@@ -25,6 +25,11 @@ files:
   - assets/**/*
   - package.json
   - "!**/*.md"
+  # `!**/*.md` above would strip every .md from node_modules too, which removes
+  # the SKILL.md files the bundled @deepseek-ai/dsh ships for its agent presets
+  # (editing-cordis-compositions, cordis-plugin-development) and silently breaks
+  # the 创造模式 skills. Re-include them: later patterns override earlier ones.
+  - "**/SKILL.md"
 
 extraResources:
   - from: vendor/node/node.exe
