@@ -190,20 +190,25 @@ function injectM3ThemeButton() {
 function startSettingsObserver() {
   if (settingsObserver) return;
   
-  settingsObserver = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      if (mutation.addedNodes.length > 0) {
-        // 检查是否有设置相关的元素被添加
-        const hasSettings = document.querySelector('[class*="setting"], [class*="Setting"], [class*="appearance"], [class*="Appearance"]');
-        if (hasSettings) {
-          const injected = injectM3ThemeButton();
-          if (injected) {
-            // 注入成功后可以暂时断开观察，节省性能
-            // 但设置页面可能重新渲染，所以保持观察
-          }
+  // 防抖（issue #26）：设置页渲染通常伴随大量 DOM 变更，若每批变更都执行
+  // 全文档 querySelector 会拖慢页面。与 preload.js 中同功能实现的 300ms
+  // 防抖对齐——只在变更停歇后检查一次。
+  let observerPending = false;
+  settingsObserver = new MutationObserver(() => {
+    if (observerPending) return;
+    observerPending = true;
+    setTimeout(() => {
+      observerPending = false;
+      // 检查是否有设置相关的元素被添加
+      const hasSettings = document.querySelector('[class*="setting"], [class*="Setting"], [class*="appearance"], [class*="Appearance"]');
+      if (hasSettings) {
+        const injected = injectM3ThemeButton();
+        if (injected) {
+          // 注入成功后可以暂时断开观察，节省性能
+          // 但设置页面可能重新渲染，所以保持观察
         }
       }
-    }
+    }, 300);
   });
   
   settingsObserver.observe(document.body, SETTINGS_OBSERVER_CONFIG);

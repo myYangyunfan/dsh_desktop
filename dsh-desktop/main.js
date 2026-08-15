@@ -26,6 +26,7 @@ const updater = require('./updater');
 const clientUpdater = require('./client-updater');
 const balance = require('./balance');
 const wslBackend = require('./wsl-backend');
+const { createGpuCrashGuard } = require('./scripts/gpu-crash-guard');
 const { SessionWatcher, scanZstdFrames } = require('./session-watcher');
 const { RendererRecovery } = require('./renderer-recovery');
 const zlib = require('node:zlib');
@@ -3550,14 +3551,34 @@ if (!gotLock) {
 } else {
   app.setAppUserModelId('com.deepseek.dsh.desktop');
   // GPU 进程崩溃是最常见的 Electron 静默退出原因（无日志、无弹窗）。
-  // 禁用硬件加速可规避大多数显卡驱动兼容性问题，对 DSH 这种文本为主
-  // 的应用无明显性能影响。若需排查，注释掉此行并观察崩溃日志。
-  app.disableHardwareAcceleration();
-  // GPU / 渲染进程崩溃日志：即使无法恢复，至少留下痕迹供排查。
-  app.on('gpu-process-crashed', (_e, killed) => {
+  // 默认启用硬件加速（issue #26：软件渲染导致 GPU 进程空转 ~60% 单核、
+  // 设置页等整页重绘明显掉帧）。仅当 settings.json 标记
+  // hardwareAcceleration === 'off'（用户手动关闭，或 GPU 连续崩溃自动降级
+  // 写入）时才禁用硬件加速。
+  if (updater.loadSettings(updCtx()).hardwareAcceleration === 'off') {
+    app.disableHardwareAcceleration();
+  }
+  // GPU / 渲染进程崩溃日志 + 自动降级（issue #26）：GPU 进程短时间内连续
+  // 崩溃达到阈值 → 判定显卡驱动不兼容 → 持久化 hardwareAcceleration:'off'
+  // 并重启应用，而不是旧版那样一刀切全局禁用硬件加速。
+  const gpuCrashGuard = createGpuCrashGuard();
+  const recordGpuCrash = (extra) => {
     const ts = new Date().toISOString();
-    try { const lp = path.join(app.getPath('userData'), 'logs', 'desktop.log'); fs.mkdirSync(path.dirname(lp), { recursive: true }); fs.appendFileSync(lp, `[${ts}] [crash] GPU 进程崩溃 (killed=${killed})\n`); } catch {}
-  });
+    try { const lp = path.join(app.getPath('userData'), 'logs', 'desktop.log'); fs.mkdirSync(path.dirname(lp), { recursive: true }); fs.appendFileSync(lp, `[${ts}] [crash] GPU 进程崩溃 ${extra}\n`); } catch {}
+    if (!gpuCrashGuard.record()) return;
+    try {
+      const s = updater.loadSettings(updCtx());
+      s.hardwareAcceleration = 'off';
+      updater.saveSettings(updCtx(), s);
+      log('boot', 'GPU 进程连续崩溃，已持久化关闭硬件加速，重启应用生效');
+    } catch (err) {
+      log('boot', 'GPU 降级标记写入失败: ' + ((err && err.message) || err));
+    }
+    try { quitting = true; markCleanExit(); killTreeSync(serverProc); } catch {}
+    app.relaunch();
+    app.exit(0);
+  };
+  app.on('gpu-process-crashed', (_e, killed) => recordGpuCrash(`(killed=${killed})`));
   app.on('render-process-gone', (_e, wc, details) => {
     const ts = new Date().toISOString();
     try { const lp = path.join(app.getPath('userData'), 'logs', 'desktop.log'); fs.mkdirSync(path.dirname(lp), { recursive: true }); fs.appendFileSync(lp, `[${ts}] [crash] 渲染进程崩溃: ${details.reason} (exitCode=${details.exitCode})\n`); } catch {}
@@ -3565,6 +3586,7 @@ if (!gotLock) {
   app.on('child-process-gone', (_e, details) => {
     const ts = new Date().toISOString();
     try { const lp = path.join(app.getPath('userData'), 'logs', 'desktop.log'); fs.mkdirSync(path.dirname(lp), { recursive: true }); fs.appendFileSync(lp, `[${ts}] [crash] 子进程崩溃: type=${details.type} reason=${details.reason} (exitCode=${details.exitCode})\n`); } catch {}
+    if (details.type === 'GPU') recordGpuCrash('(via child-process-gone)');
   });
   app.on('second-instance', () => {
     if (mainWindow) {

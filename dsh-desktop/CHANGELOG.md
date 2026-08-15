@@ -5,6 +5,12 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 
 
+## [Unreleased]
+
+### 修复
+- **桌面版默认启用硬件加速，修复软件渲染掉帧**（issue #26）：移除无条件 `app.disableHardwareAcceleration()`（软件渲染导致 GPU 进程空转 ~40-60% 单核、设置页等整页重绘明显掉帧）。改为：默认硬件加速；仅当 `settings.json` 标记 `hardwareAcceleration:'off'` 时禁用；GPU 进程 60 秒内连续崩溃 3 次（`gpu-process-crashed` / `child-process-gone` 双事件去重）自动持久化降级标记并重启应用，保留崩溃日志与自恢复兜底。降级逻辑抽为 `scripts/gpu-crash-guard.js`（含 `node --test` 单测）
+- **M3 主题管理器设置观察器防抖**（issue #26 附加项）：`assets/themes/m3-theme-manager.js` 的 `MutationObserver` 不再每批 DOM 变更都执行全文档 `querySelector`，改为 300ms 防抖（与 preload.js 中同功能实现对齐）
+
 ## [0.3.8] — 2026-08-15
 
 ### 修复
