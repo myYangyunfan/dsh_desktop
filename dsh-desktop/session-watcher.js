@@ -93,12 +93,14 @@ class SessionWatcher {
     this.onTurnEnd = onTurnEnd || (() => {});
     this.log = log || (() => {});
     this.files = new Map(); // absPath -> { size, consumed, header, title, baseline }
+    this.dirCache = { at: 0, files: [] };
     this.timer = null;
   }
 
-  start(intervalMs = 2000) {
+  start(intervalMs = 3000) {
     // 性能修复：首扫延后一拍（先让窗口绘制），且分批处理，
     // 避免启动时主进程被大量会话日志的全量解码卡死。
+    // 目录枚举结果缓存 5s，避免每 3s 递归整个 sessions 目录造成桌面卡顿。
     setImmediate(() => this.scan(4));
     this.timer = setInterval(() => this.scan(), intervalMs);
     if (this.timer.unref) this.timer.unref();
@@ -111,6 +113,8 @@ class SessionWatcher {
 
   listLogs() {
     try {
+      const now = Date.now();
+      if (now - this.dirCache.at < 5000) return this.dirCache.files;
       if (!fs.existsSync(this.sessionsDir)) return [];
       const out = [];
       const walk = (dir) => {
@@ -121,10 +125,11 @@ class SessionWatcher {
         }
       };
       walk(this.sessionsDir);
+      this.dirCache = { at: now, files: out };
       return out;
     } catch (err) {
       this.log('watch', 'listLogs 失败: ' + err.message);
-      return [];
+      return this.dirCache.files || [];
     }
   }
 

@@ -114,6 +114,7 @@ function normalizeRelease(source, data) {
 
 async function checkLatest(ctx, currentVersion) {
   const errors = [];
+  const candidates = [];
   for (const ep of apiEndpoints()) {
     try {
       const data = await httpGetJson(ep.url, ep.headers || {});
@@ -122,14 +123,23 @@ async function checkLatest(ctx, currentVersion) {
         throw new Error('上游 release 缺少版本号或安装包资产');
       }
       rel.isNewer = compareVersions(rel.version, currentVersion) > 0;
+      candidates.push(rel);
       ctx.log('client-update', `[${ep.name}] latest=${rel.version} 当前=${currentVersion} 资产数=${rel.assets.length}`);
-      return rel;
     } catch (err) {
       errors.push(`${ep.name}: ${err.message}`);
       ctx.log('client-update', `[${ep.name}] 查询失败: ${err.message}`);
     }
   }
-  throw new Error('无法连接上游发布源（' + errors.join('；') + '）');
+  if (candidates.length === 0) {
+    throw new Error('无法连接上游发布源（' + errors.join('；') + '）');
+  }
+  // 双源回退的语义是「取版本最高的可用源」，而不是先返回第一个可用源。
+  // 否则 GitHub 的 latest 落后于 Gitee 时，用户会一直被误判为“已是最新”，
+  // 表现为内置更新失效、只能手动下载安装包覆盖。
+  candidates.sort((a, b) => compareVersions(b.version, a.version));
+  const best = candidates[0];
+  ctx.log('client-update', `选用最高版本源 [${best.source}] ${best.version}（候选: ${candidates.map((c) => `${c.source}@${c.version}`).join(', ')}）`);
+  return best;
 }
 
 // --- 资产选择 / 下载 -------------------------------------------------------
@@ -315,6 +325,7 @@ function buildNsisPs1() {
   return String.raw`param(
   [Parameter(Mandatory=$true)][string]$Setup,
   [Parameter(Mandatory=$true)][string]$ProcessName,
+  [Parameter(Mandatory=$true)][string]$OldExe,
   [Parameter(Mandatory=$true)][string]$LogFile
 )
 function Log($m) {
@@ -338,11 +349,77 @@ while ($true) {
   Start-Sleep -Milliseconds 1500
 }
 Log "app exited, launching setup"
+$setupSucceeded = $false
 try {
   $sp = Start-Process -FilePath $Setup -Wait -PassThru -ErrorAction Stop
   Log ("setup finished (err=" + $sp.ExitCode + ")")
+  $setupSucceeded = $true
 } catch {
   Log ("setup launch failed: " + $_.Exception.Message)
+}
+# 安装器即使配置了自动启动，也可能被安全软件拦截或在旧版 NSIS
+# 模板里不拉起应用。这里最多等 15 秒；若新版本仍未运行，则从
+# 卸载注册表定位安装目录并显式启动，解决“更新完只退出、不重启”。
+$launched = $false
+$deadline = (Get-Date).AddSeconds(15)
+while ((Get-Date) -lt $deadline) {
+  $running = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue
+  if ($running) { $launched = $true; break }
+  Start-Sleep -Seconds 1
+}
+if (-not $launched -and $setupSucceeded) {
+  try {
+    $uninstallRoots = @(
+      'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+      'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+      'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    )
+    $candidate = $null
+    foreach ($root in $uninstallRoots) {
+      $entry = Get-ItemProperty -Path $root -ErrorAction SilentlyContinue |
+        Where-Object { $_.DisplayName -eq 'DSH Desktop' } | Select-Object -First 1
+      if ($entry) { $candidate = $entry; break }
+    }
+    $appExe = $null
+    if ($candidate) {
+      $uninstall = [string]$candidate.UninstallString
+      $m = [regex]::Match($uninstall, '"([^"]+)"')
+      if ($m.Success -and $m.Groups[1].Value) {
+        $dir = Split-Path -Parent $m.Groups[1].Value
+        $possible = Join-Path $dir 'DSH Desktop.exe'
+        if (Test-Path -LiteralPath $possible) { $appExe = $possible }
+      }
+      if (-not $appExe -and $candidate.InstallLocation) {
+        $possible = Join-Path ([string]$candidate.InstallLocation) 'DSH Desktop.exe'
+        if (Test-Path -LiteralPath $possible) { $appExe = $possible }
+      }
+    }
+    if ($appExe) {
+      Log "installer did not launch app; starting $appExe"
+      Start-Process -FilePath $appExe -ErrorAction Stop
+      $launched = $true
+    } else {
+      Log "installer did not launch app and installed exe was not found"
+    }
+  } catch {
+    Log ("post-install launch check failed: " + $_.Exception.Message)
+  }
+} elseif (-not $setupSucceeded) {
+  Log "setup did not complete"
+}
+# 兜底：无论安装器成功还是失败/被取消，都不要让用户面对「点了立即重启，
+# 应用却消失了」。找不到新版本时就重新拉起旧版本，保留可见状态。
+if (-not $launched) {
+  if (Test-Path -LiteralPath $OldExe) {
+    Log ("restarting previous build: " + $OldExe)
+    try {
+      Start-Process -FilePath $OldExe -ErrorAction Stop
+    } catch {
+      Log ("previous build launch failed: " + $_.Exception.Message)
+    }
+  } else {
+    Log "previous build not found; user will need to start the app manually"
+  }
 }
 Remove-Item -LiteralPath $Setup -Force -ErrorAction SilentlyContinue
 Log "apply-update done"
@@ -360,8 +437,9 @@ function buildNsisCmd() {
     'set "PS1=%~1"',
     'set "SETUP=%~2"',
     'set "PROC=%~3"',
-    'set "LOGF=%~4"',
-    '"%PSEXE%" -NoProfile -ExecutionPolicy Bypass -File "%PS1%" -Setup "%SETUP%" -ProcessName "%PROC%" -LogFile "%LOGF%"',
+    'set "OLD=%~4"',
+    'set "LOGF=%~5"',
+    '"%PSEXE%" -NoProfile -ExecutionPolicy Bypass -File "%PS1%" -Setup "%SETUP%" -ProcessName "%PROC%" -OldExe "%OLD%" -LogFile "%LOGF%"',
   ].join('\r\n');
 }
 
@@ -393,9 +471,9 @@ function applyUpdate(ctx, pending) {
     script = path.join(dir, 'apply-update.cmd');
     fs.writeFileSync(ps1, buildNsisPs1(), 'utf8');
     fs.writeFileSync(script, buildNsisCmd());
-    ctx.log('client-update', `启动安装版更新脚本: ${script}→${path.basename(ps1)}（安装包: ${newExe}，进程: ${procName}）日志: ${logFile}`);
+    ctx.log('client-update', `启动安装版更新脚本: ${script}→${path.basename(ps1)}（安装包: ${newExe}，进程: ${procName}，旧版: ${oldExe}）日志: ${logFile}`);
     // 同便携版：/c 的第一个参数不能是含空格的完整路径，否则脚本根本不执行。
-    child = spawn(cmdExe(), ['/d', '/c', path.basename(script), path.basename(ps1), newExe, procName, logFile], {
+    child = spawn(cmdExe(), ['/d', '/c', path.basename(script), path.basename(ps1), newExe, procName, oldExe, logFile], {
       cwd: dir,
       detached: true,
       stdio: 'ignore',
@@ -403,6 +481,9 @@ function applyUpdate(ctx, pending) {
     });
   }
   child.on('error', (err) => ctx.log('client-update', '启动更新脚本失败: ' + err.message));
+  child.on('exit', (code) => {
+    if (code !== 0) ctx.log('client-update', `更新脚本提前退出（exit ${code}），日志: ${logFile}`);
+  });
   child.unref();
   return { script, logFile };
 }

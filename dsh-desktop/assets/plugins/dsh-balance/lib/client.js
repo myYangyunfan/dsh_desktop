@@ -42,7 +42,8 @@ window.__ModuleLoader__.load({
 
 		/** 订阅桌面壳推送的余额数据（含一次主动拉取）。 */
 		function useBalanceData() {
-			const [data, setData] = react.useState(null);
+			const hasBridge = typeof window !== "undefined" && window.dshDesktop && typeof window.dshDesktop.refreshBalance === "function";
+			const [data, setData] = react.useState(() => hasBridge ? { loading: true } : null);
 			react.useEffect(() => {
 				let alive = true;
 				const apply = (next) => { if (alive && next) setData(next); };
@@ -63,6 +64,8 @@ window.__ModuleLoader__.load({
 		function BalanceDock({ useProjection }) {
 			const usage = typeof useProjection === "function" ? useProjection("tokenUsage") : void 0;
 			const data = useBalanceData();
+			// 用户关闭「显示余额/本轮费用」时整个 dock 隐藏；等待首次推送期间也不闪现。
+			if (data && (data.disabled === true || data.loading === true)) return null;
 			const prices = data && data.prices ? data.prices : void 0;
 			const balances = data && Array.isArray(data.balances) ? data.balances : [];
 			const primary = balances.find((b) => b.currency === "CNY") || balances[0];

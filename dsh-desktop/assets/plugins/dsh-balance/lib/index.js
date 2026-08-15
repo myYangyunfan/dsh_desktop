@@ -5,4 +5,4 @@
 const name = "dsh-balance";
 const inject = [];
 function apply() {}
-export { apply, inject, name };
+export default { name, inject, apply };

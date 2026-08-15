@@ -22,6 +22,13 @@ const path = require('node:path');
 // not just `npm run dist`.
 require('./patch-portable-template');
 
+// Patch the bundled dsh-session event vocabulary so plugin events
+// (dsh-agent-teams / dsh-message-edit / dsh-web-search-exa) are accepted by
+// the session reader — otherwise "history unavailable ... unknown to this
+// harness and not marked ignorable" breaks session history loading.
+const { patchDshSessionVocabulary } = require('./patch-event-vocabulary');
+const { installBuiltinPresets } = require('./install-minimal-win-preset');
+
 // Regexes for files that are safe to delete (pure metadata / dev artifacts).
 const DROP_BASENAME = /^(LICENSE.*|README.*|CHANGELOG.*|HISTORY.*|COPYING.*|NOTICE.*|AUTHORS.*|SECURITY.*|CONTRIBUTING.*|\.gitignore|\.npmignore|\.editorconfig|\.eslintrc.*|\.prettierrc.*|\.babelrc.*)$/i;
 const DROP_EXT = new Set(['.map', '.md', '.markdown', '.tsbuildinfo', '.d.ts']);
@@ -77,4 +84,24 @@ module.exports = async function afterPack(context) {
   let total = 0;
   for (const t of targets) total += pruneDroppable(t);
   console.log(`afterPack: pruned ${total} redundant files (install shrink)`);
+
+  // Patch the packaged dsh-session vocabulary in the packed app (idempotent).
+  // Runs after pruning so the .js files it modifies are the final copies.
+  const sessionPkgDir = path.join(appOutDir, 'resources', 'app', 'node_modules',
+    '@deepseek-ai', 'dsh-session');
+  if (fs.existsSync(path.join(sessionPkgDir, 'lib', 'index.js'))) {
+    const changed = patchDshSessionVocabulary(sessionPkgDir);
+    console.log(`afterPack: session event vocabulary ${changed > 0 ? `patched (+${changed} types)` : 'already up to date'}`);
+  } else {
+    console.warn('afterPack: bundled dsh-session not found — vocabulary patch skipped');
+  }
+
+  // Ship the desktop's minimal_win preset in the bundled dsh CLI (idempotent).
+  const dshPkgDir = path.join(appOutDir, 'resources', 'app', 'node_modules', '@deepseek-ai', 'dsh');
+  if (fs.existsSync(path.join(dshPkgDir, 'package.json'))) {
+    const presetDirs = installBuiltinPresets(dshPkgDir);
+    console.log(`afterPack: builtin presets installed (${presetDirs.length}): ${presetDirs.map((p) => path.basename(p)).join(", ")}`);
+  } else {
+    console.warn('afterPack: bundled dsh package not found — minimal-win preset skipped');
+  }
 };

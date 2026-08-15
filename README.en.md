@@ -14,8 +14,8 @@ A ready-to-use Windows desktop client wrapping [@deepseek-ai/dsh](https://www.np
 
 | File | Description | Size |
 | --- | --- | --- |
-| [Portable exe](https://github.com/myYangyunfan/dsh_desktop/releases/latest/download/DSH-Desktop-0.3.1-portable-x64.exe) | No install needed, double-click to run | ~126 MB |
-| [Setup exe](https://github.com/myYangyunfan/dsh_desktop/releases/latest/download/DSH-Desktop-Setup-0.3.1-x64.exe) | Installs to system, creates shortcuts | ~126 MB |
+| [Portable exe](https://github.com/myYangyunfan/dsh_desktop/releases/latest/download/DSH-Desktop-0.3.3-portable-x64.exe) | No install needed, double-click to run | ~126 MB |
+| [Setup exe](https://github.com/myYangyunfan/dsh_desktop/releases/latest/download/DSH-Desktop-Setup-0.3.3-x64.exe) | Installs to system, creates shortcuts | ~126 MB |
 
 ### China users (Gitee, split-part download)
 
@@ -24,23 +24,23 @@ A ready-to-use Windows desktop client wrapping [@deepseek-ai/dsh](https://www.np
 1. Download the following files into **the same folder**:
 
    **Portable** (no install, double-click to run, USB-friendly):
-   - [part1](https://gitee.com/my-yang-yunfan/dsh_desktop/releases/download/v0.3.1/DSH-Desktop-0.3.1-portable-x64.exe.part1) (~95 MB)
-   - [part2](https://gitee.com/my-yang-yunfan/dsh_desktop/releases/download/v0.3.1/DSH-Desktop-0.3.1-portable-x64.exe.part2) (~31 MB)
+   - [part1](https://gitee.com/my-yang-yunfan/dsh_desktop/releases/download/v0.3.3/DSH-Desktop-0.3.3-portable-x64.exe.part1) (~95 MB)
+   - [part2](https://gitee.com/my-yang-yunfan/dsh_desktop/releases/download/v0.3.3/DSH-Desktop-0.3.3-portable-x64.exe.part2) (~31 MB)
 
    **Setup** (installs to system, creates desktop/start menu shortcuts):
-   - [part1](https://gitee.com/my-yang-yunfan/dsh_desktop/releases/download/v0.3.1/DSH-Desktop-Setup-0.3.1-x64.exe.part1) (~95 MB)
-   - [part2](https://gitee.com/my-yang-yunfan/dsh_desktop/releases/download/v0.3.1/DSH-Desktop-Setup-0.3.1-x64.exe.part2) (~32 MB)
+   - [part1](https://gitee.com/my-yang-yunfan/dsh_desktop/releases/download/v0.3.3/DSH-Desktop-Setup-0.3.3-x64.exe.part1) (~95 MB)
+   - [part2](https://gitee.com/my-yang-yunfan/dsh_desktop/releases/download/v0.3.3/DSH-Desktop-Setup-0.3.3-x64.exe.part2) (~32 MB)
 
-2. Download [merge.bat](https://gitee.com/my-yang-yunfan/dsh_desktop/releases/download/v0.3.1/merge.bat), place it in the same folder, and double-click to automatically merge the exe.
+2. Download [merge.bat](https://gitee.com/my-yang-yunfan/dsh_desktop/releases/download/v0.3.3/merge.bat), place it in the same folder, and double-click to automatically merge the exe.
 
    Prefer manual merge? Run this in CMD:
 
    ```cmd
    :: Portable
-   copy /b DSH-Desktop-0.3.1-portable-x64.exe.part1 + DSH-Desktop-0.3.1-portable-x64.exe.part2 DSH-Desktop-0.3.1-portable-x64.exe
+   copy /b DSH-Desktop-0.3.3-portable-x64.exe.part1 + DSH-Desktop-0.3.3-portable-x64.exe.part2 DSH-Desktop-0.3.3-portable-x64.exe
 
    :: Setup
-   copy /b DSH-Desktop-Setup-0.3.1-x64.exe.part1 + DSH-Desktop-Setup-0.3.1-x64.exe.part2 DSH-Desktop-Setup-0.3.1-x64.exe
+   copy /b DSH-Desktop-Setup-0.3.3-x64.exe.part1 + DSH-Desktop-Setup-0.3.3-x64.exe.part2 DSH-Desktop-Setup-0.3.3-x64.exe
    ```
 
 **First run**: A loading animation appears briefly, then the DeepSeek Harness Web UI loads. If you haven't configured an API Key yet, set it up in the UI to get started (same as the `dsh` CLI).
@@ -52,7 +52,7 @@ A ready-to-use Windows desktop client wrapping [@deepseek-ai/dsh](https://www.np
 
 - **No Node.js needed**: Bundles a standalone Node runtime and npm CLI — target machine needs nothing extra
 - **Bundled dsh CLI**: Full `@deepseek-ai/dsh` package with all plugins, works offline
-- **One-click launch**: Double-click to start `dsh web`, auto-selects a free port, loads into a native window
+- **One-click launch**: Double-click to start `dsh web`, reuses the last saved port when possible (falls back to a free port if occupied) so UI preferences such as the session grouping mode persist across restarts
 - **Frameless styled window + system tray**: No native title/menu bar — a custom glass bar (rounded icon, ⋯ menu, window controls) with Win11 rounded corners; closing hides to the tray
 - **Clean exit**: Quitting kills the entire dsh process tree — no orphan processes
 - **Portable**: Data follows the exe, copy it to a USB stick and go
@@ -62,10 +62,20 @@ A ready-to-use Windows desktop client wrapping [@deepseek-ai/dsh](https://www.np
 - **DeepSeek balance widget**: inline「this turn ¥X · balance ¥Y」in the conversation stats bar, click to top up
 - **Session notifications**: Windows system notification when an agent task completes — click to bring the window back
 
-- **Quiet conversation output**: Settings → General → "Hide conversation output" keeps tool calls, file operations, and results while hiding long model text
+- **Quiet conversation output**: Settings → General → "Hide conversation output" keeps tool calls, file operations, results, turn summaries and the final summary while hiding long process text
 - **Conversation navigation rail**: a faint right-edge rail tracks session length; hovering shows a vertical tick at the cursor as a preview, only clicking jumps
 - **Portable extraction cache**: first launch caches to `%TEMP%\dsh-desktop-portable`, subsequent launches start instantly instead of re-extracting 132MB / 24k files every time
 - **Startup self-heal & watchdog**: automatically repairs broken profile symlinks that cause `dsh web` exit code 1, and relaunches the app if the main process dies unexpectedly
+- **Vision plugin (dsh-vision)**: configure an OpenAI-compatible VLM base URL, API key and model in Settings; the model can then call `view_image` (default: free Zhipu `glm-4.6v-flash`)
+- **Renderer crash recovery**: automatically reloads the Web UI after a renderer crash, rebuilds the BrowserWindow when reload fails, and shows a local error page with reload/restart actions after repeated failures
+- **Session history compatibility**: the bundled `@deepseek-ai/dsh-session` event vocabulary is patched during packaging, so events from dsh-agent-teams / dsh-message-edit / dsh-web-search-exa no longer break history loading
+- **Built-in minimal_win preset**: an official-minimal-style agent preset using PowerShell (`pwsh` + `str_replace_editor`)
+- **Built-in dsh-routing-suite**: `dsh-super-injector` (dev_* plugin injection/reload/self-heal tools) + `router-standard` preset
+- **Built-in dsh-anchored-standard**: `anchored-standard` and `zero-anchored-standard` experimental presets
+
+- **Balance dock toggle**: hide the balance/this-turn dock from the chrome menu, useful for third-party relay users
+- **Third-party reasoning effort is opt-in**: `reasoning_effort` injection is off by default to avoid breaking strict third-party APIs such as Bailian; enable it only for providers that support the field
+- **Self-update restart hardening**: setup updates relaunch the new version after install, and stale pending-update prompts are cleared when the update script starts
 
 ## Requirements
 
@@ -93,7 +103,7 @@ npm run dist             # build portable + NSIS installer -> dist/
 │  · Auto-updater (updater.js) → user-consented overlay    │
 │  · spawn node.exe from vendor|resources                  │
 └──────────────┬───────────────────────────────────────────┘
-               │  dsh web --host 127.0.0.1 --port 0
+               │  dsh web --host 127.0.0.1 --port <last saved port>
                ▼
        Bundled node.exe + @deepseek-ai/dsh
        Path resolution: user overlay > bundled package

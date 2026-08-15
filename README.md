@@ -15,23 +15,23 @@
 1. 下载以下文件，放到**同一个文件夹**：
 
    **便携版**（免安装，双击即用，可放 U 盘）：
-   - [part1](https://gitee.com/my-yang-yunfan/dsh_desktop/releases/download/v0.3.1/DSH-Desktop-0.3.1-portable-x64.exe.part1)（~95 MB）
-   - [part2](https://gitee.com/my-yang-yunfan/dsh_desktop/releases/download/v0.3.1/DSH-Desktop-0.3.1-portable-x64.exe.part2)（~31 MB）
+   - [part1](https://gitee.com/my-yang-yunfan/dsh_desktop/releases/download/v0.3.3/DSH-Desktop-0.3.3-portable-x64.exe.part1)（~95 MB）
+   - [part2](https://gitee.com/my-yang-yunfan/dsh_desktop/releases/download/v0.3.3/DSH-Desktop-0.3.3-portable-x64.exe.part2)（~31 MB）
 
    **安装版**（安装到系统，创建桌面/开始菜单快捷方式）：
-   - [part1](https://gitee.com/my-yang-yunfan/dsh_desktop/releases/download/v0.3.1/DSH-Desktop-Setup-0.3.1-x64.exe.part1)（~95 MB）
-   - [part2](https://gitee.com/my-yang-yunfan/dsh_desktop/releases/download/v0.3.1/DSH-Desktop-Setup-0.3.1-x64.exe.part2)（~32 MB）
+   - [part1](https://gitee.com/my-yang-yunfan/dsh_desktop/releases/download/v0.3.3/DSH-Desktop-Setup-0.3.3-x64.exe.part1)（~95 MB）
+   - [part2](https://gitee.com/my-yang-yunfan/dsh_desktop/releases/download/v0.3.3/DSH-Desktop-Setup-0.3.3-x64.exe.part2)（~32 MB）
 
-2. 下载 [merge.bat](https://gitee.com/my-yang-yunfan/dsh_desktop/releases/download/v0.3.1/merge.bat)，放到同一文件夹，双击运行即可自动合并出 exe。
+2. 下载 [merge.bat](https://gitee.com/my-yang-yunfan/dsh_desktop/releases/download/v0.3.3/merge.bat)，放到同一文件夹，双击运行即可自动合并出 exe。
 
    不想用 merge.bat？在 CMD 中手动合并：
 
    ```cmd
    :: 便携版
-   copy /b DSH-Desktop-0.3.1-portable-x64.exe.part1 + DSH-Desktop-0.3.1-portable-x64.exe.part2 DSH-Desktop-0.3.1-portable-x64.exe
+   copy /b DSH-Desktop-0.3.3-portable-x64.exe.part1 + DSH-Desktop-0.3.3-portable-x64.exe.part2 DSH-Desktop-0.3.3-portable-x64.exe
 
    :: 安装版
-   copy /b DSH-Desktop-Setup-0.3.1-x64.exe.part1 + DSH-Desktop-Setup-0.3.1-x64.exe.part2 DSH-Desktop-Setup-0.3.1-x64.exe
+   copy /b DSH-Desktop-Setup-0.3.3-x64.exe.part1 + DSH-Desktop-Setup-0.3.3-x64.exe.part2 DSH-Desktop-Setup-0.3.3-x64.exe
    ```
 
 ### 国际用户（GitHub，单文件下载）
@@ -40,8 +40,8 @@
 
 | 文件 | 说明 | 大小 |
 | --- | --- | --- |
-| [便携版 exe](https://github.com/myYangyunfan/dsh_desktop/releases/latest/download/DSH-Desktop-0.3.1-portable-x64.exe) | 免安装，双击即用 | ~126 MB |
-| [安装版 exe](https://github.com/myYangyunfan/dsh_desktop/releases/latest/download/DSH-Desktop-Setup-0.3.1-x64.exe) | 安装到系统，创建快捷方式 | ~126 MB |
+| [便携版 exe](https://github.com/myYangyunfan/dsh_desktop/releases/latest/download/DSH-Desktop-0.3.3-portable-x64.exe) | 免安装，双击即用 | ~126 MB |
+| [安装版 exe](https://github.com/myYangyunfan/dsh_desktop/releases/latest/download/DSH-Desktop-Setup-0.3.3-x64.exe) | 安装到系统，创建快捷方式 | ~126 MB |
 
 **首次使用**：双击运行后会显示启动动画，随后进入 DeepSeek Harness Web UI。如尚未配置 API Key，在界面内完成配置即可开始使用（与命令行 dsh 完全一致）。
 
@@ -52,7 +52,7 @@
 
 - **免装 Node**：内置独立 Node 运行时与 npm CLI，目标机器无需安装 Node.js
 - **内置 dsh CLI**：完整打包 `@deepseek-ai/dsh` 及全部插件，离线可用
-- **一键启动**：双击即启动 `dsh web`，自动挑空闲端口，就绪后加载到原生窗口
+- **一键启动**：双击即启动 `dsh web`，优先复用上次端口（被占用时自动换新端口），就绪后加载到原生窗口；稳定 origin 让会话分组等界面偏好可以持久记住
 - **风格化无边框窗口 + 系统托盘**：无原生标题栏/菜单栏，自绘玻璃栏（圆角图标、⋯ 菜单、窗口控制），Win11 圆角；关闭默认隐藏到托盘
 - **退出即清理**：退出应用自动结束 dsh 进程树，不留孤儿进程
 - **便携版**：数据跟随 exe 所在目录，拷到 U 盘就能用
@@ -64,10 +64,21 @@
 - **文件更改追踪 + 一键还原**：详情面板「文件」标签页查看本会话全部文件改动（行级 diff）并逐文件/全部还原，数据只读复用会话日志，稳定不受升级影响
 - **会话完成通知**：agent 任务跑完时弹 Windows 系统通知，点击回到窗口
 
-- **隐藏对话输出**：设置 → 通用设置 →「隐藏对话输出」，隐藏模型长篇文字，仅保留工具调用/文件操作/结果等重要信息
-- **会话导航滑轨**：对话右侧的虚化滑轨随会话长度变化；悬停时在鼠标位置显示垂直短横线预览，点击才跳转
+ - **隐藏对话输出**：设置 → 通用设置 →「隐藏对话输出」，隐藏大量工具调用、工具结果与思考过程，每一轮的最终总结输出仍然显示
+ - **会话导航滑轨**：对话右侧的虚化滑轨随会话长度变化；每条用户输入在滑轨上以圆点标出位置，悬停时在鼠标位置显示垂直短横线预览，点击才跳转
 - **便携版解压缓存**：首次解压后缓存到 `%TEMP%\dsh-desktop-portable`，后续启动秒开，不再每次解压 132MB / 2.4 万文件
 - **启动自愈与看门狗**：自动修复 profile 符号链接损坏导致的 `dsh web` 退出码 1；主进程异常退出时自动拉起并发送恢复通知
+- **识图插件 dsh-vision**：设置页直接填写 OpenAI 兼容 VLM 的 API 地址、密钥和模型，会话中即可使用 `view_image` 工具（OCR / 看图 / 读图表），默认智谱免费 `glm-4.6v-flash`
+ - **渲染进程崩溃自愈**：页面崩溃/假死时指数退避自动重载，连续失败第 3 次重建窗口；超过上限显示本地恢复页（重新加载 / 重启客户端 / 打开日志），并弹系统通知
+- **会话历史兼容补丁**：打包时自动修补内置 `@deepseek-ai/dsh-session` 事件词汇表，插件（dsh-agent-teams / dsh-message-edit / dsh-web-search-exa）写入的会话事件不再导致历史无法打开
+- **内置「极简模式_win」预设**：基于官方极简模式，把 bash 替换为 Windows PowerShell（`pwsh` + `str_replace_editor`）
+- **内置 dsh-routing-suite**：`dsh-super-injector`（dev_* 插件注入/热重载/自愈工具）+ `router-standard` 预设
+- **内置 dsh-anchored-standard**：`anchored-standard` / `zero-anchored-standard` 实验性预设
+
+- **余额提示开关**：chrome 菜单「显示余额/本轮费用」可一键关闭，第三方中转用户不再被余额提示打扰
+- **第三方模型思考强度默认安全**：`reasoning_effort` 注入默认关闭，仅 provider 支持时手动开启，避免百炼等严格 API 报参数错误
+- **插件市场**：支持 npm 包名与 `github:owner/repo#分支` 安装第三方插件，安装后重启服务生效
+
 
 ## 系统要求
 
@@ -95,7 +106,7 @@ npm run dist             # 构建 portable + NSIS 安装包 → dist/
 │  · 官方更新 (updater.js) → 用户同意后安装 overlay          │
 │  · spawn vendor|resources 里的 node.exe                   │
 └──────────────┬───────────────────────────────────────────┘
-               │  dsh web --host 127.0.0.1 --port 0
+               │  dsh web --host 127.0.0.1 --port <上次保存的端口>
                ▼
        内置 node.exe + @deepseek-ai/dsh
        路径解析：用户目录 overlay > 内置包

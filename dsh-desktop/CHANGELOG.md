@@ -4,6 +4,70 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 一键启动 Web UI。
 
 
+## [0.3.5] — 2026-08-15（插件市场替换为 Zat-DSH Engine）
+
+### 新增
+- **插件市场整体替换为 [Zat-DSH Engine](https://github.com/mishibeikejie/zat-dsh-engine)（MIT）**：移除旧 `@deepseek-ai/dsh-plugin-marketplace` 的同步副本与 patch 条目，新增 `zat-dsh-engine` bundle（社区目录 / 双语简介 / 一键安装更新卸载启停 / 网络自适应 / 自更新）；`zod` 转为显式依赖随包分发
+- **第三方许可文档**：新增 `docs/attributions.md` 与 README「第三方组件与许可」，明确 Zat-DSH Engine、dsh、koffi、Electron、React、zod 等 MIT 组件来源
+
+### 修复
+- **客户端更新「点了立即重启仍弹出有待安装的更新」**：待安装标记原子写盘 + 回读校验；每次重启安装记录 `clientUpdateAttempt`，启动识别「客户端更新未完成」并支持重试 / 打开日志 / 24h 稍后；NSIS 更新脚本在安装器失败或被取消时自动拉起旧版本
+
+## [0.3.4] — 2026-08-15（BUG 修复版）
+
+### 修复
+- **koffi 3.1.3/3.1.4 win32-x64 预编译二进制损坏**（目录选择器 worker 无消息退出、部分客户机器启动即崩）：`package.json` overrides 锁定 `koffi@3.1.5`（上游已回退 Windows 原生编译）；新增 `scripts/koffi-preflight.cjs`，启动前用内置 Node 做 FFI 冒烟，失败自动注入 browse 目录选择器 overlay
+- **目录选择器 worker 崩溃后报错无任何诊断信息**：新增 `scripts/patch-deps.js`（postinstall / pack / dist 幂等补丁），worker 无消息退出时把真实 exit code / signal 带进错误文案
+- **启动项配置生成错误导致整体打不开**：`dsh web` 退出码 1 时自动解析 `dsh-web.log` 中加载失败的 patch 插件 id，写入 `safe-boot.overlay.yml`（`dsh web --patch`）禁用后自动重试，不修改用户 patch 文件，并弹系统通知
+- **EPERM: operation not permitted, symlink 导致退出码 1**：检测到 `profiles/node_modules` 目录联接创建被拒时，自动改名备份半成品缓存、重跑官方 `healProfilesModuleFallback` 重建联接并重试启动，不再需要客户手动按手册操作
+- **部分用户设置页看不到插件设置（视图/识图/思考强度等）**：`dsh-host-apiproxy` 设置命名空间白名单补丁改为同时覆盖内置 app、profile fallback 与**更新后的 agent overlay** 三处副本，并锚定 `WEB_SETTINGS_NAMESPACES` 数组自身收尾插入；启动顺序调整为先修复 profile 联接再应用补丁
+- **启动失败弹窗缺少日志内容**：失败对话框与「服务已停止」对话框附带 `dsh-web.log` 最近日志，客户截图即可定位
+- **syncCompanionPlugins 覆盖用户禁用**：patch 中 id 已存在（含用户手写 disabled 条目）时不再自动重插，避免重复 id 与「禁用后又被加回来」
+- **全新 DSH_HOME 首次启动必失败（退出码 1，插件树无法激活）**：`syncCompanionPlugins` 在 dsh 初始化 profile 之前预写 manifest 时，只写入 bundle 插件导致核心 bundles（dsh-base / dsh-web-app）缺失。现改为以实际将运行的 dsh 包为锚点实测可解析后，先写核心 bundles 再追加 bundle 插件；解析不到则不写 manifest，交由 dsh 自行初始化（PR #14）
+- **客户端更新「点了立即重启仍弹出有待安装的更新」**：待安装标记改为原子写盘 + 回读校验；每次重启安装都记录 `clientUpdateAttempt`，下次启动若仍是旧版本则识别为「客户端更新未完成」，提供重试安装 / 打开 `apply-update.log` / 稍后（24h 不再打扰）；NSIS 更新脚本在安装器失败或被取消时自动拉起旧版本，避免“重启后应用消失”
+- **渲染进程崩溃后永久黑屏/白屏（0xC0000005）**：新增 `renderer-recovery.js` 自恢复状态机，主窗与会话浮窗统一接管：
+  - `render-process-gone`（crashed/killed/oom）→ 指数退避自动重载（首次 0.8s，上限 15s + 抖动）
+  - 连续失败第 3 次 → 主窗销毁重建 BrowserWindow（保持隐藏/托盘状态）；浮窗直接关闭
+  - 失败超过上限 → 主窗切到本地恢复页（重新加载/重启客户端/打开日志），并弹系统通知；绝不无限循环
+  - 页面加载成功后需「稳定存活 30 秒」才清零故障计数，杜绝「加载即崩溃」型循环
+  - `clean-exit`、退出中、窗口已销毁一律不触发恢复；服务进程退出时交由既有重启对话框，不双弹窗
+- **界面挂起（AppHangB1）无恢复**：监听 `unresponsive`，20s 宽限后强制终结 renderer 复用恢复路径；preload 每 5s 心跳兜底「挂起但无 unresponsive 事件」的场景（以 show/hide 事件追踪可见性，隐藏/最小化不误判）
+- **加载失败白屏**：新增 `did-fail-load` 处理，服务健在时退避重试（覆盖插件市场重启间隙），`ERR_ABORTED` 忽略
+- **崩溃无法取证**：固定 `crashDumps` 到数据目录并启用本地 Crashpad（`uploadToServer:false`），minidump 可离线分析 0xC0000005 底层来源；恢复状态写入 `run-state.json`
+- **dsh web / 预览服务随机命中 Chromium 受限端口导致页面永远无法加载**：命中即自动重启服务换端口（上限 4 次）；本地稳定端口选择也会避开受限端口
+
+### 开发
+- 新增 `scripts/test/unit-recovery.test.js`（node:test 状态机单元测试，17 例）与 `scripts/test/integration-runner.js`（真实 Electron 集成测试，10 场景）
+- 集成测试通道：`DSH_DESKTOP_TEST=1` 时经文件轮询下达命令（crash/kill/hang/quit…），renderer 崩溃时仍可用
+
+## [0.3.3] — 2026-08-15
+
+### 新增
+- **内置「极简模式_win」Agent 预设**：把官方极简模式的 bash/PTY 工具替换为 Windows PowerShell（`@deepseek-ai/dsh-tool-pwsh`），开发模式 `npm start` 自动安装，打包流程 `afterPack` 自动写入内置 dsh CLI。
+- **内置 dsh-routing-suite**：`dsh-super-injector`（dev_* 注入器/自愈工具）作为 bundle 插件随包同步进 web profile；`router-standard` 预设随包写入内置 dsh CLI。
+- **内置 dsh-anchored-standard**：`anchored-standard` 与 `zero-anchored-standard` 两个实验性预设随包写入内置 dsh CLI。
+- **识图插件设置页**：`dsh-vision` 新增设置页，可直接填写 API 地址、密钥、模型、备用模型与请求限制；设置保存后热生效。
+- **余额/本轮费用开关**：自绘菜单新增「显示余额/本轮费用」，第三方中转/不需要余额提示的用户可一键关闭整个统计 dock。
+- **会话导航滑轨输入位置圆点**：每条用户消息在右侧滑轨上以圆点标出位置，内容或尺寸变化时才重算，滚动时不额外读取布局。
+
+### 修复
+- **客户端更新多源选择错误**：GitHub 与 Gitee 双源现在取版本最高的 release，而不是返回第一个可用源；修复 GitHub latest 落后时“内置在线更新失效、只能手动覆盖安装”。
+- **插件市场安装报 `args fields do not match`**：`installPlugin` 的 Typert 描述符参数名从 `packageName` 对齐为宿主方法的 `spec`。
+- **识图插件无法配置/加载**：修正 `dsh-vision` 的 peer 依赖（`@deepseek-ai/cordis`），补齐 `dsh.client` 清单与设置 UI，配置不再依赖手工写文件。
+- **第三方模型思考强度默认不再破坏 API**：`reasoning_effort` 注入默认关闭，仅 provider 确认支持时启用；字段名留空表示只显示档位、不注入参数，避免百炼等严格接口报错。
+- **会话导航滑轨**：滑轨固定到会话内容区右侧，并在滑轨上以圆点标出每条用户输入的位置；不再因 `position:fixed` 缺省位置偏到窗口左侧。
+- **设置页出现两个「插件」栏**：移除 `dsh-super-injector` 重复注册的同名空白设置栏，设置导航只保留官方「插件」页（插件市场为其标签页）。
+- **余额/本轮费用开关失效导致金额不显示**：`balanceDockEnabled` / `setBalanceDock` 曾被误放进通知点击回调的作用域，余额刷新与菜单开关运行时抛出 `ReferenceError`；现提升为模块级函数，dock 恢复显示且开关真正生效。
+- **README 下载链接**：根 README 中英文下载链接从 0.3.1 同步为 0.3.3，并补充手动安装第三方插件说明。
+- **服务启动失败弹窗叠加**：主进程对话框串行化，启动失败/更新/错误弹窗不会同时叠成多个。
+- **「隐藏对话输出」按预期工作**：`dsh-conversation-tweaks` 设置命名空间加入浏览器设置白名单，开关保存后真正写入；开启时隐藏大量工具调用、工具结果与思考过程，每一轮最终总结输出仍然显示。
+- **桌面端卡顿优化**：会话日志目录枚举改为 5 秒缓存并降低轮询频率；会话导航滑轨滚动事件合并到 requestAnimationFrame 并限频；M3 设置观察器防抖；高频重复的页面 warning/error 日志按签名节流，减少同步磁盘写入。
+- **左侧会话分组偏好丢失**：`dsh web` 不再每次随机换端口，改为复用上次保存的 `127.0.0.1` 端口（占用时自动选新端口）。Web UI 的 localStorage 偏好（如会话分组方式）不再因 origin 变化而每次重置。
+- **客户端更新“重启后不自动安装/重复弹窗”**：启动更新脚本前清除待安装标记，失败后不会再反复弹同一个更新框；安装版安装完成后会检测新版本是否启动，未启动则从卸载注册表定位并显式拉起；NSIS 明确开启 `runAfterFinish`。
+- **插件事件导致会话历史无法加载**：打包时对内置 `@deepseek-ai/dsh-session` 事件词汇表打补丁（`afterPack` 自动执行；开发模式 `npm start` 同样幂等补丁），接受 dsh-agent-teams / dsh-message-edit / dsh-web-search-exa 写入的自定义会话事件，修复 `SessionFormatUnsupportedError: ... unknown to this harness and not marked ignorable`。
+- **0.3.2 实际未随包携带「极简模式_win」**：该预设此前只写进了 changelog，本次补齐源文件与安装流程。
+
+
 ## [0.3.2] — 2026-08-15
 
 ### 新增

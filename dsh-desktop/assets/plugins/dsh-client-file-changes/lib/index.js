@@ -4,4 +4,4 @@
 const name = "dsh-client-file-changes";
 const inject = [];
 function apply() {}
-export { apply, inject, name };
+export default { name, inject, apply };

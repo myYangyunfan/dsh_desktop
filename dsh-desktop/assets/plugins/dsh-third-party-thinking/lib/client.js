@@ -21,9 +21,9 @@ window.__ModuleLoader__.load({
 			nav: "第三方模型思考强度",
 			navSub: "让接入的 OpenAI 兼容第三方模型在模型选择器出现「思考强度」档位（off/high/max），并把所选档位注入到请求体（官方 DeepSeek 与 pi-ai 模型不受影响）。",
 			enabledLabel: "启用第三方模型思考强度",
-			enabledHint: "关闭后第三方模型不再显示思考强度控件，请求体不注入参数",
+			enabledHint: "默认关闭以避免百炼等严格校验请求体的第三方 API 报参数错误；仅当你的 provider 支持 reasoning_effort（或自定义字段）时开启",
 			wireFieldLabel: "请求字段名",
-			wireFieldHint: "OpenAI 兼容 provider 用于承接该档位的请求体字段，默认 reasoning_effort",
+			wireFieldHint: "OpenAI 兼容 provider 用于承接该档位的请求体字段，默认 reasoning_effort；留空则只显示档位控件、不注入参数",
 			save: "保存",
 			saving: "保存中…",
 			saved: "已保存",
@@ -45,7 +45,7 @@ window.__ModuleLoader__.load({
 		function ThinkingCard(props) {
 			const { useScope, scope } = props;
 			const snap = useScope((s) => s);
-			const [enabled, setEnabled] = react.useState(true);
+			const [enabled, setEnabled] = react.useState(false);
 			const [wireField, setWireField] = react.useState("reasoning_effort");
 			const [busy, setBusy] = react.useState(false);
 			const [saved, setSaved] = react.useState(false);
@@ -53,8 +53,8 @@ window.__ModuleLoader__.load({
 			react.useEffect(() => {
 				if (snap.status !== "ready") return;
 				const v = snap.value || {};
-				setEnabled(v.enabled !== false);
-				setWireField(String(v.wireField || "reasoning_effort"));
+				setEnabled(v.enabled === true);
+				setWireField(v.wireField === undefined ? "reasoning_effort" : String(v.wireField));
 			}, [snap.status]);
 
 			if (snap.status !== "ready") {
@@ -66,10 +66,10 @@ window.__ModuleLoader__.load({
 				setSaved(false);
 				try {
 					const wantEnabled = !!enabled;
-					const haveEnabled = !!(snap.value && snap.value.enabled);
+					const haveEnabled = !!(snap.value && snap.value.enabled === true);
 					if (wantEnabled !== haveEnabled) await scope.set("enabled", wantEnabled);
-					const wantWire = wireField.trim() || "reasoning_effort";
-					const haveWire = (snap.value && snap.value.wireField) || "reasoning_effort";
+					const wantWire = wireField.trim();
+					const haveWire = snap.value ? String(snap.value.wireField ?? "reasoning_effort") : "reasoning_effort";
 					if (wantWire !== haveWire) await scope.set("wireField", wantWire);
 					setSaved(true);
 				} finally {

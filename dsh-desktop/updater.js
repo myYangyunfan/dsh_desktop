@@ -38,8 +38,23 @@ function loadSettings(ctx) {
 }
 
 function saveSettings(ctx, s) {
-  try { fs.writeFileSync(settingsPath(ctx), JSON.stringify(s, null, 2) + '\n'); }
-  catch (err) { ctx.log('update', '保存 settings 失败: ' + err.message); }
+  const file = settingsPath(ctx);
+  try { fs.mkdirSync(path.dirname(file), { recursive: true }); } catch {}
+  // 设置文件可能被安全软件短暂锁定（更新重启窗口正是扫描高发期）。
+  // 先写临时文件再替换，失败重试 3 次，避免「标记清理失败→重启后仍提示待安装更新」。
+  const tmp = file + '.tmp-' + process.pid;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      fs.writeFileSync(tmp, JSON.stringify(s, null, 2) + '\n');
+      try { fs.rmSync(file, { force: true }); } catch {}
+      fs.renameSync(tmp, file);
+      return true;
+    } catch (err) {
+      try { fs.rmSync(tmp, { force: true }); } catch {}
+      if (attempt === 2) ctx.log('update', '保存 settings 失败: ' + err.message);
+    }
+  }
+  return false;
 }
 
 // --- overlay paths --------------------------------------------------------

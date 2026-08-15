@@ -30,16 +30,21 @@ const COMPANION_PLUGINS = [
   { id: 'file-changes', name: '@deepseek-ai/dsh-file-changes' },
   { id: 'client-file-changes', name: '@deepseek-ai/dsh-client-file-changes' },
   { id: 'terminal', name: '@deepseek-ai/dsh-terminal-tab' },
-  { id: 'plugin-marketplace', name: '@deepseek-ai/dsh-plugin-marketplace' },
+  { id: 'plugin-market', name: 'zat-dsh-engine' },
   { id: 'float-window', name: '@deepseek-ai/dsh-float-window' },
   { id: 'conversation-tweaks', name: '@deepseek-ai/dsh-conversation-tweaks' },
+  { id: 'super-injector', name: '@dsh-external/dsh-super-injector' },
   { id: 'prompt-custom', name: '@deepseek-ai/dsh-prompt-custom' },
   { id: 'third-party-thinking', name: '@deepseek-ai/dsh-third-party-thinking' },
   { id: 'wsl-settings', name: '@deepseek-ai/dsh-wsl-settings' },
   { id: 'dsh-vision', name: '@dsh-external/dsh-vision' },
 ];
 
-const PLUGIN_FILES = ['package.json', 'lib/index.js', 'lib/client.js', 'lib/vlm.js', 'dsh.plugin.json'];
+const PLUGIN_FILES = [
+  'package.json', 'cordis.patch.yml', 'LICENSE', 'README.md', 'README.zh.md',
+  'lib/index.js', 'lib/client.js', 'lib/vlm.js', 'lib/typert.host.js', 'lib/typert.host.d.ts',
+  'dsh.plugin.json',
+];
 
 function companionDirName(p) {
   const slash = p.name.indexOf('/');
@@ -85,7 +90,19 @@ function syncPlugins(home, dryRun) {
     }
   }
 
-  // 拷贝插件文件。
+  // v0.3.5 起插件市场整体切换为 zat-dsh-engine（MIT）：
+  // 清理旧版 @deepseek-ai/dsh-plugin-marketplace 的同步副本与 patch 行。
+  const oldPkg = path.join(profileDir, 'node_modules', '@deepseek-ai', 'dsh-plugin-marketplace');
+  if (fs.existsSync(oldPkg)) {
+    if (dryRun) log('dry-run: 将移除旧插件市场包 @deepseek-ai/dsh-plugin-marketplace');
+    else {
+      fs.rmSync(oldPkg, { recursive: true, force: true });
+      log('已移除旧插件市场包: @deepseek-ai/dsh-plugin-marketplace');
+    }
+  }
+
+  // 拷贝插件文件；bundle 插件（package.json 声明 dsh.bundle.patch）不写 patch 行。
+  const bundleNames = new Set();
   for (const p of COMPANION_PLUGINS) {
     const rel = companionDirName(p);
     const src = path.join(__dirname, '..', 'assets', 'plugins', rel);
@@ -93,9 +110,13 @@ function syncPlugins(home, dryRun) {
       warn(`跳过（找不到源）: ${p.name}（${src}）`);
       continue;
     }
+    let pkg = {};
+    try { pkg = JSON.parse(fs.readFileSync(path.join(src, 'package.json'), 'utf8')); } catch {}
+    const isBundle = !!(pkg && pkg.dsh && pkg.dsh.bundle && pkg.dsh.bundle.patch);
+    if (isBundle) bundleNames.add(p.name);
     const dest = path.join(profileModules, '..', p.name);
     if (dryRun) {
-      log(`dry-run: 将安装 ${p.name} → ${dest}`);
+      log(`dry-run: 将安装 ${p.name} → ${dest}${isBundle ? '（bundle 插件）' : ''}`);
       continue;
     }
     fs.mkdirSync(path.join(dest, 'lib'), { recursive: true });
@@ -103,15 +124,39 @@ function syncPlugins(home, dryRun) {
       const sf = path.join(src, f);
       if (fs.existsSync(sf)) fs.copyFileSync(sf, path.join(dest, f));
     }
-    log(`已安装 ${p.name}`);
+    log(`已安装 ${p.name}${isBundle ? '（bundle 插件）' : ''}`);
   }
 
-  // 注册到 profile 补丁层（幂等，保留用户自己加的条目）。
+  // Bundle 插件注册进 profile manifest 的 dsh.profile.bundles（dsh 启动时读取
+  // 包内 cordis.patch.yml）。本脚本不凭空创建 manifest（会顶替 dsh 的 profile
+  // 初始化导致全新 DSH_HOME 首次启动失败）：只有 manifest 已存在且已有 bundles
+  // 数组时才追加；否则交给 dsh 首次启动初始化，下次运行本脚本再注册。
+  const manifestFile = path.join(profileDir, 'package.json');
+  let manifest = {};
+  try { manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8')); } catch { manifest = null; }
+  if (manifest && typeof manifest === 'object' && !Array.isArray(manifest) &&
+      manifest.dsh && manifest.dsh.profile && Array.isArray(manifest.dsh.profile.bundles)) {
+    for (const name of bundleNames) {
+      if (manifest.dsh.profile.bundles.includes(name)) continue;
+      if (dryRun) {
+        log(`dry-run: 将把 bundle 插件加入 profile bundles: ${name}`);
+        continue;
+      }
+      manifest.dsh.profile.bundles.push(name);
+      fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
+      log(`已把 bundle 插件加入 web profile bundles: ${name}`);
+    }
+  } else if (bundleNames.size > 0) {
+    log('profile manifest 尚无 bundles（可能尚未初始化），bundle 插件留待下次运行注册');
+  }
+
+  // 非 bundle 插件注册到 profile 补丁层（幂等，保留用户自己加的条目）。
   const patchFile = path.join(profileDir, 'cordis.patch.yml');
   let patch = '';
   try { patch = fs.readFileSync(patchFile, 'utf8'); } catch { patch = ''; }
   let changed = false;
   for (const p of COMPANION_PLUGINS) {
+    if (bundleNames.has(p.name)) continue;
     const idNameRe = new RegExp('(id:\\s*' + p.id + '\\b[^\\n]*\\n\\s*name:\\s*\\x27)([^\\x27]*)(\\x27)');
     const m = patch.match(idNameRe);
     if (m) {
@@ -129,6 +174,13 @@ function syncPlugins(home, dryRun) {
     changed = true;
     log(`已添加补丁条目 ${p.id} → ${p.name}`);
   }
+  // 旧插件市场条目清理（幂等）。
+  const patchBefore = patch;
+  patch = patch.replace(/^\s*-\s*insert:\s*$\n^\s*-\s*id:\s*plugin-marketplace\s*$\n^\s*name:\s*['"]@deepseek-ai\/dsh-plugin-marketplace['"]\s*$\n?/gm, '');
+  if (patch !== patchBefore) {
+    changed = true;
+    log('已从 cordis.patch.yml 移除旧插件市场条目');
+  }
   if (changed) {
     if (dryRun) log(`dry-run: 将写入 ${patchFile}`);
     else {
@@ -141,62 +193,66 @@ function syncPlugins(home, dryRun) {
 }
 
 // ---------------------------------------------------------------------------
-// 运行时补丁（与 main.js applyRuntimeFlashFix / applyPromptExposeFix 同逻辑）
+// 运行时补丁（与 main.js applyRuntimeFlashFix / applyPromptExposeFix 同逻辑）：
+// 覆盖 profile fallback 与壳托管安装目录 agent 两份副本；bundle 初始化后的
+// dsh 安装（npm 版）两份副本通常互为同一文件（fallback 符号链接写穿），幂等。
 // ---------------------------------------------------------------------------
 
-function patchFileIfNeeded(file, { label, check, apply }) {
-  if (!fs.existsSync(file)) { warn(`跳过 ${label}: 未找到 ${file}`); return false; }
-  let src;
-  try { src = fs.readFileSync(file, 'utf8'); } catch (err) { warn(`跳过 ${label}: 读取失败 ${err.message}`); return false; }
-  if (check(src) === false) { warn(`跳过 ${label}: 未匹配到目标代码（版本可能已变更）`); return false; }
-  if (check(src) === 'applied') { log(`${label}: 已应用，跳过`); return false; }
-  const next = apply(src);
-  return { file, label, next };
+function patchTargets(home, pkgPath) {
+  const mk = (root) => path.join(root, 'node_modules', '@deepseek-ai', pkgPath);
+  return [
+    mk(path.join(home, 'profiles')),
+    mk(path.join(home, 'agent')),
+  ];
 }
 
 function applyRuntimePatches(home, dryRun) {
-  const modulesRoot = path.join(home, 'profiles', 'node_modules', '@deepseek-ai');
-
   // 会话列表刷新闪跳修复（mergeOrderedBaseline 保留本地新会话）。
-  const flashFile = path.join(modulesRoot, 'dsh-client-runtime', 'lib', 'client.js');
   const OLD_FLASH = '(value) => baselineByKey.get(keyOf(value))).filter((value) => value !== void 0);';
   const NEW_FLASH = '(value) => baselineByKey.get(keyOf(value)) ?? value).filter((value) => value !== void 0);';
-  const flash = patchFileIfNeeded(flashFile, {
-    label: 'runtime 补丁（会话列表闪跳）',
-    check: (src) => (src.includes(NEW_FLASH) ? 'applied' : src.includes(OLD_FLASH)),
-    apply: (src) => src.replace(OLD_FLASH, NEW_FLASH),
-  });
-  if (flash) {
-    if (dryRun) log('dry-run: 将应用会话列表闪跳修复');
-    else { fs.writeFileSync(flashFile, flash.next, 'utf8'); log('已应用会话列表闪跳修复'); }
+  for (const file of patchTargets(home, path.join('dsh-client-runtime', 'lib', 'client.js'))) {
+    if (!fs.existsSync(file)) continue;
+    try {
+      const src = fs.readFileSync(file, 'utf8');
+      if (src.includes(NEW_FLASH)) { log('runtime 补丁: 已应用，跳过 ' + file); continue; }
+      if (!src.includes(OLD_FLASH)) { warn('runtime 补丁: 未匹配到目标代码（版本可能已变更），跳过 ' + file); continue; }
+      if (dryRun) { log('dry-run: 将应用会话列表闪跳修复 ' + file); continue; }
+      fs.writeFileSync(file, src.replace(OLD_FLASH, NEW_FLASH), 'utf8');
+      log('已应用会话列表闪跳修复 ' + file);
+    } catch (err) {
+      warn('runtime 补丁失败(' + file + '): ' + err.message);
+    }
   }
 
-  // 设置暴露白名单补丁（dsh-prompt / 第三方思考）。
-  const exposeFile = path.join(modulesRoot, 'dsh-host-apiproxy', 'lib', 'index.js');
-  const NAMESPACES = ['dsh-prompt', 'dsh-third-party-thinking'];
-  let exposeSrc = null;
-  try { exposeSrc = fs.existsSync(exposeFile) ? fs.readFileSync(exposeFile, 'utf8') : null; } catch (err) {
-    warn('跳过提示词暴露补丁: 读取失败 ' + err.message);
-  }
-  if (exposeSrc !== null) {
-    let next = exposeSrc;
-    let exposeChanged = false;
-    for (const ns of NAMESPACES) {
-      if (next.includes('"' + ns + '"')) continue;
-      const closeIdx = next.indexOf('\n];');
-      if (closeIdx === -1) {
-        warn('跳过提示词暴露补丁: 未匹配到设置命名空间数组收尾');
-        exposeChanged = false;
-        break;
+  // 设置暴露白名单补丁（dsh-prompt / 第三方思考 / 识图 / 会话调整）。
+  const NAMESPACES = ['dsh-prompt', 'dsh-third-party-thinking', 'dsh-vision', 'dsh-conversation-tweaks'];
+  for (const file of patchTargets(home, path.join('dsh-host-apiproxy', 'lib', 'index.js'))) {
+    if (!fs.existsSync(file)) continue;
+    try {
+      const src = fs.readFileSync(file, 'utf8');
+      const declIdx = src.indexOf('const WEB_SETTINGS_NAMESPACES = [');
+      if (declIdx === -1) {
+        warn('提示词暴露补丁: 未找到 WEB_SETTINGS_NAMESPACES（版本可能已变更），跳过 ' + file);
+        continue;
       }
-      next = next.slice(0, closeIdx) + ',\n\t"' + ns + '"' + next.slice(closeIdx);
-      exposeChanged = true;
-    }
-    if (exposeChanged) {
-      if (dryRun) log('dry-run: 将把 ' + NAMESPACES.join(', ') + ' 加入 settings 暴露白名单');
-      else { fs.writeFileSync(exposeFile, next, 'utf8'); log('已把 ' + NAMESPACES.join(', ') + ' 加入 settings 暴露白名单'); }
-    } else {
-      log('提示词暴露补丁: 无需变更');
+      // 只认声明之后最近的 `];`，避免插进文件里其它数组。
+      const closeIdx = src.indexOf('];', declIdx);
+      if (closeIdx === -1) {
+        warn('提示词暴露补丁: 未匹配到命名空间数组收尾，跳过 ' + file);
+        continue;
+      }
+      const arrText = src.slice(declIdx, closeIdx);
+      const missing = NAMESPACES.filter((ns) => !arrText.includes('"' + ns + '"'));
+      if (missing.length === 0) {
+        log('提示词暴露补丁: 已应用，跳过 ' + file);
+        continue;
+      }
+      const block = ',\n' + missing.map((ns) => '\t"' + ns + '"').join(',\n') + '\n';
+      if (dryRun) { log('dry-run: 将把 ' + missing.join(', ') + ' 加入设置白名单 ' + file); continue; }
+      fs.writeFileSync(file, src.slice(0, closeIdx) + block + src.slice(closeIdx), 'utf8');
+      log('已把 ' + missing.join(', ') + ' 加入设置白名单 ' + file);
+    } catch (err) {
+      warn('提示词暴露补丁失败(' + file + '): ' + err.message);
     }
   }
 }

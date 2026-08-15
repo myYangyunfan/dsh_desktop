@@ -24,12 +24,15 @@ const inject = ["llm", "settings"];
 
 const NS = settingsNamespace("dsh-third-party-thinking");
 const Config = z.object({
-	enabled: z.boolean().default(true),
+	// 默认关闭：百炼等严格校验请求体的第三方 API 会直接拒绝
+	// reasoning_effort，只有确认 provider 支持时才应开启。
+	enabled: z.boolean().default(false),
+	// 留空表示「只显示档位控件，不注入任何请求字段」。
 	wireField: z.string().default("reasoning_effort")
 });
 
 // 取配置的 getter；setSource 会被替换为 settings scope 读取器（热生效）。
-let liveConfig = () => ({ enabled: true, wireField: "reasoning_effort" });
+let liveConfig = () => ({ enabled: false, wireField: "reasoning_effort" });
 
 // 具备原生 reasoning 机制的适配器（注入会破坏其原生验证路径）。
 const NATIVE_REASONING_CLASSES = new Set(["DeepSeekAdapter"]);
@@ -45,6 +48,8 @@ const INJECTED_EFFORTS = [
 /** 为未声明 reasoning 的模型注入官方形状元数据；已声明则保留。 */
 function injectReasoning(model) {
 	if (!model || model.reasoning !== void 0) return model;
+	const cfg = liveConfig() || {};
+	if (cfg.enabled === false) return model;
 	return { ...model, reasoning: { efforts: INJECTED_EFFORTS, defaultEffort: "high" } };
 }
 
@@ -64,10 +69,10 @@ function wrapStream(adapter) {
 	return async function* (...args) {
 		const options = args[0];
 		const cfg = liveConfig() || {};
-		const enabled = cfg.enabled !== false;
-		const wireField = String(cfg.wireField || "reasoning_effort");
+		const enabled = cfg.enabled === true;
+		const wireField = String(cfg.wireField ?? "reasoning_effort").trim();
 		const effort = options && options.reasoningEffort;
-		if (!enabled || effort === void 0 || effort === "off") {
+		if (!enabled || effort === void 0 || effort === "off" || wireField === "") {
 			yield* adapter.stream.apply(adapter, args);
 			return;
 		}

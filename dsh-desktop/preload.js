@@ -66,9 +66,32 @@ const dshDesktop = {
     open: (sessionId) => ipcRenderer.invoke('chrome:float-window', { action: 'open', sessionId }),
     close: () => ipcRenderer.send('float:close'),
   },
+  // 恢复页面（assets/recovery.html）使用的动作与状态读取。
+  recovery: {
+    getState: () => ipcRenderer.invoke('chrome:recovery-state'),
+    reload: () => ipcRenderer.invoke('chrome:recovery-reload'),
+    restart: () => ipcRenderer.invoke('chrome:recovery-restart'),
+    openLogs: () => ipcRenderer.invoke('chrome:recovery-open-logs'),
+  },
 };
 
 contextBridge.exposeInMainWorld('dshDesktop', dshDesktop);
+
+// ---------------------------------------------------------------------------
+// Renderer 心跳：每 5s 向主进程上报一次。主进程用它兜底判定「挂起但
+// Chromium 未发出 unresponsive 事件」的场景（窗口不可见时页面定时器会被
+// 节流，主进程只对可见窗口做判定；重新可见时立即补报一次心跳）。
+// ---------------------------------------------------------------------------
+{
+  const beat = () => {
+    try { ipcRenderer.send('dsh:renderer-heartbeat'); } catch {}
+  };
+  beat();
+  setInterval(beat, 5000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) beat();
+  });
+}
 
 // 浮窗模式检测：preload 的 process.argv 由 webPreferences.additionalArguments 注入。
 // 浮窗内注入 window.__DSH_FLOAT__ = { sessionId }，供 dsh-float-window 插件识别；
@@ -122,7 +145,7 @@ ipcRenderer.on('dsh:balance', (_e, data) => {
     } catch (_e) { /* 忽略；会话尚未就绪时无值，下次轮询再试 */ }
   };
   reportCurrentSession();
-  setInterval(reportCurrentSession, 1000);
+  setInterval(reportCurrentSession, 3000);
 }
 
 // ---------------------------------------------------------------------------
@@ -200,7 +223,7 @@ const GLYPHS = {
 let menuOpen = false;
 let menuEl = null;
 let maxBtn = null;
-let state = { appVersion: '', agentVersion: '', agentSource: '', notifyOnTurnEnd: true, closeToTray: true };
+let state = { appVersion: '', agentVersion: '', agentSource: '', notifyOnTurnEnd: true, closeToTray: true, showBalanceDock: true };
 
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
@@ -226,6 +249,7 @@ function renderMenu() {
     </div>
     <button class="dch-item" data-act="toggle-notify"><span>会话完成通知</span>${state.notifyOnTurnEnd ? '<span class="dch-check">✓</span>' : ''}</button>
     <button class="dch-item" data-act="toggle-close-to-tray"><span>关闭时最小化到托盘</span>${state.closeToTray ? '<span class="dch-check">✓</span>' : ''}</button>
+    <button class="dch-item" data-act="toggle-balance"><span>显示余额/本轮费用</span>${state.showBalanceDock ? '<span class="dch-check">✓</span>' : ''}</button>
     <div class="dch-sep"></div>
     <button class="dch-item" data-act="reload"><span>重新加载</span><span class="dch-kbd">Ctrl+R</span></button>
     <button class="dch-item" data-act="devtools"><span>开发者工具</span><span class="dch-kbd">F12</span></button>
@@ -241,7 +265,7 @@ function renderMenu() {
   menuEl.querySelectorAll('.dch-item').forEach((item) => {
     item.addEventListener('click', async () => {
       const act = item.dataset.act;
-      if (act === 'toggle-notify' || act === 'toggle-close-to-tray') {
+      if (act === 'toggle-notify' || act === 'toggle-close-to-tray' || act === 'toggle-balance') {
         const next = await dshDesktop.menu.action(act);
         if (next) state = { ...state, ...next };
         renderMenu();
@@ -734,7 +758,11 @@ function m3UpdateAllButtons() {
 }
 
 function m3FindAppearanceSection() {
+  // dsh 0.1.0-rc.6 的外观行使用稳定的 CSS module 类；先用精确选择器，
+  // 再退回 class 子串选择器。旧实现的全文档 textContent 扫描在高频 DOM
+  // 变更（流式会话 / 设置页重渲染）下会明显拖慢页面，因此不再使用。
   const selectors = [
+    '._8HJdBW_cubeRow',
     '[class*="appearance"]', '[class*="Appearance"]',
     '[class*="theme-section"]', '[class*="themeSection"]',
     '[data-section="appearance"]', '[data-testid="appearance"]',
@@ -742,15 +770,6 @@ function m3FindAppearanceSection() {
   for (const sel of selectors) {
     const el = document.querySelector(sel);
     if (el) return el;
-  }
-  // 通过文本查找
-  const all = document.querySelectorAll('div, section, label, span');
-  for (const el of all) {
-    const txt = el.textContent || '';
-    if ((txt.includes('外观') || txt.includes('Appearance') || txt.includes('主题')) && txt.length < 20) {
-      const section = el.closest('[class*="section"], [class*="Section"], [class*="group"], [class*="Group"]') || el.parentElement?.parentElement;
-      if (section && section.querySelectorAll('button').length >= 2) return section;
-    }
   }
   return null;
 }
@@ -773,8 +792,15 @@ function m3InjectSettingButton() {
 
 function m3StartSettingsObserver() {
   if (m3SettingsObserver) return;
+  // 设置页/会话流会产生高频 DOM 变更；若每次都同步做全文档
+  // querySelector 会明显拖慢页面。这里合并为 300ms 内的最后一次变更。
+  let pending = null;
   m3SettingsObserver = new MutationObserver(() => {
-    m3InjectSettingButton();
+    if (pending) return;
+    pending = setTimeout(() => {
+      pending = null;
+      m3InjectSettingButton();
+    }, 300);
   });
   m3SettingsObserver.observe(document.body, { childList: true, subtree: true });
 }

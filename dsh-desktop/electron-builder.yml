@@ -27,8 +27,11 @@ files:
   - balance.js
   - session-watcher.js
   - preload.js
+  - renderer-recovery.js
   - watchdog.js
   - assets/**/*
+  # 运行时依赖：koffi 预检、依赖自愈补丁等脚本必须在成品里存在。
+  - scripts/**/*
   - package.json
   - "!**/*.md"
   # `!**/*.md` above would strip every .md from node_modules too, which removes
@@ -63,6 +66,7 @@ nsis:
   artifactName: DSH-Desktop-Setup-${version}-${arch}.${ext}
   oneClick: false
   perMachine: false
+  runAfterFinish: true
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: always
   createStartMenuShortcut: true
