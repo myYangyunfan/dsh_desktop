@@ -5,6 +5,11 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 
 
+## [Unreleased]
+
+### 新增
+- **设置页「上下文管理」栏**：自动上下文压缩配置入口（`dsh-compaction-settings` 配套插件）。可设置自动压缩开关（auto）、触发阈值（thresholdRatio，默认 0.8）与压缩后保留 token 数（maxTokens，默认 8192），保存后写入应用 `settings.json` 并幂等改写全部 agent 预设（`agent.cordis.yml` 的 `compaction-basic` 配置，覆盖内置/fallback/overlay 三处副本与 WSL 模式），新会话生效；boot 与 dsh 更新后自动重打，设置不丢失。纯逻辑抽在 `scripts/apply-compaction-settings.js`（含 `node --test` 单测）
+
 ## [0.3.8] — 2026-08-15
 
 ### 修复

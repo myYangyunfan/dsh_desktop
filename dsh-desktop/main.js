@@ -26,6 +26,7 @@ const updater = require('./updater');
 const clientUpdater = require('./client-updater');
 const balance = require('./balance');
 const wslBackend = require('./wsl-backend');
+const { normalizeSettings, patchPresetFile } = require('./scripts/apply-compaction-settings');
 const { SessionWatcher, scanZstdFrames } = require('./session-watcher');
 const { RendererRecovery } = require('./renderer-recovery');
 const zlib = require('node:zlib');
@@ -1649,6 +1650,7 @@ async function runUpdateFlow(manual) {
       applyVisionKeyFix();
       applyProfilePatchGuard();
       applySettingsSectionGuard();
+      applyCompactionSettingsPatch();
   applyWorkspaceSearchRailFix();
     }
     const { response: r2 } = await showBox({
@@ -2089,6 +2091,33 @@ function registerChromeIpc() {
       status: wslStatusSnapshot({ force: true }),
     };
   });
+
+  // -------------------------------------------------------------------------
+  // 上下文管理配置（设置页 dsh-compaction-settings 插件消费）：
+  //   get  —— 当前已保存（规范化后）的压缩设置
+  //   save —— 校验并持久化到 settings.json，同时立即改写所有 agent 预设的
+  //           compaction-basic 配置（新会话生效；完全生效请重启应用）
+  // -------------------------------------------------------------------------
+  ipcMain.handle('dsh:compaction-config', async (event) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return null;
+    return normalizeSettings(updater.loadSettings(updCtx()).compaction);
+  });
+
+  ipcMain.handle('dsh:compaction-config-save', async (event, { cfg } = {}) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return { ok: false, error: 'unauthorized' };
+    if (!cfg || typeof cfg !== 'object') return { ok: false, error: 'bad-payload' };
+    const norm = normalizeSettings(cfg);
+    const s = updater.loadSettings(updCtx());
+    s.compaction = norm;
+    updater.saveSettings(updCtx(), s);
+    log('compaction-settings', '已保存上下文管理设置: ' + JSON.stringify(norm));
+    try {
+      applyCompactionSettingsPatch();
+    } catch (err) {
+      log('compaction-settings', '预设改写失败: ' + ((err && err.message) || err));
+    }
+    return { ok: true, config: norm, applied: true, restartHint: '新会话生效；完全生效请重启应用' };
+  });
 }
 
 let trayHintShown = false;
@@ -2215,6 +2244,7 @@ const COMPANION_PLUGINS = [
   { id: 'prompt-custom', name: '@deepseek-ai/dsh-prompt-custom' },
   { id: 'third-party-thinking', name: '@deepseek-ai/dsh-third-party-thinking' },
   { id: 'wsl-settings', name: '@deepseek-ai/dsh-wsl-settings' },
+  { id: 'compaction-settings', name: '@deepseek-ai/dsh-compaction-settings' },
   { id: 'dsh-vision', name: '@dsh-external/dsh-vision' },
 ];
 
@@ -2571,6 +2601,59 @@ function applyPromptExposeFix() {
       log('boot', '提示词暴露补丁失败(' + file + '): ' + err.message);
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// 上下文管理设置补丁：设置页「上下文管理」保存的 auto / thresholdRatio /
+// maxTokens 幂等写入所有含 compaction-basic 的 agent 预设（agent.cordis.yml）。
+// 覆盖运行副本（与提示词暴露补丁相同的三处副本 + WSL 模式）：设置页保存后
+// 新会话立即生效；应用重启 / dsh 更新后由 boot 批次重新施加，保证不丢。
+// ---------------------------------------------------------------------------
+function applyCompactionSettingsPatch() {
+  const wslHome = effectiveDshHome();
+  const pkg = ['@deepseek-ai', 'dsh'];
+  const targets = isWslMode()
+    ? [
+        path.join(wslHome, 'profiles', 'node_modules', ...pkg),
+        path.join(wslHome, 'agent', 'node_modules', ...pkg),
+      ]
+    : [
+        path.join(dshHome || path.join(os.homedir(), '.dsh'), 'profiles', 'node_modules', ...pkg),
+        path.join(__dirname, 'node_modules', ...pkg),
+        path.join(userDataDir, 'agent', 'node_modules', ...pkg),
+      ];
+  const settings = normalizeSettings(updater.loadSettings(updCtx()).compaction);
+  let patched = 0;
+  for (const pkgRoot of targets) {
+    if (!pkgRoot) continue;
+    const presetRoot = path.join(pkgRoot, 'config', 'agent-presets');
+    if (!fs.existsSync(presetRoot)) continue;
+    let dirs;
+    try {
+      dirs = fs.readdirSync(presetRoot, { withFileTypes: true });
+    } catch (err) {
+      log('compaction-settings', '读取预设目录失败(' + presetRoot + '): ' + err.message);
+      continue;
+    }
+    for (const d of dirs) {
+      if (!d.isDirectory()) continue;
+      const file = path.join(presetRoot, d.name, 'agent.cordis.yml');
+      if (!fs.existsSync(file)) continue;
+      try {
+        const src = fs.readFileSync(file, 'utf8');
+        const out = patchPresetFile(src, settings);
+        if (out !== src) {
+          fs.writeFileSync(file, out, { encoding: 'utf8' });
+          patched++;
+          log('compaction-settings', '已写入压缩设置 ' + file + '（auto=' + settings.auto +
+            ', thresholdRatio=' + settings.thresholdRatio + ', maxTokens=' + settings.maxTokens + '）');
+        }
+      } catch (err) {
+        log('compaction-settings', '预设改写失败(' + file + '): ' + err.message);
+      }
+    }
+  }
+  log('compaction-settings', '上下文管理补丁完成（改写 ' + patched + ' 个预设文件）');
 }
 
 // ---------------------------------------------------------------------------
@@ -3487,6 +3570,7 @@ async function boot() {
     applyVisionKeyFix();
     applyProfilePatchGuard();
     applySettingsSectionGuard();
+    applyCompactionSettingsPatch();
   applyWorkspaceSearchRailFix();
   } else {
     // 先修复 profile fallback 联接再同步/补丁依赖文件：EPERM 环境下补丁写不进去。
@@ -3498,6 +3582,7 @@ async function boot() {
     applyVisionKeyFix();
     applyProfilePatchGuard();
     applySettingsSectionGuard();
+    applyCompactionSettingsPatch();
   applyWorkspaceSearchRailFix();
     initRendererRecovery();
     createWindow();

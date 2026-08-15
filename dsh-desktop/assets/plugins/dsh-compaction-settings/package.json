@@ -1,0 +1,28 @@
+{
+  "name": "@deepseek-ai/dsh-compaction-settings",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DSH Desktop 配套插件：设置页「上下文管理」栏，配置自动上下文压缩（auto / thresholdRatio / maxTokens），保存后写入所有 agent 预设的 compaction-basic 配置",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": { "default": "./lib/index.js" },
+    "./client": { "default": "./lib/client.js" },
+    "./package.json": "./package.json"
+  },
+  "license": "MIT",
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-client-ui-settings": "*",
+    "@deepseek-ai/dsh-client-ui-primitives": "*",
+    "react": ">=18"
+  }
+}

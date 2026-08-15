@@ -47,6 +47,11 @@ const dshDesktop = {
     saveConfig: (cfg) => ipcRenderer.invoke('dsh:wsl-config-save', { cfg }),
     recheck: () => ipcRenderer.invoke('dsh:wsl-recheck'),
   },
+  // 上下文管理配置（设置页 dsh-compaction-settings 插件消费）。
+  compaction: {
+    getConfig: () => ipcRenderer.invoke('dsh:compaction-config'),
+    saveConfig: (cfg) => ipcRenderer.invoke('dsh:compaction-config-save', { cfg }),
+  },
   // 插件市场：请求主进程原地重启 dsh web 服务（安装/卸载插件后生效）。
   restartService: () => ipcRenderer.invoke('chrome:restart-service', { intent: 'restart-service' }),
   // 「文件」视图的还原请求：changes = [{path, op, oldText, newText}]（逆序）。
