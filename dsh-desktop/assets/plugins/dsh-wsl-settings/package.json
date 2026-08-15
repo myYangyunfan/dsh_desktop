@@ -1,0 +1,28 @@
+{
+  "name": "@deepseek-ai/dsh-wsl-settings",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DSH Desktop 配套插件：设置页「WSL 后端」栏，切换 local/wsl 后端模式、配置 WSL 发行版与安装目录、展示 WSL 状态（DSH Desktop）",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": { "default": "./lib/index.js" },
+    "./client": { "default": "./lib/client.js" },
+    "./package.json": "./package.json"
+  },
+  "license": "MIT",
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-client-ui-settings": "*",
+    "@deepseek-ai/dsh-client-ui-primitives": "*",
+    "react": ">=18"
+  }
+}

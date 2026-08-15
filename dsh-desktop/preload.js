@@ -41,6 +41,12 @@ const dshDesktop = {
   },
   getInfo: () => ipcRenderer.invoke('chrome:init'),
   refreshBalance: () => ipcRenderer.invoke('dsh:balance-refresh'),
+  // WSL 后端配置（设置页 dsh-wsl-settings 插件消费）。
+  wsl: {
+    getConfig: () => ipcRenderer.invoke('dsh:wsl-config'),
+    saveConfig: (cfg) => ipcRenderer.invoke('dsh:wsl-config-save', { cfg }),
+    recheck: () => ipcRenderer.invoke('dsh:wsl-recheck'),
+  },
   // 插件市场：请求主进程原地重启 dsh web 服务（安装/卸载插件后生效）。
   restartService: () => ipcRenderer.invoke('chrome:restart-service', { intent: 'restart-service' }),
   // 「文件」视图的还原请求：changes = [{path, op, oldText, newText}]（逆序）。

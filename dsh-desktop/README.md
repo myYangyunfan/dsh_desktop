@@ -161,6 +161,36 @@ npm run dist                   # 构建 portable + NSIS 安装包，输出到 di
 | 更新走 overlay + staging 原子切换 | 更新失败零风险；便携版（资源每次从 exe 解压）也能持久更新 |
 | 通知读会话日志而非 UI 协议 | 持久化格式是官方稳定接口；UI 的私有 RPC/SSE 协议随版本变化，容易失效 |
 
+## 连接 WSL（WSL 托管模式）
+
+壳支持两种后端：`local`（启动内置 dsh，默认）、`wsl`（壳经 wsl.exe 在 WSL 内安装/更新/运行自己的 dsh）。选择方式：设置页「WSL 后端」栏（推荐，含状态展示与预检）、`settings.json` 的 `backend` 字段，或环境变量 `DSH_DESKTOP_BACKEND=local|wsl`。
+
+### 把配套插件装进你自己 WSL 里的 dsh（可选，与后端模式无关）
+
+如果你在 WSL 里另有自己装的 dsh（checkout 开发版或 npm 版）——壳自带的配套插件（余额、文件视图、终端、浮窗、插件市场、自定义提示词、第三方思考、识图等）是壳私有打包的（不进 npm），想让它也用上，在 WSL 里执行：
+
+```bash
+node dsh-desktop/scripts/sync-companion-plugins.js ~/.dsh --with-patches
+```
+
+（`--dry-run` 可先预览；`--with-patches` 额外应用「会话列表闪跳修复 + 设置暴露白名单」两个运行时补丁，否则自定义提示词/第三方思考的设置页可能显示「设置不可用」。）插件在 **dsh web 重启后**才挂载（profile 补丁层在启动时读取）：重启 `dsh web`（checkout 开发模式 `pnpm dsh web`；npm 安装版 `dsh web`），注意会中断正在跑的会话（会话数据在磁盘上，可继续）。终端插件在 POSIX 下自动使用 `sh -i`，其余插件跨平台。卸载：删掉 `cordis.patch.yml` 中对应 `insert` 条目与 `profiles/web/node_modules` 下的对应包目录即可。
+
+### wsl：壳在 WSL 里托管自己的 dsh（自动更新全闭环）
+
+不想借用已有 dsh、又想要 Windows 原生窗口 + 自动更新？选 `backend: "wsl"`：壳经 `wsl.exe` 在 WSL 里**安装、同步插件、启动、更新**自己的一套 dsh，与 local 模式体验一致。
+
+- **设置页入口（推荐）**：设置 → 「WSL 后端」栏——切换 local/wsl 模式、填发行版与安装目录、查看当前 WSL 状态（发行版/node/npm/agent 版本与检测错误）、「重新检测」按钮；保存后重启应用生效（切换前会预检一次 WSL 连通性，错误直接显示在页面上）。纯浏览器打开时该栏显示「仅在 DSH Desktop 客户端中可用」。
+- 配置（`settings.json` / 环境变量，均可手填；设置页写的也是 `settings.json`）：
+  - `wslDistro`（`DSH_DESKTOP_WSL_DISTRO`）：发行版名，默认 `wsl -l -q` 第一个；
+  - `wslInstallDir`（`DSH_DESKTOP_WSL_DIR`）：WSL 内安装目录（Linux 绝对路径，**不含空白**），默认 `~/.dsh-desktop`——刻意不默认 `~/.dsh`，避免与你自己的 dsh 共用 DSH_HOME 互相改写 profile；想共享会话就显式设成 `~/.dsh`；
+  - 前置条件：WSL 内要有 node + npm（`sh -lc 'node --version'` 能出结果即可，fnm/nvm 皆可；缺失时保存配置会提示、启动会弹窗引导）。
+- 首次启动流程：显示加载页 → 探测 WSL/node → 缺 agent 时在 WSL 内 `npm install @deepseek-ai/dsh@<内置版本>`（约 2–3 分钟，之后复用 npm 缓存）→ 配套插件 + 运行时补丁经 UNC（`\\wsl.localhost\<发行版>\...`）同步进 WSL profile → `wsl.exe -e sh -lc` 启动 `dsh web --host 127.0.0.1 --port 0` → 解析就绪 URL（与 local 同规则）→ Windows 经 localhost 转发加载窗口。
+- 目录布局（WSL 内）：`<dir>/agent`（当前版本，`DSH_HOME=<dir>`）、`agent-prev`（回退）、`agent-staging`（更新中转）、`dsh.pid`（退出清理）、`profiles`/`sessions`（数据）。
+- **自动更新**：检查仍在 Windows 侧（npm registry 查询），安装走 WSL 内 npm（staging + 原子切换，失败自动保留旧版），重启应用生效；启动失败弹窗可「回退到上一版本」。
+- 退出/重启服务：按 `dsh.pid` 发 SIGTERM 优雅收尾（绝不 `wsl --terminate`）；插件市场的「重启服务」在托管模式下可用（重启 WSL 内的 dsh web）。
+- 会话通知、余额小部件、文件 diff 查看照常（经 UNC 直读 WSL 文件）；「文件」视图的还原/打开仍是 Windows 本地功能，不适用于 WSL 会话。
+- 已知边界：Windows 侧访问依赖 WSL2 的 localhost 转发（不通时启用 `.wslconfig` 的 `networkingMode=mirrored`）；`wslInstallDir` 路径不能含空格。
+
 ## 日志与排障
 
 - `desktop.log`：壳层日志（启动参数、端口、通知、更新、退出）
@@ -187,10 +217,11 @@ dsh-desktop/
 ├── client-updater.js     # 客户端（封装层）自更新引擎（GitHub/Gitee 双源 + 分片合并 + 原地替换）
 ├── balance.js            # DeepSeek 账户余额查询（主进程）
 ├── session-watcher.js    # 会话完成监听（zstd 多帧解码 + turn/end 检测）
-├── preload.js            # 沙箱预加载（自绘玻璃标题栏 + 窗口控制/菜单 IPC + 余额事件桥）
+├── preload.js            # 沙箱预加载（自绘玻璃标题栏 + 窗口控制/菜单 IPC + 余额事件桥 + WSL 配置桥）
+├── wsl-backend.js        # WSL 托管后端（发行版探测 / bootstrap 安装 / 启动停止 / 更新回退）
 ├── assets/               # 加载页、更新进度页、图标、托盘图标、配套 dsh 插件
 │   ├── sponsor/          # 赞助收款码（支付宝 / 微信，「请作者喝咖啡」面板与本文档共用）
-│   └── plugins/          # dsh-balance（余额小部件）、dsh-file-changes（文件更改投影）、dsh-client-file-changes（「文件」视图）—— 自动同步进 web profile
+│   └── plugins/          # dsh-balance（余额小部件）、dsh-file-changes（文件更改投影）、dsh-client-file-changes（「文件」视图）、dsh-wsl-settings（设置页「WSL 后端」栏）等 —— 自动同步进 web profile
 ├── scripts/
 │   ├── fetch-node.js     # 内置 node.exe 复制脚本
 │   ├── fetch-npm.js      # 内置 npm CLI 复制脚本
@@ -198,6 +229,7 @@ dsh-desktop/
 │   ├── check-latest.js   # agent 更新链路测试工具
 │   ├── check-client-latest.js # 客户端更新链路测试工具
 │   ├── test-watcher.js   # 通知检测单测
+│   ├── sync-companion-plugins.js # 把配套插件同步进任意 dsh 的 web profile（独立于壳）
 │   └── inspect-session.js# 会话日志解析工具
 ├── build/icon.png        # electron-builder 图标源
 ├── vendor/               # 内置 node.exe / npm CLI（fetch-runtime 生成，不入库）

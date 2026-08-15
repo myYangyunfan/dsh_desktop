@@ -105,6 +105,13 @@ npm run dist             # 构建 portable + NSIS 安装包 → dist/
        原生窗口加载 Web UI（仅本机回环访问）
 ```
 
+## 连接 WSL 里的 dsh（WSL 托管模式）
+
+壳支持两种后端：`local`（内置 dsh，默认）、`wsl`（壳在 WSL 里安装并更新自己的 dsh），用 `settings.json` 的 `backend` 或环境变量 `DSH_DESKTOP_BACKEND` 选择。
+
+- **wsl（托管）**：设置页「WSL 后端」栏（或 `settings.json` 的 `backend` / 环境变量 `DSH_DESKTOP_BACKEND`）选 `wsl` 后，壳首次启动在 WSL 内 `npm install` 一套自己的 dsh（默认目录 `~/.dsh-desktop`，可配置；要求 WSL 内有 node/npm），每次启动自动同步配套插件并启动、连接；**agent 自动更新、回退、插件市场重启全部闭环**，体验等同本地模式。转发不通时在 `.wslconfig` 启用 `networkingMode=mirrored`。详见 `dsh-desktop/README.md`。
+- 自己在 WSL 里另装了 dsh（checkout 开发版/npm 版）想用上壳的配套插件？在 WSL 里跑 `node dsh-desktop/scripts/sync-companion-plugins.js ~/.dsh --with-patches`，重启 `dsh web` 生效。
+
 ## 目录结构
 
 ```
