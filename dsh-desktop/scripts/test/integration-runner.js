@@ -395,6 +395,32 @@ SCENARIOS['preview-fence'] = async (t) => {
   t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
 };
 
+SCENARIOS['heal-stale-manifest'] = async (t) => {
+  // issue #16：旧版本（0.3.3/0.3.4，#13 场景）写坏的存量 manifest ——
+  // bundles 只有配套 bundle、缺少核心 bundles —— 必须在本轮启动中自愈，
+  // 否则 dsh web 每次都以「plugin tree failed to load」退出码 1 失败。
+  const profileDir = path.join(t.dshHome, 'profiles', 'web');
+  fs.mkdirSync(profileDir, { recursive: true });
+  const badManifest = {
+    name: 'dsh-profile-web',
+    private: true,
+    dsh: { profile: { bundles: ['@dsh-external/dsh-super-injector', 'zat-dsh-engine'] } },
+  };
+  fs.writeFileSync(path.join(profileDir, 'package.json'), JSON.stringify(badManifest, null, 2) + '\n');
+  await t.waitFor('boot-ready', 240000, '坏 manifest 应被自愈后正常启动');
+  await t.waitFor('界面已稳定', 60000, '稳定期完成');
+  t.assert(t.grepLog('profile manifest 自愈'), '应记录 manifest 自愈日志');
+  const manifest = JSON.parse(fs.readFileSync(path.join(profileDir, 'package.json'), 'utf8'));
+  const bundles = manifest && manifest.dsh && manifest.dsh.profile && manifest.dsh.profile.bundles;
+  t.assert(Array.isArray(bundles), 'manifest bundles 应为数组');
+  t.assert(bundles[0] === '@deepseek-ai/dsh-base' && bundles[1] === '@deepseek-ai/dsh-web-app',
+    `核心 bundles 应补齐到最前，实际=${JSON.stringify(bundles)}`);
+  t.assert(bundles.includes('@dsh-external/dsh-super-injector') && bundles.includes('zat-dsh-engine'),
+    '既有配套 bundle 应原样保留');
+  const q = await t.quitAndCheck();
+  t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
+};
+
 SCENARIOS['kill-renderer'] = async (t) => {
   await t.waitFor('boot-ready', 240000, 'Web UI 就绪');
   await t.waitFor('界面已稳定', 60000, '稳定期完成');

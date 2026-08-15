@@ -28,6 +28,7 @@ const balance = require('./balance');
 const wslBackend = require('./wsl-backend');
 const { SessionWatcher, scanZstdFrames } = require('./session-watcher');
 const { RendererRecovery } = require('./renderer-recovery');
+const { ensureCoreBundles, CORE_BUNDLE_NAMES } = require('./profile-manifest');
 const zlib = require('node:zlib');
 
 // ---------------------------------------------------------------------------
@@ -2338,6 +2339,23 @@ function healProfilePatch() {
     log('boot', 'profile patch 自愈失败: ' + err.message);
   }
 }
+/**
+ * 在「实际将运行的 dsh 包」（内置或用户目录 overlay）中解析核心 bundles，
+ * 只返回真实可解析的模板名；解析不到的名字绝不写入，避免与真正启动的
+ * dsh 版本漂移后写入无效 bundle 名。
+ */
+function resolvableCoreBundles() {
+  const installAnchor = path.dirname(dshPackageJson());
+  return CORE_BUNDLE_NAMES.filter((name) => {
+    try {
+      require.resolve(name + '/package.json', { paths: [installAnchor] });
+      return true;
+    } catch {
+      return false; // 该 dsh 安装中缺失，交由 dsh 初始化
+    }
+  });
+}
+
 function syncCompanionPlugins() {
   if (!IS_WIN) return;
   try {
@@ -2415,21 +2433,26 @@ function syncCompanionPlugins() {
     // manifest，交由 dsh 自行初始化，bundle 插件留待下一次启动注册。
     let bundlesUsable = Array.isArray(manifest.dsh.profile.bundles);
     if (!bundlesUsable) {
-      const coreBundles = [];
-      // 以「实际将运行的 dsh 包」（内置或用户目录 overlay）为解析锚点，
-      // 确保写入的模板与真正启动的 dsh 版本一致；解析不到则不写。
-      const installAnchor = path.dirname(dshPackageJson());
-      for (const name of ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app']) {
-        try {
-          require.resolve(name + '/package.json', { paths: [installAnchor] });
-          coreBundles.push(name);
-        } catch { /* 该 dsh 安装中缺失，交由 dsh 初始化 */ }
-      }
-      if (coreBundles.length === 2) {
+      const coreBundles = resolvableCoreBundles();
+      if (coreBundles.length === CORE_BUNDLE_NAMES.length) {
         manifest.dsh.profile.bundles = coreBundles;
         bundlesUsable = true;
       } else {
         log('boot', 'dsh 出厂核心 bundles 未在安装中解析到，跳过 manifest 预写，交由 dsh 初始化');
+      }
+    } else {
+      // issue #16 存量自愈：旧版本（0.3.3/0.3.4，#13 的 bug 场景）写坏的
+      // manifest 里 bundles 只有配套 bundle、缺少核心 bundles。dsh 启动时
+      // 核心服务（webServer/subprocess/settings/llm 等）无人提供，插件树
+      // 无法激活（N entries did not activate），且该状态永远无法自愈。
+      // 这里把缺失且可解析的核心 bundles 补到列表最前（保持与模板一致的
+      // 先后顺序），其余条目（含用户自行添加的）原样保留；健康 manifest
+      // 零写入（幂等）。写入用原子写，避免与 dsh 的观察者撕裂读。
+      const healed = ensureCoreBundles(manifest.dsh.profile.bundles, resolvableCoreBundles());
+      if (healed) {
+        manifest.dsh.profile.bundles = healed.next;
+        writePatchAtomic(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
+        log('boot', 'profile manifest 自愈: 旧版本写坏的 bundles 缺少核心 ' + healed.added.join(', ') + '，已补齐到最前');
       }
     }
     for (const name of bundleNames) {

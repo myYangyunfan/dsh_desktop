@@ -20,6 +20,7 @@ const entryFiles = [
   'balance.js',
   'session-watcher.js',
   'renderer-recovery.js',
+  'profile-manifest.js',
   'wsl-backend.js',
   'watchdog.js',
 ];
