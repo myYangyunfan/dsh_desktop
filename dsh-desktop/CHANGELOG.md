@@ -5,6 +5,11 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 
 
+## [Unreleased]
+
+### 修复
+- **客户端自更新在中文 Windows 上解析失败**（`apply-update.ps1` 报 `Unexpected token '}'`，issue #23）：更新脚本改为带 UTF-8 BOM 写出，Windows PowerShell 5.1 不再按系统 ANSI 代码页（GBK）误读中文注释导致换行符被吞、语法乱码；`buildNsisPs1()` 模板注释同步 ASCII 化，脚本在任何代码页与换行风格下均安全
+
 ## [0.3.8] — 2026-08-15
 
 ### 修复

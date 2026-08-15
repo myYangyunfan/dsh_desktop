@@ -357,9 +357,11 @@ try {
 } catch {
   Log ("setup launch failed: " + $_.Exception.Message)
 }
-# 安装器即使配置了自动启动，也可能被安全软件拦截或在旧版 NSIS
-# 模板里不拉起应用。这里最多等 15 秒；若新版本仍未运行，则从
-# 卸载注册表定位安装目录并显式启动，解决“更新完只退出、不重启”。
+# The installer may be blocked by security software, and old NSIS
+# templates may not relaunch the app even when configured to. Wait up to
+# 15s; if the new build is still not running, locate the install dir from
+# the uninstall registry and start it explicitly, fixing "update exits
+# but never restarts".
 $launched = $false
 $deadline = (Get-Date).AddSeconds(15)
 while ((Get-Date) -lt $deadline) {
@@ -407,8 +409,9 @@ if (-not $launched -and $setupSucceeded) {
 } elseif (-not $setupSucceeded) {
   Log "setup did not complete"
 }
-# 兜底：无论安装器成功还是失败/被取消，都不要让用户面对「点了立即重启，
-# 应用却消失了」。找不到新版本时就重新拉起旧版本，保留可见状态。
+# Fallback: whether the installer succeeded or was cancelled/failed, never
+# leave the user staring at "I clicked restart and the app disappeared".
+# If the new build cannot be found, relaunch the previous build instead.
 if (-not $launched) {
   if (Test-Path -LiteralPath $OldExe) {
     Log ("restarting previous build: " + $OldExe)
@@ -469,7 +472,12 @@ function applyUpdate(ctx, pending) {
   } else {
     const ps1 = path.join(dir, 'apply-update.ps1');
     script = path.join(dir, 'apply-update.cmd');
-    fs.writeFileSync(ps1, buildNsisPs1(), 'utf8');
+    // 必须带 BOM 写 UTF-8：Windows PowerShell 5.1 对无 BOM 的 .ps1 按系统
+    // ANSI 代码页（中文系统 = GBK）解码，模板中的中文注释被误读且可能吞掉
+    // 换行符，脚本在解析阶段报 Unexpected token '}' 直接退出（客户端更新
+    // “下载完重启无反应”的根因之一，见 issue #23）。模板本身已 ASCII 化，
+    // BOM 保证将来再写入非 ASCII 注释也不会重蹈覆辙。
+    fs.writeFileSync(ps1, '\uFEFF' + buildNsisPs1(), 'utf8');
     fs.writeFileSync(script, buildNsisCmd());
     ctx.log('client-update', `启动安装版更新脚本: ${script}→${path.basename(ps1)}（安装包: ${newExe}，进程: ${procName}，旧版: ${oldExe}）日志: ${logFile}`);
     // 同便携版：/c 的第一个参数不能是含空格的完整路径，否则脚本根本不执行。
