@@ -395,6 +395,27 @@ SCENARIOS['preview-fence'] = async (t) => {
   t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
 };
 
+SCENARIOS['web-search-patch'] = async (t) => {
+  // issue #20：启动时必须把 web-search baseURL 契约补丁落到生效的 profile
+  // fallback 副本（junction 写穿内置包），并记录日志。
+  await t.waitFor('boot-ready', 240000, 'Web UI 就绪');
+  await t.waitFor('界面已稳定', 60000, '稳定期完成');
+  t.assert(t.grepLog('web-search baseURL 补丁'), '应记录 web-search baseURL 补丁日志');
+  const providerFile = path.join(t.dshHome, 'profiles', 'node_modules', '@deepseek-ai', 'dsh-web-search-deepseek', 'lib', 'index.js');
+  t.assert(fs.existsSync(providerFile), 'profile fallback 应存在 provider 副本');
+  const src = fs.readFileSync(providerFile, 'utf8');
+  t.assert(src.includes('normalizedBase'), 'provider 应已写入归一化拼接补丁');
+  t.assert(src.includes('Anthropic 兼容 Messages API'), 'provider 应已写入协议契约指引');
+  const clientFile = path.join(t.dshHome, 'profiles', 'node_modules', '@deepseek-ai', 'dsh-client-ui-settings-plugins', 'lib', 'client.js');
+  if (fs.existsSync(clientFile)) {
+    t.assert(fs.readFileSync(clientFile, 'utf8').includes('该提供方通过 Anthropic 兼容 Messages API 请求'), '设置页文案补丁应落盘');
+  } else {
+    t.assert(true, 'client 副本不在 profile fallback（不影响 provider 修复断言）');
+  }
+  const q = await t.quitAndCheck();
+  t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
+};
+
 SCENARIOS['kill-renderer'] = async (t) => {
   await t.waitFor('boot-ready', 240000, 'Web UI 就绪');
   await t.waitFor('界面已稳定', 60000, '稳定期完成');

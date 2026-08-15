@@ -28,6 +28,7 @@ require('./patch-portable-template');
 // harness and not marked ignorable" breaks session history loading.
 const { patchDshSessionVocabulary } = require('./patch-event-vocabulary');
 const { installBuiltinPresets } = require('./install-minimal-win-preset');
+const { patchWebSearchBaseUrl } = require('./patch-web-search-baseurl');
 
 // Regexes for files that are safe to delete (pure metadata / dev artifacts).
 const DROP_BASENAME = /^(LICENSE.*|README.*|CHANGELOG.*|HISTORY.*|COPYING.*|NOTICE.*|AUTHORS.*|SECURITY.*|CONTRIBUTING.*|\.gitignore|\.npmignore|\.editorconfig|\.eslintrc.*|\.prettierrc.*|\.babelrc.*)$/i;
@@ -103,5 +104,16 @@ module.exports = async function afterPack(context) {
     console.log(`afterPack: builtin presets installed (${presetDirs.length}): ${presetDirs.map((p) => path.basename(p)).join(", ")}`);
   } else {
     console.warn('afterPack: bundled dsh package not found — minimal-win preset skipped');
+  }
+
+  // Patch the bundled dsh-web-search-deepseek baseURL handling (issue #20,
+  // idempotent). Runs after pruning so the .js files it modifies are the final
+  // copies; the same implementation is re-applied at boot for the overlay copy.
+  const appNm = path.join(appOutDir, 'resources', 'app', 'node_modules');
+  if (fs.existsSync(appNm)) {
+    const wsChanged = patchWebSearchBaseUrl(appNm, (m) => console.log('afterPack: ' + m));
+    console.log(`afterPack: web-search baseURL ${wsChanged > 0 ? `patched (${wsChanged} files)` : 'already up to date'}`);
+  } else {
+    console.warn('afterPack: bundled app node_modules not found — web-search baseURL patch skipped');
   }
 };

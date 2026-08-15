@@ -28,6 +28,7 @@ const balance = require('./balance');
 const wslBackend = require('./wsl-backend');
 const { SessionWatcher, scanZstdFrames } = require('./session-watcher');
 const { RendererRecovery } = require('./renderer-recovery');
+const { patchWebSearchBaseUrl } = require('./scripts/patch-web-search-baseurl');
 const zlib = require('node:zlib');
 
 // ---------------------------------------------------------------------------
@@ -1649,7 +1650,8 @@ async function runUpdateFlow(manual) {
       applyVisionKeyFix();
       applyProfilePatchGuard();
       applySettingsSectionGuard();
-  applyWorkspaceSearchRailFix();
+      applyWorkspaceSearchRailFix();
+      applyWebSearchBaseUrlFix();
     }
     const { response: r2 } = await showBox({
       type: 'info',
@@ -2894,6 +2896,30 @@ function applyWorkspaceSearchRailFix() {
     }
   }
 }
+// ---------------------------------------------------------------------------
+// issue #20 运行时补丁：dsh-web-search-deepseek 的「接口地址」契约与拼接修复。
+// 补丁本体在 scripts/patch-web-search-baseurl.js（与打包补丁共用同一实现，
+// 避免两处漂移）；这里覆盖三处运行副本：profile fallback（junction 写穿）、
+// 内置 app 副本、用户更新过的 agent overlay。锚点不匹配（上游将来修复后）
+// 自动跳过，绝不损坏文件。
+// ---------------------------------------------------------------------------
+function applyWebSearchBaseUrlFix() {
+  const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
+  const targets = [
+    path.join(home, 'profiles', 'node_modules'),
+    path.join(__dirname, 'node_modules'),
+    path.join(userDataDir, 'agent', 'node_modules'),
+  ];
+  for (const root of targets) {
+    if (!root || !fs.existsSync(root)) continue;
+    try {
+      const n = patchWebSearchBaseUrl(root, (m) => log('boot', m));
+      if (n > 0) log('boot', 'web-search baseURL 补丁: 已应用到 ' + root);
+    } catch (err) {
+      log('boot', 'web-search baseURL 补丁失败(' + root + '): ' + err.message);
+    }
+  }
+}
 // 快捷方式维护：修复「没有桌面快捷方式 / 快捷方式指向的文件消失」，
 // 并让快捷方式图标跟随图标设计更新（.lnk 单独指定 icon.ico）。
 // ---------------------------------------------------------------------------
@@ -3487,7 +3513,8 @@ async function boot() {
     applyVisionKeyFix();
     applyProfilePatchGuard();
     applySettingsSectionGuard();
-  applyWorkspaceSearchRailFix();
+    applyWorkspaceSearchRailFix();
+    applyWebSearchBaseUrlFix();
   } else {
     // 先修复 profile fallback 联接再同步/补丁依赖文件：EPERM 环境下补丁写不进去。
     await repairProfileFallback(home);
@@ -3498,7 +3525,8 @@ async function boot() {
     applyVisionKeyFix();
     applyProfilePatchGuard();
     applySettingsSectionGuard();
-  applyWorkspaceSearchRailFix();
+    applyWorkspaceSearchRailFix();
+    applyWebSearchBaseUrlFix();
     initRendererRecovery();
     createWindow();
     wireWindowRecovery();
