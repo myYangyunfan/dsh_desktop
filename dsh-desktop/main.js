@@ -28,6 +28,7 @@ const balance = require('./balance');
 const wslBackend = require('./wsl-backend');
 const { SessionWatcher, scanZstdFrames } = require('./session-watcher');
 const { RendererRecovery } = require('./renderer-recovery');
+const { dedupePatchEntries, dropBlocksByIds, parseFailedLoaderIds, mapPackagesToPatchIds } = require('./profile-patch-heal');
 const zlib = require('node:zlib');
 
 // ---------------------------------------------------------------------------
@@ -532,32 +533,32 @@ function logTailSnippet(maxLines = 20) {
   return tail ? '\n\n最近日志：\n' + tail : '';
 }
 
-function parseFailedLoaderIds(text) {
-  const ids = new Set();
-  const re = /failed to apply loader entry\s+([A-Za-z0-9_-]+)\s*\(/g;
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    if (m[1] !== 'include') ids.add(m[1]);
-  }
-  return [...ids];
+// loader 失败条目的三种 id 形态解析已收口到 profile-patch-heal.js
+// （parseFailedLoaderIds，含 issue #17 的 "duplicate loader entry id: X" 与
+// 括号包名形态），这里不再保留本地实现。
+
+function profilePatchText() {
+  const patchFile = path.join(dshHome || path.join(os.homedir(), '.dsh'), 'profiles', 'web', 'cordis.patch.yml');
+  try { return fs.readFileSync(patchFile, 'utf8'); } catch { return ''; }
 }
 
 function profilePatchIds() {
-  const patchFile = path.join(dshHome || path.join(os.homedir(), '.dsh'), 'profiles', 'web', 'cordis.patch.yml');
+  const text = profilePatchText();
   const ids = new Set();
-  try {
-    const text = fs.readFileSync(patchFile, 'utf8');
-    const re = /(?:^|\n)\s*-\s*id:\s*([A-Za-z0-9_-]+)/g;
-    let m;
-    while ((m = re.exec(text)) !== null) ids.add(m[1]);
-  } catch {}
+  const re = /(?:^|\n)\s*-\s*id:\s*([A-Za-z0-9_-]+)/g;
+  let m;
+  while ((m = re.exec(text)) !== null) ids.add(m[1]);
   return [...ids];
 }
 
 function findFailedPatchPlugins() {
-  const failed = parseFailedLoaderIds(readDshWebLogTail(120));
+  const tokens = parseFailedLoaderIds(readDshWebLogTail(120));
   const known = new Set(profilePatchIds());
-  return failed.filter((id) => known.has(id));
+  // 括号包名（@scope/pkg）不是 patch id：先映射回条目 id 再参与 overlay 判定；
+  // 其余 token（hash 形态与 duplicate loader entry id: X 形态）按既有逻辑过滤。
+  const packages = tokens.filter((t) => t.includes('/'));
+  const mapped = mapPackagesToPatchIds(profilePatchText(), packages);
+  return [...new Set([...tokens.filter((t) => !t.includes('/')), ...mapped])].filter((id) => known.has(id));
 }
 
 function safeBootOverlayPath() {
@@ -2270,12 +2271,16 @@ function removeLegacyMarketplace(profileWebModules, profileDir) {
 }
 
 // ---------------------------------------------------------------------------
-// profile patch 自愈：cordis.patch.yml 损坏（典型：顶层 `[]` 与 `- insert:` 列表
-// 混存——同一 YAML 文档两个顶层值）会让 dsh web 装配 profile 时抛 YAMLException
-// 并以 exit 1 退出，桌面端「启动失败」。每次启动 dsh web 前调用本函数：
+// profile patch 自愈：cordis.patch.yml 损坏会让 dsh web 装配 profile 时抛错并
+// 以 exit 1 退出，桌面端「启动失败」。每次启动 dsh web 前调用本函数：
 //   1. 顶层孤立 `[]` 与列表条目混存 → 移除 `[]` 行（修复为单一顶层列表）；
-//   2. 仍无法解析（其它损坏形态）→ 备份为 cordis.patch.yml.broken-<ts> 并重置为
-//      最小合法文件，日志告警，备份保留用户内容供恢复。健康文件零写入（幂等）。
+//   2. issue #17 存量：同一 loader id 被注册多次（旧版本插件安装写入的重复
+//      insert 条目 → cordis loader "duplicate loader entry id: X"）→ 注册行级
+//      去重，保留首次注册、备份原文件；config 覆盖/disabled 禁用条目是用户
+//      配置，绝不改动；
+//   3. 仍无法解析（其它损坏形态）→ 备份为 cordis.patch.yml.broken-<ts> 并
+//      重置为最小合法文件，日志告警，备份保留用户内容供恢复。
+//   健康文件零写入（幂等）。
 // ---------------------------------------------------------------------------
 function profilePatchFile() {
   const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
@@ -2328,6 +2333,20 @@ function healProfilePatch() {
     let parsed;
     let error = null;
     try { parsed = yaml.load(text); } catch (err) { error = err; }
+    if (!error && Array.isArray(parsed)) {
+      // issue #17 存量自愈：注册行级去重。重复注册（旧版本插件安装
+      // 写入的第二个同 id insert 条目）会让 cordis loader 抛
+      // "duplicate loader entry id: X"，且该状态永远无法自愈；只删重复
+      // 注册行，用户手写的 config/disabled 覆盖条目原样保留。
+      const dedupe = dedupePatchEntries(text);
+      if (dedupe.removed.length > 0) {
+        const backup = file + '.dup-' + Date.now();
+        try { fs.copyFileSync(file, backup); } catch {}
+        writePatchAtomic(file, dedupe.text);
+        log('boot', 'profile patch 自愈: 移除了重复注册的 loader 条目 ' + [...new Set(dedupe.removed)].join(', ') + '，原文件已备份到 ' + backup);
+        text = dedupe.text;
+      }
+    }
     if (error || !Array.isArray(parsed)) {
       const backup = file + '.broken-' + Date.now();
       try { fs.renameSync(file, backup); } catch { fs.copyFileSync(file, backup); }
@@ -2446,6 +2465,23 @@ function syncCompanionPlugins() {
     let patch = '';
     try { patch = fs.readFileSync(patchFile, 'utf8'); } catch { patch = ''; }
     let changed = false;
+    // bundle 迁移自愈（issue #17 同族）：旧版本把后来升级为 bundle 的配套插件
+    // 当非 bundle 写进了 patch（insert 行）；插件现经 dsh.profile.bundles 装配，
+    // 残留注册行会造成同 id 双登记 → cordis loader "duplicate loader entry id" →
+    // 整树加载失败（更新后首次启动崩溃）。幂等移除命中的注册行/块；用户手写
+    // 的 config 覆盖/disabled 禁用条目原样保留。
+    const bundleIds = new Set();
+    for (const p of COMPANION_PLUGINS) {
+      if (bundleNames.has(p.name)) bundleIds.add(p.id);
+    }
+    if (bundleIds.size > 0 && patch.includes('- id:')) {
+      const migration = dropBlocksByIds(patch, [...bundleIds]);
+      if (migration.removed.length > 0) {
+        patch = migration.text;
+        changed = true;
+        log('boot', '已把 bundle 插件移出 profile patch（避免双登记）: ' + [...new Set(migration.removed)].join(', '));
+      }
+    }
     for (const p of COMPANION_PLUGINS) {
       if (bundleNames.has(p.name)) continue;
       // 该 id 在 patch 里已存在：若它现在的 name 与当前版本不一致（例如终端

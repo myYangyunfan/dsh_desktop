@@ -28,6 +28,7 @@ files:
   - session-watcher.js
   - preload.js
   - renderer-recovery.js
+  - profile-patch-heal.js
   - wsl-backend.js
   - watchdog.js
   - assets/**/*

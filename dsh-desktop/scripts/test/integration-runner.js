@@ -395,6 +395,101 @@ SCENARIOS['preview-fence'] = async (t) => {
   t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
 };
 
+SCENARIOS['heal-dup-patch'] = async (t) => {
+  // issue #17：旧版本插件安装写入的「同 id 重复注册」存量（cordis.patch.yml
+  // 含两个 id: balance 的 insert 块）会让 cordis loader 抛
+  // "duplicate loader entry id: X" 且永远无法启动。本场景验证启动自愈：
+  // 去重为单一条目、原文件备份、正常进入 Web UI。
+  const profileDir = path.join(t.dshHome, 'profiles', 'web');
+  fs.mkdirSync(profileDir, { recursive: true });
+  const dupPatch = [
+    '# 模拟 v0.3.4 存量：两个 insert 块重复注册 id: balance',
+    '- insert:',
+    '    - id: balance',
+    "      name: '@deepseek-ai/dsh-balance'",
+    '- insert:',
+    '    - id: balance',
+    "      name: '@deepseek-ai/dsh-balance'",
+    '',
+  ].join('\n');
+  const patchFile = path.join(profileDir, 'cordis.patch.yml');
+  fs.writeFileSync(patchFile, dupPatch);
+  await t.waitFor('boot-ready', 240000, '重复注册的 patch 应被自愈后正常启动');
+  await t.waitFor('界面已稳定', 60000, '稳定期完成');
+  t.assert(t.grepLog('移除了重复注册的 loader 条目'), '应记录重复条目自愈日志');
+  const healed = fs.readFileSync(patchFile, 'utf8');
+  t.assert((healed.match(/^\s*- id: balance$/gm) || []).length === 1, `balance 条目应去重为 1 个，实际=${healed}`);
+  const backups = fs.readdirSync(profileDir).filter((f) => f.startsWith('cordis.patch.yml.dup-'));
+  t.assert(backups.length >= 1, '原文件应被备份为 cordis.patch.yml.dup-<ts>');
+  const q = await t.quitAndCheck();
+  t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
+};
+
+SCENARIOS['heal-bundle-patch'] = async (t) => {
+  // bundle 迁移双登记自愈（issue #17 同族）：旧版本把后来升级为 bundle 的
+  // 配套插件写进了 cordis.patch.yml（insert 行），现经 dsh.profile.bundles
+  // 装配 → 同 id 双登记 → duplicate loader entry → 启动失败。启动时应自动
+  // 移除 patch 中的残留行并正常进入 Web UI。
+  const profileDir = path.join(t.dshHome, 'profiles', 'web');
+  fs.mkdirSync(profileDir, { recursive: true });
+  const stalePatch = [
+    '# 旧版本遗留：better-sidebar 还被当作非 bundle 写入 patch',
+    '- insert:',
+    '    - id: better-sidebar',
+    "      name: 'dsh-better-sidebar'",
+    '',
+  ].join('\n');
+  const patchFile = path.join(profileDir, 'cordis.patch.yml');
+  fs.writeFileSync(patchFile, stalePatch);
+  await t.waitFor('boot-ready', 240000, 'bundle 双登记应被自愈后正常启动');
+  await t.waitFor('界面已稳定', 60000, '稳定期完成');
+  t.assert(t.grepLog('已把 bundle 插件移出 profile patch'), '应记录 bundle 迁移自愈日志');
+  const healed = fs.readFileSync(patchFile, 'utf8');
+  t.assert(!/id: better-sidebar/.test(healed), `patch 中的 better-sidebar 残留行应被移除，实际=${healed}`);
+  const q = await t.quitAndCheck();
+  t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
+};
+
+SCENARIOS['heal-dup-patch-keeps-config'] = async (t) => {
+  // 回归防线：自愈只允许删「重复注册行」，绝不删除用户手写的
+  // config 覆盖 / disabled 禁用条目（cordis.patch.yml 官方文件头声明的
+  // 顶层条目形态）。同 id 的重复 insert 注册 + disabled/config 覆盖共存时，
+  // 应去重注册行并原样保留用户配置条目后正常启动。
+  const profileDir = path.join(t.dshHome, 'profiles', 'web');
+  fs.mkdirSync(profileDir, { recursive: true });
+  const patch = [
+    '# 重复注册 balance + 用户手写的 disabled/config 覆盖条目',
+    '- insert:',
+    '    - id: balance',
+    "      name: '@deepseek-ai/dsh-balance'",
+    '- insert:',
+    '    - id: balance',
+    "      name: '@deepseek-ai/dsh-balance'",
+    '- id: balance',
+    '  disabled: true',
+    '- insert:',
+    '    - id: terminal',
+    "      name: '@deepseek-ai/dsh-terminal-tab'",
+    '- id: terminal',
+    '  config: {}',
+    '',
+  ].join('\n');
+  const patchFile = path.join(profileDir, 'cordis.patch.yml');
+  fs.writeFileSync(patchFile, patch);
+  await t.waitFor('boot-ready', 240000, '重复注册应被自愈，且用户配置条目保留');
+  await t.waitFor('界面已稳定', 60000, '稳定期完成');
+  t.assert(t.grepLog('移除了重复注册的 loader 条目'), '应记录重复条目自愈日志');
+  const healed = fs.readFileSync(patchFile, 'utf8');
+  t.assert((healed.match(/^\s*- id: balance$/gm) || []).length === 2, `balance 应只剩 1 条注册 + 1 条 disabled 覆盖，实际=${healed}`);
+  t.assert((healed.match(/^\s*- id: terminal$/gm) || []).length === 2, `terminal 应只剩 1 条注册 + 1 条 config 覆盖，实际=${healed}`);
+  t.assert(/disabled: true/.test(healed), '用户 disabled 条目应保留');
+  t.assert(/config: \{\}/.test(healed), '用户 config 覆盖条目应保留');
+  const backups = fs.readdirSync(profileDir).filter((f) => f.startsWith('cordis.patch.yml.dup-'));
+  t.assert(backups.length >= 1, '原文件应被备份为 cordis.patch.yml.dup-<ts>');
+  const q = await t.quitAndCheck();
+  t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
+};
+
 SCENARIOS['kill-renderer'] = async (t) => {
   await t.waitFor('boot-ready', 240000, 'Web UI 就绪');
   await t.waitFor('界面已稳定', 60000, '稳定期完成');
