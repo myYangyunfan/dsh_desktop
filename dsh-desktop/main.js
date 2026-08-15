@@ -1706,10 +1706,37 @@ function syncCompanionPlugins() {
     const manifestFile = path.join(profileDir, 'package.json');
     let manifest = {};
     try { manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8')); } catch { manifest = { name: 'dsh-profile-web', private: true }; }
-    manifest.dsh ??= {};
-    manifest.dsh.profile ??= {};
-    manifest.dsh.profile.bundles ??= [];
+    if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) manifest = { name: 'dsh-profile-web', private: true };
+    if (!manifest.dsh || typeof manifest.dsh !== 'object') manifest.dsh = {};
+    if (!manifest.dsh.profile || typeof manifest.dsh.profile !== 'object') manifest.dsh.profile = {};
+    // 全新 profile（dsh 尚未初始化）时 manifest 不存在、也没有 bundles。
+    // 此时壳层不能凭空新建只含自己 bundle 的 manifest：那会顶替 dsh 的
+    // 初始化，profile 里没有提供核心服务的插件，插件树无法激活，
+    // 全新 DSH_HOME 首次启动必然失败。
+    // 处理：核心 bundles 必须在安装中实测可解析（与 dsh-app-boot 的
+    // PROFILE_TEMPLATES.web 同名）才写入；解析不到（模板未来改名）则不写
+    // manifest，交由 dsh 自行初始化，bundle 插件留待下一次启动注册。
+    let bundlesUsable = Array.isArray(manifest.dsh.profile.bundles);
+    if (!bundlesUsable) {
+      const coreBundles = [];
+      // 以「实际将运行的 dsh 包」（内置或用户目录 overlay）为解析锚点，
+      // 确保写入的模板与真正启动的 dsh 版本一致；解析不到则不写。
+      const installAnchor = path.dirname(dshPackageJson());
+      for (const name of ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app']) {
+        try {
+          require.resolve(name + '/package.json', { paths: [installAnchor] });
+          coreBundles.push(name);
+        } catch { /* 该 dsh 安装中缺失，交由 dsh 初始化 */ }
+      }
+      if (coreBundles.length === 2) {
+        manifest.dsh.profile.bundles = coreBundles;
+        bundlesUsable = true;
+      } else {
+        log('boot', 'dsh 出厂核心 bundles 未在安装中解析到，跳过 manifest 预写，交由 dsh 初始化');
+      }
+    }
     for (const name of bundleNames) {
+      if (!bundlesUsable) break;
       if (!manifest.dsh.profile.bundles.includes(name)) {
         manifest.dsh.profile.bundles.push(name);
         fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
