@@ -14,7 +14,7 @@
 // modules (sharp, node-pty, koffi, ...) match the Node ABI they were
 // installed for. We deliberately never rebuild them against Electron.
 
-const { app, BrowserWindow, Menu, Tray, shell, dialog, Notification, ipcMain, clipboard } = require('electron');
+const { app, BrowserWindow, Menu, Tray, shell, dialog, Notification, ipcMain, clipboard, crashReporter } = require('electron');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -25,6 +25,7 @@ const updater = require('./updater');
 const clientUpdater = require('./client-updater');
 const balance = require('./balance');
 const { SessionWatcher, scanZstdFrames } = require('./session-watcher');
+const { RendererRecovery } = require('./renderer-recovery');
 const zlib = require('node:zlib');
 
 // ---------------------------------------------------------------------------
@@ -96,6 +97,8 @@ let balanceCache = null;
 let balanceTimer = null;
 let restartingServer = false;
 let trayRecoveryTimer = null;
+let recovery = null; // 渲染进程崩溃/挂起自恢复状态机（renderer-recovery.js）
+let crashDumpsDir = '';
 
 // ---------------------------------------------------------------------------
 // 会话浮窗（分屏）：把会话弹出到独立窗口
@@ -359,7 +362,37 @@ function showBox(opts) {
 // dsh web server lifecycle
 // ---------------------------------------------------------------------------
 
+// Chromium 限制端口（net::ERR_UNSAFE_PORT）。dsh web / 预览服务用 --port 0
+// 随机选端口，可能命中这些端口导致页面永远无法加载（实测命中过 4045）。
+// 命中时自动重启服务换端口，而不是让用户面对无法加载的窗口。
+const CHROMIUM_RESTRICTED_PORTS = new Set([
+  1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77, 79,
+  87, 95, 101, 102, 103, 104, 109, 110, 111, 113, 115, 117, 119, 123, 135, 137,
+  139, 143, 161, 179, 389, 427, 465, 512, 513, 514, 515, 526, 530, 531, 532,
+  540, 548, 554, 556, 563, 587, 601, 636, 989, 990, 993, 995, 1719, 1720, 1723,
+  2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669,
+  6697, 10080,
+]);
+
+function restrictedPortOf(url) {
+  try {
+    const u = new URL(url);
+    const port = Number(u.port || (u.protocol === 'https:' ? '443' : '80'));
+    return CHROMIUM_RESTRICTED_PORTS.has(port) ? port : 0;
+  } catch {
+    return 0;
+  }
+}
+
+// 集成测试专用：DSH_DESKTOP_TEST_FORCE_UNSAFE=1 时把第一次探测到的端口
+// 强制视为受限端口（6000），端到端验证「重启换端口」交接路径。
+let testForceUnsafeOnce = process.env.DSH_DESKTOP_TEST_FORCE_UNSAFE === '1';
+
 function startServer() {
+  return startServerWithRetries(4);
+}
+
+function startServerWithRetries(unsafePortRetries) {
   return new Promise((resolve, reject) => {
     // M1 修复：重入前先终结旧进程，避免孤儿 harness 同时写同一 DSH_HOME。
     if (serverProc && !serverProc.killed && !quitting) {
@@ -387,6 +420,7 @@ function startServer() {
     });
     serverProc = proc;
     let settled = false;
+    let handedOff = false; // 受限端口重启：本实例的退出不再影响外层 Promise/弹窗
     let bootTimer = null;
     const finish = (fn, value) => {
       if (!settled) { settled = true; fn(value); }
@@ -397,7 +431,31 @@ function startServer() {
       const text = chunk.toString();
       for (const line of text.split(/\r?\n/)) {
         const m = line.match(/dsh web:\s+(https?:\/\/\S+)/);
-        if (m) finish(resolve, m[1]);
+        if (!m) continue;
+        let blocked;
+        if (testForceUnsafeOnce) {
+          testForceUnsafeOnce = false;
+          blocked = 6000; // 测试钩子：仅第一次强制视为受限端口
+        } else {
+          blocked = restrictedPortOf(m[1]);
+        }
+        if (blocked && unsafePortRetries > 0) {
+          // 端口命中 Chromium 受限列表：结束该实例重启换端口（有上限）。
+          // 标记 handedOff，本实例的 exit 事件不得提前 reject 外层 Promise
+          // 或弹出「服务已停止」对话框，结果交由递归重启决定。
+          handedOff = true;
+          log('dsh', `端口 ${blocked} 属于 Chromium 受限端口（ERR_UNSAFE_PORT），重启服务换端口（剩余重试 ${unsafePortRetries} 次）`);
+          killTree(proc);
+          setTimeout(() => {
+            if (quitting) return finish(reject, new Error('应用正在退出'));
+            startServerWithRetries(unsafePortRetries - 1).then(
+              (url) => finish(resolve, url),
+              (err) => finish(reject, err)
+            );
+          }, 600);
+          return;
+        }
+        finish(resolve, m[1]);
       }
     };
     proc.stdout.on('data', onData);
@@ -409,8 +467,10 @@ function startServer() {
       // 原地重启（插件市场）或已替换为新进程时，不打扰用户、也不清掉新进程的句柄。
       const intentional = restartingServer || serverProc !== proc;
       if (serverProc === proc) serverProc = null;
-      finish(reject, new Error(`dsh web 启动失败（退出码 ${code}）。日志: ${path.join(logsDir, 'dsh-web.log')}`));
-      if (!quitting && !intentional && webUrl && mainWindow && !mainWindow.isDestroyed()) {
+      if (!handedOff) {
+        finish(reject, new Error(`dsh web 启动失败（退出码 ${code}）。日志: ${path.join(logsDir, 'dsh-web.log')}`));
+      }
+      if (!quitting && !intentional && !handedOff && webUrl && mainWindow && !mainWindow.isDestroyed()) {
         showBox({
           type: 'error',
           title: 'DSH 服务已停止',
@@ -494,7 +554,7 @@ function handleBootFailure(err) {
 // Window
 // ---------------------------------------------------------------------------
 
-function createWindow() {
+function createWindow(opts = {}) {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -514,13 +574,15 @@ function createWindow() {
       spellcheck: false,
     },
   });
+  const win = mainWindow;
 
-  mainWindow.loadFile(path.join(__dirname, 'assets', 'loading.html'));
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  win.loadFile(path.join(__dirname, 'assets', 'loading.html'));
+  // startHidden：崩溃恢复重建窗口时保持「隐藏到托盘」状态，不突然弹出窗口。
+  win.once('ready-to-show', () => { if (!win.isDestroyed() && !opts.startHidden) win.show(); });
   // Keep the app brand in the OS title bar (the web UI sets its own <title>).
-  mainWindow.on('page-title-updated', (event) => {
+  win.on('page-title-updated', (event) => {
     event.preventDefault();
-    mainWindow.setTitle('DSH Desktop');
+    win.setTitle('DSH Desktop');
   });
 
   // Open target=_blank / window.open in the system browser.
@@ -554,14 +616,13 @@ function createWindow() {
   mainWindow.webContents.on('will-redirect', guardNavigation);
 
   // 渲染进程错误捕获：插件/页面异常统一落到 desktop.log，便于排查空白视图。
-  mainWindow.webContents.on('console-message', (_e, level, message, line, sourceId) => {
+  win.webContents.on('console-message', (_e, level, message, line, sourceId) => {
     if (level === 'error' || level === 'warning') {
       log('page', `[${level}] ${message} (${sourceId || 'unknown'}:${line})`);
     }
   });
-  mainWindow.webContents.on('render-process-gone', (_e, details) => {
-    log('page', `渲染进程异常退出: ${details.reason} (exitCode=${details.exitCode})`);
-  });
+  // 渲染进程崩溃/挂起的自恢复由 renderer-recovery.js 统一接管
+  // （boot 阶段经 wireWindowRecovery() 挂载），这里不再只记日志。
 
   // 移除菜单栏后仍保留的键盘快捷键。
   mainWindow.webContents.on('before-input-event', (event, input) => {
@@ -570,7 +631,7 @@ function createWindow() {
     if (input.key === 'F11') { mainWindow.setFullScreen(!mainWindow.isFullScreen()); event.preventDefault(); }
     else if (input.key === 'F12') { mainWindow.webContents.toggleDevTools(); event.preventDefault(); }
     else if (input.control && input.shift && key === 'i') { mainWindow.webContents.toggleDevTools(); event.preventDefault(); }
-    else if (input.control && key === 'r') { mainWindow.reload(); event.preventDefault(); }
+    else if (input.control && key === 'r') { reloadMainWindow(); event.preventDefault(); }
     else if (input.alt && key === 'f4') { mainWindow.close(); event.preventDefault(); }
   });
 
@@ -597,10 +658,85 @@ function createWindow() {
   });
 
   mainWindow.on('closed', () => {
-    mainWindow = null;
+    // 崩溃恢复会销毁并重建主窗：旧窗口的 closed 可能晚于新窗口创建，
+    // 必须校验身份，避免把新的 mainWindow 全局引用置空。
+    if (mainWindow === win) mainWindow = null;
     if (sponsorWindow && !sponsorWindow.isDestroyed()) sponsorWindow.destroy();
     sponsorWindow = null;
   });
+}
+
+// ---------------------------------------------------------------------------
+// 渲染进程自恢复：装配 renderer-recovery 状态机（Issue #9 根治修复）
+// ---------------------------------------------------------------------------
+
+function initRendererRecovery() {
+  if (recovery) return recovery;
+  const opts = {
+    log: (msg) => log('recovery', msg),
+    isQuitting: () => quitting,
+    isServerAlive: () => !!serverProc && serverProc.exitCode === null && !serverProc.killed,
+    getTarget: () => (webUrl ? { kind: 'url', url: webUrl } : null),
+    loadingPage: path.join(__dirname, 'assets', 'loading.html'),
+    recoveryPage: path.join(__dirname, 'assets', 'recovery.html'),
+    rebuildMainWindow: ({ startHidden } = {}) => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
+      createWindow({ startHidden: !!startHidden });
+      wireWindowRecovery();
+      return mainWindow;
+    },
+    waitServerUp: (maxMs) => {
+      if (!webUrl) return Promise.reject(new Error('webUrl 未知'));
+      return waitUntilUp(webUrl, maxMs);
+    },
+    onGaveUp: (lastFailure) => {
+      writeRunState({ renderer: { state: 'gave-up', lastFailure, at: new Date().toISOString() } });
+    },
+    onStable: () => {
+      writeRunState({ renderer: { state: 'healthy', at: new Date().toISOString() } });
+    },
+    notify: (title, body) => {
+      try {
+        const n = new Notification({
+          title,
+          body,
+          icon: path.join(__dirname, 'assets', 'icon.png'),
+        });
+        n.on('click', () => showMainWindow());
+        n.show();
+      } catch (err) {
+        log('recovery', '通知发送失败: ' + err.message);
+      }
+    },
+  };
+  // 集成测试专用：缩短「稳定期」，加快测试节奏。生产环境恒为默认 30s。
+  if (process.env.DSH_DESKTOP_TEST && process.env.DSH_DESKTOP_TEST_STABILITY_MS) {
+    opts.STABILITY_MS = Number(process.env.DSH_DESKTOP_TEST_STABILITY_MS);
+  }
+  recovery = new RendererRecovery(opts);
+  return recovery;
+}
+
+function wireWindowRecovery() {
+  if (recovery && mainWindow && !mainWindow.isDestroyed()) recovery.attach(mainWindow, 'main');
+}
+
+// 统一的「重新加载」入口：处于恢复页（已放弃自动恢复）时走恢复流程，
+// 否则普通 reload。菜单与 Ctrl+R 共用。
+function reloadMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const st = recovery ? recovery.stateOf(mainWindow) : null;
+  if (st && st.gaveUp) {
+    log('recovery', '用户在恢复页触发重新加载');
+    recovery.retryNow(mainWindow);
+    return;
+  }
+  mainWindow.reload();
+}
+
+function startHeartbeatLoop() {
+  // renderer 心跳由 preload 每 5s 上报；这里周期性判定「可见窗口」是否失联。
+  setInterval(() => { if (recovery) recovery.checkHeartbeats(); }, 15000).unref();
 }
 
 // ---------------------------------------------------------------------------
@@ -647,9 +783,8 @@ function guardWebContents(wc) {
       log('float-page', `[${lvl}] ${text} (${src}:${lineNo})`);
     }
   });
-  wc.on('render-process-gone', (_e, details) => {
-    log('float-page', `浮窗渲染进程异常退出: ${details.reason} (exitCode=${details.exitCode})`);
-  });
+  // 浮窗渲染进程崩溃/挂起的自恢复由 renderer-recovery.js 统一接管
+  // （createFloatWindow 里经 recovery.attach 挂载），这里不再只记日志。
 }
 
 // 创建并登记一个会话浮窗。返回 BrowserWindow；失败返回 null。
@@ -701,6 +836,7 @@ function createFloatWindow(sessionId, { title } = {}) {
     }
   });
   guardWebContents(win.webContents);
+  if (recovery) recovery.attach(win, 'float');
 
   log('float', '已创建会话浮窗 sessionId=' + sessionId);
   return win;
@@ -1080,7 +1216,7 @@ function registerChromeIpc() {
       return { notifyOnTurnEnd, closeToTray: closeToTrayEnabled() };
     }
     switch (action) {
-      case 'reload': mainWindow.reload(); break;
+      case 'reload': reloadMainWindow(); break;
       case 'devtools': mainWindow.webContents.toggleDevTools(); break;
       case 'fullscreen': mainWindow.setFullScreen(!mainWindow.isFullScreen()); break;
       case 'open-browser': if (webUrl) shell.openExternal(webUrl); break;
@@ -1261,6 +1397,54 @@ function registerChromeIpc() {
     } catch (err) {
       return { ok: false, error: String((err && err.message) || err) };
     }
+  });
+
+  // renderer 心跳（preload 每 5s 上报）：用于「挂起无 unresponsive 事件」兜底判定。
+  ipcMain.on('dsh:renderer-heartbeat', (event) => {
+    if (recovery) recovery.noteHeartbeat(event.sender.id);
+  });
+
+  // 恢复页面（assets/recovery.html）的三个按钮。全部校验来源必须是主窗。
+  ipcMain.handle('chrome:recovery-state', (event) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return null;
+    return {
+      appVersion: APP_VERSION,
+      logsDir,
+      crashDumpsDir,
+      state: recovery ? recovery.stateOf(mainWindow) : null,
+    };
+  });
+
+  ipcMain.handle('chrome:recovery-reload', async (event) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return { ok: false, error: 'unauthorized' };
+    // 服务进程已退出时先重启服务（可能换新端口），再恢复加载。
+    if (!serverProc || serverProc.exitCode !== null || serverProc.killed) {
+      try {
+        await startAndShow();
+      } catch (err) {
+        return { ok: false, error: String((err && err.message) || err) };
+      }
+    }
+    recovery.retryNow(mainWindow);
+    return { ok: true };
+  });
+
+  ipcMain.handle('chrome:recovery-restart', (event) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return { ok: false, error: 'unauthorized' };
+    log('recovery', '用户在恢复页面选择重启客户端');
+    quitting = true;
+    forceQuit = true;
+    markCleanExit();
+    killTree(serverProc);
+    app.relaunch();
+    app.exit(0);
+    return { ok: true };
+  });
+
+  ipcMain.handle('chrome:recovery-open-logs', (event) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return { ok: false, error: 'unauthorized' };
+    shell.openPath(logsDir);
+    return { ok: true };
   });
 }
 
@@ -1843,11 +2027,127 @@ function startPreviewStaticServer() {
       res.end();
     }
   });
-  server.listen(0, "127.0.0.1", () => {
-    previewStaticPort = server.address().port;
-    log("boot", "预览静态服务已启动: http://127.0.0.1:" + previewStaticPort);
-  });
+  const listenPreview = (retriesLeft) => {
+    server.listen(0, "127.0.0.1", () => {
+      const port = server.address().port;
+      if (CHROMIUM_RESTRICTED_PORTS.has(port) && retriesLeft > 0) {
+        log("boot", `预览服务端口 ${port} 受限，重试换端口（剩余 ${retriesLeft} 次）`);
+        server.close(() => listenPreview(retriesLeft - 1));
+        return;
+      }
+      previewStaticPort = port;
+      log("boot", "预览静态服务已启动: http://127.0.0.1:" + previewStaticPort);
+    });
+  };
+  listenPreview(4);
   server.on("error", (err) => log("boot", "预览静态服务失败: " + err.message));
+}
+
+// ---------------------------------------------------------------------------
+// 集成测试控制通道：仅在 DSH_DESKTOP_TEST=1 时启用。
+// 测试 harness 向 DSH_DESKTOP_TEST_DIR/test-control.json 写入命令，
+// 本进程轮询执行并把结果写入 test-status.json。renderer 崩溃时页面不可用，
+// 因此选择文件通道而非 IPC，保证任何时刻都能下达命令。
+// ---------------------------------------------------------------------------
+function setupTestChannel() {
+  const dir = process.env.DSH_DESKTOP_TEST_DIR;
+  if (!process.env.DSH_DESKTOP_TEST || !dir) return;
+  const ctrlFile = path.join(dir, 'test-control.json');
+  const statFile = path.join(dir, 'test-status.json');
+  const writeStatus = (id, ok, detail) => {
+    try {
+      fs.writeFileSync(statFile, JSON.stringify({ id, ok: !!ok, detail: detail === undefined ? null : detail, at: new Date().toISOString() }));
+    } catch {}
+  };
+  const commands = {
+    'crash-main': () => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.forcefullyCrashRenderer();
+      else throw new Error('no main window');
+    },
+    'kill-main': () => {
+      const pid = mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents.getOSProcessId() : 0;
+      if (!pid) throw new Error('no renderer pid');
+      process.kill(pid);
+    },
+    'hang-main': () => {
+      if (!mainWindow || mainWindow.isDestroyed()) throw new Error('no main window');
+      // 在 renderer 主线程注入 120s 忙循环制造挂起；恢复机制会强制终结该进程。
+      mainWindow.webContents
+        .executeJavaScript('(function(){var s=Date.now();while(Date.now()-s<120000){}})()')
+        .catch(() => {});
+    },
+    'crash-float': () => {
+      const sid = '__test_float__';
+      const win = createFloatWindow(sid, { title: '测试浮窗' });
+      if (!win) throw new Error('float creation failed');
+      setTimeout(() => {
+        try {
+          if (!win.isDestroyed()) win.webContents.forcefullyCrashRenderer();
+        } catch {}
+      }, 2500);
+    },
+    'kill-server-silent': () => {
+      // 模拟插件市场式原地重启的前半程：退出处理器不弹窗。
+      // 不置空 serverProc：让 isServerAlive() 依据真实退出状态，
+      // 优雅终止完成（exit 事件）后自然变为 false。
+      restartingServer = true;
+      killTree(serverProc);
+    },
+    'restart-server': async () => {
+      restartingServer = true;
+      try {
+        const url = await startAndShow();
+        return { ok: true, url };
+      } finally {
+        restartingServer = false;
+      }
+    },
+    'reload-main': () => {
+      if (!mainWindow || mainWindow.isDestroyed()) throw new Error('no main window');
+      mainWindow.reload();
+    },
+    'recovery-reload': () => {
+      if (!recovery || !mainWindow || mainWindow.isDestroyed()) throw new Error('no window');
+      recovery.retryNow(mainWindow);
+    },
+    state: () => {
+      const url = mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents.getURL() : null;
+      return {
+        url,
+        webUrl,
+        serverAlive: !!serverProc && serverProc.exitCode === null && !serverProc.killed,
+        recovery: recovery ? recovery.stateOf(mainWindow) : null,
+      };
+    },
+    quit: () => {
+      forceQuit = true;
+      setTimeout(() => app.quit(), 100);
+    },
+  };
+  let lastId = null;
+  const poll = setInterval(() => {
+    let raw;
+    try { raw = fs.readFileSync(ctrlFile, 'utf8'); } catch { return; }
+    let cmd;
+    try { cmd = JSON.parse(raw); } catch { return; }
+    if (!cmd || !cmd.id || cmd.id === lastId) return;
+    lastId = cmd.id;
+    try {
+      const fn = commands[cmd.cmd];
+      if (!fn) { writeStatus(cmd.id, false, 'unknown-command'); return; }
+      const r = fn(cmd.args || {});
+      if (r && typeof r.then === 'function') {
+        r.then((v) => writeStatus(cmd.id, true, v))
+          .catch((e) => writeStatus(cmd.id, false, String((e && e.message) || e)));
+      } else {
+        writeStatus(cmd.id, true, r === undefined ? null : r);
+      }
+    } catch (err) {
+      writeStatus(cmd.id, false, String((err && err.stack) || err));
+    }
+  }, 150);
+  poll.unref();
+  log('test-event', 'test-channel-ready');
 }
 
 async function boot() {
@@ -1860,6 +2160,22 @@ async function boot() {
 
   userDataDir = app.getPath('userData');
   logsDir = path.join(userDataDir, 'logs');
+  // 崩溃取证（Issue #9）：把 Crashpad minidump 固定到数据目录并保留，
+  // 用于后续定位 0xC0000005 的底层来源（不联网上传）。
+  crashDumpsDir = path.join(userDataDir, 'crash-dumps');
+  try {
+    fs.mkdirSync(crashDumpsDir, { recursive: true });
+    app.setPath('crashDumps', crashDumpsDir);
+    crashReporter.start({
+      productName: 'DSH Desktop',
+      companyName: 'DSH Desktop',
+      submitURL: '',
+      uploadToServer: false,
+      compress: true,
+    });
+  } catch (err) {
+    log('crash', 'crashReporter 初始化失败: ' + err.message);
+  }
   // DSH_HOME: respect an explicit override; otherwise let dsh use its own
   // default (~/.dsh), so the desktop app shares config/sessions with the CLI.
   dshHome = process.env.DSH_HOME || '';
@@ -1884,7 +2200,11 @@ async function boot() {
   syncCompanionPlugins();
   applyRuntimeFlashFix();
   applyPromptExposeFix();
+  initRendererRecovery();
   createWindow();
+  wireWindowRecovery();
+  startHeartbeatLoop();
+  setupTestChannel();
   const home = dshHome || process.env.DSH_HOME || require('node:path').join(require('node:os').homedir(), '.dsh');
   await repairProfileFallback(home);
   startAndShow()
@@ -1915,6 +2235,7 @@ async function boot() {
         setTimeout(() => runClientUpdateFlow(false), 60000).unref();
         setInterval(() => runClientUpdateFlow(false), 12 * 3600 * 1000).unref();
       }
+      log('test-event', 'boot-ready');
     })
     .catch((err) => handleBootFailure(err));
 }
@@ -1961,6 +2282,7 @@ if (!gotLock) {
     killTree(serverProc);
     updater.abort();
     if (sessionWatcher) sessionWatcher.stop();
+    if (recovery) recovery.dispose();
     if (balanceTimer) clearInterval(balanceTimer);
     if (trayRecoveryTimer) { clearInterval(trayRecoveryTimer); trayRecoveryTimer = null; }
     if (tray) { try { tray.destroy(); } catch {} tray = null; }

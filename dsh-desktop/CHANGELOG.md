@@ -4,6 +4,24 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 一键启动 Web UI。
 
 
+## [未发布] — Issue #9 渲染进程崩溃自恢复
+
+### 修复
+- **渲染进程崩溃后永久黑屏/白屏（0xC0000005）**：新增 `renderer-recovery.js` 自恢复状态机，主窗与会话浮窗统一接管：
+  - `render-process-gone`（crashed/killed/oom）→ 指数退避自动重载（首次 0.8s，上限 15s + 抖动）
+  - 连续失败第 3 次 → 主窗销毁重建 BrowserWindow（保持隐藏/托盘状态）；浮窗直接关闭
+  - 失败超过上限 → 主窗切到本地恢复页（重新加载/重启客户端/打开日志），并弹系统通知；绝不无限循环
+  - 页面加载成功后需「稳定存活 30 秒」才清零故障计数，杜绝「加载即崩溃」型循环
+  - `clean-exit`、退出中、窗口已销毁一律不触发恢复；服务进程退出时交由既有重启对话框，不双弹窗
+- **界面挂起（AppHangB1）无恢复**：监听 `unresponsive`，20s 宽限后强制终结 renderer 复用恢复路径；preload 每 5s 心跳兜底「挂起但无 unresponsive 事件」的场景（以 show/hide 事件追踪可见性，隐藏/最小化不误判，也不依赖在挂起/RDP 场景下会误报的 `isVisible()`）
+- **加载失败白屏**：新增 `did-fail-load` 处理，服务健在时退避重试（覆盖插件市场重启间隙），`ERR_ABORTED` 忽略
+- **崩溃无法取证**：固定 `crashDumps` 到数据目录并启用本地 Crashpad（`uploadToServer:false`），minidump 可离线分析 0xC0000005 底层来源；恢复状态写入 `run-state.json`
+- **dsh web / 预览服务随机命中 Chromium 受限端口导致页面永远无法加载**：`--port 0` 可能选中 4045/6000 等受限端口（实测命中 4045，`ERR_UNSAFE_PORT`），现在命中即自动重启服务换端口（上限 4 次）
+
+### 开发
+- 新增 `scripts/test/unit-recovery.test.js`（node:test 状态机单元测试，17 例）与 `scripts/test/integration-runner.js`（真实 Electron 集成测试，10 场景：健康启动/崩溃恢复/重建/放弃/挂起/服务重启/进程被杀/浮窗/启动早期崩溃/受限端口重启，全部隔离 DSH_HOME 与 userData）
+- 集成测试通道：`DSH_DESKTOP_TEST=1` 时经文件轮询下达命令（crash/kill/hang/quit…），renderer 崩溃时仍可用
+
 ## [0.3.2] — 2026-08-15
 
 ### 新增
