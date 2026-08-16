@@ -1,0 +1,377 @@
+window.__ModuleLoader__.load({
+	id: "@deepseek-ai/dsh-plugin-manager",
+	factory: (require) => {
+		var module = { exports: {} };
+		var exports = module.exports;
+		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+
+		const react = require("react");
+		const { jsx, jsxs } = require("react/jsx-runtime");
+
+		const L = {
+			tab: "管理",
+			tabHint: "搜索插件、点击分类标签过滤；配套/其他插件可一键关闭，完全退出并重启 DSH Desktop 后生效。",
+			searchPlaceholder: "搜索插件（名称 / id / 描述）…",
+			viewCompact: "简洁",
+			viewDetail: "详情",
+			catAll: "全部",
+			groupCompanion: "配套插件",
+			groupOther: "其他插件",
+			groupCore: "核心组件",
+			groupToggleableNote: "可开关",
+			groupReadonlyNote: "不可关闭",
+			descFallback: "（无描述）",
+			badgeEnabled: "已启用",
+			badgeDisabled: "已关闭",
+			badgePending: "重启后生效",
+			badgeFailed: "挂载失败",
+			badgePendingLoad: "加载中",
+			loading: "加载中…",
+			errorPrefix: "插件清单加载失败：",
+			noBridge: "插件管理桥接不可用（请确认已更新到最新版 DSH Desktop）",
+			toastFailed: "操作失败：",
+			refresh: "刷新",
+			noMatch: "没有匹配的插件",
+			localOnlyHint: "（清单来自本地文件，实时注册表暂不可用）",
+			countSuffix: "个插件"
+		};
+
+		function bridge() {
+			const b = window.dshDesktop;
+			if (!b || !b.pluginManager || typeof b.pluginManager.list !== "function") return null;
+			return b.pluginManager;
+		}
+
+		const badge = (text, color) => jsx("span", {
+			style: { fontSize: 11, padding: "1px 8px", borderRadius: 8, border: "1px solid currentColor", color, marginLeft: 6, whiteSpace: "nowrap" },
+			children: text
+		});
+
+		/** 归一化 live 注册表返回：可能 {ok,value} / {entries} / 数组。 */
+		function normalizeLive(result) {
+			if (Array.isArray(result)) return result;
+			if (result && Array.isArray(result.entries)) return result.entries;
+			if (result && result.ok && Array.isArray(result.value)) return result.value;
+			if (result && result.ok && result.value && Array.isArray(result.value.entries)) return result.value.entries;
+			return null;
+		}
+
+		function PluginManagerTab({ list }) {
+			const [rows, setRows] = react.useState(null);
+			const [error, setError] = react.useState(null);
+			const [localOnly, setLocalOnly] = react.useState(false);
+			const [pendingId, setPendingId] = react.useState(null);
+			// 乐观 UI：点击立即反映到勾选框与「重启后生效」标记（id → 期望值）
+			const [pendingMap, setPendingMap] = react.useState({});
+			const [query, setQuery] = react.useState("");
+			const [view, setView] = react.useState("detail"); // compact | detail
+			const [cat, setCat] = react.useState("all"); // all | companion | other | core
+			const [refreshTick, setRefreshTick] = react.useState(0);
+
+			react.useEffect(() => {
+				let cancelled = false;
+				(async () => {
+					setError(null);
+					// 1) 本地桥：完整（配套/用户/核心 bundle）+ 描述 + 可开关集合 —— 主数据源
+					const b = bridge();
+					let mine = [];
+					if (b && typeof b.list === "function") {
+						try {
+							const data = await b.list();
+							if (Array.isArray(data)) mine = data;
+						} catch (err) {
+							console.error("[dsh-plugin-manager] 本地桥 list 失败:", err);
+						}
+					}
+					// 2) live 注册表：尽力补充（核心组件全集），失败不阻塞
+					let live = [];
+					let liveOk = false;
+					try {
+						const raw = await list();
+						const entries = normalizeLive(raw);
+						if (entries) { live = entries; liveOk = true; }
+						else console.warn("[dsh-plugin-manager] live list 返回异常形状:", raw);
+					} catch (err) {
+						console.warn("[dsh-plugin-manager] live list 失败（降级本地清单）:", err);
+					}
+					if (cancelled) return;
+
+					const toggleableById = new Map(mine.filter((r) => r && r.toggleable).map((r) => [r.id, r]));
+					const descById = new Map(mine.map((r) => [r.id, r.description]));
+					const liveIds = new Set(live.filter((e) => e && e.entryId !== void 0).map((e) => e.entryId));
+					const byId = new Map();
+					for (const r of mine) {
+						// live 可用时：本地推导的占位核心行（manifest 包名 ≠ 真实 loader 条目 id，
+						// 如 dsh-web-app → web-runtime）不展示，避免与「全部」标签对不上；
+						// 可开关行即使当前未加载（如已禁用的 balance）也必须展示，否则无法重新打开。
+						if (liveOk && !r.toggleable && !liveIds.has(r.id)) continue;
+						if (!byId.has(r.id)) byId.set(r.id, {
+							id: r.id,
+							title: r.name || r.id,
+							enabled: !!r.enabled,
+							phase: "",
+							description: r.description || "",
+							toggleable: !!r.toggleable,
+							from: "local"
+						});
+					}
+					for (const e of live) {
+						if (!e || typeof e !== "object" || e.entryId === void 0) continue;
+						const row = byId.get(e.entryId);
+						if (row) {
+							row.enabled = !!e.enabled;
+							row.phase = e.fiberPhase || row.phase;
+						} else {
+							byId.set(e.entryId, {
+								id: e.entryId,
+								title: e.moduleName || e.entryId,
+								enabled: !!e.enabled,
+								phase: e.fiberPhase || "",
+								description: descById.get(e.entryId) || "",
+								toggleable: toggleableById.has(e.entryId),
+								from: "live"
+							});
+						}
+					}
+					const mapped = [...byId.values()].sort((a, b) => {
+						const ga = a.toggleable ? 0 : 1, gb = b.toggleable ? 0 : 1;
+						return ga - gb || a.title.localeCompare(b.title);
+					});
+					if (!cancelled) {
+						setRows(mapped);
+						setLocalOnly(!liveOk && mapped.length > 0);
+					}
+				})();
+				return () => { cancelled = true; };
+			}, [list, refreshTick]);
+
+			const onToggle = (row, enabled) => {
+				const b = bridge();
+				if (!b || !row || !row.toggleable) return;
+				// 1) 立即反映到 UI（打勾/取消 + 「重启后生效」标记）
+				setPendingMap((prev) => ({ ...prev, [row.id]: enabled }));
+				setPendingId(row.id);
+				// 2) 写盘（失败则回滚 UI 并提示）
+				b.setEnabled(row.id, enabled).then((res) => {
+					setPendingId(null);
+					if (res && res.ok) {
+						// pendingMap 保留：重启前一直显示新状态 + 标记
+					} else {
+						setPendingMap((prev) => {
+							const next = { ...prev };
+							delete next[row.id];
+							return next;
+						});
+						setError(L.toastFailed + String((res && res.error) || "未知错误"));
+					}
+				}).catch((err) => {
+					setPendingId(null);
+					setPendingMap((prev) => {
+						const next = { ...prev };
+						delete next[row.id];
+						return next;
+					});
+					setError(L.toastFailed + String((err && err.message) || err));
+				});
+			};
+
+			/** 行当前显示值：有未生效的点击 → 新值；否则实际状态。 */
+			const rowValue = (row) => (row.id in pendingMap ? pendingMap[row.id] : row.enabled);
+			const rowDirty = (row) => row.id in pendingMap;
+			const rowCat = (row) => (row.toggleable ? (row.id === "llm-deepseek" ? "other" : "companion") : "core");
+
+			const matches = (row) => {
+				if (!query) return true;
+				const q = query.toLowerCase();
+				return (row.title + " " + row.id + " " + row.description).toLowerCase().includes(q);
+			};
+
+			const phaseBadge = (row) => {
+				if (row.phase === "failed") return badge(L.badgeFailed, "var(--dsw-alias-state-error-primary, #ff7a85)");
+				if (row.phase === "loading" || row.phase === "pending") return badge(L.badgePendingLoad, "var(--dsw-alias-state-info-primary, #5b9bd5)");
+				return null;
+			};
+
+			/** 行显示名：名称（可读 id）+ 包名（moduleName/package）；匿名 id 退化为只显包名。 */
+			const rowName = (row) => (/^[0-9a-f]{8}$/i.test(row.id) ? null : row.id);
+			const rowPkg = (row) => row.title;
+
+			/** 简洁视图行：名称 + 包名 + 开关（悬停显示描述）。 */
+			const renderCompactRow = (row) => jsx("div", {
+				key: row.id,
+				style: { display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--dsw-alias-divider-weak, rgba(128,128,128,0.14))" },
+				children: [
+					jsxs("span", {
+						style: { flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: rowValue(row) ? 1 : 0.5 },
+						title: row.description || L.descFallback,
+						children: [
+							jsx("span", { style: { fontWeight: 600 }, children: rowName(row) || rowPkg(row) }),
+							rowName(row) ? jsx("span", { style: { fontSize: 12, opacity: 0.55, marginLeft: 8 }, children: rowPkg(row) }) : null
+						]
+					}),
+					rowDirty(row) ? badge(L.badgePending, "var(--dsw-alias-state-info-primary, #5b9bd5)") : null,
+					jsx("input", {
+						type: "checkbox",
+						checked: rowValue(row),
+						disabled: !row.toggleable || pendingId === row.id,
+						onChange: () => onToggle(row, !rowValue(row)),
+						style: { marginLeft: 8, cursor: row.toggleable ? "pointer" : "not-allowed" }
+					})
+				]
+			});
+
+			/** 详情视图行：名称 + 包名 + 状态徽章 + 描述 + 开关。 */
+			const renderDetailRow = (row) => jsx("div", {
+				key: row.id,
+				style: { display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 0", borderBottom: "1px solid var(--dsw-alias-divider-weak, rgba(128,128,128,0.16))" },
+				children: [
+					jsx("div", {
+						style: { flex: 1, display: "flex", flexDirection: "column", gap: 3, minWidth: 0 },
+						children: [
+							jsxs("div", { children: [
+								jsx("span", { style: { fontWeight: 600 }, children: rowName(row) || rowPkg(row) }),
+								jsx("span", { style: { fontSize: 12, opacity: 0.55, marginLeft: 8 }, children: rowPkg(row) }),
+								rowValue(row) ? badge(L.badgeEnabled, "var(--dsw-alias-state-success-primary, #4caf7d)") : badge(L.badgeDisabled, "var(--dsw-alias-state-warning-primary, #d99a3d)"),
+								phaseBadge(row),
+								rowDirty(row) ? badge(L.badgePending, "var(--dsw-alias-state-info-primary, #5b9bd5)") : null
+							] }),
+							jsx("span", { style: { fontSize: 12, opacity: 0.65, lineHeight: 1.5 }, children: row.description || L.descFallback })
+						]
+					}),
+					jsx("input", {
+						type: "checkbox",
+						checked: rowValue(row),
+						disabled: !row.toggleable || pendingId === row.id,
+						onChange: () => onToggle(row, !rowValue(row)),
+						style: { marginTop: 2, cursor: row.toggleable ? "pointer" : "not-allowed" }
+					})
+				]
+			});
+
+			const renderBody = () => {
+				if (error) return jsx("div", { style: { fontSize: 12, color: "var(--dsw-alias-state-error-primary, #ff7a85)", marginTop: 8 }, children: error });
+				if (!rows) return jsx("div", { style: { fontSize: 12, opacity: 0.7, marginTop: 8 }, children: L.loading });
+				const base = rows.filter(matches);
+				if (base.length === 0) return jsx("div", { style: { fontSize: 12, opacity: 0.7, marginTop: 8 }, children: L.noMatch });
+				const groups = {
+					companion: base.filter((r) => rowCat(r) === "companion"),
+					other: base.filter((r) => rowCat(r) === "other"),
+					core: base.filter((r) => rowCat(r) === "core")
+				};
+				const shown = cat === "all" ? base : groups[cat];
+				if (shown.length === 0) return jsx("div", { style: { fontSize: 12, opacity: 0.7, marginTop: 8 }, children: L.noMatch });
+				const renderRow = view === "compact" ? renderCompactRow : renderDetailRow;
+				const group = (title, note, items) => items.length === 0 ? null : jsxs("div", {
+					children: [
+						jsxs("div", { style: { fontWeight: 600, fontSize: 13, margin: "14px 0 2px" }, children: [
+							jsx("span", { children: title }),
+							jsx("span", { style: { fontSize: 12, opacity: 0.55, marginLeft: 8 }, children: note + " · " + items.length }),
+							jsx("span", { style: { fontSize: 12, opacity: 0.4, marginLeft: 8 }, children: items.filter((r) => rowValue(r)).length + " 启用 / " + items.filter((r) => !rowValue(r)).length + " 关闭" })
+						] }),
+						items.map(renderRow)
+					]
+				});
+				if (cat !== "all") {
+					const meta = { companion: [L.groupCompanion, L.groupToggleableNote], other: [L.groupOther, L.groupToggleableNote], core: [L.groupCore, L.groupReadonlyNote] };
+					const [title, note] = meta[cat];
+					return group(title, note, shown);
+				}
+				return jsxs("div", {
+					children: [
+						group(L.groupCompanion, L.groupToggleableNote, groups.companion),
+						group(L.groupOther, L.groupToggleableNote, groups.other),
+						group(L.groupCore, L.groupReadonlyNote, groups.core)
+					]
+				});
+			};
+
+			/** 分类标签（可点击过滤）。 */
+			const chipStyle = (active) => ({
+				fontSize: 12,
+				padding: "3px 12px",
+				borderRadius: 12,
+				border: "1px solid " + (active ? "var(--dsw-alias-state-info-primary, #5b9bd5)" : "var(--dsw-alias-border-l2, rgba(128,128,128,0.35))"),
+				background: active ? "color-mix(in srgb, var(--dsw-alias-state-info-primary, #5b9bd5) 12%, transparent)" : "transparent",
+				color: active ? "var(--dsw-alias-state-info-primary, #5b9bd5)" : "inherit",
+				cursor: "pointer"
+			});
+			const chip = (key, label, count) => jsx("button", {
+				type: "button",
+				key: key,
+				onClick: () => setCat((c) => (c === key ? "all" : key)),
+				style: chipStyle(cat === key),
+				children: label + " · " + count
+			});
+
+			const renderChips = () => {
+				if (!rows) return null;
+				const base = rows.filter(matches);
+				const n = (k) => base.filter((r) => rowCat(r) === k).length;
+				return jsxs("div", { style: { display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }, children: [
+					chip("all", L.catAll, base.length),
+					chip("companion", L.groupCompanion, n("companion")),
+					chip("other", L.groupOther, n("other")),
+					chip("core", L.groupCore, n("core"))
+				] });
+			};
+
+			return jsxs("div", { children: [
+				jsx("span", { style: { fontSize: 12, opacity: 0.65 }, children: L.tabHint }),
+				rows ? jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10, marginTop: 10 }, children: [
+					jsx("input", {
+						type: "search",
+						placeholder: L.searchPlaceholder,
+						value: query,
+						onChange: (e) => setQuery(e.target.value),
+						style: { flex: 1, maxWidth: 360, fontSize: 13, padding: "5px 10px", borderRadius: 8, border: "1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.35))", background: "transparent", color: "inherit" }
+					}),
+					jsx("span", { style: { fontSize: 12, opacity: 0.6 }, children: rows.length + " " + L.countSuffix }),
+					jsxs("div", { style: { display: "flex", gap: 4 }, children: [
+						jsx("button", {
+							type: "button",
+							onClick: () => setView("compact"),
+							style: { fontSize: 12, padding: "3px 10px", borderRadius: 8, cursor: "pointer", border: "1px solid " + (view === "compact" ? "var(--dsw-alias-state-info-primary, #5b9bd5)" : "var(--dsw-alias-border-l2, rgba(128,128,128,0.35))"), color: view === "compact" ? "var(--dsw-alias-state-info-primary, #5b9bd5)" : "inherit" },
+							children: L.viewCompact
+						}),
+						jsx("button", {
+							type: "button",
+							onClick: () => setView("detail"),
+							style: { fontSize: 12, padding: "3px 10px", borderRadius: 8, cursor: "pointer", border: "1px solid " + (view === "detail" ? "var(--dsw-alias-state-info-primary, #5b9bd5)" : "var(--dsw-alias-border-l2, rgba(128,128,128,0.35))"), color: view === "detail" ? "var(--dsw-alias-state-info-primary, #5b9bd5)" : "inherit" },
+							children: L.viewDetail
+						})
+					] }),
+					jsx("button", {
+						type: "button",
+						onClick: () => setRefreshTick((v) => v + 1),
+						style: { fontSize: 12, cursor: "pointer" },
+						children: L.refresh
+					})
+				] }) : null,
+				renderChips(),
+				localOnly ? jsx("div", { style: { fontSize: 12, opacity: 0.6, marginTop: 6 }, children: L.localOnlyHint }) : null,
+				renderBody()
+			] });
+		}
+
+		function apply(ctx) {
+			const list = async () => {
+				const result = await ctx.remote.pluginInventory.list();
+				if (!result.ok) throw new Error(`pluginInventory.list failed: ${result.error.code}: ${result.error.message}`);
+				return result.value;
+			};
+			const injected = () => ({ list });
+			ctx.slots.inject("settings.plugins.tab", () => ctx.slots.register({
+				name: "settings.plugins.tab",
+				id: "manage",
+				order: 20,
+				label: () => L.tab,
+				inject: injected
+			}, PluginManagerTab), "dsh-plugin-manager: plugins management tab");
+		}
+
+		const inject = ["slots", "remote", "remote.pluginInventory"];
+		exports.apply = apply;
+		exports.inject = inject;
+		return module.exports;
+	}
+});

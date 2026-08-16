@@ -5,6 +5,11 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 
 
+## [Unreleased]
+
+### 新增
+- **设置页「插件」页融合为单一「管理」标签（`dsh-plugin-manager`）**：启动时幂等隐藏官方只读「全部」清单（`applyPluginInventoryTabMergeFix` 过滤 `settings.plugins.tab` 中 id 为 `all` 的条目），管理标签成为唯一插件入口——**搜索框**（按名称/包名/描述过滤）+ **可点击分类标签**（配套插件可开关 / 其他插件可开关 / 核心组件只读，点击过滤、再点取消，各组显示启用/关闭计数）+ **双视图**（简洁：名称+包名+开关 / 详情：+状态徽章+中文描述）+ 全量 live 清单与本地清单融合（描述取自各插件 package.json）+ **乐观 UI 开关**（点击立即翻转勾选框并标记「重启后生效」，写盘失败自动回滚）。关闭/重新打开写入 web profile `cordis.patch.yml` 的用户层 `disabled` 条目（与 `llm-deepseek` 同款覆盖机制，同一 id 只保留一处，避免 loader 双登记崩溃），完全退出并重启 DSH Desktop 生效。解决「插件看不懂作用、默认启用无法关闭」的社区反馈
+
 ## [0.3.9] — 2026-08-16
 
 ### 新增

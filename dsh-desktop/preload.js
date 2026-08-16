@@ -66,6 +66,13 @@ const dshDesktop = {
     open: (sessionId) => ipcRenderer.invoke('chrome:float-window', { action: 'open', sessionId }),
     close: () => ipcRenderer.send('float:close'),
   },
+  // 插件管理（设置页「插件」页「管理」标签，dsh-plugin-manager 插件消费）：
+  // 列出插件 / 开关写入 web profile cordis.patch.yml 的用户层 disabled 条目
+  // （完全退出并重启应用生效）。
+  pluginManager: {
+    list: () => ipcRenderer.invoke('dsh:plugin-list'),
+    setEnabled: (id, enabled) => ipcRenderer.invoke('dsh:plugin-set-enabled', { id, enabled }),
+  },
   // 桌面宠物原生小窗（harness-pet）：主窗控制开关/状态查询/最小化自动弹出
   // 上报；小窗内关闭自身/搬窗（绝对目标位置）。
   petWindow: {

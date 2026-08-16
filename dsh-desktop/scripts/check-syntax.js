@@ -35,6 +35,7 @@ const entryFiles = [
   'scripts/sync-companion-plugins.js',
   'scripts/after-pack.js',
   'scripts/patch-portable-template.js',
+  'scripts/plugin-manager-patch.js',
 ];
 
 // 匹配「async/await 关键字与紧随其后的 function 声明之间被空行/注释行拆开」：

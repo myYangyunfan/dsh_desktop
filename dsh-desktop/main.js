@@ -27,6 +27,7 @@ const clientUpdater = require('./client-updater');
 const balance = require('./balance');
 const wslBackend = require('./wsl-backend');
 const { createGpuCrashGuard } = require('./scripts/gpu-crash-guard');
+const { togglePluginInPatch } = require('./scripts/plugin-manager-patch');
 const { installBuiltinPresets } = require('./scripts/install-minimal-win-preset');
 const { SessionWatcher, scanZstdFrames } = require('./session-watcher');
 const { RendererRecovery } = require('./renderer-recovery');
@@ -2129,6 +2130,7 @@ async function runUpdateFlow(manual) {
       applyProfilePatchGuard();
       applySettingsSectionGuard();
       applyWorkspaceSearchRailFix();
+      applyPluginInventoryTabMergeFix();
     } else {
       await updater.applyUpdate(ctx, latest);
       // 新 overlay 已就位：立即重打运行时补丁（全部幂等），否则「稍后重启」后再
@@ -2142,6 +2144,7 @@ async function runUpdateFlow(manual) {
       applyProfilePatchGuard();
       applySettingsSectionGuard();
       applyWorkspaceSearchRailFix();
+      applyPluginInventoryTabMergeFix();
       applyWebSearchBaseUrlFix();
       applyMenuViewportFix();
       applySessionManageFix();
@@ -2645,6 +2648,33 @@ function registerChromeIpc() {
       status: wslStatusSnapshot({ force: true }),
     };
   });
+
+  // -------------------------------------------------------------------------
+  // 插件管理（设置页「插件」页「管理」标签，dsh-plugin-manager 插件消费）：
+  //   list —— 收集配套/用户/核心插件：id、包名、package.json 描述、启用状态
+  //   set  —— 写入/移除 web profile cordis.patch.yml 的用户层 disabled 条目
+  //           （与 llm-deepseek 同款覆盖机制；完全退出并重启应用后生效）
+  // -------------------------------------------------------------------------
+  ipcMain.handle('dsh:plugin-list', async (event) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return [];
+    return pluginManagerCollect();
+  });
+
+  ipcMain.handle('dsh:plugin-set-enabled', async (event, { id, enabled } = {}) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return { ok: false, error: 'unauthorized' };
+    const row = pluginManagerCollect().find((r) => r.id === id);
+    if (!row) return { ok: false, error: '未知插件: ' + String(id) };
+    if (!row.toggleable) return { ok: false, error: '该插件不可关闭: ' + String(id) };
+    try {
+      const res = pluginManagerSetEnabled(id, !!enabled);
+      if (!res.ok) return res;
+      log('plugin-manager', '已' + (enabled ? '启用' : '关闭') + '插件 ' + id);
+      return { ok: true, restartRequired: true };
+    } catch (err) {
+      log('plugin-manager', '设置插件 ' + id + ' 失败: ' + ((err && err.message) || err));
+      return { ok: false, error: String((err && err.message) || err) };
+    }
+  });
 }
 
 let trayHintShown = false;
@@ -2821,13 +2851,14 @@ const COMPANION_PLUGINS = [
   // 面板（恢复/删除）。依赖 patch-session-manage.js 的官方包运行时补丁。
   { id: 'dsh-session-manager', name: 'dsh-session-manager' },
   { id: 'conversation-tweaks', name: '@deepseek-ai/dsh-conversation-tweaks' },
-  { id: 'super-injector', name: '@dsh-external/dsh-super-injector' },
+  { id: 'dsh-super-injector', name: '@dsh-external/dsh-super-injector' },
   { id: 'prompt-custom', name: '@deepseek-ai/dsh-prompt-custom' },
   { id: 'third-party-thinking', name: '@deepseek-ai/dsh-third-party-thinking' },
   { id: 'wsl-settings', name: '@deepseek-ai/dsh-wsl-settings' },
   { id: 'dsh-vision', name: '@dsh-external/dsh-vision' },
   { id: 'side-session', name: '@dsh-external/dsh-side-session' },
   { id: 'compaction-acp', name: 'billion-context-dsh' },
+  { id: 'plugin-manager', name: '@deepseek-ai/dsh-plugin-manager' },
 ];
 
 function companionDirName(p) {
@@ -3319,6 +3350,158 @@ function syncCompanionPlugins() {
 }
 
 // ---------------------------------------------------------------------------
+// 插件管理数据与写盘（设置页「插件」页「管理」标签；IPC 见 dsh:plugin-list /
+// dsh:plugin-set-enabled）
+// ---------------------------------------------------------------------------
+
+/** web profile 目录（与 profilePatchFile 同源，WSL 模式下走 UNC 写穿）。 */
+function pluginManagerProfileDir() {
+  const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
+  return path.join(home, 'profiles', 'web');
+}
+
+/** 读取并解析 cordis.patch.yml（js-yaml 方言；解析失败返回空列表）。 */
+function pluginManagerReadPatch() {
+  const file = path.join(pluginManagerProfileDir(), 'cordis.patch.yml');
+  let text = '';
+  try { text = fs.readFileSync(file, 'utf8'); } catch {}
+  const yaml = loadDshYamlDialect();
+  if (!yaml) return { file, text, entries: [] };
+  try {
+    const parsed = yaml.load(text);
+    return { file, text, entries: Array.isArray(parsed) ? parsed : [] };
+  } catch {
+    return { file, text, entries: [] };
+  }
+}
+
+/** 读插件包 package.json 的 description（profile node_modules → app assets 兜底）。 */
+function pluginManagerPackageDescription(name) {
+  if (!name) return '';
+  const candidates = [
+    path.join(pluginManagerProfileDir(), 'node_modules', ...name.split('/')),
+    path.join(__dirname, 'assets', 'plugins', name.includes('/') ? name.slice(name.indexOf('/') + 1) : name),
+  ];
+  for (const dir of candidates) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
+      if (pkg && typeof pkg.description === 'string' && pkg.description) return pkg.description;
+    } catch {}
+  }
+  return '';
+}
+
+/**
+ * 收集插件清单（供「管理」标签展示）：
+ *   - companion：COMPANION_PLUGINS 定义的配套插件（可开关）
+ *   - other    ：patch 的 insert 块里出现但不在配套表（用户安装/热装）+
+ *                用户层条目（llm-deepseek / web 等），可开关（带 config 且未禁用的除外）
+ *   - core     ：manifest bundles 中的核心组件（不可开关）
+ * enabled = 用户层没有 disabled: true。
+ */
+function pluginManagerCollect() {
+  const { entries } = pluginManagerReadPatch();
+  const companionById = new Map(COMPANION_PLUGINS.map((p) => [p.id, p.name]));
+  const insertById = new Map();
+  const userById = new Map();
+  for (const entry of entries) {
+    if (!entry || typeof entry !== 'object') continue;
+    if (Array.isArray(entry.insert)) {
+      for (const it of entry.insert) {
+        if (it && typeof it.id === 'string') insertById.set(it.id, it.name || '');
+      }
+    } else if (typeof entry.id === 'string') {
+      userById.set(entry.id, {
+        name: entry.name || '',
+        disabled: entry.disabled === true,
+        hasConfig: entry.config !== undefined && entry.config !== null,
+      });
+    }
+  }
+  let bundles = [];
+  try {
+    const m = JSON.parse(fs.readFileSync(path.join(pluginManagerProfileDir(), 'package.json'), 'utf8'));
+    bundles = (m && m.dsh && m.dsh.profile && Array.isArray(m.dsh.profile.bundles)) ? m.dsh.profile.bundles : [];
+  } catch {}
+  const companionNames = new Set(COMPANION_PLUGINS.map((p) => p.name));
+
+  const seen = new Set();
+  const rows = [];
+  const addRow = (id, name, group) => {
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    const user = userById.get(id);
+    const userDisabled = !!(user && user.disabled);
+    const hasConfig = !!(user && user.hasConfig);
+    const toggleable = group !== 'core' && !(hasConfig && !userDisabled);
+    rows.push({
+      id,
+      name: name || id,
+      description: pluginManagerPackageDescription(name || id),
+      enabled: !userDisabled,
+      toggleable,
+      group,
+    });
+  };
+  // 配套插件（COMPANION_PLUGINS 为准；patch insert 里的同名 id 统一归属）
+  for (const p of COMPANION_PLUGINS) addRow(p.id, p.name, 'companion');
+  // 其他：insert 块出现但不在配套表
+  for (const [id, name] of insertById) if (!companionById.has(id)) addRow(id, name, 'other');
+  // 其他：用户层条目（llm-deepseek / web / 手动条目）
+  for (const [id, u] of userById) if (!companionById.has(id)) addRow(id, u.name, 'other');
+  // 核心：manifest bundles 中非配套包（dsh-base / dsh-web-app 等）
+  for (const name of bundles) {
+    if (companionNames.has(name)) continue;
+    const id = name.includes('/') ? name.slice(name.indexOf('/') + 1) : name;
+    if (!seen.has(id)) addRow(id, name, 'core');
+  }
+  const order = { companion: 0, other: 1, core: 2 };
+  return rows.sort((a, b) => order[a.group] - order[b.group] || a.id.localeCompare(b.id));
+}
+
+/** 解析插件包名（配套表 → insert 块）。 */
+function pluginManagerResolveName(id) {
+  const c = COMPANION_PLUGINS.find((p) => p.id === id);
+  if (c) return c.name;
+  const { entries } = pluginManagerReadPatch();
+  for (const entry of entries) {
+    if (entry && Array.isArray(entry.insert)) {
+      const it = entry.insert.find((x) => x && x.id === id);
+      if (it && it.name) return it.name;
+    }
+  }
+  return '';
+}
+
+/**
+ * 写入/移除用户层 disabled 条目（纯文本手术见 scripts/plugin-manager-patch.js）：
+ *   关闭 —— 若 id 在 insert 块里，先从块内移除，再追加/更新顶层条目
+ *           {id, name, disabled: true}（同一 id 只保留一处，避免 loader 双登记崩溃）
+ *   启用 —— 移除顶层条目的 disabled 行；条目无 config 时整个移除
+ *           （配套插件下次启动由 syncCompanionPlugins 重新 insert）
+ */
+function pluginManagerSetEnabled(id, enabled) {
+  const file = path.join(pluginManagerProfileDir(), 'cordis.patch.yml');
+  let text = '';
+  try { text = fs.readFileSync(file, 'utf8'); } catch {}
+  if (!text.trim()) text = '# dsh web profile patch（由 DSH Desktop 维护）\n';
+
+  const name = pluginManagerResolveName(id);
+  if (!enabled && !name) return { ok: false, error: '无法解析插件包名: ' + id };
+
+  let patched;
+  try {
+    patched = togglePluginInPatch(text, id, !!enabled, name);
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err) };
+  }
+  if (patched !== text) {
+    try { writePatchAtomic(file, patched); } catch (err) { return { ok: false, error: String((err && err.message) || err) }; }
+  }
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
 // 内置 Agent 预设同步：local 模式的预设由 npm start / after-pack 直接写入
 // Windows 侧内置 dsh 包的 config/agent-presets；WSL 托管模式的 dsh 是 WSL 内
 // npm 安装的干净包，不包含壳自带的 8 个预设，因此模式列表比 local 少。
@@ -3790,6 +3973,37 @@ function applyWorkspaceSearchRailFix() {
     }
   }
 }
+
+// ---------------------------------------------------------------------------
+// 插件页标签合并补丁：官方「全部」只读清单与 dsh-plugin-manager 的「管理」标签
+// 功能重叠（管理已含全量列表 + 搜索 + 分类 + 开关）。幂等地从插件页标签列表
+// 中过滤掉 id 为 "all" 的只读清单，让「管理」成为唯一的插件列表入口。
+// 目标：内置副本 + profile fallback；锚点不匹配（上游将来修复后）自动跳过。
+// ---------------------------------------------------------------------------
+function applyPluginInventoryTabMergeFix() {
+  const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
+  const marker = 'dsh-desktop fix: hide inventory tab';
+  const oldPat = 'tabs = ctx.slots.entries("settings.plugins.tab").map((entry) => ({';
+  const newPat = 'tabs = ctx.slots.entries("settings.plugins.tab").filter((entry) => (entry.options.id ?? "") !== "all").map((entry) => ({ // ' + marker;
+  const candidates = [
+    path.join(__dirname, 'node_modules', '@deepseek-ai', 'dsh-client-ui-settings-plugins', 'lib', 'client.js'),
+    path.join(home, 'profiles', 'node_modules', '@deepseek-ai', 'dsh-client-ui-settings-plugins', 'lib', 'client.js'),
+  ];
+  for (const file of candidates) {
+    if (!file || !fs.existsSync(file)) continue;
+    try {
+      let src = fs.readFileSync(file, 'utf8');
+      if (src.includes(marker)) { log('boot', '插件页标签合并: 已应用，跳过 ' + file); continue; }
+      if (!src.includes(oldPat)) { log('boot', '插件页标签合并: 锚点未匹配（dsh 版本可能已变化），跳过 ' + file); continue; }
+      src = src.replace(oldPat, newPat);
+      fs.writeFileSync(file, src, { encoding: 'utf8' });
+      log('boot', '插件页标签合并: 已隐藏「全部」只读清单 ' + file);
+    } catch (err) {
+      log('boot', '插件页标签合并失败(' + file + '): ' + err.message);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // issue #20 运行时补丁：dsh-web-search-deepseek 的「接口地址」契约与拼接修复。
 // 补丁本体在 scripts/patch-web-search-baseurl.js（与打包补丁共用同一实现，
@@ -4491,6 +4705,7 @@ async function boot() {
     applyProfilePatchGuard();
     applySettingsSectionGuard();
     applyWorkspaceSearchRailFix();
+    applyPluginInventoryTabMergeFix();
     applyWebSearchBaseUrlFix();
     applyMenuViewportFix();
     applySessionManageFix();
@@ -4506,6 +4721,7 @@ async function boot() {
     applyProfilePatchGuard();
     applySettingsSectionGuard();
     applyWorkspaceSearchRailFix();
+    applyPluginInventoryTabMergeFix();
     applyWebSearchBaseUrlFix();
     applyMenuViewportFix();
     applySessionManageFix();
