@@ -104,6 +104,11 @@
 - [cakeni/harness-pet](https://github.com/cakeni/harness-pet)（MIT）内置：会话旁的鲸鱼小宠物，素材与归因随包分发（`assets/plugins/harness-pet`）。
 - 同样以 bundle 形式自动同步进 web profile。
 
+## 对话节点导航条（dsh-navbar）
+
+- [vlln/dsh-navbar](https://github.com/vlln/dsh-navbar)（MIT）内置：对话区右缘的节点串导航条——每 user 消息一个节点，悬停预览（6 行截断）、点击平滑跳转 + 品牌蓝高亮、连续悬停/滚轮切换、>11 节点自动滑动窗口、<2 条 user 消息自动隐藏；消息精选 pin（assistant 操作条 📌，精选轮次渲染为金色椭圆盘，状态按会话持久化）。实现 dsh-external/issues#144 规格，纯浏览器端 bundle（`assets/plugins/dsh-navbar`，含 LICENSE 与预编译 lib），启动时自动同步进 web profile。
+- **取代** `dsh-conversation-tweaks` 内置的会话右侧导航滑轨（dct-rail，已移除），对话区右缘导航由 dsh-navbar 统一提供；conversation-tweaks 保留「隐藏对话输出」能力。
+
 ## 稳定性与兼容性（0.3.6）
 
 ### v0.3.6
@@ -290,7 +295,7 @@ dsh-desktop/
 ├── assets/               # 加载页、更新进度页、恢复页、图标、托盘图标、配套 dsh 插件
 │   ├── sponsor/          # 赞助收款码（支付宝 / 微信，「请作者喝咖啡」面板与本文档共用）
 │   ├── agent-presets/    # 8 个内置预设（minimal-win / router-standard / anchored-standard / zero-anchored-standard / whoami-standard / v4-flash-godmode-opencode-go / warmupbetter / warmupbetter-replay），local 打包写入 / WSL 启动与更新时经 UNC 同步
-│   └── plugins/          # dsh-balance / dsh-file-changes / dsh-vision / zat-dsh-engine / dsh-better-sidebar / harness-pet / dsh-super-injector / dsh-wsl-settings（设置页「WSL 后端」栏）等，启动时自动同步进 web profile
+│   └── plugins/          # dsh-balance / dsh-file-changes / dsh-vision / zat-dsh-engine / dsh-better-sidebar / dsh-navbar / harness-pet / dsh-super-injector / dsh-wsl-settings（设置页「WSL 后端」栏）等，启动时自动同步进 web profile
 ├── scripts/
 │   ├── fetch-node.js     # 内置 node.exe 复制脚本
 │   ├── fetch-npm.js      # 内置 npm CLI 复制脚本

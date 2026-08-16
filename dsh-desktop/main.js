@@ -2658,6 +2658,10 @@ const COMPANION_PLUGINS = [
   { id: 'better-sidebar', name: 'dsh-better-sidebar' },
   { id: 'harness-pet', name: 'harness-pet' },
   { id: 'float-window', name: '@deepseek-ai/dsh-float-window' },
+  // 对话节点导航条（vlln/dsh-navbar，MIT）：对话区右缘节点串快速跳转
+  // user 消息（悬停预览/点击跳转/滚轮切换），取代 conversation-tweaks
+  // 内置的会话滑轨。
+  { id: 'dsh-navbar', name: '@vlln/dsh-navbar' },
   { id: 'conversation-tweaks', name: '@deepseek-ai/dsh-conversation-tweaks' },
   { id: 'super-injector', name: '@dsh-external/dsh-super-injector' },
   { id: 'prompt-custom', name: '@deepseek-ai/dsh-prompt-custom' },
@@ -2944,7 +2948,7 @@ function syncCompanionPlugins() {
     const bundleNames = new Set();
     const copyFiles = [
       'package.json', 'cordis.patch.yml', 'LICENSE', 'README.md', 'README.zh.md',
-      'lib/index.js', 'lib/client.js', 'lib/vlm.js', 'lib/typert.host.js', 'lib/typert.host.d.ts',
+      'lib/index.js', 'lib/index.mjs', 'lib/client.js', 'lib/vlm.js', 'lib/typert.host.js', 'lib/typert.host.d.ts',
       'dsh.plugin.json',
     ];
     // 配套插件引用了不在 dsh 核心依赖闭包里的 npm 包时（例如 dsh-better-sidebar

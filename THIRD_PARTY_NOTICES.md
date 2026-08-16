@@ -56,6 +56,7 @@
 | dsh-better-sidebar | 0.12.2 | MIT | https://github.com/omdsh-dev/DSH-better-sidebar |
 | @dsh-external/dsh-super-injector | 0.3.1 | BSD-3-Clause | https://github.com/dsh-external (社区 @dsh-external scope) |
 | @dsh-external/dsh-vision | 0.1.0 | BSD-3-Clause | https://github.com/dsh-external (社区 @dsh-external scope) |
+| dsh-navbar | 0.3.0 | MIT | https://github.com/vlln/dsh-navbar |
 | harness-pet | 0.1.0 | MIT | https://github.com/cakeni/harness-pet |
 | zat-dsh-engine | 0.4.0 | MIT | https://github.com/mishibeikejie/zat-dsh-engine |
 
