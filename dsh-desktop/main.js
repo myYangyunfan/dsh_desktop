@@ -39,7 +39,7 @@ const { PROFILE_BUNDLE_GUARD_MARKER, PROFILE_BOOT_GUARD_MARKER, verifyBundleDir,
 const { COMPANION_PLUGINS } = require('./scripts/lib/companion-plugins');
 const { writeFileAtomic } = require('./scripts/lib/patch-io');
 const { applyPatchToFiles } = require('./scripts/lib/patch-engine');
-const { FLASH_PKG_REL, EXPOSE_PKG_REL, patchTargets, transformFlashFix, transformExposeFix } = require('./scripts/lib/runtime-patches');
+const { FLASH_PKG_REL, EXPOSE_PKG_REL, patchTargets, localCopyFiles, guardCopyFiles, localNodeModulesRoots, transformFlashFix, transformExposeFix } = require('./scripts/lib/runtime-patches');
 const { ACP_DISABLE_BLOCK, PET_DISABLE_BLOCK, removeLegacyMarketplacePatchLines, ensureDisabledPatchEntry, registerCompanionPatchEntries, syncCompanionFiles } = require('./scripts/lib/companion-profile');
 const { patchWebSearchBaseUrl } = require('./scripts/patch-web-search-baseurl');
 const { patchMenuViewport } = require('./scripts/patch-menu-viewport');
@@ -1507,19 +1507,7 @@ function createWindow(opts = {}) {
   // Keep the window pinned to the local web UI; send external links out.
   // H1 修复：origin 精确比较（protocol+host+port），杜绝前缀/异域/userinfo 逃逸；
   // file: 一律拦截（同 webContents 下 file 页面仍持有 preload 桥）；will-redirect 同规则。
-  const isAllowedWebUrl = (url) => {
-    try {
-      const target = new URL(url);
-      if (target.protocol !== 'http:' && target.protocol !== 'https:') return false;
-      if (webUrl) {
-        const base = new URL(webUrl);
-        return target.origin === base.origin;
-      }
-      return target.hostname === '127.0.0.1' || target.hostname === 'localhost' || target.hostname === '::1';
-    } catch {
-      return false;
-    }
-  };
+  // 判定函数为模块级 isAllowedWebUrl（浮窗守卫共用同一实现，见会话浮窗小节）。
   const guardNavigation = (event, url) => {
     if (isAllowedWebUrl(url)) return;
     event.preventDefault();
@@ -2143,6 +2131,11 @@ async function runUpdateFlow(manual) {
       applySettingsSectionGuard();
       applyWorkspaceSearchRailFix();
       applyPluginInventoryTabMergeFix();
+      // 与 local 分支、与 WSL 启动分支一致：包级补丁同样立即重打（幂等），
+      // 避免「稍后重启」后以未修复的新 WSL agent 启动（历史漂移补齐）。
+      applyWebSearchBaseUrlFix();
+      applyMenuViewportFix();
+      applySessionManageFix();
     } else {
       await updater.applyUpdate(ctx, latest);
       // 新 overlay 已就位：立即重打运行时补丁（全部幂等），否则「稍后重启」后再
@@ -3434,41 +3427,29 @@ function syncLocalAgentPresets() {
 }
 
 // ---------------------------------------------------------------------------
-// 运行时补丁候选路径（与旧实现逐项一致，仅消除逐函数复制的 path.join 样板）：
+// 运行时补丁候选路径（构造收口在 scripts/lib/runtime-patches.js 的纯函数里，
+// 这里只绑定模块级变量）：
 //   本地模式三副本 = profile fallback（junction 写穿内置副本）→ 内置 app 副本
-//   → 用户更新过的 agent overlay；防护类补丁（app-boot / settings / workspace）
-//   另覆盖 overlay 嵌套 dsh 依赖副本，且内置副本优先。
+//   → 用户更新过的 agent overlay；防护类补丁（app-boot / settings / workspace /
+//   插件页标签合并）另覆盖 overlay 嵌套 dsh 依赖副本，且内置副本优先。
 //   WSL 托管模式目标 = WSL 安装目录（profile fallback + agent，经 UNC 写穿），
-//   由 scripts/lib/runtime-patches.js 的 patchTargets 统一构造。
+//   由 patchTargets 统一构造；包级补丁在 WSL 模式追加 WSL agent 直连根。
 // ---------------------------------------------------------------------------
 function runtimeCopyFiles(pkgRel) {
-  const home = dshHome || path.join(os.homedir(), '.dsh');
-  return [
-    path.join(home, 'profiles', 'node_modules', '@deepseek-ai', pkgRel),
-    path.join(__dirname, 'node_modules', '@deepseek-ai', pkgRel),
-    path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', pkgRel),
-  ];
+  return localCopyFiles(dshHome || path.join(os.homedir(), '.dsh'), __dirname, userDataDir, pkgRel);
 }
 
 function runtimeGuardFiles(pkgRel) {
-  const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
-  return [
-    path.join(__dirname, 'node_modules', '@deepseek-ai', pkgRel),
-    path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', pkgRel),
-    path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', '@deepseek-ai', pkgRel),
-    path.join(home, 'profiles', 'node_modules', '@deepseek-ai', pkgRel),
-  ];
+  return guardCopyFiles(effectiveDshHome() || path.join(os.homedir(), '.dsh'), __dirname, userDataDir, pkgRel);
 }
 
 // node_modules 根目录版本（web-search / menu-viewport / session-manage 三个
-// 包级补丁用）：WSL 模式下 home 为 UNC 等价路径（经 UNC 覆盖 WSL profile）。
+// 包级补丁用）：WSL 模式下 home 为 UNC 等价路径（经 UNC 覆盖 WSL profile），
+// 并追加 WSL agent 直连根兜底（与 patchTargets 的 agent 条目语义一致）。
 function runtimeNodeModulesRoots() {
   const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
-  return [
-    path.join(home, 'profiles', 'node_modules'),
-    path.join(__dirname, 'node_modules'),
-    path.join(userDataDir, 'agent', 'node_modules'),
-  ];
+  const extraRoots = isWslMode() ? [path.join(home, 'agent', 'node_modules')] : [];
+  return localNodeModulesRoots(home, __dirname, userDataDir, extraRoots);
 }
 
 // ---------------------------------------------------------------------------
@@ -3528,7 +3509,9 @@ function applyPromptExposeFix() {
 // 文本模型自动识图补丁：官方 apiproxy 在 session.prompt 入口检查模型是否支持
 // image 输入，不支持就直接拒绝。本补丁复用已安装的 dsh-vision 插件配置
 // （设置 → 识图插件（view_image）的 VLM baseURL/model/apiKey），把图片转述为
-// 详细文字（含 OCR）后再发送，文本模型也能“看图”。幂等，覆盖三处运行副本。
+// 详细文字（含 OCR）后再发送，文本模型也能“看图”。幂等；本地模式覆盖三处
+// 运行副本，WSL 托管模式覆盖 WSL profile fallback + agent（与闪跳/白名单
+// 补丁同模式，经 UNC 写穿）。
 // ---------------------------------------------------------------------------
 function applyImageSendFix() {
   const HELPER_MARKER = 'async function describeImagesWithVision(ctx, content)';
@@ -3610,9 +3593,13 @@ async function describeImagesWithVision(ctx, content) {
 							}
 						}`;
 
+  const wslHome = effectiveDshHome();
+  const files = isWslMode()
+    ? patchTargets(wslHome, EXPOSE_PKG_REL)
+    : runtimeCopyFiles(EXPOSE_PKG_REL);
   applyPatchToFiles({
     prefix: '识图发送补丁',
-    files: runtimeCopyFiles(EXPOSE_PKG_REL),
+    files,
     log: (m) => log('boot', m),
     transform: (src, file) => {
       if (src.includes(HELPER_MARKER)) return { status: 'already' };
@@ -3658,15 +3645,20 @@ async function describeImagesWithVision(ctx, content) {
 // 会把 role('secret') 的 apiKey 整字段删除，带密钥校验的 VLM 端点必然 401，
 // prompt 被拒、客户端提示「图片发送失败」。这里幂等改写为先读 settings.get()
 // 的宿主侧未脱敏解析值（保留 apiKey），describe 快照降级为回退。dsh 更新后
-// 本函数会在下次启动重新应用。
+// 本函数会在下次启动重新应用。本地模式覆盖三处运行副本；WSL 托管模式覆盖
+// WSL profile fallback + agent（与闪跳/白名单补丁同模式，经 UNC 写穿）。
 // ---------------------------------------------------------------------------
 function applyVisionKeyFix() {
   const guardMarker = 'dsh-desktop fix: read the resolved HOST-side value';
   const from = '\tlet vision = null;\n\tif (settings !== void 0 && typeof settings.describe === "function") {\n\t\ttry {\n\t\t\tconst descriptor = settings.describe({ redactSecrets: true }).find((candidate) => String(candidate.ns) === "dsh-vision");\n\t\t\tif (descriptor !== void 0 && descriptor.value !== void 0 && typeof descriptor.value === "object") vision = descriptor.value;\n\t\t} catch {}\n\t}';
   const to = '\tlet vision = null;\n\tif (settings !== void 0 && typeof settings.get === "function") {\n\t\t// dsh-desktop fix: read the resolved HOST-side value (settings.get), not the\n\t\t// redacted wire snapshot. redactSecrets strips role(\'secret\') fields, so\n\t\t// describe({redactSecrets:true}) drops apiKey and every keyed VLM endpoint\n\t\t// answers 401 — image sends failed for configured users.\n\t\tconst resolved = settings.get("dsh-vision");\n\t\tif (resolved !== void 0 && typeof resolved === "object") vision = resolved;\n\t}\n\tif (vision === null && settings !== void 0 && typeof settings.describe === "function") {\n\t\ttry {\n\t\t\tconst descriptor = settings.describe({ redactSecrets: true }).find((candidate) => String(candidate.ns) === "dsh-vision");\n\t\t\tif (descriptor !== void 0 && descriptor.value !== void 0 && typeof descriptor.value === "object") vision = descriptor.value;\n\t\t} catch {}\n\t}';
+  const wslHome = effectiveDshHome();
+  const files = isWslMode()
+    ? patchTargets(wslHome, EXPOSE_PKG_REL)
+    : runtimeCopyFiles(EXPOSE_PKG_REL);
   applyPatchToFiles({
     prefix: '识图密钥补丁',
-    files: runtimeCopyFiles(EXPOSE_PKG_REL),
+    files,
     log: (m) => log('boot', m),
     transform: (src, file) => {
       if (src.includes(guardMarker)) return { status: 'already' };
@@ -3874,17 +3866,14 @@ function applyWorkspaceSearchRailFix() {
 // 插件页标签合并补丁：官方「全部」只读清单与 dsh-plugin-manager 的「管理」标签
 // 功能重叠（管理已含全量列表 + 搜索 + 分类 + 开关）。幂等地从插件页标签列表
 // 中过滤掉 id 为 "all" 的只读清单，让「管理」成为唯一的插件列表入口。
-// 目标：内置副本 + profile fallback；锚点不匹配（上游将来修复后）自动跳过。
+// 目标与其它防护类补丁一致：内置副本 + 更新 overlay（含嵌套 dsh 依赖副本）+
+// profile fallback；锚点不匹配（上游将来修复后）自动跳过。
 // ---------------------------------------------------------------------------
 function applyPluginInventoryTabMergeFix() {
-  const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
   const marker = 'dsh-desktop fix: hide inventory tab';
   const oldPat = 'tabs = ctx.slots.entries("settings.plugins.tab").map((entry) => ({';
   const newPat = 'tabs = ctx.slots.entries("settings.plugins.tab").filter((entry) => (entry.options.id ?? "") !== "all").map((entry) => ({ // ' + marker;
-  const files = [
-    path.join(__dirname, 'node_modules', '@deepseek-ai', 'dsh-client-ui-settings-plugins', 'lib', 'client.js'),
-    path.join(home, 'profiles', 'node_modules', '@deepseek-ai', 'dsh-client-ui-settings-plugins', 'lib', 'client.js'),
-  ];
+  const files = runtimeGuardFiles(path.join('dsh-client-ui-settings-plugins', 'lib', 'client.js'));
   applyPatchToFiles({
     prefix: '插件页标签合并',
     files,

@@ -61,4 +61,4 @@ function readFileCached(file) {
   }
 }
 
-module.exports = { writeFileAtomic, readFileCached, fileRealKey };
+module.exports = { writeFileAtomic, readFileCached };

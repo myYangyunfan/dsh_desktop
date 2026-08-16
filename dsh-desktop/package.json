@@ -2,7 +2,7 @@
     "name":  "dsh-desktop",
     "productName":  "DSH Desktop",
     "version":  "0.3.9",
-    "description":  "DeepSeek Harness (dsh) 寮€绠卞嵆鐢ㄧ殑 Windows 妗岄潰瀹㈡埛绔細鍐呯疆 dsh CLI 涓?Node 杩愯鏃讹紝涓€閿惎鍔?Web UI",
+    "description":  "DeepSeek Harness (dsh) 开箱即用的 Windows 桌面客户端：内置 dsh CLI 与 Node 运行时，一键启动 Web UI",
     "main":  "main.js",
     "author":  "DSH Desktop",
     "license":  "MIT",

@@ -38,7 +38,6 @@ const { writeFileAtomic, readFileCached } = require('./patch-io');
  *   | { status: 'changed', src: string, note?: any }} spec.transform
  * @param {(file: string) => string|null} [spec.alreadyLog]  已应用日志主体；null/缺省 = 静默
  * @param {(msg: string) => void} [spec.anchorLog]           锚点失配日志通道；缺省 = log
- * @param {(file: string) => string} [spec.readFailLog]      读取失败日志主体；缺省 '读取失败，跳过 ' + file
  * @param {(file: string, note?: any) => string} [spec.doneLog] 成功日志主体；缺省 '已应用 ' + file
  * @param {boolean} [spec.donePrefix]  成功行是否加 `${prefix}: `；缺省 true
  * @param {(file: string, err: Error) => string} [spec.failLog]
@@ -55,7 +54,6 @@ function applyPatchToFiles(spec) {
     transform,
     alreadyLog = null,
     anchorLog = log,
-    readFailLog = (file) => '读取失败，跳过 ' + file,
     doneLog = (file) => '已应用 ' + file,
     donePrefix = true,
     failLog = (file, err) => `${prefix}失败(${file}): ${err.message}`,
@@ -69,7 +67,7 @@ function applyPatchToFiles(spec) {
     try {
       const src = readFileCached(file);
       if (src === null) {
-        log(`${prefix}: ${readFailLog(file)}`);
+        log(`${prefix}: 读取失败，跳过 ${file}`);
         continue;
       }
       const result = transform(src, file);

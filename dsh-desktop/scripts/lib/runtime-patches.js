@@ -42,6 +42,43 @@ function patchTargets(home, pkgRel) {
   ];
 }
 
+// ---------------------------------------------------------------------------
+// 运行时补丁候选路径构造（纯函数：路径根由调用方传入，便于单测；main.js 绑定
+// 模块级变量）。三种布局与旧实现逐项一致，并补齐同系列补丁的历史覆盖缺口：
+//   - localCopyFiles         本地模式三副本（profile fallback → 内置副本 → 更新 overlay）；
+//   - guardCopyFiles         防护类补丁四副本（内置副本优先 + overlay 嵌套 dsh
+//                            依赖副本 + profile fallback）；
+//   - localNodeModulesRoots  包级补丁的 node_modules 根目录列表（extraRoots 用于
+//                            WSL 模式追加 WSL agent 直连根，与 patchTargets 的
+//                            agent 兜底语义一致）。
+// ---------------------------------------------------------------------------
+
+function localCopyFiles(home, appDir, userDataDir, pkgRel) {
+  return [
+    path.join(home, 'profiles', 'node_modules', '@deepseek-ai', pkgRel),
+    path.join(appDir, 'node_modules', '@deepseek-ai', pkgRel),
+    path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', pkgRel),
+  ];
+}
+
+function guardCopyFiles(home, appDir, userDataDir, pkgRel) {
+  return [
+    path.join(appDir, 'node_modules', '@deepseek-ai', pkgRel),
+    path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', pkgRel),
+    path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', '@deepseek-ai', pkgRel),
+    path.join(home, 'profiles', 'node_modules', '@deepseek-ai', pkgRel),
+  ];
+}
+
+function localNodeModulesRoots(home, appDir, userDataDir, extraRoots = []) {
+  return [
+    path.join(home, 'profiles', 'node_modules'),
+    path.join(appDir, 'node_modules'),
+    path.join(userDataDir, 'agent', 'node_modules'),
+    ...extraRoots,
+  ];
+}
+
 /**
  * 闪跳修复变换（纯函数）。锚点失配的 detail 含文件路径，与两个调用方
  * （main.js / 同步脚本）的旧日志文案逐字一致。
@@ -83,6 +120,9 @@ module.exports = {
   FLASH_PKG_REL,
   EXPOSE_PKG_REL,
   patchTargets,
+  localCopyFiles,
+  guardCopyFiles,
+  localNodeModulesRoots,
   transformFlashFix,
   transformExposeFix,
 };

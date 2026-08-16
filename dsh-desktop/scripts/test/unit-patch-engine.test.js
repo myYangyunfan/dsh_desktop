@@ -21,6 +21,7 @@ const { applyPatchToFiles } = require('../lib/patch-engine');
 const {
   FLASH_OLD, FLASH_NEW, SETTINGS_NAMESPACES,
   FLASH_PKG_REL, EXPOSE_PKG_REL, patchTargets,
+  localCopyFiles, guardCopyFiles, localNodeModulesRoots,
   transformFlashFix, transformExposeFix,
 } = require('../lib/runtime-patches');
 const { COMPANION_PLUGINS, companionDirName } = require('../lib/companion-plugins');
@@ -201,6 +202,38 @@ test('runtime-patches: WSL/CLI 目标路径约定', () => {
   assert.strictEqual(FLASH_PKG_REL, path.join('dsh-client-runtime', 'lib', 'client.js'));
   assert.strictEqual(EXPOSE_PKG_REL, path.join('dsh-host-apiproxy', 'lib', 'index.js'));
   assert.deepStrictEqual(SETTINGS_NAMESPACES, ['dsh-prompt', 'dsh-third-party-thinking', 'dsh-vision', 'dsh-conversation-tweaks']);
+});
+
+test('runtime-patches: 候选路径构造器（本地三副本/防护四副本/WSL agent 直连根）', () => {
+  const home = 'C:\\home';
+  const appDir = 'C:\\app';
+  const userData = 'C:\\ud';
+  const rel = path.join('dsh-host-apiproxy', 'lib', 'index.js');
+  // 本地模式三副本：profile fallback → 内置副本 → 更新 overlay
+  assert.deepStrictEqual(localCopyFiles(home, appDir, userData, rel), [
+    path.join(home, 'profiles', 'node_modules', '@deepseek-ai', rel),
+    path.join(appDir, 'node_modules', '@deepseek-ai', rel),
+    path.join(userData, 'agent', 'node_modules', '@deepseek-ai', rel),
+  ]);
+  // 防护类四副本：内置副本优先 + overlay + overlay 嵌套 dsh 依赖副本 + profile fallback
+  assert.deepStrictEqual(guardCopyFiles(home, appDir, userData, rel), [
+    path.join(appDir, 'node_modules', '@deepseek-ai', rel),
+    path.join(userData, 'agent', 'node_modules', '@deepseek-ai', rel),
+    path.join(userData, 'agent', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', '@deepseek-ai', rel),
+    path.join(home, 'profiles', 'node_modules', '@deepseek-ai', rel),
+  ]);
+  // 包级补丁根目录：本地三件套；WSL 模式追加 WSL agent 直连根
+  assert.deepStrictEqual(localNodeModulesRoots(home, appDir, userData), [
+    path.join(home, 'profiles', 'node_modules'),
+    path.join(appDir, 'node_modules'),
+    path.join(userData, 'agent', 'node_modules'),
+  ]);
+  assert.deepStrictEqual(localNodeModulesRoots(home, appDir, userData, [path.join(home, 'agent', 'node_modules')]), [
+    path.join(home, 'profiles', 'node_modules'),
+    path.join(appDir, 'node_modules'),
+    path.join(userData, 'agent', 'node_modules'),
+    path.join(home, 'agent', 'node_modules'),
+  ]);
 });
 
 // ---------------------------------------------------------------------------
