@@ -677,11 +677,97 @@ function dshWebLogPath() {
   return path.join(logsDir, 'dsh-web.log');
 }
 
+// 日志体积封顶与尾部读取（资源治理）：desktop.log / dsh-web.log 无界追加，
+// 长期运行会膨胀到数百 MB。启动时超过上限只保留尾部；读取侧统一改为
+// 「fd 定位读末尾定长字节」，把诊断路径的成本从 O(日志大小) 降为 O(1)。
+const MAX_LOG_BYTES = 4 * 1024 * 1024; // 超过即封顶
+const LOG_KEEP_BYTES = 256 * 1024; // 封顶后保留的尾部字节
+const LOG_TAIL_READ_BYTES = 256 * 1024; // 诊断读取的最多字节
+
+/** 读取文件末尾最多 maxBytes 字节；文件缺失返回空串。 */
+function readFileTailText(file, maxBytes) {
+  try {
+    const st = fs.statSync(file);
+    if (st.size <= 0) return '';
+    const len = Math.min(st.size, maxBytes);
+    const buf = Buffer.alloc(len);
+    const fd = fs.openSync(file, 'r');
+    let pos = 0;
+    try {
+      while (pos < len) {
+        const n = fs.readSync(fd, buf, pos, len - pos, st.size - len + pos);
+        if (n <= 0) break;
+        pos += n;
+      }
+    } finally {
+      fs.closeSync(fd);
+    }
+    return buf.subarray(0, pos).toString('utf8');
+  } catch {
+    return '';
+  }
+}
+
+/** 启动时封顶日志：超过 MAX_LOG_BYTES 则原子地只保留尾部 LOG_KEEP_BYTES。 */
+function capLogFile(file) {
+  try {
+    const st = fs.statSync(file);
+    if (st.size <= MAX_LOG_BYTES) return;
+    const keep = Math.min(st.size, LOG_KEEP_BYTES);
+    const tail = Buffer.alloc(keep);
+    const fd = fs.openSync(file, 'r');
+    let pos = 0;
+    try {
+      while (pos < keep) {
+        const n = fs.readSync(fd, tail, pos, keep - pos, st.size - keep + pos);
+        if (n <= 0) break;
+        pos += n;
+      }
+    } finally {
+      fs.closeSync(fd);
+    }
+    const tmp = file + '.cap';
+    fs.writeFileSync(tmp, tail.subarray(0, pos));
+    fs.renameSync(tmp, file);
+    log('boot', '日志已封顶: ' + file + ' (' + st.size + ' -> ' + pos + ' bytes)');
+  } catch (err) {
+    log('boot', '日志封顶失败 ' + file + ': ' + err.message);
+  }
+}
+
+/** 清理超过保留期的崩溃转储（只动 *.dmp，settings.dat 与本次新转储不受影响）。 */
+function pruneOldCrashDumps() {
+  const MAX_DMP_AGE_MS = 14 * 24 * 3600 * 1000;
+  try {
+    const now = Date.now();
+    for (const e of fs.readdirSync(crashDumpsDir)) {
+      if (!e.endsWith('.dmp')) continue;
+      const p = path.join(crashDumpsDir, e);
+      try {
+        const st = fs.statSync(p);
+        if (now - st.mtimeMs > MAX_DMP_AGE_MS) {
+          fs.rmSync(p, { force: true });
+          log('boot', '已清理过期崩溃转储: ' + e);
+        }
+      } catch {}
+    }
+  } catch {}
+}
+
 function readDshWebLogTail(maxLines = 80) {
   try {
-    const text = fs.readFileSync(dshWebLogPath(), 'utf8');
-    const lines = text.split(/\r?\n/).filter(Boolean);
-    return lines.slice(-maxLines).join('\n');
+    const file = dshWebLogPath();
+    const t0 = Date.now();
+    let size = 0;
+    try { size = fs.statSync(file).size; } catch { return ''; }
+    const text = readFileTailText(file, LOG_TAIL_READ_BYTES);
+    if (process.env.DSH_RUNTIME_PROBE && size > LOG_TAIL_READ_BYTES) {
+      log('probe', `readDshWebLogTail: bytes=${size} read=${text.length} ms=${Date.now() - t0}`);
+    }
+    // 从文件中部起读时首行可能是半行：丢弃，避免产生半行/乱码 token。
+    const lines = text.split(/\r?\n/);
+    if (size > LOG_TAIL_READ_BYTES && lines.length > 0) lines.shift();
+    return lines.filter(Boolean).slice(-maxLines).join('\n');
   } catch {
     return '';
   }
@@ -793,6 +879,11 @@ function backupAndRebuildProfileModules(home) {
 // 避免「重启后连续弹出多个启动失败窗口」。
 let boxChain = Promise.resolve();
 function showBox(opts) {
+  // AUDIT guard: isolated test runs never pop dialogs; resolve like the cancel button.
+  if (process.env.DSH_DESKTOP_TEST && process.env.DSH_DESKTOP_TEST_NO_DIALOG) {
+    const response = typeof opts.cancelId === 'number' ? opts.cancelId : 0;
+    return Promise.resolve({ response, checkboxChecked: false });
+  }
   const run = () => {
     if (mainWindow && !mainWindow.isDestroyed()) return dialog.showMessageBox(mainWindow, opts);
     return dialog.showMessageBox(opts);
@@ -1153,7 +1244,10 @@ function scanWebLogForSettingsFailure() {
   try {
     const file = path.join(logsDir, 'dsh-web.log');
     if (!fs.existsSync(file)) return null;
-    const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+    // 只读末尾定长字节：settings-file 报错行属于最近一次失败启动，必在尾部；
+    // 避免日志膨胀后整文件读入的线性成本。
+    const text = readFileTailText(file, LOG_TAIL_READ_BYTES);
+    const lines = text.split(/\r?\n/);
     const hit = lines.slice(-400).reverse().find((l) => l.includes('settings-file:'));
     if (!hit) return null;
     const m = hit.match(/settings-file: (?:invalid document at )?([^\n]+)/);
@@ -1299,7 +1393,10 @@ function createWindow(opts = {}) {
 
   win.loadFile(path.join(__dirname, 'assets', 'loading.html'));
   // startHidden：崩溃恢复重建窗口时保持「隐藏到托盘」状态，不突然弹出窗口。
-  win.once('ready-to-show', () => { if (!win.isDestroyed() && !opts.startHidden) win.show(); });
+  // AUDIT guard: isolated test runs never show a window.
+  if (!process.env.DSH_DESKTOP_TEST_HIDE_WINDOW) {
+    win.once('ready-to-show', () => { if (!win.isDestroyed() && !opts.startHidden) win.show(); });
+  }
   // Keep the app brand in the OS title bar (the web UI sets its own <title>).
   win.on('page-title-updated', (event) => {
     event.preventDefault();
@@ -4024,6 +4121,12 @@ async function boot() {
   resolveBackendConfig();
   fs.mkdirSync(logsDir, { recursive: true });
   if (dshHome) fs.mkdirSync(dshHome, { recursive: true });
+  // 日志体积封顶：desktop.log / dsh-web.log 无界追加，长期运行会膨胀到数百 MB，
+  // 还会让失败路径上的「整文件读尾部」变成线性开销。此时没有任何写者（上一
+  // 个实例已退出、本实例尚未开流），封顶是安全的。
+  capLogFile(path.join(logsDir, 'desktop.log'));
+  capLogFile(path.join(logsDir, 'dsh-web.log'));
+  capLogFile(path.join(logsDir, 'watchdog.log'));
   desktopLog = fs.createWriteStream(path.join(logsDir, 'desktop.log'), { flags: 'a' });
   // 崩溃取证（Issue #9）：把 Crashpad minidump 固定到数据目录并保留，
   // 用于后续定位 0xC0000005 的底层来源（不联网上传）。
@@ -4031,6 +4134,7 @@ async function boot() {
   try {
     fs.mkdirSync(crashDumpsDir, { recursive: true });
     app.setPath('crashDumps', crashDumpsDir);
+    pruneOldCrashDumps();
     crashReporter.start({
       productName: 'DSH Desktop',
       companyName: 'DSH Desktop',

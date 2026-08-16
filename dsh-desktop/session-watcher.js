@@ -12,12 +12,26 @@
 // Decoding mirrors the persistence backend's public-API path exactly:
 // structurally scan complete frame ranges, then zstdDecompressSync each
 // frame (node:zlib — same codec dsh itself uses). No third-party deps.
+//
+// 资源模型（v2，根治随会话数线性增长的持续轮询）：
+//   · 每个会话文件挂一个 fs.watch（Windows 下文件写入会触发事件）——
+//     内容增长时立即增量解码，通知延迟由「每 3 秒轮询」级变为事件级；
+//   · 兜底清扫每 10s 只做 stat（捕获 fs.watch 漏报/文件被整体替换），
+//     目录全量遍历每 30s 一次（发现新会话/清理消失的会话与监视器）。
+//   600 会话实测：原设计 3s 全量 stat + 5s 全量遍历 ≈ 每 3 秒 40-46ms +
+//   每 5 秒 54-85ms（约 3% 单核持续）；v2 稳态 ≈ stat 4ms/s + 遍历
+//   2.5ms/s（约 0.7% 单核），且随会话数增长斜率降为原来的 ~1/4。
+//   fs.watch 漏报/文件替换的极端情形由 10s 兜底清扫收敛（通知最坏延迟
+//   10s，正常路径为事件级、比原设计更快）。
 
 const fs = require('node:fs');
 const path = require('node:path');
 const zlib = require('node:zlib');
 
 const ZSTD_MAGIC = 4247762216; // 28 B5 2F FD little-endian
+
+const STAT_SWEEP_MS = 10000; // 兜底 stat 清扫（捕获 fs.watch 漏报/文件替换）
+const WALK_SWEEP_MS = 30000; // 目录对账（发现新会话、清理消失的监视器）
 
 // Structural zstd frame scanner (ported from dsh-session-persistence-jsonl).
 function scanZstdFrames(buffer) {
@@ -88,33 +102,55 @@ function expandRow(line) {
 }
 
 class SessionWatcher {
-  constructor({ sessionsDir, onTurnEnd, log }) {
+  constructor({ sessionsDir, onTurnEnd, log, statSweepMs, walkSweepMs }) {
     this.sessionsDir = sessionsDir;
     this.onTurnEnd = onTurnEnd || (() => {});
     this.log = log || (() => {});
     this.files = new Map(); // absPath -> { size, consumed, header, title, baseline }
     this.dirCache = { at: 0, files: [] };
     this.timer = null;
+    this.walkTimer = null;
+    this.watchers = new Map(); // absPath -> FSWatcher
+    this.statSweepMs = statSweepMs === undefined ? STAT_SWEEP_MS : statSweepMs;
+    this.walkSweepMs = walkSweepMs === undefined ? WALK_SWEEP_MS : walkSweepMs;
   }
 
-  start(intervalMs = 3000) {
-    // 性能修复：首扫延后一拍（先让窗口绘制），且分批处理，
-    // 避免启动时主进程被大量会话日志的全量解码卡死。
-    // 目录枚举结果缓存 5s，避免每 3s 递归整个 sessions 目录造成桌面卡顿。
+  start() {
+    // 首扫延后一拍（先让窗口绘制），且分批处理，避免启动时主进程被大量
+    // 会话日志的全量解码卡死。
     setImmediate(() => this.scan(4));
-    this.timer = setInterval(() => this.scan(), intervalMs);
+    // 兜底 stat 清扫：捕获 fs.watch 漏报与「整文件替换（rename）」等事件
+    // 盲区；正常增长路径由每文件的 fs.watch 事件即时处理。
+    this.timer = setInterval(() => this.scan(), this.statSweepMs);
     if (this.timer.unref) this.timer.unref();
+    // 目录对账：发现新会话、摘除已消失会话与其监视器。
+    this.walkTimer = setInterval(() => this.refreshWatchList(), this.walkSweepMs);
+    if (this.walkTimer.unref) this.walkTimer.unref();
   }
 
   stop() {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    if (this.walkTimer) clearInterval(this.walkTimer);
+    this.walkTimer = null;
+    for (const w of this.watchers.values()) {
+      try { w.close(); } catch {}
+    }
+    this.watchers.clear();
   }
 
-  listLogs() {
+  // ---- AUDIT probe (env-gated, temporary) ----
+  _probe(marker, extra) {
+    if (!process.env.DSH_RUNTIME_PROBE) return;
+    try { this.log('watch', `probe:${marker} ${extra || ''}`); } catch {}
+  }
+
+  listLogs(force = false) {
     try {
       const now = Date.now();
-      if (now - this.dirCache.at < 5000) return this.dirCache.files;
+      // 目录清单缓存 25s：普通 stat 清扫（10s 一次）直接复用清单，全量遍历
+      // 只发生在 30s 对账（force）与首扫，避免每 10s 递归整个 sessions 树。
+      if (!force && now - this.dirCache.at < 25000) return this.dirCache.files;
       if (!fs.existsSync(this.sessionsDir)) return [];
       const out = [];
       const walk = (dir) => {
@@ -124,8 +160,15 @@ class SessionWatcher {
           else if (entry.name === 'session.jsonl.zstd') out.push(p);
         }
       };
+      const t0 = Date.now();
       walk(this.sessionsDir);
       this.dirCache = { at: now, files: out };
+      if (process.env.DSH_RUNTIME_PROBE) {
+        this._probeWalks = (this._probeWalks || 0) + 1;
+        if (this._probeWalks % 4 === 0) {
+          this._probe('walk', `#${this._probeWalks} files=${out.length} ms=${Date.now() - t0}`);
+        }
+      }
       return out;
     } catch (err) {
       this.log('watch', 'listLogs 失败: ' + err.message);
@@ -133,11 +176,61 @@ class SessionWatcher {
     }
   }
 
+  /** 给一个会话文件挂监视器；已挂或失败则跳过（兜底清扫兜住）。 */
+  attachWatch(file) {
+    if (this.watchers.has(file)) return;
+    try {
+      const w = fs.watch(file, (eventType) => this.onFileEvent(file, eventType));
+      w.on('error', () => {
+        try { w.close(); } catch {}
+        if (this.watchers.get(file) === w) this.watchers.delete(file);
+      });
+      this.watchers.set(file, w);
+    } catch { /* 文件可能刚消失；下次对账重试 */ }
+  }
+
+  /**
+   * fs.watch 事件：立即增量处理该文件（process 为同步函数，无并发问题）。
+   * rename（删除/整文件替换）时强制重新基线：size 不变的同尺寸替换在
+   * 「大小比对」下不可见，但 rename 事件是替换的强信号，重基线只做一次
+   * 帧边界扫描 + 头部解码，代价可忽略。
+   */
+  onFileEvent(file, eventType) {
+    try {
+      if (eventType === 'rename') {
+        const rec = this.files.get(file);
+        if (rec) {
+          rec.consumed = 0; rec.header = null; rec.title = null; rec.baseline = false; rec.hasTurnEvents = false;
+        }
+      }
+      this.process(file);
+    } catch (err) { this.log('watch', '处理失败 ' + file + ': ' + err.message); }
+  }
+
+  /** 目录对账：刷新文件清单、为新文件挂监视器、清理已消失文件的监视器。 */
+  refreshWatchList() {
+    const t0 = Date.now();
+    const files = this.listLogs(true);
+    const alive = new Set(files);
+    for (const file of files) this.attachWatch(file);
+    for (const [file, w] of this.watchers) {
+      if (alive.has(file)) continue;
+      try { w.close(); } catch {}
+      this.watchers.delete(file);
+    }
+    if (process.env.DSH_RUNTIME_PROBE) {
+      this._probe('refresh', `files=${files.length} watchers=${this.watchers.size} ms=${Date.now() - t0}`);
+    }
+  }
+
   scan(maxChanged = Infinity) {
     let any = false;
     let changed = 0;
+    let fileCount = 0;
+    const t0 = Date.now();
     for (const file of this.listLogs()) {
       try {
+        fileCount += 1;
         const grew = this.process(file);
         if (grew) {
           any = true;
@@ -145,6 +238,12 @@ class SessionWatcher {
           if (changed >= maxChanged) break;
         }
       } catch (err) { this.log('watch', '处理失败 ' + file + ': ' + err.message); }
+    }
+    if (process.env.DSH_RUNTIME_PROBE) {
+      this._probeScans = (this._probeScans || 0) + 1;
+      if (this._probeScans % 5 === 0) {
+        this._probe('scan', `#${this._probeScans} files=${fileCount} ms=${Date.now() - t0}`);
+      }
     }
     return any;
   }
