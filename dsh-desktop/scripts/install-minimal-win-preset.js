@@ -32,6 +32,22 @@ function presetsSourceDir() {
   return path.resolve(__dirname, '..', 'assets', 'agent-presets');
 }
 
+/**
+ * 启动提速：目标文件与源大小 + mtime 一致时跳过复制（cpSync 保留时间戳，
+ * 复制的目标 mtime 与源一致，下次启动可继续命中跳过）。预设安装的语义是
+ * 「目标必须与源一致」：不一致（缺失/大小或时间戳不同）就覆盖，因此跳过
+ * 只发生在目标已一致时，行为与原「每次全量复制」等价，只是不再无意义写盘。
+ */
+function fileMatches(sf, df) {
+  try {
+    const sst = fs.statSync(sf);
+    const dst = fs.statSync(df);
+    return dst.size === sst.size && Math.round(dst.mtimeMs) === Math.round(sst.mtimeMs);
+  } catch {
+    return false;
+  }
+}
+
 /** Copy one bundled preset directory into <dshPackageDir>/config/agent-presets/. */
 function installBuiltinPreset(dshPackageDir, id) {
   const src = path.join(presetsSourceDir(), id);
@@ -46,7 +62,10 @@ function installBuiltinPreset(dshPackageDir, id) {
   // referenced relatively from agent.cordis.yml.
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
     if (!entry.isFile()) continue;
-    fs.copyFileSync(path.join(src, entry.name), path.join(dest, entry.name));
+    const sf = path.join(src, entry.name);
+    const df = path.join(dest, entry.name);
+    if (fileMatches(sf, df)) continue; // 已一致：跳过写盘
+    fs.cpSync(sf, df, { force: true, preserveTimestamps: true });
   }
   return dest;
 }
@@ -72,7 +91,10 @@ function installBuiltinPresets(dshPackageDir) {
     fs.mkdirSync(sharedDest, { recursive: true });
     for (const entry of fs.readdirSync(sharedSrc, { withFileTypes: true })) {
       if (!entry.isFile()) continue;
-      fs.copyFileSync(path.join(sharedSrc, entry.name), path.join(sharedDest, entry.name));
+      const sf = path.join(sharedSrc, entry.name);
+      const df = path.join(sharedDest, entry.name);
+      if (fileMatches(sf, df)) continue; // 已一致：跳过写盘
+      fs.cpSync(sf, df, { force: true, preserveTimestamps: true });
     }
   }
   return dests;

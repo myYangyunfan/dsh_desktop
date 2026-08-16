@@ -184,6 +184,33 @@ function log(tag, msg) {
   if (process.env.DSH_DESKTOP_DEBUG) process.stdout.write(line);
 }
 
+// 启动提速：运行时补丁对同一物理文件（profile junction 别名、内置副本、
+// overlay 副本）反复整读。按 realpath 归一化 + size/mtime 校验做进程级读
+// 缓存；任何写入都会更新 mtime，缓存自动失效，不存在陈旧内容。
+const fileReadMemo = new Map(); // realpath -> { size, mtimeMs, text }
+const fileRealKeyMemo = new Map(); // path -> realpath（路径本身是固定常量）
+function fileRealKey(file) {
+  let key = fileRealKeyMemo.get(file);
+  if (key === undefined) {
+    try { key = fs.realpathSync(file); } catch { key = file; }
+    fileRealKeyMemo.set(file, key);
+  }
+  return key;
+}
+function readFileCached(file) {
+  try {
+    const st = fs.statSync(file);
+    const key = fileRealKey(file);
+    const hit = fileReadMemo.get(key);
+    if (hit && hit.size === st.size && hit.mtimeMs === st.mtimeMs) return hit.text;
+    const text = fs.readFileSync(file, 'utf8');
+    fileReadMemo.set(key, { size: st.size, mtimeMs: st.mtimeMs, text });
+    return text;
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 运行状态标记 + 看门狗（防“进程/托盘凭空消失且无任何提醒”）
 // ---------------------------------------------------------------------------
@@ -605,6 +632,15 @@ function runKoffiPreflight() {
     log('preflight', 'koffi 预检脚本不存在，跳过（视为通过）');
     return true;
   }
+  // 启动提速：koffi 冒烟探针的结果只取决于壳自带二进制（node.exe、探针脚本、
+  // koffi 预编译模块）。同一签名在本机已通过时直接复用缓存，省去每次启动
+  // spawnSync 子进程（约 100ms+）。只缓存「通过」：失败不缓存，下次启动仍会
+  // 重试，保证被安全软件误拦等瞬时失败可以自恢复。
+  const signature = koffiPreflightSignature();
+  if (koffiCachedPass(signature)) {
+    log('preflight', 'koffi 预检缓存命中（同签名上次已通过），跳过子进程探测');
+    return true;
+  }
   try {
     const r = spawnSync(nodeExe(), [script], { timeout: 20000, windowsHide: true, encoding: 'utf8' });
     const output = String((r.stdout || '') + (r.stderr || '')).trim();
@@ -613,6 +649,7 @@ function runKoffiPreflight() {
       return false;
     }
     if (r.status === 0) {
+      saveKoffiPreflightPass(signature);
       log('preflight', 'koffi 预检通过');
       return true;
     }
@@ -621,6 +658,61 @@ function runKoffiPreflight() {
   } catch (err) {
     log('preflight', 'koffi 预检异常: ' + err.message);
     return false;
+  }
+}
+
+// koffi 预检缓存：签名 = 壳版本 + node.exe + 探针脚本 + koffi 包内全部 .node
+// 二进制（路径/大小/mtime）。任一环节随应用升级或文件被替换而变化 → 缓存
+// 自动失效，下一次启动重新真实预检。
+function koffiPreflightCachePath() {
+  return path.join(userDataDir, 'koffi-preflight-cache.json');
+}
+
+function koffiPreflightSignature() {
+  const parts = [APP_VERSION];
+  const statParts = [nodeExe(), koffiPreflightScript()];
+  const koffiDir = path.join(__dirname, 'node_modules', 'koffi');
+  statParts.push(path.join(koffiDir, 'index.cjs'), path.join(koffiDir, 'package.json'));
+  const collectNode = (dir, depth) => {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) { if (depth < 4) collectNode(p, depth + 1); continue; }
+      if (e.name.endsWith('.node')) statParts.push(p);
+    }
+  };
+  collectNode(koffiDir, 0);
+  for (const p of statParts) {
+    try {
+      const st = fs.statSync(p);
+      parts.push(p + '|' + st.size + '|' + Math.round(st.mtimeMs));
+    } catch {
+      parts.push(p + '|?');
+    }
+  }
+  return parts.join('\n');
+}
+
+function koffiCachedPass(signature) {
+  try {
+    const c = JSON.parse(fs.readFileSync(koffiPreflightCachePath(), 'utf8'));
+    return !!(c && c.v === 1 && c.signature === signature && c.ok === true);
+  } catch {
+    return false;
+  }
+}
+
+function saveKoffiPreflightPass(signature) {
+  try {
+    fs.writeFileSync(koffiPreflightCachePath(), JSON.stringify({
+      v: 1,
+      signature,
+      ok: true,
+      at: new Date().toISOString(),
+    }));
+  } catch (err) {
+    log('preflight', '写 koffi 预检缓存失败: ' + err.message);
   }
 }
 
@@ -833,8 +925,12 @@ function chooseStableWebPort() {
     const settings = updater.loadSettings(updCtx());
     const preferred = Number(settings.webPort) || 0;
     const save = (port) => {
-      settings.webPort = port;
-      updater.saveSettings(updCtx(), settings);
+      // 启动提速：端口与已保存值一致时不写盘，避免每次启动都改写
+      // settings.json（无意义的写入 + mtime 抖动）。
+      if (settings.webPort !== port) {
+        settings.webPort = port;
+        updater.saveSettings(updCtx(), settings);
+      }
       resolve(port);
     };
     const tryPort = (port, done) => {
@@ -1957,6 +2053,13 @@ async function runUpdateFlow(manual) {
       quitting = true;
       markCleanExit();
       killTreeSync(serverProc);
+      // 立即重启前预热 profile fallback：先终结旧服务再重指向新 overlay 的
+      // 联接并落新快照（新版本锚点与旧快照必然不同），重启后的首次启动直接
+      // 走快照快速校验，不再把完整 heal（约 0.6s）压在启动关键路径上；旧
+      // 服务已退出，重指向不会与旧进程的延迟加载产生版本错配。
+      if (!isWslMode()) {
+        await repairProfileFallback(dshHome || path.join(os.homedir(), '.dsh'));
+      }
       app.relaunch();
       app.exit(0);
     }
@@ -2660,10 +2763,63 @@ function loadDshYamlDialect() {
   return dshYamlDialect;
 }
 
+// profile patch 自愈的签名缓存：cordis.patch.yml 是本项目高频自愈对象，但
+// 每次启动实际需要改动的情形很少。以「文件路径 + 大小 + 精确 mtimeMs」为
+// 签名，签名一致说明文件内容未被任何写入方触碰（写入必改 mtime），可跳过
+// 读文件 + js-yaml 解析 + 去重扫描。进程内 memo 同时消除 startServer 里对
+// 同一文件的第二次全量解析。文件被改（含本进程后续的同步写入）→ 签名变化
+// → 自动重新自愈，无陈旧判断。
+let patchHealMemo = null; // { file, size, mtimeMs }
+
+function patchHealCachePath() {
+  return path.join(userDataDir, 'profile-patch-heal-cache.json');
+}
+
+function patchFileSignature(file) {
+  try {
+    const st = fs.statSync(file);
+    return { size: st.size, mtimeMs: st.mtimeMs };
+  } catch {
+    return null;
+  }
+}
+
+function readPersistedPatchHeal() {
+  try {
+    const c = JSON.parse(fs.readFileSync(patchHealCachePath(), 'utf8'));
+    if (c && c.v === 1 && typeof c.file === 'string' && typeof c.size === 'number' && typeof c.mtimeMs === 'number') return c;
+  } catch {}
+  return null;
+}
+
+function writePersistedPatchHeal(file, sig) {
+  try {
+    fs.writeFileSync(patchHealCachePath(), JSON.stringify({
+      v: 1,
+      file,
+      size: sig.size,
+      mtimeMs: sig.mtimeMs,
+      at: new Date().toISOString(),
+    }));
+  } catch {}
+}
+
 function healProfilePatch() {
   try {
     const file = profilePatchFile();
     if (!fs.existsSync(file)) return;
+    // 启动提速：签名一致 → 该文件已在当前内容状态下自愈过，直接跳过。
+    const sig = patchFileSignature(file);
+    if (sig) {
+      const memoHit = patchHealMemo && patchHealMemo.file === file &&
+        patchHealMemo.size === sig.size && patchHealMemo.mtimeMs === sig.mtimeMs;
+      if (memoHit) return;
+      const persisted = readPersistedPatchHeal();
+      if (persisted && persisted.file === file && persisted.size === sig.size && persisted.mtimeMs === sig.mtimeMs) {
+        patchHealMemo = { file, size: sig.size, mtimeMs: sig.mtimeMs };
+        return;
+      }
+    }
     let text = fs.readFileSync(file, 'utf8');
     const bareArray = /^\s*\[\]\s*$/m.test(text);
     const hasEntries = /^\s*-\s+(?:id|insert)\s*:/m.test(text);
@@ -2696,6 +2852,12 @@ function healProfilePatch() {
       try { fs.renameSync(file, backup); } catch { fs.copyFileSync(file, backup); }
       fs.writeFileSync(file, '# recovered by DSH Desktop: 原内容无法解析，已备份到\n# ' + backup + '\n[]\n', 'utf8');
       log('boot', 'profile patch 自愈: 解析失败（' + String((error && error.message) || '顶层非数组') + '），已备份到 ' + backup + ' 并重置为最小文件');
+    }
+    // 完整自愈流程已跑完（含 yaml 解析）：记录当前内容签名，下次启动命中跳过。
+    const after = patchFileSignature(file);
+    if (after) {
+      patchHealMemo = { file, size: after.size, mtimeMs: after.mtimeMs };
+      writePersistedPatchHeal(file, after);
     }
   } catch (err) {
     log('boot', 'profile patch 自愈失败: ' + err.message);
@@ -3043,7 +3205,8 @@ function applyRuntimeFlashFix() {
   for (const file of targets) {
     if (!file || !fs.existsSync(file)) continue;
     try {
-      let src = fs.readFileSync(file, 'utf8');
+      let src = readFileCached(file);
+      if (src === null) { log('boot', 'runtime 补丁: 读取失败，跳过 ' + file); continue; }
       if (src.includes(newPat)) { log('boot', 'runtime 补丁: 已应用，跳过 ' + file); continue; }
       if (!src.includes(oldPat)) { log('boot', 'runtime 补丁: 未匹配到目标代码（版本可能已变更），跳过 ' + file); continue; }
       src = src.replace(oldPat, newPat);
@@ -3083,7 +3246,8 @@ function applyPromptExposeFix() {
   for (const file of targets) {
     if (!file || !fs.existsSync(file)) continue;
     try {
-      let src = fs.readFileSync(file, 'utf8');
+      let src = readFileCached(file);
+      if (src === null) { log('boot', '提示词暴露补丁: 读取失败，跳过 ' + file); continue; }
       const declIdx = src.indexOf('const WEB_SETTINGS_NAMESPACES = [');
       if (declIdx === -1) {
         log('boot', '提示词暴露补丁: 未找到 WEB_SETTINGS_NAMESPACES（版本可能已变更），跳过 ' + file);
@@ -3205,7 +3369,8 @@ async function describeImagesWithVision(ctx, content) {
   for (const file of targets) {
     if (!file || !fs.existsSync(file)) continue;
     try {
-      let src = fs.readFileSync(file, 'utf8');
+      let src = readFileCached(file);
+      if (src === null) { log('boot', '识图发送补丁: 读取失败，跳过 ' + file); continue; }
       if (src.includes(HELPER_MARKER)) {
         log('boot', '识图发送补丁: 已应用，跳过 ' + file);
         continue;
@@ -3271,7 +3436,8 @@ function applyVisionKeyFix() {
   for (const file of targets) {
     if (!file || !fs.existsSync(file)) continue;
     try {
-      let src2 = fs.readFileSync(file, 'utf8');
+      let src2 = readFileCached(file);
+      if (src2 === null) { log('boot', '识图密钥补丁: 读取失败，跳过 ' + file); continue; }
       if (src2.includes(guardMarker)) { log('boot', '识图密钥补丁: 已应用，跳过 ' + file); continue; }
       if (!src2.includes(from)) { log('boot', '识图密钥补丁: 锚点未匹配（版本可能已变化），跳过 ' + file); continue; }
       src2 = src2.replace(from, to);
@@ -3323,7 +3489,8 @@ function applyProfilePatchGuard() {
   for (const file of candidates) {
     if (!fs.existsSync(file)) continue;
     try {
-      let src = fs.readFileSync(file, 'utf8');
+      let src = readFileCached(file);
+      if (src === null) { log('boot', 'profile patch 防护: 读取失败，跳过 ' + file); continue; }
       if (src.includes(guardMarker)) continue; // 已应用（幂等）
       if (!src.includes(callSite) || !src.includes(insertAfter)) {
         log('boot', 'profile patch 防护: ' + file + ' 锚点未匹配（dsh 版本可能已变化），跳过');
@@ -3379,7 +3546,8 @@ function applySettingsSectionGuard() {
   for (const file of candidates) {
     if (!fs.existsSync(file)) continue;
     try {
-      let src = fs.readFileSync(file, 'utf8');
+      let src = readFileCached(file);
+      if (src === null) { log('boot', 'settings 注册防护: 读取失败，跳过 ' + file); continue; }
       if (src.includes(guardMarker)) continue; // 已应用（幂等）
       if (!src.includes(anchor)) {
         log('boot', 'settings 注册防护: ' + file + ' 锚点未匹配（dsh 版本可能已变化），跳过');
@@ -3418,7 +3586,8 @@ function applyWorkspaceSearchRailFix() {
   for (const file of candidates) {
     if (!file || !fs.existsSync(file)) continue;
     try {
-      let src = fs.readFileSync(file, 'utf8');
+      let src = readFileCached(file);
+      if (src === null) { log('boot', 'workspace 搜索栏修复: 读取失败，跳过 ' + file); continue; }
       if (src.includes(guardMarker)) { log('boot', 'workspace 搜索栏修复: 已应用，跳过 ' + file); continue; }
       if (!src.includes(oldGuard) || !src.includes(oldDeps)) {
         log('boot', 'workspace 搜索栏修复: 锚点未匹配（dsh 版本可能已变化），跳过 ' + file);
@@ -4003,13 +4172,8 @@ function setupTestChannel() {
 }
 
 async function boot() {
-  // Portable builds keep all data next to the exe.
-  if (!app.isPackaged && process.env.DSH_DESKTOP_USERDATA) {
-    app.setPath('userData', process.env.DSH_DESKTOP_USERDATA);
-  } else if (process.env.PORTABLE_EXECUTABLE_DIR) {
-    app.setPath('userData', path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'data'));
-  }
-
+  // userData 重定向（便携版 data/ 与 dev 测试 DSH_DESKTOP_USERDATA）已在
+  // 模块加载期、单实例锁校验之前完成（见 App lifecycle 区块），此处直接读取。
   userDataDir = app.getPath('userData');
   logsDir = path.join(userDataDir, 'logs');
   // DSH_HOME: respect an explicit override; otherwise let dsh use its own
@@ -4146,6 +4310,12 @@ async function boot() {
 // 便携版数据随 exe 走（data/），两版可同时运行互不干扰。
 if (process.env.PORTABLE_EXECUTABLE_DIR) {
   try { app.setPath('userData', path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'data')); } catch {}
+} else if (!app.isPackaged && process.env.DSH_DESKTOP_USERDATA) {
+  // 开发模式集成测试隔离（DSH_DESKTOP_USERDATA）：与便携版同理，必须在锁
+  // 校验之前重定向，否则所有测试实例共用默认 userData 的实例锁 —— 真实
+  // 桌面端（安装版）运行时测试实例会因锁冲突全部静默退出，反之亦然。
+  // 只作用于 dev 模式且仅由测试环境显式设置，对安装版/便携版无任何影响。
+  try { app.setPath('userData', process.env.DSH_DESKTOP_USERDATA); } catch {}
 }
 
 const gotLock = app.requestSingleInstanceLock();
