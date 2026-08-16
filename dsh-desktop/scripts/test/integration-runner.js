@@ -395,6 +395,55 @@ SCENARIOS['preview-fence'] = async (t) => {
   t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
 };
 
+SCENARIOS['vision-key-keep'] = async (t) => {
+  // 识图 apiKey 保存回归：role('secret') 字段永不回显，旧版卡片在「改其它
+  // 字段后保存」时会把已存密钥静默清空（用户反馈“密钥没法保存”）。修复后：
+  // 留空 = 保持已存密钥；仅非空输入才写入。
+  await t.waitFor('boot-ready', 240000, 'Web UI 就绪');
+  await t.waitFor('界面已稳定', 60000, '稳定期完成');
+  // 1) 同步进 profile 的 vision 客户端 bundle 必须携带修复标记。
+  const clientFile = path.join(t.dshHome, 'profiles', 'web', 'node_modules', '@dsh-external', 'dsh-vision', 'lib', 'client.js');
+  t.assert(fs.existsSync(clientFile), 'vision 客户端 bundle 应已同步进 profile');
+  const bundle = fs.readFileSync(clientFile, 'utf8');
+  t.assert(bundle.includes('保持已保存的密钥'), 'bundle 应包含「留空 = 保持已保存的密钥」提示');
+  t.assert(bundle.includes('apiKeyValue !== ""'), 'bundle 应包含「仅非空才写入密钥」逻辑');
+  // 2) 走与设置页一致的 RPC 链路验证语义。
+  const rpc = (method, payload) => new Promise((resolve, reject) => {
+    const body = JSON.stringify({ type: 'client-request', rpcId: 'r' + Date.now(), method, payload });
+    const base = webUrlOf(t);
+    const endpoint = new URL('/api/' + method, base);
+    const req = http.request({ host: endpoint.hostname, port: endpoint.port, path: endpoint.pathname, method: 'POST', headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } }, (res) => {
+      let data = '';
+      res.on('data', (c) => { data += c; });
+      res.on('end', () => { try { resolve({ status: res.statusCode, json: JSON.parse(data) }); } catch { reject(new Error('bad json (url=' + base + ' path=' + endpoint.pathname + ' status=' + res.statusCode + '): ' + String(data).slice(0, 300))); } });
+    });
+    req.on('error', reject);
+    req.end(body);
+  });
+  const keyInDisk = () => {
+    const sf = path.join(t.dshHome, 'settings.yaml');
+    if (!fs.existsSync(sf)) return null;
+    const m = /apiKey:\s*(\S+)/.exec(fs.readFileSync(sf, 'utf8'));
+    return m ? m[1] : null;
+  };
+  const s1 = await rpc('settings.mutate', { ns: 'dsh-vision', ops: [{ op: 'set', path: ['apiKey'], value: 'sk-user-key-abc' }] });
+  t.assert(s1.json && s1.json.result && s1.json.result.ok, '第一次保存密钥应成功');
+  t.assert(keyInDisk() === 'sk-user-key-abc', `密钥应落盘，实际=${keyInDisk()}`);
+  const s2 = await rpc('settings.mutate', { ns: 'dsh-vision', ops: [{ op: 'set', path: ['model'], value: 'glm-4.6v' }] });
+  t.assert(s2.json && s2.json.result && s2.json.result.ok, '第二次保存（只改模型）应成功');
+  t.assert(keyInDisk() === 'sk-user-key-abc', `改其它字段保存不得清空密钥，实际=${keyInDisk()}`);
+  const s3 = await rpc('settings.mutate', { ns: 'dsh-vision', ops: [{ op: 'set', path: ['apiKey'], value: 'sk-new-key-xyz' }] });
+  t.assert(s3.json && s3.json.result && s3.json.result.ok, '新密钥覆盖保存应成功');
+  t.assert(keyInDisk() === 'sk-new-key-xyz', `新密钥应覆盖旧值，实际=${keyInDisk()}`);
+  const q = await t.quitAndCheck();
+  t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
+};
+
+function webUrlOf(t) {
+  const m = /Web UI 就绪: (http:\/\/127\.0\.0\.1:\d+)/.exec(fs.readFileSync(t.desktopLog, 'utf8'));
+  return m ? m[1] : null;
+}
+
 SCENARIOS['kill-renderer'] = async (t) => {
   await t.waitFor('boot-ready', 240000, 'Web UI 就绪');
   await t.waitFor('界面已稳定', 60000, '稳定期完成');
