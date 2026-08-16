@@ -19,6 +19,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
 const http = require('node:http');
+const https = require('node:https');
 const net = require('node:net');
 const os = require('node:os');
 
@@ -27,7 +28,15 @@ const clientUpdater = require('./client-updater');
 const balance = require('./balance');
 const wslBackend = require('./wsl-backend');
 const { createGpuCrashGuard } = require('./scripts/gpu-crash-guard');
-const { togglePluginInPatch } = require('./scripts/plugin-manager-patch');
+const { togglePluginInPatch, setPluginRemoved } = require('./scripts/plugin-manager-patch');
+const {
+  compareVersions,
+  npmLatestUrl,
+  githubReleaseApiUrl,
+  githubAssetDownloadUrl,
+  verifyIntegrity,
+  findPackageRoot,
+} = require('./scripts/plugin-manager-update');
 const { installBuiltinPresets } = require('./scripts/install-minimal-win-preset');
 const { SessionWatcher, scanZstdFrames } = require('./session-watcher');
 const { RendererRecovery } = require('./renderer-recovery');
@@ -2688,6 +2697,54 @@ function registerChromeIpc() {
       return { ok: false, error: String((err && err.message) || err) };
     }
   });
+
+  // 卸载：内置配套 = 标记卸载（可恢复，重启后不再同步/装配）；
+  // 第三方 = 标记 + 删除安装目录（不可恢复）。
+  ipcMain.handle('dsh:plugin-uninstall', async (event, { id } = {}) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return { ok: false, error: 'unauthorized' };
+    try {
+      const res = pluginManagerUninstall(String(id));
+      if (res.ok) log('plugin-manager', '已卸载插件 ' + id);
+      return res;
+    } catch (err) {
+      log('plugin-manager', '卸载插件 ' + id + ' 失败: ' + ((err && err.message) || err));
+      return { ok: false, error: String((err && err.message) || err) };
+    }
+  });
+
+  ipcMain.handle('dsh:plugin-restore', async (event, { id } = {}) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return { ok: false, error: 'unauthorized' };
+    try {
+      const res = pluginManagerRestore(String(id));
+      if (res.ok) log('plugin-manager', '已恢复插件 ' + id);
+      return res;
+    } catch (err) {
+      log('plugin-manager', '恢复插件 ' + id + ' 失败: ' + ((err && err.message) || err));
+      return { ok: false, error: String((err && err.message) || err) };
+    }
+  });
+
+  // 检查插件更新（npm 官方 + npmmirror 镜像 / GitHub 官方 + 加速镜像）。
+  ipcMain.handle('dsh:plugin-check-updates', async (event) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return { ok: false, error: 'unauthorized' };
+    try {
+      return { ok: true, items: await pluginManagerCheckUpdates() };
+    } catch (err) {
+      log('plugin-manager', '检查插件更新失败: ' + ((err && err.message) || err));
+      return { ok: false, error: String((err && err.message) || err) };
+    }
+  });
+
+  // 更新单个插件：下载 → 校验 → 备份 → 解压替换 → 重启生效。
+  ipcMain.handle('dsh:plugin-update', async (event, { id } = {}) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return { ok: false, error: 'unauthorized' };
+    try {
+      return await pluginManagerUpdate(String(id));
+    } catch (err) {
+      log('plugin-manager', '更新插件 ' + id + ' 失败: ' + ((err && err.message) || err));
+      return { ok: false, error: String((err && err.message) || err) };
+    }
+  });
 }
 
 let trayHintShown = false;
@@ -3134,6 +3191,24 @@ function syncCompanionPlugins() {
     const profileDir = path.join(home, 'profiles', 'web');
     const profileModules = path.join(profileDir, 'node_modules', '@deepseek-ai');
     fs.mkdirSync(profileModules, { recursive: true });
+
+    // 插件管理「卸载」标记（removed: true 的顶层条目）：本次启动跳过文件复制
+    // 与 manifest 装配，避免「卸载后一重启又被复活」。解析失败不影响同步。
+    const removedIds = new Set();
+    try {
+      const yaml = loadDshYamlDialect();
+      if (yaml) {
+        let ptxt = '';
+        try { ptxt = fs.readFileSync(path.join(profileDir, 'cordis.patch.yml'), 'utf8'); } catch { /* 无 patch 文件 */ }
+        const parsed = ptxt ? yaml.load(ptxt) : null;
+        if (Array.isArray(parsed)) {
+          for (const e of parsed) {
+            if (e && typeof e === 'object' && typeof e.id === 'string' && e.removed === true) removedIds.add(e.id);
+          }
+        }
+      }
+    } catch { /* 解析失败按无标记处理 */ }
+
     const expectedDirs = new Set(COMPANION_PLUGINS.map(companionDirName));
     removeStaleCompanionPlugins(profileModules, expectedDirs);
     removeLegacyMarketplace(path.join(profileDir, 'node_modules'), profileDir);
@@ -3165,6 +3240,7 @@ function syncCompanionPlugins() {
       syncDir(sdir, path.join(profileDir, 'node_modules', name));
     }
     for (const p of COMPANION_PLUGINS) {
+      if (removedIds.has(p.id)) continue; // 已卸载（插件管理器）→ 不复制、不装配
       const rel = companionDirName(p);
       const src = path.join(__dirname, 'assets', 'plugins', rel);
       if (!fs.existsSync(path.join(src, 'package.json'))) continue;
@@ -3175,6 +3251,20 @@ function syncCompanionPlugins() {
       // node_modules 下；配套包自身的依赖由 dsh 的 profiles/node_modules
       // fallback（healProfilesModuleFallback）解析。
       const dest = path.join(profileModules, '..', p.name);
+      // 用户已把插件更新到比安装包更新的版本（插件管理器「更新」）→ 保留
+      // profile 副本，否则每次启动会把更新版本覆盖回安装包版本。
+      try {
+        const aPkg = JSON.parse(fs.readFileSync(path.join(src, 'package.json'), 'utf8'));
+        const dPkgFile = path.join(dest, 'package.json');
+        if (aPkg && aPkg.version && fs.existsSync(dPkgFile)) {
+          const dPkg = JSON.parse(fs.readFileSync(dPkgFile, 'utf8'));
+          if (dPkg && dPkg.version && compareVersions(dPkg.version, aPkg.version) > 0) {
+            log('boot', '插件 ' + p.id + ' 版本 ' + dPkg.version + ' 高于安装包 ' + aPkg.version + '，保留更新版本');
+            if (isBundle) bundleNames.add(p.name); // manifest 登记不因保留而缺失
+            continue;
+          }
+        }
+      } catch { /* 版本读取失败按正常复制处理 */ }
       fs.mkdirSync(path.join(dest, 'lib'), { recursive: true });
       for (const f of copyFiles) {
         const sf = path.join(src, f);
@@ -3285,6 +3375,19 @@ function syncCompanionPlugins() {
       if (manifest.dsh.profile.bundles.length !== before) {
         writePatchAtomic(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
         log('boot', '配套 bundle 源缺失，已从 web profile bundles 移除（视为禁用）: ' + [...missingSourceNames].join(', '));
+      }
+    }
+    // 插件管理「卸载」标记的 bundle 配套：从 manifest bundles 移除（否则 loader
+    // 仍会装配已卸载的 bundle）。
+    if (removedIds.size > 0 && Array.isArray(manifest.dsh.profile.bundles)) {
+      const removedBundles = COMPANION_PLUGINS.filter((p) => removedIds.has(p.id)).map((p) => p.name);
+      if (removedBundles.length > 0) {
+        const before = manifest.dsh.profile.bundles.length;
+        manifest.dsh.profile.bundles = manifest.dsh.profile.bundles.filter((n) => !removedBundles.includes(n));
+        if (manifest.dsh.profile.bundles.length !== before) {
+          writePatchAtomic(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
+          log('boot', '已卸载 bundle 插件，从 web profile bundles 移除: ' + removedBundles.join(', '));
+        }
       }
     }
 
@@ -3428,6 +3531,7 @@ function pluginManagerCollect() {
         name: entry.name || '',
         disabled: entry.disabled === true,
         hasConfig: entry.config !== undefined && entry.config !== null,
+        removed: entry.removed === true,
       });
     }
   }
@@ -3446,7 +3550,8 @@ function pluginManagerCollect() {
     const user = userById.get(id);
     const userDisabled = !!(user && user.disabled);
     const hasConfig = !!(user && user.hasConfig);
-    const toggleable = group !== 'core' && !(hasConfig && !userDisabled);
+    const removed = !!(user && user.removed === true);
+    const toggleable = group !== 'core' && !removed && !(hasConfig && !userDisabled);
     rows.push({
       id,
       name: name || id,
@@ -3454,21 +3559,35 @@ function pluginManagerCollect() {
       enabled: !userDisabled,
       toggleable,
       group,
+      removed,
+      hasConfig,
     });
   };
-  // 配套插件（COMPANION_PLUGINS 为准；patch insert 里的同名 id 统一归属）
-  for (const p of COMPANION_PLUGINS) addRow(p.id, p.name, 'companion');
+  // 配套插件（COMPANION_PLUGINS 为准；patch insert 里的同名 id 统一归属；
+  // 带卸载标记的归入 removed 分组）
+  for (const p of COMPANION_PLUGINS) {
+    const u = userById.get(p.id);
+    addRow(p.id, p.name, u && u.removed === true ? 'removed' : 'companion');
+  }
   // 其他：insert 块出现但不在配套表
   for (const [id, name] of insertById) if (!companionById.has(id)) addRow(id, name, 'other');
-  // 其他：用户层条目（llm-deepseek / web / 手动条目）
-  for (const [id, u] of userById) if (!companionById.has(id)) addRow(id, u.name, 'other');
+  // 其他：用户层条目（llm-deepseek / web / 手动条目）；含卸载标记的归入 removed
+  for (const [id, u] of userById) {
+    if (!companionById.has(id)) addRow(id, u.name, u.removed === true ? 'removed' : 'other');
+  }
+  // 卸载标记且不在配套表也不在用户表（理论上不发生；防御性兜底）
+  for (const entry of entries) {
+    if (entry && typeof entry === 'object' && typeof entry.id === 'string' && entry.removed === true && !seen.has(entry.id)) {
+      addRow(entry.id, entry.name || entry.id, 'removed');
+    }
+  }
   // 核心：manifest bundles 中非配套包（dsh-base / dsh-web-app 等）
   for (const name of bundles) {
     if (companionNames.has(name)) continue;
     const id = name.includes('/') ? name.slice(name.indexOf('/') + 1) : name;
     if (!seen.has(id)) addRow(id, name, 'core');
   }
-  const order = { companion: 0, other: 1, core: 2 };
+  const order = { companion: 0, other: 1, core: 2, removed: 3 };
   return rows.sort((a, b) => order[a.group] - order[b.group] || a.id.localeCompare(b.id));
 }
 
@@ -3512,6 +3631,279 @@ function pluginManagerSetEnabled(id, enabled) {
     try { writePatchAtomic(file, patched); } catch (err) { return { ok: false, error: String((err && err.message) || err) }; }
   }
   return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// 插件卸载 / 恢复 / 更新（设置页「插件」页「管理」标签；IPC 见 dsh:plugin-*）
+// ---------------------------------------------------------------------------
+
+/** 插件包在 profile node_modules 下的安装目录（白名单校验，只允许 web profile）。 */
+function pluginManagerPackageDir(name) {
+  if (!name || typeof name !== 'string') return null;
+  if (!/^(@[a-z0-9-]+\/)?[a-z0-9._-]+$/i.test(name)) return null;
+  const base = path.join(pluginManagerProfileDir(), 'node_modules');
+  const dir = path.join(base, ...name.split('/'));
+  if (!dir.startsWith(base + path.sep)) return null;
+  return dir;
+}
+
+/** 当前安装版本：profile 包版本；读取失败回退安装包 assets 版本。 */
+function pluginManagerInstalledVersion(name) {
+  const pkgDir = pluginManagerPackageDir(name);
+  if (pkgDir) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8'));
+      if (pkg && pkg.version) return String(pkg.version);
+    } catch {}
+  }
+  try {
+    const rel = name.includes('/') ? name.slice(name.indexOf('/') + 1) : name;
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'assets', 'plugins', rel, 'package.json'), 'utf8'));
+    if (pkg && pkg.version) return String(pkg.version);
+  } catch {}
+  return '';
+}
+
+/** 卸载：写 removed 标记（同步器据此停止复制/装配）；第三方插件同时删除目录。
+ *  带 config 的系统/用户条目（web 等）与核心组件禁止卸载——config 是用户数据。 */
+function pluginManagerUninstall(id) {
+  const row = pluginManagerCollect().find((r) => r.id === id);
+  if (!row) return { ok: false, error: '未知插件: ' + id };
+  if (row.group === 'core') return { ok: false, error: '核心组件不可卸载: ' + id };
+  if (row.hasConfig && !row.removed) return { ok: false, error: '该插件带自定义配置，禁止卸载: ' + id };
+  const { file, text } = pluginManagerReadPatch();
+  let patched;
+  try {
+    patched = setPluginRemoved(text, id, true, row.name);
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err) };
+  }
+  if (patched !== text) {
+    try { writePatchAtomic(file, patched); } catch (err) { return { ok: false, error: String((err && err.message) || err) }; }
+  }
+  const pkgDir = pluginManagerPackageDir(row.name);
+  if (pkgDir && fs.existsSync(pkgDir)) {
+    try {
+      fs.rmSync(pkgDir, { recursive: true, force: true });
+      log('plugin-manager', '已删除插件安装目录 ' + pkgDir);
+    } catch (err) {
+      return { ok: false, error: '标记已写入，但删除安装目录失败: ' + ((err && err.message) || err) };
+    }
+  }
+  return { ok: true, restartRequired: true };
+}
+
+/** 恢复卸载（内置配套/基础层插件）：清除 removed 标记，重启后同步器重新装配。 */
+function pluginManagerRestore(id) {
+  const { file, text } = pluginManagerReadPatch();
+  const name = pluginManagerResolveName(id);
+  let patched;
+  try {
+    patched = setPluginRemoved(text, id, false, name);
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err) };
+  }
+  if (patched !== text) {
+    try { writePatchAtomic(file, patched); } catch (err) { return { ok: false, error: String((err && err.message) || err) }; }
+  }
+  return { ok: true, restartRequired: true };
+}
+
+// 可独立更新的插件（有公开发布源的才列进来；其余随应用更新）。
+//   npm    —— 官方 registry.npmjs.org + 镜像 registry.npmmirror.com（含 sha512 校验）
+//   github —— 官方 GitHub Releases + 加速镜像（gh-proxy 系列）
+const PLUGIN_UPDATE_SOURCES = {
+  'compaction-acp': { kind: 'npm', pkg: 'billion-context-dsh' },
+  'better-sidebar': { kind: 'npm', pkg: 'dsh-better-sidebar' },
+  'side-session': { kind: 'github', repo: 'hzhz314159/dsh-side-session' },
+};
+
+/** GET JSON（跟随重定向，超时取消）。 */
+function pluginManagerHttpGetJson(url, timeoutMs = 15000, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { headers: { 'User-Agent': 'DSH-Desktop', ...headers }, timeout: timeoutMs }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        return resolve(pluginManagerHttpGetJson(res.headers.location, timeoutMs, headers));
+      }
+      let data = '';
+      res.on('data', (c) => { data += c; });
+      res.on('end', () => {
+        if (res.statusCode !== 200) return reject(new Error('HTTP ' + res.statusCode));
+        try { resolve(JSON.parse(data)); } catch (err) { reject(new Error('响应不是合法 JSON')); }
+      });
+    });
+    req.on('timeout', () => req.destroy(new Error('请求超时')));
+    req.on('error', (err) => reject(err));
+  });
+}
+
+/** 下载到 Buffer（最大 64MB 防护）。 */
+function pluginManagerHttpGetBuffer(url, timeoutMs = 60000) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { headers: { 'User-Agent': 'DSH-Desktop' }, timeout: timeoutMs }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        return resolve(pluginManagerHttpGetBuffer(res.headers.location, timeoutMs));
+      }
+      if (res.statusCode !== 200) { res.resume(); return reject(new Error('HTTP ' + res.statusCode)); }
+      const chunks = [];
+      let total = 0;
+      res.on('data', (c) => {
+        total += c.length;
+        if (total > 64 * 1024 * 1024) { req.destroy(new Error('下载超过 64MB 上限')); return; }
+        chunks.push(c);
+      });
+      res.on('end', () => resolve(Buffer.concat(chunks)));
+    });
+    req.on('timeout', () => req.destroy(new Error('下载超时')));
+    req.on('error', (err) => reject(err));
+  });
+}
+
+/** 查 npm 最新版本：官方失败自动切 npmmirror 镜像。 */
+async function pluginManagerFetchNpmLatest(pkg) {
+  for (const mirror of [false, true]) {
+    try {
+      const data = await pluginManagerHttpGetJson(npmLatestUrl(pkg, mirror));
+      if (data && typeof data.version === 'string' && data.dist && data.dist.tarball) {
+        return {
+          version: String(data.version),
+          tarball: String(data.dist.tarball),
+          integrity: typeof data.dist.integrity === 'string' ? data.dist.integrity : '',
+          source: mirror ? 'npmmirror' : 'npm',
+        };
+      }
+    } catch (err) {
+      log('plugin-manager', '查询 ' + pkg + (mirror ? ' 镜像' : ' 官方') + '失败: ' + err.message);
+    }
+  }
+  return null;
+}
+
+/** 查 GitHub Releases 最新版（带资产；仅官方 API，镜像仅用于资产下载加速）。 */
+async function pluginManagerFetchGithubLatest(repo) {
+  try {
+    const data = await pluginManagerHttpGetJson(githubReleaseApiUrl(repo), 15000, { Accept: 'application/vnd.github+json' });
+    if (data && data.tag_name && Array.isArray(data.assets) && data.assets.length > 0) {
+      const a = data.assets.find((x) => x && x.name) || data.assets[0];
+      return {
+        version: String(data.tag_name).replace(/^v/, ''),
+        tag: String(data.tag_name),
+        assetName: String(a.name),
+        tarball: githubAssetDownloadUrl(repo, data.tag_name, a.name),
+        integrity: '',
+        source: 'github',
+      };
+    }
+  } catch (err) {
+    log('plugin-manager', '查询 ' + repo + ' Releases 失败: ' + err.message);
+  }
+  return null;
+}
+
+/** 检查全部可更新插件（有更新源的才查）。 */
+async function pluginManagerCheckUpdates() {
+  const rows = pluginManagerCollect().filter((r) => PLUGIN_UPDATE_SOURCES[r.id]);
+  const results = [];
+  for (const row of rows) {
+    const src = PLUGIN_UPDATE_SOURCES[row.id];
+    const current = pluginManagerInstalledVersion(row.name) || '0.0.0';
+    const info = src.kind === 'npm'
+      ? await pluginManagerFetchNpmLatest(src.pkg)
+      : await pluginManagerFetchGithubLatest(src.repo);
+    if (!info) {
+      results.push({ id: row.id, name: row.name, current, latest: '', hasUpdate: false, source: src.kind, error: '查询失败' });
+      continue;
+    }
+    results.push({
+      id: row.id,
+      name: row.name,
+      current,
+      latest: info.version,
+      hasUpdate: compareVersions(info.version, current) > 0,
+      source: src.kind,
+      download: info,
+    });
+  }
+  return results;
+}
+
+/**
+ * 更新单个插件：下载 → 校验 → 备份旧版 → tar.exe 解压 → 定位包根 → 替换。
+ * 失败自动回滚备份；成功需重启生效（sync 的版本保留逻辑防止被安装包覆盖）。
+ */
+async function pluginManagerUpdate(id) {
+  const row = pluginManagerCollect().find((r) => r.id === id);
+  const src = row && PLUGIN_UPDATE_SOURCES[id];
+  if (!row || !src) return { ok: false, error: '该插件没有可用更新源' };
+  const info = src.kind === 'npm'
+    ? await pluginManagerFetchNpmLatest(src.pkg)
+    : await pluginManagerFetchGithubLatest(src.repo);
+  if (!info || !info.tarball) return { ok: false, error: '查询最新版本失败（网络或源不可用）' };
+
+  const pkgDir = pluginManagerPackageDir(row.name);
+  if (!pkgDir || !fs.existsSync(path.join(pkgDir, 'package.json'))) {
+    return { ok: false, error: '未找到插件安装目录: ' + row.name };
+  }
+
+  const isZip = /\.zip$/i.test(info.tarball);
+  const tmpFile = path.join(pluginManagerProfileDir(), 'plugin-update-' + id + '-' + Date.now() + (isZip ? '.zip' : '.tgz'));
+  const backupDir = pkgDir + '.bak-' + Date.now();
+  try {
+    // 1) 下载
+    let buf;
+    try {
+      buf = await pluginManagerHttpGetBuffer(info.tarball);
+    } catch (err) {
+      // GitHub 资产官方直链失败 → 走加速镜像重试一次
+      if (src.kind === 'github') {
+        log('plugin-manager', '官方直链下载失败(' + err.message + ')，改用镜像重试');
+        const { ghProxyUrl } = require('./scripts/plugin-manager-update');
+        buf = await pluginManagerHttpGetBuffer(ghProxyUrl(info.tarball));
+      } else {
+        throw err;
+      }
+    }
+    // 2) 校验
+    if (info.integrity && !verifyIntegrity(buf, info.integrity)) {
+      return { ok: false, error: '下载校验失败（sha512 不匹配），已中止' };
+    }
+    fs.writeFileSync(tmpFile, buf);
+    // 3) 备份旧版
+    fs.renameSync(pkgDir, backupDir);
+    try {
+      // 4) 解压（Windows 自带 bsdtar：tgz 用 -xzf，zip 用 -xf）
+      const extractDir = path.join(pluginManagerProfileDir(), 'plugin-update-x-' + id + '-' + Date.now());
+      fs.mkdirSync(extractDir, { recursive: true });
+      const r = spawnSync('tar.exe', isZip ? ['-xf', tmpFile, '-C', extractDir] : ['-xzf', tmpFile, '-C', extractDir], { encoding: 'utf8' });
+      if (r.status !== 0) throw new Error('解压失败: ' + ((r.stderr && r.stderr.trim()) || 'tar 退出码 ' + r.status));
+      const root = findPackageRoot(extractDir);
+      if (!root) throw new Error('解压内容里找不到 package.json');
+      const newPkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+      if (!newPkg || !newPkg.version) throw new Error('新版本 package.json 缺少 version');
+      // 5) 替换
+      fs.mkdirSync(pkgDir, { recursive: true });
+      fs.cpSync(root, pkgDir, { recursive: true, force: true, preserveTimestamps: true });
+      fs.rmSync(extractDir, { recursive: true, force: true });
+      fs.rmSync(backupDir, { recursive: true, force: true });
+      return { ok: true, restartRequired: true, version: String(newPkg.version) };
+    } catch (err) {
+      // 回滚
+      try {
+        if (fs.existsSync(backupDir)) {
+          fs.rmSync(pkgDir, { recursive: true, force: true });
+          fs.renameSync(backupDir, pkgDir);
+        }
+      } catch { /* 回滚失败仅记录 */ }
+      throw err;
+    }
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err) };
+  } finally {
+    try { fs.unlinkSync(tmpFile); } catch {}
+    try { if (fs.existsSync(backupDir)) fs.rmSync(backupDir, { recursive: true, force: true }); } catch {}
+  }
 }
 
 // ---------------------------------------------------------------------------

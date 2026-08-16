@@ -18,8 +18,10 @@ window.__ModuleLoader__.load({
 			groupCompanion: "配套插件",
 			groupOther: "其他插件",
 			groupCore: "核心组件",
+			groupRemoved: "已卸载（可恢复）",
 			groupToggleableNote: "可开关",
 			groupReadonlyNote: "不可关闭",
+			groupRemovedNote: "重启后不再加载",
 			descFallback: "（无描述）",
 			badgeEnabled: "已启用",
 			badgeDisabled: "已关闭",
@@ -33,7 +35,23 @@ window.__ModuleLoader__.load({
 			refresh: "刷新",
 			noMatch: "没有匹配的插件",
 			localOnlyHint: "（清单来自本地文件，实时注册表暂不可用）",
-			countSuffix: "个插件"
+			countSuffix: "个插件",
+			checkUpdates: "检查更新",
+			checking: "检查更新中…",
+			updateAvailable: "可更新",
+			upToDate: "已是最新",
+			updateBtn: "更新",
+			updating: "更新中…",
+			updateDone: "已更新，重启后生效",
+			updateFailed: "更新失败：",
+			updateNoSources: "当前没有可独立更新的插件（其余插件随应用更新）",
+			updateFollowsApp: "随应用更新",
+			uninstallBtn: "卸载",
+			uninstallConfirm: "确认卸载？",
+			uninstallDone: "已卸载，重启后生效",
+			restoreBtn: "恢复",
+			restoreDone: "已恢复，重启后生效",
+			actionFailed: "操作失败："
 		};
 
 		function bridge() {
@@ -121,6 +139,14 @@ window.__ModuleLoader__.load({
 			const [view, setView] = react.useState("detail"); // compact | detail
 			const [cat, setCat] = react.useState("all"); // all | companion | other | core
 			const [refreshTick, setRefreshTick] = react.useState(0);
+			// 更新检查结果：id → {current, latest, hasUpdate, source, applied?}
+			const [updateMap, setUpdateMap] = react.useState(null);
+			const [checkingUpdates, setCheckingUpdates] = react.useState(false);
+			const [updatingId, setUpdatingId] = react.useState(null);
+			// 卸载两步确认（id → true 表示已点过一次，等待再点确认）
+			const [uninstallArmed, setUninstallArmed] = react.useState(null);
+			// 操作结果提示条（成功/失败均走这里，避免借用 error 区）
+			const [actionMsg, setActionMsg] = react.useState(null);
 
 			react.useEffect(() => {
 				let cancelled = false;
@@ -157,8 +183,9 @@ window.__ModuleLoader__.load({
 					for (const r of mine) {
 						// live 可用时：本地推导的占位核心行（manifest 包名 ≠ 真实 loader 条目 id，
 						// 如 dsh-web-app → web-runtime）不展示，避免与「全部」标签对不上；
-						// 可开关行即使当前未加载（如已禁用的 balance）也必须展示，否则无法重新打开。
-						if (liveOk && !r.toggleable && !liveIds.has(r.id)) continue;
+						// 可开关行即使当前未加载（如已禁用的 balance）也必须展示，否则无法重新打开；
+						// 已卸载行（removed）同理必须展示（提供「恢复」入口）。
+						if (liveOk && !r.toggleable && !r.removed && !liveIds.has(r.id)) continue;
 						if (!byId.has(r.id)) byId.set(r.id, {
 							id: r.id,
 							title: r.name || r.id,
@@ -166,6 +193,9 @@ window.__ModuleLoader__.load({
 							phase: "",
 							description: r.description || "",
 							toggleable: !!r.toggleable,
+							group: r.group || (r.toggleable ? "companion" : "core"),
+							removed: !!r.removed,
+							hasConfig: !!r.hasConfig,
 							from: "local"
 						});
 					}
@@ -183,6 +213,9 @@ window.__ModuleLoader__.load({
 								phase: e.fiberPhase || "",
 								description: descById.get(e.entryId) || "",
 								toggleable: toggleableById.has(e.entryId),
+								group: toggleableById.has(e.entryId) ? "companion" : "core",
+								removed: false,
+								hasConfig: false,
 								from: "live"
 							});
 						}
@@ -232,7 +265,80 @@ window.__ModuleLoader__.load({
 			/** 行当前显示值：有未生效的点击 → 新值；否则实际状态。 */
 			const rowValue = (row) => (row.id in pendingMap ? pendingMap[row.id] : row.enabled);
 			const rowDirty = (row) => row.id in pendingMap;
-			const rowCat = (row) => (row.toggleable ? (row.id === "llm-deepseek" ? "other" : "companion") : "core");
+			const rowCat = (row) => (row.group === "removed" ? "removed" : row.group || (row.toggleable ? "companion" : "core"));
+
+			/** 检查更新（npm 官方+镜像 / GitHub 官方+镜像）。 */
+			const doCheckUpdates = () => {
+				const b = bridge();
+				if (!b || !b.checkUpdates || checkingUpdates) return;
+				setCheckingUpdates(true);
+				setActionMsg(null);
+				b.checkUpdates().then((res) => {
+					setCheckingUpdates(false);
+					if (!res || !res.ok) {
+						setActionMsg(L.updateFailed + String((res && res.error) || "未知错误"));
+						return;
+					}
+					const list = Array.isArray(res.items) ? res.items : [];
+					const map = {};
+					for (const it of list) map[it.id] = it;
+					setUpdateMap(map);
+					const n = list.filter((it) => it.hasUpdate).length;
+					setActionMsg(n > 0 ? n + " 个插件可更新" : (list.length === 0 ? L.updateNoSources : L.upToDate));
+				}).catch((err) => {
+					setCheckingUpdates(false);
+					setActionMsg(L.updateFailed + String((err && err.message) || err));
+				});
+			};
+
+			/** 更新单个插件：成功后打上「已更新」标记，重启后生效。 */
+			const doUpdate = (row) => {
+				const b = bridge();
+				if (!b || !b.update || updatingId) return;
+				setUpdatingId(row.id);
+				setActionMsg(null);
+				b.update(row.id).then((res) => {
+					setUpdatingId(null);
+					if (res && res.ok) {
+						setUpdateMap((prev) => ({ ...prev, [row.id]: { ...(prev[row.id] || {}), applied: res.version || true } }));
+						setActionMsg(L.updateDone + (res.version ? "（v" + res.version + "）" : ""));
+					} else {
+						setActionMsg(L.updateFailed + String((res && res.error) || "未知错误"));
+					}
+				}).catch((err) => {
+					setUpdatingId(null);
+					setActionMsg(L.updateFailed + String((err && err.message) || err));
+				});
+			};
+
+			/** 卸载（两步确认）或恢复：成功后刷新清单。 */
+			const doUninstall = (row) => {
+				if (uninstallArmed !== row.id) { setUninstallArmed(row.id); return; }
+				setUninstallArmed(null);
+				const b = bridge();
+				if (!b || !b.uninstall) return;
+				b.uninstall(row.id).then((res) => {
+					if (res && res.ok) {
+						setActionMsg(L.uninstallDone);
+						setRefreshTick((t) => t + 1);
+					} else {
+						setActionMsg(L.actionFailed + String((res && res.error) || "未知错误"));
+					}
+				}).catch((err) => setActionMsg(L.actionFailed + String((err && err.message) || err)));
+			};
+
+			const doRestore = (row) => {
+				const b = bridge();
+				if (!b || !b.restore) return;
+				b.restore(row.id).then((res) => {
+					if (res && res.ok) {
+						setActionMsg(L.restoreDone);
+						setRefreshTick((t) => t + 1);
+					} else {
+						setActionMsg(L.actionFailed + String((res && res.error) || "未知错误"));
+					}
+				}).catch((err) => setActionMsg(L.actionFailed + String((err && err.message) || err)));
+			};
 
 			const matches = (row) => {
 				if (!query) return true;
@@ -285,6 +391,9 @@ window.__ModuleLoader__.load({
 							]
 						}),
 						jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8, flex: "none" }, children: [
+							updateMap && updateMap[row.id] && updateMap[row.id].hasUpdate && !updateMap[row.id].applied
+								? badge("↑ " + updateMap[row.id].latest, "var(--dsw-alias-state-info-primary, #5b9bd5)")
+								: null,
 							rowDirty(row) ? badge(L.badgePending, "var(--dsw-alias-state-info-primary, #5b9bd5)") : null,
 							jsx("span", { style: { width: 7, height: 7, borderRadius: 999, background: dotColor, flex: "none" } }),
 							switchControl(row, on, onToggle, pendingId === row.id)
@@ -293,33 +402,72 @@ window.__ModuleLoader__.load({
 				});
 			};
 
-			/** 详情视图行：名称 + 包名 + 状态徽章 + 描述 + 开关。 */
-			const renderDetailRow = (row) => jsx("div", {
-				key: row.id,
-				style: { display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 0", borderBottom: "1px solid var(--dsw-alias-divider-weak, rgba(128,128,128,0.16))" },
-				children: [
-					jsx("div", {
-						style: { flex: 1, display: "flex", flexDirection: "column", gap: 3, minWidth: 0 },
-						children: [
-							jsxs("div", { children: [
-								jsx("span", { style: { fontWeight: 600 }, children: rowName(row) || rowPkg(row) }),
-								jsx("span", { style: { fontSize: 12, opacity: 0.55, marginLeft: 8 }, children: rowPkg(row) }),
-								rowValue(row) ? badge(L.badgeEnabled, "var(--dsw-alias-state-success-primary, #4caf7d)") : badge(L.badgeDisabled, "var(--dsw-alias-state-warning-primary, #d99a3d)"),
-								phaseBadge(row),
-								rowDirty(row) ? badge(L.badgePending, "var(--dsw-alias-state-info-primary, #5b9bd5)") : null
-							] }),
-							jsx("span", { style: { fontSize: 12, opacity: 0.65, lineHeight: 1.5 }, children: row.description || L.descFallback })
-						]
-					}),
-					jsx("input", {
-						type: "checkbox",
-						checked: rowValue(row),
-						disabled: !row.toggleable || pendingId === row.id,
-						onChange: () => onToggle(row, !rowValue(row)),
-						style: { marginTop: 2, cursor: row.toggleable ? "pointer" : "not-allowed" }
-					})
-				]
+			/** 操作按钮（卸载两步确认 / 恢复 / 更新）小链接样式。 */
+			const linkBtnStyle = (danger, accent) => ({
+				fontSize: 11,
+				padding: "2px 10px",
+				borderRadius: 7,
+				cursor: "pointer",
+				whiteSpace: "nowrap",
+				border: "1px solid " + (danger ? "var(--dsw-alias-state-error-primary, #ff7a85)" : "var(--dsw-alias-border-l2, rgba(128,128,128,0.35))"),
+				color: danger ? "var(--dsw-alias-state-error-primary, #ff7a85)" : (accent ? "var(--dsw-alias-state-info-primary, #5b9bd5)" : "inherit"),
+				background: "transparent"
 			});
+
+			/** 详情视图行：名称 + 包名 + 状态徽章 + 描述 + 开关/操作按钮。 */
+			const renderDetailRow = (row) => {
+				const upd = updateMap && updateMap[row.id];
+				const removed = rowCat(row) === "removed";
+				return jsxs("div", {
+					key: row.id,
+					style: { display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 0", borderBottom: "1px solid var(--dsw-alias-divider-weak, rgba(128,128,128,0.16))", opacity: removed ? 0.62 : 1 },
+					children: [
+						jsx("div", {
+							style: { flex: 1, display: "flex", flexDirection: "column", gap: 3, minWidth: 0 },
+							children: [
+								jsxs("div", { children: [
+									jsx("span", { style: { fontWeight: 600 }, children: rowName(row) || rowPkg(row) }),
+									jsx("span", { style: { fontSize: 12, opacity: 0.55, marginLeft: 8 }, children: rowPkg(row) }),
+									rowValue(row) ? badge(L.badgeEnabled, "var(--dsw-alias-state-success-primary, #4caf7d)") : badge(L.badgeDisabled, "var(--dsw-alias-state-warning-primary, #d99a3d)"),
+									phaseBadge(row),
+									rowDirty(row) ? badge(L.badgePending, "var(--dsw-alias-state-info-primary, #5b9bd5)") : null,
+									upd && upd.hasUpdate && !upd.applied ? badge(L.updateAvailable + " v" + upd.current + " → v" + upd.latest, "var(--dsw-alias-state-info-primary, #5b9bd5)") : null,
+									upd && upd.applied ? badge(L.updateDone + (upd.applied !== true ? "（v" + upd.applied + "）" : ""), "var(--dsw-alias-state-success-primary, #4caf7d)") : null
+								] }),
+								jsx("span", { style: { fontSize: 12, opacity: 0.65, lineHeight: 1.5 }, children: row.description || L.descFallback })
+							]
+						}),
+						jsxs("div", { style: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flex: "none" }, children: [
+							jsx("input", {
+								type: "checkbox",
+								checked: rowValue(row),
+								disabled: !row.toggleable || pendingId === row.id,
+								onChange: () => onToggle(row, !rowValue(row)),
+								style: { cursor: row.toggleable ? "pointer" : "not-allowed" }
+							}),
+							row.group !== "core" && !row.hasConfig && !removed ? jsx("button", {
+								type: "button",
+								onClick: () => doUninstall(row),
+								style: linkBtnStyle(uninstallArmed === row.id, false),
+								children: uninstallArmed === row.id ? L.uninstallConfirm : L.uninstallBtn
+							}) : null,
+							removed ? jsx("button", {
+								type: "button",
+								onClick: () => doRestore(row),
+								style: linkBtnStyle(false, true),
+								children: L.restoreBtn
+							}) : null,
+							upd && (upd.hasUpdate || upd.applied) && !removed ? jsx("button", {
+								type: "button",
+								disabled: !!updatingId,
+								onClick: () => doUpdate(row),
+								style: linkBtnStyle(false, true),
+								children: upd.applied ? L.updateDone : (updatingId === row.id ? L.updating : L.updateBtn + " v" + upd.latest)
+							}) : null
+						] })
+					]
+				});
+			};
 
 			const renderBody = () => {
 				if (error) return jsx("div", { style: { fontSize: 12, color: "var(--dsw-alias-state-error-primary, #ff7a85)", marginTop: 8 }, children: error });
@@ -329,7 +477,8 @@ window.__ModuleLoader__.load({
 				const groups = {
 					companion: base.filter((r) => rowCat(r) === "companion"),
 					other: base.filter((r) => rowCat(r) === "other"),
-					core: base.filter((r) => rowCat(r) === "core")
+					core: base.filter((r) => rowCat(r) === "core"),
+					removed: base.filter((r) => rowCat(r) === "removed")
 				};
 				const shown = cat === "all" ? base : groups[cat];
 				if (shown.length === 0) return jsx("div", { style: { fontSize: 12, opacity: 0.7, marginTop: 8 }, children: L.noMatch });
@@ -355,7 +504,8 @@ window.__ModuleLoader__.load({
 					children: [
 						group(L.groupCompanion, L.groupToggleableNote, groups.companion),
 						group(L.groupOther, L.groupToggleableNote, groups.other),
-						group(L.groupCore, L.groupReadonlyNote, groups.core)
+						group(L.groupCore, L.groupReadonlyNote, groups.core),
+						group(L.groupRemoved, L.groupRemovedNote, groups.removed)
 					]
 				});
 			};
@@ -417,11 +567,19 @@ window.__ModuleLoader__.load({
 					] }),
 					jsx("button", {
 						type: "button",
+						disabled: checkingUpdates,
+						onClick: doCheckUpdates,
+						style: { fontSize: 12, padding: "5px 12px", borderRadius: 8, cursor: "pointer", border: "1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.35))", background: "transparent", color: "inherit" },
+						children: checkingUpdates ? L.checking : L.checkUpdates
+					}),
+					jsx("button", {
+						type: "button",
 						onClick: () => setRefreshTick((v) => v + 1),
 						style: { fontSize: 12, cursor: "pointer" },
 						children: L.refresh
 					})
 				] }) : null,
+				actionMsg ? jsx("div", { style: { fontSize: 12, opacity: 0.8, marginTop: 8 }, children: actionMsg }) : null,
 				renderChips(),
 				localOnly ? jsx("div", { style: { fontSize: 12, opacity: 0.6, marginTop: 6 }, children: L.localOnlyHint }) : null,
 				renderBody()

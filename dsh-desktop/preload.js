@@ -68,10 +68,14 @@ const dshDesktop = {
   },
   // 插件管理（设置页「插件」页「管理」标签，dsh-plugin-manager 插件消费）：
   // 列出插件 / 开关写入 web profile cordis.patch.yml 的用户层 disabled 条目
-  // （完全退出并重启应用生效）。
+  // （完全退出并重启应用生效）；卸载/恢复/检查更新/更新。
   pluginManager: {
     list: () => ipcRenderer.invoke('dsh:plugin-list'),
     setEnabled: (id, enabled) => ipcRenderer.invoke('dsh:plugin-set-enabled', { id, enabled }),
+    uninstall: (id) => ipcRenderer.invoke('dsh:plugin-uninstall', { id }),
+    restore: (id) => ipcRenderer.invoke('dsh:plugin-restore', { id }),
+    checkUpdates: () => ipcRenderer.invoke('dsh:plugin-check-updates'),
+    update: (id) => ipcRenderer.invoke('dsh:plugin-update', { id }),
   },
   // 桌面宠物原生小窗（harness-pet）：主窗控制开关/状态查询/最小化自动弹出
   // 上报；小窗内关闭自身/搬窗（绝对目标位置）。

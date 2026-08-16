@@ -2,7 +2,7 @@
 // 单元测试：scripts/plugin-manager-patch.js（cordis.patch.yml 用户层 disabled 开关）
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { togglePluginInPatch } = require('../plugin-manager-patch');
+const { togglePluginInPatch, setPluginRemoved } = require('../plugin-manager-patch');
 
 const FIXTURE = [
   '# dsh web profile patch（由 DSH Desktop 维护）',
@@ -152,4 +152,53 @@ test('自愈：历史遗留的多条重复注释在下次禁用时收敛为一�
   const out = togglePluginInPatch(messy, 'balance', false, '@deepseek-ai/dsh-balance');
   assert.equal(commentCount(out, 'balance'), 1, '四条历史注释收敛为一条');
   assert.equal(countId(out, 'balance'), 1, '且只有一份条目');
+});
+
+// --- 卸载/恢复 --------------------------------------------------------------
+
+function removedCount(text) {
+  return (text.match(/removed\s*:\s*true/g) || []).length;
+}
+
+test('卸载：insert 块条目移出，顶层条目带 disabled + removed 标记', () => {
+  const out = setPluginRemoved(FIXTURE, 'terminal', true, '@deepseek-ai/dsh-terminal-tab');
+  assert.ok(!out.includes('    - id: terminal'), '应已从 insert 块移除');
+  assert.equal(countId(out, 'terminal'), 1, '全文件只保留一个登记点');
+  assert.equal(removedCount(out), 1, '恰好一个 removed: true');
+  assert.match(out, /- id: terminal[\s\S]*disabled: true[\s\S]*removed: true/);
+  assert.ok(!out.includes('- insert:\n\n'), '被掏空的 insert 块应被清理');
+});
+
+test('卸载：重复卸载幂等', () => {
+  const once = setPluginRemoved(FIXTURE, 'balance', true, '@deepseek-ai/dsh-balance');
+  const twice = setPluginRemoved(once, 'balance', true, '@deepseek-ai/dsh-balance');
+  assert.equal(once, twice);
+});
+
+test('恢复：移除 removed/disabled，无 config 条目整体消失（等待启动同步恢复）', () => {
+  const removed = setPluginRemoved(FIXTURE, 'terminal', true, '@deepseek-ai/dsh-terminal-tab');
+  const out = setPluginRemoved(removed, 'terminal', false);
+  assert.equal(countId(out, 'terminal'), 0, '条目已移除');
+  assert.equal(removedCount(out), 0, 'removed 标记已清');
+});
+
+test('恢复：带 config 的条目只清标记，config 保留', () => {
+  const withConfig = FIXTURE.replace('  config:\n', '  removed: true\n  disabled: true\n  config:\n');
+  const out = setPluginRemoved(withConfig, 'web', false);
+  assert.ok(out.includes('- id: web'));
+  assert.ok(out.includes('  config:'));
+  assert.ok(out.includes('    searchProvider: opencode-mcp'));
+  assert.equal(removedCount(out), 0, 'removed 行已移除');
+  assert.ok(!out.includes("name: '@deepseek-ai/dsh-web'\n  disabled: true"), 'disabled 行已移除');
+});
+
+test('卸载→恢复→卸载 往返不堆积注释', () => {
+  let t = FIXTURE;
+  t = setPluginRemoved(t, 'balance', true, '@deepseek-ai/dsh-balance');
+  t = setPluginRemoved(t, 'balance', false);
+  t = setPluginRemoved(t, 'balance', true, '@deepseek-ai/dsh-balance');
+  assert.equal(commentCount(t, 'balance'), 0, '卸载注释');
+  assert.ok((t.match(/卸载 balance/g) || []).length <= 1, '卸载注释至多一条');
+  assert.equal(countId(t, 'balance'), 1);
+  assert.equal(removedCount(t), 1);
 });
