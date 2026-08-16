@@ -47,6 +47,60 @@ window.__ModuleLoader__.load({
 			children: text
 		});
 
+		// 简洁视图卡片网格的窄屏适配（与官方清单页同款：≤680px 收成单列）。
+		const PM_CSS_ID = "@deepseek-ai/dsh-plugin-manager/compact-grid.css";
+		if (typeof document !== "undefined" && !document.querySelector("style[data-plugin-css=\"" + PM_CSS_ID + "\"]")) {
+			const st = document.createElement("style");
+			st.dataset.plugin = "@deepseek-ai/dsh-plugin-manager";
+			st.dataset.pluginCss = PM_CSS_ID;
+			st.textContent = "@media (width <= 680px){.dshpm-cards{grid-template-columns:minmax(0,1fr) !important}}";
+			document.head.appendChild(st);
+		}
+
+		/** 包名短名（去掉 @scope/ 前缀，如 @deepseek-ai/dsh-balance → dsh-balance）。 */
+		const pkgShort = (name) => {
+			const s = String(name || "");
+			const i = s.indexOf("/");
+			return i >= 0 ? s.slice(i + 1) : s;
+		};
+
+		/** 迷你开关（简洁视图卡片用）。 */
+		const switchControl = (row, on, onToggle, pending) => {
+			const disabled = !row.toggleable || pending;
+			return jsx("button", {
+				type: "button",
+				role: "switch",
+				"aria-checked": on,
+				"aria-label": row.id,
+				disabled,
+				onClick: () => onToggle(row, !on),
+				style: {
+					position: "relative",
+					width: 32,
+					height: 18,
+					borderRadius: 999,
+					border: "1px solid " + (on ? "var(--dsw-alias-state-success-primary, #4caf7d)" : "var(--dsw-alias-border-l2, rgba(128,128,128,0.35))"),
+					background: on ? "color-mix(in srgb, var(--dsw-alias-state-success-primary, #4caf7d) 30%, transparent)" : "transparent",
+					cursor: row.toggleable ? "pointer" : "not-allowed",
+					flex: "none",
+					padding: 0,
+					opacity: disabled ? 0.55 : 1
+				},
+				children: jsx("span", {
+					style: {
+						position: "absolute",
+						top: 2,
+						left: on ? 18 : 2,
+						width: 12,
+						height: 12,
+						borderRadius: 999,
+						background: on ? "var(--dsw-alias-state-success-primary, #4caf7d)" : "var(--dsw-alias-label-tertiary, rgba(128,128,128,0.6))",
+						transition: "left .14s var(--ds-ease-in-out, ease)"
+					}
+				})
+			});
+		};
+
 		/** 归一化 live 注册表返回：可能 {ok,value} / {entries} / 数组。 */
 		function normalizeLive(result) {
 			if (Array.isArray(result)) return result;
@@ -196,29 +250,48 @@ window.__ModuleLoader__.load({
 			const rowName = (row) => (/^[0-9a-f]{8}$/i.test(row.id) ? null : row.id);
 			const rowPkg = (row) => row.title;
 
-			/** 简洁视图行：名称 + 包名 + 开关（悬停显示描述）。 */
-			const renderCompactRow = (row) => jsx("div", {
-				key: row.id,
-				style: { display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--dsw-alias-divider-weak, rgba(128,128,128,0.14))" },
-				children: [
-					jsxs("span", {
-						style: { flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: rowValue(row) ? 1 : 0.5 },
-						title: row.description || L.descFallback,
-						children: [
-							jsx("span", { style: { fontWeight: 600 }, children: rowName(row) || rowPkg(row) }),
-							rowName(row) ? jsx("span", { style: { fontSize: 12, opacity: 0.55, marginLeft: 8 }, children: rowPkg(row) }) : null
-						]
-					}),
-					rowDirty(row) ? badge(L.badgePending, "var(--dsw-alias-state-info-primary, #5b9bd5)") : null,
-					jsx("input", {
-						type: "checkbox",
-						checked: rowValue(row),
-						disabled: !row.toggleable || pendingId === row.id,
-						onChange: () => onToggle(row, !rowValue(row)),
-						style: { marginLeft: 8, cursor: row.toggleable ? "pointer" : "not-allowed" }
-					})
-				]
-			});
+			/** 简洁视图卡片（官方清单页同款：标题 + 状态圆点 + 开关）。 */
+			const renderCompactCard = (row) => {
+				const on = rowValue(row);
+				const failed = row.phase === "failed";
+				const dotColor = failed
+					? "var(--dsw-alias-state-error-primary, #ff7a85)"
+					: on
+						? "var(--dsw-alias-state-success-primary, #4caf7d)"
+						: "var(--dsw-alias-label-tertiary, rgba(128,128,128,0.5))";
+				const name = rowName(row) || rowPkg(row);
+				const short = rowName(row) ? pkgShort(rowPkg(row)) : null;
+				return jsxs("div", {
+					key: row.id,
+					title: row.description || L.descFallback,
+					style: {
+						display: "flex",
+						alignItems: "center",
+						justifyContent: "space-between",
+						gap: 10,
+						minWidth: 0,
+						padding: "10px 12px",
+						border: "1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.35))",
+						borderRadius: 10,
+						background: "var(--dsw-alias-bg-layer-3, transparent)",
+						opacity: on ? 1 : 0.62
+					},
+					children: [
+						jsxs("span", {
+							style: { display: "flex", alignItems: "baseline", minWidth: 0, overflow: "hidden" },
+							children: [
+								jsx("span", { style: { fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }, children: name }),
+								short ? jsx("span", { style: { fontSize: 11, opacity: 0.5, marginLeft: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }, children: short }) : null
+							]
+						}),
+						jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8, flex: "none" }, children: [
+							rowDirty(row) ? badge(L.badgePending, "var(--dsw-alias-state-info-primary, #5b9bd5)") : null,
+							jsx("span", { style: { width: 7, height: 7, borderRadius: 999, background: dotColor, flex: "none" } }),
+							switchControl(row, on, onToggle, pendingId === row.id)
+						] })
+					]
+				});
+			};
 
 			/** 详情视图行：名称 + 包名 + 状态徽章 + 描述 + 开关。 */
 			const renderDetailRow = (row) => jsx("div", {
@@ -260,7 +333,7 @@ window.__ModuleLoader__.load({
 				};
 				const shown = cat === "all" ? base : groups[cat];
 				if (shown.length === 0) return jsx("div", { style: { fontSize: 12, opacity: 0.7, marginTop: 8 }, children: L.noMatch });
-				const renderRow = view === "compact" ? renderCompactRow : renderDetailRow;
+				const compact = view === "compact";
 				const group = (title, note, items) => items.length === 0 ? null : jsxs("div", {
 					children: [
 						jsxs("div", { style: { fontWeight: 600, fontSize: 13, margin: "14px 0 2px" }, children: [
@@ -268,7 +341,9 @@ window.__ModuleLoader__.load({
 							jsx("span", { style: { fontSize: 12, opacity: 0.55, marginLeft: 8 }, children: note + " · " + items.length }),
 							jsx("span", { style: { fontSize: 12, opacity: 0.4, marginLeft: 8 }, children: items.filter((r) => rowValue(r)).length + " 启用 / " + items.filter((r) => !rowValue(r)).length + " 关闭" })
 						] }),
-						items.map(renderRow)
+						compact
+							? jsx("div", { className: "dshpm-cards", style: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, marginTop: 6 }, children: items.map(renderCompactCard) })
+							: items.map(renderDetailRow)
 					]
 				});
 				if (cat !== "all") {
