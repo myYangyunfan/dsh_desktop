@@ -22,6 +22,8 @@ window.__ModuleLoader__.load({
 			groupToggleableNote: "可开关",
 			groupReadonlyNote: "不可关闭",
 			groupRemovedNote: "重启后不再加载",
+			groupUpdateable: "可更新",
+			groupUpdateableNote: "检测到新版可升级",
 			descFallback: "（无描述）",
 			badgeEnabled: "已启用",
 			badgeDisabled: "已关闭",
@@ -138,7 +140,7 @@ window.__ModuleLoader__.load({
 			const [pendingMap, setPendingMap] = react.useState({});
 			const [query, setQuery] = react.useState("");
 			const [view, setView] = react.useState("detail"); // compact | detail
-			const [cat, setCat] = react.useState("all"); // all | companion | other | core
+			const [cat, setCat] = react.useState("all"); // all | updateable | companion | other | core | removed
 			const [refreshTick, setRefreshTick] = react.useState(0);
 			// 更新检查结果：id → {current, latest, hasUpdate, source, applied?}
 			const [updateMap, setUpdateMap] = react.useState(null);
@@ -270,6 +272,9 @@ window.__ModuleLoader__.load({
 			const rowDirty = (row) => row.id in pendingMap;
 			const rowCat = (row) => (row.group === "removed" ? "removed" : row.group || (row.toggleable ? "companion" : "core"));
 
+			/** 是否可更新（检查过且官方有新版本，且尚未更新成功）。 */
+			const isUpdateable = (row) => !!updateMap && !!updateMap[row.id] && !!updateMap[row.id].hasUpdate && !updateMap[row.id].applied;
+
 			/** 检查更新（npm 官方+镜像 / GitHub 官方+镜像）。 */
 			const doCheckUpdates = () => {
 				const b = bridge();
@@ -291,6 +296,8 @@ window.__ModuleLoader__.load({
 						setActionMsg(L.updateNoSources);
 					} else {
 						setActionMsg("检查完成：" + (n > 0 ? n + " 个可更新，" : "") + (list.length - n) + " 个已是最新；其余插件随应用更新");
+						// 有可更新项时自动切到「可更新」分类，避免在长列表里找
+						if (n > 0) setCat("updateable");
 					}
 				}).catch((err) => {
 					setCheckingUpdates(false);
@@ -522,34 +529,37 @@ window.__ModuleLoader__.load({
 			};
 
 			const renderBody = () => {
+				const emptyState = (t) => jsx("div", { style: { fontSize: 12, opacity: 0.6, marginTop: 12, padding: "18px 0", textAlign: "center", border: "1px dashed var(--dsw-alias-border-l2, rgba(128,128,128,0.3))", borderRadius: 10 }, children: t });
 				if (error) return jsx("div", { style: { fontSize: 12, color: "var(--dsw-alias-state-error-primary, #ff7a85)", marginTop: 8 }, children: error });
 				if (!rows) return jsx("div", { style: { fontSize: 12, opacity: 0.7, marginTop: 8 }, children: L.loading });
 				const base = rows.filter(matches);
-				if (base.length === 0) return jsx("div", { style: { fontSize: 12, opacity: 0.7, marginTop: 8 }, children: L.noMatch });
+				if (base.length === 0) return emptyState(L.noMatch);
 				const groups = {
 					companion: base.filter((r) => rowCat(r) === "companion"),
 					other: base.filter((r) => rowCat(r) === "other"),
 					core: base.filter((r) => rowCat(r) === "core"),
 					removed: base.filter((r) => rowCat(r) === "removed")
 				};
-				const shown = cat === "all" ? base : groups[cat];
-				if (shown.length === 0) return jsx("div", { style: { fontSize: 12, opacity: 0.7, marginTop: 8 }, children: L.noMatch });
+				// 「可更新」分类只在真有更新项时有效：更新全部完成后自动回退到「全部」，避免停留在空分类
+				const effCat = cat === "updateable" && !base.some(isUpdateable) ? "all" : cat;
+				const shown = effCat === "all" ? base : effCat === "updateable" ? base.filter(isUpdateable) : groups[effCat];
+				if (shown.length === 0) return emptyState(L.noMatch);
 				const compact = view === "compact";
 				const group = (title, note, items) => items.length === 0 ? null : jsxs("div", {
 					children: [
-						jsxs("div", { style: { fontWeight: 600, fontSize: 13, margin: "14px 0 2px" }, children: [
-							jsx("span", { children: title }),
-							jsx("span", { style: { fontSize: 12, opacity: 0.55, marginLeft: 8 }, children: note + " · " + items.length }),
-							jsx("span", { style: { fontSize: 12, opacity: 0.4, marginLeft: 8 }, children: items.filter((r) => rowValue(r)).length + " 启用 / " + items.filter((r) => !rowValue(r)).length + " 关闭" })
+						jsxs("div", { style: { display: "flex", alignItems: "baseline", gap: 8, margin: "14px 0 2px" }, children: [
+							jsx("span", { style: { fontWeight: 600, fontSize: 13 }, children: title }),
+							jsx("span", { style: { fontSize: 12, opacity: 0.55 }, children: note }),
+							jsx("span", { style: { fontSize: 11, padding: "1px 8px", borderRadius: 999, border: "1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.35))", opacity: 0.7 }, children: items.length })
 						] }),
 						compact
 							? jsx("div", { className: "dshpm-cards", style: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, marginTop: 6 }, children: items.map(renderCompactCard) })
 							: items.map(renderDetailRow)
 					]
 				});
-				if (cat !== "all") {
-					const meta = { companion: [L.groupCompanion, L.groupToggleableNote], other: [L.groupOther, L.groupToggleableNote], core: [L.groupCore, L.groupReadonlyNote] };
-					const [title, note] = meta[cat];
+				if (effCat !== "all") {
+					const meta = { updateable: [L.groupUpdateable, L.groupUpdateableNote], companion: [L.groupCompanion, L.groupToggleableNote], other: [L.groupOther, L.groupToggleableNote], core: [L.groupCore, L.groupReadonlyNote], removed: [L.groupRemoved, L.groupRemovedNote] };
+					const [title, note] = meta[effCat] || [effCat, ''];
 					return group(title, note, shown);
 				}
 				return jsxs("div", {
@@ -563,20 +573,20 @@ window.__ModuleLoader__.load({
 			};
 
 			/** 分类标签（可点击过滤）。 */
-			const chipStyle = (active) => ({
+			const chipStyle = (active, hot) => ({
 				fontSize: 12,
 				padding: "3px 12px",
 				borderRadius: 12,
-				border: "1px solid " + (active ? "var(--dsw-alias-state-info-primary, #5b9bd5)" : "var(--dsw-alias-border-l2, rgba(128,128,128,0.35))"),
-				background: active ? "color-mix(in srgb, var(--dsw-alias-state-info-primary, #5b9bd5) 12%, transparent)" : "transparent",
-				color: active ? "var(--dsw-alias-state-info-primary, #5b9bd5)" : "inherit",
+				border: "1px solid " + (active || hot ? "var(--dsw-alias-state-info-primary, #5b9bd5)" : "var(--dsw-alias-border-l2, rgba(128,128,128,0.35))"),
+				background: active || hot ? "color-mix(in srgb, var(--dsw-alias-state-info-primary, #5b9bd5) 12%, transparent)" : "transparent",
+				color: active || hot ? "var(--dsw-alias-state-info-primary, #5b9bd5)" : "inherit",
 				cursor: "pointer"
 			});
-			const chip = (key, label, count) => jsx("button", {
+			const chip = (key, label, count, hot) => jsx("button", {
 				type: "button",
 				key: key,
 				onClick: () => setCat((c) => (c === key ? "all" : key)),
-				style: chipStyle(cat === key),
+				style: chipStyle(cat === key, hot),
 				children: label + " · " + count
 			});
 
@@ -584,8 +594,10 @@ window.__ModuleLoader__.load({
 				if (!rows) return null;
 				const base = rows.filter(matches);
 				const n = (k) => base.filter((r) => rowCat(r) === k).length;
+				const updCount = base.filter(isUpdateable).length;
 				return jsxs("div", { style: { display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }, children: [
 					chip("all", L.catAll, base.length),
+					updCount > 0 ? chip("updateable", L.groupUpdateable, updCount, true) : null,
 					chip("companion", L.groupCompanion, n("companion")),
 					chip("other", L.groupOther, n("other")),
 					chip("core", L.groupCore, n("core")),
@@ -593,9 +605,18 @@ window.__ModuleLoader__.load({
 				] });
 			};
 
+			/** 视图切换按钮（简洁 / 详情）：统一选中高亮样式。 */
+			const viewBtn = (active, label, onClick) => jsx("button", {
+				type: "button",
+				onClick: onClick,
+				style: { fontSize: 12, padding: "5px 12px", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap", border: "1px solid " + (active ? "var(--dsw-alias-state-info-primary, #5b9bd5)" : "var(--dsw-alias-border-l2, rgba(128,128,128,0.35))"), background: active ? "color-mix(in srgb, var(--dsw-alias-state-info-primary, #5b9bd5) 12%, transparent)" : "transparent", color: active ? "var(--dsw-alias-state-info-primary, #5b9bd5)" : "inherit" },
+				children: label
+			});
+			const msgColor = /失败|错误/.test(actionMsg || "") ? "var(--dsw-alias-state-error-primary, #ff7a85)" : "var(--dsw-alias-state-info-primary, #5b9bd5)";
+
 			return jsxs("div", { children: [
 				jsx("span", { style: { fontSize: 12, opacity: 0.65 }, children: L.tabHint }),
-				rows ? jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10, marginTop: 10 }, children: [
+				rows ? jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10, marginTop: 10, flexWrap: "wrap" }, children: [
 					jsx("input", {
 						type: "search",
 						placeholder: L.searchPlaceholder,
@@ -603,36 +624,26 @@ window.__ModuleLoader__.load({
 						onChange: (e) => setQuery(e.target.value),
 						style: { flex: 1, maxWidth: 360, fontSize: 13, padding: "5px 10px", borderRadius: 8, border: "1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.35))", background: "transparent", color: "inherit" }
 					}),
-					jsx("span", { style: { fontSize: 12, opacity: 0.6 }, children: rows.length + " " + L.countSuffix }),
-					jsxs("div", { style: { display: "flex", gap: 4 }, children: [
+					jsx("span", { style: { fontSize: 12, opacity: 0.6, whiteSpace: "nowrap" }, children: rows.length + " " + L.countSuffix }),
+					jsxs("div", { style: { display: "flex", gap: 4, marginLeft: "auto", flexWrap: "wrap" }, children: [
+						viewBtn(view === "compact", L.viewCompact, () => setView("compact")),
+						viewBtn(view === "detail", L.viewDetail, () => setView("detail")),
 						jsx("button", {
 							type: "button",
-							onClick: () => setView("compact"),
-							style: { fontSize: 12, padding: "3px 10px", borderRadius: 8, cursor: "pointer", border: "1px solid " + (view === "compact" ? "var(--dsw-alias-state-info-primary, #5b9bd5)" : "var(--dsw-alias-border-l2, rgba(128,128,128,0.35))"), color: view === "compact" ? "var(--dsw-alias-state-info-primary, #5b9bd5)" : "inherit" },
-							children: L.viewCompact
+							disabled: checkingUpdates,
+							onClick: doCheckUpdates,
+							style: { fontSize: 12, padding: "5px 12px", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap", border: "1px solid " + (checkingUpdates ? "var(--dsw-alias-border-l2, rgba(128,128,128,0.35))" : "var(--dsw-alias-state-info-primary, #5b9bd5)"), background: checkingUpdates ? "transparent" : "color-mix(in srgb, var(--dsw-alias-state-info-primary, #5b9bd5) 12%, transparent)", color: checkingUpdates ? "inherit" : "var(--dsw-alias-state-info-primary, #5b9bd5)" },
+							children: checkingUpdates ? L.checking : L.checkUpdates
 						}),
 						jsx("button", {
 							type: "button",
-							onClick: () => setView("detail"),
-							style: { fontSize: 12, padding: "3px 10px", borderRadius: 8, cursor: "pointer", border: "1px solid " + (view === "detail" ? "var(--dsw-alias-state-info-primary, #5b9bd5)" : "var(--dsw-alias-border-l2, rgba(128,128,128,0.35))"), color: view === "detail" ? "var(--dsw-alias-state-info-primary, #5b9bd5)" : "inherit" },
-							children: L.viewDetail
+							onClick: () => setRefreshTick((v) => v + 1),
+							style: { fontSize: 12, padding: "5px 12px", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap", border: "1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.35))", background: "transparent", color: "inherit" },
+							children: L.refresh
 						})
-					] }),
-					jsx("button", {
-						type: "button",
-						disabled: checkingUpdates,
-						onClick: doCheckUpdates,
-						style: { fontSize: 12, padding: "5px 12px", borderRadius: 8, cursor: "pointer", border: "1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.35))", background: "transparent", color: "inherit" },
-						children: checkingUpdates ? L.checking : L.checkUpdates
-					}),
-					jsx("button", {
-						type: "button",
-						onClick: () => setRefreshTick((v) => v + 1),
-						style: { fontSize: 12, cursor: "pointer" },
-						children: L.refresh
-					})
+					] })
 				] }) : null,
-				actionMsg ? jsx("div", { style: { fontSize: 12, opacity: 0.8, marginTop: 8 }, children: actionMsg }) : null,
+				actionMsg ? jsx("div", { style: { fontSize: 12, marginTop: 8, padding: "6px 12px", borderRadius: 8, border: "1px solid " + msgColor, background: "color-mix(in srgb, " + msgColor + " 8%, transparent)", color: msgColor }, children: actionMsg }) : null,
 				renderChips(),
 				localOnly ? jsx("div", { style: { fontSize: 12, opacity: 0.6, marginTop: 6 }, children: L.localOnlyHint }) : null,
 				renderBody()
