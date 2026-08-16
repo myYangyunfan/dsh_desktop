@@ -19,6 +19,8 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+// 原子写与 main.js / 其它补丁脚本共用同一实现（scripts/lib/patch-io.js）。
+const { writeFileAtomic } = require('./lib/patch-io');
 
 const MARKER = 'dsh-desktop patch (issue #36)';
 
@@ -51,7 +53,7 @@ function patchFile(file, log = () => {}) {
   src = src.replace(OLD_Y_CLAMP, NEW_Y_CLAMP).replace(OLD_STYLE, NEW_STYLE);
   src = '// ' + MARKER + ': Menu portal 列表视口封顶（issue #36）\n' + src;
   try {
-    fs.writeFileSync(file, src, 'utf8');
+    writeFileAtomic(file, src);
     log('menu-viewport 补丁: 已应用 ' + file);
     return true;
   } catch (err) {

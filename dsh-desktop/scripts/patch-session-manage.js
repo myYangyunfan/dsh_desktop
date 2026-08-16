@@ -29,6 +29,8 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+// 原子写与 main.js / 其它补丁脚本共用同一实现（scripts/lib/patch-io.js）。
+const { writeFileAtomic } = require('./lib/patch-io');
 
 const MARKER = 'dsh-desktop patch (session manage)';
 
@@ -125,7 +127,7 @@ function applyReplacements(file, replacements, upgradeRules, log) {
     }
     if (upgraded) {
       try {
-        fs.writeFileSync(file, src, 'utf8');
+        writeFileAtomic(file, src);
         log('session-manage 补丁: 已升级 ' + file);
         return true;
       } catch (err) {
@@ -145,7 +147,7 @@ function applyReplacements(file, replacements, upgradeRules, log) {
   }
   src = '// ' + MARKER + ': 对话删除/归档管理运行时补丁\n' + src;
   try {
-    fs.writeFileSync(file, src, 'utf8');
+    writeFileAtomic(file, src);
     log('session-manage 补丁: 已应用 ' + file);
     return true;
   } catch (err) {

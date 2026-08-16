@@ -716,6 +716,67 @@ SCENARIOS['web-search-patch'] = async (t) => {
   t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
 };
 
+SCENARIOS['runtime-patches-suite'] = async (t) => {
+  // 统一补丁引擎重构的端到端防线：一次真实启动后，全部 12 个运行时补丁家族
+  // 必须已落盘（幂等标记/锚点产物）或留下对应日志。静默幂等的三个防护类
+  // 补丁（profile patch / bundle / settings）以文件标记断言。
+  await t.waitFor('boot-ready', 240000, 'Web UI 就绪');
+  await t.waitFor('界面已稳定', 60000, '稳定期完成');
+  const logText = fs.readFileSync(t.desktopLog, 'utf8');
+  // 有日志产出的补丁家族（已应用/锚点失配/写入成功均有前缀日志）
+  for (const prefix of [
+    'runtime 补丁:', '提示词暴露补丁:', '识图发送补丁:', '识图密钥补丁:',
+    'workspace 搜索栏修复:', '插件页标签合并:', 'web-search baseURL 补丁',
+    'menu-viewport 补丁', 'session-manage 补丁',
+  ]) {
+    t.assert(logText.includes(prefix), '启动日志应包含补丁前缀: ' + prefix);
+  }
+  const nm = path.join(t.dshHome, 'profiles', 'node_modules', '@deepseek-ai');
+  const pkgFile = (rel) => path.join(nm, rel);
+  const readOf = (rel) => {
+    const f = pkgFile(rel);
+    t.assert(fs.existsSync(f), 'profile fallback 应存在: ' + rel);
+    return fs.readFileSync(f, 'utf8');
+  };
+  // 闪跳修复（dsh-client-runtime）
+  const runtime = readOf(path.join('dsh-client-runtime', 'lib', 'client.js'));
+  t.assert(runtime.includes('(value) => baselineByKey.get(keyOf(value)) ?? value).filter((value) => value !== void 0);'), '闪跳修复应落盘');
+  // host-apiproxy：白名单 + 识图转述 + 密钥修复 + 会话删除 RPC
+  const apiproxy = readOf(path.join('dsh-host-apiproxy', 'lib', 'index.js'));
+  for (const marker of ['"dsh-conversation-tweaks"', 'describeImagesWithVision', 'dsh-desktop fix: read the resolved HOST-side value', 'unarchiveSession']) {
+    t.assert(apiproxy.includes(marker), 'host-apiproxy 应包含补丁标记: ' + marker);
+  }
+  // 三个静默幂等的防护类补丁（app-boot / settings）
+  const appBoot = readOf(path.join('dsh-app-boot', 'lib', 'index.js'));
+  t.assert(appBoot.includes('function loadUserPatchLayer'), 'profile patch 防护应注入');
+  t.assert(appBoot.includes('dsh-desktop guard: a broken profile bundle must not brick'), 'profile bundle 防护应注入');
+  const settings = readOf(path.join('dsh-settings', 'lib', 'index.js'));
+  t.assert(settings.includes('dsh-desktop guard: an invalid stored section must not brick'), 'settings 注册防护应注入');
+  // workspace 搜索栏 / 插件页标签合并 / menu 视口 / web-search 契约 / 会话删除
+  const workspaceUi = readOf(path.join('dsh-client-ui-workspace', 'lib', 'client.js'));
+  t.assert(workspaceUi.includes('dsh-desktop fix: rail search expansion'), 'workspace 搜索栏修复应落盘');
+  const pluginsUi = readOf(path.join('dsh-client-ui-settings-plugins', 'lib', 'client.js'));
+  t.assert(pluginsUi.includes('dsh-desktop fix: hide inventory tab'), '插件页标签合并应落盘');
+  const primitives = readOf(path.join('dsh-client-ui-primitives', 'lib', 'index.js'));
+  t.assert(primitives.includes('dsh-desktop patch (issue #36)'), 'menu 视口补丁应落盘');
+  const webSearch = readOf(path.join('dsh-web-search-deepseek', 'lib', 'index.js'));
+  t.assert(webSearch.includes('normalizedBase'), 'web-search baseURL 补丁应落盘');
+  const workspacePkg = readOf(path.join('dsh-workspace', 'lib', 'index.js'));
+  t.assert(workspacePkg.includes('unarchiveSession'), '会话删除补丁（workspace）应落盘');
+  // dsh/lib/profile-boot-*.js 家级补丁层防护（同名 stub re-export 文件不含
+  // 锚点、按设计跳过；真实装配模块必须已注入）。
+  const dshLib = path.join(nm, 'dsh', 'lib');
+  const bootFiles = fs.existsSync(dshLib)
+    ? fs.readdirSync(dshLib).filter((f) => /^profile-boot-.+\.js$/.test(f))
+    : [];
+  t.assert(bootFiles.length > 0, '应存在 profile-boot-*.js 装配文件');
+  const guardedBoot = bootFiles.filter((name) =>
+    fs.readFileSync(path.join(dshLib, name), 'utf8').includes('loadUserPatchLayerSafe'));
+  t.assert(guardedBoot.length > 0, 'profile-boot 家级补丁层防护应注入到真实装配模块（stub 文件按设计跳过）');
+  const q = await t.quitAndCheck();
+  t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
+};
+
 SCENARIOS['vision-key-keep'] = async (t) => {
   // 识图 apiKey 保存回归：role('secret') 字段永不回显，旧版卡片在「改其它
   // 字段后保存」时会把已存密钥静默清空（用户反馈“密钥没法保存”）。修复后：

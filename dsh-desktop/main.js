@@ -32,8 +32,15 @@ const { installBuiltinPresets } = require('./scripts/install-minimal-win-preset'
 const { SessionWatcher, scanZstdFrames } = require('./session-watcher');
 const { RendererRecovery } = require('./renderer-recovery');
 const { ensureCoreBundles, CORE_BUNDLE_NAMES } = require('./profile-manifest');
-const { dedupePatchEntries, dropBlocksByIds, parseFailedLoaderIds, mapPackagesToPatchIds } = require('./profile-patch-heal');
-const { PROFILE_BUNDLE_GUARD_MARKER, PROFILE_BOOT_GUARD_MARKER, bundlePatchRel, verifyBundleDir, packageDirUpward, scanProfileBundles, recoverManifestBundles, applyAppBootBundleGuard, applyProfileBootBundleGuard } = require('./profile-bundle-heal');
+const { dedupePatchEntries, parseFailedLoaderIds, mapPackagesToPatchIds } = require('./profile-patch-heal');
+const { PROFILE_BUNDLE_GUARD_MARKER, PROFILE_BOOT_GUARD_MARKER, verifyBundleDir, packageDirUpward, scanProfileBundles, recoverManifestBundles, applyAppBootBundleGuard, applyProfileBootBundleGuard } = require('./profile-bundle-heal');
+// 统一补丁引擎与共享数据源（scripts/lib/）：main.js 的运行时补丁、同步脚本
+// 与 after-pack 共用同一实现，杜绝重复与漂移。
+const { COMPANION_PLUGINS } = require('./scripts/lib/companion-plugins');
+const { writeFileAtomic } = require('./scripts/lib/patch-io');
+const { applyPatchToFiles } = require('./scripts/lib/patch-engine');
+const { FLASH_PKG_REL, EXPOSE_PKG_REL, patchTargets, transformFlashFix, transformExposeFix } = require('./scripts/lib/runtime-patches');
+const { ACP_DISABLE_BLOCK, PET_DISABLE_BLOCK, removeLegacyMarketplacePatchLines, ensureDisabledPatchEntry, registerCompanionPatchEntries, syncCompanionFiles } = require('./scripts/lib/companion-profile');
 const { patchWebSearchBaseUrl } = require('./scripts/patch-web-search-baseurl');
 const { patchMenuViewport } = require('./scripts/patch-menu-viewport');
 const { patchSessionManage } = require('./scripts/patch-session-manage');
@@ -185,33 +192,6 @@ function log(tag, msg) {
   const line = `[${new Date().toISOString()}] [${tag}] ${msg}\n`;
   try { if (desktopLog) desktopLog.write(line); } catch {}
   if (process.env.DSH_DESKTOP_DEBUG) process.stdout.write(line);
-}
-
-// 启动提速：运行时补丁对同一物理文件（profile junction 别名、内置副本、
-// overlay 副本）反复整读。按 realpath 归一化 + size/mtime 校验做进程级读
-// 缓存；任何写入都会更新 mtime，缓存自动失效，不存在陈旧内容。
-const fileReadMemo = new Map(); // realpath -> { size, mtimeMs, text }
-const fileRealKeyMemo = new Map(); // path -> realpath（路径本身是固定常量）
-function fileRealKey(file) {
-  let key = fileRealKeyMemo.get(file);
-  if (key === undefined) {
-    try { key = fs.realpathSync(file); } catch { key = file; }
-    fileRealKeyMemo.set(file, key);
-  }
-  return key;
-}
-function readFileCached(file) {
-  try {
-    const st = fs.statSync(file);
-    const key = fileRealKey(file);
-    const hit = fileReadMemo.get(key);
-    if (hit && hit.size === st.size && hit.mtimeMs === st.mtimeMs) return hit.text;
-    const text = fs.readFileSync(file, 'utf8');
-    fileReadMemo.set(key, { size: st.size, mtimeMs: st.mtimeMs, text });
-    return text;
-  } catch {
-    return null;
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -2869,84 +2849,11 @@ function startBalanceLoop() {
 // ---------------------------------------------------------------------------
 // 配套 dsh 插件同步（注入 web profile：余额小部件 + 文件更改追踪/还原）
 // ---------------------------------------------------------------------------
-
-const COMPANION_PLUGINS = [
-  { id: 'balance', name: '@deepseek-ai/dsh-balance' },
-  { id: 'file-changes', name: '@deepseek-ai/dsh-file-changes' },
-  { id: 'client-file-changes', name: '@deepseek-ai/dsh-client-file-changes' },
-  { id: 'terminal', name: '@deepseek-ai/dsh-terminal-tab' },
-  { id: 'plugin-market', name: 'zat-dsh-engine' },
-  { id: 'better-sidebar', name: 'dsh-better-sidebar' },
-  { id: 'harness-pet', name: 'harness-pet' },
-  { id: 'float-window', name: '@deepseek-ai/dsh-float-window' },
-  // 对话节点导航条（vlln/dsh-navbar，MIT）：对话区右缘节点串快速跳转
-  // user 消息（悬停预览/点击跳转/滚轮切换），取代 conversation-tweaks
-  // 内置的会话滑轨。
-  { id: 'dsh-navbar', name: '@vlln/dsh-navbar' },
-  // 对话删除与归档管理（本仓库内置）：会话行菜单删除按钮 + 设置内归档管理
-  // 面板（恢复/删除）。依赖 patch-session-manage.js 的官方包运行时补丁。
-  { id: 'dsh-session-manager', name: 'dsh-session-manager' },
-  { id: 'conversation-tweaks', name: '@deepseek-ai/dsh-conversation-tweaks' },
-  { id: 'super-injector', name: '@dsh-external/dsh-super-injector' },
-  { id: 'prompt-custom', name: '@deepseek-ai/dsh-prompt-custom' },
-  { id: 'third-party-thinking', name: '@deepseek-ai/dsh-third-party-thinking' },
-  { id: 'wsl-settings', name: '@deepseek-ai/dsh-wsl-settings' },
-  { id: 'dsh-vision', name: '@dsh-external/dsh-vision' },
-  { id: 'side-session', name: '@dsh-external/dsh-side-session' },
-  { id: 'compaction-acp', name: 'billion-context-dsh' },
-  { id: 'plugin-manager', name: '@deepseek-ai/dsh-plugin-manager' },
-];
-
-function companionDirName(p) {
-  const slash = p.name.indexOf('/');
-  return slash >= 0 ? p.name.slice(slash + 1) : p.name;
-}
-
-function removeStaleCompanionPlugins(profileModules, expectedDirs) {
-  let entries;
-  try { entries = fs.readdirSync(profileModules, { withFileTypes: true }); } catch { return; }
-  for (const entry of entries) {
-    if (!entry.isDirectory() || expectedDirs.has(entry.name)) continue;
-    const pkgPath = path.join(profileModules, entry.name, 'package.json');
-    let pkg;
-    try { pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')); } catch { continue; }
-    // 只清理「DSH Desktop 配套插件」遗留的旧包名（例如改名为 dsh-terminal-tab
-    // 之前同步进 profile 的 dsh-terminal）。判定依据是该包由本壳层私有同步而来，
-    // 避免误删用户自己安装或官方预设依赖的同名包。
-    if (pkg && pkg.private === true && typeof pkg.description === 'string' && /DSH Desktop/.test(pkg.description)) {
-      try {
-        fs.rmSync(path.join(profileModules, entry.name), { recursive: true, force: true });
-        log('boot', '已清理过期配套插件: ' + entry.name);
-      } catch (err) {
-        log('boot', '清理过期配套插件失败 ' + entry.name + ': ' + err.message);
-      }
-    }
-  }
-}
-
-function removeLegacyMarketplace(profileWebModules, profileDir) {
-  // v0.3.5 起插件市场整体切换为 zat-dsh-engine（MIT）：
-  // 清理旧版 @deepseek-ai/dsh-plugin-marketplace 的同步副本与 patch 行。
-  const oldPkg = path.join(profileWebModules, '@deepseek-ai', 'dsh-plugin-marketplace');
-  try {
-    if (fs.existsSync(oldPkg)) {
-      fs.rmSync(oldPkg, { recursive: true, force: true });
-      log('boot', '已移除旧插件市场包: @deepseek-ai/dsh-plugin-marketplace');
-    }
-  } catch (err) {
-    log('boot', '移除旧插件市场包失败: ' + err.message);
-  }
-  const patchFile = path.join(profileDir, 'cordis.patch.yml');
-  try {
-    let patch = fs.readFileSync(patchFile, 'utf8');
-    const before = patch;
-    patch = patch.replace(/^\s*-\s*insert:\s*$\n^\s*-\s*id:\s*plugin-marketplace\s*$\n^\s*name:\s*['"]@deepseek-ai\/dsh-plugin-marketplace['"]\s*$\n?/gm, '');
-    if (patch !== before) {
-      fs.writeFileSync(patchFile, patch);
-      log('boot', '已从 cordis.patch.yml 移除旧插件市场条目');
-    }
-  } catch {}
-}
+// 配套插件清单 COMPANION_PLUGINS 的唯一数据源在 scripts/lib/companion-plugins.js
+//（与 scripts/sync-companion-plugins.js 共用，杜绝两处清单漂移）。
+// 过期插件清理 / 旧市场清理 / 文件同步 / bundle 校验 / 补丁条目注册等纯逻辑
+// 也统一收口在 scripts/lib/companion-profile.js，本文件只保留与桌面壳耦合的
+// manifest 恢复流程。
 
 // ---------------------------------------------------------------------------
 // profile patch 自愈：cordis.patch.yml 损坏会让 dsh web 装配 profile 时抛错并
@@ -2963,13 +2870,6 @@ function removeLegacyMarketplace(profileWebModules, profileDir) {
 function profilePatchFile() {
   const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
   return path.join(home, 'profiles', 'web', 'cordis.patch.yml');
-}
-
-/** 原子写入（临时文件 + rename），避免与 dsh 的 HMR 观察者撕裂读。 */
-function writePatchAtomic(file, content) {
-  const tmp = file + '.tmp';
-  fs.writeFileSync(tmp, content, 'utf8');
-  fs.renameSync(tmp, file);
 }
 
 // 惰性加载 js-yaml（随内置 dsh 存在于 resources/app/node_modules，传递依赖）；
@@ -3056,7 +2956,7 @@ function healProfilePatch() {
     const hasEntries = /^\s*-\s+(?:id|insert)\s*:/m.test(text);
     if (bareArray && hasEntries) {
       text = text.replace(/^\s*\[\]\s*$\n?/m, '');
-      writePatchAtomic(file, text);
+      writeFileAtomic(file, text);
       log('boot', 'profile patch 自愈: 移除了与列表混存的顶层 []（cordis.patch.yml）');
     }
     const yaml = loadDshYamlDialect();
@@ -3073,7 +2973,7 @@ function healProfilePatch() {
       if (dedupe.removed.length > 0) {
         const backup = file + '.dup-' + Date.now();
         try { fs.copyFileSync(file, backup); } catch {}
-        writePatchAtomic(file, dedupe.text);
+        writeFileAtomic(file, dedupe.text);
         log('boot', 'profile patch 自愈: 移除了重复注册的 loader 条目 ' + [...new Set(dedupe.removed)].join(', ') + '，原文件已备份到 ' + backup);
         text = dedupe.text;
       }
@@ -3111,42 +3011,8 @@ function resolvableCoreBundles() {
   });
 }
 
-// 递归比对 src/dest 的 size+mtime，任一文件缺失或不一致返回 true（需要同步）。
-// dest 目录整体不存在时直接返回 true，避免逐文件 stat 异常。
-function dirNeedsSync(src, dest) {
-  if (!fs.existsSync(dest)) return true;
-  let entries;
-  try { entries = fs.readdirSync(src, { withFileTypes: true }); } catch { return true; }
-  for (const e of entries) {
-    const s = path.join(src, e.name);
-    const d = path.join(dest, e.name);
-    if (e.isDirectory()) {
-      if (dirNeedsSync(s, d)) return true;
-    } else {
-      try {
-        const ss = fs.statSync(s);
-        const ds = fs.statSync(d);
-        if (ds.size !== ss.size || Math.round(ds.mtimeMs) !== Math.round(ss.mtimeMs)) return true;
-      } catch {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-// 目录级同步：内容一致时跳过，避免每次启动全量递归复制
-// （临时目录 + 杀软实时扫描下重复写盘最费时）。cpSync 必须保留时间戳，
-// 否则复制后的 mtime 每次都是"现在"，跳过比对永远不成立。
-function syncDir(src, dest) {
-  if (!fs.existsSync(src)) return;
-  try {
-    if (fs.existsSync(dest) && !dirNeedsSync(src, dest)) return;
-    fs.cpSync(src, dest, { recursive: true, force: true, preserveTimestamps: true });
-  } catch (err) {
-    log('boot', '同步目录失败 ' + src + ': ' + err.message);
-  }
-}
+// 目录级同步（dirNeedsSync + syncDir）收口在 scripts/lib/companion-profile.js，
+// 由 syncCompanionFiles 使用；本文件不再维护副本。
 
 // ---------------------------------------------------------------------------
 // profile bundle 健康检查（只读）：dsh web 启动前把每个 bundles 条目的装配
@@ -3189,110 +3055,45 @@ function syncCompanionPlugins() {
     const home = effectiveDshHome();
     if (!home) { log('boot', 'DSH_HOME 未解析，跳过配套插件同步'); return; }
     const profileDir = path.join(home, 'profiles', 'web');
-    const profileModules = path.join(profileDir, 'node_modules', '@deepseek-ai');
-    fs.mkdirSync(profileModules, { recursive: true });
-    const expectedDirs = new Set(COMPANION_PLUGINS.map(companionDirName));
-    removeStaleCompanionPlugins(profileModules, expectedDirs);
-    removeLegacyMarketplace(path.join(profileDir, 'node_modules'), profileDir);
+    const patchFile = path.join(profileDir, 'cordis.patch.yml');
+    // 插件文件同步 / 过期插件清理 / 旧市场目录清理 / 源缺失扫描 / bundle
+    // 落盘校验：与 scripts/sync-companion-plugins.js 共用 scripts/lib/
+    // companion-profile.js 的同一实现（日志文案经回调保持本函数原有输出）。
+    // 源缺失原则（issue #34 诊断的自愈死循环）：缺失源一律不写 patch 注册
+    //（否则「注册了但包不存在」会让 dsh web 启动崩溃）；若 manifest 仍登记
+    // 为 bundle，则视为用户意图禁用，从 bundles 移除。
+    const { bundleNames, missingNames: missingSourceNames } = syncCompanionFiles({
+      assetsRoot: path.join(__dirname, 'assets', 'plugins'),
+      profileDir,
+      vendorRoot: path.join(__dirname, 'node_modules'),
+      log: (m) => log('boot', m),
+      fail: (m) => log('boot', m),
+      onCopyFail: (sf, err) => log('boot', '同步配套插件文件失败 ' + sf + ': ' + err.message),
+      onVerifyFail: (name, reason) => log('boot', '配套 bundle 校验失败（按源缺失处理，不注册）: ' + name + ' —— ' + reason),
+    });
 
-    // 源缺失的配套插件（用户从 assets 删除 / 开发中裁剪 / 安装包损坏）：
-    // 既不能复制、也无法从源码确认 bundle 身份。处理原则（issue #34 诊断
-    // 的自愈死循环）：缺失源一律不写 patch 注册（否则「注册了但包不存在」
-    // 会让 dsh web 启动崩溃）；若 manifest 仍登记为 bundle，则视为用户
-    // 意图禁用，从 bundles 移除。
-    const missingSourceNames = new Set();
-    for (const p of COMPANION_PLUGINS) {
-      const sdir = path.join(__dirname, 'assets', 'plugins', companionDirName(p));
-      if (!fs.existsSync(path.join(sdir, 'package.json'))) missingSourceNames.add(p.name);
-    }
-
-    const bundleNames = new Set();
-    const copyFiles = [
-      'package.json', 'cordis.patch.yml', 'LICENSE', 'README.md', 'README.zh.md',
-      'lib/index.js', 'lib/index.mjs', 'lib/client.js', 'lib/vlm.js', 'lib/typert.host.js', 'lib/typert.host.d.ts',
-      'dsh.plugin.json',
-    ];
-    // 配套插件引用了不在 dsh 核心依赖闭包里的 npm 包时（例如 dsh-better-sidebar
-    // 使用的 schemastery / cosmokit），把内置副本一并落到 profile web node_modules，
-    // 保证 bundle 的宿主端能在 profile 内解析到这些依赖。
-    const vendorDeps = ['schemastery', 'cosmokit', '@standard-schema/spec'];
-    for (const name of vendorDeps) {
-      const sdir = path.join(__dirname, 'node_modules', name);
-      if (!fs.existsSync(sdir)) continue;
-      syncDir(sdir, path.join(profileDir, 'node_modules', name));
-    }
-    for (const p of COMPANION_PLUGINS) {
-      const rel = companionDirName(p);
-      const src = path.join(__dirname, 'assets', 'plugins', rel);
-      if (!fs.existsSync(path.join(src, 'package.json'))) continue;
-      let pkg = {};
-      try { pkg = JSON.parse(fs.readFileSync(path.join(src, 'package.json'), 'utf8')); } catch {}
-      const isBundle = bundlePatchRel(pkg) !== '';
-      // @deepseek-ai 与 @dsh-external 两种 scope 都按包名落到 profile 的
-      // node_modules 下；配套包自身的依赖由 dsh 的 profiles/node_modules
-      // fallback（healProfilesModuleFallback）解析。
-      const dest = path.join(profileModules, '..', p.name);
-      fs.mkdirSync(path.join(dest, 'lib'), { recursive: true });
-      for (const f of copyFiles) {
-        const sf = path.join(src, f);
-        if (!fs.existsSync(sf)) continue;
-        const df = path.join(dest, f);
-        // 逐文件比对大小+mtime，一致则跳过复制，避免每次启动都写盘
-        // （临时目录 + 杀软实时扫描下重复写入最费时）。注意 fs.copyFileSync
-        // 不保留时间戳（复制的目标 mtime=现在），会让比对永远不成立；这里
-        // 用 cpSync + preserveTimestamps 写，保证第二次启动能命中跳过。
-        try {
-          const sst = fs.statSync(sf);
-          const dst = fs.statSync(df);
-          if (dst.size === sst.size && Math.round(dst.mtimeMs) === Math.round(sst.mtimeMs)) continue;
-        } catch { /* 目标缺失或不可读 → 照常复制 */ }
-        try {
-          fs.cpSync(sf, df, { force: true, preserveTimestamps: true });
-        } catch (err) {
-          log('boot', '同步配套插件文件失败 ' + sf + ': ' + err.message);
-        }
+    // v0.3.5 起插件市场整体切换为 zat-dsh-engine（MIT）：清理旧版
+    // @deepseek-ai/dsh-plugin-marketplace 的 patch 行（幂等）。
+    try {
+      let legacyPatch = fs.readFileSync(patchFile, 'utf8');
+      const legacy = removeLegacyMarketplacePatchLines(legacyPatch);
+      if (legacy.changed) {
+        writeFileAtomic(patchFile, legacy.patch);
+        log('boot', '已从 cordis.patch.yml 移除旧插件市场条目');
       }
-      // 完整同步插件自带的 lib/assets/src/dist/node_modules 目录：第三方插件
-      // （如 dsh-better-sidebar 的懒加载 chunk、harness-pet 的动画素材、
-      // billion-context-dsh 的 dist 构建产物）不都落在固定文件清单里，递归
-      // 复制保证打包产物与资源随插件一起进 profile；node_modules 用于随包
-      // 分发插件的私有依赖（如 billion-context-dsh 的 acp-kernel），保证
-      // bundle 在 profile 内可解析。
-      for (const sub of ['lib', 'assets', 'src', 'dist', 'node_modules']) {
-        syncDir(path.join(src, sub), path.join(dest, sub));
-      }
-      // Bundle 插件不写 patch 行：dsh 在启动时读取 profile 的
-      // dsh.profile.bundles 并应用包内 cordis.patch.yml。
-      if (isBundle) {
-        // 落盘后校验 bundle 完整性：dsh 装配时会读取补丁层与入口文件，任一
-        // 缺失都会让整棵插件树加载失败（billion-context-dsh 上游缺 dist 构建
-        // 产物正是这类崩溃）。校验失败按「源缺失」处理：不注册、从 manifest
-        // 移除登记、日志告警，下次启动重试。
-        const check = verifyBundleDir(dest);
-        if (!check.ok) {
-          missingSourceNames.add(p.name);
-          log('boot', '配套 bundle 校验失败（按源缺失处理，不注册）: ' + p.name + ' —— ' + check.reason);
-        } else {
-          bundleNames.add(p.name);
-        }
-      }
-    }
+    } catch {}
 
     // billion-context-dsh（compaction-acp）是模型驱动的 ACP 压缩后端：同一
     // realm 内与 dsh 默认的 compaction-basic 不能并存（插件 README 的官方
     // 安装说明）。幂等写入禁用条目：patch 中已存在 compaction-basic 条目
     // （含用户手写的 disabled 块）则不动，尊重用户配置。
     if (bundleNames.has('billion-context-dsh')) {
-      const acpPatchFile = path.join(profileDir, 'cordis.patch.yml');
       try {
         let patch = '';
-        try { patch = fs.readFileSync(acpPatchFile, 'utf8'); } catch { /* 全新 profile：patch 文件尚未创建，视为空 */ }
-        if (!/(?:^|\n)\s*-?\s*id\s*:\s*compaction-basic\b/.test('\n' + patch)) {
-          const block = '\n# billion-context-dsh：禁用 preset realm 的 compaction-basic（ACP 模型驱动后端接管压缩决策）\n- id: compaction-basic\n  disabled: true\n';
-          if (/^\s*\[\]\s*$/m.test(patch)) patch = patch.replace(/\[\]/m, block.trim());
-          else if (patch.trim() === '') patch = '# dsh web profile patch（由 DSH Desktop 维护）\n' + block.trim();
-          else patch = patch.replace(/\s*$/, '\n') + block;
-          fs.writeFileSync(acpPatchFile, patch);
+        try { patch = fs.readFileSync(patchFile, 'utf8'); } catch { /* 全新 profile：patch 文件尚未创建，视为空 */ }
+        const entry = ensureDisabledPatchEntry(patch, new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*compaction-basic\\b'), ACP_DISABLE_BLOCK);
+        if (entry.changed) {
+          writeFileAtomic(patchFile, entry.patch);
           log('boot', '已禁用 compaction-basic（billion-context-dsh 接管压缩后端）');
         }
       } catch (err) {
@@ -3300,22 +3101,18 @@ function syncCompanionPlugins() {
       }
     }
 
-    // 桌面宠物（harness-pet）默认关闭：客户端常驻 rAF 逐帧绘制 320x320
-    // canvas（issue #34 诊断为软渲染/流式输出下的持续阻塞源），且旧版保存的
-    // 开关值会覆盖客户端默认。插件级 disabled 条目一票否决任何已保存状态；
-    // 需要时可在 设置 → 插件 → 管理 一键开启（与 dsh-plugin-manager 同机制）。
-    // 幂等：patch 中已存在 harness-pet 条目（含用户手写）则不动，尊重用户配置。
+    // 桌面宠物（harness-pet）默认关闭：客户端常驻 rAF 逐帧绘制 canvas（issue
+    // #34 诊断为软渲染/流式输出下的持续阻塞源），且旧版保存的开关值会覆盖
+    // 客户端默认。插件级 disabled 条目一票否决任何已保存状态；需要时可在
+    // 设置 → 插件 → 管理 一键开启（与 dsh-plugin-manager 同机制）。幂等：
+    // patch 中已存在 harness-pet 条目（含用户手写）则不动，尊重用户配置。
     if (bundleNames.has('harness-pet')) {
-      const petPatchFile = path.join(profileDir, 'cordis.patch.yml');
       try {
         let patch = '';
-        try { patch = fs.readFileSync(petPatchFile, 'utf8'); } catch { /* 全新 profile：patch 文件尚未创建，视为空 */ }
-        if (!/(?:^|\n)\s*-?\s*id\s*:\s*harness-pet\b/.test('\n' + patch)) {
-          const block = '\n# harness-pet：桌面宠物默认关闭（设置 → 插件 → 管理 可一键开启）\n- id: harness-pet\n  disabled: true\n';
-          if (/^\s*\[\]\s*$/m.test(patch)) patch = patch.replace(/\[\]/m, block.trim());
-          else if (patch.trim() === '') patch = '# dsh web profile patch（由 DSH Desktop 维护）\n' + block.trim();
-          else patch = patch.replace(/\s*$/, '\n') + block;
-          fs.writeFileSync(petPatchFile, patch);
+        try { patch = fs.readFileSync(patchFile, 'utf8'); } catch { /* 全新 profile：patch 文件尚未创建，视为空 */ }
+        const entry = ensureDisabledPatchEntry(patch, new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*harness-pet\\b'), PET_DISABLE_BLOCK);
+        if (entry.changed) {
+          writeFileAtomic(patchFile, entry.patch);
           log('boot', '已默认关闭桌面宠物（harness-pet，可在插件管理开启）');
         }
       } catch (err) {
@@ -3371,7 +3168,7 @@ function syncCompanionPlugins() {
       const healed = ensureCoreBundles(manifest.dsh.profile.bundles, resolvableCoreBundles());
       if (healed) {
         manifest.dsh.profile.bundles = healed.next;
-        writePatchAtomic(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
+        writeFileAtomic(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
         log('boot', 'profile manifest 自愈: 旧版本写坏的 bundles 缺少核心 ' + healed.added.join(', ') + '，已补齐到最前');
       }
     }
@@ -3379,7 +3176,7 @@ function syncCompanionPlugins() {
       if (!bundlesUsable) break;
       if (!manifest.dsh.profile.bundles.includes(name)) {
         manifest.dsh.profile.bundles.push(name);
-        writePatchAtomic(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
+        writeFileAtomic(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
         log('boot', '已把 bundle 插件加入 web profile bundles: ' + name);
       }
     }
@@ -3390,7 +3187,7 @@ function syncCompanionPlugins() {
       const before = manifest.dsh.profile.bundles.length;
       manifest.dsh.profile.bundles = manifest.dsh.profile.bundles.filter((n) => !missingSourceNames.has(n));
       if (manifest.dsh.profile.bundles.length !== before) {
-        writePatchAtomic(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
+        writeFileAtomic(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
         log('boot', '配套 bundle 源缺失，已从 web profile bundles 移除（视为禁用）: ' + [...missingSourceNames].join(', '));
       }
     }
@@ -3404,7 +3201,7 @@ function syncCompanionPlugins() {
         new Set([...CORE_BUNDLE_NAMES, ...COMPANION_PLUGINS.map((p) => p.name)]),
       ));
       if (recovered.length > 0) {
-        writePatchAtomic(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
+        writeFileAtomic(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
         log('boot', 'profile manifest 重置后已恢复用户安装的 bundle 插件: ' + recovered.join(', '));
       } else {
         log('boot', 'profile manifest 已重置（原文件已备份），未发现需要恢复的用户 bundle');
@@ -3412,73 +3209,21 @@ function syncCompanionPlugins() {
       notifyManifestResetRecovered(recovered);
     }
 
-    // 非 bundle 插件注册到 profile 的 patch 层（幂等）。
-    const patchFile = path.join(profileDir, 'cordis.patch.yml');
+    // 非 bundle 插件注册到 profile 的 patch 层（幂等）。bundle 迁移自愈
+    //（issue #17 同族：升级为 bundle 的插件残留 insert 行会造成同 id 双登记）、
+    // 源缺失残留移除、用户已有条目尊重与 name 就地改名统一收口在共享实现
+    // registerCompanionPatchEntries（与 scripts/sync-companion-plugins.js 同一
+    // 数据源；用户手写的 config/disabled 覆盖条目由 dropBlocksByIds 语义原样保留）。
     let patch = '';
     try { patch = fs.readFileSync(patchFile, 'utf8'); } catch { patch = ''; }
-    let changed = false;
-    // bundle 迁移自愈（issue #17 同族）：旧版本把后来升级为 bundle 的配套插件
-    // 当非 bundle 写进了 patch（insert 行）；插件现经 dsh.profile.bundles 装配，
-    // 残留注册行会造成同 id 双登记 → cordis loader "duplicate loader entry id" →
-    // 整树加载失败（更新后首次启动崩溃）。幂等移除命中的注册行/块；用户手写
-    // 的 config 覆盖/disabled 禁用条目原样保留（PR #24 v2）。
-    const bundleIds = new Set();
-    for (const p of COMPANION_PLUGINS) {
-      if (bundleNames.has(p.name)) bundleIds.add(p.id);
-    }
-    if (bundleIds.size > 0 && patch.includes('- id:')) {
-      const migration = dropBlocksByIds(patch, [...bundleIds]);
-      if (migration.removed.length > 0) {
-        patch = migration.text;
-        changed = true;
-        log('boot', '已把 bundle 插件移出 profile patch（避免双登记）: ' + [...new Set(migration.removed)].join(', '));
-      }
-    }
-    // 源缺失插件的旧注册残留同样移除：不清理的话 loader 仍会尝试加载
-    // 不存在的包（issue #34 诊断的「Cannot find package」崩溃）；用户手写
-    // 的 config/disabled 覆盖条目由 dropBlocksByIds 语义原样保留。
-    if (missingSourceNames.size > 0 && patch.includes('- id:')) {
-      const missingIds = COMPANION_PLUGINS.filter((p) => missingSourceNames.has(p.name)).map((p) => p.id);
-      if (missingIds.length > 0) {
-        const drop = dropBlocksByIds(patch, missingIds);
-        if (drop.removed.length > 0) {
-          patch = drop.text;
-          changed = true;
-          log('boot', '已把源缺失插件移出 profile patch（避免注册不存在的包）: ' + [...new Set(drop.removed)].join(', '));
-        }
-      }
-    }
-    for (const p of COMPANION_PLUGINS) {
-      if (bundleNames.has(p.name)) continue;
-      // 源缺失：不写任何注册（复制循环已跳过它），避免「注册了但包不存在」
-      // 导致 dsh web 启动崩溃。
-      if (missingSourceNames.has(p.name)) continue;
-      // 该 id 在 patch 里已存在：若它现在的 name 与当前版本不一致（例如终端
-      // 包改名 @deepseek-ai/dsh-terminal → dsh-terminal-tab），就地改名为当前
-      // 值。否则旧名残留会让配套插件与 agent 内置终端重复注册路由、或加载
-      // 到已不属于本版本的包。只改 name 行，不动用户自己加的其它行。
-      const idNameRe = new RegExp('(id:\\s*' + p.id + '\\b[^\\n]*\\n\\s*name:\\s*\\x27)([^\\x27]*)(\\x27)');
-      const m = patch.match(idNameRe);
-      if (m) {
-        if (m[2] !== p.name) {
-          patch = patch.replace(idNameRe, '$1' + p.name + '$3');
-          changed = true;
-        }
-        continue;
-      }
-      // 尊重用户已有配置：id 只要出现过（例如用户手写的 disabled 条目）就不再
-      // 自动插入，避免「禁用后下次启动又被加回来」或同 id 重复条目导致 loader 报错。
-      if (new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*' + p.id + '\\b').test('\n' + patch)) {
-        continue;
-      }
-      const block = `- insert:\n    - id: ${p.id}\n      name: '${p.name}'\n`;
-      if (/^\s*\[\]\s*$/m.test(patch)) patch = patch.replace(/\[\]/m, block);
-      else if (patch.trim() === '') patch = '# dsh web profile patch（由 DSH Desktop 维护）\n' + block;
-      else patch = patch.replace(/\s*$/, '\n') + block;
-      changed = true;
-    }
-    if (changed) {
-      fs.writeFileSync(patchFile, patch);
+    const registration = registerCompanionPatchEntries(patch, {
+      plugins: COMPANION_PLUGINS,
+      bundleNames,
+      missingNames: missingSourceNames,
+      onDrop: (m) => log('boot', m),
+    });
+    if (registration.changed) {
+      writeFileAtomic(patchFile, registration.patch);
       log('boot', '已同步配套插件到 web profile: ' + COMPANION_PLUGINS.map((p) => p.id).join(', '));
     }
   } catch (err) {
@@ -3633,7 +3378,7 @@ function pluginManagerSetEnabled(id, enabled) {
     return { ok: false, error: String((err && err.message) || err) };
   }
   if (patched !== text) {
-    try { writePatchAtomic(file, patched); } catch (err) { return { ok: false, error: String((err && err.message) || err) }; }
+    try { writeFileAtomic(file, patched); } catch (err) { return { ok: false, error: String((err && err.message) || err) }; }
   }
   return { ok: true };
 }
@@ -3689,6 +3434,44 @@ function syncLocalAgentPresets() {
 }
 
 // ---------------------------------------------------------------------------
+// 运行时补丁候选路径（与旧实现逐项一致，仅消除逐函数复制的 path.join 样板）：
+//   本地模式三副本 = profile fallback（junction 写穿内置副本）→ 内置 app 副本
+//   → 用户更新过的 agent overlay；防护类补丁（app-boot / settings / workspace）
+//   另覆盖 overlay 嵌套 dsh 依赖副本，且内置副本优先。
+//   WSL 托管模式目标 = WSL 安装目录（profile fallback + agent，经 UNC 写穿），
+//   由 scripts/lib/runtime-patches.js 的 patchTargets 统一构造。
+// ---------------------------------------------------------------------------
+function runtimeCopyFiles(pkgRel) {
+  const home = dshHome || path.join(os.homedir(), '.dsh');
+  return [
+    path.join(home, 'profiles', 'node_modules', '@deepseek-ai', pkgRel),
+    path.join(__dirname, 'node_modules', '@deepseek-ai', pkgRel),
+    path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', pkgRel),
+  ];
+}
+
+function runtimeGuardFiles(pkgRel) {
+  const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
+  return [
+    path.join(__dirname, 'node_modules', '@deepseek-ai', pkgRel),
+    path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', pkgRel),
+    path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', '@deepseek-ai', pkgRel),
+    path.join(home, 'profiles', 'node_modules', '@deepseek-ai', pkgRel),
+  ];
+}
+
+// node_modules 根目录版本（web-search / menu-viewport / session-manage 三个
+// 包级补丁用）：WSL 模式下 home 为 UNC 等价路径（经 UNC 覆盖 WSL profile）。
+function runtimeNodeModulesRoots() {
+  const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
+  return [
+    path.join(home, 'profiles', 'node_modules'),
+    path.join(__dirname, 'node_modules'),
+    path.join(userDataDir, 'agent', 'node_modules'),
+  ];
+}
+
+// ---------------------------------------------------------------------------
 // dsh web 运行时闪跳修复：官方 dsh-client-runtime 在会话列表刷新
 // （mergeOrderedBaseline）时会丢弃「本地已创建、宿主全量列表尚未回显」的
 // 新会话，使 current 瞬时变 undefined，UI 闪回「选择工作区/无会话」状态。
@@ -3699,32 +3482,18 @@ function applyRuntimeFlashFix() {
   // wsl 托管模式目标换成 WSL 安装目录（profile fallback + agent，经 UNC 写穿，
   // fallback 符号链接未创建时由 agent 直连目标兜底）。
   const wslHome = effectiveDshHome();
-  const targets = isWslMode()
-    ? [
-        path.join(wslHome, 'profiles', 'node_modules', '@deepseek-ai', 'dsh-client-runtime', 'lib', 'client.js'),
-        path.join(wslHome, 'agent', 'node_modules', '@deepseek-ai', 'dsh-client-runtime', 'lib', 'client.js'),
-      ]
-    : [
-        path.join(dshHome || path.join(os.homedir(), '.dsh'), 'profiles', 'node_modules', '@deepseek-ai', 'dsh-client-runtime', 'lib', 'client.js'),
-        path.join(__dirname, 'node_modules', '@deepseek-ai', 'dsh-client-runtime', 'lib', 'client.js'),
-        path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', 'dsh-client-runtime', 'lib', 'client.js'),
-      ];
-  const oldPat = '(value) => baselineByKey.get(keyOf(value))).filter((value) => value !== void 0);';
-  const newPat = '(value) => baselineByKey.get(keyOf(value)) ?? value).filter((value) => value !== void 0);';
-  for (const file of targets) {
-    if (!file || !fs.existsSync(file)) continue;
-    try {
-      let src = readFileCached(file);
-      if (src === null) { log('boot', 'runtime 补丁: 读取失败，跳过 ' + file); continue; }
-      if (src.includes(newPat)) { log('boot', 'runtime 补丁: 已应用，跳过 ' + file); continue; }
-      if (!src.includes(oldPat)) { log('boot', 'runtime 补丁: 未匹配到目标代码（版本可能已变更），跳过 ' + file); continue; }
-      src = src.replace(oldPat, newPat);
-      fs.writeFileSync(file, src, { encoding: 'utf8' });
-      log('boot', 'runtime 补丁: 已修复会话列表刷新闪跳 ' + file);
-    } catch (err) {
-      log('boot', 'runtime 补丁失败(' + file + '): ' + err.message);
-    }
-  }
+  const files = isWslMode()
+    ? patchTargets(wslHome, FLASH_PKG_REL)
+    : runtimeCopyFiles(FLASH_PKG_REL);
+  applyPatchToFiles({
+    prefix: 'runtime 补丁',
+    files,
+    log: (m) => log('boot', m),
+    transform: transformFlashFix,
+    alreadyLog: (file) => '已应用，跳过 ' + file,
+    doneLog: (file) => '已修复会话列表刷新闪跳 ' + file,
+    failLog: (file, err) => 'runtime 补丁失败(' + file + '): ' + err.message,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -3741,47 +3510,18 @@ function applyPromptExposeFix() {
   // 覆盖运行副本：profile fallback、内置 app 副本、更新 overlay；
   // wsl 托管模式目标换成 WSL 安装目录（profile fallback + agent，经 UNC 写穿）。
   const wslHome = effectiveDshHome();
-  const targets = isWslMode()
-    ? [
-        path.join(wslHome, 'profiles', 'node_modules', '@deepseek-ai', 'dsh-host-apiproxy', 'lib', 'index.js'),
-        path.join(wslHome, 'agent', 'node_modules', '@deepseek-ai', 'dsh-host-apiproxy', 'lib', 'index.js'),
-      ]
-    : [
-        path.join(dshHome || path.join(os.homedir(), '.dsh'), 'profiles', 'node_modules', '@deepseek-ai', 'dsh-host-apiproxy', 'lib', 'index.js'),
-        path.join(__dirname, 'node_modules', '@deepseek-ai', 'dsh-host-apiproxy', 'lib', 'index.js'),
-        path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', 'dsh-host-apiproxy', 'lib', 'index.js'),
-      ];
-  const namespaces = ['dsh-prompt', 'dsh-third-party-thinking', 'dsh-vision', 'dsh-conversation-tweaks'];
-  for (const file of targets) {
-    if (!file || !fs.existsSync(file)) continue;
-    try {
-      let src = readFileCached(file);
-      if (src === null) { log('boot', '提示词暴露补丁: 读取失败，跳过 ' + file); continue; }
-      const declIdx = src.indexOf('const WEB_SETTINGS_NAMESPACES = [');
-      if (declIdx === -1) {
-        log('boot', '提示词暴露补丁: 未找到 WEB_SETTINGS_NAMESPACES（版本可能已变更），跳过 ' + file);
-        continue;
-      }
-      // 只认声明之后最近的 `];`，避免插进文件里其它数组。
-      const closeIdx = src.indexOf('];', declIdx);
-      if (closeIdx === -1) {
-        log('boot', '提示词暴露补丁: 未匹配到命名空间数组收尾，跳过 ' + file);
-        continue;
-      }
-      const arrText = src.slice(declIdx, closeIdx);
-      const missing = namespaces.filter((ns) => !arrText.includes('"' + ns + '"'));
-      if (missing.length === 0) {
-        log('boot', '提示词暴露补丁: 已应用，跳过 ' + file);
-        continue;
-      }
-      const block = ',\n' + missing.map((ns) => '\t"' + ns + '"').join(',\n') + '\n';
-      src = src.slice(0, closeIdx) + block + src.slice(closeIdx);
-      fs.writeFileSync(file, src, { encoding: 'utf8' });
-      log('boot', '提示词暴露补丁: 已把 ' + missing.join(', ') + ' 加入设置白名单 ' + file);
-    } catch (err) {
-      log('boot', '提示词暴露补丁失败(' + file + '): ' + err.message);
-    }
-  }
+  const files = isWslMode()
+    ? patchTargets(wslHome, EXPOSE_PKG_REL)
+    : runtimeCopyFiles(EXPOSE_PKG_REL);
+  applyPatchToFiles({
+    prefix: '提示词暴露补丁',
+    files,
+    log: (m) => log('boot', m),
+    transform: transformExposeFix,
+    alreadyLog: (file) => '已应用，跳过 ' + file,
+    doneLog: (file, note) => '已把 ' + note.join(', ') + ' 加入设置白名单 ' + file,
+    failLog: (file, err) => '提示词暴露补丁失败(' + file + '): ' + err.message,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -3791,11 +3531,6 @@ function applyPromptExposeFix() {
 // 详细文字（含 OCR）后再发送，文本模型也能“看图”。幂等，覆盖三处运行副本。
 // ---------------------------------------------------------------------------
 function applyImageSendFix() {
-  const targets = [
-    path.join(dshHome || path.join(os.homedir(), '.dsh'), 'profiles', 'node_modules', '@deepseek-ai', 'dsh-host-apiproxy', 'lib', 'index.js'),
-    path.join(__dirname, 'node_modules', '@deepseek-ai', 'dsh-host-apiproxy', 'lib', 'index.js'),
-    path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', 'dsh-host-apiproxy', 'lib', 'index.js'),
-  ];
   const HELPER_MARKER = 'async function describeImagesWithVision(ctx, content)';
   const HELPER_ANCHOR = '/** Validate one prompt as a batch before publishing any durable image object. */';
   const HELPER = `
@@ -3875,54 +3610,46 @@ async function describeImagesWithVision(ctx, content) {
 							}
 						}`;
 
-  for (const file of targets) {
-    if (!file || !fs.existsSync(file)) continue;
-    try {
-      let src = readFileCached(file);
-      if (src === null) { log('boot', '识图发送补丁: 读取失败，跳过 ' + file); continue; }
-      if (src.includes(HELPER_MARKER)) {
-        log('boot', '识图发送补丁: 已应用，跳过 ' + file);
-        continue;
-      }
+  applyPatchToFiles({
+    prefix: '识图发送补丁',
+    files: runtimeCopyFiles(EXPOSE_PKG_REL),
+    log: (m) => log('boot', m),
+    transform: (src, file) => {
+      if (src.includes(HELPER_MARKER)) return { status: 'already' };
       // 1) 插入转述 helper（此后所有索引必须基于插入后的 src 重新计算）
       const anchorIdx = src.indexOf(HELPER_ANCHOR);
       if (anchorIdx === -1) {
-        log('boot', '识图发送补丁: 未找到 helper 插入锚点（版本可能已变更），跳过 ' + file);
-        continue;
+        return { status: 'anchor-missing', detail: '未找到 helper 插入锚点（版本可能已变更），跳过 ' + file };
       }
       src = src.slice(0, anchorIdx) + HELPER + '\n' + src.slice(anchorIdx);
       // 2) prompt 入口：声明 admittedContent
       const hasImageIdx = src.indexOf('const hasImage = content.some((part) => part.type === "image");');
       if (hasImageIdx === -1) {
-        log('boot', '识图发送补丁: 未找到 hasImage 入口（版本可能已变更），跳过 ' + file);
-        continue;
+        return { status: 'anchor-missing', detail: '未找到 hasImage 入口（版本可能已变更），跳过 ' + file };
       }
       src = src.slice(0, hasImageIdx) + 'let admittedContent = content;\n\t\t\t\t' + src.slice(hasImageIdx);
       // 3) 把“模型不支持图片”的直接拒绝替换为自动转述
       const gateIdx = src.indexOf(GATE_MARKER);
       if (gateIdx === -1) {
-        log('boot', '识图发送补丁: 未找到模型图片门槛（版本可能已变更），跳过 ' + file);
-        continue;
+        return { status: 'anchor-missing', detail: '未找到模型图片门槛（版本可能已变更），跳过 ' + file };
       }
       const gateEnd = src.indexOf('});', gateIdx);
       if (gateEnd === -1) {
-        log('boot', '识图发送补丁: 图片门槛收尾异常，跳过 ' + file);
-        continue;
+        return { status: 'anchor-missing', detail: '图片门槛收尾异常，跳过 ' + file };
       }
       src = src.slice(0, gateIdx) + GATE_NEW + src.slice(gateEnd + 3);
       // 4) durablePromptContent 使用转述后的内容（从门槛之后查找调用点，避免命中函数定义）
       const callIdx = src.indexOf('durablePromptContent(ctx, content)', gateIdx);
       if (callIdx === -1) {
-        log('boot', '识图发送补丁: 未找到 durablePromptContent 调用，跳过 ' + file);
-        continue;
+        return { status: 'anchor-missing', detail: '未找到 durablePromptContent 调用，跳过 ' + file };
       }
       src = src.slice(0, callIdx) + 'durablePromptContent(ctx, admittedContent)' + src.slice(callIdx + 'durablePromptContent(ctx, content)'.length);
-      fs.writeFileSync(file, src, { encoding: 'utf8' });
-      log('boot', '识图发送补丁: 已启用文本模型图片自动转述 ' + file);
-    } catch (err) {
-      log('boot', '识图发送补丁失败(' + file + '): ' + err.message);
-    }
-  }
+      return { status: 'changed', src };
+    },
+    alreadyLog: (file) => '已应用，跳过 ' + file,
+    doneLog: (file) => '已启用文本模型图片自动转述 ' + file,
+    failLog: (file, err) => '识图发送补丁失败(' + file + '): ' + err.message,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -3937,25 +3664,21 @@ function applyVisionKeyFix() {
   const guardMarker = 'dsh-desktop fix: read the resolved HOST-side value';
   const from = '\tlet vision = null;\n\tif (settings !== void 0 && typeof settings.describe === "function") {\n\t\ttry {\n\t\t\tconst descriptor = settings.describe({ redactSecrets: true }).find((candidate) => String(candidate.ns) === "dsh-vision");\n\t\t\tif (descriptor !== void 0 && descriptor.value !== void 0 && typeof descriptor.value === "object") vision = descriptor.value;\n\t\t} catch {}\n\t}';
   const to = '\tlet vision = null;\n\tif (settings !== void 0 && typeof settings.get === "function") {\n\t\t// dsh-desktop fix: read the resolved HOST-side value (settings.get), not the\n\t\t// redacted wire snapshot. redactSecrets strips role(\'secret\') fields, so\n\t\t// describe({redactSecrets:true}) drops apiKey and every keyed VLM endpoint\n\t\t// answers 401 — image sends failed for configured users.\n\t\tconst resolved = settings.get("dsh-vision");\n\t\tif (resolved !== void 0 && typeof resolved === "object") vision = resolved;\n\t}\n\tif (vision === null && settings !== void 0 && typeof settings.describe === "function") {\n\t\ttry {\n\t\t\tconst descriptor = settings.describe({ redactSecrets: true }).find((candidate) => String(candidate.ns) === "dsh-vision");\n\t\t\tif (descriptor !== void 0 && descriptor.value !== void 0 && typeof descriptor.value === "object") vision = descriptor.value;\n\t\t} catch {}\n\t}';
-  const targets = [
-    path.join(dshHome || path.join(os.homedir(), '.dsh'), 'profiles', 'node_modules', '@deepseek-ai', 'dsh-host-apiproxy', 'lib', 'index.js'),
-    path.join(__dirname, 'node_modules', '@deepseek-ai', 'dsh-host-apiproxy', 'lib', 'index.js'),
-    path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', 'dsh-host-apiproxy', 'lib', 'index.js'),
-  ];
-  for (const file of targets) {
-    if (!file || !fs.existsSync(file)) continue;
-    try {
-      let src2 = readFileCached(file);
-      if (src2 === null) { log('boot', '识图密钥补丁: 读取失败，跳过 ' + file); continue; }
-      if (src2.includes(guardMarker)) { log('boot', '识图密钥补丁: 已应用，跳过 ' + file); continue; }
-      if (!src2.includes(from)) { log('boot', '识图密钥补丁: 锚点未匹配（版本可能已变化），跳过 ' + file); continue; }
-      src2 = src2.replace(from, to);
-      fs.writeFileSync(file, src2, { encoding: 'utf8' });
-      log('boot', '识图密钥补丁: 已修复 apiKey 被脱敏截断 ' + file);
-    } catch (err) {
-      log('boot', '识图密钥补丁失败(' + file + '): ' + err.message);
-    }
-  }
+  applyPatchToFiles({
+    prefix: '识图密钥补丁',
+    files: runtimeCopyFiles(EXPOSE_PKG_REL),
+    log: (m) => log('boot', m),
+    transform: (src, file) => {
+      if (src.includes(guardMarker)) return { status: 'already' };
+      if (!src.includes(from)) {
+        return { status: 'anchor-missing', detail: '锚点未匹配（版本可能已变化），跳过 ' + file };
+      }
+      return { status: 'changed', src: src.replace(from, to) };
+    },
+    alreadyLog: (file) => '已应用，跳过 ' + file,
+    doneLog: (file) => '已修复 apiKey 被脱敏截断 ' + file,
+    failLog: (file, err) => '识图密钥补丁失败(' + file + '): ' + err.message,
+  });
 }
 // ---------------------------------------------------------------------------
 // dsh 装配层防护：profile 自有的 cordis.patch.yml 属于用户数据，dsh 官方设计是
@@ -3988,31 +3711,21 @@ function applyProfilePatchGuard() {
     '\t\treturn [];\n' +
     '\t}\n' +
     '}';
-  const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
-  const candidates = [
-    path.join(__dirname, 'node_modules', '@deepseek-ai', 'dsh-app-boot', 'lib', 'index.js'),
-    path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', 'dsh-app-boot', 'lib', 'index.js'),
-    path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', '@deepseek-ai', 'dsh-app-boot', 'lib', 'index.js'),
-    path.join(home, 'profiles', 'node_modules', '@deepseek-ai', 'dsh-app-boot', 'lib', 'index.js'),
-  ];
-  for (const file of candidates) {
-    if (!fs.existsSync(file)) continue;
-    try {
-      let src = readFileCached(file);
-      if (src === null) { log('boot', 'profile patch 防护: 读取失败，跳过 ' + file); continue; }
-      if (src.includes(guardMarker)) continue; // 已应用（幂等）
+  applyPatchToFiles({
+    prefix: 'profile patch 防护',
+    files: runtimeGuardFiles(path.join('dsh-app-boot', 'lib', 'index.js')),
+    log: (m) => log('boot', m),
+    transform: (src, file) => {
+      if (src.includes(guardMarker)) return { status: 'already' }; // 已应用（幂等，静默）
       if (!src.includes(callSite) || !src.includes(insertAfter)) {
-        log('boot', 'profile patch 防护: ' + file + ' 锚点未匹配（dsh 版本可能已变化），跳过');
-        continue;
+        return { status: 'anchor-missing', detail: file + ' 锚点未匹配（dsh 版本可能已变化），跳过' };
       }
-      src = src.replace(callSite, callReplacement);
-      src = src.replace(insertAfter, insertAfter + '\n\n' + injected);
-      fs.writeFileSync(file, src, { encoding: 'utf8' });
-      log('boot', 'profile patch 防护: 已注入自愈加载到 ' + file);
-    } catch (err) {
-      log('boot', 'profile patch 防护失败: ' + err.message);
-    }
-  }
+      const out = src.replace(callSite, callReplacement);
+      return { status: 'changed', src: out.replace(insertAfter, insertAfter + '\n\n' + injected) };
+    },
+    doneLog: (file) => '已注入自愈加载到 ' + file,
+    failLog: (file, err) => 'profile patch 防护失败: ' + err.message,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -4027,58 +3740,57 @@ function applyProfilePatchGuard() {
 // profile-bundle-heal.js；dsh 更新后本函数会在下次启动重新应用。
 // ---------------------------------------------------------------------------
 function applyProfileBundleGuard() {
-  const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
-  const appBootCandidates = [
-    path.join(__dirname, 'node_modules', '@deepseek-ai', 'dsh-app-boot', 'lib', 'index.js'),
-    path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', 'dsh-app-boot', 'lib', 'index.js'),
-    path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', '@deepseek-ai', 'dsh-app-boot', 'lib', 'index.js'),
-    path.join(home, 'profiles', 'node_modules', '@deepseek-ai', 'dsh-app-boot', 'lib', 'index.js'),
-  ];
-  for (const file of appBootCandidates) {
-    if (!fs.existsSync(file)) continue;
-    try {
-      const src = readFileCached(file);
-      if (src === null) { log('boot', 'profile bundle 防护: 读取失败，跳过 ' + file); continue; }
-      const out = applyAppBootBundleGuard(src);
-      if (!out.changed) {
-        if (!src.includes(PROFILE_BUNDLE_GUARD_MARKER)) {
-          log('boot', 'profile bundle 防护: ' + file + ' 锚点未匹配（dsh 版本可能已变化），跳过');
-        }
-        continue;
+  const appBootFiles = runtimeGuardFiles(path.join('dsh-app-boot', 'lib', 'index.js'));
+  const appBootTransform = (src, file) => {
+    const out = applyAppBootBundleGuard(src);
+    if (!out.changed) {
+      if (!src.includes(PROFILE_BUNDLE_GUARD_MARKER)) {
+        return { status: 'anchor-missing', detail: file + ' 锚点未匹配（dsh 版本可能已变化），跳过' };
       }
-      fs.writeFileSync(file, out.src, { encoding: 'utf8' });
-      log('boot', 'profile bundle 防护: 已注入自愈装配到 ' + file);
-    } catch (err) {
-      log('boot', 'profile bundle 防护失败(' + file + '): ' + err.message);
+      return { status: 'already' }; // 已注入（幂等，静默）
     }
-  }
+    return { status: 'changed', src: out.src };
+  };
+  applyPatchToFiles({
+    prefix: 'profile bundle 防护',
+    files: appBootFiles,
+    log: (m) => log('boot', m),
+    transform: appBootTransform,
+    doneLog: (file) => '已注入自愈装配到 ' + file,
+    failLog: (file, err) => 'profile bundle 防护失败(' + file + '): ' + err.message,
+  });
+
+  // dsh/lib/profile-boot-*.js：家级 cordis.patch.yml 与 profile 补丁层自愈。
+  const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
   const profileBootDirs = [
     path.join(__dirname, 'node_modules', '@deepseek-ai', 'dsh', 'lib'),
     path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', 'dsh', 'lib'),
     path.join(home, 'profiles', 'node_modules', '@deepseek-ai', 'dsh', 'lib'),
   ];
+  const profileBootFiles = [];
   for (const dir of profileBootDirs) {
     let names;
     try { names = fs.readdirSync(dir).filter((f) => /^profile-boot-.+\.js$/.test(f)); } catch { continue; }
-    for (const name of names) {
-      const file = path.join(dir, name);
-      try {
-        const src = readFileCached(file);
-        if (src === null) { log('boot', 'profile bundle 防护: 读取失败，跳过 ' + file); continue; }
-        const out = applyProfileBootBundleGuard(src);
-        if (!out.changed) {
-          if (!src.includes(PROFILE_BOOT_GUARD_MARKER)) {
-            log('boot', 'profile bundle 防护: ' + file + ' 锚点未匹配（dsh 版本可能已变化），跳过');
-          }
-          continue;
-        }
-        fs.writeFileSync(file, out.src, { encoding: 'utf8' });
-        log('boot', 'profile bundle 防护: 已注入自愈装配到 ' + file);
-      } catch (err) {
-        log('boot', 'profile bundle 防护失败(' + file + '): ' + err.message);
-      }
-    }
+    for (const name of names) profileBootFiles.push(path.join(dir, name));
   }
+  const profileBootTransform = (src, file) => {
+    const out = applyProfileBootBundleGuard(src);
+    if (!out.changed) {
+      if (!src.includes(PROFILE_BOOT_GUARD_MARKER)) {
+        return { status: 'anchor-missing', detail: file + ' 锚点未匹配（dsh 版本可能已变化），跳过' };
+      }
+      return { status: 'already' }; // 已注入（幂等，静默）
+    }
+    return { status: 'changed', src: out.src };
+  };
+  applyPatchToFiles({
+    prefix: 'profile bundle 防护',
+    files: profileBootFiles,
+    log: (m) => log('boot', m),
+    transform: profileBootTransform,
+    doneLog: (file) => '已注入自愈装配到 ' + file,
+    failLog: (file, err) => 'profile bundle 防护失败(' + file + '): ' + err.message,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -4111,31 +3823,21 @@ function applySettingsSectionGuard() {
     '\t\t\treturn;\n' +
     '\t\t}\n' +
     '\t\thooks.setSource(() => scope.get());';
-  const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
-  const candidates = [
-    path.join(__dirname, 'node_modules', '@deepseek-ai', 'dsh-settings', 'lib', 'index.js'),
-    path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', 'dsh-settings', 'lib', 'index.js'),
-    path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', '@deepseek-ai', 'dsh-settings', 'lib', 'index.js'),
-    path.join(home, 'profiles', 'node_modules', '@deepseek-ai', 'dsh-settings', 'lib', 'index.js'),
-  ];
-  for (const file of candidates) {
-    if (!fs.existsSync(file)) continue;
-    try {
-      let src = readFileCached(file);
-      if (src === null) { log('boot', 'settings 注册防护: 读取失败，跳过 ' + file); continue; }
-      if (src.includes(guardMarker)) continue; // 已应用（幂等）
+  const from2 = '\t\tconst scope = sctx.settings.register(ns, schema, {\n\t\t\tbase: entry,\n\t\t\t...hooks.validate === void 0 ? {} : { validate: hooks.validate }\n\t\t});\n\t\thooks.setSource(() => scope.get());';
+  applyPatchToFiles({
+    prefix: 'settings 注册防护',
+    files: runtimeGuardFiles(path.join('dsh-settings', 'lib', 'index.js')),
+    log: (m) => log('boot', m),
+    transform: (src, file) => {
+      if (src.includes(guardMarker)) return { status: 'already' }; // 已应用（幂等，静默）
       if (!src.includes(anchor)) {
-        log('boot', 'settings 注册防护: ' + file + ' 锚点未匹配（dsh 版本可能已变化），跳过');
-        continue;
+        return { status: 'anchor-missing', detail: file + ' 锚点未匹配（dsh 版本可能已变化），跳过' };
       }
-      const from2 = '\t\tconst scope = sctx.settings.register(ns, schema, {\n\t\t\tbase: entry,\n\t\t\t...hooks.validate === void 0 ? {} : { validate: hooks.validate }\n\t\t});\n\t\thooks.setSource(() => scope.get());';
-      src = src.replace(from2, guarded);
-      fs.writeFileSync(file, src, { encoding: 'utf8' });
-      log('boot', 'settings 注册防护: 已注入到 ' + file);
-    } catch (err) {
-      log('boot', 'settings 注册防护失败: ' + err.message);
-    }
-  }
+      return { status: 'changed', src: src.replace(from2, guarded) };
+    },
+    doneLog: (file) => '已注入到 ' + file,
+    failLog: (file, err) => 'settings 注册防护失败: ' + err.message,
+  });
 }
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
@@ -4146,35 +3848,26 @@ function applySettingsSectionGuard() {
 // 展开」。这里幂等地给监听加 searchOnExpand 宽限，并补进依赖数组。
 // ---------------------------------------------------------------------------
 function applyWorkspaceSearchRailFix() {
-  const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
   const guardMarker = 'dsh-desktop fix: rail search expansion';
   const oldGuard = '\t\t\t\tif (!wide || !searchExpanded) return;';
   const newGuard = '\t\t\t\tif (!wide || !searchExpanded || searchOnExpand) return; // ' + guardMarker;
   const oldDeps = '\t\t\t}, [\n\t\t\t\tnormalizedQuery,\n\t\t\t\twide,\n\t\t\t\tsearchExpanded\n\t\t\t]);';
   const newDeps = '\t\t\t}, [\n\t\t\t\tnormalizedQuery,\n\t\t\t\twide,\n\t\t\t\tsearchExpanded,\n\t\t\t\tsearchOnExpand\n\t\t\t]);';
-  const candidates = [
-    path.join(__dirname, 'node_modules', '@deepseek-ai', 'dsh-client-ui-workspace', 'lib', 'client.js'),
-    path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', 'dsh-client-ui-workspace', 'lib', 'client.js'),
-    path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', '@deepseek-ai', 'dsh-client-ui-workspace', 'lib', 'client.js'),
-    path.join(home, 'profiles', 'node_modules', '@deepseek-ai', 'dsh-client-ui-workspace', 'lib', 'client.js'),
-  ];
-  for (const file of candidates) {
-    if (!file || !fs.existsSync(file)) continue;
-    try {
-      let src = readFileCached(file);
-      if (src === null) { log('boot', 'workspace 搜索栏修复: 读取失败，跳过 ' + file); continue; }
-      if (src.includes(guardMarker)) { log('boot', 'workspace 搜索栏修复: 已应用，跳过 ' + file); continue; }
+  applyPatchToFiles({
+    prefix: 'workspace 搜索栏修复',
+    files: runtimeGuardFiles(path.join('dsh-client-ui-workspace', 'lib', 'client.js')),
+    log: (m) => log('boot', m),
+    transform: (src, file) => {
+      if (src.includes(guardMarker)) return { status: 'already' };
       if (!src.includes(oldGuard) || !src.includes(oldDeps)) {
-        log('boot', 'workspace 搜索栏修复: 锚点未匹配（dsh 版本可能已变化），跳过 ' + file);
-        continue;
+        return { status: 'anchor-missing', detail: '锚点未匹配（dsh 版本可能已变化），跳过 ' + file };
       }
-      src = src.replace(oldGuard, newGuard).replace(oldDeps, newDeps);
-      fs.writeFileSync(file, src, { encoding: 'utf8' });
-      log('boot', 'workspace 搜索栏修复: 已注入到 ' + file);
-    } catch (err) {
-      log('boot', 'workspace 搜索栏修复失败(' + file + '): ' + err.message);
-    }
-  }
+      return { status: 'changed', src: src.replace(oldGuard, newGuard).replace(oldDeps, newDeps) };
+    },
+    alreadyLog: (file) => '已应用，跳过 ' + file,
+    doneLog: (file) => '已注入到 ' + file,
+    failLog: (file, err) => 'workspace 搜索栏修复失败(' + file + '): ' + err.message,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -4188,23 +3881,25 @@ function applyPluginInventoryTabMergeFix() {
   const marker = 'dsh-desktop fix: hide inventory tab';
   const oldPat = 'tabs = ctx.slots.entries("settings.plugins.tab").map((entry) => ({';
   const newPat = 'tabs = ctx.slots.entries("settings.plugins.tab").filter((entry) => (entry.options.id ?? "") !== "all").map((entry) => ({ // ' + marker;
-  const candidates = [
+  const files = [
     path.join(__dirname, 'node_modules', '@deepseek-ai', 'dsh-client-ui-settings-plugins', 'lib', 'client.js'),
     path.join(home, 'profiles', 'node_modules', '@deepseek-ai', 'dsh-client-ui-settings-plugins', 'lib', 'client.js'),
   ];
-  for (const file of candidates) {
-    if (!file || !fs.existsSync(file)) continue;
-    try {
-      let src = fs.readFileSync(file, 'utf8');
-      if (src.includes(marker)) { log('boot', '插件页标签合并: 已应用，跳过 ' + file); continue; }
-      if (!src.includes(oldPat)) { log('boot', '插件页标签合并: 锚点未匹配（dsh 版本可能已变化），跳过 ' + file); continue; }
-      src = src.replace(oldPat, newPat);
-      fs.writeFileSync(file, src, { encoding: 'utf8' });
-      log('boot', '插件页标签合并: 已隐藏「全部」只读清单 ' + file);
-    } catch (err) {
-      log('boot', '插件页标签合并失败(' + file + '): ' + err.message);
-    }
-  }
+  applyPatchToFiles({
+    prefix: '插件页标签合并',
+    files,
+    log: (m) => log('boot', m),
+    transform: (src, file) => {
+      if (src.includes(marker)) return { status: 'already' };
+      if (!src.includes(oldPat)) {
+        return { status: 'anchor-missing', detail: '锚点未匹配（dsh 版本可能已变化），跳过 ' + file };
+      }
+      return { status: 'changed', src: src.replace(oldPat, newPat) };
+    },
+    alreadyLog: (file) => '已应用，跳过 ' + file,
+    doneLog: (file) => '已隐藏「全部」只读清单 ' + file,
+    failLog: (file, err) => '插件页标签合并失败(' + file + '): ' + err.message,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -4215,12 +3910,7 @@ function applyPluginInventoryTabMergeFix() {
 // 自动跳过，绝不损坏文件。
 // ---------------------------------------------------------------------------
 function applyWebSearchBaseUrlFix() {
-  const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
-  const targets = [
-    path.join(home, 'profiles', 'node_modules'),
-    path.join(__dirname, 'node_modules'),
-    path.join(userDataDir, 'agent', 'node_modules'),
-  ];
+  const targets = runtimeNodeModulesRoots();
   for (const root of targets) {
     if (!root || !fs.existsSync(root)) continue;
     try {
@@ -4240,12 +3930,7 @@ function applyWebSearchBaseUrlFix() {
 // 更新过的 agent overlay。锚点不匹配（上游将来修复后）自动跳过，绝不损坏。
 // ---------------------------------------------------------------------------
 function applyMenuViewportFix() {
-  const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
-  const targets = [
-    path.join(home, 'profiles', 'node_modules'),
-    path.join(__dirname, 'node_modules'),
-    path.join(userDataDir, 'agent', 'node_modules'),
-  ];
+  const targets = runtimeNodeModulesRoots();
   for (const root of targets) {
     if (!root || !fs.existsSync(root)) continue;
     try {
@@ -4265,12 +3950,7 @@ function applyMenuViewportFix() {
 // 副本：profile fallback、内置 app 副本、用户更新过的 agent overlay。
 // ---------------------------------------------------------------------------
 function applySessionManageFix() {
-  const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
-  const targets = [
-    path.join(home, 'profiles', 'node_modules'),
-    path.join(__dirname, 'node_modules'),
-    path.join(userDataDir, 'agent', 'node_modules'),
-  ];
+  const targets = runtimeNodeModulesRoots();
   for (const root of targets) {
     if (!root || !fs.existsSync(root)) continue;
     try {

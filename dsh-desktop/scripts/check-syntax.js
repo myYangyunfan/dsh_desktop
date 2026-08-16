@@ -26,6 +26,12 @@ const entryFiles = [
   'profile-manifest.js',
   'profile-patch-heal.js',
   'profile-bundle-heal.js',
+  // 统一补丁引擎与配套插件共享模块（main.js / 同步脚本 / after-pack 共用）。
+  'scripts/lib/patch-io.js',
+  'scripts/lib/patch-engine.js',
+  'scripts/lib/companion-plugins.js',
+  'scripts/lib/runtime-patches.js',
+  'scripts/lib/companion-profile.js',
   'scripts/patch-web-search-baseurl.js',
   'scripts/patch-menu-viewport.js',
   'scripts/patch-session-manage.js',

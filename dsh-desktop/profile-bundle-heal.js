@@ -160,12 +160,10 @@ function recoverManifestBundles(manifest, found) {
 
 /**
  * 原子写（临时文件 + rename），避免与 dsh 的 HMR 观察者撕裂读。
+ * 唯一实现在 scripts/lib/patch-io.js；这里转发导出，保证既有引用方
+ * （sync-companion-plugins.js 等）与本仓库其它原子写共用同一实现。
  */
-function writeFileAtomic(file, content) {
-  const tmp = file + '.tmp';
-  fs.writeFileSync(tmp, content, 'utf8');
-  fs.renameSync(tmp, file);
-}
+const { writeFileAtomic } = require('./scripts/lib/patch-io');
 
 // ---------------------------------------------------------------------------
 // @deepseek-ai/dsh-app-boot/lib/index.js 变换

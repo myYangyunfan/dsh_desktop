@@ -25,6 +25,8 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+// 原子写与 main.js / 其它补丁脚本共用同一实现（scripts/lib/patch-io.js）。
+const { writeFileAtomic } = require('./lib/patch-io');
 
 const MARKER = 'dsh-desktop patch (issue #20)';
 
@@ -149,7 +151,7 @@ function patchWebSearchBaseUrl(nmRoot, log = () => {}) {
       continue; // 已应用（幂等）
     }
     try {
-      fs.writeFileSync(file, result.src, 'utf8');
+      writeFileAtomic(file, result.src);
       changedFiles += 1;
       log('web-search baseURL 补丁: 已应用 ' + file);
     } catch (err) {
