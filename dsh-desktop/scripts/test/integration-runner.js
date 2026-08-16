@@ -587,6 +587,79 @@ function webUrlOf(t) {
   return m ? m[1] : null;
 }
 
+SCENARIOS['session-delete-flow'] = async (t) => {
+  // 对话删除/归档管理端到端（dsh-session-manager + patch-session-manage.js）：
+  // 创建会话 → 归档 → 恢复 → 再归档 → 删除（目录消失 + 归档集清理）→
+  // 运行中会话删除被拒绝。走真实 HTTP RPC 链路（与客户端同通道）。
+  await t.waitFor('boot-ready', 240000, 'Web UI 就绪');
+  await t.waitFor('界面已稳定', 60000, '稳定期完成');
+  const rpc = (method, payload) => new Promise((resolve, reject) => {
+    const body = JSON.stringify({ type: 'client-request', rpcId: 'r' + Date.now(), method, payload });
+    const base = webUrlOf(t);
+    const endpoint = new URL('/api/' + method, base);
+    const req = http.request({ host: endpoint.hostname, port: endpoint.port, path: endpoint.pathname, method: 'POST', headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } }, (res) => {
+      let data = '';
+      res.on('data', (c) => { data += c; });
+      res.on('end', () => { try { resolve({ status: res.statusCode, json: JSON.parse(data) }); } catch { reject(new Error('bad json (url=' + base + ' path=' + endpoint.pathname + ' status=' + res.statusCode + '): ' + String(data).slice(0, 300))); } });
+    });
+    req.on('error', reject);
+    req.end(body);
+  });
+  const sessionDirExists = (id) => {
+    const root = path.join(t.dshHome, 'sessions');
+    if (!fs.existsSync(root)) return false;
+    for (const project of fs.readdirSync(root, { withFileTypes: true })) {
+      if (!project.isDirectory()) continue;
+      if (fs.existsSync(path.join(root, project.name, id))) return true;
+    }
+    return false;
+  };
+  const waitFor = async (fn, timeoutMs, label) => {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      if (fn()) return true;
+      await sleep(300);
+    }
+    throw new Error('等待超时: ' + label);
+  };
+  // 1) 创建工作区 + 会话（会话目录应落盘）
+  const proj = path.join(t.dir, 'proj-delete-flow');
+  fs.mkdirSync(proj, { recursive: true });
+  const w1 = await rpc('workspace.create', { path: proj });
+  t.assert(w1.json && w1.json.result && w1.json.result.ok, '创建工作区应成功: ' + JSON.stringify(w1.json && w1.json.result));
+  const workspaceId = w1.json.result.value.workspace.workspaceId;
+  const s1 = await rpc('session.create', { workspaceId });
+  t.assert(s1.json && s1.json.result && s1.json.result.ok, '创建会话应成功: ' + JSON.stringify(s1.json && s1.json.result));
+  const sessionId = s1.json.result.value.sessionId;
+  await waitFor(() => sessionDirExists(sessionId), 15000, '会话目录落盘');
+  t.assert(sessionDirExists(sessionId), '会话目录应存在');
+  // 2) 归档 → 恢复 → 再归档（恢复功能验证）
+  const a1 = await rpc('workspace.archiveSession', { sessionId });
+  t.assert(a1.json && a1.json.result && a1.json.result.ok && a1.json.result.value.archivedSessionIds.includes(sessionId), '归档后集合应包含会话');
+  const u1 = await rpc('workspace.unarchiveSession', { sessionId });
+  t.assert(u1.json && u1.json.result && u1.json.result.ok && !u1.json.result.value.archivedSessionIds.includes(sessionId), '恢复后集合应移除会话（恢复功能验证）');
+  const a2 = await rpc('workspace.archiveSession', { sessionId });
+  t.assert(a2.json && a2.json.result && a2.json.result.ok && a2.json.result.value.archivedSessionIds.includes(sessionId), '再次归档应成功');
+  // 3) 删除 → 目录消失 + 归档集清理
+  const d1 = await rpc('workspace.deleteSession', { sessionId });
+  t.assert(d1.json && d1.json.result && d1.json.result.ok && d1.json.result.value.deleted === true, '删除 RPC 应成功: ' + JSON.stringify(d1.json && d1.json.result));
+  await waitFor(() => !sessionDirExists(sessionId), 10000, '会话目录删除');
+  t.assert(!sessionDirExists(sessionId), '会话目录应已删除');
+  const list = await rpc('workspace.list', {});
+  t.assert(list.json && list.json.result && list.json.result.ok && !list.json.result.value.archivedSessionIds.includes(sessionId), '删除后归档集应不再包含该会话');
+  // 4) 空闲 live 会话也可删除（dsh 没有 close：创建过的会话常驻 live 注册表，
+  //    删除流程先摘除 live（优雅 flush）再删目录——运行中会话才被拒绝）
+  const s2 = await rpc('session.create', { workspaceId });
+  t.assert(s2.json && s2.json.result && s2.json.result.ok, '第二次创建会话应成功');
+  const sessionId2 = s2.json.result.value.sessionId;
+  const d2 = await rpc('workspace.deleteSession', { sessionId: sessionId2 });
+  t.assert(d2.json && d2.json.result && d2.json.result.ok && d2.json.result.value.deleted === true, '空闲 live 会话删除应成功（摘除后删除）: ' + JSON.stringify(d2.json && d2.json.result));
+  await waitFor(() => !sessionDirExists(sessionId2), 10000, '第二个会话目录删除');
+  t.assert(!sessionDirExists(sessionId2), '第二个会话目录应已删除');
+  const q = await t.quitAndCheck();
+  t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
+};
+
 SCENARIOS['kill-renderer'] = async (t) => {
   await t.waitFor('boot-ready', 240000, 'Web UI 就绪');
   await t.waitFor('界面已稳定', 60000, '稳定期完成');

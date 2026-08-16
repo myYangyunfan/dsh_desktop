@@ -1,0 +1,10 @@
+{
+  "id": "dsh-side-session",
+  "version": "0.2.0",
+  "main": "./lib/index.js",
+  "description": "DSH 侧边临时会话：右缘停靠/可拖出浮窗，主界面同款 UI，基于当前会话上下文发起不污染主会话的临时追问",
+  "engines": {
+    "dsh": ">=0.0.1"
+  },
+  "contributes": {}
+}

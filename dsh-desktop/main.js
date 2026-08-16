@@ -34,6 +34,7 @@ const { ensureCoreBundles, CORE_BUNDLE_NAMES } = require('./profile-manifest');
 const { dedupePatchEntries, dropBlocksByIds, parseFailedLoaderIds, mapPackagesToPatchIds } = require('./profile-patch-heal');
 const { patchWebSearchBaseUrl } = require('./scripts/patch-web-search-baseurl');
 const { patchMenuViewport } = require('./scripts/patch-menu-viewport');
+const { patchSessionManage } = require('./scripts/patch-session-manage');
 const zlib = require('node:zlib');
 
 // ---------------------------------------------------------------------------
@@ -2040,6 +2041,7 @@ async function runUpdateFlow(manual) {
       applyWorkspaceSearchRailFix();
       applyWebSearchBaseUrlFix();
       applyMenuViewportFix();
+      applySessionManageFix();
     }
     const { response: r2 } = await showBox({
       type: 'info',
@@ -2547,10 +2549,27 @@ function trayHintOnce() {
 }
 
 function showMainWindow() {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
+  // 防御性恢复（用户反馈：关闭到托盘后托盘/桌面图标都无法重新打开）：
+  // 1) 窗口被销毁或从未创建 → 重建主窗并加载 Web UI；
+  // 2) 最小化 → 先 restore；隐藏 → show；最后置顶聚焦，确保回到前台。
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    if (!webUrl) return;
+    try {
+      createWindow();
+      initRendererRecovery();
+      wireWindowRecovery();
+      mainWindow.loadURL(webUrl).catch((err) => log('boot', '恢复窗口加载失败: ' + ((err && err.message) || err)));
+      log('boot', '主窗不存在，已重建并加载 Web UI');
+    } catch (err) {
+      log('boot', '重建主窗失败: ' + ((err && err.message) || err));
+    }
+    return;
+  }
   if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.show();
+  if (!mainWindow.isVisible()) mainWindow.show();
+  try { mainWindow.setSkipTaskbar(false); } catch {}
   mainWindow.focus();
+  try { mainWindow.moveTop(); } catch {}
 }
 
 function ensureTray() {
@@ -2587,10 +2606,9 @@ function createTray() {
       { label: '退出', click: () => { forceQuit = true; app.quit(); } },
     ]);
     tray.setContextMenu(menu);
-    tray.on('click', () => {
-      if (mainWindow && mainWindow.isVisible()) mainWindow.hide();
-      else showMainWindow();
-    });
+    // 左键/双击一律恢复窗口（用户反馈「托盘点不开」：去掉「可见则隐藏」的
+    // 双态逻辑，避免隐藏态误判导致的点按无反应）。
+    tray.on('click', () => showMainWindow());
     tray.on('double-click', () => showMainWindow());
     log('boot', '系统托盘已就绪');
   } catch (err) {
@@ -2656,12 +2674,16 @@ const COMPANION_PLUGINS = [
   // user 消息（悬停预览/点击跳转/滚轮切换），取代 conversation-tweaks
   // 内置的会话滑轨。
   { id: 'dsh-navbar', name: '@vlln/dsh-navbar' },
+  // 对话删除与归档管理（本仓库内置）：会话行菜单删除按钮 + 设置内归档管理
+  // 面板（恢复/删除）。依赖 patch-session-manage.js 的官方包运行时补丁。
+  { id: 'dsh-session-manager', name: 'dsh-session-manager' },
   { id: 'conversation-tweaks', name: '@deepseek-ai/dsh-conversation-tweaks' },
   { id: 'super-injector', name: '@dsh-external/dsh-super-injector' },
   { id: 'prompt-custom', name: '@deepseek-ai/dsh-prompt-custom' },
   { id: 'third-party-thinking', name: '@deepseek-ai/dsh-third-party-thinking' },
   { id: 'wsl-settings', name: '@deepseek-ai/dsh-wsl-settings' },
   { id: 'dsh-vision', name: '@dsh-external/dsh-vision' },
+  { id: 'side-session', name: '@dsh-external/dsh-side-session' },
 ];
 
 function companionDirName(p) {
@@ -3582,6 +3604,31 @@ function applyMenuViewportFix() {
     }
   }
 }
+// ---------------------------------------------------------------------------
+// 对话删除 / 归档管理运行时补丁（dsh-session-manager 插件的前置依赖）：
+// dsh-workspace（unarchiveSession）+ dsh-host-apiproxy（unarchiveSession /
+// deleteSession RPC）+ dsh-client-connection（API 面 + schema）+
+// dsh-client-ui-workspace（会话行菜单「删除对话」）。补丁本体在
+// scripts/patch-session-manage.js（幂等、锚点不匹配自动跳过）；覆盖三处运行
+// 副本：profile fallback、内置 app 副本、用户更新过的 agent overlay。
+// ---------------------------------------------------------------------------
+function applySessionManageFix() {
+  const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
+  const targets = [
+    path.join(home, 'profiles', 'node_modules'),
+    path.join(__dirname, 'node_modules'),
+    path.join(userDataDir, 'agent', 'node_modules'),
+  ];
+  for (const root of targets) {
+    if (!root || !fs.existsSync(root)) continue;
+    try {
+      const n = patchSessionManage(root, (m) => log('boot', m));
+      if (n > 0) log('boot', '对话删除补丁: 已应用到 ' + root);
+    } catch (err) {
+      log('boot', '对话删除补丁失败(' + root + '): ' + err.message);
+    }
+  }
+}
 // 快捷方式维护：修复「没有桌面快捷方式 / 快捷方式指向的文件消失」，
 // 并让快捷方式图标跟随图标设计更新（.lnk 单独指定 icon.ico）。
 // ---------------------------------------------------------------------------
@@ -3619,7 +3666,8 @@ function maintainShortcuts() {
     const settings = updater.loadSettings(updCtx());
     const linksDir = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs');
     const startMenu = path.join(linksDir, 'DSH Desktop.lnk');
-    const desktop = path.join(app.getPath('desktop'), 'DSH Desktop.lnk');
+    const desktopDir = app.getPath('desktop');
+    const desktop = path.join(desktopDir, 'DSH Desktop.lnk');
     const ico = shortcutIconPath();
     const opts = {
       target,
@@ -3628,6 +3676,29 @@ function maintainShortcuts() {
       appUserModelId: 'com.deepseek.dsh.desktop',
     };
     let changed = false;
+
+    // 去重（用户反馈「每次启动自动生成多个快捷方式」）：清理规范名之外的
+    // 同族快捷方式——Windows 自动重命名的副本（“DSH Desktop (1).lnk”）、
+    // 手动“发送到桌面”的副本（“DSH Desktop - 快捷方式.lnk”）、旧版本残留等，
+    // 只保留规范名一个。前缀匹配，不会误删用户其它快捷方式。
+    const cleanupDir = (dir) => {
+      let removed = 0;
+      let entries;
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return 0; }
+      for (const e of entries) {
+        if (!e.isFile() || !/^DSH Desktop.*\.lnk$/i.test(e.name)) continue;
+        if (e.name.toLowerCase() === 'DSH Desktop.lnk') continue;
+        try { fs.rmSync(path.join(dir, e.name), { force: true }); removed++; } catch {}
+      }
+      return removed;
+    };
+    const removedDesktop = cleanupDir(desktopDir);
+    const removedStart = cleanupDir(linksDir);
+    if (removedDesktop + removedStart > 0) {
+      log('boot', '快捷方式去重: 清理桌面 ' + removedDesktop + ' 个、开始菜单 ' + removedStart + ' 个重复快捷方式');
+    }
+
+    const isPortable = !!process.env.PORTABLE_EXECUTABLE_FILE;
     // exe 被移动过，或图标设计更新过：替换现有快捷方式（修复“指向的文件消失”）。
     if ((settings.shortcutTarget && settings.shortcutTarget !== target) || settings.shortcutIcon !== SHORTCUT_ICON_VERSION) {
       for (const p of [startMenu, desktop]) {
@@ -3636,11 +3707,13 @@ function maintainShortcuts() {
         }
       }
     }
-    // 缺失则创建：便携版补桌面快捷方式；开始菜单快捷方式是系统通知的前置条件。
+    // 开始菜单快捷方式是系统通知的前置条件：缺失则创建。
     if (!fs.existsSync(startMenu)) {
       try { shell.writeShortcutLink(startMenu, 'create', opts); changed = true; } catch {}
     }
-    if (!fs.existsSync(desktop)) {
+    // 桌面快捷方式：仅便携版由壳层维护（安装版由 NSIS 安装器创建，壳层不再
+    // 自动生成，避免「每次启动自动生成桌面快捷方式」造成多个图标）。
+    if (isPortable && !fs.existsSync(desktop)) {
       try { shell.writeShortcutLink(desktop, 'create', opts); changed = true; } catch {}
     }
     if (changed) {
@@ -4190,6 +4263,7 @@ async function boot() {
     applyWorkspaceSearchRailFix();
     applyWebSearchBaseUrlFix();
     applyMenuViewportFix();
+    applySessionManageFix();
   } else {
     // 先修复 profile fallback 联接再同步/补丁依赖文件：EPERM 环境下补丁写不进去。
     await repairProfileFallback(home);
@@ -4204,6 +4278,7 @@ async function boot() {
     applyWorkspaceSearchRailFix();
     applyWebSearchBaseUrlFix();
     applyMenuViewportFix();
+    applySessionManageFix();
     setupTestChannel();
     if (runKoffiPreflight()) clearAutoPickerBrowseOverlay();
     else enablePickerBrowseOverlay();
@@ -4304,11 +4379,9 @@ if (!gotLock) {
     if (details.type === 'GPU') recordGpuCrash('(via child-process-gone)');
   });
   app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    }
+    // 用户再次双击桌面/开始菜单图标：恢复（或重建）主窗口。
+    log('boot', 'second-instance：恢复主窗口');
+    showMainWindow();
   });
   app.on('before-quit', () => {
     quitting = true;

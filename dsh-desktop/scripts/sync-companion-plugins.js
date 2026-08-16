@@ -42,12 +42,14 @@ const COMPANION_PLUGINS = [
   { id: 'harness-pet', name: 'harness-pet' },
   { id: 'float-window', name: '@deepseek-ai/dsh-float-window' },
   { id: 'dsh-navbar', name: '@vlln/dsh-navbar' },
+  { id: 'dsh-session-manager', name: 'dsh-session-manager' },
   { id: 'conversation-tweaks', name: '@deepseek-ai/dsh-conversation-tweaks' },
   { id: 'super-injector', name: '@dsh-external/dsh-super-injector' },
   { id: 'prompt-custom', name: '@deepseek-ai/dsh-prompt-custom' },
   { id: 'third-party-thinking', name: '@deepseek-ai/dsh-third-party-thinking' },
   { id: 'wsl-settings', name: '@deepseek-ai/dsh-wsl-settings' },
   { id: 'dsh-vision', name: '@dsh-external/dsh-vision' },
+  { id: 'side-session', name: '@dsh-external/dsh-side-session' },
 ];
 
 const PLUGIN_FILES = [

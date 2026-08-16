@@ -109,6 +109,21 @@
 - [vlln/dsh-navbar](https://github.com/vlln/dsh-navbar)（MIT）内置：对话区右缘的节点串导航条——每 user 消息一个节点，悬停预览（6 行截断）、点击平滑跳转 + 品牌蓝高亮、连续悬停/滚轮切换、>11 节点自动滑动窗口、<2 条 user 消息自动隐藏；消息精选 pin（assistant 操作条 📌，精选轮次渲染为金色椭圆盘，状态按会话持久化）。实现 dsh-external/issues#144 规格，纯浏览器端 bundle（`assets/plugins/dsh-navbar`，含 LICENSE 与预编译 lib），启动时自动同步进 web profile。
 - **取代** `dsh-conversation-tweaks` 内置的会话右侧导航滑轨（dct-rail，已移除），对话区右缘导航由 dsh-navbar 统一提供；conversation-tweaks 保留「隐藏对话输出」能力。
 
+## 侧边临时会话（dsh-side-session）
+
+- [hzhz314159/dsh-side-session](https://github.com/hzhz314159/dsh-side-session)（MIT）内置：复刻 Codex 的「side session」——基于**当前主会话上下文**（对话记录 + agent 触及的文件）在独立浮窗里发起临时追问，答案只存在于临时会话，不写入主会话、不触发主会话工具。
+- 浮窗可拖拽/缩放，默认收起不遮挡主界面；点击左侧 footer 的 💬 图标或 `Ctrl+Shift+S` 唤起。
+- 三种回答引擎（互斥、持久化、即时切换）：复用 DSH 全局 Key / 插件自带 Key / 走宿主 LLM 服务（`ctx.llm`，不读任何 key）；流式输出，UI 与主界面同款设计令牌（深色/浅色自动跟随）。
+- 上下文自动捕获：服务端解析会话日志 `session.jsonl.zstd`（zstd 帧扫描，容忍事件模型变更），含截断护栏（transcript 120 条 / 40K 字符、文件 200 个）。
+- 以 bundle 形式随桌面端分发（`assets/plugins/dsh-side-session`，含 LICENSE 与 README），启动时自动同步进 web profile。
+
+## 对话删除与归档管理（dsh-session-manager）
+
+- 内置配套插件（本仓库实现，MIT）：dsh 官方只有「归档」没有「删除」，本插件补齐两条入口：
+  - **会话行 ⋯ 菜单「删除对话」**（位于「归档会话」下方，当前会话行不显示）：确认后经宿主 RPC 删除该会话日志与附件（运行中的会话会被拒绝），列表实时移除；
+  - **设置 →「归档对话管理」**：列出全部已归档对话（标题/项目/更新时间），每条提供「恢复」（回到原工作区与顺序）与「删除」。
+- 实现依赖 `scripts/patch-session-manage.js` 在启动/打包时对官方包做幂等补丁（`dsh-workspace` unarchiveSession、`dsh-host-apiproxy` unarchiveSession/deleteSession RPC、`dsh-client-connection` API 面与 schema、`dsh-client-ui-workspace` 菜单项）；状态更新走官方 host 帧，无需重启服务。
+
 ## 稳定性与兼容性（0.3.6）
 
 ### v0.3.6
@@ -295,7 +310,7 @@ dsh-desktop/
 ├── assets/               # 加载页、更新进度页、恢复页、图标、托盘图标、配套 dsh 插件
 │   ├── sponsor/          # 赞助收款码（支付宝 / 微信，「请作者喝咖啡」面板与本文档共用）
 │   ├── agent-presets/    # 8 个内置预设（minimal-win / router-standard / anchored-standard / zero-anchored-standard / whoami-standard / v4-flash-godmode-opencode-go / warmupbetter / warmupbetter-replay），local 打包写入 / WSL 启动与更新时经 UNC 同步
-│   └── plugins/          # dsh-balance / dsh-file-changes / dsh-vision / zat-dsh-engine / dsh-better-sidebar / dsh-navbar / harness-pet / dsh-super-injector / dsh-wsl-settings（设置页「WSL 后端」栏）等，启动时自动同步进 web profile
+│   └── plugins/          # dsh-balance / dsh-file-changes / dsh-vision / zat-dsh-engine / dsh-better-sidebar / dsh-navbar / harness-pet / dsh-super-injector / dsh-side-session / dsh-wsl-settings（设置页「WSL 后端」栏）等，启动时自动同步进 web profile
 ├── scripts/
 │   ├── fetch-node.js     # 内置 node.exe 复制脚本
 │   ├── fetch-npm.js      # 内置 npm CLI 复制脚本

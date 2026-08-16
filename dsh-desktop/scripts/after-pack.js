@@ -30,6 +30,7 @@ const { patchDshSessionVocabulary } = require('./patch-event-vocabulary');
 const { installBuiltinPresets } = require('./install-minimal-win-preset');
 const { patchWebSearchBaseUrl } = require('./patch-web-search-baseurl');
 const { patchMenuViewport } = require('./patch-menu-viewport');
+const { patchSessionManage } = require('./patch-session-manage');
 
 // Regexes for files that are safe to delete (pure metadata / dev artifacts).
 const DROP_BASENAME = /^(LICENSE.*|README.*|CHANGELOG.*|HISTORY.*|COPYING.*|NOTICE.*|AUTHORS.*|SECURITY.*|CONTRIBUTING.*|\.gitignore|\.npmignore|\.editorconfig|\.eslintrc.*|\.prettierrc.*|\.babelrc.*)$/i;
@@ -117,7 +118,11 @@ module.exports = async function afterPack(context) {
     // issue #36: Menu portal 列表视口封顶（预设很多时顶部条目被裁掉的修复）。
     const mvChanged = patchMenuViewport(appNm, (m) => console.log('afterPack: ' + m));
     console.log(`afterPack: menu viewport ${mvChanged > 0 ? 'patched' : 'already up to date'}`);
+    // 对话删除/归档管理：官方包运行时补丁（dsh-workspace / host-apiproxy /
+    // client-connection / client-ui-workspace）。
+    const smChanged = patchSessionManage(appNm, (m) => console.log('afterPack: ' + m));
+    console.log(`afterPack: session manage ${smChanged > 0 ? `patched (${smChanged} files)` : 'already up to date'}`);
   } else {
-    console.warn('afterPack: bundled app node_modules not found — web-search baseURL / menu viewport patch skipped');
+    console.warn('afterPack: bundled app node_modules not found — web-search baseURL / menu viewport / session manage patch skipped');
   }
 };
