@@ -97,6 +97,68 @@ function packageDirUpward(anchorDir, packageName) {
 }
 
 /**
+ * 扫描 profile node_modules 中实际落盘且可装配的第三方 bundle 包（issue #48
+ * 数据恢复用：manifest 重置后用户手动安装的插件仍留在磁盘上，据此恢复登记）。
+ * 只返回通过 verifyBundleDir 完整校验的包；excludeNames（核心 + 配套插件名）
+ * 与未声明 dsh.bundle 的普通依赖一律排除。结果按包名排序保证确定性。
+ * @returns [{ name: string, version: string }]
+ */
+function scanProfileBundles(modulesDir, excludeNames) {
+  const found = [];
+  let top;
+  try { top = fs.readdirSync(modulesDir, { withFileTypes: true }); } catch { return found; }
+  const candidates = [];
+  for (const entry of top) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name.startsWith('@')) {
+      let scoped;
+      try { scoped = fs.readdirSync(path.join(modulesDir, entry.name), { withFileTypes: true }); } catch { continue; }
+      for (const sub of scoped) {
+        if (!sub.isDirectory()) continue;
+        candidates.push({ name: entry.name + '/' + sub.name, dir: path.join(modulesDir, entry.name, sub.name) });
+      }
+    } else {
+      candidates.push({ name: entry.name, dir: path.join(modulesDir, entry.name) });
+    }
+  }
+  candidates.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  for (const { name, dir } of candidates) {
+    if (excludeNames.has(name)) continue;
+    let pkg = null;
+    try { pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')); } catch { continue; }
+    if (!pkg || typeof pkg !== 'object' || typeof pkg.name !== 'string' || pkg.name === '') continue;
+    if (!bundlePatchRel(pkg)) continue;
+    // 入口 / 补丁层缺失的包即使恢复登记也会被启动防护跳过，一律不登记。
+    if (!verifyBundleDir(dir).ok) continue;
+    found.push({ name: pkg.name, version: typeof pkg.version === 'string' ? pkg.version : '' });
+  }
+  return found;
+}
+
+/**
+ * 把扫描到的第三方 bundle 合并回 profile manifest：bundles 追加缺失项（保持
+ * 既有顺序），dependencies 补回包名（用包内声明的版本号；git 依赖等非常规
+ * 来源无法还原原始 spec，登记版本号可保证后续 pnpm 安装不把它当孤儿包清理）。
+ * @returns 本次实际恢复的包名列表。
+ */
+function recoverManifestBundles(manifest, found) {
+  const bundles = Array.isArray(manifest && manifest.dsh && manifest.dsh.profile && manifest.dsh.profile.bundles)
+    ? manifest.dsh.profile.bundles : [];
+  const dependencies = (manifest && manifest.dependencies && typeof manifest.dependencies === 'object' && !Array.isArray(manifest.dependencies))
+    ? manifest.dependencies : {};
+  const recovered = [];
+  for (const item of found) {
+    if (bundles.includes(item.name)) continue;
+    bundles.push(item.name);
+    if (typeof dependencies[item.name] !== 'string' || dependencies[item.name] === '') dependencies[item.name] = item.version;
+    recovered.push(item.name);
+  }
+  manifest.dsh.profile.bundles = bundles;
+  if (recovered.length > 0) manifest.dependencies = dependencies;
+  return recovered;
+}
+
+/**
  * 原子写（临时文件 + rename），避免与 dsh 的 HMR 观察者撕裂读。
  */
 function writeFileAtomic(file, content) {
@@ -282,6 +344,8 @@ module.exports = {
   bundleEntryOf,
   verifyBundleDir,
   packageDirUpward,
+  scanProfileBundles,
+  recoverManifestBundles,
   writeFileAtomic,
   applyAppBootBundleGuard,
   applyProfileBootBundleGuard,

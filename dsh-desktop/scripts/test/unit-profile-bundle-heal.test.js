@@ -24,6 +24,8 @@ const {
   bundleEntryOf,
   verifyBundleDir,
   packageDirUpward,
+  scanProfileBundles,
+  recoverManifestBundles,
   writeFileAtomic,
   applyAppBootBundleGuard,
   applyProfileBootBundleGuard,
@@ -127,6 +129,44 @@ test('writeFileAtomic: 落盘内容正确且不留 .tmp', () => {
   assert.equal(fs.readFileSync(file, 'utf8'), '{"a":1}\n');
   assert.equal(fs.existsSync(file + '.tmp'), false);
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('scanProfileBundles: 只返回可装配的第三方 bundle，排除核心/配套/普通依赖/损坏包', () => {
+  const base = tmpFixture({
+    'node_modules/@dsh-external/tavily/package.json': JSON.stringify({ name: '@dsh-external/tavily', version: '1.2.3', main: 'lib/index.js', dsh: { bundle: { patch: './cordis.patch.yml' } } }),
+    'node_modules/@dsh-external/tavily/cordis.patch.yml': '[]\n',
+    'node_modules/@dsh-external/tavily/lib/index.js': 'export {};\n',
+    'node_modules/@deepseek-ai/dsh-base/package.json': JSON.stringify({ name: '@deepseek-ai/dsh-base', version: '1.0.0', main: 'lib/index.js', dsh: { bundle: { patch: './cordis.patch.yml' } } }),
+    'node_modules/@deepseek-ai/dsh-base/cordis.patch.yml': '[]\n',
+    'node_modules/@deepseek-ai/dsh-base/lib/index.js': 'export {};\n',
+    'node_modules/plain-lib/package.json': JSON.stringify({ name: 'plain-lib', version: '1.0.0' }),
+    // 声明了 dsh.bundle 但补丁层/入口缺失：不得恢复登记
+    'node_modules/broken-bundle/package.json': JSON.stringify({ name: 'broken-bundle', version: '1.0.0', dsh: { bundle: { patch: './cordis.patch.yml' } } }),
+    'node_modules/bad-json/package.json': '{BAD',
+  });
+  const found = scanProfileBundles(path.join(base, 'node_modules'), new Set(['@deepseek-ai/dsh-base']));
+  assert.deepEqual(found, [{ name: '@dsh-external/tavily', version: '1.2.3' }]);
+  assert.deepEqual(scanProfileBundles(path.join(base, 'missing'), new Set()), []);
+});
+
+test('recoverManifestBundles: 追加缺失登记并补回 dependencies，保留既有顺序与内容', () => {
+  const manifest = { name: 'dsh-profile-web', private: true, dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@dsh-external/tavily'] } } };
+  const recovered = recoverManifestBundles(manifest, [
+    { name: '@dsh-external/tavily', version: '1.2.3' },
+    { name: 'other-bundle', version: '2.0.0' },
+  ]);
+  assert.deepEqual(recovered, ['other-bundle']);
+  assert.deepEqual(manifest.dsh.profile.bundles, ['@deepseek-ai/dsh-base', '@dsh-external/tavily', 'other-bundle']);
+  assert.deepEqual(manifest.dependencies, { 'other-bundle': '2.0.0' });
+
+  const m2 = { dsh: { profile: { bundles: [] } }, dependencies: { x: '' } };
+  assert.deepEqual(recoverManifestBundles(m2, [{ name: 'x', version: '3.0.0' }]), ['x']);
+  assert.deepEqual(m2.dependencies, { x: '3.0.0' });
+  assert.deepEqual(m2.dsh.profile.bundles, ['x']);
+
+  const m3 = { dsh: { profile: { bundles: ['a'] } }, dependencies: { a: '^1.0.0' } };
+  assert.deepEqual(recoverManifestBundles(m3, [{ name: 'a', version: '9.9.9' }]), []);
+  assert.deepEqual(m3.dependencies, { a: '^1.0.0' }, '既有依赖版本不得覆盖');
 });
 
 // 变换锚点合成源（必须与 profile-bundle-heal.js 内的锚点字节一致）。

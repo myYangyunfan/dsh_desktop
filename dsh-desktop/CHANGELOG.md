@@ -15,11 +15,12 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 - **侧边临时会话升级 v0.2.5（合入上游更新）**：左侧栏图标对齐、浮窗展开/收起动画档位（0/300/500/800/1200ms，默认 500）、输入框与发送按钮样式与主会话同款、移除「停止回答」按钮；服务端**热重载自愈**（`settings.registrations.delete(NS)` + 路由重注册，开发热重载后不再残留重复注册）。保留本地增量解析与 4s 拉取节流。版本号定为 0.2.5 与上游 0.2.4 区分
 - **桌面宠物默认关闭（插件级）**：harness-pet 常驻 canvas 逐帧绘制在软渲染/流式输出下持续占用主进程，且旧版保存的开关值会覆盖客户端默认关闭。现启动同步时幂等写入 profile patch `- id: harness-pet\n  disabled: true`（一票否决任何已保存状态），需要时在 设置 → 插件 → 管理 一键开启
 - **更新后桌面快捷方式消失**：安装版（NSIS）此前依赖安装器创建桌面快捷方式，壳层只在便携版下补建——安装版更新（向导取消勾选创建 / 旧版卸载清理 / 手动覆盖安装目录）后桌面快捷方式缺失且永远不会自愈。现壳层对**安装版与便携版一致**地「缺失即补建」规范名 `DSH Desktop.lnk`（去重逻辑先行，桌面上至多保留一个，不会复现旧版「每次启动生成多个快捷方式」），并修复快捷方式指向被移动/更新后的 exe。另给 `maintainShortcuts` 加 `DSH_DESKTOP_TEST=1` 显式守卫：集成测试（dev electron 以文件路径启动时 `app.isPackaged` 也为 true）不再把用户真实快捷方式改指向测试用 electron.exe
-- **profile bundle 缺失 / 损坏导致 dsh web 启动失败（退出码 1）根治**：dsh 官方装配对 `dsh.profile.bundles` fail-loud——登记了未安装的插件抛 `cannot resolve profile bundle`、普通库或仅客户端 bundle 被登记抛 `declares no dsh.bundle`、bundle 的 `cordis.patch.yml` 损坏抛 `failed to parse overlay`、profile `package.json` 损坏直接抛 JSON 错误、家级 `cordis.patch.yml` 损坏抛 `failed to parse patches`——任一命中桌面端永久无法启动。三层修复：
+- **profile bundle 缺失 / 损坏导致 dsh web 启动失败（退出码 1）根治 + 重启丢插件数据恢复（issue #48）**：dsh 官方装配对 `dsh.profile.bundles` fail-loud——登记了未安装的插件抛 `cannot resolve profile bundle`、普通库或仅客户端 bundle 被登记抛 `declares no dsh.bundle`、bundle 的 `cordis.patch.yml` 损坏抛 `failed to parse overlay`、profile `package.json` 损坏直接抛 JSON 错误、家级 `cordis.patch.yml` 损坏抛 `failed to parse patches`——任一命中桌面端永久无法启动。四层修复：
   - **启动防护**（`applyProfileBundleGuard`，幂等运行时补丁，dsh 更新后自动重打）：改写 `@deepseek-ai/dsh-app-boot` 的 `loadProfile`——bundle 层逐个跳过并写带修复指引的 stderr 诊断；profile manifest 损坏则备份 `.broken-<ts>` 后按出厂模板重建；改写 dsh `profile-boot` 装配——家级补丁层与 profile 补丁层损坏时备份 + 重置为空列表（同时覆盖启动与 HMR 热重载路径）。用户数据只备份不删除，重装插件即恢复。
-  - **写盘侧防呆**：配套插件同步在 bundle 落盘后校验「补丁层 + 入口文件」存在才登记进 manifest（`billion-context-dsh` 上游缺 `dist` 构建产物时不再登记，杜绝整棵插件树加载失败）；profile manifest 损坏时先备份原文再重建；本次改动的 manifest 与补丁层写入全部原子化。
+  - **写盘侧防呆**：配套插件同步在 bundle 落盘后校验「补丁层 + 入口文件」存在才登记进 manifest（`billion-context-dsh` 上游缺 `dist` 构建产物时不再登记，杜绝整棵插件树加载失败）；profile manifest 损坏时先备份原文再重建；manifest 写入全部原子化（消除写盘撕裂这一损坏来源）。
+  - **用户插件数据恢复**（issue #48）：manifest 损坏被重置后，用户手动安装的第三方 bundle 仍实际落在 profile node_modules 里——启动自愈会扫描、校验并把它们合并回 manifest（`bundles` + `dependencies`），用户插件照常装配；普通依赖与损坏包不恢复登记。同时弹「配置自愈」系统通知（集成测试态抑制），不再静默。
   - **启动前健康检查**：`dsh web` 启动前把每个 bundles 条目的装配状态落到 `desktop.log`（缺失 / 未声明 / 补丁层缺失一目了然），`dsh-web.log` 保留完整 stderr 诊断。
-  变换逻辑收口为纯模块 `profile-bundle-heal.js`（`node --test` 单测 11 项 + 6 个新集成场景：heal-missing-bundle / heal-manifestless-bundle / heal-broken-manifest / heal-broken-home-patch / heal-broken-bundle-patch / companion-bundle-invariant）。
+  变换与恢复逻辑收口为纯模块 `profile-bundle-heal.js`（`node --test` 单测 13 项 + 7 个新集成场景：heal-missing-bundle / heal-manifestless-bundle / heal-broken-manifest / heal-broken-manifest-recovers / heal-broken-home-patch / heal-broken-bundle-patch / companion-bundle-invariant）。
 
 ## [0.3.9] — 2026-08-16
 

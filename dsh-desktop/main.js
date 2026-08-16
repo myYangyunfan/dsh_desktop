@@ -33,7 +33,7 @@ const { SessionWatcher, scanZstdFrames } = require('./session-watcher');
 const { RendererRecovery } = require('./renderer-recovery');
 const { ensureCoreBundles, CORE_BUNDLE_NAMES } = require('./profile-manifest');
 const { dedupePatchEntries, dropBlocksByIds, parseFailedLoaderIds, mapPackagesToPatchIds } = require('./profile-patch-heal');
-const { PROFILE_BUNDLE_GUARD_MARKER, PROFILE_BOOT_GUARD_MARKER, bundlePatchRel, verifyBundleDir, packageDirUpward, applyAppBootBundleGuard, applyProfileBootBundleGuard } = require('./profile-bundle-heal');
+const { PROFILE_BUNDLE_GUARD_MARKER, PROFILE_BOOT_GUARD_MARKER, bundlePatchRel, verifyBundleDir, packageDirUpward, scanProfileBundles, recoverManifestBundles, applyAppBootBundleGuard, applyProfileBootBundleGuard } = require('./profile-bundle-heal');
 const { patchWebSearchBaseUrl } = require('./scripts/patch-web-search-baseurl');
 const { patchMenuViewport } = require('./scripts/patch-menu-viewport');
 const { patchSessionManage } = require('./scripts/patch-session-manage');
@@ -938,6 +938,25 @@ function notifySafeBoot(ids) {
     n.show();
   } catch (err) {
     log('boot', '安全模式通知失败: ' + err.message);
+  }
+}
+
+// issue #48：profile manifest 重置是数据丢失类事件，除了日志还要给用户可见
+// 提示。集成测试实例与用户正在使用的桌面端并存（showBox 抑制的同一原因），
+// 测试态不弹真实通知，断言走 desktop.log。
+function notifyManifestResetRecovered(recovered) {
+  if (process.env.DSH_DESKTOP_TEST === '1') return;
+  try {
+    const n = new Notification({
+      title: 'DSH Desktop 配置自愈',
+      body: Array.isArray(recovered) && recovered.length > 0
+        ? 'profile 配置损坏，已备份并重建；检测到您安装的插件并已自动恢复：' + recovered.join(', ')
+        : 'profile 配置损坏，已备份并重建（原文件保留在 profile 目录的 .broken- 备份中，可对比找回原配置）',
+      icon: path.join(__dirname, 'assets', 'icon.png'),
+    });
+    n.show();
+  } catch (err) {
+    log('boot', '配置自愈通知失败: ' + err.message);
   }
 }
 
@@ -3306,8 +3325,10 @@ function syncCompanionPlugins() {
 
     const manifestFile = path.join(profileDir, 'package.json');
     let manifest = null;
-    try { manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8')); } catch {}
+    let manifestReset = false; // 解析失败或顶层非法触发的重置（issue #48 数据恢复标记）
+    try { manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8')); } catch { manifestReset = true; }
     if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
+      manifestReset = true;
       // manifest 损坏：先备份原文件再重置（不可解析时原文是唯一现场），绝不
       // 静默丢弃用户数据。全新 profile 没有文件，不产生备份。
       if (fs.existsSync(manifestFile)) {
@@ -3372,6 +3393,23 @@ function syncCompanionPlugins() {
         writePatchAtomic(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
         log('boot', '配套 bundle 源缺失，已从 web profile bundles 移除（视为禁用）: ' + [...missingSourceNames].join(', '));
       }
+    }
+    // issue #48 数据恢复：manifest 重置分支会丢掉用户手动安装的第三方 bundle
+    // 登记（dependencies + bundles 条目）。这些包仍实际落在 profile node_modules
+    // 里，扫描并校验后合并回 manifest，用户插件在自愈后照常装配，无需手工恢复
+    // 备份。只动重置分支；正常启动时既有登记零改动（幂等）。
+    if (manifestReset && bundlesUsable && Array.isArray(manifest.dsh.profile.bundles)) {
+      const recovered = recoverManifestBundles(manifest, scanProfileBundles(
+        path.join(profileDir, 'node_modules'),
+        new Set([...CORE_BUNDLE_NAMES, ...COMPANION_PLUGINS.map((p) => p.name)]),
+      ));
+      if (recovered.length > 0) {
+        writePatchAtomic(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
+        log('boot', 'profile manifest 重置后已恢复用户安装的 bundle 插件: ' + recovered.join(', '));
+      } else {
+        log('boot', 'profile manifest 已重置（原文件已备份），未发现需要恢复的用户 bundle');
+      }
+      notifyManifestResetRecovered(recovered);
     }
 
     // 非 bundle 插件注册到 profile 的 patch 层（幂等）。

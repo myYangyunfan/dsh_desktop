@@ -586,6 +586,45 @@ SCENARIOS['heal-broken-manifest'] = async (t) => {
   t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
 };
 
+SCENARIOS['heal-broken-manifest-recovers'] = async (t) => {
+  // issue #48 数据恢复：manifest 损坏被重置后，用户手动安装的第三方 bundle
+  // 仍实际落在 profile node_modules 里。启动自愈应把它们合并回 manifest
+  // （bundles + dependencies），用户插件照常装配；非 bundle 的普通依赖与
+  // 损坏包不得恢复登记。
+  const profileDir = path.join(t.dshHome, 'profiles', 'web');
+  fs.mkdirSync(profileDir, { recursive: true });
+  const fixture = path.join(profileDir, 'node_modules', '@dsh-external', 'dsh-recovery-fixture');
+  fs.mkdirSync(path.join(fixture, 'lib'), { recursive: true });
+  fs.writeFileSync(path.join(fixture, 'package.json'), JSON.stringify({
+    name: '@dsh-external/dsh-recovery-fixture',
+    version: '1.0.0',
+    main: 'lib/index.js',
+    dsh: { bundle: { patch: './cordis.patch.yml' } },
+  }, null, 2) + '\n');
+  fs.writeFileSync(path.join(fixture, 'cordis.patch.yml'), '[]\n', 'utf8');
+  fs.writeFileSync(path.join(fixture, 'lib', 'index.js'), 'export {};\n', 'utf8');
+  // 普通库：不得被恢复登记
+  const plainDir = path.join(profileDir, 'node_modules', '@dsh-external', 'plain-lib');
+  fs.mkdirSync(plainDir, { recursive: true });
+  fs.writeFileSync(path.join(plainDir, 'package.json'), JSON.stringify({ name: '@dsh-external/plain-lib', version: '1.0.0' }, null, 2) + '\n');
+  fs.writeFileSync(path.join(profileDir, 'package.json'), '{"name": "dsh-profile-web", "private": true, "dsh": {"profile": {"bundles": [', 'utf8');
+  await t.waitFor('boot-ready', 240000, '损坏的 manifest 应自愈并恢复用户 bundle 后正常启动');
+  await t.waitFor('界面已稳定', 60000, '稳定期完成');
+  t.assert(t.grepLog('已恢复用户安装的 bundle 插件'), '应记录第三方 bundle 恢复日志');
+  const manifest = JSON.parse(fs.readFileSync(path.join(profileDir, 'package.json'), 'utf8'));
+  const bundles = manifest && manifest.dsh && manifest.dsh.profile && manifest.dsh.profile.bundles;
+  t.assert(Array.isArray(bundles) && bundles.includes('@deepseek-ai/dsh-base'), `应含核心 bundles，实际=${JSON.stringify(bundles)}`);
+  t.assert(Array.isArray(bundles) && bundles.includes('@dsh-external/dsh-recovery-fixture'),
+    `用户安装的 bundle 应被恢复登记，实际=${JSON.stringify(bundles)}`);
+  t.assert(!(Array.isArray(bundles) && bundles.includes('@dsh-external/plain-lib')), '普通库不得恢复登记');
+  t.assert(manifest && manifest.dependencies && manifest.dependencies['@dsh-external/dsh-recovery-fixture'] === '1.0.0',
+    `dependencies 应补回用户 bundle，实际=${JSON.stringify(manifest && manifest.dependencies)}`);
+  const backups = fs.readdirSync(profileDir).filter((f) => f.startsWith('package.json.broken-'));
+  t.assert(backups.length >= 1, '损坏原文应保留备份');
+  const q = await t.quitAndCheck();
+  t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
+};
+
 SCENARIOS['heal-broken-home-patch'] = async (t) => {
   // 家级补丁层 $DSH_HOME/cordis.patch.yml 损坏 → 官方 composeProfile 抛
   // "failed to parse patches" 并启动失败。profile-boot 防护应备份 + 重置为
