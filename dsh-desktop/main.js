@@ -758,13 +758,9 @@ function pruneOldCrashDumps() {
 function readDshWebLogTail(maxLines = 80) {
   try {
     const file = dshWebLogPath();
-    const t0 = Date.now();
     let size = 0;
     try { size = fs.statSync(file).size; } catch { return ''; }
     const text = readFileTailText(file, LOG_TAIL_READ_BYTES);
-    if (process.env.DSH_RUNTIME_PROBE && size > LOG_TAIL_READ_BYTES) {
-      log('probe', `readDshWebLogTail: bytes=${size} read=${text.length} ms=${Date.now() - t0}`);
-    }
     // 从文件中部起读时首行可能是半行：丢弃，避免产生半行/乱码 token。
     const lines = text.split(/\r?\n/);
     if (size > LOG_TAIL_READ_BYTES && lines.length > 0) lines.shift();
@@ -880,11 +876,6 @@ function backupAndRebuildProfileModules(home) {
 // 避免「重启后连续弹出多个启动失败窗口」。
 let boxChain = Promise.resolve();
 function showBox(opts) {
-  // AUDIT guard: isolated test runs never pop dialogs; resolve like the cancel button.
-  if (process.env.DSH_DESKTOP_TEST && process.env.DSH_DESKTOP_TEST_NO_DIALOG) {
-    const response = typeof opts.cancelId === 'number' ? opts.cancelId : 0;
-    return Promise.resolve({ response, checkboxChecked: false });
-  }
   const run = () => {
     if (mainWindow && !mainWindow.isDestroyed()) return dialog.showMessageBox(mainWindow, opts);
     return dialog.showMessageBox(opts);
@@ -1394,10 +1385,7 @@ function createWindow(opts = {}) {
 
   win.loadFile(path.join(__dirname, 'assets', 'loading.html'));
   // startHidden：崩溃恢复重建窗口时保持「隐藏到托盘」状态，不突然弹出窗口。
-  // AUDIT guard: isolated test runs never show a window.
-  if (!process.env.DSH_DESKTOP_TEST_HIDE_WINDOW) {
-    win.once('ready-to-show', () => { if (!win.isDestroyed() && !opts.startHidden) win.show(); });
-  }
+  win.once('ready-to-show', () => { if (!win.isDestroyed() && !opts.startHidden) win.show(); });
   // Keep the app brand in the OS title bar (the web UI sets its own <title>).
   win.on('page-title-updated', (event) => {
     event.preventDefault();

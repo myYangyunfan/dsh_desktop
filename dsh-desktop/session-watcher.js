@@ -139,17 +139,11 @@ class SessionWatcher {
     this.watchers.clear();
   }
 
-  // ---- AUDIT probe (env-gated, temporary) ----
-  _probe(marker, extra) {
-    if (!process.env.DSH_RUNTIME_PROBE) return;
-    try { this.log('watch', `probe:${marker} ${extra || ''}`); } catch {}
-  }
-
+  // 目录清单缓存 25s：普通 stat 清扫（10s 一次）直接复用清单，全量遍历
+  // 只发生在 30s 对账（force）与首扫，避免频繁递归整个 sessions 树。
   listLogs(force = false) {
     try {
       const now = Date.now();
-      // 目录清单缓存 25s：普通 stat 清扫（10s 一次）直接复用清单，全量遍历
-      // 只发生在 30s 对账（force）与首扫，避免每 10s 递归整个 sessions 树。
       if (!force && now - this.dirCache.at < 25000) return this.dirCache.files;
       if (!fs.existsSync(this.sessionsDir)) return [];
       const out = [];
@@ -160,15 +154,8 @@ class SessionWatcher {
           else if (entry.name === 'session.jsonl.zstd') out.push(p);
         }
       };
-      const t0 = Date.now();
       walk(this.sessionsDir);
       this.dirCache = { at: now, files: out };
-      if (process.env.DSH_RUNTIME_PROBE) {
-        this._probeWalks = (this._probeWalks || 0) + 1;
-        if (this._probeWalks % 4 === 0) {
-          this._probe('walk', `#${this._probeWalks} files=${out.length} ms=${Date.now() - t0}`);
-        }
-      }
       return out;
     } catch (err) {
       this.log('watch', 'listLogs 失败: ' + err.message);
@@ -209,7 +196,6 @@ class SessionWatcher {
 
   /** 目录对账：刷新文件清单、为新文件挂监视器、清理已消失文件的监视器。 */
   refreshWatchList() {
-    const t0 = Date.now();
     const files = this.listLogs(true);
     const alive = new Set(files);
     for (const file of files) this.attachWatch(file);
@@ -218,19 +204,13 @@ class SessionWatcher {
       try { w.close(); } catch {}
       this.watchers.delete(file);
     }
-    if (process.env.DSH_RUNTIME_PROBE) {
-      this._probe('refresh', `files=${files.length} watchers=${this.watchers.size} ms=${Date.now() - t0}`);
-    }
   }
 
   scan(maxChanged = Infinity) {
     let any = false;
     let changed = 0;
-    let fileCount = 0;
-    const t0 = Date.now();
     for (const file of this.listLogs()) {
       try {
-        fileCount += 1;
         const grew = this.process(file);
         if (grew) {
           any = true;
@@ -238,12 +218,6 @@ class SessionWatcher {
           if (changed >= maxChanged) break;
         }
       } catch (err) { this.log('watch', '处理失败 ' + file + ': ' + err.message); }
-    }
-    if (process.env.DSH_RUNTIME_PROBE) {
-      this._probeScans = (this._probeScans || 0) + 1;
-      if (this._probeScans % 5 === 0) {
-        this._probe('scan', `#${this._probeScans} files=${fileCount} ms=${Date.now() - t0}`);
-      }
     }
     return any;
   }
