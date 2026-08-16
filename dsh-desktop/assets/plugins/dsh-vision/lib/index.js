@@ -17,6 +17,22 @@ const DEFAULT_BASE_URL = 'https://open.bigmodel.cn/api/paas/v4';
 const DEFAULT_FREE_FALLBACKS = ['glm-4.1v-thinking-flash', 'glm-4v-flash'];
 /** Errors worth trying the next model for: rate limit, missing model, server trouble. */
 const RETRIABLE = /returned (?:429|404|5\d\d)/;
+/**
+ * Zhipu's older free vision models cap max_tokens at 1024 (HTTP 400 code 1210
+ * "max_tokens参数非法"). The plugin default is 2048 (tuned for glm-4.6v-flash),
+ * so a stored config that selects a legacy model 400s on every call and the
+ * fallback chain never runs (400 is not in RETRIABLE). Clamp the budget for
+ * these models instead of forcing users to know per-model limits.
+ */
+const LEGACY_1K_CAP_MODELS = new Set(['glm-4v-flash', 'glm-4.1v-thinking-flash']);
+/**
+ * Any HTTP 400 from the endpoint may be a max_tokens-over-cap rejection (Zhipu
+ * replies "code 1210 max_tokens参数非法"; the body wording can change, and the
+ * code may be the only stable signal). Matching plain `returned 400` keeps the
+ * downgrade retry working even if the message text drifts — the cost of one
+ * extra request is far lower than silently missing the rejection.
+ */
+const MAX_TOKENS_REJECTED = /returned 400/;
 export const Config = z.object({
     baseURL: z.string().default(DEFAULT_BASE_URL)
         .description('OpenAI-compatible endpoint base URL (…/chat/completions is appended)'),
@@ -63,11 +79,15 @@ export function apply(ctx, config) {
         const fallbackModels = Array.isArray(cfg.fallbackModels) && cfg.fallbackModels.length > 0
             ? cfg.fallbackModels
             : baseURL === DEFAULT_BASE_URL && model === "glm-4.6v-flash" ? DEFAULT_FREE_FALLBACKS : [];
+        // 旧模型（glm-4v-flash 等）max_tokens 上限 1024：默认 2048 必然 400，直接钳制。
+        const maxTokens = LEGACY_1K_CAP_MODELS.has(model)
+            ? Math.min(cfg.maxTokens ?? 2048, 1024)
+            : cfg.maxTokens ?? 2048;
         return {
             baseURL,
             model,
             fallbackModels,
-            maxTokens: cfg.maxTokens ?? 2048,
+            maxTokens,
             timeoutMs: cfg.timeoutMs ?? 60_000,
             maxImageBytes: cfg.maxImageBytes ?? 10 * 1024 * 1024,
         };
@@ -119,8 +139,20 @@ export function apply(ctx, config) {
                 }
                 catch (error) {
                     lastError = error;
-                    if (!(error instanceof Error) || !RETRIABLE.test(error.message))
-                        throw error;
+                    if (!(error instanceof Error)) throw error;
+                    // 400（可能是 max_tokens 超上限，如智谱 code 1210）：降档到 1024
+                    // 重试同一模型一次，而不是直接放弃——fallback 链只对 429/404/5xx 生效。
+                    if (MAX_TOKENS_REJECTED.test(error.message) && resolved.maxTokens > 1024) {
+                        try {
+                            return await visionChat({ ...resolved, model, apiKey, source, question, maxTokens: 1024, signal: exec.signal });
+                        }
+                        catch (error2) {
+                            lastError = error2;
+                            if (!(error2 instanceof Error) || !RETRIABLE.test(error2.message)) throw error2;
+                            continue;
+                        }
+                    }
+                    if (!RETRIABLE.test(error.message)) throw error;
                 }
             }
             throw lastError;

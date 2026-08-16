@@ -109,6 +109,11 @@ window.__ModuleLoader__.load({
           };
           for (const [key, value] of Object.entries(values)) {
             const have = (snap.value || {})[key];
+            // 不把「等于插件默认值」且存储里没有的字段写进配置：默认值本就由
+            // 宿主生效，写死会把未来模型/端点变化的适配空间一起固化（例如
+            // maxTokens 2048 遇上旧模型上限 1024 直接 400）。
+            // 注：apiKey 不在 DEFAULTS 中，不受此跳过影响（保留 #32 的语义）。
+            if (have === undefined && DEFAULTS[key] !== undefined && JSON.stringify(value) === JSON.stringify(DEFAULTS[key])) continue;
             if (JSON.stringify(value) !== JSON.stringify(have)) await scope.set(key, value);
           }
           setSaved(true);
