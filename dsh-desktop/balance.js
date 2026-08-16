@@ -87,6 +87,49 @@ function readApiKey(dshHome) {
   return '';
 }
 
+// 从 env 或 ~/.dsh/.credentials.yaml 读取任意凭据条目（与 readApiKey 同构）。
+function readCredentialValue(dshHome, name) {
+  const envKey = process.env[name];
+  if (envKey) return envKey.trim();
+  try {
+    const text = fs.readFileSync(path.join(dshHome, '.credentials.yaml'), 'utf8');
+    const re = new RegExp('^\\s*' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*:\\s*["\']?([^"\'\\s#]+)');
+    for (const line of text.split(/\r?\n/)) {
+      const m = line.match(re);
+      if (m) return m[1];
+    }
+  } catch {}
+  return '';
+}
+
+// OpenCode Go 套餐用量查询（官方配额接口：GET https://opencode.ai/zen/go/v1/usage，
+// Authorization: Bearer <OPENCODE_GO_API_KEY>）。响应：
+//   { usage: { rolling, weekly, monthly: { percent, status, resetsAt } } }
+// 三个窗口均为「套餐额度已用百分比」。失败只影响本 provider，不影响 DeepSeek 余额。
+async function queryOpenCodeGoUsage(dshHome) {
+  const key = readCredentialValue(dshHome, 'OPENCODE_GO_API_KEY');
+  if (!key) return { ok: false, error: 'no-key' };
+  try {
+    const data = await fetchJson('https://opencode.ai/zen/go/v1/usage', key);
+    const u = (data && data.usage) || {};
+    const windows = {};
+    for (const k of ['rolling', 'weekly', 'monthly']) {
+      const v = u[k];
+      if (v && typeof v === 'object') {
+        windows[k] = {
+          percent: Number(v.percent) || 0,
+          status: String(v.status || ''),
+          resetsAt: v.resetsAt ? new Date(v.resetsAt).toISOString() : '',
+        };
+      }
+    }
+    if (!Object.keys(windows).length) return { ok: false, error: 'empty usage payload' };
+    return { ok: true, windows };
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err) };
+  }
+}
+
 // 当前默认模型（~/.dsh/settings.yaml 的 agent-default-model.model），
 // 决定按哪一档价格估算本轮费用。
 function readActiveModel(dshHome) {
@@ -152,6 +195,8 @@ async function queryBalance(dshHome) {
 
 module.exports = {
   queryBalance,
+  queryOpenCodeGoUsage,
+  readCredentialValue,
   readActiveModel,
   effectivePrice,
   isPeakHour,
