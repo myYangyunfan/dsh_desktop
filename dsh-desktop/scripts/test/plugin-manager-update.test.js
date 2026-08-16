@@ -23,6 +23,17 @@ test('版本比较：数值分段（0.12.2 > 0.2.1）', () => {
   assert.equal(compareVersions('v0.2.3', '0.2.3'), 0, '前导 v 忽略');
 });
 
+test('版本比较：预发布与缺失段（semver 边界）', () => {
+  assert.ok(compareVersions('0.2.3-beta', '0.2.3') < 0, '预发布 < 正式');
+  assert.ok(compareVersions('0.2.3', '0.2.3-beta') > 0);
+  assert.ok(compareVersions('0.2.4-beta', '0.2.3') > 0, '更新版预发布 > 旧版正式');
+  assert.ok(compareVersions('0.2.3-alpha', '0.2.3-beta') < 0, '预发布之间按字符串');
+  assert.equal(compareVersions('1.0', '1.0.0'), 0, '缺失段按 0');
+  assert.equal(compareVersions('1.0.0', '1.0'), 0);
+  assert.ok(compareVersions('1.0-beta', '1.0') < 0, '预发布 < 同号正式（缺失段场景）');
+  assert.ok(compareVersions('1.0', '1.0-beta') > 0);
+});
+
 test('npm 双源 URL：官方与镜像同构', () => {
   assert.equal(npmLatestUrl('billion-context-dsh', false), 'https://registry.npmjs.org/billion-context-dsh/latest');
   assert.equal(npmLatestUrl('billion-context-dsh', true), 'https://registry.npmmirror.com/billion-context-dsh/latest');
@@ -75,5 +86,20 @@ test('解压定位：直接就是包根 / 找不到返回 null', () => {
     const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-empty-'));
     assert.equal(findPackageRoot(empty), null);
     fs.rmSync(empty, { recursive: true, force: true });
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+test('解压定位：唯一子目录递归深入 / 多层嵌套', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-root-'));
+  try {
+    fs.mkdirSync(path.join(tmp, 'repo-1.0.0', 'src'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'repo-1.0.0', 'package.json'), '{"name":"x","version":"1.0.0"}');
+    assert.equal(findPackageRoot(tmp), path.join(tmp, 'repo-1.0.0'));
+    // 多套一层（GitHub zip 内含子目录）
+    const nested = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-root-'));
+    fs.mkdirSync(path.join(nested, 'a', 'b'), { recursive: true });
+    fs.writeFileSync(path.join(nested, 'a', 'b', 'package.json'), '{"name":"y","version":"2.0.0"}');
+    assert.equal(findPackageRoot(nested), path.join(nested, 'a', 'b'));
+    fs.rmSync(nested, { recursive: true, force: true });
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });

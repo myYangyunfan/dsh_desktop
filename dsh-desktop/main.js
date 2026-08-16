@@ -2701,7 +2701,7 @@ function registerChromeIpc() {
   // 卸载：内置配套 = 标记卸载（可恢复，重启后不再同步/装配）；
   // 第三方 = 标记 + 删除安装目录（不可恢复）。
   ipcMain.handle('dsh:plugin-uninstall', async (event, { id } = {}) => {
-    if (!mainWindow || event.sender !== mainWindow.webContents) return { ok: false, error: 'unauthorized' };
+    if (!pluginManagerIpcAllowed(event)) return { ok: false, error: 'unauthorized' };
     try {
       const res = pluginManagerUninstall(String(id));
       if (res.ok) log('plugin-manager', '已卸载插件 ' + id);
@@ -2713,7 +2713,7 @@ function registerChromeIpc() {
   });
 
   ipcMain.handle('dsh:plugin-restore', async (event, { id } = {}) => {
-    if (!mainWindow || event.sender !== mainWindow.webContents) return { ok: false, error: 'unauthorized' };
+    if (!pluginManagerIpcAllowed(event)) return { ok: false, error: 'unauthorized' };
     try {
       const res = pluginManagerRestore(String(id));
       if (res.ok) log('plugin-manager', '已恢复插件 ' + id);
@@ -2726,7 +2726,7 @@ function registerChromeIpc() {
 
   // 检查插件更新（npm 官方 + npmmirror 镜像 / GitHub 官方 + 加速镜像）。
   ipcMain.handle('dsh:plugin-check-updates', async (event) => {
-    if (!mainWindow || event.sender !== mainWindow.webContents) return { ok: false, error: 'unauthorized' };
+    if (!pluginManagerIpcAllowed(event)) return { ok: false, error: 'unauthorized' };
     try {
       return { ok: true, items: await pluginManagerCheckUpdates() };
     } catch (err) {
@@ -2737,7 +2737,7 @@ function registerChromeIpc() {
 
   // 更新单个插件：下载 → 校验 → 备份 → 解压替换 → 重启生效。
   ipcMain.handle('dsh:plugin-update', async (event, { id } = {}) => {
-    if (!mainWindow || event.sender !== mainWindow.webContents) return { ok: false, error: 'unauthorized' };
+    if (!pluginManagerIpcAllowed(event)) return { ok: false, error: 'unauthorized' };
     try {
       return await pluginManagerUpdate(String(id));
     } catch (err) {
@@ -2745,6 +2745,17 @@ function registerChromeIpc() {
       return { ok: false, error: String((err && err.message) || err) };
     }
   });
+}
+
+/** IPC 鉴权：仅主窗主 frame（webUrl origin 白名单）可调用插件管理接口。
+ *  防止主窗被导航到外部页面后，渲染进程仍能触达卸载/更新等高危 IPC。 */
+function pluginManagerIpcAllowed(event) {
+  if (!mainWindow || event.sender !== mainWindow.webContents) return false;
+  try {
+    const url = event.senderFrame && event.senderFrame.url;
+    if (typeof url === 'string' && webUrl && url.startsWith(webUrl)) return true;
+  } catch {}
+  return false;
 }
 
 let trayHintShown = false;
@@ -2999,11 +3010,18 @@ function profilePatchFile() {
   return path.join(home, 'profiles', 'web', 'cordis.patch.yml');
 }
 
-/** 原子写入（临时文件 + rename），避免与 dsh 的 HMR 观察者撕裂读。 */
+/** 原子写入（临时文件 + rename），避免与 dsh 的 HMR 观察者撕裂读。
+ *  临时文件带进程内唯一序号，并发写同一 patch 不互相覆盖/不撞 ENOENT。 */
+let patchTmpSeq = 0;
 function writePatchAtomic(file, content) {
-  const tmp = file + '.tmp';
+  const tmp = file + '.tmp-' + process.pid + '-' + (++patchTmpSeq);
   fs.writeFileSync(tmp, content, 'utf8');
-  fs.renameSync(tmp, file);
+  try {
+    fs.renameSync(tmp, file);
+  } catch (err) {
+    try { fs.rmSync(tmp, { force: true }); } catch {}
+    throw err;
+  }
 }
 
 // 惰性加载 js-yaml（随内置 dsh 存在于 resources/app/node_modules，传递依赖）；
@@ -3491,6 +3509,15 @@ function pluginManagerReadPatch() {
   }
 }
 
+// patch 读-改-写互斥：并发 IPC（开关/卸载/恢复同时触发）串行化，
+// 避免后一个操作基于陈旧文本覆盖前一个操作的写入。
+let patchWriteChain = Promise.resolve();
+function withPatchWrite(fn) {
+  const run = patchWriteChain.then(fn, fn);
+  patchWriteChain = run.catch(() => {});
+  return run;
+}
+
 /** 读插件包 package.json 的 description（profile node_modules → app assets 兜底）。 */
 function pluginManagerPackageDescription(name) {
   if (!name) return '';
@@ -3613,24 +3640,26 @@ function pluginManagerResolveName(id) {
  *           （配套插件下次启动由 syncCompanionPlugins 重新 insert）
  */
 function pluginManagerSetEnabled(id, enabled) {
-  const file = path.join(pluginManagerProfileDir(), 'cordis.patch.yml');
-  let text = '';
-  try { text = fs.readFileSync(file, 'utf8'); } catch {}
-  if (!text.trim()) text = '# dsh web profile patch（由 DSH Desktop 维护）\n';
+  return withPatchWrite(() => {
+    const file = path.join(pluginManagerProfileDir(), 'cordis.patch.yml');
+    let text = '';
+    try { text = fs.readFileSync(file, 'utf8'); } catch {}
+    if (!text.trim()) text = '# dsh web profile patch（由 DSH Desktop 维护）\n';
 
-  const name = pluginManagerResolveName(id);
-  if (!enabled && !name) return { ok: false, error: '无法解析插件包名: ' + id };
+    const name = pluginManagerResolveName(id);
+    if (!enabled && !name) return { ok: false, error: '无法解析插件包名: ' + id };
 
-  let patched;
-  try {
-    patched = togglePluginInPatch(text, id, !!enabled, name);
-  } catch (err) {
-    return { ok: false, error: String((err && err.message) || err) };
-  }
-  if (patched !== text) {
-    try { writePatchAtomic(file, patched); } catch (err) { return { ok: false, error: String((err && err.message) || err) }; }
-  }
-  return { ok: true };
+    let patched;
+    try {
+      patched = togglePluginInPatch(text, id, !!enabled, name);
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err) };
+    }
+    if (patched !== text) {
+      try { writePatchAtomic(file, patched); } catch (err) { return { ok: false, error: String((err && err.message) || err) }; }
+    }
+    return { ok: true };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -3671,42 +3700,46 @@ function pluginManagerUninstall(id) {
   if (!row) return { ok: false, error: '未知插件: ' + id };
   if (row.group === 'core') return { ok: false, error: '核心组件不可卸载: ' + id };
   if (row.hasConfig && !row.removed) return { ok: false, error: '该插件带自定义配置，禁止卸载: ' + id };
-  const { file, text } = pluginManagerReadPatch();
-  let patched;
-  try {
-    patched = setPluginRemoved(text, id, true, row.name);
-  } catch (err) {
-    return { ok: false, error: String((err && err.message) || err) };
-  }
-  if (patched !== text) {
-    try { writePatchAtomic(file, patched); } catch (err) { return { ok: false, error: String((err && err.message) || err) }; }
-  }
-  const pkgDir = pluginManagerPackageDir(row.name);
-  if (pkgDir && fs.existsSync(pkgDir)) {
+  return withPatchWrite(() => {
+    const { file, text } = pluginManagerReadPatch();
+    let patched;
     try {
-      fs.rmSync(pkgDir, { recursive: true, force: true });
-      log('plugin-manager', '已删除插件安装目录 ' + pkgDir);
+      patched = setPluginRemoved(text, id, true, row.name);
     } catch (err) {
-      return { ok: false, error: '标记已写入，但删除安装目录失败: ' + ((err && err.message) || err) };
+      return { ok: false, error: String((err && err.message) || err) };
     }
-  }
-  return { ok: true, restartRequired: true };
+    if (patched !== text) {
+      try { writePatchAtomic(file, patched); } catch (err) { return { ok: false, error: String((err && err.message) || err) }; }
+    }
+    const pkgDir = pluginManagerPackageDir(row.name);
+    if (pkgDir && fs.existsSync(pkgDir)) {
+      try {
+        fs.rmSync(pkgDir, { recursive: true, force: true });
+        log('plugin-manager', '已删除插件安装目录 ' + pkgDir);
+      } catch (err) {
+        return { ok: false, error: '标记已写入，但删除安装目录失败: ' + ((err && err.message) || err) };
+      }
+    }
+    return { ok: true, restartRequired: true };
+  });
 }
 
 /** 恢复卸载（内置配套/基础层插件）：清除 removed 标记，重启后同步器重新装配。 */
 function pluginManagerRestore(id) {
-  const { file, text } = pluginManagerReadPatch();
-  const name = pluginManagerResolveName(id);
-  let patched;
-  try {
-    patched = setPluginRemoved(text, id, false, name);
-  } catch (err) {
-    return { ok: false, error: String((err && err.message) || err) };
-  }
-  if (patched !== text) {
-    try { writePatchAtomic(file, patched); } catch (err) { return { ok: false, error: String((err && err.message) || err) }; }
-  }
-  return { ok: true, restartRequired: true };
+  return withPatchWrite(() => {
+    const { file, text } = pluginManagerReadPatch();
+    const name = pluginManagerResolveName(id);
+    let patched;
+    try {
+      patched = setPluginRemoved(text, id, false, name);
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err) };
+    }
+    if (patched !== text) {
+      try { writePatchAtomic(file, patched); } catch (err) { return { ok: false, error: String((err && err.message) || err) }; }
+    }
+    return { ok: true, restartRequired: true };
+  });
 }
 
 // 可独立更新的插件（有公开发布源的才列进来；其余随应用更新）。
@@ -3718,13 +3751,14 @@ const PLUGIN_UPDATE_SOURCES = {
   'side-session': { kind: 'github', repo: 'hzhz314159/dsh-side-session' },
 };
 
-/** GET JSON（跟随重定向，超时取消）。 */
-function pluginManagerHttpGetJson(url, timeoutMs = 15000, headers = {}) {
+/** GET JSON（跟随重定向，上限 5 跳防环，超时取消）。 */
+function pluginManagerHttpGetJson(url, timeoutMs = 15000, headers = {}, redirects = 0) {
   return new Promise((resolve, reject) => {
+    if (redirects > 5) return reject(new Error('重定向次数过多'));
     const req = https.get(url, { headers: { 'User-Agent': 'DSH-Desktop', ...headers }, timeout: timeoutMs }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume();
-        return resolve(pluginManagerHttpGetJson(res.headers.location, timeoutMs, headers));
+        return resolve(pluginManagerHttpGetJson(res.headers.location, timeoutMs, headers, redirects + 1));
       }
       let data = '';
       res.on('data', (c) => { data += c; });
@@ -3738,23 +3772,28 @@ function pluginManagerHttpGetJson(url, timeoutMs = 15000, headers = {}) {
   });
 }
 
-/** 下载到 Buffer（最大 64MB 防护）。 */
-function pluginManagerHttpGetBuffer(url, timeoutMs = 60000) {
+/** 下载到 Buffer（最大 64MB 防护；重定向上限 5 跳防环）。 */
+function pluginManagerHttpGetBuffer(url, timeoutMs = 60000, redirects = 0) {
   return new Promise((resolve, reject) => {
+    if (redirects > 5) return reject(new Error('重定向次数过多'));
     const req = https.get(url, { headers: { 'User-Agent': 'DSH-Desktop' }, timeout: timeoutMs }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume();
-        return resolve(pluginManagerHttpGetBuffer(res.headers.location, timeoutMs));
+        return resolve(pluginManagerHttpGetBuffer(res.headers.location, timeoutMs, redirects + 1));
       }
       if (res.statusCode !== 200) { res.resume(); return reject(new Error('HTTP ' + res.statusCode)); }
       const chunks = [];
       let total = 0;
+      let limitHit = false;
       res.on('data', (c) => {
+        if (limitHit) return;
         total += c.length;
-        if (total > 64 * 1024 * 1024) { req.destroy(new Error('下载超过 64MB 上限')); return; }
+        if (total > 64 * 1024 * 1024) { limitHit = true; req.destroy(new Error('下载超过 64MB 上限')); return; }
         chunks.push(c);
       });
-      res.on('end', () => resolve(Buffer.concat(chunks)));
+      res.on('end', () => {
+        if (!limitHit) resolve(Buffer.concat(chunks));
+      });
     });
     req.on('timeout', () => req.destroy(new Error('下载超时')));
     req.on('error', (err) => reject(err));
@@ -3781,18 +3820,22 @@ async function pluginManagerFetchNpmLatest(pkg) {
   return null;
 }
 
-/** 查 GitHub Releases 最新版（带资产；仅官方 API，镜像仅用于资产下载加速）。 */
+/** 查 GitHub Releases 最新版（带资产；仅官方 API，镜像仅用于资产下载加速）。
+ *  GitHub API 的资产 digest 字段（sha256 hex）作为完整性锚点——镜像/中间人
+ *  替换内容时 digest 比对失败即拒绝安装。 */
 async function pluginManagerFetchGithubLatest(repo) {
   try {
     const data = await pluginManagerHttpGetJson(githubReleaseApiUrl(repo), 15000, { Accept: 'application/vnd.github+json' });
     if (data && data.tag_name && Array.isArray(data.assets) && data.assets.length > 0) {
       const a = data.assets.find((x) => x && x.name) || data.assets[0];
+      // GitHub API digest 形如 "sha256:<hex64>"（部分老资产无此字段）
+      const dm = /^(?:sha256:)?([0-9a-fA-F]{64})$/.exec(String(a.digest || ''));
       return {
         version: String(data.tag_name).replace(/^v/, ''),
         tag: String(data.tag_name),
         assetName: String(a.name),
         tarball: githubAssetDownloadUrl(repo, data.tag_name, a.name),
-        integrity: '',
+        digest: dm ? dm[1].toLowerCase() : '',
         source: 'github',
       };
     }
@@ -3802,21 +3845,20 @@ async function pluginManagerFetchGithubLatest(repo) {
   return null;
 }
 
-/** 检查全部可更新插件（有更新源的才查）。 */
+/** 检查全部可更新插件（有更新源的才查；已卸载的跳过）。 */
 async function pluginManagerCheckUpdates() {
-  const rows = pluginManagerCollect().filter((r) => PLUGIN_UPDATE_SOURCES[r.id]);
-  const results = [];
-  for (const row of rows) {
+  const rows = pluginManagerCollect().filter((r) => PLUGIN_UPDATE_SOURCES[r.id] && !r.removed);
+  // 并行查询各源（npm 双源串行重试、GitHub 官方）——3 个源最坏耗时从 ~90s 降到 ~30s
+  const settled = await Promise.all(rows.map(async (row) => {
     const src = PLUGIN_UPDATE_SOURCES[row.id];
     const current = pluginManagerInstalledVersion(row.name) || '0.0.0';
     const info = src.kind === 'npm'
       ? await pluginManagerFetchNpmLatest(src.pkg)
       : await pluginManagerFetchGithubLatest(src.repo);
     if (!info) {
-      results.push({ id: row.id, name: row.name, current, latest: '', hasUpdate: false, source: src.kind, error: '查询失败' });
-      continue;
+      return { id: row.id, name: row.name, current, latest: '', hasUpdate: false, source: src.kind, error: '查询失败' };
     }
-    results.push({
+    return {
       id: row.id,
       name: row.name,
       current,
@@ -3824,85 +3866,119 @@ async function pluginManagerCheckUpdates() {
       hasUpdate: compareVersions(info.version, current) > 0,
       source: src.kind,
       download: info,
-    });
-  }
-  return results;
+    };
+  }));
+  return settled;
 }
+
+// 同一插件更新中互斥：并发调用直接返回「更新中」，避免目录交错破坏。
+const pluginUpdateLocks = new Map();
 
 /**
  * 更新单个插件：下载 → 校验 → 备份旧版 → tar.exe 解压 → 定位包根 → 替换。
  * 失败自动回滚备份；成功需重启生效（sync 的版本保留逻辑防止被安装包覆盖）。
+ * 校验链：npm = dist.integrity（sha512）；GitHub = Release API digest（sha256，
+ * 来自官方 API 的完整性锚点）——镜像/中间人替换内容即比对失败拒绝安装。
  */
 async function pluginManagerUpdate(id) {
+  if (pluginUpdateLocks.has(id)) return { ok: false, error: '该插件正在更新中，请稍候' };
   const row = pluginManagerCollect().find((r) => r.id === id);
   const src = row && PLUGIN_UPDATE_SOURCES[id];
   if (!row || !src) return { ok: false, error: '该插件没有可用更新源' };
-  const info = src.kind === 'npm'
-    ? await pluginManagerFetchNpmLatest(src.pkg)
-    : await pluginManagerFetchGithubLatest(src.repo);
-  if (!info || !info.tarball) return { ok: false, error: '查询最新版本失败（网络或源不可用）' };
+  if (row.removed) return { ok: false, error: '插件已卸载，请先恢复再更新' };
 
   const pkgDir = pluginManagerPackageDir(row.name);
   if (!pkgDir || !fs.existsSync(path.join(pkgDir, 'package.json'))) {
     return { ok: false, error: '未找到插件安装目录: ' + row.name };
   }
 
-  const isZip = /\.zip$/i.test(info.tarball);
-  const tmpFile = path.join(pluginManagerProfileDir(), 'plugin-update-' + id + '-' + Date.now() + (isZip ? '.zip' : '.tgz'));
-  const backupDir = pkgDir + '.bak-' + Date.now();
-  try {
-    // 1) 下载
-    let buf;
+  let lock;
+  pluginUpdateLocks.set(id, (lock = (async () => {
+    const info = src.kind === 'npm'
+      ? await pluginManagerFetchNpmLatest(src.pkg)
+      : await pluginManagerFetchGithubLatest(src.repo);
+    if (!info || !info.tarball) return { ok: false, error: '查询最新版本失败（网络或源不可用）' };
+
+    const isZip = /\.zip$/i.test(info.tarball);
+    const tmpFile = path.join(pluginManagerProfileDir(), 'plugin-update-' + id + '-' + Date.now() + (isZip ? '.zip' : '.tgz'));
+    const backupDir = pkgDir + '.bak-' + Date.now();
+    let rollbackFailed = false;
     try {
-      buf = await pluginManagerHttpGetBuffer(info.tarball);
-    } catch (err) {
-      // GitHub 资产官方直链失败 → 走加速镜像重试一次
-      if (src.kind === 'github') {
-        log('plugin-manager', '官方直链下载失败(' + err.message + ')，改用镜像重试');
-        const { ghProxyUrl } = require('./scripts/plugin-manager-update');
-        buf = await pluginManagerHttpGetBuffer(ghProxyUrl(info.tarball));
+      // 1) 下载（GitHub 官方直链失败 → 加速镜像重试一次；镜像内容同样过校验）
+      let buf;
+      try {
+        buf = await pluginManagerHttpGetBuffer(info.tarball);
+      } catch (err) {
+        if (src.kind === 'github') {
+          log('plugin-manager', '官方直链下载失败(' + err.message + ')，改用镜像重试');
+          const { ghProxyUrl } = require('./scripts/plugin-manager-update');
+          buf = await pluginManagerHttpGetBuffer(ghProxyUrl(info.tarball));
+        } else {
+          throw err;
+        }
+      }
+      // 2) 完整性校验（信任锚点来自官方元数据，镜像替换内容即失败）
+      if (info.integrity) {
+        if (!verifyIntegrity(buf, info.integrity)) return { ok: false, error: '下载校验失败（sha512 不匹配），已中止' };
+      } else if (src.kind === 'github') {
+        if (!info.digest) return { ok: false, error: '该 Release 未提供校验和，为安全起见拒绝更新' };
+        const crypto = require('node:crypto');
+        const actual = crypto.createHash('sha256').update(buf).digest('hex');
+        if (actual !== info.digest) return { ok: false, error: '下载校验失败（sha256 不匹配），已中止' };
       } else {
+        log('plugin-manager', '警告: ' + src.pkg + ' 的 npm 元数据缺少 integrity，跳过校验');
+      }
+      fs.writeFileSync(tmpFile, buf);
+      // 3) 备份旧版
+      fs.renameSync(pkgDir, backupDir);
+      try {
+        // 4) 解压（Windows 自带 bsdtar：tgz 用 -xzf，zip 用 -xf）
+        const extractDir = path.join(pluginManagerProfileDir(), 'plugin-update-x-' + id + '-' + Date.now());
+        fs.mkdirSync(extractDir, { recursive: true });
+        const r = spawnSync('tar.exe', isZip ? ['-xf', tmpFile, '-C', extractDir] : ['-xzf', tmpFile, '-C', extractDir], { encoding: 'utf8' });
+        if (r.status !== 0) throw new Error('解压失败: ' + ((r.stderr && r.stderr.trim()) || 'tar 退出码 ' + r.status));
+        const root = findPackageRoot(extractDir);
+        if (!root) throw new Error('解压内容里找不到 package.json');
+        // 解压根必须落在 extractDir 内（防异常 tar 实现写外部）
+        if (!path.resolve(root).startsWith(path.resolve(extractDir) + path.sep)) {
+          throw new Error('解压内容路径越界，已中止');
+        }
+        const newPkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+        if (!newPkg || !newPkg.version) throw new Error('新版本 package.json 缺少 version');
+        // 包名与安装目标一致（防镜像投毒换包）
+        if (row.name && newPkg.name && newPkg.name !== row.name) {
+          throw new Error('下载内容包名不匹配（' + newPkg.name + ' ≠ ' + row.name + '），已中止');
+        }
+        // 5) 替换
+        fs.mkdirSync(pkgDir, { recursive: true });
+        fs.cpSync(root, pkgDir, { recursive: true, force: true, preserveTimestamps: true });
+        fs.rmSync(extractDir, { recursive: true, force: true });
+        return { ok: true, restartRequired: true, version: String(newPkg.version) };
+      } catch (err) {
+        // 回滚（成功路径的备份清理放在 finally，不参与成败判定）
+        try {
+          if (fs.existsSync(backupDir)) {
+            fs.rmSync(pkgDir, { recursive: true, force: true });
+            fs.renameSync(backupDir, pkgDir);
+          }
+        } catch (rollbackErr) {
+          rollbackFailed = true;
+          log('plugin-manager', '回滚失败，备份保留在 ' + backupDir + ': ' + ((rollbackErr && rollbackErr.message) || rollbackErr));
+        }
         throw err;
       }
-    }
-    // 2) 校验
-    if (info.integrity && !verifyIntegrity(buf, info.integrity)) {
-      return { ok: false, error: '下载校验失败（sha512 不匹配），已中止' };
-    }
-    fs.writeFileSync(tmpFile, buf);
-    // 3) 备份旧版
-    fs.renameSync(pkgDir, backupDir);
-    try {
-      // 4) 解压（Windows 自带 bsdtar：tgz 用 -xzf，zip 用 -xf）
-      const extractDir = path.join(pluginManagerProfileDir(), 'plugin-update-x-' + id + '-' + Date.now());
-      fs.mkdirSync(extractDir, { recursive: true });
-      const r = spawnSync('tar.exe', isZip ? ['-xf', tmpFile, '-C', extractDir] : ['-xzf', tmpFile, '-C', extractDir], { encoding: 'utf8' });
-      if (r.status !== 0) throw new Error('解压失败: ' + ((r.stderr && r.stderr.trim()) || 'tar 退出码 ' + r.status));
-      const root = findPackageRoot(extractDir);
-      if (!root) throw new Error('解压内容里找不到 package.json');
-      const newPkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-      if (!newPkg || !newPkg.version) throw new Error('新版本 package.json 缺少 version');
-      // 5) 替换
-      fs.mkdirSync(pkgDir, { recursive: true });
-      fs.cpSync(root, pkgDir, { recursive: true, force: true, preserveTimestamps: true });
-      fs.rmSync(extractDir, { recursive: true, force: true });
-      fs.rmSync(backupDir, { recursive: true, force: true });
-      return { ok: true, restartRequired: true, version: String(newPkg.version) };
     } catch (err) {
-      // 回滚
-      try {
-        if (fs.existsSync(backupDir)) {
-          fs.rmSync(pkgDir, { recursive: true, force: true });
-          fs.renameSync(backupDir, pkgDir);
-        }
-      } catch { /* 回滚失败仅记录 */ }
-      throw err;
+      return { ok: false, error: String((err && err.message) || err) };
+    } finally {
+      try { fs.unlinkSync(tmpFile); } catch {}
+      // 备份清理：回滚失败时保留（用户可手动恢复）
+      try { if (!rollbackFailed && fs.existsSync(backupDir)) fs.rmSync(backupDir, { recursive: true, force: true }); } catch {}
     }
-  } catch (err) {
-    return { ok: false, error: String((err && err.message) || err) };
+  })()));
+  try {
+    return await lock;
   } finally {
-    try { fs.unlinkSync(tmpFile); } catch {}
-    try { if (fs.existsSync(backupDir)) fs.rmSync(backupDir, { recursive: true, force: true }); } catch {}
+    pluginUpdateLocks.delete(id);
   }
 }
 

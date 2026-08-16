@@ -28,6 +28,7 @@ window.__ModuleLoader__.load({
 			badgePending: "重启后生效",
 			badgeFailed: "挂载失败",
 			badgePendingLoad: "加载中",
+			uninstalledTag: "已卸载",
 			loading: "加载中…",
 			errorPrefix: "插件清单加载失败：",
 			noBridge: "插件管理桥接不可用（请确认已更新到最新版 DSH Desktop）",
@@ -91,7 +92,7 @@ window.__ModuleLoader__.load({
 				"aria-checked": on,
 				"aria-label": row.id,
 				disabled,
-				onClick: () => onToggle(row, !on),
+				onClick: (e) => { if (e && e.stopPropagation) e.stopPropagation(); onToggle(row, !on); },
 				style: {
 					position: "relative",
 					width: 32,
@@ -143,6 +144,8 @@ window.__ModuleLoader__.load({
 			const [updateMap, setUpdateMap] = react.useState(null);
 			const [checkingUpdates, setCheckingUpdates] = react.useState(false);
 			const [updatingId, setUpdatingId] = react.useState(null);
+			// 简洁卡片展开详情（点击卡片切换；null = 全部收起）
+			const [expanded, setExpanded] = react.useState(null);
 			// 卸载两步确认（id → true 表示已点过一次，等待再点确认）
 			const [uninstallArmed, setUninstallArmed] = react.useState(null);
 			// 操作结果提示条（成功/失败均走这里，避免借用 error 区）
@@ -284,7 +287,11 @@ window.__ModuleLoader__.load({
 					for (const it of list) map[it.id] = it;
 					setUpdateMap(map);
 					const n = list.filter((it) => it.hasUpdate).length;
-					setActionMsg(n > 0 ? n + " 个插件可更新" : (list.length === 0 ? L.updateNoSources : L.upToDate));
+					if (list.length === 0) {
+						setActionMsg(L.updateNoSources);
+					} else {
+						setActionMsg("检查完成：" + (n > 0 ? n + " 个可更新，" : "") + (list.length - n) + " 个已是最新；其余插件随应用更新");
+					}
 				}).catch((err) => {
 					setCheckingUpdates(false);
 					setActionMsg(L.updateFailed + String((err && err.message) || err));
@@ -356,10 +363,13 @@ window.__ModuleLoader__.load({
 			const rowName = (row) => (/^[0-9a-f]{8}$/i.test(row.id) ? null : row.id);
 			const rowPkg = (row) => row.title;
 
-			/** 简洁视图卡片（官方清单页同款：标题 + 状态圆点 + 开关）。 */
+			/** 简洁视图卡片：单行（名称 + 圆点 + 开关），点击展开详情与操作。 */
 			const renderCompactCard = (row) => {
 				const on = rowValue(row);
 				const failed = row.phase === "failed";
+				const removed = rowCat(row) === "removed";
+				const isOpen = expanded === row.id;
+				const upd = updateMap && updateMap[row.id];
 				const dotColor = failed
 					? "var(--dsw-alias-state-error-primary, #ff7a85)"
 					: on
@@ -369,35 +379,78 @@ window.__ModuleLoader__.load({
 				const short = rowName(row) ? pkgShort(rowPkg(row)) : null;
 				return jsxs("div", {
 					key: row.id,
-					title: row.description || L.descFallback,
+					onClick: () => setExpanded(isOpen ? null : row.id),
+					title: isOpen ? undefined : (row.description || L.descFallback),
 					style: {
 						display: "flex",
-						alignItems: "center",
-						justifyContent: "space-between",
-						gap: 10,
+						flexDirection: "column",
 						minWidth: 0,
 						padding: "10px 12px",
-						border: "1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.35))",
+						border: "1px solid " + (isOpen ? "var(--dsw-alias-border-l1, rgba(128,128,128,0.55))" : "var(--dsw-alias-border-l2, rgba(128,128,128,0.35))"),
 						borderRadius: 10,
 						background: "var(--dsw-alias-bg-layer-3, transparent)",
-						opacity: on ? 1 : 0.62
+						cursor: "pointer",
+						opacity: on ? 1 : 0.62,
+						boxShadow: isOpen ? "var(--dsw-shadow-lv1, 0 4px 12px rgba(0,0,0,0.12))" : undefined
 					},
 					children: [
-						jsxs("span", {
-							style: { display: "flex", alignItems: "baseline", minWidth: 0, overflow: "hidden" },
+						jsxs("div", {
+							style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 },
 							children: [
-								jsx("span", { style: { fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }, children: name }),
-								short ? jsx("span", { style: { fontSize: 11, opacity: 0.5, marginLeft: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }, children: short }) : null
+								jsxs("span", {
+									style: { display: "flex", alignItems: "baseline", minWidth: 0, overflow: "hidden" },
+									children: [
+										jsx("span", { style: { fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }, children: name }),
+										short ? jsx("span", { style: { fontSize: 11, opacity: 0.5, marginLeft: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }, children: short }) : null,
+										removed ? jsx("span", { style: { fontSize: 11, opacity: 0.55, marginLeft: 6 }, children: L.uninstalledTag }) : null
+									]
+								}),
+								jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8, flex: "none" }, children: [
+									upd && upd.hasUpdate && !upd.applied && !removed
+										? badge("↑ " + upd.latest, "var(--dsw-alias-state-info-primary, #5b9bd5)")
+										: null,
+									rowDirty(row) ? badge(L.badgePending, "var(--dsw-alias-state-info-primary, #5b9bd5)") : null,
+									jsx("span", { style: { width: 7, height: 7, borderRadius: 999, background: dotColor, flex: "none" } }),
+									switchControl(row, on, onToggle, pendingId === row.id)
+								] })
 							]
 						}),
-						jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8, flex: "none" }, children: [
-							updateMap && updateMap[row.id] && updateMap[row.id].hasUpdate && !updateMap[row.id].applied
-								? badge("↑ " + updateMap[row.id].latest, "var(--dsw-alias-state-info-primary, #5b9bd5)")
-								: null,
-							rowDirty(row) ? badge(L.badgePending, "var(--dsw-alias-state-info-primary, #5b9bd5)") : null,
-							jsx("span", { style: { width: 7, height: 7, borderRadius: 999, background: dotColor, flex: "none" } }),
-							switchControl(row, on, onToggle, pendingId === row.id)
-						] })
+						isOpen ? jsxs("div", {
+							style: { marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--dsw-alias-divider-weak, rgba(128,128,128,0.14))", display: "flex", flexDirection: "column", gap: 8 },
+							children: [
+								jsx("span", { style: { fontSize: 12, opacity: 0.7, lineHeight: 1.5 }, children: row.description || L.descFallback }),
+								jsxs("div", { style: { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }, children: [
+									on ? badge(L.badgeEnabled, "var(--dsw-alias-state-success-primary, #4caf7d)") : badge(L.badgeDisabled, "var(--dsw-alias-state-warning-primary, #d99a3d)"),
+									failed ? badge(L.badgeFailed, "var(--dsw-alias-state-error-primary, #ff7a85)") : null,
+									upd && !upd.error ? (upd.hasUpdate && !upd.applied
+										? badge(L.updateAvailable + " v" + upd.current + " → v" + upd.latest, "var(--dsw-alias-state-info-primary, #5b9bd5)")
+										: (!upd.applied ? badge(L.upToDate + (upd.current ? " v" + upd.current : ""), "var(--dsw-alias-label-tertiary, rgba(128,128,128,0.6))") : null))
+										: null,
+									rowDirty(row) ? badge(L.badgePending, "var(--dsw-alias-state-info-primary, #5b9bd5)") : null
+								] }),
+								jsxs("div", { style: { display: "flex", alignItems: "center", gap: 6 }, children: [
+									row.group !== "core" && !row.hasConfig && !removed ? jsx("button", {
+										type: "button",
+										onClick: (e) => { e.stopPropagation(); doUninstall(row); },
+										style: linkBtnStyle(uninstallArmed === row.id, false),
+										children: uninstallArmed === row.id ? L.uninstallConfirm : L.uninstallBtn
+									}) : null,
+									removed ? jsx("button", {
+										type: "button",
+										onClick: (e) => { e.stopPropagation(); doRestore(row); },
+										style: linkBtnStyle(false, true),
+										children: L.restoreBtn
+									}) : null,
+									upd && (upd.hasUpdate || upd.applied) && !removed ? jsx("button", {
+										type: "button",
+										disabled: !!updatingId,
+										onClick: (e) => { e.stopPropagation(); doUpdate(row); },
+										style: linkBtnStyle(false, true),
+										children: upd.applied ? L.updateDone : (updatingId === row.id ? L.updating : L.updateBtn + " v" + upd.latest)
+									}) : null
+								] })
+							]
+						}) : null
 					]
 				});
 			};
@@ -414,56 +467,55 @@ window.__ModuleLoader__.load({
 				background: "transparent"
 			});
 
-			/** 详情视图行：名称 + 包名 + 状态徽章 + 描述 + 开关/操作按钮。 */
+			/** 详情视图行：三段式（标题行 / 描述 / 操作行），信息有条理。 */
 			const renderDetailRow = (row) => {
-				const upd = updateMap && updateMap[row.id];
+				const on = rowValue(row);
+				const failed = row.phase === "failed";
 				const removed = rowCat(row) === "removed";
+				const upd = updateMap && updateMap[row.id];
 				return jsxs("div", {
 					key: row.id,
-					style: { display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 0", borderBottom: "1px solid var(--dsw-alias-divider-weak, rgba(128,128,128,0.16))", opacity: removed ? 0.62 : 1 },
+					style: { display: "flex", flexDirection: "column", gap: 5, padding: "10px 0", borderBottom: "1px solid var(--dsw-alias-divider-weak, rgba(128,128,128,0.16))", opacity: removed ? 0.62 : 1 },
 					children: [
-						jsx("div", {
-							style: { flex: 1, display: "flex", flexDirection: "column", gap: 3, minWidth: 0 },
-							children: [
-								jsxs("div", { children: [
-									jsx("span", { style: { fontWeight: 600 }, children: rowName(row) || rowPkg(row) }),
-									jsx("span", { style: { fontSize: 12, opacity: 0.55, marginLeft: 8 }, children: rowPkg(row) }),
-									rowValue(row) ? badge(L.badgeEnabled, "var(--dsw-alias-state-success-primary, #4caf7d)") : badge(L.badgeDisabled, "var(--dsw-alias-state-warning-primary, #d99a3d)"),
-									phaseBadge(row),
-									rowDirty(row) ? badge(L.badgePending, "var(--dsw-alias-state-info-primary, #5b9bd5)") : null,
-									upd && upd.hasUpdate && !upd.applied ? badge(L.updateAvailable + " v" + upd.current + " → v" + upd.latest, "var(--dsw-alias-state-info-primary, #5b9bd5)") : null,
-									upd && upd.applied ? badge(L.updateDone + (upd.applied !== true ? "（v" + upd.applied + "）" : ""), "var(--dsw-alias-state-success-primary, #4caf7d)") : null
-								] }),
-								jsx("span", { style: { fontSize: 12, opacity: 0.65, lineHeight: 1.5 }, children: row.description || L.descFallback })
-							]
-						}),
-						jsxs("div", { style: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flex: "none" }, children: [
-							jsx("input", {
-								type: "checkbox",
-								checked: rowValue(row),
-								disabled: !row.toggleable || pendingId === row.id,
-								onChange: () => onToggle(row, !rowValue(row)),
-								style: { cursor: row.toggleable ? "pointer" : "not-allowed" }
-							}),
-							row.group !== "core" && !row.hasConfig && !removed ? jsx("button", {
-								type: "button",
-								onClick: () => doUninstall(row),
-								style: linkBtnStyle(uninstallArmed === row.id, false),
-								children: uninstallArmed === row.id ? L.uninstallConfirm : L.uninstallBtn
-							}) : null,
-							removed ? jsx("button", {
-								type: "button",
-								onClick: () => doRestore(row),
-								style: linkBtnStyle(false, true),
-								children: L.restoreBtn
-							}) : null,
-							upd && (upd.hasUpdate || upd.applied) && !removed ? jsx("button", {
-								type: "button",
-								disabled: !!updatingId,
-								onClick: () => doUpdate(row),
-								style: linkBtnStyle(false, true),
-								children: upd.applied ? L.updateDone : (updatingId === row.id ? L.updating : L.updateBtn + " v" + upd.latest)
-							}) : null
+						jsxs("div", { style: { display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", minWidth: 0 }, children: [
+							jsx("span", { style: { fontWeight: 600 }, children: rowName(row) || rowPkg(row) }),
+							jsx("span", { style: { fontSize: 12, opacity: 0.55, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: rowPkg(row) }),
+							on ? badge(L.badgeEnabled, "var(--dsw-alias-state-success-primary, #4caf7d)") : badge(L.badgeDisabled, "var(--dsw-alias-state-warning-primary, #d99a3d)"),
+							phaseBadge(row),
+							removed ? badge(L.uninstalledTag, "var(--dsw-alias-label-tertiary, rgba(128,128,128,0.6))") : null
+						] }),
+						jsx("span", { style: { fontSize: 12, opacity: 0.65, lineHeight: 1.5 }, children: row.description || L.descFallback }),
+						jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginTop: 2 }, children: [
+							jsxs("div", { style: { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }, children: [
+								rowDirty(row) ? badge(L.badgePending, "var(--dsw-alias-state-info-primary, #5b9bd5)") : null,
+								upd && !upd.error && !upd.applied ? (upd.hasUpdate
+									? badge(L.updateAvailable + " v" + upd.current + " → v" + upd.latest, "var(--dsw-alias-state-info-primary, #5b9bd5)")
+									: badge(L.upToDate + (upd.current ? " v" + upd.current : ""), "var(--dsw-alias-label-tertiary, rgba(128,128,128,0.6))"))
+									: null,
+								upd && upd.applied ? badge(L.updateDone + (upd.applied !== true ? "（v" + upd.applied + "）" : ""), "var(--dsw-alias-state-success-primary, #4caf7d)") : null
+							] }),
+							jsxs("div", { style: { display: "flex", alignItems: "center", gap: 6 }, children: [
+								upd && (upd.hasUpdate || upd.applied) && !removed ? jsx("button", {
+									type: "button",
+									disabled: !!updatingId,
+									onClick: () => doUpdate(row),
+									style: linkBtnStyle(false, true),
+									children: upd.applied ? L.updateDone : (updatingId === row.id ? L.updating : L.updateBtn + " v" + upd.latest)
+								}) : null,
+								row.group !== "core" && !row.hasConfig && !removed ? jsx("button", {
+									type: "button",
+									onClick: () => doUninstall(row),
+									style: linkBtnStyle(uninstallArmed === row.id, false),
+									children: uninstallArmed === row.id ? L.uninstallConfirm : L.uninstallBtn
+								}) : null,
+								removed ? jsx("button", {
+									type: "button",
+									onClick: () => doRestore(row),
+									style: linkBtnStyle(false, true),
+									children: L.restoreBtn
+								}) : null,
+								switchControl(row, on, onToggle, pendingId === row.id)
+							] })
 						] })
 					]
 				});
@@ -536,7 +588,8 @@ window.__ModuleLoader__.load({
 					chip("all", L.catAll, base.length),
 					chip("companion", L.groupCompanion, n("companion")),
 					chip("other", L.groupOther, n("other")),
-					chip("core", L.groupCore, n("core"))
+					chip("core", L.groupCore, n("core")),
+					chip("removed", L.groupRemoved, n("removed"))
 				] });
 			};
 

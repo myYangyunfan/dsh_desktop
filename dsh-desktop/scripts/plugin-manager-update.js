@@ -5,20 +5,36 @@
 // 便于 node --test 单测；网络下载与文件落地编排在 main.js（pluginManager*）。
 // ---------------------------------------------------------------------------
 
-/** 数值分段比较版本（0.12.2 > 0.2.1；非数字段按字符串比较）。 */
+/**
+ * 数值分段比较版本（0.12.2 > 0.2.1），semver 段规则：
+ *   - 缺失段按 0 处理（1.0 == 1.0.0）；
+ *   - 段先按数字前缀比较（0.2.4-beta > 0.2.3）；
+ *   - 数字前缀相等时：无预发布后缀 > 有后缀（0.2.3 > 0.2.3-beta）；
+ *   - 两段都带后缀按字符串比较（alpha < beta）；
+ *   - 数字段 > 纯文本段。
+ */
 function compareVersions(a, b) {
   const pa = String(a || '').replace(/^v/, '').split('.');
   const pb = String(b || '').replace(/^v/, '').split('.');
   const n = Math.max(pa.length, pb.length);
+  const seg = (s) => {
+    if (s === undefined) return { num: 0, isNum: true, hasPre: false, raw: '' };
+    const m = /^(\d+)(.*)$/.exec(s);
+    if (!m) return { num: NaN, isNum: false, hasPre: false, raw: s };
+    return { num: parseInt(m[1], 10), isNum: true, hasPre: m[2].length > 0, raw: s };
+  };
   for (let i = 0; i < n; i++) {
-    const x = pa[i], y = pb[i];
-    if (x === undefined) return -1;
-    if (y === undefined) return 1;
-    const nx = Number(x), ny = Number(y);
-    if (Number.isFinite(nx) && Number.isFinite(ny)) {
-      if (nx !== ny) return nx < ny ? -1 : 1;
-    } else if (x !== y) {
-      return x < y ? -1 : 1;
+    const x = seg(pa[i]), y = seg(pb[i]);
+    if (x.isNum && y.isNum) {
+      if (x.num !== y.num) return x.num < y.num ? -1 : 1;
+      if (x.hasPre !== y.hasPre) return x.hasPre ? -1 : 1; // 有后缀 < 无后缀
+      if (x.hasPre && x.raw !== y.raw) return x.raw < y.raw ? -1 : 1;
+    } else if (x.isNum && !y.isNum) {
+      return 1;
+    } else if (!x.isNum && y.isNum) {
+      return -1;
+    } else if (x.raw !== y.raw) {
+      return x.raw < y.raw ? -1 : 1;
     }
   }
   return 0;
@@ -71,18 +87,21 @@ function verifyIntegrity(buffer, integrity) {
  * 返回目录绝对路径；找不到返回 null。
  * @param {string} dir 解压目标目录（tar.exe 解压后的临时目录）
  */
-function findPackageRoot(dir) {
+function findPackageRoot(dir, depth = 0) {
   const fs = require('node:fs');
   const path = require('node:path');
+  if (depth > 8) return null; // 递归深度防护（防目录环/异常嵌套）
   let entries = [];
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return null; }
   const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
   // 1) 顶层直接就是包根
   if (fs.existsSync(path.join(dir, 'package.json'))) return dir;
-  // 2) 只有一个子目录且内含 package.json → 那就是包根
+  // 2) 只有一个子目录且内含 package.json → 那就是包根；
+  //    唯一子目录不含 package.json 时递归深入（GitHub zip 可能多套一层）
   if (dirs.length === 1) {
     const sub = path.join(dir, dirs[0]);
     if (fs.existsSync(path.join(sub, 'package.json'))) return sub;
+    return findPackageRoot(sub, depth + 1);
   }
   // 3) package/ 惯例（npm tarball）
   const pkg = path.join(dir, 'package');
