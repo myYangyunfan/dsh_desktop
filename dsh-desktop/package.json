@@ -1,55 +1,55 @@
 {
-  "name": "dsh-desktop",
-  "productName": "DSH Desktop",
-  "version": "0.3.8",
-  "description": "DeepSeek Harness (dsh) 开箱即用的 Windows 桌面客户端：内置 dsh CLI 与 Node 运行时，一键启动 Web UI",
-  "main": "main.js",
-  "author": "DSH Desktop",
-  "license": "MIT",
-  "private": true,
-  "scripts": {
-    "start": "node scripts/install-minimal-win-preset.js && node scripts/patch-event-vocabulary.js node_modules/@deepseek-ai/dsh-session && node scripts/patch-deps.js && electron .",
-    "fetch-node": "node scripts/fetch-node.js",
-    "pack": "node scripts/patch-portable-template.js && node scripts/patch-deps.js && electron-builder --dir",
-    "predist": "node scripts/check-syntax.js",
-    "prepack": "node scripts/check-syntax.js",
-    "dist": "node scripts/patch-portable-template.js && node scripts/patch-deps.js && electron-builder --win",
-    "fetch-npm": "node scripts/fetch-npm.js",
-    "fetch-runtime": "node scripts/fetch-node.js && node scripts/fetch-npm.js",
-    "postinstall": "node scripts/patch-deps.js",
-    "electron:fetch": "node node_modules/electron/install.js"
-  },
-  "dependencies": {
-    "@deepseek-ai/dsh": "0.1.0-rc.6",
-    "zstddec": "0.2.0",
-    "@deepseek-ai/cordis-plugin-group": "1.0.1",
-    "@deepseek-ai/dsh-anonymous-user-id": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-atomic-write": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-bash-local": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-code-runtime": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-compaction": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-fs": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-invariants": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-output-retention": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-sandbox": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-scope": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-session-telemetry": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-session-title-llm": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-shell": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-spill": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-subagent-in-process-driver": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-subprocess": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-timeout": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-workflow": "0.1.0-rc.6",
-    "zod": "^4.0.0",
-    "ws": "^8.18.0",
-    "schemastery": "^3.18.0"
-  },
-  "devDependencies": {
-    "electron": "^43.4.0",
-    "electron-builder": "^26.15.3"
-  },
-  "overrides": {
-    "koffi": "3.1.5"
-  }
+    "name":  "dsh-desktop",
+    "productName":  "DSH Desktop",
+    "version":  "0.3.9",
+    "description":  "DeepSeek Harness (dsh) 寮€绠卞嵆鐢ㄧ殑 Windows 妗岄潰瀹㈡埛绔細鍐呯疆 dsh CLI 涓?Node 杩愯鏃讹紝涓€閿惎鍔?Web UI",
+    "main":  "main.js",
+    "author":  "DSH Desktop",
+    "license":  "MIT",
+    "private":  true,
+    "scripts":  {
+                    "start":  "node scripts/install-minimal-win-preset.js \u0026\u0026 node scripts/patch-event-vocabulary.js node_modules/@deepseek-ai/dsh-session \u0026\u0026 node scripts/patch-deps.js \u0026\u0026 electron .",
+                    "fetch-node":  "node scripts/fetch-node.js",
+                    "pack":  "node scripts/patch-portable-template.js \u0026\u0026 node scripts/patch-deps.js \u0026\u0026 electron-builder --dir",
+                    "predist":  "node scripts/check-syntax.js",
+                    "prepack":  "node scripts/check-syntax.js",
+                    "dist":  "node scripts/patch-portable-template.js \u0026\u0026 node scripts/patch-deps.js \u0026\u0026 electron-builder --win",
+                    "fetch-npm":  "node scripts/fetch-npm.js",
+                    "fetch-runtime":  "node scripts/fetch-node.js \u0026\u0026 node scripts/fetch-npm.js",
+                    "postinstall":  "node scripts/patch-deps.js",
+                    "electron:fetch":  "node node_modules/electron/install.js"
+                },
+    "dependencies":  {
+                         "@deepseek-ai/dsh":  "0.1.0-rc.6",
+                         "zstddec":  "0.2.0",
+                         "@deepseek-ai/cordis-plugin-group":  "1.0.1",
+                         "@deepseek-ai/dsh-anonymous-user-id":  "0.1.0-rc.6",
+                         "@deepseek-ai/dsh-atomic-write":  "0.1.0-rc.6",
+                         "@deepseek-ai/dsh-bash-local":  "0.1.0-rc.6",
+                         "@deepseek-ai/dsh-code-runtime":  "0.1.0-rc.6",
+                         "@deepseek-ai/dsh-compaction":  "0.1.0-rc.6",
+                         "@deepseek-ai/dsh-fs":  "0.1.0-rc.6",
+                         "@deepseek-ai/dsh-invariants":  "0.1.0-rc.6",
+                         "@deepseek-ai/dsh-output-retention":  "0.1.0-rc.6",
+                         "@deepseek-ai/dsh-sandbox":  "0.1.0-rc.6",
+                         "@deepseek-ai/dsh-scope":  "0.1.0-rc.6",
+                         "@deepseek-ai/dsh-session-telemetry":  "0.1.0-rc.6",
+                         "@deepseek-ai/dsh-session-title-llm":  "0.1.0-rc.6",
+                         "@deepseek-ai/dsh-shell":  "0.1.0-rc.6",
+                         "@deepseek-ai/dsh-spill":  "0.1.0-rc.6",
+                         "@deepseek-ai/dsh-subagent-in-process-driver":  "0.1.0-rc.6",
+                         "@deepseek-ai/dsh-subprocess":  "0.1.0-rc.6",
+                         "@deepseek-ai/dsh-timeout":  "0.1.0-rc.6",
+                         "@deepseek-ai/dsh-workflow":  "0.1.0-rc.6",
+                         "zod":  "^4.0.0",
+                         "ws":  "^8.18.0",
+                         "schemastery":  "^3.18.0"
+                     },
+    "devDependencies":  {
+                            "electron":  "^43.4.0",
+                            "electron-builder":  "^26.15.3"
+                        },
+    "overrides":  {
+                      "koffi":  "3.1.5"
+                  }
 }

@@ -5,7 +5,7 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 
 
-## [Unreleased]
+## [0.3.9] — 2026-08-16
 
 ### 新增
 - **对话删除与归档管理（dsh-session-manager 内置插件）**：dsh 官方只有归档没有删除，现补齐：
