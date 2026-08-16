@@ -30,6 +30,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const { installBuiltinPresets } = require('./install-minimal-win-preset');
+const { bundlePatchRel, verifyBundleDir, writeFileAtomic } = require('../profile-bundle-heal');
 
 // 与 main.js COMPANION_PLUGINS 保持一致（保持同步时请两处一起改）。
 const COMPANION_PLUGINS = [
@@ -200,19 +201,38 @@ function syncPlugins(home, dryRun) {
     }
   }
 
+  // 配套插件引用了不在 dsh 核心依赖闭包里的 npm 包时（例如 dsh-better-sidebar
+  // 使用的 schemastery / cosmokit、dsh-side-session 使用的 schemastery），把
+  // 内置副本一并落到 profile web node_modules，保证 bundle 的宿主端能在
+  // profile 内解析到这些依赖（与 main.js syncCompanionPlugins 的 vendorDeps
+  // 一致；dsh 的 profiles/node_modules fallback 只覆盖 dsh 自身依赖闭包）。
+  const vendorDeps = ['schemastery', 'cosmokit', '@standard-schema/spec'];
+  for (const name of vendorDeps) {
+    const sdir = path.join(__dirname, '..', 'node_modules', name);
+    if (!fs.existsSync(sdir)) continue;
+    const ddir = path.join(profileDir, 'node_modules', ...name.split('/'));
+    if (dryRun) {
+      log(`dry-run: 将同步私有依赖 ${name} → ${ddir}`);
+      continue;
+    }
+    fs.cpSync(sdir, ddir, { recursive: true, force: true, preserveTimestamps: true });
+    log(`已同步私有依赖 ${name}`);
+  }
+
   // 拷贝插件文件；bundle 插件（package.json 声明 dsh.bundle.patch）不写 patch 行。
   const bundleNames = new Set();
+  const missingBundleNames = new Set(); // 源缺失或落盘校验失败的 bundle 包名
   for (const p of COMPANION_PLUGINS) {
     const rel = companionDirName(p);
     const src = path.join(__dirname, '..', 'assets', 'plugins', rel);
     if (!fs.existsSync(path.join(src, 'package.json'))) {
       warn(`跳过（找不到源）: ${p.name}（${src}）`);
+      missingBundleNames.add(p.name);
       continue;
     }
     let pkg = {};
     try { pkg = JSON.parse(fs.readFileSync(path.join(src, 'package.json'), 'utf8')); } catch {}
-    const isBundle = !!(pkg && pkg.dsh && pkg.dsh.bundle && pkg.dsh.bundle.patch);
-    if (isBundle) bundleNames.add(p.name);
+    const isBundle = bundlePatchRel(pkg) !== '';
     const dest = path.join(profileModules, '..', p.name);
     if (dryRun) {
       log(`dry-run: 将安装 ${p.name} → ${dest}${isBundle ? '（bundle 插件）' : ''}`);
@@ -230,6 +250,17 @@ function syncPlugins(home, dryRun) {
       const sdir = path.join(src, sub);
       if (fs.existsSync(sdir)) {
         fs.cpSync(sdir, path.join(dest, sub), { recursive: true, force: true, preserveTimestamps: true });
+      }
+    }
+    // 落盘后校验 bundle 完整性（补丁层 + 入口文件必须存在）：校验失败不注册，
+    // 否则 dsh 启动时会因整棵插件树加载失败而崩溃。下次运行本脚本会重试。
+    if (isBundle) {
+      const check = verifyBundleDir(dest);
+      if (!check.ok) {
+        missingBundleNames.add(p.name);
+        warn(`已复制但校验失败（不注册为 bundle）: ${p.name} —— ${check.reason}`);
+      } else {
+        bundleNames.add(p.name);
       }
     }
     log(`已安装 ${p.name}${isBundle ? '（bundle 插件）' : ''}`);
@@ -251,8 +282,22 @@ function syncPlugins(home, dryRun) {
         continue;
       }
       manifest.dsh.profile.bundles.push(name);
-      fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
+      writeFileAtomic(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
       log(`已把 bundle 插件加入 web profile bundles: ${name}`);
+    }
+    // 源缺失 / 校验失败的 bundle 若仍登记在 manifest，会让 dsh 启动崩溃：
+    // 幂等移除登记（视为用户禁用），包文件保留，下次运行本脚本重试。
+    if (missingBundleNames.size > 0) {
+      const before = manifest.dsh.profile.bundles.length;
+      manifest.dsh.profile.bundles = manifest.dsh.profile.bundles.filter((n) => !missingBundleNames.has(n));
+      if (manifest.dsh.profile.bundles.length !== before) {
+        if (dryRun) {
+          log('dry-run: 将把源缺失/校验失败的 bundle 移出 profile bundles: ' + [...missingBundleNames].join(', '));
+        } else {
+          writeFileAtomic(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
+          log('已把源缺失/校验失败的 bundle 移出 profile bundles: ' + [...missingBundleNames].join(', '));
+        }
+      }
     }
   } else if (bundleNames.size > 0) {
     log('profile manifest 尚无 bundles（可能尚未初始化），bundle 插件留待下次运行注册');
@@ -265,6 +310,9 @@ function syncPlugins(home, dryRun) {
   let changed = false;
   for (const p of COMPANION_PLUGINS) {
     if (bundleNames.has(p.name)) continue;
+    // 源缺失/校验失败：不写任何注册（复制循环已跳过），避免「注册了但包不存在」
+    // 导致 dsh web 启动崩溃。
+    if (missingBundleNames.has(p.name)) continue;
     const idNameRe = new RegExp('(id:\\s*' + p.id + '\\b[^\\n]*\\n\\s*name:\\s*\\x27)([^\\x27]*)(\\x27)');
     const m = patch.match(idNameRe);
     if (m) {
@@ -292,7 +340,7 @@ function syncPlugins(home, dryRun) {
   if (changed) {
     if (dryRun) log(`dry-run: 将写入 ${patchFile}`);
     else {
-      fs.writeFileSync(patchFile, patch);
+      writeFileAtomic(patchFile, patch);
       log(`已写入 ${patchFile}`);
     }
   } else {
@@ -313,7 +361,7 @@ function syncPlugins(home, dryRun) {
       else acpPatch = acpPatch.replace(/\s*$/, '\n') + block;
       if (dryRun) log(`dry-run: 将向 ${patchFile} 写入 compaction-basic 禁用条目`);
       else {
-        fs.writeFileSync(patchFile, acpPatch);
+        writeFileAtomic(patchFile, acpPatch);
         log('已写入 compaction-basic 禁用条目（billion-context-dsh 接管压缩后端）');
       }
     } else {

@@ -517,6 +517,145 @@ SCENARIOS['heal-dup-patch-keeps-config'] = async (t) => {
   t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
 };
 
+SCENARIOS['heal-missing-bundle'] = async (t) => {
+  // 用户反馈崩溃类 1：manifest 登记了未安装的 bundle（dsh plugin 安装中途
+  // 失败 / 手工删除 / 迁移后缺 node_modules）→ 官方 loadProfile 抛
+  // "cannot resolve profile bundle" 并以退出码 1 启动失败。启动防护应跳过该
+  // 层并正常进入 Web UI；manifest 登记原样保留（等待用户重装，绝不破坏）。
+  const profileDir = path.join(t.dshHome, 'profiles', 'web');
+  fs.mkdirSync(profileDir, { recursive: true });
+  const manifestFile = path.join(profileDir, 'package.json');
+  fs.writeFileSync(manifestFile, JSON.stringify({
+    name: 'dsh-profile-web',
+    private: true,
+    dependencies: {},
+    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@dsh-external/dsh-skill-manager'] } },
+  }, null, 2) + '\n');
+  await t.waitFor('boot-ready', 240000, '缺失 bundle 应被跳过并正常启动');
+  await t.waitFor('界面已稳定', 60000, '稳定期完成');
+  t.assert(t.grepLog('profile bundle 缺失'), '健康检查应记录缺失 bundle');
+  const webLog = fs.readFileSync(path.join(t.userData, 'logs', 'dsh-web.log'), 'utf8');
+  t.assert(/cannot resolve profile bundle "@dsh-external\/dsh-skill-manager"/.test(webLog), 'dsh-web.log 应含 cannot resolve 诊断');
+  t.assert(/profile bundle "@dsh-external\/dsh-skill-manager" skipped/.test(webLog), 'dsh-web.log 应记录该层被跳过');
+  const after = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+  t.assert(after.dsh.profile.bundles.includes('@dsh-external/dsh-skill-manager'), 'manifest 登记应原样保留');
+  const q = await t.quitAndCheck();
+  t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
+};
+
+SCENARIOS['heal-manifestless-bundle'] = async (t) => {
+  // 用户反馈崩溃类 2：bundle 包已安装但 package.json 未声明 dsh.bundle.patch
+  // （普通库 / 仅客户端 bundle）→ 官方 loadProfile 抛 "declares no
+  // dsh.bundle" 并启动失败。启动防护应跳过该层并正常进入 Web UI，登记保留。
+  const profileDir = path.join(t.dshHome, 'profiles', 'web');
+  const pkgDir = path.join(profileDir, 'node_modules', '@dsh-external', 'dsh-gold-luxe');
+  fs.mkdirSync(pkgDir, { recursive: true });
+  fs.writeFileSync(path.join(pkgDir, 'package.json'), JSON.stringify({ name: '@dsh-external/dsh-gold-luxe', version: '1.0.0' }, null, 2) + '\n');
+  const manifestFile = path.join(profileDir, 'package.json');
+  fs.writeFileSync(manifestFile, JSON.stringify({
+    name: 'dsh-profile-web',
+    private: true,
+    dependencies: {},
+    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@dsh-external/dsh-gold-luxe'] } },
+  }, null, 2) + '\n');
+  await t.waitFor('boot-ready', 240000, '无 dsh.bundle 声明的 bundle 应被跳过并正常启动');
+  await t.waitFor('界面已稳定', 60000, '稳定期完成');
+  const webLog = fs.readFileSync(path.join(t.userData, 'logs', 'dsh-web.log'), 'utf8');
+  t.assert(/profile bundle "@dsh-external\/dsh-gold-luxe" skipped/.test(webLog), 'dsh-web.log 应记录该层被跳过');
+  const after = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+  t.assert(after.dsh.profile.bundles.includes('@dsh-external/dsh-gold-luxe'), 'manifest 登记应原样保留');
+  const q = await t.quitAndCheck();
+  t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
+};
+
+SCENARIOS['heal-broken-manifest'] = async (t) => {
+  // profile manifest JSON 损坏（手改 / 写盘撕裂）→ 壳层同步先备份原文件再
+  // 重置为核心 bundles 模板，dsh web 正常启动。备份必须存在（不丢用户现场）。
+  const profileDir = path.join(t.dshHome, 'profiles', 'web');
+  fs.mkdirSync(profileDir, { recursive: true });
+  fs.writeFileSync(path.join(profileDir, 'package.json'), '{"name": "dsh-profile-web", "private": true, "dsh": {"profile": {"bundles": [', 'utf8');
+  await t.waitFor('boot-ready', 240000, '损坏的 manifest 应被备份重建后正常启动');
+  await t.waitFor('界面已稳定', 60000, '稳定期完成');
+  t.assert(t.grepLog('profile manifest 损坏，原文件已备份'), '应记录 manifest 备份日志');
+  const backups = fs.readdirSync(profileDir).filter((f) => f.startsWith('package.json.broken-'));
+  t.assert(backups.length >= 1, '损坏的 manifest 应备份为 package.json.broken-<ts>');
+  const manifest = JSON.parse(fs.readFileSync(path.join(profileDir, 'package.json'), 'utf8'));
+  const bundles = manifest && manifest.dsh && manifest.dsh.profile && manifest.dsh.profile.bundles;
+  t.assert(Array.isArray(bundles) && bundles.includes('@deepseek-ai/dsh-base'), `重建后的 manifest 应含核心 bundles，实际=${JSON.stringify(bundles)}`);
+  const q = await t.quitAndCheck();
+  t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
+};
+
+SCENARIOS['heal-broken-home-patch'] = async (t) => {
+  // 家级补丁层 $DSH_HOME/cordis.patch.yml 损坏 → 官方 composeProfile 抛
+  // "failed to parse patches" 并启动失败。profile-boot 防护应备份 + 重置为
+  // 空列表后正常启动；损坏原文保留在 .broken- 备份里。
+  fs.writeFileSync(path.join(t.dshHome, 'cordis.patch.yml'), '- id: [BAD', 'utf8');
+  await t.waitFor('boot-ready', 240000, '损坏的家级补丁层应被自愈后正常启动');
+  await t.waitFor('界面已稳定', 60000, '稳定期完成');
+  const webLog = fs.readFileSync(path.join(t.userData, 'logs', 'dsh-web.log'), 'utf8');
+  t.assert(/cordis\.patch\.yml failed to parse/.test(webLog), 'dsh-web.log 应记录家级补丁层解析失败');
+  const backups = fs.readdirSync(t.dshHome).filter((f) => f.startsWith('cordis.patch.yml.broken-'));
+  t.assert(backups.length >= 1, '损坏的家级补丁层应备份为 cordis.patch.yml.broken-<ts>');
+  const healed = fs.readFileSync(path.join(t.dshHome, 'cordis.patch.yml'), 'utf8');
+  t.assert(/\[\]/.test(healed), `自愈后应为最小合法文件，实际=${healed}`);
+  const q = await t.quitAndCheck();
+  t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
+};
+
+SCENARIOS['heal-broken-bundle-patch'] = async (t) => {
+  // bundle 的 cordis.patch.yml 损坏 → 官方 loadOverlayPatches 抛 "failed to
+  // parse overlay" 并启动失败。启动防护应跳过该层并正常进入 Web UI；bundle
+  // 文件不修改（重装该插件即可恢复）。
+  const profileDir = path.join(t.dshHome, 'profiles', 'web');
+  const pkgDir = path.join(profileDir, 'node_modules', '@dsh-external', 'dsh-broken');
+  fs.mkdirSync(pkgDir, { recursive: true });
+  fs.writeFileSync(path.join(pkgDir, 'package.json'), JSON.stringify({ name: '@dsh-external/dsh-broken', version: '1.0.0', dsh: { bundle: { patch: './cordis.patch.yml' } } }, null, 2) + '\n');
+  const brokenPatch = '- id: [BAD';
+  fs.writeFileSync(path.join(pkgDir, 'cordis.patch.yml'), brokenPatch, 'utf8');
+  const manifestFile = path.join(profileDir, 'package.json');
+  fs.writeFileSync(manifestFile, JSON.stringify({
+    name: 'dsh-profile-web',
+    private: true,
+    dependencies: {},
+    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@dsh-external/dsh-broken'] } },
+  }, null, 2) + '\n');
+  await t.waitFor('boot-ready', 240000, '损坏的 bundle 补丁层应被跳过并正常启动');
+  await t.waitFor('界面已稳定', 60000, '稳定期完成');
+  const webLog = fs.readFileSync(path.join(t.userData, 'logs', 'dsh-web.log'), 'utf8');
+  t.assert(/profile bundle "@dsh-external\/dsh-broken" skipped/.test(webLog), 'dsh-web.log 应记录该层被跳过');
+  t.assert(fs.readFileSync(path.join(pkgDir, 'cordis.patch.yml'), 'utf8') === brokenPatch, 'bundle 文件不应被修改');
+  const q = await t.quitAndCheck();
+  t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
+};
+
+SCENARIOS['companion-bundle-invariant'] = async (t) => {
+  // 写盘侧防呆不变量：配套 bundle 只有在「补丁层 + 入口文件」都实际落盘后才
+  // 会登记进 manifest（billion-context-dsh 上游缺 dist 构建产物时必须不登记，
+  // 否则 dsh web 启动崩溃）。场景对两种资产状态都成立：
+  // manifest 含 billion-context-dsh ⟺ profile node_modules 里该包入口存在。
+  await t.waitFor('boot-ready', 240000, 'Web UI 就绪');
+  const profileDir = path.join(t.dshHome, 'profiles', 'web');
+  let bundles = [];
+  try {
+    const m = JSON.parse(fs.readFileSync(path.join(profileDir, 'package.json'), 'utf8'));
+    bundles = (m && m.dsh && m.dsh.profile && Array.isArray(m.dsh.profile.bundles)) ? m.dsh.profile.bundles : [];
+  } catch {}
+  let entryExists = false;
+  const pkgPath = path.join(profileDir, 'node_modules', 'billion-context-dsh', 'package.json');
+  if (fs.existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+      const entry = (pkg && pkg.main) || (pkg && pkg.exports && pkg.exports['.'] && pkg.exports['.'].import);
+      entryExists = !!entry && fs.existsSync(path.join(path.dirname(pkgPath), ...String(entry).split('/')));
+    } catch {}
+  }
+  t.assert(bundles.includes('billion-context-dsh') === entryExists,
+    `登记状态应与入口文件存在性一致，实际 bundles=${JSON.stringify(bundles)} entryExists=${entryExists}`);
+  const q = await t.quitAndCheck();
+  t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
+};
+
 SCENARIOS['web-search-patch'] = async (t) => {
   // issue #20：启动时必须把 web-search baseURL 契约补丁落到生效的 profile
   // fallback 副本（junction 写穿内置包），并记录日志。

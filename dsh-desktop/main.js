@@ -33,6 +33,7 @@ const { SessionWatcher, scanZstdFrames } = require('./session-watcher');
 const { RendererRecovery } = require('./renderer-recovery');
 const { ensureCoreBundles, CORE_BUNDLE_NAMES } = require('./profile-manifest');
 const { dedupePatchEntries, dropBlocksByIds, parseFailedLoaderIds, mapPackagesToPatchIds } = require('./profile-patch-heal');
+const { PROFILE_BUNDLE_GUARD_MARKER, PROFILE_BOOT_GUARD_MARKER, bundlePatchRel, verifyBundleDir, packageDirUpward, applyAppBootBundleGuard, applyProfileBootBundleGuard } = require('./profile-bundle-heal');
 const { patchWebSearchBaseUrl } = require('./scripts/patch-web-search-baseurl');
 const { patchMenuViewport } = require('./scripts/patch-menu-viewport');
 const { patchSessionManage } = require('./scripts/patch-session-manage');
@@ -1128,6 +1129,7 @@ async function startServer(unsafePortRetries = 4, overlays = []) {
     serverProc = null;
   }
   healProfilePatch();
+  logProfileBundleHealth();
   if (isWslMode()) {
     // WSL 托管模式：经 wsl.exe 在 WSL 内启动 dsh web（仍 --port 0 由 WSL 内 OS
     // 分配；稳定端口持久化只作用于本地 spawn）。受限端口重启走同一递归。
@@ -2138,6 +2140,7 @@ async function runUpdateFlow(manual) {
       applyImageSendFix();
       applyVisionKeyFix();
       applyProfilePatchGuard();
+      applyProfileBundleGuard();
       applySettingsSectionGuard();
       applyWorkspaceSearchRailFix();
       applyPluginInventoryTabMergeFix();
@@ -2152,6 +2155,7 @@ async function runUpdateFlow(manual) {
       applyImageSendFix();
       applyVisionKeyFix();
       applyProfilePatchGuard();
+      applyProfileBundleGuard();
       applySettingsSectionGuard();
       applyWorkspaceSearchRailFix();
       applyPluginInventoryTabMergeFix();
@@ -3125,6 +3129,40 @@ function syncDir(src, dest) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// profile bundle 健康检查（只读）：dsh web 启动前把每个 bundles 条目的装配
+// 状态落到 desktop.log —— 缺失 / 未声明 dsh.bundle.patch / 补丁层缺失都会让
+// 该层被启动防护跳过，这里让诊断在壳日志里可见（dsh-web.log 的 stderr 告警
+// 保留完整细节）。不修改任何文件。
+// ---------------------------------------------------------------------------
+function logProfileBundleHealth() {
+  try {
+    const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
+    const profileDir = path.join(home, 'profiles', 'web');
+    let manifest = null;
+    try {
+      manifest = JSON.parse(fs.readFileSync(path.join(profileDir, 'package.json'), 'utf8'));
+    } catch (err) {
+      log('boot', 'profile bundle 健康检查: manifest 不可读（' + err.message + '），交由启动防护自愈');
+      return;
+    }
+    const bundles = (manifest && manifest.dsh && manifest.dsh.profile && Array.isArray(manifest.dsh.profile.bundles)) ? manifest.dsh.profile.bundles : [];
+    const installAnchor = path.dirname(dshPackageJson());
+    for (const name of bundles) {
+      if (typeof name !== 'string' || name === '') continue;
+      const dir = packageDirUpward(installAnchor, name) || packageDirUpward(profileDir, name);
+      if (!dir) {
+        log('boot', 'profile bundle 缺失（该层将被启动防护跳过）: ' + name + ' —— 用 dsh plugin --profile web install 可修复');
+        continue;
+      }
+      const check = verifyBundleDir(dir);
+      if (!check.ok) log('boot', 'profile bundle 不可用（该层将被启动防护跳过）: ' + name + ' —— ' + check.reason);
+    }
+  } catch (err) {
+    log('boot', 'profile bundle 健康检查失败: ' + err.message);
+  }
+}
+
 function syncCompanionPlugins() {
   if (!IS_WIN) return;
   try {
@@ -3170,7 +3208,7 @@ function syncCompanionPlugins() {
       if (!fs.existsSync(path.join(src, 'package.json'))) continue;
       let pkg = {};
       try { pkg = JSON.parse(fs.readFileSync(path.join(src, 'package.json'), 'utf8')); } catch {}
-      const isBundle = !!(pkg && pkg.dsh && pkg.dsh.bundle && pkg.dsh.bundle.patch);
+      const isBundle = bundlePatchRel(pkg) !== '';
       // @deepseek-ai 与 @dsh-external 两种 scope 都按包名落到 profile 的
       // node_modules 下；配套包自身的依赖由 dsh 的 profiles/node_modules
       // fallback（healProfilesModuleFallback）解析。
@@ -3206,7 +3244,19 @@ function syncCompanionPlugins() {
       }
       // Bundle 插件不写 patch 行：dsh 在启动时读取 profile 的
       // dsh.profile.bundles 并应用包内 cordis.patch.yml。
-      if (isBundle) bundleNames.add(p.name);
+      if (isBundle) {
+        // 落盘后校验 bundle 完整性：dsh 装配时会读取补丁层与入口文件，任一
+        // 缺失都会让整棵插件树加载失败（billion-context-dsh 上游缺 dist 构建
+        // 产物正是这类崩溃）。校验失败按「源缺失」处理：不注册、从 manifest
+        // 移除登记、日志告警，下次启动重试。
+        const check = verifyBundleDir(dest);
+        if (!check.ok) {
+          missingSourceNames.add(p.name);
+          log('boot', '配套 bundle 校验失败（按源缺失处理，不注册）: ' + p.name + ' —— ' + check.reason);
+        } else {
+          bundleNames.add(p.name);
+        }
+      }
     }
 
     // billion-context-dsh（compaction-acp）是模型驱动的 ACP 压缩后端：同一
@@ -3255,9 +3305,22 @@ function syncCompanionPlugins() {
     }
 
     const manifestFile = path.join(profileDir, 'package.json');
-    let manifest = {};
-    try { manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8')); } catch { manifest = { name: 'dsh-profile-web', private: true }; }
-    if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) manifest = { name: 'dsh-profile-web', private: true };
+    let manifest = null;
+    try { manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8')); } catch {}
+    if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
+      // manifest 损坏：先备份原文件再重置（不可解析时原文是唯一现场），绝不
+      // 静默丢弃用户数据。全新 profile 没有文件，不产生备份。
+      if (fs.existsSync(manifestFile)) {
+        const backup = manifestFile + '.broken-' + Date.now();
+        try {
+          fs.copyFileSync(manifestFile, backup);
+          log('boot', 'profile manifest 损坏，原文件已备份到 ' + backup);
+        } catch (err) {
+          log('boot', 'profile manifest 备份失败: ' + err.message);
+        }
+      }
+      manifest = { name: 'dsh-profile-web', private: true };
+    }
     if (!manifest.dsh || typeof manifest.dsh !== 'object') manifest.dsh = {};
     if (!manifest.dsh.profile || typeof manifest.dsh.profile !== 'object') manifest.dsh.profile = {};
     // 全新 profile（dsh 尚未初始化）时 manifest 不存在、也没有 bundles。
@@ -3295,7 +3358,7 @@ function syncCompanionPlugins() {
       if (!bundlesUsable) break;
       if (!manifest.dsh.profile.bundles.includes(name)) {
         manifest.dsh.profile.bundles.push(name);
-        fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
+        writePatchAtomic(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
         log('boot', '已把 bundle 插件加入 web profile bundles: ' + name);
       }
     }
@@ -3910,6 +3973,72 @@ function applyProfilePatchGuard() {
       log('boot', 'profile patch 防护: 已注入自愈加载到 ' + file);
     } catch (err) {
       log('boot', 'profile patch 防护失败: ' + err.message);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// profile bundle 装配防护：官方 dsh-app-boot 对 profile bundle 缺失/损坏
+// fail-loud（resolveBundleDir 抛 cannot resolve profile bundle、无
+// dsh.bundle.patch 声明抛 declares no dsh.bundle、bundle 补丁层损坏抛
+// failed to parse overlay），都会让 dsh web 以退出码 1 启动失败。这里像
+// applyProfilePatchGuard 一样幂等地改写 @deepseek-ai/dsh-app-boot：bundle
+// 层逐个跳过（stderr 诊断，profile manifest 损坏则备份 + 模板重建）；同时
+// 改写 dsh 的 profile-boot 装配（家级 cordis.patch.yml 与 profile 补丁层
+// 损坏时备份 + 重置，覆盖启动与 HMR 热重载）。变换逻辑收口在
+// profile-bundle-heal.js；dsh 更新后本函数会在下次启动重新应用。
+// ---------------------------------------------------------------------------
+function applyProfileBundleGuard() {
+  const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
+  const appBootCandidates = [
+    path.join(__dirname, 'node_modules', '@deepseek-ai', 'dsh-app-boot', 'lib', 'index.js'),
+    path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', 'dsh-app-boot', 'lib', 'index.js'),
+    path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', '@deepseek-ai', 'dsh-app-boot', 'lib', 'index.js'),
+    path.join(home, 'profiles', 'node_modules', '@deepseek-ai', 'dsh-app-boot', 'lib', 'index.js'),
+  ];
+  for (const file of appBootCandidates) {
+    if (!fs.existsSync(file)) continue;
+    try {
+      const src = readFileCached(file);
+      if (src === null) { log('boot', 'profile bundle 防护: 读取失败，跳过 ' + file); continue; }
+      const out = applyAppBootBundleGuard(src);
+      if (!out.changed) {
+        if (!src.includes(PROFILE_BUNDLE_GUARD_MARKER)) {
+          log('boot', 'profile bundle 防护: ' + file + ' 锚点未匹配（dsh 版本可能已变化），跳过');
+        }
+        continue;
+      }
+      fs.writeFileSync(file, out.src, { encoding: 'utf8' });
+      log('boot', 'profile bundle 防护: 已注入自愈装配到 ' + file);
+    } catch (err) {
+      log('boot', 'profile bundle 防护失败(' + file + '): ' + err.message);
+    }
+  }
+  const profileBootDirs = [
+    path.join(__dirname, 'node_modules', '@deepseek-ai', 'dsh', 'lib'),
+    path.join(userDataDir, 'agent', 'node_modules', '@deepseek-ai', 'dsh', 'lib'),
+    path.join(home, 'profiles', 'node_modules', '@deepseek-ai', 'dsh', 'lib'),
+  ];
+  for (const dir of profileBootDirs) {
+    let names;
+    try { names = fs.readdirSync(dir).filter((f) => /^profile-boot-.+\.js$/.test(f)); } catch { continue; }
+    for (const name of names) {
+      const file = path.join(dir, name);
+      try {
+        const src = readFileCached(file);
+        if (src === null) { log('boot', 'profile bundle 防护: 读取失败，跳过 ' + file); continue; }
+        const out = applyProfileBootBundleGuard(src);
+        if (!out.changed) {
+          if (!src.includes(PROFILE_BOOT_GUARD_MARKER)) {
+            log('boot', 'profile bundle 防护: ' + file + ' 锚点未匹配（dsh 版本可能已变化），跳过');
+          }
+          continue;
+        }
+        fs.writeFileSync(file, out.src, { encoding: 'utf8' });
+        log('boot', 'profile bundle 防护: 已注入自愈装配到 ' + file);
+      } catch (err) {
+        log('boot', 'profile bundle 防护失败(' + file + '): ' + err.message);
+      }
     }
   }
 }
@@ -4752,6 +4881,7 @@ async function boot() {
     applyImageSendFix();
     applyVisionKeyFix();
     applyProfilePatchGuard();
+    applyProfileBundleGuard();
     applySettingsSectionGuard();
     applyWorkspaceSearchRailFix();
     applyPluginInventoryTabMergeFix();
@@ -4768,6 +4898,7 @@ async function boot() {
     applyImageSendFix();
     applyVisionKeyFix();
     applyProfilePatchGuard();
+    applyProfileBundleGuard();
     applySettingsSectionGuard();
     applyWorkspaceSearchRailFix();
     applyPluginInventoryTabMergeFix();

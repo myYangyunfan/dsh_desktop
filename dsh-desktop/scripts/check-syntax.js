@@ -25,6 +25,7 @@ const entryFiles = [
   // 自愈 / 补丁模块（electron-builder files 清单内，随包分发，必须过语法门）。
   'profile-manifest.js',
   'profile-patch-heal.js',
+  'profile-bundle-heal.js',
   'scripts/patch-web-search-baseurl.js',
   'scripts/patch-menu-viewport.js',
   'scripts/patch-session-manage.js',

@@ -30,6 +30,7 @@ files:
   - renderer-recovery.js
   - profile-manifest.js
   - profile-patch-heal.js
+  - profile-bundle-heal.js
   - wsl-backend.js
   - watchdog.js
   - assets/**/*
