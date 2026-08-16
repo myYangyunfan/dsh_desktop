@@ -2,8 +2,11 @@
 
 所有预设存放在 `assets/agent-presets/<id>/`，由 `scripts/install-minimal-win-preset.js`
 在 `npm start`（开发）与 `afterPack`（打包）时复制进内置 dsh 的
-`config/agent-presets/`。目录名即 preset id（`[a-z0-9-]+`），显示名与描述在
-各目录的 `preset.yml` 中。
+`config/agent-presets/`。WSL 托管模式启动/更新时会经 UNC 调用同一安装逻辑写入
+WSL 内的 dsh 包；`scripts/sync-companion-plugins.js` 也会为 WSL / Linux 里另装的
+dsh 同步这批预设（自动探测 `DSH_HOME/agent` 与 PATH 上的 dsh 命令，或 `--dsh-package`
+指定包目录）。
+目录名即 preset id（`[a-z0-9-]+`），显示名与描述在各目录的 `preset.yml` 中。
 
 ## 预设与上游来源
 

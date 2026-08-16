@@ -26,6 +26,7 @@ const updater = require('./updater');
 const clientUpdater = require('./client-updater');
 const balance = require('./balance');
 const wslBackend = require('./wsl-backend');
+const { installBuiltinPresets } = require('./scripts/install-minimal-win-preset');
 const { SessionWatcher, scanZstdFrames } = require('./session-watcher');
 const { RendererRecovery } = require('./renderer-recovery');
 const zlib = require('node:zlib');
@@ -1639,6 +1640,18 @@ async function runUpdateFlow(manual) {
       // WSL 托管：检查复用 Windows 侧 npm（纯 registry 查询），安装走 WSL 内
       // npm（staging + 原子切换，语义与本地模式一致）。
       await wslBackend.applyUpdate(latest, (line) => log('update', 'wsl: ' + line));
+      // 新 WSL agent 已就位：与 local 一致，立即补同步配套插件/内置预设并重打
+      // 运行时补丁（全部幂等），否则「稍后重启」后再重启服务会以未修复、且
+      // 缺少壳内置模式的新版本启动。
+      syncCompanionPlugins();
+      syncBuiltinAgentPresets();
+      applyRuntimeFlashFix();
+      applyPromptExposeFix();
+      applyImageSendFix();
+      applyVisionKeyFix();
+      applyProfilePatchGuard();
+      applySettingsSectionGuard();
+      applyWorkspaceSearchRailFix();
     } else {
       await updater.applyUpdate(ctx, latest);
       // 新 overlay 已就位：立即重打运行时补丁（全部幂等），否则「稍后重启」后再
@@ -2479,7 +2492,33 @@ function syncCompanionPlugins() {
   } catch (err) {
     log('boot', '同步配套插件失败: ' + err.message);
   }
-}// ---------------------------------------------------------------------------
+}
+
+// ---------------------------------------------------------------------------
+// 内置 Agent 预设同步：local 模式的预设由 npm start / after-pack 直接写入
+// Windows 侧内置 dsh 包的 config/agent-presets；WSL 托管模式的 dsh 是 WSL 内
+// npm 安装的干净包，不包含壳自带的 8 个预设，因此模式列表比 local 少。
+// 这里经 UNC 把 assets/agent-presets 幂等复制进 WSL agent 包，让两种后端
+// 看到的模式一致（_preset 是共享模块目录，installBuiltinPresets 一并处理）。
+// ---------------------------------------------------------------------------
+function syncBuiltinAgentPresets() {
+  if (!IS_WIN || !isWslMode()) return;
+  try {
+    const home = effectiveDshHome();
+    if (!home) { log('boot', 'DSH_HOME 未解析，跳过内置 Agent 预设同步'); return; }
+    const dshPkgDir = path.join(home, 'agent', 'node_modules', '@deepseek-ai', 'dsh');
+    if (!fs.existsSync(path.join(dshPkgDir, 'package.json'))) {
+      log('boot', 'WSL 内 dsh 包未就绪，跳过内置 Agent 预设同步');
+      return;
+    }
+    const dests = installBuiltinPresets(dshPkgDir);
+    log('boot', '已同步 ' + dests.length + ' 个内置 Agent 预设到 WSL dsh: ' + dests.map((d) => path.basename(d)).join(', '));
+  } catch (err) {
+    log('boot', '同步内置 Agent 预设到 WSL 失败: ' + err.message);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // dsh web 运行时闪跳修复：官方 dsh-client-runtime 在会话列表刷新
 // （mergeOrderedBaseline）时会丢弃「本地已创建、宿主全量列表尚未回显」的
 // 新会话，使 current 瞬时变 undefined，UI 闪回「选择工作区/无会话」状态。
@@ -3481,6 +3520,7 @@ async function boot() {
     setupTestChannel();
     await wslBackend.ensureInstalled();
     syncCompanionPlugins();
+    syncBuiltinAgentPresets();
     applyRuntimeFlashFix();
     applyPromptExposeFix();
     applyImageSendFix();

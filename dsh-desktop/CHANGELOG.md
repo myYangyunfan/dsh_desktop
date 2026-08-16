@@ -10,6 +10,7 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 ### 修复
 - **安装后启动即报 `ReferenceError: async is not defined`**：`main.js` 中 `async` 关键字与 `probeOverlayAgent` 函数声明被注释行拆开，导致主进程模块加载失败。已重接 `async function`；新增 `scripts/check-syntax.js` 并接入 `prepack` / `predist`，打包前强制做入口 JS 语法检查与「async/await 关键字与声明被拆开」模式扫描，此类坏包无法再打包。
 - **安装后启动即弹「应用初始化失败：home is not defined」**：`main.js` 的 `applySettingsSectionGuard()` 构造候选补丁路径时引用了未声明的 `home` 变量（相邻的 `applyProfilePatchGuard` / `applyWorkspaceSearchRailFix` 均有声明，唯独此处遗漏），`boot()` 无条件调用该函数导致每次启动必现初始化失败弹窗。已在该函数内补齐 `const home = effectiveDshHome() || path.join(os.homedir(), '.dsh')`，与相邻防护函数保持一致。
+- **WSL 模式「模式列表」比 local 少**：WSL 托管后端经 npm 安装的 dsh 是干净包，不含壳内置的 8 个 Agent 预设（`minimal-win` / `router-standard` / `anchored-standard` 等）。现在 `main.js` 在 WSL bootstrap 与更新后会经 UNC 把 `assets/agent-presets` 写入 WSL agent 包的 `config/agent-presets`；`scripts/sync-companion-plugins.js` 也自动同步预设（可 `--dsh-package <目录>` 显式指定），WSL / Linux 的模式列表与 Windows local 一致。
 
 ## [0.3.6] — 2026-08-15
 

@@ -58,6 +58,7 @@
 - [ ] WSL 内 `cat ~/.dsh-desktop/profiles/web/cordis.patch.yml` → 11 条 `- insert:`（余额/文件/终端/浮窗/插件市场/提示词/思考/识图/WSL 设置等）；
 - [ ] UI 中：对话底部余额小部件、详情面板「文件」标签页（diff 查看）、「终端」标签页（WSL 内走 `sh -i`，执行 `pwd` 应显示 WSL 路径）、会话浮窗、插件市场、设置页「自定义提示词」可用；
 - [ ] WSL 内目录布局正确：`agent/` `agent-prev/`（更新后）`agent-staging/`（仅安装期间）`profiles/` `sessions/` `dsh.pid`；
+- [ ] WSL 内 `ls ~/.dsh-desktop/agent/node_modules/@deepseek-ai/dsh/config/agent-presets` → 除 npm 包自带的 code/cordis/minimal/standard 外，还有 `minimal-win` / `router-standard` / `anchored-standard` 等 8 个壳内置预设与 `_preset` 共享模块；UI 的模式列表与 local 一致；
 - [ ] 会话完成 → Windows Toast 通知弹出（经 UNC 读 WSL 会话日志）；
 - [ ] 「文件」视图的**还原/打开**应被安全栅栏拒绝（WSL 会话不适用，预期行为；diff 查看不受影响）。
 
@@ -81,10 +82,11 @@
 cd /home/ezio/workspace/dsh_desktop   # 在 WSL 里
 node dsh-desktop/scripts/sync-companion-plugins.js ~/.dsh --dry-run   # 先预览
 node dsh-desktop/scripts/sync-companion-plugins.js ~/.dsh --with-patches
+# 未自动找到你的 dsh 包时（预设同步日志会提示），追加: --dsh-package <dsh 包目录>
 # 重启你自己的 dsh web（checkout: pnpm dsh web；npm 版: dsh web）
 ```
 
-- [ ] 重启后你的 dsh 设置页出现「WSL 后端」等全部配套栏目；补丁日志提示「已应用/无需变更」幂等。
+- [ ] 重启后你的 dsh 设置页出现「WSL 后端」等全部配套栏目；补丁日志提示「已应用/无需变更」幂等；预设日志提示已同步 8 个内置 Agent 预设（未自动找到 dsh 包时用 `--dsh-package <包目录>` 指定）。
 
 ## 3. 已在 WSL 内自动化验证过的项（无需重复）
 

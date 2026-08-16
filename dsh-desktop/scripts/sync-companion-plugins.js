@@ -1,21 +1,25 @@
 'use strict';
 
 // 把 DSH Desktop 的配套插件同步进任意 dsh 的 web profile（独立于 Electron 壳，
-// 逻辑与 main.js 的 syncCompanionPlugins 完全一致）。典型用途：把自己 WSL / Linux
-// 里另装的 dsh（checkout 开发版或 npm 版）也配上壳自带的插件（余额、文件改动视图、
-// 终端、浮窗、插件市场、自定义提示词、第三方思考、识图等）。
+// 逻辑与 main.js 的 syncCompanionPlugins 完全一致），并顺带把壳内置的 Agent
+// 预设（assets/agent-presets）同步进能找到的 dsh 包 config/agent-presets，
+// 避免 WSL / Linux 里的 dsh 模式列表比 Windows 内置 dsh 少。典型用途：把自己
+// WSL / Linux 里另装的 dsh（checkout 开发版或 npm 版）也配上壳自带的插件
+// （余额、文件改动视图、终端、浮窗、插件市场、自定义提示词、第三方思考、识图等）。
 //
 // 用法（WSL / Linux / Windows 均可执行）：
-//   node scripts/sync-companion-plugins.js [DSH_HOME] [--with-patches] [--dry-run]
+//   node scripts/sync-companion-plugins.js [DSH_HOME] [--with-patches] [--dry-run] [--dsh-package <目录>]
 //     DSH_HOME       目标 dsh 数据目录，默认 ~/.dsh
 //     --with-patches 额外应用两个运行时补丁（会话列表闪跳修复、
 //                    dsh-prompt / 第三方思考设置暴露白名单）
 //     --dry-run      只打印将要做的事，不落盘
+//     --dsh-package  内置 Agent 预设的目标 dsh 包目录（缺省自动探测
+//                    <DSH_HOME>/agent 与 PATH 上的 dsh 命令）
 //
-// 生效方式：同步只落盘；dsh web 在启动时读取 profile 补丁层，因此需要重启
-// WSL 里的 dsh web 后插件才会挂载（checkout 开发模式 `pnpm dsh web`，
-// npm 安装版 `dsh web`）。注意：重启 dsh web 会中断当前正在跑的会话
-// （会话数据在磁盘上，重启后可继续）。
+// 生效方式：同步只落盘；dsh web 在启动时读取 profile 补丁层与包内预设目录，
+// 因此需要重启 WSL 里的 dsh web 后插件才会挂载（checkout 开发模式
+// `pnpm dsh web`，npm 安装版 `dsh web`）。注意：重启 dsh web 会中断当前正在
+// 跑的会话（会话数据在磁盘上，重启后可继续）。
 //
 // 卸载：从 <DSH_HOME>/profiles/web/cordis.patch.yml 删掉对应 insert 条目，
 // 并删掉 <DSH_HOME>/profiles/web/node_modules/@deepseek-ai/dsh-* 目录即可。
@@ -23,6 +27,9 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+
+const { installBuiltinPresets } = require('./install-minimal-win-preset');
 
 // 与 main.js COMPANION_PLUGINS 保持一致（保持同步时请两处一起改）。
 const COMPANION_PLUGINS = [
@@ -57,6 +64,91 @@ function log(msg) {
 
 function warn(msg) {
   console.warn('[sync] ⚠ ' + msg);
+}
+
+// ---------------------------------------------------------------------------
+// 内置 Agent 预设同步：Windows 打包产物由 npm start / after-pack 直接写入
+// 内置 dsh 包；WSL / Linux 里另装的 dsh 是干净的 npm 包，缺少壳自带的 8 个
+// 模式预设。这里把 assets/agent-presets 幂等复制进 dsh 包的
+// config/agent-presets，让两端模式列表一致。
+// ---------------------------------------------------------------------------
+
+function isDshPackageDir(dir) {
+  if (!dir) return false;
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
+    return pkg && pkg.name === '@deepseek-ai/dsh';
+  } catch { return false; }
+}
+
+function packageDirFromBin(binPath) {
+  if (!binPath) return '';
+  let p = path.resolve(binPath);
+  try { p = fs.realpathSync.native(p); } catch {}
+  let dir = path.dirname(p);
+  for (let i = 0; i < 8 && dir; i += 1) {
+    if (isDshPackageDir(dir)) return dir;
+    // npm global 的 shim 在 <prefix> 目录，真正的包在 <prefix>/node_modules 下。
+    const nested = path.join(dir, 'node_modules', '@deepseek-ai', 'dsh');
+    if (isDshPackageDir(nested)) return nested;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return '';
+}
+
+function commandLocations(cmd) {
+  try {
+    const win = process.platform === 'win32';
+    const res = spawnSync(win ? 'where.exe' : 'sh', win ? [cmd] : ['-lc', `command -v ${cmd} 2>/dev/null || true`], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 15000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    if (res.status !== 0) return [];
+    return (res.stdout || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  } catch { return []; }
+}
+
+function findDshPackageDir(home, explicit) {
+  if (explicit) {
+    const dir = path.resolve(explicit);
+    return isDshPackageDir(dir) ? dir : '';
+  }
+  const candidates = [
+    path.join(home, 'agent', 'node_modules', '@deepseek-ai', 'dsh'),
+    path.join(home, 'profiles', 'node_modules', '@deepseek-ai', 'dsh'),
+    path.join(home, 'node_modules', '@deepseek-ai', 'dsh'),
+  ];
+  for (const dir of candidates) {
+    if (isDshPackageDir(dir)) return dir;
+  }
+  for (const location of commandLocations('dsh')) {
+    const dir = packageDirFromBin(location);
+    if (dir) return dir;
+  }
+  return '';
+}
+
+function syncBuiltinPresets(home, dshPackageArg, dryRun) {
+  const dshPkgDir = findDshPackageDir(home, dshPackageArg);
+  if (!dshPkgDir) {
+    if (dshPackageArg) warn(`--dsh-package 未找到有效的 @deepseek-ai/dsh 包: ${dshPackageArg}`);
+    else log('未找到 dsh 包（@deepseek-ai/dsh），跳过内置 Agent 预设同步；可用 --dsh-package <目录> 显式指定');
+    return;
+  }
+  if (dryRun) {
+    log(`dry-run: 将同步内置 Agent 预设（assets/agent-presets）→ ${path.join(dshPkgDir, 'config', 'agent-presets')}`);
+    return;
+  }
+  try {
+    const dests = installBuiltinPresets(dshPkgDir);
+    log(`已同步 ${dests.length} 个内置 Agent 预设 → ${dshPkgDir}: ${dests.map((d) => path.basename(d)).join(', ')}`);
+  } catch (err) {
+    warn('内置 Agent 预设同步失败: ' + (err && err.message ? err.message : err));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -263,7 +355,16 @@ function applyRuntimePatches(home, dryRun) {
 
 function main() {
   const args = process.argv.slice(2);
-  const homeArg = args.find((a) => !a.startsWith('--'));
+  const dshPkgIdx = args.indexOf('--dsh-package');
+  let dshPackageArg = '';
+  if (dshPkgIdx >= 0) {
+    dshPackageArg = args[dshPkgIdx + 1] || '';
+    if (!dshPackageArg || dshPackageArg.startsWith('--')) {
+      warn('--dsh-package 需要一个目录参数，本次忽略');
+      dshPackageArg = '';
+    }
+  }
+  const homeArg = args.find((a) => !a.startsWith('--') && a !== dshPackageArg);
   const home = path.resolve(homeArg || process.env.DSH_HOME || path.join(os.homedir(), '.dsh'));
   const withPatches = args.includes('--with-patches');
   const dryRun = args.includes('--dry-run');
@@ -279,9 +380,10 @@ function main() {
     }
   }
   syncPlugins(home, dryRun);
+  syncBuiltinPresets(home, dshPackageArg, dryRun);
   if (withPatches) applyRuntimePatches(home, dryRun);
   console.log('[sync] 完成。');
-  console.log('[sync] 提示：插件在 dsh web 启动时才会挂载 —— 请重启 WSL 里的 dsh web：');
+  console.log('[sync] 提示：插件与内置 Agent 预设在 dsh web 启动时才会挂载 —— 请重启 WSL 里的 dsh web：');
   console.log('[sync]   checkout 开发模式:  cd <harness 目录> && pnpm dsh web');
   console.log('[sync]   npm 安装版:        dsh web');
   console.log('[sync]   重启会中断当前正在跑的会话；会话数据在磁盘上，重启后可继续。');

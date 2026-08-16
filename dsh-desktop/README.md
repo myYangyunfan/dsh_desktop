@@ -234,7 +234,7 @@ npm run dist                   # 构建 portable + NSIS 安装包，输出到 di
 node dsh-desktop/scripts/sync-companion-plugins.js ~/.dsh --with-patches
 ```
 
-（`--dry-run` 可先预览；`--with-patches` 额外应用「会话列表闪跳修复 + 设置暴露白名单」两个运行时补丁，否则自定义提示词/第三方思考的设置页可能显示「设置不可用」。）插件在 **dsh web 重启后**才挂载（profile 补丁层在启动时读取）：重启 `dsh web`（checkout 开发模式 `pnpm dsh web`；npm 安装版 `dsh web`），注意会中断正在跑的会话（会话数据在磁盘上，可继续）。终端插件在 POSIX 下自动使用 `sh -i`，其余插件跨平台。卸载：删掉 `cordis.patch.yml` 中对应 `insert` 条目与 `profiles/web/node_modules` 下的对应包目录即可。
+（`--dry-run` 可先预览；`--with-patches` 额外应用「会话列表闪跳修复 + 设置暴露白名单」两个运行时补丁，否则自定义提示词/第三方思考的设置页可能显示「设置不可用」。脚本同时会把壳内置的 8 个 Agent 预设同步进能找到的 dsh 包 `config/agent-presets`——`<DSH_HOME>/agent`（如 WSL 托管布局的 `~/.dsh-desktop/agent`）与 PATH 上的 dsh 命令会自动探测，其它安装位置可用 `--dsh-package <dsh 包目录>` 显式指定。）插件与预设都在 **dsh web 重启后**才挂载（profile 补丁层与包内预设目录在启动时读取）：重启 `dsh web`（checkout 开发模式 `pnpm dsh web`；npm 安装版 `dsh web`），注意会中断正在跑的会话（会话数据在磁盘上，可继续）。终端插件在 POSIX 下自动使用 `sh -i`，其余插件跨平台。卸载：删掉 `cordis.patch.yml` 中对应 `insert` 条目与 `profiles/web/node_modules` 下的对应包目录即可。
 
 ### wsl：壳在 WSL 里托管自己的 dsh（自动更新全闭环）
 
@@ -245,7 +245,7 @@ node dsh-desktop/scripts/sync-companion-plugins.js ~/.dsh --with-patches
   - `wslDistro`（`DSH_DESKTOP_WSL_DISTRO`）：发行版名，默认 `wsl -l -q` 第一个；
   - `wslInstallDir`（`DSH_DESKTOP_WSL_DIR`）：WSL 内安装目录（Linux 绝对路径，**不含空白**），默认 `~/.dsh-desktop`——刻意不默认 `~/.dsh`，避免与你自己的 dsh 共用 DSH_HOME 互相改写 profile；想共享会话就显式设成 `~/.dsh`；
   - 前置条件：WSL 内要有 node + npm（`sh -lc 'node --version'` 能出结果即可，fnm/nvm 皆可；缺失时保存配置会提示、启动会弹窗引导）。
-- 首次启动流程：显示加载页 → 探测 WSL/node → 缺 agent 时在 WSL 内 `npm install @deepseek-ai/dsh@<内置版本>`（约 2–3 分钟，之后复用 npm 缓存）→ 配套插件 + 运行时补丁经 UNC（`\\wsl.localhost\<发行版>\...`）同步进 WSL profile → `wsl.exe -e sh -lc` 启动 `dsh web --host 127.0.0.1 --port 0` → 解析就绪 URL（与 local 同规则）→ Windows 经 localhost 转发加载窗口。
+- 首次启动流程：显示加载页 → 探测 WSL/node → 缺 agent 时在 WSL 内 `npm install @deepseek-ai/dsh@<内置版本>`（约 2–3 分钟，之后复用 npm 缓存）→ 配套插件经 UNC 同步进 WSL profile、内置 Agent 预设经 UNC 写入 WSL agent 包 `config/agent-presets`（与 local 模式列表一致）→ 运行时补丁覆盖 WSL profile/agent → `wsl.exe -e sh -lc` 启动 `dsh web --host 127.0.0.1 --port 0` → 解析就绪 URL（与 local 同规则）→ Windows 经 localhost 转发加载窗口。
 - 目录布局（WSL 内）：`<dir>/agent`（当前版本，`DSH_HOME=<dir>`）、`agent-prev`（回退）、`agent-staging`（更新中转）、`dsh.pid`（退出清理）、`profiles`/`sessions`（数据）。
 - **自动更新**：检查仍在 Windows 侧（npm registry 查询），安装走 WSL 内 npm（staging + 原子切换，失败自动保留旧版），重启应用生效；启动失败弹窗可「回退到上一版本」。
 - 退出/重启服务：按 `dsh.pid` 发 SIGTERM 优雅收尾（绝不 `wsl --terminate`）；插件市场的「重启服务」在托管模式下可用（重启 WSL 内的 dsh web）。
@@ -289,7 +289,7 @@ dsh-desktop/
 ├── wsl-backend.js        # WSL 托管后端（发行版探测 / bootstrap 安装 / 启动停止 / 更新回退）
 ├── assets/               # 加载页、更新进度页、恢复页、图标、托盘图标、配套 dsh 插件
 │   ├── sponsor/          # 赞助收款码（支付宝 / 微信，「请作者喝咖啡」面板与本文档共用）
-│   ├── agent-presets/    # 8 个内置预设（minimal-win / router-standard / anchored-standard / zero-anchored-standard / whoami-standard / v4-flash-godmode-opencode-go / warmupbetter / warmupbetter-replay）
+│   ├── agent-presets/    # 8 个内置预设（minimal-win / router-standard / anchored-standard / zero-anchored-standard / whoami-standard / v4-flash-godmode-opencode-go / warmupbetter / warmupbetter-replay），local 打包写入 / WSL 启动与更新时经 UNC 同步
 │   └── plugins/          # dsh-balance / dsh-file-changes / dsh-vision / zat-dsh-engine / dsh-better-sidebar / harness-pet / dsh-super-injector / dsh-wsl-settings（设置页「WSL 后端」栏）等，启动时自动同步进 web profile
 ├── scripts/
 │   ├── fetch-node.js     # 内置 node.exe 复制脚本
@@ -298,9 +298,9 @@ dsh-desktop/
 │   ├── check-latest.js   # agent 更新链路测试工具
 │   ├── check-client-latest.js # 客户端更新链路测试工具
 │   ├── patch-event-vocabulary.js # dsh-session 事件词汇表补丁（afterPack 自动调用）
-│   ├── install-minimal-win-preset.js # 内置 minimal-win 预设安装（npm start / afterPack 调用）
+│   ├── install-minimal-win-preset.js # 内置 8 个 Agent 预设安装（npm start / afterPack / WSL 同步调用）
 │   ├── test-watcher.js   # 通知检测单测
-│   ├── sync-companion-plugins.js # 把配套插件同步进任意 dsh 的 web profile（独立于壳）
+│   ├── sync-companion-plugins.js # 把配套插件与内置 Agent 预设同步进任意 dsh（独立于壳）
 │   └── inspect-session.js# 会话日志解析工具
 ├── build/icon.png        # electron-builder 图标源
 ├── vendor/               # 内置 node.exe / npm CLI（fetch-runtime 生成，不入库）

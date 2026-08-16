@@ -8,8 +8,9 @@
 //   <dir>/agent-staging/...                     npm 安装 staging（完成后原子 mv）
 //   <dir>/dsh.pid                               dsh web 进程 pid（退出清理用）
 //   <dir>/profiles、sessions、settings.yaml      dsh 自身数据（与本地模式同构）
-// 配套插件同步不在这里：main.js 的 syncCompanionPlugins 经 UNC（effectiveDshHome
-// = <dir> 的 UNC 等价路径）直接写入 WSL profile，与本模块解耦。
+// 配套插件与内置 Agent 预设同步不在这里：main.js 的 syncCompanionPlugins /
+// syncBuiltinAgentPresets 经 UNC（effectiveDshHome = <dir> 的 UNC 等价路径）
+// 直接写入 WSL profile 与 agent 包，与本模块解耦。
 //
 // 跨 WSL 调用约定（已在真实 wsl.exe 上实测）：
 //   · wsl.exe 只接受 `--` 之后「按空格拆开的独立 argv 单词」；把整条命令拼成
