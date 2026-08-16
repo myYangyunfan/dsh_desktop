@@ -75,7 +75,7 @@ window.__ModuleLoader__.load({
         const v = snap.value || {};
         setForm({
           baseURL: String(v.baseURL || DEFAULTS.baseURL),
-          apiKey: String(v.apiKey || ""),
+          apiKey: "",
           model: String(v.model || DEFAULTS.model),
           fallbackModels: Array.isArray(v.fallbackModels) ? v.fallbackModels.join(", ") : "",
           maxTokens: String(v.maxTokens ?? DEFAULTS.maxTokens),
