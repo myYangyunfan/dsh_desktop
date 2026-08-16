@@ -2330,9 +2330,10 @@ function removeLegacyMarketplace(profileWebModules, profileDir) {
 // profile patch 自愈：cordis.patch.yml 损坏会让 dsh web 装配 profile 时抛错并
 // 以 exit 1 退出，桌面端「启动失败」。每次启动 dsh web 前调用本函数：
 //   1. 顶层孤立 `[]` 与列表条目混存 → 移除 `[]` 行（修复为单一顶层列表）；
-//   2. issue #17 存量：同一 loader id 重复注册（旧版本插件安装写入的重复
-//      insert 条目 → cordis loader "duplicate loader entry id: X"）→ 块级
-//      去重，保留首个条目、备份原文件；
+//   2. issue #17 存量：同一 loader id 被注册多次（旧版本插件安装写入的重复
+//      insert 条目 → cordis loader "duplicate loader entry id: X"）→ 注册行级
+//      去重，保留首次注册、备份原文件；config 覆盖/disabled 禁用条目是用户
+//      配置，绝不改动；
 //   3. 仍无法解析（其它损坏形态）→ 备份为 cordis.patch.yml.broken-<ts> 并
 //      重置为最小合法文件，日志告警，备份保留用户内容供恢复。
 //   健康文件零写入（幂等）。
@@ -2389,9 +2390,10 @@ function healProfilePatch() {
     let error = null;
     try { parsed = yaml.load(text); } catch (err) { error = err; }
     if (!error && Array.isArray(parsed)) {
-      // issue #17 存量自愈：按 id 去重顶层条目。重复注册（旧版本插件安装
-      // 写入的第二个同 id insert 块）会让 cordis loader 抛
-      // "duplicate loader entry id: X"，且该状态永远无法自愈。
+      // issue #17 存量自愈：注册行级去重。重复注册（旧版本插件安装
+      // 写入的第二个同 id insert 条目）会让 cordis loader 抛
+      // "duplicate loader entry id: X"，且该状态永远无法自愈；只删重复
+      // 注册行，用户手写的 config/disabled 覆盖条目原样保留。
       const dedupe = dedupePatchEntries(text);
       if (dedupe.removed.length > 0) {
         const backup = file + '.dup-' + Date.now();
@@ -2543,9 +2545,9 @@ function syncCompanionPlugins() {
     let changed = false;
     // bundle 迁移自愈（issue #17 同族）：旧版本把后来升级为 bundle 的配套插件
     // 当非 bundle 写进了 patch（insert 行）；插件现经 dsh.profile.bundles 装配，
-    // 残留行会造成同 id 双登记 → cordis loader "duplicate loader entry id" →
-    // 整树加载失败（更新后首次启动崩溃）。幂等移除命中的 patch 行/块，其余
-    // 条目（含用户手写内容）原样保留。
+    // 残留注册行会造成同 id 双登记 → cordis loader "duplicate loader entry id" →
+    // 整树加载失败（更新后首次启动崩溃）。幂等移除命中的注册行/块；用户手写
+    // 的 config 覆盖/disabled 禁用条目原样保留。
     const bundleIds = new Set();
     for (const p of COMPANION_PLUGINS) {
       if (bundleNames.has(p.name)) bundleIds.add(p.id);

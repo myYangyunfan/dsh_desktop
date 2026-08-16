@@ -477,6 +477,46 @@ SCENARIOS['heal-bundle-patch'] = async (t) => {
   t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
 };
 
+SCENARIOS['heal-dup-patch-keeps-config'] = async (t) => {
+  // 回归防线：自愈只允许删「重复注册行」，绝不删除用户手写的
+  // config 覆盖 / disabled 禁用条目（cordis.patch.yml 官方文件头声明的
+  // 顶层条目形态）。同 id 的重复 insert 注册 + disabled/config 覆盖共存时，
+  // 应去重注册行并原样保留用户配置条目后正常启动。
+  const profileDir = path.join(t.dshHome, 'profiles', 'web');
+  fs.mkdirSync(profileDir, { recursive: true });
+  const patch = [
+    '# 重复注册 balance + 用户手写的 disabled/config 覆盖条目',
+    '- insert:',
+    '    - id: balance',
+    "      name: '@deepseek-ai/dsh-balance'",
+    '- insert:',
+    '    - id: balance',
+    "      name: '@deepseek-ai/dsh-balance'",
+    '- id: balance',
+    '  disabled: true',
+    '- insert:',
+    '    - id: terminal',
+    "      name: '@deepseek-ai/dsh-terminal-tab'",
+    '- id: terminal',
+    '  config: {}',
+    '',
+  ].join('\n');
+  const patchFile = path.join(profileDir, 'cordis.patch.yml');
+  fs.writeFileSync(patchFile, patch);
+  await t.waitFor('boot-ready', 240000, '重复注册应被自愈，且用户配置条目保留');
+  await t.waitFor('界面已稳定', 60000, '稳定期完成');
+  t.assert(t.grepLog('移除了重复注册的 loader 条目'), '应记录重复条目自愈日志');
+  const healed = fs.readFileSync(patchFile, 'utf8');
+  t.assert((healed.match(/^\s*- id: balance$/gm) || []).length === 2, `balance 应只剩 1 条注册 + 1 条 disabled 覆盖，实际=${healed}`);
+  t.assert((healed.match(/^\s*- id: terminal$/gm) || []).length === 2, `terminal 应只剩 1 条注册 + 1 条 config 覆盖，实际=${healed}`);
+  t.assert(/disabled: true/.test(healed), '用户 disabled 条目应保留');
+  t.assert(/config: \{\}/.test(healed), '用户 config 覆盖条目应保留');
+  const backups = fs.readdirSync(profileDir).filter((f) => f.startsWith('cordis.patch.yml.dup-'));
+  t.assert(backups.length >= 1, '原文件应被备份为 cordis.patch.yml.dup-<ts>');
+  const q = await t.quitAndCheck();
+  t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
+};
+
 SCENARIOS['web-search-patch'] = async (t) => {
   // issue #20：启动时必须把 web-search baseURL 契约补丁落到生效的 profile
   // fallback 副本（junction 写穿内置包），并记录日志。

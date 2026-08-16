@@ -2,10 +2,10 @@
 
 // profile-patch-heal.js 纯函数单元测试（node --test）。
 // 用法：node --test scripts/test/unit-patch-heal.test.js
-// 覆盖：重复条目块级移除与保留顺序、文件头/尾注释保留、无重复零修改、
-//       无 id 条目保留、部分重复形态（保留块，交由 overlay 兜底）、
+// 覆盖：注册行级去重（双缺/三同名/零修改/注释保留/块内重复/部分重复行级手术）、
+//       config 覆盖与 disabled 禁用条目绝不删除、定向 insert 块不动、
 //       loader 日志三种 id 形态解析、包名→patch id 映射、
-//       bundle 迁移双登记移除（整块/部分行级/直接条目/零修改）。
+//       bundle 迁移双登记移除（整块/部分行级/直注册条目/用户配置保留/零修改）。
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -65,7 +65,7 @@ test('dedupePatchEntries: 三个同名块 → 只保留第一个', () => {
   assert.strictEqual((r.text.match(/- id: balance/g) || []).length, 1);
 });
 
-test('dedupePatchEntries: 部分重复形态（块含新 id）→ 保留块、移除列表为空（overlay 兜底）', () => {
+test('dedupePatchEntries: insert 块部分重复 → 只删重复注册行，保留块内新注册', () => {
   const input = [
     '- insert:',
     '    - id: balance',
@@ -77,8 +77,61 @@ test('dedupePatchEntries: 部分重复形态（块含新 id）→ 保留块、�
     "      name: '@deepseek-ai/dsh-terminal-tab'",
   ].join('\n');
   const r = dedupePatchEntries(input);
+  assert.deepStrictEqual(r.removed, ['balance']);
+  assert.strictEqual((r.text.match(/- id: balance/g) || []).length, 1, '重复注册的 balance 行只剩首次注册');
+  assert.strictEqual((r.text.match(/- id: terminal/g) || []).length, 1, '新注册 terminal 保留');
+  assert.ok(r.text.includes('- insert:'), '块头保留');
+  assert.ok(r.text.includes("name: '@deepseek-ai/dsh-terminal-tab'"), 'terminal 的 name 保留');
+});
+
+test('dedupePatchEntries: config 覆盖与 disabled 禁用条目绝不删除（用户配置保留）', () => {
+  const input = [
+    '- insert:',
+    '    - id: balance',
+    "      name: '@deepseek-ai/dsh-balance'",
+    '- id: balance',
+    '  disabled: true',
+    '- insert:',
+    '    - id: terminal',
+    "      name: '@deepseek-ai/dsh-terminal-tab'",
+    '- id: terminal',
+    '  config:',
+    '    width: 320',
+  ].join('\n');
+  const r = dedupePatchEntries(input);
   assert.deepStrictEqual(r.removed, []);
-  assert.strictEqual(r.text, input, '极端形态不做行级手术');
+  assert.strictEqual(r.text, input, '无重复注册 → 零写入（config/disabled 覆盖条目原样保留）');
+});
+
+test('dedupePatchEntries: 同一 insert 块内重复注册（罕见形态）→ 行级去重', () => {
+  const input = [
+    '- insert:',
+    '    - id: balance',
+    "      name: '@deepseek-ai/dsh-balance'",
+    '    - id: terminal',
+    "      name: '@deepseek-ai/dsh-terminal-tab'",
+    '    - id: balance',
+    "      name: '@deepseek-ai/dsh-balance'",
+  ].join('\n');
+  const r = dedupePatchEntries(input);
+  assert.deepStrictEqual(r.removed, ['balance']);
+  assert.strictEqual((r.text.match(/- id: balance/g) || []).length, 1, '块内重复注册行移除');
+  assert.strictEqual((r.text.match(/- id: terminal/g) || []).length, 1, 'terminal 保留');
+});
+
+test('dedupePatchEntries: 定向 insert 块（- id: X + insert:）不参与去重', () => {
+  const input = [
+    '- insert:',
+    '    - id: balance',
+    "      name: '@deepseek-ai/dsh-balance'",
+    '- id: extra-group',
+    '  insert:',
+    '    - id: balance',
+    "      name: '@deepseek-ai/dsh-balance'",
+  ].join('\n');
+  const r = dedupePatchEntries(input);
+  assert.deepStrictEqual(r.removed, []);
+  assert.strictEqual(r.text, input, '定向 insert 块原样保留');
 });
 
 test('parseFailedLoaderIds: 三种日志形态', () => {
@@ -186,4 +239,56 @@ test('dropBlocksByIds: 多个命中块全部移除', () => {
   assert.deepStrictEqual(r.removed, ['better-sidebar', 'harness-pet']);
   assert.ok(r.text.includes('id: balance'), '未命中条目保留');
   assert.strictEqual((r.text.match(/id: balance/g) || []).length, 1);
+});
+
+test('dropBlocksByIds: config 覆盖与 disabled 禁用条目绝不删除（bundle 迁移保留用户配置）', () => {
+  const input = [
+    '- insert:',
+    '    - id: better-sidebar',
+    "      name: 'dsh-better-sidebar'",
+    '- id: better-sidebar',
+    '  disabled: true',
+    '- id: better-sidebar',
+    '  config:',
+    '    width: 320',
+  ].join('\n');
+  const r = dropBlocksByIds(input, ['better-sidebar']);
+  assert.deepStrictEqual(r.removed, ['better-sidebar']);
+  assert.strictEqual((r.text.match(/- id: better-sidebar/g) || []).length, 2, 'disabled 与 config 覆盖条目保留');
+  assert.ok(!r.text.includes("name: 'dsh-better-sidebar'"), '注册行（insert 块）已移除');
+  assert.ok(r.text.includes('disabled: true') && r.text.includes('width: 320'), '用户配置原样保留');
+});
+
+test('dropBlocksByIds: 直注册条目带 config 时不删除（用户配置保留）', () => {
+  const input = [
+    '- id: better-sidebar',
+    "  name: 'dsh-better-sidebar'",
+    '  config:',
+    '    width: 320',
+  ].join('\n');
+  const r = dropBlocksByIds(input, ['better-sidebar']);
+  assert.deepStrictEqual(r.removed, []);
+  assert.strictEqual(r.text, input, '含 config 的直条目保留');
+});
+
+test('dropBlocksByIds: 直注册条目带 disabled 时不删除（用户禁用意图保留）', () => {
+  const input = [
+    '- id: better-sidebar',
+    "  name: 'dsh-better-sidebar'",
+    '  disabled: true',
+  ].join('\n');
+  const r = dropBlocksByIds(input, ['better-sidebar']);
+  assert.deepStrictEqual(r.removed, []);
+  assert.strictEqual(r.text, input, '含 disabled 的直条目保留');
+});
+
+test('dropBlocksByIds: 直注册条目带任意自定义键时不删除（用户覆盖条目保留）', () => {
+  const input = [
+    '- id: better-sidebar',
+    "  name: 'dsh-better-sidebar'",
+    '  width: 320',
+  ].join('\n');
+  const r = dropBlocksByIds(input, ['better-sidebar']);
+  assert.deepStrictEqual(r.removed, []);
+  assert.strictEqual(r.text, input, '携带自定义键的直条目保留');
 });
