@@ -14,7 +14,7 @@
 // modules (sharp, node-pty, koffi, ...) match the Node ABI they were
 // installed for. We deliberately never rebuild them against Electron.
 
-const { app, BrowserWindow, Menu, Tray, shell, dialog, Notification, ipcMain, clipboard, crashReporter } = require('electron');
+const { app, BrowserWindow, Menu, Tray, shell, dialog, Notification, ipcMain, clipboard, crashReporter, screen } = require('electron');
 const { spawn, spawnSync } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');

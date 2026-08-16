@@ -1851,9 +1851,10 @@ body { background: radial-gradient(circle at 50% 68%, rgba(231, 247, 253, .96), 
 				}
 				const previousStatus = harnessStatus;
 				harnessStatus = status;
-				// 只在状态跃迁时响一声；状态持续期间不重复响。
+				// 只在状态跃迁时响一声；状态持续期间不重复响；autoCycle 轮播
+				// 模式（调试预览）不响，避免每轮循环都叮咚两次。
 				if (!soundPrimed) soundPrimed = true;
-				else if (previousStatus !== status && (status === "waiting" || status === "success")) playPetSound(status);
+				else if (!settings.autoCycle && previousStatus !== status && (status === "waiting" || status === "success")) playPetSound(status);
 				conversationTitle = nextConversationTitle?.trim() || conversationTitle;
 				const nextReply = nextAssistantText?.trim() || void 0;
 				followAssistantTail = shouldFollowAssistantTail(assistantReply, nextReply);
@@ -1975,7 +1976,9 @@ body { background: radial-gradient(circle at 50% 68%, rgba(231, 247, 253, .96), 
 					const id = parsed && typeof parsed === "object" && typeof parsed.sessionId === "string" ? parsed.sessionId : void 0;
 					if (!id) return;
 					const current = context.sessions.list.getSnapshot().current;
-					if (id !== current) context.sessions.open(id).catch(() => {});
+					// 注意：SessionRuntime.open 是同步方法（manager.select），
+					// 不返回 Promise —— 直接 try/catch 包住，不调用 .catch。
+					if (id !== current) { try { context.sessions.open(id); } catch {} }
 				} catch {}
 			};
 			window.addEventListener("storage", onStorage);

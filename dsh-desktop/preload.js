@@ -129,12 +129,18 @@ if (FLOAT_MODE) {
 // 宠物小窗模式检测：preload 的 process.argv 由 webPreferences.additionalArguments
 // 注入（createPetWindow 传 --dsh-pet=1）。小窗内注入 window.__DSH_PET__ 供
 // harness-pet 插件识别，并隐藏除宠物根节点外的全部界面（页面透明，只显示鲸鱼）。
+// 样式注入延迟到 DOMContentLoaded（preload 执行时 document.head 可能尚不存在，
+// 直接 append 会抛 TypeError 中断 preload 后续逻辑）。
 const PET_MODE = process.argv.includes('--dsh-pet=1');
 if (PET_MODE) {
   contextBridge.exposeInMainWorld('__DSH_PET__', {});
-  const style = document.createElement('style');
-  style.textContent = 'html,body{background:transparent!important;overflow:hidden!important}body>:not(#harness-pet-root){display:none!important}';
-  document.head.appendChild(style);
+  const injectPetPageStyle = () => {
+    const style = document.createElement('style');
+    style.textContent = 'html,body{background:transparent!important;overflow:hidden!important}body>:not(#harness-pet-root){display:none!important}';
+    (document.head || document.documentElement).appendChild(style);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', injectPetPageStyle);
+  else injectPetPageStyle();
 }
 
 // 页面异常 → 主进程日志（desktop.log），便于排查插件空白视图。
