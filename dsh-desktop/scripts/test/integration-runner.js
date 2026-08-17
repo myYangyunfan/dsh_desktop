@@ -200,6 +200,9 @@ class ScenarioContext {
 // 场景级环境变量（应用启动参数）。
 const SCENARIO_ENV = {
   'unsafe-port': { DSH_DESKTOP_TEST_FORCE_UNSAFE: '1' },
+  // WSL 探测失败回落本地模式（issue #54）：强制一个必然不存在的发行版名，
+  // 任何机器（含未安装 WSL 的机器）上 configureAsync 都必然失败。
+  'wsl-broken-fallback': { DSH_DESKTOP_BACKEND: 'wsl', DSH_DESKTOP_WSL_DISTRO: '__dsh_test_missing_distro__' },
 };
 
 const SCENARIOS = {};
@@ -216,7 +219,9 @@ SCENARIOS['boot-healthy'] = async (t) => {
   t.assert(run.renderer && run.renderer.state === 'healthy', `run-state 应记录 healthy，实际=${JSON.stringify(run.renderer)}`);
   const crashDumps = path.join(t.userData, 'crash-dumps');
   t.assert(fs.existsSync(crashDumps), 'crash-dumps 目录应存在');
-  t.assert(!t.readNew(t.desktopLog).includes('渲染进程异常退出'), '健康启动不应出现崩溃事件');
+  // 全文件检索而非 readNew 增量：启动期崩溃日志可能已被 waitFor 消费，
+  // 增量断言会恒真（历史缺陷）。
+  t.assert(!t.grepLog('渲染进程异常退出'), '健康启动不应出现崩溃事件');
   const q = await t.quitAndCheck();
   t.assert(q.exit.code === 0, `退出码应为 0，实际=${q.exit.code}`);
   t.assert(q.cleanExit === true, 'run-state 应标记 cleanExit=true');
@@ -948,9 +953,26 @@ SCENARIOS['unsafe-port'] = async (t) => {
   t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
 };
 
+SCENARIOS['wsl-broken-fallback'] = async (t) => {
+  // WSL 配置错误不再让应用启动失败（issue #54）：configureAsync 探测失败
+  // 后回落到本地模式继续启动，且日志/状态可证明回落发生。
+  await t.waitFor('test-channel-ready', 60000, '测试通道就绪');
+  await t.waitFor('已回落到本地模式', 120000, 'WSL 探测失败回落日志');
+  await t.waitFor('boot-ready', 240000, '回落本地后 Web UI 就绪');
+  await t.waitFor('界面已稳定', 60000, '稳定期完成');
+  const st = await t.state();
+  t.assert(st.backend === 'local', `回落后应为 local 模式，实际=${st.backend}`);
+  t.assert(sameUrl(st.url, st.webUrl), '回落本地后应加载 Web UI');
+  t.assert(t.grepLog('WSL 托管模式探测失败，已回落到本地模式'), 'desktop.log 应记录回落原因');
+  const q = await t.quitAndCheck();
+  t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
+};
+
 // ---------------------------------------------------------------------------
 // 运行入口
 // ---------------------------------------------------------------------------
+
+let KEEP_TEMP = false;
 
 async function runScenario(name) {
   const t = new ScenarioContext(name);
@@ -958,6 +980,8 @@ async function runScenario(name) {
     if (!cond) throw new Error(`断言失败: ${msg}`);
   };
   const started = Date.now();
+  // 进程泄漏检测基线是全系统进程表：场景期间若有无关 node/electron 启动
+  // 会被误判为泄漏（已知限制——跑集成期间不要并发启动 node 进程）。
   const baseline = { node: tasklistPids('node.exe'), electron: tasklistPids('electron.exe') };
   let result = null;
   try {
@@ -981,19 +1005,28 @@ async function runScenario(name) {
     }
     result.durationMs = Date.now() - started;
     result.dir = t.dir;
+    // 场景临时树清理：每个场景都会留下整套 DSH_HOME + userData + 日志，
+    // 全量跑下来数百 MB；失败现场默认保留到下一次运行前由 mkdtemp 换新，
+    // 需要保留失败现场时传 --keep。
+    if (!KEEP_TEMP) {
+      try { fs.rmSync(t.dir, { recursive: true, force: true }); } catch {}
+    } else {
+      process.stdout.write(`[${name}] 保留临时目录: ${t.dir}\n`);
+    }
   }
   return result;
 }
 
 async function main() {
   const args = process.argv.slice(2);
+  KEEP_TEMP = args.includes('--keep');
   if (args.includes('--list')) {
     console.log(Object.keys(SCENARIOS).join('\n'));
     return;
   }
   const names = args.includes('--all') ? Object.keys(SCENARIOS) : args.filter((a) => !a.startsWith('--'));
   if (names.length === 0) {
-    console.error('用法: node scripts/test/integration-runner.js <scenario...> | --all | --list');
+    console.error('用法: node scripts/test/integration-runner.js <scenario...> | --all | --list [--keep 保留失败现场临时目录]');
     process.exit(2);
   }
   let failures = 0;
