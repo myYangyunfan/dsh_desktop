@@ -492,7 +492,6 @@ function m3ApplyTheme(enabled) {
     document.body.removeAttribute(M3_THEME_ATTR);
     document.documentElement.removeAttribute(M3_THEME_ATTR);
   }
-  window.dispatchEvent(new CustomEvent('m3-theme-change', { detail: { enabled } }));
 }
 
 function m3ToggleTheme() {
@@ -878,17 +877,16 @@ function m3InitTheme() {
     });
   }
   
-  // 暴露 API
-  window.__m3Theme = {
-    isEnabled: () => m3ThemeEnabled,
-    toggle: m3ToggleTheme,
-    set: (v) => { m3SavePreference(v); m3ApplyTheme(v); m3UpdateAllButtons(); },
-  };
+  // 对外 API：contextIsolation 下 preload 的 window 与页面 window 是不同
+  // JS 对象，直接赋值 window.__m3Theme 页面不可见（历史死代码，已移除）。
+  // 主题仅通过 DOM（data-m3-theme 属性 + 设置页按钮）驱动，无需桥接 API。
 }
 
-// 初始化 M3 主题
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', m3InitTheme);
-} else {
-  m3InitTheme();
+// 初始化 M3 主题（宠物小窗只显示鲸鱼动画，跳过主题注入）
+if (!PET_MODE) {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', m3InitTheme);
+  } else {
+    m3InitTheme();
+  }
 }
