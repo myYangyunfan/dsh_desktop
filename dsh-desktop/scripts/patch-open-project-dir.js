@@ -47,8 +47,13 @@ const PROJ_CTX_ANCHOR = '\t\t\t\tonClick: onToggle,\n\t\t\t\tdraggable: drag !==
 const PROJ_CTX_INSERT = '\t\t\t\tonClick: onToggle,\n\t\t\t\tonContextMenu: actions === void 0 ? void 0 : (e) => {\n\t\t\t\t\te.preventDefault();\n\t\t\t\t\te.stopPropagation();\n\t\t\t\t\tsetMenuPos({ x: e.clientX, y: e.clientY });\n\t\t\t\t\tsetMenuOpen(true);\n\t\t\t\t},\n\t\t\t\tdraggable: drag !== void 0,';
 
 // 4. 项目行 Menu：portal 模式用光标矩形定位（右键时）；⋮ 按钮点击复位 menuPos。
+//    注意：Menu place() 的定位分支读取 r.left / r.bottom / r.right，矩形必须
+//    提供完整四边（缺 right/bottom 会让坐标算出 NaN，弹层落回静态位置）。
 const PROJ_MENU_RECT_ANCHOR = '\t\t\t\t\t\t\tportal: true,\n\t\t\t\t\t\t\tcloseOnPointerLeave: true,\n\t\t\t\t\t\t\tanchor: (0, react_jsx_runtime.jsx)("button", {';
-const PROJ_MENU_RECT_INSERT = '\t\t\t\t\t\t\tportal: true,\n\t\t\t\t\t\t\tcloseOnPointerLeave: true,\n\t\t\t\t\t\t\tgetAnchorRect: menuPos === null ? void 0 : () => ({ left: menuPos.x, top: menuPos.y, width: 0, height: 0 }),\n\t\t\t\t\t\t\tanchor: (0, react_jsx_runtime.jsx)("button", {';
+const PROJ_MENU_RECT_INSERT = '\t\t\t\t\t\t\tportal: true,\n\t\t\t\t\t\t\tcloseOnPointerLeave: true,\n\t\t\t\t\t\t\tgetAnchorRect: menuPos === null ? void 0 : () => ({ left: menuPos.x, top: menuPos.y, right: menuPos.x + 1, bottom: menuPos.y + 1, width: 0, height: 0 }),\n\t\t\t\t\t\t\tanchor: (0, react_jsx_runtime.jsx)("button", {';
+// v1 升级：旧矩形缺 right/bottom（NaN 定位 bug，弹层固定在上方）→ 补全四边。
+const PROJ_MENU_RECT_UPGRADE_ANCHOR = 'getAnchorRect: menuPos === null ? void 0 : () => ({ left: menuPos.x, top: menuPos.y, width: 0, height: 0 }),';
+const PROJ_MENU_RECT_UPGRADE_INSERT = 'getAnchorRect: menuPos === null ? void 0 : () => ({ left: menuPos.x, top: menuPos.y, right: menuPos.x + 1, bottom: menuPos.y + 1, width: 0, height: 0 }),';
 
 const PROJ_BTN_ANCHOR = 'onClick: (e) => {\n\t\t\t\t\t\t\t\t\te.stopPropagation();\n\t\t\t\t\t\t\t\t\tsetMenuOpen((v) => !v);\n\t\t\t\t\t\t\t\t},';
 const PROJ_BTN_INSERT = 'onClick: (e) => {\n\t\t\t\t\t\t\t\t\te.stopPropagation();\n\t\t\t\t\t\t\t\t\tsetMenuPos(null);\n\t\t\t\t\t\t\t\t\tsetMenuOpen((v) => !v);\n\t\t\t\t\t\t\t\t},';
@@ -76,7 +81,10 @@ const SESS_CTX_INSERT = '\t\t\t\t\tonClick: () => {\n\t\t\t\t\t\tonOpen(node.id)
 
 // 9. 会话行 Menu：portal 模式用光标矩形定位；⋮ 按钮点击复位 menuPos。
 const SESS_MENU_RECT_ANCHOR = '\t\t\t\t\t\t\t\tportal: true,\n\t\t\t\t\t\t\t\tcloseOnPointerLeave: true,\n\t\t\t\t\t\t\t\tanchor: (0, react_jsx_runtime.jsx)("button", {';
-const SESS_MENU_RECT_INSERT = '\t\t\t\t\t\t\t\tportal: true,\n\t\t\t\t\t\t\t\tcloseOnPointerLeave: true,\n\t\t\t\t\t\t\t\tgetAnchorRect: menuPos === null ? void 0 : () => ({ left: menuPos.x, top: menuPos.y, width: 0, height: 0 }),\n\t\t\t\t\t\t\t\tanchor: (0, react_jsx_runtime.jsx)("button", {';
+const SESS_MENU_RECT_INSERT = '\t\t\t\t\t\t\t\tportal: true,\n\t\t\t\t\t\t\t\tcloseOnPointerLeave: true,\n\t\t\t\t\t\t\t\tgetAnchorRect: menuPos === null ? void 0 : () => ({ left: menuPos.x, top: menuPos.y, right: menuPos.x + 1, bottom: menuPos.y + 1, width: 0, height: 0 }),\n\t\t\t\t\t\t\t\tanchor: (0, react_jsx_runtime.jsx)("button", {';
+// v1 升级：旧矩形缺 right/bottom（NaN 定位 bug，弹层固定在上方）→ 补全四边。
+const SESS_MENU_RECT_UPGRADE_ANCHOR = 'getAnchorRect: menuPos === null ? void 0 : () => ({ left: menuPos.x, top: menuPos.y, width: 0, height: 0 }),';
+const SESS_MENU_RECT_UPGRADE_INSERT = 'getAnchorRect: menuPos === null ? void 0 : () => ({ left: menuPos.x, top: menuPos.y, right: menuPos.x + 1, bottom: menuPos.y + 1, width: 0, height: 0 }),';
 
 const SESS_BTN_ANCHOR = 'onClick: (e) => {\n\t\t\t\t\t\t\t\t\t\te.stopPropagation();\n\t\t\t\t\t\t\t\t\t\tsetMenuOpen((v) => !v);\n\t\t\t\t\t\t\t\t\t},';
 const SESS_BTN_INSERT = 'onClick: (e) => {\n\t\t\t\t\t\t\t\t\t\te.stopPropagation();\n\t\t\t\t\t\t\t\t\t\tsetMenuPos(null);\n\t\t\t\t\t\t\t\t\t\tsetMenuOpen((v) => !v);\n\t\t\t\t\t\t\t\t\t},';
@@ -174,7 +182,12 @@ function patchOpenProjectDir(nmRoot, log = () => {}) {
         { anchor: UI_ZH_ANCHOR, insert: UI_ZH_INSERT },
         { anchor: UI_EN_ANCHOR, insert: UI_EN_INSERT },
       ],
-      upgradeRules: [],
+      // v1 → v2 升级：v1 的 getAnchorRect 矩形缺 right/bottom，Menu place()
+      // 用 r.bottom/r.right 算坐标得到 NaN，弹层固定在上方不跟随光标。
+      upgradeRules: [
+        { anchor: PROJ_MENU_RECT_UPGRADE_ANCHOR, insert: PROJ_MENU_RECT_UPGRADE_INSERT },
+        { anchor: SESS_MENU_RECT_UPGRADE_ANCHOR, insert: SESS_MENU_RECT_UPGRADE_INSERT },
+      ],
     },
   ];
   let changed = 0;
