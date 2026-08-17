@@ -3,42 +3,11 @@
 // 插件更新（npm 官方/镜像 双源 + GitHub Releases 官方/镜像）：
 // 纯函数部分（版本比较、源 URL 构建、校验、解压包根定位）集中在这里，
 // 便于 node --test 单测；网络下载与文件落地编排在 main.js（pluginManager*）。
+// 版本比较全仓唯一实现在 scripts/lib/versions.js（updater.js 与本模块共用），
+// 此处仅作兼容性再导出（main.js / companion-profile / 既有单测沿用本路径）。
 // ---------------------------------------------------------------------------
 
-/**
- * 数值分段比较版本（0.12.2 > 0.2.1），semver 段规则：
- *   - 缺失段按 0 处理（1.0 == 1.0.0）；
- *   - 段先按数字前缀比较（0.2.4-beta > 0.2.3）；
- *   - 数字前缀相等时：无预发布后缀 > 有后缀（0.2.3 > 0.2.3-beta）；
- *   - 两段都带后缀按字符串比较（alpha < beta）；
- *   - 数字段 > 纯文本段。
- */
-function compareVersions(a, b) {
-  const pa = String(a || '').replace(/^v/, '').split('.');
-  const pb = String(b || '').replace(/^v/, '').split('.');
-  const n = Math.max(pa.length, pb.length);
-  const seg = (s) => {
-    if (s === undefined) return { num: 0, isNum: true, hasPre: false, raw: '' };
-    const m = /^(\d+)(.*)$/.exec(s);
-    if (!m) return { num: NaN, isNum: false, hasPre: false, raw: s };
-    return { num: parseInt(m[1], 10), isNum: true, hasPre: m[2].length > 0, raw: s };
-  };
-  for (let i = 0; i < n; i++) {
-    const x = seg(pa[i]), y = seg(pb[i]);
-    if (x.isNum && y.isNum) {
-      if (x.num !== y.num) return x.num < y.num ? -1 : 1;
-      if (x.hasPre !== y.hasPre) return x.hasPre ? -1 : 1; // 有后缀 < 无后缀
-      if (x.hasPre && x.raw !== y.raw) return x.raw < y.raw ? -1 : 1;
-    } else if (x.isNum && !y.isNum) {
-      return 1;
-    } else if (!x.isNum && y.isNum) {
-      return -1;
-    } else if (x.raw !== y.raw) {
-      return x.raw < y.raw ? -1 : 1;
-    }
-  }
-  return 0;
-}
+const { compareVersions } = require('./lib/versions');
 
 /** npm registry 的「最新版本」端点（官方 / npmmirror 镜像）。 */
 function npmLatestUrl(pkg, mirror) {

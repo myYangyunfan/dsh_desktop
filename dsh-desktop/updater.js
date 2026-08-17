@@ -67,37 +67,29 @@ function overlayBinPath(ctx) {
 }
 
 function overlayVersion(ctx) {
-  try { return require(path.join(overlayDir(ctx), 'node_modules', PKG, 'package.json')).version; }
+  try {
+    // 用 readFileSync + JSON.parse 而不是 require：require 按路径缓存，本进程内
+    // overlay 被更新替换到同一路径后仍读到旧版本号（历史脏读）。
+    return JSON.parse(fs.readFileSync(path.join(overlayDir(ctx), 'node_modules', PKG, 'package.json'), 'utf8')).version || null;
+  }
   catch { return null; }
 }
 
 function bundledVersion() {
-  try { return require(PKG + '/package.json').version; }
+  try {
+    return JSON.parse(fs.readFileSync(require.resolve(PKG + '/package.json'), 'utf8')).version || null;
+  }
   catch { return null; }
 }
 
 function activeVersion(ctx) { return overlayVersion(ctx) || bundledVersion(); }
 
-// --- semver-ish compare (handles 0.1.0-rc.N style prereleases) -------------
-
-function compareVersions(a, b) {
-  const parse = (v) => {
-    const [core, pre = ''] = String(v).split('-');
-    const nums = core.split('.').map((s) => parseInt(s, 10) || 0);
-    const preNum = parseInt((pre.match(/\d+/) || [''])[0], 10);
-    return { nums, pre, preNum: Number.isNaN(preNum) ? -1 : preNum, hasPre: !!pre };
-  };
-  const A = parse(a), B = parse(b);
-  for (let i = 0; i < 3; i++) {
-    if (A.nums[i] !== B.nums[i]) return A.nums[i] - B.nums[i];
-  }
-  if (A.hasPre !== B.hasPre) return A.hasPre ? -1 : 1; // prerelease < release
-  if (A.hasPre && A.pre !== B.pre) {
-    if (A.preNum >= 0 && B.preNum >= 0 && A.preNum !== B.preNum) return A.preNum - B.preNum;
-    return A.pre < B.pre ? -1 : A.pre > B.pre ? 1 : 0;
-  }
-  return 0;
-}
+// --- semver-ish compare ---
+// 全仓唯一实现见 scripts/lib/versions.js（与 scripts/plugin-manager-update.js
+// 共用）；本文件保持导出以兼容既有调用方（main.js / client-updater.js /
+// scripts/check-latest.js）。对客户端版本（0.3.x）与 agent 版本
+// （0.1.0-rc.N）的全部真实形态比对过，替换为零行为变更。
+const { compareVersions } = require('./scripts/lib/versions');
 
 // --- npm runner -----------------------------------------------------------
 
@@ -134,7 +126,9 @@ function runNpm(ctx, args, { timeoutMs = 30 * 60 * 1000, logStream = null } = {}
     activeProc = proc;
     let settled = false;
     let stdoutBuf = '';
-    const finish = (fn, value) => { if (!settled) { settled = true; clearTimeout(timer); activeProc = null; fn(value); } };
+    // finish 只允许「当前在途的 npm 进程」清除 activeProc：并发 runNpm 时
+    // 较早结束者不得把较晚启动者的进程引用清掉（abort 会因此漏杀）。
+    const finish = (fn, value) => { if (!settled) { settled = true; clearTimeout(timer); if (activeProc === proc) activeProc = null; fn(value); } };
     const timer = setTimeout(() => { killProc(proc); finish(reject, new Error('npm 执行超时（' + Math.round(timeoutMs / 1000) + ' 秒）')); }, timeoutMs);
     let stderrBuf = '';
     proc.stdout.on('data', (c) => { stdoutBuf += c.toString(); if (logStream) logStream.write(c); });
@@ -155,6 +149,7 @@ function runNpm(ctx, args, { timeoutMs = 30 * 60 * 1000, logStream = null } = {}
 async function checkLatest(ctx) {
   const out = await runNpm(ctx, ['view', PKG, 'version'], { timeoutMs: 90000 });
   const lines = out.trim().split(/\r?\n/).filter(Boolean);
+  if (lines.length === 0) throw new Error('npm view 无输出，无法解析官方版本号');
   const v = lines[lines.length - 1].trim();
   if (!/^\d+\.\d+\.\d+/.test(v)) throw new Error('无法解析官方版本号: ' + JSON.stringify(v));
   return v;
@@ -201,11 +196,19 @@ async function applyUpdate(ctx, version) {
     fs.rmSync(staging, { recursive: true, force: true });
     throw new Error('切换新版本失败: ' + (err && err.message) + '（staging 已清理）');
   }
-  fs.rmSync(backup, { recursive: true, force: true });
+  // 旧副本清理失败（杀软/句柄锁定）不影响「更新已成功」的判定：绝不能因此
+  // 向上抛错让用户看到「更新失败，仍使用当前版本」（实际已切换成功）。
+  try {
+    fs.rmSync(backup, { recursive: true, force: true });
+  } catch (cleanupErr) {
+    ctx.log('update', '清理旧版本副本失败（不影响本次更新）: ' + String(cleanupErr && cleanupErr.message));
+  }
 
   const settings = loadSettings(ctx);
   settings.skipVersion = null;
-  saveSettings(ctx, settings);
+  if (!saveSettings(ctx, settings)) {
+    ctx.log('update', '保存 settings 失败：重启后可能仍提示待安装更新');
+  }
   ctx.log('update', '更新完成: ' + PKG + '@' + version);
   return { version, logPath };
 }
