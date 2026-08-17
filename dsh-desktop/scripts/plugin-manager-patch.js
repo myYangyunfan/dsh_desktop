@@ -24,13 +24,16 @@ function yamlQuote(s) {
 }
 
 // 顶层用户层条目（缩进 0-2 空格）+ 全部续行（含行尾换行）。
+// id 边界用负向断言（id 字符集 [A-Za-z0-9_.-]，`\b` 对 -/. 是非法词边界，
+// 会误匹配前缀如 terminal→terminal-tab）；续行组前瞻排除同缩进兄弟
+// `- id:`（贪婪续行会把同块后续兄弟条目整块吞掉，造成误删）。
 function topLevelEntryRe(id) {
-  return new RegExp('(?:^|\\n)([ \\t]{0,2})- id:\\s*' + escRegExp(id) + '\\b[^\\n]*\\n(?:[ \\t]+[^\\n]*\\n)*', 'g');
+  return new RegExp('(?:^|\\n)([ \\t]{0,2})- id:\\s*' + escRegExp(id) + '(?![A-Za-z0-9_.-])[^\\n]*\\n(?:[ \\t]+(?![ \\t]*- id:)[^\\n]*\\n)*', 'g');
 }
 
 // insert 块内的内层条目（缩进 >= 4）+ 续行（含行尾换行）。
 function insertInnerEntryRe(id) {
-  return new RegExp('(?:^|\\n)[ \\t]+- id:\\s*' + escRegExp(id) + '\\b[^\\n]*\\n(?:[ \\t]+[^\\n]*\\n)*', 'g');
+  return new RegExp('(?:^|\\n)[ \\t]+- id:\\s*' + escRegExp(id) + '(?![A-Za-z0-9_.-])[^\\n]*\\n(?:[ \\t]+(?![ \\t]*- id:)[^\\n]*\\n)*', 'g');
 }
 
 // 本模块写入的标记注释行（整行，含行尾换行）。

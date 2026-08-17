@@ -202,3 +202,62 @@ test('卸载→恢复→卸载 往返不堆积注释', () => {
   assert.equal(countId(t, 'balance'), 1);
   assert.equal(removedCount(t), 1);
 });
+
+// #66：insert 同块兄弟条目不得被贪婪续行组吞掉（issue #66）
+test('#66 禁用：同 insert 块的兄弟条目保留（续行组不吞兄弟）', () => {
+  const text = [
+    '- insert:',
+    '    - id: terminal',
+    '      name: terminal',
+    '    - id: file-changes',
+    '      name: file-changes',
+    '',
+  ].join('\n');
+  const out = togglePluginInPatch(text, 'terminal', false);
+  assert.ok(out.includes('    - id: file-changes'), '兄弟条目 file-changes 必须保留');
+  assert.ok(!out.includes('    - id: terminal'), '目标条目已从 insert 块移除');
+  assert.match(out, /- id: terminal\s*\n\s*name: '?terminal'?\s*\n\s*disabled: true/);
+});
+
+test('#66 禁用：目标条目在块中间时前后兄弟都保留', () => {
+  const text = [
+    '- insert:',
+    '    - id: a',
+    '      name: a',
+    '    - id: terminal',
+    '      name: terminal',
+    '    - id: c',
+    '      name: c',
+    '',
+  ].join('\n');
+  const out = togglePluginInPatch(text, 'terminal', false);
+  assert.ok(out.includes('    - id: a'), '前置兄弟 a 保留');
+  assert.ok(out.includes('    - id: c'), '后置兄弟 c 保留');
+  assert.ok(!out.includes('    - id: terminal'), '目标条目已移除');
+});
+
+test('#66 禁用：id 前缀不误删（terminal 不匹配 terminal-tab）', () => {
+  const text = [
+    '- insert:',
+    '    - id: terminal-tab',
+    '      name: terminal-tab',
+    '',
+  ].join('\n');
+  const out = togglePluginInPatch(text, 'terminal', false);
+  assert.ok(out.includes('    - id: terminal-tab'), 'terminal-tab 不得被 terminal 误删');
+  assert.match(out, /- id: terminal\s*\n/, '无现成条目时按预期追加顶层条目');
+});
+
+test('#66 卸载：同 insert 块的兄弟条目保留', () => {
+  const text = [
+    '- insert:',
+    '    - id: terminal',
+    '      name: terminal',
+    '    - id: file-changes',
+    '      name: file-changes',
+    '',
+  ].join('\n');
+  const out = setPluginRemoved(text, 'terminal', true);
+  assert.ok(out.includes('    - id: file-changes'), '卸载时兄弟条目 file-changes 必须保留');
+  assert.equal(removedCount(out), 1);
+});

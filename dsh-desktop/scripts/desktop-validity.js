@@ -185,9 +185,13 @@ function checkPluginPackage(name, dir, yaml, fs = require('node:fs'), listed = f
       }
     }
   }
-  // 声明了 main 但入口文件缺失（仅警告：bundle 不一定走 main）
+  // 声明了 main 但入口文件缺失。启动清单（listed）内的包随 patch 加载时按包名
+  // require → 走 main，缺失会导致启动失败（issue #76：缺 dist/main 实测崩）；
+  // 非清单包（普通 npm 依赖）不参与启动加载，仅警告。
   if (typeof pkg.main === 'string' && pkg.main && !fs.existsSync(path.join(dir, pkg.main))) {
-    issues.push({ level: 'warning', text: `main 入口不存在: ${pkg.main}` });
+    issues.push(listed
+      ? { level: 'error', text: `启动清单内插件 main 入口不存在: ${pkg.main}（加载该包会失败，请移除或修复）` }
+      : { level: 'warning', text: `main 入口不存在: ${pkg.main}` });
   }
   return { name, issues, ids, patchOk };
 }

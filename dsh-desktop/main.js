@@ -4142,6 +4142,14 @@ const PLUGIN_UPDATE_SOURCES = {
   'side-session': { kind: 'github', repo: 'hzhz314159/dsh-side-session' },
 };
 
+/** 解析重定向 Location：相对地址基于原 URL 解析；仅允许 https（http 跳转拒绝，
+ *  与 https.get 一致；异常收敛为 rejection，不冒泡未捕获异常——issue #80）。 */
+function resolveRedirectLocation(location, baseUrl) {
+  const next = new URL(String(location), String(baseUrl));
+  if (next.protocol !== 'https:') throw new Error('重定向目标协议不受支持: ' + next.protocol);
+  return next.toString();
+}
+
 /** GET JSON（跟随重定向，上限 5 跳防环，超时取消）。 */
 function pluginManagerHttpGetJson(url, timeoutMs = 15000, headers = {}, redirects = 0) {
   return new Promise((resolve, reject) => {
@@ -4149,7 +4157,11 @@ function pluginManagerHttpGetJson(url, timeoutMs = 15000, headers = {}, redirect
     const req = https.get(url, { headers: { 'User-Agent': 'DSH-Desktop', ...headers }, timeout: timeoutMs }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume();
-        return resolve(pluginManagerHttpGetJson(res.headers.location, timeoutMs, headers, redirects + 1));
+        try {
+          return resolve(pluginManagerHttpGetJson(resolveRedirectLocation(res.headers.location, url), timeoutMs, headers, redirects + 1));
+        } catch (err) {
+          return reject(err);
+        }
       }
       let data = '';
       res.on('data', (c) => { data += c; });
@@ -4170,7 +4182,11 @@ function pluginManagerHttpGetBuffer(url, timeoutMs = 60000, redirects = 0) {
     const req = https.get(url, { headers: { 'User-Agent': 'DSH-Desktop' }, timeout: timeoutMs }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume();
-        return resolve(pluginManagerHttpGetBuffer(res.headers.location, timeoutMs, redirects + 1));
+        try {
+          return resolve(pluginManagerHttpGetBuffer(resolveRedirectLocation(res.headers.location, url), timeoutMs, redirects + 1));
+        } catch (err) {
+          return reject(err);
+        }
       }
       if (res.statusCode !== 200) { res.resume(); return reject(new Error('HTTP ' + res.statusCode)); }
       const chunks = [];
@@ -4218,7 +4234,17 @@ async function pluginManagerFetchGithubLatest(repo) {
   try {
     const data = await pluginManagerHttpGetJson(githubReleaseApiUrl(repo), 15000, { Accept: 'application/vnd.github+json' });
     if (data && data.tag_name && Array.isArray(data.assets) && data.assets.length > 0) {
-      const a = data.assets.find((x) => x && x.name) || data.assets[0];
+      // 多资产 Release 选择策略（issue #90）：优先「平台匹配的归档」（win/x64 +
+      // .tgz/.tar.gz/.zip），其次任意归档，再次平台匹配任意文件，最后回退第一个。
+      // 此前直接取第一个资产，多资产 Release（checksum/其它平台分包）会下载错文件。
+      const isArchive = (n) => /\.(?:tgz|tar\.gz|zip)$/i.test(n);
+      const isWinAsset = (n) => /(?:win|windows)/i.test(n);
+      const a =
+        data.assets.find((x) => x && x.name && isArchive(x.name) && isWinAsset(x.name)) ||
+        data.assets.find((x) => x && x.name && isArchive(x.name)) ||
+        data.assets.find((x) => x && x.name && isWinAsset(x.name)) ||
+        data.assets.find((x) => x && x.name) ||
+        data.assets[0];
       // GitHub API digest 形如 "sha256:<hex64>"（部分老资产无此字段）
       const dm = /^(?:sha256:)?([0-9a-fA-F]{64})$/.exec(String(a.digest || ''));
       return {

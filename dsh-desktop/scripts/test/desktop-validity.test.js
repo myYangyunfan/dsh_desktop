@@ -198,3 +198,35 @@ test('validatePlugins: 覆盖条目（disabled/config）不算注册 → 不产�
   const out3 = validatePlugins(profileDir, null, path.join(dir, 'assets'), jsonYaml, fs);
   assert.strictEqual(out3.ok, true, '定向 insert 组名不算注册');
 });
+
+// ---------- #76：main 入口缺失——清单内升 error，避免「体检通过但启动失败」 ----------
+
+test('#76 清单内（listed）main 缺失 → error；未列出 → 保持 warning', () => {
+  const dir = tmpdir();
+  write(dir, 'listed-pkg/package.json', JSON.stringify({
+    name: 'listed-pkg', main: 'lib/index.js', dsh: { bundle: { patch: './cordis.patch.yml' } },
+  }));
+  write(dir, 'listed-pkg/cordis.patch.yml', patchJson([{ id: 'lp' }]));
+  const listed = checkPluginPackage('listed-pkg', path.join(dir, 'listed-pkg'), jsonYaml, fs, true);
+  const err = listed.issues.find((i) => i.level === 'error' && /main 入口不存在/.test(i.text));
+  assert.ok(err, 'listed 包 main 缺失应报 error');
+  assert.match(err.text, /启动清单/);
+  const notListed = checkPluginPackage('listed-pkg', path.join(dir, 'listed-pkg'), jsonYaml, fs, false);
+  const warn = notListed.issues.find((i) => i.level === 'warning' && /main 入口不存在/.test(i.text));
+  assert.ok(warn, '未列出包 main 缺失保持 warning，不误报启动失败');
+  assert.ok(!notListed.issues.some((i) => i.level === 'error' && /main 入口不存在/.test(i.text)));
+});
+
+test('#76 validatePlugins: 清单内 main 缺失 → ok:false + contractViolations 列出', () => {
+  const dir = tmpdir();
+  const profileDir = dir;
+  write(profileDir, 'package.json', JSON.stringify({ name: 'p', dsh: { profile: { bundles: ['broken-main'] } } }));
+  write(dir, 'assets/broken-main/package.json', JSON.stringify({
+    name: 'broken-main', main: 'lib/missing.js', dsh: { bundle: { patch: './cordis.patch.yml' } },
+  }));
+  write(dir, 'assets/broken-main/cordis.patch.yml', patchJson([{ id: 'bm' }]));
+  const out = validatePlugins(profileDir, null, path.join(dir, 'assets'), jsonYaml, fs);
+  assert.strictEqual(out.ok, false, '清单内 main 缺失 → 体检不通过（不再假绿）');
+  assert.deepStrictEqual(out.contractViolations, ['broken-main'], '可一键移除名单包含该包');
+  assert.ok(out.summary.errors >= 1);
+});
