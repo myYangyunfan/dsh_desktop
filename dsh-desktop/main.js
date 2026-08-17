@@ -50,7 +50,7 @@ const { COMPANION_PLUGINS } = require('./scripts/lib/companion-plugins');
 const { writeFileAtomic } = require('./scripts/lib/patch-io');
 const { applyPatchToFiles } = require('./scripts/lib/patch-engine');
 const { FLASH_PKG_REL, EXPOSE_PKG_REL, patchTargets, localCopyFiles, guardCopyFiles, localNodeModulesRoots, transformFlashFix, transformExposeFix } = require('./scripts/lib/runtime-patches');
-const { ACP_DISABLE_BLOCK, PET_DISABLE_BLOCK, removeLegacyMarketplacePatchLines, ensureDisabledPatchEntry, registerCompanionPatchEntries, syncCompanionFiles } = require('./scripts/lib/companion-profile');
+const { ACP_DISABLE_BLOCK, PET_DISABLE_BLOCK, removeLegacyMarketplacePatchLines, removedPluginIdsFromPatch, ensureDisabledPatchEntry, registerCompanionPatchEntries, syncCompanionFiles } = require('./scripts/lib/companion-profile');
 const { patchWebSearchBaseUrl } = require('./scripts/patch-web-search-baseurl');
 const { patchMenuViewport } = require('./scripts/patch-menu-viewport');
 const { patchSessionManage } = require('./scripts/patch-session-manage');
@@ -82,15 +82,22 @@ function recordStartupCrash(kind, err) {
   } catch {}
 }
 process.on('uncaughtException', (err) => {
+  // 单处理器收敛（历史两处重复注册，boot 前会弹两个错误框）：
+  // 启动崩溃取证 + 主进程日志 + 单个错误框。
   recordStartupCrash('uncaughtException', err);
-  if (!bootFinished && err) {
-    try {
+  const stack = (err && (err.stack || err.message)) || String(err);
+  log('crash', 'uncaughtException: ' + stack);
+  try {
+    if (!bootFinished) {
       dialog.showErrorBox('DSH Desktop 启动异常', String((err && err.message) || err) + '\n\n详细日志：' + startupCrashLogFile());
-    } catch {}
-  }
+    } else {
+      dialog.showErrorBox('DSH Desktop 遇到异常', '应用已记录该错误并继续运行。\n\n' + stack.slice(0, 500));
+    }
+  } catch {}
 });
 process.on('unhandledRejection', (reason) => {
   recordStartupCrash('unhandledRejection', reason instanceof Error ? reason : new Error(String(reason)));
+  log('crash', 'unhandledRejection: ' + String((reason && (reason.stack || reason.message)) || reason));
 });
 
 // ---------------------------------------------------------------------------
@@ -169,6 +176,7 @@ let balanceTimer = null;
 let restartingServer = false;
 let trayRecoveryTimer = null;
 let backendMode = 'local'; // local | wsl（WSL 托管后端见 wsl-backend.js）
+let wslFallbackReason = ''; // WSL 模式探测失败回落 local 的原因（设置页/日志展示）
 let recovery = null; // 渲染进程崩溃/挂起自恢复状态机（renderer-recovery.js）
 let crashDumpsDir = "";
 let pickerBrowseOverlay = null; // koffi 预检失败时注入的目录选择器降级 overlay
@@ -214,7 +222,10 @@ function runStatePath() {
 
 function writeRunState(extra = {}) {
   try {
-    fs.writeFileSync(runStatePath(), JSON.stringify({
+    // 原子写（tmp + rename）：看门狗每 2s 读一次 run-state.json，直接
+    // truncate-then-write 会让看门狗读到撕裂内容（JSON.parse 失败 → 误判
+    // 进程已消失 → 拉起重复实例，或丢失 cleanExit 标记）。
+    writeFileAtomic(runStatePath(), JSON.stringify({
       pid: process.pid,
       exe: process.execPath,
       cleanExit: false,
@@ -234,7 +245,7 @@ function markCleanExit() {
     try { state = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
     state.cleanExit = true;
     state.endedAt = new Date().toISOString();
-    fs.writeFileSync(p, JSON.stringify(state));
+    writeFileAtomic(p, JSON.stringify(state));
   } catch (err) {
     log('watchdog', '写退出标记失败: ' + err.message);
   }
@@ -251,19 +262,37 @@ function detectUncleanPreviousRun() {
   return null;
 }
 
+// Electron 的 Notification 若无 JS 侧强引用可能被 GC 而永不显示：
+// 统一持有引用到 close 再释放（内存有界），全部系统通知共用此入口。
+const activeNotifications = new Set();
+function showNotification({ title, body, onClick } = {}) {
+  try {
+    const n = new Notification({
+      title: String(title || ''),
+      body: String(body || ''),
+      icon: path.join(__dirname, 'assets', 'icon.png'),
+    });
+    activeNotifications.add(n);
+    n.on('close', () => activeNotifications.delete(n));
+    if (onClick) n.on('click', onClick);
+    n.show();
+    return n;
+  } catch {
+    return null;
+  }
+}
+
 function notifyUncleanRestart(prev) {
   try {
     const started = prev && prev.startedAt ? new Date(prev.startedAt) : null;
     const when = started && !Number.isNaN(started.getTime())
       ? started.toLocaleString('zh-CN', { hour12: false })
       : '上次';
-    const n = new Notification({
+    showNotification({
       title: 'DSH Desktop 已自动恢复',
       body: `检测到应用在 ${when} 前后未正常退出，看门狗已重新启动应用。`,
-      icon: path.join(__dirname, 'assets', 'icon.png'),
+      onClick: () => showMainWindow(),
     });
-    n.on('click', () => showMainWindow());
-    n.show();
   } catch (err) {
     log('crash', '恢复通知发送失败: ' + err.message);
   }
@@ -456,18 +485,8 @@ async function repairProfileFallback(home) {
 }
 
 
-// 主进程未捕获异常：记录堆栈并保持进程存活，避免无痕退出。
-process.on('uncaughtException', (err) => {
-  const stack = (err && (err.stack || err.message)) || String(err);
-  log('crash', 'uncaughtException: ' + stack);
-  try {
-    dialog.showErrorBox('DSH Desktop 遇到异常', '应用已记录该错误并继续运行。\n\n' + stack.slice(0, 500));
-  } catch {}
-});
-
-process.on('unhandledRejection', (reason) => {
-  log('crash', 'unhandledRejection: ' + String((reason && (reason.stack || reason.message)) || reason));
-});
+// 主进程未捕获异常统一在文件顶部的单处理器记录（启动崩溃取证 + 日志 + 错误框），
+// 这里不再重复注册第二个 uncaughtException/unhandledRejection 处理器。
 
 process.on('exit', (code) => {
   const line = `[${new Date().toISOString()}] [crash] 主进程退出 code=${code}\n`;
@@ -866,7 +885,10 @@ function logTailSnippet(maxLines = 20) {
 // 括号包名形态），这里不再保留本地实现。
 
 function profilePatchText() {
-  const patchFile = path.join(dshHome || path.join(os.homedir(), '.dsh'), 'profiles', 'web', 'cordis.patch.yml');
+  // WSL 托管模式下 DSH_HOME 是 WSL 安装目录的 UNC 等价路径（effectiveDshHome），
+  // 不是本机 ~/.dsh：安全启动自愈必须读实际生效的 profile（历史 bug：这里用
+  // 本地 dshHome，WSL 模式下 overlay 判定读到无关文件，用户拿不到坏插件自愈）。
+  const patchFile = path.join(effectiveDshHome() || path.join(os.homedir(), '.dsh'), 'profiles', 'web', 'cordis.patch.yml');
   try { return fs.readFileSync(patchFile, 'utf8'); } catch { return ''; }
 }
 
@@ -922,12 +944,10 @@ function ensureSafeBootOverlay(ids) {
 
 function notifySafeBoot(ids) {
   try {
-    const n = new Notification({
+    showNotification({
       title: 'DSH Desktop 安全模式',
       body: '检测到启动配置错误，已自动禁用问题插件：' + ids.join(', ') + '。修复后可删除 ' + safeBootOverlayPath(),
-      icon: path.join(__dirname, 'assets', 'icon.png'),
     });
-    n.show();
   } catch (err) {
     log('boot', '安全模式通知失败: ' + err.message);
   }
@@ -939,14 +959,12 @@ function notifySafeBoot(ids) {
 function notifyManifestResetRecovered(recovered) {
   if (process.env.DSH_DESKTOP_TEST === '1') return;
   try {
-    const n = new Notification({
+    showNotification({
       title: 'DSH Desktop 配置自愈',
       body: Array.isArray(recovered) && recovered.length > 0
         ? 'profile 配置损坏，已备份并重建；检测到您安装的插件并已自动恢复：' + recovered.join(', ')
         : 'profile 配置损坏，已备份并重建（原文件保留在 profile 目录的 .broken- 备份中，可对比找回原配置）',
-      icon: path.join(__dirname, 'assets', 'icon.png'),
     });
-    n.show();
   } catch (err) {
     log('boot', '配置自愈通知失败: ' + err.message);
   }
@@ -1074,21 +1092,35 @@ function chooseStableWebPort() {
 //           DSH_DESKTOP_WSL_DISTRO / DSH_DESKTOP_WSL_DIR（wsl）
 // settings.json：backend / wslDistro / wslInstallDir
 // ---------------------------------------------------------------------------
-function resolveBackendConfig() {
+async function resolveBackendConfig() {
   const s = updater.loadSettings(updCtx());
   const want = String(process.env.DSH_DESKTOP_BACKEND || s.backend || '').trim().toLowerCase();
   if (want === 'remote') {
     // remote 附加模式已移除（如需连接外部已运行的 dsh，用 WSL 托管或浏览器直开）。
     log('boot', 'settings.backend=remote 已不再支持，回落为 local 模式');
   }
-  backendMode = want === 'wsl' ? 'wsl' : 'local';
-  if (backendMode === 'wsl') {
-    // 解析发行版/安装目录并探活；失败抛错（boot 的 catch 会弹失败框）。
-    wslBackend.configure({
-      distro: String(process.env.DSH_DESKTOP_WSL_DISTRO || s.wslDistro || '').trim(),
-      installDir: String(process.env.DSH_DESKTOP_WSL_DIR || s.wslInstallDir || '').trim(),
-      log,
-    });
+  if (want === 'wsl') {
+    try {
+      // 解析发行版/安装目录并探活（异步，不阻塞主进程；boot 等待结果）。
+      await wslBackend.configureAsync({
+        distro: String(process.env.DSH_DESKTOP_WSL_DISTRO || s.wslDistro || '').trim(),
+        installDir: String(process.env.DSH_DESKTOP_WSL_DIR || s.wslInstallDir || '').trim(),
+        log,
+      });
+      backendMode = 'wsl';
+      wslFallbackReason = '';
+    } catch (err) {
+      // issue #54：WSL 配置错误（未安装发行版 / 发行版内缺 node 等）不再让
+      // 应用启动失败——回落到本地模式继续启动。已保存的 WSL 配置原样保留，
+      // 用户可在 设置 → WSL 后端 修正后重启切回；本地模式行为与未配置
+      // WSL 时完全一致。
+      backendMode = 'local';
+      wslFallbackReason = String((err && err.message) || err);
+      log('boot', 'WSL 托管模式探测失败，已回落到本地模式: ' + wslFallbackReason);
+    }
+  } else {
+    backendMode = 'local';
+    wslFallbackReason = '';
   }
   return { mode: backendMode };
 }
@@ -1105,11 +1137,13 @@ function effectiveDshHome() {
 
 // 设置页「WSL 后端」用的状态快照：当前 local 模式（未配置过）或 force 时，
 // 按已保存的 wslDistro/wslInstallDir 做一次探测；失败不抛错，错误进 status。
-function wslStatusSnapshot(opts = {}) {
+// 全部探测走异步原语（configureAsync/statusAsync），绝不阻塞主进程
+// （历史实现在此做多段 spawnSync，WSL 冷启动时设置页打开会冻结数分钟）。
+async function wslStatusSnapshotAsync(opts = {}) {
   if (!wslBackend.isConfigured() || opts.force) {
     try {
       const s = updater.loadSettings(updCtx());
-      wslBackend.configure({
+      await wslBackend.configureAsync({
         distro: String(s.wslDistro || '').trim(),
         installDir: String(s.wslInstallDir || '').trim(),
         log,
@@ -1121,7 +1155,7 @@ function wslStatusSnapshot(opts = {}) {
       };
     }
   }
-  return wslBackend.status();
+  return wslBackend.statusAsync();
 }
 
 // ---------------------------------------------------------------------------
@@ -1427,7 +1461,8 @@ async function handleBootFailure(err, overlays = []) {
   // EPERM/symlink 自愈（客户手册场景）：先于插件安全模式处理。
   if (!epermRepairAttempted && dshWebLogHasEpermSymlink()) {
     epermRepairAttempted = true;
-    const home = dshHome || process.env.DSH_HOME || path.join(os.homedir(), '.dsh');
+    // WSL 模式走 effectiveDshHome()（UNC 等价路径），与 profilePatchText 同源。
+    const home = effectiveDshHome() || dshHome || process.env.DSH_HOME || path.join(os.homedir(), '.dsh');
     if (backupAndRebuildProfileModules(home)) {
       return repairProfileFallback(home).then(() =>
         startAndShow(overlays).catch((e2) => handleBootFailure(e2, overlays))
@@ -1634,13 +1669,7 @@ function initRendererRecovery() {
     },
     notify: (title, body) => {
       try {
-        const n = new Notification({
-          title,
-          body,
-          icon: path.join(__dirname, 'assets', 'icon.png'),
-        });
-        n.on('click', () => showMainWindow());
-        n.show();
+        showNotification({ title, body, onClick: () => showMainWindow() });
       } catch (err) {
         log('recovery', '通知发送失败: ' + err.message);
       }
@@ -1707,14 +1736,14 @@ function guardWebContents(wc) {
   };
   wc.on('will-navigate', guardNavigation);
   wc.on('will-redirect', guardNavigation);
-  wc.on('console-message', (details, level, message, line, sourceId) => {
-    // Electron 43 起第一参是 { level, message, lineNumber, sourceId }；
-    // 后面 4 个旧位置参数保留为兼容。浮窗插件的排查日志是 console.log
-    // （info 级）：同样落进 desktop.log，不必再要求用户打开 DevTools。
-    const text = (details && details.message) || message || '';
-    const lvl = (details && details.level) || level;
-    const lineNo = (details && details.lineNumber) ?? line;
-    const src = (details && details.sourceId) || sourceId || 'unknown';
+  wc.on('console-message', (_e, level, message, line, sourceId) => {
+    // 与主窗处理器同一标准签名（event, level, message, line, sourceId）。
+    // 浮窗插件的排查日志是 console.log（info 级）：同样落进 desktop.log，
+    // 不必再要求用户打开 DevTools。
+    const text = message || '';
+    const lvl = level;
+    const lineNo = line;
+    const src = sourceId || 'unknown';
     if (lvl === 'error' || lvl === 3 || lvl === 'warning' || lvl === 2 || /\[dsh-float-window\]/.test(text)) {
       log('float-page', `[${lvl}] ${text} (${src}:${lineNo})`);
     }
@@ -2232,19 +2261,17 @@ function onSessionTurnEnd(info) {
   lastGlobalNotifyAt = now;
   log('notify', '任务完成: ' + JSON.stringify(info));
   try {
-    const n = new Notification({
+    showNotification({
       title: info.title || 'DSH 任务完成',
       body: info.body || '会话任务已完成',
-      icon: path.join(__dirname, 'assets', 'icon.png'),
+      onClick: () => {
+        if (mainWindow) {
+          if (mainWindow.isMinimized()) mainWindow.restore();
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      },
     });
-    n.on('click', () => {
-      if (mainWindow) {
-        if (mainWindow.isMinimized()) mainWindow.restore();
-        mainWindow.show();
-        mainWindow.focus();
-      }
-    });
-    n.show();
   } catch (err) {
     log('notify', '通知发送失败: ' + err.message);
   }
@@ -2301,6 +2328,9 @@ async function showAbout() {
 function registerChromeIpc() {
   ipcMain.handle('chrome:init', async (event) => {
     if (!mainWindow || event.sender !== mainWindow.webContents) return null;
+    // 等待预览静态服务端口就绪（有界 1.5s）：消除「主窗加载早于 listen 回调」
+    // 的竞态，消费方拿到的 staticPort 不会是 0。
+    await Promise.race([previewPortReady, new Promise((r) => setTimeout(r, 1500))]);
     let iconDataUri = '';
     try {
       const buf = fs.readFileSync(path.join(__dirname, 'assets', 'icon.png'));
@@ -2627,7 +2657,9 @@ function registerChromeIpc() {
       backend: backendMode,
       wslDistro: String(s.wslDistro || ''),
       wslInstallDir: String(s.wslInstallDir || ''),
-      status: wslStatusSnapshot(),
+      status: await wslStatusSnapshotAsync(),
+      // 启动时 WSL 探测失败回落 local 的原因（空 = 未发生回落）。
+      fallbackReason: wslFallbackReason,
     };
   });
 
@@ -2642,10 +2674,11 @@ function registerChromeIpc() {
       return { ok: false, error: 'WSL 安装目录必须是 WSL 内绝对路径（以 / 或 ~ 开头）' };
     }
     if (/\s/.test(wslInstallDir)) return { ok: false, error: 'WSL 安装目录不能包含空白字符' };
-    // 目标为 wsl 时预检一次，让用户在重启前就能发现配置问题。
+    // 目标为 wsl 时预检一次，让用户在重启前就能发现配置问题（异步探测，
+    // 不阻塞界面）。
     if (backend === 'wsl') {
       try {
-        wslBackend.configure({ distro: wslDistro, installDir: wslInstallDir, log });
+        await wslBackend.configureAsync({ distro: wslDistro, installDir: wslInstallDir, log });
       } catch (err) {
         return { ok: false, error: String((err && err.message) || err) };
       }
@@ -2666,7 +2699,8 @@ function registerChromeIpc() {
       backend: backendMode,
       wslDistro: String(s.wslDistro || ''),
       wslInstallDir: String(s.wslInstallDir || ''),
-      status: wslStatusSnapshot({ force: true }),
+      status: await wslStatusSnapshotAsync({ force: true }),
+      fallbackReason: wslFallbackReason,
     };
   });
 
@@ -2747,12 +2781,16 @@ function registerChromeIpc() {
 }
 
 /** IPC 鉴权：仅主窗主 frame（webUrl origin 白名单）可调用插件管理接口。
- *  防止主窗被导航到外部页面后，渲染进程仍能触达卸载/更新等高危 IPC。 */
+ *  防止主窗被导航到外部页面后，渲染进程仍能触达卸载/更新等高危 IPC。
+ *  按 origin 精确比较（历史用 startsWith 前缀匹配，形如
+ *  http://127.0.0.1:<port>.evil.com 的前缀撞名可绕过）。 */
 function pluginManagerIpcAllowed(event) {
   if (!mainWindow || event.sender !== mainWindow.webContents) return false;
   try {
     const url = event.senderFrame && event.senderFrame.url;
-    if (typeof url === 'string' && webUrl && url.startsWith(webUrl)) return true;
+    if (typeof url === 'string' && url !== '' && webUrl) {
+      return new URL(url).origin === new URL(webUrl).origin;
+    }
   } catch {}
   return false;
 }
@@ -2893,7 +2931,7 @@ async function refreshBalance() {
 // 余额刷新节流：会话完成 / 窗口显示 / 轮询共用，距上次不足 30s 跳过，
 // 避免高频事件（流式多回合）触发过多 HTTP 请求。
 let lastBalanceRefreshAt = 0;
-let balanceRetryTimer = null;
+let balanceRetryTimer = null; // 与 balanceTimer 同为模块级状态，集中声明（避免函数体后置声明）
 
 function maybeRefreshBalance(force = false) {
   const now = Date.now();
@@ -3120,24 +3158,14 @@ function syncCompanionPlugins() {
     const home = effectiveDshHome();
     if (!home) { log('boot', 'DSH_HOME 未解析，跳过配套插件同步'); return; }
     const profileDir = path.join(home, 'profiles', 'web');
-    // 插件管理「卸载」标记（removed: true 的顶层条目）：本次启动跳过文件复制
-    // 与 manifest 装配，避免「卸载后一重启又被复活」。解析失败不影响同步。
-    const removedIds = new Set();
-    try {
-      const yaml = loadDshYamlDialect();
-      if (yaml) {
-        let ptxt = '';
-        try { ptxt = fs.readFileSync(path.join(profileDir, 'cordis.patch.yml'), 'utf8'); } catch { /* 无 patch 文件 */ }
-        const parsed = ptxt ? yaml.load(ptxt) : null;
-        if (Array.isArray(parsed)) {
-          for (const e of parsed) {
-            if (e && typeof e === 'object' && typeof e.id === 'string' && e.removed === true) removedIds.add(e.id);
-          }
-        }
-      }
-    } catch { /* 解析失败按无标记处理 */ }
-
     const patchFile = path.join(profileDir, 'cordis.patch.yml');
+    // 插件管理「卸载」标记（removed: true 的顶层条目）：本次启动跳过文件复制
+    // 与 manifest 装配，避免「卸载后一重启又被复活」。纯文本提取（共享实现
+    // removedPluginIdsFromPatch，与 scripts/sync-companion-plugins.js 同一数据源），
+    // 解析失败不影响同步。
+    let patchText = '';
+    try { patchText = fs.readFileSync(patchFile, 'utf8'); } catch { /* 无 patch 文件 */ }
+    const removedIds = removedPluginIdsFromPatch(patchText);
     // 插件文件同步 / 过期插件清理 / 旧市场目录清理 / 源缺失扫描 / bundle
     // 落盘校验 / 卸载标记跳过 / 更新版本保留：与 scripts/sync-companion-plugins.js
     // 共用 scripts/lib/companion-profile.js 的同一实现（日志文案经回调保持
@@ -3308,15 +3336,18 @@ function syncCompanionPlugins() {
 
     // 非 bundle 插件注册到 profile 的 patch 层（幂等）。bundle 迁移自愈
     //（issue #17 同族：升级为 bundle 的插件残留 insert 行会造成同 id 双登记）、
-    // 源缺失残留移除、用户已有条目尊重与 name 就地改名统一收口在共享实现
-    // registerCompanionPatchEntries（与 scripts/sync-companion-plugins.js 同一
-    // 数据源；用户手写的 config/disabled 覆盖条目由 dropBlocksByIds 语义原样保留）。
+    // 源缺失残留移除、卸载标记跳过、用户已有条目尊重与 name 就地改名统一收口
+    // 在共享实现 registerCompanionPatchEntries（与 scripts/sync-companion-plugins.js
+    // 同一数据源；用户手写的 config/disabled 覆盖条目由 dropBlocksByIds 语义原样保留）。
+    // 注意：必须在 legacy/ACP/PET 三步落盘之后重新读盘——它们都可能改写过
+    // 文件，注册层基于旧快照写回会覆盖这几步的成果。
     let patch = '';
     try { patch = fs.readFileSync(patchFile, 'utf8'); } catch { patch = ''; }
     const registration = registerCompanionPatchEntries(patch, {
       plugins: COMPANION_PLUGINS,
       bundleNames,
       missingNames: missingSourceNames,
+      removedIds,
       onDrop: (m) => log('boot', m),
     });
     if (registration.changed) {
@@ -3965,7 +3996,10 @@ function applyPromptExposeFix() {
 // 补丁同模式，经 UNC 写穿）。
 // ---------------------------------------------------------------------------
 function applyImageSendFix() {
-  const HELPER_MARKER = 'async function describeImagesWithVision(ctx, content)';
+  // 幂等标记必须是桌面端自有注释：历史实现用「存在同名函数」判已应用，
+  // 新版 dsh-host-apiproxy 已原生内置 describeImagesWithVision —— 会误判
+  // 「已应用」而静默跳过门槛补丁，文本模型图片发送重新失效。
+  const DESKTOP_MARKER = 'DSH Desktop: reuse the dsh-vision VLM config';
   const HELPER_ANCHOR = '/** Validate one prompt as a batch before publishing any durable image object. */';
   const HELPER = `
 /** DSH Desktop: reuse the dsh-vision VLM config to describe images as text so text-only models can "see" them. */
@@ -4053,13 +4087,19 @@ async function describeImagesWithVision(ctx, content) {
     files,
     log: (m) => log('boot', m),
     transform: (src, file) => {
-      if (src.includes(HELPER_MARKER)) return { status: 'already' };
-      // 1) 插入转述 helper（此后所有索引必须基于插入后的 src 重新计算）
-      const anchorIdx = src.indexOf(HELPER_ANCHOR);
-      if (anchorIdx === -1) {
-        return { status: 'anchor-missing', detail: '未找到 helper 插入锚点（版本可能已变更），跳过 ' + file };
+      if (src.includes(DESKTOP_MARKER)) return { status: 'already' };
+      // 上游已原生内置同名 helper（新版 dsh）：不重复插入（重复定义会留下
+      // 被后者遮蔽的死代码），只做门槛替换；其 apiKey 脱敏缺陷由
+      // applyVisionKeyFix 就地修复。
+      const nativeHelper = src.includes('async function describeImagesWithVision');
+      if (!nativeHelper) {
+        // 1) 插入转述 helper（此后所有索引必须基于插入后的 src 重新计算）
+        const anchorIdx = src.indexOf(HELPER_ANCHOR);
+        if (anchorIdx === -1) {
+          return { status: 'anchor-missing', detail: '未找到 helper 插入锚点（版本可能已变更），跳过 ' + file };
+        }
+        src = src.slice(0, anchorIdx) + HELPER + '\n' + src.slice(anchorIdx);
       }
-      src = src.slice(0, anchorIdx) + HELPER + '\n' + src.slice(anchorIdx);
       // 2) prompt 入口：声明 admittedContent
       const hasImageIdx = src.indexOf('const hasImage = content.some((part) => part.type === "image");');
       if (hasImageIdx === -1) {
@@ -4790,6 +4830,11 @@ function offerPendingClientUpdate() {
 // ---------------------------------------------------------------------------
 
 let previewStaticPort = 0;
+// 预览端口就绪信号：listen 回调异步拿到端口，chrome:init 读 staticPort 存在
+// 「主窗加载早于服务就绪」的竞态（消费方 dsh-client-file-changes 会把 0 当
+// 「无预览服务」，预览链接整段失效）。chrome:init 等待本信号（有界）再返回。
+let previewPortReadyResolve = null;
+const previewPortReady = new Promise((resolve) => { previewPortReadyResolve = resolve; });
 
 function startPreviewStaticServer() {
   const MIME = {
@@ -4867,11 +4912,16 @@ function startPreviewStaticServer() {
         return;
       }
       previewStaticPort = port;
+      if (previewPortReadyResolve) previewPortReadyResolve();
       log("boot", "预览静态服务已启动: http://127.0.0.1:" + previewStaticPort);
     });
   };
   listenPreview(4);
-  server.on("error", (err) => log("boot", "预览静态服务失败: " + err.message));
+  server.on("error", (err) => {
+    log("boot", "预览静态服务失败: " + err.message);
+    // 服务起不来也要释放等待方，避免 chrome:init 被挂住到超时。
+    if (previewPortReadyResolve) previewPortReadyResolve();
+  });
 }
 
 function setupTestChannel() {
@@ -4944,6 +4994,7 @@ function setupTestChannel() {
         webUrl,
         serverAlive: !!serverProc && serverProc.exitCode === null && !serverProc.killed,
         recovery: recovery ? recovery.stateOf(mainWindow) : null,
+        backend: backendMode,
       };
     },
     quit: () => {
@@ -4986,8 +5037,9 @@ async function boot() {
   // default (~/.dsh), so the desktop app shares config/sessions with the CLI.
   dshHome = process.env.DSH_HOME || '';
   // 后端模式（local/wsl）：读取环境变量 / settings.json。wsl 模式在此
-  // 解析发行版/安装目录并探活 node/npm，失败抛错（boot 的 catch 弹失败框）。
-  resolveBackendConfig();
+  // 解析发行版/安装目录并探活 node/npm（异步）；探测失败回落 local 模式
+  // 继续启动（issue #54），不再抛错让应用无法启动。
+  await resolveBackendConfig();
   fs.mkdirSync(logsDir, { recursive: true });
   if (dshHome) fs.mkdirSync(dshHome, { recursive: true });
   // 日志体积封顶：desktop.log / dsh-web.log 无界追加，长期运行会膨胀到数百 MB，
@@ -5017,6 +5069,10 @@ async function boot() {
   log('boot', `DSH Desktop ${APP_VERSION}  userData=${userDataDir}  dshHome=${dshHome || '(dsh 默认)'}  agent=${dshVersion()}(${dshVersionSource()})`);
   if (isWslMode()) {
     log('boot', `WSL 托管模式已启用：发行版=${wslBackend.distroName()} 安装目录=${wslBackend.installDirLinux()}（UNC: ${wslBackend.uncHome()}）`);
+  } else if (wslFallbackReason) {
+    // 上面 resolveBackendConfig 阶段的回落日志此时尚未开流（desktop.log 未建），
+    // 这里补记一条，保证用户日志里能看到回落原因（issue #54 排查入口）。
+    log('boot', 'WSL 托管模式探测失败，已回落到本地模式，原因: ' + wslFallbackReason);
   }
 
   // 运行状态/看门狗：先读取上一次运行是否干净退出，再写入本次状态。
