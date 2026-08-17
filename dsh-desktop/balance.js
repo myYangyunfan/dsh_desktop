@@ -121,9 +121,6 @@ const LEGACY_PRICES = {
 // 峰谷定价生效节点：2026-08-17 00:00 北京时间 = 2026-08-16 16:00 UTC。
 const PEAK_PRICING_SINCE_UTC = Date.UTC(2026, 7, 16, 16, 0, 0);
 
-// 兜底档（deepseek-v4-flash 高峰价）。
-const FALLBACK_PRICES = { cacheMiss: 3, cacheHit: 0.1, output: 9 };
-
 // 当前（或指定时刻）是否处于高峰时段（北京时间 9:00-12:00、14:00-18:00）。
 function isPeakHour(date) {
   const d = date ? new Date(date) : new Date();
@@ -132,15 +129,17 @@ function isPeakHour(date) {
 }
 
 // 某模型在指定时刻的“有效单价”（已含旧版→峰谷切换与高峰/低谷换算）。
-// 模型名为空（settings.yaml 缺失）时按 deepseek-v4-pro 兜底：与 main.js 的
-// 调用方回退一致（未知模型按高单价估算，避免少报费用）。
+// 模型名为空（settings.yaml 缺失 / 调用方未传）时按 deepseek-v4-pro 兜底：
+// 与 main.js 的调用方回退一致（readActiveModel() || 'deepseek-v4-pro'）。
+// 未知模型名（非空但不在价目表内）同样按 v4-pro 最高档估算，避免少报费用；
+// 旧版固定价期与峰谷期统一回退到 v4-pro 对应档位，杜绝两时期回退档位
+// 不一致造成的费用估算跳变（旧实现峰谷期回退 pro、旧版期回退 flash）。
 function effectivePrice(model, date) {
   const key = String(model || '').trim() || 'deepseek-v4-pro';
   const now = date ? new Date(date) : new Date();
   if (now.getTime() < PEAK_PRICING_SINCE_UTC) {
-    return { ...(LEGACY_PRICES[key] || FALLBACK_PRICES) };
+    return { ...(LEGACY_PRICES[key] || LEGACY_PRICES['deepseek-v4-pro']) };
   }
-  // 未知模型名按 v4-pro（最高档）估算：与函数头注释一致，避免少报费用。
   const peak = PEAK_PRICES[key] || PEAK_PRICES['deepseek-v4-pro'];
   if (isPeakHour(now)) return { ...peak };
   return {

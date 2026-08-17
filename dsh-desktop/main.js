@@ -106,6 +106,13 @@ process.on('unhandledRejection', (reason) => {
 // ---------------------------------------------------------------------------
 const DANGEROUS_EXT = /\.(bat|cmd|com|exe|ps1|vbs|lnk|js|jse|msi|scr|pif|reg)$/i;
 const fileRootsCache = { at: 0, roots: [] };
+// 强制刷新冷却：isUnderFileRoots 在 miss 时会强制失效缓存以兜住「TTL 内新建会话」，
+// 但每次 miss 都强制刷新会被高频/恶意探测放大为「全目录遍历 + 逐文件 zstd 解压」
+// 的本地 DoS（预览/还原服务监听 127.0.0.1，浏览器恶意页面即可触发）。用冷却窗口
+// 把强制刷新限制为至多每 5s 一次；冷却期内的 miss 直接按当前缓存判定返回 false，
+// 新会话由下一次冷却到期后的刷新或 5 分钟 TTL 自然收敛。
+const FILE_ROOTS_FORCE_COOLDOWN_MS = 5000;
+let fileRootsForceAt = 0;
 
 function fileRoots() {
   if (Date.now() - fileRootsCache.at < 5 * 60 * 1000) return fileRootsCache.roots;
@@ -143,7 +150,11 @@ function isUnderFileRoots(p) {
   if (check()) return true;
   // 缓存可能滞后于新会话：5 分钟 TTL 内新建的会话，其 cwd 尚未进入缓存。
   // 首次判定不通过时强制刷新一次再判，避免误拒新会话的项目文件（预览/还原/打开）。
-  // 刷新后的缓存再保持 5 分钟，攻击性探测最多触发每 5 分钟一次重扫。
+  // 但「每次 miss 都强制刷新」会被高频/恶意探测放大为本地 DoS（全目录遍历 + 逐文件
+  // zstd 解压）：用冷却窗口把强制刷新限制为至多每 5s 一次。冷却期内的 miss 直接
+  // 返回 false（新会话由下一次冷却到期后的刷新或 5 分钟 TTL 收敛，最坏延迟 5s）。
+  if (Date.now() - fileRootsForceAt < FILE_ROOTS_FORCE_COOLDOWN_MS) return false;
+  fileRootsForceAt = Date.now();
   fileRootsCache.at = 0;
   return check();
 }
@@ -600,7 +611,10 @@ async function killTree(proc) {
   }
   return new Promise((resolve) => {
     if (!proc || !proc.pid || proc.exitCode !== null || proc.signalCode !== null) return resolve();
+    let done = false; // finish 幂等守卫：exit / taskkill error / 兜底定时器可能同时触发
     const finish = () => {
+      if (done) return;
+      done = true;
       proc.removeListener('exit', finish);
       resolve();
     };
@@ -612,13 +626,18 @@ async function killTree(proc) {
       if (timer.unref) timer.unref();
       return;
     }
+    // spawn 的 'error' 事件异步抛出（taskkill 不可用 / PATH 损坏时），try/catch
+    // 抓不到；不挂监听器会冒到 uncaughtException。挂上后与兜底定时器一起收敛到
+    // finish（幂等，多次触发安全）。
+    let tk;
     try {
-      spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+      tk = spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
     } catch (err) {
       log('killTree', String(err));
       finish();
       return;
     }
+    if (tk) tk.on('error', (err) => { log('killTree', 'taskkill error: ' + String((err && err.message) || err)); finish(); });
     // 兜底：taskkill 异常或进程未按时退出时，不得让重启流程永久挂起。
     const timer = setTimeout(finish, 3000);
     if (timer.unref) timer.unref();
@@ -1246,6 +1265,10 @@ function watchServerProc(proc, out, opts = {}) {
       for (const line of text.split(/\r?\n/)) {
         const m = line.match(/dsh web:\s+(https?:\/\/\S+)/);
         if (!m) continue;
+        // 本 chunk 已 resolve/reject 就不再处理后续行：dsh web 偶发输出多行
+        // 「dsh web: <url>」时，第二行会进入受限端口分支 killTree 刚就绪的
+        // 服务，而调用方已拿到（已死的）第一行 URL。
+        if (settled) return;
         let blocked;
         if (testForceUnsafeOnce) {
           testForceUnsafeOnce = false;
@@ -1281,11 +1304,17 @@ function watchServerProc(proc, out, opts = {}) {
         finish(resolve, m[1]);
       }
     };
+    // out（dsh-web.log 写流）在 spawn 'error'（进程未启动即失败，不触发 exit）
+    // 路径下原先不会关闭，反复 boot 失败会泄漏文件描述符。用幂等 endOut 在
+    // error 与 exit 两条路径统一收口；end 之后到达的 stderr chunk 用 try 兜住，
+    // 避免 out.write 抛错冒到 uncaughtException。
+    let outEnded = false;
+    const endOut = () => { if (!outEnded) { outEnded = true; try { out.end(); } catch {} } };
     proc.stdout.on('data', onData);
-    proc.stderr.on('data', (c) => out.write(c));
-    proc.on('error', (err) => finish(reject, err));
+    proc.stderr.on('data', (c) => { try { out.write(c); } catch {} });
+    proc.on('error', (err) => { endOut(); finish(reject, err); });
     proc.on('exit', (code, signal) => {
-      out.end();
+      endOut();
       log('dsh', `进程退出 code=${code} signal=${signal}`);
       // 原地重启（插件市场）或已替换为新进程时，不打扰用户、也不清掉新进程的句柄。
       const intentional = restartingServer || serverProc !== proc;
@@ -2113,145 +2142,152 @@ async function runUpdateFlow(manual) {
     if (manual) await showBox({ type: 'info', title: '更新', message: '更新正在进行中，请稍候。', buttons: ['确定'] });
     return;
   }
-  const ctx = updCtx();
-  let latest;
-  try {
-    latest = await updater.checkLatest(ctx);
-  } catch (err) {
-    log('update', '检查失败: ' + err.message);
-    if (manual) {
-      await showBox({
-        type: 'warning',
-        title: '检查更新失败',
-        message: '无法连接 npm registry。',
-        detail: err.message + '\n\n可通过环境变量 NPM_CONFIG_REGISTRY 配置镜像。',
-        buttons: ['确定'],
-      });
-    }
-    return;
-  }
-  const current = isWslMode() ? (wslBackend.activeVersion() || '0.0.0') : updater.activeVersion(ctx);
-  const settings = updater.loadSettings(ctx);
-  if (updater.compareVersions(latest, current) <= 0) {
-    if (manual) {
-      await showBox({
-        type: 'info',
-        title: '检查更新',
-        message: '当前已是最新版本。',
-        detail: `@deepseek-ai/dsh@${current}`,
-        buttons: ['确定'],
-      });
-    }
-    return;
-  }
-  if (!manual && settings.skipVersion === latest) return;
-
-  const { response } = await showBox({
-    type: 'info',
-    title: '发现新版本',
-    message: `官方 @deepseek-ai/dsh 发布了新版本：${latest}`,
-    detail: `当前版本：${current}\n\n是否立即更新？\n· 从 npm 官方源下载新版本及其依赖（首次约 250MB）\n· 更新期间界面保持可用，完成后重启应用生效\n· 失败会自动保留当前版本` + (isWslMode() ? '\n· WSL 托管模式：安装在 ' + wslBackend.installDirLinux() + '/agent' : ''),
-    buttons: ['立即更新', '跳过此版本', '稍后'],
-    defaultId: 0,
-    cancelId: 2,
-  });
-  if (response === 1) {
-    settings.skipVersion = latest;
-    updater.saveSettings(ctx, settings);
-    log('update', '用户跳过版本 ' + latest);
-    return;
-  }
-  if (response === 2) return;
-
+  // 守卫标志同步置位：checkLatest（网络，最长 90s）与发现新版本对话框（用户思考）
+  // 都在旧实现的置位之前，自动更新定时器（6h）与手动触发可同时通过守卫并发
+  // 执行 applyUpdate，双 npm 安装互踩 staging 会损坏 agent。整个流程包进
+  // try/finally，所有提前返回路径都经 finally 复位标志，杜绝更新永久卡死。
   updateBusy = true;
-  const progressWin = showUpdateWindow(latest);
   try {
-    if (isWslMode()) {
-      // WSL 托管：检查复用 Windows 侧 npm（纯 registry 查询），安装走 WSL 内
-      // npm（staging + 原子切换，语义与本地模式一致）。
-      await wslBackend.applyUpdate(latest, (line) => log('update', 'wsl: ' + line));
-      // 新 WSL agent 已就位：与 local 一致，立即补同步配套插件/内置预设并重打
-      // 运行时补丁（全部幂等），否则「稍后重启」后再重启服务会以未修复、且
-      // 缺少壳内置模式的新版本启动。
-      syncCompanionPlugins();
-      syncBuiltinAgentPresets();
-      applyRuntimeFlashFix();
-      applyPromptExposeFix();
-      applyShellDescriptionCompatFix();
-      applyCodeModeCompatFix();
-      applyImageSendFix();
-      applyAttachmentMimeTrustFix();
-      applyVisionKeyFix();
-      applyProfilePatchGuard();
-      applyProfileBundleGuard();
-      applySettingsSectionGuard();
-      applyWorkspaceSearchRailFix();
-      applyPluginInventoryTabMergeFix();
-      // 与 local 分支、与 WSL 启动分支一致：包级补丁同样立即重打（幂等），
-      // 避免「稍后重启」后以未修复的新 WSL agent 启动（历史漂移补齐）。
-      applyWebSearchBaseUrlFix();
-      applyMenuViewportFix();
-      applySessionManageFix();
-    } else {
-      await updater.applyUpdate(ctx, latest);
-      // 新 overlay 已就位：立即重打运行时补丁（全部幂等），否则「稍后重启」后再
-      // 点「重启 dsh web 服务」会用未修复的新版本启动（识图发送、设置暴露等回归）。
-      // 同时把壳内置 Agent 预设补进新 overlay（干净 npm 包不含 8 个壳预设）。
-      syncLocalAgentPresets();
-      applyRuntimeFlashFix();
-      applyPromptExposeFix();
-      applyShellDescriptionCompatFix();
-      applyCodeModeCompatFix();
-      applyImageSendFix();
-      applyAttachmentMimeTrustFix();
-      applyVisionKeyFix();
-      applyProfilePatchGuard();
-      applyProfileBundleGuard();
-      applySettingsSectionGuard();
-      applyWorkspaceSearchRailFix();
-      applyPluginInventoryTabMergeFix();
-      applyWebSearchBaseUrlFix();
-      applyMenuViewportFix();
-      applySessionManageFix();
-    }
-    // 进度窗已非模态，但完成对话框弹出前仍先关闭它，避免叠窗/对话框被遮挡。
-    closeUpdateWindow(progressWin);
-    const { response: r2 } = await showBox({
-      type: 'info',
-      title: '更新完成',
-      message: `已更新到 @deepseek-ai/dsh@${latest}`,
-      detail: '重启应用后生效。',
-      buttons: ['立即重启', '稍后重启'],
-      defaultId: 0,
-      cancelId: 1,
-    });
-    if (r2 === 0) {
-      quitting = true;
-      markCleanExit();
-      killTreeSync(serverProc);
-      // 立即重启前预热 profile fallback：先终结旧服务再重指向新 overlay 的
-      // 联接并落新快照（新版本锚点与旧快照必然不同），重启后的首次启动直接
-      // 走快照快速校验，不再把完整 heal（约 0.6s）压在启动关键路径上；旧
-      // 服务已退出，重指向不会与旧进程的延迟加载产生版本错配。
-      if (!isWslMode()) {
-        await repairProfileFallback(dshHome || path.join(os.homedir(), '.dsh'));
+    const ctx = updCtx();
+    let latest;
+    try {
+      latest = await updater.checkLatest(ctx);
+    } catch (err) {
+      log('update', '检查失败: ' + err.message);
+      if (manual) {
+        await showBox({
+          type: 'warning',
+          title: '检查更新失败',
+          message: '无法连接 npm registry。',
+          detail: err.message + '\n\n可通过环境变量 NPM_CONFIG_REGISTRY 配置镜像。',
+          buttons: ['确定'],
+        });
       }
-      app.relaunch();
-      app.exit(0);
+      return;
     }
-  } catch (err) {
-    closeUpdateWindow(progressWin);
-    log('update', '更新失败: ' + err.message);
-    await showBox({
-      type: 'error',
-      title: '更新失败',
-      message: '未能完成更新，仍使用当前版本。',
-      detail: err.message,
-      buttons: ['确定'],
+    const current = isWslMode() ? (wslBackend.activeVersion() || '0.0.0') : updater.activeVersion(ctx);
+    const settings = updater.loadSettings(ctx);
+    if (updater.compareVersions(latest, current) <= 0) {
+      if (manual) {
+        await showBox({
+          type: 'info',
+          title: '检查更新',
+          message: '当前已是最新版本。',
+          detail: `@deepseek-ai/dsh@${current}`,
+          buttons: ['确定'],
+        });
+      }
+      return;
+    }
+    if (!manual && settings.skipVersion === latest) return;
+
+    const { response } = await showBox({
+      type: 'info',
+      title: '发现新版本',
+      message: `官方 @deepseek-ai/dsh 发布了新版本：${latest}`,
+      detail: `当前版本：${current}\n\n是否立即更新？\n· 从 npm 官方源下载新版本及其依赖（首次约 250MB）\n· 更新期间界面保持可用，完成后重启应用生效\n· 失败会自动保留当前版本` + (isWslMode() ? '\n· WSL 托管模式：安装在 ' + wslBackend.installDirLinux() + '/agent' : ''),
+      buttons: ['立即更新', '跳过此版本', '稍后'],
+      defaultId: 0,
+      cancelId: 2,
     });
+    if (response === 1) {
+      settings.skipVersion = latest;
+      updater.saveSettings(ctx, settings);
+      log('update', '用户跳过版本 ' + latest);
+      return;
+    }
+    if (response === 2) return;
+
+    const progressWin = showUpdateWindow(latest);
+    try {
+      if (isWslMode()) {
+        // WSL 托管：检查复用 Windows 侧 npm（纯 registry 查询），安装走 WSL 内
+        // npm（staging + 原子切换，语义与本地模式一致）。
+        await wslBackend.applyUpdate(latest, (line) => log('update', 'wsl: ' + line));
+        // 新 WSL agent 已就位：与 local 一致，立即补同步配套插件/内置预设并重打
+        // 运行时补丁（全部幂等），否则「稍后重启」后再重启服务会以未修复、且
+        // 缺少壳内置模式的新版本启动。
+        syncCompanionPlugins();
+        syncBuiltinAgentPresets();
+        applyRuntimeFlashFix();
+        applyPromptExposeFix();
+        applyShellDescriptionCompatFix();
+        applyCodeModeCompatFix();
+        applyImageSendFix();
+        applyAttachmentMimeTrustFix();
+        applyVisionKeyFix();
+        applyProfilePatchGuard();
+        applyProfileBundleGuard();
+        applySettingsSectionGuard();
+        applyWorkspaceSearchRailFix();
+        applyPluginInventoryTabMergeFix();
+        // 与 local 分支、与 WSL 启动分支一致：包级补丁同样立即重打（幂等），
+        // 避免「稍后重启」后以未修复的新 WSL agent 启动（历史漂移补齐）。
+        applyWebSearchBaseUrlFix();
+        applyMenuViewportFix();
+        applySessionManageFix();
+      } else {
+        await updater.applyUpdate(ctx, latest);
+        // 新 overlay 已就位：立即重打运行时补丁（全部幂等），否则「稍后重启」后再
+        // 点「重启 dsh web 服务」会用未修复的新版本启动（识图发送、设置暴露等回归）。
+        // 同时把壳内置 Agent 预设补进新 overlay（干净 npm 包不含 8 个壳预设）。
+        syncLocalAgentPresets();
+        applyRuntimeFlashFix();
+        applyPromptExposeFix();
+        applyShellDescriptionCompatFix();
+        applyCodeModeCompatFix();
+        applyImageSendFix();
+        applyAttachmentMimeTrustFix();
+        applyVisionKeyFix();
+        applyProfilePatchGuard();
+        applyProfileBundleGuard();
+        applySettingsSectionGuard();
+        applyWorkspaceSearchRailFix();
+        applyPluginInventoryTabMergeFix();
+        applyWebSearchBaseUrlFix();
+        applyMenuViewportFix();
+        applySessionManageFix();
+      }
+      // 进度窗已非模态，但完成对话框弹出前仍先关闭它，避免叠窗/对话框被遮挡。
+      closeUpdateWindow(progressWin);
+      const { response: r2 } = await showBox({
+        type: 'info',
+        title: '更新完成',
+        message: `已更新到 @deepseek-ai/dsh@${latest}`,
+        detail: '重启应用后生效。',
+        buttons: ['立即重启', '稍后重启'],
+        defaultId: 0,
+        cancelId: 1,
+      });
+      if (r2 === 0) {
+        quitting = true;
+        markCleanExit();
+        killTreeSync(serverProc);
+        // 立即重启前预热 profile fallback：先终结旧服务再重指向新 overlay 的
+        // 联接并落新快照（新版本锚点与旧快照必然不同），重启后的首次启动直接
+        // 走快照快速校验，不再把完整 heal（约 0.6s）压在启动关键路径上；旧
+        // 服务已退出，重指向不会与旧进程的延迟加载产生版本错配。
+        if (!isWslMode()) {
+          await repairProfileFallback(dshHome || path.join(os.homedir(), '.dsh'));
+        }
+        app.relaunch();
+        app.exit(0);
+      }
+    } catch (err) {
+      closeUpdateWindow(progressWin);
+      log('update', '更新失败: ' + err.message);
+      await showBox({
+        type: 'error',
+        title: '更新失败',
+        message: '未能完成更新，仍使用当前版本。',
+        detail: err.message,
+        buttons: ['确定'],
+      });
+    } finally {
+      if (progressWin && !progressWin.isDestroyed()) progressWin.destroy();
+    }
   } finally {
     updateBusy = false;
-    if (progressWin && !progressWin.isDestroyed()) progressWin.destroy();
   }
 }
 
@@ -4729,137 +4765,142 @@ async function runClientUpdateFlow(manual) {
     if (manual) await showBox({ type: 'info', title: '更新', message: '客户端更新正在进行中，请稍候。', buttons: ['确定'] });
     return;
   }
-  const ctx = updCtx();
-  const settings = updater.loadSettings(ctx);
-  // 手动检查时优先处理已下载的待安装包：用户主动点「检查客户端更新」即表明
-  // 更新意图，不应被 24h 静默期（clientUpdateSnoozeUntil）挡住——否则会出现
-  // 「包已下载却没有任何安装入口，看起来像更新坏了」的体验。
-  if (manual && (process.platform === 'win32' || process.platform === 'darwin') && settings.pendingClientUpdate && settings.pendingClientUpdate.path) {
-    const pend = settings.pendingClientUpdate;
-    if (fs.existsSync(pend.path) && updater.compareVersions(pend.version, APP_VERSION) > 0) {
-      const { response: rp } = await showBox({
+  // 守卫同步置位（同 runUpdateFlow）：待安装包对话框、checkLatest 网络、发现新版本
+  // 对话框都在旧置位之前，并发触发会双下载/双 spawn 安装互踩。全程 try/finally 复位。
+  clientUpdateBusy = true;
+  try {
+    const ctx = updCtx();
+    const settings = updater.loadSettings(ctx);
+    // 手动检查时优先处理已下载的待安装包：用户主动点「检查客户端更新」即表明
+    // 更新意图，不应被 24h 静默期（clientUpdateSnoozeUntil）挡住——否则会出现
+    // 「包已下载却没有任何安装入口，看起来像更新坏了」的体验。
+    if (manual && (process.platform === 'win32' || process.platform === 'darwin') && settings.pendingClientUpdate && settings.pendingClientUpdate.path) {
+      const pend = settings.pendingClientUpdate;
+      if (fs.existsSync(pend.path) && updater.compareVersions(pend.version, APP_VERSION) > 0) {
+        const { response: rp } = await showBox({
+          type: 'info',
+          title: '有待安装的客户端更新',
+          message: `已下载 DSH Desktop v${pend.version}，是否立即安装并重启？`,
+          detail: '安装包保存在数据目录的 updates 文件夹中。',
+          buttons: ['立即重启', '取消'],
+          defaultId: 0,
+          cancelId: 1,
+        });
+        if (rp === 0) {
+          quitForClientUpdate(ctx, pend);
+          return;
+        }
+      } else if (!fs.existsSync(pend.path)) {
+        // 安装包已丢失：清理标记，避免每次手动检查都卡在这个分支。
+        clientUpdater.cleanupPendingPackage(pend);
+        settings.pendingClientUpdate = null;
+        settings.pendingClientVersion = null;
+        settings.clientUpdateAttempt = null;
+        updater.saveSettings(ctx, settings);
+      }
+    }
+    let release;
+    try {
+      release = await clientUpdater.checkLatest(ctx, APP_VERSION);
+    } catch (err) {
+      log('client-update', '检查失败: ' + err.message);
+      if (manual) {
+        await showBox({
+          type: 'warning',
+          title: '检查客户端更新失败',
+          message: '无法连接上游发布源。',
+          detail: err.message + '\n\n可通过环境变量 DSH_DESKTOP_RELEASE_API 指定镜像 API。',
+          buttons: ['确定'],
+        });
+      }
+      return;
+    }
+    if (!release.isNewer) {
+      if (manual) {
+        await showBox({
+          type: 'info',
+          title: '检查客户端更新',
+          message: '当前已是最新版本。',
+          detail: `DSH Desktop v${APP_VERSION}\n上游最新：${release.version}（${release.source}）`,
+          buttons: ['确定'],
+        });
+      }
+      return;
+    }
+    if (!manual && settings.skipClientVersion === release.version) return;
+    // M7 修复：用户选过"稍后"的同版本不再每 12h 重复弹窗/重复下载。
+    if (!manual && settings.pendingClientVersion === release.version) return;
+    const notes = release.body ? '\n\n更新说明：\n' + release.body.slice(0, 800) : '';
+    const { response } = await showBox({
+      type: 'info',
+      title: '发现新版本客户端',
+      message: `DSH Desktop 发布了新版本：v${release.version}`,
+      detail: `当前版本：v${APP_VERSION}\n发布来源：${release.source}${notes}\n\n是否立即更新？下载后自动替换并重启应用。`,
+      buttons: ['立即更新', '跳过此版本', '稍后'],
+      defaultId: 0,
+      cancelId: 2,
+    });
+    if (response === 1) {
+      settings.skipClientVersion = release.version;
+      updater.saveSettings(ctx, settings);
+      log('client-update', '用户跳过版本 ' + release.version);
+      return;
+    }
+    if (response === 2) {
+      // M7 修复：记录"稍后"版本，周期检查不再重复打扰（新版本出现时仍会提示）。
+      settings.pendingClientVersion = release.version;
+      updater.saveSettings(ctx, settings);
+      log('client-update', '用户稍后处理版本 ' + release.version);
+      return;
+    }
+
+    const progressWin = showUpdateWindow(release.version, 'client');
+    try {
+      const { filePath, size } = await clientUpdater.downloadRelease(ctx, release, {
+        onProgress: (received, total) => {
+          const pct = total > 0 ? Math.round((received * 100) / total) : -1;
+          if (progressWin && !progressWin.isDestroyed()) {
+            progressWin.webContents
+              .executeJavaScript(
+                `window.__setProgress && window.__setProgress(${pct}, ${Math.round(received / 1048576)}, ${Math.round(total / 1048576)})`
+              )
+              .catch(() => {});
+          }
+        },
+      });
+      settings.pendingClientUpdate = { version: release.version, path: filePath, source: release.source };
+      settings.skipClientVersion = null;
+      settings.pendingClientVersion = null;
+      updater.saveSettings(ctx, settings);
+      // 先关进度窗再弹「下载完成」：避免窗口叠层，也保证对话框不被遮挡。
+      closeUpdateWindow(progressWin);
+      const { response: r2 } = await showBox({
         type: 'info',
-        title: '有待安装的客户端更新',
-        message: `已下载 DSH Desktop v${pend.version}，是否立即安装并重启？`,
-        detail: '安装包保存在数据目录的 updates 文件夹中。',
-        buttons: ['立即重启', '取消'],
+        title: '下载完成',
+        message: `已准备好 DSH Desktop v${release.version}（${Math.round(size / 1048576)} MB）。`,
+        detail: '立即重启应用完成更新？\n· 重启后自动安装新版本并启动\n· 选择稍后重启：下次启动时再提示安装',
+        buttons: ['立即重启', '稍后重启'],
         defaultId: 0,
         cancelId: 1,
       });
-      if (rp === 0) {
-        quitForClientUpdate(ctx, pend);
-        return;
+      if (r2 === 0) {
+        quitForClientUpdate(ctx, settings.pendingClientUpdate);
       }
-    } else if (!fs.existsSync(pend.path)) {
-      // 安装包已丢失：清理标记，避免每次手动检查都卡在这个分支。
-      clientUpdater.cleanupPendingPackage(pend);
-      settings.pendingClientUpdate = null;
-      settings.pendingClientVersion = null;
-      settings.clientUpdateAttempt = null;
-      updater.saveSettings(ctx, settings);
-    }
-  }
-  let release;
-  try {
-    release = await clientUpdater.checkLatest(ctx, APP_VERSION);
-  } catch (err) {
-    log('client-update', '检查失败: ' + err.message);
-    if (manual) {
+    } catch (err) {
+      closeUpdateWindow(progressWin);
+      log('client-update', '更新失败: ' + err.message);
       await showBox({
-        type: 'warning',
-        title: '检查客户端更新失败',
-        message: '无法连接上游发布源。',
-        detail: err.message + '\n\n可通过环境变量 DSH_DESKTOP_RELEASE_API 指定镜像 API。',
+        type: 'error',
+        title: '更新失败',
+        message: '未能完成客户端更新，仍使用当前版本。',
+        detail: err.message,
         buttons: ['确定'],
       });
+    } finally {
+      if (progressWin && !progressWin.isDestroyed()) progressWin.destroy();
     }
-    return;
-  }
-  if (!release.isNewer) {
-    if (manual) {
-      await showBox({
-        type: 'info',
-        title: '检查客户端更新',
-        message: '当前已是最新版本。',
-        detail: `DSH Desktop v${APP_VERSION}\n上游最新：${release.version}（${release.source}）`,
-        buttons: ['确定'],
-      });
-    }
-    return;
-  }
-  if (!manual && settings.skipClientVersion === release.version) return;
-  // M7 修复：用户选过"稍后"的同版本不再每 12h 重复弹窗/重复下载。
-  if (!manual && settings.pendingClientVersion === release.version) return;
-  const notes = release.body ? '\n\n更新说明：\n' + release.body.slice(0, 800) : '';
-  const { response } = await showBox({
-    type: 'info',
-    title: '发现新版本客户端',
-    message: `DSH Desktop 发布了新版本：v${release.version}`,
-    detail: `当前版本：v${APP_VERSION}\n发布来源：${release.source}${notes}\n\n是否立即更新？下载后自动替换并重启应用。`,
-    buttons: ['立即更新', '跳过此版本', '稍后'],
-    defaultId: 0,
-    cancelId: 2,
-  });
-  if (response === 1) {
-    settings.skipClientVersion = release.version;
-    updater.saveSettings(ctx, settings);
-    log('client-update', '用户跳过版本 ' + release.version);
-    return;
-  }
-  if (response === 2) {
-    // M7 修复：记录"稍后"版本，周期检查不再重复打扰（新版本出现时仍会提示）。
-    settings.pendingClientVersion = release.version;
-    updater.saveSettings(ctx, settings);
-    log('client-update', '用户稍后处理版本 ' + release.version);
-    return;
-  }
-
-  clientUpdateBusy = true;
-  const progressWin = showUpdateWindow(release.version, 'client');
-  try {
-    const { filePath, size } = await clientUpdater.downloadRelease(ctx, release, {
-      onProgress: (received, total) => {
-        const pct = total > 0 ? Math.round((received * 100) / total) : -1;
-        if (progressWin && !progressWin.isDestroyed()) {
-          progressWin.webContents
-            .executeJavaScript(
-              `window.__setProgress && window.__setProgress(${pct}, ${Math.round(received / 1048576)}, ${Math.round(total / 1048576)})`
-            )
-            .catch(() => {});
-        }
-      },
-    });
-    settings.pendingClientUpdate = { version: release.version, path: filePath, source: release.source };
-    settings.skipClientVersion = null;
-    settings.pendingClientVersion = null;
-    updater.saveSettings(ctx, settings);
-    // 先关进度窗再弹「下载完成」：避免窗口叠层，也保证对话框不被遮挡。
-    closeUpdateWindow(progressWin);
-    const { response: r2 } = await showBox({
-      type: 'info',
-      title: '下载完成',
-      message: `已准备好 DSH Desktop v${release.version}（${Math.round(size / 1048576)} MB）。`,
-      detail: '立即重启应用完成更新？\n· 重启后自动安装新版本并启动\n· 选择稍后重启：下次启动时再提示安装',
-      buttons: ['立即重启', '稍后重启'],
-      defaultId: 0,
-      cancelId: 1,
-    });
-    if (r2 === 0) {
-      quitForClientUpdate(ctx, settings.pendingClientUpdate);
-    }
-  } catch (err) {
-    closeUpdateWindow(progressWin);
-    log('client-update', '更新失败: ' + err.message);
-    await showBox({
-      type: 'error',
-      title: '更新失败',
-      message: '未能完成客户端更新，仍使用当前版本。',
-      detail: err.message,
-      buttons: ['确定'],
-    });
   } finally {
     clientUpdateBusy = false;
-    if (progressWin && !progressWin.isDestroyed()) progressWin.destroy();
   }
 }
 
