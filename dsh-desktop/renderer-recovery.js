@@ -56,8 +56,11 @@ function computeBackoff(failureCount, opts) {
 
 // 纯函数：由当前故障计数决定下一步动作。
 //   failures 1~2 → reload；3（主窗且本窗口未重建过）→ rebuild；>MAX → give-up。
-function nextAction(failures, kind, rebuiltInBurst) {
-  if (failures > DEFAULT_OPTS.MAX_ATTEMPTS) return 'give-up';
+// MAX_ATTEMPTS 走注入 opts（与 _countFailure / computeBackoff 同一数据源；
+// 历史实现死绑 DEFAULT_OPTS，注入配置在此处被静默忽略）。
+function nextAction(failures, kind, rebuiltInBurst, opts) {
+  const o = { ...DEFAULT_OPTS, ...(opts || {}) };
+  if (failures > o.MAX_ATTEMPTS) return 'give-up';
   if (kind === 'main' && failures === 3 && !rebuiltInBurst) return 'rebuild';
   return 'reload';
 }
@@ -81,6 +84,7 @@ class RendererRecovery {
     this.opts = { ...DEFAULT_OPTS, ...opts };
     this._states = new Map(); // winId -> state
     this._wins = new Set(); // BrowserWindow
+    this._attached = new Set(); // 已挂监听去重（attach 幂等）
     this._heartbeats = new Map(); // webContentsId -> lastBeatAt
   }
 
@@ -158,11 +162,15 @@ class RendererRecovery {
 
   // ---------------------------------------------------------------- 对外 API
 
-  // 把恢复机制挂到窗口上（主窗/浮窗）。重复 attach 同窗口只会追加一次状态。
+  // 把恢复机制挂到窗口上（主窗/浮窗）。重复 attach 同窗口只追加一次状态，
+  // 事件监听同样只挂一次（历史实现只去重状态：二次 attach 会整套重复挂
+  // 监听，render-process-gone 等被双倍计数）。
   attach(win, kind) {
     if (!win || win.isDestroyed()) return;
     const s = this._state(win);
     s.kind = kind;
+    if (this._attached.has(win)) return;
+    this._attached.add(win);
     const wc = win.webContents;
 
     wc.on('render-process-gone', (_e, details) => this._onGone(win, details));
@@ -173,9 +181,12 @@ class RendererRecovery {
       if (isMainFrame) this._onFailLoad(win, { code, desc, url });
     });
     wc.on('destroyed', () => {
+      const st = this._states.get(win.id);
+      if (st) this._clearTimers(st); // 窗口销毁即清定时器，避免对已销毁窗口的残留回调
       this._states.delete(win.id);
       this._heartbeats.delete(wc.id);
       this._wins.delete(win);
+      this._attached.delete(win);
     });
     // 可见性用 show/hide 事件自行追踪（而非 isVisible()）：后者在挂起、
     // RDP/服务会话等场景下会误报 false，导致挂起判定被永远跳过。
@@ -403,7 +414,7 @@ class RendererRecovery {
       s.attemptTimer = null;
       s.gen += 1; // 同时放弃可能在途的加载尝试，其结果不再被信任
     }
-    const action = nextAction(s.failures, s.kind, s.rebuiltInBurst);
+    const action = nextAction(s.failures, s.kind, s.rebuiltInBurst, this.opts);
     if (action === 'give-up') { this._giveUp(win, s); return; }
     if (action === 'rebuild') { this._rebuildNow(win, s); return; }
     const delay = computeBackoff(s.failures, this.opts);
@@ -561,7 +572,8 @@ class RendererRecovery {
     s.lastErrorPageAt = now;
     this._log('加载本地恢复页面');
     if (this.opts.recoveryPage) {
-      win.webContents.loadFile(this.opts.recoveryPage).catch(() => {});
+      // 恢复页缺失/损坏不能静默白屏：至少留一条日志，用户点击无响应时有据可查。
+      win.webContents.loadFile(this.opts.recoveryPage).catch((e) => this._log('恢复页加载失败: ' + String((e && e.message) || e)));
     }
   }
 

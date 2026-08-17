@@ -83,6 +83,10 @@ function launchApp() {
     });
     child.unref();
   } catch (err) {
+    // spawn 本身失败（exe 被锁/环境异常）不计入重启额度、不占用宽限：
+    // 下一轮 poll 仍可立即重试，而不是白白烧掉一次额度 + 15s 宽限。
+    restartCount -= 1;
+    lastLaunchAt = 0;
     log('watchdog: spawn failed: ' + ((err && err.message) || err));
   }
 }

@@ -185,7 +185,7 @@ test('resolveRepos: 非法配置回退默认仓库，合法配置原样保留', 
 });
 
 test('buildPortableCmd: 纯 ASCII，含替换重试与只读目录降级分支', () => {
-  const cmd = buildPortableCmd('C:\\data\\updates\\apply-update.log');
+  const cmd = buildPortableCmd();
   assert.ok(ASCII.test(cmd), '便携版更新脚本必须是纯 ASCII');
   assert.ok(cmd.includes(':retry_replace'), '替换失败需要重试标签');
   assert.ok(cmd.includes('if %rtry% lss 12'), '替换失败需要有限次重试');
