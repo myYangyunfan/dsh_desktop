@@ -41,7 +41,7 @@ const {
 const {
   ACP_DISABLE_BLOCK, PET_DISABLE_BLOCK,
   ensureDisabledPatchEntry, removeLegacyMarketplacePatchLines,
-  registerCompanionPatchEntries, syncCompanionFiles,
+  registerCompanionPatchEntries, syncCompanionFiles, removedPluginIdsFromPatch,
 } = require('./lib/companion-profile');
 
 function log(msg) {
@@ -146,12 +146,19 @@ function syncPlugins(home, dryRun) {
   if (dryRun) {
     log(`dry-run: 目标 profile ${profileDir}`);
   }
+  const patchFile = path.join(profileDir, 'cordis.patch.yml');
+  let patch = '';
+  try { patch = fs.readFileSync(patchFile, 'utf8'); } catch { patch = ''; }
+  // 插件管理「卸载」标记（removed: true 的顶层条目）：与 main.js 同一语义，
+  // 本次同步跳过文件复制与注册，避免 CLI 把用户在桌面端卸载的插件装回。
+  const removedIds = removedPluginIdsFromPatch(patch);
   // 文件同步 + 过期清理 + bundle 完整性校验（共享实现，文案经 hooks 注入，
   // 与旧版本脚本输出逐字一致）。
   const { bundleNames, missingNames } = syncCompanionFiles({
     assetsRoot: path.join(__dirname, '..', 'assets', 'plugins'),
     profileDir,
     vendorRoot: path.join(__dirname, '..', 'node_modules'),
+    removedIds,
     dryRun,
     log: (m) => log(m),
     fail: (m) => warn(m),
@@ -201,14 +208,14 @@ function syncPlugins(home, dryRun) {
   }
 
   // 非 bundle 插件注册到 profile 补丁层（共享实现：幂等、尊重用户已有条目、
-  // bundle 迁移去重与源缺失残留移除；旧插件市场条目一并清理）。
-  const patchFile = path.join(profileDir, 'cordis.patch.yml');
-  let patch = '';
-  try { patch = fs.readFileSync(patchFile, 'utf8'); } catch { patch = ''; }
+  // bundle 迁移去重、源缺失残留移除与卸载标记跳过；旧插件市场条目一并清理）。
+  // patch 文本沿用函数入口的快照（文件同步/清单步骤不改写 patch），最后统一
+  // 原子写一次。
   const reg = registerCompanionPatchEntries(patch, {
     plugins: COMPANION_PLUGINS,
     bundleNames,
     missingNames,
+    removedIds,
     onDrop: (m) => log(m),
     onEntry: (m) => log(m),
   });

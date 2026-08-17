@@ -11,19 +11,31 @@
 //
 // 约定：
 //   - writeFileAtomic：临时文件 + rename。临时文件与目标同目录，保证 rename
-//     同卷；替换整文件，避免与 dsh 的 HMR 观察者撕裂读。
+//     同卷；替换整文件，避免与 dsh 的 HMR 观察者撕裂读。临时名含 pid +
+//     时间戳 + 进程内序号：主进程运行时补丁与 CLI 补丁脚本可能并发打同一
+//     文件，固定 .tmp 名会让两个调用方互相覆盖/rename 对方尚未写满的
+//     临时文件（历史竞态）。
 //   - readFileCached：按 realpath 归一化 + size/mtime 签名做进程级读缓存；
 //     任何写入都会更新 mtime，缓存自动失效，不存在陈旧内容（语义与旧 main.js
-//     内联实现完全一致，包括多路径指向同一物理文件时的去重读）。
+//     内联实现完全一致，包括多路径指向同一物理文件时的去重读）。读前读后
+//     各 stat 一次：读取期间文件被改写则不写缓存（TOCTOU 防护），下一次
+//     调用自然重读。
 // ---------------------------------------------------------------------------
 
 const fs = require('node:fs');
 
-/** 原子写（临时文件 + rename），避免与 dsh 的观察者撕裂读。 */
+let atomicTmpSeq = 0;
+
+/** 原子写（唯一临时名 + rename），避免与 dsh 的观察者撕裂读。 */
 function writeFileAtomic(file, content) {
-  const tmp = file + '.tmp';
-  fs.writeFileSync(tmp, content, 'utf8');
-  fs.renameSync(tmp, file);
+  const tmp = `${file}.${process.pid}.${Date.now()}.${++atomicTmpSeq}.tmp`;
+  try {
+    fs.writeFileSync(tmp, content, 'utf8');
+    fs.renameSync(tmp, file);
+  } catch (err) {
+    try { fs.rmSync(tmp, { force: true }); } catch {}
+    throw err;
+  }
 }
 
 // realpath -> { size, mtimeMs, text }
@@ -54,7 +66,12 @@ function readFileCached(file) {
     const hit = fileReadMemo.get(key);
     if (hit && hit.size === st.size && hit.mtimeMs === st.mtimeMs) return hit.text;
     const text = fs.readFileSync(file, 'utf8');
-    fileReadMemo.set(key, { size: st.size, mtimeMs: st.mtimeMs, text });
+    // TOCTOU 防护：读取期间文件被改写（size/mtime 变化）则不缓存，
+    // 避免把「读到的旧内容」记在「新签名」下造成陈旧命中。
+    const st2 = fs.statSync(file);
+    if (st2.size === st.size && st2.mtimeMs === st.mtimeMs) {
+      fileReadMemo.set(key, { size: st2.size, mtimeMs: st2.mtimeMs, text });
+    }
     return text;
   } catch {
     return null;

@@ -27,6 +27,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { writeFileAtomic } = require('./lib/patch-io');
 
 const AGENT_TEAMS = [
   'agent-teams/member-added',
@@ -92,7 +93,7 @@ function patchFile(file, quote) {
     sorted.splice(at === -1 ? sorted.length : at, 0, item);
   }
   const indent = file.endsWith('index.js') ? '\t' : '    ';
-  fs.writeFileSync(file, replaceSet(src, knownSpan, sorted, indent, quote));
+  writeFileAtomic(file, replaceSet(src, knownSpan, sorted, indent, quote));
   console.log(`patch-event-vocabulary: ${file} +${missing.length} types (${sorted.length} total)`);
   return missing.length;
 }

@@ -94,7 +94,9 @@ function transformFlashFix(src, file) {
 
 /**
  * 设置暴露白名单变换（纯函数）。只认声明之后最近的 `];`，避免插进文件里
- * 其它数组；缺失的命名空间以与旧实现逐字节一致的格式追加。
+ * 其它数组；缺失的命名空间以与旧实现逐字节一致的格式追加。原数组以尾逗号
+ * 收尾（`"x",\n];`）时不重复前导逗号——历史实现无条件前置 `,\n`，遇到带
+ * 尾逗号的文件会生成 `,\n,` 双逗号语法错误。
  * @returns {{status:'already'} | {status:'anchor-missing', detail: string} | {status:'changed', src: string, note: string[]}}
  */
 function transformExposeFix(src, file) {
@@ -109,7 +111,8 @@ function transformExposeFix(src, file) {
   const arrText = src.slice(declIdx, closeIdx);
   const missing = SETTINGS_NAMESPACES.filter((ns) => !arrText.includes('"' + ns + '"'));
   if (missing.length === 0) return { status: 'already' };
-  const block = ',\n' + missing.map((ns) => '\t"' + ns + '"').join(',\n') + '\n';
+  const hasTrailingComma = /,\s*$/.test(arrText);
+  const block = (hasTrailingComma ? '\n' : ',\n') + missing.map((ns) => '\t"' + ns + '"').join(',\n') + '\n';
   return { status: 'changed', src: src.slice(0, closeIdx) + block + src.slice(closeIdx), note: missing };
 }
 

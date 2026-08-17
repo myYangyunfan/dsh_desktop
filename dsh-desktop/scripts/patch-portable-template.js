@@ -17,6 +17,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { writeFileAtomic } = require('./lib/patch-io');
 
 function patch() {
   const libPackage = require.resolve('app-builder-lib/package.json');
@@ -48,7 +49,7 @@ function patch() {
   }
   text = text.replace(cleanup, `    SetOutPath $EXEDIR\n    ; DSH_PORTABLE_CACHE_PATCH: keep the extracted cache for next launch.\n`);
 
-  fs.writeFileSync(template, text, 'utf8');
+  writeFileAtomic(template, text);
   console.log('[portable-cache] patched template:', template);
 }
 

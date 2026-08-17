@@ -28,7 +28,7 @@ const { COMPANION_PLUGINS, companionDirName } = require('../lib/companion-plugin
 const {
   PATCH_HEADER, ACP_DISABLE_BLOCK, PET_DISABLE_BLOCK,
   ensureDisabledPatchEntry, removeLegacyMarketplacePatchLines,
-  registerCompanionPatchEntries, syncCompanionFiles,
+  registerCompanionPatchEntries, syncCompanionFiles, removedPluginIdsFromPatch,
 } = require('../lib/companion-profile');
 const { bundlePatchRel, verifyBundleDir } = require('../../profile-bundle-heal');
 
@@ -169,7 +169,7 @@ test('runtime-patches: 闪跳变换 already/失配/changed 字节级正确', () 
   assert.ok(!out.src.includes(FLASH_OLD) && out.src.includes(FLASH_NEW));
 });
 
-test('runtime-patches: 白名单变换 声明缺失/收尾缺失/部分缺失/已应用', () => {
+test('runtime-patches: 白名单变换 声明缺失/收尾缺失/部分缺失/已应用/尾逗号数组', () => {
   const file = 'C:\\x\\index.js';
   assert.deepStrictEqual(transformExposeFix('export const x = 1;', file), {
     status: 'anchor-missing',
@@ -187,6 +187,17 @@ test('runtime-patches: 白名单变换 声明缺失/收尾缺失/部分缺失/�
   const expectedBlock = ',\n' + out.note.map((ns) => '\t"' + ns + '"').join(',\n') + '\n';
   assert.strictEqual(out.src, src.slice(0, src.indexOf('];')) + expectedBlock + src.slice(src.indexOf('];')), '插入格式与旧实现逐字节一致');
   assert.deepStrictEqual(transformExposeFix(out.src, file), { status: 'already' }, '二次应用幂等');
+  // 原数组带尾逗号（",\n];"）：不得产生 ",", 双逗号语法错误（历史缺陷）。
+  const trailing = 'const WEB_SETTINGS_NAMESPACES = [\n\t"dsh-prompt",\n];\nrest();';
+  const outT = transformExposeFix(trailing, file);
+  assert.strictEqual(outT.status, 'changed');
+  assert.ok(!outT.src.includes(',\n,') && !outT.src.includes(',\n\n,'), '不得出现双逗号');
+  const expectedT = ',\n' + outT.note.map((ns) => '\t"' + ns + '"').join(',\n') + '\n';
+  const rebuiltT = trailing.slice(0, trailing.indexOf('];')) + expectedT.replace(/^,\n/, '\n') + trailing.slice(trailing.indexOf('];'));
+  assert.strictEqual(outT.src, rebuiltT, '尾逗号形态只省略前导逗号，其余字节一致');
+  // 产物必须仍是合法 JS 数组文本（简单语法校验：括号配平 + 无空槽）
+  const arrOnly = outT.src.slice(outT.src.indexOf('['), outT.src.indexOf('];') + 2);
+  assert.ok(!/,\s*,/.test(arrOnly), '数组内不得有空槽');
   // 真实 vendored 文件：已应用状态
   const real = path.join(repoRoot, 'node_modules', '@deepseek-ai', EXPOSE_PKG_REL);
   assert.strictEqual(transformExposeFix(fs.readFileSync(real, 'utf8'), real).status, 'already', 'vendored 副本应判定为已应用');
@@ -335,6 +346,42 @@ test('registerCompanionPatchEntries: 空文件注册/幂等/改名/尊重用户�
   });
   assert.deepStrictEqual(r6.dropped, ['balance']);
   assert.ok(!r6.patch.includes('@deepseek-ai/dsh-balance'), '源缺失插件的注册应被移除');
+});
+
+test('removedPluginIdsFromPatch: 卸载标记提取（正常/损坏 YAML/insert 块不误伤）', () => {
+  // 插件管理写入的标记形态：顶层条目带 removed: true
+  const patch = '# header\n- insert:\n    - id: balance\n      name: \'@deepseek-ai/dsh-balance\'\n- id: terminal\n  name: \'dsh-terminal-tab\'\n  disabled: true\n  removed: true\n- id: vision\n  config:\n    keep: 1\n  removed: true\n';
+  assert.deepStrictEqual([...removedPluginIdsFromPatch(patch)].sort(), ['terminal', 'vision']);
+  // insert 块内层条目（缩进 >= 4）即使带 removed 字样也不参与
+  const inner = '- insert:\n    - id: x\n      removed: true\n';
+  assert.deepStrictEqual([...removedPluginIdsFromPatch(inner)], []);
+  // 无标记 / 空文本
+  assert.deepStrictEqual([...removedPluginIdsFromPatch('- id: a\n  disabled: true\n')], []);
+  assert.deepStrictEqual([...removedPluginIdsFromPatch('')], []);
+  // YAML 损坏：按标记形状仍能识别（比旧实现经 js-yaml 解析失败丢全部标记更稳健）
+  const corrupt = '- id: broken: [unclosed\n  removed: true\n';
+  assert.deepStrictEqual([...removedPluginIdsFromPatch(corrupt)], ['broken']);
+});
+
+test('registerCompanionPatchEntries: 卸载标记显式跳过注册', () => {
+  const plugins = [
+    { id: 'balance', name: '@deepseek-ai/dsh-balance' },
+    { id: 'terminal', name: 'dsh-terminal-tab' },
+  ];
+  const bundleNames = new Set();
+  const missingNames = new Set();
+  // 不传 removedIds：两者都注册（既有行为）
+  const r1 = registerCompanionPatchEntries('', { plugins, bundleNames, missingNames });
+  assert.deepStrictEqual(r1.added, ['balance', 'terminal']);
+  // removedIds 含 balance：只注册 terminal，且不产生 balance 的任何行
+  const r2 = registerCompanionPatchEntries('', { plugins, bundleNames, missingNames, removedIds: new Set(['balance']) });
+  assert.deepStrictEqual(r2.added, ['terminal']);
+  assert.ok(!r2.patch.includes('balance'), '已卸载插件不得写入任何注册');
+  // 已存在的 removed 标记条目：不重复 insert、不改写（与未传 removedIds 的旧侥幸路径一致）
+  const withMarker = '# user\n- id: balance\n  disabled: true\n  removed: true\n';
+  const r3 = registerCompanionPatchEntries(withMarker, { plugins, bundleNames, missingNames, removedIds: new Set(['balance']) });
+  assert.strictEqual((r3.patch.match(/id: balance/g) || []).length, 1, '标记条目保留且不重复');
+  assert.ok(r3.patch.includes('removed: true'));
 });
 
 test('companion-profile: 真实 assets 全量同步到隔离 profile（幂等零写入 + dry-run 零落盘）', (t) => {

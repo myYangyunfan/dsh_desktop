@@ -14,14 +14,16 @@
 // 由 postinstall / start / pack / dist 在打包前应用；匹配失败只告警不中断。
 const fs = require('node:fs');
 const path = require('node:path');
+const { writeFileAtomic } = require('./lib/patch-io');
 
 const root = path.resolve(__dirname, '..');
 const target = path.join(root, 'node_modules', '@deepseek-ai', 'dsh-llm-pi-ai', 'lib', 'index.js');
 
 const PATCH_MARKER = 'dsh-desktop-patch: credits-before-auth';
 // 匹配 classifyPiAiError 里原始的「401/403→AUTH」+「isQuotaExceededError→QUOTA」两行
-// （tab 缩进，401 在前、余额在后）。
-const OLD_RE = /\tif \(\/\\b\(\?:401\|403\)\\b\/\.test\(message\)\) return "AUTH";\n\tif \(isQuotaExceededError\(message\)\) return QUOTA_EXCEEDED_CODE;/;
+// （tab 缩进，401 在前、余额在后）。换行用 \r?\n：目标文件若为 CRLF（历史
+// 发布形态）也必须命中，不能静默跳过补丁。
+const OLD_RE = /\tif \(\/\\b\(\?:401\|403\)\\b\/\.test\(message\)\) return "AUTH";\r?\n\tif \(isQuotaExceededError\(message\)\) return QUOTA_EXCEEDED_CODE;/;
 const NEW_BLOCK = [
   '\t/* ' + PATCH_MARKER + ' — 第三方 provider 余额不足(CreditsError)会返回 401，须先于 AUTH 判定，否则误显示 API key is invalid */',
   '\tif (isQuotaExceededError(message)) return QUOTA_EXCEEDED_CODE;',
@@ -43,7 +45,7 @@ function main() {
     return;
   }
   src = src.replace(OLD_RE, NEW_BLOCK);
-  fs.writeFileSync(target, src);
+  writeFileAtomic(target, src);
   console.log('[patch-pi-ai-credits] 已补丁 dsh-llm-pi-ai：余额判定前置到 401-AUTH 之前');
 }
 

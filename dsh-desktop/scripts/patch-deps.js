@@ -3,6 +3,7 @@
 // 错误文案。由 postinstall / pack / dist 在打包前应用；匹配失败只告警不中断。
 const fs = require('node:fs');
 const path = require('node:path');
+const { writeFileAtomic } = require('./lib/patch-io');
 
 const root = path.resolve(__dirname, '..');
 const target = path.join(root, 'node_modules', '@deepseek-ai', 'dsh-host-directory-picker-native', 'lib', 'index.js');
@@ -33,7 +34,7 @@ function main() {
     return;
   }
   src = src.replace(OLD_RE, NEW_BLOCK);
-  fs.writeFileSync(target, src);
+  writeFileAtomic(target, src);
   console.log('[patch-deps] 已补丁 picker-native：worker 退出上报 exit code / signal');
 }
 

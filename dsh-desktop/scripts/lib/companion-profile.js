@@ -17,7 +17,7 @@ const { COMPANION_PLUGINS, companionDirName } = require('./companion-plugins');
 const { dropBlocksByIds } = require('../../profile-patch-heal');
 const { writeFileAtomic } = require('./patch-io');
 const { bundlePatchRel, verifyBundleDir } = require('../../profile-bundle-heal');
-const { compareVersions } = require('../plugin-manager-update');
+const { compareVersions } = require('./versions');
 
 // 同步进 profile 的固定文件清单（旧 main.js copyFiles / 同步脚本 PLUGIN_FILES）。
 const PLUGIN_FILES = [
@@ -45,6 +45,32 @@ const PET_DISABLE_BLOCK = '\n# harness-pet：桌面宠物默认关闭（设置 �
 // ---------------------------------------------------------------------------
 // 目录/文件清理
 // ---------------------------------------------------------------------------
+
+/** 正则字面量转义（插件 id 拼进正则前必须转义；防御性收口）。 */
+function escRegExp(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * 从 patch 文本提取「插件管理卸载标记」的插件 id（纯文本扫描，唯一实现，
+ * main.js 与同步脚本共用）。标记形态由 scripts/plugin-manager-patch.js 写入：
+ * 顶层 `- id: X` 条目（缩进 0-2）内带 `removed: true` 行；insert 块内层条目
+ * （缩进 >= 4）不参与匹配。YAML 损坏时也按标记形状识别——旧 main.js 实现经
+ * js-yaml 解析，解析失败会丢全部标记、把已卸载插件重新装回，纯文本提取在
+ * 该失败边缘更稳健；正常文件行为与旧实现一致。
+ * @param {string} patch cordis.patch.yml 原文
+ * @returns {Set<string>}
+ */
+function removedPluginIdsFromPatch(patch) {
+  const ids = new Set();
+  const text = String(patch || '');
+  const entryRe = /(?:^|\n)([ \t]{0,2})- id:[ \t]*([A-Za-z0-9_.-]+)([\s\S]*?)(?=(?:\n[ \t]{0,2}- id:)|(?:\n[ \t]{0,2}- insert:)|\s*$)/g;
+  let m;
+  while ((m = entryRe.exec(text)) !== null) {
+    if (/(?:^|\n)[ \t]{0,2}removed[ \t]*:[ \t]*true\b/.test(m[3])) ids.add(m[2]);
+  }
+  return ids;
+}
 
 /**
  * 清理历史版本遗留的旧包名（私有 + 描述含 "DSH Desktop" 的才动，避免误删
@@ -172,18 +198,23 @@ function ensureDisabledPatchEntry(patch, idPattern, block) {
  *      （用户手写的 config/disabled 覆盖条目原样保留）；
  *   2. id 已存在 → 只做 name 就地改名（不动用户其它行）；
  *   3. id 未出现 → 追加 insert 条目；[] 占位 / 空文件 / 正常文件三种形态
- *      与旧实现逐字一致。
+ *      与旧实现逐字一致；
+ *   4. removedIds（插件管理「卸载」标记）显式跳过：不写任何注册。历史上
+ *      靠「removed 标记条目仍在同一文件里」被 id 存在性检查侥幸挡住，
+ *      契约不显式；现在由调用方显式传入，标记条目被其它写入方重写时
+ *      也不会把已卸载插件重新 insert。
  * @param {string} patch 当前 patch 文本（读取失败调用方传 ''）
  * @param {Object} opts
  * @param {Array<{id:string,name:string}>} opts.plugins
  * @param {Set<string>} opts.bundleNames   已按 bundle 装配的包名
  * @param {Set<string>} opts.missingNames  源缺失/校验失败的包名
+ * @param {Set<string>} [opts.removedIds]  插件管理「卸载」标记的插件 id（跳过注册）
  * @param {(msg:string)=>void} [opts.onDrop]  移除残留注册行日志
  * @param {(msg:string)=>void} [opts.onEntry] 改名/新增条目日志
  * @returns {{ patch: string, changed: boolean, dropped: string[], updated: string[], added: string[] }}
  */
 function registerCompanionPatchEntries(patch, opts) {
-  const { plugins, bundleNames, missingNames, onDrop, onEntry } = opts;
+  const { plugins, bundleNames, missingNames, removedIds, onDrop, onEntry } = opts;
   let text = patch;
   let changed = false;
   const dropped = [];
@@ -224,14 +255,20 @@ function registerCompanionPatchEntries(patch, opts) {
     }
   }
   for (const p of plugins) {
+    // 插件管理「卸载」标记：跳过一切注册（契约显式化；removed 标记条目自身
+    // 由插件管理模块维护，本函数不触碰）。
+    if (removedIds && removedIds.has(p.id)) continue;
     if (bundleNames.has(p.name)) continue;
     // 源缺失：不写任何注册（复制循环已跳过它），避免「注册了但包不存在」
     // 导致 dsh web 启动崩溃。
     if (missingNames.has(p.name)) continue;
+    // 插件 id 拼进正则前转义（当前清单 id 均为安全标识符，防御性收口，
+    // 与 plugin-manager-patch 的白名单防御一致）。
+    const reId = escRegExp(p.id);
     // 该 id 在 patch 里已存在：若它现在的 name 与当前版本不一致（例如终端
     // 包改名 @deepseek-ai/dsh-terminal → dsh-terminal-tab），就地改名为当前
     // 值。只改 name 行，不动用户自己加的其它行。
-    const idNameRe = new RegExp('(id:\\s*' + p.id + '\\b[^\\n]*\\n\\s*name:\\s*\\x27)([^\\x27]*)(\\x27)');
+    const idNameRe = new RegExp('(id:\\s*' + reId + '\\b[^\\n]*\\n\\s*name:\\s*\\x27)([^\\x27]*)(\\x27)');
     const m = text.match(idNameRe);
     if (m) {
       if (m[2] !== p.name) {
@@ -244,7 +281,7 @@ function registerCompanionPatchEntries(patch, opts) {
     }
     // 尊重用户已有配置：id 只要出现过（例如用户手写的 disabled 条目）就不再
     // 自动插入，避免「禁用后下次启动又被加回来」或同 id 重复条目导致 loader 报错。
-    if (new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*' + p.id + '\\b').test('\n' + text)) {
+    if (new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*' + reId + '\\b').test('\n' + text)) {
       continue;
     }
     const block = `- insert:\n    - id: ${p.id}\n      name: '${p.name}'\n`;
@@ -412,6 +449,7 @@ module.exports = {
   removeStaleCompanionPlugins,
   removeLegacyMarketplaceDir,
   removeLegacyMarketplacePatchLines,
+  removedPluginIdsFromPatch,
   ensureDisabledPatchEntry,
   registerCompanionPatchEntries,
   syncCompanionFiles,
