@@ -60,6 +60,7 @@ const presetGuard = require('./scripts/lib/preset-guard');
 const { patchWebSearchBaseUrl } = require('./scripts/patch-web-search-baseurl');
 const { patchMenuViewport } = require('./scripts/patch-menu-viewport');
 const { patchSessionManage } = require('./scripts/patch-session-manage');
+const { patchOpenProjectDir } = require('./scripts/patch-open-project-dir');
 const { patchSessionPersistence } = require('./scripts/patch-session-persistence');
 // 「设置 → 插件 → 诊断与管理」：诊断 / 备份与恢复 / 日志包导出 / 防砖体检 /
 // bundle 顺序检测与重排（纯函数模块，node --test 单测覆盖）。
@@ -5184,6 +5185,8 @@ function applyMenuViewportFix() {
 // dsh-client-ui-workspace（会话行菜单「删除对话」）。补丁本体在
 // scripts/patch-session-manage.js（幂等、锚点不匹配自动跳过）；覆盖三处运行
 // 副本：profile fallback、内置 app 副本、用户更新过的 agent overlay。
+// 同循环顺带重打「打开项目目录」补丁（scripts/patch-open-project-dir.js，
+// 幂等）：侧边栏项目行/会话行菜单追加「打开项目目录」并支持右键弹出。
 // ---------------------------------------------------------------------------
 function applySessionManageFix() {
   const targets = runtimeNodeModulesRoots();
@@ -5194,6 +5197,12 @@ function applySessionManageFix() {
       if (n > 0) log('boot', '对话删除补丁: 已应用到 ' + root);
     } catch (err) {
       log('boot', '对话删除补丁失败(' + root + '): ' + err.message);
+    }
+    try {
+      const n = patchOpenProjectDir(root, (m) => log('boot', m));
+      if (n > 0) log('boot', '打开项目目录补丁: 已应用到 ' + root);
+    } catch (err) {
+      log('boot', '打开项目目录补丁失败(' + root + '): ' + err.message);
     }
   }
 }

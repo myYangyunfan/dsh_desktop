@@ -35,6 +35,7 @@ const { installBuiltinPresets } = require('./install-minimal-win-preset');
 const { patchWebSearchBaseUrl } = require('./patch-web-search-baseurl');
 const { patchMenuViewport } = require('./patch-menu-viewport');
 const { patchSessionManage } = require('./patch-session-manage');
+const { patchOpenProjectDir } = require('./patch-open-project-dir');
 const { patchSessionPersistence } = require('./patch-session-persistence');
 const { patchSlotCompat } = require('./patch-slot-compat');
 
@@ -154,11 +155,14 @@ module.exports = async function afterPack(context) {
     // client-connection / client-ui-workspace）。
     const smChanged = patchSessionManage(appNm, (m) => console.log('afterPack: ' + m));
     console.log(`afterPack: session manage ${smChanged > 0 ? `patched (${smChanged} files)` : 'already up to date'}`);
+    // 侧边栏「打开项目目录」：项目行/会话行菜单追加入口 + 右键弹出。
+    const odChanged = patchOpenProjectDir(appNm, (m) => console.log('afterPack: ' + m));
+    console.log(`afterPack: open project dir ${odChanged > 0 ? 'patched' : 'already up to date'}`);
     const spChanged = patchSessionPersistence(appNm, (m) => console.log('afterPack: ' + m));
     console.log(`afterPack: session torn-tail recovery ${spChanged > 0 ? 'patched' : 'already up to date'}`);
     const skChanged = patchSlotCompat(appNm, (m) => console.log('afterPack: ' + m));
     console.log(`afterPack: keyed slot compatibility ${skChanged > 0 ? 'patched' : 'already up to date'}`);
   } else {
-    console.warn('afterPack: bundled app node_modules not found — web-search baseURL / menu viewport / session manage / session recovery / slot compatibility patches skipped');
+    console.warn('afterPack: bundled app node_modules not found — web-search baseURL / menu viewport / session manage / open project dir / session recovery / slot compatibility patches skipped');
   }
 };

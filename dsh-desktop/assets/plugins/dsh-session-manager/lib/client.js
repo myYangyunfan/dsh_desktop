@@ -220,6 +220,15 @@ window.__ModuleLoader__.load({
 				unarchiveSession: (sessionId) => unarchiveSession(ctx, String(sessionId))
 			};
 
+			// 侧边栏「打开项目目录」桥（patch-open-project-dir.js 补丁的菜单项调用）：
+			// 走宿主 preload 的 window.dshDesktop.openPath（dsh:file-open IPC →
+			// shell.openPath），零新增 IPC；未来可无缝切换为 web 端实现。
+			window.__dshDesktopOpenDir = (cwd) => {
+				if (!cwd) return;
+				if (window.dshDesktop?.openPath) window.dshDesktop.openPath(cwd);
+				else console.warn('[open-project-dir] window.dshDesktop.openPath 不可用（cwd=' + cwd + '）');
+			};
+
 			ctx.slots.inject("settings.section", () => ctx.slots.register({
 				name: "settings.section",
 				id: NS,

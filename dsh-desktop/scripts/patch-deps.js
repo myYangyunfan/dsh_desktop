@@ -67,6 +67,17 @@ try {
   console.log('[patch-deps] session-manage 补丁跳过: ' + (err && err.message ? err.message : err));
 }
 
+// 顺带应用侧边栏「打开项目目录」补丁（项目行/会话行菜单追加「打开项目目录」，
+// 支持右键弹出同一菜单）。开发模式（npm start）直接打 dev node_modules；打包
+// 由 after-pack 与启动时运行时补丁覆盖（幂等，锚点不匹配只告警不中断）。
+try {
+  const { patchOpenProjectDir } = require('./patch-open-project-dir');
+  const n = patchOpenProjectDir(root, (m) => console.log(m));
+  if (n > 0) console.log('[patch-deps] open-project-dir 补丁已应用（dev node_modules）');
+} catch (err) {
+  console.log('[patch-deps] open-project-dir 补丁跳过: ' + (err && err.message ? err.message : err));
+}
+
 // 会话进程在 frame 收尾后、JSONL 行写完前中断时，官方读取器会把可恢复的
 // 最终半条记录误判为永久损坏。让它复用已有 torn-tail repair 流程。
 try {
