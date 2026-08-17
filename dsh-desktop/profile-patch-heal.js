@@ -226,7 +226,10 @@ function dropBlocksByIds(text, ids) {
  *   1. failed to apply loader entry <hash> (@scope/pkg): ...（旧形态，hash 是
  *      条目实例 id，对 overlay 无用但保留兼容）；
  *   2. duplicate loader entry id: X（cordis-plugin-loader 的重复注册 TypeError）；
- *   3. 括号中的包名 @scope/pkg（交由 mapPackagesToPatchIds 映射回 patch id）。
+ *   3. 括号中的包名 @scope/pkg 或非 scope 包名（dsh-better-sidebar / harness-pet
+ *      等配套插件都是非 scope，历史正则只认 @scope/ 会漏掉这些条目），交由
+ *      mapPackagesToPatchIds 映射回 patch id。旧日志的无关 token "(include)"
+ *      统一排除。
  * @param {string} text 日志文本
  * @returns {string[]} 去重后的 id/包名 token 列表
  */
@@ -235,21 +238,22 @@ function parseFailedLoaderIds(text) {
   const hashRe = /failed to apply loader entry\s+([A-Za-z0-9_-]+)\s*\(/g;
   let m;
   while ((m = hashRe.exec(text)) !== null) {
-    if (m[1] !== 'include') ids.add(m[1]);
+    ids.add(m[1]);
   }
   const dupRe = /duplicate loader entry id:\s*([A-Za-z0-9_-]+)/g;
   while ((m = dupRe.exec(text)) !== null) ids.add(m[1]);
-  const pkgRe = /failed to apply loader entry[\s\S]{0,120}?\((@[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\)/g;
+  const pkgRe = /failed to apply loader entry[\s\S]{0,120}?\((@?[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)?)\)/g;
   while ((m = pkgRe.exec(text)) !== null) ids.add(m[1]);
+  ids.delete('include'); // 旧日志形态里的无关 token
   return [...ids];
 }
 
 /**
- * 把 loader 日志中的包名（@scope/pkg）映射回 cordis.patch.yml 条目 id。
- * 按「- id: X 之后紧邻的 name: '包名'」扫描；一个包名可能对应多个条目
- * （重复注册场景），全部返回供 overlay 一并禁用。
+ * 把 loader 日志中的包名（@scope/pkg 或非 scope 包名）映射回 cordis.patch.yml
+ * 条目 id。按「- id: X 之后紧邻的 name: '包名'」扫描；一个包名可能对应多个
+ * 条目（重复注册场景），全部返回供 overlay 一并禁用。
  * @param {string} patchText cordis.patch.yml 原文
- * @param {string[]} packages 包名列表（可含 @scope/）
+ * @param {string[]} packages 包名列表（可含 @scope/，也可为非 scope 名）
  * @returns {string[]} 匹配到的 patch 条目 id
  */
 function mapPackagesToPatchIds(patchText, packages) {
@@ -261,7 +265,7 @@ function mapPackagesToPatchIds(patchText, packages) {
   while ((m = entryRe.exec(patchText)) !== null) {
     const id = m[1];
     const body = m[2];
-    const nameRe = /(?:^|\n)\s*name:\s*['"]?(@[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)['"]?/g;
+    const nameRe = /(?:^|\n)\s*name:\s*['"]?(@?[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)?)['"]?/g;
     let nm;
     while ((nm = nameRe.exec(body)) !== null) {
       if (wanted.has(nm[1])) ids.push(id);

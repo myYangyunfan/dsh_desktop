@@ -17,7 +17,7 @@ const DEFAULT_BASE = 'https://api.deepseek.com';
 // ---------------------------------------------------------------------------
 // OpenCode Go 订阅额度（5 小时滚动 / 每周 / 每月）
 // 端点：https://opencode.ai/zen/go/v1/usage（官方未公开文档，2026-08 实测可用）
-// 密钥来源：环境变量 OPENCODE_GO_API_KEY（兼容 OPENCODE_API_KEY）>
+// 密钥来源：环境变量 OPENCODE_GO_API_KEY（兼容 OPENCODE_API_KEY）
 // DSH_HOME/.credentials.yaml 的 OPENCODE_GO_API_KEY > OpenCode CLI auth.json
 // （opencode-go / opencode 条目，type=api）。
 // 返回：{ usage: { rolling, weekly, monthly } }，每窗口
@@ -25,16 +25,29 @@ const DEFAULT_BASE = 'https://api.deepseek.com';
 // ---------------------------------------------------------------------------
 const OPENCODE_USAGE_URL = 'https://opencode.ai/zen/go/v1/usage';
 
-function readOpencodeGoKey(dshHome) {
-  const envKey = process.env.OPENCODE_GO_API_KEY || process.env.OPENCODE_API_KEY;
-  if (envKey) return envKey.trim();
+/**
+ * 从 .credentials.yaml 逐行读取一个键值（`KEY: value`，值可带引号）。
+ * readApiKey / readOpencodeGoKey 共用，避免「读 YAML→正则」样板三处复制漂移。
+ * @param {string} dshHome
+ * @param {string} keyName
+ * @returns {string} 读取失败/未找到返回空串
+ */
+function readCredentialLine(dshHome, keyName) {
   try {
     const text = fs.readFileSync(path.join(dshHome, '.credentials.yaml'), 'utf8');
     for (const line of text.split(/\r?\n/)) {
-      const m = line.match(/^\s*OPENCODE_GO_API_KEY\s*:\s*["']?([^"'\s#]+)/);
+      const m = line.match(new RegExp('^\\s*' + keyName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*:\\s*["\']?([^"\'\\s#]+)'));
       if (m) return m[1];
     }
   } catch {}
+  return '';
+}
+
+function readOpencodeGoKey(dshHome) {
+  const envKey = process.env.OPENCODE_GO_API_KEY || process.env.OPENCODE_API_KEY;
+  if (envKey) return envKey.trim();
+  const fromCreds = readCredentialLine(dshHome, 'OPENCODE_GO_API_KEY');
+  if (fromCreds) return fromCreds;
   // OpenCode CLI auth.json 兜底（macOS/Linux 默认位置；Windows 相同相对位置存在时也读）。
   try {
     const authPath = path.join(homedir(), '.local', 'share', 'opencode', 'auth.json');
@@ -111,9 +124,6 @@ const PEAK_PRICING_SINCE_UTC = Date.UTC(2026, 7, 16, 16, 0, 0);
 // 兜底档（deepseek-v4-flash 高峰价）。
 const FALLBACK_PRICES = { cacheMiss: 3, cacheHit: 0.1, output: 9 };
 
-// 兼容旧引用：DEFAULT_PRICES 即高峰全价表。
-const DEFAULT_PRICES = PEAK_PRICES;
-
 // 当前（或指定时刻）是否处于高峰时段（北京时间 9:00-12:00、14:00-18:00）。
 function isPeakHour(date) {
   const d = date ? new Date(date) : new Date();
@@ -122,8 +132,10 @@ function isPeakHour(date) {
 }
 
 // 某模型在指定时刻的“有效单价”（已含旧版→峰谷切换与高峰/低谷换算）。
+// 模型名为空（settings.yaml 缺失）时按 deepseek-v4-pro 兜底：与 main.js 的
+// 调用方回退一致（未知模型按高单价估算，避免少报费用）。
 function effectivePrice(model, date) {
-  const key = String(model || '').trim() || 'deepseek-v4-flash';
+  const key = String(model || '').trim() || 'deepseek-v4-pro';
   const now = date ? new Date(date) : new Date();
   if (now.getTime() < PEAK_PRICING_SINCE_UTC) {
     return { ...(LEGACY_PRICES[key] || FALLBACK_PRICES) };
@@ -140,22 +152,19 @@ function effectivePrice(model, date) {
 function readApiKey(dshHome) {
   const envKey = process.env.DEEPSEEK_API_KEY;
   if (envKey) return envKey.trim();
-  try {
-    const text = fs.readFileSync(path.join(dshHome, '.credentials.yaml'), 'utf8');
-    for (const line of text.split(/\r?\n/)) {
-      const m = line.match(/^\s*DEEPSEEK_API_KEY\s*:\s*["']?([^"'\s#]+)/);
-      if (m) return m[1];
-    }
-  } catch {}
-  return '';
+  return readCredentialLine(dshHome, 'DEEPSEEK_API_KEY');
 }
 
 // 当前默认模型（~/.dsh/settings.yaml 的 agent-default-model.model），
-// 决定按哪一档价格估算本轮费用。
+// 决定按哪一档价格估算本轮费用。锚定 agent-default-model 段：settings.yaml
+// 其它段落（插件 config 等）也可能有 model: 行，取错档位会算错费用。
 function readActiveModel(dshHome) {
   try {
     const text = fs.readFileSync(path.join(dshHome, 'settings.yaml'), 'utf8');
-    const m = text.match(/^\s*model\s*:\s*(\S+)/m);
+    // YAML 映射段 = 段首行 + 其后的缩进续行；非缩进行（下一顶层键）自然截断。
+    const section = /^agent-default-model:.*(?:\n[ \t]+.*)*/m.exec(text);
+    if (!section) return '';
+    const m = /^\s*model\s*:\s*['"]?([^\s'"#]+)/m.exec(section[0]);
     if (m) return m[1];
   } catch {}
   return '';
@@ -193,10 +202,11 @@ function fetchJson(url, apiKey, timeoutMs = 15000) {
   });
 }
 
-// 返回 { ok, isAvailable?, balances: [{currency,total,granted,toppedUp}], error?, prices }
+// 返回 { ok, isAvailable?, balances: [{currency,total,granted,toppedUp}], error? }
+// 三条路径返回字段集合一致（prices 由调用方 main.js 统一附加）。
 async function queryBalance(dshHome) {
   const key = readApiKey(dshHome);
-  if (!key) return { ok: false, error: 'no-key', balances: [], prices: DEFAULT_PRICES };
+  if (!key) return { ok: false, error: 'no-key', balances: [] };
   try {
     const data = await fetchJson(balanceEndpoint(), key);
     const balances = Array.isArray(data.balance_infos)
@@ -219,8 +229,4 @@ module.exports = {
   readActiveModel,
   effectivePrice,
   isPeakHour,
-  PEAK_PRICES,
-  LEGACY_PRICES,
-  DEFAULT_PRICES,
-  FALLBACK_PRICES,
 };

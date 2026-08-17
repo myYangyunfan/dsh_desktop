@@ -6,55 +6,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const zlib = require('node:zlib');
 const crypto = require('node:crypto');
+const { scanZstdFrames } = require('../session-watcher'); // 帧扫描器唯一实现（历史三份副本已收口）
 
 const file = process.argv[2];
 const dir = path.dirname(file);
 const buf = fs.readFileSync(file);
 console.log(`input: ${file} (${buf.length} bytes)`);
-
-const ZSTD_MAGIC = 4247762216;
-function scanZstdFrames(buffer) {
-  const frames = [];
-  let offset = 0;
-  while (offset < buffer.length) {
-    const start = offset;
-    if (buffer.length - offset < 4) return { frames, tornStart: start };
-    if (buffer.readUInt32LE(offset) !== ZSTD_MAGIC) return { frames, tornStart: start };
-    offset += 4;
-    if (offset === buffer.length) return { frames, tornStart: start };
-    const descriptor = buffer.readUInt8(offset);
-    offset += 1;
-    if ((descriptor & 24) !== 0) return { frames, tornStart: start };
-    const contentSizeFlag = descriptor >>> 6;
-    const singleSegment = (descriptor & 32) !== 0;
-    const checksum = (descriptor & 4) !== 0;
-    const dictionaryFlag = descriptor & 3;
-    const dictionaryBytes = dictionaryFlag === 3 ? 4 : dictionaryFlag;
-    const contentSizeBytes = contentSizeFlag === 0 ? (singleSegment ? 1 : 0) : (1 << contentSizeFlag);
-    const remainingHeaderBytes = (singleSegment ? 0 : 1) + dictionaryBytes + contentSizeBytes;
-    if (buffer.length - offset < remainingHeaderBytes) return { frames, tornStart: start };
-    offset += remainingHeaderBytes;
-    for (;;) {
-      if (buffer.length - offset < 3) return { frames, tornStart: start };
-      const blockHeader = buffer.readUIntLE(offset, 3);
-      offset += 3;
-      const lastBlock = (blockHeader & 1) !== 0;
-      const blockType = (blockHeader >>> 1) & 3;
-      const blockSize = blockHeader >>> 3;
-      if (blockType === 3) return { frames, tornStart: start };
-      const payloadBytes = blockType === 1 ? 1 : blockSize;
-      if (buffer.length - offset < payloadBytes) return { frames, tornStart: start };
-      offset += payloadBytes;
-      if (lastBlock) break;
-    }
-    if (checksum) {
-      if (buffer.length - offset < 4) return { frames, tornStart: start };
-      offset += 4;
-    }
-    frames.push({ start, end: offset });
-  }
-  return { frames };
-}
 
 function decodeFrame(b, frame) {
   return zlib.zstdDecompressSync(b.subarray(frame.start, frame.end)).toString('utf8');
@@ -62,6 +19,10 @@ function decodeFrame(b, frame) {
 
 // Mirrors @deepseek-ai/dsh-session decodeStorageRecord: chunk rows expand to
 // assistant/chunk events with seq = row.seq0 + k (members are plain strings).
+// 注意：这里刻意不复用 session-watcher.js 的 expandRow——那是「通知」语义
+// （chunk 成员当原始字符串展开，非数组时丢弃整行），本脚本是「修复」语义
+// （必须合成带 seq 的 assistant/chunk 事件并参与 seq 连续性校验，非数组时
+// 保留整行），两者语义不同，混用会破坏修复正确性。
 function expandRow(row) {
   if (!row || typeof row !== 'object') return [];
   switch (row.type) {

@@ -27,6 +27,9 @@ function ensureCoreBundles(bundles, resolvableCores) {
   const usable = [...new Set(
     (Array.isArray(resolvableCores) ? resolvableCores : []).filter((c) => CORE_BUNDLE_NAMES.includes(c))
   )];
+  // 补齐顺序按 CORE_BUNDLE_NAMES 规范序内聚在本函数内，不依赖调用方传入序
+  // （历史契约依赖 main.js 恰好按规范序传参，任何乱序调用方都会产出乱序核心）。
+  usable.sort((a, b) => CORE_BUNDLE_NAMES.indexOf(a) - CORE_BUNDLE_NAMES.indexOf(b));
   const added = usable.filter((c) => !bundles.includes(c));
   if (added.length === 0) return null;
   return { next: [...added, ...bundles], added };

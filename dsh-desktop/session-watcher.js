@@ -106,7 +106,7 @@ class SessionWatcher {
     this.sessionsDir = sessionsDir;
     this.onTurnEnd = onTurnEnd || (() => {});
     this.log = log || (() => {});
-    this.files = new Map(); // absPath -> { size, consumed, header, title, baseline }
+    this.files = new Map(); // absPath -> { consumed, lastSize, header, title, baseline }
     this.dirCache = { at: 0, files: [] };
     this.timer = null;
     this.walkTimer = null;
@@ -116,6 +116,8 @@ class SessionWatcher {
   }
 
   start() {
+    // 重复调用防护：接口不幂等，二次 start 会再挂两个 interval 而不清旧句柄。
+    if (this.timer || this.walkTimer) return;
     // 首扫延后一拍（先让窗口绘制），且分批处理，避免启动时主进程被大量
     // 会话日志的全量解码卡死。
     setImmediate(() => this.scan(4));
@@ -188,6 +190,7 @@ class SessionWatcher {
         const rec = this.files.get(file);
         if (rec) {
           rec.consumed = 0; rec.header = null; rec.title = null; rec.baseline = false; rec.hasTurnEvents = false;
+          rec.lastSize = -1; // 强制重基线一次：同尺寸整文件替换在「大小比对」下不可见，rename 是替换的强信号
         }
       }
       this.process(file);
@@ -245,7 +248,7 @@ class SessionWatcher {
     try { st = fs.statSync(file); } catch { this.files.delete(file); return false; }
     let rec = this.files.get(file);
     if (!rec) {
-      rec = { size: 0, consumed: 0, header: null, title: null, baseline: false, hasTurnEvents: false };
+      rec = { consumed: 0, lastSize: 0, header: null, title: null, baseline: false, hasTurnEvents: false };
       this.files.set(file, rec);
     }
     if (st.size <= rec.consumed && rec.baseline) return false; // 无新字节
@@ -253,6 +256,7 @@ class SessionWatcher {
     // 文件被截断/重写（如 repair 脚本）→ 重新基线。
     if (st.size < rec.consumed) {
       rec.consumed = 0; rec.header = null; rec.title = null; rec.baseline = false; rec.hasTurnEvents = false;
+      rec.lastSize = 0;
     }
 
     const first = !rec.baseline;
@@ -260,13 +264,22 @@ class SessionWatcher {
     let tail;
     try { tail = this.readTail(file, readFrom, st.size); } catch { return false; }
 
-    // 尾部不是帧边界（被重写/拼接异常）→ 归零重新基线。
+    // 尾部不是帧边界（被重写/拼接异常）→ 归零重新基线；但长度与上次判定
+    // 一致且仍不是帧边界时（坏内容没有进展），按已消费处理，避免对不变的
+    // 坏文件每 10s 兜底清扫都全量重读重基线（fs.watch 的 rename 事件会在
+    // 整文件替换时强制重基线，正常修复路径不受影响）。
     if (!first && tail.length >= 4 && tail.readUInt32LE(0) !== ZSTD_MAGIC) {
+      if (rec.lastSize === st.size) {
+        rec.consumed = st.size;
+        rec.lastSize = st.size;
+        return false;
+      }
       rec.consumed = 0; rec.header = null; rec.title = null; rec.baseline = false; rec.hasTurnEvents = false;
+      rec.lastSize = st.size;
       return this.process(file);
     }
 
-    const { frames, tornStart } = scanZstdFrames(tail);
+    const { frames } = scanZstdFrames(tail);
 
     // 首次见到该会话（基线）：只解析头部与最后一帧边界，不逐帧解码历史——
     // 历史事件本就不触发通知，跳过全量解压可避免启动卡顿。
@@ -281,7 +294,7 @@ class SessionWatcher {
       }
       // 没有完整帧则不推进（tornStart 提示未写满）。
       rec.baseline = true;
-      rec.size = st.size;
+      rec.lastSize = st.size;
       return true; // 计为"做了重活"（供分批限流）
     }
 
@@ -305,7 +318,7 @@ class SessionWatcher {
       consumed = readFrom + f.end;
     }
     rec.consumed = consumed;
-    rec.size = st.size;
+    rec.lastSize = st.size;
 
     // 通知语义：会话出现 turn 事件后按 turn/end 计数，否则按 assistant/message 兜底。
     const count = rec.hasTurnEvents ? turnEnds : assistantMessages;
