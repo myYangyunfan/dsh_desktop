@@ -32,8 +32,10 @@ const { spawnSync } = require('node:child_process');
 
 const { installBuiltinPresets } = require('./install-minimal-win-preset');
 const { COMPANION_PLUGINS } = require('./lib/companion-plugins');
+const { CORE_BUNDLE_NAMES } = require('../profile-manifest');
 const { writeFileAtomic } = require('./lib/patch-io');
 const { applyPatchToFiles } = require('./lib/patch-engine');
+const { reconcileProfileBundles, createEntryListYamlParser } = require('./lib/profile-reconcile');
 const {
   FLASH_PKG_REL, EXPOSE_PKG_REL, PW_REL, BASH_REL, CODE_PRESET_REL, patchTargets,
   transformFlashFix, transformExposeFix,
@@ -121,8 +123,7 @@ function findDshPackageDir(home, explicit) {
   return '';
 }
 
-function syncBuiltinPresets(home, dshPackageArg, dryRun) {
-  const dshPkgDir = findDshPackageDir(home, dshPackageArg);
+function syncBuiltinPresets(home, dshPackageArg, dryRun, dshPkgDir) {
   if (!dshPkgDir) {
     if (dshPackageArg) warn(`--dsh-package 未找到有效的 @deepseek-ai/dsh 包: ${dshPackageArg}`);
     else log('未找到 dsh 包（@deepseek-ai/dsh），跳过内置 Agent 预设同步；可用 --dsh-package <目录> 显式指定');
@@ -144,7 +145,7 @@ function syncBuiltinPresets(home, dshPackageArg, dryRun) {
 // 插件同步（与 main.js syncCompanionPlugins 共用同一实现；dry-run 时只读不改）
 // ---------------------------------------------------------------------------
 
-function syncPlugins(home, dryRun) {
+function syncPlugins(home, dryRun, dshPkgDir) {
   const profileDir = path.join(home, 'profiles', 'web');
   if (dryRun) {
     log(`dry-run: 目标 profile ${profileDir}`);
@@ -173,42 +174,28 @@ function syncPlugins(home, dryRun) {
     onVendorSynced: (name) => log(`已同步私有依赖 ${name}`),
   });
 
-  // Bundle 插件注册进 profile manifest 的 dsh.profile.bundles（dsh 启动时读取
-  // 包内 cordis.patch.yml）。本脚本不凭空创建 manifest（会顶替 dsh 的 profile
-  // 初始化导致全新 DSH_HOME 首次启动失败）：只有 manifest 已存在且已有 bundles
-  // 数组时才追加；否则交给 dsh 首次启动初始化，下次运行本脚本再注册。
-  const manifestFile = path.join(profileDir, 'package.json');
-  let manifest = {};
-  try { manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8')); } catch { manifest = null; }
-  if (manifest && typeof manifest === 'object' && !Array.isArray(manifest) &&
-      manifest.dsh && manifest.dsh.profile && Array.isArray(manifest.dsh.profile.bundles)) {
-    for (const name of bundleNames) {
-      if (manifest.dsh.profile.bundles.includes(name)) continue;
-      if (dryRun) {
-        log(`dry-run: 将把 bundle 插件加入 profile bundles: ${name}`);
-        continue;
-      }
-      manifest.dsh.profile.bundles.push(name);
-      writeFileAtomic(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
-      log(`已把 bundle 插件加入 web profile bundles: ${name}`);
-    }
-    // 源缺失 / 校验失败的 bundle 若仍登记在 manifest，会让 dsh 启动崩溃：
-    // 幂等移除登记（视为用户禁用），包文件保留，下次运行本脚本重试。
-    if (missingNames.size > 0) {
-      const before = manifest.dsh.profile.bundles.length;
-      manifest.dsh.profile.bundles = manifest.dsh.profile.bundles.filter((n) => !missingNames.has(n));
-      if (manifest.dsh.profile.bundles.length !== before) {
-        if (dryRun) {
-          log('dry-run: 将把源缺失/校验失败的 bundle 移出 profile bundles: ' + [...missingNames].join(', '));
-        } else {
-          writeFileAtomic(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
-          log('已把源缺失/校验失败的 bundle 移出 profile bundles: ' + [...missingNames].join(', '));
-        }
-      }
-    }
-  } else if (bundleNames.size > 0) {
-    log('profile manifest 尚无 bundles（可能尚未初始化），bundle 插件留待下次运行注册');
-  }
+  // profile manifest 装配对账（与 main.js 共用 scripts/lib/profile-reconcile.js
+  // 唯一实现）：损坏备份重建（核心可解析时）、核心补齐、全量逐条校验（无效且
+  // 非核心的登记移除并记入隔离记录 dsh-desktop.broken-bundles.json）、配套
+  // bundle 登记追加、源缺失移除。initMissing=false 保持 CLI 历史契约：manifest
+  // 文件不存在时绝不凭空创建（顶替 dsh 的 profile 初始化有风险），交由 dsh
+  // 首次启动初始化，下次运行本脚本再注册。dry-run 只计算不落盘。
+  // 与 main.js 同口径：插件管理「卸载」标记的配套 bundle 从 manifest 移除
+  //（removedBundles，避免卸载后仍被装配）；重置恢复排除核心 + 配套（由核心
+  // 补齐与配套追加步骤接管，绝不恢复用户已卸载的配套插件）。
+  const removedBundles = COMPANION_PLUGINS.filter((p) => removedIds.has(p.id)).map((p) => p.name);
+  reconcileProfileBundles(profileDir, {
+    installAnchorDir: dshPkgDir,
+    coreNames: CORE_BUNDLE_NAMES,
+    addNames: bundleNames,
+    missingNames,
+    removedBundles: new Set(removedBundles),
+    excludeFromRecover: new Set([...CORE_BUNDLE_NAMES, ...COMPANION_PLUGINS.map((p) => p.name)]),
+    parsePatch: createEntryListYamlParser(),
+    dryRun,
+    initMissing: false,
+    log: (m) => log(dryRun ? 'dry-run: ' + m : m),
+  });
 
   // 非 bundle 插件注册到 profile 补丁层（共享实现：幂等、尊重用户已有条目、
   // bundle 迁移去重、源缺失残留移除与卸载标记跳过；旧插件市场条目一并清理）。
@@ -405,8 +392,11 @@ function main() {
       fs.mkdirSync(home, { recursive: true });
     }
   }
-  syncPlugins(home, dryRun);
-  syncBuiltinPresets(home, dshPackageArg, dryRun);
+  // dsh 包目录（manifest 对账的第一解析锚点 + 内置 Agent 预设目标）；定位不到
+  // 时对账降级为只以 profile node_modules 为锚点，预设同步跳过。
+  const dshPkgDir = findDshPackageDir(home, dshPackageArg);
+  syncPlugins(home, dryRun, dshPkgDir);
+  syncBuiltinPresets(home, dshPackageArg, dryRun, dshPkgDir);
   if (withPatches) applyRuntimePatches(home, dryRun);
   console.log('[sync] 完成。');
   console.log('[sync] 提示：插件与内置 Agent 预设在 dsh web 启动时才会挂载 —— 请重启 WSL 里的 dsh web：');

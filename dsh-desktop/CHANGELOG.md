@@ -3,7 +3,27 @@
 DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行时与 dsh CLI，
 一键启动 Web UI。
 
-
+## [Unreleased]
+### 修复
+- **profile bundle 装配链根治性重构（「declares no dsh.bundle」一类启动失败不再依赖锚点补丁）**：`dsh.profile.bundles` 中任何一条登记不满足 dsh 装配契约（包未安装 / 未声明 `dsh.bundle.patch` / 补丁层缺失或损坏 / 入口文件缺失），官方 `dsh-app-boot` 即 fail-loud 以退出码 1 启动失败。此前唯一防线是启动前对 dsh 构建产物做字符串锚点改写（跳过 + 诊断），锚点随 dsh 版本变化失配即静默失效——用户反馈的 `profile bundle "dsh-hub" declares no dsh.bundle`（纯客户端 bundle 被登记进 profile.bundles）正是该形状，且入口缺失形状（loader 激活期 `plugin tree failed to load`）在防护覆盖范围之外。本次重构把「启动前把 manifest 对账到可装配状态」收口为唯一实现 `scripts/lib/profile-reconcile.js`（main.js 与 `sync-companion-plugins.js` 共用），运行时防护保留为纵深防御：
+  - **全量逐条校验**：每条 bundles 登记按与 dsh 装配契约一一对应的 11 种失败码校验（登记名非法 / 包未安装 / 未声明补丁层 / 补丁层越界·缺失·不可解析 / 入口越界·缺失·指向目录 / client 入口越界·缺失，补丁层用与 dsh 相同的 entry-list YAML 方言解析；client 入口校验与上游 `verifyBundleDir` 新增的 `exports["./client"]` 校验同语义、文案逐字一致，并在对账侧收口为结构化失败码）；无效且非核心的登记**从 manifest 移除**并写入隔离记录 `dsh-desktop.broken-bundles.json`（移除原因 + 时间，重装插件重新登记即恢复，恢复健康后记录自动清除）；核心 bundles（`@deepseek-ai/dsh-base` / `dsh-web-app`）校验失败绝不移除（核心缺失是安装损坏而非数据问题，保留并由启动防护兜底跳过 + 告警）；
+  - **校验实现单一化**：`profile-bundle-heal.js` 提取 `inspectBundleDir` 为唯一结构化校验实现（`verifyBundleDir` 变为兼容包装，文案与契约不变），对账与同步侧防呆共用同一判定语义；
+  - **家级补丁层启动前预检**（`healHomePatch`）：`$DSH_HOME/cordis.patch.yml` 损坏此前只由 profile-boot 锚点补丁兜底，现启动 dsh web 前用同一方言预检，损坏 → 备份 `.broken-<ts>` + 重置为最小合法文件；
+  - **既有语义逐项保留**：损坏 manifest 备份重建（.broken-<ts>）、核心补齐（issue #16）、配套登记追加、源缺失/卸载标记移除、重置后用户 bundle 恢复（issue #48）与全部日志文案不变；健康 manifest 零写入（幂等），写入全部原子化；
+  - **CLI 同步收口**：`sync-companion-plugins.js` 的 manifest 段改用同一对账实现（`initMissing=false` 保持「不凭空创建 manifest」历史契约；损坏 manifest 在核心可解析时同样备份重建，dry-run 输出计划）；
+  - **测试**：新增 `unit-profile-reconcile` 25 项单测（含两个真实 `dsh-app-boot` 复现测试——无效登记在官方 `loadProfile` 下必崩、对账后正常装配）；集成场景 `heal-missing-bundle` / `heal-manifestless-bundle` / `heal-broken-bundle-patch` / `heal-broken-home-patch` 断言更新为「移除 + 隔离记录 + 正常启动」，新增 `heal-entry-missing-bundle`（防护覆盖不到的入口缺失形状）；`check-syntax.js` 纳入新模块。
+- **全量 review 修正（装配对账判定与 dsh 官方契约逐字对齐）**：
+  - **补丁层条目级校验**：dsh 官方 `parsePatchList` 要求补丁层「顶层数组且每项为映射」，原校验只查顶层数组——`- 42` / `- "x"` / `- [1,2]` / `- null` 等畸形文件会被判健康、dsh 装配时仍 fail-loud。`inspectBundleDir`、`healHomePatch` 与 `healProfilePatch` 现共用 `isPatchListValid`（与官方逐字同构）判定；
+  - **包解析与官方同构**：`validateBundleEntry` / 核心可解析判定改用与 `resolveBundleDir` 相同的 `createRequire.resolve.paths` 探测（含 NODE_PATH 与全局 node_modules）——此前 `packageDirUpward` 探测不到 NODE_PATH/全局安装的包，会把官方实际能装配的健康登记误判 UNRESOLVABLE 而误删；
+  - **配套登记与恢复登记复检**：`addNames` 追加与 issue #48 恢复的登记此前只经 `verifyBundleDir`（不查补丁层可解析性），YAML 损坏的配套/恢复 bundle 会留下一个「仅靠运行时防护兜底」的启动窗口；现追加前/恢复后统一过 `validateBundleEntry` 复检，失败 → 不登记/移除 + 隔离记录。
+- **全量 review 第二轮修正（对账语义收口与记录生命周期）**：
+  - **入口文件必须是普通文件**：`inspectBundleDir` 的入口校验由 `existsSync` 升级为 `statSync().isFile()`——入口路径指向目录时（`main: "./lib"` 等形状）存在性检查会放过，而 dsh Loader 用 ESM `import()` 激活入口必然 `ERR_UNSUPPORTED_DIR_IMPORT`（防护覆盖不到的崩溃形状），现判 `ENTRY_MISSING` 并在启动前移除登记；
+  - **策略性移除不进隔离记录**：配套源缺失 / 插件管理「卸载」标记的登记由步骤 4/6 按「用户意图禁用」移除，不再被步骤 2 判 UNRESOLVABLE 写入隔离记录（卸载/源缺失是用户意图而非无效登记，避免记录误导；CLI 同步同步补上 `removedBundles` 与 `excludeFromRecover`，与 main.js 口径完全一致——此前 CLI 不会把已卸载配套从 manifest 移除，且重置恢复可能把用户已卸载的配套重新登记）；
+  - **隔离记录同轮清除**：`addNames` 登记成功与重置恢复成功时，同名历史隔离记录当轮即清除（此前要等下一次启动的步骤 2）；
+  - **记录写入去重**：同 code + reason 的既有隔离条目不重写（保留首次 `removedAt`，持续损坏状态不再每次启动重写记录文件）；`addNames` 校验失败不再对未改动的 manifest 做内容相同的重写；
+  - **健康检查口径统一**：`logProfileBundleHealth` 改用与对账相同的 `resolveBundleDirLike` 双锚点解析，消除「对账判定可解析、健康检查误报缺失」的口径撕裂（诊断只读）；
+  - **重复登记去重**：同一 bundle 名在 `dsh.profile.bundles` 中登记两次时，其补丁层条目会重复出现在组合 entry list 中，loader 装配期抛 `duplicate loader entry id`（fail-loud → 退出码 1），且启动防护覆盖不到（两层都能正常加载）——现对账保留首次出现、移除重复项（冗余而非无效登记，不进隔离记录），该形状此前从不清理；
+  - **测试环境封闭**：`unit-sync-cli` 的 CLI 调用 PATH 收口到 System32——CLI 的 `findDshPackageDir` 会经 PATH 探测 `dsh` 命令，环境 PATH 上的真实 dsh（如 harness 安装）会被当作预设同步目标，把 `assets/agent-presets` 写进真实安装（内容相同、mtime 被改写）；测试必须封闭，绝不触碰真实环境。
 
 ## [0.3.10] — 2026-08-17
 ### 新增

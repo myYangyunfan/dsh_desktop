@@ -525,8 +525,10 @@ SCENARIOS['heal-dup-patch-keeps-config'] = async (t) => {
 SCENARIOS['heal-missing-bundle'] = async (t) => {
   // 用户反馈崩溃类 1：manifest 登记了未安装的 bundle（dsh plugin 安装中途
   // 失败 / 手工删除 / 迁移后缺 node_modules）→ 官方 loadProfile 抛
-  // "cannot resolve profile bundle" 并以退出码 1 启动失败。启动防护应跳过该
-  // 层并正常进入 Web UI；manifest 登记原样保留（等待用户重装，绝不破坏）。
+  // "cannot resolve profile bundle" 并以退出码 1 启动失败。启动装配对账
+  // （reconcileProfileBundles）应把该无效登记从 manifest 移除并记入隔离记录
+  // （dsh-desktop.broken-bundles.json），正常进入 Web UI；重装插件后重新登记
+  // 即可恢复，绝不破坏包文件。
   const profileDir = path.join(t.dshHome, 'profiles', 'web');
   fs.mkdirSync(profileDir, { recursive: true });
   const manifestFile = path.join(profileDir, 'package.json');
@@ -536,22 +538,26 @@ SCENARIOS['heal-missing-bundle'] = async (t) => {
     dependencies: {},
     dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@dsh-external/dsh-skill-manager'] } },
   }, null, 2) + '\n');
-  await t.waitFor('boot-ready', 240000, '缺失 bundle 应被跳过并正常启动');
+  await t.waitFor('boot-ready', 240000, '缺失 bundle 的登记应被对账移除并正常启动');
   await t.waitFor('界面已稳定', 60000, '稳定期完成');
-  t.assert(t.grepLog('profile bundle 缺失'), '健康检查应记录缺失 bundle');
+  t.assert(t.grepLog('已把无效的 profile bundle 登记移除'), '应记录无效登记移除诊断');
   const webLog = fs.readFileSync(path.join(t.userData, 'logs', 'dsh-web.log'), 'utf8');
-  t.assert(/cannot resolve profile bundle "@dsh-external\/dsh-skill-manager"/.test(webLog), 'dsh-web.log 应含 cannot resolve 诊断');
-  t.assert(/profile bundle "@dsh-external\/dsh-skill-manager" skipped/.test(webLog), 'dsh-web.log 应记录该层被跳过');
+  t.assert(!/cannot resolve profile bundle "@dsh-external\/dsh-skill-manager"/.test(webLog), 'dsh-web.log 不应再出现 cannot resolve 崩溃');
   const after = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
-  t.assert(after.dsh.profile.bundles.includes('@dsh-external/dsh-skill-manager'), 'manifest 登记应原样保留');
+  t.assert(!after.dsh.profile.bundles.includes('@dsh-external/dsh-skill-manager'), '无效登记应从 manifest 移除');
+  const record = JSON.parse(fs.readFileSync(path.join(profileDir, 'dsh-desktop.broken-bundles.json'), 'utf8'));
+  t.assert(record && record.entries && record.entries['@dsh-external/dsh-skill-manager'], '隔离记录应记下移除原因');
+  t.assert(record.entries['@dsh-external/dsh-skill-manager'].code === 'UNRESOLVABLE', '隔离记录应含结构化失败码');
   const q = await t.quitAndCheck();
   t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
 };
 
 SCENARIOS['heal-manifestless-bundle'] = async (t) => {
   // 用户反馈崩溃类 2：bundle 包已安装但 package.json 未声明 dsh.bundle.patch
-  // （普通库 / 仅客户端 bundle）→ 官方 loadProfile 抛 "declares no
-  // dsh.bundle" 并启动失败。启动防护应跳过该层并正常进入 Web UI，登记保留。
+  // （普通库 / 仅客户端 bundle，用户反馈的 dsh-hub 即此形状）→ 官方
+  // loadProfile 抛 "declares no dsh.bundle" 并启动失败。启动装配对账应把该
+  // 无效登记从 manifest 移除并记入隔离记录，正常进入 Web UI；重装后重新登记
+  // 即可恢复，包文件不修改。
   const profileDir = path.join(t.dshHome, 'profiles', 'web');
   const pkgDir = path.join(profileDir, 'node_modules', '@dsh-external', 'dsh-gold-luxe');
   fs.mkdirSync(pkgDir, { recursive: true });
@@ -563,12 +569,14 @@ SCENARIOS['heal-manifestless-bundle'] = async (t) => {
     dependencies: {},
     dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@dsh-external/dsh-gold-luxe'] } },
   }, null, 2) + '\n');
-  await t.waitFor('boot-ready', 240000, '无 dsh.bundle 声明的 bundle 应被跳过并正常启动');
+  await t.waitFor('boot-ready', 240000, '无 dsh.bundle 声明的登记应被对账移除并正常启动');
   await t.waitFor('界面已稳定', 60000, '稳定期完成');
-  const webLog = fs.readFileSync(path.join(t.userData, 'logs', 'dsh-web.log'), 'utf8');
-  t.assert(/profile bundle "@dsh-external\/dsh-gold-luxe" skipped/.test(webLog), 'dsh-web.log 应记录该层被跳过');
+  t.assert(t.grepLog('已把无效的 profile bundle 登记移除'), '应记录无效登记移除诊断');
   const after = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
-  t.assert(after.dsh.profile.bundles.includes('@dsh-external/dsh-gold-luxe'), 'manifest 登记应原样保留');
+  t.assert(!after.dsh.profile.bundles.includes('@dsh-external/dsh-gold-luxe'), '无效登记应从 manifest 移除');
+  const record = JSON.parse(fs.readFileSync(path.join(profileDir, 'dsh-desktop.broken-bundles.json'), 'utf8'));
+  t.assert(record && record.entries && record.entries['@dsh-external/dsh-gold-luxe'], '隔离记录应记下移除原因');
+  t.assert(record.entries['@dsh-external/dsh-gold-luxe'].code === 'NO_BUNDLE_DECL', '隔离记录应含结构化失败码');
   const q = await t.quitAndCheck();
   t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
 };
@@ -632,13 +640,16 @@ SCENARIOS['heal-broken-manifest-recovers'] = async (t) => {
 
 SCENARIOS['heal-broken-home-patch'] = async (t) => {
   // 家级补丁层 $DSH_HOME/cordis.patch.yml 损坏 → 官方 composeProfile 抛
-  // "failed to parse patches" 并启动失败。profile-boot 防护应备份 + 重置为
-  // 空列表后正常启动；损坏原文保留在 .broken- 备份里。
+  // "failed to parse patches" 并启动失败。壳层在启动 dsh web 前用与 dsh 相同
+  // 的 entry-list 方言预检（healHomePatch）：损坏 → 备份 .broken-<ts> + 重置
+  // 为最小合法文件后正常启动；损坏原文保留在备份里。运行时防护（profile-boot
+  // guard）保留为纵深防御，正常情况下 dsh-web.log 不应出现解析失败。
   fs.writeFileSync(path.join(t.dshHome, 'cordis.patch.yml'), '- id: [BAD', 'utf8');
-  await t.waitFor('boot-ready', 240000, '损坏的家级补丁层应被自愈后正常启动');
+  await t.waitFor('boot-ready', 240000, '损坏的家级补丁层应被预检自愈后正常启动');
   await t.waitFor('界面已稳定', 60000, '稳定期完成');
+  t.assert(t.grepLog('家级补丁层自愈'), 'desktop.log 应记录家级补丁层自愈');
   const webLog = fs.readFileSync(path.join(t.userData, 'logs', 'dsh-web.log'), 'utf8');
-  t.assert(/cordis\.patch\.yml failed to parse/.test(webLog), 'dsh-web.log 应记录家级补丁层解析失败');
+  t.assert(!/cordis\.patch\.yml failed to parse/.test(webLog), 'dsh-web.log 不应出现解析失败（预检已修复）');
   const backups = fs.readdirSync(t.dshHome).filter((f) => f.startsWith('cordis.patch.yml.broken-'));
   t.assert(backups.length >= 1, '损坏的家级补丁层应备份为 cordis.patch.yml.broken-<ts>');
   const healed = fs.readFileSync(path.join(t.dshHome, 'cordis.patch.yml'), 'utf8');
@@ -649,8 +660,9 @@ SCENARIOS['heal-broken-home-patch'] = async (t) => {
 
 SCENARIOS['heal-broken-bundle-patch'] = async (t) => {
   // bundle 的 cordis.patch.yml 损坏 → 官方 loadOverlayPatches 抛 "failed to
-  // parse overlay" 并启动失败。启动防护应跳过该层并正常进入 Web UI；bundle
-  // 文件不修改（重装该插件即可恢复）。
+  // parse overlay" 并启动失败。启动装配对账（entry-list 方言预检）应把该无效
+  // 登记从 manifest 移除并记入隔离记录，正常进入 Web UI；bundle 文件不修改
+  // （重装该插件即可恢复）。
   const profileDir = path.join(t.dshHome, 'profiles', 'web');
   const pkgDir = path.join(profileDir, 'node_modules', '@dsh-external', 'dsh-broken');
   fs.mkdirSync(pkgDir, { recursive: true });
@@ -664,11 +676,105 @@ SCENARIOS['heal-broken-bundle-patch'] = async (t) => {
     dependencies: {},
     dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@dsh-external/dsh-broken'] } },
   }, null, 2) + '\n');
-  await t.waitFor('boot-ready', 240000, '损坏的 bundle 补丁层应被跳过并正常启动');
+  await t.waitFor('boot-ready', 240000, '损坏的 bundle 补丁层登记应被对账移除并正常启动');
   await t.waitFor('界面已稳定', 60000, '稳定期完成');
-  const webLog = fs.readFileSync(path.join(t.userData, 'logs', 'dsh-web.log'), 'utf8');
-  t.assert(/profile bundle "@dsh-external\/dsh-broken" skipped/.test(webLog), 'dsh-web.log 应记录该层被跳过');
+  t.assert(t.grepLog('已把无效的 profile bundle 登记移除'), '应记录无效登记移除诊断');
+  const after = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+  t.assert(!after.dsh.profile.bundles.includes('@dsh-external/dsh-broken'), '无效登记应从 manifest 移除');
+  const record = JSON.parse(fs.readFileSync(path.join(profileDir, 'dsh-desktop.broken-bundles.json'), 'utf8'));
+  t.assert(record && record.entries && record.entries['@dsh-external/dsh-broken'], '隔离记录应记下移除原因');
+  t.assert(record.entries['@dsh-external/dsh-broken'].code === 'PATCH_UNPARSEABLE', '隔离记录应含结构化失败码');
   t.assert(fs.readFileSync(path.join(pkgDir, 'cordis.patch.yml'), 'utf8') === brokenPatch, 'bundle 文件不应被修改');
+  const q = await t.quitAndCheck();
+  t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
+};
+
+SCENARIOS['heal-entry-missing-bundle'] = async (t) => {
+  // 用户反馈崩溃类 3（防护覆盖不到的形状）：bundle 声明 dsh.bundle.patch 与
+  // 入口文件，但入口文件缺失（安装不完整 / 手工删除）——loadProfile 只读补丁
+  // 层不查入口，崩溃发生在 loader 激活期（plugin tree failed to load），此前
+  // 启动防护无法覆盖。启动装配对账（ENTRY_MISSING 校验）应把该登记移除并记入
+  // 隔离记录，正常进入 Web UI；包文件不修改（重装即可恢复）。
+  const profileDir = path.join(t.dshHome, 'profiles', 'web');
+  const pkgDir = path.join(profileDir, 'node_modules', '@dsh-external', 'ghost-entry');
+  fs.mkdirSync(pkgDir, { recursive: true });
+  fs.writeFileSync(path.join(pkgDir, 'package.json'), JSON.stringify({ name: '@dsh-external/ghost-entry', version: '1.0.0', main: 'lib/index.js', dsh: { bundle: { patch: './cordis.patch.yml' } } }, null, 2) + '\n');
+  fs.writeFileSync(path.join(pkgDir, 'cordis.patch.yml'), '[]\n', 'utf8');
+  const manifestFile = path.join(profileDir, 'package.json');
+  fs.writeFileSync(manifestFile, JSON.stringify({
+    name: 'dsh-profile-web',
+    private: true,
+    dependencies: {},
+    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@dsh-external/ghost-entry'] } },
+  }, null, 2) + '\n');
+  await t.waitFor('boot-ready', 240000, '入口缺失的登记应被对账移除并正常启动');
+  await t.waitFor('界面已稳定', 60000, '稳定期完成');
+  t.assert(t.grepLog('已把无效的 profile bundle 登记移除'), '应记录无效登记移除诊断');
+  const webLog = fs.readFileSync(path.join(t.userData, 'logs', 'dsh-web.log'), 'utf8');
+  t.assert(!/plugin tree failed to load/.test(webLog), 'dsh-web.log 不应出现插件树加载失败');
+  const after = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+  t.assert(!after.dsh.profile.bundles.includes('@dsh-external/ghost-entry'), '无效登记应从 manifest 移除');
+  const record = JSON.parse(fs.readFileSync(path.join(profileDir, 'dsh-desktop.broken-bundles.json'), 'utf8'));
+  t.assert(record && record.entries && record.entries['@dsh-external/ghost-entry'], '隔离记录应记下移除原因');
+  t.assert(record.entries['@dsh-external/ghost-entry'].code === 'ENTRY_MISSING', '隔离记录应含结构化失败码');
+  const q = await t.quitAndCheck();
+  t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
+};
+
+SCENARIOS['heal-dup-bundle'] = async (t) => {
+  // 重复登记形状：同一 bundle 名登记两次 → 其补丁层条目重复出现在组合
+  // entry list → loader 装配期抛 "duplicate loader entry id"（fail-loud →
+  // 退出码 1），且启动防护覆盖不到（两层都能正常加载）。启动装配对账应保留
+  // 首次出现、移除重复项（冗余而非无效登记，不进隔离记录），正常进入 Web UI。
+  const profileDir = path.join(t.dshHome, 'profiles', 'web');
+  fs.mkdirSync(profileDir, { recursive: true });
+  const manifestFile = path.join(profileDir, 'package.json');
+  fs.writeFileSync(manifestFile, JSON.stringify({
+    name: 'dsh-profile-web',
+    private: true,
+    dependencies: {},
+    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'] } },
+  }, null, 2) + '\n');
+  await t.waitFor('boot-ready', 240000, '重复登记的 bundle 应被对账去重并正常启动');
+  await t.waitFor('界面已稳定', 60000, '稳定期完成');
+  t.assert(t.grepLog('已移除重复登记的 profile bundle'), '应记录重复登记移除诊断');
+  const webLog = fs.readFileSync(path.join(t.userData, 'logs', 'dsh-web.log'), 'utf8');
+  t.assert(!/duplicate loader entry id/.test(webLog), 'dsh-web.log 不应出现 duplicate loader entry id 崩溃');
+  const after = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+  t.assert(after.dsh.profile.bundles.filter((n) => n === '@deepseek-ai/dsh-base').length === 1, '重复登记应被去重（只保留首次出现）');
+  t.assert(after.dsh.profile.bundles.includes('@deepseek-ai/dsh-web-app'), '其余核心登记不受影响');
+  const q = await t.quitAndCheck();
+  t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
+};
+
+SCENARIOS['heal-dir-entry-bundle'] = async (t) => {
+  // 入口指向目录形状：bundle 声明 main: "./lib"（目录）——Loader 用 ESM
+  // import() 激活入口必然 ERR_UNSUPPORTED_DIR_IMPORT（激活期崩溃，防护覆盖
+  // 不到，存在性检查会放过）。对账的「入口必须是普通文件」校验应判
+  // ENTRY_MISSING 并移除登记，正常进入 Web UI；包文件不修改。
+  const profileDir = path.join(t.dshHome, 'profiles', 'web');
+  const pkgDir = path.join(profileDir, 'node_modules', '@dsh-external', 'dir-entry');
+  fs.mkdirSync(path.join(pkgDir, 'lib'), { recursive: true });
+  fs.writeFileSync(path.join(pkgDir, 'package.json'), JSON.stringify({ name: '@dsh-external/dir-entry', version: '1.0.0', main: 'lib', dsh: { bundle: { patch: './cordis.patch.yml' } } }, null, 2) + '\n');
+  fs.writeFileSync(path.join(pkgDir, 'cordis.patch.yml'), '[]\n', 'utf8');
+  fs.writeFileSync(path.join(pkgDir, 'lib', 'index.js'), 'export {};\n');
+  const manifestFile = path.join(profileDir, 'package.json');
+  fs.writeFileSync(manifestFile, JSON.stringify({
+    name: 'dsh-profile-web',
+    private: true,
+    dependencies: {},
+    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@dsh-external/dir-entry'] } },
+  }, null, 2) + '\n');
+  await t.waitFor('boot-ready', 240000, '入口指向目录的登记应被对账移除并正常启动');
+  await t.waitFor('界面已稳定', 60000, '稳定期完成');
+  t.assert(t.grepLog('已把无效的 profile bundle 登记移除'), '应记录无效登记移除诊断');
+  const webLog = fs.readFileSync(path.join(t.userData, 'logs', 'dsh-web.log'), 'utf8');
+  t.assert(!/ERR_UNSUPPORTED_DIR_IMPORT|did not activate|plugin tree failed to load/.test(webLog), 'dsh-web.log 不应出现激活期崩溃');
+  const after = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+  t.assert(!after.dsh.profile.bundles.includes('@dsh-external/dir-entry'), '入口指向目录的登记应从 manifest 移除');
+  const record = JSON.parse(fs.readFileSync(path.join(profileDir, 'dsh-desktop.broken-bundles.json'), 'utf8'));
+  t.assert(record && record.entries && record.entries['@dsh-external/dir-entry'], '隔离记录应记下移除原因');
+  t.assert(record.entries['@dsh-external/dir-entry'].code === 'ENTRY_MISSING', '隔离记录应含结构化失败码');
   const q = await t.quitAndCheck();
   t.assert(q.exit.code === 0 && q.cleanExit === true, '干净退出');
 };

@@ -41,9 +41,13 @@ const {
 const { installBuiltinPresets } = require('./scripts/install-minimal-win-preset');
 const { SessionWatcher, scanZstdFrames } = require('./session-watcher');
 const { RendererRecovery } = require('./renderer-recovery');
-const { ensureCoreBundles, CORE_BUNDLE_NAMES } = require('./profile-manifest');
+const { CORE_BUNDLE_NAMES } = require('./profile-manifest');
 const { dedupePatchEntries, parseFailedLoaderIds, mapPackagesToPatchIds, findMissingBundleDeclarations, scanBundleContracts, removeBundlesFromProfile } = require('./profile-patch-heal');
-const { PROFILE_BUNDLE_GUARD_MARKER, PROFILE_BOOT_GUARD_MARKER, verifyBundleDir, packageDirUpward, scanProfileBundles, recoverManifestBundles, applyAppBootBundleGuard, applyProfileBootBundleGuard, applyProfileBootHealGuard } = require('./profile-bundle-heal');
+const { PROFILE_BUNDLE_GUARD_MARKER, PROFILE_BOOT_GUARD_MARKER, verifyBundleDir, isPatchListValid, applyAppBootBundleGuard, applyProfileBootBundleGuard, applyProfileBootHealGuard } = require('./profile-bundle-heal');
+// profile manifest 装配对账（唯一实现）：启动前把 dsh.profile.bundles 对账到
+// 「每条登记都可装配」状态（无效登记移除 + 隔离记录、核心补齐、损坏重建、
+// 重置恢复），配合 profile-bundle-heal 的运行时防护构成双层防线。
+const { reconcileProfileBundles, createEntryListYamlParser, resolveBundleDirLike } = require('./scripts/lib/profile-reconcile');
 // 统一补丁引擎与共享数据源（scripts/lib/）：main.js 的运行时补丁、同步脚本
 // 与 after-pack 共用同一实现，杜绝重复与漂移。
 const { COMPANION_PLUGINS } = require('./scripts/lib/companion-plugins');
@@ -1286,6 +1290,7 @@ async function startServer(unsafePortRetries = 4, overlays = []) {
     serverProc = null;
   }
   healProfilePatch();
+  healHomePatch();
   logProfileBundleHealth();
   if (isWslMode()) {
     // WSL 托管模式：经 wsl.exe 在 WSL 内启动 dsh web（仍 --port 0 由 WSL 内 OS
@@ -3534,24 +3539,15 @@ function profilePatchFile() {
 
 // 原子写统一收口在 scripts/lib/patch-io.js 的 writeFileAtomic（临时文件 + rename）。
 // 惰性加载 js-yaml（随内置 dsh 存在于 resources/app/node_modules，传递依赖）；
-// 缺失时静默降级为仅做结构化修复（不阻断启动）。
+// 缺失时静默降级为仅做结构化修复（不阻断启动）。方言构造与
+// scripts/lib/profile-reconcile.js 的 createEntryListYamlParser 共用同一实现。
 let dshYamlDialect = null;
 let dshYamlTried = false;
 function loadDshYamlDialect() {
   if (dshYamlTried) return dshYamlDialect;
   dshYamlTried = true;
-  try {
-    const yaml = require('js-yaml');
-    // 与 dsh 相同的 entry-list 方言：`!!js` 表达式是合法标量。
-    const jsType = new yaml.Type('tag:yaml.org,2002:js', {
-      kind: 'scalar',
-      resolve: (data) => typeof data === 'string',
-      construct: (data) => ({ __jsExpr: data }),
-    });
-    dshYamlDialect = { load: (content) => yaml.load(content, { schema: yaml.JSON_SCHEMA.extend(jsType) }) };
-  } catch {
-    dshYamlDialect = null;
-  }
+  const parse = createEntryListYamlParser();
+  dshYamlDialect = parse ? { load: (content) => parse(content) } : null;
   return dshYamlDialect;
 }
 
@@ -3625,7 +3621,8 @@ function healProfilePatch() {
     let parsed;
     let error = null;
     try { parsed = yaml.load(text); } catch (err) { error = err; }
-    if (!error && Array.isArray(parsed)) {
+    // 合法判定与 dsh-app-boot parsePatchList 同构：顶层数组且每项为映射。
+    if (!error && isPatchListValid(parsed)) {
       // issue #17 存量自愈：注册行级去重（PR #24 v2）。重复注册（旧版本
       // 插件安装写入的第二个同 id insert 条目）会让 cordis loader 抛
       // "duplicate loader entry id: X"，且该状态永远无法自愈；只删重复
@@ -3639,11 +3636,13 @@ function healProfilePatch() {
         text = dedupe.text;
       }
     }
-    if (error || !Array.isArray(parsed)) {
+    if (error || !isPatchListValid(parsed)) {
       const backup = file + '.broken-' + Date.now();
       try { fs.renameSync(file, backup); } catch { fs.copyFileSync(file, backup); }
       fs.writeFileSync(file, '# recovered by DSH Desktop: 原内容无法解析，已备份到\n# ' + backup + '\n[]\n', 'utf8');
-      log('boot', 'profile patch 自愈: 解析失败（' + String((error && error.message) || '顶层非数组') + '），已备份到 ' + backup + ' 并重置为最小文件');
+      const cause = error ? String((error && error.message) || error)
+        : (Array.isArray(parsed) ? '条目不是映射（顶层数组每项须为映射）' : '顶层非数组');
+      log('boot', 'profile patch 自愈: 解析失败（' + cause + '），已备份到 ' + backup + ' 并重置为最小文件');
     }
     // 完整自愈流程已跑完（含 yaml 解析）：记录当前内容签名，下次启动命中跳过。
     const after = patchFileSignature(file);
@@ -3655,31 +3654,59 @@ function healProfilePatch() {
     log('boot', 'profile patch 自愈失败: ' + err.message);
   }
 }
-/**
- * 在「实际将运行的 dsh 包」（内置或用户目录 overlay）中解析核心 bundles，
- * 只返回真实可解析的模板名；解析不到的名字绝不写入，避免与真正启动的
- * dsh 版本漂移后写入无效 bundle 名。
- */
-function resolvableCoreBundles() {
-  const installAnchor = path.dirname(dshPackageJson());
-  return CORE_BUNDLE_NAMES.filter((name) => {
-    try {
-      require.resolve(name + '/package.json', { paths: [installAnchor] });
-      return true;
-    } catch {
-      return false; // 该 dsh 安装中缺失，交由 dsh 初始化
+
+// ---------------------------------------------------------------------------
+// 家级补丁层预检（$DSH_HOME/cordis.patch.yml）：dsh 官方 composeProfile 对
+// 该文件 fail-loud（"failed to parse patches" → dsh web 退出码 1），此前只由
+// dsh profile-boot 的运行时防护（锚点改写）兜底。这里在启动前用与 dsh 相同
+// 的 entry-list 方言预检：损坏 → 备份 .broken-<ts> + 重置为最小合法文件
+// （与 healProfilePatch 同款语义，原文永不丢弃）。健康文件零写入（幂等，
+// 进程内签名 memo，避免重复解析）。
+// ---------------------------------------------------------------------------
+let homePatchHealMemo = null; // { file, size, mtimeMs }
+
+function healHomePatch() {
+  try {
+    const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
+    const file = path.join(home, 'cordis.patch.yml');
+    if (!fs.existsSync(file)) return;
+    const sig = patchFileSignature(file);
+    if (sig && homePatchHealMemo && homePatchHealMemo.file === file &&
+        homePatchHealMemo.size === sig.size && homePatchHealMemo.mtimeMs === sig.mtimeMs) {
+      return;
     }
-  });
+    const yaml = loadDshYamlDialect();
+    if (!yaml) return; // 无 yaml 依赖：跳过解析（运行时防护兜底）
+    let parsed = null;
+    let error = null;
+    try { parsed = yaml.load(fs.readFileSync(file, 'utf8')); } catch (err) { error = err; }
+    // 合法判定与 dsh-app-boot parsePatchList 同构：顶层数组且每项为映射
+    // （只查 Array.isArray 会放过「条目是标量/字符串/嵌套数组/null」的畸形
+    // 文件，composeProfile 仍会 fail-loud）。
+    if (!error && isPatchListValid(parsed)) {
+      homePatchHealMemo = { file, size: sig.size, mtimeMs: sig.mtimeMs };
+      return;
+    }
+    const backup = file + '.broken-' + Date.now();
+    try { fs.renameSync(file, backup); } catch { fs.copyFileSync(file, backup); }
+    fs.writeFileSync(file, '# recovered by DSH Desktop: 原内容无法解析，已备份到\n# ' + backup + '\n[]\n', 'utf8');
+    const cause = error ? String((error && error.message) || error)
+      : (Array.isArray(parsed) ? '条目不是映射（顶层数组每项须为映射）' : '顶层非数组');
+    log('boot', '家级补丁层自愈: 解析失败（' + cause + '），已备份到 ' + backup + ' 并重置为最小文件');
+    const after = patchFileSignature(file);
+    if (after) homePatchHealMemo = { file, size: after.size, mtimeMs: after.mtimeMs };
+  } catch (err) {
+    log('boot', '家级补丁层自愈失败: ' + err.message);
+  }
 }
 
 // 目录级同步（dirNeedsSync + syncDir）收口在 scripts/lib/companion-profile.js，
 // 由 syncCompanionFiles 使用；本文件不再维护副本。
 
 // ---------------------------------------------------------------------------
-// profile bundle 健康检查（只读）：dsh web 启动前把每个 bundles 条目的装配
-// 状态落到 desktop.log —— 缺失 / 未声明 dsh.bundle.patch / 补丁层缺失都会让
-// 该层被启动防护跳过，这里让诊断在壳日志里可见（dsh-web.log 的 stderr 告警
-// 保留完整细节）。不修改任何文件。
+// profile bundle 健康检查（只读）：启动对账（reconcileProfileBundles）已把
+// 无效的非核心登记从 manifest 移除，这里把对账后仍存在的异常条目（核心
+// bundle 缺失 / 损坏等，启动防护兜底跳过）落到 desktop.log。不修改任何文件。
 // ---------------------------------------------------------------------------
 function logProfileBundleHealth() {
   try {
@@ -3696,13 +3723,17 @@ function logProfileBundleHealth() {
     const installAnchor = path.dirname(dshPackageJson());
     for (const name of bundles) {
       if (typeof name !== 'string' || name === '') continue;
-      const dir = packageDirUpward(installAnchor, name) || packageDirUpward(profileDir, name);
+      // 与对账（reconcileProfileBundles）同一解析实现（createRequire.resolve.paths
+      // 双锚点，含 NODE_PATH / 全局 node_modules）：诊断口径与对账判定一致，
+      // 避免「对账判定可解析、健康检查误报缺失」的口径撕裂。
+      const dir = resolveBundleDirLike(path.join(installAnchor, 'package.json'), name)
+        || resolveBundleDirLike(path.join(profileDir, 'package.json'), name);
       if (!dir) {
-        log('boot', 'profile bundle 缺失（该层将被启动防护跳过）: ' + name + ' —— 用 dsh plugin --profile web install 可修复');
+        log('boot', 'profile bundle 缺失（对账后仍存在，启动防护兜底跳过）: ' + name + ' —— 用 dsh plugin --profile web install 可修复');
         continue;
       }
       const check = verifyBundleDir(dir);
-      if (!check.ok) log('boot', 'profile bundle 不可用（该层将被启动防护跳过）: ' + name + ' —— ' + check.reason);
+      if (!check.ok) log('boot', 'profile bundle 不可用（对账后仍存在，启动防护兜底跳过）: ' + name + ' —— ' + check.reason);
     }
   } catch (err) {
     log('boot', 'profile bundle 健康检查失败: ' + err.message);
@@ -3790,106 +3821,27 @@ function syncCompanionPlugins() {
       }
     }
 
-    const manifestFile = path.join(profileDir, 'package.json');
-    let manifest = null;
-    let manifestReset = false; // 解析失败或顶层非法触发的重置（issue #48 数据恢复标记）
-    try { manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8')); } catch { manifestReset = true; }
-    if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
-      manifestReset = true;
-      // manifest 损坏：先备份原文件再重置（不可解析时原文是唯一现场），绝不
-      // 静默丢弃用户数据。全新 profile 没有文件，不产生备份。
-      if (fs.existsSync(manifestFile)) {
-        const backup = manifestFile + '.broken-' + Date.now();
-        try {
-          fs.copyFileSync(manifestFile, backup);
-          log('boot', 'profile manifest 损坏，原文件已备份到 ' + backup);
-        } catch (err) {
-          log('boot', 'profile manifest 备份失败: ' + err.message);
-        }
-      }
-      manifest = { name: 'dsh-profile-web', private: true };
-    }
-    if (!manifest.dsh || typeof manifest.dsh !== 'object') manifest.dsh = {};
-    if (!manifest.dsh.profile || typeof manifest.dsh.profile !== 'object') manifest.dsh.profile = {};
-    // 全新 profile（dsh 尚未初始化）时 manifest 不存在、也没有 bundles。
-    // 此时壳层不能凭空新建只含自己 bundle 的 manifest：那会顶替 dsh 的
-    // 初始化，profile 里没有提供核心服务的插件，插件树无法激活，
-    // 全新 DSH_HOME 首次启动必然失败。
-    // 处理：核心 bundles 必须在安装中实测可解析（与 dsh-app-boot 的
-    // PROFILE_TEMPLATES.web 同名）才写入；解析不到（模板未来改名）则不写
-    // manifest，交由 dsh 自行初始化，bundle 插件留待下一次启动注册。
-    let bundlesUsable = Array.isArray(manifest.dsh.profile.bundles);
-    if (!bundlesUsable) {
-      const coreBundles = resolvableCoreBundles();
-      if (coreBundles.length === CORE_BUNDLE_NAMES.length) {
-        manifest.dsh.profile.bundles = coreBundles;
-        bundlesUsable = true;
-      } else {
-        log('boot', 'dsh 出厂核心 bundles 未在安装中解析到，跳过 manifest 预写，交由 dsh 初始化');
-      }
-    } else {
-      // issue #16 存量自愈：旧版本（0.3.3/0.3.4，#13 的 bug 场景）写坏的
-      // manifest 里 bundles 只有配套 bundle、缺少核心 bundles。dsh 启动时
-      // 核心服务（webServer/subprocess/settings/llm 等）无人提供，插件树
-      // 无法激活（N entries did not activate），且该状态永远无法自愈。
-      // 这里把缺失且可解析的核心 bundles 补到列表最前（保持与模板一致的
-      // 先后顺序），其余条目（含用户自行添加的）原样保留；健康 manifest
-      // 零写入（幂等）。写入用原子写，避免与 dsh 的观察者撕裂读。
-      const healed = ensureCoreBundles(manifest.dsh.profile.bundles, resolvableCoreBundles());
-      if (healed) {
-        manifest.dsh.profile.bundles = healed.next;
-        writeFileAtomic(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
-        log('boot', 'profile manifest 自愈: 旧版本写坏的 bundles 缺少核心 ' + healed.added.join(', ') + '，已补齐到最前');
-      }
-    }
-    for (const name of bundleNames) {
-      if (!bundlesUsable) break;
-      if (!manifest.dsh.profile.bundles.includes(name)) {
-        manifest.dsh.profile.bundles.push(name);
-        writeFileAtomic(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
-        log('boot', '已把 bundle 插件加入 web profile bundles: ' + name);
-      }
-    }
-    // 存量 bundle 源缺失 → 视为用户禁用：从 bundles 移除（幂等），否则 dsh
-    // 启动仍会因 manifest 登记了不存在的包而失败。只动配套插件名，用户自行
-    // 添加的第三方 bundle 与核心 bundles 不受影响。
-    if (missingSourceNames.size > 0 && Array.isArray(manifest.dsh.profile.bundles)) {
-      const before = manifest.dsh.profile.bundles.length;
-      manifest.dsh.profile.bundles = manifest.dsh.profile.bundles.filter((n) => !missingSourceNames.has(n));
-      if (manifest.dsh.profile.bundles.length !== before) {
-        writeFileAtomic(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
-        log('boot', '配套 bundle 源缺失，已从 web profile bundles 移除（视为禁用）: ' + [...missingSourceNames].join(', '));
-      }
-    }
-    // issue #48 数据恢复：manifest 重置分支会丢掉用户手动安装的第三方 bundle
-    // 登记（dependencies + bundles 条目）。这些包仍实际落在 profile node_modules
-    // 里，扫描并校验后合并回 manifest，用户插件在自愈后照常装配，无需手工恢复
-    // 备份。只动重置分支；正常启动时既有登记零改动（幂等）。
-    if (manifestReset && bundlesUsable && Array.isArray(manifest.dsh.profile.bundles)) {
-      const recovered = recoverManifestBundles(manifest, scanProfileBundles(
-        path.join(profileDir, 'node_modules'),
-        new Set([...CORE_BUNDLE_NAMES, ...COMPANION_PLUGINS.map((p) => p.name)]),
-      ));
-      if (recovered.length > 0) {
-        writeFileAtomic(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
-        log('boot', 'profile manifest 重置后已恢复用户安装的 bundle 插件: ' + recovered.join(', '));
-      } else {
-        log('boot', 'profile manifest 已重置（原文件已备份），未发现需要恢复的用户 bundle');
-      }
-      notifyManifestResetRecovered(recovered);
-    }
-    // 插件管理「卸载」标记的 bundle 配套：从 manifest bundles 移除（否则 loader
-    // 仍会装配已卸载的 bundle）。
-    if (removedIds.size > 0 && Array.isArray(manifest.dsh.profile.bundles)) {
-      const removedBundles = COMPANION_PLUGINS.filter((p) => removedIds.has(p.id)).map((p) => p.name);
-      if (removedBundles.length > 0) {
-        const before = manifest.dsh.profile.bundles.length;
-        manifest.dsh.profile.bundles = manifest.dsh.profile.bundles.filter((n) => !removedBundles.includes(n));
-        if (manifest.dsh.profile.bundles.length !== before) {
-          writeFileAtomic(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
-          log('boot', '已卸载 bundle 插件，从 web profile bundles 移除: ' + removedBundles.join(', '));
-        }
-      }
+    // profile manifest 装配对账（收口在 scripts/lib/profile-reconcile.js 唯一
+    // 实现，main.js 与 sync-companion-plugins.js 共用）：损坏备份重建、核心
+    // 补齐、全量逐条校验（无效且非核心的登记移除并记入隔离记录
+    // dsh-desktop.broken-bundles.json）、配套登记追加、源缺失/卸载标记移除、
+    // 重置后用户 bundle 恢复（issue #48）。全部原子写，健康 manifest 零写入
+    // （幂等）。parsePatch 注入与 dsh 相同的 entry-list 方言（js-yaml 缺失时
+    // 降级为不检查补丁层可解析性，运行时防护兜底）。
+    const removedBundles = COMPANION_PLUGINS.filter((p) => removedIds.has(p.id)).map((p) => p.name);
+    const reconciled = reconcileProfileBundles(profileDir, {
+      installAnchorDir: path.dirname(dshPackageJson()),
+      coreNames: CORE_BUNDLE_NAMES,
+      addNames: bundleNames,
+      missingNames: missingSourceNames,
+      removedBundles: new Set(removedBundles),
+      excludeFromRecover: new Set([...CORE_BUNDLE_NAMES, ...COMPANION_PLUGINS.map((p) => p.name)]),
+      parsePatch: loadDshYamlDialect(),
+      log: (m) => log('boot', m),
+    });
+    if (reconciled.reset && reconciled.manifest &&
+        Array.isArray(reconciled.manifest.dsh && reconciled.manifest.dsh.profile && reconciled.manifest.dsh.profile.bundles)) {
+      notifyManifestResetRecovered(reconciled.recovered);
     }
 
     // 非 bundle 插件注册到 profile 的 patch 层（幂等）。bundle 迁移自愈

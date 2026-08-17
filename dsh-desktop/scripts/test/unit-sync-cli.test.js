@@ -33,13 +33,22 @@ function tmpdir(t) {
 
 function runCli(t, home, extraArgs = []) {
   // 输出不经过管道（沙箱限制），只断言落盘结果。
+  // PATH 收口到 System32：CLI 的 findDshPackageDir 会经 PATH 探测 `dsh` 命令，
+  // 环境 PATH 上的真实 dsh（如 harness 安装）会被当作预设同步目标，把
+  // assets/agent-presets 写进真实安装（内容相同、mtime 被改写）——测试必须
+  // 封闭，绝不触碰真实环境。System32 保证 where.exe（commandLocations 用）
+  // 可用。
   const res = spawnSync(process.execPath, [cli, home, ...extraArgs], {
     cwd: repoRoot,
     encoding: 'utf8',
     windowsHide: true,
     timeout: 300000,
     stdio: 'ignore',
-    env: { ...process.env, DSH_HOME: '' },
+    env: {
+      ...process.env,
+      DSH_HOME: '',
+      PATH: process.env.SystemRoot ? path.join(process.env.SystemRoot, 'System32') : '',
+    },
   });
   assert.strictEqual(res.status, 0, `CLI 应正常退出（signal=${res.signal}）`);
 }
@@ -143,4 +152,28 @@ test('sync CLI: 尊重用户手写 disabled 条目，不重复 insert', (t) => {
   assert.strictEqual((patch.match(/id: balance/g) || []).length, 1, '用户禁用的插件不得再 insert');
   assert.ok(patch.includes('disabled: true'), '用户禁用条目原样保留');
   assert.ok(patch.includes('- id: file-changes'), '其它插件照常注册');
+});
+
+test('sync CLI: 卸载标记（removed: true）的配套 bundle 从 manifest 移除，且不进隔离记录', (t) => {
+  const home = tmpdir(t);
+  const profileDir = path.join(home, 'profiles', 'web');
+  fs.mkdirSync(profileDir, { recursive: true });
+  // 预置 manifest：核心 + 已卸载的 balance 配套（残留登记，包目录已被删）
+  fs.writeFileSync(path.join(profileDir, 'package.json'), JSON.stringify({
+    name: 'dsh-profile-web', private: true, dependencies: {},
+    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@deepseek-ai/dsh-balance'] } },
+  }, null, 2) + '\n');
+  // 卸载标记（插件管理写入的形态）
+  fs.writeFileSync(path.join(profileDir, 'cordis.patch.yml'),
+    '# dsh web profile patch（由 DSH Desktop 维护）\n- id: balance\n  removed: true\n');
+  runCli(t, home);
+  const manifest = JSON.parse(fs.readFileSync(path.join(profileDir, 'package.json'), 'utf8'));
+  assert.ok(!manifest.dsh.profile.bundles.includes('@deepseek-ai/dsh-balance'), '已卸载的配套 bundle 应从 manifest 移除');
+  assert.ok(manifest.dsh.profile.bundles.includes('@deepseek-ai/dsh-base'), '核心登记不得受影响');
+  assert.ok(!fs.existsSync(path.join(profileDir, 'dsh-desktop.broken-bundles.json')),
+    '卸载属用户主动意图，不得写入隔离记录');
+  // 幂等：二次运行 manifest 不再改动（已移除的登记不得被重新加回）
+  const afterFirst = fs.readFileSync(path.join(profileDir, 'package.json'), 'utf8');
+  runCli(t, home);
+  assert.strictEqual(fs.readFileSync(path.join(profileDir, 'package.json'), 'utf8'), afterFirst, '二次同步 manifest 零写入');
 });

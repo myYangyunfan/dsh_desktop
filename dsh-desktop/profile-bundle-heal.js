@@ -66,30 +66,106 @@ function bundleEntryOf(pkg) {
 // ---------------------------------------------------------------------------
 
 /**
- * 校验一个已落盘的 bundle 目录：package.json 可解析、声明了 dsh.bundle.patch、
- * 补丁层与入口文件都存在；声明了 exports["./client"] 时 client bundle 入口也
- * 必须存在。任一不满足返回 { ok:false, reason } —— 同步方必须按「源缺失」处理
- * （不注册为 profile bundle），否则 dsh 启动时必然崩溃。
+ * 结构化校验失败码（inspectBundleDir 与 scripts/lib/profile-reconcile.js 的
+ * validateBundleEntry 共用；中文 reason 保持与 verifyBundleDir 既有文案逐字
+ * 一致——含上游新增的 client bundle 入口校验文案，历史调用方与单测断言不受
+ * 影响）。
  */
-function verifyBundleDir(dir) {
+const BUNDLE_CHECK_CODES = {
+  /** 登记项不是非空字符串（validateBundleEntry 前置判定）。 */
+  INVALID_NAME: 'INVALID_NAME',
+  /** 双锚点（dsh 安装 / profile node_modules）均解析不到包（validateBundleEntry）。 */
+  UNRESOLVABLE: 'UNRESOLVABLE',
+  /** package.json 不可读 / 不是合法 JSON。 */
+  PACKAGE_JSON_INVALID: 'PACKAGE_JSON_INVALID',
+  /** package.json 未声明 dsh.bundle.patch（普通库或仅客户端 bundle）。 */
+  NO_BUNDLE_DECL: 'NO_BUNDLE_DECL',
+  /** 补丁层相对路径越出包目录。 */
+  PATCH_OUTSIDE: 'PATCH_OUTSIDE',
+  /** 补丁层文件不存在。 */
+  PATCH_MISSING: 'PATCH_MISSING',
+  /** 补丁层存在但无法按 dsh entry-list 方言解析（或顶层非数组）。 */
+  PATCH_UNPARSEABLE: 'PATCH_UNPARSEABLE',
+  /** 入口文件相对路径越出包目录。 */
+  ENTRY_OUTSIDE: 'ENTRY_OUTSIDE',
+  /** 入口文件不存在。 */
+  ENTRY_MISSING: 'ENTRY_MISSING',
+  /** client bundle 入口（exports["./client"]）相对路径越出包目录。 */
+  CLIENT_ENTRY_OUTSIDE: 'CLIENT_ENTRY_OUTSIDE',
+  /** client bundle 入口（exports["./client"]）文件不存在。 */
+  CLIENT_ENTRY_MISSING: 'CLIENT_ENTRY_MISSING',
+};
+
+/**
+ * 判定一次 entry-list YAML 解析结果是否满足 dsh 的补丁层契约
+ * （dsh-app-boot parsePatchList）：顶层必须是数组，且每个条目必须是映射
+ * （非 null 对象、非数组）。与官方判定逐字同构——只检查 Array.isArray 会
+ * 放过「顶层数组但条目是标量/字符串/嵌套数组/null」的畸形文件，dsh 装配时
+ * 仍会 fail-loud（"must be a mapping"）。inspectBundleDir 与 main.js 的
+ * healHomePatch 共用本判定。
+ * @param {unknown} parsed entry-list YAML 解析结果
+ * @returns {boolean} 满足 dsh 补丁层契约时为 true
+ */
+function isPatchListValid(parsed) {
+  if (!Array.isArray(parsed)) return false;
+  return parsed.every((entry) => typeof entry === 'object' && entry !== null && !Array.isArray(entry));
+}
+
+/**
+ * 结构化校验一个已落盘的 bundle 目录（唯一实现）：package.json 可解析、
+ * 声明了 dsh.bundle.patch、补丁层存在且（提供解析器时）可解析、入口文件
+ * 存在；声明了 exports["./client"] 时 client bundle 入口也必须存在。任一
+ * 不满足返回 { ok:false, code, reason } —— 同步方必须按「源缺失」处理
+ * （不注册为 profile bundle），否则 dsh 启动时必然崩溃。verifyBundleDir
+ * 与本仓库 scripts/lib/profile-reconcile.js 的 validateBundleEntry 共用本函数，
+ * 保证各调用方的判定语义一致。
+ * @param {string} dir bundle 包目录（绝对路径）
+ * @param {(content: string) => unknown} [parsePatch] dsh entry-list 方言解析器；
+ *   提供时补丁层必须可解析且为合法 entry-list（顶层数组 + 每项为映射，与
+ *   dsh-app-boot parsePatchList 的契约一致）；null 跳过该检查（调用方无 yaml
+ *   依赖时的降级，与 healProfilePatch 的既有降级语义一致）。
+ * @returns {{ ok: boolean, code: string, reason: string, patchPath?: string }}
+ */
+function inspectBundleDir(dir, parsePatch) {
   let pkg = null;
   try {
     pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
   } catch (err) {
-    return { ok: false, reason: 'package.json 不可读或不是合法 JSON: ' + ((err && err.message) || err) };
+    return { ok: false, code: BUNDLE_CHECK_CODES.PACKAGE_JSON_INVALID, reason: 'package.json 不可读或不是合法 JSON: ' + ((err && err.message) || err) };
   }
   const patchRel = bundlePatchRel(pkg);
-  if (!patchRel) return { ok: false, reason: 'package.json 未声明 dsh.bundle.patch' };
+  if (!patchRel) return { ok: false, code: BUNDLE_CHECK_CODES.NO_BUNDLE_DECL, reason: 'package.json 未声明 dsh.bundle.patch' };
   // 路径归一化围栏：补丁层必须仍落在 bundle 目录内（防 `../../x` 越界读取）。
   const patchFile = path.resolve(dir, patchRel);
   const dirRoot = path.resolve(dir) + path.sep;
-  if (!patchFile.startsWith(dirRoot)) return { ok: false, reason: '补丁层路径越界: ' + patchRel };
-  if (!fs.existsSync(patchFile)) return { ok: false, reason: '补丁层缺失: ' + patchRel };
+  if (!patchFile.startsWith(dirRoot)) return { ok: false, code: BUNDLE_CHECK_CODES.PATCH_OUTSIDE, reason: '补丁层路径越界: ' + patchRel };
+  if (!fs.existsSync(patchFile)) return { ok: false, code: BUNDLE_CHECK_CODES.PATCH_MISSING, reason: '补丁层缺失: ' + patchRel };
+  if (typeof parsePatch === 'function') {
+    try {
+      const parsed = parsePatch(fs.readFileSync(patchFile, 'utf8'));
+      if (!Array.isArray(parsed)) {
+        return { ok: false, code: BUNDLE_CHECK_CODES.PATCH_UNPARSEABLE, reason: '补丁层不是顶层 YAML 数组: ' + patchRel };
+      }
+      if (!parsed.every((entry) => typeof entry === 'object' && entry !== null && !Array.isArray(entry))) {
+        return { ok: false, code: BUNDLE_CHECK_CODES.PATCH_UNPARSEABLE, reason: '补丁层条目不是映射（dsh 要求顶层数组每项为映射）: ' + patchRel };
+      }
+    } catch (err) {
+      return { ok: false, code: BUNDLE_CHECK_CODES.PATCH_UNPARSEABLE, reason: '补丁层无法解析: ' + patchRel + '（' + ((err && err.message) || err) + '）' };
+    }
+  }
   const entry = bundleEntryOf(pkg);
   if (entry) {
     const entryFile = path.resolve(dir, entry);
-    if (!entryFile.startsWith(dirRoot)) return { ok: false, reason: '入口文件路径越界: ' + entry };
-    if (!fs.existsSync(entryFile)) return { ok: false, reason: '入口文件缺失: ' + entry };
+    if (!entryFile.startsWith(dirRoot)) return { ok: false, code: BUNDLE_CHECK_CODES.ENTRY_OUTSIDE, reason: '入口文件路径越界: ' + entry };
+    if (!fs.existsSync(entryFile)) return { ok: false, code: BUNDLE_CHECK_CODES.ENTRY_MISSING, reason: '入口文件缺失: ' + entry };
+    // 入口必须是普通文件（符号链接经 statSync 跟随解析）：dsh Loader 用 ESM
+    // import() 激活入口，指向目录的 main/exports 会在激活期抛
+    // ERR_UNSUPPORTED_DIR_IMPORT（防护覆盖不到的崩溃形状），存在性检查会放过。
+    let entryStat = null;
+    try { entryStat = fs.statSync(entryFile); } catch { /* 不可读按缺失处理 */ }
+    if (!entryStat || !entryStat.isFile()) {
+      return { ok: false, code: BUNDLE_CHECK_CODES.ENTRY_MISSING, reason: '入口文件缺失或不是普通文件: ' + entry };
+    }
   }
   // client bundle 入口（exports["./client"] 字符串声明）：client-modules 装配时
   // 按该路径读取客户端 bundle，缺失会让整个 client 模块注册 fail-loud
@@ -99,10 +175,21 @@ function verifyBundleDir(dir) {
     && typeof pkg.exports['./client'] === 'string' ? pkg.exports['./client'] : '';
   if (clientRel) {
     const clientFile = path.resolve(dir, clientRel);
-    if (!clientFile.startsWith(dirRoot)) return { ok: false, reason: 'client 入口路径越界: ' + clientRel };
-    if (!fs.existsSync(clientFile)) return { ok: false, reason: 'client 入口缺失: ' + clientRel };
+    if (!clientFile.startsWith(dirRoot)) return { ok: false, code: BUNDLE_CHECK_CODES.CLIENT_ENTRY_OUTSIDE, reason: 'client 入口路径越界: ' + clientRel };
+    if (!fs.existsSync(clientFile)) return { ok: false, code: BUNDLE_CHECK_CODES.CLIENT_ENTRY_MISSING, reason: 'client 入口缺失: ' + clientRel };
   }
-  return { ok: true, reason: '' };
+  return { ok: true, code: '', reason: '', patchPath: patchFile };
+}
+
+/**
+ * 校验一个已落盘的 bundle 目录（兼容包装）：package.json 可解析、声明了
+ * dsh.bundle.patch、补丁层与入口文件都存在；声明了 exports["./client"] 时
+ * client bundle 入口也必须存在。任一不满足返回 { ok:false, reason }。
+ * 判定语义与文案委托给 inspectBundleDir（不检查补丁层可解析性，历史契约）。
+ */
+function verifyBundleDir(dir) {
+  const check = inspectBundleDir(dir, null);
+  return { ok: check.ok, reason: check.reason };
 }
 
 /**
@@ -396,8 +483,11 @@ function applyProfileBootBundleGuard(src) {
 module.exports = {
   PROFILE_BUNDLE_GUARD_MARKER,
   PROFILE_BOOT_GUARD_MARKER,
+  BUNDLE_CHECK_CODES,
   bundlePatchRel,
   bundleEntryOf,
+  inspectBundleDir,
+  isPatchListValid,
   verifyBundleDir,
   packageDirUpward,
   scanProfileBundles,
