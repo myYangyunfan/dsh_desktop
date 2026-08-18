@@ -239,6 +239,55 @@ test('v2: non-string session id does not throw away turn-end notification', () =
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
+test('P0-5: cold session (mtime > 7d) gets no watcher; active one does', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swp05-'));
+  const cold = path.join(tmp, 'p1', 'cold', 'session.jsonl.zstd');
+  const active = path.join(tmp, 'p1', 'hot', 'session.jsonl.zstd');
+  makeSessionFile(cold, 'cold');
+  makeSessionFile(active, 'hot');
+  const old = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+  fs.utimesSync(cold, old, old);
+  const w = new SessionWatcher({ sessionsDir: tmp, onTurnEnd: () => {}, log: () => {} });
+  w.refreshWatchList();
+  assert.strictEqual(w.watchers.has(cold), false, '冷会话不得挂 watch');
+  assert.strictEqual(w.watchers.has(active), true, '活跃会话应挂 watch');
+  w.stop();
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+test('P0-5: revived cold session is upgraded to a watcher by scan', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swp05-'));
+  const file = path.join(tmp, 'p1', 'revive', 'session.jsonl.zstd');
+  makeSessionFile(file, 'revive');
+  const old = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+  fs.utimesSync(file, old, old);
+  const w = new SessionWatcher({ sessionsDir: tmp, onTurnEnd: () => {}, log: () => {} });
+  w.refreshWatchList(); // 冷：不挂
+  assert.strictEqual(w.watchers.has(file), false);
+  // 会话被写入复活（mtime 更新为 now）→ 10s 兜底清扫（scan）发现增长即升级挂 watch
+  appendFrame(file, [{ type: 'session/title', data: { title: 'revived' } }]);
+  w.scan();
+  assert.strictEqual(w.watchers.has(file), true, '复活会话应被 scan 升级挂 watch');
+  w.stop();
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+test('P0-5: watcher is detached once the session cools down (reconcile)', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swp05-'));
+  const file = path.join(tmp, 'p1', 'cool', 'session.jsonl.zstd');
+  makeSessionFile(file, 'cool');
+  const w = new SessionWatcher({ sessionsDir: tmp, onTurnEnd: () => {}, log: () => {} });
+  w.refreshWatchList();
+  assert.strictEqual(w.watchers.has(file), true);
+  const old = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+  fs.utimesSync(file, old, old);
+  w.refreshWatchList(); // 变冷 → 摘除
+  assert.strictEqual(w.watchers.has(file), false);
+  assert.strictEqual(w.watchers.size, 0);
+  w.stop();
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
 test('v2: non-string cwd does not throw and still notifies (issue #88)', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swv2-'));
   const file = path.join(tmp, 'p1', 'sessc', 'session.jsonl.zstd');

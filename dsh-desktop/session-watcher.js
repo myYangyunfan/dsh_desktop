@@ -33,6 +33,12 @@ const ZSTD_MAGIC = 4247762216; // 28 B5 2F FD little-endian
 const STAT_SWEEP_MS = 10000; // 兜底 stat 清扫（捕获 fs.watch 漏报/文件替换）
 const WALK_SWEEP_MS = 30000; // 目录对账（发现新会话、清理消失的监视器）
 
+// P0-5 句柄收敛：只对「活跃会话」挂 fs.watch——mtime 7 天内的会话才可能继续
+// 写入，冷会话（长期无写入）由 10s 兜底清扫覆盖即可。600 会话（590 个冷）场景
+// 句柄从 600 降到 ≈10（降 ≥80%）；冷会话复活（被写入增长）时 scan 的升级逻辑
+// 立即补挂 watch，通知延迟最坏 = stat 清扫周期（10s）。
+const SESSION_WATCH_ACTIVE_MS = 7 * 24 * 60 * 60 * 1000;
+
 // Structural zstd frame scanner (ported from dsh-session-persistence-jsonl).
 // Robust to mid-stream corruption: when a non-magic byte (garbage) or a torn
 // frame is encountered, it searches forward for the next valid frame magic and
@@ -184,9 +190,18 @@ class SessionWatcher {
     }
   }
 
-  /** 给一个会话文件挂监视器；已挂或失败则跳过（兜底清扫兜住）。 */
+  /** mtime 7 天内 = 活跃会话（才值得挂事件级监视器）。stat 失败视为不活跃。 */
+  isActiveSession(file) {
+    try {
+      const st = fs.statSync(file);
+      return Date.now() - st.mtimeMs < SESSION_WATCH_ACTIVE_MS;
+    } catch { return false; }
+  }
+
+  /** 给一个活跃会话文件挂监视器；已挂/不活跃/失败则跳过（兜底清扫兜住）。 */
   attachWatch(file) {
     if (this.watchers.has(file)) return;
+    if (!this.isActiveSession(file)) return; // P0-5：冷会话不挂 watch
     try {
       const w = fs.watch(file, (eventType) => this.onFileEvent(file, eventType));
       w.on('error', () => {
@@ -216,15 +231,21 @@ class SessionWatcher {
     } catch (err) { this.log('watch', '处理失败 ' + file + ': ' + err.message); }
   }
 
-  /** 目录对账：刷新文件清单、为新文件挂监视器、清理已消失文件的监视器。 */
+  /** 目录对账：刷新文件清单、为活跃新文件挂监视器、清理消失/变冷的监视器。 */
   refreshWatchList() {
+    const before = this.watchers.size;
     const files = this.listLogs(true);
     const alive = new Set(files);
     for (const file of files) this.attachWatch(file);
     for (const [file, w] of this.watchers) {
-      if (alive.has(file)) continue;
+      // 文件已消失，或会话已冷却（mtime > 7 天）：摘除监视器（句柄收敛）。
+      // 冷会话复活由 scan 的 attachWatch 升级逻辑重新挂回。
+      if (alive.has(file) && this.isActiveSession(file)) continue;
       try { w.close(); } catch {}
       this.watchers.delete(file);
+    }
+    if (this.watchers.size !== before) {
+      this.log('watch', '监视器对账: ' + before + ' → ' + this.watchers.size + ' 个（仅活跃会话挂 watch）');
     }
   }
 
@@ -237,6 +258,9 @@ class SessionWatcher {
         if (grew) {
           any = true;
           changed += 1;
+          // P0-5 升级逻辑：冷会话复活（被写入增长）立即补挂事件级监视器，
+          // 不必等下一个 30s 对账——此后增长走事件路径，延迟降到事件级。
+          if (!this.watchers.has(file)) this.attachWatch(file);
           if (changed >= maxChanged) break;
         }
       } catch (err) { this.log('watch', '处理失败 ' + file + ': ' + err.message); }
