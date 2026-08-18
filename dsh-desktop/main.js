@@ -6738,6 +6738,7 @@ async function boot() {
         setInterval(() => runClientUpdateFlow(false), 12 * 3600 * 1000).unref();
       }
       log('test-event', 'boot-ready');
+      bootMark('boot:ready');
       writeBootTimings();
       startMemoryWatch();
     })

@@ -1,0 +1,20 @@
+{
+  "generatedAt": "2026-08-18T14:47:15.271Z",
+  "exe": "DSH Desktop.exe (attached installer)",
+  "userData": "default",
+  "count": 5,
+  "effectiveRows": 5,
+  "totalP50": 4984,
+  "p50": {
+    "boot:backend": 0,
+    "boot:window": 187,
+    "boot:patches": 220,
+    "boot:patches-local": 629,
+    "boot:spawn": 648,
+    "boot:first-packet": 3830,
+    "boot:wait-up": 3861,
+    "boot:load": 4596,
+    "boot:ui-loaded": 4596,
+    "boot:ready": 4984
+  }
+}
