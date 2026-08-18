@@ -24,6 +24,10 @@ const {
   cleanupPendingPackage,
   concatFiles,
   resolveHttpProxy,
+  hashAssetOf,
+  findHashEntry,
+  verifyHashAgainstSumFile,
+  sha256OfFile,
 } = require('../../client-updater');
 
 function withEnv(name, value, fn) {
@@ -468,4 +472,62 @@ test('resolveHttpProxy: 解析 HTTPS_PROXY / 分号分隔多代理 / 无代理�
   withEnv('HTTPS_PROXY', undefined, () => {
     assert.strictEqual(resolveHttpProxy(), null);
   });
+});
+
+// --- F-1 SHA256SUMS 完整性校验（fail-closed）---
+
+test('hashAssetOf: 从资产列表挑出校验和清单（大小写/命名变体）', () => {
+  const release = { assets: [
+    { name: 'DSH-Desktop-0.3.11-win-setup-x64.exe' },
+    { name: 'SHA256SUMS' },
+    { name: 'SHA256SUMS.sig' },
+  ] };
+  assert.strictEqual(hashAssetOf(release).name, 'SHA256SUMS');
+  const lower = { assets: [{ name: 'dsh.zip' }, { name: 'sha256sums' }] };
+  assert.strictEqual(hashAssetOf(lower).name, 'sha256sums');
+  const dot = { assets: [{ name: 'DSH-Desktop-0.3.11.zip' }, { name: 'DSH-Desktop-0.3.11.zip.sha256' }] };
+  assert.strictEqual(hashAssetOf(dot).name, 'DSH-Desktop-0.3.11.zip.sha256');
+  assert.strictEqual(hashAssetOf({ assets: [{ name: 'DSH-Desktop-0.3.11.zip' }] }), null, '无校验和清单 → null');
+  assert.strictEqual(hashAssetOf({}), null, '无 assets → null');
+});
+
+test('findHashEntry: 解析 hex+文件名（兼容 * 标记与 CRLF），缺条目 null', () => {
+  const h = 'ab'.repeat(32);
+  const text = [
+    '00'.repeat(32) + '  othera.exe',
+    h + '  DSH-Desktop-0.3.11-win-setup-x64.exe',
+    '11'.repeat(32) + '  mac.dmg',
+  ].join('\r\n');
+  assert.strictEqual(findHashEntry(text, 'DSH-Desktop-0.3.11-win-setup-x64.exe'), h);
+  assert.strictEqual(findHashEntry(text, 'other.exe'), null, '缺条目 → null');
+  assert.strictEqual(findHashEntry('', 'x.exe'), null);
+  // 二进制标记 *：`<hex> *name` 同样可解析
+  assert.strictEqual(findHashEntry('aa'.repeat(32) + ' *bin.zip', 'bin.zip'), 'aa'.repeat(32));
+  // 损坏行跳过
+  assert.strictEqual(findHashEntry('not-a-hash foo\n' + h + '  ok.exe', 'ok.exe'), h);
+});
+
+test('verifyHashAgainstSumFile: 命中/不匹配/缺条目三态', () => {
+  const h = 'AB'.repeat(32); // 大写输入→小写归一
+  const sum = h + '  pkg.exe';
+  assert.deepStrictEqual(verifyHashAgainstSumFile(sum, 'pkg.exe', 'ab'.repeat(32)), { ok: true, expected: 'ab'.repeat(32) });
+  const bad = verifyHashAgainstSumFile(sum, 'pkg.exe', 'ff'.repeat(32));
+  assert.strictEqual(bad.ok, false);
+  assert.ok(/校验和不匹配/.test(bad.reason));
+  const missing = verifyHashAgainstSumFile(sum, 'other.exe', 'ab'.repeat(32));
+  assert.strictEqual(missing.ok, false);
+  assert.ok(/缺少/.test(missing.reason));
+});
+
+test('sha256OfFile: 流式计算与 crypto 直接计算一致', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cu-hash-'));
+  try {
+    const f = path.join(dir, 'pkg.bin');
+    fs.writeFileSync(f, Buffer.from('F-1 smoke payload '.repeat(1024), 'utf8'));
+    const expected = require('node:crypto').createHash('sha256').update(fs.readFileSync(f)).digest('hex');
+    assert.strictEqual(await sha256OfFile(f), expected);
+    await assert.rejects(sha256OfFile(path.join(dir, 'nope.bin')));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

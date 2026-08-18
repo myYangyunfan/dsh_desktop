@@ -29,6 +29,7 @@
 const https = require('node:https');
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 const { compareVersions } = require('./updater');
 
@@ -249,6 +250,50 @@ function selectAsset(release) {
   throw new Error('未找到匹配的安装包资产（' + release.assets.map((a) => a.name).join(', ') + '）');
 }
 
+// --- F-1 完整性校验：SHA256SUMS（fail-closed）--------------------------------
+// 安装包下载完成后，必须从同一 Release 取得校验和清单并逐字节比对；
+// 清单缺失 / 下载失败 / 缺条目 / 不匹配 → 一律丢弃安装包并拒绝安装。
+// 校验和清单资产命名约定：SHA256SUMS / sha256sums / x.sha256（含 `.sha256` 后缀）。
+
+const HASH_ASSET_RE = /(?:^|[._-])sha(?:256)?sums?$|\.sha256$/i;
+
+function hashAssetOf(release) {
+  return (Array.isArray(release.assets) ? release.assets : [])
+    .find((a) => a && typeof a.name === 'string' && HASH_ASSET_RE.test(a.name)) || null;
+}
+
+/** 流式计算文件 sha256（安装包 100MB+，不做整文件读内存）。 */
+function sha256OfFile(file) {
+  return new Promise((resolve, reject) => {
+    const h = crypto.createHash('sha256');
+    const rs = fs.createReadStream(file);
+    rs.on('error', reject);
+    rs.on('data', (c) => h.update(c));
+    rs.on('end', () => resolve(h.digest('hex')));
+  });
+}
+
+/** 解析 SHA256SUMS 文本（`<hex64>  <文件名>`，兼容 `*` 二进制标记与 CRLF），
+ *  返回 wantName 条目的小写哈希；缺条目返回 null。 */
+function findHashEntry(text, wantName) {
+  for (const line of String(text || '').split(/\r?\n/)) {
+    const m = line.match(/^([0-9a-fA-F]{64})\s+(\*?)(.+)$/);
+    if (!m) continue;
+    if (m[3].trim() === wantName) return m[1].toLowerCase();
+  }
+  return null;
+}
+
+/** 纯函数校验：sumText 中 wantName 条目的哈希 vs actualSha256。 */
+function verifyHashAgainstSumFile(sumText, wantName, actualSha256) {
+  const expected = findHashEntry(sumText, wantName);
+  if (!expected) return { ok: false, reason: 'SHA256SUMS 中缺少「' + wantName + '」条目' };
+  if (String(actualSha256).toLowerCase() !== expected) {
+    return { ok: false, reason: '校验和不匹配（清单声明 ' + expected.slice(0, 12) + '…，实际 ' + String(actualSha256).slice(0, 12) + '…）' };
+  }
+  return { ok: true, expected };
+}
+
 function downloadFile(url, dest, { onProgress } = {}) {
   return new Promise((resolve, reject) => {
     const tmp = dest + '.part';
@@ -389,6 +434,28 @@ async function downloadRelease(ctx, release, { onProgress } = {}) {
   if (!split && sel.totalSize > 0 && Math.abs(stat.size - sel.totalSize) > 2 * 1024 * 1024) {
     ctx.log('client-update', `大小与上游声明不一致：期望 ${sel.totalSize} 实际 ${stat.size}（继续，安装器会自校验）`);
   }
+  // F-1：SHA256SUMS 强制校验（fail-closed）。清单下载失败/缺失/缺条目/哈希不符
+  // 一律丢弃安装包拒绝安装，防止被替换或损坏的安装包进入安装器。
+  const hashAsset = hashAssetOf(release);
+  if (!hashAsset) {
+    fs.rmSync(finalPath, { force: true });
+    throw new Error('该 Release 未提供 SHA256SUMS 校验和清单，为安全起见已拒绝安装（完整性无法验证）');
+  }
+  let sumText = null;
+  try {
+    const sp = await downloadFile(hashAsset.url, path.join(dir, hashAsset.name));
+    sumText = fs.readFileSync(sp.path, 'utf8');
+    try { fs.rmSync(sp.path, { force: true }); } catch {}
+  } catch (err) {
+    fs.rmSync(finalPath, { force: true });
+    throw new Error('SHA256SUMS 下载失败，已拒绝安装: ' + ((err && err.message) || err));
+  }
+  const v = verifyHashAgainstSumFile(sumText, sel.name, await sha256OfFile(finalPath));
+  if (!v.ok) {
+    fs.rmSync(finalPath, { force: true });
+    throw new Error(v.reason + '，已丢弃安装包');
+  }
+  ctx.log('client-update', `SHA256SUMS 校验通过: ${sel.name} (${v.expected.slice(0, 16)}…)`);
   ctx.log('client-update', `下载完成: ${finalPath}（${Math.round(stat.size / 1048576)} MB）`);
   return { filePath: finalPath, size: stat.size };
 }
@@ -820,4 +887,9 @@ module.exports = {
   resolveRepos,
   resolveHttpProxy,
   DEFAULT_REPOS,
+  HASH_ASSET_RE,
+  hashAssetOf,
+  findHashEntry,
+  verifyHashAgainstSumFile,
+  sha256OfFile,
 };
