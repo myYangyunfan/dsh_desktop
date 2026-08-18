@@ -65,6 +65,7 @@ const { patchWebSearchBaseUrl } = require('./scripts/patch-web-search-baseurl');
 const { patchMenuViewport } = require('./scripts/patch-menu-viewport');
 const { patchSessionManage } = require('./scripts/patch-session-manage');
 const { patchOpenProjectDir } = require('./scripts/patch-open-project-dir');
+const { transformReplayDegrade, replayCopyFiles } = require('./scripts/patch-replay-degrade');
 const { patchSessionPersistence } = require('./scripts/patch-session-persistence');
 // 「设置 → 插件 → 诊断与管理」：诊断 / 备份与恢复 / 日志包导出 / 防砖体检 /
 // bundle 顺序检测与重排（纯函数模块，node --test 单测覆盖）。
@@ -2624,6 +2625,7 @@ async function runUpdateFlow(manual) {
           applySessionManageFix();
           applyOpenProjectDirFix();
           applySessionPersistenceFix();
+          applyReplayDegradeFix();
         });
       } else {
         await updater.applyUpdate(ctx, latest);
@@ -2651,6 +2653,7 @@ async function runUpdateFlow(manual) {
           applySessionManageFix();
           applyOpenProjectDirFix();
           applySessionPersistenceFix();
+          applyReplayDegradeFix();
         });
       }
       // 进度窗已非模态，但完成对话框弹出前仍先关闭它，避免叠窗/对话框被遮挡。
@@ -5733,6 +5736,28 @@ function applySessionPersistenceFix() {
     }
   }
 }
+// ---------------------------------------------------------------------------
+// replay 降级补丁：dsh-llm-pi-ai readReplayState 对旧版本（legacy 会话）写入
+// 的非法/未知 replay state 抛 INVALID_REPLAY_STATE → 历史会话续聊直接失败
+// 卡死。补丁把 toPiAssistant 内 replayedAssistant 包进 try/catch，仅该 code
+// 降级为 foreignAssistant 继续会话；其它错误照常上抛。
+// ---------------------------------------------------------------------------
+function applyReplayDegradeFix() {
+  const files = replayCopyFiles(
+    dshHome || path.join(os.homedir(), '.dsh'),
+    __dirname,
+    userDataDir
+  );
+  applyPatchToFiles({
+    prefix: 'replay 降级补丁',
+    files,
+    log: (m) => log('boot', m),
+    transform: transformReplayDegrade,
+    alreadyLog: (file) => '已应用，跳过 ' + file,
+    doneLog: (file, note) => '已写入 replay 降级 ' + file + (note ? ' (' + note + ')' : ''),
+    failLog: (file, err) => 'replay 降级补丁失败(' + file + '): ' + err.message,
+  });
+}
 // 快捷方式维护：修复「没有桌面快捷方式 / 快捷方式指向的文件消失」，
 // 并让快捷方式图标跟随图标设计更新（.lnk 单独指定 icon.ico）。
 // ---------------------------------------------------------------------------
@@ -6503,6 +6528,7 @@ async function boot() {
       applySessionManageFix();
       applyOpenProjectDirFix();
       applySessionPersistenceFix();
+          applyReplayDegradeFix();
     });
     bootMark('boot:patches-wsl');
   } else {
@@ -6530,6 +6556,7 @@ async function boot() {
       applySessionManageFix();
       applyOpenProjectDirFix();
       applySessionPersistenceFix();
+          applyReplayDegradeFix();
     });
     bootMark('boot:patches-local');
     setupTestChannel();

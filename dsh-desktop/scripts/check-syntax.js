@@ -45,6 +45,7 @@ const entryFiles = [
   'scripts/patch-menu-viewport.js',
   'scripts/patch-session-manage.js',
   'scripts/patch-open-project-dir.js',
+  'scripts/patch-replay-degrade.js',
   'scripts/patch-session-persistence.js',
   'scripts/patch-slot-compat.js',
   'scripts/gpu-crash-guard.js',
