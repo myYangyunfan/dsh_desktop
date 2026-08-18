@@ -80,17 +80,18 @@
 				questOff: "已关闭"
 			};
 
-			// 通用设置开关行样式（qdu- 前缀，从 conversation-tweaks 的 dct-*
-			// 原样改名复制；开关行不依赖 body 属性 —— 模式关闭时也必须可见）。
+			// 通用设置开关行样式（qdu- 前缀）。开关行不依赖 body 属性 ——
+			// 模式关闭时也必须可见；风格与 Quest 设置页行语言保持一致。
 			const ROW_CSS = [
-				".qdu-row{border-bottom:1px solid var(--dsw-alias-border-l2);align-items:center;gap:8px;padding:16px 0;display:flex}",
-				".qdu-rowText{flex-direction:column;flex:1;gap:4px;min-width:0;padding-right:48px;display:flex}",
-				".qdu-title{color:var(--dsw-alias-label-primary);font-size:14px;font-weight:400;line-height:22px}",
+				".qdu-row{border-bottom:1px solid var(--qdu-line,#e8eaed);align-items:center;gap:8px;padding:14px 4px;margin:0 -4px;display:flex;border-radius:8px;transition:background-color .15s ease}",
+				".qdu-row:hover{background:var(--qdu-hover,rgba(38,49,72,.045))}",
+				".qdu-rowText{flex-direction:column;flex:1;gap:3px;min-width:0;padding-right:48px;display:flex}",
+				".qdu-title{color:var(--dsw-alias-label-primary);font-size:14px;font-weight:500;line-height:22px}",
 				".qdu-desc{color:var(--dsw-alias-label-tertiary);font-size:12px;font-weight:400;line-height:18px}",
-				".qdu-switch{width:44px;height:26px;background:var(--dsw-alias-interactive-bg-hover);cursor:pointer;border:none;border-radius:999px;flex:none;position:relative;transition:background .15s}",
-				".qdu-switch[aria-checked=true]{background:var(--dsw-alias-state-business-primary)}",
-				".qdu-switch:disabled{opacity:.5;cursor:default}",
-				".qdu-knob{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.35);transition:transform .15s}",
+				".qdu-switch{width:42px;height:24px;background:var(--dsw-alias-border-l2,rgba(0,0,0,.14));cursor:pointer;border:none;border-radius:999px;flex:none;position:relative;transition:background .18s ease}",
+				".qdu-switch[aria-checked=true]{background:var(--dsw-alias-state-business-primary,#4176e6)}",
+				".qdu-switch:disabled{opacity:.45;cursor:default}",
+				".qdu-knob{position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(16,24,40,.25);transition:transform .18s cubic-bezier(.4,0,.2,1)}",
 				".qdu-switch[aria-checked=true] .qdu-knob{transform:translateX(18px)}"
 			].join("");
 
@@ -108,23 +109,28 @@
 			//         > .uV2eYG_root(.uV2eYG_hero) > .uV2eYG_card > textarea.uV2eYG_input
 			//   消息  .Md3f7G_flowItem[data-chat-flow-kind] > .Sxvs8a_root
 			const CSS = [
-				// —— 设计令牌（Qoder Quest 视觉语言：大圆角浮起卡片、细腻灰阶、
-				//    主色仅作点缀；全部映射 dsw token，深色模式自动适配）——
-				'body[data-dsh-quest-ui]{--qdu-radius-card:16px;--qdu-radius-hero:20px;--qdu-radius-pill:999px;--qdu-radius-item:8px;--qdu-shadow-float:0 1px 2px rgba(16,24,40,.04),0 8px 24px rgba(16,24,40,.06);--qdu-shadow-float-lg:0 2px 4px rgba(16,24,40,.05),0 12px 36px rgba(16,24,40,.10);--qdu-bg-card:var(--dsw-alias-container-bg-primary,#fff);--qdu-bg-canvas:var(--dsw-alias-container-bg-secondary,#f7f8fa);--qdu-bg-hover:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.04));--qdu-bg-active:var(--dsw-alias-interactive-bg-active,rgba(0,0,0,.07));--qdu-border:var(--dsw-alias-border-l2,rgba(16,24,40,.08));--qdu-accent:var(--dsw-alias-state-business-primary,#4f6ef7);--qdu-label-1:var(--dsw-alias-label-primary);--qdu-label-2:var(--dsw-alias-label-secondary);--qdu-label-3:var(--dsw-alias-label-tertiary)}',
+				// —— 设计令牌（实测宿主仅定义 interactive/border/label/business 四组
+				//    token，container-bg-* 为空；卡片/画布底色用自定字面量）——
+				'body[data-dsh-quest-ui]{--qdu-radius-hero:20px;--qdu-radius-card:14px;--qdu-radius-item:8px;--qdu-radius-pill:999px;--qdu-bg-card:#ffffff;--qdu-bg-canvas:#f7f8fa;--qdu-hover:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06));--qdu-active:var(--dsw-alias-interactive-bg-active,rgba(38,49,72,.10));--qdu-line:var(--dsw-alias-border-l2,rgba(0,0,0,.10));--qdu-line-soft:var(--dsw-alias-border-l1,rgba(0,0,0,.05));--qdu-accent:var(--dsw-alias-state-business-primary,#4176e6);--qdu-label-1:var(--dsw-alias-label-primary,#0f1115);--qdu-label-2:var(--dsw-alias-label-secondary,#61666b);--qdu-label-3:var(--dsw-alias-label-tertiary,#818590);--qdu-shadow-float:0 1px 2px rgba(16,24,40,.04),0 8px 24px rgba(16,24,40,.06);--qdu-shadow-float-lg:0 2px 4px rgba(16,24,40,.05),0 16px 40px rgba(16,24,40,.10);--qdu-ease:cubic-bezier(.4,0,.2,1)}',
 			
 				// —— Q1 主画布：中央列换更干净的画布底，与侧栏拉开层次 ——
 				'body[data-dsh-quest-ui] [class*="_centerCol"]{background:var(--qdu-bg-canvas)}',
 			
 				// —— Q2 侧边会话栏（Qoder Quest 分组列表风）：大间距圆角行 +
 				//    选中态主色浅底 + 行内文字降噪 ——
-				'body[data-dsh-quest-ui] [role="treeitem"]{border-radius:var(--qdu-radius-item);min-height:38px;transition:background-color .15s ease,color .15s ease}',
-				'body[data-dsh-quest-ui] [role="treeitem"]:hover{background:var(--qdu-bg-hover)}',
-				'body[data-dsh-quest-ui] [role="treeitem"][aria-selected="true"]{background:var(--qdu-bg-active)}',
+				'body[data-dsh-quest-ui] [role="treeitem"]{border-radius:var(--qdu-radius-item);transition:background-color .15s ease,color .15s ease}',
+				'body[data-dsh-quest-ui] [role="treeitem"]:hover{background:var(--qdu-hover)}',
+				'body[data-dsh-quest-ui] [role="treeitem"][aria-selected="true"]{background:var(--qdu-active)}',
+				// 工作区标题（"工作区"）→ 小号大写字距标签；侧栏搜索框胶囊化
+				'body[data-dsh-quest-ui] [class*="_sectionLabel"]{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--qdu-label-3)}',
+				'body[data-dsh-quest-ui] [class*="_search"]:not(textarea){border-radius:var(--qdu-radius-pill);border:1px solid transparent;transition:border-color .15s ease,background-color .15s ease}',
+				'body[data-dsh-quest-ui] [class*="_search"]:not(textarea):hover{border-color:var(--qdu-line)}',
+				'body[data-dsh-quest-ui] [class*="_search"]:not(textarea):focus-within{border-color:color-mix(in srgb,var(--qdu-accent) 45%,transparent)}',
 				// 行标题与时间戳降噪（限定侧栏容器，避免误伤主区）
 				'body[data-dsh-quest-ui] [class*="_groupSection"] [class*="_title"]{color:var(--qdu-label-1)}',
 				'body[data-dsh-quest-ui] [class*="_groupSection"] [class*="_time"]{color:var(--qdu-label-3)}',
 				// 侧栏分隔线柔化（宽度不变；!important 压宿主 hashed 类边框色）
-				'body[data-dsh-quest-ui] [class$="_sidebar"],body[data-dsh-quest-ui] [class$="_Sidebar"]{border-right:1px solid var(--qdu-border)!important}',
+				'body[data-dsh-quest-ui] [class$="_sidebar"],body[data-dsh-quest-ui] [class$="_Sidebar"]{border-right:1px solid var(--qdu-line-soft)!important}',
 			
 				// —— Q3 中央英雄输入卡片（Quest 核心视觉）：浮起白卡、大圆角、
 				//    双层柔影，聚焦时阴影加深 + 主色光环 ——
@@ -150,15 +156,35 @@
 				'body[data-dsh-quest-ui] [class*="_flowItem"] [class*="_root"]{border-radius:var(--qdu-radius-card)}',
 				'body[data-dsh-quest-ui] [data-chat-flow-kind="user"] > *:first-child{border-radius:var(--qdu-radius-card)}',
 			
-				// —— Q5 按钮统一圆角与过渡（排除自有 qdu-* 节点）——
-				'body[data-dsh-quest-ui] button:not([class^="qdu-"]){border-radius:var(--qdu-radius-item);transition:border-radius .15s ease,background-color .15s ease,box-shadow .15s ease,color .15s ease}',
+				// —— Q5 按钮统一圆角与过渡（排除自有 qdu-* 节点）；文本输入白底柔和
+				//    描边 + 聚焦主色光环；键盘焦点环主色半透明 ——
+				'body[data-dsh-quest-ui] button:not([class^="qdu-"]){border-radius:var(--qdu-radius-item);transition:border-radius .15s var(--qdu-ease),background-color .15s var(--qdu-ease),box-shadow .15s var(--qdu-ease),color .15s var(--qdu-ease)}',
+				'body[data-dsh-quest-ui] input[type="text"],body[data-dsh-quest-ui] input[type="search"],body[data-dsh-quest-ui] input[type="password"]{border-radius:var(--qdu-radius-item);border:1px solid var(--qdu-line);transition:border-color .15s ease,box-shadow .15s ease}',
+				'body[data-dsh-quest-ui] input[type="text"]:focus,body[data-dsh-quest-ui] input[type="search"]:focus,body[data-dsh-quest-ui] input[type="password"]:focus{border-color:color-mix(in srgb,var(--qdu-accent) 45%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--qdu-accent) 12%,transparent);outline:none}',
+				'body[data-dsh-quest-ui] button:focus-visible,body[data-dsh-quest-ui] [role="treeitem"]:focus-visible,body[data-dsh-quest-ui] a:focus-visible{outline:2px solid color-mix(in srgb,var(--qdu-accent) 55%,transparent);outline-offset:2px}',
+
+				// —— Q5b 设置弹窗重设计（VOzbGW_* mask/panel/navList/options）：
+				//    浮起大圆角面板 + 导航胶囊选中（主色浅底 + 左侧指示条）+
+				//    内容行柔和分隔 + hover 圆角块 ——
+				'body[data-dsh-quest-ui] [class*="_mask"]{background:rgba(16,24,40,.28)!important;backdrop-filter:blur(3px)}',
+				'body[data-dsh-quest-ui] [role="dialog"][class*="_panel"]{border-radius:var(--qdu-radius-hero);background:var(--qdu-bg-card);box-shadow:var(--qdu-shadow-float-lg);border:1px solid color-mix(in srgb,var(--qdu-label-1) 6%,transparent);overflow:hidden}',
+				'body[data-dsh-quest-ui] [class*="_navList"] button{border-radius:var(--qdu-radius-item);transition:background-color .15s var(--qdu-ease),color .15s var(--qdu-ease)}',
+				'body[data-dsh-quest-ui] [class*="_navList"] button:hover{background:var(--qdu-hover)}',
+				'body[data-dsh-quest-ui] [class*="_navList"] button[aria-selected="true"],body[data-dsh-quest-ui] [class*="_navList"] button[class*="ctive"]{background:color-mix(in srgb,var(--qdu-accent) 9%,transparent);color:var(--qdu-label-1);font-weight:500;position:relative}',
+				'body[data-dsh-quest-ui] [class*="_navList"] button[aria-selected="true"]::before,body[data-dsh-quest-ui] [class*="_navList"] button[class*="ctive"]::before{content:"";position:absolute;left:2px;top:50%;transform:translateY(-50%);width:3px;height:16px;border-radius:2px;background:var(--qdu-accent)}',
+				// 内容区行（通用设置 settings.general.item）：柔和分隔 + hover 圆角块
+				'body[data-dsh-quest-ui] [data-slot="settings.general.item"]{border-bottom:1px solid var(--qdu-line-soft)!important;transition:background-color .15s ease}',
+				'body[data-dsh-quest-ui] [data-slot="settings.general.item"]:hover{background:var(--qdu-hover)}',
+				// 设置弹窗导航与内容区之间分隔线柔化（排除 navList 自身避免双线）
+				'body[data-dsh-quest-ui] [class*="_nav"]:not([class*="_navList"]){border-right:1px solid var(--qdu-line-soft)}',
 			
 				// —— Q6 细滚动条（8px、圆角、半透明；后代与 body 自身两种前缀变体）——
 				'body[data-dsh-quest-ui] ::-webkit-scrollbar{width:8px;height:8px}',
-				'body[data-dsh-quest-ui] ::-webkit-scrollbar-thumb{border-radius:var(--qdu-radius-pill);background:rgba(127,127,127,.30)}',
+				'body[data-dsh-quest-ui] ::-webkit-scrollbar-thumb{border-radius:var(--qdu-radius-pill);background:rgba(127,127,127,.28)}',
+				'body[data-dsh-quest-ui] ::-webkit-scrollbar-thumb:hover{background:rgba(127,127,127,.45)}',
 				'body[data-dsh-quest-ui] ::-webkit-scrollbar-track{background:transparent}',
 				'body[data-dsh-quest-ui]::-webkit-scrollbar{width:8px;height:8px}',
-				'body[data-dsh-quest-ui]::-webkit-scrollbar-thumb{border-radius:var(--qdu-radius-pill);background:rgba(127,127,127,.30)}',
+				'body[data-dsh-quest-ui]::-webkit-scrollbar-thumb{border-radius:var(--qdu-radius-pill);background:rgba(127,127,127,.28)}',
 				'body[data-dsh-quest-ui]::-webkit-scrollbar-track{background:transparent}',
 			
 				// —— 自有节点：侧栏分组头（Qoder Quest 小号大写字距标签）——
@@ -167,7 +193,7 @@
 				// —— 自有节点：元数据药丸条（贴输入卡片上方、居中、描边药丸；
 				//    纯展示不拦截点击）——
 				'body[data-dsh-quest-ui] .qdu-pillbar{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;max-width:780px;margin:0 auto 8px;padding:0 16px;pointer-events:none}',
-				'body[data-dsh-quest-ui] .qdu-pill{border:1px solid var(--qdu-border);border-radius:var(--qdu-radius-pill);padding:3px 12px;font-size:12px;line-height:18px;color:var(--qdu-label-2);background:var(--qdu-bg-card);display:inline-flex;align-items:center;gap:4px;box-shadow:0 1px 2px rgba(16,24,40,.04)}',
+				'body[data-dsh-quest-ui] .qdu-pill{border:1px solid color-mix(in srgb,var(--qdu-label-1) 8%,transparent);border-radius:var(--qdu-radius-pill);padding:3px 12px;font-size:12px;line-height:18px;color:var(--qdu-label-2);background:var(--qdu-bg-card);display:inline-flex;align-items:center;gap:4px;box-shadow:0 1px 2px rgba(16,24,40,.04)}',
 				// 药丸前缀圆点（主色点缀）
 				'body[data-dsh-quest-ui] .qdu-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--qdu-accent);opacity:.75}',
 			
