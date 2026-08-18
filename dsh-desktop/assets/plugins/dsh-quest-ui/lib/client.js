@@ -139,7 +139,7 @@
 				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea){position:relative;display:flex;flex-direction:column;background:transparent!important;border:none!important;box-shadow:none!important;border-radius:0;min-height:140px;padding:0 10px 2px!important;transition:box-shadow .18s var(--qdu-ease)}',
 				// 聚焦反馈：仅顶部 2px 主色直线（平角）——下方不再出现任何弧形蓝边
 				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea):focus-within{box-shadow:none!important}',
-				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea):focus-within::after{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:color-mix(in srgb,var(--qdu-accent) 70%,transparent);border-radius:0;pointer-events:none}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea):focus-within::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:color-mix(in srgb,var(--qdu-accent) 95%,transparent);border-radius:0;pointer-events:none}',
 				// 空态 hero：大区域（240px）、内容顶到左上，与画布完全融合（无边角）
 				'body[data-dsh-quest-ui] [class*="_composerHero"] [class*="_root"]:has(textarea){border-radius:0;box-shadow:none!important;min-height:240px;display:flex;flex-direction:column;justify-content:flex-start}',
 				'body[data-dsh-quest-ui] [class*="_composerHero"]{max-width:820px;margin:0 auto;width:100%}',
@@ -222,6 +222,17 @@
 				'body[data-dsh-quest-ui] .qdu-nav-head{box-sizing:border-box;padding:12px 12px 6px;font-size:11px;line-height:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--qdu-label-3);user-select:none}',
 			
 			// （v0.4.4：胶囊样式已彻底移除，节点与 CSS 均不再存在）
+
+				// —— 第三方插件元素 Quest 化处理 ——
+				// 消息区“编辑”悬浮钮（dshrw-editbtn，白底方形带阴影）：Quest 下隐藏
+				'body[data-dsh-quest-ui] .dshrw-editbtn{display:none!important}',
+				// 临时会话按钮（dss-footer-icon，原在侧栏底部带文字）：只留图标，
+				// fixed 到窗口右上角，与对话/文件/终端标签栏（y≈84）同一水平面
+				'body[data-dsh-quest-ui] .dss-footer-icon{position:fixed!important;top:80px;right:14px;width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;z-index:5;background:transparent;border:none}',
+				'body[data-dsh-quest-ui] .dss-footer-icon .dss-footer-label{display:none}',
+				// 上下文用量面板（JObwrW_panel）：轻度美化降噪（内容为宿主用量数据）
+				'body[data-dsh-quest-ui] .JObwrW_panel{line-height:1.6}',
+				'body[data-dsh-quest-ui] .JObwrW_figures{color:var(--qdu-label-2)}',
 			
 				// —— 空态建议卡：圆点前缀（::before 14px 描边圆）+ 40px 行高 +
 				//    hover 浅底；官方欢迎页有建议条目时才命中，无条目安静无效 ——
