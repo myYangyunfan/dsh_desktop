@@ -814,7 +814,15 @@ function pickerBrowseOverlayPath() {
   return path.join(userDataDir, 'picker-browse.overlay.yml');
 }
 
-function runKoffiPreflight() {
+// P0-3 koffi 预检异步化状态：缓存命中 → 同步零等待；未命中 → 异步子进程探测
+// 不阻塞 boot，由 startAndShow 有界等待（3s）决定目录选择器 overlay。
+let koffiPreflightPending = null; // Promise<boolean> | null（异步探测进行中）
+let koffiPreflightResult = null;  // boolean | null（null = 尚未落定）
+let koffiPreflightConsumed = false; // startAndShow 是否已消费结果（区分「晚到」）
+
+// 同步判断「已确定通过」（非 Windows / 脚本缺失 / 签名缓存命中），零等待；
+// 返回 false 表示需要真实探测（调用方应发起 koffiPreflightAsync）。
+function koffiPreflightSync() {
   if (!IS_WIN) return true;
   const script = koffiPreflightScript();
   if (!fs.existsSync(script)) {
@@ -830,24 +838,52 @@ function runKoffiPreflight() {
     log('preflight', 'koffi 预检缓存命中（同签名上次已通过），跳过子进程探测');
     return true;
   }
-  try {
-    const r = spawnSync(nodeExe(), [script], { timeout: 20000, windowsHide: true, encoding: 'utf8' });
-    const output = String((r.stdout || '') + (r.stderr || '')).trim();
-    if (r.error) {
-      log('preflight', 'koffi 预检无法执行: ' + r.error.message);
-      return false;
+  return false;
+}
+
+// 异步子进程探测（boot 不等待，最长 20s；绝不 reject，结果写 koffiPreflightResult）。
+function koffiPreflightAsync() {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      koffiPreflightResult = ok;
+      resolve(ok);
+    };
+    let child;
+    try {
+      child = spawn(nodeExe(), [koffiPreflightScript()], {
+        windowsHide: true,
+        timeout: 20000,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch (err) {
+      log('preflight', 'koffi 预检无法启动: ' + err.message);
+      return finish(false);
     }
-    if (r.status === 0) {
-      saveKoffiPreflightPass(signature);
-      log('preflight', 'koffi 预检通过');
-      return true;
-    }
-    log('preflight', `koffi 预检失败（退出码 0x${(r.status >>> 0).toString(16)}）: ${output.slice(0, 400)}`);
-    return false;
-  } catch (err) {
-    log('preflight', 'koffi 预检异常: ' + err.message);
-    return false;
-  }
+    let output = '';
+    child.stdout.on('data', (d) => { output += String(d); });
+    child.stderr.on('data', (d) => { output += String(d); });
+    child.on('error', (err) => {
+      log('preflight', 'koffi 预检无法执行: ' + err.message);
+      finish(false);
+    });
+    child.on('exit', (code) => {
+      const text = output.trim();
+      if (code === 0) {
+        saveKoffiPreflightPass(koffiPreflightSignature());
+        log('preflight', 'koffi 预检通过');
+        finish(true);
+      } else if (code === null) {
+        log('preflight', 'koffi 预检超时（20s），按失败处理');
+        finish(false);
+      } else {
+        log('preflight', `koffi 预检失败（退出码 0x${(code >>> 0).toString(16)}）: ${text.slice(0, 400)}`);
+        finish(false);
+      }
+    });
+  });
 }
 
 // koffi 预检缓存：签名 = 壳版本 + node.exe + 探针脚本 + koffi 包内全部 .node
@@ -1621,7 +1657,28 @@ function runBundleContractMaintenance() {
   });
 }
 
-function startAndShow(overlays = []) {
+async function startAndShow(overlays = []) {
+  // P0-3：koffi 预检有界等待（最多 3s，仅首次启动的异步探测期存在 pending）。
+  // 落定 → 按真实结果决定目录选择器 overlay；超时 → 保守默认启用降级 overlay
+  // （本次接受降级，晚到通过只记日志不热切换——overlay 仅在启动时合并）。
+  const pending = koffiPreflightPending;
+  if (pending) {
+    let timedOut = false;
+    const timeout = new Promise((resolve) => {
+      setTimeout(() => { timedOut = true; resolve(); }, 3000);
+    });
+    try { await Promise.race([pending, timeout]); } catch {}
+    koffiPreflightConsumed = true;
+    const ok = koffiPreflightResult;
+    if (ok === true) {
+      clearAutoPickerBrowseOverlay();
+    } else {
+      enablePickerBrowseOverlay();
+      if (ok === null || timedOut) {
+        log('preflight', 'koffi 预检 3s 内未落定，本次按降级目录选择器启动（结果下次启动生效）');
+      }
+    }
+  }
   const merged = [];
   if (pickerBrowseOverlay && fs.existsSync(pickerBrowseOverlay)) merged.push(pickerBrowseOverlay);
   for (const p of overlays) {
@@ -6367,8 +6424,19 @@ async function boot() {
     applySessionPersistenceFix();
     bootMark('boot:patches-local');
     setupTestChannel();
-    if (runKoffiPreflight()) clearAutoPickerBrowseOverlay();
-    else enablePickerBrowseOverlay();
+    // P0-3：koffi 预检异步化——缓存命中零等待；未命中则异步探测不阻塞 boot
+    // （探测约 100ms~20s），由 startAndShow 有界等待 3s 决定目录选择器 overlay，
+    // 超时按保守默认（启用降级 overlay）启动，晚到通过不热切换只记日志。
+    if (!koffiPreflightSync()) {
+      koffiPreflightPending = koffiPreflightAsync();
+      koffiPreflightPending.then((ok) => {
+        if (ok === true && !koffiPreflightConsumed) {
+          log('preflight', 'koffi 预检晚到通过，本次保持降级目录选择器，下次启动生效');
+        }
+      }).catch(() => {});
+    } else {
+      clearAutoPickerBrowseOverlay();
+    }
   }
   bootFinished = true; // 窗口已建：此后异常走既有 fatal/错误弹窗，不再重复弹
   startAndShowGuarded()
