@@ -123,6 +123,10 @@ jobs:
           if ($checked -eq 0) { throw '未找到任何待校验的原生二进制' }
           Write-Output "OK: $checked 个原生二进制均为 $want"
 
+      - name: Build custom uninstaller
+        shell: pwsh
+        run: .\scripts\build-uninstaller.ps1
+
       - name: Build (x64, portable + nsis)
         run: npm run dist
         # 本地同款构建 5-8 分钟；公共 runner 更慢，30 分钟上限足够且失败时可取日志
@@ -364,6 +368,10 @@ jobs:
           }
           if ($checked -eq 0) { throw '未找到任何待校验的原生二进制' }
           Write-Output "OK: $checked 个原生二进制均为 $want"
+
+      - name: Build custom uninstaller
+        shell: pwsh
+        run: .\scripts\build-uninstaller.ps1
 
       - name: Build (arm64, portable + nsis)
         run: npm run dist:arm64

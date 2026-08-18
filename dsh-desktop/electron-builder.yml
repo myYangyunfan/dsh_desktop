@@ -49,6 +49,9 @@ extraResources:
     to: node/node.exe
   - from: vendor/npm
     to: npm
+  # Custom uninstaller: installer.nsh copies this to $INSTDIR during install.
+  - from: build/Uninstall_DSH_Desktop.exe
+    to: Uninstall_DSH_Desktop.exe
 
 win:
   icon: build/icon.png
@@ -78,5 +81,7 @@ nsis:
   createStartMenuShortcut: true
   shortcutName: DSH Desktop
   uninstallDisplayName: DSH Desktop
+  # Replace the default NSIS uninstaller with our custom Uninstall_DSH_Desktop.exe.
+  include: uninstaller/installer.nsh
 
 publish: null
