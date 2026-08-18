@@ -84,5 +84,9 @@ nsis:
   uninstallDisplayName: DSH Desktop
   # Replace the default NSIS uninstaller with our custom Uninstall_DSH_Desktop.exe.
   include: uninstaller/installer.nsh
+  # P1-3: 显式 lzma（electron-builder NSIS 默认压缩）并关闭 solid 字典共享，
+  # 换取更高的压缩一致性/稳定性；portable 目标保持默认不受影响。
+  compression: lzma
+  solid: false
 
 publish: null

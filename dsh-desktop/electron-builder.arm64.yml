@@ -88,5 +88,9 @@ nsis:
   uninstallDisplayName: DSH Desktop
   # Replace the default NSIS uninstaller with our custom Uninstall_DSH_Desktop.exe.
   include: uninstaller/installer.nsh
+  # P1-3: 与 electron-builder.yml 同步——显式 lzma 并关闭 solid 字典共享，
+  # portable 目标保持默认不受影响。
+  compression: lzma
+  solid: false
 
 publish: null
