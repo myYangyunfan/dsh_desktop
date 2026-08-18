@@ -59,6 +59,9 @@ function createBalanceScheduler(options) {
     throttleMs = DEFAULT_THROTTLE_MS,
     retryDelaysMs = DEFAULT_RETRY_DELAYS_MS,
     pollMs = DEFAULT_POLL_MS,
+    // P1-2+A-7：最小化/隐藏判定（壳层注入）。非 force 刷新（含后台轮询）
+    // 命中时直接跳过且不推进 lastAttemptAt —— 恢复可见后下一次刷新立即可达。
+    shouldSkipRefresh = null,
   } = options;
 
   let latestSeq = 0;        // 最近一次实际发出的请求序号（latest-sequence 守卫）
@@ -182,6 +185,11 @@ function createBalanceScheduler(options) {
    */
   function maybeRefresh(force = false) {
     if (stopped) return Promise.resolve(cache);
+    // P1-2+A-7：最小化/隐藏暂停。不推进 lastAttemptAt，恢复后立即可刷新；
+    // force（启动/重试/窗口恢复补刷）穿透本门。
+    if (!force && typeof shouldSkipRefresh === 'function' && shouldSkipRefresh()) {
+      return Promise.resolve(cache);
+    }
     const nowMs = Date.now();
     if (!force && nowMs - lastAttemptAt < throttleMs) return Promise.resolve(cache);
     lastAttemptAt = nowMs;

@@ -3831,6 +3831,10 @@ function ensureBalanceScheduler() {
         try { mainWindow.webContents.send('dsh:balance', result); } catch {}
       }
     },
+    // P1-2+A-7：最小化/隐藏时暂停后台轮询（含 3 分钟定时器），恢复显示后
+    // 由 restore 事件 force 补刷。不以失焦为触发——副屏并排可见时失焦是常态。
+    shouldSkipRefresh: () => !!(mainWindow && !mainWindow.isDestroyed() &&
+      (mainWindow.isMinimized() || !mainWindow.isVisible())),
     log,
   });
   return balanceScheduler;
@@ -3844,6 +3848,8 @@ function refreshBalance() {
 // 节流刷新：会话完成 / 窗口显示 / 轮询共用，距上次不足 30s 跳过，
 // 避免高频事件（流式多回合）触发过多 HTTP 请求。
 function maybeRefreshBalance(force = false) {
+  // 直接转发编排器。最小化/隐藏暂停由 ensureBalanceScheduler 注入的
+  // shouldSkipRefresh 控制（含后台轮询），恢复补刷见 startBalanceLoop。
   return ensureBalanceScheduler().maybeRefresh(force);
 }
 
@@ -3852,6 +3858,11 @@ function startBalanceLoop() {
   // 更新慢，缩短轮询并配合「窗口显示/会话完成」触发点）。失败后的加速
   // 重试（30s→1m→2m→5m 指数退避）由编排器内部负责。
   ensureBalanceScheduler().start();
+  // P1-2+A-7：最小化/隐藏期间轮询已暂停（shouldSkipRefresh 注入），
+  // 窗口恢复可见时立即补刷一次（force 穿透暂停门，节流仍兜底）。
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.on('restore', () => maybeRefreshBalance(true));
+  }
 }
 
 // ---------------------------------------------------------------------------
