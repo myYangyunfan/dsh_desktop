@@ -234,14 +234,14 @@
 				'body[data-dsh-quest-ui] .JObwrW_panel{line-height:1.6}',
 				'body[data-dsh-quest-ui] .JObwrW_figures{color:var(--qdu-label-2)}',
 				// —— dsh-synapse 会话地图适配（内置后集成）：切换按钮 Quest 化，
-				//    从自绘标题栏（top:12 会压住窗口控制区）下移到顶部标签栏同一
-				//    水平面（y≈80，与对话/文件/终端 tabs 及右上角临时会话钮对齐），
-				//    样式统一 Quest 语言（细边白底胶囊、active 主色）；overlay 淡入 ——
-				'body[data-dsh-quest-ui] .dsh-synapse-switch{top:80px!important;border:1px solid color-mix(in srgb,var(--qdu-label-1) 10%,transparent)!important;background:var(--qdu-bg-card)!important;box-shadow:0 1px 3px rgba(16,24,40,.06)!important;border-radius:999px!important}',
+				//    与顶部 Session log（wSkVaW_headerUtilities，y≈48）同一水平面；
+				//    地图 overlay 下移避开 Electron 自绘标题栏（0-36px），
+				//    否则 iframe 内 topbar 会被标题栏挡住上半截 ——
+				'body[data-dsh-quest-ui] .dsh-synapse-switch{top:48px!important;border:1px solid color-mix(in srgb,var(--qdu-label-1) 10%,transparent)!important;background:var(--qdu-bg-card)!important;box-shadow:0 1px 3px rgba(16,24,40,.06)!important;border-radius:999px!important}',
 				'body[data-dsh-quest-ui] .dsh-synapse-switch button{font-weight:500!important;color:var(--qdu-label-2)!important;border-radius:999px!important;transition:background-color .15s var(--qdu-ease),color .15s var(--qdu-ease)!important}',
 				'body[data-dsh-quest-ui] .dsh-synapse-switch button:hover{background:var(--qdu-hover)!important;color:var(--qdu-label-1)!important}',
 				'body[data-dsh-quest-ui] .dsh-synapse-switch button.active{background:var(--qdu-accent)!important;color:#fff!important}',
-				'body[data-dsh-quest-ui] .dsh-synapse-overlay{animation:qdu-fade-in .18s var(--qdu-ease)}',
+				'body[data-dsh-quest-ui] .dsh-synapse-overlay{animation:qdu-fade-in .18s var(--qdu-ease);top:36px!important}',
 				'@keyframes qdu-fade-in{from{opacity:0}to{opacity:1}}',
 			
 				// —— 空态建议卡：圆点前缀（::before 14px 描边圆）+ 40px 行高 +
