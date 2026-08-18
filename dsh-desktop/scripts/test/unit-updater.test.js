@@ -42,7 +42,8 @@ test('checkLatest: merges GitHub prerelease and npm fallback sources', async () 
     fetchGitHubReleases: async () => [
       { tag_name: 'dsh-v0.1.0-rc.7', draft: false, published_at: '2026-08-17T12:01:58Z' },
     ],
-    runNpm: async () => '{"latest":"0.1.0-rc.6","next":"0.1.0-rc.7"}',
+    fetchNpmDistTags: async () => ({ latest: '0.1.0-rc.6', next: '0.1.0-rc.7' }),
+    fetchNpmVersionExists: async () => true,
   };
   assert.equal(await updater.checkLatest(ctx), '0.1.0-rc.7');
 });
@@ -50,7 +51,7 @@ test('checkLatest: merges GitHub prerelease and npm fallback sources', async () 
 test('checkLatest: GitHub failure falls back to npm dist-tags', async () => {
   const ctx = {
     fetchGitHubReleases: async () => { throw new Error('network down'); },
-    runNpm: async () => '{"latest":"0.1.0-rc.6","next":"0.1.0-rc.7"}',
+    fetchNpmDistTags: async () => ({ latest: '0.1.0-rc.6', next: '0.1.0-rc.7' }),
   };
   assert.equal(await updater.checkLatest(ctx), '0.1.0-rc.7');
 });
@@ -60,11 +61,81 @@ test('checkLatest: does not advertise a GitHub version missing from npm', async 
     fetchGitHubReleases: async () => [
       { tag_name: 'dsh-v0.1.0-rc.8', draft: false, published_at: '2026-08-18T00:00:00Z' },
     ],
-    runNpm: async (_ctx, args) => args.includes('dist-tags')
-      ? '{"latest":"0.1.0-rc.7","next":"0.1.0-rc.7"}'
-      : '',
+    fetchNpmDistTags: async () => ({ latest: '0.1.0-rc.7', next: '0.1.0-rc.7' }),
+    fetchNpmVersionExists: async () => false,
   };
   assert.equal(await updater.checkLatest(ctx), '0.1.0-rc.7');
+});
+
+test('registryFromNpmrc: 注释/空行/多 registry 行取最后/非法值忽略/尾斜杠归一', () => {
+  assert.equal(updater.registryFromNpmrc(''), null);
+  assert.equal(updater.registryFromNpmrc('# comment\n; also comment\n'), null);
+  assert.equal(updater.registryFromNpmrc('registry=https://registry.npmmirror.com/'), 'https://registry.npmmirror.com');
+  assert.equal(
+    updater.registryFromNpmrc('registry = https://registry.npmmirror.com\nregistry=https://registry.npmjs.org/'),
+    'https://registry.npmjs.org',
+    '后写的 registry 行覆盖先写',
+  );
+  assert.equal(updater.registryFromNpmrc('registry=ftp://bad.example/'), null, '非 http(s) 值忽略');
+  assert.equal(updater.registryFromNpmrc('proxy=http://proxy:8080\nregistry=https://registry.npmjs.org/'), 'https://registry.npmjs.org', '无关行跳过');
+});
+
+test('resolveNpmRegistry: env 优先 → 项目 npmrc → 用户 npmrc → 默认', () => {
+  const fsMod = {
+    existsSync: (p) => p.includes('.npmrc'),
+    readFileSync: (p) => (p.includes('userdata') ? 'registry=https://project.example/\n' : 'registry=https://user.example/\n'),
+  };
+  // 默认
+  assert.equal(updater.resolveNpmRegistry({ env: {}, fsMod: { existsSync: () => false, readFileSync: () => '' } }), 'https://registry.npmjs.org');
+  // env 优先
+  assert.equal(
+    updater.resolveNpmRegistry({ env: { NPM_CONFIG_REGISTRY: 'https://env.example/' }, userDataDir: 'userdata', homeDir: 'home', fsMod }),
+    'https://env.example',
+  );
+  // 项目优先于用户
+  assert.equal(
+    updater.resolveNpmRegistry({ env: {}, userDataDir: 'userdata', homeDir: 'home', fsMod }),
+    'https://project.example',
+  );
+  // 无项目文件 → 用户
+  assert.equal(
+    updater.resolveNpmRegistry({ env: {}, userDataDir: 'nodir', homeDir: 'home', fsMod: { existsSync: (p) => p.includes('home'), readFileSync: () => 'registry=https://user.example/\n' } }),
+    'https://user.example',
+  );
+  // env 非法值（非 http）→ 忽略走文件
+  assert.equal(
+    updater.resolveNpmRegistry({ env: { NPM_CONFIG_REGISTRY: 'garbage' }, userDataDir: 'userdata', homeDir: 'home', fsMod }),
+    'https://project.example',
+  );
+});
+
+test('npmDistTagsUrl / npmVersionUrl: scoped 包编码与尾斜杠归一', () => {
+  assert.equal(
+    updater.npmDistTagsUrl('https://registry.npmjs.org', '@deepseek-ai/dsh'),
+    'https://registry.npmjs.org/-/package/%40deepseek-ai%2Fdsh/dist-tags',
+  );
+  assert.equal(
+    updater.npmVersionUrl('https://registry.npmjs.org/', '@deepseek-ai/dsh', '0.1.0-rc.7'),
+    'https://registry.npmjs.org/%40deepseek-ai%2Fdsh/0.1.0-rc.7',
+  );
+});
+
+test('checkNpmLatest: next>latest 场景取 dist-tags 最大值（rc 通道可发现）', async () => {
+  const ctx = {
+    fetchNpmDistTags: async () => ({ latest: '0.1.0-rc.6', next: '0.1.0-rc.7' }),
+  };
+  assert.equal(await updater.checkNpmLatest(ctx), '0.1.0-rc.7');
+});
+
+test('checkNpmLatest: 无可识别版本号抛错', async () => {
+  const ctx = { fetchNpmDistTags: async () => ({ latest: 'not-a-version' }) };
+  await assert.rejects(() => updater.checkNpmLatest(ctx), /无可识别版本号/);
+});
+
+test('checkNpmVersion: 注入探测 200/404 语义透传', async () => {
+  const ctx = { fetchNpmVersionExists: async (url) => url.includes('0.1.0-rc.8') };
+  assert.equal(await updater.checkNpmVersion(ctx, '0.1.0-rc.8'), true);
+  assert.equal(await updater.checkNpmVersion(ctx, '0.1.0-rc.9'), false);
 });
 
 test('activeVersion: returns "0.0.0" when both overlay and bundled are null', { skip: hasBundledDsh && 'bundled dsh installed: fallback branch not reachable' }, () => {

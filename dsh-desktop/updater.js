@@ -23,12 +23,16 @@
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
+const os = require('node:os');
 const https = require('node:https');
 const tls = require('node:tls');
 
 const PKG = '@deepseek-ai/dsh';
 const GITHUB_RELEASES_URL = 'https://api.github.com/repos/deepseek-ai/deepseek-harness/releases?per_page=20';
 const IS_WIN = process.platform === 'win32';
+const DEFAULT_REGISTRY = 'https://registry.npmjs.org';
+// npm 管道输出只用于安装日志/错误尾部，64KB 尾部环形足够（历史版本无上限累积）。
+const MAX_PIPE_BUF = 64 * 1024;
 
 let activeProc = null;
 let trustedCAs = null;
@@ -149,13 +153,15 @@ function runNpm(ctx, args, { timeoutMs = 30 * 60 * 1000, logStream = null } = {}
     activeProc = proc;
     let settled = false;
     let stdoutBuf = '';
+    let stderrBuf = '';
     // finish 只允许「当前在途的 npm 进程」清除 activeProc：并发 runNpm 时
     // 较早结束者不得把较晚启动者的进程引用清掉（abort 会因此漏杀）。
     const finish = (fn, value) => { if (!settled) { settled = true; clearTimeout(timer); if (activeProc === proc) activeProc = null; fn(value); } };
     const timer = setTimeout(() => { killProc(proc); finish(reject, new Error('npm 执行超时（' + Math.round(timeoutMs / 1000) + ' 秒）')); }, timeoutMs);
-    let stderrBuf = '';
-    proc.stdout.on('data', (c) => { stdoutBuf += c.toString(); if (logStream) logStream.write(c); });
-    proc.stderr.on('data', (c) => { stderrBuf += c.toString(); if (logStream) logStream.write(c); });
+    // 尾部环形缓冲：只保留最近 64KB，防止异常输出撑爆内存（logStream 仍全量落盘）。
+    const ring = (buf, chunk) => { const s = buf + chunk; return s.length > MAX_PIPE_BUF ? s.slice(-MAX_PIPE_BUF) : s; };
+    proc.stdout.on('data', (c) => { stdoutBuf = ring(stdoutBuf, c.toString()); if (logStream) logStream.write(c); });
+    proc.stderr.on('data', (c) => { stderrBuf = ring(stderrBuf, c.toString()); if (logStream) logStream.write(c); });
     proc.on('error', (err) => finish(reject, err));
     proc.on('exit', (code) => {
       if (code === 0) finish(resolve, stdoutBuf);
@@ -197,40 +203,135 @@ function selectLatestRelease(releases) {
   return best;
 }
 
-function fetchJson(url, { timeoutMs = 12000 } = {}) {
+// 统一 HTTPS JSON 读取（GitHub Releases 与 npm registry 共用）：
+// 跟随重定向（≤3 跳）、4MB 上限、系统+内置根证书并集（企业代理友好，TLS 校验不降级）。
+function fetchJson(url, { timeoutMs = 12000, accept = 'application/vnd.github+json', source = 'GitHub Releases' } = {}) {
   return new Promise((resolve, reject) => {
     const requestOptions = {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        'User-Agent': 'dsh-desktop-updater',
-      },
+      headers: { Accept: accept, 'User-Agent': 'dsh-desktop-updater' },
     };
-    // Node does not use the Windows certificate store unless explicitly
-    // requested. Combine system and bundled roots so enterprise proxies work
-    // without weakening TLS validation (`rejectUnauthorized` stays enabled).
     if (typeof tls.getCACertificates === 'function') {
       if (trustedCAs === null) trustedCAs = [...new Set([...tls.rootCertificates, ...tls.getCACertificates('system')])];
       requestOptions.ca = trustedCAs;
     }
-    const req = https.get(url, requestOptions, (res) => {
-      let body = '';
-      res.setEncoding('utf8');
-      res.on('data', (chunk) => {
-        body += chunk;
-        if (body.length > 4 * 1024 * 1024) req.destroy(new Error('响应过大'));
-      });
-      res.on('end', () => {
-        if (res.statusCode < 200 || res.statusCode >= 300) {
-          reject(new Error(`GitHub Releases HTTP ${res.statusCode}`));
+    let redirects = 3;
+    const attempt = (currentUrl) => {
+      const req = https.get(currentUrl, requestOptions, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects > 0) {
+          redirects--;
+          res.resume();
+          attempt(new URL(res.headers.location, currentUrl).toString());
           return;
         }
-        try { resolve(JSON.parse(body)); }
-        catch (err) { reject(new Error('GitHub Releases 返回了无效 JSON: ' + err.message)); }
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => {
+          body += chunk;
+          if (body.length > 4 * 1024 * 1024) req.destroy(new Error('响应过大'));
+        });
+        res.on('end', () => {
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            reject(new Error(source + ' HTTP ' + res.statusCode));
+            return;
+          }
+          try { resolve(JSON.parse(body)); }
+          catch (err) { reject(new Error(source + ' 返回了无效 JSON: ' + err.message)); }
+        });
       });
-    });
-    const timer = setTimeout(() => req.destroy(new Error('GitHub Releases 请求超时')), timeoutMs);
-    req.on('error', (err) => { clearTimeout(timer); reject(err); });
-    req.on('close', () => clearTimeout(timer));
+      const timer = setTimeout(() => req.destroy(new Error(source + ' 请求超时')), timeoutMs);
+      req.on('error', (err) => { clearTimeout(timer); reject(err); });
+      req.on('close', () => clearTimeout(timer));
+    };
+    attempt(url);
+  });
+}
+
+// --- npm registry 解析（禁止 spawn npm config；纯文本 .npmrc 解析） ----------
+// 优先级定死：① NPM_CONFIG_REGISTRY 环境变量 → ② 项目 .npmrc（userDataDir）
+// → ③ 用户 .npmrc（$HOME）→ ④ 默认官方 registry。值需以 http(s):// 开头，
+// 尾部斜杠归一（拼接时自行补 /）。
+
+/** 纯函数：从 .npmrc 文本提取最后一个有效 registry 行（npm 语义：后写覆盖）。 */
+function registryFromNpmrc(text) {
+  if (!text) return null;
+  let found = null;
+  for (const raw of String(text).split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#') || line.startsWith(';')) continue;
+    const m = /^registry\s*=\s*(\S+)\s*$/.exec(line);
+    if (m) {
+      const v = m[1].replace(/\/+$/, '');
+      if (/^https?:\/\//i.test(v)) found = v;
+    }
+  }
+  return found;
+}
+
+/** 解析 registry 基地址（无尾斜杠）。env/fsMod 可注入以便测试。 */
+function resolveNpmRegistry({ env = process.env, homeDir = null, userDataDir = null, fsMod = fs } = {}) {
+  const fromEnv = env && env.NPM_CONFIG_REGISTRY;
+  if (fromEnv && /^https?:\/\//i.test(String(fromEnv).trim())) {
+    return String(fromEnv).trim().replace(/\/+$/, '');
+  }
+  let project = null;
+  let user = null;
+  if (userDataDir) {
+    try {
+      const p = path.join(userDataDir, '.npmrc');
+      if (fsMod.existsSync(p)) project = registryFromNpmrc(fsMod.readFileSync(p, 'utf8'));
+    } catch {}
+  }
+  if (homeDir) {
+    try {
+      const p = path.join(homeDir, '.npmrc');
+      if (fsMod.existsSync(p)) user = registryFromNpmrc(fsMod.readFileSync(p, 'utf8'));
+    } catch {}
+  }
+  return project || user || DEFAULT_REGISTRY;
+}
+
+/** dist-tags 端点：GET <registry>/-/package/<pkg-encoded>/dist-tags → {latest, next, ...}。 */
+function npmDistTagsUrl(registry, pkg) {
+  return String(registry).replace(/\/+$/, '') + '/-/package/' + encodeURIComponent(pkg) + '/dist-tags';
+}
+
+/** 版本元数据端点：GET <registry>/<pkg-encoded>/<version> → 200 存在 / 404 不存在。 */
+function npmVersionUrl(registry, pkg, version) {
+  return String(registry).replace(/\/+$/, '') + '/' + encodeURIComponent(pkg) + '/' + encodeURIComponent(version);
+}
+
+/** 探测某版本在 registry 是否可解析（200=true / 404=false / 其它抛错）。 */
+function npmVersionExists(url, { timeoutMs = 15000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const requestOptions = {
+      headers: { Accept: 'application/json', 'User-Agent': 'dsh-desktop-updater' },
+    };
+    if (typeof tls.getCACertificates === 'function') {
+      if (trustedCAs === null) trustedCAs = [...new Set([...tls.rootCertificates, ...tls.getCACertificates('system')])];
+      requestOptions.ca = trustedCAs;
+    }
+    let redirects = 3;
+    const attempt = (currentUrl) => {
+      const req = https.get(currentUrl, requestOptions, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects > 0) {
+          redirects--;
+          res.resume();
+          attempt(new URL(res.headers.location, currentUrl).toString());
+          return;
+        }
+        // 响应体不需要解析：读完丢弃，仅依据状态码。
+        res.resume();
+        res.on('end', () => {
+          if (res.statusCode === 200) resolve(true);
+          else if (res.statusCode === 404) resolve(false);
+          else reject(new Error('npm registry HTTP ' + res.statusCode));
+        });
+      });
+      const timer = setTimeout(() => req.destroy(new Error('npm registry 请求超时')), timeoutMs);
+      req.on('error', (err) => { clearTimeout(timer); reject(err); });
+      req.on('close', () => clearTimeout(timer));
+    };
+    attempt(url);
   });
 }
 
@@ -255,20 +356,27 @@ function parseNpmVersions(output) {
 }
 
 async function checkNpmLatest(ctx) {
-  // `version` only follows the `latest` tag and therefore misses rc/beta
+  // `latest` tag only follows the `latest` tag and therefore misses rc/beta
   // releases. Dist-tags includes both latest and next on the official npm
-  // package (rc.6/latest, rc.7/next at the time of this fix).
-  const npmRunner = ctx.runNpm || runNpm;
-  const out = await npmRunner(ctx, ['view', PKG, 'dist-tags', '--json'], { timeoutMs: 90000 });
-  const versions = parseNpmVersions(out).map(parseReleaseVersion).filter(Boolean);
+  // package (rc.6/latest, rc.7/next at the time of this fix). P1-1: 改纯 HTTPS
+  // 读取 dist-tags 端点，不再 spawn npm view（6h 周期检查零子进程）。
+  const registry = resolveNpmRegistry({ homeDir: os.homedir(), userDataDir: ctx.userDataDir });
+  const distTags = ctx.fetchNpmDistTags
+    ? await ctx.fetchNpmDistTags()
+    : await fetchJson(npmDistTagsUrl(registry, PKG), { accept: 'application/json', source: 'npm registry' });
+  const versions = parseNpmVersions(JSON.stringify(distTags)).map(parseReleaseVersion).filter(Boolean);
   if (versions.length === 0) throw new Error('npm dist-tags 无可识别版本号');
   return versions.reduce((best, v) => compareVersions(v, best) > 0 ? v : best, versions[0]);
 }
 
 async function checkNpmVersion(ctx, version) {
-  const npmRunner = ctx.runNpm || runNpm;
-  const out = await npmRunner(ctx, ['view', PKG + '@' + version, 'version'], { timeoutMs: 90000 });
-  return parseNpmVersions(out).map(parseReleaseVersion).includes(version);
+  // P1-1: 版本存在性探测改 HTTPS（GET 版本元数据端点，200/404 判定），
+  // 不再 spawn npm view。
+  const registry = resolveNpmRegistry({ homeDir: os.homedir(), userDataDir: ctx.userDataDir });
+  const url = npmVersionUrl(registry, PKG, version);
+  return ctx.fetchNpmVersionExists
+    ? await ctx.fetchNpmVersionExists(url)
+    : await npmVersionExists(url);
 }
 
 async function checkLatest(ctx) {
@@ -386,4 +494,9 @@ module.exports = {
   applyUpdate,
   rollback,
   abort,
+  registryFromNpmrc,
+  resolveNpmRegistry,
+  npmDistTagsUrl,
+  npmVersionUrl,
+  npmVersionExists,
 };
