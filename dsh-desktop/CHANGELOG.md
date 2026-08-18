@@ -5,6 +5,29 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 ### 修复
+- **余额显示链路整体加固（架构重构而非补丁）**：本轮费用计算、余额查询、编排推送全链路系统性修复 21 处缺陷（2 严重 / 3 高 / 8 中 / 8 低），全部按「整体架构改进」落地：
+  - **本轮费用输入项恒为 0（严重，OpenAI 兼容端点）**：`sessionCost` 的 `uncachedInputTokens + cacheWriteTokens` 求和先于 `||0` 守卫求值，openai-compat 适配器产出 `inputTokens` 形态且不产出 `cacheWriteTokens`，两处契约不匹配 → `undefined+undefined=NaN→0`，所有 one-api/SiliconFlow/Ollama 端点本轮费用只剩 cacheRead+output 计费。根治：① 客户端新增 `normalizeUsage` 归一化（投影/透传两种形态统一四桶、每操作数独立守卫）；② `openai-compat.js` 的 `mapUsage` 对齐 harness DISJOINT 契约（`inputTokens = prompt − cacheRead − cacheWrite`，缓存写单列、兼容多种 provider 字段命名）并附带 `model` 字段。
+  - **重定向无条件携带 Authorization 泄露 API Key（严重，安全）**：`fetchJson` 跟随 3xx 时把密钥原样转发到新 URL，跨主机或 https→http 降级时计费凭证被发往非预期主机。根治：首跳（用户显式配置的端点）始终携带密钥；重定向跳仅「同主机且全程 https」保留，其余剥离并经 `warning` 显式告警。
+  - **refreshBalance 无并发去重（高）**：并发触发时慢失败覆盖快成功 / 旧数据覆盖新数据（last-writer-wins）。根治：新增 `balance-scheduler.js` 编排模块——in-flight 去重（并发共享一次请求）+ latest-sequence 守卫（只有最新请求结果写 cache/推送）。
+  - **持久失败 30s 无限重试（高）**：密钥错误/断网时每 30s 两发 HTTP 永不停歇。根治：指数退避 30s→1m→2m→5m 封顶，成功清零，禁用状态不重试，退出前统一清理。
+  - **默认模型价估实际会话费用，最大 3x 偏差（高）**：prices 取 settings 默认模型档套到会话全部 token。根治：主进程每次推送**全模型价目表 `priceTable`**（同一时刻求值），适配器 usage 携带 `model`，客户端按会话真实模型选档；会话模型不可知时明确标注「按默认模型 X 单价估算（会话实际模型未知）」，绝不假装精确。
+  - **peak 与 prices 两次独立 `new Date()` + 切换点不检查（中）**：临界秒 chip 文案与计价档可能自相矛盾，且旧版期 `isPeakHour` 也返回 true。根治：编排层取单一 `now` 传入三个函数（签名支持 date 参数）；`isPeakHour` 在峰谷生效节点（2026-08-16 16:00 UTC）之前恒 false。
+  - **pickUsageWindow 把 percent:null 转 0（中）**：`Number(null)=0` 使「未知用量」显示成「0%」。根治：`percent == null ? NaN : Number(...)`，非有限一律保持 null。
+  - **超时为 socket 空闲超时、1MB 上限按字符计（中）**：slow-drip 服务器可长期保活绕过 15s；多字节内容实际可超 1MB。根治：跨重定向共享 deadline 的总超时 + socket 空闲双保险；按 `Buffer` 字节累计上限。
+  - **readCredentialLine 逐行正则不区分 YAML 段（中）**：嵌套段同名键可能读到错误密钥。根治：只匹配列 0 顶层键，支持引号值/行尾注释/正则元字符键名。
+  - **http 端点明文传输无提示（中）**：显式支持 http 代理但密钥明文过网。根治：结果携带 `warning`，主进程记日志，README 提示仅建议本地代理。
+  - **格式化余额字符串静默清零（中）**：`Number("1,234.56")=NaN→0`。根治：`parseAmount` 剥离千分位/货币符号、负数钳 0、脏数据显式告警。
+  - **sessionCost 无下限保护（中）**：负 token 产生负费用。根治：逐桶 `Math.max(0, …)`。
+  - **OpenCode URL 硬编码无环境覆盖（中）**：代理场景必走公网。根治：`OPENCODE_USAGE_URL` 环境变量覆盖。
+  - **低危项全部修复**：`money` 格式化边界（0→"0.00"、超大→本地化不出现 `1e+21`、非有限→"—"）；外链 `rel="noopener noreferrer"`；`goUsageText` 全空返回 null 不再渲染空白 chip；`readActiveModel` 逐行状态机锚定段（前缀相似段/深层嵌套同名键不误匹配）；refreshBalance 内 settings 双读合并为单读；IPC 双通道重复投递改为「处理器只触发不返回数据 + 客户端只消费事件 + 页面内已收推送不再重复触发」；数组子元素补稳定 key 消除 React dev 告警；价目表 `PRICING_MODELS` 统一维护。切换瞬间价格跳变（低）经评估为官方整点计费口径本身，保持整点切换并保证显示与计价档自洽（见 `docs/balance-architecture.md` §7）。
+  - **测试体系**：新增/扩充 79 项 node:test 断言——`unit-balance`（21：峰谷临界点 ±1ms、顶层键锚定、段锚定、金额解析矩阵、端点覆盖、重定向端口归一）、`unit-balance-scheduler`（14：节流/去重/stop 守卫/退避重试/单一 now/设置单读/禁用短路）、`integration-balance`（16：真实回环 HTTP/HTTPS mock——重定向密钥剥离矩阵、slow-drip 总超时、字节体积上限、http 警告）、`edge-client`（19：vm 沙箱加载真实产物，token 归一化矩阵含 [BUG] 回归用例）、`unit-openai-compat`（9：适配器 DISJOINT 契约端到端 + 缓存字段规整）+ **真实环境验证 `verify-balance-renderer`**（16：仓库自带 Electron 在隐藏 BrowserWindow + 真实 React 18 + 真实 DOM 中加载 client.js 产物，全程零网络、userData 指向临时目录、绝不触碰真实 ~/.dsh）；存量 `verify-balance-dock` 17 项断言保持通过，合计 112 项全部通过。全量测试目录仅剩 2 项与本改动无关的既有环境前提失败（`unit-updater` 的 activeVersion 两项断言依赖「本机无 bundled agent」，在干净检出通过、带 node_modules 的开发检出受本机 dsh 版本影响）。
+  - **文档与打包**：新增 `docs/balance-architecture.md`（数据流/载荷契约/token 契约/安全边界/编排语义/缺陷映射表）；README 余额段更新（3 分钟轮询、峰谷价目表、新环境变量、http 告警）；`balance-scheduler.js` 纳入四个 electron-builder 配置的 files 清单与 `check-syntax.js` 语法门。
+- **余额显示链路加固——全量 review 修正**：
+  - **`balancePrices.<model>` 覆盖现作用于价目表（修复功能回归）**：原实现把用户单价覆盖只并入 `prices`（默认模型档），而客户端按会话真实模型优先走 `priceTable`，导致「真实跑该模型的会话静默忽略覆盖」。现覆盖统一合并进 `priceTable`，`prices` 恒等于 `priceTable[默认模型]`，定价单一真源；`unit-balance-scheduler` 断言同步更新。
+  - **`mapUsage` 缓存字段 Number 规整**：`cacheReadTokens`/`cacheWriteTokens` 原样透传，provider 返回字符串会破坏 DISJOINT 三桶不变量、垃圾串会产出 `inputTokens=NaN`。现经 `toFiniteTokenCount` 规整（仅接受非负有限数，其余忽略），并补「数字串/垃圾串」断言。
+  - **OpenCode Go 告警可见性**：http 明文 / 重定向剥离密钥的 `warning` 原落在 `opencodeGo.warning` 但既不记日志也不展示，现 `apply` 补记日志，与余额侧一致。
+  - **latest-sequence 守卫口径修正**：该守卫在当前 API 下恒真（in-flight 去重已杜绝并发多请求），属防御性兜底；补「stop() 期间在途请求不推送」单测覆盖其可达的 `!stopped` 分支，架构文档与测试头注释如实标注。
+  - **低危收口**：纯浏览器兜底价 `FALLBACK_PRICES` 对齐默认模型 deepseek-v4-pro（原为 flash，低估 3x）；重定向同主机判定改为 hostname+port（默认端口归一化）；`disabled` 退化形态补齐契约字段；`queryBalance` 对非对象响应加守卫 + 去重 `parseAmount` 调用；fetchJson 重定向清理本跳 socket 空闲定时器；React 数组子元素 key 修正（消除残留 dev 告警）；`verify-balance-renderer` 防御性清除 `ELECTRON_RUN_AS_NODE` 并加 `--disable-gpu`（无 GPU 环境可复现）。
 - **内置插件市场 zat-dsh-engine 默认移除（社区反馈：默认不要带旧引擎市场）**：`COMPANION_PLUGINS` 移除 `plugin-market`（`assets/plugins/zat-dsh-engine` 目录随包删除），内置市场统一为 dshmarket（设置页入口不变）。存量 profile 里已装配的旧市场副本由 `retireZatEngine` 一次性清理（profile node_modules 目录 + manifest bundles 登记），settings 标记 `zatEngineRetired` 保证只清一次——之后用户从 dshmarket 主动重装不受影响。
 - **内置 Agent 预设保护（更新不再覆盖用户改过的 `assets/agent-presets`）**：用户直接修改安装目录内置预设后，客户端更新（NSIS/portable 覆盖安装）会整体替换 `resources/app` 把改动冲掉。现更新安装前把「用户改过」的文件快照到 `userData/preset-guard/backup`（覆盖安装不触碰 userData），新版本首次启动自动恢复（官方改过同一文件时用户版优先）；基线按版本管理（`preset-guard/baseline.json` 记逐文件 sha256），官方改动与用户改动始终可区分，下一轮更新仍能正确检测。更新未实际发生时快照自动丢弃。新增 `scripts/lib/preset-guard.js` 纯函数模块 + 9 项单测。
 - **agent 更新回退失败后静默卡住**：overlay agent 启动失败弹窗的「回退到内置版本并重试」分支直接调用 `updater.rollback()` 且无异常保护——回退本身失败（overlay 目录被安全软件/句柄锁定）时异常成为 unhandledRejection，用户点击后应用无任何反应、静默卡在失败页。现回退包 try/catch，失败显式弹「回退失败」错误框（说明文件可能被占用）并给「重试回退 / 退出」两个出口。

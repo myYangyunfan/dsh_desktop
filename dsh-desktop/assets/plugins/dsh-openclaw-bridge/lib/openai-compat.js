@@ -94,15 +94,47 @@ function mapFinishReason(reason) {
   }
 }
 
-function mapUsage(usage) {
-  const cacheRead = usage?.prompt_tokens_details?.cached_tokens ?? usage?.prompt_cache_hit_tokens;
-  const reasoning = usage?.completion_tokens_details?.reasoning_tokens;
-  return {
-    inputTokens: usage.prompt_tokens - (cacheRead ?? 0),
-    outputTokens: usage.completion_tokens,
-    ...(cacheRead !== void 0 ? { cacheReadTokens: cacheRead } : {}),
-    ...(reasoning !== void 0 ? { reasoningTokens: reasoning } : {}),
-  };
+// ---------- 用量映射 ----------
+//
+// 契约（与 @deepseek-ai/dsh-llm-deepseek 的 mapUsage 同构，DISJOINT 计数）：
+//   · prompt_tokens 含缓存读（provider 端 prompt_tokens = 缓存命中 + 未命中），
+//     harness 契约要求 inputTokens 为「扣除缓存读」后的输入；缓存写 token
+//     （cache creation）也包含在 prompt_tokens 内，因此 inputTokens 同时扣除
+//     缓存写——保证 `inputTokens + cacheReadTokens + cacheWriteTokens` 恰好
+//     等于 prompt_tokens，不会在计费侧重复计费。
+//   · 各字段兼容多种 provider 命名（DeepSeek / OpenAI 标准 / 常见聚合网关）。
+//   · 附带 model 字段：余额小部件按会话真实模型取价（priceTable 契约）。
+// 规整 token 计数字段：仅接受非负有限数，其余（缺失/垃圾串/负数/NaN/Infinity）
+// 一律视为「无该字段」（void 0）——既保证出站字段为 number 类型，又避免垃圾
+// 输入污染 DISJOINT 不变量（inputTokens = prompt − cacheRead − cacheWrite）。
+function toFiniteTokenCount(v) {
+	if (v === void 0 || v === null) return void 0;
+	const n = Number(v);
+	return Number.isFinite(n) && n >= 0 ? n : void 0;
+}
+
+function mapUsage(usage, model) {
+	const prompt = Number(usage?.prompt_tokens) || 0;
+	const completion = Number(usage?.completion_tokens) || 0;
+	const cacheRead = toFiniteTokenCount(
+		usage?.prompt_tokens_details?.cached_tokens ?? usage?.prompt_cache_hit_tokens
+	);
+	const cacheWrite = toFiniteTokenCount(
+		usage?.prompt_tokens_details?.cache_creation_tokens
+			?? usage?.prompt_tokens_details?.cache_write_tokens
+			?? usage?.prompt_cache_write_tokens
+			?? usage?.prompt_cache_creation_tokens
+	);
+	const reasoning = usage?.completion_tokens_details?.reasoning_tokens;
+	const inputTokens = Math.max(0, prompt - (cacheRead ?? 0) - (cacheWrite ?? 0));
+	return {
+		inputTokens,
+		outputTokens: completion,
+		...(cacheRead !== void 0 ? { cacheReadTokens: cacheRead } : {}),
+		...(cacheWrite !== void 0 ? { cacheWriteTokens: cacheWrite } : {}),
+		...(reasoning !== void 0 ? { reasoningTokens: reasoning } : {}),
+		...(model !== void 0 && model !== null && String(model).length > 0 ? { model: String(model) } : {}),
+	};
 }
 
 function httpErrorCode(status, error) {
@@ -168,7 +200,7 @@ async function* parseSse(body, pkg) {
 }
 
 // ---------- SSE → StreamChunk 状态机（delta-only，BlockAssembler 自动拼块） ----------
-async function* translate(payloads) {
+async function* translate(payloads, model) {
   let textIndex = -1;
   const toolBlocks = new Map();
   let nextIndex = 0;
@@ -220,7 +252,7 @@ async function* translate(payloads) {
       }
       if (typeof choice.finish_reason === "string") pendingFinish = mapFinishReason(choice.finish_reason);
     }
-    if (chunk.usage) pendingUsage = mapUsage(chunk.usage);
+    if (chunk.usage) pendingUsage = mapUsage(chunk.usage, model);
   }
 }
 
@@ -293,6 +325,6 @@ export class OpenAiCompatAdapter extends LlmAdapter {
       });
     }
     if (!response.body) throw new LlmError(this.pkg + ": API returned no response body", "EMPTY_RESPONSE");
-    yield* translate(parseSse(response.body, this.pkg));
+    yield* translate(parseSse(response.body, this.pkg), options.model);
   }
 }

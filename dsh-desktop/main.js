@@ -27,6 +27,7 @@ const os = require('node:os');
 const updater = require('./updater');
 const clientUpdater = require('./client-updater');
 const balance = require('./balance');
+const { createBalanceScheduler } = require('./balance-scheduler');
 const wslBackend = require('./wsl-backend');
 const { createGpuCrashGuard } = require('./scripts/gpu-crash-guard');
 const { togglePluginInPatch, setPluginRemoved } = require('./scripts/plugin-manager-patch');
@@ -228,7 +229,7 @@ let tray = null;
 let forceQuit = false;
 let clientUpdateBusy = false;
 let balanceCache = null;
-let balanceTimer = null;
+let balanceScheduler = null; // 余额刷新编排器（节流/并发仲裁/退避重试，见 balance-scheduler.js）
 let restartingServer = false;
 let trayRecoveryTimer = null;
 let backendMode = 'local'; // local | wsl（WSL 托管后端见 wsl-backend.js）
@@ -2990,8 +2991,12 @@ function registerChromeIpc() {
   });
 
   ipcMain.handle('dsh:balance-refresh', async (event) => {
-    if (!mainWindow || event.sender !== mainWindow.webContents) return balanceCache;
-    return refreshBalance();
+    if (!mainWindow || event.sender !== mainWindow.webContents) return null;
+    // 单一投递契约：处理器只触发刷新（数据经 'dsh:balance' 事件推送），
+    // 不返回值——杜绝「处理器返回值 + 事件推送」双通道重复投递。
+    // 显式触发绕过节流（页面挂载即要最新数据；并发由编排器仲裁）。
+    maybeRefreshBalance(true).catch(() => {});
+    return null;
   });
 
   // 文件还原（「文件」视图的回退）：按会话日志里已持久化的写前/写后全文，
@@ -3655,74 +3660,53 @@ function createTray() {
 
 // ---------------------------------------------------------------------------
 // DeepSeek 余额（推送到 Web UI 的 dsh-balance 插件）
+//
+// 编排逻辑（节流 / 并发仲裁 / 指数退避重试 / 单一出口推送）全部收口在
+// balance-scheduler.js（纯 Node 可单测）；本文件只做依赖注入与进程级接线。
+// 数据契约与安全边界见 docs/balance-architecture.md。
 // ---------------------------------------------------------------------------
 
-async function refreshBalance() {
-  if (!balanceDockEnabled()) {
-    const result = { ok: false, disabled: true, balances: [], prices: {}, error: 'balance dock disabled' };
-    balanceCache = result;
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('dsh:balance', result);
-    }
-    return result;
-  }
-  const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
-  const s = updater.loadSettings(updCtx());
-  // OpenCode Go 套餐用量（状态栏独立 chip，PR #44 语义）：settings.json 的
-  // showOpenCodeGoUsage:false 可整体关闭（查询与展示一并关闭）。
-  const opencodePromise = s.showOpenCodeGoUsage === false
-    ? Promise.resolve({ ok: false, disabled: true })
-    : balance.queryOpencodeUsage(home)
-      .catch((err) => ({ ok: false, error: String((err && err.message) || err) }));
-  let result;
-  try {
-    result = await balance.queryBalance(home);
-  } catch (err) {
-    result = { ok: false, error: String((err && err.message) || err), balances: [] };
-  }
-  result.opencodeGo = await opencodePromise;
-  // 按当前默认模型 + 当前时段（峰谷）计算有效单价；settings.json 的
-  // balancePrices.<model> 可整体覆盖该模型的单价。
-  const model = balance.readActiveModel(home) || 'deepseek-v4-pro';
-  const override = s.balancePrices && s.balancePrices[model];
-  result.prices = { ...balance.effectivePrice(model), ...(override || {}) };
-  result.model = model;
-  result.peak = balance.isPeakHour();
-  result.at = new Date().toISOString(); // 数据获取时间（UI 可显示「更新于 …」）
-  balanceCache = result;
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('dsh:balance', result);
-  }
-  if (!result.ok) {
-    // 查询失败：30s 后自动重试一次，避免长时间停留在过期/缺失状态。
-    if (balanceRetryTimer) clearTimeout(balanceRetryTimer);
-    balanceRetryTimer = setTimeout(() => {
-      balanceRetryTimer = null;
-      maybeRefreshBalance(true);
-    }, 30 * 1000);
-    if (balanceRetryTimer.unref) balanceRetryTimer.unref();
-  }
-  return result;
+function ensureBalanceScheduler() {
+  if (balanceScheduler) return balanceScheduler;
+  balanceScheduler = createBalanceScheduler({
+    getHome: () => effectiveDshHome() || path.join(os.homedir(), '.dsh'),
+    // 每次刷新只读取一次 settings（余额开关与 OpenCode Go 开关同源，避免双读）。
+    getSettings: () => updater.loadSettings(updCtx()),
+    queryBalance: balance.queryBalance,
+    queryOpencodeUsage: balance.queryOpencodeUsage,
+    readActiveModel: balance.readActiveModel,
+    effectivePrice: balance.effectivePrice,
+    priceTable: balance.priceTable,
+    isPeakHour: balance.isPeakHour,
+    // 数据唯一出口：写缓存（did-finish-load 补推用）+ 推送到渲染进程。
+    // IPC 处理器只触发刷新不返回数据，客户端只消费事件（单一投递契约）。
+    push: (result) => {
+      balanceCache = result;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        try { mainWindow.webContents.send('dsh:balance', result); } catch {}
+      }
+    },
+    log,
+  });
+  return balanceScheduler;
 }
 
-// 余额刷新节流：会话完成 / 窗口显示 / 轮询共用，距上次不足 30s 跳过，
-// 避免高频事件（流式多回合）触发过多 HTTP 请求。
-let lastBalanceRefreshAt = 0;
-let balanceRetryTimer = null; // 与 balanceTimer 同为模块级状态，集中声明（避免函数体后置声明）
+// 直接刷新（菜单开关 / IPC 显式触发，绕过节流；并发由编排器仲裁）。
+function refreshBalance() {
+  return ensureBalanceScheduler().maybeRefresh(true);
+}
 
+// 节流刷新：会话完成 / 窗口显示 / 轮询共用，距上次不足 30s 跳过，
+// 避免高频事件（流式多回合）触发过多 HTTP 请求。
 function maybeRefreshBalance(force = false) {
-  const now = Date.now();
-  if (!force && now - lastBalanceRefreshAt < 30 * 1000) return;
-  lastBalanceRefreshAt = now;
-  refreshBalance().catch(() => {});
+  return ensureBalanceScheduler().maybeRefresh(force);
 }
 
 function startBalanceLoop() {
   // 启动即刷新；此后每 3 分钟轮询（原 15 分钟——用户反馈余额显示不同步/
-  // 更新慢，缩短轮询并配合「窗口显示/会话完成」触发点）。
-  maybeRefreshBalance(true);
-  balanceTimer = setInterval(() => maybeRefreshBalance(), 3 * 60 * 1000);
-  if (balanceTimer.unref) balanceTimer.unref();
+  // 更新慢，缩短轮询并配合「窗口显示/会话完成」触发点）。失败后的加速
+  // 重试（30s→1m→2m→5m 指数退避）由编排器内部负责。
+  ensureBalanceScheduler().start();
 }
 
 // ---------------------------------------------------------------------------
@@ -5668,6 +5652,7 @@ function quitForClientUpdate(ctx, pending) {
   }
   updater.abort();
   if (sessionWatcher) sessionWatcher.stop();
+  if (balanceScheduler) balanceScheduler.stop();
   // 内置 Agent 预设保护：安装覆盖 resources/app 前，快照用户改过的
   // assets/agent-presets 文件到 userData（覆盖安装不触碰），新版本首启恢复。
   if (pending && pending.version) stagePresetGuardBackup(pending.version);
@@ -6387,8 +6372,7 @@ if (!gotLock) {
     updater.abort();
     if (recovery) recovery.dispose();
     if (sessionWatcher) sessionWatcher.stop();
-    if (balanceTimer) clearInterval(balanceTimer);
-    if (balanceRetryTimer) { clearTimeout(balanceRetryTimer); balanceRetryTimer = null; }
+    if (balanceScheduler) balanceScheduler.stop();
     if (trayRecoveryTimer) { clearInterval(trayRecoveryTimer); trayRecoveryTimer = null; }
     if (tray) { try { tray.destroy(); } catch {} tray = null; }
   });
