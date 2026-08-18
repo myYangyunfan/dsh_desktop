@@ -54,6 +54,7 @@ const { reconcileProfileBundles, createEntryListYamlParser, resolveBundleDirLike
 // 与 after-pack 共用同一实现，杜绝重复与漂移。
 const { COMPANION_PLUGINS } = require('./scripts/lib/companion-plugins');
 const { writeFileAtomic } = require('./scripts/lib/patch-io');
+const settingsGuard = require('./scripts/lib/settings-guard');
 const { applyPatchToFiles, setPatchCollectHook } = require('./scripts/lib/patch-engine');
 const { selectReleaseAsset } = require('./scripts/lib/github-release-assets');
 const { FLASH_PKG_REL, EXPOSE_PKG_REL, PW_REL, BASH_REL, CODE_PRESET_REL, patchTargets, localCopyFiles, guardCopyFiles, localNodeModulesRoots, slotCompatCopyFiles, slotCompatPatchTargets, transformFlashFix, transformExposeFix, transformShellDescriptionOptional, transformCodeModeCompat, transformAttachmentMimeTrust, transformLegacySlotKey, transformSlotUnkeyedCompat, transformSlotErrorIsolation, SLOT_ERROR_ISOLATE_MARKER, SLOT_KEY_COMPAT_PKG_REL, ATTACH_LOCAL_REL } = require('./scripts/lib/runtime-patches');
@@ -6488,6 +6489,58 @@ function startMemoryWatch() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// A-12 设置写入侧防御：settings.yaml（~/.dsh/settings.yaml）的写入者是 dsh
+// web 的 settings 服务，壳侧不直接写；这里 watch 文件变化 + 1s 防抖，写后
+// 校验（轻量 YAML 解析 + 必需段 agent-default-model 存在性）。校验失败且
+// 有「最近通过校验」备份 → tmp+rename 原子回写；无备份只记日志。回写后
+// 5s 冷却，避免对同一轮损坏内容循环回写刷屏。
+// ---------------------------------------------------------------------------
+const SETTINGS_GUARD_DEBOUNCE_MS = 1000;
+const SETTINGS_GUARD_BACKOFF_MS = 5000;
+let settingsGuardTimer = null;
+let settingsGuardWatcher = null;
+let settingsGuardBackoffUntil = 0;
+function settingsGuardBackupPath() {
+  return path.join(userDataDir, 'settings-guard-backup.json');
+}
+function setupSettingsGuard() {
+  try {
+    if (settingsGuardWatcher) {
+      settingsGuardWatcher.close();
+      settingsGuardWatcher = null;
+    }
+    const home = dshHome || path.join(os.homedir(), '.dsh');
+    const file = path.join(home, 'settings.yaml');
+    if (!fs.existsSync(file)) return;
+    settingsGuardWatcher = fs.watch(file, () => {
+      if (settingsGuardTimer) clearTimeout(settingsGuardTimer);
+      settingsGuardTimer = setTimeout(() => {
+        settingsGuardTimer = null;
+        // 回写冷却期内只校验不动作（仍刷新备份内容不必要——校验失败不更新备份）。
+        if (Date.now() < settingsGuardBackoffUntil) return;
+        try {
+          const r = settingsGuard.guardSettingsChange(file, {
+            backupFile: settingsGuardBackupPath(),
+            yaml: loadDshYamlDialect(),
+          });
+          if (r.changed) {
+            settingsGuardBackoffUntil = Date.now() + SETTINGS_GUARD_BACKOFF_MS;
+            log('boot', 'settings.yaml 写入校验失败，已自动回写最近可用版本: ' + (r.error || ''));
+          } else if (r.error && !r.readError) {
+            log('boot', 'settings.yaml 写入校验失败且无可用备份: ' + r.error);
+          }
+        } catch (err) {
+          log('boot', 'settings.yaml 防护检查失败: ' + ((err && err.message) || err));
+        }
+        // 文件被整文件替换（rename）后 fs.watch 可能失效：幂等重建。
+        setupSettingsGuard();
+      }, SETTINGS_GUARD_DEBOUNCE_MS);
+    });
+    settingsGuardWatcher.on('error', () => {});
+  } catch {}
+}
+
 async function boot() {
   // userData 重定向（便携版 data/ 与 dev 测试 DSH_DESKTOP_USERDATA）已在
   // 模块加载期、单实例锁校验之前完成（见 App lifecycle 区块），此处直接读取。
@@ -6663,6 +6716,7 @@ async function boot() {
       setTimeout(() => {
         sessionWatcher.start();
         startBalanceLoop();
+        setupSettingsGuard();
       }, 500).unref();
       maintainShortcuts();
       warnTempRun();
