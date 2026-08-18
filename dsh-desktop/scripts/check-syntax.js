@@ -40,6 +40,7 @@ const entryFiles = [
   'scripts/lib/js-syntax-scan.js',
   'scripts/lib/preset-guard.js',
   'scripts/lib/log-rotate.js',
+  'scripts/lib/roots-index.js',
   'scripts/patch-web-search-baseurl.js',
   'scripts/patch-menu-viewport.js',
   'scripts/patch-session-manage.js',

@@ -41,6 +41,7 @@ const {
 } = require('./scripts/plugin-manager-update');
 const { installBuiltinPresets } = require('./scripts/install-minimal-win-preset');
 const { SessionWatcher, scanZstdFrames } = require('./session-watcher');
+const rootsIndex = require('./scripts/lib/roots-index');
 const { RendererRecovery } = require('./renderer-recovery');
 const { CORE_BUNDLE_NAMES } = require('./profile-manifest');
 const { dedupePatchEntries, parseFailedLoaderIds, mapPackagesToPatchIds, findMissingBundleDeclarations, scanBundleContracts, removeBundlesFromProfile } = require('./profile-patch-heal');
@@ -199,31 +200,72 @@ function sessionFilesSignature() {
 const FILE_ROOTS_FORCE_COOLDOWN_MS = 5000;
 let fileRootsForceAt = 0;
 
+// P0-1 会话根索引：解析结果持久化到 <userData>/roots-index.json（path →
+// {mtimeMs,size,cwd}）。TTL 失效后的增量重扫只解析「索引外或 stat 已变化」
+// 的文件，避免每次刷新对全部会话文件全量读盘+zstd 解压（600 会话 = 数百 MB
+// 同步读盘，是 dsh:file-open 秒级卡顿根因）。索引读写失败均降级为旧行为。
+function rootsIndexFilePath() {
+  return path.join(userDataDir, 'roots-index.json');
+}
+let rootsIndexMemo = null;
+let rootsIndexDirty = false;
+let rootsIndexSaveFailLogged = false;
+
 function fileRoots() {
   if (Date.now() - fileRootsCache.at < 5 * 60 * 1000) return fileRootsCache.roots;
   const dshHome = process.env.DSH_HOME || path.join(os.homedir(), '.dsh');
   const roots = [];
+  const sessionFiles = [];
   const walk = (dir) => {
     let entries;
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const e of entries) {
       const p = path.join(dir, e.name);
       if (e.isDirectory()) { walk(p); continue; }
-      if (e.name !== 'session.jsonl.zstd') continue;
-      try {
-        const buf = fs.readFileSync(p);
-        const { frames } = scanZstdFrames(buf);
-        if (frames.length === 0) continue;
-        const text = zlib.zstdDecompressSync(buf.subarray(frames[0].start, frames[0].end)).toString('utf8');
-        const header = JSON.parse(text.split('\n', 1)[0]);
-        if (header && typeof header.cwd === 'string' && header.cwd) roots.push(header.cwd);
-      } catch { /* 跳过损坏日志 */ }
+      if (e.name === 'session.jsonl.zstd') sessionFiles.push(p);
     }
   };
   walk(path.join(dshHome, 'sessions'));
+  // 索引加载（进程内 memo；userDataDir 在 boot 后已赋值）。
+  if (!rootsIndexMemo) rootsIndexMemo = rootsIndex.loadRootsIndex(rootsIndexFilePath(), fs, path);
+  const entries = rootsIndexMemo.entries;
+  let hit = 0;
+  let parsed = 0;
+  for (const p of sessionFiles) {
+    let st;
+    try { st = fs.statSync(p); } catch { continue; }
+    const e = entries[p];
+    if (e && typeof e.cwd === 'string' && e.cwd && e.mtimeMs === st.mtimeMs && e.size === st.size) {
+      // 索引命中：零读盘（不 open 文件）。
+      roots.push(e.cwd);
+      hit += 1;
+      continue;
+    }
+    const cwd = rootsIndex.readSessionCwd(p, { fs, scan: scanZstdFrames, inflate: (b) => zlib.zstdDecompressSync(b) });
+    if (cwd) {
+      entries[p] = { mtimeMs: st.mtimeMs, size: st.size, cwd };
+      roots.push(cwd);
+      parsed += 1;
+    } else {
+      // 解析失败（损坏/空）：删除过期条目，避免索引膨胀。
+      delete entries[p];
+    }
+    rootsIndexDirty = true;
+  }
   fileRootsCache.roots = [...new Set(roots)];
   fileRootsCache.at = Date.now();
   fileRootsCache.sig = sessionFilesSignature();
+  if (rootsIndexDirty) {
+    const saved = rootsIndex.saveRootsIndex(rootsIndexFilePath(), rootsIndexMemo, fs, path);
+    rootsIndexDirty = false;
+    if (!saved && !rootsIndexSaveFailLogged) {
+      rootsIndexSaveFailLogged = true;
+      log('file-roots', '会话根索引保存失败，本次按全量结果使用（下次刷新重试）');
+    }
+  }
+  if (sessionFiles.length > 0) {
+    log('file-roots', '重建完成: ' + sessionFiles.length + ' 个会话（索引命中 ' + hit + '，解析 ' + parsed + '）');
+  }
   return fileRootsCache.roots;
 }
 
