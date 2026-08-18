@@ -1,0 +1,20 @@
+{
+  "name": "@deepseek-ai/dsh-quest-ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DSH Desktop 配套插件：Quest 模式界面（通用设置一键切换，默认关闭）",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": { "default": "./lib/index.js" },
+    "./client": { "default": "./lib/client.js" },
+    "./package.json": "./package.json"
+  },
+  "license": "MIT",
+  "dsh": {
+    "client": {
+      "inject": ["@deepseek-ai/dsh-client-ui-conversation"],
+      "platform": "web"
+    }
+  }
+}
