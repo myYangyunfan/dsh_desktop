@@ -246,6 +246,47 @@ function transformPersistenceTornTail(src, file) {
 }
 
 // ---------------------------------------------------------------------------
+// 单个损坏的会话日志不得击穿整个启动扫描：listArtifacts 读首行遇到损坏 zstd
+// 时跳过该会话并告警，而不是让整个 plugin tree 初始化崩溃（2026-08 事故：
+// 卷影恢复带回零填充头部的会话日志，导致应用整体无法启动）。
+const PERSISTENCE_CORRUPT_MARKER = 'dsh-desktop-corrupt-guard-v1';
+const PERSISTENCE_CORRUPT_OLD =
+  'const first = this.compression === "zstd" ? await this.readFirstZstdLine(path, signal) : await this.readFirstLine(path, signal);';
+const PERSISTENCE_CORRUPT_NEW = [
+  'let first;',
+  '\t\t\t\ttry {',
+  '\t\t\t\t\t// ' + PERSISTENCE_CORRUPT_MARKER + ': 损坏会话日志告警跳过，不得击穿启动扫描。',
+  '\t\t\t\t\tfirst = this.compression === "zstd" ? await this.readFirstZstdLine(path, signal) : await this.readFirstLine(path, signal);',
+  '\t\t\t\t} catch (corruptError) {',
+  '\t\t\t\t\tsignal?.throwIfAborted();',
+  '\t\t\t\t\tconsole.warn(`[dsh-session-persistence] skipping corrupt session log: ${path} (${corruptError?.message ?? corruptError})`);',
+  '\t\t\t\t\tcontinue;',
+  '\t\t\t\t}',
+].join('\n');
+
+function transformPersistenceCorruptGuard(src, file) {
+  if (src.includes(PERSISTENCE_CORRUPT_MARKER)) return { status: 'already' };
+  if (!src.includes(PERSISTENCE_CORRUPT_OLD)) {
+    return {
+      status: 'anchor-missing',
+      detail: '未找到损坏会话容错锚点（版本可能已变更），跳过 ' + file,
+    };
+  }
+  return { status: 'changed', src: src.replace(PERSISTENCE_CORRUPT_OLD, PERSISTENCE_CORRUPT_NEW) };
+}
+
+/** 会话持久化全部容错变换：尾部擕裂恢复 + 损坏会话跳过，依次应用。 */
+function transformPersistenceAll(src, file) {
+  const torn = transformPersistenceTornTail(src, file);
+  const afterTorn = torn.status === 'changed' ? torn.src : src;
+  const guard = transformPersistenceCorruptGuard(afterTorn, file);
+  if (guard.status === 'changed') return { status: 'changed', src: guard.src };
+  if (torn.status === 'changed') return { status: 'changed', src: afterTorn };
+  if (torn.status === 'already' && guard.status === 'already') return { status: 'already' };
+  return guard.status === 'anchor-missing' ? guard : torn;
+}
+
+// ---------------------------------------------------------------------------
 /**
  * Preserve the rc.6 keyed-slot registration contract for third-party client
  * plugins: an explicit key wins, and a legacy `id` is promoted to `key`.
@@ -453,6 +494,9 @@ module.exports = {
   PERSISTENCE_PKG_REL,
   PERSISTENCE_TORN_MARKER,
   transformPersistenceTornTail,
+  PERSISTENCE_CORRUPT_MARKER,
+  transformPersistenceCorruptGuard,
+  transformPersistenceAll,
   SLOT_KEY_COMPAT_PKG_REL,
   SLOT_UNKEYED_COMPAT_PKG_REL,
   SLOT_COMPAT_PKG_RELS,

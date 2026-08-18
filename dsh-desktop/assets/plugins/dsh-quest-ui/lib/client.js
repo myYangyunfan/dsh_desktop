@@ -95,6 +95,21 @@
 				".qdu-switch[aria-checked=true] .qdu-knob{transform:translateX(18px)}"
 			].join("");
 
+			// dsh-synapse 会话地图适配（双 UI 通用，不锁 body[data-dsh-quest-ui]
+			// 作用域——默认 UI 与 Quest UI 都生效）：切换按钮与顶部 Session log
+			// （wSkVaW_headerUtilities，y≈48）同一水平面；地图 overlay 下移避开
+			// Electron 自绘标题栏（0-36px），否则 iframe 内 topbar 被挡上半截。
+			// 颜色用字面量（默认 UI 下 --qdu-* 令牌不存在），与 ROW_CSS 同为
+			// 无作用域常量，随 ensureCss 一并注入。
+			const SYNAPSE_CSS = [
+				".dsh-synapse-switch{top:48px!important;border:1px solid rgba(15,17,21,.10)!important;background:#ffffff!important;box-shadow:0 1px 3px rgba(16,24,40,.06)!important;border-radius:999px!important}",
+				".dsh-synapse-switch button{font-weight:500!important;color:#61666b!important;border-radius:999px!important;transition:background-color .15s cubic-bezier(.4,0,.2,1),color .15s cubic-bezier(.4,0,.2,1)!important}",
+				".dsh-synapse-switch button:hover{background:rgba(38,49,72,.06)!important;color:#0f1115!important}",
+				".dsh-synapse-switch button.active{background:#4176e6!important;color:#fff!important}",
+				".dsh-synapse-overlay{animation:qdu-synapse-fade-in .18s cubic-bezier(.4,0,.2,1);top:36px!important}",
+				"@keyframes qdu-synapse-fade-in{from{opacity:0}to{opacity:1}}"
+			].join("");
+
 			// 主题 CSS（Quest 风格 reskin）：每条规则都必须以 body[data-dsh-quest-ui]
 			// 开头（验收静态扫描）；设计令牌全部映射宿主 --dsw-alias-* token，
 			// 深浅色自动兼容。选择器基于实机探测的宿主结构（语义后缀子串匹配
@@ -233,16 +248,7 @@
 				// 上下文用量面板（JObwrW_panel）：轻度美化降噪（内容为宿主用量数据）
 				'body[data-dsh-quest-ui] .JObwrW_panel{line-height:1.6}',
 				'body[data-dsh-quest-ui] .JObwrW_figures{color:var(--qdu-label-2)}',
-				// —— dsh-synapse 会话地图适配（内置后集成）：切换按钮 Quest 化，
-				//    与顶部 Session log（wSkVaW_headerUtilities，y≈48）同一水平面；
-				//    地图 overlay 下移避开 Electron 自绘标题栏（0-36px），
-				//    否则 iframe 内 topbar 会被标题栏挡住上半截 ——
-				'body[data-dsh-quest-ui] .dsh-synapse-switch{top:48px!important;border:1px solid color-mix(in srgb,var(--qdu-label-1) 10%,transparent)!important;background:var(--qdu-bg-card)!important;box-shadow:0 1px 3px rgba(16,24,40,.06)!important;border-radius:999px!important}',
-				'body[data-dsh-quest-ui] .dsh-synapse-switch button{font-weight:500!important;color:var(--qdu-label-2)!important;border-radius:999px!important;transition:background-color .15s var(--qdu-ease),color .15s var(--qdu-ease)!important}',
-				'body[data-dsh-quest-ui] .dsh-synapse-switch button:hover{background:var(--qdu-hover)!important;color:var(--qdu-label-1)!important}',
-				'body[data-dsh-quest-ui] .dsh-synapse-switch button.active{background:var(--qdu-accent)!important;color:#fff!important}',
-				'body[data-dsh-quest-ui] .dsh-synapse-overlay{animation:qdu-fade-in .18s var(--qdu-ease);top:36px!important}',
-				'@keyframes qdu-fade-in{from{opacity:0}to{opacity:1}}',
+				// —— dsh-synapse 适配已上移为双 UI 通用的 SYNAPSE_CSS（v0.6.0）——
 			
 				// —— 空态建议卡：圆点前缀（::before 14px 描边圆）+ 40px 行高 +
 				//    hover 浅底；官方欢迎页有建议条目时才命中，无条目安静无效 ——
@@ -258,7 +264,7 @@
 				const tag = document.createElement("style");
 				tag.dataset.plugin = "@deepseek-ai/dsh-quest-ui";
 				tag.dataset.pluginCss = tagId;
-				tag.textContent = ROW_CSS + CSS;
+				tag.textContent = ROW_CSS + SYNAPSE_CSS + CSS;
 				document.head.appendChild(tag);
 			}
 
@@ -375,15 +381,36 @@
 				if (synapseFrameHooked !== frame) {
 					if (synapseFrameHooked && synapseFrameHooked.removeEventListener) {
 						synapseFrameHooked.removeEventListener("load", synapseFrameReload);
-				}
+					}
 					synapseFrameHooked = frame;
 					frame.addEventListener("load", synapseFrameReload);
 				}
+			}
+			// 双 UI 通用（v0.6.0）：synapse 宿主元素由其 client.js 在模块加载时创建，
+			// 与本插件加载顺序不确定——启动期有界探测（最多 12 次×800ms）找到
+			// iframe 后接管（注入 + load 重挂），找不到即安静放弃，不常驻轮询
+			// （P1：模式关闭态除一次性探测外零开销）。
+			var synapseBootTimer = null;
+			function bootstrapSynapseTheme() {
+				if (typeof document === "undefined") return;
+				var tries = 0;
+				var probe = function () {
+					synapseBootTimer = null;
+					try {
+						if (document.querySelector(".dsh-synapse-overlay iframe")) {
+							ensureSynapseTheme();
+							return;
+						}
+					} catch (e) { /* P8 */ }
+					if (++tries < 12) synapseBootTimer = setTimeout(probe, 800);
+				};
+				probe();
 			}
 			function synapseFrameReload() {
 				try { injectSynapseStyle(synapseFrameHooked && synapseFrameHooked.contentDocument); } catch (e) { /* P8 */ }
 			}
 			function teardownSynapseTheme() {
+				if (synapseBootTimer !== null) { clearTimeout(synapseBootTimer); synapseBootTimer = null; }
 				if (synapseFrameHooked && synapseFrameHooked.removeEventListener) {
 					synapseFrameHooked.removeEventListener("load", synapseFrameReload);
 				}
@@ -427,7 +454,8 @@
 					if (this._timer) { clearTimeout(this._timer); this._timer = null; }
 					if (this._observer) { this._observer.disconnect(); this._observer = null; }
 					this._removeAllOwnedNodes(); // 摘掉全部 qdu-* 自有节点
-					teardownSynapseTheme();   // 摘 synapse 主题注入与 load 监听
+					// 注：synapse 主题注入为双 UI 通用能力（v0.6.0），模式关闭不拆；
+					// 仅在插件卸载时由 teardown effect 清理。
 					this._fp = "";
 				},
 				_removeAllOwnedNodes: function () {
@@ -483,7 +511,11 @@
 				}, QuestModeRow), "dsh-quest-ui: quest mode row");
 
 				// 插件卸载时彻底拆除增强器（清理回调语义）。
-				ctx.effect(() => () => questEnhancers.setOn(false), "dsh-quest-ui: teardown enhancers");
+				// 插件卸载时彻底清理增强器与 synapse 注入（模式开关不由此路径负责）。
+				ctx.effect(() => () => { questEnhancers.setOn(false); teardownSynapseTheme(); }, "dsh-quest-ui: teardown enhancers");
+
+				// synapse 适配双 UI 通用：无论模式开关状态，启动即接管画布。
+				try { bootstrapSynapseTheme(); } catch (e) { console.warn("[dsh-quest-ui] synapse bootstrap failed: " + ((e && e.message) || e)); }
 			}
 
 			function apply(ctx) {

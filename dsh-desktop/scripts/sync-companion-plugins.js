@@ -43,7 +43,7 @@ const {
   transformShellDescriptionOptional, transformCodeModeCompat,
   transformAttachmentMimeTrust, ATTACH_LOCAL_REL,
   transformLegacySlotKey, transformSlotUnkeyedCompat,
-  PERSISTENCE_PKG_REL, transformPersistenceTornTail,
+  PERSISTENCE_PKG_REL, transformPersistenceAll,
 } = require('./lib/runtime-patches');
 const {
   ACP_DISABLE_BLOCK, PET_DISABLE_BLOCK,
@@ -378,19 +378,20 @@ function applyRuntimePatches(home, dryRun) {
     dryRunChangedLog: (file) => 'dry-run: 将信任图片解码字节 ' + file,
   });
 
-  // 最终完整 zstd frame 内的半条 JSONL 走已有崩溃恢复流程。
+  // 会话持久化容错：尾部擕裂的半条 JSONL 走崩溃恢复流程；整个日志损坏
+  // （坏帧头/零填充头）的会话告警跳过，不得击穿启动扫描。
   applyPatchToFiles({
-    prefix: '会话历史尾部恢复补丁',
+    prefix: '会话持久化容错补丁',
     files: patchTargets(home, PERSISTENCE_PKG_REL),
     log: (m) => log(m),
     anchorLog: (m) => warn(m),
-    transform: transformPersistenceTornTail,
+    transform: transformPersistenceAll,
     alreadyLog: (file) => '已应用，跳过 ' + file,
-    doneLog: (file) => '已恢复 zstd 尾部容错 ' + file,
+    doneLog: (file) => '已应用 zstd 尾部/损坏会话容错 ' + file,
     donePrefix: false,
-    failLog: (file, err) => '会话历史尾部恢复补丁失败(' + file + '): ' + err.message,
+    failLog: (file, err) => '会话持久化容错补丁失败(' + file + '): ' + err.message,
     dryRun,
-    dryRunChangedLog: (file) => 'dry-run: 将恢复 zstd 尾部容错 ' + file,
+    dryRunChangedLog: (file) => 'dry-run: 将应用 zstd 尾部/损坏会话容错 ' + file,
   });
 }
 
