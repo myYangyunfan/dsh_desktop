@@ -20,10 +20,14 @@ const { bundlePatchRel, verifyBundleDir } = require('../../profile-bundle-heal')
 const { compareVersions } = require('./versions');
 
 // 同步进 profile 的固定文件清单（旧 main.js copyFiles / 同步脚本 PLUGIN_FILES）。
+// 根目录平铺布局的第三方插件（如 dsh-synapse：入口 index.js/client.js 与
+// app.js/styles.css/deepseek-mark.svg 同目录散件，index.js 经 import.meta.url
+// 相对路径读取，不可挪入子目录）也在此登记；存在才拷，对其他插件零影响。
 const PLUGIN_FILES = [
   'package.json', 'cordis.patch.yml', 'LICENSE', 'README.md', 'README.zh.md',
   'lib/index.js', 'lib/index.mjs', 'lib/client.js', 'lib/vlm.js', 'lib/typert.host.js', 'lib/typert.host.d.ts',
   'dsh.plugin.json',
+  'index.js', 'client.js', 'app.js', 'styles.css', 'deepseek-mark.svg',
 ];
 
 // 配套插件引用了不在 dsh 核心依赖闭包里的 npm 包时（例如 dsh-better-sidebar

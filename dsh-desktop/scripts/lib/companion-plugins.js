@@ -29,9 +29,6 @@ const COMPANION_PLUGINS = [
   // 面板（恢复/删除）。依赖 patch-session-manage.js 的官方包运行时补丁。
   { id: 'dsh-session-manager', name: 'dsh-session-manager' },
   { id: 'conversation-tweaks', name: '@deepseek-ai/dsh-conversation-tweaks' },
-  // Quest 模式界面（本仓库内置）：设置-通用里一键开关类 Quest 沉浸式界面
-  // （分组会话栏 + 卡片式输入区 + 药丸元数据条），默认关闭、关闭时零开销。
-  { id: 'quest-ui', name: '@deepseek-ai/dsh-quest-ui' },
   // id 必须与该插件 bundle 层 cordis.patch.yml 声明的 loader id 一致
   // （dsh-super-injector）。曾声明为 super-injector 导致 bundle 迁移自愈的
   // dropBlocksByIds 永不命中残留 insert 块 → 双登记启动崩溃（issue #104）。
@@ -81,6 +78,10 @@ const COMPANION_PLUGINS = [
   { id: 'settings-nav-custom', name: 'dsh-settings-nav-custom' },
   // 设置页高级选项折叠：把低频选项行收进「高级选项」折叠组。
   { id: 'settings-groups', name: 'dsh-settings-groups' },
+  // 会话地图（liangmianya/dsh-synapse，MIT）：可视化非线性对话工作区，
+  // 把同一工作区内的会话/追问/分支呈现为可拖拽缩放的对话画布；bundle 插件，
+  // 零依赖、复用现有 dsh web 服务。上游：https://github.com/liangmianya/dsh-synapse
+  { id: 'synapse', name: 'dsh-synapse' },
 ];
 
 /** 包名 → assets/plugins 下的目录名（去 scope 前缀）。 */
