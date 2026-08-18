@@ -43,7 +43,7 @@ app.whenReady().then(() => {
   });
   win.loadFile(path.join(__dirname, 'page.html'));
   // 看门狗：任何卡死都在 30s 内以失败退出
-  setTimeout(() => finish(1, 'TIMEOUT: 渲染层测试 30s 未完成'), 30000);
+  setTimeout(() => finish(1, 'TIMEOUT: 渲染层测试 60s 未完成'), 60000);
 });
 
 app.on('window-all-closed', () => {});

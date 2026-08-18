@@ -28,7 +28,14 @@ jobs:
         run: node scripts/check-syntax.js
       - name: 全量单测（unit-* / desktop-*，node --test 自动发现）
         run: npm test
-      - name: 余额链路验证（逻辑级 + 真实 Electron 渲染层，#106）
-        run: |
-          node scripts/test/verify-balance-dock.cjs
-          node scripts/test/verify-balance-renderer.cjs
+      - name: 余额链路验证（逻辑级 dock）
+        run: node scripts/test/verify-balance-dock.cjs
+      - name: 余额链路验证（真实 Electron 渲染层，#106）
+        run: node scripts/test/verify-balance-renderer.cjs
+      - name: 上传余额验证诊断（仅失败时）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: balance-verify-diag
+          path: dsh-desktop/.ci-diag
+          if-no-files-found: ignore

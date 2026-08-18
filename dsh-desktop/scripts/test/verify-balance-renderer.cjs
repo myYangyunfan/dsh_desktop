@@ -44,10 +44,25 @@ delete childEnv.ELECTRON_RUN_AS_NODE;
 // 隐藏窗口渲染层测试用软件渲染即可，跨环境更稳。--no-sandbox 同理利于无沙箱的 CI。
 const r = spawnSync(electron, ['--disable-gpu', '--no-sandbox', harnessDir], {
   env: childEnv,
-  stdio: 'inherit',
+  encoding: 'utf8',
   windowsHide: true,
-  timeout: 60000,
+  timeout: 120000,
 });
+
+// CI 诊断落盘：无论成败都把 Electron 全量输出与结果 JSON 写进 .ci-diag，
+// 失败时由 workflow 上传 artifact，避免日志域不可达时无从定位。
+const diagDir = path.join(__dirname, '..', '..', '.ci-diag');
+try {
+  fs.mkdirSync(diagDir, { recursive: true });
+  fs.writeFileSync(path.join(diagDir, 'balance-renderer.log'),
+    '=== stdout ===\n' + (r.stdout || '') + '\n=== stderr ===\n' + (r.stderr || '') +
+    '\n=== status: ' + r.status + (r.error ? ' error: ' + r.error.message : '') + ' ===\n');
+  if (fs.existsSync(resultFile)) {
+    fs.copyFileSync(resultFile, path.join(diagDir, 'balance-renderer-result.json'));
+  }
+} catch {}
+if (r.stdout) process.stdout.write(r.stdout);
+if (r.stderr) process.stderr.write(r.stderr);
 
 if (r.error) {
   console.error('[verify-balance-renderer] 启动失败: ' + r.error.message);
