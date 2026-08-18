@@ -94,52 +94,85 @@
 				".qdu-switch[aria-checked=true] .qdu-knob{transform:translateX(18px)}"
 			].join("");
 
-			// 主题 CSS（纲要阶段三/五）：每条规则都必须以 body[data-dsh-quest-ui]
+			// 主题 CSS（Quest 风格 reskin）：每条规则都必须以 body[data-dsh-quest-ui]
 			// 开头（验收静态扫描）；设计令牌全部映射宿主 --dsw-alias-* token，
-			// 深浅色自动兼容。定位一律走结构位置（role/data-*）或类名子串/后缀
-			// 试探 —— 官方类名带 hash，禁止精确匹配。
+			// 深浅色自动兼容。选择器基于实机探测的宿主结构（语义后缀子串匹配
+			// + 当前版本 hash 前缀双保险，与 conversation-tweaks 用 .Md3f7G_flowItem
+			// 同策略：hash 版本内稳定，升级失配时安静降级）。
+			//
+			// 宿主结构锚点（实机 CDP 探测）：
+			//   侧栏  .qDHVXG_list > .qDHVXG_groupSection > span > div[role=treeitem]
+			//         .YDXeBa_sessionRow / .YDXeBa_projectRow / .YDXeBa_selected
+			//   主区  .pI_x6G_centerCol > [slot=conversation] > .wSkVaW_root
+			//   输入  .wSkVaW_composerStack(.wSkVaW_composerHero 空态 hero 形态)
+			//         > .uV2eYG_root(.uV2eYG_hero) > .uV2eYG_card > textarea.uV2eYG_input
+			//   消息  .Md3f7G_flowItem[data-chat-flow-kind] > .Sxvs8a_root
 			const CSS = [
-				// —— 设计令牌 ——
-				'body[data-dsh-quest-ui]{--qdu-radius-card:12px;--qdu-radius-pill:999px;--qdu-radius-item:8px;--qdu-shadow-card:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.04);--qdu-bg-card:var(--dsw-alias-container-bg-secondary,#f9fafb);--qdu-bg-hover:var(--dsw-alias-interactive-bg-hover);--qdu-border:var(--dsw-alias-border-l2);--qdu-label-1:var(--dsw-alias-label-primary);--qdu-label-3:var(--dsw-alias-label-tertiary)}',
-
-				// —— S1 侧边会话栏行：圆角 8px、hover/选中浅底、行距 40px ——
-				'body[data-dsh-quest-ui] [role="treeitem"]{border-radius:var(--qdu-radius-item);min-height:40px;transition:background-color .15s ease}',
+				// —— 设计令牌（Qoder Quest 视觉语言：大圆角浮起卡片、细腻灰阶、
+				//    主色仅作点缀；全部映射 dsw token，深色模式自动适配）——
+				'body[data-dsh-quest-ui]{--qdu-radius-card:16px;--qdu-radius-hero:20px;--qdu-radius-pill:999px;--qdu-radius-item:8px;--qdu-shadow-float:0 1px 2px rgba(16,24,40,.04),0 8px 24px rgba(16,24,40,.06);--qdu-shadow-float-lg:0 2px 4px rgba(16,24,40,.05),0 12px 36px rgba(16,24,40,.10);--qdu-bg-card:var(--dsw-alias-container-bg-primary,#fff);--qdu-bg-canvas:var(--dsw-alias-container-bg-secondary,#f7f8fa);--qdu-bg-hover:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.04));--qdu-bg-active:var(--dsw-alias-interactive-bg-active,rgba(0,0,0,.07));--qdu-border:var(--dsw-alias-border-l2,rgba(16,24,40,.08));--qdu-accent:var(--dsw-alias-state-business-primary,#4f6ef7);--qdu-label-1:var(--dsw-alias-label-primary);--qdu-label-2:var(--dsw-alias-label-secondary);--qdu-label-3:var(--dsw-alias-label-tertiary)}',
+			
+				// —— Q1 主画布：中央列换更干净的画布底，与侧栏拉开层次 ——
+				'body[data-dsh-quest-ui] [class*="_centerCol"]{background:var(--qdu-bg-canvas)}',
+			
+				// —— Q2 侧边会话栏（Qoder Quest 分组列表风）：大间距圆角行 +
+				//    选中态主色浅底 + 行内文字降噪 ——
+				'body[data-dsh-quest-ui] [role="treeitem"]{border-radius:var(--qdu-radius-item);min-height:38px;transition:background-color .15s ease,color .15s ease}',
 				'body[data-dsh-quest-ui] [role="treeitem"]:hover{background:var(--qdu-bg-hover)}',
-				'body[data-dsh-quest-ui] [role="treeitem"][aria-selected="true"]{background:var(--qdu-bg-hover)}',
-
-				// —— S2 侧边栏与主区间分隔线柔和化（宽度不变）——
-				// !important：宿主 hashed 类自带 border-right 颜色，需提升特异性覆盖。
+				'body[data-dsh-quest-ui] [role="treeitem"][aria-selected="true"]{background:var(--qdu-bg-active)}',
+				// 行标题与时间戳降噪（限定侧栏容器，避免误伤主区）
+				'body[data-dsh-quest-ui] [class*="_groupSection"] [class*="_title"]{color:var(--qdu-label-1)}',
+				'body[data-dsh-quest-ui] [class*="_groupSection"] [class*="_time"]{color:var(--qdu-label-3)}',
+				// 侧栏分隔线柔化（宽度不变；!important 压宿主 hashed 类边框色）
 				'body[data-dsh-quest-ui] [class$="_sidebar"],body[data-dsh-quest-ui] [class$="_Sidebar"]{border-right:1px solid var(--qdu-border)!important}',
-
-				// —— S3 输入区卡片化：卡片底色 + 12px 圆角 + 浅阴影 ——
-				'body[data-dsh-quest-ui] [class*="composer"],body[data-dsh-quest-ui] [class*="Composer"]{background:var(--qdu-bg-card);border-radius:var(--qdu-radius-card);box-shadow:var(--qdu-shadow-card)}',
-				'body[data-dsh-quest-ui] textarea{border-radius:var(--qdu-radius-item)}',
-
-				// —— S4 消息气泡：12px 圆角、去硬边框改浅阴影 ——
-				// !important：覆盖宿主 hashed 类气泡边框色。
+			
+				// —— Q3 中央英雄输入卡片（Quest 核心视觉）：浮起白卡、大圆角、
+				//    双层柔影，聚焦时阴影加深 + 主色光环 ——
+				// 卡片外壳（hero 空态与 normal 会话态共用 .uV2eYG_root）；描边用
+				// label 色 8% 透明混合（浅色主题≈浅灰线，深色主题≈浅亮线，避免宿主
+				// border token 的纯深色值形成硬描边）
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea){background:var(--qdu-bg-card);border:1px solid color-mix(in srgb,var(--qdu-label-1) 8%,transparent);border-radius:var(--qdu-radius-card);box-shadow:var(--qdu-shadow-float);transition:box-shadow .2s ease,border-color .2s ease}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea):focus-within{border-color:color-mix(in srgb,var(--qdu-accent) 45%,transparent);box-shadow:var(--qdu-shadow-float-lg),0 0 0 3px color-mix(in srgb,var(--qdu-accent) 12%,transparent)}',
+				// 空态 hero 形态：更大圆角 + 居中限宽 + 更强浮起感
+				'body[data-dsh-quest-ui] [class*="_composerHero"] [class*="_root"]:has(textarea){border-radius:var(--qdu-radius-hero);box-shadow:var(--qdu-shadow-float-lg)}',
+				'body[data-dsh-quest-ui] [class*="_composerHero"]{max-width:780px;margin:0 auto;width:100%}',
+				// 输入框内层透明化，避免与卡片底色叠加；_card 内层圆角兼作 :has 失效时的兜底
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_card"]{border-radius:var(--qdu-radius-card)}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] textarea{background:transparent;border-radius:calc(var(--qdu-radius-card) - 6px)}',
+				// hero 卡内权限/模型行（Full access / 模型名）→ 描边药丸风
+				'body[data-dsh-quest-ui] [class*="_composerHero"] [class*="_root"]:has(textarea) button{border-radius:var(--qdu-radius-pill);border:1px solid var(--qdu-border);background:transparent;color:var(--qdu-label-2);font-size:12px}',
+				'body[data-dsh-quest-ui] [class*="_composerHero"] [class*="_root"]:has(textarea) button:hover{background:var(--qdu-bg-hover)}',
+			
+				// —— Q4 消息流降噪：助手消息圆角、去硬边框；用户消息仅圆角化
+				//    （不给背景，避免误伤宿主首子元素（如头像）的既有底色）——
 				'body[data-dsh-quest-ui] [data-chat-flow-kind="assistant"]{border-radius:var(--qdu-radius-card)}',
-				'body[data-dsh-quest-ui] [class*="messageItem"],body[data-dsh-quest-ui] [class*="MessageItem"]{border-radius:var(--qdu-radius-card);border-color:transparent!important;box-shadow:var(--qdu-shadow-card)}',
-
-				// —— S5 按钮/开关统一 8px 圆角与 150ms 过渡（排除自有 qdu-* 节点）——
+				// !important：覆盖宿主 hashed 类气泡边框色（去硬边框改柔和）
+				'body[data-dsh-quest-ui] [class*="_flowItem"] [class*="_root"]{border-radius:var(--qdu-radius-card)}',
+				'body[data-dsh-quest-ui] [data-chat-flow-kind="user"] > *:first-child{border-radius:var(--qdu-radius-card)}',
+			
+				// —— Q5 按钮统一圆角与过渡（排除自有 qdu-* 节点）——
 				'body[data-dsh-quest-ui] button:not([class^="qdu-"]){border-radius:var(--qdu-radius-item);transition:border-radius .15s ease,background-color .15s ease,box-shadow .15s ease,color .15s ease}',
-
-				// —— S6 细滚动条（8px、圆角、半透明；后代与 body 自身两种前缀变体）——
+			
+				// —— Q6 细滚动条（8px、圆角、半透明；后代与 body 自身两种前缀变体）——
 				'body[data-dsh-quest-ui] ::-webkit-scrollbar{width:8px;height:8px}',
-				'body[data-dsh-quest-ui] ::-webkit-scrollbar-thumb{border-radius:var(--qdu-radius-pill);background:rgba(127,127,127,.35)}',
+				'body[data-dsh-quest-ui] ::-webkit-scrollbar-thumb{border-radius:var(--qdu-radius-pill);background:rgba(127,127,127,.30)}',
 				'body[data-dsh-quest-ui] ::-webkit-scrollbar-track{background:transparent}',
 				'body[data-dsh-quest-ui]::-webkit-scrollbar{width:8px;height:8px}',
-				'body[data-dsh-quest-ui]::-webkit-scrollbar-thumb{border-radius:var(--qdu-radius-pill);background:rgba(127,127,127,.35)}',
+				'body[data-dsh-quest-ui]::-webkit-scrollbar-thumb{border-radius:var(--qdu-radius-pill);background:rgba(127,127,127,.30)}',
 				'body[data-dsh-quest-ui]::-webkit-scrollbar-track{background:transparent}',
-
-				// —— 自有节点：侧栏分组头 ——
-				'body[data-dsh-quest-ui] .qdu-nav-head{box-sizing:border-box;padding:10px 12px 6px;font-size:12px;line-height:16px;letter-spacing:.04em;color:var(--qdu-label-3);user-select:none}',
-
-				// —— 自有节点：元数据药丸条（纯展示，不拦截主区点击）——
-				'body[data-dsh-quest-ui] .qdu-pillbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 16px;pointer-events:none}',
-				'body[data-dsh-quest-ui] .qdu-pill{border:1px solid var(--qdu-border);border-radius:var(--qdu-radius-pill);padding:4px 10px;font-size:12px;color:var(--qdu-label-3);display:inline-flex;align-items:center;gap:4px}',
-
-				// —— 空态建议卡：圆点前缀（::before 14px 描边圆）+ 40px 行高 + hover 浅底 ——
-				// 官方欢迎页有建议条目时才命中；无条目则本组规则安静无效（不做兜底）。
+			
+				// —— 自有节点：侧栏分组头（Qoder Quest 小号大写字距标签）——
+				'body[data-dsh-quest-ui] .qdu-nav-head{box-sizing:border-box;padding:12px 12px 6px;font-size:11px;line-height:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--qdu-label-3);user-select:none}',
+			
+				// —— 自有节点：元数据药丸条（贴输入卡片上方、居中、描边药丸；
+				//    纯展示不拦截点击）——
+				'body[data-dsh-quest-ui] .qdu-pillbar{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;max-width:780px;margin:0 auto 8px;padding:0 16px;pointer-events:none}',
+				'body[data-dsh-quest-ui] .qdu-pill{border:1px solid var(--qdu-border);border-radius:var(--qdu-radius-pill);padding:3px 12px;font-size:12px;line-height:18px;color:var(--qdu-label-2);background:var(--qdu-bg-card);display:inline-flex;align-items:center;gap:4px;box-shadow:0 1px 2px rgba(16,24,40,.04)}',
+				// 药丸前缀圆点（主色点缀）
+				'body[data-dsh-quest-ui] .qdu-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--qdu-accent);opacity:.75}',
+			
+				// —— 空态建议卡：圆点前缀（::before 14px 描边圆）+ 40px 行高 +
+				//    hover 浅底；官方欢迎页有建议条目时才命中，无条目安静无效 ——
 				'body[data-dsh-quest-ui] [class*="suggestion"] button,body[data-dsh-quest-ui] [class*="Suggestion"] button{position:relative;display:flex;align-items:center;min-height:40px;padding-left:32px;border-radius:var(--qdu-radius-item);transition:background-color .15s ease}',
 				'body[data-dsh-quest-ui] [class*="suggestion"] button::before,body[data-dsh-quest-ui] [class*="Suggestion"] button::before{content:"";position:absolute;left:9px;width:14px;height:14px;box-sizing:border-box;border:1.5px solid var(--qdu-label-3);border-radius:50%}',
 				'body[data-dsh-quest-ui] [class*="suggestion"] button:hover,body[data-dsh-quest-ui] [class*="Suggestion"] button:hover{background:var(--qdu-bg-hover)}'
@@ -224,12 +257,19 @@
 				if (first.parentNode) first.parentNode.insertBefore(head, first);
 			}
 
-			// 阶段五：元数据药丸条。挂对话主区顶部（[data-slot="conversation"]
-			// 的父列首位）；找不到主列时退化到会话根容器首位。
+			// 阶段五：元数据药丸条。Quest 风格下贴在输入卡片正上方（输入栈容器
+			// [class*="_composerStack"] 的前一兄弟位），随 hero/normal 形态移动；
+			// 找不到输入栈时退化到对话主列首位。
 			function applyMetaPills() {
 				removeOwnedNodes(PILLBAR_CLASS);
-				var conv = document.querySelector('[data-slot="conversation"]');
-				var host = (conv && conv.parentElement) || document.querySelector('[data-slot="conversation.session"]');
+				var stack = document.querySelector('[class*="_composerStack"]');
+				var host = (stack && stack.parentElement) || null;
+				var anchor = stack || null;
+				if (!host) {
+					var conv = document.querySelector('[data-slot="conversation"]');
+					host = (conv && conv.parentElement) || document.querySelector('[data-slot="conversation.session"]');
+					anchor = null;
+				}
 				if (!host) return;
 				var texts = window.__dshQuestUiCore.PILL_TEXTS.slice();
 				var meta = null;
@@ -243,7 +283,8 @@
 					pill.textContent = texts[i];
 					bar.appendChild(pill);
 				}
-				host.insertBefore(bar, host.firstChild);
+				// 插在输入栈前一兄弟位（紧贴卡片上方）；退化路径插主列首位。
+				host.insertBefore(bar, anchor || host.firstChild);
 			}
 
 			// 目标区域结构摘要（指纹输入）：会话行数 + 自有节点存在位 + 主区就绪位。
