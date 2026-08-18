@@ -162,12 +162,61 @@ function normalizeRelease(source, data) {
   };
 }
 
-async function checkLatest(ctx, currentVersion) {
+// --- 温启动网络去重（A-6）------------------------------------------------------
+// 自动检查（12h 定时器/启动 60s 后）的结果按 1h 窗口缓存到 userData：
+// 同窗口内重启/再次自动检查直接复用，零外网请求；自动检查失败同样退避 1h。
+// 手动「检查更新」useCache=false 直通网络（仅受既有 clientUpdateBusy 防连点）。
+const CLIENT_UPDATE_CACHE_TTL_MS = 60 * 60 * 1000;
+const CLIENT_UPDATE_CACHE_VERSION = 1;
+
+function clientUpdateCachePath(ctx) {
+  return path.join(ctx.userDataDir, 'client-update-cache.json');
+}
+
+function readUpdateCache(ctx) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(clientUpdateCachePath(ctx), 'utf8'));
+    if (parsed && parsed.v === CLIENT_UPDATE_CACHE_VERSION) return parsed;
+  } catch {}
+  return null;
+}
+
+function writeUpdateCache(ctx, data) {
+  try {
+    fs.mkdirSync(ctx.userDataDir, { recursive: true });
+    const tmp = clientUpdateCachePath(ctx) + '.tmp-' + process.pid;
+    fs.writeFileSync(tmp, JSON.stringify({ v: CLIENT_UPDATE_CACHE_VERSION, ...data }));
+    fs.renameSync(tmp, clientUpdateCachePath(ctx));
+  } catch {
+    // 缓存写入失败不影响主流程（下次重新探测）。
+  }
+}
+
+async function checkLatest(ctx, currentVersion, opts = {}) {
+  const useCache = !!opts.useCache;
   const errors = [];
   const candidates = [];
-  for (const ep of apiEndpoints()) {
+  // 自动检查：1h 窗口缓存命中直接返回（含失败退避）。
+  if (useCache) {
+    const cache = readUpdateCache(ctx);
+    if (cache && Date.now() - cache.at < CLIENT_UPDATE_CACHE_TTL_MS) {
+      if (cache.failed) {
+        throw new Error('上次自动检查失败（1 小时内退避，可手动检查更新）');
+      }
+      const rel = cache.release;
+      if (rel && rel.version && Array.isArray(rel.assets) && rel.assets.length > 0) {
+        rel.isNewer = compareVersions(rel.version, currentVersion) > 0;
+        ctx.log('client-update', `缓存命中（${new Date(cache.at).toISOString()}）[${rel.source}] ${rel.version}`);
+        return rel;
+      }
+    }
+  }
+  // 双源并行探测：GitHub/Gitee 同时请求（任意 20s 超时内落定，不再串行 40s）。
+  // ctx.fetchEndpoint 为测试注入点（生产走 httpGetJson）。
+  const httpGet = ctx.fetchEndpoint ? (url, headers) => ctx.fetchEndpoint(url, headers) : httpGetJson;
+  await Promise.allSettled(apiEndpoints().map(async (ep) => {
     try {
-      const data = await httpGetJson(ep.url, ep.headers || {});
+      const data = await httpGet(ep.url, ep.headers || {});
       const rel = normalizeRelease(ep.name, data);
       if (!rel.version || !rel.assets.length) {
         throw new Error('上游 release 缺少版本号或安装包资产');
@@ -179,8 +228,10 @@ async function checkLatest(ctx, currentVersion) {
       errors.push(`${ep.name}: ${err.message}`);
       ctx.log('client-update', `[${ep.name}] 查询失败: ${err.message}`);
     }
-  }
+  }));
   if (candidates.length === 0) {
+    // 自动检查失败写退避缓存；手动检查直通不受影响。
+    if (useCache) writeUpdateCache(ctx, { at: Date.now(), failed: true });
     throw new Error('无法连接上游发布源（' + errors.join('；') + '）');
   }
   // 双源回退的语义是「取版本最高的可用源」，而不是先返回第一个可用源。
@@ -189,6 +240,7 @@ async function checkLatest(ctx, currentVersion) {
   candidates.sort((a, b) => compareVersions(b.version, a.version));
   const best = candidates[0];
   ctx.log('client-update', `选用最高版本源 [${best.source}] ${best.version}（候选: ${candidates.map((c) => `${c.source}@${c.version}`).join(', ')}）`);
+  if (useCache) writeUpdateCache(ctx, { at: Date.now(), release: best });
   return best;
 }
 
@@ -892,4 +944,7 @@ module.exports = {
   findHashEntry,
   verifyHashAgainstSumFile,
   sha256OfFile,
+  CLIENT_UPDATE_CACHE_TTL_MS,
+  readUpdateCache,
+  writeUpdateCache,
 };

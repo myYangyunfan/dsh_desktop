@@ -28,6 +28,10 @@ const {
   findHashEntry,
   verifyHashAgainstSumFile,
   sha256OfFile,
+  checkLatest,
+  readUpdateCache,
+  writeUpdateCache,
+  CLIENT_UPDATE_CACHE_TTL_MS,
 } = require('../../client-updater');
 
 function withEnv(name, value, fn) {
@@ -530,4 +534,142 @@ test('sha256OfFile: 流式计算与 crypto 直接计算一致', async () => {
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ---------------------------------------------------------------------------
+// A-6 温启动网络去重：双源并行 + 1h 窗口缓存 + 失败退避
+// ---------------------------------------------------------------------------
+
+function makeRelease(source, version) {
+  return {
+    source,
+    version,
+    name: null,
+    body: '',
+    htmlUrl: null,
+    assets: [
+      { name: `DSH-Desktop-${version}-win-setup-x64.exe`, url: 'https://example.com/' + version, size: 100 },
+    ],
+  };
+}
+
+function cuTmpdir(t) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cu-cache-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  return path.join(dir, 'userdata');
+}
+
+test('checkLatest: 双源并行探测且取最高版本源（候选排序语义保留）', async (t) => {
+  const calls = [];
+  const ctx = {
+    userDataDir: cuTmpdir(t),
+    log: () => {},
+    fetchEndpoint: async (url) => {
+      calls.push(url);
+      if (url.includes('github')) return { tag_name: 'v0.3.11', assets: [{ name: 'x.exe', url: 'u', size: 1 }] };
+      return { tag_name: 'v0.3.9', assets: [{ name: 'x.exe', url: 'u', size: 1 }] };
+    },
+  };
+  const rel = await checkLatest(ctx, '0.3.10', {});
+  assert.strictEqual(rel.version, '0.3.11', 'GitHub 更高 → 选 GitHub');
+  assert.strictEqual(rel.isNewer, true);
+  assert.strictEqual(calls.length, 2, '两个源都要探测（并行）');
+});
+
+test('checkLatest: 一个源失败时另一源兜底', async (t) => {
+  const ctx = {
+    userDataDir: cuTmpdir(t),
+    log: () => {},
+    fetchEndpoint: async (url) => {
+      if (url.includes('github')) throw new Error('github down');
+      return { tag_name: 'v0.3.9', assets: [{ name: 'x.exe', url: 'u', size: 1 }] };
+    },
+  };
+  const rel = await checkLatest(ctx, '0.3.10', {});
+  assert.strictEqual(rel.source, 'Gitee');
+  assert.strictEqual(rel.isNewer, false, '0.3.9 < 0.3.10');
+});
+
+test('checkLatest: 并行总耗时约等于最大延迟而非串行和', async (t) => {
+  const ctx = {
+    userDataDir: cuTmpdir(t),
+    log: () => {},
+    fetchEndpoint: async (url) => {
+      await new Promise((r) => setTimeout(r, url.includes('github') ? 150 : 30));
+      return { tag_name: 'v0.3.11', assets: [{ name: 'x.exe', url: 'u', size: 1 }] };
+    },
+  };
+  const t0 = Date.now();
+  await checkLatest(ctx, '0.3.10', {});
+  const dt = Date.now() - t0;
+  assert.ok(dt < 210, '并行下总耗时应约为最大延迟而非两源之和（实际 ' + dt + 'ms）');
+});
+
+test('checkLatest: useCache 1h 窗口命中（第二次零网络请求）', async (t) => {
+  let calls = 0;
+  const ctx = {
+    userDataDir: cuTmpdir(t),
+    log: () => {},
+    fetchEndpoint: async () => { calls++; return { tag_name: 'v0.3.11', assets: [{ name: 'x.exe', url: 'u', size: 1 }] }; },
+  };
+  const r1 = await checkLatest(ctx, '0.3.10', { useCache: true });
+  assert.strictEqual(r1.version, '0.3.11');
+  assert.strictEqual(calls, 2, '首次走网络（双源）');
+  const r2 = await checkLatest(ctx, '0.3.10', { useCache: true });
+  assert.strictEqual(r2.version, '0.3.11');
+  assert.strictEqual(calls, 2, '缓存命中，不再发起网络请求');
+});
+
+test('checkLatest: useCache=false 手动直通，无视缓存', async (t) => {
+  let calls = 0;
+  const ctx = {
+    userDataDir: cuTmpdir(t),
+    log: () => {},
+    fetchEndpoint: async () => { calls++; return { tag_name: 'v0.3.11', assets: [{ name: 'x.exe', url: 'u', size: 1 }] }; },
+  };
+  await checkLatest(ctx, '0.3.10', { useCache: true });   // 写缓存
+  assert.strictEqual(calls, 2);
+  await checkLatest(ctx, '0.3.10', { useCache: false });  // 手动：直通
+  assert.strictEqual(calls, 4, '手动检查不受缓存影响');
+});
+
+test('checkLatest: 自动失败写退避缓存（1h 内重试抛错），手动直通不受影响', async (t) => {
+  const ctx = {
+    userDataDir: cuTmpdir(t),
+    log: () => {},
+    fetchEndpoint: async () => { throw new Error('network down'); },
+  };
+  await assert.rejects(() => checkLatest(ctx, '0.3.10', { useCache: true }), /无法连接上游发布源/);
+  await assert.rejects(() => checkLatest(ctx, '0.3.10', { useCache: true }), /退避/, '第二次自动检查走失败退避');
+  await assert.rejects(() => checkLatest(ctx, '0.3.10', { useCache: false }), /无法连接上游发布源/, '手动检查直通网络（仍报网络错而非退避）');
+});
+
+test('checkLatest: TTL 过期后缓存失效，重新探测', async (t) => {
+  const calls = [];
+  const ctx = {
+    userDataDir: cuTmpdir(t),
+    log: () => {},
+    fetchEndpoint: async (url) => { calls.push(url); return { tag_name: 'v0.3.11', assets: [{ name: 'x.exe', url: 'u', size: 1 }] }; },
+  };
+  await checkLatest(ctx, '0.3.10', { useCache: true });
+  assert.strictEqual(calls.length, 2);
+  // 把缓存 at 改到 2h 前 → 过期
+  const cache = readUpdateCache(ctx);
+  cache.at = Date.now() - CLIENT_UPDATE_CACHE_TTL_MS - 1000;
+  writeUpdateCache(ctx, cache);
+  await checkLatest(ctx, '0.3.10', { useCache: true });
+  assert.strictEqual(calls.length, 4, 'TTL 过期后重新探测');
+});
+
+test('readUpdateCache/writeUpdateCache: round-trip 与损坏容错', (t) => {
+  const dir = cuTmpdir(t);
+  const ctx = { userDataDir: dir, log: () => {} };
+  assert.strictEqual(readUpdateCache(ctx), null, '无缓存文件 → null');
+  writeUpdateCache(ctx, { at: 123, release: { version: 'v1' } });
+  const c = readUpdateCache(ctx);
+  assert.strictEqual(c.at, 123);
+  assert.strictEqual(c.release.version, 'v1');
+  fs.writeFileSync(path.join(dir, 'client-update-cache.json'), '{corrupt');
+  assert.strictEqual(readUpdateCache(ctx), null, '损坏 JSON → null');
+  assert.strictEqual(CLIENT_UPDATE_CACHE_TTL_MS, 60 * 60 * 1000, '1h 窗口');
 });

@@ -5968,7 +5968,8 @@ async function runClientUpdateFlow(manual) {
     }
     let release;
     try {
-      release = await clientUpdater.checkLatest(ctx, APP_VERSION);
+      // A-6：自动检查走 1h 窗口缓存（温启动零外网版本检查）；手动检查直通网络。
+      release = await clientUpdater.checkLatest(ctx, APP_VERSION, { useCache: !manual });
     } catch (err) {
       log('client-update', '检查失败: ' + err.message);
       if (manual) {
