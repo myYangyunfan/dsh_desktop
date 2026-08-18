@@ -16,7 +16,7 @@
 // rebuild them against Electron.
 
 const { app, BrowserWindow, Menu, Tray, shell, dialog, Notification, ipcMain, clipboard, crashReporter, screen } = require('electron');
-const { spawn, spawnSync } = require('node:child_process');
+const { spawn, spawnSync, execFileSync } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
 const http = require('node:http');
@@ -66,6 +66,7 @@ const { patchMenuViewport } = require('./scripts/patch-menu-viewport');
 const { patchSessionManage } = require('./scripts/patch-session-manage');
 const { patchOpenProjectDir } = require('./scripts/patch-open-project-dir');
 const { selectCrashDumpsToRemove } = require('./scripts/lib/crash-prune');
+const { ringAppendJsonl } = require('./scripts/lib/memory-observe');
 const { transformReplayDegrade, replayCopyFiles } = require('./scripts/patch-replay-degrade');
 const { patchSessionPersistence } = require('./scripts/patch-session-persistence');
 // 「设置 → 插件 → 诊断与管理」：诊断 / 备份与恢复 / 日志包导出 / 防砖体检 /
@@ -6422,6 +6423,71 @@ function writeBootTimings() {
   } catch {}
 }
 
+// ---------------------------------------------------------------------------
+// A-9 长时内存观测：每 30 分钟采样主进程（process.memoryUsage().rss）、
+// 后端（serverProc pid 经 wmic WorkingSetSize）、渲染进程
+// （webContents.getProcessMemoryInfo().workingSetSize），环形写入
+// <userData>/diagnostics/memory-samples.jsonl（保留最近 2000 行）。
+// 只观测不干预；任何一步失败都记 null 而不中断。
+// ---------------------------------------------------------------------------
+const MEMORY_WATCH_INTERVAL_MS = 30 * 60 * 1000;
+const MEMORY_WATCH_FIRST_DELAY_MS = 60 * 1000;
+let memoryWatchTimer = null;
+function memorySamplesPath() {
+  return path.join(userDataDir, 'diagnostics', 'memory-samples.jsonl');
+}
+function backendRssMb(pid) {
+  // Windows 无 /proc：经 wmic 查 WorkingSetSize（/value 形态稳定解析）。
+  // 失败/非 WIN 返回 null——只观测，失败静默。
+  if (!pid) return null;
+  try {
+    const out = execFileSync('wmic', ['process', 'where', 'ProcessId=' + pid, 'get', 'WorkingSetSize', '/value'], {
+      encoding: 'utf8',
+      timeout: 5000,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    const m = /WorkingSetSize=(\d+)/.exec(out);
+    return m ? Math.round(Number(m[1]) / 1048576) : null;
+  } catch {
+    return null;
+  }
+}
+function collectMemorySample() {
+  const row = {
+    at: new Date().toISOString(),
+    mainRssMB: Math.round(process.memoryUsage().rss / 1048576),
+    backendRssMB: backendRssMb(serverProc && serverProc.pid),
+    rendererWorkingSetMB: null,
+  };
+  const write = () => {
+    try {
+      fs.mkdirSync(path.dirname(memorySamplesPath()), { recursive: true });
+      ringAppendJsonl(memorySamplesPath(), row, {}, fs);
+    } catch {}
+  };
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.getProcessMemoryInfo().then((info) => {
+        row.rendererWorkingSetMB = info && info.workingSetSize ? Math.round(info.workingSetSize / 1048576) : null;
+        write();
+      }).catch(() => { row.rendererWorkingSetMB = null; write(); });
+      return;
+    }
+  } catch {}
+  write();
+}
+function startMemoryWatch() {
+  if (memoryWatchTimer) return;
+  // 首采延迟 1 分钟（避开启动峰值），此后每 30 分钟一次。
+  setTimeout(collectMemorySample, MEMORY_WATCH_FIRST_DELAY_MS).unref();
+  memoryWatchTimer = setInterval(collectMemorySample, MEMORY_WATCH_INTERVAL_MS);
+  memoryWatchTimer.unref();
+  app.on('will-quit', () => {
+    if (memoryWatchTimer) { clearInterval(memoryWatchTimer); memoryWatchTimer = null; }
+  });
+}
+
 async function boot() {
   // userData 重定向（便携版 data/ 与 dev 测试 DSH_DESKTOP_USERDATA）已在
   // 模块加载期、单实例锁校验之前完成（见 App lifecycle 区块），此处直接读取。
@@ -6609,6 +6675,7 @@ async function boot() {
       }
       log('test-event', 'boot-ready');
       writeBootTimings();
+      startMemoryWatch();
     })
     .catch((err) => handleBootFailure(err));
 }

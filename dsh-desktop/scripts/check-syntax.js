@@ -41,6 +41,7 @@ const entryFiles = [
   'scripts/lib/preset-guard.js',
   'scripts/lib/log-rotate.js',
   'scripts/lib/crash-prune.js',
+  'scripts/lib/memory-observe.js',
   'scripts/lib/roots-index.js',
   'scripts/patch-web-search-baseurl.js',
   'scripts/patch-menu-viewport.js',
