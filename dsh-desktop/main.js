@@ -54,7 +54,7 @@ const { reconcileProfileBundles, createEntryListYamlParser, resolveBundleDirLike
 // 与 after-pack 共用同一实现，杜绝重复与漂移。
 const { COMPANION_PLUGINS } = require('./scripts/lib/companion-plugins');
 const { writeFileAtomic } = require('./scripts/lib/patch-io');
-const { applyPatchToFiles } = require('./scripts/lib/patch-engine');
+const { applyPatchToFiles, setPatchCollectHook } = require('./scripts/lib/patch-engine');
 const { selectReleaseAsset } = require('./scripts/lib/github-release-assets');
 const { FLASH_PKG_REL, EXPOSE_PKG_REL, PW_REL, BASH_REL, CODE_PRESET_REL, patchTargets, localCopyFiles, guardCopyFiles, localNodeModulesRoots, slotCompatCopyFiles, slotCompatPatchTargets, transformFlashFix, transformExposeFix, transformShellDescriptionOptional, transformCodeModeCompat, transformAttachmentMimeTrust, transformLegacySlotKey, transformSlotUnkeyedCompat, transformSlotErrorIsolation, SLOT_ERROR_ISOLATE_MARKER, SLOT_KEY_COMPAT_PKG_REL, ATTACH_LOCAL_REL } = require('./scripts/lib/runtime-patches');
 const { rotateLogFile, createRotatingWriteStream } = require('./scripts/lib/log-rotate');
@@ -2602,52 +2602,56 @@ async function runUpdateFlow(manual) {
         // 缺少壳内置模式的新版本启动。
         syncCompanionPlugins();
         syncBuiltinAgentPresets();
-        applySlotCompatFix();
-        preScanPluginHealth();
-        applyRuntimeFlashFix();
-        applyPromptExposeFix();
-        applyShellDescriptionCompatFix();
-        applyCodeModeCompatFix();
-        applyImageSendFix();
-        applyAttachmentMimeTrustFix();
-        applyVisionKeyFix();
-        applyProfilePatchGuard();
-        applyProfileBundleGuard();
-        applySettingsSectionGuard();
-        applyWorkspaceSearchRailFix();
-        applyPluginInventoryTabMergeFix();
-        // 与 local 分支、与 WSL 启动分支一致：包级补丁同样立即重打（幂等），
-        // 避免「稍后重启」后以未修复的新 WSL agent 启动（历史漂移补齐）。
-        applyWebSearchBaseUrlFix();
-        applyMenuViewportFix();
-        applySessionManageFix();
-        applyOpenProjectDirFix();
-        applySessionPersistenceFix();
+        preScanPluginHealth(); // 纯读预检，照常执行（P0-2 批次外）
+        patchBatchRun(() => {
+          applySlotCompatFix();
+          applyRuntimeFlashFix();
+          applyPromptExposeFix();
+          applyShellDescriptionCompatFix();
+          applyCodeModeCompatFix();
+          applyImageSendFix();
+          applyAttachmentMimeTrustFix();
+          applyVisionKeyFix();
+          applyProfilePatchGuard();
+          applyProfileBundleGuard();
+          applySettingsSectionGuard();
+          applyWorkspaceSearchRailFix();
+          applyPluginInventoryTabMergeFix();
+          // 与 local 分支、与 WSL 启动分支一致：包级补丁同样立即重打（幂等），
+          // 避免「稍后重启」后以未修复的新 WSL agent 启动（历史漂移补齐）。
+          applyWebSearchBaseUrlFix();
+          applyMenuViewportFix();
+          applySessionManageFix();
+          applyOpenProjectDirFix();
+          applySessionPersistenceFix();
+        });
       } else {
         await updater.applyUpdate(ctx, latest);
         // 新 overlay 已就位：立即重打运行时补丁（全部幂等），否则「稍后重启」后再
         // 点「重启 dsh web 服务」会用未修复的新版本启动（识图发送、设置暴露等回归）。
         // 同时把壳内置 Agent 预设补进新 overlay（干净 npm 包不含 8 个壳预设）。
         syncLocalAgentPresets();
-        applySlotCompatFix();
-        preScanPluginHealth();
-        applyRuntimeFlashFix();
-        applyPromptExposeFix();
-        applyShellDescriptionCompatFix();
-        applyCodeModeCompatFix();
-        applyImageSendFix();
-        applyAttachmentMimeTrustFix();
-        applyVisionKeyFix();
-        applyProfilePatchGuard();
-        applyProfileBundleGuard();
-        applySettingsSectionGuard();
-        applyWorkspaceSearchRailFix();
-        applyPluginInventoryTabMergeFix();
-        applyWebSearchBaseUrlFix();
-        applyMenuViewportFix();
-        applySessionManageFix();
-        applyOpenProjectDirFix();
-        applySessionPersistenceFix();
+        preScanPluginHealth(); // 纯读预检，照常执行（P0-2 批次外）
+        patchBatchRun(() => {
+          applySlotCompatFix();
+          applyRuntimeFlashFix();
+          applyPromptExposeFix();
+          applyShellDescriptionCompatFix();
+          applyCodeModeCompatFix();
+          applyImageSendFix();
+          applyAttachmentMimeTrustFix();
+          applyVisionKeyFix();
+          applyProfilePatchGuard();
+          applyProfileBundleGuard();
+          applySettingsSectionGuard();
+          applyWorkspaceSearchRailFix();
+          applyPluginInventoryTabMergeFix();
+          applyWebSearchBaseUrlFix();
+          applyMenuViewportFix();
+          applySessionManageFix();
+          applyOpenProjectDirFix();
+          applySessionPersistenceFix();
+        });
       }
       // 进度窗已非模态，但完成对话框弹出前仍先关闭它，避免叠窗/对话框被遮挡。
       closeUpdateWindow(progressWin);
@@ -4274,6 +4278,95 @@ function presetGuardRootDir() {
   return path.join(__dirname, 'assets', 'agent-presets');
 }
 
+// ---------------------------------------------------------------------------
+// P0-2 补丁代际签名：18 个文件补丁的批次级跳过门禁。
+//   · 签名 = 壳版本 + overlay 版本 + 模式 + cordis.patch.yml/插件清单 stat
+//     + 上次批次实际候选目标文件集合的 stat（mtime/size，经
+//     setPatchCollectHook 收集，无需手工枚举；APP_VERSION 绑定版本演进，
+//     同版本内代码热改由 DSH_FORCE_PATCH=1 兜底强制重打）。
+//   · 命中（上次同输入成功应用）→ 跳过 18 个文件补丁，其余状态驱动项
+//     （applyPresetGuard / repairProfileFallback / syncCompanionPlugins /
+//     syncLocalAgentPresets / syncBuiltinAgentPresets / setupTestChannel /
+//     preScanPluginHealth）不受影响，照常执行。
+//   · 不命中/无缓存/DSH_FORCE_PATCH=1 → 全量重打，并记录本次目标文件集合。
+//   · 缓存损坏/保存失败 → 下次重打（安全方向，绝不误跳过）。
+// ---------------------------------------------------------------------------
+let patchBatchFiles = null;
+
+function patchBatchCachePath() {
+  return path.join(userDataDir, 'patch-batch-cache.json');
+}
+
+function patchBatchCacheRead() {
+  try {
+    const c = JSON.parse(fs.readFileSync(patchBatchCachePath(), 'utf8'));
+    if (c && c.v === 1 && typeof c.signature === 'string' && Array.isArray(c.files)) return c;
+  } catch {}
+  return null;
+}
+
+// 聚合签名：漏列/文件缺失只会让签名不命中（安全方向），绝无「命中但漏打」。
+function patchBatchSignature(files) {
+  const parts = [APP_VERSION, updater.overlayVersion(updCtx()) || '', isWslMode() ? 'wsl' : 'local'];
+  const home = effectiveDshHome() || path.join(os.homedir(), '.dsh');
+  for (const f of [
+    path.join(home, 'profiles', 'web', 'cordis.patch.yml'),
+    path.join(home, 'profiles', 'web', 'package.json'),
+  ]) {
+    try {
+      const st = fs.statSync(f);
+      parts.push(f + '|' + st.size + '|' + Math.round(st.mtimeMs));
+    } catch {
+      parts.push(f + '|?');
+    }
+  }
+  const sorted = [...files].sort();
+  for (const f of sorted) {
+    try {
+      const st = fs.statSync(f);
+      parts.push(f + '|' + st.size + '|' + Math.round(st.mtimeMs));
+    } catch {
+      parts.push(f + '|missing');
+    }
+  }
+  return parts.join('\n');
+}
+
+// 统一批次入口：exec() 内执行 18 个文件补丁（applyPresetGuard 等状态驱动项
+// 放在批次外）。签名命中 → 跳过；否则全量重打并落缓存。
+function patchBatchRun(exec) {
+  if (process.env.DSH_FORCE_PATCH === '1') {
+    log('boot', 'DSH_FORCE_PATCH=1：强制重打 18 个文件补丁');
+  } else {
+    const cached = patchBatchCacheRead();
+    if (cached && cached.files.length > 0 && cached.signature === patchBatchSignature(cached.files)) {
+      log('boot', '补丁代际签名命中，跳过 18 个文件补丁（applyPresetGuard/repair/sync 等状态驱动项照常执行）');
+      return;
+    }
+  }
+  const collected = [];
+  patchBatchFiles = collected;
+  setPatchCollectHook((f) => { if (collected.indexOf(f) < 0) collected.push(f); });
+  try {
+    exec();
+  } finally {
+    setPatchCollectHook(null);
+    patchBatchFiles = null;
+  }
+  if (collected.length > 0) {
+    const signature = patchBatchSignature(collected);
+    try {
+      fs.writeFileSync(patchBatchCachePath(), JSON.stringify({ v: 1, at: new Date().toISOString(), signature, files: collected }));
+      log('boot', '补丁批次完成，已记录 ' + collected.length + ' 个目标文件（下次启动签名命中即跳过）');
+    } catch (err) {
+      log('boot', '补丁批次缓存保存失败（下次启动将重打）: ' + err.message);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 状态驱动补丁：无 mtime 锚点，永远执行（P0-2 签名门禁不覆盖）。
+// ---------------------------------------------------------------------------
 function applyPresetGuard() {
   try {
     const s = updater.loadSettings(updCtx());
@@ -6378,50 +6471,54 @@ async function boot() {
     await wslBackend.ensureInstalled();
     syncCompanionPlugins();
     syncBuiltinAgentPresets();
-    applySlotCompatFix();
-    preScanPluginHealth();
-    applyRuntimeFlashFix();
-    applyPromptExposeFix();
-    applyShellDescriptionCompatFix();
-    applyCodeModeCompatFix();
-    applyImageSendFix();
-    applyAttachmentMimeTrustFix();
-    applyVisionKeyFix();
-    applyProfilePatchGuard();
-    applyProfileBundleGuard();
-    applySettingsSectionGuard();
-    applyWorkspaceSearchRailFix();
-    applyPluginInventoryTabMergeFix();
-    applyWebSearchBaseUrlFix();
-    applyMenuViewportFix();
-    applySessionManageFix();
-    applyOpenProjectDirFix();
-    applySessionPersistenceFix();
+    preScanPluginHealth(); // 纯读预检，照常执行（P0-2 批次外）
+    patchBatchRun(() => {
+      applySlotCompatFix();
+      applyRuntimeFlashFix();
+      applyPromptExposeFix();
+      applyShellDescriptionCompatFix();
+      applyCodeModeCompatFix();
+      applyImageSendFix();
+      applyAttachmentMimeTrustFix();
+      applyVisionKeyFix();
+      applyProfilePatchGuard();
+      applyProfileBundleGuard();
+      applySettingsSectionGuard();
+      applyWorkspaceSearchRailFix();
+      applyPluginInventoryTabMergeFix();
+      applyWebSearchBaseUrlFix();
+      applyMenuViewportFix();
+      applySessionManageFix();
+      applyOpenProjectDirFix();
+      applySessionPersistenceFix();
+    });
     bootMark('boot:patches-wsl');
   } else {
     // 先修复 profile fallback 联接再同步/补丁依赖文件：EPERM 环境下补丁写不进去。
     await repairProfileFallback(home);
     syncCompanionPlugins();
     syncLocalAgentPresets();
-    applySlotCompatFix();
-    preScanPluginHealth();
-    applyRuntimeFlashFix();
-    applyPromptExposeFix();
-    applyShellDescriptionCompatFix();
-    applyCodeModeCompatFix();
-    applyImageSendFix();
-    applyAttachmentMimeTrustFix();
-    applyVisionKeyFix();
-    applyProfilePatchGuard();
-    applyProfileBundleGuard();
-    applySettingsSectionGuard();
-    applyWorkspaceSearchRailFix();
-    applyPluginInventoryTabMergeFix();
-    applyWebSearchBaseUrlFix();
-    applyMenuViewportFix();
-    applySessionManageFix();
-    applyOpenProjectDirFix();
-    applySessionPersistenceFix();
+    preScanPluginHealth(); // 纯读预检，照常执行（P0-2 批次外）
+    patchBatchRun(() => {
+      applySlotCompatFix();
+      applyRuntimeFlashFix();
+      applyPromptExposeFix();
+      applyShellDescriptionCompatFix();
+      applyCodeModeCompatFix();
+      applyImageSendFix();
+      applyAttachmentMimeTrustFix();
+      applyVisionKeyFix();
+      applyProfilePatchGuard();
+      applyProfileBundleGuard();
+      applySettingsSectionGuard();
+      applyWorkspaceSearchRailFix();
+      applyPluginInventoryTabMergeFix();
+      applyWebSearchBaseUrlFix();
+      applyMenuViewportFix();
+      applySessionManageFix();
+      applyOpenProjectDirFix();
+      applySessionPersistenceFix();
+    });
     bootMark('boot:patches-local');
     setupTestChannel();
     // P0-3：koffi 预检异步化——缓存命中零等待；未命中则异步探测不阻塞 boot

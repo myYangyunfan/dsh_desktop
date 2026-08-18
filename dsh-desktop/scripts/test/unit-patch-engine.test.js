@@ -18,7 +18,7 @@ const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
 const { writeFileAtomic, readFileCached } = require('../lib/patch-io');
-const { applyPatchToFiles } = require('../lib/patch-engine');
+const { applyPatchToFiles, setPatchCollectHook } = require('../lib/patch-engine');
 const {
   FLASH_OLD, FLASH_NEW, SETTINGS_NAMESPACES,
   FLASH_PKG_REL, EXPOSE_PKG_REL, patchTargets,
@@ -157,6 +157,48 @@ test('patch-engine: 空路径/文件不存在静默跳过；读取失败与写�
   fs.chmodSync(ro, 0o666);
   fs.rmSync(ro + '.tmp', { force: true });
   assert.strictEqual(fs.readFileSync(ro, 'utf8'), 'OLD', '写入失败不得损坏原文件');
+});
+
+test('patch-engine: 收集钩子在存在性过滤前收取全部非空候选文件', (t) => {
+  const dir = tmpdir(t);
+  const file = path.join(dir, 't.js');
+  fs.writeFileSync(file, 'OLD');
+  const logs = [];
+  const base = {
+    prefix: '测试补丁',
+    log: (m) => logs.push(m),
+    transform: (src) => ({ status: 'changed', src: src.replace('OLD', 'DONE') }),
+    doneLog: (f) => '已应用 ' + f,
+  };
+  const seen = [];
+  setPatchCollectHook((f) => seen.push(f));
+  t.after(() => setPatchCollectHook(null));
+  const n = applyPatchToFiles({ ...base, files: [file, path.join(dir, 'nope.js'), null, '', file] });
+  assert.strictEqual(n, 2, '真实文件出现两次则应用两次（引擎不去重，去重由调用方 patchBatchRun 负责）；不存在的文件静默跳过');
+  assert.deepStrictEqual(seen, [file, path.join(dir, 'nope.js'), file],
+    '钩子应收到全部非空候选（含不存在路径，含重复，含真实文件），null/空字符串不收取');
+});
+
+test('patch-engine: 钩子置空后不再收集（默认态）', (t) => {
+  const dir = tmpdir(t);
+  const file = path.join(dir, 't2.js');
+  fs.writeFileSync(file, 'OLD');
+  const logs = [];
+  const base = {
+    prefix: '测试补丁',
+    log: (m) => logs.push(m),
+    transform: (src) => ({ status: 'changed', src: src.replace('OLD', 'DONE') }),
+    doneLog: (f) => '已应用 ' + f,
+  };
+  setPatchCollectHook(null);
+  let seen = 0;
+  applyPatchToFiles({ ...base, files: [file] });
+  assert.strictEqual(seen, 0, '钩子为 null 时不得收集');
+  // 重新挂上后恢复收集（钩子可热切换）
+  setPatchCollectHook(() => { seen++; });
+  t.after(() => setPatchCollectHook(null));
+  applyPatchToFiles({ ...base, files: [file] });
+  assert.strictEqual(seen, 1, '重新挂载后应恢复收集');
 });
 
 // ---------------------------------------------------------------------------

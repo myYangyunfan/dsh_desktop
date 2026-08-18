@@ -25,6 +25,12 @@
 const fs = require('node:fs');
 const { writeFileAtomic, readFileCached } = require('./patch-io');
 
+// P0-2 补丁代际签名：批次执行时由 main.js 挂收集钩子，把本批次实际候选的
+// 目标文件集合记录下来（供下次启动的签名判定）。批次外（sync 等单点调用）
+// 钩子为空，不收集。
+let patchCollectHook = null;
+function setPatchCollectHook(fn) { patchCollectHook = fn; }
+
 /**
  * 对一组候选文件依次应用同一个补丁变换。
  *
@@ -62,6 +68,9 @@ function applyPatchToFiles(spec) {
     write = writeFileAtomic,
   } = spec;
   let written = 0;
+  if (patchCollectHook) {
+    for (const file of files) if (file) patchCollectHook(file);
+  }
   for (const file of files) {
     if (!file || !fs.existsSync(file)) continue;
     try {
@@ -94,4 +103,4 @@ function applyPatchToFiles(spec) {
   return written;
 }
 
-module.exports = { applyPatchToFiles };
+module.exports = { applyPatchToFiles, setPatchCollectHook };
