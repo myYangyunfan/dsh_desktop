@@ -136,40 +136,44 @@
 				//    开阔区域靠浅灰画布衬托轮廓，按钮与提示贴大区域下缘两端分布 ——
 				// 外壳（hero 空态与 normal 会话态共用）：无框无影，豁达打开
 				// !important：压宿主自带边框，彻底解除“框中框”束缚
-				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea){position:relative;background:var(--qdu-bg-card);border:none!important;box-shadow:none!important;border-radius:18px;padding:0 10px 6px!important;transition:box-shadow .18s var(--qdu-ease)}',
-				// 聚焦反馈：一圈极细主色环（代替边框/重阴影，保持打开感）
-				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea):focus-within{box-shadow:0 0 0 1.5px color-mix(in srgb,var(--qdu-accent) 30%,transparent),0 1px 2px rgba(16,24,40,.04)!important}',
-				// 空态 hero：大区域、内容顶到左上（textarea 在上、工具行压底），
-				// 22px 更大圆角 + 极微浮起 + 顶部主色渐变高光线
-				'body[data-dsh-quest-ui] [class*="_composerHero"] [class*="_root"]:has(textarea){border-radius:22px;box-shadow:0 1px 3px rgba(16,24,40,.04)!important;min-height:200px;display:flex;flex-direction:column;justify-content:flex-start}',
-				'body[data-dsh-quest-ui] [class*="_composerHero"] [class*="_root"]:has(textarea)::before{content:"";position:absolute;left:28px;right:28px;top:0;height:2px;border-radius:0 0 999px 999px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--qdu-accent) 55%,transparent) 35%,color-mix(in srgb,var(--qdu-accent) 55%,transparent) 65%,transparent);pointer-events:none}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea){position:relative;display:flex;flex-direction:column;background:var(--qdu-bg-card);border:none!important;box-shadow:none!important;border-radius:18px;padding:0 10px 2px!important;transition:box-shadow .18s var(--qdu-ease)}',
+				// 聚焦反馈：仅顶部 2px 主色直线（平角）——下方不再出现任何弧形蓝边
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea):focus-within{box-shadow:none!important}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea):focus-within::after{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:color-mix(in srgb,var(--qdu-accent) 70%,transparent);border-radius:0;pointer-events:none}',
+				// 空态 hero：大区域、内容顶到左上，22px 大圆角（无阴影无装饰线）
+				'body[data-dsh-quest-ui] [class*="_composerHero"] [class*="_root"]:has(textarea){border-radius:22px;box-shadow:none!important;min-height:200px;display:flex;flex-direction:column;justify-content:flex-start}',
 				'body[data-dsh-quest-ui] [class*="_composerHero"]{max-width:820px;margin:0 auto;width:100%}',
 				// 输入区内层完全透明化（宿主 card/backdrop 自带底色是“生搬感”根源）；
 				// card/scroll 纵向撑满使工具行贴底；打破宿主 780px 居中限宽 ——
 				// 输入卡占满整个下栏，从左上角开始（v0.4.1：豁达全开）
-				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_card"]{border-radius:inherit;background:transparent!important;flex:1;display:flex;flex-direction:column;width:100%!important;max-width:none!important;margin-left:0!important;margin-right:0!important}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_card"]{position:static!important;border-radius:inherit;background:transparent!important;flex:1;display:flex;flex-direction:column;width:100%!important;max-width:none!important;margin-left:0!important;margin-right:0!important}',
 				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_card"] > [class*="_scroll"]{flex:1;width:100%!important;max-width:none!important;margin:0!important}',
 				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_grow"] [class*="_backdrop"]{background:transparent!important;border:none!important;box-shadow:none!important}',
 				// textarea：大幅打开 —— normal 态 72px、hero 态 96px，大呼吸内边距
 				'body[data-dsh-quest-ui] [class*="_composerStack"] textarea{background:transparent;border-radius:14px;padding:16px 18px 8px;min-height:72px}',
 				'body[data-dsh-quest-ui] [class*="_composerStack"] textarea::placeholder{color:var(--qdu-label-3);opacity:.75}',
 				'body[data-dsh-quest-ui] [class*="_composerHero"] textarea{min-height:96px}',
-				// 发送键（.uV2eYG_primary）：36px 圆形主色 + hover 抬升投影
+				// 发送键：36px 圆形主色，无投影无浮动（下方干净利落）
 				// !important：宿主 normal 态自带 8px 方圆角与尺寸
-				'body[data-dsh-quest-ui] [class*="_composerStack"] button[class*="_primary"]{width:36px;height:36px;border-radius:999px!important;box-shadow:0 2px 8px color-mix(in srgb,var(--qdu-accent) 35%,transparent);transition:transform .15s var(--qdu-ease),box-shadow .15s var(--qdu-ease),opacity .15s ease}',
-				'body[data-dsh-quest-ui] [class*="_composerStack"] button[class*="_primary"]:hover{transform:translateY(-1px);box-shadow:0 4px 14px color-mix(in srgb,var(--qdu-accent) 45%,transparent)}',
-				'body[data-dsh-quest-ui] [class*="_composerStack"] button[class*="_primary"]:active{transform:translateY(0)}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] button[class*="_primary"]{width:36px;height:36px;border-radius:999px!important;box-shadow:none!important;transition:opacity .15s ease}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] button[class*="_primary"]:hover{opacity:.88}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] button[class*="_primary"]:active{opacity:.75}',
 				// 工具行图标钮（命令/附件）：幽灵圆形，去宿主灰底
 				// !important + 双属性选择器提升特异性：宿主对 _add 也用了 ！important
 				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_row"] [class*="_tools"] button[class*="_add"],body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_row"] [class*="_tools"] .dsh-vision-attach-btn{width:32px;height:32px;border-radius:999px!important;background:transparent!important;background-color:transparent!important;color:var(--qdu-label-2)}',
 				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_row"] [class*="_tools"] button[class*="_add"]:hover,body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_row"] [class*="_tools"] .dsh-vision-attach-btn:hover{background:var(--qdu-hover)!important;color:var(--qdu-label-1)}',
-				// 文字选择器（访问模式/选择模型/上下文环）：描边药丸；图标环圆形
-				'body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="访问模式"],body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="选择模型"]{height:28px;border-radius:999px;border:1px solid var(--qdu-line);background:transparent!important;color:var(--qdu-label-2)!important;font-size:12px;transition:background-color .15s ease,border-color .15s ease,color .15s ease}',
-				'body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="访问模式"]:hover,body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="选择模型"]:hover{background:var(--qdu-hover)!important;border-color:var(--qdu-line);color:var(--qdu-label-1)!important}',
+				// 文字选择器（访问模式/选择模型/上下文环）：去描边去底色的幽灵文字钮
+				'body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="访问模式"],body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="选择模型"]{height:28px;border:none!important;border-radius:8px!important;background:transparent!important;background-color:transparent!important;color:var(--qdu-label-2)!important;font-size:12px;box-shadow:none!important;transition:background-color .15s ease,color .15s ease}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="访问模式"]:hover,body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="选择模型"]:hover{background:var(--qdu-hover)!important;color:var(--qdu-label-1)!important}',
 				'body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="上下文"]{border-radius:999px!important;transition:background-color .15s ease}',
 				'body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="上下文"]:hover{background:var(--qdu-hover)!important}',
-				// 工具行：贴大区域最底缘，两端分布（左工具组贴左缘 / 右发送组贴右缘）
-				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_row"]{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 8px 8px}',
+				// 工具行：绝对定位钉在 root 最底缘（摆脱宿主 card 固定高度限制），
+				// 两端分布（左工具组贴左缘 / 右发送组贴右缘）
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_row"]{position:absolute;left:10px;right:10px;bottom:4px;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 8px}',
+				// 余额信息（dsh-balance dock，root 下独占一行）：绝对定位到
+				// 工具行同一最底层的中部，与发送键同层，下方不再多出一行
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea) > div:has(.dsh-balance-wrap){display:block;position:absolute;left:50%;transform:translateX(-50%);bottom:10px;margin:0!important;max-width:60%;overflow:hidden;white-space:nowrap}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea) > div:has(.dsh-balance-wrap) .dsh-balance-wrap{white-space:nowrap}',
 				// 会话统计条：突破宿主 748px 居中限宽的外层 wrapper，左对齐贴缘，降噪小字
 				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea) > div:has([class*="_sep"]){width:100%!important;max-width:none!important;margin:0!important;padding:8px 14px 0;box-sizing:border-box}',
 				'body[data-dsh-quest-ui] div:has(> span[class*="_sep"]){color:var(--qdu-label-3);font-size:11px;width:100%;max-width:none!important;justify-content:flex-start!important;flex-wrap:wrap}',
@@ -216,12 +220,7 @@
 				// —— 自有节点：侧栏分组头（Qoder Quest 小号大写字距标签）——
 				'body[data-dsh-quest-ui] .qdu-nav-head{box-sizing:border-box;padding:12px 12px 6px;font-size:11px;line-height:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--qdu-label-3);user-select:none}',
 			
-				// —— 自有节点：元数据药丸条（贴输入卡片上方、居中、描边药丸；
-				//    纯展示不拦截点击）——
-				'body[data-dsh-quest-ui] .qdu-pillbar{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;max-width:780px;margin:0 auto 8px;padding:0 16px;pointer-events:none}',
-				'body[data-dsh-quest-ui] .qdu-pill{border:1px solid color-mix(in srgb,var(--qdu-label-1) 8%,transparent);border-radius:var(--qdu-radius-pill);padding:3px 12px;font-size:12px;line-height:18px;color:var(--qdu-label-2);background:var(--qdu-bg-card);display:inline-flex;align-items:center;gap:4px;box-shadow:0 1px 2px rgba(16,24,40,.04)}',
-				// 药丸前缀圆点（主色点缀）
-				'body[data-dsh-quest-ui] .qdu-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--qdu-accent);opacity:.75}',
+			// （v0.4.4：胶囊样式已彻底移除，节点与 CSS 均不再存在）
 			
 				// —— 空态建议卡：圆点前缀（::before 14px 描边圆）+ 40px 行高 +
 				//    hover 浅底；官方欢迎页有建议条目时才命中，无条目安静无效 ——
