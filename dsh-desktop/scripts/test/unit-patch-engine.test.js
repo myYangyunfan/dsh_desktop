@@ -411,17 +411,17 @@ test('runtime-patches: keyed slot 兼容覆盖顶层与 dsh 嵌套依赖副本',
 test('companion-plugins: 既有前缀顺序与 workspace-anchor 位置唯一（漂移防线）', () => {
   const ids = COMPANION_PLUGINS.map((p) => p.id);
   assert.deepStrictEqual(
-    ids.slice(0, 18),
+    ids.slice(0, 19),
     [
       'balance', 'file-changes', 'client-file-changes', 'terminal',
       'better-sidebar', 'harness-pet', 'float-window', 'dsh-navbar', 'dsh-session-manager',
-      'conversation-tweaks', 'super-injector', 'prompt-custom', 'workspace-anchor',
+      'conversation-tweaks', 'quest-ui', 'dsh-super-injector', 'prompt-custom', 'workspace-anchor',
       'third-party-thinking', 'wsl-settings', 'dsh-vision', 'side-session',
       'compaction-acp',
     ],
     '既有前缀顺序不得漂移（新增/改名须同步更新本测试）'
   );
-  assert.strictEqual(ids.indexOf('workspace-anchor'), 12, 'workspace-anchor 应固定在 prompt-custom 之后');
+  assert.strictEqual(ids.indexOf('workspace-anchor'), 13, 'workspace-anchor 应固定在 prompt-custom 之后');
   assert.strictEqual(ids.filter((id) => id === 'workspace-anchor').length, 1, 'workspace-anchor 不得重复');
   assert.strictEqual(companionDirName({ name: '@deepseek-ai/dsh-balance' }), 'dsh-balance');
   assert.strictEqual(companionDirName({ name: 'harness-pet' }), 'harness-pet');
@@ -507,6 +507,30 @@ test('registerCompanionPatchEntries: 空文件注册/幂等/改名/尊重用户�
   });
   assert.deepStrictEqual(r6.dropped, ['balance']);
   assert.ok(!r6.patch.includes('@deepseek-ai/dsh-balance'), '源缺失插件的注册应被移除');
+});
+
+test('registerCompanionPatchEntries: 清单 id 与 patch/bundle 层 loader id 一致（issue #104）', () => {
+  // 回归：dsh-super-injector 的清单 id 曾声明为 super-injector，而 patch 残留
+  // insert 块与 bundle 层（@dsh-external/dsh-super-injector/cordis.patch.yml）
+  // 的 loader id 均为 dsh-super-injector。bundle 迁移自愈按清单 id 调
+  // dropBlocksByIds，id 错位导致残留块永不命中 → 同名包 bundle+patch 双登记
+  // → cordis loader "duplicate loader entry id" 启动崩溃循环（0.3.10）。
+  const injector = COMPANION_PLUGINS.find((p) => p.name === '@dsh-external/dsh-super-injector');
+  assert.strictEqual(injector.id, 'dsh-super-injector',
+    '清单 id 必须与 patch/bundle 层实际 loader id 一致，否则自愈永不命中');
+  // 现场残留形态（profiles/web/cordis.patch.yml 旧版 insert 块，见 issue #104 证据）
+  const legacyPatch = '# dsh web profile patch（由 DSH Desktop 维护）\n'
+    + "- insert:\n    - id: dsh-super-injector\n      name: '@dsh-external/dsh-super-injector'\n      config: {}\n";
+  const r = registerCompanionPatchEntries(legacyPatch, {
+    plugins: [injector],
+    bundleNames: new Set(['@dsh-external/dsh-super-injector']),
+    missingNames: new Set(),
+  });
+  assert.deepStrictEqual(r.dropped, ['dsh-super-injector'],
+    'bundle 迁移自愈应命中残留 insert 块（修复前因 id 错位永远 dropped 为空）');
+  assert.ok(!r.patch.includes('@dsh-external/dsh-super-injector'),
+    '残留注册应被移除，避免双登记');
+  assert.ok(r.changed, '应产生变更');
 });
 
 test('removedPluginIdsFromPatch: 卸载标记提取（正常/损坏 YAML/insert 块不误伤）', () => {

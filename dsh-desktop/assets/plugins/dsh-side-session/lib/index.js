@@ -83,33 +83,236 @@ function clamp(text, max) {
 
 // ---------------------------------------------------------------------------
 // dsh 全局凭据解析（取自 dsh-desktop/balance.js 的实测实现，逐行对齐）
+// v0.3.0 起改为「当前会话供应商感知」：不再只认 DEEPSEEK_API_KEY，
+// 而是实时读取 agent-default-model 的 provider/model，再解析该供应商的
+// apiKeyEnv（settings.yaml 的 llm-pi-ai.providers.<p>.apiKeyEnv 优先，
+// 其次内置已知表，最后启发式 `${PROVIDER}_API_KEY`），并据此取 key / base。
 // ---------------------------------------------------------------------------
 function dshHome() {
   return process.env.DSH_HOME || join(homedir(), ".dsh");
 }
 
-function readGlobalKey() {
-  if (process.env.DEEPSEEK_API_KEY) return process.env.DEEPSEEK_API_KEY.trim();
-  try {
-    const text = readFileSync(join(dshHome(), ".credentials.yaml"), "utf8");
-    for (const line of text.split(/\r?\n/)) {
-      const m = line.match(/^\s*DEEPSEEK_API_KEY\s*:\s*["']?([^"'\s#]+)/);
-      if (m) return m[1];
-    }
-  } catch {}
-  return "";
-}
+// 内置已知供应商表：base = OpenAI 兼容 /chat/completions 基址（无尾斜杠），
+// env = 该供应商的凭据 env 名（与 pi-ai env-api-keys 对齐），openai = 是否
+// OpenAI 兼容协议（否则 mode1 直连不支持，提示转 mode3/mode2）。
+const KNOWN_PROVIDERS = {
+  deepseek: { base: "https://api.deepseek.com", env: "DEEPSEEK_API_KEY", openai: true },
+  "opencode-go": { base: "https://opencode.ai/zen/go/v1", env: "OPENCODE_API_KEY", openai: true },
+  opencode: { base: "https://opencode.ai/zen/v1", env: "OPENCODE_API_KEY", openai: true },
+  openai: { base: "https://api.openai.com/v1", env: "OPENAI_API_KEY", openai: true },
+  openrouter: { base: "https://openrouter.ai/api/v1", env: "OPENROUTER_API_KEY", openai: true },
+  groq: { base: "https://api.groq.com/openai/v1", env: "GROQ_API_KEY", openai: true },
+  cerebras: { base: "https://api.cerebras.ai/v1", env: "CEREBRAS_API_KEY", openai: true },
+  xai: { base: "https://api.x.ai/v1", env: "XAI_API_KEY", openai: true },
+  mistral: { base: "https://api.mistral.ai", env: "MISTRAL_API_KEY", openai: true },
+  moonshotai: { base: "https://api.moonshot.ai/v1", env: "MOONSHOT_API_KEY", openai: true },
+  "moonshotai-cn": { base: "https://api.moonshot.cn/v1", env: "MOONSHOT_API_KEY", openai: true },
+  nvidia: { base: "https://integrate.api.nvidia.com/v1", env: "NVIDIA_API_KEY", openai: true },
+  huggingface: { base: "https://router.huggingface.co/v1", env: "HF_TOKEN", openai: true },
+  fireworks: { base: "https://api.fireworks.ai/inference", env: "FIREWORKS_API_KEY", openai: true },
+  together: { base: "https://api.together.ai/v1", env: "TOGETHER_API_KEY", openai: true },
+  zai: { base: "https://api.z.ai/api/coding/paas/v4", env: "ZAI_API_KEY", openai: true },
+  "zai-coding-cn": { base: "https://open.bigmodel.cn/api/coding/paas/v4", env: "ZAI_CODING_CN_API_KEY", openai: true },
+  "kimi-coding": { base: "https://api.kimi.com/coding", env: "KIMI_API_KEY", openai: true },
+  "qwen-token-plan": { base: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1", env: "QWEN_TOKEN_PLAN_API_KEY", openai: true },
+  "qwen-token-plan-cn": { base: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1", env: "QWEN_TOKEN_PLAN_CN_API_KEY", openai: true },
+  "ant-ling": { base: "https://api.ant-ling.com/v1", env: "ANT_LING_API_KEY", openai: true },
+  xiaomi: { base: "https://api.xiaomimimo.com/v1", env: "XIAOMI_API_KEY", openai: true },
+  "github-copilot": { base: "https://api.individual.githubcopilot.com", env: "COPILOT_GITHUB_TOKEN", openai: true },
+  // 非 OpenAI 兼容协议：mode1 直连 /chat/completions 不适用，建议 mode3/mode2
+  anthropic: { base: "https://api.anthropic.com", env: "ANTHROPIC_API_KEY", openai: false },
+  google: { base: "https://generativelanguage.googleapis.com/v1beta", env: "GEMINI_API_KEY", openai: false },
+  "google-vertex": { base: "", env: "GOOGLE_CLOUD_API_KEY", openai: false },
+  "cloudflare-workers-ai": { base: "", env: "CLOUDFLARE_API_KEY", openai: false },
+  "cloudflare-ai-gateway": { base: "", env: "CLOUDFLARE_API_KEY", openai: false },
+  "vercel-ai-gateway": { base: "", env: "AI_GATEWAY_API_KEY", openai: false },
+  "azure-openai-responses": { base: "", env: "AZURE_OPENAI_API_KEY", openai: false },
+};
 
-// 锚定 agent-default-model 段取 model（与 balance.readActiveModel 行为一致，
-// 但额外锚定命名空间以避免其他 model: 键误读）。
-function readGlobalModel() {
+// 当前会话默认模型选择（agent-default-model 段），轻缓存 5s。
+let activeSelectionCache = null; // { at, value: {provider, model} }
+
+function readActiveSelection() {
+  if (activeSelectionCache && Date.now() - activeSelectionCache.at < 5000) {
+    return activeSelectionCache.value;
+  }
+  const sel = { provider: "", model: "", reasoningEffort: "" };
   try {
     const text = readFileSync(join(dshHome(), "settings.yaml"), "utf8");
-    // 仅锚定 agent-default-model 段内的 model: 行，避免误读其它命名空间的 model 键
-    const anchored = text.match(/agent-default-model:[\s\S]*?^\s*model:\s*(\S+)/m);
-    if (anchored) return anchored[1];
+    // 仅锚定 agent-default-model 段内的行，避免误读其它命名空间的同名键。
+    // match 返回 [全文, ...]，取 [0] 才是匹配文本。
+    const m0 =
+      text.match(/agent-default-model:[\s\S]*?(?=^\S)/m) ||
+      text.match(/agent-default-model:[\s\S]*$/m);
+    const block = m0 ? m0[0] : "";
+    const p = block.match(/^\s*provider\s*:\s*(\S+)/m);
+    const md = block.match(/^\s*model\s*:\s*(\S+)/m);
+    const re = block.match(/^\s*reasoningEffort\s*:\s*(\S+)/m);
+    if (p) sel.provider = p[1];
+    if (md) sel.model = md[1];
+    if (re) sel.reasoningEffort = re[1];
   } catch {}
-  return DEFAULT_MODEL;
+  activeSelectionCache = { at: Date.now(), value: sel };
+  return sel;
+}
+
+// 读取 settings.yaml 里 llm-pi-ai.providers.<provider> 的 apiKeyEnv / baseURL
+function readProviderProfile(provider) {
+  try {
+    const text = readFileSync(join(dshHome(), "settings.yaml"), "utf8");
+    const lines = text.split(/\r?\n/);
+    let top = -1;
+    for (let k = 0; k < lines.length; k++) {
+      if (/^llm-pi-ai\s*:/.test(lines[k])) {
+        top = k;
+        break;
+      }
+    }
+    if (top < 0) return {};
+    const block = [];
+    let k = top + 1;
+    while (k < lines.length && (/^\s+\S/.test(lines[k]) || lines[k].trim() === "")) {
+      block.push(lines[k]);
+      k++;
+    }
+    let pIdx = -1;
+    for (let b = 0; b < block.length; b++) {
+      if (/^\s*providers\s*:/.test(block[b])) {
+        pIdx = b;
+        break;
+      }
+    }
+    if (pIdx < 0) return {};
+    const baseIndent = ((block[pIdx].match(/^(\s*)/) || [])[1] || "").length;
+    let target = -1;
+    let targetIndent = -1;
+    for (let b = pIdx + 1; b < block.length; b++) {
+      const ln = block[b];
+      if (!ln.trim()) continue;
+      const indent = ((ln.match(/^(\s*)/) || [])[1] || "").length;
+      if (indent <= baseIndent) break;
+      const m = ln.match(/^\s*([A-Za-z0-9_.-]+)\s*:/);
+      if (m && m[1] === provider) {
+        target = b;
+        targetIndent = indent;
+        break;
+      }
+    }
+    if (target < 0) return {};
+    const prof = {};
+    for (let b = target + 1; b < block.length; b++) {
+      const ln = block[b];
+      if (!ln.trim() || !/^\s+/.test(ln)) break;
+      const indent = ((ln.match(/^(\s*)/) || [])[1] || "").length;
+      if (indent <= targetIndent) break;
+      const kv = ln.match(/^\s*([a-zA-Z0-9_-]+)\s*:\s*(.*)$/);
+      if (kv && ["apiKeyEnv", "baseURL", "api"].indexOf(kv[1]) >= 0) {
+        prof[kv[1]] = kv[2].trim().replace(/^["']|["']$/g, "");
+      }
+    }
+    return prof;
+  } catch {
+    return {};
+  }
+}
+
+// 按供应商解析 API Key：优先环境变量 → DSH 凭据服务（credentials.resolve）
+// → ~/.dsh/.credentials.yaml 扁平键 regex。apiKeyEnv 取 profile 覆盖优先。
+async function resolveProviderKey(provider, profile) {
+  const env =
+    (profile && profile.apiKeyEnv) ||
+    (KNOWN_PROVIDERS[provider] && KNOWN_PROVIDERS[provider].env) ||
+    (provider ? provider.replace(/[^A-Za-z0-9_]/g, "_").toUpperCase() + "_API_KEY" : "") ||
+    "";
+  // 1) 环境变量
+  if (process.env[env]) return { key: process.env[env].trim(), env };
+  // 2) DSH 凭据服务（若宿主提供 credentials 服务）
+  try {
+    if (ctxRef && ctxRef.get) {
+      const svc = ctxRef.get("credentials", false);
+      if (svc && typeof svc.resolve === "function") {
+        const hit = await svc.resolve(env);
+        const v = hit && hit.value;
+        if (v && String(v).length) return { key: String(v).trim(), env };
+      }
+    }
+  } catch {}
+  // 3) ~/.dsh/.credentials.yaml 扁平 key: value 行
+  try {
+    const text = readFileSync(join(dshHome(), ".credentials.yaml"), "utf8");
+    const re = new RegExp(
+      "^\\s*" + env.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*:\\s*[\"']?([^\"'\\s#]+)"
+    );
+    for (const line of text.split(/\r?\n/)) {
+      const m = line.match(re);
+      if (m) return { key: m[1], env };
+    }
+  } catch {}
+  return { key: "", env };
+}
+
+// 按供应商解析 OpenAI 兼容基址（无尾斜杠）：profile.baseURL → KNOWN_PROVIDERS.base
+function resolveProviderBase(provider, profile) {
+  const base =
+    (profile && profile.baseURL) ||
+    (KNOWN_PROVIDERS[provider] && KNOWN_PROVIDERS[provider].base) ||
+    "";
+  return base.replace(/\/+$/, "");
+}
+
+// mode1 用：解析「当前会话 provider/model」+ 该供应商的 key/base。
+// 优先 body（客户端当前会话上下文）→ 会话日志 parsed → agent-default-model。
+// 返回 { key, model, base, source, provider, env, openai, reason }。
+async function resolveGlobalForMode1(body, parsed) {
+  const active = readActiveSelection();
+  const provider =
+    String(
+      (body && body.provider) ||
+        (parsed && parsed.provider) ||
+        active.provider ||
+        ""
+    ) || "deepseek";
+  const model =
+    String(
+      (body && body.model) ||
+        (parsed && parsed.model) ||
+        active.model ||
+        ""
+    ) || DEFAULT_MODEL;
+  const profile = readProviderProfile(provider);
+  const known = KNOWN_PROVIDERS[provider] || {};
+  const openai = profile.api
+    ? String(profile.api).indexOf("openai") >= 0
+    : known.openai !== false;
+  const base = resolveProviderBase(provider, profile);
+  if (!base) {
+    return {
+      key: "",
+      model,
+      base: "",
+      source: "global",
+      provider,
+      env: (profile && profile.apiKeyEnv) || known.env || "",
+      openai,
+      reason: "unknown-provider",
+    };
+  }
+  const { key, env } = await resolveProviderKey(provider, profile);
+  return {
+    key,
+    model,
+    base,
+    source: "global",
+    provider,
+    env,
+    openai,
+    reason: key ? "ok" : "no-key",
+  };
+}
+
+// 兼容旧引用：agent-default-model 段的 model（与 balance.readActiveModel 一致）
+function readGlobalModel() {
+  return readActiveSelection().model || DEFAULT_MODEL;
 }
 
 function globalBase() {
@@ -606,6 +809,14 @@ async function handleContext(req, res) {
   }
   try {
     const parsed = parseSession(sessionId);
+    const active = readActiveSelection();
+    // provider/model 回退：会话日志缺失 → 实时默认（agent-default-model），
+    // 让 UI 始终能看到「当前会话实际使用的模型」（如 opencode-go/deepseek-v4-flash）。
+    const provider =
+      parsed.provider && parsed.provider !== DEFAULT_PROVIDER
+        ? parsed.provider
+        : active.provider || parsed.provider;
+    const model = parsed.model || active.model || DEFAULT_MODEL;
     let updatedAt = 0;
     try {
       const file = findSessionFile(sessionId);
@@ -619,13 +830,21 @@ async function handleContext(req, res) {
         msgs: parsed.transcript.length,
         files: parsed.files.length,
         truncated: parsed.truncated,
-        provider: parsed.provider,
-        model: parsed.model,
+        provider,
+        model,
+        active: { provider: active.provider, model: active.model, reasoningEffort: active.reasoningEffort },
         updatedAt,
       });
       return;
     }
-    sendJson(res, 200, { sessionId, ...parsed, updatedAt });
+    sendJson(res, 200, {
+      sessionId,
+      ...parsed,
+      provider,
+      model,
+      active: { provider: active.provider, model: active.model, reasoningEffort: active.reasoningEffort },
+      updatedAt,
+    });
   } catch (err) {
     sendJson(res, 500, { error: String((err && err.message) || err) });
   }
@@ -634,21 +853,24 @@ async function handleContext(req, res) {
 // ---------------------------------------------------------------------------
 // 路由：/ask（mode1 / mode2 流式代理；mode3 走 ctx.llm）
 // ---------------------------------------------------------------------------
-function resolveKeyForMode(mode, settings) {
+// 路由 /ask 的密钥解析：
+//   mode2 → 插件自带 key/model/endpoint（不变）；
+//   mode1 → provider 感知：按「当前会话 / 实时默认」解析供应商的 key/base。
+async function resolveKeyForMode(mode, settings, body, parsed) {
+  const active = readActiveSelection();
   if (mode === "2") {
     const key = (settings && settings.apiKey ? String(settings.apiKey) : "").trim();
-    const model = (settings && settings.model ? String(settings.model) : "") || DEFAULT_MODEL;
+    const model =
+      (settings && settings.model ? String(settings.model) : "") ||
+      String((body && body.model) || (parsed && parsed.model) || "") ||
+      active.model ||
+      DEFAULT_MODEL;
     const endpoint = (
       settings && settings.endpoint ? String(settings.endpoint) : ""
     ).replace(/\/+$/, "") || DEFAULT_BASE;
-    return { key, model, base: endpoint, source: "plugin" };
+    return { key, model, base: endpoint, source: "plugin", provider: "", env: "", openai: true, reason: key ? "ok" : "no-key" };
   }
-  return {
-    key: readGlobalKey(),
-    model: readGlobalModel(),
-    base: globalBase(),
-    source: "global",
-  };
+  return resolveGlobalForMode1(body, parsed);
 }
 
 async function handleAskMode3(req, res, body, sessionId) {
@@ -658,8 +880,13 @@ async function handleAskMode3(req, res, body, sessionId) {
   }
   const { system, rest } = buildFinalPrompt(body);
   const parsed = parseSession(sessionId);
-  const provider = String(body.provider || parsed.provider || DEFAULT_PROVIDER);
-  const model = String(body.model || parsed.model || readGlobalModel());
+  const active = readActiveSelection();
+  const provider = String(
+    body.provider || parsed.provider || active.provider || DEFAULT_PROVIDER
+  );
+  const model = String(
+    body.model || parsed.model || active.model || readGlobalModel()
+  );
   const llmMessages = rest.map((m) => ({
     role: m.role,
     content: [{ type: "text", text: String(m.content || "") }],
@@ -735,12 +962,39 @@ async function handleAsk(req, res) {
     return handleAskMode3(req, res, body, sessionId);
   }
 
-  const cfg = resolveKeyForMode(mode, body.pluginSettings || lastSettings);
+  const parsed = parseSession(sessionId);
+  const cfg = await resolveKeyForMode(mode, body.pluginSettings || lastSettings, body, parsed);
+  if (cfg.reason === "unknown-provider") {
+    const msg =
+      "当前默认供应商「" +
+      cfg.provider +
+      "」未在内置已知表，且 settings.yaml 的 llm-pi-ai.providers." +
+      cfg.provider +
+      " 未配置 baseURL，无法确定 API 端点。请在 DSH 设置（llm-pi-ai）为该供应商配置 baseURL，或切换到模式 2/3。";
+    sendJson(res, 400, { error: "unknown-provider", message: msg });
+    return;
+  }
+  if (mode === "1" && cfg.openai === false) {
+    const msg =
+      "当前默认供应商「" +
+      cfg.provider +
+      "」使用非 OpenAI 兼容协议，模式 1 无法直连 /chat/completions。请切换到模式 3（宿主 LLM 自动适配）或模式 2（自带 Key + 自定义端点）。";
+    sendJson(res, 400, { error: "protocol-unsupported", message: msg });
+    return;
+  }
   if (!cfg.key) {
     const msg =
       mode === "2"
         ? "插件 API Key 为空：请在临时会话面板「插件密钥」处填写，或在设置里配置 dsh-side-session.apiKey"
-        : "DSH 全局 Key 为空：请先在 DSH 主程序配置 DeepSeek API Key（设置页或环境变量 DEEPSEEK_API_KEY）";
+        : "DSH 全局 Key 为空：当前供应商「" +
+          cfg.provider +
+          "」未获取到凭据（期望环境变量 " +
+          cfg.env +
+          " 或 ~/.dsh/.credentials.yaml 中的 " +
+          cfg.env +
+          "）。请先在 DSH 主程序 Models/设置页配置 " +
+          cfg.provider +
+          " 的 API Key，或切换到模式 2/3。";
     sendJson(res, 400, { error: "no-key", message: msg });
     return;
   }

@@ -32,7 +32,10 @@ const COMPANION_PLUGINS = [
   // Quest 模式界面（本仓库内置）：设置-通用里一键开关类 Quest 沉浸式界面
   // （分组会话栏 + 卡片式输入区 + 药丸元数据条），默认关闭、关闭时零开销。
   { id: 'quest-ui', name: '@deepseek-ai/dsh-quest-ui' },
-  { id: 'super-injector', name: '@dsh-external/dsh-super-injector' },
+  // id 必须与该插件 bundle 层 cordis.patch.yml 声明的 loader id 一致
+  // （dsh-super-injector）。曾声明为 super-injector 导致 bundle 迁移自愈的
+  // dropBlocksByIds 永不命中残留 insert 块 → 双登记启动崩溃（issue #104）。
+  { id: 'dsh-super-injector', name: '@dsh-external/dsh-super-injector' },
   { id: 'prompt-custom', name: '@deepseek-ai/dsh-prompt-custom' },
   { id: 'workspace-anchor', name: '@deepseek-ai/dsh-workspace-anchor' },
   { id: 'third-party-thinking', name: '@deepseek-ai/dsh-third-party-thinking' },

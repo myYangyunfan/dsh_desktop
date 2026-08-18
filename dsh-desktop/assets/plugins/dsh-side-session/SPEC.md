@@ -135,7 +135,15 @@ package.json       "dsh": { "client": { "inject": [...ui...], "platform":"web" }
 ## 13. 已确认决策（2026-08-16，依据 Desktop/Spec.txt 与仓库实测）
 
 - **Q1 回答引擎（依据用户 Spec.txt）**：三模式互斥、持久化、即时切换、不重启。
-  - mode1 `reuse_global_key`：服务端读 dsh 全局 Key。来源链 = `env DEEPSEEK_API_KEY` → `$DSH_HOME/.credentials.yaml` 的 `DEEPSEEK_API_KEY`；base = `env DEEPSEEK_API_BASE` 默认 `https://api.deepseek.com`；model = `$DSH_HOME/settings.yaml` 的 `model:` 行，缺省 `deepseek-chat`。（取自仓库 `dsh-desktop/balance.js` 的实测实现）
+  - mode1 `reuse_global_key`：服务端读 dsh 当前默认供应商（**provider 感知**，v0.3.0 起）。
+    读取 `$DSH_HOME/settings.yaml` 的 `agent-default-model.provider/model`（实时，5s 轻缓存），
+    按该供应商解析 apiKeyEnv（`llm-pi-ai.providers.<p>.apiKeyEnv` > 内置 `KNOWN_PROVIDERS`
+    表 > 启发式 `${PROVIDER}_API_KEY`）；key 来源链 = `env <apiKeyEnv>` → DSH 凭据服务
+    `credentials.resolve` → `$DSH_HOME/.credentials.yaml` 的 `<apiKeyEnv>`；base = profile
+    `baseURL` > `KNOWN_PROVIDERS.base` > 默认 `https://api.deepseek.com`；model = 会话解析 >
+    `agent-default-model.model` > `deepseek-v4-flash`。内置表覆盖 deepseek / opencode-go /
+    opencode / openai / openrouter / groq / together 等；未知供应商（无 baseURL）或非 OpenAI
+    兼容协议给出明确指引（配 baseURL 或转 mode3/2）。
   - mode2 `plugin_self_key`：服务端读本插件 settings 的 `apiKey` / `model` / `endpoint`（secret 角色，持久化）。
   - mode3 `server_call_dsh_llm`：服务端走 `ctx.llm.stream({provider, model, system, messages})`（实测 dsh 主机**无** `/v1/chat/completions` 端点，改用宿主 LLM 服务）。不读任何 key。未就绪返回「宿主 LLM 服务(ctx.llm)当前不可用」。
   - 校验：key 为空弹窗提示去哪里填；网络/模型错误 UI 展示；模式切换即时生效。

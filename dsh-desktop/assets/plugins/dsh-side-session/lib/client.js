@@ -162,7 +162,12 @@ window.__ModuleLoader__.load({
         })
         .then(function (m) {
           if (!m || m.sessionId !== getState().sessionId) return;
-          var fp = String(m.updatedAt || 0) + ":" + String(m.msgs || 0) + ":" + String(m.files || 0) + ":" + String(m.title || "");
+          // 指纹含 provider/model/active：模型切换（如 opencode-go）即时触发全量刷新
+          var activeStr =
+            (m.active && m.active.provider ? m.active.provider : "") +
+            "/" +
+            (m.active && m.active.model ? m.active.model : "");
+          var fp = String(m.updatedAt || 0) + ":" + String(m.msgs || 0) + ":" + String(m.files || 0) + ":" + String(m.title || "") + ":" + String(m.provider || "") + ":" + String(m.model || "") + ":" + activeStr;
           if (fp === lastFingerprint) return; // 无变化：不重拉、不重渲染
           lastFingerprint = fp;
           var now = Date.now();
@@ -517,6 +522,10 @@ window.__ModuleLoader__.load({
       ".dss-head:active{cursor:grabbing}",
       ".dss-title{font-size:14px;font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;",
       "text-overflow:ellipsis;color:var(--dsw-alias-label-primary,#0f1115)}",
+      ".dss-head-model{flex:none;max-width:160px;padding:1px 8px;border-radius:999px;font-size:10px;",
+      "background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06));",
+      "color:var(--dsw-static-deepseek-500,rgb(65,118,230));white-space:nowrap;overflow:hidden;",
+      "text-overflow:ellipsis;font-family:var(--ds-font-family-code,ui-monospace,Consolas,monospace)}",
       ".dss-btn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;",
       "border-radius:8px;border:none;background:transparent;color:var(--dsw-alias-label-tertiary,#81858c);",
       "cursor:pointer;flex:none;transition:background .12s,color .12s}",
@@ -808,6 +817,12 @@ window.__ModuleLoader__.load({
       }
       var files = ctx.files || [];
       var msgs = ctx.transcript || [];
+      var active = ctx.active || {};
+      // 会话实际使用的模型（优先日志解析；fallback 到 DSH 实时默认）
+      var curModel = (ctx.model || "").replace(/^deepseek-official$/i, "");
+      var curProvider = (ctx.provider || "").replace(/^deepseek-official$/i, "");
+      var modelLabel =
+        (curProvider ? curProvider + "/" : "") + (curModel || "?");
       var summary =
         (ctx.title || "(未知会话)") +
         " · 对话 " + msgs.length + " 条 · 文件 " + files.length + " 个" +
@@ -835,13 +850,40 @@ window.__ModuleLoader__.load({
             h("path", { d: "M9 6l6 6-6 6" })
           ),
           h("span", null, "会话上下文"),
-          h("span", { className: "dss-ctx-summary", title: summary }, summary)
+          h(
+            "span",
+            { className: "dss-ctx-summary", title: summary },
+            modelLabel ? h("span", { className: "dss-chip", style: { marginRight: "6px" }, title: "当前会话模型（实时读取）" }, modelLabel) : null,
+            summary
+          )
         ),
         open
           ? h(
               "div",
               { className: "dss-ctx-body" },
               h("div", null, "会话：" + (ctx.title || "(未知)")),
+              h(
+                "div",
+                null,
+                modelLabel
+                  ? h(
+                      "span",
+                      { className: "dss-chip", title: "当前会话实际使用的模型（实时读取）" },
+                      "当前模型：" + modelLabel
+                    )
+                  : null,
+                active && (active.model || active.provider)
+                  ? h(
+                      "span",
+                      {
+                        className: "dss-chip",
+                        style: { marginLeft: "4px" },
+                        title: "DSH 当前默认（agent-default-model，实时读取）",
+                      },
+                      "默认：" + (active.provider || "") + "/" + (active.model || (curModel || "?"))
+                    )
+                  : null
+              ),
               h(
                 "div",
                 null,
@@ -972,6 +1014,22 @@ window.__ModuleLoader__.load({
 
       // （原侧栏停靠挤压逻辑已移除：仅保留浮窗形态）
 
+      // 实时读取当前会话模型：优先会话日志解析，其次 DSH 实时默认
+      var headModelLabel = "";
+      try {
+        var _ctx = s.context;
+        var _active = (_ctx && _ctx.active) || {};
+        var _mp = String(_ctx && _ctx.provider ? _ctx.provider : "").replace(/^deepseek-official$/i, "");
+        var _mm = String(_ctx && _ctx.model ? _ctx.model : "");
+        if (!_mp && _active.provider) _mp = String(_active.provider);
+        var _realModel =
+          _mm ||
+          (_active.model || "");
+        headModelLabel = (_mp ? _mp + "/" : "") + (_realModel || "?");
+      } catch (e) {
+        headModelLabel = "";
+      }
+
       var body = h(
         "div",
         { style: { display: "flex", flexDirection: "column", height: "100%", minHeight: 0 } },
@@ -983,6 +1041,11 @@ window.__ModuleLoader__.load({
             title: "拖动移动浮窗",
           },
           h("div", { className: "dss-title" }, "临时会话"),
+          h(
+            "span",
+            { className: "dss-head-model", title: "当前会话模型（实时读取 DSH 实际使用模型）" },
+            headModelLabel
+          ),
           h(
             "button",
             {
@@ -1229,7 +1292,7 @@ window.__ModuleLoader__.load({
           : null,
         h("div", { className: "dss-set-hint" }, "浮窗可自由拖动/缩放；左下角侧栏图标或 Ctrl+Shift+S 唤起。"),
         mode === "1"
-          ? h("div", { className: "dss-set-hint" }, "使用 DSH 全局凭据（DEEPSEEK_API_KEY 环境变量或 ~/.dsh/.credentials.yaml）。")
+          ? h("div", { className: "dss-set-hint" }, "自动读取 DSH 当前默认供应商（agent-default-model）的 Key 与端点（settings.yaml llm-pi-ai 的 apiKeyEnv，或对应环境变量 / ~/.dsh/.credentials.yaml）。浮窗头部实时显示当前会话模型。")
           : null,
         mode === "3"
           ? h("div", { className: "dss-set-hint" }, "走服务端 ctx.llm.stream，不读任何 key。需宿主 LLM 服务可用。")
