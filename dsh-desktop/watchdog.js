@@ -38,6 +38,17 @@ let lastLaunchAt = 0;
 function log(msg) {
   if (!logFile) return;
   const line = `[${new Date().toISOString()}] ${msg}\n`;
+  // A-1 统一日志轮转（与 scripts/lib/log-rotate.js 同语义，独立进程内联零依赖）：
+  // 超过 5MB 滚动一代（watchdog.log -> .1 -> .2，保留两代），失败不阻断写入。
+  try {
+    const st = fs.statSync(logFile);
+    if (st.size > 5 * 1024 * 1024) {
+      try { fs.rmSync(logFile + '.2', { force: true }); } catch {}
+      try { if (fs.existsSync(logFile + '.1')) fs.renameSync(logFile + '.1', logFile + '.2'); } catch {}
+      fs.renameSync(logFile, logFile + '.1');
+      fs.closeSync(fs.openSync(logFile, 'a')); // 重建主文件保持恒存在
+    }
+  } catch {}
   try { fs.appendFileSync(logFile, line, 'utf8'); } catch {}
 }
 

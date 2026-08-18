@@ -56,6 +56,7 @@ const { writeFileAtomic } = require('./scripts/lib/patch-io');
 const { applyPatchToFiles } = require('./scripts/lib/patch-engine');
 const { selectReleaseAsset } = require('./scripts/lib/github-release-assets');
 const { FLASH_PKG_REL, EXPOSE_PKG_REL, PW_REL, BASH_REL, CODE_PRESET_REL, patchTargets, localCopyFiles, guardCopyFiles, localNodeModulesRoots, slotCompatCopyFiles, slotCompatPatchTargets, transformFlashFix, transformExposeFix, transformShellDescriptionOptional, transformCodeModeCompat, transformAttachmentMimeTrust, transformLegacySlotKey, transformSlotUnkeyedCompat, transformSlotErrorIsolation, SLOT_ERROR_ISOLATE_MARKER, SLOT_KEY_COMPAT_PKG_REL, ATTACH_LOCAL_REL } = require('./scripts/lib/runtime-patches');
+const { rotateLogFile, createRotatingWriteStream } = require('./scripts/lib/log-rotate');
 const { ACP_DISABLE_BLOCK, PET_DISABLE_BLOCK, removeLegacyMarketplacePatchLines, removedPluginIdsFromPatch, ensureDisabledPatchEntry, registerCompanionPatchEntries, syncCompanionFiles } = require('./scripts/lib/companion-profile');
 // 内置 Agent 预设保护：客户端更新（覆盖安装）前快照用户改过的预设，更新后恢复。
 const presetGuard = require('./scripts/lib/preset-guard');
@@ -872,8 +873,7 @@ function dshWebLogPath() {
 // 日志体积封顶与尾部读取（资源治理）：desktop.log / dsh-web.log 无界追加，
 // 长期运行会膨胀到数百 MB。启动时超过上限只保留尾部；读取侧统一改为
 // 「fd 定位读末尾定长字节」，把诊断路径的成本从 O(日志大小) 降为 O(1)。
-const MAX_LOG_BYTES = 4 * 1024 * 1024; // 超过即封顶
-const LOG_KEEP_BYTES = 256 * 1024; // 封顶后保留的尾部字节
+// 日志轮转阈值/保留代数统一在 scripts/lib/log-rotate.js（A-1：5MB 上限，保留两代）。
 const LOG_TAIL_READ_BYTES = 256 * 1024; // 诊断读取的最多字节
 
 /** 读取文件末尾最多 maxBytes 字节；文件缺失返回空串。 */
@@ -900,31 +900,11 @@ function readFileTailText(file, maxBytes) {
   }
 }
 
-/** 启动时封顶日志：超过 MAX_LOG_BYTES 则原子地只保留尾部 LOG_KEEP_BYTES。 */
+/** 启动时轮转日志（A-1）：超过 5MB 则滚动为 .1/.2 保留两代，主文件从头开始。 */
 function capLogFile(file) {
-  try {
-    const st = fs.statSync(file);
-    if (st.size <= MAX_LOG_BYTES) return;
-    const keep = Math.min(st.size, LOG_KEEP_BYTES);
-    const tail = Buffer.alloc(keep);
-    const fd = fs.openSync(file, 'r');
-    let pos = 0;
-    try {
-      while (pos < keep) {
-        const n = fs.readSync(fd, tail, pos, keep - pos, st.size - keep + pos);
-        if (n <= 0) break;
-        pos += n;
-      }
-    } finally {
-      fs.closeSync(fd);
-    }
-    const tmp = file + '.cap';
-    fs.writeFileSync(tmp, tail.subarray(0, pos));
-    fs.renameSync(tmp, file);
-    log('boot', '日志已封顶: ' + file + ' (' + st.size + ' -> ' + pos + ' bytes)');
-  } catch (err) {
-    log('boot', '日志封顶失败 ' + file + ': ' + err.message);
-  }
+  const r = rotateLogFile(file);
+  if (r.error) log('boot', '日志轮转失败 ' + file + ': ' + r.error);
+  else if (r.rotated) log('boot', '日志已轮转: ' + file + ' (' + r.previousSize + ' bytes → .1/.2 保留两代)');
 }
 
 /** 清理超过保留期的崩溃转储（只动 *.dmp，settings.dat 与本次新转储不受影响）。 */
@@ -1361,7 +1341,7 @@ async function startServer(unsafePortRetries = 4, overlays = []) {
     if (!wslBackend.isReady()) {
       return Promise.reject(new Error('WSL 托管后端未就绪: ' + wslBackend.lastError()));
     }
-    const out = fs.createWriteStream(path.join(logsDir, 'dsh-web.log'), { flags: 'a' });
+    const out = createRotatingWriteStream(path.join(logsDir, 'dsh-web.log'));
     // 写流 error 静默监听：磁盘满/权限变更等写失败时避免 uncaughtException 崩主进程（issue #86）。
     out.on('error', (e) => log('dsh', 'dsh-web.log 写入失败: ' + ((e && e.message) || e)));
     log('dsh', `WSL 托管模式：在 ${wslBackend.installDirLinux()}/agent 内启动 dsh web`);
@@ -1379,7 +1359,7 @@ async function startServer(unsafePortRetries = 4, overlays = []) {
         (app.isPackaged ? '安装包可能不完整，请重新安装。' : '开发模式请先运行: npm run fetch-node')
       ));
     }
-    const out = fs.createWriteStream(path.join(logsDir, 'dsh-web.log'), { flags: 'a' });
+    const out = createRotatingWriteStream(path.join(logsDir, 'dsh-web.log'));
     // 同上：写流 error 静默监听，防 uncaughtException（issue #86）。
     out.on('error', (e) => log('dsh', 'dsh-web.log 写入失败: ' + ((e && e.message) || e)));
     log('dsh', `启动: "${nodeBin}" "${bin}" web --host 127.0.0.1 --port ${webPort}`);
@@ -6176,7 +6156,7 @@ async function boot() {
   capLogFile(path.join(logsDir, 'desktop.log'));
   capLogFile(path.join(logsDir, 'dsh-web.log'));
   capLogFile(path.join(logsDir, 'watchdog.log'));
-  desktopLog = fs.createWriteStream(path.join(logsDir, 'desktop.log'), { flags: 'a' });
+  desktopLog = createRotatingWriteStream(path.join(logsDir, 'desktop.log'));
   desktopLog.on('error', (e) => { try { console.error('desktop.log 写入失败', e); } catch {} });
   // 崩溃取证（Issue #9）：把 Crashpad minidump 固定到数据目录并保留，
   // 用于后续定位 0xC0000005 的底层来源（不联网上传）。
