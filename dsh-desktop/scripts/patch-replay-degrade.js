@@ -14,6 +14,13 @@
 //
 // 幂等标记 REPLAY_MARKER 命中 → already；锚点失配 → anchor-missing 跳过
 // （版本变更安全降级，绝不改写）。
+//
+// 注意（上游演进）：dsh-llm-pi-ai 0.1.0-rc.7 起已原生内置该降级——
+// toPiAssistant(message, onDegrade) 自带 try/catch 且仅对
+// error.code === "INVALID_REPLAY_STATE" 降级、其余照抛。新版源码的
+// toPiAssistant 不再包含下方 REPLAY_ANCHOR_OLD（老版 return 行），因此
+// 对 rc.7+ 本补丁返回 anchor-missing 幂等跳过，属预期；本补丁只服务于
+// 仍随安装版分发的 rc.6 及更老版本。
 
 const path = require('node:path');
 

@@ -54,7 +54,7 @@ test('replay-degrade: 锚点缺失跳过且不改写', () => {
   });
 });
 
-test('replay-degrade: 真实 vendored 文件可补丁且幂等（纯函数，不落盘）', () => {
+test('replay-degrade: 真实 vendored 文件可补丁或已由上游覆盖（纯函数，不落盘）', () => {
   const file = path.join(repoRoot, 'node_modules', REPLAY_PKG_REL);
   assert.ok(fs.existsSync(file), '真实文件应存在: ' + file);
   const src0 = fs.readFileSync(file, 'utf8');
@@ -62,11 +62,23 @@ test('replay-degrade: 真实 vendored 文件可补丁且幂等（纯函数，不
   const src = src0.includes(REPLAY_MARKER) ? src0.replace(REPLAY_PATCHED, REPLAY_ANCHOR_OLD) : src0;
   assert.ok(!src.includes(REPLAY_MARKER), '还原失败：真实副本含补丁但无法还原为上游形态');
   const out = transformReplayDegrade(src, file);
-  assert.strictEqual(out.status, 'changed', '上游官方文件应可补丁');
-  assert.ok(out.src.includes(REPLAY_MARKER));
-  assert.ok(!out.src.includes(REPLAY_ANCHOR_OLD));
-  // 幂等
-  assert.deepStrictEqual(transformReplayDegrade(out.src, file), { status: 'already' });
+  // 三态均可：
+  //   · changed   —— 老版本（如 0.1.0-rc.6）锚点匹配，本补丁可应用；
+  //   · already   —— 本补丁已应用（幂等）；
+  //   · anchor-missing —— 上游新版（0.1.0-rc.7 起）已原生内置 INVALID_REPLAY_STATE
+  //     降级（toPiAssistant(message, onDegrade) 自带 try/catch 判定），无需再打。
+  if (out.status === 'changed') {
+    assert.ok(out.src.includes(REPLAY_MARKER));
+    assert.ok(!out.src.includes(REPLAY_ANCHOR_OLD));
+    assert.deepStrictEqual(transformReplayDegrade(out.src, file), { status: 'already' });
+  } else if (out.status === 'already') {
+    // 已打补丁：幂等通过。
+  } else {
+    assert.strictEqual(out.status, 'anchor-missing');
+    // 锚点失配必须能解释为「上游原生已覆盖」，否则是版本漂移警报（测试该失败）。
+    assert.ok(/error\.code\s*!==\s*"INVALID_REPLAY_STATE"/.test(src),
+      'anchor-missing 时上游应已原生实现 replay 降级（error.code !== "INVALID_REPLAY_STATE"）');
+  }
 });
 
 test('replay-degrade: 三副本路径约定（profile fallback → 内置 → overlay agent）', () => {
