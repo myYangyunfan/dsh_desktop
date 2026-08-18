@@ -57,7 +57,10 @@ test('replay-degrade: 锚点缺失跳过且不改写', () => {
 test('replay-degrade: 真实 vendored 文件可补丁且幂等（纯函数，不落盘）', () => {
   const file = path.join(repoRoot, 'node_modules', REPLAY_PKG_REL);
   assert.ok(fs.existsSync(file), '真实文件应存在: ' + file);
-  const src = fs.readFileSync(file, 'utf8');
+  const src0 = fs.readFileSync(file, 'utf8');
+  // 安装版可能已被本补丁打过：先精确还原为上游形态再验证变换本身。
+  const src = src0.includes(REPLAY_MARKER) ? src0.replace(REPLAY_PATCHED, REPLAY_ANCHOR_OLD) : src0;
+  assert.ok(!src.includes(REPLAY_MARKER), '还原失败：真实副本含补丁但无法还原为上游形态');
   const out = transformReplayDegrade(src, file);
   assert.strictEqual(out.status, 'changed', '上游官方文件应可补丁');
   assert.ok(out.src.includes(REPLAY_MARKER));

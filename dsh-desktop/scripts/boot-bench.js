@@ -5,7 +5,10 @@
  * 输出各阶段 p50（中位数）毫秒与占比，一条命令回答「慢在哪一段」。
  *
  * 用法:
- *   node scripts/boot-bench.js [--count 5] [--exe <路径>] [--userdata <目录>]
+ *   node scripts/boot-bench.js [--count 5] [--exe <路径>] [--userdata <目录>] [--json <文件>]
+ *
+ * --json <文件>: 汇总后把机器可读结果（各阶段 p50 + 有效次数）写入文件，
+ *                供 CI 门禁 bench-gate.js 对比基线（p50 超基线 +20% 告警）。
  *
  * 默认 exe:   %LOCALAPPDATA%\Programs\DSH Desktop\DSH Desktop.exe
  * 默认 userdata: %APPDATA%\DSH Desktop
@@ -28,6 +31,7 @@ const exe = argValue('--exe', process.env.DSH_BOOT_BENCH_EXE) ||
   path.join(process.env.LOCALAPPDATA || '', 'Programs', 'DSH Desktop', 'DSH Desktop.exe');
 const userData = argValue('--userdata', process.env.DSH_BOOT_BENCH_USERDATA) ||
   path.join(process.env.APPDATA || '', 'DSH Desktop');
+const jsonOut = argValue('--json', '');
 
 const timingsFile = path.join(userData, 'diagnostics', 'boot-timings.jsonl');
 
@@ -143,6 +147,29 @@ async function main() {
     }
   }
   const totalP50 = median(series['boot:ready'].slice().sort((a, b) => a - b)) || 1;
+  if (jsonOut) {
+    const p50 = {};
+    for (const [key] of STAGES) {
+      const vals = series[key].slice().sort((a, b) => a - b);
+      p50[key] = median(vals);
+    }
+    const payload = {
+      generatedAt: new Date().toISOString(),
+      exe,
+      userData,
+      count,
+      effectiveRows: rows.length,
+      totalP50,
+      p50,
+    };
+    try {
+      fs.writeFileSync(jsonOut, JSON.stringify(payload, null, 2) + '\n', 'utf8');
+      console.log('\n已写入基准 JSON: ' + jsonOut);
+    } catch (err) {
+      console.error('写入基准 JSON 失败: ' + err.message);
+      process.exit(1);
+    }
+  }
   console.log('阶段 p50（中位数，毫秒）与占比（相对 boot:ready）:');
   console.log('-'.repeat(72));
   for (const [key, label] of STAGES) {

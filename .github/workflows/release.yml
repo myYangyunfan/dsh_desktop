@@ -200,6 +200,18 @@ jobs:
             throw "打包产物缺少: $unpacked/resources/npm"
           }
 
+      # 启动冒烟 + 性能门禁：boot-bench 对解包产物做连续冷启动采样（各阶段
+      # p50 写入 bench.json），bench-gate 与仓库基线对比（无基线=首跑不误报）。
+      # 基线生成：本机 `node scripts/boot-bench.js --count 5 --json scripts/bench-baseline.json`
+      # 后把 scripts/bench-baseline.json 提交进仓库。
+      - name: Boot smoke and bench gate (x64)
+        shell: pwsh
+        run: |
+          $bench = Join-Path $env:RUNNER_TEMP "bench.json"
+          node scripts/boot-bench.js --count 3 --exe "dist/$env:UNPACKED/DSH Desktop.exe" --userdata (Join-Path $env:RUNNER_TEMP "bench-ud") --json $bench
+          node scripts/bench-gate.js $bench
+          Write-Output "boot-bench 冒烟通过（无基线时不误报，仅记录结果）"
+
       # 最终安装包（portable / nsis）的入口 stub 架构记录到日志（stub 即使为 x86
       # 也能在 arm64 Windows 的 x86 仿真下安装运行，故不硬性断言）。
       - name: Report installer machine types

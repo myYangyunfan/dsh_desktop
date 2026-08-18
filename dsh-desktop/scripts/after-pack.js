@@ -80,6 +80,24 @@ function resourcesDir(appOutDir, platform = process.platform) {
     : path.join(appOutDir, 'resources');
 }
 
+// Require-integrity gate (A-13): every relative require() inside the app's own
+// scripts must resolve inside the packed app. A missing target historically
+// surfaced only at first launch as a crash ("Cannot find module ..."), shipped
+// in a release — fail the build here instead of producing a broken package.
+// Only relative (./ ../) requires of the app's own scripts are checked;
+// node_modules resolution is electron-builder's business.
+const requireIntegrity = require('./lib/require-integrity');
+
+function verifyRequireIntegrity(appDir) {
+  const { checked, missing } = requireIntegrity.integrityCheck(appDir);
+  if (missing.length > 0) {
+    console.error('afterPack: require 完整性校验失败——以下相对 require 在打包产物中缺失（启动即崩溃）:');
+    for (const m of missing) console.error('  ' + m);
+    throw new Error('afterPack: require 完整性校验失败（' + missing.length + ' 处缺失），拒绝产出废包');
+  }
+  console.log(`afterPack: require integrity ok (${checked.length} scripts, all relative requires resolve)`);
+}
+
 module.exports = async function afterPack(context) {
   const { appOutDir, electronPlatformName } = context;
   const res = resourcesDir(appOutDir, electronPlatformName);
@@ -165,4 +183,15 @@ module.exports = async function afterPack(context) {
   } else {
     console.warn('afterPack: bundled app node_modules not found — web-search baseURL / menu viewport / session manage / open project dir / session recovery / slot compatibility patches skipped');
   }
+
+  // A-13: require 完整性门禁（必须在所有补丁/剪枝之后，校验最终产物）。
+  const packedApp = path.join(res, 'app');
+  if (fs.existsSync(packedApp)) {
+    verifyRequireIntegrity(packedApp);
+  } else {
+    console.warn('afterPack: packed app dir not found — require integrity check skipped');
+  }
 };
+
+// 供单测与冒烟脚本直接调用（electron-builder 仍以函数形式引用本模块）。
+module.exports.verifyRequireIntegrity = verifyRequireIntegrity;

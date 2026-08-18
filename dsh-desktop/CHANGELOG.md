@@ -4,6 +4,8 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 一键启动 Web UI。
 
 ## [Unreleased]
+### 新增
+- **启动冒烟与性能门禁 + 打包 require 完整性校验（工程项 A-13）**：`boot-bench` 新增 `--json` 输出（各阶段 p50 机器可读汇总）；新增 `bench-gate` 门禁脚本（与仓库基线 `scripts/bench-baseline.json` 对比，容差 1.2，缺基线/首跑不误报，`--fail` 时违规 exit 1）；release.yml 的 build-x64 job 内置「Boot smoke and bench gate」步骤——对解包产物连续 3 次冷启动采样并跑门禁。`after-pack` 打包完成后逐文件校验 `resources/app` 下全部相对 require 目标存在（main.js/preload.js/scripts 全量），缺失即拒绝产出废包（根治「剪枝/热更新漏文件 → 启动即崩」类事故，如漏同步 `scripts/patch-open-project-dir.js`）。新增 `docs/incident-runbook.md` 故障处置手册（日志与数据位置、启动失败排查、自愈机制清单、性能门禁用法、常见故障速查、应急处置原则）。
 ### 修复
 - **余额显示链路整体加固（架构重构而非补丁）**：本轮费用计算、余额查询、编排推送全链路系统性修复 21 处缺陷（2 严重 / 3 高 / 8 中 / 8 低），全部按「整体架构改进」落地：
   - **本轮费用输入项恒为 0（严重，OpenAI 兼容端点）**：`sessionCost` 的 `uncachedInputTokens + cacheWriteTokens` 求和先于 `||0` 守卫求值，openai-compat 适配器产出 `inputTokens` 形态且不产出 `cacheWriteTokens`，两处契约不匹配 → `undefined+undefined=NaN→0`，所有 one-api/SiliconFlow/Ollama 端点本轮费用只剩 cacheRead+output 计费。根治：① 客户端新增 `normalizeUsage` 归一化（投影/透传两种形态统一四桶、每操作数独立守卫）；② `openai-compat.js` 的 `mapUsage` 对齐 harness DISJOINT 契约（`inputTokens = prompt − cacheRead − cacheWrite`，缓存写单列、兼容多种 provider 字段命名）并附带 `model` 字段。
