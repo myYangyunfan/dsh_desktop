@@ -136,12 +136,12 @@
 				//    开阔区域靠浅灰画布衬托轮廓，按钮与提示贴大区域下缘两端分布 ——
 				// 外壳（hero 空态与 normal 会话态共用）：无框无影，豁达打开
 				// !important：压宿主自带边框，彻底解除“框中框”束缚
-				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea){position:relative;display:flex;flex-direction:column;background:var(--qdu-bg-card);border:none!important;box-shadow:none!important;border-radius:18px;padding:0 10px 2px!important;transition:box-shadow .18s var(--qdu-ease)}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea){position:relative;display:flex;flex-direction:column;background:transparent!important;border:none!important;box-shadow:none!important;border-radius:0;min-height:140px;padding:0 10px 2px!important;transition:box-shadow .18s var(--qdu-ease)}',
 				// 聚焦反馈：仅顶部 2px 主色直线（平角）——下方不再出现任何弧形蓝边
 				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea):focus-within{box-shadow:none!important}',
 				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea):focus-within::after{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:color-mix(in srgb,var(--qdu-accent) 70%,transparent);border-radius:0;pointer-events:none}',
-				// 空态 hero：大区域、内容顶到左上，22px 大圆角（无阴影无装饰线）
-				'body[data-dsh-quest-ui] [class*="_composerHero"] [class*="_root"]:has(textarea){border-radius:22px;box-shadow:none!important;min-height:200px;display:flex;flex-direction:column;justify-content:flex-start}',
+				// 空态 hero：大区域（240px）、内容顶到左上，与画布完全融合（无边角）
+				'body[data-dsh-quest-ui] [class*="_composerHero"] [class*="_root"]:has(textarea){border-radius:0;box-shadow:none!important;min-height:240px;display:flex;flex-direction:column;justify-content:flex-start}',
 				'body[data-dsh-quest-ui] [class*="_composerHero"]{max-width:820px;margin:0 auto;width:100%}',
 				// 输入区内层完全透明化（宿主 card/backdrop 自带底色是“生搬感”根源）；
 				// card/scroll 纵向撑满使工具行贴底；打破宿主 780px 居中限宽 ——
