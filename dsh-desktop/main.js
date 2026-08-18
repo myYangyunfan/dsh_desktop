@@ -6656,10 +6656,16 @@ async function boot() {
         log,
         onTurnEnd: (info) => onSessionTurnEnd(info),
       });
-      sessionWatcher.start();
+      // A-10: 非关键功能延后到首屏稳定后再启动——loadURL resolve 时首帧
+      // 仍在布局/合成，把会话监视器与余额轮询（含启动即刷新的首次请求）
+      // 再延后 500ms，避开首帧窗口；桌宠小窗本就按需创建（最小化/IPC），
+      // 无启动期初始化需要延迟。延迟只影响 0.5s 内的后台监听与余额显示。
+      setTimeout(() => {
+        sessionWatcher.start();
+        startBalanceLoop();
+      }, 500).unref();
       maintainShortcuts();
       warnTempRun();
-      startBalanceLoop();
       offerPendingClientUpdate();
 
       if (!process.env.DSH_DESKTOP_SKIP_AUTO_UPDATE) {
