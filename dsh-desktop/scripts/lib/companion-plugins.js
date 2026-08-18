@@ -58,7 +58,7 @@ const COMPANION_PLUGINS = [
   { id: 'dsh-hub', name: 'dsh-hub' },
   // 手机桥（hzhz314159/dsh-mini，MIT）：从手机浏览器/App 驱动 DSH agent 会话
   // （收发文字/图片/文件、切换模型、平衡度环、局域网网关二维码配对）。
-  // 随包附带手机 App 安装包 DSH-Mobile-v1.4.0.zip（assets/plugins/dsh-mini/）。
+  // 随包附带手机 App 安装包 DSH-Mobile-v1.4.2.apk（assets/plugins/dsh-mini/）。
   { id: 'dsh-mini', name: '@deepseek-ai/dsh-mini' },
   // IM 桥（hzhz314159/openclaw-dsh-bridge，MIT）：微信/飞书官方频道桥接入 DSH
   // agent 会话（消息分片回写、通道适配器、去重限流）；QQ 由官方插件
@@ -81,6 +81,10 @@ const COMPANION_PLUGINS = [
   { id: 'settings-nav-custom', name: 'dsh-settings-nav-custom' },
   // 设置页高级选项折叠：把低频选项行收进「高级选项」折叠组。
   { id: 'settings-groups', name: 'dsh-settings-groups' },
+  // 会话地图（liangmianya/dsh-synapse，MIT）：可视化非线性对话工作区，
+  // 把同一工作区内的会话/追问/分支呈现为可拖拽缩放的对话画布；bundle 插件，
+  // 零依赖、复用现有 dsh web 服务。上游：https://github.com/liangmianya/dsh-synapse
+  { id: 'synapse', name: 'dsh-synapse' },
 ];
 
 /** 包名 → assets/plugins 下的目录名（去 scope 前缀）。 */

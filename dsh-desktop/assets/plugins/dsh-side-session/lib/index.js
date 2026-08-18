@@ -97,6 +97,11 @@ function dshHome() {
 // OpenAI 兼容协议（否则 mode1 直连不支持，提示转 mode3/mode2）。
 const KNOWN_PROVIDERS = {
   deepseek: { base: "https://api.deepseek.com", env: "DEEPSEEK_API_KEY", openai: true },
+  // DSH 官方默认供应商（dsh-llm-deepseek 注册的 provider 路由）：OpenAI 兼容
+  // 直连。agent-default-model 默认即此，缺失会让 mode1 对所有未改默认配置
+  // 的用户报 unknown-provider。配置在 llm-deepseek 段（见
+  // PROVIDER_SETTINGS_SECTION），而非 llm-pi-ai.providers。
+  "deepseek-official": { base: "https://api.deepseek.com", env: "DEEPSEEK_API_KEY", openai: true },
   "opencode-go": { base: "https://opencode.ai/zen/go/v1", env: "OPENCODE_API_KEY", openai: true },
   opencode: { base: "https://opencode.ai/zen/v1", env: "OPENCODE_API_KEY", openai: true },
   openai: { base: "https://api.openai.com/v1", env: "OPENAI_API_KEY", openai: true },
@@ -156,8 +161,54 @@ function readActiveSelection() {
   return sel;
 }
 
-// 读取 settings.yaml 里 llm-pi-ai.providers.<provider> 的 apiKeyEnv / baseURL
+// 官方 provider 的 settings.yaml 配置段映射：这些 provider 的 key/base 配置
+// 不在 llm-pi-ai.providers 体系，而在官方 adapter 自己的顶层段（对齐
+// dsh-llm-deepseek 的 Config：apiKeyEnv 默认 DEEPSEEK_API_KEY、baseURL 默认
+// https://api.deepseek.com，另支持 DEEPSEEK_BASE_URL env 覆盖）。
+const PROVIDER_SETTINGS_SECTION = { "deepseek-official": "llm-deepseek" };
+
+// 读取顶层段（如 llm-deepseek:）直下一层的 apiKeyEnv / baseURL。
+function readOfficialSectionProfile(provider) {
+  const section = PROVIDER_SETTINGS_SECTION[provider];
+  if (!section) return {};
+  try {
+    const text = readFileSync(join(dshHome(), "settings.yaml"), "utf8");
+    const lines = text.split(/\r?\n/);
+    let top = -1;
+    for (let k = 0; k < lines.length; k++) {
+      if (new RegExp("^" + section + "\\s*:").test(lines[k])) {
+        top = k;
+        break;
+      }
+    }
+    if (top < 0) return {};
+    const baseIndent = ((lines[top].match(/^(\s*)/) || [])[1] || "").length;
+    const prof = {};
+    for (let k = top + 1; k < lines.length; k++) {
+      const ln = lines[k];
+      if (!ln.trim()) continue;
+      const indent = ((ln.match(/^(\s*)/) || [])[1] || "").length;
+      if (indent <= baseIndent) break;
+      const kv = ln.match(/^\s*([a-zA-Z0-9_-]+)\s*:\s*(.*)$/);
+      if (kv && ["apiKeyEnv", "baseURL"].indexOf(kv[1]) >= 0) {
+        prof[kv[1]] = kv[2].trim().replace(/^["']|["']$/g, "");
+      }
+    }
+    return prof;
+  } catch {
+    return {};
+  }
+}
+
+// 读取 settings.yaml 里 llm-pi-ai.providers.<provider> 的 apiKeyEnv / baseURL；
+// 未命中时回退官方 provider 配置段（PROVIDER_SETTINGS_SECTION）。
 function readProviderProfile(provider) {
+  const prof = readPiAiProviderProfile(provider);
+  if (prof.apiKeyEnv || prof.baseURL) return prof;
+  return readOfficialSectionProfile(provider);
+}
+
+function readPiAiProviderProfile(provider) {
   try {
     const text = readFileSync(join(dshHome(), "settings.yaml"), "utf8");
     const lines = text.split(/\r?\n/);
@@ -251,10 +302,13 @@ async function resolveProviderKey(provider, profile) {
   return { key: "", env };
 }
 
-// 按供应商解析 OpenAI 兼容基址（无尾斜杠）：profile.baseURL → KNOWN_PROVIDERS.base
+// 按供应商解析 OpenAI 兼容基址（无尾斜杠）：profile.baseURL →（官方 provider
+// 的 DEEPSEEK_BASE_URL env，对齐 dsh-llm-deepseek 的 BASE_URL_ENV）→
+// KNOWN_PROVIDERS.base
 function resolveProviderBase(provider, profile) {
   const base =
     (profile && profile.baseURL) ||
+    (provider === "deepseek-official" && process.env.DEEPSEEK_BASE_URL) ||
     (KNOWN_PROVIDERS[provider] && KNOWN_PROVIDERS[provider].base) ||
     "";
   return base.replace(/\/+$/, "");
@@ -1152,4 +1206,23 @@ function apply(ctx, config) {
   };
 }
 
-export { apply, inject, name, parseSession, resetParseCacheForTest };
+export {
+  apply,
+  inject,
+  name,
+  parseSession,
+  resetParseCacheForTest,
+  KNOWN_PROVIDERS,
+  readProviderProfile,
+  resolveProviderBase,
+  resolveProviderBaseForTest as resolveProviderBaseForTestHelper,
+};
+// 测试辅助：冻结 env 读取的纯化版本（避免测试间 env 串扰）。
+function resolveProviderBaseForTest(provider, profile, env = process.env) {
+  const base =
+    (profile && profile.baseURL) ||
+    (provider === "deepseek-official" && env.DEEPSEEK_BASE_URL) ||
+    (KNOWN_PROVIDERS[provider] && KNOWN_PROVIDERS[provider].base) ||
+    "";
+  return base.replace(/\/+$/, "");
+}

@@ -36,12 +36,13 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  renameSync,
   writeFileSync,
   readdirSync,
   statSync,
 } from "node:fs";
 import { createServer, request as httpRequest } from "node:http";
-import { homedir, networkInterfaces } from "node:os";
+import { homedir, networkInterfaces, hostname as osHostname } from "node:os";
 import { join, normalize, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { handleGuiApi, RpcError } from "./gui-api.js";
@@ -143,8 +144,10 @@ function hasGuiSession(req) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 function authGuiRequest(req, res, url) {
-  // 本机直连（桌面浏览器/回环）免 token；LAN 经网关进来必须有会话或 token
-  if (isLoopback(req) && req.headers["x-dsh-mini-gateway"] !== "1") return true;
+  // 本机直连（桌面浏览器/回环）免 token；LAN 经网关进来必须有会话或 token。
+  // publicMode：取消回环豁免——同机隧道（cloudflared/frp/ngrok）转出的请求 remoteAddress
+  // 是回环，若不收紧就会被误判为本机直连而免鉴权（SPEC-v4 §5.1）。
+  if (isLoopback(req) && !isPublicMode() && req.headers["x-dsh-mini-gateway"] !== "1") return true;
   if (hasGuiSession(req)) return true;
   const want = effectiveToken();
   if (want && url.searchParams.get("token") === want) {
@@ -164,7 +167,8 @@ function authGuiRequest(req, res, url) {
 }
 // WS upgrade 鉴权（无 res，升级阶段无法 302/写 403 页）；token 通过即放行
 function authGuiWs(req, url) {
-  if (isLoopback(req) && req.headers["x-dsh-mini-gateway"] !== "1") return true;
+  if (!isPublicMode() && isExternalHost(req)) return false; // SPEC-v5 §2：关闭外网访问时拒外网来源
+  if (isLoopback(req) && !isPublicMode() && req.headers["x-dsh-mini-gateway"] !== "1") return true;
   if (hasGuiSession(req)) return true;
   const want = effectiveToken();
   if (want && url.searchParams.get("token") === want) return true;
@@ -209,6 +213,72 @@ function isLocalDirect(req) {
   return req.headers["x-dsh-mini-gateway"] !== "1" && isLoopback(req);
 }
 
+// ── 来源判定（SPEC-v5 §2「允许外网访问」）───────────────────────────────────
+// 「允许外网访问」关闭时，网关只服务本机 + 局域网：回环 / 本机主机名 / 本机
+// 网卡 IP / 私有网段。其他来源（公网域名 *.trycloudflare.com、公网 IP、自定义
+// 域名）一律 403 —— 即使 remoteAddress 是回环（同机隧道 cloudflared/frp/cpolar
+// 转出的连接）也能靠 Host 头识破：隧道转发会保留原始公网 Host。
+function isPrivateIp(ip) {
+  const raw = String(ip || "").trim().toLowerCase();
+  const v4 = raw.replace(/^::ffff:/, "");
+  if (v4 === "::1" || v4 === "0:0:0:0:0:0:0:1") return true;
+  if (/^127\./.test(v4)) return true;
+  // IPv6 内网段：链路本地 fe80::/10、ULA fc00::/7、站点本地 fec0::/10
+  if (v4.includes(":")) {
+    const first = v4.split(":")[0];
+    if (/^fe[89ab]/.test(first) || /^fc/.test(first) || /^fd/.test(first) || /^fec/.test(first)) return true;
+    return false;
+  }
+  const parts = v4.split(".").map(Number);
+  if (parts.length !== 4 || parts.some((x) => !Number.isFinite(x) || x < 0 || x > 255)) return false;
+  const [a, b] = parts;
+  if (a === 10) return true; // 10/8
+  if (a === 172 && b >= 16 && b <= 31) return true; // 172.16/12
+  if (a === 192 && b === 168) return true; // 192.168/16
+  if (a === 169 && b === 254) return true; // 链路本地 169.254/16
+  if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT 100.64/10
+  return false;
+}
+let hostnameCache = null;
+function localHostname() {
+  if (hostnameCache === null) {
+    try {
+      hostnameCache = osHostname().toLowerCase();
+    } catch {
+      hostnameCache = "";
+    }
+  }
+  return hostnameCache;
+}
+// 解析 Host 头为裸 hostname（去端口 / IPv6 括号），空 Host 按内网放行（由 token 把关）
+function hostHeaderHostname(req) {
+  let host = String(req.headers.host || "").trim().toLowerCase();
+  if (host.startsWith("[")) {
+    const close = host.indexOf("]");
+    return close > 0 ? host.slice(1, close) : host;
+  }
+  const colon = host.lastIndexOf(":");
+  if (colon > 0 && host.indexOf(":") === colon) host = host.slice(0, colon); // IPv4:port
+  return host;
+}
+// true = 外网来源（公网域名 / 公网 IP / 非本机非私有地址）
+function isExternalHost(req) {
+  const hostname = hostHeaderHostname(req);
+  if (!hostname) return false;
+  if (hostname === "localhost" || hostname === "localhost.localdomain" || hostname === localHostname()) return false;
+  try {
+    const ifaces = networkInterfaces();
+    for (const name of Object.keys(ifaces)) {
+      for (const ni of ifaces[name] || []) {
+        if (ni && ni.address && ni.address.toLowerCase() === hostname) return false; // 本机网卡 IP
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return !isPrivateIp(hostname);
+}
+
 function sendJson(res, status, data) {
   const body = JSON.stringify(data);
   res.writeHead(status, {
@@ -248,19 +318,27 @@ function effectiveToken() {
   return "";
 }
 
+// 原子写（开发指南 §10.11）：先写同目录临时文件再 rename 覆盖，
+// 避免进程崩溃/断电时留下半截的 token.txt / config.json。
+function atomicWriteFileSync(file, data) {
+  const tmp = file + ".tmp-" + process.pid + "-" + Date.now();
+  writeFileSync(tmp, data, "utf8");
+  renameSync(tmp, file);
+}
+
 function ensureToken() {
   const t = effectiveToken();
   if (t) return t;
   mkdirSync(MINI_HOME, { recursive: true });
   const fresh = randomUUID().replace(/-/g, "");
-  writeFileSync(tokenFile(), fresh, "utf8");
+  atomicWriteFileSync(tokenFile(), fresh);
   return fresh;
 }
 
 function resetToken() {
   mkdirSync(MINI_HOME, { recursive: true });
   const fresh = randomUUID().replace(/-/g, "");
-  writeFileSync(tokenFile(), fresh, "utf8");
+  atomicWriteFileSync(tokenFile(), fresh);
   return fresh;
 }
 
@@ -292,6 +370,25 @@ function configFile() {
 
 let configCache = null; // { at, cfg }
 
+// ── 公网穿透（publicMode）常量（SPEC-v4 §6/§7）────────────────────────────
+// PUBLIC_MAX_UPLOAD_MB：publicMode 下上传上限钳制（对齐 Cloudflare Tunnel 免费档
+// 单请求 ~100MB 并留余量，避免顶到隧道上限时语义模糊）。
+const PUBLIC_MAX_UPLOAD_MB = 50;
+
+// publicMode = 外网穿透模式。启用后网关对「一切」请求（含同机隧道转成的 loopback 连接）
+// 强制 bridge token，封死「隧道包被误判为本机直连而免鉴权」的洞（SPEC-v4 §5.1/§5.2）。
+function isPublicMode() {
+  return loadConfig().publicMode === true;
+}
+
+// 归一化公网地址：只接受 http(s)://，去掉尾部 / 与 query/hash，限长 2048
+function normalizePublicUrl(v) {
+  const s = String(v || "").trim();
+  if (!s) return "";
+  if (!/^https?:\/\//i.test(s)) return "";
+  return s.replace(/\/+$/, "").replace(/[?#].*$/, "").slice(0, 2048);
+}
+
 function loadConfig() {
   const now = Date.now();
   if (configCache && now - configCache.at < 5000) return configCache.cfg;
@@ -301,34 +398,66 @@ function loadConfig() {
   } catch {
     /* defaults */
   }
+  const publicMode = cfg.publicMode === true;
+  const rawMax = Number.isFinite(Number(cfg.maxUploadMb))
+    ? Math.min(Math.max(Number(cfg.maxUploadMb), 1), MAX_UPLOAD_MB_CAP)
+    : DEFAULT_MAX_UPLOAD_MB;
   const out = {
     lanEnabled: cfg.lanEnabled !== false,
-    maxUploadMb: Number.isFinite(Number(cfg.maxUploadMb))
-      ? Math.min(Math.max(Number(cfg.maxUploadMb), 1), MAX_UPLOAD_MB_CAP)
-      : DEFAULT_MAX_UPLOAD_MB,
+    maxUploadMb: publicMode ? Math.min(rawMax, PUBLIC_MAX_UPLOAD_MB) : rawMax, // SPEC §7.4 钳制
     gatewayPort: Number.isFinite(Number(cfg.gatewayPort))
       ? Math.min(Math.max(Math.round(Number(cfg.gatewayPort)), MIN_GATEWAY_PORT), MAX_GATEWAY_PORT)
       : DEFAULT_GATEWAY_PORT,
+    publicMode,
+    publicUrl: normalizePublicUrl(cfg.publicUrl),
+    publicRpcAllow: Array.isArray(cfg.publicRpcAllow)
+      ? cfg.publicRpcAllow.map(String).filter((x) => x && x.length <= 128)
+      : null,
   };
   configCache = { at: now, cfg: out };
   return out;
 }
 
+function rawMaxFromDisk() {
+  try {
+    const d = JSON.parse(readFileSync(configFile(), "utf8"));
+    const n = Number(d.maxUploadMb);
+    return Number.isFinite(n) ? Math.min(Math.max(n, 1), MAX_UPLOAD_MB_CAP) : DEFAULT_MAX_UPLOAD_MB;
+  } catch {
+    return DEFAULT_MAX_UPLOAD_MB;
+  }
+}
+
 function saveConfig(patch) {
   const cfg = loadConfig();
+  const publicMode = typeof patch.publicMode === "boolean" ? patch.publicMode : cfg.publicMode;
+  // 磁盘保留原始 maxUploadMb（钳制只在生效层，SPEC §7.4「不写盘」）——
+  // 这样关掉 publicMode 后原始上限自动恢复，不会被钳出的值抹掉。
+  const rawMax = Number.isFinite(Number(patch.maxUploadMb))
+    ? Math.min(Math.max(Number(patch.maxUploadMb), 1), MAX_UPLOAD_MB_CAP)
+    : rawMaxFromDisk();
   const next = {
     lanEnabled: typeof patch.lanEnabled === "boolean" ? patch.lanEnabled : cfg.lanEnabled,
-    maxUploadMb: Number.isFinite(Number(patch.maxUploadMb))
-      ? Math.min(Math.max(Number(patch.maxUploadMb), 1), MAX_UPLOAD_MB_CAP)
-      : cfg.maxUploadMb,
+    maxUploadMb: rawMax,
     gatewayPort: Number.isFinite(Number(patch.gatewayPort))
       ? Math.min(Math.max(Math.round(Number(patch.gatewayPort)), MIN_GATEWAY_PORT), MAX_GATEWAY_PORT)
       : cfg.gatewayPort,
+    publicMode,
+    publicUrl: patch.publicUrl !== undefined ? normalizePublicUrl(patch.publicUrl) : cfg.publicUrl,
+    publicRpcAllow:
+      patch.publicRpcAllow !== undefined
+        ? Array.isArray(patch.publicRpcAllow)
+          ? patch.publicRpcAllow.map(String).filter((x) => x && x.length <= 128)
+          : null
+        : cfg.publicRpcAllow,
   };
+  // publicMode=false 时清掉残留白名单（回退全开）——保证 LAN 行为与 v1.4.0 逐字一致
+  if (!publicMode) next.publicRpcAllow = null;
+  const effective = { ...next, maxUploadMb: publicMode ? Math.min(rawMax, PUBLIC_MAX_UPLOAD_MB) : rawMax };
   mkdirSync(MINI_HOME, { recursive: true });
-  writeFileSync(configFile(), JSON.stringify(next, null, 2), "utf8");
-  configCache = { at: Date.now(), cfg: next };
-  return next;
+  atomicWriteFileSync(configFile(), JSON.stringify(next, null, 2));
+  configCache = { at: Date.now(), cfg: effective };
+  return effective;
 }
 
 function readBody(req, limit = MAX_BODY_BYTES) {
@@ -445,7 +574,13 @@ function buildGuiledIndex() {
   try {
     html = readFileSync(join(GUI_DIST, "index.html"), "utf8");
   } catch {
-    html = "<!doctype html><meta charset=\"utf-8\"><title>DSH-Mobile</title><h1>GUI 资产未采集</h1>";
+    html =
+      "<!doctype html><meta charset=\"utf-8\"><title>DSH-Mobile</title>" +
+      "<div style=\"font-family:system-ui,sans-serif;padding:32px;max-width:520px\">" +
+      "<h1>GUI 资产缺失</h1>" +
+      "<p>当前 dsh-mini 安装未包含 <code>gui/</code> 运行资产（<code>gui/dist/index.html</code>、<code>gui/manifest.json</code>、<code>gui/bundles/</code>）。</p>" +
+      "<p>请改用最新版安装包（确认内含 <code>gui/</code> 目录）重新安装本插件后重试；若为局域网/移动端连接，请在部署方重新 `npm pack` 后再分发。</p>" +
+      "</div>";
   }
   const boot = JSON.stringify({ rev, entries: manifest ? manifest.entries : [] });
   // ES2022+ polyfills for older Android WebView kernels (e.g. Huawei Android 10
@@ -461,7 +596,6 @@ function buildGuiledIndex() {
     "if(window.crypto){if(typeof crypto.getRandomValues!=='function'){crypto.getRandomValues=function(a){for(var i=0;i<a.length;i++)a[i]=Math.floor(Math.random()*256);return a}}if(typeof crypto.randomUUID!=='function'){crypto.randomUUID=function(){var b=crypto.getRandomValues(new Uint8Array(16));b[6]=(b[6]&15)|64;b[8]=(b[8]&63)|128;var h='';for(var i=0;i<16;i++){h+=(i===4||i===6||i===8||i===10)?'-':'';h+=(b[i]<16?'0':'')+b[i].toString(16)}return h}}}" +
     "if(typeof AbortSignal!=='undefined'&&typeof AbortSignal.timeout!=='function'){AbortSignal.timeout=function(ms){var c=new AbortController();var t=setTimeout(function(){try{c.abort(new DOMException('The operation timed out','TimeoutError'))}catch(e){c.abort(new Error('Timeout'))}},ms);try{c.signal.addEventListener('abort',function(){clearTimeout(t)})}catch(e){}return c.signal}}" +
     "if(typeof AbortController!=='undefined'){var origAbort=AbortController.prototype.abort;AbortController.prototype.abort=function(reason){if(arguments.length===0){return origAbort.call(this,new Error('Aborted'))}return origAbort.call(this,reason)}}" +
-    "window.__wsProbeLog=[];var NW=window.WebSocket;window.WebSocket=function(url,protocols){var s=protocols?new NW(url,protocols):new NW(url);var t0=Date.now();function rec(ev,x){try{window.__wsProbeLog.push(ev+' '+url+' '+(Date.now()-t0)+'ms'+(x?' '+x:''));window.__wsProbeLog=window.__wsProbeLog.slice(-120)}catch(e){}}try{s.addEventListener('open',function(){rec('OPEN')});s.addEventListener('error',function(){rec('ERR')});s.addEventListener('close',function(e){rec('CLOSE'+e.code,(e.reason||''))})}catch(e){rec('HOOKFAIL',String(e))}return s;};try{window.WebSocket.prototype=NW.prototype}catch(e){}" +
     "})();</script>";
   // ── 手机端 UI 改造：完整补丁（CSS + JS）──
   // 关键：grid 列宽 0px 1fr 0px（不是 display:none——display:none 会让 grid 子元素前移到 0px 列）
@@ -588,9 +722,114 @@ function buildGuiledIndex() {
   const mobilePatch =
     "<style id=\"dsh-mobile-patch\">" + mobileCss + "</style>" +
     "<script>" + mobileJs + "</script>";
+  // 内/外网实时自动切换 bootstrap（注入 GUI 首页；ES5 语法，兼容老 WebView）。
+  // 现实约束：页面为 https（公网 CF 隧道）时浏览器混合内容拦截 http 内网探测，
+  // 只能显示「切到内网」入口；页面为 http（内网基址或 http 隧道）时双向全自动。
+  const netBootJs = `(function () {
+  if (window.__DSH_NETBOOT__) return;
+  window.__DSH_NETBOOT__ = { log: [] };
+  function lg(m) { try { var l = window.__DSH_NETBOOT__.log; l.push(String(m)); while (l.length > 60) l.shift(); } catch (e) {} }
+  try { if (window.DshMiniBridge) return; } catch (e) {}
+  var LS = null;
+  try { LS = window.localStorage; } catch (e) {}
+  function lsGet(k) { try { return LS ? LS.getItem(k) : null; } catch (e) { return null; } }
+  function lsSet(k, v) { try { if (LS) LS.setItem(k, v); } catch (e) {} }
+  var LAST_SW = "dshMiniNetLastSwitchAt";
+  var LAN_HARD_MS = 2600;
+  var LAN_PREF = 0.6;
+  var COOLDOWN_MS = 60000;
+  var LOOP_MS = 15000;
+  var PROBE_MS = 2200;
+  var scheme = location.protocol;
+  var origin = location.origin;
+  var cand = null;
+  function httpify(u) { return u ? u.replace(/^https:/i, "http:") : u; }
+  function clean(u) {
+    try { var x = new URL(u, origin); x.search = ""; x.hash = ""; return x.toString().replace(/\\/$/, ""); } catch (e) { return u.replace(/[?#].*$/, "").replace(/\\/$/, ""); }
+  }
+  function fetchJson(u, timeoutMs) {
+    return new Promise(function (resolve) {
+      var ctrl = null, to = null;
+      try { ctrl = new AbortController(); to = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, timeoutMs); } catch (e) {}
+      fetch(u, Object.assign({ cache: "no-store", credentials: "same-origin" }, ctrl ? { signal: ctrl.signal } : {}))
+        .then(function (r) { try { if (to) clearTimeout(to); } catch (e) {} return r.ok ? r.json() : null; })
+        .then(function (d) { resolve(d); })
+        .catch(function () { try { if (to) clearTimeout(to); } catch (e) {} resolve(null); });
+    });
+  }
+  function ping(base) {
+    var t0 = Date.now();
+    return fetchJson(clean(base) + "/api/ping?e=" + t0, PROBE_MS).then(function (d) {
+      return (d && d.ok) ? { base: base, rtt: Date.now() - t0 } : null;
+    });
+  }
+  function addPill() {
+    try {
+      if (document.getElementById("dsh-netboot-pill")) return;
+      if (!cand || !cand.lanUrl) return;
+      var p = document.createElement("a");
+      p.id = "dsh-netboot-pill";
+      p.href = cand.lanUrl;
+      p.textContent = "当前公网接入 · 切到内网";
+      p.title = "已在同一局域网时点此切到内网地址（更流畅）";
+      p.style.cssText = "position:fixed;left:10px;bottom:calc(14px + var(--dsh-safe-bottom,0px));z-index:9600;max-width:72vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:9px 14px;border-radius:20px;background:rgba(35,35,36,.95);color:#d8dde3;font:13px/1.4 -apple-system,'Segoe UI',sans-serif;text-decoration:none;box-shadow:0 4px 18px rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.10)";
+      document.body.appendChild(p);
+    } catch (e) { lg("pill:" + e); }
+  }
+  function removePill() {
+    try { var p = document.getElementById("dsh-netboot-pill"); if (p && p.parentNode) p.parentNode.removeChild(p); } catch (e) {}
+  }
+  function decide(lanR, pubR) {
+    if (lanR && lanR.rtt < LAN_HARD_MS) {
+      if (pubR && pubR.rtt < lanR.rtt * LAN_PREF) return pubR;
+      return lanR;
+    }
+    return pubR || null;
+  }
+  function trySwitch(best) {
+    if (!best) return;
+    var tgt = null;
+    try { tgt = new URL(best.base, origin).origin; } catch (e) { return; }
+    if (!tgt || tgt === origin) return;
+    if (scheme === "https:" && tgt.indexOf("http://") === 0) { addPill(); return; }
+    var last = Number(lsGet(LAST_SW) || 0);
+    if (Date.now() - last < COOLDOWN_MS) return;
+    lsSet(LAST_SW, String(Date.now()));
+    lg("switch " + best.base);
+    try { location.replace(best.base); } catch (e) { window.location.href = best.base; }
+  }
+  function monitorOnce() {
+    if (!cand) return;
+    if (scheme === "https:") { addPill(); return; }
+    removePill();
+    var lanP = cand.lanUrl ? ping(httpify(cand.lanUrl)) : Promise.resolve(null);
+    var pubP = cand.publicUrl ? ping(cand.publicUrl) : Promise.resolve(null);
+    Promise.all([lanP, pubP]).then(function (rs) {
+      trySwitch(decide(rs[0], rs[1]));
+    });
+  }
+  function loadBase() {
+    fetchJson(httpify(origin) + "/api/base", 5000).then(function (b) {
+      if (!b || !b.ok) return;
+      cand = { lanUrl: b.lanUrl || "", publicUrl: b.publicUrl || "" };
+      monitorOnce();
+    });
+  }
+  function arm() {
+    try { window.addEventListener("online", function () { monitorOnce(); }); } catch (e) {}
+    try { window.addEventListener("focus", function () { monitorOnce(); }); } catch (e) {}
+    try { setInterval(function () { monitorOnce(); }, LOOP_MS); } catch (e) {}
+    try { setInterval(function () { loadBase(); }, 60000); } catch (e) {}
+  }
+  if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", loadBase); }
+  else { setTimeout(loadBase, 250); }
+  arm();
+})();`;
+  const netBootSnippet =
+    "<script id=\"dsh-netboot\">" + netBootJs + "</script>";
   const injected =
     "<script>window.__DSH_BOOT__ = " + boot + "</script>";
-  html = html.replace("<head>", "<head>" + polyfill + mobilePatch + injected);
+  html = html.replace("<head>", "<head>" + polyfill + mobilePatch + netBootSnippet + injected);
   guiIndexCache = { rev, html };
   return html;
 }
@@ -649,14 +888,28 @@ function serveGui(req, res, u, url) {
 }
 
 // 旧 /dsh-mini/* 协议反向代理到主端口（保持 APK connect / health 兼容）
+// hop-by-hop 头由同一段链路双方自己管理，显式剥离避免透传导致连接语义混乱
+// （HTTP/1.1 RFC 7230：Connection/Keep-Alive/Transfer-Encoding/Upgrade/Proxy-* 不应转发）。
+const HOP_BY_HOP = new Set([
+  "connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te",
+  "trailer", "transfer-encoding", "upgrade",
+]);
+function stripHopByHop(headers) {
+  const out = {};
+  for (const k of Object.keys(headers || {})) {
+    if (HOP_BY_HOP.has(k.toLowerCase())) continue;
+    out[k] = headers[k];
+  }
+  return out;
+}
 function proxyToUpstream(req, res) {
-  const headers = { ...req.headers };
+  const headers = stripHopByHop({ ...req.headers });
   headers.host = `${gwUpstreamHost}:${gwUpstreamPort}`;
   headers["x-dsh-mini-gateway"] = "1";
   const upstream = httpRequest(
     { hostname: "127.0.0.1", port: gwUpstreamPort, path: req.url, method: req.method, headers },
     (up) => {
-      res.writeHead(up.statusCode || 502, up.headers);
+      res.writeHead(up.statusCode || 502, stripHopByHop(up.headers));
       up.on("error", () => {
         try {
           res.destroy();
@@ -720,7 +973,11 @@ function startGateway(ctx) {
       sendJson(res, 405, { error: "method not allowed" });
       return;
     }
-    readBody(req, 16 * 1024 * 1024)
+    // RPC body 上限与上传钳制对齐：session.prompt 携带 base64 图片（膨胀 ~1.33×），
+    // 固定 16MB 会在 maxUploadMb≥12MB 时 413。用 maxUploadMb×1.6 留余量，至少 24MB。
+    const cfgNow = loadConfig();
+    const rpcBodyMb = Math.max(24, Math.floor(cfgNow.maxUploadMb * 1.6));
+    readBody(req, rpcBodyMb * 1024 * 1024)
       .then((raw) => {
         let envelope;
         try {
@@ -732,6 +989,29 @@ function startGateway(ctx) {
         const method = (envelope && envelope.method) || methodName;
         const rpcId = envelope && envelope.rpcId != null ? envelope.rpcId : "n/a";
         const payload = (envelope && envelope.payload) || {};
+        // SPEC v4 §7.5：publicMode + publicRpcAllow 白名单过滤（默认 null=全开，与 LAN 行为一致）。
+        // 用户在设置/配置里按需收窄高风险面（commands/*、credentials.*、host.* 等）。
+        const cfgNow = loadConfig();
+        if (
+          cfgNow.publicMode &&
+          Array.isArray(cfgNow.publicRpcAllow) &&
+          cfgNow.publicRpcAllow.length > 0 &&
+          !cfgNow.publicRpcAllow.includes(method)
+        ) {
+          sendJson(res, 200, {
+            type: "server-response",
+            rpcId,
+            result: {
+              ok: false,
+              error: {
+                code: "rpc-not-allowed",
+                message: `RPC "${method}" is not exposed while publicMode is enabled`,
+                details: { method },
+              },
+            },
+          });
+          return;
+        }
         handleGuiApi(ctx, method, payload)
           .then((value) => {
             sendJson(res, 200, { type: "server-response", rpcId, result: { ok: true, value } });
@@ -750,6 +1030,35 @@ function startGateway(ctx) {
   };
   const server = createServer((req, res) => {
     const u = (req.url || "/").split("?")[0];
+    // SPEC-v5 §2「允许外网访问」：开关关闭（publicMode=false）时，外网来源一律 403。
+    // 必须在任何分支（含 /api/ping、/dsh-mini/* 反代）之前拦截，实现「只允许内部局域网」。
+    if (!loadConfig().publicMode && isExternalHost(req)) {
+      sendText(
+        res,
+        403,
+        "external access disabled: allow external access is OFF, only LAN/IPv4-loopback is allowed",
+        "text/plain; charset=utf-8",
+      );
+      return;
+    }
+    // 接入探测：GET /api/ping —— 无鉴权、CORS 全开，只回 liveness + 时间戳，
+    // 不暴露任何数据。供手机端「内/外网按流畅度自动切换」做跨源连通性 + RTT 探测。
+    if (u === "/api/ping" && req.method === "GET") {
+      let q = "";
+      try {
+        q = new URL(req.url, "http://x").searchParams.get("e") || "";
+      } catch {
+        /* ignore */
+      }
+      res.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET,OPTIONS",
+      });
+      res.end(JSON.stringify({ ok: true, t: Date.now(), e: q }));
+      return;
+    }
     // 旧 dsh-mini 协议 → 代理到主端口（保持兼容）
     if (u === APP_PREFIX || u.startsWith(APP_PREFIX + "/")) {
       proxyToUpstream(req, res);
@@ -764,6 +1073,26 @@ function startGateway(ctx) {
         url = new URL("/", "http://x");
       }
       if (!authGuiRequest(req, res, url)) return; // 403 或 302 已发
+      // 接入自检：GET /api/base —— 同源 + 已鉴权才返回（不设 CORS），供手机端
+      // 「内/外网实时切换」读取候选基址。token 仅同源已鉴权会话可见。
+      if (u === "/api/base" && req.method === "GET") {
+        const cfgB = loadConfig();
+        const tkB = effectiveToken();
+        const ipsB = lanAddresses();
+        const lanB = ipsB.length ? `http://${ipsB[0]}:${cfgB.gatewayPort}/?token=${encodeURIComponent(tkB)}` : "";
+        const pubB = cfgB.publicMode && cfgB.publicUrl ? `${cfgB.publicUrl}/?token=${encodeURIComponent(tkB)}` : "";
+        sendJson(res, 200, {
+          ok: true,
+          token: tkB,
+          lanUrl: lanB,
+          publicUrl: pubB,
+          publicMode: cfgB.publicMode,
+          gatewayPort: cfgB.gatewayPort,
+          lanIps: ipsB,
+          ts: Date.now(),
+        });
+        return;
+      }
       handleGuiPost(req, res, u.slice("/api/".length));
       return;
     }
@@ -812,17 +1141,27 @@ function gatewayStatus(ctx) {
   const reachable = cfg.lanEnabled && gwListening && ips.length > 0;
   const token = effectiveToken();
   let url = "";
-  if (cfg.lanEnabled && ips.length) {
+  // SPEC v4 §6.2：publicMode 且已配 publicUrl 时，二维码/连接 URL 优先走公网地址
+  if (cfg.publicMode && cfg.publicUrl && gwListening) {
+    url = `${cfg.publicUrl}/?token=${encodeURIComponent(token)}`;
+  } else if (cfg.lanEnabled && ips.length) {
     url = `http://${ips[0]}:${cfg.gatewayPort}/?token=${encodeURIComponent(token)}`; // v3: 根路径直接出 GUI
   } else if (port > 0) {
     url = `http://127.0.0.1:${port}/?token=${encodeURIComponent(token)}`;
   }
   let bindWarn = null;
-  if (cfg.lanEnabled) {
+  if (cfg.publicMode && !cfg.publicUrl) {
+    bindWarn = "允许外网访问已开启，但尚未填写公网地址（publicUrl）。填入隧道公网地址后二维码将切为公网 URL。";
+  } else if (cfg.lanEnabled) {
     if (gwListenError) bindWarn = "LAN 网关启动失败：" + gwListenError;
     else if (!gwListening) bindWarn = "LAN 网关未在监听（正在启动或端口被占用）。";
     else if (ips.length === 0) bindWarn = "未检测到局域网 IPv4 地址，手机无法访问本机。";
   }
+  const external = {
+    enabled: cfg.publicMode,
+    url: cfg.publicMode && cfg.publicUrl ? `${cfg.publicUrl}/?token=${encodeURIComponent(token)}` : "",
+    up: cfg.publicMode && cfg.publicUrl && gwListening,
+  };
   return {
     version: PLUGIN_VERSION,
     token,
@@ -838,6 +1177,10 @@ function gatewayStatus(ctx) {
     reachable,
     url,
     bindWarn,
+    publicMode: cfg.publicMode,
+    publicUrl: cfg.publicUrl,
+    publicRpcAllow: cfg.publicRpcAllow,
+    external,
   };
 }
 
@@ -897,8 +1240,29 @@ async function dispatchApi(ctx, req, res, pathname, url) {
         }
         patch.gatewayPort = Math.round(n);
       }
+      // SPEC v4 §6.1/§6.3：外网穿透（publicMode / publicUrl / publicRpcAllow）
+      if (parsed.publicMode !== undefined) {
+        if (typeof parsed.publicMode !== "boolean") {
+          return sendJson(res, 400, { error: "publicMode must be a boolean" });
+        }
+        patch.publicMode = parsed.publicMode;
+      }
+      if (parsed.publicUrl !== undefined) {
+        const u = normalizePublicUrl(parsed.publicUrl);
+        if (parsed.publicUrl !== "" && !u) {
+          return sendJson(res, 400, { error: "publicUrl must be an http(s):// URL (no query/hash) or empty" });
+        }
+        patch.publicUrl = u;
+      }
+      if (parsed.publicRpcAllow !== undefined) {
+        // null 与 [] 都表示「回退全开」（与 saveConfig 契约一致）；仅拒非法类型
+        if (parsed.publicRpcAllow !== null && !Array.isArray(parsed.publicRpcAllow)) {
+          return sendJson(res, 400, { error: "publicRpcAllow must be an array of RPC method names, or null/[] for allow-all" });
+        }
+        patch.publicRpcAllow = parsed.publicRpcAllow;
+      }
       if (Object.keys(patch).length === 0) {
-        return sendJson(res, 400, { error: "nothing to change (lanEnabled?, maxUploadMb?, gatewayPort?)" });
+        return sendJson(res, 400, { error: "nothing to change (lanEnabled?, maxUploadMb?, gatewayPort?, publicMode?, publicUrl?, publicRpcAllow?)" });
       }
       const cfg = saveConfig(patch);
       startGateway(ctx);

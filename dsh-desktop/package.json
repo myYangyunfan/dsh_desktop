@@ -9,7 +9,7 @@
     "private":  true,
     "scripts":  {
                     "start":  "node scripts/install-minimal-win-preset.js \u0026\u0026 node scripts/patch-event-vocabulary.js node_modules/@deepseek-ai/dsh-session \u0026\u0026 node scripts/patch-deps.js \u0026\u0026 electron .",
-                    "test":  "node --test \"scripts/test/*.test.js\"",
+                    "test":  "node --test \"scripts/test/*.test.js\" \"scripts/test/*.test.mjs\"",
                     "test:integration":  "node scripts/test/integration-runner.js --all",
                     "fetch-node":  "node scripts/fetch-node.js",
                     "pack":  "node scripts/patch-portable-template.js \u0026\u0026 node scripts/patch-deps.js \u0026\u0026 electron-builder --dir",

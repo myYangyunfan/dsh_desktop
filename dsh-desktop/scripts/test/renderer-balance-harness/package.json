@@ -1,0 +1,7 @@
+{
+  "name": "dsh-balance-renderer-harness",
+  "version": "0.0.0",
+  "private": true,
+  "main": "main.js",
+  "description": "dsh-balance 客户端渲染层真实环境验证（隐藏窗口 + 真实 React，仅供测试，随测试目录分发）"
+}

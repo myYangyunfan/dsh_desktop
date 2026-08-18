@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-mini",
-  "version": "1.4.0",
+  "version": "1.4.2",
   "description": "DSH-Mobile — phone bridge for DeepSeek Harness Desktop (Codex-Mini style): drive DSH agent sessions from a phone browser / app, with attachments, per-session model switching, balance ring and LAN gateway QR pairing",
   "type": "module",
   "main": "lib/index.js",
@@ -12,6 +12,7 @@
   "files": [
     "lib",
     "public",
+    "gui",
     "cordis.patch.yml",
     "README.md"
   ],

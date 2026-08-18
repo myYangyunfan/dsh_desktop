@@ -19,6 +19,7 @@ const entryFiles = [
   'updater.js',
   'client-updater.js',
   'balance.js',
+  'balance-scheduler.js',
   'session-watcher.js',
   'renderer-recovery.js',
   'wsl-backend.js',

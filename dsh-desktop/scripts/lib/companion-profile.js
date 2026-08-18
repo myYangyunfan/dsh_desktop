@@ -20,10 +20,14 @@ const { bundlePatchRel, verifyBundleDir } = require('../../profile-bundle-heal')
 const { compareVersions } = require('./versions');
 
 // 同步进 profile 的固定文件清单（旧 main.js copyFiles / 同步脚本 PLUGIN_FILES）。
+// 根目录平铺布局的第三方插件（如 dsh-synapse：入口 index.js/client.js 与
+// app.js/styles.css/deepseek-mark.svg 同目录散件，index.js 经 import.meta.url
+// 相对路径读取，不可挪入子目录）也在此登记；存在才拷，对其他插件零影响。
 const PLUGIN_FILES = [
   'package.json', 'cordis.patch.yml', 'LICENSE', 'README.md', 'README.zh.md',
   'lib/index.js', 'lib/index.mjs', 'lib/client.js', 'lib/vlm.js', 'lib/typert.host.js', 'lib/typert.host.d.ts',
   'dsh.plugin.json',
+  'index.js', 'client.js', 'app.js', 'styles.css', 'deepseek-mark.svg',
 ];
 
 // 配套插件引用了不在 dsh 核心依赖闭包里的 npm 包时（例如 dsh-better-sidebar
@@ -424,9 +428,11 @@ function syncCompanionFiles(opts) {
     // 完整同步插件自带的 lib/assets/src/dist/node_modules 目录：第三方插件
     // 的懒加载 chunk、动画素材、dist 构建产物与随包分发的私有依赖
     // （如 billion-context-dsh 的 acp-kernel）不都落在固定文件清单里。
-    // public 为 webServer 静态资源目录（dsh-mini 手机桥页面等），同样必须
-    // 随包同步，否则插件 webServer 挂载时找不到静态页。
-    for (const sub of ['lib', 'client', 'data', 'assets', 'src', 'dist', 'public', 'node_modules']) {
+    // public 是 webServer 静态资源目录（dsh-mini 手机桥页面等），同样必须
+    // 随包同步，否则插件 webServer 挂载时找不到静态页面。gui 是 dsh-mini
+    // v1.4+ 的手机 GUI 静态产物（manifest.json + bundles + dist），缺失时
+    // 手机端只能看到上游内置的「未携带 gui/ 资产」报错页。
+    for (const sub of ['lib', 'client', 'data', 'assets', 'src', 'dist', 'public', 'gui', 'node_modules']) {
       syncDir(path.join(src, sub), path.join(dest, sub), log);
     }
     // 落盘后校验 bundle 完整性：dsh 装配时会读取补丁层与入口文件，任一缺失

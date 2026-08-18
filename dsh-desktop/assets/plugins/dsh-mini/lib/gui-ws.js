@@ -6,14 +6,6 @@
 // 纯下行：客户端只收不发（上行帧官方也拒绝）。
 // 挂接：attachGuiWs(nodeHttpServer, ctx, authFn)，authFn(req,url)=>boolean 决定握手放行。
 import { randomUUID, createHash } from "node:crypto";
-import { appendFileSync } from "node:fs";
-
-const WS_DEBUG_LOG = "E:\\DSH Zone\\dsh-mini\\ws-debug.log"; // TEMP DEBUG — remove after diagnosis
-function dbg(line) {
-  try {
-    appendFileSync(WS_DEBUG_LOG, new Date().toISOString() + " " + line + "\n");
-  } catch { /* ignore */ }
-}
 
 const WS_MAGIC = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
@@ -113,6 +105,31 @@ function toolViewFor(event) {
   return { for: event.type === "tool/call" ? "call" : "result", view: { card: String(name) } };
 }
 
+// workspace wire 视图（对齐官方 dsh-host-apiproxy workspaceView/changedWorkspaceView，
+// api-proxy.js:820-841）。domain/changed 增量帧用 changedWorkspaceView 从 record 提取；
+// 初始快照和 registry.get() 用 workspaceView 从 workspace 对象提取。
+function workspaceView(w) {
+  return {
+    workspaceId: w.id || w.workspaceId,
+    path: w.path || "",
+    title: w.title || "",
+    sessionIds: [...(w.sessionIds || [])],
+    createdAt: w.createdAt || "",
+    updatedAt: w.updatedAt || "",
+  };
+}
+function changedWorkspaceView(workspaceId, value) {
+  const r = value && typeof value === "object" ? value : {};
+  return {
+    workspaceId: workspaceId,
+    path: r.path || "",
+    title: r.title || "",
+    sessionIds: [...(r.sessionIds || [])],
+    createdAt: r.createdAt || "",
+    updatedAt: r.updatedAt || "",
+  };
+}
+
 export function lastEventSeq(session) {
   try {
     if (session && typeof session.seq === "number") return session.seq - 1;
@@ -126,25 +143,18 @@ export function attachGuiWs(server, ctx, authFn) {
   server.on("upgrade", (req, socket, head) => {
     const url = new URL(req.url || "/", "http://x");
     const path = url.pathname;
-    dbg("UPGRADE " + path + " cookie=" + (req.headers.cookie ? "present" : "MISSING") + " origin=" + (req.headers.origin || "") + " ua=" + (req.headers["user-agent"] || "").slice(0, 60));
     if (path !== "/api/events.mux" && path !== "/api/events.host") {
-      dbg("  404 path");
       socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
       socket.destroy();
       return;
     }
     if (!authFn(req, url)) {
-      dbg("  403 auth");
       socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
       socket.destroy();
       return;
     }
     const ws = performHandshake(req, socket);
-    if (!ws) {
-      dbg("  400 handshake");
-      return;
-    }
-    dbg("  101 OK");
+    if (!ws) return;
     // head：客户端在握手后立即发来的帧（官方客户端只收不发），忽略
     void head;
     if (path === "/api/events.mux") startMux(ws, ctx);
@@ -156,6 +166,7 @@ export function attachGuiWs(server, ctx, authFn) {
 // mux 流：连接即全会话 subscribed 基线 + ctx.on('session/event') 增量
 // ---------------------------------------------------------------------------
 function startMux(ws, ctx) {
+  const rc = (ctx && ctx.root) || ctx; // root scope：子 fiber ctx 收不到 DSH 主树 emit（实测），须用 root
   const subs = [];
   const push = (payload) => writeFrame(ws, payload);
   const subSession = (session) => {
@@ -169,7 +180,7 @@ function startMux(ws, ctx) {
   } catch { /* ignore */ }
   try {
     subs.push(
-      ctx.on("session/event", (session, event) => {
+      rc.on("session/event", (session, event) => {
         if (!session || !event) return;
         const view = toolViewFor(event);
         push({
@@ -178,8 +189,8 @@ function startMux(ws, ctx) {
           event,
           ...(view ? { view } : {}),
         });
-      }),
-      ctx.on("session/created", (session) => subSession(session)),
+      }, { global: true }),
+      rc.on("session/created", (session) => subSession(session), { global: true }),
     );
   } catch { /* ignore */ }
   ws.onClose(() => {
@@ -195,6 +206,7 @@ function startMux(ws, ctx) {
 // host 流：workspace 快照 + session 生命周期 + agent 状态
 // ---------------------------------------------------------------------------
 function startHost(ws, ctx) {
+  const rc = (ctx && ctx.root) || ctx; // root scope：子 fiber ctx 收不到 DSH 主树 emit（实测），须用 root
   const subs = [];
   const push = (payload) => writeFrame(ws, payload);
   const workspace = ctx.get("workspaceRegistry");
@@ -221,29 +233,89 @@ function startHost(ws, ctx) {
   }
   try {
     subs.push(
-      ctx.on("session/created", (session) => {
+      // SPEC-v5 §1.6.2: cwd/parentSession/origin 从 session.header 提取（非顶层属性），
+      // 对齐官方 sessionListFields(session.header, session.events)（api-proxy.js:408-419）。
+      // session.cwd 顶层属性在 DSH 运行时通常 undefined → 旧代码帧里缺 cwd → 前端无法分组。
+      rc.on("session/created", (session) => {
         if (!session) return;
+        const header = session.header || {};
         push({
           type: "host/session-added",
           sessionId: session.id,
           blank: !session.running && !(Array.isArray(session.events) && session.events.length),
-          ...(session.cwd ? { cwd: session.cwd } : {}),
-          ...(session.parentSessionId ? { parentSessionId: session.parentSessionId } : {}),
-          ...(session.agentPreset ? { agentPreset: session.agentPreset } : {}),
+          ...(header.cwd === undefined ? {} : { cwd: header.cwd }),
+          ...(header.parentSession === undefined ? {} : { parentSessionId: header.parentSession }),
+          ...(header.origin === undefined ? {} : { origin: header.origin }),
         });
-      }),
-      ctx.on("session/disposed", (session) => {
+      }, { global: true }),
+      rc.on("session/disposed", (session) => {
         if (session && session.id) push({ type: "host/session-removed", sessionId: session.id });
-      }),
-      ctx.on("agent/status", ({ agent, status }) => {
+      }, { global: true }),
+      rc.on("agent/status", ({ agent, status }) => {
         const id = agent && (agent.id || agent.sessionId);
         if (id) push({ type: "host/session-status", sessionId: id, running: status === "running" });
-      }),
-      ctx.on("agent/error", ({ agent, error }) => {
+      }, { global: true }),
+      rc.on("agent/error", ({ agent, error }) => {
         const id = agent && (agent.id || agent.sessionId);
         if (id) push({ type: "host/agent-error", sessionId: id, message: String((error && error.message) || error) });
-      }),
+      }, { global: true }),
+      // SPEC-v5 §1.6.1: 补全 domain/changed 监听（对齐官方 api-proxy.js:3229-3285）。
+      // 旧代码完全不监听此事件 → 电脑端新建会话后 workspaceRegistry 更新 sessionIds
+      // 触发 domain/changed(domain='workspace') → dsh-mini 不转发 → 手机端侧栏不更新。
+      rc.on("domain/changed", (change) => {
+        if (!change || change.domain !== "workspace") return;
+        const wr = ctx.get("workspaceRegistry");
+        if (!wr) return;
+        try {
+          if (change.table === "") {
+            // 全局 workspace 状态变更（order / archived / 新增 workspace）
+            if (change.operation !== "put") return;
+            const state = change.value || {};
+            const ids = state.workspaceIds || [];
+            for (const wid of ids) {
+              const w = wr.get ? wr.get(wid) : null;
+              if (w) push({ type: "host/workspace-changed", workspace: workspaceView(w) });
+            }
+            if (ids.length) push({ type: "host/workspace-order-changed", workspaceIds: [...ids] });
+            const arch = wr.archivedSessionIds;
+            const archList = typeof arch === "function" ? arch() : (Array.isArray(arch) ? arch : []);
+            push({ type: "host/archived-sessions-changed", archivedSessionIds: [...archList] });
+            return;
+          }
+          if (change.table !== "workspaces") return;
+          if (change.operation === "deleted") {
+            push({ type: "host/workspace-removed", workspaceId: change.key });
+            return;
+          }
+          // 单个 workspace 记录变更（含 sessionIds 更新）——新建会话归入工作区时走此分支
+          push({ type: "host/workspace-changed", workspace: changedWorkspaceView(change.key, change.value) });
+        } catch { /* ignore */ }
+      }, { global: true }),
     );
+    // SPEC-v5 §1.6.3: 白名单转发事件（对齐官方 API_REMOTE_FORWARDED_EVENTS，
+    // dsh-api-remotes/lib/types/remote-events.js:16-28）。官方 apiproxy 逐事件 verbatim
+    // 转发；dsh-mini 不依赖 dsh-api-remotes，硬编码列表，逐个 try/catch 注册（缺失事件静默跳过）。
+    const FORWARDED = [
+      "agent-preset/selected", "commands/change", "credentials/updated",
+      "cordis/request-run", "cordis/request-run-resolved",
+      "cordis/dynamic-package", "cordis/dynamic-retract",
+      "cordis/inspect-query", "cordis/inspect-query-resolved",
+      "llm/adapters-updated", "settings/document-updated",
+    ];
+    for (const name of FORWARDED) {
+      try {
+        subs.push(
+          rc.on(name, (...args) => {
+            const p = args[0];
+            if (p && typeof p === "object") {
+              push(p.type ? p : { type: name, ...p });
+            } else {
+              push({ type: name });
+            }
+          }, { global: true }),
+        );
+      } catch { /* event not mounted, skip */ }
+    }
   } catch { /* ignore */ }
   ws.onClose(() => {
     for (const d of subs) {

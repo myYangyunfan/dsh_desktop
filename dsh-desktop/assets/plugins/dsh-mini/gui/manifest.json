@@ -1,0 +1,428 @@
+{
+  "rev": "4bea25cbaf6a",
+  "entries": [
+    {
+      "id": "@deepseek-ai/dsh-typert-registry",
+      "url": "/plugins/@deepseek-ai/dsh-typert-registry/client.js?rev=f41d56e0b747",
+      "rev": "f41d56e0b747",
+      "inject": [],
+      "immediately": true
+    },
+    {
+      "id": "@deepseek-ai/dsh-api-gateway",
+      "url": "/plugins/@deepseek-ai/dsh-api-gateway/client.js?rev=9e83e9d9c076",
+      "rev": "9e83e9d9c076",
+      "inject": [
+        "@deepseek-ai/dsh-typert-registry",
+        "@deepseek-ai/dsh-client-connection"
+      ],
+      "immediately": true
+    },
+    {
+      "id": "@deepseek-ai/dsh-session-log-export",
+      "url": "/plugins/@deepseek-ai/dsh-session-log-export/client.js?rev=c8b2bb57ded4",
+      "rev": "c8b2bb57ded4",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-commands",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-hmr",
+      "url": "/plugins/@deepseek-ai/dsh-client-hmr/client.js?rev=774dfcde3162",
+      "rev": "774dfcde3162",
+      "inject": [],
+      "immediately": true
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-modules",
+      "url": "/plugins/@deepseek-ai/dsh-client-modules/client.js?rev=c3a65f7f440a",
+      "rev": "c3a65f7f440a",
+      "inject": [],
+      "immediately": true
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-connection",
+      "url": "/plugins/@deepseek-ai/dsh-client-connection/client.js?rev=36d58d209c00",
+      "rev": "36d58d209c00",
+      "inject": [],
+      "immediately": true
+    },
+    {
+      "id": "@deepseek-ai/dsh-api-remotes",
+      "url": "/plugins/@deepseek-ai/dsh-api-remotes/client.js?rev=e17dd6016653",
+      "rev": "e17dd6016653",
+      "inject": [
+        "@deepseek-ai/dsh-api-gateway"
+      ],
+      "immediately": true
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-runtime",
+      "url": "/plugins/@deepseek-ai/dsh-client-runtime/client.js?rev=ad48157c095d",
+      "rev": "ad48157c095d",
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-typert-registry",
+        "@deepseek-ai/dsh-api-remotes"
+      ],
+      "immediately": true
+    },
+    {
+      "id": "@deepseek-ai/dsh-cordis-client-runner",
+      "url": "/plugins/@deepseek-ai/dsh-cordis-client-runner/client.js?rev=53ff5565d917",
+      "rev": "53ff5565d917",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-modules",
+        "@deepseek-ai/dsh-client-ui-theme"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-theme",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-theme/client.js?rev=f0a9f7028c4e",
+      "rev": "f0a9f7028c4e",
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-api-remotes"
+      ],
+      "immediately": true
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-locale",
+      "url": "/plugins/@deepseek-ai/dsh-client-locale/client.js?rev=af9b29eb6756",
+      "rev": "af9b29eb6756",
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-api-remotes"
+      ],
+      "immediately": true
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-layout",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-layout/client.js?rev=5ab8c01f4dbb",
+      "rev": "5ab8c01f4dbb",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-theme"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-sidebar",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-sidebar/client.js?rev=74802f0ecce6",
+      "rev": "74802f0ecce6",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-locale"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-settings",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-settings/client.js?rev=09edeb10e0d0",
+      "rev": "09edeb10e0d0",
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-api-remotes"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-settings-general",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-settings-general/client.js?rev=14258da36869",
+      "rev": "14258da36869",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-settings-models",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-settings-models/client.js?rev=edb7d16543b7",
+      "rev": "edb7d16543b7",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-api-remotes"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-settings-plugin-inventory",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-settings-plugin-inventory/client.js?rev=110092f7caad",
+      "rev": "110092f7caad",
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-locale"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-conversation",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-conversation/client.js?rev=052ed3238a98",
+      "rev": "052ed3238a98",
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-ui-layout"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-tool",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-tool/client.js?rev=06eb630f1b65",
+      "rev": "06eb630f1b65",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-cordis",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-cordis/client.js?rev=787f0de4a575",
+      "rev": "787f0de4a575",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-cordis-client-runner",
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-input-trigger",
+        "@deepseek-ai/dsh-client-ui-tool",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-workflow-run",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-workflow-run/client.js?rev=3f274d8d0ce1",
+      "rev": "3f274d8d0ce1",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-deliverables",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-deliverables/client.js?rev=9a99d45f5d5e",
+      "rev": "9a99d45f5d5e",
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-workspace",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-workspace/client.js?rev=1feee8d0099e",
+      "rev": "1feee8d0099e",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-input-trigger",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-input-trigger/client.js?rev=0bd00b04060f",
+      "rev": "0bd00b04060f",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-commands",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-commands/client.js?rev=109bd87d209e",
+      "rev": "109bd87d209e",
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-input-trigger",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-skill",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-skill/client.js?rev=0418706fedfa",
+      "rev": "0418706fedfa",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-tool",
+        "@deepseek-ai/dsh-client-ui-input-trigger",
+        "@deepseek-ai/dsh-api-remotes"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-subagent",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-subagent/client.js?rev=b42b38d0424c",
+      "rev": "b42b38d0424c",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-primitives",
+        "@deepseek-ai/dsh-client-ui-input-trigger"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-jobs",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-jobs/client.js?rev=a31e2a9cfc0c",
+      "rev": "a31e2a9cfc0c",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-primitives"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-goal",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-goal/client.js?rev=13c440df3e0f",
+      "rev": "13c440df3e0f",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-message-feedback",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-message-feedback/client.js?rev=205fdc15cd97",
+      "rev": "205fdc15cd97",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-model-selection",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-model-selection/client.js?rev=f9ba63d5aa1e",
+      "rev": "f9ba63d5aa1e",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-commands",
+        "@deepseek-ai/dsh-api-remotes"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-permission-presets",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-permission-presets/client.js?rev=d9d4d9d2a415",
+      "rev": "d9d4d9d2a415",
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-commands",
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-agent-preset",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-agent-preset/client.js?rev=59990c772575",
+      "rev": "59990c772575",
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-api-remotes"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-settings-plugins",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-settings-plugins/client.js?rev=a6e59e23819a",
+      "rev": "a6e59e23819a",
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-api-remotes"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-plan",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-plan/client.js?rev=a8cab1449aba",
+      "rev": "a8cab1449aba",
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-user-questions",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-user-questions/client.js?rev=8b5b79d18d35",
+      "rev": "8b5b79d18d35",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ],
+      "immediately": false
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-trajectory",
+      "url": "/plugins/@deepseek-ai/dsh-client-ui-trajectory/client.js?rev=50aaebcf123b",
+      "rev": "50aaebcf123b",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ],
+      "immediately": false
+    }
+  ]
+}

@@ -2545,12 +2545,12 @@ var qrcode = function() {
         h(
           "div",
           { className: "dsm-dialog", onClick: function (e) { e.stopPropagation(); } },
-          h("div", { className: "dsm-dialog-title" }, "手机连接 DSH-Mobile"),
+          h("div", { className: "dsm-dialog-title" }, "远程控制 DSH-Mobile"),
           gw.lanEnabled
             ? h(
                 "div",
                 { className: "dsm-qr-wrap" },
-                gw.reachable
+                gw.reachable || (gw.publicMode && gw.publicUrl)
                   ? h("canvas", { ref: canvasRef, className: "dsm-qr" })
                   : h(
                       "div",
@@ -2576,7 +2576,7 @@ var qrcode = function() {
                   "前往设置开启网关"
                 )
               ),
-          gw.lanEnabled && gw.url
+          (gw.lanEnabled || (gw.publicMode && gw.publicUrl)) && gw.url
             ? h(
                 "div",
                 { className: "dsm-url-row" },
@@ -2668,7 +2668,7 @@ var qrcode = function() {
           type: "button",
           className: "dsm-footer-icon",
           "data-rail": wide ? "0" : "1",
-          title: "手机连接",
+          title: "远程控制",
           "aria-haspopup": "dialog",
           onClick: function () {
             // 未配置（网关关闭）→ 跳设置页；已配置 → 弹二维码
@@ -2700,7 +2700,7 @@ var qrcode = function() {
           h("rect", { x: "5", y: "2", width: "14", height: "20", rx: "2", ry: "2" }),
           h("path", { d: "M12 18h.01" })
         ),
-        wide ? h("span", { className: "dsm-footer-label" }, "手机连接") : null
+        wide ? h("span", { className: "dsm-footer-label" }, "远程控制") : null
       );
     }
 
@@ -2724,6 +2724,18 @@ var qrcode = function() {
       var showTokenState = useState(false);
       var showToken = showTokenState[0];
       var setShowToken = showTokenState[1];
+      var pubModeState = useState(gw.publicMode === true);
+      var pubMode = pubModeState[0];
+      var setPubMode = pubModeState[1];
+      var pubUrlState = useState(gw.publicUrl || "");
+      var pubUrl = pubUrlState[0];
+      var setPubUrl = pubUrlState[1];
+      useEffect(function () {
+        setPubMode(gw.publicMode === true);
+      }, [gw.publicMode]);
+      useEffect(function () {
+        if (gw.publicUrl != null) setPubUrl(gw.publicUrl);
+      }, [gw.publicUrl]);
       useEffect(function () {
         refreshGateway();
       }, []);
@@ -2908,6 +2920,70 @@ var qrcode = function() {
         h(
           "div",
           { className: "dsm-set-row" },
+          h("div", { className: "dsm-set-label" }, "允许外网访问"),
+          h(
+            "label",
+            { className: "dsm-switch" },
+            h("input", {
+              type: "checkbox",
+              checked: pubMode,
+              disabled: s.busy,
+              onChange: function (e) {
+                setPubMode(e.target.checked);
+                postConfig({ publicMode: e.target.checked });
+              },
+            }),
+            h("span", { className: "dsm-switch-slider" })
+          ),
+          h(
+            "div",
+            { className: "dsm-set-hint" },
+            "关闭 = 仅内部局域网：只有回环 / 本机 / 局域网 IP 可访问，来自公网域名或公网 IP 的请求（含 cloudflared 等隧道转出的连接）一律拒绝（即使带连接密钥）。开启 = 允许外网：用独立隧道把网关 0.0.0.0:" +
+              (gw.gatewayPort != null ? gw.gatewayPort : "?") +
+              " 暴露到公网，所有请求（含隧道回环）都必须携带连接密钥，二维码自动切换为公网地址；局域网体验不受影响。"
+          ),
+          pubMode
+            ? h(
+                "div",
+                { className: "dsm-set-row" },
+                h("div", { className: "dsm-set-label" }, "公网地址 (publicUrl)"),
+                h(
+                  "div",
+                  { className: "dsm-token-row" },
+                  h("input", {
+                    className: "dsm-set-input",
+                    type: "text",
+                    placeholder: "https://xxx-xxx.trycloudflare.com",
+                    value: pubUrl,
+                    onChange: function (e) {
+                      setPubUrl(e.target.value);
+                    },
+                  }),
+                  h(
+                    "button",
+                    {
+                      type: "button",
+                      className: "dsm-btn",
+                      disabled: s.busy,
+                      onClick: function () {
+                        postConfig({ publicUrl: pubUrl.trim() });
+                      },
+                    },
+                    "应用"
+                  )
+                ),
+                h(
+                  "div",
+                  { className: "dsm-set-hint" },
+                  (gw.external && gw.external.up ? "✓ 外网入口已配置，二维码/连接 URL 为公网地址。" : gw.publicUrl ? "已填写，等待网关按此地址生成二维码。" : "填写隧道公网地址（以 http(s):// 开头，不要带 ?token 或尾部斜杠）。保存后二维码/连接 URL 自动切换；外网设备首次打开需在地址后附 ?token= 或在应用中扫码。") +
+                    (gw.maxUploadMb != null && pubMode ? " 外网模式上传上限已钳制为 " + gw.maxUploadMb + " MB。" : "")
+                )
+              )
+            : null
+        ),
+        h(
+          "div",
+          { className: "dsm-set-row" },
           h("div", { className: "dsm-set-label" }, "状态"),
           h(
             "button",
@@ -3081,7 +3157,7 @@ var qrcode = function() {
       ctx.effect(function () {
         try {
           const ret = ctx.slots.inject("sidebar.footer.action", function () {
-            const dispose = ctx.slots.register({ name: "sidebar.footer.action", id: "dsh-mini", order: 210, label: "手机连接" }, FooterIcon);
+            const dispose = ctx.slots.register({ name: "sidebar.footer.action", id: "dsh-mini", order: 210, label: "远程控制" }, FooterIcon);
             beacon("slot-footer", "registered");
             return dispose;
           }, "dsh-mini");

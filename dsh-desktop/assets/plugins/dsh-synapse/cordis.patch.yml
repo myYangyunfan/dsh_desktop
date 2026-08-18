@@ -1,0 +1,13 @@
+# dsh-synapse only extends the Web profile: it reuses the existing DSH server
+# rather than running a second application process.
+- insert:
+    - id: synapse
+      name: dsh-synapse
+      config:
+        # A profile can override this path in its own cordis.patch.yml.
+        dataFile: !!js dshHomePath('synapse/workspaces.json')
+        autoProjection: true
+        projectionWorkspaceTitle: DSH 任务
+        # Extra authorities the /synapse Host check accepts (host or host:port);
+        # localhost and 127.0.0.1 are always allowed.
+        trustedHosts: []

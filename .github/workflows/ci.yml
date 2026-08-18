@@ -28,3 +28,7 @@ jobs:
         run: node scripts/check-syntax.js
       - name: 全量单测（unit-* / desktop-*，node --test 自动发现）
         run: npm test
+      - name: 余额链路验证（逻辑级 + 真实 Electron 渲染层，#106）
+        run: |
+          node scripts/test/verify-balance-dock.cjs
+          node scripts/test/verify-balance-renderer.cjs

@@ -1,6 +1,6 @@
 {
   "name": "@dsh-external/dsh-side-session",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "DSH 临时会话：独立悬浮窗，自动导入当前主对话上下文，发起不污染主会话的临时追问",
   "type": "module",

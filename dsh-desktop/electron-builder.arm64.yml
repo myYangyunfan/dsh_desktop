@@ -36,6 +36,7 @@ files:
   - updater.js
   - client-updater.js
   - balance.js
+  - balance-scheduler.js
   - session-watcher.js
   - preload.js
   - renderer-recovery.js

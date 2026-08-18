@@ -143,3 +143,49 @@ test('rollback: 命令执行失败时返回 false，不虚假成功（issue #87�
   wsl._internals.runWsl = async () => ({ ok: false, code: 1, stdout: '', stderr: 'wsl.exe 网络错误' });
   assert.equal(await wsl.rollback(), false, 'runWsl 失败（res.ok=false）时必须返回 false');
 });
+
+test('installAgent: 失败后清理 staging 且清理命令必须短超时', async () => {
+  stubPrimitives();
+  await wsl.configureAsync({ distro: 'Ubuntu' });
+  const calls = [];
+  wsl._internals.runWsl = async (cmd, opts = {}) => {
+    calls.push({ cmd, opts });
+    if (cmd.includes('npm install')) return { ok: false, code: 1, stdout: '', stderr: 'E404 not found' };
+    return { ok: true, code: 0, stdout: '', stderr: '' };
+  };
+  await assert.rejects(() => wsl.applyUpdate('9.9.9'), /E404/);
+  const cleanup = calls.find((c) => c.cmd.trim().startsWith('rm -rf') && c.cmd.includes('agent-staging'));
+  assert.ok(cleanup, '失败后应发出 staging 清理命令');
+  assert.ok(cleanup.opts.timeoutMs <= 60000,
+    '清理命令必须短超时（实际 ' + cleanup.opts.timeoutMs + 'ms）——默认 20 分钟超时会把「安装失败」拖到不可忍受');
+});
+
+test('命令契约：所有传给 wsl.exe 的命令不得再自行嵌套 sh -lc（双重登录 shell）', async () => {
+  stubPrimitives();
+  await wsl.configureAsync({ distro: 'Ubuntu' });
+  const cmds = [];
+  const origRunWsl = wsl._internals.runWsl;
+  wsl._internals.runWsl = async (cmd, opts) => { cmds.push(cmd); return origRunWsl(cmd, opts); };
+  const spawns = [];
+  const origSpawn = wsl._internals.spawn;
+  // 假进程：只拦截 argv 记录，绝不真的拉起 wsl.exe（spawnServer 直接返回该对象）。
+  wsl._internals.spawn = (bin, argv, opts) => {
+    if (argv && argv[0] === '-d') spawns.push(argv[argv.length - 1]);
+    return { killed: false, kill() {}, stdout: { on() {} }, stderr: { on() {} } };
+  };
+  try {
+    await wsl.ensureInstalled();
+    await wsl.rollback();
+    await wsl.hasPrevious();
+    await wsl.stop();
+    wsl.spawnServer();
+    await wsl.statusAsync();
+  } finally {
+    wsl._internals.runWsl = origRunWsl;
+    wsl._internals.spawn = origSpawn;
+  }
+  for (const cmd of [...cmds, ...spawns]) {
+    assert.ok(!/sh\s+-lc\s/.test(cmd),
+      '命令不得再嵌套 sh -lc（runWsl/runWslSync/spawnServer 已包装外层登录 shell）: ' + cmd);
+  }
+});

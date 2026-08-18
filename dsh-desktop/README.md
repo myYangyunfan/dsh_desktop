@@ -54,12 +54,13 @@
 
 ## DeepSeek 余额小部件
 
-- 桌面端读取 `~/.dsh/.credentials.yaml` 的 `DEEPSEEK_API_KEY`（或环境变量），调用 `https://api.deepseek.com/user/balance`，每 15 分钟刷新，通过 preload 推送到 Web UI。
-- 配套 dsh 客户端插件（`assets/plugins/dsh-balance`）在每次启动时自动同步进 web profile 并注册到 `conversation.composer.dock`，在对话底部统计栏内联显示：**本轮 ¥X.XX · 余额 ¥Y.YY**（本轮费用按 token 用量 × 价格档估算，缓存命中/未命中/输出分别计价）。
+- 桌面端读取 `~/.dsh/.credentials.yaml` 的 `DEEPSEEK_API_KEY`（或环境变量），调用 `https://api.deepseek.com/user/balance`，每 3 分钟轮询，并在「启动 / 窗口显示 / 会话回合完成 / 页面加载 / 菜单开关」时触发刷新（30 秒节流；失败按 30s→1m→2m→5m 指数退避自动重试，成功即恢复），通过 preload 推送到 Web UI。
+- 配套 dsh 客户端插件（`assets/plugins/dsh-balance`）在每次启动时自动同步进 web profile 并注册到 `conversation.composer.dock`，在对话底部统计栏内联显示：**本轮 ¥X.XX · 余额 ¥Y.YY**（本轮费用按 token 用量 × 价格档估算，缓存命中/未命中/输出分别计价；会话投影携带真实模型时按真实模型计价，否则明确标注「按默认模型估算」）。
 - **OpenCode Go 订阅额度**：同一小部件内追加显示 `Go 5h x% 周 x% 月 x%`——调用 `https://opencode.ai/zen/go/v1/usage` 读取 **5 小时滚动 / 每周 / 每月** 三个窗口的已用百分比与重置时间；密钥取自 `OPENCODE_GO_API_KEY`（环境变量或 `~/.dsh/.credentials.yaml`，回退 OpenCode CLI 的 `auth.json`），未配置时自动省略该段。
-- 价格档默认：deepseek-chat 2/0.5/8、deepseek-reasoner 与 deepseek-v4-pro 4/1/16（¥/百万 token）；可在 `<数据目录>\settings.json` 的 `balancePrices.<model>` 覆盖。代理/镜像可用 `DEEPSEEK_API_BASE` 或 `DEEPSEEK_BALANCE_URL` 环境变量。
+- 价格档默认（2026-08-17 起峰谷定价，¥/百万 token）：deepseek-v4-flash 高峰 3/0.1/9、空闲 1.5/0.05/4.5；deepseek-v4-pro 高峰 9/0.3/27、空闲 4.5/0.15/13.5；deepseek-chat / deepseek-reasoner 为旧模型名别名。可在 `<数据目录>\settings.json` 的 `balancePrices.<model>` 覆盖。
+- 代理/镜像环境变量：`DEEPSEEK_BALANCE_URL`（余额端点完整 URL）或 `DEEPSEEK_API_BASE`（自动拼接 `/user/balance`）；`OPENCODE_USAGE_URL`（OpenCode Go 端点完整 URL）。使用 `http://` 端点时 API Key 明文传输，桌面端会记录告警，仅建议用于本地代理。
 - 不需要余额提示时：chrome 栏 ⋯ 菜单 →「显示余额/本轮费用」取消勾选，整个 dock 会隐藏（第三方中转/非官方直连用户推荐关闭）。
-- 纯浏览器打开 Web UI 时无桌面壳推送，小部件只显示「本轮」费用。
+- 纯浏览器打开 Web UI 时无桌面壳推送，小部件只显示「本轮」费用（内置默认价格档）。
 
 ## 自定义注入提示词
 

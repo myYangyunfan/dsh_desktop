@@ -82,7 +82,10 @@ internals.runWslSync = function runWslSync(cmd, timeoutMs = 60000) {
   return { ok: res.status === 0, code: res.status, stdout: res.stdout || '', stderr: res.stderr || '' };
 };
 
-/** 异步执行一条 WSL 命令，收集输出；onLine 可选地收到每行 stdout（进度日志）。 */
+/** 异步执行一条 WSL 命令，收集输出；onLine 可选地收到每行 stdout（进度日志）。
+ * cmd 已由本函数包装进外层 `sh -lc`（登录 shell），调用方传裸命令串即可
+ * ——不要再自行嵌套 `sh -lc '...'`（历史遗留的双重嵌套已清理：多一层登录
+ * shell 会重复加载 profile、拉长 WSL 冷启动，且嵌套引号是未来的注入面）。 */
 internals.runWsl = function runWsl(cmd, { timeoutMs = 20 * 60 * 1000, onLine } = {}) {
   return new Promise((resolve) => {
     const child = internals.spawn(WSL_EXE, ['-d', state.distro, '-e', 'sh', '-lc', cmd], {
@@ -294,11 +297,14 @@ async function installAgent(version, onLine) {
   if (!VERSION_RE.test(v)) throw new Error(`非法的版本号: ${JSON.stringify(v)}`);
   const dir = state.installDir;
   const bin = `${dir}/agent-staging/node_modules/@deepseek-ai/dsh/lib/bin.js`;
-  const cmd = `sh -lc 'set -eu; rm -rf ${dir}/agent-staging; mkdir -p ${dir}/agent-staging; cd ${dir}/agent-staging; export NPM_CONFIG_UPDATE_NOTIFIER=false NPM_CONFIG_FUND=false NPM_CONFIG_AUDIT=false; npm install --save-exact --omit=dev --no-audit --no-fund --no-update-notifier ${PKG}@${v}; test -f ${bin}; cd ${dir}; if [ -d agent ]; then rm -rf agent-prev; mv agent agent-prev; fi; mv agent-staging agent; echo WSL_INSTALL_OK'`;
+  const cmd = `set -eu; rm -rf ${dir}/agent-staging; mkdir -p ${dir}/agent-staging; cd ${dir}/agent-staging; export NPM_CONFIG_UPDATE_NOTIFIER=false NPM_CONFIG_FUND=false NPM_CONFIG_AUDIT=false; npm install --save-exact --omit=dev --no-audit --no-fund --no-update-notifier ${PKG}@${v}; test -f ${bin}; cd ${dir}; if [ -d agent ]; then rm -rf agent-prev; mv agent agent-prev; fi; mv agent-staging agent; echo WSL_INSTALL_OK`;
   const res = await internals.runWsl(cmd, { timeoutMs: 30 * 60 * 1000, onLine });
   if (!res.ok || !res.stdout.includes('WSL_INSTALL_OK')) {
     const tail = (res.stderr || res.stdout || '').split(/\r?\n/).slice(-15).join('\n');
-    await internals.runWsl(`sh -lc 'rm -rf ${dir}/agent-staging'`).catch(() => {});
+    // 清理命令必须短超时：WSL 卡死场景下默认 20 分钟超时会把「安装失败」
+    // 的错误抛出拖延到用户不可忍受。runWsl 永远 resolve（从不 reject），
+    // 无需 .catch。
+    await internals.runWsl(`rm -rf ${dir}/agent-staging`, { timeoutMs: 15000 });
     throw new Error(`WSL 内 npm 安装 ${PKG}@${v} 失败（exit=${res.code}${res.timedOut ? '，超时' : ''}）:\n${tail}`);
   }
   state.versionCache = null;
@@ -307,9 +313,9 @@ async function installAgent(version, onLine) {
 
 /** 确保 agent 已安装（缺失时按内置版本安装；首次约数分钟）。 */
 async function ensureInstalled() {
-  const mk = await internals.runWsl(`sh -lc 'mkdir -p ${state.installDir}'`);
+  const mk = await internals.runWsl(`mkdir -p ${state.installDir}`);
   if (!mk.ok) fail(`无法在 WSL 内创建安装目录 ${state.installDir}: ${mk.stderr || mk.stdout}`);
-  const check = await internals.runWsl(`sh -lc 'test -f ${agentBin()} && echo EXISTS'`);
+  const check = await internals.runWsl(`test -f ${agentBin()} && echo EXISTS`);
   if (check.ok && check.stdout.includes('EXISTS')) return false;
   const version = bundledVersion();
   log(`agent 缺失，开始在 WSL 内安装 ${PKG}@${version}（首次约数分钟）…`);
@@ -327,7 +333,7 @@ async function applyUpdate(version, onLine) {
 /** 回退到上一版本（agent-prev → agent）。 */
 async function rollback() {
   const dir = state.installDir;
-  const res = await internals.runWsl(`sh -lc 'cd ${dir} && rm -rf agent-failed && mv agent agent-failed 2>/dev/null || true; if [ -d agent-prev ]; then mv agent-prev agent; echo WSL_ROLLBACK_OK; else echo WSL_NO_PREV; fi'`);
+  const res = await internals.runWsl(`cd ${dir} && rm -rf agent-failed && mv agent agent-failed 2>/dev/null || true; if [ -d agent-prev ]; then mv agent-prev agent; echo WSL_ROLLBACK_OK; else echo WSL_NO_PREV; fi`);
   state.versionCache = null;
   // 命令执行失败（res.ok=false）时 stdout 为空，绝不能被当成「已回退」的
   // 虚假成功（issue #87）。
@@ -341,7 +347,7 @@ async function rollback() {
 }
 
 async function hasPrevious() {
-  const res = await internals.runWsl(`sh -lc 'test -d ${state.installDir}/agent-prev && echo YES'`);
+  const res = await internals.runWsl(`test -d ${state.installDir}/agent-prev && echo YES`);
   return res.ok && res.stdout.includes('YES');
 }
 
@@ -349,7 +355,7 @@ async function hasPrevious() {
 function activeVersion() {
   if (state.versionCache !== null) return state.versionCache;
   try {
-    const res = internals.runWslSync(`sh -lc 'cat ${state.installDir}/agent/node_modules/@deepseek-ai/dsh/package.json'`, 60000);
+    const res = internals.runWslSync(`cat ${state.installDir}/agent/node_modules/@deepseek-ai/dsh/package.json`, 60000);
     if (res.ok) {
       state.versionCache = JSON.parse(res.stdout).version || null;
       return state.versionCache;
@@ -386,7 +392,7 @@ function spawnServer() {
   const dir = state.installDir;
   // env -u 清掉宿主 harness 残留（DSH_WEB_URL / 会话变量），避免 WSL 内 dsh 误判；
   // DSH_HOME 指向安装目录（profiles/sessions 数据与 agent 同目录）。
-  const cmd = `sh -lc 'cd ${dir} && rm -f dsh.pid && echo $$ > dsh.pid && exec env -u DSH_WEB_URL -u DSH_SESSION_ID -u DSH_SESSION_JSONL -u DSH_SHELL -u NODE_OPTIONS DSH_HOME=${dir} node ${agentBin()} web --host 127.0.0.1 --port 0'`;
+  const cmd = `cd ${dir} && rm -f dsh.pid && echo $$ > dsh.pid && exec env -u DSH_WEB_URL -u DSH_SESSION_ID -u DSH_SESSION_JSONL -u DSH_SHELL -u NODE_OPTIONS DSH_HOME=${dir} node ${agentBin()} web --host 127.0.0.1 --port 0`;
   log(`启动 WSL dsh web: ${cmd}`);
   const proc = internals.spawn(WSL_EXE, ['-d', state.distro, '-e', 'sh', '-lc', cmd], {
     windowsHide: true,
@@ -398,7 +404,7 @@ function spawnServer() {
 /** 按 pid 文件优雅终止 WSL 内的 dsh web（绝不 wsl --terminate，那会杀整个发行版）。 */
 async function stop() {
   const dir = state.installDir;
-  const res = await internals.runWsl(`sh -lc 'p=${dir}/dsh.pid; if [ -f $p ]; then kill $(cat $p) 2>/dev/null || true; fi; rm -f ${dir}/dsh.pid'`, { timeoutMs: 30000 });
+  const res = await internals.runWsl(`p=${dir}/dsh.pid; if [ -f "$p" ]; then kill $(cat "$p") 2>/dev/null || true; fi; rm -f ${dir}/dsh.pid`, { timeoutMs: 30000 });
   log('已请求终止 WSL 内 dsh web' + (res.ok ? '' : '（可能已退出）'));
 }
 
