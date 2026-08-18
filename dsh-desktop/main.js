@@ -1810,10 +1810,68 @@ async function handleBootFailure(err, overlays = []) {
 // Window
 // ---------------------------------------------------------------------------
 
+// 主窗口位置记忆：用户拖到哪里，下次启动就在哪里。此前主窗不指定 x/y，
+// 每次启动位置由 Windows 层叠策略决定（左上角附近），表现为「拖到中间，
+// 重启又跑回左边」。状态存 <userData>/window-state.json（原子写），恢复前
+// 校验落在某块显示器工作区内，按掉的外接屏不会把窗口留在屏幕外。
+function windowStateFile() {
+  return path.join(userDataDir, 'window-state.json');
+}
+
+function loadWindowState() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(windowStateFile(), 'utf8'));
+    const b = raw && raw.bounds;
+    if (!b || ![b.x, b.y, b.width, b.height].every((v) => Number.isFinite(v))) return null;
+    return {
+      bounds: { x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.width), height: Math.round(b.height) },
+      maximized: raw.maximized === true,
+    };
+  } catch { /* 首次启动/文件损坏 → 居中 */ }
+  return null;
+}
+
+// 窗口至少有 100x100 区域落在某块显示器工作区内，才认为位置可恢复。
+function boundsVisibleOnSomeDisplay(bounds) {
+  try {
+    for (const d of screen.getAllDisplays()) {
+      const a = d.workArea;
+      const ox = Math.max(0, Math.min(bounds.x + bounds.width, a.x + a.width) - Math.max(bounds.x, a.x));
+      const oy = Math.max(0, Math.min(bounds.y + bounds.height, a.y + a.height) - Math.max(bounds.y, a.y));
+      if (ox >= 100 && oy >= 100) return true;
+    }
+  } catch { /* screen 不可用时保守放行 */ return true; }
+  return false;
+}
+
+let mainWindowStateTimer = null;
+function saveWindowStateNow(win) {
+  try {
+    if (!win || win.isDestroyed()) return;
+    // getNormalBounds：最大化时也返回还原尺寸，无需区分事件来源。
+    const state = { bounds: win.getNormalBounds(), maximized: win.isMaximized() };
+    writeFileAtomic(windowStateFile(), JSON.stringify(state));
+  } catch (err) {
+    log('window', '位置保存失败: ' + ((err && err.message) || err));
+  }
+}
+
+// move/resize 高频触发，防抖落盘（与宠物窗 petPosTimer 同策略）。
+function scheduleSaveWindowState(win) {
+  if (mainWindowStateTimer !== null) clearTimeout(mainWindowStateTimer);
+  mainWindowStateTimer = setTimeout(() => {
+    mainWindowStateTimer = null;
+    saveWindowStateNow(win);
+  }, 400);
+}
+
 function createWindow(opts = {}) {
+  const savedState = loadWindowState();
+  const visible = savedState && boundsVisibleOnSomeDisplay(savedState.bounds);
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
+    width: (visible && savedState.bounds.width) || 1400,
+    height: (visible && savedState.bounds.height) || 900,
+    ...(visible ? { x: savedState.bounds.x, y: savedState.bounds.y } : { center: true }),
     minWidth: 960,
     minHeight: 640,
     show: false,
@@ -1834,7 +1892,21 @@ function createWindow(opts = {}) {
 
   win.loadFile(path.join(__dirname, 'assets', 'loading.html'));
   // startHidden：崩溃恢复重建窗口时保持「隐藏到托盘」状态，不突然弹出窗口。
-  win.once('ready-to-show', () => { if (!win.isDestroyed() && !opts.startHidden) win.show(); });
+  // 上次是最大化则恢复最大化（在 show 前调，避免可见的尺寸跳变）。
+  win.once('ready-to-show', () => {
+    if (win.isDestroyed()) return;
+    if (savedState && savedState.maximized) win.maximize();
+    if (!opts.startHidden) win.show();
+  });
+  // 位置/尺寸变化防抖保存；最大化状态切换与关闭时立即保存。
+  win.on('resize', () => scheduleSaveWindowState(win));
+  win.on('move', () => scheduleSaveWindowState(win));
+  win.on('maximize', () => saveWindowStateNow(win));
+  win.on('unmaximize', () => saveWindowStateNow(win));
+  win.on('close', () => {
+    if (mainWindowStateTimer !== null) { clearTimeout(mainWindowStateTimer); mainWindowStateTimer = null; }
+    saveWindowStateNow(win);
+  });
   // Keep the app brand in the OS title bar (the web UI sets its own <title>).
   win.on('page-title-updated', (event) => {
     event.preventDefault();
