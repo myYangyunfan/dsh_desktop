@@ -354,6 +354,8 @@ class ConnectProxyAgent extends https.Agent {
         decodeURIComponent(proxy.username) + ':' + decodeURIComponent(proxy.password || '')
       ).toString('base64');
     }
+    // https:// 代理需要先对代理自身建立 TLS（两层隧道），否则明文 CONNECT
+    // 发给 TLS 端口会被代理拒绝；http:// 代理则明文直连。
     const proxyClient = proxy.protocol === 'https:' ? https : http;
     const proxyReq = proxyClient.request({
       host: proxy.hostname,

@@ -12,6 +12,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const http = require('node:http');
+const https = require('node:https');
 const balance = require('../../balance');
 
 const ENV_KEYS = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'NO_PROXY', 'no_proxy',
@@ -112,6 +113,28 @@ test('proxyFor: 非法代理 URL / 非 http(s) 协议 → null 直连', () => {
   withEnv({ HTTPS_PROXY: 'ftp://proxy:21' }, () => {
     assert.equal(balance.proxyFor('https://api.deepseek.com/x'), null, '非 http(s) 代理忽略');
   });
+});
+
+test('ConnectProxyAgent: https 代理走 https.request / http 代理走 http.request（CONNECT 隧道）', (t) => {
+  const httpsCalls = [];
+  const httpCalls = [];
+  const fakeReq = { on: () => fakeReq, end: () => {} };
+  t.mock.method(https, 'request', (opts) => { httpsCalls.push(opts); return fakeReq; });
+  t.mock.method(http, 'request', (opts) => { httpCalls.push(opts); return fakeReq; });
+  // https:// 代理：必须先对代理自身 TLS（两层隧道），不能明文 http.request 连 443。
+  const httpsAgent = new balance.ConnectProxyAgent(new URL('https://proxy.local:8443'));
+  httpsAgent.createConnection({ host: 'api.example.com', port: 443 }, () => {});
+  assert.equal(httpsCalls.length, 1, 'https 代理应走 https.request');
+  assert.equal(httpCalls.length, 0, 'https 代理不应走明文 http.request');
+  assert.equal(httpsCalls[0].method, 'CONNECT');
+  assert.equal(httpsCalls[0].port, '8443', 'URL.port 为字符串');
+  // http:// 代理：明文直连 CONNECT。
+  const httpAgent = new balance.ConnectProxyAgent(new URL('http://proxy.local:8080'));
+  httpAgent.createConnection({ host: 'api.example.com', port: 443 }, () => {});
+  assert.equal(httpCalls.length, 1, 'http 代理应走 http.request');
+  assert.equal(httpsCalls.length, 1, 'http 代理不应再触发 https.request');
+  assert.equal(httpCalls[0].method, 'CONNECT');
+  assert.equal(httpCalls[0].port, '8080', 'URL.port 为字符串');
 });
 
 test('端到端: HTTP_PROXY 下 absolute-form GET 经代理命中（env URL 覆盖保留）', (t) => {

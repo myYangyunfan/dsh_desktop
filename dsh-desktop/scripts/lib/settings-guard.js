@@ -70,8 +70,11 @@ function guardSettingsChange(file, opts) {
   const check = validateSettingsYaml(text, opts);
   if (check.ok) {
     try {
+      // 备份也走 tmp+rename 原子写，避免半写损坏后回写坏内容（与回写同语义）。
       fs.mkdirSync(require('node:path').dirname(opts.backupFile), { recursive: true });
-      fs.writeFileSync(opts.backupFile, text, 'utf8');
+      const tmpFile = opts.backupFile + '.tmp-' + process.pid;
+      fs.writeFileSync(tmpFile, text, 'utf8');
+      fs.renameSync(tmpFile, opts.backupFile);
     } catch {}
     return { ok: true, changed: false };
   }

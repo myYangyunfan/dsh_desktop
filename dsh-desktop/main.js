@@ -6692,7 +6692,10 @@ async function boot() {
     if (!koffiPreflightSync()) {
       koffiPreflightPending = koffiPreflightAsync();
       koffiPreflightPending.then((ok) => {
-        if (ok === true && !koffiPreflightConsumed) {
+        // 仅当 startAndShow 已消费结果（本次已按降级启动）时，晚到通过才值得
+        // 提示「下次启动生效」；早到（未消费）时 startAndShow 会正常启用 overlay，
+        // 无需（也不应）打「保持降级」的误导日志。
+        if (ok === true && koffiPreflightConsumed) {
           log('preflight', 'koffi 预检晚到通过，本次保持降级目录选择器，下次启动生效');
         }
       }).catch(() => {});
