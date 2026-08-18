@@ -136,17 +136,19 @@
 				//    开阔区域靠浅灰画布衬托轮廓，按钮与提示贴大区域下缘两端分布 ——
 				// 外壳（hero 空态与 normal 会话态共用）：无框无影，豁达打开
 				// !important：压宿主自带边框，彻底解除“框中框”束缚
-				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea){position:relative;background:var(--qdu-bg-card);border:none!important;box-shadow:none!important;border-radius:18px;transition:box-shadow .18s var(--qdu-ease)}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea){position:relative;background:var(--qdu-bg-card);border:none!important;box-shadow:none!important;border-radius:18px;padding:0 10px 6px!important;transition:box-shadow .18s var(--qdu-ease)}',
 				// 聚焦反馈：一圈极细主色环（代替边框/重阴影，保持打开感）
 				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea):focus-within{box-shadow:0 0 0 1.5px color-mix(in srgb,var(--qdu-accent) 30%,transparent),0 1px 2px rgba(16,24,40,.04)!important}',
-				// 空态 hero：更大圆角 + 更宽限幅 + 极微浮起 + 顶部主色渐变高光线
-				'body[data-dsh-quest-ui] [class*="_composerHero"] [class*="_root"]:has(textarea){border-radius:22px;box-shadow:0 1px 3px rgba(16,24,40,.04)!important;min-height:200px;display:flex;flex-direction:column;justify-content:center}',
+				// 空态 hero：大区域、内容顶到左上（textarea 在上、工具行压底），
+				// 22px 更大圆角 + 极微浮起 + 顶部主色渐变高光线
+				'body[data-dsh-quest-ui] [class*="_composerHero"] [class*="_root"]:has(textarea){border-radius:22px;box-shadow:0 1px 3px rgba(16,24,40,.04)!important;min-height:200px;display:flex;flex-direction:column;justify-content:flex-start}',
 				'body[data-dsh-quest-ui] [class*="_composerHero"] [class*="_root"]:has(textarea)::before{content:"";position:absolute;left:28px;right:28px;top:0;height:2px;border-radius:0 0 999px 999px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--qdu-accent) 55%,transparent) 35%,color-mix(in srgb,var(--qdu-accent) 55%,transparent) 65%,transparent);pointer-events:none}',
 				'body[data-dsh-quest-ui] [class*="_composerHero"]{max-width:820px;margin:0 auto;width:100%}',
 				// 输入区内层完全透明化（宿主 card/backdrop 自带底色是“生搬感”根源）；
-				// hero 时 card/scroll 纵向撑满，使工具行贴大区域底缘
-				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_card"]{border-radius:inherit;background:transparent!important;flex:1;display:flex;flex-direction:column}',
-				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_card"] > [class*="_scroll"]{flex:1}',
+				// card/scroll 纵向撑满使工具行贴底；打破宿主 780px 居中限宽 ——
+				// 输入卡占满整个下栏，从左上角开始（v0.4.1：豁达全开）
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_card"]{border-radius:inherit;background:transparent!important;flex:1;display:flex;flex-direction:column;width:100%!important;max-width:none!important;margin-left:0!important;margin-right:0!important}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_card"] > [class*="_scroll"]{flex:1;width:100%!important;max-width:none!important;margin:0!important}',
 				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_grow"] [class*="_backdrop"]{background:transparent!important;border:none!important;box-shadow:none!important}',
 				// textarea：大幅打开 —— normal 态 72px、hero 态 96px，大呼吸内边距
 				'body[data-dsh-quest-ui] [class*="_composerStack"] textarea{background:transparent;border-radius:14px;padding:16px 18px 8px;min-height:72px}',
@@ -166,10 +168,11 @@
 				'body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="访问模式"]:hover,body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="选择模型"]:hover{background:var(--qdu-hover)!important;border-color:var(--qdu-line);color:var(--qdu-label-1)!important}',
 				'body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="上下文"]{border-radius:999px!important;transition:background-color .15s ease}',
 				'body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="上下文"]:hover{background:var(--qdu-hover)!important}',
-				// 工具行：两端分布（左工具组 / 右发送组），贴大区域下缘；提示随行
-				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_row"]{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 14px 12px}',
-				// 会话统计条（root 兄弟，竖线分隔）：贴输入区下缘，降噪小字
-				'body[data-dsh-quest-ui] div:has(> span[class*="_sep"]){color:var(--qdu-label-3);font-size:11px;padding-top:8px}',
+				// 工具行：贴大区域最底缘，两端分布（左工具组贴左缘 / 右发送组贴右缘）
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_row"]{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 8px 8px}',
+				// 会话统计条：突破宿主 748px 居中限宽的外层 wrapper，左对齐贴缘，降噪小字
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea) > div:has([class*="_sep"]){width:100%!important;max-width:none!important;margin:0!important;padding:8px 14px 0;box-sizing:border-box}',
+				'body[data-dsh-quest-ui] div:has(> span[class*="_sep"]){color:var(--qdu-label-3);font-size:11px;width:100%;max-width:none!important;justify-content:flex-start!important;flex-wrap:wrap}',
 				'body[data-dsh-quest-ui] span[class*="_sep"]{color:var(--qdu-line)}',
 			
 				// —— Q4 消息流降噪：助手消息圆角、去硬边框；用户消息仅圆角化
@@ -306,34 +309,11 @@
 				if (first.parentNode) first.parentNode.insertBefore(head, first);
 			}
 
-			// 阶段五：元数据药丸条。Quest 风格下贴在输入卡片正上方（输入栈容器
-			// [class*="_composerStack"] 的前一兄弟位），随 hero/normal 形态移动；
-			// 找不到输入栈时退化到对话主列首位。
+			// 阶段五（v0.4.1 调整）：按用户反馈移除元数据药丸条 —— 中间不再插入
+			// 任何胶囊节点，输入域直接顶到下栏左上，其余部件压至最底缘。
+			// 核心接口（PILL_TEXTS/readWorkspaceMeta）与指纹字段保留供二期恢复。
 			function applyMetaPills() {
-				removeOwnedNodes(PILLBAR_CLASS);
-				var stack = document.querySelector('[class*="_composerStack"]');
-				var host = (stack && stack.parentElement) || null;
-				var anchor = stack || null;
-				if (!host) {
-					var conv = document.querySelector('[data-slot="conversation"]');
-					host = (conv && conv.parentElement) || document.querySelector('[data-slot="conversation.session"]');
-					anchor = null;
-				}
-				if (!host) return;
-				var texts = window.__dshQuestUiCore.PILL_TEXTS.slice();
-				var meta = null;
-				try { meta = window.__dshQuestUiCore.readWorkspaceMeta(); } catch (e) { /* P8 */ }
-				if (meta && meta.branch) texts.push(String(meta.branch)); // 二期：分支名药丸
-				var bar = document.createElement("div");
-				bar.className = PILLBAR_CLASS;
-				for (var i = 0; i < texts.length; i++) {
-					var pill = document.createElement("span");
-					pill.className = "qdu-pill";
-					pill.textContent = texts[i];
-					bar.appendChild(pill);
-				}
-				// 插在输入栈前一兄弟位（紧贴卡片上方）；退化路径插主列首位。
-				host.insertBefore(bar, anchor || host.firstChild);
+				return;
 			}
 
 			// 目标区域结构摘要（指纹输入）：会话行数 + 自有节点存在位 + 主区就绪位。
