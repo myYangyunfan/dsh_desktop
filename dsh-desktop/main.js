@@ -101,10 +101,26 @@ function recordStartupCrash(kind, err) {
     fs.appendFileSync(startupCrashLogFile(), `[${new Date().toISOString()}] [${kind}] ${(err && err.stack) || err}\n`, 'utf8');
   } catch {}
 }
+/**
+ * A-2 运行期异常兜底：写入 <userData>/logs/runtime-crash.log（堆栈+时间+内存水位）。
+ * 仅由下方统一异常处理器调用（不新增监听器）；boot 前 logsDir 未初始化时跳过
+ * （启动期取证仍由 startup-crash.log 负责，二者不双写）。环形：超 1MB 滚一代。
+ */
+function recordRuntimeCrash(kind, err) {
+  try {
+    if (!logsDir) return;
+    const file = path.join(logsDir, 'runtime-crash.log');
+    rotateLogFile(file, { maxBytes: 1024 * 1024 });
+    const mem = process.memoryUsage();
+    const meta = `[${new Date().toISOString()}] [${kind}] rss=${(mem.rss / 1048576).toFixed(1)}MB heap=${(mem.heapUsed / 1048576).toFixed(1)}MB`;
+    fs.appendFileSync(file, meta + '\n' + ((err && err.stack) || String(err)) + '\n---\n', 'utf8');
+  } catch {}
+}
 process.on('uncaughtException', (err) => {
   // 单处理器收敛（历史两处重复注册，boot 前会弹两个错误框）：
   // 启动崩溃取证 + 主进程日志 + 单个错误框。
   recordStartupCrash('uncaughtException', err);
+  recordRuntimeCrash('uncaughtException', err);
   const stack = (err && (err.stack || err.message)) || String(err);
   log('crash', 'uncaughtException: ' + stack);
   try {
@@ -117,6 +133,7 @@ process.on('uncaughtException', (err) => {
 });
 process.on('unhandledRejection', (reason) => {
   recordStartupCrash('unhandledRejection', reason instanceof Error ? reason : new Error(String(reason)));
+  recordRuntimeCrash('unhandledRejection', reason instanceof Error ? reason : new Error(String(reason)));
   log('crash', 'unhandledRejection: ' + String((reason && (reason.stack || reason.message)) || reason));
 });
 
