@@ -526,6 +526,41 @@ const M3_THEME_KEY = 'dsh-desktop-m3-theme';
 const M3_THEME_ATTR = 'data-m3-theme';
 let m3ThemeEnabled = false;
 let m3SettingsObserver = null;
+let m3NavListener = null;
+
+// P2-1: 设置页门控。observer 的唯一职责是给设置页外观行注入 M3 按钮，
+// 但 SPA 全生命周期挂在 body 上的 MutationObserver 会在会话页/首页产生
+// 高频无效回调。URL 形态（hash 或 path）命中设置页才观察；路由形态未知
+// 时以 DOM 特征（外观区块/已注入按钮）兜底；离开设置页立即 disconnect。
+function m3IsSettingsPage() {
+  if (typeof location !== 'undefined') {
+    const h = location.hash || '';
+    const p = location.pathname || '';
+    if (h.includes('settings') || p === '/settings' || p.startsWith('/settings/')) return true;
+  }
+  if (document.querySelector('.m3-theme-option')) return true; // 已注入过（本页刚导航回来）
+  return !!m3FindAppearanceSection();
+}
+
+function m3ArmNavListener() {
+  if (m3NavListener) return;
+  m3NavListener = () => {
+    if (!m3IsSettingsPage()) return;
+    window.removeEventListener('hashchange', m3NavListener);
+    window.removeEventListener('popstate', m3NavListener);
+    m3NavListener = null;
+    m3StartSettingsObserver();
+  };
+  window.addEventListener('hashchange', m3NavListener);
+  window.addEventListener('popstate', m3NavListener);
+}
+
+function m3DisarmNavListener() {
+  if (!m3NavListener) return;
+  window.removeEventListener('hashchange', m3NavListener);
+  window.removeEventListener('popstate', m3NavListener);
+  m3NavListener = null;
+}
 
 function m3LoadPreference() {
   try { return localStorage.getItem(M3_THEME_KEY) === 'm3'; }
@@ -897,6 +932,12 @@ function m3InjectSettingButton() {
 
 function m3StartSettingsObserver() {
   if (m3SettingsObserver) return;
+  // 不在设置页：不观察，挂导航监听等用户进入设置页后再启动。
+  if (!m3IsSettingsPage()) {
+    m3ArmNavListener();
+    return;
+  }
+  m3DisarmNavListener();
   // 设置页/会话流会产生高频 DOM 变更；若每次都同步做全文档
   // querySelector 会明显拖慢页面。这里合并为 300ms 内的最后一次变更。
   let pending = null;
@@ -904,6 +945,13 @@ function m3StartSettingsObserver() {
     if (pending) return;
     pending = setTimeout(() => {
       pending = null;
+      // 已离开设置页：断开观察，避免会话页高频回调；等下次进入再启动。
+      if (!m3IsSettingsPage()) {
+        m3SettingsObserver.disconnect();
+        m3SettingsObserver = null;
+        m3ArmNavListener();
+        return;
+      }
       m3InjectSettingButton();
     }, 300);
   });
