@@ -138,6 +138,35 @@ process.on('unhandledRejection', (reason) => {
 });
 
 // ---------------------------------------------------------------------------
+// A-3 LLM 错误落盘：dsh-web.log（后端 stderr）实时提取模型调用错误行，
+// 追加写 userData/llm-errors.jsonl（环形 1MB，复用 A-1 的 rotateLogFile）。
+// 行匹配规则单一来源 = desktop-diagnostics.isLlmErrorLine（诊断报告同规则）。
+// ---------------------------------------------------------------------------
+let lastLlmSig = '';
+let lastLlmAt = 0;
+function recordLlmError(line) {
+  try {
+    // 同签名 5s 节流：防同一错误行高频刷盘。
+    const sig = line.slice(0, 120);
+    if (sig === lastLlmSig && Date.now() - lastLlmAt < 5000) return;
+    lastLlmSig = sig;
+    lastLlmAt = Date.now();
+    const file = path.join(userDataDir, 'llm-errors.jsonl');
+    rotateLogFile(file, { maxBytes: 1024 * 1024 });
+    fs.appendFileSync(file, JSON.stringify({ at: new Date().toISOString(), line: line.slice(0, 500) }) + '\n', 'utf8');
+  } catch {}
+}
+function scanChunkForLlmErrors(chunk) {
+  try {
+    const text = chunk.toString('utf8');
+    for (const raw of text.split(/\r?\n/)) {
+      if (!raw) continue;
+      if (desktopDiagnostics.isLlmErrorLine(raw)) recordLlmError(raw);
+    }
+  } catch {}
+}
+
+// ---------------------------------------------------------------------------
 // H2/H3 路径围栏：文件还原/打开只允许「会话 cwd」之下的项目文件。
 // 任意绝对路径（如写入 Startup\*.bat）一律拒绝；缓存 5 分钟。
 // ---------------------------------------------------------------------------
@@ -1465,7 +1494,11 @@ function watchServerProc(proc, out, opts = {}) {
     let outEnded = false;
     const endOut = () => { if (!outEnded) { outEnded = true; try { out.end(); } catch {} } };
     proc.stdout.on('data', onData);
-    proc.stderr.on('data', (c) => { try { out.write(c); } catch {} });
+    proc.stderr.on('data', (c) => {
+      // A-3：实时提取 LLM 调用错误行（NO_ADAPTER/MISSING_CREDENTIAL/4xx-5xx 等）落盘。
+      scanChunkForLlmErrors(c);
+      try { out.write(c); } catch {}
+    });
     proc.on('error', (err) => { endOut(); finish(reject, err); });
     proc.on('exit', (code, signal) => {
       endOut();
@@ -3238,6 +3271,9 @@ function registerChromeIpc() {
           web: logsDir ? path.join(logsDir, 'dsh-web.log') : null,
         },
         selfHealHistoryFile: path.join(userDataDir, 'self-heal-history.json'),
+        llmErrorsFile: path.join(userDataDir, 'llm-errors.jsonl'),
+        settingsFile: path.join(home, 'settings.yaml'),
+        credentialsFile: path.join(home, '.credentials.yaml'),
         yaml: loadDshYamlDialect(),
         env: {
           appVersion: app.getVersion(),
@@ -3384,6 +3420,9 @@ function registerChromeIpc() {
           web: logsDir ? path.join(logsDir, 'dsh-web.log') : null,
         },
         selfHealHistoryFile: path.join(userDataDir, 'self-heal-history.json'),
+        llmErrorsFile: path.join(userDataDir, 'llm-errors.jsonl'),
+        settingsFile: path.join(home, 'settings.yaml'),
+        credentialsFile: path.join(home, '.credentials.yaml'),
         yaml: loadDshYamlDialect(),
         env: {
           appVersion: app.getVersion(),

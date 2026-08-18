@@ -256,6 +256,76 @@ function readSelfHealHistory(file, fs = require('node:fs')) {
   }
 }
 
+/** A-3：判断一行后端日志是否为 LLM 调用错误。
+ *  关键词直达（NO_ADAPTER/INVALID_REPLAY_STATE/MISSING_CREDENTIAL 等），
+ *  或「4xx/5xx 状态码 + LLM 上下文词」同时命中（避免裸 4xx/5xx 误报端口/行号）。 */
+const LLM_ERR_KEY_RE = /NO_ADAPTER|INVALID_REPLAY_STATE|MISSING_CREDENTIAL|INVALID_(?:API_)?KEY|AUTHENTICATION_FAILED|UNAUTHORIZED|RATE_LIMIT/i;
+const LLM_STATUS_RE = /\b[45]\d\d\b/;
+const LLM_CONTEXT_RE = /llm|model|api|credential|secret|token|key|auth/i;
+function isLlmErrorLine(line) {
+  if (!line) return false;
+  if (LLM_ERR_KEY_RE.test(line)) return true;
+  return LLM_STATUS_RE.test(line) && LLM_CONTEXT_RE.test(line);
+}
+
+/** 读 llm-errors.jsonl（环形 1MB，A-3 落盘），返回 {exists, count, recent:[{at,line}]}。 */
+function analyzeLlmErrors(file, fs = require('node:fs')) {
+  try {
+    if (!file || !fs.existsSync(file)) return { exists: false, count: 0, recent: [] };
+    const rows = [];
+    for (const raw of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
+      if (!raw.trim()) continue;
+      try {
+        const r = JSON.parse(raw);
+        if (r && typeof r.at === 'string') rows.push(r);
+      } catch {}
+    }
+    return {
+      exists: true,
+      count: rows.length,
+      recent: rows.slice(-5).map((r) => ({ at: r.at, line: typeof r.line === 'string' ? r.line.slice(0, 300) : '' })),
+    };
+  } catch {
+    return { exists: false, count: 0, recent: [] };
+  }
+}
+
+/** A-3 默认模型解析：settings.yaml 的 agent-default-model.{provider,model} +
+ *  llm-pi-ai.providers.<provider>.apiKeyEnv 关联 .credentials.yaml 的凭证键存在性。 */
+function resolveDefaultModel(settingsFile, credentialsFile, yaml, fs = require('node:fs')) {
+  try {
+    let settings = null;
+    try {
+      if (settingsFile && yaml) settings = yaml.load(fs.readFileSync(settingsFile, 'utf8'));
+    } catch {}
+    if (!settings || typeof settings !== 'object') {
+      return { ok: false, reason: 'settings.yaml 不可读' };
+    }
+    const adm = settings['agent-default-model'];
+    if (!adm || typeof adm !== 'object' || !adm.provider || !adm.model) {
+      return { ok: false, reason: 'settings.yaml 缺少 agent-default-model（provider/model）' };
+    }
+    let apiKeyEnv = null;
+    try {
+      const providers = settings['llm-pi-ai'] && settings['llm-pi-ai'].providers;
+      const p = providers && providers[adm.provider];
+      if (p && typeof p.apiKeyEnv === 'string') apiKeyEnv = p.apiKeyEnv;
+    } catch {}
+    let credentialPresent = null;
+    if (apiKeyEnv) {
+      try {
+        const esc = apiKeyEnv.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        credentialPresent = new RegExp('(^|\\n)\\s*' + esc + '\\s*:').test(fs.readFileSync(credentialsFile, 'utf8'));
+      } catch {
+        credentialPresent = null;
+      }
+    }
+    return { ok: true, provider: adm.provider, model: adm.model, apiKeyEnv, credentialPresent };
+  } catch {
+    return { ok: false, reason: '解析失败' };
+  }
+}
+
 function runDiagnostics(opts, fs = require('node:fs')) {
   const path = require('node:path');
   const e = (msg) => ({ code: 'message', message: msg });
@@ -329,6 +399,31 @@ function runDiagnostics(opts, fs = require('node:fs')) {
     infos.push(e(`最近启动自愈（${new Date(it.ts).toLocaleString()}）：${action} ${it.names.join('、')}`));
   }
 
+  // --- LLM 错误与默认模型（A-3）---
+  const llm = {
+    errors: analyzeLlmErrors(opts.llmErrorsFile, fs),
+    defaultModel: resolveDefaultModel(opts.settingsFile, opts.credentialsFile, opts.yaml, fs),
+  };
+  sections.llm = llm;
+  if (llm.errors.count > 0) {
+    const last = llm.errors.recent[llm.errors.recent.length - 1];
+    infos.push(e(`已记录 ${llm.errors.count} 条模型调用错误（最近: ${last ? last.line.slice(0, 120) : '无'}）——检查凭证与模型配置`));
+  }
+  const dm = llm.defaultModel;
+  if (dm.ok) {
+    if (dm.apiKeyEnv) {
+      if (dm.credentialPresent === false) {
+        warnings.push(e(`默认模型 ${dm.provider}/${dm.model} 的凭证键 ${dm.apiKeyEnv} 未在 .credentials.yaml 中配置——模型调用会失败`));
+      } else if (dm.credentialPresent === true) {
+        infos.push(e(`默认模型: ${dm.provider}/${dm.model}（凭证键 ${dm.apiKeyEnv} 已配置）`));
+      }
+    } else {
+      infos.push(e(`默认模型: ${dm.provider}/${dm.model}`));
+    }
+  } else if (dm.reason) {
+    warnings.push(e(`默认模型解析: ${dm.reason}`));
+  }
+
   // --- 环境 ---
   const env = opts.env || {};
   sections.env = env;
@@ -350,5 +445,8 @@ module.exports = {
   analyzePlugins,
   analyzeCrashDumps,
   readSelfHealHistory,
+  isLlmErrorLine,
+  analyzeLlmErrors,
+  resolveDefaultModel,
   runDiagnostics,
 };

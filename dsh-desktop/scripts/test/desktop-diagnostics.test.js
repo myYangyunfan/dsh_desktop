@@ -14,6 +14,9 @@ const {
   analyzePlugins,
   analyzeCrashDumps,
   readSelfHealHistory,
+  isLlmErrorLine,
+  analyzeLlmErrors,
+  resolveDefaultModel,
   runDiagnostics,
 } = require('../desktop-diagnostics.js');
 
@@ -255,4 +258,91 @@ test('runDiagnostics 报告携带自愈历史（sections + infos）', () => {
   assert.strictEqual(report.sections.selfHeal.length, 1);
   assert.strictEqual(report.sections.selfHeal[0].kind, 'bundle');
   assert.ok(report.infos.some((i) => /最近启动自愈.*已自动移除.*dsh-vision/.test(i.message)));
+});
+
+// --- A-3 LLM 错误与默认模型 ---
+
+test('isLlmErrorLine：关键词直达与 4xx/5xx+上下文双条件', () => {
+  assert.strictEqual(isLlmErrorLine('llm: NO_ADAPTER for provider opencode'), true);
+  assert.strictEqual(isLlmErrorLine('INVALID_REPLAY_STATE: cannot resume legacy session'), true);
+  assert.strictEqual(isLlmErrorLine('[llm] MISSING_CREDENTIAL OPENCODE_API_KEY'), true);
+  assert.strictEqual(isLlmErrorLine('[llm] POST /v1/chat/completions 401'), true);
+  assert.strictEqual(isLlmErrorLine('api request failed with status 503 retrying'), true);
+  // 裸 4xx/5xx（端口/行号/数字）无 LLM 上下文 → 不误报
+  assert.strictEqual(isLlmErrorLine('listening on 127.0.0.1:4040'), false);
+  assert.strictEqual(isLlmErrorLine('line 500 of boot script'), false);
+  assert.strictEqual(isLlmErrorLine('web UI ready'), false);
+  assert.strictEqual(isLlmErrorLine(''), false);
+});
+
+test('analyzeLlmErrors：不存在/有记录/损坏行容错', () => {
+  const dir = tmpdir();
+  const file = path.join(dir, 'llm-errors.jsonl');
+  assert.deepStrictEqual(analyzeLlmErrors(file, fs), { exists: false, count: 0, recent: [] });
+  const rows = [];
+  for (let i = 1; i <= 7; i++) rows.push(JSON.stringify({ at: '2026-08-18T0' + i + ':00:00Z', line: 'err ' + i }));
+  fs.writeFileSync(file, rows.join('\n') + '\n' + 'not-json-line\n', 'utf8');
+  const r = analyzeLlmErrors(file, fs);
+  assert.strictEqual(r.exists, true);
+  assert.strictEqual(r.count, 7); // 损坏行跳过
+  assert.strictEqual(r.recent.length, 5);
+  assert.strictEqual(r.recent[4].line, 'err 7'); // 最近一条在尾部
+  assert.strictEqual(r.recent[0].line, 'err 3');
+});
+
+test('resolveDefaultModel：凭证键存在/缺失/配置缺键', () => {
+  const dir = tmpdir();
+  const settings = JSON.stringify({
+    'agent-default-model': { provider: 'opencode', model: 'deepseek-v4-flash-free' },
+    'llm-pi-ai': { providers: { opencode: { apiKeyEnv: 'OPENCODE_API_KEY' } } },
+  });
+  const credOk = 'OPENCODE_API_KEY: abc123\nDEEPSEEK_API_KEY: xyz\n';
+  const credMissing = 'DEEPSEEK_API_KEY: xyz\n';
+  const fakeYaml = { load: (t) => JSON.parse(t) };
+  const sf = write(dir, 'settings.json5', settings);
+  const cf = write(dir, 'cred-ok.yaml', credOk);
+  const cf2 = write(dir, 'cred-missing.yaml', credMissing);
+  const ok = resolveDefaultModel(sf, cf, fakeYaml, fs);
+  assert.deepStrictEqual(ok, { ok: true, provider: 'opencode', model: 'deepseek-v4-flash-free', apiKeyEnv: 'OPENCODE_API_KEY', credentialPresent: true });
+  const miss = resolveDefaultModel(sf, cf2, fakeYaml, fs);
+  assert.strictEqual(miss.credentialPresent, false);
+  const noSettings = resolveDefaultModel(path.join(dir, 'nope.yaml'), cf, fakeYaml, fs);
+  assert.strictEqual(noSettings.ok, false);
+  assert.ok((noSettings.reason || '').length > 0);
+  const noAdm = resolveDefaultModel(write(dir, 'no-adm.yaml', '{"other":1}'), cf, fakeYaml, fs);
+  assert.strictEqual(noAdm.ok, false);
+  assert.ok(/agent-default-model/.test(noAdm.reason));
+});
+
+test('runDiagnostics 报告携带 llm 段（错误计数 + 凭证缺失 warning）', () => {
+  const dir = tmpdir();
+  const profile = path.join(dir, 'profile');
+  write(profile, 'cordis.patch.yml', '[{"id":"web","insert":[]}]');
+  write(profile, 'package.json', JSON.stringify({ dsh: { profile: { bundles: [] } } }));
+  const errs = path.join(dir, 'llm-errors.jsonl');
+  write(dir, 'llm-errors.jsonl', JSON.stringify({ at: '2026-08-18T01:00:00Z', line: '[llm] NO_ADAPTER' }) + '\n');
+  const sf = write(dir, 'settings.json5', JSON.stringify({
+    'agent-default-model': { provider: 'opencode', model: 'deepseek-v4-flash-free' },
+    'llm-pi-ai': { providers: { opencode: { apiKeyEnv: 'OPENCODE_API_KEY' } } },
+  }));
+  const cf = write(dir, 'cred.yaml', 'DEEPSEEK_API_KEY: xyz\n'); // 无 OPENCODE_API_KEY
+  const report = runDiagnostics({
+    profileDir: profile,
+    patchFile: path.join(profile, 'cordis.patch.yml'),
+    assetsDir: null,
+    coreDirDshAt: null,
+    crashDir: null,
+    logs: {},
+    selfHealHistoryFile: null,
+    llmErrorsFile: errs,
+    settingsFile: sf,
+    credentialsFile: cf,
+    yaml: { load: (t) => JSON.parse(t) },
+    env: {},
+  }, fs);
+  assert.strictEqual(report.sections.llm.errors.count, 1);
+  assert.strictEqual(report.sections.llm.errors.recent[0].line, '[llm] NO_ADAPTER');
+  assert.strictEqual(report.sections.llm.defaultModel.provider, 'opencode');
+  assert.ok(report.infos.some((i) => /1 条模型调用错误/.test(i.message)));
+  assert.ok(report.warnings.some((i) => /凭证键 OPENCODE_API_KEY 未在 \.credentials\.yaml 中配置/.test(i.message)));
 });

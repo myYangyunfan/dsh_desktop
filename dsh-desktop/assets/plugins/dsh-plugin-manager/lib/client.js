@@ -69,6 +69,10 @@ window.__ModuleLoader__.load({
 			diagSelfHealTitle: "最近启动自愈",
 			diagSelfHealRemoved: "已自动移出启动清单 {0}",
 			diagSelfHealDisabled: "已自动禁用 {0}",
+			llmSection: "模型与凭证",
+			llmErrorsN: "最近发生 {0} 条模型调用错误",
+			llmCredOk: "凭证已配置",
+			llmCredMissing: "凭证缺失——模型调用会失败",
 			backupTitle: "备份配置",
 			backupExport: "导出备份…",
 			backupExporting: "导出中…",
@@ -939,8 +943,32 @@ window.__ModuleLoader__.load({
 				// 自愈历史随报告放在 sections.selfHeal（顶层仅 ok/errors/warnings/infos），
 				// 兼容两处取值，避免 r.selfHeal 恒为 undefined 蓝条永不显示。
 				const selfHeal = Array.isArray(r.selfHeal) ? r.selfHeal : (r.sections && Array.isArray(r.sections.selfHeal) ? r.sections.selfHeal : []);
+				// A-3 模型与凭证小节：默认模型解析 + 最近模型调用错误（随报告带回）。
+				const llm = r.sections && r.sections.llm;
+				const llmErrors = llm && llm.errors;
+				const dm = llm && llm.defaultModel;
+				const llmBox = (() => {
+					const pieces = [];
+					if (dm && dm.ok) {
+						const credTxt = dm.apiKeyEnv
+							? (dm.credentialPresent === false ? L.llmCredMissing : L.llmCredOk)
+							: null;
+						pieces.push(jsx("div", { key: "dm", style: { wordBreak: "break-all" }, children: dm.provider + " / " + dm.model + (credTxt ? "（" + credTxt + "：" + dm.apiKeyEnv + "）" : "") }));
+					}
+					if (llmErrors && llmErrors.count > 0) {
+						(llmErrors.recent || []).forEach((it, i) => {
+							pieces.push(jsx("div", { key: "e" + i, style: { wordBreak: "break-all", opacity: 0.85 }, children: (it.at || "").replace("T", " ").slice(0, 19) + "  " + it.line }));
+						});
+					}
+					if (pieces.length === 0) return null;
+					return jsxs("div", { style: { marginTop: 8, fontSize: 12, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.25))", display: "flex", flexDirection: "column", gap: 4 }, children: [
+						jsx("span", { style: { fontWeight: 600 }, children: L.llmSection + (llmErrors && llmErrors.count > 0 ? "（" + L.llmErrorsN.replace("{0}", String(llmErrors.count)) + "）" : "") }),
+						...pieces
+					] });
+				})();
 				if (r.ok === true) return jsxs("div", { children: [
 					selfHealBox(selfHeal),
+					llmBox,
 					jsx("div", { style: { fontSize: 12, color: "var(--dsw-alias-state-success-primary, #4caf7d)", marginTop: 6 }, children: L.diagOk })
 				] });
 				const section = (title, items, color, icon) => jsxs("div", { style: { marginTop: 6 }, children: [
@@ -949,6 +977,7 @@ window.__ModuleLoader__.load({
 				] });
 				return jsxs("div", { children: [
 					selfHealBox(selfHeal),
+					llmBox,
 					section(L.diagErrors, errs, "var(--dsw-alias-state-error-primary, #ff7a85)", "⛔"),
 					section(L.diagWarnings, warns, "var(--dsw-alias-state-warning-primary, #d99a3d)", "⚠"),
 					section(L.diagInfos, infos, "var(--dsw-alias-label-tertiary, rgba(128,128,128,0.6))", "ℹ")
