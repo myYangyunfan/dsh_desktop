@@ -65,6 +65,7 @@ const { patchWebSearchBaseUrl } = require('./scripts/patch-web-search-baseurl');
 const { patchMenuViewport } = require('./scripts/patch-menu-viewport');
 const { patchSessionManage } = require('./scripts/patch-session-manage');
 const { patchOpenProjectDir } = require('./scripts/patch-open-project-dir');
+const { selectCrashDumpsToRemove } = require('./scripts/lib/crash-prune');
 const { transformReplayDegrade, replayCopyFiles } = require('./scripts/patch-replay-degrade');
 const { patchSessionPersistence } = require('./scripts/patch-session-persistence');
 // 「设置 → 插件 → 诊断与管理」：诊断 / 备份与恢复 / 日志包导出 / 防砖体检 /
@@ -1034,19 +1035,21 @@ function capLogFile(file) {
 
 /** 清理超过保留期的崩溃转储（只动 *.dmp，settings.dat 与本次新转储不受影响）。 */
 function pruneOldCrashDumps() {
-  const MAX_DMP_AGE_MS = 14 * 24 * 3600 * 1000;
   try {
-    const now = Date.now();
+    const entries = [];
     for (const e of fs.readdirSync(crashDumpsDir)) {
       if (!e.endsWith('.dmp')) continue;
-      const p = path.join(crashDumpsDir, e);
       try {
-        const st = fs.statSync(p);
-        if (now - st.mtimeMs > MAX_DMP_AGE_MS) {
-          fs.rmSync(p, { force: true });
-          log('boot', '已清理过期崩溃转储: ' + e);
-        }
+        entries.push({
+          name: e,
+          mtimeMs: fs.statSync(path.join(crashDumpsDir, e)).mtimeMs,
+        });
       } catch {}
+    }
+    // A-8: 14 天龄上限 + 数量上限（保留最近 5 个，最新 1 个豁免）。
+    for (const name of selectCrashDumpsToRemove(entries)) {
+      fs.rmSync(path.join(crashDumpsDir, name), { force: true });
+      log('boot', '已清理过期崩溃转储: ' + name);
     }
   } catch {}
 }
