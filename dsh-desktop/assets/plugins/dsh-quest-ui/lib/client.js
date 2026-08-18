@@ -233,6 +233,16 @@
 				// 上下文用量面板（JObwrW_panel）：轻度美化降噪（内容为宿主用量数据）
 				'body[data-dsh-quest-ui] .JObwrW_panel{line-height:1.6}',
 				'body[data-dsh-quest-ui] .JObwrW_figures{color:var(--qdu-label-2)}',
+				// —— dsh-synapse 会话地图适配（内置后集成）：切换按钮 Quest 化，
+				//    从自绘标题栏（top:12 会压住窗口控制区）下移到顶部标签栏同一
+				//    水平面（y≈80，与对话/文件/终端 tabs 及右上角临时会话钮对齐），
+				//    样式统一 Quest 语言（细边白底胶囊、active 主色）；overlay 淡入 ——
+				'body[data-dsh-quest-ui] .dsh-synapse-switch{top:80px!important;border:1px solid color-mix(in srgb,var(--qdu-label-1) 10%,transparent)!important;background:var(--qdu-bg-card)!important;box-shadow:0 1px 3px rgba(16,24,40,.06)!important;border-radius:999px!important}',
+				'body[data-dsh-quest-ui] .dsh-synapse-switch button{font-weight:500!important;color:var(--qdu-label-2)!important;border-radius:999px!important;transition:background-color .15s var(--qdu-ease),color .15s var(--qdu-ease)!important}',
+				'body[data-dsh-quest-ui] .dsh-synapse-switch button:hover{background:var(--qdu-hover)!important;color:var(--qdu-label-1)!important}',
+				'body[data-dsh-quest-ui] .dsh-synapse-switch button.active{background:var(--qdu-accent)!important;color:#fff!important}',
+				'body[data-dsh-quest-ui] .dsh-synapse-overlay{animation:qdu-fade-in .18s var(--qdu-ease)}',
+				'@keyframes qdu-fade-in{from{opacity:0}to{opacity:1}}',
 			
 				// —— 空态建议卡：圆点前缀（::before 14px 描边圆）+ 40px 行高 +
 				//    hover 浅底；官方欢迎页有建议条目时才命中，无条目安静无效 ——
@@ -337,6 +347,55 @@
 				};
 			}
 
+			// —— dsh-synapse 画布主题适配：synapse 以同源 iframe（/synapse/）
+			//    呈现，Quest 宿主 CSS 够不到帧内文档；这里在同源安全前提下向
+			//    contentDocument 注入一份轻量 Quest 主题（字体/底色/按钮/滚动条
+			//    对齐宿主），并随 iframe 重新加载重注入。只插 style 节点，不动
+			//    上游 DOM（P7）；iframe 缺失或跨源时安静返回（P8）。
+			var SYNAPSE_THEME_ID = "qdu-synapse-theme";
+			var SYNAPSE_THEME_CSS = [
+				"body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:#f7f8fa}",
+			"button{border-radius:8px;transition:background-color .15s ease,color .15s ease,border-color .15s ease}",
+			"::-webkit-scrollbar{width:8px;height:8px}",
+			"::-webkit-scrollbar-thumb{border-radius:999px;background:rgba(127,127,127,.28)}",
+			"::-webkit-scrollbar-track{background:transparent}"
+			].join("");
+			var synapseFrameHooked = null;
+			function injectSynapseStyle(doc) {
+				if (!doc || !doc.head || doc.getElementById(SYNAPSE_THEME_ID)) return;
+				var st = doc.createElement("style");
+				st.id = SYNAPSE_THEME_ID;
+				st.textContent = SYNAPSE_THEME_CSS;
+				doc.head.appendChild(st);
+			}
+			function ensureSynapseTheme() {
+				var frame = document.querySelector(".dsh-synapse-overlay iframe");
+				if (!frame) return;
+				try { injectSynapseStyle(frame.contentDocument); } catch (e) { /* 跨源/未就绪 */ }
+				if (synapseFrameHooked !== frame) {
+					if (synapseFrameHooked && synapseFrameHooked.removeEventListener) {
+						synapseFrameHooked.removeEventListener("load", synapseFrameReload);
+				}
+					synapseFrameHooked = frame;
+					frame.addEventListener("load", synapseFrameReload);
+				}
+			}
+			function synapseFrameReload() {
+				try { injectSynapseStyle(synapseFrameHooked && synapseFrameHooked.contentDocument); } catch (e) { /* P8 */ }
+			}
+			function teardownSynapseTheme() {
+				if (synapseFrameHooked && synapseFrameHooked.removeEventListener) {
+					synapseFrameHooked.removeEventListener("load", synapseFrameReload);
+				}
+				synapseFrameHooked = null;
+				try {
+					var frame = document.querySelector(".dsh-synapse-overlay iframe");
+					var doc = frame && frame.contentDocument;
+					var st = doc && doc.getElementById(SYNAPSE_THEME_ID);
+					if (st && st.parentNode) st.parentNode.removeChild(st);
+				} catch (e) { /* P8 */ }
+			}
+
 			// 统一增强器入口（P1/P2/P3）：开启才挂单一观察器，关闭彻底拆除。
 			var questEnhancers = {
 				_observer: null,
@@ -368,6 +427,7 @@
 					if (this._timer) { clearTimeout(this._timer); this._timer = null; }
 					if (this._observer) { this._observer.disconnect(); this._observer = null; }
 					this._removeAllOwnedNodes(); // 摘掉全部 qdu-* 自有节点
+					teardownSynapseTheme();   // 摘 synapse 主题注入与 load 监听
 					this._fp = "";
 				},
 				_removeAllOwnedNodes: function () {
@@ -383,6 +443,7 @@
 						this._fp = fp;
 						applySidebarHead(); // 阶段四
 						applyMetaPills();   // 阶段五
+						ensureSynapseTheme(); // synapse 画布主题适配（幂等）
 					} catch (e) { /* P8：静默 */ }
 				}
 			};
