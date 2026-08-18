@@ -32,6 +32,12 @@ const ZSTD_MAGIC = 4247762216; // 28 B5 2F FD little-endian
 
 const STAT_SWEEP_MS = 10000; // 兜底 stat 清扫（捕获 fs.watch 漏报/文件替换）
 const WALK_SWEEP_MS = 30000; // 目录对账（发现新会话、清理消失的监视器）
+// A-11：无「运行中会话」时 stat 清扫降频（10s → 60s）。运行中会话定义：
+// 文件 mtime 10 分钟内（正在写入），或增量解码观察到 turn/start 尚未配对
+// turn/end（进行中的轮次，fs.watch 正常路径仍在工作，降频只影响兜底延迟；
+// 有 event 级监视器时通知延迟本来就是事件级，60s 兜底仅覆盖漏报/替换）。
+const SESSION_RUNNING_MS = 10 * 60 * 1000;
+const STAT_SWEEP_QUIET_MS = 60000;
 
 // P0-5 句柄收敛：只对「活跃会话」挂 fs.watch——mtime 7 天内的会话才可能继续
 // 写入，冷会话（长期无写入）由 10s 兜底清扫覆盖即可。600 会话（590 个冷）场景
@@ -127,7 +133,7 @@ function expandRow(line) {
 }
 
 class SessionWatcher {
-  constructor({ sessionsDir, onTurnEnd, log, statSweepMs, walkSweepMs }) {
+  constructor({ sessionsDir, onTurnEnd, log, statSweepMs, walkSweepMs, quietMs }) {
     this.sessionsDir = sessionsDir;
     this.onTurnEnd = onTurnEnd || (() => {});
     this.log = log || (() => {});
@@ -138,6 +144,8 @@ class SessionWatcher {
     this.watchers = new Map(); // absPath -> FSWatcher
     this.statSweepMs = statSweepMs === undefined ? STAT_SWEEP_MS : statSweepMs;
     this.walkSweepMs = walkSweepMs === undefined ? WALK_SWEEP_MS : walkSweepMs;
+    this.quietSweepMs = quietMs === undefined ? STAT_SWEEP_QUIET_MS : quietMs;
+    this.anyRunning = false; // 最近一次 scan 是否有运行中会话（A-11 降频依据）
   }
 
   start() {
@@ -265,7 +273,35 @@ class SessionWatcher {
         }
       } catch (err) { this.log('watch', '处理失败 ' + file + ': ' + err.message); }
     }
+    this.updateRunningFlag();
     return any;
+  }
+
+  /**
+   * A-11：依据「是否还有运行中会话」评估扫描频率。
+   * 运行中 = 任一已知会话 turnOpen（turn/start 未配对 turn/end）或
+   * mtime 10 分钟内（正在写入）。无运行中会话时 stat 清扫降频到
+   * quietSweepMs（默认 60s），fs.watch 的事件路径不受影响。
+   */
+  updateRunningFlag() {
+    const now = Date.now();
+    let running = false;
+    for (const rec of this.files.values()) {
+      if (rec.turnOpen) { running = true; break; }
+      if (typeof rec.lastMtime === 'number' && now - rec.lastMtime < SESSION_RUNNING_MS) {
+        running = true;
+        break;
+      }
+    }
+    if (running === this.anyRunning) return;
+    this.anyRunning = running;
+    if (!this.timer) return;
+    clearInterval(this.timer);
+    this.timer = setInterval(() => this.scan(), this.anyRunning ? this.statSweepMs : this.quietSweepMs);
+    if (this.timer.unref) this.timer.unref();
+    this.log('watch', this.anyRunning
+      ? '存在运行中会话，扫描频率保持 ' + Math.round(this.statSweepMs / 1000) + 's'
+      : '无运行中会话，兜底扫描降频至 ' + Math.round(this.quietSweepMs / 1000) + 's');
   }
 
   /** 读取文件自 offset 起的尾部字节（增量读取，避免每次全量读盘）。 */
@@ -291,15 +327,16 @@ class SessionWatcher {
     try { st = fs.statSync(file); } catch { this.files.delete(file); return false; }
     let rec = this.files.get(file);
     if (!rec) {
-      rec = { consumed: 0, lastSize: 0, header: null, title: null, baseline: false, hasTurnEvents: false };
+      rec = { consumed: 0, lastSize: 0, header: null, title: null, baseline: false, hasTurnEvents: false, turnOpen: false, lastMtime: 0 };
       this.files.set(file, rec);
     }
+    rec.lastMtime = st.mtimeMs; // A-11 运行中判定（mtime 窗口）
     if (st.size <= rec.consumed && rec.baseline) return false; // 无新字节
 
     // 文件被截断/重写（如 repair 脚本）→ 重新基线。
     if (st.size < rec.consumed) {
       rec.consumed = 0; rec.header = null; rec.title = null; rec.baseline = false; rec.hasTurnEvents = false;
-      rec.lastSize = 0;
+      rec.lastSize = 0; rec.turnOpen = false;
     }
 
     const first = !rec.baseline;
@@ -317,8 +354,9 @@ class SessionWatcher {
         rec.lastSize = st.size;
         return false;
       }
+      // 重新基线处也要重置 turnOpen（上面截断分支已处理，此处是坏内容分支）。
       rec.consumed = 0; rec.header = null; rec.title = null; rec.baseline = false; rec.hasTurnEvents = false;
-      rec.lastSize = st.size;
+      rec.lastSize = st.size; rec.turnOpen = false;
       return this.process(file);
     }
 
@@ -381,7 +419,8 @@ class SessionWatcher {
           if (!ev || typeof ev !== 'object') continue;
           if (ev.type === 'session/title' && ev.data && typeof ev.data.title === 'string') rec.title = ev.data.title;
           if (ev.type === 'turn/start' || ev.type === 'turn/end') rec.hasTurnEvents = true;
-          if (ev.type === 'turn/end') turnEnds += 1;
+          if (ev.type === 'turn/start') rec.turnOpen = true; // A-11：进行中轮次
+          if (ev.type === 'turn/end') { rec.turnOpen = false; turnEnds += 1; }
           if (ev.type === 'assistant/message') assistantMessages += 1;
         }
       }

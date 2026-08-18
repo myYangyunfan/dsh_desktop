@@ -306,3 +306,88 @@ test('v2: non-string cwd does not throw and still notifies (issue #88)', () => {
   assert.strictEqual(notes[0].cwd, 12345);
   fs.rmSync(tmp, { recursive: true, force: true });
 });
+
+test('A-11: 老会话（无写入）不误报运行中；新写入恢复 10s；写入停止后降频', async (t) => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swv2-'));
+  const file = path.join(tmp, 'p1', 'sessq', 'session.jsonl.zstd');
+  makeSessionFile(file, 'sessq');
+  const old = Date.now() - 3600 * 1000; // 1 小时前 = 无运行中（mtime 窗口 10 分钟）
+  fs.utimesSync(file, new Date(old), new Date(old));
+  const logs = [];
+  const w = new SessionWatcher({
+    sessionsDir: tmp,
+    onTurnEnd: () => {},
+    log: (k, m) => logs.push(m),
+    statSweepMs: 40,   // 活跃时周期（隔离用短值）
+    quietMs: 200,      // 降频后周期（隔离用短值）
+    walkSweepMs: 60000,
+  });
+  t.after(() => { w.stop(); fs.rmSync(tmp, { recursive: true, force: true }); });
+  w.start();
+  await sleep(150); // 首扫后应判定无运行中
+  assert.strictEqual(w.anyRunning, false);
+  assert.ok(!logs.some((m) => m.includes('扫描频率')), '初始静默不应输出频率日志: ' + logs.join('|'));
+  // 新写入（mtime 更新）→ 下一轮 scan 判定运行中 → 保持活跃周期
+  appendFrame(file, [{ type: 'assistant/message' }]);
+  await sleep(200);
+  assert.strictEqual(w.anyRunning, true, 'mtime 10 分钟内应判定运行中');
+  assert.ok(logs.some((m) => m.includes('扫描频率保持')), '应输出保持周期日志: ' + logs.join('|'));
+  // 写入停止 + mtime 老化 → 降频
+  fs.utimesSync(file, new Date(old), new Date(old));
+  await sleep(300);
+  assert.strictEqual(w.anyRunning, false, 'mtime 老化后应判定无运行中');
+  assert.ok(logs.some((m) => m.includes('无运行中会话，兜底扫描降频')), '应输出降频日志: ' + logs.join('|'));
+});
+
+test('A-11: turn/start 未配对时即使 mtime 老化也保持运行中，turn/end 后降频', async (t) => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swv2-'));
+  const file = path.join(tmp, 'p1', 'sesst', 'session.jsonl.zstd');
+  makeSessionFile(file, 'sesst');
+  const old = Date.now() - 3600 * 1000;
+  const logs = [];
+  const w = new SessionWatcher({
+    sessionsDir: tmp,
+    onTurnEnd: () => {},
+    log: (k, m) => logs.push(m),
+    statSweepMs: 40,
+    quietMs: 200,
+    walkSweepMs: 60000,
+  });
+  t.after(() => { w.stop(); fs.rmSync(tmp, { recursive: true, force: true }); });
+  w.process(file); // 基线（只解析头部，不推断历史轮次）
+  // 运行期观察到 turn/start 且无配对 turn/end → 增量路径标记进行中
+  appendFrame(file, [{ type: 'turn/start' }]);
+  fs.utimesSync(file, new Date(old), new Date(old));
+  w.process(file); // 增量：turn/start → turnOpen
+  assert.strictEqual(w.files.get(file).turnOpen, true, '增量解析应标记进行中轮次');
+  w.start();
+  await sleep(150);
+  assert.strictEqual(w.anyRunning, true, 'turn/start 未配对时保持运行中（即使 mtime 老化）');
+  // 配对 turn/end（mtime 保持老化）→ 降频
+  appendFrame(file, [{ type: 'turn/end' }]);
+  fs.utimesSync(file, new Date(old), new Date(old));
+  await sleep(300);
+  assert.strictEqual(w.files.get(file).turnOpen, false, 'turn/end 应清除进行中标记');
+  assert.strictEqual(w.anyRunning, false, '无运行中后应降频');
+  assert.ok(logs.some((m) => m.includes('无运行中会话，兜底扫描降频')), '应输出降频日志: ' + logs.join('|'));
+});
+
+test('A-11: stop 后 updateRunningFlag 不重建定时器', async (t) => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swv2-'));
+  const w = new SessionWatcher({
+    sessionsDir: tmp,
+    onTurnEnd: () => {},
+    log: () => {},
+    statSweepMs: 40,
+    quietMs: 200,
+    walkSweepMs: 60000,
+  });
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  w.start();
+  await sleep(100);
+  w.stop();
+  const timerBefore = w.timer;
+  w.anyRunning = true; // 模拟状态翻转
+  w.updateRunningFlag();
+  assert.strictEqual(w.timer, timerBefore, 'stop 后不得重建定时器');
+});
