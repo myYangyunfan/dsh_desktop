@@ -312,7 +312,6 @@ let webUrl = null;
 let quitting = false;
 let updateBusy = false;
 let notifyOnTurnEnd = true;
-let currentSessionId = ''; // 主窗当前正在观看的会话（渲染进程上报），现仅用于完成通知的调试日志
 let sessionWatcher = null;
 let userDataDir = '';
 let logsDir = '';
@@ -1609,12 +1608,15 @@ function watchServerProc(proc, out, opts = {}) {
       }
     });
     // Safety net in case the URL line never appears.
-    bootTimer = setTimeout(() => finish(reject, new Error('等待 dsh web 启动超时（60 秒）')), 60000);
+    bootTimer = setTimeout(() => finish(reject, new Error('等待 dsh web 启动超时（' + (WEB_BOOT_TIMEOUT_MS / 1000) + ' 秒）')), WEB_BOOT_TIMEOUT_MS);
     bootTimer.unref();
   });
 }
 
-function waitUntilUp(url, timeoutMs = 120000) {
+// P2-6: web 启动超时单一常量（文案与阈值同源，避免 60s/120s 双标）。
+const WEB_BOOT_TIMEOUT_MS = 120000;
+
+function waitUntilUp(url, timeoutMs = WEB_BOOT_TIMEOUT_MS) {
   const started = Date.now();
   return new Promise((resolve, reject) => {
     const tick = () => {
@@ -2712,7 +2714,7 @@ const lastNotifyAt = new Map(); // sessionId -> timestamp (per-session rate-limi
 let lastGlobalNotifyAt = 0; // 全局限流：短时间窗口内至多一条，避免多会话同时完成刷屏
 
 function onSessionTurnEnd(info) {
-  log('notify', 'DEBUG turn detected: ' + JSON.stringify({ sid: info.sessionId, title: info.title, notifyOnTurnEnd, quitting, vis: mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible(), foc: mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused(), curSid: currentSessionId }));
+  log('notify', 'DEBUG turn detected: ' + JSON.stringify({ sid: info.sessionId, title: info.title, notifyOnTurnEnd, quitting, vis: mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible(), foc: mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused() }));
   // 回合完成 = 产生消耗：触发余额刷新（节流 30s），让余额显示及时同步。
   maybeRefreshBalance();
   if (!notifyOnTurnEnd || quitting) { log('notify', 'DEBUG skip: notifyOnTurnEnd=' + notifyOnTurnEnd + ' quitting=' + quitting); return; }
@@ -2831,19 +2833,27 @@ function imagePasteSave(dataUrl, name) {
   return { ok: true, path: file, size: buf.length };
 }
 
+// P2-5: 图标 dataURI 进程级缓存。icon.png 是打包静态资源，进程生命周期内
+// 不变，chrome:init（每次页面加载/刷新都会调用）不必反复 readFileSync。
+let chromeIconDataUri = null;
+function chromeIconDataUriCached() {
+  if (chromeIconDataUri !== null) return chromeIconDataUri;
+  try {
+    const buf = fs.readFileSync(path.join(__dirname, 'assets', 'icon.png'));
+    if (buf.length > 0 && buf[0] === 0x89 && buf[1] === 0x50) {
+      chromeIconDataUri = 'data:image/png;base64,' + buf.toString('base64');
+    }
+  } catch {}
+  return chromeIconDataUri || '';
+}
+
 function registerChromeIpc() {
   ipcMain.handle('chrome:init', async (event) => {
     if (!mainWindow || event.sender !== mainWindow.webContents) return null;
     // 等待预览静态服务端口就绪（有界 1.5s）：消除「主窗加载早于 listen 回调」
     // 的竞态，消费方拿到的 staticPort 不会是 0。
     await Promise.race([previewPortReady, new Promise((r) => setTimeout(r, 1500))]);
-    let iconDataUri = '';
-    try {
-      const buf = fs.readFileSync(path.join(__dirname, 'assets', 'icon.png'));
-      if (buf.length > 0 && buf[0] === 0x89 && buf[1] === 0x50) {
-        iconDataUri = 'data:image/png;base64,' + buf.toString('base64');
-      }
-    } catch {}
+    const iconDataUri = chromeIconDataUriCached();
     const s = updater.loadSettings(updCtx());
     const urls = repoUrls();
     return {
@@ -3129,12 +3139,6 @@ function registerChromeIpc() {
   ipcMain.on('dsh:page-error', (event, payload) => {
     if (!mainWindow || event.sender !== mainWindow.webContents) return;
     log('page-error', String(payload));
-  });
-
-  // 渲染进程上报「当前观看的会话」ID，供完成通知的调试日志记录。
-  ipcMain.on('dsh:current-session', (event, sessionId) => {
-    if (typeof sessionId !== 'string' || !sessionId) return;
-    currentSessionId = sessionId;
   });
 
   ipcMain.handle('dsh:balance-refresh', async (event) => {

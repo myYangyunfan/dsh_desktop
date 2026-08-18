@@ -208,11 +208,24 @@ if (PET_MODE) {
 }
 
 // 页面异常 → 主进程日志（desktop.log），便于排查插件空白视图。
+// 与主进程 console-message 同款节流：同签名 5 秒内只转发一条（异常循环
+// 会淹没 IPC 与同步磁盘日志写入）。
+const pageErrorThrottle = new Map();
+const sendPageError = (prefix, msg) => {
+  try {
+    const key = prefix + ':' + String(msg);
+    const now = Date.now();
+    if (now - (pageErrorThrottle.get(key) || 0) < 5000) return;
+    if (pageErrorThrottle.size > 500) pageErrorThrottle.clear();
+    pageErrorThrottle.set(key, now);
+    ipcRenderer.send('dsh:page-error', key);
+  } catch {}
+};
 window.addEventListener('error', (e) => {
-  try { ipcRenderer.send('dsh:page-error', 'window.onerror: ' + ((e && (e.message || e.error)) || 'unknown')); } catch {}
+  sendPageError('window.onerror', ((e && (e.message || e.error)) || 'unknown'));
 });
 window.addEventListener('unhandledrejection', (e) => {
-  try { ipcRenderer.send('dsh:page-error', 'unhandledrejection: ' + String((e && e.reason && (e.reason.message || e.reason)) || e)); } catch {}
+  sendPageError('unhandledrejection', String((e && e.reason && (e.reason.message || e.reason)) || e));
 });
 
 // 余额推送 → window 事件（dsh-balance 插件订阅）。
@@ -225,25 +238,6 @@ ipcRenderer.on('dsh:balance', (_e, data) => {
 ipcRenderer.on('pet:state', (_e, data) => {
   try { window.dispatchEvent(new CustomEvent('dsh-pet-state', { detail: data || {} })); } catch {}
 });
-
-// 上报「当前观看的会话」ID → 主进程（仅用于完成通知的调试日志）。
-// 轮询读取 localStorage['dsh.sessions.current'].sessionId，仅在变化时发送。
-{
-  let lastReported = '';
-  const reportCurrentSession = () => {
-    try {
-      const raw = localStorage.getItem('dsh.sessions.current');
-      const parsed = raw ? JSON.parse(raw) : null;
-      const id = parsed && typeof parsed === 'object' ? String(parsed.sessionId || '') : '';
-      if (id && id !== lastReported) {
-        lastReported = id;
-        ipcRenderer.send('dsh:current-session', id);
-      }
-    } catch (_e) { /* 忽略；会话尚未就绪时无值，下次轮询再试 */ }
-  };
-  reportCurrentSession();
-  setInterval(reportCurrentSession, 3000);
-}
 
 // ---------------------------------------------------------------------------
 // Chrome DOM
