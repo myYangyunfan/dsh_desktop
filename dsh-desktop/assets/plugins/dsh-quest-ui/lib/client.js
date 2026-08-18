@@ -132,23 +132,26 @@
 				// 侧栏分隔线柔化（宽度不变；!important 压宿主 hashed 类边框色）
 				'body[data-dsh-quest-ui] [class$="_sidebar"],body[data-dsh-quest-ui] [class$="_Sidebar"]{border-right:1px solid var(--qdu-line-soft)!important}',
 			
-				// —— Q3 中央英雄输入卡片（Quest 核心视觉）：浮起白卡、大圆角、
-				//    双层柔影，聚焦时阴影加深 + 主色光环 ——
-				// 卡片外壳（hero 空态与 normal 会话态共用 .uV2eYG_root）；描边用
-				// label 色 8% 透明混合；position 给 hero 顶部高光线做定位铺垫
-				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea){position:relative;background:var(--qdu-bg-card);border:1px solid color-mix(in srgb,var(--qdu-label-1) 8%,transparent);border-radius:var(--qdu-radius-card);box-shadow:var(--qdu-shadow-float);transition:box-shadow .2s var(--qdu-ease),border-color .2s var(--qdu-ease)}',
-				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea):focus-within{border-color:color-mix(in srgb,var(--qdu-accent) 45%,transparent);box-shadow:var(--qdu-shadow-float-lg),0 0 0 3px color-mix(in srgb,var(--qdu-accent) 12%,transparent)}',
-				// 空态 hero 形态：更大圆角 + 居中限宽 + 更强浮起 + 顶部主色渐变高光线
-				'body[data-dsh-quest-ui] [class*="_composerHero"] [class*="_root"]:has(textarea){border-radius:24px;box-shadow:var(--qdu-shadow-float-lg)}',
-				'body[data-dsh-quest-ui] [class*="_composerHero"] [class*="_root"]:has(textarea)::before{content:"";position:absolute;left:24px;right:24px;top:0;height:2px;border-radius:0 0 999px 999px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--qdu-accent) 55%,transparent) 35%,color-mix(in srgb,var(--qdu-accent) 55%,transparent) 65%,transparent);pointer-events:none}',
-				'body[data-dsh-quest-ui] [class*="_composerHero"]{max-width:780px;margin:0 auto;width:100%}',
-				// 输入区内层完全透明化（宿主 card/backdrop 自带底色是“生搬感”根源）
-				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_card"]{border-radius:var(--qdu-radius-card);background:transparent!important}',
+				// —— Q3 中央输入区（Qoder Quest 打开式）：去边框去嵌套，白底大圆角
+				//    开阔区域靠浅灰画布衬托轮廓，按钮与提示贴大区域下缘两端分布 ——
+				// 外壳（hero 空态与 normal 会话态共用）：无框无影，豁达打开
+				// !important：压宿主自带边框，彻底解除“框中框”束缚
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea){position:relative;background:var(--qdu-bg-card);border:none!important;box-shadow:none!important;border-radius:18px;transition:box-shadow .18s var(--qdu-ease)}',
+				// 聚焦反馈：一圈极细主色环（代替边框/重阴影，保持打开感）
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea):focus-within{box-shadow:0 0 0 1.5px color-mix(in srgb,var(--qdu-accent) 30%,transparent),0 1px 2px rgba(16,24,40,.04)!important}',
+				// 空态 hero：更大圆角 + 更宽限幅 + 极微浮起 + 顶部主色渐变高光线
+				'body[data-dsh-quest-ui] [class*="_composerHero"] [class*="_root"]:has(textarea){border-radius:22px;box-shadow:0 1px 3px rgba(16,24,40,.04)!important;min-height:200px;display:flex;flex-direction:column;justify-content:center}',
+				'body[data-dsh-quest-ui] [class*="_composerHero"] [class*="_root"]:has(textarea)::before{content:"";position:absolute;left:28px;right:28px;top:0;height:2px;border-radius:0 0 999px 999px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--qdu-accent) 55%,transparent) 35%,color-mix(in srgb,var(--qdu-accent) 55%,transparent) 65%,transparent);pointer-events:none}',
+				'body[data-dsh-quest-ui] [class*="_composerHero"]{max-width:820px;margin:0 auto;width:100%}',
+				// 输入区内层完全透明化（宿主 card/backdrop 自带底色是“生搬感”根源）；
+				// hero 时 card/scroll 纵向撑满，使工具行贴大区域底缘
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_card"]{border-radius:inherit;background:transparent!important;flex:1;display:flex;flex-direction:column}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_card"] > [class*="_scroll"]{flex:1}',
 				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_grow"] [class*="_backdrop"]{background:transparent!important;border:none!important;box-shadow:none!important}',
-				// textarea：大呼吸内边距 + placeholder 降噪；hero 态更高
-				'body[data-dsh-quest-ui] [class*="_composerStack"] textarea{background:transparent;border-radius:calc(var(--qdu-radius-card) - 6px);padding:14px 18px 6px}',
+				// textarea：大幅打开 —— normal 态 72px、hero 态 96px，大呼吸内边距
+				'body[data-dsh-quest-ui] [class*="_composerStack"] textarea{background:transparent;border-radius:14px;padding:16px 18px 8px;min-height:72px}',
 				'body[data-dsh-quest-ui] [class*="_composerStack"] textarea::placeholder{color:var(--qdu-label-3);opacity:.75}',
-				'body[data-dsh-quest-ui] [class*="_composerHero"] textarea{min-height:64px}',
+				'body[data-dsh-quest-ui] [class*="_composerHero"] textarea{min-height:96px}',
 				// 发送键（.uV2eYG_primary）：36px 圆形主色 + hover 抬升投影
 				// !important：宿主 normal 态自带 8px 方圆角与尺寸
 				'body[data-dsh-quest-ui] [class*="_composerStack"] button[class*="_primary"]{width:36px;height:36px;border-radius:999px!important;box-shadow:0 2px 8px color-mix(in srgb,var(--qdu-accent) 35%,transparent);transition:transform .15s var(--qdu-ease),box-shadow .15s var(--qdu-ease),opacity .15s ease}',
@@ -163,10 +166,10 @@
 				'body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="访问模式"]:hover,body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="选择模型"]:hover{background:var(--qdu-hover)!important;border-color:var(--qdu-line);color:var(--qdu-label-1)!important}',
 				'body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="上下文"]{border-radius:999px!important;transition:background-color .15s ease}',
 				'body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="上下文"]:hover{background:var(--qdu-hover)!important}',
-				// 卡内工具行底部呼吸（row 在 textarea 下）
-				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_row"]{padding:0 10px 10px}',
-				// 会话统计条（root 兄弟，竖线分隔）：整体降噪，竖线淡化为细线
-				'body[data-dsh-quest-ui] div:has(> span[class*="_sep"]){color:var(--qdu-label-3);font-size:11px}',
+				// 工具行：两端分布（左工具组 / 右发送组），贴大区域下缘；提示随行
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_row"]{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 14px 12px}',
+				// 会话统计条（root 兄弟，竖线分隔）：贴输入区下缘，降噪小字
+				'body[data-dsh-quest-ui] div:has(> span[class*="_sep"]){color:var(--qdu-label-3);font-size:11px;padding-top:8px}',
 				'body[data-dsh-quest-ui] span[class*="_sep"]{color:var(--qdu-line)}',
 			
 				// —— Q4 消息流降噪：助手消息圆角、去硬边框；用户消息仅圆角化
