@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.InteropServices;
+
 using System.Security.Principal;
 using System.Threading;
 using System.Drawing;
@@ -41,7 +41,22 @@ class DSHDesktopUninstaller
     static string NotifRegKey2 = @"Software\Microsoft\Windows\CurrentVersion\PushNotifications\Backup\com.deepseek.dsh.desktop";
     static string MachineEnvKey = @"SYSTEM\CurrentControlSet\Control\Session Manager\Environment";
     static string DshHome = ResolveDshHome();
-    static string DshRuntime = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(DshHome)), ".dsh-runtime");
+    static string DshRuntime = ResolveDshRuntime();
+
+    static string ResolveDshRuntime()
+    {
+        string fullHome = Path.GetFullPath(DshHome);
+        string parent = Path.GetDirectoryName(fullHome);
+
+        // DshHome may be a drive root (e.g. "C:\"), where GetDirectoryName
+        // returns null; fall back to the user profile so Combine is safe.
+        if (string.IsNullOrEmpty(parent) || parent == fullHome)
+        {
+            parent = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        }
+
+        return Path.Combine(parent, ".dsh-runtime");
+    }
     static bool useDetectedRunningDsh = false;
     static string DetectedRunningDshDir = FindRunningDshInstallDir();
     static string LogFilePath = Path.Combine(Directory.GetCurrentDirectory(), "Log.log");
@@ -70,8 +85,8 @@ class DSHDesktopUninstaller
         }
     }
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    static extern int MessageBoxW(IntPtr hWnd, string lpText, string lpCaption, uint uType);
+
+
 #endregion
 
 #region Install Detection
@@ -833,6 +848,55 @@ class DSHDesktopUninstaller
     static void KillDSHProcesses()
     {
         Log("[1/9] Stopping DSH Desktop processes...");
+
+        // First pass: try graceful close when a main window exists,
+        // otherwise terminate the process directly.
+        foreach (Process p in Process.GetProcesses())
+        {
+            try
+            {
+                if (IsDshProcess(p))
+                {
+                    if (p.MainWindowHandle != IntPtr.Zero)
+                    {
+                        p.CloseMainWindow();
+                        Log("  Sent close to: " + p.ProcessName + " (PID " + p.Id + ")");
+                    }
+                    else
+                    {
+                        p.Kill();
+                        Log("  Killed: " + p.ProcessName + " (PID " + p.Id + ")");
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        // Wait up to 3 seconds for graceful shutdown, re-enumerating each time.
+        for (int i = 0; i < 10; i++)
+        {
+            bool anyAlive = false;
+            foreach (Process p in Process.GetProcesses())
+            {
+                try
+                {
+                    if (IsDshProcess(p))
+                    {
+                        anyAlive = true;
+                        break;
+                    }
+                }
+                catch
+                {
+                }
+            }
+            if (!anyAlive) break;
+            Thread.Sleep(300);
+        }
+
+        // Second pass: force-kill any remaining DSH processes.
         foreach (Process p in Process.GetProcesses())
         {
             try
@@ -840,14 +904,15 @@ class DSHDesktopUninstaller
                 if (IsDshProcess(p))
                 {
                     p.Kill();
-                    Log("  Stopped: " + p.ProcessName + " (PID " + p.Id + ")");
+                    Log("  Force killed: " + p.ProcessName + " (PID " + p.Id + ")");
                 }
             }
             catch
             {
             }
         }
-        Thread.Sleep(1500);
+
+        Thread.Sleep(500);
     }
 
     static bool IsDshProcess(Process p)
@@ -929,22 +994,32 @@ class DSHDesktopUninstaller
         FileAttributes attr = File.GetAttributes(path);
         if ((attr & FileAttributes.ReparsePoint) != 0)
         {
+            // Never follow a reparse point into its target.
             Directory.Delete(path, false);
             return;
         }
 
-        string[] subdirs = Directory.GetDirectories(path);
-        foreach (string sub in subdirs)
+        // Clear read-only attributes and delete all files first.
+        foreach (string file in Directory.GetFiles(path))
+        {
+            try
+            {
+                File.SetAttributes(file, FileAttributes.Normal);
+                File.Delete(file);
+            }
+            catch
+            {
+                // A single locked file is retried by the outer DeleteDirectoryWithRetry.
+            }
+        }
+
+        // Recurse into subdirectories, then remove the now-empty directory.
+        foreach (string sub in Directory.GetDirectories(path))
         {
             DeleteDirectorySafe(sub);
         }
 
-        string[] files = Directory.GetFiles(path);
-        foreach (string file in files)
-        {
-            File.Delete(file);
-        }
-
+        // Fail loudly on the final delete so DeleteDirectoryWithRetry can retry.
         Directory.Delete(path, false);
     }
 
@@ -996,6 +1071,7 @@ class DSHDesktopUninstaller
         DeleteRegSubKey(Registry.CurrentUser, NotifRegKey1, "HKCU notification settings");
         DeleteRegSubKey(Registry.CurrentUser, NotifRegKey2, "HKCU push backup");
 
+        // 历史遗留变量，某些旧版本 DSH 曾使用，卸载时清理
         try
         {
             using (RegistryKey key = Registry.CurrentUser.OpenSubKey("Environment", true))
@@ -1312,9 +1388,23 @@ class DSHDesktopUninstaller
         string temp = Path.GetTempPath();
         try
         {
-            string[] dirs = Directory.GetDirectories(temp, "dsh*");
-            foreach (string d in dirs)
+            foreach (string d in Directory.GetDirectories(temp, "dsh*"))
             {
+                string name = Path.GetFileName(d);
+                bool nameMatch = name.StartsWith("dsh-", StringComparison.OrdinalIgnoreCase)
+                                 || name.StartsWith("dsh_", StringComparison.OrdinalIgnoreCase)
+                                 || System.Text.RegularExpressions.Regex.IsMatch(name, @"^dsh\d+$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+                bool contentMatch = Directory.Exists(Path.Combine(d, "node_modules"))
+                                    || File.Exists(Path.Combine(d, "dsh.log"))
+                                    || File.Exists(Path.Combine(d, "dsh-desktop.log"));
+
+                if (!nameMatch || !contentMatch)
+                {
+                    Log("  Skipping non-DSH temp: " + d);
+                    continue;
+                }
+
                 try
                 {
                     Directory.Delete(d, true);
@@ -1330,7 +1420,6 @@ class DSHDesktopUninstaller
         }
     }
 #endregion
-
 #region Logging & Helpers
     static void InitializeLog()
     {
