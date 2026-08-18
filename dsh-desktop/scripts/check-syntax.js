@@ -58,6 +58,7 @@ const entryFiles = [
   'scripts/desktop-backup.js',
   'scripts/desktop-ordering.js',
   'scripts/desktop-validity.js',
+  'scripts/boot-bench.js',
 ];
 
 // （async/await 关键字与 function 声明之间被空行/注释行拆开的孤立关键字）

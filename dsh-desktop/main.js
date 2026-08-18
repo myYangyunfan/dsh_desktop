@@ -1383,6 +1383,7 @@ async function startServer(unsafePortRetries = 4, overlays = []) {
     // 同上：写流 error 静默监听，防 uncaughtException（issue #86）。
     out.on('error', (e) => log('dsh', 'dsh-web.log 写入失败: ' + ((e && e.message) || e)));
     log('dsh', `启动: "${nodeBin}" "${bin}" web --host 127.0.0.1 --port ${webPort}`);
+    bootMark('boot:spawn');
     // --use-system-ca: 让 dsh web 进程信任系统证书库（代理/MITM 场景下内置 node 的
     // 默认 CA 无法验证，导致插件市场等对外 fetch 失败）。
     const patchArgs = overlays
@@ -1456,6 +1457,7 @@ function watchServerProc(proc, out, opts = {}) {
             updater.saveSettings(updCtx(), settings);
           }
         } catch {}
+        bootMark('boot:first-packet');
         finish(resolve, m[1]);
       }
     };
@@ -1557,12 +1559,15 @@ function startAndShow(overlays = []) {
     .then(waitUntilUp)
     .then((url) => {
       webUrl = url;
+      bootMark('boot:wait-up');
       log('boot', 'Web UI 就绪: ' + url);
       // 启动成功后主动清理无 dsh.bundle 声明的坏 bundle 条目：维护者软跳过
       // 保证「不崩」但不清理，坏条目会每次启动告警；这里顺带清理 + 留痕 +
       // 提示。旧世代 boot 的失败兜底在 handleBootFailure，两路共用守卫。
       runBundleContractMaintenance();
-      if (mainWindow && !mainWindow.isDestroyed()) return mainWindow.loadURL(url).then(() => url);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        return mainWindow.loadURL(url).then(() => { bootMark('boot:load'); return url; });
+      }
       return url;
     });
 }
@@ -1881,6 +1886,7 @@ function createWindow(opts = {}) {
   // 页面（重）加载完成后补推一次余额缓存（reload/恢复重建后插件订阅事件
   // 已失效，直接推送当前缓存即可立即恢复显示）。
   win.webContents.on('did-finish-load', () => {
+    bootMark('boot:ui-loaded');
     if (balanceCache) {
       try { win.webContents.send('dsh:balance', balanceCache); } catch {}
     }
@@ -6122,9 +6128,36 @@ function setupTestChannel() {
   log('test-event', 'test-channel-ready');
 }
 
+// ---------------------------------------------------------------------------
+// A-0 启动时间线仪表化：boot() 各阶段打 performance.now() 时间戳，boot-ready
+// 时汇总写入 <userData>/diagnostics/boot-timings.jsonl（保留最近 20 次启动），
+// scripts/boot-bench.js 读取取 p50 定位启动慢点。开销：每次启动一次小文件写。
+// ---------------------------------------------------------------------------
+const bootTimings = {};
+function bootMark(name) {
+  try { bootTimings[name] = performance.now(); } catch {}
+}
+function writeBootTimings() {
+  try {
+    if (typeof bootTimings['boot:start'] !== 'number') return;
+    const base = bootTimings['boot:start'];
+    const ms = {};
+    for (const k of Object.keys(bootTimings)) ms[k] = Math.round(bootTimings[k] - base);
+    const dir = path.join(userDataDir, 'diagnostics');
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, 'boot-timings.jsonl');
+    let lines = [];
+    try { lines = fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(Boolean); } catch {}
+    lines.push(JSON.stringify({ app: APP_VERSION, at: new Date().toISOString(), ms }));
+    if (lines.length > 20) lines = lines.slice(-20);
+    fs.writeFileSync(file, lines.join('\n') + '\n');
+  } catch {}
+}
+
 async function boot() {
   // userData 重定向（便携版 data/ 与 dev 测试 DSH_DESKTOP_USERDATA）已在
   // 模块加载期、单实例锁校验之前完成（见 App lifecycle 区块），此处直接读取。
+  bootMark('boot:start');
   userDataDir = app.getPath('userData');
   logsDir = path.join(userDataDir, 'logs');
   // DSH_HOME: respect an explicit override; otherwise let dsh use its own
@@ -6134,6 +6167,7 @@ async function boot() {
   // 解析发行版/安装目录并探活 node/npm（异步）；探测失败回落 local 模式
   // 继续启动（issue #54），不再抛错让应用无法启动。
   await resolveBackendConfig();
+  bootMark('boot:backend');
   fs.mkdirSync(logsDir, { recursive: true });
   if (dshHome) fs.mkdirSync(dshHome, { recursive: true });
   // 日志体积封顶：desktop.log / dsh-web.log 无界追加，长期运行会膨胀到数百 MB，
@@ -6182,6 +6216,7 @@ async function boot() {
   // 阶段（首次同步/补丁可能耗时数十秒）崩溃/挂起也有兜底，而不是裸奔。
   // （PR #39 提速 + 本合入补齐恢复装配时机）
   createWindow();
+  bootMark('boot:window');
   initRendererRecovery();
   wireWindowRecovery();
   startHeartbeatLoop();
@@ -6196,6 +6231,7 @@ async function boot() {
   // assets/agent-presets 始终在 Windows 侧安装目录）。放在预设同步之前，
   // 恢复后的内容再由 syncLocalAgentPresets / syncBuiltinAgentPresets 以
   // 「源为尊」同步进 dsh 包。
+  bootMark('boot:patches');
   applyPresetGuard();
   const home = dshHome || process.env.DSH_HOME || require('node:path').join(require('node:os').homedir(), '.dsh');
   if (isWslMode()) {
@@ -6226,6 +6262,7 @@ async function boot() {
     applySessionManageFix();
     applyOpenProjectDirFix();
     applySessionPersistenceFix();
+    bootMark('boot:patches-wsl');
   } else {
     // 先修复 profile fallback 联接再同步/补丁依赖文件：EPERM 环境下补丁写不进去。
     await repairProfileFallback(home);
@@ -6250,6 +6287,7 @@ async function boot() {
     applySessionManageFix();
     applyOpenProjectDirFix();
     applySessionPersistenceFix();
+    bootMark('boot:patches-local');
     setupTestChannel();
     if (runKoffiPreflight()) clearAutoPickerBrowseOverlay();
     else enablePickerBrowseOverlay();
@@ -6285,6 +6323,7 @@ async function boot() {
         setInterval(() => runClientUpdateFlow(false), 12 * 3600 * 1000).unref();
       }
       log('test-event', 'boot-ready');
+      writeBootTimings();
     })
     .catch((err) => handleBootFailure(err));
 }
