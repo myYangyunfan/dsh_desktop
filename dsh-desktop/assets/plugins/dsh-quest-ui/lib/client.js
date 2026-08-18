@@ -135,19 +135,39 @@
 				// —— Q3 中央英雄输入卡片（Quest 核心视觉）：浮起白卡、大圆角、
 				//    双层柔影，聚焦时阴影加深 + 主色光环 ——
 				// 卡片外壳（hero 空态与 normal 会话态共用 .uV2eYG_root）；描边用
-				// label 色 8% 透明混合（浅色主题≈浅灰线，深色主题≈浅亮线，避免宿主
-				// border token 的纯深色值形成硬描边）
-				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea){background:var(--qdu-bg-card);border:1px solid color-mix(in srgb,var(--qdu-label-1) 8%,transparent);border-radius:var(--qdu-radius-card);box-shadow:var(--qdu-shadow-float);transition:box-shadow .2s ease,border-color .2s ease}',
+				// label 色 8% 透明混合；position 给 hero 顶部高光线做定位铺垫
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea){position:relative;background:var(--qdu-bg-card);border:1px solid color-mix(in srgb,var(--qdu-label-1) 8%,transparent);border-radius:var(--qdu-radius-card);box-shadow:var(--qdu-shadow-float);transition:box-shadow .2s var(--qdu-ease),border-color .2s var(--qdu-ease)}',
 				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea):focus-within{border-color:color-mix(in srgb,var(--qdu-accent) 45%,transparent);box-shadow:var(--qdu-shadow-float-lg),0 0 0 3px color-mix(in srgb,var(--qdu-accent) 12%,transparent)}',
-				// 空态 hero 形态：更大圆角 + 居中限宽 + 更强浮起感
-				'body[data-dsh-quest-ui] [class*="_composerHero"] [class*="_root"]:has(textarea){border-radius:var(--qdu-radius-hero);box-shadow:var(--qdu-shadow-float-lg)}',
+				// 空态 hero 形态：更大圆角 + 居中限宽 + 更强浮起 + 顶部主色渐变高光线
+				'body[data-dsh-quest-ui] [class*="_composerHero"] [class*="_root"]:has(textarea){border-radius:24px;box-shadow:var(--qdu-shadow-float-lg)}',
+				'body[data-dsh-quest-ui] [class*="_composerHero"] [class*="_root"]:has(textarea)::before{content:"";position:absolute;left:24px;right:24px;top:0;height:2px;border-radius:0 0 999px 999px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--qdu-accent) 55%,transparent) 35%,color-mix(in srgb,var(--qdu-accent) 55%,transparent) 65%,transparent);pointer-events:none}',
 				'body[data-dsh-quest-ui] [class*="_composerHero"]{max-width:780px;margin:0 auto;width:100%}',
-				// 输入框内层透明化，避免与卡片底色叠加；_card 内层圆角兼作 :has 失效时的兜底
-				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_card"]{border-radius:var(--qdu-radius-card)}',
-				'body[data-dsh-quest-ui] [class*="_composerStack"] textarea{background:transparent;border-radius:calc(var(--qdu-radius-card) - 6px)}',
-				// hero 卡内权限/模型行（Full access / 模型名）→ 描边药丸风
-				'body[data-dsh-quest-ui] [class*="_composerHero"] [class*="_root"]:has(textarea) button{border-radius:var(--qdu-radius-pill);border:1px solid var(--qdu-border);background:transparent;color:var(--qdu-label-2);font-size:12px}',
-				'body[data-dsh-quest-ui] [class*="_composerHero"] [class*="_root"]:has(textarea) button:hover{background:var(--qdu-bg-hover)}',
+				// 输入区内层完全透明化（宿主 card/backdrop 自带底色是“生搬感”根源）
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_card"]{border-radius:var(--qdu-radius-card);background:transparent!important}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_grow"] [class*="_backdrop"]{background:transparent!important;border:none!important;box-shadow:none!important}',
+				// textarea：大呼吸内边距 + placeholder 降噪；hero 态更高
+				'body[data-dsh-quest-ui] [class*="_composerStack"] textarea{background:transparent;border-radius:calc(var(--qdu-radius-card) - 6px);padding:14px 18px 6px}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] textarea::placeholder{color:var(--qdu-label-3);opacity:.75}',
+				'body[data-dsh-quest-ui] [class*="_composerHero"] textarea{min-height:64px}',
+				// 发送键（.uV2eYG_primary）：36px 圆形主色 + hover 抬升投影
+				// !important：宿主 normal 态自带 8px 方圆角与尺寸
+				'body[data-dsh-quest-ui] [class*="_composerStack"] button[class*="_primary"]{width:36px;height:36px;border-radius:999px!important;box-shadow:0 2px 8px color-mix(in srgb,var(--qdu-accent) 35%,transparent);transition:transform .15s var(--qdu-ease),box-shadow .15s var(--qdu-ease),opacity .15s ease}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] button[class*="_primary"]:hover{transform:translateY(-1px);box-shadow:0 4px 14px color-mix(in srgb,var(--qdu-accent) 45%,transparent)}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] button[class*="_primary"]:active{transform:translateY(0)}',
+				// 工具行图标钮（命令/附件）：幽灵圆形，去宿主灰底
+				// !important + 双属性选择器提升特异性：宿主对 _add 也用了 ！important
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_row"] [class*="_tools"] button[class*="_add"],body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_row"] [class*="_tools"] .dsh-vision-attach-btn{width:32px;height:32px;border-radius:999px!important;background:transparent!important;background-color:transparent!important;color:var(--qdu-label-2)}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_row"] [class*="_tools"] button[class*="_add"]:hover,body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_row"] [class*="_tools"] .dsh-vision-attach-btn:hover{background:var(--qdu-hover)!important;color:var(--qdu-label-1)}',
+				// 文字选择器（访问模式/选择模型/上下文环）：描边药丸；图标环圆形
+				'body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="访问模式"],body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="选择模型"]{height:28px;border-radius:999px;border:1px solid var(--qdu-line);background:transparent!important;color:var(--qdu-label-2)!important;font-size:12px;transition:background-color .15s ease,border-color .15s ease,color .15s ease}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="访问模式"]:hover,body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="选择模型"]:hover{background:var(--qdu-hover)!important;border-color:var(--qdu-line);color:var(--qdu-label-1)!important}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="上下文"]{border-radius:999px!important;transition:background-color .15s ease}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] button[aria-label*="上下文"]:hover{background:var(--qdu-hover)!important}',
+				// 卡内工具行底部呼吸（row 在 textarea 下）
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_row"]{padding:0 10px 10px}',
+				// 会话统计条（root 兄弟，竖线分隔）：整体降噪，竖线淡化为细线
+				'body[data-dsh-quest-ui] div:has(> span[class*="_sep"]){color:var(--qdu-label-3);font-size:11px}',
+				'body[data-dsh-quest-ui] span[class*="_sep"]{color:var(--qdu-line)}',
 			
 				// —— Q4 消息流降噪：助手消息圆角、去硬边框；用户消息仅圆角化
 				//    （不给背景，避免误伤宿主首子元素（如头像）的既有底色）——
