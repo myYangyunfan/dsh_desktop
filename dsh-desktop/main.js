@@ -2207,6 +2207,7 @@ const COMPANION_PLUGINS = [
   { id: 'client-file-changes', name: '@deepseek-ai/dsh-client-file-changes' },
   { id: 'terminal', name: '@deepseek-ai/dsh-terminal-tab' },
   { id: 'plugin-market', name: 'zat-dsh-engine' },
+  { id: 'skill-manager', name: 'dsh-skill-manager' },
   { id: 'better-sidebar', name: 'dsh-better-sidebar' },
   { id: 'harness-pet', name: 'harness-pet' },
   { id: 'float-window', name: '@deepseek-ai/dsh-float-window' },
@@ -2389,7 +2390,7 @@ function syncCompanionPlugins() {
       // 完整同步插件自带的 lib/assets/src 目录：第三方插件（如
       // dsh-better-sidebar 的懒加载 chunk、harness-pet 的动画素材）不都落在
       // 固定文件清单里，递归复制保证打包产物与资源随插件一起进 profile。
-      for (const sub of ['lib', 'assets', 'src']) {
+      for (const sub of ['lib', 'assets', 'src', 'dist']) {
         const sdir = path.join(src, sub);
         if (fs.existsSync(sdir)) {
           fs.cpSync(sdir, path.join(dest, sub), { recursive: true, force: true });

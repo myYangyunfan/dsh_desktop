@@ -31,6 +31,7 @@ const COMPANION_PLUGINS = [
   { id: 'client-file-changes', name: '@deepseek-ai/dsh-client-file-changes' },
   { id: 'terminal', name: '@deepseek-ai/dsh-terminal-tab' },
   { id: 'plugin-market', name: 'zat-dsh-engine' },
+  { id: 'skill-manager', name: 'dsh-skill-manager' },
   { id: 'float-window', name: '@deepseek-ai/dsh-float-window' },
   { id: 'conversation-tweaks', name: '@deepseek-ai/dsh-conversation-tweaks' },
   { id: 'super-injector', name: '@dsh-external/dsh-super-injector' },
@@ -123,6 +124,12 @@ function syncPlugins(home, dryRun) {
     for (const f of PLUGIN_FILES) {
       const sf = path.join(src, f);
       if (fs.existsSync(sf)) fs.copyFileSync(sf, path.join(dest, f));
+    }
+    for (const sub of ['lib', 'assets', 'src', 'dist']) {
+      const sdir = path.join(src, sub);
+      if (fs.existsSync(sdir)) {
+        fs.cpSync(sdir, path.join(dest, sub), { recursive: true, force: true });
+      }
     }
     log(`已安装 ${p.name}${isBundle ? '（bundle 插件）' : ''}`);
   }
