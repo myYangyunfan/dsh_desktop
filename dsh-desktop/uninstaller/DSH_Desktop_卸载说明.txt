@@ -6,21 +6,33 @@ DSH Desktop 完全卸载程序 - 使用说明
   相关源码、EXE、图标、构建脚本与说明均整理在此目录。
 
 用途:
-  彻底卸载 DSH Desktop，清理程序、更新器、缓存、快捷方式、注册表和 DSH 用户数据残留。
-  已兼容 0.3.9 / 0.3.10 ,可能兼容后续版本：自动扫描注册表中的 DSH Desktop 卸载项，
-  不再依赖单一卸载 GUID / 安装路径。
+  彻底卸载 DSH Desktop / DeepSeek Harness Desktop 等 DSH 桌面端，清理程序、更新器、缓存、
+  快捷方式、注册表和 DSH 用户数据残留。
+  已兼容 0.3.9 / 0.3.10 官方版，并适配其他 DSH 桌面端：
+    - 官方：官方仓库 deepseek-ai/deepseek-harness（窗口显示：官方 deepseek-ai/deepseek-harness）
+    - 第三方：其他 DSH 桌面仓库均视为第三方，例如 myYangyunfan/dsh_desktop、dataelement/dsh-desktop、
+      AmazingBoyCrazy/dsh_desktop、Easyhoov/deepseek-harness-desktop-windows、steven-kid/deepseek-harness-desktop、
+      2633352305/DeepSeekHarness-Desktop 等
+        majiayu000/dsh-desk、gxcsoccer/dsh-studio、FlashingChen/dsh-desktop-hub、Lxiayu/DshCockpit、
+        Ackow/dshdesktop-client、ding7015869-alt/dsh-web-desktop、citrusli2026/dsh-electron-shell、
+        hastings0714/dsh-client、zouyuxuan122/Deepseek-runtime-EAC 等
+    - 未知：识别不出来时显示 未知 null
+    找不到匹配的已知版本时，使用通用卸载逻辑：按注册表卸载项、常见安装位置、进程名、快捷方式名
+    自动扫描清理，不再依赖单一卸载 GUID / 安装路径。
 
 卸载时会执行:
-  1. 结束所有 DSH Desktop 相关进程（安装目录内进程 / DSH Desktop.exe / dsh-desktop.exe）
-  2. 删除 DSH Desktop 程序目录（自动识别注册表与常见安装位置）
-  3. 删除 %LOCALAPPDATA%\dsh-desktop-updater
-  4. 删除 %LOCALAPPDATA%\dsh-launcher-updater
-  5. 删除 %APPDATA%\DSH Desktop 与 %APPDATA%\dsh-desktop（缓存/日志/数据）
-  6. 删除桌面与开始菜单的 DSH Desktop 快捷方式（当前用户 + 公共用户）
-  7. 删除注册表中的 DSH Desktop 卸载项（HKLM/HKCU、32/64 位视图通用扫描）
+  1. 结束所有 DSH 相关进程（安装目录内进程 / DSH Desktop.exe / dsh-desktop.exe /
+     DeepSeek Harness Desktop.exe / deepseek-harness.exe / DSHDesktop.exe / dshdesktop.exe / deepseek-runtime-desktop.exe / DSH-Desktop.exe / DeepSeek-runtime-Desktop.exe / dsh-desk.exe / dsh-studio.exe / dsh-desktop-hub.exe / dsh-cockpit.exe / dsh-client.exe / dsh-web-desktop.exe / dsh-electron-shell.exe）
+  2. 删除检测到的 DSH 程序目录（注册表 + 常见安装位置 + 已知变体目录）
+  3. 删除 %LOCALAPPDATA% 下已知更新器/程序目录（dsh-desktop-updater、dsh-launcher-updater、dsh-updater 等）
+  4. 删除 %APPDATA% 下 DSH Desktop / dsh-desktop / DeepSeek Harness 等缓存/日志/数据
+  5. 删除 %LOCALAPPDATA%\dsh-edge-app（Edge 简洁版）与 npm 全局 @deepseek-ai/dsh（如存在）
+  6. 删除桌面与开始菜单的 DSH 相关快捷方式（当前用户 + 公共用户）
+  7. 删除注册表中的 DSH 卸载项（HKLM/HKCU、32/64 位视图通用扫描）
   8. 删除 HKCU 通知/推送残留
   9. 从系统 PATH 移除 %USERPROFILE%\.dsh-runtime\node
-  10. 清理 %USERPROFILE%\.dsh 用户数据（默认全部删除，包括 .agent-presets 与 sessions 聊天数据）
+  10. 清理 %USERPROFILE%\.dsh 用户数据（默认全部删除，包括 .agent-presets、sessions 聊天数据与 skills 技能）
+       （skills 技能位于 %USERPROFILE%\.dsh\skills，所有 DSH 桌面端共用同一 DSH_HOME 数据根，无需单独为各变体适配）
   11. 清理 %USERPROFILE%\.dsh-runtime（默认删除；如选择保留则不删）
   12. 清理 %TEMP%\dsh* 临时目录
 
@@ -42,24 +54,31 @@ DSH Desktop 完全卸载程序 - 使用说明
   - /KeepModelConfig
         保留模型配置与凭据（.credentials.yaml + settings.yaml 中的模型配置；settings.yaml 与应用设置共用时合并保留）
   - /KeepOtherUserData
-        保留 .dsh 中除预设、聊天、插件、应用设置、模型配置外的其他数据
+        保留 .dsh 中除预设、聊天、插件、skills、应用设置、模型配置外的其他数据
         （graph-memory/storages/super-injector/profiles 等），别名 /KeepOtherData
   - /KeepChatData
         保留聊天数据（.dsh\sessions 对话记录），别名 /KeepChat
+    - /KeepSkills
+          保留 .dsh\skills 全部 skills（技能）
+    - /KeepSkills=名称1,名称2
+          仅保留指定 skills，例如 /KeepSkills=animate,prototype
   - /KeepAll
-        保留所有可选项目：预设、插件、聊天、应用设置、模型配置、其他 .dsh 数据、.dsh-runtime
-        （等价 /KeepPresets /KeepPlugins /KeepChatData /KeepAppSettings /KeepModelConfig /KeepOtherUserData /KeepRuntime）
+        保留所有可选项目：预设、插件、skills、聊天、应用设置、模型配置、其他 .dsh 数据、.dsh-runtime
+        （等价 /KeepPresets /KeepPlugins /KeepSkills /KeepChatData /KeepAppSettings /KeepModelConfig /KeepOtherUserData /KeepRuntime）
 
   卸载模式:
     - 程序识别卸载（/DetectRunning，别名 /DetectDSH）
-          识别当前正在运行的 DSH（DSH Desktop.exe / dsh-desktop.exe），
+          识别当前正在运行的 DSH（DSH Desktop.exe / dsh-desktop.exe / DeepSeek Harness Desktop.exe 等），
           找到其所在目录并卸载该目录；若当前没有运行中的 DSH，则自动回退到默认卸载。
     - 默认卸载（/Default）
           当前默认行为：按注册表卸载项、常见安装位置、当前程序目录顺序检测。
 
 
-交互模式:
-  双击运行后会弹出卸载确认窗口；
+  窗口最上方显示“当前DSH: 官方/第三方/未知”，用于提示本次识别到的桌面端类型：
+    - 官方：官方仓库 deepseek-ai/deepseek-harness，显示 官方 deepseek-ai/deepseek-harness
+    - 第三方：其他 DSH 仓库，显示 第三方 仓库路径，例如 myYangyunfan/dsh_desktop、AmazingBoyCrazy/dsh_desktop
+    - 未知：识别不出来时显示 未知 null
+    - 未知/通用情况下仍会使用通用卸载逻辑
   窗口顶部先选择“卸载模式”：
     - 程序识别卸载：识别当前运行的 DSH 并卸载其目录；未检测到运行中 DSH 时自动回退默认。
     - 默认卸载：按注册表/常见安装路径检测，即当前默认行为。
@@ -75,7 +94,8 @@ DSH Desktop 完全卸载程序 - 使用说明
     - 其他 .dsh 数据：保留预设、聊天、插件、应用设置、模型配置之外的其余 .dsh 数据
       （graph-memory/storages/super-injector/profiles 等）
     - .dsh-runtime：保留 DSH CLI 运行时
-  勾选完成后点击“卸载”继续，点击“取消”退出。
+  勾选完成后点击“卸载”，会再次弹出确认窗口，列出本次要保留的内容；
+  点击“确定”才开始卸载，点击“取消”则退出。
 
 静默参数:
   Uninstall_DSH_Desktop.exe /S
@@ -89,6 +109,6 @@ Uninstall_DSH_Desktop.exe /S /DetectRunning
 
 
 注意:
-  - 卸载会删除 DSH Desktop 产生的用户数据/会话记录；请提前备份需要的内容。
+  - 卸载会删除 DSH / DeepSeek Harness 桌面端产生的用户数据/会话记录；请提前备份需要的内容。
   - 旧的 0.3.9 安装包固定保留 agent-sc / agent-sc-v 与 .dsh-runtime，
     新版本已改为可选保留项，不再强制保留。
