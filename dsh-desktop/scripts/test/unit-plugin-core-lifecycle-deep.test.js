@@ -42,19 +42,29 @@ function lockFile(file, holdMs = 15000) {
     "Start-Sleep -Seconds " + Math.ceil(holdMs / 1000);
   const child = cp.spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { stdio: ['ignore', 'ignore', 'pipe'] });
   const errChunks = [];
+  let spawnErr = '';
   if (child.stderr) child.stderr.on('data', (d) => errChunks.push(d));
+  child.on('error', (e) => { spawnErr = String(e && e.message); });
   return {
     child,
     async ready() {
-      // 就绪预算 40s：GitHub runner 的 PowerShell 冷启动在多测试并行 IO 抢占
-      // 下可超 10s（CI 实测 I1(d) 在旧 10s 预算内 marker 未现误判锁失败）。
+      const t0 = Date.now();
       for (let i = 0; i < 1600; i += 1) {
         if (fs.existsSync(marker)) return true;
         if (child.exitCode !== null) {
-          throw new Error(`锁进程提前退出(${child.exitCode})：${Buffer.concat(errChunks).toString('utf8').slice(0, 500)}`);
+          // 【CI 诊断专用】把 exit code、spawn error、stderr、脚本原文全部打进
+          // 测试输出，定位 runner 上 PowerShell 锁失败的真因后移除。
+          console.error('[lockdiag] 提前退出', JSON.stringify({
+            exitCode: child.exitCode, spawnErr,
+            stderr: Buffer.concat(errChunks).toString('utf8').slice(0, 1500),
+            file, script, PATH_HAS_PS: (process.env.PATH || '').toLowerCase().includes('powershell'),
+            elapsed: Date.now() - t0,
+          }));
+          return false;
         }
         await sleep(25);
       }
+      console.error('[lockdiag] 超时', JSON.stringify({ spawnErr, stderr: Buffer.concat(errChunks).toString('utf8').slice(0, 1500), elapsed: Date.now() - t0 }));
       return fs.existsSync(marker);
     },
     async release() {
