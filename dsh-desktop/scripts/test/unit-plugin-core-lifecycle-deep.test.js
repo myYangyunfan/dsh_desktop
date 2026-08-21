@@ -61,11 +61,12 @@ function lockFile(file, holdMs = 15000) {
             elapsed: Date.now() - t0,
           }));
           // GitHub 注解通道：全量套件日志过大被截断时，注解走独立小接口可稳定取回。
-          console.error('::error ::lockdiag-early-exit ' + JSON.stringify({ exitCode: child.exitCode, spawnErr, stderr: Buffer.concat(errChunks).toString('utf8').slice(0, 600) }));
+          console.error('::error::lockdiag-early-exit ' + JSON.stringify({ exitCode: child.exitCode, spawnErr, stderr: Buffer.concat(errChunks).toString('utf8').slice(0, 600) }));
           return false;
         }
         await sleep(25);
       }
+      console.error('::error::lockdiag-timeout ' + JSON.stringify({ spawnErr, stderr: Buffer.concat(errChunks).toString('utf8').slice(0, 600), elapsed: Date.now() - t0 }));
       console.error('[lockdiag] 超时', JSON.stringify({ spawnErr, stderr: Buffer.concat(errChunks).toString('utf8').slice(0, 1500), elapsed: Date.now() - t0 }));
       return fs.existsSync(marker);
     },
