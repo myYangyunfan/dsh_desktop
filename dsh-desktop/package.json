@@ -7,12 +7,11 @@
   "license": "MIT",
   "private": true,
   "scripts": {
-    "test": "node --test scripts/test/unit-plugin-core-lifecycle-deep.test.js",
+    "test": "node --test \"scripts/test/*.test.js\" \"scripts/test/*.test.mjs\"",
     "fetch-node": "node scripts/fetch-node.js",
     "fetch-npm": "node scripts/fetch-npm.js",
     "fetch-runtime": "node scripts/fetch-node.js && node scripts/fetch-npm.js",
-    "postinstall": "node scripts/patch-deps.js",
-    "__orig_test": "node --test \"scripts/test/*.test.js\" \"scripts/test/*.test.mjs\""
+    "postinstall": "node scripts/patch-deps.js"
   },
   "dependencies": {
     "@deepseek-ai/dsh": "0.1.1-rc.1",
