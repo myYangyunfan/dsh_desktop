@@ -40,34 +40,18 @@ function lockFile(file, holdMs = 15000) {
     "$f = [System.IO.File]::Open('" + psFile + "', [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::None);" +
     "[System.IO.File]::WriteAllText('" + psMarker + "', '1');" +
     "Start-Sleep -Seconds " + Math.ceil(holdMs / 1000);
-  const child = cp.spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { stdio: ['ignore', 'ignore', 'pipe'] });
-  const errChunks = [];
-  let spawnErr = '';
-  if (child.stderr) child.stderr.on('data', (d) => errChunks.push(d));
-  child.on('error', (e) => { spawnErr = String(e && e.message); });
+  // 优先 pwsh（PowerShell 7）：GitHub runner 上冷启动 ~0.3s，比 Windows
+  // PowerShell 5.1（并行全量测试抢占下可达 10s+）快一个量级；无 pwsh 回落。
+  const exe = cp.spawnSync('pwsh', ['-NoProfile', '-Command', 'exit 0'], { timeout: 8000, windowsHide: true }).status === 0 ? 'pwsh' : 'powershell';
+  const child = cp.spawn(exe, ['-NoProfile', '-NonInteractive', '-Command', script], { stdio: ['ignore', 'ignore', 'ignore'], windowsHide: true });
   return {
     child,
     async ready() {
-      const t0 = Date.now();
+      // 就绪预算 40s（原 10s 在 CI 并行负载下不够）。
       for (let i = 0; i < 1600; i += 1) {
         if (fs.existsSync(marker)) return true;
-        if (child.exitCode !== null) {
-          // 【CI 诊断专用】把 exit code、spawn error、stderr、脚本原文全部打进
-          // 测试输出，定位 runner 上 PowerShell 锁失败的真因后移除。
-          console.error('[lockdiag] 提前退出', JSON.stringify({
-            exitCode: child.exitCode, spawnErr,
-            stderr: Buffer.concat(errChunks).toString('utf8').slice(0, 1500),
-            file, script, PATH_HAS_PS: (process.env.PATH || '').toLowerCase().includes('powershell'),
-            elapsed: Date.now() - t0,
-          }));
-          // GitHub 注解通道：全量套件日志过大被截断时，注解走独立小接口可稳定取回。
-          console.error('::error::lockdiag-early-exit ' + JSON.stringify({ exitCode: child.exitCode, spawnErr, stderr: Buffer.concat(errChunks).toString('utf8').slice(0, 600) }));
-          return false;
-        }
         await sleep(25);
       }
-      console.error('::error::lockdiag-timeout ' + JSON.stringify({ spawnErr, stderr: Buffer.concat(errChunks).toString('utf8').slice(0, 600), elapsed: Date.now() - t0 }));
-      console.error('[lockdiag] 超时', JSON.stringify({ spawnErr, stderr: Buffer.concat(errChunks).toString('utf8').slice(0, 1500), elapsed: Date.now() - t0 }));
       return fs.existsSync(marker);
     },
     async release() {
