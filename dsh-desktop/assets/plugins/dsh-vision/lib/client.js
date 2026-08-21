@@ -32,12 +32,7 @@ window.__ModuleLoader__.load({
         };
       }
     } catch { /* 模块不在页面表（rc.7 及更早内核）→ 走下一级回落 */ }
-    if (!bindSnapshotSelector) {
-      try {
-        const webReactMod = require("@deepseek-ai/dsh-client-web-react");
-        if (typeof webReactMod.bindSnapshotSelector === "function") bindSnapshotSelector = webReactMod.bindSnapshotSelector;
-      } catch { /* compat 未注入（罕见）→ react 原生兜底 */ }
-    }
+
     if (!bindSnapshotSelector) {
       const { useSyncExternalStore } = require("react");
       bindSnapshotSelector = (source) => {
