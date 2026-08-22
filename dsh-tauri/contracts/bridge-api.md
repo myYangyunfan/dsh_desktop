@@ -143,9 +143,9 @@
 
 | 上行 | 载荷/节律 | 语义 |
 |------|-----------|------|
-| renderer 心跳 | 5s 一次 + `visibilitychange` 可见时立即补报 | 挂起兜底判定（仅可见窗口） |
-| `page-error` | `window.onerror` / `unhandledrejection` 文本 | 页面异常 → desktop.log |
-| `current-session` | 3s 轮询 `localStorage['dsh.sessions.current']`，变化才发 | 当前观看会话（通知调试日志用） |
+| renderer 心跳 | 5s 一次 + `visibilitychange` 可见时立即补报；载荷带窗口归属标签 `{window: 'main'\|'float'\|'pet'}`，**仅主框架发送**（iframe 全跳过——开销不随帧数翻倍，iframe 心跳不污染主窗计数） | 挂起兜底判定（仅可见且未最小化的主窗；浮窗/宠物窗心跳不参与判定） |
+| `page-error` | `window.onerror` / `unhandledrejection` 文本 | 页面异常 → desktop.log（仅主框架上报） |
+| `current-session` | 3s 轮询 `localStorage['dsh.sessions.current']`，变化才发（仅主框架） | 当前观看会话（通知调试日志用） |
 | `float:close` / `pet:close` / `pet:move-to` / `pet:set-auto-open` | — | 见 §2.6 / §2.9 |
 
 ## 5. 模式全局（浮窗 / 宠物窗）

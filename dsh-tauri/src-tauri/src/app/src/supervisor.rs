@@ -26,8 +26,49 @@ use kernel_process::crash_loop::Verdict;
 const SERVICE_STABLE_SECS: u64 = 45;
 /// boot 看门狗上限（D2「永挂形态」根治）：boot 全链有界 5 分钟。
 const BOOT_WATCHDOG_TIMEOUT: Duration = Duration::from_secs(300);
+/// 单步 sidecar 子进程上限（有界执行，性能审计 2026-08）：健康路径每步
+/// 秒级；AV 拦半死时按失败处理进瀑布/恢复页，不再拖满整个看门狗窗口。
+const SIDECAR_STEP_TIMEOUT: Duration = Duration::from_secs(60);
+/// boot 链整体（cli.js boot 五步）上限：健康 ~4s；两层瀑布最坏 2×120s
+/// 仍留在看门狗 300s 之内。
+const SIDECAR_BOOT_TIMEOUT: Duration = Duration::from_secs(120);
 
 use shell_core::RunState;
+
+/// 探活三态（单连接判定：连不上 = 进程死；连得上但 HTTP 无响应 = 假死；
+/// 有响应字节 = 活）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProbeOutcome {
+    Alive,
+    TcpDead,
+    Zombie,
+}
+
+use crate::bounded;
+
+/// 内核进程 + 其杀树 Job 句柄（进程隔离不变量：两者同进同出——
+/// 内核终结（kill_tree / 自然退出）后 Job 句柄随本结构 Drop 关闭，
+/// 不再随 spawn 泄漏；壳存活期间句柄在场，强杀兜底语义不变）。
+struct KernelProc {
+    child: Child,
+    job: kernel_process::job_object::JobHandle,
+}
+
+/// boot 进行中标志（「双内核竞态」根治，性能审计 2026-08）：瀑布运行期间
+/// 内核启动期退出由瀑布层独占接管——崩溃自动重启臂（2s 延迟线程）必须
+/// 让位。历史缺陷：两条恢复路径无互斥，瀑布二层重跑 boot 链（~4s）期间
+/// 自动重启线程先拉起内核 A，随后瀑布又拉起内核 B 并直接覆盖句柄——A 成为
+/// 无人管理的孤儿内核（数百 MB RSS 常驻，直到进程退出才被 Job Object 收割）。
+struct BootActiveGuard(Arc<Supervisor>, u64);
+impl Drop for BootActiveGuard {
+    fn drop(&mut self) {
+        // 代际感知：旧瀑布的守卫不得清掉新瀑布的标志（restart 叠加场景）。
+        let mut g = self.0.inner.lock().unwrap_or_else(|p| p.into_inner());
+        if g.generation == self.1 {
+            g.boot_active = false;
+        }
+    }
+}
 
 /// supervisor 对外事件（发给装配层，转发给窗口/托盘/日志）。
 #[derive(Debug, Clone)]
@@ -60,7 +101,7 @@ pub struct Supervisor {
 
 struct Inner {
     state: RunState,
-    kernel: Option<Child>,
+    kernel: Option<KernelProc>,
     kernel_url: Option<String>,
     port: Option<u16>,
     last_error: Option<String>,
@@ -78,6 +119,9 @@ struct Inner {
     /// （同代际下崩溃自动重启换内核后，旧环不得继续探活/误杀新内核）。
     probe_gen: u64,
     stopping: bool,
+    /// 瀑布进行中（BootActiveGuard 维护）：启动期退出由瀑布独占接管，
+    /// 崩溃自动重启臂让位（防双内核竞态，见 BootActiveGuard）。
+    boot_active: bool,
 }
 
 
@@ -143,6 +187,7 @@ impl Supervisor {
                 generation: 0,
                 probe_gen: 0,
                 stopping: false,
+                boot_active: false,
             })),
         }
     }
@@ -230,6 +275,10 @@ impl Supervisor {
     fn boot_waterfall(this: Arc<Self>, tx: Sender<SupervisorEvent>, preferred_port: Option<u16>) {
         {
             let gen = this.inner.lock().unwrap_or_else(|p| p.into_inner()).generation;
+            // 瀑布启动：独占内核恢复权直到本链终局（就绪/恢复页/取消）——
+            // Drop 守卫保证任何 return / panic 路径都释放（代际感知防叠犬误清）。
+            this.inner.lock().unwrap_or_else(|p| p.into_inner()).boot_active = true;
+            let _boot_guard = BootActiveGuard(Arc::clone(&this), gen);
             // ---- [0.5] farm 实体目录去材料化（Electron repairProfileFallback
             // 等价物，H/V2 实测定论的残余风险）：farm 条目被云同步/复制还原成
             // 实体目录时内核 heal 直接放弃（"exists and is not a symlink"），
@@ -399,15 +448,16 @@ impl Supervisor {
     }
 
     /// guard 子命令薄跑（stdout 末行 JSON 解析；失败返回 None——瀑布降级而非崩）。
+    /// 有界执行：AV 拦半死的 node 不再拖住 boot 线程（超时按失败处理）。
     fn guard_cli_json(&self, args: &[&str]) -> Option<serde_json::Value> {
-        let out = Command::new(&self.node_exe)
-            .arg(&self.sidecar_cli)
+        let mut cmd = Command::new(&self.node_exe);
+        cmd.arg(&self.sidecar_cli)
             .args(args)
             .arg("--app-dir")
             .arg(&self.app_dir)
-            .creation_flags_win()
-            .output()
-            .ok()?;
+            .creation_flags_win();
+        let out = bounded::output_with_timeout(&mut cmd, SIDECAR_STEP_TIMEOUT).ok()?;
+        let out = out.output?;
         if !out.status.success() { return None; }
         let stdout = String::from_utf8_lossy(&out.stdout);
         let line = stdout.trim_end().lines().last()?;
@@ -436,18 +486,18 @@ impl Supervisor {
             eprintln!("[farm-repair] 脚本缺失（{:?}），跳过", script);
             return;
         }
-        let out = Command::new(&self.node_exe)
-            .arg(&script)
+        let mut cmd = Command::new(&self.node_exe);
+        cmd.arg(&script)
             .arg(&self.app_dir)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .creation_flags_win()
-            .output();
+            .creation_flags_win();
+        let out = bounded::output_with_timeout(&mut cmd, SIDECAR_STEP_TIMEOUT);
         match out {
             Ok(o) => {
-                let stderr = String::from_utf8_lossy(&o.stderr);
-                for line in stderr.lines().filter(|l| l.contains("[farm-repair]")) {
-                    log_line(line);
+                if let Some(out) = o.output {
+                    let stderr = String::from_utf8_lossy(&out.stderr);
+                    for line in stderr.lines().filter(|l| l.contains("[farm-repair]")) {
+                        log_line(line);
+                    }
                 }
             }
             Err(e) => eprintln!("[farm-repair] 执行失败（不阻断）：{e}"),
@@ -455,23 +505,23 @@ impl Supervisor {
     }
 
     fn run_sidecar_boot(&self, tx: &Sender<SupervisorEvent>, _gen: u64) -> Result<(), String> {
-        let out = Command::new(&self.node_exe)
-            .arg(&self.sidecar_cli)
+        let mut cmd = Command::new(&self.node_exe);
+        cmd.arg(&self.sidecar_cli)
             .arg("boot")
             .arg("--app-dir")
             .arg(&self.app_dir)
             .env("DSH_TAURI_VERSION", env!("CARGO_PKG_VERSION"))
             // GUI 进程起 console 子进程抑制终端窗（boot 是「启动后弹终端」主源，
             // 与本文件其余 node spawn 同口径——0.5.0 实测修复）。
-            .creation_flags_win()
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
+            .creation_flags_win();
+        let out = bounded::output_with_timeout(&mut cmd, SIDECAR_BOOT_TIMEOUT)
             .map_err(|e| {
                 let msg = format!("sidecar spawn 失败（node: {} cli: {}）: {e}", self.node_exe.display(), self.sidecar_cli.display());
                 eprintln!("[boot] {msg}");
                 msg
-            })?;
+            })?
+            .output
+            .ok_or("sidecar boot 超时被终止（有界执行）")?;
         if !out.status.success() {
             let msg = format!("sidecar boot 退出码 {:?}: {}", out.status.code(), String::from_utf8_lossy(&out.stderr).lines().take(6).collect::<Vec<_>>().join(" | "));
             eprintln!("[boot] {msg}");
@@ -504,14 +554,16 @@ impl Supervisor {
         let ok = match cached {
             Some(true) => true,
             _ => {
-                let out = std::process::Command::new(&self.node_exe)
-                    .arg(&self.sidecar_cli)
+                let mut cmd = std::process::Command::new(&self.node_exe);
+                cmd.arg(&self.sidecar_cli)
                     .arg("koffi-preflight")
                     .arg("--app-dir")
                     .arg(&self.app_dir)
-                    .creation_flags_win()
-                    .output();
-                let ok = matches!(out, Ok(o) if o.status.success()
+                    .creation_flags_win();
+                let out = bounded::output_with_timeout(&mut cmd, SIDECAR_STEP_TIMEOUT)
+                    .ok()
+                    .and_then(|o| o.output);
+                let ok = matches!(out, Some(o) if o.status.success()
                     && String::from_utf8_lossy(&o.stdout).trim_end().ends_with("{\"ok\":true}"));
                 if ok {
                     let _ = settings.set("koffiPreflightOk", serde_json::json!(true));
@@ -520,14 +572,16 @@ impl Supervisor {
             }
         };
         if !ok {
-            let out = std::process::Command::new(&self.node_exe)
-                .arg(&self.sidecar_cli)
+            let mut cmd = std::process::Command::new(&self.node_exe);
+            cmd.arg(&self.sidecar_cli)
                 .arg("picker-overlay")
                 .arg("--app-dir")
                 .arg(&self.app_dir)
-                .creation_flags_win()
-                .output();
-            if let Ok(o) = out {
+                .creation_flags_win();
+            let out = bounded::output_with_timeout(&mut cmd, SIDECAR_STEP_TIMEOUT)
+                .ok()
+                .and_then(|o| o.output);
+            if let Some(o) = out {
                 let stdout = String::from_utf8_lossy(&o.stdout);
                 if let Some(line) = stdout.trim_end().lines().last() {
                     if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
@@ -558,14 +612,16 @@ impl Supervisor {
 
     /// 刷新 safe-boot overlay（崩溃自动重启前）：解析 dsh-web.log 失败插件 → 禁用。
     fn refresh_safe_overlay(&self) -> bool {
-        let out = std::process::Command::new(&self.node_exe)
-            .arg(&self.sidecar_cli)
+        let mut cmd = std::process::Command::new(&self.node_exe);
+        cmd.arg(&self.sidecar_cli)
             .arg("safe-overlay")
             .arg("--app-dir")
             .arg(&self.app_dir)
-            .creation_flags_win()
-            .output();
-        let Ok(o) = out else { return false };
+            .creation_flags_win();
+        let Some(o) = bounded::output_with_timeout(&mut cmd, SIDECAR_STEP_TIMEOUT)
+            .ok()
+            .and_then(|o| o.output)
+        else { return false };
         let stdout = String::from_utf8_lossy(&o.stdout);
         let Some(line) = stdout.trim_end().lines().last() else { return false };
         let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else { return false };
@@ -586,6 +642,16 @@ impl Supervisor {
 
     /// spawn 内核进程 + 就绪行监视线程。
     fn spawn_kernel(self: Arc<Self>, port: u16, tx: &Sender<SupervisorEvent>) -> Result<(), String> {
+        // 进程隔离不变量：spawn 前必须无活内核——任何并发路径违反互斥
+        // （瀑布 vs 自动重启）时，后来者负责回收先到者。历史缺陷：直接覆盖
+        // 句柄 = 先到内核成为孤儿（数百 MB RSS 无人管，占着端口直到进程退出）。
+        let orphan = self.inner.lock().unwrap_or_else(|p| p.into_inner()).kernel.take();
+        if let Some(mut victim) = orphan {
+            let pid = victim.child.id();
+            log_line(&format!("spawn 前发现未回收内核 pid={pid}（并发 spawn 违例，先杀后起）"));
+            kernel_process::kill_tree(&mut victim.child, pid);
+            victim.job.close(); // 内核已终结：释放 Job 句柄
+        }
         let overlays = self.inner.lock().unwrap_or_else(|p| p.into_inner()).overlays.clone();
         let spec = SpawnSpec::new(&self.node_exe, &self.bin_js, &self.kernel_version, port, &overlays);
         let mut cmd = Command::new(&spec.node_exe);
@@ -610,12 +676,17 @@ impl Supervisor {
         log_line(&format!("内核 pid={pid} spawn: {}", spec.display_cmd()));
 
         // Review#2 根治：Job Object 杀树保护（父进程被强杀时 OS 收割内核树）。
-        if let Err(e) = kernel_process::job_object::assign_child_to_kill_on_close_job(&child) {
-            log_line(&format!("Job Object 赋值失败（杀树保护降级为显式 taskkill）: {e}"));
-        }
+        // 句柄随 KernelProc 存活，内核终结后 Drop 关闭（不再随 spawn 泄漏）。
+        let job = match kernel_process::job_object::assign_child_to_kill_on_close_job(&child) {
+            Ok(job) => job,
+            Err(e) => {
+                log_line(&format!("Job Object 赋值失败（杀树保护降级为显式 taskkill）: {e}"));
+                kernel_process::job_object::JobHandle::noop()
+            }
+        };
         let stdout = child.stdout.take().ok_or("stdout piped 失败")?;
         let stderr = child.stderr.take();
-        self.inner.lock().unwrap_or_else(|p| p.into_inner()).kernel = Some(child);
+        self.inner.lock().unwrap_or_else(|p| p.into_inner()).kernel = Some(KernelProc { child, job });
 
         // 就绪行监视（独占读 stdout；读 EOF 时若进程仍在则继续探活兜底）。
         let this = Arc::clone(&self);
@@ -665,7 +736,7 @@ impl Supervisor {
             let (code, exited) = {
                 let mut g = this.inner.lock().unwrap_or_else(|p| p.into_inner());
                 match g.kernel.as_mut() {
-                    Some(c) => match c.try_wait() {
+                    Some(kp) => match kp.child.try_wait() {
                         Ok(Some(st)) => (st.code(), true),
                         Ok(None) => (None, true), // stdout 关了但进程在：罕见，按退出处理
                         Err(_) => (None, true),
@@ -720,10 +791,20 @@ impl Supervisor {
             // 经 KernelReady 把页面从恢复页拉回内核页（页面反复横跳）。
             Verdict::Tripped | Verdict::Cooldown => self.enter_recovery_tx(tx, "崩溃环触发"),
             Verdict::Ok => {
+                // 瀑布进行中：启动期退出由瀑布层独占接管（boot_active 互斥）——
+                // 历史缺陷：自动重启臂（2s 延迟）与瀑布二层（重跑 boot 链 ~4s）
+                // 无互斥，两路各拉一个内核，后者覆盖句柄 → 前者成孤儿内核
+                // （数百 MB RSS 常驻；若同端口其一还吃 EADDRINUSE 记假崩溃）。
+                let (port, gen, boot_active) = {
+                    let g = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+                    (g.port, g.generation, g.boot_active)
+                };
+                if boot_active {
+                    log_line("瀑布进行中：启动期退出由瀑布层接管，本次不自动重启（防双内核竞态）");
+                    return;
+                }
                 // 未成环：自动重启一次（Electron watchServerProc 语义：异常退出自动拉起）。
                 // 探活/换页不在此布防：新内核的就绪行线程统一负责（probe_gen 令牌）。
-                let port = self.inner.lock().unwrap_or_else(|p| p.into_inner()).port;
-                let gen = self.inner.lock().unwrap_or_else(|p| p.into_inner()).generation;
                 let this = Arc::clone(self);
                 let tx2 = tx.clone();
                 std::thread::spawn(move || {
@@ -744,23 +825,33 @@ impl Supervisor {
         }
     }
 
-    /// 探活循环：TCP connect + 就绪超时。
-    /// HTTP 应用层探活：读到任何响应字节（含 404/401——内核对 / 至少回
-    /// index/错误页）即证明事件循环在转。TCP 握手由 OS 协议栈完成，进程
-    /// 假死时也恒成功——必须发请求读响应才能区分（issue #122/#129）。
-    fn http_alive(port: u16) -> bool {
+    /// 单连接三态探活（性能审计 2026-08：原实现每拍开两条连接——TCP 试探
+    /// 一条、http_alive 再开一条，健康稳态每天 ~5.76 万次环回连接纯浪费）。
+    fn probe_outcome(port: u16) -> ProbeOutcome {
         use std::io::{Read, Write};
-        let Ok(addr) = format!("127.0.0.1:{port}").parse() else { return false };
+        let Ok(addr) = format!("127.0.0.1:{port}").parse() else { return ProbeOutcome::TcpDead };
         let Ok(mut s) = std::net::TcpStream::connect_timeout(&addr, Duration::from_secs(2)) else {
-            return false;
+            return ProbeOutcome::TcpDead;
         };
         let _ = s.set_read_timeout(Some(Duration::from_secs(3)));
         let _ = s.set_write_timeout(Some(Duration::from_secs(3)));
         if s.write_all(b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n").is_err() {
-            return false;
+            // 端口在、协议死：按假死计；进程若真死，下一拍 connect 失败归 TcpDead。
+            return ProbeOutcome::Zombie;
         }
         let mut buf = [0u8; 16];
-        matches!(s.read(&mut buf), Ok(n) if n > 0)
+        match s.read(&mut buf) {
+            Ok(n) if n > 0 => ProbeOutcome::Alive,
+            _ => ProbeOutcome::Zombie,
+        }
+    }
+
+    /// HTTP 应用层探活（bool 语义，热探路径消费）：读到任何响应字节（含
+    /// 404/401——内核对 / 至少回 index/错误页）即证明事件循环在转。TCP 握手
+    /// 由 OS 协议栈完成，进程假死时也恒成功——必须发请求读响应才能区分
+    /// （issue #122/#129）。
+    fn http_alive(port: u16) -> bool {
+        Self::probe_outcome(port) == ProbeOutcome::Alive
     }
 
     fn probe_loop(self: &Arc<Self>, port: u16, tx: Sender<SupervisorEvent>, gen: u64, probe_gen: u64) {
@@ -792,46 +883,43 @@ impl Supervisor {
                         return;
                     }
                 }
-                let tcp_ok = std::net::TcpStream::connect_timeout(
-                    &format!("127.0.0.1:{port}").parse().unwrap(),
-                    Duration::from_secs(2),
-                )
-                .is_ok();
-                if tcp_ok && Self::http_alive(port) {
-                    consecutive = 0;
-                    zombie = 0;
-                    continue;
-                }
-                if !tcp_ok {
-                    zombie = 0;
-                    consecutive += 1;
-                    let _ = tx.send(SupervisorEvent::ProbeFailed { consecutive });
-                    if consecutive >= 3 {
-                        // 端口连续失联但进程可能还活着：杀掉按退出处理。
-                        // 内核已不在（退出处理链已接管：自动重启或恢复页）时
-                        // 不得再记一次崩溃——那会把后续自动重启的新内核当作
-                        // 本次失败连带处理。
-                        let kernel_present = {
-                            let g = this.inner.lock().unwrap_or_else(|p| p.into_inner());
-                            g.kernel.is_some()
-                        };
-                        if kernel_present {
+                match Self::probe_outcome(port) {
+                    ProbeOutcome::Alive => {
+                        consecutive = 0;
+                        zombie = 0;
+                    }
+                    ProbeOutcome::TcpDead => {
+                        zombie = 0;
+                        consecutive += 1;
+                        let _ = tx.send(SupervisorEvent::ProbeFailed { consecutive });
+                        if consecutive >= 3 {
+                            // 端口连续失联但进程可能还活着：杀掉按退出处理。
+                            // 内核已不在（退出处理链已接管：自动重启或恢复页）时
+                            // 不得再记一次崩溃——那会把后续自动重启的新内核当作
+                            // 本次失败连带处理。
+                            let kernel_present = {
+                                let g = this.inner.lock().unwrap_or_else(|p| p.into_inner());
+                                g.kernel.is_some()
+                            };
+                            if kernel_present {
+                                this.kill_kernel();
+                                this.on_kernel_exit(None, &tx);
+                            }
+                            return;
+                        }
+                    }
+                    // TCP 通、HTTP 无响应：假死形态。
+                    ProbeOutcome::Zombie => {
+                        zombie += 1;
+                        let _ = tx.send(SupervisorEvent::ZombieSuspect { consecutive: zombie });
+                        log_line(&format!("内核假死可疑（端口通、HTTP 无响应）×{zombie}"));
+                        if zombie >= 20 {
+                            log_line("内核假死判定成立（连续 60s HTTP 无响应，20×3s 探活），受控重启");
                             this.kill_kernel();
                             this.on_kernel_exit(None, &tx);
+                            return;
                         }
-                        return;
                     }
-                    continue;
-                }
-                // TCP 通、HTTP 无响应：假死形态。
-                zombie += 1;
-                let _ = tx.send(SupervisorEvent::ZombieSuspect { consecutive: zombie });
-                log_line(&format!("内核假死可疑（端口通、HTTP 无响应）×{zombie}"));
-                if zombie >= 20 {
-                    log_line("内核假死判定成立（连续 60s HTTP 无响应，20×3s 探活），受控重启");
-                    this.kill_kernel();
-                    this.on_kernel_exit(None, &tx);
-                    return;
                 }
             }
         });
@@ -893,12 +981,14 @@ impl Supervisor {
 
     /// 杀内核整树（restart / 恢复页 / 探活失败 / 应用退出共用）。
     /// Windows：taskkill /T /F；Unix：killpg(-pgid, SIGKILL) 整组收割
-    /// ——OS 绑定见 kernel_process::kill_tree（本函数仅持锁取 child + 派发）。
+    /// ——OS 绑定见 kernel_process::kill_tree。
+    /// 持锁仅取句柄，杀树（taskkill 子进程 + wait，AV 下数百 ms）在锁外
+    /// 进行——旧行为全程持锁，探活节拍 / state() / kernel_url() 全部陪等。
     pub fn kill_kernel(&self) {
-        let mut g = self.inner.lock().unwrap_or_else(|p| p.into_inner());
-        if let Some(mut c) = g.kernel.take() {
-            let pid = c.id();
-            kill_tree(&mut c, pid);
+        if let Some(mut kp) = self.inner.lock().unwrap_or_else(|p| p.into_inner()).kernel.take() {
+            let pid = kp.child.id();
+            kill_tree(&mut kp.child, pid);
+            kp.job.close(); // 内核已终结：释放 Job 句柄（不再随 spawn 泄漏）
         }
     }
 
@@ -1020,6 +1110,92 @@ Content-Length: 0
             }
         }
         None
+    }
+
+    /// 单连接三态探活（性能审计 2026-08）：每拍恰好一次 TCP 连接——原实现
+    /// TCP 试探 + http_alive 各开一条（健康稳态 3s 一拍 ×2 条 ≈ 每天 5.76 万
+    /// 次环回连接）。计数服务器实测连接数 == 探测次数。
+    #[test]
+    fn probe_once_opens_exactly_one_connection_per_tick() {
+        use std::sync::atomic::AtomicUsize;
+        let conns = Arc::new(AtomicUsize::new(0));
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let c2 = Arc::clone(&conns);
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let mut s = stream.unwrap();
+                c2.fetch_add(1, Ordering::Relaxed);
+                use std::io::{Read, Write};
+                let mut buf = [0u8; 128];
+                let _ = s.read(&mut buf);
+                let _ = s.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+            }
+        });
+        std::thread::sleep(Duration::from_millis(150));
+        const N: usize = 5;
+        for _ in 0..N {
+            assert_eq!(Supervisor::probe_outcome(port), ProbeOutcome::Alive);
+        }
+        assert_eq!(conns.load(Ordering::Relaxed), N, "每拍必须恰好一次连接（旧实现 2×N = 纯浪费）");
+    }
+
+    /// 三态对照：假死（TCP 通、HTTP 永不响应）/ 无监听端口——单连接判定
+    /// 与旧双连接口径逐态一致。
+    #[test]
+    fn probe_outcome_classifies_zombie_and_dead() {
+        let zombie = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let zport = zombie.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            for stream in zombie.incoming() {
+                let _stream: std::net::TcpStream = stream.unwrap();
+                std::thread::sleep(Duration::from_secs(30)); // 持住连接不响应
+            }
+        });
+        let dead = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let dport = dead.local_addr().unwrap().port();
+        drop(dead);
+        std::thread::sleep(Duration::from_millis(150));
+        assert_eq!(Supervisor::probe_outcome(zport), ProbeOutcome::Zombie, "TCP 通、HTTP 永不响应 → 假死");
+        assert_eq!(Supervisor::probe_outcome(dport), ProbeOutcome::TcpDead, "无监听端口 → 进程死");
+    }
+
+    /// 进程生命周期不变量形态锚点（性能审计 2026-08）：
+    /// ① boot_active 互斥：瀑布运行期启动期退出不得进入自动重启臂；
+    /// ② spawn 前回收：spawn_kernel 必须先杀未回收内核（孤儿根治的第二道防线）；
+    /// ③ 杀树在锁外：kill_kernel 持锁仅取句柄（探活节拍不陪等 taskkill）；
+    /// ④ Job 句柄随内核终结关闭（不随 spawn 泄漏）。
+    #[test]
+    fn kernel_lifecycle_invariants_shape() {
+        let src = include_str!("supervisor.rs").replace("\r\n", "\n");
+        // ① 自动重启臂必须让位瀑布。
+        let exit_seg = src
+            .split("fn on_kernel_exit")
+            .nth(1)
+            .and_then(|s| s.split("/// 单连接三态探活").next())
+            .expect("on_kernel_exit 段");
+        let boot_check = exit_seg.find("boot_active").expect("自动重启臂必须检查 boot_active");
+        let restart_arm = exit_seg.find("std::thread::spawn(move || {\n                    std::thread::sleep(Duration::from_secs(2));").expect("自动重启线程臂");
+        assert!(boot_check < restart_arm, "boot_active 检查必须先于自动重启线程拉起（瀑布独占恢复权）");
+        // ② spawn 前回收。
+        let spawn_seg = src
+            .split("fn spawn_kernel")
+            .nth(1)
+            .and_then(|s| s.split("let overlays =").next())
+            .expect("spawn_kernel 段头");
+        assert!(spawn_seg.contains("并发 spawn 违例，先杀后起"), "spawn 前必须回收未收割内核: {spawn_seg}");
+        // ③ 杀树锁外。
+        let kill_seg = src
+            .split("pub fn kill_kernel")
+            .nth(1)
+            .and_then(|s| s.split("/// 应用退出路径").next())
+            .expect("kill_kernel 段");
+        assert!(kill_seg.contains("kernel.take()"), "持锁仅取句柄");
+        assert!(kill_seg.contains("job.close()"), "内核终结后必须关闭 Job 句柄");
+        // ④ BootActiveGuard 存在且代际感知。
+        assert!(src.contains("struct BootActiveGuard"), "瀑布互斥守卫必须存在");
+        let guard_seg = src.split("impl Drop for BootActiveGuard").nth(1).and_then(|s| s.split("}").next()).unwrap_or("");
+        assert!(guard_seg.contains("g.generation == self.1"), "守卫清理必须代际感知（restart 叠加场景）");
     }
 
     /// 干净临时 home + userData（测试沙箱）。
@@ -1213,7 +1389,7 @@ Content-Length: 0
         let exit_seg = src
             .split("fn on_kernel_exit")
             .nth(1)
-            .and_then(|s| s.split("/// 探活循环").next())
+            .and_then(|s| s.split("/// 单连接三态探活").next())
             .expect("on_kernel_exit 段");
         assert!(
             exit_seg.contains("Verdict::Tripped | Verdict::Cooldown =>"),
@@ -1323,6 +1499,95 @@ mod stability_tests {
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    /// 构造伪仓库根（boot 竞态 E2E 用）：<root>/dsh-desktop/vendor/node/<node> +
+    /// <root>/sidecar/cli.js（假分发器）+ <root>/dsh-desktop/node_modules/.../bin.js
+    /// （秒退假内核，每次执行向计数文件追加一行）。
+    fn fake_repo_root(node_exe: &std::path::Path, counter: &std::path::Path, boot_sleep_ms: u64) -> std::path::PathBuf {
+        let root = sandbox(&format!("fake-root-{}", std::process::id()));
+        let app_dir = root.join("dsh-desktop");
+        std::fs::create_dir_all(app_dir.join("vendor").join("node")).unwrap();
+        std::fs::create_dir_all(root.join("sidecar")).unwrap();
+        let dsh_dir = app_dir.join("node_modules").join("@deepseek-ai").join("dsh").join("lib");
+        std::fs::create_dir_all(&dsh_dir).unwrap();
+        // vendor node：同卷硬链接（零拷贝），跨卷回退复制。
+        let vendored = app_dir.join("vendor").join("node").join("node.exe");
+        if std::fs::hard_link(node_exe, &vendored).is_err() {
+            std::fs::copy(node_exe, &vendored).unwrap();
+        }
+        // 假内核：立即退出（无就绪行）→ 每次拉起都失败 → 瀑布三层全走。
+        let counter_js = counter.to_string_lossy().replace('\\', "\\\\").replace('\'', "\\'");
+        std::fs::write(
+            dsh_dir.join("bin.js"),
+            format!("require('node:fs').appendFileSync('{counter_js}', 'spawn\\n'); process.exit(1);"),
+        )
+        .unwrap();
+        // 假 sidecar cli：boot 子命令睡眠（放大竞态窗口：自动重启延迟 2s <
+        // 二层 boot 链耗时），其余子命令按协议输出末行 JSON。
+        std::fs::write(
+            root.join("sidecar").join("cli.js"),
+            format!(
+                r#""use strict";
+const cmd = process.argv[2];
+if (cmd === 'boot') {{
+  const end = Date.now() + {boot_sleep_ms};
+  while (Date.now() < end) {{}}
+  process.stdout.write(JSON.stringify({{ ok: true, totalMs: {boot_sleep_ms}, steps: [] }}) + "\n");
+  process.exit(0);
+}}
+if (cmd === 'koffi-preflight') {{ process.stdout.write('{{"ok":true}}' + "\n"); process.exit(0); }}
+process.stdout.write('{{"ok":true}}' + "\n");
+"#
+            ),
+        )
+        .unwrap();
+        root
+    }
+
+    /// 双内核竞态 E2E（性能审计 2026-08 根治锚点）：内核启动期退出时，
+    /// 崩溃自动重启臂（2s 延迟）与瀑布二层（重跑 boot 链，此处放大到 5s）
+    /// 无互斥 → 两条路径各拉一个内核，后者覆盖句柄 → 前者成孤儿
+    /// （数百 MB RSS 无人管，直到进程退出才被 Job Object 收割）。
+    /// 修复后（boot_active 互斥 + spawn 前回收），瀑布全过程恰好拉起 3 次
+    /// （三层各一）。修复前实测 spawn 数 > 3。
+    #[test]
+    fn boot_race_does_not_spawn_orphan_kernels() {
+        let Some(root) = repo_root() else { eprintln!("[skip] 无依赖环境"); return; };
+        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let home = sandbox("race-home");
+        std::env::set_var("DSH_HOME", &home);
+        std::env::set_var("DSH_TAURI_USERDATA", home.join("ud"));
+        let counter = std::env::temp_dir().join(format!("dsh-fake-kernel-count-{}", std::process::id()));
+        let _ = std::fs::remove_file(&counter);
+        let node_exe = root.join("dsh-desktop").join("vendor").join("node").join("node.exe");
+        let fake_root = fake_repo_root(&node_exe, &counter, 5_000);
+
+        let sv: Arc<Supervisor> = Arc::new(Supervisor::new(&fake_root));
+        let (tx, rx) = std::sync::mpsc::channel();
+        sv.spawn_boot(tx, None);
+        // 瀑布终局：伪 cli 无可回滚快照（guard-lastgood 无 id）→ 两层拉起
+        // （首拉 + 修复层）后直接进恢复页。二层 boot 放大 5s > 自动重启臂
+        // 延迟 2s——竞态窗口确定敞开（修复前此处会多出自动重启的 spawn）。
+        let deadline = Instant::now() + Duration::from_secs(120);
+        loop {
+            let left = deadline.saturating_duration_since(Instant::now()).max(Duration::from_millis(1));
+            match rx.recv_timeout(left) {
+                Ok(SupervisorEvent::CrashLoop { .. }) => break,
+                Ok(_) => {}
+                Err(_) => panic!("120s 内瀑布未到终局（应三层失败进恢复页）"),
+            }
+        }
+        // 先关停（压住迟到的自动重启线程），再数 spawn。
+        sv.shutdown();
+        std::thread::sleep(Duration::from_secs(3));
+        let spawns = std::fs::read_to_string(&counter).unwrap_or_default().lines().filter(|l| !l.trim().is_empty()).count();
+        assert_eq!(spawns, 2, "瀑布两层恰好各拉起一次内核（实测 {spawns} 次；>2 = 双内核竞态回归：自动重启臂与瀑布未互斥）");
+        std::env::remove_var("DSH_HOME");
+        std::env::remove_var("DSH_TAURI_USERDATA");
+        let _ = std::fs::remove_file(&counter);
+        let _ = std::fs::remove_dir_all(&fake_root);
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     /// 伴随插件入口文件被写坏（用户磁盘坏块/更新中断的真实形态）：

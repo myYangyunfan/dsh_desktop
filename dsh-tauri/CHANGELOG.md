@@ -1,5 +1,35 @@
 # Changelog
 
+## [未发布] — 性能与资源占用审计根治（五大系列）
+
+### 进程隔离：子进程等待全部挪出 UI 主线程
+- **根因**：Tauri 同步命令在 UI 主线程执行——`run_sidecar`（插件/诊断/备份全族）、`copy_text`（每复制一次 spawn PowerShell）、`wsl_config_get`/`wsl_recheck`、`image_paste_save`、`restart_service`/`recovery_restart`（杀树段）一律 `.output()` 同步等子进程，node 冷启动数百 ms 起、插件检查/更新分钟级 → 整窗冻结（拖动/重绘/全部 IPC 派发停摆；menu.rs check-agent-update 注释记录的同一实测形态）。**修法**：统一 `async fn` + `tauri::async_runtime::spawn_blocking`（run_sidecar 串行锁语义不变，排队发生在后台线程池）；新增 `bounded::output_with_timeout`（超时强杀整树）作为壳内子进程唯一有界出口——AV/SmartScreen 拦半死不再永挂，boot 链单步 60s / 整链 120s / sidecar 命令 300s 有界
+- **copy_text 双缺陷**：Windows 命令行 ~32K 上限使长文本（契约允许 1MB）直接失败 + PowerShell 按控制台代码页解析参数的非 ASCII 乱码面 → 改经 stdin 传 base64（纯 ASCII 代码页安全，UTF-8 精确还原），实测 90KB 中英混排往返逐字节一致
+
+### 内核进程生命周期：双内核竞态 / Job 句柄泄漏 / 探活双连接
+- **boot 竞态根治**：内核启动期退出时，崩溃自动重启臂（2s 延迟）与瀑布二层（重跑 boot 链）无互斥 → 两路各拉一个内核，后者覆盖句柄 → 前者成孤儿（数百 MB RSS 无人管直到进程退出）。**修法**：`boot_active` 互斥（BootActiveGuard，Drop 释放 + 代际感知防叠犬误清）+ `spawn_kernel` 前置回收不变量（并发违例时后来者杀先到者）。E2E 实测：伪仓库（假内核秒退 + 二层 boot 放大 5s）瀑布全程恰好 3 次 spawn（修复前 >3）
+- **Job 句柄泄漏**：每次内核 spawn 泄漏一个 Job Object 句柄（进程生命周期不回收，崩溃环/瀑布重试下日积月累上千）→ 句柄随 `KernelProc` 存活、终结即 `close()`（壳存活期间在场，强杀兜底语义不变）
+- **kill_kernel 锁外杀树**：持锁仅取句柄，taskkill（AV 下数百 ms）不再让探活节拍 / state() / kernel_url() 陪等
+- **探活单连接三态**：原实现每拍开两条连接（TCP 试探 + http_alive 各一），健康稳态 ≈ 每天 5.76 万次环回连接 → `probe_outcome` 单连接三态（Alive/TcpDead/Zombie），连接数实测减半、判定口径逐态一致
+
+### 桥垫片：iframe 守卫次序 + 监听器生命周期
+- **iframe 重复壳机制**：Tauri initialization_script 注入所有同源 iframe，守卫却写在壳机制之后——每个 iframe 都装 5s 心跳 + 3s 会话轮询 + 4 个事件订阅（开销随帧数翻倍，iframe 心跳污染全局计数掩蔽主窗假死判定）。**修法**：`IS_TOP` 帧定位前置，壳机制（订阅/心跳/轮询/错误上报/控制条/自初始化）全部主框架独占；桥对象与 dialog polyfill 保留在所有帧（Electron 时代 iframe 本无桥，只会更好）。vm 沙箱行为测试：iframe 载入零 IPC
+- **监听器泄漏**：`plugin:event|listen` 只增不减，每次导航/重载在 Rust 侧监听表留死条目（emit 向死句柄派发）→ pagehide 统一退订 + 清定时器（listen Promise 未决时 resolve 后补位退订）
+- **心跳窗口归属**：心跳载荷带 `{window: main|float|pet}`，假死看门狗只统计主窗——全窗口共用计数时活的浮窗永久掩蔽死的主窗（漏恢复）
+
+### 假死看门狗：最小化误判
+- Windows 上最小化窗 `is_visible` 仍为 true，缺 `is_minimized` 检查时定时器节流（~1 次/分）被误判为心跳停摆 → 最小化期间每 ~5-6 分钟一次 `location.reload()` 风暴（SPA 状态丢弃 + 监听器累积）。**修法**：失联判定统一 `common::window_watchable`（可见且未最小化，与余额轮询暂停门单一口径）
+
+### sidecar（Node）
+- **模块懒加载**：全部子命令共用 `loadModules` 全量 require 15 模块（patch-registry 729 行等），每 3 分钟的 balance-fetch 也整套装载（58ms+/次，AV 机器放大；未消费模块缺失还直接炸命令）→ getter 懒加载，消费面零变更；实测最小 appDir（仅 balance 两件套）balance-fetch 正常
+- **插件解压有界**：`Expand-Archive`/`unzip` 此前 `execFileSync` 无超时（AV 拦半死 → 更新链永挂 + Rust 侧串行锁被占死）→ `exec-bounded.js` 统一有界出口（120s，超时杀进程）
+- **httpGetJson 字节上限**：元数据通道（npm latest / GitHub Releases，先于 integrity 校验）原实现响应体无限累积成字符串 → 4MB 上限（对照 httpGetBuffer 64MB / balance.js 1MB，该文件族唯一缺口）
+
+### 壳层小项
+- `app_init` 三键单次读盘（SettingsStore::get 每键全量读 settings.json，垫片每次载入 + 每次菜单打开都触发）
+- `[diag] t0` 探针改 `DSH_TAURI_DIAG=1` 门控（原无条件执行：每次内核就绪顶掉真实会话指针 + preview-server 空转）
+- 静态页目录（%TEMP%/dsh-tauri-pages-*）退出清理 + 启动清扫 7 天前残留（强杀形态此前无限累积）
+
 ## [0.5.2] — 2026-08-22
 
 ### 修复（用户实测反馈驱动）
