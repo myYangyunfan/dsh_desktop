@@ -16,6 +16,56 @@
  */
 (function () {
   if (window.dshDesktop) return; // 幂等（重复注入防御）
+  // ---- 帧定位（必须在任何壳机制之前）----------------------------------
+  // Tauri initialization_script 会注入同源所有 iframe（synapse /synapse/ 等），
+  // 而 Electron contextBridge 只跑主框架。守卫必须先于事件订阅/心跳/会话
+  // 轮询/错误上报/控制条注入——历史缺陷：守卫写在壳机制之后，每个 iframe
+  // 都装 5s 心跳 + 3s 会话轮询 + 4 个事件订阅（开销随帧数翻倍，且 iframe
+  // 心跳污染全局计数、掩蔽主窗假死判定）。
+  // 桥对象（window.dshDesktop）与 dialog polyfill 保留在所有帧（兼容性：
+  // iframe 内插件可能消费桥/确认框；Electron 时代 iframe 本无桥，只会更好）。
+  var IS_TOP = false;
+  try { IS_TOP = window.top === window.self; } catch (e) { /* 跨源受限帧按 iframe 处理 */ }
+  // 窗口归属标签：假死看门狗只统计主窗（main）心跳；浮窗/宠物窗独立标签，
+  // 不再与主窗共用一个全局计数（浮窗活着 ≠ 主窗活着）。
+  var WINDOW_LABEL = 'main';
+  try {
+    if (window.__DSH_FLOAT__) WINDOW_LABEL = 'float';
+    else if (window.__DSH_PET__) WINDOW_LABEL = 'pet';
+  } catch (e) {}
+
+  // ---- 页面生命周期收尾（防跨导航累积）-------------------------------
+  // Tauri 的 plugin:event|listen 在 Rust 侧监听表登记，页面导航/重载后旧
+  // 回调死亡但表项残留（emit 仍向死句柄派发）——pagehide 统一退订 + 清
+  // 定时器（listen 的 Promise 未决时先挂起，resolve 后补位退订）。
+  var lifecycleTimers = [];
+  var eventUnsubscribers = [];
+  var pageHidden = false;
+  function armLifecycleTimer(id) { if (id !== undefined) lifecycleTimers.push(id); return id; }
+  function onEventDone(registered, name) {
+    if (!registered || typeof registered.then !== 'function') return;
+    eventUnsubscribers.push(registered.then(function (id) {
+      var unsub = function () {
+        try { INVOKE('plugin:event|unlisten', { event: name, id: id }).catch(function () {}); } catch (e) {}
+      };
+      if (pageHidden) unsub(); // pagehide 先于注册完成：立即补位退订
+      return unsub;
+    }).catch(function () { /* 注册失败即无退订义务 */ }));
+  }
+  function onPageHide() {
+    if (pageHidden) return;
+    pageHidden = true;
+    while (eventUnsubscribers.length) {
+      var entry = eventUnsubscribers.pop();
+      if (entry && typeof entry.then === 'function') {
+        entry.then(function (unsub) { try { if (typeof unsub === 'function') unsub(); } catch (e) {} });
+      }
+    }
+    while (lifecycleTimers.length) {
+      try { clearInterval(lifecycleTimers.pop()); } catch (e) {}
+    }
+  }
+
   // ---- WebView2 原生 dialog polyfill ---------------------------------
   // Tauri/wry (WebView2) 不弹原生 confirm/alert/prompt：confirm 恒 false、
   // alert/prompt 静默。dsh-session-manager 的删除确认走 window.confirm →
@@ -58,12 +108,12 @@
   }
   function send(cmd, args) { call(cmd, args).catch(function () { /* fire-and-forget：失败只静默 */ }); }
 
-  // ---- 事件（主进程 → 页面）----
+  // ---- 事件（主进程 → 页面；仅主框架订阅，见帧定位守卫）----
   var listeners = { maximize: [], jump: [], balance: [], pet: [] };
   function onEvent(name, queue, map) {
     if (!INVOKE || !TRANSFORM) return;
     try {
-      INVOKE('plugin:event|listen', {
+      var registered = INVOKE('plugin:event|listen', {
         event: name,
         target: { kind: 'Any' },
         handler: TRANSFORM(function (payload) {
@@ -71,58 +121,15 @@
             try { queue[i](map ? map(payload) : payload); } catch (e) { /* 订阅方异常不外溢 */ }
           }
         })
-      }).catch(function () { /* 事件系统不可用时静默（浏览器模式） */ });
+      });
+      if (registered && typeof registered.catch === 'function') {
+        registered.catch(function () { /* 事件系统不可用时静默（浏览器模式） */ });
+      }
+      onEventDone(registered, name);
     } catch (e) { /* 同上 */ }
   }
-  onEvent('window-maximized', listeners.maximize, Boolean);
-  onEvent('notification-jump', listeners.jump, function (p) {
-    var id = p && typeof p.sessionId === 'string' ? p.sessionId.trim() : '';
-    return id && id.length <= 256 ? Object.freeze({ sessionId: id }) : null;
-  });
-  onEvent('balance-changed', listeners.balance, function (p) { return p; });
-  onEvent('pet-state', listeners.pet, function (p) { return p || {}; });
 
-  // ---- 余额 / 宠物状态 → window CustomEvent（契约 §3，dsh-balance / harness-pet 消费）----
-  listeners.balance.push(function (data) {
-    try { window.dispatchEvent(new CustomEvent('dsh-balance-changed', { detail: data })); } catch (e) {}
-  });
-  listeners.pet.push(function (data) {
-    try { window.dispatchEvent(new CustomEvent('dsh-pet-state', { detail: data })); } catch (e) {}
-  });
-
-  // ---- 通知跳转补发（订阅前收到的最后一次保留）----
-  var pendingJump = null;
-  listeners.jump.push(function (jump) { if (jump) pendingJump = jump; });
-
-  // ---- 心跳：5s + visibilitychange 补报（契约 §4）----
-  send('renderer_heartbeat');
-  setInterval(function () { send('renderer_heartbeat'); }, 5000);
-  document.addEventListener('visibilitychange', function () {
-    if (!document.hidden) send('renderer_heartbeat');
-  });
-
-  // ---- 页面异常上报（契约 §4）----
-  window.addEventListener('error', function (e) {
-    send('page_error', { message: 'window.onerror: ' + ((e && (e.message || e.error)) || 'unknown') });
-  });
-  window.addEventListener('unhandledrejection', function (e) {
-    send('page_error', { message: 'unhandledrejection: ' + String((e && e.reason && (e.reason.message || e.reason)) || e) });
-  });
-
-  // ---- 当前会话上报：3s 轮询 localStorage，变化才发（契约 §4）----
-  (function () {
-    var last = '';
-    var tick = function () {
-      try {
-        var raw = localStorage.getItem('dsh.sessions.current');
-        var parsed = raw ? JSON.parse(raw) : null;
-        var id = parsed && typeof parsed === 'object' ? String(parsed.sessionId || '') : '';
-        if (id && id !== last) { last = id; send('current_session', { sessionId: id }); }
-      } catch (e) { /* 会话未就绪时无值 */ }
-    };
-    tick();
-    setInterval(tick, 3000);
-  })();
+  // ---- 桥对象（48 方法，签名见 contracts/bridge-api.md）----
 
   // ---- 桥对象（48 方法，签名见 contracts/bridge-api.md）----
   var dshDesktop = {
@@ -226,6 +233,62 @@
   };
 
   Object.defineProperty(window, 'dshDesktop', { value: dshDesktop, writable: false, configurable: false });
+
+  // ---- 壳机制（仅主框架；iframe 全跳过——开销不随帧数翻倍，心跳不污染主窗计数）----
+  if (IS_TOP) {
+    onEvent('window-maximized', listeners.maximize, Boolean);
+    onEvent('notification-jump', listeners.jump, function (p) {
+      var id = p && typeof p.sessionId === 'string' ? p.sessionId.trim() : '';
+      return id && id.length <= 256 ? Object.freeze({ sessionId: id }) : null;
+    });
+    onEvent('balance-changed', listeners.balance, function (p) { return p; });
+    onEvent('pet-state', listeners.pet, function (p) { return p || {}; });
+
+    // ---- 余额 / 宠物状态 → window CustomEvent（契约 §3，dsh-balance / harness-pet 消费）----
+    listeners.balance.push(function (data) {
+      try { window.dispatchEvent(new CustomEvent('dsh-balance-changed', { detail: data })); } catch (e) {}
+    });
+    listeners.pet.push(function (data) {
+      try { window.dispatchEvent(new CustomEvent('dsh-pet-state', { detail: data })); } catch (e) {}
+    });
+
+    // ---- 通知跳转补发（订阅前收到的最后一次保留）----
+    var pendingJump = null;
+    listeners.jump.push(function (jump) { if (jump) pendingJump = jump; });
+
+    // ---- 心跳：5s + visibilitychange 补报（契约 §4，带窗口归属标签）----
+    send('renderer_heartbeat', { window: WINDOW_LABEL });
+    armLifecycleTimer(setInterval(function () { send('renderer_heartbeat', { window: WINDOW_LABEL }); }, 5000));
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) send('renderer_heartbeat', { window: WINDOW_LABEL });
+    });
+
+    // ---- 页面异常上报（契约 §4）----
+    window.addEventListener('error', function (e) {
+      send('page_error', { message: 'window.onerror: ' + ((e && (e.message || e.error)) || 'unknown') });
+    });
+    window.addEventListener('unhandledrejection', function (e) {
+      send('page_error', { message: 'unhandledrejection: ' + String((e && e.reason && (e.reason.message || e.reason)) || e) });
+    });
+
+    // ---- 当前会话上报：3s 轮询 localStorage，变化才发（契约 §4）----
+    (function () {
+      var last = '';
+      var tick = function () {
+        try {
+          var raw = localStorage.getItem('dsh.sessions.current');
+          var parsed = raw ? JSON.parse(raw) : null;
+          var id = parsed && typeof parsed === 'object' ? String(parsed.sessionId || '') : '';
+          if (id && id !== last) { last = id; send('current_session', { sessionId: id }); }
+        } catch (e) { /* 会话未就绪时无值 */ }
+      };
+      tick();
+      armLifecycleTimer(setInterval(tick, 3000));
+    })();
+
+    // pagehide 收尾（事件退订 + 定时器清除，见「页面生命周期收尾」段）。
+    window.addEventListener('pagehide', onPageHide);
+  }
 
   // ---- 窗口控制条注入（内核页，沉浸式双主题）--------------------------
   // 主窗 decorations:false：loading/recovery/poc 壳页自带标题栏，但内核
@@ -650,23 +713,22 @@
       else cb();
     }
   }
-  // iframe 守卫（用户实测「会话地图双层壳」根治）：Tauri initialization_script
-  // 会注入同源所有 iframe（synapse /synapse/ 等），而 Electron contextBridge
-  // 只跑主框架——主框架独占壳（标题栏/菜单/拖拽），iframe 里全部跳过。
-  if (window.top !== window.self) return;
+  // 控制条注入与自初始化同样只属主框架（帧定位守卫见文件首；历史形态
+  // 「会话地图双层壳」的根治语义不变——iframe 不注入第二层壳）。
+  if (IS_TOP) {
+    onBodyReady(function () {
+      injectChromeBar();
+      try {
+        // 内核 SPA/插件重挂载防御：控制条是 body 直接子元素，childList（无需
+        // subtree）即可精确感知「被移除」→ 重注（injectChromeBar 自身幂等）。
+        var watch = new MutationObserver(function () {
+          if (!document.getElementById(CHROME_ID)) injectChromeBar();
+        });
+        watch.observe(document.body, { childList: true });
+      } catch (e) { /* 同上：防御性兜底 */ }
+    });
 
-  onBodyReady(function () {
-    injectChromeBar();
-    try {
-      // 内核 SPA/插件重挂载防御：控制条是 body 直接子元素，childList（无需
-      // subtree）即可精确感知「被移除」→ 重注（injectChromeBar 自身幂等）。
-      var watch = new MutationObserver(function () {
-        if (!document.getElementById(CHROME_ID)) injectChromeBar();
-      });
-      watch.observe(document.body, { childList: true });
-    } catch (e) { /* 同上：防御性兜底 */ }
-  });
-
-  // 自初始化：回填 appVersion（失败静默——浏览器模式常见）。
-  try { dshDesktop.getInfo().catch(function () {}); } catch (e) {}
+    // 自初始化：回填 appVersion（失败静默——浏览器模式常见）。
+    try { dshDesktop.getInfo().catch(function () {}); } catch (e) {}
+  }
 })();

@@ -91,25 +91,38 @@ function emit(value) {
 // ---------------------------------------------------------------------------
 
 function loadModules(appDir) {
+  // 懒加载（性能审计 2026-08）：全部子命令共用 ctxFromArgs→loadModules 入口，
+  // 而多数子命令只碰一两个模块——此前 15 个模块全量 require（patch-registry
+  // 729 行等），每 3 分钟的 balance-fetch 也整套装载（纯启动开销；缺失的
+  // 未消费模块还会直接炸掉整个命令）。getter 对 mods.* 消费方透明，接口
+  // 零变更；require 缓存保证重复访问零成本。
   // Electron 版 main.js 顶部 require 的相对路径在这里以 appDir 为根解析。
-  const req = (rel) => require(path.join(appDir, rel));
-  return {
-    integration: req('scripts/integration'),
-    presetInstaller: req('scripts/install-minimal-win-preset'),
-    pluginManagerPatch: req('scripts/plugin-manager-patch'),
-    pluginManagerUpdate: req('scripts/plugin-manager-update'),
-    companionPlugins: req('scripts/lib/companion-plugins'),
-    profileReconcile: req('scripts/lib/profile-reconcile'),
-    profilePatchHeal: req('profile-patch-heal'),
-    patchIo: req('scripts/lib/patch-io'),
-    githubReleaseAssets: req('scripts/lib/github-release-assets'),
-    desktopDiagnostics: req('scripts/desktop-diagnostics'),
-    desktopBackup: req('scripts/desktop-backup'),
-    desktopOrdering: req('scripts/desktop-ordering'),
-    desktopValidity: req('scripts/desktop-validity'),
-     sessionWatcher: req('session-watcher'),
-    pluginGuard: req('plugin-guard'),
+  const defs = {
+    integration: 'scripts/integration',
+    presetInstaller: 'scripts/install-minimal-win-preset',
+    pluginManagerPatch: 'scripts/plugin-manager-patch',
+    pluginManagerUpdate: 'scripts/plugin-manager-update',
+    companionPlugins: 'scripts/lib/companion-plugins',
+    profileReconcile: 'scripts/lib/profile-reconcile',
+    profilePatchHeal: 'profile-patch-heal',
+    patchIo: 'scripts/lib/patch-io',
+    githubReleaseAssets: 'scripts/lib/github-release-assets',
+    desktopDiagnostics: 'scripts/desktop-diagnostics',
+    desktopBackup: 'scripts/desktop-backup',
+    desktopOrdering: 'scripts/desktop-ordering',
+    desktopValidity: 'scripts/desktop-validity',
+    sessionWatcher: 'session-watcher',
+    pluginGuard: 'plugin-guard',
   };
+  const mods = {};
+  for (const name of Object.keys(defs)) {
+    const rel = defs[name];
+    Object.defineProperty(mods, name, {
+      enumerable: true,
+      get() { return require(path.join(appDir, rel)); },
+    });
+  }
+  return mods;
 }
 
 /**
@@ -397,30 +410,10 @@ function createPluginManager(mods, { appDir, home }) {
     'side-session': { kind: 'github', repo: 'hzhz314159/dsh-side-session' },
   };
 
-  function httpGetJson(url, timeoutMs = 15000, headers = {}, redirects = 0) {
-    return new Promise((resolve, reject) => {
-      if (redirects > 5) return reject(new Error('重定向次数过多'));
-      let client;
-      try {
-        const u = new URL(url);
-        client = u.protocol === 'https:' ? https : require('node:http');
-      } catch (err) { return reject(err); }
-      const req = client.get(url, { headers: { 'User-Agent': 'DSH-Desktop', ...headers }, timeout: timeoutMs }, (res) => {
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          res.resume();
-          return resolve(httpGetJson(new URL(res.headers.location, url).toString(), timeoutMs, headers, redirects + 1));
-        }
-        let data = '';
-        res.on('data', (c) => { data += c; });
-        res.on('end', () => {
-          if (res.statusCode !== 200) return reject(new Error('HTTP ' + res.statusCode));
-          try { resolve(JSON.parse(data)); } catch { reject(new Error('响应不是合法 JSON')); }
-        });
-      });
-      req.on('timeout', () => req.destroy(new Error('请求超时')));
-      req.on('error', (err) => reject(err));
-    });
-  }
+  // httpGetJson 迁至 ./http-json（性能审计 2026-08：补齐响应体字节上限——
+  // 本通道服务 npm latest / GitHub Releases 元数据，先于 integrity 校验、
+  // 无完整性保护，原实现无限累积成字符串）。重定向/超时/UA 语义不变。
+  const { httpGetJson } = require('./http-json');
 
   function httpGetBuffer(url, timeoutMs = 60000, redirects = 0) {
     return new Promise((resolve, reject) => {
@@ -526,14 +519,16 @@ function createPluginManager(mods, { appDir, home }) {
       } else {
         // zip：Windows 走 PowerShell Expand-Archive；其余平台 unzip（macOS 系统
         // 自带，多数 Linux 发行版预装——缺失时报可读错误，不再静默 ENOENT）。
-        const { execFileSync } = require('node:child_process');
+        // 有界执行（性能审计 2026-08）：execFileSync 无超时时，AV/SmartScreen
+        // 把解压子进程拦到半死 → 更新链永挂 + Rust 侧串行锁被占死。
+        const { execFileBounded } = require('./exec-bounded');
         const zipPath = path.join(tmp, 'dl.zip');
         fs.writeFileSync(zipPath, buf);
         const dest = path.join(tmp, 'x');
         if (process.platform === 'win32') {
-          execFileSync('powershell', ['-NoProfile', '-Command', `Expand-Archive -LiteralPath '${zipPath}' -DestinationPath '${dest}' -Force`], { stdio: 'ignore' });
+          await execFileBounded('powershell', ['-NoProfile', '-Command', `Expand-Archive -LiteralPath '${zipPath}' -DestinationPath '${dest}' -Force`], { timeoutMs: 120_000 });
         } else {
-          execFileSync('unzip', ['-o', zipPath, '-d', dest], { stdio: 'ignore' });
+          await execFileBounded('unzip', ['-o', zipPath, '-d', dest], { timeoutMs: 120_000 });
         }
       }
       const root = findPackageRoot(tmp);

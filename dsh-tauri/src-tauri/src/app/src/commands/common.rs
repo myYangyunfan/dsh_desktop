@@ -10,6 +10,16 @@ pub fn terr(e: tauri::Error) -> BridgeError {
     BridgeError::internal(e.to_string())
 }
 
+/// 窗口可观测判定（纯函数，全仓单一判定口径）：
+/// 可见且未最小化才算「前台可交互」。消费方：余额轮询暂停门（Electron
+/// shouldSkipRefresh 同语义）、渲染层假死看门狗（最小化窗口定时器被节流，
+/// 心跳停摆不计失联——Windows 上 is_visible 对最小化窗仍为 true，缺
+/// minimized 检查会把节流误判为假死 → 周期性重载风暴）。
+/// 查询失败缺省：visible 按 true（不误杀正常逻辑）、minimized 按 false。
+pub fn window_watchable(visible: Option<bool>, minimized: Option<bool>) -> bool {
+    visible.unwrap_or(true) && !minimized.unwrap_or(false)
+}
+
 /// 系统浏览器打开 http(s) URL。
 pub fn open_http_url(url: &str) -> Result<serde_json::Value, BridgeError> {
     if !(url.starts_with("http://") || url.starts_with("https://")) {
@@ -208,6 +218,17 @@ mod tests {
         assert_eq!(s.len(), 15, "YYYYMMDD-HHMMSS：{s}");
         assert_eq!(s.as_bytes()[8], b'-');
         assert!(s.starts_with("20"), "{s}");
+    }
+
+    /// 窗口可观测判定表（全仓单一口径）：可见未最小化；最小化/隐藏均停；
+    /// 查询失败缺省不误杀（visible=true / minimized=false）。
+    #[test]
+    fn window_watchable_decision_table() {
+        assert!(window_watchable(Some(true), Some(false)), "可见且未最小化");
+        assert!(window_watchable(None, None), "查询失败按可观测（不误杀正常逻辑）");
+        assert!(!window_watchable(Some(true), Some(true)), "最小化 → 停（定时器被节流）");
+        assert!(!window_watchable(Some(false), Some(false)), "隐藏 → 停");
+        assert!(!window_watchable(Some(false), None), "隐藏（最小化未知）→ 停");
     }
 
     #[test]

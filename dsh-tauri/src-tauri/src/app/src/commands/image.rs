@@ -12,8 +12,13 @@ use super::common::b64_decode;
 const E_IMAGE_PASTE: &str = "E_IMAGE_PASTE";
 
 #[tauri::command]
-pub fn image_paste_save(payload: serde_json::Value) -> Result<serde_json::Value, BridgeError> {
-    image_paste_save_impl(&payload).map_err(|e| BridgeError::new(E_IMAGE_PASTE, &e))
+pub async fn image_paste_save(payload: serde_json::Value) -> Result<serde_json::Value, BridgeError> {
+    // 进程隔离（性能审计 2026-08）：≤15MB base64 解码 + 落盘在 UI 主线程上
+    // 可冻结整窗数百 ms——spawn_blocking 挪出（载荷经 IPC 已到壳侧，纯 CPU/IO）。
+    tauri::async_runtime::spawn_blocking(move || image_paste_save_impl(&payload))
+        .await
+        .map_err(|e| BridgeError::internal(format!("图片落盘任务失败: {e}")))?
+        .map_err(|e| BridgeError::new(E_IMAGE_PASTE, &e))
 }
 
 fn image_paste_save_impl(payload: &serde_json::Value) -> Result<serde_json::Value, String> {

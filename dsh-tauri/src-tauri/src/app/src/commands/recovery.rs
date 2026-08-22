@@ -50,13 +50,13 @@ pub fn recovery_reload(app: AppHandle) -> Result<serde_json::Value, BridgeError>
 }
 
 #[tauri::command]
-pub fn recovery_restart(app: AppHandle) -> Result<serde_json::Value, BridgeError> {
+pub async fn recovery_restart(app: AppHandle) -> Result<serde_json::Value, BridgeError> {
     let state = app.state::<AppState>();
     let sv = state.supervisor.lock().unwrap_or_else(|p| p.into_inner()).clone();
     if let Some(sv) = sv {
         // 事件路由复用（v0.5.1「恢复页重启后白屏」回归根治）：走 route_events
         // 消费的 supervisor_tx 通道——此前新建通道且 rx 即刻丢弃，重启成功后
-        // KernelReady 无人路由、失败后 CrashLoop 无人路由，页面永远停在
+        // KernelReady 无人路由、失败后 CrashLoop 也无人路由，页面永远停在
         // loading 页（真机复现：内核 3s 就绪 + 稳定落定，页面零进度卡死）。
         // 端口优先复用上次内核端口（origin 稳定，SPA localStorage 偏好不丢）。
         let preferred = state.last_port.load(std::sync::atomic::Ordering::Relaxed);
@@ -65,13 +65,18 @@ pub fn recovery_restart(app: AppHandle) -> Result<serde_json::Value, BridgeError
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .clone();
-        match tx {
+        // 进程隔离（性能审计 2026-08）：重启的杀树段（taskkill /T /F + wait）
+        // 挪出 UI 主线程——同步命令会整窗冻结。
+        let joined = tauri::async_runtime::spawn_blocking(move || match tx {
             Some(tx) => sv.recovery_restart_with_port(tx, u16::try_from(preferred).ok()),
             None => {
                 let (tx, _rx) = std::sync::mpsc::channel();
                 sv.recovery_restart_with_port(tx, u16::try_from(preferred).ok());
             }
-        }
+        })
+        .await
+        .map_err(|e| BridgeError::internal(format!("重启任务失败: {e}")))?;
+        let _ = joined;
     } else {
         // 内核从未装配：恢复页「重启内核」= 重新装配（如用户刚补齐安装产物）。
         crate::start_supervisor(app.clone()).map_err(BridgeError::internal)?;
@@ -97,7 +102,7 @@ mod tests {
     fn recovery_restart_reuses_supervisor_tx_shape() {
         let src = include_str!("recovery.rs").replace("\r\n", "\n");
         let seg = src
-            .split("pub fn recovery_restart")
+            .split("pub async fn recovery_restart")
             .nth(1)
             .and_then(|s| s.split("pub fn recovery_open_logs").next())
             .expect("recovery_restart 段");

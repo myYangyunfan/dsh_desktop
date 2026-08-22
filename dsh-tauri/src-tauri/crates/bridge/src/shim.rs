@@ -364,3 +364,50 @@ mod window_chrome_tests {
         );
     }
 }
+
+/// 帧定位与生命周期（iframe 重复壳机制 / 监听表累积的历史缺陷回归锚点；
+/// 行为级验证在 sidecar/bridge-shim.test.js 的 vm 沙箱测试，此处固化源码形态）。
+#[cfg(test)]
+mod frame_guard_tests {
+    use super::BRIDGE_SHIM_JS;
+
+    /// 守卫次序：IS_TOP 判定必须先于任何壳机制注册——历史缺陷是守卫写在
+    /// 壳机制之后，每个同源 iframe 都装 5s 心跳 + 3s 会话轮询 + 4 个事件
+    /// 订阅（开销随帧数翻倍，且 iframe 心跳污染全局计数、掩蔽主窗假死判定）。
+    #[test]
+    fn top_frame_guard_precedes_shell_machinery_shape() {
+        assert!(BRIDGE_SHIM_JS.contains("var IS_TOP = false;"), "帧定位守卫缺失");
+        assert!(BRIDGE_SHIM_JS.contains("window.top === window.self"), "守卫语义必须是 top===self");
+        let guard_pos = BRIDGE_SHIM_JS.find("var IS_TOP = false;").expect("帧定位守卫位置");
+        let top_block = BRIDGE_SHIM_JS.find("if (IS_TOP) {").expect("主框架壳机制分支");
+        let first_listen = BRIDGE_SHIM_JS.find("onEvent('window-maximized'").expect("首个事件订阅");
+        let first_beat = BRIDGE_SHIM_JS.find("send('renderer_heartbeat'").expect("首拍心跳");
+        assert!(guard_pos < first_listen, "帧定位守卫必须先于事件订阅注册");
+        assert!(guard_pos < first_beat, "帧定位守卫必须先于心跳发送");
+        assert!(top_block < first_listen, "事件订阅必须在 IS_TOP 分支内（iframe 全跳过）");
+    }
+
+    /// 心跳窗口归属标签：主窗假死判定只统计 main；浮窗（__DSH_FLOAT__）与
+    /// 宠物窗（__DSH_PET__）独立标签——多窗共用一个全局计数时，活的浮窗会
+    /// 永久掩蔽死的主窗（漏恢复），反之亦然（误重载）。
+    #[test]
+    fn heartbeat_carries_window_label_shape() {
+        assert!(BRIDGE_SHIM_JS.contains("WINDOW_LABEL"), "心跳必须带窗口归属标签");
+        assert!(BRIDGE_SHIM_JS.contains("window.__DSH_FLOAT__"), "浮窗标签判定缺失");
+        assert!(BRIDGE_SHIM_JS.contains("window.__DSH_PET__"), "宠物窗标签判定缺失");
+        let beat = BRIDGE_SHIM_JS.find("send('renderer_heartbeat', { window: WINDOW_LABEL })").expect("心跳发送必须带标签");
+        let label_def = BRIDGE_SHIM_JS.find("var WINDOW_LABEL = 'main';").expect("标签定义");
+        assert!(label_def < beat, "标签定义必须先于心跳发送");
+    }
+
+    /// pagehide 生命周期：plugin:event|listen 注册的监听在页面导航/重载后
+    /// 由 Rust 侧监听表持有死回调——必须经 plugin:event|unlisten 退订 + 清
+    /// 定时器（历史缺陷：listen 只增不减）。
+    #[test]
+    fn pagehide_unlistens_events_and_clears_timers_shape() {
+        assert!(BRIDGE_SHIM_JS.contains("plugin:event|unlisten"), "必须经 plugin:event|unlisten 退订");
+        assert!(BRIDGE_SHIM_JS.contains("onPageHide"), "必须有 pagehide 收尾函数");
+        assert!(BRIDGE_SHIM_JS.contains("addEventListener('pagehide'"), "必须挂 pagehide 监听");
+        assert!(BRIDGE_SHIM_JS.contains("clearInterval(lifecycleTimers.pop())"), "pagehide 必须清壳机制定时器");
+    }
+}

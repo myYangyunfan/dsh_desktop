@@ -10,6 +10,7 @@
 //! - 默认：loading 页 → sidecar boot → 内核拉起 → 就绪换页到内核 Web UI；
 //! - `DSH_TAURI_POC=1`：PoC 回归模式（不拉内核，加载 PoC 页，Phase 0 验收复用）。
 
+mod bounded;
 mod commands;
 mod pages;
 mod poc_page;
@@ -32,7 +33,12 @@ pub struct AppState {
     pub supervisor: Mutex<Option<SupervisorHandle>>,
     pub loading_url: Mutex<String>,
     pub recovery_url: Mutex<String>,
-    pub heartbeats: AtomicU32,
+    /// 主窗心跳计数（性能审计 2026-08 拆分）：假死看门狗只看本计数——
+    /// 全窗口共用一个计数时，活的浮窗/宠物窗会永久掩蔽死的主窗（漏恢复）。
+    /// 垫片按窗口归属标签上报（bridge-shim.js WINDOW_LABEL）。
+    pub heartbeats_main: AtomicU32,
+    /// 副窗（浮窗/宠物窗/未知标签）心跳计数（诊断用途，不参与假死判定）。
+    pub heartbeats_side: AtomicU32,
     pub page_errors: AtomicU32,
     pub current_session: Mutex<Option<String>>,
     pub last_port: AtomicU32,
@@ -43,6 +49,8 @@ pub struct AppState {
     pub boot_error: Mutex<Option<String>>,
     /// 余额链状态（commands/balance.rs：事件载荷缓存 + in-flight 去重）。
     pub balance: commands::balance::BalanceState,
+    /// 静态页目录（%TEMP%/dsh-tauri-pages-<pid>；退出时清理，防随启动累积）。
+    pub pages_dir: std::path::PathBuf,
 }
 
 impl AppState {
@@ -51,7 +59,8 @@ impl AppState {
             supervisor: Mutex::new(None),
             loading_url: Mutex::new(String::new()),
             recovery_url: Mutex::new(String::new()),
-            heartbeats: AtomicU32::new(0),
+            heartbeats_main: AtomicU32::new(0),
+            heartbeats_side: AtomicU32::new(0),
             page_errors: AtomicU32::new(0),
             current_session: Mutex::new(None),
             last_port: AtomicU32::new(0),
@@ -59,6 +68,7 @@ impl AppState {
             supervisor_tx: Mutex::new(None),
             boot_error: Mutex::new(None),
             balance: commands::balance::BalanceState::new(),
+            pages_dir: std::env::temp_dir().join(format!("dsh-tauri-pages-{}", std::process::id())),
         }
     }
 }
@@ -216,6 +226,8 @@ pub fn run() {
                         if let Some(sv) = state.supervisor.lock().unwrap_or_else(|p| p.into_inner()).clone() {
                             sv.shutdown();
                         }
+                        // 静态页目录随退出清理（防 %TEMP% 随启动累积）。
+                        let _ = std::fs::remove_dir_all(&state.pages_dir);
                     }
                     if let Some(mut g) = INSTANCE_LOCK.lock().unwrap_or_else(|p| p.into_inner()).take() {
                         g.release();
@@ -237,8 +249,12 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     }
     let state = AppState::empty();
     upgrade_first_run_report(&state);
+    // 历史残留清扫（性能审计 2026-08）：静态页目录每次启动新建一个
+    // （dsh-tauri-pages-<pid>），强杀形态无人清理会在 %TEMP% 无限累积——
+    // 启动时清 7 天前的旧目录（本次目录刚建，mtime 新，天然不受影响）。
+    sweep_stale_page_dirs();
     // ---- 静态页（loading / recovery / poc）经 preview-server 托管 ----
-    let dir = std::env::temp_dir().join(format!("dsh-tauri-pages-{}", std::process::id()));
+    let dir = state.pages_dir.clone();
     std::fs::create_dir_all(&dir)?;
     std::fs::write(dir.join("loading.html"), pages::LOADING_HTML)?;
     std::fs::write(dir.join("recovery.html"), pages::RECOVERY_HTML)?;
@@ -363,11 +379,17 @@ fn route_one_event(app: &tauri::AppHandle, ev: SupervisorEvent) {
                     let _ = store.set("lastWebPort", serde_json::json!(port));
                 }
                 let _ = commands::navigate_main(&app, &url);
-                if let Some(w) = app.get_webview_window("main") {
-                    let diag_base = { let u = app.state::<AppState>().loading_url.lock().unwrap_or_else(|p| p.into_inner()).clone(); let mut o = String::new(); if let Some(pos) = u.rfind('/') { o = u[..pos].to_string(); } o };
-                    match w.eval(&format!("window.__DIAG_BASE__={:?}; window.__TAURI_INTERNALS__.invoke('current_session',{{sessionId:'[diag] t0'}}).then(function(){{fetch(window.__DIAG_BASE__+'/__diag/t0-invoke-OK')}},function(err){{fetch(window.__DIAG_BASE__+'/__diag/t0-invoke-REJECT-'+encodeURIComponent(String(err&&err.message||err)))}})", diag_base)) {
-                        Ok(_) => eprintln!("[diag] t0 eval OK"),
-                        Err(e) => eprintln!("[diag] t0 eval ERR: {e}"),
+                // 诊断探针 t0：DSH_TAURI_DIAG=1 才启用（性能审计 2026-08 门控
+                // 修正）——历史缺陷：无条件执行，每次内核就绪都 invoke 一次
+                // current_session('[diag] t0')，把真实会话指针顶掉（通知跳转
+                // 的聚焦豁免失效直到用户切会话）+ 一次 preview-server 空转。
+                if std::env::var("DSH_TAURI_DIAG").ok().as_deref() == Some("1") {
+                    if let Some(w) = app.get_webview_window("main") {
+                        let diag_base = { let u = app.state::<AppState>().loading_url.lock().unwrap_or_else(|p| p.into_inner()).clone(); let mut o = String::new(); if let Some(pos) = u.rfind('/') { o = u[..pos].to_string(); } o };
+                        match w.eval(&format!("window.__DIAG_BASE__={:?}; window.__TAURI_INTERNALS__.invoke('current_session',{{sessionId:'[diag] t0'}}).then(function(){{fetch(window.__DIAG_BASE__+'/__diag/t0-invoke-OK')}},function(err){{fetch(window.__DIAG_BASE__+'/__diag/t0-invoke-REJECT-'+encodeURIComponent(String(err&&err.message||err)))}})", diag_base)) {
+                            Ok(_) => eprintln!("[diag] t0 eval OK"),
+                            Err(e) => eprintln!("[diag] t0 eval ERR: {e}"),
+                        }
                     }
                 }
                 if let Some(w) = app.get_webview_window("main") {
@@ -684,6 +706,13 @@ fn upgrade_first_run_report(state: &AppState) {
 ///（页面加载），此后可见主窗连续 ~40s 心跳零增长 → location.reload()。
 /// 覆盖「内核活着但页面白屏/JS 死循环」——dsh 可用优先于页面完美。
 ///
+/// 判定口径（性能审计 2026-08 修正）：
+/// - 只统计主窗心跳（heartbeats_main，垫片按窗口归属标签上报）——全窗口
+///   共用一个计数时，活的浮窗/宠物窗会永久掩蔽死的主窗（漏恢复）。
+/// - 不可见**或最小化**都不计失联（common::window_watchable 单一口径）——
+///   Windows 上最小化窗 is_visible 仍为 true，缺 minimized 检查时定时器
+///   节流（~1 次/分）被误判为停摆 → 每 ~5-6 分钟一次的重载风暴。
+///
 /// 内存审计（2026-08）：KernelReady 事件在每次内核重启（自动重启 / 假死受控
 /// 重启 / restart_service / 恢复页重试）都会触发——且单次 boot 会发两回
 /// （stdout 就绪行线程 + 瀑布 on_boot_success）。旧实现每次都 spawn 一个
@@ -698,20 +727,20 @@ fn watch_renderer_heartbeat(app: tauri::AppHandle) {
         // 宽限：等第一条心跳到达（或 60s 超时进入持续监测）。
         let baseline = app
             .try_state::<AppState>()
-            .map(|s| s.heartbeats.load(Ordering::Relaxed))
+            .map(|s| s.heartbeats_main.load(Ordering::Relaxed))
             .unwrap_or(0);
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
         while std::time::Instant::now() < deadline {
             std::thread::sleep(std::time::Duration::from_secs(5));
             if let Some(state) = app.try_state::<AppState>() {
-                if state.heartbeats.load(Ordering::Relaxed) > baseline {
+                if state.heartbeats_main.load(Ordering::Relaxed) > baseline {
                     break;
                 }
             }
         }
         let mut last = app
             .try_state::<AppState>()
-            .map(|s| s.heartbeats.load(Ordering::Relaxed))
+            .map(|s| s.heartbeats_main.load(Ordering::Relaxed))
             .unwrap_or(0);
         let mut stall: u32 = 0;
         loop {
@@ -722,13 +751,15 @@ fn watch_renderer_heartbeat(app: tauri::AppHandle) {
             }
             let Some(state) = app.try_state::<AppState>() else { return };
             let Some(win) = app.get_webview_window("main") else { return };
-            // 不可见窗口定时器被节流（与 Electron 判定口径一致）——不计失联。
-            if !win.is_visible().unwrap_or(true) {
+            // 不可见/最小化窗口定时器被节流（Electron 判定口径 + minimized，
+            // 全仓统一 common::window_watchable）——不计失联。
+            let watchable = commands::common::window_watchable(win.is_visible().ok(), win.is_minimized().ok());
+            if !watchable {
                 stall = 0;
-                last = state.heartbeats.load(Ordering::Relaxed);
+                last = state.heartbeats_main.load(Ordering::Relaxed);
                 continue;
             }
-            let now = state.heartbeats.load(Ordering::Relaxed);
+            let now = state.heartbeats_main.load(Ordering::Relaxed);
             if now == last {
                 stall += 1;
             } else {
@@ -742,6 +773,32 @@ fn watch_renderer_heartbeat(app: tauri::AppHandle) {
             }
         }
     });
+}
+
+/// 清扫 %TEMP% 里 7 天前的 dsh-tauri-pages-* 残留目录（强杀形态无人清理；
+/// 原子性：目录 mtime 判龄，本次运行的目录天然不受影响）。
+fn sweep_stale_page_dirs() {
+    const SEVEN_DAYS_SECS: u64 = 7 * 86400;
+    let Ok(rd) = std::fs::read_dir(std::env::temp_dir()) else { return };
+    for entry in rd.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if !name.starts_with("dsh-tauri-pages-") {
+            continue;
+        }
+        let Ok(meta) = entry.metadata() else { continue };
+        if !meta.is_dir() {
+            continue;
+        }
+        let aged = meta
+            .modified()
+            .ok()
+            .and_then(|m| m.elapsed().ok())
+            .map(|age| age.as_secs() > SEVEN_DAYS_SECS)
+            .unwrap_or(false);
+        if aged {
+            let _ = std::fs::remove_dir_all(entry.path());
+        }
+    }
 }
 
 /// 诊断探针：非侵入读取页面健康度（confirm 返回值 / composer 可用性 /
@@ -809,16 +866,22 @@ fn inject_diag_probe(app: tauri::AppHandle) {
 
 #[cfg(test)]
 mod heartbeat_watcher_tests {
+    use super::*;
+
     /// 形态锚点（内存审计 2026-08）：心跳监测线程必须带代数交替退出路径
     /// ——KernelReady 每次内核重启都会触发（且单次 boot 发两回），无守卫时
     /// 监测线程随重启次数只增不减（各持 AppHandle 永久 10s 轮询）。
+    /// 性能审计（同月）追加两条判定口径锚点：
+    /// - 只统计主窗计数 heartbeats_main（全窗共用计数会被活的浮窗掩蔽）；
+    /// - 不可见**或最小化**均不计失联（window_watchable 单一口径——Windows
+    ///   上最小化窗 is_visible 仍为 true，缺此检查 = 周期性重载风暴）。
     #[test]
     fn heartbeat_watcher_has_generation_guard_shape() {
         let src = include_str!("lib.rs");
         let seg = src
             .split("fn watch_renderer_heartbeat")
             .nth(1)
-            .and_then(|s| s.split("\n}\n\n/// 诊断探针").next())
+            .and_then(|s| s.split("\n}\n\n/// 清扫 %TEMP%").next())
             .expect("watch_renderer_heartbeat 函数体");
         assert!(src.contains("static HEARTBEAT_WATCHER_GEN"), "必须有全局代数号");
         assert!(
@@ -829,6 +892,60 @@ mod heartbeat_watcher_tests {
             seg.contains("HEARTBEAT_WATCHER_GEN.load") && seg.contains("return;"),
             "监测循环必须校验代数号并退出旧线程: {seg}"
         );
+        assert!(
+            !seg.contains("s.heartbeats.load") && !seg.contains("state.heartbeats.load"),
+            "不得再读全窗口混计的 heartbeats（浮窗掩蔽主窗假死）: {seg}"
+        );
+        assert!(
+            seg.contains("heartbeats_main.load"),
+            "必须只统计主窗计数 heartbeats_main: {seg}"
+        );
+        assert!(
+            seg.contains("window_watchable") && seg.contains("is_minimized"),
+            "失联判定必须含最小化检查（window_watchable 单一口径）: {seg}"
+        );
+    }
+
+    /// 静态页目录清扫（性能审计 2026-08）：7 天前的 dsh-tauri-pages-* 删除，
+    /// 新建的与无关目录不动。（目录 mtime 回拨需 PowerShell——std 无法对
+    /// 目录句柄 set_modified，Windows 目录句柄不可写。）
+    #[cfg(windows)]
+    #[test]
+    fn sweep_stale_page_dirs_removes_only_aged() {
+        use crate::commands::common::NoWindow;
+        let tmp = std::env::temp_dir();
+        let mk = |name: &str| {
+            let d = tmp.join(name);
+            let _ = std::fs::remove_dir_all(&d);
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(d.join("x.html"), b"x").unwrap();
+            d
+        };
+        let backdate = |d: &std::path::Path, days: u64| {
+            let script = format!(
+                "(Get-Item -LiteralPath '{}').LastWriteTime = (Get-Date).AddDays(-{})",
+                d.to_string_lossy().replace('\'', "''"),
+                days
+            );
+            let ok = std::process::Command::new("powershell")
+                .args(["-NoProfile", "-Command", &script])
+                .creation_flags_no_window()
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false);
+            assert!(ok, "目录 mtime 回拨失败（前置条件）: {}", d.display());
+        };
+        let stale = mk(&format!("dsh-tauri-pages-19999-stale-{}", std::process::id()));
+        let fresh = mk(&format!("dsh-tauri-pages-19998-fresh-{}", std::process::id()));
+        let unrelated = mk(&format!("dsh-unrelated-{}", std::process::id()));
+        backdate(&stale, 8);
+        backdate(&unrelated, 30);
+        sweep_stale_page_dirs();
+        assert!(!stale.exists(), "8 天前的静态页目录必须被清");
+        assert!(fresh.exists(), "新目录不得误删");
+        assert!(unrelated.exists(), "无关目录不得误删");
+        let _ = std::fs::remove_dir_all(&fresh);
+        let _ = std::fs::remove_dir_all(&unrelated);
     }
 }
 

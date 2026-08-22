@@ -120,14 +120,19 @@ fn wsl_config_payload(backend: &str, distro: &str, install_dir: &str) -> serde_j
 }
 
 #[tauri::command]
-pub fn wsl_config_get(app: AppHandle) -> Result<serde_json::Value, BridgeError> {
+pub async fn wsl_config_get(app: AppHandle) -> Result<serde_json::Value, BridgeError> {
     // WSL 托管：Phase 3 简版（配置存取 + recheck 探活）；完整 wsl-backend 复用
     // 随 Phase 3 后续（migration-roadmap）。形态必须与 Electron 一致——此前
     // 返回 `{mode:"local"}` 致设置页 backend/status 全空、dirty 恒真（实测 bug）。
     let state = app.state::<AppState>();
     let store = shell_core::SettingsStore::new(state.paths.settings.clone());
     let (backend, distro, install_dir) = wsl_settings_load_from(&store);
-    Ok(wsl_config_payload(&backend, &distro, &install_dir))
+    // 进程隔离（性能审计 2026-08）：wsl --status 探活在半安装形态下可达秒级，
+    // spawn_blocking 挪出 UI 主线程。
+    let payload = tauri::async_runtime::spawn_blocking(move || wsl_config_payload(&backend, &distro, &install_dir))
+        .await
+        .map_err(|e| BridgeError::internal(format!("wsl 探活任务失败: {e}")))?;
+    Ok(payload)
 }
 
 #[tauri::command]
@@ -159,14 +164,17 @@ pub fn wsl_config_save(cfg: serde_json::Value, app: AppHandle) -> Result<serde_j
 }
 
 #[tauri::command]
-pub fn wsl_recheck(app: AppHandle) -> Result<serde_json::Value, BridgeError> {
+pub async fn wsl_recheck(app: AppHandle) -> Result<serde_json::Value, BridgeError> {
     // Electron 语义：recheck 返回与 getConfig 同形态（status 强制重探测）。
     // 此前返回 `{ok,available}` 与契约不符——设置页「重新检测」把表单状态
     // 打回空（实测「WSL 行空」根因之一）。
     let state = app.state::<AppState>();
     let store = shell_core::SettingsStore::new(state.paths.settings.clone());
     let (backend, distro, install_dir) = wsl_settings_load_from(&store);
-    Ok(wsl_config_payload(&backend, &distro, &install_dir))
+    let payload = tauri::async_runtime::spawn_blocking(move || wsl_config_payload(&backend, &distro, &install_dir))
+        .await
+        .map_err(|e| BridgeError::internal(format!("wsl 探活任务失败: {e}")))?;
+    Ok(payload)
 }
 
 #[cfg(test)]

@@ -107,16 +107,14 @@ pub fn trigger_fetch(app: &AppHandle) {
     std::thread::spawn(move || fetch_and_push(&h));
 }
 
-/// 可见性判定纯函数（主窗缺省按不可见处理——无窗时轮询暂停，防后台空刷）。
-fn window_visibility(visible: Option<bool>, minimized: Option<bool>) -> bool {
-    visible.unwrap_or(true) && !minimized.unwrap_or(false)
-}
+/// 可见性判定统一口径见 [`super::common::window_watchable`]（全仓单一判定：
+/// 余额轮询暂停门与假死看门狗共用，防两处口径漂移）。
 
 /// 主窗是否可见且未最小化（Electron shouldSkipRefresh 注入的同款判定，
 /// P1-2+A-7：不以失焦为触发——副屏并排可见时失焦是常态）。
 fn main_window_visible(app: &AppHandle) -> bool {
     app.get_webview_window("main")
-        .map(|w| window_visibility(w.is_visible().ok(), w.is_minimized().ok()))
+        .map(|w| super::common::window_watchable(w.is_visible().ok(), w.is_minimized().ok()))
         .unwrap_or(false)
 }
 
@@ -225,10 +223,11 @@ mod tests {
         assert_eq!(BALANCE_POLL_SECS, 180, "轮询周期 = Electron balance-scheduler DEFAULT_POLL_MS");
     }
 
-    /// 可见性判定表：缺省可见（unwrap_or(true)）；最小化即暂停；窗口缺失
-    /// （Option 外层 None）由 main_window_visible 归为不可见。
+    /// 可见性判定表：已迁 common::window_watchable（全仓单一口径），
+    /// 此处锚定余额链消费的一侧语义不回退。
     #[test]
     fn window_visibility_decision_table() {
+        use super::super::common::window_watchable as window_visibility;
         assert!(window_visibility(Some(true), Some(false)), "可见且未最小化");
         assert!(window_visibility(None, None), "查询失败按可见（不误杀正常轮询）");
         assert!(!window_visibility(Some(true), Some(true)), "最小化 → 暂停");
