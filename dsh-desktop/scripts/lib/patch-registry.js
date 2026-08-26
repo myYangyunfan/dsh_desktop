@@ -1115,6 +1115,33 @@ const PATCH_SPECS = [
     failLog: (root, err) => 'pi-ai 超限文案补丁失败(' + root + '): ' + err.message,
   },
   // -------------------------------------------------------------------------
+  // dsh-token-meter messageTokens 下限夹取补丁（内核 accounting 边界 bug）：
+  // contextBreakdownProjectionDefinition.apply 用
+  //   messageTokens: state.messageTokens + fold.deltaTokens,
+  // 而 foldSurfaceProjection 在消息被压缩/替换（surfaceOp === "replace"）时
+  // 返回 deltaTokens = tokens - claim.tokens（可为负）。负 delta 绝对值大于已
+  // 累计 state.messageTokens 时 messageTokens 变负 → stateSchema 的 tokenCount
+  // = z.number().int().nonnegative() 校验失败（"Too small: expected number to
+  // be >= 0"）→ 本轮运行失败。补丁把该行夹到 Math.max(0, …)，该值仅用于
+  // 「上下文构成」估算展示/计量，夹 0 不影响真实请求。锚点失配自动退役。
+  // 见 scripts/patch-token-meter-clamp.js。
+  // -------------------------------------------------------------------------
+  {
+    id: 'token-meter-clamp',
+    group: 'package',
+    order: 233,
+    kind: 'root',
+    layout: 'nm-roots',
+    wslLayout: 'nm-roots',
+    apply: rootAppliers.patchTokenMeterClamp,
+    marker: null,
+    requires: [],
+    failPolicy: 'warn',
+    cli: true,
+    successLog: (root) => 'token-meter 夹取补丁: 已应用到 ' + root,
+    failLog: (root, err) => 'token-meter 夹取补丁失败(' + root + '): ' + err.message,
+  },
+  // -------------------------------------------------------------------------
   // 设置写入韧性补丁（PR5，v0.5.2「添加供应商没反应/灰」两层根治）：
   //   1) 孤儿锁自愈（dsh-atomic-write）——内核持锁窗口内被强杀留下
   //      settings.yaml.lock 孤儿，此后该机所有设置写入 2s 超时失败（页面只读

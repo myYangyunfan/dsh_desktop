@@ -146,8 +146,8 @@ test('D. pkgRel/pkgRels 被 patch-target-resolver 常量覆盖（白名单外新
 });
 
 test('E. order 全局唯一、组内升序、补丁间依赖序成立', () => {
-  // 54 = 53（上一基线）+ pi-ai-overflow-message（上下文超限友好文案，order 232）。
-  assert.equal(PATCH_SPECS.length, 55, 'spec 总数应为 55');
+  // 56 = 55（上一基线）+ token-meter-clamp（messageTokens 下限夹取，order 233）。
+  assert.equal(PATCH_SPECS.length, 56, 'spec 总数应为 56');
   const orders = PATCH_SPECS.map((s) => s.order);
   assert.equal(new Set(orders).size, orders.length, 'order 必须全局唯一');
   const byId = Object.fromEntries(PATCH_SPECS.map((s) => [s.id, s]));
@@ -204,9 +204,9 @@ test('E3. device-auth 154 与 credentials-absent 153 相邻无干扰', () => {
   );
 });
 
-test('F. cli:true 恰为 20 项；failPolicy ∈ {warn,degrade}', () => {
+test('F. cli:true 恰为 21 项；failPolicy ∈ {warn,degrade}', () => {
   const cliSpecs = registry.getSpecsByCli();
-  assert.equal(cliSpecs.length, 20, 'cli:true 数量应与既有断言一致（20，含 pi-ai-overflow-message）');
+  assert.equal(cliSpecs.length, 21, 'cli:true 数量应与既有断言一致（21，含 token-meter-clamp）');
   for (const s of cliSpecs) assert.equal(s.cli, true);
   for (const spec of PATCH_SPECS) {
     assert.ok(

@@ -155,6 +155,7 @@ const BASELINE = {
     'pi-ai-credits': 'root',
     'pi-ai-reasoning-defaults': 'root',
     'pi-ai-overflow-message': 'root',
+    'token-meter-clamp': 'root',
     'bundle-arrival-retry': 'root',
     'agent-loop-scheduler-guard': 'root',
     'empty-tool-name-guidance': 'root',
@@ -212,6 +213,7 @@ const BASELINE = {
     'pi-ai-credits': 'root',
     'pi-ai-reasoning-defaults': 'root',
     'pi-ai-overflow-message': 'root',
+    'token-meter-clamp': 'root',
     'bundle-arrival-retry': 'root',
     'agent-loop-scheduler-guard': 'root',
     'empty-tool-name-guidance': 'root',
@@ -241,11 +243,11 @@ test('48 补丁 × rc.2 / rc.1 双形态判定矩阵与基线快照一致（锚�
     `判定矩阵漂移（内核形态变化或锚点漂移；确认后更新 BASELINE 快照以显式接受新基线）：\n  ${drift.join('\n  ')}`);
 });
 
-test('基线快照自身完整性：两形态 × 55 id 全覆盖', () => {
+test('基线快照自身完整性：两形态 × 56 id 全覆盖', () => {
   const ids = new Set(PATCH_SPECS.map((s) => s.id));
-  assert.equal(ids.size, 55);
+  assert.equal(ids.size, 56);
   for (const form of Object.keys(BASELINE)) {
-    assert.equal(Object.keys(BASELINE[form]).length, 55, `${form} 基线应覆盖 55 项`);
+    assert.equal(Object.keys(BASELINE[form]).length, 56, `${form} 基线应覆盖 56 项`);
     for (const id of Object.keys(BASELINE[form])) assert.ok(ids.has(id), `${form} 基线含未知 id ${id}`);
   }
 });

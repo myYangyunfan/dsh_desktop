@@ -64,6 +64,10 @@ const { patchPiAiReasoningDefaults } = require('../patch-pi-ai-reasoning-default
 // pi-ai 上下文超限友好文案补丁（第三方 OpenAI 兼容端点裸 400/413 无响应体
 // → 上下文超限提示，避免「400 status code (no body)」死谜语）。
 const { patchPiAiOverflowMessage } = require('../patch-pi-ai-overflow-message');
+// dsh-token-meter messageTokens 下限夹取补丁（内核 accounting 边界：replace
+// 负 delta 使 messageTokens 溢出为负 → tokenCount nonnegative 校验失败；只用于
+// 「上下文构成」估算展示/计量，夹 0 不影响真实请求）。
+const { patchTokenMeterClamp } = require('../patch-token-meter-clamp');
 // 设置写入韧性（PR5：v0.5.2「添加供应商没反应/灰」两层根治——孤儿锁自愈 +
 // 设置页命名空间自愈 + settings-conflict 静默重试）。
 const {
@@ -1968,6 +1972,7 @@ module.exports = {
     patchPiAiCredits,
     patchPiAiReasoningDefaults,
     patchPiAiOverflowMessage,
+    patchTokenMeterClamp,
     patchAtomicWriteOrphanLock,
     patchSettingsModelsResilience,
     patchBundleArrivalRetry,
