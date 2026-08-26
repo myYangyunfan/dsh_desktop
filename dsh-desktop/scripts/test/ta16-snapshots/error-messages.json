@@ -176,67 +176,67 @@
   ],
   "sessionNotifyRs": [
     {
-      "line": 171,
+      "line": 174,
       "text": "DSH 任务完成"
     },
     {
-      "line": 172,
+      "line": 175,
       "text": "会话任务已完成"
     },
     {
-      "line": 369,
+      "line": 394,
       "text": "[notify] session watcher 不启动（不影响主窗）：{e}"
     },
     {
-      "line": 385,
+      "line": 410,
       "text": "AppState 未就绪"
     },
     {
-      "line": 391,
+      "line": 416,
       "text": "supervisor 未装配（内核未就绪）"
     },
     {
-      "line": 396,
+      "line": 421,
       "text": "payload 脚本缺失：{}"
     },
     {
-      "line": 442,
+      "line": 467,
       "text": "[notify] session watcher 启动失败：{e}"
     },
     {
-      "line": 451,
+      "line": 476,
       "text": "[notify] session watcher 连续 {spawn_failures} 次启动失败，放弃（内核重启可复活）"
     },
     {
-      "line": 469,
+      "line": 494,
       "text": "[notify] session watcher 在岗（{}，监视 {}）"
     },
     {
-      "line": 493,
+      "line": 518,
       "text": "[notify] turn-end 处理 panic（已隔离，继续）"
     },
     {
-      "line": 498,
+      "line": 528,
       "text": "[notify] watcher 超长行丢弃（>{WATCHER_LINE_CAP}B）"
     },
     {
-      "line": 524,
+      "line": 554,
       "text": "[notify] session watcher 退出，{}ms 后第 {restarts} 次重启"
     },
     {
-      "line": 548,
+      "line": 578,
       "text": "stdout 管道缺失"
     },
     {
-      "line": 549,
+      "line": 579,
       "text": "stderr 管道缺失"
     },
     {
-      "line": 651,
+      "line": 697,
       "text": "[notify] 任务完成: {}"
     },
     {
-      "line": 664,
+      "line": 710,
       "text": "[notify] 通知发送失败: {e}"
     }
   ],
@@ -367,36 +367,40 @@
   ],
   "watcherJs": [
     {
-      "line": 198,
+      "line": 201,
       "text": "listLogs 失败: "
     },
     {
-      "line": 232,
+      "line": 235,
       "text": "处理失败 "
     },
     {
-      "line": 258,
+      "line": 261,
       "text": "处理失败 "
-    },
-    {
-      "line": 401,
-      "text": "DSH 任务完成"
-    },
-    {
-      "line": 409,
-      "text": "会话 "
     },
     {
       "line": 410,
+      "text": "DSH 任务完成"
+    },
+    {
+      "line": 418,
+      "text": "会话 "
+    },
+    {
+      "line": 419,
       "text": " 轮任务完成）"
     },
     {
-      "line": 414,
+      "line": 423,
       "text": "onTurnEnd 回调异常: "
     },
     {
-      "line": 422,
+      "line": 431,
       "text": "onTurnStart 回调异常: "
+    },
+    {
+      "line": 439,
+      "text": "onApprovalAsked 回调异常: "
     }
   ]
 }
