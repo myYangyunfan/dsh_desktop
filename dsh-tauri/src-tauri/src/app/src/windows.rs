@@ -69,6 +69,15 @@ fn default_main_window_geometry(app: &tauri::AppHandle) -> (f64, f64, Option<(f6
 ///
 /// Linux 例外：WebKitGTK 下 undecorated 窗口存在首帧不渲染/白屏的已知问题
 /// （tauri/wry），故 Linux 退回原生标题栏；Windows/macOS 维持自绘标题栏。
+///
+/// 高 DPI（2.8K）缩放：WebView2 已按系统 DPI 自动缩放 web 内容——wry 建窗时
+/// 不覆盖 `ICoreWebView2Controller3::RasterizationScale`（默认 = 显示器 DPI ×
+/// 系统文字缩放，且 `ShouldDetectMonitorScaleChanges` 默认 true，跨屏拖动到
+/// 不同 scale 的显示器时 WebView2 会自动更新它）。因此此处**刻意不调用**
+/// `set_zoom(scale_factor)`：`SetZoomFactor` 是乘在 `RasterizationScale` 之上的
+/// 额外倍数，设成 `scale_factor` 会让页面 `devicePixelRatio ≈ scale²`，造成
+/// 双重缩放。窗口几何的 scale_factor 换算（`default_main_window_geometry` /
+/// `save_main_window_state`）是独立口径，已正确按逻辑/物理像素处理。
 #[allow(clippy::too_many_arguments)]
 pub fn create_main_window(
     app: &tauri::AppHandle,
