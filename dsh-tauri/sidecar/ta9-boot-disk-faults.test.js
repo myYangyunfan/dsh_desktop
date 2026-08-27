@@ -95,6 +95,7 @@ function makeFakeAppDir() {
     'scripts/install-minimal-win-preset.js': PRESET_STUB,
     'scripts/plugin-manager-patch.js': 'module.exports = { togglePluginInPatch: (t) => t, setPluginRemoved: (t) => t };',
     'scripts/plugin-manager-update.js': 'module.exports = { selectReleaseAsset: null, npmLatestUrl: () => "", githubReleaseApiUrl: () => "", githubAssetDownloadUrl: () => "", verifyIntegrity: () => {}, compareVersions: () => 0, findPackageRoot: () => null };',
+    'scripts/plugin-core/lib/patch-surgery.js': 'module.exports = { quotePatchScalarValues: (t) => t, yamlQuoteIfNeeded: (t) => t };',
     'scripts/lib/companion-plugins.js': 'module.exports = { COMPANION_PLUGINS: [] };',
     'scripts/lib/profile-reconcile.js': 'module.exports = { createEntryListYamlParser: () => null };',
     'scripts/lib/patch-io.js': 'const fs = require("node:fs"); module.exports = { writeFileAtomic: (f, d) => fs.writeFileSync(f, d), readFileCached: () => null };',

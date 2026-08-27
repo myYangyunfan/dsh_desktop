@@ -120,6 +120,16 @@ function makeRecovery(overrides = {}) {
 
 const tick = (ms) => new Promise((res) => setTimeout(res, ms));
 
+// 轮询等待条件成立 —— 并行高负载下固定毫秒 sleep 会受事件循环抖动影响，
+// 用确定性条件（而非墙钟猜测）消除时序型 flake。
+async function waitFor(fn, timeoutMs = 2000) {
+  const start = Date.now();
+  while (!fn()) {
+    if (Date.now() - start > timeoutMs) throw new Error('waitFor 超时');
+    await tick(5);
+  }
+}
+
 test('崩溃后自动重载并在稳定期后清零', async () => {
   const { r, logs } = makeRecovery();
   let stable = 0;
@@ -172,9 +182,12 @@ test('稳定期内发生新故障则保留计数（防止慢速崩溃循环无�
   const win = fakeWin();
   r.attach(win, 'main');
   win.webContents.emit('render-process-gone', {}, { reason: 'crashed', exitCode: 1 }); // f=1
-  await tick(25); // 10ms 退避后加载完成（atLoad=1），稳定期 30ms 尚未到
+  // 等第一次 reload 完成并进入稳定期判定（expectingWeb=true）后再注入第二次故障：
+  // 固定 25ms sleep 在并行高负载下可能早于 did-finish-load，导致 failuresAtLoad
+  // 被快照成 2 而跳过脏检查分支（时序型 flake）。
+  await waitFor(() => r.stateOf(win).expectingWeb === true);
   win.webContents.emit('render-process-gone', {}, { reason: 'crashed', exitCode: 1 }); // f=2
-  await tick(30); // 第一次稳定期已过 → 脏检查应保留计数
+  await tick(FAST_OPTS.STABILITY_MS + 20); // 第一次稳定期已过 → 脏检查应保留计数
   assert.strictEqual(r.stateOf(win).failures, 2, '稳定期内有新故障应保留计数');
   assert.ok(logs.some((l) => l.includes('保留计数防止循环')), '应记录脏稳定日志');
   await tick(250); // 后续恢复链完成并再次干净稳定
