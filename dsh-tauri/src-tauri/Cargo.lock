@@ -877,6 +877,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
  "url",
+ "windows",
  "wsl-backend",
 ]
 

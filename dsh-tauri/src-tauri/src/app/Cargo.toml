@@ -41,6 +41,13 @@ rustls = { version = "0.23", default-features = false, features = ["ring"] }
 # URL 解析（updater 下载门禁：scheme+host 白名单）。树内已有（tauri 传递）。
 url = "2"
 
+[target.'cfg(target_os = "windows")'.dependencies]
+# Windows-only 主窗图标补丁（commands/icon.rs 的 win_icon 模块）：直接以 crate
+# 名 `windows` 引入会与本 crate 的 `pub mod windows`（窗口管理模块）同名冲突，
+# 故用 `windows-api` 别名引入。该 crate 已在依赖树内（tao/tauri-runtime-wry
+# 传递），仅复用、不新增下载。
+windows-api = { package = "windows", version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+
 [dev-dependencies]
 # 集成测试（tests/sponsor_window.rs）用 mock runtime 走生产同款建窗路径。
 tauri = { version = "2", features = ["test"] }

@@ -64,12 +64,109 @@ fn apply_icon(app: &AppHandle, img: tauri::image::Image<'_>) -> Result<(), Bridg
     if let Some(win) = app.get_webview_window("main") {
         win.set_icon(img.clone())
             .map_err(|e| BridgeError::internal(format!("设置主窗图标失败: {e}")))?;
+        // Windows：tauri 的 WebviewWindow::set_icon 只发 WM_SETICON(ICON_SMALL)
+        // （标题栏小图标），任务栏/alt-tab 用的 ICON_BIG 不会被更新；而主窗
+        // decorations:false 又没有原生标题栏，于是「自定义图标只在托盘生效」。
+        // 这里直接对窗口 HWND 补设 ICON_SMALL + ICON_BIG（与托盘同款 RGBA→HICON）。
+        #[cfg(target_os = "windows")]
+        win_icon::apply_to_main_window(&win, &img)?;
     }
     if let Some(tray) = app.tray_by_id("main-tray") {
         tray.set_icon(Some(img))
             .map_err(|e| BridgeError::internal(format!("设置托盘图标失败: {e}")))?;
     }
     Ok(())
+}
+
+/// Windows-only 主窗图标补正：把图标同时设置到主窗 HWND 的 ICON_SMALL（标题栏）
+/// 与 ICON_BIG（任务栏/alt-tab）。tauri 的 `WebviewWindow::set_icon` 在 Windows
+/// 只设 ICON_SMALL（走 tao `set_window_icon`），ICON_BIG 无人更新；本模块直接把
+/// RGBA 转成 HICON 后 SendMessageW(WM_SETICON, …) 补设两档。
+#[cfg(target_os = "windows")]
+mod win_icon {
+    use std::sync::{Mutex, OnceLock};
+
+    use bridge::BridgeError;
+    use windows_api::Win32::Foundation::{LPARAM, WPARAM};
+    use windows_api::Win32::UI::WindowsAndMessaging::{
+        CreateIcon, DestroyIcon, SendMessageW, HICON, ICON_BIG, ICON_SMALL, WM_SETICON,
+    };
+
+    /// 当前挂到主窗的 HICON 原值（进程生命周期内持有；替换时销毁旧句柄）。
+    /// 存 usize 免去 HICON（内部 *mut c_void 非 Send/Sync）作 static 的约束。
+    static WINDOW_ICON: OnceLock<Mutex<Option<usize>>> = OnceLock::new();
+
+    fn window_icon_slot() -> &'static Mutex<Option<usize>> {
+        WINDOW_ICON.get_or_init(|| Mutex::new(None))
+    }
+
+    /// RGBA → 32bpp BGRA + 单色 AND mask 的 HICON。与 tao 的
+    /// `RgbaIcon::into_windows_icon` 同款算法（托盘图标即走此实现且已验证可用）。
+    fn rgba_to_hicon(rgba: &[u8], width: u32, height: u32) -> Result<HICON, BridgeError> {
+        let pixel_count = (width as usize) * (height as usize);
+        if rgba.len() != pixel_count * 4 {
+            return Err(BridgeError::internal("图标 RGBA 长度与尺寸不符"));
+        }
+
+        let mut bgra = rgba.to_vec();
+        let mut and_mask = Vec::with_capacity(pixel_count);
+        // 逐像素：AND mask 字节 = alpha 取反（== a.wrapping_sub(255)），
+        // 像素交换 R<->B（RGBA → BGRA）。
+        for px in bgra.chunks_exact_mut(4) {
+            let a = px[3];
+            and_mask.push(a.wrapping_sub(u8::MAX));
+            px.swap(0, 2);
+        }
+
+        unsafe {
+            CreateIcon(
+                None,
+                width as i32,
+                height as i32,
+                1,
+                32,
+                and_mask.as_ptr(),
+                bgra.as_ptr(),
+            )
+        }
+        .map_err(|e| BridgeError::internal(format!("创建窗口图标失败: {e}")))
+    }
+
+    pub(super) fn apply_to_main_window(
+        win: &tauri::WebviewWindow,
+        img: &tauri::image::Image<'_>,
+    ) -> Result<(), BridgeError> {
+        let hwnd = win
+            .hwnd()
+            .map_err(|e| BridgeError::internal(format!("获取主窗 HWND 失败: {e}")))?;
+        let icon = rgba_to_hicon(img.rgba(), img.width(), img.height())?;
+        let icon_raw = icon.0 as usize;
+
+        // WM_SETICON 不接管 HICON 所有权：须本侧持有到下次替换/进程退出。
+        {
+            let mut slot = window_icon_slot().lock().unwrap_or_else(|p| p.into_inner());
+            if let Some(old_raw) = slot.replace(icon_raw) {
+                let _ = unsafe { DestroyIcon(HICON(old_raw as *mut std::ffi::c_void)) };
+            }
+        }
+
+        unsafe {
+            // ICON_SMALL = 标题栏；ICON_BIG = 任务栏 / alt-tab。
+            let _ = SendMessageW(
+                hwnd,
+                WM_SETICON,
+                Some(WPARAM(ICON_SMALL as usize)),
+                Some(LPARAM(icon.0 as isize)),
+            );
+            let _ = SendMessageW(
+                hwnd,
+                WM_SETICON,
+                Some(WPARAM(ICON_BIG as usize)),
+                Some(LPARAM(icon.0 as isize)),
+            );
+        }
+        Ok(())
+    }
 }
 
 /// 恢复默认图标（主窗 + 托盘）。默认图标来自 `default_window_icon`
