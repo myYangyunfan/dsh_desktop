@@ -244,7 +244,7 @@ export function EditorHost(props: {
   // The docked panel's drag-resize: pointer capture on the handle itself
   // (no window listeners — the captured pointer keeps tracking even off the
   // handle). Local width while dragging, persisted into meta.treeWidth on
-  // release. The panel docks right, so dragging LEFT widens it.
+  // release. The panel docks left, so dragging RIGHT widens it.
   // Moves are BATCHED per frame (createFrameBatcher): applying every
   // pointermove is a setState that re-renders this host AND the editor
   // viewer below it (CodeMirror re-lays out on the width change) at event
@@ -266,7 +266,7 @@ export function EditorHost(props: {
   const onResizeMove = (event: React.PointerEvent): void => {
     const drag = dragRef.current
     if (drag === null) return
-    pendingWidthRef.current = clampTreeWidth(drag.startWidth + (drag.startX - event.clientX))
+    pendingWidthRef.current = clampTreeWidth(drag.startWidth + (event.clientX - drag.startX))
     dragBatcher.schedule(() => setDragWidth(pendingWidthRef.current))
   }
   const onResizeEnd = (event: React.PointerEvent): void => {
@@ -279,7 +279,7 @@ export function EditorHost(props: {
     dragBatcher.flushNow()
     dragRef.current = null
     setDragWidth(null)
-    const finalWidth = clampTreeWidth(drag.startWidth + (drag.startX - event.clientX))
+    const finalWidth = clampTreeWidth(drag.startWidth + (event.clientX - drag.startX))
     if (finalWidth !== treeWidthOf(tab)) patchMeta(ctx, tab, { treeWidth: finalWidth })
   }
 
@@ -470,32 +470,6 @@ export function EditorHost(props: {
         </button>
       </div>
       <div className={css.editorBody}>
-        <div className={css.editorMain}>
-          {showEmpty && <div className={css.editorPlaceholder}>{t('editorEmptyHint')}</div>}
-          {!showEmpty && load.status === 'loading' && <div className={css.editorPlaceholder}>{t('loading')}</div>}
-          {!showEmpty && load.status === 'error' && (
-            <div className={css.editorError}>
-              <span>{load.message}</span>
-              {load.autoAttempt !== undefined && <span>{t('fsReadRetryWaiting', { n: load.autoAttempt })}</span>}
-              <button type="button" className={css.terminalRetry} onClick={() => { setAttempt(a => a + 1) }}>
-                {t('terminalRetry')}
-              </button>
-            </div>
-          )}
-          {!showEmpty && load.status === 'binary' && <BinaryDownload scope={scope} path={path} />}
-          {!showEmpty && load.status === 'ready' && createElement(load.viewer.component, {
-            ctx, store, scope, path, title,
-            viewerId: load.viewer.id,
-            content: load.content,
-            truncated: load.truncated,
-            mediaUrl: load.mediaUrl,
-            customData: load.customData,
-            // The viewer's toolbar always hoists into this host's header.
-            toolbar: 'host',
-            onToolbarState,
-            onToolbarControls,
-          })}
-        </div>
         {treeOpen && (
           <div className={css.editorTreeDock} style={{ width: treeWidth }}>
             <div
@@ -525,6 +499,32 @@ export function EditorHost(props: {
             />
           </div>
         )}
+        <div className={css.editorMain}>
+          {showEmpty && <div className={css.editorPlaceholder}>{t('editorEmptyHint')}</div>}
+          {!showEmpty && load.status === 'loading' && <div className={css.editorPlaceholder}>{t('loading')}</div>}
+          {!showEmpty && load.status === 'error' && (
+            <div className={css.editorError}>
+              <span>{load.message}</span>
+              {load.autoAttempt !== undefined && <span>{t('fsReadRetryWaiting', { n: load.autoAttempt })}</span>}
+              <button type="button" className={css.terminalRetry} onClick={() => { setAttempt(a => a + 1) }}>
+                {t('terminalRetry')}
+              </button>
+            </div>
+          )}
+          {!showEmpty && load.status === 'binary' && <BinaryDownload scope={scope} path={path} />}
+          {!showEmpty && load.status === 'ready' && createElement(load.viewer.component, {
+            ctx, store, scope, path, title,
+            viewerId: load.viewer.id,
+            content: load.content,
+            truncated: load.truncated,
+            mediaUrl: load.mediaUrl,
+            customData: load.customData,
+            // The viewer's toolbar always hoists into this host's header.
+            toolbar: 'host',
+            onToolbarState,
+            onToolbarControls,
+          })}
+        </div>
       </div>
     </div>
   )

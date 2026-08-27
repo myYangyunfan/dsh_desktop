@@ -1,0 +1,11 @@
+{
+  "//": "Declaration build for the shipped types surface: emits lib/types/*.d.ts from src (the typecheck gate stays `tsc --noEmit` on tsconfig.json; tsdown bundles the JS). Consumers resolve declarations through the package exports' types subpaths.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": "lib/types"
+  },
+  "include": ["src"]
+}

@@ -233,7 +233,7 @@ export const SIDEBAR_PREFS_DEFAULTS: SidebarPrefs = {
   terminalFontFamily: '',
   terminalFontSize: TERMINAL_FONT_SIZE_DEFAULT,
   interceptOpenPath: true,
-  editorExplorer: false,
+  editorExplorer: true,
   terminalShell: '',
   terminalShellArgs: '',
   titleBarScheme: 'auto',

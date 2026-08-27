@@ -847,6 +847,46 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   text-align: center;
 }
 
+/* ── File tree icon tones ──────────────────────────────────────────────── */
+
+/* VS Code-style per-file-type icon coloring. Deliberate exception to the
+   token-only rule (like the editor/xterm designed palettes): concrete hues
+   give every file family a recognizable glyph tint — TypeScript blue,
+   Markdown green, JSON yellow, CSS/HTML orange, images purple, folders a
+   warm bronze. The values sit on `body` (light defaults) and flip on
+   `body[data-ds-dark-theme]` (dark, brighter), so a scheme flip recolors
+   the tree instantly with no re-render. */
+:global(body) {
+  --dsh-file-icon-folder: #b98a3e;
+  --dsh-file-icon-js: #c9a000;
+  --dsh-file-icon-ts: #3178c6;
+  --dsh-file-icon-json: #a4912a;
+  --dsh-file-icon-md: #4f9a50;
+  --dsh-file-icon-css: #c86b2f;
+  --dsh-file-icon-html: #d46a1f;
+  --dsh-file-icon-image: #a855b0;
+}
+
+:global(body[data-ds-dark-theme]) {
+  --dsh-file-icon-folder: #dcb67a;
+  --dsh-file-icon-js: #e8c44b;
+  --dsh-file-icon-ts: #56a8d8;
+  --dsh-file-icon-json: #cbcb41;
+  --dsh-file-icon-md: #69a864;
+  --dsh-file-icon-css: #d18f52;
+  --dsh-file-icon-html: #e37933;
+  --dsh-file-icon-image: #c586e0;
+}
+
+.explorerIconFolder { color: var(--dsh-file-icon-folder); }
+.explorerIconJs { color: var(--dsh-file-icon-js); }
+.explorerIconTs { color: var(--dsh-file-icon-ts); }
+.explorerIconJson { color: var(--dsh-file-icon-json); }
+.explorerIconMd { color: var(--dsh-file-icon-md); }
+.explorerIconCss { color: var(--dsh-file-icon-css); }
+.explorerIconHtml { color: var(--dsh-file-icon-html); }
+.explorerIconImage { color: var(--dsh-file-icon-image); }
+
 /* Drag a file/folder over a tree row: the target directory row gets a filled
    highlight (drops land inside it; file rows target their parent directory).
    The zone frame around the whole tree is the portaled .uploadDropZone. */
@@ -1128,23 +1168,25 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
 }
 
 /* The docked file tree: the wrapper owns the (drag-adjustable) width and
-   the hairline separation; the resize handle is a wider invisible strip on
-   its left edge with a hover affordance. */
+   the hairline separation; the tree docks at the tab's LEFT edge (VSCode
+   explorer), so the hairline is its right border and the resize handle is
+   a wider invisible strip on that right edge with a hover affordance. */
 .editorTreeDock {
   position: relative;
   flex: none;
   min-height: 0;
   display: flex;
-  border-left: 1px solid var(--dsw-alias-border-l1);
+  border-right: 1px solid var(--dsw-alias-border-l1);
 }
 
 .editorTreeResize {
   position: absolute;
   top: 0;
   bottom: 0;
-  /* Inside the dock (left edge): pointer capture on the handle keeps the
-     drag alive even when the pointer leaves the strip. */
-  left: 0;
+  /* Inside the dock (right edge — the tree's seam against the editor):
+     pointer capture on the handle keeps the drag alive even when the
+     pointer leaves the strip. */
+  right: 0;
   width: 6px;
   cursor: col-resize;
   touch-action: none;
@@ -1567,6 +1609,100 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   overflow-y: auto;
   padding: 10px 14px;
   font: var(--dsw-font-xs-13);
+}
+
+/* ── Markdown reading theme ────────────────────────────────────────────── */
+
+/* A self-contained reading theme for the markdown preview (TextEditor's
+   `.editorMd`, which renders MarkdownText). Styled for long-doc readability
+   with a VSCode-Office flavor, but strictly on DSH tokens — the color-mix
+   derivations adapt to light/dark automatically, so no external theme is
+   fetched and skins keep working. The primitives' own `.markdown` sheet
+   supplies the base typography; these rules ADD structure (heading rules,
+   quote tint, code-block card, table zebra) over that baseline. */
+.editorMd {
+  --dsh-md-accent: var(--dsw-alias-state-business-primary);
+  --dsh-md-border: var(--dsw-alias-border-l2);
+  --dsh-md-quote-bg: color-mix(in srgb, var(--dsw-alias-state-business-primary) 8%, transparent);
+  --dsh-md-table-head-bg: var(--dsw-alias-interactive-bg-hover);
+  --dsh-md-table-stripe: color-mix(in srgb, var(--dsw-alias-interactive-bg-hover) 45%, transparent);
+}
+
+/* Headings: a hairline anchor under h1/h2 and a slightly dimmed 3–6 so the
+   hierarchy reads at a glance. */
+.editorMd :global(h1),
+.editorMd :global(h2) {
+  border-bottom: 1px solid var(--dsh-md-border);
+  padding-bottom: 0.35em;
+  font-weight: 700;
+  color: var(--dsw-alias-label-primary);
+}
+
+.editorMd :global(h3),
+.editorMd :global(h4),
+.editorMd :global(h5),
+.editorMd :global(h6) {
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* Links: keep the primitives' brand ink but fix the underline offset so the
+   underline clears descenders. */
+.editorMd :global(a) {
+  text-underline-offset: 3px;
+}
+
+/* Blockquotes: a muted tint plus an accent bar (VSCode quote chrome). */
+.editorMd :global(blockquote) {
+  margin: 16px 0;
+  padding: 6px 14px;
+  border-left: 3px solid var(--dsh-md-accent);
+  background: var(--dsh-md-quote-bg);
+  border-radius: 0 8px 8px 0;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.editorMd :global(blockquote p:last-child) {
+  margin-bottom: 0;
+}
+
+/* Fenced code blocks (MarkdownText's CodeBlock root carries the stable
+   `.md-code-block` class): a bordered, rounded, tinted card. Shiki already
+   supplies the theme-aware syntax colors; this only dresses the container. */
+.editorMd :global(.md-code-block) {
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 10px;
+  background: var(--dsw-alias-markdown-code-block);
+  overflow: hidden;
+}
+
+.editorMd :global(.md-code-block pre) {
+  background: var(--dsw-alias-markdown-code-block) !important;
+}
+
+/* Tables: header fill, full cell hairlines, zebra striping. */
+.editorMd :global(th) {
+  background: var(--dsh-md-table-head-bg);
+  font-weight: 650;
+}
+
+.editorMd :global(th),
+.editorMd :global(td) {
+  border: 1px solid var(--dsh-md-border);
+}
+
+.editorMd :global(tbody tr:nth-child(even)) {
+  background: var(--dsh-md-table-stripe);
+}
+
+/* Lists: accent markers echo the link/quotes color. */
+.editorMd :global(li::marker) {
+  color: var(--dsh-md-accent);
+}
+
+/* Images: a hairline frame so screenshots read as figures, not flotsam. */
+.editorMd :global(img) {
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
 }
 
 /* ── Mermaid diagram block (markdown preview, mermaid lazy chunk) ────────

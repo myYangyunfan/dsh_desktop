@@ -30,6 +30,7 @@ import {
 import { SiCursor, SiZedindustries } from 'react-icons/si'
 import { VscFile, VscFolder, VscFolderOpened, VscLinkExternal, VscPin, VscPinned } from 'react-icons/vsc'
 import { api, downloadUrl, type FsEntry } from './api.ts'
+import { extOf } from './lang.ts'
 import { IconUploadOutline16, IconVscode16 } from './icons.tsx'
 import type { OpenWithTarget } from './open-with.ts'
 import { relativeTo } from './paths.ts'
@@ -60,6 +61,30 @@ function parentOf(path: string): string {
  *  (mirror of Sidebar.tsx's panel-host shield gate). */
 function isFileDrag(event: DragEvent): boolean {
   return event.dataTransfer?.types.includes('Files') ?? false
+}
+
+/**
+ * VS Code-style per-file-type icon tone. Files whose extension the editor
+ * already knows how to syntax-highlight get a colored glyph (TypeScript blue,
+ * Markdown green, JSON yellow, CSS/HTML orange, images purple, …); folders
+ * get their own warm tone; anything else stays the monochrome `currentColor`
+ * outline. The colors are CSS variables defined in sidebar.module.css under
+ * `body` (light) and `body[data-ds-dark-theme]` (dark), so a theme flip
+ * recolors the icons without a re-render.
+ */
+function fileIconClassOf(entry: FsEntry): string | undefined {
+  const ext = extOf(entry.name)
+  switch (ext) {
+    case 'ts': case 'tsx': case 'mts': case 'cts': return css.explorerIconTs
+    case 'js': case 'jsx': case 'mjs': case 'cjs': return css.explorerIconJs
+    case 'json': case 'jsonc': return css.explorerIconJson
+    case 'md': case 'markdown': return css.explorerIconMd
+    case 'css': return css.explorerIconCss
+    case 'html': case 'htm': return css.explorerIconHtml
+    case 'png': case 'jpg': case 'jpeg': case 'gif': case 'svg':
+    case 'webp': case 'ico': case 'bmp': case 'avif': return css.explorerIconImage
+    default: return undefined
+  }
 }
 
 /** How long the row's "copied" label stays after a successful write. */
@@ -444,7 +469,7 @@ export function FileTree(props: {
               onDrop={(event) => { handleDirDrop(event, entry.path) }}
               onContextMenu={(event) => { openRowMenu(event, entry.path, true) }}
             >
-              {isOpen ? <VscFolderOpened size={14} /> : <VscFolder size={14} />}
+              {isOpen ? <VscFolderOpened size={14} className={css.explorerIconFolder} /> : <VscFolder size={14} className={css.explorerIconFolder} />}
               <span className={css.explorerName}>{entry.name}</span>
               {entry.isSymlink && <IconLinkOutline16 size={12} className={css.explorerSymlink} />}
               {rowActions(entry)}
@@ -475,7 +500,7 @@ export function FileTree(props: {
           onDrop={(event) => { handleFileDrop(event, entry.path) }}
           onContextMenu={(event) => { openRowMenu(event, entry.path, false) }}
         >
-          <VscFile size={14} />
+          <VscFile size={14} className={fileIconClassOf(entry)} />
           <span className={css.explorerName}>{entry.name}</span>
           {entry.isSymlink && <IconLinkOutline16 size={12} className={css.explorerSymlink} />}
           {rowActions(entry)}
@@ -504,7 +529,7 @@ export function FileTree(props: {
             onDrop={(event) => { handleDirDrop(event, root) }}
             onContextMenu={(event) => { openRowMenu(event, root, true) }}
           >
-            <VscFolderOpened size={14} />
+            <VscFolderOpened size={14} className={css.explorerIconFolder} />
             <span className={css.explorerName}>{baseName(root)}</span>
             {copiedPath === root
               ? <span className={css.explorerCopied}>{t('copied')}</span>

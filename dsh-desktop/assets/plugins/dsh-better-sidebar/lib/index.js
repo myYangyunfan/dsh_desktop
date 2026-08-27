@@ -71,7 +71,7 @@ const PrefsSchema = z.object({
 	terminalFontFamily: z.string().default(""),
 	terminalFontSize: z.number().step(1).min(9).max(32).default(13),
 	interceptOpenPath: z.boolean().default(true),
-	editorExplorer: z.boolean().default(false),
+	editorExplorer: z.boolean().default(true),
 	terminalShell: z.string().default(""),
 	terminalShellArgs: z.string().default(""),
 	titleBarScheme: z.union([
