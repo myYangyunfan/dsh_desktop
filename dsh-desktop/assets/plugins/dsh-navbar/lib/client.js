@@ -99,6 +99,42 @@ window.__ModuleLoader__.load({
   pointer-events: none;
 }
 [data-vlln-more] { width: 3px; height: 3px; border-radius: 999px; background: rgba(128,128,140,.5); flex: none; }
+/* 「加载更早历史」按钮：贴导航条最上方，仅当会话还有更早历史（官方加载
+ * 更早按钮存在）时显示。视觉：20px 柔和圆形按钮——官方 token 背景 + 发丝
+ * 描边（静态可读、不刺眼），悬停品牌色亮起 + 箭头微抬。水平居中于药丸列
+ * 正上方（药丸列保持左对齐不移动）：margin 0 -6.5px 使 margin-box 宽度 =
+ * 7px（20 - 2×6.5），与药丸列同宽同起点，视觉中心即药丸列中心；药丸伸缩
+ * （7px→22px 药丸向右延伸）不影响按钮位置。loadingOlder 期间禁用置灰。
+ * ::after 放大命中区（20px 视觉 → 28px 热区）。 */
+[data-vlln-load-older] {
+  width: 20px; height: 20px; padding: 0; border: none; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: none; cursor: pointer; position: relative;
+  margin: 0 -6.5px;
+  color: var(--dsw-alias-label-secondary, rgba(128, 128, 140, .75));
+  background: var(--dsw-alias-bg-layer-2, rgba(128, 128, 140, .1));
+  box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l2, rgba(128, 128, 140, .2));
+  transition: color .18s ease, background .18s ease, box-shadow .18s ease;
+}
+[data-vlln-load-older]::after {
+  content: ''; position: absolute; inset: -4px; border-radius: 999px;
+}
+[data-vlln-load-older] svg {
+  transition: transform .18s ease;
+}
+[data-vlln-load-older]:hover {
+  color: var(--dsw-alias-brand-primary, #4c9aff);
+  background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 140, .16));
+  box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l3, rgba(128, 128, 140, .3));
+}
+[data-vlln-load-older]:hover svg { transform: translateY(-1px); }
+[data-vlln-load-older]:disabled { opacity: .38; cursor: default; }
+[data-vlln-load-older]:disabled:hover {
+  color: var(--dsw-alias-label-secondary, rgba(128, 128, 140, .75));
+  background: var(--dsw-alias-bg-layer-2, rgba(128, 128, 140, .1));
+  box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l2, rgba(128, 128, 140, .2));
+}
+[data-vlln-load-older]:disabled:hover svg { transform: none; }
 [data-vlln-dot].pinned {
   /* 精选轮次：金色细长椭圆盘——与普通深灰圆点（7×7）和激活蓝药丸
    * （22×7）都不同的第三形态，尺寸适中、hover 不膨胀突兀。 */
@@ -122,7 +158,8 @@ window.__ModuleLoader__.load({
 [data-vlln-pin-button]:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); }
 [data-vlln-pin-button][data-active] { color: #f0b429; }
 @media (prefers-reduced-motion: reduce) {
-  [data-dsh-navbar], [data-vlln-dot], [data-vlln-dot].active {
+  [data-dsh-navbar], [data-vlln-dot], [data-vlln-dot].active, [data-vlln-load-older],
+  [data-vlln-load-older] svg {
     transition: none; animation: none;
   }
 }
@@ -141,6 +178,14 @@ body:has(.dsh-synapse-overlay:not([hidden])) [data-vlln-preview] { display: none
 				preview.setAttribute("data-vlln-preview", "");
 				preview.style.display = "none";
 				body.appendChild(preview);
+				const loadOlderLabel = ctx.locale.getLocale().active.startsWith("zh") ? "加载更早历史" : "Load earlier history";
+				const loadOlderLoading = ctx.locale.getLocale().active.startsWith("zh") ? "加载中…" : "Loading…";
+				const loadOlderEl = document.createElement("button");
+				loadOlderEl.type = "button";
+				loadOlderEl.setAttribute("data-vlln-load-older", "");
+				loadOlderEl.style.display = "none";
+				loadOlderEl.setAttribute("aria-label", loadOlderLabel);
+				loadOlderEl.innerHTML = "<svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.25\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M18 15l-6-6-6 6\"/></svg>";
 				const flowOf = () => document.querySelector("[data-chat-flow=\"\"]") ?? document.querySelector("[data-focus-flow=\"\"]");
 				const scrollerOf = () => {
 					const flow = flowOf();
@@ -155,6 +200,17 @@ body:has(.dsh-synapse-overlay:not([hidden])) [data-vlln-preview] { display: none
 				};
 				const allRows = () => [...document.querySelectorAll("[data-time-hover-root]")].filter((row) => !row.hasAttribute("data-pending-steering"));
 				const userRows = () => allRows().filter((row) => !row.hasAttribute("data-turn-tail") && row.querySelector("[class*=\"bubble\"]") !== null);
+				const olderButtonOf = () => {
+					const flow = flowOf();
+					if (flow === null) return null;
+					for (const child of flow.children) {
+						if (!(child instanceof HTMLElement)) continue;
+						if (child.hasAttribute("data-chat-flow-key")) continue;
+						const button = child.querySelector(":scope > button[type=\"button\"]");
+						if (button !== null) return button;
+					}
+					return null;
+				};
 				const position = () => {
 					const flow = flowOf();
 					if (flow === null) return;
@@ -261,6 +317,18 @@ body:has(.dsh-synapse-overlay:not([hidden])) [data-vlln-preview] { display: none
 				const hidePreview = () => {
 					preview.style.display = "none";
 				};
+				const showLoadOlderPreview = () => {
+					preview.textContent = loadOlderEl.disabled ? loadOlderLoading : loadOlderLabel;
+					preview.style.display = "block";
+					positionPreview(loadOlderEl);
+				};
+				loadOlderEl.addEventListener("mouseenter", showLoadOlderPreview);
+				loadOlderEl.addEventListener("mouseleave", hidePreview);
+				loadOlderEl.addEventListener("focus", showLoadOlderPreview);
+				loadOlderEl.addEventListener("blur", hidePreview);
+				loadOlderEl.addEventListener("mousemove", (e) => {
+					e.stopPropagation();
+				});
 				const pinnedRowOf = (all, rows, i, turns) => {
 					let start = -1;
 					for (let k = 0; k < all.length; k++) if (all[k] === rows[i]) {
@@ -290,6 +358,9 @@ body:has(.dsh-synapse-overlay:not([hidden])) [data-vlln-preview] { display: none
 						return;
 					}
 					bar.style.display = "flex";
+					const older = olderButtonOf();
+					loadOlderEl.style.display = older === null ? "none" : "";
+					loadOlderEl.disabled = older === null ? true : older.disabled;
 					const active = computeActive();
 					activeIndex = active;
 					const all = allRows();
@@ -305,7 +376,7 @@ body:has(.dsh-synapse-overlay:not([hidden])) [data-vlln-preview] { display: none
 						lo = Math.min(lo, pinnedIndexes[0]);
 						hi = Math.max(hi, pinnedIndexes[pinnedIndexes.length - 1]);
 					}
-					const expectedCount = hi - lo + 1 + (lo > 0 ? 1 : 0) + (hi < rows.length - 1 ? 1 : 0);
+					const expectedCount = hi - lo + 1 + (lo > 0 ? 1 : 0) + (hi < rows.length - 1 ? 1 : 0) + 1;
 					if (rows.length === builtRows.length && rows.every((row, i) => row === builtRows[i]) && bar.childElementCount === expectedCount) {
 						updateActiveClass(active);
 						[...bar.querySelectorAll("[data-vlln-dot]")].forEach((dot, i) => {
@@ -315,6 +386,7 @@ body:has(.dsh-synapse-overlay:not([hidden])) [data-vlln-preview] { display: none
 						return;
 					}
 					bar.textContent = "";
+					bar.appendChild(loadOlderEl);
 					if (windowed && lo > 0) {
 						const more = document.createElement("span");
 						more.setAttribute("data-vlln-more", "");
@@ -439,13 +511,13 @@ body:has(.dsh-synapse-overlay:not([hidden])) [data-vlln-preview] { display: none
 						return;
 					}
 					bindIO();
-					// 任何非 bar/preview 自身的 DOM 变化都触发重渲染：
-					// 侧栏折叠/展开、better-sidebar 面板开关、浮窗出现等兄弟节点
-					// 布局变化同样会改变对话流的几何位置，只响应 flow 内部变化
-					// 会让 bar 停在旧位置（视觉上"消失"）。schedule 自带 rAF 节流。
 					for (const m of mutations) {
 						if (m.target === bar || bar.contains(m.target)) continue;
 						if (m.target === preview || preview.contains(m.target)) continue;
+						// 任何非 bar/preview 自身的 DOM 变化都触发重渲染：
+						// 侧栏折叠/展开、better-sidebar 面板开关、浮窗出现等兄弟节点
+						// 布局变化同样会改变对话流的几何位置，只响应 flow 内部变化
+						// 会让 bar 停在旧位置（视觉上"消失"）。schedule 自带 rAF 节流。
 						schedule();
 						return;
 					}
@@ -528,9 +600,13 @@ body:has(.dsh-synapse-overlay:not([hidden])) [data-vlln-preview] { display: none
 					hoverAnchor = null;
 					hidePreview();
 				});
+				loadOlderEl.addEventListener("click", (e) => {
+					e.stopPropagation();
+					olderButtonOf()?.click();
+				});
 				bar.addEventListener("click", (e) => {
 					const t = e.target;
-					if (t !== null && t.closest("[data-vlln-dot]") !== null) return;
+					if (t !== null && (t.closest("[data-vlln-dot]") !== null || t.closest("[data-vlln-load-older]") !== null)) return;
 					const hit = nearestDot(e.clientY);
 					if (hit === null) return;
 					const dots = [...bar.querySelectorAll("[data-vlln-dot]")];
