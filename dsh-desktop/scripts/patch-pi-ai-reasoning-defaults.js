@@ -21,8 +21,9 @@
 //      插件这条旁路也断了 → 用户侧「第三方思考强度不生效」。
 //
 // 修复（本补丁，宿主侧单一改动）：手声明条目（无 base）在未声明
-// reasoningEfforts 时回落**标准 OpenAI 档位字典**而非 false：
-//   { off: 不发字段, low: "low", medium: "medium", high: "high" }
+// reasoningEfforts 时回落**完整 DSH 档位字典**而非 false（off 缺席 = 不发字段）：
+//   { minimal: "minimal", low: "low", medium: "medium", high: "high",
+//     xhigh: "xhigh", max: "max" }
 // 「继承」语义在手声明条目上本就空转（无基条目可继承），改为默认字典后：
 //   - 思考强度控件开箱即用（pi-ai 原生 metadata 链：reasoningInfo → 控件）；
 //   - wire 映射走 pi-ai 原生 thinkingLevelMap（VB3 已逐协议核实）：三个可手
@@ -61,21 +62,26 @@ const MARKER = 'dsh-desktop patch (hand-declared reasoning defaults)';
  */
 const ANCHOR = '\tif (efforts === void 0) return { reasoning: base?.reasoning ?? false };';
 
+/** 旧版档位字典（v0.5.3 起注入的低/中/高）——已打补丁的文件升级时就地替换。 */
+const OLD_MAP = 'thinkingLevelMap: { low: "low", medium: "medium", high: "high" }';
+/** 新完整档位字典：手声明条目默认覆盖全 7 档（off 缺席 = 「不发字段」）。 */
+const NEW_MAP = 'thinkingLevelMap: { minimal: "minimal", low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: "max" }';
+
 /** 注入体（tab 缩进与上游一致；off 缺席 = 「不发字段」的规范 map 形态）。 */
 const REPLACEMENT = [
   '\tif (efforts === void 0) {',
   '\t\t// ' + MARKER + ': 手声明条目（无内置 catalog 基条目）默认思考档位。',
   '\t\t// 上游「未声明 = 继承 catalog 同 id 条目」在手声明条目上空转（无 base →',
   '\t\t// reasoning:false），思考强度控件永不出现且显式档位报',
-  '\t\t// UNSUPPORTED_REASONING_EFFORT。回落标准 OpenAI 档位字典：off=不发字段',
-  '\t\t//（map 缺席，规范形态）；low/medium/high 直通——三个可手声明协议',
-  '\t\t//（openai-completions / openai-responses / anthropic-messages）的 wire',
-  '\t\t// 映射对同名拼写都有原生 thinkingLevelMap 消费。未选档位时 defaultEffort',
-  '\t\t// 缺席 → 不向 wire 发任何字段，严格网关不受影响。catalog 基条目存在时',
-  '\t\t// 维持上游继承语义（下方 return）。',
+  '\t\t// UNSUPPORTED_REASONING_EFFORT。回落完整 7 档字典（off 缺席 = 不发字段）：',
+  '\t\t// minimal/low/medium/high/xhigh/max 全档可调，wire 取同名拼写——与上游',
+  '\t\t// openai 路由 thinkingLevelMap[level] ?? level 的同名回落语义一致，',
+  '\t\t// anthropic 路由 mapThinkingLevelToEffort 逐档映射。第三方网关对自身不',
+  '\t\t// 支持的档位会按端点文档拒绝，选择权交给用户，本补丁不替用户猜档位。',
+  '\t\t// catalog 基条目存在时维持上游继承语义（下方 return）。',
   '\t\tif (base === void 0) return {',
   '\t\t\treasoning: true,',
-  '\t\t\tthinkingLevelMap: { low: "low", medium: "medium", high: "high" }',
+  '\t\t\t' + NEW_MAP,
   '\t\t};',
   '\t\treturn { reasoning: base?.reasoning ?? false };',
   '\t}',
@@ -88,7 +94,17 @@ const REPLACEMENT = [
  * @returns {{status:'already'}|{status:'anchor-missing',detail:string}|{status:'changed',src:string}}
  */
 function transformReasoningDefaults(src, file) {
-  if (src.includes(MARKER)) return { status: 'already' };
+  if (src.includes(MARKER)) {
+    // 已打补丁：新版字典在位则幂等；旧版（仅 low/medium/high）就地升级为新
+    // 完整字典——否则已装包用户（payload 镜像了 dev node_modules）会因 marker
+    // 短路而永远停留在旧档位。旧版字典被替换为带 xhigh/max 的新字典后，
+    // getSupportedThinkingLevels 才会把 xhigh/max 计入可选档。
+    if (src.includes(NEW_MAP)) return { status: 'already' };
+    if (src.includes(OLD_MAP)) {
+      return { status: 'changed', src: src.split(OLD_MAP).join(NEW_MAP) };
+    }
+    return { status: 'already' }; // marker 在但字典形态不可识别，保守不改写
+  }
   if (!src.includes(ANCHOR)) {
     return {
       status: 'anchor-missing',
@@ -143,7 +159,7 @@ function patchPiAiReasoningDefaults(nmRoot, log = () => {}, stats, options) {
   return 0;
 }
 
-module.exports = { patchPiAiReasoningDefaults, transformReasoningDefaults, MARKER, TARGET_REL, ANCHOR };
+module.exports = { patchPiAiReasoningDefaults, transformReasoningDefaults, MARKER, TARGET_REL, ANCHOR, OLD_MAP, NEW_MAP };
 
 if (require.main === module) {
   const root = process.argv[2] ? path.resolve(process.argv[2]) : path.resolve(__dirname, '..', 'node_modules');

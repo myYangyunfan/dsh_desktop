@@ -21,6 +21,8 @@ const {
   MARKER,
   TARGET_REL,
   ANCHOR,
+  OLD_MAP,
+  NEW_MAP,
 } = require('../patch-pi-ai-reasoning-defaults');
 
 /** 与 dsh-llm-pi-ai lib/index.js 同构的最小片段（tab 缩进、含锚点行）。 */
@@ -81,7 +83,7 @@ test('补丁脚本：一次应用注入 marker + 默认字典，base 分支保�
   const result = transformReasoningDefaults(fixtureSource());
   assert.equal(result.status, 'changed');
   assert.ok(result.src.includes(MARKER), '应注入幂等 marker');
-  assert.ok(result.src.includes('thinkingLevelMap: { low: "low", medium: "medium", high: "high" }'), '应注入标准档位字典');
+  assert.ok(result.src.includes(NEW_MAP), '应注入完整 7 档字典（含 xhigh/max）');
   assert.ok(result.src.includes('if (base === void 0) return {'), '手声明判定分支应在');
   // base 存在时的上游继承语义保留。
   assert.ok(result.src.includes('return { reasoning: base?.reasoning ?? false };'), '继承分支应保留');
@@ -93,6 +95,36 @@ test('补丁脚本：二次应用幂等（already）', () => {
   const once = transformReasoningDefaults(fixtureSource());
   assert.equal(once.status, 'changed');
   assert.equal(transformReasoningDefaults(once.src).status, 'already');
+});
+
+test('补丁脚本：旧版字典（low/medium/high）就地升级为完整 7 档并幂等', () => {
+  // 模拟已打「旧版补丁」的部署文件：marker + 旧字典，原锚点单行已被替换掉。
+  const oldSource = [
+    'const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];',
+    'function resolveModelReasoning(provider, entry, base) {',
+    '\tconst efforts = entry.reasoningEfforts;',
+    '\tif (efforts === void 0) {',
+    '\t\t// ' + MARKER + ': legacy three-level defaults',
+    '\t\tif (base === void 0) return {',
+    '\t\t\treasoning: true,',
+    '\t\t\t' + OLD_MAP,
+    '\t\t};',
+    '\t\treturn { reasoning: base?.reasoning ?? false };',
+    '\t}',
+    '\treturn { reasoning: true, thinkingLevelMap: {} };',
+    '}',
+  ].join('\n');
+  assert.ok(oldSource.includes(MARKER), '模拟旧补丁文件应含 marker');
+  assert.ok(oldSource.includes(OLD_MAP), '模拟旧补丁文件应含旧字典');
+  assert.ok(!oldSource.includes(ANCHOR), '旧补丁文件不应再含原锚点单行');
+
+  const upgraded = transformReasoningDefaults(oldSource);
+  assert.equal(upgraded.status, 'changed', '旧字典应被升级而非 anchor-missing');
+  assert.ok(upgraded.src.includes(NEW_MAP), '应升级为完整 7 档字典');
+  assert.ok(!upgraded.src.includes(OLD_MAP), '旧字典应被完全替换');
+  assert.ok(upgraded.src.includes(MARKER), '升级不应破坏 marker');
+  // 升级后二次幂等：已是新字典 → already，不再重复改写。
+  assert.equal(transformReasoningDefaults(upgraded.src).status, 'already');
 });
 
 test('补丁脚本：锚点缺失跳过且字节不损坏', () => {
@@ -138,7 +170,7 @@ test('补丁脚本：root 应用器一次写入 / 二次幂等 / stats 计数 / 
   assert.equal(patchPiAiReasoningDefaults(empty, () => {}, stats), 0);
 });
 
-test('行为语义：手声明条目（无 base）未声明字典 → reasoning:true + 标准档位 map', () => {
+test('行为语义：手声明条目（无 base）未声明字典 → reasoning:true + 完整档位 map', () => {
   const once = transformReasoningDefaults(fixtureSource());
   const resolveModelReasoning = extractPatchedFunction(once.src);
   const out = resolveModelReasoning('my-gateway', { id: 'gpt-5-mini' }, undefined);
@@ -146,7 +178,14 @@ test('行为语义：手声明条目（无 base）未声明字典 → reasoning:
     reasoning: true,
     // off 缺席 = 「不发字段」的规范 map 形态（与上游声明路径对 off:null 的
     // 物化一致：声明 off:null 落 map 时省略键）。
-    thinkingLevelMap: { low: 'low', medium: 'medium', high: 'high' },
+    thinkingLevelMap: {
+      minimal: 'minimal',
+      low: 'low',
+      medium: 'medium',
+      high: 'high',
+      xhigh: 'xhigh',
+      max: 'max',
+    },
   });
 });
 
@@ -182,10 +221,10 @@ test('实装文件锚定：dev node_modules 的 dsh-llm-pi-ai 已打补丁且行
   const src = fs.readFileSync(real, 'utf8');
   if (!src.includes(MARKER)) return; // patch-deps 尚未跑过（CI 顺序），不算失败
   const resolveModelReasoning = extractPatchedFunction(src);
-  // 手声明条目：控件开箱即用。
+  // 手声明条目：控件开箱即用（完整 7 档含 xhigh/max）。
   assert.deepEqual(
     resolveModelReasoning('my-gateway', { id: 'gpt-5' }, undefined),
-    { reasoning: true, thinkingLevelMap: { low: 'low', medium: 'medium', high: 'high' } },
+    { reasoning: true, thinkingLevelMap: { minimal: 'minimal', low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' } },
   );
   // catalog 条目：上游继承语义不变。
   assert.deepEqual(
