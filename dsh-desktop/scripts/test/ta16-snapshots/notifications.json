@@ -34,6 +34,22 @@
       "DSH Desktop",
       "发现新版本 v",
       "，点击右上角 ⋯ 菜单查看并安装"
+    ],
+    [
+      "DSH Desktop",
+      "自定义图标已生效"
+    ],
+    [
+      "DSH Desktop",
+      "自定义图标设置失败："
+    ],
+    [
+      "DSH Desktop",
+      "已恢复默认图标"
+    ],
+    [
+      "DSH Desktop",
+      "恢复默认图标失败："
     ]
   ],
   "singleInstanceDialog": "DSH Desktop 已在运行"

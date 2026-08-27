@@ -574,6 +574,9 @@
       menuItemHtml('toggle-balance', '显示余额/本轮费用', s.showBalanceDock ? check : '') +
       menuItemHtml('toggle-auto-update', '自动安装客户端更新', s.autoInstallUpdates ? check : '') +
       '<div class="dch-sep"></div>' +
+      menuItemHtml('set-custom-icon', '自定义图标…', '') +
+      menuItemHtml('reset-custom-icon', '恢复默认图标', '') +
+      '<div class="dch-sep"></div>' +
       menuItemHtml('reload', '重新加载', '<span class="dch-kbd">Ctrl+R</span>') +
       menuItemHtml('devtools', '开发者工具', '<span class="dch-kbd">F12</span>') +
       menuItemHtml('fullscreen', '全屏', '<span class="dch-kbd">F11</span>') +
@@ -629,6 +632,8 @@
             renderMenu();
             return;
           }
+          if (act === 'set-custom-icon') { closeMenu(); applyCustomIconPick(); return; }
+          if (act === 'reset-custom-icon') { closeMenu(); applyCustomIconReset(); return; }
           closeMenu();
           if (act === 'sponsor') { try { dshDesktop.sponsorWindow(); } catch (e2) {} return; }
           try { dshDesktop.menu.action(act).catch(function () {}); } catch (e2) {}
@@ -657,6 +662,77 @@
     menuOpen = false;
     if (menuState.clientUpdate) menuState.clientUpdate.armed = false; // 关菜单解除二次确认态
     if (menuPanel) menuPanel.hidden = true;
+  }
+  // ---- 自定义桌面图标（⋯ 菜单「自定义图标…」/「恢复默认图标」）----
+  // 无 dialog 插件、无 Host 文件选择通道：经 <input type=file>（WebView2
+  // 原生文件选择）读 bytes → base64 data URL → menu_action('set-custom-icon')
+  // 交壳侧魔数白名单校验/解码/落盘/设置主窗+托盘。用户取消静默；失败经
+  // shellNotify 轻提示（增强面，不阻断主线）。
+  var CUSTOM_ICON_MAX_BYTES = 15 * 1024 * 1024;
+  function pickCustomIconFile() {
+    return new Promise(function (resolve, reject) {
+      var input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/png,image/x-icon,image/vnd.microsoft.icon,.png,.ico';
+      input.style.display = 'none';
+      var settled = false;
+      function cleanup() {
+        try { if (input && input.parentNode) input.parentNode.removeChild(input); } catch (e) {}
+        try { window.removeEventListener('focus', onFocus); } catch (e) {}
+      }
+      var onFocus = function () {
+        // 原生文件对话框关闭后窗口焦点回归：change 未触发即用户取消。
+        setTimeout(function () {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          resolve(null);
+        }, 300);
+      };
+      input.onchange = function () {
+        settled = true;
+        cleanup();
+        var f = (input.files && input.files[0]) || null;
+        if (!f) { resolve(null); return; }
+        if (f.size > CUSTOM_ICON_MAX_BYTES) { reject(new Error('图片超过 15MB 上限')); return; }
+        var reader = new FileReader();
+        reader.onerror = function () { reject(new Error('读取图片失败')); };
+        reader.onload = function () {
+          var dataUrl = reader.result;
+          if (typeof dataUrl !== 'string' || !dataUrl) { reject(new Error('读取图片失败')); return; }
+          resolve(dataUrl);
+        };
+        reader.readAsDataURL(f);
+      };
+      try {
+        (document.body || document.documentElement).appendChild(input);
+        window.addEventListener('focus', onFocus);
+        input.click();
+      } catch (e) {
+        cleanup();
+        reject(e);
+      }
+    });
+  }
+  function iconActionError(e) {
+    return e && e.message ? String(e.message).replace(/^\[[A-Z_]+\]\s*/, '') : '未知错误';
+  }
+  function applyCustomIconPick() {
+    pickCustomIconFile().then(function (dataUrl) {
+      if (!dataUrl) return; // 用户取消
+      return dshDesktop.menu.action('set-custom-icon', { dataUrl: dataUrl }).then(function (r) {
+        if (r && r.ok) shellNotify('DSH Desktop', '自定义图标已生效');
+      });
+    }).catch(function (e) {
+      shellNotify('DSH Desktop', '自定义图标设置失败：' + iconActionError(e));
+    });
+  }
+  function applyCustomIconReset() {
+    dshDesktop.menu.action('reset-custom-icon').then(function (r) {
+      if (r && r.ok) shellNotify('DSH Desktop', '已恢复默认图标');
+    }).catch(function (e) {
+      shellNotify('DSH Desktop', '恢复默认图标失败：' + iconActionError(e));
+    });
   }
   function openMenu() {
     if (!menuPanel) return;

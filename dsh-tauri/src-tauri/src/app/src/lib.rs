@@ -412,6 +412,10 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("[tray] 初始化失败（不影响主窗）: {e}");
     }
 
+    // 启动重放自定义图标（若有持久化副本 → 应用到主窗+托盘；否则走默认）。
+    // 坏图标/解码失败内部已回退默认并日志，绝不阻断启动。
+    commands::icon::apply_custom_icon_if_present(app.handle());
+
     // ---- 客户端更新静默检查（一次性，不阻塞启动；引擎见 commands/updater_client.rs）----
     // 独立线程 + 延迟 15s：不挤占启动关键路径（内核拉起/首屏），也给内核页
     // 挂事件监听留时间；无更新 → 零打扰；离线/失败 → 完全静默（仅日志取证）；

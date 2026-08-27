@@ -27,6 +27,7 @@ pub(crate) mod balance;
 mod common;
 mod file;
 mod guard;
+pub(crate) mod icon;
 mod image;
 mod lifecycle;
 mod menu;

@@ -91,9 +91,9 @@ function parseRustActs() {
   return acts;
 }
 
-test('TA7-1a bridge-api.md §2.3 act 表 → menu.rs：单向差集为空（含 toggle 展开共 13 项）', () => {
+test('TA7-1a bridge-api.md §2.3 act 表 → menu.rs：单向差集为空（含 toggle 展开共 15 项）', () => {
   const md = parseMdActs();
-  assert.strictEqual(md.size, 13, `契约 act 计数（toggle 展开）: ${[...md]}`);
+  assert.strictEqual(md.size, 15, `契约 act 计数（toggle 展开）: ${[...md]}`);
   const missing = diff(md, parseRustActs());
   assert.deepStrictEqual(missing, [], '契约有而实装缺的 act');
 });

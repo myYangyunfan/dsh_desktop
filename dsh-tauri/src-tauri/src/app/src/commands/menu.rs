@@ -268,6 +268,20 @@ pub async fn menu_action(action: String, payload: Option<serde_json::Value>, app
                 Ok(serde_json::json!({ "ok": true, "replaced": replaced, "manual": !replaced, "version": next }))
             }
         }
+        // 自定义桌面客户端图标（⋯ 菜单「自定义图标…」/「恢复默认图标」）：
+        // 菜单动作（非独立 bridge 通道），壳侧实现见 super::icon。payload 由
+        // 垫片按 <input type=file> 读 bytes 后以 base64 data URL 传入。
+        "set-custom-icon" => {
+            let payload = payload
+                .as_ref()
+                .ok_or_else(|| BridgeError::invalid_arg("缺自定义图标数据"))?;
+            let format = super::icon::set_custom_icon(&app, payload)?;
+            Ok(serde_json::json!({ "ok": true, "format": format }))
+        }
+        "reset-custom-icon" => {
+            super::icon::reset_custom_icon(&app)?;
+            Ok(serde_json::json!({ "ok": true }))
+        }
         other => Err(BridgeError::invalid_arg(format!("未知菜单动作：{other}"))),
     }
 }

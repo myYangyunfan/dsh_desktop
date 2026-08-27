@@ -49,7 +49,7 @@
 |---|------|------|------|
 | 18 | `action(action: string, payload?: object): Promise<any>` | 菜单/⋯ 菜单动作分发（act 枚举见下） | `chrome:menu` → `menu_action` |
 
-`menu_action` 已实装 act 枚举（v0.5.0，13 个）：
+`menu_action` 已实装 act 枚举（v0.5.0，15 个）：
 
 | act | 语义 | 返回 |
 |-----|------|------|
@@ -63,6 +63,8 @@
 | `toggle-notify` / `toggle-close-to-tray` / `toggle-balance` / `toggle-auto-update` | settings 单键切换（`notifyOnTurnEnd` / `closeToTray` / `showBalanceDock` / `autoInstallUpdates`，垫片 merge 进菜单 state 重渲染） | `{<settings键>: <新值>}` |
 | `check-client-update` | **双源客户端更新检查**（GitHub + Gitee releases/latest 并发探测，资产级回落；语义化比较防降级；`updater_client::check_latest`）。历史：`check-agent-update`（npm 内核比对）已随「内核随客户端分发、无 overlay 更新链」设计退役 | `{ok, current, next, notes, asset, source}` 或 `{ok, upToDate}` |
 | `install-client-update` | 下载并安装客户端更新（`download_to_temp` 流式下载+sha256 校验【GitHub digest > .sha256 边车 > size/50MB 兜底；HashMismatch 时自动换另一源重试一次——镜像漂移救回、真篡改仍硬失败】；Windows NSIS `/S /R /UPDATE` 静默升级保数据→shutdown→exit 由安装器 `/R` 重启；macOS 开 DMG 手动引导；Linux AppImage 原子自替换） | `{ok, upToDate:true}`（已最新，不空装）／ Windows `{ok, installing}` / mac `{ok, manual:true, version}` / linux `{ok, replaced, manual, version}` |
+| `set-custom-icon` | 设置自定义桌面客户端图标（`payload.dataUrl` 为 PNG/ICO base64 data URL；壳侧魔数白名单校验+解码、落 app_data 副本、`WebviewWindow::set_icon` + `TrayIcon::set_icon` 同步主窗+托盘；重启后重放） | `{ok, format}` |
+| `reset-custom-icon` | 恢复默认桌面客户端图标（删除自定义图标副本，恢复 `default_window_icon` 到主窗+托盘） | `{ok}` |
 
 ### 2.4 `wsl`（WSL 后端配置，3 项）
 

@@ -34,15 +34,19 @@
       "text": "定位当前可执行文件失败: {e}"
     },
     {
-      "line": 271,
+      "line": 277,
+      "text": "缺自定义图标数据"
+    },
+    {
+      "line": 285,
       "text": "未知菜单动作：{other}"
     },
     {
-      "line": 277,
+      "line": 291,
       "text": "主窗不存在"
     },
     {
-      "line": 287,
+      "line": 301,
       "text": "无法连接更新源（GitHub/Gitee 均不可达），请检查网络后从右上角 ⋯ 菜单重试（{m}）"
     }
   ],
@@ -274,87 +278,87 @@
       "text": "[tray] 初始化失败（不影响主窗）: {e}"
     },
     {
-      "line": 429,
+      "line": 433,
       "text": "[update] 检测到客户端新版本 {} → {}（{}，{}）"
     },
     {
-      "line": 435,
+      "line": 439,
       "text": "[update] 启动更新检查失败（静默忽略）：{e}"
     },
     {
-      "line": 469,
+      "line": 473,
       "text": "[route] 事件路由 panic（已隔离，继续处理后续事件）"
     },
     {
-      "line": 525,
+      "line": 529,
       "text": "[route] 内核 URL 变更（端口漂移），跳过渲染抑制直接换页（{url}）"
     },
     {
-      "line": 545,
+      "line": 549,
       "text": "[route] 重启风暴渲染抑制：距上次换页 <{KERNEL_NAV_SUPPRESS_WINDOW_MS}ms 且页面存活，跳过整页换页（{url}）"
     },
     {
-      "line": 547,
+      "line": 551,
       "text": "[route] 重启风暴渲染抑制：页面探针无响应，执行整页换页（{url}）"
     },
     {
-      "line": 565,
+      "line": 569,
       "text": "[route] boot 步骤 {name} OK（{ms}ms）"
     },
     {
-      "line": 567,
+      "line": 571,
       "text": "[route] boot 步骤 {name} FAIL（{ms}ms）: {}"
     },
     {
-      "line": 567,
+      "line": 571,
       "text": "未知失败"
     },
     {
-      "line": 609,
+      "line": 613,
       "text": "[route] 内核退出 code={code:?}"
     },
     {
-      "line": 613,
+      "line": 617,
       "text": "[route] 崩溃环触发（累计 {crashes} 次），主窗转恢复页"
     },
     {
-      "line": 614,
+      "line": 618,
       "text": "内核反复异常退出"
     },
     {
-      "line": 621,
+      "line": 625,
       "text": "内核服务反复异常退出，已进入恢复模式"
     },
     {
-      "line": 625,
+      "line": 629,
       "text": "[route] 探活失败 ×{consecutive}"
     },
     {
-      "line": 629,
+      "line": 633,
       "text": "[route] 内核假死可疑 ×{consecutive}（端口通、HTTP 无响应）"
     },
     {
-      "line": 675,
+      "line": 679,
       "text": "DSH_TAURI_REPO_ROOT={root} 不含 dsh-desktop/vendor/node"
     },
     {
-      "line": 693,
+      "line": 697,
       "text": "未找到内核目录 dsh-desktop（开发检出与安装产物布局均未命中；可设 DSH_TAURI_REPO_ROOT 指定）"
     },
     {
-      "line": 722,
+      "line": 726,
       "text": "显示主窗口"
     },
     {
-      "line": 723,
+      "line": 727,
       "text": "打开日志"
     },
     {
-      "line": 725,
+      "line": 729,
       "text": "退出"
     },
     {
-      "line": 728,
+      "line": 732,
       "text": "无应用图标"
     }
   ],

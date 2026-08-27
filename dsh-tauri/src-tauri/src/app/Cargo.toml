@@ -12,7 +12,7 @@ tauri-build = { version = "2", features = [] }
 embed-resource = "3"
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
+tauri = { version = "2", features = ["tray-icon", "image-png", "image-ico"] }
 tauri-plugin-notification = "2"
 tauri-plugin-updater = "2"
 serde = { workspace = true }
