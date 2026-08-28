@@ -67,6 +67,8 @@ const {
   PICKER_AUTO_PKG_REL,
   LLM_PKG_REL,
   PERSISTENCE_PKG_REL,
+  CODEX_BIN_PKG_REL,
+  CLAUDE_SUBAGENT_PKG_REL,
 } = require('./patch-target-resolver');
 
 const {
@@ -101,6 +103,8 @@ const {
   transformAdapterPrepareCallGuard,
   transformSessionHeaderScanGuard,
   transformSessionLoadGraceful,
+  transformCodexLocalBinFallback,
+  transformClaudeLocalBinFallback,
   rootAppliers,
 } = require('./patch-adapters');
 
@@ -131,6 +135,8 @@ const {
   LOADER_TREE_ISOLATION_MARKER,
   LOADER_ACTIVATION_ISOLATION_MARKER,
   FAIL_LOUD_ISOLATION_MARKER,
+  CODEX_LOCAL_BIN_MARKER,
+  CLAUDE_LOCAL_BIN_MARKER,
 } = require('./patch-adapters').markers;
 
 const {
@@ -1191,6 +1197,60 @@ const PATCH_SPECS = [
       alreadyLog: alreadySkip,
       doneLog: (file) => '已注入 loadHistory 撕裂尾部优雅降级到 ' + file,
       failLog: (file, err) => '会话加载优雅降级补丁失败(' + file + '): ' + err.message,
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // Codex CLI 本地二进制回落补丁（安装包瘦身移除 @openai/codex-win32-x64
+  // 原生二进制后）：@openai/codex/bin/codex.js 的 findCodexExecutable() 缺失
+  // vendored 二进制即抛错，补丁追加 CODEX_BIN / PATH 回落。cli:true 使 boot +
+  // CLI 同步期均应用。见 patch-adapters transformCodexLocalBinFallback。
+  // -------------------------------------------------------------------------
+  {
+    id: 'codex-local-bin-fallback',
+    group: 'runtime',
+    order: 290,
+    kind: 'file',
+    layout: 'runtime-local-nm',
+    wslLayout: 'runtime-local-nm',
+    pkgRel: CODEX_BIN_PKG_REL,
+    transform: transformCodexLocalBinFallback,
+    marker: CODEX_LOCAL_BIN_MARKER,
+    requires: [],
+    failPolicy: 'warn',
+    cli: true,
+    logs: {
+      prefix: 'Codex 本地二进制回落补丁',
+      alreadyLog: alreadySkip,
+      doneLog: (file) => '已注入 CODEX_BIN / PATH 回落到 ' + file,
+      failLog: (file, err) => 'Codex 本地二进制回落补丁失败(' + file + '): ' + err.message,
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // Claude Code 子代理本地二进制回落补丁（安装包瘦身移除
+  // @anthropic-ai/claude-agent-sdk-win32-x64 原生二进制后）：向 query({...})
+  // 透传 pathToClaudeCodeExecutable = CLAUDE_BIN。cli:true 使 boot + CLI
+  // 同步期均应用。见 patch-adapters transformClaudeLocalBinFallback。
+  // -------------------------------------------------------------------------
+  {
+    id: 'claude-local-bin-fallback',
+    group: 'runtime',
+    order: 300,
+    kind: 'file',
+    layout: 'runtime-local',
+    wslLayout: 'wsl',
+    pkgRel: CLAUDE_SUBAGENT_PKG_REL,
+    transform: transformClaudeLocalBinFallback,
+    marker: CLAUDE_LOCAL_BIN_MARKER,
+    requires: [],
+    failPolicy: 'warn',
+    cli: true,
+    logs: {
+      prefix: 'Claude 子代理本地二进制回落补丁',
+      alreadyLog: alreadySkip,
+      doneLog: (file) => '已注入 pathToClaudeCodeExecutable (CLAUDE_BIN) 到 ' + file,
+      failLog: (file, err) => 'Claude 子代理本地二进制回落补丁失败(' + file + '): ' + err.message,
     },
   },
 ];

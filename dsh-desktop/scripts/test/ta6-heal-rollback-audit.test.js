@@ -38,6 +38,9 @@ const IMPL_SOURCES = [
 ].map((f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } });
 
 const PRISTINE_RC2 = path.join(__dirname, '..', '..', '..', '.tmp-rc2-stage', 'node_modules');
+// 桌面壳自身 node_modules（postinstall/patch-deps 不碰 @openai/codex 等桌面独有
+// 依赖，故对这类补丁是 pristine 源，供 firstTargetFile 回退定位）。
+const PATCHED_DESKTOP = path.join(__dirname, '..', '..', 'node_modules');
 // 0.1.2-alpha.1：重定位补丁的目标包（dsh-api-session-controller / dsh-api-settings-
 // controller / dsh-client-ui-slots 等）不在 .tmp-rc2-stage（旧内核）中，回滚审计需
 // 回退到 .tmp-kernel 的 pristine 构建产物（built lib）定位目标。
@@ -70,6 +73,12 @@ function firstTargetFile(spec) {
   for (const rel of rels) {
     const p = kernelTarget(rel);
     if (p && fs.existsSync(p)) return p;
+  }
+  // 桌面壳独有依赖（@openai/codex 等非 @deepseek-ai scope 包）在内核 pristine 树
+  // 无源；postinstall/patch-deps 不碰它们，dsh-desktop/node_modules 对其是 pristine。
+  for (const rel of rels) {
+    const p = path.join(PATCHED_DESKTOP, rel);
+    if (fs.existsSync(p)) return p;
   }
   return null;
 }
@@ -110,8 +119,8 @@ const MULTI_SITE = new Set([
 const fileSpecs = PATCH_SPECS.filter((s) => s.kind === 'file');
 const rootSpecs = PATCH_SPECS.filter((s) => s.kind === 'root');
 
-test('审计 1：分类覆盖全部 29 个 file transform（无回滚盲区）', () => {
-  assert.equal(fileSpecs.length, 29);
+test('审计 1：分类覆盖全部 31 个 file transform（无回滚盲区）', () => {
+  assert.equal(fileSpecs.length, 31);
   const report = [];
   for (const spec of fileSpecs) {
     const pair = INVERSE_PAIR_HINTS[spec.id];

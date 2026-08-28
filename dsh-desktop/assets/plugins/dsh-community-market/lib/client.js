@@ -2194,11 +2194,12 @@ function MarketOverlay({ useStore, actions, readLocale, t, initialView }) {
 }
 
 // src/client/market-view-store.ts
-// [desktop-restart-fix 同族适配] 上游构建产物原为 require("@deepseek-ai/dsh-client-runtime/client")
-// ——子路径形态在内核模块表（inject 图行按裸包名注册）下必 miss（#124 形态）。
-// 改 require 裸包名：inject 声明保证 runtime 图行先于本插件物化，lib/client.js
-// 的导出面（含 defineStore）完整可用，行为与上游逐字一致。
-var import_client = require("@deepseek-ai/dsh-client-runtime");
+// [dsh-client-runtime-decomposed] 0.1.2-alpha.1 把 dsh-client-runtime 分解，
+// defineStore 迁至 @deepseek-ai/dsh-client-store。上游构建产物原 require
+// dsh-client-runtime/client（子路径形态在内核模块表按裸包名注册下必 miss，
+// #124 形态）。此处改 require "@deepseek-ai/dsh-client-store"：inject 声明
+// 保证 store 图行先于本插件物化，defineStore 导出面完整可用。
+var import_client = require("@deepseek-ai/dsh-client-store");
 function createMarketViewStore() {
   return (0, import_client.defineStore)({
     init: () => ({ open: false }),

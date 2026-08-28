@@ -156,41 +156,37 @@ const SM_NS_NEW = [
   '\t\t\t}',
 ].join('\n');
 
-/** CustomProviderCard 的 mutate 尾三行锚点（expectedRevision: openedAt 全文件唯一）。 */
+/** CustomProviderCard 的 mutate 尾锚点（`}], openedAt);` 全文件唯一；0.1.2-alpha.1 起
+ *  mutate 改为 `api.settings.mutate(ns, ops, expectedRevision)`、响应改为 `{ok,error,value}`，
+ *  describe 改为无参 `api.settings.describe()` 返回 `{ok,value}`——锚点与注入体同步改用新签名。 */
 const SM_CONFLICT_ANCHOR = [
-  '\t\t\t\t\t\texpectedRevision: openedAt',
-  '\t\t\t\t\t});',
-  '\t\t\t\t\tif (!response.result.ok) return response.result.error.message;',
+  '\t\t\t\t\t}], openedAt);',
+  '\t\t\t\t\tif (!response.ok) return response.error.message;',
 ].join('\n');
 
 const SM_CONFLICT_NEW = [
-  '\t\t\t\t\t\texpectedRevision: openedAt',
-  '\t\t\t\t\t});',
-  '\t\t\t\t\tif (!response.result.ok) {',
+  '\t\t\t\t\t}], openedAt);',
+  '\t\t\t\t\tif (!response.ok) {',
   '\t\t\t\t\t\t// ' + CONFLICT_RETRY_MARKER + ': 卡片打开后命名空间被任何面写过一次，',
   '\t\t\t\t\t\t// openedAt 即陈旧——重读一次 revision 静默重试（ops 是 providers.<route>',
   '\t\t\t\t\t\t// 点位写，不会覆盖他人字段）；仍失败才把报错交回原路径。',
-  '\t\t\t\t\t\tif (response.result.error?.code === "settings-conflict") {',
-  '\t\t\t\t\t\t\tconst fresh = await api.settings.describe({});',
-  '\t\t\t\t\t\t\tconst freshRevision = fresh.result.ok ? fresh.result.value.namespaces.find((row) => row.ns === NS$1)?.revision : void 0;',
+  '\t\t\t\t\t\tif (response.error?.code === "settings-conflict") {',
+  '\t\t\t\t\t\t\tconst fresh = await api.settings.describe();',
+  '\t\t\t\t\t\t\tconst freshRevision = fresh.ok ? fresh.value.namespaces.find((row) => row.ns === NS$1)?.revision : void 0;',
   '\t\t\t\t\t\t\tif (freshRevision !== void 0 && freshRevision !== openedAt) {',
-  '\t\t\t\t\t\t\t\tconst retry = await api.settings.mutate({',
-  '\t\t\t\t\t\t\t\t\tns: NS$1,',
-  '\t\t\t\t\t\t\t\t\tops: [{',
-  '\t\t\t\t\t\t\t\t\t\top: "set",',
-  '\t\t\t\t\t\t\t\t\t\tpath: ["providers", route],',
-  '\t\t\t\t\t\t\t\t\t\tvalue: profile',
-  '\t\t\t\t\t\t\t\t\t}],',
-  '\t\t\t\t\t\t\t\t\texpectedRevision: freshRevision',
-  '\t\t\t\t\t\t\t\t});',
-  '\t\t\t\t\t\t\t\tif (retry.result.ok) {',
+  '\t\t\t\t\t\t\t\tconst retry = await api.settings.mutate(NS$1, [{',
+  '\t\t\t\t\t\t\t\t\top: "set",',
+  '\t\t\t\t\t\t\t\t\tpath: ["providers", route],',
+  '\t\t\t\t\t\t\t\t\tvalue: profile',
+  '\t\t\t\t\t\t\t\t}], freshRevision);',
+  '\t\t\t\t\t\t\t\tif (retry.ok) {',
   '\t\t\t\t\t\t\t\t\tsetCommitted(true);',
   '\t\t\t\t\t\t\t\t\treturn;',
   '\t\t\t\t\t\t\t\t}',
-  '\t\t\t\t\t\t\t\treturn retry.result.error.message;',
+  '\t\t\t\t\t\t\t\treturn retry.error.message;',
   '\t\t\t\t\t\t\t}',
   '\t\t\t\t\t\t}',
-  '\t\t\t\t\t\treturn response.result.error.message;',
+  '\t\t\t\t\t\treturn response.error.message;',
   '\t\t\t\t\t}',
 ].join('\n');
 

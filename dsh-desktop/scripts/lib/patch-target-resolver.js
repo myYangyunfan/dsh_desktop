@@ -79,10 +79,21 @@ const KERNEL_WEB_INDEX_REL = path.join('dsh-web-frontend', 'dist', 'index.html')
 // W1 问题四（WSL 目录选择器误判 native）补丁目标：adaptive 选择器的
 // resolver 所在入口（resolveDirectoryPickerBackend 锚点 :65）。
 const PICKER_AUTO_PKG_REL = path.join('dsh-host-directory-picker-auto', 'lib', 'index.js');
+// Codex CLI 本地二进制回落补丁目标（@openai/codex/bin/codex.js）：非 @deepseek-ai
+// scope，pkgRel 含完整 scope 前缀，配套下方 mkPkg 的 scope-agnostic 布局。
+const CODEX_BIN_PKG_REL = path.join('@openai', 'codex', 'bin', 'codex.js');
+// Claude Code 子代理适配器补丁目标（@deepseek-ai scope，pkgRel 相对 @deepseek-ai，
+// 与其它 PKG_REL 常量一致）。
+const CLAUDE_SUBAGENT_PKG_REL = path.join('dsh-subagent-claude-code', 'lib', 'index.js');
 
 /** @deepseek-ai/<pkgRel> 落点（以 node_modules/@deepseek-ai 根为准）。 */
 function mkAi(root, pkgRel) {
   return path.join(root, 'node_modules', '@deepseek-ai', pkgRel);
+}
+
+/** node_modules 任意 scope 包内相对路径（pkgRel 已含 scope 前缀，如 @openai/codex/...）。 */
+function mkPkg(root, pkgRel) {
+  return path.join(root, 'node_modules', pkgRel);
 }
 
 /**
@@ -96,6 +107,14 @@ const LAYOUTS = {
     mkAi(path.join(ctx.home, 'profiles'), spec.pkgRel),
     mkAi(ctx.appDir, spec.pkgRel),
     mkAi(path.join(ctx.userDataDir, 'agent'), spec.pkgRel),
+  ],
+  // 通用 node_modules 包文件布局（scope-agnostic）：非 @deepseek-ai scope 的
+  // 桌面独有依赖（如 @openai/codex）落点（pkgRel 已含 scope 前缀，与 mkPkg
+  // 配套）；三副本同 runtime-local。
+  'runtime-local-nm': (ctx, spec) => [
+    mkPkg(path.join(ctx.home, 'profiles'), spec.pkgRel),
+    mkPkg(ctx.appDir, spec.pkgRel),
+    mkPkg(path.join(ctx.userDataDir, 'agent'), spec.pkgRel),
   ],
   // 防护类补丁四副本：app 优先 + overlay 嵌套 dsh + profile fallback。
   'guard': (ctx, spec) => [
@@ -256,6 +275,8 @@ module.exports = {
   API_GATEWAY_ABSENT_PKG_REL,
   KERNEL_WEB_INDEX_REL,
   PICKER_AUTO_PKG_REL,
+  CODEX_BIN_PKG_REL,
+  CLAUDE_SUBAGENT_PKG_REL,
   resolvePatchTargets,
   resolveNmRoots,
   // 兼容期旧签名（一个版本周期后删除）。

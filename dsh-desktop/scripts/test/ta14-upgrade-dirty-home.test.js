@@ -89,8 +89,8 @@ function buildInstallTree(t) {
 function makeResolve(patchedSrc) {
   const start = patchedSrc.indexOf('async resolve(id) {');
   assert.ok(start !== -1, '产物应含 resolve 方法');
-  const end = patchedSrc.indexOf('\n\t}', start);
-  const methodSrc = patchedSrc.slice(start, end + '\n\t}'.length);
+  const end = patchedSrc.indexOf('\n\t\t}', start);
+  const methodSrc = patchedSrc.slice(start, end + '\n\t\t}'.length);
   const warns = [];
   class UnknownPresetError extends Error {}
   const sandbox = { UnknownPresetError, warns, console: { warn: (m) => warns.push(String(m)) } };

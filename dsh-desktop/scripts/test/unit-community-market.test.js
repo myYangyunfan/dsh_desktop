@@ -162,7 +162,7 @@ test('D 桥接插件加载面 + 客户端包装与注入清单一致', async () 
   // locale/settings 均为类型面，预载由 package.json dsh.client.inject 声明），
   // 真正运行时消费的模块必须出现在 require 面。
   for (const needed of [
-    '@deepseek-ai/dsh-client-runtime/client',
+    '@deepseek-ai/dsh-client-store',
     '@deepseek-ai/dsh-client-ui-primitives',
     'react/jsx-runtime',
   ]) {
@@ -171,7 +171,7 @@ test('D 桥接插件加载面 + 客户端包装与注入清单一致', async () 
   // 注入清单与上游一致（模块预载声明完整）。
   const pkg = JSON.parse(fs.readFileSync(path.join(marketDir, 'package.json'), 'utf8'));
   assert.deepStrictEqual(pkg.dsh.client.inject, [
-    '@deepseek-ai/dsh-client-runtime',
+    '@deepseek-ai/dsh-client-store',
     '@deepseek-ai/dsh-client-locale',
     '@deepseek-ai/dsh-client-ui-layout',
     '@deepseek-ai/dsh-client-ui-settings',

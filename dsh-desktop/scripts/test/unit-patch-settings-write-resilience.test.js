@@ -292,16 +292,22 @@ test('namespace-heal: 无偏差时不重读', async () => {
   assert.equal(loads, 0, '无偏差时不得重读');
 });
 
-/** 从 patched 源抽出冲突重试片段（if (!response.result.ok) { 起）。 */
+/** 从 patched 源抽出冲突重试片段（if (!response.ok) { 起）。 */
 function extractConflictRetrySnippet() {
   const src = readOrSkip(SM_FILE);
   assert.ok(src !== null);
-  const patched = src.includes(CONFLICT_RETRY_MARKER) ? src : transformSettingsModelsResilience(src, 'sm').src;
+  // payload 可能已被 boot 链只打上 namespace-heal（半补丁）——先反剥成 pristine
+  // 夹具再重跑 transform，让 conflict-retry 注入体必然存在（与 root 应用器同手法）。
+  const pristine = src.includes(NAMESPACE_HEAL_MARKER) || src.includes(CONFLICT_RETRY_MARKER)
+    ? src.split(AW_CONSTANTS.SM_NS_NEW).join(AW_CONSTANTS.SM_NS_ANCHOR)
+        .split(AW_CONSTANTS.SM_CONFLICT_NEW).join(AW_CONSTANTS.SM_CONFLICT_ANCHOR)
+    : src;
+  const patched = transformSettingsModelsResilience(pristine, 'sm').src;
   // 起点锚定：marker 注释在 if 块体内，向前找紧邻的 if 行（文件前部还有
-  // 别处的 if (!response.result.ok) { 形态，不能全局取首个）。
+  // 别处的 if (!response.ok) { 形态，不能全局取首个）。
   const markerAt = patched.indexOf(CONFLICT_RETRY_MARKER);
   assert.ok(markerAt !== -1, '产物中应有冲突重试 marker');
-  const start = patched.lastIndexOf('if (!response.result.ok) {', markerAt);
+  const start = patched.lastIndexOf('if (!response.ok) {', markerAt);
   // 结束边界 = 注入块之后上游原句 setCommitted(true);（5 缩进）所在行首：
   // 注入块自带的更深缩进 setCommitted 不以「\n+5tab」开头，不会误匹配。
   const end = patched.indexOf('\n\t\t\t\t\tsetCommitted(true);', start);
@@ -319,16 +325,16 @@ async function runConflictSnippet(mutateResults, describeResult, firstResponse) 
   let mutates = 0;
   const api = {
     settings: {
-      mutate: async (payload) => {
+      mutate: async (ns, ops, expectedRevision) => {
         const r = mutateResults[Math.min(mutates, mutateResults.length - 1)];
         mutates += 1;
-        return { result: r };
+        return r;
       },
-      describe: async () => ({ result: describeResult }),
+      describe: async () => describeResult,
     },
   };
   let committed = false;
-  const initial = firstResponse !== undefined ? { result: firstResponse } : { result: mutateResults[0] };
+  const initial = firstResponse !== undefined ? firstResponse : mutateResults[0];
   const outcome = await make(
     api,
     initial,

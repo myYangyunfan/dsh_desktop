@@ -184,6 +184,11 @@ jobs:
           rm -rf "$DEST/node_modules"
           cp -r dsh-desktop/node_modules "$DEST/node_modules"
           rm -rf "$DEST/node_modules/electron" "$DEST/node_modules/electron-builder" "$DEST/node_modules/electron-winstaller" "$DEST/node_modules/@electron" "$DEST/node_modules/@img/sharp-darwin-arm64" "$DEST/node_modules/@img/sharp-libvips-darwin-arm64" "$DEST/node_modules/@img/sharp-wasm32" "$DEST/node_modules/@koromix/koffi-darwin-arm64"
+          # Codex/Claude 原生二进制（optional platform packages，~700MB 死重）：内核子代理
+          # 适配器仅在真正拉起 Codex/Claude Code 进程时才解析这些 optional 二进制；import
+          # 只读 JS 侧 metapackage。glob 精准命中各平台 variant（codex-win32-x64 /
+          # codex-linux-x64 / claude-agent-sdk-darwin-arm64 ...），保留 metapackage 不断 import 图。
+          rm -rf "$DEST"/node_modules/@openai/codex-* "$DEST"/node_modules/@anthropic-ai/claude-agent-sdk-*
           # rc7 vendor（非阻断——renderer 三级回落链兜底）
           if [ -d "dsh-desktop/dist/win-unpacked/resources/app/node_modules/@deepseek-ai" ]; then
             for pkg in dsh-desktop/dist/win-unpacked/resources/app/node_modules/@deepseek-ai/*/; do
@@ -439,6 +444,11 @@ jobs:
           rm -rf "$DEST/node_modules"
           cp -r dsh-desktop/node_modules "$DEST/node_modules"
           rm -rf "$DEST/node_modules/electron" "$DEST/node_modules/electron-builder" "$DEST/node_modules/electron-winstaller" "$DEST/node_modules/@electron" "$DEST/node_modules/@img/sharp-darwin-arm64" "$DEST/node_modules/@img/sharp-libvips-darwin-arm64" "$DEST/node_modules/@img/sharp-wasm32" "$DEST/node_modules/@koromix/koffi-darwin-arm64"
+          # Codex/Claude 原生二进制（optional platform packages，~700MB 死重）：内核子代理
+          # 适配器仅在真正拉起 Codex/Claude Code 进程时才解析这些 optional 二进制；import
+          # 只读 JS 侧 metapackage。glob 精准命中各平台 variant（codex-win32-x64 /
+          # codex-linux-x64 / claude-agent-sdk-darwin-arm64 ...），保留 metapackage 不断 import 图。
+          rm -rf "$DEST"/node_modules/@openai/codex-* "$DEST"/node_modules/@anthropic-ai/claude-agent-sdk-*
           # rc7 vendor（非阻断——renderer 三级回落链兜底）
           if [ -d "dsh-desktop/dist/win-unpacked/resources/app/node_modules/@deepseek-ai" ]; then
             for pkg in dsh-desktop/dist/win-unpacked/resources/app/node_modules/@deepseek-ai/*/; do
@@ -630,6 +640,11 @@ jobs:
           rm -rf "$DEST/node_modules"
           cp -r dsh-desktop/node_modules "$DEST/node_modules"
           rm -rf "$DEST/node_modules/electron" "$DEST/node_modules/electron-builder" "$DEST/node_modules/electron-winstaller" "$DEST/node_modules/@electron" "$DEST/node_modules/@img/sharp-darwin-arm64" "$DEST/node_modules/@img/sharp-libvips-darwin-arm64" "$DEST/node_modules/@img/sharp-wasm32" "$DEST/node_modules/@koromix/koffi-darwin-arm64"
+          # Codex/Claude 原生二进制（optional platform packages，~700MB 死重）：内核子代理
+          # 适配器仅在真正拉起 Codex/Claude Code 进程时才解析这些 optional 二进制；import
+          # 只读 JS 侧 metapackage。glob 精准命中各平台 variant（codex-win32-x64 /
+          # codex-linux-x64 / claude-agent-sdk-darwin-arm64 ...），保留 metapackage 不断 import 图。
+          rm -rf "$DEST"/node_modules/@openai/codex-* "$DEST"/node_modules/@anthropic-ai/claude-agent-sdk-*
           # rc7 vendor（非阻断——renderer 三级回落链兜底）
           if [ -d "dsh-desktop/dist/win-unpacked/resources/app/node_modules/@deepseek-ai" ]; then
             for pkg in dsh-desktop/dist/win-unpacked/resources/app/node_modules/@deepseek-ai/*/; do
@@ -841,6 +856,11 @@ jobs:
           rm -rf "$DEST/node_modules"
           cp -r dsh-desktop/node_modules "$DEST/node_modules"
           rm -rf "$DEST/node_modules/electron" "$DEST/node_modules/electron-builder" "$DEST/node_modules/electron-winstaller" "$DEST/node_modules/@electron"
+          # Codex/Claude 原生二进制（optional platform packages，~700MB 死重）：内核子代理
+          # 适配器仅在真正拉起 Codex/Claude Code 进程时才解析这些 optional 二进制；import
+          # 只读 JS 侧 metapackage。glob 精准命中各平台 variant（codex-win32-x64 /
+          # codex-linux-x64 / claude-agent-sdk-darwin-arm64 ...），保留 metapackage 不断 import 图。
+          rm -rf "$DEST"/node_modules/@openai/codex-* "$DEST"/node_modules/@anthropic-ai/claude-agent-sdk-*
           # musl 产物全剔除：linuxdeploy 扫描 AppDir 内全部 ELF，遇 musl 链接
           # 的原生模块（@photostructure/sqlite 的 *.musl.node、@koromix/koffi
           # 的 musl_x64/ 目录等）会找 libc.musl-x86_64.so.1（glibc runner 上
@@ -1012,6 +1032,11 @@ jobs:
           rm -rf "$DEST/node_modules"
           cp -r dsh-desktop/node_modules "$DEST/node_modules"
           rm -rf "$DEST/node_modules/electron" "$DEST/node_modules/electron-builder" "$DEST/node_modules/electron-winstaller" "$DEST/node_modules/@electron"
+          # Codex/Claude 原生二进制（optional platform packages，~700MB 死重）：内核子代理
+          # 适配器仅在真正拉起 Codex/Claude Code 进程时才解析这些 optional 二进制；import
+          # 只读 JS 侧 metapackage。glob 精准命中各平台 variant（codex-win32-x64 /
+          # codex-linux-x64 / claude-agent-sdk-darwin-arm64 ...），保留 metapackage 不断 import 图。
+          rm -rf "$DEST"/node_modules/@openai/codex-* "$DEST"/node_modules/@anthropic-ai/claude-agent-sdk-*
           echo "Payload: $(du -sm "$DEST" | cut -f1)MB"
 
       - name: Build installer

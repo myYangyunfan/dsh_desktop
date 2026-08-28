@@ -42,7 +42,7 @@ const COMPOSITION_SOURCES = [
 //   - 受保护 bundle（loader 缺失即致命，本来就不会静默）；
 //   - 「用户高频路径的单点依赖」：保存 key（credentials）、设置读写（settings）、
 //     模型调用（llm/llm-deepseek）、会话（session/persistence）、页面可达
-//     （webserver/modules/connection/api-gateway）、权限边界（sandbox/approval）、
+//     （webserver/modules/connection/typert-gateway）、权限边界（sandbox/approval）、
 //     持久存储（storage-json）、插件清单（plugin-inventory）。
 // platformConditional 不在本清单（bash/pwsh 系行按平台禁用属正常组合）。
 // ---------------------------------------------------------------------------
@@ -57,7 +57,7 @@ const CRITICAL_SERVICES = [
   { rowId: 'approval', moduleName: '@deepseek-ai/dsh-user-approval', label: '权限审批', consequence: '工具调用的用户审批（允许/拒绝）流程失效' },
   { rowId: 'storage-json', moduleName: '@deepseek-ai/dsh-storage-json', label: '本地存储', consequence: '本地键值存储失效，依赖 storage 域的功能不保存' },
   { rowId: 'webserver', moduleName: '@deepseek-ai/dsh-host-webserver', label: '本地服务端口', consequence: '页面端口不监听：白屏/一直加载' },
-  { rowId: 'api-gateway', moduleName: '@deepseek-ai/dsh-host-apiproxy', label: 'API 网关', consequence: '前后端 RPC 全部哑火，页面所有操作报错' },
+  { rowId: 'typert-gateway', moduleName: '@deepseek-ai/dsh-api-gateway', label: 'API 网关', consequence: '前后端 RPC 全部哑火，页面所有操作报错' },
   { rowId: 'modules', moduleName: '@deepseek-ai/dsh-client-modules', label: '前端模块表', consequence: '浏览器模块表（window.__DSH_BOOT__）缺失，页面空白' },
   { rowId: 'connection', moduleName: '@deepseek-ai/dsh-client-connection', label: '前后端传输', consequence: 'fetch/SSE 传输断开，页面无法与后端通信' },
   { rowId: 'plugin-inventory', moduleName: '@deepseek-ai/dsh-host-plugin-inventory', label: '插件清单服务', consequence: '插件清单/健康页无数据' },

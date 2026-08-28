@@ -67,6 +67,12 @@ function targetFile(root, spec) {
       const p = kernelTarget(rel);
       if (p && fs.existsSync(p)) return p;
     }
+    // 桌面壳独有依赖（@openai/codex 等非 @deepseek-ai scope 包）在内核 pristine
+    // 树无源；postinstall/patch-deps 不碰它们，dsh-desktop/node_modules 对其是 pristine。
+    for (const rel of rels) {
+      const p = path.join(PATCHED_DESKTOP, rel);
+      if (fs.existsSync(p)) return p;
+    }
   }
   return null;
 }
@@ -156,6 +162,6 @@ for (const spec of fileSpecs) {
   });
 }
 
-test('契约面完整性：29 个 file transform 全部被本文件覆盖', () => {
-  assert.equal(fileSpecs.length, 29);
+test('契约面完整性：31 个 file transform 全部被本文件覆盖', () => {
+  assert.equal(fileSpecs.length, 31);
 });

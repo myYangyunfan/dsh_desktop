@@ -1909,6 +1909,84 @@ function transformSessionLoadGraceful(src, file) {
   return { status: 'changed', src: out };
 }
 
+// ---------------------------------------------------------------------------
+// Codex CLI 本地二进制回落补丁（2026-08，安装包瘦身移除 @openai/codex-win32-x64
+// 原生二进制 codex.exe 后）：@openai/codex/bin/codex.js 的 findCodexExecutable()
+// 只解析 vendored 路径，缺失即抛 "Missing optional dependency ... Reinstall"。
+// 补丁在抛错前追加回落：CODEX_BIN（显式指定）→ PATH 扫描 codex.exe/codex。
+// vendored 路径仍为第一优先（已存在的 vendored 二进制分支完全不变）。
+// ---------------------------------------------------------------------------
+const CODEX_LOCAL_BIN_MARKER = 'dsh-desktop compat: codex-local-bin-fallback';
+// 锚点 = findCodexExecutable() 抛错前的 packageManager 检测两行（2 空格缩进，
+// 与顶层同名变量行 0 空格缩进区分，保证唯一命中函数内那一处）。
+const CODEX_LOCAL_BIN_ANCHOR = [
+  '  const packageManager = detectPackageManager();',
+  '  const updateCommand =',
+].join('\n');
+const CODEX_LOCAL_BIN_INJECTION = [
+  '  // ' + CODEX_LOCAL_BIN_MARKER + ' — installer slimmed by removing the bundled',
+  '  // @openai/codex-win32-x64 native binary. When the vendored path above is absent,',
+  '  // honor an explicit CODEX_BIN or a `codex`/`codex.exe` on PATH before giving up.',
+  '  const localCodexBin = process.env.CODEX_BIN;',
+  '  if (localCodexBin) {',
+  '    if (existsSync(localCodexBin)) return localCodexBin;',
+  '  } else if (process.env.PATH) {',
+  '    const codexExeName = process.platform === "win32" ? "codex.exe" : "codex";',
+  '    for (const codexPathDir of process.env.PATH.split(path.delimiter)) {',
+  '      if (!codexPathDir) continue;',
+  '      const codexCandidate = path.join(codexPathDir, codexExeName);',
+  '      if (existsSync(codexCandidate)) return codexCandidate;',
+  '    }',
+  '  }',
+  '',
+  '  const packageManager = detectPackageManager();',
+  '  const updateCommand =',
+].join('\n');
+
+function transformCodexLocalBinFallback(src, file) {
+  if (src.includes(CODEX_LOCAL_BIN_MARKER)) return { status: 'already' };
+  if (!src.includes(CODEX_LOCAL_BIN_ANCHOR)) {
+    return { status: 'anchor-missing', detail: '未找到 codex findCodexExecutable 抛错前锚点（版本可能已变化），跳过 ' + file };
+  }
+  return { status: 'changed', src: src.replace(CODEX_LOCAL_BIN_ANCHOR, () => CODEX_LOCAL_BIN_INJECTION) };
+}
+
+// ---------------------------------------------------------------------------
+// Claude Code 子代理本地二进制回落补丁（2026-08，安装包瘦身移除
+// @anthropic-ai/claude-agent-sdk-win32-x64 原生二进制 claude.exe 后）：
+// dsh-subagent-claude-code 的 startClaudeCodeRun() 调 query({...}) 时未透传
+// pathToClaudeCodeExecutable，SDK 找不到内置二进制即失败。补丁把 options 从
+// 直接调用改为展开合并 + pathToClaudeCodeExecutable: process.env.CLAUDE_BIN，
+// 未设 CLAUDE_BIN 时为 undefined（SDK 语义回落到内置/自动发现，行为不变）。
+// ---------------------------------------------------------------------------
+const CLAUDE_LOCAL_BIN_MARKER = 'dsh-desktop compat: claude-local-bin-fallback';
+const CLAUDE_LOCAL_BIN_ANCHOR = [
+  '\t\tquery$1 = query({',
+  '\t\t\tprompt,',
+  '\t\t\toptions: claudeQueryOptions(spec, controller, captureChild, capturePermissionDiagnostic)',
+  '\t\t});',
+].join('\n');
+const CLAUDE_LOCAL_BIN_INJECTION = [
+  '\t\tquery$1 = query({',
+  '\t\t\tprompt,',
+  '\t\t\toptions: {',
+  '\t\t\t\t// ' + CLAUDE_LOCAL_BIN_MARKER + ' — installer slimmed by removing the',
+  '\t\t\t\t// bundled @anthropic-ai/claude-agent-sdk-win32-x64 native binary; point',
+  '\t\t\t\t// the SDK at a local Claude Code CLI via CLAUDE_BIN when provided.',
+  '\t\t\t\t...claudeQueryOptions(spec, controller, captureChild, capturePermissionDiagnostic),',
+  '\t\t\t\tpathToClaudeCodeExecutable: process.env.CLAUDE_BIN || undefined',
+  '\t\t\t}',
+  '\t\t});',
+].join('\n');
+
+function transformClaudeLocalBinFallback(src, file) {
+  if (src.includes(CLAUDE_LOCAL_BIN_MARKER)) return { status: 'already' };
+  if (!src.includes(CLAUDE_LOCAL_BIN_ANCHOR)) {
+    return { status: 'anchor-missing', detail: '未找到 claude subagent query({...}) 调用锚点（版本可能已变化），跳过 ' + file };
+  }
+  return { status: 'changed', src: src.replace(CLAUDE_LOCAL_BIN_ANCHOR, () => CLAUDE_LOCAL_BIN_INJECTION) };
+}
+
 module.exports = {
   // runtime-patches 的 transform（re-export）。其中 transformPersistenceAll 不被
   // registry 直接引用，其消费方是 rootAppliers.patchSessionPersistence
@@ -1949,6 +2027,9 @@ module.exports = {
   transformAdapterPrepareCallGuard,
   transformSessionHeaderScanGuard,
   transformSessionLoadGraceful,
+  // Codex / Claude 子代理本地二进制回落（安装包瘦身移除原生二进制后）。
+  transformCodexLocalBinFallback,
+  transformClaudeLocalBinFallback,
   // K1 注入体常量（单测 vm 行为验证用，与 transform 同源；非 marker）。
   CREDENTIALS_HELPERS_CODE,
   // 包级补丁 node_modules 根应用器（唯一实现）。
@@ -1998,6 +2079,8 @@ module.exports = {
     SESSION_HEADER_SCAN_MARKER,
     SESSION_LOAD_GRACEFUL_MARKER,
     MANUAL_SORT_DRAG_MARKER,
+    CODEX_LOCAL_BIN_MARKER,
+    CLAUDE_LOCAL_BIN_MARKER,
     ...require('./loader-isolation').markers,
   },
 };

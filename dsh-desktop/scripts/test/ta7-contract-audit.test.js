@@ -373,7 +373,6 @@ test('TA7-6 commit-plan §3 草案功能关键词 ↔ 测试文件存在（软�
     { kw: ['dsh-subagent-lens'], files: ['dsh-desktop/scripts/test/unit-dsh-subagent-lens.test.js'] },
     { kw: ['better-sidebar'], files: ['dsh-desktop/scripts/test/unit-better-sidebar-chunk-retry.test.js'] },
     { kw: ['file-drop'], files: ['dsh-desktop/scripts/test/unit-dsh-file-drop-attach.test.js'] },
-    { kw: ['浮窗'], files: ['dsh-desktop/scripts/test/unit-float-window-client.test.js'] },
     { kw: ['设备授权'], files: ['dsh-desktop/scripts/test/unit-device-auth-guidance.test.js'] },
   ];
   let hit = 0;

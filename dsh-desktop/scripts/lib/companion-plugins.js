@@ -20,7 +20,6 @@ const COMPANION_PLUGINS = [
   { id: 'terminal', name: '@deepseek-ai/dsh-terminal-tab' },
   { id: 'better-sidebar', name: 'dsh-better-sidebar' },
   { id: 'harness-pet', name: 'harness-pet' },
-  { id: 'float-window', name: '@deepseek-ai/dsh-float-window' },
   // 对话节点导航条（vlln/dsh-navbar，MIT）：对话区右缘节点串快速跳转
   // user 消息（悬停预览/点击跳转/滚轮切换），取代 conversation-tweaks
   // 内置的会话滑轨。

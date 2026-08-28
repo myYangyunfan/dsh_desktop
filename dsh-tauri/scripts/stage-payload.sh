@@ -106,14 +106,21 @@ mirror_dir "$SRC/vendor/npm" "$DST/vendor/npm"
 #      等兄弟名不受影响）----
 mirror_dir "$SRC/node_modules" "$DST/node_modules" \
    //XD electron electron-builder electron-winstaller @electron \
-   sharp-darwin-arm64 sharp-libvips-darwin-arm64 sharp-wasm32 koffi-darwin-arm64
+   sharp-darwin-arm64 sharp-libvips-darwin-arm64 sharp-wasm32 koffi-darwin-arm64 \
+   codex-win32-x64 claude-agent-sdk-win32-x64
 # robocopy /XD 语义陷阱：排除目录同时被挡在「复制」与「/MIR 删除」之外——
 # 此前 staging 残留在 DST 的 darwin/wasm 二进制（PD1：~27MB 死重）不会被
 # /MIR 清掉，必须显式删除（与 CI staging 的 rm -rf 行逐项同口径）。
+# Codex/Claude 原生二进制（codex-win32-x64 ~374MB、claude-agent-sdk-win32-x64
+# ~323MB）：内核子代理适配器仅在【真正拉起子代理进程】时才解析这些 optional
+# 平台二进制；import 阶段只读 JS 侧 metapackage（@openai/codex 的 package.json /
+# @anthropic-ai/claude-agent-sdk 的 sdk.mjs 惰性解析）。仅排除这两个原生包，
+# 保留 metapackage 以免断 import 图。
 rm -rf "$DST/node_modules/electron" "$DST/node_modules/electron-builder" \
        "$DST/node_modules/electron-winstaller" "$DST/node_modules/@electron" \
        "$DST/node_modules/@img/sharp-darwin-arm64" "$DST/node_modules/@img/sharp-libvips-darwin-arm64" \
-       "$DST/node_modules/@img/sharp-wasm32" "$DST/node_modules/@koromix/koffi-darwin-arm64"
+       "$DST/node_modules/@img/sharp-wasm32" "$DST/node_modules/@koromix/koffi-darwin-arm64" \
+       "$DST/node_modules/@openai/codex-win32-x64" "$DST/node_modules/@anthropic-ai/claude-agent-sdk-win32-x64"
 
 # ---- rc7 客户端包 vendor（历史层：内核侧 fallback farm 兜底）----
 # PD1 对账修复：来源不再依赖本机 0.4.1 构建产物 dist/win-unpacked 的整棵

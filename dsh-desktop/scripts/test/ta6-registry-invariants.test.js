@@ -144,11 +144,8 @@ test('D. pkgRel/pkgRels 被 patch-target-resolver 常量覆盖（白名单外新
 });
 
 test('E. order 全局唯一、组内升序、补丁间依赖序成立', () => {
-  // 44 = 56（上一基线）- 12 项退役（session-event-bound / load-all-history /
-  // load-all-history-ui / prompt-expose-fix / image-send-fix / vision-toggle-gate /
-  // vision-key-fix / code-mode-compat / skill-ui-zh / api-gateway-absent-guidance
-  // / session-manage / session-orphans）。
-  assert.equal(PATCH_SPECS.length, 44, 'spec 总数应为 44');
+  // 46 = 44（上一基线）+ 2 项新增（codex-local-bin-fallback / claude-local-bin-fallback）。
+  assert.equal(PATCH_SPECS.length, 46, 'spec 总数应为 46');
   const orders = PATCH_SPECS.map((s) => s.order);
   assert.equal(new Set(orders).size, orders.length, 'order 必须全局唯一');
   const byId = Object.fromEntries(PATCH_SPECS.map((s) => [s.id, s]));
@@ -195,9 +192,9 @@ test('E3. device-auth 154 与 credentials-absent 153 相邻无干扰', () => {
   );
 });
 
-test('F. cli:true 恰为 18 项；failPolicy ∈ {warn,degrade}', () => {
+test('F. cli:true 恰为 20 项；failPolicy ∈ {warn,degrade}', () => {
   const cliSpecs = registry.getSpecsByCli();
-  assert.equal(cliSpecs.length, 18, 'cli:true 数量应与既有断言一致（18，0.1.2-alpha.1 退役 3 项 cli 补丁）');
+  assert.equal(cliSpecs.length, 20, 'cli:true 数量应与既有断言一致（20，新增 codex/claude 本地二进制回落）');
   for (const s of cliSpecs) assert.equal(s.cli, true);
   for (const spec of PATCH_SPECS) {
     assert.ok(
