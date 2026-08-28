@@ -230,12 +230,12 @@ test('applyAll：root 补丁 anchor-missing 经真实 patchSessionPersistence �
   assert.equal(report.failed, 0, '失配不应计为 failed');
 });
 
-test('applyAll：requires 降级链（openPath required→degraded；deleteSession 非 required→warnings）', () => {
+test('applyAll：requires 降级链（openPath required 缺失 → degraded）', () => {
   const logs = [];
   const ctx = {
     home: 'x', appDir: 'y', userDataDir: 'z', wslMode: false,
     log: (m) => logs.push(m),
-    hostDetectors: { openPath: () => false, deleteSession: () => false },
+    hostDetectors: { openPath: () => false },
   };
   const mk = (id, requires) => ({
     id, group: 'runtime', order: 1, kind: 'file', layout: 'runtime-local', wslLayout: 'wsl',
@@ -244,11 +244,8 @@ test('applyAll：requires 降级链（openPath required→degraded；deleteSessi
   });
   const report = applyAll(ctx, [
     mk('needs-open-path', ['openPath']),
-    mk('needs-delete-session', ['deleteSession']),
   ]);
   assert.ok(report.degraded.includes('needs-open-path'), 'openPath required 缺失 → degraded');
-  assert.ok(report.warnings.includes('needs-delete-session'), 'deleteSession 非 required 缺失 → warnings');
-  assert.ok(!report.degraded.includes('needs-delete-session'), '非 required 缺失不得进 degraded');
 });
 
 test('applyAll：dryRun=true 时 transform 返回 changed 但不落盘（dryRunChangedLog 输出）', (t) => {

@@ -34,7 +34,7 @@ test('createPluginIntegration().run()：解构后调用返回 { syncResult, patc
     loadSettings: () => ({}),
     saveSettings: () => {},
     getInstallAnchorDir: () => anchor,
-    hostDetectors: { openPath: () => true, deleteSession: () => true },
+    hostDetectors: { openPath: () => true },
   };
 
   const integration = createPluginIntegration(opts);

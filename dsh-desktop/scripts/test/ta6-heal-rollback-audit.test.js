@@ -34,8 +34,6 @@ const IMPL_SOURCES = [
   path.join(LIB_DIR, 'runtime-patches.js'),
   path.join(LIB_DIR, 'patch-adapters.js'),
   path.join(LIB_DIR, 'loader-isolation.js'),
-  path.join(__dirname, '..', 'patch-session-orphans.js'),
-  path.join(__dirname, '..', 'patch-session-manage.js'),
   path.join(__dirname, '..', '..', 'profile-bundle-heal.js'),
 ].map((f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } });
 
