@@ -101,9 +101,9 @@ function makeResolve(patchedSrc) {
   };
 }
 
-/** 真实 roster：安装树 config/agent-presets 实际目录（与内核 list() 同源）。 */
-function rosterOf(pkgDir) {
-  const dir = path.join(pkgDir, 'config', 'agent-presets');
+/** 真实 roster：<home>/.agent-presets 实际目录（与内核 user root 同源）。 */
+function rosterOf(home) {
+  const dir = path.join(home, '.agent-presets');
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir, { withFileTypes: true })
     .filter((e) => e.isDirectory())
@@ -117,12 +117,13 @@ function rosterOf(pkgDir) {
 test('a-050-form：无 presets 步产物，minimal-win 缺失时 resume 回落 minimal（warn 降级不硬失败）', (t) => {
   const home = buildLegacyHome(t);
   const { pkgDir } = buildInstallTree(t);
-  // 0.5.0 现场Electron 老版只装了基础 roster（无 minimal-win 步产物）。
-  const presetRoot = path.join(pkgDir, 'config', 'agent-presets');
-  fs.mkdirSync(path.join(presetRoot, 'standard'), { recursive: true });
-  fs.mkdirSync(path.join(presetRoot, 'minimal'), { recursive: true });
+  // 0.5.0 现场：只装了 shipped roster（cordis/minimal/ptc/standard），无
+  // minimal-win 步产物。回落逻辑只依赖 roster 数组（vm 执行注入产物），
+  // 直接用新版 shipped roster 仿真。
+  const shipped = ['cordis', 'minimal', 'ptc', 'standard']
+    .map((id) => ({ id, path: `/<root>/${id}/agent.cordis.yml` }));
   const resolve = makeResolve(fs.readFileSync(path.join(pkgDir, 'lib', 'index.js'), 'utf8'));
-  const preset = resolve.call(rosterOf(pkgDir), 'minimal-win');
+  const preset = resolve.call(shipped, 'minimal-win');
   return preset.then((p) => {
     assert.equal(p.id, 'minimal', 'minimal-win 应回落 minimal');
     assert.equal(resolve.warns.length, 1, '回落必须告警一次');
@@ -133,17 +134,18 @@ test('a-050-form：无 presets 步产物，minimal-win 缺失时 resume 回落 m
 });
 
 test('a-upgrade：installBuiltinPresets 真跑后 minimal-win 直通（无告警、无需回落）', (t) => {
+  const home = buildLegacyHome(t);
   const { pkgDir } = buildInstallTree(t);
-  const dests = installBuiltinPresets(pkgDir);
+  const dests = installBuiltinPresets(home);
   assert.ok(dests.length >= 1, '至少装出 minimal-win');
-  const ids = rosterOf(pkgDir).map((p) => p.id);
+  const ids = rosterOf(home).map((p) => p.id);
   assert.ok(ids.includes('minimal-win'), '升级后 roster 必须含 minimal-win: ' + ids.join(','));
   // 预设完整性：agent.cordis.yml + preset.yml 双文件。
-  const dest = path.join(pkgDir, 'config', 'agent-presets', 'minimal-win');
+  const dest = path.join(home, '.agent-presets', 'minimal-win');
   assert.ok(fs.existsSync(path.join(dest, 'agent.cordis.yml')));
   assert.ok(fs.existsSync(path.join(dest, 'preset.yml')));
   const resolve = makeResolve(fs.readFileSync(path.join(pkgDir, 'lib', 'index.js'), 'utf8'));
-  const roster = rosterOf(pkgDir);
+  const roster = rosterOf(home);
   return resolve.call(roster, 'minimal-win').then((p) => {
     assert.equal(p.id, 'minimal-win', '升级后 minimal-win 直通');
     assert.equal(resolve.warns.length, 0, '已知 id 不得告警');
@@ -151,16 +153,17 @@ test('a-upgrade：installBuiltinPresets 真跑后 minimal-win 直通（无告警
 });
 
 test('a-idempotent：installBuiltinPresets 二遍幂等（已一致跳过写盘）', (t) => {
+  const home = buildLegacyHome(t);
   const { pkgDir } = buildInstallTree(t);
-  installBuiltinPresets(pkgDir);
-  const probe = path.join(pkgDir, 'config', 'agent-presets', 'minimal-win', 'agent.cordis.yml');
+  installBuiltinPresets(home);
+  const probe = path.join(home, '.agent-presets', 'minimal-win', 'agent.cordis.yml');
   const st1 = fs.statSync(probe);
-  installBuiltinPresets(pkgDir);
+  installBuiltinPresets(home);
   const st2 = fs.statSync(probe);
   assert.equal(Math.round(st2.mtimeMs), Math.round(st1.mtimeMs), '二遍不得重写已一致文件');
   // 单预设入口（老调用方形态）同样可用。
-  const d = installBuiltinPreset(pkgDir, 'minimal-win');
-  assert.equal(d, path.join(pkgDir, 'config', 'agent-presets', 'minimal-win'));
+  const d = installBuiltinPreset(home, 'minimal-win');
+  assert.equal(d, path.join(home, '.agent-presets', 'minimal-win'));
 });
 
 // ---------------------------------------------------------------------------
@@ -277,10 +280,9 @@ test('reinstall：脏现场并存 → installBuiltinPresets + compositionPreflig
   // 脏现场 3：profile 自身 package.json 半写（boot 扫描链不得抛）。
   fs.writeFileSync(path.join(home, 'profiles', 'web', 'package.json'), '{"dsh": {"profile": {"bund');
 
-  // 重装链 1：预设全量重装（新安装树）。
-  const { pkgDir } = buildInstallTree(t);
-  installBuiltinPresets(pkgDir);
-  assert.ok(rosterOf(pkgDir).some((p) => p.id === 'minimal-win'));
+  // 重装链 1：预设全量重装（写入 <home>/.agent-presets）。
+  installBuiltinPresets(home);
+  assert.ok(rosterOf(home).some((p) => p.id === 'minimal-win'));
   // 重装链 2：fallback junction 重建。
   const report = compositionPreflight({ home, appDir, log: () => {} });
   assert.equal(report.broken.length, 0, '悬空必须被重建: ' + JSON.stringify(report.broken));

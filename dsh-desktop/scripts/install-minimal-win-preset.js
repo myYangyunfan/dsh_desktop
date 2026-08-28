@@ -1,12 +1,17 @@
 'use strict';
 
-// Install every bundled agent preset from assets/agent-presets into an
-// @deepseek-ai/dsh package directory.
+// Install every bundled agent preset from assets/agent-presets into the DSH
+// home's user preset root (<DSH_HOME>/.agent-presets).
 //
-// - `npm start` runs this against the dev node_modules copy so the presets are
-//   also visible when running from source.
-// - scripts/after-pack.js runs it against the packed app copy, so the shipped
-//   build carries all presets out of the box.
+// The 0.1.2-alpha.1 kernel moved built-in presets out of
+// `dsh/config/agent-presets` into the `@deepseek-ai/dsh-agent-presets` package
+// (shipped set: cordis / minimal / ptc / standard). User-supplied presets are
+// discovered from `<DSH_HOME>/.agent-presets` (the package's derived `user`
+// root), so our desktop presets are installed there to coexist with the new
+// roster instead of depending on the removed `code` / `minimal-win` ids.
+//
+// - `scripts/sync-companion-plugins.js` runs this against the target DSH_HOME so
+//   the desktop's own presets are visible in WSL / Linux dsh installs too.
 //
 // Preset directory ids must match [a-z0-9-]+ (the user-facing name lives in
 // each preset.yml). Current set:
@@ -26,10 +31,23 @@
 // alongside the preset slots without treating it as one.
 
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 function presetsSourceDir() {
   return path.resolve(__dirname, '..', 'assets', 'agent-presets');
+}
+
+/** 内核 dsh-agent-presets 的用户预设根（<DSH_HOME>/.agent-presets）。 */
+function userPresetRoot(dshHome) {
+  return path.join(dshHome, '.agent-presets');
+}
+
+/** 缺省 DSH_HOME（$DSH_HOME 优先，否则 ~/.dsh），与 dsh-home-paths 同源。 */
+function defaultDshHome() {
+  const env = process.env.DSH_HOME;
+  if (env && env.trim().length > 0) return path.resolve(env);
+  return path.join(os.homedir(), '.dsh');
 }
 
 /**
@@ -48,15 +66,15 @@ function fileMatches(sf, df) {
   }
 }
 
-/** Copy one bundled preset directory into <dshPackageDir>/config/agent-presets/. */
-function installBuiltinPreset(dshPackageDir, id) {
+/** Copy one bundled preset directory into <dshHome>/.agent-presets/. */
+function installBuiltinPreset(dshHome, id) {
   const src = path.join(presetsSourceDir(), id);
   const agentFile = path.join(src, 'agent.cordis.yml');
   const metaFile = path.join(src, 'preset.yml');
   if (!fs.existsSync(agentFile) || !fs.existsSync(metaFile)) {
     throw new Error(`builtin preset source incomplete: ${src}`);
   }
-  const dest = path.join(dshPackageDir, 'config', 'agent-presets', id);
+  const dest = path.join(userPresetRoot(dshHome), id);
   fs.mkdirSync(dest, { recursive: true });
   // Full-directory copy: presets may carry local .mjs bootstrap modules
   // referenced relatively from agent.cordis.yml.
@@ -74,20 +92,20 @@ function installBuiltinPreset(dshPackageDir, id) {
 const SHARED_PRESET_DIR = '_preset';
 
 /** Install all bundled presets. Returns the destination directories. */
-function installBuiltinPresets(dshPackageDir) {
+function installBuiltinPresets(dshHome) {
   const presetRoot = presetsSourceDir();
   const ids = fs.readdirSync(presetRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && entry.name !== SHARED_PRESET_DIR)
     .map((entry) => entry.name)
     .sort();
-  const dests = ids.map((id) => installBuiltinPreset(dshPackageDir, id));
+  const dests = ids.map((id) => installBuiltinPreset(dshHome, id));
 
   // Copy the shared `_preset` modules referenced by zero/whoami rows and
   // imports (`../_preset/*.mjs`). It is deliberately not installed as a preset
   // slot: discovery would otherwise report it as a broken roster row.
   const sharedSrc = path.join(presetRoot, SHARED_PRESET_DIR);
   if (fs.existsSync(sharedSrc)) {
-    const sharedDest = path.join(dshPackageDir, 'config', 'agent-presets', SHARED_PRESET_DIR);
+    const sharedDest = path.join(userPresetRoot(dshHome), SHARED_PRESET_DIR);
     fs.mkdirSync(sharedDest, { recursive: true });
     for (const entry of fs.readdirSync(sharedSrc, { withFileTypes: true })) {
       if (!entry.isFile()) continue;
@@ -100,9 +118,9 @@ function installBuiltinPresets(dshPackageDir) {
   return dests;
 }
 
-/** Backward-compatible wrapper used by after-pack and older callers. */
-function installMinimalWinPreset(dshPackageDir) {
-  return installBuiltinPreset(dshPackageDir, 'minimal-win');
+/** Backward-compatible wrapper used by older callers. */
+function installMinimalWinPreset(dshHome) {
+  return installBuiltinPreset(dshHome, 'minimal-win');
 }
 
 /** Resolve the locally installed @deepseek-ai/dsh package directory. */
@@ -116,12 +134,14 @@ module.exports = {
   installBuiltinPreset,
   installBuiltinPresets,
   installedDshPackageDir,
+  userPresetRoot,
+  defaultDshHome,
   PRESET_ID: 'minimal-win',
 };
 
 if (require.main === module) {
   try {
-    const dests = installBuiltinPresets(installedDshPackageDir());
+    const dests = installBuiltinPresets(defaultDshHome());
     console.log(`builtin presets installed (${dests.length}): ${dests.join(', ')}`);
   } catch (err) {
     console.error(`builtin preset install failed: ${(err && err.message) || err}`);

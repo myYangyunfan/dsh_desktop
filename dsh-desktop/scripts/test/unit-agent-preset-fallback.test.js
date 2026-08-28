@@ -158,7 +158,7 @@ function makeResolve(patchedSrc) {
   };
 }
 
-const ROSTER = ['standard', 'code', 'minimal', 'cordis'].map((id) => ({ id, path: `/<root>/${id}/agent.cordis.yml` }));
+const ROSTER = ['standard', 'ptc', 'minimal', 'cordis'].map((id) => ({ id, path: `/<root>/${id}/agent.cordis.yml` }));
 
 test('回落：minimal-win → minimal（语义最近），warn 含原 id / 回落目标 / 原因 / 原错误', async () => {
   const h = makeResolve(transformAgentPresetFallback(PRISTINE_RESOLVE, 't.js').src);
@@ -202,13 +202,13 @@ test('回落：minimal-win 但 roster 无 minimal → standard 兜底；standard
   );
   assert.ok(empty.message.includes('minimal-win') && empty.message.includes('not found'));
   assert.equal(h2.warns.length, 0, '未发生回落不应告警');
-  // 仅 code（standard 保底也缺失）：无可回落 → 原样硬抛，不告警。
+  // 仅 ptc（standard 保底也缺失）：无可回落 → 原样硬抛，不告警。
   const h3 = mk();
-  const codeOnly = await h3.call([{ id: 'code', path: '/x' }], 'minimal-win').then(
+  const ptcOnly = await h3.call([{ id: 'ptc', path: '/x' }], 'minimal-win').then(
     () => assert.fail('无 standard 可保底时应抛 UnknownPresetError'),
     (err) => err
   );
-  assert.equal(codeOnly.presetId, 'minimal-win');
+  assert.equal(ptcOnly.presetId, 'minimal-win');
   assert.equal(h3.warns.length, 0, '未发生回落不应告警');
 });
 

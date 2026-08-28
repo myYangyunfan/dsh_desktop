@@ -1,6 +1,9 @@
 node_modules/
 dist/
-vendor/
+# vendor/ 下是 fetch-runtime 生成的运行时（node.exe + npm），不入库；
+# 但 vendor/dsh-kernel/ 是随库提交的 0.1.2-alpha.1 内核 tgz，必须入库。
+vendor/*
+!vendor/dsh-kernel/
 *.log
 data/
 .DS_Store
