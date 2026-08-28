@@ -109,6 +109,53 @@ test('组装契约：result 含 prices/priceTable/model/peak/at/opencodeGo，单
   assert.strictEqual(scheduler.getCache(), result);
 });
 
+test('periodTables 载荷（issue #168）：注入时出站含三张表 + pricingSince；未注入不产生字段', async () => {
+  const tables = {
+    peak: { 'deepseek-v4-flash': { cacheMiss: 3, cacheHit: 0.1, output: 9 } },
+    off: { 'deepseek-v4-flash': { cacheMiss: 1.5, cacheHit: 0.05, output: 4.5 } },
+    legacy: { 'deepseek-v4-flash': { cacheMiss: 1, cacheHit: 0.02, output: 2 } },
+  };
+  const { scheduler } = makeHarness({
+    schedulerOptions: {
+      periodTables: () => tables,
+      pricingSinceIso: () => '2026-08-16T16:00:00.000Z',
+    },
+  });
+  const result = await scheduler.refresh();
+  assert.strictEqual(result.periodTables, tables, '三张表原样出站（引用透传，客户端只读）');
+  assert.strictEqual(result.pricingSince, '2026-08-16T16:00:00.000Z');
+  // 未注入（旧接线形态）→ 字段缺席，客户端回退旧口径（prices/priceTable）。
+  const plain = await makeHarness().scheduler.refresh();
+  assert.strictEqual(plain.periodTables, undefined);
+  assert.strictEqual(plain.pricingSince, undefined);
+});
+
+test('periodTables 覆盖（issue #168）：balancePrices.<model> 同时并入三张表', async () => {
+  const { scheduler } = makeHarness({
+    settings: {
+      balancePrices: {
+        'deepseek-v4-flash': { cacheMiss: 1, cacheHit: 0.5, output: 8 },
+        'my-model': { cacheMiss: 2, cacheHit: 0.2, output: 7 },
+      },
+    },
+    schedulerOptions: {
+      periodTables: () => ({
+        peak: { 'deepseek-v4-flash': { cacheMiss: 3, cacheHit: 0.1, output: 9 } },
+        off: { 'deepseek-v4-flash': { cacheMiss: 1.5, cacheHit: 0.05, output: 4.5 } },
+        legacy: { 'deepseek-v4-flash': { cacheMiss: 1, cacheHit: 0.02, output: 2 } },
+      }),
+      pricingSinceIso: () => '2026-08-16T16:00:00.000Z',
+    },
+  });
+  const result = await scheduler.refresh();
+  // 已有模型：覆盖字段并入三张表（覆盖语义 = 该模型就用这套价，与时段无关）。
+  for (const k of ['peak', 'off', 'legacy']) {
+    assert.deepStrictEqual(result.periodTables[k]['deepseek-v4-flash'], { cacheMiss: 1, cacheHit: 0.5, output: 8 });
+    // 表外新模型：以默认模型档为基底并入（覆盖字段全给时基底被全覆盖）。
+    assert.deepStrictEqual(result.periodTables[k]['my-model'], { cacheMiss: 2, cacheHit: 0.2, output: 7 });
+  }
+});
+
 test('节流：30s 窗口内重复 maybeRefresh 不重复请求；force 绕过', async () => {
   const { scheduler, calls } = makeHarness();
   await scheduler.maybeRefresh();      // 第一次实际请求

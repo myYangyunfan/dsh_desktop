@@ -23,10 +23,33 @@ const SRC = fs.readFileSync(CLIENT_PATH, 'utf8');
 // ---------------------------------------------------------------------------
 // 测试床：每次 loadClient() 生成全新沙箱（模块级状态如 bridgePushedOnce 隔离）
 // ---------------------------------------------------------------------------
+// opts.now        —— 固定沙箱时钟（Date.now()/无参 new Date()）：时段计价用例
+// opts.storage    —— 注入 localStorage mock（跨 loadClient 共享 = 模拟页面重载）
+// opts.sessionId  —— sessions 服务返回的当前会话 id（费用账本键控）
+// ---------------------------------------------------------------------------
 
-function loadClient(bridgeOverrides) {
+function makeStorage() {
+  const m = new Map();
+  return {
+    getItem: (k) => (m.has(k) ? m.get(k) : null),
+    setItem: (k, v) => { m.set(k, String(v)); },
+    removeItem: (k) => { m.delete(k); },
+  };
+}
+
+function loadClient(bridgeOverrides, opts = {}) {
   const calls = { refreshBalance: 0, handler: null };
   const listeners = new Map();
+  // 时间源控制：沙箱 Date 的静态 now()/无参构造返回固定值；
+  // new Date(ms) 原样透传（beijingPartsOf 的 UTC 平移读法依赖数值构造）。
+  const realDate = Date;
+  const fixedNow = Number.isFinite(opts.now) ? { value: opts.now } : null;
+  const SandboxDate = fixedNow === null ? realDate : class extends realDate {
+    constructor(...args) { super(...(args.length > 0 ? args : [fixedNow.value])); }
+    static now() { return fixedNow.value; }
+  };
+  const storage = opts.storage !== undefined ? opts.storage : null;
+  let sessionId = opts.sessionId;
   const sandboxWindow = {
     __ModuleLoader__: { load: (obj) => { calls.captured = obj; } },
     dshDesktop: bridgeOverrides && bridgeOverrides.dshDesktop !== undefined
@@ -47,7 +70,9 @@ function loadClient(bridgeOverrides) {
     // unref：不清理的挂起定时器不阻塞测试进程退出。
     setTimeout: (fn, ms, ...args) => { const t = setTimeout(fn, ms, ...args); if (t.unref) t.unref(); return t; },
     clearTimeout,
+    Date: SandboxDate,
   };
+  if (storage !== null) sandbox.localStorage = storage;
   vm.createContext(sandbox);
   vm.runInContext(SRC, sandbox, { filename: 'client.js' });
 
@@ -100,6 +125,9 @@ function loadClient(bridgeOverrides) {
   // declared」的冷启动竞态，见 lib/client.js apply 注释）：mock 的 inject
   // 立即求值 factory，落到与旧 register 相同的捕获路径，断言语义不变。
   const fakeCtx = {
+    get: (name) => (name === 'sessions' && sessionId !== undefined
+      ? { list: { getSnapshot: () => ({ current: sessionId }) } }
+      : undefined),
     slots: {
       register(slotInfo, Component) { dockComponent = Component; },
       inject(key, factory) {
@@ -128,7 +156,11 @@ function loadClient(bridgeOverrides) {
     for (const { cb } of pendingEffects) cb();
   }
 
-  return { calls, listeners, render, runEffects, resetHooks, dock: () => dockComponent, setPresetData: (d) => { presetData = d; } };
+  return {
+    calls, listeners, render, runEffects, resetHooks, dock: () => dockComponent, setPresetData: (d) => { presetData = d; },
+    setNow: (ms) => { if (fixedNow !== null) fixedNow.value = ms; },
+    setSessionId: (id) => { sessionId = id; },
+  };
 }
 
 /** 收集渲染树全部文本。 */
@@ -279,14 +311,31 @@ test('纯浏览器降级：无 data 时按 FALLBACK_PRICES 计价', () => {
 });
 
 test('sessionCost: prices 覆盖生效；非法价格字段回退内置默认档', () => {
-  const h = loadClient();
   const usage = { uncachedInputTokens: 1e6, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
-  // 合法覆盖
+  // 合法覆盖（新账本 → 基线按覆盖价入账）
+  let h = loadClient();
   let r = h.render(usage, { prices: { cacheMiss: 1, cacheHit: 0.5, output: 8 } });
   assert.strictEqual(costChipText(r), '本轮 ¥1.000');
-  // 非法覆盖（NaN/负数）→ 回退默认档（FALLBACK_PRICES，与 deepseek-v4-pro 一致）
+  // 非法覆盖（NaN/负数）→ 回退默认档（FALLBACK_PRICES，与 deepseek-v4-pro 一致）。
+  // 必须用全新账本：增量计价语义下同一 usage 换价不再重算已入账部分（见下一条用例）。
+  h = loadClient();
   r = h.render(usage, { prices: { cacheMiss: NaN, cacheHit: -1, output: 8 } });
   assert.strictEqual(costChipText(r), '本轮 ¥9.000');
+});
+
+test('增量计价回归（issue #168）：同一用量、推送价目变化 → 费用不重算', () => {
+  const usage = { uncachedInputTokens: 1e6, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+  const h = loadClient();
+  // 基线：合法覆盖价 1 元/百万 → 1M miss = ¥1。
+  let r = h.render(usage, { prices: { cacheMiss: 1, cacheHit: 0.5, output: 8 } });
+  assert.strictEqual(costChipText(r), '本轮 ¥1.000');
+  // 推送换价（含非法字段回退默认档 9 元）：已入账的 1M 仍按入账时的 1 元计，
+  // 绝不随新推送整段重算——旧实现此处显示 ¥9.000（峰谷切换费用跳变的根因）。
+  r = h.render(usage, { prices: { cacheMiss: NaN, cacheHit: -1, output: 8 } });
+  assert.strictEqual(costChipText(r), '本轮 ¥1.000');
+  // 新增量才按新价入账：再消耗 1M miss × 9 = +¥9 → 累计 ¥10。
+  r = h.render({ uncachedInputTokens: 2e6, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }, { prices: { cacheMiss: NaN, cacheHit: -1, output: 8 } });
+  assert.strictEqual(costChipText(r), '本轮 ¥10.00');
 });
 
 // ---------------------------------------------------------------------------
@@ -431,4 +480,147 @@ test('渲染形态：仅 Go（无余额无用量）→ 直接 goDock', () => {
   const r = h.render(null, data);
   assert.strictEqual(r.result.type, 'a');
   assert.ok(String(r.result.props.className).includes('dsh-balance-go'));
+});
+
+// ---------------------------------------------------------------------------
+// 按消耗时段计价（issue #168）：增量账本 + periodTables 三张表 + 周末规则
+//
+// 官方计费口径：每个 token 按其消耗时刻的时段价结算，已结算量不随后续
+// 峰谷切换重算。旧实现「累计 token × 推送时刻价」在峰谷切换后整段跳变。
+// 时间锚点（北京 = UTC+8）：
+//   周三 2026-08-26 10:30（02:30Z）→ 高峰（9-12 窗口内）
+//   周三 2026-08-26 20:00（12:00Z）→ 空闲
+//   周三 2026-08-26 11:30（03:30Z）→ 高峰；12:30（04:30Z）→ 空闲（跨边界）
+//   周六 2026-08-29 10:00（02:00Z）→ 周末全天空闲（2026-08-23 起）
+//   周六 2026-08-22 10:00（02:00Z）→ 生效日前：仍按小时窗口（高峰）
+//   2026-08-10 10:00（02:00Z）→ 峰谷生效日前 → legacy 固定价
+// ---------------------------------------------------------------------------
+
+const FLASH_PEAK = { cacheMiss: 3, cacheHit: 0.1, output: 9 };
+const FLASH_OFF = { cacheMiss: 1.5, cacheHit: 0.05, output: 4.5 };
+const FLASH_LEGACY = { cacheMiss: 1, cacheHit: 0.02, output: 2 };
+const PRO_PEAK = { cacheMiss: 9, cacheHit: 0.3, output: 27 };
+const PERIOD_DATA = {
+  ok: true,
+  balances: [{ currency: 'CNY', total: 88.5, granted: 10, toppedUp: 78.5 }],
+  prices: FLASH_PEAK, // 推送时刻的解析价（可能滞后于真实时段）
+  priceTable: { 'deepseek-v4-flash': FLASH_PEAK, 'deepseek-v4-pro': PRO_PEAK },
+  periodTables: {
+    peak: { 'deepseek-v4-flash': FLASH_PEAK, 'deepseek-v4-pro': PRO_PEAK },
+    off: { 'deepseek-v4-flash': FLASH_OFF, 'deepseek-v4-pro': { cacheMiss: 4.5, cacheHit: 0.15, output: 13.5 } },
+    legacy: { 'deepseek-v4-flash': FLASH_LEGACY, 'deepseek-v4-pro': { cacheMiss: 3, cacheHit: 0.025, output: 6 } },
+  },
+  pricingSince: '2026-08-16T16:00:00.000Z',
+  model: 'deepseek-v4-flash',
+  peak: true, // 推送时刻=高峰（对空闲时刻的用例构成「推送滞后」场景）
+};
+const U1M = { uncachedInputTokens: 1e6, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+const U2M = { uncachedInputTokens: 2e6, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+
+test('时段计价（#168）：高峰基线 → 空闲时段同用量重渲染 → 费用不整段重算', () => {
+  const peakMs = Date.parse('2026-08-26T02:30:00.000Z'); // 周三 10:30 北京
+  const offMs = Date.parse('2026-08-26T12:00:00.000Z');  // 周三 20:00 北京
+  const h = loadClient({}, { now: peakMs });
+  // 基线：1M miss × 高峰价 3 = ¥3。
+  let r = h.render(U1M, PERIOD_DATA);
+  assert.strictEqual(costChipText(r), '本轮 ¥3.000');
+  assert.ok(collectText(r.result).includes('⛰ 高峰价'), '高峰时刻 chip 为高峰');
+  // 跨到空闲时段：同用量、新推送（prices 仍是高峰解析价 + peak=true 滞后）。
+  // 已入账的 1M 仍按消耗时（高峰）的 3 元计——旧实现此处显示 ¥1.500。
+  h.setNow(offMs);
+  r = h.render(U1M, PERIOD_DATA);
+  assert.strictEqual(costChipText(r), '本轮 ¥3.000', '峰谷切换后同用量费用不得重算');
+  // chip 用客户端本地判定即时切换（不受推送 peak=true 滞后影响）。
+  assert.ok(collectText(r.result).includes('🌙 空闲价'), '空闲时刻 chip 应即时切换');
+});
+
+test('时段计价（#168）：跨峰谷边界的增量分段计价', () => {
+  const peakMs = Date.parse('2026-08-26T03:30:00.000Z'); // 周三 11:30 北京（高峰）
+  const offMs = Date.parse('2026-08-26T04:30:00.000Z');  // 周三 12:30 北京（空闲）
+  const h = loadClient({}, { now: peakMs });
+  let r = h.render(U1M, PERIOD_DATA);
+  assert.strictEqual(costChipText(r), '本轮 ¥3.000', '高峰段 1M × 3');
+  h.setNow(offMs);
+  r = h.render(U2M, PERIOD_DATA); // 新增 1M miss 在空闲段消耗 × 1.5
+  assert.strictEqual(costChipText(r), '本轮 ¥4.500', '3 + 1.5：增量按空闲价，基线不重算');
+});
+
+test('时段计价（#168）：2026-08-23 起周末全天空闲（客户端判定与计价一致）', () => {
+  const satMs = Date.parse('2026-08-29T02:00:00.000Z'); // 周六 10:00 北京
+  const h = loadClient({}, { now: satMs });
+  const r = h.render(U1M, PERIOD_DATA); // 推送 peak=true（滞后/旧规则）也不影响
+  assert.strictEqual(costChipText(r), '本轮 ¥1.500', '周末 1M × 空闲价 1.5');
+  assert.ok(collectText(r.result).includes('🌙 空闲价'), '周末 chip 为空闲');
+});
+
+test('时段计价（#168）：生效日前的周六仍按小时窗口判高峰（不溯及既往）', () => {
+  const satBeforeMs = Date.parse('2026-08-22T02:00:00.000Z'); // 周六 10:00 北京（8-23 前）
+  const h = loadClient({}, { now: satBeforeMs });
+  const r = h.render(U1M, PERIOD_DATA);
+  assert.strictEqual(costChipText(r), '本轮 ¥3.000', '生效日前周六 10:00 仍为高峰全价');
+  assert.ok(collectText(r.result).includes('⛰ 高峰价'));
+});
+
+test('时段计价（#168）：峰谷生效日之前按 legacy 固定价表计价', () => {
+  const legacyMs = Date.parse('2026-08-10T02:00:00.000Z'); // 周一 10:00 北京（8-17 前）
+  const h = loadClient({}, { now: legacyMs });
+  const r = h.render(U1M, PERIOD_DATA);
+  assert.strictEqual(costChipText(r), '本轮 ¥1.000', '旧版固定价 flash miss=1');
+  assert.ok(collectText(r.result).includes('🌙 空闲价') || !collectText(r.result).includes('⛰ 高峰价'), 'legacy 期无高峰概念');
+});
+
+test('时段计价（#168）：会话切换账本键控——回切原会话费用保留', () => {
+  const peakMs = Date.parse('2026-08-26T02:30:00.000Z');
+  const h = loadClient({}, { now: peakMs, sessionId: 'sess-a' });
+  let r = h.render(U1M, PERIOD_DATA);
+  assert.strictEqual(costChipText(r), '本轮 ¥3.000');
+  // 切到会话 B：2M 存量按 B 自己的基线（高峰全价）入账。
+  h.setSessionId('sess-b');
+  r = h.render(U2M, PERIOD_DATA);
+  assert.strictEqual(costChipText(r), '本轮 ¥6.000', '会话 B 独立基线 2M × 3');
+  // 切回会话 A：账本保留，仍为 ¥3（不受 B 的基线污染）。
+  h.setSessionId('sess-a');
+  r = h.render(U1M, PERIOD_DATA);
+  assert.strictEqual(costChipText(r), '本轮 ¥3.000', '回切 A 费用保留');
+});
+
+test('时段计价（#168）：页面重载（localStorage）延续账本，不重置不重算', () => {
+  const peakMs = Date.parse('2026-08-26T02:30:00.000Z');
+  const offMs = Date.parse('2026-08-26T12:00:00.000Z');
+  const storage = makeStorage();
+  // 第一段页面生命：高峰段 1M 入账 ¥3，写入 localStorage。
+  const h1 = loadClient({}, { now: peakMs, storage, sessionId: 'sess-a' });
+  let r = h1.render(U1M, PERIOD_DATA);
+  assert.strictEqual(costChipText(r), '本轮 ¥3.000');
+  // 模拟页面重载：全新沙箱（模块级账本清空）、共享 storage、时钟已到空闲段。
+  const h2 = loadClient({}, { now: offMs, storage, sessionId: 'sess-a' });
+  r = h2.render(U1M, PERIOD_DATA);
+  assert.strictEqual(costChipText(r), '本轮 ¥3.000', '重载后延续账本（旧实现按空闲价重算成 ¥1.500）');
+  // 新增量按当前（空闲）时段价入账。
+  r = h2.render(U2M, PERIOD_DATA);
+  assert.strictEqual(costChipText(r), '本轮 ¥4.500', '重载后增量 1M × 1.5');
+});
+
+test('时段计价（#168）：localStorage 脏数据/不可用 → 空账本降级不炸', () => {
+  const peakMs = Date.parse('2026-08-26T02:30:00.000Z');
+  // 脏数据（非法 JSON）→ 解析失败按空账本，功能不受影响。
+  const badStorage = { getItem: () => '{not-json', setItem: () => {}, removeItem: () => {} };
+  const h = loadClient({}, { now: peakMs, storage: badStorage, sessionId: 'sess-a' });
+  let r = h.render(U1M, PERIOD_DATA);
+  assert.strictEqual(costChipText(r), '本轮 ¥3.000', '脏 storage 降级为内存账本');
+  // setItem 抛异常（配额满/隐私模式）→ 静默转纯内存账本。
+  const throwStorage = { getItem: () => null, setItem: () => { throw new Error('quota'); }, removeItem: () => {} };
+  const h2 = loadClient({}, { now: peakMs, storage: throwStorage, sessionId: 'sess-a' });
+  r = h2.render(U1M, PERIOD_DATA);
+  assert.ok(!r.threw && costChipText(r) === '本轮 ¥3.000', '写失败不传染渲染');
+  r = h2.render(U2M, PERIOD_DATA);
+  assert.strictEqual(costChipText(r), '本轮 ¥6.000', '内存账本继续增量计价');
+});
+
+test('时段计价（#168）：usage 模型档在 periodTables 下同样生效', () => {
+  const peakMs = Date.parse('2026-08-26T02:30:00.000Z');
+  const h = loadClient({}, { now: peakMs });
+  const usage = { ...U1M, model: 'deepseek-v4-pro' };
+  const r = h.render(usage, PERIOD_DATA);
+  assert.strictEqual(costChipText(r), '本轮 ¥9.000', 'usage.model=pro → 高峰 pro 档 miss=9');
 });

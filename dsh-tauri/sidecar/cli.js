@@ -1110,9 +1110,10 @@ async function main() {
         // 编排半边在 Rust 侧 commands/balance.rs）：复用 payload 的
         // balance.js + balance-scheduler.js（refresh() 直刷 + pollMs:0 不装
         // 轮询定时器），组装出与 Electron 完全同构的事件载荷
-        // （ok/balances/prices/priceTable/model/peak/opencodeGo/at，
-        // 契约见 docs/balance-architecture.md §2）。stdout 末行 JSON 即结果；
-        // 密钥不出本进程（Rust 只透传 JSON，见 balance-scheduler 出站模型）。
+        // （ok/balances/prices/priceTable/model/peak/opencodeGo/at
+        // /periodTables/pricingSince，契约见 docs/balance-architecture.md §2）。
+        // stdout 末行 JSON 即结果；密钥不出本进程（Rust 只透传 JSON，
+        // 见 balance-scheduler 出站模型）。
         const c = ctx();
         const balance = require(path.join(c.appDir, 'balance'));
         const { createBalanceScheduler } = require(path.join(c.appDir, 'balance-scheduler'));
@@ -1126,6 +1127,8 @@ async function main() {
           readActiveModel: balance.readActiveModel,
           effectivePrice: balance.effectivePrice,
           priceTable: balance.priceTable,
+          periodTables: balance.periodTables,
+          pricingSinceIso: balance.peakPricingSinceIso,
           isPeakHour: balance.isPeakHour,
           push: (r) => { result = r; },
           log: (topic, msg) => process.stderr.write('[' + topic + '] ' + msg + '\n'),

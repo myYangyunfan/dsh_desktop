@@ -17,6 +17,7 @@ Tauri 线为 `dsh-tauri/src-tauri/src/app/src/commands/balance.rs` + sidecar
 ┌─────────────────────────────────────────────────────────────────────┐
 │ 展示层  assets/plugins/dsh-balance/lib/client.js（浏览器内）          │
 │   · normalizeUsage()：token 用量归一化（单一真源）                    │
+│   · observeCost()：按消耗时段增量计价账本（§3.1，issue #168）         │
 │   · sessionCost()/hasUsage()/money()/goUsageText()                   │
 │   · 只消费 window "dsh-balance-changed" 事件（单一投递）              │
 └───────────────────────────────▲─────────────────────────────────────┘
@@ -108,6 +109,12 @@ interface BalancePush {
   };
   prices: Prices;           // 默认模型在推送时刻的有效单价（== priceTable[默认模型]，含 balancePrices.<model> 覆盖）
   priceTable: Record<string, Prices>; // 全部已知模型同一时刻的价目表（含 balancePrices.<model> 覆盖）
+  periodTables?: {          // 三张时段价目表（issue #168：客户端「按 token 消耗时刻计价」的数据源）
+    peak: Record<string, Prices>;    // 峰谷期高峰档全价（含覆盖）
+    off: Record<string, Prices>;     // 峰谷期空闲档（高峰的一半，含覆盖）
+    legacy: Record<string, Prices>;  // 2026-08-17 前旧版固定价（含覆盖）
+  };
+  pricingSince?: string;    // 峰谷定价生效节点 ISO（periodTables 的选档边界）
   model: string;            // 默认模型名（settings.yaml agent-default-model）
   peak: boolean;            // 推送时刻是否高峰时段（与 prices/priceTable 同刻求值）
   at: string;               // 推送时刻 ISO 时间戳
@@ -122,8 +129,10 @@ interface UsageWindow {
 interface Prices { cacheMiss: number; cacheHit: number; output: number } // ¥/百万 token
 ```
 
-兼容性约定：新增字段（`warning` / `priceTable` / `at`）为可选项，旧客户端忽略未知
-字段即可正常显示；`prices` / `model` / `peak` / `balances` 等既有字段语义不变。
+兼容性约定：新增字段（`warning` / `priceTable` / `at` / `periodTables` / `pricingSince`）
+为可选项，旧客户端忽略未知字段即可正常显示；`prices` / `model` / `peak` / `balances`
+等既有字段语义不变。`periodTables` 与 `pricingSince` 配套出现：客户端观察到用量
+增量时按自身时钟选档入账（见 §3.1），推送滞后不再影响计价正确性。
 
 ---
 
@@ -170,6 +179,32 @@ DISJOINT 计数）：
 2. usage 携带的模型不在价目表 → 回退默认模型，title 标注「…会话模型 X 不在价目表内」；
 3. usage 无模型字段（会话投影未透传）→ 回退默认模型，title 标注
    「…会话实际模型未知」——绝不假装精确。
+
+### 3.1 按消耗时段计价（issue #168）
+
+官方峰谷计费口径：**每个 token 按它被消耗那一刻的时段单价结算，已结算的量
+不随后续峰谷切换重算**。`tokenUsage` 投影只给出累计四桶、不带时间戳，因此
+本轮费用在展示层做**增量计价账本**（`assets/plugins/dsh-balance/lib/client.js`
+的 `observeCost`）：
+
+- 每次观察到累计用量前进，只对**增量**按「观察时刻」的时段价入账；
+- 基线（首次观察到的存量）按当时时段价一次性入账；
+- 时段价从推送的 `periodTables`（peak/off/legacy 三张表）按客户端自身时钟
+  选档（`isPeakAt`，镜像 `balance.js` `isPeakHour`，含周末规则）——推送滞后
+  （一个轮询周期）不影响计价正确性；
+- 账本按会话 id 键控、localStorage 持久化（页面重载延续，容量 32 会话
+  LRU；存储脏数据/配额满静默降级为纯内存账本）；
+- 同一 usage 重复观察增量为零（幂等）：渲染期调用安全，React 严格模式
+  双渲染/丢弃渲染不会重复入账；累计回退（`(turn,step)` 样本替换）按有符号
+  增量冲回，总费用下限 0。
+
+已知近似（token 无时间戳的架构边界，fail-soft 取舍）：基线与页面关闭期间
+消耗的量按「观察/重开时刻」的时段价估算；自插件在场起的新增量全部按真实
+消耗时段计价。峰谷切换只影响之后的新增量——显示不再随推送整段跳变。
+
+用户 `balancePrices.<model>` 覆盖由编排层同时并入三张表（覆盖语义 =
+「该模型就用这套价」，与时段无关），`prices` 恒等于 `priceTable[默认模型]`
+的不变量保持不变。
 
 ---
 
@@ -229,13 +264,14 @@ DISJOINT 计数）：
 - OpenCode Go 端点：`OPENCODE_USAGE_URL`（代理/镜像场景）>
   `https://opencode.ai/zen/go/v1/usage`。
 - 定价：2026-08-17 起峰谷定价（北京 9:00-12:00 / 14:00-18:00 全价，其余半价），
-  此前旧版固定价；`isPeakHour` 在峰谷生效节点之前恒为 false，保证 chip 与
-  计价档一致。
-- **切换瞬间价格跳变**：按小时切价是官方计费规则本身（整点切换、
-  无比例过渡），费用估算无法对跨整点的 token 做比例拆分（token 无时间戳）。
-  架构决策：保持整点切换，与官方计费口径一致；通过「单一 now」保证界面显示的
-  价格与计价档永远自洽。若产品后续要求平滑显示，可在展示层对 chip 做过渡动画，
-  不影响计价正确性。
+  此前旧版固定价；**2026-08-23 起周末（周六/周日）全天按空闲价计费**
+  （官方公告，不溯及既往——生效节点前的周末仍按小时窗口判定）。
+  `isPeakHour` 在峰谷生效节点之前恒为 false，保证 chip 与计价档一致。
+- **按消耗时段计价**：本轮费用对每个用量增量按其**消耗时刻**的时段价入账
+  （见 §3.1），官方按请求发生时刻结算的口径一致。峰谷切换只影响之后的
+  新增量，已入账部分不随推送重算——「整点切换价格跳变」被限制在边界时刻
+  之后的新 token 上（官方计费规则本身，无比例过渡）；推送滞后一个轮询
+  周期不再传染计价（客户端本地选档）。
 
 ## 8. 安全与隔离（测试约定）
 
@@ -256,6 +292,8 @@ DISJOINT 计数）：
 | 🟠 高 | refreshBalance 无并发去重，last-writer-wins | balance-scheduler.js in-flight 去重 + latest-sequence 守卫 |
 | 🟠 高 | 持久失败 30s 无限重试 | balance-scheduler.js 指数退避（30s→1m→2m→5m 封顶，成功清零） |
 | 🟠 高 | 默认模型价估实际会话费用（3x 偏差） | main.js 推送 `priceTable`；openai-compat.js usage 携带 model；client.js 按模型选档 + 估算标注 |
+| 🟠 高 | 本轮费用随峰谷切换整段重算（累计 token × 推送时刻价，历史被重定价，issue #168） | balance-scheduler.js 推送 `periodTables`/`pricingSince`；client.js 增量计价账本 `observeCost`（§3.1） |
+| 🟠 高 | `isPeakHour` 缺周末规则（2026-08-23 起周末全天空闲，官方公告；周末误报高峰价/全价计费，issue #168） | balance.js `isPeakHour` 周末判定（`WEEKEND_OFFPEAK_SINCE_UTC`）；client.js `isPeakAt` 同口径 |
 | 🟡 中 | peak 与 prices 双 `new Date()` + 切换点 | balance-scheduler.js 单一 now；balance.js `isPeakHour` 旧版期返回 false |
 | 🟡 中 | pickUsageWindow 把 percent:null 转 0 | balance.js `pickUsageWindow` `== null` 分支 |
 | 🟡 中 | 超时为空闲超时 + 1MB 按字符计 | balance.js fetchJson 总 deadline + 按字节累计 |
@@ -276,7 +314,9 @@ DISJOINT 计数）：
 ## 10. 维护约定
 
 - 价目表变更：只改 `balance.js` 的 `PEAK_PRICES` / `LEGACY_PRICES` /
-  `PEAK_PRICING_SINCE_UTC`，客户端零改动（`priceTable` 自动同步）。
+  `PEAK_PRICING_SINCE_UTC` / `WEEKEND_OFFPEAK_SINCE_UTC`，客户端零改动
+  （`priceTable` 与 `periodTables` 自动同步；客户端镜像的时段判定
+  `isPeakAt`/`WEEKEND_OFFPEAK_SINCE` 需同步常量——两处必须同口径）。
 - 新增模型别名：加入 `PRICING_MODELS`。
 - 新增网络边界参数：一律走 `fetchJson` options（timeoutMs / maxRedirects /
   maxBodyBytes），默认值集中在 `balance.js` 顶部常量。
