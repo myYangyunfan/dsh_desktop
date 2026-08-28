@@ -198,23 +198,9 @@ function patchBundleArrivalRetry(nmRoot, log = () => {}, stats, options = {}) {
       stats,
     });
   }
-  const indexFile = path.join(nmRoot, '@deepseek-ai', CLIENT_MODULES_INDEX_REL);
-  if (fs.existsSync(indexFile)) {
-    changed += applyPatchToFiles({
-      prefix: 'serveBundle 读重试补丁',
-      files: [indexFile],
-      log,
-      transform: transformServeReadRetry,
-      alreadyLog: (f) => '已应用，跳过 ' + f,
-      doneLog: (f) => '已应用 serveBundle 瞬态读盘重试 ' + f,
-      anchorLog,
-      failLog: (f, err) => 'serveBundle 读重试失败(' + f + '): ' + err.message,
-      donePrefix,
-      dryRun,
-      dryRunChangedLog: (f) => 'dry-run: 将应用 serveBundle 瞬态读盘重试 ' + f,
-      stats,
-    });
-  }
+  // 0.1.2-alpha.1 退役内核半边（serveBundle transient-read retry）：新 serveBundle
+  // 从预烘焙的 in-memory responses 表直接回包，不再逐请求 readFile——瞬态读盘
+  // 失败→404 的窗口已由上游消除，故 serveBundle 半边锚点自然退役，不再应用。
   return changed;
 }
 

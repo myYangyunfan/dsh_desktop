@@ -10,31 +10,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const {
-  transformVisionKeyFix,
-  transformVisionToggleGate,
   transformProfilePatchGuard,
   transformSettingsSectionGuard,
   transformWorkspaceSearchRailFix,
   transformPluginInventoryTabMergeFix,
-  transformImageSendFix,
   transformFlashFix,
 } = require('../lib/patch-adapters');
-
-const VISION_MARKER = 'dsh-desktop fix: read the resolved HOST-side value';
-const VISION_FROM = '\tlet vision = null;\n\tif (settings !== void 0 && typeof settings.describe === "function") {\n\t\ttry {\n\t\t\tconst descriptor = settings.describe({ redactSecrets: true }).find((candidate) => String(candidate.ns) === "dsh-vision");\n\t\t\tif (descriptor !== void 0 && descriptor.value !== void 0 && typeof descriptor.value === "object") vision = descriptor.value;\n\t\t} catch {}\n\t}';
-
-test('transformVisionKeyFix：匹配 / 已应用 / 失配三态', () => {
-  const changed = transformVisionKeyFix(VISION_FROM, 't.js');
-  assert.equal(changed.status, 'changed');
-  assert.ok(changed.src.includes(VISION_MARKER));
-  assert.ok(changed.src.includes('settings.get("dsh-vision")'));
-  // 已应用：marker 存在 → already
-  assert.equal(transformVisionKeyFix('// ' + VISION_MARKER, 't.js').status, 'already');
-  // 失配：无 from 锚点 → anchor-missing，绝不改写
-  const miss = transformVisionKeyFix('export const x = 1;', 't.js');
-  assert.equal(miss.status, 'anchor-missing');
-  assert.ok(miss.detail.includes('版本可能已变化'));
-});
 
 const PATCH_GUARD_CALL = '\t\tpatches: options.userLayer !== false && existsSync(patchPath) ? loadOverlayPatches(binName, patchPath) : []';
 const PATCH_GUARD_AFTER = '\treturn parsePatchList(binName, file, content, "overlay");\n}';
@@ -91,118 +72,6 @@ test('transformPluginInventoryTabMergeFix：匹配 / 已应用 / 失配三态', 
   assert.ok(changed.src.includes('.filter((entry) => (entry.options.id ?? "") !== "all")'));
   assert.equal(transformPluginInventoryTabMergeFix('// ' + TAB_MARKER, 't.js').status, 'already');
   assert.equal(transformPluginInventoryTabMergeFix('export const x = 1;', 't.js').status, 'anchor-missing');
-});
-
-test('transformImageSendFix：已应用 / 失配（helper 锚点缺失）', () => {
-  assert.equal(transformImageSendFix('DSH Desktop: reuse the dsh-vision VLM config', 't.js').status, 'already');
-  const miss = transformImageSendFix('export const x = 1;', 't.js');
-  assert.equal(miss.status, 'anchor-missing');
-  assert.ok(miss.detail.includes('helper 插入锚点'));
-});
-
-test('transformImageSendFix：完整匹配注入 helper / admittedContent / 门槛替换', () => {
-  const src = [
-    '/** Validate one prompt as a batch before publishing any durable image object. */',
-    'const hasImage = content.some((part) => part.type === "image");',
-    'if (modelInfo.inputModalities !== void 0 && !modelInfo.inputModalities.includes("image")) return err(request, {',
-    '\t\t\t\tcode: "no-image"',
-    '\t\t\t});',
-    'durablePromptContent(ctx, content);',
-  ].join('\n');
-  const changed = transformImageSendFix(src, 't.js');
-  assert.equal(changed.status, 'changed');
-  assert.ok(changed.src.includes('async function describeImagesWithVision'));
-  assert.ok(changed.src.includes('let admittedContent = content;'));
-  assert.ok(changed.src.includes('admittedContent = await describeImagesWithVision(ctx, content)'));
-  assert.ok(changed.src.includes('durablePromptContent(ctx, admittedContent)'));
-  // 已应用后幂等
-  assert.equal(transformImageSendFix(changed.src, 't.js').status, 'already');
-});
-
-// ---------------------------------------------------------------------------
-// 识图总开关（enabled）门槛增量补丁：image-send-fix 旧树补挂「关闭 → 原样拒绝」。
-// ---------------------------------------------------------------------------
-const VISION_TOGGLE_MARKER_TEST = 'DSH Desktop: dsh-vision master switch (enabled)';
-// 旧树 fixture：image-send-fix 已应用（含 key-fix 后的 settings 读取形态），
-// 但 helper 无 enabled 检查、gate catch 无 disabled 分支（升级前产物）。
-const VISION_TOGGLE_OLD_TREE = [
-  'async function describeImagesWithVision(ctx, content) {',
-  '\tconst settings = ctx.get("settings");',
-  '\tlet vision = null;',
-  '\tif (settings !== void 0 && typeof settings.get === "function") {',
-  '\t\tconst resolved = settings.get("dsh-vision");',
-  '\t\tif (resolved !== void 0 && typeof resolved === "object") vision = resolved;',
-  '\t}',
-  '\tif (vision === null || typeof vision.baseURL !== "string" || vision.baseURL.trim() === "" || typeof vision.model !== "string" || vision.model.trim() === "") {',
-  '\t\tthrow new Error("未配置识图服务");',
-  '\t}',
-  '\treturn out;',
-  '}',
-  'if (modelInfo.inputModalities !== void 0 && !modelInfo.inputModalities.includes("image")) {',
-  '\t\t\t\t\t\t\t\ttry {',
-  '\t\t\t\t\t\t\t\t\tadmittedContent = await describeImagesWithVision(ctx, content);',
-  '\t\t\t\t\t\t\t\t} catch (error) {',
-  '\t\t\t\t\t\t\t\t\treturn err(request, {',
-  '\t\t\t\t\t\t\t\t\t\tcode: "attachment-error",',
-  '\t\t\t\t\t\t\t\t\t});',
-  '\t\t\t\t\t\t\t\t}',
-  '\t\t\t\t\t\t\t}',
-].join('\n');
-
-test('transformVisionToggleGate：旧树匹配 → helper 检查 + gate 分支注入，幂等', () => {
-  const changed = transformVisionToggleGate(VISION_TOGGLE_OLD_TREE, 't.js');
-  assert.equal(changed.status, 'changed');
-  // helper：enabled=false 检查插在配置检查之前，带 marker 注释
-  assert.ok(changed.src.includes(VISION_TOGGLE_MARKER_TEST));
-  assert.ok(changed.src.indexOf('vision.enabled === false') < changed.src.indexOf('typeof vision.baseURL !== "string"'));
-  assert.ok(changed.src.includes('visionDisabled.dshVisionDisabled = true'));
-  // gate：catch 先识别 disabled 标记并按上游原样拒绝，再落通用转述失败分支
-  assert.ok(changed.src.includes('error.dshVisionDisabled === true'));
-  assert.ok(changed.src.includes('MODEL_DOES_NOT_SUPPORT_IMAGES'));
-  assert.ok(changed.src.indexOf('error.dshVisionDisabled === true') < changed.src.indexOf('code: "attachment-error"'));
-  // 幂等 + 已应用
-  assert.equal(transformVisionToggleGate(changed.src, 't.js').status, 'already');
-});
-
-test('transformVisionToggleGate：新版 image-send 常量产物（新树）→ already', () => {
-  const fresh = transformImageSendFix([
-    '/** Validate one prompt as a batch before publishing any durable image object. */',
-    'const hasImage = content.some((part) => part.type === "image");',
-    'if (modelInfo.inputModalities !== void 0 && !modelInfo.inputModalities.includes("image")) return err(request, {',
-    '\t\t\t\tcode: "no-image"',
-    '\t\t\t});',
-    'durablePromptContent(ctx, content);',
-  ].join('\n'), 't.js');
-  assert.equal(fresh.status, 'changed');
-  // 新常量自带开关内容 → 增量补丁短路 already，绝不重复插入
-  assert.equal(transformVisionToggleGate(fresh.src, 't.js').status, 'already');
-});
-
-test('transformVisionToggleGate：增量产物与新版常量产物字节一致（防两形态漂移）', () => {
-  const pristine = [
-    '/** Validate one prompt as a batch before publishing any durable image object. */',
-    'const hasImage = content.some((part) => part.type === "image");',
-    'if (modelInfo.inputModalities !== void 0 && !modelInfo.inputModalities.includes("image")) return err(request, {',
-    '\t\t\t\tcode: "no-image"',
-    '\t\t\t});',
-    'durablePromptContent(ctx, content);',
-  ].join('\n');
-  const fresh = transformImageSendFix(pristine, 't.js').src;
-  // 从新产物反向剥离两处插入 → 旧树；增量补丁应还原出与 fresh 完全一致的字节。
-  // 剥离文本与插入文本刻意重复书写：常量一旦改动，此测试即失配报警。
-  const stripCheck = /\t\/\/ DSH Desktop: dsh-vision master switch \(enabled\)[^\n]*\n(?:\t\/\/[^\n]*\n)*\tif \(vision !== null && vision\.enabled === false\) \{\n\t\tconst visionDisabled = new Error\("dsh-vision disabled"\);\n\t\tvisionDisabled\.dshVisionDisabled = true;\n\t\tthrow visionDisabled;\n\t\}\n/;
-  const stripBranch = /\t{9}if \(error && error\.dshVisionDisabled === true\) \{\n\t{10}return err\(request, \{\n\t{11}code: 'attachment-error',\n\t{11}message: `Model "\$\{current\.model\}" does not support image input\.\`,\n\t{11}details: \{ reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' \}\n\t{10}\}\);\n\t{9}\}\n/;
-  const oldTree = fresh.replace(stripCheck, '').replace(stripBranch, '');
-  assert.notEqual(oldTree, fresh, '反向剥离应实际生效');
-  const out = transformVisionToggleGate(oldTree, 't.js');
-  assert.equal(out.status, 'changed');
-  assert.equal(out.src, fresh, '增量产物须与新版常量产物字节一致');
-});
-
-test('transformVisionToggleGate：失配（helper/gate 缺失）→ anchor-missing 不改写', () => {
-  const miss = transformVisionToggleGate('export const x = 1;', 't.js');
-  assert.equal(miss.status, 'anchor-missing');
-  assert.ok(miss.detail.includes('识图'));
 });
 
 test('runtime transform re-export 可用', () => {

@@ -33,16 +33,21 @@ const { applyAll } = require('../integration/patch-runner');
 
 const MARKER = 'dsh-desktop fix: agent-preset-fallback';
 // payload 内核包 pristine 副本（dsh-agent-presets 双文件）。
+// 0.1.2-alpha.1：agent-preset-fallback 锚点内层缩进从 2-tab 改为 3-tab（async
+// resolve 内层 +1），.tmp-rc2-stage（旧内核）的 dsh-agent-presets 仍是 2-tab，
+// pristine 源回退到 .tmp-kernel 的 0.1.2-alpha.1 消费者安装产物（平铺
+// node_modules，无嵌套 node_modules/符号链接，可整目录 cpSync 做 applyAll 集成）。
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const PAYLOAD_PRESETS_DIR = path.join(
-  REPO_ROOT, '.tmp-rc2-stage',
-  'node_modules', '@deepseek-ai', 'dsh-agent-presets'
+  REPO_ROOT, '.tmp-kernel', '.consumer-0.1.2-alpha.1', 'node_modules',
+  '@deepseek-ai', 'dsh-agent-presets',
 );
 const PRISTINE_FILES = ['lib/index.js', 'lib/invariant.js']
   .map((rel) => path.join(PAYLOAD_PRESETS_DIR, rel))
   .filter((f) => fs.existsSync(f));
 
 // 与上游 resolve() 抛错点逐字一致的锚点源（payload 缺失时的独立 fixture）。
+// 0.1.2-alpha.1：resolve() 内层缩进 3-tab（async resolve 内的 list 前置声明层）。
 const PRISTINE_RESOLVE = [
   'var UnknownPresetError = class extends Error {',
   '\tconstructor(presetId, available) {',
@@ -53,9 +58,9 @@ const PRISTINE_RESOLVE = [
   '\tasync resolve(id) {',
   '\t\tconst wanted = id ?? this.defaultId;',
   '\t\tconst presets = await this.list();',
-  '\t\tconst found = presets.find((preset) => preset.id === wanted);',
-  '\t\tif (found === void 0) throw new UnknownPresetError(wanted, presets.map((preset) => preset.id));',
-  '\t\treturn found;',
+  '\t\t\tconst found = presets.find((preset) => preset.id === wanted);',
+  '\t\t\tif (found === void 0) throw new UnknownPresetError(wanted, presets.map((preset) => preset.id));',
+  '\t\t\treturn found;',
   '\t}',
   '};',
   'export { C, UnknownPresetError };',
@@ -225,10 +230,10 @@ test('PresetMountError 不回落：补丁只动 Unknown 分支，resolveMountabl
     const src = fs.readFileSync(PRISTINE_FILES[0], 'utf8');
     const out = transformAgentPresetFallback(src, PRISTINE_FILES[0]);
     const extract = (s) => {
-      const start = s.indexOf('\tasync resolveMountable(id) {');
+      const start = s.indexOf('\t\tasync resolveMountable(id) {');
       assert.ok(start !== -1, 'pristine 源应含 resolveMountable');
-      const end = s.indexOf('\n\t}', start);
-      return s.slice(start, end + '\n\t}'.length);
+      const end = s.indexOf('\n\t\t}', start);
+      return s.slice(start, end + '\n\t\t}'.length);
     };
     assert.equal(extract(out.src), extract(src), 'resolveMountable 方法体必须逐字不变（broken 预设仍硬抛）');
   }

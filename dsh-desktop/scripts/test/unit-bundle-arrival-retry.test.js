@@ -229,7 +229,9 @@ test('真实文件: dev 树 dsh-client-modules 双文件已打补丁（或不可
     return;
   }
   assert.equal(transformLoaderRetry(src, client).status, 'already');
-  assert.equal(transformServeReadRetry(fs.readFileSync(index, 'utf8'), index).status, 'already');
-  // root 应用器对已应用树幂等（0 写入）。
+  // 0.1.2-alpha.1：serveBundle 半边已退役（新 serveBundle 从 in-memory 预烘焙
+  // responses 回包，不再逐请求 readFile），index.js 不再承载瞬态读盘重试锚点。
+  assert.equal(transformServeReadRetry(fs.readFileSync(index, 'utf8'), index).status, 'anchor-missing');
+  // root 应用器对已应用树幂等（0 写入；serveBundle 半边不再尝试）。
   assert.equal(patchBundleArrivalRetry(NM, () => {}), 0);
 });

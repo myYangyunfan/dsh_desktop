@@ -35,7 +35,19 @@ const {
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 const appBootFile = path.join(repoRoot, 'node_modules', '@deepseek-ai', 'dsh-app-boot', 'lib', 'index.js');
-const profileBootFile = path.join(repoRoot, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'profile-boot-DG5t9aNs.js');
+// 0.1.2-alpha.1：内核 profile-boot 产物文件名变化（BTzzdrGY 真实装配面 +
+// x7_BzdeW 纯 re-export 存根），且真实面可能已被 boot 链打过补丁——glob 出
+// 含装配面（loadOptionalPatches/loadUserPatchLayerSafe）的真实 bundle。
+function findProfileBootFile() {
+  const lib = path.join(repoRoot, 'node_modules', '@deepseek-ai', 'dsh', 'lib');
+  const files = fs.readdirSync(lib).filter((f) => /^profile-boot-.*\.js$/.test(f));
+  for (const f of files) {
+    const src = fs.readFileSync(path.join(lib, f), 'utf8');
+    if (src.includes('loadOptionalPatches') || src.includes('loadUserPatchLayerSafe')) return path.join(lib, f);
+  }
+  return files.length ? path.join(lib, files[0]) : null;
+}
+const profileBootFile = findProfileBootFile();
 
 function syntaxCheck(name, src) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pbg-unit-'));
@@ -191,11 +203,13 @@ test('recoverManifestBundles: 追加缺失登记并补回 dependencies，保留�
 });
 
 // 变换锚点合成源（必须与 profile-bundle-heal.js 内的锚点字节一致）。
+// 0.1.2-alpha.1：`normalizeShippedProfile(...)` 结果先落入 `manifest` 常量，
+// `bundles` 单独声明后再 `.map(...)`（patchReload 校验插入其间），锚点按新形态改写。
 const SYNTHETIC_APP_LAYERS = [
-  '\tconst layers = (normalizeShippedProfile(name, dir, readProfileManifest(binName, dir)).dsh?.profile?.bundles ?? []).map((packageName) => {',
+  '\tconst layers = bundles.map((packageName) => {',
   '\t\tconst packageDir = resolveBundleDir(binName, packageName, installAnchor, dir);',
   '\t\tconst declared = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf8")).dsh?.bundle?.patch;',
-  '\t\tif (declared === void 0) throw new Error(`' + '${binName}: profile bundle ${JSON.stringify(packageName)} declares no dsh.bundle in its package.json`' + ');',
+  '\t\tif (declared === void 0) throw new Error(`${binName}: profile bundle ${JSON.stringify(packageName)} declares no dsh.bundle in its package.json`);',
   '\t\tconst patchPath = join(packageDir, declared);',
   '\t\treturn {',
   '\t\t\tpackageName,',

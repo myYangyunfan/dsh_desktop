@@ -1,11 +1,12 @@
 'use strict';
 
 // ---------------------------------------------------------------------------
-// TA6 元测试 2：transform 契约三态语义统一（34 个 file transform 逐个实跑）。
+// TA6 元测试 2：transform 契约三态语义统一（29 个 file transform 逐个实跑）。
 //
 // 对每个 transform 用三种输入各跑一遍：
-//   1) pristine 源（.tmp-rc2-stage 未经补丁的内核包文本；有依赖的先应用依赖
-//      transform）→ status ∈ {changed, already, anchor-missing}；
+//   1) pristine 源（.tmp-rc2-stage 未经补丁的内核包文本；重定位补丁回退到
+//      .tmp-kernel 的 0.1.2-alpha.1 构建产物）→ status ∈ {changed, already,
+//      anchor-missing}；
 //        - changed：必须携带 string src 且与输入不同；
 //        - already：不得携带 src；
 //        - anchor-missing（自然退役）：detail 非空且含文件名；此时用
@@ -30,25 +31,23 @@ const { PATCH_SPECS } = require('../lib/patch-registry');
 const PRISTINE_RC2 = path.join(__dirname, '..', '..', '..', '.tmp-rc2-stage', 'node_modules');
 const PATCHED_DESKTOP = path.join(__dirname, '..', '..', 'node_modules'); // postinstall 后的真实已应用树
 const POISON_LABEL = 'TA6-POISON-TARGET.js';
-
-/** 补丁间依赖链（先应用的 id 列表，对齐 registry order）。 */
-const PRE_CHAIN = {
-  'vision-toggle-gate': ['image-send-fix'],
-  'vision-key-fix': ['image-send-fix'],
-};
-
-const byId = Object.fromEntries(PATCH_SPECS.map((s) => [s.id, s]));
-
-/** 「上游重构退役」白名单：这些补丁的锚点在 rc.2 被上游以**不同形态**修复
- * （代码重构，非采纳我们的注入）——pristine 与任何新装树都恒 anchor-missing，
- * 我们的 marker 永远不可能出现。「真实已应用树应 already」的不变量只对
- * 「上游采纳了我们的形态」的退役补丁成立；对本清单成员，anchor-missing
- * 同样是正确终态（幂等语义 = 什么都不做，两种形态等价自洽）。
- * （v0.5.3 内核升 rc.2 时这两项开始在新装树上退役，CI 先于本地暴露。） */
-const REFACTORED_RETIRED = new Set([
-  'slot-legacy-key',      // rc.2 重构了 ui-slots register（rec.spec 形态消失）
-  'slot-error-isolation', // rc.2 移除了 if(key===void 0) throw 形态
-]);
+// 0.1.2-alpha.1：重定位补丁的目标包（dsh-api-session-controller / dsh-api-settings-
+// controller / dsh-client-ui-slots 等）不在 .tmp-rc2-stage（旧内核）中，三态契约需
+// 回退到 .tmp-kernel 的 pristine 构建产物（built lib）定位目标。
+const KERNEL_BUILD = path.join(__dirname, '..', '..', '..', '.tmp-kernel');
+let KERNEL_BY_NAME = null;
+function kernelTarget(pkgRel) {
+  if (KERNEL_BY_NAME === null) {
+    try {
+      const inv = JSON.parse(fs.readFileSync(path.join(KERNEL_BUILD, '.dsh-inventory.json'), 'utf8'));
+      KERNEL_BY_NAME = new Map(inv.map((p) => [p.name, p.dir]));
+    } catch { KERNEL_BY_NAME = new Map(); }
+  }
+  const parts = String(pkgRel).split(path.sep);
+  const rec = KERNEL_BY_NAME.get('@deepseek-ai/' + parts[0]);
+  if (!rec || typeof rec !== 'string') return null;
+  return path.join(KERNEL_BUILD, rec, ...parts.slice(1));
+}
 
 function targetFile(root, spec) {
   if (spec.layout === 'profile-boot-dirs') {
@@ -63,18 +62,20 @@ function targetFile(root, spec) {
     const p = path.join(root, '@deepseek-ai', rel);
     if (fs.existsSync(p)) return p;
   }
+  if (root === PRISTINE_RC2) {
+    for (const rel of rels) {
+      const p = kernelTarget(rel);
+      if (p && fs.existsSync(p)) return p;
+    }
+  }
   return null;
 }
 
-/** pristine 输入：先应用依赖链（vision 系依赖 image-send 注入的形态）。 */
+/** pristine 输入：重定位补丁回退到 alpha.1 内核构建产物。 */
 function pristineInput(spec) {
   const file = targetFile(PRISTINE_RC2, spec);
   assert.ok(file, `${spec.id} 在 pristine 树中找不到目标文件`);
-  let src = fs.readFileSync(file, 'utf8');
-  for (const depId of (PRE_CHAIN[spec.id] || [])) {
-    const r = byId[depId].transform(src, file);
-    if (r.status === 'changed') src = r.src;
-  }
+  const src = fs.readFileSync(file, 'utf8');
   return { file, src };
 }
 
@@ -117,14 +118,11 @@ for (const spec of fileSpecs) {
     if (r1.status === 'anchor-missing') {
       assert.ok(r1.detail && r1.detail.includes(path.basename(file)),
         `${spec.id} 退役态 detail 应含文件名，得 "${r1.detail}"`);
-      // 退役补丁在真实已应用树上必须表现为 already（幂等语义不因退役丢失）；
-      // 例外：上游重构退役（白名单）——真实树恒 anchor-missing，同为正确终态。
-      if (!REFACTORED_RETIRED.has(spec.id)) {
-        const patchedFile = targetFile(PATCHED_DESKTOP, spec);
-        if (patchedFile) {
-          const rp = spec.transform(fs.readFileSync(patchedFile, 'utf8'), patchedFile);
-          assert.equal(rp.status, 'already', `${spec.id} 在真实已应用树应 already，得 ${rp.status}`);
-        }
+      // 退役补丁在真实已应用树上必须表现为 already（幂等语义不因退役丢失）。
+      const patchedFile = targetFile(PATCHED_DESKTOP, spec);
+      if (patchedFile) {
+        const rp = spec.transform(fs.readFileSync(patchedFile, 'utf8'), patchedFile);
+        assert.equal(rp.status, 'already', `${spec.id} 在真实已应用树应 already，得 ${rp.status}`);
       }
     }
 
@@ -133,13 +131,7 @@ for (const spec of fileSpecs) {
       : r1.status === 'already' ? pristine
         : fs.readFileSync(targetFile(PATCHED_DESKTOP, spec), 'utf8');
     const r2 = spec.transform(applied, file);
-    if (REFACTORED_RETIRED.has(spec.id) && r1.status === 'anchor-missing') {
-      // 上游重构退役：真实树恒 anchor-missing（marker 永不出现）——确定性
-      // 终态同样满足幂等（同输入恒同输出，绝不二次改写）。
-      assert.equal(r2.status, 'anchor-missing', `${spec.id} 退休态幂等：应恒 anchor-missing，得 ${r2.status}`);
-    } else {
-      assert.equal(r2.status, 'already', `${spec.id} 已应用源应 already，得 ${r2.status}`);
-    }
+    assert.equal(r2.status, 'already', `${spec.id} 已应用源应 already，得 ${r2.status}`);
     assert.equal(r2.src, undefined);
 
     // 3) 毒化源：锚点挖掉 → anchor-missing + detail 含文件名，绝不改写。
@@ -164,15 +156,6 @@ for (const spec of fileSpecs) {
   });
 }
 
-test('vision 系依赖序：未应用 image-send 时 toggle/key 必须 anchor-missing（不误伤）', () => {
-  for (const id of ['vision-toggle-gate', 'vision-key-fix']) {
-    const spec = byId[id];
-    const file = targetFile(PRISTINE_RC2, spec);
-    const r = spec.transform(fs.readFileSync(file, 'utf8'), file);
-    assert.equal(r.status, 'anchor-missing', `${id} 在裸 pristine 上应因缺 image-send 形态而 anchor-missing`);
-  }
-});
-
-test('契约面完整性：39 个 file transform 全部被本文件覆盖', () => {
-  assert.equal(fileSpecs.length, 39);
+test('契约面完整性：29 个 file transform 全部被本文件覆盖', () => {
+  assert.equal(fileSpecs.length, 29);
 });

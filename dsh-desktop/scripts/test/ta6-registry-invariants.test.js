@@ -52,12 +52,10 @@ const INLINE_PKG_REL_SPEC_IDS = new Set([
   'plugin-inventory-tab-merge',
 ]);
 
-/** 已知补丁间依赖（目标 order 必须更小）。 */
-const PATCH_DEPENDS = {
-  'session-orphans': ['session-manage'],   // 195 > 190（锚点即 session-manage 注入体）
-  'vision-toggle-gate': ['image-send-fix'], // 95 > 80（依赖其注入的 helper/gate 形态）
-  'vision-key-fix': ['image-send-fix'],     // 100 > 80（锚点即 image-send 注入的 helper 文本）
-};
+/** 已知补丁间依赖（目标 order 必须更小）。
+ * 0.1.2-alpha.1：session-manage / session-orphans / vision 系（image-send、
+ * vision-toggle、vision-key）均已退役，补丁间依赖表随之清空。 */
+const PATCH_DEPENDS = {};
 
 const norm = (p) => String(p).split(path.sep).join('/');
 
@@ -146,8 +144,11 @@ test('D. pkgRel/pkgRels 被 patch-target-resolver 常量覆盖（白名单外新
 });
 
 test('E. order 全局唯一、组内升序、补丁间依赖序成立', () => {
-  // 56 = 55（上一基线）+ token-meter-clamp（messageTokens 下限夹取，order 233）。
-  assert.equal(PATCH_SPECS.length, 56, 'spec 总数应为 56');
+  // 44 = 56（上一基线）- 12 项退役（session-event-bound / load-all-history /
+  // load-all-history-ui / prompt-expose-fix / image-send-fix / vision-toggle-gate /
+  // vision-key-fix / code-mode-compat / skill-ui-zh / api-gateway-absent-guidance
+  // / session-manage / session-orphans）。
+  assert.equal(PATCH_SPECS.length, 44, 'spec 总数应为 44');
   const orders = PATCH_SPECS.map((s) => s.order);
   assert.equal(new Set(orders).size, orders.length, 'order 必须全局唯一');
   const byId = Object.fromEntries(PATCH_SPECS.map((s) => [s.id, s]));
@@ -161,16 +162,6 @@ test('E. order 全局唯一、组内升序、补丁间依赖序成立', () => {
       );
     }
   }
-  // 任务书点名的序关系：session-manage 190 < session-orphans 195。
-  assert.equal(byId['session-manage'].order, 190);
-  assert.equal(byId['session-orphans'].order, 195);
-  assert.ok(byId['session-orphans'].order > byId['session-manage'].order);
-  // 依赖组同组（package）同布局，requires 同源。
-  assert.equal(byId['session-orphans'].group, byId['session-manage'].group);
-  assert.deepEqual(byId['session-orphans'].requires, byId['session-manage'].requires);
-  // vision 系：image-send 80 < vision-toggle 95 < vision-key 100。
-  assert.ok(byId['image-send-fix'].order < byId['vision-toggle-gate'].order);
-  assert.ok(byId['vision-toggle-gate'].order < byId['vision-key-fix'].order);
 });
 
 test('E2. K1 三层相互独立（无补丁间依赖、目标文件互不重叠）', () => {
@@ -204,9 +195,9 @@ test('E3. device-auth 154 与 credentials-absent 153 相邻无干扰', () => {
   );
 });
 
-test('F. cli:true 恰为 21 项；failPolicy ∈ {warn,degrade}', () => {
+test('F. cli:true 恰为 18 项；failPolicy ∈ {warn,degrade}', () => {
   const cliSpecs = registry.getSpecsByCli();
-  assert.equal(cliSpecs.length, 21, 'cli:true 数量应与既有断言一致（21，含 token-meter-clamp）');
+  assert.equal(cliSpecs.length, 18, 'cli:true 数量应与既有断言一致（18，0.1.2-alpha.1 退役 3 项 cli 补丁）');
   for (const s of cliSpecs) assert.equal(s.cli, true);
   for (const spec of PATCH_SPECS) {
     assert.ok(

@@ -21,7 +21,6 @@ const path = require('node:path');
 
 const {
   CLIENT_MODULES_CLIENT_REL,
-  CLIENT_MODULES_INDEX_REL,
   patchBundleArrivalRetry,
 } = require('../lib/bundle-arrival-retry-patch');
 const {
@@ -61,20 +60,6 @@ const LOADER_PRISTINE = [
   '\t\t\t}, { once: true });',
   '\t\t\tdocument.head.append(el);',
   '\t\t});',
-].join('\n');
-
-const SERVE_PRISTINE = [
-  '\t\ttry {',
-  '\t\t\tconst body = await readFile(path);',
-  '\t\t\tres.writeHead(200, {',
-  '\t\t\t\t"content-type": isSourceMap ? "application/json; charset=utf-8" : "text/javascript; charset=utf-8",',
-  '\t\t\t\t"cache-control": "no-cache"',
-  '\t\t\t});',
-  '\t\t\tres.end(body);',
-  '\t\t} catch {',
-  '\t\t\tres.writeHead(404);',
-  '\t\t\tres.end();',
-  '\t\t}',
 ].join('\n');
 
 const SCHED_LOOP_PRISTINE = [
@@ -191,14 +176,16 @@ function assertAnchorMissingCount(applier, filesSpec, expectedMissing) {
 // 1) bundle-arrival-retry
 // ---------------------------------------------------------------------------
 
-test('bundle-arrival-retry: dry-run 零落盘 + 真实写 2 文件 + 幂等', () => {
+test('bundle-arrival-retry: dry-run 零落盘 + 真实写 1 文件 + 幂等', () => {
+  // 0.1.2-alpha.1 退役内核半边（serveBundle transient-read retry）：新 serveBundle
+  // 从预烘焙 in-memory responses 表直接回包，serveBundle 半边锚点自然退役，
+  // 仅浏览器半边（defaultLoadBundle）保留。
   assertDryRunAndWrite(
     patchBundleArrivalRetry,
     {
       [CLIENT_MODULES_CLIENT_REL]: LOADER_PRISTINE,
-      [CLIENT_MODULES_INDEX_REL]: SERVE_PRISTINE,
     },
-    2,
+    1,
   );
 });
 

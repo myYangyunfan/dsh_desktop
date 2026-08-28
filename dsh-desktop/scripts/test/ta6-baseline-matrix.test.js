@@ -98,83 +98,64 @@ function computeMatrix() {
 }
 
 // ===========================================================================
-// 基线快照（2026-08-22，rc.2 = .tmp-rc2-stage，rc.1 = .tmp-rc1-stage/rc1）。
+// 基线快照（2026-08-28，rc.2 = .tmp-rc2-stage，rc.1 = .tmp-rc1-stage/rc1；
+// 0.1.2-alpha.1 升级后：12 项退役 + 6 项重定位/重锚点，44 项基线）。
 // 内核升级后 diff 此矩阵即知锚点漂移面：修改本常量 = 显式接受新基线。
 // ===========================================================================
 const BASELINE = {
   'rc.2': {
-    'slot-legacy-key': 'anchor-missing',
+    'slot-legacy-key': 'target-absent',
     'slot-unkeyed-compat': 'changed',
-    'slot-error-isolation': 'anchor-missing',
-    'runtime-flash-fix': 'changed',
-    'session-event-bound': 'changed',
-    'load-all-history': 'changed',
-    'load-all-history-ui': 'changed',
-    'prompt-expose-fix': 'already',
+    'slot-error-isolation': 'target-absent',
+    'runtime-flash-fix': 'target-absent',
     'shell-description-compat': 'changed',
-    'code-mode-compat': 'changed',
-    'image-send-fix': 'changed',
     'attachment-mime-trust': 'changed',
-    'vision-toggle-gate': 'already',
-    'vision-key-fix': 'already',
     'persistent-shell-abort-race': 'changed',
-    'terminal-interrupt-escalation': 'changed',
+    'terminal-interrupt-escalation': 'anchor-missing',
     'profile-patch-guard': 'changed',
-    'profile-bundle-guard-appboot': 'changed',
+    'profile-bundle-guard-appboot': 'anchor-missing',
     'profile-bundle-guard-profileboot': 'already',
     'settings-section-guard': 'changed',
     'loader-tree-isolation': 'changed',
     'loader-activation-isolation': 'changed',
     'fail-loud-isolation': 'changed',
     'workspace-search-rail-fix': 'already',
-    'fallback-heal-isolation': 'changed',
+    'manual-sort-drag-fix': 'changed',
+    'fallback-heal-isolation': 'anchor-missing',
     'credentials-initial-retry': 'changed',
-    'credentials-absent-guidance': 'changed',
+    'credentials-absent-guidance': 'target-absent',
     'device-auth-guidance': 'changed',
+    'kernel-web-boot-watchdog': 'changed',
     'plugin-inventory-tab-merge': 'changed',
     'web-search-baseurl': 'root',
     'menu-viewport': 'root',
-    'session-manage': 'root',
-    'session-orphans': 'root',
     'open-project-dir': 'root',
     'session-persistence': 'root',
     'tool-source-compat': 'root',
     'pi-ai-opencode-go-models': 'root',
+    'pi-ai-credits': 'root',
+    'pi-ai-overflow-message': 'root',
+    'token-meter-clamp': 'root',
     'atomic-write-orphan-lock': 'root',
     'settings-models-resilience': 'root',
-    'agent-preset-fallback': 'changed',
+    'pi-ai-reasoning-defaults': 'root',
+    'bundle-arrival-retry': 'root',
+    'agent-loop-scheduler-guard': 'root',
+    'empty-tool-name-guidance': 'root',
+    'agent-preset-fallback': 'anchor-missing',
     'prompt-context-literal': 'changed',
-    'api-gateway-absent-guidance': 'changed',
-    'kernel-web-boot-watchdog': 'changed',
     'wsl-picker-browse': 'changed',
     'adapter-prepare-call-guard': 'changed',
     'session-header-scan-guard': 'changed',
     'session-load-graceful': 'changed',
-    'skill-ui-zh': 'changed',
-    'manual-sort-drag-fix': 'changed',
-    'pi-ai-credits': 'root',
-    'pi-ai-reasoning-defaults': 'root',
-    'pi-ai-overflow-message': 'root',
-    'token-meter-clamp': 'root',
-    'bundle-arrival-retry': 'root',
-    'agent-loop-scheduler-guard': 'root',
-    'empty-tool-name-guidance': 'root',
   },
   'rc.1': {
     'slot-legacy-key': 'target-absent',
     'slot-unkeyed-compat': 'target-absent',
     'slot-error-isolation': 'target-absent',
     'runtime-flash-fix': 'target-absent',
-    'session-event-bound': 'target-absent',
-    'load-all-history': 'target-absent',
-    'load-all-history-ui': 'target-absent',
-    'prompt-expose-fix': 'target-absent',
     'shell-description-compat': 'target-absent',
-    'code-mode-compat': 'changed',
-    'image-send-fix': 'target-absent',
     'attachment-mime-trust': 'target-absent',
-    'vision-toggle-gate': 'target-absent',
-    'vision-key-fix': 'target-absent',
     'persistent-shell-abort-race': 'target-absent',
     'terminal-interrupt-escalation': 'target-absent',
     'profile-patch-guard': 'target-absent',
@@ -185,42 +166,38 @@ const BASELINE = {
     'loader-activation-isolation': 'target-absent',
     'fail-loud-isolation': 'target-absent',
     'workspace-search-rail-fix': 'target-absent',
+    'manual-sort-drag-fix': 'target-absent',
     'fallback-heal-isolation': 'target-absent',
     'credentials-initial-retry': 'target-absent',
     'credentials-absent-guidance': 'target-absent',
     'device-auth-guidance': 'target-absent',
+    'kernel-web-boot-watchdog': 'target-absent',
     'plugin-inventory-tab-merge': 'target-absent',
     'web-search-baseurl': 'root',
     'menu-viewport': 'root',
-    'session-manage': 'root',
-    'session-orphans': 'root',
     'open-project-dir': 'root',
     'session-persistence': 'root',
     'tool-source-compat': 'root',
     'pi-ai-opencode-go-models': 'root',
+    'pi-ai-credits': 'root',
+    'pi-ai-overflow-message': 'root',
+    'token-meter-clamp': 'root',
     'atomic-write-orphan-lock': 'root',
     'settings-models-resilience': 'root',
+    'pi-ai-reasoning-defaults': 'root',
+    'bundle-arrival-retry': 'root',
+    'agent-loop-scheduler-guard': 'root',
+    'empty-tool-name-guidance': 'root',
     'agent-preset-fallback': 'target-absent',
     'prompt-context-literal': 'target-absent',
-    'api-gateway-absent-guidance': 'target-absent',
-    'kernel-web-boot-watchdog': 'target-absent',
     'wsl-picker-browse': 'target-absent',
     'adapter-prepare-call-guard': 'target-absent',
     'session-header-scan-guard': 'target-absent',
     'session-load-graceful': 'target-absent',
-    'skill-ui-zh': 'target-absent',
-    'manual-sort-drag-fix': 'target-absent',
-    'pi-ai-credits': 'root',
-    'pi-ai-reasoning-defaults': 'root',
-    'pi-ai-overflow-message': 'root',
-    'token-meter-clamp': 'root',
-    'bundle-arrival-retry': 'root',
-    'agent-loop-scheduler-guard': 'root',
-    'empty-tool-name-guidance': 'root',
   },
 };
 
-test('48 补丁 × rc.2 / rc.1 双形态判定矩阵与基线快照一致（锚点漂移哨兵）', { skip: !formRoot('rc.2') ? 'pristine rc.2 stage 树不可用（.tmp-rc2-stage 缺失）' : false }, () => {
+test('44 补丁 × rc.2 / rc.1 双形态判定矩阵与基线快照一致（锚点漂移哨兵）', { skip: !formRoot('rc.2') ? 'pristine rc.2 stage 树不可用（.tmp-rc2-stage 缺失）' : false }, () => {
   const matrix = computeMatrix();
   // 打印当前矩阵（基线对照 / 升级 diff 材料）。
   console.log('[TA6 基线矩阵]');
@@ -243,11 +220,11 @@ test('48 补丁 × rc.2 / rc.1 双形态判定矩阵与基线快照一致（锚�
     `判定矩阵漂移（内核形态变化或锚点漂移；确认后更新 BASELINE 快照以显式接受新基线）：\n  ${drift.join('\n  ')}`);
 });
 
-test('基线快照自身完整性：两形态 × 56 id 全覆盖', () => {
+test('基线快照自身完整性：两形态 × 44 id 全覆盖', () => {
   const ids = new Set(PATCH_SPECS.map((s) => s.id));
-  assert.equal(ids.size, 56);
+  assert.equal(ids.size, 44);
   for (const form of Object.keys(BASELINE)) {
-    assert.equal(Object.keys(BASELINE[form]).length, 56, `${form} 基线应覆盖 56 项`);
+    assert.equal(Object.keys(BASELINE[form]).length, 44, `${form} 基线应覆盖 44 项`);
     for (const id of Object.keys(BASELINE[form])) assert.ok(ids.has(id), `${form} 基线含未知 id ${id}`);
   }
 });

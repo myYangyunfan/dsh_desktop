@@ -50,24 +50,19 @@ const path = require('node:path');
 
 const {
   FLASH_PKG_REL,
-  CONVERSATION_PKG_REL,
-  SKILL_UI_PKG_REL,
+  API_SETTINGS_CONTROLLER_PKG_REL,
   WORKSPACE_PKG_REL,
-  EXPOSE_PKG_REL,
   SLOT_KEY_COMPAT_PKG_REL,
   SLOT_UNKEYED_COMPAT_PKG_REL,
-  SLOT_COMPAT_PKG_RELS,
   PW_REL,
   BASH_REL,
   PERSISTENT_SHELL_PKG_RELS,
   TERMINAL_BASH_REL,
-  CODE_PRESET_REL,
   ATTACH_LOCAL_REL,
   LOADER_PKG_REL,
   APP_BOOT_PKG_REL,
   AGENT_PRESET_FALLBACK_PKG_RELS,
   PROMPT_CONTEXT_LITERAL_PKG_RELS,
-  API_GATEWAY_ABSENT_PKG_REL,
   KERNEL_WEB_INDEX_REL,
   PICKER_AUTO_PKG_REL,
   LLM_PKG_REL,
@@ -76,16 +71,11 @@ const {
 
 const {
   transformFlashFix,
-  transformExposeFix,
   transformLegacySlotKey,
   transformSlotUnkeyedCompat,
   transformSlotErrorIsolation,
   transformShellDescriptionOptional,
-  transformCodeModeCompat,
   transformAttachmentMimeTrust,
-  transformImageSendFix,
-  transformVisionKeyFix,
-  transformVisionToggleGate,
   transformProfilePatchGuard,
   transformProfileBundleAppBoot,
   transformProfileBundleProfileBoot,
@@ -103,20 +93,14 @@ const {
   transformCredentialsAbsentGuidance,
   // 设备未授权（DeepSeek 服务端风控 403）报文追加可操作指引。
   transformDeviceAuthGuidance,
-  // E1（apiProxy 缺席 → /api 全裸 404）缺席分支改错误信封 + 修复指引。
-  transformApiGatewayAbsent,
   // #154 第三根因：内核 web UI boot 看门狗（client module system 不可达不无限转圈）。
   transformKernelBootWatchdog,
   // W1 问题四：WSL 内目录选择器强制 browse（zenity 窗口在 WSLg 里不可见）。
   transformDirectoryPickerWslBrowse,
   // R7：adapter 缺 prepareCall 时回落基类语义 + 升级指引（v0.5.3 对话失败）。
   transformAdapterPrepareCallGuard,
-  transformSessionEventBound,
   transformSessionHeaderScanGuard,
   transformSessionLoadGraceful,
-  transformLoadAllHistory,
-  transformLoadAllHistoryUi,
-  transformSkillUiZh,
   rootAppliers,
 } = require('./patch-adapters');
 
@@ -124,9 +108,6 @@ const {
   SLOT_KEY_COMPAT_MARKER,
   SLOT_UNKEYED_COMPAT_MARKER,
   SLOT_ERROR_ISOLATE_MARKER_V2,
-  IMAGE_SEND_MARKER,
-  VISION_KEY_MARKER,
-  VISION_TOGGLE_MARKER,
   PROFILE_PATCH_GUARD_MARKER,
   PROFILE_BUNDLE_GUARD_MARKER,
   PROFILE_BOOT_GUARD_MARKER,
@@ -142,16 +123,11 @@ const {
   CREDENTIALS_INITIAL_RETRY_MARKER,
   CREDENTIALS_ABSENT_GUIDANCE_MARKER,
   DEVICE_AUTH_GUIDANCE_MARKER,
-  API_GATEWAY_ABSENT_MARKER,
   KERNEL_BOOT_WATCHDOG_MARKER,
   WSL_PICKER_BROWSE_MARKER,
   ADAPTER_PREPARE_CALL_GUARD_MARKER,
-  SESSION_EVENT_BOUND_MARKER,
   SESSION_HEADER_SCAN_MARKER,
   SESSION_LOAD_GRACEFUL_MARKER,
-  LOAD_ALL_HISTORY_MARKER,
-  LOAD_ALL_HISTORY_UI_MARKER,
-  SKILL_UI_ZH_MARKER,
   LOADER_TREE_ISOLATION_MARKER,
   LOADER_ACTIVATION_ISOLATION_MARKER,
   FAIL_LOUD_ISOLATION_MARKER,
@@ -178,7 +154,7 @@ const PATCH_SPECS = [
     kind: 'file',
     layout: 'slot-compat',
     wslLayout: 'slot-compat-wsl',
-    pkgRels: SLOT_COMPAT_PKG_RELS,
+    pkgRels: [SLOT_KEY_COMPAT_PKG_REL],
     transform: transformLegacySlotKey,
     marker: SLOT_KEY_COMPAT_MARKER,
     requires: [],
@@ -198,7 +174,7 @@ const PATCH_SPECS = [
     kind: 'file',
     layout: 'slot-compat',
     wslLayout: 'slot-compat-wsl',
-    pkgRels: SLOT_COMPAT_PKG_RELS,
+    pkgRels: [SLOT_UNKEYED_COMPAT_PKG_REL],
     transform: transformSlotUnkeyedCompat,
     marker: SLOT_UNKEYED_COMPAT_MARKER,
     requires: [],
@@ -218,7 +194,7 @@ const PATCH_SPECS = [
     kind: 'file',
     layout: 'slot-compat',
     wslLayout: 'slot-compat-wsl',
-    pkgRels: SLOT_COMPAT_PKG_RELS,
+    pkgRels: [SLOT_KEY_COMPAT_PKG_REL],
     transform: transformSlotErrorIsolation,
     marker: SLOT_ERROR_ISOLATE_MARKER_V2,
     requires: [],
@@ -257,107 +233,6 @@ const PATCH_SPECS = [
   },
 
   // -------------------------------------------------------------------------
-  // Session.events 有界保留（K4：v0.5.4 多子代理渲染进程 OOM 根治）。
-  // -------------------------------------------------------------------------
-  {
-    id: 'session-event-bound',
-    group: 'runtime',
-    order: 45,
-    kind: 'file',
-    layout: 'runtime-local',
-    wslLayout: 'wsl',
-    pkgRel: FLASH_PKG_REL,
-    transform: transformSessionEventBound,
-    marker: SESSION_EVENT_BOUND_MARKER,
-    requires: [],
-    failPolicy: 'warn',
-    cli: true,
-    logs: {
-      prefix: 'Session events 有界保留补丁',
-      alreadyLog: alreadySkip,
-      doneLog: (file) => '已绑定 Session events 有界保留 ' + file,
-      failLog: (file, err) => 'Session events 有界保留补丁失败(' + file + '): ' + err.message,
-    },
-  },
-
-  // -------------------------------------------------------------------------
-  // 一键加载全部历史（K24）：Session.loadAllHistory() 分批自动加载完整个历史
-  // （每批 400 条、批间让帧、进度 + 10000 条保护上限 + 取消）。运行时侧，锚点
-  // 独立于 session-event-bound（K8）。cli:false（桌面壳 boot 应用，不参与 CLI
-  // 同步期）。
-  // -------------------------------------------------------------------------
-  {
-    id: 'load-all-history',
-    group: 'runtime',
-    order: 46,
-    kind: 'file',
-    layout: 'runtime-local',
-    wslLayout: 'wsl',
-    pkgRel: FLASH_PKG_REL,
-    transform: transformLoadAllHistory,
-    marker: LOAD_ALL_HISTORY_MARKER,
-    requires: [],
-    failPolicy: 'warn',
-    cli: false,
-    logs: {
-      prefix: '一键加载全部历史补丁',
-      alreadyLog: alreadySkip,
-      doneLog: (file) => '已注入 Session.loadAllHistory 到 ' + file,
-      failLog: (file, err) => '一键加载全部历史补丁失败(' + file + '): ' + err.message,
-    },
-  },
-
-  // -------------------------------------------------------------------------
-  // 一键加载全部历史 —— UI 侧（K24）：ConversationController.loadAllHistory /
-  // cancelLoadAllHistory + ChatView 按钮/进度/上限提示。只追加、不改 K22 自动
-  // 滚底与既有 loadOlder 逻辑。cli:false。
-  // -------------------------------------------------------------------------
-  {
-    id: 'load-all-history-ui',
-    group: 'runtime',
-    order: 47,
-    kind: 'file',
-    layout: 'runtime-local',
-    wslLayout: 'wsl',
-    pkgRel: CONVERSATION_PKG_REL,
-    transform: transformLoadAllHistoryUi,
-    marker: LOAD_ALL_HISTORY_UI_MARKER,
-    requires: [],
-    failPolicy: 'warn',
-    cli: false,
-    logs: {
-      prefix: '一键加载全部历史 UI 补丁',
-      alreadyLog: alreadySkip,
-      doneLog: (file) => '已注入加载全部历史按钮到 ' + file,
-      failLog: (file, err) => '一键加载全部历史 UI 补丁失败(' + file + '): ' + err.message,
-    },
-  },
-
-  // -------------------------------------------------------------------------
-  // dsh-host-apiproxy 设置暴露白名单补丁。
-  // -------------------------------------------------------------------------
-  {
-    id: 'prompt-expose-fix',
-    group: 'runtime',
-    order: 50,
-    kind: 'file',
-    layout: 'runtime-local',
-    wslLayout: 'wsl',
-    pkgRel: EXPOSE_PKG_REL,
-    transform: transformExposeFix,
-    marker: null,
-    requires: [],
-    failPolicy: 'warn',
-    cli: true,
-    logs: {
-      prefix: '提示词暴露补丁',
-      alreadyLog: alreadySkip,
-      doneLog: (file, note) => '已把 ' + note.join(', ') + ' 加入设置白名单 ' + file,
-      failLog: (file, err) => '提示词暴露补丁失败(' + file + '): ' + err.message,
-    },
-  },
-
-  // -------------------------------------------------------------------------
   // shell 工具 description 可选化补丁（pwsh/bash 共用同一 transform）。
   // -------------------------------------------------------------------------
   {
@@ -384,78 +259,6 @@ const PATCH_SPECS = [
   // -------------------------------------------------------------------------
   // code preset 兼容补丁（mode: code → both）。
   // -------------------------------------------------------------------------
-  {
-    id: 'code-mode-compat',
-    group: 'runtime',
-    order: 70,
-    kind: 'file',
-    layout: 'runtime-local',
-    wslLayout: 'wsl',
-    pkgRel: CODE_PRESET_REL,
-    transform: transformCodeModeCompat,
-    marker: null,
-    requires: [],
-    failPolicy: 'warn',
-    cli: true,
-    logs: {
-      prefix: 'code 模式兼容补丁',
-      alreadyLog: alreadySkip,
-      doneLog: (file) => '已把 code preset 切换为 both ' + file,
-      failLog: (file, err) => 'code 模式兼容补丁失败(' + file + '): ' + err.message,
-    },
-  },
-
-  // -------------------------------------------------------------------------
-  // 文本模型自动识图补丁（原 applyImageSendFix 内联 transform）。
-  // -------------------------------------------------------------------------
-  {
-    id: 'image-send-fix',
-    group: 'runtime',
-    order: 80,
-    kind: 'file',
-    layout: 'runtime-local',
-    wslLayout: 'wsl',
-    pkgRel: EXPOSE_PKG_REL,
-    transform: transformImageSendFix,
-    marker: IMAGE_SEND_MARKER,
-    requires: [],
-    failPolicy: 'warn',
-    cli: false,
-    logs: {
-      prefix: '识图发送补丁',
-      alreadyLog: alreadySkip,
-      doneLog: (file) => '已启用文本模型图片自动转述 ' + file,
-      failLog: (file, err) => '识图发送补丁失败(' + file + '): ' + err.message,
-    },
-  },
-
-  // -------------------------------------------------------------------------
-  // 识图总开关（enabled）门槛增量补丁：旧树上补挂「dsh-vision 关闭 →
-  // 不转述、按上游原样拒绝」。必须在 image-send-fix 之后（依赖其 helper 与
-  // gate 形态）；与 vision-key-fix 无区域重叠，先后皆可。
-  // -------------------------------------------------------------------------
-  {
-    id: 'vision-toggle-gate',
-    group: 'runtime',
-    order: 95,
-    kind: 'file',
-    layout: 'runtime-local',
-    wslLayout: 'wsl',
-    pkgRel: EXPOSE_PKG_REL,
-    transform: transformVisionToggleGate,
-    marker: VISION_TOGGLE_MARKER,
-    requires: [],
-    failPolicy: 'warn',
-    cli: false,
-    logs: {
-      prefix: '识图开关补丁',
-      alreadyLog: alreadySkip,
-      doneLog: (file) => '已接入识图总开关（关闭=原图不转述不发送） ' + file,
-      failLog: (file, err) => '识图开关补丁失败(' + file + '): ' + err.message,
-    },
-  },
-
-  // -------------------------------------------------------------------------
   // 图片字节信任补丁。
   // -------------------------------------------------------------------------
   {
@@ -476,30 +279,6 @@ const PATCH_SPECS = [
       alreadyLog: alreadySkip,
       doneLog: (file) => '已信任图片解码字节 ' + file,
       failLog: (file, err) => '图片字节信任补丁失败(' + file + '): ' + err.message,
-    },
-  },
-
-  // -------------------------------------------------------------------------
-  // 图片自动转述 apiKey 修复（原 applyVisionKeyFix 内联 transform）。
-  // -------------------------------------------------------------------------
-  {
-    id: 'vision-key-fix',
-    group: 'runtime',
-    order: 100,
-    kind: 'file',
-    layout: 'runtime-local',
-    wslLayout: 'wsl',
-    pkgRel: EXPOSE_PKG_REL,
-    transform: transformVisionKeyFix,
-    marker: VISION_KEY_MARKER,
-    requires: [],
-    failPolicy: 'warn',
-    cli: false,
-    logs: {
-      prefix: '识图密钥补丁',
-      alreadyLog: alreadySkip,
-      doneLog: (file) => '已修复 apiKey 被脱敏截断 ' + file,
-      failLog: (file, err) => '识图密钥补丁失败(' + file + '): ' + err.message,
     },
   },
 
@@ -796,7 +575,7 @@ const PATCH_SPECS = [
     kind: 'file',
     layout: 'guard',
     wslLayout: 'guard',
-    pkgRel: path.join('dsh-host-apiproxy', 'lib', 'index.js'),
+    pkgRel: API_SETTINGS_CONTROLLER_PKG_REL,
     transform: transformCredentialsAbsentGuidance,
     marker: CREDENTIALS_ABSENT_GUIDANCE_MARKER,
     requires: [],
@@ -828,32 +607,6 @@ const PATCH_SPECS = [
       prefix: '设备未授权报错指引',
       doneLog: (file) => '已注入可操作指引到 ' + file,
       failLog: (file, err) => '设备未授权报错指引失败(' + file + '): ' + err.message,
-    },
-  },
-  {
-    // api-gateway 缺席指引（E1，v0.5.2 用户反馈「/api/agentPreset.list HTTP 404
-    // 整个桌面端都没法用」）：api-gateway 插件（dsh-host-apiproxy）本 boot 加载
-    // 失败（K1 半树窗口砸中网关）时，dsh-client-connection 的 /api fallback 对
-    // 所有方法回裸 404，前端各面只见英文 transport failure 谜语。补丁把缺席
-    // 分支改为 POST → 200 + internal 错误信封（客户端 rpcErrorSchema 闭合
-    // union，非 internal 新 code 会 parse 失败）+ 中英一步修复指引（退出重启
-    // 一次自愈）；非 POST 腿保留 404 契约。见 patch-adapters E1 注释。
-    id: 'api-gateway-absent-guidance',
-    group: 'guard',
-    order: 155,
-    kind: 'file',
-    layout: 'guard',
-    wslLayout: 'guard',
-    pkgRel: API_GATEWAY_ABSENT_PKG_REL,
-    transform: transformApiGatewayAbsent,
-    marker: API_GATEWAY_ABSENT_MARKER,
-    requires: [],
-    failPolicy: 'warn',
-    cli: false,
-    logs: {
-      prefix: 'api 网关缺席报错指引',
-      doneLog: (file) => '已把缺席裸 404 改为错误信封+修复指引 ' + file,
-      failLog: (file, err) => 'api 网关缺席报错指引失败(' + file + '): ' + err.message,
     },
   },
   {
@@ -904,34 +657,6 @@ const PATCH_SPECS = [
   },
 
   // -------------------------------------------------------------------------
-  // K27：skill 工具行「Skill」标题 /「Inspect」按钮硬编码英文，绕过 locale
-  // 词典。补丁改 t("row.title") / t("row.inspect") + zh/en 补齐键；工具名
-  // "skill" 与模型侧提示词（tool description / catalog system-reminder）不动。
-  // guard 布局（client bundle 四副本）、cli:false（桌面壳 boot 应用，CLI 同步
-  // 期不碰）。见 patch-adapters K27 注释。
-  // -------------------------------------------------------------------------
-  {
-    id: 'skill-ui-zh',
-    group: 'guard',
-    order: 161,
-    kind: 'file',
-    layout: 'guard',
-    wslLayout: 'guard',
-    pkgRel: SKILL_UI_PKG_REL,
-    transform: transformSkillUiZh,
-    marker: SKILL_UI_ZH_MARKER,
-    requires: [],
-    failPolicy: 'warn',
-    cli: false,
-    logs: {
-      prefix: 'skill 工具行汉化',
-      alreadyLog: alreadySkip,
-      doneLog: (file) => '已汉化 skill 工具行标题/按钮 ' + file,
-      failLog: (file, err) => 'skill 工具行汉化失败(' + file + '): ' + err.message,
-    },
-  },
-
-  // -------------------------------------------------------------------------
   // 包级补丁（node_modules 根应用器，kind='root'）。
   // -------------------------------------------------------------------------
   {
@@ -963,40 +688,6 @@ const PATCH_SPECS = [
     cli: false,
     successLog: (root) => 'menu 视口补丁: 已应用到 ' + root,
     failLog: (root, err) => 'menu 视口补丁失败(' + root + '): ' + err.message,
-  },
-  {
-    id: 'session-manage',
-    group: 'package',
-    order: 190,
-    kind: 'root',
-    layout: 'nm-roots',
-    wslLayout: 'nm-roots',
-    apply: rootAppliers.patchSessionManage,
-    marker: null,
-    requires: ['deleteSession'],
-    failPolicy: 'warn',
-    cli: false,
-    successLog: (root) => '对话删除补丁: 已应用到 ' + root,
-    failLog: (root, err) => '对话删除补丁失败(' + root + '): ' + err.message,
-  },
-  {
-    // 会话孤儿进程清理（C2）：workspace.deleteSession 摘除 live 会话后复用内核
-    // 自有 owner 清理 API（agent.cancel + jobs/terminals.disposeOwned 杀梯）。
-    // order 195 保证 session-manage(190) 的注入区先行存在。failPolicy warn：
-    // 内核侧 API 形态漂移时 anchor-missing 自动退役，不阻断 boot。
-    id: 'session-orphans',
-    group: 'package',
-    order: 195,
-    kind: 'root',
-    layout: 'nm-roots',
-    wslLayout: 'nm-roots',
-    apply: rootAppliers.patchSessionOrphans,
-    marker: null,
-    requires: ['deleteSession'],
-    failPolicy: 'warn',
-    cli: false,
-    successLog: (root) => '会话孤儿进程补丁: 已应用到 ' + root,
-    failLog: (root, err) => '会话孤儿进程补丁失败(' + root + '): ' + err.message,
   },
   {
     id: 'open-project-dir',

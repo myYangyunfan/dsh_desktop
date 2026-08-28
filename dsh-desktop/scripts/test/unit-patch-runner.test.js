@@ -13,7 +13,7 @@ const path = require('node:path');
 
 const { applyFile, applyAll, applyRoot, resolveFiles } = require('../integration/patch-runner');
 const { PATCH_SPECS } = require('../lib/patch-registry');
-const { SLOT_COMPAT_PKG_RELS, resolveNmRoots } = require('../lib/patch-target-resolver');
+const { resolveNmRoots } = require('../lib/patch-target-resolver');
 const { patchSessionPersistence } = require('../patch-session-persistence');
 
 function makeCtx(t) {
@@ -33,10 +33,12 @@ test('applyFile：slot-compat 布局每个目标文件只被处理一次（不�
   const ctx = makeCtx(t);
   const spec = PATCH_SPECS.find((s) => s.id === 'slot-legacy-key');
 
-  // 在 profile fallback 根创建 ui-slots / cordis-client-runner 两个目标文件，
+  // 在 profile fallback 根创建该 spec 自身 pkgRels 的目标文件，
   // 用计数 transform 统计每个文件被调用的次数。
+  // 0.1.2-alpha.1：slot 三层各自收窄 pkgRels 到其锚点所在文件（slot-legacy-key
+  // 只指向 ui-slots，不再覆盖 cordis-client-runner）。
   const created = [];
-  for (const rel of SLOT_COMPAT_PKG_RELS) {
+  for (const rel of spec.pkgRels) {
     const f = path.join(ctx.home, 'profiles', 'node_modules', '@deepseek-ai', rel);
     fs.mkdirSync(path.dirname(f), { recursive: true });
     fs.writeFileSync(f, 'const x = 1;\n');

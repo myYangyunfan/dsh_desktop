@@ -63,6 +63,8 @@ function persistentSendFixture(shell) {
 }
 
 /** 构造 dsh-terminal-bash interruptOnce 尾段（含 closeOnce 开头锚定唯一性）。 */
+// 0.1.2-alpha.1：`this.clearActive()` 重命名为 `this.releaseSettledActive()`（语义
+// 不变），锚点与注入体同步改用新方法名。
 const TERMINAL_INTERRUPT_FIXTURE = [
   'class LocalPtySession {',
   '\tinterrupt(operation) {',
@@ -82,7 +84,7 @@ const TERMINAL_INTERRUPT_FIXTURE = [
   '\t\t} finally {',
   '\t\t\tif (this.interrupting === operation) this.interrupting = void 0;',
   '\t\t}',
-  '\t\tif (this.active === operation && operation.settled) this.clearActive();',
+  '\t\tif (this.active === operation && operation.settled) this.releaseSettledActive();',
   '\t\telse if (this.active === operation && !this.closing) {',
   '\t\t\tthis.pollingReady = operation;',
   '\t\t\tthis.schedulePoll(operation, 0);',

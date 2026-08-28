@@ -64,18 +64,6 @@ try {
   console.log('[patch-deps] menu-viewport 补丁跳过: ' + (err && err.message ? err.message : err));
 }
 
-// 顺带应用对话删除/归档管理补丁（dsh-session-manager 前置依赖）：开发模式
-// （npm start）直接打 dev node_modules；打包由 after-pack 与启动时运行时
-// 补丁覆盖（幂等，锚点不匹配只告警不中断）。
-try {
-  const { patchSessionManage } = require('./patch-session-manage');
-  // 补丁函数期望 node_modules 根目录（path.join(nmRoot, '@deepseek-ai', ...)）。
-  const n = patchSessionManage(path.join(root, 'node_modules'), (m) => console.log(m));
-  if (n > 0) console.log('[patch-deps] session-manage 补丁已应用（dev node_modules）');
-} catch (err) {
-  console.log('[patch-deps] session-manage 补丁跳过: ' + (err && err.message ? err.message : err));
-}
-
 // 顺带应用「打开项目目录」补丁（issue #85）：侧栏项目/会话行 ⋯ 菜单增加
 // 「打开项目目录」+ 右键菜单（dsh-client-ui-workspace）。依赖
 // dsh-session-manager 插件提供的 window.__dshDesktopOpenDir 桥；开发模式

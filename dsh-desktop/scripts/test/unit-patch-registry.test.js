@@ -8,7 +8,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { PATCH_SPECS, getSpecsByGroup, getSpecsByCli } = require('../lib/patch-registry');
-const { SLOT_KEY_COMPAT_PKG_REL, SLOT_COMPAT_PKG_RELS } = require('../lib/patch-target-resolver');
+const { SLOT_KEY_COMPAT_PKG_REL, SLOT_UNKEYED_COMPAT_PKG_REL } = require('../lib/patch-target-resolver');
 const { SLOT_KEY_COMPAT_MARKER, SLOT_ERROR_ISOLATE_MARKER, SLOT_ERROR_ISOLATE_MARKER_V2 } = require('../lib/runtime-patches');
 
 test('清单非空、id 唯一、order 升序', () => {
@@ -49,15 +49,21 @@ test('分组查询返回有序子集', () => {
   }
 });
 
-test('slot 三层共用 slot-compat 布局与 pkgRels', () => {
+test('slot 三层共用 slot-compat 布局；pkgRels 各指向其锚点所在文件', () => {
+  // 0.1.2-alpha.1：slot 注册代码在 ui-slots（rec.spec / keyed throw）与
+  // cordis-client-runner（slots.spec）之间重新分派，三层补丁各自收窄到其锚点
+  // 所在文件，避免跨文件误报 anchor-missing。
+  const byId = Object.fromEntries(PATCH_SPECS.map((s) => [s.id, s]));
   const slotIds = ['slot-legacy-key', 'slot-unkeyed-compat', 'slot-error-isolation'];
   for (const id of slotIds) {
-    const spec = PATCH_SPECS.find((s) => s.id === id);
+    const spec = byId[id];
     assert.ok(spec, id);
     assert.equal(spec.layout, 'slot-compat');
     assert.equal(spec.wslLayout, 'slot-compat-wsl');
-    assert.deepEqual(spec.pkgRels, SLOT_COMPAT_PKG_RELS);
   }
+  assert.deepEqual(byId['slot-legacy-key'].pkgRels, [SLOT_KEY_COMPAT_PKG_REL]);
+  assert.deepEqual(byId['slot-unkeyed-compat'].pkgRels, [SLOT_UNKEYED_COMPAT_PKG_REL]);
+  assert.deepEqual(byId['slot-error-isolation'].pkgRels, [SLOT_KEY_COMPAT_PKG_REL]);
 });
 
 test('ui-slots 预检 marker 与 transform 幂等判定同源（slot 三层）', () => {
@@ -84,12 +90,12 @@ test('防护类补丁与包级补丁均已登记（无遗漏 apply*）', () => {
   const ids = new Set(PATCH_SPECS.map((s) => s.id));
   const expected = [
     'slot-legacy-key', 'slot-unkeyed-compat', 'slot-error-isolation',
-    'runtime-flash-fix', 'session-event-bound', 'prompt-expose-fix', 'shell-description-compat',
-    'code-mode-compat', 'image-send-fix', 'attachment-mime-trust', 'vision-key-fix',
+    'runtime-flash-fix', 'shell-description-compat',
+    'attachment-mime-trust',
     'persistent-shell-abort-race', 'terminal-interrupt-escalation',
     'profile-patch-guard', 'profile-bundle-guard-appboot', 'profile-bundle-guard-profileboot',
     'settings-section-guard', 'workspace-search-rail-fix', 'plugin-inventory-tab-merge',
-    'web-search-baseurl', 'menu-viewport', 'session-manage', 'open-project-dir',
+    'web-search-baseurl', 'menu-viewport', 'open-project-dir',
     'session-persistence', 'tool-source-compat', 'pi-ai-opencode-go-models',
     'pi-ai-credits', 'pi-ai-reasoning-defaults', 'pi-ai-overflow-message',
     'token-meter-clamp',
@@ -100,13 +106,13 @@ test('防护类补丁与包级补丁均已登记（无遗漏 apply*）', () => {
   for (const id of expected) assert.ok(ids.has(id), `遗漏补丁 ${id}`);
 });
 
-test('getSpecsByCli：返回 21 个 cli:true 补丁（8 runtime + 5 数据完整性 + 2 设置写入韧性 + 3 内核韧性 + 1 pi-ai 超限文案 + 1 token-meter 夹取）', () => {
+test('getSpecsByCli：返回 18 个 cli:true 补丁（8 runtime + 4 数据完整性 + 2 设置写入韧性 + 3 内核韧性 + 1 pi-ai 超限文案 + 1 token-meter 夹取，0.1.2-alpha.1 退役 3 项）', () => {
   const specs = getSpecsByCli();
-  assert.equal(specs.length, 21, 'cli 清单应恰为 21 项');
+  assert.equal(specs.length, 18, 'cli 清单应恰为 18 项');
   const expected = new Set([
     'slot-legacy-key', 'slot-unkeyed-compat', 'slot-error-isolation',
-    'runtime-flash-fix', 'session-event-bound', 'prompt-expose-fix', 'shell-description-compat',
-    'code-mode-compat', 'attachment-mime-trust', 'session-persistence',
+    'runtime-flash-fix', 'shell-description-compat',
+    'attachment-mime-trust', 'session-persistence',
     'tool-source-compat', 'pi-ai-opencode-go-models', 'pi-ai-credits',
     'pi-ai-reasoning-defaults', 'pi-ai-overflow-message', 'token-meter-clamp',
     'atomic-write-orphan-lock', 'settings-models-resilience',
@@ -138,10 +144,7 @@ test('getSpecsByCli：每个 spec 的 transform/apply 与 patch-adapters 导出�
     'slot-unkeyed-compat': adapters.transformSlotUnkeyedCompat,
     'slot-error-isolation': adapters.transformSlotErrorIsolation,
     'runtime-flash-fix': adapters.transformFlashFix,
-    'session-event-bound': adapters.transformSessionEventBound,
-    'prompt-expose-fix': adapters.transformExposeFix,
     'shell-description-compat': adapters.transformShellDescriptionOptional,
-    'code-mode-compat': adapters.transformCodeModeCompat,
     'attachment-mime-trust': adapters.transformAttachmentMimeTrust,
   };
   const rootApplyMap = {

@@ -22,7 +22,13 @@
 const path = require('node:path');
 
 /** 各补丁目标包内的相对路径（@deepseek-ai/<rel>）。 */
-const FLASH_PKG_REL = path.join('dsh-client-runtime', 'lib', 'client.js');
+// 0.1.2-alpha.1 起 dsh-client-runtime 分解为 dsh-api-session-controller（Session /
+// mergeOrderedBaseline 所在客户端入口）+ dsh-client-store / dsh-client-web。
+// 闪跳修复（mergeOrderedBaseline 保留本地新会话）落点迁至 session-controller。
+const FLASH_PKG_REL = path.join('dsh-api-session-controller', 'lib', 'client.js');
+// K1 credentials-absent 指引落点：dsh-host-apiproxy 分解后，报错文案现由
+// dsh-api-settings-controller 透传（credentials 缺席分支）。
+const API_SETTINGS_CONTROLLER_PKG_REL = path.join('dsh-api-settings-controller', 'lib', 'index.js');
 const CONVERSATION_PKG_REL = path.join('dsh-client-ui-conversation', 'lib', 'client.js');
 const SKILL_UI_PKG_REL = path.join('dsh-client-ui-skill', 'lib', 'client.js');
 // K25：会话分组「手动排序」拖拽失效修复补丁目标（ViewOptionsMenu /
@@ -225,6 +231,7 @@ function slotCompatPatchTargets(home) {
 module.exports = {
   LAYOUTS,
   FLASH_PKG_REL,
+  API_SETTINGS_CONTROLLER_PKG_REL,
   CONVERSATION_PKG_REL,
   SKILL_UI_PKG_REL,
   WORKSPACE_PKG_REL,

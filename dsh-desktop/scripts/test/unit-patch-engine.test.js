@@ -20,13 +20,12 @@ const { spawnSync } = require('node:child_process');
 const { writeFileAtomic, readFileCached } = require('../lib/patch-io');
 const { applyPatchToFiles } = require('../lib/patch-engine');
 const {
-  FLASH_OLD, FLASH_NEW, SETTINGS_NAMESPACES,
-  FLASH_PKG_REL, EXPOSE_PKG_REL, patchTargets,
+  FLASH_OLD, FLASH_NEW,
+  FLASH_PKG_REL, patchTargets,
   localCopyFiles, guardCopyFiles, localNodeModulesRoots,
   slotCompatCopyFiles, slotCompatPatchTargets,
-  transformFlashFix, transformExposeFix,
+  transformFlashFix,
   SHELL_DESC_MARKER, SHELL_DESC_VALIDATE_OLD, SHELL_DESC_VALIDATE_NEW, PW_REL, BASH_REL, transformShellDescriptionOptional,
-  CODE_MODE_MARKER, CODE_MODE_OLD, CODE_MODE_NEW, CODE_PRESET_REL, transformCodeModeCompat,
   ATTACH_MIME_MARKER, ATTACH_MIME_OLD, ATTACH_MIME_NEW, ATTACH_LOCAL_REL, transformAttachmentMimeTrust,
   SLOT_KEY_COMPAT_PKG_REL, SLOT_UNKEYED_COMPAT_PKG_REL,
   SLOT_KEY_COMPAT_MARKER, SLOT_KEY_COMPAT_OLD, SLOT_KEY_COMPAT_NEW, transformLegacySlotKey,
@@ -177,66 +176,6 @@ test('runtime-patches: 闪跳变换 already/失配/changed 字节级正确', () 
   assert.ok(!out.src.includes(FLASH_OLD) && out.src.includes(FLASH_NEW));
 });
 
-test('runtime-patches: 白名单变换 声明缺失/收尾缺失/部分缺失/已应用/尾逗号数组', () => {
-  const file = 'C:\\x\\index.js';
-  assert.deepStrictEqual(transformExposeFix('export const x = 1;', file), {
-    status: 'anchor-missing',
-    detail: '未找到 WEB_SETTINGS_NAMESPACES（版本可能已变更），跳过 ' + file,
-  });
-  assert.deepStrictEqual(
-    transformExposeFix('namespaces: settings.describe({ redactSecrets: true }).map(namespaceView)', file),
-    { status: 'already' },
-    'rc.7 动态设置描述已原生支持插件命名空间',
-  );
-  // 声明存在但缺少 `];` 收尾 → anchor-missing（收尾缺失）
-  assert.deepStrictEqual(
-    transformExposeFix('const WEB_SETTINGS_NAMESPACES = [\n\t"a"\n', file),
-    { status: 'anchor-missing', detail: '未匹配到命名空间数组收尾，跳过 ' + file }
-  );
-  const src = 'const WEB_SETTINGS_NAMESPACES = [\n\t"dsh-prompt"\n];\nrest();';
-  const out = transformExposeFix(src, file);
-  assert.strictEqual(out.status, 'changed');
-  assert.deepStrictEqual(out.note, ['dsh-third-party-thinking', 'dsh-vision', 'dsh-conversation-tweaks']);
-  const expectedBlock = ',\n' + out.note.map((ns) => '\t"' + ns + '"').join(',\n') + '\n';
-  assert.strictEqual(out.src, src.slice(0, src.indexOf('];')) + expectedBlock + src.slice(src.indexOf('];')), '插入格式与旧实现逐字节一致');
-  assert.deepStrictEqual(transformExposeFix(out.src, file), { status: 'already' }, '二次应用幂等');
-  // 原数组带尾逗号（",\n];"）：不得产生 ",", 双逗号语法错误（历史缺陷）。
-  const trailing = 'const WEB_SETTINGS_NAMESPACES = [\n\t"dsh-prompt",\n];\nrest();';
-  const outT = transformExposeFix(trailing, file);
-  assert.strictEqual(outT.status, 'changed');
-  assert.ok(!outT.src.includes(',\n,') && !outT.src.includes(',\n\n,'), '不得出现双逗号');
-  const expectedT = ',\n' + outT.note.map((ns) => '\t"' + ns + '"').join(',\n') + '\n';
-  const rebuiltT = trailing.slice(0, trailing.indexOf('];')) + expectedT.replace(/^,\n/, '\n') + trailing.slice(trailing.indexOf('];'));
-  assert.strictEqual(outT.src, rebuiltT, '尾逗号形态只省略前导逗号，其余字节一致');
-  // 产物必须仍是合法 JS 数组文本（简单语法校验：括号配平 + 无空槽）
-  const arrOnly = outT.src.slice(outT.src.indexOf('['), outT.src.indexOf('];') + 2);
-  assert.ok(!/,\s*,/.test(arrOnly), '数组内不得有空槽');
-  // 真实 vendored 文件：已应用状态
-  const real = path.join(repoRoot, 'node_modules', '@deepseek-ai', EXPOSE_PKG_REL);
-  assert.strictEqual(transformExposeFix(fs.readFileSync(real, 'utf8'), real).status, 'already', 'vendored 副本应判定为已应用');
-});
-
-test('runtime-patches: 白名单变换 空数组不产生前导逗号（P2-5）', () => {
-  const file = 'C:\\x\\index.js';
-  // 形态一：`const WEB_SETTINGS_NAMESPACES = [];`
-  const empty = 'const WEB_SETTINGS_NAMESPACES = [];\nrest();';
-  const out = transformExposeFix(empty, file);
-  assert.strictEqual(out.status, 'changed');
-  const arrOnly = out.src.slice(out.src.indexOf('['), out.src.indexOf('];') + 1);
-  assert.ok(!/^\[\s*,/.test(arrOnly), '空数组不得生成前导逗号（空槽非法 JS）: ' + arrOnly);
-  assert.ok(!/,\s*,/.test(arrOnly), '数组内不得有空槽');
-  assert.deepStrictEqual(new Function('return ' + arrOnly)(), SETTINGS_NAMESPACES, '空数组注入后解析为完整白名单');
-  assert.strictEqual(transformExposeFix(out.src, file).status, 'already', '二次应用幂等');
-
-  // 形态二：`const WEB_SETTINGS_NAMESPACES = [\n];`
-  const emptyNl = 'const WEB_SETTINGS_NAMESPACES = [\n];\nrest();';
-  const out2 = transformExposeFix(emptyNl, file);
-  assert.strictEqual(out2.status, 'changed');
-  const arrOnly2 = out2.src.slice(out2.src.indexOf('['), out2.src.indexOf('];') + 1);
-  assert.ok(!/^\[\s*,/.test(arrOnly2), '换行空数组同样不得前导逗号');
-  assert.deepStrictEqual(new Function('return ' + arrOnly2)(), SETTINGS_NAMESPACES);
-});
-
 test('runtime-patches: WSL/CLI 目标路径约定', () => {
   const home = 'C:\\home';
   const rel = path.join('dsh-client-runtime', 'lib', 'client.js');
@@ -244,9 +183,9 @@ test('runtime-patches: WSL/CLI 目标路径约定', () => {
     path.join(home, 'profiles', 'node_modules', '@deepseek-ai', rel),
     path.join(home, 'agent', 'node_modules', '@deepseek-ai', rel),
   ]);
-  assert.strictEqual(FLASH_PKG_REL, path.join('dsh-client-runtime', 'lib', 'client.js'));
-  assert.strictEqual(EXPOSE_PKG_REL, path.join('dsh-host-apiproxy', 'lib', 'index.js'));
-  assert.deepStrictEqual(SETTINGS_NAMESPACES, ['dsh-prompt', 'dsh-third-party-thinking', 'dsh-vision', 'dsh-conversation-tweaks']);
+  // 0.1.2-alpha.1：dsh-client-runtime 分解为 dsh-api-session-controller，
+  // 闪跳修复（mergeOrderedBaseline 保留本地新会话）落点迁至 session-controller。
+  assert.strictEqual(FLASH_PKG_REL, path.join('dsh-api-session-controller', 'lib', 'client.js'));
 });
 
 test('runtime-patches: 候选路径构造器（本地三副本/防护四副本/WSL agent 直连根）', () => {
@@ -317,27 +256,6 @@ test('tool-compat: shell description 锚点缺失时跳过且不改写', () => {
   assert.deepStrictEqual(out, {
     status: 'anchor-missing',
     detail: '未找到 shell description 锚点（版本可能已变更），跳过 ' + file,
-  });
-});
-
-test('tool-compat: code preset code→both 变换（真实 vendored 文件 + 幂等）', () => {
-  const file = path.join(repoRoot, 'node_modules', '@deepseek-ai', CODE_PRESET_REL);
-  const src0 = fs.readFileSync(file, 'utf8');
-  const src = src0.includes(CODE_MODE_MARKER) ? src0.replace(CODE_MODE_NEW, CODE_MODE_OLD) : src0;
-  const out = transformCodeModeCompat(src, file);
-  assert.strictEqual(out.status, 'changed');
-  assert.ok(out.src.includes(CODE_MODE_MARKER), '应写入幂等标记');
-  assert.ok(out.src.includes('    mode: both'), 'mode 应切换为 both');
-  assert.ok(!out.src.includes('    mode: code'), '原 mode: code 不得残留');
-  assert.deepStrictEqual(transformCodeModeCompat(out.src, file), { status: 'already' }, '二次应用应幂等');
-});
-
-test('tool-compat: code preset 锚点缺失时跳过且不改写', () => {
-  const file = path.join('C:', 'x', 'code.yml');
-  const out = transformCodeModeCompat(['- id: tool-presentation', '  name: other', ''].join(String.fromCharCode(10)), file);
-  assert.deepStrictEqual(out, {
-    status: 'anchor-missing',
-    detail: '未找到 code preset 的 tool-presentation 锚点（版本可能已变更），跳过 ' + file,
   });
 });
 

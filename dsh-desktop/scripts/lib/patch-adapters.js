@@ -20,13 +20,11 @@
 
 const {
   transformFlashFix,
-  transformExposeFix,
   transformPersistenceAll,
   transformLegacySlotKey,
   transformSlotUnkeyedCompat,
   transformSlotErrorIsolation,
   transformShellDescriptionOptional,
-  transformCodeModeCompat,
   transformAttachmentMimeTrust,
   SLOT_KEY_COMPAT_MARKER,
   SLOT_UNKEYED_COMPAT_MARKER,
@@ -45,12 +43,9 @@ const {
 // 包级补丁（node_modules 根应用器，唯一实现；签名 (nmRoot, log) => number）。
 const { patchWebSearchBaseUrl } = require('../patch-web-search-baseurl');
 const { patchMenuViewport } = require('../patch-menu-viewport');
-const { patchSessionManage } = require('../patch-session-manage');
 const { patchOpenProjectDir } = require('../patch-open-project-dir');
 const { patchSessionPersistence } = require('../patch-session-persistence');
 const { patchToolSourceCompat } = require('./tool-source-patch');
-// 会话孤儿进程清理（C2：session-manage 注入区扩展，deleteSession 后杀子进程树）。
-const { patchSessionOrphans } = require('./patch-session-orphans');
 // pi-ai opencode-go 模型目录补丁（opencode-go.json 纯数据补充）。
 const { patchPiAiOpencodeGoModels } = require('../patch-pi-ai-opencode-go-models');
 // pi-ai 余额判定前置补丁（F2：第三方 provider 欠费 401+CreditsError 误判 AUTH
@@ -538,9 +533,11 @@ function transformPersistentShellAbortRace(src, file) {
 // 上游修复意向：上游内置中断升级后本补丁经 already / anchor-missing 退役。
 // ---------------------------------------------------------------------------
 const INTERRUPT_ESCALATION_MARKER = 'dsh-desktop fix: interrupt escalation';
-const INTERRUPT_ESCALATION_ANCHOR = '\t\tif (this.active === operation && operation.settled) this.clearActive();\n\t\telse if (this.active === operation && !this.closing) {\n\t\t\tthis.pollingReady = operation;\n\t\t\tthis.schedulePoll(operation, 0);\n\t\t}\n\t}\n\tasync closeOnce(reason) {';
+// 0.1.2-alpha.1：`this.clearActive()` 重命名为 `this.releaseSettledActive()`（语义
+// 不变：中断后 settle 即释放 active）。锚点与注入体同步改用新方法名。
+const INTERRUPT_ESCALATION_ANCHOR = '\t\tif (this.active === operation && operation.settled) this.releaseSettledActive();\n\t\telse if (this.active === operation && !this.closing) {\n\t\t\tthis.pollingReady = operation;\n\t\t\tthis.schedulePoll(operation, 0);\n\t\t}\n\t}\n\tasync closeOnce(reason) {';
 const INTERRUPT_ESCALATION_INJECTION =
-  '\t\tif (this.active === operation && operation.settled) this.clearActive();\n' +
+  '\t\tif (this.active === operation && operation.settled) this.releaseSettledActive();\n' +
   '\t\telse if (this.active === operation && !this.closing) {\n' +
   '\t\t\tthis.pollingReady = operation;\n' +
   '\t\t\tthis.schedulePoll(operation, 0);\n' +
@@ -585,26 +582,28 @@ function transformTerminalInterruptEscalation(src, file) {
 // anchor-missing 自然退役（参照 vision-key-fix 休眠先例）。
 // ---------------------------------------------------------------------------
 const AGENT_PRESET_FALLBACK_MARKER = 'dsh-desktop fix: agent-preset-fallback';
-const AGENT_PRESET_FALLBACK_ANCHOR = '\t\tconst found = presets.find((preset) => preset.id === wanted);\n\t\tif (found === void 0) throw new UnknownPresetError(wanted, presets.map((preset) => preset.id));\n\t\treturn found;';
+// 0.1.2-alpha.1：resolve() 内层缩进从 2-tab 变为 3-tab（async resolve 内的 list 前
+// 置声明层），锚点与注入体同步改用 3-tab 缩进。
+const AGENT_PRESET_FALLBACK_ANCHOR = '\t\t\tconst found = presets.find((preset) => preset.id === wanted);\n\t\t\tif (found === void 0) throw new UnknownPresetError(wanted, presets.map((preset) => preset.id));\n\t\t\treturn found;';
 const AGENT_PRESET_FALLBACK_INJECTION = [
-  '\t\tconst found = presets.find((preset) => preset.id === wanted);',
-  '\t\tif (found === void 0) {',
-  '\t\t\t// dsh-desktop fix: agent-preset-fallback — a session or profile may reference a',
-  '\t\t\t// preset id this deployment no longer ships (0.5.0 dropped the Electron-era',
-  '\t\t\t// "minimal-win"). A hard UnknownPresetError here bricks resume forever; fall',
-  '\t\t\t// back to the closest semantic preset and warn instead. Only "unknown id"',
-  '\t\t\t// degrades — a PresetMountError (broken composition) stays a loud failure.',
-  '\t\t\tconst availableIds = presets.map((preset) => preset.id);',
-  '\t\t\tconst fallbackId = wanted === "minimal-win" && availableIds.includes("minimal") ? "minimal" : availableIds.includes("standard") ? "standard" : void 0;',
-  '\t\t\tconst fallback = fallbackId === void 0 ? void 0 : presets.find((preset) => preset.id === fallbackId);',
-  '\t\t\tif (fallback !== void 0) {',
-  '\t\t\t\tconst originalError = new UnknownPresetError(wanted, availableIds);',
-  '\t\t\t\tconsole.warn(`[dsh] agent-presets 预设回落：引用的预设 "${wanted}" 在当前安装中不存在（可用：${availableIds.join(", ") || "无"}），已自动回落到语义最近的预设 "${fallback.id}"（原因：该预设随版本升级移除，回落规则 minimal-win→minimal、其余未知 id→standard）。会话将以回落预设继续恢复，建议在预设选择中重新挑选。原始错误：${originalError.message}`);',
-  '\t\t\t\treturn fallback;',
+  '\t\t\tconst found = presets.find((preset) => preset.id === wanted);',
+  '\t\t\tif (found === void 0) {',
+  '\t\t\t\t// dsh-desktop fix: agent-preset-fallback — a session or profile may reference a',
+  '\t\t\t\t// preset id this deployment no longer ships (0.5.0 dropped the Electron-era',
+  '\t\t\t\t// "minimal-win"). A hard UnknownPresetError here bricks resume forever; fall',
+  '\t\t\t\t// back to the closest semantic preset and warn instead. Only "unknown id"',
+  '\t\t\t\t// degrades — a PresetMountError (broken composition) stays a loud failure.',
+  '\t\t\t\tconst availableIds = presets.map((preset) => preset.id);',
+  '\t\t\t\tconst fallbackId = wanted === "minimal-win" && availableIds.includes("minimal") ? "minimal" : availableIds.includes("standard") ? "standard" : void 0;',
+  '\t\t\t\tconst fallback = fallbackId === void 0 ? void 0 : presets.find((preset) => preset.id === fallbackId);',
+  '\t\t\t\tif (fallback !== void 0) {',
+  '\t\t\t\t\tconst originalError = new UnknownPresetError(wanted, availableIds);',
+  '\t\t\t\t\tconsole.warn(`[dsh] agent-presets 预设回落：引用的预设 "${wanted}" 在当前安装中不存在（可用：${availableIds.join(", ") || "无"}），已自动回落到语义最近的预设 "${fallback.id}"（原因：该预设随版本升级移除，回落规则 minimal-win→minimal、其余未知 id→standard）。会话将以回落预设继续恢复，建议在预设选择中重新挑选。原始错误：${originalError.message}`);',
+  '\t\t\t\t\treturn fallback;',
+  '\t\t\t\t}',
+  '\t\t\t\tthrow new UnknownPresetError(wanted, presets.map((preset) => preset.id));',
   '\t\t\t}',
-  '\t\t\tthrow new UnknownPresetError(wanted, presets.map((preset) => preset.id));',
-  '\t\t}',
-  '\t\treturn found;',
+  '\t\t\treturn found;',
 ].join('\n');
 
 function transformAgentPresetFallback(src, file) {
@@ -700,16 +699,20 @@ function transformPromptContextLiteral(src, file) {
 
 // a. fallback heal 单点容错。
 const FALLBACK_HEAL_ISOLATION_MARKER = 'dsh-desktop heal isolation: one stale fallback entry must not abort the whole heal';
+// 0.1.2-alpha.1：fallback heal 循环从「`for (const [packageName, target] of links)`
+// + 无条件 ensureSymlink」重构为「`for (const entry of entries)` + proxy/symlink
+// 分派（entry.kind === "proxy" 走 ensureModuleProxy，否则 ensureSymlink）」。
 const FALLBACK_HEAL_LOOP_OLD = [
-  '\tfor (const [packageName, target] of links) {',
-  '\t\tconst link = join(modulesDir, packageName);',
+  '\tfor (const entry of entries) {',
+  '\t\tconst link = join(modulesDir, entry.packageName);',
   '\t\tmkdirSync(dirname(link), { recursive: true });',
-  '\t\tensureSymlink(link, target);',
+  '\t\tif (entry.kind === "proxy") ensureModuleProxy(link, entry.packageName, entry.version, entry.targets);',
+  '\t\telse ensureSymlink(link, entry.packageDir);',
   '\t}',
 ].join('\n');
 const FALLBACK_HEAL_LOOP_NEW = [
-  '\tfor (const [packageName, target] of links) {',
-  '\t\tconst link = join(modulesDir, packageName);',
+  '\tfor (const entry of entries) {',
+  '\t\tconst link = join(modulesDir, entry.packageName);',
   '\t\tmkdirSync(dirname(link), { recursive: true });',
   '\t\t// ' + FALLBACK_HEAL_ISOLATION_MARKER + ' (K1): a single bad entry must',
   '\t\t// not abort the whole heal — a half-healed fallback tree leaves host-',
@@ -718,17 +721,19 @@ const FALLBACK_HEAL_LOOP_NEW = [
   '\t\t// place (Windows AV/EPERM transients, concurrent-heal EEXIST races),',
   '\t\t// then isolate the one name and keep healing the rest.',
   '\t\ttry {',
-  '\t\t\tensureSymlink(link, target);',
+  '\t\t\tif (entry.kind === "proxy") ensureModuleProxy(link, entry.packageName, entry.version, entry.targets);',
+  '\t\t\telse ensureSymlink(link, entry.packageDir);',
   '\t\t} catch (healError) {',
   '\t\t\tlet healed = false;',
   '\t\t\tfor (let healRetry = 0; healRetry < 3; healRetry += 1) {',
   '\t\t\t\ttry {',
-  '\t\t\t\t\tensureSymlink(link, target);',
+  '\t\t\t\t\tif (entry.kind === "proxy") ensureModuleProxy(link, entry.packageName, entry.version, entry.targets);',
+  '\t\t\t\t\telse ensureSymlink(link, entry.packageDir);',
   '\t\t\t\t\thealed = true;',
   '\t\t\t\t\tbreak;',
   '\t\t\t\t} catch {}',
   '\t\t\t}',
-  '\t\t\tif (!healed) process.stderr.write(`[fallback-heal] entry ${packageName} failed: ${healError instanceof Error ? healError.message : String(healError)}\\n`);',
+  '\t\t\tif (!healed) process.stderr.write(`[fallback-heal] entry ${entry.packageName} failed: ${healError instanceof Error ? healError.message : String(healError)}\\n`);',
   '\t\t}',
   '\t}',
 ].join('\n');
@@ -1905,24 +1910,17 @@ function transformSessionLoadGraceful(src, file) {
 }
 
 module.exports = {
-  // runtime-patches 的 9 个 transform（re-export）。其中
-  // transformPersistenceAll 不被 registry 直接引用，其消费方是
-  // rootAppliers.patchSessionPersistence（session-persistence 以 root 应用器
-  // 形态登记），此处 re-export 仅为保持 transform 收口的对称性，非死代码。
+  // runtime-patches 的 transform（re-export）。其中 transformPersistenceAll 不被
+  // registry 直接引用，其消费方是 rootAppliers.patchSessionPersistence
+  // （session-persistence 以 root 应用器形态登记），此处 re-export 仅为保持
+  // transform 收口的对称性，非死代码。
   transformFlashFix,
-  transformExposeFix,
   transformPersistenceAll,
   transformLegacySlotKey,
   transformSlotUnkeyedCompat,
   transformSlotErrorIsolation,
   transformShellDescriptionOptional,
-  transformCodeModeCompat,
   transformAttachmentMimeTrust,
-  // 原 main.js 内联 transform（声明化，字节级等价）。
-  transformImageSendFix,
-  transformVisionKeyFix,
-  // 识图总开关（enabled）门槛增量补丁（旧树 → 新语义）。
-  transformVisionToggleGate,
   transformProfilePatchGuard,
   transformProfileBundleAppBoot,
   transformProfileBundleProfileBoot,
@@ -1943,28 +1941,20 @@ module.exports = {
   transformCredentialsAbsentGuidance,
   // 设备未授权（DeepSeek 服务端风控 403）报文追加可操作指引。
   transformDeviceAuthGuidance,
-  // E1（apiProxy 缺席 → /api 全裸 404 → 桌面端整体不可用）缺席分支改错误信封 + 指引。
-  transformApiGatewayAbsent,
   // #154 第三根因：内核 web UI boot 看门狗（client module system 不可达不无限转圈）。
   transformKernelBootWatchdog,
   // W1 问题四：WSL 内目录选择器强制 browse（zenity 窗口在 WSLg 里不可见）。
   transformDirectoryPickerWslBrowse,
   // R7：adapter 缺 prepareCall 时回落基类语义 + 升级指引（v0.5.3 对话失败）。
   transformAdapterPrepareCallGuard,
-  transformSessionEventBound,
   transformSessionHeaderScanGuard,
   transformSessionLoadGraceful,
-  transformLoadAllHistory,
-  transformLoadAllHistoryUi,
-  transformSkillUiZh,
   // K1 注入体常量（单测 vm 行为验证用，与 transform 同源；非 marker）。
   CREDENTIALS_HELPERS_CODE,
   // 包级补丁 node_modules 根应用器（唯一实现）。
   rootAppliers: {
     patchWebSearchBaseUrl,
     patchMenuViewport,
-    patchSessionManage,
-    patchSessionOrphans,
     patchOpenProjectDir,
     patchSessionPersistence,
     patchToolSourceCompat,
@@ -1988,9 +1978,6 @@ module.exports = {
     SLOT_UNKEYED_COMPAT_MARKER,
     SLOT_ERROR_ISOLATE_MARKER,
     SLOT_ERROR_ISOLATE_MARKER_V2,
-    IMAGE_SEND_MARKER,
-    VISION_KEY_MARKER,
-    VISION_TOGGLE_MARKER,
     PROFILE_PATCH_GUARD_MARKER,
     PROFILE_BUNDLE_GUARD_MARKER,
     PROFILE_BOOT_GUARD_MARKER,
@@ -2005,16 +1992,11 @@ module.exports = {
     CREDENTIALS_INITIAL_RETRY_MARKER,
     CREDENTIALS_ABSENT_GUIDANCE_MARKER,
     DEVICE_AUTH_GUIDANCE_MARKER,
-    API_GATEWAY_ABSENT_MARKER,
     KERNEL_BOOT_WATCHDOG_MARKER,
     WSL_PICKER_BROWSE_MARKER,
     ADAPTER_PREPARE_CALL_GUARD_MARKER,
-    SESSION_EVENT_BOUND_MARKER,
     SESSION_HEADER_SCAN_MARKER,
     SESSION_LOAD_GRACEFUL_MARKER,
-    LOAD_ALL_HISTORY_MARKER,
-    LOAD_ALL_HISTORY_UI_MARKER,
-    SKILL_UI_ZH_MARKER,
     MANUAL_SORT_DRAG_MARKER,
     ...require('./loader-isolation').markers,
   },

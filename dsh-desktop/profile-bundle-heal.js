@@ -287,8 +287,10 @@ const { writeFileAtomic } = require('./scripts/lib/patch-io');
 // ---------------------------------------------------------------------------
 
 // loadProfile 中逐个 bundle 严格装配的原始代码块（built 文件为制表符缩进）。
+// 0.1.2-alpha.1：`normalizeShippedProfile(...)` 结果先落入 `manifest` 常量，
+// `bundles` 单独声明后再 `.map(...)`（且 patchReload 校验插入其间），锚点按新形态改写。
 const APP_BOOT_LAYERS_ANCHOR = [
-  '\tconst layers = (normalizeShippedProfile(name, dir, readProfileManifest(binName, dir)).dsh?.profile?.bundles ?? []).map((packageName) => {',
+  '\tconst layers = bundles.map((packageName) => {',
   '\t\tconst packageDir = resolveBundleDir(binName, packageName, installAnchor, dir);',
   '\t\tconst declared = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf8")).dsh?.bundle?.patch;',
   '\t\tif (declared === void 0) throw new Error(`${binName}: profile bundle ${JSON.stringify(packageName)} declares no dsh.bundle in its package.json`);',

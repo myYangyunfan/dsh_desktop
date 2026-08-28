@@ -28,7 +28,6 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { PATCH_SPECS } = require('../lib/patch-registry');
-const { transformVisionToggleGate } = require('../lib/patch-adapters');
 
 const LIB_DIR = path.join(__dirname, '..', 'lib');
 const IMPL_SOURCES = [
@@ -41,6 +40,23 @@ const IMPL_SOURCES = [
 ].map((f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } });
 
 const PRISTINE_RC2 = path.join(__dirname, '..', '..', '..', '.tmp-rc2-stage', 'node_modules');
+// 0.1.2-alpha.1：重定位补丁的目标包（dsh-api-session-controller / dsh-api-settings-
+// controller / dsh-client-ui-slots 等）不在 .tmp-rc2-stage（旧内核）中，回滚审计需
+// 回退到 .tmp-kernel 的 pristine 构建产物（built lib）定位目标。
+const KERNEL_BUILD = path.join(__dirname, '..', '..', '..', '.tmp-kernel');
+let KERNEL_BY_NAME = null;
+function kernelTarget(pkgRel) {
+  if (KERNEL_BY_NAME === null) {
+    try {
+      const inv = JSON.parse(fs.readFileSync(path.join(KERNEL_BUILD, '.dsh-inventory.json'), 'utf8'));
+      KERNEL_BY_NAME = new Map(inv.map((p) => [p.name, p.dir]));
+    } catch { KERNEL_BY_NAME = new Map(); }
+  }
+  const parts = String(pkgRel).split(path.sep);
+  const rec = KERNEL_BY_NAME.get('@deepseek-ai/' + parts[0]);
+  if (!rec || typeof rec !== 'string') return null;
+  return path.join(KERNEL_BUILD, rec, ...parts.slice(1));
+}
 
 function firstTargetFile(spec) {
   if (spec.layout === 'profile-boot-dirs') {
@@ -53,6 +69,10 @@ function firstTargetFile(spec) {
     const p = path.join(PRISTINE_RC2, '@deepseek-ai', rel);
     if (fs.existsSync(p)) return p;
   }
+  for (const rel of rels) {
+    const p = kernelTarget(rel);
+    if (p && fs.existsSync(p)) return p;
+  }
   return null;
 }
 
@@ -62,7 +82,6 @@ const INVERSE_PAIR_HINTS = {
   // id: [OLD/FROM 常量片段, NEW/TO 常量片段]（在实现源码文本中出现即可判
   // 机械可逆——常量对本身就是反向 replace 的全部输入）。
   'runtime-flash-fix': ['FLASH_OLD', 'FLASH_NEW'],
-  'vision-key-fix': ['VISION_KEY_FROM', 'VISION_KEY_TO'],
   'profile-patch-guard': ['PROFILE_PATCH_GUARD_CALL_SITE', 'PROFILE_PATCH_GUARD_CALL_REPLACEMENT'],
   'settings-section-guard': ['SETTINGS_SECTION_FROM', 'SETTINGS_SECTION_GUARDED'],
   'workspace-search-rail-fix': ['WORKSPACE_SEARCH_RAIL_OLD_GUARD', 'WORKSPACE_SEARCH_RAIL_NEW_GUARD'],
@@ -75,20 +94,15 @@ const INVERSE_PAIR_HINTS = {
   'credentials-initial-retry': ['CREDENTIALS_LOAD_INITIAL_OLD', 'CREDENTIALS_LOAD_INITIAL_NEW'],
   'credentials-absent-guidance': ['CREDENTIALS_ABSENT_OLD', 'CREDENTIALS_ABSENT_NEW'],
   'device-auth-guidance': ['DEVICE_AUTH_THROW_ANCHOR_V2', 'deviceAuthGuidanceBlock'],
-  // 无 marker 补丁的回滚定位常量（撤销 = 从数组剥除 SETTINGS_NAMESPACES 追加项）。
-  'prompt-expose-fix': ['WEB_SETTINGS_NAMESPACES', 'SETTINGS_NAMESPACES'],
   'slot-legacy-key': ['SLOT_KEY_COMPAT_OLD', 'SLOT_KEY_COMPAT_NEW'],
   'slot-unkeyed-compat': ['SLOT_UNKEYED_COMPAT_OLD', 'SLOT_UNKEYED_COMPAT_NEW'],
   'shell-description-compat': ['SHELL_DESC_VALIDATE_OLD', 'SHELL_DESC_VALIDATE_NEW'],
-  'code-mode-compat': ['CODE_MODE_OLD', 'CODE_MODE_NEW'],
   'attachment-mime-trust': ['ATTACH_MIME_OLD', 'ATTACH_MIME_NEW'],
-  'session-orphans': ['SESSION_ORPHANS_ANCHOR', 'SESSION_ORPHANS_INJECTION'],
   'session-load-graceful': ['SESSION_LOAD_GRACEFUL_DECODER_OLD', 'SESSION_LOAD_GRACEFUL_DECODER_NEW'],
 };
 
 const MULTI_SITE = new Set([
   'credentials-initial-retry', // 3 处替换（首读/stat/helpers 追加）
-  'prompt-expose-fix',         // 数组追加（幂等条件 = 命名空间已列）
   'slot-error-isolation',      // 三分支（原始 throw / v1 修复×2）
   'adapter-prepare-call-guard', // 双调用点替换 + 方法注入（prepareCall/adapterStream）
   'session-header-scan-guard', // 四点注入（模块级缓存 / helper 方法 / 读行 / 读上限）
@@ -98,8 +112,8 @@ const MULTI_SITE = new Set([
 const fileSpecs = PATCH_SPECS.filter((s) => s.kind === 'file');
 const rootSpecs = PATCH_SPECS.filter((s) => s.kind === 'root');
 
-test('审计 1：分类覆盖全部 39 个 file transform（无回滚盲区）', () => {
-  assert.equal(fileSpecs.length, 39);
+test('审计 1：分类覆盖全部 29 个 file transform（无回滚盲区）', () => {
+  assert.equal(fileSpecs.length, 29);
   const report = [];
   for (const spec of fileSpecs) {
     const pair = INVERSE_PAIR_HINTS[spec.id];
@@ -124,11 +138,7 @@ test('审计 2：带 marker 的 transform，其 changed 产物含 marker（回�
     if (!spec.marker) continue;
     const file = firstTargetFile(spec);
     assert.ok(file, `${spec.id} 缺 pristine 目标`);
-    let src = fs.readFileSync(file, 'utf8');
-    // 依赖链先行（vision 系）。
-    if (spec.id === 'vision-toggle-gate' || spec.id === 'vision-key-fix') {
-      void transformVisionToggleGate;
-    }
+    const src = fs.readFileSync(file, 'utf8');
     const r = spec.transform(src, file);
     if (r.status === 'changed') {
       assert.ok(
@@ -141,7 +151,7 @@ test('审计 2：带 marker 的 transform，其 changed 产物含 marker（回�
 });
 
 test('审计 3：root 应用器只碰 node_modules（npm ci 整体可恢复）', () => {
-  assert.equal(rootSpecs.length, 17);
+  assert.equal(rootSpecs.length, 15);
   for (const spec of rootSpecs) {
     assert.equal(spec.layout, 'nm-roots', `${spec.id} 应为 nm-roots 布局`);
     assert.equal(spec.wslLayout, 'nm-roots', `${spec.id} WSL 布局也应为 nm-roots`);
@@ -153,8 +163,7 @@ test('审计 4（发现记录）：无 marker 的 file transform 依赖产物形
   // 回滚时无法用 marker 扫描定位——须依赖 FROM/TO 反向替换或重装。
   const noMarker = fileSpecs.filter((s) => !s.marker).map((s) => s.id);
   const expectedNoMarker = [
-    'runtime-flash-fix', 'prompt-expose-fix', 'shell-description-compat',
-    'code-mode-compat', 'attachment-mime-trust',
+    'runtime-flash-fix', 'shell-description-compat', 'attachment-mime-trust',
   ];
   assert.deepEqual(noMarker, expectedNoMarker, '无 marker 补丁清单漂移（新无 marker 补丁需补审计）');
 });
