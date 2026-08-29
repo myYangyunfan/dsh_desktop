@@ -44,7 +44,7 @@ const INJECT = [
   '            try {',
   '                const _st = error && error.status;',
   '                if (typeof _st === "number" && _st >= 400 && _st < 500) {',
-  '                    const _dumpDir = process.env.DSH_LLM_DUMP_DIR || process.env.DSH_HOME || "";',
+  '                    const _dumpDir = process.env.DSH_LLM_DUMP_DIR || process.env.DSH_HOME || __dsh4xxPath.join(__dsh4xxHome(), ".dsh");',
   '                    if (_dumpDir) {',
   '                        const _params = globalThis.__dsh4xxLastParams;',
   '                        const _model = globalThis.__dsh4xxLastModel || model;',
@@ -59,11 +59,24 @@ const INJECT = [
 
 /** 顶部注入的 ESM import。 */
 const IMPORT_INJECT = [
-  '// ' + MARKER + ': 4xx 诊断落盘用的 fs/path import。',
+  '// ' + MARKER + ': 4xx 诊断落盘用的 fs/path/os import。',
+  'import * as __dsh4xxFs from "node:fs";',
+  'import * as __dsh4xxPath from "node:path";',
+  'import { homedir as __dsh4xxHome } from "node:os";',
+  IMPORT_ANCHOR,
+].join('\n');
+
+/** v1 注入块（无 os import）——升级就地替换。 */
+const IMPORT_V1 = [
+  '// ' + MARKER + ': 4xx 诊断落盘用的 fs/path import.',
   'import * as __dsh4xxFs from "node:fs";',
   'import * as __dsh4xxPath from "node:path";',
   IMPORT_ANCHOR,
 ].join('\n');
+/** v1 dumpDir 行（env 缺失即静默跳过——生产内核进程无 DSH_HOME，实测 supervisor 的 set_var 全在 #[test] 里）。 */
+const DUMPDIR_V1 = 'const _dumpDir = process.env.DSH_LLM_DUMP_DIR || process.env.DSH_HOME || "";';
+/** v2：兜底 homedir()/.dsh。 */
+const DUMPDIR_V2 = 'const _dumpDir = process.env.DSH_LLM_DUMP_DIR || process.env.DSH_HOME || __dsh4xxPath.join(__dsh4xxHome(), ".dsh");';
 
 /**
  * transform：幂等、锚点失配不改写。
@@ -72,7 +85,20 @@ const IMPORT_INJECT = [
  * @returns {{status:'already'}|{status:'anchor-missing',detail:string}|{status:'changed',src:string}}
  */
 function transform4xxDump(src, file) {
-  if (src.includes(MARKER)) return { status: 'already' };
+  if (src.includes(MARKER)) {
+    // v2 已在位则幂等；v1（env 缺失即静默跳过）就地升级：dumpDir 行 + os import。
+    if (src.includes(DUMPDIR_V2)) return { status: 'already' };
+    if (src.includes(DUMPDIR_V1)) {
+      let out = src.replace(DUMPDIR_V1, DUMPDIR_V2);
+      if (out.includes(IMPORT_V1)) out = out.replace(IMPORT_V1, IMPORT_INJECT);
+      else {
+        // v1 import 块行尾差异兜底：逐行插入 os import（幂等判定用 DUMPDIR_V2）
+        out = out.replace('import * as __dsh4xxPath from "node:path";', 'import * as __dsh4xxPath from "node:path";\nimport { homedir as __dsh4xxHome } from "node:os";');
+      }
+      return { status: 'changed', src: out };
+    }
+    return { status: 'already' }; // marker 在但形态不可识别，保守不改写
+  }
   if (!src.includes(ANCHOR) || !src.includes(IMPORT_ANCHOR) || !src.includes(PARAMS_ANCHOR)) {
     return {
       status: 'anchor-missing',
