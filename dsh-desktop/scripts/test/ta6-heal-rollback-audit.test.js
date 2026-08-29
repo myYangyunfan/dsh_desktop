@@ -14,7 +14,7 @@
 //   - 多点注入：一次 transform 改多处（回滚需逐点处理）。
 //
 // 审计约束（守卫价值）：
-//   1. 分类必须覆盖全部 34 个 file transform（无「无法回滚」盲区）；
+//   1. 分类必须覆盖全部 35 个 file transform（无「无法回滚」盲区）；
 //   2. 每个带 marker 的 transform，marker 必须能定位回滚点（marker 出现在
 //      其 changed 产物中——用 pristine 实跑验证）；
 //   3. root 应用器（14 个）只碰 node_modules 内文件 → npm ci 可整体恢复。
@@ -120,8 +120,8 @@ const MULTI_SITE = new Set([
 const fileSpecs = PATCH_SPECS.filter((s) => s.kind === 'file');
 const rootSpecs = PATCH_SPECS.filter((s) => s.kind === 'root');
 
-test('审计 1：分类覆盖全部 34 个 file transform（无回滚盲区）', () => {
-  assert.equal(fileSpecs.length, 34);
+test('审计 1：分类覆盖全部 35 个 file transform（无回滚盲区）', () => {
+  assert.equal(fileSpecs.length, 35);
   const report = [];
   for (const spec of fileSpecs) {
     const pair = INVERSE_PAIR_HINTS[spec.id];

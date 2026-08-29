@@ -84,6 +84,8 @@ const PICKER_AUTO_PKG_REL = path.join('dsh-host-directory-picker-auto', 'lib', '
 const CODEX_BIN_PKG_REL = path.join('@openai', 'codex', 'bin', 'codex.js');
 // pi-ai openai-completions 路由（4xx 诊断落盘补丁目标；scope-agnostic 布局）。
 const PI_AI_COMPLETIONS_PKG_REL = path.join('@earendil-works', 'pi-ai', 'dist', 'api', 'openai-completions.js');
+// 官方 DeepSeek API 适配器（deepseek-official 路由，不走 pi-ai）。
+const DS_LLM_DEEPSEEK_PKG_REL = path.join('@deepseek-ai', 'dsh-llm-deepseek', 'lib', 'index.js');
 // Claude Code 子代理适配器补丁目标（@deepseek-ai scope，pkgRel 相对 @deepseek-ai，
 // 与其它 PKG_REL 常量一致）。
 const CLAUDE_SUBAGENT_PKG_REL = path.join('dsh-subagent-claude-code', 'lib', 'index.js');
@@ -283,6 +285,7 @@ module.exports = {
   PICKER_AUTO_PKG_REL,
   CODEX_BIN_PKG_REL,
   PI_AI_COMPLETIONS_PKG_REL,
+  DS_LLM_DEEPSEEK_PKG_REL,
   CLAUDE_SUBAGENT_PKG_REL,
   SKILL_FS_PKG_REL,
   resolvePatchTargets,

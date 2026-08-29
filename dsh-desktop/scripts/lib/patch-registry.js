@@ -70,6 +70,7 @@ const {
   CODEX_BIN_PKG_REL,
   CLAUDE_SUBAGENT_PKG_REL,
   PI_AI_COMPLETIONS_PKG_REL,
+  DS_LLM_DEEPSEEK_PKG_REL,
   SKILL_FS_PKG_REL,
 } = require('./patch-target-resolver');
 
@@ -109,6 +110,7 @@ const {
   transformClaudeLocalBinFallback,
   transformPiAi4xxDump,
   transformPiAiToolSchemaSanitize,
+  transformDsToolSchemaSanitize,
   transformSkillDirsCompat,
   rootAppliers,
 } = require('./patch-adapters');
@@ -144,6 +146,7 @@ const {
   CLAUDE_LOCAL_BIN_MARKER,
   PI_AI_4XX_DUMP_MARKER,
   PI_AI_TOOL_SCHEMA_SANITIZE_MARKER,
+  DS_TOOL_SCHEMA_SANITIZE_MARKER,
   SKILL_DIRS_COMPAT_MARKER,
 } = require('./patch-adapters').markers;
 
@@ -1259,6 +1262,34 @@ const PATCH_SPECS = [
       alreadyLog: alreadySkip,
       doneLog: (file) => '已注入 pathToClaudeCodeExecutable (CLAUDE_BIN) 到 ' + file,
       failLog: (file, err) => 'Claude 子代理本地二进制回落补丁失败(' + file + '): ' + err.message,
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // dsh-llm-deepseek 工具净化补丁（ds-tool-schema-sanitize）：deepseek-official
+  // 路由独立于 pi-ai 的工具序列化（requestWithMessages 内联 map），同样需要
+  // 名字规范化 + schema 净化 + 回映射（官方 API 校验同款 pattern/required）。
+  // 净化实现为纯函数重建——内核 deepFreeze 的 schema 上 delete 会抛 TypeError
+  // 导致突变式实现静默失效（wire 探针实测）。cli:true。
+  // -------------------------------------------------------------------------
+  {
+    id: 'ds-tool-schema-sanitize',
+    group: 'runtime',
+    order: 340,
+    kind: 'file',
+    layout: 'runtime-local',
+    wslLayout: 'wsl',
+    pkgRel: DS_LLM_DEEPSEEK_PKG_REL,
+    transform: transformDsToolSchemaSanitize,
+    marker: DS_TOOL_SCHEMA_SANITIZE_MARKER,
+    requires: [],
+    failPolicy: 'warn',
+    cli: true,
+    logs: {
+      prefix: 'ds 工具净化补丁',
+      alreadyLog: alreadySkip,
+      doneLog: (file) => '已注入 ds 适配器 schema 净化+名字规范化/回映射到 ' + file,
+      failLog: (file, err) => 'ds 工具净化补丁失败(' + file + '): ' + err.message,
     },
   },
 

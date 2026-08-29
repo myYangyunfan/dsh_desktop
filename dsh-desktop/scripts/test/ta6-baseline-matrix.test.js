@@ -1,7 +1,7 @@
 'use strict';
 
 // ---------------------------------------------------------------------------
-// TA6 元测试 6：49 补丁 × 双版本形态判定矩阵（基线快照，最有长期价值）。
+// TA6 元测试 6：50 补丁 × 双版本形态判定矩阵（基线快照，最有长期价值）。
 //
 // 对两个 pristine 内核源各跑一遍全部 transform（按 registry order）：
 //   - 形态 rc.2：.tmp-rc2-stage/node_modules（npm 闭包解包，未打任何补丁）；
@@ -155,6 +155,7 @@ const BASELINE = {
     'skill-dirs-compat': 'changed',
     'pi-ai-4xx-dump': 'target-absent',
     'pi-ai-tool-schema-sanitize': 'target-absent',
+    'ds-tool-schema-sanitize': 'target-absent',
   },
   'rc.1': {
     'slot-legacy-key': 'target-absent',
@@ -206,10 +207,11 @@ const BASELINE = {
     'skill-dirs-compat': 'target-absent',
     'pi-ai-4xx-dump': 'target-absent',
     'pi-ai-tool-schema-sanitize': 'target-absent',
+    'ds-tool-schema-sanitize': 'target-absent',
   },
 };
 
-test('49 补丁 × rc.2 / rc.1 双形态判定矩阵与基线快照一致（锚点漂移哨兵）', { skip: !formRoot('rc.2') ? 'pristine rc.2 stage 树不可用（.tmp-rc2-stage 缺失）' : false }, () => {
+test('50 补丁 × rc.2 / rc.1 双形态判定矩阵与基线快照一致（锚点漂移哨兵）', { skip: !formRoot('rc.2') ? 'pristine rc.2 stage 树不可用（.tmp-rc2-stage 缺失）' : false }, () => {
   const matrix = computeMatrix();
   // 打印当前矩阵（基线对照 / 升级 diff 材料）。
   console.log('[TA6 基线矩阵]');
@@ -232,11 +234,11 @@ test('49 补丁 × rc.2 / rc.1 双形态判定矩阵与基线快照一致（锚�
     `判定矩阵漂移（内核形态变化或锚点漂移；确认后更新 BASELINE 快照以显式接受新基线）：\n  ${drift.join('\n  ')}`);
 });
 
-test('基线快照自身完整性：两形态 × 49 id 全覆盖', () => {
+test('基线快照自身完整性：两形态 × 50 id 全覆盖', () => {
   const ids = new Set(PATCH_SPECS.map((s) => s.id));
-  assert.equal(ids.size, 49);
+  assert.equal(ids.size, 50);
   for (const form of Object.keys(BASELINE)) {
-    assert.equal(Object.keys(BASELINE[form]).length, 49, `${form} 基线应覆盖 49 项`);
+    assert.equal(Object.keys(BASELINE[form]).length, 50, `${form} 基线应覆盖 49 项`);
     for (const id of Object.keys(BASELINE[form])) assert.ok(ids.has(id), `${form} 基线含未知 id ${id}`);
   }
 });
