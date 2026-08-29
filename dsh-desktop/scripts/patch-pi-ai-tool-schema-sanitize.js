@@ -54,6 +54,7 @@ const HELPER = [
   '    const walk = (node) => {',
   '        if (Array.isArray(node)) { node.forEach(walk); return node; }',
   '        if (node && typeof node === "object") {',
+  '            if (Array.isArray(node.required) && node.required.length === 0) delete node.required;',
   '            if (node.properties && typeof node.properties === "object") {',
   '                for (const key of Object.keys(node.properties)) {',
   '                    const prop = node.properties[key];',
