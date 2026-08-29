@@ -2075,6 +2075,7 @@ function transformSkillDirsCompat(src, file) {
 
 // pi-ai 4xx 请求落盘（独立脚本实现，registry 经此引用保持单一收口）。
 const { transform4xxDump: transformPiAi4xxDump, MARKER: PI_AI_4XX_DUMP_MARKER } = require('../patch-pi-ai-4xx-dump');
+const { transformToolSchemaSanitize: transformPiAiToolSchemaSanitize, MARKER: PI_AI_TOOL_SCHEMA_SANITIZE_MARKER } = require('../patch-pi-ai-tool-schema-sanitize');
 
 module.exports = {
   // runtime-patches 的 transform（re-export）。其中 transformPersistenceAll 不被
@@ -2083,6 +2084,8 @@ module.exports = {
   // transform 收口的对称性，非死代码。
   transformPiAi4xxDump,
   PI_AI_4XX_DUMP_MARKER,
+  PI_AI_TOOL_SCHEMA_SANITIZE_MARKER,
+  transformPiAiToolSchemaSanitize,
   transformFlashFix,
   transformPersistenceAll,
   transformLegacySlotKey,
@@ -2148,6 +2151,7 @@ module.exports = {
   // transform 同源），bundle-guard 系来自 profile-bundle-heal，loader 隔离系
   // 来自 loader-isolation，其余为本文档声明化。
   markers: {
+  PI_AI_TOOL_SCHEMA_SANITIZE_MARKER,
     SLOT_KEY_COMPAT_MARKER,
     SLOT_UNKEYED_COMPAT_MARKER,
     SLOT_ERROR_ISOLATE_MARKER,

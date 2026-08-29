@@ -108,6 +108,7 @@ const {
   transformCodexLocalBinFallback,
   transformClaudeLocalBinFallback,
   transformPiAi4xxDump,
+  transformPiAiToolSchemaSanitize,
   transformSkillDirsCompat,
   rootAppliers,
 } = require('./patch-adapters');
@@ -142,6 +143,7 @@ const {
   CODEX_LOCAL_BIN_MARKER,
   CLAUDE_LOCAL_BIN_MARKER,
   PI_AI_4XX_DUMP_MARKER,
+  PI_AI_TOOL_SCHEMA_SANITIZE_MARKER,
   SKILL_DIRS_COMPAT_MARKER,
 } = require('./patch-adapters').markers;
 
@@ -1257,6 +1259,36 @@ const PATCH_SPECS = [
       alreadyLog: alreadySkip,
       doneLog: (file) => '已注入 pathToClaudeCodeExecutable (CLAUDE_BIN) 到 ' + file,
       failLog: (file, err) => 'Claude 子代理本地二进制回落补丁失败(' + file + '): ' + err.message,
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // pi-ai 工具 schema+函数名净化补丁（pi-ai-tool-schema-sanitize）：DeepSeek/
+  // LiteLLM 系路由严格校验：①属性级 required:true/false（JSON Schema 非法位置，
+  // cardian 系 26 工具携带）②函数名含 . 等非法字符（OpenAI 规范仅
+  // [a-zA-Z0-9_-]）③空 required 数组——任一即整请求 400 MODEL_TOOL_NOT_SUPPORTED
+  //（实测 a.b→400/ab→200；required:false 工具单发全 400）。glm/qwen/kimi 不校验。
+  // 净化：出口剥属性级布尔 required+删空 required 数组+名字规范化（非法字符→
+  // 下划线），解析侧回映射还原原名分发。cli:true。
+  // -------------------------------------------------------------------------
+  {
+    id: 'pi-ai-tool-schema-sanitize',
+    group: 'runtime',
+    order: 330,
+    kind: 'file',
+    layout: 'runtime-local-nm',
+    wslLayout: 'runtime-local-nm',
+    pkgRel: PI_AI_COMPLETIONS_PKG_REL,
+    transform: transformPiAiToolSchemaSanitize,
+    marker: PI_AI_TOOL_SCHEMA_SANITIZE_MARKER,
+    requires: [],
+    failPolicy: 'warn',
+    cli: true,
+    logs: {
+      prefix: 'pi-ai 工具净化补丁',
+      alreadyLog: alreadySkip,
+      doneLog: (file) => '已注入 schema 净化+名字规范化/回映射到 ' + file,
+      failLog: (file, err) => 'pi-ai 工具净化补丁失败(' + file + '): ' + err.message,
     },
   },
 
