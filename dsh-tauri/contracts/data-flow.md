@@ -87,7 +87,9 @@ app 启动
 - 任何装配失败（含内核目录缺失、boot 线程 panic 被 catch_unwind 捕获）都
   终态于**恢复页**而非进程退出：`recovery_state` 回
   `{state, kernelUrl?, crashes?, reason}`；未装配态回
-  `{state:"no-kernel", reason}`。
+  `{state:"no-kernel", reason}`。`reason` 附带本次 boot 瀑布的内核报错尾行
+  （`内核报错：…`，自瀑布起点的 dsh-web.log 偏移提取，绝不引用上一次运行
+  的残留输出）；boot-failed 事故详情同口径——壳侧概括 + 真实根因同行透出。
 - 恢复页「重启内核 / 重新加载」在 supervisor 缺位时**重新装配**
   （start_supervisor，幂等），不要求重启应用。
 - 静态页服务启动失败 → data: 内嵌提示页降级（无 IPC 的静态兜底）。

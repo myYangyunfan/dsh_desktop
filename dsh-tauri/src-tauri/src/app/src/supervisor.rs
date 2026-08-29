@@ -110,6 +110,9 @@ struct Inner {
     /// （同代际下崩溃自动重启换内核后，旧环不得继续探活/误杀新内核）。
     probe_gen: u64,
     stopping: bool,
+    /// 本次 boot 瀑布起点的 dsh-web.log 偏移（内核报错提取作用域，None=未
+    /// 记账：恢复页不得引用上一次运行的残留输出——那会把旧根因安到新失败上）。
+    log_mark: Option<u64>,
 }
 
 
@@ -203,6 +206,7 @@ impl Supervisor {
                 generation: 0,
                 probe_gen: 0,
                 stopping: false,
+                log_mark: None,
             })),
             wsl: Arc::new(Mutex::new(None)),
             fallback_reason: Arc::new(Mutex::new(String::new())),
@@ -331,6 +335,14 @@ impl Supervisor {
 
     /// 守护瀑布主体（boot 线程内执行；panic 由 spawn_boot 捕获兜底）。
     fn boot_waterfall(this: Arc<Self>, tx: Sender<SupervisorEvent>, preferred_port: Option<u16>) {
+        {
+            // 记账本次瀑布的 dsh-web.log 起始偏移：恢复页/事故报告只引用
+            // 本次运行的内核输出（io 失败按 None 处理，绝不阻断 boot）。
+            let web_log = shell_core::DshPaths::resolve().logs.join("dsh-web.log");
+            let mark = std::fs::metadata(&web_log).ok().map(|m| m.len());
+            let mut g = this.inner.lock().unwrap_or_else(|p| p.into_inner());
+            g.log_mark = mark;
+        }
         {
             let gen = this.inner.lock().unwrap_or_else(|p| p.into_inner()).generation;
             // ---- [-2] Node 三级解析预检（v0.5.4）：系统 PATH ≥22 → 内置
@@ -488,13 +500,15 @@ impl Supervisor {
                             this.on_boot_success(url, port3, gen, None)
                         }
                         Err(final_err) => {
-                            this.guard_incident("boot-failed", &format!("回滚到 {id} 后仍无法启动：{final_err}"));
+                            let note = this.kernel_error_suffix();
+                            this.guard_incident("boot-failed", &format!("回滚到 {id} 后仍无法启动：{final_err}{note}"));
                             this.enter_recovery(&tx, &format!("回滚后仍失败：{final_err}"));
                         }
                     }
                 }
                 None => {
-                    this.guard_incident("boot-failed", "启动失败且无可回滚快照（首次运行或快照耗尽）");
+                    let note = this.kernel_error_suffix();
+                    this.guard_incident("boot-failed", &format!("启动失败且无可回滚快照（首次运行或快照耗尽）{note}"));
                     this.enter_recovery(&tx, "启动失败且无可回滚快照（可在恢复页重试）");
                 }
             }
@@ -1306,15 +1320,30 @@ impl Supervisor {
     fn enter_recovery(&self, tx: &Sender<SupervisorEvent>, reason: &str) {
         self.enter_recovery_tx(tx, reason);
     }
+    /// 本次瀑布内核报错的附加说明（`\n内核报错：…`；无账/无输出时为空串）。
+    /// 事故报告（guard/incidents/）与恢复页共用，用户反馈时不再丢最关键的
+    /// message 行——此前壳侧 reason 只有概括（「启动失败且无可回滚快照」），
+    /// 真实根因（如 `TypeError [ERR_INVALID_ARG_TYPE]: The "paths[0]" …`）
+    /// 只埋在 dsh-web.log 深处，QQ 群排查只能靠截图盲猜。
+    fn kernel_error_suffix(&self) -> String {
+        let mark = self.inner.lock().unwrap_or_else(|p| p.into_inner()).log_mark;
+        match kernel_error_note(mark) {
+            Some(note) => format!("\n{note}"),
+            None => String::new(),
+        }
+    }
     fn enter_recovery_tx(&self, tx: &Sender<SupervisorEvent>, reason: &str) {
         self.kill_kernel();
         // 幂等：已在崩溃环态（冷却期内后续崩溃）不再重发 CrashLoop 事件——
         // 事件会再导航恢复页 + 弹系统通知，崩溃连环下发会刷屏。
         let already = self.state() == RunState::CrashLoop;
         self.set_state(RunState::CrashLoop);
+        // 壳侧 reason 只是概括；附上本次运行的内核报错尾行（真实根因）。
+        let suffix = self.kernel_error_suffix();
+        let reason_owned = if suffix.is_empty() { reason.to_string() } else { format!("{reason}{suffix}") };
         {
             let mut g = self.inner.lock().unwrap_or_else(|p| p.into_inner());
-            g.last_error = Some(reason.to_string());
+            g.last_error = Some(reason_owned);
             // P2-3（V13 审查）：吊销在途瀑布。看门狗/崩溃环开火时若不递增
             // 代际，慢 boot 步（AV 拖 300s）返回后 continue 的瀑布会继续
             // spawn 内核（boot_waterfall 只在每步间查 cancelled(gen)），把
@@ -1661,6 +1690,96 @@ impl WinFlags for Command {
 mod tests {
     use super::*;
     use std::sync::atomic::Ordering;
+
+    /// 内核报错提取（真机形态回放，2026-08 QQ 群 ERR_INVALID_ARG_TYPE 案例）：
+    /// 未处理 rejection 的原始转储——message 行 + 栈帧 + `{ code: … }` 壳。
+    /// 此前壳侧 reason 只有「启动失败且无可回滚快照」概括，用户截图常把
+    /// message 行裁掉，排查被迫盲猜；恢复页/事故报告必须自带这一行。
+    #[test]
+    fn summarize_kernel_error_extracts_real_message() {
+        let tail = concat!(
+            "web-err| node:internal/process/task_queues:104:5\n",
+            "web-err|     triggerUncaughtException(\n",
+            "web-err|     ^\n",
+            "web-err| TypeError [ERR_INVALID_ARG_TYPE]: The \"paths[0]\" argument must be of type string. Received type undefined\n",
+            "web-err|     at ZoneAwarePromise (D:\\app\\zone.js:1:1)\n",
+            "web-err|     at file:///D:/DSH%20Desktop/dsh-desktop/node_modules/@deepseek-ai/dsh/lib/bin.js:130:9\n",
+            "web-err|     at process.processTicksAndRejections (node:internal/process/task_queues:104:5) {\n",
+            "web-err|   code: 'ERR_INVALID_ARG_TYPE'\n",
+            "web-err| }\n",
+            "web-err|\n",
+            "web-err| Node.js v24.18.1\n",
+        );
+        assert_eq!(
+            summarize_kernel_error(tail).as_deref(),
+            Some("TypeError [ERR_INVALID_ARG_TYPE]: The \"paths[0]\" argument must be of type string. Received type undefined")
+        );
+    }
+
+    /// 前缀只出现在 4KB 管道块首：块内多行裸行同样要被扫描到（stderr 线程
+    /// 整块 relay 的真实形态），且多轮报错取**最后**一条（最贴近退出现场）。
+    #[test]
+    fn summarize_kernel_error_handles_chunk_prefix_and_prefers_latest() {
+        let tail = concat!(
+            "web-err| Error: dsh: first attempt failed\n",
+            "web-err|     at somewhere (a.js:1:1)\n",
+            "web| [loader-isolation] entry webserver failed: Error: listen EACCES: permission denied 127.0.0.1:50391\n",
+            "    at updateError (file:///C:/x/cordis-plugin-loader/lib/index.js:326:9)\n",
+            "dsh: fatal load failure: TypeError [ERR_INVALID_ARG_TYPE]: The \"cwd\" argument must be of type string\n",
+        );
+        assert_eq!(
+            summarize_kernel_error(tail).as_deref(),
+            Some("dsh: fatal load failure: TypeError [ERR_INVALID_ARG_TYPE]: The \"cwd\" argument must be of type string")
+        );
+    }
+
+    /// 纯噪声（只有栈帧/版本尾/壳侧行）→ None：恢复页 reason 保持壳侧原样，
+    /// 绝不把栈帧或无关行当根因透出。
+    #[test]
+    fn summarize_kernel_error_returns_none_on_noise_only() {
+        assert_eq!(summarize_kernel_error(""), None);
+        assert_eq!(summarize_kernel_error("web-err|     at a.js:1:1\nweb-err| Node.js v24.18.1\n"), None);
+        assert_eq!(summarize_kernel_error("内核退出 code=Some(1) 第 2 次\n"), None);
+        // throw er 头部行与空壳行不算消息。
+        assert_eq!(summarize_kernel_error("web-err| throw er; // Unhandled 'error' event\nweb-err| {\nweb-err| }\n"), None);
+    }
+
+    /// 提取结果截断到 300 字符（错误对象 toString 可能携带超长 URL/参数回显，
+    /// 恢复页 #why 与事故详情都不该被撑爆）。
+    #[test]
+    fn summarize_kernel_error_caps_length() {
+        let long = format!("Error: {}\n", "x".repeat(1000));
+        let got = summarize_kernel_error(&long).expect("有消息");
+        assert_eq!(got.chars().count(), 300);
+    }
+
+    /// IO 作用域：只认 `mark` 之后追加的本次内核输出——mark 之后无新内容
+    /// （Node 缺失等未 spawn 即失败）不得引用上一次运行的残留报错（旧根因
+    /// 安到新失败上）。显式路径 + 纯函数组合，不重定向全局环境（并行套件
+    /// 下 env 重定向会与 sidecar 集成测试的后台日志中继线程交叉污染）。
+    #[test]
+    fn kernel_error_note_scopes_to_log_mark() {
+        let home = std::env::temp_dir().join(format!("dsh-sup-kerr-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(&home).expect("建临时目录");
+        let log = home.join("dsh-web.log");
+        std::fs::write(&log, "web-err| TypeError [ERR_STALE]: previous run residue\n").expect("预写旧内容");
+        let mark = std::fs::metadata(&log).unwrap().len();
+        // 未记账 / mark 之后无输出 → None。
+        assert_eq!(kernel_error_note(None), None, "未记账 → None");
+        assert_eq!(read_log_since(&log, mark), None, "不得引用上次运行残留");
+        // mark 之后追加本次报错 → 提取本次消息。
+        use std::io::Write;
+        let mut f = std::fs::OpenOptions::new().append(true).open(&log).unwrap();
+        writeln!(f, "web-err| TypeError [ERR_INVALID_ARG_TYPE]: The \"paths[0]\" argument must be of type string").unwrap();
+        let tail = read_log_since(&log, mark).expect("应读到本次输出");
+        let msg = summarize_kernel_error(&tail).expect("应提取本次报错");
+        assert!(msg.contains("ERR_INVALID_ARG_TYPE"), "含根因: {msg}");
+        assert!(!msg.contains("ERR_STALE"), "不得混入旧内容: {msg}");
+        let note = format!("内核报错：{msg}");
+        assert!(note.starts_with("内核报错：TypeError"), "组装形态: {note}");
+        let _ = std::fs::remove_dir_all(&home);
+    }
 
     /// issue #159 假死判定「回合感知」：无进行中回合时达阈值判死（真死兜底），
     /// 存在进行中回合时豁免（内核正工作不得误杀）。
@@ -2546,6 +2665,62 @@ pub(crate) fn panic_payload_str(p: &(dyn std::any::Any + Send)) -> String {
     } else {
         "未知 panic 载荷".to_string()
     }
+}
+
+/// 从 dsh-web.log 自 `mark` 偏移起（本次 boot 瀑布的内核输出）提取最后一条
+/// 报错行，组装成「内核报错：…」。None = 未记账 / 读不到 / 本次无报错行。
+/// 全链不 panic 不阻断：诊断增强失败按无附加说明处理。
+fn kernel_error_note(mark: Option<u64>) -> Option<String> {
+    let mark = mark?;
+    let path = shell_core::DshPaths::resolve().logs.join("dsh-web.log");
+    let tail = read_log_since(&path, mark)?;
+    let msg = summarize_kernel_error(&tail)?;
+    Some(format!("内核报错：{msg}"))
+}
+
+/// 读取文件自 `mark` 字节偏移到当前末尾的内容（单次封顶 256KB——4MB 轮转
+/// 文件被外部截断时 mark 可能远超末尾，此时 None；正常一次启动输出远小于
+/// 封顶值）。全链静默失败。
+fn read_log_since(path: &std::path::Path, mark: u64) -> Option<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = std::fs::File::open(path).ok()?;
+    let len = f.metadata().ok()?.len();
+    if len <= mark {
+        return None;
+    }
+    let start = mark.max(len.saturating_sub(256 * 1024));
+    f.seek(SeekFrom::Start(start)).ok()?;
+    let mut buf = String::new();
+    f.read_to_string(&mut buf).ok()?;
+    Some(buf)
+}
+
+/// 从内核输出尾部提取最后一条报错消息行（纯函数，可单测）。
+///
+/// dsh-web.log 的 `web-err| ` 前缀按 4KB 管道块只出现在块首（stderr 线程
+/// 整块读取），块内换行不带前缀——统一按行剥前缀后当内核输出。排除栈帧
+/// （`at …`）、`throw er` 头、Node 版本尾、错误对象的 `{`/`}` 壳后，命中
+/// 「错误类名 / ERR_ 码 / fatal 自述」特征的行为消息行，取**最后**一条
+/// （多轮报错时最后者最贴近退出现场）。
+fn summarize_kernel_error(tail: &str) -> Option<String> {
+    let mut last_msg: Option<&str> = None;
+    for line in tail.lines() {
+        let l = line.strip_prefix("web-err| ").unwrap_or(line).trim_end();
+        let t = l.trim_start();
+        if t.is_empty()
+            || t.starts_with("at ")
+            || t.starts_with("throw er")
+            || t.starts_with("Node.js v")
+            || t.starts_with('{')
+            || t == "}"
+        {
+            continue;
+        }
+        if t.contains("Error") || t.contains("[ERR_") || t.contains("fatal") {
+            last_msg = Some(t);
+        }
+    }
+    last_msg.map(|m| m.chars().take(300).collect())
 }
 
 #[cfg(test)]
