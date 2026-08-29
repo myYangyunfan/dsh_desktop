@@ -1367,7 +1367,7 @@ jobs:
     needs: [publish]
     if: always() && !cancelled() && needs.publish.result == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 75
     env:
       GH_REPO: myYangyunfan/dsh_desktop
       GITEE_API: https://gitee.com/api/v5
@@ -1527,8 +1527,18 @@ jobs:
               continue
             fi
             echo "上传到 Gitee: $name（${size} 字节）"
-            curl -sf -X POST "${GITEE_API}/repos/${GITEE_REPO}/releases/${REL_ID}/attach_files?access_token=${GITEE_TOKEN}" \
-              -F "file=@${f}" > /dev/null
+            # Gitee 上传 API 大文件慢：单文件 10 分钟上限 + 失败重试一次（避免
+            # 单文件卡死耗尽 job timeout，v0.5.6 两次 dispatch 均在此超时）。
+            for attempt in 1 2; do
+              if curl -sf --max-time 600 -X POST "${GITEE_API}/repos/${GITEE_REPO}/releases/${REL_ID}/attach_files?access_token=${GITEE_TOKEN}" \
+                -F "file=@${f}" > /dev/null; then
+                echo "  上传成功: $name（第 ${attempt} 次）"
+                break
+              fi
+              echo "::warning::上传失败（第 ${attempt} 次）: $name，重试…"
+              [ "$attempt" -eq 2 ] && exit 1
+              sleep 10
+            done
           done
 
       - name: Verify mirrored assets
