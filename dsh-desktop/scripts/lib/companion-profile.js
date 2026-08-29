@@ -366,6 +366,63 @@ function removeRetiredDshSessionManagerPatchRows(patch) {
 }
 
 // ---------------------------------------------------------------------------
+// dsh-float-window 退役（桌面浮窗：随内核 0.1.2-alpha.1 移除该包而退役；其
+// client 注册的 slot conversation.session.header.actions 在新内核已不再声明，
+// 老用户 profile 里残留的同步副本会报 "slot ... is not declared"）。
+// ---------------------------------------------------------------------------
+
+/** 退役插件的包名与 loader id（scope 包，与 dsh-third-party-thinking 落点一致）。 */
+const RETIRED_FLOAT_WINDOW_PACKAGE = '@deepseek-ai/dsh-float-window';
+const RETIRED_FLOAT_WINDOW_LOADER_ID = 'float-window';
+
+/**
+ * 移除已退役插件 dsh-float-window 的同步副本（幂等）。非 bundle 插件（无
+ * dsh.bundle.patch），登记只存在于 cordis.patch.yml 的 insert 条目，manifest 无
+ * bundles/dependencies 登记，故无需 manifest 手术。目录清理带内置装配特征门
+ * （private: true + 包名精确匹配），避免误删用户自装的同名第三方包。
+ * @param {string} profileDir web profile 目录
+ * @param {Object} hooks { log, fail, plan, dryRun }
+ */
+function removeRetiredDshFloatWindowDir(profileDir, hooks = {}) {
+  const { log, fail, plan, dryRun = false } = hooks;
+  const pkgDir = path.join(profileDir, 'node_modules', '@deepseek-ai', 'dsh-float-window');
+  if (fs.existsSync(pkgDir)) {
+    let isBuiltin = false;
+    try {
+      const p = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8'));
+      isBuiltin = !!(p && p.name === RETIRED_FLOAT_WINDOW_PACKAGE && p.private === true);
+    } catch { /* 目录残缺：也按可清理处理 */ isBuiltin = true; }
+    if (isBuiltin) {
+      if (dryRun) {
+        if (plan) plan('dry-run: 将移除已退役插件 ' + RETIRED_FLOAT_WINDOW_PACKAGE);
+      } else {
+        try {
+          fs.rmSync(pkgDir, { recursive: true, force: true });
+          if (log) log('已移除已退役插件: ' + RETIRED_FLOAT_WINDOW_PACKAGE);
+        } catch (err) {
+          if (fail) fail('移除已退役插件失败: ' + err.message);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * 移除 patch 层已退役插件（loader id float-window）的全部登记行（insert 内层
+ * 条目、纯 insert 块、name-only 顶层条目）。纯文本变换，由调用方在自己的 patch
+ * 快照上调用后统一落盘（syncCompanionFiles 不改写 patch 文件）。
+ * @param {string} patch cordis.patch.yml 原文
+ * @returns {{ patch: string, changed: boolean }}
+ */
+function removeRetiredDshFloatWindowPatchRows(patch) {
+  const drop = dropBlocksByIds(String(patch || ''), [RETIRED_FLOAT_WINDOW_LOADER_ID]);
+  if (drop.removed.length > 0) {
+    return { patch: drop.text, changed: true };
+  }
+  return { patch, changed: false };
+}
+
+// ---------------------------------------------------------------------------
 // 目录级同步（递归比对 size+mtime 精确值，一致时跳过）
 // ---------------------------------------------------------------------------
 
@@ -455,6 +512,9 @@ function syncCompanionFiles(opts) {
   // dependencies）一次性清理；patch 行由调用方对快照调用
   // removeRetiredDshSessionManagerPatchRows 清理。
   removeRetiredDshSessionManagerDir(profileDir, { log, fail, plan, dryRun });
+  // dsh-float-window 退役：非 bundle 插件，仅目录清理（无 manifest 登记）；
+  // patch 行由调用方对快照调用 removeRetiredDshFloatWindowPatchRows 清理。
+  removeRetiredDshFloatWindowDir(profileDir, { log, fail, plan, dryRun });
 
   const bundleNames = new Set();
   for (const name of VENDOR_DEPS) {
@@ -598,6 +658,8 @@ module.exports = {
   removeRetiredThirdPartyThinkingPatchRows,
   removeRetiredDshSessionManagerDir,
   removeRetiredDshSessionManagerPatchRows,
+  removeRetiredDshFloatWindowDir,
+  removeRetiredDshFloatWindowPatchRows,
   removeLegacyMarketplacePatchLines,
   removedPluginIdsFromPatch,
   ensureDisabledPatchEntry,

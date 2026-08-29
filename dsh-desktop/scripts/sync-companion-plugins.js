@@ -44,7 +44,7 @@ const {
   ACP_DISABLE_BLOCK, PET_DISABLE_BLOCK,
   ensureDisabledPatchEntry, removeLegacyMarketplacePatchLines,
   removeRetiredDshMarketPatchRows, removeRetiredThirdPartyThinkingPatchRows,
-  removeRetiredDshSessionManagerPatchRows,
+  removeRetiredDshSessionManagerPatchRows, removeRetiredDshFloatWindowPatchRows,
   registerCompanionPatchEntries, syncCompanionFiles, removedPluginIdsFromPatch,
 } = require('./lib/companion-profile');
 
@@ -292,6 +292,16 @@ function syncPlugins(home, dryRun, dshPkgDir) {
   if (retiredSsm.changed) {
     changed = true;
     log('已从 cordis.patch.yml 移除退役插件 dsh-session-manager 条目');
+  }
+
+  // 已退役插件 dsh-float-window（loader id float-window）：insert 内层 / 顶层块 /
+  // name-only 条目一次性清理（幂等；目录清理在 syncCompanionFiles 内的
+  // removeRetiredDshFloatWindowDir 已处理）。
+  const retiredFw = removeRetiredDshFloatWindowPatchRows(patch);
+  patch = retiredFw.patch;
+  if (retiredFw.changed) {
+    changed = true;
+    log('已从 cordis.patch.yml 移除退役插件 dsh-float-window 条目');
   }
 
   // billion-context-dsh（compaction-acp）是模型驱动的 ACP 压缩后端：同一
