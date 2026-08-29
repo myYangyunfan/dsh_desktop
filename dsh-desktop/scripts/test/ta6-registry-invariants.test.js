@@ -39,6 +39,7 @@ const IMPL_SOURCES = [
   path.join(LIB_DIR, 'patch-adapters.js'),
   path.join(LIB_DIR, 'loader-isolation.js'),
   path.join(__dirname, '..', '..', 'profile-bundle-heal.js'),
+  path.join(__dirname, '..', 'patch-pi-ai-4xx-dump.js'),
 ].map((f) => fs.readFileSync(f, 'utf8'));
 
 /** 既有「内联 pkgRel」白名单：registry 里未走 patch-target-resolver 常量的
@@ -144,8 +145,8 @@ test('D. pkgRel/pkgRels 被 patch-target-resolver 常量覆盖（白名单外新
 });
 
 test('E. order 全局唯一、组内升序、补丁间依赖序成立', () => {
-  // 46 = 44（上一基线）+ 2 项新增（codex-local-bin-fallback / claude-local-bin-fallback）。
-  assert.equal(PATCH_SPECS.length, 46, 'spec 总数应为 46');
+  // 47 = 46（上一基线）+ 1 项新增（skill-dirs-compat）。
+  assert.equal(PATCH_SPECS.length, 48, 'spec 总数应为 48');
   const orders = PATCH_SPECS.map((s) => s.order);
   assert.equal(new Set(orders).size, orders.length, 'order 必须全局唯一');
   const byId = Object.fromEntries(PATCH_SPECS.map((s) => [s.id, s]));
@@ -192,9 +193,9 @@ test('E3. device-auth 154 与 credentials-absent 153 相邻无干扰', () => {
   );
 });
 
-test('F. cli:true 恰为 20 项；failPolicy ∈ {warn,degrade}', () => {
+test('F. cli:true 恰为 22 项；failPolicy ∈ {warn,degrade}', () => {
   const cliSpecs = registry.getSpecsByCli();
-  assert.equal(cliSpecs.length, 20, 'cli:true 数量应与既有断言一致（20，新增 codex/claude 本地二进制回落）');
+  assert.equal(cliSpecs.length, 22, 'cli:true 数量（含 skill-dirs-compat + pi-ai-4xx-dump）');
   for (const s of cliSpecs) assert.equal(s.cli, true);
   for (const spec of PATCH_SPECS) {
     assert.ok(

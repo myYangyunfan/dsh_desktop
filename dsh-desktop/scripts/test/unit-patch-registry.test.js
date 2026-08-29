@@ -106,9 +106,9 @@ test('防护类补丁与包级补丁均已登记（无遗漏 apply*）', () => {
   for (const id of expected) assert.ok(ids.has(id), `遗漏补丁 ${id}`);
 });
 
-test('getSpecsByCli：返回 20 个 cli:true 补丁（8 runtime + 4 数据完整性 + 2 设置写入韧性 + 3 内核韧性 + 1 pi-ai 超限文案 + 1 token-meter 夹取 + 2 本地二进制回落）', () => {
+test('getSpecsByCli：返回 22 个 cli:true 补丁（8 runtime + 4 数据完整性 + 2 设置写入韧性 + 3 内核韧性 + 1 pi-ai 超限文案 + 1 token-meter 夹取 + 2 本地二进制回落 + 1 skill 目录兼容 + 1 pi-ai 4xx 落盘）', () => {
   const specs = getSpecsByCli();
-  assert.equal(specs.length, 20, 'cli 清单应恰为 20 项');
+  assert.equal(specs.length, 22, 'cli 清单应恰为 22 项');
   const expected = new Set([
     'slot-legacy-key', 'slot-unkeyed-compat', 'slot-error-isolation',
     'runtime-flash-fix', 'shell-description-compat',
@@ -119,6 +119,8 @@ test('getSpecsByCli：返回 20 个 cli:true 补丁（8 runtime + 4 数据完整
     'bundle-arrival-retry', 'agent-loop-scheduler-guard',
     'empty-tool-name-guidance',
     'codex-local-bin-fallback', 'claude-local-bin-fallback',
+    'skill-dirs-compat',
+    'pi-ai-4xx-dump',
   ]);
   assert.deepEqual(new Set(specs.map((s) => s.id)), expected, 'cli 清单 id 集合不符');
   for (const s of specs) assert.equal(s.cli, true, `${s.id} 应标记 cli:true`);
@@ -149,6 +151,8 @@ test('getSpecsByCli：每个 spec 的 transform/apply 与 patch-adapters 导出�
     'attachment-mime-trust': adapters.transformAttachmentMimeTrust,
     'codex-local-bin-fallback': adapters.transformCodexLocalBinFallback,
     'claude-local-bin-fallback': adapters.transformClaudeLocalBinFallback,
+    'skill-dirs-compat': adapters.transformSkillDirsCompat,
+    'pi-ai-4xx-dump': adapters.transformPiAi4xxDump,
   };
   const rootApplyMap = {
     'session-persistence': adapters.rootAppliers.patchSessionPersistence,

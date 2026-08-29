@@ -69,6 +69,8 @@ const {
   PERSISTENCE_PKG_REL,
   CODEX_BIN_PKG_REL,
   CLAUDE_SUBAGENT_PKG_REL,
+  PI_AI_COMPLETIONS_PKG_REL,
+  SKILL_FS_PKG_REL,
 } = require('./patch-target-resolver');
 
 const {
@@ -105,6 +107,8 @@ const {
   transformSessionLoadGraceful,
   transformCodexLocalBinFallback,
   transformClaudeLocalBinFallback,
+  transformPiAi4xxDump,
+  transformSkillDirsCompat,
   rootAppliers,
 } = require('./patch-adapters');
 
@@ -137,6 +141,8 @@ const {
   FAIL_LOUD_ISOLATION_MARKER,
   CODEX_LOCAL_BIN_MARKER,
   CLAUDE_LOCAL_BIN_MARKER,
+  PI_AI_4XX_DUMP_MARKER,
+  SKILL_DIRS_COMPAT_MARKER,
 } = require('./patch-adapters').markers;
 
 const {
@@ -1251,6 +1257,65 @@ const PATCH_SPECS = [
       alreadyLog: alreadySkip,
       doneLog: (file) => '已注入 pathToClaudeCodeExecutable (CLAUDE_BIN) 到 ' + file,
       failLog: (file, err) => 'Claude 子代理本地二进制回落补丁失败(' + file + '): ' + err.message,
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // pi-ai 4xx 请求落盘补丁（pi-ai-4xx-dump，"400 status code (no body)" 诊断）：
+  // 网关对 streaming 请求的 4xx 一律无响应体（实测 401-no-body），错误侧
+  // 看不到任何成因。补丁在 pi-ai stream() 的 catch 里把当时的 model/baseUrl/
+  // 完整 params 落到 $DSH_HOME/llm-4xx-dump.log（messages 每条截 2000 字），
+  // 一次复现即可定位真实拒因。写失败静默、绝不影响请求流。cli:true。
+  // -------------------------------------------------------------------------
+  {
+    id: 'pi-ai-4xx-dump',
+    group: 'runtime',
+    order: 320,
+    kind: 'file',
+    layout: 'runtime-local-nm',
+    wslLayout: 'runtime-local-nm',
+    pkgRel: PI_AI_COMPLETIONS_PKG_REL,
+    transform: transformPiAi4xxDump,
+    marker: PI_AI_4XX_DUMP_MARKER,
+    requires: [],
+    failPolicy: 'warn',
+    cli: true,
+    logs: {
+      prefix: 'pi-ai 4xx 落盘补丁',
+      alreadyLog: alreadySkip,
+      doneLog: (file) => '已注入 4xx 请求落盘到 ' + file,
+      failLog: (file, err) => 'pi-ai 4xx 落盘补丁失败(' + file + '): ' + err.message,
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // skill 目录兼容补丁（skill-dirs-compat，用户技能管理面板空白反馈）：
+  // dsh-skill-filesystem 的 roots() 只扫 .dsh/.agents 系根，用户为
+  // Claude Code（~/.claude/skills）与 Codex CLI（~/.codex/skills）装的技能
+  // 不可见。补丁：1) includeDefaultRoots 时追加 user-claude / user-codex
+  // 两个约定根（rank 低于 user-agents、高于 bundled，custom 目录仍优先）；
+  // 2) DSH_SKILL_DIRS（path.delimiter 分隔）并入 customSkillDirs。
+  // 上游原生收录这些根后经 already / anchor-missing 自然退役。cli:true：
+  // boot + CLI 同步期均应用。见 patch-adapters transformSkillDirsCompat。
+  // -------------------------------------------------------------------------
+  {
+    id: 'skill-dirs-compat',
+    group: 'runtime',
+    order: 310,
+    kind: 'file',
+    layout: 'runtime-local',
+    wslLayout: 'wsl',
+    pkgRel: SKILL_FS_PKG_REL,
+    transform: transformSkillDirsCompat,
+    marker: SKILL_DIRS_COMPAT_MARKER,
+    requires: [],
+    failPolicy: 'warn',
+    cli: true,
+    logs: {
+      prefix: 'skill 目录兼容补丁',
+      alreadyLog: alreadySkip,
+      doneLog: (file) => '已让 ~/.claude/skills、~/.codex/skills 与 DSH_SKILL_DIRS 参与技能发现 ' + file,
+      failLog: (file, err) => 'skill 目录兼容补丁失败(' + file + '): ' + err.message,
     },
   },
 ];

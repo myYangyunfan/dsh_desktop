@@ -42,11 +42,17 @@ rustls = { version = "0.23", default-features = false, features = ["ring"] }
 url = "2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-# Windows-only 主窗图标补丁（commands/icon.rs 的 win_icon 模块）：直接以 crate
-# 名 `windows` 引入会与本 crate 的 `pub mod windows`（窗口管理模块）同名冲突，
-# 故用 `windows-api` 别名引入。该 crate 已在依赖树内（tao/tauri-runtime-wry
-# 传递），仅复用、不新增下载。
-windows-api = { package = "windows", version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+# Windows-only 主窗图标补丁 + 快捷方式图标重写（commands/icon.rs 的
+# win_icon / shortcut_icon 模块）：直接以 crate 名 `windows` 引入会与本
+# crate 的 `pub mod windows`（窗口管理模块）同名冲突，故用 `windows-api`
+# 别名引入。该 crate 已在依赖树内（tao/tauri-runtime-wry 传递），仅复用、
+# 不新增下载。features：
+# - Win32_Foundation / Win32_UI_WindowsAndMessaging：WM_SETICON 补设两档图标；
+# - Win32_UI_Shell：IShellLinkW/ShellLink/IPersistFile Load-Save、
+#   SHGetKnownFolderPath(FOLDERID_Desktop)、SHChangeNotify 刷图标缓存；
+# - Win32_System_Com：CoInitializeEx/CoCreateInstance/CoTaskMemFree；
+# - Win32_Storage_FileSystem：IShellLinkW::GetPath（WIN32_FIND_DATAW 形参）。
+windows-api = { package = "windows", version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell", "Win32_System_Com", "Win32_Storage_FileSystem"] }
 
 [dev-dependencies]
 # 集成测试（tests/sponsor_window.rs）用 mock runtime 走生产同款建窗路径。

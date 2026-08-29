@@ -114,13 +114,14 @@ const MULTI_SITE = new Set([
   'adapter-prepare-call-guard', // 双调用点替换 + 方法注入（prepareCall/adapterStream）
   'session-header-scan-guard', // 四点注入（模块级缓存 / helper 方法 / 读行 / 读上限）
   'session-load-graceful',     // 四点注入（hoist / scanner 赋值 / 计数 / catch 降级）
+  'skill-dirs-compat',         // 三点注入（import 扩 delimiter / 构造器 env 并入 / roots 追加）
 ]);
 
 const fileSpecs = PATCH_SPECS.filter((s) => s.kind === 'file');
 const rootSpecs = PATCH_SPECS.filter((s) => s.kind === 'root');
 
-test('审计 1：分类覆盖全部 31 个 file transform（无回滚盲区）', () => {
-  assert.equal(fileSpecs.length, 31);
+test('审计 1：分类覆盖全部 33 个 file transform（无回滚盲区）', () => {
+  assert.equal(fileSpecs.length, 33);
   const report = [];
   for (const spec of fileSpecs) {
     const pair = INVERSE_PAIR_HINTS[spec.id];

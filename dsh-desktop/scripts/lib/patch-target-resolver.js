@@ -82,9 +82,15 @@ const PICKER_AUTO_PKG_REL = path.join('dsh-host-directory-picker-auto', 'lib', '
 // Codex CLI 本地二进制回落补丁目标（@openai/codex/bin/codex.js）：非 @deepseek-ai
 // scope，pkgRel 含完整 scope 前缀，配套下方 mkPkg 的 scope-agnostic 布局。
 const CODEX_BIN_PKG_REL = path.join('@openai', 'codex', 'bin', 'codex.js');
+// pi-ai openai-completions 路由（4xx 诊断落盘补丁目标；scope-agnostic 布局）。
+const PI_AI_COMPLETIONS_PKG_REL = path.join('@earendil-works', 'pi-ai', 'dist', 'api', 'openai-completions.js');
 // Claude Code 子代理适配器补丁目标（@deepseek-ai scope，pkgRel 相对 @deepseek-ai，
 // 与其它 PKG_REL 常量一致）。
 const CLAUDE_SUBAGENT_PKG_REL = path.join('dsh-subagent-claude-code', 'lib', 'index.js');
+// skill 目录兼容补丁目标（dsh-skill-filesystem）：FileSystemSkillProvider 的
+// 构造器（customSkillDirs 装配）与 roots()（user 根清单）所在入口，即运行时
+// 经 exports "." 实际加载的技能发现 provider。
+const SKILL_FS_PKG_REL = path.join('dsh-skill-filesystem', 'lib', 'index.js');
 
 /** @deepseek-ai/<pkgRel> 落点（以 node_modules/@deepseek-ai 根为准）。 */
 function mkAi(root, pkgRel) {
@@ -276,7 +282,9 @@ module.exports = {
   KERNEL_WEB_INDEX_REL,
   PICKER_AUTO_PKG_REL,
   CODEX_BIN_PKG_REL,
+  PI_AI_COMPLETIONS_PKG_REL,
   CLAUDE_SUBAGENT_PKG_REL,
+  SKILL_FS_PKG_REL,
   resolvePatchTargets,
   resolveNmRoots,
   // 兼容期旧签名（一个版本周期后删除）。
