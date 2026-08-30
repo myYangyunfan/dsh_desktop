@@ -261,6 +261,8 @@ function makeGuard(c) {
 function createPluginManager(mods, { appDir, home }) {
   const { COMPANION_PLUGINS } = mods.companionPlugins;
   const { togglePluginInPatch, setPluginRemoved } = mods.pluginManagerPatch;
+  // 无效条目体检 + 一键清理（补丁层唯一实现在 patch-surgery，经 plugin-manager-patch 再导出）。
+  const { listDeadEntries: pmListDeadEntries, removeDeadEntriesById: pmRemoveDeadEntriesById } = mods.pluginManagerPatch;
   const { writeFileAtomic } = mods.patchIo;
   const { selectReleaseAsset, npmLatestUrl, githubReleaseApiUrl, githubAssetDownloadUrl, verifyIntegrity, compareVersions, findPackageRoot } = mods.pluginManagerUpdate;
   const https = require('node:https');
@@ -641,7 +643,45 @@ function createPluginManager(mods, { appDir, home }) {
     }
   }
 
-  return { collect, setEnabled, uninstall, restore, checkUpdates, update };
+  // ---- 无效条目体检 + 一键清理（cordis.patch.yml 死条目；补丁层实现在 patch-surgery）----
+
+  /** 体检参数：候选包根（profile node_modules → 安装根 node_modules → assets 插件目录）
+   *  + collect() 全量插件 id 集合（陈旧禁用判定的对照面）。 */
+  function deadScanOpts() {
+    return {
+      searchRoots: [
+        path.join(profileDir(), 'node_modules'),
+        path.join(appDir, 'node_modules'),
+        path.join(appDir, 'assets', 'plugins'),
+      ],
+      knownIds: new Set(collect().map((r) => r.id)),
+    };
+  }
+
+  /** 死条目/陈旧禁用体检（只读；patch 缺失按无死条目降级）。 */
+  function listDeadEntries() {
+    return pmListDeadEntries(path.join(profileDir(), 'cordis.patch.yml'), deadScanOpts());
+  }
+
+  /** 一键清理：只接受当前体检仍判死的 id（页面快照可能过期；宁漏勿误，绝不自动删除）。
+   *  清理在补丁层带备份 + 原子写 + 幂等（removeDeadEntriesById）。 */
+  function removeDeadEntries(ids) {
+    return withPatchWrite(() => {
+      const list = (Array.isArray(ids) ? ids : [ids]).filter((i) => typeof i === 'string' && i);
+      const skipped = [];
+      if (list.length === 0) return { ok: true, removed: [], backup: null, skipped };
+      const fresh = listDeadEntries();
+      const deadIds = new Set(fresh.dead.map((d) => d.id));
+      const targets = [...new Set(list)].filter((id) => deadIds.has(id));
+      for (const id of list) if (!deadIds.has(id)) skipped.push(id);
+      if (targets.length === 0) return { ok: true, removed: [], backup: null, skipped };
+      const res = pmRemoveDeadEntriesById(path.join(profileDir(), 'cordis.patch.yml'), targets);
+      if (res && res.error) return { ok: false, error: res.error, removed: [], backup: null, skipped };
+      return { ok: true, removed: res.removed, backup: res.backup, skipped, restartRequired: true };
+    });
+  }
+
+  return { collect, setEnabled, uninstall, restore, checkUpdates, update, listDeadEntries, removeDeadEntries };
 }
 
 // ---------------------------------------------------------------------------
@@ -784,6 +824,24 @@ async function main() {
         const c = ctx();
         const id = rest.find((a) => !a.startsWith('--'));
         return emit(await createPluginManager(c.mods, c).update(String(id)));
+      }
+      case 'plugin-list-dead-entries': {
+        // 无效条目体检（死条目 + 疑似陈旧禁用；只读，插件管理页横幅数据源）。
+        const c = ctx();
+        return emit(createPluginManager(c.mods, c).listDeadEntries());
+      }
+      case 'plugin-remove-dead-entries': {
+        // 一键清理：ids 为 JSON 数组（diag-order-apply 同款传参）；sidecar 侧
+        // 只清理当前体检仍判死的 id（复核宁漏勿误），绝不自动删除。
+        const c = ctx();
+        const json = rest.find((a) => !a.startsWith('--'));
+        let ids = [];
+        try {
+          const parsed = JSON.parse(json || '[]');
+          if (Array.isArray(parsed)) ids = parsed;
+          else if (parsed) ids = [parsed];
+        } catch { if (json) ids = [json]; }
+        return emit(await createPluginManager(c.mods, c).removeDeadEntries(ids));
       }
       case 'diag-run':
       case 'diag-export': {

@@ -221,6 +221,10 @@
     },
     pluginManager: {
       list: function () { return call('plugin_list'); },
+      // 无效条目体检 + 一键清理（Tauri 原生新增，无 Electron 母本；旧壳缺方法
+      // 时插件管理页以可选链调用静默降级）。
+      listDeadEntries: function () { return call('plugin_list_dead_entries'); },
+      removeDeadEntries: function (ids) { return call('plugin_remove_dead_entries', { ids: Array.isArray(ids) ? ids : [] }); },
       setEnabled: function (id, enabled) { return call('plugin_set_enabled', { id: id, enabled: !!enabled }); },
       uninstall: function (id) { return call('plugin_uninstall', { id: id }); },
       restore: function (id) { return call('plugin_restore', { id: id }); },

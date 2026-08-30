@@ -93,6 +93,12 @@ pub fn wsl_spawn_args(distro: &str, cmd: &str) -> Vec<String> {
 
 /// 子进程环境白名单（Windows 必需集 + node 运行必需集）。
 /// Electron 版 shieldArgs 的语义：**白名单**而非黑名单（防泄漏任意父进程变量）。
+///
+/// 崩溃环根治（2026-08，macOS）：`env_clear()` 之后白名单必须自足，缺了
+/// macOS/Linux 运行必需变量（TMPDIR/USER/SHELL 等）会导致内核或子进程行为
+/// 异常。**绝不加回** `NODE_OPTIONS` / `NODE_REQUIRE` / `ELECTRON_RUN_AS_NODE` /
+/// `NODE_PATH`——正是这类父进程变量泄漏（如 WorkBuddy 的 genie-safe-delete.cjs
+/// 猴补丁）把内核的批量删 node_modules.lock 打成 SAFE_DELETE_BULK_CONFIRM_REQUIRED。
 pub const ENV_ALLOWLIST: &[&str] = &[
     "SystemRoot",
     "windir",
@@ -110,7 +116,30 @@ pub const ENV_ALLOWLIST: &[&str] = &[
     "OS",
     "LANG",
     "DSH_HOME",
+    // macOS/Linux 运行必需集（env_clear 后自足）。
+    "TMPDIR",
+    "USER",
+    "LOGNAME",
+    "SHELL",
+    "TERM",
 ];
+
+/// 构造「环境净化」后的 node 命令：先 [`Command::env_clear`] 清空继承环境，
+/// 再按 [`ENV_ALLOWLIST`] 白名单逐项透传父进程变量。所有执行 DSH 自身 JS
+/// 的 node 进程（内核 / sidecar / guard / farm-repair / koffi / safe-overlay）
+/// 都必须经此构造——`std::process::Command` 默认继承父进程全部环境，只挂
+/// 白名单而**不 `env_clear()`** 会让白名单形同虚设，`NODE_OPTIONS` 等任意
+/// 父进程变量泄漏进内核（macOS 启动崩溃环根因）。
+pub fn sanitized_node_command(node_exe: impl Into<std::path::PathBuf>) -> std::process::Command {
+    let mut cmd = std::process::Command::new(node_exe.into());
+    cmd.env_clear();
+    for (k, v) in std::env::vars() {
+        if ENV_ALLOWLIST.iter().any(|a| a.eq_ignore_ascii_case(&k)) {
+            cmd.env(k, v);
+        }
+    }
+    cmd
+}
 
 impl SpawnSpec {
     pub fn new(
@@ -212,8 +241,41 @@ mod tests {
     #[test]
     fn env_allowlist_excludes_node_and_electron() {
         assert!(!ENV_ALLOWLIST.contains(&"NODE_OPTIONS"));
+        assert!(!ENV_ALLOWLIST.contains(&"NODE_REQUIRE"));
         assert!(!ENV_ALLOWLIST.contains(&"ELECTRON_RUN_AS_NODE"));
+        assert!(!ENV_ALLOWLIST.contains(&"NODE_PATH"));
         assert!(ENV_ALLOWLIST.contains(&"SystemRoot"));
+        // macOS/Linux 运行必需集（env_clear 后白名单自足，见崩溃环根治）。
+        assert!(ENV_ALLOWLIST.contains(&"TMPDIR"));
+        assert!(ENV_ALLOWLIST.contains(&"USER"));
+        assert!(ENV_ALLOWLIST.contains(&"LOGNAME"));
+        assert!(ENV_ALLOWLIST.contains(&"SHELL"));
+        assert!(ENV_ALLOWLIST.contains(&"TERM"));
+    }
+
+    /// 环境净化（崩溃环根治锚点）：`env_clear()` 后白名单自足、禁漏变量绝不
+    /// 透传。父进程注入 NODE_OPTIONS 猴补丁时，净化后的命令环境不得含它。
+    #[test]
+    fn sanitized_command_clears_env_and_applies_allowlist() {
+        let marker = "DSH_SANITIZE_MARKER_VAR";
+        // 禁漏变量：NODE_OPTIONS 猴补丁正是 macOS 崩溃环根因。
+        std::env::set_var(marker, "1");
+        std::env::set_var("NODE_OPTIONS", "--require=/bad/genie-safe-delete.cjs");
+        let cmd = sanitized_node_command("node");
+        let envs: std::collections::BTreeMap<String, Option<String>> = cmd
+            .get_envs()
+            .map(|(k, v)| (k.to_string_lossy().into_owned(), v.map(|x| x.to_string_lossy().into_owned())))
+            .collect();
+        // 禁漏变量绝不出现（白名单外 = 不透传）。
+        assert!(!envs.contains_key("NODE_OPTIONS"), "NODE_OPTIONS 不得泄漏: {envs:?}");
+        assert!(!envs.contains_key("NODE_REQUIRE"));
+        assert!(!envs.contains_key("ELECTRON_RUN_AS_NODE"));
+        assert!(!envs.contains_key("NODE_PATH"));
+        // 白名单变量必须透传（PATH 恒在；注入的 DSH_ 前缀变量非白名单，亦不出现）。
+        assert!(envs.contains_key("PATH"), "PATH 白名单必须透传: {envs:?}");
+        assert!(!envs.contains_key(marker), "非白名单父进程变量不得透传: {envs:?}");
+        std::env::remove_var(marker);
+        std::env::remove_var("NODE_OPTIONS");
     }
 
     /// WSL 包装 argv：严格独立单词（无空格拼接）、参数序 -d → -e → sh -lc → cmd。

@@ -77,15 +77,30 @@ pub(crate) fn parse_last_line_json(stdout: &str) -> Option<serde_json::Value> {
 fn fetch_once(app: &AppHandle) -> Option<serde_json::Value> {
     let state = app.state::<AppState>();
     let sv = state.supervisor.lock().unwrap_or_else(|p| p.into_inner()).clone()?;
-    let out = std::process::Command::new(&sv.node_exe)
+    // 净化构造（env_clear + 白名单）后显式回传代理与用户数据变量：balance.js
+    // 的 proxyFor 直接读 HTTPS_PROXY/HTTP_PROXY/NO_PROXY，sidecar resolveHome
+    // 读 DSH_TAURI_USERDATA（DSH_HOME 在白名单内已透传）。
+    let mut cmd = kernel_process::sanitized_node_command(&sv.node_exe);
+    for key in [
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "NO_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "no_proxy",
+        "DSH_TAURI_USERDATA",
+    ] {
+        if let Ok(value) = std::env::var(key) {
+            cmd.env(key, value);
+        }
+    }
+    let out = cmd
         .arg(&sv.sidecar_cli)
         .arg("balance-fetch")
         .arg("--app-dir")
         .arg(&sv.app_dir)
         .env("DSH_TAURI_VERSION", env!("CARGO_PKG_VERSION"))
         // GUI 进程起 console 子进程必须抑制终端窗（与 run_sidecar 同口径）。
-        // 环境整表继承：HTTPS_PROXY/HTTP_PROXY/NO_PROXY/DSH_HOME/DSH_TAURI_USERDATA
-        // 必须原样到达 node 侧（balance.js proxyFor / sidecar resolveHome 同源）。
         .creation_flags_no_window()
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())

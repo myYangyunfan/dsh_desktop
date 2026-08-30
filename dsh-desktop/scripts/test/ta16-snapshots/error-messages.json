@@ -180,67 +180,67 @@
   ],
   "sessionNotifyRs": [
     {
-      "line": 174,
+      "line": 175,
       "text": "DSH 任务完成"
     },
     {
-      "line": 175,
+      "line": 176,
       "text": "会话任务已完成"
     },
     {
-      "line": 394,
+      "line": 395,
       "text": "[notify] session watcher 不启动（不影响主窗）：{e}"
     },
     {
-      "line": 410,
+      "line": 411,
       "text": "AppState 未就绪"
     },
     {
-      "line": 416,
+      "line": 417,
       "text": "supervisor 未装配（内核未就绪）"
     },
     {
-      "line": 421,
+      "line": 422,
       "text": "payload 脚本缺失：{}"
     },
     {
-      "line": 467,
+      "line": 468,
       "text": "[notify] session watcher 启动失败：{e}"
     },
     {
-      "line": 476,
+      "line": 477,
       "text": "[notify] session watcher 连续 {spawn_failures} 次启动失败，放弃（内核重启可复活）"
     },
     {
-      "line": 494,
+      "line": 495,
       "text": "[notify] session watcher 在岗（{}，监视 {}）"
     },
     {
-      "line": 518,
+      "line": 519,
       "text": "[notify] turn-end 处理 panic（已隔离，继续）"
     },
     {
-      "line": 528,
+      "line": 529,
       "text": "[notify] watcher 超长行丢弃（>{WATCHER_LINE_CAP}B）"
     },
     {
-      "line": 554,
+      "line": 555,
       "text": "[notify] session watcher 退出，{}ms 后第 {restarts} 次重启"
     },
     {
-      "line": 578,
+      "line": 579,
       "text": "stdout 管道缺失"
     },
     {
-      "line": 579,
+      "line": 580,
       "text": "stderr 管道缺失"
     },
     {
-      "line": 697,
+      "line": 698,
       "text": "[notify] 任务完成: {}"
     },
     {
-      "line": 710,
+      "line": 711,
       "text": "[notify] 通知发送失败: {e}"
     }
   ],
@@ -254,111 +254,111 @@
       "text": "[boot] 壳进程 run() 入口"
     },
     {
-      "line": 264,
+      "line": 266,
       "text": "tauri 构建"
     },
     {
-      "line": 341,
+      "line": 343,
       "text": "[pages] preview-server 启动失败（降级 data: 内嵌页）: {e}"
     },
     {
-      "line": 343,
+      "line": 345,
       "text": "<!doctype html><meta charset=\\\"utf-8\\\"><body style=\\\"font:14px system-ui;background:#0b1220;color:#d7dde4;display:flex;align-items:center;justify-content:center;height:100vh\\\"><div style=\\\"max-width:520px\\\">静态页服务启动失败，请查看日志目录：<br>{}<br>重启应用可重试。</div></body>"
     },
     {
-      "line": 356,
+      "line": 358,
       "text": "DSH Desktop 已在运行"
     },
     {
-      "line": 402,
+      "line": 404,
       "text": "[boot] 内核装配失败（主窗转恢复页，不退出）: {e}"
     },
     {
-      "line": 412,
+      "line": 414,
       "text": "[tray] 初始化失败（不影响主窗）: {e}"
     },
     {
-      "line": 433,
+      "line": 435,
       "text": "[update] 检测到客户端新版本 {} → {}（{}，{}）"
     },
     {
-      "line": 439,
+      "line": 441,
       "text": "[update] 启动更新检查失败（静默忽略）：{e}"
     },
     {
-      "line": 473,
+      "line": 475,
       "text": "[route] 事件路由 panic（已隔离，继续处理后续事件）"
     },
     {
-      "line": 529,
+      "line": 531,
       "text": "[route] 内核 URL 变更（端口漂移），跳过渲染抑制直接换页（{url}）"
     },
     {
-      "line": 549,
+      "line": 551,
       "text": "[route] 重启风暴渲染抑制：距上次换页 <{KERNEL_NAV_SUPPRESS_WINDOW_MS}ms 且页面存活，跳过整页换页（{url}）"
     },
     {
-      "line": 551,
+      "line": 553,
       "text": "[route] 重启风暴渲染抑制：页面探针无响应，执行整页换页（{url}）"
     },
     {
-      "line": 569,
+      "line": 571,
       "text": "[route] boot 步骤 {name} OK（{ms}ms）"
     },
     {
-      "line": 571,
+      "line": 573,
       "text": "[route] boot 步骤 {name} FAIL（{ms}ms）: {}"
     },
     {
-      "line": 571,
+      "line": 573,
       "text": "未知失败"
     },
     {
-      "line": 613,
+      "line": 615,
       "text": "[route] 内核退出 code={code:?}"
     },
     {
-      "line": 617,
+      "line": 619,
       "text": "[route] 崩溃环触发（累计 {crashes} 次），主窗转恢复页"
     },
     {
-      "line": 618,
+      "line": 620,
       "text": "内核反复异常退出"
     },
     {
-      "line": 625,
+      "line": 627,
       "text": "内核服务反复异常退出，已进入恢复模式"
     },
     {
-      "line": 629,
+      "line": 631,
       "text": "[route] 探活失败 ×{consecutive}"
     },
     {
-      "line": 633,
+      "line": 635,
       "text": "[route] 内核假死可疑 ×{consecutive}（端口通、HTTP 无响应）"
     },
     {
-      "line": 679,
+      "line": 681,
       "text": "DSH_TAURI_REPO_ROOT={root} 不含 dsh-desktop/vendor/node"
     },
     {
-      "line": 697,
+      "line": 699,
       "text": "未找到内核目录 dsh-desktop（开发检出与安装产物布局均未命中；可设 DSH_TAURI_REPO_ROOT 指定）"
     },
     {
-      "line": 726,
+      "line": 728,
       "text": "显示主窗口"
     },
     {
-      "line": 727,
+      "line": 729,
       "text": "打开日志"
     },
     {
-      "line": 729,
+      "line": 731,
       "text": "退出"
     },
     {
-      "line": 732,
+      "line": 734,
       "text": "无应用图标"
     }
   ],

@@ -1,7 +1,8 @@
 //! # bridge —— `window.dshDesktop` 桥
 //!
-//! contracts/bridge-api.md（53 方法硬契约）+ contracts/ipc-commands.md（43 通道映射）
-//! + contracts/error-codes.md（统一错误码）的**代码载体**：
+//! contracts/bridge-api.md（55 方法：53 硬契约 + 2 Tauri 原生新增）
+//! + contracts/ipc-commands.md（45 通道映射）+ contracts/error-codes.md（统一错误码）
+//! 的**代码载体**：
 //!
 //! - [`error`]    —— `BridgeError`（code/message/detail，serde 序列化给垫片）
 //! - [`commands`] —— Electron 通道 → Tauri command 的映射表（纯函数 + 完整性测试）

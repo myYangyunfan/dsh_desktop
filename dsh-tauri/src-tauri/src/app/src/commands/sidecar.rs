@@ -1,4 +1,4 @@
-//! sidecar 转发族（ipc-commands.md §2.2/§2.3）：插件管理六通道 + 诊断/备份。
+//! sidecar 转发族（ipc-commands.md §2.2/§2.3）：插件管理八通道 + 诊断/备份。
 //!
 //! 全部经 `run_sidecar`（node cli.js <子命令> --app-dir）——单一数据流的
 //! Rust 编排侧，业务全在 Node sidecar（plugin-contract.md §3）。
@@ -20,7 +20,7 @@ pub fn run_sidecar(app: &AppHandle, args: &[&str]) -> Result<serde_json::Value, 
     let state = app.state::<AppState>();
     let sv = state.supervisor.lock().unwrap_or_else(|p| p.into_inner()).clone();
     let sv = sv.ok_or_else(|| BridgeError::internal("supervisor 未初始化"))?;
-    let out = std::process::Command::new(&sv.node_exe)
+    let out = kernel_process::sanitized_node_command(&sv.node_exe)
         .arg(&sv.sidecar_cli)
         .args(args)
         .arg("--app-dir")
@@ -73,6 +73,18 @@ pub fn plugin_check_updates(app: AppHandle, window: WebviewWindow) -> Result<ser
 pub fn plugin_update(id: String, app: AppHandle, window: WebviewWindow) -> Result<serde_json::Value, BridgeError> {
     main_window_only(&window)?;
     run_sidecar(&app, &["plugin-update", &id])
+}
+// 无效条目体检 + 一键清理（Tauri 原生新增，无 Electron 母本；插件管理页横幅）。
+#[tauri::command]
+pub fn plugin_list_dead_entries(app: AppHandle, window: WebviewWindow) -> Result<serde_json::Value, BridgeError> {
+    main_window_only(&window)?;
+    run_sidecar(&app, &["plugin-list-dead-entries"])
+}
+#[tauri::command]
+pub fn plugin_remove_dead_entries(ids: Vec<String>, app: AppHandle, window: WebviewWindow) -> Result<serde_json::Value, BridgeError> {
+    main_window_only(&window)?;
+    let json = serde_json::to_string(&ids).map_err(|e| BridgeError::internal(e.to_string()))?;
+    run_sidecar(&app, &["plugin-remove-dead-entries", &json])
 }
 
 // ---------------------------------------------------------------------------
@@ -204,18 +216,19 @@ mod tests {
             .nth(1)
             .and_then(|s| s.split("// ---").next())
             .expect("run_sidecar 函数体");
-        assert!(seg.contains("Command::new(&sv.node_exe)"), "锚点漂移（改了 spawn 写法需同步测试）: {seg}");
+        assert!(seg.contains("sanitized_node_command(&sv.node_exe)"), "锚点漂移（改了 spawn 写法需同步测试）: {seg}");
         assert!(seg.contains(".creation_flags_no_window()"), "sidecar spawn 必须抑制终端窗: {seg}");
     }
 
     /// 主窗白名单（ipc-commands.md §3.3；Electron pluginManagerIpcAllowed 同守卫面）：
-    /// 插件管理六通道 + 诊断/备份族 + restart_service 必须逐个前置 main_window_only
+    /// 插件管理八通道 + 诊断/备份族 + restart_service 必须逐个前置 main_window_only
     /// （浮窗/宠物窗内核页不得装/卸插件与重启内核）。WSL 三通道对齐 Electron 不设守卫。
     #[test]
     fn sidecar_family_commands_are_main_window_gated() {
         let src = include_str!("sidecar.rs").replace("\r\n", "\n");
         for cmd in [
             "plugin_list", "plugin_set_enabled", "plugin_uninstall", "plugin_restore", "plugin_check_updates", "plugin_update",
+            "plugin_list_dead_entries", "plugin_remove_dead_entries",
             "diag_run", "diag_export", "diag_validate", "diag_order", "diag_order_apply", "diag_remove_bundle",
             "backup_export", "backup_restore",
         ] {

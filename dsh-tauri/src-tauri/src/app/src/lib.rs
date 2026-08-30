@@ -236,6 +236,8 @@ pub fn run() {
             commands::plugin_restore,
             commands::plugin_check_updates,
             commands::plugin_update,
+            commands::plugin_list_dead_entries,
+            commands::plugin_remove_dead_entries,
             // Phase 3
             commands::file_revert,
             commands::image_paste_save,

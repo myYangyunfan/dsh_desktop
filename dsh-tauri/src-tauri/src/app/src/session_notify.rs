@@ -61,7 +61,7 @@
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::PathBuf;
-use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 
@@ -70,6 +70,7 @@ use tauri_plugin_notification::NotificationExt;
 
 use crate::AppState;
 use crate::commands::NoWindow;
+use kernel_process::sanitized_node_command;
 
 // ---------------------------------------------------------------------------
 // 常量（Electron main.js onSessionTurnEnd / preload 逐字对齐）
@@ -563,7 +564,7 @@ fn run_watcher(app: AppHandle, my_gen: u64, paths: WatcherPaths) {
 fn spawn_watcher_process(
     paths: &WatcherPaths,
 ) -> Result<(Child, SpawnedWatcher), String> {
-    let mut cmd = Command::new(&paths.node);
+    let mut cmd = sanitized_node_command(&paths.node);
     cmd.arg(&paths.script)
         .arg("--sessions-dir")
         .arg(&paths.sessions_dir)

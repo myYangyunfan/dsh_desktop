@@ -18,7 +18,7 @@ pub struct ChannelMapping {
     pub cut: bool,
 }
 
-/// 全量映射表（43 通道，提取自 main.js，见 contracts/ipc-commands.md §2）。
+/// 全量映射表（45 通道：43 提取自 main.js + 2 Tauri 原生新增，见 contracts/ipc-commands.md §2）。
 pub const CHANNELS: &[ChannelMapping] = &[
     // ---- Phase 1：核心生命周期 ----
     m("chrome:init", "app_init", false, false),
@@ -51,6 +51,9 @@ pub const CHANNELS: &[ChannelMapping] = &[
     mp("dsh:plugin-restore", "plugin_restore", false, false),
     mp("dsh:plugin-check-updates", "plugin_check_updates", false, false),
     mp("dsh:plugin-update", "plugin_update", false, false),
+    // Tauri 原生新增（无 Electron 母本）：插件管理页无效条目体检 + 一键清理。
+    mp("dsh:plugin-list-dead-entries", "plugin_list_dead_entries", false, false),
+    mp("dsh:plugin-remove-dead-entries", "plugin_remove_dead_entries", false, false),
     // ---- Phase 3：围栏 / 诊断 / WSL ----
     mp3("dsh:file-revert", "file_revert", false, false),
     mp3("dsh:file-open", "file_open", false, false),
@@ -94,10 +97,11 @@ mod tests {
     use super::*;
     use std::collections::HashSet;
 
-    /// contracts/ipc-commands.md §2 声明的总量：36 invoke + 7 send = 43，全部保留。
+    /// contracts/ipc-commands.md §2 声明的总量：38 invoke + 7 send = 45
+    ///（36 + 2 为 Tauri 原生新增的插件死条目体检/清理通道），全部保留。
     #[test]
     fn channel_count_matches_contract() {
-        assert_eq!(CHANNELS.len(), 43, "通道总数必须与契约文档一致");
+        assert_eq!(CHANNELS.len(), 45, "通道总数必须与契约文档一致");
         assert_eq!(CHANNELS.iter().filter(|c| c.cut).count(), 0, "无裁撤通道（guard:action 已迁移）");
         assert_eq!(
             CHANNELS.iter().filter(|c| c.fire_and_forget).count(),

@@ -16,7 +16,7 @@
 | `guard:action` | `guard_action` | 插件保护中心交互面（status/check/incident/resolve-incident 分发；写动作仍走守护瀑布自动面） |
 | 事件 `dsh:balance` | event `balance-changed` | 冒号统一转连字符 |
 
-## 2. 全量映射表（43 通道）
+## 2. 全量映射表（45 通道：43 提取自 main.js + 2 Tauri 原生新增，见 §2.2）
 
 ### 2.1 保留 —— Phase 1（核心生命周期，main.js:2868-3271）
 
@@ -59,6 +59,8 @@
 | `dsh:plugin-restore` (3366) | `plugin_restore` | 同上 |
 | `dsh:plugin-check-updates` (3379) | `plugin_check_updates` | 同上 |
 | `dsh:plugin-update` (3390) | `plugin_update` | 同上 |
+| `dsh:plugin-list-dead-entries` | `plugin_list_dead_entries` | 同上（**Tauri 原生新增，无 Electron 母本**：cordis.patch.yml 无效条目体检，插件管理页横幅数据源） |
+| `dsh:plugin-remove-dead-entries` | `plugin_remove_dead_entries` | 同上（**Tauri 原生新增，无 Electron 母本**：一键清理死条目，sidecar 侧复核 + 备份 + 原子写 + 幂等） |
 
 ### 2.3 保留 —— Phase 3（围栏 / 预览 / 诊断 / WSL）
 
@@ -90,7 +92,8 @@
 
 1. **参数形态**：Electron 的单 payload 对象拆平为 command 具名参数（`{action}` → `action: String`）。
 2. **错误返回**：所有 command 统一返回 `Result<T, BridgeError>`；`BridgeError` 携带 `code`（contracts/error-codes.md）+ `message`，序列化为 `{code, message}` 供垫片转成 `Error`。
-3. **origin 白名单（已实装，v0.5.2）**：插件管理六通道、诊断/备份族与
+3. **origin 白名单（已实装，v0.5.2）**：插件管理八通道（六条 Electron 母本通道
+   + 两条 Tauri 原生新增的死条目体检/清理）、诊断/备份族与
    `restart_service` 仅接受主窗 label 的调用（对齐 Electron `pluginManagerIpcAllowed`
    的实际守卫面——含 `chrome:restart-service`，不含 WSL 三通道）；`window_control`
    等任意窗可用。Tauri command 拿不到原生 origin（远程页经 capability `remote.urls`

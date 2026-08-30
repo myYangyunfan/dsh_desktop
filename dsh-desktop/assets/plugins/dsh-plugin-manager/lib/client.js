@@ -126,7 +126,13 @@ window.__ModuleLoader__.load({
 			healthDisabled: "已被禁用",
 			healthFix: "修复指引：完全退出并重启 DSH Desktop（启动链会自动修复 / 重装缺失组件）。若重启后仍缺席，请在下方「导出诊断日志包」并随反馈附上。",
 			healthError: "检测失败：",
-			healthNoChannel: "内核插件清单通道不可用（请确认已更新到最新版 DSH Desktop）"
+			healthNoChannel: "内核插件清单通道不可用（请确认已更新到最新版 DSH Desktop）",
+			// 无效条目体检（cordis.patch.yml 死条目横幅 + 一键清理；桥缺方法时整块静默隐藏）
+			deadScanTitle: "检测到 {0} 条无效插件条目（包不存在）：",
+			deadStaleTitle: "另有 {0} 条疑似陈旧的禁用记录（只提示，不参与清理）：",
+			deadCleanBtn: "清理",
+			deadCleaning: "清理中…",
+			deadCleanDone: "已清理，完全退出重启 DSH Desktop 后生效"
 		};
 
 		// 关键后端服务清单（运行期形态）：id = 组合 yml 的行 id（loader entryId），
@@ -249,10 +255,13 @@ window.__ModuleLoader__.load({
 			const [updatingId, setUpdatingId] = react.useState(null);
 			// 简洁卡片展开详情（点击卡片切换；null = 全部收起）
 			const [expanded, setExpanded] = react.useState(null);
-			// 卸载两步确认（id → true 表示已点过一次，等待再点确认）
-			const [uninstallArmed, setUninstallArmed] = react.useState(null);
-			// 操作结果提示条（成功/失败均走这里，避免借用 error 区）
-			const [actionMsg, setActionMsg] = react.useState(null);
+				// 卸载两步确认（id → true 表示已点过一次，等待再点确认）
+				const [uninstallArmed, setUninstallArmed] = react.useState(null);
+				// 无效条目体检（cordis.patch.yml 死条目）：null=未扫描/无死条目
+				const [deadScan, setDeadScan] = react.useState(null);
+				const [cleaningDead, setCleaningDead] = react.useState(false);
+				// 操作结果提示条（成功/失败均走这里，避免借用 error 区）
+				const [actionMsg, setActionMsg] = react.useState(null);
 
 			react.useEffect(() => {
 				let cancelled = false;
@@ -333,6 +342,14 @@ window.__ModuleLoader__.load({
 					if (!cancelled) {
 						setRows(mapped);
 						setLocalOnly(!liveOk && mapped.length > 0);
+					}
+					// 3) 无效条目体检（可选链：桥/壳缺方法即 undefined；失败与取消
+					//    一律静默降级——横幅是增强面，绝不阻塞插件清单）。
+					try {
+						const scan = await (b && b.listDeadEntries?.());
+						if (!cancelled && scan && scan.ok) setDeadScan(scan);
+					} catch (err) {
+						console.warn("[dsh-plugin-manager] 无效条目体检失败（降级隐藏）:", err);
 					}
 				})();
 				return () => { cancelled = true; };
@@ -453,6 +470,28 @@ window.__ModuleLoader__.load({
 						setActionMsg(L.actionFailed + String((res && res.error) || "未知错误"));
 					}
 				}).catch((err) => setActionMsg(L.actionFailed + String((err && err.message) || err)));
+			};
+
+			/** 一键清理死条目（备份 + 原子写在壳侧完成，壳侧只清理仍判死的 id；
+			 *  成功后刷新清单并重扫横幅，提示重启生效）。 */
+			const doCleanDead = () => {
+				const b = bridge();
+				const ids = deadScan && Array.isArray(deadScan.dead) ? deadScan.dead.map((d) => d.id) : [];
+				if (!b || !b.removeDeadEntries || cleaningDead || ids.length === 0) return;
+				setCleaningDead(true);
+				b.removeDeadEntries(ids).then((res) => {
+					setCleaningDead(false);
+					if (res && res.ok) {
+						setDeadScan(null);
+						setActionMsg(L.deadCleanDone);
+						setRefreshTick((t) => t + 1);
+					} else {
+						setActionMsg(L.actionFailed + String((res && res.error) || "未知错误"));
+					}
+				}).catch((err) => {
+					setCleaningDead(false);
+					setActionMsg(L.actionFailed + String((err && err.message) || err));
+				});
 			};
 
 			const matches = (row) => {
@@ -717,6 +756,31 @@ window.__ModuleLoader__.load({
 			// 有可更新项的个数（工具栏「检查更新」按钮据此高亮 + 显示数量）
 			const updTotal = updateMap ? Object.values(updateMap).filter((it) => it && it.hasUpdate).length : 0;
 
+			// 无效条目横幅（死条目一键清理；疑似陈旧禁用只透出）。
+			const warnColor = "var(--dsw-alias-state-warning-primary, #d99a3d)";
+			const deadList = deadScan && Array.isArray(deadScan.dead) ? deadScan.dead : [];
+			const staleList = deadScan && Array.isArray(deadScan.stale) ? deadScan.stale : [];
+			const deadBanner = deadList.length === 0 ? null : jsxs("div", {
+				style: { fontSize: 12, marginTop: 8, padding: "8px 12px", borderRadius: 8, border: "1px solid " + warnColor, background: "color-mix(in srgb, " + warnColor + " 8%, transparent)", color: warnColor, display: "flex", flexDirection: "column", gap: 6 },
+				children: [
+					jsxs("div", { style: { fontWeight: 600 }, children: [
+						"⚠ " + L.deadScanTitle.replace("{0}", String(deadList.length)),
+						jsx("button", {
+							type: "button",
+							disabled: cleaningDead,
+							onClick: doCleanDead,
+							style: { fontSize: 12, padding: "2px 12px", marginLeft: 10, borderRadius: 7, cursor: cleaningDead ? "default" : "pointer", whiteSpace: "nowrap", border: "1px solid " + warnColor, background: "transparent", color: "inherit", opacity: cleaningDead ? 0.55 : 1 },
+							children: cleaningDead ? L.deadCleaning : L.deadCleanBtn
+						})
+					] }),
+					jsx("ul", { style: { margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 2 }, children: deadList.map((d, i) => jsxs("li", { style: { wordBreak: "break-all" }, children: [
+						d.id,
+						d.name && d.name !== d.id ? "（" + d.name + "）" : ""
+					] }, i)) }),
+					staleList.length > 0 ? jsx("div", { style: { opacity: 0.8 }, children: L.deadStaleTitle.replace("{0}", String(staleList.length)) + staleList.map((s) => s.id).join("、") }) : null
+				]
+			});
+
 			return jsxs("div", { children: [
 				jsx("span", { style: { fontSize: 12, opacity: 0.65 }, children: L.tabHint }),
 				rows ? jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10, marginTop: 10, flexWrap: "wrap" }, children: [
@@ -747,6 +811,7 @@ window.__ModuleLoader__.load({
 					] })
 				] }) : null,
 				actionMsg ? jsx("div", { style: { fontSize: 12, marginTop: 8, padding: "6px 12px", borderRadius: 8, border: "1px solid " + msgColor, background: "color-mix(in srgb, " + msgColor + " 8%, transparent)", color: msgColor }, children: actionMsg }) : null,
+				deadBanner,
 				renderChips(),
 				localOnly ? jsx("div", { style: { fontSize: 12, opacity: 0.6, marginTop: 6 }, children: L.localOnlyHint }) : null,
 				renderBody()

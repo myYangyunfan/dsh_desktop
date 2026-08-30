@@ -14,7 +14,7 @@
 - 所有请求-响应方法返回 `Promise`；错误拒绝时携带 `{ message }` 形态的 `Error`。
 - 订阅方法（`onMaximizeChange` / `onNotificationJump`）返回**取消订阅函数**。
 
-## 2. 方法总表（53 项）
+## 2. 方法总表（55 项：53 Electron 契约面 + 2 Tauri 原生新增，见 §2.7 末尾）
 
 ### 2.1 顶层字段与方法
 
@@ -87,7 +87,7 @@
 | 23 | `open(sessionId: string): Promise<any>` | 会话弹出到独立浮窗 | `chrome:float-window{action:'open'}` → `float_window` |
 | 24 | `close(): void` | **同步 send**。浮窗自关闭 | `float:close` → command `float_close`（fire-and-forget） |
 
-### 2.7 `pluginManager`（插件管理，6 项；Phase 2 经 sidecar）
+### 2.7 `pluginManager`（插件管理，8 项；Phase 2 经 sidecar）
 
 | # | 签名 | 语义 | 通道 |
 |---|------|------|------|
@@ -97,6 +97,8 @@
 | 28 | `restore(id: string): Promise<any>` | 从隔离区恢复 | `dsh:plugin-restore` → `plugin_restore` |
 | 29 | `checkUpdates(): Promise<any>` | 检查插件更新 | `dsh:plugin-check-updates` → `plugin_check_updates` |
 | 30 | `update(id: string): Promise<any>` | 更新单个插件 | `dsh:plugin-update` → `plugin_update` |
+| 54 | `listDeadEntries(): Promise<{ok, patchExists, dead, stale}>` | 无效条目体检（**Tauri 原生新增，无 Electron 母本**）：`dead`=包不存在的死条目（可清理），`stale`=疑似陈旧禁用（只透出）。旧壳缺方法时页面可选链静默降级 | `dsh:plugin-list-dead-entries` → `plugin_list_dead_entries` |
+| 55 | `removeDeadEntries(ids: string[]): Promise<{ok, removed, backup, skipped, restartRequired}>` | 一键清理死条目（**Tauri 原生新增，无 Electron 母本**）：备份 + 原子写 + 幂等；sidecar 只清理当前体检仍判死的 id | `dsh:plugin-remove-dead-entries` → `plugin_remove_dead_entries` |
 
 ### 2.8 `diagBackup`（诊断与备份，9 项）
 

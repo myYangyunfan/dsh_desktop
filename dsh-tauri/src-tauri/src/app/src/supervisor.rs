@@ -27,7 +27,7 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use kernel_process::{choose_stable_port, kill_tree, CrashLoopDetector, ReadyLineParser, SpawnSpec};
+use kernel_process::{choose_stable_port, kill_tree, sanitized_node_command, CrashLoopDetector, ReadyLineParser, SpawnSpec};
 use kernel_process::crash_loop::Verdict;
 /// 稳定落定窗口（Electron SERVICE_STABLE_MS 同语义：就绪后稳定存活此时长，
 /// 启动快照才成为「最后良好」回滚锚点）。
@@ -592,7 +592,7 @@ impl Supervisor {
 
     /// guard 子命令薄跑（stdout 末行 JSON 解析；失败返回 None——瀑布降级而非崩）。
     fn guard_cli_json(&self, args: &[&str]) -> Option<serde_json::Value> {
-        let out = Command::new(&self.node_exe)
+        let out = sanitized_node_command(&self.node_exe)
             .arg(&self.sidecar_cli)
             .args(args)
             .arg("--app-dir")
@@ -752,7 +752,7 @@ impl Supervisor {
             eprintln!("[farm-repair] 脚本缺失（{:?}），跳过", script);
             return;
         }
-        let out = Command::new(&self.node_exe)
+        let out = sanitized_node_command(&self.node_exe)
             .arg(&script)
             .arg(&self.app_dir)
             .stdout(Stdio::piped())
@@ -771,7 +771,7 @@ impl Supervisor {
     }
 
     fn run_sidecar_boot(&self, tx: &Sender<SupervisorEvent>, _gen: u64) -> Result<(), String> {
-        let out = Command::new(&self.node_exe)
+        let out = sanitized_node_command(&self.node_exe)
             .arg(&self.sidecar_cli)
             .arg("boot")
             .arg("--app-dir")
@@ -821,7 +821,7 @@ impl Supervisor {
             let ok = match cached {
                 Some(true) => true,
                 _ => {
-                    let out = std::process::Command::new(&self.node_exe)
+                    let out = sanitized_node_command(&self.node_exe)
                         .arg(&self.sidecar_cli)
                         .arg("koffi-preflight")
                         .arg("--app-dir")
@@ -837,7 +837,7 @@ impl Supervisor {
                 }
             };
         if !ok {
-            let out = std::process::Command::new(&self.node_exe)
+            let out = sanitized_node_command(&self.node_exe)
                 .arg(&self.sidecar_cli)
                 .arg("picker-overlay")
                 .arg("--app-dir")
@@ -875,7 +875,7 @@ impl Supervisor {
 
     /// 刷新 safe-boot overlay（崩溃自动重启前）：解析 dsh-web.log 失败插件 → 禁用。
     fn refresh_safe_overlay(&self) -> bool {
-        let out = std::process::Command::new(&self.node_exe)
+        let out = sanitized_node_command(&self.node_exe)
             .arg(&self.sidecar_cli)
             .arg("safe-overlay")
             .arg("--app-dir")
@@ -924,14 +924,14 @@ impl Supervisor {
         } else {
             let use_system_ca = self.node_resolved.as_ref().map(|r| r.supports_use_system_ca()).unwrap_or(false);
             let spec = SpawnSpec::new(&self.node_exe, &self.bin_js, &self.kernel_version, port, &overlays, use_system_ca);
-            let mut cmd = Command::new(&spec.node_exe);
+            // 环境净化：env_clear + 白名单（sanitized_node_command）。macOS 启动
+            // 崩溃环根治——`std::process::Command` 默认继承父进程全部环境，此前
+            // 只挂白名单不 env_clear，白名单形同虚设，NODE_OPTIONS 等任意父进程
+            // 变量泄漏进内核（WorkBuddy 的 genie-safe-delete.cjs 猴补丁被打进内核，
+            // boot 时批量删 node_modules.lock 被抛 SAFE_DELETE_BULK_CONFIRM_REQUIRED）。
+            let mut cmd = sanitized_node_command(&spec.node_exe);
             cmd.args(&spec.node_args).arg(&spec.bin_js).args(&spec.web_args);
-            // 环境白名单 + 监管标识（main.js childEnv 语义）。
-            for (k, v) in std::env::vars() {
-                if spec.env_allow.iter().any(|a| a.eq_ignore_ascii_case(&k)) {
-                    cmd.env(k, v);
-                }
-            }
+            // 监管标识（main.js childEnv 语义）。
             cmd.env("DSH_DESKTOP_SUPERVISED", "1").env("NO_COLOR", "1");
             cmd.current_dir(&self.app_dir).stdin(Stdio::null())
                 .stdout(Stdio::piped()).stderr(Stdio::piped())
@@ -2451,6 +2451,40 @@ Content-Length: 0
         // local 分支的既有锚点仍在。
         assert!(seg.contains("SpawnSpec::new(&self.node_exe"), "local 分支 SpawnSpec 链不变");
         assert!(seg.contains("set_process_group_leader(&mut cmd)"), "local 分支 PGID 设置不变");
+    }
+
+    /// 崩溃环根治锚点（macOS NODE_OPTIONS 泄漏）：spawn_kernel local 分支必须
+    /// 经 sanitized_node_command（env_clear + 白名单），内核环境不含
+    /// NODE_OPTIONS / NODE_REQUIRE / ELECTRON_RUN_AS_NODE / NODE_PATH，只含
+    /// 白名单（PATH 等）+ 监管标识（DSH_DESKTOP_SUPERVISED / NO_COLOR）。
+    #[test]
+    fn spawn_kernel_env_is_sanitized_shape_and_behavior() {
+        // ① 形态锚点：防回退到「只挂白名单不 env_clear」的旧内联循环形态。
+        let src = include_str!("supervisor.rs").replace("\r\n", "\n");
+        let seg = src
+            .split("fn spawn_kernel")
+            .nth(1)
+            .and_then(|s| s.split("/// 内核退出处理").next())
+            .expect("spawn_kernel 段");
+        assert!(seg.contains("sanitized_node_command(&spec.node_exe)"), "spawn_kernel 必须经净化构造: {seg}");
+        assert!(!seg.contains("for (k, v) in std::env::vars()"), "不得残留内联白名单循环（旧形态 env 泄漏）: {seg}");
+        // ② 行为断言：净化命令 = env_clear + 白名单 + 监管标识，禁漏变量绝不出现。
+        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        std::env::set_var("NODE_OPTIONS", "--require=/bad/genie-safe-delete.cjs");
+        let mut cmd = sanitized_node_command("node");
+        cmd.env("DSH_DESKTOP_SUPERVISED", "1").env("NO_COLOR", "1");
+        let envs: std::collections::BTreeMap<String, Option<String>> = cmd
+            .get_envs()
+            .map(|(k, v)| (k.to_string_lossy().into_owned(), v.map(|x| x.to_string_lossy().into_owned())))
+            .collect();
+        assert!(!envs.contains_key("NODE_OPTIONS"), "NODE_OPTIONS 不得泄漏进内核: {envs:?}");
+        assert!(!envs.contains_key("NODE_REQUIRE"), "NODE_REQUIRE 不得泄漏进内核: {envs:?}");
+        assert!(!envs.contains_key("ELECTRON_RUN_AS_NODE"));
+        assert!(!envs.contains_key("NODE_PATH"));
+        assert_eq!(envs.get("DSH_DESKTOP_SUPERVISED").and_then(|v| v.as_deref()), Some("1"), "监管标识必须在场: {envs:?}");
+        assert_eq!(envs.get("NO_COLOR").and_then(|v| v.as_deref()), Some("1"), "NO_COLOR 必须在场: {envs:?}");
+        assert!(envs.contains_key("PATH"), "白名单 PATH 必须透传: {envs:?}");
+        std::env::remove_var("NODE_OPTIONS");
     }
 
     /// 形态（v0.5.4 Node 三级解析接线）：构造经 resolve_node_with +

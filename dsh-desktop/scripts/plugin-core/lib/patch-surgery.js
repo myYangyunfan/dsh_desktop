@@ -18,6 +18,7 @@
 
 const { LOADER_ID_RE } = require('./ids');
 const { escRegExp, detectEol, splitLines, joinLines, preserveEol, yamlQuote } = require('./text');
+const { writeFileAtomic } = require('./fs-atomic');
 
 // 新 patch 文件的头部（历史两种入口逐字一致）。
 const PATCH_HEADER = '# dsh web profile patch（由 DSH Desktop 维护）\n';
@@ -768,6 +769,153 @@ function registerCompanionPatchEntries(patch, opts) {
   return { patch: text === text0 ? original : preserveEol(original, text), changed, dropped, updated, added };
 }
 
+// ---------------------------------------------------------------------------
+// 无效条目体检 + 一键清理（插件管理页横幅；本段含受控落盘，是「纯文本函数」
+// 契约的显式例外：扫描只读，删除仅在用户显式点击后执行，且必先备份）
+// ---------------------------------------------------------------------------
+
+// npm 包名形态（与 sidecar cli.js packageDir 同口径）：形态不认识的 name
+// （相对路径/URL/变量等）一律跳过判定——宁漏勿误。
+const PKG_NAME_RE = /^(@[a-z0-9-]+\/)?[a-z0-9._-]+$/i;
+
+/**
+ * 包目录是否可在任一候选根解析到（存在 package.json 才算在位）：
+ * 每个根先试「全名路径」（node_modules 语义），scope 包再试「去 scope 短名」
+ * （assets/plugins 等非 node_modules 根按短名落盘的兜底面）。
+ */
+function packageResolvable(name, roots) {
+  const rel = String(name).split('/').filter(Boolean);
+  if (rel.length === 0) return false;
+  for (const root of roots || []) {
+    if (!root || typeof root !== 'string') continue;
+    try {
+      if (fs.existsSync(path.join(root, ...rel, 'package.json'))) return true;
+    } catch { /* 不可读按缺席处理 */ }
+    if (rel.length > 1 && rel[0].startsWith('@')) {
+      try {
+        if (fs.existsSync(path.join(root, rel[rel.length - 1], 'package.json'))) return true;
+      } catch { /* 同上 */ }
+    }
+  }
+  return false;
+}
+
+/** 备份文件时间戳（本地时间 YYYYMMDD-HHmmss，与既有 .bak-<ts> 家族同风格）。 */
+function deadBackupStamp() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return '' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+}
+
+/**
+ * 无效条目体检（只读，插件管理页横幅数据源）：
+ *   a) 死条目——条目带合法 npm 形态的 name: 且该包在全部候选根都解析不到
+ *      （removed: true 墓碑条目跳过：卸载链靠它支持「恢复」，绝不判死）；
+ *   b) 疑似陈旧——disabled: true 的 id 不在 collect() 全量插件 id 集合
+ *      （opts.knownIds 缺省则整条规则跳过）；只透出，不进一键清理。
+ * patch 文件缺失/不可读按「无死条目」降级（体检不得把管理页弄挂）。
+ * @param {string} patchFile cordis.patch.yml 绝对路径
+ * @param {{ searchRoots?: string[], knownIds?: Set<string>|string[] }} [opts]
+ * @returns {{ ok: boolean, patchExists: boolean, dead: Array<{id:string,name:string,disabled:boolean}>, stale: Array<{id:string,name:string,disabled:boolean}> }}
+ */
+function listDeadEntries(patchFile, opts) {
+  const dead = [];
+  const stale = [];
+  let text = '';
+  try { text = fs.readFileSync(patchFile, 'utf8'); } catch { return { ok: true, patchExists: false, dead, stale }; }
+  const searchRoots = ((opts && Array.isArray(opts.searchRoots)) ? opts.searchRoots : [])
+    .filter((r) => typeof r === 'string' && r);
+  let known = null;
+  if (opts && opts.knownIds) known = opts.knownIds instanceof Set ? opts.knownIds : new Set(opts.knownIds);
+  let rows;
+  try { rows = parsePatchRows(text); } catch { rows = { top: [], inserts: [] }; }
+  const reported = new Set();
+  for (const row of [...(rows.top || []), ...(rows.inserts || [])]) {
+    if (!row || typeof row.id !== 'string' || !row.id || row.removed) continue;
+    if (reported.has(row.id)) continue; // 顶层/insert 双登记只报一次
+    reported.add(row.id);
+    const hasName = typeof row.name === 'string' && row.name !== '';
+    // a) 包名解析不到（全根）→ 死条目（进一键清理集）
+    if (hasName && PKG_NAME_RE.test(row.name) && !packageResolvable(row.name, searchRoots)) {
+      dead.push({ id: row.id, name: row.name, disabled: row.disabled === true });
+      continue;
+    }
+    // b) 陈旧禁用（id 不在 collect 全量集合）→ 只透出，不自动清理
+    if (known && row.disabled === true && !known.has(row.id)) {
+      stale.push({ id: row.id, name: hasName ? row.name : '', disabled: true });
+    }
+  }
+  return { ok: true, patchExists: true, dead, stale };
+}
+
+/**
+ * 一键清理：删除指定 id 的完整条目子树（顶层 / insert 内层均可，含 name/
+ * disabled/config 与更深层级），并清掉本模块写入的「关闭/卸载」标记注释。
+ * 落盘路径：copyFile 备份为 `cordis.patch.yml.bak-dead-<时间戳>` →
+ * writeFileAtomic（fs-atomic 唯一实现：临时文件 + rename 原子替换，含
+ * Windows EPERM 重试）。幂等：id 已不在文件中 → 零写入（不备份不改文件）。
+ * 调用方（cli.js / 页面）必须保证 ids 来自 listDeadEntries 的 dead 集——
+ * 本函数绝不自行判定、绝不自动删除。
+ * @param {string} patchFile cordis.patch.yml 绝对路径
+ * @param {string[]} ids 待清理条目 id
+ * @returns {{ changed: boolean, removed: string[], backup: string|null, error?: string }}
+ */
+function removeDeadEntriesById(patchFile, ids) {
+  const removal = new Set((Array.isArray(ids) ? ids : [ids])
+    .filter((i) => typeof i === 'string' && i && LOADER_ID_RE.test(i)));
+  if (removal.size === 0) return { changed: false, removed: [], backup: null };
+  let text;
+  try { text = fs.readFileSync(patchFile, 'utf8'); } catch (err) {
+    return { changed: false, removed: [], backup: null, error: '读取补丁失败: ' + String((err && err.message) || err) };
+  }
+  // 行级删除：EOL 保持（与 toggle/setRemoved 同契约，内部统一 LF 手术）。
+  const eol = detectEol(text);
+  const lines = splitLines(text);
+  const out = [];
+  const removed = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const m = ANY_ID_ROW_RE.exec(lines[i]);
+    if (m && removal.has(m[2])) {
+      if (!removed.includes(m[2])) removed.push(m[2]);
+      const indent = m[1].replace(/\t/g, '  ').length;
+      i += 1;
+      // 连带删除缩进更深的子树行（name/disabled/config 及嵌套列表）与块内空行，
+      // 到缩进 ≤ id 行处停下（与 dedupePatchEntries 的子树口径一致）。
+      while (i < lines.length) {
+        const l = lines[i];
+        const li = (l.match(/^[\t ]*/) || [''])[0].replace(/\t/g, '  ').length;
+        if (l.trim() === '' || li > indent) { i += 1; continue; }
+        break;
+      }
+      i -= 1; // 抵消外层 for 的自增（当前行是下一个未处理行）
+      continue;
+    }
+    out.push(lines[i]);
+  }
+  if (removed.length === 0) return { changed: false, removed: [], backup: null };
+  // 条目已删：清掉本模块的标记注释（反复开关/卸载残留，不得随清理堆积）。
+  let joined = joinLines(out, eol);
+  for (const id of removed) {
+    joined = joined.replace(markerCommentRe(id), '').replace(uninstallCommentRe(id), '');
+  }
+  // 被掏空的孤立 `- insert:` 空块清理（与开关/卸载手术同款）。尾部先补换行：
+  // 清空后的块可能以 `- insert:` 收尾（无换行），原正则以 `\n` 收口会漏掉。
+  if (!joined.endsWith('\n')) joined += '\n';
+  joined = dropEmptyInsertBlocks(joined);
+  // 全部条目被清空时补 `[]`，保证仍是合法顶层数组（复用既有自愈）。
+  let outText = joinLines(ensurePatchArray(splitLines(joined)), eol);
+  outText = outText.replace(/\n{3,}/g, eol + eol); // 删除后残留的连续空行收敛
+  const stamp = deadBackupStamp();
+  const backup = patchFile + '.bak-dead-' + stamp;
+  try {
+    fs.copyFileSync(patchFile, backup);
+    writeFileAtomic(patchFile, outText);
+  } catch (err) {
+    return { changed: false, removed: [], backup: null, error: '清理写入失败: ' + String((err && err.message) || err) };
+  }
+  return { changed: true, removed, backup };
+}
+
 module.exports = {
   PATCH_HEADER,
   ACP_DISABLE_BLOCK,
@@ -798,4 +946,7 @@ module.exports = {
   // #155 根因二：sidecar safe-overlay 复用 YAML 单引号安全化（@ 开头包名）。
   yamlQuote,
   registerCompanionPatchEntries,
+  // 无效条目体检 + 一键清理（插件管理页横幅；历史导入路径 scripts/plugin-manager-patch.js 一并再导出）。
+  listDeadEntries,
+  removeDeadEntriesById,
 };
