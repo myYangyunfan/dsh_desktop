@@ -68,6 +68,7 @@ window.__ModuleLoader__.load({
       baseURLHint: "OpenAI 兼容 base URL，例如 https://open.bigmodel.cn/api/paas/v4 或 http://localhost:11434/v1",
       apiKeyLabel: "API 密钥",
       apiKeyHint: "留空 = 保持已保存的密钥（密钥保存后不回显）；也可用环境变量 DSH_VISION_API_KEY / ZHIPUAI_API_KEY / DASHSCOPE_API_KEY；本地 Ollama 可留空",
+      apiKeyPlaceholder: "已保存（不显示密钥）；留空 = 保持已存密钥",
       modelLabel: "模型",
       modelHint: "例如 glm-4.6v-flash（智谱免费）/ qwen3-vl-flash / glm-4.6v / qwen3-vl:4b",
       fallbackLabel: "备用模型",
@@ -97,10 +98,11 @@ window.__ModuleLoader__.load({
       });
     }
 
-    function textInput(value, onChange, type = "text") {
+    function textInput(value, onChange, type = "text", placeholder = "") {
       return jsx("input", {
         type,
         value: value || "",
+        placeholder,
         style: { padding: "4px 8px", fontFamily: "inherit" },
         onChange: (e) => onChange(e.target.value)
       });
@@ -225,7 +227,7 @@ window.__ModuleLoader__.load({
             enabledOn ? L.enabledOn : L.enabledOff
           ),
           fieldRow(L.baseURLLabel, L.baseURLHint, textInput(form.baseURL, set("baseURL"))),
-          fieldRow(L.apiKeyLabel, L.apiKeyHint, textInput(form.apiKey, set("apiKey"), "password")),
+          fieldRow(L.apiKeyLabel, L.apiKeyHint, textInput(form.apiKey, set("apiKey"), "password", L.apiKeyPlaceholder)),
           fieldRow(L.modelLabel, L.modelHint, textInput(form.model, set("model"))),
           fieldRow(L.fallbackLabel, L.fallbackHint, textInput(form.fallbackModels, set("fallbackModels"))),
           fieldRow(L.maxTokensLabel, null, textInput(form.maxTokens, set("maxTokens"), "number")),

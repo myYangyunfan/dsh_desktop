@@ -197,7 +197,12 @@ const SM_CONFLICT_NEW = [
  * @returns {{status:'already'}|{status:'anchor-missing',detail:string}|{status:'changed',src:string}}
  */
 function transformSettingsModelsResilience(src, file) {
-  if (src.includes(NAMESPACE_HEAL_MARKER) || src.includes(CONFLICT_RETRY_MARKER)) {
+  // 幂等判定必须「两个注入体都已在」才算 already：本文件含两处相互独立的
+  // 锚点，历史现场曾出现「只打上 namespace-heal、缺 conflict-retry」的半补丁
+  // （早期锚点失配只注入其一，而 || 会让后续重跑在看到首个 marker 时提前
+  // already，永远补不上另一半）。改为 && 后，半补丁会在下次应用时把缺失的
+  // 注入体补全（逐锚点独立替换，已注入处其锚点自然不命中）。
+  if (src.includes(NAMESPACE_HEAL_MARKER) && src.includes(CONFLICT_RETRY_MARKER)) {
     return { status: 'already' };
   }
   let next = src;

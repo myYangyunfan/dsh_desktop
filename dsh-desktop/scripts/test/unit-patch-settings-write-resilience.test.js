@@ -218,6 +218,24 @@ test('settings-models: 无锚点时 anchor-missing 不改写', () => {
   assert.equal(r.status, 'anchor-missing');
 });
 
+test('settings-models: 半补丁（仅 namespace-heal）会在重跑时补全 conflict-retry', () => {
+  const src = readOrSkip(SM_FILE);
+  assert.ok(src !== null);
+  // 反剥 namespace-heal 回原锚点 → 再只注入 namespace-heal，构造「半补丁」现场
+  //（历史现场：早期锚点失配只命中其一，|| 幂等判定会让缺另一半的文件被误判 already）。
+  const pristine = src.includes(NAMESPACE_HEAL_MARKER)
+    ? src.split(AW_CONSTANTS.SM_NS_NEW).join(AW_CONSTANTS.SM_NS_ANCHOR)
+    : src;
+  const half = pristine.replace(AW_CONSTANTS.SM_NS_ANCHOR, AW_CONSTANTS.SM_NS_NEW);
+  assert.equal(half.includes(NAMESPACE_HEAL_MARKER), true);
+  assert.equal(half.includes(CONFLICT_RETRY_MARKER), false);
+  const r = transformSettingsModelsResilience(half, 'sm');
+  assert.equal(r.status, 'changed', '半补丁应被判定为 changed 而非 already');
+  assert.equal(r.src.includes(NAMESPACE_HEAL_MARKER), true);
+  assert.equal(r.src.includes(CONFLICT_RETRY_MARKER), true, '缺失的 conflict-retry 注入体应被补全');
+  assert.equal(transformSettingsModelsResilience(r.src, 'sm').status, 'already', '补全后二遍应幂等 already');
+});
+
 test('settings-models: root 应用器在临时 nm 根实跑（changed → already）', () => {
   const src = readOrSkip(SM_FILE);
   assert.ok(src !== null);
