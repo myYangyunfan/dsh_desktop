@@ -157,6 +157,19 @@ v0.5.0 起发布走 **Tauri GitHub Actions 云端流水线**（[`tauri-release.y
 | `dsh-hub` | 插件中枢：更新引擎 / 全局记忆 / 图谱与市场挂载 | [ARFCON/dsh-hub-DSH](https://github.com/ARFCON/dsh-hub-DSH) |
 | `harness-pet` | 桌面宠物 | [cakeni/harness-pet](https://github.com/cakeni/harness-pet) |
 
+## 🧠 社区预设
+
+除官方内核自带的 `standard` / `ptc` / `minimal` / `cordis` 外，随安装包共内置 8 个 Agent 预设——7 个来自下表社区仓库（新会话设置中直接可选），另加自研的 `minimal-win`；逐预设清单、上游同步与许可细节见 [dsh-desktop/docs/agent-presets.md](dsh-desktop/docs/agent-presets.md)。按模型/接入方式的选型建议：
+
+| 预设（内置 id） | 用途 | 上游仓库 | 上游作者 | 许可证 |
+| --- | --- | --- | --- | --- |
+| `router-standard` | 官方 API · **flash** 模型（任务感知路由） | [dsh-routing-suite](https://github.com/yjh051108/dsh-routing-suite) | [@yjh051108](https://github.com/yjh051108) | MIT |
+| `anchored-standard`（含 `zero-anchored-standard` / `whoami-standard` 变体） | 官方 API · **pro** 模型（两段式：Minimal 引导 → 全量 Standard） | [dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard) | [@xiaobright](https://github.com/xiaobright) | MIT |
+| `v4-flash-godmode-opencode-go` | OpenCode Go · **flash** 模型（build/fix 内路由） | [v4-flash-godmode-opencode-go](https://github.com/SheberDavid/v4-flash-godmode-opencode-go) | [@SheberDavid](https://github.com/SheberDavid) | ⚠️ 上游无 LICENSE 文件（作者声明基于 MIT 的 dsh-routing-suite 改编，分发前建议与作者确认） |
+| `warmupbetter` / `warmupbetter-replay` | OpenCode Go · **pro** 模型（首轮长 COT 热身 / 回放） | [myDshPresets](https://github.com/0liveiraaa/myDshPresets) | [@0liveiraaa](https://github.com/0liveiraaa) | 上游 README 声明修改按 MIT（附 MIT 的 `LICENSE.deepseek-harness`） |
+
+> 致谢以上社区作者；预设的改编与适配细节见各预设目录内 `NOTICE` / `README`。`router-standard` 依赖的运行时注入器以 [dsh-super-injector](https://github.com/yjh051108/dsh-super-injector) 插件形态随包内置（见上表插件生态）。
+
 ## 🏗 架构
 
 **v0.5.0 起为 Tauri 2（Rust）架构**——Electron 壳已退役，其全部职责（窗口 / IPC / 更新 / 打包）由 Rust 侧逐 crate 复刻，契约先行（`dsh-tauri/contracts/` 五份硬契约为接口唯一事实源）：

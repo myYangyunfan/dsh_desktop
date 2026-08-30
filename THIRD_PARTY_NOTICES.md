@@ -82,18 +82,19 @@
 
 ## 3. 内置 Agent 预设（Bundled Agent Presets，第三方来源）
 
-随安装包分发的 agent 预设（位于 `dsh-desktop/assets/agent-presets/`），来自以下第三方社区仓库。这些预设均基于 DeepSeek Harness 官方 Standard/Minimal 预设改编，采用 MIT 许可证（其中 `v4-flash-godmode-opencode-go` 基于上游 `dsh-router-standard` 的 MIT 代码改编）。
+随安装包分发的 agent 预设（位于 `dsh-desktop/assets/agent-presets/`），来自以下第三方社区仓库。各预设均基于 DeepSeek Harness 官方 Standard/Minimal 预设改编；许可证以上游仓库实际声明为准（多数为 MIT；`v4-flash-godmode-opencode-go` 与 `warmupbetter` 系列上游无标准 LICENSE 文件，见下表标注）。
 
 | 预设 | 用途 | 许可证 | 来源仓库 |
 |---|---|---|---|
 | `router-standard` | 任务感知路由（spec 计划 / react 执行） | MIT | https://github.com/yjh051108/dsh-routing-suite |
 | `anchored-standard` | 首轮锚定 + 工具延迟展开 | MIT | https://github.com/xiaobright/dsh-anchored-standard |
 | `zero-anchored-standard` | 零工具锚定轮 + 后续展开 | MIT | https://github.com/xiaobright/dsh-anchored-standard |
-| `v4-flash-godmode-opencode-go` | opencode-go V4 Flash 引导（神模式） | MIT | https://github.com/SheberDavid/v4-flash-godmode-opencode-go |
-| `warmupbetter` | 首轮真实模型长 COT 热身 | MIT | https://github.com/0liveiraaa/myDshPresets |
-| `warmupbetter-replay` | 首轮重放预录 COT | MIT | https://github.com/0liveiraaa/myDshPresets |
+| `whoami-standard` | 「你是谁」自介锚定轮变体 | MIT | https://github.com/xiaobright/dsh-anchored-standard |
+| `v4-flash-godmode-opencode-go` | opencode-go V4 Flash 引导（神模式） | ⚠️ 上游仓库无 LICENSE 文件（其 README 声明基于 MIT 的 dsh-routing-suite 改编；对外分发前建议与作者确认） | https://github.com/SheberDavid/v4-flash-godmode-opencode-go |
+| `warmupbetter` | 首轮真实模型长 COT 热身 | 上游 README 声明修改部分按 MIT 许可，目录内附 MIT 的 `LICENSE.deepseek-harness`（无独立 LICENSE 文件） | https://github.com/0liveiraaa/myDshPresets |
+| `warmupbetter-replay` | 首轮重放预录 COT | 同上 | https://github.com/0liveiraaa/myDshPresets |
 
-> 另有 `minimal-win`（基于官方极简模式的 Windows PowerShell 适配）与 `whoami-standard`（实验性）为本项目内置预设，基于 DeepSeek Harness 官方预设衍生，非第三方来源。
+> 另有 `minimal-win`（基于官方极简模式的 Windows PowerShell 适配）为本项目自研内置预设，非第三方来源。逐预设的许可细节与同步说明见 [dsh-desktop/docs/agent-presets.md](dsh-desktop/docs/agent-presets.md)。
 
 ## 4. 内置运行时（Bundled Runtime）
 

@@ -1,0 +1,21 @@
+NOTICE
+
+本预设来自 https://github.com/SheberDavid/v4-flash-godmode-opencode-go
+（快照：2026-08）。
+
+许可证警示（分发前必读）：
+- 上游仓库**没有 LICENSE 文件**，不构成正式的开源许可授权。
+- 上游作者在其 README 中声明本项目基于 dsh-routing-suite（MIT，Copyright
+  (c) 2026 yjh051108）改编，并致谢 dsh-router-standard 的研究；`router-core.mjs`
+  / `router-bootstrap.mjs` 的来源部分按上游声明适用该 MIT 授权。
+- 除去自 dsh-routing-suite 派生的部分，其余内容的许可状态以「上游无 LICENSE」
+  为准。对外分发前建议与上游作者确认许可；如有顾虑，可从内置清单移除本预设。
+
+上游状态：上游 README 已宣布「原作者已更新，本项目不再演进，建议使用原作者的
+dsh-routing-suite」。本目录为停更前的快照。
+
+与本目录其他文件的差异：
+- `agent.cordis.yml` / `router-bootstrap.mjs` / `router-core.mjs` 与上游
+  `preset/` 内容一致（仅行尾差异）。
+- `preset.yml` 的 description 保留本地功能描述（上游同字段已改为停更公告）。
+- `README.md` 为上游 README 的扩写版（适配说明与实测记录），见该文件。
