@@ -44,7 +44,7 @@ const {
   ACP_DISABLE_BLOCK, PET_DISABLE_BLOCK,
   ensureDisabledPatchEntry, removeLegacyMarketplacePatchLines,
   removeRetiredDshMarketPatchRows, removeRetiredThirdPartyThinkingPatchRows,
-  removeRetiredDshSessionManagerPatchRows, removeRetiredDshFloatWindowPatchRows,
+  removeRetiredDshFloatWindowPatchRows,
   registerCompanionPatchEntries, syncCompanionFiles, removedPluginIdsFromPatch,
 } = require('./lib/companion-profile');
 
@@ -282,16 +282,6 @@ function syncPlugins(home, dryRun, dshPkgDir) {
   if (retiredTpt.changed) {
     changed = true;
     log('已从 cordis.patch.yml 移除退役插件 dsh-third-party-thinking 条目');
-  }
-
-  // 已退役插件 dsh-session-manager（loader id dsh-session-manager）：insert 内层
-  // 条目 / 顶层块 / name-only 条目一次性清理（幂等；目录与 manifest 登记清理在
-  // syncCompanionFiles 内的 removeRetiredDshSessionManagerDir 已处理）。
-  const retiredSsm = removeRetiredDshSessionManagerPatchRows(patch);
-  patch = retiredSsm.patch;
-  if (retiredSsm.changed) {
-    changed = true;
-    log('已从 cordis.patch.yml 移除退役插件 dsh-session-manager 条目');
   }
 
   // 已退役插件 dsh-float-window（loader id float-window）：insert 内层 / 顶层块 /

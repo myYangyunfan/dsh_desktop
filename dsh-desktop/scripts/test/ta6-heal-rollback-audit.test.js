@@ -34,6 +34,7 @@ const IMPL_SOURCES = [
   path.join(LIB_DIR, 'runtime-patches.js'),
   path.join(LIB_DIR, 'patch-adapters.js'),
   path.join(LIB_DIR, 'loader-isolation.js'),
+  path.join(__dirname, '..', 'patch-session-manage.js'),
   path.join(__dirname, '..', '..', 'profile-bundle-heal.js'),
 ].map((f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } });
 
@@ -159,7 +160,7 @@ test('审计 2：带 marker 的 transform，其 changed 产物含 marker（回�
 });
 
 test('审计 3：root 应用器只碰 node_modules（npm ci 整体可恢复）', () => {
-  assert.equal(rootSpecs.length, 15);
+  assert.equal(rootSpecs.length, 16);
   for (const spec of rootSpecs) {
     assert.equal(spec.layout, 'nm-roots', `${spec.id} 应为 nm-roots 布局`);
     assert.equal(spec.wslLayout, 'nm-roots', `${spec.id} WSL 布局也应为 nm-roots`);

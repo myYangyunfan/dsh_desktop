@@ -45,6 +45,9 @@ const { patchWebSearchBaseUrl } = require('../patch-web-search-baseurl');
 const { patchMenuViewport } = require('../patch-menu-viewport');
 const { patchOpenProjectDir } = require('../patch-open-project-dir');
 const { patchSessionPersistence } = require('../patch-session-persistence');
+// 对话删除 / 归档管理补丁（删除 + 恢复归档 + 设置内归档管理链路；孤儿进程
+// 清理已内联到 deleteSession，不再单列 session-orphans 补丁）。
+const { patchSessionManage } = require('../patch-session-manage');
 const { patchToolSourceCompat } = require('./tool-source-patch');
 // pi-ai opencode-go 模型目录补丁（opencode-go.json 纯数据补充）。
 const { patchPiAiOpencodeGoModels } = require('../patch-pi-ai-opencode-go-models');
@@ -2137,6 +2140,7 @@ module.exports = {
     patchMenuViewport,
     patchOpenProjectDir,
     patchSessionPersistence,
+    patchSessionManage,
     patchToolSourceCompat,
     patchPiAiOpencodeGoModels,
     patchPiAiCredits,

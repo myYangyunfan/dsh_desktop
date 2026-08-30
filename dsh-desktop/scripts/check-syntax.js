@@ -39,6 +39,7 @@ const entryFiles = [
   'scripts/patch-menu-viewport.js',
   'scripts/patch-open-project-dir.js',
   'scripts/patch-session-persistence.js',
+  'scripts/patch-session-manage.js',
   'scripts/patch-slot-compat.js',
   'scripts/patch-pi-ai-opencode-go-models.js',
   'scripts/gpu-crash-guard.js',

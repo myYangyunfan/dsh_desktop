@@ -89,6 +89,18 @@ try {
 } catch (err) {
   console.log('[patch-deps] session-persistence 尾部恢复补丁跳过: ' + (err && err.message ? err.message : err));
 }
+
+// 对话删除 / 归档管理补丁（删除 + 恢复归档 + 客户端「删除对话」菜单项）。
+// 开发模式（npm start / postinstall）直接打 dev node_modules；运行副本由
+// patch-registry（桌面壳启动 + CLI 同步）覆盖（幂等，锚点不匹配只告警不中断）。
+try {
+  const { patchSessionManage } = require('./patch-session-manage');
+  // 补丁函数期望 node_modules 根目录（path.join(nmRoot, '@deepseek-ai', ...)）。
+  const n = patchSessionManage(path.join(root, 'node_modules'), (m) => console.log(m));
+  if (n > 0) console.log('[patch-deps] session-manage 对话删除/归档管理补丁已应用（dev node_modules）');
+} catch (err) {
+  console.log('[patch-deps] session-manage 补丁跳过: ' + (err && err.message ? err.message : err));
+}
 // 空 tool-call 持久化会把 tool/result 的 callId 写成空串，restore 严格校验
 // 直接击穿（整个会话打不开）。读端 dsh-session 容错 + 写端 dsh-agent-loop 防护。
 try {

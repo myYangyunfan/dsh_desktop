@@ -706,6 +706,28 @@ const PATCH_SPECS = [
     successLog: (root) => 'menu 视口补丁: 已应用到 ' + root,
     failLog: (root, err) => 'menu 视口补丁失败(' + root + '): ' + err.message,
   },
+  // -------------------------------------------------------------------------
+  // 对话删除 / 归档管理补丁（删除 + 恢复归档 + 客户端「删除对话」菜单项）。
+  // 在 dsh-workspace / dsh-session / dsh-api-workspace-controller /
+  // dsh-api-remotes / dsh-client-ui-workspace 上做外科手术式扩展；孤儿进程
+  // 清理（原 session-orphans 补丁）已内联到 deleteSession。菜单项可见性由
+  // host-capabilities 的 deleteSession 桥守卫控制（桥缺失即隐藏）。
+  // -------------------------------------------------------------------------
+  {
+    id: 'session-manage',
+    group: 'package',
+    order: 190,
+    kind: 'root',
+    layout: 'nm-roots',
+    wslLayout: 'nm-roots',
+    apply: rootAppliers.patchSessionManage,
+    marker: null,
+    requires: ['deleteSession'],
+    failPolicy: 'warn',
+    cli: false,
+    successLog: (root) => '对话删除补丁: 已应用到 ' + root,
+    failLog: (root, err) => '对话删除补丁失败(' + root + '): ' + err.message,
+  },
   {
     id: 'open-project-dir',
     group: 'package',

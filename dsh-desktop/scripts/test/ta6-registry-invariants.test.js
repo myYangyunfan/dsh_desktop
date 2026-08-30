@@ -55,8 +55,9 @@ const INLINE_PKG_REL_SPEC_IDS = new Set([
 ]);
 
 /** 已知补丁间依赖（目标 order 必须更小）。
- * 0.1.2-alpha.1：session-manage / session-orphans / vision 系（image-send、
- * vision-toggle、vision-key）均已退役，补丁间依赖表随之清空。 */
+ * 0.1.2-alpha.1：vision 系（image-send / vision-toggle / vision-key）均已退役，
+ * session-manage 恢复后无补丁间依赖（其 requires 是宿主能力 deleteSession，
+ * 非补丁间依赖），补丁间依赖表仍为空。 */
 const PATCH_DEPENDS = {};
 
 const norm = (p) => String(p).split(path.sep).join('/');
@@ -146,8 +147,8 @@ test('D. pkgRel/pkgRels 被 patch-target-resolver 常量覆盖（白名单外新
 });
 
 test('E. order 全局唯一、组内升序、补丁间依赖序成立', () => {
-  // 47 = 46（上一基线）+ 1 项新增（skill-dirs-compat）。
-  assert.equal(PATCH_SPECS.length, 50, 'spec 总数应为 50');
+  // 51 = 50（上一基线）+ 1 项恢复（session-manage：对话删除/归档管理）。
+  assert.equal(PATCH_SPECS.length, 51, 'spec 总数应为 51');
   const orders = PATCH_SPECS.map((s) => s.order);
   assert.equal(new Set(orders).size, orders.length, 'order 必须全局唯一');
   const byId = Object.fromEntries(PATCH_SPECS.map((s) => [s.id, s]));
