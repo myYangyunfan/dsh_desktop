@@ -110,6 +110,16 @@ fi
 # 唯一可靠断言来源（内核 stderr 是假阴性）。
 export DSH_TAURI_DIAG=1
 
+# 单实例守卫前置检查：已运行的 DSH Desktop 会让冒烟壳让位（tauri_plugin_single_instance
+# → supervisor 零日志、boot 永不就绪、冒烟误 FAIL），且收尾 //IM 强杀会误杀用户实例
+# （T4 已知风险）。两败俱伤，直接拒绝执行。
+if tasklist //FI "IMAGENAME eq dsh-tauri-app.exe" 2>/dev/null | grep -q dsh-tauri-app.exe; then
+  echo "[smoke] === ABORT：检测到已运行的 DSH Desktop 实例 ==="
+  echo "[smoke] 单实例守卫会让冒烟壳让位（boot 永不就绪），收尾强杀也会误杀用户实例。"
+  echo "[smoke] 请完全退出 DSH Desktop（托盘退出）后重跑本脚本。"
+  exit 1
+fi
+
 echo "[smoke] 启动（DSH_HOME/DSH_TAURI_USERDATA 全隔离），日志 → $SMOKE/app.log"
 DSH_HOME="$(cygpath -w "$SMOKE/home")" \
 DSH_TAURI_USERDATA="$(cygpath -w "$SMOKE/ud")" \
