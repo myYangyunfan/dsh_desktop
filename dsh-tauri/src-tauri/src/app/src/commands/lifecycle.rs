@@ -131,6 +131,12 @@ pub fn open_external(url: String) -> Result<serde_json::Value, BridgeError> {
 pub fn page_error(state: State<AppState>, message: String) -> Result<serde_json::Value, BridgeError> {
     let n = state.page_errors.fetch_add(1, Ordering::Relaxed) + 1;
     eprintln!("[page-error #{n}] {message}");
+    // 落盘 desktop.log（2026-08-31 删除对话排障实证盲区）：release 壳是
+    // windows_subsystem="windows" GUI 子系统，eprintln 无人接收——bridge-shim
+    // 把 alert 转桥到本命令的设计前提（「消息不丢」）在安装态不成立，页面
+    // 异常/插件 RPC 失败（如 alert「操作失败: …」）在生产日志里彻底蒸发。
+    // 与 route_log 同走 file_log（写者锁串行化，防双写者行撕裂）。
+    crate::supervisor::file_log(&format!("[page-error #{n}] {message}"));
     Ok(serde_json::Value::Null)
 }
 

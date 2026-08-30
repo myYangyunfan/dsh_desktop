@@ -67,6 +67,17 @@ const SESSION_INSERT = 'list() {\n\t\treturn [...this.store.values()].map((entry
 const HOST_IMPORT_ANCHOR = 'import { DirectoryPickerError } from "@deepseek-ai/dsh-host-directory-picker";';
 const HOST_IMPORT_INSERT = 'import { DirectoryPickerError } from "@deepseek-ai/dsh-host-directory-picker";\nimport { rm } from "node:fs/promises";\nimport { dirname } from "node:path";';
 
+// 3a-2. WorkspaceController 的 cordis inject 声明补全（2026-08-31 隔离实测根因）。
+// deleteSession 访问 this.ctx.agents / this.ctx.sessions / this.ctx.sessionPersistence，
+// 而控制器只声明了 ["typert", "workspaceRegistry"] —— cordis 对未声明服务做属性
+// 访问直接抛 `cannot get property "agents" without inject`，删除在宿主第一行就炸
+// （探针实证：fake-delete-REJECT → alert「操作失败: workspace session delete failed」）。
+// 三个服务均为内核根作用域服务（agents：dsh-goal/file-reference-local 同名注入；
+// sessions：dsh-session:1674；sessionPersistence：dsh-session-persistence:1478），
+// 与 workspaceRegistry 同域，inject 可解析。
+const HOST_INJECT_ANCHOR = 'static inject = ["typert", "workspaceRegistry"];';
+const HOST_INJECT_INSERT = 'static inject = ["typert", "workspaceRegistry", "agents", "sessions", "sessionPersistence"];';
+
 // 3b. WorkspaceCommands：archiveSession 之后、requireWorkspace 之前插入两个命令。
 const HOST_CMDS_ANCHOR = '\t\treturn { archivedSessionIds: [...this.ctx.workspaceRegistry.archivedSessionIds] };\n\t}\n\trequireWorkspace(workspaceId) {';
 const HOST_CMDS_INSERT = '\t\treturn { archivedSessionIds: [...this.ctx.workspaceRegistry.archivedSessionIds] };\n\t}\n\t/**\n\t* dsh-desktop patch (session manage): 从归档集合移除一个会话（恢复）。\n\t* 幂等：不在归档集合中是 no-op。恢复后会话沿用原有 workspace 槽位与显示顺序。\n\t* @param request - Session identity to unarchive.\n\t* @returns the complete resulting archive set.\n\t*/\n\tasync unarchiveSession(request) {\n\t\tawait this.ctx.workspaceRegistry.unarchiveSession(request.sessionId);\n\t\treturn { archivedSessionIds: [...this.ctx.workspaceRegistry.archivedSessionIds] };\n\t}\n\t/**\n\t* dsh-desktop patch (session manage): 彻底删除一个会话（日志与附件一并移除，\n\t* 不可恢复）。拒绝正在运行的会话（实时查询 ctx.agents 注册表，宿主权威状态，\n\t* 与 sessions.list 的 running 同源）；随后摘除 live 注册表（session/disposed\n\t* 广播 → 客户端实时移除行）、清理归档集合、从所属工作区 sessionIds 摘除并\n\t* 持久化，最后按 jsonl 布局移除会话目录。\n\t* @param request - Session identity to delete.\n\t* @returns deletion confirmation.\n\t*/\n\tasync deleteSession(request) {\n\t\tconst { sessionId } = request;\n\t\t// 拒绝「正在运行」的会话（agent 活跃时写路径会重建目录，删除不安全）。\n\t\tif (this.ctx.agents.get(sessionId)?.status === "running") {\n\t\t\tthrow failure("session-running", "cannot delete a running session: stop it first", { sessionId });\n\t\t}\n\t\t// 先摘除 live 注册表（detachEntered 优雅 flush 后释放持久化状态并广播\n\t\t// session/disposed）；此后写路径不再拥有该会话，目录移除才安全。\n\t\tthis.ctx.sessions.remove(sessionId);\n\t\t// dsh-desktop patch (session orphans): 上游 agent 只随内核退出卸载，删除\n\t\t// 会话后其名下背景进程与持久终端会一直活到内核退出（孤儿泄漏）。复用内核\n\t\t// 自有 owner 清理 API 终结该 agent 名下全部工作；两者幂等，服务缺失时静默降级。\n\t\ttry {\n\t\t\tconst dshDeletedAgent = this.ctx.agents.get(sessionId);\n\t\t\tif (dshDeletedAgent !== void 0) {\n\t\t\t\ttry { dshDeletedAgent.cancel({ kind: "user" }, { keepInbox: true }); } catch {}\n\t\t\t\tconst dshDeletedJobs = this.ctx.get("jobs");\n\t\t\t\tif (dshDeletedJobs && typeof dshDeletedJobs.disposeOwned === "function") void Promise.resolve(dshDeletedJobs.disposeOwned(dshDeletedAgent)).catch(() => {});\n\t\t\t\tconst dshDeletedTerminals = this.ctx.get("terminals");\n\t\t\t\tif (dshDeletedTerminals && typeof dshDeletedTerminals.disposeOwned === "function") void Promise.resolve(dshDeletedTerminals.disposeOwned(dshDeletedAgent)).catch(() => {});\n\t\t\t}\n\t\t} catch {}\n\t\t// 清理归档集合（含陈旧归档项）。\n\t\tawait this.ctx.workspaceRegistry.unarchiveSession(sessionId);\n\t\t// 从所属工作区的 sessionIds 中摘除并持久化——否则 workspace.json 的\n\t\t// workspaces.<id>.sessionIds 会残留已删除会话引用，磁盘状态与运行时\n\t\t// 状态不一致（issue #82）。用原始 record 判定（sessionIds getter 会按\n\t\t// 已删除会话的 host 路径过滤，看不到残留项）。\n\t\tfor (const ws of this.ctx.workspaceRegistry.list()) {\n\t\t\tif (ws.record && Array.isArray(ws.record.sessionIds) && ws.record.sessionIds.includes(sessionId)) {\n\t\t\t\tawait ws.detachSession(sessionId);\n\t\t\t}\n\t\t}\n\t\t// 移除会话目录（jsonl 布局：listArtifacts 返回 log 文件路径，其父目录即\n\t\t// 会话目录，日志与附件一并移除）。目录移除为 best-effort：失败只告警不\n\t\t// 中断删除主链（已从注册表/归档/工作区摘除）。\n\t\ttry {\n\t\t\tconst artifacts = await this.ctx.sessionPersistence.listArtifacts();\n\t\t\tconst artifact = artifacts.find((entry) => entry && entry.header && entry.header.id === sessionId);\n\t\t\tif (artifact !== void 0) {\n\t\t\t\tawait rm(dirname(artifact.path), { recursive: true, force: true });\n\t\t\t}\n\t\t} catch (error) {\n\t\t\tthis.ctx.logger.warn(`session-manage: session "${sessionId}" directory removal failed: ${String(error)}`);\n\t\t}\n\t\treturn { deleted: true };\n\t}\n\trequireWorkspace(workspaceId) {';
@@ -123,8 +134,14 @@ const UI_EN_ANCHOR = '"menu.archiveSession": "Archive session",';
 const UI_EN_INSERT = '"menu.archiveSession": "Archive session",\n\t\t\t"menu.deleteSession": "Delete conversation",';
 
 // ---------------------------------------------------------------------------
-// 工具：在文件中做「锚点必须存在 + 标记幂等」的替换
+// 工具：在文件中做「锚点必须存在 + 增量幂等」的替换
 // ---------------------------------------------------------------------------
+// 增量幂等（2026-08-31）：幂等判定从「全局 MARKER 存在即整文件跳过」改为
+// 「逐替换项以 insert 自身判已完成」。背景：已打补丁的存量文件（旧版补丁
+// 产物）带着 MARKER，后加的替换项（如 3a-2 inject 补全）永远到不了它们——
+// 启动补丁每次 boot 都跑，全局跳过 = 新修复对存量安装零生效。逐项判定下：
+// 旧替换在存量文件里 insert 已在 → 跳过；新替换 insert 不在 → 锚点命中 → 补上。
+// 部分应用时任一锚点缺失即整体放弃（不落盘），保持单文件原子性。
 function applyReplacements(file, replacements, log, stats, options) {
   let src;
   try {
@@ -133,19 +150,25 @@ function applyReplacements(file, replacements, log, stats, options) {
     log('session-manage 补丁: 读取失败 ' + file + ': ' + err.message);
     return false;
   }
-  if (src.includes(MARKER)) {
-    log('session-manage 补丁: 已应用，跳过 ' + file);
-    return false;
-  }
+  const alreadyMarked = src.includes(MARKER);
+  let changed = false;
   for (const { anchor, insert } of replacements) {
+    if (src.includes(insert)) continue; // 本替换已完成（insert 自身即 done 标记）
     if (!src.includes(anchor)) {
       log('session-manage 补丁: 锚点未匹配（dsh 版本可能已变化），跳过 ' + file + ' :: ' + anchor.slice(0, 60));
       if (stats) stats.anchorMissing += 1;
       return false;
     }
     src = src.replace(anchor, insert);
+    changed = true;
   }
-  src = '// ' + MARKER + ': 对话删除/归档管理运行时补丁\n' + src;
+  if (!changed && alreadyMarked) {
+    log('session-manage 补丁: 已应用，跳过 ' + file);
+    return false;
+  }
+  if (!alreadyMarked) {
+    src = '// ' + MARKER + ': 对话删除/归档管理运行时补丁\n' + src;
+  }
   try {
     if (options && options.dryRun) {
       log('session-manage 补丁: dry-run: 将应用 ' + file);
@@ -182,6 +205,7 @@ function patchSessionManage(nmRoot, log = () => {}, stats, options) {
       file: path.join(nmRoot, '@deepseek-ai', 'dsh-api-workspace-controller', 'lib', 'index.js'),
       replacements: [
         { anchor: HOST_IMPORT_ANCHOR, insert: HOST_IMPORT_INSERT },
+        { anchor: HOST_INJECT_ANCHOR, insert: HOST_INJECT_INSERT },
         { anchor: HOST_CMDS_ANCHOR, insert: HOST_CMDS_INSERT },
         { anchor: HOST_CTRL_ANCHOR, insert: HOST_CTRL_INSERT },
       ],

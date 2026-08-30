@@ -1401,8 +1401,23 @@ fn inject_diag_probe(app: tauri::AppHandle) {
             try{console.log('[diag]',m)}catch(e){}
           }
           var r; try{ r = window.confirm('diag') }catch(e){ r = 'THROW:'+e.message }
-          rep('confirm-returns:'+r+' polyfilled='+(window.__dshDialogPolyfilled===true));
-          rep('bridge:'+typeof window.dshDesktop);
+          rep('confirm-returns:'+r+' polyfilled='+(window.__dshDialogPolyfilled===true)+
+            ' confirmSrc:'+(function(){try{return String(window.confirm).replace(/\s+/g,' ').slice(0,48)}catch(e){return '?'}})());
+          rep('bridge:'+typeof window.dshDesktop+
+            ' sm:'+typeof window.__dshSessionManager+
+            ' smDelete:'+typeof (window.__dshSessionManager && window.__dshSessionManager.deleteSession)+
+            ' ml:'+typeof window.__ModuleLoader__);
+          // 会话删除链实证（假 id 无破坏性：宿主对不存在 id 走 no-op 返回 deleted:true）。
+          // resolve=true ⇒ 桥+RPC 传输+宿主补丁全通（断点收敛到 B/C）；REJECT 内容区分
+          // D（传输断裂的报错形态）；STILL-PENDING ⇒ Remote 层挂起；桥缺席 ⇒ A。
+          try{
+            var dp = window.__dshSessionManager ? window.__dshSessionManager.deleteSession('__nonexistent_test_id__') : null;
+            if (dp && typeof dp.then === 'function') {
+              dp.then(function(v){ rep('fake-delete-RESOLVE:'+String(v)); },
+                      function(e){ rep('fake-delete-REJECT:'+String((e&&e.message)||e).slice(0,160)); });
+              setTimeout(function(){ rep('fake-delete-STILL-PENDING-4s'); }, 4000);
+            } else { rep('fake-delete-SYNC:'+String(dp)); }
+          }catch(e){ rep('fake-delete-THROW:'+String((e&&e.message)||e).slice(0,160)); }
           function probeComposer(tag){
             try{
               var tas = document.querySelectorAll('textarea,[contenteditable]');
@@ -1429,6 +1444,61 @@ fn inject_diag_probe(app: tauri::AppHandle) {
               setTimeout(function(){ probeComposer('after-new'); rep('console-errors:'+errs.slice(0,6).join(' / ')); }, 3000);
             } else { rep('no-new-session-button-found'); rep('console-errors:'+errs.slice(0,6).join(' / ')); }
           }, 2500);
+          // ---- 菜单 E2E 阶段（+6.5s）：真实点击会话行 ⋯ →「删除对话」----
+          // 桥 spy 记录 onSelect 是否真调到桥（断点 B 判据）；E2E 在隔离 home
+          // 上进行（删除的是新建会话/镜像副本，真实数据零接触）。
+          setTimeout(function(){
+            try{
+              if (window.__dshSessionManager && typeof window.__dshSessionManager.deleteSession === 'function') {
+                var orig = window.__dshSessionManager.deleteSession;
+                window.__dshSessionManager.deleteSession = function(id){
+                  rep('BRIDGE-CALLED:'+id);
+                  try{
+                    var rr = orig.apply(this, arguments);
+                    if (rr && typeof rr.then === 'function') rr.then(function(v){ rep('BRIDGE-RESOLVE:'+String(v)); }, function(e){ rep('BRIDGE-REJECT:'+String((e&&e.message)||e).slice(0,160)); });
+                    else rep('BRIDGE-SYNC:'+String(rr));
+                  }catch(e2){ rep('BRIDGE-THROW:'+String((e2&&e2.message)||e2).slice(0,160)); }
+                  return rr;
+                };
+              } else { rep('menu-stage-skip:no-bridge'); }
+              function fireClick(el){
+                ['pointerover','pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(t){
+                  try{ el.dispatchEvent(new MouseEvent(t,{bubbles:true,cancelable:true,view:window})) }catch(e){}
+                });
+              }
+              function findDeleteItem(){
+                var best=null;
+                document.querySelectorAll('li,[role="menuitem"],[role="menu"] *,div,span,button').forEach(function(el){
+                  var t=(el.textContent||'').trim();
+                  if(t==='删除对话'||t==='Delete conversation'){ if(!best||best.contains(el)) best=el; }
+                });
+                return best;
+              }
+              var cands=[];
+              document.querySelectorAll('button,[role="button"]').forEach(function(b){
+                var sig=(((b.getAttribute&&b.getAttribute('aria-label'))||'')+' '+((b.getAttribute&&b.getAttribute('title'))||'')+' '+((b.textContent||'').trim()));
+                var dots=/更多|菜单|more|⋯|\.\.\./i.test(sig)&&sig.length<20;
+                // 会话/项目行 ⋯ 触发钮：aria-label 为 actions.session/workspace.aria
+                // 的本地化插值（含「会话/项目」字样），行 hover 才显形但 DOM 恒在。
+                var rowMenu=/会话|session|项目|workspace/i.test(sig)&&sig.length<60&&!/新建|新会话|new/i.test(sig);
+                if(dots||rowMenu)cands.push(b);
+              });
+              rep('menu-candidates:'+cands.length);
+              var idx=0, opened=false;
+              (function tryOpen(){
+                if(opened||idx>=cands.length){ if(!opened) rep('menu-open-FAILED:no-candidate-opened-menu'); return; }
+                var b=cands[idx++];
+                try{ fireClick(b) }catch(e){}
+                setTimeout(function(){
+                  var it=findDeleteItem();
+                  if(it){ opened=true; rep('menu-opened:candidate'+(idx-1));
+                    fireClick(it); rep('delete-item-clicked');
+                    setTimeout(function(){ rep('post-delete-errors:'+errs.slice(0,4).join(' / ')); }, 2500);
+                  } else { tryOpen(); }
+                }, 700);
+              })();
+            }catch(e){ rep('menu-stage-THROW:'+String((e&&e.message)||e).slice(0,120)); }
+          }, 6500);
         })()"#;
 
         // 探针基址注入（fetch 通道）。`probe base eval`

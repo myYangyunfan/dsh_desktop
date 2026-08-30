@@ -116,6 +116,14 @@ pub const ENV_ALLOWLIST: &[&str] = &[
     "OS",
     "LANG",
     "DSH_HOME",
+    // 壳侧生产覆盖通道（shell-core paths.rs 与 sidecar resolveUserData 同口径）：
+    // sidecar（safe-overlay / repair / picker-overlay 经 resolveUserData 定位
+    // userData）必须拿到它与 DSH_HOME 同步的隔离值——缺失时 env_clear 后回落
+    // 真实 APPDATA，隔离测试会把 safe-boot.overlay.yml / heal 缓存写进用户
+    // 真实 userData（2026-08-31 实测污染事故）。DSH_TAURI_DIAG 同理（探针开关，
+    // 内核侧诊断透传）。
+    "DSH_TAURI_USERDATA",
+    "DSH_TAURI_DIAG",
     // macOS/Linux 运行必需集（env_clear 后自足）。
     "TMPDIR",
     "USER",
@@ -251,6 +259,13 @@ mod tests {
         assert!(ENV_ALLOWLIST.contains(&"LOGNAME"));
         assert!(ENV_ALLOWLIST.contains(&"SHELL"));
         assert!(ENV_ALLOWLIST.contains(&"TERM"));
+        // 壳侧生产覆盖通道必须随净化透传（2026-08-31 隔离污染事故锚点）：
+        // sidecar（safe-overlay/repair/picker-overlay 经 resolveUserData 定位
+        // userData）拿不到 DSH_TAURI_USERDATA 会回落真实 APPDATA，把
+        // safe-boot.overlay.yml / heal 缓存写进用户真实 userData，且解析的
+        // 「失败插件」来自真实历史日志尾部（陈旧 id 误禁健康插件）。
+        assert!(ENV_ALLOWLIST.contains(&"DSH_TAURI_USERDATA"));
+        assert!(ENV_ALLOWLIST.contains(&"DSH_TAURI_DIAG"));
     }
 
     /// 环境净化（崩溃环根治锚点）：`env_clear()` 后白名单自足、禁漏变量绝不
