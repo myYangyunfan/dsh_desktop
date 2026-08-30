@@ -7,11 +7,12 @@ export declare function FileTree(props: {
     cwd: string | undefined;
     expanded: string[];
     onToggle: (path: string) => void;
+    /** Primary open (click / Enter / Space): preview in a side split. */
     onOpenFile: (path: string) => void;
+    /** Context-menu "preview" — full-area open (file rows; absent → no entry). */
+    onPreviewFile?: (path: string) => void;
     /** Context-menu "open in a new tab" (file rows; absent → no entry). */
     onOpenFileNewTab?: (path: string) => void;
-    /** Context-menu "open to the side" (file rows; absent → no entry). */
-    onOpenFileSide?: (path: string) => void;
     /**
      * The "open with" menu: resolved external targets (already SSH-filtered
      * and in menu order). Absent → the whole section is hidden.

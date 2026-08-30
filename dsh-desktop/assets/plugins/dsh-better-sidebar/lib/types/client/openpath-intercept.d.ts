@@ -39,3 +39,24 @@ export interface OpenPathInterceptDeps {
  * @returns the disposer restoring the original method (HMR-safe).
  */
 export declare function wrapOpenPath(workspaces: OpenPathService, deps: OpenPathInterceptDeps): () => void;
+/** The typed remote `session.openWorkspacePath` face (mirror of the generated client method in @deepseek-ai/dsh-api-session-controller). */
+export interface RemoteOpenWorkspacePathService {
+    openWorkspacePath(request: {
+        path: string;
+    }, signal?: unknown): Promise<{
+        ok: true;
+        value: {
+            opened: true;
+        };
+    }>;
+}
+/**
+ * Wrap the CURRENT upstream chat file-open funnel: the typed remote
+ * `ctx.remote.session.openWorkspacePath({ path })`. Intercepted calls open
+ * the file in the sidebar editor and resolve as `{ ok: true, value: { opened: true } }`; anything
+ * declined falls through to the original remote call untouched.
+ * @param service - the remote `session` namespace service (undefined before the api-remotes contribution mounts; a no-op in that case).
+ * @param deps - per-call takeover decisions.
+ * @returns the disposer restoring the original method (HMR-safe).
+ */
+export declare function wrapRemoteOpenWorkspacePath(service: RemoteOpenWorkspacePathService | null | undefined, deps: OpenPathInterceptDeps): () => void;

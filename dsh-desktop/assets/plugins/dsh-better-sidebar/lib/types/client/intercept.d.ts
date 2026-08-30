@@ -31,3 +31,10 @@ export declare function registerTurnTailInterception(ctx: Context, store: Sideba
  * the original method. Returns the disposer restoring the original (HMR-safe).
  */
 export declare function registerOpenPathInterception(ctx: Context, store: SidebarStore): () => void;
+/**
+ * Register the chat file-open interception for the CURRENT funnel: wraps
+ * `ctx.remote.session.openWorkspacePath` (the method DSH 0.1.x chat routes
+ * every file open through). The remote `session` namespace mounts
+ * asynchronously, so the wrap retries briefly until the method appears.
+ */
+export declare function registerRemoteOpenPathInterception(ctx: Context, store: SidebarStore): () => void;

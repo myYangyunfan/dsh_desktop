@@ -11,7 +11,7 @@ import type { Context } from '../context-types.ts'
 import type { SidebarStore } from './state.ts'
 import { t } from './locales.ts'
 import { resolveSidebarPath, selectProducedFiles } from './produced-files.ts'
-import { wrapOpenPath } from './openpath-intercept.ts'
+import { wrapOpenPath, wrapRemoteOpenWorkspacePath, type OpenPathInterceptDeps, type RemoteOpenWorkspacePathService } from './openpath-intercept.ts'
 import css from './sidebar.module.css'
 
 /** Open a file in the sidebar's editor (used by the intercepted row and the explorer). */
@@ -92,19 +92,80 @@ export function registerTurnTailInterception(ctx: Context, store: SidebarStore):
 }
 
 /**
- * Register the chat file-open interception: wraps `ctx.workspaces.openPath`
- * — the single funnel every chat-side file open goes through (tool-row path
- * links, the produced-files row, prose mentions) — so opens land in the
- * sidebar editor instead of the Host OS. Gated by BOTH the `interceptOpenPath`
- * pref and the editor tab's enable switch; declined opens fall through to
- * the original method. Returns the disposer restoring the original (HMR-safe).
+ * Register the chat file-open interception for the LEGACY funnel: wraps
+ * `ctx.workspaces.openPath` (the older snapshot's single door). Gated by BOTH
+ * the `interceptOpenPath` pref and the editor tab's enable switch; declined
+ * opens fall through to the original method. Returns the disposer restoring
+ * the original (HMR-safe).
  */
 export function registerOpenPathInterception(ctx: Context, store: SidebarStore): () => void {
-  return wrapOpenPath(ctx.workspaces, {
+  return wrapOpenPath(ctx.workspaces, openPathDeps(ctx, store))
+}
+
+/** Shared per-call takeover decisions for both file-open funnels. */
+function openPathDeps(ctx: Context, store: SidebarStore): OpenPathInterceptDeps {
+  return {
     takeoverEnabled: () => !store.getSuspended()
       && store.getPrefs().interceptOpenPath !== false
       && store.getPrefs().tabsEnabled['editor'] !== false,
     currentSessionId: () => ctx.sessions.list.getSnapshot().current,
     openInSidebar: (path, sessionId) => { openSidebarFile(ctx, store, sessionId, path) },
-  })
+  }
+}
+
+/** Resolve the remote `session` namespace service (undefined before the
+ *  api-remotes contribution mounts, or when the runtime lacks the typed
+ *  remote entirely). The namespace is a DISTINCT cordis service key
+ *  (`remote.session`) — not a `.session` property on the `remote` service —
+ *  so resolve it directly. */
+function remoteSessionOf(ctx: Context): RemoteOpenWorkspacePathService | undefined {
+  try {
+    const session = ctx.get('remote.session') as RemoteOpenWorkspacePathService | undefined
+    if (session !== undefined && typeof session.openWorkspacePath === 'function') return session
+  } catch {
+    // Not mounted yet (or the runtime lacks the typed remote): fall through.
+  }
+  try {
+    const remote = ctx.get('remote') as { session?: RemoteOpenWorkspacePathService } | undefined
+    const session = remote?.session
+    if (session !== undefined && typeof session.openWorkspacePath === 'function') return session
+  } catch {
+    // Same as above.
+  }
+  return undefined
+}
+
+/**
+ * Register the chat file-open interception for the CURRENT funnel: wraps
+ * `ctx.remote.session.openWorkspacePath` — the method DSH 0.1.x chat routes
+ * every file open through (ui-chat's conversation.view `openFile`). The
+ * remote `session` namespace is mounted asynchronously by the api-remotes
+ * contribution, so the wrap retries briefly until the method appears and
+ * gives up silently if the runtime never exposes it (the legacy wrap is the
+ * fallback). Gated by the same prefs as the legacy funnel. Returns the
+ * disposer cancelling the retry and restoring the original (HMR-safe).
+ */
+export function registerRemoteOpenPathInterception(ctx: Context, store: SidebarStore): () => void {
+  let disposed = false
+  let disposer: (() => void) | undefined
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let attempts = 0
+
+  const tryWrap = (): void => {
+    if (disposed) return
+    const session = remoteSessionOf(ctx)
+    if (session === undefined || typeof session.openWorkspacePath !== 'function') {
+      attempts += 1
+      if (attempts < 50) timer = setTimeout(tryWrap, 100)
+      return
+    }
+    disposer = wrapRemoteOpenWorkspacePath(session, openPathDeps(ctx, store))
+  }
+
+  tryWrap()
+  return () => {
+    disposed = true
+    if (timer !== undefined) clearTimeout(timer)
+    disposer?.()
+  }
 }

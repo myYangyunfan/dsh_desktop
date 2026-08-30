@@ -10,7 +10,7 @@
  * Row actions: hovering a row reveals an @-reference button on the far
  * right (appends `@<relative path>` to the composer draft), and right-click
  * opens a context menu: file rows offer the caller's open escapes
- * (new tab / to the side, only when the callbacks exist) and a download
+ * (full-area preview / new tab, only when the callbacks exist) and a download
  * action (the host serves raw bytes, binary-safe); directory rows offer
  * "upload here"; every row can copy the relative or absolute path (with a
  * brief "copied" label replacing the button after a successful write).
@@ -132,11 +132,12 @@ export function FileTree(props: {
   cwd: string | undefined
   expanded: string[]
   onToggle: (path: string) => void
+  /** Primary open (click / Enter / Space): preview in a side split. */
   onOpenFile: (path: string) => void
+  /** Context-menu "preview" — full-area open (file rows; absent → no entry). */
+  onPreviewFile?: (path: string) => void
   /** Context-menu "open in a new tab" (file rows; absent → no entry). */
   onOpenFileNewTab?: (path: string) => void
-  /** Context-menu "open to the side" (file rows; absent → no entry). */
-  onOpenFileSide?: (path: string) => void
   /**
    * The "open with" menu: resolved external targets (already SSH-filtered
    * and in menu order). Absent → the whole section is hidden.
@@ -159,7 +160,7 @@ export function FileTree(props: {
   /** True while an upload is in flight (drops are ignored). */
   busy: boolean
 }) {
-  const { sessionId, cwd, expanded, onToggle, onOpenFile, onOpenFileNewTab, onOpenFileSide, openWithTargets, openWithPinned, openWithSsh, onOpenWith, onToggleOpenWithPin, onReferenceFile, refreshTick, onUploadRequest, busy } = props
+  const { sessionId, cwd, expanded, onToggle, onOpenFile, onOpenFileNewTab, onPreviewFile, openWithTargets, openWithPinned, openWithSsh, onOpenWith, onToggleOpenWithPin, onReferenceFile, refreshTick, onUploadRequest, busy } = props
   const [data, setData] = useState<Record<string, LevelData>>({})
   const dataRef = useRef(data)
   /** The row whose path was just copied ("copied" label replaces its button). */
@@ -620,11 +621,11 @@ export function FileTree(props: {
         onClose={() => { setRowMenu(null) }}
         items={[
           // The open escapes head the FILE menu (dirs only get copy).
+          ...(rowMenu?.isDir === false && onPreviewFile !== undefined
+            ? [{ id: 'preview', label: t('preview'), icon: <VscFolderOpened size={16} /> }]
+            : []),
           ...(rowMenu?.isDir === false && onOpenFileNewTab !== undefined
             ? [{ id: 'open-new-tab', label: t('openFileNewTab'), icon: <IconCodeOutline16 size={16} /> }]
-            : []),
-          ...(rowMenu?.isDir === false && onOpenFileSide !== undefined
-            ? [{ id: 'open-side', label: t('openFileSide'), icon: <VscFolderOpened size={16} /> }]
             : []),
           ...openWithEntries(),
           // Download applies to files only (the host route refuses directories).
@@ -646,8 +647,8 @@ export function FileTree(props: {
             onOpenFileNewTab?.(target.path)
             return
           }
-          if (id === 'open-side') {
-            onOpenFileSide?.(target.path)
+          if (id === 'preview') {
+            onPreviewFile?.(target.path)
             return
           }
           if (id.startsWith('open-with:')) {

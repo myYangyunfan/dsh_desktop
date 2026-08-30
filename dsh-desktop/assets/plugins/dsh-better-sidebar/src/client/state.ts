@@ -107,7 +107,7 @@ function uid(prefix: string): string {
 
 /** Mint a fresh uid-based tab id. The `'editor:' + path` convention only
  *  covers openSidebarFile opens (per-path dedupe); opens that must not
- *  dedupe (the tree's "open to the side") mint through here. */
+ *  dedupe (the primary tree-click side split) mint through here. */
 export function mintTabId(): string {
   return uid('tab')
 }

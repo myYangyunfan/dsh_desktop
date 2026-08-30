@@ -8,16 +8,18 @@
  *
  * The chrome depends on the `editorExplorer` mode (read reactively so
  * toggling it re-renders without a reload):
- * - merged (in-place): tree click / path-input Enter switch the CURRENT
- *   tab in place (updateTab rewrites path/title; the tab keeps its id and
- *   meta, so treeOpen/treeWidth survive the switch);
- * - split: they open through `openSidebarFile` (a per-path dedupe tab),
- *   and a PATH-LESS window is the standalone explorer — it renders ONLY
- *   the tree panel (search + FileTree, full-window), no editor chrome.
- *   Editor tabs (with a path) keep the full chrome in both modes.
- * The tree's context menu offers the explicit escapes in both modes: open
- * in a new tab (per-path dedupe) or to the side (a fresh tab in a fresh
- * rightward split of the current pane).
+ * - primary open (tree click / search result): preview in a SIDE SPLIT —
+ *   a fresh tab in a rightward split of the current pane, in both modes;
+ * - full-area open (the context menu's "预览" item and path-input Enter):
+ *   merged mode switches the CURRENT tab in place (updateTab rewrites
+ *   path/title; the tab keeps its id and meta, so treeOpen/treeWidth
+ *   survive the switch); split mode opens through `openSidebarFile` (a
+ *   per-path dedupe tab).
+ * In split mode a PATH-LESS window is the standalone explorer — it renders
+ * ONLY the tree panel (search + FileTree, full-window), no editor chrome.
+ * Editor tabs (with a path) keep the full chrome in both modes. The tree's
+ * context menu offers the explicit escapes: "预览" (full-area open) and
+ * "在新 Tab 中打开" (per-path dedupe).
  *
  * The strategy dispatch is pure (planFirstMatch / planFsReadOutcome in
  * editor-load.ts); this component only wires it to the host APIs.
@@ -131,13 +133,13 @@ export function EditorHost(props: {
   )
 
   /** 返回上级：merged mode reverts the window to the files home (the docked
-   *  explorer); split mode closes this file-preview tab, revealing the
-   *  standalone explorer behind it. */
+   *  explorer, tree panel re-opened); split mode closes this file-preview
+   *  tab, revealing the standalone explorer behind it. */
   const goBack = (): void => {
     const service = ctx.betterSidebar
     if (service === undefined) return
     if (inPlace) {
-      service.updateTab(tab.id, { path: '', title: t('files') })
+      service.updateTab(tab.id, { path: '', title: t('files'), meta: { ...metaOf(tab), treeOpen: true } })
     } else {
       service.closeTab(tab.id, scope)
     }
@@ -158,13 +160,22 @@ export function EditorHost(props: {
   const treeOnly = showEmpty && !inPlace
 
   /**
-   * Open a file from THIS window (tree click / search row / path input):
-   * merged mode switches this tab in place (stable id, meta survives);
-   * split mode opens a per-path dedupe tab through openSidebarFile.
+   * The full-area open (the context menu's "预览" item and the path-input
+   * Enter): merged mode switches this tab in place (stable id, meta
+   * survives); split mode opens a per-path dedupe tab through
+   * openSidebarFile. Opening a file from the explorer home closes the
+   * docked tree so the preview gets the full width (file tabs default
+   * closed, per `treeOpenOf`); a user-opened tree survives file→file
+   * switches.
    */
   const openFile = (absolute: string): void => {
     if (inPlace) {
-      ctx.betterSidebar?.updateTab(tab.id, { path: absolute, title: baseName(absolute) })
+      const fromHome = tab.path === undefined || tab.path === ''
+      ctx.betterSidebar?.updateTab(tab.id, {
+        path: absolute,
+        title: baseName(absolute),
+        ...(fromHome ? { meta: { ...metaOf(tab), treeOpen: false } } : {}),
+      })
     } else {
       openSidebarFile(ctx, store, scope.sessionId, absolute)
     }
@@ -176,9 +187,10 @@ export function EditorHost(props: {
   }
 
   /**
-   * The context menu's "open to the side": a fresh editor tab (uid id — the
-   * `'editor:' + path` convention would clash with the id safety net on a
-   * second side-open of the same file) in a rightward split of THIS pane.
+   * The PRIMARY open (tree click / Enter / search result): a side-split
+   * preview — a fresh editor tab (uid id — the `'editor:' + path`
+   * convention would clash with the id safety net on a second side-open of
+   * the same file) in a rightward split of THIS pane.
    */
   const openFileSide = (absolute: string): void => {
     store.reduce((state) => {
@@ -396,9 +408,9 @@ export function EditorHost(props: {
           cwd={scope.cwd}
           expanded={expanded}
           onToggle={onToggleDir}
-          onOpenFile={openFile}
+          onOpenFile={openFileSide}
           onOpenFileNewTab={openFileNewTab}
-          onOpenFileSide={openFileSide}
+          onPreviewFile={openFile}
           openWithTargets={openWithTargets}
           openWithPinned={openWithConfig.pinned}
           openWithSsh={openWithSshActive(openWithConfig)}
@@ -487,9 +499,9 @@ export function EditorHost(props: {
               cwd={scope.cwd}
               expanded={expanded}
               onToggle={onToggleDir}
-              onOpenFile={openFile}
+              onOpenFile={openFileSide}
               onOpenFileNewTab={openFileNewTab}
-              onOpenFileSide={openFileSide}
+              onPreviewFile={openFile}
               openWithTargets={openWithTargets}
               openWithPinned={openWithConfig.pinned}
               openWithSsh={openWithSshActive(openWithConfig)}

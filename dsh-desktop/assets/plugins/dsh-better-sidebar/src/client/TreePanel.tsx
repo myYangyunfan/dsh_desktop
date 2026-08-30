@@ -2,8 +2,9 @@
  * The files window's tree surface: a global file-name search box on top
  * (300ms debounce; an in-flight search is aborted by the next keystroke)
  * over either the shared controlled FileTree (empty query) or the flat
- * result list (relative paths; click opens through the caller's mode-aware
- * open). Owns its refresh tick: the icon next to the search input clears
+ * result list (relative paths; click opens through the caller's primary
+ * side-split preview). Owns its refresh tick: the icon next to the search
+ * input clears
  * the tree cache. EditorHost docks it as the tab's right panel (wrapped in
  * a drag-resize handle) and provides the file context-menu open escapes.
  *
@@ -46,11 +47,12 @@ export function TreePanel(props: {
   cwd: string | undefined
   expanded: string[]
   onToggle: (path: string) => void
+  /** Primary open (click / search result): preview in a side split. */
   onOpenFile: (path: string) => void
+  /** File context-menu "preview" — full-area open (passed through to FileTree). */
+  onPreviewFile?: (path: string) => void
   /** File context-menu "open in a new tab" (passed through to FileTree). */
   onOpenFileNewTab?: (path: string) => void
-  /** File context-menu "open to the side" (passed through to FileTree). */
-  onOpenFileSide?: (path: string) => void
   /** The "open with" menu surface (passed through to FileTree; absent →
    *  the whole section is hidden). */
   openWithTargets?: OpenWithTarget[]
@@ -63,7 +65,7 @@ export function TreePanel(props: {
    *  at a fixed width. */
   full?: boolean
 }) {
-  const { sessionId, cwd, expanded, onToggle, onOpenFile, onOpenFileNewTab, onOpenFileSide, openWithTargets, openWithPinned, openWithSsh, onOpenWith, onToggleOpenWithPin, onReferenceFile, full } = props
+  const { sessionId, cwd, expanded, onToggle, onOpenFile, onOpenFileNewTab, onPreviewFile, openWithTargets, openWithPinned, openWithSsh, onOpenWith, onToggleOpenWithPin, onReferenceFile, full } = props
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<{ matches: string[]; truncated: boolean } | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -224,7 +226,7 @@ export function TreePanel(props: {
           onToggle={onToggle}
           onOpenFile={onOpenFile}
           onOpenFileNewTab={onOpenFileNewTab}
-          onOpenFileSide={onOpenFileSide}
+          onPreviewFile={onPreviewFile}
           openWithTargets={openWithTargets}
           openWithPinned={openWithPinned}
           openWithSsh={openWithSsh}
