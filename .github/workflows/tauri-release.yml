@@ -213,7 +213,9 @@ jobs:
       - name: Run tests (unit only, skip env-dependent integration)
         run: |
           cd dsh-tauri/src-tauri
-          set -o pipefail
+          # GHA 的 shell: bash 自带 -e（errexit）——失败管道会立刻终止本步骤，
+          # 下面的注解透出逻辑永远不执行（前两轮注解为空的根因）。显式关掉。
+          set +e
           cargo test --workspace --quiet -- --skip sidecar_boot_sandbox --skip full_boot_to_kernel --skip broken_companion --skip corrupted_patch 2>&1 | tee test-output.txt
           code=${PIPESTATUS[0]}
           # CI 日志下载域名（results-receiver.actions.githubusercontent.com）直连
