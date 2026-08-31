@@ -25,7 +25,7 @@ const TARBALLS = join(ROOT, 'vendor', 'dsh-kernel');
 const PKG_PATH = join(ROOT, 'package.json');
 const LOCK_PATH = join(ROOT, 'package-lock.json');
 const SHELL = process.platform === 'win32';
-const KERNEL_VERSION = '0.1.2-alpha.1';
+const KERNEL_VERSION = '0.1.2-alpha.2';
 
 const realPkg = JSON.parse(readFileSync(PKG_PATH, 'utf8'));
 

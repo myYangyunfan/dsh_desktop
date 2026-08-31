@@ -1,44 +1,46 @@
-# Vendored dsh kernel tarballs
+# Vendored dsh kernel tarballs (STAGED — not yet active)
 
-This directory holds the packed, npm-installable tarballs for the locally-built
-`@deepseek-ai/dsh` **0.1.2-alpha.1** kernel (the full `@deepseek-ai/dsh-*`
-family — 241 packages, ~8.1 MB compressed). The kernel is built from GitHub
-(`dsh-v0.1.2-alpha.1`) and is **NOT published to the npm registry**, so these
-tarballs are committed to the repo to make the kernel reproducible on a fresh
-machine / CI without any registry lookup for the kernel itself.
+This directory stages the packed, npm-installable tarballs for the locally-built
+`@deepseek-ai/dsh` **0.1.2-alpha.2** kernel (the full `@deepseek-ai/dsh-*`
+family — 245 packages). The kernel is built from GitHub (`dsh-v0.1.2-alpha.2`)
+and is **NOT published to the npm registry**. This is a staging directory for
+the next kernel bump: the currently active set is
+`../dsh-kernel/` (0.1.2-alpha.1, 241 packages). Nothing in here is referenced
+by `dsh-desktop/package.json` / `package-lock.json` yet.
+
+Contents: 245 `deepseek-ai-dsh-<pkg>-0.1.2-alpha.2.tgz` tarballs plus
+`publish-order.txt` (the official `release:pack` upload order). Relative to the
+active 0.1.2-alpha.1 set, alpha.2 adds 4 packages and drops none:
+
+- `@deepseek-ai/dsh-client-ui-schedule`
+- `@deepseek-ai/dsh-deque`
+- `@deepseek-ai/dsh-util-time`
+- `@deepseek-ai/dsh-util-values`
 
 ## Where they came from
 
-- Produced by `pnpm pack` over every publishable `@deepseek-ai/dsh-*` package in
-  the kernel monorepo. `pnpm pack` rewrites each `workspace:` dependency into an
-  explicit ranged version (`^0.1.2-alpha.1` for dsh-* workspace deps, and the
-  vendored framework versions for the rest), so the tarballs are installable by
-  a plain `npm` consumer.
-- The build source of truth lives in `.tmp-kernel/` (not committed as build
-  input for this mechanism); the generation scripts are
-  `.tmp-kernel/dsh-make-tarballs.mjs` and `.tmp-kernel/dsh-consumer-install.mjs`.
+- Built and packed from the official `dsh-v0.1.2-alpha.2` source tree with the
+  repository's own release flow: `pnpm install`, `pnpm build:official` (binds
+  client artifacts to the official build profile and writes the client build
+  record), then `scripts/release/pack.ts --family dsh` (validates the build
+  record, the one-version baseline, and each tarball payload; packs all 245
+  members in publish order via `pnpm pack`).
+- `pnpm pack` rewrites each `workspace:` dependency into an explicit ranged
+  version (`^0.1.2-alpha.2` for dsh-* workspace deps, and the vendored
+  framework versions for the rest), so the tarballs are installable by a plain
+  `npm` consumer.
+- Two local adaptations were applied to the scratch checkout's release scripts
+  for Windows (spawn `pnpm` through its JS entrypoint instead of the `.cmd`
+  shim; `tar --force-local` for `C:` paths). Neither changes tarball content.
 
-## How the install flow works
+## How to activate (kernel bump)
 
-1. `dsh-desktop/package.json` declares every `@deepseek-ai/dsh*` package at
-   `0.1.2-alpha.1` (semver) as a direct dependency. These MUST NOT resolve from
-   the registry.
-2. `dsh-desktop/package-lock.json` points each of those 241 packages at its
-   vendored tarball via a `file:vendor/dsh-kernel/<name>-0.1.2-alpha.1.tgz`
-   `resolved` entry, so `npm ci` / `npm install` install them locally instead of
-   hitting the registry. (Transitive external deps still resolve from the
-   registry as normal.)
-3. The `postinstall` hook runs
-   `node scripts/install-kernel.mjs && node scripts/patch-deps.js`. The
-   `install-kernel.mjs` step is idempotent: if
-   `node_modules/@deepseek-ai/dsh/package.json` is already `0.1.2-alpha.1` it
-   exits immediately; otherwise it installs all 241 tarballs into a throwaway
-   `file:` npm project and merges the result into `dsh-desktop/node_modules`.
-   This guarantees the kernel is present *before* `patch-deps.js` applies its
-   patches.
+Follow the same steps as the 0.1.2-alpha.1 set (see `../dsh-kernel/README.md`):
 
-## Regenerating (kernel bump)
-
-If the kernel version changes, regenerate the tarballs, copy them here, then
-regenerate `package-lock.json` (the `file:`-resolved entries) with
-`dsh-desktop/scripts/generate-kernel-lock.mjs`.
+1. Copy these tarballs over `vendor/dsh-kernel/` and update
+   `dsh-desktop/package.json` to declare every `@deepseek-ai/dsh*` package at
+   `0.1.2-alpha.2`, including the 4 new packages above.
+2. Regenerate `package-lock.json` (the `file:`-resolved entries) with
+   `dsh-desktop/scripts/generate-kernel-lock.mjs`.
+3. `scripts/install-kernel.mjs` and `scripts/patch-deps.js` pick the version up
+   from the manifests; verify the installed kernel reports `0.1.2-alpha.2`.
