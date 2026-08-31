@@ -1,5 +1,40 @@
 # Changelog — DSH Desktop（Tauri 版，主线架构 v0.5.0 起）
 
+# DSH Desktop v0.5.7 — 全平台
+
+> 本版本是 **0.5.6 之后的修复 + 功能恢复版本**：删除/归档对话功能回归（含必炸根因
+> 修复）、侧边栏交互全面 VSCode 化、spawn 环境净化根治外部注入崩溃环、内置 8 个
+> 社区预设（署名齐全）。详细根因链见 [docs/release-notes/v0.5.7.md](docs/release-notes/v0.5.7.md)。
+
+## ⚠️ 重点 1：删除/归档对话功能回归（v0.5.6 退役功能的重生）
+
+- 宿主 RPC 重靶到 api-workspace-controller / api-remotes / session / workspace /
+  client-ui-workspace（7 锚点全命中、增量幂等，存量副本启动自动拿修复）
+- 「点击删除无任何反应」根因修复：cordis `static inject` 缺 `agents` 等服务声明 →
+  `without inject` 抛错 → commandError → alert 在 GUI 子系统 stderr 蒸发。配套把
+  `page_error` 双写 desktop.log，诊断盲区根治
+
+## ⚠️ 重点 2：spawn 环境净化根治（NODE_OPTIONS 泄漏崩溃环）
+
+- 全部执行 DSH JS 的 node spawn 走 `sanitized_node_command`（env_clear + 白名单 +
+  TMPDIR/USER/LOGNAME/SHELL/TERM/DSH 变量），覆盖 9 处 spawn 点；balance 显式回传
+  代理变量。根治外部环境（WorkBuddy 的 safe-delete shim）注入内核 → boot 崩溃环
+- 顺带根治 sidecar 回落真实 APPDATA 误写 `safe-boot.overlay.yml` 禁用健康插件的事故链
+
+## 🎨 侧边栏（dsh-better-sidebar）与插件
+
+- 文件树点击语义对齐 VSCode（左键分栏预览 / 右键「预览」全预览区）
+- 聊天流文件名点击统一进侧边栏预览（实锤旧拦截器在新内核从未生效）
+- 修复并排布局回归（预览区被树挤到 0）
+- 插件管理新增「无效条目体检 + 一键清理」；settings-models 半补丁幂等修复；
+  识图 apiKey 占位提示；冒烟脚本单实例前置守卫
+
+## 📦 内置 8 个社区预设（署名齐全）
+
+router-standard（flash）/ anchored-standard 系（pro）/ v4-flash-godmode-opencode-go
+（OpenCode Go · flash）/ warmupbetter 系（OpenCode Go · pro）。逐上游核对结论与许可
+注记见 [docs/agent-presets.md](../dsh-desktop/docs/agent-presets.md)。
+
 # DSH Desktop v0.5.6 — Tauri 2
 
 > 本版本是 **0.5.5 之后的大版本**：内核升级 + 全模型适配根治 + 大量体验优化。

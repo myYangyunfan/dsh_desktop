@@ -1256,6 +1256,20 @@ jobs:
           cat > release-notes.md << EOF
           # DSH Desktop ${VERSION} — Tauri 2
 
+          ## 本版本重点（v0.5.7）
+
+          - 删除/归档对话功能回归（v0.5.6 退役），并修复点击后无任何反应的必炸根因
+            （补丁宿主 cordis inject 缺 agents 声明，报错在 GUI 子系统 stderr 蒸发）
+          - 侧边栏 VSCode 化：文件树左键分栏预览 / 右键预览全屏 / 聊天流文件名点击
+            进侧边栏 / 修复并排布局预览区被挤没的回归
+          - spawn 环境净化根治：外部 NODE_OPTIONS 注入（safe-delete shim）不再引发
+            内核启动崩溃环；page_error 双写 desktop.log 根治报错不可见
+          - 插件管理新增「无效条目体检 + 一键清理」；设置写入半补丁修复；识图
+            apiKey 占位提示；冒烟脚本单实例前置守卫
+          - 内置 8 个社区预设（官方 API 与 OpenCode Go 的 flash / pro 用途，署名齐全）
+
+          详细根因链见源码仓库 dsh-tauri/docs/release-notes/v0.5.7.md 与 CHANGELOG.md。
+
           ## 安装包
 
           | 平台 | 格式 |
