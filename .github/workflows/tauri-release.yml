@@ -1333,7 +1333,11 @@ jobs:
           TAG='${{ steps.ver.outputs.tag }}'
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             echo "release $TAG 不存在——创建（仅此一次触碰 release 元数据）"
-            gh release create "$TAG" --title "DSH Desktop $TAG" --notes-file release-notes.md --prerelease
+            # 不带 --prerelease：更新器的 /releases/latest 端点跳过 prerelease，
+            # 出生即 prerelease 意味着更新检查永远看不到新版本（直到手动翻
+            # latest——v0.5.7 首发即踩，「自动更新一直不生效」的全局根因之一）。
+            # 正式 release 自动成为 latest，更新链路即刻可见。
+            gh release create "$TAG" --title "DSH Desktop $TAG" --notes-file release-notes.md
           fi
           for f in release-assets/*; do
             name=$(basename "$f")
@@ -1543,34 +1547,51 @@ jobs:
           LIMIT=${GITEE_FILE_LIMIT}
           # 刷新远端资产清单（rebuild 后为空，复用时为现状）
           curl -sf "${GITEE_API}/repos/${GITEE_REPO}/releases/tags/${{ steps.ver.outputs.tag }}?access_token=${GITEE_TOKEN}" > gitee-now.json
-          for f in gh-assets/*; do
+          # 上传顺序：win-x64 安装包优先（CN 用户主下载资产），其后其余资产。
+          # 单资产最终失败不再中断整个镜像——上一版 arm64 exe 连败两次即 exit，
+          # win-x64 安装包永远轮不到上传（Gitee 源全用户更新失效的实爆）。
+          # 收口由下方 Verify mirrored assets 兜底：缺失/大小不符仍会拒发。
+          declare -A SEEN
+          FAIL=0
+          upload_one() {
+            local f="$1" name size remote attempt
             name=$(basename "$f")
+            if [ -n "${SEEN[$name]:-}" ]; then return 0; fi
+            SEEN[$name]=1
             size=$(stat -c%s "$f")
             # Gitee v5 资产对象无 size 字段（只有 name + browser_download_url），
             # 存在性按 name 判定；大小由 sha256 边车兜底。
             remote=$(jq -r --arg n "$name" '.assets[]? | select(.name==$n) | .name' gitee-now.json | head -1)
             if [ -n "$remote" ] && [ "$remote" != "null" ]; then
               echo "跳过（已镜像）: $name"
-              continue
+              return 0
             fi
             if [ "$size" -gt "$LIMIT" ]; then
               echo "::warning::跳过超 Gitee 100MB 限制的资产: $name（${size} 字节；壳侧自动回落 GitHub 源下载）"
-              continue
+              return 0
             fi
             echo "上传到 Gitee: $name（${size} 字节）"
-            # Gitee 上传 API 大文件慢：单文件 10 分钟上限 + 失败重试一次（避免
-            # 单文件卡死耗尽 job timeout，v0.5.6 两次 dispatch 均在此超时）。
-            for attempt in 1 2; do
+            # Gitee 上传 API 大文件慢：单文件 10 分钟上限 + 4 次退避重试
+            #（20/40/60s——v0.5.7 首发实测单文件偶发连败两次即退）。
+            for attempt in 1 2 3 4; do
               if curl -sf --max-time 600 -X POST "${GITEE_API}/repos/${GITEE_REPO}/releases/${REL_ID}/attach_files?access_token=${GITEE_TOKEN}" \
                 -F "file=@${f}" > /dev/null; then
                 echo "  上传成功: $name（第 ${attempt} 次）"
-                break
+                return 0
               fi
-              echo "::warning::上传失败（第 ${attempt} 次）: $name，重试…"
-              [ "$attempt" -eq 2 ] && exit 1
-              sleep 10
+              echo "::warning::上传失败（第 ${attempt} 次）: $name"
+              if [ "$attempt" -eq 4 ]; then return 1; fi
+              sleep $((attempt * 20))
             done
+            return 1
+          }
+          for f in gh-assets/*-win-x64.exe gh-assets/*; do
+            if [ -f "$f" ]; then upload_one "$f" || FAIL=1; fi
           done
+          if [ "$FAIL" -ne 0 ]; then
+            echo "::error::一个或多个资产最终上传失败（详见上方告警）——Verify 步骤将复核并拒绝发布"
+            exit 1
+          fi
 
       - name: Verify mirrored assets
         # 镜像收口：重查 Gitee release，每个 ≤100MB 的源资产（含全部边车）
