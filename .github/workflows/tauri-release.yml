@@ -272,6 +272,10 @@ jobs:
           VERSION=${{ steps.ver.outputs.version }}
           cd dsh-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis
           ls -la
+          # 版本混装防线②：Rust cache 恢复的 bundle 目录可能残留上个版本的改名
+          # 产物——上传 glob 是 DSH-Desktop-Setup-*，非本版本的旧文件必须清掉
+          #（0.5.6/0.5.7 混装被 verify 拒发的实爆）。
+          find . -maxdepth 1 -name 'DSH-Desktop-Setup-*' ! -name "DSH-Desktop-Setup-${VERSION}-win-x64.exe" -delete
           # 版本混装防线③：Tauri NSIS 产物名内嵌 tauri.conf.json 的版本
           # （<productName>_<ver>_x64-setup.exe）——期望版本不符时 glob 落空即失败
           shopt -s nullglob
@@ -499,6 +503,9 @@ jobs:
           if [ ! -d "$NSIS_DIR" ]; then echo "no nsis bundle dir (build failed?), skip rename"; exit 0; fi
           cd "$NSIS_DIR"
           ls -la
+          # 版本混装防线②：cache 恢复的 bundle 目录可能残留上个版本的改名产物
+          #（上传 glob 是 DSH-Desktop-Setup-*，非本版本旧文件必须清掉）。
+          find . -maxdepth 1 -name 'DSH-Desktop-Setup-*' ! -name "DSH-Desktop-Setup-${VERSION}-win-arm64.exe" -delete
           shopt -s nullglob
           src=( *_"${VERSION}"_arm64-setup.exe )
           if [ ${#src[@]} -eq 0 ]; then
