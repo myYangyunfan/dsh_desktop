@@ -1407,7 +1407,7 @@ jobs:
       GH_REPO: myYangyunfan/dsh_desktop
       GITEE_API: https://gitee.com/api/v5
       GITEE_REPO: my-yang-yunfan/dsh_desktop
-      GITEE_FILE_LIMIT: '104857600'
+      GITEE_FILE_LIMIT: '83886080'
     steps:
       - name: Resolve release tag/version
         id: ver
@@ -1567,7 +1567,7 @@ jobs:
               return 0
             fi
             if [ "$size" -gt "$LIMIT" ]; then
-              echo "::warning::跳过超 Gitee 100MB 限制的资产: $name（${size} 字节；壳侧自动回落 GitHub 源下载）"
+              echo "::warning::跳过超 Gitee 限制的资产: $name（${size} 字节；壳侧自动回落 GitHub 源下载）"
               return 0
             fi
             echo "上传到 Gitee: $name（${size} 字节）"
