@@ -213,7 +213,14 @@ jobs:
       - name: Run tests (unit only, skip env-dependent integration)
         run: |
           cd dsh-tauri/src-tauri
-          cargo test --workspace --quiet -- --skip sidecar_boot_sandbox --skip full_boot_to_kernel --skip broken_companion --skip corrupted_patch
+          set -o pipefail
+          cargo test --workspace --quiet -- --skip sidecar_boot_sandbox --skip full_boot_to_kernel --skip broken_companion --skip corrupted_patch 2>&1 | tee test-output.txt
+          code=${PIPESTATUS[0]}
+          # CI 日志下载域名（results-receiver.actions.githubusercontent.com）直连
+          # 被墙——失败用例名以 ::error:: 注解透出（注解走 api.github.com 加速
+          # 通道，是墙内环境唯一可读的诊断出口）
+          grep -E "FAILED|panicked at" test-output.txt | head -30 | sed 's/^/::error::/' || true
+          exit $code
         shell: bash
 
       - name: Assert bundled D3DCOMPILER_47.dll (B1 fix prerequisite)
