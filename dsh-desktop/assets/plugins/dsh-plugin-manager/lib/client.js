@@ -151,7 +151,9 @@ window.__ModuleLoader__.load({
 			{ id: "approval", module: "@deepseek-ai/dsh-user-approval", label: "权限审批", consequence: "工具调用的用户审批（允许 / 拒绝）流程失效" },
 			{ id: "storage-json", module: "@deepseek-ai/dsh-storage-json", label: "本地存储", consequence: "本地键值存储失效，依赖 storage 域的功能不保存" },
 			{ id: "webserver", module: "@deepseek-ai/dsh-host-webserver", label: "本地服务端口", consequence: "页面端口不监听：白屏 / 一直加载" },
-			{ id: "api-gateway", module: "@deepseek-ai/dsh-host-apiproxy", label: "API 网关", consequence: "前后端 RPC 全部哑火，页面所有操作报错" },
+			// api-gateway 行已移除（2026-08-31）：内核 0.1.2-alpha.1 重构后网关 folded
+			// 进核心原生实现，loader 条目不存在——按旧行 id（@deepseek-ai/dsh-host-apiproxy
+			// 时代的 api-gateway）查 live 注册表永远缺席，产生永久误报红条（RPC 实际正常）。
 			{ id: "plugin-inventory", module: "@deepseek-ai/dsh-host-plugin-inventory", label: "插件清单服务", consequence: "插件清单 / 健康页无数据" },
 			{ id: "modules", module: "@deepseek-ai/dsh-client-modules", label: "前端模块表", consequence: "浏览器模块表（window.__DSH_BOOT__）缺失，页面空白" },
 			{ id: "connection", module: "@deepseek-ai/dsh-client-connection", label: "前后端传输", consequence: "fetch / SSE 传输断开，页面无法与后端通信" },
