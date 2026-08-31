@@ -88,7 +88,7 @@ mod image_paste_tests {
     #[test]
     fn image_paste_save_impl_contract() {
         // Electron 契约形态：合法 png 落盘返回 {ok,path,size}；坏输入带可读错误。
-        let _g = crate::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let _g = crate::logging::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let tmp = std::env::temp_dir().join(format!("dsh-paste-test-{}", std::process::id()));
         std::env::set_var("DSH_TEST_TMP", &tmp);
         // 1x1 PNG（70B 真实字节）
@@ -167,7 +167,7 @@ mod image_paste_tests {
     #[test]
     fn image_paste_save_sweeps_expired_files_via_main_path() {
         use std::time::Duration;
-        let _g = crate::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let _g = crate::logging::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let tmp = std::env::temp_dir().join(format!("dsh-paste-sweep-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();

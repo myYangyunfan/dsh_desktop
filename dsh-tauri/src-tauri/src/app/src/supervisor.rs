@@ -1987,7 +1987,7 @@ Content-Length: 0
     #[test]
     fn sidecar_boot_sandbox_integration() {
         let Some(root) = repo_root() else { eprintln!("[skip] 仓库检出不含 dsh-desktop（CI 无依赖环境）"); return; };
-        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let _env = crate::logging::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let home = sandbox("boot");
         std::env::set_var("DSH_HOME", &home);
         std::env::set_var("DSH_TAURI_USERDATA", home.join("ud"));
@@ -2010,7 +2010,7 @@ Content-Length: 0
     #[test]
     fn full_boot_to_kernel_ready_integration() {
         let Some(root) = repo_root() else { eprintln!("[skip] 仓库检出不含 dsh-desktop"); return; };
-        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let _env = crate::logging::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let home = sandbox("full");
         std::env::set_var("DSH_HOME", &home);
         std::env::set_var("DSH_TAURI_USERDATA", home.join("ud"));
@@ -2469,7 +2469,7 @@ Content-Length: 0
         assert!(seg.contains("sanitized_node_command(&spec.node_exe)"), "spawn_kernel 必须经净化构造: {seg}");
         assert!(!seg.contains("for (k, v) in std::env::vars()"), "不得残留内联白名单循环（旧形态 env 泄漏）: {seg}");
         // ② 行为断言：净化命令 = env_clear + 白名单 + 监管标识，禁漏变量绝不出现。
-        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let _env = crate::logging::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         std::env::set_var("NODE_OPTIONS", "--require=/bad/genie-safe-delete.cjs");
         let mut cmd = sanitized_node_command("node");
         cmd.env("DSH_DESKTOP_SUPERVISED", "1").env("NO_COLOR", "1");
@@ -2567,7 +2567,7 @@ Content-Length: 0
     fn wsl_stub_boot_to_kernel_ready_e2e() {
         use std::sync::Mutex as StdMutex;
         let Some(root) = repo_root() else { eprintln!("[skip] 仓库检出不含 dsh-desktop"); return; };
-        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let _env = crate::logging::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let home = sandbox("wsl-e2e");
         let unc_home = home.join("unc-home"); // 模拟 \\wsl.localhost\<distro>\... 形态的落点目录
         std::fs::create_dir_all(&unc_home).unwrap();
@@ -2796,7 +2796,7 @@ mod stability_tests {
     #[test]
     fn broken_companion_file_is_healed_by_sync() {
         let Some(root) = repo_root() else { eprintln!("[skip] 无依赖环境"); return; };
-        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let _env = crate::logging::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let home = sandbox("broken");
         std::env::set_var("DSH_HOME", &home);
         std::env::set_var("DSH_TAURI_USERDATA", home.join("ud"));
@@ -2847,7 +2847,7 @@ mod stability_tests {
     #[test]
     fn corrupted_patch_is_rolled_back_to_lastgood() {
         let Some(root) = repo_root() else { eprintln!("[skip]"); return; };
-        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let _env = crate::logging::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let home = sandbox("rollback");
         std::env::set_var("DSH_HOME", &home);
         std::env::set_var("DSH_TAURI_USERDATA", home.join("ud"));
@@ -2896,7 +2896,7 @@ mod stability_tests {
     #[test]
     fn guard_action_read_surface_status_check_incident_resolve() {
         let Some(root) = repo_root() else { eprintln!("[skip] 无依赖环境"); return; };
-        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let _env = crate::logging::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let home = sandbox("guard-read");
         std::env::set_var("DSH_HOME", &home);
         std::env::set_var("DSH_TAURI_USERDATA", home.join("ud"));

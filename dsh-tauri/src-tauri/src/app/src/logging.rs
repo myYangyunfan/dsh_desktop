@@ -39,6 +39,15 @@ pub const LOG_CAP_BYTES: u64 = 4 * 1024 * 1024;
 ///（运行路径零 unwrap/expect/panic），持有锁期间不会触发 panic 重入。
 static APPEND_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+/// 进程级 env 互斥（测试专用规范锁，2026-08）：本模块 sandbox 与
+/// commands/image、lib 的 find_repo_root 等测试在并行下互相竞争进程环境
+/// 变量（DSH_TEST_TMP 等）——此前 image 与 logging 各持一把私有锁互不
+/// 互斥，产生 sweep 空扫 / early_log 失败的并行偶发（CI Windows x64 门禁
+/// 实爆）。所有改进程 env 的测试统一取本锁。放本模块顶层：ta9/ta4 以
+/// `#[path]` 把本文件包含进各自测试 crate（彼时 `crate::` 指向测试 crate，
+/// 引 lib 的锁必 E0432），自包含才能在两个编译上下文同时可用。
+pub(crate) static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// 壳日志目录（`<app_data>/logs`）。
 pub fn logs_dir() -> PathBuf {
     shell_core::DshPaths::resolve().logs
@@ -252,11 +261,11 @@ pub fn write_log_pointer_files() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // 进程级 env 互斥：必须与 lib.rs 的 ENV_LOCK 同一把锁。本模块 sandbox
-    // 清理的 DSH_TEST_TMP 与 image 等测试的 env 关键区互相竞争——此前本模块
-    // 私有锁与 crate::ENV_LOCK 互不互斥，正是并行偶发失败（image sweep 空扫、
-    // early_log 失败）的根因。
-    use crate::ENV_LOCK;
+    // 进程级 env 互斥：用本模块顶层的规范锁（crate::logging::ENV_LOCK）——
+    // image 等测试同样取它，全进程统一。注意不能写 `crate::ENV_LOCK`：
+    // ta9/ta4 以 #[path] 把本文件包含进各自测试 crate，彼时 crate:: 指向
+    // 测试 crate 根，引用 lib 的锁必 E0432（CI Windows x64 门禁实爆）。
+    use super::ENV_LOCK;
 
     struct Sandbox {
         home: PathBuf,

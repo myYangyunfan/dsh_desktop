@@ -184,8 +184,9 @@ fn ta15_form_swap_gate_precedes_spawn() {
     // 归还无早退：唯一 return 在 swap 失败侧；store(false) 必在函数内。
     assert!(f.contains("store(false"), "持有者必然归还旗标");
     // fetch_once 内才是真子进程（形态面：spawn 只在取数函数里）。
+    // sanitized_node_command 内部即 Command::new + env_clear + 白名单（spawn 净化）。
     let fo = BALANCE_RS.split("fn fetch_once").nth(1).unwrap();
-    assert!(fo.contains("Command::new"), "fetch_once 以子进程取数");
+    assert!(fo.contains("sanitized_node_command"), "fetch_once 以净化构造起子进程取数");
 }
 
 #[test]

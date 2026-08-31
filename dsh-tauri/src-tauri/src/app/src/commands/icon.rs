@@ -602,7 +602,7 @@ mod tests {
     /// 用 DSH_TEST_APPDATA 重定向隔离断言，不改真实用户目录。
     #[test]
     fn custom_icon_paths_live_in_app_data() {
-        let _g = crate::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let _g = crate::logging::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let home = std::env::temp_dir().join(format!("dsh-icon-path-{}", std::process::id()));
         std::env::set_var("DSH_TEST_APPDATA", home.join("appdata"));
         let cands = custom_icon_candidates();

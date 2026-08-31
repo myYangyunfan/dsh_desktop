@@ -193,7 +193,7 @@ mod tests {
     /// file_revert 功能：围栏内替换（逆序）+ 越界拒绝 + 内容不匹配跳过。
     #[test]
     fn file_revert_fence_and_idempotency() {
-        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let _env = crate::logging::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let home = std::env::temp_dir().join(format!("dsh-cmd-revert-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&home);
         // dsh_home = <home>/.dsh（paths 契约）——围栏内文件须在其下。
@@ -221,7 +221,7 @@ mod tests {
     /// 还原主场景）；home 外不存在路径仍拒（不得借 revert 创建新文件）。
     #[test]
     fn file_revert_workspace_file_allowed_and_new_path_denied() {
-        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let _env = crate::logging::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let home = std::env::temp_dir().join(format!("dsh-cmd-ws-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&home);
         std::env::set_var("DSH_TEST_HOME", &home);
@@ -260,7 +260,7 @@ mod tests {
     /// 拒绝；含 `%`/`&` 的合法路径不再被元字符黑名单误杀（#137）。
     #[test]
     fn file_open_workspace_path_and_metachar_paths() {
-        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let _env = crate::logging::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let home = std::env::temp_dir().join(format!("dsh-cmd-open-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&home);
         std::env::set_var("DSH_TEST_HOME", &home);

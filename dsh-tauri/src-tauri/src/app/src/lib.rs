@@ -80,10 +80,8 @@ impl AppState {
     }
 }
 
-/// 测试用：环境变量互斥锁（DSH_TEST_HOME / DSH_HOME 变更期间串行化，
-/// 防止并行测试读到中间态路径）。
-#[cfg(test)]
-pub(crate) static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+/// 测试用 env 互斥的规范锁已迁至 logging::ENV_LOCK（ta9/ta4 以 #[path] 包含
+/// logging.rs 时 crate:: 指向测试 crate，lib 内定义的锁在那两个编译单元不可达）。
 
 /// 进程级单实例锁（退出时 Drop 删锁文件；强杀残留由陈锁回收逻辑兜底）。
 static INSTANCE_LOCK: std::sync::Mutex<Option<shell_core::SingleInstanceGuard>> = std::sync::Mutex::new(None);
@@ -944,7 +942,7 @@ mod window_state_tests {
     /// 窗口状态 save→load roundtrip（window-state.json，Electron 同构）。
     #[test]
     fn window_state_roundtrip_and_clamps() {
-        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let _env = crate::logging::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let home = sandbox_env("rt");
         let state = AppState::empty();
         save_window_state(&state, (120, 60, 1280.0, 820.0, true)).unwrap();
@@ -964,7 +962,7 @@ mod window_state_tests {
     /// 升级场景：Electron 版用户已有 window-state.json → Tauri 版原样恢复。
     #[test]
     fn electron_window_state_upgrades_verbatim() {
-        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let _env = crate::logging::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let home = sandbox_env("upg");
         let state = AppState::empty();
         // Electron 版真实样本（main.js loadWindowState 消费的同 schema）。
@@ -987,7 +985,7 @@ mod window_state_tests {
     /// 升级场景：旧 settings.json 含裁撤键 → 加载不炸、识别（不删除，可回退）。
     #[test]
     fn legacy_settings_keys_ignored_not_deleted() {
-        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let _env = crate::logging::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let home = sandbox_env("legacy");
         let state = AppState::empty();
         std::fs::create_dir_all(&state.paths.app_data).unwrap();
@@ -1968,7 +1966,7 @@ mod repo_root_tests {
 
     #[test]
     fn find_repo_root_env_override_wins() {
-        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let _env = crate::logging::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let root = fake_root("env");
         std::env::set_var("DSH_TAURI_REPO_ROOT", &root);
         let found = find_repo_root().expect("显式覆盖且布局合法时必须命中");
@@ -1979,7 +1977,7 @@ mod repo_root_tests {
 
     #[test]
     fn find_repo_root_env_override_invalid_is_error() {
-        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let _env = crate::logging::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         std::env::set_var("DSH_TAURI_REPO_ROOT", std::env::temp_dir());
         let r = find_repo_root();
         std::env::remove_var("DSH_TAURI_REPO_ROOT");
@@ -2015,7 +2013,7 @@ mod repo_root_tests {
     /// 不再写宿主 %APPDATA%）。非便携态不碰环境。
     #[test]
     fn portable_redirect_env_set_before_any_logging_would_run() {
-        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let _env = crate::logging::ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let dir = std::env::temp_dir().join(format!("dsh-tauri-portable-redirect-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
