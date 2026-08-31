@@ -395,6 +395,10 @@ function transformSettingsSectionGuard(src, file) {
 
 // ---------------------------------------------------------------------------
 // dsh-client-ui-workspace 搜索栏修复（原 applyWorkspaceSearchRailFix）。
+// 已退役（v0.6.0 alpha.2 重靶期，注册表条目已摘除）：0.1.2-alpha.2 上游原生
+// 包含同款守卫（guard + deps 双全，pristine :L1991 实证），补丁无增量。
+// 定义休眠保留（参照 session-event-bound / load-all-history 先例），仅供
+// 历史安装副本回滚审计与 rc.7 及更早形态参考。
 // ---------------------------------------------------------------------------
 const WORKSPACE_SEARCH_RAIL_MARKER = 'dsh-desktop fix: rail search expansion';
 // rc.8 起上游原生包含了同款守卫（无 marker 注释的裸形态）：`if (!wide ||
@@ -2103,7 +2107,6 @@ module.exports = {
   transformProfileBundleAppBoot,
   transformProfileBundleProfileBoot,
   transformSettingsSectionGuard,
-  transformWorkspaceSearchRailFix,
   transformManualSortFix,
   transformPluginInventoryTabMergeFix,
   // 持久 shell 停止修复（abort race + 中断升级）。
@@ -2168,7 +2171,6 @@ module.exports = {
     PROFILE_BUNDLE_GUARD_MARKER,
     PROFILE_BOOT_GUARD_MARKER,
     SETTINGS_SECTION_MARKER,
-    WORKSPACE_SEARCH_RAIL_MARKER,
     PLUGIN_INVENTORY_TAB_MARKER,
     PERSISTENT_ABORT_RACE_MARKER,
     INTERRUPT_ESCALATION_MARKER,

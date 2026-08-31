@@ -162,6 +162,6 @@ for (const spec of fileSpecs) {
   });
 }
 
-test('契约面完整性：35 个 file transform 全部被本文件覆盖', () => {
-  assert.equal(fileSpecs.length, 35);
+test('契约面完整性：34 个 file transform 全部被本文件覆盖', () => {
+  assert.equal(fileSpecs.length, 34);
 });

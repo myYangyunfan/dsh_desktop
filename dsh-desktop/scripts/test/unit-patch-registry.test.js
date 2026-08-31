@@ -94,7 +94,7 @@ test('防护类补丁与包级补丁均已登记（无遗漏 apply*）', () => {
     'attachment-mime-trust',
     'persistent-shell-abort-race', 'terminal-interrupt-escalation',
     'profile-patch-guard', 'profile-bundle-guard-appboot', 'profile-bundle-guard-profileboot',
-    'settings-section-guard', 'workspace-search-rail-fix', 'plugin-inventory-tab-merge',
+    'settings-section-guard', 'plugin-inventory-tab-merge',
     'web-search-baseurl', 'menu-viewport', 'open-project-dir',
     'session-persistence', 'tool-source-compat', 'pi-ai-opencode-go-models',
     'pi-ai-credits', 'pi-ai-reasoning-defaults', 'pi-ai-overflow-message',

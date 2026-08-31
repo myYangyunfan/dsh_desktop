@@ -12,7 +12,6 @@ const path = require('node:path');
 const {
   transformProfilePatchGuard,
   transformSettingsSectionGuard,
-  transformWorkspaceSearchRailFix,
   transformPluginInventoryTabMergeFix,
   transformFlashFix,
 } = require('../lib/patch-adapters');
@@ -45,21 +44,6 @@ test('transformSettingsSectionGuard：匹配 / 已应用 / 失配三态', () => 
   assert.equal(transformSettingsSectionGuard('// ' + SETTINGS_MARKER, 't.js').status, 'already');
   const miss = transformSettingsSectionGuard('export const x = 1;', 't.js');
   assert.equal(miss.status, 'anchor-missing');
-});
-
-const RAIL_MARKER = 'dsh-desktop fix: rail search expansion';
-const RAIL_OLD_GUARD = '\t\t\t\tif (!wide || !searchExpanded) return;';
-const RAIL_OLD_DEPS = '\t\t\t}, [\n\t\t\t\tnormalizedQuery,\n\t\t\t\twide,\n\t\t\t\tsearchExpanded\n\t\t\t]);';
-
-test('transformWorkspaceSearchRailFix：匹配 / 已应用 / 失配三态', () => {
-  const src = RAIL_OLD_GUARD + '\n' + RAIL_OLD_DEPS;
-  const changed = transformWorkspaceSearchRailFix(src, 't.js');
-  assert.equal(changed.status, 'changed');
-  assert.ok(changed.src.includes(RAIL_MARKER));
-  assert.ok(changed.src.includes('searchOnExpand'));
-  assert.equal(transformWorkspaceSearchRailFix('// ' + RAIL_MARKER, 't.js').status, 'already');
-  // 两个锚点缺一即失配
-  assert.equal(transformWorkspaceSearchRailFix(RAIL_OLD_GUARD, 't.js').status, 'anchor-missing');
 });
 
 const TAB_MARKER = 'dsh-desktop fix: hide inventory tab';

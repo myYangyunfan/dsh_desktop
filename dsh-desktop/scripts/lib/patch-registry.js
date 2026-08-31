@@ -85,7 +85,6 @@ const {
   transformProfileBundleAppBoot,
   transformProfileBundleProfileBoot,
   transformSettingsSectionGuard,
-  transformWorkspaceSearchRailFix,
   transformManualSortFix,
   transformPluginInventoryTabMergeFix,
   transformPersistentShellAbortRace,
@@ -123,7 +122,6 @@ const {
   PROFILE_BUNDLE_GUARD_MARKER,
   PROFILE_BOOT_GUARD_MARKER,
   SETTINGS_SECTION_MARKER,
-  WORKSPACE_SEARCH_RAIL_MARKER,
   MANUAL_SORT_DRAG_MARKER,
   PLUGIN_INVENTORY_TAB_MARKER,
   PERSISTENT_ABORT_RACE_MARKER,
@@ -500,26 +498,12 @@ const PATCH_SPECS = [
       failLog: (file, err) => 'fail-loud 就绪后隔离失败: ' + err.message,
     },
   },
-  {
-    id: 'workspace-search-rail-fix',
-    group: 'guard',
-    order: 150,
-    kind: 'file',
-    layout: 'guard',
-    wslLayout: 'guard',
-    pkgRel: WORKSPACE_PKG_REL,
-    transform: transformWorkspaceSearchRailFix,
-    marker: WORKSPACE_SEARCH_RAIL_MARKER,
-    requires: [],
-    failPolicy: 'warn',
-    cli: false,
-    logs: {
-      prefix: 'workspace 搜索栏修复',
-      alreadyLog: alreadySkip,
-      doneLog: (file) => '已注入到 ' + file,
-      failLog: (file, err) => 'workspace 搜索栏修复失败(' + file + '): ' + err.message,
-    },
-  },
+  // -------------------------------------------------------------------------
+  // workspace-search-rail-fix 已退役（v0.6.0 alpha.2 重靶期）：0.1.2-alpha.2
+  // 上游原生包含同款守卫（`if (!wide || !searchExpanded || searchOnExpand)
+  // return;` 且 deps 含 searchOnExpand，pristine :L1991 实证），补丁无增量。
+  // transform 保留在 patch-adapters（休眠，参照 session-event-bound 先例）。
+  // -------------------------------------------------------------------------
   // K25 手动排序拖拽失效修复：会话行 HTML5 拖拽在 React 18 批处理下 drag.active
   // 未及时更新导致 dragover/drop 未 preventDefault → 拖拽无效。onDragStart 内
   // flushSync 同步提交 drag 状态。只改会话行（node.id）拖拽起点，不动排序/持久化。

@@ -147,8 +147,9 @@ test('D. pkgRel/pkgRels 被 patch-target-resolver 常量覆盖（白名单外新
 });
 
 test('E. order 全局唯一、组内升序、补丁间依赖序成立', () => {
-  // 51 = 50（上一基线）+ 1 项恢复（session-manage：对话删除/归档管理）。
-  assert.equal(PATCH_SPECS.length, 51, 'spec 总数应为 51');
+  // 50 = 51（上一基线）− 1 项退役（workspace-search-rail-fix：alpha.2 上游
+  // 已原生实现同款守卫，pristine :L1991 实证）。
+  assert.equal(PATCH_SPECS.length, 50, 'spec 总数应为 50');
   const orders = PATCH_SPECS.map((s) => s.order);
   assert.equal(new Set(orders).size, orders.length, 'order 必须全局唯一');
   const byId = Object.fromEntries(PATCH_SPECS.map((s) => [s.id, s]));

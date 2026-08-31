@@ -357,14 +357,15 @@ test('companion-plugins: 既有前缀顺序与 workspace-anchor 位置唯一（�
     ids.slice(0, 18),
     [
       'balance', 'file-changes', 'client-file-changes', 'terminal',
-      'better-sidebar', 'harness-pet', 'dsh-navbar', 'conversation-tweaks',
+      'better-sidebar', 'harness-pet', 'dsh-navbar', 'dsh-session-manager',
+      'conversation-tweaks',
       'quest-ui', 'dsh-super-injector', 'prompt-custom', 'workspace-anchor',
       'wsl-settings', 'dsh-vision', 'side-session', 'compaction-acp',
-      'plugin-manager', 'graph-memory',
+      'plugin-manager',
     ],
     '既有前缀顺序不得漂移（新增/改名须同步更新本测试）'
   );
-  assert.strictEqual(ids.indexOf('workspace-anchor'), 11, 'workspace-anchor 应固定在 prompt-custom 之后');
+  assert.strictEqual(ids.indexOf('workspace-anchor'), 12, 'workspace-anchor 应固定在 prompt-custom 之后');
   assert.strictEqual(ids.filter((id) => id === 'workspace-anchor').length, 1, 'workspace-anchor 不得重复');
   assert.strictEqual(companionDirName({ name: '@deepseek-ai/dsh-balance' }), 'dsh-balance');
   assert.strictEqual(companionDirName({ name: 'harness-pet' }), 'harness-pet');
