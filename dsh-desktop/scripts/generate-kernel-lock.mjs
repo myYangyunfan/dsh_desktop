@@ -14,7 +14,8 @@
  * (Run from anywhere; it resolves paths relative to this file.)
  */
 
-import { spawn } from 'node:child_process';
+import { spawn } from "node:child_process";
+import crypto from "node:crypto";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -25,7 +26,7 @@ const TARBALLS = join(ROOT, 'vendor', 'dsh-kernel');
 const PKG_PATH = join(ROOT, 'package.json');
 const LOCK_PATH = join(ROOT, 'package-lock.json');
 const SHELL = process.platform === 'win32';
-const KERNEL_VERSION = '0.1.2-alpha.2';
+const KERNEL_VERSION = '0.1.2-alpha.3';
 
 const realPkg = JSON.parse(readFileSync(PKG_PATH, 'utf8'));
 
@@ -104,6 +105,21 @@ try {
     dependencies: realPkg.dependencies,
     devDependencies: realPkg.devDependencies ?? {},
   };
+
+  // --- sanity: every dsh package has a file:-resolved entry ---
+  // integrity 重算覆写（v0.6.0 实测）：npm 对 file: tarball 的 integrity 计算与
+  // 真实字节偶发不一致（session-turn-outline 13049B 两轮 regen 均错）——以真实
+  // tarball 字节的 sha512 为准覆写，npm ci 的校验链才可靠。
+  let rehashed = 0;
+  for (const name of Object.keys(fileDeps)) {
+    const entry = tmpLock.packages[`node_modules/${name}`];
+    if (!entry) continue;
+    const tgzPath = join(ROOT, resolvedByName[name].replace(/^file:/, ''));
+    entry.integrity =
+      'sha512-' + crypto.createHash('sha512').update(readFileSync(tgzPath)).digest('base64');
+    rehashed += 1;
+  }
+  console.log(`generate-kernel-lock: integrity 重算覆写 ${rehashed} 个 file: 条目`);
 
   // --- sanity: every dsh package has a file:-resolved entry ---
   let bad = 0;
