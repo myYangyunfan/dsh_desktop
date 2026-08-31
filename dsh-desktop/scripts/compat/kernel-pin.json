@@ -1,0 +1,38 @@
+{
+  "compatLayerVersion": "0.6.0-skeleton.1",
+  "kernel": {
+    "tag": "dsh-v0.1.2-alpha.1",
+    "packageVersion": "0.1.2-alpha.1",
+    "acquisition": "offline-tarball",
+    "vendorDir": "vendor/dsh-kernel",
+    "upstream": "https://github.com/deepseek-ai/deepseek-harness",
+    "license": "MIT",
+    "maturity": "developer-preview",
+    "pinPolicy": "exact — 官方 developer preview 破坏性变更随时发生，禁止浮动"
+  },
+  "services": {
+    "_meta": "关键后端服务清单（id = 组合 yml 行 id / loader entryId）。来源：官方 ctx seam 表（dsh-std/01 §4）+ 桌面组合实装。此清单取代散落在健康页/插件管理里的硬编码 id。",
+    "required": [
+      { "id": "credentials", "module": "@deepseek-ai/dsh-credentials-local", "label": "凭据服务" },
+      { "id": "settings", "module": "@deepseek-ai/dsh-settings-file", "label": "设置文档" },
+      { "id": "llm", "module": "@deepseek-ai/dsh-llm", "label": "模型调用核心" },
+      { "id": "llm-deepseek", "module": "@deepseek-ai/dsh-llm-deepseek", "label": "DeepSeek 模型路由" },
+      { "id": "session", "module": "@deepseek-ai/dsh-session", "label": "会话域" },
+      { "id": "session-persistence-jsonl", "module": "@deepseek-ai/dsh-session-persistence-jsonl", "label": "会话落盘" },
+      { "id": "sandbox", "module": "@deepseek-ai/dsh-sandbox-local", "label": "文件边界" },
+      { "id": "approval", "module": "@deepseek-ai/dsh-user-approval", "label": "权限审批" },
+      { "id": "storage-json", "module": "@deepseek-ai/dsh-storage-json", "label": "本地存储" },
+      { "id": "webserver", "module": "@deepseek-ai/dsh-host-webserver", "label": "本地服务端口" },
+      { "id": "plugin-inventory", "module": "@deepseek-ai/dsh-host-plugin-inventory", "label": "插件清单服务" },
+      { "id": "modules", "module": "@deepseek-ai/dsh-client-modules", "label": "前端模块表" },
+      { "id": "connection", "module": "@deepseek-ai/dsh-client-connection", "label": "前后端传输" }
+    ],
+    "removed": [
+      { "id": "api-gateway", "removedInKernel": "0.1.2-alpha.1", "reason": "网关 folded 进核心原生实现（v0.5.7 健康页误报教训）" }
+    ]
+  },
+  "protocols": {
+    "tui": { "upstream": "ccch1mneyyy/dsh-TUI", "spec": "ADAPTER.md", "digest": "dsh-tauri/docs/compat-layer/tui-adapter-protocol.md" }
+  },
+  "notes": "升级 = 显式换 kernel.tag + 重跑适配器判定（alpha2-migration-assessment.md）+ 全量测试；禁止浮动。"
+}
