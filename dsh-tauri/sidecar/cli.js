@@ -755,6 +755,24 @@ async function cmdBoot(args, ctx) {
     return { ok: true, count: dests.length };
   })) && ok;
   ok = (await step('patches', () => integration.applyPatches())) && ok;
+  ok = (await step('compat-pin', () => {
+    // 兼容层 M1（v0.6.0）：kernel-pin fail-closed 校验——vendored tarball 与
+    // kernel-pin.json 的精确 pin 一致性（版本混装防线；校验器随 payload 分发，
+    // 旧 payload 缺校验器时跳过不阻断）。
+    const validator = path.join(appDir, 'scripts', 'compat', 'validate-pin.js');
+    if (!require('node:fs').existsSync(validator)) {
+      log('compat-pin: 校验器不在位（旧 payload），跳过（非阻断）');
+      return { ok: true, note: 'validator-missing' };
+    }
+    const r = require('node:child_process').spawnSync(process.execPath, [validator, appDir], { encoding: 'utf8' });
+    if (r.error) throw r.error;
+    if (r.status !== 0) {
+      const out = (r.stdout || '').trim().split('\n').slice(0, 6).join(' | ');
+      return { ok: false, error: 'kernel-pin 与 vendored 内核不一致：' + out };
+    }
+    const m = (r.stdout || '').match(/校验通过: (\S+)/);
+    return { ok: true, tag: m ? m[1] : undefined };
+  })) && ok;
   ok = (await step('preflight', () => integration.preflightHealth())) && ok;
   // 后端观测字段（additive，supervisor 只消费 ok/steps）：WSL 生效时携带
   // distro/installDir/UNC home/agent 就绪态；回落时携带原因（设置页可展示）。

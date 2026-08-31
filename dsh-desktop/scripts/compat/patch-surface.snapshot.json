@@ -1,0 +1,93 @@
+{
+  "generatedAt": "2026-08-31T13:21:35.623Z",
+  "kernelRoot": "@deepseek-ai",
+  "markerCount": 10,
+  "surface": [
+    {
+      "file": "dsh-api-remotes/lib/client.js",
+      "sha256": "04b437a6340ac20b",
+      "markers": [
+        "session manage"
+      ]
+    },
+    {
+      "file": "dsh-api-workspace-controller/lib/client.js",
+      "sha256": "ed5111790ec1e06a",
+      "markers": [
+        "session manage"
+      ]
+    },
+    {
+      "file": "dsh-api-workspace-controller/lib/index.js",
+      "sha256": "e12387949ed2c41b",
+      "markers": [
+        "session manage",
+        "session orphans"
+      ]
+    },
+    {
+      "file": "dsh-api-workspace-controller/lib/typert.host.js",
+      "sha256": "e8e4f2d215e5ac0b",
+      "markers": [
+        "session manage"
+      ]
+    },
+    {
+      "file": "dsh-client-ui-primitives/lib/index.js",
+      "sha256": "c5b2957fb293afe5",
+      "markers": [
+        "issue #36"
+      ]
+    },
+    {
+      "file": "dsh-client-ui-settings-plugins/lib/client.js",
+      "sha256": "f80b7cd417937535",
+      "markers": [
+        "issue #20"
+      ]
+    },
+    {
+      "file": "dsh-client-ui-workspace/lib/client.js",
+      "sha256": "98d160e71154d032",
+      "markers": [
+        "open project dir",
+        "session manage"
+      ]
+    },
+    {
+      "file": "dsh-llm-deepseek/lib/index.js",
+      "sha256": "f93222e291ae0757",
+      "markers": [
+        "ds tool schema sanitize"
+      ]
+    },
+    {
+      "file": "dsh-llm-pi-ai/lib/index.js",
+      "sha256": "6ffdda01f9fc0691",
+      "markers": [
+        "hand-declared reasoning defaults"
+      ]
+    },
+    {
+      "file": "dsh-session/lib/index.js",
+      "sha256": "f519d36d32b67d7f",
+      "markers": [
+        "session manage"
+      ]
+    },
+    {
+      "file": "dsh-web-search-deepseek/lib/index.js",
+      "sha256": "b95bf580fc862b28",
+      "markers": [
+        "issue #20"
+      ]
+    },
+    {
+      "file": "dsh-workspace/lib/index.js",
+      "sha256": "1b970e31132055ec",
+      "markers": [
+        "session manage"
+      ]
+    }
+  ]
+}
