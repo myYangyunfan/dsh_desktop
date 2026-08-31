@@ -138,66 +138,85 @@ function transformOrphanLock(src, file) {
 // 根因二：ui-settings-models 命名空间自愈 + 冲突重试
 // ---------------------------------------------------------------------------
 
-/** load() 内 namespaces 构建行锚点（全文件唯一）。 */
-const SM_NS_ANCHOR = '\t\t\tconst namespaces = new Map(views.map((view) => [view.ns, view]));';
+/** load() 内 namespaces 构建行锚点（全文件唯一）。0.1.2-alpha.2：load() 体
+ *  缩进整体 +1（4-tab），锚点与注入体同步改用 4-tab。 */
+const SM_NS_ANCHOR = '\t\t\t\tconst namespaces = new Map(views.map((view) => [view.ns, view]));';
 
 const SM_NS_NEW = [
-  '\t\t\tlet namespaces = new Map(views.map((view) => [view.ns, view]));',
-  '\t\t\t// ' + NAMESPACE_HEAL_MARKER + ': provider 目录（llm.providers 实时应答）存在',
-  '\t\t\t// 某 settingsNs 而镜像视图（describe 只在 idle 首载、register 不发事件）',
-  '\t\t\t// 缺席时，强制重读一次 describe 并重建——否则「添加自定义供应商」按钮',
-  '\t\t\t// 因 protocols=[] 恒灰、「添加」因 addNamespace 缺席点击无反应。',
-  '\t\t\tif (providers.some((entry) => entry.settingsNs !== "" && !namespaces.has(entry.settingsNs)) && typeof this.describeFace.load === "function") {',
-  '\t\t\t\ttry {',
-  '\t\t\t\t\tawait this.describeFace.load();',
-  '\t\t\t\t\tconst healed = this.describeFace.getSnapshot().view;',
-  '\t\t\t\t\tif (healed !== void 0) namespaces = new Map(healed.namespaces.map((view) => [view.ns, view]));',
-  '\t\t\t\t} catch {}',
-  '\t\t\t}',
+  '\t\t\t\tlet namespaces = new Map(views.map((view) => [view.ns, view]));',
+  '\t\t\t\t// ' + NAMESPACE_HEAL_MARKER + ': provider 目录（llm.providers 实时应答）存在',
+  '\t\t\t\t// 某 settingsNs 而镜像视图（describe 只在 idle 首载、register 不发事件）',
+  '\t\t\t\t// 缺席时，强制重读一次 describe 并重建——否则「添加自定义供应商」按钮',
+  '\t\t\t\t// 因 protocols=[] 恒灰、「添加」因 addNamespace 缺席点击无反应。',
+  '\t\t\t\tif (providers.some((entry) => entry.settingsNs !== "" && !namespaces.has(entry.settingsNs)) && typeof this.describeFace.load === "function") {',
+  '\t\t\t\t\ttry {',
+  '\t\t\t\t\t\tawait this.describeFace.load();',
+  '\t\t\t\t\t\tconst healed = this.describeFace.getSnapshot().view;',
+  '\t\t\t\t\t\tif (healed !== void 0) namespaces = new Map(healed.namespaces.map((view) => [view.ns, view]));',
+  '\t\t\t\t\t} catch {}',
+  '\t\t\t\t}',
 ].join('\n');
 
 /** CustomProviderCard 的 mutate 尾锚点（`}], openedAt);` 全文件唯一；0.1.2-alpha.1 起
  *  mutate 改为 `api.settings.mutate(ns, ops, expectedRevision)`、响应改为 `{ok,error,value}`，
- *  describe 改为无参 `api.settings.describe()` 返回 `{ok,value}`——锚点与注入体同步改用新签名。 */
+ *  describe 改为无参 `api.settings.describe()` 返回 `{ok,value}`——锚点与注入体同步改用新签名。
+ *  0.1.2-alpha.2：卡片改经 `operations.writeSettings` 包装（返回 `{kind:'written'|'conflict'|'refused',
+ *  message?}`，pristine client.js 实证），冲突重试锚点与注入体同步改用新形态。 */
 const SM_CONFLICT_ANCHOR = [
   '\t\t\t\t\t}], openedAt);',
-  '\t\t\t\t\tif (!response.ok) return response.error.message;',
+  '\t\t\t\t\tif (written.kind !== "written") return written.kind === "conflict" ? t("conflict") : written.message;',
 ].join('\n');
 
 const SM_CONFLICT_NEW = [
   '\t\t\t\t\t}], openedAt);',
-  '\t\t\t\t\tif (!response.ok) {',
+  '\t\t\t\t\tif (written.kind !== "written") {',
   '\t\t\t\t\t\t// ' + CONFLICT_RETRY_MARKER + ': 卡片打开后命名空间被任何面写过一次，',
   '\t\t\t\t\t\t// openedAt 即陈旧——重读一次 revision 静默重试（ops 是 providers.<route>',
   '\t\t\t\t\t\t// 点位写，不会覆盖他人字段）；仍失败才把报错交回原路径。',
-  '\t\t\t\t\t\tif (response.error?.code === "settings-conflict") {',
-  '\t\t\t\t\t\t\tconst fresh = await api.settings.describe();',
-  '\t\t\t\t\t\t\tconst freshRevision = fresh.ok ? fresh.value.namespaces.find((row) => row.ns === NS$1)?.revision : void 0;',
+  '\t\t\t\t\t\tif (written.kind === "conflict") {',
+  '\t\t\t\t\t\t\tconst fresh = await operations.describeSettings();',
+  '\t\t\t\t\t\t\tconst freshRevision = fresh === void 0 ? void 0 : fresh.namespaces.find((row) => row.ns === NS$1)?.revision;',
   '\t\t\t\t\t\t\tif (freshRevision !== void 0 && freshRevision !== openedAt) {',
-  '\t\t\t\t\t\t\t\tconst retry = await api.settings.mutate(NS$1, [{',
+  '\t\t\t\t\t\t\t\tconst retry = await operations.writeSettings(NS$1, [{',
   '\t\t\t\t\t\t\t\t\top: "set",',
   '\t\t\t\t\t\t\t\t\tpath: ["providers", route],',
   '\t\t\t\t\t\t\t\t\tvalue: profile',
   '\t\t\t\t\t\t\t\t}], freshRevision);',
-  '\t\t\t\t\t\t\t\tif (retry.ok) {',
+  '\t\t\t\t\t\t\t\tif (retry.kind === "written") {',
   '\t\t\t\t\t\t\t\t\tsetCommitted(true);',
   '\t\t\t\t\t\t\t\t\treturn;',
   '\t\t\t\t\t\t\t\t}',
-  '\t\t\t\t\t\t\t\treturn retry.error.message;',
+  '\t\t\t\t\t\t\t\treturn retry.message;',
   '\t\t\t\t\t\t\t}',
   '\t\t\t\t\t\t}',
-  '\t\t\t\t\t\treturn response.error.message;',
+  '\t\t\t\t\t\treturn written.kind === "conflict" ? t("conflict") : written.message;',
   '\t\t\t\t\t}',
 ].join('\n');
 
+/** createModelsOperations 对象头锚点（全文件唯一）。0.1.2-alpha.2 起卡片组件拿不到
+ *  ctx/api（只收 operations 回调面，pristine client.js 实证），冲突重试的重读走
+ *  本补丁注入的 describeSettings 回调——与 SM_CONFLICT_NEW 成对注入。 */
+const SM_OPS_ANCHOR = 'function createModelsOperations(ctx) {\n\t\t\treturn {\n\t\t\t\tdescribeCredential: async (ref) => {';
+const SM_OPS_NEW = [
+  'function createModelsOperations(ctx) {',
+  '\t\t\treturn {',
+  '\t\t\t\t// ' + CONFLICT_RETRY_MARKER + ': CustomProviderCard 的冲突重试需要重读 describe——',
+  '\t\t\t\t// 0.1.2-alpha.2 起卡片拿不到 ctx，只能经由本回调取镜像源数据。',
+  '\t\t\t\tdescribeSettings: async () => {',
+  '\t\t\t\t\tconst response = await ctx.remote.settings.describe();',
+  '\t\t\t\t\treturn response.ok ? response.value : void 0;',
+  '\t\t\t\t},',
+  '\t\t\t\tdescribeCredential: async (ref) => {',
+].join('\n');
+
 /**
- * transform：ui-settings-models 两处注入（幂等、锚点失配不改写、逐锚点独立）。
+ * transform：ui-settings-models 三处注入（幂等、锚点失配不改写、逐锚点独立）。
  * @param {string} src
  * @param {string} file
  * @returns {{status:'already'}|{status:'anchor-missing',detail:string}|{status:'changed',src:string}}
  */
 function transformSettingsModelsResilience(src, file) {
-  // 幂等判定必须「两个注入体都已在」才算 already：本文件含两处相互独立的
+  // 幂等判定必须「两类注入体都已在」才算 already：本文件含多相互独立的
   // 锚点，历史现场曾出现「只打上 namespace-heal、缺 conflict-retry」的半补丁
   // （早期锚点失配只注入其一，而 || 会让后续重跑在看到首个 marker 时提前
   // already，永远补不上另一半）。改为 && 后，半补丁会在下次应用时把缺失的
@@ -219,6 +238,12 @@ function transformSettingsModelsResilience(src, file) {
     changed = true;
   } else {
     missing.push('CustomProviderCard mutate 尾锚点');
+  }
+  if (src.includes(SM_OPS_ANCHOR)) {
+    next = next.replace(SM_OPS_ANCHOR, () => SM_OPS_NEW);
+    changed = true;
+  } else {
+    missing.push('createModelsOperations 对象头');
   }
   if (!changed) {
     return {
@@ -315,5 +340,7 @@ module.exports = {
     SM_NS_NEW: SM_NS_NEW,
     SM_CONFLICT_ANCHOR: SM_CONFLICT_ANCHOR,
     SM_CONFLICT_NEW: SM_CONFLICT_NEW,
+    SM_OPS_ANCHOR: SM_OPS_ANCHOR,
+    SM_OPS_NEW: SM_OPS_NEW,
   },
 };

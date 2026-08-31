@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-31T14:47:40.633Z",
+  "generatedAt": "2026-08-31T17:08:45.102Z",
   "kernelRoot": "@deepseek-ai",
   "markerCount": 10,
   "surface": [
@@ -66,6 +66,13 @@
       "sha256": "ad21b496dbf07513",
       "markers": [
         "session manage"
+      ]
+    },
+    {
+      "file": "dsh-web-search-deepseek/lib/index.js",
+      "sha256": "d26e37a6893fcc0c",
+      "markers": [
+        "issue #20"
       ]
     },
     {

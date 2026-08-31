@@ -32,12 +32,34 @@ const {
 
 // payload pristine 源（stage-payload 镜像；boot 链跑过后可能已带补丁——幂等
 // 场景反而覆盖 already 分支，行为测试统一在临时目录自建 pristine 夹具）。
+// 0.1.2-alpha.2 重靶期：dsh-client-ui-settings-models 半边改用 vendored alpha.2
+// tarball 解包的 pristine 源（payload 树停留在 alpha.1，锚点已换代；原子写半边
+// 锚点未漂移，维持 payload 源）。
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const PAYLOAD_NM = path.join(
   REPO_ROOT, 'dsh-tauri', 'package-payload', 'dsh-desktop', 'node_modules', '@deepseek-ai'
 );
 const AW_FILE = path.join(PAYLOAD_NM, 'dsh-atomic-write', 'lib', 'index.js');
-const SM_FILE = path.join(PAYLOAD_NM, 'dsh-client-ui-settings-models', 'lib', 'client.js');
+const SM_VENDOR_TARBALL = path.join(
+  REPO_ROOT, 'dsh-desktop', 'vendor', 'dsh-kernel',
+  'deepseek-ai-dsh-client-ui-settings-models-0.1.2-alpha.2.tgz',
+);
+const SM_FILE = extractPristineSettingsModels();
+
+/** 把 vendored alpha.2 tarball 解到一次性目录，返回 pristine client.js 路径。 */
+function extractPristineSettingsModels() {
+  const { after } = require('node:test');
+  assert.ok(fs.existsSync(SM_VENDOR_TARBALL), '缺 vendored alpha.2 tarball: ' + SM_VENDOR_TARBALL);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-swr-pristine-'));
+  after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  // win32 显式用系统自带 bsdtar（Git Bash 的 GNU tar 会把 "C:\" 当远程主机）。
+  const tarBin = process.platform === 'win32'
+    ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe')
+    : 'tar';
+  const res = spawnSync(tarBin, ['-xzf', SM_VENDOR_TARBALL, '-C', dir], { encoding: 'utf8' });
+  assert.equal(res.status, 0, 'tar 解包失败: ' + (res.stderr || ''));
+  return path.join(dir, 'package', 'lib', 'client.js');
+}
 
 function readOrSkip(file) {
   if (!fs.existsSync(file)) return null;
@@ -193,9 +215,9 @@ test('orphan-lock: 非数字锁体按存活处理（保守回退）', async () =
 // 设置页韧性：transform 层
 // ---------------------------------------------------------------------------
 
-test('settings-models: transform 命中双锚点产出 changed 且语法合法', () => {
+test('settings-models: transform 命中三锚点产出 changed 且语法合法', () => {
   const src = readOrSkip(SM_FILE);
-  assert.ok(src !== null, 'payload 缺 dsh-client-ui-settings-models/lib/client.js');
+  assert.ok(src !== null, '缺 dsh-client-ui-settings-models/lib/client.js（vendor tarball）');
   const r = transformSettingsModelsResilience(src, 'sm');
   assert.ok(r.status === 'changed' || r.status === 'already', `期望 changed/already，实际 ${r.status}`);
   if (r.status === 'changed') {
@@ -239,10 +261,11 @@ test('settings-models: 半补丁（仅 namespace-heal）会在重跑时补全 co
 test('settings-models: root 应用器在临时 nm 根实跑（changed → already）', () => {
   const src = readOrSkip(SM_FILE);
   assert.ok(src !== null);
-  // payload 可能已被 boot 链/沙箱验证打过补丁：反剥成 pristine 夹具再测首遍 changed。
+  // pristine tarball 源正常应未打补丁；防御性反剥（与 transform 同源注入常量）。
   const pristine = src.includes(NAMESPACE_HEAL_MARKER) || src.includes(CONFLICT_RETRY_MARKER)
     ? src.split(AW_CONSTANTS.SM_NS_NEW).join(AW_CONSTANTS.SM_NS_ANCHOR)
         .split(AW_CONSTANTS.SM_CONFLICT_NEW).join(AW_CONSTANTS.SM_CONFLICT_ANCHOR)
+        .split(AW_CONSTANTS.SM_OPS_NEW).join(AW_CONSTANTS.SM_OPS_ANCHOR)
     : src;
   const root = makeNmRoot(path.join('dsh-client-ui-settings-models', 'lib', 'client.js'), pristine);
   try {
@@ -310,22 +333,22 @@ test('namespace-heal: 无偏差时不重读', async () => {
   assert.equal(loads, 0, '无偏差时不得重读');
 });
 
-/** 从 patched 源抽出冲突重试片段（if (!response.ok) { 起）。 */
+/** 从 patched 源抽出冲突重试片段（if (written.kind !== "written") { 起）。 */
 function extractConflictRetrySnippet() {
   const src = readOrSkip(SM_FILE);
   assert.ok(src !== null);
-  // payload 可能已被 boot 链只打上 namespace-heal（半补丁）——先反剥成 pristine
-  // 夹具再重跑 transform，让 conflict-retry 注入体必然存在（与 root 应用器同手法）。
+  // pristine 源正常应未打补丁；防御性反剥（半补丁现场重跑 transform 同手法）。
   const pristine = src.includes(NAMESPACE_HEAL_MARKER) || src.includes(CONFLICT_RETRY_MARKER)
     ? src.split(AW_CONSTANTS.SM_NS_NEW).join(AW_CONSTANTS.SM_NS_ANCHOR)
         .split(AW_CONSTANTS.SM_CONFLICT_NEW).join(AW_CONSTANTS.SM_CONFLICT_ANCHOR)
+        .split(AW_CONSTANTS.SM_OPS_NEW).join(AW_CONSTANTS.SM_OPS_ANCHOR)
     : src;
   const patched = transformSettingsModelsResilience(pristine, 'sm').src;
   // 起点锚定：marker 注释在 if 块体内，向前找紧邻的 if 行（文件前部还有
-  // 别处的 if (!response.ok) { 形态，不能全局取首个）。
+  // 别处的 if (written.kind !== "written") 形态，不能全局取首个）。
   const markerAt = patched.indexOf(CONFLICT_RETRY_MARKER);
   assert.ok(markerAt !== -1, '产物中应有冲突重试 marker');
-  const start = patched.lastIndexOf('if (!response.ok) {', markerAt);
+  const start = patched.lastIndexOf('if (written.kind !== "written") {', markerAt);
   // 结束边界 = 注入块之后上游原句 setCommitted(true);（5 缩进）所在行首：
   // 注入块自带的更深缩进 setCommitted 不以「\n+5tab」开头，不会误匹配。
   const end = patched.indexOf('\n\t\t\t\t\tsetCommitted(true);', start);
@@ -333,63 +356,68 @@ function extractConflictRetrySnippet() {
   return patched.slice(start, end);
 }
 
-async function runConflictSnippet(mutateResults, describeResult, firstResponse) {
+async function runConflictSnippet(writeResults, describeValue, firstWritten) {
   const snippet = extractConflictRetrySnippet();
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
   const make = new AsyncFunction(
-    'api', 'response', 'openedAt', 'route', 'profile', 'setCommitted', 'NS$1',
+    'operations', 'written', 'openedAt', 'route', 'profile', 'setCommitted', 'NS$1', 't',
     snippet + '\nreturn "fell-through";'
   );
-  let mutates = 0;
-  const api = {
-    settings: {
-      mutate: async (ns, ops, expectedRevision) => {
-        const r = mutateResults[Math.min(mutates, mutateResults.length - 1)];
-        mutates += 1;
-        return r;
-      },
-      describe: async () => describeResult,
+  let writes = 0;
+  let describes = 0;
+  const operations = {
+    writeSettings: async (ns, ops, expectedRevision) => {
+      const r = writeResults[Math.min(writes, writeResults.length - 1)];
+      writes += 1;
+      return r;
+    },
+    describeSettings: async () => {
+      describes += 1;
+      return describeValue;
     },
   };
   let committed = false;
-  const initial = firstResponse !== undefined ? firstResponse : mutateResults[0];
+  const initial = firstWritten !== undefined ? firstWritten : writeResults[0];
   const outcome = await make(
-    api,
+    operations,
     initial,
     1,
     'acme-gateway',
     { api: 'openai-completions' },
     () => { committed = true; },
-    'llm-pi-ai'
+    'llm-pi-ai',
+    (key) => 'conflict:' + key
   );
-  return { outcome, committed, mutates };
+  return { outcome, committed, writes, describes };
 }
 
 test('conflict-retry: settings-conflict 时重读 revision 静默重试成功', async () => {
-  const conflict = { ok: false, error: { code: 'settings-conflict', message: 'stale' } };
-  const okMutate = { ok: true, value: { ns: 'llm-pi-ai', revision: 7 } };
-  const describeOk = { ok: true, value: { namespaces: [{ ns: 'llm-pi-ai', revision: 7 }] } };
-  // 首个 response 由调用方直接传入（真实代码是上游 mutate 的返回），api.settings.mutate
-  // 只会被重试路径调用——mock 首个应答即重试结果。
-  const { outcome, committed, mutates } = await runConflictSnippet([okMutate], describeOk, conflict);
-  assert.equal(mutates, 1, '应发起恰好一次重试');
+  const conflict = { kind: 'conflict', message: 'stale' };
+  const okWrite = { kind: 'written', view: { ns: 'llm-pi-ai', revision: 7 } };
+  const describeOk = { namespaces: [{ ns: 'llm-pi-ai', revision: 7 }] };
+  // 首个 written 由调用方直接传入（真实代码是上游 writeSettings 的返回），
+  // operations.writeSettings 只会被重试路径调用——mock 首个应答即重试结果。
+  const { outcome, committed, writes, describes } = await runConflictSnippet([okWrite], describeOk, conflict);
+  assert.equal(writes, 1, '应发起恰好一次重试写');
+  assert.equal(describes, 1, '应重读一次 describe');
   assert.equal(committed, true, '重试成功应走 committed');
   assert.equal(outcome, undefined, '成功路径不返回报错');
 });
 
 test('conflict-retry: 重试仍失败时返回重试报错', async () => {
-  const conflict = { ok: false, error: { code: 'settings-conflict', message: 'stale' } };
-  const stillBad = { ok: false, error: { code: 'settings-rejected', message: 'retry-failed' } };
-  const describeOk = { ok: true, value: { namespaces: [{ ns: 'llm-pi-ai', revision: 7 }] } };
-  const { outcome, committed, mutates } = await runConflictSnippet([stillBad], describeOk, conflict);
-  assert.equal(mutates, 1);
+  const conflict = { kind: 'conflict', message: 'stale' };
+  const stillBad = { kind: 'refused', message: 'retry-failed' };
+  const describeOk = { namespaces: [{ ns: 'llm-pi-ai', revision: 7 }] };
+  const { outcome, committed, writes } = await runConflictSnippet([stillBad], describeOk, conflict);
+  assert.equal(writes, 1);
   assert.equal(committed, false);
   assert.equal(outcome, 'retry-failed');
 });
 
-test('conflict-retry: 非冲突错误原样透传（不重试）', async () => {
-  const rejected = { ok: false, error: { code: 'settings-rejected', message: 'no-writer-lock' } };
-  const { outcome, mutates } = await runConflictSnippet([rejected], { ok: false });
-  assert.equal(mutates, 0, '非冲突不得重试');
+test('conflict-retry: 非冲突错误原样透传（不重试、不重读）', async () => {
+  const refused = { kind: 'refused', message: 'no-writer-lock' };
+  const { outcome, writes, describes } = await runConflictSnippet([refused], { namespaces: [] }, refused);
+  assert.equal(writes, 0, '非冲突不得重试');
+  assert.equal(describes, 0, '非冲突不得重读');
   assert.equal(outcome, 'no-writer-lock');
 });

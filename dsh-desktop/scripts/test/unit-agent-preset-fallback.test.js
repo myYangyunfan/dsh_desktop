@@ -3,22 +3,24 @@
 // agent-preset-fallback 补丁单元测试（node --test）。
 //
 // 0.5.0 存量用户 resume 变砖修复：会话/profile 引用 Electron 老版本安装的
-// minimal-win 预设 → 内核 dsh-agent-presets resolve() 抛 UnknownPresetError →
+// minimal-win 预设 → 内核 dsh-agent-presets resolve() 查无此 id 硬抛 →
 // resume 硬失败。补丁把该分支改为 warn 降级回落（minimal-win→minimal、其余
-// 未知 id→standard），PresetMountError 保持硬抛。
+// 未知 id→standard），broken 预设的 resolveMountable 硬抛路径不经本补丁。
 //
 // 覆盖：
-//   1. 锚点命中 payload pristine 源（lib/index.js + lib/invariant.js 双文件）；
+//   1. 锚点命中 pristine 源（vendor alpha.2 tarball 解出的 lib/index.js +
+//      lib/invariant.js 双文件）；
 //   2. transform 产物可被 node --check 解析；
 //   3. 幂等（二遍 already）；
 //   4. 回落逻辑行为（vm 执行真实注入产物，非复述实现）：
 //      minimal-win→minimal / 未知 id→standard / roster 无可回落→原样抛 /
-//      已知 id 直通不告警 / PresetMountError 路径不受补丁影响；
+//      已知 id 直通不告警 / resolveMountable 路径不受补丁影响；
 //   5. registry 装配（布局 / pkgRels / transform 同源 / cli:false 不进 CLI 清单）；
 //   6. 临时目录 pristine 副本实跑 patch-runner applyAll（changed → already、
 //      errors=0、failed=0）。
 
 const test = require('node:test');
+const { after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -32,26 +34,45 @@ const { AGENT_PRESET_FALLBACK_PKG_RELS, resolvePatchTargets } = require('../lib/
 const { applyAll } = require('../integration/patch-runner');
 
 const MARKER = 'dsh-desktop fix: agent-preset-fallback';
-// payload 内核包 pristine 副本（dsh-agent-presets 双文件）。
-// 0.1.2-alpha.1：agent-preset-fallback 锚点内层缩进从 2-tab 改为 3-tab（async
-// resolve 内层 +1），.tmp-rc2-stage（旧内核）的 dsh-agent-presets 仍是 2-tab，
-// pristine 源回退到 .tmp-kernel 的 0.1.2-alpha.1 消费者安装产物（平铺
-// node_modules，无嵌套 node_modules/符号链接，可整目录 cpSync 做 applyAll 集成）。
+// pristine 内核包源：vendored 0.1.2-alpha.2 tarball（vendor/dsh-kernel/，升级
+// 即换版——0.1.2-alpha.1 消费者安装产物已随内核换代过期，不再作 pristine 源）。
+// 0.1.2-alpha.2：resolve() 查无此 id 改抛多行 RemoteError("agent-preset/not-found")，
+// UnknownPresetError 消失，锚点与注入体已同步重靶（见 patch-adapters 注释）。
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
-const PAYLOAD_PRESETS_DIR = path.join(
-  REPO_ROOT, '.tmp-kernel', '.consumer-0.1.2-alpha.1', 'node_modules',
-  '@deepseek-ai', 'dsh-agent-presets',
+const VENDOR_TARBALL = path.join(
+  REPO_ROOT, 'dsh-desktop', 'vendor', 'dsh-kernel',
+  'deepseek-ai-dsh-agent-presets-0.1.2-alpha.2.tgz',
 );
+
+/** 把 vendor tarball 解到一次性目录，返回解包后的包目录（package/）。 */
+function extractPristinePresets() {
+  assert.ok(fs.existsSync(VENDOR_TARBALL), '缺 vendored alpha.2 tarball: ' + VENDOR_TARBALL);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-apf-pristine-'));
+  after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  // win32 显式用系统自带 bsdtar（Git Bash 的 GNU tar 会把 "C:\" 当远程主机）。
+  const tarBin = process.platform === 'win32'
+    ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe')
+    : 'tar';
+  const res = spawnSync(tarBin, ['-xzf', VENDOR_TARBALL, '-C', dir], { encoding: 'utf8' });
+  assert.strictEqual(res.status, 0, 'tar 解包失败: ' + (res.stderr || ''));
+  return path.join(dir, 'package');
+}
+
+const PAYLOAD_PRESETS_DIR = extractPristinePresets();
 const PRISTINE_FILES = ['lib/index.js', 'lib/invariant.js']
   .map((rel) => path.join(PAYLOAD_PRESETS_DIR, rel))
   .filter((f) => fs.existsSync(f));
 
-// 与上游 resolve() 抛错点逐字一致的锚点源（payload 缺失时的独立 fixture）。
-// 0.1.2-alpha.1：resolve() 内层缩进 3-tab（async resolve 内的 list 前置声明层）。
+// 与上游 resolve() 抛错点逐字一致的锚点源（tarball 缺失时的独立 fixture）。
+// 0.1.2-alpha.2：查无此 id 抛多行 RemoteError("agent-preset/not-found", …,
+// { agentPreset, available })；锚点区段（found/if/throw/return）与 pristine
+// 实文逐字一致（3-tab 内层）。
 const PRISTINE_RESOLVE = [
-  'var UnknownPresetError = class extends Error {',
-  '\tconstructor(presetId, available) {',
-  '\t\tsuper(`agent-presets: preset "${presetId}" not found (available: ${available.join(", ") || "none"})`);',
+  'var RemoteError = class extends Error {',
+  '\tconstructor(code, message, props) {',
+  '\t\tsuper(message);',
+  '\t\tthis.code = code;',
+  '\t\tObject.assign(this, props);',
   '\t}',
   '};',
   'var C = class {',
@@ -59,11 +80,17 @@ const PRISTINE_RESOLVE = [
   '\t\tconst wanted = id ?? this.defaultId;',
   '\t\tconst presets = await this.list();',
   '\t\t\tconst found = presets.find((preset) => preset.id === wanted);',
-  '\t\t\tif (found === void 0) throw new UnknownPresetError(wanted, presets.map((preset) => preset.id));',
+  '\t\t\tif (found === void 0) {',
+  '\t\t\t\tconst available = presets.map((preset) => preset.id);',
+  '\t\t\t\tthrow new RemoteError("agent-preset/not-found", `agent-presets: preset "${wanted}" not found (available: ${available.join(", ") || "none"})`, {',
+  '\t\t\t\t\tagentPreset: wanted,',
+  '\t\t\t\t\tavailable',
+  '\t\t\t\t});',
+  '\t\t\t}',
   '\t\t\treturn found;',
   '\t}',
   '};',
-  'export { C, UnknownPresetError };',
+  'export { C, RemoteError };',
 ].join('\n');
 
 function tmpdir(t, prefix) {
@@ -86,8 +113,8 @@ test('锚点命中 payload pristine 源（index.js 与同源 invariant.js 双文
     const out = transformAgentPresetFallback(src, file);
     assert.equal(out.status, 'changed', file + ' pristine 源应命中锚点');
     assert.ok(out.src.includes(MARKER), file + ' 产物应含 marker 注释');
-    assert.ok(out.src.includes('availableIds.includes("minimal")'), file + ' 产物应含 minimal-win→minimal 回落');
-    assert.ok(out.src.includes('availableIds.includes("standard")'), file + ' 产物应含未知 id→standard 保底');
+    assert.ok(out.src.includes('available.includes("minimal")'), file + ' 产物应含 minimal-win→minimal 回落');
+    assert.ok(out.src.includes('available.includes("standard")'), file + ' 产物应含未知 id→standard 保底');
     assert.ok(out.src.includes('console.warn'), file + ' 产物应含中文告警日志');
   }
 });
@@ -131,8 +158,9 @@ test('幂等：第二遍 already / 无锚点 anchor-missing 不改写', () => {
 
 /**
  * 从 transform 产物中抽出 resolve 方法体，在 vm 沙箱里以真实语义执行。
- * 沙箱提供上游同构的 UnknownPresetError 与 console.warn 采集；receiver 提供
- * list()/defaultId——测试的是注入产物本身，不是复述实现。
+ * 沙箱提供上游同构的 RemoteError（0.1.2-alpha.2 起的查无此 id 抛错形态）与
+ * console.warn 采集；receiver 提供 list()/defaultId——测试的是注入产物本身，
+ * 不是复述实现。
  */
 function makeResolve(patchedSrc) {
   const start = patchedSrc.indexOf('async resolve(id) {');
@@ -141,18 +169,18 @@ function makeResolve(patchedSrc) {
   assert.ok(end !== -1, '应找到方法收尾');
   const methodSrc = patchedSrc.slice(start, end + '\n\t}'.length);
   const warns = [];
-  class UnknownPresetError extends Error {
-    constructor(presetId, available) {
-      super(`agent-presets: preset "${presetId}" not found (available: ${available.join(", ") || "none"})`);
-      this.presetId = presetId;
-      this.available = available;
+  class RemoteError extends Error {
+    constructor(code, message, props) {
+      super(message);
+      this.code = code;
+      Object.assign(this, props);
     }
   }
-  const sandbox = { UnknownPresetError, warns, console: { warn: (m) => warns.push(String(m)) } };
+  const sandbox = { RemoteError, warns, console: { warn: (m) => warns.push(String(m)) } };
   const fn = vm.runInNewContext('({' + methodSrc + '}).resolve', sandbox);
   return {
     warns,
-    UnknownPresetError,
+    RemoteError,
     call: (presets, id, defaultId = 'standard') =>
       fn.call({ list: async () => presets, defaultId }, id),
   };
@@ -197,7 +225,7 @@ test('回落：minimal-win 但 roster 无 minimal → standard 兜底；standard
   // 空 roster：无可回落 → 保持上游硬抛语义，不告警。
   const h2 = mk();
   const empty = await h2.call([], 'minimal-win').then(
-    () => assert.fail('空 roster 应抛 UnknownPresetError'),
+    () => assert.fail('空 roster 应抛 RemoteError'),
     (err) => err
   );
   assert.ok(empty.message.includes('minimal-win') && empty.message.includes('not found'));
@@ -205,10 +233,10 @@ test('回落：minimal-win 但 roster 无 minimal → standard 兜底；standard
   // 仅 ptc（standard 保底也缺失）：无可回落 → 原样硬抛，不告警。
   const h3 = mk();
   const ptcOnly = await h3.call([{ id: 'ptc', path: '/x' }], 'minimal-win').then(
-    () => assert.fail('无 standard 可保底时应抛 UnknownPresetError'),
+    () => assert.fail('无 standard 可保底时应抛 RemoteError'),
     (err) => err
   );
-  assert.equal(ptcOnly.presetId, 'minimal-win');
+  assert.equal(ptcOnly.agentPreset, 'minimal-win');
   assert.equal(h3.warns.length, 0, '未发生回落不应告警');
 });
 
@@ -225,7 +253,7 @@ test('PresetMountError 不回落：补丁只动 Unknown 分支，resolveMountabl
   // 注入代码不制造 / 不拦截挂载错误，也不触碰 resolveMountable 调用方。
   assert.ok(!changed.src.includes('new PresetMountError'), '注入不得伪造/改写 PresetMountError 抛错');
   assert.ok(!changed.src.includes('resolveMountable'), '注入不得触碰 resolveMountable');
-  // payload pristine 上更强的字节级证明：resolveMountable 方法体变换前后逐字一致。
+  // pristine tarball 上更强的字节级证明：resolveMountable 方法体变换前后逐字一致。
   if (PRISTINE_FILES.length > 0) {
     const src = fs.readFileSync(PRISTINE_FILES[0], 'utf8');
     const out = transformAgentPresetFallback(src, PRISTINE_FILES[0]);

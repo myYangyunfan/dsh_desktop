@@ -24,10 +24,29 @@ const repoRoot = path.resolve(__dirname, '..', '..');
 // 0.1.2-alpha.1：fallback heal 循环重构为 `for (const entry of entries)` +
 // proxy/symlink 分派，锚点已重定位。.tmp-rc2-stage（旧内核）仍是旧循环，pristine
 // 源回退到 .tmp-kernel 的 0.1.2-alpha.1 消费者安装产物。
-const PRISTINE_APP_BOOT = path.join(
-  repoRoot, '..', '.tmp-kernel', '.consumer-0.1.2-alpha.1', 'node_modules',
-  '@deepseek-ai', 'dsh-app-boot', 'lib', 'index.js'
+// 0.1.2-alpha.2 黄区重靶期：.tmp-kernel 消费者产物已随内核换代过期（alpha.1
+// dsh-app-boot import 的 FIRST_PARTY_SECTION_ORDER 在 alpha.2 dsh-system-prompt
+// 已消失，行为级测试经 junction 撞 alpha.2 依赖图即炸）——pristine 源改从
+// vendored alpha.2 tarball 解包（与 unit-agent-preset-fallback 同款来源）。
+const PRISTINE_APP_BOOT_TARBALL = path.join(
+  repoRoot, 'vendor', 'dsh-kernel', 'deepseek-ai-dsh-app-boot-0.1.2-alpha.2.tgz',
 );
+
+/** 解 vendored alpha.2 tarball 到一次性目录，返回 pristine dsh-app-boot 路径。 */
+function extractPristineAppBoot() {
+  const { after } = require('node:test');
+  assert.ok(fs.existsSync(PRISTINE_APP_BOOT_TARBALL), '缺 vendored alpha.2 tarball: ' + PRISTINE_APP_BOOT_TARBALL);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'k1-pristine-'));
+  after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  // win32 显式用系统自带 bsdtar（Git Bash 的 GNU tar 会把 "C:\" 当远程主机）。
+  const tarBin = process.platform === 'win32'
+    ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe')
+    : 'tar';
+  const res = require('node:child_process').spawnSync(tarBin, ['-xzf', PRISTINE_APP_BOOT_TARBALL, '-C', dir], { encoding: 'utf8' });
+  assert.strictEqual(res.status, 0, 'tar 解包失败: ' + (res.stderr || ''));
+  return path.join(dir, 'package', 'lib', 'index.js');
+}
+const PRISTINE_APP_BOOT = extractPristineAppBoot();
 const DEV_APP_BOOT = path.join(repoRoot, 'node_modules', '@deepseek-ai', 'dsh-app-boot', 'lib', 'index.js');
 const installAnchor = path.join(repoRoot, 'node_modules', '@deepseek-ai', 'dsh', 'package.json');
 

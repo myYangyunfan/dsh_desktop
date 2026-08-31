@@ -11,9 +11,10 @@
 //  1. provider（lib/index.js）：
 //     · 基址归一化后再拼 /messages：尾斜杠不产生双斜杠；基址已以 /messages
 //       结尾时不再重复拼接（允许用户直接填完整端点）；
-//     · HTTP 失败信息附上实际请求地址与本提供方的协议契约，把裸 404 变成
-//       可自解的指引（该提供方只支持 DeepSeek Anthropic 兼容 Messages API，
-//       其它协议的搜索服务需使用对应提供方）。
+//     · HTTP 失败信息附上本提供方的协议契约指引（该提供方只支持 DeepSeek
+//       Anthropic 兼容 Messages API，其它协议的搜索服务需使用对应提供方）。
+//       0.1.2-alpha.2 起「实际请求地址」由上游 searchEndpointError 原生附带
+//       （pristine 实证），原 ` at ${endpoint}` 改写半边按先例退役。
 //  2. 设置页文案（dsh-client-ui-settings-plugins/lib/client.js，中英文）：
 //     「接口地址」提示改为明确说明协议契约（POST <基址>/messages），避免用户
 //     误以为可以填写任意搜索服务地址。
@@ -41,13 +42,16 @@ const PROVIDER_NEW_ENDPOINT_LINES = [
   'const normalizedBase = options.baseURL.replace(/\\/+$/, "");',
   'const endpoint = /\\/messages\\/?$/.test(normalizedBase) ? normalizedBase : `${normalizedBase}/messages`;',
 ];
-const PROVIDER_OLD_MESSAGE = 'let message = `DeepSeek API error (HTTP ${response.status})`;';
-const PROVIDER_NEW_MESSAGE = 'let message = `DeepSeek API error (HTTP ${response.status}) at ${endpoint}`;';
-const PROVIDER_OLD_THROW = 'throw new WebError(message, "WEB_PROVIDER_ERROR");';
+// 「失败信息附上实际请求地址」半边已退役（0.1.2-alpha.2 原生化，pristine 实证）：
+// alpha.2 起所有 !response.ok 抛错统一经 searchEndpointError(endpoint, message)
+// 包装，其文案原生携带 `The web search request used endpoint <JSON 化地址>…`，
+// message 内再拼 ` at ${endpoint}` 会重复地址。地址语义由上游覆盖，本补丁不再改写。
+const PROVIDER_OLD_THROW = 'throw searchEndpointError(endpoint, message);';
 const PROVIDER_NEW_THROW_LINES = [
-  '// dsh-desktop patch (issue #20): 附上请求地址与协议契约，裸 404 也能自解。',
-  'const guidance = " 本搜索提供方仅支持 DeepSeek 的 Anthropic 兼容 Messages API（POST <基址>/messages，x-api-key 鉴权）。请将「接口地址」填为该协议的基址（留空 = 官方默认地址）；其它协议的搜索服务（如 Exa）需要对应的提供方插件。";',
-  'throw new WebError(message + guidance, "WEB_PROVIDER_ERROR");',
+  '// dsh-desktop patch (issue #20): 附上协议契约指引，裸 404 也能自解',
+  '//（请求地址由上游 searchEndpointError 原生附带，这里只补本提供方的协议契约）。',
+  'message += " 本搜索提供方仅支持 DeepSeek 的 Anthropic 兼容 Messages API（POST <基址>/messages，x-api-key 鉴权）。请将「接口地址」填为该协议的基址（留空 = 官方默认地址）；其它协议的搜索服务（如 Exa）需要对应的提供方插件。";',
+  'throw searchEndpointError(endpoint, message);',
 ];
 
 // ---------------------------------------------------------------------------
@@ -90,7 +94,6 @@ function patchProvider(src) {
   if (src.includes(MARKER)) return { changed: false, skipped: false, src };
   const replacements = [
     [PROVIDER_OLD_ENDPOINT, indentedBlock(src, PROVIDER_OLD_ENDPOINT, PROVIDER_NEW_ENDPOINT_LINES)],
-    [PROVIDER_OLD_MESSAGE, indentedBlock(src, PROVIDER_OLD_MESSAGE, [PROVIDER_NEW_MESSAGE])],
     [PROVIDER_OLD_THROW, indentedBlock(src, PROVIDER_OLD_THROW, PROVIDER_NEW_THROW_LINES)],
   ];
   let out = src;

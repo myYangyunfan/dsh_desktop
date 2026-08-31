@@ -362,11 +362,17 @@ function transformProfileBundleProfileBoot(src, file) {
 // dsh-settings 注册防护（原 applySettingsSectionGuard 内联 transform）。
 // ---------------------------------------------------------------------------
 const SETTINGS_SECTION_MARKER = 'dsh-desktop guard: an invalid stored section must not brick';
-const SETTINGS_SECTION_ANCHOR = '\t\tconst scope = sctx.settings.register(ns, schema, {';
+// 0.1.2-alpha.2：消费侧胶水函数（sctx.settings.register）重构为 provider 类方法
+// installSection（pristine dsh-settings/lib/index.js 实证），register 调用点改为
+// this.register、缩进不变（2-tab）。守卫语义零变化：register 抛错（存储 section
+// 损坏 resolve 失败）不再击穿消费方 fiber，回落 composition 配置，命名空间本次
+// boot 不可用。logger 接收方同步改 this.ctx.logger（alpha.2 同类内既有用法，
+// 如 "keeping last good" 分支）。
+const SETTINGS_SECTION_ANCHOR = '\t\tconst scope = this.register(ns, schema, {';
 const SETTINGS_SECTION_GUARDED =
   '\t\tlet scope;\n' +
   '\t\ttry {\n' +
-  '\t\t\tscope = sctx.settings.register(ns, schema, {\n' +
+  '\t\t\tscope = this.register(ns, schema, {\n' +
   '\t\t\t\tbase: entry,\n' +
   '\t\t\t\t...hooks.validate === void 0 ? {} : { validate: hooks.validate }\n' +
   '\t\t\t});\n' +
@@ -374,8 +380,8 @@ const SETTINGS_SECTION_GUARDED =
   '\t\t\t// dsh-desktop guard: an invalid stored section must not brick the consumer\n' +
   '\t\t\t// fiber (fail-loud boot). Fall back to the composition config; the\n' +
   '\t\t\t// namespace simply stays unavailable until the stored section is fixed.\n' +
-  '\t\t\tsctx.logger.warn("settings: registration for \\"%s\\" failed; falling back to the composition config this boot", ns);\n' +
-  '\t\t\tsctx.logger.warn(error);\n' +
+  '\t\t\tthis.ctx.logger.warn("settings: registration for \\"%s\\" failed; falling back to the composition config this boot", ns);\n' +
+  '\t\t\tthis.ctx.logger.warn(error);\n' +
   '\t\t\ttry {\n' +
   '\t\t\t\thooks.setSource(() => entry);\n' +
   '\t\t\t\thooks.onChange();\n' +
@@ -383,7 +389,7 @@ const SETTINGS_SECTION_GUARDED =
   '\t\t\treturn;\n' +
   '\t\t}\n' +
   '\t\thooks.setSource(() => scope.get());';
-const SETTINGS_SECTION_FROM = '\t\tconst scope = sctx.settings.register(ns, schema, {\n\t\t\tbase: entry,\n\t\t\t...hooks.validate === void 0 ? {} : { validate: hooks.validate }\n\t\t});\n\t\thooks.setSource(() => scope.get());';
+const SETTINGS_SECTION_FROM = '\t\tconst scope = this.register(ns, schema, {\n\t\t\tbase: entry,\n\t\t\t...hooks.validate === void 0 ? {} : { validate: hooks.validate }\n\t\t});\n\t\thooks.setSource(() => scope.get());';
 
 function transformSettingsSectionGuard(src, file) {
   if (src.includes(SETTINGS_SECTION_MARKER)) return { status: 'already' }; // 已应用（幂等，静默）
@@ -591,24 +597,44 @@ function transformTerminalInterruptEscalation(src, file) {
 const AGENT_PRESET_FALLBACK_MARKER = 'dsh-desktop fix: agent-preset-fallback';
 // 0.1.2-alpha.1：resolve() 内层缩进从 2-tab 变为 3-tab（async resolve 内的 list 前
 // 置声明层），锚点与注入体同步改用 3-tab 缩进。
-const AGENT_PRESET_FALLBACK_ANCHOR = '\t\t\tconst found = presets.find((preset) => preset.id === wanted);\n\t\t\tif (found === void 0) throw new UnknownPresetError(wanted, presets.map((preset) => preset.id));\n\t\t\treturn found;';
+// 0.1.2-alpha.2：UnknownPresetError 消失，查无此 id 改抛多行
+// `new RemoteError("agent-preset/not-found", …, { agentPreset, available })`
+// （pristine dsh-agent-presets/lib/index.js + 同源 invariant.js 实证，双文件锚点
+// 文本一致）。锚点同步改用新形态；回落语义零变化——未知 id 先 warn 回落
+// （minimal-win→minimal、其余未知 id→standard），无可回落目标时原样抛上游
+// RemoteError（与旧补丁「保持原样抛错」等价），resolveMountable 的 broken 硬抛
+// 不经本补丁。
+const AGENT_PRESET_FALLBACK_ANCHOR = [
+  '\t\t\tconst found = presets.find((preset) => preset.id === wanted);',
+  '\t\t\tif (found === void 0) {',
+  '\t\t\t\tconst available = presets.map((preset) => preset.id);',
+  '\t\t\t\tthrow new RemoteError("agent-preset/not-found", `agent-presets: preset "${wanted}" not found (available: ${available.join(", ") || "none"})`, {',
+  '\t\t\t\t\tagentPreset: wanted,',
+  '\t\t\t\t\tavailable',
+  '\t\t\t\t});',
+  '\t\t\t}',
+  '\t\t\treturn found;',
+].join('\n');
 const AGENT_PRESET_FALLBACK_INJECTION = [
   '\t\t\tconst found = presets.find((preset) => preset.id === wanted);',
   '\t\t\tif (found === void 0) {',
+  '\t\t\t\tconst available = presets.map((preset) => preset.id);',
   '\t\t\t\t// dsh-desktop fix: agent-preset-fallback — a session or profile may reference a',
   '\t\t\t\t// preset id this deployment no longer ships (0.5.0 dropped the Electron-era',
-  '\t\t\t\t// "minimal-win"). A hard UnknownPresetError here bricks resume forever; fall',
+  '\t\t\t\t// "minimal-win"). A hard not-found error here bricks resume forever; fall',
   '\t\t\t\t// back to the closest semantic preset and warn instead. Only "unknown id"',
-  '\t\t\t\t// degrades — a PresetMountError (broken composition) stays a loud failure.',
-  '\t\t\t\tconst availableIds = presets.map((preset) => preset.id);',
-  '\t\t\t\tconst fallbackId = wanted === "minimal-win" && availableIds.includes("minimal") ? "minimal" : availableIds.includes("standard") ? "standard" : void 0;',
+  '\t\t\t\t// degrades — a broken-preset refusal stays a loud failure (mount paths',
+  '\t\t\t\t// re-check the resolved preset after this resolve).',
+  '\t\t\t\tconst fallbackId = wanted === "minimal-win" && available.includes("minimal") ? "minimal" : available.includes("standard") ? "standard" : void 0;',
   '\t\t\t\tconst fallback = fallbackId === void 0 ? void 0 : presets.find((preset) => preset.id === fallbackId);',
   '\t\t\t\tif (fallback !== void 0) {',
-  '\t\t\t\t\tconst originalError = new UnknownPresetError(wanted, availableIds);',
-  '\t\t\t\t\tconsole.warn(`[dsh] agent-presets 预设回落：引用的预设 "${wanted}" 在当前安装中不存在（可用：${availableIds.join(", ") || "无"}），已自动回落到语义最近的预设 "${fallback.id}"（原因：该预设随版本升级移除，回落规则 minimal-win→minimal、其余未知 id→standard）。会话将以回落预设继续恢复，建议在预设选择中重新挑选。原始错误：${originalError.message}`);',
+  '\t\t\t\t\tconsole.warn(`[dsh] agent-presets 预设回落：引用的预设 "${wanted}" 在当前安装中不存在（可用：${available.join(", ") || "无"}），已自动回落到语义最近的预设 "${fallback.id}"（原因：该预设随版本升级移除，回落规则 minimal-win→minimal、其余未知 id→standard）。会话将以回落预设继续恢复，建议在预设选择中重新挑选。原始错误：agent-presets: preset "${wanted}" not found`);',
   '\t\t\t\t\treturn fallback;',
   '\t\t\t\t}',
-  '\t\t\t\tthrow new UnknownPresetError(wanted, presets.map((preset) => preset.id));',
+  '\t\t\t\tthrow new RemoteError("agent-preset/not-found", `agent-presets: preset "${wanted}" not found (available: ${available.join(", ") || "none"})`, {',
+  '\t\t\t\t\tagentPreset: wanted,',
+  '\t\t\t\t\tavailable',
+  '\t\t\t\t});',
   '\t\t\t}',
   '\t\t\treturn found;',
 ].join('\n');
@@ -823,13 +849,17 @@ function transformCredentialsInitialRetry(src, file) {
 }
 
 // c. apiproxy「credentials service is absent」报错文案追加修复指引。
+// 0.1.2-alpha.2：报错从 `message: "…",` 属性形态改为内联
+// `throw new RemoteError("gateway/internal", "…", {});`（pristine
+// dsh-api-settings-controller/lib/index.js provider() 实证），锚点与注入体同步
+// 改用新形态；指引语义零变化（报错文案追加一步修复指引）。
 const CREDENTIALS_ABSENT_GUIDANCE_MARKER = 'dsh-desktop compat: credentials-absent guidance';
-const CREDENTIALS_ABSENT_OLD = 'message: "credentials service is absent: this deployment does not mount a credential provider (e.g. @deepseek-ai/dsh-credentials-local) in its composition",';
+const CREDENTIALS_ABSENT_OLD = '\t\t\tif (credentials === void 0) throw new RemoteError("gateway/internal", "credentials service is absent: this deployment does not mount a credential provider (e.g. @deepseek-ai/dsh-credentials-local) in its composition", {});';
 const CREDENTIALS_ABSENT_NEW = [
   '\t\t\t// ' + CREDENTIALS_ABSENT_GUIDANCE_MARKER + ' (K1): the absent provider is almost always a',
   '\t\t\t// half-healed profile module fallback (`~/.dsh/profiles/node_modules`), not a',
   '\t\t\t// broken deployment — tell the user the one-step remedy instead of a riddle.',
-  '\t\t\tmessage: "credentials service is absent: this deployment does not mount a credential provider (e.g. @deepseek-ai/dsh-credentials-local) in its composition — a required plugin failed to load this boot; restart DSH Desktop once to auto-repair the profile module fallback, then save the key again —— 请完全退出并重启 DSH Desktop 一次（启动链会自动修复），再重新保存密钥",',
+  '\t\t\tif (credentials === void 0) throw new RemoteError("gateway/internal", "credentials service is absent: this deployment does not mount a credential provider (e.g. @deepseek-ai/dsh-credentials-local) in its composition — a required plugin failed to load this boot; restart DSH Desktop once to auto-repair the profile module fallback, then save the key again —— 请完全退出并重启 DSH Desktop 一次（启动链会自动修复），再重新保存密钥", {});',
 ].join('\n');
 
 function transformCredentialsAbsentGuidance(src, file) {

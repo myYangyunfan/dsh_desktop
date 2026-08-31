@@ -33,10 +33,13 @@ function buildFakeTree(t) {
   fs.mkdirSync(path.dirname(client), { recursive: true });
   const providerSrc = [
     'export const x = 1;',
+    'function searchEndpointError(endpoint, message, cause) {',
+    '\treturn new WebError(message, "WEB_PROVIDER_ERROR");',
+    '}',
     'async search(request, signal) {',
     '\t\tconst endpoint = `${options.baseURL}/messages`;',
     '\t\tlet message = `DeepSeek API error (HTTP ${response.status})`;',
-    '\t\tthrow new WebError(message, "WEB_PROVIDER_ERROR");',
+    '\t\tthrow searchEndpointError(endpoint, message);',
     '}',
   ].join('\n');
   const clientSrc = [

@@ -33,10 +33,12 @@ test('transformProfilePatchGuard：匹配 / 已应用 / 失配三态', () => {
 });
 
 const SETTINGS_MARKER = 'dsh-desktop guard: an invalid stored section must not brick';
-const SETTINGS_ANCHOR = '\t\tconst scope = sctx.settings.register(ns, schema, {';
+// 0.1.2-alpha.2：register 调用点在 provider 类方法 installSection 内（this.register），
+// 与 patch-adapters 重靶后锚点同源（sctx.settings.register 老形态已随内核换代失效）。
+const SETTINGS_ANCHOR = '\t\tconst scope = this.register(ns, schema, {';
 
 test('transformSettingsSectionGuard：匹配 / 已应用 / 失配三态', () => {
-  const src = '\t\tconst scope = sctx.settings.register(ns, schema, {\n\t\t\tbase: entry,\n\t\t\t...hooks.validate === void 0 ? {} : { validate: hooks.validate }\n\t\t});\n\t\thooks.setSource(() => scope.get());';
+  const src = '\t\tconst scope = this.register(ns, schema, {\n\t\t\tbase: entry,\n\t\t\t...hooks.validate === void 0 ? {} : { validate: hooks.validate }\n\t\t});\n\t\thooks.setSource(() => scope.get());';
   const changed = transformSettingsSectionGuard(src, 't.js');
   assert.equal(changed.status, 'changed');
   assert.ok(changed.src.includes(SETTINGS_MARKER));

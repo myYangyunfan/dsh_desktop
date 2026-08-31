@@ -104,7 +104,10 @@ function computeMatrix() {
 // 新增 skill-dirs-compat 1 项 → 47 项基线；
 // 恢复 session-manage（对话删除/归档管理）1 项 root 补丁 → 51 项基线；
 // alpha.2 重靶期退役 workspace-search-rail-fix（0.1.2-alpha.2 上游原生同款
-// 守卫，pristine :L1991 实证）→ 50 项基线）。
+// 守卫，pristine :L1991 实证）→ 50 项基线；
+// alpha.2 黄区重靶（2026-08-31）：settings-section-guard 锚点改 alpha.2
+// installSection 形态（this.register），rc.2 老形态（sctx.settings.register）
+// 对新锚点失配 → rc.2 判定 changed → anchor-missing，其余 49 项判定不变）。
 // 内核升级后 diff 此矩阵即知锚点漂移面：修改本常量 = 显式接受新基线。
 // ===========================================================================
 const BASELINE = {
@@ -120,7 +123,7 @@ const BASELINE = {
     'profile-patch-guard': 'changed',
     'profile-bundle-guard-appboot': 'anchor-missing',
     'profile-bundle-guard-profileboot': 'already',
-    'settings-section-guard': 'changed',
+    'settings-section-guard': 'anchor-missing',
     'loader-tree-isolation': 'changed',
     'loader-activation-isolation': 'changed',
     'fail-loud-isolation': 'changed',
