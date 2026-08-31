@@ -252,10 +252,11 @@ pub fn write_log_pointer_files() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
-
-    /// 进程级 env 互斥（与 lib.rs ENV_LOCK 同理：resolve 读进程环境）。
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
+    // 进程级 env 互斥：必须与 lib.rs 的 ENV_LOCK 同一把锁。本模块 sandbox
+    // 清理的 DSH_TEST_TMP 与 image 等测试的 env 关键区互相竞争——此前本模块
+    // 私有锁与 crate::ENV_LOCK 互不互斥，正是并行偶发失败（image sweep 空扫、
+    // early_log 失败）的根因。
+    use crate::ENV_LOCK;
 
     struct Sandbox {
         home: PathBuf,

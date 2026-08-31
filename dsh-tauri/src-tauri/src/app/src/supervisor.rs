@@ -2637,7 +2637,9 @@ Content-Length: 0
         assert!(sv.wsl_cfg.is_some(), "settings backend=wsl 应解析为 WSL 意图");
         let (tx, rx) = std::sync::mpsc::channel();
         sv.spawn_boot(tx, None);
-        let deadline = Instant::now() + Duration::from_secs(150);
+        // 兜底窗口 300s：本用例在 workspace 全量并行下实测偶发超 150s
+        // （image/logging 等 env 关键区测试同进程抢 CPU），非产品缺陷。
+        let deadline = Instant::now() + Duration::from_secs(300);
         let mut saw_install = false;
         let mut boot_steps: Vec<String> = Vec::new();
         loop {
@@ -2655,7 +2657,7 @@ Content-Length: 0
                 }
                 Ok(SupervisorEvent::CrashLoop { .. }) => panic!("WSL 注桩链不应进恢复页"),
                 Ok(other) => { let _ = other; }
-                Err(_) => panic!("150s 内未就绪（boot_steps={boot_steps:?} saw_install={saw_install}）"),
+                Err(_) => panic!("300s 内未就绪（boot_steps={boot_steps:?} saw_install={saw_install}）"),
             }
         }
         // 链路断言：五步全过 + 安装步在场 + 运行态就绪 + actual port 落 Inner。
