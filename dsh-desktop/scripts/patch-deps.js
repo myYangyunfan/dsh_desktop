@@ -184,3 +184,16 @@ try {
 } catch (err) {
   console.log('[patch-deps] 空工具名指引补丁跳过: ' + (err && err.message ? err.message : err));
 }
+
+// web-search baseURL 契约补丁（issue #20）：provider 归一化拼接 + 协议契约指引，
+// 设置页中英文文案。registry（web-search-baseurl, cli:false）只在桌面壳 boot 链
+// 应用，postinstall 不补会导致全新 npm ci 后 dev node_modules 缺该干预、
+// patch-surface 快照报「补丁干预消失」（alpha.3 激活实测）。与其它 root 补丁
+// 同款接入：幂等、锚点失配只告警不中断。
+try {
+  const { patchWebSearchBaseUrl } = require('./patch-web-search-baseurl');
+  const n = patchWebSearchBaseUrl(path.join(root, 'node_modules'), (m) => console.log('[patch-deps] ' + m));
+  if (n > 0) console.log('[patch-deps] web-search baseURL 补丁已应用（dev node_modules）');
+} catch (err) {
+  console.log('[patch-deps] web-search baseURL 补丁跳过: ' + (err && err.message ? err.message : err));
+}

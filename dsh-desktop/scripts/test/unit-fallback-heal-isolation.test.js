@@ -27,15 +27,15 @@ const repoRoot = path.resolve(__dirname, '..', '..');
 // 0.1.2-alpha.2 黄区重靶期：.tmp-kernel 消费者产物已随内核换代过期（alpha.1
 // dsh-app-boot import 的 FIRST_PARTY_SECTION_ORDER 在 alpha.2 dsh-system-prompt
 // 已消失，行为级测试经 junction 撞 alpha.2 依赖图即炸）——pristine 源改从
-// vendored alpha.2 tarball 解包（与 unit-agent-preset-fallback 同款来源）。
+// vendored tarball 解包（与 unit-agent-preset-fallback 同款来源，随 pin 换版）。
 const PRISTINE_APP_BOOT_TARBALL = path.join(
-  repoRoot, 'vendor', 'dsh-kernel', 'deepseek-ai-dsh-app-boot-0.1.2-alpha.2.tgz',
+  repoRoot, 'vendor', 'dsh-kernel', 'deepseek-ai-dsh-app-boot-0.1.2-alpha.3.tgz',
 );
 
-/** 解 vendored alpha.2 tarball 到一次性目录，返回 pristine dsh-app-boot 路径。 */
+/** 解 vendored tarball 到一次性目录，返回 pristine dsh-app-boot 路径。 */
 function extractPristineAppBoot() {
   const { after } = require('node:test');
-  assert.ok(fs.existsSync(PRISTINE_APP_BOOT_TARBALL), '缺 vendored alpha.2 tarball: ' + PRISTINE_APP_BOOT_TARBALL);
+  assert.ok(fs.existsSync(PRISTINE_APP_BOOT_TARBALL), '缺 vendored alpha.3 tarball: ' + PRISTINE_APP_BOOT_TARBALL);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'k1-pristine-'));
   after(() => fs.rmSync(dir, { recursive: true, force: true }));
   // win32 显式用系统自带 bsdtar（Git Bash 的 GNU tar 会把 "C:\" 当远程主机）。

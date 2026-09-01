@@ -32,9 +32,9 @@ const {
 
 // payload pristine 源（stage-payload 镜像；boot 链跑过后可能已带补丁——幂等
 // 场景反而覆盖 already 分支，行为测试统一在临时目录自建 pristine 夹具）。
-// 0.1.2-alpha.2 重靶期：dsh-client-ui-settings-models 半边改用 vendored alpha.2
-// tarball 解包的 pristine 源（payload 树停留在 alpha.1，锚点已换代；原子写半边
-// 锚点未漂移，维持 payload 源）。
+// 0.1.2-alpha.2 重靶期：dsh-client-ui-settings-models 半边改用 vendored tarball
+// 解包的 pristine 源（payload 树停留在 alpha.1，锚点已换代；原子写半边
+// 锚点未漂移，维持 payload 源）。tarball 随 kernel-pin 换版（alpha.3 起）。
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const PAYLOAD_NM = path.join(
   REPO_ROOT, 'dsh-tauri', 'package-payload', 'dsh-desktop', 'node_modules', '@deepseek-ai'
@@ -42,14 +42,14 @@ const PAYLOAD_NM = path.join(
 const AW_FILE = path.join(PAYLOAD_NM, 'dsh-atomic-write', 'lib', 'index.js');
 const SM_VENDOR_TARBALL = path.join(
   REPO_ROOT, 'dsh-desktop', 'vendor', 'dsh-kernel',
-  'deepseek-ai-dsh-client-ui-settings-models-0.1.2-alpha.2.tgz',
+  'deepseek-ai-dsh-client-ui-settings-models-0.1.2-alpha.3.tgz',
 );
 const SM_FILE = extractPristineSettingsModels();
 
-/** 把 vendored alpha.2 tarball 解到一次性目录，返回 pristine client.js 路径。 */
+/** 把 vendored tarball 解到一次性目录，返回 pristine client.js 路径。 */
 function extractPristineSettingsModels() {
   const { after } = require('node:test');
-  assert.ok(fs.existsSync(SM_VENDOR_TARBALL), '缺 vendored alpha.2 tarball: ' + SM_VENDOR_TARBALL);
+  assert.ok(fs.existsSync(SM_VENDOR_TARBALL), '缺 vendored alpha.3 tarball: ' + SM_VENDOR_TARBALL);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-swr-pristine-'));
   after(() => fs.rmSync(dir, { recursive: true, force: true }));
   // win32 显式用系统自带 bsdtar（Git Bash 的 GNU tar 会把 "C:\" 当远程主机）。

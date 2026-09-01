@@ -34,19 +34,19 @@ const { AGENT_PRESET_FALLBACK_PKG_RELS, resolvePatchTargets } = require('../lib/
 const { applyAll } = require('../integration/patch-runner');
 
 const MARKER = 'dsh-desktop fix: agent-preset-fallback';
-// pristine 内核包源：vendored 0.1.2-alpha.2 tarball（vendor/dsh-kernel/，升级
+// pristine 内核包源：vendored 0.1.2-alpha.3 tarball（vendor/dsh-kernel/，升级
 // 即换版——0.1.2-alpha.1 消费者安装产物已随内核换代过期，不再作 pristine 源）。
 // 0.1.2-alpha.2：resolve() 查无此 id 改抛多行 RemoteError("agent-preset/not-found")，
 // UnknownPresetError 消失，锚点与注入体已同步重靶（见 patch-adapters 注释）。
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const VENDOR_TARBALL = path.join(
   REPO_ROOT, 'dsh-desktop', 'vendor', 'dsh-kernel',
-  'deepseek-ai-dsh-agent-presets-0.1.2-alpha.2.tgz',
+  'deepseek-ai-dsh-agent-presets-0.1.2-alpha.3.tgz',
 );
 
 /** 把 vendor tarball 解到一次性目录，返回解包后的包目录（package/）。 */
 function extractPristinePresets() {
-  assert.ok(fs.existsSync(VENDOR_TARBALL), '缺 vendored alpha.2 tarball: ' + VENDOR_TARBALL);
+  assert.ok(fs.existsSync(VENDOR_TARBALL), '缺 vendored alpha.3 tarball: ' + VENDOR_TARBALL);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-apf-pristine-'));
   after(() => fs.rmSync(dir, { recursive: true, force: true }));
   // win32 显式用系统自带 bsdtar（Git Bash 的 GNU tar 会把 "C:\" 当远程主机）。

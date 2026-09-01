@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-08-31T17:08:45.102Z",
+  "generatedAt": "2026-08-31T19:45:28.288Z",
   "kernelRoot": "@deepseek-ai",
   "markerCount": 10,
   "surface": [
     {
       "file": "dsh-api-remotes/lib/client.js",
-      "sha256": "47dd5db80180b86c",
+      "sha256": "102ded4511d06ae0",
       "markers": [
         "session manage"
       ]
@@ -34,7 +34,7 @@
     },
     {
       "file": "dsh-client-ui-primitives/lib/index.js",
-      "sha256": "720de1608c7ea8a6",
+      "sha256": "ed4e0281b1c9e04f",
       "markers": [
         "issue #36"
       ]
