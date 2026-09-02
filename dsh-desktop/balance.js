@@ -93,6 +93,11 @@ const PRICING_MODELS = ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-chat',
 // 峰谷定价生效节点：2026-08-17 00:00 北京时间 = 2026-08-16 16:00 UTC。
 const PEAK_PRICING_SINCE_UTC = Date.UTC(2026, 7, 16, 16, 0, 0);
 
+// 周末闲时生效节点：官方 2026-08-23 公告——周六/周日全天不再区分峰谷，
+// 统一按空闲价计费。2026-08-23 00:00 北京时间 = 2026-08-22 16:00 UTC。
+// 与 dsh-offpeak 插件的周末规则（issue #158）同口径。
+const WEEKEND_OFFPEAK_SINCE_UTC = Date.UTC(2026, 7, 22, 16, 0, 0);
+
 // 模型缺失 / 未知时的兜底档（与价目表回退一致，避免少报费用）。
 const DEFAULT_MODEL = 'deepseek-v4-pro';
 
@@ -210,13 +215,20 @@ async function queryOpencodeUsage(dshHome) {
  * 当前（或指定时刻）是否处于高峰时段（北京时间 9:00-12:00、14:00-18:00）。
  * 契约：峰谷定价生效（2026-08-16 16:00 UTC）之前一律 false——旧版期没有
  * 峰谷概念，避免「chip 显示高峰价、实际按旧版固定价计」的自相矛盾。
+ * 2026-08-23（北京时间）起周末（周六/周日）整天空闲（官方公告），
+ * 不溯及既往：生效节点前的周末仍按工作日峰谷窗口判定。
  * 无效日期返回 false（宁可显示空闲，不可显示错误的高峰态）。
  */
 function isPeakHour(date) {
   const d = date ? new Date(date) : new Date();
   if (!Number.isFinite(d.getTime())) return false;
-  if (d.getTime() < PEAK_PRICING_SINCE_UTC) return false;
-  const hour = new Date(d.getTime() + 8 * 3600 * 1000).getUTCHours();
+  const t = d.getTime();
+  if (t < PEAK_PRICING_SINCE_UTC) return false;
+  // 北京 = UTC+8（无夏令时）：平移后按 UTC 字段读北京墙钟。
+  const shifted = new Date(t + 8 * 3600 * 1000);
+  const weekday = shifted.getUTCDay(); // 0=周日 … 6=周六
+  if ((weekday === 0 || weekday === 6) && t >= WEEKEND_OFFPEAK_SINCE_UTC) return false;
+  const hour = shifted.getUTCHours();
   return (hour >= 9 && hour < 12) || (hour >= 14 && hour < 18);
 }
 
@@ -251,6 +263,50 @@ function priceTable(date) {
   const out = {};
   for (const model of PRICING_MODELS) out[model] = effectivePrice(model, date);
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// 三张时段价目表（peak / off / legacy）——「按 token 消耗时刻计价」契约。
+//
+// effectivePrice/priceTable 只给出「某一时刻」的已解析单价；而本轮费用的
+// 正确口径是：每个 token 按它被消耗那一刻的时段价结算（官方计费规则），
+// 已消耗的量不随后续峰谷切换重算。客户端拿到三张表后即可在观察到用量
+// 增量时，按当时所处时段自主选档——推送滞后（最长一个轮询周期）不再
+// 影响计价正确性。三张表均为纯常量快照，与求值时刻无关。
+// ---------------------------------------------------------------------------
+
+/** 峰谷期高峰档全价表（全模型，含别名）。 */
+function peakPriceTable() {
+  const out = {};
+  for (const model of PRICING_MODELS) out[model] = { ...PEAK_PRICES[model] };
+  return out;
+}
+
+/** 峰谷期空闲档价表（高峰的一半）。 */
+function offPriceTable() {
+  const out = {};
+  for (const model of PRICING_MODELS) {
+    const p = PEAK_PRICES[model];
+    out[model] = { cacheMiss: p.cacheMiss / 2, cacheHit: p.cacheHit / 2, output: p.output / 2 };
+  }
+  return out;
+}
+
+/** 2026-08-17 前旧版固定价表（跨生效节点的会话结算参考）。 */
+function legacyPriceTable() {
+  const out = {};
+  for (const model of PRICING_MODELS) out[model] = { ...LEGACY_PRICES[model] };
+  return out;
+}
+
+/** 三张时段价目表打包（balance-scheduler 出站载荷 periodTables 字段的数据源）。 */
+function periodTables() {
+  return { peak: peakPriceTable(), off: offPriceTable(), legacy: legacyPriceTable() };
+}
+
+/** 峰谷定价生效节点（ISO 字符串）——客户端区分旧版固定价期的边界。 */
+function peakPricingSinceIso() {
+  return new Date(PEAK_PRICING_SINCE_UTC).toISOString();
 }
 
 function readApiKey(dshHome) {
@@ -618,6 +674,11 @@ module.exports = {
   effectivePrice,
   isPeakHour,
   priceTable,
+  periodTables,
+  peakPriceTable,
+  offPriceTable,
+  legacyPriceTable,
+  peakPricingSinceIso,
   // 端点解析（测试用）
   balanceEndpoint,
   opencodeUsageEndpoint,

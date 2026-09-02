@@ -132,6 +132,67 @@ test('isPeakHour: 无效日期 / 非 Date 输入不抛异常且语义明确', ()
 });
 
 // ---------------------------------------------------------------------------
+// isPeakHour 周末规则（issue #168：官方 2026-08-23 公告，周末全天空闲）
+// ---------------------------------------------------------------------------
+
+test('isPeakHour: 2026-08-23 起周末全天空闲（周六/周日原高峰窗口 → false）', () => {
+  // 周六 2026-08-29 10:30 北京（02:30Z）：生效日后 → 空闲。
+  assert.equal(balance.isPeakHour(new Date('2026-08-29T02:30:00Z')), false);
+  // 周日 2026-08-30 16:00 北京（08:00Z）：下午高峰窗口 → 空闲。
+  assert.equal(balance.isPeakHour(new Date('2026-08-30T08:00:00Z')), false);
+  // 生效瞬间（北京 8/23 00:00 = 8/22 16:00Z）之后的周末深夜同样空闲。
+  assert.equal(balance.isPeakHour(new Date('2026-08-29T18:30:00Z')), false);
+});
+
+test('isPeakHour: 生效日前的周末仍按小时窗口判高峰（不溯及既往）', () => {
+  // 周六 2026-08-22 10:30 北京（02:30Z）：8-23 规则未生效 → 高峰。
+  assert.equal(balance.isPeakHour(new Date('2026-08-22T02:30:00Z')), true);
+  // 周六 2026-08-22 20:00 北京（12:00Z）：非窗口时段 → 空闲（与规则无关）。
+  assert.equal(balance.isPeakHour(new Date('2026-08-22T12:00:00Z')), false);
+});
+
+test('isPeakHour: 周末规则生效后工作日高峰窗口不受影响', () => {
+  // 周三 2026-08-26 10:30 / 16:00 北京：仍为高峰。
+  assert.equal(balance.isPeakHour(new Date('2026-08-26T02:30:00Z')), true);
+  assert.equal(balance.isPeakHour(new Date('2026-08-26T08:00:00Z')), true);
+  // 周三 12:30 / 20:00 北京：仍为空闲。
+  assert.equal(balance.isPeakHour(new Date('2026-08-26T04:30:00Z')), false);
+  assert.equal(balance.isPeakHour(new Date('2026-08-26T12:00:00Z')), false);
+});
+
+// ---------------------------------------------------------------------------
+// periodTables（issue #168：按 token 消耗时刻计价的契约载荷）
+// ---------------------------------------------------------------------------
+
+test('periodTables: 三张表内容与求值时刻无关，off = peak 的一半', () => {
+  const tables = balance.periodTables();
+  assert.deepStrictEqual(Object.keys(tables).sort(), ['legacy', 'off', 'peak']);
+  // peak 表 = 全价快照。
+  assert.deepStrictEqual(tables.peak['deepseek-v4-flash'], { cacheMiss: 3, cacheHit: 0.1, output: 9 });
+  assert.deepStrictEqual(tables.peak['deepseek-v4-pro'], { cacheMiss: 9, cacheHit: 0.3, output: 27 });
+  // off 表 = 高峰一半。
+  assert.deepStrictEqual(tables.off['deepseek-v4-flash'], { cacheMiss: 1.5, cacheHit: 0.05, output: 4.5 });
+  assert.deepStrictEqual(tables.off['deepseek-v4-pro'], { cacheMiss: 4.5, cacheHit: 0.15, output: 13.5 });
+  // legacy 表 = 旧版固定价。
+  assert.deepStrictEqual(tables.legacy['deepseek-v4-flash'], { cacheMiss: 1, cacheHit: 0.02, output: 2 });
+  assert.deepStrictEqual(tables.legacy['deepseek-v4-pro'], { cacheMiss: 3, cacheHit: 0.025, output: 6 });
+  // 别名同档 + 与求值时刻无关（两次调用同值）。
+  assert.deepStrictEqual(tables.peak['deepseek-chat'], tables.peak['deepseek-v4-flash']);
+  assert.deepStrictEqual(balance.periodTables(), tables);
+  // 纯快照：深拷贝语义（改副本不污染常量表）。
+  tables.peak['deepseek-v4-flash'].cacheMiss = 999;
+  assert.strictEqual(balance.periodTables().peak['deepseek-v4-flash'].cacheMiss, 3);
+});
+
+test('periodTables: 单表函数与打包函数一致；peakPricingSinceIso 锚定生效节点', () => {
+  const tables = balance.periodTables();
+  assert.deepStrictEqual(balance.peakPriceTable(), tables.peak);
+  assert.deepStrictEqual(balance.offPriceTable(), tables.off);
+  assert.deepStrictEqual(balance.legacyPriceTable(), tables.legacy);
+  assert.strictEqual(balance.peakPricingSinceIso(), '2026-08-16T16:00:00.000Z');
+});
+
+// ---------------------------------------------------------------------------
 // priceTable
 // ---------------------------------------------------------------------------
 

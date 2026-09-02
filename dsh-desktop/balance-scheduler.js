@@ -37,6 +37,10 @@ const DEFAULT_MODEL = 'deepseek-v4-pro';
  * @param {(dshHome: string) => string} options.readActiveModel 默认模型读取
  * @param {(model: string, date: Date) => object} options.effectivePrice 有效单价
  * @param {(date: Date) => object} options.priceTable 全模型价目表
+ * @param {() => {peak: object, off: object, legacy: object}} [options.periodTables]
+ *   三张时段价目表（peak/off/legacy，见 balance.js periodTables()）——客户端
+ *   「按 token 消耗时刻计价」的数据源；未注入则载荷不含 periodTables（旧形态）
+ * @param {() => string} [options.pricingSinceIso] 峰谷定价生效节点（ISO 字符串）
  * @param {(date: Date) => boolean} options.isPeakHour 高峰判定
  * @param {(result: object) => void} options.push 数据唯一出口（推送渲染进程）
  * @param {(tag: string, msg: string) => void} [options.log] 日志
@@ -56,6 +60,8 @@ function createBalanceScheduler(options) {
     readActiveModel,
     effectivePrice,
     priceTable,
+    periodTables = null,
+    pricingSinceIso = null,
     isPeakHour,
     push,
     log = () => {},
@@ -128,6 +134,29 @@ function createBalanceScheduler(options) {
     result.model = model;
     result.peak = isPeakHour(now);
     result.at = now.toISOString();
+    // 三张时段价目表 + 峰谷生效节点：客户端对每个观察到的用量增量按「消耗时刻」
+    // 选档计价（本轮费用不随推送时刻的峰谷状态整段重算）。用户覆盖同样并入
+    // 三张表——覆盖语义是「该模型就用这套价」，与时段无关。
+    if (typeof periodTables === 'function') {
+      const tables = periodTables();
+      if (tables && typeof tables === 'object' && tables.peak && tables.off && tables.legacy) {
+        if (overrides && typeof overrides === 'object') {
+          for (const t of [tables.peak, tables.off, tables.legacy]) {
+            for (const m of Object.keys(overrides)) {
+              const ov = overrides[m];
+              if (ov && typeof ov === 'object') {
+                t[m] = { ...(t[m] || t[model] || effectivePrice(m, now)), ...ov };
+              }
+            }
+          }
+        }
+        result.periodTables = tables;
+      }
+    }
+    if (typeof pricingSinceIso === 'function') {
+      const since = pricingSinceIso();
+      if (typeof since === 'string' && since !== '') result.pricingSince = since;
+    }
     return result;
   }
 

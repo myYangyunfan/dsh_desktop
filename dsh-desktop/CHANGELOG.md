@@ -6,6 +6,14 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### 余额 dock：本轮费用改「按 token 消耗时段」计价 + 峰谷判定补周末规则（issue #168）
+
+- **修复本轮费用随峰谷切换整段重算**：旧实现是「累计 token × 推送时刻的时段价」——高峰/空闲切换后（最长一个轮询周期），整段历史费用跟着跳变（如高峰期 ¥12 的会话到晚上显示 ¥6），与官方「按请求发生时刻结算、不追溯」的计费口径不符。现改为展示层**增量计价账本**：每个观察到的用量增量按其消耗时刻的时段价入账，已入账部分不随推送重算；账本按会话 id 键控、localStorage 持久化（页面重载延续、32 会话 LRU、脏数据/配额满静默降级纯内存）。已知近似（token 无时间戳的架构边界）：基线与页面关闭期间的量按观察/重开时刻的时段价估算（详见 `docs/balance-architecture.md` §3.1）。
+- **主进程推送 `periodTables`（peak/off/legacy 三张时段价目表）+ `pricingSince`（峰谷生效节点）**：客户端按自身时钟选档，推送滞后不再影响计价正确性；`balancePrices.<model>` 用户覆盖同时并入三张表（覆盖语义与时段无关）。旧接线（未注入 `periodTables`）不产生新字段，客户端回退旧口径，向后兼容。
+- **`balance.js` `isPeakHour` 补周末规则**：官方 2026-08-23 公告起周六/周日全天按空闲价计费——旧实现周末 9-12/14-18 仍判高峰（dock 误显 ⛰高峰价、费用按全价估算），现与 `dsh-offpeak` 插件（issue #158）同口径，生效节点前不溯及既往。
+- **峰谷 chip 改客户端本地判定**（`isPeakAt`，镜像主进程口径）：整点切换即时生效，不受推送周期滞后影响；推送未携带 `periodTables`（旧形态）时回退主进程 `peak` 字段。
+- **测试**：`unit-balance.test.js` 新增 isPeakHour 周末矩阵（生效前后周六/周日、工作日不受影响）与 periodTables 三张表内容/纯快照断言；`unit-balance-scheduler.test.js` 新增 periodTables/pricingSince 载荷与覆盖并入断言；`edge-client.test.js` 新增时段计价回归组（峰→谷同用量不重算、跨边界增量分段、周末/legacy 选档、会话键控、重载延续、脏 storage 降级、模型档）+ 修正「prices 覆盖」用例为新语义（同一用量换价不重算）。
+
 ### 插件市场整体替换：dshmarket → dsh-community-market（F5）
 
 - **内置市场切换为上游 DSH Desktop 同款社区市场**：`assets/plugins/dsh-community-market`（源码构建自 [anywhere-labs/deepseek-harness-desktop](https://github.com/anywhere-labs/deepseek-harness-desktop) 的 `dsh-community-market`，MIT）——开放目录源架构（内置 DSH 1024Store / dshfind 两个合作目录适配器 + 标准 HTTP 目录源，用户自行添加与启用）、契约 schema 校验的目录快照、npm registry 精确版本 + 完整性校验安装（禁装产品包/生命周期脚本防护、失败自动回滚）、安装回执与启停管理。宿主半边挂 `/api/community-market/*` 十条路由；客户端半边（`window.__ModuleLoader__` CJS bundle）注册设置页市场 tab + 侧栏入口 + 全屏 overlay。
