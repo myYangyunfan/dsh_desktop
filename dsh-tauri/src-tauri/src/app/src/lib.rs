@@ -22,7 +22,7 @@ pub mod windows;
 // C3 极早期日志：boot-early.log / 封顶追加 / panic hook 最早落盘（logging.rs）。
 mod logging;
 
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use supervisor::{Supervisor, SupervisorEvent};
@@ -85,6 +85,14 @@ impl AppState {
 
 /// 进程级单实例锁（退出时 Drop 删锁文件；强杀残留由陈锁回收逻辑兜底）。
 static INSTANCE_LOCK: std::sync::Mutex<Option<shell_core::SingleInstanceGuard>> = std::sync::Mutex::new(None);
+
+/// 退出竞态闸门（tao "cannot move state from Destroyed" panic 实测修复，
+/// boot-early.log 2026-08-31）：托盘「退出」先 shutdown() 杀内核 →
+/// app.exit(0) 拆 tao 事件循环，此刻内核就绪线程仍在飞的 KernelReady
+/// 若照常走触窗链（eval/show/focus/start_watcher/start_balance_loop），
+/// 对已 Destroyed 的事件循环戳窗口即 panic（与「内核退出 code=None」同秒）。
+/// 所有退出路径先置位；route_one_event 退出态只留日志直通。
+static EXITING: AtomicBool = AtomicBool::new(false);
 
 /// 保存主窗状态——**window-state.json（Electron 同文件同 schema）**：
 /// 升级用户窗口位置不丢，回退 Electron 也不丢（双向兼容，contracts 见
@@ -265,6 +273,8 @@ pub fn run() {
         .run(|app, event| {
             match event {
                 tauri::RunEvent::ExitRequested { .. } => {
+                    // 退出竞态闸门：关窗/托盘退出/Cmd+Q 汇聚点，先于一切收尾置位。
+                    EXITING.store(true, Ordering::Release);
                     // 问题 2：退出前保存主窗状态——用户调整尺寸/位置后直接走
                     // 托盘「退出」/ Cmd+Q 时不再丢。窗口可能已销毁（closeToTray
                     // =false 关窗即退），save_main_window_state 内部 if let 容错，
@@ -279,6 +289,8 @@ pub fn run() {
                     session_notify::shutdown_watcher();
                 }
                 tauri::RunEvent::Exit => {
+                    // 兕底置位（ExitRequested 已置时幂等；覆盖未经该事件的退出形态）。
+                    EXITING.store(true, Ordering::Release);
                     // std::process::exit 不跑 Drop：锁与内核树在此显式收尾
                     //（Review#2：exit(0) 后锁残留实测）。
                     windows::save_main_window_state(app);
@@ -561,6 +573,14 @@ fn kernel_ready_navigate(app: tauri::AppHandle, url: String) {
 }
 
 fn route_one_event(app: &tauri::AppHandle, ev: SupervisorEvent) {
+    // 退出竞态闸门：置位后仍在飞的事件（内核收割/就绪线程最后一批）只留
+    // 日志直通，跳过全部触窗与子系统拉起动作——KernelReady 的 eval/show/
+    // watcher/balance 链对已 Destroyed 的 tao 事件循环操作 = EARLY-PANIC
+    // 实测形态（boot-early.log 2026-08-31）。
+    if EXITING.load(Ordering::Acquire) {
+        route_log("[route] 退出中，丢弃在飞 supervisor 事件（触窗动作已跳过）".to_string());
+        return;
+    }
     match ev {
             SupervisorEvent::BootStep { name, ok, ms, error } => {
                 // boot 步骤结果必须落日志（此前只 emit 给 loading 页不打日志，
@@ -725,6 +745,8 @@ fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> 
     let menu = tauri::menu::MenuBuilder::new(app)
         .text("show", "显示主窗口")
         .text("logs", "打开日志")
+        .text("acp-selftest", "ACP 自检")
+        .text("acp-config", "ACP 配置（Zed）")
         .separator()
         .text("quit", "退出")
         .build()?;
@@ -745,7 +767,62 @@ fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> 
                 let _ = std::fs::create_dir_all(&dir);
                 let _ = commands::open_in_explorer(&dir);
             }
+            "acp-selftest" => {
+                // ACP 托管①：代跑一次 initialize 握手验证物料/路径健康。握手是
+                // 秒级 IO（首跑还含 profile 物料初始化），放后台线程——托盘回调
+                // 在事件循环线程，阻塞会冻住全部窗口消息。结果走通知+日志。
+                let app2 = app.clone();
+                std::thread::spawn(move || {
+                    let sv = app2.try_state::<AppState>()
+                        .and_then(|s| s.supervisor.lock().unwrap_or_else(|p| p.into_inner()).clone());
+                    let Some(sv) = sv else {
+                        route_log("[acp] supervisor 未就绪，自检取消".to_string());
+                        return;
+                    };
+                    route_log("[acp] 自检开始：spawn --profile acp 做 initialize 握手".to_string());
+                    let body = match commands::acp::run_selftest(&sv) {
+                        Ok(summary) => {
+                            route_log(format!("[acp] 自检通过：{summary}"));
+                            format!("ACP 服务就绪：{summary}")
+                        }
+                        Err(e) => {
+                            route_log(format!("[acp] 自检失败：{e}"));
+                            format!("ACP 自检失败：{e}")
+                        }
+                    };
+                    let _ = app2.notification().builder().title("DSH Desktop ACP").body(body).show();
+                });
+            }
+            "acp-config" => {
+                // ACP 托管②：导出 Zed agent_servers 配置片段（绝对路径）到日志
+                // 目录并打开——ACP 协议由外部客户端 spawn server，桌面只负责把
+                // 正确的 node/bin.js 路径交给用户。
+                let sv = app.try_state::<AppState>()
+                    .and_then(|s| s.supervisor.lock().unwrap_or_else(|p| p.into_inner()).clone());
+                let Some(sv) = sv else {
+                    route_log("[acp] supervisor 未就绪，导出取消".to_string());
+                    return;
+                };
+                match commands::acp::export_zed_config(&sv) {
+                    Ok(path) => {
+                        route_log(format!("[acp] Zed 配置片段已导出：{}", path.display()));
+                        let dir = shell_core::DshPaths::resolve().logs;
+                        let _ = std::fs::create_dir_all(&dir);
+                        let _ = commands::open_in_explorer(&dir);
+                        let _ = app.notification().builder().title("DSH Desktop ACP")
+                            .body(format!("配置片段已写入：{}（已打开目录，合并进 Zed 设置）", path.display())).show();
+                    }
+                    Err(e) => {
+                        route_log(format!("[acp] 配置导出失败：{e}"));
+                        let _ = app.notification().builder().title("DSH Desktop ACP")
+                            .body(format!("ACP 配置导出失败：{e}")).show();
+                    }
+                }
+            }
             "quit" => {
+                // 先置位退出闸门再 shutdown：shutdown 杀内核到 app.exit 拆
+                // 事件循环之间，在飞事件不得再触窗（EXITING 静态注释）。
+                EXITING.store(true, Ordering::Release);
                 if let Some(state) = app.try_state::<AppState>() {
                     if let Some(sv) = state.supervisor.lock().unwrap_or_else(|p| p.into_inner()).clone() {
                         sv.shutdown();
@@ -861,6 +938,19 @@ mod tray_behavior_shape {
         for item in ["显示主窗口", "打开日志", "退出"] {
             assert!(seg.contains(item), "托盘菜单项「{item}」不得缺失: {seg}");
         }
+    }
+
+    /// 退出竞态闸门（tao Destroyed panic 实测修复）：托盘「退出」必须先置位
+    /// EXITING 再 shutdown——shutdown 杀内核与 app.exit 拆事件循环之间，
+    /// 在飞 KernelReady 事件对销毁中的窗口戳 eval/show = EARLY-PANIC 实测。
+    #[test]
+    fn quit_arms_exiting_gate_before_shutdown() {
+        let src = src();
+        let seg = tray_seg(&src);
+        let quit = seg.split("\"quit\" =>").nth(1).expect("quit 分支");
+        let gate = quit.find("EXITING.store(true").expect("quit 必须置位退出闸门");
+        let shutdown = quit.find("sv.shutdown()").expect("quit 必须收尾 supervisor");
+        assert!(gate < shutdown, "EXITING 置位必须先于 shutdown（先关竞态窗口）");
     }
 }
 

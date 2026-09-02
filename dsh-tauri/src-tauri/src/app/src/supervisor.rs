@@ -790,7 +790,16 @@ impl Supervisor {
                 msg
             })?;
         if !out.status.success() {
-            let msg = format!("sidecar boot 退出码 {:?}: {}", out.status.code(), String::from_utf8_lossy(&out.stderr).lines().take(6).collect::<Vec<_>>().join(" | "));
+            // 死因在输出**末尾**：sidecar 自身进度行先刷屏，V8 fatal/OOM/abort
+            // 报告最后才出（0xC0000409 真机日志此前 take(6) 只留头部，只剩
+            // 「repair → OK」，真正的死因行被整段裁掉——排查只能看到「死了」
+            // 看不到「为何死」）。改为保留尾部；stderr 空时退回 stdout 尾部。
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            let mut reason = tail_lines(&stderr, 10);
+            if reason.is_empty() {
+                reason = tail_lines(&String::from_utf8_lossy(&out.stdout), 3);
+            }
+            let msg = format!("sidecar boot 退出码 {:?}: {}", out.status.code(), reason);
             eprintln!("[boot] {msg}");
             return Err(msg);
         }
@@ -1753,6 +1762,33 @@ mod tests {
         assert_eq!(got.chars().count(), 300);
     }
 
+    /// sidecar 崩溃死因在 stderr **末尾**（V8 fatal/abort 报告在 sidecar 自身
+    /// 进度行之后）：必须留尾部而非头部——真机 0xC0000409（logs.zip
+    /// 2026-08-31）此前 take(6) 只留头部进度行，死因行整段丢失。
+    #[test]
+    fn tail_lines_keeps_tail_not_head() {
+        let s = concat!(
+            "[sidecar] boot 步骤 repair → OK (25ms)\n",
+            "[sidecar] boot 步骤 sync → OK (12ms)\n",
+            "#\n",
+            "# Fatal error in V8: Check failed\n",
+            "#\n",
+        );
+        assert_eq!(
+            tail_lines(s, 3),
+            "# | # Fatal error in V8: Check failed | #"
+        );
+    }
+
+    /// 行数不足全量保留（不 panic 不补齐）；空/纯空白输入 → 空串
+    /// （调用方据此走 stdout 退路，而不是把「无输出」当内容透出）。
+    #[test]
+    fn tail_lines_edges() {
+        assert_eq!(tail_lines("a\nb\nc", 10), "a | b | c");
+        assert_eq!(tail_lines("", 5), "");
+        assert_eq!(tail_lines("\n \n\t\n", 5), "");
+    }
+
     /// IO 作用域：只认 `mark` 之后追加的本次内核输出——mark 之后无新内容
     /// （Node 缺失等未 spawn 即失败）不得引用上一次运行的残留报错（旧根因
     /// 安到新失败上）。显式路径 + 纯函数组合，不重定向全局环境（并行套件
@@ -1998,8 +2034,9 @@ Content-Length: 0
         std::env::remove_var("DSH_TAURI_USERDATA");
         assert!(result.is_ok(), "sidecar boot 应成功: {result:?}");
         // 步骤事件按固定顺序全部转发（data-flow.md §3）。
-        let names: Vec<String> = rx.iter().map(|e| match e { SupervisorEvent::BootStep { name, .. } => name, _ => String::new() }).take(5).collect();
-        assert_eq!(names, vec!["repair", "sync", "presets", "patches", "preflight"], "boot 步骤顺序契约");
+        // 六步契约：compat-pin 为 143fa9e7（compat-layer M1）加入的 fail-closed 步骤。
+        let names: Vec<String> = rx.iter().map(|e| match e { SupervisorEvent::BootStep { name, .. } => name, _ => String::new() }).take(6).collect();
+        assert_eq!(names, vec!["repair", "sync", "presets", "patches", "compat-pin", "preflight"], "boot 步骤顺序契约");
         // 沙箱 home 上 profile 结构确已建立（同步器落盘）。
         assert!(home.join("profiles").join("web").join("cordis.patch.yml").exists(), "profile patch 应已建立");
         let _ = std::fs::remove_dir_all(&home);
@@ -2039,7 +2076,7 @@ Content-Length: 0
                 Err(_) => panic!("150s 内未就绪（boot_steps={boot_steps:?}）"),
             }
         };
-        assert_eq!(boot_steps, vec!["repair", "sync", "presets", "patches", "preflight"]);
+        assert_eq!(boot_steps, vec!["repair", "sync", "presets", "patches", "compat-pin", "preflight"]);
         assert!(url.starts_with("http://127.0.0.1:"), "就绪 URL 形态: {url}");
         assert_eq!(sv.state(), RunState::Ready);
         assert!(sv.kernel_url().is_some());
@@ -2483,7 +2520,9 @@ Content-Length: 0
         assert!(!envs.contains_key("NODE_PATH"));
         assert_eq!(envs.get("DSH_DESKTOP_SUPERVISED").and_then(|v| v.as_deref()), Some("1"), "监管标识必须在场: {envs:?}");
         assert_eq!(envs.get("NO_COLOR").and_then(|v| v.as_deref()), Some("1"), "NO_COLOR 必须在场: {envs:?}");
-        assert!(envs.contains_key("PATH"), "白名单 PATH 必须透传: {envs:?}");
+        // Windows 环境键大小写不敏感且实际键名随来源漂移（系统 "Path" vs
+        // 显式注入 "PATH"），白名单透传断言必须按 ASCII 大小写折叠核对。
+        assert!(envs.keys().any(|k| k.eq_ignore_ascii_case("PATH")), "白名单 PATH 必须透传: {envs:?}");
         std::env::remove_var("NODE_OPTIONS");
     }
 
@@ -2660,8 +2699,8 @@ Content-Length: 0
                 Err(_) => panic!("300s 内未就绪（boot_steps={boot_steps:?} saw_install={saw_install}）"),
             }
         }
-        // 链路断言：五步全过 + 安装步在场 + 运行态就绪 + actual port 落 Inner。
-        assert_eq!(boot_steps, vec!["repair", "sync", "presets", "patches", "preflight"], "sidecar 五步契约（经 --home UNC）");
+        // 链路断言：六步全过（compat-pin 为 143fa9e7 加入）+ 安装步在场 + 运行态就绪 + actual port 落 Inner。
+        assert_eq!(boot_steps, vec!["repair", "sync", "presets", "patches", "compat-pin", "preflight"], "sidecar 六步契约（经 --home UNC）");
         assert!(saw_install, "agent 未就绪应触发 wsl-install 步（BootStep 进度上报）");
         assert!(sv.wsl_active().is_some(), "configure 成功后 WSL 运行态生效");
         assert_eq!(sv.backend_effective(), "wsl");
@@ -2757,6 +2796,19 @@ fn summarize_kernel_error(tail: &str) -> Option<String> {
         }
     }
     last_msg.map(|m| m.chars().take(300).collect())
+}
+
+/// 取多行文本的尾部 n 行（跳过纯空白行，` | ` 连成单行日志）。
+///
+/// 与 summarize_kernel_error「取最后一条」同一取向：进程崩溃死因
+/// （V8 fatal、OOM、abort 报告）总在输出末尾——头部保留会把死因裁掉。
+fn tail_lines(s: &str, n: usize) -> String {
+    let lines: Vec<&str> = s.lines().filter(|l| !l.trim().is_empty()).collect();
+    if lines.is_empty() {
+        return String::new();
+    }
+    let start = lines.len().saturating_sub(n);
+    lines[start..].join(" | ")
 }
 
 #[cfg(test)]

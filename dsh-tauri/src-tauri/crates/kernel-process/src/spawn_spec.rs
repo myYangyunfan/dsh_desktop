@@ -287,7 +287,11 @@ mod tests {
         assert!(!envs.contains_key("ELECTRON_RUN_AS_NODE"));
         assert!(!envs.contains_key("NODE_PATH"));
         // 白名单变量必须透传（PATH 恒在；注入的 DSH_ 前缀变量非白名单，亦不出现）。
-        assert!(envs.contains_key("PATH"), "PATH 白名单必须透传: {envs:?}");
+        // 键名比较大小写不敏感：Windows env 块实际键名可能是 "Path"。
+        assert!(
+            envs.keys().any(|k| k.eq_ignore_ascii_case("PATH")),
+            "PATH 白名单必须透传: {envs:?}"
+        );
         assert!(!envs.contains_key(marker), "非白名单父进程变量不得透传: {envs:?}");
         std::env::remove_var(marker);
         std::env::remove_var("NODE_OPTIONS");

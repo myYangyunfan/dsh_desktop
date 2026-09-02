@@ -19,6 +19,7 @@
 //! - [`file`]      —— 文件域：file_open / file_revert（fence 围栏）
 //! - [`image`]     —— 剪贴板粘贴图落盘
 //! - [`wsl`]       —— WSL 配置三通道
+//! - [`acp`]       —— ACP 托管族：自检（initialize 握手）+ Zed 配置片段导出（托盘入口）
 //! - [`common`]    —— 共享 OS / 编码 / 时间小工具
 
 // balance 供 lib.rs（AppState 字段与轮询环接线）与 menu.rs（toggle 后触发）
@@ -36,6 +37,8 @@ mod sidecar;
 mod window;
 mod wsl;
 pub mod updater_client;
+/// ACP 托管族：不注册 bridge command（托盘菜单直调），路径引用即可。
+pub mod acp;
 
 // 注意：必须用 glob re-export。`#[tauri::command]` 会随函数生成隐藏项
 // `__cmd__<name>`（generate_handler! 依赖 `commands::__cmd__*` 路径），
