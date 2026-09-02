@@ -34618,6 +34618,7 @@ globalThis.__dshChunks__["editor"] = (require) => {
 						EditorState.tabSize.of(2),
 						EditorView.contentAttributes.of({ spellcheck: "false" }),
 						cmSurfaceTheme,
+						dshEditorFeatures.editorFeatures(),
 						diffHighlightField,
 						themeComp.of(dark),
 						...language !== null ? [language] : [],
@@ -34909,6 +34910,575 @@ globalThis.__dshChunks__["editor"] = (require) => {
 	}
 	//#endregion
 	exports.TextEditor = TextEditor;
+/* dsh-editor-features:begin */
+/* side-ed: bracket matching + indentation folding + find & replace.
+ * Hand-inlined equivalent of src/client/editor-features.ts (this vendored
+ * chunk cannot be rebuilt offline). Pure helpers are the same algorithms;
+ * the extensions compose bundle-local CodeMirror bindings and hang the
+ * fold gutter off activeGutters — the mechanism lineNumbers() itself uses
+ * in this build (the singular gutter() export was tree-shaken away; the
+ * src side uses the public gutter() wrapper, which resolves to the same
+ * facet value). scripts/test/unit-better-sidebar-editor-features.test.js
+ * vm-evaluates this very section against stub CodeMirror bindings. */
+var dshEditorFeatures = (function () {
+	// ---- pure helpers (mirrored by src/client/editor-features.ts) ----
+	const BRACKET_OPEN = { '(': ')', '[': ']', '{': '}' }
+	const BRACKET_CLOSE = { ')': '(', ']': '[', '}': '{' }
+	const BRACKET_SCAN_LIMIT = 200000
+	function matchingBracketIndex(text, head) {
+		for (const pos of [head - 1, head]) {
+			if (pos < 0 || pos >= text.length) continue
+			const ch = text[pos]
+			if (ch in BRACKET_OPEN) {
+				const open = ch
+				const close = BRACKET_OPEN[ch]
+				let depth = 0
+				const limit = Math.min(text.length, pos + BRACKET_SCAN_LIMIT)
+				for (let i = pos + 1; i < limit; i++) {
+					const c = text[i]
+					if (c === open) depth++
+					else if (c === close) {
+						if (depth === 0) return { bracket: pos, match: i }
+						depth--
+					}
+				}
+			} else if (ch in BRACKET_CLOSE) {
+				const close = ch
+				const open = BRACKET_CLOSE[ch]
+				let depth = 0
+				const limit = Math.max(0, pos - BRACKET_SCAN_LIMIT)
+				for (let i = pos - 1; i >= limit; i--) {
+					const c = text[i]
+					if (c === close) depth++
+					else if (c === open) {
+						if (depth === 0) return { bracket: pos, match: i }
+						depth--
+					}
+				}
+			}
+		}
+		return null
+	}
+	const FOLD_STEP_BUDGET = 2000000
+	function foldableBlocks(text) {
+		const lines = text.split('\n')
+		const blocks = []
+		let budget = FOLD_STEP_BUDGET
+		for (let i = 0; i < lines.length; i++) {
+			const header = lines[i]
+			let base = 0
+			while (base < header.length && (header[base] === ' ' || header[base] === '\t')) base++
+			if (header.trim() === '') continue
+			let last = i
+			for (let j = i + 1; j < lines.length; j++) {
+				if (budget-- <= 0) return blocks
+				const s = lines[j]
+				if (s.trim() === '') continue
+				let ind = 0
+				while (ind < s.length && (s[ind] === ' ' || s[ind] === '\t')) ind++
+				if (ind > base) {
+					last = j
+					continue
+				}
+				break
+			}
+			if (last > i) blocks.push({ fromLine: i + 1, toLine: last + 1 })
+		}
+		return blocks
+	}
+	function findMatchOffsets(text, query, caseSensitive) {
+		if (query === '') return []
+		const hay = caseSensitive ? text : text.toLowerCase()
+		const needle = caseSensitive ? query : query.toLowerCase()
+		if (needle === '') return []
+		const out = []
+		let at = hay.indexOf(needle)
+		while (at !== -1) {
+			out.push(at)
+			at = hay.indexOf(needle, at + needle.length)
+		}
+		return out
+	}
+	function computeReplacedText(text, query, replacement, caseSensitive) {
+		const offsets = findMatchOffsets(text, query, caseSensitive)
+		if (offsets.length === 0) return { text: text, count: 0 }
+		const parts = []
+		let prev = 0
+		for (const off of offsets) {
+			parts.push(text.slice(prev, off), replacement)
+			prev = off + query.length
+		}
+		parts.push(text.slice(prev))
+		return { text: parts.join(''), count: offsets.length }
+	}
+
+	// ---- runtime css (one <style data-plugin-css> tag, K28 pattern) ----
+	function ensureEditorFeaturesCss() {
+		if (typeof document === 'undefined') return
+		const id = 'dsh-better-sidebar/editor-features'
+		if (document.querySelector('style[data-plugin-css="' + id + '"]') !== null) return
+		const style = document.createElement('style')
+		style.dataset.plugin = 'dsh-better-sidebar'
+		style.dataset.pluginCss = id
+		style.textContent = [
+			'.dsh-editor-bracket-match{background:color-mix(in srgb,currentColor 16%,transparent);outline:1px solid color-mix(in srgb,currentColor 45%,transparent);border-radius:2px;}',
+			'.dsh-editor-fold-gutter{width:13px;}',
+			'.dsh-editor-fold-marker{cursor:pointer;opacity:.5;font-size:10px;line-height:1;padding:2px 3px 0 4px;font-family:ui-monospace,monospace;}',
+			'.dsh-editor-fold-marker:hover{opacity:1;}',
+			'.dsh-editor-fold-placeholder{font-style:italic;color:color-mix(in srgb,currentColor 55%,transparent);background:color-mix(in srgb,currentColor 9%,transparent);border-radius:3px;padding:0 4px;margin:0 3px;font-size:.92em;}',
+			'.dsh-editor-find-panel{position:absolute;top:4px;right:18px;z-index:30;display:flex;flex-direction:column;gap:4px;padding:6px 8px;border:1px solid color-mix(in srgb,currentColor 20%,transparent);border-radius:6px;background:color-mix(in srgb,currentColor 7%,transparent);backdrop-filter:blur(8px);font-size:12px;}',
+			'.dsh-editor-find-row{display:flex;align-items:center;gap:4px;}',
+			'.dsh-editor-find-input{flex:1 1 130px;min-width:110px;color:inherit;background:color-mix(in srgb,currentColor 8%,transparent);border:1px solid color-mix(in srgb,currentColor 20%,transparent);border-radius:4px;padding:2px 6px;font:inherit;outline:none;}',
+			'.dsh-editor-find-input:focus{border-color:color-mix(in srgb,currentColor 45%,transparent);}',
+			'.dsh-editor-find-btn{cursor:pointer;color:inherit;background:transparent;border:1px solid color-mix(in srgb,currentColor 22%,transparent);border-radius:4px;padding:1px 7px;font:inherit;line-height:1.5;}',
+			'.dsh-editor-find-btn:hover{background:color-mix(in srgb,currentColor 12%,transparent);}',
+			'.dsh-editor-find-btn[aria-pressed="true"]{background:color-mix(in srgb,currentColor 22%,transparent);font-weight:600;}',
+			'.dsh-editor-find-count{min-width:52px;text-align:center;opacity:.75;font-variant-numeric:tabular-nums;white-space:nowrap;}',
+			'.dsh-editor-find-count:empty{display:none;}',
+		].join('\n')
+		document.head.appendChild(style)
+	}
+
+	// ---- feature 1: bracket matching ----
+	const bracketMatchMark = Decoration.mark({ class: 'dsh-editor-bracket-match' })
+	function bracketMatchExtension() {
+		return ViewPlugin.fromClass(class {
+			constructor() { this.decorations = Decoration.none }
+			update(update) {
+				if (!(update.selectionSet || update.docChanged)) return
+				const state = update.state
+				const head = state.selection.main.head
+				const pair = matchingBracketIndex(state.doc.toString(), head)
+				if (pair === null) {
+					this.decorations = Decoration.none
+					return
+				}
+				const from = Math.min(pair.bracket, pair.match)
+				const to = Math.max(pair.bracket, pair.match)
+				this.decorations = Decoration.set([
+					bracketMatchMark.range(from, from + 1),
+					bracketMatchMark.range(to, to + 1),
+				])
+			}
+		}, { decorations: (v) => v.decorations })
+	}
+
+	// ---- feature 2: indentation-based code folding ----
+	const dshFoldEffect = StateEffect.define()
+	const dshUnfoldEffect = StateEffect.define()
+	const dshUnfoldAllEffect = StateEffect.define()
+	class DshFoldPlaceholder extends WidgetType {
+		constructor(count) { super(); this.count = count }
+		eq(other) { return other.count === this.count }
+		toDOM() {
+			const span = document.createElement('span')
+			span.className = 'dsh-editor-fold-placeholder'
+			span.textContent = ' … ' + this.count + ' 行 '
+			return span
+		}
+		ignoreEvent() { return false }
+	}
+	const foldBlockCache = new WeakMap()
+	function foldIndexFor(doc) {
+		let entry = foldBlockCache.get(doc)
+		if (entry === undefined) {
+			const blocks = foldableBlocks(doc.toString())
+			const byHeader = new Map()
+			for (const block of blocks) byHeader.set(block.fromLine, block)
+			entry = { blocks: blocks, byHeader: byHeader }
+			foldBlockCache.set(doc, entry)
+		}
+		return entry
+	}
+	function buildFoldDeco(ranges, doc) {
+		if (ranges.length === 0) return Decoration.none
+		return Decoration.set(ranges.map((r) => {
+			const count = Math.max(0, doc.lineAt(r.to).number - doc.lineAt(r.from).number)
+			return Decoration.replace({ widget: new DshFoldPlaceholder(count) }).range(r.from, r.to)
+		}), true)
+	}
+	const foldState = StateField.define({
+		create: () => ({ ranges: [], deco: Decoration.none }),
+		update(value, tr) {
+			let ranges = value.ranges
+			let touched = false
+			for (const effect of tr.effects) {
+				if (effect.is(dshFoldEffect)) {
+					ranges = ranges.filter((r) => r.to < effect.value.from || r.from > effect.value.to)
+					ranges = ranges.concat([effect.value]).sort((a, b) => a.from - b.from)
+					touched = true
+				} else if (effect.is(dshUnfoldEffect)) {
+					ranges = ranges.filter((r) => r.from !== effect.value.from || r.to !== effect.value.to)
+					touched = true
+				} else if (effect.is(dshUnfoldAllEffect)) {
+					if (ranges.length > 0) touched = true
+					ranges = []
+				}
+			}
+			if (tr.docChanged) {
+				ranges = ranges
+					.map((r) => ({ from: tr.changes.mapPos(r.from), to: tr.changes.mapPos(r.to) }))
+					.filter((r) => r.to > r.from)
+				touched = true
+			}
+			return touched ? { ranges: ranges, deco: buildFoldDeco(ranges, tr.state.doc) } : value
+		},
+		provide: (field) => EditorView.decorations.from(field, (v) => v.deco),
+	})
+	class DshFoldMarker extends GutterMarker {
+		constructor(folded) { super(); this.folded = folded }
+		eq(other) { return other.folded === this.folded }
+		toDOM() {
+			const span = document.createElement('span')
+			span.className = 'dsh-editor-fold-marker'
+			span.textContent = this.folded ? '▸' : '▾'
+			return span
+		}
+	}
+	const foldOpenMarker = new DshFoldMarker(false)
+	const foldFoldedMarker = new DshFoldMarker(true)
+	function toggleFoldAt(view, pos) {
+		const doc = view.state.doc
+		const line = doc.lineAt(pos)
+		const field = view.state.field(foldState, false)
+		const folded = field ? field.ranges : []
+		let existing = null
+		for (const r of folded) {
+			if (doc.lineAt(r.from).number === line.number) {
+				existing = r
+				break
+			}
+		}
+		if (existing !== null) {
+			view.dispatch({ effects: dshUnfoldEffect.of({ from: existing.from, to: existing.to }) })
+			return
+		}
+		const block = foldIndexFor(doc).byHeader.get(line.number)
+		if (block === undefined) return
+		view.dispatch({
+			effects: dshFoldEffect.of({ from: doc.line(block.fromLine).to, to: doc.line(block.toLine).to }),
+		})
+	}
+	function foldGutterExtension() {
+		// This build tree-shook the singular gutter() export; lineNumbers()
+		// keeps the shared gutter view plugin mounted, so an activeGutters
+		// entry is all a custom gutter needs (SingleGutterView consumes it).
+		return activeGutters.of({
+			class: 'dsh-editor-fold-gutter',
+			renderEmptyElements: false,
+			markers: () => [],
+			lineMarker(view, line) {
+				const doc = view.state.doc
+				const number = doc.lineAt(line.from).number
+				const index = foldIndexFor(doc)
+				if (!index.byHeader.has(number)) return null
+				const field = view.state.field(foldState, false)
+				const folded = field ? field.ranges : []
+				for (const r of folded) {
+					if (doc.lineAt(r.from).number === number) return foldFoldedMarker
+				}
+				return foldOpenMarker
+			},
+			lineMarkerChange: (update) => update.startState.field(foldState, false) !== update.state.field(foldState, false),
+			domEventHandlers: {
+				mousedown(view, line) {
+					toggleFoldAt(view, line.from)
+					return true
+				},
+			},
+		})
+	}
+	function foldCommand(view, fold) {
+		const head = view.state.selection.main.head
+		if (fold) {
+			toggleFoldAt(view, head)
+		} else {
+			const doc = view.state.doc
+			const line = doc.lineAt(head).number
+			const field = view.state.field(foldState, false)
+			const folded = field ? field.ranges : []
+			let hit = null
+			for (const r of folded) {
+				if (doc.lineAt(r.from).number === line || (r.from <= head && r.to >= head)) {
+					hit = r
+					break
+				}
+			}
+			if (hit !== null) view.dispatch({ effects: dshUnfoldEffect.of(hit) })
+		}
+		return true
+	}
+	function foldExtension() {
+		return [
+			foldState,
+			foldGutterExtension(),
+			keymap.of([
+				{ key: 'Ctrl-Shift-[', mac: 'Mod-Alt-[', run: (view) => foldCommand(view, true) },
+				{ key: 'Ctrl-Shift-]', mac: 'Mod-Alt-]', run: (view) => foldCommand(view, false) },
+			]),
+		]
+	}
+
+	// ---- feature 3: find & replace (no @codemirror/search in this build) ----
+	function findPanelExtension() {
+		ensureEditorFeaturesCss()
+		const plugin = ViewPlugin.fromClass(class DshFindPanel {
+			constructor(view) {
+				this.view = view
+				this.panel = null
+				this.queryInput = null
+				this.replaceInput = null
+				this.countLabel = null
+				this.state = { open: false, query: '', replacement: '', caseSensitive: false, offsets: [], index: 0 }
+			}
+			update(update) {
+				if (this.state.open && update.docChanged) this.recompute()
+			}
+			destroy() {
+				this.closePanel()
+			}
+			ensureDom() {
+				if (this.panel !== null) return
+				const panel = document.createElement('div')
+				panel.className = 'dsh-editor-find-panel'
+				const row1 = document.createElement('div')
+				row1.className = 'dsh-editor-find-row'
+				const caseBtn = document.createElement('button')
+				caseBtn.type = 'button'
+				caseBtn.className = 'dsh-editor-find-btn'
+				caseBtn.textContent = 'Aa'
+				caseBtn.title = '区分大小写'
+				caseBtn.setAttribute('aria-pressed', String(this.state.caseSensitive))
+				caseBtn.addEventListener('click', () => {
+					this.state.caseSensitive = !this.state.caseSensitive
+					caseBtn.setAttribute('aria-pressed', String(this.state.caseSensitive))
+					this.recompute()
+				})
+				const query = document.createElement('input')
+				query.className = 'dsh-editor-find-input'
+				query.placeholder = '查找'
+				query.spellcheck = false
+				query.value = this.state.query
+				query.addEventListener('input', () => {
+					this.state.query = query.value
+					this.state.index = 0
+					this.recompute()
+				})
+				query.addEventListener('keydown', (event) => {
+					if (event.key === 'Enter') {
+						event.preventDefault()
+						this.navigate(event.shiftKey ? -1 : 1)
+					} else if (event.key === 'Escape') {
+						event.preventDefault()
+						this.closePanel()
+						this.view.focus()
+					}
+				})
+				const count = document.createElement('span')
+				count.className = 'dsh-editor-find-count'
+				const prev = document.createElement('button')
+				prev.type = 'button'
+				prev.className = 'dsh-editor-find-btn'
+				prev.textContent = '◀'
+				prev.title = '上一个 (Shift+F3)'
+				prev.addEventListener('click', () => this.navigate(-1))
+				const next = document.createElement('button')
+				next.type = 'button'
+				next.className = 'dsh-editor-find-btn'
+				next.textContent = '▶'
+				next.title = '下一个 (F3)'
+				next.addEventListener('click', () => this.navigate(1))
+				const close = document.createElement('button')
+				close.type = 'button'
+				close.className = 'dsh-editor-find-btn'
+				close.textContent = '×'
+				close.title = '关闭 (Esc)'
+				close.addEventListener('click', () => {
+					this.closePanel()
+					this.view.focus()
+				})
+				row1.append(caseBtn, query, count, prev, next, close)
+				const row2 = document.createElement('div')
+				row2.className = 'dsh-editor-find-row'
+				const replace = document.createElement('input')
+				replace.className = 'dsh-editor-find-input'
+				replace.placeholder = '替换为'
+				replace.spellcheck = false
+				replace.value = this.state.replacement
+				replace.addEventListener('keydown', (event) => {
+					if (event.key === 'Escape') {
+						event.preventDefault()
+						this.closePanel()
+						this.view.focus()
+					}
+				})
+				replace.addEventListener('input', () => {
+					this.state.replacement = replace.value
+				})
+				const replaceBtn = document.createElement('button')
+				replaceBtn.type = 'button'
+				replaceBtn.className = 'dsh-editor-find-btn'
+				replaceBtn.textContent = '替换'
+				replaceBtn.title = '替换当前'
+				replaceBtn.addEventListener('click', () => this.replaceCurrent())
+				const replaceAllBtn = document.createElement('button')
+				replaceAllBtn.type = 'button'
+				replaceAllBtn.className = 'dsh-editor-find-btn'
+				replaceAllBtn.textContent = '全部'
+				replaceAllBtn.title = '全部替换'
+				replaceAllBtn.addEventListener('click', () => this.replaceAll())
+				row2.append(replace, replaceBtn, replaceAllBtn)
+				panel.append(row1, row2)
+				this.view.dom.appendChild(panel)
+				this.panel = panel
+				this.queryInput = query
+				this.replaceInput = replace
+				this.countLabel = count
+			}
+			openPanel() {
+				this.ensureDom()
+				this.state.open = true
+				this.panel.style.display = 'flex'
+				this.recompute()
+				this.queryInput.focus()
+				this.queryInput.select()
+			}
+			closePanel() {
+				this.state.open = false
+				if (this.panel !== null) this.panel.remove()
+				this.panel = null
+				this.queryInput = null
+				this.replaceInput = null
+				this.countLabel = null
+			}
+			recompute() {
+				this.state.offsets = findMatchOffsets(
+					this.view.state.doc.toString(),
+					this.state.query,
+					this.state.caseSensitive,
+				)
+				if (this.state.index >= this.state.offsets.length) {
+					this.state.index = Math.max(0, this.state.offsets.length - 1)
+				}
+				if (this.countLabel !== null) {
+					this.countLabel.textContent = this.state.query === ''
+						? ''
+						: this.state.offsets.length === 0
+							? '0 个结果'
+							: (this.state.index + 1) + '/' + this.state.offsets.length
+				}
+			}
+			navigate(delta) {
+				if (this.state.offsets.length === 0) return
+				const total = this.state.offsets.length
+				this.state.index = (this.state.index + delta + total) % total
+				const at = this.state.offsets[this.state.index]
+				const end = at + this.state.query.length
+				this.view.dispatch({ selection: EditorSelection.range(at, end), scrollIntoView: true })
+				if (this.countLabel !== null) this.countLabel.textContent = (this.state.index + 1) + '/' + total
+			}
+			navigatePublic(delta) {
+				this.navigate(delta)
+			}
+			closeAndRefocus() {
+				this.closePanel()
+				this.view.focus()
+			}
+			replaceCurrent() {
+				this.recompute()
+				if (this.state.offsets.length === 0) return
+				const sel = this.view.state.selection.main
+				const at = this.state.offsets[this.state.index]
+				if (!(sel.from === at && sel.to === at + this.state.query.length)) {
+					this.navigate(0)
+					return
+				}
+				this.view.dispatch({
+					changes: { from: at, to: at + this.state.query.length, insert: this.state.replacement },
+				})
+				this.state.index = Math.min(this.state.index, Math.max(0, this.state.offsets.length - 1))
+			}
+			replaceAll() {
+				if (this.state.query === '') return
+				const replaced = computeReplacedText(
+					this.view.state.doc.toString(),
+					this.state.query,
+					this.state.replacement,
+					this.state.caseSensitive,
+				)
+				if (replaced.count === 0) return
+				this.view.dispatch({ changes: { from: 0, to: this.view.state.doc.length, insert: replaced.text } })
+				this.state.index = 0
+			}
+		})
+		return [
+			plugin,
+			keymap.of([
+				{
+					key: 'Mod-f',
+					preventDefault: true,
+					run: (view) => {
+						const panel = view.plugin(plugin)
+						if (panel === null) return false
+						panel.openPanel()
+						return true
+					},
+				},
+				{
+					key: 'F3',
+					preventDefault: true,
+					run: (view) => {
+						const panel = view.plugin(plugin)
+						if (panel === null || !panel.state.open) return false
+						panel.navigatePublic(1)
+						return true
+					},
+				},
+				{
+					key: 'Shift-F3',
+					preventDefault: true,
+					run: (view) => {
+						const panel = view.plugin(plugin)
+						if (panel === null || !panel.state.open) return false
+						panel.navigatePublic(-1)
+						return true
+					},
+				},
+				{
+					key: 'Escape',
+					run: (view) => {
+						const panel = view.plugin(plugin)
+						if (panel === null || !panel.state.open) return false
+						panel.closeAndRefocus()
+						return true
+					},
+				},
+			]),
+		]
+	}
+
+	// ---- aggregate ----
+	function editorFeatures() {
+		ensureEditorFeaturesCss()
+		return [bracketMatchExtension(), foldExtension(), findPanelExtension()]
+	}
+	return {
+		matchingBracketIndex: matchingBracketIndex,
+		foldableBlocks: foldableBlocks,
+		findMatchOffsets: findMatchOffsets,
+		computeReplacedText: computeReplacedText,
+		ensureEditorFeaturesCss: ensureEditorFeaturesCss,
+		editorFeatures: editorFeatures,
+	}
+})()
+module.exports.__internals = {
+	matchingBracketIndex: dshEditorFeatures.matchingBracketIndex,
+	foldableBlocks: dshEditorFeatures.foldableBlocks,
+	findMatchOffsets: dshEditorFeatures.findMatchOffsets,
+	computeReplacedText: dshEditorFeatures.computeReplacedText,
+}
+module.exports.editorFeaturesDsh = dshEditorFeatures.editorFeatures
+/* dsh-editor-features:end */
 	return module.exports;
 };
 

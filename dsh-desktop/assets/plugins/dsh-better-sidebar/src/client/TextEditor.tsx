@@ -32,6 +32,7 @@ import { lazyChunkComponent } from './lazy-chunk.tsx'
 import { splitMermaidBlocks, type MermaidMarkdownProps } from './mermaid-blocks.ts'
 import { t } from './locales.ts'
 import { ensureDiffHighlightCss, highlightKindClass, readFileChangesStore, readFileHighlight } from './file-changes-highlight.ts'
+import { editorFeatures } from './editor-features.ts'
 import type { EditorToolbarState, FileViewerProps } from './service.ts'
 import css from './sidebar.module.css'
 
@@ -176,6 +177,9 @@ export function TextEditor(props: FileViewerProps) {
         CodeMirrorView.lineWrapping,
         lineNumbers(),
         history(),
+        // Bracket matching + folding + find & replace (side-ed). Before the
+        // keymap so Mod-f / F3 / Escape win over the default bindings.
+        editorFeatures(),
         EditorState.tabSize.of(2),
         CodeMirrorView.contentAttributes.of({ spellcheck: 'false' }),
         cmSurfaceTheme,
