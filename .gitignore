@@ -56,3 +56,6 @@ target-s1/
 
 # 本地便携版安装/运行目录（DSH Desktop.exe + resources，运行时产物不入库）
 portable/
+
+# 内核升级过程旧版 tgz 暂存（alpha.4 激活时遗留，确认稳定后可整体删除）
+dsh-desktop/vendor-next/
