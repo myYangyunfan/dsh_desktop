@@ -1,0 +1,114 @@
+{
+  "name": "dsh-cardian",
+  "version": "0.13.0",
+  "description": "cardian —— DeepSeek Harness 知识中心插件：RepoWiki / 知识卡片 / 记忆，全部落地到本地 Obsidian 仓库",
+  "type": "module",
+  "main": "lib/index.js",
+  "bin": {
+    "cardian": "./cli.mjs"
+  },
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./typert": {
+      "default": "./src/typert.js"
+    },
+    "./core": {
+      "default": "./core/index.js"
+    },
+    "./core/errors": {
+      "default": "./core/errors.js"
+    },
+    "./core/config": {
+      "default": "./core/config.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "core",
+    "lib",
+    "cli.mjs",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "ITERATIONS.md",
+    "examples"
+  ],
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\"",
+    "test:watch": "node --test --watch \"test/*.test.mjs\"",
+    "build": "tsdown",
+    "build:client": "tsdown",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm test && npm run build"
+  },
+  "license": "MIT",
+  "author": "cardian contributors",
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "knowledge-base",
+    "obsidian",
+    "repowiki",
+    "memory",
+    "cli",
+    "flashcards"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-api-remotes"
+      ],
+      "external": [
+        "@deepseek-ai/dsh-client-runtime/client",
+        "@deepseek-ai/dsh-client-locale/client",
+        "@deepseek-ai/dsh-client-ui-layout/client",
+        "@deepseek-ai/dsh-client-ui-sidebar/client",
+        "@deepseek-ai/dsh-api-remotes/client"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-typert-protocol": "*"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@types/react": "^18.2.0",
+    "react": "^18.2.0",
+    "tsdown": "^0.22.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/myYangyunfan/dsh_cardian.git"
+  },
+  "homepage": "https://github.com/myYangyunfan/dsh_cardian#readme",
+  "bugs": {
+    "url": "https://github.com/myYangyunfan/dsh_cardian/issues"
+  }
+}

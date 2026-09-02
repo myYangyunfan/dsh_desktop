@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-01T17:45:07.817Z",
+  "generatedAt": "2026-09-02T12:33:22.784Z",
   "kernelRoot": "@deepseek-ai",
   "markerCount": 52,
   "surface": [
@@ -91,7 +91,7 @@
     },
     {
       "file": "dsh-client-ui-settings-models/lib/client.js",
-      "sha256": "8c5f07e58e1f07d6",
+      "sha256": "9a294e148bc1ac08",
       "markers": [
         "settings-conflict retry",
         "settings-models namespace heal"
@@ -99,7 +99,7 @@
     },
     {
       "file": "dsh-client-ui-settings-plugins/lib/client.js",
-      "sha256": "b3fd203d02869407",
+      "sha256": "09dee050369a3abc",
       "markers": [
         "hide inventory tab",
         "issue #20"
@@ -115,7 +115,7 @@
     },
     {
       "file": "dsh-client-ui-workspace/lib/client.js",
-      "sha256": "1d5a768ecf127c95",
+      "sha256": "642f987f5b8b2960",
       "markers": [
         "manual sort drag sync",
         "open project dir",
@@ -145,14 +145,15 @@
     },
     {
       "file": "dsh-llm-deepseek/lib/index.js",
-      "sha256": "d5cb54aef423fc1d",
+      "sha256": "adb3bca0a013d495",
       "markers": [
-        "device-auth guidance"
+        "device-auth guidance",
+        "ds tool schema sanitize"
       ]
     },
     {
       "file": "dsh-llm-pi-ai/lib/index.js",
-      "sha256": "94241e864762bfa5",
+      "sha256": "c233ea9f6ed0cacb",
       "markers": [
         "hand-declared reasoning defaults"
       ]

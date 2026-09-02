@@ -59,8 +59,9 @@ const { patchPiAiCredits } = require('../patch-pi-ai-credits');
 // 供应商模型条目无 reasoningEfforts 字典时 pi-ai 回落 reasoning:false，控件
 // 永不出现；手声明条目回落标准 OpenAI 档位字典，开箱即用且未选档位不发字段）。
 const { patchPiAiReasoningDefaults } = require('../patch-pi-ai-reasoning-defaults');
-// pi-ai 上下文超限友好文案补丁（第三方 OpenAI 兼容端点裸 400/413 无响应体
-// → 上下文超限提示，避免「400 status code (no body)」死谜语）。
+// pi-ai 裸 400/413 no body 友好文案补丁（第三方 OpenAI 兼容端点该形态是
+// 模糊信号：超窗或供应商网关拒绝/故障两成因并列提示，避免「400 status code
+// (no body)」死谜语，也不再误报成超限误导用户）。
 const { patchPiAiOverflowMessage } = require('../patch-pi-ai-overflow-message');
 // dsh-token-meter messageTokens 下限夹取补丁（内核 accounting 边界：replace
 // 负 delta 使 messageTokens 溢出为负 → tokenCount nonnegative 校验失败；只用于

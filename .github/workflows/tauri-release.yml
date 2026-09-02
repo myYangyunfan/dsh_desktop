@@ -181,6 +181,10 @@ jobs:
           mkdir -p "$DEST/vendor"
           cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
           cp -r dsh-desktop/vendor/npm "$DEST/vendor/npm" 2>/dev/null || true
+          # vendored 内核 tarball（随仓库提交）：0.5.7 起 boot 链 compat-pin 步骤
+          # fail-closed 校验 vendor/dsh-kernel 与 kernel-pin 一致，缺目录即拒绝启动
+          # （0.5.7 本地打包踩坑复盘：五平台 stage 清单均已补齐，勿再删）。
+          cp -r dsh-desktop/vendor/dsh-kernel "$DEST/vendor/dsh-kernel"
           rm -rf "$DEST/node_modules"
           cp -r dsh-desktop/node_modules "$DEST/node_modules"
           rm -rf "$DEST/node_modules/electron" "$DEST/node_modules/electron-builder" "$DEST/node_modules/electron-winstaller" "$DEST/node_modules/@electron" "$DEST/node_modules/@img/sharp-darwin-arm64" "$DEST/node_modules/@img/sharp-libvips-darwin-arm64" "$DEST/node_modules/@img/sharp-wasm32" "$DEST/node_modules/@koromix/koffi-darwin-arm64"
@@ -455,6 +459,10 @@ jobs:
           mkdir -p "$DEST/vendor"
           cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
           cp -r dsh-desktop/vendor/npm "$DEST/vendor/npm" 2>/dev/null || true
+          # vendored 内核 tarball（随仓库提交）：0.5.7 起 boot 链 compat-pin 步骤
+          # fail-closed 校验 vendor/dsh-kernel 与 kernel-pin 一致，缺目录即拒绝启动
+          # （0.5.7 本地打包踩坑复盘：五平台 stage 清单均已补齐，勿再删）。
+          cp -r dsh-desktop/vendor/dsh-kernel "$DEST/vendor/dsh-kernel"
           rm -rf "$DEST/node_modules"
           cp -r dsh-desktop/node_modules "$DEST/node_modules"
           rm -rf "$DEST/node_modules/electron" "$DEST/node_modules/electron-builder" "$DEST/node_modules/electron-winstaller" "$DEST/node_modules/@electron" "$DEST/node_modules/@img/sharp-darwin-arm64" "$DEST/node_modules/@img/sharp-libvips-darwin-arm64" "$DEST/node_modules/@img/sharp-wasm32" "$DEST/node_modules/@koromix/koffi-darwin-arm64"
@@ -654,6 +662,10 @@ jobs:
           mkdir -p "$DEST/vendor"
           cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
           cp -r dsh-desktop/vendor/npm "$DEST/vendor/npm" 2>/dev/null || true
+          # vendored 内核 tarball（随仓库提交）：0.5.7 起 boot 链 compat-pin 步骤
+          # fail-closed 校验 vendor/dsh-kernel 与 kernel-pin 一致，缺目录即拒绝启动
+          # （0.5.7 本地打包踩坑复盘：五平台 stage 清单均已补齐，勿再删）。
+          cp -r dsh-desktop/vendor/dsh-kernel "$DEST/vendor/dsh-kernel"
           rm -rf "$DEST/node_modules"
           cp -r dsh-desktop/node_modules "$DEST/node_modules"
           rm -rf "$DEST/node_modules/electron" "$DEST/node_modules/electron-builder" "$DEST/node_modules/electron-winstaller" "$DEST/node_modules/@electron" "$DEST/node_modules/@img/sharp-darwin-arm64" "$DEST/node_modules/@img/sharp-libvips-darwin-arm64" "$DEST/node_modules/@img/sharp-wasm32" "$DEST/node_modules/@koromix/koffi-darwin-arm64"
@@ -870,6 +882,10 @@ jobs:
           mkdir -p "$DEST/vendor"
           cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
           cp -r dsh-desktop/vendor/npm "$DEST/vendor/npm" 2>/dev/null || true
+          # vendored 内核 tarball（随仓库提交）：0.5.7 起 boot 链 compat-pin 步骤
+          # fail-closed 校验 vendor/dsh-kernel 与 kernel-pin 一致，缺目录即拒绝启动
+          # （0.5.7 本地打包踩坑复盘：五平台 stage 清单均已补齐，勿再删）。
+          cp -r dsh-desktop/vendor/dsh-kernel "$DEST/vendor/dsh-kernel"
           rm -rf "$DEST/node_modules"
           cp -r dsh-desktop/node_modules "$DEST/node_modules"
           rm -rf "$DEST/node_modules/electron" "$DEST/node_modules/electron-builder" "$DEST/node_modules/electron-winstaller" "$DEST/node_modules/@electron"
@@ -1046,6 +1062,10 @@ jobs:
           mkdir -p "$DEST/vendor"
           cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
           cp -r dsh-desktop/vendor/npm "$DEST/vendor/npm" 2>/dev/null || true
+          # vendored 内核 tarball（随仓库提交）：0.5.7 起 boot 链 compat-pin 步骤
+          # fail-closed 校验 vendor/dsh-kernel 与 kernel-pin 一致，缺目录即拒绝启动
+          # （0.5.7 本地打包踩坑复盘：五平台 stage 清单均已补齐，勿再删）。
+          cp -r dsh-desktop/vendor/dsh-kernel "$DEST/vendor/dsh-kernel"
           rm -rf "$DEST/node_modules"
           cp -r dsh-desktop/node_modules "$DEST/node_modules"
           rm -rf "$DEST/node_modules/electron" "$DEST/node_modules/electron-builder" "$DEST/node_modules/electron-winstaller" "$DEST/node_modules/@electron"

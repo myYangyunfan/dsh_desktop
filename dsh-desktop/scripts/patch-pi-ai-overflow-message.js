@@ -1,6 +1,6 @@
 'use strict';
 
-// dsh-llm-pi-ai 上下文超限友好文案补丁（幂等）。
+// dsh-llm-pi-ai 裸 400/413 no body 友好文案补丁（幂等）。
 //
 // 问题：第三方自定义 OpenAI 兼容端点（openai-completions 协议）在输入超过
 // 上下文窗口时，常见形态是「HTTP 400 且响应体为空」。OpenAI SDK 把这种
@@ -13,7 +13,9 @@
 // 超限，也不知道该怎么办。
 //
 // 修复：在 mapStopReason 的 overflow 分支里，把「裸 400/413 无响应体」这条
-// opaque 文案映射成可操作提示（上下文超限，精简/开新会话）。其余可读的超限
+// opaque 文案映射成两成因并列的可操作提示（① 上下文超限→精简/开新会话；
+// ② 供应商网关拒绝/故障→重试/换模型——0.6.0 实测 tokenrhythm 故障窗口内
+// 连 530B 标题请求都 400 空体，说死成超限会误导用户删会话）。其余可读超限
 // 文案（如 Anthropic "prompt is too long: X tokens > Y"）保持原样不丢信息。
 // 锚点失配（上游重构 mapStopReason）自动退役。
 //
@@ -41,12 +43,14 @@ const FN_ANCHOR = 'function mapStopReason(message, contextWindow) {';
 // 注入的 helper 函数（声明于 mapStopReason 之前，function 声明提升保证可用）。
 // 与 pi-ai OVERFLOW_PATTERNS 的 Cerebras 条目同形：^4(00|13) ... (no body)。
 const HELPER_BLOCK = [
-  '\t/** ' + PATCH_MARKER + ' — OpenAI 兼容端点裸 400/413 无响应体（Cerebras 风格）',
-  '\t *  是上下文超限的典型形态，映射成可操作提示，避免用户看到',
-  '\t *  "400 status code (no body)" 死谜语。 */',
+  '\t/** ' + PATCH_MARKER + ' — OpenAI 兼容端点裸 400/413 无响应体是模糊信号：',
+  '\t *  既可能是上下文超限（Cerebras 风格），也可能是供应商网关拒绝/故障',
+  '\t *  （实测 tokenrhythm 故障窗口内连 530B 标题请求都 400 空体）。映射成',
+  '\t *  两成因并列的可操作提示，避免看到 "400 status code (no body)" 死谜语，',
+  '\t *  也避免把供应商故障误报成超限误导用户删会话。 */',
   '\tfunction friendlyPiAiOverflowMessage(errorMessage, model) {',
   '\t\tif (typeof errorMessage === "string" && /^4(?:00|13)\\s*(?:status code)?\\s*\\(no body\\)/i.test(errorMessage)) {',
-  '\t\t\treturn "上下文超限：模型端点返回 HTTP 400/413 无响应体（通常是输入超过该模型的上下文窗口）。请精简对话、压缩附件或开启新会话后重试。";',
+  '\t\t\treturn "模型端点返回 HTTP 400/413 无响应体（模糊错误，两种常见成因）：① 上下文超限——精简对话、压缩附件或开启新会话；② 供应商网关拒绝或故障——稍后重试或换模型/供应商。4xx 明细见数据目录 llm-4xx-dump.log。";',
   '\t\t}',
   '\t\treturn errorMessage ?? `pi-ai detected context overflow for model "${model}"`;',
   '\t}',

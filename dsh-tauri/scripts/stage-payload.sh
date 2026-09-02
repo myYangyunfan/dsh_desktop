@@ -99,6 +99,12 @@ fi
 cp -f "$SRC/vendor/node/$NODE_BIN" "$DST/vendor/node/$NODE_BIN"
 mirror_dir "$SRC/vendor/npm" "$DST/vendor/npm"
 
+# ---- vendor/dsh-kernel：内核离线 tarball（compat-pin 运行期校验器据此核对内核
+#      版本，缺版本混装防线）。此目录必须与源全量同步——历史遗漏该步导致 payload
+#      残留上一版内核 tarball，内核升级后 validate-pin 以「版本混装」FAIL（boot
+#      期同名校验器亦会 fail-closed 拒启）。全量 /MIR 镜像以清除陈旧版本。----
+mirror_dir "$SRC/vendor/dsh-kernel" "$DST/vendor/dsh-kernel"
+
 # ---- node_modules：生产依赖全量（排除面与 CI「Stage payload (CI simplified)」
 #      逐项对齐——PD1 对账：本地只排 devDeps 三件，比 CI 少排了 @electron 与
 #      darwin/wasm 原生模块，win 包混入 ~28MB 死重。robocopy /XD 按目录名

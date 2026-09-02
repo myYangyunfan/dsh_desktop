@@ -1,0 +1,16 @@
+{
+  "id": "dsh-cardian",
+  "version": "0.13.0",
+  "main": "./lib/index.js",
+  "description": "cardian —— DeepSeek Harness 知识中心插件：RepoWiki / 知识卡片 / 记忆，全部落地到本地 Obsidian 仓库",
+  "engines": {
+    "dsh": ">=0.0.1"
+  },
+  "contributes": {
+    "tools": [],
+    "skills": []
+  },
+  "client": {
+    "main": "./lib/client.js"
+  }
+}

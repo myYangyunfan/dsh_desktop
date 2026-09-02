@@ -161,7 +161,10 @@ const BASELINE = {
     'skill-dirs-compat': 'changed',
     'pi-ai-4xx-dump': 'target-absent',
     'pi-ai-tool-schema-sanitize': 'target-absent',
-    'ds-tool-schema-sanitize': 'target-absent',
+    // cardian 双前缀修复后，ds-tool-schema-sanitize 的 pkgRel 收口到单前缀，
+    // rc.2 pristine 树的 @deepseek-ai/dsh-llm-deepseek/lib/index.js 现可命中→
+    // 补丁真正应用（旧基线 target-absent 是双前缀 bug 导致的 0 命中假象）。
+    'ds-tool-schema-sanitize': 'changed',
   },
   'rc.1': {
     'slot-legacy-key': 'target-absent',

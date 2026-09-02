@@ -293,6 +293,13 @@
   //    每个装饰子元素都带属性，右侧按钮天然阻断。
   //  - 浮窗（__DSH_FLOAT__，自带浮窗条）/宠物窗（__DSH_PET__）/壳页
   //    （loading|recovery|poc.html 自带 #bar/#titlebar）跳过，防重复控制条。
+  //  - 平台门（与 windows.rs 主窗 decorations 平台门配套，改一侧必须同步）：
+  //    仅 Windows 主窗自绘（decorations:false）注入全宽控制条；mac/linux 用
+  //    原生标题栏（mac 用户只认红绿灯/全屏钮，实测「找不到关闭和全屏按钮」；
+  //    linux 防 WebKitGTK 白屏）→ 不注入条（否则双份标题栏 + body 下推
+  //    破坏布局），降级为仅注入右上 ⋯ 菜单悬浮钮（injectMenuBall）：菜单里
+  //    的更新检查/通知开关/退出等功能不丢。UA 判定：Windows UA 不含
+  //    Macintosh/Linux 两词，mac/linux UA 均含其一。
   //  - 初始化脚本先于页面脚本运行，DOM 未建：MutationObserver 等 body 出现
   //    再注入；内核 SPA/插件可能移除 body 直接子元素 → 观察 body childList，
   //    被移除就重注（幂等：先查 #dsh-tauri-chrome）。
@@ -302,6 +309,11 @@
   var CHROME_ID = 'dsh-tauri-chrome';
   var CHROME_H = 36;
   var MENU_ID = 'dsh-tauri-menu'; // ⋯ 下拉菜单面板（挂在控制条内，fixed 溢出条本体）
+  // 原生标题栏平台（mac/linux）：主窗 decorations 为原生（见 windows.rs 平台
+  // 门）→ 控制条降级为 ⋯ 菜单悬浮钮。UA 判定须在 initialization_script 里
+  // 可用（navigator.userAgent 恒可用，无时序问题）。
+  var NATIVE_TITLE_BAR = /(Macintosh|Linux)/.test(navigator.userAgent || '');
+  var BALL_ID = 'dsh-tauri-menu-ball'; // ⋯ 菜单悬浮钮（原生标题栏平台专用）
   // 内核 favicon.svg（dsh-web-frontend/dist）的鲸鱼单 path。原文件 light=
   // fill #000、@media(prefers-color-scheme:dark) 覆盖 #fff；这里去掉内联
   // fill，由 CSS fill:currentColor 跟随标题色，内核运行时切主题即时反色。
@@ -422,12 +434,16 @@
     } catch (e) { return true; }
   }
   // ⋯ 按钮红点（发现新版本未处理时；自愈重注后按 updateDotOn 重打）。
+  // 两种形态兼容：全宽条（Windows）查条内的 dch-menu-btn；悬浮钮
+  // （mac/linux）钮本体即按钮。幂等：两种形态互斥（同一窗口只存在其一），
+  // 找到即打/摘，两处都找不到静默。
   var updateDotOn = false;
   function markUpdateDot(on) {
     updateDotOn = !!on;
     try {
       var bar = document.getElementById(CHROME_ID);
       var btn = bar && bar.querySelector('button.dch-menu-btn');
+      if (!btn) btn = document.getElementById(BALL_ID);
       if (btn) { if (updateDotOn) btn.classList.add('dch-dot'); else btn.classList.remove('dch-dot'); }
     } catch (e) {}
   }
@@ -756,7 +772,9 @@
     try {
       document.addEventListener('click', function (e) {
         if (!menuOpen) return;
-        var bar = document.getElementById(CHROME_ID);
+        // 点击宿主（条或悬浮钮）内不关菜单（否则悬浮钮形态下点钮即关，
+        // 菜单永远打不开）；点其余任何地方关闭。
+        var bar = document.getElementById(CHROME_ID) || document.getElementById(BALL_ID);
         if (!bar || !bar.contains(e.target)) closeMenu();
       });
       document.addEventListener('keydown', function (e) {
@@ -764,13 +782,80 @@
       });
     } catch (e2) { /* 兜底挂不上时菜单仍可用（⋯ 再点切换） */ }
   }
+  // ---- ⋯ 菜单悬浮钮（原生标题栏平台：mac/linux，见 NATIVE_TITLE_BAR）----
+  // 主窗用原生标题栏（mac 红绿灯 / linux 防白屏）时不注入全宽控制条（否则
+  // 双份标题栏 + body 下推 36px 破坏布局），降级为右上角小悬浮钮：只含 ⋯
+  // 一个钮 + 菜单面板，保住菜单功能面（更新检查/通知开关/图标/退出等）。
+  // 主题跟随复用 themeBar 机制（themeBar 指向钮，浅色档定义在钮上，菜单
+  // 面板是钮子元素继承 --dch-* 兑底变量）。自愈重注与条同策略（injectChromeBar
+  // 统一入口 + watch observer，钮的幂等查 BALL_ID）。
+  function injectMenuBall() {
+    try {
+      var head = document.head || document.documentElement;
+      // 菜单面板样式与全宽条形态共用同一份（style data-for=CHROME_ID 幂等；
+      // 条专属选择器都挂在 #CHROME_ID 下，对钮形态不命中，冗余无害）。
+      var css = document.querySelector('style[data-for="' + CHROME_ID + '"]');
+      if (!css) {
+        css = document.createElement('style');
+        css.setAttribute('data-for', CHROME_ID);
+        css.textContent =
+          '#' + BALL_ID + '{position:fixed;top:10px;right:10px;z-index:2147483000;width:32px;height:32px;' +
+          'display:grid;place-items:center;border:1px solid color-mix(in srgb,var(--dsw-alias-border-l1,rgba(127,127,127,.25)) 60%,transparent);' +
+          'border-radius:9px;padding:0;outline:none;cursor:pointer;user-select:none;box-sizing:border-box;' +
+          '--dch-bg:#0b1220;--dch-fg:#e6ecff;--dch-fg2:#b8c5ea;--dch-fg3:#93a5d8;--dch-line:rgba(255,255,255,.09);--dch-hover:rgba(255,255,255,.09);' +
+          'color:var(--dsw-alias-label-secondary,var(--dch-fg2));' +
+          'background:color-mix(in srgb,var(--dsw-alias-bg-base,var(--dch-bg)) 62%,transparent);' +
+          'backdrop-filter:blur(12px) saturate(1.4);-webkit-backdrop-filter:blur(12px) saturate(1.4);' +
+          'font-family:var(--dsw-font-family,"Segoe UI",system-ui,sans-serif);' +
+          'transition:background-color .25s ease,color .25s ease}' +
+          // 浅色兑底档（与全宽条同款内核 light 值）：面板是钮子元素，继承换档。
+          '#' + BALL_ID + '[data-dsh-theme="light"]{--dch-bg:#ffffff;--dch-fg:#0f1115;--dch-fg2:#61666b;--dch-fg3:#81858c;' +
+          '--dch-line:rgba(0,0,0,.10);--dch-hover:rgba(0,0,0,.06)}' +
+          '#' + BALL_ID + ':hover{background:var(--dsw-alias-interactive-bg-hover,var(--dch-hover));color:var(--dsw-alias-label-primary,var(--dch-fg))}' +
+          '#' + BALL_ID + ' svg{width:14px;height:14px;display:block;fill:currentColor;stroke:none}' +
+          // 红点：与条形态 dch-dot 同款（markUpdateDot 直接打在钮上）。
+          '#' + BALL_ID + '.dch-dot::after{content:"";position:absolute;top:2px;right:2px;width:7px;height:7px;' +
+          'border-radius:50%;background:#ff5f57;box-shadow:0 0 0 2px color-mix(in srgb,var(--dsw-alias-bg-base,var(--dch-bg,#0b1220)) 88%,transparent)}';
+        head.appendChild(css);
+      }
+      var ball = document.createElement('button');
+      ball.id = BALL_ID;
+      ball.type = 'button';
+      ball.title = '菜单';
+      ball.setAttribute('aria-label', '菜单');
+      var ic = svgEl('svg', { viewBox: '0 0 12 12', 'aria-hidden': 'true' });
+      var spec = GLYPHS.menu;
+      for (var i = 0; i < spec.length; i++) ic.appendChild(svgEl(spec[i].t, spec[i].a));
+      ball.appendChild(ic);
+      if (updateDotOn) ball.classList.add('dch-dot');
+      ball.onclick = function () { try { if (menuOpen) closeMenu(); else openMenu(); } catch (e2) {} };
+      // ⋯ 菜单面板：钮的子元素（fixed 溢出钮本体渲染，与条形态同位）。
+      var mDiv = document.createElement('div');
+      mDiv.id = MENU_ID;
+      mDiv.className = 'dch-menu';
+      mDiv.hidden = true;
+      ball.appendChild(mDiv);
+      menuPanel = mDiv;
+      menuOpen = false;
+      installMenuHooks();
+      document.body.appendChild(ball);
+      // 主题档位：与条形态同机制（watchTheme 幂等）。
+      themeBar = ball;
+      applyTheme();
+      watchTheme();
+    } catch (e) { /* 注入失败不影响页面主流程 */ }
+  }
   function injectChromeBar() {
     try {
-      if (document.getElementById(CHROME_ID)) return; // 幂等（重复注入/重注防御）
+      // 幂等（两种形态互斥统一防重；重复注入/重注防御）。
+      if (document.getElementById(CHROME_ID) || document.getElementById(BALL_ID)) return;
       if (window.__DSH_FLOAT__ || window.__DSH_PET__) return; // 专属窗形态，各有各的条
       if (/(^|\/)(loading|recovery|poc)\.html$/.test(location.pathname)) return; // 壳页自带标题栏
       var shellBar = document.getElementById('bar');
       if ((shellBar && shellBar.hasAttribute('data-tauri-drag-region')) || document.getElementById('titlebar')) return;
+      // 平台门：原生标题栏平台（mac/linux）不注入全宽条，降级为 ⋯ 悬浮钮
+      // （与 windows.rs decorations 平台门配套，防双份标题栏 + body 下推）。
+      if (NATIVE_TITLE_BAR) { injectMenuBall(); return; }
 
       var head = document.head || document.documentElement;
       // 样式幂等：自愈重注只补条本体，<head> 里的样式不动（SPA 反复摘条
@@ -1041,10 +1126,11 @@
   onBodyReady(function () {
     injectChromeBar();
     try {
-      // 内核 SPA/插件重挂载防御：控制条是 body 直接子元素，childList（无需
-      // subtree）即可精确感知「被移除」→ 重注（injectChromeBar 自身幂等）。
+      // 内核 SPA/插件重挂载防御：控制条/悬浮钮是 body 直接子元素，childList
+      //（无需 subtree）即可精确感知「被移除」→ 重注（injectChromeBar 自身
+      // 幂等，两种形态互斥统一防重）。
       var watch = new MutationObserver(function () {
-        if (!document.getElementById(CHROME_ID)) injectChromeBar();
+        if (!document.getElementById(CHROME_ID) && !document.getElementById(BALL_ID)) injectChromeBar();
       });
       watch.observe(document.body, { childList: true });
     } catch (e) { /* 同上：防御性兜底 */ }

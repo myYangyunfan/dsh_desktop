@@ -1,8 +1,8 @@
 {
   "compatLayerVersion": "0.6.0-skeleton.1",
   "kernel": {
-    "tag": "dsh-v0.1.2-alpha.4",
-    "packageVersion": "0.1.2-alpha.4",
+    "tag": "dsh-v0.1.2-alpha.5",
+    "packageVersion": "0.1.2-alpha.5",
     "acquisition": "offline-tarball",
     "vendorDir": "vendor/dsh-kernel",
     "upstream": "https://github.com/deepseek-ai/deepseek-harness",

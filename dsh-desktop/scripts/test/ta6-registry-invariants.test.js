@@ -50,7 +50,8 @@ const INLINE_PKG_REL_SPEC_IDS = new Set([
   // workspace-search-rail-fix 已收口到 WORKSPACE_PKG_REL（K25），移出白名单。
   'credentials-initial-retry',
   // credentials-absent-guidance 的内联 pkgRel 与 EXPOSE_PKG_REL 同值，视为已覆盖。
-  'device-auth-guidance',
+  // device-auth-guidance 已收口到 DS_LLM_DEEPSEEK_PKG_REL（cardian 双前缀修复后
+  // 与 ds-tool-schema-sanitize 共用同一 resolver 常量），移出白名单。
   'plugin-inventory-tab-merge',
 ]);
 

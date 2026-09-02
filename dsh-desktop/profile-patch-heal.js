@@ -28,8 +28,10 @@ function removeBundlesFromProfile(profileDir, names) {
 }
 
 /**
- * 从 dsh-web.log 尾部识别 loader 失败条目 id。覆盖四种形态：
- *   1. failed to apply loader entry <hash> (@scope/pkg): ...（旧形态）
+ * 从 dsh-web.log 尾部识别 loader 失败条目 id。覆盖五种形态：
+ *   1. failed to apply|import loader entry <hash> (@scope/pkg): ...（apply=装配
+ *      期失败；import=模块导入期失败，如 0.5.5+ 内核移除 dsh-client-runtime
+ *      后旧版 @linxin666/dsh-desktop-launcher 报 missed the module table）
  *   2. duplicate loader entry id: X
  *   3. 括号中的包名 @scope/pkg 或非 scope 包名
  *   4. profile bundle "X" declares no dsh.bundle in its package.json
@@ -38,14 +40,17 @@ function removeBundlesFromProfile(profileDir, names) {
  */
 function parseFailedLoaderIds(text) {
   const ids = new Set();
-  const hashRe = /failed to apply loader entry\s+([A-Za-z0-9_.-]+)\s*\(/g;
+  // apply/import 两期失败都必须识别：safe-boot 自动禁用此前只认 apply，
+  // import 形态（内核 alpha.x 模块表严格化后高频出现）从未被禁用 →
+  // 用户每次启动都被同一坏插件弹错（5.4→5.5→5.6 连续复现）。
+  const hashRe = /failed to (?:apply|import) loader entry\s+([A-Za-z0-9_.-]+)\s*\(/g;
   let m;
   while ((m = hashRe.exec(text)) !== null) {
     ids.add(m[1]);
   }
   const dupRe = /duplicate loader entry id:\s*([A-Za-z0-9_.-]+)/g;
   while ((m = dupRe.exec(text)) !== null) ids.add(m[1]);
-  const pkgRe = /failed to apply loader entry[\s\S]{0,120}?\((@?[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)?)\)/g;
+  const pkgRe = /failed to (?:apply|import) loader entry[\s\S]{0,120}?\((@?[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)?)\)/g;
   while ((m = pkgRe.exec(text)) !== null) ids.add(m[1]);
   ids.delete('include'); // 旧日志形态里的无关 token
   const bundleRe = /profile bundle\s+"([^"]+)"\s+declares no dsh\.bundle/g;

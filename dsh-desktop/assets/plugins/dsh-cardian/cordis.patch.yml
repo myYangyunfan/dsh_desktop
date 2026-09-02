@@ -1,0 +1,10 @@
+# cardian bundle patch（DSH 启动时 insert 该插件行）
+# 说明：patch 按 id 整行替换，config 需给出完整配置（不做字段级 merge）。
+- insert:
+    - id: cardian
+      name: dsh-cardian
+      config:
+        # Obsidian 仓库路径：知识卡片 / 记忆 / RepoWiki 都写入此目录。
+        # 可改为绝对路径，例如 !!js path.join(process.env.HOME, 'obsidian-vault')
+        vaultPath: ./cardian-vault
+        autoInit: true

@@ -65,10 +65,15 @@ fn default_main_window_geometry(app: &tauri::AppHandle) -> (f64, f64, Option<(f6
     (w, h, Some((x, y)))
 }
 
-/// 主窗：decorations:false + 导航围栏 + 垫片。初始加载 loading 页。
+/// 主窗：decorations 平台门 + 导航围栏 + 垫片。初始加载 loading 页。
 ///
 /// Linux 例外：WebKitGTK 下 undecorated 窗口存在首帧不渲染/白屏的已知问题
-/// （tauri/wry），故 Linux 退回原生标题栏；Windows/macOS 维持自绘标题栏。
+/// （tauri/wry），故 Linux 退回原生标题栏。
+/// macOS 例外：自绘控制条是 Windows 专属视觉（右上 min/max/close），mac
+/// 用户只认左上红绿灯（含绿钮全屏）；实测报告「找不到关闭和全屏按钮」。
+/// mac 退回原生标题栏（交通灯），垫片在该平台降级为仅注入 ⋯ 菜单悬浮钮
+/// （菜单里的更新/退出/通知开关等功能不丢），不注入全宽控制条。
+/// 仅 Windows 维持自绘标题栏（decorations:false）。
 ///
 /// 高 DPI（2.8K）缩放：WebView2 已按系统 DPI 自动缩放 web 内容——wry 建窗时
 /// 不覆盖 `ICoreWebView2Controller3::RasterizationScale`（默认 = 显示器 DPI ×
@@ -97,9 +102,11 @@ pub fn create_main_window(
     )
     .title("DSH Desktop")
     .min_inner_size(980.0, 600.0)
-    // Linux/WebKitGTK：undecorated 窗口首帧不渲染/白屏（tauri/wry 已知问题），
-    // 退回原生标题栏；Windows/macOS 维持自绘标题栏（decorations:false）。
-    .decorations(cfg!(target_os = "linux"))
+    // 平台门：Linux（WebKitGTK undecorated 白屏）与 macOS（用户只认原生
+    // 红绿灯，自绘控制条是 Windows 专属视觉）退回原生标题栏；仅 Windows
+    // 自绘（decorations:false）。垫片在原生标题栏平台同步降级（见
+    // bridge-shim.js 平台门），防双份控制条。
+    .decorations(cfg!(any(target_os = "linux", target_os = "macos")))
     // 显式声明（用户实测「不能调整窗口大小」）：undecorated 窗口默认应可
     // 拖边缩放，显式置 true 防构建配置漂移；与 Electron frame:false +
     // resizable:true 行为对齐。
@@ -1047,9 +1054,10 @@ mod tests {
         assert!(seg.contains("open_pet_window"), "判定为真必须打开宠物窗: {seg}");
     }
 
-    /// Linux/WebKitGTK 白屏兜底：主窗 decorations 必须平台门控——Linux 退回
-    /// 原生标题栏（undecorated 首帧不渲染是 tauri/wry 已知问题），
-    /// Windows/macOS 维持自绘标题栏（decorations:false）。
+    /// 原生标题栏平台门：主窗 decorations 必须平台门控——Linux 退回原生
+    /// 标题栏（undecorated 首帧不渲染是 tauri/wry 已知问题）；macOS 同样退
+    /// 回原生标题栏（用户只认红绿灯/全屏钮，自绘控制条是 Windows 专属
+    /// 视觉，实测「找不到关闭和全屏按钮」）。仅 Windows 维持自绘。
     #[test]
     fn main_window_decorations_platform_gated_shape() {
         let src = include_str!("windows.rs");
@@ -1059,8 +1067,8 @@ mod tests {
             .and_then(|s| s.split("pub fn hide_main_to_tray").next())
             .expect("create_main_window 函数体");
         assert!(
-            seg.contains(".decorations(cfg!(target_os = \"linux\"))"),
-            "主窗 decorations 必须平台门控（Linux 原生标题栏防白屏，Win/mac 自绘）: {seg}"
+            seg.contains(".decorations(cfg!(any(target_os = \"linux\", target_os = \"macos\")))"),
+            "主窗 decorations 必须平台门控（Linux 防白屏 + mac 原生红绿灯，仅 Win 自绘）: {seg}"
         );
         assert!(
             !seg.contains(".decorations(false)"),

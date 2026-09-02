@@ -598,7 +598,7 @@ const PATCH_SPECS = [
     kind: 'file',
     layout: 'guard',
     wslLayout: 'guard',
-    pkgRel: path.join('dsh-llm-deepseek', 'lib', 'index.js'),
+    pkgRel: DS_LLM_DEEPSEEK_PKG_REL,
     transform: transformDeviceAuthGuidance,
     marker: DEVICE_AUTH_GUIDANCE_MARKER,
     requires: [],
@@ -805,13 +805,14 @@ const PATCH_SPECS = [
     failLog: (root, err) => 'pi-ai 余额判定补丁失败(' + root + '): ' + err.message,
   },
   // -------------------------------------------------------------------------
-  // pi-ai 上下文超限友好文案补丁（第三方模型接入）：OpenAI 兼容端点超窗常见
-  // 「HTTP 400 无响应体」，OpenAI SDK 格式化为 "400 status code (no body)"。
-  // mapStopReason 已把它分类为 CONTEXT_WINDOW_EXCEEDED（code 正确），但
-  // failure.message 仍是原样 errorMessage，客户端 displayFailureMessage 只对
-  // AUTH 改写文案 → 用户看到死谜语。补丁在 overflow 分支把裸 400/413 no body
-  // 映射为可操作提示（精简/开新会话），其余可读超限文案不丢信息。锚点失配
-  // 自动退役。见 scripts/patch-pi-ai-overflow-message.js。
+  // pi-ai 裸 400/413 no body 友好文案补丁（第三方模型接入）：OpenAI 兼容端点
+  // 返回「HTTP 400 无响应体」时，OpenAI SDK 格式化为 "400 status code
+  // (no body)"。该形态是模糊信号：既可能是上下文超窗，也可能是供应商网关
+  // 拒绝/故障（0.6.0 实测 tokenrhythm 故障窗口内连 530B 标题请求都 400 空体）。
+  // 补丁在 overflow 分支把裸 400/413 no body 映射为两成因并列的可操作提示
+  // （超限→精简/开新会话；网关→重试/换模型），不再说死成超限误导用户删会话。
+  // 其余可读超限文案不丢信息。锚点失配自动退役。见
+  // scripts/patch-pi-ai-overflow-message.js。
   // -------------------------------------------------------------------------
   {
     id: 'pi-ai-overflow-message',

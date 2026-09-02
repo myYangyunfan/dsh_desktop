@@ -53,7 +53,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const TARBALLS = join(ROOT, 'vendor', 'dsh-kernel');
 const NODE_MODULES = join(ROOT, 'node_modules');
 const DSH_PACKAGE = join(NODE_MODULES, '@deepseek-ai', 'dsh', 'package.json');
-const KERNEL_VERSION = '0.1.2-alpha.4';
+const KERNEL_VERSION = '0.1.2-alpha.5';
 const SHELL = process.platform === 'win32';
 
 /** Read `package.json` out of a pnpm/npm pack tarball without extracting it. */

@@ -199,8 +199,8 @@ mod dialog_polyfill_tests {
 mod window_chrome_tests {
     use super::BRIDGE_SHIM_JS;
 
-    /// 内核页窗口控制条：decorations:false 主窗导航到内核 Web UI 后，
-    /// 页面不认识 data-tauri-drag-region（Electron 用 -webkit-app-region，
+    /// 内核页窗口控制条：decorations:false 主窗（Windows）导航到内核 Web UI
+    /// 后，页面不认识 data-tauri-drag-region（Electron 用 -webkit-app-region，
     /// WebView2 不支持）→ 不能拖、无窗口按钮（用户实测 bug）。垫片必须注入。
     #[test]
     fn window_chrome_injection_present() {
@@ -216,6 +216,38 @@ mod window_chrome_tests {
         // 内容下推契约：普通流走 padding，fixed 侧边栏（dsh-better-sidebar）读属性。
         assert!(BRIDGE_SHIM_JS.contains("data-dsh-title-bar-height"), "缺 body 下推的属性声明");
         assert!(BRIDGE_SHIM_JS.contains("padding-top:"), "缺 body padding 下推");
+    }
+
+    /// 原生标题栏平台门（与 windows.rs decorations 平台门配套，改一侧必须
+    /// 同步）：mac/linux 主窗为原生标题栏（mac 红绿灯/全屏钮，linux 防白屏），
+    /// 垫片不得注入全宽条（否则双份标题栏 + body 下推破坏布局），降级为 ⋯
+    /// 菜单悬浮钮（保住菜单功能面：更新/通知开关/退出等）。
+    #[test]
+    fn window_chrome_native_title_bar_platform_gate() {
+        // 平台判定（UA：Windows UA 不含 Macintosh/Linux 两词，mac/linux 均含其一）。
+        assert!(BRIDGE_SHIM_JS.contains("NATIVE_TITLE_BAR"), "缺平台门判定");
+        assert!(BRIDGE_SHIM_JS.contains("/(Macintosh|Linux)/.test(navigator.userAgent"), "UA 判定形态漂移");
+        // 悬浮钮降级形态存在且为统一入口内分支（浮窗/宠物窗/壳页跳过后先分流）。
+        assert!(BRIDGE_SHIM_JS.contains("injectMenuBall"), "缺悬浮钮注入函数");
+        assert!(BRIDGE_SHIM_JS.contains("dsh-tauri-menu-ball"), "缺悬浮钮 id");
+        assert!(
+            BRIDGE_SHIM_JS.contains("if (NATIVE_TITLE_BAR) { injectMenuBall(); return; }"),
+            "原生标题栏平台必须在注入条之前分流到悬浮钮"
+        );
+        // 幂等与自愈重注必须两形态统一防重（悬浮钮被 SPA 摘除后也要能重注）。
+        assert!(
+            BRIDGE_SHIM_JS.contains("!document.getElementById(BALL_ID)"),
+            "幂等/自愈检查必须兼容悬浮钮形态"
+        );
+        // 红点与点击外关闭必须兼容两种形态（否则悬浮钮形态红点丢失/菜单打不开）。
+        assert!(
+            BRIDGE_SHIM_JS.contains("btn = document.getElementById(BALL_ID)"),
+            "红点兼容悬浮钮形态"
+        );
+        assert!(
+            BRIDGE_SHIM_JS.contains("document.getElementById(CHROME_ID) || document.getElementById(BALL_ID)"),
+            "点击外关闭兼容悬浮钮形态（点钮不得关菜单）"
+        );
     }
 
     /// 控制条只注入内核页：浮窗/宠物窗/壳页各有标题栏，注入会重复遮挡。

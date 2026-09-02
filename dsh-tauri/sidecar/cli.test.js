@@ -58,14 +58,14 @@ test('环境自检：依赖齐备（否则全组跳过）', () => {
   assert.ok(true);
 });
 
-test('boot：沙箱 home 四步全过并建档', { skip: !HAVE_DEPS }, (t) => {
+test('boot：沙箱 home 六步全过并建档', { skip: !HAVE_DEPS }, (t) => {
   const sb = sandbox(t.name);
   t.after(() => fs.rmSync(sb.dir, { recursive: true, force: true }));
   const r = cli(['boot'], { env: sb.env, timeout: 180_000 });
   assert.strictEqual(r.code, 0, `stderr: ${r.stderr.slice(-500)}`);
   assert.strictEqual(r.json.ok, true, JSON.stringify(r.json));
-  // 固定顺序契约（data-flow.md §3）。
-  assert.deepStrictEqual(r.json.steps.map((s) => s.name), ['repair', 'sync', 'presets', 'patches', 'preflight']);
+  // 固定顺序契约（data-flow.md §3；0.5.7 起加入 compat-pin 内核一致性校验步）。
+  assert.deepStrictEqual(r.json.steps.map((s) => s.name), ['repair', 'sync', 'presets', 'patches', 'compat-pin', 'preflight']);
   // 沙箱建档：web profile + patch 清单落盘。
   assert.ok(fs.existsSync(path.join(sb.dir, 'profiles', 'web', 'cordis.patch.yml')), 'profile patch 应建档');
   assert.ok(fs.existsSync(path.join(sb.dir, 'profiles', 'web', 'package.json')), 'profile package 应建档');
@@ -315,13 +315,15 @@ test('picker-overlay：内容与 Electron 版逐行一致', { skip: !HAVE_DEPS }
 test('safe-overlay：解析失败日志 → 禁用 overlay（幂等合并）', { skip: !HAVE_DEPS }, (t) => {
   const sb = sandbox(t.name);
   t.after(() => fs.rmSync(sb.dir, { recursive: true, force: true }));
-  // 模拟 dsh-web.log 尾部（Electron parseFailedLoaderIds 的三种形态样本）。
+  // 模拟 dsh-web.log 尾部（Electron parseFailedLoaderIds 的多形态样本，
+  // 含 import 期失败：safe-boot 此前只认 apply，同坏插件反复弹）。
   const logs = path.join(sb.dir, 'ud', 'logs'); // sandbox 的 DSH_TAURI_USERDATA = sb.dir/ud
   fs.mkdirSync(logs, { recursive: true });
   fs.writeFileSync(path.join(logs, 'dsh-web.log'), [
     'boot: ok',
     'duplicate loader entry id: bad-plugin-x',
     'failed to apply loader entry broken_y (some stack)',
+    'failed to import loader entry 9c5ab60c (@linxin666/dsh-desktop-launcher): client-modules: require("@deepseek-ai/dsh-client-runtime/client") missed the module table',
     'profile bundle "ghost-bundle" declares no dsh.bundle',
     'dsh web: http://127.0.0.1:1',
   ].join('\n'));
@@ -329,6 +331,8 @@ test('safe-overlay：解析失败日志 → 禁用 overlay（幂等合并）', {
   assert.strictEqual(r.json.ok, true, JSON.stringify(r.json));
   assert.ok(r.json.ids.includes('bad-plugin-x'), `ids: ${JSON.stringify(r.json.ids)}`);
   assert.ok(r.json.ids.includes('ghost-bundle'), 'bundle 形态也应命中');
+  assert.ok(r.json.ids.includes('9c5ab60c'), 'import hash 形态也应命中');
+  assert.ok(r.json.ids.includes('@linxin666/dsh-desktop-launcher'), 'import 包名形态也应命中');
   const text = fs.readFileSync(r.json.path, 'utf8');
   assert.ok(text.includes('- id: bad-plugin-x\n  disabled: true'), 'overlay 禁用条目');
   // 幂等：再跑一次不重复。
@@ -432,7 +436,7 @@ function makeWslAgentLayout(uncHome) {
   return dshDir;
 }
 
-test('boot（WSL 半边）：五步全过，sync/presets 落 UNC home，本地 DSH_HOME 零写入', { skip: !HAVE_DEPS }, (t) => {
+test('boot（WSL 半边）：六步全过，sync/presets 落 UNC home，本地 DSH_HOME 零写入', { skip: !HAVE_DEPS }, (t) => {
   const sb = sandbox(t.name);
   t.after(() => fs.rmSync(sb.dir, { recursive: true, force: true }));
   const uncHome = path.join(sb.dir, 'wsl-home'); // 普通目录模拟 \\wsl$ 布局形态
@@ -442,8 +446,9 @@ test('boot（WSL 半边）：五步全过，sync/presets 落 UNC home，本地 D
   const r = cli(['boot'], { env, timeout: 180_000 });
   assert.strictEqual(r.code, 0, `stderr: ${r.stderr.slice(-800)}`);
   assert.strictEqual(r.json.ok, true, JSON.stringify(r.json).slice(0, 400));
-  // 步骤契约不变（supervisor 消费 ok/steps；WSL 是同一五步链）。
-  assert.deepStrictEqual(r.json.steps.map((s) => s.name), ['repair', 'sync', 'presets', 'patches', 'preflight']);
+  // 步骤契约不变（supervisor 消费 ok/steps；WSL 是同一六步链，0.5.7 起
+  // 含 compat-pin）。
+  assert.deepStrictEqual(r.json.steps.map((s) => s.name), ['repair', 'sync', 'presets', 'patches', 'compat-pin', 'preflight']);
   for (const s of r.json.steps) assert.strictEqual(s.ok, true, JSON.stringify(s));
   // 后端观测字段。
   assert.strictEqual(r.json.backend, 'wsl');
@@ -455,9 +460,10 @@ test('boot（WSL 半边）：五步全过，sync/presets 落 UNC home，本地 D
   // 语义不适用于该层）。
   assert.ok(fs.existsSync(path.join(uncHome, 'profiles', 'web', 'cordis.patch.yml')), 'UNC profile patch 应建档');
   assert.ok(fs.existsSync(path.join(uncHome, 'profiles', 'web', 'node_modules')), 'UNC profile node_modules 应建档');
-  // presets 半边：内置 Agent 预设同步进 UNC agent 包（Electron
-  // syncBuiltinAgentPresets 同式目标）。
-  assert.ok(fs.existsSync(path.join(dshDir, 'config', 'agent-presets', 'minimal-win', 'agent.cordis.yml')), '内置预设应同步进 WSL agent 包');
+  // presets 半边：内置 Agent 预设同步进 UNC agent 包的用户预设根
+  // （installBuiltinPresets(dshDir) → <dshDir>/.agent-presets/<id>/；
+  // 6e38c3b5 起预设根从 config/agent-presets 迁到 .agent-presets）。
+  assert.ok(fs.existsSync(path.join(dshDir, '.agent-presets', 'minimal-win', 'agent.cordis.yml')), '内置预设应同步进 WSL agent 包');
   // 本地 DSH_HOME（沙箱）零写入——WSL 模式一切落点换到 UNC home。
   assert.strictEqual(fs.existsSync(path.join(sb.dir, 'profiles')), false, '本地 home 不应被写入');
 });

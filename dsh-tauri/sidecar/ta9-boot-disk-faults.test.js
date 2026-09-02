@@ -188,14 +188,20 @@ test('五步同时写盘全坏 → 仍然 ok:true，每步各带 warning（客�
   }
 });
 
-test('对照：无故障时五步全绿零 warning', () => {
+test('对照：无故障时六步全绿零 warning', () => {
   const appDir = makeFakeAppDir();
   try {
     const { res, home } = runBoot(appDir, {});
     assert.strictEqual(res.status, 0, res.stderr);
     const out = lastJson(res);
     assert.strictEqual(out.ok, true);
-    assert.deepStrictEqual(out.steps.map((s) => s.name), STEPS, 'boot 链顺序契约');
+    // 真实 boot 链顺序契约（0.5.7 起含 compat-pin；STEPS 仅是故障注入矩阵
+    // 的 stub 故障点清单，compat-pin 是 spawnSync 校验器无写盘故障点不入矩阵）。
+    assert.deepStrictEqual(
+      out.steps.map((s) => s.name),
+      [...STEPS.slice(0, 4), 'compat-pin', STEPS[4]],
+      'boot 链顺序契约',
+    );
     for (const s of out.steps) {
       assert.strictEqual(s.ok, true);
       assert.strictEqual(s.warning, null);

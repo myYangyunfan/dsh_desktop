@@ -35,6 +35,9 @@ const entryFiles = [
   'scripts/lib/github-release-assets.js',
   'scripts/lib/js-syntax-scan.js',
   'scripts/lib/preset-guard.js',
+  // llm-pi-ai settings 自愈（boot repair 步接线，随包分发，必须过语法门）。
+  'scripts/lib/pi-ai-settings-heal.js',
+  'scripts/integration/index.js',
   'scripts/patch-web-search-baseurl.js',
   'scripts/patch-menu-viewport.js',
   'scripts/patch-open-project-dir.js',

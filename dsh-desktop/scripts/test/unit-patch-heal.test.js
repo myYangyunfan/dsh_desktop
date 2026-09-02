@@ -185,6 +185,19 @@ test('parseFailedLoaderIds: 三种日志形态', () => {
   assert.ok(!ids.includes('include'), 'include 条目排除');
 });
 
+test('parseFailedLoaderIds: import 形态（5.4→5.5+ 内核模块表严格化，missed the module table）', () => {
+  // 用户真实错误文案（@linxin666/dsh-desktop-launcher 旧版在 alpha.x 内核下）：
+  // safe-boot 此前只认 apply 形态，import 失败从未被自动禁用 → 5.5/5.6 反复弹。
+  const logText = [
+    'failed to import loader entry 9c5ab60c (@linxin666/dsh-desktop-launcher): client-modules: require("@deepseek-ai/dsh-client-runtime/client") missed the module table — not a platform seed word, not a materialized module, and no registered package factory (a build-time externals drift, or a dynamic dependency that did not arrive)',
+    'dsh web: http://127.0.0.1:1',
+  ].join('\n');
+  const ids = parseFailedLoaderIds(logText);
+  assert.ok(ids.includes('9c5ab60c'), 'import hash 形态识别');
+  assert.ok(ids.includes('@linxin666/dsh-desktop-launcher'), 'import 括号包名形态识别');
+  assert.ok(!ids.includes('@deepseek-ai/dsh-client-runtime/client'), '错误详情里的 require 目标不得误抓（非失败条目）');
+});
+
 test('mapPackagesToPatchIds: 包名映射回条目 id（含重复注册场景）', () => {
   const patch = [
     '- insert:',

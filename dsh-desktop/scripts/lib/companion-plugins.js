@@ -115,6 +115,13 @@ const COMPANION_PLUGINS = [
   // 折叠为前几行 + 「展开」遮罩，点击展开全文、再点「收起」收回；短消息零
   // 侵入、不碰代码块/图片/表格。纯客户端（DOM 定位 + CSS 折叠 + 事件委托）。
   { id: 'input-fold', name: 'dsh-input-fold' },
+  // 知识中心（myYangyunfan/dsh_cardian，MIT）：RepoWiki / 知识卡片 / 记忆
+  // 三区知识库，全部落地本地 Obsidian 仓库；宿主半边注册 cardian.* 工具族与
+  // Typert 远端网关（remote.cardianRemote.*，typert-protocol 走安装根解析，
+  // 同 dsh-hub 先例），客户端半边经 sidebar.footer.action + shell.overlay
+  // 提供「知识树」面板；RAG 知识概览预注入系统提示。
+  // 上游：https://github.com/myYangyunfan/dsh_cardian
+  { id: 'cardian', name: 'dsh-cardian' },
 ];
 
 /** 包名 → assets/plugins 下的目录名（去 scope 前缀）。 */

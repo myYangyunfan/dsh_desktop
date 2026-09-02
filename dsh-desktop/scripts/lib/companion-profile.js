@@ -50,7 +50,9 @@ const VENDOR_DEPS = [
 ];
 
 // 目录级同步的运行资产子目录（正常复制路径全量走这份清单）。
-const SYNC_SUBDIRS = ['lib', 'client', 'data', 'assets', 'src', 'dist', 'public', 'gui', 'node_modules'];
+// core：dsh-cardian 的框架无关知识中心库（宿主 main 已 bundle 进 lib/index.js，
+// core 随包保留源码供审阅与再构建，同步以保包内自洽）。
+const SYNC_SUBDIRS = ['lib', 'client', 'data', 'assets', 'src', 'core', 'dist', 'public', 'gui', 'node_modules'];
 
 // keep-newer 分支的「缺失资产补齐」清单：与 SYNC_SUBDIRS 的差异是不含
 // node_modules —— 给更新版注入安装包里的旧依赖树，会经由 require 解析顺序

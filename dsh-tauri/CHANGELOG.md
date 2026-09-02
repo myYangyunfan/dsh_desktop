@@ -1,5 +1,81 @@
 # Changelog — DSH Desktop（Tauri 版，主线架构 v0.5.0 起）
 
+# DSH Desktop v0.6.0 — 全平台
+
+> 本版本是 **0.5.7 之后的首个正式版本（GA）**：vendored 内核 alpha.1→alpha.5 全量
+> 更替（兼容层 M1/M2 收官）、dsh-cardian 知识中心插件内置 + 工具名净化补丁落地、
+> 第三方供应商模型消失根治、跨内核覆盖安装 boot 失败自愈、macOS 原生窗口按钮、
+> safe-boot 补 import 形态识别。详细根因链见
+> [docs/release-notes/v0.6.0.md](docs/release-notes/v0.6.0.md)。
+
+## ⚠️ 重点 1：兼容层 M1/M2 收官——vendored 内核 alpha.1→alpha.5 全量更替
+
+- kernel-pin 清单 + fail-closed 校验器（`scripts/compat/validate-pin.js`）：boot 链
+  新增 `compat-pin` 步，壳/内核版本不匹配直接 boot FAIL（替代静默带病启动）
+- patch-surface 快照机制：51 处运行时补丁的目标文件/锚点全量登记，内核升级时
+  增量复核锚点漂移（alpha.3 收口实测 6 处漂移全部重靶、零遗留）
+- vendored 内核 0.1.2-alpha.1 → 0.1.2-alpha.4 逐级激活：红区/黄区逐项重靶、
+  search-rail 原生化退役（补丁 51→50）、8 插件 settings 新契约迁移、CI pin/surface
+  双校验门禁
+- **alpha.4 → alpha.5 收口**：官方 tag `dsh-v0.1.2-alpha.5` 源码构建（清理 alpha.1
+  遗留 4 个孤儿包目录后成功），242 tarball 整体替换 vendor；kernel-pin/install-kernel/
+  generate-kernel-lock 的 KERNEL_VERSION + package.json 243 处全量 bump、lock 重算
+  integrity；patch-deps 重施 50 补丁写入 61 / 失配 0 / 降级 0 / 告警 0，patch-surface
+  重快照 verify 无漂移
+
+## ⚠️ 重点 2：第三方供应商模型消失根治（boot 链自愈）
+
+- llm-pi-ai 的 `apply()` 对 providers 做全量校验，一家供应商条目非法 → 整个插件
+  启动失败 → 全部第三方模型消失。新增 boot 链自愈步（`pi-ai-settings-heal.js`）：
+  非法供应商条目自动降级为禁用注记并写回合法配置，官方模型与其余第三方供应商
+  全部恢复
+
+## ⚠️ 重点 3：safe-boot 补 import 形态识别（5.4→5.6 反复弹错缺口）
+
+- `parseFailedLoaderIds` 此前只认 `failed to apply loader entry` 形态；内核 alpha.x
+  模块表严格化后的 `failed to import loader entry … missed the module table`（如
+  旧版 @linxin666/dsh-desktop-launcher 依赖已移除的 @dsh-client-runtime）从未触发
+  自动禁用 → 用户每次启动都被同一坏插件弹错。补齐 `(?:apply|import)` 两期形态，
+  import 失败同样进入 overlay 自动禁用闭环
+
+## ⚠️ 重点 4：跨内核「覆盖安装」boot 失败根治（vendor 陈旧内核 tarball 自愈）
+
+- **现象**：跨内核版本覆盖安装后 app 起不来（恢复页），`desktop.log` 铁证
+  `compat-pin FAIL: kernel-pin 与 vendored 内核不一致` → `sidecar-boot FAIL`。
+- **根因**：NSIS 覆盖安装只做「增/覆盖」不做「删」——旧 `vendor/dsh-kernel` 里的
+  上一版内核 tarball 不被清除，与新版叠加成版本混装；compat-pin 按文件名含
+  `packageVersion` 判定，任何非 pin 版本 tgz 即 fail-closed 拒启（发布包本身干净，
+  仅覆盖安装态触发，每次内核升版覆盖安装都会复发）。
+- **根治**：新增 `scripts/lib/vendor-kernel-heal.js`，在 boot 链 repair 步（先于
+  compat-pin）把非 pin 版本 tarball 移出到 `vendor/_dsh-stale-kernel-quarantine/`
+  sibling 隔离目录（非破坏、可回退、幂等、全容忍不阻断；无匹配版本时绝不剪），
+  覆盖安装后首 boot 即自愈无需重装；新增 5 项单测。连带补 `stage-payload.sh` 与
+  CI 五平台 stage 清单遗漏的 `vendor/dsh-kernel` 全量镜像。
+
+## 🧩 dsh-cardian 知识中心插件内置
+
+- RepoWiki / 知识卡片 / 记忆三合一，全部落地本地 Obsidian 仓库（cardian-vault），
+  兼容层适配内核（92/92 测试通过）
+- **工具名净化补丁首次真正落地（双前缀 bug）**：`DS_LLM_DEEPSEEK_PKG_REL` 曾误含
+  `@deepseek-ai` 段与 `mkAi()` 自带 scope 叠加成双前缀 → sanitize/device-auth 两块
+  补丁 0 命中；收口为不含 scope 后运行时 `dsh-llm-deepseek/lib/index.js` 实证含 2 个
+  dsh-desktop 标记，cardian `ds.*` 工具名含非法字符 `.` 触发 400 的顽疾根治
+
+## 🪟 macOS 原生窗口按钮（红绿灯 + 全屏绿钮）
+
+- 主窗 decorations 平台门扩为 `any(linux, macos)`：mac 用户拿回原生关闭/全屏按钮；
+  Windows 维持自绘控制条；mac/Linux 下 bridge-shim 降级为右上 ⋯ 菜单悬浮钮
+  （保住更新检查/通知开关/退出等功能面，防双份标题栏破坏布局）
+
+## 🎨 其它
+
+- 侧边栏编辑器三特性：括号配对高亮 + 缩进折叠 gutter + 查找替换面板；右侧面板
+  宽度上限为中央会话列保留 280px（根治拖宽盖满整页）
+- 壳层稳定性三修 + ACP 托管切为自检 + 配置导出（Zed 等外部编辑器接入）
+- dsh-openclaw-bridge 0.7.1：alpha.4 settings 新契约迁移
+- 内置 dsh-cardian 0.13.0；侧边栏存量测试漂移修复（boot 六步契约 ×3 + WSL
+  presets 路径）
+
 # DSH Desktop v0.5.7 — 全平台
 
 > 本版本是 **0.5.6 之后的修复 + 功能恢复版本**：删除/归档对话功能回归（含必炸根因
