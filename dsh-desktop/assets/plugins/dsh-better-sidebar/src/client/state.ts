@@ -92,7 +92,21 @@ export interface SidebarState {
 export const PANEL_MIN = 280
 export const PANEL_MAX = 640
 export const PANEL_DEFAULT = 400
+/** Minimum width the center conversation column keeps when the right panel is
+ * at its widest. Mirrors the vertical contract in {@link setBottomHeight}
+ * (which reserves PANEL_MIN tall for the center): without a horizontal floor
+ * the panel could be dragged to swallow the whole viewport — the reported
+ * "drag it right and it covers the page / a small screen is fully covered". */
+export const CENTER_MIN = PANEL_MIN
 export const TAB_MAX_WIDTH = 160
+
+/** Upper bound for the right panel width at a given viewport width: keep at
+ * least {@link CENTER_MIN} for the center conversation column. Falls back to
+ * PANEL_MAX when the viewport is unknown (SSR/tests). Always ≥ PANEL_MIN. */
+export function maxPanelWidthFor(viewportWidth: number): number {
+  if (!Number.isFinite(viewportWidth)) return PANEL_MAX
+  return Math.max(PANEL_MIN, viewportWidth - CENTER_MIN)
+}
 /** Bottom panel geometry contract (mirrors the width contract; the upper
  * bound is the viewport, enforced by {@link setBottomHeight}). */
 export const BOTTOM_MIN = 120
@@ -624,10 +638,11 @@ export function toggleBottomPanel(state: SidebarState): SidebarState {
   return { ...state, bottomOpen: !state.bottomOpen }
 }
 
-/** Set the panel width (clamped to the contract range; the upper bound is
- * the viewport so the fullscreen expansion can fill the window). */
+/** Set the panel width (clamped to the contract range; the upper bound
+ * reserves {@link CENTER_MIN} for the center conversation column so the panel
+ * can never be dragged to cover the whole window). */
 export function setWidth(state: SidebarState, width: number): SidebarState {
-  const max = typeof window !== 'undefined' ? Math.max(PANEL_MIN, window.innerWidth) : PANEL_MAX
+  const max = typeof window !== 'undefined' ? maxPanelWidthFor(window.innerWidth) : PANEL_MAX
   return { ...state, width: Math.min(max, Math.max(PANEL_MIN, Math.round(width))) }
 }
 
@@ -758,7 +773,7 @@ export interface SidebarSnapshot {
  * clamped to the panel floor (a tiny percent must stay usable) and to the
  * viewport (a large one must never cover the whole window). */
 export function defaultWidthFor(viewport: number, percent: number): number {
-  return Math.min(viewport, Math.max(PANEL_MIN, Math.round(viewport * percent / 100)))
+  return Math.min(maxPanelWidthFor(viewport), Math.max(PANEL_MIN, Math.round(viewport * percent / 100)))
 }
 
 function loadState(sessionId: string, prefs: SidebarPrefs): SidebarState {
@@ -851,7 +866,7 @@ export function sanitizeState(parsed: unknown): SidebarState | undefined {
     : treeHasId(splits, requestedActivePane) || treeHasId(bottomSplits, requestedActivePane)
       ? requestedActivePane
       : firstLeaf(splits).id
-  const maxWidth = typeof window !== 'undefined' ? window.innerWidth : Infinity
+  const maxWidth = typeof window !== 'undefined' ? maxPanelWidthFor(window.innerWidth) : Infinity
   return {
     panelOpen: record.panelOpen,
     width: Math.max(PANEL_MIN, Math.min(record.width, maxWidth)),

@@ -623,7 +623,7 @@ window.__ModuleLoader__.load({
 		/** Set the panel width (clamped to the contract range; the upper bound is
 		* the viewport so the fullscreen expansion can fill the window). */
 		function setWidth(state, width) {
-			const max = typeof window !== "undefined" ? Math.max(280, window.innerWidth) : 640;
+			const max = typeof window !== "undefined" ? Math.max(280, window.innerWidth - 280) : 640;
 			return {
 				...state,
 				width: Math.min(max, Math.max(280, Math.round(width)))
@@ -738,7 +738,7 @@ window.__ModuleLoader__.load({
 		* clamped to the panel floor (a tiny percent must stay usable) and to the
 		* viewport (a large one must never cover the whole window). */
 		function defaultWidthFor(viewport, percent) {
-			return Math.min(viewport, Math.max(280, Math.round(viewport * percent / 100)));
+			return Math.min(Math.max(280, viewport - 280), Math.max(280, Math.round(viewport * percent / 100)));
 		}
 		function loadState(sessionId, prefs) {
 			try {
@@ -788,7 +788,7 @@ window.__ModuleLoader__.load({
 			});
 			const requestedActivePane = typeof record.activePane === "string" ? reid.get(record.activePane) ?? record.activePane : null;
 			const activePane = requestedActivePane === null ? null : treeHasId(splits, requestedActivePane) || treeHasId(bottomSplits, requestedActivePane) ? requestedActivePane : firstLeaf(splits).id;
-			const maxWidth = typeof window !== "undefined" ? window.innerWidth : Infinity;
+			const maxWidth = typeof window !== "undefined" ? Math.max(280, window.innerWidth - 280) : Infinity;
 			return {
 				panelOpen: record.panelOpen,
 				width: Math.max(280, Math.min(record.width, maxWidth)),
@@ -11726,7 +11726,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 				draggingRef.current = anyDragging;
 				if (!anyDragging) measureCenter();
 			}, [anyDragging, measureCenter]);
-			const clampWidth = (width) => Math.min(Math.max(280, Math.round(width)), Math.max(280, window.innerWidth));
+			const clampWidth = (width) => Math.min(Math.max(280, Math.round(width)), Math.max(280, window.innerWidth - 280));
 			const clampHeight = (height) => Math.min(Math.max(120, Math.round(height)), Math.max(120, window.innerHeight - 280));
 			/** Single writer for the layout-push variables: the app shell gives up
 			*  the panel's width/height while open (0 while collapsed) through
@@ -11843,7 +11843,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 						width = clampWidth(widthDrag.current.startWidth + (widthDrag.current.startX - event.clientX));
 						height = state?.bottomOpen === true ? Math.min(state.bottomHeight, window.innerHeight) : 0;
 					} else if (draggingBottom) {
-						width = Math.min(state?.width ?? 0, window.innerWidth);
+						width = Math.min(state?.width ?? 0, Math.max(280, window.innerWidth - 280));
 						height = clampHeight(bottomDrag.current.startHeight + (bottomDrag.current.startY - event.clientY));
 					} else if (draggingCorner) {
 						width = clampWidth(cornerDrag.current.startWidth + (cornerDrag.current.startX - event.clientX));
@@ -11865,7 +11865,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 					dragCommitted.current = true;
 					stopDragScheduling();
 					const last = lastDragSize.current;
-					const adoptedWidth = !narrow && state?.panelOpen === true ? Math.min(last?.width ?? state?.width ?? 0, window.innerWidth) : 0;
+					const adoptedWidth = !narrow && state?.panelOpen === true ? Math.min(last?.width ?? state?.width ?? 0, Math.max(280, window.innerWidth - 280)) : 0;
 					const adoptedHeight = !narrow && state?.bottomOpen === true ? Math.min(last?.height ?? state?.bottomHeight ?? 0, window.innerHeight) : 0;
 					applyDrag(adoptedWidth, adoptedHeight);
 					draggingRef.current = false;
@@ -11875,7 +11875,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 				reset();
 			};
 			(0, react.useEffect)(() => {
-				const width = !narrow && snapshot.state?.panelOpen === true ? Math.min(snapshot.state.width, window.innerWidth) : 0;
+				const width = !narrow && snapshot.state?.panelOpen === true ? Math.min(snapshot.state.width, Math.max(280, window.innerWidth - 280)) : 0;
 				const height = !narrow && snapshot.state?.bottomOpen === true ? Math.min(snapshot.state.bottomHeight, window.innerHeight) : 0;
 				writeGeometry(width, height);
 			}, [
@@ -12111,7 +12111,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 						className: clsx(sidebar_module_css_default.panel, !state.panelOpen && sidebar_module_css_default.panelHidden),
 						"data-dsh-panel": true,
 						style: {
-							width: narrow ? "100vw" : Math.min(state.width, window.innerWidth),
+							width: narrow ? "100vw" : Math.min(state.width, Math.max(280, window.innerWidth - 280)),
 							bottom: narrow && keyboardInset > 0 ? `${keyboardInset}px` : void 0
 						},
 						"data-dragging": anyDragging || void 0,
@@ -12241,7 +12241,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 									if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
 									const { startY, startHeight } = bottomDrag.current;
 									const height = clampHeight(startHeight + (startY - event.clientY));
-									scheduleDrag(Math.min(state.width, window.innerWidth), height);
+									scheduleDrag(Math.min(state.width, Math.max(280, window.innerWidth - 280)), height);
 								},
 								onPointerUp: (event) => {
 									if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
@@ -12250,7 +12250,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 									event.currentTarget.releasePointerCapture(event.pointerId);
 									const { startY, startHeight } = bottomDrag.current;
 									const height = clampHeight(startHeight + (startY - event.clientY));
-									commitDrag(Math.min(state.width, window.innerWidth), height, (s) => setBottomHeight(s, height));
+									commitDrag(Math.min(state.width, Math.max(280, window.innerWidth - 280)), height, (s) => setBottomHeight(s, height));
 									setDraggingBottom(false);
 								},
 								onPointerCancel: (event) => {

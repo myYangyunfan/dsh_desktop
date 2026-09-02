@@ -35,7 +35,7 @@ import { IconCloseFill14, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Context, SidebarSessionList } from '../context-types.ts'
 import { appendToDraft } from './conversation-draft.ts'
 import {
-  BOTTOM_MIN, PANEL_MIN, agentUuidOf, firstLeaf, isAgentTabId, leafWithTab, migrateBottomTabs, moveTab, moveTabToEdge, openDiffTab,
+  BOTTOM_MIN, PANEL_MIN, maxPanelWidthFor, agentUuidOf, firstLeaf, isAgentTabId, leafWithTab, migrateBottomTabs, moveTab, moveTabToEdge, openDiffTab,
   reconcileAgentTerminals,
   resizeSplitIn, setBottomHeight, setWidth, toggleBottomPanel, toggleExpanded, togglePanel,
   type DropZone, type SidebarState, type SidebarStore, type SidebarTab, type SplitNode,
@@ -707,7 +707,7 @@ export function Sidebar(props: { ctx: Context; store: SidebarStore }) {
   // Clamp mirrors of setWidth/setBottomHeight for mid-drag values (the store
   // re-clamps on commit; these keep the panels from overshooting mid-drag).
   const clampWidth = (width: number): number =>
-    Math.min(Math.max(PANEL_MIN, Math.round(width)), Math.max(PANEL_MIN, window.innerWidth))
+    Math.min(Math.max(PANEL_MIN, Math.round(width)), maxPanelWidthFor(window.innerWidth))
   const clampHeight = (height: number): number =>
     Math.min(Math.max(BOTTOM_MIN, Math.round(height)), Math.max(BOTTOM_MIN, window.innerHeight - PANEL_MIN))
 
@@ -844,7 +844,7 @@ export function Sidebar(props: { ctx: Context; store: SidebarStore }) {
         width = clampWidth(widthDrag.current.startWidth + (widthDrag.current.startX - event.clientX))
         height = state?.bottomOpen === true ? Math.min(state.bottomHeight, window.innerHeight) : 0
       } else if (draggingBottom) {
-        width = Math.min(state?.width ?? 0, window.innerWidth)
+        width = Math.min(state?.width ?? 0, maxPanelWidthFor(window.innerWidth))
         height = clampHeight(bottomDrag.current.startHeight + (bottomDrag.current.startY - event.clientY))
       } else if (draggingCorner) {
         width = clampWidth(cornerDrag.current.startWidth + (cornerDrag.current.startX - event.clientX))
@@ -873,7 +873,7 @@ export function Sidebar(props: { ctx: Context; store: SidebarStore }) {
       stopDragScheduling()
       const last = lastDragSize.current
       const adoptedWidth = !narrow && state?.panelOpen === true
-        ? Math.min(last?.width ?? state?.width ?? 0, window.innerWidth)
+        ? Math.min(last?.width ?? state?.width ?? 0, maxPanelWidthFor(window.innerWidth))
         : 0
       const adoptedHeight = !narrow && state?.bottomOpen === true
         ? Math.min(last?.height ?? state?.bottomHeight ?? 0, window.innerHeight)
@@ -895,7 +895,7 @@ export function Sidebar(props: { ctx: Context; store: SidebarStore }) {
   // conversation keeps the full width behind the drawer.
   useEffect(() => {
     const width = !narrow && snapshot.state?.panelOpen === true
-      ? Math.min(snapshot.state.width, window.innerWidth)
+      ? Math.min(snapshot.state.width, maxPanelWidthFor(window.innerWidth))
       : 0
     const height = !narrow && snapshot.state?.bottomOpen === true
       ? Math.min(snapshot.state.bottomHeight, window.innerHeight)
@@ -1137,7 +1137,7 @@ export function Sidebar(props: { ctx: Context; store: SidebarStore }) {
         className={clsx(css.panel, !state.panelOpen && css.panelHidden)}
         data-dsh-panel
         style={{
-          width: narrow ? '100vw' : Math.min(state.width, window.innerWidth),
+          width: narrow ? '100vw' : Math.min(state.width, maxPanelWidthFor(window.innerWidth)),
           // Narrow drawer: keep the bottom-anchored sheet above the on-screen
           // keyboard (visualViewport inset); desktop panels are full-height
           // and unaffected.
@@ -1305,7 +1305,7 @@ export function Sidebar(props: { ctx: Context; store: SidebarStore }) {
             if (!event.currentTarget.hasPointerCapture(event.pointerId)) return
             const { startY, startHeight } = bottomDrag.current
             const height = clampHeight(startHeight + (startY - event.clientY))
-            scheduleDrag(Math.min(state.width, window.innerWidth), height)
+            scheduleDrag(Math.min(state.width, maxPanelWidthFor(window.innerWidth)), height)
           }}
           onPointerUp={(event) => {
             if (!event.currentTarget.hasPointerCapture(event.pointerId)) return
@@ -1316,7 +1316,7 @@ export function Sidebar(props: { ctx: Context; store: SidebarStore }) {
             // Up position wins over the rAF pending value (see the width
             // strip handler — issue #247).
             const height = clampHeight(startHeight + (startY - event.clientY))
-            commitDrag(Math.min(state.width, window.innerWidth), height, s => setBottomHeight(s, height))
+            commitDrag(Math.min(state.width, maxPanelWidthFor(window.innerWidth)), height, s => setBottomHeight(s, height))
             setDraggingBottom(false)
           }}
           onPointerCancel={(event) => { abortDrag(() => setDraggingBottom(false), event) }}
