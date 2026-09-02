@@ -3,6 +3,14 @@
 本项目为 DSH（DeepSeek Harness）插件：微信官方 ClawBot / OpenClaw 网关 → DSH 会话桥接。
 版本号遵循语义化版本；每次发布附测试状态（单元断言数由 `scripts/test.ps1` 输出）。
 
+## [0.7.1] — 2026-09（适配 DSH 内核 alpha.4 设置 API）
+
+### 修复
+- **设置节注册迁移**：dsh-settings alpha.4 移除模块级 `installSettingsSection` /
+  `settingsNamespace`，改用 `ctx.settings.register("openclaw-bridge", Config, { base })`
+  直注册（ns 裸字符串）+ `scope.get()` 取值 + `scope.watch()` 热更；存储配置非法时
+  注册失败降级为仅环境变量配置并告警，不再阻断插件启动。
+
 ## [0.7.0] — 2026-08（会话映射持久化，跨重启记忆连续）
 
 > 修复「DSH 桌面端重启后微信用户/模型名的对话记忆丢失」：key → 会话的映射

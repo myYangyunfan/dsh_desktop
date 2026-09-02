@@ -43,7 +43,8 @@
 
 ## DSH 设置里的 ClawBot 配置栏
 
-宿主插件通过 `installSettingsSection(ctx, "openclaw-bridge", Config, ...)` 注册设置节；
+宿主插件通过 `ctx.settings.register("openclaw-bridge", Config, { base })` 直注册设置节
+（ns 裸字符串；alpha.4 起 dsh-settings 移除了模块级 `installSettingsSection`/`settingsNamespace`）；
 客户端卡片注册到 `settings.section` 槽位（schema-form 渲染 Config 表单）。
 
 - 可配置项（v0.5，7 个字段）：
@@ -82,9 +83,10 @@
 
 ## 设置栏落地要点
 
-- 宿主：`installSettingsSection(ctx, "openclaw-bridge", Config, config, { setSource, onChange })`
-  注册设置节；配置经 settings 服务三层合成（schema 默认值 + composition base + 用户文档），
-  `scope.watch` 驱动 onChange 热生效；
+- 宿主：`ctx.settings.register("openclaw-bridge", Config, { base: config })` 注册设置节
+  （返回 scope：`scope.get()` 取值 + `scope.watch()` 热更；存储配置非法时注册失败降级为
+  仅环境变量配置并告警）；配置经 settings 服务三层合成（schema 默认值 + composition base
+  + 用户文档）；
 - 客户端：`ctx.settingsScope.bind({ namespace })` 得到现成控制器（load/set/unset +
   `settings.mutate` 乐观并发），`bindSnapshotSelector(scope)` 订阅快照，
   卡片注册到 `settings.section` 槽位；

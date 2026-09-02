@@ -35,7 +35,6 @@ const PLUGIN_VERSION = (() => {
 import { installModelSelection } from "@deepseek-ai/dsh-agent";
 import { createUserMessage } from "@deepseek-ai/dsh-llm";
 import { SessionId } from "@deepseek-ai/dsh-session";
-import { installSettingsSection, settingsNamespace } from "@deepseek-ai/dsh-settings";
 import z from "@deepseek-ai/schemastery";
 import { createWechatClient } from "./wechat.js";
 import { OpenAiCompatAdapter, PROVIDER_ID } from "./openai-compat.js";
@@ -45,7 +44,8 @@ const inject = ["webServer", "agents", "sessions", "agentDefaultModel", "llm"];
 
 // ---- 设置节（DSH 设置页的 ClawBot 栏）----
 // 命名空间 "openclaw-bridge"：用户在设置页保存的配置经 settings 服务热生效。
-const NS = settingsNamespace("openclaw-bridge");
+// alpha.4 起 dsh-settings 移除了模块级 settingsNamespace() 工厂，注册收裸字符串。
+const NS = "openclaw-bridge";
 const Config = z.object({
   // "provider/model" 或仅 "model"（provider 缺省时沿用 DSH 默认模型的 provider）；
   // 留空 = 使用 DSH 设置的默认模型。
@@ -806,11 +806,12 @@ function apply(ctx, config) {
     return { baseURL: cfg.customBaseURL, apiKey: cfg.customApiKey, model: cfg.customModel };
   });
   const customRegistration = ctx.llm.registerAdapter([PROVIDER_ID], customAdapter);
-  installSettingsSection(ctx, NS, Config, config || {}, {
-    setSource: (source) => {
-      liveConfig = source; // source 是 () => scope.get() 的取值函数
-    },
-    onChange: () => {
+  // alpha.4 迁移：旧的 install 辅助已从 dsh-settings 移除，改为
+  // ctx.settings.register 直注册（ns 裸字符串）+ scope.get 取值 + scope.watch 热更。
+  try {
+    const scope = ctx.settings.register(NS, Config, { base: config || {} });
+    liveConfig = () => scope.get(); // source 是 () => scope.get() 的取值函数
+    scope.watch(() => {
       // 新映射会话（新 model 名）会使用新配置；已有会话保持连续性。
       // 日志脱敏：token/apiKey 不回显明文。
       const cfg = liveConfig() || {};
@@ -818,8 +819,10 @@ function apply(ctx, config) {
       if (redacted.token) redacted.token = "***";
       if (redacted.customApiKey) redacted.customApiKey = "***";
       console.log("[openclaw-bridge] settings updated: " + JSON.stringify(redacted));
-    },
-  });
+    });
+  } catch (error) {
+    console.warn("[openclaw-bridge] settings section unavailable (invalid stored config): " + ((error && error.message) || error));
+  }
   const disposeChat = ctx.webServer.register({ kind: "exact", path: CHAT_ROUTE, handler: (req, res) => handleChat(ctx, req, res) });
   const disposeHealth = ctx.webServer.register({
     kind: "exact",

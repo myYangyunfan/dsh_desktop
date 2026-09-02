@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-openclaw-bridge",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "DSH plugin bridging WeChat official ClawBot / OpenClaw gateways into DSH agent sessions, with a ClawBot settings section in the DSH settings page",
   "type": "module",
   "main": "lib/index.js",
