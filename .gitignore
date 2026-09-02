@@ -53,3 +53,6 @@ _*.diff
 .gitee-upload/
 target-s1/
 *.exe
+
+# 本地便携版安装/运行目录（DSH Desktop.exe + resources，运行时产物不入库）
+portable/
