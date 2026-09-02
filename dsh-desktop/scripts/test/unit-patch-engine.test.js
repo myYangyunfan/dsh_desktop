@@ -34,6 +34,7 @@ const {
 const { COMPANION_PLUGINS, companionDirName } = require('../lib/companion-plugins');
 const {
   PATCH_HEADER, ACP_DISABLE_BLOCK, PET_DISABLE_BLOCK,
+  ACP_SELF_DISABLE_BLOCK, removeAcpBasicDisableBlock,
   ensureDisabledPatchEntry, removeLegacyMarketplacePatchLines,
   registerCompanionPatchEntries, syncCompanionFiles, removedPluginIdsFromPatch,
 } = require('../lib/companion-profile');
@@ -396,6 +397,28 @@ test('ensureDisabledPatchEntry: 已存在/[] 形态/空文件/追加 四种形�
   assert.strictEqual(appended.patch, base.replace(/\s*$/, '\n') + ACP_DISABLE_BLOCK);
 });
 
+
+test('removeAcpBasicDisableBlock: 精确撤销自动块、尊重用户手写、幂等', () => {
+  const idRe = (id) => new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*' + id + '\\b');
+  const base = '# dsh web profile patch（由 DSH Desktop 维护）\n- id: harness-pet\n  disabled: true\n';
+  // 旧路径追加一段自动 compaction-basic 禁用块，再用 heal 撤销 → 保留无关条目。
+  const auto = ensureDisabledPatchEntry(base, idRe('compaction-basic'), ACP_DISABLE_BLOCK);
+  assert.strictEqual(auto.changed, true);
+  assert.ok(auto.patch.includes('- id: compaction-basic\n  disabled: true'));
+  const healed = removeAcpBasicDisableBlock(auto.patch);
+  assert.strictEqual(healed.changed, true);
+  assert.ok(!healed.patch.includes('- id: compaction-basic'), 'compaction-basic 禁用块应被撤销');
+  assert.ok(healed.patch.includes('- id: harness-pet\n  disabled: true'), '无关条目不得被误删');
+  // 幂等：块已不在位 → 零改写。
+  const again = removeAcpBasicDisableBlock(healed.patch);
+  assert.strictEqual(again.changed, false);
+  assert.strictEqual(again.patch, healed.patch);
+  // 用户手写的 compaction-basic 条目（非本模块注释格式）不得被删除。
+  const user = '# 用户配置\n- id: compaction-basic\n  disabled: true\n';
+  const untouched = removeAcpBasicDisableBlock(user);
+  assert.strictEqual(untouched.changed, false);
+  assert.strictEqual(untouched.patch, user);
+});
 test('removeLegacyMarketplacePatchLines: 移除旧市场 insert 条目且幂等', () => {
   const patch = '# dsh web profile patch（由 DSH Desktop 维护）\n- insert:\n    - id: plugin-marketplace\n      name: \'@deepseek-ai/dsh-plugin-marketplace\'\n- insert:\n    - id: balance\n      name: \'@deepseek-ai/dsh-balance\'\n';
   const r1 = removeLegacyMarketplacePatchLines(patch);

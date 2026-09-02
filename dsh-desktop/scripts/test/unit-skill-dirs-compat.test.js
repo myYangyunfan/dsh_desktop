@@ -3,15 +3,15 @@
 // ---------------------------------------------------------------------------
 // skill-dirs-compat 补丁单测（三态契约 + 行为验证）。
 //
-// transformSkillDirsCompat 三点注入（node:path import 扩 delimiter / 构造器
-// DSH_SKILL_DIRS 并入 customSkillDirs / roots() 追加 user-claude / user-codex），
+// transformSkillDirsCompat 两点注入（2026-09 收窄：用户要求技能读取固定到
+// 「只读自己的 skills」，跨代理 user-claude/user-codex 根追加已移除）：
+// node:path import 扩 delimiter / 构造器 DSH_SKILL_DIRS 并入 customSkillDirs。
 // 本文件用与内核产物同构的最小 fixture 验证：
 //   1) pristine → changed，产物含 marker 与两处注入特征；
 //   2) 产物 / marker-only → already（幂等）；
 //   3) 锚点缺失（逐个挖锚点 / 空源）→ anchor-missing + detail 含文件名；
 //   4) 行为：剥掉 import 后在 vm 沙箱里实跑构造器 + roots()——DSH_SKILL_DIRS
-//      分隔解析、空段过滤、resolve 映射、rank 高低（custom < user-agents <
-//      user-claude < user-codex < bundled 600）。
+//      分隔解析、空段过滤、resolve 映射；产物不得引入跨代理根。
 // ---------------------------------------------------------------------------
 
 const test = require('node:test');
@@ -65,10 +65,10 @@ test('pristine → changed：产物含 marker、claude/codex 根与 DSH_SKILL_DI
   assert.equal(typeof r.src, 'string');
   assert.notEqual(r.src, PRISTINE);
   assert.ok(r.src.includes(SKILL_DIRS_COMPAT_MARKER), '产物应含幂等 marker');
-  assert.ok(r.src.includes('".claude", "skills"'), '产物应含 .claude/skills 根');
-  assert.ok(r.src.includes('".codex", "skills"'), '产物应含 .codex/skills 根');
-  assert.ok(r.src.includes('source: "user-claude"'));
-  assert.ok(r.src.includes('source: "user-codex"'));
+  assert.ok(!r.src.includes('".claude", "skills"'), '收窄后不得追加跨代理 .claude/skills 根');
+  assert.ok(!r.src.includes('".codex", "skills"'), '收窄后不得追加跨代理 .codex/skills 根');
+  assert.ok(!r.src.includes('source: "user-claude"'), '收窄后无 user-claude 根');
+  assert.ok(!r.src.includes('source: "user-codex"'), '收窄后无 user-codex 根');
   assert.ok(r.src.includes('process.env.DSH_SKILL_DIRS'), '产物应含 DSH_SKILL_DIRS 解析');
   assert.ok(r.src.includes('delimiter, dirname'), '产物应把 delimiter 并入 node:path import');
   // import 扩展只此一处，原命名一个不丢。
@@ -88,7 +88,6 @@ test('锚点缺失 → anchor-missing + detail 含文件名（逐锚点挖掘）
   const cases = {
     'node:path import': PRISTINE.replace('import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";', 'import { join } from "node:path";'),
     'customSkillDirs 构造器行': PRISTINE.replace('\t\tthis.customSkillDirs = (config.customSkillDirs ?? []).map((root) => resolve(root));', '\t\tthis.customSkillDirs = [];'),
-    'roots() user-agents push 块': PRISTINE.replace('\t\t\trank: USER_AGENTS_RANK\n', ''),
   };
   for (const [name, src] of Object.entries(cases)) {
     const r = transformSkillDirsCompat(src, LABEL);
@@ -116,19 +115,18 @@ function evaluatePatched(product, env) {
   return context;
 }
 
-test('行为：roots() 追加 user-claude/user-codex 根且 rank 次序正确', async () => {
+test('行为：收窄后 roots() 不引入跨代理根（对齐 2026-09 只读自身 skills）', async () => {
   const changed = transformSkillDirsCompat(PRISTINE, LABEL);
   const context = evaluatePatched(changed.src, {});
   const provider = new context.FileSystemSkillProvider({}, {}, { dshHome: '/dsh', customSkillDirs: ['/cfg/skills'] });
   const roots = await provider.roots();
+  const sources = roots.map((r) => r.source);
+  assert.ok(!sources.includes('user-claude'), 'user-claude 根已移除');
+  assert.ok(!sources.includes('user-codex'), 'user-codex 根已移除');
+  // 自身根次序不变：custom(300) < user-dsh(400) < user-agents(500)。
   const bySource = Object.fromEntries(roots.map((r) => [r.source, r]));
-  assert.equal(bySource['user-claude'].path, '/home/tester/.claude/skills');
-  assert.equal(bySource['user-codex'].path, '/home/tester/.codex/skills');
-  // rank 次序：custom(300) < user-agents(500) < user-claude(510) < user-codex(520) < bundled(600)。
-  assert.equal(bySource['user-claude'].rank, 510);
-  assert.equal(bySource['user-codex'].rank, 520);
-  assert.ok(bySource.custom.rank < bySource['user-agents'].rank, 'custom 目录仍优先于 user-agents');
-  assert.ok(bySource['user-codex'].rank < 600, 'user-codex 仍优先于 bundled(600)');
+  assert.ok(bySource.custom.rank < bySource['user-dsh'].rank, 'custom 仍优先于 user-dsh');
+  assert.ok(bySource['user-dsh'].rank < bySource['user-agents'].rank, 'user-dsh 仍优先于 user-agents');
 });
 
 test('行为：DSH_SKILL_DIRS 分隔解析、空段过滤、与 config 条目同级 resolve', async () => {
@@ -150,7 +148,7 @@ test('行为：DSH_SKILL_DIRS 分隔解析、空段过滤、与 config 条目同
   assert.equal(custom2, '/resolved:/cfg/skills');
 });
 
-test('行为：includeDefaultRoots=false 时不追加 claude/codex 根（对齐上游语义）', async () => {
+test('行为：includeDefaultRoots=false 时自身根全部缺席（对齐上游语义）', async () => {
   const changed = transformSkillDirsCompat(PRISTINE, LABEL);
   const context = evaluatePatched(changed.src, {});
   const provider = new context.FileSystemSkillProvider({}, {}, { includeDefaultRoots: false });

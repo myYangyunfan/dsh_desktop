@@ -19,6 +19,7 @@ const {
   transformFallbackHealIsolation,
   markers: { FALLBACK_HEAL_ISOLATION_MARKER },
 } = require('../lib/patch-adapters');
+const { kernel } = require('../compat/kernel-pin.json');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 // 0.1.2-alpha.1：fallback heal 循环重构为 `for (const entry of entries)` +
@@ -29,7 +30,7 @@ const repoRoot = path.resolve(__dirname, '..', '..');
 // 已消失，行为级测试经 junction 撞 alpha.2 依赖图即炸）——pristine 源改从
 // vendored tarball 解包（与 unit-agent-preset-fallback 同款来源，随 pin 换版）。
 const PRISTINE_APP_BOOT_TARBALL = path.join(
-  repoRoot, 'vendor', 'dsh-kernel', 'deepseek-ai-dsh-app-boot-0.1.2-alpha.3.tgz',
+  repoRoot, 'vendor', 'dsh-kernel', `deepseek-ai-dsh-app-boot-${kernel.packageVersion}.tgz`,
 );
 
 /** 解 vendored tarball 到一次性目录，返回 pristine dsh-app-boot 路径。 */

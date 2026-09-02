@@ -12,7 +12,7 @@
  * @module dsh-subagent-lens
  */
 import z from '@deepseek-ai/schemastery';
-import { settingsNamespace } from '@deepseek-ai/dsh-settings';
+
 
 export const name = 'dsh-subagent-lens';
 export const inject = ['settings'];
@@ -33,7 +33,7 @@ export const Config = z.object({
         .description('Max characters kept per command line (longer commands are truncated with an ellipsis)'),
 });
 
-const NS = settingsNamespace('dsh-subagent-lens');
+const NS = 'dsh-subagent-lens';
 
 export function apply(ctx, config) {
     try {

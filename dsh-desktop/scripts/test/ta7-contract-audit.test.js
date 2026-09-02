@@ -13,7 +13,7 @@
 //  5. wsl-backend.md 契约键（settings 三键 / §2.1 载荷 / §2.2 返回 / env 覆盖）
 //     ↔ commands/wsl.rs + sidecar/wsl-mode.js，双向；
 //  6. docs/commit-plan-20260822.md §3 CHANGELOG 草案功能关键词 ↔ 测试文件存在（软断言）；
-//  7. bridge-api.md 53 方法表 ↔ bridge-shim.js dshDesktop 对象实际挂载方法名，双向。
+//  7. bridge-api.md 55 方法表 ↔ bridge-shim.js dshDesktop 对象实际挂载方法名，双向。
 //
 // 已知漂移以 KNOWN_* 白名单锁定（新漂移进 diff 即失败，消账后从白名单移除）。
 // 本文件只读仓库源码/文档，不做任何写操作。
@@ -258,7 +258,7 @@ function parseRegisteredCommands() {
 
 test('TA7-3a ipc-commands.md §2 → generate_handler：契约命令全注册', () => {
   const md = parseMdCommands();
-  assert.strictEqual(md.size, 43, `契约命令计数: ${md.size}`);
+  assert.strictEqual(md.size, 45, `契约命令计数: ${md.size}`);
   const reg = parseRegisteredCommands();
   const missing = [...md].filter((c) => !reg.has(c));
   assert.deepStrictEqual(missing, [], '契约有而未注册的 command');
@@ -393,7 +393,7 @@ test('TA7-6 commit-plan §3 草案功能关键词 ↔ 测试文件存在（软�
 });
 
 // ----------------------------------------------------------------------------
-// 7. bridge-api.md 53 方法表 ↔ bridge-shim.js dshDesktop 挂载（双向）
+// 7. bridge-api.md 55 方法表 ↔ bridge-shim.js dshDesktop 挂载（双向）
 // ----------------------------------------------------------------------------
 
 function parseMdMethodSurfaces() {
@@ -457,9 +457,9 @@ function parseShimSurfaces() {
   return surfaces;
 }
 
-test('TA7-7a bridge-api.md 方法表（53）→ 垫片挂载：差集为空', () => {
+test('TA7-7a bridge-api.md 方法表（55）→ 垫片挂载：差集为空', () => {
   const md = parseMdMethodSurfaces();
-  assert.strictEqual(md.size, 53, `契约方法计数: ${md.size}`);
+  assert.strictEqual(md.size, 55, `契约方法计数: ${md.size}`);
   const missing = diff(md, parseShimSurfaces());
   assert.deepStrictEqual(missing, [], '契约有而垫片缺的方法/字段');
 });

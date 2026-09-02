@@ -1,14 +1,18 @@
 /**
- * Regenerate dsh-desktop/package-lock.json so the vendored 0.1.2-alpha.1 kernel
- * resolves from `file:vendor/dsh-kernel/*.tgz` instead of the npm registry.
+ * Regenerate dsh-desktop/package-lock.json so the vendored dsh kernel resolves
+ * from `file:vendor/dsh-kernel/*.tgz` instead of the npm registry.
+ *
+ * The exact kernel version is defined once in scripts/compat/kernel-pin.json
+ * (kernel.packageVersion); the KERNEL_VERSION constant below is kept in sync with
+ * that pin.
  *
  * Why: the kernel is NOT published to npm. package.json declares every
- * @deepseek-ai/dsh* package as an exact semver `0.1.2-alpha.1`, and this script
- * produces the matching lockfile where each of those 241 packages has a
+ * @deepseek-ai/dsh* package as an exact semver matching the pin, and this script
+ * produces the matching lockfile where each of those vendored packages has a
  * `file:`-resolved entry pointing at the vendored tarball. npm ci / npm install
  * then install the kernel locally; all other (external) deps still resolve from
- * the registry. This is what keeps `npm ci` from trying to fetch 0.1.2-alpha.1
- * from the registry.
+ * the registry. This is what keeps `npm ci` from trying to fetch the kernel from
+ * the registry.
  *
  * Usage:  node scripts/generate-kernel-lock.mjs
  * (Run from anywhere; it resolves paths relative to this file.)
@@ -26,11 +30,11 @@ const TARBALLS = join(ROOT, 'vendor', 'dsh-kernel');
 const PKG_PATH = join(ROOT, 'package.json');
 const LOCK_PATH = join(ROOT, 'package-lock.json');
 const SHELL = process.platform === 'win32';
-const KERNEL_VERSION = '0.1.2-alpha.3';
+const KERNEL_VERSION = '0.1.2-alpha.4';
 
 const realPkg = JSON.parse(readFileSync(PKG_PATH, 'utf8'));
 
-// --- build the file: dependency map for the 241 vendored tarballs ---
+// --- build the file: dependency map for the vendored tarballs ---
 const files = readdirSync(TARBALLS).filter((f) => f.endsWith('.tgz')).sort();
 if (files.length === 0) throw new Error(`no tarballs in ${TARBALLS}`);
 

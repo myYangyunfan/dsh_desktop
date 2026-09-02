@@ -1,16 +1,49 @@
 'use strict';
-// 依赖层小补丁（幂等）：目录选择器 worker 无消息退出时，把真实退出码/信号带进
-// 错误文案。由 postinstall / pack / dist 在打包前应用；匹配失败只告警不中断。
+// ---------------------------------------------------------------------------
+// dev 树补丁收口（注册表驱动，幂等）——postinstall 链第二步（install-kernel
+// 换装内核之后运行）。
+//
+// 结构（v0.6.0 alpha.3 收口重构，替代此前 13 个手写 try 块）：
+//   1) picker-native 内联补丁：历史遗留、未登记注册表，保持原样；
+//   2) canonical 引擎全链重放：integration/patch-runner.applyAll 遍历
+//      patch-registry 全部规格（16 root + 34 file），与桌面壳 boot 链、CLI
+//      同步链同款引擎、同一规格集——postinstall 后的 dev 树即「全链收敛态」，
+//      patch-surface 快照可被全新 npm ci 逐字节复现。
+//
+// 副本范围：ctx 的 home / userDataDir 指向不存在路径，layouts 里 profile
+// fallback / agent overlay 副本被 existsSync 天然跳过，只打 appDir（dev
+// node_modules）副本——运行副本仍由 boot 链与 sync-companion-plugins 负责
+// （tmpdir ctx 同款先例）。
+//
+// 失败可见性（fail-loud）：锚点失配（= 内核换代导致干预静默消失）/ 读写
+// 失败 / 规格级异常 → 退出非零，npm ci 与 CI 当场暴露，而非静默成功后靠
+// 事后手工 patch-surface verify。degraded 为设计内降级（degrade 档失配），
+// 只告警不拦截。
+//
+// 内核换代重靶时【不需要动本文件】：补丁在 patch-registry 登记即自动纳入
+// postinstall（root kind 声明 apply/successLog/failLog；file kind 声明
+// transform/layout）。
+// ---------------------------------------------------------------------------
+
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { writeFileAtomic } = require('./lib/patch-io');
+const { PATCH_SPECS, getSpecsByGroup } = require('./lib/patch-registry');
+const { applyAll } = require('./integration/patch-runner');
 
 const root = path.resolve(__dirname, '..');
-const target = path.join(root, 'node_modules', '@deepseek-ai', 'dsh-host-directory-picker-native', 'lib', 'index.js');
+const nmRoot = path.join(root, 'node_modules');
 
-const PATCH_MARKER = 'worker.on("exit", (code, signal) => {';
-const OLD_RE = /worker\.on\("exit", \(\) => \{\s*settle\(\(\) => \{\s*reject\(\/\* @__PURE__ \*\/ new Error\("win32 folder dialog worker exited before reporting a result"\)\);\s*\}\);\s*\}\);/;
-const NEW_BLOCK = [
+// ---------------------------------------------------------------------------
+// 1) picker-native（未登记注册表的历史遗留内联补丁，幂等）：目录选择器
+// worker 无消息退出时，把真实退出码/信号带进错误文案。
+// ---------------------------------------------------------------------------
+
+const PICKER_TARGET = path.join(nmRoot, '@deepseek-ai', 'dsh-host-directory-picker-native', 'lib', 'index.js');
+const PICKER_MARKER = 'worker.on("exit", (code, signal) => {';
+const PICKER_OLD_RE = /worker\.on\("exit", \(\) => \{\s*settle\(\(\) => \{\s*reject\(\/\* @__PURE__ \*\/ new Error\("win32 folder dialog worker exited before reporting a result"\)\);\s*\}\);\s*\}\);/;
+const PICKER_NEW_BLOCK = [
   'worker.on("exit", (code, signal) => {',
   '\t\tsettle(() => {',
   '\t\t\tconst suffix = signal ? ` (signal ${signal})` : typeof code === "number" ? ` (exit code ${code})` : "";',
@@ -19,181 +52,66 @@ const NEW_BLOCK = [
   '\t});',
 ].join('\n');
 
-function main() {
-  if (!fs.existsSync(target)) {
+function patchPickerNativeExitCode() {
+  if (!fs.existsSync(PICKER_TARGET)) {
     console.log('[patch-deps] dsh-host-directory-picker-native 不存在，跳过');
     return;
   }
-  let src = fs.readFileSync(target, 'utf8');
-  if (src.includes(PATCH_MARKER)) {
+  let src = fs.readFileSync(PICKER_TARGET, 'utf8');
+  if (src.includes(PICKER_MARKER)) {
     console.log('[patch-deps] picker worker 退出码补丁已应用，跳过');
     return;
   }
-  if (!OLD_RE.test(src)) {
+  if (!PICKER_OLD_RE.test(src)) {
     console.log('[patch-deps] picker-native 未匹配到目标代码（版本可能已更新），跳过');
     return;
   }
-  src = src.replace(OLD_RE, NEW_BLOCK);
-  writeFileAtomic(target, src);
+  src = src.replace(PICKER_OLD_RE, PICKER_NEW_BLOCK);
+  writeFileAtomic(PICKER_TARGET, src);
   console.log('[patch-deps] 已补丁 picker-native：worker 退出上报 exit code / signal');
 }
 
-main();
+// ---------------------------------------------------------------------------
+// 2) 注册表驱动全链重放（canonical 引擎 applyAll）。
+// ---------------------------------------------------------------------------
 
-// 顺带应用 dsh-llm-pi-ai 余额判定补丁：opencode 等第三方 provider 余额不足时返回
-// 401 + CreditsError，dsh 原本一律判 AUTH 并显示 "API key is invalid"，误导用户。
-// 见 patch-pi-ai-credits.js（幂等，失败只告警不中断）。boot 期经 patch-registry
-// （pi-ai-credits 条目）幂等重应用，此处覆盖 postinstall 后新装的 dev node_modules。
-try {
-  const { patchPiAiCredits } = require('./patch-pi-ai-credits.js');
-  const n = patchPiAiCredits(path.join(root, 'node_modules'), (m) => console.log('[patch-deps] ' + m));
-  if (n > 0) console.log('[patch-deps] pi-ai 余额判定补丁已应用（dev node_modules）');
-} catch (err) {
-  console.log('[patch-deps] pi-ai 余额判定补丁跳过: ' + (err && err.message ? err.message : err));
-}
-
-// 顺带应用 Menu portal 视口补丁（issue #36）：预设很多时弹层顶部条目被裁掉。
-// 开发模式（npm start）直接打 dev node_modules；打包由 after-pack 与启动时
-// 运行时补丁覆盖（幂等，锚点不匹配只告警不中断）。
-try {
-  const { patchMenuViewport } = require('./patch-menu-viewport');
-  // 补丁函数期望 node_modules 根目录（path.join(nmRoot, '@deepseek-ai', ...)）。
-  const n = patchMenuViewport(path.join(root, 'node_modules'), (m) => console.log(m));
-  if (n > 0) console.log('[patch-deps] menu-viewport 补丁已应用（dev node_modules）');
-} catch (err) {
-  console.log('[patch-deps] menu-viewport 补丁跳过: ' + (err && err.message ? err.message : err));
+/** 构造「只命中 dev 树副本」的 applyAll ctx（home/userDataDir 不存在）。 */
+function buildDevCtx(log) {
+  return {
+    home: path.join(os.tmpdir(), 'dsh-postinstall-absent-home'),
+    appDir: root,
+    userDataDir: path.join(os.tmpdir(), 'dsh-postinstall-absent-userdata'),
+    wslMode: false,
+    log,
+  };
 }
 
-// 顺带应用「打开项目目录」补丁（issue #85）：侧栏项目/会话行 ⋯ 菜单增加
-// 「打开项目目录」+ 右键菜单（dsh-client-ui-workspace）。依赖
-// dsh-session-manager 插件提供的 window.__dshDesktopOpenDir 桥；开发模式
-// （npm start）直接打 dev node_modules；打包由 after-pack 与启动时运行时
-// 补丁覆盖（幂等，锚点不匹配只告警不中断）。
-try {
-  const { patchOpenProjectDir } = require('./patch-open-project-dir');
-  // 注意：补丁函数期望 node_modules 根目录（与 slot-compat 一致）；其它
-  // 旧补丁块直接传 root 是历史遗留，这里保持正确传法。
-  const n = patchOpenProjectDir(path.join(root, 'node_modules'), (m) => console.log(m));
-  if (n > 0) console.log('[patch-deps] open-project-dir 补丁已应用（dev node_modules）');
-} catch (err) {
-  console.log('[patch-deps] open-project-dir 补丁跳过: ' + (err && err.message ? err.message : err));
+/**
+ * 对 dev 树执行注册表全链补丁收口（幂等，可在 npm ci 后重跑）。
+ * @param {(msg: string) => void} [log]
+ * @param {Array<Object>} [specs] 规格清单（默认全量注册表，供单测注入）
+ * @param {Object} [options] applyAll 场景覆盖（透传；同 boot/CLI 链）
+ * @returns {ReturnType<typeof applyAll>} patchReport
+ */
+function runDevTreePatch(log = (m) => console.log('[patch-deps] ' + m), specs = getSpecsByGroup(), options = {}) {
+  return applyAll(buildDevCtx(log), specs, options);
 }
 
-// 会话进程在 frame 收尾后、JSONL 行写完前中断时，官方读取器会把可恢复的
-// 最终半条记录误判为永久损坏。让它复用已有 torn-tail repair 流程。
-try {
-  const { patchSessionPersistence } = require('./patch-session-persistence');
-  // 补丁函数期望 node_modules 根目录（path.join(nmRoot, '@deepseek-ai', ...)）。
-  const n = patchSessionPersistence(path.join(root, 'node_modules'), (m) => console.log(m));
-  if (n > 0) console.log('[patch-deps] session-persistence 尾部恢复补丁已应用（dev node_modules）');
-} catch (err) {
-  console.log('[patch-deps] session-persistence 尾部恢复补丁跳过: ' + (err && err.message ? err.message : err));
-}
+module.exports = { runDevTreePatch, buildDevCtx, patchPickerNativeExitCode, PATCH_SPECS };
 
-// 对话删除 / 归档管理补丁（删除 + 恢复归档 + 客户端「删除对话」菜单项）。
-// 开发模式（npm start / postinstall）直接打 dev node_modules；运行副本由
-// patch-registry（桌面壳启动 + CLI 同步）覆盖（幂等，锚点不匹配只告警不中断）。
-try {
-  const { patchSessionManage } = require('./patch-session-manage');
-  // 补丁函数期望 node_modules 根目录（path.join(nmRoot, '@deepseek-ai', ...)）。
-  const n = patchSessionManage(path.join(root, 'node_modules'), (m) => console.log(m));
-  if (n > 0) console.log('[patch-deps] session-manage 对话删除/归档管理补丁已应用（dev node_modules）');
-} catch (err) {
-  console.log('[patch-deps] session-manage 补丁跳过: ' + (err && err.message ? err.message : err));
-}
-// 空 tool-call 持久化会把 tool/result 的 callId 写成空串，restore 严格校验
-// 直接击穿（整个会话打不开）。读端 dsh-session 容错 + 写端 dsh-agent-loop 防护。
-try {
-  const { patchToolSourceCompat } = require('./lib/tool-source-patch');
-  const n = patchToolSourceCompat(path.join(root, 'node_modules'), (m) => console.log(m));
-  if (n > 0) console.log('[patch-deps] tool source 容错补丁已应用（dev node_modules）');
-} catch (err) {
-  console.log('[patch-deps] tool source 容错补丁跳过: ' + (err && err.message ? err.message : err));
-}
-// rc.6 第三方客户端插件用 `id` 注册 keyed slot；rc.7 改为强制 `key`，而
-// dsh-advisor / dsh-llm-fallbacks key/id 都不传，单个插件就能拖垮整个 loader。
-// 只在 keyed slot 缺 key 时兜底；显式 key 与其它 slot 行为保持原样。
-try {
-  const { patchSlotCompat } = require('./patch-slot-compat');
-  const n = patchSlotCompat(path.join(root, 'node_modules'), (m) => console.log(m));
-  if (n > 0) console.log('[patch-deps] keyed slot 兼容补丁已应用（dev node_modules）');
-} catch (err) {
-  console.log('[patch-deps] keyed slot 兼容补丁跳过: ' + (err && err.message ? err.message : err));
-}
-
-// pi-ai opencode-go 内置模型目录落后于端点：设置页「获取可用模型」对 catalog
-// 命中源以内置 catalog 作答（不访问端点），deepseek-v4-flash-vision-exp 缺失。
-// 开发模式（npm start / postinstall）直接打 dev node_modules；运行副本由
-// patch-registry（桌面壳启动 + CLI 同步）覆盖（幂等，锚点不匹配只告警不中断）。
-try {
-  const { patchPiAiOpencodeGoModels } = require('./patch-pi-ai-opencode-go-models');
-  const n = patchPiAiOpencodeGoModels(path.join(root, 'node_modules'), (m) => console.log('[patch-deps] ' + m));
-  if (n > 0) console.log('[patch-deps] opencode-go 模型目录补丁已应用（dev node_modules）');
-} catch (err) {
-  console.log('[patch-deps] opencode-go 模型目录补丁跳过: ' + (err && err.message ? err.message : err));
-}
-
-// pi-ai 手声明路由思考档位默认（F4：v0.5.3「第三方思考强度不生效」——自定义
-// 供应商模型条目无 reasoningEfforts 字典时 pi-ai 回落 reasoning:false，思考强度
-// 控件永不出现；手声明条目回落标准 OpenAI 档位字典，开箱即用且未选档位不发
-// 字段）。开发模式（npm start / postinstall）直接打 dev node_modules；运行副本
-// 由 patch-registry（桌面壳启动 + CLI 同步）覆盖（幂等，锚点失配只告警不中断）。
-try {
-  const { patchPiAiReasoningDefaults } = require('./patch-pi-ai-reasoning-defaults');
-  const n = patchPiAiReasoningDefaults(path.join(root, 'node_modules'), (m) => console.log('[patch-deps] ' + m));
-  if (n > 0) console.log('[patch-deps] pi-ai 思考档位默认补丁已应用（dev node_modules）');
-} catch (err) {
-  console.log('[patch-deps] pi-ai 思考档位默认补丁跳过: ' + (err && err.message ? err.message : err));
-}
-
-// 插件 client bundle 到达瞬态失败重试（E2/问题A：杀软扫描锁/插件目录并发替换/
-// 内核换代复用同端口的单次 404 被 arrive() 当终态 → 「Failed to load plugins」
-// 横幅直到整页刷新）。浏览器半边 script 重试 + serveBundle 读盘瞬态码短重试。
-// 开发模式（npm start / postinstall）直接打 dev node_modules；运行副本由
-// patch-registry（桌面壳启动 + CLI 同步）覆盖（幂等，锚点失配只告警不中断）。
-try {
-  const { patchBundleArrivalRetry } = require('./lib/bundle-arrival-retry-patch');
-  const n = patchBundleArrivalRetry(path.join(root, 'node_modules'), (m) => console.log('[patch-deps] ' + m));
-  if (n > 0) console.log('[patch-deps] bundle 到达重试补丁已应用（dev node_modules）');
-} catch (err) {
-  console.log('[patch-deps] bundle 到达重试补丁跳过: ' + (err && err.message ? err.message : err));
-}
-
-// 工具调度器缺席防崩（E2/问题B：issue #147 同款 reading 'prepare'——
-// Symbol() 副本唯一，进程内第二份 dsh-tools 实例（插件嵌套副本）符号互不相认
-// → ctx.tools[TOOL_RUNTIME_SCHEDULER] undefined → 工具步中途炸）。agent-loop
-// 四处裸读改解析器（私有符号 → Symbol.for 全局镜像 → 显式错误），dsh-tools
-// 补挂全局镜像。运行副本由 patch-registry（桌面壳启动 + CLI 同步）覆盖。
-try {
-  const { patchSchedulerGuard } = require('./lib/scheduler-guard-patch');
-  const n = patchSchedulerGuard(path.join(root, 'node_modules'), (m) => console.log('[patch-deps] ' + m));
-  if (n > 0) console.log('[patch-deps] 调度器防崩补丁已应用（dev node_modules）');
-} catch (err) {
-  console.log('[patch-deps] 调度器防崩补丁跳过: ' + (err && err.message ? err.message : err));
-}
-
-// 工具调用 name 为空指引补丁（K11：`unknown tool ""` 死循环重试）——dsh-tools
-// ToolNotFoundError 对空 name 特判三向指引（协议错位 / 中转网关剥离 / 模型输出
-// 崩坏），非空 name 原语义不变。开发模式（npm start / postinstall）直接打 dev
-// node_modules；运行副本由 patch-registry（桌面壳启动 + CLI 同步）覆盖（幂等，
-// 锚点失配只告警不中断）。见 scripts/lib/empty-tool-name-patch.js。
-try {
-  const { patchEmptyToolName } = require('./lib/empty-tool-name-patch');
-  const n = patchEmptyToolName(path.join(root, 'node_modules'), (m) => console.log('[patch-deps] ' + m));
-  if (n > 0) console.log('[patch-deps] 空工具名指引补丁已应用（dev node_modules）');
-} catch (err) {
-  console.log('[patch-deps] 空工具名指引补丁跳过: ' + (err && err.message ? err.message : err));
-}
-
-// web-search baseURL 契约补丁（issue #20）：provider 归一化拼接 + 协议契约指引，
-// 设置页中英文文案。registry（web-search-baseurl, cli:false）只在桌面壳 boot 链
-// 应用，postinstall 不补会导致全新 npm ci 后 dev node_modules 缺该干预、
-// patch-surface 快照报「补丁干预消失」（alpha.3 激活实测）。与其它 root 补丁
-// 同款接入：幂等、锚点失配只告警不中断。
-try {
-  const { patchWebSearchBaseUrl } = require('./patch-web-search-baseurl');
-  const n = patchWebSearchBaseUrl(path.join(root, 'node_modules'), (m) => console.log('[patch-deps] ' + m));
-  if (n > 0) console.log('[patch-deps] web-search baseURL 补丁已应用（dev node_modules）');
-} catch (err) {
-  console.log('[patch-deps] web-search baseURL 补丁跳过: ' + (err && err.message ? err.message : err));
+if (require.main === module) {
+  patchPickerNativeExitCode();
+  const report = runDevTreePatch();
+  const hardFail = report.anchorMissing > 0 || report.failed > 0 || report.errors.length > 0;
+  if (report.degraded.length > 0) {
+    console.warn('[patch-deps] 降级补丁（设计内告警）: ' + report.degraded.join(', '));
+  }
+  if (hardFail) {
+    console.error(
+      `[patch-deps] ⚠ dev 树补丁收口不完整：失配 ${report.anchorMissing} 处 / ` +
+      `失败 ${report.failed} 处 / 规格异常 ${report.errors.length} 项（${report.errors.join(', ')}）`
+    );
+    console.error('[patch-deps] 多为内核换代导致锚点失配——按 compat 层重靶流程更新补丁锚点后重跑，勿静默忽略');
+    process.exitCode = 1;
+  }
 }

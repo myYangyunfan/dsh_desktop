@@ -29,6 +29,7 @@ const {
   patchSettingsModelsResilience,
   AW_CONSTANTS,
 } = require('../lib/patch-settings-write-resilience');
+const { kernel } = require('../compat/kernel-pin.json');
 
 // payload pristine 源（stage-payload 镜像；boot 链跑过后可能已带补丁——幂等
 // 场景反而覆盖 already 分支，行为测试统一在临时目录自建 pristine 夹具）。
@@ -42,7 +43,7 @@ const PAYLOAD_NM = path.join(
 const AW_FILE = path.join(PAYLOAD_NM, 'dsh-atomic-write', 'lib', 'index.js');
 const SM_VENDOR_TARBALL = path.join(
   REPO_ROOT, 'dsh-desktop', 'vendor', 'dsh-kernel',
-  'deepseek-ai-dsh-client-ui-settings-models-0.1.2-alpha.3.tgz',
+  `deepseek-ai-dsh-client-ui-settings-models-${kernel.packageVersion}.tgz`,
 );
 const SM_FILE = extractPristineSettingsModels();
 

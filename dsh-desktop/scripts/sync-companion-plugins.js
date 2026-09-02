@@ -41,7 +41,8 @@ const { quotePatchScalarValues } = require('./plugin-core/lib/patch-surgery');
 const { PluginStateStore } = require('./plugin-core/lib/state-store');
 const { syncHubRecognition } = require('./lib/hub-registry');
 const {
-  ACP_DISABLE_BLOCK, PET_DISABLE_BLOCK,
+  ACP_SELF_DISABLE_BLOCK, PET_DISABLE_BLOCK,
+  removeAcpBasicDisableBlock,
   ensureDisabledPatchEntry, removeLegacyMarketplacePatchLines,
   removeRetiredDshMarketPatchRows, removeRetiredThirdPartyThinkingPatchRows,
   removeRetiredDshFloatWindowPatchRows,
@@ -294,19 +295,25 @@ function syncPlugins(home, dryRun, dshPkgDir) {
     log('已从 cordis.patch.yml 移除退役插件 dsh-float-window 条目');
   }
 
-  // billion-context-dsh（compaction-acp）是模型驱动的 ACP 压缩后端：同一
-  // realm 内与 dsh 默认的 compaction-basic 不能并存（插件 README 的官方
-  // 安装说明）。幂等写入禁用条目：patch 中已存在 compaction-basic 条目
-  // （含用户手写的 disabled 块）则不动，尊重用户配置。
+  // billion-context-dsh（compaction-acp，模型驱动的 ACP 压缩后端）默认关闭：
+  // 用户反馈其在上下文占用未及 1/4 时仍频繁压缩。改为随包默认禁用（harness-pet
+  // 同款顶层 disabled 块一票否决 bundle 自身 insert），需要时在设置 → 插件 →
+  // 管理 一键开启。同时撤销历史自动写入的 compaction-basic 禁用块、恢复内核
+  // 默认压缩（billion-context-dsh 不再默认接管，两后端互斥的前提随之消失）。
   if (bundleNames.has('billion-context-dsh')) {
-    const acp = ensureDisabledPatchEntry(patch, new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*compaction-basic(?![A-Za-z0-9_.-])'), ACP_DISABLE_BLOCK);
+    const heal = removeAcpBasicDisableBlock(patch);
+    if (heal.changed) {
+      patch = heal.patch;
+      changed = true;
+      if (dryRun) log(`dry-run: 将撤销 ${patchFile} 中的 compaction-basic 禁用块`);
+      else log('已撤销 compaction-basic 禁用块（恢复内核默认压缩）');
+    }
+    const acp = ensureDisabledPatchEntry(patch, new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*compaction-acp(?![A-Za-z0-9_.-])'), ACP_SELF_DISABLE_BLOCK);
     if (acp.changed) {
       patch = acp.patch;
       changed = true;
-      if (dryRun) log(`dry-run: 将向 ${patchFile} 写入 compaction-basic 禁用条目`);
-      else log('已写入 compaction-basic 禁用条目（billion-context-dsh 接管压缩后端）');
-    } else {
-      log('compaction-basic 禁用条目已存在（跳过）');
+      if (dryRun) log(`dry-run: 将向 ${patchFile} 写入 compaction-acp 默认禁用条目`);
+      else log('已写入 compaction-acp 禁用条目（billion-context-dsh 默认关闭）');
     }
   }
 

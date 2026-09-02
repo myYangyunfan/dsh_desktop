@@ -148,12 +148,13 @@ function applyReplacements(file, replacements, log, stats, options) {
     src = fs.readFileSync(file, 'utf8');
   } catch (err) {
     log('session-manage 补丁: 读取失败 ' + file + ': ' + err.message);
+    if (stats) stats.failed += 1;
     return false;
   }
   const alreadyMarked = src.includes(MARKER);
   let changed = false;
-  for (const { anchor, insert } of replacements) {
-    if (src.includes(insert)) continue; // 本替换已完成（insert 自身即 done 标记）
+  for (const { anchor, insert, done } of replacements) {
+    if (src.includes(done !== undefined ? done : insert)) continue; // 本替换已完成（insert/done 自身即完成标记）
     if (!src.includes(anchor)) {
       log('session-manage 补丁: 锚点未匹配（dsh 版本可能已变化），跳过 ' + file + ' :: ' + anchor.slice(0, 60));
       if (stats) stats.anchorMissing += 1;
@@ -179,6 +180,7 @@ function applyReplacements(file, replacements, log, stats, options) {
     return true;
   } catch (err) {
     log('session-manage 补丁: 写入失败 ' + file + ': ' + err.message);
+    if (stats) stats.failed += 1;
     return false;
   }
 }
@@ -187,7 +189,8 @@ function applyReplacements(file, replacements, log, stats, options) {
  * 对某个 node_modules 根目录应用对话删除/归档管理补丁（幂等）。
  * @param {string} nmRoot node_modules 根目录
  * @param {(msg: string) => void} [log]
- * @param {{anchorMissing?: number}} [stats]
+ * @param {{anchorMissing?: number, failed?: number}} [stats] 计数回流
+ *   （锚点失配与读写失败均由调用方报告采集）
  * @param {{dryRun?: boolean}} [options]
  * @returns {number} 实际发生修改的文件数
  */
@@ -234,7 +237,10 @@ function patchSessionManage(nmRoot, log = () => {}, stats, options) {
     {
       file: path.join(nmRoot, '@deepseek-ai', 'dsh-client-ui-workspace', 'lib', 'client.js'),
       replacements: [
-        { anchor: UI_MENU_ANCHOR, insert: UI_MENU_INSERT },
+        // done 判据用本注入体独有文案：后续 open-project-dir 补丁会在同一
+        // 菜单数组里追加 open-folder 项，insert 尾部（`];` 定界）随之变化，
+        // 链重跑时若仍用 insert 自身判完成会对已收敛态误报 anchor-missing。
+        { anchor: UI_MENU_ANCHOR, insert: UI_MENU_INSERT, done: 'dsh-desktop patch (session manage): 归档下方增加删除' },
         { anchor: UI_SELECT_ANCHOR, insert: UI_SELECT_INSERT },
         { anchor: UI_ZH_ANCHOR, insert: UI_ZH_INSERT },
         { anchor: UI_EN_ANCHOR, insert: UI_EN_INSERT },

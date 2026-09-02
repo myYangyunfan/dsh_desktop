@@ -2,7 +2,6 @@
 import { randomUUID as randomUUID3 } from "node:crypto";
 import { BlockList as BlockList3, isIP as isIP3 } from "node:net";
 import z from "@deepseek-ai/schemastery";
-import { settingsNamespace } from "@deepseek-ai/dsh-settings";
 
 // src/contracts/errors.ts
 var CatalogContractError = class extends Error {
@@ -4691,7 +4690,7 @@ var MarketInstallService = class {
 };
 
 // src/host/routes.ts
-var MARKET_SETTINGS_NAMESPACE = settingsNamespace("dsh-community-market");
+var MARKET_SETTINGS_NAMESPACE = "dsh-community-market";
 var SOURCE_SCHEMA = z.object({
   sourceRecordId: z.string().required(),
   registrationKind: z.union(["user-added", "built-in"]).required(),

@@ -1,13 +1,42 @@
 {
-  "generatedAt": "2026-08-31T19:45:28.288Z",
+  "generatedAt": "2026-09-01T17:45:07.817Z",
   "kernelRoot": "@deepseek-ai",
-  "markerCount": 10,
+  "markerCount": 52,
   "surface": [
     {
+      "file": "dsh-agent-loop/lib/index.js",
+      "sha256": "5d0aa522a2d8ae22",
+      "markers": [
+        "cross-copy scheduler lookup guard",
+        "synthesize empty tool-call ids"
+      ]
+    },
+    {
+      "file": "dsh-agent-presets/lib/index.js",
+      "sha256": "46de2fd35712b452",
+      "markers": [
+        "agent-preset-fallback"
+      ]
+    },
+    {
+      "file": "dsh-agent-presets/lib/invariant.js",
+      "sha256": "8cf3a18ad246de9a",
+      "markers": [
+        "agent-preset-fallback"
+      ]
+    },
+    {
       "file": "dsh-api-remotes/lib/client.js",
-      "sha256": "102ded4511d06ae0",
+      "sha256": "35c1285a31e08130",
       "markers": [
         "session manage"
+      ]
+    },
+    {
+      "file": "dsh-api-settings-controller/lib/index.js",
+      "sha256": "7808db19d80c395c",
+      "markers": [
+        "credentials-absent guidance"
       ]
     },
     {
@@ -33,6 +62,27 @@
       ]
     },
     {
+      "file": "dsh-atomic-write/lib/index.js",
+      "sha256": "e58b847d61f9dc66",
+      "markers": [
+        "orphan lock recovery"
+      ]
+    },
+    {
+      "file": "dsh-attachment-local/lib/index.js",
+      "sha256": "def04067735e574f",
+      "markers": [
+        "trust decoded image bytes"
+      ]
+    },
+    {
+      "file": "dsh-client-modules/lib/client.js",
+      "sha256": "72f7493fe464b0f6",
+      "markers": [
+        "bundle script transient-fetch retry"
+      ]
+    },
+    {
       "file": "dsh-client-ui-primitives/lib/index.js",
       "sha256": "ed4e0281b1c9e04f",
       "markers": [
@@ -40,32 +90,165 @@
       ]
     },
     {
-      "file": "dsh-client-ui-settings-plugins/lib/client.js",
-      "sha256": "58341509a58f6552",
+      "file": "dsh-client-ui-settings-models/lib/client.js",
+      "sha256": "8c5f07e58e1f07d6",
       "markers": [
+        "settings-conflict retry",
+        "settings-models namespace heal"
+      ]
+    },
+    {
+      "file": "dsh-client-ui-settings-plugins/lib/client.js",
+      "sha256": "b3fd203d02869407",
+      "markers": [
+        "hide inventory tab",
         "issue #20"
       ]
     },
     {
-      "file": "dsh-client-ui-workspace/lib/client.js",
-      "sha256": "84c73629c5956e45",
+      "file": "dsh-client-ui-slots/lib/index.js",
+      "sha256": "c2e49a8eea28b226",
       "markers": [
+        "accept legacy keyed-slot id as key",
+        "isolate keyed-slot registration errors"
+      ]
+    },
+    {
+      "file": "dsh-client-ui-workspace/lib/client.js",
+      "sha256": "1d5a768ecf127c95",
+      "markers": [
+        "manual sort drag sync",
         "open project dir",
         "session manage"
       ]
     },
     {
+      "file": "dsh-cordis-client-runner/lib/client.js",
+      "sha256": "2406afee3b1a481e",
+      "markers": [
+        "derive keyed slot key for unkeyed registrations"
+      ]
+    },
+    {
+      "file": "dsh-credentials-local/lib/index.js",
+      "sha256": "28df289ed678eeeb",
+      "markers": [
+        "transient initial credentials read retries"
+      ]
+    },
+    {
+      "file": "dsh-host-directory-picker-auto/lib/index.js",
+      "sha256": "16cb89718c232202",
+      "markers": [
+        "WSL picker must browse, not zenity into WSLg"
+      ]
+    },
+    {
+      "file": "dsh-llm-deepseek/lib/index.js",
+      "sha256": "d5cb54aef423fc1d",
+      "markers": [
+        "device-auth guidance"
+      ]
+    },
+    {
       "file": "dsh-llm-pi-ai/lib/index.js",
-      "sha256": "bd3bc60939d88efc",
+      "sha256": "94241e864762bfa5",
       "markers": [
         "hand-declared reasoning defaults"
       ]
     },
     {
-      "file": "dsh-session/lib/index.js",
-      "sha256": "ad21b496dbf07513",
+      "file": "dsh-llm/lib/index.js",
+      "sha256": "9aa612aefaa0cee0",
       "markers": [
-        "session manage"
+        "adapter prepareCall guard"
+      ]
+    },
+    {
+      "file": "dsh-session-persistence-jsonl/lib/index.js",
+      "sha256": "ea7dce478fbf65cc",
+      "markers": [
+        "degrade session load to last complete frame",
+        "recover complete zstd frame torn JSONL tail",
+        "session header scan cache + bounded read"
+      ]
+    },
+    {
+      "file": "dsh-session/lib/index.js",
+      "sha256": "113fb809821615d6",
+      "markers": [
+        "session manage",
+        "tolerate empty tool source"
+      ]
+    },
+    {
+      "file": "dsh-skill-filesystem/lib/index.js",
+      "sha256": "ed4c34c5eef96bc3",
+      "markers": [
+        "skill-dirs-compat"
+      ]
+    },
+    {
+      "file": "dsh-subagent-claude-code/lib/index.js",
+      "sha256": "1ab2d80216e04692",
+      "markers": [
+        "claude-local-bin-fallback"
+      ]
+    },
+    {
+      "file": "dsh-system-prompt/lib/index.js",
+      "sha256": "6a5b1f9e830c58e0",
+      "markers": [
+        "prompt-context-literal"
+      ]
+    },
+    {
+      "file": "dsh-terminal-bash/lib/index.js",
+      "sha256": "b750362a0d5728b3",
+      "markers": [
+        "interrupt escalation"
+      ]
+    },
+    {
+      "file": "dsh-token-meter/lib/index.js",
+      "sha256": "d6714dd7448e4725",
+      "markers": [
+        "clamp token-meter messageTokens"
+      ]
+    },
+    {
+      "file": "dsh-tool-bash-persistent/lib/index.js",
+      "sha256": "88776f479af86009",
+      "markers": [
+        "race the persistent send against tool abort"
+      ]
+    },
+    {
+      "file": "dsh-tool-bash/lib/index.js",
+      "sha256": "669b737ad2342474",
+      "markers": [
+        "optional shell description"
+      ]
+    },
+    {
+      "file": "dsh-tool-pwsh-persistent/lib/index.js",
+      "sha256": "b22e287db13a7fab",
+      "markers": [
+        "race the persistent send against tool abort"
+      ]
+    },
+    {
+      "file": "dsh-tool-pwsh/lib/index.js",
+      "sha256": "b8070e160d0f4d85",
+      "markers": [
+        "optional shell description"
+      ]
+    },
+    {
+      "file": "dsh-tools/lib/index.js",
+      "sha256": "ee177f4a28baa0cb",
+      "markers": [
+        "global-symbol scheduler mirror"
       ]
     },
     {

@@ -29,6 +29,12 @@ const ACP_DISABLE_BLOCK = '\n# billion-context-dsh：禁用 preset realm 的 com
 // 桌面宠物（harness-pet）默认关闭的禁用块。
 const PET_DISABLE_BLOCK = '\n# harness-pet：桌面宠物默认关闭（设置 → 插件 → 管理 可一键开启）\n- id: harness-pet\n  disabled: true\n';
 
+// billion-context-dsh（compaction-acp）自身默认关闭的禁用块（harness-pet 同款）。
+// 用户反馈模型驱动压缩在占用率未及 1/4 时仍频繁压缩，改为默认关闭；需要时在
+// 设置 → 插件 → 管理 一键开启。禁用顶层条目一票否决 bundle 自身 cordis.patch.yml
+// 的 insert 注册（loader disabled 覆盖语义），内核默认 compaction-basic 随即接管。
+const ACP_SELF_DISABLE_BLOCK = '\n# billion-context-dsh（compaction-acp）：模型驱动压缩默认关闭（频繁自动压缩反馈；设置 → 插件 → 管理 可一键开启）\n- id: compaction-acp\n  disabled: true\n';
+
 // 顶层条目 id 行（缩进 0-2）：统一字符集，含点号。
 const ID_ROW_RE = /^(\s*)-\s*id:\s*([A-Za-z0-9][A-Za-z0-9_.-]*)/;
 // 任意缩进的条目 id 行（insert 块内层 / 顶层共用）。
@@ -623,6 +629,31 @@ function removeLegacyMarketplacePatchLines(patch) {
 }
 
 /**
+ * 撤销历史自动写入的 compaction-basic 禁用块（billion-context-dsh 默认关闭后，
+ * 内核默认压缩需恢复）。仅精确删除本模块 ACP_DISABLE_BLOCK 写入的那一段（含其
+ * 专属注释行），用户手写的 compaction-basic 条目一律不动。幂等：块不在位则
+ * 零改写。兼容 [] 形态（无前导换行的 trim 形态）。
+ * @param {string} patch cordis.patch.yml 原文
+ * @returns {{ patch: string, changed: boolean }}
+ */
+function removeAcpBasicDisableBlock(patch) {
+  if (typeof patch !== 'string' || patch === '') return { patch, changed: false };
+  const original = patch;
+  const normalized = original.includes('\r\n') ? original.replace(/\r\n/g, '\n') : original;
+  let out = normalized;
+  // 常规追加形态：块以前导换行起，整段删除后留一个换行。
+  out = out.split(ACP_DISABLE_BLOCK).join('\n');
+  // [] / 空文件形态：ensureDisabledPatchEntry 写入的是 block.trim()（无前导换行）。
+  const trimmed = ACP_DISABLE_BLOCK.trim();
+  if (out.includes(trimmed)) out = out.split(trimmed).join('');
+  // 连续空行收敛，保持文件整洁。
+  out = out.replace(/\n{3,}/g, '\n\n');
+  if (out === normalized) return { patch: original, changed: false };
+  return { patch: preserveEol(original, out), changed: true };
+}
+
+
+/**
  * 幂等写入默认禁用条目（compaction-basic / harness-pet）。
  * @returns {{ patch: string, changed: boolean }}
  */
@@ -919,6 +950,7 @@ function removeDeadEntriesById(patchFile, ids) {
 module.exports = {
   PATCH_HEADER,
   ACP_DISABLE_BLOCK,
+  ACP_SELF_DISABLE_BLOCK,
   PET_DISABLE_BLOCK,
   LOADER_ID_RE,
   parsePatchRows,
@@ -940,6 +972,7 @@ module.exports = {
   removedPluginIdsFromPatch,
   removeLegacyMarketplacePatchLines,
   ensureDisabledPatchEntry,
+  removeAcpBasicDisableBlock,
   needsYamlScalarQuote,
   quotePatchScalarValues,
   yamlQuoteIfNeeded,

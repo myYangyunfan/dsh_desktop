@@ -29,7 +29,7 @@
  */
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import z from '@deepseek-ai/schemastery';
-import { settingsNamespace } from '@deepseek-ai/dsh-settings';
+
 import { visionChat } from './vlm.js';
 export const name = 'dsh-vision';
 export const inject = ['tools', 'systemPrompt', 'settings', 'llm', 'attachments'];
@@ -70,7 +70,7 @@ export const Config = z.object({
     timeoutMs: z.number().step(1).min(1_000).max(300_000).default(60_000),
     maxImageBytes: z.number().step(1).min(1).default(10 * 1024 * 1024),
 });
-const NS = settingsNamespace('dsh-vision');
+const NS = 'dsh-vision';
 // 配置的 getter；setSource 会被替换为 settings scope 读取器（热生效）。
 let liveConfig = () => ({});
 

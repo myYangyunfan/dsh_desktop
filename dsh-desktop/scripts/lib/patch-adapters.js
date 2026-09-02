@@ -2025,20 +2025,14 @@ function transformClaudeLocalBinFallback(src, file) {
 }
 
 // ---------------------------------------------------------------------------
-// skill 目录兼容补丁（2026-08，用户技能管理面板空白反馈）：内核
-// dsh-skill-filesystem 的 roots() 只扫 .dsh/.agents 系根（project × 2 +
-// custom + user × 2 + bundled），用户为 Claude Code（~/.claude/skills）与
-// Codex CLI（~/.codex/skills）装的技能一概不可见——桌面技能管理面板
-//（dsh-basics-panel 经 ctx.skills.snapshot()）对这类用户显示为空。补丁
-// 两点（单 marker 幂等，锚点失配自动退役）：
-//   1) roots() 在 includeDefaultRoots 分支追加 user-claude / user-codex 两
-//      个常用约定根，rank 取 USER_AGENTS_RANK+10 / +20（低于 custom 300 与
-//      user-agents 500、仍高于 bundled 600——自定义目录与 .agents 用户根
-//      优先级不变；复用文件已 import 的 homedir，不新增依赖）；
-//   2) 构造器把 DSH_SKILL_DIRS（path.delimiter 分隔，过滤空段）并入
-//      this.customSkillDirs，与 config 条目同样 resolve + CUSTOM_RANK。
-// 顺带把 node:path 命名导入扩一个 delimiter（ESM 产物无 path 命名空间可用，
-// 不扩则注入体是 ReferenceError）。
+// skill 目录兼容补丁（2026-08 面板空白反馈 → 2026-09 收窄读取范围）：内核
+// dsh-skill-filesystem 的 roots() 已扫 project × 2 + custom + user-dsh（.dsh/skills）
+// + user-agents（.agents/skills）+ bundled 五类「自身」根，本补丁现仅保留一点：
+//   构造器把 DSH_SKILL_DIRS（path.delimiter 分隔，过滤空段）并入 this.customSkillDirs，
+//   与 config 条目同样 resolve + CUSTOM_RANK（用户自备技能根，显式环境变量注入）。
+// 历史版本还曾在 roots() 追加 user-claude（~/.claude/skills）/ user-codex（~/.codex/skills）
+// 两个跨代理约定根；用户要求技能读取固定到「只读自己的 skills」，该两处追加已移除
+// （单 marker 幂等、锚点失配自动退役语义不变）。顺带把 node:path 命名导入扩 delimiter。
 // ---------------------------------------------------------------------------
 const SKILL_DIRS_COMPAT_MARKER = 'dsh-desktop compat: skill-dirs-compat';
 // 锚点 0：node:path 命名导入行（delimiter 并入，按字母序插在最前）。
@@ -2056,57 +2050,17 @@ const SKILL_DIRS_CUSTOM_NEW = [
   '\t\t\t.filter((dir) => dir !== "")',
   '\t\t\t.map((dir) => resolve(dir)));',
 ].join('\n');
-// 锚点 2：roots() 的 user-dsh / user-agents push 块（user-claude / user-codex
-// 追加为同一 push 调用的后两个实参，includeDefaultRoots 语义自动覆盖）。
-const SKILL_DIRS_ROOTS_ANCHOR = [
-  '\t\tif (this.includeDefaultRoots) roots.push({',
-  '\t\t\tpath: join(this.dshHome, "skills"),',
-  '\t\t\tsource: "user-dsh",',
-  '\t\t\trank: USER_DSH_RANK,',
-  '\t\t\tskipSystem: true',
-  '\t\t}, {',
-  '\t\t\tpath: join(this.agentsHome, "skills"),',
-  '\t\t\tsource: "user-agents",',
-  '\t\t\trank: USER_AGENTS_RANK',
-  '\t\t});',
-].join('\n');
-const SKILL_DIRS_ROOTS_NEW = [
-  '\t\tif (this.includeDefaultRoots) roots.push({',
-  '\t\t\tpath: join(this.dshHome, "skills"),',
-  '\t\t\tsource: "user-dsh",',
-  '\t\t\trank: USER_DSH_RANK,',
-  '\t\t\tskipSystem: true',
-  '\t\t}, {',
-  '\t\t\tpath: join(this.agentsHome, "skills"),',
-  '\t\t\tsource: "user-agents",',
-  '\t\t\trank: USER_AGENTS_RANK',
-  '\t\t}, {',
-  '\t\t\t// ' + SKILL_DIRS_COMPAT_MARKER + ' — common Claude Code / Codex CLI skill directories',
-  '\t\t\t// are first-class user roots so skills installed for those CLIs appear in skill',
-  '\t\t\t// management; ranks stay above user-agents and below bundled so custom and',
-  '\t\t\t// .agents roots keep precedence.',
-  '\t\t\tpath: join(homedir(), ".claude", "skills"),',
-  '\t\t\tsource: "user-claude",',
-  '\t\t\trank: USER_AGENTS_RANK + 10',
-  '\t\t}, {',
-  '\t\t\tpath: join(homedir(), ".codex", "skills"),',
-  '\t\t\tsource: "user-codex",',
-  '\t\t\trank: USER_AGENTS_RANK + 20',
-  '\t\t});',
-].join('\n');
 
 function transformSkillDirsCompat(src, file) {
   if (src.includes(SKILL_DIRS_COMPAT_MARKER)) return { status: 'already' };
   const missing = [];
   if (!src.includes(SKILL_DIRS_IMPORT_ANCHOR)) missing.push('node:path import');
   if (!src.includes(SKILL_DIRS_CUSTOM_ANCHOR)) missing.push('customSkillDirs constructor line');
-  if (!src.includes(SKILL_DIRS_ROOTS_ANCHOR)) missing.push('roots() user-agents push');
   if (missing.length > 0) {
     return { status: 'anchor-missing', detail: '未找到 skill 目录兼容锚点（版本可能已变更）：' + missing.join(' / ') + '，跳过 ' + file };
   }
   let out = src.replace(SKILL_DIRS_IMPORT_ANCHOR, () => SKILL_DIRS_IMPORT_NEW);
   out = out.replace(SKILL_DIRS_CUSTOM_ANCHOR, () => SKILL_DIRS_CUSTOM_NEW);
-  out = out.replace(SKILL_DIRS_ROOTS_ANCHOR, () => SKILL_DIRS_ROOTS_NEW);
   return { status: 'changed', src: out };
 }
 
@@ -2163,7 +2117,7 @@ module.exports = {
   // Codex / Claude 子代理本地二进制回落（安装包瘦身移除原生二进制后）。
   transformCodexLocalBinFallback,
   transformClaudeLocalBinFallback,
-  // skill 目录兼容（~/.claude/skills、~/.codex/skills + DSH_SKILL_DIRS 参与发现）。
+  // skill 目录兼容（DSH_SKILL_DIRS 并入 custom 根；已移除 ~/.claude、~/.codex 跨代理根）。
   transformSkillDirsCompat,
   // K1 注入体常量（单测 vm 行为验证用，与 transform 同源；非 marker）。
   CREDENTIALS_HELPERS_CODE,

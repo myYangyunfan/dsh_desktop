@@ -8,7 +8,7 @@
 // 未知 id→standard），broken 预设的 resolveMountable 硬抛路径不经本补丁。
 //
 // 覆盖：
-//   1. 锚点命中 pristine 源（vendor alpha.2 tarball 解出的 lib/index.js +
+//   1. 锚点命中 pristine 源（vendor alpha.3 tarball 解出的 lib/index.js +
 //      lib/invariant.js 双文件）；
 //   2. transform 产物可被 node --check 解析；
 //   3. 幂等（二遍 already）；
@@ -32,6 +32,7 @@ const { transformAgentPresetFallback, markers } = require('../lib/patch-adapters
 const { PATCH_SPECS, getSpecsByCli } = require('../lib/patch-registry');
 const { AGENT_PRESET_FALLBACK_PKG_RELS, resolvePatchTargets } = require('../lib/patch-target-resolver');
 const { applyAll } = require('../integration/patch-runner');
+const { kernel } = require('../compat/kernel-pin.json');
 
 const MARKER = 'dsh-desktop fix: agent-preset-fallback';
 // pristine 内核包源：vendored 0.1.2-alpha.3 tarball（vendor/dsh-kernel/，升级
@@ -41,7 +42,7 @@ const MARKER = 'dsh-desktop fix: agent-preset-fallback';
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const VENDOR_TARBALL = path.join(
   REPO_ROOT, 'dsh-desktop', 'vendor', 'dsh-kernel',
-  'deepseek-ai-dsh-agent-presets-0.1.2-alpha.3.tgz',
+  `deepseek-ai-dsh-agent-presets-${kernel.packageVersion}.tgz`,
 );
 
 /** 把 vendor tarball 解到一次性目录，返回解包后的包目录（package/）。 */

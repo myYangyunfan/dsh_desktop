@@ -1,12 +1,12 @@
 // Host-side entry for dsh-quest-ui:
 // registers the durable settings namespace used by the General-settings toggle.
 import z from "@deepseek-ai/schemastery";
-import { installSettingsSection, settingsNamespace } from "@deepseek-ai/dsh-settings";
+
 
 const name = "@deepseek-ai/dsh-quest-ui";
 const inject = ["settings"];
 
-const NS = settingsNamespace("dsh-quest-ui");
+const NS = "dsh-quest-ui";
 const Config = z.object({
   questMode: z.boolean().default(false)
 });

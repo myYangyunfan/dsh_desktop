@@ -1,8 +1,8 @@
 {
   "compatLayerVersion": "0.6.0-skeleton.1",
   "kernel": {
-    "tag": "dsh-v0.1.2-alpha.3",
-    "packageVersion": "0.1.2-alpha.3",
+    "tag": "dsh-v0.1.2-alpha.4",
+    "packageVersion": "0.1.2-alpha.4",
     "acquisition": "offline-tarball",
     "vendorDir": "vendor/dsh-kernel",
     "upstream": "https://github.com/deepseek-ai/deepseek-harness",
@@ -28,7 +28,9 @@
       { "id": "connection", "module": "@deepseek-ai/dsh-client-connection", "label": "前后端传输" }
     ],
     "removed": [
-      { "id": "api-gateway", "removedInKernel": "0.1.2-alpha.1", "reason": "网关 folded 进核心原生实现（v0.5.7 健康页误报教训）" }
+      { "id": "api-gateway", "removedInKernel": "0.1.2-alpha.1", "reason": "网关 folded 进核心原生实现（v0.5.7 健康页误报教训）" },
+      { "id": "code-runtime-python", "removedInKernel": "0.1.2-alpha.4", "reason": "上游 alpha.4 未发布该包且家族依赖树零引用，随升级一并移除（242/244）" },
+      { "id": "tool-subagent-report", "removedInKernel": "0.1.2-alpha.4", "reason": "上游 alpha.4 未发布该包且家族依赖树零引用，随升级一并移除（242/244）" }
     ]
   },
   "protocols": {

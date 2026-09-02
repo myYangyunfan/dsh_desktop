@@ -14,13 +14,12 @@
 // system prompt 全文（只读），供客户端设置页「预览官方提示词」入口对照编辑自定义提示词。
 
 import z from "@deepseek-ai/schemastery";
-import { installSettingsSection, settingsNamespace } from "@deepseek-ai/dsh-settings";
-import { PERSONA_SECTION, PERSONA_ORDER, renderPrompt } from "@deepseek-ai/dsh-system-prompt";
+import { PERSONA_SECTION, renderPrompt } from "@deepseek-ai/dsh-system-prompt";
 
 const name = "@deepseek-ai/dsh-prompt-custom";
 const inject = ["settings", "systemPrompt", "webServer"];
 
-const NS = settingsNamespace("dsh-prompt");
+const NS = "dsh-prompt";
 const Config = z.object({
 	enabled: z.boolean().default(false),
 	mode: z.union([z.const("replace"), z.const("append")]).default("append"),
@@ -116,10 +115,13 @@ function apply(ctx, config) {
 		const cfg = liveConfig() || {};
 		if (!cfg.enabled || !String(cfg.text || "").trim()) return;
 		const text = String(cfg.text).trim();
+		// alpha.4 移除了 PERSONA_ORDER 导出（SECTION_ORDERS 内部化）；改经服务公开
+		// getter 取上游权威值，避免硬编码内部数值。
+		const personaOrder = agent.ctx.systemPrompt.getSectionOrder("DEPLOYMENT_PERSONA");
 		if (cfg.mode === "replace") {
-			agent.ctx.systemPrompt.section({ name: PERSONA_SECTION, order: PERSONA_ORDER, text });
+			agent.ctx.systemPrompt.section({ name: PERSONA_SECTION, order: personaOrder, text });
 		} else {
-			agent.ctx.systemPrompt.section({ name: "dsh:custom-prompt", order: PERSONA_ORDER + 1, text });
+			agent.ctx.systemPrompt.section({ name: "dsh:custom-prompt", order: personaOrder + 1, text });
 		}
 	});
 

@@ -3,7 +3,7 @@
 // patch-surface.js — 兼容层 M2 配套：补丁干预面快照与漂移校验。
 //
 // 机制（采纳 dsh-TUI 团队 patch-surface.snapshot.json 同款，v0.6.0 兼容层
-// README 组件③）：把壳对官方内核的全部补丁干预（dsh-desktop patch 系列标记）
+// README 组件③）：把壳对官方内核的全部补丁干预（dsh-desktop 标记系列）
 // 与被干预文件的指纹快照成 JSON；verify 模式重推导并比对——内核换版导致
 // 补丁失配（标记消失）或出现意外干预时，CI/本地先爆（而非内核升级静默漂移）。
 //
@@ -18,36 +18,61 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const SNAP_REL = path.join('dsh-desktop', 'scripts', 'compat', 'patch-surface.snapshot.json');
-// 补丁标记家族：patch-*.js / patch-adapters.js 里统一以「dsh-desktop patch (名字)」
-// 形态声明（含历史形态「dsh-desktop fix:」「dsh-desktop compat:」）。
-const MARKER_RE = /dsh-desktop (?:patch \(([^)]+)\)|fix:? ([^*"\n]+)|compat:? ([^*\n"']+))/g;
+// 补丁标记家族：patch-*.js / patch-adapters.js 里统一以括号名（patch）、
+// 冒号名（fix: / compat:）三种声明形态携带「dsh-desktop 」前缀注入。
+// 捕获组统一排除 `*` 引号（双引/单引/反引号）`;` `{` `}` `<` `>` 反斜杠
+// （字符串拼接里的 `\n` 转义尾巴）与换行，避免从单引号字符串注释里采出
+// 带尾巴的垃圾标记名；patch (...) 形式以右括号定界，仍用 [^)]+。
+const MARKER_RE = /dsh-desktop (?:patch \(([^)]+)\)|fix:? ([^*"'`;{}<>\n\\]+)|compat:? ([^*"'`;{}<>\n\\]+))/g;
 
 function sha(buf) {
   return crypto.createHash('sha256').update(buf).digest('hex').slice(0, 16);
 }
 
-/** 扫描 repo 的补丁源码，收集全部干预标记名。 */
+/** 扫描 repo 的补丁源码，收集全部干预标记名。
+ *  递归遍历 <repo>/dsh-desktop/scripts 整棵子树（覆盖 scripts/lib、scripts/compat、
+ *  scripts/integration 等子目录里声明的标记），跳过 node_modules/test/dist；
+ *  外加 <repo>/dsh-desktop 顶层非递归 .js 扫描（balance.js 等）。 */
 function collectMarkers(repoRoot) {
   const markers = new Set();
-  const dirs = [
-    path.join(repoRoot, 'dsh-desktop', 'scripts'),
-    path.join(repoRoot, 'dsh-desktop'),
-  ];
   const seen = new Set();
-  for (const dir of dirs) {
-    let entries = [];
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
-    for (const e of entries) {
-      if (!e.isFile() || !/\.js$/.test(e.name) || seen.has(e.name)) continue;
-      seen.add(e.name);
-      let src = '';
-      try { src = fs.readFileSync(path.join(dir, e.name), 'utf8'); } catch { continue; }
-      for (const m of src.matchAll(MARKER_RE)) {
-        const name = (m[1] || m[2] || m[3] || '').trim();
-        if (name) markers.add(name);
-      }
+
+  function scanFile(full) {
+    if (seen.has(full)) return;
+    seen.add(full);
+    let src = '';
+    try { src = fs.readFileSync(full, 'utf8'); } catch { return; }
+    for (const m of src.matchAll(MARKER_RE)) {
+      // 「 — 解释文本」同行散文截断（fix:/compat: 注释常名字与说明同句），
+      // 截断后与其它短名去重合并。
+      const name = ((m[1] || m[2] || m[3] || '').trim()).split(' — ')[0].trim();
+      if (name) markers.add(name);
     }
   }
+
+  // ① <repo>/dsh-desktop/scripts 子树递归（跳过 node_modules/test/dist）。
+  const SKIP_DIRS = new Set(['node_modules', 'test', 'dist']);
+  (function walk(dir) {
+    let entries = [];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        if (SKIP_DIRS.has(e.name)) continue;
+        walk(full);
+      } else if (e.isFile() && /\.js$/.test(e.name)) {
+        scanFile(full);
+      }
+    }
+  })(path.join(repoRoot, 'dsh-desktop', 'scripts'));
+
+  // ② <repo>/dsh-desktop 顶层非递归 .js 扫描（balance.js 等）。
+  let topEntries = [];
+  try { topEntries = fs.readdirSync(path.join(repoRoot, 'dsh-desktop'), { withFileTypes: true }); } catch { /* 容错：顶层不可读则跳过 */ }
+  for (const e of topEntries) {
+    if (e.isFile() && /\.js$/.test(e.name)) scanFile(path.join(repoRoot, 'dsh-desktop', e.name));
+  }
+
   return [...markers].sort();
 }
 
@@ -110,12 +135,16 @@ function cmdVerify(kernelRoot, repoRoot) {
   process.exit(1);
 }
 
-const [, , cmd, kernelRoot, repoRoot] = process.argv;
-if (!cmd || !kernelRoot) {
-  console.error('用法: node patch-surface.js <snapshot|verify> <kernel-root> [repo-root]');
-  process.exit(1);
+module.exports = { collectMarkers, buildSurface, MARKER_RE };
+
+if (require.main === module) {
+  const [, , cmd, kernelRoot, repoRoot] = process.argv;
+  if (!cmd || !kernelRoot) {
+    console.error('用法: node patch-surface.js <snapshot|verify> <kernel-root> [repo-root]');
+    process.exit(1);
+  }
+  const rr = repoRoot ? path.resolve(repoRoot) : path.resolve(__dirname, '..', '..');
+  if (cmd === 'snapshot') cmdSnapshot(path.resolve(kernelRoot), rr);
+  else if (cmd === 'verify') cmdVerify(path.resolve(kernelRoot), rr);
+  else { console.error('未知命令: ' + cmd); process.exit(1); }
 }
-const rr = repoRoot ? path.resolve(repoRoot) : path.resolve(__dirname, '..', '..');
-if (cmd === 'snapshot') cmdSnapshot(path.resolve(kernelRoot), rr);
-else if (cmd === 'verify') cmdVerify(path.resolve(kernelRoot), rr);
-else { console.error('未知命令: ' + cmd); process.exit(1); }

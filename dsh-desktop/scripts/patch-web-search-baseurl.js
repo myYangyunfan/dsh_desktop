@@ -126,6 +126,10 @@ function patchClient(src) {
  * 对某个 node_modules 根目录应用 issue #20 补丁（幂等）。
  * @param {string} nmRoot node_modules 根目录
  * @param {(msg: string) => void} [log]
+ * @param {{anchorMissing?: number, failed?: number}} [stats] 可选可观测性计数回流：
+ *   anchorMissing 累计锚点未匹配跳过的文件，failed 累计读/写失败的文件——
+ *   让调用方能区分「返回 0 = 已打（正常）」与「返回 0 = 全部读写失败」。
+ * @param {{dryRun?: boolean}} [options]
  * @returns {number} 实际发生修改的文件数
  */
 function patchWebSearchBaseUrl(nmRoot, log = () => {}, stats, options) {
@@ -141,6 +145,7 @@ function patchWebSearchBaseUrl(nmRoot, log = () => {}, stats, options) {
       src = fs.readFileSync(file, 'utf8');
     } catch (err) {
       log('web-search baseURL 补丁: 读取失败 ' + file + ': ' + err.message);
+      if (stats) stats.failed += 1;
       continue;
     }
     const patch = file.includes('dsh-web-search-deepseek') ? patchProvider : patchClient;
@@ -164,6 +169,7 @@ function patchWebSearchBaseUrl(nmRoot, log = () => {}, stats, options) {
       }
     } catch (err) {
       log('web-search baseURL 补丁: 写入失败 ' + file + ': ' + err.message);
+      if (stats) stats.failed += 1;
     }
   }
   return changedFiles;

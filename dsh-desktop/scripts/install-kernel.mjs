@@ -1,21 +1,25 @@
 /**
- * Install the locally-built @deepseek-ai/dsh@0.1.2-alpha.1 kernel from the
- * VENDORED tarballs in dsh-desktop/vendor/dsh-kernel/ — WITHOUT the npm registry.
+ * Install the locally-built @deepseek-ai/dsh kernel from the VENDORED tarballs in
+ * dsh-desktop/vendor/dsh-kernel/ — WITHOUT the npm registry.
+ *
+ * The exact kernel version is defined once in scripts/compat/kernel-pin.json
+ * (kernel.packageVersion / kernel.tag); the KERNEL_VERSION constant below is kept in
+ * sync with that pin — do not drift it independently.
  *
  * Why this exists
  * ---------------
- * The dsh kernel (the whole @deepseek-ai/dsh-* family) is built from GitHub
- * (`dsh-v0.1.2-alpha.1`) and is NOT published to npm. The 241 packed tarballs
- * (`pnpm pack` output, with `workspace:` deps already rewritten to explicit
- * `^0.1.2-alpha.1` ranges) are committed under vendor/dsh-kernel/ so a fresh
- * machine / CI can reproduce the exact kernel node_modules offline.
+ * The dsh kernel (the whole @deepseek-ai/dsh-* family) is built from the official
+ * tagged source and is NOT published to npm. The packed tarballs (`pnpm pack`
+ * output, with `workspace:` deps already rewritten to explicit ranged versions)
+ * are committed under vendor/dsh-kernel/ so a fresh machine / CI can reproduce the
+ * exact kernel node_modules offline.
  *
  * How it works (mirrors the consumer-install approach)
  * ----------------------------------------------------
  * 1. Fast path: if node_modules/@deepseek-ai/dsh/package.json is already
- *    `0.1.2-alpha.1`, exit 0 immediately (idempotent, no network).
- * 2. Otherwise, build a throwaway npm project whose dependencies are ALL 241
- *    tarballs as `file:` URLs, run `npm install --no-audit --no-fund
+ *    KERNEL_VERSION, exit 0 immediately (idempotent, no network).
+ * 2. Otherwise, build a throwaway npm project whose dependencies are ALL the
+ *    vendored tarballs as `file:` URLs, run `npm install --no-audit --no-fund
  *    --no-package-lock`, and merge the resolved node_modules into
  *    dsh-desktop/node_modules. Every @deepseek-ai/dsh-* resolves to our local
  *    tarball; external deps (resolve.exports, yaml, SDKs, natives, ...) come
@@ -49,7 +53,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const TARBALLS = join(ROOT, 'vendor', 'dsh-kernel');
 const NODE_MODULES = join(ROOT, 'node_modules');
 const DSH_PACKAGE = join(NODE_MODULES, '@deepseek-ai', 'dsh', 'package.json');
-const KERNEL_VERSION = '0.1.2-alpha.3';
+const KERNEL_VERSION = '0.1.2-alpha.4';
 const SHELL = process.platform === 'win32';
 
 /** Read `package.json` out of a pnpm/npm pack tarball without extracting it. */

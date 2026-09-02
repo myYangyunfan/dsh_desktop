@@ -101,9 +101,11 @@ test('sync CLI: 空 DSH_HOME 首次同步落盘正确（包/条目/禁用块）'
   }
   // harness-pet 默认禁用块（bundle 校验通过才会写）
   assert.ok(patch.includes('- id: harness-pet\n  disabled: true'), 'harness-pet 默认禁用块应写入');
-  // billion-context-dsh 缺 dist 构建产物 → 不注册 → 不写 compaction-basic 禁用块
+  // billion-context-dsh 默认关闭：bundle 可装配 → 写 compaction-acp 自身禁用块，
+  // 且不再自动禁用 compaction-basic（内核默认压缩保留）；缺 dist → 两者都不写。
   const acpOk = fs.existsSync(path.join(repoRoot, 'assets', 'plugins', 'billion-context-dsh', 'dist', 'index.js'));
-  assert.strictEqual(patch.includes('compaction-basic'), acpOk, 'compaction-basic 禁用块只应在 ACP bundle 可装配时写入');
+  assert.strictEqual(patch.includes('- id: compaction-acp\n  disabled: true'), acpOk, 'compaction-acp 默认禁用块只应在 bundle 可装配时写入');
+  assert.ok(!patch.includes('- id: compaction-basic\n  disabled: true'), '不应再自动禁用 compaction-basic（内核默认压缩需保留）');
 });
 
 test('sync CLI: 二次同步零写入；dry-run 零落盘', (t) => {

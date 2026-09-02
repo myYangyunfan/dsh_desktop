@@ -17,6 +17,14 @@
       "label": "打开日志"
     },
     {
+      "id": "acp-selftest",
+      "label": "ACP 自检"
+    },
+    {
+      "id": "acp-config",
+      "label": "ACP 配置（Zed）"
+    },
+    {
       "id": "quit",
       "label": "退出"
     }

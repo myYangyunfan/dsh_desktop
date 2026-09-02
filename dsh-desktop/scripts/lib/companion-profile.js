@@ -19,10 +19,12 @@ const { compareVersions } = require('./versions');
 const {
   PATCH_HEADER,
   ACP_DISABLE_BLOCK,
+  ACP_SELF_DISABLE_BLOCK,
   PET_DISABLE_BLOCK,
   removedPluginIdsFromPatch,
   removeLegacyMarketplacePatchLines,
   ensureDisabledPatchEntry,
+  removeAcpBasicDisableBlock,
   registerCompanionPatchEntries,
 } = require('../plugin-core/lib/patch-surgery');
 
@@ -558,6 +560,7 @@ function syncCompanionFiles(opts) {
 module.exports = {
   PATCH_HEADER,
   ACP_DISABLE_BLOCK,
+  ACP_SELF_DISABLE_BLOCK,
   PET_DISABLE_BLOCK,
   KNOWN_COMPANION_DIR_NAMES,
   removeStaleCompanionPlugins,
@@ -571,6 +574,7 @@ module.exports = {
   removeLegacyMarketplacePatchLines,
   removedPluginIdsFromPatch,
   ensureDisabledPatchEntry,
+  removeAcpBasicDisableBlock,
   registerCompanionPatchEntries,
   syncCompanionFiles,
   dirNeedsSync,

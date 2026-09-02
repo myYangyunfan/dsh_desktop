@@ -30,6 +30,10 @@ jobs:
           cache-dependency-path: dsh-desktop/package-lock.json
       - name: 安装依赖
         run: npm ci
+      - name: kernel-pin 一致性校验（fail-closed，离线 tarball 与 pin 不得混版）
+        run: node scripts/compat/validate-pin.js
+      - name: 补丁干预面漂移校验（npm ci 后 dev 树应与快照收敛态一致）
+        run: node scripts/compat/patch-surface.js verify node_modules/@deepseek-ai ..
       - name: 语法预检（构建门禁同款，prepack/predist 自动执行）
         run: node scripts/check-syntax.js
       - name: 全量单测（unit-* / desktop-*，node --test 自动发现）

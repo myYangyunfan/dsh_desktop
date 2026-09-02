@@ -22,7 +22,7 @@ export const BUILTIN_ENTRIES = [
         id: 'glm-5.2',
         provider: '*',
         model: 'glm-5.2',
-        note: 'GLM-5.2 原生档位 minimal / low / medium / high（智谱 z.ai 深度思考文档）；阿里云百炼 OpenAI 兼容端点实测接受这些取值。',
+        noteKey: 'glm52',
         efforts: {
             minimal: 'minimal',
             low: 'low',
@@ -35,7 +35,7 @@ export const BUILTIN_ENTRIES = [
         id: 'kimi-k3',
         provider: '*',
         model: 'kimi/kimi-k3',
-        note: 'Kimi K3 官方档位 low / high / max（Moonshot 思考力度文档），与 pi-ai 目录 moonshotai 条目一致。',
+        noteKey: 'kimiK3',
         efforts: {
             low: 'low',
             high: 'high',
@@ -47,7 +47,7 @@ export const BUILTIN_ENTRIES = [
         id: 'kimi-k3-plain',
         provider: '*',
         model: 'kimi-k3',
-        note: 'Kimi K3 官方档位 low / high / max（Moonshot 思考力度文档），与 pi-ai 目录 moonshotai 条目一致。',
+        noteKey: 'kimiK3',
         efforts: {
             low: 'low',
             high: 'high',

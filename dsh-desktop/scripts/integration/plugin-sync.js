@@ -29,7 +29,8 @@ const { quotePatchScalarValues } = require('../plugin-core/lib/patch-surgery');
 const { PluginStateStore } = require('../plugin-core/lib/state-store');
 const { reconcileProfileBundles, resolveBundleDirLike } = require('../lib/profile-reconcile');
 const {
-  ACP_DISABLE_BLOCK,
+  ACP_SELF_DISABLE_BLOCK,
+  removeAcpBasicDisableBlock,
   PET_DISABLE_BLOCK,
   removeLegacyMarketplacePatchLines,
   removeRetiredDshMarketPatchRows,
@@ -371,18 +372,23 @@ function createPluginSync(ctx) {
       // v0.3.11 起内置插件市场 zat-dsh-engine 默认移除（用户要求）。
       retireZatEngine(profileDir);
 
-      // billion-context-dsh（compaction-acp）与 compaction-basic 不能并存。
+      // billion-context-dsh（compaction-acp，模型驱动的 ACP 压缩后端）默认关闭：
+      // 用户反馈其在上下文占用未及 1/4 时仍频繁压缩。改为随包默认禁用（顶层
+      // disabled 块一票否决 bundle 自身 insert），需要时在设置 → 插件 → 管理
+      // 一键开启。同时撤销历史自动写入的 compaction-basic 禁用块，恢复内核默认压缩。
       if (bundleNames.has('billion-context-dsh')) {
         try {
           let patch = '';
           try { patch = fs.readFileSync(patchFile, 'utf8'); } catch { /* 全新 profile：patch 文件尚未创建，视为空 */ }
-          const entry = ensureDisabledPatchEntry(patch, new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*compaction-basic\\b'), ACP_DISABLE_BLOCK);
-          if (entry.changed) {
-            writeFileAtomic(patchFile, entry.patch);
-            log('已禁用 compaction-basic（billion-context-dsh 接管压缩后端）');
+          const heal = removeAcpBasicDisableBlock(patch);
+          patch = heal.patch;
+          const self = ensureDisabledPatchEntry(patch, new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*compaction-acp\\b'), ACP_SELF_DISABLE_BLOCK);
+          if (heal.changed || self.changed) {
+            writeFileAtomic(patchFile, self.patch);
+            log('billion-context-dsh 默认关闭：已禁用 compaction-acp 并恢复内核默认 compaction-basic');
           }
         } catch (err) {
-          log('写入 compaction-basic 禁用条目失败: ' + err.message);
+          log('写入 compaction-acp 默认禁用条目失败: ' + err.message);
         }
       }
 
