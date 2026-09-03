@@ -748,6 +748,7 @@ fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> 
         .text("acp-selftest", "ACP 自检")
         .text("acp-config", "ACP 配置（Zed）")
         .separator()
+        .text("restart", "一键重启")
         .text("quit", "退出")
         .build()?;
     let tray = tauri::tray::TrayIconBuilder::with_id("main-tray")
@@ -818,6 +819,19 @@ fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> 
                             .body(format!("ACP 配置导出失败：{e}")).show();
                     }
                 }
+            }
+            "restart" => {
+                // 一键重启（托盘右键）：整应用退出并重新拉起——与 quit 同序，
+                // 先置退出闸门、shutdown 杀内核整树防孤儿 node 进程，再调
+                // Tauri 2 原生 AppHandle::restart() 重执行二进制（无需插件）。
+                // 用于让新 bundle / 兼容层补丁按 rev 缓存刷新生效（免手动退出重开）。
+                EXITING.store(true, Ordering::Release);
+                if let Some(state) = app.try_state::<AppState>() {
+                    if let Some(sv) = state.supervisor.lock().unwrap_or_else(|p| p.into_inner()).clone() {
+                        sv.shutdown();
+                    }
+                }
+                app.restart();
             }
             "quit" => {
                 // 先置位退出闸门再 shutdown：shutdown 杀内核到 app.exit 拆
@@ -930,14 +944,31 @@ mod tray_behavior_shape {
         );
     }
 
-    /// 托盘菜单三项不回归。
+    /// 托盘菜单项不回归（含新增「一键重启」）。
     #[test]
     fn tray_menu_items_unchanged() {
         let src = src();
         let seg = tray_seg(&src);
-        for item in ["显示主窗口", "打开日志", "退出"] {
+        for item in ["显示主窗口", "打开日志", "一键重启", "退出"] {
             assert!(seg.contains(item), "托盘菜单项「{item}」不得缺失: {seg}");
         }
+    }
+
+    /// 一键重启竞态闸门（对齐 quit）：托盘「一键重启」必须先置位 EXITING、
+    /// 再 shutdown 杀内核树，最后 app.restart() 重执行——顺序不可颠倒，
+    /// 否则在飞 KernelReady 事件会戳销毁中的窗口（EARLY-PANIC 实测），或
+    /// 内核树漏杀留孤儿 node 进程。
+    #[test]
+    fn restart_arms_exiting_gate_before_shutdown() {
+        let src = src();
+        let seg = tray_seg(&src);
+        let restart = seg.split("\"restart\" =>").nth(1).expect("restart 分支");
+        let restart = restart.split("\"quit\" =>").next().expect("restart 分支收尾");
+        let gate = restart.find("EXITING.store(true").expect("restart 必须置位退出闸门");
+        let shutdown = restart.find("sv.shutdown()").expect("restart 必须收尾 supervisor");
+        let relaunch = restart.find("app.restart()").expect("restart 必须调 app.restart 重执行");
+        assert!(gate < shutdown, "EXITING 置位必须先于 shutdown（先关竞态窗口）");
+        assert!(shutdown < relaunch, "shutdown 杀内核必须先于 app.restart 重执行");
     }
 
     /// 退出竞态闸门（tao Destroyed panic 实测修复）：托盘「退出」必须先置位
