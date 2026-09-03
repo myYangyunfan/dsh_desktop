@@ -69,6 +69,17 @@ test('boot：沙箱 home 六步全过并建档', { skip: !HAVE_DEPS }, (t) => {
   // 沙箱建档：web profile + patch 清单落盘。
   assert.ok(fs.existsSync(path.join(sb.dir, 'profiles', 'web', 'cordis.patch.yml')), 'profile patch 应建档');
   assert.ok(fs.existsSync(path.join(sb.dir, 'profiles', 'web', 'package.json')), 'profile package 应建档');
+  // #174 红线：内置预设必须落在**内核可发现的用户预设根** <DSH_HOME>/.agent-presets，
+  // 而不是 payload 包目录（旧 bug 写进 node_modules/@deepseek-ai/dsh/.agent-presets，
+  // 没有任何 roots 扫那里 → 客户端模式列表只剩出厂四件套）。
+  assert.ok(fs.existsSync(path.join(sb.dir, '.agent-presets', 'minimal-win', 'agent.cordis.yml')), '内置预设应落 <DSH_HOME>/.agent-presets');
+  assert.ok(fs.existsSync(path.join(sb.dir, '.agent-presets', 'router-standard', 'agent.cordis.yml')), 'v0.5.7 社区预设应在位');
+  assert.ok(fs.existsSync(path.join(sb.dir, '.agent-presets', '_preset', 'skill-search.mjs')), '_preset 共享模块应在位（zero/whoami 系依赖）');
+  assert.equal(
+    fs.existsSync(path.join(APP_DIR, 'node_modules', '@deepseek-ai', 'dsh', '.agent-presets', 'minimal-win', 'agent.cordis.yml')),
+    false,
+    '不得再往 payload 包目录写预设（旧落点死角）',
+  );
 });
 
 test('boot 容忍分级：自愈类子失败不阻断（坏 patch → 自愈 → ok:true）', { skip: !HAVE_DEPS }, (t) => {
@@ -460,10 +471,12 @@ test('boot（WSL 半边）：六步全过，sync/presets 落 UNC home，本地 D
   // 语义不适用于该层）。
   assert.ok(fs.existsSync(path.join(uncHome, 'profiles', 'web', 'cordis.patch.yml')), 'UNC profile patch 应建档');
   assert.ok(fs.existsSync(path.join(uncHome, 'profiles', 'web', 'node_modules')), 'UNC profile node_modules 应建档');
-  // presets 半边：内置 Agent 预设同步进 UNC agent 包的用户预设根
-  // （installBuiltinPresets(dshDir) → <dshDir>/.agent-presets/<id>/；
-  // 6e38c3b5 起预设根从 config/agent-presets 迁到 .agent-presets）。
-  assert.ok(fs.existsSync(path.join(dshDir, '.agent-presets', 'minimal-win', 'agent.cordis.yml')), '内置预设应同步进 WSL agent 包');
+  // presets 半边：内置 Agent 预设落 UNC home 的用户预设根（WSL 内 agent 以
+  // DSH_HOME=<安装目录> 运行，见 dsh-desktop/wsl-backend.js:455）。
+  // #174：旧实现传 dshDir（agent 包目录），写进无人读取的死角——现在必须落 home。
+  assert.ok(fs.existsSync(path.join(uncHome, '.agent-presets', 'minimal-win', 'agent.cordis.yml')), '内置预设应落 UNC home/.agent-presets');
+  assert.ok(fs.existsSync(path.join(uncHome, '.agent-presets', 'router-standard', 'agent.cordis.yml')), 'v0.5.7 社区预设应落 UNC home');
+  assert.equal(fs.existsSync(path.join(dshDir, '.agent-presets')), false, '不得再往 WSL agent 包目录写预设');
   // 本地 DSH_HOME（沙箱）零写入——WSL 模式一切落点换到 UNC home。
   assert.strictEqual(fs.existsSync(path.join(sb.dir, 'profiles')), false, '本地 home 不应被写入');
 });
@@ -480,6 +493,9 @@ test('boot（WSL 半边）：agent 未就绪 → presets 跳过不阻断（下�
   assert.strictEqual(presets.ok, true, 'agent 未就绪不得阻断 boot');
   assert.match(r.stderr, /WSL 内 dsh 包未就绪/);
   assert.strictEqual(r.json.wsl.agentReady, false);
+  // agent 未就绪时 presets 步跳过，但 repair 步的只补不动兵（preset-heal）仍应
+  // 把缺失预设补到 UNC home——客户端能否看到预设与 agent 包安装进度无关。
+  assert.ok(fs.existsSync(path.join(uncHome, '.agent-presets', 'minimal-win', 'agent.cordis.yml')), 'repair 步兵底应补写预设');
 });
 
 test('boot（WSL 解析失败）：回落 local 继续启动（Electron issue #54 语义）', { skip: !HAVE_DEPS }, (t) => {

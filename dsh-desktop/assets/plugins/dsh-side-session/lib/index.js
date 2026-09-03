@@ -124,8 +124,22 @@ const KNOWN_PROVIDERS = {
   "ant-ling": { base: "https://api.ant-ling.com/v1", env: "ANT_LING_API_KEY", openai: true },
   xiaomi: { base: "https://api.xiaomimimo.com/v1", env: "XIAOMI_API_KEY", openai: true },
   "github-copilot": { base: "https://api.individual.githubcopilot.com", env: "COPILOT_GITHUB_TOKEN", openai: true },
+  // 以下 OpenAI 兼容供应商取自内核 pi-ai 内置表（@earendil-works/pi-ai/providers/all），
+  // side-session 之前缺失。补齐后 mode1 可直连其 OpenAI 兼容 /chat/completions；base=其
+  // openai-completions baseUrl（无尾斜杠），env=pi-ai envApiKeyAuth 凭据名，逐字对齐内核。
+  baseten: { base: "https://inference.baseten.co/v1", env: "BASETEN_API_KEY", openai: true },
+  "qwen-token-plan-individual": { base: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1", env: "QWEN_TOKEN_PLAN_API_KEY", openai: true },
+  "xiaomi-token-plan-cn": { base: "https://token-plan-cn.xiaomimimo.com/v1", env: "XIAOMI_TOKEN_PLAN_CN_API_KEY", openai: true },
+  "xiaomi-token-plan-ams": { base: "https://token-plan-ams.xiaomimimo.com/v1", env: "XIAOMI_TOKEN_PLAN_AMS_API_KEY", openai: true },
+  "xiaomi-token-plan-sgp": { base: "https://token-plan-sgp.xiaomimimo.com/v1", env: "XIAOMI_TOKEN_PLAN_SGP_API_KEY", openai: true },
   // 非 OpenAI 兼容协议：mode1 直连 /chat/completions 不适用，建议 mode3/mode2
   anthropic: { base: "https://api.anthropic.com", env: "ANTHROPIC_API_KEY", openai: false },
+  // MiniMax：pi-ai 以 anthropic-messages 协议注册（base 带 /anthropic 后缀，国际 api.minimax.io、
+  // 国内 api.minimaxi.com），非 OpenAI 兼容，mode1 不能直连 /chat/completions。给非空 base 使其
+  // 命中「协议不支持→引导 mode2/3」而非「未知供应商」；mode3 经宿主 LLM（pi-ai anthropic-messages）
+  // 可正常调用 MiniMax-M3 等。env 对齐 pi-ai envApiKeyAuth。证据：providers/minimax{,-cn}.js。
+  minimax: { base: "https://api.minimax.io/anthropic", env: "MINIMAX_API_KEY", openai: false },
+  "minimax-cn": { base: "https://api.minimaxi.com/anthropic", env: "MINIMAX_CN_API_KEY", openai: false },
   google: { base: "https://generativelanguage.googleapis.com/v1beta", env: "GEMINI_API_KEY", openai: false },
   "google-vertex": { base: "", env: "GOOGLE_CLOUD_API_KEY", openai: false },
   "cloudflare-workers-ai": { base: "", env: "CLOUDFLARE_API_KEY", openai: false },
@@ -1019,12 +1033,22 @@ async function handleAsk(req, res) {
   const parsed = parseSession(sessionId);
   const cfg = await resolveKeyForMode(mode, body.pluginSettings || lastSettings, body, parsed);
   if (cfg.reason === "unknown-provider") {
+    // 报错时列出内置已支持清单 + 配置指引，降低排查成本（保持 400 + error 码结构不变）。
+    const supported = Object.keys(KNOWN_PROVIDERS).sort().join("、");
     const msg =
       "当前默认供应商「" +
       cfg.provider +
       "」未在内置已知表，且 settings.yaml 的 llm-pi-ai.providers." +
       cfg.provider +
-      " 未配置 baseURL，无法确定 API 端点。请在 DSH 设置（llm-pi-ai）为该供应商配置 baseURL，或切换到模式 2/3。";
+      " 未配置 baseURL，无法确定 API 端点。\n" +
+      "解决办法（任选其一）：\n" +
+      "  1) 在 settings.yaml 的 llm-pi-ai.providers." +
+      cfg.provider +
+      " 下补 baseURL（OpenAI 兼容 /chat/completions 基址）与 apiKeyEnv（凭据 env 名）；\n" +
+      "  2) 切换到内置已支持供应商：" +
+      supported +
+      "；\n" +
+      "  3) 改用模式 2（自带 Key + 自定义端点）或模式 3（宿主 LLM 自动适配，支持 anthropic-messages 等非 OpenAI 兼容协议）。";
     sendJson(res, 400, { error: "unknown-provider", message: msg });
     return;
   }

@@ -837,9 +837,15 @@ const PATCH_SPECS = [
   // 返回 deltaTokens = tokens - claim.tokens（可为负）。负 delta 绝对值大于已
   // 累计 state.messageTokens 时 messageTokens 变负 → stateSchema 的 tokenCount
   // = z.number().int().nonnegative() 校验失败（"Too small: expected number to
-  // be >= 0"）→ 本轮运行失败。补丁把该行夹到 Math.max(0, …)，该值仅用于
-  // 「上下文构成」估算展示/计量，夹 0 不影响真实请求。锚点失配自动退役。
-  // 见 scripts/patch-token-meter-clamp.js。
+  // be >= 0"）→ 本轮运行失败。补丁分两层（写端杜绝新负值 + 读端作废旧脏行）：
+  //   [写端] 把该行夹到 Math.max(0, …)——新负值不再被产生/落盘；
+  //   [读端] 把 contextBreakdown 的 stateVersion 2→3——投影 checkpoint 落盘且
+  //          restore() 见 row.ver===stateVersion 就 stateSchema.parse(row.val)，
+  //          0.5.6 遗留的 ver=2 负值行升级后仍会被直接 parse 抛错（issue #172 历史
+  //          加载失败）；bump 使 ver 失配 → restoreFloor 拉到 seq 0 用已夹取 apply
+  //          重折自愈。该值仅用于「上下文构成」估算展示/计量，夹 0 不影响真实请求。
+  //          版本锚点带 key 前缀，只 bump contextBreakdown，不误伤同值 2 的 tokenUsage。
+  // 锚点失配自动退役。见 scripts/patch-token-meter-clamp.js。
   // -------------------------------------------------------------------------
   {
     id: 'token-meter-clamp',

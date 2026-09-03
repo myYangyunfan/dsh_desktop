@@ -18,6 +18,7 @@ Tauri 线为 `dsh-tauri/src-tauri/src/app/src/commands/balance.rs` + sidecar
 │ 展示层  assets/plugins/dsh-balance/lib/client.js（浏览器内）          │
 │   · normalizeUsage()：token 用量归一化（单一真源）                    │
 │   · sessionCost()/hasUsage()/money()/goUsageText()                   │
+│   · observeSessionCost()：增量计价账本（issue #168，见 §2.1）          │
 │   · 只消费 window "dsh-balance-changed" 事件（单一投递）              │
 └───────────────────────────────▲─────────────────────────────────────┘
                                 │ Electron：preload.js 转发 'dsh:balance'
@@ -28,7 +29,7 @@ Tauri 线为 `dsh-tauri/src-tauri/src/app/src/commands/balance.rs` + sidecar
 │   · 节流（30s）/ 并发仲裁（in-flight 去重 + latest-sequence 守卫）     │
 │   · 失败指数退避重试（30s→1m→2m→5m 封顶，成功清零）                    │
 │   · 最小化/隐藏暂停门 shouldSkipRefresh（P1-2+A-7，force 穿透）        │
-│   · 单一 now 时刻（prices/priceTable/peak/at 同刻一致）               │
+│   · 单一 now 时刻（prices/priceTable/peak/pricingTier/at 同刻一致）    │
 │   · 唯一数据出口：push(result)                                       │
 └───────────────┬─────────────────────────────────────────────────────┘
                 │ Electron：main.js 薄接线（注入查询函数/设置读取/push 回调）
@@ -39,6 +40,7 @@ Tauri 线为 `dsh-tauri/src-tauri/src/app/src/commands/balance.rs` + sidecar
 │   · queryBalance / queryOpencodeUsage：取数 + 规整                    │
 │   · fetchJson：HTTP 安全边界（见 §4）                                 │
 │   · 凭据/模型/价格/金额解析纯函数；配置文件 mtime 缓存（P1-2+A-7）      │
+│   · isPeakHour()/pricingTier()/periodTables()/pricingSince()（§7）    │
 │   · HTTPS_PROXY/HTTP_PROXY/NO_PROXY 代理（CONNECT 隧道/absolute-form） │
 └───────────────┬─────────────────────────────────────────────────────┘
                 │ 只读
@@ -111,6 +113,10 @@ interface BalancePush {
   model: string;            // 默认模型名（settings.yaml agent-default-model）
   peak: boolean;            // 推送时刻是否高峰时段（与 prices/priceTable 同刻求值）
   at: string;               // 推送时刻 ISO 时间戳
+  // —— issue #168 增量计价字段（全部可选：旧宿主不注入即缺席，客户端自行降级）——
+  pricingTier?: 'legacy' | 'peak' | 'off';      // 推送时刻所属计价档（未注入时由 peak 兜底推导）
+  periodTables?: Record<'peak'|'off'|'legacy', Record<string, Prices>>; // 三张全模型价目表
+  pricingSince?: { peakPricing: string; weekendOffpeak: string };        // 规则生效节点（ISO）
 }
 
 interface UsageWindow {
@@ -122,8 +128,29 @@ interface UsageWindow {
 interface Prices { cacheMiss: number; cacheHit: number; output: number } // ¥/百万 token
 ```
 
-兼容性约定：新增字段（`warning` / `priceTable` / `at`）为可选项，旧客户端忽略未知
+兼容性约定：新增字段（`warning` / `priceTable` / `at` / issue #168 的
+`pricingTier` / `periodTables` / `pricingSince`）为可选项，旧客户端忽略未知
 字段即可正常显示；`prices` / `model` / `peak` / `balances` 等既有字段语义不变。
+
+`periodTables` 与 `priceTable` 的一致性不变量（同一次推送内）：
+`periodTables[pricingTier] === priceTable`（对象身份相等）。由此保证
+「客户端首次入账」取到的价目与旧实现逐字相同，新字段只影响**后续跨档位**
+的增量取价精度。用户 `balancePrices` 覆盖会并入三张表（定价单一真源不外溢到账本）。
+
+### 2.1 增量计价账本（issue #168）
+
+「本轮 ¥」不再是「会话累计 token × 推送时刻价目」——那个口径下峰谷一切换，
+整段历史费用会被按新价重算（用户看到金额突然跳变）。现按**消耗时刻**计价：
+
+| 要点 | 语义 |
+|------|------|
+| 入账单位 | 每个「用量增量」（本次观察 − 历史高水位）按当帧档位一次性入账，锁定不再改写 |
+| 选档依据 | `pricingTier`（缺省时由 `peak` 推导，再缺省 → `unknown`），取价走 `periodTables[tier]`（缺省时降级 `priceTable`） |
+| 幂等 | 投影是会话累计总量，增量 = `max(0, cur − highWater)`；重复渲染 / StrictMode 双渲染增量为 0，不叠加 |
+| 投影回退 | 重试可致累计量小幅下降 → 高水位不下调、差额丢弃（官方口径：已结算不追溯） |
+| 持久化 | `localStorage["dsh-balance:cost-ledger:v1"]`，按 `sessionId`（slot 标准 kit props）隔离；超 60 个会话按 `updatedAt` 淘汰；损坏/版本不符/写失败一律静默重建，绝不影响取价与余额显示 |
+| 老会话兼容 | 无账本时首帧用**当前价目**对全部累计用量一次性入账（`backfilled: true` + `cost-ledger backfill` 日志），此后才走增量；首帧金额与旧实现逐分相等 |
+| 无 localStorage | 退回模块级内存账本（受限上下文 / 纯浏览器），行为一致只是不跨重载 |
 
 ---
 
@@ -228,14 +255,18 @@ DISJOINT 计数）：
   `/user/balance`）> 官方 `https://api.deepseek.com`。
 - OpenCode Go 端点：`OPENCODE_USAGE_URL`（代理/镜像场景）>
   `https://opencode.ai/zen/go/v1/usage`。
-- 定价：2026-08-17 起峰谷定价（北京 9:00-12:00 / 14:00-18:00 全价，其余半价），
+- 定价：2026-08-17 起峰谷定价（北京**工作日** 9:00-12:00 / 14:00-18:00 全价，其余半价），
   此前旧版固定价；`isPeakHour` 在峰谷生效节点之前恒为 false，保证 chip 与
   计价档一致。
-- **切换瞬间价格跳变**：按小时切价是官方计费规则本身（整点切换、
-  无比例过渡），费用估算无法对跨整点的 token 做比例拆分（token 无时间戳）。
-  架构决策：保持整点切换，与官方计费口径一致；通过「单一 now」保证界面显示的
-  价格与计价档永远自洽。若产品后续要求平滑显示，可在展示层对 chip 做过渡动画，
-  不影响计价正确性。
+- **周末全天空闲**（官方 2026-08-23 00:00 北京时间起）：周六/周日全天按空闲价计。
+  `balance.js` 的生效门槛常量 `WEEKEND_OFFPEAK_SINCE_UTC` 与
+  `assets/plugins/dsh-offpeak` 的 `WEEKEND_OFFPEAK_EFFECTIVE_FROM`（issue #158 产物）
+  指同一北京日历日，口径以两侧交叉一致性测试守住
+  （`scripts/test/unit-balance-weekend.test.js` 从 offpeak 源码正则读常量对拍）。
+  该规则**不溯及既往**：门槛之前的周末仍按旧窗口判高峰。
+- **切换瞬间价格跳变**：按小时切价是官方计费规则本身（整点切换、无比例过渡）。
+  issue #168 修复后，展示层不再「用当前价重算历史」——各时段增量在发生时即按
+  当时价目锁定（见 §2.1），跨整点不再跳变；chip 与价目仍由「单一 now」保证自洽。
 
 ## 8. 安全与隔离（测试约定）
 
@@ -267,7 +298,8 @@ DISJOINT 计数）：
 | 🟢 低 | money 格式化边界（1e+21 / Infinity / 跨数量级） | client.js `money`（非有限 → "—"、0 → "0.00"、大额走本地化） |
 | 🟢 低 | rel 缺 noopener | client.js 两个外链 `rel="noopener noreferrer"` |
 | 🟢 低 | goUsageText 全空返回 "Go " | client.js 全空返回 null，调用方不渲染 |
-| 🟢 低 | 切换瞬间价格跳变 | 架构决策：与官方整点计费口径一致（见 §7，不属代码缺陷） |
+| 🔴 严重 | **issue #168-1**「本轮 ¥」= 会话累计 token × 推送时刻价目 → 峰谷切换后历史费用整段跳变 | balance-scheduler.js 推送 `periodTables`/`pricingTier`/`pricingSince`；client.js 增量计价账本（按消耗时刻选档入账，已结算不追溯，localStorage 按会话持久化，见 §2.1） |
+| 🟠 高 | **issue #168-2** `balance.js` `isPeakHour` 缺周末规则，与 `dsh-offpeak`（issue #158）口径不一致：2026-08-23 起周六/周日 9-12/14-18 仍按全价 | balance.js `WEEKEND_OFFPEAK_SINCE_UTC` + `isPeakHour` 周末豁免（含生效门槛，不溯及既往）；与 dsh-offpeak 交叉一致性测试 |
 | 🟢 低 | sessionCost/money 零单测覆盖 | 新增 95 项断言 + 存量 dock 17 项，合计 112 项（含真实 Electron 渲染层验证） |
 | 🟢 低 | readActiveModel 正则可匹配更深嵌套 | balance.js 逐行状态机（缩进最浅优先） |
 | 🟢 低 | settings 双读 | balance-scheduler.js 每次刷新单次 `getSettings()` |
@@ -276,7 +308,11 @@ DISJOINT 计数）：
 ## 10. 维护约定
 
 - 价目表变更：只改 `balance.js` 的 `PEAK_PRICES` / `LEGACY_PRICES` /
-  `PEAK_PRICING_SINCE_UTC`，客户端零改动（`priceTable` 自动同步）。
+  `PEAK_PRICING_SINCE_UTC`，客户端零改动（`priceTable` / `periodTables` 自动同步）。
+- 峰谷规则变更（窗口、生效门槛）：`balance.js` 的 `isPeakHour` 与
+  `assets/plugins/dsh-offpeak` 的 `isPeak()` **必须同步**改，两侧口径由
+  `unit-balance-weekend.test.js` 的源码交叉断言把守；历史门槛类常量只能新增、
+  不可改写（不溯及既往）。
 - 新增模型别名：加入 `PRICING_MODELS`。
 - 新增网络边界参数：一律走 `fetchJson` options（timeoutMs / maxRedirects /
   maxBodyBytes），默认值集中在 `balance.js` 顶部常量。

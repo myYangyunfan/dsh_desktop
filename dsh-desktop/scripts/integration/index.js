@@ -21,6 +21,13 @@ const { healPiAiSettings } = require('../lib/pi-ai-settings-heal');
 // vendor/dsh-kernel 陈旧内核 tarball 自愈（0.6.1 alpha.5 覆盖安装「版本混装」形态：
 // NSIS 只增不删 → 旧 alpha.4 tgz 残留 → compat-pin fail-closed 拒启）。
 const { healVendorStaleKernels } = require('../lib/vendor-kernel-heal');
+// 内置 Agent 预设落点自愈（issue #174：presets 步落点根错到 payload 包目录，
+// 客户端模式列表只剩内核出厂四件套）——本步只补 <DSH_HOME>/.agent-presets 里
+// 缺失的文件，已存在（含用户改过的）一律不动。
+const { healBuiltinPresets, detectLegacyPresetCopy } = require('../lib/preset-heal');
+// 服务缺席诊断（issue #176）：识别 inject 了「运行态根本不存在（上游已移除）服务」
+// 的第三方插件（典型 mobile-gateway 依赖 apiProxy），落一行明确日志，根治静默 pending。
+const { runServiceAbsenceDiagnosis } = require('./service-absence');
 
 /**
  * @param {Object} opts
@@ -96,6 +103,34 @@ function createPluginIntegration(opts) {
       await healPiAiSettings({ appDir, home: getHome(), log });
     } catch (err) {
       log('settings.yaml llm-pi-ai 自愈异常（容忍继续，不阻断启动）: ' + String((err && err.message) || err));
+    }
+    // 内置 Agent 预设落点兜底（issue #174）：boot 的 presets 步被跳过（WSL agent
+    // 未就绪）或抛错（payload 只读 / 瞬态文件锁）时，这里把用户预设根里缺失的
+    // 预设补回来。只补不动（现存文件一律不改写），模块内部全容忍；这里再兜一层。
+    const home = getHome() || path.join(os.homedir(), '.dsh');
+    try {
+      healBuiltinPresets({ appDir, home, log });
+      const legacy = detectLegacyPresetCopy(appDir);
+      if (legacy) {
+        log('preset-heal: 检测到旧版本落点残留（' + legacy + '，无人读取，可手动删除）');
+      }
+    } catch (err) {
+      log('内置预设落点自愈异常（容忍继续，不阻断启动）: ' + String((err && err.message) || err));
+    }
+    // 服务缺席诊断（issue #176）：扫描已安装第三方插件的 inject，命中「内核已移除
+    // 服务」（当前登记 apiProxy）时逐个落一行 [service-absence] 日志——让「插件永远
+    // [pending] 且无提示」变成可诊断的明确文案。全容错：任何失败都不阻断启动。
+    try {
+      const absence = runServiceAbsenceDiagnosis({
+        appDir,
+        extraRoots: [path.join(getHome() || '', 'plugins')].filter((p) => p && p !== path.sep),
+        log,
+      });
+      if (absence.findings.length > 0) {
+        log('服务缺席诊断：检出 ' + absence.findings.length + ' 项依赖已移除服务的插件（详见 [service-absence] 行）');
+      }
+    } catch (err) {
+      log('服务缺席诊断异常（容忍继续，不阻断启动）: ' + String((err && err.message) || err));
     }
   };
   const applyPatches = () => applyAll(buildCtx());

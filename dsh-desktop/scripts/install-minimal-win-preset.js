@@ -33,6 +33,12 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+// 预设槽枚举的唯一实现（与 scripts/lib/preset-heal.js 共用）：递归 + 相对路径。
+// 只拷顶层文件会静默丢嵌套资源：预设可携带子目录（内核出厂 cordis 预设即有
+// presets/cordis/skills/<name>/SKILL.md，composition 里用 new URL('skills/', baseUrl)
+// 引用），而内核 health check 只看 `name:` 行——目录类引用缺失不会被判 broken，
+// 只会让用户看到「预设能选但技能列表空掉」这类更难查的故障。
+const { SHARED_PRESET_DIR, listPresetSlots, listPresetSlotFiles, slotFileAt } = require('./lib/preset-files');
 
 function presetsSourceDir() {
   return path.resolve(__dirname, '..', 'assets', 'agent-presets');
@@ -66,6 +72,26 @@ function fileMatches(sf, df) {
   }
 }
 
+/**
+ * 逐文件把一个槽的内容对齐源（递归含子目录，已一致的文件跳过写盘）。
+ * @param {string} src 源槽目录
+ * @param {string} dest 目标槽目录
+ * @returns {number} 实际写盘的文件数
+ */
+function copySlotFiles(src, dest) {
+  fs.mkdirSync(dest, { recursive: true });
+  let copied = 0;
+  for (const rel of listPresetSlotFiles(src)) {
+    const sf = slotFileAt(src, rel);
+    const df = slotFileAt(dest, rel);
+    if (fileMatches(sf, df)) continue; // 已一致：跳过写盘
+    fs.mkdirSync(path.dirname(df), { recursive: true }); // 嵌套资源：先建父目录
+    fs.cpSync(sf, df, { force: true, preserveTimestamps: true });
+    copied += 1;
+  }
+  return copied;
+}
+
 /** Copy one bundled preset directory into <dshHome>/.agent-presets/. */
 function installBuiltinPreset(dshHome, id) {
   const src = path.join(presetsSourceDir(), id);
@@ -75,29 +101,15 @@ function installBuiltinPreset(dshHome, id) {
     throw new Error(`builtin preset source incomplete: ${src}`);
   }
   const dest = path.join(userPresetRoot(dshHome), id);
-  fs.mkdirSync(dest, { recursive: true });
-  // Full-directory copy: presets may carry local .mjs bootstrap modules
-  // referenced relatively from agent.cordis.yml.
-  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-    if (!entry.isFile()) continue;
-    const sf = path.join(src, entry.name);
-    const df = path.join(dest, entry.name);
-    if (fileMatches(sf, df)) continue; // 已一致：跳过写盘
-    fs.cpSync(sf, df, { force: true, preserveTimestamps: true });
-  }
+  // 递归拷贝：预设除顶层 .mjs 引导模块外还可能带相对引用的资源子目录。
+  copySlotFiles(src, dest);
   return dest;
 }
-
-/** Shared-module directory inside the preset root (not a preset slot). */
-const SHARED_PRESET_DIR = '_preset';
 
 /** Install all bundled presets. Returns the destination directories. */
 function installBuiltinPresets(dshHome) {
   const presetRoot = presetsSourceDir();
-  const ids = fs.readdirSync(presetRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && entry.name !== SHARED_PRESET_DIR)
-    .map((entry) => entry.name)
-    .sort();
+  const ids = listPresetSlots(presetRoot).filter((id) => id !== SHARED_PRESET_DIR);
   const dests = ids.map((id) => installBuiltinPreset(dshHome, id));
 
   // Copy the shared `_preset` modules referenced by zero/whoami rows and
@@ -105,15 +117,7 @@ function installBuiltinPresets(dshHome) {
   // slot: discovery would otherwise report it as a broken roster row.
   const sharedSrc = path.join(presetRoot, SHARED_PRESET_DIR);
   if (fs.existsSync(sharedSrc)) {
-    const sharedDest = path.join(userPresetRoot(dshHome), SHARED_PRESET_DIR);
-    fs.mkdirSync(sharedDest, { recursive: true });
-    for (const entry of fs.readdirSync(sharedSrc, { withFileTypes: true })) {
-      if (!entry.isFile()) continue;
-      const sf = path.join(sharedSrc, entry.name);
-      const df = path.join(sharedDest, entry.name);
-      if (fileMatches(sf, df)) continue; // 已一致：跳过写盘
-      fs.cpSync(sf, df, { force: true, preserveTimestamps: true });
-    }
+    copySlotFiles(sharedSrc, path.join(userPresetRoot(dshHome), SHARED_PRESET_DIR));
   }
   return dests;
 }
@@ -136,6 +140,8 @@ module.exports = {
   installedDshPackageDir,
   userPresetRoot,
   defaultDshHome,
+  fileMatches,
+  SHARED_PRESET_DIR,
   PRESET_ID: 'minimal-win',
 };
 

@@ -139,6 +139,21 @@ function read(p) { return fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n'); }
   check('健康卡进入分区自动检测一次（useEffect []）', /useEffect\(\(\) => \{\s*detect\(\);[\s\S]*?\}, \[\]\);/.test(src));
   check('busy 防重入（无并发检测风暴）', src.includes('if (busy) return;'));
   check('检测是单次 list() 调用 + 本地 Map 判定（非逐服务探测）', src.includes('byId') && src.includes('CRITICAL_RUNTIME'));
+  // issue #175 防线：健康卡条目必须与静态关键服务清单同源。旧键 api-gateway /
+  // @deepseek-ai/dsh-host-apiproxy 是重构前命名，拿它查 live 注册表永远缺席 →
+  // 网关永久误报红条（实际挂载键见 dsh-base/cordis.patch.yml 的 typert-gateway 行）。
+  const { criticalServices } = require(path.join(ROOT, 'scripts/integration/composition-integrity.js'));
+  const runtimeRows = [...src.matchAll(/\{ id: "([a-z0-9_.-]+)", module: "([^"]+)"/g)]
+    .map((m) => ({ id: m[1], module: m[2] }));
+  const runtimeIds = new Set(runtimeRows.map((r) => r.id));
+  check('健康卡 15 项关键服务全解析', runtimeIds.size === 15);
+  check('健康卡不再用旧网关 loader 键 api-gateway', !runtimeIds.has('api-gateway'));
+  check('健康卡按实际挂载键监控网关', runtimeIds.has('typert-gateway')
+    && runtimeRows.some((r) => r.id === 'typert-gateway' && r.module === '@deepseek-ai/dsh-api-gateway'));
+  // base-bundle（dsh-base 容器）运行期无独立 loader 条目，故不入健康卡
+  const staticIds = criticalServices().map((s) => s.rowId).filter((id) => id !== 'base-bundle');
+  check('健康卡与 composition-integrity 关键清单同集（防两表漂移）',
+    staticIds.every((id) => runtimeIds.has(id)) && [...runtimeIds].every((id) => staticIds.includes(id)));
 }
 
 // ---- 12. 补丁链：readFileCached size+mtime 缓存（纯逻辑复测）----

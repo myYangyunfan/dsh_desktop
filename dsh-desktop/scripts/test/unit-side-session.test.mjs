@@ -125,3 +125,64 @@ test('真正未知的 provider 仍返回空 base（保留 unknown-provider 报�
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// issue #173「自定义提供方接入失败」：minimax / minimax-cn 接入。
+// 根因：内核 pi-ai 内置表（@earendil-works/pi-ai/providers/all）以 anthropic-messages
+// 协议注册 minimax（国际 https://api.minimax.io/anthropic，env MINIMAX_API_KEY）与
+// minimax-cn（国内 https://api.minimaxi.com/anthropic，env MINIMAX_CN_API_KEY）；
+// side-session 的 KNOWN_PROVIDERS 缺这两条 → 用户配 minimax-cn/MiniMax-M3 后 mode1 报
+// unknown-provider「无法确定 API 端点」。补齐为 openai:false：base 非空使其从
+// 「未知供应商」转为「协议不支持→引导 mode2/3」（mode3 经宿主 LLM 走 pi-ai 可正常调用）。
+// 证据：node_modules/@earendil-works/pi-ai/dist/providers/minimax{,-cn}.js
+// ---------------------------------------------------------------------------
+test('KNOWN_PROVIDERS 覆盖 minimax / minimax-cn（对齐 pi-ai anthropic-messages 端点）', () => {
+  const cn = mod.KNOWN_PROVIDERS['minimax-cn'];
+  assert.ok(cn, '缺 minimax-cn：用户配 minimax-cn/MiniMax-M3 会报 unknown-provider');
+  assert.equal(cn.base, 'https://api.minimaxi.com/anthropic', '国内端点须与 pi-ai minimax-cn.js baseUrl 一致');
+  assert.equal(cn.env, 'MINIMAX_CN_API_KEY', 'env 须与 pi-ai envApiKeyAuth 一致');
+  assert.equal(cn.openai, false, 'pi-ai 以 anthropic-messages 提供 MiniMax，非 OpenAI 兼容，mode1 不能直连 /chat/completions');
+
+  const io = mod.KNOWN_PROVIDERS['minimax'];
+  assert.ok(io, '缺 minimax（国际站）');
+  assert.equal(io.base, 'https://api.minimax.io/anthropic');
+  assert.equal(io.env, 'MINIMAX_API_KEY');
+  assert.equal(io.openai, false);
+});
+
+test('minimax-cn 可解析出 base/env：不再触发 unknown-provider，并引导到非直连模式', () => {
+  const home = mkdtempSync(join(tmpdir(), 'side-session-mm-'));
+  const prev = process.env.DSH_HOME;
+  process.env.DSH_HOME = home;
+  try {
+    writeFileSync(join(home, 'settings.yaml'), [
+      'agent-default-model:',
+      '  provider: minimax-cn',
+      '  model: MiniMax-M3',
+    ].join('\n'));
+    const profile = mod.readProviderProfile('minimax-cn');
+    // base 能从内置表解析出来（非空）→ resolveGlobalForMode1 不再判 unknown-provider。
+    assert.equal(mod.resolveProviderBase('minimax-cn', profile), 'https://api.minimaxi.com/anthropic');
+    // env 命中内置表，且与插件启发式 ${PROVIDER}_API_KEY 逐字一致（凭据解析对齐）。
+    assert.equal(mod.KNOWN_PROVIDERS['minimax-cn'].env, 'MINIMAX_CN_API_KEY');
+    assert.equal('minimax-cn'.replace(/[^A-Za-z0-9_]/g, '_').toUpperCase() + '_API_KEY', 'MINIMAX_CN_API_KEY');
+    // openai:false → mode1 走 protocol-unsupported 分支（引导 mode2/3），而非 unknown-provider。
+    assert.equal(mod.KNOWN_PROVIDERS['minimax-cn'].openai, false);
+  } finally {
+    process.env.DSH_HOME = prev;
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('补齐的其它 pi-ai 内置 OpenAI 兼容供应商能被 mode1 解析出 base', () => {
+  for (const [p, base] of [
+    ['baseten', 'https://inference.baseten.co/v1'],
+    ['xiaomi-token-plan-cn', 'https://token-plan-cn.xiaomimimo.com/v1'],
+    ['qwen-token-plan-individual', 'https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1'],
+  ]) {
+    const entry = mod.KNOWN_PROVIDERS[p];
+    assert.ok(entry, '缺 ' + p);
+    assert.equal(entry.openai, true, p + ' 在 pi-ai 里是 openai-completions，mode1 可直连');
+    assert.equal(mod.resolveProviderBaseForTestHelper(p, {}, {}), base);
+  }
+});

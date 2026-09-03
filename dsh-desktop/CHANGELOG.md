@@ -6,6 +6,67 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### fix(balance)：「本轮 ¥」峰谷切换整段跳变 + `isPeakHour` 缺周末规则（issue #168）
+
+- **根因 1（计价时刻错）**：`tokenUsage` 投影是会话**累计总量**，展示层每帧做
+  「累计量 × 推送时刻价目」；主进程 `doRefresh()` 的 `prices`/`priceTable`/`peak`
+  又全部按推送时刻单点求值——于是跨过整点（或周末零点）的那一次推送，会把之前
+  时段已消耗的全部 token 按新价目重算，用户看到「本轮 ¥」突然翻倍/减半。
+- **根因 2（两条同一规则的口径）**：官方 2026-08-23 起周六/周日全天空闲价，
+  `assets/plugins/dsh-offpeak`（issue #158 产物）已实现，但 `balance.js`
+  `isPeakHour()` 周末 9-12 / 14-18 仍返高峰 → 周末高峰时 chip 与计价都错。
+- **修复（主进程只增字段）**：`balance.js` 新增 `pricingTier()` /
+  `periodTables()`（peak·off·legacy 三张全模型表）/ `pricingSince()`；
+  `balance-scheduler.js` 推送携带三字段，均为**可选注入 + 优雅降级**（旧宿主
+  如 Tauri sidecar 不注入即退回旧载荷形态），且守
+  `periodTables[pricingTier] === priceTable` 身份不变量，首帧金额与旧实现逐字一致。
+- **修复（展示层增量账本）**：`dsh-balance` 插件新增 `observeSessionCost()`，
+  每个用量增量按被观察时刻选档入账、分段锁定不追溯；高水位差量保证渲染期
+  幂等（StrictMode 双渲染 / 无新 token 轮询 / 投影小幅回退均不叠加）；
+  `localStorage["dsh-balance:cost-ledger:v1"]` 按 `sessionId` 持久化（上限 60 会话
+  按 `updatedAt` 淘汰，损坏/超额/写失败一律静默重建）；老会话无账本时首帧按当前
+  价目一次性入账（`backfilled` + `cost-ledger backfill` 日志），与旧行为金额等价。
+- **修复（周末口径对齐）**：`isPeakHour()` 补周六/周日全天空闲，新增门槛常量
+  `WEEKEND_OFFPEAK_SINCE_UTC`（北京 2026-08-23 00:00）并**不溯及既往**；与
+  dsh-offpeak 采用「复制口径 + 注明来源 + 源码交叉对拍」（避开 CJS 要求 ESM 插件
+  源的打包耦合）；tooltip 文案补「周六/周日全天空闲价」与分段明细。
+- **测试 / 门**：新增 `unit-balance-weekend.test.js`（12）、
+  `unit-balance-scheduler-payload.test.js`（10）、`unit-balance-ledger.test.js`（22），
+  含门槛前后周末、与 dsh-offpeak 逐小时对拍、价目切换金额不变、老会话一次性入账
+  兼容、双向 payload 兼容；`edge-client.test.js` 两个赖于旧「重定价」语义的用例
+  拆为独立沙箱；`docs/balance-architecture.md` 同步 §1/§2.1/§7/§9/§10。
+
+### fix(presets)：内置预设不出现在客户端（issue #174）
+
+- **根因（写入路径 ≠ 发现路径）**：`6e38c3b5`（v0.5.6）把 `installBuiltinPresets()`
+  的参数语义从「dsh 包目录」改成「DSH home」，安装器 / `sync-companion-plugins` /
+  相应测试都跟了，唯独 sidecar boot 的 `presets` 步调用点没跟（仍传
+  `installedDshPackageDir()`）——8 个内置预设被写进
+  `<payload>/node_modules/@deepseek-ai/dsh/.agent-presets`，而内核只扫「出厂集 +
+  `config.roots` + `<DSH_HOME>/.agent-presets`」三类根，模式列表因此只剩
+  `standard`/`ptc`/`minimal`/`cordis`。写入本身成功（payload 可写）且日志报
+  `boot 步骤 presets OK`，故障静默（0.6.2 安装副本实测：旧落点 56 个文件躺着，
+  `~/.dsh/.agent-presets` 不存在）。
+- **修复**：`dsh-tauri/sidecar/cli.js` 的 `presets` 步 local / WSL 两分支均改传
+  effective DSH home（WSL 为 UNC home）；新增 boot `repair` 步的「只补缺、绝不动
+  已有」幂等自愈 `scripts/lib/preset-heal.js`（原子写 + 备份 + mtime 对齐源 +
+  全容忍不阻断，风格对齐 `pi-ai-settings-heal.js`），覆盖已经写歪的存量安装——
+  升级后首次 boot 即在正确落点补齐，用户自定义预设与定制内容不受影响；旧落点
+  残留由 `detectLegacyPresetCopy()` 记诊断行（不自动删）。
+- **同源隐患收口**：预设槽/文件枚举收敛为 `scripts/lib/preset-files.js` 单一实现
+  （递归到底 + 正斜杠相对路径），自愈与安装器共用；此前两份枚举各自只拷顶层，
+  预设携带嵌套资源（如内核出厂 `cordis` 的 `skills/`）时会静默丢文件且不报错。
+  `stage-payload.sh` 对整个 `assets/` 递归镜像（非白名单），打包面无此缺口；WSL 侧
+  agent 经 `npm install` 安装（内核包 `files` 含 `presets` 整目录），预设由壳层写穿
+  UNC home，与打包资源清单无关——本环无「缺目录」问题。
+- **测试 / 门**：新增 `scripts/test/unit-preset-heal.test.js`（21 用例：缺失补写 /
+  存在不覆盖 / 嵌套目录 / 源不可用与目标不可写容忍 / heal×installer 落地集合与
+  时戳对账 / composition 相对引用命中）；`sidecar/cli.test.js` 加 boot 落点红线
+  （预设必落 `<DSH_HOME>/.agent-presets`，并对 payload 包目录做反向断言）；
+  `ta9-boot-disk-faults.test.js` 的 `install-minimal-win-preset` 桩与新契约对齐；
+  `scripts/check-syntax.js` 入口清单纳入 `preset-files.js` / `preset-heal.js`；
+  `docs/agent-presets.md` 补「分发链路（源 → 打包 → 落点 → UI）」与本案例留档。
+
 ### 插件市场整体替换：dshmarket → dsh-community-market（F5）
 
 - **内置市场切换为上游 DSH Desktop 同款社区市场**：`assets/plugins/dsh-community-market`（源码构建自 [anywhere-labs/deepseek-harness-desktop](https://github.com/anywhere-labs/deepseek-harness-desktop) 的 `dsh-community-market`，MIT）——开放目录源架构（内置 DSH 1024Store / dshfind 两个合作目录适配器 + 标准 HTTP 目录源，用户自行添加与启用）、契约 schema 校验的目录快照、npm registry 精确版本 + 完整性校验安装（禁装产品包/生命周期脚本防护、失败自动回滚）、安装回执与启停管理。宿主半边挂 `/api/community-market/*` 十条路由；客户端半边（`window.__ModuleLoader__` CJS bundle）注册设置页市场 tab + 侧栏入口 + 全屏 overlay。

@@ -69,7 +69,11 @@ const STEP = process.env.DSH_TA9_FAULT_STEP;
 const CODE = process.env.DSH_TA9_FAULT_CODE || 'ENOSPC';
 module.exports = {
   installedDshPackageDir() { return path.join(HOME, 'agent-dsh'); },
-  installBuiltinPresets(dir) {
+  // 与 scripts/install-minimal-win-preset.js 的真实契约对齐（#174 后）：入参是
+  // DSH home，预设落 <home>/.agent-presets（内核可发现的用户预设根）。
+  userPresetRoot(home) { return path.join(home, '.agent-presets'); },
+  installBuiltinPresets(home) {
+    const dir = path.join(home, '.agent-presets');
     fs.mkdirSync(dir, { recursive: true });
     if (STEP === 'presets') {
       const orig = fs.writeFileSync;

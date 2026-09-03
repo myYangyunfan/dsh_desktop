@@ -1,6 +1,6 @@
 {
   "name": "dsh-community-market",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "DSH Desktop built-in community plugin market (upstream: anywhere-labs/deepseek-harness-desktop, MIT): open catalog sources (DSH 1024Store / dshfind / standard HTTP), search, verified npm installs, enable/disable and receipts. · DSH Desktop 内置可视化插件市场：开放目录源、搜索、校验安装与启停管理。",
   "type": "module",

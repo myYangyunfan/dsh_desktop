@@ -35,6 +35,10 @@ const entryFiles = [
   'scripts/lib/github-release-assets.js',
   'scripts/lib/js-syntax-scan.js',
   'scripts/lib/preset-guard.js',
+  // 内置预设落点自愈（boot repair 步接线，issue #174）与预设槽递归枚举
+  // （heal 与 installer 共用单一实现）——随包分发，必须过语法门。
+  'scripts/lib/preset-files.js',
+  'scripts/lib/preset-heal.js',
   // llm-pi-ai settings 自愈（boot repair 步接线，随包分发，必须过语法门）。
   'scripts/lib/pi-ai-settings-heal.js',
   'scripts/integration/index.js',

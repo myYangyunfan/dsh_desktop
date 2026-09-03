@@ -23,6 +23,7 @@
  */
 import { spawn } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { StringDecoder } from 'node:string_decoder';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { Service } from '@deepseek-ai/cordis';
@@ -104,6 +105,51 @@ function spawnEnv() {
   return { ...process.env, CI: 'true' };
 }
 
+/**
+ * 输出尾部缓冲上限（字符）。issue #170：包管理器的真实失败原因（如
+ * `[ERR_PNPM_FETCH_404]`、`dsh: pnpm not found on PATH`）只随子进程输出出现，而市场
+ * 侧此前 `resume()` 丢弃输出、把一切压成固定文案，用户无从自救。实测（pnpm 11
+ * 经 `dsh plugin` 的 stdio:'inherit' 链）404 错误行落在 **stdout**、只有
+ * `dsh: pnpm failed …` 落在 stderr，故两路都要留。桥接层是子进程的唯一拥有者，
+ * 在这里留一份**有界**尾部（长日志只保最后 N 字符，不随输出无界增长），随 done
+ * 结算一起回传给市场格式化。
+ */
+const OUTPUT_TAIL_CHARS = 4096;
+
+/**
+ * 有界尾部文本缓冲：`push(chunk)` 增量喂入，`take()` 取尾部快照。
+ * 用 StringDecoder 逐块解码，避免多字节 UTF-8 被块边界截断成乱码。
+ */
+function createTailBuffer(limit = OUTPUT_TAIL_CHARS) {
+  const decoder = new StringDecoder('utf8');
+  const parts = [];
+  let length = 0;
+  const trim = () => {
+    while (length > limit && parts.length > 0) {
+      const excess = length - limit;
+      const head = parts[0];
+      if (head.length <= excess) { length -= head.length; parts.shift(); continue; }
+      parts[0] = head.slice(excess);
+      length -= excess;
+      break;
+    }
+  };
+  return {
+    push(chunk) {
+      const text = decoder.write(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk), 'utf8'));
+      if (text === '') return;
+      parts.push(text);
+      length += text.length;
+      trim();
+    },
+    take() {
+      const rest = decoder.end();
+      if (rest !== '') { parts.push(rest); length += rest.length; trim(); }
+      return parts.join('');
+    },
+  };
+}
+
 /** Windows 上 kill 只杀 wrapper —— taskkill 清整树。 */
 function killChildTree(child) {
   if (process.platform === 'win32' && child.pid !== undefined) {
@@ -123,6 +169,12 @@ function killChildTree(child) {
  * @param {string} [profile] profile 名（`dsh plugin` 的 `--profile` 为必需项，
  *   缺省时内核 CLI 直接 `required option '--profile <name>' not specified` 报错，
  *   导致市场安装/更新/卸载全部失败 —— issue #164）。
+ * @returns {{ stdout: import('node:stream').Readable, stderr: import('node:stream').Readable,
+ *   done: Promise<{exitCode: number|null, signal: string|null, stdoutTail: string,
+ *   stderrTail: string, spawnError: string}>, cancel: () => void }}
+ *   `done` 仅在「子进程 exit 已收到且双流已关」后结算（issue #170：旧实现只数
+ *   流关闭，Windows 上会得到 exitCode:null → 成功安装被市场误判为失败），并带
+ *   两路输出的有界尾部与 spawn 失败原因，供市场拼可自救的错误文案。
  */
 /** 组装 `dsh plugin …` 的完整 argv（含必需的 `--profile <name>`）。 */
 function buildPluginArgv(entry, pluginArgs, profile) {
@@ -135,27 +187,60 @@ function buildPluginArgv(entry, pluginArgs, profile) {
 function runDshPlugin(pluginArgs, invokingDir, signal, profile) {
   const entry = dshArgv();
   const argv = buildPluginArgv(entry, pluginArgs, profile);
+  const outTail = createTailBuffer();
+  const errTail = createTailBuffer();
   const child = spawnShim(entry.file, argv, {
     cwd: invokingDir || entry.cwd || undefined,
     env: spawnEnv(),
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   }, entry.viaShell);
+  // 边读边留尾部：两路都必须是 flowing（不堵管道、不卡子进程），同时不丢弃
+  // 根因文本（issue #170）——数据监听器兼当排水，无需再 resume()。
+  child.stdout.on('data', (chunk) => outTail.push(chunk));
+  child.stderr.on('data', (chunk) => errTail.push(chunk));
   const done = new Promise((resolveDone) => {
     let exitCode = null;
     let signalName = null;
+    let spawnError = '';
     let settled = false;
+    let exited = false;
     // 等整树输出收尾（Windows shim wrapper 退出 ≠ pnpm 退出）再结算，与上游
     // DesktopPnpmHandle「全树退出才 settle」同义。
-    let pending = 2;
+    let pendingStreams = 2;
     const settle = () => {
-      if (!settled) { settled = true; resolveDone({ exitCode, signal: signalName }); }
+      if (settled) return;
+      settled = true;
+      resolveDone({
+        exitCode,
+        signal: signalName,
+        stderrTail: errTail.take(),
+        stdoutTail: outTail.take(),
+        spawnError,
+      });
     };
-    const maybeSettle = () => { if (--pending <= 0) settle(); };
-    child.stdout.on('close', maybeSettle);
-    child.stderr.on('close', maybeSettle);
-    child.on('error', () => { exitCode = -1; pending = 0; settle(); });
-    child.on('exit', (code, sig) => { exitCode = code; signalName = sig; });
+    // issue #170（真因）：Windows + node 24 实测两路 stdio 的 'close' 先于子进程
+    // 'exit' 到达（stdout-close → stderr-close → exit）。只数流关闭会在 exitCode
+    // 仍为 null 时结算，市场 `outcome.exitCode !== 0` 据此判败 → **安装实际成功
+    // 也报“did not complete successfully”并回滚**。故结算条件改为「exit 已收到
+    // 且双流已关」，并以 ChildProcess 'close' 兜底。
+    const trySettle = () => { if (exited && pendingStreams <= 0) settle(); };
+    const onStreamClose = () => { pendingStreams -= 1; trySettle(); };
+    child.stdout.on('close', onStreamClose);
+    child.stderr.on('close', onStreamClose);
+    child.on('exit', (code, sig) => { exitCode = code; signalName = sig; exited = true; trySettle(); });
+    child.on('error', (err) => {
+      // spawn 本身失败（ENOENT / EPERM 等）：错误文本此前被吞成 exitCode -1。
+      spawnError = String((err && err.message) || err || 'spawn error');
+      exitCode = -1;
+      signalName = null;
+      exited = true;
+      settle();
+    });
+    child.on('close', (code, sig) => {
+      if (!exited) { exitCode = code; signalName = sig; exited = true; }
+      settle();
+    });
   });
   const cancel = () => killChildTree(child);
   if (signal !== undefined) {
@@ -625,6 +710,7 @@ export const __internals = {
   argvProfile,
   resolveProfileDirectory,
   buildPluginArgv,
+  createTailBuffer,
   runDshPlugin,
   updateAddCommand,
   BridgePnpmService,

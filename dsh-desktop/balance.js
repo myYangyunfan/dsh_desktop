@@ -93,8 +93,25 @@ const PRICING_MODELS = ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-chat',
 // 峰谷定价生效节点：2026-08-17 00:00 北京时间 = 2026-08-16 16:00 UTC。
 const PEAK_PRICING_SINCE_UTC = Date.UTC(2026, 7, 16, 16, 0, 0);
 
+// 周末全天空闲规则生效节点：2026-08-23 00:00 北京时间 = 2026-08-22 16:00 UTC。
+// 官方 2026-08-23 起周六/周日全天按空闲价计（issue #158 / #168）；此前周末
+// 沿用工作日窗口（9-12 / 14-18 为高峰），故该规则不得溯及既往——判定
+// 「历史时刻」时，门槛之前的周末仍按旧窗口返回高峰。
+// 口径对齐来源：assets/plugins/dsh-offpeak/src/index.js 的
+//   WEEKEND_OFFPEAK_EFFECTIVE_FROM = "2026-08-23" 与 isPeak()（北京时间日历日
+//   字符串比较）。本模块用固定 +8 偏移（无夏令时），与之一一等价；两处若有
+//   调整须同步修改，交叉一致性由 scripts/test/unit-balance-weekend.test.js 守住。
+const WEEKEND_OFFPEAK_SINCE_UTC = Date.UTC(2026, 7, 22, 16, 0, 0);
+
 // 模型缺失 / 未知时的兜底档（与价目表回退一致，避免少报费用）。
 const DEFAULT_MODEL = 'deepseek-v4-pro';
+
+// 计价档位（issue #168）：客户端增量账本按「消耗时刻所属档位」入账，
+// 档位名即 periodTables 的键。
+//   'legacy' —— 峰谷定价生效前的旧版固定价期；
+//   'peak'   —— 峰谷期内高峰窗口（全价）；
+//   'off'    —— 峰谷期内空闲时段（半价，含 2026-08-23 起的周末全天）。
+const PRICING_TIERS = ['legacy', 'peak', 'off'];
 
 // ---------------------------------------------------------------------------
 // 纯函数工具
@@ -207,17 +224,66 @@ async function queryOpencodeUsage(dshHome) {
 }
 
 /**
- * 当前（或指定时刻）是否处于高峰时段（北京时间 9:00-12:00、14:00-18:00）。
- * 契约：峰谷定价生效（2026-08-16 16:00 UTC）之前一律 false——旧版期没有
- * 峰谷概念，避免「chip 显示高峰价、实际按旧版固定价计」的自相矛盾。
+ * 当前（或指定时刻）是否处于高峰时段（北京时间工作日 9:00-12:00、14:00-18:00）。
+ * 契约：
+ *   · 峰谷定价生效（2026-08-16 16:00 UTC）之前一律 false——旧版期没有
+ *     峰谷概念，避免「chip 显示高峰价、实际按旧版固定价计」的自相矛盾；
+ *   · 2026-08-23 00:00 北京时间起，周六/周日全天按空闲价（返回 false），
+ *     该规则不溯及既往：门槛之前的周末仍按旧窗口判定（issue #168）。
  * 无效日期返回 false（宁可显示空闲，不可显示错误的高峰态）。
  */
 function isPeakHour(date) {
   const d = date ? new Date(date) : new Date();
   if (!Number.isFinite(d.getTime())) return false;
   if (d.getTime() < PEAK_PRICING_SINCE_UTC) return false;
-  const hour = new Date(d.getTime() + 8 * 3600 * 1000).getUTCHours();
+  // 平移到北京时区（固定 +8，无夏令时），用 UTC 分量读北京日历字段。
+  const shifted = new Date(d.getTime() + 8 * 3600 * 1000);
+  if (d.getTime() >= WEEKEND_OFFPEAK_SINCE_UTC) {
+    const day = shifted.getUTCDay(); // 0=周日 6=周六
+    if (day === 0 || day === 6) return false;
+  }
+  const hour = shifted.getUTCHours();
   return (hour >= 9 && hour < 12) || (hour >= 14 && hour < 18);
+}
+
+/**
+ * 指定时刻的计价档位（issue #168）：'legacy' | 'peak' | 'off'。
+ * 与 effectivePrice()/isPeakHour() 共用同一套门槛，保证「档位 ↔ 价目」不矛盾：
+ *   periodTables()[pricingTier(t)] 恒等于 priceTable(t)（未叠加用户覆盖时）。
+ * 无效日期按当前时刻求值（与 isPeakHour 的保守取向不同，此处取「不崩」即可）。
+ */
+function pricingTier(date) {
+  const d = date ? new Date(date) : new Date();
+  const t = Number.isFinite(d.getTime()) ? d.getTime() : Date.now();
+  if (t < PEAK_PRICING_SINCE_UTC) return 'legacy';
+  return isPeakHour(new Date(t)) ? 'peak' : 'off';
+}
+
+/**
+ * 三张固定价目表（peak / off / legacy，全模型），与「现在」无关。
+ * 客户端增量账本据此把每个用量增量按消耗时刻档位选表计价，峰谷切换时
+ * 不再重算历史（issue #168）。每次调用返回全新对象，调用方可安全叠加覆盖。
+ */
+function periodTables() {
+  const dayAt = (hour) => new Date(Date.UTC(2026, 7, 17, hour, 0, 0) - 8 * 3600 * 1000);
+  // 取一个峰谷期内的高峰时刻与空闲时刻，复用 effectivePrice 的换算逻辑，
+  // 避免在这里重复 /2 的算术（防止两处口径漂移）。
+  // 2026-08-17 是周一：北京 10:00 为高峰，北京 13:00 为空闲。
+  const peakTable = priceTable(dayAt(10));
+  const offTable = priceTable(dayAt(13));
+  const legacyTable = priceTable(new Date(PEAK_PRICING_SINCE_UTC - 1000));
+  return { peak: peakTable, off: offTable, legacy: legacyTable };
+}
+
+/**
+ * 定价规则生效节点（ISO 串），供客户端/展示层说明「何时开始按峰谷计价」。
+ * 门槛常量只此一处定义，客户端不再硬编码日期。
+ */
+function pricingSince() {
+  return {
+    peakPricing: new Date(PEAK_PRICING_SINCE_UTC).toISOString(),
+    weekendOffpeak: new Date(WEEKEND_OFFPEAK_SINCE_UTC).toISOString(),
+  };
 }
 
 /**
@@ -618,6 +684,13 @@ module.exports = {
   effectivePrice,
   isPeakHour,
   priceTable,
+  // 峰谷增量计价契约（issue #168，新增字段语义见 docs/balance-architecture.md §2）
+  pricingTier,
+  periodTables,
+  pricingSince,
+  PRICING_TIERS,
+  PEAK_PRICING_SINCE_UTC,
+  WEEKEND_OFFPEAK_SINCE_UTC,
   // 端点解析（测试用）
   balanceEndpoint,
   opencodeUsageEndpoint,

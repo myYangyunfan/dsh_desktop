@@ -3652,6 +3652,61 @@ var MarketInstallError = class extends Error {
     this.name = "MarketInstallError";
   }
 };
+// --- issue #170: surface the package manager's own failure reason -------------
+// Upstream collapsed every non-zero pnpm exit into one fixed sentence while
+// runPlugin() drained the child's output into the void, so a profile with an
+// unresolvable leftover dependency ([ERR_PNPM_FETCH_404]) and a missing pnpm
+// binary looked identical to the user. The desktop bridge
+// (dsh-market-desktop-bridge) now reports `stdoutTail` / `stderrTail` /
+// `spawnError` on the settled outcome; these helpers bound that text and append
+// it to the message, which travels verbatim through sendInstallError() -> the
+// market client's operationErrorMessage().
+var MAX_PM_DETAIL_CHARS = 900;
+var PM_DETAIL_LINES = 6;
+var PM_LINE_CHARS = 200;
+var ANSI_ESCAPE_PATTERN = /\u001B\[[0-9;?]*[ -/]*[@-~]/gu;
+// 噪声行（进度 / 供应链策略提示 / 分隔线）。前两项做子串匹配：pnpm 会在行首加
+// 状态图标（非 ASCII 甚至乱码），行首锚定的 ^ 会漏匹配。
+var PM_PROGRESS_NOISE = /(?:progress:|lockfile passes|packages?\s*[:+]|^\s*[-_=]{4,}\s*$)/iu;
+function packageManagerText(value) {
+  if (typeof value !== "string") return "";
+  const lines = [];
+  for (const raw of value.replace(ANSI_ESCAPE_PATTERN, "").split(/\r?\n/u)) {
+    const line = raw.trim();
+    if (line === "" || PM_PROGRESS_NOISE.test(line)) continue;
+    lines.push(line.length > PM_LINE_CHARS ? `${line.slice(0, PM_LINE_CHARS)}...` : line);
+  }
+  return lines.slice(-PM_DETAIL_LINES).join(" | ");
+}
+function packageManagerDetail(outcome) {
+  if (outcome === null || typeof outcome !== "object") return "";
+  // 三路合并（spawnError → stderr → stdout，送进同一个行筛选器取尾部 N 行）。
+  // 实测 pnpm 11 经 `dsh plugin`（stdio: "inherit"）把 [ERR_PNPM_FETCH_404] 打在
+  // stdout，只取 stderr 会丢掉根因（issue #170）。
+  const parts = [];
+  if (typeof outcome.spawnError === "string" && outcome.spawnError !== "") parts.push(outcome.spawnError);
+  if (typeof outcome.stderrTail === "string" && outcome.stderrTail !== "") parts.push(outcome.stderrTail);
+  if (typeof outcome.stdoutTail === "string" && outcome.stdoutTail !== "") parts.push(outcome.stdoutTail);
+  const detail = packageManagerText(parts.join("\n"));
+  return detail.length > MAX_PM_DETAIL_CHARS ? detail.slice(-MAX_PM_DETAIL_CHARS) : detail;
+}
+function packageManagerStatus(outcome) {
+  if (outcome === null || typeof outcome !== "object") return "";
+  if (typeof outcome.signal === "string" && outcome.signal !== "") return ` (${outcome.signal})`;
+  return typeof outcome.exitCode === "number" && outcome.exitCode !== 0 ? ` (exit ${outcome.exitCode})` : "";
+}
+function packageManagerFailure(base, outcome) {
+  const status = packageManagerStatus(outcome);
+  const detail = packageManagerDetail(outcome);
+  return detail === "" ? `${base}${status}` : `${base}${status} ${detail}`;
+}
+function packageManagerError(code, base, cause) {
+  if (cause instanceof Error && cause.name === "AbortError") return new MarketInstallError(code, base);
+  const detail = packageManagerDetail({
+    spawnError: cause instanceof Error ? cause.message : typeof cause === "string" ? cause : ""
+  });
+  return new MarketInstallError(code, detail === "" ? base : `${base} ${detail}`);
+}
 function stableExactVersion(value) {
   return typeof value === "string" && valid(value, { loose: false }) === value && prerelease(value, { loose: false }) === null;
 }
@@ -4399,8 +4454,8 @@ var MarketInstallService = class {
         pnpmOptions: this.installOptions(candidate.packageName),
         signal: combinedSignal
       });
-    } catch {
-      throw new MarketInstallError("operation-failed", "The desktop package manager could not start the update.");
+    } catch (cause) {
+      throw packageManagerError("operation-failed", "The desktop package manager could not start the update.", cause);
     }
     handle.stdout.resume();
     handle.stderr.resume();
@@ -4409,15 +4464,15 @@ var MarketInstallService = class {
     let outcome;
     try {
       outcome = await handle.done;
-    } catch {
+    } catch (cause) {
       combinedSignal.throwIfAborted();
-      throw new MarketInstallError("operation-failed", "The desktop package manager failed during the update.");
+      throw packageManagerError("operation-failed", "The desktop package manager failed during the update.", cause);
     } finally {
       combinedSignal.removeEventListener("abort", cancel);
     }
     combinedSignal.throwIfAborted();
     if (outcome.exitCode !== 0 || outcome.signal !== null) {
-      throw new MarketInstallError("operation-failed", "The desktop package manager did not complete the update.");
+      throw new MarketInstallError("operation-failed", packageManagerFailure("The desktop package manager did not complete the update.", outcome));
     }
   }
   async executeUpdate(token, signal) {
@@ -4647,8 +4702,8 @@ var MarketInstallService = class {
         recovery: installRecovery,
         signal: combinedSignal
       });
-    } catch {
-      throw new MarketInstallError("operation-failed", "The desktop package manager could not start.");
+    } catch (cause) {
+      throw packageManagerError("operation-failed", "The desktop package manager could not start.", cause);
     }
     handle.stdout.resume();
     handle.stderr.resume();
@@ -4657,15 +4712,15 @@ var MarketInstallService = class {
     let outcome;
     try {
       outcome = await handle.done;
-    } catch {
+    } catch (cause) {
       combinedSignal.throwIfAborted();
-      throw new MarketInstallError("operation-failed", "The desktop package manager failed.");
+      throw packageManagerError("operation-failed", "The desktop package manager failed.", cause);
     } finally {
       combinedSignal.removeEventListener("abort", cancel);
     }
     combinedSignal.throwIfAborted();
     if (outcome.exitCode !== 0 || outcome.signal !== null) {
-      throw new MarketInstallError("operation-failed", "The desktop package manager did not complete successfully.");
+      throw new MarketInstallError("operation-failed", packageManagerFailure("The desktop package manager did not complete successfully.", outcome));
     }
   }
   installOptions(packageName) {
@@ -5865,7 +5920,10 @@ const __internals = {
   marketManagedPackage,
   candidateKey2,
   reconcileInstallations,
-  mergeInstallationUpdates
+  mergeInstallationUpdates,
+  packageManagerDetail,
+  packageManagerFailure,
+  packageManagerError
 };
 export {
   BUILT_IN_PROVIDERS,

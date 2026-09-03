@@ -726,32 +726,40 @@ async function cmdBoot(args, ctx) {
     return ok;
   };
   // 对齐 main.js boot 链（local 模式）：repair → sync → presets → patches → preflight。
-  // presets 步（v0.5.1 迁移）：Electron 时代有三条预设同步路径（after-pack 预装 /
-  // main.js 内联 syncLocalAgentPresets / WSL UNC 半边），Tauri 此前全缺——旧注释
-  // 「plugin-sync 内部已含预设对账」经核实为错误陈述（plugin-sync 不碰 agent-presets）。
-  // 现复用 payload 自带的 install-minimal-win-preset.js（幂等，mtime/size 跳过）：
-  //   local：目标为当前生效的 @deepseek-ai/dsh 包（Tauri 无 overlay updater，即
-  //     payload 副本；将来若迁移 overlay 更新链，需带回 Electron 的「overlay 优先」）；
-  //   wsl：目标为 UNC agent 包（Electron syncBuiltinAgentPresets 同式）——agent
-  //     未就绪（Rust 侧 ensureInstalled 未跑完 / 首启）时跳过不阻断，下次 boot 补齐。
+  // presets 步（v0.5.1 迁移，落点根修正见 issue #174）：把 assets/agent-presets 下的
+  // 内置预设对账进**内核可发现的用户预设根** <DSH_HOME>/.agent-presets（内核
+  // dsh-agent-presets 的 includeUserRoot 落点：lib/index.js:1307
+  // dshHomePath(".agent-presets")，roots 只有「出厂集 + config.roots + 用户根」三类）。
+  // 断链成因：6e38c3b5 把 installBuiltinPresets 的参数语义从「dsh 包目录」改成
+  // 「DSH home」，本步调用点没跟着改——仍传 installedDshPackageDir()，8 个内置预设
+  // 被写进 <payload>/node_modules/@deepseek-ai/dsh/.agent-presets（没有任何 roots 扫那里）
+  // → 客户端模式列表只剩出厂四件套 standard/ptc/minimal/cordis（issue #174；0.6.2
+  // 安装副本实锤：sidecar/cli.js:752-753 仍传 installedDshPackageDir()）。
+  // 另两层巧合让故障不报错：payload 在 currentUser 安装下可写（写入成功）、
+  // repair 步另有无条件补写网（scripts/lib/preset-heal.js）——本步仍保留为「内容
+  // 对账到源」（上游预设更新要靠它传播）。
+  //   local：目标 = effective DSH home（$DSH_HOME 或 ~/.dsh；也是 per-machine 装到
+  //     Program Files 时唯一确定可写的落点）；
+  //   wsl：目标 = UNC home（WSL 内 agent 以 DSH_HOME=<安装目录> 运行，见
+  //     dsh-desktop/wsl-backend.js:455）——agent 未就绪（Rust 侧 ensureInstalled 未跑完 /
+  //     首启）时跳过不阻断，下次 boot 补齐（避开对未就绪 UNC 路径的无谓写失败告警）。
   // 步骤语义照抄 sidecar 容忍策略：失败告警不阻断启动（Electron 侧同款 try/catch）。
   let ok = true;
   ok = (await step('repair', () => integration.healBeforeServer())) && ok;
   ok = (await step('sync', () => integration.syncPlugins())) && ok;
   ok = (await step('presets', () => {
     if (backend.wsl) {
-      const dshDir = findWslDshPackageDir(home);
-      if (!dshDir) {
+      // 就绪门控只看 agent 包（写落点已与包目录无关）。
+      if (!findWslDshPackageDir(home)) {
         log('presets: WSL 内 dsh 包未就绪（' + path.join(home, 'agent', 'node_modules', '@deepseek-ai', 'dsh') + '），本次跳过（Rust 侧安装完成后下次 boot 补齐）');
         return { ok: true, count: 0, note: 'wsl-agent-not-ready' };
       }
-      const dests = mods.presetInstaller.installBuiltinPresets(dshDir);
-      log('presets: ' + dests.length + ' 个内置预设对账完成 → WSL agent 包 ' + dshDir);
+      const dests = mods.presetInstaller.installBuiltinPresets(home);
+      log('presets: ' + dests.length + ' 个内置预设对账完成 → WSL home ' + mods.presetInstaller.userPresetRoot(home));
       return { ok: true, count: dests.length };
     }
-    const dshDir = mods.presetInstaller.installedDshPackageDir();
-    const dests = mods.presetInstaller.installBuiltinPresets(dshDir);
-    log('presets: ' + dests.length + ' 个内置预设对账完成（minimal-win/router-standard/anchored 系/whoami/warmupbetter 系等）→ ' + dshDir);
+    const dests = mods.presetInstaller.installBuiltinPresets(home);
+    log('presets: ' + dests.length + ' 个内置预设对账完成（minimal-win/router-standard/anchored 系/whoami/warmupbetter 系等）→ ' + mods.presetInstaller.userPresetRoot(home));
     return { ok: true, count: dests.length };
   })) && ok;
   ok = (await step('patches', () => integration.applyPatches())) && ok;

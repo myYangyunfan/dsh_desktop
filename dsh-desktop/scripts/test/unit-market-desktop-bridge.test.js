@@ -13,6 +13,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
@@ -109,6 +110,94 @@ test('A5 buildPluginArgv 携带必需的 --profile（issue #164）', () => {
     internals.buildPluginArgv(entry, ['remove', 'x'], undefined),
     ['--use-system-ca', 'C:/dsh/lib/bin.js', 'plugin', 'remove', 'x'],
   );
+});
+
+test('A6 createTailBuffer 保留尾部且有界（issue #170：带出包管理器根因）', () => {
+  const b = internals.createTailBuffer(8);
+  assert.strictEqual(b.take(), '', '空缓冲不抛');
+  b.push('aaaaaaaa');
+  b.push('bbbbbbbb');
+  b.push('cccccccc');
+  const tail = b.take();
+  assert.strictEqual(tail.length, 8, '上限严格：不随输出无界增长');
+  assert.strictEqual(tail, 'cccccccc', '只留最后 N 字符');
+});
+
+test('A7 createTailBuffer 多字节块边界不产生乱码', () => {
+  const text = 'fetch failed: 注册表 404';
+  const full = Buffer.from(text, 'utf8');
+  const cut = full.indexOf(Buffer.from('注', 'utf8')) + 1; // 切在三字节序列中间
+  assert.ok(cut > 0 && cut < full.length, '切点有效');
+  const b = internals.createTailBuffer(4096);
+  b.push(full.subarray(0, cut));
+  b.push(full.subarray(cut));
+  assert.strictEqual(b.take(), text, '拼接后原文无损');
+});
+
+test('A8 runDshPlugin 把子进程退码与 stderr 尾部随 outcome 回传（#170）', async (t) => {
+  // 闭环验证：把“重入的 dsh CLI”换成已知退码+已知 stderr 的假 bin，确认两者
+  // 能穿过 spawn → 尾部缓冲 → done 结算（真机里 stderr 就是 [ERR_PNPM_FETCH_404]
+  // 那几行，此前整块被丢弃）。
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-bridge-cli-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const saved = process.argv[1];
+  try {
+    for (const code of [0, 3]) {
+      const fake = path.join(dir, `bin.js`);
+      fs.writeFileSync(fake,
+        `process.stdout.write('install ok\\n'); process.stderr.write('boom 404 not in registry\\n'); process.exit(${code});\n`,
+        'utf8');
+      process.argv[1] = fake; // dshArgv() 认 `…/bin.js` 形态 → node 直跑（无 shell）
+      const handle = internals.runDshPlugin(['add', 'x@1.0.0', '--save-exact'], dir, undefined, 'web');
+      handle.stdout.resume();
+      handle.stderr.resume();
+      const outcome = await handle.done;
+      assert.strictEqual(outcome.exitCode, code, `退出码原样透传（实际 ${JSON.stringify(outcome.exitCode)}）`);
+      assert.strictEqual(outcome.signal, null);
+      assert.ok(outcome.stderrTail.includes('boom 404'), 'stderr 根因行进入结算体');
+      assert.ok(outcome.stdoutTail.includes('install ok'), 'stdout 也留尾部（pnpm 把错误报告写在 stdout）');
+      assert.strictEqual(outcome.spawnError, '', 'spawn 正常时不假报');
+    }
+  } finally {
+    process.argv[1] = saved;
+  }
+});
+
+test('A8b 成功安装不得被误判为失败（#170 真因：Windows 流 close 早于 exit）', async (t) => {
+  // Windows + node 24 实测：子进程两路 stdio 的 'close' 先于 'exit' 到达。旧结算
+  // 只数流关闭 → done 拿到 exitCode:null → 市场 `outcome.exitCode !== 0` 判败，
+  // 把 exit 0 的成功安装报成“did not complete successfully”并回滚。
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-bridge-ok-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const fake = path.join(dir, 'bin.js');
+  fs.writeFileSync(fake, "process.stdout.write('Done in 1s\\n'); process.stderr.write('progress\\n');\n", 'utf8');
+  const saved = process.argv[1];
+  process.argv[1] = fake;
+  try {
+    const handle = internals.runDshPlugin(['add', 'x@1.0.0'], dir, undefined, 'web');
+    const outcome = await handle.done; // 必须结算，不得挂起
+    assert.notEqual(outcome.exitCode, null, 'exitCode 不得为 null（null 会被市场误判为失败）');
+    assert.strictEqual(outcome.exitCode, 0);
+    assert.strictEqual(outcome.exitCode !== 0 || outcome.signal !== null, false, '市场侧失败判定为假');
+  } finally {
+    process.argv[1] = saved;
+  }
+});
+
+test('A9 子进程起不来时 spawnError 带出原因（而非静默 exitCode -1）', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-bridge-bad-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const saved = process.argv[1];
+  // 指向不存在的目录下的 bin.js：cwd 无效 → spawn error（ENOENT）。
+  process.argv[1] = path.join(dir, 'nope', 'bin.js');
+  try {
+    const outcome = await internals.runDshPlugin(['list'], undefined, undefined, 'web').done;
+    assert.equal(outcome.exitCode, -1);
+    assert.match(outcome.spawnError, /ENOENT|spawn|invalid argument|current working directory/i,
+      'spawn 失败原因不丢');
+  } finally {
+    process.argv[1] = saved;
+  }
 });
 
 test('B1 包元数据满足 hub 登记规则（name/精确 semver/description/private）', () => {

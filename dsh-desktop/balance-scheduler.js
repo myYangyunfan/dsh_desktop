@@ -38,6 +38,9 @@ const DEFAULT_MODEL = 'deepseek-v4-pro';
  * @param {(model: string, date: Date) => object} options.effectivePrice 有效单价
  * @param {(date: Date) => object} options.priceTable 全模型价目表
  * @param {(date: Date) => boolean} options.isPeakHour 高峰判定
+ * @param {() => object} [options.periodTables] 三张价目表 {peak,off,legacy}（issue #168，可选注入）
+ * @param {() => object} [options.pricingSince] 峰谷/周末规则生效节点（issue #168，可选注入）
+ * @param {(date: Date) => string} [options.pricingTier] 计价档位判定（issue #168，可选注入）
  * @param {(result: object) => void} options.push 数据唯一出口（推送渲染进程）
  * @param {(tag: string, msg: string) => void} [options.log] 日志
  * @param {number} [options.throttleMs] 节流窗口（测试可缩短）
@@ -57,6 +60,11 @@ function createBalanceScheduler(options) {
     effectivePrice,
     priceTable,
     isPeakHour,
+    // issue #168 新增依赖：均为「可选注入」——旧宿主（如 Tauri sidecar cli.js）
+    // 不传时自动降级为旧 payload 形态，不影响既有推送。
+    periodTables = null,
+    pricingSince = null,
+    pricingTier = null,
     push,
     log = () => {},
     throttleMs = DEFAULT_THROTTLE_MS,
@@ -77,12 +85,64 @@ function createBalanceScheduler(options) {
   let pollTimer = null;
   let stopped = false;
 
+  /**
+   * 组装 issue #168 的增量计价字段（均为新增字段，不改既有字段语义）。
+   * 任何异常一律降级为「字段缺席」，由客户端退回旧行为，不阻断余额推送。
+   * @param {Date} now 与 prices/priceTable/peak 同一时刻
+   * @param {object} table 已叠加用户覆盖的全模型价目表（保持对象身份）
+   * @param {boolean} peak 当前是否高峰
+   * @param {object} overrides settings.balancePrices（由调用方一次读出传入，不重复读盘）
+   */
+  function pricingFields(now, table, peak, overrides) {
+    const out = {};
+    try {
+      out.pricingTier = typeof pricingTier === 'function' ? pricingTier(now) : (peak ? 'peak' : 'off');
+      if (typeof pricingSince === 'function') out.pricingSince = pricingSince();
+      if (typeof periodTables === 'function') {
+        const tables = periodTables();
+        if (tables && typeof tables === 'object') {
+          // 用户覆盖同样并入三张表，与 priceTable 口径一致（定价单一真源）。
+          for (const tier of Object.keys(tables)) {
+            const t = tables[tier];
+            if (t && typeof t === 'object') applyPriceOverrides(t, now, overrides);
+            // 不变量：当前档位表就是本次推送的 priceTable（对象身份相等），
+            // 保证「新 client 首次入账」与「旧 client 整段计价」金额一致。
+            if (tier === out.pricingTier) tables[tier] = table;
+          }
+          out.periodTables = tables;
+        }
+      }
+    } catch (err) {
+      log('balance', '峰谷计价字段组装失败（降级为旧载荷）: ' + String((err && err.message) || err));
+    }
+    return out;
+  }
+
+  /**
+   * 将用户 settings.balancePrices.<model> 覆盖并入给定价目表（就地）。
+   * 未命中价目表的新模型名按当前时刻兜底档展开。
+   * @param {object} table 待并入的价目表
+   * @param {Date} now 兜底档求值时刻
+   * @param {object} overrides settings.balancePrices（可为空）
+   */
+  function applyPriceOverrides(table, now, overrides) {
+    if (!overrides || typeof overrides !== 'object') return table;
+    for (const m of Object.keys(overrides)) {
+      const ov = overrides[m];
+      if (ov && typeof ov === 'object') {
+        table[m] = { ...(table[m] || effectivePrice(m, now)), ...ov };
+      }
+    }
+    return table;
+  }
+
   /** 组装一次完整的刷新结果（单一 now，保证 prices 与 peak 同刻一致）。 */
   async function doRefresh() {
     const settings = getSettings() || {}; // 每次刷新只读一次 settings（余额与 OpenCode Go 开关同源）
     if (settings.showBalanceDock === false) {
       // 退化形态：消费者须最先判 disabled（客户端已如此）。补齐其余字段，
       // 保持与正常路径契约同构，避免「跨路径字段集合不一致」。
+      const disabledAt = new Date();
       return {
         ok: false,
         disabled: true,
@@ -91,9 +151,21 @@ function createBalanceScheduler(options) {
         priceTable: {},
         model: '',
         peak: false,
-        at: new Date().toISOString(),
+        at: disabledAt.toISOString(),
         opencodeGo: { ok: false, disabled: true },
         error: 'balance dock disabled',
+        // issue #168：disabled 路径同构携带计价字段（档位无意义，置 null）。
+        pricingTier: null,
+        ...(() => {
+          try {
+            return {
+              ...(typeof pricingSince === 'function' ? { pricingSince: pricingSince() } : {}),
+              ...(typeof periodTables === 'function' ? { periodTables: periodTables() } : {}),
+            };
+          } catch {
+            return {};
+          }
+        })(),
       };
     }
     const home = getHome();
@@ -114,20 +186,15 @@ function createBalanceScheduler(options) {
     // 定价单一真源：全模型价目表 + 用户 balancePrices.<model> 覆盖一并落入价目表，
     // prices 恒等于 priceTable[默认模型]——杜绝「覆盖只作用于默认档、真实模型会话绕过覆盖」。
     const table = priceTable(now);
-    const overrides = settings.balancePrices;
-    if (overrides && typeof overrides === 'object') {
-      for (const m of Object.keys(overrides)) {
-        const ov = overrides[m];
-        if (ov && typeof ov === 'object') {
-          table[m] = { ...(table[m] || effectivePrice(m, now)), ...ov };
-        }
-      }
-    }
+    applyPriceOverrides(table, now, settings.balancePrices);
     result.priceTable = table;
     result.prices = table[model] || effectivePrice(model, now);
     result.model = model;
     result.peak = isPeakHour(now);
     result.at = now.toISOString();
+    // issue #168：推送「峰谷生效节点 + 三张价目表 + 当前档位」，客户端据此
+    // 把用量增量按消耗时刻价目入账（已结算不追溯）。只增字段，不改语义。
+    Object.assign(result, pricingFields(now, result.priceTable, result.peak, settings.balancePrices));
     return result;
   }
 

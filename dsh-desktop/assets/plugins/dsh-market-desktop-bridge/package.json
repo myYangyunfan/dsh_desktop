@@ -1,6 +1,6 @@
 {
   "name": "dsh-market-desktop-bridge",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "DSH Desktop companion bridge for dsh-community-market: provides desktopProfiles / desktopPnpm / desktopPlugins / desktopActions host services by adapting the shell-supervised dsh CLI and the profile's cordis.patch.yml. Upstream market: anywhere-labs/deepseek-harness-desktop (MIT).",
   "type": "module",

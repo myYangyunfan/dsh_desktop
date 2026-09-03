@@ -127,6 +127,13 @@ window.__ModuleLoader__.load({
 			healthFix: "修复指引：完全退出并重启 DSH Desktop（启动链会自动修复 / 重装缺失组件）。若重启后仍缺席，请在下方「导出诊断日志包」并随反馈附上。",
 			healthError: "检测失败：",
 			healthNoChannel: "内核插件清单通道不可用（请确认已更新到最新版 DSH Desktop）",
+			// 已移除服务提示（issue #176：插件 inject 了运行态不存在的服务 → 永久 pending）
+			removedTitle: "已移除的内核服务（插件适配指引）",
+			removedHint: "部分老插件的 inject 仍依赖已被新内核移除的服务；这类插件会一直停留在「等待生效(pending)」且不报错。若某插件长期 pending 且依赖下列服务，即为根因。",
+			removedSvcPrefix: "依赖已移除服务",
+			removedUseInstead: "请作者改用",
+			removedPendingNone: "当前没有长期停留在 pending 的插件。",
+			removedPendingCount: "检测到 {0} 个插件停留在「等待生效(pending)」：",
 			// 无效条目体检（cordis.patch.yml 死条目横幅 + 一键清理；桥缺方法时整块静默隐藏）
 			deadScanTitle: "检测到 {0} 条无效插件条目（包不存在）：",
 			deadStaleTitle: "另有 {0} 条疑似陈旧的禁用记录（只提示，不参与清理）：",
@@ -151,13 +158,32 @@ window.__ModuleLoader__.load({
 			{ id: "approval", module: "@deepseek-ai/dsh-user-approval", label: "权限审批", consequence: "工具调用的用户审批（允许 / 拒绝）流程失效" },
 			{ id: "storage-json", module: "@deepseek-ai/dsh-storage-json", label: "本地存储", consequence: "本地键值存储失效，依赖 storage 域的功能不保存" },
 			{ id: "webserver", module: "@deepseek-ai/dsh-host-webserver", label: "本地服务端口", consequence: "页面端口不监听：白屏 / 一直加载" },
-			// api-gateway 行已移除（2026-08-31）：内核 0.1.2-alpha.1 重构后网关 folded
-			// 进核心原生实现，loader 条目不存在——按旧行 id（@deepseek-ai/dsh-host-apiproxy
-			// 时代的 api-gateway）查 live 注册表永远缺席，产生永久误报红条（RPC 实际正常）。
+			// issue #175：网关行的旧键（api-gateway / @deepseek-ai/dsh-host-apiproxy）是
+			// 重构前命名——被移除的是宿主服务 apiProxy（见下方 REMOVED_CAPABILITIES），
+			// 网关这一 loader 行本身仍在组合里，只是改名/改包：
+			//   node_modules/@deepseek-ai/dsh-base/cordis.patch.yml:45-46
+			//     - id: typert-gateway / name: '@deepseek-ai/dsh-api-gateway'
+			// 用旧键查 live 注册表永远缺席 → 永久误报红条；删掉该行又会丢掉对网关的
+			// 真实监控（真挂了就报绿）。故按实际挂载键修正，与 composition-integrity.js
+			// CRITICAL_SERVICES 的 typert-gateway 行（同 label / consequence 口径）对齐。
+			{ id: "typert-gateway", module: "@deepseek-ai/dsh-api-gateway", label: "API 网关", consequence: "前后端 RPC 全部哑火，页面所有操作报错" },
 			{ id: "plugin-inventory", module: "@deepseek-ai/dsh-host-plugin-inventory", label: "插件清单服务", consequence: "插件清单 / 健康页无数据" },
 			{ id: "modules", module: "@deepseek-ai/dsh-client-modules", label: "前端模块表", consequence: "浏览器模块表（window.__DSH_BOOT__）缺失，页面空白" },
 			{ id: "connection", module: "@deepseek-ai/dsh-client-connection", label: "前后端传输", consequence: "fetch / SSE 传输断开，页面无法与后端通信" },
 			{ id: "web-runtime", module: "@deepseek-ai/dsh-web-app", label: "Web 运行时", consequence: "Web 运行时未挂载，页面无法完成启动" }
+		];
+
+		// 已从内核移除的服务登记表（与 scripts/integration/service-absence.js 的
+		// REMOVED_SERVICES 保持同源口径；此处只用于 UI 展示适配指引，不参与关键判定）。
+		// issue #176：插件若 inject 下列服务，会永远 pending 且无报错。
+		const REMOVED_CAPABILITIES = [
+			{
+				service: "apiProxy",
+				label: "API Proxy 服务",
+				removedIn: "0.1.2-alpha.5",
+				useInstead: ["typertGateway", "webServer"],
+				note: "新内核已将 API Proxy 的一元操作下沉到各自的 Remote 归属服务（会话 / 设置 / 凭据 / 模型 / 命令 / 工作区等），统一经 typertGateway 传输；不再有名为 apiProxy 的宿主服务。",
+			},
 		];
 
 		function bridge() {
@@ -907,6 +933,45 @@ window.__ModuleLoader__.load({
 			] });
 		}
 
+		/**
+		 * 已移除服务提示卡（issue #176）。
+		 * 纯展示 + 只读：从运行态清单（pluginInventory）统计长期 pending 的插件，
+		 * 并列出内核已移除的服务与作者适配指引。不改动 BackendHealthCard 的关键
+		 * 服务判定（CRITICAL_RUNTIME）——只新增一块自包含的提示，与 #175 无交叉。
+		 */
+		function RemovedServiceNoticeCard({ list }) {
+			const [entries, setEntries] = react.useState(null);
+			const [busy, setBusy] = react.useState(false);
+			const detect = react.useCallback(() => {
+				if (busy) return;
+				setBusy(true);
+				Promise.resolve()
+					.then(() => (typeof list === "function" ? list() : null))
+					.then((raw) => { const e = normalizeLive(raw); setEntries(Array.isArray(e) ? e : []); })
+					.catch(() => setEntries([]))
+					.finally(() => setBusy(false));
+			}, [busy, list]);
+			react.useEffect(() => { detect(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+			const warnColor = "var(--dsw-alias-state-warning-primary, #d99a3d)";
+			const pending = (entries || []).filter((e) => e && e.fiberPhase === "pending");
+			return jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 8 }, children: [
+				jsx("div", { style: { fontSize: 11, opacity: 0.55 }, children: L.removedHint }),
+				entries === null
+					? jsx("div", { style: { fontSize: 12, opacity: 0.6 }, children: L.healthRunning })
+					: pending.length === 0
+						? jsx("div", { style: { fontSize: 12, color: "var(--dsw-alias-state-success-primary, #4caf7d)" }, children: L.removedPendingNone })
+						: jsxs("div", { style: { fontSize: 12, color: warnColor }, children: [
+							L.removedPendingCount.replace("{0}", String(pending.length)),
+							jsx("ul", { style: { margin: "4px 0 0", paddingLeft: 18, display: "flex", flexDirection: "column", gap: 2 }, children: pending.map((e, i) => jsx("li", { style: { wordBreak: "break-all" }, children: String(e.moduleName || e.entryId || "?") }, i)) }),
+						] }),
+				jsx("ul", { style: { margin: 0, paddingLeft: 18, fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }, children: REMOVED_CAPABILITIES.map((c, i) => jsxs("li", { style: { wordBreak: "break-all" }, children: [
+					jsx("span", { style: { fontWeight: 600, color: warnColor }, children: "「" + c.label + "」" + L.removedSvcPrefix + "（" + c.service + "，自 " + c.removedIn + "）：" }),
+					jsx("span", { children: c.note + " " + L.removedUseInstead + " " + c.useInstead.join(" / ") + "。" })
+				] }, i)) }),
+				jsx("div", { children: jsx("button", { type: "button", disabled: busy, onClick: detect, style: { fontSize: 12, padding: "5px 12px", borderRadius: 8, cursor: busy ? "default" : "pointer", whiteSpace: "nowrap", border: "1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.35))", background: "transparent", color: "inherit", opacity: busy ? 0.55 : 1 }, children: busy ? L.healthRunning : L.healthRun }) })
+			] });
+		}
+
 		/** 设置侧栏「诊断与管理」分区：后端服务健康 / 诊断 / 备份恢复 / 日志包导出 / 防砖体检 / bundle 顺序。 */
 		function DiagSection({ list }) {
 			const [diagReport, setDiagReport] = react.useState(null);
@@ -1207,6 +1272,7 @@ window.__ModuleLoader__.load({
 			return jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 12 }, children: [
 				jsx("div", { style: { fontSize: 12, opacity: 0.6 }, children: L.diagHint }),
 				card(L.healthTitle, jsx(BackendHealthCard, { list })),
+				card(L.removedTitle, jsx(RemovedServiceNoticeCard, { list })),
 				card(L.diagTitle + " — 诊断", jsxs("div", { children: [
 					actionBtn(diagBusy ? L.diagRunning : L.diagRun, doRunDiag, diagBusy, false),
 					diagBody

@@ -178,3 +178,70 @@ test('D 桥接插件加载面 + 客户端包装与注入清单一致', async () 
     '@deepseek-ai/dsh-client-ui-sidebar',
   ]);
 });
+
+// issue #170：桌面包管理器（pnpm 经 dsh CLI）非零退出时，不能再只给一句
+// “did not complete successfully”——必须把退出码与 stderr 里的根因（如
+// [ERR_PNPM_FETCH_404] + 肇事包名）带出来，用户才能自救。
+test('E1 packageManagerFailure 带出 exit 码与 stderr 根因行', () => {
+  const { packageManagerFailure } = market.__internals;
+  const outcome = {
+    exitCode: 1,
+    signal: null,
+    stderrTail: '\u001b[31mProgress: resolved 0, reused 1\u001b[39m\n'
+      + '[ERR_PNPM_FETCH_404] GET https://registry.npmjs.org/@deepseek-ai%2Fdsh-third-party-thinking: Not Found - 404\n'
+      + 'This error happened while installing a direct dependency of C:\\Users\\x\\.dsh\\profiles\\web\n'
+      + 'dsh: pnpm failed in profile directory C:\\Users\\x\\.dsh\\profiles\\web\n',
+  };
+  const message = packageManagerFailure('The desktop package manager did not complete successfully.', outcome);
+  assert.ok(message.startsWith('The desktop package manager did not complete successfully. (exit 1)'), message);
+  assert.ok(message.includes('ERR_PNPM_FETCH_404'), '根因错误码可见');
+  assert.ok(message.includes('dsh-third-party-thinking'), '肇事包名可见');
+  assert.ok(!message.includes('Progress:'), '进度行剔除');
+  assert.ok(!message.includes('\u001b['), 'ANSI 色码剥离');
+});
+
+test('E2 无输出摘要时文案保持原样（兼容非桌面桥的 pnpm 实现）', () => {
+  const { packageManagerFailure, packageManagerDetail } = market.__internals;
+  assert.strictEqual(
+    packageManagerFailure('The desktop package manager did not complete the update.', { exitCode: 2, signal: null }),
+    'The desktop package manager did not complete the update. (exit 2)',
+  );
+  assert.ok(packageManagerFailure('base', { exitCode: null, signal: 'SIGKILL' }).startsWith('base (SIGKILL)'));
+  assert.strictEqual(packageManagerDetail(undefined), '');
+  assert.strictEqual(packageManagerDetail({}), '');
+});
+
+test('E3 摘要长度有界，且不泄入 AbortError 噪声', () => {
+  const { packageManagerFailure, packageManagerError } = market.__internals;
+  const huge = packageManagerFailure('base', { exitCode: 1, signal: null, stderrTail: 'x'.repeat(100000) });
+  assert.ok(huge.length < 'base (exit 1) '.length + 950, `摘要必须截断：${huge.length}`);
+  const err = packageManagerError('operation-failed', 'The desktop package manager could not start.', new Error('spawn dsh ENOENT'));
+  assert.strictEqual(err.code, 'operation-failed');
+  assert.ok(err.message.includes('ENOENT'), '底层 cause 带出');
+  const abort = new Error('This operation was aborted');
+  abort.name = 'AbortError';
+  assert.strictEqual(
+    packageManagerError('operation-failed', 'The desktop package manager could not start.', abort).message,
+    'The desktop package manager could not start.',
+    '取消不算包管理器故障，不拼接原因',
+  );
+});
+
+test('E4 根因落在 stdout 时也能带出（pnpm 11 实测行为）', () => {
+  const { packageManagerFailure } = market.__internals;
+  // 真机链路：内核 CLI 用 stdio:'inherit' 跑 pnpm，pnpm 把 404 报告写在 stdout，
+  // stderr 只剩 `dsh: pnpm failed in profile directory …`。只看 stderr 依旧看不到根因。
+  const outcome = {
+    exitCode: 1,
+    signal: null,
+    stderrTail: 'dsh: pnpm failed in profile directory C:\\Users\\x\\.dsh\\profiles\\web\n',
+    stdoutTail: 'Progress: resolved 3, reused 0, downloaded 0, added 0\n'
+      + '[ERR_PNPM_FETCH_404] GET https://registry.npmjs.org/@deepseek-ai%2Fdsh-third-party-thinking: Not Found - 404\n'
+      + '@deepseek-ai/dsh-third-party-thinking is not in the npm registry, or you have no permission to fetch it.\n',
+  };
+  const message = packageManagerFailure('The desktop package manager did not complete successfully.', outcome);
+  assert.ok(message.includes('ERR_PNPM_FETCH_404'), message);
+  assert.ok(message.includes('is not in the npm registry'), '自救指引行保留');
+  assert.ok(message.includes('dsh: pnpm failed'), 'stderr 行同场保留');
+  assert.ok(!message.includes('Progress:'), '噪声行剔除');
+});
