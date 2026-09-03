@@ -106,9 +106,9 @@ test('防护类补丁与包级补丁均已登记（无遗漏 apply*）', () => {
   for (const id of expected) assert.ok(ids.has(id), `遗漏补丁 ${id}`);
 });
 
-test('getSpecsByCli：返回 24 个 cli:true 补丁（8 runtime + 4 数据完整性 + 2 设置写入韧性 + 3 内核韧性 + 1 pi-ai 超限文案 + 1 token-meter 夹取 + 2 本地二进制回落 + 1 skill 目录兼容 + 1 pi-ai 4xx 落盘）', () => {
+test('getSpecsByCli：返回 25 个 cli:true 补丁（8 runtime + 4 数据完整性 + 2 设置写入韧性 + 3 内核韧性 + 1 pi-ai 超限文案 + 1 token-meter 夹取 + 2 本地二进制回落 + 1 skill 目录兼容 + 1 pi-ai 4xx 落盘 + 1 工作区标签闪跳）', () => {
   const specs = getSpecsByCli();
-  assert.equal(specs.length, 24, 'cli 清单应恰为 22 项');
+  assert.equal(specs.length, 25, 'cli 清单应恰为 25 项');
   const expected = new Set([
     'slot-legacy-key', 'slot-unkeyed-compat', 'slot-error-isolation',
     'runtime-flash-fix', 'shell-description-compat',
@@ -120,6 +120,7 @@ test('getSpecsByCli：返回 24 个 cli:true 补丁（8 runtime + 4 数据完整
     'empty-tool-name-guidance',
     'codex-local-bin-fallback', 'claude-local-bin-fallback',
     'skill-dirs-compat',
+    'workspace-chip-label-hold',
     'pi-ai-4xx-dump',
     'pi-ai-tool-schema-sanitize',
     'ds-tool-schema-sanitize',
@@ -154,6 +155,7 @@ test('getSpecsByCli：每个 spec 的 transform/apply 与 patch-adapters 导出�
     'codex-local-bin-fallback': adapters.transformCodexLocalBinFallback,
     'claude-local-bin-fallback': adapters.transformClaudeLocalBinFallback,
     'skill-dirs-compat': adapters.transformSkillDirsCompat,
+    'workspace-chip-label-hold': adapters.transformWorkspaceChipLabelHold,
     'pi-ai-4xx-dump': adapters.transformPiAi4xxDump,
     'pi-ai-tool-schema-sanitize': adapters.transformPiAiToolSchemaSanitize,
     'ds-tool-schema-sanitize': adapters.transformDsToolSchemaSanitize,

@@ -6,6 +6,50 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### fix(flash)：选择工作文件夹时「跳闪」（chip 闪回「选择工作区」+ 输入框瞬时禁用）
+
+- **现象**：选完工作文件夹后，对话区头部短暂闪回「选择工作区」（文件夹图标换成
+  关闭态、宽度跳变），同时输入框瞬时变禁用、placeholder 闪成「选择一个工作区开始」。
+- **历史补丁排查（A 线，未失配）**：0.2.4 时代的 `applyRuntimeFlashFix` /
+  `mergeOrderedBaseline` 修复仍在位（`patch-registry` 的 `runtime-flash-fix`，order 40，
+  靶点已随 0.1.2-alpha.1 内核分解迁至 `dsh-api-session-controller/lib/client.js`）；
+  vendor alpha.5 pristine `:289` 与仓库 / profiles / 运行副本三处均已含 `?? value`，
+  全仓也无第二处 `mergeOrderedBaseline` 同源实现 → 会话列表侧不复发。
+- **壳层排查（B 线，排除）**：目录选择器走 `dsh-host-directory-picker-native`
+  （koffi + 独立 node 子进程开 `IFileOpenDialog`），选完不触发 webview reload /
+  窗口重建 / 尺寸变化；渲染恢复梯（EvalReload→NativeReload→NativeNavigate）仅在
+  心跳停摆 4×10s 后介入，报障时段日志无换页记录。
+- **根因（新向量，UI 派生层）**：`dsh-client-ui-conversation/lib/client.js:14405` 的
+  `chipTitle` 把 `workspaces.phase === "ready"` 当作「投影已权威」而屏蔽 `cwd` 派生
+  回退。选完文件夹的那一帧里，会话已 open、`useSessions.byId[id].cwd` 即时就位，
+  而 `workspaces.items[].sessionIds` 要等宿主下一次 upsert 才回显该 sessionId ⇒
+  `sessionWorkspace === undefined` 且 phase 已 ready ⇒ `chipTitle` 塌成 `undefined` ⇒
+  WorkspaceChip 回落 `t("hero.chooseWorkspace")`，并因 `inert = hero && chipTitle === void 0`
+  （:14436）连带 composer `disabled`。属 alpha 世代引入 Workspace 投影后的回归。
+- **修复（兼容层补丁 `workspace-chip-label-hold`）**：删除该表达式里的
+  `workspaces.phase === "ready" ||` 一项，让 `cwd` 派生标签（`workspaceLabel(cwd)`，与
+  投影回显后的 workspace 标题同源）覆盖投影缺口帧；真正的「无工作目录」hero 仍由
+  剩余 `cwd === void 0 || cwd === ""` 两项塌空，引导语义不变。纯显示面，不改状态机与数据流。
+- **登记与护栏**：`patch-adapters.transformWorkspaceChipLabelHold`（marker
+  `dsh-desktop fix: workspace chip keeps cwd label across projection gap`，OLD/NEW 常量对机械可逆）；
+  `patch-registry` 新增 spec（order 350、layout runtime-local、wslLayout wsl、failPolicy warn、
+  cli true，pkgRel 复用已导出的 `CONVERSATION_PKG_REL`）；spec 总数 50→51、cli:true 24→25，
+  同步 `ta6-registry-invariants` / `ta6-transform-contract` / `ta6-heal-rollback-audit` /
+  `ta6-baseline-matrix` / `ta3-boot-chain` / `unit-patch-registry` 计数与基线；`patch-surface`
+  快照重跑（37 个被干预文件 / 54 个标记家族）后 verify 零漂移。
+- **生效链路证据**：浏览器并非跑 `dsh-web-frontend/dist` 里的打包副本，而是由
+  `dsh-client-modules` 的 `ClientModuleRegistry` 把各包 `exports["./client"]` 解析成磁盘
+  绝对路径后 `readFileSync` 原样发给 `/plugins/<id>/client.js`（`index.js:526/635/734`）——
+  因此改 `node_modules` 里的 `lib/client.js` 确实改变运行 UI；反之缓存按 bundle rev 建立，
+  补丁需重启内核/应用后才对新开的页面生效。
+- **已知相邻面（本次不改）**：配套插件 `dsh-mini`（DSH-Mobile 手机桥）自带一份 vendored
+  `gui/bundles/@deepseek-ai/dsh-client-ui-conversation/client.js`（`:6827`）含同一 gate，
+  手机浏览器面同症状；它是插件自身 `build.sh` 的产物、非内核 node_modules 树，现有
+  LAYOUTS 全部只解析 `node_modules` 落点，改它属另一条链路（待上游/插件侧随版收）。
+- **测试**：新增 `unit-workspace-chip-label-hold.test.js`（8 例：三态契约、注入体语法自洽、
+  vm 实跑缺口帧不塌空 / 权威 title 仍优先 / 空 cwd 与无会话语义保持、上游退役形态失配、
+  真实 alpha 内核产物锚点、registry 字段契约）。
+
 ### fix(balance)：「本轮 ¥」峰谷切换整段跳变 + `isPeakHour` 缺周末规则（issue #168）
 
 - **根因 1（计价时刻错）**：`tokenUsage` 投影是会话**累计总量**，展示层每帧做

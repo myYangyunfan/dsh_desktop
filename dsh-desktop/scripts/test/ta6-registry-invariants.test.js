@@ -148,9 +148,11 @@ test('D. pkgRel/pkgRels 被 patch-target-resolver 常量覆盖（白名单外新
 });
 
 test('E. order 全局唯一、组内升序、补丁间依赖序成立', () => {
+  // 51 = 50（上一基线）+ 1 项新增（workspace-chip-label-hold：0.1.2-alpha.5
+  // 「选择工作文件夹时跳闪」，chipTitle 的 workspaces.phase gate 重靶）。
   // 50 = 51（上一基线）− 1 项退役（workspace-search-rail-fix：alpha.2 上游
   // 已原生实现同款守卫，pristine :L1991 实证）。
-  assert.equal(PATCH_SPECS.length, 50, 'spec 总数应为 50');
+  assert.equal(PATCH_SPECS.length, 51, 'spec 总数应为 51');
   const orders = PATCH_SPECS.map((s) => s.order);
   assert.equal(new Set(orders).size, orders.length, 'order 必须全局唯一');
   const byId = Object.fromEntries(PATCH_SPECS.map((s) => [s.id, s]));
@@ -197,9 +199,9 @@ test('E3. device-auth 154 与 credentials-absent 153 相邻无干扰', () => {
   );
 });
 
-test('F. cli:true 恰为 22 项；failPolicy ∈ {warn,degrade}', () => {
+test('F. cli:true 恰为 25 项；failPolicy ∈ {warn,degrade}', () => {
   const cliSpecs = registry.getSpecsByCli();
-  assert.equal(cliSpecs.length, 24, 'cli:true 数量（含 skill-dirs-compat + pi-ai-4xx-dump）');
+  assert.equal(cliSpecs.length, 25, 'cli:true 数量（含 skill-dirs-compat + pi-ai-4xx-dump + workspace-chip-label-hold）');
   for (const s of cliSpecs) assert.equal(s.cli, true);
   for (const spec of PATCH_SPECS) {
     assert.ok(

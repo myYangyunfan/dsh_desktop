@@ -2065,6 +2065,50 @@ function transformSkillDirsCompat(src, file) {
   return { status: 'changed', src: out };
 }
 
+// ---------------------------------------------------------------------------
+// 工作区标签闪跳补丁（workspace-chip-label-hold，2026-09「选择工作文件夹时
+// 跳闪」反馈）：0.1.2-alpha 世代引入 Workspace 投影后，对话头 chip 标题按
+// pendingWorkspace → sessionWorkspace（workspaces.items 中 sessionIds 含当前
+// 会话者）取值，只有投影 phase !== "ready" 时才回退 session.cwd 派生标签。
+// 选完文件夹的瞬间，会话已 open 且 cwd 即时就位（useSessions.byId[id].cwd），
+// 而 workspaces.items[].sessionIds 要等宿主下一次 upsert 才回显——该帧内
+// sessionWorkspace === undefined 且 phase 已 ready ⇒ chipTitle 塌成 undefined：
+// chip 闪回「选择工作区」（并换成关闭态文件夹图标，宽度跳变 = 用户所述「跳」），
+// 同时 inert = hero && chipTitle === void 0 命中 ⇒ 输入框 disabled、placeholder
+// 变「选择一个工作区开始」。补丁只删该表达式里的 `workspaces.phase === "ready" ||`
+// 一项，让 cwd 回退覆盖投影缺口帧；真正的「无工作目录」hero 仍由
+// cwd === void 0 || cwd === "" 两项兜住，状态机与数据流零改动。
+// 上游若在同帧回带 sessionIds（或去掉该 gate），本补丁经 already /
+// anchor-missing 自然退役。目标 dsh-client-ui-conversation/lib/client.js:14405。
+// ---------------------------------------------------------------------------
+const WORKSPACE_CHIP_LABEL_MARKER = 'dsh-desktop fix: workspace chip keeps cwd label across projection gap';
+// 锚点：chipTitle 派生行（0.1.2-alpha.5 pristine / node_modules / 运行副本三处
+// 逐字一致，全文件唯一命中，三 tab 缩进）。
+const WORKSPACE_CHIP_LABEL_ANCHOR = '\t\t\tconst chipTitle = pendingWorkspace?.title ?? (sessionId === void 0 ? void 0 : sessionWorkspace?.title ?? (workspaces.phase === "ready" || cwd === void 0 || cwd === "" ? void 0 : workspaceLabel(cwd)));';
+const WORKSPACE_CHIP_LABEL_NEW = '\t\t\tconst chipTitle = pendingWorkspace?.title ?? (sessionId === void 0 ? void 0 : sessionWorkspace?.title ?? (cwd === void 0 || cwd === "" ? void 0 : workspaceLabel(cwd)));';
+// 机械可逆（inverse-replace）：NEW → ANCHOR 即回滚，注释块按 marker 定位挖除。
+const WORKSPACE_CHIP_LABEL_COMMENTS = [
+  '// ' + WORKSPACE_CHIP_LABEL_MARKER,
+  '// Removed term: workspaces.phase === "ready" ||  (see chipTitle below).',
+  '// A picked directory reaches this component through sessions.byId[id].cwd one',
+  '// frame earlier than the workspace projection echoes the new sessionId into',
+  '// workspaces.items[].sessionIds, so the old gate collapsed chipTitle to',
+  '// undefined for that frame: the header chip fell back to the "choose a',
+  '// workspace" placeholder (folder-closed icon, width jump) and the composer',
+  '// turned inert. Keeping the cwd fallback covers the gap, while sessions with',
+  '// no cwd still collapse to undefined through the remaining two terms.',
+];
+const WORKSPACE_CHIP_LABEL_INJECTION = WORKSPACE_CHIP_LABEL_COMMENTS
+  .map((line) => '\t\t\t' + line).join('\n') + '\n' + WORKSPACE_CHIP_LABEL_NEW;
+
+function transformWorkspaceChipLabelHold(src, file) {
+  if (src.includes(WORKSPACE_CHIP_LABEL_MARKER)) return { status: 'already' };
+  if (!src.includes(WORKSPACE_CHIP_LABEL_ANCHOR)) {
+    return { status: 'anchor-missing', detail: '未找到 chipTitle 的 workspaces.phase gate 锚点（版本可能已变化），跳过 ' + file };
+  }
+  return { status: 'changed', src: src.replace(WORKSPACE_CHIP_LABEL_ANCHOR, () => WORKSPACE_CHIP_LABEL_INJECTION) };
+}
+
 // pi-ai 4xx 请求落盘（独立脚本实现，registry 经此引用保持单一收口）。
 const { transform4xxDump: transformPiAi4xxDump, MARKER: PI_AI_4XX_DUMP_MARKER } = require('../patch-pi-ai-4xx-dump');
 const { transformToolSchemaSanitize: transformPiAiToolSchemaSanitize, MARKER: PI_AI_TOOL_SCHEMA_SANITIZE_MARKER } = require('../patch-pi-ai-tool-schema-sanitize');
@@ -2120,6 +2164,8 @@ module.exports = {
   transformClaudeLocalBinFallback,
   // skill 目录兼容（DSH_SKILL_DIRS 并入 custom 根；已移除 ~/.claude、~/.codex 跨代理根）。
   transformSkillDirsCompat,
+  // 选择工作文件夹时 chip/输入框闪回「选择工作区」（workspace 投影缺口帧）。
+  transformWorkspaceChipLabelHold,
   // K1 注入体常量（单测 vm 行为验证用，与 transform 同源；非 marker）。
   CREDENTIALS_HELPERS_CODE,
   // 包级补丁 node_modules 根应用器（唯一实现）。
@@ -2175,6 +2221,7 @@ module.exports = {
     CLAUDE_LOCAL_BIN_MARKER,
   PI_AI_4XX_DUMP_MARKER,
     SKILL_DIRS_COMPAT_MARKER,
+    WORKSPACE_CHIP_LABEL_MARKER,
     ...require('./loader-isolation').markers,
   },
 };

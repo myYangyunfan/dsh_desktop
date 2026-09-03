@@ -29,6 +29,8 @@ const FLASH_PKG_REL = path.join('dsh-api-session-controller', 'lib', 'client.js'
 // K1 credentials-absent 指引落点：dsh-host-apiproxy 分解后，报错文案现由
 // dsh-api-settings-controller 透传（credentials 缺席分支）。
 const API_SETTINGS_CONTROLLER_PKG_REL = path.join('dsh-api-settings-controller', 'lib', 'index.js');
+// 对话头（ConversationRoot / chipTitle / composer inert 判定）所在入口：
+// workspace-chip-label-hold（选择工作文件夹时闪回「选择工作区」）靶点。
 const CONVERSATION_PKG_REL = path.join('dsh-client-ui-conversation', 'lib', 'client.js');
 const SKILL_UI_PKG_REL = path.join('dsh-client-ui-skill', 'lib', 'client.js');
 // K25：会话分组「手动排序」拖拽失效修复补丁目标（ViewOptionsMenu /

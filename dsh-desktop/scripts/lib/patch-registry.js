@@ -28,11 +28,16 @@
 //              供 preflight 只读体检复用；
 //   requires   宿主能力依赖（见 host-capabilities.js）；
 //   cli        CLI 同步期（sync-companion-plugins.js --with-patches）是否也应用；
-//              cli:true 共 17 项（= 8 个 HEAD 原有补丁 + slot-error-isolation
-//              + session-persistence + tool-source-compat / pi-ai-opencode-go-models
+//              cli:true 现共 25 项（HEAD 原有 8 个 + slot-error-isolation +
+//              session-persistence + tool-source-compat / pi-ai-opencode-go-models
 //              / pi-ai-credits / pi-ai-reasoning-defaults 四个数据完整性补丁
 //              + bundle-arrival-retry / agent-loop-scheduler-guard 两个内核
-//              韧性补丁）；
+//              韧性补丁 + pi-ai-overflow-message / token-meter-clamp /
+//              atomic-write-orphan-lock / settings-models-resilience /
+//              empty-tool-name-guidance + codex/claude 本地二进制回落 +
+//              skill-dirs-compat + pi-ai 系 4xx 落盘/schema 净化 +
+//              workspace-chip-label-hold）；计数哨兵见
+//              ta6-registry-invariants.test.js F 与 unit-patch-registry.test.js；
 //              image-send/vision-key 与 guard 组为 false，仅桌面壳运行时应用；
 //   failPolicy 'warn'（失配告警跳过，多数现状）| 'degrade'（失配降级 +
 //              升级提示）| 'fatal'（仅 build 期保留）；作用于规格级异常
@@ -50,6 +55,7 @@ const path = require('node:path');
 
 const {
   FLASH_PKG_REL,
+  CONVERSATION_PKG_REL,
   API_SETTINGS_CONTROLLER_PKG_REL,
   WORKSPACE_PKG_REL,
   SLOT_KEY_COMPAT_PKG_REL,
@@ -111,6 +117,8 @@ const {
   transformPiAiToolSchemaSanitize,
   transformDsToolSchemaSanitize,
   transformSkillDirsCompat,
+  // 选择工作文件夹时 chip/输入框闪回「选择工作区」（workspace 投影缺口帧）。
+  transformWorkspaceChipLabelHold,
   rootAppliers,
 } = require('./patch-adapters');
 
@@ -146,6 +154,7 @@ const {
   PI_AI_TOOL_SCHEMA_SANITIZE_MARKER,
   DS_TOOL_SCHEMA_SANITIZE_MARKER,
   SKILL_DIRS_COMPAT_MARKER,
+  WORKSPACE_CHIP_LABEL_MARKER,
 } = require('./patch-adapters').markers;
 
 const {
@@ -1392,6 +1401,38 @@ const PATCH_SPECS = [
       alreadyLog: alreadySkip,
       doneLog: (file) => '已让 ~/.claude/skills、~/.codex/skills 与 DSH_SKILL_DIRS 参与技能发现 ' + file,
       failLog: (file, err) => 'skill 目录兼容补丁失败(' + file + '): ' + err.message,
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // 工作区标签闪跳补丁（workspace-chip-label-hold，0.1.2-alpha.5「选择工作
+  // 文件夹时跳闪」反馈）：对话头 chip 标题在 workspace 投影 phase === "ready"
+  // 时不再回退 session.cwd 派生标签，而选完文件夹的那一帧里会话已 open、cwd
+  // 已就位，workspaces.items[].sessionIds 却要等宿主下一次 upsert 才回显——
+  // chipTitle 塌成 undefined，chip 闪回「选择工作区」+ 输入框 inert（禁用）。
+  // 补丁删除该 gate 的一项，让 cwd 回退覆盖投影缺口；无 cwd 的真空 hero 态
+  // 仍由剩余两项维持。纯显示面，不触状态机。见 patch-adapters
+  // transformWorkspaceChipLabelHold（历史 runtime-flash-fix 修的是会话列表侧，
+  // 与本补丁同症状、不同向量，二者均在位）。cli:true：boot + CLI 同步期均应用。
+  // -------------------------------------------------------------------------
+  {
+    id: 'workspace-chip-label-hold',
+    group: 'runtime',
+    order: 350,
+    kind: 'file',
+    layout: 'runtime-local',
+    wslLayout: 'wsl',
+    pkgRel: CONVERSATION_PKG_REL,
+    transform: transformWorkspaceChipLabelHold,
+    marker: WORKSPACE_CHIP_LABEL_MARKER,
+    requires: [],
+    failPolicy: 'warn',
+    cli: true,
+    logs: {
+      prefix: '工作区标签闪跳补丁',
+      alreadyLog: alreadySkip,
+      doneLog: (file) => '已修复选择工作文件夹时闪回「选择工作区」/输入框禁用 ' + file,
+      failLog: (file, err) => '工作区标签闪跳补丁失败(' + file + '): ' + err.message,
     },
   },
 ];

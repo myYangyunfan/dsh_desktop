@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-09-02T12:33:22.784Z",
+  "generatedAt": "2026-09-03T06:13:26.932Z",
   "kernelRoot": "@deepseek-ai",
-  "markerCount": 52,
+  "markerCount": 54,
   "surface": [
     {
       "file": "dsh-agent-loop/lib/index.js",
@@ -80,6 +80,13 @@
       "sha256": "72f7493fe464b0f6",
       "markers": [
         "bundle script transient-fetch retry"
+      ]
+    },
+    {
+      "file": "dsh-client-ui-conversation/lib/client.js",
+      "sha256": "93f3cda0e0f13912",
+      "markers": [
+        "workspace chip keeps cwd label across projection gap"
       ]
     },
     {
@@ -212,8 +219,9 @@
     },
     {
       "file": "dsh-token-meter/lib/index.js",
-      "sha256": "d6714dd7448e4725",
+      "sha256": "5ee14db4f0e0b972",
       "markers": [
+        "bump contextBreakdown stateVersion",
         "clamp token-meter messageTokens"
       ]
     },

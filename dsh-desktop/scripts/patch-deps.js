@@ -6,7 +6,7 @@
 // 结构（v0.6.0 alpha.3 收口重构，替代此前 13 个手写 try 块）：
 //   1) picker-native 内联补丁：历史遗留、未登记注册表，保持原样；
 //   2) canonical 引擎全链重放：integration/patch-runner.applyAll 遍历
-//      patch-registry 全部规格（16 root + 34 file），与桌面壳 boot 链、CLI
+//      patch-registry 全部规格（16 root + 35 file），与桌面壳 boot 链、CLI
 //      同步链同款引擎、同一规格集——postinstall 后的 dev 树即「全链收敛态」，
 //      patch-surface 快照可被全新 npm ci 逐字节复现。
 //

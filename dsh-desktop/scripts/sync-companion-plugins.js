@@ -360,11 +360,11 @@ function syncPlugins(home, dryRun, dshPkgDir) {
 // ---------------------------------------------------------------------------
 // 运行时补丁：复用 patch-runner 的 applyAll + patch-registry 的 getSpecsByCli()，
 // 由 registry 的 cli:true 字段单一驱动（CLI 与 main.js 不再各持一份手写清单，
-// 杜绝漂移）。0.1.2-alpha.1 起 cli:true 共 18 个补丁（slot 兼容 / 闪跳 /
-// shell description / 图片字节信任 / session 持久化 / tool source 容错 /
-// pi-ai 系 / token-meter / atomic-write / settings / bundle 到达重试 /
-// agent-loop 调度器 / 空工具名指引等）；宿主侧识图等其余补丁 cli:false，
-// 不在同步期应用。
+// 杜绝漂移）。0.1.2-alpha.5 起 cli:true 共 25 个补丁（slot 兼容 / 会话列表闪跳 /
+// 工作区标签闪跳 / shell description / 图片字节信任 / session 持久化 /
+// tool source 容错 / pi-ai 系 / token-meter / atomic-write / settings /
+// bundle 到达重试 / agent-loop 调度器 / 空工具名指引等）；宿主侧识图等其余
+// 补丁 cli:false，不在同步期应用。
 //
 // 注：runtime-flash-fix 的 doneLog 与 registry 统一为「已修复会话列表刷新闪跳」，
 // 属有意修复历史文案漂移（非保持 CLI 历史文案），与 registry 单一数据源原则一致。

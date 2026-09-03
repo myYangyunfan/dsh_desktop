@@ -1,7 +1,7 @@
 'use strict';
 
 // ---------------------------------------------------------------------------
-// TA6 元测试 6：50 补丁 × 双版本形态判定矩阵（基线快照，最有长期价值）。
+// TA6 元测试 6：51 补丁 × 双版本形态判定矩阵（基线快照，最有长期价值）。
 //
 // 对两个 pristine 内核源各跑一遍全部 transform（按 registry order）：
 //   - 形态 rc.2：.tmp-rc2-stage/node_modules（npm 闭包解包，未打任何补丁）；
@@ -107,7 +107,10 @@ function computeMatrix() {
 // 守卫，pristine :L1991 实证）→ 50 项基线；
 // alpha.2 黄区重靶（2026-08-31）：settings-section-guard 锚点改 alpha.2
 // installSection 形态（this.register），rc.2 老形态（sctx.settings.register）
-// 对新锚点失配 → rc.2 判定 changed → anchor-missing，其余 49 项判定不变）。
+// 对新锚点失配 → rc.2 判定 changed → anchor-missing，其余 49 项判定不变；
+// 新增 workspace-chip-label-hold 1 项（chipTitle 的 workspaces.phase gate 放宽；
+// rc.2 stage 树含 alpha 世代 dsh-client-ui-conversation 且锚点一致 → changed，
+// rc.1 旧线无此包 → target-absent）→ 51 项基线）。
 // 内核升级后 diff 此矩阵即知锚点漂移面：修改本常量 = 显式接受新基线。
 // ===========================================================================
 const BASELINE = {
@@ -165,6 +168,7 @@ const BASELINE = {
     // rc.2 pristine 树的 @deepseek-ai/dsh-llm-deepseek/lib/index.js 现可命中→
     // 补丁真正应用（旧基线 target-absent 是双前缀 bug 导致的 0 命中假象）。
     'ds-tool-schema-sanitize': 'changed',
+    'workspace-chip-label-hold': 'changed',
   },
   'rc.1': {
     'slot-legacy-key': 'target-absent',
@@ -217,10 +221,11 @@ const BASELINE = {
     'pi-ai-4xx-dump': 'target-absent',
     'pi-ai-tool-schema-sanitize': 'target-absent',
     'ds-tool-schema-sanitize': 'target-absent',
+    'workspace-chip-label-hold': 'target-absent',
   },
 };
 
-test('50 补丁 × rc.2 / rc.1 双形态判定矩阵与基线快照一致（锚点漂移哨兵）', { skip: !formRoot('rc.2') ? 'pristine rc.2 stage 树不可用（.tmp-rc2-stage 缺失）' : false }, () => {
+test('51 补丁 × rc.2 / rc.1 双形态判定矩阵与基线快照一致（锚点漂移哨兵）', { skip: !formRoot('rc.2') ? 'pristine rc.2 stage 树不可用（.tmp-rc2-stage 缺失）' : false }, () => {
   const matrix = computeMatrix();
   // 打印当前矩阵（基线对照 / 升级 diff 材料）。
   console.log('[TA6 基线矩阵]');
@@ -243,11 +248,11 @@ test('50 补丁 × rc.2 / rc.1 双形态判定矩阵与基线快照一致（锚�
     `判定矩阵漂移（内核形态变化或锚点漂移；确认后更新 BASELINE 快照以显式接受新基线）：\n  ${drift.join('\n  ')}`);
 });
 
-test('基线快照自身完整性：两形态 × 50 id 全覆盖', () => {
+test('基线快照自身完整性：两形态 × 51 id 全覆盖', () => {
   const ids = new Set(PATCH_SPECS.map((s) => s.id));
-  assert.equal(ids.size, 50);
+  assert.equal(ids.size, 51);
   for (const form of Object.keys(BASELINE)) {
-    assert.equal(Object.keys(BASELINE[form]).length, 50, `${form} 基线应覆盖 50 项`);
+    assert.equal(Object.keys(BASELINE[form]).length, 51, `${form} 基线应覆盖 51 项`);
     for (const id of Object.keys(BASELINE[form])) assert.ok(ids.has(id), `${form} 基线含未知 id ${id}`);
   }
 });

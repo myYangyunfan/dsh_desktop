@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 // TA6 元测试 5：heal / 回滚面审计（静态分类，报告清单，不实现反向变换）。
 //
-// 对 34 个 file transform 逐个回答「如何撤销」：
+// 对 35 个 file transform 逐个回答「如何撤销」：
 //   - npm-ci 可恢复：目标都在 node_modules/@deepseek-ai 包内，重装即回
 //     pristine（全部 file 补丁皆然——这也是 rc.2→rc.8 升级后补丁自然退役
 //     的机制）；
@@ -14,7 +14,7 @@
 //   - 多点注入：一次 transform 改多处（回滚需逐点处理）。
 //
 // 审计约束（守卫价值）：
-//   1. 分类必须覆盖全部 34 个 file transform（无「无法回滚」盲区）；
+//   1. 分类必须覆盖全部 35 个 file transform（无「无法回滚」盲区）；
 //   2. 每个带 marker 的 transform，marker 必须能定位回滚点（marker 出现在
 //      其 changed 产物中——用 pristine 实跑验证）；
 //   3. root 应用器（14 个）只碰 node_modules 内文件 → npm ci 可整体恢复。
@@ -106,6 +106,7 @@ const INVERSE_PAIR_HINTS = {
   'shell-description-compat': ['SHELL_DESC_VALIDATE_OLD', 'SHELL_DESC_VALIDATE_NEW'],
   'attachment-mime-trust': ['ATTACH_MIME_OLD', 'ATTACH_MIME_NEW'],
   'session-load-graceful': ['SESSION_LOAD_GRACEFUL_DECODER_OLD', 'SESSION_LOAD_GRACEFUL_DECODER_NEW'],
+  'workspace-chip-label-hold': ['WORKSPACE_CHIP_LABEL_ANCHOR', 'WORKSPACE_CHIP_LABEL_NEW'],
 };
 
 const MULTI_SITE = new Set([
@@ -120,8 +121,8 @@ const MULTI_SITE = new Set([
 const fileSpecs = PATCH_SPECS.filter((s) => s.kind === 'file');
 const rootSpecs = PATCH_SPECS.filter((s) => s.kind === 'root');
 
-test('审计 1：分类覆盖全部 34 个 file transform（无回滚盲区）', () => {
-  assert.equal(fileSpecs.length, 34);
+test('审计 1：分类覆盖全部 35 个 file transform（无回滚盲区）', () => {
+  assert.equal(fileSpecs.length, 35);
   const report = [];
   for (const spec of fileSpecs) {
     const pair = INVERSE_PAIR_HINTS[spec.id];
