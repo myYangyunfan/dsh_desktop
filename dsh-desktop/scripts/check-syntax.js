@@ -41,6 +41,8 @@ const entryFiles = [
   'scripts/lib/preset-heal.js',
   // llm-pi-ai settings 自愈（boot repair 步接线，随包分发，必须过语法门）。
   'scripts/lib/pi-ai-settings-heal.js',
+  // profile manifest 孤儿依赖自愈（boot repair 步接线，issue #177）。
+  'scripts/lib/profile-orphan-dep-heal.js',
   'scripts/integration/index.js',
   'scripts/patch-web-search-baseurl.js',
   'scripts/patch-menu-viewport.js',

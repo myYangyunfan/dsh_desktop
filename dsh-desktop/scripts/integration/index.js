@@ -28,6 +28,10 @@ const { healBuiltinPresets, detectLegacyPresetCopy } = require('../lib/preset-he
 // 服务缺席诊断（issue #176）：识别 inject 了「运行态根本不存在（上游已移除）服务」
 // 的第三方插件（典型 mobile-gateway 依赖 apiProxy），落一行明确日志，根治静默 pending。
 const { runServiceAbsenceDiagnosis } = require('./service-absence');
+// profile manifest 孤儿依赖自愈（issue #177）：v0.5.3 时代写入器留在 profile
+// dependencies 里的 `@deepseek-ai/*` 孤儿条目（内核闭包没有、npm 也拿不到）会让
+// 内核 boot 直接 ERR_MODULE_NOT_FOUND 退出，并让后续 pnpm 安装撞 404（#156/#170 欠账）。
+const { healProfileOrphanDeps } = require('../lib/profile-orphan-dep-heal');
 
 /**
  * @param {Object} opts
@@ -92,6 +96,16 @@ function createPluginIntegration(opts) {
       healVendorStaleKernels({ appDir, log });
     } catch (err) {
       log('vendor-kernel 自愈异常（容忍继续，不阻断启动）: ' + String((err && err.message) || err));
+    }
+    // profile manifest 孤儿依赖清理（issue #177）：必须早于内核拉起与 compat-pin 相关
+    // 步骤——孤儿条目留在 dependencies 里，boot 装配阶段就会 ERR_MODULE_NOT_FOUND 退出
+    // （恢复页「回滚后仍失败」形态）。判据全为本地确定性证据（vendor 闭包 + 内置配套件
+    // 名单 + profile / 共享 farm 内在位性），闭包读不到即整体放弃；模块内部全容忍（备份 + 原子写），
+    // 这里再兜一层异常——repair 步任何子失败绝不阻断启动。
+    try {
+      healProfileOrphanDeps({ appDir, home: getHome() || path.join(os.homedir(), '.dsh'), log });
+    } catch (err) {
+      log('profile 孤儿依赖自愈异常（容忍继续，不阻断启动）: ' + String((err && err.message) || err));
     }
     pluginSync.healProfilePatch();
     pluginSync.healHomePatch();

@@ -67,6 +67,51 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
   `scripts/check-syntax.js` 入口清单纳入 `preset-files.js` / `preset-heal.js`；
   `docs/agent-presets.md` 补「分发链路（源 → 打包 → 落点 → UI）」与本案例留档。
 
+### fix(boot)：profile 孤儿依赖致内核启动期退出，回滚也救不回（issue #177）
+
+- **现象（v0.6.0 GA 生产事故）**：恢复页红字「回滚后仍失败：内核启动期退出
+  code=Some(1)」+ `ERR_MODULE_NOT_FOUND: Cannot find package
+  '@deepseek-ai/cordis-plugin-timer' imported from C:\Users\GC\.dsh\profiles\web\`，
+  累计异常退出 3 次——回滚 / 重置都无效，因为脏数据在**用户 profile 的
+  `package.json`** 里，不在程序侧。
+- **根因（#156 / #170 欠账的爆点）**：v0.5.3 时代的写入器把内置件 / 宿主内核家族件
+  按 npm 精确版本形状写进 profile `dependencies`（hub 识别登记 `6070d5ab`、dshmarket
+  时代 `corePackageNames()` 把 cordis 家族含 `timer` 当「宿主核心件」传播、
+  `profile-bundle-heal.recoverManifestBundles` 按包内版本补写）。这些包后来从内核
+  移除 / 改名 / 退役（`@deepseek-ai/cordis-plugin-timer` 不在 vendor 的 242 个内核
+  tarball 闭包里，离线分发也装不到），profile 留下**孤儿条目**；内核 boot 按 manifest
+  声明装配即解析失败退出。而既有清理链 `hub-registry.cleanLegacyProfileDependencies`
+  只按「当前配套件名单」对账，`if (!plugin) continue;` 恰恰把「名字已不在名单里」的
+  孤儿永久跳过——#170 回复里承诺「另开跟进」的就是这一环。
+- **修复（boot repair 步新增 `scripts/lib/profile-orphan-dep-heal.js`）**：先于内核
+  拉起与 compat-pin 相关步骤，遍历 `profiles/` 下每个 profile，按**本地确定性证据**
+  （全为只读，boot 期绝不联网）判定孤儿并移除：① 只碰 `@deepseek-ai/` scope；
+  ② spec 不是 `link:` / `file:` / `workspace:` / `npm:` / git 等协议形态；③ 不在内核
+  vendor 闭包（`kernel-pin.packageVersion` + `vendor/dsh-kernel/deepseek-ai-<name>-<ver>.tgz`
+  名单还原）；④ 不是内置配套件（`COMPANION_PLUGINS`）、不在同 manifest 的
+  `dsh.profile.bundles` 里、profile 自有 `node_modules` 与 `.dsh-module-fallback`
+  都无实体，且安装闭包派生的共享 farm（`<home>/profiles/node_modules`）也提供不了它
+  ——后者保护「不在 vendor tarball 名单里但随客户端 npm 闭包分发」的合法声明（
+  `@deepseek-ai/schemastery` / `@deepseek-ai/cordis-plugin-*`），farm 有货而 profile 内
+  是无 package.json 的坏 shadow 时仍按孤儿处理（它就是 NOT_FOUND 的根源）。
+  任一证据读不到（pin / vendor 目录不可用或名单为空）即**整体放弃**，
+  宁漏勿误；健康 profile 零写入 no-op；清理动作 = 备份原文件
+  （`package.json.heal-orphan-<ts>`）+ 原子写 + 日志归因（已知退役件单独标注）。
+- **与既有链协调**：`cleanLegacyProfileDependencies` 的 `if (!plugin) continue;` 保留
+  （用户自装与孤儿在此无法区分），但模块头与其行注释收口「issue #177 分工」——两条链
+  各自幂等、判定面不重叠；已核实不会与 `recoverManifestBundles` / dsh-hub /
+  super-injector 的写入路径来回拉扯（它们只补「盘上有实体且校验通过」或 `link:` 源的
+  条目，正是本步的保留判据）。
+- **测试 / 门**：新增 `scripts/test/unit-profile-orphan-dep-heal.test.js`（16 用例：
+  孤儿剪除 + 备份 / 闭包内不动 / 非内核 scope 不动 / 解析失败容忍 / 无孤儿零写入零日志 /
+  多 profile 且单个坏 manifest 不牵连 / 协议 spec 与 bundles 仍登记与 profile 内实装
+  三保护面 / 剪空移除 `dependencies` 键 / 证据不可用整体放弃 / tarball 名还原包名（含
+  `-vlln` 形态与陈旧版本剔除）/ 幂等二次 no-op 不重复备份 / dryRun 零落盘 / 未初始化
+  profile 不凭空建文件 / farm 可解析的 npm 闭包件不误剪 / 坏 shadow 仍剪）；
+  `unit-plugin-integration.test.js` 加 boot 接线红线
+  （`healBeforeServer()` 走真实闭包证据把孤儿剪掉且保留合法声明）；
+  `scripts/check-syntax.js` 入口清单纳入新模块。
+
 ### 插件市场整体替换：dshmarket → dsh-community-market（F5）
 
 - **内置市场切换为上游 DSH Desktop 同款社区市场**：`assets/plugins/dsh-community-market`（源码构建自 [anywhere-labs/deepseek-harness-desktop](https://github.com/anywhere-labs/deepseek-harness-desktop) 的 `dsh-community-market`，MIT）——开放目录源架构（内置 DSH 1024Store / dshfind 两个合作目录适配器 + 标准 HTTP 目录源，用户自行添加与启用）、契约 schema 校验的目录快照、npm registry 精确版本 + 完整性校验安装（禁装产品包/生命周期脚本防护、失败自动回滚）、安装回执与启停管理。宿主半边挂 `/api/community-market/*` 十条路由；客户端半边（`window.__ModuleLoader__` CJS bundle）注册设置页市场 tab + 侧栏入口 + 全屏 overlay。

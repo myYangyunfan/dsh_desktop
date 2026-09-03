@@ -28,6 +28,12 @@
 //     cleanLegacyProfileDependencies）；用户自装条目（非配套名 / 范围版本 /
 //     file: link: 等异形 spec）一律不动。识别面①（桌面端插件管理页枚举
 //     dependencies）就此失去内置件——取舍见下。
+//   · 【issue #177 分工】本函数只覆盖「名字仍在配套清单里」的条目；名字已从
+//     内核 / 配套面消失的**孤儿条目**（典型 `@deepseek-ai/cordis-plugin-timer`，
+//     内核 boot 装配它即 ERR_MODULE_NOT_FOUND 退出）由 boot repair 步
+//     `scripts/lib/profile-orphan-dep-heal.js` 按「vendor 内核闭包 + 配套件名单
+//     + profile / 共享 farm 内在位性」这些本地证据回收——#170 回复里承诺的
+//     「manifest 清理链彻底修复另开跟进」即此。两条链各自幂等、判定面不重叠。
 //   · hotplug-hub/packs/dsh-desktop/hotpack.json：指向已落位 node_modules
 //     目录的 path 源指针包，让 hub 的 status/preview 把内置件列为
 //     cached/reused（识别面②，保留）。**只读指针**：内置件的挂载归同步链
@@ -276,7 +282,9 @@ function cleanLegacyProfileDependencies(opts) {
   let changed = false;
   for (const name of Object.keys(deps)) {
     const plugin = byName.get(name);
-    if (!plugin) continue; // 非配套件名：用户自装，绝不动
+    // 非当前配套件名：本函数不动（用户自装与「名字已消失的孤儿条目」在此无法
+    // 区分，孤儿回收归 profile-orphan-dep-heal.js，见模块头 issue #177 分工）。
+    if (!plugin) continue;
     const spec = deps[name];
     // 形状门：旧写入器只写精确 semver；范围/异形 spec 是用户自己的。
     if (typeof spec !== 'string' || !HUB_EXACT_VERSION_RE.test(spec)) continue;
