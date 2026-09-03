@@ -55,6 +55,7 @@ const path = require('node:path');
 
 const {
   FLASH_PKG_REL,
+  SESSION_CTRL_INDEX_PKG_REL,
   CONVERSATION_PKG_REL,
   API_SETTINGS_CONTROLLER_PKG_REL,
   WORKSPACE_PKG_REL,
@@ -82,6 +83,8 @@ const {
 
 const {
   transformFlashFix,
+  // 文本模型自动识图（识图门槛 VLM 转述 + prompt content 空值守卫，0.1.2-alpha.5 重锚）。
+  transformImageSendFix,
   transformLegacySlotKey,
   transformSlotUnkeyedCompat,
   transformSlotErrorIsolation,
@@ -109,6 +112,8 @@ const {
   transformDirectoryPickerWslBrowse,
   // R7：adapter 缺 prepareCall 时回落基类语义 + 升级指引（v0.5.3 对话失败）。
   transformAdapterPrepareCallGuard,
+  // contentHasImage 非数组守卫（v0.6.0 本轮运行失败 reading 'some' 根治）。
+  transformContentHasImageGuard,
   transformSessionHeaderScanGuard,
   transformSessionLoadGraceful,
   transformCodexLocalBinFallback,
@@ -124,6 +129,7 @@ const {
 
 const {
   SLOT_KEY_COMPAT_MARKER,
+  IMAGE_SEND_MARKER,
   SLOT_UNKEYED_COMPAT_MARKER,
   SLOT_ERROR_ISOLATE_MARKER_V2,
   PROFILE_PATCH_GUARD_MARKER,
@@ -143,6 +149,7 @@ const {
   KERNEL_BOOT_WATCHDOG_MARKER,
   WSL_PICKER_BROWSE_MARKER,
   ADAPTER_PREPARE_CALL_GUARD_MARKER,
+  CONTENT_HAS_IMAGE_GUARD_MARKER,
   SESSION_HEADER_SCAN_MARKER,
   SESSION_LOAD_GRACEFUL_MARKER,
   LOADER_TREE_ISOLATION_MARKER,
@@ -285,6 +292,49 @@ const PATCH_SPECS = [
   // -------------------------------------------------------------------------
   // 图片字节信任补丁。
   // -------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // 文本模型自动识图补丁（image-send-fix，0.1.2-alpha.5 重锚 + 重新登记）：
+  // 0.1.2-alpha.1（b5d5c4a5「退役已原生化的补丁」）内核拆分时，本补丁（连同
+  // vision-key-fix / vision-toggle-gate）从注册表摘除，但 alpha 世代内核并未
+  // 原生内置识图转述（node_modules 零命中 describeImagesWithVision）——功能就
+  // 此失效（用户故障②「当前模型不支持图片」）。且 alpha.5 重写 SessionCommand
+  // Controller.prompt 后，旧锚点（content.some / modelInfo / return err(request,{）
+  // 全部失配，即便登记也 0 命中。此处按 alpha.5 真实代码重锚 lib/index.js：
+  //   故障②（门槛）：文本模型（inputModalities 不含 image）收到图片时，改为调
+  //     VLM（describeImagesWithVision）转述成文字再发；dsh-vision 关闭或转述失败
+  //     时按上游原样抛回 MODEL_DOES_NOT_SUPPORT_IMAGES / 追加可操作指引。
+  //   入口守卫（纵深防御）：同一条 transform 把 :745 改为 request.content ?? []，
+  //     并让 admitPromptContent 走恒为数组的 admittedContent，绝不再裸崩 TypeError。
+  //     取证已推翻「:745 即故障①」的假设：该 wire 的 content 由 typert strict codec
+  //     强制为必填数组，undefined 不可达；而用户截图的「本轮运行失败」唯一来源是
+  //     轮内 turn/end 失败（准入失败只弹输入框 toast），故障①站点收敛为 dsh-llm
+  //     contentHasImage 与 dsh-tools result.content.some 两处，本机无留痕、未定案，
+  //     故不预防性打补丁（详见 patch-adapters 注释与交付报告遗留项）。
+  //     enabled 总开关与 apiKey 宿主侧读取已内联进 IMAGE_SEND_HELPER，故无需复活
+  //     vision-key-fix / vision-toggle-gate。
+  // cli:false（对齐 agent-preset-fallback 先例：桌面壳 boot 链全量应用，CLI 同步
+  // 期不碰内核包源码之外的目标）。详见 patch-adapters transformImageSendFix。
+  // -------------------------------------------------------------------------
+  {
+    id: 'image-send-fix',
+    group: 'runtime',
+    order: 80,
+    kind: 'file',
+    layout: 'runtime-local',
+    wslLayout: 'wsl',
+    pkgRel: SESSION_CTRL_INDEX_PKG_REL,
+    transform: transformImageSendFix,
+    marker: IMAGE_SEND_MARKER,
+    requires: [],
+    failPolicy: 'warn',
+    cli: false,
+    logs: {
+      prefix: '识图发送补丁',
+      alreadyLog: alreadySkip,
+      doneLog: (file) => '已启用文本模型图片自动转述（含 prompt content 空值守卫） ' + file,
+      failLog: (file, err) => '识图发送补丁失败(' + file + '): ' + err.message,
+    },
+  },
   {
     id: 'attachment-mime-trust',
     group: 'runtime',
@@ -1165,6 +1215,37 @@ const PATCH_SPECS = [
       alreadyLog: alreadySkip,
       doneLog: (file) => '已注入 prepareCall 缺失回落守卫到 ' + file,
       failLog: (file, err) => 'adapter prepareCall 守卫补丁失败(' + file + '): ' + err.message,
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // contentHasImage 非数组守卫（v0.6.0 用户反馈「本轮运行失败 Cannot read
+  // properties of undefined (reading 'some')」）：dsh-llm 共用唯一递归图片遍历
+  // contentHasImage 对 tool-result 递归 contentHasImage(block.content)，某个
+  // tool-result 块 content 为非数组（undefined）时裸 content.some 即抛错、
+  // 经 adapterStream → turn/end 冒泡成整轮失败。补丁在函数头加
+  // if (!Array.isArray(content)) return false（非数组天然无图）。同一
+  // dsh-llm/lib/index.js 靶（adapter-prepare-call-guard 之后）。failPolicy warn：
+  // 上游锚点漂移时 anchor-missing 自动退役，不阻断 boot。
+  // -------------------------------------------------------------------------
+  {
+    id: 'content-has-image-guard',
+    group: 'runtime',
+    order: 271,
+    kind: 'file',
+    layout: 'runtime-local',
+    wslLayout: 'wsl',
+    pkgRel: LLM_PKG_REL,
+    transform: transformContentHasImageGuard,
+    marker: CONTENT_HAS_IMAGE_GUARD_MARKER,
+    requires: [],
+    failPolicy: 'warn',
+    cli: false,
+    logs: {
+      prefix: 'contentHasImage 非数组守卫补丁',
+      alreadyLog: alreadySkip,
+      doneLog: (file) => '已注入 contentHasImage 非数组守卫到 ' + file,
+      failLog: (file, err) => 'contentHasImage 非数组守卫补丁失败(' + file + '): ' + err.message,
     },
   },
 

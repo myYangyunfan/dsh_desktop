@@ -148,11 +148,18 @@ test('D. pkgRel/pkgRels 被 patch-target-resolver 常量覆盖（白名单外新
 });
 
 test('E. order 全局唯一、组内升序、补丁间依赖序成立', () => {
+  // 53 = 52（上一基线）+ 1 项新增（content-has-image-guard：v0.6.0「本轮运行失败
+  // Cannot read properties of undefined (reading 'some')」，dsh-llm contentHasImage 对
+  // tool-result 递归时 content 非数组裸崩，函数头加 Array.isArray 守卫）。
+  // 52 = 51（上一基线）+ 1 项重新登记（image-send-fix：0.1.2-alpha.1 退役后，
+  // 按 alpha.5 重写后的 SessionCommandController.prompt 重锚，一条 transform 同时
+  // 兜住识图自动转述失效（故障②）与 prompt content undefined 裸崩（故障①）；
+  // 其 transform 自 alpha.1 起一直是未登记死代码，此次为重锚后重新纳册）。
   // 51 = 50（上一基线）+ 1 项新增（workspace-chip-label-hold：0.1.2-alpha.5
   // 「选择工作文件夹时跳闪」，chipTitle 的 workspaces.phase gate 重靶）。
   // 50 = 51（上一基线）− 1 项退役（workspace-search-rail-fix：alpha.2 上游
   // 已原生实现同款守卫，pristine :L1991 实证）。
-  assert.equal(PATCH_SPECS.length, 51, 'spec 总数应为 51');
+  assert.equal(PATCH_SPECS.length, 53, 'spec 总数应为 53');
   const orders = PATCH_SPECS.map((s) => s.order);
   assert.equal(new Set(orders).size, orders.length, 'order 必须全局唯一');
   const byId = Object.fromEntries(PATCH_SPECS.map((s) => [s.id, s]));

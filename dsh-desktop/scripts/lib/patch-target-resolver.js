@@ -26,6 +26,12 @@ const path = require('node:path');
 // mergeOrderedBaseline 所在客户端入口）+ dsh-client-store / dsh-client-web。
 // 闪跳修复（mergeOrderedBaseline 保留本地新会话）落点迁至 session-controller。
 const FLASH_PKG_REL = path.join('dsh-api-session-controller', 'lib', 'client.js');
+// image-send-fix 落点：SessionCommandController.prompt（识图门槛 + prompt content
+// 空值守卫）所在的服务端命令入口。同包（dsh-api-session-controller）不同文件——
+// 该包 "." 出口即 lib/index.js（自包含 bundle，内联 types/commands.js 区），运行时
+// 加载的就是它；lib/types/commands.js 是未内联的分块副本（空格缩进 + undefined，
+// 锚点形态不同且非桌面运行时路径），不纳靶。lib/client.js 是客户端侧（FLASH 靶）。
+const SESSION_CTRL_INDEX_PKG_REL = path.join('dsh-api-session-controller', 'lib', 'index.js');
 // K1 credentials-absent 指引落点：dsh-host-apiproxy 分解后，报错文案现由
 // dsh-api-settings-controller 透传（credentials 缺席分支）。
 const API_SETTINGS_CONTROLLER_PKG_REL = path.join('dsh-api-settings-controller', 'lib', 'index.js');
@@ -263,6 +269,7 @@ function slotCompatPatchTargets(home) {
 module.exports = {
   LAYOUTS,
   FLASH_PKG_REL,
+  SESSION_CTRL_INDEX_PKG_REL,
   API_SETTINGS_CONTROLLER_PKG_REL,
   CONVERSATION_PKG_REL,
   SKILL_UI_PKG_REL,

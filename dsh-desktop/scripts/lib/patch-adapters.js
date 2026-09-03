@@ -88,7 +88,7 @@ const { patchEmptyToolName } = require('./empty-tool-name-patch');
 // 文本模型自动识图补丁（原 main.js applyImageSendFix 内联 transform）。
 // ---------------------------------------------------------------------------
 const IMAGE_SEND_MARKER = 'DSH Desktop: reuse the dsh-vision VLM config';
-const IMAGE_SEND_HELPER_ANCHOR = '/** Validate one prompt as a batch before publishing any durable image object. */';
+const IMAGE_SEND_HELPER_ANCHOR = 'function routeServed(ctx, provider) {';
 const IMAGE_SEND_HELPER = `
 /** DSH Desktop: reuse the dsh-vision VLM config to describe images as text so text-only models can "see" them. */
 async function describeImagesWithVision(ctx, content) {
@@ -162,67 +162,102 @@ async function describeImagesWithVision(ctx, content) {
 	return out;
 }
 `;
-const IMAGE_SEND_GATE_MARKER = 'if (modelInfo.inputModalities !== void 0 && !modelInfo.inputModalities.includes("image")) return err(request, {';
-const IMAGE_SEND_GATE_NEW = `if (modelInfo.inputModalities !== void 0 && !modelInfo.inputModalities.includes("image")) {
-								try {
-									admittedContent = await describeImagesWithVision(ctx, content);
-								} catch (error) {
-									if (error && error.dshVisionDisabled === true) {
-										return err(request, {
-											code: 'attachment-error',
-											message: \`Model "\${current.model}" does not support image input.\`,
-											details: { reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' }
-										});
-									}
-									return err(request, {
-										code: "attachment-error",
-										message: \`图片自动转述失败：\${error instanceof Error ? error.message : String(error)}。请在 设置 → 识图插件（view_image） 配置 VLM 后重试。\`,
-										details: { reason: "IMAGE_DESCRIPTION_FAILED" }
-									});
-								}
-							}`;
+// --- 0.1.2-alpha.5 重锚：dsh-api-session-controller/lib/index.js 的
+// SessionCommandController.prompt（:745 hasImage / :751 图片门槛 / :754 准入）。
+// 三处锚点均为该文件逐字唯一命中（tab 缩进，锚点串从首个非空白字符起匹配，
+// 前导 tab 原样保留在产物中）。一条 transform 承担两件事：
+//   故障②（本补丁的真实靶点）：文本模型（inputModalities 不含 image）收到图片
+//     本应由 dsh-vision VLM 转述成文字再发，alpha.5 上游直接 throw
+//     MODEL_DOES_NOT_SUPPORT_IMAGES 拒绝 → 输入框 toast「当前模型不支持图片」。
+//     门槛改为转述；dsh-vision 关闭（enabled===false）或转述失败时，按上游原样
+//     抛回 MODEL_DOES_NOT_SUPPORT_IMAGES / 追加 IMAGE_DESCRIPTION_FAILED 指引。
+//   :745 content 空值守卫（纵深防御，经取证**不是**故障①的根因，见下）：
+//     content ?? [] 让非数组调用不再触发裸 TypeError，hasImage 随之 false，
+//     admittedContent 恒为数组后下游 admitPromptContent 也不会二次崩（同文件
+//     imageBlockIn 早已有 !Array.isArray 守卫，上游此处漏防属其自身不一致）。
+// 故障①（「本轮运行失败 Cannot read properties of undefined (reading 'some')」）
+// 的取证结论：该文案唯一来源是 turn/end{reason.kind:"error"}（dsh-client-ui-chat
+// /lib/client.js:6218 failureFrom → TurnErrorItem），而 prompt() 准入失败走的是
+// 输入框 toast `${error.message} (${error.code})`（dsh-client-ui-conversation
+// /lib/client.js:15359）；且 typert strict codec 的 SessionPromptRequest 里
+// content 为必填数组（dsh-api-session-controller/lib/typert.remote-client.js:561
+// 起 schema；网关 dsh-api-gateway/lib/index.js:1058 decode → schema.parse）——
+// 故 :745 的 undefined 经官方 wire 不可达，也不可能是「本轮运行失败」。轮内裸
+// .some 站点收敛为两处：dsh-llm/lib/index.js:558 contentHasImage（8 个轮内调用
+// 点共享的递归图片遍历，仅在所选模型 inputModalities 不含 image 时求值）与
+// dsh-tools/lib/index.js:1295 result.content.some；抛错均经 adapterFailureChunk
+// / schedulerFailure → turn/end{code:"UNKNOWN"} → 该文案。本机数据目录 65 个
+// 会话全量逐帧解压零命中，无法就地定案 → 按「根因未定案不写守卫」纪律，不对其
+// 预先打补丁（详见交付报告遗留项）。
+// image-send-fix 于 0.1.2-alpha.1（b5d5c4a5「退役已原生化的补丁」）随内核拆分
+// 一并从注册表摘除，转述功能就此在 alpha 世代失效；此处按 alpha.5 真实代码重锚
+// 并重新登记（enabled 总开关与 apiKey 宿主侧读取已内联进 IMAGE_SEND_HELPER，
+// 无需再复活 vision-key-fix / vision-toggle-gate）。
+const IMAGE_SEND_HASIMAGE_OLD = 'const hasImage = request.content.some((part) => part.type === "image");';
+// 入口守卫：content ?? [] 让 undefined 不再触发裸 TypeError，hasImage 随之 false；
+// admittedContent 默认取 promptContent（恒为数组），门槛命中时改挂转述结果。
+const IMAGE_SEND_HASIMAGE_NEW = [
+  'const promptContent = request.content ?? [];',
+  '\t\tlet admittedContent = promptContent;',
+  '\t\tconst hasImage = promptContent.some((part) => part.type === "image");',
+].join('\n');
+// alpha.5 门槛原句（单行 throw）——逐字锚点。
+const IMAGE_SEND_GATE_OLD = 'if (model.inputModalities !== void 0 && !model.inputModalities.includes("image")) throw new RemoteError("session/attachment-invalid", `Model "${current.model}" does not support image input.`, { reason: "MODEL_DOES_NOT_SUPPORT_IMAGES" });';
+// 门槛替换体：文本模型 + 图片 → VLM 转述写 admittedContent；dsh-vision 关闭
+// （dshVisionDisabled）回落上游 MODEL_DOES_NOT_SUPPORT_IMAGES；其它失败给可操作
+// 指引。alpha.5 用 this.ctx / throw（非旧 ctx / return err(request,{））。
+const IMAGE_SEND_GATE_NEW = [
+  'if (model.inputModalities !== void 0 && !model.inputModalities.includes("image")) {',
+  '\t\t\t\t\t\ttry {',
+  '\t\t\t\t\t\t\tadmittedContent = await describeImagesWithVision(this.ctx, promptContent);',
+  '\t\t\t\t\t\t} catch (visionError) {',
+  '\t\t\t\t\t\t\tif (visionError && visionError.dshVisionDisabled === true) {',
+  '\t\t\t\t\t\t\t\tthrow new RemoteError("session/attachment-invalid", `Model "${current.model}" does not support image input.`, { reason: "MODEL_DOES_NOT_SUPPORT_IMAGES" });',
+  '\t\t\t\t\t\t\t}',
+  '\t\t\t\t\t\t\tthrow new RemoteError("session/attachment-invalid", `图片自动转述失败：${visionError instanceof Error ? visionError.message : String(visionError)}。请在 设置 → 识图插件（view_image） 配置 VLM 后重试。`, { reason: "IMAGE_DESCRIPTION_FAILED" });',
+  '\t\t\t\t\t\t}',
+  '\t\t\t\t\t}',
+].join('\n');
+// 准入使用转述后的内容（admittedContent 默认 = promptContent，永不为 undefined）。
+const IMAGE_SEND_ADMIT_OLD = 'admitPromptContent(this.ctx.attachments, request.content)';
+const IMAGE_SEND_ADMIT_NEW = 'admitPromptContent(this.ctx.attachments, admittedContent)';
 
 function transformImageSendFix(src, file) {
   if (src.includes(IMAGE_SEND_MARKER)) return { status: 'already' };
-  // 上游已原生内置同名 helper（新版 dsh）：不重复插入（重复定义会留下
-  // 被后者遮蔽的死代码），只做门槛替换；其 apiKey 脱敏缺陷由
-  // transformVisionKeyFix 就地修复。
+  // 上游若原生内置同名 helper：不重复插入（避免遮蔽死代码），仅重写门槛与准入。
   const nativeHelper = src.includes('async function describeImagesWithVision');
   if (!nativeHelper) {
-    // 1) 插入转述 helper（此后所有索引必须基于插入后的 src 重新计算）
     const anchorIdx = src.indexOf(IMAGE_SEND_HELPER_ANCHOR);
     if (anchorIdx === -1) {
-      return { status: 'anchor-missing', detail: '未找到 helper 插入锚点（版本可能已变更），跳过 ' + file };
+      return { status: 'anchor-missing', detail: '未找到 helper 插入锚点（routeServed，版本可能已变更），跳过 ' + file };
     }
     src = src.slice(0, anchorIdx) + IMAGE_SEND_HELPER + '\n' + src.slice(anchorIdx);
   }
-  // 2) prompt 入口：声明 admittedContent
-  const hasImageIdx = src.indexOf('const hasImage = content.some((part) => part.type === "image");');
+  // 1) prompt 入口：content 空值守卫（纵深防御）+ admittedContent 声明
+  const hasImageIdx = src.indexOf(IMAGE_SEND_HASIMAGE_OLD);
   if (hasImageIdx === -1) {
-    return { status: 'anchor-missing', detail: '未找到 hasImage 入口（版本可能已变更），跳过 ' + file };
+    return { status: 'anchor-missing', detail: '未找到 hasImage 入口（request.content，版本可能已变更），跳过 ' + file };
   }
-  src = src.slice(0, hasImageIdx) + 'let admittedContent = content;\n\t\t\t\t' + src.slice(hasImageIdx);
-  // 3) 把“模型不支持图片”的直接拒绝替换为自动转述
-  const gateIdx = src.indexOf(IMAGE_SEND_GATE_MARKER);
+  src = src.slice(0, hasImageIdx) + IMAGE_SEND_HASIMAGE_NEW + src.slice(hasImageIdx + IMAGE_SEND_HASIMAGE_OLD.length);
+  // 2) 图片门槛：文本模型 → VLM 转述；关闭/失败回落上游拒绝（故障②）
+  const gateIdx = src.indexOf(IMAGE_SEND_GATE_OLD);
   if (gateIdx === -1) {
-    return { status: 'anchor-missing', detail: '未找到模型图片门槛（版本可能已变更），跳过 ' + file };
+    return { status: 'anchor-missing', detail: '未找到模型图片门槛（alpha.5 throw 形态，版本可能已变更），跳过 ' + file };
   }
-  const gateEnd = src.indexOf('});', gateIdx);
-  if (gateEnd === -1) {
-    return { status: 'anchor-missing', detail: '图片门槛收尾异常，跳过 ' + file };
-  }
-  src = src.slice(0, gateIdx) + IMAGE_SEND_GATE_NEW + src.slice(gateEnd + 3);
-  // 4) durablePromptContent 使用转述后的内容（从门槛之后查找调用点，避免命中函数定义）
-  const callIdx = src.indexOf('durablePromptContent(ctx, content)', gateIdx);
+  src = src.slice(0, gateIdx) + IMAGE_SEND_GATE_NEW + src.slice(gateIdx + IMAGE_SEND_GATE_OLD.length);
+  // 3) admitPromptContent 使用转述后的内容
+  const callIdx = src.indexOf(IMAGE_SEND_ADMIT_OLD);
   if (callIdx === -1) {
-    return { status: 'anchor-missing', detail: '未找到 durablePromptContent 调用，跳过 ' + file };
+    return { status: 'anchor-missing', detail: '未找到 admitPromptContent 调用（版本可能已变更），跳过 ' + file };
   }
-  src = src.slice(0, callIdx) + 'durablePromptContent(ctx, admittedContent)' + src.slice(callIdx + 'durablePromptContent(ctx, content)'.length);
+  src = src.slice(0, callIdx) + IMAGE_SEND_ADMIT_NEW + src.slice(callIdx + IMAGE_SEND_ADMIT_OLD.length);
   return { status: 'changed', src };
 }
 
 // ---------------------------------------------------------------------------
-// 图片自动转述 apiKey 修复（原 main.js applyVisionKeyFix 内联 transform）。
+// 【休眠·未登记】图片自动转述 apiKey 修复（原 main.js applyVisionKeyFix 内联
+// transform）：锚点为旧内核的 settings.describe 形态；alpha.5 重锚后同等语义已
+// 内联进 IMAGE_SEND_HELPER（settings.get 优先 + describe 兼容回落），仅留作参照。
 // ---------------------------------------------------------------------------
 const VISION_KEY_MARKER = 'dsh-desktop fix: read the resolved HOST-side value';
 const VISION_KEY_FROM = '\tlet vision = null;\n\tif (settings !== void 0 && typeof settings.describe === "function") {\n\t\ttry {\n\t\t\tconst descriptor = settings.describe({ redactSecrets: true }).find((candidate) => String(candidate.ns) === "dsh-vision");\n\t\t\tif (descriptor !== void 0 && descriptor.value !== void 0 && typeof descriptor.value === "object") vision = descriptor.value;\n\t\t} catch {}\n\t}';
@@ -237,12 +272,13 @@ function transformVisionKeyFix(src, file) {
 }
 
 // ---------------------------------------------------------------------------
-// 识图总开关（enabled）门槛增量补丁：image-send-fix 已应用的旧树上补挂
-// 「dsh-vision 关闭 → 不转述、按上游原样拒绝」。IMAGE_SEND_MARKER 相同而
-// 内容已升级，旧树永远走 already 分支拿不到新常量，因此按 vision-key-fix
-// 的先例单列 transform 与 marker；两处锚点（helper 配置检查行 / gate 调用
-// 行）在旧树与新树均存在，产物与新版 IMAGE_SEND_HELPER / IMAGE_SEND_GATE_NEW
-// 直接生成的字节一致（新树靠 marker 短路 already，不会重复插入）。
+// 【休眠·未登记】识图总开关（enabled）门槛增量补丁：历史上用于给「已应用旧版
+// image-send-fix」的旧内核树补挂「dsh-vision 关闭 → 不转述、按上游原样拒绝」。
+// 0.1.2-alpha.5 重锚后不再需要：enabled 判定与 dshVisionDisabled 回落已直接写进
+// IMAGE_SEND_HELPER / IMAGE_SEND_GATE_NEW，注册表里也没有对应 PatchSpec。
+// 下方两处锚点（VISION_TOGGLE_HELPER_ANCHOR 之外的 GATE_FROM）仍是 alpha.1 前的
+// ctx / return err(request,{ 形态，对 alpha.5 树必然 anchor-missing——保留仅为
+// 历史参照（同 vision-key-fix 休眠先例），请勿据此推断 alpha.5 仍缺开关。
 // ---------------------------------------------------------------------------
 const VISION_TOGGLE_MARKER = 'DSH Desktop: dsh-vision master switch (enabled)';
 const VISION_TOGGLE_HELPER_ANCHOR = '\tif (vision === null || typeof vision.baseURL !== "string" || vision.baseURL.trim() === "" || typeof vision.model !== "string" || vision.model.trim() === "") {';
@@ -1197,6 +1233,32 @@ function transformAdapterPrepareCallGuard(src, file) {
   out = out.replace(ADAPTER_PREPARE_CALL_ANCHOR_PREPARED, '\t\tconst adapterCall = await this.prepareAdapterCall(registration.adapter, config.provider, config.model, signal);');
   out = out.replace(ADAPTER_PREPARE_CALL_ANCHOR_DIRECT, '\t\t\t\tconst adapterCall = await this.prepareAdapterCall(adapter, options.provider, options.model, options.signal);');
   return { status: 'changed', src: out };
+}
+
+// ---------------------------------------------------------------------------
+// contentHasImage 非数组守卫（v0.6.0 用户反馈「本轮运行失败 Cannot read
+// properties of undefined (reading 'some')」）。dsh-llm 的 contentHasImage 是
+// 所有图片策略（capability gating / text-only serialization / compaction survey）
+// 共用的唯一递归图片遍历；它对 tool-result 递归调用 contentHasImage(block.content)，
+// 而某个 tool-result 块的 content 可能为非数组（undefined）——裸 content.some
+// 即抛 "Cannot read properties of undefined (reading 'some')"，经 adapterStream →
+// turn/end 冒泡成整轮失败。非数组内容天然不含图片，直接返回 false 即可。
+// 上游修复意向：上游给 contentHasImage 加 Array 守卫后，本补丁经 already /
+// anchor-missing 自然退役。
+// ---------------------------------------------------------------------------
+const CONTENT_HAS_IMAGE_GUARD_MARKER = 'dsh-desktop fix: contentHasImage non-array guard';
+const CONTENT_HAS_IMAGE_OLD = '\treturn content.some((block) => block.type === "image" || block.type === "tool-result" && contentHasImage(block.content));';
+const CONTENT_HAS_IMAGE_NEW = '\tif (!Array.isArray(content)) return false; // ' + CONTENT_HAS_IMAGE_GUARD_MARKER + ' (a tool-result block may carry undefined content; non-array holds no image)\n' + CONTENT_HAS_IMAGE_OLD;
+
+function transformContentHasImageGuard(src, file) {
+  if (src.includes(CONTENT_HAS_IMAGE_GUARD_MARKER)) return { status: 'already' };
+  if (!src.includes(CONTENT_HAS_IMAGE_OLD)) {
+    return { status: 'anchor-missing', detail: '未找到 dsh-llm contentHasImage 锚点（版本可能已变更），跳过 ' + file };
+  }
+  if (src.split(CONTENT_HAS_IMAGE_OLD).length - 1 !== 1) {
+    return { status: 'anchor-missing', detail: 'dsh-llm contentHasImage 锚点非唯一，跳过 ' + file };
+  }
+  return { status: 'changed', src: src.replace(CONTENT_HAS_IMAGE_OLD, CONTENT_HAS_IMAGE_NEW) };
 }
 
 // 会话事件有界保留（K4：v0.5.4 多子代理渲染进程 OOM 根治）。内核
@@ -2157,6 +2219,8 @@ module.exports = {
   transformDirectoryPickerWslBrowse,
   // R7：adapter 缺 prepareCall 时回落基类语义 + 升级指引（v0.5.3 对话失败）。
   transformAdapterPrepareCallGuard,
+  // contentHasImage 非数组守卫（v0.6.0 本轮运行失败 reading 'some' 根治）。
+  transformContentHasImageGuard,
   transformSessionHeaderScanGuard,
   transformSessionLoadGraceful,
   // Codex / Claude 子代理本地二进制回落（安装包瘦身移除原生二进制后）。
@@ -2169,6 +2233,8 @@ module.exports = {
   // K1 注入体常量（单测 vm 行为验证用，与 transform 同源；非 marker）。
   CREDENTIALS_HELPERS_CODE,
   // 包级补丁 node_modules 根应用器（唯一实现）。
+  // 文本模型自动识图（识图门槛转述 + prompt content 空值守卫，0.1.2-alpha.5 重锚）。
+  transformImageSendFix,
   rootAppliers: {
     patchWebSearchBaseUrl,
     patchMenuViewport,
@@ -2192,6 +2258,7 @@ module.exports = {
   // transform 同源），bundle-guard 系来自 profile-bundle-heal，loader 隔离系
   // 来自 loader-isolation，其余为本文档声明化。
   markers: {
+    IMAGE_SEND_MARKER,
   DS_TOOL_SCHEMA_SANITIZE_MARKER,
   PI_AI_TOOL_SCHEMA_SANITIZE_MARKER,
     SLOT_KEY_COMPAT_MARKER,
@@ -2214,6 +2281,7 @@ module.exports = {
     KERNEL_BOOT_WATCHDOG_MARKER,
     WSL_PICKER_BROWSE_MARKER,
     ADAPTER_PREPARE_CALL_GUARD_MARKER,
+    CONTENT_HAS_IMAGE_GUARD_MARKER,
     SESSION_HEADER_SCAN_MARKER,
     SESSION_LOAD_GRACEFUL_MARKER,
     MANUAL_SORT_DRAG_MARKER,

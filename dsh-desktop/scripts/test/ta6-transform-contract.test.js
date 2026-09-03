@@ -1,7 +1,7 @@
 'use strict';
 
 // ---------------------------------------------------------------------------
-// TA6 元测试 2：transform 契约三态语义统一（35 个 file transform 逐个实跑）。
+// TA6 元测试 2：transform 契约三态语义统一（37 个 file transform 逐个实跑）。
 //
 // 对每个 transform 用三种输入各跑一遍：
 //   1) pristine 源（.tmp-rc2-stage 未经补丁的内核包文本；重定位补丁回退到
@@ -162,6 +162,8 @@ for (const spec of fileSpecs) {
   });
 }
 
-test('契约面完整性：35 个 file transform 全部被本文件覆盖', () => {
-  assert.equal(fileSpecs.length, 35);
+// 37 = 35（旧基线）+ image-send-fix（0.1.2-alpha.5 重锚重新纳册）+ content-has-image-guard
+// （dsh-llm contentHasImage 非数组守卫）两条 file 补丁。
+test('契约面完整性：37 个 file transform 全部被本文件覆盖', () => {
+  assert.equal(fileSpecs.length, 37);
 });

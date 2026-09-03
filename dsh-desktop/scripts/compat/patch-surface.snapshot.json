@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-09-03T06:13:26.932Z",
+  "generatedAt": "2026-09-03T11:29:36.084Z",
   "kernelRoot": "@deepseek-ai",
-  "markerCount": 54,
+  "markerCount": 55,
   "surface": [
     {
       "file": "dsh-agent-loop/lib/index.js",
@@ -30,6 +30,14 @@
       "sha256": "35c1285a31e08130",
       "markers": [
         "session manage"
+      ]
+    },
+    {
+      "file": "dsh-api-session-controller/lib/index.js",
+      "sha256": "04fb4f304081ad88",
+      "markers": [
+        "read the resolved HOST-side value",
+        "read the resolved HOST-side value (settings.get), not the"
       ]
     },
     {
@@ -167,9 +175,10 @@
     },
     {
       "file": "dsh-llm/lib/index.js",
-      "sha256": "9aa612aefaa0cee0",
+      "sha256": "6941eb324dfd69dd",
       "markers": [
-        "adapter prepareCall guard"
+        "adapter prepareCall guard",
+        "contentHasImage non-array guard"
       ]
     },
     {
