@@ -1250,15 +1250,30 @@ const CONTENT_HAS_IMAGE_GUARD_MARKER = 'dsh-desktop fix: contentHasImage non-arr
 const CONTENT_HAS_IMAGE_OLD = '\treturn content.some((block) => block.type === "image" || block.type === "tool-result" && contentHasImage(block.content));';
 const CONTENT_HAS_IMAGE_NEW = '\tif (!Array.isArray(content)) return false; // ' + CONTENT_HAS_IMAGE_GUARD_MARKER + ' (a tool-result block may carry undefined content; non-array holds no image)\n' + CONTENT_HAS_IMAGE_OLD;
 
+// dsh-tools 家族（同 bug 类：轮内裸 result.content.some 图片扫描，非数组即崩 reading 'some'）——
+// run_code/PTC 结果 finalize 处把图片结果下沉为 user message；某 tool-result 块 content 非数组
+// 时裸 .some 抛错冒泡成整轮失败。与 dsh-llm contentHasImage 共用同一 marker（本 spec 多靶）。
+const TOOLS_IMAGE_RESULT_OLD = '\t\t\t\t\t\t\tif (!result.isError && result.content.some((block) => block.type === "image")) exec.deferContext(createUserMessage({';
+const TOOLS_IMAGE_RESULT_NEW = '\t\t\t\t\t\t\t// ' + CONTENT_HAS_IMAGE_GUARD_MARKER + ' (dsh-tools: a tool-result block may carry non-array content; guard the image scan instead of crashing the turn)\n' + '\t\t\t\t\t\t\tif (!result.isError && Array.isArray(result.content) && result.content.some((block) => block.type === "image")) exec.deferContext(createUserMessage({';
+
+/** contentHasImage / result.content.some 非数组守卫（多靶：dsh-llm + dsh-tools，按锚点分派）。 */
 function transformContentHasImageGuard(src, file) {
   if (src.includes(CONTENT_HAS_IMAGE_GUARD_MARKER)) return { status: 'already' };
-  if (!src.includes(CONTENT_HAS_IMAGE_OLD)) {
-    return { status: 'anchor-missing', detail: '未找到 dsh-llm contentHasImage 锚点（版本可能已变更），跳过 ' + file };
+  // dsh-llm 家族：contentHasImage 递归遍历函数头守卫。
+  if (src.includes(CONTENT_HAS_IMAGE_OLD)) {
+    if (src.split(CONTENT_HAS_IMAGE_OLD).length - 1 !== 1) {
+      return { status: 'anchor-missing', detail: 'dsh-llm contentHasImage 锚点非唯一，跳过 ' + file };
+    }
+    return { status: 'changed', src: src.replace(CONTENT_HAS_IMAGE_OLD, CONTENT_HAS_IMAGE_NEW) };
   }
-  if (src.split(CONTENT_HAS_IMAGE_OLD).length - 1 !== 1) {
-    return { status: 'anchor-missing', detail: 'dsh-llm contentHasImage 锚点非唯一，跳过 ' + file };
+  // dsh-tools 家族：run_code/PTC 图片结果 finalize 处 result.content.some 守卫。
+  if (src.includes(TOOLS_IMAGE_RESULT_OLD)) {
+    if (src.split(TOOLS_IMAGE_RESULT_OLD).length - 1 !== 1) {
+      return { status: 'anchor-missing', detail: 'dsh-tools result.content.some 锚点非唯一，跳过 ' + file };
+    }
+    return { status: 'changed', src: src.replace(TOOLS_IMAGE_RESULT_OLD, TOOLS_IMAGE_RESULT_NEW) };
   }
-  return { status: 'changed', src: src.replace(CONTENT_HAS_IMAGE_OLD, CONTENT_HAS_IMAGE_NEW) };
+  return { status: 'anchor-missing', detail: '未找到 contentHasImage / result.content.some 锚点（版本可能已变更），跳过 ' + file };
 }
 
 // 会话事件有界保留（K4：v0.5.4 多子代理渲染进程 OOM 根治）。内核
@@ -2221,6 +2236,9 @@ module.exports = {
   transformAdapterPrepareCallGuard,
   // contentHasImage 非数组守卫（v0.6.0 本轮运行失败 reading 'some' 根治）。
   transformContentHasImageGuard,
+  // 多靶守卫锚点常量（dsh-llm contentHasImage + dsh-tools result.content.some，单测同源引用）。
+  TOOLS_IMAGE_RESULT_OLD,
+  TOOLS_IMAGE_RESULT_NEW,
   transformSessionHeaderScanGuard,
   transformSessionLoadGraceful,
   // Codex / Claude 子代理本地二进制回落（安装包瘦身移除原生二进制后）。

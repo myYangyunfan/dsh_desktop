@@ -49,6 +49,10 @@ const SLOT_UNKEYED_COMPAT_PKG_REL = path.join('dsh-cordis-client-runner', 'lib',
 const SLOT_COMPAT_PKG_RELS = [SLOT_KEY_COMPAT_PKG_REL, SLOT_UNKEYED_COMPAT_PKG_REL];
 const PW_REL = path.join('dsh-tool-pwsh', 'lib', 'index.js');
 const BASH_REL = path.join('dsh-tool-bash', 'lib', 'index.js');
+// run_code（code 模式）工具定义在引擎包 dsh-tools/lib/index.js：其 description
+// 参数与 shell 工具同构（required:true + execute 内 args.description.trim() 校验），
+// 模型省略时同样抛 missing required property → 与 shell-description-compat 共靶。
+const DSHTOOLS_REL = path.join('dsh-tools', 'lib', 'index.js');
 // 持久 shell（pwsh / bash persistent）与其 PTY 后端的停止修复补丁目标。
 const PWSH_PERSIST_REL = path.join('dsh-tool-pwsh-persistent', 'lib', 'index.js');
 const BASH_PERSIST_REL = path.join('dsh-tool-bash-persistent', 'lib', 'index.js');
@@ -281,6 +285,7 @@ module.exports = {
   SLOT_COMPAT_PKG_RELS,
   PW_REL,
   BASH_REL,
+  DSHTOOLS_REL,
   PWSH_PERSIST_REL,
   BASH_PERSIST_REL,
   PERSISTENT_SHELL_PKG_RELS,

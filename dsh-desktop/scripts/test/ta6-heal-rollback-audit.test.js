@@ -103,8 +103,9 @@ const INVERSE_PAIR_HINTS = {
   'device-auth-guidance': ['DEVICE_AUTH_THROW_ANCHOR_V2', 'deviceAuthGuidanceBlock'],
   'slot-legacy-key': ['SLOT_KEY_COMPAT_OLD', 'SLOT_KEY_COMPAT_NEW'],
   'slot-unkeyed-compat': ['SLOT_UNKEYED_COMPAT_OLD', 'SLOT_UNKEYED_COMPAT_NEW'],
-  'shell-description-compat': ['SHELL_DESC_VALIDATE_OLD', 'SHELL_DESC_VALIDATE_NEW'],
+  'shell-description-compat': ['SHELL_DESC_VALIDATE_OLD', 'SHELL_DESC_VALIDATE_NEW', 'SHELL_DESC_SCHEMA_OLD', 'SHELL_DESC_SCHEMA_OPTIONAL', 'RUNCODE_VALIDATE_OLD', 'RUNCODE_VALIDATE_NEW', 'RUNCODE_SCHEMA_OLD', 'RUNCODE_SCHEMA_OPTIONAL'],
   'attachment-mime-trust': ['ATTACH_MIME_OLD', 'ATTACH_MIME_NEW'],
+  'content-has-image-guard': ['CONTENT_HAS_IMAGE_OLD', 'CONTENT_HAS_IMAGE_NEW', 'TOOLS_IMAGE_RESULT_OLD', 'TOOLS_IMAGE_RESULT_NEW'],
   'session-load-graceful': ['SESSION_LOAD_GRACEFUL_DECODER_OLD', 'SESSION_LOAD_GRACEFUL_DECODER_NEW'],
   'workspace-chip-label-hold': ['WORKSPACE_CHIP_LABEL_ANCHOR', 'WORKSPACE_CHIP_LABEL_NEW'],
 };
@@ -115,7 +116,9 @@ const MULTI_SITE = new Set([
   'adapter-prepare-call-guard', // 双调用点替换 + 方法注入（prepareCall/adapterStream）
   'session-header-scan-guard', // 四点注入（模块级缓存 / helper 方法 / 读行 / 读上限）
   'session-load-graceful',     // 四点注入（hoist / scanner 赋值 / 计数 / catch 降级）
-  'skill-dirs-compat',         // 三点注入（import 扩 delimiter / 构造器 env 并入 / roots 追加）
+  'skill-dirs-compat',        // 三点注入（import 扩 delimiter / 构造器 env 并入 / roots 追加）
+  'content-has-image-guard',  // 多靶：dsh-llm contentHasImage + dsh-tools result.content.some
+  'shell-description-compat',  // 多点：shell(pwsh/bash) + run_code(dsh-tools) 各 schema 删 required:true + validate 兜底
 ]);
 
 const fileSpecs = PATCH_SPECS.filter((s) => s.kind === 'file');

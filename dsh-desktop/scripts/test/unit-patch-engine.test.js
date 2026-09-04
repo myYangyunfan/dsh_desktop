@@ -25,13 +25,16 @@ const {
   localCopyFiles, guardCopyFiles, localNodeModulesRoots,
   slotCompatCopyFiles, slotCompatPatchTargets,
   transformFlashFix,
-  SHELL_DESC_MARKER, SHELL_DESC_VALIDATE_OLD, SHELL_DESC_VALIDATE_NEW, PW_REL, BASH_REL, transformShellDescriptionOptional,
+  SHELL_DESC_MARKER, SHELL_DESC_VALIDATE_OLD, SHELL_DESC_VALIDATE_NEW,
+  SHELL_DESC_SCHEMA_OLD, SHELL_DESC_SCHEMA_OPTIONAL, PW_REL, BASH_REL, transformShellDescriptionOptional,
+  RUNCODE_DESC_MARKER, RUNCODE_SCHEMA_OLD, RUNCODE_SCHEMA_OPTIONAL, RUNCODE_VALIDATE_OLD, RUNCODE_VALIDATE_NEW,
   ATTACH_MIME_MARKER, ATTACH_MIME_OLD, ATTACH_MIME_NEW, ATTACH_LOCAL_REL, transformAttachmentMimeTrust,
   SLOT_KEY_COMPAT_PKG_REL, SLOT_UNKEYED_COMPAT_PKG_REL,
   SLOT_KEY_COMPAT_MARKER, SLOT_KEY_COMPAT_OLD, SLOT_KEY_COMPAT_NEW, transformLegacySlotKey,
   SLOT_UNKEYED_COMPAT_MARKER, SLOT_UNKEYED_COMPAT_OLD, SLOT_UNKEYED_COMPAT_NEW, transformSlotUnkeyedCompat,
 } = require('../lib/runtime-patches');
 const { COMPANION_PLUGINS, companionDirName } = require('../lib/companion-plugins');
+const { DSHTOOLS_REL } = require('../lib/patch-target-resolver');
 const {
   PATCH_HEADER, ACP_DISABLE_BLOCK, PET_DISABLE_BLOCK,
   ACP_SELF_DISABLE_BLOCK, removeAcpBasicDisableBlock,
@@ -221,34 +224,45 @@ test('runtime-patches: 候选路径构造器（本地三副本/防护四副本/W
   ]);
 });
 
+// 把 dev node_modules 里可能已打过补丁的 shell 工具源还原为官方形态（validate +
+// schema 两处都回退），供变换单测从确定起点验证。
+function pristineShellSrc(live) {
+  let s = live;
+  if (s.includes(SHELL_DESC_VALIDATE_NEW)) s = s.replace(SHELL_DESC_VALIDATE_NEW, SHELL_DESC_VALIDATE_OLD);
+  if (s.includes(SHELL_DESC_SCHEMA_OPTIONAL)) s = s.replace(SHELL_DESC_SCHEMA_OPTIONAL, SHELL_DESC_SCHEMA_OLD);
+  return s;
+}
+
 test('tool-compat: shell description 兜底变换（真实 vendored 文件 + 幂等）', () => {
   for (const rel of [PW_REL, BASH_REL]) {
     const file = path.join(repoRoot, 'node_modules', '@deepseek-ai', rel);
-    const src0 = fs.readFileSync(file, 'utf8');
-    // dev node_modules 可能已被运行时补丁打过：先还原为官方源再验证变换本身。
-    const src = src0.includes(SHELL_DESC_VALIDATE_NEW) ? src0.replace(SHELL_DESC_VALIDATE_NEW, SHELL_DESC_VALIDATE_OLD) : src0;
+    const src = pristineShellSrc(fs.readFileSync(file, 'utf8'));
     const out = transformShellDescriptionOptional(src, file);
     assert.strictEqual(out.status, 'changed', rel + ' 应可补丁');
-    assert.ok(out.src.includes(SHELL_DESC_MARKER), rel + ' 应写入幂等标记');
-    assert.ok(out.src.includes('required: true'), rel + ' 的 schema description 必须保持 required: true（引擎校验器拒绝 false）');
-    assert.ok(!out.src.includes('required: false'), rel + ' 不得写入 required: false');
+    assert.ok(out.src.includes(SHELL_DESC_MARKER), rel + ' 应写入幂等标记（validate 兜底）');
+    assert.ok(out.src.includes(SHELL_DESC_SCHEMA_OPTIONAL), rel + ' description 应改为可选（删除 required: true 行）');
+    assert.ok(!out.src.includes(SHELL_DESC_SCHEMA_OLD), rel + ' 不得残留 description 的 required: true 块');
+    assert.ok(!out.src.includes('required: false'), rel + ' 不得写入 required: false（引擎定义期即拒）');
+    assert.ok(out.src.includes('required: true'), rel + ' command 等其它参数仍须保持 required: true');
     assert.ok(out.src.includes('args.description = args.command.trim().split'), rel + ' 缺省 description 应从 command 生成');
     assert.ok(!/split\(\/\r?\n\/\)/.test(out.src), rel + ' 生成的正则不得含真换行（转义回归）');
     assert.deepStrictEqual(transformShellDescriptionOptional(out.src, file), { status: 'already' }, rel + ' 二次应用应幂等');
   }
 });
 
-test('tool-compat: shell description 旧 schema 补丁（required: false）自动回滚', () => {
+test('tool-compat: shell description 历史误写（required: false）收敛为删除该行', () => {
   const file = path.join(repoRoot, 'node_modules', '@deepseek-ai', PW_REL);
-  const src = fs.readFileSync(file, 'utf8');
+  const src = pristineShellSrc(fs.readFileSync(file, 'utf8'));
   const legacy = src.replace(
     '\t\t\t\trequired: true,\n\t\t\t\tdescription: "Clear, concise description',
     '\t\t\t\trequired: false, // dsh-desktop compat: optional shell description\n\t\t\t\tdescription: "Clear, concise description'
   );
+  assert.notStrictEqual(legacy, src, '应成功构造历史 required:false 形态');
   const out = transformShellDescriptionOptional(legacy, file);
-  assert.strictEqual(out.status, 'changed', '含旧 false 补丁时应回滚');
-  assert.ok(out.src.includes('required: true'), '回滚后 schema 应恢复 required: true');
-  assert.ok(!out.src.includes('required: false'), '回滚后不得残留 required: false');
+  assert.strictEqual(out.status, 'changed', '含历史 false 误写时应收敛为可选');
+  assert.ok(!out.src.includes('required: false'), '收敛后不得残留 required: false');
+  assert.ok(out.src.includes(SHELL_DESC_SCHEMA_OPTIONAL), '收敛后 description 应为可选形态');
+  assert.ok(!out.src.includes(SHELL_DESC_SCHEMA_OLD), '收敛后不得残留 required: true 块');
 });
 
 test('tool-compat: shell description 锚点缺失时跳过且不改写', () => {
@@ -256,8 +270,24 @@ test('tool-compat: shell description 锚点缺失时跳过且不改写', () => {
   const out = transformShellDescriptionOptional('export const x = 1;', file);
   assert.deepStrictEqual(out, {
     status: 'anchor-missing',
-    detail: '未找到 shell description 锚点（版本可能已变更），跳过 ' + file,
+    detail: '未找到 shell/run_code description 锚点（版本可能已变更），跳过 ' + file,
   });
+});
+
+test('tool-compat: run_code description 兜底变换（真实 dsh-tools + 双 schema 块 + 幂等）', () => {
+  const file = path.join(repoRoot, 'node_modules', '@deepseek-ai', DSHTOOLS_REL);
+  let src = fs.readFileSync(file, 'utf8');
+  // 还原官方形态（两处 required:true schema + 旧 trim 校验），从确定起点验证。
+  src = src.split(RUNCODE_SCHEMA_OPTIONAL).join(RUNCODE_SCHEMA_OLD);
+  src = src.split(RUNCODE_VALIDATE_NEW).join(RUNCODE_VALIDATE_OLD);
+  const out = transformShellDescriptionOptional(src, file);
+  assert.strictEqual(out.status, 'changed', 'dsh-tools run_code 应可补丁');
+  assert.ok(out.src.includes(RUNCODE_DESC_MARKER), '应写入 run_code 幂等标记');
+  assert.strictEqual(out.src.split(RUNCODE_SCHEMA_OLD).length - 1, 0, '两处 required:true 块都应消除');
+  assert.strictEqual(out.src.split(RUNCODE_SCHEMA_OPTIONAL).length - 1, 2, '两处 description 都应改为可选');
+  assert.ok(out.src.includes('args.description = args.code.trim().split'), '缺省 description 应从 code 首行生成');
+  assert.ok(out.src.includes('code: {' + '\n' + '\t\t\t\ttype: "string",' + '\n' + '\t\t\t\trequired: true'), 'code 仍须保持 required: true');
+  assert.deepStrictEqual(transformShellDescriptionOptional(out.src, file), { status: 'already' }, '二次应用应幂等');
 });
 
 test('tool-compat: attachment 图片字节信任变换（真实 vendored 文件 + 幂等）', () => {

@@ -63,6 +63,7 @@ const {
   SLOT_UNKEYED_COMPAT_PKG_REL,
   PW_REL,
   BASH_REL,
+  DSHTOOLS_REL,
   PERSISTENT_SHELL_PKG_RELS,
   TERMINAL_BASH_REL,
   ATTACH_LOCAL_REL,
@@ -273,7 +274,10 @@ const PATCH_SPECS = [
     kind: 'file',
     layout: 'runtime-local',
     wslLayout: 'wsl',
-    pkgRels: [PW_REL, BASH_REL],
+    // description 仅用于 UI/日志展示，不应让整个工具调用失败。共三靶：
+    // pwsh/bash（shell 工具）+ dsh-tools（run_code，code 模式）。transform 内
+    // run_code 步先于 shell 步（run_code 3-tab validate 行含 shell 1-tab 锚点子串）。
+    pkgRels: [PW_REL, BASH_REL, DSHTOOLS_REL],
     transform: transformShellDescriptionOptional,
     marker: null,
     requires: [],
@@ -1224,7 +1228,9 @@ const PATCH_SPECS = [
   // contentHasImage 对 tool-result 递归 contentHasImage(block.content)，某个
   // tool-result 块 content 为非数组（undefined）时裸 content.some 即抛错、
   // 经 adapterStream → turn/end 冒泡成整轮失败。补丁在函数头加
-  // if (!Array.isArray(content)) return false（非数组天然无图）。同一
+  // if (!Array.isArray(content)) return false（非数组天然无图）。0.6 交付时列为
+  // 「同 bug 类残留未定案点」的 dsh-tools/lib/index.js 轮内 result.content.some（约
+  // :1297，图片结果 finalize）本 spec 一并多靶根治（共用 marker，transform 按锚点分派）。同一
   // dsh-llm/lib/index.js 靶（adapter-prepare-call-guard 之后）。failPolicy warn：
   // 上游锚点漂移时 anchor-missing 自动退役，不阻断 boot。
   // -------------------------------------------------------------------------
@@ -1235,7 +1241,7 @@ const PATCH_SPECS = [
     kind: 'file',
     layout: 'runtime-local',
     wslLayout: 'wsl',
-    pkgRel: LLM_PKG_REL,
+    pkgRels: [LLM_PKG_REL, DSHTOOLS_REL],
     transform: transformContentHasImageGuard,
     marker: CONTENT_HAS_IMAGE_GUARD_MARKER,
     requires: [],

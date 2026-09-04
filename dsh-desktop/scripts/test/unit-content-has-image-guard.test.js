@@ -29,9 +29,9 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { spawnSync, execFileSync } = require('node:child_process');
 
-const { transformContentHasImageGuard, markers } = require('../lib/patch-adapters');
+const { transformContentHasImageGuard, TOOLS_IMAGE_RESULT_OLD, TOOLS_IMAGE_RESULT_NEW, markers } = require('../lib/patch-adapters');
 const { PATCH_SPECS, getSpecsByCli } = require('../lib/patch-registry');
-const { LLM_PKG_REL } = require('../lib/patch-target-resolver');
+const { LLM_PKG_REL, DSHTOOLS_REL } = require('../lib/patch-target-resolver');
 const { kernel } = require('../compat/kernel-pin.json');
 
 const MARKER = markers.CONTENT_HAS_IMAGE_GUARD_MARKER;
@@ -126,8 +126,23 @@ test('7. registry 装配：pkgRel/transform/marker 同源、cli:false 不进 CLI
   assert.equal(spec.order, 271);
   assert.equal(spec.failPolicy, 'warn');
   assert.equal(spec.cli, false);
-  assert.equal(spec.pkgRel, LLM_PKG_REL, 'pkgRel 应为 dsh-llm/lib/index.js');
+  assert.ok(Array.isArray(spec.pkgRels), 'content-has-image-guard 现应为多靶 pkgRels');
+  assert.ok(spec.pkgRels.includes(LLM_PKG_REL), 'pkgRels 应含 dsh-llm/lib/index.js');
+  assert.ok(spec.pkgRels.includes(DSHTOOLS_REL), 'pkgRels 应含 dsh-tools/lib/index.js（同 bug 类残留点一并根治）');
   assert.equal(spec.transform, transformContentHasImageGuard, 'transform 应与 patch-adapters 导出同源');
   assert.equal(spec.marker, MARKER, 'marker 应为共享常量 CONTENT_HAS_IMAGE_GUARD_MARKER');
   assert.ok(!getSpecsByCli().some((s) => s.id === 'content-has-image-guard'), 'cli:false 补丁不得进 CLI 清单');
+});
+
+test('8. 多靶：dsh-tools result.content.some 守卫（真实 vendored 文件 + 幂等 + 精准）', () => {
+  const file = path.join(REPO_ROOT, 'dsh-desktop', 'node_modules', '@deepseek-ai', DSHTOOLS_REL);
+  // 还原官方形态：已注入守卫退回裸 result.content.some（连带去掉本 marker）。
+  const src = fs.readFileSync(file, 'utf8').split(TOOLS_IMAGE_RESULT_NEW).join(TOOLS_IMAGE_RESULT_OLD);
+  assert.ok(src.includes(TOOLS_IMAGE_RESULT_OLD), '起点应含裸 result.content.some 锚点');
+  const out = transformContentHasImageGuard(src, file);
+  assert.equal(out.status, 'changed', 'dsh-tools result.content.some 应可补丁');
+  assert.ok(out.src.includes(TOOLS_IMAGE_RESULT_NEW), '应注入 Array.isArray 守卫');
+  assert.ok(!out.src.includes(TOOLS_IMAGE_RESULT_OLD), '不得残留裸 result.content.some');
+  assert.ok(/Array\.isArray\(result\.content\)/.test(out.src), '守卫应含 Array.isArray(result.content)');
+  assert.equal(transformContentHasImageGuard(out.src, file).status, 'already', '二次应用应幂等');
 });

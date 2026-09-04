@@ -355,12 +355,18 @@ function transformSlotErrorIsolation(src, file) {
   };
 }
 
-// 模型工具兼容补丁（问题背景：code 模式的 run_code 程序经常省略 shell 工具
-// 的 `description`，而该字段只用于 UI/日志展示，不应让整个工具调用失败）。
-// 变换：validateBashArgs / validatePwshArgs 在缺省时用 command 首行自动补值。
-// 曾同时改 schema 的 description.required: true → false，但引擎 schema 校验器
-// 拒绝（"unsupported JSON schema: parameters.description.required must be true
-// when present"）→ 该部分已废弃，transform 会自动回滚已写入的 false。
+// 模型工具兼容补丁（问题背景：模型调用 shell 工具（pwsh/bash，含经 jobs 派发）时
+// 经常省略 `description`，而该字段只用于 UI/日志展示，不应让整个工具调用失败）。
+// 报错形态：`invalid arguments: missing required property "description"`。
+// 根因：引擎通用 schema 校验器（dsh-tools validateArgs）在工具自定义 validate 之前
+// 先跑 required 检查；description 在 schema 里是 required:true，模型一省略就被通用
+// 校验器拒绝，自定义 validate 里的兜底补值根本没机会执行（旧补丁只补 validate 故无效）。
+// 修法（两处缺一不可）：
+//   (1) schema：删除 description 的 `required: true` 行——引擎规则（runSchemaCompiler）
+//       是「required 若出现必须为 true」，故不能设 false（会被拒），只能整行删除；
+//       省略 key 后 description 不进 required 数组，通用校验器放行省略。
+//   (2) validate：description 缺省/空串时用 command 首行补值（兜底 UI/日志展示）。
+// 历史误写的 `required: false`（引擎定义期即拒）会被收敛为「删除该行」。
 // 幂等标记 = dsh-desktop compat: optional shell description。
 // ---------------------------------------------------------------------------
 
@@ -368,25 +374,40 @@ const SHELL_DESC_MARKER = "dsh-desktop compat: optional shell description";
 const SHELL_DESC_VALIDATE_OLD = "\tif (args.description.trim().length === 0) throw new Error(\"invalid description: expected a non-empty string\");";
 const SHELL_DESC_VALIDATE_NEW = "\tif (typeof args.description !== \"string\" || args.description.trim().length === 0) {\n\t\t// " + SHELL_DESC_MARKER + ": description is only for UI/log; derive one when the model omits it.\n\t\targs.description = args.command.trim().split(/\\r?\\n/)[0].slice(0, 80) || \"Run shell command\";\n\t}";
 const SHELL_DESC_SCHEMA_OLD = "\t\t\tdescription: {\n\t\t\t\ttype: \"string\",\n\t\t\t\trequired: true,\n\t\t\t\tdescription: \"Clear, concise description of what this command does in active voice, 5-10 words (shown in the UI). Examples:";
-// 已废弃：仅作旧补丁回滚识别锚点（引擎 schema 校验器拒绝 required: false）。
+// 目标形态：删除 description 的 `required: true` 行（省略 key = 可选）。
+const SHELL_DESC_SCHEMA_OPTIONAL = "\t\t\tdescription: {\n\t\t\t\ttype: \"string\",\n\t\t\t\tdescription: \"Clear, concise description of what this command does in active voice, 5-10 words (shown in the UI). Examples:";
+// 历史误写形态（required: false，引擎定义期即拒）；仅作收敛识别锚点。
 const SHELL_DESC_SCHEMA_NEW = "\t\t\tdescription: {\n\t\t\t\ttype: \"string\",\n\t\t\t\trequired: false, // " + SHELL_DESC_MARKER + "\n\t\t\t\tdescription: \"Clear, concise description of what this command does in active voice, 5-10 words (shown in the UI). Examples:";
 
-/** shell 工具 description 兜底变换（pwsh/bash 共用，锚点逐字节一致）。
- *  只改 validate 校验（缺省时用 command 首行补值）；schema 的
- *  required: false 已被引擎拒绝（必须 true），旧补丁若已写入会自动回滚。 */
+// run_code（code 模式）description 兜底——与 shell 同构，落点在引擎包 dsh-tools：
+// schema description.required:true + execute 内 args.description.trim() 校验（3-tab）。
+// 模型省略 description 时通用校验器先拒 → run_code 调用失败。修法同 shell：删
+// required:true（可选）+ validate 缺省时用 args.code 首行补值。
+const RUNCODE_DESC_MARKER = "dsh-desktop compat: optional run_code description";
+const RUNCODE_SCHEMA_OLD = "\t\t\tdescription: {\n\t\t\t\ttype: \"string\",\n\t\t\t\trequired: true,\n\t\t\t\tdescription: RUN_CODE_DESCRIPTION_PARAM_DESCRIPTION";
+const RUNCODE_SCHEMA_OPTIONAL = "\t\t\tdescription: {\n\t\t\t\ttype: \"string\",\n\t\t\t\tdescription: RUN_CODE_DESCRIPTION_PARAM_DESCRIPTION";
+const RUNCODE_VALIDATE_OLD = "\t\t\tif (args.description.trim().length === 0) throw new Error(\"invalid description: expected a non-empty string\");";
+const RUNCODE_VALIDATE_NEW = "\t\t\tif (typeof args.description !== \"string\" || args.description.trim().length === 0) {\n\t\t\t\t// " + RUNCODE_DESC_MARKER + ": description is only for UI/log; derive one from the program when the model omits it.\n\t\t\t\targs.description = args.code.trim().split(/\\r?\\n/)[0].slice(0, 80) || \"Run program\";\n\t\t\t}";
+
+/** shell / run_code description 兜底变换（幂等，锚点逐字节一致）。
+ *  两家族各：schema 删 description 的 required:true + validate 缺省补值。
+ *  run_code 步必须先于 shell：run_code 的 3-tab validate 行以 shell 的 1-tab 锚点为
+ *  子串，若 shell 先跑会用 args.command 逻辑误改 run_code 行（无 command → 崩）。 */
 function transformShellDescriptionOptional(src, file) {
-  let reverted = false;
-  if (src.includes(SHELL_DESC_SCHEMA_NEW)) {
-    src = src.replace(SHELL_DESC_SCHEMA_NEW, SHELL_DESC_SCHEMA_OLD);
-    reverted = true;
-  }
-  if (src.includes(SHELL_DESC_MARKER)) {
-    return reverted ? { status: "changed", src, note: "已回滚 schema required: false" } : { status: "already" };
-  }
-  if (!src.includes(SHELL_DESC_VALIDATE_OLD)) {
-    return { status: "anchor-missing", detail: "未找到 shell description 锚点（版本可能已变更），跳过 " + file };
-  }
-  return { status: "changed", src: src.replace(SHELL_DESC_VALIDATE_OLD, SHELL_DESC_VALIDATE_NEW), note: reverted ? "已回滚 schema required: false" : undefined };
+  let out = src;
+  const notes = [];
+  // === run_code 家族（dsh-tools；必须先跑，见上）===
+  if (out.includes(RUNCODE_SCHEMA_OLD)) { out = out.replaceAll(RUNCODE_SCHEMA_OLD, RUNCODE_SCHEMA_OPTIONAL); notes.push("run_code: description 改为可选（两处 schema 块）"); }
+  if (out.includes(RUNCODE_VALIDATE_OLD)) { out = out.replace(RUNCODE_VALIDATE_OLD, RUNCODE_VALIDATE_NEW); notes.push("run_code: validate 兜底"); }
+  // === shell (pwsh/bash) 家族 ===
+  if (out.includes(SHELL_DESC_SCHEMA_NEW)) { out = out.replace(SHELL_DESC_SCHEMA_NEW, SHELL_DESC_SCHEMA_OPTIONAL); notes.push("shell: 清理历史 required:false"); }
+  if (out.includes(SHELL_DESC_SCHEMA_OLD)) { out = out.replace(SHELL_DESC_SCHEMA_OLD, SHELL_DESC_SCHEMA_OPTIONAL); notes.push("shell: description 改为可选"); }
+  if (out.includes(SHELL_DESC_VALIDATE_OLD)) { out = out.replace(SHELL_DESC_VALIDATE_OLD, SHELL_DESC_VALIDATE_NEW); notes.push("shell: validate 兜底"); }
+  if (notes.length > 0) return { status: "changed", src: out, note: notes.join("; ") };
+  const done = out.includes(SHELL_DESC_MARKER) || out.includes(SHELL_DESC_SCHEMA_OPTIONAL)
+    || out.includes(RUNCODE_DESC_MARKER) || out.includes(RUNCODE_SCHEMA_OPTIONAL);
+  if (done) return { status: "already" };
+  return { status: "anchor-missing", detail: "未找到 shell/run_code description 锚点（版本可能已变更），跳过 " + file };
 }
 
 const CODE_MODE_MARKER = 'dsh-desktop compat: direct tools alongside run_code';
@@ -468,7 +489,13 @@ module.exports = {
   SHELL_DESC_VALIDATE_OLD,
   SHELL_DESC_VALIDATE_NEW,
   SHELL_DESC_SCHEMA_OLD,
+  SHELL_DESC_SCHEMA_OPTIONAL,
   SHELL_DESC_SCHEMA_NEW,
+  RUNCODE_DESC_MARKER,
+  RUNCODE_SCHEMA_OLD,
+  RUNCODE_SCHEMA_OPTIONAL,
+  RUNCODE_VALIDATE_OLD,
+  RUNCODE_VALIDATE_NEW,
   PW_REL,
   BASH_REL,
   transformShellDescriptionOptional,

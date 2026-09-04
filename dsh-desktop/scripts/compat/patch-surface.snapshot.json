@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-09-03T11:29:36.084Z",
+  "generatedAt": "2026-09-03T16:37:05.670Z",
   "kernelRoot": "@deepseek-ai",
-  "markerCount": 55,
+  "markerCount": 56,
   "surface": [
     {
       "file": "dsh-agent-loop/lib/index.js",
@@ -243,7 +243,7 @@
     },
     {
       "file": "dsh-tool-bash/lib/index.js",
-      "sha256": "669b737ad2342474",
+      "sha256": "72a3cf70eedeeeb0",
       "markers": [
         "optional shell description"
       ]
@@ -257,16 +257,18 @@
     },
     {
       "file": "dsh-tool-pwsh/lib/index.js",
-      "sha256": "b8070e160d0f4d85",
+      "sha256": "cd77b41ed8d32009",
       "markers": [
         "optional shell description"
       ]
     },
     {
       "file": "dsh-tools/lib/index.js",
-      "sha256": "ee177f4a28baa0cb",
+      "sha256": "1b8c5f9a647e37ed",
       "markers": [
-        "global-symbol scheduler mirror"
+        "contentHasImage non-array guard",
+        "global-symbol scheduler mirror",
+        "optional run_code description"
       ]
     },
     {
