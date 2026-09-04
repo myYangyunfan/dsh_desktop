@@ -1,5 +1,40 @@
 # Changelog — DSH Desktop（Tauri 版，主线架构 v0.5.0 起）
 
+# DSH Desktop v0.6.1 — 全平台
+
+> 本版本聚焦「历史对话完整回溯」这一核心能力的两项主诉根治，均为 boot 链运行时
+> 补丁（runtime-patch，补丁注册表 56→57），不改装配语义 / 协议热路径 / 去重逻辑。
+
+## 🐛 重点 1：历史对话完整回溯（BUG1，A 档三补丁同链叠加）
+
+- **h1 分页容量 50→200**（`history-page-size`）：客户端首屏 open 与向上翻页 loadOlder 的
+  每页条数放大至 200，服务端 `DEFAULT_MAX_MESSAGES` 同步 200（仅校验正整数、无上限夹取，
+  故请求 200 即得 200 条）。直击「历史仅加载约三分之一 / 到顶仍不全」的容量瓶颈。
+- **h3 journal 断头续读**（`journal-prepend-continuity`）：删除 gateway `RemoteJournalStream.prepend()`
+  遇不连续历史页即置 `hasMore:false` 并 throw 的锁死分支，改走正常续读，历史可持续向更早处翻页。
+- **h2 到顶自动翻页**（`chat-scroll-autoload-older`）：向 ChatView 消息流列顶部注入 IntersectionObserver
+  哨兵，滑动到聊天顶部即复用现有 loadOlder 自动翻页，不再需手动点「加载更早」。
+- 三者同处一条 boot 链叠加生效：h1/h3 打通「取回更早历史」的数据通路，h2 让到顶即触发翻页，
+  把「进度条到头但早期对话未真正加载」的体验缺口一并补齐。
+
+## 🐛 重点 2：会话装配「可观测化 + 自愈」（BUG2 吞消息）
+
+- 新增 `conversation-assembly-resilience`（order 390，靶 `dsh-client-ui-conversation`
+  `BoundConversation.accept`）：装配器对 dup-start / non-appended / update-before-start 一律 throw，
+  抛错冒泡到 client-store `notifySubscribers` 被 console.error 静默吞 → 快照不再前进，事件已在
+  durable journal（后台有轨迹）界面却不渲染。
+- **自愈**：接住增量装配（prepend / append）或整体 replace 抛出的异常，改从 durable 的完整连续
+  窗口 `window.entries`（权威真相）安全重建——瞬时竞态（某条消息的起始项稍后随翻页补齐）一次
+  重建即恢复、节点重新出现。
+- **可观测**：若连重建都无法装配，不再静默，输出带固定前缀 `[dsh-assembly-resilience]`、按错误
+  内容去重一次的 console.error，并保持 feed 存活（不递归、不卡死）。对话拆分 / 多版本迭代 +
+  历史窗口不全时最易命中，本补丁为该场景提供韧性防线。
+
+## ✅ 验证
+
+- TA6 元测试（契约三态 / 回滚审计 / registry 不变量 / 基线矩阵）与 TA3 boot 链断言同步更新至
+  57 项；端到端 applyAll 三副本（runtime-local）落盘 changed=3 → 二遍幂等 changed=0、产物 node --check 通过。
+
 # DSH Desktop v0.6.0 — 全平台
 
 > 本版本是 **0.5.7 之后的首个正式版本（GA）**：vendored 内核 alpha.1→alpha.5 全量

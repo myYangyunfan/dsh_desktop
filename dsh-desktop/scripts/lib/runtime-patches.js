@@ -451,6 +451,34 @@ function transformCodeModeCompat(src, file) {
   return { status: 'changed', src: src.replace(CODE_MODE_OLD, CODE_MODE_NEW) };
 }
 
+// ---------------------------------------------------------------------------
+// 历史对话分页容量放大（h1）：客户端首屏 open 与向上翻页 loadOlder 的每页条数
+// 从 50 放大到 200，服务端 DEFAULT_MAX_MESSAGES 同步放大。直接缓解「历史仅能加
+// 载约三分之一 / 上滑到顶仍加载不全」——首屏与每次翻页承载更多历史。服务端对
+// maxMessages 仅校验「正整数」、无上限夹取（history.ts :250 / paginate :338），
+// 故请求 200 即得 200 条。纯数字字面量替换，正则容忍缩进/换行差异，不锚定前导
+// 空白；loadThrough 已是 200（maxMessages: 200），\b50\b 不误伤。两靶文件（
+// session-controller lib/client.js 的两处调用点 + lib/index.js 的 DEFAULT）共用
+// 同一 marker，命中任一即前置注释标记，二次运行短路 already。
+// ---------------------------------------------------------------------------
+const HISTORY_PAGE_MARKER = 'dsh-desktop compat: larger history page';
+const HISTORY_PAGE_SIZE_NEW = '200';
+
+/**
+ * 历史分页容量放大变换（纯函数，幂等）。
+ * @returns {{status:'already'} | {status:'anchor-missing', detail: string} | {status:'changed', src: string}}
+ */
+function transformHistoryPageSize(src, file) {
+  if (src.includes(HISTORY_PAGE_MARKER)) return { status: 'already' };
+  const patched = src
+    .replace(/(\bmaxMessages:\s*)50\b/g, '$1' + HISTORY_PAGE_SIZE_NEW)
+    .replace(/\b(DEFAULT_MAX_MESSAGES\s*=\s*)50\b/, '$1' + HISTORY_PAGE_SIZE_NEW);
+  if (patched === src) {
+    return { status: 'anchor-missing', detail: '未找到历史分页容量锚点（版本可能已变更），跳过 ' + file };
+  }
+  return { status: 'changed', src: '// ' + HISTORY_PAGE_MARKER + '\n' + patched };
+}
+
 module.exports = {
   FLASH_OLD,
   FLASH_NEW,
@@ -509,4 +537,7 @@ module.exports = {
   ATTACH_MIME_NEW,
   ATTACH_LOCAL_REL,
   transformAttachmentMimeTrust,
+  HISTORY_PAGE_MARKER,
+  HISTORY_PAGE_SIZE_NEW,
+  transformHistoryPageSize,
 };

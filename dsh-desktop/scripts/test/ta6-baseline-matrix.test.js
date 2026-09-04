@@ -119,6 +119,14 @@ function computeMatrix() {
 // 'some' 崩溃根治）：与 adapter-prepare-call-guard 同靶 dsh-llm/lib/index.js → rc.2
 // 'changed'（stage 树含该包且 contentHasImage 锚点一致），rc.1 旧线无该包 → target-absent
 // → 53 项基线）。
+// history-page-size 新增（h1：历史分页容量 50→200）→ 靶 dsh-api-session-controller，
+// rc.2 stage 树不含该包 → 两形态 target-absent → 54 项基线。
+// journal-prepend-continuity 新增（h3：gateway/lib/client.js 不连续历史页断头删除）
+// → 靶 dsh-api-gateway，rc.2 / rc.1 均不含该包 → 两形态 target-absent → 55 项基线。
+// chat-scroll-autoload-older 新增（h2：dsh-client-ui-chat ChatView 滚到顶自动翻页）
+// → 靶 dsh-client-ui-chat，rc.2 / rc.1 均不含该包 → 两形态 target-absent → 56 项基线。
+// conversation-assembly-resilience 新增（BUG2 会话装配自愈）→ 靶 dsh-client-ui-conversation
+// lib/client.js，rc.2 含该包 accept 方法体匹配 → changed；rc.1 无该包 → target-absent → 57 项基线。
 // 内核升级后 diff 此矩阵即知锚点漂移面：修改本常量 = 显式接受新基线。
 // ===========================================================================
 const BASELINE = {
@@ -179,6 +187,16 @@ const BASELINE = {
     // 补丁真正应用（旧基线 target-absent 是双前缀 bug 导致的 0 命中假象）。
     'ds-tool-schema-sanitize': 'changed',
     'workspace-chip-label-hold': 'changed',
+    // history-page-size（h1）：靶 dsh-api-session-controller，rc.2 stage 树不含该包
+    // （同 runtime-flash-fix / image-send-fix）→ target-absent。
+    'history-page-size': 'target-absent',
+    // journal-prepend-continuity（h3）：靶 dsh-api-gateway，rc.2 stage 树不含该包 → target-absent。
+    'journal-prepend-continuity': 'target-absent',
+    // chat-scroll-autoload-older（h2）：靶 dsh-client-ui-chat，rc.2 stage 树不含该包 → target-absent。
+    'chat-scroll-autoload-older': 'target-absent',
+    // conversation-assembly-resilience（BUG2）：靶 dsh-client-ui-conversation/lib/client.js，
+    // rc.2 stage 树含该包且 accept(window) 方法体匹配 → changed。
+    'conversation-assembly-resilience': 'changed',
   },
   'rc.1': {
     'slot-legacy-key': 'target-absent',
@@ -234,10 +252,15 @@ const BASELINE = {
     'pi-ai-tool-schema-sanitize': 'target-absent',
     'ds-tool-schema-sanitize': 'target-absent',
     'workspace-chip-label-hold': 'target-absent',
+    'history-page-size': 'target-absent',
+    'journal-prepend-continuity': 'target-absent',
+    'chat-scroll-autoload-older': 'target-absent',
+    // conversation-assembly-resilience（BUG2）：rc.1 旧线仅 dsh 主包，无 ui-conversation → target-absent。
+    'conversation-assembly-resilience': 'target-absent',
   },
 };
 
-test('53 补丁 × rc.2 / rc.1 双形态判定矩阵与基线快照一致（锚点漂移哨兵）', { skip: !formRoot('rc.2') ? 'pristine rc.2 stage 树不可用（.tmp-rc2-stage 缺失）' : false }, () => {
+test('57 补丁 × rc.2 / rc.1 双形态判定矩阵与基线快照一致（锚点漂移哨兵）', { skip: !formRoot('rc.2') ? 'pristine rc.2 stage 树不可用（.tmp-rc2-stage 缺失）' : false }, () => {
   const matrix = computeMatrix();
   // 打印当前矩阵（基线对照 / 升级 diff 材料）。
   console.log('[TA6 基线矩阵]');
@@ -260,11 +283,11 @@ test('53 补丁 × rc.2 / rc.1 双形态判定矩阵与基线快照一致（锚�
     `判定矩阵漂移（内核形态变化或锚点漂移；确认后更新 BASELINE 快照以显式接受新基线）：\n  ${drift.join('\n  ')}`);
 });
 
-test('基线快照自身完整性：两形态 × 53 id 全覆盖', () => {
+test('基线快照自身完整性：两形态 × 57 id 全覆盖', () => {
   const ids = new Set(PATCH_SPECS.map((s) => s.id));
-  assert.equal(ids.size, 53);
+  assert.equal(ids.size, 57);
   for (const form of Object.keys(BASELINE)) {
-    assert.equal(Object.keys(BASELINE[form]).length, 53, `${form} 基线应覆盖 53 项`);
+    assert.equal(Object.keys(BASELINE[form]).length, 57, `${form} 基线应覆盖 57 项`);
     for (const id of Object.keys(BASELINE[form])) assert.ok(ids.has(id), `${form} 基线含未知 id ${id}`);
   }
 });

@@ -32,6 +32,14 @@ const FLASH_PKG_REL = path.join('dsh-api-session-controller', 'lib', 'client.js'
 // 加载的就是它；lib/types/commands.js 是未内联的分块副本（空格缩进 + undefined，
 // 锚点形态不同且非桌面运行时路径），不纳靶。lib/client.js 是客户端侧（FLASH 靶）。
 const SESSION_CTRL_INDEX_PKG_REL = path.join('dsh-api-session-controller', 'lib', 'index.js');
+// journal-stream 历史续读补丁落点：RemoteJournalStream.prepend()（断头锁死 hasMore
+// 的分支）所在的服务端流式客户端。经 @deepseek-ai/dsh-api-gateway/client 子路径加载
+// 的 lib/client.js（bundle 版，保留可读标识符 + protocolViolation$1 重命名符号）。
+const GATEWAY_CLIENT_PKG_REL = path.join('dsh-api-gateway', 'lib', 'client.js');
+// 聊天自动翻页补丁落点：ChatView（手动「加载更早」按钮 / listRef 滚动容器 / loadOlderAnchored）
+// 所在的客户端 UI 包。运行时经 dsh-client-ui-chat/lib/client.js（bundle 版，保留
+// 可读 React hooks 调用与标识符）加载。
+const UI_CHAT_CLIENT_PKG_REL = path.join('dsh-client-ui-chat', 'lib', 'client.js');
 // K1 credentials-absent 指引落点：dsh-host-apiproxy 分解后，报错文案现由
 // dsh-api-settings-controller 透传（credentials 缺席分支）。
 const API_SETTINGS_CONTROLLER_PKG_REL = path.join('dsh-api-settings-controller', 'lib', 'index.js');
@@ -274,6 +282,8 @@ module.exports = {
   LAYOUTS,
   FLASH_PKG_REL,
   SESSION_CTRL_INDEX_PKG_REL,
+  GATEWAY_CLIENT_PKG_REL,
+  UI_CHAT_CLIENT_PKG_REL,
   API_SETTINGS_CONTROLLER_PKG_REL,
   CONVERSATION_PKG_REL,
   SKILL_UI_PKG_REL,

@@ -38,6 +38,9 @@ const IMPL_SOURCES = [
   path.join(LIB_DIR, 'runtime-patches.js'),
   path.join(LIB_DIR, 'patch-adapters.js'),
   path.join(LIB_DIR, 'loader-isolation.js'),
+  path.join(LIB_DIR, 'journal-history-patches.js'),
+  path.join(LIB_DIR, 'chat-scroll-patches.js'),
+  path.join(LIB_DIR, 'assembly-resilience-patches.js'),
   path.join(__dirname, '..', '..', 'profile-bundle-heal.js'),
   path.join(__dirname, '..', 'patch-pi-ai-4xx-dump.js'),
   path.join(__dirname, '..', 'patch-pi-ai-tool-schema-sanitize.js'),
@@ -159,7 +162,16 @@ test('E. order 全局唯一、组内升序、补丁间依赖序成立', () => {
   // 「选择工作文件夹时跳闪」，chipTitle 的 workspaces.phase gate 重靶）。
   // 50 = 51（上一基线）− 1 项退役（workspace-search-rail-fix：alpha.2 上游
   // 已原生实现同款守卫，pristine :L1991 实证）。
-  assert.equal(PATCH_SPECS.length, 53, 'spec 总数应为 53');
+  // 54 = 53（上一基线）+ 1 项新增（history-page-size：历史对话分页容量 50→200，
+  // 直击「历史仅加载约三分之一 / 上滑到顶仍加载不全」主诉之一；两靶 session-
+  // controller lib/client.js 调用点 + lib/index.js DEFAULT_MAX_MESSAGES）。
+  // 55 = 54（上一基线）+ 1 项新增（journal-prepend-continuity：gateway/lib/client.js
+  // RemoteJournalStream.prepend() 不连续历史页断头分支删除，历史可持续向更早处翻页）。
+  // 56 = 55（上一基线）+ 1 项新增（chat-scroll-autoload-older：dsh-client-ui-chat ChatView
+  // IntersectionObserver 顶部哨兵，滚到顶自动 loadOlder，不再需手动点「加载更早」）。
+  // 57 = 56（上一基线）+ 1 项新增（conversation-assembly-resilience：dsh-client-ui-conversation
+  // BoundConversation.accept 装配抛错改为安全重建 + 去重可见告警，直击「吞消息」）。
+  assert.equal(PATCH_SPECS.length, 57, 'spec 总数应为 57');
   const orders = PATCH_SPECS.map((s) => s.order);
   assert.equal(new Set(orders).size, orders.length, 'order 必须全局唯一');
   const byId = Object.fromEntries(PATCH_SPECS.map((s) => [s.id, s]));

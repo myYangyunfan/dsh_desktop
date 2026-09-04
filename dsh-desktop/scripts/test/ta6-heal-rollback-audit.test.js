@@ -119,13 +119,14 @@ const MULTI_SITE = new Set([
   'skill-dirs-compat',        // 三点注入（import 扩 delimiter / 构造器 env 并入 / roots 追加）
   'content-has-image-guard',  // 多靶：dsh-llm contentHasImage + dsh-tools result.content.some
   'shell-description-compat',  // 多点：shell(pwsh/bash) + run_code(dsh-tools) 各 schema 删 required:true + validate 兜底
+  'chat-scroll-autoload-older', // 双注入：ChatView 内 useRef+useEffect(IO) + flow column 哨兵 div
 ]);
 
 const fileSpecs = PATCH_SPECS.filter((s) => s.kind === 'file');
 const rootSpecs = PATCH_SPECS.filter((s) => s.kind === 'root');
 
-test('审计 1：分类覆盖全部 37 个 file transform（无回滚盲区）', () => {
-  assert.equal(fileSpecs.length, 37);
+test('审计 1：分类覆盖全部 41 个 file transform（无回滚盲区）', () => {
+  assert.equal(fileSpecs.length, 41);
   const report = [];
   for (const spec of fileSpecs) {
     const pair = INVERSE_PAIR_HINTS[spec.id];

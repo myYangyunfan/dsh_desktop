@@ -56,6 +56,8 @@ const path = require('node:path');
 const {
   FLASH_PKG_REL,
   SESSION_CTRL_INDEX_PKG_REL,
+  GATEWAY_CLIENT_PKG_REL,
+  UI_CHAT_CLIENT_PKG_REL,
   CONVERSATION_PKG_REL,
   API_SETTINGS_CONTROLLER_PKG_REL,
   WORKSPACE_PKG_REL,
@@ -91,6 +93,10 @@ const {
   transformSlotErrorIsolation,
   transformShellDescriptionOptional,
   transformAttachmentMimeTrust,
+  transformHistoryPageSize,
+  transformJournalPrependContinuity,
+  transformChatAutoLoadOlder,
+  transformConversationAssemblyResilience,
   transformProfilePatchGuard,
   transformProfileBundleAppBoot,
   transformProfileBundleProfileBoot,
@@ -163,6 +169,10 @@ const {
   DS_TOOL_SCHEMA_SANITIZE_MARKER,
   SKILL_DIRS_COMPAT_MARKER,
   WORKSPACE_CHIP_LABEL_MARKER,
+  HISTORY_PAGE_MARKER,
+  JOURNAL_PREPEND_MARKER,
+  CHAT_AUTOLOAD_MARKER,
+  ASSEMBLY_RESILIENCE_MARKER,
 } = require('./patch-adapters').markers;
 
 const {
@@ -1520,6 +1530,125 @@ const PATCH_SPECS = [
       alreadyLog: alreadySkip,
       doneLog: (file) => '已修复选择工作文件夹时闪回「选择工作区」/输入框禁用 ' + file,
       failLog: (file, err) => '工作区标签闪跳补丁失败(' + file + '): ' + err.message,
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // 历史对话分页容量放大（h1，历史加载不全主诉之一）：客户端首屏 open 与向上
+  // 翻页 loadOlder 的每页条数 50→200，服务端 DEFAULT_MAX_MESSAGES 同步 50→200。
+  // 服务端对 maxMessages 仅校验正整数、无上限夹取，故请求 200 即得 200 条。落点
+  // 两文件：session-controller lib/client.js（events.open + loadOlder 两处调用点）
+  // 与 lib/index.js（DEFAULT_MAX_MESSAGES）。数字字面量正则替换、容忍缩进差异。
+  // 与 runtime-flash-fix 同靶 lib/client.js（不同区段，互不重叠）。cli:false：
+  // 仅桌面壳 boot 链应用。详见 runtime-patches transformHistoryPageSize。
+  // -------------------------------------------------------------------------
+  {
+    id: 'history-page-size',
+    group: 'runtime',
+    order: 360,
+    kind: 'file',
+    layout: 'runtime-local',
+    wslLayout: 'wsl',
+    pkgRels: [FLASH_PKG_REL, SESSION_CTRL_INDEX_PKG_REL],
+    transform: transformHistoryPageSize,
+    marker: HISTORY_PAGE_MARKER,
+    requires: [],
+    failPolicy: 'warn',
+    cli: false,
+    logs: {
+      prefix: '历史分页容量补丁',
+      alreadyLog: alreadySkip,
+      doneLog: (file) => '已放大历史对话分页容量（50→200） ' + file,
+      failLog: (file, err) => '历史分页容量补丁失败(' + file + '): ' + err.message,
+    },
+  },
+  // -------------------------------------------------------------------------
+  // journal-stream 历史续读补丁（BUG1「历史加载不全」根因之一）。
+  // 靶 dsh-api-gateway/lib/client.js RemoteJournalStream.prepend()：删除「不连续
+  // 历史页」断头分支（publish entries:[] + hasMore:false + throw），使其改走下方
+  // 正常分支（prepend accepted + 推进 baseSeq + 回填真实 hasMore），历史可持续向
+  // 更早处翻页，不再一遇不连续就永久锁死。连续页行为不变（该分支本不触发）。cli:false。
+  // -------------------------------------------------------------------------
+  {
+    id: 'journal-prepend-continuity',
+    group: 'runtime',
+    order: 370,
+    kind: 'file',
+    layout: 'runtime-local',
+    wslLayout: 'wsl',
+    pkgRel: GATEWAY_CLIENT_PKG_REL,
+    transform: transformJournalPrependContinuity,
+    marker: JOURNAL_PREPEND_MARKER,
+    requires: [],
+    failPolicy: 'warn',
+    cli: false,
+    logs: {
+      prefix: '历史续读补丁',
+      alreadyLog: alreadySkip,
+      doneLog: (file) => '已放开不连续历史页的续读锁定 ' + file,
+      failLog: (file, err) => '历史续读补丁失败(' + file + '): ' + err.message,
+    },
+  },
+  // -------------------------------------------------------------------------
+  // 聊天滚到顶自动翻页补丁（BUG1 体验收口）。
+  // 靶 dsh-client-ui-chat/lib/client.js ChatView：向 flow column 顶部注入哨兵 div +
+  // IntersectionObserver effect，滚入视口即复用现有 loadOlderAnchored 自动翻页，
+  // 不再需手动点「加载更早」。不触碰 hot onScroll 采样路径。multi-site（两处注入）。cli:false。
+  // -------------------------------------------------------------------------
+  {
+    id: 'chat-scroll-autoload-older',
+    group: 'runtime',
+    order: 380,
+    kind: 'file',
+    layout: 'runtime-local',
+    wslLayout: 'wsl',
+    pkgRel: UI_CHAT_CLIENT_PKG_REL,
+    transform: transformChatAutoLoadOlder,
+    marker: CHAT_AUTOLOAD_MARKER,
+    requires: [],
+    failPolicy: 'warn',
+    cli: false,
+    logs: {
+      prefix: '聊天自动翻页补丁',
+      alreadyLog: alreadySkip,
+      doneLog: (file) => '已启用滚到顶自动加载更早历史 ' + file,
+      failLog: (file, err) => '聊天自动翻页补丁失败(' + file + '): ' + err.message,
+    },
+  },
+  // -------------------------------------------------------------------------
+  // 会话装配「可观测化 + 自愈」补丁（BUG2 吞消息：发送后功能执行、token 消耗、
+  // 后台有轨迹，界面却不渲染新增对话）。
+  // 靶 dsh-client-ui-conversation/lib/client.js BoundConversation.accept(window)（装配
+  // 驱动点）：装配器对 dup-start / non-appended / update-before-start 一律 throw，
+  // 抛错冒泡到 client-store notifySubscribers 被 console.error 静默吞，快照不再前进。
+  // 本补丁不碰装配语义/协议热路径/去重，只在驱动层：① 将增量装配（prepend/append）
+  // 或整体 replace 的抛错接住，改调 dshSafeRebuild 从 durable 的完整连续窗口
+  // window.entries（权威真相）重建——瞬时竞态（start 稍后随翻页补齐）一次重建即恢复；
+  // ② 若连重建都无法装配，不再静默，输出带固定前缀 [dsh-assembly-resilience] 的按错
+  // 误内容去重一次的 console.error，并保持 feed 存活（不递归、不卡死）。cli:false（仅
+  // 桌面壳 boot 链应用，与 history/journal/chat 系 BUG1 补丁同档）。唯一命中定位点，整个
+  // accept(window) 方法体（产物内唯一），命中数非 1 整块跳过。见 patch-adapters
+  // transformConversationAssemblyResilience。与 workspace-chip-label-hold 同靶
+  // dsh-client-ui-conversation/lib/client.js（不同区段，互不重叠）。
+  // -------------------------------------------------------------------------
+  {
+    id: 'conversation-assembly-resilience',
+    group: 'runtime',
+    order: 390,
+    kind: 'file',
+    layout: 'runtime-local',
+    wslLayout: 'wsl',
+    pkgRel: CONVERSATION_PKG_REL,
+    transform: transformConversationAssemblyResilience,
+    marker: ASSEMBLY_RESILIENCE_MARKER,
+    requires: [],
+    failPolicy: 'warn',
+    cli: false,
+    logs: {
+      prefix: '会话装配自愈补丁',
+      alreadyLog: alreadySkip,
+      doneLog: (file) => '已将会话装配被吞的抛错改为安全重建 + 去重告警 ' + file,
+      failLog: (file, err) => '会话装配自愈补丁失败(' + file + '): ' + err.message,
     },
   },
 ];

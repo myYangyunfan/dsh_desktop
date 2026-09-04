@@ -162,8 +162,8 @@ for (const spec of fileSpecs) {
   });
 }
 
-// 37 = 35（旧基线）+ image-send-fix（0.1.2-alpha.5 重锚重新纳册）+ content-has-image-guard
-// （dsh-llm contentHasImage 非数组守卫）两条 file 补丁。
-test('契约面完整性：37 个 file transform 全部被本文件覆盖', () => {
-  assert.equal(fileSpecs.length, 37);
+// 41 = 40（旧基线）+ conversation-assembly-resilience（BUG2 会话装配「可观测化 + 自愈」：
+// BoundConversation.accept 被静默吞的装配抛错 → 安全重建 + 去重告警）一条 file 补丁。
+test('契约面完整性：41 个 file transform 全部被本文件覆盖', () => {
+  assert.equal(fileSpecs.length, 41);
 });

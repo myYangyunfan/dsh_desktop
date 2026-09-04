@@ -26,11 +26,33 @@ const {
   transformSlotErrorIsolation,
   transformShellDescriptionOptional,
   transformAttachmentMimeTrust,
+  transformHistoryPageSize,
   SLOT_KEY_COMPAT_MARKER,
   SLOT_UNKEYED_COMPAT_MARKER,
   SLOT_ERROR_ISOLATE_MARKER,
   SLOT_ERROR_ISOLATE_MARKER_V2,
+  HISTORY_PAGE_MARKER,
 } = require('./runtime-patches');
+
+// journal-stream 历史续读补丁（BUG1：不连续历史页断头锁死 hasMore）。
+// 独立模块，避免向 runtime-patches.js 插入含制表符/换行的字面量时误伤其正则。
+const {
+  transformJournalPrependContinuity,
+  JOURNAL_PREPEND_MARKER,
+} = require('./journal-history-patches');
+
+// 聊天历史滚到顶自动翻页补丁（BUG1 体验收口：IntersectionObserver 顶部哨兵）。
+const {
+  transformChatAutoLoadOlder,
+  CHAT_AUTOLOAD_MARKER,
+} = require('./chat-scroll-patches');
+
+// 会话装配「可观测化 + 自愈」补丁（BUG2 吞消息：捕获被静默吞的装配抛错，
+// 从完整连续窗口安全重建 + 去重可见告警）。
+const {
+  transformConversationAssemblyResilience,
+  ASSEMBLY_RESILIENCE_MARKER,
+} = require('./assembly-resilience-patches');
 
 const {
   PROFILE_BUNDLE_GUARD_MARKER,
@@ -2209,6 +2231,10 @@ module.exports = {
   transformSlotErrorIsolation,
   transformShellDescriptionOptional,
   transformAttachmentMimeTrust,
+  transformHistoryPageSize,
+  transformJournalPrependContinuity,
+  transformChatAutoLoadOlder,
+  transformConversationAssemblyResilience,
   transformProfilePatchGuard,
   transformProfileBundleAppBoot,
   transformProfileBundleProfileBoot,
@@ -2308,6 +2334,10 @@ module.exports = {
   PI_AI_4XX_DUMP_MARKER,
     SKILL_DIRS_COMPAT_MARKER,
     WORKSPACE_CHIP_LABEL_MARKER,
+    HISTORY_PAGE_MARKER,
+    JOURNAL_PREPEND_MARKER,
+    CHAT_AUTOLOAD_MARKER,
+    ASSEMBLY_RESILIENCE_MARKER,
     ...require('./loader-isolation').markers,
   },
 };
