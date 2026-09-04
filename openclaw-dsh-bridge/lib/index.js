@@ -40,7 +40,7 @@ import { createWechatClient } from "./wechat.js";
 import { OpenAiCompatAdapter, PROVIDER_ID } from "./openai-compat.js";
 
 const name = "@deepseek-ai/dsh-openclaw-bridge";
-const inject = ["webServer", "agents", "sessions", "agentDefaultModel", "llm"];
+const inject = ["webServer", "agents", "sessions", "agentDefaultModel", "llm", "settings"];
 
 // ---- 设置节（DSH 设置页的 ClawBot 栏）----
 // 命名空间 "openclaw-bridge"：用户在设置页保存的配置经 settings 服务热生效。
