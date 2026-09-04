@@ -170,6 +170,36 @@ fn apply_portable_user_data_redirect() {
     }
 }
 
+/// Linux 白屏根治（WebKitGTK DMABUF 渲染协商失败）：Arch 等滚动发行版的
+/// webkit2gtk 2.4x 与 NVIDIA / 部分驱动在 DMABUF framebuffer 上谈不拢，症状
+/// 正是「窗口能开、内容整片纯白」（tauri-apps/tauri#9394；官方 v2 文档
+/// develop/debug/linux-graphics）。对策：建任何 webview 前注入
+/// `WEBKIT_DISABLE_DMABUF_RENDERER=1`，让 WebKitGTK 走较慢但可靠的渲染路径。
+///
+/// 保守边界（避免拖累本就正常的机器）：① 仅 Linux 生效（Windows / macOS 不
+/// 触碰）；② 用户 / 环境已显式设置该变量（任意非空值，含 "0"）时一律不覆盖
+/// ——把最终决定权留给更了解自身显卡的本地用户。纯判定
+/// `webkit_should_inject_dmabuf_off` 不做平台门控，供跨平台单测复用。
+fn webkit_should_inject_dmabuf_off(existing: Option<&str>) -> bool {
+    // None 或纯空白 → 未显式设置 → 注入；任意非空值 → 尊重用户配置，不注入。
+    existing.map(str::trim).map_or(true, |v| v.is_empty())
+}
+
+/// 按上述策略在 Linux 落地 DMABUF 关闭；非 Linux 编译期为读取判定后即 no-op
+/// （两侧均消费 `inject`，无 dead_code 警告）。必须在 tauri::Builder 建窗前调用。
+fn apply_linux_webkit_workaround() {
+    let inject = webkit_should_inject_dmabuf_off(
+        std::env::var("WEBKIT_DISABLE_DMABUF_RENDERER").ok().as_deref(),
+    );
+    #[cfg(target_os = "linux")]
+    if inject {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        logging::early_log("[boot] Linux：注入 WEBKIT_DISABLE_DMABUF_RENDERER=1（WebKitGTK 白屏根治，tauri#9394）");
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = inject;
+}
+
 pub fn run() {
     // C3：极早期落盘——run() 第一行就写 boot-early.log（v0.5.2 真机：进程死在
     // Builder/setup 早期时 logs/ 目录从未被创建，全程零日志）。Builder::build
@@ -180,6 +210,7 @@ pub fn run() {
     logging::early_log("[boot] 壳进程 run() 入口");
     logging::install_early_panic_hook();
     install_panic_hook();
+    apply_linux_webkit_workaround();
     let mut builder = tauri::Builder::default();
     // 第二实例拉起（用户双击图标而应用已在跑）：聚焦既有主窗而非报错退出。
     // 必须注册在最前（官方要求）；shell-core 单实例锁保留为跨窗体兜底。
@@ -2343,3 +2374,42 @@ mod ta1_property_unit;
 #[cfg(test)]
 #[path = "ta1_concurrency_unit.rs"]
 mod ta1_concurrency_unit;
+// ---------------------------------------------------------------------------
+// Linux WebKitGTK 白屏根治回归门（tauri#9394 / v2 linux-graphics 文档）：
+// 纯判定跨平台直验 + run() 接线形态断言（include_str CRLF 归一）。
+// ---------------------------------------------------------------------------
+#[cfg(test)]
+mod linux_webkit_shape {
+    use super::webkit_should_inject_dmabuf_off;
+
+    /// 决策表：未设置 / 空 / 纯空白 → 注入；任意非空值（含 "0"/"1"）→ 尊重用户不覆盖。
+    #[test]
+    fn dmabuf_off_injection_decision_table() {
+        assert!(webkit_should_inject_dmabuf_off(None), "未设置应注入默认");
+        assert!(webkit_should_inject_dmabuf_off(Some("")), "空串视为未设置");
+        assert!(webkit_should_inject_dmabuf_off(Some("   ")), "纯空白视为未设置");
+        assert!(!webkit_should_inject_dmabuf_off(Some("1")), "用户已设 1 不覆盖");
+        assert!(!webkit_should_inject_dmabuf_off(Some("0")), "用户已设 0 也不覆盖（尊重显式接管）");
+    }
+
+    /// 接线形态：run() 必须在建 Builder 之前调用 apply_linux_webkit_workaround；
+    /// 该函数注入 DMABUF 变量并做 Linux 平台门控（不拖累 Windows/macOS）。
+    #[test]
+    fn webkit_workaround_wired_before_builder_shape() {
+        let src = include_str!("lib.rs").replace("\r\n", "\n");
+        let body = src
+            .split("fn apply_linux_webkit_workaround()")
+            .nth(1)
+            .and_then(|s| s.split("pub fn run()").next())
+            .expect("apply_linux_webkit_workaround 函数体");
+        assert!(body.contains("WEBKIT_DISABLE_DMABUF_RENDERER"), "必须注入 DMABUF 关闭变量");
+        assert!(body.contains("target_os = \"linux\""), "必须 Linux 门控（不拖累 Win/mac）");
+        let run_prologue = src
+            .split("pub fn run() {")
+            .nth(1)
+            .and_then(|s| s.split("let mut builder = tauri::Builder::default();").next())
+            .expect("run() prologue（Builder 之前）");
+        assert!(run_prologue.contains("apply_linux_webkit_workaround()"), "run() 必须在建 Builder 前调用白屏根治（早于任何建窗）");
+    }
+}
+
