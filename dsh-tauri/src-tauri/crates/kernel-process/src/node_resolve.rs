@@ -4,15 +4,17 @@
 //! 无法理解）；安装版始终内置 91MB node 即便用户机器已有 node。
 //!
 //! 优先级（design 契约）：
-//! 1. **系统 PATH 中的 node**（`<exe> --version` 大版本 ≥ [`MIN_NODE_MAJOR`]）
-//!    → 用它（省 91MB；也绕开 vendor node 被杀软拦截的机型）。
-//! 2. **内置 vendor node**（`<appDir>/vendor/node/node.exe|node`）→ 保底
-//!    （离线机器 / 系统 node 过旧 / WindowsApps 商店占位 stub）。
+//! 1. **内置 vendor node**（`<appDir>/vendor/node/node.exe|node`，厂商测过的
+//!    确定性运行时）→ 在位且 `--version` 探测健康即优先。根治「系统装了没测过
+//!    的 node（如某些 24.x minor）→ 内核内部 ESM loader 归类失败 → 打不开」。
+//! 2. **系统 PATH 中的 node**（`<exe> --version` 大版本 ≥ [`MIN_NODE_MAJOR`]）
+//!    → 仅在 vendor 缺失（便携版）或 vendor 被杀软拦到探测不通时回落。
 //! 3. 都没有 → `None`，调用方（supervisor boot 瀑布）发清晰 BootStep 错误
 //!    并转恢复页（替代旧「sidecar spawn 失败 os error 2」不可读形态）。
 //!
 //! 版本门控的理由：WindowsApps 的 node.exe 占位 stub（运行即开商店/报错）与
-//! 过旧 node（内核 engines 要求 22+）都必须被挡下，回落 vendor 保底。
+//! 过旧 node（内核 engines 要求 22+）在被回落到系统一级时必须被挡下。vendor
+//! 优先前也过一次带超时探测，避免把被拦到半死的 vendor 强推致 loading 永挂。
 //!
 //! WSL 托管模式不受影响：内核 spawn 走 WSL 内 node（ensure_installed 链），
 //! 本链只解析 **Windows 侧** sidecar/guard/watcher 所用的 node。
@@ -24,8 +26,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-/// 系统 node 最低大版本（对齐内核 engines 与内置 vendor v24 双保险口径：
-/// 22 是内核声明的下限，达标即用系统 node）。
+/// 系统 node 最低大版本（vendor 回落为保底时才走系统 node；此下限对齐内核
+/// engines 声明的 22，达标才采用系统 node，否则视同不可用）。
 pub const MIN_NODE_MAJOR: u32 = 22;
 
 /// `node --version` 探测超时：D2「永挂形态」在 setup 线程的前置防线——
@@ -138,8 +140,19 @@ impl NodeProbe for RealNodeProbe {
     }
 }
 
-/// 三级解析链核心（注桩可测）：系统 node（版本达标）→ vendor → None。
+/// 三级解析链核心（注桩可测）：**内置 vendor node 优先**（厂商测过的确定性
+/// 运行时，杜绝系统 node 大版本差异击穿内核 ESM loader）→ 系统 PATH 中达标
+/// node（vendor 缺失/探测不通时回落，覆盖便携版与杀软拦 vendor 的机型）→ 都
+/// 不行则 `None`。健康 vendor 在位即优先；否则回落系统；系统也不达标但 vendor
+/// 在位时仍作最后保底返回（总得试一个，与旧行为终底一致）。
 pub fn resolve_node_with(probe: &dyn NodeProbe, vendor: Option<PathBuf>) -> Option<ResolvedNode> {
+    // 1. 内置 vendor node 在位且 --version 探测健康 → 优先。
+    if let Some(v) = vendor.as_ref() {
+        if probe.node_version(v).as_deref().and_then(parse_node_version).is_some() {
+            return Some(ResolvedNode::Vendor(v.clone()));
+        }
+    }
+    // 2. 回落系统 PATH 中 major ≥ MIN_NODE_MAJOR 的 node。
     if let Some(exe) = probe.find_node_in_path() {
         if let Some((major, minor)) = probe.node_version(&exe).as_deref().and_then(parse_node_version) {
             if major >= MIN_NODE_MAJOR {
@@ -147,6 +160,7 @@ pub fn resolve_node_with(probe: &dyn NodeProbe, vendor: Option<PathBuf>) -> Opti
             }
         }
     }
+    // 3. 终底：vendor 在位（即便探测失败）仍返回它，否则 None。
     vendor.map(ResolvedNode::Vendor)
 }
 
@@ -234,28 +248,40 @@ mod tests {
     use super::*;
     use std::sync::Mutex;
 
-    /// 桩探测（优先级矩阵确定性验证）：预置 PATH 候选与版本输出。
+    /// 桩探测（优先级矩阵确定性验证）：区分 vendor / 系统两路 `--version` 输出
+    /// （`node_version` 据 exe 是否等于注入的 PATH 命中路径来分流）。
     struct StubProbe {
         path_hit: Option<PathBuf>,
         version: Option<String>,
+        vendor_version: Option<String>,
     }
     impl NodeProbe for StubProbe {
         fn find_node_in_path(&self) -> Option<PathBuf> {
             self.path_hit.clone()
         }
-        fn node_version(&self, _exe: &Path) -> Option<String> {
-            self.version.clone()
+        fn node_version(&self, exe: &Path) -> Option<String> {
+            if self.path_hit.as_deref() == Some(exe) {
+                self.version.clone()
+            } else {
+                self.vendor_version.clone()
+            }
         }
     }
 
-    fn probe(version: Option<&str>) -> StubProbe {
+    fn fake_system_path() -> PathBuf {
+        PathBuf::from(if cfg!(windows) {
+            r"C:\fake\node.exe"
+        } else {
+            "/fake/node"
+        })
+    }
+
+    /// 系统命中桩：`sys_ver` 给系统 node，`vendor_ver` 给 vendor node（None=探测不通）。
+    fn stub(sys_ver: Option<&str>, vendor_ver: Option<&str>) -> StubProbe {
         StubProbe {
-            path_hit: Some(PathBuf::from(if cfg!(windows) {
-                r"C:\fake\node.exe"
-            } else {
-                "/fake/node"
-            })),
-            version: version.map(String::from),
+            path_hit: Some(fake_system_path()),
+            version: sys_ver.map(String::from),
+            vendor_version: vendor_ver.map(String::from),
         }
     }
 
@@ -303,51 +329,66 @@ mod tests {
     }
 
     #[test]
-    fn priority_system_ge_22_wins_over_vendor() {
+    fn healthy_vendor_wins_over_system() {
         let vendor = PathBuf::from("/app/vendor/node/node.exe");
-        let p = probe(Some("v24.15.0"));
+        // vendor 探测健康 → 即便系统也有达标 node，仍优先 vendor（装机版确定性运行时口径）。
+        let p = stub(Some("v24.15.0"), Some("v24.15.0"));
         assert_eq!(
             resolve_node_with(&p, Some(vendor.clone())),
-            Some(ResolvedNode::System { exe: p.path_hit.clone().unwrap(), major: 24, minor: 15 }),
-            "系统 node ≥22 优先于内置 vendor（省 91MB 口径）"
+            Some(ResolvedNode::Vendor(vendor)),
+            "健康 vendor 优先于系统 node"
         );
-        // 恰好 22：下限含端点。
-        let p22 = probe(Some("v22.0.0"));
-        assert!(matches!(resolve_node_with(&p22, Some(vendor)), Some(ResolvedNode::System { major: 22, .. })));
     }
 
     #[test]
-    fn priority_old_or_broken_system_falls_to_vendor() {
+    fn broken_vendor_falls_back_to_system() {
         let vendor = PathBuf::from("/app/vendor/node/node.exe");
-        // 过旧（<22）→ vendor 保底。
-        for ver in ["v21.7.3", "v18.20.4", "v14.21.3"] {
+        // vendor 探测不通（缺失/被杀软拦到超时），系统达标 → 回落系统 node。
+        let p = stub(Some("v22.1.0"), None);
+        assert_eq!(
+            resolve_node_with(&p, Some(vendor)),
+            Some(ResolvedNode::System { exe: fake_system_path(), major: 22, minor: 1 }),
+            "vendor 探测不通须回落系统 node"
+        );
+    }
+
+    #[test]
+    fn missing_vendor_uses_system() {
+        // 便携版：无 vendor（None），系统达标 → 系统 node（无内置 node 也能跑的起死回生主路径）。
+        assert!(matches!(
+            resolve_node_with(&stub(Some("v22.1.0"), None), None),
+            Some(ResolvedNode::System { major: 22, .. })
+        ));
+    }
+
+    #[test]
+    fn healthy_vendor_preempts_any_system() {
+        let vendor = PathBuf::from("/app/vendor/node/node.exe");
+        // vendor 健康：无论系统过旧/垃圾/探测失败，第 1 级都先命中 vendor。
+        for bad_sys in ["v21.7.3", "v18.20.4", "此应用无法在你的电脑上运行", ""] {
             assert_eq!(
-                resolve_node_with(&probe(Some(ver)), Some(vendor.clone())),
+                resolve_node_with(&stub(Some(bad_sys), Some("v24.15.0")), Some(vendor.clone())),
                 Some(ResolvedNode::Vendor(vendor.clone())),
-                "{ver} 须回落 vendor"
+                "健康 vendor 须先于任何系统 node 命中：{bad_sys}"
             );
         }
-        // 版本探测失败（杀软拦截/超时/商店 stub 报错）→ vendor 保底。
+    }
+
+    #[test]
+    fn dead_vendor_and_old_system_returns_vendor_as_last_resort() {
+        let vendor = PathBuf::from("/app/vendor/node/node.exe");
+        // vendor 探测不通 + 系统过旧：第 1、2 级皆不命中，终底仍返回在位的 vendor（总得试一个）。
         assert_eq!(
-            resolve_node_with(&probe(None), Some(vendor.clone())),
-            Some(ResolvedNode::Vendor(vendor.clone()))
-        );
-        // 版本输出为垃圾文本 → vendor 保底。
-        assert_eq!(
-            resolve_node_with(&probe(Some("此应用无法在你的电脑上运行")), Some(vendor.clone())),
-            Some(ResolvedNode::Vendor(vendor.clone()))
+            resolve_node_with(&stub(Some("v18.20.4"), None), Some(vendor.clone())),
+            Some(ResolvedNode::Vendor(vendor)),
+            "vendor 在位但坏、系统过旧 → 终底返回 vendor 保底"
         );
     }
 
     #[test]
     fn no_system_no_vendor_is_none() {
-        let p = StubProbe { path_hit: None, version: None };
+        let p = StubProbe { path_hit: None, version: None, vendor_version: None };
         assert_eq!(resolve_node_with(&p, None), None, "三级链全空 → None（调用方报清晰错误）");
-        // 系统有 node 但 vendor 缺：仍命中系统（便携版主路径——无内置 node 也能跑）。
-        assert!(matches!(
-            resolve_node_with(&probe(Some("v22.1.0")), None),
-            Some(ResolvedNode::System { .. })
-        ));
     }
 
     #[test]

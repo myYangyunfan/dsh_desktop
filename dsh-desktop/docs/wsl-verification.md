@@ -102,7 +102,8 @@ node dsh-desktop/scripts/sync-companion-plugins.js ~/.dsh --with-patches
 
 | 现象 | 处理 |
 | --- | --- |
-| 窗口加载后白屏/加载页停留超 60s 弹失败框 | 看 `dsh-web.log`；多为 localhost 转发不通 → `.wslconfig` 加 `[wsl2] networkingMode=mirrored` 后 `wsl --shutdown` 重启（注意会中断 WSL 内会话） |
+| 窗口加载后白屏/加载页停留超 60s 弹失败框 | 看 `dsh-web.log`；多为 localhost 转发不通 → `.wslconfig` 加 `[wsl2] networkingMode=mirrored` 后重启 WSL（注意会中断 WSL 内会话） |
+| **偶发断线重连、断线时正在输出的回答中断** | 多为 WSL2 NAT 的 localhost 端口转发抖动（睡眠唤醒 / 网络切换 / 虚拟网卡重置）。**判据**：断线时刻 `dsh-web.log` 只有连接错误、**无 `KernelExit`** 即属转发抖动。三层应对：① **根治**——`.wslconfig` 设 `[wsl2] networkingMode=mirrored`（Win11 22H2+）走 localhost 直连；② 壳已加固——探活不再因转发瞬时抖动误杀 WSL 内还活着的内核，等转发恢复后前端自动重连**同一内核**并靠其 durable event 续上输出；③ 极端环境可用 `DSH_WSL_HOST=0.0.0.0` 放宽内核 bind（默认回环，NAT 下需配防火墙放行） |
 | 保存 wsl 配置时报「未检测到 WSL 发行版」 | 确认 `wsl -l -q` 有输出；或显式填 `wslDistro` |
 | 保存报「未找到可用的 node/npm」 | WSL 内装 Node：`sudo apt install nodejs npm` 或 fnm/nvm；注意必须是**登录 shell** 可见（`wsl sh -lc 'node --version'`） |
 | 首次切换后安装很久 | 正常（完整依赖闭包 + Linux 原生模块预编译包）；`desktop.log` 有 `[wsl] npm:` 进度；失败会在日志尾部留 npm 输出 |

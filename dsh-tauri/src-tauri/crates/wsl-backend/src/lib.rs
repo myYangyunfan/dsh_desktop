@@ -36,6 +36,9 @@ pub const TIMEOUT_STOP: Duration = Duration::from_secs(30);
 pub const TIMEOUT_INSTALL: Duration = Duration::from_secs(30 * 60);
 pub const TIMEOUT_CLEANUP: Duration = Duration::from_secs(15);
 pub const TIMEOUT_VERSION: Duration = Duration::from_secs(60);
+/// 存活探测超时（探活防误杀：`kill -0` 一条轻命令；转发抖动时 wsl.exe 本身
+/// 仍可快速响应，10s 足够且远小于 supervisor 的重启判据窗口）。
+pub const TIMEOUT_PROBE: Duration = Duration::from_secs(10);
 
 /// Docker Desktop 辅助发行版（不含交互 shell 与 node，自动选择时跳过）。
 fn is_system_distro(d: &str) -> bool {
@@ -683,9 +686,28 @@ impl WslBackend {
         res.ok
     }
 
-    /// 内核 spawn 命令串（`--no-open` 门控由调用方按版本决定）。
+    /// 内核 spawn 命令串（`--no-open` 门控由调用方按版本决定；bind host 走白名单）。
     pub fn server_cmd(&self, no_open: bool) -> String {
-        spec::server_cmd(&self.install_dir(), no_open)
+        spec::server_cmd(&self.install_dir(), no_open, &self.bind_host())
+    }
+
+    /// 内核 bind 地址（#1 逃生阀）：读 `DSH_WSL_HOST`，经 [`spec::normalize_bind_host`]
+    /// 白名单收口——默认 `127.0.0.1`（回环），仅显式 `0.0.0.0` 放宽到全网卡。
+    fn bind_host(&self) -> String {
+        let raw = std::env::var("DSH_WSL_HOST").unwrap_or_else(|_| "127.0.0.1".into());
+        spec::normalize_bind_host(&raw).to_string()
+    }
+
+    /// WSL 内内核进程存活探测（探活防误杀，契约 §4.4 补充）：读 dsh.pid 并
+    /// `kill -0`。true = 进程仍存活（stdout 标记 ALIVE）；探测失败/超时/无 pid
+    /// 一律 false（fail-closed，调用方据此回落到原重启路径）。供 supervisor 在
+    /// WSL 模式「TCP 失联但进程可能还活着（localhost 转发抖动）」时决定重启与否：
+    /// 进程仍在就不换内核，让前端既有 reconnect 连回同一进程、靠 durable event 续流。
+    pub fn is_server_alive(&self) -> bool {
+        let distro = self.distro();
+        let cmd = spec::probe_alive_cmd(&self.install_dir());
+        let res = self.invoker.run(&distro, &cmd, TIMEOUT_PROBE);
+        spec::parse_alive_probe(&res.stdout)
     }
 
     /// spawn 内核（wsl.exe 包装；Job Object 绑定与就绪行监视在 supervisor 侧）。

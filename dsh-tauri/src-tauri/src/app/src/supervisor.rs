@@ -171,10 +171,10 @@ impl Supervisor {
             let cfg = wsl_backend::detect_backend_mode_from_map(&map);
             (cfg.backend == "wsl").then_some(cfg)
         };
-        // ---- Node 三级解析链（v0.5.4 便携版修复/瘦身基础，构造期一次性）：
-        //      系统 PATH 中 ≥22 的 node → 内置 vendor/node → None。便携版在
-        //      无内置 node 的机器上经第一级起死回生；系统有 node 的机器不再
-        //      依赖 91MB 内置二进制（杀软拦截面同步收窄）。----
+        // ---- Node 三级解析链（v0.5.4 便携版修复基础，构造期一次性）：内置
+        //      vendor/node（探测健康）优先 → 系统 PATH 中 ≥22 的 node → None。装机
+        //      版优先用厂商测过的内置 node，杜绝系统 node 大版本差异（如 node24）
+        //      击穿内核 ESM loader；便携版无内置 node 时回落系统 node。----
         let node_resolved = kernel_process::node_resolve::resolve_node_with(
             node_probe.as_ref(),
             kernel_process::node_resolve::existing_vendor_node(&app_dir),
@@ -665,6 +665,7 @@ impl Supervisor {
                     st["npmVersion"].as_str().unwrap_or(""),
                     if cfg.simulated { "（DSH_WSL_MODE 模拟缝）" } else { "" },
                 ));
+                Self::log_wsl_network_hint();
                 Some(backend)
             }
             Err(e) => {
@@ -672,6 +673,27 @@ impl Supervisor {
                 this.wsl_fallback(&e.to_string());
                 None
             }
+        }
+    }
+
+    /// WSL 网络模式提示（#1 可诊断性）：读 `%USERPROFILE%\.wslconfig` 判是否
+    /// mirrored，把「偶发断线致输出中断」的正解打进 boot 日志。mirrored（Win11
+    /// 22H2+）让 Windows↔WSL 的 localhost 直连、不经 NAT 端口转发，是转发抖动
+    /// 的根治手段；无 .wslconfig 视为默认 NAT。仅记日志，探测失败不阻断启动。
+    fn log_wsl_network_hint() {
+        let mirrored = std::env::var("USERPROFILE")
+            .ok()
+            .map(|p| std::path::Path::new(&p).join(".wslconfig"))
+            .and_then(|f| std::fs::read_to_string(f).ok())
+            .map(|s| {
+                let compact: String = s.to_lowercase().chars().filter(|c| !c.is_whitespace()).collect();
+                compact.contains("networkingmode=mirrored")
+            })
+            .unwrap_or(false);
+        if mirrored {
+            log_line("WSL 网络：检测到 .wslconfig networkingMode=mirrored（localhost 直连，抗转发抖动最佳，无需额外处理）");
+        } else {
+            log_line("WSL 网络：默认 NAT（未检测到 mirrored）。若偶发断线导致输出中断，建议在 %USERPROFILE%\\.wslconfig 写 [wsl2] networkingMode=mirrored，随后重启 WSL 生效——详见 dsh-desktop/docs/wsl-verification.md");
         }
     }
 
@@ -1217,6 +1239,14 @@ impl Supervisor {
         zombie >= ZOMBIE_THRESHOLD && active_turns == 0
     }
 
+    /// WSL 模式 TCP 连续失联达阈值时的处置决策（纯函数，可单测）：入参为「WSL 内
+    /// 内核进程是否存活」探测结果。存活 → true（继续等待 localhost 转发恢复、
+    /// **不重启**，给前端 reconnect 留住同一内核与它的 durable event）；已退出 →
+    /// false（按原退出处理链重启）。非 WSL 模式不调用本函数（TCP 失联 == 进程真死）。
+    fn decide_wsl_tcp_lost(wsl_kernel_alive: bool) -> bool {
+        wsl_kernel_alive
+    }
+
     fn probe_loop(self: &Arc<Self>, port: u16, tx: Sender<SupervisorEvent>, gen: u64, probe_gen: u64) {
         let this = Arc::clone(self);
         std::thread::spawn(move || {
@@ -1274,10 +1304,26 @@ impl Supervisor {
                             let g = this.inner.lock().unwrap_or_else(|p| p.into_inner());
                             g.kernel.is_some()
                         };
-                        if kernel_present {
-                            this.kill_kernel();
-                            this.on_kernel_exit(None, &tx);
+                        if !kernel_present {
+                            return;
                         }
+                        // WSL 模式专属防误杀：连不上 127.0.0.1:port 常常只是 WSL2
+                        // localhost 转发抖动（睡眠唤醒 / 网络切换 / 虚拟网卡重置），
+                        // WSL 内内核进程其实还活着。若照 local 语义 kill + 重启，会
+                        // 换上全新空内核——旧会话的流式输出彻底丢失，且前端 reconnect
+                        // 只连到新进程（durable event 随旧进程消失，续不上）。故先探
+                        // WSL 内进程：仍在 → 不重启、复位失联计数继续等转发恢复（前端
+                        // 自会重连同一内核续流）；确认没了 → 按原退出处理重启。
+                        if let Some(backend) = this.wsl_active() {
+                            if Self::decide_wsl_tcp_lost(backend.is_server_alive()) {
+                                log_line("WSL：TCP 连续失联但 WSL 内内核进程存活（疑 localhost 转发抖动）——不重启，等待转发恢复（前端将重连同一内核）");
+                                consecutive = 0;
+                                continue;
+                            }
+                            log_line("WSL：TCP 连续失联且 WSL 内内核进程已退出，按内核退出处理");
+                        }
+                        this.kill_kernel();
+                        this.on_kernel_exit(None, &tx);
                         return;
                     }
                     continue;
@@ -1917,27 +1963,35 @@ Content-Length: 0
         let _ = std::fs::remove_dir_all(&bad);
     }
 
-    /// Node 三级解析链优先级（v0.5.4 P0 回归锚点；vendor 平台主名/备名
-    /// 选择的底层单测在 kernel-process::node_resolve，此处验证 supervisor
-    /// 构造接线）：系统 ≥22 优先 → 过旧/探测失败回落 vendor → 全缺 None。
+    /// Node 三级解析链优先级（v0.5.4 便携版修复 + node 版本适配：装机版
+    /// vendor 优先口径；vendor 平台主名/备名选择的底层单测在
+    /// kernel-process::node_resolve，此处验证 supervisor 构造接线）：
+    /// 健康 vendor 优先 → vendor 坏/缺回落系统 ≥22 → 全缺 None。
     #[test]
     fn node_resolution_priority_chain() {
         struct StubNodeProbe {
             path_hit: Option<PathBuf>,
             version: Option<String>,
+            vendor_version: Option<String>,
         }
         impl kernel_process::NodeProbe for StubNodeProbe {
             fn find_node_in_path(&self) -> Option<PathBuf> {
                 self.path_hit.clone()
             }
-            fn node_version(&self, _exe: &std::path::Path) -> Option<String> {
-                self.version.clone()
+            fn node_version(&self, exe: &std::path::Path) -> Option<String> {
+                // 系统命中路径返回 version；其余（vendor 绝对路径）返回 vendor_version。
+                if self.path_hit.as_deref() == Some(exe) {
+                    self.version.clone()
+                } else {
+                    self.vendor_version.clone()
+                }
             }
         }
-        let probe = |ver: Option<&str>| {
+        let probe = |sys_ver: Option<&str>, vendor_ver: Option<&str>| {
             Arc::new(StubNodeProbe {
                 path_hit: Some(PathBuf::from(if cfg!(windows) { r"C:\fake\node.exe" } else { "/fake/node" })),
-                version: ver.map(String::from),
+                version: sys_ver.map(String::from),
+                vendor_version: vendor_ver.map(String::from),
             }) as Arc<dyn kernel_process::NodeProbe>
         };
         let mk = |root: &std::path::Path, with_vendor: bool| -> std::path::PathBuf {
@@ -1950,27 +2004,32 @@ Content-Length: 0
             d
         };
 
-        // ① 系统 ≥22：即便 vendor 在位也优先系统（瘦身/杀软规避口径）。
+        // ① 装机版主路径：vendor 在位且健康 → 优先 vendor（即便系统也有达标
+        //    node），杜绝系统 node 大版本差异（如 node24）击穿内核 ESM loader。
         let root = sandbox("nr1");
-        let sv = Supervisor::new_with_probes(&mk(&root, true), real_wsl_invoker(), probe(Some("v24.15.0")));
-        assert!(matches!(&sv.node_resolved, Some(kernel_process::node_resolve::ResolvedNode::System { major: 24, .. })), "系统 node ≥22 优先");
+        let sv = Supervisor::new_with_probes(&mk(&root, true), real_wsl_invoker(), probe(Some("v24.15.0"), Some("v24.15.0")));
+        assert!(matches!(&sv.node_resolved, Some(kernel_process::node_resolve::ResolvedNode::Vendor(_))), "健康 vendor 优先于系统 node");
         assert_eq!(sv.node_exe, sv.node_resolved.as_ref().unwrap().exe(), "node_exe 必须指向命中者");
-        // ② 系统过旧（<22）：回落 vendor。
+        // ② vendor 探测不通（被杀软拦到超时）+ 系统达标 → 回落系统 node。
         let root2 = sandbox("nr2");
-        let sv2 = Supervisor::new_with_probes(&mk(&root2, true), real_wsl_invoker(), probe(Some("v18.20.4")));
-        assert!(matches!(&sv2.node_resolved, Some(kernel_process::node_resolve::ResolvedNode::Vendor(_))), "过旧系统 node 须回落 vendor");
-        // ③ 系统探测失败（杀软/商店 stub）：回落 vendor。
+        let sv2 = Supervisor::new_with_probes(&mk(&root2, true), real_wsl_invoker(), probe(Some("v22.1.0"), None));
+        assert!(matches!(&sv2.node_resolved, Some(kernel_process::node_resolve::ResolvedNode::System { major: 22, .. })), "vendor 探测不通须回落系统 node");
+        // ③ 便携版缺 vendor：无内置 node → 用系统 node（起死回生主路径）。
         let root3 = sandbox("nr3");
-        let sv3 = Supervisor::new_with_probes(&mk(&root3, true), real_wsl_invoker(), probe(None));
-        assert!(matches!(&sv3.node_resolved, Some(kernel_process::node_resolve::ResolvedNode::Vendor(_))), "探测失败须回落 vendor");
-        // ④ 便携版缺文件形态：无系统 node 且无 vendor → None + 占位 node_exe
+        let sv3 = Supervisor::new_with_probes(&mk(&root3, false), real_wsl_invoker(), probe(Some("v22.1.0"), None));
+        assert!(matches!(&sv3.node_resolved, Some(kernel_process::node_resolve::ResolvedNode::System { .. })), "便携版无 vendor 须用系统 node");
+        // ④ vendor 在位但探测不通 + 系统过旧：第 1、2 级皆不命中 → 终底返回 vendor。
+        let root4b = sandbox("nr4b");
+        let sv4b = Supervisor::new_with_probes(&mk(&root4b, true), real_wsl_invoker(), probe(Some("v18.20.4"), None));
+        assert!(matches!(&sv4b.node_resolved, Some(kernel_process::node_resolve::ResolvedNode::Vendor(_))), "vendor 坏且系统过旧 → 终底 vendor 保底");
+        // ⑤ 便携版缺文件形态：无系统 node 且无 vendor → None + 占位 node_exe
         //    （spawn 失败旧路径终防线在位）。
         let root4 = sandbox("nr4");
-        let sv4 = Supervisor::new_with_probes(&mk(&root4, false), real_wsl_invoker(), probe(None));
+        let sv4 = Supervisor::new_with_probes(&mk(&root4, false), real_wsl_invoker(), probe(None, None));
         assert!(sv4.node_resolved.is_none(), "三级链全空 → None");
         let primary = if cfg!(windows) { "node.exe" } else { "node" };
         assert_eq!(sv4.node_exe, root4.join("dsh-desktop").join("vendor").join("node").join(primary), "全缺时占位主名路径");
-        for d in [&root, &root2, &root3, &root4] {
+        for d in [&root, &root2, &root3, &root4, &root4b] {
             let _ = std::fs::remove_dir_all(d);
         }
     }
@@ -2488,6 +2547,14 @@ Content-Length: 0
         // local 分支的既有锚点仍在。
         assert!(seg.contains("SpawnSpec::new(&self.node_exe"), "local 分支 SpawnSpec 链不变");
         assert!(seg.contains("set_process_group_leader(&mut cmd)"), "local 分支 PGID 设置不变");
+    }
+
+    /// WSL TCP 失联去留判定（探活防误杀核心）：WSL 内进程存活 → 不重启（继续
+    /// 等待转发恢复，前端重连同一内核）；已退出 → 按退出处理重启。
+    #[test]
+    fn decide_wsl_tcp_lost_gate() {
+        assert!(Supervisor::decide_wsl_tcp_lost(true), "WSL 内进程存活 → 继续等待，不重启");
+        assert!(!Supervisor::decide_wsl_tcp_lost(false), "WSL 内进程已退出 → 按退出处理");
     }
 
     /// 崩溃环根治锚点（macOS NODE_OPTIONS 泄漏）：spawn_kernel local 分支必须

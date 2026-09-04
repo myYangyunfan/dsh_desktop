@@ -230,7 +230,7 @@ wsl-backend（settings 解析属配置域，两处消费：supervisor + commands
 | # | 风险 | 缓解 |
 |---|------|------|
 | R1 | UNC（9P）慢：33 插件同步/补丁经 UNC 写 WSL fs，boot 链显著变慢 | Electron 线同链已实证可用；侧记耗时进 BootStep ms；若超标，备选 = sync 步改在 WSL 内跑（node <appDir 经 UNC 执行）——M2 评估，M1 不做 |
-| R2 | localhost 转发失效（.wslconfig 关闭 / 旧 Win10 19041 前 / 绑定 127.0.0.1 的转发怪癖） | 探活失败→崩溃环→恢复页（fallbackReason 指路）；备选方案登记：`--host 0.0.0.0`（URL 仍打印 127.0.0.1 由壳改写）——仅实证 R2 发生才启用 |
+| R2 | localhost 转发抖动/失效（睡眠唤醒/网络切换/虚拟网卡重置，或 .wslconfig 关闭 / 旧 Win10 19041 前 / 绑定 127.0.0.1 的转发怪癖） | **已实装分层应对**（用户反馈「偶发断线致输出中断」）：① 探活防误杀——TCP 连续失联（≥3）时先 `kill -0 $(cat dsh.pid)` 探 WSL 内进程，仍在则**不重启**、复位失联计数等转发恢复（前端 reconnect 连回同一内核 + durable event 续流），确认退出才走崩溃环；② bind 逃生阀 `DSH_WSL_HOST`（白名单 127.0.0.1/0.0.0.0，默认回环）；③ boot 探测 `.wslconfig` 是否 mirrored 并打日志引导。**根治仍推荐 mirrored 网络**（localhost 直连绕开 NAT 转发）；若转发恒不通（localhostForwarding=false）则 wsl.exe 存活探测亦失败→崩溃环→恢复页（fallbackReason 指路） |
 | R3 | 壳被强杀 → WSL 内内核孤儿（Job Object 只收 wsl.exe） | spawn 前命令串已 `rm -f dsh.pid`；下次启动 ensure_installed 前 stop 旧 pid；瀑布重试兜底（Electron 同款残余，登记不改） |
 | R4 | wsl.exe 输出编码漂移（新版本形态变化） | decode 三形态 + 名单 NUL 防御（#126 战果）；解析失败 = 空名单 = E_WSL_UNAVAILABLE（fail-closed 可读） |
 | R5 | 同步 command 阻塞 IPC（探测数十秒） | D6：全部异步 command + 后台线程；契约 §2 注明上限 |

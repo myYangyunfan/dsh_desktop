@@ -292,7 +292,7 @@ node dsh-desktop/scripts/sync-companion-plugins.js ~/.dsh --with-patches
 - **自动更新**：检查仍在 Windows 侧（npm registry 查询），安装走 WSL 内 npm（staging + 原子切换，失败自动保留旧版），重启应用生效；启动失败弹窗可「回退到上一版本」。
 - 退出/重启服务：按 `dsh.pid` 发 SIGTERM 优雅收尾（绝不 `wsl --terminate`）；插件市场的「重启服务」在托管模式下可用（重启 WSL 内的 dsh web）。
 - 会话通知、余额小部件、文件 diff 查看照常（经 UNC 直读 WSL 文件）；「文件」视图的还原/打开仍是 Windows 本地功能，不适用于 WSL 会话。
-- 已知边界：Windows 侧访问依赖 WSL2 的 localhost 转发（不通时启用 `.wslconfig` 的 `networkingMode=mirrored`）；`wslInstallDir` 路径不能含空格。
+- 已知边界：Windows 侧访问依赖 WSL2 的 localhost 转发——**推荐**在 `.wslconfig` 设 `[wsl2] networkingMode=mirrored`（Win11 22H2+）走 localhost 直连，根治 NAT 转发的偶发断线/输出中断；未 mirrored 时壳也不再因转发抖动误杀 WSL 内还活着的内核（断线后前端重连同一内核续上，详见 docs/wsl-verification.md 常见问题）；`wslInstallDir` 路径不能含空格。
 
 ## 日志与排障
 

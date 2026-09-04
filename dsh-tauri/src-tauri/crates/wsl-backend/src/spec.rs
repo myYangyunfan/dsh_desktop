@@ -26,6 +26,17 @@ pub fn version_valid(v: &str) -> bool {
     !v.is_empty() && v.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
 }
 
+/// 内核 bind 地址白名单（`--host` 参数，进入 `sh -lc` 命令串前必过）。默认回环；
+/// 仅 `0.0.0.0`（全网卡，供 mirrored 不可用且确证 localhost 转发怪癖时放宽）被
+/// 承认，其余任意值（含 `::1`/注入形态/空）一律 fail-safe 回落 `127.0.0.1`——
+/// 保证拼进命令串的 host 只能是这两个字面量之一，注入面为零。
+pub fn normalize_bind_host(raw: &str) -> &'static str {
+    match raw.trim() {
+        "0.0.0.0" => "0.0.0.0",
+        _ => "127.0.0.1",
+    }
+}
+
 /// agent 包内 bin.js 入口（WSL 内 Linux 绝对路径）。
 pub fn agent_bin(install_dir: &str) -> String {
     format!("{install_dir}/agent/node_modules/{PKG}/lib/bin.js")
@@ -43,6 +54,9 @@ pub fn agent_pkg_dir(install_dir: &str) -> String {
 /// `DSH_HOME=<dir>`（Windows 环境块不传进 WSL，净化只能在命令串内完成）；
 /// `--port 0` 由 WSL 内 OS 分配，实际端口从就绪行解析。
 ///
+/// `host` 为内核 bind 地址（`--host`）：默认 `127.0.0.1`；调用方须先经
+/// [`normalize_bind_host`] 白名单，确保进入命令串的只能是回环或 `0.0.0.0`。
+///
 /// W1 修复：
 /// - `node --expose-internals`（问题一）：node 级参数（bin.js 之前，进
 ///   `process.execArgv`）——内核 cordis-plugin-loader 据此取 Node 内部 ESM
@@ -51,11 +65,11 @@ pub fn agent_pkg_dir(install_dir: &str) -> String {
 ///   profile 后 NODE_OPTIONS 是用户自己的堆设置（如 --max-old-space-size），
 ///   清掉会让 600+ 依赖的 npm/内核解析 OOM；宿主 Windows 环境块本就不传进
 ///   WSL（WSLENV 白名单），无「宿主残留」可清。
-pub fn server_cmd(install_dir: &str, no_open: bool) -> String {
+pub fn server_cmd(install_dir: &str, no_open: bool, host: &str) -> String {
     format!(
         "cd {install_dir} && rm -f dsh.pid && echo $$ > dsh.pid \
          && exec env -u DSH_WEB_URL -u DSH_SESSION_ID -u DSH_SESSION_JSONL -u DSH_SHELL \
-         DSH_HOME={install_dir} node --expose-internals {} web{} --host 127.0.0.1 --port 0",
+         DSH_HOME={install_dir} node --expose-internals {} web{} --host {host} --port 0",
         agent_bin(install_dir),
         if no_open { " --no-open" } else { "" }
     )
@@ -67,6 +81,22 @@ pub fn stop_cmd(install_dir: &str) -> String {
     format!(
         "p={install_dir}/dsh.pid; if [ -f \"$p\" ]; then kill $(cat \"$p\") 2>/dev/null || true; fi; rm -f {install_dir}/dsh.pid"
     )
+}
+
+/// WSL 内内核进程**存活探测**命令（探活防误杀，见契约 §4.4 补充）：`kill -0`
+/// 判 pid 文件里的进程是否还在，输出标记 ALIVE / DEAD / NOPID。用于区分
+/// 「WSL2 localhost 转发抖动（进程仍在）」与「内核真死」——前者不该触发重启。
+/// 判定走 **stdout 标记非 exit 码**（`sh -lc` 尾命令码不可靠，issue #87 教训）。
+pub fn probe_alive_cmd(install_dir: &str) -> String {
+    format!(
+        "p={install_dir}/dsh.pid; if [ -f \"$p\" ]; then if kill -0 $(cat \"$p\") 2>/dev/null; then echo ALIVE; else echo DEAD; fi; else echo NOPID; fi"
+    )
+}
+
+/// 解析存活探测 stdout：仅精确行 `ALIVE` 判活（DEAD/NOPID/空/噪声一律判不活，
+/// fail-closed——宁可回落到原重启路径，也不放任真死的 WSL 内核不重启）。
+pub fn parse_alive_probe(stdout: &str) -> bool {
+    stdout.lines().any(|l| l.trim() == "ALIVE")
 }
 
 /// npm staging 安装 + 原子切换命令串（契约 §4.5，Electron installAgent 同式
@@ -150,7 +180,7 @@ mod tests {
     /// server_cmd 形态逐字符比对（--no-open 门控；W1 两项修复锚点）。
     #[test]
     fn server_cmd_matches_contract_shape() {
-        let cmd = server_cmd("/home/u/.dsh-desktop", true);
+        let cmd = server_cmd("/home/u/.dsh-desktop", true, "127.0.0.1");
         let expected = concat!(
             "cd /home/u/.dsh-desktop && rm -f dsh.pid && echo $$ > dsh.pid ",
             "&& exec env -u DSH_WEB_URL -u DSH_SESSION_ID -u DSH_SESSION_JSONL -u DSH_SHELL ",
@@ -160,7 +190,9 @@ mod tests {
         );
         assert_eq!(cmd, expected);
         // rc.7（无 --no-open）形态：web 后直接 --host。
-        assert!(server_cmd("/d", false).contains("web --host 127.0.0.1 --port 0"));
+        assert!(server_cmd("/d", false, "127.0.0.1").contains("web --host 127.0.0.1 --port 0"));
+        // #1 逃生阀：host 参数化，0.0.0.0 透传到 --host（默认仍回环，上面已锁）。
+        assert!(server_cmd("/d", false, "0.0.0.0").contains("web --host 0.0.0.0 --port 0"));
         // 关键序：cd → rm pid → echo pid → exec env -u → node --expose-internals。
         let positions = [
             cmd.find("cd /home/u/.dsh-desktop").unwrap(),
@@ -261,5 +293,33 @@ mod tests {
         assert!(is_unc_host("wsl$"));
         assert!(!is_unc_host("evil"));
         assert!(!is_unc_host(""));
+    }
+
+    /// normalize_bind_host：仅 0.0.0.0 被放宽，其余（含注入/非法）回落 127.0.0.1。
+    #[test]
+    fn bind_host_whitelist() {
+        assert_eq!(normalize_bind_host("0.0.0.0"), "0.0.0.0");
+        assert_eq!(normalize_bind_host("  0.0.0.0  "), "0.0.0.0");
+        assert_eq!(normalize_bind_host("127.0.0.1"), "127.0.0.1");
+        assert_eq!(normalize_bind_host(""), "127.0.0.1");
+        assert_eq!(normalize_bind_host("::1"), "127.0.0.1");
+        // 注入形态必须被白名单挡回落环（拼进命令串前只可能两个字面量之一）。
+        assert_eq!(normalize_bind_host("0.0.0.0; rm -rf /"), "127.0.0.1");
+        assert_eq!(normalize_bind_host("`whoami`"), "127.0.0.1");
+    }
+
+    /// probe_alive_cmd 形态（kill -0 + 三态标记）；parse_alive_probe 判定。
+    #[test]
+    fn probe_alive_shape_and_parse() {
+        let cmd = probe_alive_cmd("/home/u/.dsh-desktop");
+        assert!(cmd.contains("kill -0 $(cat \"$p\")"), "须 kill -0 探测");
+        assert!(cmd.contains("echo ALIVE") && cmd.contains("echo DEAD") && cmd.contains("echo NOPID"));
+        assert!(!cmd.contains("--terminate"), "绝不 wsl --terminate");
+        assert!(parse_alive_probe("ALIVE\n"));
+        assert!(parse_alive_probe("  ALIVE  "));
+        assert!(!parse_alive_probe("DEAD\n"), "DEAD 不得判活（且不含子串 ALIVE）");
+        assert!(!parse_alive_probe("NOPID\n"));
+        assert!(!parse_alive_probe(""));
+        assert!(!parse_alive_probe("wsl: failed to start"), "噪声/报错 fail-closed 判不活");
     }
 }
