@@ -54,6 +54,13 @@ interface SelectionPopup {
 const LazyMermaidMarkdown = lazyChunkComponent<MermaidMarkdownProps>(
   'mermaid',
   (mod) => mod.MermaidMarkdown as ComponentType<MermaidMarkdownProps> | undefined,
+  // Fallback for when the mermaid chunk cannot load (kernel restart window,
+  // network blip, a missing module-table row after an overlay install): render
+  // the SAME source through the plain MarkdownText — mermaid fences degrade to
+  // code blocks instead of leaving the whole preview stuck on an error strip.
+  // Mirrors the editor chunk's TextFallback; the content is already in props,
+  // so a mermaid-bearing file stays exactly as viewable as a plain one.
+  (props) => <MarkdownText text={props.text} codeLabels={props.codeLabels} />,
 )
 
 /**

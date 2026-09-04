@@ -34518,7 +34518,10 @@ globalThis.__dshChunks__["editor"] = (require) => {
 	* MarkdownText pass over the whole source, with rendered mermaid fences
 	* swapped for diagrams. Module-level `pick` keeps the load effect stable.
 	*/
-	const LazyMermaidMarkdown = lazyChunkComponent("mermaid", (mod) => mod.MermaidMarkdown);
+	const LazyMermaidMarkdown = lazyChunkComponent("mermaid", (mod) => mod.MermaidMarkdown, (props) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.MarkdownText, {
+		text: props.text,
+		codeLabels: props.codeLabels
+	}));
 	/**
 	* Inline agent-diff decorations (K28): a per-editor StateField holding the
 	* line decorations for the current file's agent-changed lines. The field is
