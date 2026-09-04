@@ -18,6 +18,11 @@ const { preflight } = require('./fault-isolation');
 // llm-pi-ai settings.yaml 非法供应商条目自愈（0.5.7 alpha.4「一家不合法全体
 // 陪葬」形态：目录外路由缺 api/baseURL → 插件启动失败 → 三方供应商整组消失）。
 const { healPiAiSettings } = require('../lib/pi-ai-settings-heal');
+// settings.yaml 整文档不可解析自愈（用户反馈「加载提供方目录失败: settings service
+// is absent」根治）：dsh-settings-file 初始加载对非法文档致命抛错 → settings 提供方被
+// loader-isolation 降级 → 服务缺席。内核拉起前先用同款 yaml 判定校验，坏则分级自愈
+// （剥 BOM → 恢复最近合法备份 → 重置空文档），须早于 pi-ai 自愈（后者要求文档可解析）。
+const { healSettingsDocument } = require('../lib/settings-document-heal');
 // vendor/dsh-kernel 陈旧内核 tarball 自愈（0.6.1 alpha.5 覆盖安装「版本混装」形态：
 // NSIS 只增不删 → 旧 alpha.4 tgz 残留 → compat-pin fail-closed 拒启）。
 const { healVendorStaleKernels } = require('../lib/vendor-kernel-heal');
@@ -110,6 +115,14 @@ function createPluginIntegration(opts) {
     pluginSync.healProfilePatch();
     pluginSync.healHomePatch();
     pluginSync.logProfileBundleHealth();
+    // settings.yaml 整文档不可解析自愈（同步、纯 fs）：必须早于 pi-ai 自愈——后者
+    // 要求文档可解析才有意义。模块内部全容忍（备份 + 原子写、宁漏勿误），这里再兜
+    // 一层异常——repair 步任何子失败绝不阻断启动。
+    try {
+      healSettingsDocument({ appDir, home: getHome(), log });
+    } catch (err) {
+      log('settings.yaml 文档自愈异常（容忍继续，不阻断启动）: ' + String((err && err.message) || err));
+    }
     // settings.yaml 的 llm-pi-ai 非法供应商自愈（内核包 ESM，heal 为 async）：
     // 模块内部全容忍（宁漏勿误、备份+原子写），这里再兜一层异常——repair 步
     // 任何子失败绝不阻断启动。

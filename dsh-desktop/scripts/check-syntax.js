@@ -41,6 +41,9 @@ const entryFiles = [
   'scripts/lib/preset-heal.js',
   // llm-pi-ai settings 自愈（boot repair 步接线，随包分发，必须过语法门）。
   'scripts/lib/pi-ai-settings-heal.js',
+  // settings.yaml 整文档不可解析自愈（boot repair 步接线，「settings service is
+  // absent」弹窗根治，随包分发，必须过语法门）。
+  'scripts/lib/settings-document-heal.js',
   // profile manifest 孤儿依赖自愈（boot repair 步接线，issue #177）。
   'scripts/lib/profile-orphan-dep-heal.js',
   'scripts/integration/index.js',
