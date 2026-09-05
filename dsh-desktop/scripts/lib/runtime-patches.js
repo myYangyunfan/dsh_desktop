@@ -79,6 +79,9 @@ const SLOT_UNKEYED_COMPAT_NEW = [
 // prefix.  The patch below lets only the final complete frame go through the
 // existing torn-tail repair path.
 const PERSISTENCE_TORN_MARKER = 'dsh-desktop compat: recover complete zstd frame torn JSONL tail';
+// 首部 marker 行（torn-tail 以「整行前置」方式打标）。逆运算还原 pristine 时需要
+// 剥掉它，故收口成单一常量而不是在两处各写一遍拼接。
+const PERSISTENCE_TORN_HEAD = '// ' + PERSISTENCE_TORN_MARKER + '\n';
 const PERSISTENCE_FRAME_LOOP_OLD = 'let remainingFrames = frames.length - 1;\n\t\t\tfor (const plaintext of decodedFrames) {';
 const PERSISTENCE_FRAME_LOOP_NEW = [
   'let remainingFrames = frames.length - 1;',
@@ -183,7 +186,7 @@ function transformPersistenceTornTail(src, file) {
   let patched = src.replace(PERSISTENCE_FRAME_LOOP_OLD, PERSISTENCE_FRAME_LOOP_NEW);
   patched = patched.replace(PERSISTENCE_WRITE_OLD, PERSISTENCE_WRITE_NEW);
   patched = patched.replace(PERSISTENCE_COMPLETE_CHECK, PERSISTENCE_COMPLETE_CHECK_NEW);
-  patched = '// ' + PERSISTENCE_TORN_MARKER + '\n' + patched;
+  patched = PERSISTENCE_TORN_HEAD + patched;
   return { status: 'changed', src: patched };
 }
 
@@ -493,8 +496,20 @@ module.exports = {
   transformExposeFix,
   PERSISTENCE_PKG_REL,
   PERSISTENCE_TORN_MARKER,
+  // torn-tail / corrupt-guard 的正向替换对（[OLD, NEW]）与首部 marker 行：
+  // pristine 逆运算按引用登记（patch-adapters.PRISTINE_INJECTIONS），杜绝
+  // 「哨兵测试里再抄一份字面串」的复制漂移 —— 抄的那份会变成第二处漂移源。
+  PERSISTENCE_TORN_HEAD,
+  PERSISTENCE_FRAME_LOOP_OLD,
+  PERSISTENCE_FRAME_LOOP_NEW,
+  PERSISTENCE_WRITE_OLD,
+  PERSISTENCE_WRITE_NEW,
+  PERSISTENCE_COMPLETE_CHECK,
+  PERSISTENCE_COMPLETE_CHECK_NEW,
   transformPersistenceTornTail,
   PERSISTENCE_CORRUPT_MARKER,
+  PERSISTENCE_CORRUPT_OLD,
+  PERSISTENCE_CORRUPT_NEW,
   transformPersistenceCorruptGuard,
   transformPersistenceAll,
   SLOT_KEY_COMPAT_PKG_REL,

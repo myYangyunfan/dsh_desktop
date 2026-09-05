@@ -116,16 +116,30 @@ function cmdVerify(kernelRoot, repoRoot) {
   const snapPath = path.join(repoRoot, SNAP_REL);
   if (!fs.existsSync(snapPath)) { console.error('✗ 快照不存在：' + SNAP_REL + '（先跑 snapshot）'); process.exit(1); }
   const snap = JSON.parse(fs.readFileSync(snapPath, 'utf8'));
-  const markers = snap.surface.flatMap((s) => s.markers);
-  const uniq = [...new Set(markers)].sort();
-  const now = buildSurface(kernelRoot, uniq);
+  // 标记集必须现采（并上快照里已登记的），不能只拿快照的：否则新加的补丁家族
+  // 落在快照外的文件上时，buildSurface 根本看不到它，verify 静默绿（守卫盲区）；
+  // 落在已有文件上时又会只报「内容漂移（标记仍在位）」，把新增干预说成内容漂。
+  const markers = [...new Set([
+    ...snap.surface.flatMap((s) => s.markers),
+    ...collectMarkers(repoRoot),
+  ])].sort();
+  const now = buildSurface(kernelRoot, markers);
   const nowMap = new Map(now.surface.map((s) => [s.file, s]));
   const oldMap = new Map(snap.surface.map((s) => [s.file, s]));
   let drift = 0;
   for (const [file, old] of oldMap) {
     const cur = nowMap.get(file);
     if (!cur) { console.error(`::error::补丁干预消失：${file}（原标记 ${old.markers.join(',')}）——内核换版后补丁失配？`); drift++; }
-    else if (cur.sha256 !== old.sha256) { console.error(`::error::文件内容漂移：${file}（标记仍在位）`); drift++; }
+    else if (cur.sha256 !== old.sha256) {
+      const added = cur.markers.filter((m) => !old.markers.includes(m));
+      const lost = old.markers.filter((m) => !cur.markers.includes(m));
+      if (added.length || lost.length) {
+        console.error(`::error::标记集变更：${file} 新增 [${added.join(',')}] 消失 [${lost.join(',')}]`);
+      } else {
+        console.error(`::error::文件内容漂移：${file}（标记仍在位）`);
+      }
+      drift++;
+    }
   }
   for (const [file] of nowMap) {
     if (!oldMap.has(file)) { console.error(`::error::新出现的补丁干预：${file}（快照外）`); drift++; }

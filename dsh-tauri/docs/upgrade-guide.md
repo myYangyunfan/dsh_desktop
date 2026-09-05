@@ -40,8 +40,11 @@ electron-builder NSIS）写的是另一套键——于是 0.4.x → 0.5.0 升级
 （本机实测取证：Electron 装在 `D:\app\dsh\DSH Desktop`，v0.5.0 却装到
 `D:\app\DSH Desktop`）。
 
-**Electron 线注册表事实**（`dsh-desktop/electron-builder.yml` +
-`uninstaller/DSH_Desktop_Uninstaller.cs` 推导，本机 `Log.log` 卸载记录实证）：
+**Electron 线注册表事实**（由 `dsh-desktop/electron-builder.yml` +
+`uninstaller/DSH_Desktop_Uninstaller.cs` 推导，本机 `Log.log` 卸载记录实证。
+两者已随 Electron 线下线从工作树删除，但事实仍成立（注册表键名不随源码移动），
+需核对原文时从历史取回：`git show 6ff0cc83^:dsh-desktop/electron-builder.yml`、
+`git show 02981194^:dsh-desktop/uninstaller/DSH_Desktop_Uninstaller.cs`）：
 
 | 键 | 名称 | 来源 |
 |----|------|------|

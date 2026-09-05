@@ -1,17 +1,21 @@
 // dsh-input-history — 终端式上下键命令历史回溯（DSH Desktop 配套插件）
 //
 // 浏览器半边（classic-script bundle，经 __ModuleLoader__.load 注册）：
-//   1. 经 conversation.input.left 槽位拿到 inputActions / input / session
-//      （与 dsh-file-drop 同款：sessions.provide 注入 inputActions + input，
-//       槽位 owner zone 注入 session），登记「当前会话环境」；
+//   1. 经 conversation.input.left 槽位拿到 inputActions 与一组快照 hook
+//      （当前内核只下发 hook —— useChat / useSession / useInput，不再直下
+//       input、session 快照对象），登记「当前会话环境」；
 //   2. 捕获阶段 keydown（document）拦截 ↑/↓：
 //        · 光标在输入框、空草稿、无 shift/ctrl/meta/alt 组合键时才回溯；
 //        · 回溯过程中 ↑/↓ 继续翻（草稿此时非空，靠「是否在回溯」状态放行）；
 //        · ↓ 越过最新历史回到空；
 //        · 用户一旦手动编辑（原生 input 事件，setDraft 不触发）即复位指针。
-//   3. 历史来源：优先本会话已发送的用户消息（session.chat 真实消息，挂载时
-//      播种）；发送瞬间经「包装 submit + 回车捕获」自建记录，保证最新一条
-//      立刻可回溯（连续重复去重，不重不漏）。
+//   3. 历史来源：优先本会话已发送的用户消息（节点表真实消息，一可读就播种）。
+//      节点表在当前内核是 ChatSnapshot —— 经 useChat 拿 {nodes, order}，文本在
+//      node.data.content；旧内核才是 SessionSnapshot.chat —— 经 useSession 拿，
+//      文本在 node.content。两条通道都试，非空者生效。只读旧通道时新内核永远
+//      读不到东西，上下键因此在任何会话里都翻不出历史（v0.6.2 实机报告，与
+//      dsh-message-rewind 同源的静默契约漂移）。发送瞬间经「包装 submit +
+//      回车捕获」自建记录，保证最新一条立刻可回溯（连续重复去重，不重不漏）。
 //   4. 按会话隔离：历史与导航指针都以 inputActions 为 key。
 //
 // 纯逻辑挂在 window.__dshInputHistoryCore（生产无副作用），供 node 测试套件
@@ -26,6 +30,17 @@
     return !!x && typeof x.get === 'function' && typeof x.forEach === 'function';
   }
 
+  /**
+   * 是否「可按 key 读的节点表」。两种都认：
+   *   · 旧内核 / 测试夹具 —— Map（get + forEach）；
+   *   · 当前内核 ChatNodeStore —— get + values()（没有 forEach！）。
+   * 只用 isMapLike 会把当前内核的节点表判为不可读（v0.6.2 实机报告）。
+   */
+  function isNodeStore(x) {
+    return !!x && typeof x.get === 'function'
+      && (typeof x.values === 'function' || typeof x.forEach === 'function');
+  }
+
   /** 内容块 → 纯文本（type:'text' 的块按序拼接；其余块忽略）。 */
   function contentText(content) {
     if (!Array.isArray(content)) return '';
@@ -38,19 +53,25 @@
   }
 
   /**
-   * 从会话快照提取本会话用户消息（真实历史，最旧→最新）。
-   * 不可读（旧内核 / 无 chat）返回 null；可读返回 string[]（跳过纯图片消息）。
+   * 从快照提取本会话用户消息（真实历史，最旧→最新）。
+   * 容器兼容两种：当前内核 ChatSnapshot `{ nodes, order }`，旧内核
+   * SessionSnapshot `{ chat: { nodes, order } }`。节点文本同样兼容两路：
+   * `node.data.content`（现在，conversation-node state 挂在 data 下）与
+   * `node.content`（旧）。不可读返回 null；可读返回 string[]（跳过纯图片消息）。
    */
-  function extractUserMessages(session) {
-    if (!session || !session.chat) return null;
-    var nodes = session.chat.nodes;
-    var order = session.chat.order;
-    if (!isMapLike(nodes) || !Array.isArray(order)) return null;
+  function extractUserMessages(snapshot) {
+    if (!snapshot) return null;
+    var chat = isNodeStore(snapshot.nodes) ? snapshot : snapshot.chat;
+    if (!chat) return null;
+    var nodes = chat.nodes;
+    var order = chat.order;
+    if (!isNodeStore(nodes) || !Array.isArray(order)) return null;
     var out = [];
     for (var i = 0; i < order.length; i++) {
       var node = nodes.get(order[i]);
       if (!node || node.kind !== 'user') continue;
-      var text = contentText(node.content);
+      var raw = node.content !== undefined ? node.content : node.data && node.data.content;
+      var text = typeof raw === 'string' ? raw : contentText(raw);
       if (text !== '') out.push(text);
     }
     return out;
@@ -147,6 +168,7 @@
   // 暴露纯逻辑供测试；生产无副作用。
   var core = {
     isMapLike: isMapLike,
+    isNodeStore: isNodeStore,
     contentText: contentText,
     extractUserMessages: extractUserMessages,
     createHistoryController: createHistoryController,
@@ -154,6 +176,23 @@
   if (typeof window !== 'undefined') {
     window.__dshInputHistoryCore = core;
   }
+
+  // ──────── 快照蒸馏（喂给 hook 的选择器：身份稳定、结果可比较） ────────
+
+  function distillUsers(snapshot) {
+    try {
+      var users = extractUserMessages(snapshot);
+      return users && users.length > 0 ? JSON.stringify(users) : '';
+    } catch (_e) { return ''; }
+  }
+
+  var CHAT_SELECTOR = function (snapshot) { return distillUsers(snapshot); };
+  var SESSION_SELECTOR = function (snapshot) { return distillUsers(snapshot && snapshot.chat); };
+  var INPUT_SELECTOR = function (snapshot) {
+    try {
+      return snapshot ? String(snapshot.phase || '') + '\u0000' + String(snapshot.draft == null ? '' : snapshot.draft) : '';
+    } catch (_e) { return ''; }
+  };
 
   // ───────── 运行时状态（按会话 inputActions 隔离） ─────────
   var controllerBySession = new Map();    // key -> controller（controller 是历史+指针的唯一数据源）
@@ -305,7 +344,7 @@
     listenersAttached = true;
   }
 
-  // ───────────────────────── 槽位注册（拿 inputActions/input/session） ─────────────────────────
+  // ───────────────────────── 槽位注册（拿 inputActions 与快照 hook） ─────────────────────────
 
   function attachSlot(ctx, react) {
     var useEffect = react.useEffect;
@@ -314,24 +353,38 @@
     function HistorySlot(props) {
       props = props || {};
       var inputActions = props.inputActions;
-      var input = props.input;       // input 状态快照（含 draft/phase/imageIds）
-      var session = props.session;   // 会话快照（含 chat.nodes/order）
+      var input = props.input;       // 旧内核直下的 input 快照（当前内核无此 prop）
+
+      // 节点表两条通道，hook 必须每次都无条件调用（条件化调用会打乱 React
+      // 的 hook 顺序）：useChat 是当前内核的 ChatSnapshot，useSession 是旧
+      // SessionSnapshot（其 chat 字段）；读到东西的那条生效。
+      var chatUsers = '';
+      var legacyUsers = '';
+      try { if (typeof props.useChat === 'function') chatUsers = props.useChat(CHAT_SELECTOR) || ''; } catch (_e) { chatUsers = ''; }
+      try { if (typeof props.useSession === 'function') legacyUsers = props.useSession(SESSION_SELECTOR) || ''; } catch (_e) { legacyUsers = ''; }
+      var usersJson = chatUsers || legacyUsers;
+
+      // input 快照：旧内核直接用 props.input；当前内核经 useInput 镜像回
+      // {draft, phase}（DOM 真值优先生效，这里只补 isMachineBusy 与回退路径）。
+      var inputMirror = '';
+      try { if (typeof props.useInput === 'function') inputMirror = props.useInput(INPUT_SELECTOR) || ''; } catch (_e) { inputMirror = ''; }
 
       var inputRef = useRef(input);
-      useEffect(function () { inputRef.current = input; });
+      useEffect(function () {
+        if (input) { inputRef.current = input; return; }
+        if (!inputMirror) return;
+        var at = inputMirror.indexOf('\u0000');
+        inputRef.current = {
+          phase: at < 0 ? inputMirror : inputMirror.slice(0, at),
+          draft: at < 0 ? '' : inputMirror.slice(at + 1),
+        };
+      });
 
       useEffect(function () {
         if (!inputActions || typeof inputActions.setDraft !== 'function' || typeof inputActions.submit !== 'function') return;
         var key = inputActions;
         var env = { key: key, inputActions: inputActions, inputRef: inputRef };
         activeEnv = env;
-
-        // 播种：首次挂载且历史为空时，用真实消息回填（已发送的旧消息）。
-        var ctrl = controllerFor(key);
-        if (ctrl.getHistory().length === 0) {
-          var real = extractUserMessages(session);
-          if (real && real.length > 0) ctrl.setHistory(real);
-        }
 
         // 发送按钮路径：包装 submit 记录草稿（回车路径由 keydown 捕获记录）。
         var orig = inputActions.submit;
@@ -346,6 +399,19 @@
         };
       }, [inputActions]);
 
+      // 播种：真实消息一可读就回填（已发过的旧消息）。每个 inputActions 只播一次，
+      // 切会话（identity 变化）重新播种；该会话已有自建记录时不覆盖。
+      var seededForRef = useRef(null);
+      useEffect(function () {
+        if (!inputActions || !usersJson || seededForRef.current === inputActions) return;
+        var users;
+        try { users = JSON.parse(usersJson); } catch (_e) { return; }
+        if (!users || users.length === 0) return;
+        var ctrl = controllerFor(inputActions);
+        if (ctrl.getHistory().length === 0) ctrl.setHistory(users);
+        seededForRef.current = inputActions;
+      }, [usersJson, inputActions]);
+
       return null;
     }
 
@@ -354,7 +420,7 @@
         return ctx.slots.register({
           name: 'conversation.input.left',
           id: 'dsh-input-history',
-          order: 5, // 无视觉元素；仅需登记到该槽位拿到 inputActions/input/session
+          order: 5, // 无视觉元素；仅需登记到该槽位拿到 inputActions 与 useChat/useInput
         }, HistorySlot);
       }, 'dsh-input-history: terminal-style input history');
     } catch (_e) { /* 槽位系统不可用（旧内核）：仅保留全局监听降级 */ }

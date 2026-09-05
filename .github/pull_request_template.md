@@ -19,8 +19,8 @@ PR 标题规范：[类型] 简述（关联 issue）
 
 - [ ] 已按测试规范补充或更新测试（`scripts/test/` 下 `unit-*.test.js` 或 `desktop-*.test.js`；**bug 修复必须带回归用例**）
 - [ ] 本地已通过语法预检：`node scripts/check-syntax.js`
-- [ ] 本地已通过全量单测：`npm test`（附实测结果，如 `357 pass / 0 fail / 2 skip`）
-- [ ] 已手动启动应用（`npm start`）验证相关功能路径
+- [ ] 本地已通过全量单测：`npm test`（附实测的 `tests / pass / fail / skipped` 四项计数；**`skipped` 比改动前增加必须说明原因** —— 靠 `skip` 遮住的守卫等于关掉的报警器）
+- [ ] 已手动启动应用验证相关功能路径（仓库根没有 npm start 脚本；跑桌面壳：`cd dsh-tauri/src-tauri/src/app && cargo run`）
 
 ## 影响面
 

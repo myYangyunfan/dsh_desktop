@@ -75,11 +75,12 @@ function patchPickerNativeExitCode() {
 // 2) 注册表驱动全链重放（canonical 引擎 applyAll）。
 // ---------------------------------------------------------------------------
 
-/** 构造「只命中 dev 树副本」的 applyAll ctx（home/userDataDir 不存在）。 */
-function buildDevCtx(log) {
+/** 构造「只命中 appDir 副本」的 applyAll ctx（home/userDataDir 不存在）。
+ *  appDir 默认 dev 树；打包门禁传 payload 根即可复用同一套布局解析。 */
+function buildDevCtx(log, appDir = root) {
   return {
     home: path.join(os.tmpdir(), 'dsh-postinstall-absent-home'),
-    appDir: root,
+    appDir,
     userDataDir: path.join(os.tmpdir(), 'dsh-postinstall-absent-userdata'),
     wslMode: false,
     log,

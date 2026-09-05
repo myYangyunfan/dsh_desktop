@@ -3,8 +3,8 @@
 // ta2-patch-transforms.test.js — 补丁 transform 字节翻转属性测试（TA2 测试加固）。
 //
 // 被测对象：scripts/lib/patch-adapters.js 导出的全部 transform*（含
-// runtime-patches / loader-isolation 的 re-export，26 个 transform 函数）
-// 与 rootAppliers 复合应用器（8 个）。
+// runtime-patches / loader-isolation 的 re-export；当前 39 个，数量只锁下界）
+// 与 rootAppliers 复合应用器（当前 17 个）。
 //
 // 方法一（字节翻转）：以 patch-target-resolver 声明的真实 vendor 落点文件
 // （node_modules/@deepseek-ai/<pkgRel>，即各补丁的目标源）为语料，每文件做
@@ -12,7 +12,7 @@
 //   · 不变量 1（不 panic）：任何翻转下 transform 不抛、返回合法三态；
 // 方法二（锚点重建）：vendor 落点均已应用补丁（锚点已被 NEW 文本替换），
 // 从 transform 实现模块源收割 FROM 锚点字面量，包进合法 JS 函数体合成
-// pristine 源，transform 命中 → changed 产物抽样 ≤30 份经子进程
+// pristine 源，transform 命中 → changed 产物逐个经子进程
 // node --check 必须全部通过（注入体保持语法完整性）。
 // 运行：node --test scripts/test/ta2-patch-transforms.test.js
 
@@ -21,6 +21,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
+const vm = require('node:vm');
 const { execFileSync } = require('node:child_process');
 
 const adapters = require('../lib/patch-adapters');
@@ -110,11 +111,21 @@ test(`属性：${TRANSFORM_NAMES.length} 个 transform × ${corpus.length} 份 v
 });
 
 // ---------------------------------------------------------------------------
-// 2) 锚点重建 pristine → changed 产物抽样 ≤30 份经 node --check
+// 2) 锚点重建 pristine → changed 产物逐个经 node --check
 // ---------------------------------------------------------------------------
-test('属性：changed 产物抽样（≤30 份，锚点重建 pristine）经 node --check 全部通过', { timeout: 180_000 }, () => {
-  // 从 transform 实现模块源收割字符串常量（FROM 锚点 / 注入体），eval 反转义
-  //（仅对仓库自身源码的引号串求值）；包进合法 JS 函数体合成 pristine。
+test('属性：changed 产物抽样（锚点重建 pristine）经 node --check 全部通过', () => {
+  // 代价纪律（本条用例曾经把整套冻住 45+ 分钟，教训写在这儿）：
+  //   旧写法对「每个 transform × 每条收割字面量」都起一次 `node --check` 子进程
+  //   （Windows 实测 90ms/次）。transform 从 26 涨到 39、字面量涨到 1077 后，
+  //   需要 37471 次 spawn ≈ 56 分钟；而 39 个 transform 里有 33 个在这套合成
+  //   pristine 上永不命中，等于把整张字面量表逐条重扫 33 遍。
+  //   更要紧的是：用例上写的 { timeout: 180_000 } 对**同步**函数体无效 ——
+  //   execFileSync 占死事件循环，定时器根本没机会触发（已实测：timeout:2000 的
+  //   同步用例跑 15s 照样判绿）。所以护栏不能挂在选项上，必须在体内自计。
+  //   现口径：可解析性用进程内 vm.Script 预筛一次（并先用一对控制样本证明它与
+  //   `node --check` 同判），子进程只用于最终选出的 changed 产物（每个 transform 1 份）。
+  const BUDGET_MS = 45_000;
+  const tStart = Date.now();
   const IMPL_FILES = ['../lib/patch-adapters.js', '../lib/runtime-patches.js', '../lib/loader-isolation.js', '../../profile-bundle-heal.js'];
   const literals = [];
   for (const rel of IMPL_FILES) {
@@ -131,33 +142,66 @@ test('属性：changed 产物抽样（≤30 份，锚点重建 pristine）经 no
   assert.ok(literals.length >= 80, '锚点收割数量下界，实际 ' + literals.length);
   const wrap = (lit) => 'function __ta2__(a, b, c, options, settings, ctx, event, node, hooks, sctx, entry) {\n"ta2-anchor";\n' + lit + '\n}\n';
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ta2-patch-'));
+  /** 子进程权威判：node --check（只在最终产物上用，不进内层循环）。 */
   const checkOk = (src) => {
     const f = path.join(tmp, 'c.js');
     fs.writeFileSync(f, src, 'utf8');
     try { execFileSync(process.execPath, ['--check', f], { stdio: 'pipe' }); return true; } catch { return false; }
   };
-  let checked = 0;
+  /** 进程内语法判：与 node --check 同一套解析器，但不必付进程创建的钱。 */
+  const parseOk = (src) => { try { new vm.Script(src, { filename: 'ta2.js' }); return true; } catch { return false; } };
+  // 控制组：换判据必须先证明两者同判，否则「省下子进程」这一步就是白省的。
+  // 不拿手写片段当控制样本：第一版写了 'const a = 1;'，而包装函数形参就叫 a
+  // ——函数体内 const a 与形参重名本就是语法错，vm.Script 判对了、我的断言判错了。
+  // 改成拿【真实语料】逐条对答，并要求“同判为真”与“同判为假”各至少一例，
+  // 避免“两个判据一样地错”也算通过。
+  const ctlStep = Math.max(1, Math.floor(literals.length / 7));
+  const ctlSamples = literals.filter((_, i) => i % ctlStep === 0).slice(0, 7);
+  let agreeTrue = 0; let agreeFalse = 0;
+  for (const lit of ctlSamples) {
+    const p = wrap(lit);
+    const byVm = parseOk(p); const byChild = checkOk(p);
+    assert.equal(byVm, byChild, '控制组失败：vm.Script 与 node --check 对同一段判负不同：'
+      + JSON.stringify(lit.slice(0, 48)));
+    if (byVm) agreeTrue++; else agreeFalse++;
+  }
+  assert.ok(agreeTrue >= 1 && agreeFalse >= 1,
+    '控制组无效力：真实语料样本里没同时出现「可解析」与「不可解析」（true=' + agreeTrue + ' false=' + agreeFalse + '）');
+  // 预筛：整张表只做一遍可解析性判定，而不是 transform 数 × 字面量数。
+  const pristineOf = new Map();
+  for (const lit of literals) { const p = wrap(lit); if (parseOk(p)) pristineOf.set(lit, p); }
+  assert.ok(pristineOf.size >= 20, '可解析 pristine 至少 20 份，实际 ' + pristineOf.size);
+
+  let checked = 0; let misses = 0; let spawns = 0;
   try {
     for (const name of TRANSFORM_NAMES) {
-      if (checked >= 30) break;
+      if (Date.now() - tStart > BUDGET_MS) {
+        assert.fail('本用例自检预算 ' + BUDGET_MS + 'ms 用尽于 ' + name + '（已产样 ' + checked
+          + ' 份、spawn ' + spawns + ' 次）—— 同步用例的 { timeout } 不会生效，故必须由体内预算兜底');
+      }
       const fn = adapters[name];
-      for (const lit of literals) {
-        const pristine = wrap(lit);
-        // 锚点片段常是不完整语句（未闭合括号）：仅当 pristine 自身可解析时，
-        // changed 产物才必须同样可解析（transform 不得引入语法破坏）。
-        if (!checkOk(pristine)) continue;
+      let hit = false;
+      for (const [lit, pristine] of pristineOf) {
         let out;
         try { out = fn(pristine, 't.js'); } catch { continue; }
-        if (out.status !== 'changed' || typeof out.src !== 'string') continue;
-        assert.ok(checkOk(out.src), name + ' changed 产物必须保持可解析（pristine 已通过 node --check）');
+        if (!out || out.status !== 'changed' || typeof out.src !== 'string') continue;
+        assert.ok(checkOk(out.src), name + ' changed 产物必须保持可解析（pristine 已通过语法判定）');
+        spawns++;
         checked++;
+        hit = true;
         break; // 每个 transform 取 1 份样本
       }
+      if (!hit) misses++; // 合成 pristine 命中不了它，属覆盖面事实，不装看不见
     }
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
   assert.ok(checked >= 5, '至少 5 个 transform 产出「pristine 可解析」的 changed 样本并通过 node --check，实际 ' + checked);
+  assert.ok(checked === spawns, '产样数与子进程数必须一一对应（否则内层循环又开始滥 spawn）：'
+    + checked + ' vs ' + spawns);
+  // 诚实口径：这套合成 pristine 只能覆盖一部分 transform，剩下的逐条点名计数。
+  assert.ok(misses <= TRANSFORM_NAMES.length,
+    '产样 ' + checked + ' / 未命中 ' + misses + ' / 合计 ' + TRANSFORM_NAMES.length);
 });
 
 // ---------------------------------------------------------------------------

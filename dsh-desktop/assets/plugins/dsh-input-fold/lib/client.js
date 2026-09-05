@@ -3,8 +3,8 @@
 // 浏览器半边（classic-script bundle，经 __ModuleLoader__.load 注册）：
 //   1. 定位 user 消息块：内核会话把每个节点渲染为
 //      div.flowItem[data-chat-flow-kind="user"][data-chat-anchor-key]
-//        └─ div.userRow[data-time-hover-root]
-//             └─ div.userStack
+//        └─ div.userRow[data-time-hover-root]   （旧内核；当前内核该属性已删除，
+//             └─ div.userStack                   仅保留 class 词元 userRow）
 //                  └─ div.bubble（[class*="bubble"]）—— 纯文本提示词所在
 //      （参见 @deepseek-ai/dsh-client-ui-conversation/lib/client.js 的
 //      ChatNodeSeat / UserStyleBubble；图片渲染在 bubble 之外的 userStack，
@@ -149,7 +149,14 @@
   function ensureToggleButton(row) {
     if (!row || typeof row.querySelector !== 'function') return;
     if (row.querySelector('[' + TOGGLE_ATTR + ']')) return;
-    var host = row.querySelector('[data-time-hover-root]') || row;
+    // dsh-compat:hover-root-fallback —— [data-time-hover-root] 在当前内核已被删除
+    // （实机命中 0，见行锚说明），直接退到 row 会把「收起」按钮甩到整行末尾
+    // （动作条之下），与原来贴在 userStack 后面的位置不一致。中间垫一档
+    // class 词元 userRow：哈希前缀会变、局部名不会变，与本文件 [class*="bubble"]
+    // 同一套判定风格。
+    var host = row.querySelector('[data-time-hover-root]')
+      || row.querySelector('[class*="userRow"]')
+      || row;
     if (!host || typeof host.appendChild !== 'function') return;
     var btn = document.createElement('button');
     btn.type = 'button';

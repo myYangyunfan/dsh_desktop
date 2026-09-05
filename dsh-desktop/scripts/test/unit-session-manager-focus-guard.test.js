@@ -185,6 +185,97 @@ test('恢复：空值 textarea（selection 不支持）不抛异常', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 当前内核：composer 是 Lexical contenteditable div（不再有 <textarea>）
+// ---------------------------------------------------------------------------
+function makeEditable(overrides) {
+  const el = {
+    tagName: 'DIV',
+    isContentEditable: true,
+    textContent: '回退实测',
+    disabled: false,
+    readOnly: false,
+    focusCalls: 0,
+    _attrs: { contenteditable: 'true' },
+    getAttribute(name) { return name in this._attrs ? this._attrs[name] : null; },
+    focus(opts) { this.focusCalls += 1; this.focusOpts = opts; }
+  };
+  return Object.assign(el, overrides);
+}
+
+/** 造一个「新内核」document：wrap 里只有 contenteditable，没有 textarea。 */
+function makeDocV2(opts = {}) {
+  const field = opts.field === undefined ? makeEditable() : opts.field;
+  const ranges = [];
+  const wrap = {
+    querySelector: (sel) => {
+      if (sel === 'textarea') return null;
+      if (sel === '[data-composer-input]') return field.getAttribute('contenteditable') === 'false' ? null : field;
+      if (sel === '[contenteditable]') return field;
+      return null;
+    }
+  };
+  return {
+    body: {},
+    documentElement: {},
+    activeElement: opts.activeElement === undefined ? null : opts.activeElement,
+    querySelector: (sel) => (sel === '[data-input-scroll]' ? wrap : null),
+    createRange: () => ({
+      _collapsed: null,
+      selectNodeContents(el) { this.node = el; },
+      collapse(toStart) { this._collapsed = !toStart; }
+    }),
+    defaultView: {
+      getSelection: () => ({
+        removeAllRanges() { ranges.push('remove'); },
+        addRange(r) { ranges.push(r); }
+      })
+    },
+    _ranges: ranges
+  };
+}
+
+test('恢复（新内核）：只有 contenteditable 时仍应补焦 —— 修前此处恒返回 false', () => {
+  const field = makeEditable();
+  const doc = makeDocV2({ field, activeElement: { tagName: 'BUTTON' } });
+  assert.equal(restoreComposerFocus(doc), true, 'composer 换成 contenteditable 后补焦不得静默失效');
+  assert.equal(field.focusCalls, 1);
+  assert.equal(field.focusOpts.preventScroll, true);
+  const added = doc._ranges.filter((r) => r !== 'remove');
+  assert.equal(added.length, 1, '应经 Range 把光标放到末尾');
+  assert.equal(added[0]._collapsed, true, 'collapse(false) = 置末尾');
+  assert.equal(added[0].node, field, 'Range 应落在 composer 自身');
+});
+
+test('恢复（新内核）：contenteditable="false"（禁用/机器忙）→ 不抢焦点', () => {
+  const field = makeEditable({ getAttribute(name) { return name === 'contenteditable' ? 'false' : null; } });
+  const doc = makeDocV2({ field });
+  // wrap 按属性契约查不到可编辑元素 → 等价于「无输入框」
+  assert.equal(restoreComposerFocus(doc), false);
+  assert.equal(field.focusCalls, 0);
+});
+
+test('恢复（新内核）：焦点已在 contenteditable 上 → 不重复抢焦', () => {
+  const field = makeEditable();
+  const doc = makeDocV2({ field, activeElement: field });
+  assert.equal(restoreComposerFocus(doc), false);
+  assert.equal(field.focusCalls, 0);
+});
+
+test('恢复：wrap 里既无 textarea 也无可编辑区（非对话视图）→ 不动作', () => {
+  const wrap = { querySelector: () => null };
+  const doc = { body: {}, documentElement: {}, activeElement: null, querySelector: (sel) => (sel === '[data-input-scroll]' ? wrap : null) };
+  assert.equal(restoreComposerFocus(doc), false);
+});
+
+test('恢复：桩 document 无 createRange（旧宿主/测试环境）→ 仍补焦，不抛异常', () => {
+  const field = makeEditable();
+  const wrap = { querySelector: (sel) => (sel === 'textarea' ? null : field) };
+  const doc = { body: {}, documentElement: {}, activeElement: null, querySelector: () => wrap };
+  assert.equal(restoreComposerFocus(doc), true);
+  assert.equal(field.focusCalls, 1);
+});
+
+// ---------------------------------------------------------------------------
 // 装配冒烟：导出形状防止重构漂移
 // ---------------------------------------------------------------------------
 test('装配：client 导出 apply/inject/sessions 注入与 focusGuard 纯函数', () => {

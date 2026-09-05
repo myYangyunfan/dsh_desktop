@@ -297,7 +297,7 @@ dependencies = [
 
 [[package]]
 name = "bridge"
-version = "0.6.0"
+version = "0.6.2"
 dependencies = [
  "serde",
 ]
@@ -858,7 +858,7 @@ dependencies = [
 
 [[package]]
 name = "dsh-tauri-app"
-version = "0.6.0"
+version = "0.6.2"
 dependencies = [
  "bridge",
  "embed-resource",
@@ -1034,7 +1034,7 @@ dependencies = [
 
 [[package]]
 name = "fence"
-version = "0.6.0"
+version = "0.6.2"
 
 [[package]]
 name = "field-offset"
@@ -2024,7 +2024,7 @@ dependencies = [
 
 [[package]]
 name = "kernel-process"
-version = "0.6.0"
+version = "0.6.2"
 dependencies = [
  "libc",
  "windows-sys 0.59.0",
@@ -2738,7 +2738,7 @@ dependencies = [
 
 [[package]]
 name = "poc-sidecar-spawn"
-version = "0.6.0"
+version = "0.6.2"
 dependencies = [
  "kernel-process",
 ]
@@ -2804,7 +2804,7 @@ checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
 
 [[package]]
 name = "preview-server"
-version = "0.6.0"
+version = "0.6.2"
 
 [[package]]
 name = "proc-macro-crate"
@@ -3456,7 +3456,7 @@ dependencies = [
 
 [[package]]
 name = "session-watcher"
-version = "0.6.0"
+version = "0.6.2"
 
 [[package]]
 name = "sha2"
@@ -3471,7 +3471,7 @@ dependencies = [
 
 [[package]]
 name = "shell-core"
-version = "0.6.0"
+version = "0.6.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -5360,7 +5360,7 @@ dependencies = [
 
 [[package]]
 name = "wsl-backend"
-version = "0.6.0"
+version = "0.6.2"
 dependencies = [
  "serde_json",
 ]

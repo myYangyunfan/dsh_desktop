@@ -3,8 +3,9 @@
 // TA3 链路集成测试：boot 链全链（applyAll → composition-integrity CLI →
 // fault-isolation preflight / compositionPreflight 一条龙）。
 //
-// 手法：pristine 源取自仓库根 .tmp-rc2-stage/node_modules（rc2 装配产物，
-// 未被任何补丁碰过）；拷入两个临时目录充当 appDir 与 home（绝不碰真实
+// 手法：pristine 源取自 pristine-kernel-roots 给出的「未被任何补丁碰过」的内核
+// 闭包树（历史上是仓库根 .tmp-rc2-stage，现为 .tmp-kernel/.consumer-*/node_modules）；
+// 拷入两个临时目录充当 appDir 与 home（绝不碰真实
 // ~/.dsh 与在用实例），跑生产 applyAll（48 补丁注册表全量）+ 只读预检 +
 // 关键服务修复探测，断言：
 //   1. 一遍：48 补丁全部执行、changed > 0、零 errors；
@@ -26,18 +27,22 @@ const { promisify } = require('node:util');
 
 const execFileAsync = promisify(execFile);
 
-const repoRoot = path.resolve(__dirname, '..', '..', '..'); // dsh 仓库根（.tmp-rc2-stage）
 const desktopRoot = path.resolve(__dirname, '..', '..'); // dsh-desktop
-const pristineNm = path.join(repoRoot, '.tmp-rc2-stage', 'node_modules');
+// pristine 根：旧实现硬编码 .tmp-rc2-stage，那株一次性装配树被清后本文件两条
+// 用例如注释所说「skip」—— 全链一条龙是整套里最接近真实启动的守卫，静默停摆
+// 比红更糟，故改为多候选根探测。
+const { firstPristineRoot, describePristineRoots } = require('../lib/pristine-kernel-roots');
+const pristineNm = firstPristineRoot();
 const { applyAll } = require('../integration/patch-runner');
 const { PATCH_SPECS } = require('../lib/patch-registry');
 const { preflight, compositionPreflight } = require('../integration/fault-isolation');
 const { checkServicePresence } = require('../integration/composition-integrity');
 
-/** pristine 源缺席时跳过（rc2 stage 是装配产物，可能被清理）。 */
+/** pristine 源缺席时跳过（候选根都是构建/装配产物，可能被清理）。 */
 function hasPristine() {
-  return fs.existsSync(path.join(pristineNm, '@deepseek-ai', 'dsh-base', 'cordis.patch.yml'));
+  return !!pristineNm && fs.existsSync(path.join(pristineNm, '@deepseek-ai', 'dsh-base', 'cordis.patch.yml'));
 }
+const SKIP_NO_PRISTINE = '无可用 pristine 内核闭包树（查过：' + describePristineRoots() + '）';
 
 /** 组装临时 appDir + home（home 的 fallback credentials junction 故意缺失，
  * 供 compositionPreflight 修复场景）。 */
@@ -70,13 +75,13 @@ async function buildTempRoots(t) {
   return { root, appDir, home, ctx, logs };
 }
 
-test('boot 链一条龙：applyAll(57) → composition-integrity → preflight → 二遍幂等', { skip: !hasPristine() && '缺 .tmp-rc2-stage pristine 源' }, async (t) => {
+test('boot 链一条龙：applyAll(58) → composition-integrity → preflight → 二遍幂等', { skip: !hasPristine() && SKIP_NO_PRISTINE }, async (t) => {
   const { appDir, home, ctx } = await buildTempRoots(t);
 
-  // ---- 1. 一遍 applyAll：57 补丁全执行、有落盘、零 errors ----
+  // ---- 1. 一遍 applyAll：58 补丁全执行、有落盘、零 errors ----
   const r1 = applyAll(ctx);
-  assert.equal(r1.total, 57, `注册表应有 57 个补丁（实际 ${r1.total}）`);
-  assert.equal(PATCH_SPECS.length, 57, 'PATCH_SPECS 与编排 total 一致');
+  assert.equal(r1.total, 58, `注册表应有 58 个补丁（实际 ${r1.total}）`);
+  assert.equal(PATCH_SPECS.length, 58, 'PATCH_SPECS 与编排 total 一致');
   assert.ok(r1.changed > 0, `pristine 源一遍必须有写入（实际 changed=${r1.changed}）`);
   assert.deepEqual(r1.errors, [], `一遍不得有 errors：${JSON.stringify(r1.errors)}`);
   // degrade/fatal 档补丁的 anchor-missing 分流进 degraded（设计语义：降级告警
@@ -125,7 +130,7 @@ test('boot 链一条龙：applyAll(57) → composition-integrity → preflight �
   const r2 = applyAll(ctx);
   // total = 处理的 spec 数（含 target-absent，applyAll 内每 spec 无条件 +1），
   // 与一遍同源必相等，均等于 PATCH_SPECS.length；二遍只是 changed 归零。
-  assert.equal(r2.total, 57, `二遍 total 应与一遍一致（实际 ${r2.total}）`);
+  assert.equal(r2.total, 58, `二遍 total 应与一遍一致（实际 ${r2.total}）`);
   assert.deepEqual(r2.errors, [], `二遍不得有 errors：${JSON.stringify(r2.errors)}`);
   assert.equal(r2.changed, 0, `二遍应幂等（一遍 changed=${changedFirst}，二遍 changed=${r2.changed}）`);
 
@@ -136,7 +141,7 @@ test('boot 链一条龙：applyAll(57) → composition-integrity → preflight �
   assert.deepEqual(k1b, { checked: ['credentials'], repaired: [], broken: [] }, '健康态幂等');
 });
 
-test('composition-integrity 负向：挖掉关键包 → CLI 退出码非 0', { skip: !hasPristine() && '缺 .tmp-rc2-stage pristine 源' }, async (t) => {
+test('composition-integrity 负向：挖掉关键包 → CLI 退出码非 0', { skip: !hasPristine() && SKIP_NO_PRISTINE }, async (t) => {
   const { appDir } = await buildTempRoots(t);
   fs.rmSync(path.join(appDir, 'node_modules', '@deepseek-ai', 'dsh-credentials-local'), { recursive: true, force: true });
   const report = checkServicePresence(appDir);

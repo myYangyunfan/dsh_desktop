@@ -1,5 +1,85 @@
 # Changelog — DSH Desktop（Tauri 版，主线架构 v0.5.0 起）
 
+# DSH Desktop v0.6.2 — 全平台
+
+> 本版本两条主线：① 单项根治「多模态模型说我发不了图片」——设置页模型卡新增
+> 逐行「支持图片输入」勾选（boot 链运行时补丁 `model-image-input`，补丁注册表
+> 57→58）；② 内核 composer（输入区）换代漂移整族修复——Lexical contenteditable
+> 取代旧 textarea/草稿坐标后，9 个依赖旧 DOM/props 契约的配套插件静默失效，
+> 全部迁移到新契约并新增契约新鲜度守卫；顺带根治 sync CLI 把本机残留依赖树
+> 整树分发导致的同步卡死。
+
+## 🐛 重点：多模态模型发图被拒（MODEL_DOES_NOT_SUPPORT_IMAGES）
+
+- **根因**：靶包 `dsh-client-ui-settings-models` 的模型编辑区只暴露 contextWindow /
+  maxTokens 两格，**没有任何模态控件** → `llm-pi-ai.providers.<route>.models[]` 里
+  永远不写 `input` → pi-ai 解析 `declaredInput(entry.input) ?? base?.input ??
+  [...request.defaultInput]` 恒回落 `DEFAULT_INPUT = ["text"]`，并以「已声明」形态
+  回报 `inputModalities`。两道连锁：① 会话控制器门槛直接抛
+  `MODEL_DOES_NOT_SUPPORT_IMAGES`（UI 文案「当前模型不支持图片」）；② 即便绕过，
+  `dsh-llm` 的 `projectImagesForTextModel` 会把图片替换成文字占位，模型遂答
+  「我看不到图」。上游的保守默认是有意设计，不能放宽全局 defaultInput——那会让
+  真正的纯文本模型收到图片并吃 4xx。
+- **修法**：新增 root 补丁 `model-image-input`（order 248，靶
+  `dsh-client-ui-settings-models/lib/client.js`），在模型卡 grid 追加第三格 checkbox：
+  勾选写显式 `input: ["text", "image"]`、取消写显式 `input: ["text"]`（刻意不删键，
+  避免「继承上游声明」的语义歧义）。写回链路零改动——pathOps 是通用 key 级 diff、
+  整组 models 一次 set，不裁未知字段。顺带修 `adopt()`：该字段白名单原本把端点在
+  「获取模型」里自报的模态静默丢弃，现保留 image，从目录挑选即自动勾上。
+- **为什么只有「图片」没有「视频」**：pi-ai 的 `MODALITIES` 枚举仅 `text` / `image`，
+  写 `video` 会被 zod 校验直接拒，故不提供视频勾选（避免做出一个存不上的开关）。
+- **兜底路径**：`dsh-vision` 插件在网关侧把图片转述为文字，适合「不想逐个勾选」或
+  该模型确实不支持视觉输入的场景。
+
+## 🐛 重点 2：composer 换代漂移整族修复（9 插件静默失效）
+
+- **根因**：内核输入区从 textarea/草稿坐标换代为 Lexical contenteditable，且槽位
+  props 面收敛为只下发 hooks（useSession/useInput/useChat）——此前一批插件读取的
+  `props.session` / `props.input` 快照恒为 undefined、textarea 原型 setter 打不中
+  节点，全部静默失效（无报错、功能直接消失）。同一根因在 9 个插件上各炸各的，
+  本版本全部迁移到新契约（每处均对修复前 HEAD 做交叉验证，证明确有捕获力）：
+- `dsh-message-rewind`「编辑并回退」：useChat 优先 + useSession 旧形状回退，
+  两个 hook 无条件调用保 hook 顺序（修复前只能弹 message context unavailable）；
+- `dsh-input-history`：同族迁移（useChat/useInput）；
+- `dsh-file-drop`：useInput 镜像 + contenteditable 注入 + 草稿坐标系重锚；
+- `dsh-image-paste`：textarea 原型 setter 打在 contenteditable 上、降级通道静默
+  死 → 改注入路径；
+- `dsh-navbar`：行枚举改锚 `[data-chat-flow-kind]`（保留旧属性优先）；
+- `dsh-conversation-tweaks`：摘掉 4 个哈希类，全改属性契约；
+- `dsh-input-fold`：收起按钮宿主垫 userRow 词元（内核侧新增 2 条用例）；
+- `dsh-offpeak`：高峰拦截两代修复（输入面/读草稿/清草稿三助手）；
+- `dsh-vision`：件引用覆盖用户草稿（input 快照不再下发）修复。
+
+## 🐛 重点 3：sync CLI 把本机残留依赖树整树分发（同步卡死数分钟）
+
+- **根因**：`syncCompanionFiles` 的同步子目录清单含 node_modules——dev 树上插件
+  目录里 pnpm/npm install 留下的 gitignored 残留（如 dsh-better-sidebar 的 1.3 万
+  文件 junction 巨树）会被整树拷进目标 profile：单次同步烧数分钟，配套插件同步
+  与 WSL/Linux 侧 CLI 全部受害。与打包侧 stage-payload 的残留剔除同族缺陷，
+  当时只守了打包面、同步面漏防。
+- **修法**：判据改声明式——配套插件唯一数据源新增 `shipsNodeModules` 标志，仅
+  git 跟踪的正件依赖树（dsh-hub / graph-memory / billion-context-dsh）随同步
+  分发，其余插件源里的 node_modules 一律视为本机残留。git 探针方案被否决并记录：
+  收口环境下 git 探测 ENOENT 会让判据静默回退「宁同步」，防线形同虚设——
+  环境依赖探针不可靠，用声明式标志。
+
+## ✅ 验证
+
+- 新增单测 `unit-patch-model-image-input.test.js`（13 用例）：pristine 夹具锚点唯一性 /
+  changed→already 幂等 / UI 双锚点半失配不落半成品 / 半补丁补全 / locale 末行尾逗号
+  事故回归位 / `imageInputOf` 与 `adopt()` 真值表（含字符串与数字脏值不致误判或抛错）/
+  dry-run 零落盘。
+- TA6 基线矩阵、TA3 boot 链（applyAll 总量）、TA6 回滚审计（root 应用器数 16→17）
+  计数同步至 58；dev 树落盘 changed=1、二次幂等 changed=0、产物 `node --check` 通过。
+- composer 漂移族：契约新鲜度守卫 8/8 绿（对 HEAD 交叉验证红 5 处，证明有捕获力）；
+  槽位 props 契约对账守卫（含夹具自证）、「编辑并回退」端到端实测（分叉子会话、
+  前缀完整、重发编辑件语义正确）。
+- sync CLI 残留防线：配套插件同步 5/5 绿（每用例 5 分钟超时 → 约 7 秒）；companion
+  族 33/33；修复前红片组合并发复验 65/65；两条反向契约用例锁新语义。
+- 工程侧：测试套件卡死根治（属性行变换用例 56 分钟→17 秒，体内自计预算替代对
+  同步函数无效的 `{timeout}` 选项）；8 枚历史退役补丁函数逐枚定性并规范【休眠】
+  标注，新增守卫钉住「写了但永远跑不到」的死补丁类。
+
 # DSH Desktop v0.6.1 — 全平台
 
 > 本版本聚焦「历史对话完整回溯」这一核心能力的两项主诉根治，均为 boot 链运行时

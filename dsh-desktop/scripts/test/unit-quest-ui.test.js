@@ -3,6 +3,7 @@
 //   T1 partitionItems：一期恒把所有下标归入 quests；空数组返回两个空数组；
 //   T2 fingerprint：相同结构摘要输出相同字符串；自有节点存在位翻转时输出变化；
 //   T3 CSS 作用域扫描：主题 CSS 每个选择器以 body[data-dsh-quest-ui] 开头；
+//   T3a 切分器自身回归：顶层逗号才切，:has()/:is() 括号内逗号不得切；
 //   T4 源码体积：client.js + index.js + package.json 合计 ≤ 60KB（P6）；
 //   T5 companion 登记：COMPANION_PLUGINS 存在 quest-ui 条目。
 // 评估方式照 verify-balance-dock.cjs：vm + 最小 window stub，评估 client.js
@@ -69,6 +70,42 @@ test('附：二期预留接口一期恒 null / 分组文案常量', () => {
 });
 
 // ---------- T3：CSS 作用域扫描 ----------
+/** 按「顶层逗号」切选择器组。括号内的逗号属于函数型选择器
+ *  （:has() / :not() / :is() / :where()）的选择器列表，不是并列选择器的
+ *  分隔符：朴素 split(',') 会把 :has(textarea, [data-composer-input]) 误切成
+ *  两段，把合法的整作主题域内的规则报成越界。 */
+function splitTopLevelSelectors(selector) {
+	const parts = [];
+	let depth = 0;
+	let cur = '';
+	for (const ch of selector) {
+		if (ch === '(') depth += 1;
+		else if (ch === ')') depth -= 1;
+		if (ch === ',' && depth === 0) { parts.push(cur); cur = ''; continue; }
+		cur += ch;
+	}
+	parts.push(cur);
+	return parts.map((p) => p.trim()).filter((p) => p !== '');
+}
+
+test('T3a 选择器切分：顶层逗号才切，括号内逗号不切', () => {
+	assert.deepEqual(
+		splitTopLevelSelectors('body[data-dsh-quest-ui] a:has(textarea, [data-composer-input])'),
+		['body[data-dsh-quest-ui] a:has(textarea, [data-composer-input])'],
+		':has() 内的列表不得被切开'
+	);
+	assert.deepEqual(
+		splitTopLevelSelectors('body[data-dsh-quest-ui] a,body[data-dsh-quest-ui] b{'),
+		['body[data-dsh-quest-ui] a', 'body[data-dsh-quest-ui] b{'],
+		'顶层逗号应切开'
+	);
+	assert.deepEqual(
+		splitTopLevelSelectors('body[x] :is(a, b),body[x] c:where(p, q),body[x] d'),
+		['body[x] :is(a, b)', 'body[x] c:where(p, q)', 'body[x] d'],
+		'混合形态'
+	);
+});
+
 test('T3 主题 CSS：每条选择器以 body[data-dsh-quest-ui] 开头', () => {
 	const m = clientSrc.match(/const CSS = \[([\s\S]*?)\]\.join\(""\)/);
 	assert.ok(m, 'client.js 中应存在 const CSS = [...].join("") 主题常量');
@@ -82,8 +119,10 @@ test('T3 主题 CSS：每条选择器以 body[data-dsh-quest-ui] 开头', () => 
 		// @keyframes 除外（本插件未使用，防御性保留该例外）
 		if (selector.startsWith('@keyframes')) continue;
 		// 逗号并列的复合选择器逐段检查（::-webkit-scrollbar 伪元素规则的
-		// 前缀变体同样以 body[data-dsh-quest-ui] 开头，主断言直接覆盖）
-		for (const part of selector.split(',')) {
+		// 前缀变体同样以 body[data-dsh-quest-ui] 开头，主断言直接覆盖）。
+		// 只切顶层逗号：:has(textarea, [data-composer-input]) 里的逗号属于
+		// 函数型选择器的列表，朴素 split(',') 会把它误报成越界。
+		for (const part of splitTopLevelSelectors(selector)) {
 			assert.ok(
 				part.trim().startsWith('body[data-dsh-quest-ui]'),
 				'选择器未以 body[data-dsh-quest-ui] 开头: ' + part

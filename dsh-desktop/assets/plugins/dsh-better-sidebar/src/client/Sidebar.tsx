@@ -37,11 +37,12 @@ import { appendToDraft } from './conversation-draft.ts'
 import {
   BOTTOM_MIN, PANEL_MIN, maxPanelWidthFor, agentUuidOf, firstLeaf, isAgentTabId, leafWithTab, migrateBottomTabs, moveTab, moveTabToEdge, openDiffTab,
   reconcileAgentTerminals,
-  resizeSplitIn, setBottomHeight, setWidth, toggleBottomPanel, toggleExpanded, togglePanel,
+  resizeSplitIn, setBottomHeight, setExplorerWidth, setWidth, toggleBottomPanel, toggleExpanded, toggleExplorer, togglePanel,
   type DropZone, type SidebarState, type SidebarStore, type SidebarTab, type SplitNode,
 } from './state.ts'
 import { IconPanelBottomOutline16, IconPanelRightOutline16 } from './icons.tsx'
 import { Workbench, type WorkbenchActions } from './split-pane.tsx'
+import { ExplorerRail, ExplorerRailCollapsed } from './ExplorerRail.tsx'
 import { useNarrowViewport } from './breakpoints.ts'
 import { parseDesktopEnv } from './desktop-env.ts'
 import { getWcoSnapshot, subscribeWco } from './wco.ts'
@@ -1184,6 +1185,34 @@ export function Sidebar(props: { ctx: Context; store: SidebarStore }) {
             />
           )}
         <div className={css.panelBody}>
+          {/*
+            The persistent Explorer rail: the file tree lives to the LEFT of
+            the tabbed workbench (VSCode's sidebar), decoupled from any tab so
+            it stays put while files open as tabs beside it. Every open is a
+            fixed, per-path-deduped tab (no transient preview slot to overwrite
+            the last file). Offered whenever the editor tab type is enabled;
+            the rail collapses to a thin strip, so a narrow drawer can reclaim
+            the full width. The rail is OUTSIDE the split tree, so activePane
+            always resolves to a workbench pane.
+          */}
+          {snapshot.prefs.tabsEnabled['editor'] !== false && (
+            state.explorerOpen ? (
+              <ExplorerRail
+                ctx={ctx}
+                store={store}
+                sessionId={sessionId}
+                cwd={cwd}
+                expanded={state.expanded}
+                onToggleDir={(path) => { store.reduce(s => toggleExpanded(s, path)) }}
+                onReferenceFile={referenceInChat}
+                width={state.explorerWidth}
+                onResize={(width) => { store.reduce(s => setExplorerWidth(s, width)) }}
+                onCollapse={() => { store.reduce(toggleExplorer) }}
+              />
+            ) : (
+              <ExplorerRailCollapsed onExpand={() => { store.reduce(toggleExplorer) }} />
+            )
+          )}
           <Workbench
             state={state}
             newTabOptions={buildNewTabOptions(state, ctx, { sessionId, cwd })}

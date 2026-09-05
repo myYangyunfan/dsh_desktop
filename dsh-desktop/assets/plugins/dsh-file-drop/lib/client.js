@@ -25,6 +25,14 @@
 //   4. 全部交互 try/catch 静默降级（插件惯例），失败经就地红字/浮动 toast
 //      给用户可见错误文案。
 //
+// 两代内核的读侧契约（内核换代后 input 快照不再直下槽位组件）：
+//   conversation.input.left 现只下发 hook（实测 props 有 useInput/useChat/
+//   inputActions/sessionId，无 input/session），故附件栏张数与草稿前缀经
+//   useInput 蒸馏镜像取回（props.input 在位时优先，兼容旧内核与测试）；
+//   composer 已由 <textarea> 换成 Lexical contenteditable，注入必须走
+//   beforeinput 管线（execCommand insertText）并回读校验 —— 写不进去要给
+//   可见提示，不再静默吞（静默失效是本族缺陷的病灶）。
+//
 // 内核附件 API（@deepseek-ai/dsh-attachment-local，内容制）：
 //   媒体白名单 image/png|jpeg|webp|gif；默认单图 3.5MB、单条消息 20 张、
 //   合计 100MB、单边 2000px —— 见 node_modules 内 lib/index.js
@@ -366,6 +374,35 @@
     return parts.join('\n');
   }
 
+  /**
+   * InputState → 可比较字符串（喂给 useInput 的选择器）。hook 默认按
+   * Object.is 判等，直接返回对象会让每轮渲染都判定为变化，故蒸馏成字符串；
+   * 分隔符取 \u0000（草稿不会出现，parseInputMirror 按剩余段无损回填）。
+   */
+  function distillInput(state) {
+    try {
+      if (!state) return '';
+      var n = Array.isArray(state.imageIds) ? state.imageIds.length : 0;
+      return String(state.phase || '') + '\u0000' + n + '\u0000' + String(state.draft == null ? '' : state.draft);
+    } catch (_e) { return ''; }
+  }
+
+  /** distillInput 的反向解析；空面返回 null（调用方按「无快照」处理）。 */
+  function parseInputMirror(mirror) {
+    if (typeof mirror !== 'string' || mirror === '') return null;
+    var parts = mirror.split('\u0000');
+    if (parts.length < 3) return null;
+    var n = Number(parts[1]);
+    return {
+      phase: parts[0],
+      imageCount: isFinite(n) && n >= 0 ? Math.floor(n) : 0,
+      draft: parts.slice(2).join('\u0000'),
+    };
+  }
+
+  // 选择器必须是模块级稳定身份（每次渲染新建函数会让 hook 每轮重算）。
+  var INPUT_SELECTOR = function (state) { return distillInput(state); };
+
   // 暴露纯逻辑供测试；生产无副作用。
   var core = {
     TEXT_MAX_BYTES: TEXT_MAX_BYTES,
@@ -392,6 +429,9 @@
     makePendingTextEntry: makePendingTextEntry,
     makePendingPathEntry: makePendingPathEntry,
     materializePending: materializePending,
+    distillInput: distillInput,
+    parseInputMirror: parseInputMirror,
+    injectIntoComposer: injectIntoComposer,
   };
   if (typeof window !== 'undefined') {
     window.__dshFileDropCore = core;
@@ -441,7 +481,10 @@
     var text = entry && entry.kind === 'text'
       ? ('<!-- 附件：' + (entry.name || '未命名') + ' -->\n' + entry.content)
       : buildPathHint({ name: entry && entry.name, path: entry && entry.path, size: entry && entry.size });
-    injectIntoComposer(findComposer(), text);
+    // 注入失败不再静默：这是「无槽位」分支唯一的出口，吞了就等于丢信息。
+    if (!injectIntoComposer(findComposer(), text)) {
+      showToast('无法写入输入框：「' + ((entry && entry.name) || '附件') + '」未注入，请重试或直接粘贴内容', true);
+    }
   }
   if (typeof window !== 'undefined') {
     window.__dshFileDropStore = {
@@ -455,25 +498,97 @@
 
   // ───────────────────────── DOM 粘合 ─────────────────────────
 
-  /** 找到当前会话的输入框（React 受控 textarea）。 */
-  function findComposer() {
-    var ae = typeof document !== 'undefined' ? document.activeElement : null;
-    if (ae && (ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return ae;
-    var root = document.querySelector('[data-slot="conversation.session"]');
-    var scope = root || document;
-    return scope.querySelector('textarea');
+  /** 在给定作用域里安全查询（测试桩里的“元素”可能没有 querySelector）。 */
+  function queryIn(scope, selector) {
+    try {
+      if (scope && typeof scope.querySelector === 'function') return scope.querySelector(selector);
+    } catch (_e) { /* 选择器非法/不可达 */ }
+    return null;
   }
 
-  /** 向 React 受控 textarea 注入文本（native setter + input 事件）。 */
-  function injectIntoComposer(textarea, text) {
-    if (!textarea || !text) return false;
-    textarea.focus();
-    var setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
-    var next = (textarea.value || '') + text;
-    if (!next.endsWith('\n')) next += '\n';
-    setter.call(textarea, next);
-    textarea.dispatchEvent(new Event('input', { bubbles: true }));
-    return true;
+  /**
+   * 找到当前会话输入框。两代内核两种形态都认（全部落空返回 null）：
+   *   · 当前：Lexical contenteditable —— [data-composer-input] /
+   *     [data-lexical-editor] 是实测在位的稳定属性（全页已无 textarea，
+   *     旧选择器恒 null 正是本插件失效的一半原因）；
+   *   · 旧：React 受控 textarea；焦点元素只作最后兜底（优先把提示
+   *     写进真正的 composer，而不是用户正在看的其它输入框）。
+   */
+  function findComposer() {
+    if (typeof document === 'undefined') return null;
+    var scope = queryIn(document, '[data-slot="conversation.session"]') || document;
+    return queryIn(scope, '[data-composer-input]')
+      || queryIn(scope, '[data-lexical-editor]')
+      || queryIn(scope, 'textarea')
+      || queryIn(document, '[data-composer-input]')
+      || (function () {
+        var ae = document.activeElement;
+        return ae && (ae.tagName === 'TEXTAREA' || ae.isContentEditable) ? ae : null;
+      })();
+  }
+
+  /** 读输入框当前文本（textarea 走 value，contenteditable 走 textContent）。 */
+  function composerText(el) {
+    if (!el) return null;
+    try {
+      if (typeof el.value === 'string') return el.value;
+      if (typeof el.textContent === 'string') return el.textContent;
+    } catch (_e) { /* 异形元素 */ }
+    return null;
+  }
+
+  /**
+   * 向输入框注入文本，按元素形态分流两条写路径：
+   *   · textarea（旧内核 React 受控）：native value setter + input 事件；
+   *   · contenteditable（当前 Lexical）：光标移到末尾后 execCommand
+   *     ('insertText')，经 beforeinput 管线让编辑器自己收下——实测直接改
+   *     textContent 会被下一次 reconcile 回滚，而拿 textarea 原型 setter 打
+   *     在 <div> 上会抛 TypeError（被上层 catch 吞成静默失效）。
+   * 返回**是否真的落上**（注入后回读校验），调用须据此给可见提示。
+   */
+  function injectIntoComposer(el, text) {
+    if (!el || !text) return false;
+    var before = composerText(el) || '';
+    var payload = text.endsWith('\n') ? text : text + '\n';
+    try { el.focus(); } catch (_e) { /* 不可聚焦不影响写入 */ }
+    var isTextarea = el.tagName === 'TEXTAREA' || (typeof el.value === 'string' && !el.isContentEditable);
+    if (isTextarea) {
+      var desc = typeof HTMLTextAreaElement === 'function'
+        ? Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value') : null;
+      if (desc && typeof desc.set === 'function') desc.set.call(el, before + payload);
+      else el.value = before + payload;
+      try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (_e2) { /* 桩环境无 Event */ }
+    } else {
+      try {
+        var sel = typeof window !== 'undefined' && typeof window.getSelection === 'function' ? window.getSelection() : null;
+        var range = typeof document.createRange === 'function' ? document.createRange() : null;
+        if (sel && range && typeof range.selectNodeContents === 'function') {
+          range.selectNodeContents(el);
+          range.collapse(false); // 末尾——不劈开已有内容与引用 chip
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      } catch (_e3) { /* 选区不可得仍试一次 insertText */ }
+      try {
+        if (!document.execCommand('insertText', false, payload)) return false;
+      } catch (_e4) { return false; }
+    }
+    var after = composerText(el);
+    if (after === null) return true; // 回读不到（异形桩元素）→ 信任写入
+    return after.length > before.length && after.indexOf(text) >= 0;
+  }
+
+  /**
+   * 物化前读回草稿前缀。坐标系优先级：
+   *   1. 快照 draft —— 内核 clipboard projection（引用 chip 的剪贴板形态），
+   *      与 setDraft 同一坐标系，唯一不会把 chip 写坏的读法；
+   *   2. DOM 文本 —— 快照缺席时的兜底（contenteditable 的 textContent 会
+   *      把 chip 退化成显示文本，但好过把用户正文直接丢了）。
+   */
+  function readComposerDraft(snapshotDraft) {
+    if (typeof snapshotDraft === 'string' && snapshotDraft !== '') return snapshotDraft;
+    var text = composerText(findComposer());
+    return text && text.trim() !== '' ? text : '';
   }
 
   /** Electron 里取拖入文件的完整路径（webUtils.getPathForFile 经 preload 暴露）。 */
@@ -575,7 +690,9 @@
       var key = currentSessionKey();
       if (!key) {
         // 无槽位（旧内核/file:// 壳）：chip 无处渲染，回退合并路径提示注入（既有语义）。
-        injectIntoComposer(findComposer(), core.buildDropHint(list));
+        if (!injectIntoComposer(findComposer(), core.buildDropHint(list))) {
+          showToast('无法写入输入框：' + list.length + ' 个拖入文件的路径提示未注入', true);
+        }
         return;
       }
       for (var i = 0; i < list.length; i++) {
@@ -781,6 +898,20 @@
       props = props || {};
       var inputActions = props.inputActions || {};
       var input = props.input;
+      // input 快照镜像：当前内核该槽只下发 hook（实机 fiber 实测 props 为
+      // {useInput, useChat, useSession, useConversation, useTrajectory,
+      // useProjection, inputActions, sessionId, ...}，无 input/session）。
+      // hook 必须无条件调用以保持调用顺序稳定；缺席（旧内核/测试）时
+      // 退化为空面，由 props.input 顶上。
+      var inputMirror = '';
+      try {
+        if (typeof props.useInput === 'function') inputMirror = props.useInput(INPUT_SELECTOR) || '';
+      } catch (_e0) { inputMirror = ''; }
+      var mirror = parseInputMirror(inputMirror);
+      var draft = (input && typeof input.draft === 'string') ? input.draft : (mirror ? mirror.draft : '');
+      var railCount = (input && Array.isArray(input.imageIds))
+        ? input.imageIds.length
+        : (mirror ? mirror.imageCount : 0);
       var fileRef = useRef(null);
       var errRef = useRef(null);
       var state = useState('');
@@ -796,7 +927,7 @@
             try { return ctx.get('conversation'); } catch (_e) { return undefined; }
           })(),
           inputActions: inputActions,
-          railCount: input && Array.isArray(input.imageIds) ? input.imageIds.length : 0,
+          railCount: railCount,
         };
         railEnvRef = env;
         return function () { if (railEnvRef === env) railEnvRef = null; };
@@ -807,18 +938,15 @@
       //   · 点击发送按钮 → inputActions.submit()（包装它）；
       //   · 回车发送 → keyboard.submit(mode) 直接调 SessionInputShell.submit，
       //     绕过 actions.submit —— 用捕获阶段 keydown 在 React 回车处理器前物化。
-      var inputRef = useRef(input);
-      useEffect(function () { inputRef.current = input; });
+      var draftRef = useRef(draft);
+      useEffect(function () { draftRef.current = draft; });
       useEffect(function () {
         if (!inputActions || typeof inputActions.submit !== 'function' || typeof inputActions.setDraft !== 'function') return;
         var orig = inputActions.submit;
         function materialize() {
           var pending = snapshotPending(inputActions);
           if (pending.length === 0) return;
-          var cur = '';
-          var c = findComposer();
-          if (c && typeof c.value === 'string') cur = c.value;
-          else if (inputRef.current && typeof inputRef.current.draft === 'string') cur = inputRef.current.draft;
+          var cur = readComposerDraft(draftRef.current);
           var text = materializePending(pending);
           clearPending(inputActions);
           if (text) inputActions.setDraft(cur + (cur ? '\n' : '') + text + '\n');
@@ -863,8 +991,7 @@
           handlePickedFiles(files, {
             conversation: (function () { try { return ctx.get('conversation'); } catch (_e2) { return undefined; } })(),
             inputActions: inputActions,
-            input: input,
-            railCount: input && Array.isArray(input.imageIds) ? input.imageIds.length : 0,
+            railCount: railCount,
             onError: flashErr,
           });
         } catch (_e3) { /* 选择器异常静默 */ }
@@ -935,9 +1062,11 @@
       }, 'dsh-file-drop: attach button');
     } catch (_e) { /* 槽位系统不可用（旧内核）：只保留拖放/粘贴路径 */ }
 
-    // 附件 chip 条：挂进输入框左侧（与 📎 按钮同槽，同样拿到 inputActions/
-    // input props）。不用 conversation.input.attachments——那是内核图片附件
-    // 专用槽，props 是 {attachments,canAcceptDrop,...} 无 inputActions。
+    // 附件 chip 条：挂进输入框左侧（与 📎 按钮同槽）。该槽 props 只有
+    // inputActions 与一组 hook（useInput/useChat/…），不下发 input/session
+    // 快照——内核 SlotMap 里 conversation.input.left 没声明 owner，快照值只能
+    // 经 hook 取。不用 conversation.input.attachments：那是内核图片附件专用
+    // 槽，props 是 {attachments,canAcceptDrop,...} 无 inputActions。
     try {
       ctx.slots.inject('conversation.input.left', function () {
         return ctx.slots.register({

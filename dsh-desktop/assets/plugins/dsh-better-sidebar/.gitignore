@@ -1,0 +1,5 @@
+# Source maps emitted by `tsdown` on every local `pnpm bundle`. They are NOT
+# part of the published plugin (see package.json "files": only the lib/*.js and
+# lib/types/** ship), and re-writing them on each rebuild only adds diff churn,
+# so they stay untracked.
+lib/*.map

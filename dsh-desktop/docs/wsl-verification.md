@@ -21,12 +21,16 @@
    npm install
    npm run fetch-runtime     # 内置 node.exe + npm CLI
    ```
-2. 开发模式启动（验证用，带调试日志）：
+2. 开发模式启动（验证用，带诊断探针）——运行入口在**桌面壳侧**，`dsh-desktop/` 无 `start` 脚本：
    ```powershell
-   $env:DSH_DESKTOP_DEBUG = '1'
-   npm start
+   cd ..\dsh-tauri\src-tauri\src\app
+   $env:DSH_TAURI_DIAG = '1'   # 换页后注入页面探针（dialog/composer/console 回传 app.log）
+   cargo run
    ```
-   或打包便携版后双击验证：`npm run dist` → `dist/DSH-Desktop-*-win-portable-x64.exe`。
+   或打包安装版后双击验证（打包三步见 `dsh-tauri/README.md` 快速上手 / `docs/development.md` §6）：
+   产物在 `dsh-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/DSH Desktop_<ver>_x64-setup.exe`。
+   WSL 回落的人工复现：`DSH_TAURI_WSL_EXE=<桩路径>` 可把 `wsl.exe` 换成桩，用来确定性复现
+   「解析失败 → 回落 local」（同一开关由 Rust `wsl-backend` 与 sidecar `wsl-mode.js` 共用）。
 3. 日志位置：便携版 `data\logs\`，安装版 `%APPDATA%\DSH Desktop\logs\`；菜单「打开日志目录」可直达。关键文件：`desktop.log`（`[wsl]` 前缀行 = WSL 后端动作）、`dsh-web.log`、`update.log`。
 
 ## 2. 分步验证

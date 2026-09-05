@@ -64,10 +64,11 @@ node --test sidecar/cli.test.js                    # sidecar（16 例，沙箱 h
 cd src-tauri/src/app && cargo run                  # 主线（loading→内核→Web UI）
 
 # 打包 + 冒烟（详见 docs/development.md §6）
-bash ../scripts/stage-payload.sh                   # ① 内核 payload 暂存
+cd ../../..                                      # 回到 dsh-tauri/（上方已 cd 进 src-tauri/src/app）
+bash scripts/stage-payload.sh                   # ① 内核 payload 暂存
 npx --yes @tauri-apps/cli build \
   --config src-tauri/src/app/tauri.conf.json --target x86_64-pc-windows-msvc   # ② NSIS
-bash ../scripts/smoke-installed.sh                 # ③ 安装布局冒烟（隔离环境）
+bash scripts/smoke-installed.sh                 # ③ 安装布局冒烟（隔离环境）
 ```
 
 ## 与 Electron 版的关系

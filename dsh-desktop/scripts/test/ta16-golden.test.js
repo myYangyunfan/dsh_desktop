@@ -261,6 +261,29 @@ function allVisibleTexts() {
   return texts;
 }
 
+/**
+ * 递归剥掉 `line` 字段（仅供比对）。
+ *
+ * 为什么不比行号：本套快照的定义是「用户可见面」，而行号不是用户可见的。
+ * 把 file:line 纳入 deepEqual 后，lib.rs 里任何一处无关插入都会让 40 条
+ * 记录集体位移、金样集体红——真信号（新文案）被埋在一堆噪声 diff 里。
+ * 实测：2026-09-05 新增「一键重启」托盘项 + 1 行 Linux 日志，前者被后者
+ * 的行号漂移盖住，分诊成本远高于变更本身。
+ * 行号仍写进快照文件（人定位用），只是不参与相等判定；文案本身一字不改地比对。
+ */
+function withoutLineFields(v) {
+  if (Array.isArray(v)) return v.map(withoutLineFields);
+  if (v && typeof v === 'object') {
+    const out = {};
+    for (const [k, val] of Object.entries(v)) {
+      if (k === 'line') continue;
+      out[k] = withoutLineFields(val);
+    }
+    return out;
+  }
+  return v;
+}
+
 for (const [file, [build, sources, note]] of Object.entries(SNAPSHOTS)) {
   test(`TA16 golden: ${file}`, () => {
     const current = build();
@@ -274,7 +297,7 @@ for (const [file, [build, sources, note]] of Object.entries(SNAPSHOTS)) {
     assert.ok(fs.existsSync(target), `金样缺失：${file}（用 UPDATE_SNAPSHOTS=1 npm test 生成）`);
     const golden = JSON.parse(fs.readFileSync(target, 'utf8'));
     const { _meta, ...goldenPayload } = golden; // _meta 是头注释，不参与比对
-    assert.deepEqual(current, goldenPayload,
+    assert.deepEqual(withoutLineFields(current), withoutLineFields(goldenPayload),
       `用户可见面与金样不一致：${file}（有意变更请 review 后执行 UPDATE_SNAPSHOTS=1 npm test 重写）`);
   });
 }

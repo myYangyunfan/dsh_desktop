@@ -222,13 +222,27 @@
 要求：Windows + Node.js（仅构建机需要）+ npm。
 
 ```powershell
-npm install                    # 安装 dsh / electron / electron-builder
+npm install                    # 安装内核 @deepseek-ai/* 依赖（postinstall 自动跑 patch-deps 打构建期补丁）
 npm run fetch-runtime          # 内置 node.exe + npm CLI（构建与开发都需要）
-npm start                      # 开发模式启动（窗口内跑 Web UI）
-npm run dist                   # 构建 portable + NSIS 安装包，输出到 dist/
+npm test                       # 全量测试（node --test 自动发现 scripts/test/*.test.js）
 ```
 
-> 网络受限时：Electron 二进制镜像 `$env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'`（可 `npm run electron:fetch` 手动补拉）；打包工具链镜像 `$env:ELECTRON_BUILDER_BINARIES_MIRROR='https://npmmirror.com/mirrors/electron-builder-binaries/'`。
+> 开发运行与打包都在**桌面壳侧**（`dsh-tauri/`）：本包 `package.json` 没有 `start` / `dist` 脚本
+> （原 Electron 壳已下线，照旧命令跑会直接报 `Missing script`）。
+> 现行入口（与 `dsh-tauri/docs/development.md` §6 一致；每步 cwd 不同，不要连着粘贴执行）：
+>
+> ```powershell
+> cd ..\dsh-tauri\src-tauri\src\app ; cargo run                        # 开发运行
+> cd <仓库根> ; bash dsh-tauri/scripts/stage-payload.sh                 # ① 内核 payload 暂存
+> cd dsh-tauri ; npx --yes @tauri-apps/cli build `
+>   --config src-tauri/src/app/tauri.conf.json --target x86_64-pc-windows-msvc  # ② NSIS
+> ```
+>
+> 完整流程见 `dsh-tauri/README.md` 与 `dsh-tauri/docs/development.md`。
+
+> 网络受限时：依赖拉取走 `.npmrc` 的 registry 镜像（`scripts/fetch-*.js` 会遵循它）；
+> 原先的 `ELECTRON_MIRROR` / `ELECTRON_BUILDER_BINARIES_MIRROR` 与 `npm run electron:fetch` 均已失效，
+> 随 Electron 壳一起下线，不再需要。
 >
 > 开发辅助脚本：`node scripts/check-latest.js`（检查/试装更新）、`node scripts/test-watcher.js`（通知检测单测）、`node scripts/inspect-session.js <file>`（会话日志事件词表）。
 
@@ -236,10 +250,10 @@ npm run dist                   # 构建 portable + NSIS 安装包，输出到 di
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  Electron 壳 (main.js)                                   │
+│  Tauri 壳（Rust，dsh-tauri/src-tauri/src/app）             │
 │  · 单实例锁 / 窗口 / 菜单 / 生命周期                       │
 │  · 会话完成监听 (session-watcher.js) → 系统通知            │
-│  · 官方更新 (updater.js) → 用户同意后安装 overlay          │
+│  · 官方更新 (commands/updater_client.rs) → 用户同意后装 overlay │
 │  · spawn vendor|resources 里的 node.exe                   │
 └──────────────┬───────────────────────────────────────────┘
                │  dsh web --host 127.0.0.1 --port <上次保存的端口>
@@ -339,8 +353,8 @@ dsh-desktop/
 │   ├── build-icon.ps1    # 生成应用图标（透明圆角蒙版）+ 托盘图标
 │   ├── check-latest.js   # agent 更新链路测试工具
 │   ├── check-client-latest.js # 客户端更新链路测试工具
-│   ├── patch-event-vocabulary.js # dsh-session 事件词汇表补丁（afterPack 自动调用）
-│   ├── install-minimal-win-preset.js # 内置 8 个 Agent 预设安装（npm start / afterPack / WSL 同步调用）
+│   ├── patch-event-vocabulary.js # dsh-session 事件词汇表补丁（当前无调用方，接线随 Electron 壳下线 — 见脚本头 Status）
+│   ├── install-minimal-win-preset.js # 内置 8 个 Agent 预设安装（sidecar cli.js / preset-heal / WSL 同步调用）
 │   ├── test-watcher.js   # 通知检测单测
 │   ├── sync-companion-plugins.js # 把配套插件与内置 Agent 预设同步进任意 dsh（独立于壳）
 │   └── inspect-session.js# 会话日志解析工具

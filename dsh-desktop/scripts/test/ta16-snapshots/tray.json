@@ -25,6 +25,10 @@
       "label": "ACP 配置（Zed）"
     },
     {
+      "id": "restart",
+      "label": "一键重启"
+    },
+    {
       "id": "quit",
       "label": "退出"
     }

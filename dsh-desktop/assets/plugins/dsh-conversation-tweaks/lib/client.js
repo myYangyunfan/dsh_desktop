@@ -66,10 +66,24 @@ window.__ModuleLoader__.load({
 			".dct-knob{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.35);transition:transform .15s}",
 			".dct-switch[aria-checked=true] .dct-knob{transform:translateX(18px)}",
 
-			// 隐藏大量工具调用、工具结果与思考过程；每一轮最终总结文字由
-			// refreshQuietMarkers 标记 data-dsh-keep-summary 后保持可见。
-			'body[data-dsh-quiet-output] .Md3f7G_flowItem[data-chat-flow-kind="tool-call"]{display:none!important}',
-			'body[data-dsh-quiet-output] .Md3f7G_flowItem[data-chat-flow-kind="tool-result"]{display:none!important}',
+			// dsh-compat:quiet-output-attrs —— 原来那五条规则在内核换代后一条都不命中：
+			// .Md3f7G_flowItem / .QWLzlG_root / .Sxvs8a_root / ._markdown_1nba0_5 全是
+			// CSS Module 哈希类，重打包后已变成 _RXqYG_ / t2QtNG_ / _2erCIa_ /
+			// _markdown_177e0_（实机命中各 0）。症状是「开关能拨、什么也没藏」。
+			// 新契约只用稳定属性：行锚 [data-chat-flow-kind]；过程成员
+			// [data-turn-process-member]——内核 ChatNodeSeat 给「答案锚点之前」的行打此
+			// 标记，最终答案所在行永不是成员，故不必再逐轮找总结；思考块
+			// [data-variant="think"]。turn-process 是「N 次工具调用」折叠头，成员既已
+			// 全藏，留着只会是个点了没反应的死控件，一并隐藏。
+			'body[data-dsh-quiet-output] [data-chat-flow-kind="tool-call"]{display:none!important}',
+			'body[data-dsh-quiet-output] [data-chat-flow-kind="tool-result"]{display:none!important}',
+			'body[data-dsh-quiet-output] [data-chat-flow-kind="turn-process"]{display:none!important}',
+			'body[data-dsh-quiet-output] [data-chat-flow-kind][data-turn-process-member]{display:none!important}',
+			'body[data-dsh-quiet-output] [data-variant="think"]{display:none!important}',
+
+			// 上一代内核的哈希类规则原样留着：新内核下命中 0，是纯空规则。
+			// 原先挂在 .Md3f7G_flowItem 上的两条已删——属性-only 的新规则同样命中旧内核
+			// 的行（旧行本就带 data-chat-flow-kind），不必重复。
 			'body[data-dsh-quiet-output] .QWLzlG_root{display:none!important}',
 			'body[data-dsh-quiet-output] .Sxvs8a_root .Sxvs8a_body > ._markdown_1nba0_5{display:none!important}',
 			'body[data-dsh-quiet-output] .Sxvs8a_root[data-dsh-keep-summary] .Sxvs8a_body > ._markdown_1nba0_5{display:block!important}'
@@ -119,13 +133,22 @@ window.__ModuleLoader__.load({
 		}
 
 
+		// 上一代内核的哈希类根节点。新内核换成 _2erCIa_root（哈希还会再变），所以这里
+		// 只用来判定「是否还需要 DOM 打标记」，不作为可见性选择器。
+		function legacyQuietDom() {
+			return document.querySelector(".Sxvs8a_root, .Md3f7G_flowItem") !== null;
+		}
+
 		// ------------------------------------------------------------------
-		// 隐藏输出：工具调用/工具结果/思考行由 CSS 整体隐藏；这里把每一轮
-		// 最后一个带 Markdown 正文的助手消息标记为「总结」，保持最终输出可见。
+		// 隐藏输出（仅旧内核需要）：工具调用/工具结果/思考行由 CSS 整体隐藏；
+		// 旧内核没有 data-turn-process-member 可靠，这里把每一轮最后一个带
+		// Markdown 正文的助手消息标记为「总结」，保持最终输出可见。
+		// 当前内核的可见性已由上面的属性契约独立完成，扫描路径不再进入。
 		// DOM 高频变化时用 250ms 防抖。
 		// ------------------------------------------------------------------
 		function refreshQuietMarkers() {
 			if (typeof document === "undefined") return;
+			if (!legacyQuietDom()) return;
 			const roots = Array.from(document.querySelectorAll(".Sxvs8a_root"));
 			for (const root of roots) root.removeAttribute("data-dsh-keep-summary");
 			if (!document.body.hasAttribute("data-dsh-quiet-output")) return;
@@ -157,6 +180,8 @@ window.__ModuleLoader__.load({
 				if (pending) return;
 				// 隐藏输出关闭时不跟跑 body 观察器；开关切换由 applyQuiet 直接刷新。
 				if (!document.body.hasAttribute("data-dsh-quiet-output")) return;
+				// 新内核没有标记可打：不跟跑观察器（流式输出时 DOM 变动极密）。
+				if (!legacyQuietDom()) return;
 				pending = setTimeout(() => {
 					pending = null;
 					refreshQuietMarkers();

@@ -11,6 +11,9 @@
 // 条目字段约定：
 //   id    cordis.patch.yml 注册条目与插件管理页使用的 loader id；
 //   name  profile node_modules 下的包名（含 scope）。
+//   shipsNodeModules  源目录的 node_modules 是 git 跟踪的正件依赖树，随同步分发；
+//                     缺省 false：源里的 node_modules 视为本机安装残留，绝不同步
+//                     （dev 树上一次 pnpm install 就能产出 1.3 万文件的残留树）。
 // ---------------------------------------------------------------------------
 
 const COMPANION_PLUGINS = [
@@ -40,12 +43,12 @@ const COMPANION_PLUGINS = [
   { id: 'wsl-settings', name: '@deepseek-ai/dsh-wsl-settings' },
   { id: 'dsh-vision', name: '@dsh-external/dsh-vision' },
   { id: 'side-session', name: '@dsh-external/dsh-side-session' },
-  { id: 'compaction-acp', name: 'billion-context-dsh' },
+  { id: 'compaction-acp', name: 'billion-context-dsh', shipsNodeModules: true },
   { id: 'plugin-manager', name: '@deepseek-ai/dsh-plugin-manager' },
   // 知识图谱记忆（adoresever/graph-memory，MIT）：跨会话图记忆 + PageRank /
   // 社区检测 + 向量去重；作者为 DSH 提供原生适配器（graph-memory/dsh 入口），
   // 内置后随壳分发，dsh-hub 中枢页直接显示装配状态与图谱统计。
-  { id: 'graph-memory', name: 'graph-memory' },
+  { id: 'graph-memory', name: 'graph-memory', shipsNodeModules: true },
   // 可视化插件市场（anywhere-labs/deepseek-harness-desktop 的 dsh-community-market，
   // MIT）：开放目录源（DSH 1024Store / dshfind / 标准 HTTP 源，用户自行添加
   // 与启用）、搜索、npm registry 校验安装、启停与回执管理。内置市场整体切换为
@@ -62,7 +65,7 @@ const COMPANION_PLUGINS = [
   // 插件中枢（ARFCON/dsh-hub-DSH，MIT）：插件更新引擎（版本对比/一键更新/
   // 启停/卸载/启动自检修复）+ 全局记忆 + graph-memory / dsh-market 挂载 +
   // 自身更新检查；原生适配 Gitee 版客户端版本双源对比。
-  { id: 'dsh-hub', name: 'dsh-hub' },
+  { id: 'dsh-hub', name: 'dsh-hub', shipsNodeModules: true },
   // 手机桥（hzhz314159/dsh-mini，MIT）：从手机浏览器/App 驱动 DSH agent 会话
   // （收发文字/图片/文件、切换模型、平衡度环、局域网网关二维码配对）。
   // 随包附带手机 App 安装包 DSH-Mobile-v1.4.2.apk（assets/plugins/dsh-mini/）。

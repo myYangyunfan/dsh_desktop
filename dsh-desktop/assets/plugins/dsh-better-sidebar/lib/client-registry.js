@@ -111,17 +111,22 @@ window.__ModuleLoader__.load({
 			}, []);
 			return narrow;
 		}
+		/** Upper bound for the right panel width at a given viewport width: keep at
+		* least {@link CENTER_MIN} for the center conversation column. Falls back to
+		* PANEL_MAX when the viewport is unknown (SSR/tests). Always ≥ PANEL_MIN. */
+		function maxPanelWidthFor(viewportWidth) {
+			if (!Number.isFinite(viewportWidth)) return 640;
+			return Math.max(280, viewportWidth - 280);
+		}
+		/** Clamp one Explorer rail width into the contract range. */
+		function clampExplorerWidth(value) {
+			return Math.min(480, Math.max(140, Math.round(value)));
+		}
 		let nextIdCounter = 0;
 		/** Unique pane/tab id within one state instance. */
 		function uid(prefix) {
 			nextIdCounter += 1;
 			return `${prefix}:${nextIdCounter}`;
-		}
-		/** Mint a fresh uid-based tab id. The `'editor:' + path` convention only
-		*  covers openSidebarFile opens (per-path dedupe); opens that must not
-		*  dedupe (the primary tree-click side split) mint through here. */
-		function mintTabId() {
-			return uid("tab");
 		}
 		/**
 		* The largest numeric suffix across a raw persisted state's counter ids
@@ -186,6 +191,8 @@ window.__ModuleLoader__.load({
 			return {
 				panelOpen,
 				width,
+				explorerOpen: true,
+				explorerWidth: 240,
 				activePane: leaf.id,
 				nextTerminal: 1,
 				nextBrowser: 1,
@@ -511,6 +518,20 @@ window.__ModuleLoader__.load({
 				})
 			};
 		}
+		/** Read a tab's meta as a plain record (a malformed / absent meta reads as
+		*  empty). Shared by the preview-tab reducers. */
+		function metaRecord(tab) {
+			return tab.meta !== null && typeof tab.meta === "object" && !Array.isArray(tab.meta) ? tab.meta : {};
+		}
+		/**
+		* Whether a tab is a transient "preview" tab (the VSCode italic editor).
+		* The flag rides on `meta.preview` so it persists with the layout and
+		* survives a tab move / split / reload — no new SidebarTab field, and the
+		* existing meta plumbing (openTab seed, patchTab, sanitize) carries it.
+		*/
+		function isPreviewTab(tab) {
+			return metaRecord(tab).preview === true;
+		}
 		/** Move a tab from one pane to another (insert at index; -1 appends).
 		*  The panes may live in DIFFERENT trees — dragging a tab between the two
 		*  panels removes it from its own tree and lands it in the other one. */
@@ -620,10 +641,11 @@ window.__ModuleLoader__.load({
 				bottomOpen: !state.bottomOpen
 			};
 		}
-		/** Set the panel width (clamped to the contract range; the upper bound is
-		* the viewport so the fullscreen expansion can fill the window). */
+		/** Set the panel width (clamped to the contract range; the upper bound
+		* reserves {@link CENTER_MIN} for the center conversation column so the panel
+		* can never be dragged to cover the whole window). */
 		function setWidth(state, width) {
-			const max = typeof window !== "undefined" ? Math.max(280, window.innerWidth - 280) : 640;
+			const max = typeof window !== "undefined" ? maxPanelWidthFor(window.innerWidth) : 640;
 			return {
 				...state,
 				width: Math.min(max, Math.max(280, Math.round(width)))
@@ -639,6 +661,22 @@ window.__ModuleLoader__.load({
 			return {
 				...state,
 				bottomHeight: Math.min(max, Math.max(120, Math.round(height)))
+			};
+		}
+		/** Toggle the persistent Explorer rail (the file-tree column beside the
+		*  tabbed workbench) open/closed. The rail is decoupled from any tab, so
+		*  hiding it never touches the open editor tabs. */
+		function toggleExplorer(state) {
+			return {
+				...state,
+				explorerOpen: !state.explorerOpen
+			};
+		}
+		/** Set the Explorer rail width (clamped to the contract range). */
+		function setExplorerWidth(state, width) {
+			return {
+				...state,
+				explorerWidth: clampExplorerWidth(width)
 			};
 		}
 		/** Toggle a directory in the explorer expansion set. */
@@ -738,7 +776,7 @@ window.__ModuleLoader__.load({
 		* clamped to the panel floor (a tiny percent must stay usable) and to the
 		* viewport (a large one must never cover the whole window). */
 		function defaultWidthFor(viewport, percent) {
-			return Math.min(Math.max(280, viewport - 280), Math.max(280, Math.round(viewport * percent / 100)));
+			return Math.min(maxPanelWidthFor(viewport), Math.max(280, Math.round(viewport * percent / 100)));
 		}
 		function loadState(sessionId, prefs) {
 			try {
@@ -751,7 +789,7 @@ window.__ModuleLoader__.load({
 				}
 			} catch {}
 			const viewport = typeof window !== "undefined" ? window.innerWidth : void 0;
-			return makeDefaultState(viewport === void 0 ? 400 : defaultWidthFor(viewport, prefs.defaultWidthPercent), prefs.openByDefault && (viewport === void 0 || !isNarrowWidth(viewport)), prefs.tabsEnabled["editor"] === false ? "none" : "editor-home");
+			return makeDefaultState(viewport === void 0 ? 400 : defaultWidthFor(viewport, prefs.defaultWidthPercent), prefs.openByDefault && (viewport === void 0 || !isNarrowWidth(viewport)), "none");
 		}
 		/**
 		* Structural validation of one persisted state. A malformed or stale shape
@@ -788,10 +826,12 @@ window.__ModuleLoader__.load({
 			});
 			const requestedActivePane = typeof record.activePane === "string" ? reid.get(record.activePane) ?? record.activePane : null;
 			const activePane = requestedActivePane === null ? null : treeHasId(splits, requestedActivePane) || treeHasId(bottomSplits, requestedActivePane) ? requestedActivePane : firstLeaf(splits).id;
-			const maxWidth = typeof window !== "undefined" ? Math.max(280, window.innerWidth - 280) : Infinity;
+			const maxWidth = typeof window !== "undefined" ? maxPanelWidthFor(window.innerWidth) : Infinity;
 			return {
 				panelOpen: record.panelOpen,
 				width: Math.max(280, Math.min(record.width, maxWidth)),
+				explorerOpen: typeof record.explorerOpen === "boolean" ? record.explorerOpen : true,
+				explorerWidth: typeof record.explorerWidth === "number" && Number.isFinite(record.explorerWidth) ? clampExplorerWidth(record.explorerWidth) : 240,
 				activePane,
 				nextTerminal: record.nextTerminal,
 				nextBrowser,
@@ -835,6 +875,7 @@ window.__ModuleLoader__.load({
 				if (typeof record.id !== "string" || !Array.isArray(record.tabs)) return void 0;
 				const tabs = [];
 				let droppedDiff = false;
+				let droppedHome = false;
 				for (const tab of record.tabs) {
 					if (tab === null || typeof tab !== "object") return void 0;
 					const candidate = tab;
@@ -844,17 +885,9 @@ window.__ModuleLoader__.load({
 						continue;
 					}
 					if (typeof candidate.type !== "string") return void 0;
-					if (candidate.type === "explorer") {
-						const meta = candidate.meta !== null && typeof candidate.meta === "object" && !Array.isArray(candidate.meta) ? candidate.meta : void 0;
-						tabs.push({
-							id: candidate.id,
-							type: "editor",
-							title: "Files",
-							meta: {
-								treeOpen: true,
-								...meta
-							}
-						});
+					const pathlessEditor = candidate.type === "editor" && !(typeof candidate.path === "string" && candidate.path !== "");
+					if (candidate.type === "explorer" || pathlessEditor) {
+						droppedHome = true;
 						continue;
 					}
 					tabs.push({
@@ -866,7 +899,7 @@ window.__ModuleLoader__.load({
 					});
 				}
 				const active = typeof record.active === "string" ? record.active : null;
-				if (active !== null && !tabs.some((tab) => tab.id === active) && !droppedDiff) return void 0;
+				if (active !== null && !tabs.some((tab) => tab.id === active) && !droppedDiff && !droppedHome) return void 0;
 				return {
 					kind: "leaf",
 					id: uniqueNodeId(record.id, seen, reid),
@@ -1875,6 +1908,8 @@ window.__ModuleLoader__.load({
 			editorExplorerSplit: "独立",
 			editorExplorerSplitDesc: "无路径窗口即资源管理器（仅文件树）；文件各自新开窗口（带文件树，默认收起）",
 			editorTreeToggle: "文件树面板",
+			explorerCollapse: "收起文件树",
+			explorerExpand: "展开文件树",
 			editorPathPlaceholder: "输入文件路径（相对会话目录或绝对路径），Enter 打开",
 			editorSearchPlaceholder: "按文件名搜索…",
 			editorSearchNoResults: "无匹配文件",
@@ -2000,6 +2035,7 @@ window.__ModuleLoader__.load({
 			editorBack: "返回上级",
 			copied: "已复制",
 			copy: "复制",
+			footnotes: "脚注",
 			newFile: "新文件",
 			openEditor: "打开编辑器",
 			gitDetail: "查看变更详情",
@@ -2208,6 +2244,8 @@ window.__ModuleLoader__.load({
 			editorExplorerSplit: "Separate",
 			editorExplorerSplitDesc: "Path-less windows are the standalone explorer (tree only); each file opens its own window (tree docked, closed by default)",
 			editorTreeToggle: "File tree panel",
+			explorerCollapse: "Collapse explorer",
+			explorerExpand: "Expand explorer",
 			editorPathPlaceholder: "File path (relative to the session directory or absolute), Enter to open",
 			editorSearchPlaceholder: "Search files by name…",
 			editorSearchNoResults: "No matching files",
@@ -2333,6 +2371,7 @@ window.__ModuleLoader__.load({
 			editorBack: "Back",
 			copied: "Copied",
 			copy: "Copy",
+			footnotes: "Footnotes",
 			newFile: "New file",
 			openEditor: "Open editor",
 			gitDetail: "View change details",
@@ -2727,17 +2766,30 @@ window.__ModuleLoader__.load({
 				workspaces.openPath = original;
 			};
 		}
-		/** The typed remote `session.openWorkspacePath` face (mirror of the generated
-		* client method in @deepseek-ai/dsh-api-session-controller). */
+		/**
+		* Wrap the CURRENT upstream chat file-open funnel: the typed remote
+		* `ctx.remote.session.openWorkspacePath({ path })` (see the file header).
+		* Intercepted calls open the file in the sidebar editor and resolve as
+		* `{ ok: true, value: { opened: true } }` — the remote's success envelope, so
+		* the chat's `openFile` resolves exactly like a real host open. Anything that
+		* declines falls through to the original remote call untouched.
+		*
+		* The typed remote installs each method as an ACCESSOR returning a fresh
+		* closure (see @deepseek-ai/dsh-api-gateway's RemoteNamespaceService.install),
+		* so the wrapper replaces the accessor with a plain value and restores the
+		* accessor verbatim on dispose (HMR-safe, like {@link wrapOpenPath}).
+		*
+		* @param service - the remote `session` namespace service (undefined before
+		*   the api-remotes contribution mounts; a no-op in that case).
+		* @param deps - per-call takeover decisions.
+		* @returns the disposer restoring the original method (HMR-safe).
+		*/
 		function wrapRemoteOpenWorkspacePath(service, deps) {
 			if (service === null || service === void 0) return () => {};
 			const descriptor = Object.getOwnPropertyDescriptor(service, "openWorkspacePath");
 			let original;
-			if (descriptor !== void 0 && typeof descriptor.get === "function") {
-				original = descriptor.get.call(service);
-			} else {
-				original = service.openWorkspacePath;
-			}
+			if (descriptor !== void 0 && typeof descriptor.get === "function") original = descriptor.get.call(service);
+			else original = service.openWorkspacePath;
 			if (typeof original !== "function") return () => {};
 			const wrapped = (request, signal) => {
 				if (deps.takeoverEnabled()) {
@@ -2745,7 +2797,10 @@ window.__ModuleLoader__.load({
 					const path = request !== null && typeof request === "object" ? request.path : void 0;
 					if (sessionId !== void 0 && typeof path === "string" && path !== "") {
 						deps.openInSidebar(path, sessionId);
-						return Promise.resolve({ ok: true, value: { opened: true } });
+						return Promise.resolve({
+							ok: true,
+							value: { opened: true }
+						});
 					}
 				}
 				return original(request, signal);
@@ -2761,14 +2816,15 @@ window.__ModuleLoader__.load({
 					Object.defineProperty(service, "openWorkspacePath", descriptor);
 				};
 			}
-			service.openWorkspacePath = wrapped;
+			const holder = service;
+			holder.openWorkspacePath = wrapped;
 			return () => {
-				service.openWorkspacePath = original;
+				holder.openWorkspacePath = original;
 			};
 		}
 		//#endregion
 		//#region \0dsh-css:C:\Users\delinger\Desktop\dsh\dsh-desktop\assets\plugins\dsh-better-sidebar\src\client\sidebar.module.css.mjs
-		const css$4 = "[data-dsh-panel-host]{z-index:40;pointer-events:none;position:fixed;inset:0}[data-dsh-panel-host][data-dsh-panel-host-degraded]{position:absolute;top:0;left:0}._4ve_2a_toggleCluster{top:calc(3px + env(safe-area-inset-top));z-index:45;pointer-events:auto;flex-direction:row;gap:4px;display:flex;position:absolute;right:10px}._4ve_2a_panel:not(._4ve_2a_panelHidden) ._4ve_2a_tabBar{padding-right:72px}._4ve_2a_toggleButton{width:28px;height:28px;color:var(--dsw-alias-label-secondary);cursor:pointer;transition:background var(--ds-transition-duration-slow) var(--ds-ease-in-out), color var(--ds-transition-duration-slow) var(--ds-ease-in-out);background:0 0;border:none;border-radius:50%;justify-content:center;align-items:center;display:flex}._4ve_2a_toggleButton:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_toggleButton:disabled{opacity:.4;cursor:default}._4ve_2a_panel{z-index:40;pointer-events:auto;background:var(--dsw-alias-bg-layer-1);border-left:1px solid var(--dsw-alias-border-l2);padding-bottom:env(safe-area-inset-bottom);transition:transform var(--ds-transition-duration-slow) var(--ds-ease-in-out), width var(--ds-transition-duration-slow) var(--ds-ease-in-out);flex-direction:column;display:flex;position:absolute;top:0;bottom:0;right:0}._4ve_2a_panelHidden{pointer-events:none;visibility:hidden;transition:transform var(--ds-transition-duration-slow) var(--ds-ease-in-out), width var(--ds-transition-duration-slow) var(--ds-ease-in-out), visibility 0s linear var(--ds-transition-duration-slow);transform:translate(102%)}._4ve_2a_panel[data-dragging]{transition:none}._4ve_2a_panelResize{cursor:col-resize;z-index:2;touch-action:none;width:8px;position:absolute;top:0;bottom:0;left:-4px}._4ve_2a_panelResizeActive{background:var(--dsw-alias-interactive-bg-hover-accent)}._4ve_2a_panelBody{flex:1;min-width:0;min-height:0;display:flex}._4ve_2a_bottomPanel{z-index:40;background:var(--dsw-alias-bg-layer-1);border-top:1px solid var(--dsw-alias-border-l2);pointer-events:auto;padding-bottom:env(safe-area-inset-bottom);transition:transform var(--ds-transition-duration-slow) var(--ds-ease-in-out), height var(--ds-transition-duration-slow) var(--ds-ease-in-out);flex-direction:column;display:flex;position:absolute;bottom:0}._4ve_2a_bottomPanelHidden{pointer-events:none;visibility:hidden;transition:transform var(--ds-transition-duration-slow) var(--ds-ease-in-out), height var(--ds-transition-duration-slow) var(--ds-ease-in-out), visibility 0s linear var(--ds-transition-duration-slow);transform:translateY(102%)}._4ve_2a_bottomPanel[data-dragging]{transition:none}._4ve_2a_panel,._4ve_2a_bottomPanel{contain:layout style}body[data-dsh-sidebar-dragging] ._4ve_2a_panel,body[data-dsh-sidebar-dragging] ._4ve_2a_bottomPanel{will-change:transform}._4ve_2a_bottomResize{cursor:row-resize;z-index:2;touch-action:none;height:8px;position:absolute;top:-4px;left:0;right:0}._4ve_2a_bottomResizeActive{background:var(--dsw-alias-interactive-bg-hover-accent)}._4ve_2a_bottomClose{z-index:4;width:28px;height:28px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:50%;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex;position:absolute;top:3px;right:6px}._4ve_2a_bottomClose:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_bottomPanel ._4ve_2a_tabBar{padding-right:40px}._4ve_2a_toggleCluster,._4ve_2a_toggleButton,._4ve_2a_tabBar{-webkit-app-region:no-drag}body[data-dsh-title-bar-compat] ._4ve_2a_toggleCluster{top:calc(var(--dsh-title-bar-strip,40px) + 3px)}body[data-dsh-title-bar-compat] ._4ve_2a_panel{padding-top:var(--dsh-title-bar-strip,40px)}._4ve_2a_cornerHandle{left:-6px;bottom:calc(var(--dsh-sidebar-height,0px) + 6px);z-index:2;cursor:nwse-resize;touch-action:none;width:12px;height:12px;position:absolute}._4ve_2a_cornerHandle:hover,._4ve_2a_cornerHandle[data-dragging]{background:var(--dsw-alias-interactive-bg-hover-accent)}._4ve_2a_iconButton{width:28px;height:28px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:50%;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}._4ve_2a_iconButton:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_iconButton:disabled{opacity:.4;cursor:default}._4ve_2a_workbench,._4ve_2a_split{flex:1;min-width:0;min-height:0;display:flex}._4ve_2a_splitRow{flex-direction:row}._4ve_2a_splitCol{flex-direction:column}._4ve_2a_splitChild{display:flex;position:relative;overflow:hidden}._4ve_2a_divider{z-index:3;touch-action:none;flex:none;position:relative}._4ve_2a_dividerRow:after,._4ve_2a_dividerCol:after{content:\"\";background:var(--dsw-alias-border-l2);transition:background var(--ds-transition-duration-slow) var(--ds-ease-in-out);position:absolute}._4ve_2a_dividerRow{cursor:col-resize;width:7px;margin:0 -2px}._4ve_2a_dividerRow:after{width:1px;top:0;bottom:0;left:50%;transform:translate(-50%)}._4ve_2a_dividerCol{cursor:row-resize;height:7px;margin:-2px 0}._4ve_2a_dividerCol:after{height:1px;top:50%;left:0;right:0;transform:translateY(-50%)}._4ve_2a_divider:hover:after,._4ve_2a_dividerActive:after{background:var(--dsw-alias-interactive-bg-hover-accent)}._4ve_2a_pane{background:var(--dsw-alias-bg-base);flex-direction:column;flex:1;min-width:0;min-height:0;display:flex;position:relative}._4ve_2a_paneDrop{outline:1px solid var(--dsw-alias-interactive-bg-hover-accent);outline-offset:-1px}._4ve_2a_dropOverlay{z-index:6;pointer-events:none;background:var(--dsw-alias-interactive-bg-hover-accent);opacity:.5;position:absolute}._4ve_2a_dropLeft{width:25%;top:0;bottom:0;left:0}._4ve_2a_dropRight{width:25%;top:0;bottom:0;right:0}._4ve_2a_dropUp{height:25%;top:0;left:0;right:0}._4ve_2a_dropDown{height:25%;bottom:0;left:0;right:0}._4ve_2a_dropCenter{outline:2px dashed var(--dsw-alias-interactive-bg-hover-accent);outline-offset:-2px;background:0 0;inset:25%}._4ve_2a_paneContent{flex-direction:column;flex:1;min-height:0;display:flex;overflow:hidden}._4ve_2a_paneTab{flex-direction:column;flex:1;min-height:0;display:flex}._4ve_2a_paneTabHidden{display:none}._4ve_2a_paneEmptyCards{flex:1;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));align-content:start;gap:8px;min-height:0;padding:12px;display:grid;overflow:hidden}._4ve_2a_paneCard{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);min-width:0;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-strong-12);cursor:pointer;text-align:center;border-radius:8px;flex-direction:column;justify-content:center;align-items:center;gap:6px;padding:12px 8px;display:flex}._4ve_2a_paneCard:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l2)}._4ve_2a_paneCard:disabled{opacity:.45;cursor:default}._4ve_2a_tabBar{border-bottom:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);flex:none;align-items:stretch;height:34px;display:flex}._4ve_2a_tabBarDrop{outline:1px dashed var(--dsw-alias-interactive-bg-hover-accent);outline-offset:-1px}._4ve_2a_tabList{scrollbar-width:none;flex:1;min-width:0;display:flex;overflow-x:auto}._4ve_2a_tabList::-webkit-scrollbar{display:none}._4ve_2a_tab{min-width:64px;max-width:160px;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-secondary);border-right:1px solid var(--dsw-alias-border-l1);cursor:pointer;user-select:none;background:0 0;flex:none;align-items:center;gap:4px;padding:0 4px 0 10px;display:flex}._4ve_2a_tab:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_tabActive{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-active)}._4ve_2a_tabTitle{text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;overflow:hidden}._4ve_2a_tabBadge{min-width:16px;height:15px;font:var(--dsw-font-xxxs-strong-11);background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-brand-primary);border-radius:8px;flex:none;justify-content:center;align-items:center;padding:0 4px;display:inline-flex}._4ve_2a_tabClose{width:18px;height:18px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:4px;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}._4ve_2a_tabClose:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_tabBarPlus{background:var(--dsw-alias-bg-layer-1);width:22px;height:22px;color:var(--dsw-alias-label-tertiary);cursor:pointer;border:none;border-radius:5px;flex:none;justify-content:center;align-self:center;align-items:center;margin:0 6px;padding:0;display:inline-flex;position:sticky;right:0}._4ve_2a_tabBarPlus:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_explorer{flex-direction:column;flex:1;min-height:0;display:flex}._4ve_2a_explorerHeader{flex:none;justify-content:space-between;align-items:center;gap:8px;height:36px;padding:0 8px 0 12px;display:flex}._4ve_2a_explorerRoot{font:var(--dsw-font-s-14);color:var(--dsw-alias-label-secondary);text-overflow:ellipsis;white-space:nowrap;overflow:hidden}._4ve_2a_explorerBody{flex:1;min-height:0;padding:2px 6px 8px;overflow:hidden auto}._4ve_2a_explorerRow{box-sizing:border-box;width:100%;max-width:100%;height:34px;font:var(--dsw-font-s-14);color:var(--dsw-alias-label-primary);text-align:left;cursor:pointer;white-space:nowrap;animation:_4ve_2a_dsh-row-in .15s var(--ds-ease-in-out);background:0 0;border:none;border-radius:8px;align-items:center;gap:6px;padding:0 8px;display:flex}._4ve_2a_explorerRow:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_explorerDir{font:var(--dsw-font-s-strong-14)}._4ve_2a_explorerHidden{opacity:.45}._4ve_2a_explorerSymlink{color:var(--dsw-alias-label-tertiary);flex:none}._4ve_2a_explorerBroken ._4ve_2a_explorerName{color:var(--dsw-alias-state-error-primary)}._4ve_2a_explorerName{text-overflow:ellipsis;white-space:nowrap;min-width:0;overflow:hidden}._4ve_2a_explorerRef{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);height:20px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-strong-11);cursor:pointer;border-radius:999px;flex:none;align-items:center;padding:0 8px;display:none}._4ve_2a_explorerRef:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_explorerRow:hover ._4ve_2a_explorerRef,._4ve_2a_explorerRow:focus-within ._4ve_2a_explorerRef{display:inline-flex}._4ve_2a_explorerCopied{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);flex:none}._4ve_2a_explorerError{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-error-primary);cursor:default}@keyframes _4ve_2a_dsh-row-in{0%{opacity:0}}._4ve_2a_explorerEmpty{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);text-align:center;padding:16px}body{--dsh-file-icon-folder:#b98a3e;--dsh-file-icon-js:#c9a000;--dsh-file-icon-ts:#3178c6;--dsh-file-icon-json:#a4912a;--dsh-file-icon-md:#4f9a50;--dsh-file-icon-css:#c86b2f;--dsh-file-icon-html:#d46a1f;--dsh-file-icon-image:#a855b0}body[data-ds-dark-theme]{--dsh-file-icon-folder:#dcb67a;--dsh-file-icon-js:#e8c44b;--dsh-file-icon-ts:#56a8d8;--dsh-file-icon-json:#cbcb41;--dsh-file-icon-md:#69a864;--dsh-file-icon-css:#d18f52;--dsh-file-icon-html:#e37933;--dsh-file-icon-image:#c586e0}._4ve_2a_explorerIconFolder{color:var(--dsh-file-icon-folder)}._4ve_2a_explorerIconJs{color:var(--dsh-file-icon-js)}._4ve_2a_explorerIconTs{color:var(--dsh-file-icon-ts)}._4ve_2a_explorerIconJson{color:var(--dsh-file-icon-json)}._4ve_2a_explorerIconMd{color:var(--dsh-file-icon-md)}._4ve_2a_explorerIconCss{color:var(--dsh-file-icon-css)}._4ve_2a_explorerIconHtml{color:var(--dsh-file-icon-html)}._4ve_2a_explorerIconImage{color:var(--dsh-file-icon-image)}._4ve_2a_explorerRowDropTarget{background:var(--dsw-alias-interactive-bg-hover);outline:1px dashed var(--dsw-alias-interactive-bg-hover-accent);outline-offset:-1px}._4ve_2a_uploadDropZone{z-index:1001;pointer-events:none;border:2px dashed var(--dsw-alias-interactive-bg-hover-accent);box-shadow:0 0 0 200vmax var(--dsw-alias-bg-mask-drop);animation:_4ve_2a_dsh-row-in .15s var(--ds-ease-in-out);border-radius:10px;justify-content:center;align-items:flex-start;padding:12px;display:flex;position:fixed}._4ve_2a_uploadDropHero{flex-direction:column;align-items:center;gap:10px;max-width:100%;padding-top:8px;display:flex}._4ve_2a_uploadDropZonePill{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);max-width:100%;box-shadow:var(--dsw-shadow-lv2);color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-strong-12);border-radius:999px;align-items:center;gap:6px;padding:6px 12px;display:flex}._4ve_2a_uploadDropZoneText{white-space:nowrap;text-overflow:ellipsis;overflow:hidden}._4ve_2a_uploadDropChatHint{z-index:1002;pointer-events:none;animation:_4ve_2a_dsh-row-in .15s var(--ds-ease-in-out);justify-content:center;align-items:center;padding:24px;display:flex;position:fixed;top:0;bottom:0;left:0}._4ve_2a_uploadDropChatCard{text-align:center;max-width:100%;color:var(--dsw-alias-label-primary);font:var(--dsw-font-s-strong-14);flex-direction:column;align-items:center;gap:12px;display:flex}._4ve_2a_uploadOverlay{z-index:30;background:var(--dsw-alias-bg-mask-1);backdrop-filter:var(--dsw-mask-blur);animation:_4ve_2a_dsh-row-in .15s var(--ds-ease-in-out);justify-content:center;align-items:center;display:flex;position:absolute;inset:0}._4ve_2a_uploadOverlayCard{border:1px solid var(--dsw-alias-border-inverted);background:var(--dsw-alias-bg-layer-2);min-width:280px;max-width:min(420px,100% - 48px);box-shadow:var(--dsw-shadow-lv3);border-radius:24px;flex-direction:column;gap:12px;padding:20px 24px;display:flex}._4ve_2a_uploadOverlayTitle{font:var(--dsw-font-s-strong-14);color:var(--dsw-alias-label-primary);align-items:center;gap:8px;display:flex}._4ve_2a_uploadOverlayTitle>svg{flex:none}._4ve_2a_uploadOverlayTitle>span{white-space:nowrap;text-overflow:ellipsis;min-width:0;overflow:hidden}._4ve_2a_uploadOverlayProgress{background:var(--dsw-alias-border-l2);border-radius:3px;height:6px;overflow:hidden}._4ve_2a_uploadOverlayProgressFill{background:var(--dsw-alias-interactive-bg-hover-accent);height:100%;transition:width .15s var(--ds-ease-in-out);border-radius:3px}._4ve_2a_uploadOverlayStatus{min-height:1em;font:var(--dsw-font-xxs-12);font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-tertiary);white-space:nowrap;text-overflow:ellipsis;overflow:hidden}._4ve_2a_uploadOverlayCancel{border:1px solid var(--dsw-alias-border-l2);height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-strong-12);cursor:pointer;background:0 0;border-radius:8px;align-self:flex-end;padding:0 14px}._4ve_2a_uploadOverlayCancel:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);border-color:var(--dsw-alias-border-l2)}._4ve_2a_uploadOverlayCancel:disabled{opacity:.4;cursor:default}._4ve_2a_editor{flex-direction:column;flex:1;min-height:0;display:flex}._4ve_2a_editorHeader{border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;align-items:center;gap:6px;padding:4px 8px;display:flex}._4ve_2a_editorBack{width:22px;height:22px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:6px;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}._4ve_2a_editorBack:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_editorTitle{min-width:0;font:var(--dsw-font-xxs-strong-12);color:var(--dsw-alias-label-secondary);text-overflow:ellipsis;white-space:nowrap;flex:1;overflow:hidden}._4ve_2a_editorPathInput{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);min-width:0;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);border-radius:6px;flex:1;padding:0 10px}._4ve_2a_editorPathInput:focus{border-color:var(--dsw-alias-border-l2);outline:none}._4ve_2a_editorTreeToggleActive{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-active)}._4ve_2a_editorBody{flex:1;min-height:0;display:flex}._4ve_2a_editorMain{flex-direction:column;flex:1;min-width:0;min-height:0;display:flex}._4ve_2a_editorTreeDock{border-right:1px solid var(--dsw-alias-border-l1);flex:none;min-height:0;display:flex;position:relative}._4ve_2a_editorTreeResize{cursor:col-resize;touch-action:none;z-index:3;width:6px;position:absolute;top:0;bottom:0;right:0}._4ve_2a_editorTreeResize:hover{background:var(--dsw-alias-border-l2)}._4ve_2a_editorTreePanel{flex-direction:column;flex:1;min-width:0;min-height:0;display:flex;position:relative}._4ve_2a_editorTreePanelFull{flex:1}._4ve_2a_editorTreeSearch{border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;align-items:center;gap:4px;padding:6px 8px;display:flex}._4ve_2a_editorSearchInput{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);min-width:0;height:26px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);border-radius:6px;flex:1;padding:0 10px}._4ve_2a_editorSearchInput:focus{border-color:var(--dsw-alias-border-l2);outline:none}._4ve_2a_editorSearchHint{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);padding:8px 12px}._4ve_2a_editorSearchResult{width:100%;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);text-align:left;cursor:pointer;text-overflow:ellipsis;white-space:nowrap;background:0 0;border:none;border-radius:6px;padding:4px 8px;display:block;overflow:hidden}._4ve_2a_editorSearchResult:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_editorStatus{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}._4ve_2a_editorStatusError{color:var(--dsw-alias-state-error-primary)}._4ve_2a_dirtyDot{background:var(--dsw-alias-state-warn-primary);border-radius:50%;flex:none;width:7px;height:7px}._4ve_2a_editorPlaceholder{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);text-align:center;flex:1;justify-content:center;align-items:center;padding:16px;display:flex}._4ve_2a_orphanedType{opacity:.7;overflow-wrap:anywhere;margin-top:8px;font-size:12px;display:block}._4ve_2a_editorBinary{text-align:center;flex-direction:column;flex:1;justify-content:center;align-items:center;gap:12px;padding:24px 16px;display:flex}._4ve_2a_editorBinaryNotice{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary)}._4ve_2a_editorDownloadLink{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-strong-12);cursor:pointer;transition:background var(--ds-transition-duration-slow) var(--ds-ease-in-out), border-color var(--ds-transition-duration-slow) var(--ds-ease-in-out);border-radius:6px;align-items:center;gap:6px;padding:6px 14px;text-decoration:none;display:inline-flex}._4ve_2a_editorDownloadLink:hover{background:var(--dsw-alias-interactive-bg-hover);border-color:var(--dsw-alias-border-l2)}._4ve_2a_editorError{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-error-primary);padding:12px 16px}._4ve_2a_editorBanner{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-state-warn-label);background:var(--dsw-alias-state-warn-tertiary);flex:none;padding:4px 12px}._4ve_2a_sandboxStatus{font:var(--dsw-font-xxxs-11);flex:none;align-items:center;gap:8px;padding:4px 10px;display:flex}._4ve_2a_sandboxStatusOn{color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-bg-layer-1);border-bottom:1px solid var(--dsw-alias-border-l1)}._4ve_2a_sandboxStatusOff{color:var(--dsw-alias-state-error-primary);background:color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent);border-bottom:1px solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent)}._4ve_2a_sandboxDot{background:var(--dsw-alias-state-success-primary);border-radius:50%;flex:none;width:6px;height:6px}._4ve_2a_sandboxStatusOff ._4ve_2a_sandboxDot{background:var(--dsw-alias-state-error-primary)}._4ve_2a_sandboxStatusText{text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;overflow:hidden}._4ve_2a_sandboxAction{border:1px solid var(--dsw-alias-border-l2);font:inherit;color:inherit;cursor:pointer;background:0 0;border-radius:6px;flex:none;padding:2px 8px}._4ve_2a_sandboxAction:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_editorHtml{background:var(--dsw-alias-bg-base);border:none;flex:1;width:100%;min-height:0}._4ve_2a_browser{flex-direction:column;flex:1;min-height:0;display:flex}._4ve_2a_browserBar{border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;align-items:center;gap:4px;padding:6px 8px;display:flex}._4ve_2a_browserInput{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);min-width:0;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);border-radius:6px;flex:1;padding:0 10px}._4ve_2a_browserInput:focus{border-color:var(--dsw-alias-border-l2);outline:none}._4ve_2a_browserMessage{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-state-warn-label);background:var(--dsw-alias-state-warn-tertiary);flex:none;padding:4px 12px}._4ve_2a_browserFrame{background:var(--dsw-alias-bg-base);border:none;flex:1;width:100%;min-height:0}._4ve_2a_browserStart{text-align:center;min-height:0;font:var(--dsw-font-xs-13);color:var(--dsw-alias-label-tertiary);flex:1;justify-content:center;align-items:center;padding:20px;display:flex}._4ve_2a_browserBlocked{text-align:center;min-height:0;color:var(--dsw-alias-state-warn-primary);flex-direction:column;flex:1;justify-content:center;align-items:center;gap:6px;padding:24px;display:flex}._4ve_2a_browserBlockedTitle{font:var(--dsw-font-xxs-strong-12);color:var(--dsw-alias-label-primary)}._4ve_2a_browserBlockedDesc{max-width:280px;font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-secondary)}._4ve_2a_browserBlockedActions{gap:8px;margin-top:6px;display:flex}._4ve_2a_browserBlockedButton{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxxs-11);cursor:pointer;border-radius:6px;padding:4px 12px}._4ve_2a_browserBlockedButton:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_editorCm{background:0 0;flex:1;min-height:0;overflow:hidden}._4ve_2a_editorCmHidden{display:none}._4ve_2a_editorCm .cm-editor{height:100%}._4ve_2a_editorCm .cm-editor.cm-focused{outline:none}._4ve_2a_editorModeToggle{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);border-radius:6px;flex:none;align-items:center;gap:2px;padding:2px;display:inline-flex}._4ve_2a_editorModeButton{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);cursor:pointer;background:0 0;border:none;border-radius:4px;padding:2px 8px}._4ve_2a_editorModeButton:hover{color:var(--dsw-alias-label-primary)}._4ve_2a_editorModeActive{background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary)}._4ve_2a_editorImageWrap{flex:1;justify-content:center;align-items:center;min-height:0;padding:12px;display:flex;overflow:auto}._4ve_2a_editorImage{object-fit:contain;max-width:100%;max-height:100%}._4ve_2a_editorMd{min-height:0;font:var(--dsw-font-xs-13);--dsh-md-accent:var(--dsw-alias-state-business-primary);--dsh-md-border:var(--dsw-alias-border-l2);--dsh-md-quote-bg:color-mix(in srgb, var(--dsw-alias-state-business-primary) 8%, transparent);--dsh-md-table-head-bg:var(--dsw-alias-interactive-bg-hover);--dsh-md-table-stripe:color-mix(in srgb, var(--dsw-alias-interactive-bg-hover) 45%, transparent);flex:1;padding:10px 14px;overflow-y:auto}._4ve_2a_editorMd h1,._4ve_2a_editorMd h2{border-bottom:1px solid var(--dsh-md-border);color:var(--dsw-alias-label-primary);padding-bottom:.35em;font-weight:700}._4ve_2a_editorMd h3,._4ve_2a_editorMd h4,._4ve_2a_editorMd h5,._4ve_2a_editorMd h6{color:var(--dsw-alias-label-secondary)}._4ve_2a_editorMd a{text-underline-offset:3px}._4ve_2a_editorMd blockquote{border-left:3px solid var(--dsh-md-accent);background:var(--dsh-md-quote-bg);color:var(--dsw-alias-label-secondary);border-radius:0 8px 8px 0;margin:16px 0;padding:6px 14px}._4ve_2a_editorMd blockquote p:last-child{margin-bottom:0}._4ve_2a_editorMd .md-code-block{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-markdown-code-block);border-radius:10px;overflow:hidden}._4ve_2a_editorMd .md-code-block pre{background:var(--dsw-alias-markdown-code-block)!important}._4ve_2a_editorMd th{background:var(--dsh-md-table-head-bg);font-weight:650}._4ve_2a_editorMd th,._4ve_2a_editorMd td{border:1px solid var(--dsh-md-border)}._4ve_2a_editorMd tbody tr:nth-child(2n){background:var(--dsh-md-table-stripe)}._4ve_2a_editorMd li::marker{color:var(--dsh-md-accent)}._4ve_2a_editorMd img{border:1px solid var(--dsw-alias-border-l1);border-radius:8px}._4ve_2a_mermaidWrap{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);border-radius:6px;margin:6px 0;overflow:hidden}._4ve_2a_mermaidHeader{border-bottom:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);justify-content:space-between;align-items:center;gap:6px;padding:4px 8px;display:flex}._4ve_2a_mermaidInfo{font:var(--dsw-font-xxxs-strong-11);color:var(--dsw-alias-label-tertiary)}._4ve_2a_mermaidCopy{height:20px;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);cursor:pointer;background:0 0;border:none;border-radius:4px;align-items:center;gap:4px;padding:0 6px;display:inline-flex}._4ve_2a_mermaidCopy:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_mermaidBody{cursor:zoom-in;justify-content:center;padding:10px;display:flex;overflow:auto}._4ve_2a_mermaidBody svg{max-width:100%;height:auto}._4ve_2a_mermaidError{border-bottom:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-state-error-primary);font:var(--dsw-font-xxxs-11);padding:6px 10px}._4ve_2a_mermaidCode{font:var(--dsw-font-xxxs-11);margin:0;padding:8px 10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow:auto}._4ve_2a_mermaidMarkdown .md-code-block[data-mermaid-processed]{display:contents}._4ve_2a_mermaidModal{z-index:1000;background:var(--dsw-alias-bg-mask-1);backdrop-filter:blur(2px);flex-direction:column;justify-content:center;align-items:center;display:flex;position:fixed;inset:0}._4ve_2a_mermaidModalToolbar{z-index:10;gap:8px;display:flex;position:absolute;top:16px;right:16px}._4ve_2a_mermaidModalButton{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);width:36px;height:36px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xs-strong-13);cursor:pointer;border-radius:8px;justify-content:center;align-items:center;display:inline-flex}._4ve_2a_mermaidModalButton:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_mermaidModalStage{justify-content:center;align-items:center;width:90vw;height:80vh;display:flex;position:relative;overflow:hidden}._4ve_2a_mermaidModalStage svg{cursor:grab;transform-origin:50%;user-select:none;-webkit-user-drag:none;background:var(--dsw-alias-bg-layer-1);border-radius:12px;max-width:none;max-height:none;padding:16px}._4ve_2a_mermaidModalStage svg:active{cursor:grabbing}._4ve_2a_mermaidModalHint{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);pointer-events:none;position:absolute;bottom:16px;left:50%;transform:translate(-50%)}._4ve_2a_selectionPopup{z-index:60;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxxs-strong-11);white-space:nowrap;cursor:pointer;border-radius:6px;align-items:center;padding:0 10px;display:inline-flex;position:fixed;transform:translate(-50%,calc(-100% - 8px))}._4ve_2a_selectionPopup:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_editorPdf{background:var(--dsw-alias-bg-base);flex-direction:column;flex:1;min-height:0;display:flex}._4ve_2a_editorPdfToolbar{border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;justify-content:flex-end;padding:6px 8px;display:flex}._4ve_2a_editorPdfStage{flex:1;min-height:0;display:flex;position:relative}._4ve_2a_editorPdfFrame{background:var(--dsw-alias-bg-base);border:none;flex:1;width:100%;min-height:0}._4ve_2a_editorPdfFrameBlocked{pointer-events:none}._4ve_2a_editorPdfDragShield{z-index:4;pointer-events:none;background:0 0;position:absolute;inset:0}._4ve_2a_editorPdfDragShieldActive{pointer-events:auto}body[data-dsh-tab-dragging] ._4ve_2a_editorPdfFrame{pointer-events:none!important}body[data-dsh-tab-dragging] ._4ve_2a_editorPdfDragShield{pointer-events:auto!important}._4ve_2a_terminalWrap{background:var(--dsw-alias-bg-base);flex-direction:column;flex:1;min-height:0;display:flex;position:relative}._4ve_2a_terminal{flex:1;min-height:0;padding:6px 4px 6px 8px}._4ve_2a_terminal .xterm{height:100%}._4ve_2a_terminalBanner{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-state-warn-label);background:var(--dsw-alias-state-warn-tertiary);flex-wrap:wrap;flex:none;align-items:center;gap:8px;padding:3px 10px;display:flex}._4ve_2a_terminalBannerUrl{word-break:break-all;opacity:.85;flex-basis:100%;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}._4ve_2a_boundaryError{z-index:50;background:var(--dsw-alias-bg-layer-1);border-left:1px solid var(--dsw-alias-border-l2);font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-error-primary);flex-direction:column;align-items:flex-start;gap:8px;padding:16px;display:flex;position:fixed;top:0;bottom:0;right:0;overflow:auto}._4ve_2a_terminalRetry{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-strong-11);cursor:pointer;border-radius:999px;flex:none;padding:1px 8px}._4ve_2a_terminalRetry:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_terminalDepsBanner{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-warn-label);background:var(--dsw-alias-state-warn-tertiary);flex-direction:column;flex:none;gap:6px;padding:10px;display:flex}._4ve_2a_terminalDepsTitle{font:var(--dsw-font-xxs-strong-12);color:var(--dsw-alias-state-warn-primary)}._4ve_2a_terminalDepsHint{opacity:.9}._4ve_2a_terminalDepsCommandRow{align-items:flex-start;gap:8px;display:flex}._4ve_2a_terminalRepairCommand{white-space:pre-wrap;word-break:break-all;user-select:text;min-width:0;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l2);border-radius:4px;flex:1;max-height:160px;margin:0;padding:6px 8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.5;overflow:auto}._4ve_2a_terminalDepsNote{opacity:.85}._4ve_2a_terminalDepsActions{align-items:center;gap:8px;display:flex}._4ve_2a_tabBoundaryError{min-height:0;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-error-primary);flex-direction:column;flex:1;align-items:flex-start;gap:8px;padding:12px 16px;display:flex;overflow:auto}._4ve_2a_git{flex-direction:column;flex:1;min-width:0;min-height:0;display:flex;overflow:hidden auto}._4ve_2a_gitHeader{flex:none;align-items:center;gap:8px;height:36px;padding:0 8px 0 12px;display:flex}._4ve_2a_gitBranchSelect{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);min-width:0;height:26px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);border-radius:6px;flex:1;padding:0 6px}._4ve_2a_gitSection{border-top:1px solid var(--dsw-alias-border-l1)}._4ve_2a_gitSectionHeader{font:var(--dsw-font-xxxs-strong-11);color:var(--dsw-alias-label-tertiary);text-transform:uppercase;justify-content:space-between;align-items:center;padding:6px 12px 4px;display:flex}._4ve_2a_gitLink{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-brand-primary);cursor:pointer;background:0 0;border:none;padding:0}._4ve_2a_gitLink:hover:not(:disabled){text-decoration:underline}._4ve_2a_gitLink:disabled{opacity:.4;cursor:default}._4ve_2a_gitRow{min-height:34px;animation:_4ve_2a_dsh-row-in .15s var(--ds-ease-in-out);border-radius:8px;align-items:center;gap:6px;margin:0 6px;padding:0 8px;display:flex}._4ve_2a_gitRow:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_gitRowSelected{background:var(--dsw-alias-interactive-bg-active)}._4ve_2a_gitRowMain{cursor:pointer;text-align:left;background:0 0;border:none;flex:1;align-items:center;gap:8px;min-width:0;padding:3px 0;display:flex}._4ve_2a_gitBadge{width:20px;height:16px;font:var(--dsw-font-xxxs-strong-11);background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);border-radius:4px;flex:none;justify-content:center;align-items:center;display:inline-flex}._4ve_2a_gitName{text-overflow:ellipsis;white-space:nowrap;min-width:0;font:var(--dsw-font-s-14);color:var(--dsw-alias-label-primary);flex:1;overflow:hidden}._4ve_2a_gitEmpty{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);padding:4px 12px 8px}._4ve_2a_gitPlaceholder{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);text-align:center;padding:16px}._4ve_2a_gitError{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-error-primary);white-space:pre-wrap;padding:8px 12px}._4ve_2a_gitDiff{border-top:1px solid var(--dsw-alias-border-l1);padding:8px}._4ve_2a_gitDiffTab{flex-direction:column;flex:1;min-width:0;min-height:0;display:flex;overflow:hidden auto}._4ve_2a_gitDiffTabHeader{border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;align-items:center;gap:8px;height:36px;padding:0 8px 0 12px;display:flex}._4ve_2a_gitDiffTabTitle{text-overflow:ellipsis;white-space:nowrap;min-width:0;font:var(--dsw-font-xxs-strong-12);color:var(--dsw-alias-label-primary);flex:1;overflow:hidden}._4ve_2a_gitDiffFile{width:100%;color:inherit;text-align:left;cursor:pointer;background:0 0;border:0;align-items:baseline;gap:6px;padding:8px 2px 2px;display:flex}._4ve_2a_gitDiffFile:disabled{cursor:default}._4ve_2a_gitDiffFile:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_gitDiffFileChevron{color:var(--dsw-alias-label-tertiary);flex:none;transform:rotate(0)}._4ve_2a_gitDiffFileChevronExpanded{transform:rotate(90deg)}._4ve_2a_gitDiffFilePath{font:var(--dsw-font-xxs-strong-12);color:var(--dsw-alias-label-primary);text-overflow:ellipsis;white-space:nowrap;overflow:hidden}._4ve_2a_gitDiffFileOld{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);text-overflow:ellipsis;white-space:nowrap;flex:none;max-width:40%;overflow:hidden}._4ve_2a_gitDiffFileTag{border:1px solid var(--dsw-alias-border-l2);font:var(--dsw-font-xxxs-strong-11);color:var(--dsw-alias-label-secondary);border-radius:999px;flex:none;padding:0 6px}._4ve_2a_gitDiffHunk{font:var(--dsw-font-markdown-code-block-small);color:var(--dsw-alias-label-tertiary);gap:8px;padding:3px 2px;display:flex}._4ve_2a_gitDiffHunkHeader{color:var(--dsw-alias-label-secondary);flex:none}._4ve_2a_gitDiffHunkSection{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}._4ve_2a_gitDiffLine{font:var(--dsw-font-markdown-code-block-small);white-space:pre-wrap;overflow-wrap:anywhere;align-items:stretch;min-width:0;line-height:20px;display:flex}._4ve_2a_gitDiffNum{text-align:right;width:36px;color:var(--dsw-alias-label-tertiary);user-select:none;flex:none;padding-right:8px}._4ve_2a_gitDiffCode{flex:1;min-width:0;overflow:visible}._4ve_2a_gitDiffCtx{color:var(--dsw-alias-label-primary)}._4ve_2a_gitDiffDel{color:var(--dsw-alias-state-error-primary);background:color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent)}._4ve_2a_gitDiffAdd{color:var(--dsw-alias-state-success-primary);background:color-mix(in srgb, var(--dsw-alias-state-success-primary) 12%, transparent)}._4ve_2a_gitDiffMeta{padding-left:2px}._4ve_2a_gitDiffMetaText{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);font-style:italic}._4ve_2a_gitDiffExpand{width:100%;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-brand-primary);cursor:pointer;text-align:center;background:0 0;border:none;margin:4px 0;display:block}._4ve_2a_gitDiffExpand:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_gitConfirmDesc{font:var(--dsw-font-s-14);color:var(--dsw-alias-label-primary);white-space:pre-wrap;margin:0}._4ve_2a_gitCommit{border-top:1px solid var(--dsw-alias-border-l1);align-items:center;gap:6px;padding:8px 12px;display:flex}._4ve_2a_gitCommitInput{flex:1;min-width:0}._4ve_2a_gitCommitButton{background:var(--dsw-alias-button-primary-fill);height:26px;color:var(--dsw-alias-label-primary-inverted);font:var(--dsw-font-xxs-strong-12);cursor:pointer;border:none;border-radius:6px;flex:none;padding:0 12px}._4ve_2a_gitCommitButton:hover:not(:disabled){background:var(--dsw-alias-button-primary-hover)}._4ve_2a_gitCommitButton:disabled{opacity:.45;cursor:default}._4ve_2a_gitLogRow{cursor:pointer;border-radius:8px;flex-direction:column;gap:2px;padding:5px 12px;display:flex}._4ve_2a_gitLogRow:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_gitLogLine1{align-items:baseline;gap:8px;min-width:0;display:flex}._4ve_2a_gitLogHash{font:var(--dsw-font-markdown-code-block-small);color:var(--dsw-alias-label-tertiary);flex:none}._4ve_2a_gitLogLine2{flex-wrap:wrap;align-items:center;gap:6px;min-width:0;display:flex}._4ve_2a_gitLogRef{border:1px solid var(--dsw-alias-border-l2);font:var(--dsw-font-xxxs-strong-11);color:var(--dsw-alias-brand-primary);white-space:nowrap;border-radius:999px;flex:none;padding:0 5px}._4ve_2a_gitLogSubject{text-overflow:ellipsis;white-space:nowrap;min-width:0;font:var(--dsw-font-s-14);color:var(--dsw-alias-label-primary);flex:1;overflow:hidden}._4ve_2a_gitLogMeta{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}._4ve_2a_gitLogMore{border:1px solid var(--dsw-alias-border-l2);width:calc(100% - 24px);font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border-radius:6px;margin:4px 12px 8px;padding:6px 0;display:block}._4ve_2a_gitLogMore:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_gitLogMore:disabled{opacity:.5;cursor:default}._4ve_2a_producedRow{flex-wrap:wrap;align-items:center;gap:8px;padding:4px 0;display:flex}._4ve_2a_producedLabel{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary)}._4ve_2a_producedChip{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);max-width:200px;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12);cursor:pointer;border-radius:999px;align-items:center;gap:4px;padding:2px 8px;display:inline-flex;overflow:hidden}._4ve_2a_producedChip:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_producedChip span{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}._4ve_2a_producedMore{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary)}._4ve_2a_toggleButton:focus-visible,._4ve_2a_bottomClose:focus-visible,._4ve_2a_iconButton:focus-visible,._4ve_2a_tab:focus-visible,._4ve_2a_tabClose:focus-visible,._4ve_2a_tabBarPlus:focus-visible,._4ve_2a_paneCard:focus-visible,._4ve_2a_explorerRow:focus-visible,._4ve_2a_explorerRef:focus-visible,._4ve_2a_gitRowMain:focus-visible,._4ve_2a_gitLink:focus-visible,._4ve_2a_gitCommitButton:focus-visible,._4ve_2a_gitLogRow:focus-visible,._4ve_2a_gitLogMore:focus-visible,._4ve_2a_gitDiffFile:focus-visible,._4ve_2a_gitDiffExpand:focus-visible,._4ve_2a_terminalRetry:focus-visible,._4ve_2a_editorModeButton:focus-visible,._4ve_2a_editorDownloadLink:focus-visible,._4ve_2a_editorPptxButton:focus-visible,._4ve_2a_editorDocxZoomRange:focus-visible{outline:2px solid var(--dsw-alias-interactive-bg-hover-accent);outline-offset:-1px}@media (prefers-reduced-motion:reduce){._4ve_2a_panel,._4ve_2a_panelHidden,._4ve_2a_bottomPanel,._4ve_2a_bottomPanelHidden,._4ve_2a_toggleCluster,._4ve_2a_toggleButton,._4ve_2a_tab,._4ve_2a_tabBarPlus,._4ve_2a_paneCard,._4ve_2a_explorerRow,._4ve_2a_gitRow,._4ve_2a_divider,._4ve_2a_dividerRow:after,._4ve_2a_dividerCol:after{transition:none;animation:none}}@media (width<=767px){._4ve_2a_panel:not(._4ve_2a_panelHidden) ._4ve_2a_tabBar{padding-right:40px}._4ve_2a_tab{min-width:48px;max-width:128px}}._4ve_2a_openWithLabel{align-items:center;gap:8px;width:100%;min-width:0;display:flex}._4ve_2a_openWithName{text-overflow:ellipsis;white-space:nowrap;flex:auto;min-width:0;overflow:hidden}._4ve_2a_openWithChevron{color:var(--dsw-alias-label-tertiary);flex:none}._4ve_2a_openWithPin{width:20px;height:20px;color:var(--dsw-alias-label-tertiary);cursor:pointer;border-radius:6px;flex:none;justify-content:center;align-items:center;display:inline-flex}._4ve_2a_openWithPin:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_openWithPinActive{color:var(--dsw-alias-state-business-primary)}";
+		const css$4 = "[data-dsh-panel-host]{z-index:40;pointer-events:none;position:fixed;inset:0}[data-dsh-panel-host][data-dsh-panel-host-degraded]{position:absolute;top:0;left:0}._4ve_2a_toggleCluster{top:calc(3px + env(safe-area-inset-top));z-index:45;pointer-events:auto;flex-direction:row;gap:4px;display:flex;position:absolute;right:10px}._4ve_2a_panel:not(._4ve_2a_panelHidden) ._4ve_2a_tabBar{padding-right:72px}._4ve_2a_toggleButton{width:28px;height:28px;color:var(--dsw-alias-label-secondary);cursor:pointer;transition:background var(--ds-transition-duration-slow) var(--ds-ease-in-out), color var(--ds-transition-duration-slow) var(--ds-ease-in-out);background:0 0;border:none;border-radius:50%;justify-content:center;align-items:center;display:flex}._4ve_2a_toggleButton:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_toggleButton:disabled{opacity:.4;cursor:default}._4ve_2a_panel{z-index:40;pointer-events:auto;background:var(--dsw-alias-bg-layer-1);border-left:1px solid var(--dsw-alias-border-l2);padding-bottom:env(safe-area-inset-bottom);transition:transform var(--ds-transition-duration-slow) var(--ds-ease-in-out), width var(--ds-transition-duration-slow) var(--ds-ease-in-out);flex-direction:column;display:flex;position:absolute;top:0;bottom:0;right:0}._4ve_2a_panelHidden{pointer-events:none;visibility:hidden;transition:transform var(--ds-transition-duration-slow) var(--ds-ease-in-out), width var(--ds-transition-duration-slow) var(--ds-ease-in-out), visibility 0s linear var(--ds-transition-duration-slow);transform:translate(102%)}._4ve_2a_panel[data-dragging]{transition:none}._4ve_2a_panelResize{cursor:col-resize;z-index:2;touch-action:none;width:8px;position:absolute;top:0;bottom:0;left:-4px}._4ve_2a_panelResizeActive{background:var(--dsw-alias-interactive-bg-hover-accent)}._4ve_2a_panelBody{flex:1;min-width:0;min-height:0;display:flex}._4ve_2a_bottomPanel{z-index:40;background:var(--dsw-alias-bg-layer-1);border-top:1px solid var(--dsw-alias-border-l2);pointer-events:auto;padding-bottom:env(safe-area-inset-bottom);transition:transform var(--ds-transition-duration-slow) var(--ds-ease-in-out), height var(--ds-transition-duration-slow) var(--ds-ease-in-out);flex-direction:column;display:flex;position:absolute;bottom:0}._4ve_2a_bottomPanelHidden{pointer-events:none;visibility:hidden;transition:transform var(--ds-transition-duration-slow) var(--ds-ease-in-out), height var(--ds-transition-duration-slow) var(--ds-ease-in-out), visibility 0s linear var(--ds-transition-duration-slow);transform:translateY(102%)}._4ve_2a_bottomPanel[data-dragging]{transition:none}._4ve_2a_panel,._4ve_2a_bottomPanel{contain:layout style}body[data-dsh-sidebar-dragging] ._4ve_2a_panel,body[data-dsh-sidebar-dragging] ._4ve_2a_bottomPanel{will-change:transform}._4ve_2a_bottomResize{cursor:row-resize;z-index:2;touch-action:none;height:8px;position:absolute;top:-4px;left:0;right:0}._4ve_2a_bottomResizeActive{background:var(--dsw-alias-interactive-bg-hover-accent)}._4ve_2a_bottomClose{z-index:4;width:28px;height:28px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:50%;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex;position:absolute;top:3px;right:6px}._4ve_2a_bottomClose:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_bottomPanel ._4ve_2a_tabBar{padding-right:40px}._4ve_2a_toggleCluster,._4ve_2a_toggleButton,._4ve_2a_tabBar{-webkit-app-region:no-drag}body[data-dsh-title-bar-compat] ._4ve_2a_toggleCluster{top:calc(var(--dsh-title-bar-strip,40px) + 3px)}body[data-dsh-title-bar-compat] ._4ve_2a_panel{padding-top:var(--dsh-title-bar-strip,40px)}._4ve_2a_cornerHandle{left:-6px;bottom:calc(var(--dsh-sidebar-height,0px) + 6px);z-index:2;cursor:nwse-resize;touch-action:none;width:12px;height:12px;position:absolute}._4ve_2a_cornerHandle:hover,._4ve_2a_cornerHandle[data-dragging]{background:var(--dsw-alias-interactive-bg-hover-accent)}._4ve_2a_iconButton{width:28px;height:28px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:50%;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}._4ve_2a_iconButton:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_iconButton:disabled{opacity:.4;cursor:default}._4ve_2a_workbench,._4ve_2a_split{flex:1;min-width:0;min-height:0;display:flex}._4ve_2a_splitRow{flex-direction:row}._4ve_2a_splitCol{flex-direction:column}._4ve_2a_splitChild{display:flex;position:relative;overflow:hidden}._4ve_2a_divider{z-index:3;touch-action:none;flex:none;position:relative}._4ve_2a_dividerRow:after,._4ve_2a_dividerCol:after{content:\"\";background:var(--dsw-alias-border-l2);transition:background var(--ds-transition-duration-slow) var(--ds-ease-in-out);position:absolute}._4ve_2a_dividerRow{cursor:col-resize;width:7px;margin:0 -2px}._4ve_2a_dividerRow:after{width:1px;top:0;bottom:0;left:50%;transform:translate(-50%)}._4ve_2a_dividerCol{cursor:row-resize;height:7px;margin:-2px 0}._4ve_2a_dividerCol:after{height:1px;top:50%;left:0;right:0;transform:translateY(-50%)}._4ve_2a_divider:hover:after,._4ve_2a_dividerActive:after{background:var(--dsw-alias-interactive-bg-hover-accent)}._4ve_2a_pane{background:var(--dsw-alias-bg-base);flex-direction:column;flex:1;min-width:0;min-height:0;display:flex;position:relative}._4ve_2a_paneDrop{outline:1px solid var(--dsw-alias-interactive-bg-hover-accent);outline-offset:-1px}._4ve_2a_dropOverlay{z-index:6;pointer-events:none;background:var(--dsw-alias-interactive-bg-hover-accent);opacity:.5;position:absolute}._4ve_2a_dropLeft{width:25%;top:0;bottom:0;left:0}._4ve_2a_dropRight{width:25%;top:0;bottom:0;right:0}._4ve_2a_dropUp{height:25%;top:0;left:0;right:0}._4ve_2a_dropDown{height:25%;bottom:0;left:0;right:0}._4ve_2a_dropCenter{outline:2px dashed var(--dsw-alias-interactive-bg-hover-accent);outline-offset:-2px;background:0 0;inset:25%}._4ve_2a_paneContent{flex-direction:column;flex:1;min-height:0;display:flex;overflow:hidden}._4ve_2a_paneTab{flex-direction:column;flex:1;min-height:0;display:flex}._4ve_2a_paneTabHidden{display:none}._4ve_2a_paneEmptyCards{flex:1;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));align-content:start;gap:8px;min-height:0;padding:12px;display:grid;overflow:hidden}._4ve_2a_paneCard{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);min-width:0;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-strong-12);cursor:pointer;text-align:center;border-radius:8px;flex-direction:column;justify-content:center;align-items:center;gap:6px;padding:12px 8px;display:flex}._4ve_2a_paneCard:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l2)}._4ve_2a_paneCard:disabled{opacity:.45;cursor:default}._4ve_2a_tabBar{border-bottom:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);flex:none;align-items:stretch;height:34px;display:flex}._4ve_2a_tabBarDrop{outline:1px dashed var(--dsw-alias-interactive-bg-hover-accent);outline-offset:-1px}._4ve_2a_tabList{scrollbar-width:none;flex:1;min-width:0;display:flex;overflow-x:auto}._4ve_2a_tabList::-webkit-scrollbar{display:none}._4ve_2a_tab{min-width:64px;max-width:160px;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-secondary);border-right:1px solid var(--dsw-alias-border-l1);cursor:pointer;user-select:none;background:0 0;flex:none;align-items:center;gap:4px;padding:0 4px 0 10px;display:flex}._4ve_2a_tab:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_tabActive{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-active)}._4ve_2a_tabTitle{text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;overflow:hidden}._4ve_2a_tabBadge{min-width:16px;height:15px;font:var(--dsw-font-xxxs-strong-11);background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-brand-primary);border-radius:8px;flex:none;justify-content:center;align-items:center;padding:0 4px;display:inline-flex}._4ve_2a_tabClose{width:18px;height:18px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:4px;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}._4ve_2a_tabClose:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_tabBarPlus{background:var(--dsw-alias-bg-layer-1);width:22px;height:22px;color:var(--dsw-alias-label-tertiary);cursor:pointer;border:none;border-radius:5px;flex:none;justify-content:center;align-self:center;align-items:center;margin:0 6px;padding:0;display:inline-flex;position:sticky;right:0}._4ve_2a_tabBarPlus:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_explorer{flex-direction:column;flex:1;min-height:0;display:flex}._4ve_2a_explorerHeader{flex:none;justify-content:space-between;align-items:center;gap:8px;height:36px;padding:0 8px 0 12px;display:flex}._4ve_2a_explorerRoot{font:var(--dsw-font-s-14);color:var(--dsw-alias-label-secondary);text-overflow:ellipsis;white-space:nowrap;overflow:hidden}._4ve_2a_explorerBody{flex:1;min-height:0;padding:2px 6px 8px;overflow:hidden auto}._4ve_2a_explorerRow{box-sizing:border-box;width:100%;max-width:100%;height:34px;font:var(--dsw-font-s-14);color:var(--dsw-alias-label-primary);text-align:left;cursor:pointer;white-space:nowrap;animation:_4ve_2a_dsh-row-in .15s var(--ds-ease-in-out);background:0 0;border:none;border-radius:8px;align-items:center;gap:6px;padding:0 8px;display:flex}._4ve_2a_explorerRow:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_explorerDir{font:var(--dsw-font-s-strong-14)}._4ve_2a_explorerHidden{opacity:.45}._4ve_2a_explorerSymlink{color:var(--dsw-alias-label-tertiary);flex:none}._4ve_2a_explorerBroken ._4ve_2a_explorerName{color:var(--dsw-alias-state-error-primary)}._4ve_2a_explorerName{text-overflow:ellipsis;white-space:nowrap;min-width:0;overflow:hidden}._4ve_2a_explorerRef{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);height:20px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-strong-11);cursor:pointer;border-radius:999px;flex:none;align-items:center;padding:0 8px;display:none}._4ve_2a_explorerRef:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_explorerRow:hover ._4ve_2a_explorerRef,._4ve_2a_explorerRow:focus-within ._4ve_2a_explorerRef{display:inline-flex}._4ve_2a_explorerCopied{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);flex:none}._4ve_2a_explorerError{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-error-primary);cursor:default}@keyframes _4ve_2a_dsh-row-in{0%{opacity:0}}._4ve_2a_explorerEmpty{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);text-align:center;padding:16px}body{--dsh-file-icon-folder:#b98a3e;--dsh-file-icon-js:#c9a000;--dsh-file-icon-ts:#3178c6;--dsh-file-icon-json:#a4912a;--dsh-file-icon-md:#4f9a50;--dsh-file-icon-css:#c86b2f;--dsh-file-icon-html:#d46a1f;--dsh-file-icon-image:#a855b0}body[data-ds-dark-theme]{--dsh-file-icon-folder:#dcb67a;--dsh-file-icon-js:#e8c44b;--dsh-file-icon-ts:#56a8d8;--dsh-file-icon-json:#cbcb41;--dsh-file-icon-md:#69a864;--dsh-file-icon-css:#d18f52;--dsh-file-icon-html:#e37933;--dsh-file-icon-image:#c586e0}._4ve_2a_explorerIconFolder{color:var(--dsh-file-icon-folder)}._4ve_2a_explorerIconJs{color:var(--dsh-file-icon-js)}._4ve_2a_explorerIconTs{color:var(--dsh-file-icon-ts)}._4ve_2a_explorerIconJson{color:var(--dsh-file-icon-json)}._4ve_2a_explorerIconMd{color:var(--dsh-file-icon-md)}._4ve_2a_explorerIconCss{color:var(--dsh-file-icon-css)}._4ve_2a_explorerIconHtml{color:var(--dsh-file-icon-html)}._4ve_2a_explorerIconImage{color:var(--dsh-file-icon-image)}._4ve_2a_explorerRowDropTarget{background:var(--dsw-alias-interactive-bg-hover);outline:1px dashed var(--dsw-alias-interactive-bg-hover-accent);outline-offset:-1px}._4ve_2a_uploadDropZone{z-index:1001;pointer-events:none;border:2px dashed var(--dsw-alias-interactive-bg-hover-accent);box-shadow:0 0 0 200vmax var(--dsw-alias-bg-mask-drop);animation:_4ve_2a_dsh-row-in .15s var(--ds-ease-in-out);border-radius:10px;justify-content:center;align-items:flex-start;padding:12px;display:flex;position:fixed}._4ve_2a_uploadDropHero{flex-direction:column;align-items:center;gap:10px;max-width:100%;padding-top:8px;display:flex}._4ve_2a_uploadDropZonePill{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);max-width:100%;box-shadow:var(--dsw-shadow-lv2);color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-strong-12);border-radius:999px;align-items:center;gap:6px;padding:6px 12px;display:flex}._4ve_2a_uploadDropZoneText{white-space:nowrap;text-overflow:ellipsis;overflow:hidden}._4ve_2a_uploadDropChatHint{z-index:1002;pointer-events:none;animation:_4ve_2a_dsh-row-in .15s var(--ds-ease-in-out);justify-content:center;align-items:center;padding:24px;display:flex;position:fixed;top:0;bottom:0;left:0}._4ve_2a_uploadDropChatCard{text-align:center;max-width:100%;color:var(--dsw-alias-label-primary);font:var(--dsw-font-s-strong-14);flex-direction:column;align-items:center;gap:12px;display:flex}._4ve_2a_uploadOverlay{z-index:30;background:var(--dsw-alias-bg-mask-1);backdrop-filter:var(--dsw-mask-blur);animation:_4ve_2a_dsh-row-in .15s var(--ds-ease-in-out);justify-content:center;align-items:center;display:flex;position:absolute;inset:0}._4ve_2a_uploadOverlayCard{border:1px solid var(--dsw-alias-border-inverted);background:var(--dsw-alias-bg-layer-2);min-width:280px;max-width:min(420px,100% - 48px);box-shadow:var(--dsw-shadow-lv3);border-radius:24px;flex-direction:column;gap:12px;padding:20px 24px;display:flex}._4ve_2a_uploadOverlayTitle{font:var(--dsw-font-s-strong-14);color:var(--dsw-alias-label-primary);align-items:center;gap:8px;display:flex}._4ve_2a_uploadOverlayTitle>svg{flex:none}._4ve_2a_uploadOverlayTitle>span{white-space:nowrap;text-overflow:ellipsis;min-width:0;overflow:hidden}._4ve_2a_uploadOverlayProgress{background:var(--dsw-alias-border-l2);border-radius:3px;height:6px;overflow:hidden}._4ve_2a_uploadOverlayProgressFill{background:var(--dsw-alias-interactive-bg-hover-accent);height:100%;transition:width .15s var(--ds-ease-in-out);border-radius:3px}._4ve_2a_uploadOverlayStatus{min-height:1em;font:var(--dsw-font-xxs-12);font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-tertiary);white-space:nowrap;text-overflow:ellipsis;overflow:hidden}._4ve_2a_uploadOverlayCancel{border:1px solid var(--dsw-alias-border-l2);height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-strong-12);cursor:pointer;background:0 0;border-radius:8px;align-self:flex-end;padding:0 14px}._4ve_2a_uploadOverlayCancel:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);border-color:var(--dsw-alias-border-l2)}._4ve_2a_uploadOverlayCancel:disabled{opacity:.4;cursor:default}._4ve_2a_editor{flex-direction:column;flex:1;min-height:0;display:flex}._4ve_2a_editorHeader{border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;align-items:center;gap:6px;padding:4px 8px;display:flex}._4ve_2a_editorBack{width:22px;height:22px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:6px;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}._4ve_2a_editorBack:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_editorTitle{min-width:0;font:var(--dsw-font-xxs-strong-12);color:var(--dsw-alias-label-secondary);text-overflow:ellipsis;white-space:nowrap;flex:1;overflow:hidden}._4ve_2a_editorPathInput{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);min-width:0;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);border-radius:6px;flex:1;padding:0 10px}._4ve_2a_editorPathInput:focus{border-color:var(--dsw-alias-border-l2);outline:none}._4ve_2a_editorTreeToggleActive{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-active)}._4ve_2a_editorBody{flex:1;min-height:0;display:flex}._4ve_2a_editorMain{flex-direction:column;flex:1;min-width:0;min-height:0;display:flex}._4ve_2a_editorTreeDock{border-right:1px solid var(--dsw-alias-border-l1);flex:none;min-height:0;display:flex;position:relative}._4ve_2a_editorTreeResize{cursor:col-resize;touch-action:none;z-index:3;width:6px;position:absolute;top:0;bottom:0;right:0}._4ve_2a_editorTreeResize:hover{background:var(--dsw-alias-border-l2)}._4ve_2a_editorTreePanel{flex-direction:column;flex:1;min-width:0;min-height:0;display:flex;position:relative}._4ve_2a_editorTreePanelFull{flex:1}._4ve_2a_explorerRail{border-right:1px solid var(--dsw-alias-border-l1);flex-direction:column;flex:none;min-width:0;min-height:0;display:flex;position:relative}._4ve_2a_explorerRailHeader{border-bottom:1px solid var(--dsw-alias-border-l1);height:30px;color:var(--dsw-alias-label-secondary);flex:none;align-items:center;gap:6px;padding:0 4px 0 10px;display:flex}._4ve_2a_explorerRailTitle{text-overflow:ellipsis;white-space:nowrap;letter-spacing:.04em;text-transform:uppercase;flex:1;min-width:0;font-size:11px;font-weight:600;overflow:hidden}._4ve_2a_explorerRailCollapsed{border-right:1px solid var(--dsw-alias-border-l1);width:30px;min-height:0;color:var(--dsw-alias-label-secondary);flex:none;justify-content:center;align-items:flex-start;padding-top:4px;display:flex}._4ve_2a_editorTreeSearch{border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;align-items:center;gap:4px;padding:6px 8px;display:flex}._4ve_2a_editorSearchInput{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);min-width:0;height:26px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);border-radius:6px;flex:1;padding:0 10px}._4ve_2a_editorSearchInput:focus{border-color:var(--dsw-alias-border-l2);outline:none}._4ve_2a_editorSearchHint{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);padding:8px 12px}._4ve_2a_editorSearchResult{width:100%;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);text-align:left;cursor:pointer;text-overflow:ellipsis;white-space:nowrap;background:0 0;border:none;border-radius:6px;padding:4px 8px;display:block;overflow:hidden}._4ve_2a_editorSearchResult:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_editorStatus{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}._4ve_2a_editorStatusError{color:var(--dsw-alias-state-error-primary)}._4ve_2a_dirtyDot{background:var(--dsw-alias-state-warn-primary);border-radius:50%;flex:none;width:7px;height:7px}._4ve_2a_editorPlaceholder{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);text-align:center;flex:1;justify-content:center;align-items:center;padding:16px;display:flex}._4ve_2a_orphanedType{opacity:.7;overflow-wrap:anywhere;margin-top:8px;font-size:12px;display:block}._4ve_2a_editorBinary{text-align:center;flex-direction:column;flex:1;justify-content:center;align-items:center;gap:12px;padding:24px 16px;display:flex}._4ve_2a_editorBinaryNotice{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary)}._4ve_2a_editorDownloadLink{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-strong-12);cursor:pointer;transition:background var(--ds-transition-duration-slow) var(--ds-ease-in-out), border-color var(--ds-transition-duration-slow) var(--ds-ease-in-out);border-radius:6px;align-items:center;gap:6px;padding:6px 14px;text-decoration:none;display:inline-flex}._4ve_2a_editorDownloadLink:hover{background:var(--dsw-alias-interactive-bg-hover);border-color:var(--dsw-alias-border-l2)}._4ve_2a_editorError{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-error-primary);padding:12px 16px}._4ve_2a_editorBanner{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-state-warn-label);background:var(--dsw-alias-state-warn-tertiary);flex:none;padding:4px 12px}._4ve_2a_sandboxStatus{font:var(--dsw-font-xxxs-11);flex:none;align-items:center;gap:8px;padding:4px 10px;display:flex}._4ve_2a_sandboxStatusOn{color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-bg-layer-1);border-bottom:1px solid var(--dsw-alias-border-l1)}._4ve_2a_sandboxStatusOff{color:var(--dsw-alias-state-error-primary);background:color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent);border-bottom:1px solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent)}._4ve_2a_sandboxDot{background:var(--dsw-alias-state-success-primary);border-radius:50%;flex:none;width:6px;height:6px}._4ve_2a_sandboxStatusOff ._4ve_2a_sandboxDot{background:var(--dsw-alias-state-error-primary)}._4ve_2a_sandboxStatusText{text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;overflow:hidden}._4ve_2a_sandboxAction{border:1px solid var(--dsw-alias-border-l2);font:inherit;color:inherit;cursor:pointer;background:0 0;border-radius:6px;flex:none;padding:2px 8px}._4ve_2a_sandboxAction:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_editorHtml{background:var(--dsw-alias-bg-base);border:none;flex:1;width:100%;min-height:0}._4ve_2a_browser{flex-direction:column;flex:1;min-height:0;display:flex}._4ve_2a_browserBar{border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;align-items:center;gap:4px;padding:6px 8px;display:flex}._4ve_2a_browserInput{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);min-width:0;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);border-radius:6px;flex:1;padding:0 10px}._4ve_2a_browserInput:focus{border-color:var(--dsw-alias-border-l2);outline:none}._4ve_2a_browserMessage{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-state-warn-label);background:var(--dsw-alias-state-warn-tertiary);flex:none;padding:4px 12px}._4ve_2a_browserFrame{background:var(--dsw-alias-bg-base);border:none;flex:1;width:100%;min-height:0}._4ve_2a_browserStart{text-align:center;min-height:0;font:var(--dsw-font-xs-13);color:var(--dsw-alias-label-tertiary);flex:1;justify-content:center;align-items:center;padding:20px;display:flex}._4ve_2a_browserBlocked{text-align:center;min-height:0;color:var(--dsw-alias-state-warn-primary);flex-direction:column;flex:1;justify-content:center;align-items:center;gap:6px;padding:24px;display:flex}._4ve_2a_browserBlockedTitle{font:var(--dsw-font-xxs-strong-12);color:var(--dsw-alias-label-primary)}._4ve_2a_browserBlockedDesc{max-width:280px;font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-secondary)}._4ve_2a_browserBlockedActions{gap:8px;margin-top:6px;display:flex}._4ve_2a_browserBlockedButton{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxxs-11);cursor:pointer;border-radius:6px;padding:4px 12px}._4ve_2a_browserBlockedButton:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_editorCm{background:0 0;flex:1;min-height:0;overflow:hidden}._4ve_2a_editorCmHidden{display:none}._4ve_2a_editorCm .cm-editor{height:100%}._4ve_2a_editorCm .cm-editor.cm-focused{outline:none}._4ve_2a_editorModeToggle{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);border-radius:6px;flex:none;align-items:center;gap:2px;padding:2px;display:inline-flex}._4ve_2a_editorModeButton{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);cursor:pointer;background:0 0;border:none;border-radius:4px;padding:2px 8px}._4ve_2a_editorModeButton:hover{color:var(--dsw-alias-label-primary)}._4ve_2a_editorModeActive{background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary)}._4ve_2a_editorImageWrap{flex:1;justify-content:center;align-items:center;min-height:0;padding:12px;display:flex;overflow:auto}._4ve_2a_editorImage{object-fit:contain;max-width:100%;max-height:100%}._4ve_2a_editorMd{min-height:0;font:var(--dsw-font-xs-13);--dsh-md-accent:var(--dsw-alias-state-business-primary);--dsh-md-border:var(--dsw-alias-border-l2);--dsh-md-quote-bg:color-mix(in srgb, var(--dsw-alias-state-business-primary) 8%, transparent);--dsh-md-table-head-bg:var(--dsw-alias-interactive-bg-hover);--dsh-md-table-stripe:color-mix(in srgb, var(--dsw-alias-interactive-bg-hover) 45%, transparent);flex:1;padding:10px 14px;overflow-y:auto}._4ve_2a_editorMd h1,._4ve_2a_editorMd h2{border-bottom:1px solid var(--dsh-md-border);color:var(--dsw-alias-label-primary);padding-bottom:.35em;font-weight:700}._4ve_2a_editorMd h3,._4ve_2a_editorMd h4,._4ve_2a_editorMd h5,._4ve_2a_editorMd h6{color:var(--dsw-alias-label-secondary)}._4ve_2a_editorMd a{text-underline-offset:3px}._4ve_2a_editorMd blockquote{border-left:3px solid var(--dsh-md-accent);background:var(--dsh-md-quote-bg);color:var(--dsw-alias-label-secondary);border-radius:0 8px 8px 0;margin:16px 0;padding:6px 14px}._4ve_2a_editorMd blockquote p:last-child{margin-bottom:0}._4ve_2a_editorMd .md-code-block{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-markdown-code-block);border-radius:10px;overflow:hidden}._4ve_2a_editorMd .md-code-block pre{background:var(--dsw-alias-markdown-code-block)!important}._4ve_2a_editorMd th{background:var(--dsh-md-table-head-bg);font-weight:650}._4ve_2a_editorMd th,._4ve_2a_editorMd td{border:1px solid var(--dsh-md-border)}._4ve_2a_editorMd tbody tr:nth-child(2n){background:var(--dsh-md-table-stripe)}._4ve_2a_editorMd li::marker{color:var(--dsh-md-accent)}._4ve_2a_editorMd img{border:1px solid var(--dsw-alias-border-l1);border-radius:8px}._4ve_2a_mermaidWrap{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);border-radius:6px;margin:6px 0;overflow:hidden}._4ve_2a_mermaidHeader{border-bottom:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);justify-content:space-between;align-items:center;gap:6px;padding:4px 8px;display:flex}._4ve_2a_mermaidInfo{font:var(--dsw-font-xxxs-strong-11);color:var(--dsw-alias-label-tertiary)}._4ve_2a_mermaidCopy{height:20px;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);cursor:pointer;background:0 0;border:none;border-radius:4px;align-items:center;gap:4px;padding:0 6px;display:inline-flex}._4ve_2a_mermaidCopy:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_mermaidBody{cursor:zoom-in;justify-content:center;padding:10px;display:flex;overflow:auto}._4ve_2a_mermaidBody svg{max-width:100%;height:auto}._4ve_2a_mermaidError{border-bottom:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-state-error-primary);font:var(--dsw-font-xxxs-11);padding:6px 10px}._4ve_2a_mermaidCode{font:var(--dsw-font-xxxs-11);margin:0;padding:8px 10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow:auto}._4ve_2a_mermaidMarkdown .md-code-block[data-mermaid-processed]{display:contents}._4ve_2a_mermaidModal{z-index:1000;background:var(--dsw-alias-bg-mask-1);backdrop-filter:blur(2px);flex-direction:column;justify-content:center;align-items:center;display:flex;position:fixed;inset:0}._4ve_2a_mermaidModalToolbar{z-index:10;gap:8px;display:flex;position:absolute;top:16px;right:16px}._4ve_2a_mermaidModalButton{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);width:36px;height:36px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xs-strong-13);cursor:pointer;border-radius:8px;justify-content:center;align-items:center;display:inline-flex}._4ve_2a_mermaidModalButton:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_mermaidModalStage{justify-content:center;align-items:center;width:90vw;height:80vh;display:flex;position:relative;overflow:hidden}._4ve_2a_mermaidModalStage svg{cursor:grab;transform-origin:50%;user-select:none;-webkit-user-drag:none;background:var(--dsw-alias-bg-layer-1);border-radius:12px;max-width:none;max-height:none;padding:16px}._4ve_2a_mermaidModalStage svg:active{cursor:grabbing}._4ve_2a_mermaidModalHint{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);pointer-events:none;position:absolute;bottom:16px;left:50%;transform:translate(-50%)}._4ve_2a_selectionPopup{z-index:60;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxxs-strong-11);white-space:nowrap;cursor:pointer;border-radius:6px;align-items:center;padding:0 10px;display:inline-flex;position:fixed;transform:translate(-50%,calc(-100% - 8px))}._4ve_2a_selectionPopup:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_editorPdf{background:var(--dsw-alias-bg-base);flex-direction:column;flex:1;min-height:0;display:flex}._4ve_2a_editorPdfToolbar{border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;justify-content:flex-end;padding:6px 8px;display:flex}._4ve_2a_editorPdfStage{flex:1;min-height:0;display:flex;position:relative}._4ve_2a_editorPdfFrame{background:var(--dsw-alias-bg-base);border:none;flex:1;width:100%;min-height:0}._4ve_2a_editorPdfFrameBlocked{pointer-events:none}._4ve_2a_editorPdfDragShield{z-index:4;pointer-events:none;background:0 0;position:absolute;inset:0}._4ve_2a_editorPdfDragShieldActive{pointer-events:auto}body[data-dsh-tab-dragging] ._4ve_2a_editorPdfFrame{pointer-events:none!important}body[data-dsh-tab-dragging] ._4ve_2a_editorPdfDragShield{pointer-events:auto!important}._4ve_2a_terminalWrap{background:var(--dsw-alias-bg-base);flex-direction:column;flex:1;min-height:0;display:flex;position:relative}._4ve_2a_terminal{flex:1;min-height:0;padding:6px 4px 6px 8px}._4ve_2a_terminal .xterm{height:100%}._4ve_2a_terminalBanner{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-state-warn-label);background:var(--dsw-alias-state-warn-tertiary);flex-wrap:wrap;flex:none;align-items:center;gap:8px;padding:3px 10px;display:flex}._4ve_2a_terminalBannerUrl{word-break:break-all;opacity:.85;flex-basis:100%;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}._4ve_2a_boundaryError{z-index:50;background:var(--dsw-alias-bg-layer-1);border-left:1px solid var(--dsw-alias-border-l2);font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-error-primary);flex-direction:column;align-items:flex-start;gap:8px;padding:16px;display:flex;position:fixed;top:0;bottom:0;right:0;overflow:auto}._4ve_2a_terminalRetry{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-strong-11);cursor:pointer;border-radius:999px;flex:none;padding:1px 8px}._4ve_2a_terminalRetry:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_terminalDepsBanner{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-warn-label);background:var(--dsw-alias-state-warn-tertiary);flex-direction:column;flex:none;gap:6px;padding:10px;display:flex}._4ve_2a_terminalDepsTitle{font:var(--dsw-font-xxs-strong-12);color:var(--dsw-alias-state-warn-primary)}._4ve_2a_terminalDepsHint{opacity:.9}._4ve_2a_terminalDepsCommandRow{align-items:flex-start;gap:8px;display:flex}._4ve_2a_terminalRepairCommand{white-space:pre-wrap;word-break:break-all;user-select:text;min-width:0;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l2);border-radius:4px;flex:1;max-height:160px;margin:0;padding:6px 8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.5;overflow:auto}._4ve_2a_terminalDepsNote{opacity:.85}._4ve_2a_terminalDepsActions{align-items:center;gap:8px;display:flex}._4ve_2a_tabBoundaryError{min-height:0;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-error-primary);flex-direction:column;flex:1;align-items:flex-start;gap:8px;padding:12px 16px;display:flex;overflow:auto}._4ve_2a_git{flex-direction:column;flex:1;min-width:0;min-height:0;display:flex;overflow:hidden auto}._4ve_2a_gitHeader{flex:none;align-items:center;gap:8px;height:36px;padding:0 8px 0 12px;display:flex}._4ve_2a_gitBranchSelect{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);min-width:0;height:26px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);border-radius:6px;flex:1;padding:0 6px}._4ve_2a_gitSection{border-top:1px solid var(--dsw-alias-border-l1)}._4ve_2a_gitSectionHeader{font:var(--dsw-font-xxxs-strong-11);color:var(--dsw-alias-label-tertiary);text-transform:uppercase;justify-content:space-between;align-items:center;padding:6px 12px 4px;display:flex}._4ve_2a_gitLink{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-brand-primary);cursor:pointer;background:0 0;border:none;padding:0}._4ve_2a_gitLink:hover:not(:disabled){text-decoration:underline}._4ve_2a_gitLink:disabled{opacity:.4;cursor:default}._4ve_2a_gitRow{min-height:34px;animation:_4ve_2a_dsh-row-in .15s var(--ds-ease-in-out);border-radius:8px;align-items:center;gap:6px;margin:0 6px;padding:0 8px;display:flex}._4ve_2a_gitRow:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_gitRowSelected{background:var(--dsw-alias-interactive-bg-active)}._4ve_2a_gitRowMain{cursor:pointer;text-align:left;background:0 0;border:none;flex:1;align-items:center;gap:8px;min-width:0;padding:3px 0;display:flex}._4ve_2a_gitBadge{width:20px;height:16px;font:var(--dsw-font-xxxs-strong-11);background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);border-radius:4px;flex:none;justify-content:center;align-items:center;display:inline-flex}._4ve_2a_gitName{text-overflow:ellipsis;white-space:nowrap;min-width:0;font:var(--dsw-font-s-14);color:var(--dsw-alias-label-primary);flex:1;overflow:hidden}._4ve_2a_gitEmpty{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);padding:4px 12px 8px}._4ve_2a_gitPlaceholder{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);text-align:center;padding:16px}._4ve_2a_gitError{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-error-primary);white-space:pre-wrap;padding:8px 12px}._4ve_2a_gitDiff{border-top:1px solid var(--dsw-alias-border-l1);padding:8px}._4ve_2a_gitDiffTab{flex-direction:column;flex:1;min-width:0;min-height:0;display:flex;overflow:hidden auto}._4ve_2a_gitDiffTabHeader{border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;align-items:center;gap:8px;height:36px;padding:0 8px 0 12px;display:flex}._4ve_2a_gitDiffTabTitle{text-overflow:ellipsis;white-space:nowrap;min-width:0;font:var(--dsw-font-xxs-strong-12);color:var(--dsw-alias-label-primary);flex:1;overflow:hidden}._4ve_2a_gitDiffFile{width:100%;color:inherit;text-align:left;cursor:pointer;background:0 0;border:0;align-items:baseline;gap:6px;padding:8px 2px 2px;display:flex}._4ve_2a_gitDiffFile:disabled{cursor:default}._4ve_2a_gitDiffFile:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_gitDiffFileChevron{color:var(--dsw-alias-label-tertiary);flex:none;transform:rotate(0)}._4ve_2a_gitDiffFileChevronExpanded{transform:rotate(90deg)}._4ve_2a_gitDiffFilePath{font:var(--dsw-font-xxs-strong-12);color:var(--dsw-alias-label-primary);text-overflow:ellipsis;white-space:nowrap;overflow:hidden}._4ve_2a_gitDiffFileOld{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);text-overflow:ellipsis;white-space:nowrap;flex:none;max-width:40%;overflow:hidden}._4ve_2a_gitDiffFileTag{border:1px solid var(--dsw-alias-border-l2);font:var(--dsw-font-xxxs-strong-11);color:var(--dsw-alias-label-secondary);border-radius:999px;flex:none;padding:0 6px}._4ve_2a_gitDiffHunk{font:var(--dsw-font-markdown-code-block-small);color:var(--dsw-alias-label-tertiary);gap:8px;padding:3px 2px;display:flex}._4ve_2a_gitDiffHunkHeader{color:var(--dsw-alias-label-secondary);flex:none}._4ve_2a_gitDiffHunkSection{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}._4ve_2a_gitDiffLine{font:var(--dsw-font-markdown-code-block-small);white-space:pre-wrap;overflow-wrap:anywhere;align-items:stretch;min-width:0;line-height:20px;display:flex}._4ve_2a_gitDiffNum{text-align:right;width:36px;color:var(--dsw-alias-label-tertiary);user-select:none;flex:none;padding-right:8px}._4ve_2a_gitDiffCode{flex:1;min-width:0;overflow:visible}._4ve_2a_gitDiffCtx{color:var(--dsw-alias-label-primary)}._4ve_2a_gitDiffDel{color:var(--dsw-alias-state-error-primary);background:color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent)}._4ve_2a_gitDiffAdd{color:var(--dsw-alias-state-success-primary);background:color-mix(in srgb, var(--dsw-alias-state-success-primary) 12%, transparent)}._4ve_2a_gitDiffMeta{padding-left:2px}._4ve_2a_gitDiffMetaText{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);font-style:italic}._4ve_2a_gitDiffExpand{width:100%;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-brand-primary);cursor:pointer;text-align:center;background:0 0;border:none;margin:4px 0;display:block}._4ve_2a_gitDiffExpand:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_gitConfirmDesc{font:var(--dsw-font-s-14);color:var(--dsw-alias-label-primary);white-space:pre-wrap;margin:0}._4ve_2a_gitCommit{border-top:1px solid var(--dsw-alias-border-l1);align-items:center;gap:6px;padding:8px 12px;display:flex}._4ve_2a_gitCommitInput{flex:1;min-width:0}._4ve_2a_gitCommitButton{background:var(--dsw-alias-button-primary-fill);height:26px;color:var(--dsw-alias-label-primary-inverted);font:var(--dsw-font-xxs-strong-12);cursor:pointer;border:none;border-radius:6px;flex:none;padding:0 12px}._4ve_2a_gitCommitButton:hover:not(:disabled){background:var(--dsw-alias-button-primary-hover)}._4ve_2a_gitCommitButton:disabled{opacity:.45;cursor:default}._4ve_2a_gitLogRow{cursor:pointer;border-radius:8px;flex-direction:column;gap:2px;padding:5px 12px;display:flex}._4ve_2a_gitLogRow:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_gitLogLine1{align-items:baseline;gap:8px;min-width:0;display:flex}._4ve_2a_gitLogHash{font:var(--dsw-font-markdown-code-block-small);color:var(--dsw-alias-label-tertiary);flex:none}._4ve_2a_gitLogLine2{flex-wrap:wrap;align-items:center;gap:6px;min-width:0;display:flex}._4ve_2a_gitLogRef{border:1px solid var(--dsw-alias-border-l2);font:var(--dsw-font-xxxs-strong-11);color:var(--dsw-alias-brand-primary);white-space:nowrap;border-radius:999px;flex:none;padding:0 5px}._4ve_2a_gitLogSubject{text-overflow:ellipsis;white-space:nowrap;min-width:0;font:var(--dsw-font-s-14);color:var(--dsw-alias-label-primary);flex:1;overflow:hidden}._4ve_2a_gitLogMeta{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}._4ve_2a_gitLogMore{border:1px solid var(--dsw-alias-border-l2);width:calc(100% - 24px);font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border-radius:6px;margin:4px 12px 8px;padding:6px 0;display:block}._4ve_2a_gitLogMore:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_gitLogMore:disabled{opacity:.5;cursor:default}._4ve_2a_producedRow{flex-wrap:wrap;align-items:center;gap:8px;padding:4px 0;display:flex}._4ve_2a_producedLabel{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary)}._4ve_2a_producedChip{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);max-width:200px;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12);cursor:pointer;border-radius:999px;align-items:center;gap:4px;padding:2px 8px;display:inline-flex;overflow:hidden}._4ve_2a_producedChip:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_producedChip span{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}._4ve_2a_producedMore{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary)}._4ve_2a_toggleButton:focus-visible,._4ve_2a_bottomClose:focus-visible,._4ve_2a_iconButton:focus-visible,._4ve_2a_tab:focus-visible,._4ve_2a_tabClose:focus-visible,._4ve_2a_tabBarPlus:focus-visible,._4ve_2a_paneCard:focus-visible,._4ve_2a_explorerRow:focus-visible,._4ve_2a_explorerRef:focus-visible,._4ve_2a_gitRowMain:focus-visible,._4ve_2a_gitLink:focus-visible,._4ve_2a_gitCommitButton:focus-visible,._4ve_2a_gitLogRow:focus-visible,._4ve_2a_gitLogMore:focus-visible,._4ve_2a_gitDiffFile:focus-visible,._4ve_2a_gitDiffExpand:focus-visible,._4ve_2a_terminalRetry:focus-visible,._4ve_2a_editorModeButton:focus-visible,._4ve_2a_editorDownloadLink:focus-visible,._4ve_2a_editorPptxButton:focus-visible,._4ve_2a_editorDocxZoomRange:focus-visible{outline:2px solid var(--dsw-alias-interactive-bg-hover-accent);outline-offset:-1px}@media (prefers-reduced-motion:reduce){._4ve_2a_panel,._4ve_2a_panelHidden,._4ve_2a_bottomPanel,._4ve_2a_bottomPanelHidden,._4ve_2a_toggleCluster,._4ve_2a_toggleButton,._4ve_2a_tab,._4ve_2a_tabBarPlus,._4ve_2a_paneCard,._4ve_2a_explorerRow,._4ve_2a_gitRow,._4ve_2a_divider,._4ve_2a_dividerRow:after,._4ve_2a_dividerCol:after{transition:none;animation:none}}@media (width<=767px){._4ve_2a_panel:not(._4ve_2a_panelHidden) ._4ve_2a_tabBar{padding-right:40px}._4ve_2a_tab{min-width:48px;max-width:128px}}._4ve_2a_openWithLabel{align-items:center;gap:8px;width:100%;min-width:0;display:flex}._4ve_2a_openWithName{text-overflow:ellipsis;white-space:nowrap;flex:auto;min-width:0;overflow:hidden}._4ve_2a_openWithChevron{color:var(--dsw-alias-label-tertiary);flex:none}._4ve_2a_openWithPin{width:20px;height:20px;color:var(--dsw-alias-label-tertiary);cursor:pointer;border-radius:6px;flex:none;justify-content:center;align-items:center;display:inline-flex}._4ve_2a_openWithPin:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_openWithPinActive{color:var(--dsw-alias-state-business-primary)}";
 		const tagId$4 = "dsh-external/dsh-better-sidebar/sidebar.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId$4) + "]") === null) {
 			const tag = document.createElement("style");
@@ -2778,234 +2834,238 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var sidebar_module_css_default = {
-			"openWithLabel": "_4ve_2a_openWithLabel",
-			"bottomResizeActive": "_4ve_2a_bottomResizeActive",
-			"explorerIconJson": "_4ve_2a_explorerIconJson",
-			"dirtyDot": "_4ve_2a_dirtyDot",
-			"tabTitle": "_4ve_2a_tabTitle",
-			"explorerRoot": "_4ve_2a_explorerRoot",
-			"sandboxDot": "_4ve_2a_sandboxDot",
-			"gitDiffExpand": "_4ve_2a_gitDiffExpand",
-			"bottomClose": "_4ve_2a_bottomClose",
-			"pane": "_4ve_2a_pane",
-			"terminalDepsCommandRow": "_4ve_2a_terminalDepsCommandRow",
+			"explorerSymlink": "_4ve_2a_explorerSymlink",
 			"editorBinaryNotice": "_4ve_2a_editorBinaryNotice",
-			"explorerIconTs": "_4ve_2a_explorerIconTs",
-			"gitDiffMeta": "_4ve_2a_gitDiffMeta",
-			"sandboxStatusOff": "_4ve_2a_sandboxStatusOff",
-			"uploadOverlayTitle": "_4ve_2a_uploadOverlayTitle",
-			"gitDiffCtx": "_4ve_2a_gitDiffCtx",
-			"editorModeButton": "_4ve_2a_editorModeButton",
-			"gitBadge": "_4ve_2a_gitBadge",
-			"bottomResize": "_4ve_2a_bottomResize",
-			"editor": "_4ve_2a_editor",
-			"editorSearchInput": "_4ve_2a_editorSearchInput",
-			"gitLogLine1": "_4ve_2a_gitLogLine1",
+			"mermaidModalHint": "_4ve_2a_mermaidModalHint",
+			"terminalBanner": "_4ve_2a_terminalBanner",
 			"uploadDropZoneText": "_4ve_2a_uploadDropZoneText",
-			"terminalDepsNote": "_4ve_2a_terminalDepsNote",
-			"editorPdfDragShield": "_4ve_2a_editorPdfDragShield",
-			"terminalDepsBanner": "_4ve_2a_terminalDepsBanner",
-			"panel": "_4ve_2a_panel",
-			"uploadOverlayCancel": "_4ve_2a_uploadOverlayCancel",
-			"uploadOverlay": "_4ve_2a_uploadOverlay",
-			"uploadDropZonePill": "_4ve_2a_uploadDropZonePill",
-			"explorerRowDropTarget": "_4ve_2a_explorerRowDropTarget",
-			"uploadDropHero": "_4ve_2a_uploadDropHero",
-			"editorBack": "_4ve_2a_editorBack",
-			"mermaidHeader": "_4ve_2a_mermaidHeader",
-			"tab": "_4ve_2a_tab",
-			"explorerIconFolder": "_4ve_2a_explorerIconFolder",
-			"uploadDropZone": "_4ve_2a_uploadDropZone",
-			"paneCard": "_4ve_2a_paneCard",
-			"uploadDropChatHint": "_4ve_2a_uploadDropChatHint",
-			"explorerIconImage": "_4ve_2a_explorerIconImage",
-			"gitLogLine2": "_4ve_2a_gitLogLine2",
-			"explorerRef": "_4ve_2a_explorerRef",
-			"terminalRepairCommand": "_4ve_2a_terminalRepairCommand",
-			"gitLogRow": "_4ve_2a_gitLogRow",
-			"editorPdfToolbar": "_4ve_2a_editorPdfToolbar",
-			"gitDiffFilePath": "_4ve_2a_gitDiffFilePath",
-			"gitDiffFileChevronExpanded": "_4ve_2a_gitDiffFileChevronExpanded",
-			"tabBarDrop": "_4ve_2a_tabBarDrop",
-			"editorSearchResult": "_4ve_2a_editorSearchResult",
-			"uploadOverlayProgress": "_4ve_2a_uploadOverlayProgress",
-			"sandboxAction": "_4ve_2a_sandboxAction",
-			"tabBadge": "_4ve_2a_tabBadge",
-			"explorerError": "_4ve_2a_explorerError",
-			"dropDown": "_4ve_2a_dropDown",
-			"iconButton": "_4ve_2a_iconButton",
-			"tabBar": "_4ve_2a_tabBar",
-			"browserBlockedButton": "_4ve_2a_browserBlockedButton",
-			"editorPdfFrameBlocked": "_4ve_2a_editorPdfFrameBlocked",
-			"gitDiffFile": "_4ve_2a_gitDiffFile",
-			"browserMessage": "_4ve_2a_browserMessage",
-			"explorerDir": "_4ve_2a_explorerDir",
-			"editorTreeDock": "_4ve_2a_editorTreeDock",
-			"mermaidCopy": "_4ve_2a_mermaidCopy",
-			"gitRowMain": "_4ve_2a_gitRowMain",
-			"gitDiffDel": "_4ve_2a_gitDiffDel",
-			"gitError": "_4ve_2a_gitError",
-			"editorTitle": "_4ve_2a_editorTitle",
-			"mermaidError": "_4ve_2a_mermaidError",
-			"tabList": "_4ve_2a_tabList",
-			"explorerName": "_4ve_2a_explorerName",
-			"explorerHidden": "_4ve_2a_explorerHidden",
 			"editorPlaceholder": "_4ve_2a_editorPlaceholder",
-			"editorModeToggle": "_4ve_2a_editorModeToggle",
-			"explorer": "_4ve_2a_explorer",
-			"mermaidWrap": "_4ve_2a_mermaidWrap",
-			"gitEmpty": "_4ve_2a_gitEmpty",
-			"editorMain": "_4ve_2a_editorMain",
-			"gitDiffHunkSection": "_4ve_2a_gitDiffHunkSection",
-			"editorPdfDragShieldActive": "_4ve_2a_editorPdfDragShieldActive",
-			"explorerBroken": "_4ve_2a_explorerBroken",
-			"browser": "_4ve_2a_browser",
-			"browserStart": "_4ve_2a_browserStart",
-			"explorerIconHtml": "_4ve_2a_explorerIconHtml",
-			"mermaidModalStage": "_4ve_2a_mermaidModalStage",
-			"gitDiffFileOld": "_4ve_2a_gitDiffFileOld",
-			"browserBlocked": "_4ve_2a_browserBlocked",
-			"gitLogMeta": "_4ve_2a_gitLogMeta",
-			"browserBlockedTitle": "_4ve_2a_browserBlockedTitle",
+			"gitSectionHeader": "_4ve_2a_gitSectionHeader",
+			"editorCm": "_4ve_2a_editorCm",
+			"mermaidModalButton": "_4ve_2a_mermaidModalButton",
+			"gitDiffCtx": "_4ve_2a_gitDiffCtx",
+			"gitLogMore": "_4ve_2a_gitLogMore",
+			"explorerIconFolder": "_4ve_2a_explorerIconFolder",
+			"uploadOverlayProgressFill": "_4ve_2a_uploadOverlayProgressFill",
+			"gitCommitInput": "_4ve_2a_gitCommitInput",
+			"explorerIconJs": "_4ve_2a_explorerIconJs",
+			"editorDocxZoomRange": "_4ve_2a_editorDocxZoomRange",
+			"tabTitle": "_4ve_2a_tabTitle",
 			"dropRight": "_4ve_2a_dropRight",
-			"editorMd": "_4ve_2a_editorMd",
-			"paneTabHidden": "_4ve_2a_paneTabHidden",
-			"terminalWrap": "_4ve_2a_terminalWrap",
-			"gitDiffTabTitle": "_4ve_2a_gitDiffTabTitle",
-			"gitDiffFileTag": "_4ve_2a_gitDiffFileTag",
+			"explorerHidden": "_4ve_2a_explorerHidden",
+			"terminalBannerUrl": "_4ve_2a_terminalBannerUrl",
+			"tabBarDrop": "_4ve_2a_tabBarDrop",
+			"uploadDropZone": "_4ve_2a_uploadDropZone",
+			"editor": "_4ve_2a_editor",
+			"dropDown": "_4ve_2a_dropDown",
+			"editorPdf": "_4ve_2a_editorPdf",
+			"gitLogHash": "_4ve_2a_gitLogHash",
+			"editorPdfDragShieldActive": "_4ve_2a_editorPdfDragShieldActive",
+			"explorerRailCollapsed": "_4ve_2a_explorerRailCollapsed",
+			"gitDiffTab": "_4ve_2a_gitDiffTab",
+			"gitBadge": "_4ve_2a_gitBadge",
+			"editorMain": "_4ve_2a_editorMain",
+			"explorerName": "_4ve_2a_explorerName",
+			"editorBanner": "_4ve_2a_editorBanner",
+			"gitLogRow": "_4ve_2a_gitLogRow",
+			"editorPdfFrameBlocked": "_4ve_2a_editorPdfFrameBlocked",
+			"uploadDropZonePill": "_4ve_2a_uploadDropZonePill",
+			"sandboxStatus": "_4ve_2a_sandboxStatus",
+			"editorPdfDragShield": "_4ve_2a_editorPdfDragShield",
+			"gitDiffHunkHeader": "_4ve_2a_gitDiffHunkHeader",
+			"editorPathInput": "_4ve_2a_editorPathInput",
+			"browserBar": "_4ve_2a_browserBar",
+			"editorPdfToolbar": "_4ve_2a_editorPdfToolbar",
+			"workbench": "_4ve_2a_workbench",
 			"browserFrame": "_4ve_2a_browserFrame",
+			"uploadOverlayProgress": "_4ve_2a_uploadOverlayProgress",
+			"uploadDropChatCard": "_4ve_2a_uploadDropChatCard",
+			"browserBlockedButton": "_4ve_2a_browserBlockedButton",
+			"editorImageWrap": "_4ve_2a_editorImageWrap",
+			"browserMessage": "_4ve_2a_browserMessage",
+			"openWithChevron": "_4ve_2a_openWithChevron",
+			"gitPlaceholder": "_4ve_2a_gitPlaceholder",
+			"orphanedType": "_4ve_2a_orphanedType",
+			"gitError": "_4ve_2a_gitError",
+			"panelBody": "_4ve_2a_panelBody",
+			"editorTreeResize": "_4ve_2a_editorTreeResize",
+			"browserBlockedActions": "_4ve_2a_browserBlockedActions",
+			"selectionPopup": "_4ve_2a_selectionPopup",
+			"dividerActive": "_4ve_2a_dividerActive",
+			"uploadOverlayTitle": "_4ve_2a_uploadOverlayTitle",
+			"gitConfirmDesc": "_4ve_2a_gitConfirmDesc",
+			"gitRowSelected": "_4ve_2a_gitRowSelected",
+			"editorHtml": "_4ve_2a_editorHtml",
+			"gitDiffFileTag": "_4ve_2a_gitDiffFileTag",
+			"editorBody": "_4ve_2a_editorBody",
+			"editorTreeSearch": "_4ve_2a_editorTreeSearch",
+			"editorSearchResult": "_4ve_2a_editorSearchResult",
+			"producedMore": "_4ve_2a_producedMore",
+			"editorPptxButton": "_4ve_2a_editorPptxButton",
+			"openWithLabel": "_4ve_2a_openWithLabel",
+			"gitDiffExpand": "_4ve_2a_gitDiffExpand",
+			"gitLogSubject": "_4ve_2a_gitLogSubject",
+			"paneContent": "_4ve_2a_paneContent",
+			"producedRow": "_4ve_2a_producedRow",
+			"explorerRail": "_4ve_2a_explorerRail",
+			"explorerIconTs": "_4ve_2a_explorerIconTs",
+			"mermaidModalToolbar": "_4ve_2a_mermaidModalToolbar",
+			"panelHidden": "_4ve_2a_panelHidden",
+			"explorerEmpty": "_4ve_2a_explorerEmpty",
+			"explorerIconHtml": "_4ve_2a_explorerIconHtml",
+			"sandboxAction": "_4ve_2a_sandboxAction",
+			"uploadDropHero": "_4ve_2a_uploadDropHero",
+			"gitDiffFile": "_4ve_2a_gitDiffFile",
+			"editorTreePanel": "_4ve_2a_editorTreePanel",
+			"sandboxStatusOff": "_4ve_2a_sandboxStatusOff",
+			"gitDiffHunk": "_4ve_2a_gitDiffHunk",
+			"gitDiffFileOld": "_4ve_2a_gitDiffFileOld",
+			"tabBoundaryError": "_4ve_2a_tabBoundaryError",
+			"gitDiffHunkSection": "_4ve_2a_gitDiffHunkSection",
+			"gitSection": "_4ve_2a_gitSection",
+			"gitLogRef": "_4ve_2a_gitLogRef",
+			"editorModeActive": "_4ve_2a_editorModeActive",
+			"browserBlockedTitle": "_4ve_2a_browserBlockedTitle",
+			"toggleButton": "_4ve_2a_toggleButton",
+			"gitRow": "_4ve_2a_gitRow",
+			"mermaidCode": "_4ve_2a_mermaidCode",
+			"explorerDir": "_4ve_2a_explorerDir",
+			"split": "_4ve_2a_split",
+			"pane": "_4ve_2a_pane",
+			"tabClose": "_4ve_2a_tabClose",
+			"explorerRef": "_4ve_2a_explorerRef",
+			"explorerRoot": "_4ve_2a_explorerRoot",
+			"gitDiff": "_4ve_2a_gitDiff",
+			"boundaryError": "_4ve_2a_boundaryError",
+			"gitDiffMetaText": "_4ve_2a_gitDiffMetaText",
+			"tabBar": "_4ve_2a_tabBar",
+			"gitLink": "_4ve_2a_gitLink",
+			"explorerHeader": "_4ve_2a_explorerHeader",
+			"panel": "_4ve_2a_panel",
+			"terminalDepsCommandRow": "_4ve_2a_terminalDepsCommandRow",
+			"explorer": "_4ve_2a_explorer",
+			"gitDiffNum": "_4ve_2a_gitDiffNum",
+			"editorBinary": "_4ve_2a_editorBinary",
+			"gitLogLine1": "_4ve_2a_gitLogLine1",
+			"openWithPinActive": "_4ve_2a_openWithPinActive",
+			"gitDiffTabTitle": "_4ve_2a_gitDiffTabTitle",
+			"explorerRailHeader": "_4ve_2a_explorerRailHeader",
+			"terminalRetry": "_4ve_2a_terminalRetry",
+			"mermaidMarkdown": "_4ve_2a_mermaidMarkdown",
+			"editorPdfStage": "_4ve_2a_editorPdfStage",
+			"tabBarPlus": "_4ve_2a_tabBarPlus",
+			"gitDiffLine": "_4ve_2a_gitDiffLine",
+			"explorerRowDropTarget": "_4ve_2a_explorerRowDropTarget",
+			"explorerBody": "_4ve_2a_explorerBody",
+			"editorDownloadLink": "_4ve_2a_editorDownloadLink",
+			"gitLogLine2": "_4ve_2a_gitLogLine2",
+			"gitEmpty": "_4ve_2a_gitEmpty",
+			"gitBranchSelect": "_4ve_2a_gitBranchSelect",
+			"editorSearchHint": "_4ve_2a_editorSearchHint",
+			"terminalWrap": "_4ve_2a_terminalWrap",
+			"terminal": "_4ve_2a_terminal",
+			"editorPdfFrame": "_4ve_2a_editorPdfFrame",
+			"dropLeft": "_4ve_2a_dropLeft",
+			"uploadOverlayStatus": "_4ve_2a_uploadOverlayStatus",
+			"gitDiffFileChevronExpanded": "_4ve_2a_gitDiffFileChevronExpanded",
+			"terminalDepsTitle": "_4ve_2a_terminalDepsTitle",
+			"bottomResize": "_4ve_2a_bottomResize",
+			"tabBadge": "_4ve_2a_tabBadge",
+			"openWithPin": "_4ve_2a_openWithPin",
+			"gitDiffFileChevron": "_4ve_2a_gitDiffFileChevron",
+			"bottomResizeActive": "_4ve_2a_bottomResizeActive",
+			"uploadOverlayCard": "_4ve_2a_uploadOverlayCard",
+			"openWithName": "_4ve_2a_openWithName",
+			"dropOverlay": "_4ve_2a_dropOverlay",
+			"explorerIconImage": "_4ve_2a_explorerIconImage",
+			"git": "_4ve_2a_git",
+			"toggleCluster": "_4ve_2a_toggleCluster",
+			"paneTab": "_4ve_2a_paneTab",
+			"gitDiffCode": "_4ve_2a_gitDiffCode",
+			"panelResizeActive": "_4ve_2a_panelResizeActive",
+			"mermaidModalStage": "_4ve_2a_mermaidModalStage",
+			"paneTabHidden": "_4ve_2a_paneTabHidden",
+			"explorerCopied": "_4ve_2a_explorerCopied",
+			"browser": "_4ve_2a_browser",
+			"tab": "_4ve_2a_tab",
+			"paneDrop": "_4ve_2a_paneDrop",
+			"editorStatusError": "_4ve_2a_editorStatusError",
+			"editorImage": "_4ve_2a_editorImage",
+			"gitDiffFilePath": "_4ve_2a_gitDiffFilePath",
+			"gitCommit": "_4ve_2a_gitCommit",
+			"bottomPanel": "_4ve_2a_bottomPanel",
+			"dropCenter": "_4ve_2a_dropCenter",
+			"gitHeader": "_4ve_2a_gitHeader",
+			"producedLabel": "_4ve_2a_producedLabel",
+			"producedChip": "_4ve_2a_producedChip",
+			"explorerRow": "_4ve_2a_explorerRow",
+			"terminalDepsHint": "_4ve_2a_terminalDepsHint",
+			"explorerError": "_4ve_2a_explorerError",
+			"mermaidBody": "_4ve_2a_mermaidBody",
+			"divider": "_4ve_2a_divider",
+			"explorerIconJson": "_4ve_2a_explorerIconJson",
+			"editorTreeToggleActive": "_4ve_2a_editorTreeToggleActive",
+			"mermaidInfo": "_4ve_2a_mermaidInfo",
+			"sandboxStatusOn": "_4ve_2a_sandboxStatusOn",
+			"dropUp": "_4ve_2a_dropUp",
+			"tabActive": "_4ve_2a_tabActive",
+			"terminalRepairCommand": "_4ve_2a_terminalRepairCommand",
+			"bottomPanelHidden": "_4ve_2a_bottomPanelHidden",
+			"editorModeToggle": "_4ve_2a_editorModeToggle",
+			"sandboxDot": "_4ve_2a_sandboxDot",
+			"editorTreeDock": "_4ve_2a_editorTreeDock",
+			"mermaidHeader": "_4ve_2a_mermaidHeader",
+			"mermaidError": "_4ve_2a_mermaidError",
+			"gitName": "_4ve_2a_gitName",
+			"explorerRailTitle": "_4ve_2a_explorerRailTitle",
+			"uploadOverlayCancel": "_4ve_2a_uploadOverlayCancel",
+			"sandboxStatusText": "_4ve_2a_sandboxStatusText",
+			"gitLogMeta": "_4ve_2a_gitLogMeta",
+			"browserBlocked": "_4ve_2a_browserBlocked",
+			"mermaidWrap": "_4ve_2a_mermaidWrap",
+			"editorError": "_4ve_2a_editorError",
+			"splitChild": "_4ve_2a_splitChild",
 			"dsh-row-in": "_4ve_2a_dsh-row-in",
 			"explorerIconMd": "_4ve_2a_explorerIconMd",
-			"orphanedType": "_4ve_2a_orphanedType",
-			"paneEmptyCards": "_4ve_2a_paneEmptyCards",
-			"editorTreeToggleActive": "_4ve_2a_editorTreeToggleActive",
-			"mermaidModal": "_4ve_2a_mermaidModal",
-			"gitLink": "_4ve_2a_gitLink",
-			"uploadOverlayCard": "_4ve_2a_uploadOverlayCard",
-			"mermaidMarkdown": "_4ve_2a_mermaidMarkdown",
-			"bottomPanelHidden": "_4ve_2a_bottomPanelHidden",
-			"explorerSymlink": "_4ve_2a_explorerSymlink",
-			"explorerCopied": "_4ve_2a_explorerCopied",
-			"openWithChevron": "_4ve_2a_openWithChevron",
-			"gitHeader": "_4ve_2a_gitHeader",
-			"gitDiffNum": "_4ve_2a_gitDiffNum",
-			"boundaryError": "_4ve_2a_boundaryError",
-			"gitLogSubject": "_4ve_2a_gitLogSubject",
-			"gitConfirmDesc": "_4ve_2a_gitConfirmDesc",
-			"producedChip": "_4ve_2a_producedChip",
-			"dropUp": "_4ve_2a_dropUp",
-			"producedLabel": "_4ve_2a_producedLabel",
-			"openWithName": "_4ve_2a_openWithName",
-			"gitDiffLine": "_4ve_2a_gitDiffLine",
-			"editorDocxZoomRange": "_4ve_2a_editorDocxZoomRange",
-			"mermaidModalButton": "_4ve_2a_mermaidModalButton",
-			"tabActive": "_4ve_2a_tabActive",
-			"panelResize": "_4ve_2a_panelResize",
-			"editorTreePanel": "_4ve_2a_editorTreePanel",
-			"panelHidden": "_4ve_2a_panelHidden",
-			"editorHeader": "_4ve_2a_editorHeader",
-			"gitDiffHunkHeader": "_4ve_2a_gitDiffHunkHeader",
-			"gitSection": "_4ve_2a_gitSection",
-			"gitPlaceholder": "_4ve_2a_gitPlaceholder",
-			"editorImage": "_4ve_2a_editorImage",
-			"gitBranchSelect": "_4ve_2a_gitBranchSelect",
-			"editorCmHidden": "_4ve_2a_editorCmHidden",
-			"gitDiffTabHeader": "_4ve_2a_gitDiffTabHeader",
-			"mermaidModalHint": "_4ve_2a_mermaidModalHint",
-			"terminalDepsHint": "_4ve_2a_terminalDepsHint",
-			"gitDiffAdd": "_4ve_2a_gitDiffAdd",
-			"cornerHandle": "_4ve_2a_cornerHandle",
-			"editorBanner": "_4ve_2a_editorBanner",
-			"explorerHeader": "_4ve_2a_explorerHeader",
-			"editorTreePanelFull": "_4ve_2a_editorTreePanelFull",
-			"terminalBanner": "_4ve_2a_terminalBanner",
-			"gitName": "_4ve_2a_gitName",
-			"toggleButton": "_4ve_2a_toggleButton",
-			"explorerEmpty": "_4ve_2a_explorerEmpty",
-			"uploadOverlayStatus": "_4ve_2a_uploadOverlayStatus",
-			"selectionPopup": "_4ve_2a_selectionPopup",
-			"terminalDepsActions": "_4ve_2a_terminalDepsActions",
-			"editorPathInput": "_4ve_2a_editorPathInput",
-			"editorSearchHint": "_4ve_2a_editorSearchHint",
-			"gitDiffTab": "_4ve_2a_gitDiffTab",
-			"divider": "_4ve_2a_divider",
-			"terminal": "_4ve_2a_terminal",
-			"browserBlockedActions": "_4ve_2a_browserBlockedActions",
-			"splitChild": "_4ve_2a_splitChild",
-			"dropOverlay": "_4ve_2a_dropOverlay",
-			"panelBody": "_4ve_2a_panelBody",
-			"editorBinary": "_4ve_2a_editorBinary",
-			"mermaidModalToolbar": "_4ve_2a_mermaidModalToolbar",
-			"gitDiffMetaText": "_4ve_2a_gitDiffMetaText",
-			"terminalDepsTitle": "_4ve_2a_terminalDepsTitle",
-			"editorPdfStage": "_4ve_2a_editorPdfStage",
-			"tabClose": "_4ve_2a_tabClose",
-			"explorerIconCss": "_4ve_2a_explorerIconCss",
-			"gitDiffHunk": "_4ve_2a_gitDiffHunk",
-			"uploadDropChatCard": "_4ve_2a_uploadDropChatCard",
-			"producedRow": "_4ve_2a_producedRow",
-			"editorPptxButton": "_4ve_2a_editorPptxButton",
-			"dividerCol": "_4ve_2a_dividerCol",
-			"sandboxStatusText": "_4ve_2a_sandboxStatusText",
-			"gitDiffCode": "_4ve_2a_gitDiffCode",
-			"git": "_4ve_2a_git",
-			"editorImageWrap": "_4ve_2a_editorImageWrap",
-			"gitDiffFileChevron": "_4ve_2a_gitDiffFileChevron",
-			"browserBlockedDesc": "_4ve_2a_browserBlockedDesc",
-			"gitLogRef": "_4ve_2a_gitLogRef",
-			"editorCm": "_4ve_2a_editorCm",
-			"openWithPin": "_4ve_2a_openWithPin",
-			"editorStatusError": "_4ve_2a_editorStatusError",
-			"dividerRow": "_4ve_2a_dividerRow",
-			"gitLogHash": "_4ve_2a_gitLogHash",
-			"editorBody": "_4ve_2a_editorBody",
-			"explorerBody": "_4ve_2a_explorerBody",
-			"dividerActive": "_4ve_2a_dividerActive",
-			"editorPdf": "_4ve_2a_editorPdf",
-			"workbench": "_4ve_2a_workbench",
-			"gitCommitInput": "_4ve_2a_gitCommitInput",
-			"editorPdfFrame": "_4ve_2a_editorPdfFrame",
-			"tabBarPlus": "_4ve_2a_tabBarPlus",
-			"bottomPanel": "_4ve_2a_bottomPanel",
-			"tabBoundaryError": "_4ve_2a_tabBoundaryError",
-			"editorDownloadLink": "_4ve_2a_editorDownloadLink",
-			"terminalBannerUrl": "_4ve_2a_terminalBannerUrl",
-			"browserBar": "_4ve_2a_browserBar",
-			"uploadOverlayProgressFill": "_4ve_2a_uploadOverlayProgressFill",
-			"split": "_4ve_2a_split",
-			"editorModeActive": "_4ve_2a_editorModeActive",
-			"panelResizeActive": "_4ve_2a_panelResizeActive",
-			"mermaidInfo": "_4ve_2a_mermaidInfo",
-			"dropLeft": "_4ve_2a_dropLeft",
-			"splitCol": "_4ve_2a_splitCol",
-			"explorerIconJs": "_4ve_2a_explorerIconJs",
-			"gitCommit": "_4ve_2a_gitCommit",
-			"terminalRetry": "_4ve_2a_terminalRetry",
+			"editorModeButton": "_4ve_2a_editorModeButton",
 			"browserInput": "_4ve_2a_browserInput",
-			"sandboxStatusOn": "_4ve_2a_sandboxStatusOn",
-			"mermaidCode": "_4ve_2a_mermaidCode",
-			"gitRowSelected": "_4ve_2a_gitRowSelected",
+			"gitDiffMeta": "_4ve_2a_gitDiffMeta",
 			"gitCommitButton": "_4ve_2a_gitCommitButton",
-			"editorHtml": "_4ve_2a_editorHtml",
-			"editorTreeSearch": "_4ve_2a_editorTreeSearch",
-			"mermaidBody": "_4ve_2a_mermaidBody",
-			"producedMore": "_4ve_2a_producedMore",
-			"gitSectionHeader": "_4ve_2a_gitSectionHeader",
-			"toggleCluster": "_4ve_2a_toggleCluster",
-			"gitLogMore": "_4ve_2a_gitLogMore",
-			"paneTab": "_4ve_2a_paneTab",
-			"sandboxStatus": "_4ve_2a_sandboxStatus",
+			"terminalDepsNote": "_4ve_2a_terminalDepsNote",
+			"browserStart": "_4ve_2a_browserStart",
+			"explorerIconCss": "_4ve_2a_explorerIconCss",
+			"editorCmHidden": "_4ve_2a_editorCmHidden",
+			"gitRowMain": "_4ve_2a_gitRowMain",
+			"iconButton": "_4ve_2a_iconButton",
+			"dividerRow": "_4ve_2a_dividerRow",
+			"editorTitle": "_4ve_2a_editorTitle",
+			"browserBlockedDesc": "_4ve_2a_browserBlockedDesc",
+			"tabList": "_4ve_2a_tabList",
+			"editorStatus": "_4ve_2a_editorStatus",
+			"splitCol": "_4ve_2a_splitCol",
+			"mermaidCopy": "_4ve_2a_mermaidCopy",
+			"cornerHandle": "_4ve_2a_cornerHandle",
+			"uploadOverlay": "_4ve_2a_uploadOverlay",
+			"editorMd": "_4ve_2a_editorMd",
+			"terminalDepsBanner": "_4ve_2a_terminalDepsBanner",
+			"editorSearchInput": "_4ve_2a_editorSearchInput",
+			"mermaidModal": "_4ve_2a_mermaidModal",
+			"paneCard": "_4ve_2a_paneCard",
+			"bottomClose": "_4ve_2a_bottomClose",
+			"editorHeader": "_4ve_2a_editorHeader",
+			"dividerCol": "_4ve_2a_dividerCol",
+			"editorTreePanelFull": "_4ve_2a_editorTreePanelFull",
+			"explorerBroken": "_4ve_2a_explorerBroken",
+			"gitDiffAdd": "_4ve_2a_gitDiffAdd",
+			"panelResize": "_4ve_2a_panelResize",
 			"splitRow": "_4ve_2a_splitRow",
-			"paneDrop": "_4ve_2a_paneDrop",
-			"gitRow": "_4ve_2a_gitRow",
-			"openWithPinActive": "_4ve_2a_openWithPinActive",
-			"editorError": "_4ve_2a_editorError",
-			"paneContent": "_4ve_2a_paneContent",
-			"dropCenter": "_4ve_2a_dropCenter",
-			"explorerRow": "_4ve_2a_explorerRow",
-			"editorTreeResize": "_4ve_2a_editorTreeResize",
-			"gitDiff": "_4ve_2a_gitDiff",
-			"editorStatus": "_4ve_2a_editorStatus"
+			"terminalDepsActions": "_4ve_2a_terminalDepsActions",
+			"uploadDropChatHint": "_4ve_2a_uploadDropChatHint",
+			"editorBack": "_4ve_2a_editorBack",
+			"gitDiffDel": "_4ve_2a_gitDiffDel",
+			"paneEmptyCards": "_4ve_2a_paneEmptyCards",
+			"gitDiffTabHeader": "_4ve_2a_gitDiffTabHeader",
+			"dirtyDot": "_4ve_2a_dirtyDot"
 		};
 		//#endregion
 		//#region src/client/intercept.tsx
@@ -3092,12 +3152,11 @@ window.__ModuleLoader__.load({
 			}, SidebarProducedFiles));
 		}
 		/**
-		* Register the chat file-open interception: wraps `ctx.workspaces.openPath`
-		* — the single funnel every chat-side file open goes through (tool-row path
-		* links, the produced-files row, prose mentions) — so opens land in the
-		* sidebar editor instead of the Host OS. Gated by BOTH the `interceptOpenPath`
-		* pref and the editor tab's enable switch; declined opens fall through to
-		* the original method. Returns the disposer restoring the original (HMR-safe).
+		* Register the chat file-open interception for the LEGACY funnel: wraps
+		* `ctx.workspaces.openPath` (the older snapshot's single door). Gated by BOTH
+		* the `interceptOpenPath` pref and the editor tab's enable switch; declined
+		* opens fall through to the original method. Returns the disposer restoring
+		* the original (HMR-safe).
 		*/
 		function registerOpenPathInterception(ctx, store) {
 			return wrapOpenPath(ctx.workspaces, openPathDeps(ctx, store));
@@ -3113,24 +3172,30 @@ window.__ModuleLoader__.load({
 			};
 		}
 		/** Resolve the remote `session` namespace service (undefined before the
-		* api-remotes contribution mounts, or when the runtime lacks the typed
-		* remote entirely). The namespace is a DISTINCT cordis service key
-		* (`remote.session`) — not a `.session` property on the `remote` service —
-		* so resolve it directly. */
+		*  api-remotes contribution mounts, or when the runtime lacks the typed
+		*  remote entirely). The namespace is a DISTINCT cordis service key
+		*  (`remote.session`) — not a `.session` property on the `remote` service —
+		*  so resolve it directly. */
 		function remoteSessionOf(ctx) {
 			try {
 				const session = ctx.get("remote.session");
 				if (session !== void 0 && typeof session.openWorkspacePath === "function") return session;
-			} catch {
-			}
+			} catch {}
 			try {
-				const remote = ctx.get("remote");
-				const session = remote?.session;
+				const session = ctx.get("remote")?.session;
 				if (session !== void 0 && typeof session.openWorkspacePath === "function") return session;
-			} catch {
-			}
-			return;
+			} catch {}
 		}
+		/**
+		* Register the chat file-open interception for the CURRENT funnel: wraps
+		* `ctx.remote.session.openWorkspacePath` — the method DSH 0.1.x chat routes
+		* every file open through (ui-chat's conversation.view `openFile`). The
+		* remote `session` namespace is mounted asynchronously by the api-remotes
+		* contribution, so the wrap retries briefly until the method appears and
+		* gives up silently if the runtime never exposes it (the legacy wrap is the
+		* fallback). Gated by the same prefs as the legacy funnel. Returns the
+		* disposer cancelling the retry and restoring the original (HMR-safe).
+		*/
 		function registerRemoteOpenPathInterception(ctx, store) {
 			let disposed = false;
 			let disposer;
@@ -3431,1543 +3496,294 @@ window.__ModuleLoader__.load({
 			return { kind: "binary" };
 		}
 		//#endregion
-		//#region node_modules/.pnpm/react-icons@5.7.0_react@18.3.1/node_modules/react-icons/lib/iconContext.mjs
-		var DefaultContext = {
-			color: void 0,
-			size: void 0,
-			className: void 0,
-			style: void 0,
-			attr: void 0
-		};
-		var IconContext = react.default.createContext && /*#__PURE__*/ react.default.createContext(DefaultContext);
-		//#endregion
-		//#region node_modules/.pnpm/react-icons@5.7.0_react@18.3.1/node_modules/react-icons/lib/iconBase.mjs
-		var _excluded = [
-			"attr",
-			"size",
-			"title"
-		];
-		function _objectWithoutProperties(e, t) {
-			if (null == e) return {};
-			var o, r, i = _objectWithoutPropertiesLoose(e, t);
-			if (Object.getOwnPropertySymbols) {
-				var n = Object.getOwnPropertySymbols(e);
-				for (r = 0; r < n.length; r++) o = n[r], -1 === t.indexOf(o) && {}.propertyIsEnumerable.call(e, o) && (i[o] = e[o]);
-			}
-			return i;
-		}
-		function _objectWithoutPropertiesLoose(r, e) {
-			if (null == r) return {};
-			var t = {};
-			for (var n in r) if ({}.hasOwnProperty.call(r, n)) {
-				if (-1 !== e.indexOf(n)) continue;
-				t[n] = r[n];
-			}
-			return t;
-		}
-		function _extends() {
-			return _extends = Object.assign ? Object.assign.bind() : function(n) {
-				for (var e = 1; e < arguments.length; e++) {
-					var t = arguments[e];
-					for (var r in t) ({}).hasOwnProperty.call(t, r) && (n[r] = t[r]);
-				}
-				return n;
-			}, _extends.apply(null, arguments);
-		}
-		function ownKeys(e, r) {
-			var t = Object.keys(e);
-			if (Object.getOwnPropertySymbols) {
-				var o = Object.getOwnPropertySymbols(e);
-				r && (o = o.filter(function(r) {
-					return Object.getOwnPropertyDescriptor(e, r).enumerable;
-				})), t.push.apply(t, o);
-			}
-			return t;
-		}
-		function _objectSpread(e) {
-			for (var r = 1; r < arguments.length; r++) {
-				var t = null != arguments[r] ? arguments[r] : {};
-				r % 2 ? ownKeys(Object(t), !0).forEach(function(r) {
-					_defineProperty(e, r, t[r]);
-				}) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys(Object(t)).forEach(function(r) {
-					Object.defineProperty(e, r, Object.getOwnPropertyDescriptor(t, r));
-				});
-			}
-			return e;
-		}
-		function _defineProperty(e, r, t) {
-			return (r = _toPropertyKey(r)) in e ? Object.defineProperty(e, r, {
-				value: t,
-				enumerable: !0,
-				configurable: !0,
-				writable: !0
-			}) : e[r] = t, e;
-		}
-		function _toPropertyKey(t) {
-			var i = _toPrimitive(t, "string");
-			return "symbol" == typeof i ? i : i + "";
-		}
-		function _toPrimitive(t, r) {
-			if ("object" != typeof t || !t) return t;
-			var e = t[Symbol.toPrimitive];
-			if (void 0 !== e) {
-				var i = e.call(t, r || "default");
-				if ("object" != typeof i) return i;
-				throw new TypeError("@@toPrimitive must return a primitive value.");
-			}
-			return ("string" === r ? String : Number)(t);
-		}
-		function Tree2Element(tree) {
-			return tree && tree.map((node, i) => /*#__PURE__*/ react.default.createElement(node.tag, _objectSpread({ key: i }, node.attr), Tree2Element(node.child)));
-		}
-		function GenIcon(data) {
-			return (props) => /*#__PURE__*/ react.default.createElement(IconBase, _extends({ attr: _objectSpread({}, data.attr) }, props), Tree2Element(data.child));
-		}
-		function IconBase(props) {
-			var elem = (conf) => {
-				var attr = props.attr, size = props.size, title = props.title, svgProps = _objectWithoutProperties(props, _excluded);
-				var computedSize = size || conf.size || "1em";
-				var className;
-				if (conf.className) className = conf.className;
-				if (props.className) className = (className ? className + " " : "") + props.className;
-				return /*#__PURE__*/ react.default.createElement("svg", _extends({
-					stroke: "currentColor",
-					fill: "currentColor",
-					strokeWidth: "0"
-				}, conf.attr, attr, svgProps, {
-					className,
-					style: _objectSpread(_objectSpread({ color: props.color || conf.color }, conf.style), props.style),
-					height: computedSize,
-					width: computedSize,
-					xmlns: "http://www.w3.org/2000/svg"
-				}), title && /*#__PURE__*/ react.default.createElement("title", null, title), props.children);
-			};
-			return IconContext !== void 0 ? /*#__PURE__*/ react.default.createElement(IconContext.Consumer, null, (conf) => elem(conf)) : elem(DefaultContext);
-		}
-		//#endregion
-		//#region node_modules/.pnpm/react-icons@5.7.0_react@18.3.1/node_modules/react-icons/si/index.mjs
-		function SiZedindustries(props) {
-			return GenIcon({
-				"tag": "svg",
-				"attr": {
-					"role": "img",
-					"viewBox": "0 0 24 24"
-				},
-				"child": [{
-					"tag": "path",
-					"attr": { "d": "M2.25 1.5a.75.75 0 0 0-.75.75v16.5H0V2.25A2.25 2.25 0 0 1 2.25 0h20.095c1.002 0 1.504 1.212.795 1.92L10.764 14.298h3.486V12.75h1.5v1.922a1.125 1.125 0 0 1-1.125 1.125H9.264l-2.578 2.578h11.689V9h1.5v9.375a1.5 1.5 0 0 1-1.5 1.5H5.185L2.562 22.5H21.75a.75.75 0 0 0 .75-.75V5.25H24v16.5A2.25 2.25 0 0 1 21.75 24H1.655C.653 24 .151 22.788.86 22.08L13.19 9.75H9.75v1.5h-1.5V9.375A1.125 1.125 0 0 1 9.375 8.25h5.314l2.625-2.625H5.625V15h-1.5V5.625a1.5 1.5 0 0 1 1.5-1.5h13.19L21.438 1.5z" },
-					"child": []
-				}]
-			})(props);
-		}
-		function SiCursor(props) {
-			return GenIcon({
-				"tag": "svg",
-				"attr": {
-					"role": "img",
-					"viewBox": "0 0 24 24"
-				},
-				"child": [{
-					"tag": "path",
-					"attr": { "d": "M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23" },
-					"child": []
-				}]
-			})(props);
-		}
-		//#endregion
-		//#region node_modules/.pnpm/react-icons@5.7.0_react@18.3.1/node_modules/react-icons/vsc/index.mjs
-		function VscPinned(props) {
-			return GenIcon({
-				"tag": "svg",
-				"attr": {
-					"viewBox": "0 0 16 16",
-					"fill": "currentColor"
-				},
-				"child": [{
-					"tag": "path",
-					"attr": { "d": "M10.0589 2.44511C9.34701 1.73063 8.14697 1.90829 7.67261 2.79839L5.6526 6.58878L2.8419 7.52568C2.6775 7.58048 2.5532 7.71649 2.51339 7.88514C2.47357 8.0538 2.52392 8.23104 2.64646 8.35357L4.79291 10.5L2.14645 13.1465L2 14L2.85356 13.8536L5.50002 11.2071L7.64646 13.3536C7.76899 13.4761 7.94623 13.5265 8.11489 13.4866C8.28354 13.4468 8.41955 13.3225 8.47435 13.1581L9.41143 10.3469L13.1897 8.32423C14.0759 7.84982 14.2538 6.6551 13.5443 5.94305L10.0589 2.44511ZM8.55511 3.2687C8.71323 2.972 9.11324 2.91278 9.35055 3.15094L12.836 6.64889C13.0725 6.88624 13.0131 7.28448 12.7178 7.44262L8.76403 9.55921C8.65137 9.61952 8.56608 9.72068 8.52567 9.84191L7.7815 12.0744L3.92562 8.21853L6.15812 7.47436C6.27966 7.43385 6.38101 7.34823 6.44126 7.23518L8.55511 3.2687Z" },
-					"child": []
-				}]
-			})(props);
-		}
-		function VscPin(props) {
-			return GenIcon({
-				"tag": "svg",
-				"attr": {
-					"viewBox": "0 0 16 16",
-					"fill": "currentColor"
-				},
-				"child": [{
-					"tag": "path",
-					"attr": { "d": "M13.5 3C13.303 3 13.109 3.038 12.923 3.114L8.481 4.967L5.659 4.026C5.505 3.976 5.339 4.001 5.209 4.095C5.078 4.189 5.001 4.339 5.001 4.5V7H1.257L0.5 7.5L1.257 8H5V10.5C5 10.661 5.077 10.812 5.208 10.905C5.338 11 5.504 11.023 5.658 10.974L8.48 10.033L12.925 11.887C13.109 11.962 13.302 12 13.499 12C14.326 12 14.999 11.327 14.999 10.5V4.5C14.999 3.673 14.326 3 13.499 3H13.5ZM14 10.5C14 10.843 13.615 11.09 13.308 10.962L8.693 9.038C8.631 9.013 8.566 9 8.501 9C8.447 9 8.395 9.009 8.343 9.025L6.001 9.806V5.193L8.343 5.974C8.457 6.011 8.581 6.007 8.694 5.961L13.306 4.038C13.629 3.902 14.001 4.156 14.001 4.499V10.499L14 10.5Z" },
-					"child": []
-				}]
-			})(props);
-		}
-		function VscLinkExternal(props) {
-			return GenIcon({
-				"tag": "svg",
-				"attr": {
-					"viewBox": "0 0 16 16",
-					"fill": "currentColor"
-				},
-				"child": [{
-					"tag": "path",
-					"attr": { "d": "M15 9.5V12.5C15 13.879 13.879 15 12.5 15H3.5C2.121 15 1 13.879 1 12.5V3.5C1 2.121 2.121 1 3.5 1H6.5C6.776 1 7 1.224 7 1.5C7 1.776 6.776 2 6.5 2H3.5C2.673 2 2 2.673 2 3.5V12.5C2 13.327 2.673 14 3.5 14H12.5C13.327 14 14 13.327 14 12.5V9.5C14 9.224 14.224 9 14.5 9C14.776 9 15 9.224 15 9.5ZM14.5 1H9.5C9.224 1 9 1.224 9 1.5C9 1.776 9.224 2 9.5 2H13.293L9.147 6.146C8.952 6.341 8.952 6.658 9.147 6.853C9.245 6.951 9.373 6.999 9.501 6.999C9.629 6.999 9.757 6.95 9.855 6.853L14.001 2.707V6.5C14.001 6.776 14.225 7 14.501 7C14.777 7 15.001 6.776 15.001 6.5V1.5C15.001 1.224 14.777 1 14.501 1H14.5Z" },
-					"child": []
-				}]
-			})(props);
-		}
-		function VscFolder(props) {
-			return GenIcon({
-				"tag": "svg",
-				"attr": {
-					"viewBox": "0 0 16 16",
-					"fill": "currentColor"
-				},
-				"child": [{
-					"tag": "path",
-					"attr": { "d": "M2 4.5V6H5.58579C5.71839 6 5.84557 5.94732 5.93934 5.85355L7.29289 4.5L5.93934 3.14645C5.84557 3.05268 5.71839 3 5.58579 3H3.5C2.67157 3 2 3.67157 2 4.5ZM1 4.5C1 3.11929 2.11929 2 3.5 2H5.58579C5.98361 2 6.36514 2.15804 6.64645 2.43934L8.20711 4H12.5C13.8807 4 15 5.11929 15 6.5V11.5C15 12.8807 13.8807 14 12.5 14H3.5C2.11929 14 1 12.8807 1 11.5V4.5ZM2 7V11.5C2 12.3284 2.67157 13 3.5 13H12.5C13.3284 13 14 12.3284 14 11.5V6.5C14 5.67157 13.3284 5 12.5 5H8.20711L6.64645 6.56066C6.36514 6.84197 5.98361 7 5.58579 7H2Z" },
-					"child": []
-				}]
-			})(props);
-		}
-		function VscFolderOpened(props) {
-			return GenIcon({
-				"tag": "svg",
-				"attr": {
-					"viewBox": "0 0 16 16",
-					"fill": "currentColor"
-				},
-				"child": [{
-					"tag": "path",
-					"attr": { "d": "M2 4.5V9.10022L2.92389 7.5C3.45979 6.5718 4.45017 6 5.52196 6L11.9146 6C11.7087 5.4174 11.1531 5 10.5 5H7C6.86739 5 6.74021 4.94732 6.64645 4.85355L4.93934 3.14645C4.84557 3.05268 4.71839 3 4.58579 3H3.5C2.67157 3 2 3.67157 2 4.5ZM7.06895 13.9953C7.04641 13.9984 7.02339 14 7 14H3.5C2.11929 14 1 12.8807 1 11.5V4.5C1 3.11929 2.11929 2 3.5 2H4.58579C4.98361 2 5.36514 2.15804 5.64645 2.43934L7.20711 4H10.5C11.724 4 12.7426 4.87965 12.958 6.04127C14.605 6.34148 15.5443 8.22106 14.6616 9.75L13.0766 12.4953C12.5407 13.4235 11.5503 13.9953 10.4785 13.9953H7.06895ZM5.52196 7C4.80743 7 4.14718 7.3812 3.78991 8L2.20492 10.7453C1.62757 11.7453 2.34926 12.9953 3.50396 12.9953L10.4785 12.9953C11.193 12.9953 11.8533 12.6141 12.2105 11.9953L13.7955 9.25C14.3729 8.25 13.6512 7 12.4965 7L5.52196 7Z" },
-					"child": []
-				}]
-			})(props);
-		}
-		function VscFile(props) {
-			return GenIcon({
-				"tag": "svg",
-				"attr": {
-					"viewBox": "0 0 16 16",
-					"fill": "currentColor"
-				},
-				"child": [{
-					"tag": "path",
-					"attr": { "d": "M5 1C3.89543 1 3 1.89543 3 3V13C3 14.1046 3.89543 15 5 15H11C12.1046 15 13 14.1046 13 13V5.41421C13 5.01639 12.842 4.63486 12.5607 4.35355L9.64645 1.43934C9.36514 1.15804 8.98361 1 8.58579 1H5ZM4 3C4 2.44772 4.44772 2 5 2H8V4.5C8 5.32843 8.67157 6 9.5 6H12V13C12 13.5523 11.5523 14 11 14H5C4.44772 14 4 13.5523 4 13V3ZM11.7929 5H9.5C9.22386 5 9 4.77614 9 4.5V2.20711L11.7929 5Z" },
-					"child": []
-				}]
-			})(props);
-		}
-		//#endregion
-		//#region src/client/lang.ts
-		/** The lowercased file extension of a path ('' when none). */
-		function extOf(path) {
-			const at = path.lastIndexOf(".");
-			if (at === -1) return "";
-			const base = path.slice(at + 1).toLowerCase();
-			return base.includes("/") || base.includes("\\") ? "" : base;
-		}
-		//#endregion
-		//#region src/client/icons.tsx
+		//#region src/client/EditorHost.tsx
 		/**
-		* Right-panel toggle glyph (the "侧拉" button): a frame with a filled strip
-		* along its RIGHT edge, in the app's outline style (1.5px stroke,
-		* currentColor).
-		*/
-		const IconPanelRightOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
-			width: size,
-			height: size,
-			className,
-			viewBox: "0 0 16 16",
-			fill: "none",
-			xmlns: "http://www.w3.org/2000/svg",
-			children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("rect", {
-				x: "1.5",
-				y: "2",
-				width: "13",
-				height: "12",
-				rx: "2.5",
-				stroke: "currentColor",
-				strokeWidth: "1.5"
-			}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("rect", {
-				x: "10.5",
-				y: "3.25",
-				width: "2.75",
-				height: "9.5",
-				rx: "1",
-				fill: "currentColor",
-				stroke: "none"
-			})]
-		});
-		/**
-		* Bottom-panel toggle glyph (the "底栏" button): a frame with a filled strip
-		* along its BOTTOM edge, in the app's outline style.
-		*/
-		const IconPanelBottomOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
-			width: size,
-			height: size,
-			className,
-			viewBox: "0 0 16 16",
-			fill: "none",
-			xmlns: "http://www.w3.org/2000/svg",
-			children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("rect", {
-				x: "1.5",
-				y: "2",
-				width: "13",
-				height: "12",
-				rx: "2.5",
-				stroke: "currentColor",
-				strokeWidth: "1.5"
-			}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("rect", {
-				x: "3.25",
-				y: "10",
-				width: "9.5",
-				height: "2.75",
-				rx: "1",
-				fill: "currentColor",
-				stroke: "none"
-			})]
-		});
-		/**
-		* Terminal glyph in the app's outline style (1.5px stroke, currentColor):
-		* a rounded frame with a prompt chevron and underscore cursor.
-		*/
-		const IconTerminalOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
-			width: size,
-			height: size,
-			className,
-			viewBox: "0 0 16 16",
-			fill: "none",
-			xmlns: "http://www.w3.org/2000/svg",
-			children: [
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("rect", {
-					x: "1.5",
-					y: "2.5",
-					width: "13",
-					height: "11",
-					rx: "2",
-					stroke: "currentColor",
-					strokeWidth: "1.5"
-				}),
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-					d: "M4.5 6.25 6.75 8 4.5 9.75",
-					stroke: "currentColor",
-					strokeWidth: "1.5",
-					strokeLinecap: "round",
-					strokeLinejoin: "round"
-				}),
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-					d: "M8.5 10.4h3",
-					stroke: "currentColor",
-					strokeWidth: "1.5",
-					strokeLinecap: "round"
-				})
-			]
-		});
-		/** Diff glyph in the app's outline style: a file frame with a plus and a minus row. */
-		const IconDiffOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
-			width: size,
-			height: size,
-			className,
-			viewBox: "0 0 16 16",
-			fill: "none",
-			xmlns: "http://www.w3.org/2000/svg",
-			children: [
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("rect", {
-					x: "1.5",
-					y: "1.5",
-					width: "13",
-					height: "13",
-					rx: "2.5",
-					stroke: "currentColor",
-					strokeWidth: "1.5"
-				}),
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-					d: "M4 5h3M5.5 3.5v3",
-					stroke: "currentColor",
-					strokeWidth: "1.5",
-					strokeLinecap: "round"
-				}),
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-					d: "M9.5 12.5h2.5",
-					stroke: "currentColor",
-					strokeWidth: "1.5",
-					strokeLinecap: "round"
-				})
-			]
-		});
-		/**
-		* Stop glyph for the background-job kill button: a filled square in the
-		* app's outline scale (16), the universal "halt this work" mark.
-		*/
-		const IconStopOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("svg", {
-			width: size,
-			height: size,
-			className,
-			viewBox: "0 0 16 16",
-			fill: "none",
-			xmlns: "http://www.w3.org/2000/svg",
-			children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("rect", {
-				x: "4",
-				y: "4",
-				width: "8",
-				height: "8",
-				rx: "1.5",
-				fill: "currentColor",
-				stroke: "none"
-			})
-		});
-		/** Upload glyph in the app's outline style: an arrow rising into a tray
-		*  (the file-manager "upload into the workspace" action). */
-		const IconUploadOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
-			width: size,
-			height: size,
-			className,
-			viewBox: "0 0 16 16",
-			fill: "none",
-			xmlns: "http://www.w3.org/2000/svg",
-			children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-				d: "M8 10V2.75M4.75 5.5 8 2.25 11.25 5.5",
-				stroke: "currentColor",
-				strokeWidth: "1.5",
-				strokeLinecap: "round",
-				strokeLinejoin: "round"
-			}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-				d: "M2.75 10.5v2.25A1.25 1.25 0 0 0 4 14h8a1.25 1.25 0 0 0 1.25-1.25V10.5",
-				stroke: "currentColor",
-				strokeWidth: "1.5",
-				strokeLinecap: "round"
-			})]
-		});
-		/** Image viewer glyph: a picture frame with a sun and a mountain. */
-		const IconImageOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
-			width: size,
-			height: size,
-			className,
-			viewBox: "0 0 16 16",
-			fill: "none",
-			xmlns: "http://www.w3.org/2000/svg",
-			children: [
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("rect", {
-					x: "1.5",
-					y: "2.5",
-					width: "13",
-					height: "11",
-					rx: "2",
-					stroke: "currentColor",
-					strokeWidth: "1.5"
-				}),
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("circle", {
-					cx: "5.5",
-					cy: "6",
-					r: "1.2",
-					stroke: "currentColor",
-					strokeWidth: "1.5"
-				}),
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-					d: "m3.5 12 3-3 2.25 2.25L11.5 8.5 13 10.5",
-					stroke: "currentColor",
-					strokeWidth: "1.5",
-					strokeLinecap: "round",
-					strokeLinejoin: "round"
-				})
-			]
-		});
-		/** PDF viewer glyph: a document frame with the "PDF" label. */
-		const IconPdfOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
-			width: size,
-			height: size,
-			className,
-			viewBox: "0 0 16 16",
-			fill: "none",
-			xmlns: "http://www.w3.org/2000/svg",
-			children: [
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-					d: "M3.5 1.5h6.5L13.5 5v9.5h-10z",
-					stroke: "currentColor",
-					strokeWidth: "1.5",
-					strokeLinejoin: "round"
-				}),
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-					d: "M9.5 1.5V5h4",
-					stroke: "currentColor",
-					strokeWidth: "1.5",
-					strokeLinejoin: "round"
-				}),
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-					d: "M5 13.5v-3h1.4c.75 0 1.1.32 1.1.85 0 .54-.35.85-1.1.85H5.3",
-					stroke: "currentColor",
-					strokeWidth: "1.25",
-					strokeLinecap: "round",
-					strokeLinejoin: "round"
-				}),
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-					d: "M8.3 13.5v-3h1.05c.8 0 1.35.5 1.35 1.5s-.55 1.5-1.35 1.5z",
-					stroke: "currentColor",
-					strokeWidth: "1.25",
-					strokeLinecap: "round",
-					strokeLinejoin: "round"
-				}),
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-					d: "M11.6 13.5v-3h1.3",
-					stroke: "currentColor",
-					strokeWidth: "1.25",
-					strokeLinecap: "round"
-				})
-			]
-		});
-		/** Markdown viewer glyph: the classic "M with a down arrow" badge. */
-		const IconMarkdownOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
-			width: size,
-			height: size,
-			className,
-			viewBox: "0 0 16 16",
-			fill: "none",
-			xmlns: "http://www.w3.org/2000/svg",
-			children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("rect", {
-				x: "1.5",
-				y: "2.5",
-				width: "13",
-				height: "11",
-				rx: "2",
-				stroke: "currentColor",
-				strokeWidth: "1.5"
-			}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-				d: "M4 10.5V5.5l2 2.5 2-2.5v5M9.5 10.5v-5l2 2.5 2-2.5v5",
-				stroke: "currentColor",
-				strokeWidth: "1.5",
-				strokeLinecap: "round",
-				strokeLinejoin: "round"
-			})]
-		});
-		/** HTML viewer glyph: a document frame with a "‹/›" tag pair. */
-		const IconHtmlOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
-			width: size,
-			height: size,
-			className,
-			viewBox: "0 0 16 16",
-			fill: "none",
-			xmlns: "http://www.w3.org/2000/svg",
-			children: [
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-					d: "M3.5 1.5h6.5L13.5 5v9.5h-10z",
-					stroke: "currentColor",
-					strokeWidth: "1.5",
-					strokeLinejoin: "round"
-				}),
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-					d: "M9.5 1.5V5h4",
-					stroke: "currentColor",
-					strokeWidth: "1.5",
-					strokeLinejoin: "round"
-				}),
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-					d: "M5.6 13.2 4.2 10l1.4-3.2M7.4 6.8 8.8 10l-1.4 3.2",
-					stroke: "currentColor",
-					strokeWidth: "1.25",
-					strokeLinecap: "round",
-					strokeLinejoin: "round"
-				})
-			]
-		});
-		/** Browser tab glyph: a globe with meridians. */
-		const IconGlobeOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
-			width: size,
-			height: size,
-			className,
-			viewBox: "0 0 16 16",
-			fill: "none",
-			xmlns: "http://www.w3.org/2000/svg",
-			children: [
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("circle", {
-					cx: "8",
-					cy: "8",
-					r: "6.5",
-					stroke: "currentColor",
-					strokeWidth: "1.5"
-				}),
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("ellipse", {
-					cx: "8",
-					cy: "8",
-					rx: "2.8",
-					ry: "6.5",
-					stroke: "currentColor",
-					strokeWidth: "1.5"
-				}),
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-					d: "M1.5 8h13M8 1.5c-2.4 1.8-2.4 11.2 0 13M8 1.5c2.4 1.8 2.4 11.2 0 13",
-					stroke: "currentColor",
-					strokeWidth: "1.5",
-					strokeLinecap: "round"
-				})
-			]
-		});
-		/** History glyph (thread switcher): a clock with a counterclockwise arrow,
-		*  in the app's outline style — the "past conversations" mark. */
-		const IconHistoryOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
-			width: size,
-			height: size,
-			className,
-			viewBox: "0 0 16 16",
-			fill: "none",
-			xmlns: "http://www.w3.org/2000/svg",
-			children: [
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-					d: "M2.4 6.8A5.6 5.6 0 1 1 2.4 9.2",
-					stroke: "currentColor",
-					strokeWidth: "1.5",
-					strokeLinecap: "round"
-				}),
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-					d: "M2.2 3.4v3.4h3.4",
-					stroke: "currentColor",
-					strokeWidth: "1.5",
-					strokeLinecap: "round",
-					strokeLinejoin: "round"
-				}),
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-					d: "M8 5.4V8l1.9 1.2",
-					stroke: "currentColor",
-					strokeWidth: "1.5",
-					strokeLinecap: "round",
-					strokeLinejoin: "round"
-				})
-			]
-		});
-		/** Save glyph (save-as-new-session): the classic floppy disk, in the app's
-		*  outline style. */
-		const IconSaveOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
-			width: size,
-			height: size,
-			className,
-			viewBox: "0 0 16 16",
-			fill: "none",
-			xmlns: "http://www.w3.org/2000/svg",
-			children: [
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-					d: "M4.2 14.5h7.6a1.2 1.2 0 0 0 1.2-1.2V4.9L10.6 2.5H4.2A1.2 1.2 0 0 0 3 3.7v9.6a1.2 1.2 0 0 0 1.2 1.2z",
-					stroke: "currentColor",
-					strokeWidth: "1.5",
-					strokeLinejoin: "round"
-				}),
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-					d: "M10 2.5v2.6H5.6V2.5",
-					stroke: "currentColor",
-					strokeWidth: "1.5",
-					strokeLinejoin: "round"
-				}),
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-					d: "M5.4 14.5v-4.2h5.2v4.2",
-					stroke: "currentColor",
-					strokeWidth: "1.5",
-					strokeLinejoin: "round"
-				})
-			]
-		});
-		/**
-		* Visual Studio Code brand mark for the file-tree "open with" menu. The
-		* path is the Simple Icons `visualstudiocode` glyph (CC0 1.0,
-		* simple-icons@11.0.0 — later releases dropped it over Microsoft's brand
-		* policy, so it is inlined here rather than pulled from react-icons),
-		* rendered monochrome via currentColor to follow the active skin.
-		*/
-		const IconVscode16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("svg", {
-			width: size,
-			height: size,
-			className,
-			viewBox: "0 0 24 24",
-			fill: "currentColor",
-			xmlns: "http://www.w3.org/2000/svg",
-			children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", { d: "M23.15 2.587L18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zm-5.146 14.861L10.826 12l7.178-5.448v10.896z" })
-		});
-		//#endregion
-		//#region src/client/upload.ts
-		/**
-		* File-upload plumbing for the files window: turn a file picker or a drag-drop
-		* into per-file raw-byte uploads through the sidebar's `/sidebar/upload` route.
+		* The editor tab host: the FILE VIEWER for one path. It resolves the file's
+		* previewer through the sidebar registry (`matchFileViewer`), fetches bytes
+		* per the matched viewer's fetch strategy, and renders its component — or the
+		* shared download pane when nothing can render the file.
 		*
-		* Folders keep their tree in both flows: the picker's `webkitdirectory`
-		* selection arrives as Files with `webkitRelativePath` filled, and dropped
-		* folders — which never surface in `dataTransfer.files` — are traversed via
-		* `webkitGetAsEntry`, so the relative path is preserved for every nested file
-		* and the host recreates the tree under the chosen directory. The File is
-		* streamed straight into the POST body (no base64 inflation); uploads run
-		* sequentially so one slow file cannot starve the others, and each result
-		* reports its own outcome (the tree keeps going after a failure). An
-		* optional `AbortSignal` stops the queue at the next item boundary and
-		* aborts the in-flight request; the host cleans up its temp file when the
-		* request stream dies.
-		*/
-		/** Sanitize a relative target: absolute paths, traversal, and empty segments
-		*  are rejected (the host enforces the same rules with a 400). */
-		function sanitizeRelativePath(rel) {
-			if (rel === "" || isAbsolutePath(rel)) return void 0;
-			if (rel.split(/[\\/]/).some((s) => s === "" || s === "." || s === "..")) return void 0;
-			return rel;
-		}
-		/** The picker's relative path: webkitRelativePath when present, else the name. */
-		function relativePathOf(file) {
-			return sanitizeRelativePath(file.webkitRelativePath || file.name || "");
-		}
-		/** Collect a picker selection (webkitdirectory folders carry relative paths). */
-		function uploadItemsFromFiles(files) {
-			const items = [];
-			for (const file of files) {
-				const rel = relativePathOf(file);
-				if (rel !== void 0) items.push({
-					file,
-					relativePath: rel
-				});
-			}
-			return items;
-		}
-		/** Read one dropped file-system entry into upload items; directories
-		*  recurse, prefixing their name onto every descendant's relative path. */
-		async function itemsFromEntry(entry, prefix) {
-			if (entry.isFile) {
-				const file = await new Promise((resolve, reject) => {
-					entry.file(resolve, reject);
-				});
-				const rel = sanitizeRelativePath(prefix + file.name);
-				return rel === void 0 ? [] : [{
-					file,
-					relativePath: rel
-				}];
-			}
-			if (entry.isDirectory) {
-				const reader = entry.createReader();
-				const entries = [];
-				for (;;) {
-					const batch = await new Promise((resolve, reject) => {
-						reader.readEntries(resolve, reject);
-					});
-					if (batch.length === 0) break;
-					entries.push(...batch);
-				}
-				return (await Promise.all(entries.map((child) => itemsFromEntry(child, `${prefix}${entry.name}/`)))).flat();
-			}
-			return [];
-		}
-		/**
-		* Collect a drag-drop payload. Dropped folders do NOT surface in
-		* `dataTransfer.files` — they arrive as directory items, so entries are
-		* captured via `webkitGetAsEntry` and traversed (draining readEntries
-		* batches), keeping each nested file's relative path. MUST be invoked
-		* synchronously from the drop handler: the dataTransfer enters protected
-		* mode once the event dispatch ends, while the captured entry handles stay
-		* readable asynchronously. Falls back to the flat file list when the entry
-		* API is unavailable; an entry that fails to read is skipped, not fatal.
-		*/
-		async function uploadItemsFromDrop(data) {
-			if (data === void 0) return [];
-			const entries = [...data.items].map((item) => item.kind === "file" ? item.webkitGetAsEntry() : null).filter((entry) => entry !== null);
-			if (entries.length === 0) return uploadItemsFromFiles(data.files);
-			return (await Promise.all(entries.map((entry) => itemsFromEntry(entry, "").catch(() => [])))).flat();
-		}
-		/** How long a success hint stays before fading (failures stay until the next action). */
-		const UPLOAD_HINT_MS = 3500;
-		/**
-		* One-line upload progress text: 'Uploading into {dir}…' while no file is in
-		* flight, then 'Uploading {done}/{total}: {name}' per file. Shared by the tree
-		* hint and the full-window upload overlay.
-		*/
-		function uploadHintText(done, total, current, dir, t) {
-			return current === "" ? t("uploadingTo", { dir }) : t("uploadProgress", {
-				done,
-				total,
-				name: current
-			});
-		}
-		/**
-		* Upload every item into `dir` (absolute, inside the session workspace),
-		* sequentially, reporting progress as `(done, total, currentRelativePath)`.
-		* Resolves with one result per item — never rejects; `signal.aborted` stops
-		* the queue at the next item boundary (completed items stay uploaded).
-		*/
-		async function uploadToDir(scope, dir, items, onProgress, signal) {
-			const results = [];
-			let done = 0;
-			for (const item of items) {
-				if (signal?.aborted) break;
-				onProgress?.(done, items.length, item.relativePath);
-				try {
-					if (item.file.size > 134217728) results.push({
-						relativePath: item.relativePath,
-						ok: false,
-						code: "too-large"
-					});
-					else {
-						const res = await api.uploadFile(scope, dir, item.relativePath, item.file, signal);
-						results.push({
-							relativePath: item.relativePath,
-							ok: true,
-							path: res.path
-						});
-					}
-				} catch (error) {
-					if (error instanceof DOMException && error.name === "AbortError") break;
-					results.push({
-						relativePath: item.relativePath,
-						ok: false,
-						code: error instanceof SidebarApiError ? error.code : void 0,
-						error: error instanceof Error ? error.message : String(error)
-					});
-				}
-				done++;
-			}
-			onProgress?.(done, items.length, "");
-			return results;
-		}
-		/** Fold a result list into a one-line status for the tree hint. */
-		function summarizeResults(results, t) {
-			const okCount = results.filter((r) => r.ok).length;
-			const failed = results.find((r) => !r.ok);
-			if (failed !== void 0) return t("uploadFailed", { error: failed.code === "too-large" ? t("uploadTooLarge") : failed.error ?? t("uploadFailedUnknown") });
-			return t("uploadDone", { count: okCount });
-		}
-		//#endregion
-		//#region src/client/FileTree.tsx
-		/**
-		* The controlled file tree behind the files window's tree panel (TreePanel
-		* wraps it with the search box): a lazy VSCode-style tree rooted at the
-		* session's working directory. Levels load on expansion (one API call per
-		* directory), directories sort first, hidden entries render dimmed. The
-		* expansion set lives in the per-session state (owned by the caller); the
-		* caller also owns the refresh affordance — a `refreshTick` bump wipes the
-		* level cache so the visible set reloads.
+		* The file tree is no longer hosted here: it is the persistent Explorer rail
+		* that lives to the LEFT of the workbench (see ExplorerRail.tsx), decoupled
+		* from any tab. So every editor tab carries a real path and renders only the
+		* viewer chrome (a path-less tab — a leftover from an older layout the store
+		* drops on load — still degrades to the empty-state hint instead of the load
+		* flow, so a stale frame never crashes).
 		*
-		* Row actions: hovering a row reveals an @-reference button on the far
-		* right (appends `@<relative path>` to the composer draft), and right-click
-		* opens a context menu: file rows offer the caller's open escapes
-		* (full-area preview / new tab, only when the callbacks exist) and a download
-		* action (the host serves raw bytes, binary-safe); directory rows offer
-		* "upload here"; every row can copy the relative or absolute path (with a
-		* brief "copied" label replacing the button after a successful write).
+		* The path input's Enter routes through `openSidebarFile`, the SAME per-path
+		* dedupe open the rail uses: a run of opens accumulates distinct tabs and
+		* never replaces one already open (no transient preview slot).
 		*
-		* Uploads start here (drag-drop or the context menu picker) but run in the
-		* caller: every request is reported through `onUploadRequest(dir, items)`
-		* (VSCode semantics — a drop on a file row targets its parent directory),
-		* and `busy` gates new drags while one upload is in flight.
+		* The strategy dispatch is pure (planFirstMatch / planFsReadOutcome in
+		* editor-load.ts); this component only wires it to the host APIs.
 		*/
-		/** Root label: the last path segment (mirror of the host rootLabel). */
-		function baseName$1(path) {
-			const trimmed = path.replace(/[\\/]+$/, "");
-			const at = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
-			return at === -1 ? trimmed : trimmed.slice(at + 1);
-		}
-		/** The containing directory of an absolute row path (never the root edge here). */
-		function parentOf(path) {
-			const at = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
-			return at <= 0 ? path : path.slice(0, at);
-		}
-		/** Only OS file drags belong to the upload surface; in-app drags (tab reorder,
-		*  split zones) must pass through untouched to the pane's tab-drop handling
-		*  (mirror of Sidebar.tsx's panel-host shield gate). */
-		function isFileDrag(event) {
-			return event.dataTransfer?.types.includes("Files") ?? false;
-		}
-		/**
-		* VS Code-style per-file-type icon tone. Files whose extension the editor
-		* already knows how to syntax-highlight get a colored glyph (TypeScript blue,
-		* Markdown green, JSON yellow, CSS/HTML orange, images purple, …); folders
-		* get their own warm tone; anything else stays the monochrome `currentColor`
-		* outline. The colors are CSS variables defined in sidebar.module.css under
-		* `body` (light) and `body[data-ds-dark-theme]` (dark), so a theme flip
-		* recolors the icons without a re-render.
-		*/
-		function fileIconClassOf(entry) {
-			switch (extOf(entry.name)) {
-				case "ts":
-				case "tsx":
-				case "mts":
-				case "cts": return sidebar_module_css_default.explorerIconTs;
-				case "js":
-				case "jsx":
-				case "mjs":
-				case "cjs": return sidebar_module_css_default.explorerIconJs;
-				case "json":
-				case "jsonc": return sidebar_module_css_default.explorerIconJson;
-				case "md":
-				case "markdown": return sidebar_module_css_default.explorerIconMd;
-				case "css": return sidebar_module_css_default.explorerIconCss;
-				case "html":
-				case "htm": return sidebar_module_css_default.explorerIconHtml;
-				case "png":
-				case "jpg":
-				case "jpeg":
-				case "gif":
-				case "svg":
-				case "webp":
-				case "ico":
-				case "bmp":
-				case "avif": return sidebar_module_css_default.explorerIconImage;
-				default: return;
-			}
-		}
-		/** How long the row's "copied" label stays after a successful write. */
-		const COPIED_MS = 1200;
-		/**
-		* The drop overlay's hero art: an arrow rising out of a notched tray
-		* (upload zone — the same glyph family as the toolbar's upload icon) and a
-		* tilted pair of photo cards (chat zone). Hand-drawn, colored in the
-		* palette of DSH's own native drop illustration (#3964FE / #9CE5ED) so the
-		* two zones read as one family; the drop overlay is this flow's one brand
-		* moment, so it gets color the rest of the UI never does.
-		*/
-		const UploadDropIllustration = () => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
-			width: "64",
-			height: "56",
-			viewBox: "0 0 64 56",
-			fill: "none",
-			"aria-hidden": "true",
-			children: [
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-					d: "M32 28V11",
-					stroke: "#3964FE",
-					strokeWidth: "5",
-					strokeLinecap: "round"
-				}),
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-					d: "M23 20l9-9 9 9",
-					stroke: "#3964FE",
-					strokeWidth: "5",
-					strokeLinecap: "round",
-					strokeLinejoin: "round"
-				}),
-				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-					d: "M10 40a4 4 0 0 1 4-4h7l3.2 4.6a5 5 0 0 0 4.1 2.2h7.4a5 5 0 0 0 4.1-2.2L43 36h7a4 4 0 0 1 4 4v2a10 10 0 0 1-10 10H20A10 10 0 0 1 10 42v-2z",
-					fill: "#9CE5ED"
-				})
-			]
-		});
-		/** The chat zone's art: two tilted photo cards, each with its own
-		*  sun-over-mountains motif (the back card carries detail too, so it never
-		*  reads as a bare blob). */
-		const ChatDropIllustration = () => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
-			width: "96",
-			height: "76",
-			viewBox: "0 0 96 76",
-			fill: "none",
-			"aria-hidden": "true",
-			children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("g", {
-				transform: "rotate(-12 24 34)",
-				children: [
-					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("rect", {
-						x: "6",
-						y: "16",
-						width: "36",
-						height: "36",
-						rx: "10",
-						fill: "#9CE5ED"
-					}),
-					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("circle", {
-						cx: "16",
-						cy: "27",
-						r: "3.5",
-						fill: "white"
-					}),
-					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-						d: "M11 44l8-9 6 6 4-4 8 9",
-						stroke: "white",
-						strokeWidth: "3",
-						strokeLinecap: "round",
-						strokeLinejoin: "round"
-					})
-				]
-			}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("g", {
-				transform: "rotate(8 61 35)",
-				children: [
-					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("rect", {
-						x: "40",
-						y: "12",
-						width: "42",
-						height: "46",
-						rx: "10",
-						fill: "#3964FE"
-					}),
-					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("circle", {
-						cx: "55",
-						cy: "27",
-						r: "5",
-						fill: "white"
-					}),
-					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
-						d: "M46 50l10-13 7 8 6-6 9 11",
-						stroke: "white",
-						strokeWidth: "3.5",
-						strokeLinecap: "round",
-						strokeLinejoin: "round"
-					})
-				]
-			})]
-		});
-		function FileTree(props) {
-			const { sessionId, cwd, expanded, onToggle, onOpenFile, onOpenFileNewTab, onPreviewFile, openWithTargets, openWithPinned, openWithSsh, onOpenWith, onToggleOpenWithPin, onReferenceFile, refreshTick, onUploadRequest, busy } = props;
-			const [data, setData] = (0, react.useState)({});
-			const dataRef = (0, react.useRef)(data);
-			/** The row whose path was just copied ("copied" label replaces its button). */
-			const [copiedPath, setCopiedPath] = (0, react.useState)(null);
-			/** Open context menu: the row path (and whether it is a directory) plus the cursor position. */
-			const [rowMenu, setRowMenu] = (0, react.useState)(null);
-			/** Whether a file drag hovers the tree (drives the portaled drop zone). */
-			const [dropOver, setDropOver] = (0, react.useState)(false);
-			/** The directory a drag is hovering right now (null = body, drop to root). */
-			const [dropTarget, setDropTarget] = (0, react.useState)(null);
-			/**
-			* Enter/leave depth under the tree body. dragenter/dragleave fire per
-			* element along the drag path (and bubble), so a counter — DSH InputBar's
-			* own pattern — is the flicker-free signal; relatedTarget is unreliable
-			* across engines for drag events.
-			*/
-			const dropDepth = (0, react.useRef)(0);
-			/** Explorer body element; its viewport rect anchors the portaled drop zone. */
-			const bodyRef = (0, react.useRef)(null);
-			/** The body's viewport rect captured at drag entry (null = not measured). */
-			const [dropRect, setDropRect] = (0, react.useState)(null);
-			/** Context-menu "upload here" target directory. */
-			const pendingUploadDir = (0, react.useRef)(void 0);
-			const fileInputRef = (0, react.useRef)(null);
-			/** Reset all drag state (drop landed, the drag left, or a new drag begins). */
-			const resetDrop = () => {
-				dropDepth.current = 0;
-				setDropOver(false);
-				setDropTarget(null);
-				setDropRect(null);
-			};
-			/**
-			* Drop handlers: always swallow the event (a dropped file must never open
-			* in the browser), then report the target directory to the caller. A drop
-			* ends the drag without further leave events, so the depth resets here.
-			* The payload collection is async (dropped folders are traversed through
-			* their entry handles — captured synchronously inside uploadItemsFromDrop
-			* while the dataTransfer is still live), so the request rides a then.
-			*/
-			const reportDrop = (dir, data) => {
-				if (busy) return;
-				uploadItemsFromDrop(data).then((items) => {
-					if (items.length > 0) onUploadRequest(dir, items);
-				});
-			};
-			const handleBodyDrop = (event) => {
-				if (!isFileDrag(event)) return;
-				event.preventDefault();
-				event.stopPropagation();
-				resetDrop();
-				if (cwd !== void 0) reportDrop(cwd, event.dataTransfer);
-			};
-			const handleDirDrop = (event, dir) => {
-				if (!isFileDrag(event)) return;
-				event.preventDefault();
-				event.stopPropagation();
-				resetDrop();
-				reportDrop(dir, event.dataTransfer);
-			};
-			const handleFileDrop = (event, path) => {
-				handleDirDrop(event, parentOf(path));
-			};
-			const handleBodyDragEnter = (event) => {
-				if (!isFileDrag(event)) return;
-				event.preventDefault();
-				event.stopPropagation();
-				dropDepth.current += 1;
-				if (busy) return;
-				if (dropDepth.current === 1) {
-					const rect = bodyRef.current?.getBoundingClientRect();
-					setDropRect(rect === void 0 ? null : {
-						top: rect.top,
-						left: rect.left,
-						width: rect.width,
-						height: rect.height
-					});
-				}
-				setDropOver(true);
-			};
-			const handleBodyDragLeave = () => {
-				dropDepth.current = Math.max(0, dropDepth.current - 1);
-				if (dropDepth.current > 0) return;
-				setDropOver(false);
-				setDropTarget(null);
-				setDropRect(null);
-			};
-			const handleBodyDragOver = (event) => {
-				if (!isFileDrag(event)) return;
-				event.preventDefault();
-				event.stopPropagation();
-				event.dataTransfer.dropEffect = busy ? "none" : "copy";
-				if (busy) return;
-				setDropTarget(null);
-			};
-			const handleRowDragOver = (event, dir) => {
-				if (!isFileDrag(event)) return;
-				event.preventDefault();
-				event.stopPropagation();
-				event.dataTransfer.dropEffect = busy ? "none" : "copy";
-				if (busy) return;
-				setDropTarget(dir);
-			};
-			const storeLevel = (0, react.useCallback)((path, level) => {
-				dataRef.current = {
-					...dataRef.current,
-					[path]: level
-				};
-				setData(dataRef.current);
-			}, []);
-			const loadDir = (0, react.useCallback)((dir) => {
-				if (dataRef.current[dir] !== void 0) return;
-				storeLevel(dir, {});
-				api.fsTree({
-					sessionId,
-					cwd
-				}, dir).then((listing) => {
-					storeLevel(dir, { entries: listing.entries });
-				}).catch((error) => {
-					storeLevel(dir, { error: error instanceof Error ? error.message : String(error) });
-				});
-			}, [
-				sessionId,
-				cwd,
-				storeLevel
-			]);
-			const lastTick = (0, react.useRef)(refreshTick);
+		function EditorHost(props) {
+			const { ctx, store, scope, tab } = props;
+			const path = tab.path ?? "";
+			const title = tab.title;
+			const [load, setLoad] = (0, react.useState)({ status: "loading" });
+			const [attempt, setAttempt] = (0, react.useState)(0);
+			const failCountRef = (0, react.useRef)(0);
+			const failKeyRef = (0, react.useRef)("");
+			const loadRef = (0, react.useRef)(load);
+			loadRef.current = load;
+			const visible = props.visible !== false;
+			const prevVisibleRef = (0, react.useRef)(visible);
 			(0, react.useEffect)(() => {
-				if (lastTick.current === refreshTick) return;
-				lastTick.current = refreshTick;
-				dataRef.current = {};
-				setData({});
-			}, [refreshTick]);
-			(0, react.useEffect)(() => {
-				const root = cwd;
-				if (root === void 0) return;
-				loadDir(root);
-				for (const dir of expanded) loadDir(dir);
-			}, [
-				cwd,
-				expanded,
-				refreshTick,
-				loadDir
-			]);
-			/** Copy `text`; on success flip the row's copied label for a moment. */
-			const copyPath = (0, react.useCallback)((text, path) => {
-				(0, _deepseek_ai_dsh_client_ui_primitives.writeClipboard)(text).then((ok) => {
-					if (!ok) return;
-					setCopiedPath(path);
-					window.setTimeout(() => {
-						setCopiedPath((current) => current === path ? null : current);
-					}, COPIED_MS);
-				});
+				if (!prevVisibleRef.current && visible && loadRef.current.status === "error") setAttempt((a) => a + 1);
+				prevVisibleRef.current = visible;
+			}, [visible]);
+			const showEmpty = path === "";
+			/** The header path input's Enter open: the SAME per-path dedupe tab the tree
+			*  rail uses, so it focuses an existing tab or appends a new one — never a
+			*  preview replacement. */
+			const openFile = (absolute) => {
+				openSidebarFile(ctx, store, scope.sessionId, absolute);
+			};
+			const [toolbar, setToolbar] = (0, react.useState)(null);
+			const controlsRef = (0, react.useRef)(null);
+			const onToolbarState = (0, react.useCallback)((next) => {
+				setToolbar((prev) => prev !== null && JSON.stringify(prev) === JSON.stringify(next) ? prev : next);
 			}, []);
-			/** The row's trailing actions: the @-reference button, or the copied label. */
-			const rowActions = (entry) => {
-				if (copiedPath === entry.path) return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-					className: sidebar_module_css_default.explorerCopied,
-					children: t("copied")
-				});
-				return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-					type: "button",
-					className: sidebar_module_css_default.explorerRef,
-					"aria-label": t("referenceFile"),
-					title: t("referenceFile"),
-					onClick: (event) => {
-						event.stopPropagation();
-						onReferenceFile(entry.path);
-					},
-					children: t("referenceFile")
-				});
-			};
-			const openRowMenu = (event, path, isDir) => {
-				event.preventDefault();
-				event.stopPropagation();
-				setRowMenu({
-					path,
-					isDir,
-					x: event.clientX,
-					y: event.clientY
-				});
-			};
-			/** Download a file through the host route (raw bytes, binary-safe). */
-			const downloadFile = (path) => {
-				const url = downloadUrl({
-					sessionId,
-					cwd
-				}, path);
-				const anchor = document.createElement("a");
-				anchor.href = url;
-				anchor.style.display = "none";
-				document.body.appendChild(anchor);
-				anchor.click();
-				anchor.remove();
-			};
-			/** The menu label of one open target: a locale key for the built-ins, the
-			*  user's own name for custom editors, plus the SSH hint in remote mode. */
-			const openWithLabelOf = (target) => {
-				const name = target.nameKey !== void 0 ? t(target.nameKey) : target.name;
-				return openWithSsh === true && !target.localOnly ? `${name}${t("openWithSshSuffix")}` : name;
-			};
-			/**
-			* The "open with" menu entries: the pinned targets as DIRECT rows, then
-			* the parent row with every target as a nested submenu. Both only render
-			* when the caller wired the feature and at least one target is visible.
-			*/
-			const openWithEntries = () => {
-				if (openWithTargets === void 0 || onOpenWith === void 0 || openWithTargets.length === 0) return [];
-				const pinnedIds = openWithPinned ?? [];
-				/** Brand marks for the built-ins (monochrome silhouettes, currentColor);
-				*  reveal gets the folder glyph, custom editors a generic code mark. */
-				const itemIcon = (target) => {
-					if (target.kind === "reveal") return /* @__PURE__ */ (0, react_jsx_runtime.jsx)(VscFolderOpened, { size: 16 });
-					if (target.id === "vscode") return /* @__PURE__ */ (0, react_jsx_runtime.jsx)(IconVscode16, { size: 16 });
-					if (target.id === "cursor") return /* @__PURE__ */ (0, react_jsx_runtime.jsx)(SiCursor, { size: 16 });
-					if (target.id === "zed") return /* @__PURE__ */ (0, react_jsx_runtime.jsx)(SiZedindustries, { size: 16 });
-					return /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCodeOutline16, { size: 16 });
+			const onToolbarControls = (0, react.useCallback)((controls) => {
+				controlsRef.current = controls;
+			}, []);
+			(0, react.useEffect)(() => {
+				setToolbar(null);
+				if (showEmpty) return;
+				let cancelled = false;
+				let retryTimer;
+				const controller = new AbortController();
+				setLoad({ status: "loading" });
+				const succeed = () => {
+					failCountRef.current = 0;
 				};
-				const pinned = openWithTargets.filter((target) => pinnedIds.includes(target.id)).map((target) => ({
-					id: `open-with:${target.id}`,
-					label: openWithLabelOf(target),
-					icon: itemIcon(target)
-				}));
-				const submenu = openWithTargets.map((target) => {
-					const pinnedNow = pinnedIds.includes(target.id);
-					return {
-						id: `open-with:${target.id}`,
-						label: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
-							className: sidebar_module_css_default.openWithLabel,
-							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-								className: sidebar_module_css_default.openWithName,
-								children: openWithLabelOf(target)
-							}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-								role: "button",
-								tabIndex: -1,
-								className: clsx(sidebar_module_css_default.openWithPin, pinnedNow && sidebar_module_css_default.openWithPinActive),
-								"aria-label": pinnedNow ? t("unpinOpenWith") : t("pinOpenWith"),
-								title: pinnedNow ? t("unpinOpenWith") : t("pinOpenWith"),
-								onClick: (event) => {
-									event.preventDefault();
-									event.stopPropagation();
-									onToggleOpenWithPin?.(target.id);
-								},
-								children: pinnedNow ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(VscPinned, { size: 14 }) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(VscPin, { size: 14 })
-							})]
-						}),
-						icon: itemIcon(target)
-					};
-				});
-				return [
-					...pinned,
-					...pinned.length > 0 ? [{
-						id: "open-with-sep",
-						type: "separator"
-					}] : [],
-					{
-						id: "open-with-menu",
-						label: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
-							className: sidebar_module_css_default.openWithLabel,
-							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-								className: sidebar_module_css_default.openWithName,
-								children: t("openWithMenu")
-							}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronRightOutline14, {
-								size: 14,
-								className: sidebar_module_css_default.openWithChevron,
-								"aria-hidden": true
-							})]
-						}),
-						icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(VscLinkExternal, { size: 16 }),
-						submenu
+				const fail = (error) => {
+					if (cancelled) return;
+					const retryable = error instanceof SidebarApiError && (error.code === "network" || error.code === "http");
+					const key = `${scope.sessionId}|${path}`;
+					if (failKeyRef.current !== key) {
+						failKeyRef.current = key;
+						failCountRef.current = 0;
 					}
-				];
-			};
-			const root = cwd;
-			const renderLevel = (dir, depth) => {
-				const level = data[dir];
-				if (level === void 0) return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-					className: sidebar_module_css_default.explorerRow,
-					style: { paddingLeft: depth * 22 + 6 },
-					children: t("loading")
-				});
-				if (level.error !== void 0) return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-					className: clsx(sidebar_module_css_default.explorerRow, sidebar_module_css_default.explorerError),
-					style: { paddingLeft: depth * 22 + 6 },
-					children: level.error
-				});
-				return (level.entries ?? []).map((entry) => {
-					if (entry.isDir) {
-						const isOpen = expanded.includes(entry.path);
-						return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-							role: "button",
-							tabIndex: 0,
-							className: clsx(sidebar_module_css_default.explorerRow, sidebar_module_css_default.explorerDir, entry.hidden && sidebar_module_css_default.explorerHidden, dropTarget === entry.path && sidebar_module_css_default.explorerRowDropTarget),
-							style: { paddingLeft: depth * 22 + 6 },
-							onClick: () => {
-								onToggle(entry.path);
-							},
-							onKeyDown: (event) => {
-								if (event.key === "Enter" || event.key === " ") {
-									event.preventDefault();
-									onToggle(entry.path);
-								}
-							},
-							onDragOver: (event) => {
-								handleRowDragOver(event, entry.path);
-							},
-							onDrop: (event) => {
-								handleDirDrop(event, entry.path);
-							},
-							onContextMenu: (event) => {
-								openRowMenu(event, entry.path, true);
-							},
-							children: [
-								isOpen ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(VscFolderOpened, {
-									size: 14,
-									className: sidebar_module_css_default.explorerIconFolder
-								}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(VscFolder, {
-									size: 14,
-									className: sidebar_module_css_default.explorerIconFolder
-								}),
-								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-									className: sidebar_module_css_default.explorerName,
-									children: entry.name
-								}),
-								entry.isSymlink && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconLinkOutline16, {
-									size: 12,
-									className: sidebar_module_css_default.explorerSymlink
-								}),
-								rowActions(entry)
-							]
-						}), isOpen && renderLevel(entry.path, depth + 1)] }, entry.path);
+					setLoad({
+						status: "error",
+						message: error instanceof Error ? error.message : String(error),
+						retryable,
+						autoAttempt: retryable ? failCountRef.current + 1 : void 0
+					});
+					if (retryable) {
+						failCountRef.current += 1;
+						retryTimer = window.setTimeout(() => {
+							if (!cancelled) setAttempt((a) => a + 1);
+						}, nextDelayMs(failCountRef.current));
 					}
-					return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						role: "button",
-						tabIndex: 0,
-						className: clsx(sidebar_module_css_default.explorerRow, entry.hidden && sidebar_module_css_default.explorerHidden, entry.broken && sidebar_module_css_default.explorerBroken, dropTarget === parentOf(entry.path) && sidebar_module_css_default.explorerRowDropTarget),
-						style: { paddingLeft: depth * 22 + 6 },
-						title: entry.broken ? `${entry.path} — ${t("brokenSymlink")}` : entry.path,
-						onClick: () => {
-							onOpenFile(entry.path);
-						},
-						onKeyDown: (event) => {
-							if (event.key === "Enter" || event.key === " ") {
-								event.preventDefault();
-								onOpenFile(entry.path);
-							}
-						},
-						onDragOver: (event) => {
-							handleRowDragOver(event, parentOf(entry.path));
-						},
-						onDrop: (event) => {
-							handleFileDrop(event, entry.path);
-						},
-						onContextMenu: (event) => {
-							openRowMenu(event, entry.path, false);
-						},
-						children: [
-							/* @__PURE__ */ (0, react_jsx_runtime.jsx)(VscFile, {
-								size: 14,
-								className: fileIconClassOf(entry)
-							}),
-							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-								className: sidebar_module_css_default.explorerName,
-								children: entry.name
-							}),
-							entry.isSymlink && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconLinkOutline16, {
-								size: 12,
-								className: sidebar_module_css_default.explorerSymlink
-							}),
-							rowActions(entry)
-						]
-					}, entry.path);
-				});
-			};
+				};
+				const mediaUrlOf = () => mediaUrl(scope, path);
+				const apply = (action) => {
+					if (cancelled) return;
+					switch (action.kind) {
+						case "binary":
+							succeed();
+							setLoad({ status: "binary" });
+							return;
+						case "render":
+							succeed();
+							setLoad({
+								status: "ready",
+								viewer: action.viewer,
+								content: action.content,
+								truncated: action.truncated,
+								mediaUrl: action.mediaUrl,
+								customData: action.customData
+							});
+							return;
+						case "customLoad":
+							action.viewer.load?.(path, scope, controller.signal).then((data) => {
+								if (cancelled) return;
+								succeed();
+								setLoad({
+									status: "ready",
+									viewer: action.viewer,
+									customData: data
+								});
+							}).catch((error) => {
+								if (cancelled) return;
+								fail(error);
+							});
+							return;
+						case "fetchFsRead":
+							api.fsRead(scope, path).then((result) => {
+								if (cancelled) return;
+								succeed();
+								const outcome = planFsReadOutcome(action.viewer, {
+									binary: result.kind === "binary",
+									content: result.kind === "text" ? result.content : "",
+									truncated: result.truncated,
+									head: result.kind === "binary" ? result.head : void 0
+								}, (head) => ctx.betterSidebar?.matchFileViewer(path, head), mediaUrlOf);
+								apply(outcome);
+							}).catch((error) => {
+								if (cancelled) return;
+								fail(error);
+							});
+							return;
+					}
+				};
+				apply(planFirstMatch(ctx.betterSidebar?.matchFileViewer(path), mediaUrlOf));
+				return () => {
+					cancelled = true;
+					if (retryTimer !== void 0) window.clearTimeout(retryTimer);
+					controller.abort();
+				};
+			}, [
+				scope.sessionId,
+				scope.cwd,
+				path,
+				ctx,
+				showEmpty,
+				attempt
+			]);
+			const saveLabel = toolbar === null ? "" : toolbar.saveState === "saving" ? t("loading") : toolbar.saveState === "saved" ? t("saved") : toolbar.saveState === "failed" ? t("saveFailed") : "";
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-				ref: bodyRef,
-				className: sidebar_module_css_default.explorerBody,
-				onDragEnter: handleBodyDragEnter,
-				onDragOver: handleBodyDragOver,
-				onDragLeave: handleBodyDragLeave,
-				onDrop: handleBodyDrop,
-				children: [
-					root === void 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-						className: sidebar_module_css_default.explorerEmpty,
-						children: t("noSession")
-					}) : /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						className: clsx(sidebar_module_css_default.explorerRow, dropTarget === root && sidebar_module_css_default.explorerRowDropTarget),
-						style: { paddingLeft: 6 },
-						onDragOver: (event) => {
-							handleRowDragOver(event, root);
-						},
-						onDrop: (event) => {
-							handleDirDrop(event, root);
-						},
-						onContextMenu: (event) => {
-							openRowMenu(event, root, true);
-						},
-						children: [
-							/* @__PURE__ */ (0, react_jsx_runtime.jsx)(VscFolderOpened, {
-								size: 14,
-								className: sidebar_module_css_default.explorerIconFolder
-							}),
-							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-								className: sidebar_module_css_default.explorerName,
-								children: baseName$1(root)
-							}),
-							copiedPath === root ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-								className: sidebar_module_css_default.explorerCopied,
-								children: t("copied")
-							}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+				className: sidebar_module_css_default.editor,
+				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+					className: sidebar_module_css_default.editorHeader,
+					children: [
+						/* @__PURE__ */ (0, react_jsx_runtime.jsx)(EditorPathInput, {
+							path,
+							cwd: scope.cwd,
+							onOpen: openFile
+						}, path),
+						toolbar?.modes === true && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+							className: sidebar_module_css_default.editorModeToggle,
+							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 								type: "button",
-								className: sidebar_module_css_default.explorerRef,
-								"aria-label": t("referenceFile"),
-								title: t("referenceFile"),
-								onClick: (event) => {
-									event.stopPropagation();
-									onReferenceFile(root);
+								className: clsx(sidebar_module_css_default.editorModeButton, toolbar.mode === "preview" && sidebar_module_css_default.editorModeActive),
+								onClick: () => {
+									controlsRef.current?.setMode("preview");
 								},
-								children: t("referenceFile")
+								children: t("preview")
+							}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+								type: "button",
+								className: clsx(sidebar_module_css_default.editorModeButton, toolbar.mode === "edit" && sidebar_module_css_default.editorModeActive),
+								onClick: () => {
+									controlsRef.current?.setMode("edit");
+								},
+								children: t("edit")
+							})]
+						}),
+						toolbar?.dirty === true && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+							className: sidebar_module_css_default.dirtyDot,
+							title: t("unsaved")
+						}),
+						toolbar?.editable === true && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+							type: "button",
+							className: sidebar_module_css_default.iconButton,
+							"aria-label": t("save"),
+							title: `${t("save")} (Ctrl/Cmd+S)`,
+							onClick: () => {
+								controlsRef.current?.save();
+							},
+							children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCheckOutline16, { size: 14 })
+						}),
+						saveLabel !== "" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+							className: clsx(sidebar_module_css_default.editorStatus, toolbar?.saveState === "failed" && sidebar_module_css_default.editorStatusError),
+							children: saveLabel
+						})
+					]
+				}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+					className: sidebar_module_css_default.editorBody,
+					children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+						className: sidebar_module_css_default.editorMain,
+						children: [
+							showEmpty && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+								className: sidebar_module_css_default.editorPlaceholder,
+								children: t("editorEmptyHint")
+							}),
+							!showEmpty && load.status === "loading" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+								className: sidebar_module_css_default.editorPlaceholder,
+								children: t("loading")
+							}),
+							!showEmpty && load.status === "error" && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+								className: sidebar_module_css_default.editorError,
+								children: [
+									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: load.message }),
+									load.autoAttempt !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: t("fsReadRetryWaiting", { n: load.autoAttempt }) }),
+									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+										type: "button",
+										className: sidebar_module_css_default.terminalRetry,
+										onClick: () => {
+											setAttempt((a) => a + 1);
+										},
+										children: t("terminalRetry")
+									})
+								]
+							}),
+							!showEmpty && load.status === "binary" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(BinaryDownload, {
+								scope,
+								path
+							}),
+							!showEmpty && load.status === "ready" && (0, react.createElement)(load.viewer.component, {
+								ctx,
+								store,
+								scope,
+								path,
+								title,
+								viewerId: load.viewer.id,
+								content: load.content,
+								truncated: load.truncated,
+								mediaUrl: load.mediaUrl,
+								customData: load.customData,
+								toolbar: "host",
+								onToolbarState,
+								onToolbarControls
 							})
 						]
-					}), data[root] !== void 0 && renderLevel(root, 1)] }),
-					dropOver && dropRect !== null && (0, react_dom.createPortal)(/* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-						className: sidebar_module_css_default.uploadDropZone,
-						style: {
-							top: dropRect.top + 2,
-							left: dropRect.left + 2,
-							width: dropRect.width - 4,
-							height: dropRect.height - 4
-						},
-						children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-							className: sidebar_module_css_default.uploadDropHero,
-							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(UploadDropIllustration, {}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-								className: sidebar_module_css_default.uploadDropZonePill,
-								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(IconUploadOutline16, { size: 14 }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-									className: sidebar_module_css_default.uploadDropZoneText,
-									children: dropTarget !== null ? t("uploadTo", { dir: dropTarget }) : t("uploadDropHint")
-								})]
-							})]
-						})
-					}), dropRect.left >= 200 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-						className: sidebar_module_css_default.uploadDropChatHint,
-						style: { width: dropRect.left },
-						children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-							className: sidebar_module_css_default.uploadDropChatCard,
-							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(ChatDropIllustration, {}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: t("uploadDropChat") })]
-						})
-					})] }), document.body),
-					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
-						ref: fileInputRef,
-						type: "file",
-						multiple: true,
-						style: { display: "none" },
-						onChange: (event) => {
-							const dir = pendingUploadDir.current ?? root;
-							pendingUploadDir.current = void 0;
-							if (dir !== void 0 && !busy) onUploadRequest(dir, uploadItemsFromFiles(event.target.files ?? []));
-							event.target.value = "";
-						}
-					}),
-					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Menu, {
-						open: rowMenu !== null,
-						onClose: () => {
-							setRowMenu(null);
-						},
-						items: [
-							...rowMenu?.isDir === false && onPreviewFile !== void 0 ? [{
-								id: "preview",
-								label: t("preview"),
-								icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(VscFolderOpened, { size: 16 })
-							}] : [],
-							...rowMenu?.isDir === false && onOpenFileNewTab !== void 0 ? [{
-								id: "open-new-tab",
-								label: t("openFileNewTab"),
-								icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCodeOutline16, { size: 16 })
-							}] : [],
-							...openWithEntries(),
-							...rowMenu?.isDir === false ? [{
-								id: "download",
-								label: t("download"),
-								icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconDownloadOutline16, { size: 16 })
-							}] : [],
-							...rowMenu?.isDir === true ? [{
-								id: "upload-here",
-								label: t("uploadHere"),
-								icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(IconUploadOutline16, { size: 16 })
-							}] : [],
-							{
-								id: "relative",
-								label: t("copyRelative"),
-								icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCopyOutline16, { size: 16 })
-							},
-							{
-								id: "absolute",
-								label: t("copyAbsolute"),
-								icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCopyOutline16, { size: 16 })
-							}
-						],
-						onSelect: (id) => {
-							const target = rowMenu;
-							if (target === null) return;
-							setRowMenu(null);
-							if (id === "open-new-tab") {
-								onOpenFileNewTab?.(target.path);
-								return;
-							}
-							if (id === "preview") {
-								onPreviewFile?.(target.path);
-								return;
-							}
-							if (id.startsWith("open-with:")) {
-								onOpenWith?.(id.slice(10), target.path);
-								return;
-							}
-							if (id === "download") {
-								downloadFile(target.path);
-								return;
-							}
-							if (id === "upload-here") {
-								pendingUploadDir.current = target.path;
-								fileInputRef.current?.click();
-								return;
-							}
-							copyPath(id === "relative" ? relativeTo(cwd ?? "", target.path) : target.path, target.path);
-						},
-						portal: true,
-						align: "start",
-						getAnchorRect: () => rowMenu === null ? null : new DOMRect(rowMenu.x, rowMenu.y, 0, 0),
-						anchor: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {})
 					})
-				]
+				})]
 			});
 		}
-		//#endregion
-		//#region src/client/frame-batcher.ts
-		function createFrameBatcher() {
-			let frame = null;
-			let task = null;
-			const run = () => {
-				frame = null;
-				const current = task;
-				task = null;
-				current?.();
-			};
-			return {
-				schedule(next) {
-					task = next;
-					if (frame === null) frame = requestAnimationFrame(run);
-				},
-				flushNow() {
-					if (frame !== null) {
-						cancelAnimationFrame(frame);
-						frame = null;
-					}
-					run();
-				},
-				dispose() {
-					if (frame !== null) {
-						cancelAnimationFrame(frame);
-						frame = null;
-					}
-					task = null;
+		/**
+		* The header's path input: shows the current file relative to the session
+		* cwd (absolute when outside it). Enter resolves the typed path (relative
+		* input joins onto the cwd — the same resolution `openSidebarFile` uses)
+		* and opens it through the parent's per-path dedupe open. Escape/blur
+		* restores the current value. The parent keys it by `path` so a re-open of
+		* the same file remounts and reseeds the draft.
+		*/
+		function EditorPathInput(props) {
+			const { path, cwd, onOpen } = props;
+			const display = path === "" ? "" : relativeTo(cwd ?? "", path);
+			const [value, setValue] = (0, react.useState)(display);
+			const commit = () => {
+				const input = value.trim();
+				if (input === "" || input === display) {
+					setValue(display);
+					return;
 				}
+				onOpen(resolveSidebarPath(cwd, input));
+				setValue(display);
 			};
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
+				className: sidebar_module_css_default.editorPathInput,
+				value,
+				placeholder: t("editorPathPlaceholder"),
+				title: path,
+				spellCheck: false,
+				onChange: (event) => {
+					setValue(event.target.value);
+				},
+				onKeyDown: (event) => {
+					if (event.key === "Enter") {
+						event.preventDefault();
+						commit();
+					} else if (event.key === "Escape") setValue(display);
+				},
+				onBlur: () => {
+					setValue(display);
+				}
+			});
 		}
 		//#endregion
 		//#region src/client/open-with.ts
@@ -5108,989 +3924,6 @@ window.__ModuleLoader__.load({
 			return row.name.trim() !== "" && row.urlTemplate.includes("{path}") && /^[a-z][a-z0-9+.-]*:\/\//i.test(row.urlTemplate.trim());
 		}
 		//#endregion
-		//#region src/client/prefs.ts
-		/** Validate one raw resolved value into {@link SidebarPrefs}. Used for the
-		* settings.get payload AND the settings.update response (both carry the
-		* layered resolved value); any malformed field falls back to its default.
-		* @param value - the raw resolved section from the settings wire.
-		* @returns validated prefs (always well-formed).
-		*/
-		function parsePrefs(value) {
-			if (value === null || typeof value !== "object") return { ...SIDEBAR_PREFS_DEFAULTS };
-			const record = value;
-			return {
-				openByDefault: typeof record.openByDefault === "boolean" ? record.openByDefault : SIDEBAR_PREFS_DEFAULTS.openByDefault,
-				defaultWidthPercent: typeof record.defaultWidthPercent === "number" && Number.isFinite(record.defaultWidthPercent) ? clampWidthPercent(record.defaultWidthPercent) : SIDEBAR_PREFS_DEFAULTS.defaultWidthPercent,
-				autoOpenSubagent: typeof record.autoOpenSubagent === "boolean" ? record.autoOpenSubagent : SIDEBAR_PREFS_DEFAULTS.autoOpenSubagent,
-				autoOpenJobs: typeof record.autoOpenJobs === "boolean" ? record.autoOpenJobs : SIDEBAR_PREFS_DEFAULTS.autoOpenJobs,
-				agentTerminalTools: typeof record.agentTerminalTools === "boolean" ? record.agentTerminalTools : SIDEBAR_PREFS_DEFAULTS.agentTerminalTools,
-				bottomPanelAutoTerminal: typeof record.bottomPanelAutoTerminal === "boolean" ? record.bottomPanelAutoTerminal : SIDEBAR_PREFS_DEFAULTS.bottomPanelAutoTerminal,
-				terminalFontFamily: typeof record.terminalFontFamily === "string" ? record.terminalFontFamily : SIDEBAR_PREFS_DEFAULTS.terminalFontFamily,
-				terminalShell: typeof record.terminalShell === "string" ? record.terminalShell : SIDEBAR_PREFS_DEFAULTS.terminalShell,
-				terminalShellArgs: typeof record.terminalShellArgs === "string" ? record.terminalShellArgs : SIDEBAR_PREFS_DEFAULTS.terminalShellArgs,
-				terminalFontSize: typeof record.terminalFontSize === "number" && Number.isFinite(record.terminalFontSize) ? clampTerminalFontSize(record.terminalFontSize) : SIDEBAR_PREFS_DEFAULTS.terminalFontSize,
-				interceptOpenPath: typeof record.interceptOpenPath === "boolean" ? record.interceptOpenPath : SIDEBAR_PREFS_DEFAULTS.interceptOpenPath,
-				editorExplorer: typeof record.editorExplorer === "boolean" ? record.editorExplorer : SIDEBAR_PREFS_DEFAULTS.editorExplorer,
-				titleBarScheme: isTitleBarScheme(record.titleBarScheme) ? record.titleBarScheme : record.titleBarCompat === true || hasLegacyStripValue(record.titleBarStripPx) ? "custom" : "auto",
-				titleBarPresetId: typeof record.titleBarPresetId === "string" ? record.titleBarPresetId : SIDEBAR_PREFS_DEFAULTS.titleBarPresetId,
-				customCss: typeof record.customCss === "string" ? record.customCss : SIDEBAR_PREFS_DEFAULTS.customCss,
-				titleBarCompat: typeof record.titleBarCompat === "boolean" ? record.titleBarCompat : SIDEBAR_PREFS_DEFAULTS.titleBarCompat,
-				titleBarStripPx: typeof record.titleBarStripPx === "number" && Number.isFinite(record.titleBarStripPx) ? clampTitleBarStrip(record.titleBarStripPx) : SIDEBAR_PREFS_DEFAULTS.titleBarStripPx,
-				htmlViewerNoSandbox: typeof record.htmlViewerNoSandbox === "boolean" ? record.htmlViewerNoSandbox : SIDEBAR_PREFS_DEFAULTS.htmlViewerNoSandbox,
-				htmlViewerDefaultUnsafe: typeof record.htmlViewerDefaultUnsafe === "boolean" ? record.htmlViewerDefaultUnsafe : SIDEBAR_PREFS_DEFAULTS.htmlViewerDefaultUnsafe,
-				browserNoSandbox: typeof record.browserNoSandbox === "boolean" ? record.browserNoSandbox : SIDEBAR_PREFS_DEFAULTS.browserNoSandbox,
-				browserInterceptLinks: typeof record.browserInterceptLinks === "boolean" ? record.browserInterceptLinks : SIDEBAR_PREFS_DEFAULTS.browserInterceptLinks,
-				browserInterceptHttp: typeof record.browserInterceptHttp === "boolean" ? record.browserInterceptHttp : SIDEBAR_PREFS_DEFAULTS.browserInterceptHttp,
-				browserInterceptHttps: typeof record.browserInterceptHttps === "boolean" ? record.browserInterceptHttps : SIDEBAR_PREFS_DEFAULTS.browserInterceptHttps,
-				tabsEnabled: booleanMapOf(record.tabsEnabled),
-				viewersEnabled: booleanMapOf(record.viewersEnabled),
-				pluginSettings: pluginSettingsMapOf(record.pluginSettings)
-			};
-		}
-		/**
-		* Validate the plugin-owned settings map (v0.12.0+): `{ descriptorId: { key:
-		* value } }`, nested open maps. Any non-object value (or a malformed whole)
-		* falls back to the empty map — the schema defaults already guard the wire
-		* shape, this is the client's second line.
-		*/
-		function pluginSettingsMapOf(value) {
-			if (value === null || typeof value !== "object" || Array.isArray(value)) return {};
-			const out = {};
-			for (const [id, blob] of Object.entries(value)) if (blob !== null && typeof blob === "object" && !Array.isArray(blob)) out[id] = blob;
-			return out;
-		}
-		/**
-		* Validate one enable-switch map (per-tab / per-viewer). Only boolean values
-		* survive; a non-object or a non-boolean entry falls back to the empty map /
-		* drops the entry — an absent key means the feature stays enabled.
-		*/
-		function booleanMapOf(value) {
-			if (value === null || typeof value !== "object" || Array.isArray(value)) return {};
-			const out = {};
-			for (const [key, item] of Object.entries(value)) if (typeof item === "boolean") out[key] = item;
-			return out;
-		}
-		/** Type guard for the title-bar scheme union (anything else falls back). */
-		function isTitleBarScheme(value) {
-			return typeof value === "string" && TITLE_BAR_SCHEMES.includes(value);
-		}
-		/**
-		* Whether the legacy document carries an explicit strip value (only
-		* reachable through the old gear popup): a stored number different from the
-		* default counts as "the user already configured something" and migrates to
-		* the `custom` scheme.
-		*/
-		function hasLegacyStripValue(value) {
-			return typeof value === "number" && Number.isFinite(value) && value !== 40;
-		}
-		/**
-		* Read the resolved side card preferences through the plugin's settings route.
-		* @param settings - the settings wire face (the plugin api by default).
-		* @returns validated prefs, or the schema defaults when the route rejects,
-		* the namespace is absent, or a stored value violates the contract.
-		*/
-		async function loadPrefs(settings) {
-			try {
-				return parsePrefs((await settings.settingsGet()).value);
-			} catch {
-				return { ...SIDEBAR_PREFS_DEFAULTS };
-			}
-		}
-		/**
-		* Read the external-disable flag from the same settings route: the
-		* dsh-web-ui family's aionui-panel provider choice. True only when the host
-		* resolved `aionui-panel.rightPanel` to 'aionui-panel' — while true the
-		* sidebar must not mount (the two right panels are mutually exclusive). Any
-		* failure (route rejected, aionui absent, malformed response) reads false,
-		* so a missing family never hides the sidebar.
-		* @param settings - the settings wire face (the plugin api by default).
-		* @returns the external-disable flag (false on any failure).
-		*/
-		async function loadExternalDisable(settings) {
-			try {
-				return (await settings.settingsGet()).externalDisable === true;
-			} catch {
-				return false;
-			}
-		}
-		//#endregion
-		//#region src/client/plugin-settings.ts
-		/**
-		* Pending-writes queue for the file tree's open-with config: pin toggles and
-		* (outside the settings popup) config edits land in the sidebar prefs as
-		* `pluginSettings['editor']`. Writes are serialized through one promise chain
-		* so a quick burst of pin clicks can never read a stale pluginSettings map
-		* and drop an earlier toggle; each write pushes the whole open map patch
-		* through the revision-free settings route and adopts the returned document.
-		*
-		* (The settings popup has its own serialized commit — SideCardSection's —
-		* so its rows and this helper rarely race; the shared route's last-write-wins
-		* semantics cover the uncommon overlap.)
-		*/
-		let queue = Promise.resolve();
-		/**
-		* Merge one plugin-owned settings blob of one descriptor and persist it.
-		* @param store - the sidebar store (its prefs are replaced by the write result).
-		* @param descriptorId - the descriptor whose blob is patched ('editor' here).
-		* @param updater - pure patch function; receives a shallow copy of the blob.
-		*/
-		function updatePluginSettings(store, descriptorId, updater) {
-			queue = queue.then(async () => {
-				const prefs = store.getPrefs();
-				const next = updater({ ...prefs.pluginSettings[descriptorId] ?? {} });
-				const view = await api.settingsUpdate({ pluginSettings: {
-					...prefs.pluginSettings,
-					[descriptorId]: next
-				} });
-				store.setPrefs(parsePrefs(view.value));
-			}).catch((error) => {
-				console.error("open-with settings write failed", error);
-			});
-		}
-		//#endregion
-		//#region src/client/UploadOverlay.tsx
-		/**
-		* Full-window upload progress over the files tree: a blurred scrim (same mask
-		* token as the repo's Modal primitive) with a card showing the target
-		* directory, file-level progress, and a cancel button. Esc cancels too —
-		* clicking the scrim does not, so a stray click can never abort an upload.
-		* Rendered inside TreePanel (absolute inset-0), so it covers only the file
-		* window and never the conversation column.
-		*/
-		function UploadOverlay(props) {
-			const { dir, done, total, current, onCancel, cancelling } = props;
-			(0, react.useEffect)(() => {
-				const onKey = (event) => {
-					if (event.key === "Escape") onCancel();
-				};
-				window.addEventListener("keydown", onKey);
-				return () => {
-					window.removeEventListener("keydown", onKey);
-				};
-			}, [onCancel]);
-			const percent = total === 0 ? 0 : Math.min(100, Math.round(done / total * 100));
-			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-				className: sidebar_module_css_default.uploadOverlay,
-				role: "dialog",
-				"aria-modal": "true",
-				"aria-label": t("uploadingTo", { dir }),
-				children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-					className: sidebar_module_css_default.uploadOverlayCard,
-					children: [
-						/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-							className: sidebar_module_css_default.uploadOverlayTitle,
-							title: dir,
-							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(IconUploadOutline16, { size: 16 }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: t("uploadingTo", { dir }) })]
-						}),
-						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-							className: sidebar_module_css_default.uploadOverlayProgress,
-							role: "progressbar",
-							"aria-valuemin": 0,
-							"aria-valuemax": total,
-							"aria-valuenow": done,
-							"aria-valuetext": t("uploadProgress", {
-								done,
-								total,
-								name: current
-							}),
-							children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-								className: sidebar_module_css_default.uploadOverlayProgressFill,
-								style: { width: `${percent}%` }
-							})
-						}),
-						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-							className: sidebar_module_css_default.uploadOverlayStatus,
-							children: uploadHintText(done, total, current, dir, t)
-						}),
-						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-							type: "button",
-							className: sidebar_module_css_default.uploadOverlayCancel,
-							disabled: cancelling,
-							onClick: onCancel,
-							children: t("cancel")
-						})
-					]
-				})
-			});
-		}
-		//#endregion
-		//#region src/client/TreePanel.tsx
-		/**
-		* The files window's tree surface: a global file-name search box on top
-		* (300ms debounce; an in-flight search is aborted by the next keystroke)
-		* over either the shared controlled FileTree (empty query) or the flat
-		* result list (relative paths; click opens through the caller's mode-aware
-		* open). Owns its refresh tick: the icon next to the search input clears
-		* the tree cache. EditorHost docks it as the tab's right panel (wrapped in
-		* a drag-resize handle) and provides the file context-menu open escapes.
-		*
-		* Uploads (header pickers, the tree's drag-drop and "upload here" menu)
-		* all funnel through here: one session at a time, shown in a full-window
-		* progress overlay with cancel, followed by a tree refresh and a one-line
-		* hint under the search row (success fades, failures and cancels stay).
-		* OS file drags are shielded at the panel host (see Sidebar.tsx), so a
-		* drop over the file window uploads here and never reaches DSH's chat
-		* intake.
-		*/
-		function TreePanel(props) {
-			const { sessionId, cwd, expanded, onToggle, onOpenFile, onOpenFileNewTab, onPreviewFile, openWithTargets, openWithPinned, openWithSsh, onOpenWith, onToggleOpenWithPin, onReferenceFile, full } = props;
-			const [query, setQuery] = (0, react.useState)("");
-			const [results, setResults] = (0, react.useState)(null);
-			const [error, setError] = (0, react.useState)(null);
-			const [refreshTick, setRefreshTick] = (0, react.useState)(0);
-			/** One-line upload status under the search row ('' hides the hint). */
-			const [uploadStatus, setUploadStatus] = (0, react.useState)("");
-			/** Whether the status line is a failure/cancel (error color, stays visible). */
-			const [uploadFailed, setUploadFailed] = (0, react.useState)(false);
-			/** The in-flight upload session (null → no overlay, buttons enabled). */
-			const [upload, setUpload] = (0, react.useState)(null);
-			/** True between the cancel click and the session settling (button disabled). */
-			const [cancelling, setCancelling] = (0, react.useState)(false);
-			/** Set by cancelUpload; the settle path shows 'upload cancelled' instead of
-			*  summarizing the partial results. */
-			const cancelledRef = (0, react.useRef)(false);
-			const fileInputRef = (0, react.useRef)(null);
-			const folderInputRef = (0, react.useRef)(null);
-			/** Start one upload session into `dir` (absolute, inside the workspace). */
-			const startUpload = (dir, items) => {
-				if (items.length === 0 || cwd === void 0 || upload !== null) return;
-				cancelledRef.current = false;
-				const controller = new AbortController();
-				setUploadFailed(false);
-				setUploadStatus(uploadHintText(0, items.length, "", dir, t));
-				setUpload({
-					dir,
-					done: 0,
-					total: items.length,
-					current: "",
-					controller
-				});
-				uploadToDir({
-					sessionId,
-					cwd
-				}, dir, items, (done, total, current) => {
-					if (current !== "") setUploadStatus(uploadHintText(done, total, current, dir, t));
-					setUpload((session) => session === null ? session : {
-						...session,
-						done,
-						total,
-						current
-					});
-				}, controller.signal).then((results) => {
-					setUpload(null);
-					setCancelling(false);
-					setRefreshTick((tick) => tick + 1);
-					if (cancelledRef.current) {
-						setUploadStatus(t("uploadCancelled"));
-						setUploadFailed(true);
-						return;
-					}
-					const status = summarizeResults(results, t);
-					setUploadStatus(status);
-					setUploadFailed(results.some((result) => !result.ok));
-					if (results.every((result) => result.ok)) window.setTimeout(() => {
-						setUploadStatus((current) => current === status ? "" : current);
-					}, UPLOAD_HINT_MS);
-				});
-			};
-			/** Cancel the in-flight upload (aborts the request; the host drops its temp). */
-			const cancelUpload = () => {
-				if (upload === null || cancelling) return;
-				cancelledRef.current = true;
-				setCancelling(true);
-				upload.controller.abort();
-			};
-			const folderInputProps = { webkitdirectory: "" };
-			const needle = query.trim();
-			(0, react.useEffect)(() => {
-				if (needle === "") {
-					setResults(null);
-					setError(null);
-					return;
-				}
-				const controller = new AbortController();
-				const timer = window.setTimeout(() => {
-					api.fsSearch({
-						sessionId,
-						cwd
-					}, needle, controller.signal).then((found) => {
-						setResults(found);
-						setError(null);
-					}).catch((failure) => {
-						if (controller.signal.aborted) return;
-						setResults(null);
-						setError(failure instanceof Error ? failure.message : String(failure));
-					});
-				}, 300);
-				return () => {
-					window.clearTimeout(timer);
-					controller.abort();
-				};
-			}, [
-				sessionId,
-				cwd,
-				needle
-			]);
-			const busy = upload !== null;
-			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-				className: clsx(sidebar_module_css_default.editorTreePanel, full === true && sidebar_module_css_default.editorTreePanelFull),
-				children: [
-					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						className: sidebar_module_css_default.editorTreeSearch,
-						children: [
-							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
-								className: sidebar_module_css_default.editorSearchInput,
-								value: query,
-								placeholder: t("editorSearchPlaceholder"),
-								spellCheck: false,
-								onChange: (event) => {
-									setQuery(event.target.value);
-								}
-							}),
-							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-								type: "button",
-								className: sidebar_module_css_default.iconButton,
-								"aria-label": t("refresh"),
-								title: t("refresh"),
-								onClick: () => {
-									setRefreshTick((tick) => tick + 1);
-								},
-								children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconRefreshOutline16, { size: 14 })
-							}),
-							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-								type: "button",
-								className: sidebar_module_css_default.iconButton,
-								"aria-label": t("uploadFiles"),
-								title: t("uploadFiles"),
-								disabled: busy,
-								onClick: () => {
-									fileInputRef.current?.click();
-								},
-								children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(IconUploadOutline16, { size: 14 })
-							}),
-							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-								type: "button",
-								className: sidebar_module_css_default.iconButton,
-								"aria-label": t("uploadFolder"),
-								title: t("uploadFolder"),
-								disabled: busy,
-								onClick: () => {
-									folderInputRef.current?.click();
-								},
-								children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderOpen16, { size: 14 })
-							}),
-							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
-								ref: fileInputRef,
-								type: "file",
-								multiple: true,
-								style: { display: "none" },
-								onChange: (event) => {
-									if (cwd !== void 0) startUpload(cwd, uploadItemsFromFiles(event.target.files ?? []));
-									event.target.value = "";
-								}
-							}),
-							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
-								ref: folderInputRef,
-								type: "file",
-								multiple: true,
-								...folderInputProps,
-								style: { display: "none" },
-								onChange: (event) => {
-									if (cwd !== void 0) startUpload(cwd, uploadItemsFromFiles(event.target.files ?? []));
-									event.target.value = "";
-								}
-							})
-						]
-					}),
-					uploadStatus !== "" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-						className: clsx(sidebar_module_css_default.editorSearchHint, uploadFailed && sidebar_module_css_default.editorError),
-						title: uploadStatus,
-						children: uploadStatus
-					}),
-					needle === "" ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(FileTree, {
-						sessionId,
-						cwd,
-						expanded,
-						onToggle,
-						onOpenFile,
-						onOpenFileNewTab,
-						onPreviewFile,
-						openWithTargets,
-						openWithPinned,
-						openWithSsh,
-						onOpenWith,
-						onToggleOpenWithPin,
-						onReferenceFile,
-						refreshTick,
-						onUploadRequest: startUpload,
-						busy
-					}) : /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						className: sidebar_module_css_default.explorerBody,
-						children: [
-							error !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-								className: clsx(sidebar_module_css_default.editorSearchHint, sidebar_module_css_default.editorError),
-								children: error
-							}),
-							error === null && results === null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-								className: sidebar_module_css_default.editorSearchHint,
-								children: t("loading")
-							}),
-							error === null && results !== null && results.matches.length === 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-								className: sidebar_module_css_default.editorSearchHint,
-								children: t("editorSearchNoResults")
-							}),
-							error === null && results !== null && results.matches.map((rel) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-								type: "button",
-								className: sidebar_module_css_default.editorSearchResult,
-								title: rel,
-								onClick: () => {
-									onOpenFile(resolveSidebarPath(cwd, rel));
-								},
-								children: rel
-							}, rel)),
-							error === null && results?.truncated === true && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-								className: sidebar_module_css_default.editorSearchHint,
-								children: t("editorSearchTruncated")
-							})
-						]
-					}),
-					upload !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(UploadOverlay, {
-						dir: upload.dir,
-						done: upload.done,
-						total: upload.total,
-						current: upload.current,
-						onCancel: cancelUpload,
-						cancelling
-					})
-				]
-			});
-		}
-		//#endregion
-		//#region src/client/EditorHost.tsx
-		/**
-		* The editor tab host: the single FILES WINDOW. It resolves a file's
-		* previewer through the sidebar registry (`matchFileViewer`), fetches bytes
-		* per the matched viewer's fetch strategy, and renders its component — or
-		* the shared download pane when nothing can render the file. A tab without
-		* a path (the seeded "Files" home) renders an empty-state hint instead of
-		* the viewer loading flow; that path-less window IS the file explorer.
-		*
-		* The chrome depends on the `editorExplorer` mode (read reactively so
-		* toggling it re-renders without a reload):
-		* - primary open (tree click / search result): preview in a SIDE SPLIT —
-		*   a fresh tab in a rightward split of the current pane, in both modes;
-		* - full-area open (the context menu's "预览" item and path-input Enter):
-		*   merged mode switches the CURRENT tab in place (updateTab rewrites
-		*   path/title; the tab keeps its id and meta, so treeOpen/treeWidth
-		*   survive the switch); split mode opens through `openSidebarFile` (a
-		*   per-path dedupe tab).
-		* In split mode a PATH-LESS window is the standalone explorer — it renders
-		* ONLY the tree panel (search + FileTree, full-window), no editor chrome.
-		* Editor tabs (with a path) keep the full chrome in both modes. The tree's
-		* context menu offers the explicit escapes: "预览" (full-area open) and
-		* "在新 Tab 中打开" (per-path dedupe).
-		*
-		* The strategy dispatch is pure (planFirstMatch / planFsReadOutcome in
-		* editor-load.ts); this component only wires it to the host APIs.
-		*/
-		/** The docked tree panel's width bounds (drag-resize clamps into them). */
-		const TREE_WIDTH_DEFAULT = 240;
-		const TREE_WIDTH_MIN = 160;
-		const TREE_WIDTH_MAX = 480;
-		/** Stable empty blob for the editor pluginSettings read (a fresh `?? {}`
-		*  would change identity every snapshot and loop useSyncExternalStore). */
-		const EMPTY_PLUGIN_BLOB = {};
-		/** The tab's persisted meta object (a malformed meta reads as empty). */
-		function metaOf(tab) {
-			return tab.meta !== null && typeof tab.meta === "object" && !Array.isArray(tab.meta) ? tab.meta : {};
-		}
-		/** Read the persisted tree-panel flag of one editor tab: an explicit
-		*  boolean meta wins; otherwise path-less tabs (the seeded home) default
-		*  open and file tabs default closed. */
-		function treeOpenOf(tab) {
-			const treeOpen = metaOf(tab).treeOpen;
-			return typeof treeOpen === "boolean" ? treeOpen : tab.path === void 0 || tab.path === "";
-		}
-		/** Read the persisted tree-panel width (clamped; default 240). */
-		function treeWidthOf(tab) {
-			const width = metaOf(tab).treeWidth;
-			return typeof width === "number" && Number.isFinite(width) ? Math.min(TREE_WIDTH_MAX, Math.max(TREE_WIDTH_MIN, Math.round(width))) : TREE_WIDTH_DEFAULT;
-		}
-		/** Merge a patch into the tab's persisted meta (rides the layout). */
-		function patchMeta(ctx, tab, patch) {
-			ctx.betterSidebar?.updateTab(tab.id, { meta: {
-				...metaOf(tab),
-				...patch
-			} });
-		}
-		/** Clamp one dock width into the contract range. */
-		function clampTreeWidth(value) {
-			return Math.min(TREE_WIDTH_MAX, Math.max(TREE_WIDTH_MIN, Math.round(value)));
-		}
-		function EditorHost(props) {
-			const { ctx, store, scope, tab, expanded, onToggleDir, onReferenceFile } = props;
-			const path = tab.path ?? "";
-			const title = tab.title;
-			const [load, setLoad] = (0, react.useState)({ status: "loading" });
-			const [attempt, setAttempt] = (0, react.useState)(0);
-			const failCountRef = (0, react.useRef)(0);
-			const failKeyRef = (0, react.useRef)("");
-			const loadRef = (0, react.useRef)(load);
-			loadRef.current = load;
-			const visible = props.visible !== false;
-			const prevVisibleRef = (0, react.useRef)(visible);
-			(0, react.useEffect)(() => {
-				if (!prevVisibleRef.current && visible && loadRef.current.status === "error") setAttempt((a) => a + 1);
-				prevVisibleRef.current = visible;
-			}, [visible]);
-			const inPlace = (0, react.useSyncExternalStore)((0, react.useCallback)((callback) => store.subscribe(callback), [store]), (0, react.useCallback)(() => store.getSnapshot().prefs.editorExplorer, [store]));
-			/** 返回上级：merged mode reverts the window to the files home (the docked
-			*  explorer); split mode closes this file-preview tab, revealing the
-			*  standalone explorer behind it. */
-			const goBack = () => {
-				const service = ctx.betterSidebar;
-				if (service === void 0) return;
-				if (inPlace) service.updateTab(tab.id, {
-					path: "",
-					title: t("files"),
-					meta: { ...metaOf(tab), treeOpen: true }
-				});
-				else service.closeTab(tab.id, scope);
-			};
-			const editorBlob = (0, react.useSyncExternalStore)((0, react.useCallback)((callback) => store.subscribe(callback), [store]), (0, react.useCallback)(() => store.getSnapshot().prefs.pluginSettings["editor"] ?? EMPTY_PLUGIN_BLOB, [store]));
-			const openWithConfig = (0, react.useMemo)(() => parseOpenWithConfig(editorBlob.openWith), [editorBlob]);
-			const openWithTargets = (0, react.useMemo)(() => resolveOpenWithTargets(openWithConfig), [openWithConfig]);
-			const showEmpty = path === "";
-			const treeOnly = showEmpty && !inPlace;
-			/**
-			* The full-area open (the context menu's "预览" item and the path-input
-			* Enter): merged mode switches this tab in place (stable id, meta
-			* survives); split mode opens a per-path dedupe tab through
-			* openSidebarFile.
-			*/
-			const openFile = (absolute) => {
-				if (inPlace) {
-					const fromHome = tab.path === void 0 || tab.path === "";
-					ctx.betterSidebar?.updateTab(tab.id, {
-						path: absolute,
-						title: baseName$1(absolute),
-						...(fromHome ? { meta: { ...metaOf(tab), treeOpen: false } } : {})
-					});
-				} else openSidebarFile(ctx, store, scope.sessionId, absolute);
-			};
-			/** The context menu's explicit "new tab" escape (per-path dedupe). */
-			const openFileNewTab = (absolute) => {
-				openSidebarFile(ctx, store, scope.sessionId, absolute);
-			};
-			/**
-			* The PRIMARY open (tree click / Enter / search result): a side-split
-			* preview — a fresh editor tab (uid id — the `'editor:' + path`
-			* convention would clash with the id safety net on a second side-open of
-			* the same file) in a rightward split of THIS pane.
-			*/
-			const openFileSide = (absolute) => {
-				store.reduce((state) => {
-					const key = treeOf(state, tab.id);
-					const pane = leafWithTab(state[key], tab.id) ?? firstLeaf(state[key]);
-					const fresh = {
-						id: mintTabId(),
-						type: "editor",
-						title: baseName$1(absolute),
-						path: absolute,
-						meta: { treeOpen: false }
-					};
-					const { node, leafId } = insertLeafAt(state[key], pane.id, "row", fresh, false);
-					return {
-						...state,
-						[key]: node,
-						activePane: leafId
-					};
-				});
-			};
-			/** The context menu's "open with" action: reveal the path in the OS file
-			*  manager, or hand the target's URL (a local `file` URL, or the SSH-remote
-			*  form for VSCode-family editors in remote mode) to the host's external
-			*  opener. Failures are logged only — a missing handler is the OS's
-			*  dialog, not a sidebar error. */
-			const openWith = (targetId, absolute) => {
-				const target = openWithTargets.find((item) => item.id === targetId);
-				if (target === void 0) return;
-				if (target.kind === "reveal") {
-					api.openExternal({
-						action: "reveal",
-						path: absolute
-					}).catch((error) => {
-						console.error("open external failed", error);
-					});
-					return;
-				}
-				const url = openWithUrl(target, absolute, openWithConfig);
-				if (url === void 0) return;
-				api.openExternal({
-					action: "url",
-					url
-				}).catch((error) => {
-					console.error("open external failed", error);
-				});
-			};
-			/** Toggle one target's pinned state. The write is serialized (see
-			*  plugin-settings.ts) and the menu re-renders when the store prefs land. */
-			const toggleOpenWithPin = (targetId) => {
-				updatePluginSettings(store, "editor", (blob) => {
-					const config = parseOpenWithConfig(blob.openWith);
-					const pinned = config.pinned.includes(targetId) ? config.pinned.filter((id) => id !== targetId) : [...config.pinned, targetId];
-					return {
-						...blob,
-						openWith: {
-							...config,
-							pinned
-						}
-					};
-				});
-			};
-			const [toolbar, setToolbar] = (0, react.useState)(null);
-			const controlsRef = (0, react.useRef)(null);
-			const onToolbarState = (0, react.useCallback)((next) => {
-				setToolbar((prev) => prev !== null && JSON.stringify(prev) === JSON.stringify(next) ? prev : next);
-			}, []);
-			const onToolbarControls = (0, react.useCallback)((controls) => {
-				controlsRef.current = controls;
-			}, []);
-			const [dragWidth, setDragWidth] = (0, react.useState)(null);
-			const dragRef = (0, react.useRef)(null);
-			const pendingWidthRef = (0, react.useRef)(0);
-			const dragBatcher = (0, react.useRef)(createFrameBatcher()).current;
-			(0, react.useEffect)(() => () => dragBatcher.dispose(), [dragBatcher]);
-			const treeWidth = dragWidth ?? treeWidthOf(tab);
-			const onResizeStart = (event) => {
-				event.preventDefault();
-				event.currentTarget.setPointerCapture?.(event.pointerId);
-				dragRef.current = {
-					startX: event.clientX,
-					startWidth: treeWidth
-				};
-			};
-			const onResizeMove = (event) => {
-				const drag = dragRef.current;
-				if (drag === null) return;
-				pendingWidthRef.current = clampTreeWidth(drag.startWidth + (event.clientX - drag.startX));
-				dragBatcher.schedule(() => setDragWidth(pendingWidthRef.current));
-			};
-			const onResizeEnd = (event) => {
-				const drag = dragRef.current;
-				if (drag === null) return;
-				dragBatcher.flushNow();
-				dragRef.current = null;
-				setDragWidth(null);
-				const finalWidth = clampTreeWidth(drag.startWidth + (event.clientX - drag.startX));
-				if (finalWidth !== treeWidthOf(tab)) patchMeta(ctx, tab, { treeWidth: finalWidth });
-			};
-			(0, react.useEffect)(() => {
-				setToolbar(null);
-				if (showEmpty) return;
-				let cancelled = false;
-				let retryTimer;
-				const controller = new AbortController();
-				setLoad({ status: "loading" });
-				const succeed = () => {
-					failCountRef.current = 0;
-				};
-				const fail = (error) => {
-					if (cancelled) return;
-					const retryable = error instanceof SidebarApiError && (error.code === "network" || error.code === "http");
-					const key = `${scope.sessionId}|${path}`;
-					if (failKeyRef.current !== key) {
-						failKeyRef.current = key;
-						failCountRef.current = 0;
-					}
-					setLoad({
-						status: "error",
-						message: error instanceof Error ? error.message : String(error),
-						retryable,
-						autoAttempt: retryable ? failCountRef.current + 1 : void 0
-					});
-					if (retryable) {
-						failCountRef.current += 1;
-						retryTimer = window.setTimeout(() => {
-							if (!cancelled) setAttempt((a) => a + 1);
-						}, nextDelayMs(failCountRef.current));
-					}
-				};
-				const mediaUrlOf = () => mediaUrl(scope, path);
-				const apply = (action) => {
-					if (cancelled) return;
-					switch (action.kind) {
-						case "binary":
-							succeed();
-							setLoad({ status: "binary" });
-							return;
-						case "render":
-							succeed();
-							setLoad({
-								status: "ready",
-								viewer: action.viewer,
-								content: action.content,
-								truncated: action.truncated,
-								mediaUrl: action.mediaUrl,
-								customData: action.customData
-							});
-							return;
-						case "customLoad":
-							action.viewer.load?.(path, scope, controller.signal).then((data) => {
-								if (cancelled) return;
-								succeed();
-								setLoad({
-									status: "ready",
-									viewer: action.viewer,
-									customData: data
-								});
-							}).catch((error) => {
-								if (cancelled) return;
-								fail(error);
-							});
-							return;
-						case "fetchFsRead":
-							api.fsRead(scope, path).then((result) => {
-								if (cancelled) return;
-								succeed();
-								const outcome = planFsReadOutcome(action.viewer, {
-									binary: result.kind === "binary",
-									content: result.kind === "text" ? result.content : "",
-									truncated: result.truncated,
-									head: result.kind === "binary" ? result.head : void 0
-								}, (head) => ctx.betterSidebar?.matchFileViewer(path, head), mediaUrlOf);
-								apply(outcome);
-							}).catch((error) => {
-								if (cancelled) return;
-								fail(error);
-							});
-							return;
-					}
-				};
-				apply(planFirstMatch(ctx.betterSidebar?.matchFileViewer(path), mediaUrlOf));
-				return () => {
-					cancelled = true;
-					if (retryTimer !== void 0) window.clearTimeout(retryTimer);
-					controller.abort();
-				};
-			}, [
-				scope.sessionId,
-				scope.cwd,
-				path,
-				ctx,
-				showEmpty,
-				attempt
-			]);
-			const treeOpen = treeOpenOf(tab);
-			/** Persist the panel flag on the tab (survives reloads with the layout). */
-			const toggleTree = () => {
-				patchMeta(ctx, tab, { treeOpen: !treeOpen });
-			};
-			const saveLabel = toolbar === null ? "" : toolbar.saveState === "saving" ? t("loading") : toolbar.saveState === "saved" ? t("saved") : toolbar.saveState === "failed" ? t("saveFailed") : "";
-			if (treeOnly) return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-				className: sidebar_module_css_default.editor,
-				children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(TreePanel, {
-					full: true,
-					sessionId: scope.sessionId,
-					cwd: scope.cwd,
-					expanded,
-					onToggle: onToggleDir,
-					onOpenFile: openFileSide,
-					onOpenFileNewTab: openFileNewTab,
-					onPreviewFile: openFile,
-					openWithTargets,
-					openWithPinned: openWithConfig.pinned,
-					openWithSsh: openWithSshActive(openWithConfig),
-					onOpenWith: openWith,
-					onToggleOpenWithPin: toggleOpenWithPin,
-					onReferenceFile
-				})
-			});
-			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-				className: sidebar_module_css_default.editor,
-				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-					className: sidebar_module_css_default.editorHeader,
-					children: [
-						!showEmpty && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-							type: "button",
-							className: sidebar_module_css_default.editorBack,
-							title: t("editorBack"),
-							"aria-label": t("editorBack"),
-							onClick: goBack,
-							children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronLeftOutline14, {})
-						}),
-						/* @__PURE__ */ (0, react_jsx_runtime.jsx)(EditorPathInput, {
-							path,
-							cwd: scope.cwd,
-							onOpen: openFile
-						}, path),
-						toolbar?.modes === true && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-							className: sidebar_module_css_default.editorModeToggle,
-							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-								type: "button",
-								className: clsx(sidebar_module_css_default.editorModeButton, toolbar.mode === "preview" && sidebar_module_css_default.editorModeActive),
-								onClick: () => {
-									controlsRef.current?.setMode("preview");
-								},
-								children: t("preview")
-							}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-								type: "button",
-								className: clsx(sidebar_module_css_default.editorModeButton, toolbar.mode === "edit" && sidebar_module_css_default.editorModeActive),
-								onClick: () => {
-									controlsRef.current?.setMode("edit");
-								},
-								children: t("edit")
-							})]
-						}),
-						toolbar?.dirty === true && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-							className: sidebar_module_css_default.dirtyDot,
-							title: t("unsaved")
-						}),
-						toolbar?.editable === true && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-							type: "button",
-							className: sidebar_module_css_default.iconButton,
-							"aria-label": t("save"),
-							title: `${t("save")} (Ctrl/Cmd+S)`,
-							onClick: () => {
-								controlsRef.current?.save();
-							},
-							children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCheckOutline16, { size: 14 })
-						}),
-						saveLabel !== "" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-							className: clsx(sidebar_module_css_default.editorStatus, toolbar?.saveState === "failed" && sidebar_module_css_default.editorStatusError),
-							children: saveLabel
-						}),
-						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-							type: "button",
-							className: clsx(sidebar_module_css_default.iconButton, treeOpen && sidebar_module_css_default.editorTreeToggleActive),
-							"aria-label": t("editorTreeToggle"),
-							title: t("editorTreeToggle"),
-							"aria-pressed": treeOpen,
-							onClick: toggleTree,
-							children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderOpen16, { size: 14 })
-						})
-					]
-				}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-					className: sidebar_module_css_default.editorBody,
-					children: [treeOpen && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						className: sidebar_module_css_default.editorTreeDock,
-						style: { width: treeWidth },
-						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-							className: sidebar_module_css_default.editorTreeResize,
-							role: "separator",
-							"aria-orientation": "vertical",
-							"aria-label": t("editorTreeToggle"),
-							onPointerDown: onResizeStart,
-							onPointerMove: onResizeMove,
-							onPointerUp: onResizeEnd,
-							onPointerCancel: onResizeEnd
-						}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(TreePanel, {
-							sessionId: scope.sessionId,
-							cwd: scope.cwd,
-							expanded,
-							onToggle: onToggleDir,
-							onOpenFile: openFileSide,
-							onOpenFileNewTab: openFileNewTab,
-							onPreviewFile: openFile,
-							openWithTargets,
-							openWithPinned: openWithConfig.pinned,
-							openWithSsh: openWithSshActive(openWithConfig),
-							onOpenWith: openWith,
-							onToggleOpenWithPin: toggleOpenWithPin,
-							onReferenceFile
-						})]
-					}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						className: sidebar_module_css_default.editorMain,
-						children: [
-							showEmpty && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-								className: sidebar_module_css_default.editorPlaceholder,
-								children: t("editorEmptyHint")
-							}),
-							!showEmpty && load.status === "loading" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-								className: sidebar_module_css_default.editorPlaceholder,
-								children: t("loading")
-							}),
-							!showEmpty && load.status === "error" && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-								className: sidebar_module_css_default.editorError,
-								children: [
-									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: load.message }),
-									load.autoAttempt !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: t("fsReadRetryWaiting", { n: load.autoAttempt }) }),
-									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-										type: "button",
-										className: sidebar_module_css_default.terminalRetry,
-										onClick: () => {
-											setAttempt((a) => a + 1);
-										},
-										children: t("terminalRetry")
-									})
-								]
-							}),
-							!showEmpty && load.status === "binary" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(BinaryDownload, {
-								scope,
-								path
-							}),
-							!showEmpty && load.status === "ready" && (0, react.createElement)(load.viewer.component, {
-								ctx,
-								store,
-								scope,
-								path,
-								title,
-								viewerId: load.viewer.id,
-								content: load.content,
-								truncated: load.truncated,
-								mediaUrl: load.mediaUrl,
-								customData: load.customData,
-								toolbar: "host",
-								onToolbarState,
-								onToolbarControls
-							})
-						]
-					})]
-				})]
-			});
-		}
-		/**
-		* The header's path input: shows the current file relative to the session
-		* cwd (absolute when outside it). Enter resolves the typed path (relative
-		* input joins onto the cwd — the same resolution `openSidebarFile` uses)
-		* and opens it through the parent's mode-aware open (in-place switch or a
-		* per-path dedupe tab); Escape/blur restores the current value. The parent
-		* keys it by `path` so an in-place switch remounts and reseeds the draft.
-		*/
-		function EditorPathInput(props) {
-			const { path, cwd, onOpen } = props;
-			const display = path === "" ? "" : relativeTo(cwd ?? "", path);
-			const [value, setValue] = (0, react.useState)(display);
-			const commit = () => {
-				const input = value.trim();
-				if (input === "" || input === display) {
-					setValue(display);
-					return;
-				}
-				onOpen(resolveSidebarPath(cwd, input));
-				setValue(display);
-			};
-			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
-				className: sidebar_module_css_default.editorPathInput,
-				value,
-				placeholder: t("editorPathPlaceholder"),
-				title: path,
-				spellCheck: false,
-				onChange: (event) => {
-					setValue(event.target.value);
-				},
-				onKeyDown: (event) => {
-					if (event.key === "Enter") {
-						event.preventDefault();
-						commit();
-					} else if (event.key === "Escape") setValue(display);
-				},
-				onBlur: () => {
-					setValue(display);
-				}
-			});
-		}
-		//#endregion
 		//#region \0dsh-css:C:\Users\delinger\Desktop\dsh\dsh-desktop\assets\plugins\dsh-better-sidebar\src\client\SideCardSection.module.css.mjs
 		const css$3 = ".JX67oW_section{flex-direction:column;gap:16px;width:100%;max-width:760px;display:flex}.JX67oW_intro{color:var(--dsw-alias-label-tertiary);margin:0;padding:0 2px;font-size:13px;line-height:20px}.JX67oW_group{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);border-radius:16px;flex-direction:column;flex:none;gap:8px;padding:20px;display:flex}.JX67oW_groupHeading{color:var(--dsw-alias-label-primary);align-items:baseline;gap:7px;padding:0 2px 6px;font-size:13px;font-weight:600;line-height:20px;display:flex}.JX67oW_count{background:var(--dsw-alias-accent-soft,var(--dsw-alias-bg-layer-2));color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:500;line-height:16px}.JX67oW_grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;display:grid}.JX67oW_card{border:1px solid var(--dsw-alias-border-l2);min-height:106px;font:inherit;color:inherit;cursor:pointer;background:0 0;border-radius:12px;flex-direction:column;transition:background .12s,border-color .12s;display:flex;position:relative;overflow:hidden}.JX67oW_card:not(.JX67oW_cardOn):hover{background:var(--dsw-alias-interactive-bg-hover);border-color:var(--dsw-alias-label-dimmed)}.JX67oW_cardOn{border-color:color-mix(in srgb, var(--dsw-alias-button-primary-fill) 45%, transparent);background:var(--dsw-alias-interactive-bg-active)}.JX67oW_cardMain{border-radius:inherit;width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer;background:0 0;border:0;flex-direction:column;flex:1;gap:6px;padding:12px;display:flex}.JX67oW_cardMain:focus-visible,.JX67oW_cardSettings:focus-visible,.JX67oW_rowGear:focus-visible{outline:2px solid var(--dsw-alias-border-l4);outline-offset:2px}.JX67oW_cardTop{align-items:center;gap:8px;min-width:0;min-height:28px;display:flex}.JX67oW_cardIconChip{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);width:28px;height:28px;color:var(--dsw-alias-label-tertiary);border-radius:8px;flex:none;justify-content:center;align-items:center;display:inline-flex}.JX67oW_cardOn .JX67oW_cardIconChip{border-color:color-mix(in srgb, var(--dsw-alias-button-primary-fill) 35%, transparent);background:color-mix(in srgb, var(--dsw-alias-button-primary-fill) 12%, transparent);color:var(--dsw-alias-button-primary-fill)}.JX67oW_cardTitle{min-width:0;color:var(--dsw-alias-label-secondary);white-space:nowrap;text-overflow:ellipsis;flex:1;font-size:13px;font-weight:600;line-height:20px;overflow:hidden}.JX67oW_cardOn .JX67oW_cardTitle{color:var(--dsw-alias-label-primary)}.JX67oW_cardSwitch{flex:none;align-items:center;display:inline-flex}.JX67oW_cardSwitchTrack{box-sizing:border-box;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;align-items:center;width:30px;height:16px;padding:2px;transition:background .15s,border-color .15s;display:inline-flex}.JX67oW_cardSwitchThumb{background:var(--dsw-alias-label-tertiary);border-radius:50%;width:10px;height:10px;transition:transform .15s,background .15s;display:block}.JX67oW_cardOn .JX67oW_cardSwitchTrack{border-color:var(--dsw-alias-button-primary-fill);background:var(--dsw-alias-button-primary-fill)}.JX67oW_cardOn .JX67oW_cardSwitchThumb{background:var(--dsw-alias-bg-layer-3);transform:translate(14px)}.JX67oW_cardDesc{color:var(--dsw-alias-label-tertiary);white-space:nowrap;text-overflow:ellipsis;font-size:11px;line-height:16px;overflow:hidden}.JX67oW_addCard{border-style:dashed;border-color:var(--dsw-alias-border-l2);text-align:left;align-items:flex-start;padding:12px}.JX67oW_addCard:hover{background:var(--dsw-alias-interactive-bg-hover);border-color:var(--dsw-alias-interactive-bg-hover-accent);color:var(--dsw-alias-label-primary)}.JX67oW_addCard:hover .JX67oW_cardTitle{color:var(--dsw-alias-label-primary)}.JX67oW_addCard:hover .JX67oW_cardIconChip{border-color:color-mix(in srgb, var(--dsw-alias-button-primary-fill) 35%, transparent);color:var(--dsw-alias-button-primary-fill)}.JX67oW_addCard:focus-visible{outline:2px solid var(--dsw-alias-border-l4);outline-offset:2px}.JX67oW_cardOn .JX67oW_cardDesc{color:var(--dsw-alias-label-secondary)}.JX67oW_cardSettings{border:0;border-top:1px solid var(--dsw-alias-border-l1);width:100%;color:var(--dsw-alias-label-secondary);font:inherit;text-align:left;cursor:pointer;background:0 0;align-items:center;gap:6px;padding:6px 12px;font-size:11px;font-weight:500;line-height:16px;transition:background .12s,color .12s;display:flex}.JX67oW_cardOn .JX67oW_cardSettings{border-top-color:color-mix(in srgb, var(--dsw-alias-button-primary-fill) 18%, transparent)}.JX67oW_cardSettings:hover{background:var(--dsw-alias-interactive-bg-hover-accent);color:var(--dsw-alias-brand-primary)}.JX67oW_rowGear{border:1px solid var(--dsw-alias-border-l2);width:22px;height:22px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border-radius:6px;flex:none;justify-content:center;align-items:center;padding:0;transition:background .12s,border-color .12s,color .12s;display:inline-flex}.JX67oW_rowGear:hover{border-color:var(--dsw-alias-interactive-bg-hover-accent);background:var(--dsw-alias-interactive-bg-hover-accent);color:var(--dsw-alias-brand-primary)}.JX67oW_row{border-bottom:1px solid var(--dsw-alias-border-l2);justify-content:space-between;align-items:center;gap:16px;padding:12px 2px;display:flex}.JX67oW_row:last-child{border-bottom:none}.JX67oW_rowText{flex-direction:column;gap:4px;min-width:0;display:flex}.JX67oW_title{color:var(--dsw-alias-label-primary);font-size:14px;line-height:22px}.JX67oW_desc{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}.JX67oW_switch{cursor:pointer;flex:none;display:inline-flex;position:relative}.JX67oW_switchInput{opacity:0;width:1px;height:1px;margin:0;position:absolute}.JX67oW_switchTrack{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);border-radius:10px;align-items:center;width:36px;height:20px;padding:2px;transition:background .15s,border-color .15s;display:inline-flex}.JX67oW_switchThumb{background:var(--dsw-alias-label-tertiary);border-radius:50%;width:14px;height:14px;transition:transform .15s,background .15s;display:block}.JX67oW_switch:hover .JX67oW_switchTrack{border-color:var(--dsw-alias-label-dimmed)}.JX67oW_switchInput:checked+.JX67oW_switchTrack{border-color:var(--dsw-alias-button-primary-fill);background:var(--dsw-alias-button-primary-fill)}.JX67oW_switchInput:checked+.JX67oW_switchTrack .JX67oW_switchThumb{background:var(--dsw-alias-bg-layer-3);transform:translate(16px)}.JX67oW_switchInput:focus-visible+.JX67oW_switchTrack{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}.JX67oW_control{flex:none;align-items:center;gap:6px;display:flex}.JX67oW_percentInput{width:76px}.JX67oW_typedInput{width:200px}.JX67oW_typedInputNumber{width:76px}.JX67oW_selectAnchor{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);max-width:220px;color:var(--dsw-alias-label-primary);cursor:pointer;border-radius:8px;align-items:center;gap:6px;padding:4px 8px;font-size:13px;line-height:20px;display:flex}.JX67oW_selectAnchor:hover{border-color:var(--dsw-alias-label-dimmed)}.JX67oW_selectAnchorIcon{flex:none;display:inline-flex}.JX67oW_selectAnchorText{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.JX67oW_selectOption{align-items:center;gap:10px;min-width:200px;display:flex}.JX67oW_selectOptionIcon{color:var(--dsw-alias-label-secondary);flex:none;display:inline-flex}.JX67oW_selectOptionText{flex-direction:column;min-width:0;display:flex}.JX67oW_suffix{color:var(--dsw-alias-label-secondary);font-size:14px;line-height:22px}.JX67oW_cssTextArea{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);width:100%;min-height:120px;color:var(--dsw-alias-label-primary);font-family:var(--ds-font-family-code,monospace);resize:vertical;border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.6}.JX67oW_cssTextArea:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}.JX67oW_popupDialog.JX67oW_popupDialog{width:min(460px,100%)}.JX67oW_popupRows{box-sizing:border-box;scrollbar-width:thin;scrollbar-color:var(--dsw-alias-scrollbar-bg-l2,transparent) transparent;flex-direction:column;gap:8px;width:100%;max-height:min(52vh,440px);padding-right:4px;display:flex;overflow:hidden auto}.JX67oW_popupRows::-webkit-scrollbar{width:6px}.JX67oW_popupRows::-webkit-scrollbar-thumb{background:var(--dsw-alias-scrollbar-bg-l2,var(--dsw-alias-border-l2));border-radius:3px}.JX67oW_popupRows::-webkit-scrollbar-thumb:hover{background:var(--dsw-alias-scrollbar-hover-l2,var(--dsw-alias-label-dimmed))}.JX67oW_popupRow{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);border-radius:12px;flex:none;justify-content:space-between;align-items:center;gap:16px;min-width:0;padding:12px 14px;transition:border-color .16s,background .16s;display:flex}.JX67oW_popupRow:hover{border-color:var(--dsw-alias-label-dimmed)}.JX67oW_done{appearance:none;font:inherit;cursor:pointer;background:var(--dsw-alias-label-primary);color:var(--dsw-alias-bg-layer-3);border:1px solid #0000;border-radius:8px;padding:5px 14px;font-size:13px;line-height:1.5}.JX67oW_done:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}.JX67oW_error{color:var(--dsw-alias-state-error-primary);padding:10px 0 2px;font-size:12px;line-height:17px}.JX67oW_pluginModal.JX67oW_pluginModal{width:min(560px,100%)}.JX67oW_pluginList{flex-direction:column;gap:12px;width:100%;display:flex}.JX67oW_pluginTopicBtn{appearance:none;border:1px solid var(--dsw-alias-border-l2);width:100%;font:inherit;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-bg-layer-1);cursor:pointer;border-radius:8px;padding:6px 12px;font-size:12px;line-height:18px}.JX67oW_pluginTopicBtn:hover{background:var(--dsw-alias-interactive-bg-hover);border-color:var(--dsw-alias-interactive-bg-hover-accent);color:var(--dsw-alias-label-primary)}.JX67oW_pluginTopicBtn:focus-visible{outline:2px solid var(--dsw-alias-border-l4);outline-offset:1px}.JX67oW_pluginEmpty{color:var(--dsw-alias-label-tertiary);padding:20px 2px;font-size:12px;line-height:18px}.JX67oW_pluginEntry{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);border-radius:12px;flex-direction:column;gap:4px;padding:12px;display:flex}.JX67oW_pluginEntryHead{justify-content:space-between;align-items:center;gap:12px;display:flex}.JX67oW_pluginEntryActions{flex:none;align-items:center;gap:6px;display:inline-flex}.JX67oW_pluginJumpBtn{appearance:none;border:1px solid var(--dsw-alias-border-l2);font:inherit;cursor:pointer;color:var(--dsw-alias-label-secondary);background:0 0;border-radius:8px;flex:none;padding:3px 12px;font-size:12px;line-height:1.5}.JX67oW_pluginJumpBtn:hover{background:var(--dsw-alias-interactive-bg-hover);border-color:var(--dsw-alias-interactive-bg-hover-accent);color:var(--dsw-alias-label-primary)}.JX67oW_pluginJumpBtn:focus-visible{outline:2px solid var(--dsw-alias-border-l4);outline-offset:1px}.JX67oW_pluginName{appearance:none;min-width:0;font:inherit;color:var(--dsw-alias-label-primary);text-align:left;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;background:0 0;border:0;padding:0;font-size:13px;font-weight:600;line-height:20px;text-decoration:none;overflow:hidden}.JX67oW_pluginName:hover{color:var(--dsw-alias-button-primary-fill);text-decoration:underline}.JX67oW_pluginDesc{color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px}.JX67oW_pluginInstall{color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l1);white-space:nowrap;border-radius:8px;padding:6px 10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:16px;display:block;overflow-x:auto}.JX67oW_pluginCopyBtn{appearance:none;font:inherit;cursor:pointer;background:var(--dsw-alias-label-primary);color:var(--dsw-alias-bg-layer-3);border:1px solid #0000;border-radius:8px;flex:none;padding:3px 12px;font-size:12px;line-height:1.5}.JX67oW_pluginCopyBtn:hover{background:var(--dsw-alias-button-primary-hover)}.JX67oW_pluginCopyBtn:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}@media (prefers-reduced-motion:reduce){.JX67oW_card,.JX67oW_cardSettings,.JX67oW_cardSwitchTrack,.JX67oW_cardSwitchThumb,.JX67oW_rowGear,.JX67oW_popupRow,.JX67oW_switchTrack,.JX67oW_switchThumb{transition:none}}.JX67oW_versionBadge{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);border-radius:999px;align-self:flex-start;align-items:center;gap:8px;padding:4px 12px 4px 14px;font-size:12px;line-height:18px;display:inline-flex}.JX67oW_versionBadgeName{color:var(--dsw-alias-label-primary);font-weight:600}.JX67oW_versionBadgeTag{background:var(--dsw-alias-accent-soft,var(--dsw-alias-border-l2));color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;border-radius:999px;padding:1px 8px}.JX67oW_pluginSearch{box-sizing:border-box;appearance:none;border:1px solid var(--dsw-alias-border-l2);width:100%;font:inherit;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1);border-radius:8px;padding:6px 10px;font-size:12px;line-height:18px}.JX67oW_pluginSearch::placeholder{color:var(--dsw-alias-label-tertiary)}.JX67oW_pluginSearch:focus-visible{outline:2px solid var(--dsw-alias-border-l4);outline-offset:1px}.JX67oW_pluginEntries{flex-direction:column;gap:10px;max-height:46vh;padding-right:2px;display:flex;overflow:hidden auto}.JX67oW_pluginGroup{flex-direction:column;gap:8px;display:flex}.JX67oW_pluginGroupHeading{color:var(--dsw-alias-label-secondary);padding:2px 2px 0;font-size:12px;font-weight:600;line-height:18px}.JX67oW_openWithEditorRow{grid-template-columns:1fr 1.5fr auto auto;align-items:center;gap:8px;min-width:0;display:grid}.JX67oW_openWithEditorInput,.JX67oW_openWithEditorTemplate{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);width:100%;min-width:0;color:var(--dsw-alias-label-primary);font:inherit;border-radius:8px;padding:5px 8px;font-size:13px;line-height:20px}.JX67oW_openWithEditorInput:focus-visible,.JX67oW_openWithEditorTemplate:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}.JX67oW_openWithFamily{color:var(--dsw-alias-label-secondary);white-space:nowrap;cursor:pointer;align-items:center;gap:5px;font-size:12px;display:inline-flex}.JX67oW_openWithRemove{color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:8px;justify-content:center;align-items:center;padding:4px;display:inline-flex}.JX67oW_openWithRemove:hover{color:var(--dsw-alias-state-error-primary);background:var(--dsw-alias-bg-layer-2)}.JX67oW_openWithHint{color:var(--dsw-alias-state-error-primary);padding:0 2px;font-size:12px;line-height:17px}";
 		const tagId$3 = "dsh-external/dsh-better-sidebar/SideCardSection.module.css";
@@ -6102,75 +3935,75 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var SideCardSection_module_css_default = {
-			"pluginJumpBtn": "JX67oW_pluginJumpBtn",
-			"count": "JX67oW_count",
-			"pluginGroupHeading": "JX67oW_pluginGroupHeading",
-			"percentInput": "JX67oW_percentInput",
-			"cssTextArea": "JX67oW_cssTextArea",
-			"pluginEntry": "JX67oW_pluginEntry",
-			"pluginGroup": "JX67oW_pluginGroup",
-			"section": "JX67oW_section",
-			"cardIconChip": "JX67oW_cardIconChip",
-			"versionBadgeTag": "JX67oW_versionBadgeTag",
-			"title": "JX67oW_title",
-			"pluginInstall": "JX67oW_pluginInstall",
-			"openWithFamily": "JX67oW_openWithFamily",
-			"openWithHint": "JX67oW_openWithHint",
-			"grid": "JX67oW_grid",
-			"cardSwitch": "JX67oW_cardSwitch",
-			"suffix": "JX67oW_suffix",
-			"cardTop": "JX67oW_cardTop",
-			"error": "JX67oW_error",
-			"selectOptionIcon": "JX67oW_selectOptionIcon",
-			"cardMain": "JX67oW_cardMain",
 			"pluginTopicBtn": "JX67oW_pluginTopicBtn",
-			"pluginEntryHead": "JX67oW_pluginEntryHead",
-			"cardSettings": "JX67oW_cardSettings",
+			"cardIconChip": "JX67oW_cardIconChip",
 			"switchInput": "JX67oW_switchInput",
-			"versionBadgeName": "JX67oW_versionBadgeName",
-			"pluginEntries": "JX67oW_pluginEntries",
-			"cardDesc": "JX67oW_cardDesc",
-			"selectOption": "JX67oW_selectOption",
-			"openWithEditorTemplate": "JX67oW_openWithEditorTemplate",
-			"cardSwitchTrack": "JX67oW_cardSwitchTrack",
-			"rowText": "JX67oW_rowText",
-			"pluginDesc": "JX67oW_pluginDesc",
-			"cardTitle": "JX67oW_cardTitle",
-			"pluginSearch": "JX67oW_pluginSearch",
-			"pluginCopyBtn": "JX67oW_pluginCopyBtn",
 			"done": "JX67oW_done",
-			"pluginEntryActions": "JX67oW_pluginEntryActions",
-			"openWithEditorRow": "JX67oW_openWithEditorRow",
-			"group": "JX67oW_group",
-			"row": "JX67oW_row",
 			"pluginList": "JX67oW_pluginList",
-			"switchThumb": "JX67oW_switchThumb",
-			"openWithEditorInput": "JX67oW_openWithEditorInput",
-			"popupDialog": "JX67oW_popupDialog",
-			"cardSwitchThumb": "JX67oW_cardSwitchThumb",
-			"typedInput": "JX67oW_typedInput",
-			"selectAnchor": "JX67oW_selectAnchor",
-			"selectAnchorIcon": "JX67oW_selectAnchorIcon",
-			"selectAnchorText": "JX67oW_selectAnchorText",
+			"pluginCopyBtn": "JX67oW_pluginCopyBtn",
+			"cardDesc": "JX67oW_cardDesc",
+			"cardMain": "JX67oW_cardMain",
+			"versionBadge": "JX67oW_versionBadge",
+			"popupRow": "JX67oW_popupRow",
+			"cardSettings": "JX67oW_cardSettings",
+			"pluginJumpBtn": "JX67oW_pluginJumpBtn",
+			"openWithRemove": "JX67oW_openWithRemove",
+			"rowGear": "JX67oW_rowGear",
 			"switchTrack": "JX67oW_switchTrack",
-			"intro": "JX67oW_intro",
+			"section": "JX67oW_section",
+			"pluginModal": "JX67oW_pluginModal",
+			"title": "JX67oW_title",
+			"selectAnchorIcon": "JX67oW_selectAnchorIcon",
+			"popupDialog": "JX67oW_popupDialog",
+			"typedInput": "JX67oW_typedInput",
+			"popupRows": "JX67oW_popupRows",
+			"pluginEntries": "JX67oW_pluginEntries",
+			"group": "JX67oW_group",
 			"desc": "JX67oW_desc",
+			"groupHeading": "JX67oW_groupHeading",
+			"switchThumb": "JX67oW_switchThumb",
+			"cardSwitchTrack": "JX67oW_cardSwitchTrack",
+			"pluginInstall": "JX67oW_pluginInstall",
+			"row": "JX67oW_row",
+			"percentInput": "JX67oW_percentInput",
+			"typedInputNumber": "JX67oW_typedInputNumber",
+			"selectAnchor": "JX67oW_selectAnchor",
+			"cardSwitch": "JX67oW_cardSwitch",
+			"cardSwitchThumb": "JX67oW_cardSwitchThumb",
 			"pluginEmpty": "JX67oW_pluginEmpty",
 			"pluginName": "JX67oW_pluginName",
-			"groupHeading": "JX67oW_groupHeading",
-			"card": "JX67oW_card",
-			"versionBadge": "JX67oW_versionBadge",
-			"cardOn": "JX67oW_cardOn",
+			"selectOption": "JX67oW_selectOption",
+			"openWithEditorRow": "JX67oW_openWithEditorRow",
+			"intro": "JX67oW_intro",
+			"versionBadgeTag": "JX67oW_versionBadgeTag",
+			"pluginSearch": "JX67oW_pluginSearch",
 			"addCard": "JX67oW_addCard",
-			"typedInputNumber": "JX67oW_typedInputNumber",
-			"pluginModal": "JX67oW_pluginModal",
-			"openWithRemove": "JX67oW_openWithRemove",
-			"control": "JX67oW_control",
-			"popupRow": "JX67oW_popupRow",
-			"rowGear": "JX67oW_rowGear",
-			"selectOptionText": "JX67oW_selectOptionText",
+			"count": "JX67oW_count",
+			"pluginDesc": "JX67oW_pluginDesc",
+			"rowText": "JX67oW_rowText",
+			"cssTextArea": "JX67oW_cssTextArea",
+			"selectOptionIcon": "JX67oW_selectOptionIcon",
+			"pluginEntryActions": "JX67oW_pluginEntryActions",
 			"switch": "JX67oW_switch",
-			"popupRows": "JX67oW_popupRows"
+			"openWithEditorTemplate": "JX67oW_openWithEditorTemplate",
+			"pluginEntryHead": "JX67oW_pluginEntryHead",
+			"card": "JX67oW_card",
+			"selectAnchorText": "JX67oW_selectAnchorText",
+			"control": "JX67oW_control",
+			"versionBadgeName": "JX67oW_versionBadgeName",
+			"openWithEditorInput": "JX67oW_openWithEditorInput",
+			"cardTop": "JX67oW_cardTop",
+			"cardTitle": "JX67oW_cardTitle",
+			"pluginGroupHeading": "JX67oW_pluginGroupHeading",
+			"selectOptionText": "JX67oW_selectOptionText",
+			"error": "JX67oW_error",
+			"cardOn": "JX67oW_cardOn",
+			"grid": "JX67oW_grid",
+			"openWithFamily": "JX67oW_openWithFamily",
+			"openWithHint": "JX67oW_openWithHint",
+			"pluginGroup": "JX67oW_pluginGroup",
+			"suffix": "JX67oW_suffix",
+			"pluginEntry": "JX67oW_pluginEntry"
 		};
 		//#endregion
 		//#region src/client/open-with-settings.tsx
@@ -6488,7 +4321,7 @@ window.__ModuleLoader__.load({
 			return badgeOf(entry) === "?";
 		}
 		/** The last path segment (tab title for a file's diff). */
-		function baseName(path) {
+		function baseName$1(path) {
 			const at = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
 			return at === -1 ? path : path.slice(at + 1);
 		}
@@ -6562,7 +4395,7 @@ window.__ModuleLoader__.load({
 				onOpenDiff({
 					id: `diff:w:${staged ? "s" : "u"}:${entry.path}`,
 					type: "diff",
-					title: baseName(entry.path),
+					title: baseName$1(entry.path),
 					diff: {
 						kind: "worktree",
 						path: entry.path,
@@ -7826,6 +5659,419 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 			return t("jobDurationSeconds", { seconds });
 		}
 		//#endregion
+		//#region src/client/icons.tsx
+		/**
+		* Right-panel toggle glyph (the "侧拉" button): a frame with a filled strip
+		* along its RIGHT edge, in the app's outline style (1.5px stroke,
+		* currentColor).
+		*/
+		const IconPanelRightOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
+			width: size,
+			height: size,
+			className,
+			viewBox: "0 0 16 16",
+			fill: "none",
+			xmlns: "http://www.w3.org/2000/svg",
+			children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("rect", {
+				x: "1.5",
+				y: "2",
+				width: "13",
+				height: "12",
+				rx: "2.5",
+				stroke: "currentColor",
+				strokeWidth: "1.5"
+			}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("rect", {
+				x: "10.5",
+				y: "3.25",
+				width: "2.75",
+				height: "9.5",
+				rx: "1",
+				fill: "currentColor",
+				stroke: "none"
+			})]
+		});
+		/**
+		* Bottom-panel toggle glyph (the "底栏" button): a frame with a filled strip
+		* along its BOTTOM edge, in the app's outline style.
+		*/
+		const IconPanelBottomOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
+			width: size,
+			height: size,
+			className,
+			viewBox: "0 0 16 16",
+			fill: "none",
+			xmlns: "http://www.w3.org/2000/svg",
+			children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("rect", {
+				x: "1.5",
+				y: "2",
+				width: "13",
+				height: "12",
+				rx: "2.5",
+				stroke: "currentColor",
+				strokeWidth: "1.5"
+			}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("rect", {
+				x: "3.25",
+				y: "10",
+				width: "9.5",
+				height: "2.75",
+				rx: "1",
+				fill: "currentColor",
+				stroke: "none"
+			})]
+		});
+		/**
+		* Terminal glyph in the app's outline style (1.5px stroke, currentColor):
+		* a rounded frame with a prompt chevron and underscore cursor.
+		*/
+		const IconTerminalOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
+			width: size,
+			height: size,
+			className,
+			viewBox: "0 0 16 16",
+			fill: "none",
+			xmlns: "http://www.w3.org/2000/svg",
+			children: [
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("rect", {
+					x: "1.5",
+					y: "2.5",
+					width: "13",
+					height: "11",
+					rx: "2",
+					stroke: "currentColor",
+					strokeWidth: "1.5"
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					d: "M4.5 6.25 6.75 8 4.5 9.75",
+					stroke: "currentColor",
+					strokeWidth: "1.5",
+					strokeLinecap: "round",
+					strokeLinejoin: "round"
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					d: "M8.5 10.4h3",
+					stroke: "currentColor",
+					strokeWidth: "1.5",
+					strokeLinecap: "round"
+				})
+			]
+		});
+		/** Diff glyph in the app's outline style: a file frame with a plus and a minus row. */
+		const IconDiffOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
+			width: size,
+			height: size,
+			className,
+			viewBox: "0 0 16 16",
+			fill: "none",
+			xmlns: "http://www.w3.org/2000/svg",
+			children: [
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("rect", {
+					x: "1.5",
+					y: "1.5",
+					width: "13",
+					height: "13",
+					rx: "2.5",
+					stroke: "currentColor",
+					strokeWidth: "1.5"
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					d: "M4 5h3M5.5 3.5v3",
+					stroke: "currentColor",
+					strokeWidth: "1.5",
+					strokeLinecap: "round"
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					d: "M9.5 12.5h2.5",
+					stroke: "currentColor",
+					strokeWidth: "1.5",
+					strokeLinecap: "round"
+				})
+			]
+		});
+		/**
+		* Stop glyph for the background-job kill button: a filled square in the
+		* app's outline scale (16), the universal "halt this work" mark.
+		*/
+		const IconStopOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("svg", {
+			width: size,
+			height: size,
+			className,
+			viewBox: "0 0 16 16",
+			fill: "none",
+			xmlns: "http://www.w3.org/2000/svg",
+			children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("rect", {
+				x: "4",
+				y: "4",
+				width: "8",
+				height: "8",
+				rx: "1.5",
+				fill: "currentColor",
+				stroke: "none"
+			})
+		});
+		/** Upload glyph in the app's outline style: an arrow rising into a tray
+		*  (the file-manager "upload into the workspace" action). */
+		const IconUploadOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
+			width: size,
+			height: size,
+			className,
+			viewBox: "0 0 16 16",
+			fill: "none",
+			xmlns: "http://www.w3.org/2000/svg",
+			children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+				d: "M8 10V2.75M4.75 5.5 8 2.25 11.25 5.5",
+				stroke: "currentColor",
+				strokeWidth: "1.5",
+				strokeLinecap: "round",
+				strokeLinejoin: "round"
+			}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+				d: "M2.75 10.5v2.25A1.25 1.25 0 0 0 4 14h8a1.25 1.25 0 0 0 1.25-1.25V10.5",
+				stroke: "currentColor",
+				strokeWidth: "1.5",
+				strokeLinecap: "round"
+			})]
+		});
+		/** Image viewer glyph: a picture frame with a sun and a mountain. */
+		const IconImageOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
+			width: size,
+			height: size,
+			className,
+			viewBox: "0 0 16 16",
+			fill: "none",
+			xmlns: "http://www.w3.org/2000/svg",
+			children: [
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("rect", {
+					x: "1.5",
+					y: "2.5",
+					width: "13",
+					height: "11",
+					rx: "2",
+					stroke: "currentColor",
+					strokeWidth: "1.5"
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("circle", {
+					cx: "5.5",
+					cy: "6",
+					r: "1.2",
+					stroke: "currentColor",
+					strokeWidth: "1.5"
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					d: "m3.5 12 3-3 2.25 2.25L11.5 8.5 13 10.5",
+					stroke: "currentColor",
+					strokeWidth: "1.5",
+					strokeLinecap: "round",
+					strokeLinejoin: "round"
+				})
+			]
+		});
+		/** PDF viewer glyph: a document frame with the "PDF" label. */
+		const IconPdfOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
+			width: size,
+			height: size,
+			className,
+			viewBox: "0 0 16 16",
+			fill: "none",
+			xmlns: "http://www.w3.org/2000/svg",
+			children: [
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					d: "M3.5 1.5h6.5L13.5 5v9.5h-10z",
+					stroke: "currentColor",
+					strokeWidth: "1.5",
+					strokeLinejoin: "round"
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					d: "M9.5 1.5V5h4",
+					stroke: "currentColor",
+					strokeWidth: "1.5",
+					strokeLinejoin: "round"
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					d: "M5 13.5v-3h1.4c.75 0 1.1.32 1.1.85 0 .54-.35.85-1.1.85H5.3",
+					stroke: "currentColor",
+					strokeWidth: "1.25",
+					strokeLinecap: "round",
+					strokeLinejoin: "round"
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					d: "M8.3 13.5v-3h1.05c.8 0 1.35.5 1.35 1.5s-.55 1.5-1.35 1.5z",
+					stroke: "currentColor",
+					strokeWidth: "1.25",
+					strokeLinecap: "round",
+					strokeLinejoin: "round"
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					d: "M11.6 13.5v-3h1.3",
+					stroke: "currentColor",
+					strokeWidth: "1.25",
+					strokeLinecap: "round"
+				})
+			]
+		});
+		/** Markdown viewer glyph: the classic "M with a down arrow" badge. */
+		const IconMarkdownOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
+			width: size,
+			height: size,
+			className,
+			viewBox: "0 0 16 16",
+			fill: "none",
+			xmlns: "http://www.w3.org/2000/svg",
+			children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("rect", {
+				x: "1.5",
+				y: "2.5",
+				width: "13",
+				height: "11",
+				rx: "2",
+				stroke: "currentColor",
+				strokeWidth: "1.5"
+			}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+				d: "M4 10.5V5.5l2 2.5 2-2.5v5M9.5 10.5v-5l2 2.5 2-2.5v5",
+				stroke: "currentColor",
+				strokeWidth: "1.5",
+				strokeLinecap: "round",
+				strokeLinejoin: "round"
+			})]
+		});
+		/** HTML viewer glyph: a document frame with a "‹/›" tag pair. */
+		const IconHtmlOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
+			width: size,
+			height: size,
+			className,
+			viewBox: "0 0 16 16",
+			fill: "none",
+			xmlns: "http://www.w3.org/2000/svg",
+			children: [
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					d: "M3.5 1.5h6.5L13.5 5v9.5h-10z",
+					stroke: "currentColor",
+					strokeWidth: "1.5",
+					strokeLinejoin: "round"
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					d: "M9.5 1.5V5h4",
+					stroke: "currentColor",
+					strokeWidth: "1.5",
+					strokeLinejoin: "round"
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					d: "M5.6 13.2 4.2 10l1.4-3.2M7.4 6.8 8.8 10l-1.4 3.2",
+					stroke: "currentColor",
+					strokeWidth: "1.25",
+					strokeLinecap: "round",
+					strokeLinejoin: "round"
+				})
+			]
+		});
+		/** Browser tab glyph: a globe with meridians. */
+		const IconGlobeOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
+			width: size,
+			height: size,
+			className,
+			viewBox: "0 0 16 16",
+			fill: "none",
+			xmlns: "http://www.w3.org/2000/svg",
+			children: [
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("circle", {
+					cx: "8",
+					cy: "8",
+					r: "6.5",
+					stroke: "currentColor",
+					strokeWidth: "1.5"
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("ellipse", {
+					cx: "8",
+					cy: "8",
+					rx: "2.8",
+					ry: "6.5",
+					stroke: "currentColor",
+					strokeWidth: "1.5"
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					d: "M1.5 8h13M8 1.5c-2.4 1.8-2.4 11.2 0 13M8 1.5c2.4 1.8 2.4 11.2 0 13",
+					stroke: "currentColor",
+					strokeWidth: "1.5",
+					strokeLinecap: "round"
+				})
+			]
+		});
+		/** History glyph (thread switcher): a clock with a counterclockwise arrow,
+		*  in the app's outline style — the "past conversations" mark. */
+		const IconHistoryOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
+			width: size,
+			height: size,
+			className,
+			viewBox: "0 0 16 16",
+			fill: "none",
+			xmlns: "http://www.w3.org/2000/svg",
+			children: [
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					d: "M2.4 6.8A5.6 5.6 0 1 1 2.4 9.2",
+					stroke: "currentColor",
+					strokeWidth: "1.5",
+					strokeLinecap: "round"
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					d: "M2.2 3.4v3.4h3.4",
+					stroke: "currentColor",
+					strokeWidth: "1.5",
+					strokeLinecap: "round",
+					strokeLinejoin: "round"
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					d: "M8 5.4V8l1.9 1.2",
+					stroke: "currentColor",
+					strokeWidth: "1.5",
+					strokeLinecap: "round",
+					strokeLinejoin: "round"
+				})
+			]
+		});
+		/** Save glyph (save-as-new-session): the classic floppy disk, in the app's
+		*  outline style. */
+		const IconSaveOutline16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
+			width: size,
+			height: size,
+			className,
+			viewBox: "0 0 16 16",
+			fill: "none",
+			xmlns: "http://www.w3.org/2000/svg",
+			children: [
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					d: "M4.2 14.5h7.6a1.2 1.2 0 0 0 1.2-1.2V4.9L10.6 2.5H4.2A1.2 1.2 0 0 0 3 3.7v9.6a1.2 1.2 0 0 0 1.2 1.2z",
+					stroke: "currentColor",
+					strokeWidth: "1.5",
+					strokeLinejoin: "round"
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					d: "M10 2.5v2.6H5.6V2.5",
+					stroke: "currentColor",
+					strokeWidth: "1.5",
+					strokeLinejoin: "round"
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					d: "M5.4 14.5v-4.2h5.2v4.2",
+					stroke: "currentColor",
+					strokeWidth: "1.5",
+					strokeLinejoin: "round"
+				})
+			]
+		});
+		/**
+		* Visual Studio Code brand mark for the file-tree "open with" menu. The
+		* path is the Simple Icons `visualstudiocode` glyph (CC0 1.0,
+		* simple-icons@11.0.0 — later releases dropped it over Microsoft's brand
+		* policy, so it is inlined here rather than pulled from react-icons),
+		* rendered monochrome via currentColor to follow the active skin.
+		*/
+		const IconVscode16 = ({ size = 16, className }) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("svg", {
+			width: size,
+			height: size,
+			className,
+			viewBox: "0 0 24 24",
+			fill: "currentColor",
+			xmlns: "http://www.w3.org/2000/svg",
+			children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", { d: "M23.15 2.587L18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zm-5.146 14.861L10.826 12l7.178-5.448v10.896z" })
+		});
+		//#endregion
 		//#region \0dsh-css:C:\Users\delinger\Desktop\dsh\dsh-desktop\assets\plugins\dsh-better-sidebar\src\client\SubagentView.module.css.mjs
 		const css$2 = ".-OIQdq_subagent{flex-direction:column;flex:1;min-height:0;display:flex}.-OIQdq_subagentHeader{flex:none;align-items:center;gap:8px;height:36px;padding:0 8px 0 12px;display:flex}.-OIQdq_subagentTitle{min-width:0;font:var(--dsw-font-s-14);color:var(--dsw-alias-label-secondary);text-overflow:ellipsis;white-space:nowrap;flex:1;overflow:hidden}.-OIQdq_subagentCount{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);flex:none}.-OIQdq_subagentRefresh{width:24px;height:24px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:6px;flex:none;justify-content:center;align-items:center;display:inline-flex}.-OIQdq_subagentRefresh:hover{background:var(--dsw-alias-interactive-bg-hover)}.-OIQdq_subagentBody{flex:1;min-height:0;padding:2px 6px 8px;overflow-y:auto}.-OIQdq_subagentRow{box-sizing:border-box;width:100%;min-height:50px;font:var(--dsw-font-s-14);color:var(--dsw-alias-label-primary);text-align:left;cursor:pointer;background:0 0;border:none;border-radius:8px;outline:none;align-items:flex-start;gap:8px;padding:7px 8px 7px 11px;display:flex;position:relative}.-OIQdq_subagentRow:hover,.-OIQdq_subagentRow:focus-visible{background:var(--dsw-alias-interactive-bg-hover)}.-OIQdq_subagentRowActive,.-OIQdq_subagentRowActive:hover,.-OIQdq_subagentRowActive:focus-visible{background:var(--dsw-alias-interactive-bg-active)}.-OIQdq_subagentRowDisabled{color:var(--dsw-alias-label-dimmed);cursor:not-allowed}.-OIQdq_subagentRowDisabled:hover{background:0 0}.-OIQdq_subagentRowLoading{cursor:default}.-OIQdq_subagentDot{margin-top:4px}.-OIQdq_subagentContent{flex-direction:column;flex:1;gap:2px;min-width:0;display:flex}.-OIQdq_subagentLabel,.-OIQdq_subagentSecondary{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.-OIQdq_subagentLabel{color:inherit;font-weight:400}.-OIQdq_subagentSecondary{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}.-OIQdq_subagentLive{min-width:0;font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);align-items:baseline;gap:4px;display:flex;overflow:hidden}.-OIQdq_subagentLiveTool{font:var(--dsw-font-xxxs-strong-11);color:var(--dsw-alias-label-secondary);flex:none}.-OIQdq_subagentLiveArgs{min-width:0;font-family:var(--ds-font-family-code);font-size:var(--dsw-font-xxxs-11-font-size);line-height:var(--dsw-font-xxxs-11-line-height);color:var(--dsw-alias-label-tertiary);text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.-OIQdq_subagentLiveText{-webkit-line-clamp:2;font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-secondary);-webkit-box-orient:vertical;display:-webkit-box;overflow:hidden}.-OIQdq_subagentNode{min-width:0;position:relative}.-OIQdq_subagentChildren{margin-left:18px;padding-left:4px;position:relative}.-OIQdq_subagentChildren:before{content:\"\";border-left:1px solid var(--dsw-alias-border-l2);height:26px;position:absolute;top:-26px;left:0}.-OIQdq_subagentChildren[aria-busy=true]:before{content:none}.-OIQdq_subagentChildren>.-OIQdq_subagentNode:before{content:\"\";border-left:1px solid var(--dsw-alias-border-l2);position:absolute;top:0;bottom:0;left:-4px}.-OIQdq_subagentChildren>.-OIQdq_subagentNode:last-child:before{height:17px;bottom:auto}.-OIQdq_subagentChildren>.-OIQdq_subagentNode>.-OIQdq_subagentRow:before{content:\"\";border-top:1px solid var(--dsw-alias-border-l2);width:14px;position:absolute;top:16px;left:-4px}.-OIQdq_subagentEmpty{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);text-align:center;flex-direction:column;gap:2px;padding:16px;display:flex}.-OIQdq_subagentEmptyHint{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-dimmed)}.-OIQdq_subagentError{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-error-primary);justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;display:flex}.-OIQdq_subagentErrorRetry{height:24px;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-strong-11);cursor:pointer;background:0 0;border:none;border-radius:6px;flex:none;align-items:center;gap:4px;padding:0 8px;display:inline-flex}.-OIQdq_subagentErrorRetry:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.-OIQdq_jobs{border-top:1px solid var(--dsw-alias-border-l2);margin-top:10px;padding-top:8px}.-OIQdq_jobsHeader{align-items:center;gap:8px;height:26px;padding:0 2px;display:flex}.-OIQdq_jobsTitle{min-width:0;font:var(--dsw-font-xxxs-strong-11);color:var(--dsw-alias-label-secondary);text-overflow:ellipsis;white-space:nowrap;flex:1;overflow:hidden}.-OIQdq_jobsCount{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);flex:none}.-OIQdq_jobsList{flex-direction:column;gap:2px;margin:0;padding:0;list-style:none;display:flex}.-OIQdq_jobsRow{border-radius:8px;align-items:center;gap:4px;display:flex}.-OIQdq_jobsRow:hover{background:var(--dsw-alias-interactive-bg-hover)}.-OIQdq_jobsRowSettled{opacity:.8}.-OIQdq_jobsRowSelected,.-OIQdq_jobsRowSelected:hover{background:var(--dsw-alias-interactive-bg-active)}.-OIQdq_jobsRowMain{min-width:0;font:var(--dsw-font-s-14);color:var(--dsw-alias-label-primary);text-align:left;cursor:pointer;background:0 0;border:none;border-radius:8px;outline:none;flex:1;align-items:flex-start;gap:8px;padding:6px 8px 6px 11px;display:flex}.-OIQdq_jobsRowMain:focus-visible{background:var(--dsw-alias-interactive-bg-hover)}.-OIQdq_jobsDot{margin-top:5px}.-OIQdq_jobsContent{flex-direction:column;gap:1px;min-width:0;display:flex}.-OIQdq_jobsLabelLine{align-items:center;gap:6px;min-width:0;display:flex}.-OIQdq_jobsKind{text-overflow:ellipsis;white-space:nowrap;border:1px solid var(--dsw-alias-border-l2);max-width:90px;font:var(--dsw-font-xxxs-strong-11);color:var(--dsw-alias-label-tertiary);border-radius:4px;flex:none;padding:0 5px;line-height:14px;overflow:hidden}.-OIQdq_jobsLabel{text-overflow:ellipsis;white-space:nowrap;min-width:0;font-family:var(--ds-font-family-code);font-size:var(--dsw-font-xxxs-11-font-size);line-height:var(--dsw-font-xxxs-11-line-height);color:var(--dsw-alias-label-primary);flex:1;overflow:hidden}.-OIQdq_jobsSecondary{text-overflow:ellipsis;white-space:nowrap;font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);overflow:hidden}.-OIQdq_jobsKill{width:22px;height:22px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:6px;flex:none;justify-content:center;align-items:center;margin-right:4px;display:inline-flex}.-OIQdq_jobsKill:hover{background:color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent);color:var(--dsw-alias-state-error-primary)}.-OIQdq_jobsKillArmed,.-OIQdq_jobsKillArmed:hover{background:color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent);width:auto;height:20px;color:var(--dsw-alias-state-error-primary);font:var(--dsw-font-xxxs-strong-11);white-space:nowrap;padding:0 8px}.-OIQdq_jobsKill:disabled{opacity:.5;cursor:default}.-OIQdq_jobsKillError{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-state-error-primary);flex:none;margin-right:4px}.-OIQdq_jobsPane{z-index:1;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);border-radius:8px;margin-top:4px;position:sticky;bottom:0;overflow:hidden;box-shadow:0 -6px 12px -8px #00000059}.-OIQdq_jobsPaneHeader{border-bottom:1px solid var(--dsw-alias-border-l1);align-items:center;gap:6px;height:28px;padding:0 4px 0 10px;display:flex}.-OIQdq_jobsPaneDot{flex:none}.-OIQdq_jobsPaneLabel{text-overflow:ellipsis;white-space:nowrap;min-width:0;font-family:var(--ds-font-family-code);font-size:var(--dsw-font-xxxs-11-font-size);line-height:var(--dsw-font-xxxs-11-line-height);color:var(--dsw-alias-label-primary);flex:1;overflow:hidden}.-OIQdq_jobsPaneStatus{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);flex:none}.-OIQdq_jobsPaneClose{width:20px;height:20px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:5px;flex:none;justify-content:center;align-items:center;display:inline-flex}.-OIQdq_jobsPaneClose:hover{background:var(--dsw-alias-interactive-bg-hover)}.-OIQdq_jobsPanePre{max-height:200px;font-family:var(--ds-font-family-code);font-size:var(--dsw-font-xxxs-11-font-size);color:var(--dsw-alias-label-primary);white-space:pre-wrap;word-break:break-word;margin:0;padding:6px 10px;line-height:1.5;overflow:auto}.-OIQdq_jobsPaneHint{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);padding:8px 10px}.-OIQdq_jobsPaneError{color:var(--dsw-alias-state-error-primary)}";
 		const tagId$2 = "dsh-external/dsh-better-sidebar/SubagentView.module.css";
@@ -7837,57 +6083,57 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 			document.head.appendChild(tag);
 		}
 		var SubagentView_module_css_default = {
-			"jobsKillError": "-OIQdq_jobsKillError",
-			"jobsPaneDot": "-OIQdq_jobsPaneDot",
-			"subagentError": "-OIQdq_subagentError",
-			"jobsPaneHint": "-OIQdq_jobsPaneHint",
-			"jobsPaneHeader": "-OIQdq_jobsPaneHeader",
 			"subagentTitle": "-OIQdq_subagentTitle",
-			"subagentSecondary": "-OIQdq_subagentSecondary",
-			"jobsPaneError": "-OIQdq_jobsPaneError",
-			"jobsPaneLabel": "-OIQdq_jobsPaneLabel",
-			"jobsHeader": "-OIQdq_jobsHeader",
-			"jobsList": "-OIQdq_jobsList",
-			"jobsKillArmed": "-OIQdq_jobsKillArmed",
-			"jobsPane": "-OIQdq_jobsPane",
-			"subagentRowLoading": "-OIQdq_subagentRowLoading",
-			"jobsSecondary": "-OIQdq_jobsSecondary",
-			"jobsLabel": "-OIQdq_jobsLabel",
-			"subagent": "-OIQdq_subagent",
-			"jobsRow": "-OIQdq_jobsRow",
-			"subagentEmptyHint": "-OIQdq_subagentEmptyHint",
-			"jobsKill": "-OIQdq_jobsKill",
-			"subagentRowActive": "-OIQdq_subagentRowActive",
-			"subagentContent": "-OIQdq_subagentContent",
-			"jobsPaneStatus": "-OIQdq_jobsPaneStatus",
-			"jobs": "-OIQdq_jobs",
-			"subagentDot": "-OIQdq_subagentDot",
-			"subagentErrorRetry": "-OIQdq_subagentErrorRetry",
-			"jobsPaneClose": "-OIQdq_jobsPaneClose",
-			"jobsTitle": "-OIQdq_jobsTitle",
-			"jobsPanePre": "-OIQdq_jobsPanePre",
-			"subagentRow": "-OIQdq_subagentRow",
-			"subagentLive": "-OIQdq_subagentLive",
-			"subagentLiveArgs": "-OIQdq_subagentLiveArgs",
-			"subagentLiveText": "-OIQdq_subagentLiveText",
-			"subagentHeader": "-OIQdq_subagentHeader",
-			"subagentBody": "-OIQdq_subagentBody",
-			"subagentChildren": "-OIQdq_subagentChildren",
 			"subagentNode": "-OIQdq_subagentNode",
-			"subagentRowDisabled": "-OIQdq_subagentRowDisabled",
-			"jobsRowSettled": "-OIQdq_jobsRowSettled",
-			"jobsRowMain": "-OIQdq_jobsRowMain",
-			"jobsDot": "-OIQdq_jobsDot",
-			"jobsRowSelected": "-OIQdq_jobsRowSelected",
+			"subagentRow": "-OIQdq_subagentRow",
 			"jobsKind": "-OIQdq_jobsKind",
-			"jobsCount": "-OIQdq_jobsCount",
+			"jobsLabel": "-OIQdq_jobsLabel",
+			"jobsKillError": "-OIQdq_jobsKillError",
+			"jobsList": "-OIQdq_jobsList",
 			"subagentCount": "-OIQdq_subagentCount",
-			"subagentRefresh": "-OIQdq_subagentRefresh",
+			"jobsPanePre": "-OIQdq_jobsPanePre",
+			"jobs": "-OIQdq_jobs",
+			"jobsSecondary": "-OIQdq_jobsSecondary",
+			"jobsTitle": "-OIQdq_jobsTitle",
+			"subagentHeader": "-OIQdq_subagentHeader",
+			"subagentEmptyHint": "-OIQdq_subagentEmptyHint",
+			"jobsPaneError": "-OIQdq_jobsPaneError",
+			"subagentLive": "-OIQdq_subagentLive",
+			"jobsPaneHint": "-OIQdq_jobsPaneHint",
+			"jobsPane": "-OIQdq_jobsPane",
+			"jobsDot": "-OIQdq_jobsDot",
+			"jobsHeader": "-OIQdq_jobsHeader",
+			"subagentDot": "-OIQdq_subagentDot",
 			"subagentLiveTool": "-OIQdq_subagentLiveTool",
+			"subagentRowActive": "-OIQdq_subagentRowActive",
 			"subagentEmpty": "-OIQdq_subagentEmpty",
+			"jobsRowSettled": "-OIQdq_jobsRowSettled",
 			"jobsContent": "-OIQdq_jobsContent",
+			"jobsPaneHeader": "-OIQdq_jobsPaneHeader",
+			"subagentLiveText": "-OIQdq_subagentLiveText",
+			"subagentBody": "-OIQdq_subagentBody",
+			"subagent": "-OIQdq_subagent",
+			"jobsPaneDot": "-OIQdq_jobsPaneDot",
+			"jobsPaneLabel": "-OIQdq_jobsPaneLabel",
+			"jobsPaneClose": "-OIQdq_jobsPaneClose",
+			"subagentSecondary": "-OIQdq_subagentSecondary",
+			"subagentError": "-OIQdq_subagentError",
+			"jobsKill": "-OIQdq_jobsKill",
+			"subagentContent": "-OIQdq_subagentContent",
+			"jobsKillArmed": "-OIQdq_jobsKillArmed",
+			"subagentRowLoading": "-OIQdq_subagentRowLoading",
+			"jobsCount": "-OIQdq_jobsCount",
+			"jobsRow": "-OIQdq_jobsRow",
+			"subagentErrorRetry": "-OIQdq_subagentErrorRetry",
+			"jobsRowSelected": "-OIQdq_jobsRowSelected",
 			"jobsLabelLine": "-OIQdq_jobsLabelLine",
-			"subagentLabel": "-OIQdq_subagentLabel"
+			"jobsPaneStatus": "-OIQdq_jobsPaneStatus",
+			"subagentChildren": "-OIQdq_subagentChildren",
+			"subagentRefresh": "-OIQdq_subagentRefresh",
+			"subagentLabel": "-OIQdq_subagentLabel",
+			"jobsRowMain": "-OIQdq_jobsRowMain",
+			"subagentRowDisabled": "-OIQdq_subagentRowDisabled",
+			"subagentLiveArgs": "-OIQdq_subagentLiveArgs"
 		};
 		//#endregion
 		//#region src/client/SubagentView.tsx
@@ -8920,45 +7166,45 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 			document.head.appendChild(tag);
 		}
 		var SideChatView_module_css_default = {
-			"sidechatError": "_1PwmhW_sidechatError",
-			"sidechatDetailHeader": "_1PwmhW_sidechatDetailHeader",
-			"sidechatComposer": "_1PwmhW_sidechatComposer",
-			"sidechatHero": "_1PwmhW_sidechatHero",
-			"sidechatIconBtn": "_1PwmhW_sidechatIconBtn",
-			"sidechatRowLine": "_1PwmhW_sidechatRowLine",
-			"sidechatRowBody": "_1PwmhW_sidechatRowBody",
-			"sidechatStatus": "_1PwmhW_sidechatStatus",
-			"sidechatRowIn": "_1PwmhW_sidechatRowIn",
-			"sidechatRowStatic": "_1PwmhW_sidechatRowStatic",
-			"sidechatPrimaryBtn": "_1PwmhW_sidechatPrimaryBtn",
-			"sidechatStatusText": "_1PwmhW_sidechatStatusText",
-			"sidechatRow": "_1PwmhW_sidechatRow",
-			"sidechatHeaderSpacer": "_1PwmhW_sidechatHeaderSpacer",
-			"sidechatSweep": "_1PwmhW_sidechatSweep",
-			"sidechatHeroDesc": "_1PwmhW_sidechatHeroDesc",
-			"sidechatScroll": "_1PwmhW_sidechatScroll",
-			"sidechatRowLabel": "_1PwmhW_sidechatRowLabel",
-			"sidechatHeroTitle": "_1PwmhW_sidechatHeroTitle",
-			"sidechatRowProse": "_1PwmhW_sidechatRowProse",
 			"sidechatBtnIn": "_1PwmhW_sidechatBtnIn",
-			"sidechatAssistant": "_1PwmhW_sidechatAssistant",
-			"sidechatComposerMeta": "_1PwmhW_sidechatComposerMeta",
 			"sidechatFadeIn": "_1PwmhW_sidechatFadeIn",
-			"sidechatRowFailed": "_1PwmhW_sidechatRowFailed",
-			"sidechatRowChevron": "_1PwmhW_sidechatRowChevron",
-			"sidechatComposerInput": "_1PwmhW_sidechatComposerInput",
-			"sidechatAgentBadge": "_1PwmhW_sidechatAgentBadge",
-			"sidechatComposerBar": "_1PwmhW_sidechatComposerBar",
-			"sidechatRowMono": "_1PwmhW_sidechatRowMono",
 			"sidechat": "_1PwmhW_sidechat",
-			"sidechatUser": "_1PwmhW_sidechatUser",
-			"sidechatRowCode": "_1PwmhW_sidechatRowCode",
-			"sidechatShimmerText": "_1PwmhW_sidechatShimmerText",
-			"sidechatRowMeta": "_1PwmhW_sidechatRowMeta",
-			"sidechatHint": "_1PwmhW_sidechatHint",
-			"sidechatHeaderDot": "_1PwmhW_sidechatHeaderDot",
+			"sidechatRowFailed": "_1PwmhW_sidechatRowFailed",
+			"sidechatRowProse": "_1PwmhW_sidechatRowProse",
+			"sidechatHero": "_1PwmhW_sidechatHero",
+			"sidechatAssistant": "_1PwmhW_sidechatAssistant",
+			"sidechatRowChevron": "_1PwmhW_sidechatRowChevron",
 			"sidechatSendBtn": "_1PwmhW_sidechatSendBtn",
-			"sidechatRowSummary": "_1PwmhW_sidechatRowSummary"
+			"sidechatPrimaryBtn": "_1PwmhW_sidechatPrimaryBtn",
+			"sidechatIconBtn": "_1PwmhW_sidechatIconBtn",
+			"sidechatRowMono": "_1PwmhW_sidechatRowMono",
+			"sidechatComposerBar": "_1PwmhW_sidechatComposerBar",
+			"sidechatRowMeta": "_1PwmhW_sidechatRowMeta",
+			"sidechatSweep": "_1PwmhW_sidechatSweep",
+			"sidechatRowCode": "_1PwmhW_sidechatRowCode",
+			"sidechatHint": "_1PwmhW_sidechatHint",
+			"sidechatHeroDesc": "_1PwmhW_sidechatHeroDesc",
+			"sidechatComposerMeta": "_1PwmhW_sidechatComposerMeta",
+			"sidechatRowBody": "_1PwmhW_sidechatRowBody",
+			"sidechatHeaderDot": "_1PwmhW_sidechatHeaderDot",
+			"sidechatComposer": "_1PwmhW_sidechatComposer",
+			"sidechatRowLine": "_1PwmhW_sidechatRowLine",
+			"sidechatRowStatic": "_1PwmhW_sidechatRowStatic",
+			"sidechatError": "_1PwmhW_sidechatError",
+			"sidechatShimmerText": "_1PwmhW_sidechatShimmerText",
+			"sidechatScroll": "_1PwmhW_sidechatScroll",
+			"sidechatRowIn": "_1PwmhW_sidechatRowIn",
+			"sidechatDetailHeader": "_1PwmhW_sidechatDetailHeader",
+			"sidechatRowLabel": "_1PwmhW_sidechatRowLabel",
+			"sidechatHeaderSpacer": "_1PwmhW_sidechatHeaderSpacer",
+			"sidechatAgentBadge": "_1PwmhW_sidechatAgentBadge",
+			"sidechatHeroTitle": "_1PwmhW_sidechatHeroTitle",
+			"sidechatRow": "_1PwmhW_sidechatRow",
+			"sidechatUser": "_1PwmhW_sidechatUser",
+			"sidechatRowSummary": "_1PwmhW_sidechatRowSummary",
+			"sidechatStatus": "_1PwmhW_sidechatStatus",
+			"sidechatStatusText": "_1PwmhW_sidechatStatusText",
+			"sidechatComposerInput": "_1PwmhW_sidechatComposerInput"
 		};
 		//#endregion
 		//#region src/client/SideChatView.tsx
@@ -9075,14 +7321,14 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 					className: SideChatView_module_css_default.sidechatUser,
 					children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.MarkdownText, {
 						text: row.text,
-						codeLabels: labels
+						labels: labels.markdown
 					})
 				}, `${row.kind}:${row.seq}`);
 				case "assistant": return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 					className: SideChatView_module_css_default.sidechatAssistant,
 					children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.MarkdownText, {
 						text: row.text,
-						codeLabels: labels
+						labels: labels.markdown
 					})
 				}, `${row.kind}:${row.seq}`);
 				case "reasoning": return /* @__PURE__ */ (0, react_jsx_runtime.jsx)(CollapsibleRow, {
@@ -9126,7 +7372,14 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 				copyLabel: t("copy"),
 				copiedLabel: t("copied"),
 				thinkLabel: t("sideChatThink"),
-				injectionLabel: t("sideChatInjection")
+				injectionLabel: t("sideChatInjection"),
+				markdown: {
+					code: {
+						copyLabel: t("copy"),
+						copiedLabel: t("copied")
+					},
+					footnotes: t("footnotes")
+				}
 			}), []);
 			const list = (0, react.useSyncExternalStore)((0, react.useMemo)(() => (callback) => ctx.sessions.list.subscribe(callback), [ctx]), (0, react.useCallback)(() => ctx.sessions.list.getSnapshot(), [ctx]));
 			const threads = (0, react.useMemo)(() => sideThreadRows(list.byId, scope.sessionId), [list, scope.sessionId]);
@@ -9515,6 +7768,206 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 					})
 				]
 			});
+		}
+		//#endregion
+		//#region node_modules/.pnpm/react-icons@5.7.0_react@18.3.1/node_modules/react-icons/lib/iconContext.mjs
+		var DefaultContext = {
+			color: void 0,
+			size: void 0,
+			className: void 0,
+			style: void 0,
+			attr: void 0
+		};
+		var IconContext = react.default.createContext && /*#__PURE__*/ react.default.createContext(DefaultContext);
+		//#endregion
+		//#region node_modules/.pnpm/react-icons@5.7.0_react@18.3.1/node_modules/react-icons/lib/iconBase.mjs
+		var _excluded = [
+			"attr",
+			"size",
+			"title"
+		];
+		function _objectWithoutProperties(e, t) {
+			if (null == e) return {};
+			var o, r, i = _objectWithoutPropertiesLoose(e, t);
+			if (Object.getOwnPropertySymbols) {
+				var n = Object.getOwnPropertySymbols(e);
+				for (r = 0; r < n.length; r++) o = n[r], -1 === t.indexOf(o) && {}.propertyIsEnumerable.call(e, o) && (i[o] = e[o]);
+			}
+			return i;
+		}
+		function _objectWithoutPropertiesLoose(r, e) {
+			if (null == r) return {};
+			var t = {};
+			for (var n in r) if ({}.hasOwnProperty.call(r, n)) {
+				if (-1 !== e.indexOf(n)) continue;
+				t[n] = r[n];
+			}
+			return t;
+		}
+		function _extends() {
+			return _extends = Object.assign ? Object.assign.bind() : function(n) {
+				for (var e = 1; e < arguments.length; e++) {
+					var t = arguments[e];
+					for (var r in t) ({}).hasOwnProperty.call(t, r) && (n[r] = t[r]);
+				}
+				return n;
+			}, _extends.apply(null, arguments);
+		}
+		function ownKeys(e, r) {
+			var t = Object.keys(e);
+			if (Object.getOwnPropertySymbols) {
+				var o = Object.getOwnPropertySymbols(e);
+				r && (o = o.filter(function(r) {
+					return Object.getOwnPropertyDescriptor(e, r).enumerable;
+				})), t.push.apply(t, o);
+			}
+			return t;
+		}
+		function _objectSpread(e) {
+			for (var r = 1; r < arguments.length; r++) {
+				var t = null != arguments[r] ? arguments[r] : {};
+				r % 2 ? ownKeys(Object(t), !0).forEach(function(r) {
+					_defineProperty(e, r, t[r]);
+				}) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys(Object(t)).forEach(function(r) {
+					Object.defineProperty(e, r, Object.getOwnPropertyDescriptor(t, r));
+				});
+			}
+			return e;
+		}
+		function _defineProperty(e, r, t) {
+			return (r = _toPropertyKey(r)) in e ? Object.defineProperty(e, r, {
+				value: t,
+				enumerable: !0,
+				configurable: !0,
+				writable: !0
+			}) : e[r] = t, e;
+		}
+		function _toPropertyKey(t) {
+			var i = _toPrimitive(t, "string");
+			return "symbol" == typeof i ? i : i + "";
+		}
+		function _toPrimitive(t, r) {
+			if ("object" != typeof t || !t) return t;
+			var e = t[Symbol.toPrimitive];
+			if (void 0 !== e) {
+				var i = e.call(t, r || "default");
+				if ("object" != typeof i) return i;
+				throw new TypeError("@@toPrimitive must return a primitive value.");
+			}
+			return ("string" === r ? String : Number)(t);
+		}
+		function Tree2Element(tree) {
+			return tree && tree.map((node, i) => /*#__PURE__*/ react.default.createElement(node.tag, _objectSpread({ key: i }, node.attr), Tree2Element(node.child)));
+		}
+		function GenIcon(data) {
+			return (props) => /*#__PURE__*/ react.default.createElement(IconBase, _extends({ attr: _objectSpread({}, data.attr) }, props), Tree2Element(data.child));
+		}
+		function IconBase(props) {
+			var elem = (conf) => {
+				var attr = props.attr, size = props.size, title = props.title, svgProps = _objectWithoutProperties(props, _excluded);
+				var computedSize = size || conf.size || "1em";
+				var className;
+				if (conf.className) className = conf.className;
+				if (props.className) className = (className ? className + " " : "") + props.className;
+				return /*#__PURE__*/ react.default.createElement("svg", _extends({
+					stroke: "currentColor",
+					fill: "currentColor",
+					strokeWidth: "0"
+				}, conf.attr, attr, svgProps, {
+					className,
+					style: _objectSpread(_objectSpread({ color: props.color || conf.color }, conf.style), props.style),
+					height: computedSize,
+					width: computedSize,
+					xmlns: "http://www.w3.org/2000/svg"
+				}), title && /*#__PURE__*/ react.default.createElement("title", null, title), props.children);
+			};
+			return IconContext !== void 0 ? /*#__PURE__*/ react.default.createElement(IconContext.Consumer, null, (conf) => elem(conf)) : elem(DefaultContext);
+		}
+		//#endregion
+		//#region node_modules/.pnpm/react-icons@5.7.0_react@18.3.1/node_modules/react-icons/vsc/index.mjs
+		function VscPinned(props) {
+			return GenIcon({
+				"tag": "svg",
+				"attr": {
+					"viewBox": "0 0 16 16",
+					"fill": "currentColor"
+				},
+				"child": [{
+					"tag": "path",
+					"attr": { "d": "M10.0589 2.44511C9.34701 1.73063 8.14697 1.90829 7.67261 2.79839L5.6526 6.58878L2.8419 7.52568C2.6775 7.58048 2.5532 7.71649 2.51339 7.88514C2.47357 8.0538 2.52392 8.23104 2.64646 8.35357L4.79291 10.5L2.14645 13.1465L2 14L2.85356 13.8536L5.50002 11.2071L7.64646 13.3536C7.76899 13.4761 7.94623 13.5265 8.11489 13.4866C8.28354 13.4468 8.41955 13.3225 8.47435 13.1581L9.41143 10.3469L13.1897 8.32423C14.0759 7.84982 14.2538 6.6551 13.5443 5.94305L10.0589 2.44511ZM8.55511 3.2687C8.71323 2.972 9.11324 2.91278 9.35055 3.15094L12.836 6.64889C13.0725 6.88624 13.0131 7.28448 12.7178 7.44262L8.76403 9.55921C8.65137 9.61952 8.56608 9.72068 8.52567 9.84191L7.7815 12.0744L3.92562 8.21853L6.15812 7.47436C6.27966 7.43385 6.38101 7.34823 6.44126 7.23518L8.55511 3.2687Z" },
+					"child": []
+				}]
+			})(props);
+		}
+		function VscPin(props) {
+			return GenIcon({
+				"tag": "svg",
+				"attr": {
+					"viewBox": "0 0 16 16",
+					"fill": "currentColor"
+				},
+				"child": [{
+					"tag": "path",
+					"attr": { "d": "M13.5 3C13.303 3 13.109 3.038 12.923 3.114L8.481 4.967L5.659 4.026C5.505 3.976 5.339 4.001 5.209 4.095C5.078 4.189 5.001 4.339 5.001 4.5V7H1.257L0.5 7.5L1.257 8H5V10.5C5 10.661 5.077 10.812 5.208 10.905C5.338 11 5.504 11.023 5.658 10.974L8.48 10.033L12.925 11.887C13.109 11.962 13.302 12 13.499 12C14.326 12 14.999 11.327 14.999 10.5V4.5C14.999 3.673 14.326 3 13.499 3H13.5ZM14 10.5C14 10.843 13.615 11.09 13.308 10.962L8.693 9.038C8.631 9.013 8.566 9 8.501 9C8.447 9 8.395 9.009 8.343 9.025L6.001 9.806V5.193L8.343 5.974C8.457 6.011 8.581 6.007 8.694 5.961L13.306 4.038C13.629 3.902 14.001 4.156 14.001 4.499V10.499L14 10.5Z" },
+					"child": []
+				}]
+			})(props);
+		}
+		function VscLinkExternal(props) {
+			return GenIcon({
+				"tag": "svg",
+				"attr": {
+					"viewBox": "0 0 16 16",
+					"fill": "currentColor"
+				},
+				"child": [{
+					"tag": "path",
+					"attr": { "d": "M15 9.5V12.5C15 13.879 13.879 15 12.5 15H3.5C2.121 15 1 13.879 1 12.5V3.5C1 2.121 2.121 1 3.5 1H6.5C6.776 1 7 1.224 7 1.5C7 1.776 6.776 2 6.5 2H3.5C2.673 2 2 2.673 2 3.5V12.5C2 13.327 2.673 14 3.5 14H12.5C13.327 14 14 13.327 14 12.5V9.5C14 9.224 14.224 9 14.5 9C14.776 9 15 9.224 15 9.5ZM14.5 1H9.5C9.224 1 9 1.224 9 1.5C9 1.776 9.224 2 9.5 2H13.293L9.147 6.146C8.952 6.341 8.952 6.658 9.147 6.853C9.245 6.951 9.373 6.999 9.501 6.999C9.629 6.999 9.757 6.95 9.855 6.853L14.001 2.707V6.5C14.001 6.776 14.225 7 14.501 7C14.777 7 15.001 6.776 15.001 6.5V1.5C15.001 1.224 14.777 1 14.501 1H14.5Z" },
+					"child": []
+				}]
+			})(props);
+		}
+		function VscFolder(props) {
+			return GenIcon({
+				"tag": "svg",
+				"attr": {
+					"viewBox": "0 0 16 16",
+					"fill": "currentColor"
+				},
+				"child": [{
+					"tag": "path",
+					"attr": { "d": "M2 4.5V6H5.58579C5.71839 6 5.84557 5.94732 5.93934 5.85355L7.29289 4.5L5.93934 3.14645C5.84557 3.05268 5.71839 3 5.58579 3H3.5C2.67157 3 2 3.67157 2 4.5ZM1 4.5C1 3.11929 2.11929 2 3.5 2H5.58579C5.98361 2 6.36514 2.15804 6.64645 2.43934L8.20711 4H12.5C13.8807 4 15 5.11929 15 6.5V11.5C15 12.8807 13.8807 14 12.5 14H3.5C2.11929 14 1 12.8807 1 11.5V4.5ZM2 7V11.5C2 12.3284 2.67157 13 3.5 13H12.5C13.3284 13 14 12.3284 14 11.5V6.5C14 5.67157 13.3284 5 12.5 5H8.20711L6.64645 6.56066C6.36514 6.84197 5.98361 7 5.58579 7H2Z" },
+					"child": []
+				}]
+			})(props);
+		}
+		function VscFolderOpened(props) {
+			return GenIcon({
+				"tag": "svg",
+				"attr": {
+					"viewBox": "0 0 16 16",
+					"fill": "currentColor"
+				},
+				"child": [{
+					"tag": "path",
+					"attr": { "d": "M2 4.5V9.10022L2.92389 7.5C3.45979 6.5718 4.45017 6 5.52196 6L11.9146 6C11.7087 5.4174 11.1531 5 10.5 5H7C6.86739 5 6.74021 4.94732 6.64645 4.85355L4.93934 3.14645C4.84557 3.05268 4.71839 3 4.58579 3H3.5C2.67157 3 2 3.67157 2 4.5ZM7.06895 13.9953C7.04641 13.9984 7.02339 14 7 14H3.5C2.11929 14 1 12.8807 1 11.5V4.5C1 3.11929 2.11929 2 3.5 2H4.58579C4.98361 2 5.36514 2.15804 5.64645 2.43934L7.20711 4H10.5C11.724 4 12.7426 4.87965 12.958 6.04127C14.605 6.34148 15.5443 8.22106 14.6616 9.75L13.0766 12.4953C12.5407 13.4235 11.5503 13.9953 10.4785 13.9953H7.06895ZM5.52196 7C4.80743 7 4.14718 7.3812 3.78991 8L2.20492 10.7453C1.62757 11.7453 2.34926 12.9953 3.50396 12.9953L10.4785 12.9953C11.193 12.9953 11.8533 12.6141 12.2105 11.9953L13.7955 9.25C14.3729 8.25 13.6512 7 12.4965 7L5.52196 7Z" },
+					"child": []
+				}]
+			})(props);
+		}
+		function VscFile(props) {
+			return GenIcon({
+				"tag": "svg",
+				"attr": {
+					"viewBox": "0 0 16 16",
+					"fill": "currentColor"
+				},
+				"child": [{
+					"tag": "path",
+					"attr": { "d": "M5 1C3.89543 1 3 1.89543 3 3V13C3 14.1046 3.89543 15 5 15H11C12.1046 15 13 14.1046 13 13V5.41421C13 5.01639 12.842 4.63486 12.5607 4.35355L9.64645 1.43934C9.36514 1.15804 8.98361 1 8.58579 1H5ZM4 3C4 2.44772 4.44772 2 5 2H8V4.5C8 5.32843 8.67157 6 9.5 6H12V13C12 13.5523 11.5523 14 11 14H5C4.44772 14 4 13.5523 4 13V3ZM11.7929 5H9.5C9.22386 5 9 4.77614 9 4.5V2.20711L11.7929 5Z" },
+					"child": []
+				}]
+			})(props);
 		}
 		//#endregion
 		//#region src/client/browser.ts
@@ -9960,29 +8413,10 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 					order: 10,
 					hidden: false,
 					dedupeKey: (tab) => tab.path,
-					settings: {
-						toggles: [{
-							key: "editorExplorer",
-							type: "select",
-							title: () => t("editorExplorer"),
-							desc: () => t("editorExplorerDesc"),
-							options: [{
-								value: true,
-								icon: (size) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconPanelLeftOutline16, { size }),
-								title: () => t("editorExplorerMerged"),
-								desc: () => t("editorExplorerMergedDesc")
-							}, {
-								value: false,
-								icon: (size) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCodeOutline16, { size }),
-								title: () => t("editorExplorerSplit"),
-								desc: () => t("editorExplorerSplitDesc")
-							}]
-						}],
-						render: ({ pluginSettings, updatePluginSetting }) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(OpenWithSettings, {
-							pluginSettings,
-							updatePluginSetting
-						})
-					},
+					settings: { render: ({ pluginSettings, updatePluginSetting }) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(OpenWithSettings, {
+						pluginSettings,
+						updatePluginSetting
+					}) },
 					component: ({ ctx, store, scope, tab, visible, expanded, onToggleDir, onReferenceFile }) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(EditorHost, {
 						ctx,
 						store,
@@ -10640,6 +9074,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 								getTabBadge?.(tab) ?? null,
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 									className: sidebar_module_css_default.tabTitle,
+									style: isPreviewTab(tab) ? { fontStyle: "italic" } : void 0,
 									children: tab.title
 								}),
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
@@ -10729,6 +9164,38 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 					]
 				})
 			});
+		}
+		//#endregion
+		//#region src/client/frame-batcher.ts
+		function createFrameBatcher() {
+			let frame = null;
+			let task = null;
+			const run = () => {
+				frame = null;
+				const current = task;
+				task = null;
+				current?.();
+			};
+			return {
+				schedule(next) {
+					task = next;
+					if (frame === null) frame = requestAnimationFrame(run);
+				},
+				flushNow() {
+					if (frame !== null) {
+						cancelAnimationFrame(frame);
+						frame = null;
+					}
+					run();
+				},
+				dispose() {
+					if (frame !== null) {
+						cancelAnimationFrame(frame);
+						frame = null;
+					}
+					task = null;
+				}
+			};
 		}
 		//#endregion
 		//#region src/client/split-pane.tsx
@@ -10966,6 +9433,1529 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 					renderTab,
 					getTabIcon,
 					getTabBadge
+				})
+			});
+		}
+		//#endregion
+		//#region src/client/prefs.ts
+		/** Validate one raw resolved value into {@link SidebarPrefs}. Used for the
+		* settings.get payload AND the settings.update response (both carry the
+		* layered resolved value); any malformed field falls back to its default.
+		* @param value - the raw resolved section from the settings wire.
+		* @returns validated prefs (always well-formed).
+		*/
+		function parsePrefs(value) {
+			if (value === null || typeof value !== "object") return { ...SIDEBAR_PREFS_DEFAULTS };
+			const record = value;
+			return {
+				openByDefault: typeof record.openByDefault === "boolean" ? record.openByDefault : SIDEBAR_PREFS_DEFAULTS.openByDefault,
+				defaultWidthPercent: typeof record.defaultWidthPercent === "number" && Number.isFinite(record.defaultWidthPercent) ? clampWidthPercent(record.defaultWidthPercent) : SIDEBAR_PREFS_DEFAULTS.defaultWidthPercent,
+				autoOpenSubagent: typeof record.autoOpenSubagent === "boolean" ? record.autoOpenSubagent : SIDEBAR_PREFS_DEFAULTS.autoOpenSubagent,
+				autoOpenJobs: typeof record.autoOpenJobs === "boolean" ? record.autoOpenJobs : SIDEBAR_PREFS_DEFAULTS.autoOpenJobs,
+				agentTerminalTools: typeof record.agentTerminalTools === "boolean" ? record.agentTerminalTools : SIDEBAR_PREFS_DEFAULTS.agentTerminalTools,
+				bottomPanelAutoTerminal: typeof record.bottomPanelAutoTerminal === "boolean" ? record.bottomPanelAutoTerminal : SIDEBAR_PREFS_DEFAULTS.bottomPanelAutoTerminal,
+				terminalFontFamily: typeof record.terminalFontFamily === "string" ? record.terminalFontFamily : SIDEBAR_PREFS_DEFAULTS.terminalFontFamily,
+				terminalShell: typeof record.terminalShell === "string" ? record.terminalShell : SIDEBAR_PREFS_DEFAULTS.terminalShell,
+				terminalShellArgs: typeof record.terminalShellArgs === "string" ? record.terminalShellArgs : SIDEBAR_PREFS_DEFAULTS.terminalShellArgs,
+				terminalFontSize: typeof record.terminalFontSize === "number" && Number.isFinite(record.terminalFontSize) ? clampTerminalFontSize(record.terminalFontSize) : SIDEBAR_PREFS_DEFAULTS.terminalFontSize,
+				interceptOpenPath: typeof record.interceptOpenPath === "boolean" ? record.interceptOpenPath : SIDEBAR_PREFS_DEFAULTS.interceptOpenPath,
+				editorExplorer: typeof record.editorExplorer === "boolean" ? record.editorExplorer : SIDEBAR_PREFS_DEFAULTS.editorExplorer,
+				titleBarScheme: isTitleBarScheme(record.titleBarScheme) ? record.titleBarScheme : record.titleBarCompat === true || hasLegacyStripValue(record.titleBarStripPx) ? "custom" : "auto",
+				titleBarPresetId: typeof record.titleBarPresetId === "string" ? record.titleBarPresetId : SIDEBAR_PREFS_DEFAULTS.titleBarPresetId,
+				customCss: typeof record.customCss === "string" ? record.customCss : SIDEBAR_PREFS_DEFAULTS.customCss,
+				titleBarCompat: typeof record.titleBarCompat === "boolean" ? record.titleBarCompat : SIDEBAR_PREFS_DEFAULTS.titleBarCompat,
+				titleBarStripPx: typeof record.titleBarStripPx === "number" && Number.isFinite(record.titleBarStripPx) ? clampTitleBarStrip(record.titleBarStripPx) : SIDEBAR_PREFS_DEFAULTS.titleBarStripPx,
+				htmlViewerNoSandbox: typeof record.htmlViewerNoSandbox === "boolean" ? record.htmlViewerNoSandbox : SIDEBAR_PREFS_DEFAULTS.htmlViewerNoSandbox,
+				htmlViewerDefaultUnsafe: typeof record.htmlViewerDefaultUnsafe === "boolean" ? record.htmlViewerDefaultUnsafe : SIDEBAR_PREFS_DEFAULTS.htmlViewerDefaultUnsafe,
+				browserNoSandbox: typeof record.browserNoSandbox === "boolean" ? record.browserNoSandbox : SIDEBAR_PREFS_DEFAULTS.browserNoSandbox,
+				browserInterceptLinks: typeof record.browserInterceptLinks === "boolean" ? record.browserInterceptLinks : SIDEBAR_PREFS_DEFAULTS.browserInterceptLinks,
+				browserInterceptHttp: typeof record.browserInterceptHttp === "boolean" ? record.browserInterceptHttp : SIDEBAR_PREFS_DEFAULTS.browserInterceptHttp,
+				browserInterceptHttps: typeof record.browserInterceptHttps === "boolean" ? record.browserInterceptHttps : SIDEBAR_PREFS_DEFAULTS.browserInterceptHttps,
+				tabsEnabled: booleanMapOf(record.tabsEnabled),
+				viewersEnabled: booleanMapOf(record.viewersEnabled),
+				pluginSettings: pluginSettingsMapOf(record.pluginSettings)
+			};
+		}
+		/**
+		* Validate the plugin-owned settings map (v0.12.0+): `{ descriptorId: { key:
+		* value } }`, nested open maps. Any non-object value (or a malformed whole)
+		* falls back to the empty map — the schema defaults already guard the wire
+		* shape, this is the client's second line.
+		*/
+		function pluginSettingsMapOf(value) {
+			if (value === null || typeof value !== "object" || Array.isArray(value)) return {};
+			const out = {};
+			for (const [id, blob] of Object.entries(value)) if (blob !== null && typeof blob === "object" && !Array.isArray(blob)) out[id] = blob;
+			return out;
+		}
+		/**
+		* Validate one enable-switch map (per-tab / per-viewer). Only boolean values
+		* survive; a non-object or a non-boolean entry falls back to the empty map /
+		* drops the entry — an absent key means the feature stays enabled.
+		*/
+		function booleanMapOf(value) {
+			if (value === null || typeof value !== "object" || Array.isArray(value)) return {};
+			const out = {};
+			for (const [key, item] of Object.entries(value)) if (typeof item === "boolean") out[key] = item;
+			return out;
+		}
+		/** Type guard for the title-bar scheme union (anything else falls back). */
+		function isTitleBarScheme(value) {
+			return typeof value === "string" && TITLE_BAR_SCHEMES.includes(value);
+		}
+		/**
+		* Whether the legacy document carries an explicit strip value (only
+		* reachable through the old gear popup): a stored number different from the
+		* default counts as "the user already configured something" and migrates to
+		* the `custom` scheme.
+		*/
+		function hasLegacyStripValue(value) {
+			return typeof value === "number" && Number.isFinite(value) && value !== 40;
+		}
+		/**
+		* Read the resolved side card preferences through the plugin's settings route.
+		* @param settings - the settings wire face (the plugin api by default).
+		* @returns validated prefs, or the schema defaults when the route rejects,
+		* the namespace is absent, or a stored value violates the contract.
+		*/
+		async function loadPrefs(settings) {
+			try {
+				return parsePrefs((await settings.settingsGet()).value);
+			} catch {
+				return { ...SIDEBAR_PREFS_DEFAULTS };
+			}
+		}
+		/**
+		* Read the external-disable flag from the same settings route: the
+		* dsh-web-ui family's aionui-panel provider choice. True only when the host
+		* resolved `aionui-panel.rightPanel` to 'aionui-panel' — while true the
+		* sidebar must not mount (the two right panels are mutually exclusive). Any
+		* failure (route rejected, aionui absent, malformed response) reads false,
+		* so a missing family never hides the sidebar.
+		* @param settings - the settings wire face (the plugin api by default).
+		* @returns the external-disable flag (false on any failure).
+		*/
+		async function loadExternalDisable(settings) {
+			try {
+				return (await settings.settingsGet()).externalDisable === true;
+			} catch {
+				return false;
+			}
+		}
+		//#endregion
+		//#region src/client/plugin-settings.ts
+		/**
+		* Pending-writes queue for the file tree's open-with config: pin toggles and
+		* (outside the settings popup) config edits land in the sidebar prefs as
+		* `pluginSettings['editor']`. Writes are serialized through one promise chain
+		* so a quick burst of pin clicks can never read a stale pluginSettings map
+		* and drop an earlier toggle; each write pushes the whole open map patch
+		* through the revision-free settings route and adopts the returned document.
+		*
+		* (The settings popup has its own serialized commit — SideCardSection's —
+		* so its rows and this helper rarely race; the shared route's last-write-wins
+		* semantics cover the uncommon overlap.)
+		*/
+		let queue = Promise.resolve();
+		/**
+		* Merge one plugin-owned settings blob of one descriptor and persist it.
+		* @param store - the sidebar store (its prefs are replaced by the write result).
+		* @param descriptorId - the descriptor whose blob is patched ('editor' here).
+		* @param updater - pure patch function; receives a shallow copy of the blob.
+		*/
+		function updatePluginSettings(store, descriptorId, updater) {
+			queue = queue.then(async () => {
+				const prefs = store.getPrefs();
+				const next = updater({ ...prefs.pluginSettings[descriptorId] ?? {} });
+				const view = await api.settingsUpdate({ pluginSettings: {
+					...prefs.pluginSettings,
+					[descriptorId]: next
+				} });
+				store.setPrefs(parsePrefs(view.value));
+			}).catch((error) => {
+				console.error("open-with settings write failed", error);
+			});
+		}
+		//#endregion
+		//#region node_modules/.pnpm/react-icons@5.7.0_react@18.3.1/node_modules/react-icons/si/index.mjs
+		function SiZedindustries(props) {
+			return GenIcon({
+				"tag": "svg",
+				"attr": {
+					"role": "img",
+					"viewBox": "0 0 24 24"
+				},
+				"child": [{
+					"tag": "path",
+					"attr": { "d": "M2.25 1.5a.75.75 0 0 0-.75.75v16.5H0V2.25A2.25 2.25 0 0 1 2.25 0h20.095c1.002 0 1.504 1.212.795 1.92L10.764 14.298h3.486V12.75h1.5v1.922a1.125 1.125 0 0 1-1.125 1.125H9.264l-2.578 2.578h11.689V9h1.5v9.375a1.5 1.5 0 0 1-1.5 1.5H5.185L2.562 22.5H21.75a.75.75 0 0 0 .75-.75V5.25H24v16.5A2.25 2.25 0 0 1 21.75 24H1.655C.653 24 .151 22.788.86 22.08L13.19 9.75H9.75v1.5h-1.5V9.375A1.125 1.125 0 0 1 9.375 8.25h5.314l2.625-2.625H5.625V15h-1.5V5.625a1.5 1.5 0 0 1 1.5-1.5h13.19L21.438 1.5z" },
+					"child": []
+				}]
+			})(props);
+		}
+		function SiCursor(props) {
+			return GenIcon({
+				"tag": "svg",
+				"attr": {
+					"role": "img",
+					"viewBox": "0 0 24 24"
+				},
+				"child": [{
+					"tag": "path",
+					"attr": { "d": "M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23" },
+					"child": []
+				}]
+			})(props);
+		}
+		//#endregion
+		//#region src/client/lang.ts
+		/** The lowercased file extension of a path ('' when none). */
+		function extOf(path) {
+			const at = path.lastIndexOf(".");
+			if (at === -1) return "";
+			const base = path.slice(at + 1).toLowerCase();
+			return base.includes("/") || base.includes("\\") ? "" : base;
+		}
+		//#endregion
+		//#region src/client/upload.ts
+		/**
+		* File-upload plumbing for the files window: turn a file picker or a drag-drop
+		* into per-file raw-byte uploads through the sidebar's `/sidebar/upload` route.
+		*
+		* Folders keep their tree in both flows: the picker's `webkitdirectory`
+		* selection arrives as Files with `webkitRelativePath` filled, and dropped
+		* folders — which never surface in `dataTransfer.files` — are traversed via
+		* `webkitGetAsEntry`, so the relative path is preserved for every nested file
+		* and the host recreates the tree under the chosen directory. The File is
+		* streamed straight into the POST body (no base64 inflation); uploads run
+		* sequentially so one slow file cannot starve the others, and each result
+		* reports its own outcome (the tree keeps going after a failure). An
+		* optional `AbortSignal` stops the queue at the next item boundary and
+		* aborts the in-flight request; the host cleans up its temp file when the
+		* request stream dies.
+		*/
+		/** Sanitize a relative target: absolute paths, traversal, and empty segments
+		*  are rejected (the host enforces the same rules with a 400). */
+		function sanitizeRelativePath(rel) {
+			if (rel === "" || isAbsolutePath(rel)) return void 0;
+			if (rel.split(/[\\/]/).some((s) => s === "" || s === "." || s === "..")) return void 0;
+			return rel;
+		}
+		/** The picker's relative path: webkitRelativePath when present, else the name. */
+		function relativePathOf(file) {
+			return sanitizeRelativePath(file.webkitRelativePath || file.name || "");
+		}
+		/** Collect a picker selection (webkitdirectory folders carry relative paths). */
+		function uploadItemsFromFiles(files) {
+			const items = [];
+			for (const file of files) {
+				const rel = relativePathOf(file);
+				if (rel !== void 0) items.push({
+					file,
+					relativePath: rel
+				});
+			}
+			return items;
+		}
+		/** Read one dropped file-system entry into upload items; directories
+		*  recurse, prefixing their name onto every descendant's relative path. */
+		async function itemsFromEntry(entry, prefix) {
+			if (entry.isFile) {
+				const file = await new Promise((resolve, reject) => {
+					entry.file(resolve, reject);
+				});
+				const rel = sanitizeRelativePath(prefix + file.name);
+				return rel === void 0 ? [] : [{
+					file,
+					relativePath: rel
+				}];
+			}
+			if (entry.isDirectory) {
+				const reader = entry.createReader();
+				const entries = [];
+				for (;;) {
+					const batch = await new Promise((resolve, reject) => {
+						reader.readEntries(resolve, reject);
+					});
+					if (batch.length === 0) break;
+					entries.push(...batch);
+				}
+				return (await Promise.all(entries.map((child) => itemsFromEntry(child, `${prefix}${entry.name}/`)))).flat();
+			}
+			return [];
+		}
+		/**
+		* Collect a drag-drop payload. Dropped folders do NOT surface in
+		* `dataTransfer.files` — they arrive as directory items, so entries are
+		* captured via `webkitGetAsEntry` and traversed (draining readEntries
+		* batches), keeping each nested file's relative path. MUST be invoked
+		* synchronously from the drop handler: the dataTransfer enters protected
+		* mode once the event dispatch ends, while the captured entry handles stay
+		* readable asynchronously. Falls back to the flat file list when the entry
+		* API is unavailable; an entry that fails to read is skipped, not fatal.
+		*/
+		async function uploadItemsFromDrop(data) {
+			if (data === void 0) return [];
+			const entries = [...data.items].map((item) => item.kind === "file" ? item.webkitGetAsEntry() : null).filter((entry) => entry !== null);
+			if (entries.length === 0) return uploadItemsFromFiles(data.files);
+			return (await Promise.all(entries.map((entry) => itemsFromEntry(entry, "").catch(() => [])))).flat();
+		}
+		/** How long a success hint stays before fading (failures stay until the next action). */
+		const UPLOAD_HINT_MS = 3500;
+		/**
+		* One-line upload progress text: 'Uploading into {dir}…' while no file is in
+		* flight, then 'Uploading {done}/{total}: {name}' per file. Shared by the tree
+		* hint and the full-window upload overlay.
+		*/
+		function uploadHintText(done, total, current, dir, t) {
+			return current === "" ? t("uploadingTo", { dir }) : t("uploadProgress", {
+				done,
+				total,
+				name: current
+			});
+		}
+		/**
+		* Upload every item into `dir` (absolute, inside the session workspace),
+		* sequentially, reporting progress as `(done, total, currentRelativePath)`.
+		* Resolves with one result per item — never rejects; `signal.aborted` stops
+		* the queue at the next item boundary (completed items stay uploaded).
+		*/
+		async function uploadToDir(scope, dir, items, onProgress, signal) {
+			const results = [];
+			let done = 0;
+			for (const item of items) {
+				if (signal?.aborted) break;
+				onProgress?.(done, items.length, item.relativePath);
+				try {
+					if (item.file.size > 134217728) results.push({
+						relativePath: item.relativePath,
+						ok: false,
+						code: "too-large"
+					});
+					else {
+						const res = await api.uploadFile(scope, dir, item.relativePath, item.file, signal);
+						results.push({
+							relativePath: item.relativePath,
+							ok: true,
+							path: res.path
+						});
+					}
+				} catch (error) {
+					if (error instanceof DOMException && error.name === "AbortError") break;
+					results.push({
+						relativePath: item.relativePath,
+						ok: false,
+						code: error instanceof SidebarApiError ? error.code : void 0,
+						error: error instanceof Error ? error.message : String(error)
+					});
+				}
+				done++;
+			}
+			onProgress?.(done, items.length, "");
+			return results;
+		}
+		/** Fold a result list into a one-line status for the tree hint. */
+		function summarizeResults(results, t) {
+			const okCount = results.filter((r) => r.ok).length;
+			const failed = results.find((r) => !r.ok);
+			if (failed !== void 0) return t("uploadFailed", { error: failed.code === "too-large" ? t("uploadTooLarge") : failed.error ?? t("uploadFailedUnknown") });
+			return t("uploadDone", { count: okCount });
+		}
+		//#endregion
+		//#region src/client/FileTree.tsx
+		/**
+		* The controlled file tree behind the files window's tree panel (TreePanel
+		* wraps it with the search box): a lazy VSCode-style tree rooted at the
+		* session's working directory. Levels load on expansion (one API call per
+		* directory), directories sort first, hidden entries render dimmed. The
+		* expansion set lives in the per-session state (owned by the caller); the
+		* caller also owns the refresh affordance — a `refreshTick` bump wipes the
+		* level cache so the visible set reloads.
+		*
+		* Row actions: hovering a row reveals an @-reference button on the far
+		* right (appends `@<relative path>` to the composer draft), and right-click
+		* opens a context menu: file rows offer the caller's open escapes
+		* (full-area preview / new tab, only when the callbacks exist) and a download
+		* action (the host serves raw bytes, binary-safe); directory rows offer
+		* "upload here"; every row can copy the relative or absolute path (with a
+		* brief "copied" label replacing the button after a successful write).
+		*
+		* Uploads start here (drag-drop or the context menu picker) but run in the
+		* caller: every request is reported through `onUploadRequest(dir, items)`
+		* (VSCode semantics — a drop on a file row targets its parent directory),
+		* and `busy` gates new drags while one upload is in flight.
+		*/
+		/** Root label: the last path segment (mirror of the host rootLabel). */
+		function baseName(path) {
+			const trimmed = path.replace(/[\\/]+$/, "");
+			const at = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
+			return at === -1 ? trimmed : trimmed.slice(at + 1);
+		}
+		/** The containing directory of an absolute row path (never the root edge here). */
+		function parentOf(path) {
+			const at = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+			return at <= 0 ? path : path.slice(0, at);
+		}
+		/** Only OS file drags belong to the upload surface; in-app drags (tab reorder,
+		*  split zones) must pass through untouched to the pane's tab-drop handling
+		*  (mirror of Sidebar.tsx's panel-host shield gate). */
+		function isFileDrag(event) {
+			return event.dataTransfer?.types.includes("Files") ?? false;
+		}
+		/**
+		* VS Code-style per-file-type icon tone. Files whose extension the editor
+		* already knows how to syntax-highlight get a colored glyph (TypeScript blue,
+		* Markdown green, JSON yellow, CSS/HTML orange, images purple, …); folders
+		* get their own warm tone; anything else stays the monochrome `currentColor`
+		* outline. The colors are CSS variables defined in sidebar.module.css under
+		* `body` (light) and `body[data-ds-dark-theme]` (dark), so a theme flip
+		* recolors the icons without a re-render.
+		*/
+		function fileIconClassOf(entry) {
+			switch (extOf(entry.name)) {
+				case "ts":
+				case "tsx":
+				case "mts":
+				case "cts": return sidebar_module_css_default.explorerIconTs;
+				case "js":
+				case "jsx":
+				case "mjs":
+				case "cjs": return sidebar_module_css_default.explorerIconJs;
+				case "json":
+				case "jsonc": return sidebar_module_css_default.explorerIconJson;
+				case "md":
+				case "markdown": return sidebar_module_css_default.explorerIconMd;
+				case "css": return sidebar_module_css_default.explorerIconCss;
+				case "html":
+				case "htm": return sidebar_module_css_default.explorerIconHtml;
+				case "png":
+				case "jpg":
+				case "jpeg":
+				case "gif":
+				case "svg":
+				case "webp":
+				case "ico":
+				case "bmp":
+				case "avif": return sidebar_module_css_default.explorerIconImage;
+				default: return;
+			}
+		}
+		/** How long the row's "copied" label stays after a successful write. */
+		const COPIED_MS = 1200;
+		/**
+		* The drop overlay's hero art: an arrow rising out of a notched tray
+		* (upload zone — the same glyph family as the toolbar's upload icon) and a
+		* tilted pair of photo cards (chat zone). Hand-drawn, colored in the
+		* palette of DSH's own native drop illustration (#3964FE / #9CE5ED) so the
+		* two zones read as one family; the drop overlay is this flow's one brand
+		* moment, so it gets color the rest of the UI never does.
+		*/
+		const UploadDropIllustration = () => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
+			width: "64",
+			height: "56",
+			viewBox: "0 0 64 56",
+			fill: "none",
+			"aria-hidden": "true",
+			children: [
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					d: "M32 28V11",
+					stroke: "#3964FE",
+					strokeWidth: "5",
+					strokeLinecap: "round"
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					d: "M23 20l9-9 9 9",
+					stroke: "#3964FE",
+					strokeWidth: "5",
+					strokeLinecap: "round",
+					strokeLinejoin: "round"
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					d: "M10 40a4 4 0 0 1 4-4h7l3.2 4.6a5 5 0 0 0 4.1 2.2h7.4a5 5 0 0 0 4.1-2.2L43 36h7a4 4 0 0 1 4 4v2a10 10 0 0 1-10 10H20A10 10 0 0 1 10 42v-2z",
+					fill: "#9CE5ED"
+				})
+			]
+		});
+		/** The chat zone's art: two tilted photo cards, each with its own
+		*  sun-over-mountains motif (the back card carries detail too, so it never
+		*  reads as a bare blob). */
+		const ChatDropIllustration = () => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
+			width: "96",
+			height: "76",
+			viewBox: "0 0 96 76",
+			fill: "none",
+			"aria-hidden": "true",
+			children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("g", {
+				transform: "rotate(-12 24 34)",
+				children: [
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("rect", {
+						x: "6",
+						y: "16",
+						width: "36",
+						height: "36",
+						rx: "10",
+						fill: "#9CE5ED"
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("circle", {
+						cx: "16",
+						cy: "27",
+						r: "3.5",
+						fill: "white"
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+						d: "M11 44l8-9 6 6 4-4 8 9",
+						stroke: "white",
+						strokeWidth: "3",
+						strokeLinecap: "round",
+						strokeLinejoin: "round"
+					})
+				]
+			}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("g", {
+				transform: "rotate(8 61 35)",
+				children: [
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("rect", {
+						x: "40",
+						y: "12",
+						width: "42",
+						height: "46",
+						rx: "10",
+						fill: "#3964FE"
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("circle", {
+						cx: "55",
+						cy: "27",
+						r: "5",
+						fill: "white"
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+						d: "M46 50l10-13 7 8 6-6 9 11",
+						stroke: "white",
+						strokeWidth: "3.5",
+						strokeLinecap: "round",
+						strokeLinejoin: "round"
+					})
+				]
+			})]
+		});
+		function FileTree(props) {
+			const { sessionId, cwd, expanded, onToggle, onOpenFile, onOpenFilePermanent, onOpenFileNewTab, onPreviewFile, openWithTargets, openWithPinned, openWithSsh, onOpenWith, onToggleOpenWithPin, onReferenceFile, refreshTick, onUploadRequest, busy } = props;
+			const [data, setData] = (0, react.useState)({});
+			const dataRef = (0, react.useRef)(data);
+			/** The row whose path was just copied ("copied" label replaces its button). */
+			const [copiedPath, setCopiedPath] = (0, react.useState)(null);
+			/** Open context menu: the row path (and whether it is a directory) plus the cursor position. */
+			const [rowMenu, setRowMenu] = (0, react.useState)(null);
+			/** Whether a file drag hovers the tree (drives the portaled drop zone). */
+			const [dropOver, setDropOver] = (0, react.useState)(false);
+			/** The directory a drag is hovering right now (null = body, drop to root). */
+			const [dropTarget, setDropTarget] = (0, react.useState)(null);
+			/**
+			* Enter/leave depth under the tree body. dragenter/dragleave fire per
+			* element along the drag path (and bubble), so a counter — DSH InputBar's
+			* own pattern — is the flicker-free signal; relatedTarget is unreliable
+			* across engines for drag events.
+			*/
+			const dropDepth = (0, react.useRef)(0);
+			/** Explorer body element; its viewport rect anchors the portaled drop zone. */
+			const bodyRef = (0, react.useRef)(null);
+			/** The body's viewport rect captured at drag entry (null = not measured). */
+			const [dropRect, setDropRect] = (0, react.useState)(null);
+			/** Context-menu "upload here" target directory. */
+			const pendingUploadDir = (0, react.useRef)(void 0);
+			const fileInputRef = (0, react.useRef)(null);
+			/** Reset all drag state (drop landed, the drag left, or a new drag begins). */
+			const resetDrop = () => {
+				dropDepth.current = 0;
+				setDropOver(false);
+				setDropTarget(null);
+				setDropRect(null);
+			};
+			/**
+			* Drop handlers: always swallow the event (a dropped file must never open
+			* in the browser), then report the target directory to the caller. A drop
+			* ends the drag without further leave events, so the depth resets here.
+			* The payload collection is async (dropped folders are traversed through
+			* their entry handles — captured synchronously inside uploadItemsFromDrop
+			* while the dataTransfer is still live), so the request rides a then.
+			*/
+			const reportDrop = (dir, data) => {
+				if (busy) return;
+				uploadItemsFromDrop(data).then((items) => {
+					if (items.length > 0) onUploadRequest(dir, items);
+				});
+			};
+			const handleBodyDrop = (event) => {
+				if (!isFileDrag(event)) return;
+				event.preventDefault();
+				event.stopPropagation();
+				resetDrop();
+				if (cwd !== void 0) reportDrop(cwd, event.dataTransfer);
+			};
+			const handleDirDrop = (event, dir) => {
+				if (!isFileDrag(event)) return;
+				event.preventDefault();
+				event.stopPropagation();
+				resetDrop();
+				reportDrop(dir, event.dataTransfer);
+			};
+			const handleFileDrop = (event, path) => {
+				handleDirDrop(event, parentOf(path));
+			};
+			const handleBodyDragEnter = (event) => {
+				if (!isFileDrag(event)) return;
+				event.preventDefault();
+				event.stopPropagation();
+				dropDepth.current += 1;
+				if (busy) return;
+				if (dropDepth.current === 1) {
+					const rect = bodyRef.current?.getBoundingClientRect();
+					setDropRect(rect === void 0 ? null : {
+						top: rect.top,
+						left: rect.left,
+						width: rect.width,
+						height: rect.height
+					});
+				}
+				setDropOver(true);
+			};
+			const handleBodyDragLeave = () => {
+				dropDepth.current = Math.max(0, dropDepth.current - 1);
+				if (dropDepth.current > 0) return;
+				setDropOver(false);
+				setDropTarget(null);
+				setDropRect(null);
+			};
+			const handleBodyDragOver = (event) => {
+				if (!isFileDrag(event)) return;
+				event.preventDefault();
+				event.stopPropagation();
+				event.dataTransfer.dropEffect = busy ? "none" : "copy";
+				if (busy) return;
+				setDropTarget(null);
+			};
+			const handleRowDragOver = (event, dir) => {
+				if (!isFileDrag(event)) return;
+				event.preventDefault();
+				event.stopPropagation();
+				event.dataTransfer.dropEffect = busy ? "none" : "copy";
+				if (busy) return;
+				setDropTarget(dir);
+			};
+			const storeLevel = (0, react.useCallback)((path, level) => {
+				dataRef.current = {
+					...dataRef.current,
+					[path]: level
+				};
+				setData(dataRef.current);
+			}, []);
+			const loadDir = (0, react.useCallback)((dir) => {
+				if (dataRef.current[dir] !== void 0) return;
+				storeLevel(dir, {});
+				api.fsTree({
+					sessionId,
+					cwd
+				}, dir).then((listing) => {
+					storeLevel(dir, { entries: listing.entries });
+				}).catch((error) => {
+					storeLevel(dir, { error: error instanceof Error ? error.message : String(error) });
+				});
+			}, [
+				sessionId,
+				cwd,
+				storeLevel
+			]);
+			const lastTick = (0, react.useRef)(refreshTick);
+			(0, react.useEffect)(() => {
+				if (lastTick.current === refreshTick) return;
+				lastTick.current = refreshTick;
+				dataRef.current = {};
+				setData({});
+			}, [refreshTick]);
+			(0, react.useEffect)(() => {
+				const root = cwd;
+				if (root === void 0) return;
+				loadDir(root);
+				for (const dir of expanded) loadDir(dir);
+			}, [
+				cwd,
+				expanded,
+				refreshTick,
+				loadDir
+			]);
+			/** Copy `text`; on success flip the row's copied label for a moment. */
+			const copyPath = (0, react.useCallback)((text, path) => {
+				(0, _deepseek_ai_dsh_client_ui_primitives.writeClipboard)(text).then((ok) => {
+					if (!ok) return;
+					setCopiedPath(path);
+					window.setTimeout(() => {
+						setCopiedPath((current) => current === path ? null : current);
+					}, COPIED_MS);
+				});
+			}, []);
+			/** The row's trailing actions: the @-reference button, or the copied label. */
+			const rowActions = (entry) => {
+				if (copiedPath === entry.path) return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+					className: sidebar_module_css_default.explorerCopied,
+					children: t("copied")
+				});
+				return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+					type: "button",
+					className: sidebar_module_css_default.explorerRef,
+					"aria-label": t("referenceFile"),
+					title: t("referenceFile"),
+					onClick: (event) => {
+						event.stopPropagation();
+						onReferenceFile(entry.path);
+					},
+					children: t("referenceFile")
+				});
+			};
+			const openRowMenu = (event, path, isDir) => {
+				event.preventDefault();
+				event.stopPropagation();
+				setRowMenu({
+					path,
+					isDir,
+					x: event.clientX,
+					y: event.clientY
+				});
+			};
+			/** Download a file through the host route (raw bytes, binary-safe). */
+			const downloadFile = (path) => {
+				const url = downloadUrl({
+					sessionId,
+					cwd
+				}, path);
+				const anchor = document.createElement("a");
+				anchor.href = url;
+				anchor.style.display = "none";
+				document.body.appendChild(anchor);
+				anchor.click();
+				anchor.remove();
+			};
+			/** The menu label of one open target: a locale key for the built-ins, the
+			*  user's own name for custom editors, plus the SSH hint in remote mode. */
+			const openWithLabelOf = (target) => {
+				const name = target.nameKey !== void 0 ? t(target.nameKey) : target.name;
+				return openWithSsh === true && !target.localOnly ? `${name}${t("openWithSshSuffix")}` : name;
+			};
+			/**
+			* The "open with" menu entries: the pinned targets as DIRECT rows, then
+			* the parent row with every target as a nested submenu. Both only render
+			* when the caller wired the feature and at least one target is visible.
+			*/
+			const openWithEntries = () => {
+				if (openWithTargets === void 0 || onOpenWith === void 0 || openWithTargets.length === 0) return [];
+				const pinnedIds = openWithPinned ?? [];
+				/** Brand marks for the built-ins (monochrome silhouettes, currentColor);
+				*  reveal gets the folder glyph, custom editors a generic code mark. */
+				const itemIcon = (target) => {
+					if (target.kind === "reveal") return /* @__PURE__ */ (0, react_jsx_runtime.jsx)(VscFolderOpened, { size: 16 });
+					if (target.id === "vscode") return /* @__PURE__ */ (0, react_jsx_runtime.jsx)(IconVscode16, { size: 16 });
+					if (target.id === "cursor") return /* @__PURE__ */ (0, react_jsx_runtime.jsx)(SiCursor, { size: 16 });
+					if (target.id === "zed") return /* @__PURE__ */ (0, react_jsx_runtime.jsx)(SiZedindustries, { size: 16 });
+					return /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCodeOutline16, { size: 16 });
+				};
+				const pinned = openWithTargets.filter((target) => pinnedIds.includes(target.id)).map((target) => ({
+					id: `open-with:${target.id}`,
+					label: openWithLabelOf(target),
+					icon: itemIcon(target)
+				}));
+				const submenu = openWithTargets.map((target) => {
+					const pinnedNow = pinnedIds.includes(target.id);
+					return {
+						id: `open-with:${target.id}`,
+						label: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+							className: sidebar_module_css_default.openWithLabel,
+							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								className: sidebar_module_css_default.openWithName,
+								children: openWithLabelOf(target)
+							}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								role: "button",
+								tabIndex: -1,
+								className: clsx(sidebar_module_css_default.openWithPin, pinnedNow && sidebar_module_css_default.openWithPinActive),
+								"aria-label": pinnedNow ? t("unpinOpenWith") : t("pinOpenWith"),
+								title: pinnedNow ? t("unpinOpenWith") : t("pinOpenWith"),
+								onClick: (event) => {
+									event.preventDefault();
+									event.stopPropagation();
+									onToggleOpenWithPin?.(target.id);
+								},
+								children: pinnedNow ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(VscPinned, { size: 14 }) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(VscPin, { size: 14 })
+							})]
+						}),
+						icon: itemIcon(target)
+					};
+				});
+				return [
+					...pinned,
+					...pinned.length > 0 ? [{
+						id: "open-with-sep",
+						type: "separator"
+					}] : [],
+					{
+						id: "open-with-menu",
+						label: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+							className: sidebar_module_css_default.openWithLabel,
+							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								className: sidebar_module_css_default.openWithName,
+								children: t("openWithMenu")
+							}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronRightOutline14, {
+								size: 14,
+								className: sidebar_module_css_default.openWithChevron,
+								"aria-hidden": true
+							})]
+						}),
+						icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(VscLinkExternal, { size: 16 }),
+						submenu
+					}
+				];
+			};
+			const root = cwd;
+			const renderLevel = (dir, depth) => {
+				const level = data[dir];
+				if (level === void 0) return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+					className: sidebar_module_css_default.explorerRow,
+					style: { paddingLeft: depth * 22 + 6 },
+					children: t("loading")
+				});
+				if (level.error !== void 0) return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+					className: clsx(sidebar_module_css_default.explorerRow, sidebar_module_css_default.explorerError),
+					style: { paddingLeft: depth * 22 + 6 },
+					children: level.error
+				});
+				return (level.entries ?? []).map((entry) => {
+					if (entry.isDir) {
+						const isOpen = expanded.includes(entry.path);
+						return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+							role: "button",
+							tabIndex: 0,
+							className: clsx(sidebar_module_css_default.explorerRow, sidebar_module_css_default.explorerDir, entry.hidden && sidebar_module_css_default.explorerHidden, dropTarget === entry.path && sidebar_module_css_default.explorerRowDropTarget),
+							style: { paddingLeft: depth * 22 + 6 },
+							onClick: () => {
+								onToggle(entry.path);
+							},
+							onKeyDown: (event) => {
+								if (event.key === "Enter" || event.key === " ") {
+									event.preventDefault();
+									onToggle(entry.path);
+								}
+							},
+							onDragOver: (event) => {
+								handleRowDragOver(event, entry.path);
+							},
+							onDrop: (event) => {
+								handleDirDrop(event, entry.path);
+							},
+							onContextMenu: (event) => {
+								openRowMenu(event, entry.path, true);
+							},
+							children: [
+								isOpen ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(VscFolderOpened, {
+									size: 14,
+									className: sidebar_module_css_default.explorerIconFolder
+								}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(VscFolder, {
+									size: 14,
+									className: sidebar_module_css_default.explorerIconFolder
+								}),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+									className: sidebar_module_css_default.explorerName,
+									children: entry.name
+								}),
+								entry.isSymlink && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconLinkOutline16, {
+									size: 12,
+									className: sidebar_module_css_default.explorerSymlink
+								}),
+								rowActions(entry)
+							]
+						}), isOpen && renderLevel(entry.path, depth + 1)] }, entry.path);
+					}
+					return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+						role: "button",
+						tabIndex: 0,
+						className: clsx(sidebar_module_css_default.explorerRow, entry.hidden && sidebar_module_css_default.explorerHidden, entry.broken && sidebar_module_css_default.explorerBroken, dropTarget === parentOf(entry.path) && sidebar_module_css_default.explorerRowDropTarget),
+						style: { paddingLeft: depth * 22 + 6 },
+						title: entry.broken ? `${entry.path} — ${t("brokenSymlink")}` : entry.path,
+						onClick: () => {
+							onOpenFile(entry.path);
+						},
+						onDoubleClick: () => {
+							onOpenFilePermanent?.(entry.path);
+						},
+						onKeyDown: (event) => {
+							if (event.key === "Enter" || event.key === " ") {
+								event.preventDefault();
+								onOpenFile(entry.path);
+							}
+						},
+						onDragOver: (event) => {
+							handleRowDragOver(event, parentOf(entry.path));
+						},
+						onDrop: (event) => {
+							handleFileDrop(event, entry.path);
+						},
+						onContextMenu: (event) => {
+							openRowMenu(event, entry.path, false);
+						},
+						children: [
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)(VscFile, {
+								size: 14,
+								className: fileIconClassOf(entry)
+							}),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								className: sidebar_module_css_default.explorerName,
+								children: entry.name
+							}),
+							entry.isSymlink && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconLinkOutline16, {
+								size: 12,
+								className: sidebar_module_css_default.explorerSymlink
+							}),
+							rowActions(entry)
+						]
+					}, entry.path);
+				});
+			};
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+				ref: bodyRef,
+				className: sidebar_module_css_default.explorerBody,
+				onDragEnter: handleBodyDragEnter,
+				onDragOver: handleBodyDragOver,
+				onDragLeave: handleBodyDragLeave,
+				onDrop: handleBodyDrop,
+				children: [
+					root === void 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+						className: sidebar_module_css_default.explorerEmpty,
+						children: t("noSession")
+					}) : /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+						className: clsx(sidebar_module_css_default.explorerRow, dropTarget === root && sidebar_module_css_default.explorerRowDropTarget),
+						style: { paddingLeft: 6 },
+						onDragOver: (event) => {
+							handleRowDragOver(event, root);
+						},
+						onDrop: (event) => {
+							handleDirDrop(event, root);
+						},
+						onContextMenu: (event) => {
+							openRowMenu(event, root, true);
+						},
+						children: [
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)(VscFolderOpened, {
+								size: 14,
+								className: sidebar_module_css_default.explorerIconFolder
+							}),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								className: sidebar_module_css_default.explorerName,
+								children: baseName(root)
+							}),
+							copiedPath === root ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								className: sidebar_module_css_default.explorerCopied,
+								children: t("copied")
+							}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+								type: "button",
+								className: sidebar_module_css_default.explorerRef,
+								"aria-label": t("referenceFile"),
+								title: t("referenceFile"),
+								onClick: (event) => {
+									event.stopPropagation();
+									onReferenceFile(root);
+								},
+								children: t("referenceFile")
+							})
+						]
+					}), data[root] !== void 0 && renderLevel(root, 1)] }),
+					dropOver && dropRect !== null && (0, react_dom.createPortal)(/* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+						className: sidebar_module_css_default.uploadDropZone,
+						style: {
+							top: dropRect.top + 2,
+							left: dropRect.left + 2,
+							width: dropRect.width - 4,
+							height: dropRect.height - 4
+						},
+						children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+							className: sidebar_module_css_default.uploadDropHero,
+							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(UploadDropIllustration, {}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+								className: sidebar_module_css_default.uploadDropZonePill,
+								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(IconUploadOutline16, { size: 14 }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+									className: sidebar_module_css_default.uploadDropZoneText,
+									children: dropTarget !== null ? t("uploadTo", { dir: dropTarget }) : t("uploadDropHint")
+								})]
+							})]
+						})
+					}), dropRect.left >= 200 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+						className: sidebar_module_css_default.uploadDropChatHint,
+						style: { width: dropRect.left },
+						children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+							className: sidebar_module_css_default.uploadDropChatCard,
+							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(ChatDropIllustration, {}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: t("uploadDropChat") })]
+						})
+					})] }), document.body),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
+						ref: fileInputRef,
+						type: "file",
+						multiple: true,
+						style: { display: "none" },
+						onChange: (event) => {
+							const dir = pendingUploadDir.current ?? root;
+							pendingUploadDir.current = void 0;
+							if (dir !== void 0 && !busy) onUploadRequest(dir, uploadItemsFromFiles(event.target.files ?? []));
+							event.target.value = "";
+						}
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Menu, {
+						open: rowMenu !== null,
+						onClose: () => {
+							setRowMenu(null);
+						},
+						items: [
+							...rowMenu?.isDir === false && onPreviewFile !== void 0 ? [{
+								id: "preview",
+								label: t("preview"),
+								icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(VscFolderOpened, { size: 16 })
+							}] : [],
+							...rowMenu?.isDir === false && onOpenFileNewTab !== void 0 ? [{
+								id: "open-new-tab",
+								label: t("openFileNewTab"),
+								icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCodeOutline16, { size: 16 })
+							}] : [],
+							...openWithEntries(),
+							...rowMenu?.isDir === false ? [{
+								id: "download",
+								label: t("download"),
+								icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconDownloadOutline16, { size: 16 })
+							}] : [],
+							...rowMenu?.isDir === true ? [{
+								id: "upload-here",
+								label: t("uploadHere"),
+								icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(IconUploadOutline16, { size: 16 })
+							}] : [],
+							{
+								id: "relative",
+								label: t("copyRelative"),
+								icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCopyOutline16, { size: 16 })
+							},
+							{
+								id: "absolute",
+								label: t("copyAbsolute"),
+								icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCopyOutline16, { size: 16 })
+							}
+						],
+						onSelect: (id) => {
+							const target = rowMenu;
+							if (target === null) return;
+							setRowMenu(null);
+							if (id === "open-new-tab") {
+								onOpenFileNewTab?.(target.path);
+								return;
+							}
+							if (id === "preview") {
+								onPreviewFile?.(target.path);
+								return;
+							}
+							if (id.startsWith("open-with:")) {
+								onOpenWith?.(id.slice(10), target.path);
+								return;
+							}
+							if (id === "download") {
+								downloadFile(target.path);
+								return;
+							}
+							if (id === "upload-here") {
+								pendingUploadDir.current = target.path;
+								fileInputRef.current?.click();
+								return;
+							}
+							copyPath(id === "relative" ? relativeTo(cwd ?? "", target.path) : target.path, target.path);
+						},
+						portal: true,
+						align: "start",
+						getAnchorRect: () => rowMenu === null ? null : new DOMRect(rowMenu.x, rowMenu.y, 0, 0),
+						anchor: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {})
+					})
+				]
+			});
+		}
+		//#endregion
+		//#region src/client/UploadOverlay.tsx
+		/**
+		* Full-window upload progress over the files tree: a blurred scrim (same mask
+		* token as the repo's Modal primitive) with a card showing the target
+		* directory, file-level progress, and a cancel button. Esc cancels too —
+		* clicking the scrim does not, so a stray click can never abort an upload.
+		* Rendered inside TreePanel (absolute inset-0), so it covers only the file
+		* window and never the conversation column.
+		*/
+		function UploadOverlay(props) {
+			const { dir, done, total, current, onCancel, cancelling } = props;
+			(0, react.useEffect)(() => {
+				const onKey = (event) => {
+					if (event.key === "Escape") onCancel();
+				};
+				window.addEventListener("keydown", onKey);
+				return () => {
+					window.removeEventListener("keydown", onKey);
+				};
+			}, [onCancel]);
+			const percent = total === 0 ? 0 : Math.min(100, Math.round(done / total * 100));
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+				className: sidebar_module_css_default.uploadOverlay,
+				role: "dialog",
+				"aria-modal": "true",
+				"aria-label": t("uploadingTo", { dir }),
+				children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+					className: sidebar_module_css_default.uploadOverlayCard,
+					children: [
+						/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+							className: sidebar_module_css_default.uploadOverlayTitle,
+							title: dir,
+							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(IconUploadOutline16, { size: 16 }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: t("uploadingTo", { dir }) })]
+						}),
+						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+							className: sidebar_module_css_default.uploadOverlayProgress,
+							role: "progressbar",
+							"aria-valuemin": 0,
+							"aria-valuemax": total,
+							"aria-valuenow": done,
+							"aria-valuetext": t("uploadProgress", {
+								done,
+								total,
+								name: current
+							}),
+							children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+								className: sidebar_module_css_default.uploadOverlayProgressFill,
+								style: { width: `${percent}%` }
+							})
+						}),
+						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+							className: sidebar_module_css_default.uploadOverlayStatus,
+							children: uploadHintText(done, total, current, dir, t)
+						}),
+						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+							type: "button",
+							className: sidebar_module_css_default.uploadOverlayCancel,
+							disabled: cancelling,
+							onClick: onCancel,
+							children: t("cancel")
+						})
+					]
+				})
+			});
+		}
+		//#endregion
+		//#region src/client/TreePanel.tsx
+		/**
+		* The files window's tree surface: a global file-name search box on top
+		* (300ms debounce; an in-flight search is aborted by the next keystroke)
+		* over either the shared controlled FileTree (empty query) or the flat
+		* result list (relative paths; click opens through the caller's primary
+		* side-split preview). Owns its refresh tick: the icon next to the search
+		* input clears
+		* the tree cache. EditorHost docks it as the tab's right panel (wrapped in
+		* a drag-resize handle) and provides the file context-menu open escapes.
+		*
+		* Uploads (header pickers, the tree's drag-drop and "upload here" menu)
+		* all funnel through here: one session at a time, shown in a full-window
+		* progress overlay with cancel, followed by a tree refresh and a one-line
+		* hint under the search row (success fades, failures and cancels stay).
+		* OS file drags are shielded at the panel host (see Sidebar.tsx), so a
+		* drop over the file window uploads here and never reaches DSH's chat
+		* intake.
+		*/
+		function TreePanel(props) {
+			const { sessionId, cwd, expanded, onToggle, onOpenFile, onOpenFilePermanent, onOpenFileNewTab, onPreviewFile, openWithTargets, openWithPinned, openWithSsh, onOpenWith, onToggleOpenWithPin, onReferenceFile, full } = props;
+			const [query, setQuery] = (0, react.useState)("");
+			const [results, setResults] = (0, react.useState)(null);
+			const [error, setError] = (0, react.useState)(null);
+			const [refreshTick, setRefreshTick] = (0, react.useState)(0);
+			/** One-line upload status under the search row ('' hides the hint). */
+			const [uploadStatus, setUploadStatus] = (0, react.useState)("");
+			/** Whether the status line is a failure/cancel (error color, stays visible). */
+			const [uploadFailed, setUploadFailed] = (0, react.useState)(false);
+			/** The in-flight upload session (null → no overlay, buttons enabled). */
+			const [upload, setUpload] = (0, react.useState)(null);
+			/** True between the cancel click and the session settling (button disabled). */
+			const [cancelling, setCancelling] = (0, react.useState)(false);
+			/** Set by cancelUpload; the settle path shows 'upload cancelled' instead of
+			*  summarizing the partial results. */
+			const cancelledRef = (0, react.useRef)(false);
+			const fileInputRef = (0, react.useRef)(null);
+			const folderInputRef = (0, react.useRef)(null);
+			/** Start one upload session into `dir` (absolute, inside the workspace). */
+			const startUpload = (dir, items) => {
+				if (items.length === 0 || cwd === void 0 || upload !== null) return;
+				cancelledRef.current = false;
+				const controller = new AbortController();
+				setUploadFailed(false);
+				setUploadStatus(uploadHintText(0, items.length, "", dir, t));
+				setUpload({
+					dir,
+					done: 0,
+					total: items.length,
+					current: "",
+					controller
+				});
+				uploadToDir({
+					sessionId,
+					cwd
+				}, dir, items, (done, total, current) => {
+					if (current !== "") setUploadStatus(uploadHintText(done, total, current, dir, t));
+					setUpload((session) => session === null ? session : {
+						...session,
+						done,
+						total,
+						current
+					});
+				}, controller.signal).then((results) => {
+					setUpload(null);
+					setCancelling(false);
+					setRefreshTick((tick) => tick + 1);
+					if (cancelledRef.current) {
+						setUploadStatus(t("uploadCancelled"));
+						setUploadFailed(true);
+						return;
+					}
+					const status = summarizeResults(results, t);
+					setUploadStatus(status);
+					setUploadFailed(results.some((result) => !result.ok));
+					if (results.every((result) => result.ok)) window.setTimeout(() => {
+						setUploadStatus((current) => current === status ? "" : current);
+					}, UPLOAD_HINT_MS);
+				});
+			};
+			/** Cancel the in-flight upload (aborts the request; the host drops its temp). */
+			const cancelUpload = () => {
+				if (upload === null || cancelling) return;
+				cancelledRef.current = true;
+				setCancelling(true);
+				upload.controller.abort();
+			};
+			const folderInputProps = { webkitdirectory: "" };
+			const needle = query.trim();
+			(0, react.useEffect)(() => {
+				if (needle === "") {
+					setResults(null);
+					setError(null);
+					return;
+				}
+				const controller = new AbortController();
+				const timer = window.setTimeout(() => {
+					api.fsSearch({
+						sessionId,
+						cwd
+					}, needle, controller.signal).then((found) => {
+						setResults(found);
+						setError(null);
+					}).catch((failure) => {
+						if (controller.signal.aborted) return;
+						setResults(null);
+						setError(failure instanceof Error ? failure.message : String(failure));
+					});
+				}, 300);
+				return () => {
+					window.clearTimeout(timer);
+					controller.abort();
+				};
+			}, [
+				sessionId,
+				cwd,
+				needle
+			]);
+			const busy = upload !== null;
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+				className: clsx(sidebar_module_css_default.editorTreePanel, full === true && sidebar_module_css_default.editorTreePanelFull),
+				children: [
+					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+						className: sidebar_module_css_default.editorTreeSearch,
+						children: [
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
+								className: sidebar_module_css_default.editorSearchInput,
+								value: query,
+								placeholder: t("editorSearchPlaceholder"),
+								spellCheck: false,
+								onChange: (event) => {
+									setQuery(event.target.value);
+								}
+							}),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+								type: "button",
+								className: sidebar_module_css_default.iconButton,
+								"aria-label": t("refresh"),
+								title: t("refresh"),
+								onClick: () => {
+									setRefreshTick((tick) => tick + 1);
+								},
+								children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconRefreshOutline16, { size: 14 })
+							}),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+								type: "button",
+								className: sidebar_module_css_default.iconButton,
+								"aria-label": t("uploadFiles"),
+								title: t("uploadFiles"),
+								disabled: busy,
+								onClick: () => {
+									fileInputRef.current?.click();
+								},
+								children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(IconUploadOutline16, { size: 14 })
+							}),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+								type: "button",
+								className: sidebar_module_css_default.iconButton,
+								"aria-label": t("uploadFolder"),
+								title: t("uploadFolder"),
+								disabled: busy,
+								onClick: () => {
+									folderInputRef.current?.click();
+								},
+								children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderOpen16, { size: 14 })
+							}),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
+								ref: fileInputRef,
+								type: "file",
+								multiple: true,
+								style: { display: "none" },
+								onChange: (event) => {
+									if (cwd !== void 0) startUpload(cwd, uploadItemsFromFiles(event.target.files ?? []));
+									event.target.value = "";
+								}
+							}),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
+								ref: folderInputRef,
+								type: "file",
+								multiple: true,
+								...folderInputProps,
+								style: { display: "none" },
+								onChange: (event) => {
+									if (cwd !== void 0) startUpload(cwd, uploadItemsFromFiles(event.target.files ?? []));
+									event.target.value = "";
+								}
+							})
+						]
+					}),
+					uploadStatus !== "" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+						className: clsx(sidebar_module_css_default.editorSearchHint, uploadFailed && sidebar_module_css_default.editorError),
+						title: uploadStatus,
+						children: uploadStatus
+					}),
+					needle === "" ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(FileTree, {
+						sessionId,
+						cwd,
+						expanded,
+						onToggle,
+						onOpenFile,
+						onOpenFilePermanent,
+						onOpenFileNewTab,
+						onPreviewFile,
+						openWithTargets,
+						openWithPinned,
+						openWithSsh,
+						onOpenWith,
+						onToggleOpenWithPin,
+						onReferenceFile,
+						refreshTick,
+						onUploadRequest: startUpload,
+						busy
+					}) : /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+						className: sidebar_module_css_default.explorerBody,
+						children: [
+							error !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+								className: clsx(sidebar_module_css_default.editorSearchHint, sidebar_module_css_default.editorError),
+								children: error
+							}),
+							error === null && results === null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+								className: sidebar_module_css_default.editorSearchHint,
+								children: t("loading")
+							}),
+							error === null && results !== null && results.matches.length === 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+								className: sidebar_module_css_default.editorSearchHint,
+								children: t("editorSearchNoResults")
+							}),
+							error === null && results !== null && results.matches.map((rel) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+								type: "button",
+								className: sidebar_module_css_default.editorSearchResult,
+								title: rel,
+								onClick: () => {
+									onOpenFile(resolveSidebarPath(cwd, rel));
+								},
+								children: rel
+							}, rel)),
+							error === null && results?.truncated === true && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+								className: sidebar_module_css_default.editorSearchHint,
+								children: t("editorSearchTruncated")
+							})
+						]
+					}),
+					upload !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(UploadOverlay, {
+						dir: upload.dir,
+						done: upload.done,
+						total: upload.total,
+						current: upload.current,
+						onCancel: cancelUpload,
+						cancelling
+					})
+				]
+			});
+		}
+		//#endregion
+		//#region src/client/ExplorerRail.tsx
+		/**
+		* The persistent Explorer rail: the file tree column that lives to the LEFT of
+		* the tabbed workbench (VSCode's sidebar), inside the panel body. Unlike the
+		* old per-tab docked tree it is decoupled from any editor tab — it stays put
+		* while files open as tabs beside it, and closing every tab never hides it.
+		*
+		* It owns only the column chrome (a slim header with a collapse affordance and
+		* a right-edge drag handle) and wires the self-contained {@link TreePanel} to
+		* the store. Every open gesture (single click, double click, the context
+		* menu's "preview" / "open in new tab", search results) funnels through
+		* {@link openSidebarFile}, which dedupes per path and lands the tab in the
+		* active workbench pane — so a run of clicks accumulates distinct tabs and
+		* NEVER replaces a previously opened one (the reported "预览会覆盖旧标签").
+		*
+		* The "open with" surface mirrors the editor host: it reads the same
+		* pluginSettings['editor'] blob so a pin click or a settings edit re-renders
+		* the menu immediately.
+		*/
+		/** Stable empty blob for the editor pluginSettings read (a fresh `?? {}`
+		*  would change identity every snapshot and loop useSyncExternalStore). */
+		const EMPTY_PLUGIN_BLOB = {};
+		function ExplorerRail(props) {
+			const { ctx, store, sessionId, cwd, expanded, onToggleDir, onReferenceFile, width, onResize, onCollapse } = props;
+			const editorBlob = (0, react.useSyncExternalStore)((0, react.useCallback)((callback) => store.subscribe(callback), [store]), (0, react.useCallback)(() => store.getSnapshot().prefs.pluginSettings["editor"] ?? EMPTY_PLUGIN_BLOB, [store]));
+			const openWithConfig = (0, react.useMemo)(() => parseOpenWithConfig(editorBlob.openWith), [editorBlob]);
+			const openWithTargets = (0, react.useMemo)(() => resolveOpenWithTargets(openWithConfig), [openWithConfig]);
+			const openFile = (0, react.useCallback)((absolute) => {
+				if (sessionId === void 0) return;
+				openSidebarFile(ctx, store, sessionId, absolute);
+			}, [
+				ctx,
+				store,
+				sessionId
+			]);
+			const openWith = (targetId, absolute) => {
+				const target = openWithTargets.find((item) => item.id === targetId);
+				if (target === void 0) return;
+				if (target.kind === "reveal") {
+					api.openExternal({
+						action: "reveal",
+						path: absolute
+					}).catch((error) => {
+						console.error("open external failed", error);
+					});
+					return;
+				}
+				const url = openWithUrl(target, absolute, openWithConfig);
+				if (url === void 0) return;
+				api.openExternal({
+					action: "url",
+					url
+				}).catch((error) => {
+					console.error("open external failed", error);
+				});
+			};
+			const toggleOpenWithPin = (targetId) => {
+				updatePluginSettings(store, "editor", (blob) => {
+					const config = parseOpenWithConfig(blob.openWith);
+					const pinned = config.pinned.includes(targetId) ? config.pinned.filter((id) => id !== targetId) : [...config.pinned, targetId];
+					return {
+						...blob,
+						openWith: {
+							...config,
+							pinned
+						}
+					};
+				});
+			};
+			const [dragWidth, setDragWidth] = (0, react.useState)(null);
+			const dragRef = (0, react.useRef)(null);
+			const pendingWidthRef = (0, react.useRef)(0);
+			const dragBatcher = (0, react.useRef)(createFrameBatcher()).current;
+			(0, react.useEffect)(() => () => dragBatcher.dispose(), [dragBatcher]);
+			const liveWidth = dragWidth ?? width;
+			const onResizeStart = (event) => {
+				event.preventDefault();
+				event.currentTarget.setPointerCapture?.(event.pointerId);
+				dragRef.current = {
+					startX: event.clientX,
+					startWidth: liveWidth
+				};
+			};
+			const onResizeMove = (event) => {
+				const drag = dragRef.current;
+				if (drag === null) return;
+				pendingWidthRef.current = clampExplorerWidth(drag.startWidth + (event.clientX - drag.startX));
+				dragBatcher.schedule(() => setDragWidth(pendingWidthRef.current));
+			};
+			const onResizeEnd = (event) => {
+				const drag = dragRef.current;
+				if (drag === null) return;
+				dragBatcher.flushNow();
+				dragRef.current = null;
+				setDragWidth(null);
+				onResize(clampExplorerWidth(drag.startWidth + (event.clientX - drag.startX)));
+			};
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+				className: sidebar_module_css_default.explorerRail,
+				style: { width: liveWidth },
+				children: [
+					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+						className: sidebar_module_css_default.explorerRailHeader,
+						children: [
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderOpen16, { size: 14 }),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								className: sidebar_module_css_default.explorerRailTitle,
+								children: t("explorer")
+							}),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+								type: "button",
+								className: sidebar_module_css_default.iconButton,
+								"aria-label": t("explorerCollapse"),
+								title: t("explorerCollapse"),
+								onClick: onCollapse,
+								children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronLeftOutline14, { size: 14 })
+							})
+						]
+					}),
+					sessionId !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(TreePanel, {
+						full: true,
+						sessionId,
+						cwd,
+						expanded,
+						onToggle: onToggleDir,
+						onOpenFile: openFile,
+						onOpenFilePermanent: openFile,
+						onOpenFileNewTab: openFile,
+						onPreviewFile: openFile,
+						openWithTargets,
+						openWithPinned: openWithConfig.pinned,
+						openWithSsh: openWithSshActive(openWithConfig),
+						onOpenWith: openWith,
+						onToggleOpenWithPin: toggleOpenWithPin,
+						onReferenceFile
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+						className: sidebar_module_css_default.editorTreeResize,
+						role: "separator",
+						"aria-orientation": "vertical",
+						"aria-label": t("explorer"),
+						onPointerDown: onResizeStart,
+						onPointerMove: onResizeMove,
+						onPointerUp: onResizeEnd,
+						onPointerCancel: onResizeEnd
+					})
+				]
+			});
+		}
+		/** The collapsed rail: a thin strip offering a single affordance to bring the
+		*  file tree back. Kept beside the workbench so collapse never reflows the tab
+		*  area's right edge and the reopen control is always in the same place. */
+		function ExplorerRailCollapsed(props) {
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+				className: sidebar_module_css_default.explorerRailCollapsed,
+				children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+					type: "button",
+					className: sidebar_module_css_default.iconButton,
+					"aria-label": t("explorerExpand"),
+					title: t("explorerExpand"),
+					onClick: props.onExpand,
+					children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronRightOutline14, { size: 14 })
 				})
 			});
 		}
@@ -11726,7 +11716,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 				draggingRef.current = anyDragging;
 				if (!anyDragging) measureCenter();
 			}, [anyDragging, measureCenter]);
-			const clampWidth = (width) => Math.min(Math.max(280, Math.round(width)), Math.max(280, window.innerWidth - 280));
+			const clampWidth = (width) => Math.min(Math.max(280, Math.round(width)), maxPanelWidthFor(window.innerWidth));
 			const clampHeight = (height) => Math.min(Math.max(120, Math.round(height)), Math.max(120, window.innerHeight - 280));
 			/** Single writer for the layout-push variables: the app shell gives up
 			*  the panel's width/height while open (0 while collapsed) through
@@ -11843,7 +11833,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 						width = clampWidth(widthDrag.current.startWidth + (widthDrag.current.startX - event.clientX));
 						height = state?.bottomOpen === true ? Math.min(state.bottomHeight, window.innerHeight) : 0;
 					} else if (draggingBottom) {
-						width = Math.min(state?.width ?? 0, Math.max(280, window.innerWidth - 280));
+						width = Math.min(state?.width ?? 0, maxPanelWidthFor(window.innerWidth));
 						height = clampHeight(bottomDrag.current.startHeight + (bottomDrag.current.startY - event.clientY));
 					} else if (draggingCorner) {
 						width = clampWidth(cornerDrag.current.startWidth + (cornerDrag.current.startX - event.clientX));
@@ -11865,7 +11855,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 					dragCommitted.current = true;
 					stopDragScheduling();
 					const last = lastDragSize.current;
-					const adoptedWidth = !narrow && state?.panelOpen === true ? Math.min(last?.width ?? state?.width ?? 0, Math.max(280, window.innerWidth - 280)) : 0;
+					const adoptedWidth = !narrow && state?.panelOpen === true ? Math.min(last?.width ?? state?.width ?? 0, maxPanelWidthFor(window.innerWidth)) : 0;
 					const adoptedHeight = !narrow && state?.bottomOpen === true ? Math.min(last?.height ?? state?.bottomHeight ?? 0, window.innerHeight) : 0;
 					applyDrag(adoptedWidth, adoptedHeight);
 					draggingRef.current = false;
@@ -11875,7 +11865,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 				reset();
 			};
 			(0, react.useEffect)(() => {
-				const width = !narrow && snapshot.state?.panelOpen === true ? Math.min(snapshot.state.width, Math.max(280, window.innerWidth - 280)) : 0;
+				const width = !narrow && snapshot.state?.panelOpen === true ? Math.min(snapshot.state.width, maxPanelWidthFor(window.innerWidth)) : 0;
 				const height = !narrow && snapshot.state?.bottomOpen === true ? Math.min(snapshot.state.bottomHeight, window.innerHeight) : 0;
 				writeGeometry(width, height);
 			}, [
@@ -12111,7 +12101,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 						className: clsx(sidebar_module_css_default.panel, !state.panelOpen && sidebar_module_css_default.panelHidden),
 						"data-dsh-panel": true,
 						style: {
-							width: narrow ? "100vw" : Math.min(state.width, Math.max(280, window.innerWidth - 280)),
+							width: narrow ? "100vw" : Math.min(state.width, maxPanelWidthFor(window.innerWidth)),
 							bottom: narrow && keyboardInset > 0 ? `${keyboardInset}px` : void 0
 						},
 						"data-dragging": anyDragging || void 0,
@@ -12153,9 +12143,28 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 									abortDrag(() => setDraggingWidth(false));
 								}
 							}),
-							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+							/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 								className: sidebar_module_css_default.panelBody,
-								children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(Workbench, {
+								children: [snapshot.prefs.tabsEnabled["editor"] !== false && (state.explorerOpen ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(ExplorerRail, {
+									ctx,
+									store,
+									sessionId,
+									cwd,
+									expanded: state.expanded,
+									onToggleDir: (path) => {
+										store.reduce((s) => toggleExpanded(s, path));
+									},
+									onReferenceFile: referenceInChat,
+									width: state.explorerWidth,
+									onResize: (width) => {
+										store.reduce((s) => setExplorerWidth(s, width));
+									},
+									onCollapse: () => {
+										store.reduce(toggleExplorer);
+									}
+								}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(ExplorerRailCollapsed, { onExpand: () => {
+									store.reduce(toggleExplorer);
+								} })), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(Workbench, {
 									state,
 									newTabOptions: buildNewTabOptions(state, ctx, {
 										sessionId,
@@ -12166,7 +12175,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 									renderTab,
 									getTabIcon: tabIconOf,
 									getTabBadge: tabBadgeOf
-								})
+								})]
 							}),
 							!narrow && state.panelOpen && state.bottomOpen && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 								className: sidebar_module_css_default.cornerHandle,
@@ -12241,7 +12250,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 									if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
 									const { startY, startHeight } = bottomDrag.current;
 									const height = clampHeight(startHeight + (startY - event.clientY));
-									scheduleDrag(Math.min(state.width, Math.max(280, window.innerWidth - 280)), height);
+									scheduleDrag(Math.min(state.width, maxPanelWidthFor(window.innerWidth)), height);
 								},
 								onPointerUp: (event) => {
 									if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
@@ -12250,7 +12259,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
 									event.currentTarget.releasePointerCapture(event.pointerId);
 									const { startY, startHeight } = bottomDrag.current;
 									const height = clampHeight(startHeight + (startY - event.clientY));
-									commitDrag(Math.min(state.width, Math.max(280, window.innerWidth - 280)), height, (s) => setBottomHeight(s, height));
+									commitDrag(Math.min(state.width, maxPanelWidthFor(window.innerWidth)), height, (s) => setBottomHeight(s, height));
 									setDraggingBottom(false);
 								},
 								onPointerCancel: (event) => {

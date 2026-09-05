@@ -25,32 +25,36 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const { transformKernelBootWatchdog, markers } = require('../lib/patch-adapters');
+const { transformKernelBootWatchdog, toPristineSource, markers } = require('../lib/patch-adapters');
 const { PATCH_SPECS } = require('../lib/patch-registry');
 const { KERNEL_WEB_INDEX_REL, resolvePatchTargets } = require('../lib/patch-target-resolver');
 
-const MARKER = 'dsh-desktop compat: kernel web boot watchdog';
+const MARKER = markers.KERNEL_BOOT_WATCHDOG_MARKER;
 
-// pristine 源选择：.tmp-rc2-stage（应用/boot 链碰不到）优先；缺失回退
-// payload 镜像（可能被沙箱 boot 链原位打补丁——此时锚点用例会 already）。
-const PRISTINE_PRIMARY = path.join(
-  __dirname, '..', '..', '..', '.tmp-rc2-stage',
-  'node_modules', '@deepseek-ai', 'dsh-web-frontend', 'dist', 'index.html',
-);
-const PRISTINE_FALLBACK = path.join(
-  __dirname, '..', '..', '..', 'dsh-tauri', 'package-payload', 'dsh-desktop',
-  'node_modules', '@deepseek-ai', 'dsh-web-frontend', 'dist', 'index.html',
-);
+// 靶文件候选：dev 安装树优先（与运行时同源），其次打包 payload 镜像。
+// 两处都会被 boot 链 / stage-payload 就地注入看门狗，故拿到字节后统一走
+// toPristineSource 剥回 pristine —— 不再依赖「某个目录恰好没被碰过」。
+// 早前这里以 .tmp-rc2-stage 为主、payload 镜像为备：前者已不再包含该包，
+// 后者是补丁态，于是「必须 changed」退化成 already，后续六条提不到注入 script
+// 块连带 TypeError。
+const TARGET_CANDIDATES = [
+  path.join(__dirname, '..', '..', 'node_modules', '@deepseek-ai', KERNEL_WEB_INDEX_REL),
+  path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'package-payload', 'dsh-desktop',
+    'node_modules', '@deepseek-ai', KERNEL_WEB_INDEX_REL),
+];
+
+const TARGET = TARGET_CANDIDATES.find((f) => fs.existsSync(f)) || null;
 
 function pristineSrc() {
-  return fs.readFileSync(fs.existsSync(PRISTINE_PRIMARY) ? PRISTINE_PRIMARY : PRISTINE_FALLBACK, 'utf8');
+  assert.ok(TARGET, '找不到 dsh-web-frontend dist/index.html 靶文件（dev 树与 payload 镜像均缺失）');
+  return toPristineSource('kernel-web-boot-watchdog', fs.readFileSync(TARGET, 'utf8'));
 }
 
 // ---------------------------------------------------------------------------
-// 1-3：锚点命中 pristine / 语法合法 / 幂等与失配。
+// 1-3：锚点命中真实靶字节 / 语法合法 / 幂等与失配。
 // ---------------------------------------------------------------------------
 
-test('锚点命中 pristine 源（版本漂移哨兵）', () => {
+test('锚点命中真实靶字节（版本漂移哨兵）', () => {
   const r = transformKernelBootWatchdog(pristineSrc(), 'index.html');
   assert.strictEqual(r.status, 'changed', `pristine 必须命中锚点，得 ${r.status}: ${r.detail || ''}`);
   assert.ok(r.src.includes(MARKER), '产物应含 marker 注释');

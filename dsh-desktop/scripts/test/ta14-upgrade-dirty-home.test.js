@@ -294,14 +294,32 @@ test('reinstall：脏现场并存 → installBuiltinPresets + compositionPreflig
 });
 
 test('reinstall-static：NSIS 升级链与卸载器保留契约（静态断言）', () => {
-  const nsh = fs.readFileSync(path.join(appDir, 'uninstaller', 'installer.nsh'), 'utf8');
-  assert.ok(nsh.includes('/KEEP_APP_DATA'), 'NSIS 升级链必须传 /KEEP_APP_DATA');
-  assert.ok(nsh.includes('--updated'), 'NSIS 升级链必须传 --updated');
-  assert.ok(nsh.includes('Uninstall_DSH_Desktop.exe'), '旧卸载器覆盖目标必须是自定义卸载器');
-  const cs = fs.readFileSync(path.join(appDir, 'uninstaller', 'DSH_Desktop_Uninstaller.cs'), 'utf8');
-  assert.ok(/KEEP_APP_DATA/.test(cs), '卸载器必须识别 KEEP_APP_DATA 契约');
-  assert.ok(cs.includes('updated'), '卸载器必须识别 --updated 契约');
-  assert.ok(cs.includes('DSH Desktop'), '卸载器必须认识旧 Electron userData 目录名（%APPDATA%\\DSH Desktop 残留清理面）');
+  // 靶迁移（2026-09-05 定性）：本项原本读 dsh-desktop/uninstaller/{installer.nsh,
+  // DSH_Desktop_Uninstaller.cs}，而整目录已被 commit 02981194（一个无关的
+  // workspace-chip flash 修复）连带删除且未搬家 ⇒ 本用例从那天起始终 ENOENT。
+  // Electron 线的自定义卸载器已不再是交付面；保数据契约现在的活体实现是
+  // Tauri 侧 installer-template.nsi 的 $UpdateMode 守卫（menu.rs 注释亦指向它）。
+  const nsi = path.join(REPO_ROOT, 'dsh-tauri', 'src-tauri', 'src', 'app', 'nsis', 'installer-template.nsi');
+  assert.ok(fs.existsSync(nsi), `升级链模板不在位：${nsi}`);
+  const src = fs.readFileSync(nsi, 'utf8');
+
+  // 1) /UPDATE 开关必须被安装与卸载两侧都解析（只一侧 = 升级时被当成真卸载）。
+  const getOpts = (src.match(/\$\{GetOptions\} \$CMDLINE "\/UPDATE" \$UpdateMode/g) || []).length;
+  assert.ok(getOpts >= 2, `/UPDATE 应被安装与卸载两侧解析，实际 ${getOpts} 处`);
+
+  // 2) 升级时回头复跑旧卸载器必须带 /UPDATE（不带 → 旧卸载器清用户数据）。
+  assert.match(src, /StrCpy \$R1 "\$R1 \/UPDATE"/, '复跑旧卸载器必须追加 /UPDATE');
+
+  // 3) 删用户数据必须同时满足「用户勾选」+「非升级」两个条件（只看勾选是
+  //    v0.5.0 实错根因：升级静默走到卸载尾段就把 %APPDATA% 清了）。
+  const andIdx = src.indexOf('${AndIf} $UpdateMode <> 1');
+  const rmIdx = src.indexOf('RmDir /r "$APPDATA');
+  assert.ok(andIdx > 0, '删数据分支必须带 $UpdateMode <> 1 的 AndIf 守卫');
+  assert.ok(rmIdx > andIdx, '$APPDATA 删除必须落在该守卫之后（不得先删后判）');
+
+  // 4) 自启项在升级时必须保留（否则升级后开机不自启，静默行为变更）。
+  assert.match(src, /\$\{If\} \$UpdateMode <> 1\s*\n\s*DeleteRegValue HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Run"/,
+    'Run 键清理应被 $UpdateMode <> 1 包裹');
 });
 
 // ---------------------------------------------------------------------------

@@ -38,50 +38,14 @@ const IMPL_SOURCES = [
   path.join(__dirname, '..', '..', 'profile-bundle-heal.js'),
 ].map((f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } });
 
-const PRISTINE_RC2 = path.join(__dirname, '..', '..', '..', '.tmp-rc2-stage', 'node_modules');
-// 桌面壳自身 node_modules（postinstall/patch-deps 不碰 @openai/codex 等桌面独有
-// 依赖，故对这类补丁是 pristine 源，供 firstTargetFile 回退定位）。
-const PATCHED_DESKTOP = path.join(__dirname, '..', '..', 'node_modules');
-// 0.1.2-alpha.1：重定位补丁的目标包（dsh-api-session-controller / dsh-api-settings-
-// controller / dsh-client-ui-slots 等）不在 .tmp-rc2-stage（旧内核）中，回滚审计需
-// 回退到 .tmp-kernel 的 pristine 构建产物（built lib）定位目标。
-const KERNEL_BUILD = path.join(__dirname, '..', '..', '..', '.tmp-kernel');
-let KERNEL_BY_NAME = null;
-function kernelTarget(pkgRel) {
-  if (KERNEL_BY_NAME === null) {
-    try {
-      const inv = JSON.parse(fs.readFileSync(path.join(KERNEL_BUILD, '.dsh-inventory.json'), 'utf8'));
-      KERNEL_BY_NAME = new Map(inv.map((p) => [p.name, p.dir]));
-    } catch { KERNEL_BY_NAME = new Map(); }
-  }
-  const parts = String(pkgRel).split(path.sep);
-  const rec = KERNEL_BY_NAME.get('@deepseek-ai/' + parts[0]);
-  if (!rec || typeof rec !== 'string') return null;
-  return path.join(KERNEL_BUILD, rec, ...parts.slice(1));
-}
+// pristine 靶点定位统一走 pristine-kernel-roots（候选闭包树 → 内核构建产物 →
+// 桌面壳独有依赖）。过去这里自己抄了一份 .tmp-rc2-stage 路径且用裸 readdirSync：
+// 该一次性装配树被清理后，本文件不是「诚实报错」而是直接 ENOENT 崩掉，
+// 把整份回滚审计报告一起吞了。
+const { findPristineTarget, describePristineRoots } = require('../lib/pristine-kernel-roots');
 
 function firstTargetFile(spec) {
-  if (spec.layout === 'profile-boot-dirs') {
-    const lib = path.join(PRISTINE_RC2, '@deepseek-ai', 'dsh', 'lib');
-    const files = fs.readdirSync(lib).filter((f) => /^profile-boot-.*\.js$/.test(f));
-    return files.length ? path.join(lib, files[0]) : null;
-  }
-  const rels = spec.pkgRels && spec.pkgRels.length ? spec.pkgRels : [spec.pkgRel];
-  for (const rel of rels) {
-    const p = path.join(PRISTINE_RC2, '@deepseek-ai', rel);
-    if (fs.existsSync(p)) return p;
-  }
-  for (const rel of rels) {
-    const p = kernelTarget(rel);
-    if (p && fs.existsSync(p)) return p;
-  }
-  // 桌面壳独有依赖（@openai/codex 等非 @deepseek-ai scope 包）在内核 pristine 树
-  // 无源；postinstall/patch-deps 不碰它们，dsh-desktop/node_modules 对其是 pristine。
-  for (const rel of rels) {
-    const p = path.join(PATCHED_DESKTOP, rel);
-    if (fs.existsSync(p)) return p;
-  }
-  return null;
+  return findPristineTarget(spec);
 }
 
 /** 分类：实现源码是否为该 spec 提供了 FROM/OLD → NEW/TO 常量对（按 marker
@@ -150,7 +114,7 @@ test('审计 2：带 marker 的 transform，其 changed 产物含 marker（回�
   for (const spec of fileSpecs) {
     if (!spec.marker) continue;
     const file = firstTargetFile(spec);
-    assert.ok(file, `${spec.id} 缺 pristine 目标`);
+    assert.ok(file, `${spec.id} 缺 pristine 目标（可用根：${describePristineRoots()}）`);
     const src = fs.readFileSync(file, 'utf8');
     const r = spec.transform(src, file);
     if (r.status === 'changed') {
@@ -164,7 +128,9 @@ test('审计 2：带 marker 的 transform，其 changed 产物含 marker（回�
 });
 
 test('审计 3：root 应用器只碰 node_modules（npm ci 整体可恢复）', () => {
-  assert.equal(rootSpecs.length, 16);
+  // 17 = 16（旧基线）+ model-image-input（模型卡「支持图片输入」勾选，同靶
+  // dsh-client-ui-settings-models 的另一区段，仍只写 nm-roots 三棵树）。
+  assert.equal(rootSpecs.length, 17);
   for (const spec of rootSpecs) {
     assert.equal(spec.layout, 'nm-roots', `${spec.id} 应为 nm-roots 布局`);
     assert.equal(spec.wslLayout, 'nm-roots', `${spec.id} WSL 布局也应为 nm-roots`);

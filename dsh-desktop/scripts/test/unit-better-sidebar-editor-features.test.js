@@ -2,21 +2,27 @@
  * unit-better-sidebar-editor-features.test.js — side-ed 侧边栏编辑器增强
  * （括号配对 + 缩进折叠 + 查找替换）单测。
  *
- * 架构背景（房子规矩）：dsh-better-sidebar 是 vendored 社区插件，编辑器
- * chunk（lib/client-editor.js）无法离线重建 —— 走「src 权威源 + lib 等价
- * 内联」双轨。lib 中的内联实现位于 `dsh-editor-features` 两个 marker 之间，
- * 以 `dshEditorFeatures` IIFE 形态存在；src 侧对应
- * src/client/editor-features.ts。
+ * 架构背景（房子规矩）：本插件已能本地重建（package.json 的
+ * `build: rm -rf lib && tsc && tsdown`），“src 权威源 + lib 手工内联”双轨已终结
+ * —— lib/client-editor.js 就是 src/client/editor-features.ts 的构建产物，不再
+ * 需要 `dsh-editor-features:begin/end` 两个 marker 夹住的手工内联段（真实现已
+ * 经 src 编译在位，手工段反而会变成重复声明）。
+ *
+ * 两条取字节的路子（都是发行字节，不测手写副本）：
+ *  1) loadChunk()：实例化整个 chunk 工厂，取它原生导出的 __internals。
+ *     既能直测四个纯函数，又反向证明了「测试面确实挂在 chunk 导出上」。
+ *  2) loadFeaturesRegion()：tsdown 会保留 `//#region <源路径>` 定界，抠出
+ *     editor-features 区段单独求值 —— chunk 只导出 TextEditor/__internals，
+ *     而 editorFeatures() 组合与 ensureEditorFeaturesCss() 幂等需要直接调用它们。
  *
  * 覆盖四块：
- *  1) 纯函数实测：vm 提取 lib 内联 section（CodeMirror 绑定用 stub），
- *     直测 matchingBracketIndex / foldableBlocks / findMatchOffsets /
- *     computeReplacedText —— 测的就是发行字节。
- *  2) 组合形状：editorFeatures()（= 括号配对 + 折叠 + 查找）返回结构与
- *     src 的 [bracket, fold(3 项), find(2 项)] 对齐。
+ *  1) 纯函数实测：matchingBracketIndex / foldableBlocks / findMatchOffsets /
+ *     computeReplacedText（经路子 1）。
+ *  2) 组合形状：editorFeatures() = [括号, 折叠(3 项), 查找(2 项)]（路子 2）。
  *  3) CSS 注入幂等：带 document stub 跑 ensureEditorFeaturesCss（K28
  *     data-plugin-css 模式），两次调用只插一个 <style>。
- *  4) 产物/src 契约：锚点邻接、marker 唯一、导出面、接线点、canonical 键位。
+ *  4) 产物/src 契约：chunk 导出面、挂载点邻接与优先级、三特性关键标识、
+ *     src 导出面与 canonical 键位。
  *
  * 运行：node --test scripts/test/unit-better-sidebar-editor-features.test.js
  *（不依赖内核 / 真实 DOM / 网络；CodeMirror 绑定以 Proxy stub 顶替。）
@@ -37,62 +43,84 @@ const FEATURES_SRC = path.join(PLUGIN_DIR, 'src', 'client', 'editor-features.ts'
 const TEXT_EDITOR_SRC = path.join(PLUGIN_DIR, 'src', 'client', 'TextEditor.tsx');
 const CHUNK_ENTRY_SRC = path.join(PLUGIN_DIR, 'src', 'client', 'chunks', 'editor.tsx');
 
-const BEGIN = '/* dsh-editor-features:begin */';
-const END = '/* dsh-editor-features:end */';
+/** tsdown 产物里保留的源区段定界（构建期写入，用于把单个源的代码抓出来）。 */
+const REGION_HEAD = '//#region src/client/editor-features.ts';
 
-/** CodeMirror 绑定替身：任意取属性/调用/构造都返回可链式透传的函数。 */
-function cmStub() {
+/** 区段可能引用的外部绑定（构建后由工厂顶部的 require 提供）。
+ *  多注入无害（区段内同名声明会遮蔽沙箱全局），少一个就 ReferenceError；
+ *  靠穷举源码引用集不靠谱（`extends WidgetType` 这种既非调用也非属性访问），
+ *  所以按 @codemirror/state + @codemirror/view 常见导出给完整一份。 */
+const CM_STUB_NAMES = [
+  'Decoration', 'EditorState', 'EditorSelection', 'EditorView', 'Range', 'RangeSet', 'StateEffect',
+  'StateField', 'Transaction', 'ViewPlugin', 'WidgetType', 'GutterMarker', 'keymap', 'gutter', 'Prec', 'theme',
+];
+
+/** 依赖替身：任意取属性 / 调用 / 构造都返回可链式透传的自身（`extends` 也吃得下）。 */
+function stubAny() {
   const fn = function () { return fn; };
   return new Proxy(fn, {
-    get: (t, k) => {
-      if (k === Symbol.toPrimitive) return () => '';
-      return fn;
-    },
+    get: (t, k) => (k === Symbol.toPrimitive ? () => '' : fn),
     apply: () => fn,
-    construct: () => ({}),
+    construct: () => fn,
   });
 }
 
-/** 从 lib 产物中提取 marker 之间的内联 section 并在沙箱中求值。 */
-function loadSection(sandboxExtra = {}) {
-  const lib = fs.readFileSync(EDITOR_CHUNK, 'utf8');
-  const begin = lib.indexOf(BEGIN);
-  const end = lib.indexOf(END);
-  assert.ok(begin !== -1, 'lib 应含 begin marker');
-  assert.ok(end !== -1 && end > begin, 'lib 应含 end marker 且在 begin 之后');
-  const section = lib.slice(begin, end + END.length);
+/**
+ * 路子 1：实例化发行 chunk。
+ * 产物形态：`globalThis.__dshChunks__["editor"] = (require) => { ... return module.exports }`，
+ * 所以给一个全 Proxy 的 require 就能拿到真实导出面。
+ */
+function loadChunk() {
+  const src = fs.readFileSync(EDITOR_CHUNK, 'utf8');
   const sandbox = {
-    Decoration: cmStub(),
-    EditorView: cmStub(),
-    GutterMarker: cmStub(),
-    ViewPlugin: cmStub(),
-    WidgetType: cmStub(),
-    StateEffect: cmStub(),
-    StateField: cmStub(),
-    keymap: cmStub(),
-    EditorSelection: cmStub(),
-    activeGutters: cmStub(),
-    gutters: cmStub(),
-    module: { exports: {} },
+    console, setTimeout, clearTimeout, Promise, TextEncoder, TextDecoder, URL, Buffer, process,
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(src, sandbox, { filename: 'client-editor.js' });
+  const factory = sandbox.__dshChunks__ && sandbox.__dshChunks__.editor;
+  assert.equal(typeof factory, 'function', 'chunk 应注册 __dshChunks__["editor"] 工厂');
+  const mod = factory(() => stubAny());
+  assert.ok(mod.__internals, '发行 chunk 应原生导出 __internals 测试面');
+  assert.equal(typeof mod.TextEditor, 'function', '发行 chunk 应导出 TextEditor');
+  return { mod, internals: mod.__internals };
+}
+
+/**
+ * 路子 2：抠出 editor-features 区段单独求值（取 chunk 未导出的内部函数）。
+ * 区段自包含设计：只依赖 @codemirror/state + @codemirror/view 核心机械件（已在
+ * chunk 内），外部名字就 CM_STUB_NAMES 七个 + document。
+ */
+function loadFeaturesRegion(sandboxExtra = {}) {
+  const src = fs.readFileSync(EDITOR_CHUNK, 'utf8');
+  const head = src.indexOf(REGION_HEAD);
+  assert.ok(head !== -1, `产物应含区段定界 ${REGION_HEAD}`);
+  const rest = src.slice(head + REGION_HEAD.length);
+  // 区段在工厂函数体内，定界行带缩进；取本区段自己的收尾 endregion。
+  const tail = rest.search(/\n[ \t]*\/\/\#endregion/);
+  assert.ok(tail !== -1, '区段应有 //#endregion 收尾');
+  const region = rest.slice(0, tail);
+  const sandbox = {
+    console, setTimeout: () => 0, clearTimeout: () => {},
+    requestAnimationFrame: () => 0, cancelAnimationFrame: () => {},
+    ...Object.fromEntries(CM_STUB_NAMES.map((n) => [n, stubAny()])),
     ...sandboxExtra,
   };
-  vm.runInNewContext(section, sandbox, { filename: 'client-editor.js#dsh-editor-features' });
-  const internals = sandbox.module.exports.__internals;
-  assert.ok(internals && typeof internals.matchingBracketIndex === 'function', 'section 应导出 __internals');
-  assert.equal(typeof sandbox.module.exports.editorFeaturesDsh, 'function', 'section 应导出 editorFeaturesDsh');
-  return { internals, mod: sandbox.module.exports, sandbox };
+  vm.runInNewContext(region, sandbox, { filename: 'client-editor.js#editor-features' });
+  assert.equal(typeof sandbox.editorFeatures, 'function', '区段应含 editorFeatures');
+  assert.equal(typeof sandbox.ensureEditorFeaturesCss, 'function', '区段应含 ensureEditorFeaturesCss');
+  return { sandbox, editorFeatures: sandbox.editorFeatures, ensureCss: sandbox.ensureEditorFeaturesCss };
 }
 
 // ---------------------------------------------------------------------------
 // 1) matchingBracketIndex：光标邻接括号对
 // ---------------------------------------------------------------------------
 test('bracket: 光标在 ( 之后 → 前括号向后配对', () => {
-  const { matchingBracketIndex } = loadSection().internals;
+  const { matchingBracketIndex } = loadChunk().internals;
   assert.deepEqual(plain(matchingBracketIndex('()', 1)), { bracket: 0, match: 1 });
 });
 
 test('bracket: 光标在 ) 之前（head 处即括号）→ 后括号向前配对', () => {
-  const { matchingBracketIndex } = loadSection().internals;
+  const { matchingBracketIndex } = loadChunk().internals;
   // head=1 处是 ')'，head-1 处是 '('：光标后括号优先级更高，两解等价一致。
   assert.deepEqual(plain(matchingBracketIndex('()', 1)), { bracket: 0, match: 1 });
   // 纯 forward 案例：head 处是 '('。
@@ -100,7 +128,7 @@ test('bracket: 光标在 ) 之前（head 处即括号）→ 后括号向前配�
 });
 
 test('bracket: 嵌套深度计数（多层同型括号）', () => {
-  const { matchingBracketIndex } = loadSection().internals;
+  const { matchingBracketIndex } = loadChunk().internals;
   const text = '{a{b}c}';
   // head=1 在第一个 '{' 之后 → 配对末尾的 '}'。
   assert.deepEqual(plain(matchingBracketIndex(text, 1)), { bracket: 0, match: 6 });
@@ -110,7 +138,7 @@ test('bracket: 嵌套深度计数（多层同型括号）', () => {
 });
 
 test('bracket: 混合类型括号互不误配', () => {
-  const { matchingBracketIndex } = loadSection().internals;
+  const { matchingBracketIndex } = loadChunk().internals;
   const text = '{[()]}';
   // head=2：head-1 处 '['（offset 1）向后配 ']'（offset 4）。
   assert.deepEqual(plain(matchingBracketIndex(text, 2)), { bracket: 1, match: 4 });
@@ -119,7 +147,7 @@ test('bracket: 混合类型括号互不误配', () => {
 });
 
 test('bracket: 不配对 / 空文本 / 越界 → null', () => {
-  const { matchingBracketIndex } = loadSection().internals;
+  const { matchingBracketIndex } = loadChunk().internals;
   assert.equal(matchingBracketIndex('(]', 1), null);
   assert.equal(matchingBracketIndex('abc', 1), null);
   assert.equal(matchingBracketIndex('', 0), null);
@@ -127,7 +155,7 @@ test('bracket: 不配对 / 空文本 / 越界 → null', () => {
 });
 
 test('bracket: 光标后字符优先于光标处字符（编辑器惯例）', () => {
-  const { matchingBracketIndex } = loadSection().internals;
+  const { matchingBracketIndex } = loadChunk().internals;
   // "f(a)" head=4：head-1 处是 ')'（offset 3），向前配对 '('（offset 1）。
   assert.deepEqual(plain(matchingBracketIndex('f(a)', 4)), { bracket: 3, match: 1 });
 });
@@ -136,7 +164,7 @@ test('bracket: 光标后字符优先于光标处字符（编辑器惯例）', ()
 // 2) foldableBlocks：缩进折叠块
 // ---------------------------------------------------------------------------
 test('fold: 两层缩进 → 每个 header 行各出一个块', () => {
-  const { foldableBlocks } = loadSection().internals;
+  const { foldableBlocks } = loadChunk().internals;
   const text = [
     'function f() {',
     '  if (x) {',
@@ -153,20 +181,20 @@ test('fold: 两层缩进 → 每个 header 行各出一个块', () => {
 });
 
 test('fold: 空行不打断块，尾随空行不计入', () => {
-  const { foldableBlocks } = loadSection().internals;
+  const { foldableBlocks } = loadChunk().internals;
   const text = ['a:', '  x = 1', '', '  y = 2', 'b:'].join('\n');
   assert.deepEqual(plain(foldableBlocks(text)), [{ fromLine: 1, toLine: 4 }]);
 });
 
 test('fold: 无子行 / 纯空文档 → 无块', () => {
-  const { foldableBlocks } = loadSection().internals;
+  const { foldableBlocks } = loadChunk().internals;
   assert.deepEqual(plain(foldableBlocks('single line')), []);
   assert.deepEqual(plain(foldableBlocks('')), []);
   assert.deepEqual(plain(foldableBlocks('\n\n\n')), []);
 });
 
 test('fold: 同级连续行归入同一块', () => {
-  const { foldableBlocks } = loadSection().internals;
+  const { foldableBlocks } = loadChunk().internals;
   const text = ['root:', '  a', '  b', '  c'].join('\n');
   assert.deepEqual(plain(foldableBlocks(text)), [{ fromLine: 1, toLine: 4 }]);
 });
@@ -175,14 +203,14 @@ test('fold: 同级连续行归入同一块', () => {
 // 3) findMatchOffsets / computeReplacedText：查找与替换
 // ---------------------------------------------------------------------------
 test('find: 基本匹配 + 大小写不敏感', () => {
-  const { findMatchOffsets } = loadSection().internals;
+  const { findMatchOffsets } = loadChunk().internals;
   assert.deepEqual(plain(findMatchOffsets('abXab', 'ab', true)), [0, 3]);
   assert.deepEqual(plain(findMatchOffsets('abXab', 'AB', false)), [0, 3]);
   assert.deepEqual(plain(findMatchOffsets('abXab', 'AB', true)), []);
 });
 
 test('find: 空 query → []，重叠不重复计', () => {
-  const { findMatchOffsets } = loadSection().internals;
+  const { findMatchOffsets } = loadChunk().internals;
   assert.deepEqual(plain(findMatchOffsets('aaa', '', true)), []);
   // "aa" in "aaa"：offset 0 命中后从 2 继续扫描 → 非 0/1 重叠。
   assert.deepEqual(plain(findMatchOffsets('aaa', 'aa', true)), [0]);
@@ -190,7 +218,7 @@ test('find: 空 query → []，重叠不重复计', () => {
 });
 
 test('replace: 全替换 + 计数；无匹配返回原文', () => {
-  const { computeReplacedText } = loadSection().internals;
+  const { computeReplacedText } = loadChunk().internals;
   assert.deepEqual(plain(computeReplacedText('aBcAbC', 'ab', 'X', false)), { text: 'XcXC', count: 2 });
   assert.deepEqual(plain(computeReplacedText('abc', 'zz', 'X', true)), { text: 'abc', count: 0 });
   assert.deepEqual(plain(computeReplacedText('aa', 'a', 'bb', true)), { text: 'bbbb', count: 2 });
@@ -200,15 +228,17 @@ test('replace: 全替换 + 计数；无匹配返回原文', () => {
 // 4) editorFeatures() 组合形状 + CSS 注入幂等（document stub）
 // ---------------------------------------------------------------------------
 test('editorFeatures(): 组合形状对齐 src（括号 + 折叠 3 项 + 查找 2 项）', () => {
-  const { mod } = loadSection();
-  const feat = mod.editorFeaturesDsh();
+  const { editorFeatures } = loadFeaturesRegion();
+  // 不过 plain()：stub 是函数 Proxy，带 toJSON 陷阱会让 JSON 往返递归；
+  // Array.isArray 与 length 都是跨 realm 安全的判定。
+  const feat = editorFeatures();
   assert.ok(Array.isArray(feat), '应返回扩展数组');
   assert.equal(feat.length, 3, '括号配对 + 折叠 + 查找替换');
   assert.ok(Array.isArray(feat[1]) && feat[1].length === 3, '折叠 = field + gutter + keymap');
   assert.ok(Array.isArray(feat[2]) && feat[2].length === 2, '查找 = plugin + keymap');
 });
 
-test('CSS 注入幂等：两次 editorFeaturesDsh() 只插一个 <style data-plugin-css>', () => {
+test('CSS 注入幂等：两次 editorFeatures() 只插一个 <style data-plugin-css>', () => {
   const appended = [];
   const el = () => ({ dataset: {}, textContent: '', className: '', style: {}, appendChild() {} });
   const documentStub = {
@@ -216,9 +246,9 @@ test('CSS 注入幂等：两次 editorFeaturesDsh() 只插一个 <style data-plu
     createElement: el,
     head: { appendChild: (n) => appended.push(n) },
   };
-  const { mod } = loadSection({ document: documentStub });
-  mod.editorFeaturesDsh();
-  mod.editorFeaturesDsh();
+  const { editorFeatures } = loadFeaturesRegion({ document: documentStub });
+  editorFeatures();
+  editorFeatures();
   assert.equal(appended.length, 1, 'style 标签只注入一次');
   assert.equal(appended[0].dataset.plugin, 'dsh-better-sidebar');
   assert.equal(appended[0].dataset.pluginCss, 'dsh-better-sidebar/editor-features');
@@ -228,34 +258,41 @@ test('CSS 注入幂等：两次 editorFeaturesDsh() 只插一个 <style data-plu
 });
 
 test('CSS 守卫：无 document 环境（vm）不抛错', () => {
-  // loadSection 的沙箱没有 document —— mod 导入/求值本身已验证不抛。
-  const { mod } = loadSection();
-  assert.ok(mod.editorFeaturesDsh, '导出可用');
+  // loadFeaturesRegion 默认沙箱没有 document —— 区段求值 + 调用本身已验证不抛。
+  const { editorFeatures, ensureCss } = loadFeaturesRegion();
+  assert.ok(editorFeatures, 'editorFeatures 可用');
+  assert.doesNotThrow(() => ensureCss(), '无 document 时 ensureEditorFeaturesCss 应静默返回');
 });
 
 // ---------------------------------------------------------------------------
-// 5) 产物契约：lib 内联接线与 marker 唯一性
+// 5) 产物契约：chunk 导出面、挂载点优先级、三特性标识
 // ---------------------------------------------------------------------------
-test('产物契约: lib 锚点邻接 + marker 唯一 + 导出面', () => {
+test('产物契约: chunk 导出面与挂载点邻接/优先级', () => {
   const lib = fs.readFileSync(EDITOR_CHUNK, 'utf8');
   const count = (needle) => lib.split(needle).length - 1;
-  assert.equal(count(BEGIN), 1, 'begin marker 唯一');
-  assert.equal(count(END), 1, 'end marker 唯一');
-  assert.equal(count('dshEditorFeatures.editorFeatures(),'), 1, '扩展挂载点唯一');
-  assert.equal(count('module.exports.__internals'), 1, '__internals 挂到 chunk exports');
-  assert.equal(count('module.exports.editorFeaturesDsh'), 1, 'editorFeaturesDsh 挂到 chunk exports');
-  assert.equal(count('activeGutters.of('), 1, '折叠 gutter 走 activeGutters（本构建无 gutter() 导出）');
-  // 锚点行（cmSurfaceTheme）的下一行即挂载点，且位于 keymap 之前保证按键优先级。
+  assert.equal(count('exports.__internals = __internals;'), 1, '__internals 挂到 chunk exports');
+  assert.equal(count('exports.TextEditor = TextEditor;'), 1, 'TextEditor 挂到 chunk exports');
+  assert.equal(count('editorFeatures(),'), 1, '扩展挂载点唯一');
+  assert.equal(count('//#region src/client/editor-features.ts'), 1, '区段定界唯一（构建保留）');
+  // 旧双轨的手工内联段不得回来：真实现已由 src 编译在位，同时存在 = 重复声明。
+  assert.equal(count('/* dsh-editor-features:begin */'), 0, '手工内联 marker 不得再现');
+  assert.equal(count('/* dsh-editor-features:end */'), 0, '手工内联 marker 不得再现');
+  // 折叠 gutter：旧手工内联走 activeGutters（当时构建无 gutter() 导出），真构建后
+  // 回归上游正规形态 gutter()，本包内应只出现一次。
+  assert.equal(count('gutter({'), 1, '折叠 gutter 走 gutter()');
+  // 挂载位置：扩展数组内、history() 之后与 tabSize 之前，保证三特性先于
+  // TextEditor 自己的 keymap 拿到按键（Mod-f / F3 / Escape 优先）。
   const lines = lib.split('\n');
-  const anchorIdx = lines.findIndex((l) => l.trimEnd().endsWith('cmSurfaceTheme,'));
-  assert.ok(anchorIdx !== -1, '锚点行存在');
-  assert.match(lines[anchorIdx + 1], /^\s*dshEditorFeatures\.editorFeatures\(\),$/, '挂载行紧跟锚点');
-  const anchorPos = lib.indexOf('dshEditorFeatures.editorFeatures(),');
-  const keymapPos = lib.indexOf("keymap.of([", anchorPos);
-  assert.ok(keymapPos === -1 || keymapPos > anchorPos, '挂载点在 TextEditor keymap 之前');
+  const mountIdx = lines.findIndex((l) => l.trim() === 'editorFeatures(),');
+  assert.ok(mountIdx !== -1, '挂载行存在');
+  assert.ok(lines[mountIdx - 1].includes('history(),'), '挂载行紧跟 history()');
+  assert.ok(lines[mountIdx + 1].includes('EditorState.tabSize.of(2),'), '挂载行先于 tabSize');
+  const mountPos = lib.indexOf('editorFeatures(),');
+  const keymapPos = lib.indexOf('keymap.of([', mountPos);
+  assert.ok(keymapPos > mountPos, '挂载点之后才有 keymap（TextEditor 自有 keymap 优先生效）');
 });
 
-test('产物契约: lib 内联含三特性的关键标识与样式 class', () => {
+test('产物契约: 发行字节含三特性的关键标识与样式 class', () => {
   const lib = fs.readFileSync(EDITOR_CHUNK, 'utf8');
   for (const needle of [
     'dsh-editor-bracket-match',
@@ -269,7 +306,7 @@ test('产物契约: lib 内联含三特性的关键标识与样式 class', () =>
     'foldState',
     'Ctrl-Shift-[',
   ]) {
-    assert.ok(lib.includes(needle), `内联应含 ${needle}`);
+    assert.ok(lib.includes(needle), `发行字节应含 ${needle}`);
   }
 });
 

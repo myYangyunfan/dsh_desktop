@@ -32,6 +32,16 @@ const {
   SLOT_ERROR_ISOLATE_MARKER,
   SLOT_ERROR_ISOLATE_MARKER_V2,
   HISTORY_PAGE_MARKER,
+  // 会话持久化族正向替换对（pristine 逆运算按引用登记，不在测试里抄第二份）。
+  PERSISTENCE_TORN_HEAD,
+  PERSISTENCE_FRAME_LOOP_OLD,
+  PERSISTENCE_FRAME_LOOP_NEW,
+  PERSISTENCE_WRITE_OLD,
+  PERSISTENCE_WRITE_NEW,
+  PERSISTENCE_COMPLETE_CHECK,
+  PERSISTENCE_COMPLETE_CHECK_NEW,
+  PERSISTENCE_CORRUPT_OLD,
+  PERSISTENCE_CORRUPT_NEW,
 } = require('./runtime-patches');
 
 // journal-stream 历史续读补丁（BUG1：不连续历史页断头锁死 hasMore）。
@@ -95,6 +105,10 @@ const {
   patchAtomicWriteOrphanLock,
   patchSettingsModelsResilience,
 } = require('./patch-settings-write-resilience');
+// 模型设置页逐模型「支持图片输入」勾选（v0.6.1 之后：某些多模态模型被当文本模型
+// 拒收图片——手声明路由不写 input 时 pi-ai 恒回落 ["text"]，门槛与图片投影双双
+// 按文本处理）。同靶 dsh-client-ui-settings-models/lib/client.js 的另一区段。
+const { patchModelImageInput } = require('./patch-model-image-input');
 // 插件 client bundle 到达瞬态失败重试（E2/问题A：bundle script ... failed to
 // load 单次 404/换内核即永久失败——浏览器半边 script 重试 + serveBundle 读盘
 // 瞬态码短重试）。
@@ -459,11 +473,12 @@ function transformSettingsSectionGuard(src, file) {
 }
 
 // ---------------------------------------------------------------------------
-// dsh-client-ui-workspace 搜索栏修复（原 applyWorkspaceSearchRailFix）。
-// 已退役（v0.6.0 alpha.2 重靶期，注册表条目已摘除）：0.1.2-alpha.2 上游原生
-// 包含同款守卫（guard + deps 双全，pristine :L1991 实证），补丁无增量。
-// 定义休眠保留（参照 session-event-bound / load-all-history 先例），仅供
-// 历史安装副本回滚审计与 rc.7 及更早形态参考。
+// 【休眠·已被上游取代】dsh-client-ui-workspace 搜索栏修复（原 applyWorkspaceSearchRailFix）。
+// 本函数未导出、未登记、无人调用（unit-patch-deps-coverage
+// 守卫 G 会钉住这一事实并要求此处必须有【休眠】标注）。休眠依据：v0.6.0 alpha.2
+// 重靶期摘除注册表条目，0.1.2-alpha.2 起上游原生包含同款守卫（guard + deps 双全，
+// pristine :L1991 实证），补丁无增量。定义保留仅供历史安装副本回滚审计与 rc.7
+// 及更早形态参考——不要据此以为现树还缺这个修复。
 // ---------------------------------------------------------------------------
 const WORKSPACE_SEARCH_RAIL_MARKER = 'dsh-desktop fix: rail search expansion';
 // rc.8 起上游原生包含了同款守卫（无 marker 注释的裸形态）：`if (!wide ||
@@ -870,8 +885,12 @@ const CREDENTIALS_HELPERS_ANCHOR = [
   '\treturn error?.code === "ENOENT";',
   '}',
 ].join('\n');
+// 注入体的两个函数头：既用来拼 CREDENTIALS_HELPERS_CODE，也用来做「已打」判定——
+// 必须是定义在位，裸标识符在改写后的调用行里同样出现（见 transformCredentialsInitialRetry）。
+const CREDENTIALS_STAT_HELPER_HEAD = 'async function statInitialWithRetry(filename) {';
+const CREDENTIALS_READ_HELPER_HEAD = 'async function readInitialDocumentWithRetry(filename) {';
 const CREDENTIALS_HELPERS_CODE = [
-  'async function statInitialWithRetry(filename) {',
+  CREDENTIALS_STAT_HELPER_HEAD,
   '\tfor (let attempt = 0; ; attempt += 1) {',
   '\t\ttry {',
   '\t\t\treturn await stat(filename);',
@@ -881,7 +900,7 @@ const CREDENTIALS_HELPERS_CODE = [
   '\t\t}',
   '\t}',
   '}',
-  'async function readInitialDocumentWithRetry(filename) {',
+  CREDENTIALS_READ_HELPER_HEAD,
   '\tfor (let attempt = 0; ; attempt += 1) {',
   '\t\ttry {',
   '\t\t\treturn await readFile(filename, "utf8");',
@@ -897,13 +916,25 @@ const CREDENTIALS_HELPERS_CODE = [
 ].join('\n');
 
 function transformCredentialsInitialRetry(src, file) {
-  if (src.includes(CREDENTIALS_INITIAL_RETRY_MARKER) && src.includes('readInitialDocumentWithRetry')) return { status: 'already' };
-  if (!src.includes(CREDENTIALS_LOAD_INITIAL_OLD) || !src.includes(CREDENTIALS_OWNER_STAT_OLD) || !src.includes(CREDENTIALS_HELPERS_ANCHOR)) {
+  // 「已打」必须三处注入全部在位，且注入体是按函数头（定义）而不是裸标识符判定。
+  // 旧判据写的是 src.includes('readInitialDocumentWithRetry')，而这个词在改写后的
+  // 调用行里同样出现：实测「调用行在、注入体被删」的孤儿态会被判 already 永不重打，
+  // 而该文件一加载就 ReferenceError: readInitialDocumentWithRetry is not defined ——
+  // 正是本补丁要修的 K1 症状本身。
+  const hasHelperDefs = src.includes(CREDENTIALS_STAT_HELPER_HEAD) && src.includes(CREDENTIALS_READ_HELPER_HEAD);
+  if (src.includes(CREDENTIALS_INITIAL_RETRY_MARKER) && hasHelperDefs
+    && src.includes(CREDENTIALS_LOAD_INITIAL_NEW) && src.includes(CREDENTIALS_OWNER_STAT_NEW)) return { status: 'already' };
+  // 只要有一处还能补就不算锚点丢失。旧实现要求三个锚点同时在场才动手，于是
+  // 「只丢一处」的半补丁态直接 anchor-missing 跳过，同样永远不会被修好。
+  if (!src.includes(CREDENTIALS_LOAD_INITIAL_OLD) && !src.includes(CREDENTIALS_OWNER_STAT_OLD)
+    && !(src.includes(CREDENTIALS_HELPERS_ANCHOR) && !hasHelperDefs)) {
     return { status: 'anchor-missing', detail: '未找到 credentials 首读锚点（版本可能已变更），跳过 ' + file };
   }
-  let out = src.replace(CREDENTIALS_LOAD_INITIAL_OLD, CREDENTIALS_LOAD_INITIAL_NEW);
-  out = out.replace(CREDENTIALS_OWNER_STAT_OLD, CREDENTIALS_OWNER_STAT_NEW);
-  out = out.replace(CREDENTIALS_HELPERS_ANCHOR, CREDENTIALS_HELPERS_ANCHOR + '\n\n' + CREDENTIALS_HELPERS_CODE);
+  // 三处注入各自条件应用、缺哪补哪（已在位的跳过，保证幂等）。
+  let out = src;
+  if (out.includes(CREDENTIALS_LOAD_INITIAL_OLD)) out = out.replace(CREDENTIALS_LOAD_INITIAL_OLD, CREDENTIALS_LOAD_INITIAL_NEW);
+  if (out.includes(CREDENTIALS_OWNER_STAT_OLD)) out = out.replace(CREDENTIALS_OWNER_STAT_OLD, CREDENTIALS_OWNER_STAT_NEW);
+  if (!hasHelperDefs) out = out.replace(CREDENTIALS_HELPERS_ANCHOR, CREDENTIALS_HELPERS_ANCHOR + '\n\n' + CREDENTIALS_HELPERS_CODE);
   return { status: 'changed', src: out };
 }
 
@@ -1084,6 +1115,14 @@ const API_GATEWAY_ABSENT_INJECTION = [
   '\t\treturn toFetchHandler(apiProxy).fetch(request);',
 ].join('\n');
 
+// 【休眠·已失效】本函数未导出、未登记、无人调用（unit-patch-deps-coverage 守卫 G 会钉住这一
+// 事实并要求此处必须有标注）。失效依据（dev 树 vendor 全树 693 个 js 实测）：
+//   API_GATEWAY_ABSENT_ANCHOR 原样/空白归一命中均为 0；`apiProxy` 与包 `dsh-host-apiproxy`
+//   在现树已不存在（只剩 dsh-api-gateway）。即 E1 描述的「网关插件缺席 → 全接口裸 404」
+//   靶形态已随上游重构消失，接回注册表也只会 anchor-missing。
+// 若同类「每个面都报 transport failure … HTTP 404」再现：按 dsh-api-gateway 现体重锚，
+// 不要直接拿下面的旧锚点当真相。原根因链记录保留在上方注释里。
+// ---------------------------------------------------------------------------
 function transformApiGatewayAbsent(src, file) {
   // CRLF 归一化匹配（对齐 loader-isolation 先例）；写回保持原 EOL。
   const crlf = src.includes('\r\n');
@@ -1461,6 +1500,12 @@ const SESSION_EVENT_RUNNING_GUARD_INJECTION = [
   '\t\t\t\tif (this.running === true && this.events.length <= SESSION_EVENT_RUNNING_HARD_CAP) return;',
 ].join('\n');
 
+// 【休眠·已失效】未导出 / 未登记 / 无调用（守卫 G 钉住）。依据：现 vendor 全树里
+// `SESSION_EVENT_BOUND` 与旧 events 裁剪路径 0 命中，本补丁 7 个锚点中 5 个原样不
+// 在场（仅剩一个 23 字节的常量名同名片段），注入体里的 trimSuppressed /
+// SESSION_EVENT_RUNNING_HARD_CAP 在现树也 0 命中 —— Session events 保留机制已被上游整体重写。
+// 待跟项（**尚未实测，不得当作已修**）：K22 症状「流式期间上滚读历史被拉回底部」在新
+// 实现里是否复现，需先在真机复现后按新字节重锚，而不是恢复本函数。
 function transformSessionEventBound(src, file) {
   if (src.includes(SESSION_EVENT_BOUND_MARKER)) return { status: 'already' };
   const anchors = [SESSION_EVENT_BOUND_CONSTANTS_OLD, SESSION_EVENT_BOUND_DISPOSE_OLD, SESSION_EVENT_BOUND_DROP_OLD, SESSION_EVENT_BOUND_APPENDLIVE_OLD, SESSION_EVENT_BOUND_LOADOLDER_OLD];
@@ -1592,6 +1637,11 @@ const LOAD_ALL_HISTORY_SNAPSHOT_REPLACEMENT = [
   '\t\t\t\t\tloadAllLimitReached: this.loadAllLimitReached,',
 ].join('\n');
 
+// 【休眠·已被取代】未导出 / 未登记 / 无调用（守卫 G 钉住）。依据：现 vendor 树里
+// loadAllHistory / load-all-history 两个名字 0 命中，INSERT_ANCHOR 与 SNAPSHOT_REPLACEMENT
+// 原样不在场；「回溯更早历史」现由四条**活**规格承载：history-page-size /
+// chat-scroll-autoload-older / journal-prepend-continuity / conversation-assembly-resilience
+// （靶字节里 loadOlder 仍在 7 个文件在场）。本函数为 v0.6.0 时期的旧实现，保留仅供历史副本回滚审计。
 function transformLoadAllHistory(src, file) {
   if (src.includes(LOAD_ALL_HISTORY_MARKER)) return { status: 'already' };
   const missing = [];
@@ -1773,6 +1823,9 @@ const LOAD_ALL_HISTORY_UI_EN_REPLACEMENT = [
   '\t\t\t"chat.loadAllLimit": "Loaded {loaded} messages (limit reached — use \u201cLoad earlier\u201d for more)",',
 ].join('\n');
 
+// 【休眠·已被取代】未导出 / 未登记 / 无调用（守卫 G 钉住）。与 transformLoadAllHistory 同族：
+// 该按钮的 SIGNATURE_OLD / BUTTON_ANCHOR / INJECT_ANCHOR 已不在现字节里（零散子锚点仍在场，
+// 但 transform 要求全部命中），自动回溯已由 chat-scroll-autoload-older 接管，无需手点按钮。
 function transformLoadAllHistoryUi(src, file) {
   if (src.includes(LOAD_ALL_HISTORY_UI_MARKER)) return { status: 'already' };
   const anchors = [
@@ -1843,6 +1896,11 @@ const SKILL_UI_EN_REPLACEMENT = [
   '\t\t};',
 ].join('\n');
 
+// 【休眠·待重锚】未导出 / 未登记 / 无调用（守卫 G 钉住）。依据：SKILL_UI_TITLE_OLD 与
+// SKILL_UI_INSPECT_OLD 在现 vendor 树原样/空白归一均 0 命中（上游 skill 行文案已改），
+// 接回注册表只会 anchor-missing。后果面（诚实记录）：若 dsh-client-ui-skill 现字节仍含
+// 英文 title/Inspect 文案，则中文环境下的该处观感退化**当前无人负责**；要恢复需按现文体重写
+// 锚点并登记 PatchSpec，而不是直接改回本函数。与同文件的活规格 skill-dirs-compat 无关（后者只管目录）。
 /** skill 工具行汉化变换（幂等，锚点失配跳过；工具名与模型侧提示词不动）。 */
 function transformSkillUiZh(src, file) {
   if (src.includes(SKILL_UI_ZH_MARKER)) return { status: 'already' };
@@ -1935,6 +1993,9 @@ const SESSION_HEADER_SCAN_METHOD_INJECTION = [
 ].join('\n');
 
 const SESSION_HEADER_SCAN_READ_EXPR = 'this.compression === "zstd" ? await this.readFirstZstdLine(path, signal) : await this.readFirstLine(path, signal)';
+// K5 把 listArtifacts 的读表达式改写成缓存调用（唯一一处的调用形态，与注入体内
+// 的方法声明不重叠），逆运算按此常量还原，不另抄字面串。
+const SESSION_HEADER_SCAN_CACHED_CALL = 'await this.readHeaderLineCached(path, signal)';
 
 const SESSION_HEADER_SCAN_CAP_ANCHOR = '\t\t\t\tcontent = Buffer.concat([content, chunk.subarray(0, bytesRead)]);';
 const SESSION_HEADER_SCAN_CAP_INJECTION = [
@@ -1956,7 +2017,7 @@ function transformSessionHeaderScanGuard(src, file) {
   }
   let out = src;
   // 函数替换器：注入文本含 ${...} 模板字面量，规避 String.replace 对 $ 序列的替换语义。
-  out = out.replace(SESSION_HEADER_SCAN_READ_EXPR, () => 'await this.readHeaderLineCached(path, signal)');
+  out = out.replace(SESSION_HEADER_SCAN_READ_EXPR, () => SESSION_HEADER_SCAN_CACHED_CALL);
   out = out.replace(SESSION_HEADER_SCAN_MODULE_ANCHOR, () => SESSION_HEADER_SCAN_MODULE_INJECTION + '\n\n' + SESSION_HEADER_SCAN_MODULE_ANCHOR);
   out = out.replace(SESSION_HEADER_SCAN_METHOD_ANCHOR, () => SESSION_HEADER_SCAN_METHOD_INJECTION);
   out = out.replace(SESSION_HEADER_SCAN_CAP_ANCHOR, () => SESSION_HEADER_SCAN_CAP_INJECTION);
@@ -1980,10 +2041,20 @@ function transformSessionHeaderScanGuard(src, file) {
 // 损坏）；header 帧损坏仍致命（scanner 未建立即重抛）。listArtifacts 的
 // corrupt-guard 语义与 K5 的 header 扫描缓存均不受影响。
 //
+// v2 收窄（本轮）：降级额外要求「损坏帧就是最后一个帧」。commitRepair 是按
+// truncateTo 就地截磁盘文件的，v1 不区分位置 → 中部帧校验失败会把它之后的
+// 完好帧一并截掉，把“可读的历史”变成“少一截且不合 upstream 契约的历史”。
+//
 // 幂等 marker 单点注入（catch 分支注释），锚点失配自动退役。
 // 目标：dsh-session-persistence-jsonl/lib/index.js（PERSISTENCE_PKG_REL）。
 // ---------------------------------------------------------------------------
 const SESSION_LOAD_GRACEFUL_MARKER = 'dsh-desktop compat: degrade session load to last complete frame';
+// v2（本文件当前形态）：降级只允许落在「损坏帧就是最后一个帧」时。v1（0.5.4~
+// 0.6.1 在野副本）的 catch 不区分损坏帧位置，中帧损坏也返回 tornMarker，随后
+// commitRepair 按 truncateTo 把磁盘文件就地截断 —— 损坏帧之后的完好帧被连带
+// 销毁（打补丁前是抛错、历史完好保留）。上游 torn-tail 自身明文声明：
+// "A torn record in any earlier frame ... remains a hard corruption error."
+const SESSION_LOAD_GRACEFUL_MARKER_V2 = SESSION_LOAD_GRACEFUL_MARKER + ' (v2)';
 
 // 锚点全部取「上游 pristine 与 torn-tail 已应用形态共有的稳定行」，故本补丁
 // 既能在 pristine（.tmp-rc2-stage）命中，也能在 torn-tail/corrupt-guard/K5 已
@@ -2003,14 +2074,28 @@ const SESSION_LOAD_GRACEFUL_WRITE_OLD = '\t\t\t\tremainingFrames -= 1;';
 const SESSION_LOAD_GRACEFUL_WRITE_NEW = '\t\t\t\tremainingFrames -= 1;\n\t\t\t\tloadFrameIndex += 1;';
 
 const SESSION_LOAD_GRACEFUL_CATCH_OLD = '\t\t} catch (error) {\n\t\t\t/* v8 ignore next -- decoder failure plus concurrent abort is timing-dependent */\n\t\t\tif (signal?.aborted) signal.throwIfAborted();\n\t\t\tthrow error;\n\t\t} finally {';
+
+// 降级判定行：v1 形态（在野副本）与 v2 形态（末帧守卫）。两者在各自产物中唯
+// 一，且 v1→v2 就地升级只替换这一行 + marker，以保证升级产物与「pristine 全新
+// 应用」逐字节相同（否则逆运算要面对第三种形态）。
+const SESSION_LOAD_GRACEFUL_GUARD_V1 = '\t\t\tif (scanner !== void 0 && frames !== void 0) {';
+const SESSION_LOAD_GRACEFUL_GUARD_V2 = [
+  '\t\t\t// 收窄判定：仅当损坏帧就是最后一个帧时才降级。中帧损坏若照样返回',
+  '\t\t\t// tornMarker，commitRepair 会按 truncateTo 截盘，把该帧之后的完好事件一并',
+  '\t\t\t// 销毁（补丁前是抛错、不销毁）；torn-tail 自身亦声明 earlier frame 的撕裂',
+  '\t\t\t// 记录仍是硬错误。loadFrameIndex 指向当前处理帧，循环收尾后为',
+  '\t\t\t// frames.length（物理撕裂尾），两种都属「损坏落在尾巴上」，放行。',
+  '\t\t\tif (scanner !== void 0 && frames !== void 0 && (loadFrameIndex === void 0 || loadFrameIndex >= frames.length - 1)) {',
+].join('\n');
+
 const SESSION_LOAD_GRACEFUL_CATCH_NEW = [
   '\t\t} catch (error) {',
   '\t\t\t/* v8 ignore next -- decoder failure plus concurrent abort is timing-dependent */',
   '\t\t\tif (signal?.aborted) signal.throwIfAborted();',
-  '\t\t\t// ' + SESSION_LOAD_GRACEFUL_MARKER + ': 解码/校验失败降级为「加载到最后一个完整帧」——',
+  '\t\t\t// ' + SESSION_LOAD_GRACEFUL_MARKER_V2 + ': 解码/校验失败降级为「加载到最后一个完整帧」——',
   '\t\t\t// 返回已解码前缀 + tornMarker（指向首个损坏帧起始），由 commitRepair 截断损坏尾部',
   '\t\t\t// 并补 closers；console.warn 保留告警，不掩盖真实损坏（header 帧损坏仍重抛）。',
-  '\t\t\tif (scanner !== void 0 && frames !== void 0) {',
+  SESSION_LOAD_GRACEFUL_GUARD_V2,
   '\t\t\t\tconst corruptStart = loadFrameIndex !== void 0 && loadFrameIndex < frames.length ? frames[loadFrameIndex].start : void 0;',
   '\t\t\t\tconst truncateTo = corruptStart ?? (frames.length > 0 ? frames[frames.length - 1].end : 0);',
   '\t\t\t\tconsole.warn(`[dsh-session-persistence] degraded session load to last complete frame (byte ${truncateTo}): ${error instanceof Error ? error.message : String(error)}`);',
@@ -2028,8 +2113,25 @@ const SESSION_LOAD_GRACEFUL_CATCH_NEW = [
   '\t\t} finally {',
 ].join('\n');
 
+// 0.5.4~0.6.1 实际写盘的 v1 catch 体（仅供 pristine 逆运算识别在野副本）。
+// 从当前定义反推而不抄两份字面串：v1 与 v2 只差【守卫行 + marker】两处，其中
+// marker 差异又是 V2 = V1 + ' (v2)' 的定义性差异，所以反向拼回去就是历史字节。
+// 哨兵单测会拿真实在野副本断言本常量确实包含于其中，防止这里“推错历史”。
+const SESSION_LOAD_GRACEFUL_CATCH_LEGACY = SESSION_LOAD_GRACEFUL_CATCH_NEW
+  .split(SESSION_LOAD_GRACEFUL_GUARD_V2).join(SESSION_LOAD_GRACEFUL_GUARD_V1)
+  .split('// ' + SESSION_LOAD_GRACEFUL_MARKER_V2 + ':').join('// ' + SESSION_LOAD_GRACEFUL_MARKER + ':');
+
 function transformSessionLoadGraceful(src, file) {
-  if (src.includes(SESSION_LOAD_GRACEFUL_MARKER)) return { status: 'already' };
+  if (src.includes(SESSION_LOAD_GRACEFUL_MARKER_V2)) return { status: 'already' };
+  // 升级通道（关键）：transform 以 marker 短路做幂等，已经带 v1 catch 体的副本
+  // 永远进不了下方 fresh-apply 分支（catch 锚点已被 v1 吃掉）。担心于“重新 stage
+  // 也修不了在野安装”，这里就地把 v1 补成 v2：只换守卫行与 marker，其余不动。
+  if (src.includes(SESSION_LOAD_GRACEFUL_MARKER) && src.includes(SESSION_LOAD_GRACEFUL_GUARD_V1)) {
+    const upgraded = src
+      .replace(SESSION_LOAD_GRACEFUL_GUARD_V1, () => SESSION_LOAD_GRACEFUL_GUARD_V2)
+      .replace('// ' + SESSION_LOAD_GRACEFUL_MARKER + ':', () => '// ' + SESSION_LOAD_GRACEFUL_MARKER_V2 + ':');
+    return { status: 'changed', src: upgraded, note: 'v1-repair' };
+  }
   const missing = [];
   if (!src.includes(SESSION_LOAD_GRACEFUL_DECODER_OLD)) missing.push('decoder hoist anchor');
   if (!src.includes(SESSION_LOAD_GRACEFUL_SCANNER_OLD)) missing.push('scanner decl anchor');
@@ -2208,6 +2310,139 @@ function transformWorkspaceChipLabelHold(src, file) {
   return { status: 'changed', src: src.replace(WORKSPACE_CHIP_LABEL_ANCHOR, () => WORKSPACE_CHIP_LABEL_INJECTION) };
 }
 
+// ---------------------------------------------------------------------------
+// pristine 还原（版本漂移哨兵单测专用）。
+//
+// 为什么需要：漂移哨兵要一份「未打补丁」的靶字节来跑 changed 分支与注入行为。
+// 早前它们直接抓 .tmp-rc2-stage / package-payload 副本当 pristine，但这两处都会
+// 被打包链就地打补丁（stage-payload 之后必是补丁态），于是 changed 断言退化成
+// already 假红 —— 更糟的是真漂移发生时它也只报 already，哨兵失去报警能力。
+//
+// 本段给出确定的逆运算：下列补丁的注入都是「固定文本替换」形态（追加式即
+// anchor → anchor + 注入体），所以把 (from, to) 反向替换即可从任意补丁态字节
+// 还原 pristine；源本就 pristine 时替换不命中，原样返回（幂等）。锚点文本全部
+// 引用上方同名常量，杜绝「测试里再抄一份」的复制漂移。
+//
+// 新增哨兵时只需在此登记该补丁的正向替换对。
+// ---------------------------------------------------------------------------
+const PRISTINE_INJECTIONS = {
+  // device-auth 指引：V2（rc.1+，3-tab if 体 → 4-tab 指引）与 V1（rc.8 及更早）
+  // 两形态都登记，revert 时按存在者命中。
+  'device-auth-guidance': [
+    [DEVICE_AUTH_THROW_ANCHOR_V2, DEVICE_AUTH_THROW_ANCHOR_V2 + '\n' + deviceAuthGuidanceBlock('\t\t\t\t')],
+    [DEVICE_AUTH_THROW_ANCHOR, DEVICE_AUTH_THROW_ANCHOR + '\n' + deviceAuthGuidanceBlock('\t\t\t')],
+  ],
+  'kernel-web-boot-watchdog': [
+    [KERNEL_BOOT_WATCHDOG_ANCHOR, KERNEL_BOOT_WATCHDOG_ANCHOR + '\n' + KERNEL_BOOT_WATCHDOG_SCRIPT],
+  ],
+  // 键名必须等于 patch-registry 里的 spec id（曾写作 manual-sort-fix，与 spec
+  // id manual-sort-drag-fix 脱钩，按 id 反查靶点的工具会静默跳过这个键）。
+  'manual-sort-drag-fix': [
+    [MANUAL_SORT_DRAG_REQUIRE_ANCHOR, MANUAL_SORT_DRAG_REQUIRE_INSERT],
+    [MANUAL_SORT_DRAG_START_ANCHOR, MANUAL_SORT_DRAG_START_FIX],
+  ],
+  // credentials 首读重试（2026-09-05 补登记）。此前该族没有逆运算，它的单测只能「磁盘
+  // 是什么态就断言什么态」：补丁态下走 already 分支，锚点真漂移时同样走 already，
+  // 等于没有哨兵。marker 就在 CREDENTIALS_LOAD_INITIAL_NEW 的注释行里，所以剥该对
+  // 会连同 marker 一并剥掉，无需 PRISTINE_HEAD_INJECTIONS。
+  'credentials-initial-retry': [
+    [CREDENTIALS_LOAD_INITIAL_OLD, CREDENTIALS_LOAD_INITIAL_NEW],
+    [CREDENTIALS_OWNER_STAT_OLD, CREDENTIALS_OWNER_STAT_NEW],
+    [CREDENTIALS_HELPERS_ANCHOR, CREDENTIALS_HELPERS_ANCHOR + '\n\n' + CREDENTIALS_HELPERS_CODE],
+  ],
+  // dsh-system-prompt interpolate 的非法变量名透传（靶文件 = 另一个包）。
+  'prompt-context-literal': [
+    [PROMPT_CONTEXT_LITERAL_ANCHOR, PROMPT_CONTEXT_LITERAL_INJECTION],
+  ],
+  // --- 会话持久化族（同一靶文件 dsh-session-persistence-jsonl 上叠加四个补丁）---
+  // 单键对已全量打补丁的副本不保证成立：K6 把 `loadFrameIndex += 1` 插进了
+  // torn-tail 的 WRITE_NEW 体内，K5 又把 corrupt-guard 注入体内的那行读表达式
+  // 改成了缓存调用 —— 两者都要等 K5/K6 先被剥掉才能还原。整族还原请用
+  // PRISTINE_FAMILIES 的族键（按应用逆序依次剥离）。
+  'persistence-torn-tail': [
+    [PERSISTENCE_FRAME_LOOP_OLD, PERSISTENCE_FRAME_LOOP_NEW],
+    [PERSISTENCE_WRITE_OLD, PERSISTENCE_WRITE_NEW],
+    [PERSISTENCE_COMPLETE_CHECK, PERSISTENCE_COMPLETE_CHECK_NEW],
+  ],
+  'persistence-corrupt-guard': [
+    [PERSISTENCE_CORRUPT_OLD, PERSISTENCE_CORRUPT_NEW],
+  ],
+  'session-header-scan-guard': [
+    // 改写型对（NEW 比 OLD 短）与三处追加型注入同列；顺序：先复原调用点，
+    // 再剥含 OLD 文本的方法体，避免误命中。
+    [SESSION_HEADER_SCAN_READ_EXPR, SESSION_HEADER_SCAN_CACHED_CALL],
+    [SESSION_HEADER_SCAN_MODULE_ANCHOR, SESSION_HEADER_SCAN_MODULE_INJECTION + '\n\n' + SESSION_HEADER_SCAN_MODULE_ANCHOR],
+    [SESSION_HEADER_SCAN_METHOD_ANCHOR, SESSION_HEADER_SCAN_METHOD_INJECTION],
+    [SESSION_HEADER_SCAN_CAP_ANCHOR, SESSION_HEADER_SCAN_CAP_INJECTION],
+  ],
+  'session-load-graceful': [
+    [SESSION_LOAD_GRACEFUL_DECODER_OLD, SESSION_LOAD_GRACEFUL_DECODER_NEW],
+    [SESSION_LOAD_GRACEFUL_SCANNER_OLD, SESSION_LOAD_GRACEFUL_SCANNER_NEW],
+    [SESSION_LOAD_GRACEFUL_WRITE_OLD, SESSION_LOAD_GRACEFUL_WRITE_NEW],
+    // catch 体两条变体都登记：在野副本带 LEGACY（v1），全新应用产出 NEW（v2）；
+    // 循环只剥存在的那一条，因此两个世界都能还原。
+    [SESSION_LOAD_GRACEFUL_CATCH_OLD, SESSION_LOAD_GRACEFUL_CATCH_NEW],
+    [SESSION_LOAD_GRACEFUL_CATCH_OLD, SESSION_LOAD_GRACEFUL_CATCH_LEGACY],
+  ],
+};
+
+// 族键 → 成员补丁的「还原顺序」（= 应用顺序的逆序）。应用侧：root 应用器
+// patchSessionPersistence（torn-tail → corrupt-guard）先于 registry 文件补丁
+// K5(order 275) → K6(order 280)，故逆序为 K6 → K5 → corrupt-guard → torn-tail。
+const PRISTINE_FAMILIES = {
+  'session-persistence-family': [
+    'session-load-graceful',
+    'session-header-scan-guard',
+    'persistence-corrupt-guard',
+    'persistence-torn-tail',
+  ],
+};
+
+// 首部整行 marker 注入（区别于行内替换，split/join 碰不到“只存在一次的文件头
+// 前置行”）：按成员登记，还原时从文件头剥掉。
+const PRISTINE_HEAD_INJECTIONS = {
+  'persistence-torn-tail': PERSISTENCE_TORN_HEAD,
+};
+
+const toCrlf = (text) => text.split('\n').join('\r\n');
+
+/** 剥离单个补丁键（正向替换对 + 可选首部 marker 行）。 */
+function revertPristineMember(key, src) {
+  const pairs = PRISTINE_INJECTIONS[key];
+  if (!pairs) throw new Error(`pristine 还原键未登记：${key}（需在 PRISTINE_INJECTIONS 补一条）`);
+  let out = src;
+  for (const [from, to] of pairs) {
+    // 磁盘副本可能是 CRLF（打包链/编辑器会转），而常量是 LF；两种形态都尝试，
+    // 并按命中的那种风格写回 from，避免在一个 CRLF 文件里插进一片 LF。
+    for (const variant of [to, toCrlf(to)]) {
+      if (!out.includes(variant)) continue;
+      out = out.split(variant).join(variant === to ? from : toCrlf(from));
+      break;
+    }
+  }
+  const head = PRISTINE_HEAD_INJECTIONS[key];
+  if (head) {
+    for (const variant of [head, toCrlf(head)]) {
+      if (!out.startsWith(variant)) continue;
+      out = out.slice(variant.length);
+      break;
+    }
+  }
+  return out;
+}
+
+/**
+ * 把已打补丁的靶字节还原为 pristine（供漂移哨兵单测构造 changed 分支输入）。
+ * @param {string} key PRISTINE_INJECTIONS 登记键或 PRISTINE_FAMILIES 族键
+ * @param {string} src 靶文件当前字节（补丁态或 pristine 皆可）
+ * @returns {string} pristine 形态文本
+ */
+function toPristineSource(key, src) {
+  const members = PRISTINE_FAMILIES[key];
+  if (members) return members.reduce((acc, member) => revertPristineMember(member, acc), src);
+  return revertPristineMember(key, src);
+}
+
 // pi-ai 4xx 请求落盘（独立脚本实现，registry 经此引用保持单一收口）。
 const { transform4xxDump: transformPiAi4xxDump, MARKER: PI_AI_4XX_DUMP_MARKER } = require('../patch-pi-ai-4xx-dump');
 const { transformToolSchemaSanitize: transformPiAiToolSchemaSanitize, MARKER: PI_AI_TOOL_SCHEMA_SANITIZE_MARKER } = require('../patch-pi-ai-tool-schema-sanitize');
@@ -2274,6 +2509,13 @@ module.exports = {
   transformSkillDirsCompat,
   // 选择工作文件夹时 chip/输入框闪回「选择工作区」（workspace 投影缺口帧）。
   transformWorkspaceChipLabelHold,
+  // 漂移哨兵单测的 pristine 逆运算与其正向替换对（单一数据源）。
+  toPristineSource,
+  PRISTINE_INJECTIONS,
+  PRISTINE_FAMILIES,
+  PRISTINE_HEAD_INJECTIONS,
+  // 在野 v1 catch 体（哨兵用来证明“逆运算推的历史字节 = 真实副本里的字节”）。
+  SESSION_LOAD_GRACEFUL_CATCH_LEGACY,
   // K1 注入体常量（单测 vm 行为验证用，与 transform 同源；非 marker）。
   CREDENTIALS_HELPERS_CODE,
   // 包级补丁 node_modules 根应用器（唯一实现）。
@@ -2293,6 +2535,7 @@ module.exports = {
     patchTokenMeterClamp,
     patchAtomicWriteOrphanLock,
     patchSettingsModelsResilience,
+    patchModelImageInput,
     patchBundleArrivalRetry,
     patchSchedulerGuard,
     patchEmptyToolName,
@@ -2328,6 +2571,7 @@ module.exports = {
     CONTENT_HAS_IMAGE_GUARD_MARKER,
     SESSION_HEADER_SCAN_MARKER,
     SESSION_LOAD_GRACEFUL_MARKER,
+    SESSION_LOAD_GRACEFUL_MARKER_V2,
     MANUAL_SORT_DRAG_MARKER,
     CODEX_LOCAL_BIN_MARKER,
     CLAUDE_LOCAL_BIN_MARKER,

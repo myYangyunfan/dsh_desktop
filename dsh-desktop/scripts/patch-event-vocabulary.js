@@ -21,9 +21,18 @@
 // and must not be touched. Idempotent: safe to run any number of times, and
 // after a DSH Desktop app update overwrites the packaged files.
 //
+// Status: NO CALLER — 接线已断，本脚本当前不会在任何构建里执行。
+//   唯一调用方 scripts/after-pack.js 随 Electron 壳在 6ff0cc83 删除，未接进 patch-deps
+//   单一通道，patch-registry 里也没有后继 spec。靶点本身仍然有效：致命门禁已搬到
+//   @deepseek-ai/dsh-session-persistence 的 assertEventsSupported()，而它是
+//   `import { KNOWN_SESSION_EVENT_TYPES } from "@deepseek-ai/dsh-session"` —— 读的就是
+//   本脚本改的那个 Set。上游至今未提供替代机制（Session.append(type, data, opts) 只
+//   透传 sourceEventSeqs/surfaceOp，不透传 ignorable，也没有事件名注册面）。
+//   影响面：随包插件不写自定义会话事件，故不自助触发；但内置插件市场仍可安装
+//   dsh-agent-teams / dsh-message-edit / dsh-web-search-exa，装上即触发上方报错且无兜底。
+//
 // Usage:
 //   node scripts/patch-event-vocabulary.js <path-to-dsh-session-package-dir>
-// (also exported for use from after-pack.js)
 
 const fs = require('node:fs');
 const path = require('node:path');

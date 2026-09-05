@@ -127,6 +127,8 @@ function computeMatrix() {
 // → 靶 dsh-client-ui-chat，rc.2 / rc.1 均不含该包 → 两形态 target-absent → 56 项基线。
 // conversation-assembly-resilience 新增（BUG2 会话装配自愈）→ 靶 dsh-client-ui-conversation
 // lib/client.js，rc.2 含该包 accept 方法体匹配 → changed；rc.1 无该包 → target-absent → 57 项基线。
+// model-image-input 新增（模型卡「支持图片输入」勾选）→ kind:'root' 应用器不参与转换判定
+// （两形态恒 'root'）→ 58 项基线。
 // 内核升级后 diff 此矩阵即知锚点漂移面：修改本常量 = 显式接受新基线。
 // ===========================================================================
 const BASELINE = {
@@ -170,6 +172,7 @@ const BASELINE = {
     'bundle-arrival-retry': 'root',
     'agent-loop-scheduler-guard': 'root',
     'empty-tool-name-guidance': 'root',
+    'model-image-input': 'root',
     'agent-preset-fallback': 'anchor-missing',
     'prompt-context-literal': 'changed',
     'wsl-picker-browse': 'changed',
@@ -238,6 +241,7 @@ const BASELINE = {
     'bundle-arrival-retry': 'root',
     'agent-loop-scheduler-guard': 'root',
     'empty-tool-name-guidance': 'root',
+    'model-image-input': 'root',
     'agent-preset-fallback': 'target-absent',
     'prompt-context-literal': 'target-absent',
     'wsl-picker-browse': 'target-absent',
@@ -260,7 +264,7 @@ const BASELINE = {
   },
 };
 
-test('57 补丁 × rc.2 / rc.1 双形态判定矩阵与基线快照一致（锚点漂移哨兵）', { skip: !formRoot('rc.2') ? 'pristine rc.2 stage 树不可用（.tmp-rc2-stage 缺失）' : false }, () => {
+test('58 补丁 × rc.2 / rc.1 双形态判定矩阵与基线快照一致（锚点漂移哨兵）', { skip: !formRoot('rc.2') ? 'pristine rc.2 stage 树不可用（.tmp-rc2-stage 缺失）' : false }, () => {
   const matrix = computeMatrix();
   // 打印当前矩阵（基线对照 / 升级 diff 材料）。
   console.log('[TA6 基线矩阵]');
@@ -283,11 +287,11 @@ test('57 补丁 × rc.2 / rc.1 双形态判定矩阵与基线快照一致（锚�
     `判定矩阵漂移（内核形态变化或锚点漂移；确认后更新 BASELINE 快照以显式接受新基线）：\n  ${drift.join('\n  ')}`);
 });
 
-test('基线快照自身完整性：两形态 × 57 id 全覆盖', () => {
+test('基线快照自身完整性：两形态 × 58 id 全覆盖', () => {
   const ids = new Set(PATCH_SPECS.map((s) => s.id));
-  assert.equal(ids.size, 57);
+  assert.equal(ids.size, 58);
   for (const form of Object.keys(BASELINE)) {
-    assert.equal(Object.keys(BASELINE[form]).length, 57, `${form} 基线应覆盖 57 项`);
+    assert.equal(Object.keys(BASELINE[form]).length, 58, `${form} 基线应覆盖 58 项`);
     for (const id of Object.keys(BASELINE[form])) assert.ok(ids.has(id), `${form} 基线含未知 id ${id}`);
   }
 });

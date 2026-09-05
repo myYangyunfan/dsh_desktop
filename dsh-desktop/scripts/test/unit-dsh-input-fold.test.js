@@ -369,3 +369,80 @@ test('e2e: apply 注册 document click 委托 + 注入样式（幂等）', () =>
   b.mod.apply();
   assert.equal(b.doc.head.querySelectorAll('style[data-plugin-css="dsh-input-fold/client.css"]').length, 1);
 });
+
+// ─────────────── 当前内核形状（[data-time-hover-root] 已被删除） ───────────────
+// 实机取证（v0.6.2 打包时，127.0.0.1:61231）：user 行为
+//   div._RXqYG_flowItem[data-chat-flow-kind="user"][data-chat-anchor-key]
+//     └─ div.jWIv2G_userRow            ← 旧内核此处带 data-time-hover-root，现无
+//          └─ div.jWIv2G_userStack
+//               ├─ div.jWIv2G_bubble   ← [class*="bubble"] 仍命中（局部名未变）
+//               └─ div.arNJOq_actions  ← 动作条在 bubble 之外（含 button，不得
+//                                            被 measureRow 的富内容判据误伤）
+// 折叠主链路在新内核下仍然工作，失效的只有「收起」按钮的宿主定位。
+function makeUserRowV2(doc, key, text) {
+  const flow = new El('div');
+  flow.setAttribute('data-chat-flow-kind', 'user');
+  flow.setAttribute('data-chat-anchor-key', key);
+
+  const userRow = new El('div');
+  userRow.className = 'jWIv2G_userRow';
+  const userStack = new El('div');
+  userStack.className = 'jWIv2G_userStack';
+  const bubble = new El('div');
+  bubble.className = 'jWIv2G_bubble';
+  bubble.textContent = text;
+  const actions = new El('div');
+  actions.className = 'arNJOq_actions';
+  const timeEl = new El('span');
+  timeEl.className = 'arNJOq_timeStart';
+  timeEl.textContent = '12:00';
+  const actBtn = new El('button');
+  actBtn.className = 'arNJOq_action';
+  actions.appendChild(timeEl);
+  actions.appendChild(actBtn);
+  userStack.appendChild(bubble);
+  userStack.appendChild(actions);
+  userRow.appendChild(userStack);
+  flow.appendChild(userRow);
+
+  doc.body.appendChild(flow);
+  return { flow, userRow, userStack, bubble };
+}
+
+test('e2e(当前内核形状): 长消息折叠，且「收起」按钮落在 userRow 内而非整行末尾', () => {
+  const b = setup();
+  const { flow, userRow } = makeUserRowV2(b.doc, 'k1', LONG);
+  assert.equal(userRow.getAttribute('data-time-hover-root'), null, '桩必须复刻新内核：无 hover-root');
+
+  b.store.scan();
+
+  // 主链路：仍能折叠（动作条里的 button 在 bubble 之外，不触发富内容判据）
+  assert.equal(flow.getAttribute('data-dsh-fold'), 'collapsed', '长消息仍应折叠');
+
+  const btn = flow.querySelector('[data-dsh-fold-toggle]');
+  assert.ok(btn, '收起按钮应注入');
+  assert.equal(btn.parentElement, userRow, '按钮宿主应为 userRow（回退到 row 会把按钮甩到动作条之下）');
+});
+
+test('e2e(当前内核形状): 展开/收起交互在无 hover-root 时仍完整可用', () => {
+  const b = setup();
+  const { flow, userRow, bubble } = makeUserRowV2(b.doc, 'k1', LONG);
+  b.store.scan();
+
+  b.doc.dispatchClick(bubble);
+  assert.equal(flow.getAttribute('data-dsh-fold'), 'expanded');
+  assert.equal(b.store.getController().isExpanded('k1'), true);
+
+  const btn = userRow.querySelector('[data-dsh-fold-toggle]');
+  assert.ok(btn, '展开后按钮在 userRow 内');
+  b.doc.dispatchClick(btn);
+  assert.equal(flow.getAttribute('data-dsh-fold'), 'collapsed');
+  assert.equal(b.store.getController().isExpanded('k1'), false);
+
+  // React 重渲染抹掉按钮 → scan 自愈，宿主仍是 userRow
+  userRow.removeChild(btn);
+  b.store.scan();
+  const btn2 = flow.querySelector('[data-dsh-fold-toggle]');
+  assert.ok(btn2, '按钮应被补回');
+  assert.equal(btn2.parentElement, userRow, '自愈后宿主仍为 userRow');
+});

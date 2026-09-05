@@ -336,7 +336,7 @@ function isMermaidBlock(block: HTMLElement): boolean {
  * Only mounted when the source contains at least one mermaid fence (see
  * TextEditor.tsx).
  */
-export function MermaidMarkdown({ text, codeLabels }: MermaidMarkdownProps): React.ReactNode {
+export function MermaidMarkdown({ text, labels }: MermaidMarkdownProps): React.ReactNode {
   const containerRef = useRef<HTMLDivElement>(null)
   const mountsRef = useRef(new Map<HTMLElement, MermaidMount>())
 
@@ -395,7 +395,7 @@ export function MermaidMarkdown({ text, codeLabels }: MermaidMarkdownProps): Rea
 
   return (
     <div className={css.mermaidMarkdown} ref={containerRef}>
-      <MarkdownText text={text} codeLabels={codeLabels} />
+      <MarkdownText text={text} labels={labels} />
     </div>
   )
 }

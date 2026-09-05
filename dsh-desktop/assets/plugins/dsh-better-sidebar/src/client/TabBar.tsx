@@ -12,7 +12,7 @@ import clsx from 'clsx'
 import {
   IconCloseFill14, IconPlusOutline16, Menu,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { SidebarTab } from './state.ts'
+import { isPreviewTab, type SidebarTab } from './state.ts'
 import { t } from './locales.ts'
 import css from './sidebar.module.css'
 
@@ -213,7 +213,7 @@ export function TabBar(props: {
           >
             {getTabIcon?.(tab) ?? null}
             {getTabBadge?.(tab) ?? null}
-            <span className={css.tabTitle}>{tab.title}</span>
+            <span className={css.tabTitle} style={isPreviewTab(tab) ? { fontStyle: 'italic' } : undefined}>{tab.title}</span>
             <button
               type="button"
               className={css.tabClose}

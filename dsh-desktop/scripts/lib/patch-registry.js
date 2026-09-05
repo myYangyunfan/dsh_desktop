@@ -158,7 +158,9 @@ const {
   ADAPTER_PREPARE_CALL_GUARD_MARKER,
   CONTENT_HAS_IMAGE_GUARD_MARKER,
   SESSION_HEADER_SCAN_MARKER,
-  SESSION_LOAD_GRACEFUL_MARKER,
+  // K6 幂等判定用 v2 marker（末帧守卫形态）；v1 marker 仍由 transform 的升级
+  // 通道引用，不作为 spec.marker（否则在野 v1 副本会被 already 短路、永不升级）。
+  SESSION_LOAD_GRACEFUL_MARKER_V2,
   LOADER_TREE_ISOLATION_MARKER,
   LOADER_ACTIVATION_ISOLATION_MARKER,
   FAIL_LOUD_ISOLATION_MARKER,
@@ -1101,6 +1103,43 @@ const PATCH_SPECS = [
   },
 
   // -------------------------------------------------------------------------
+  // 模型卡「支持图片输入」勾选补丁（用户反馈「某些多模态模型依旧说不支持图片」）。
+  // 手声明路由（llm-pi-ai.providers.<route>）的 models[] 条目在设置页里从不写
+  // `input`——上游 ModelListEditor 根本没这个控件。而 dsh-llm-pi-ai 逐模型解析是
+  // `declaredInput(entry.input) ?? base?.input ?? [...defaultInput]`（:672），手
+  // 声明路由无内置目录基条目、又未写 defaultInput → 恒回落 DEFAULT_INPUT=["text"]
+  // （:883），且 resolveModelInfo 仍返回 inputModalities:[...input]（:1760）——
+  // 属「已声明为纯文本」而非「未声明」，故门槛 !includes("image") 恒真：
+  // dsh-api-session-controller:753 走 VLM 转述（未配置即抛 MODEL_DOES_NOT_SUPPORT
+  // _IMAGES → 客户端「当前模型不支持图片，请切换支持图片的模型」），且 dsh-llm
+  // :1701 projectImagesForTextModel 会把图片替换为文字占位，模型真的收不到图。
+  // 上游取 ["text"] 为默认是有意保守（少报=发送前拒；多报=消息落库后中途失败、
+  // 会话反复重试），故不放宽默认，而是补上缺失的控件：ModelListEditor 逐行展开
+  // 区（grid，已含 contextWindow/maxTokens）追加第三格 checkbox，勾选写显式
+  // input:["text","image"]、取消写显式 ["text"]（不删键，避免继承语义歧义）。
+  // 写回链路不动：pathOps 是通用 key 级 diff、整组 models 一次 set，不裁未知字段。
+  // 附带 adopt()：该白名单原本丢弃端点自报模态，现保留 image，“获取模型”
+  // 勾选即自动勾好。注：pi-ai MODALITIES 仅 text/image（:274），无「视频」模态，
+  // 故只做图片勾选。与 settings-models-resilience 同靶不同区段，互不重叠。
+  // 锚点失配（上游重构该卡）自动退役。见 scripts/lib/patch-model-image-input.js。
+  // -------------------------------------------------------------------------
+  {
+    id: 'model-image-input',
+    group: 'package',
+    order: 248,
+    kind: 'root',
+    layout: 'nm-roots',
+    wslLayout: 'nm-roots',
+    apply: rootAppliers.patchModelImageInput,
+    marker: null,
+    requires: [],
+    failPolicy: 'warn',
+    cli: true,
+    successLog: (root) => '模型图片输入勾选补丁: 已应用到 ' + root,
+    failLog: (root, err) => '模型图片输入勾选补丁失败(' + root + '): ' + err.message,
+  },
+
+  // -------------------------------------------------------------------------
   // agent-preset 未知 id 回落补丁（0.5.0 存量用户 resume 变砖修复，追加条目）。
   //
   // 用户会话/profile 引用 Electron 老版本安装的 minimal-win 预设，0.5.0 Tauri
@@ -1318,7 +1357,7 @@ const PATCH_SPECS = [
     wslLayout: 'wsl',
     pkgRel: PERSISTENCE_PKG_REL,
     transform: transformSessionLoadGraceful,
-    marker: SESSION_LOAD_GRACEFUL_MARKER,
+    marker: SESSION_LOAD_GRACEFUL_MARKER_V2,
     requires: [],
     failPolicy: 'warn',
     cli: false,

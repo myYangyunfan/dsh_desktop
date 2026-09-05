@@ -104,6 +104,10 @@ function loadShim() {
     clearInterval: () => {},
     requestAnimationFrame: (fn) => { fn(); return 0; },
     location: win.location,
+    // navigator 在浏览器里是全局（不只是 window.navigator）：垫片顶层
+    // NATIVE_TITLE_BAR 判定直接读裸 navigator，缺这个全局会在加载期
+    // ReferenceError，把整个 soak 卡在第一行（与本用例要考的 DOM/堆稳定无关）。
+    navigator: win.navigator,
     MutationObserver: class MutationObserver { observe() {} disconnect() {} },
     URL, TextEncoder, TextDecoder,
   };

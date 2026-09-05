@@ -20,7 +20,7 @@ import clsx from 'clsx'
 import { EditorState, RangeSet, StateEffect, StateField, type Text } from '@codemirror/state'
 import { Decoration, EditorView as CodeMirrorView, keymap, lineNumbers } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
-import { IconCheckOutline16, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCheckOutline16, MarkdownText, type MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import { api, htmlUrl } from './api.ts'
 import { languageForPath } from './lang.ts'
 import { cmSurfaceTheme, CmThemeCompartment } from './cm-themes.ts'
@@ -60,7 +60,7 @@ const LazyMermaidMarkdown = lazyChunkComponent<MermaidMarkdownProps>(
   // code blocks instead of leaving the whole preview stuck on an error strip.
   // Mirrors the editor chunk's TextFallback; the content is already in props,
   // so a mermaid-bearing file stays exactly as viewable as a plain one.
-  (props) => <MarkdownText text={props.text} codeLabels={props.codeLabels} />,
+  (props) => <MarkdownText text={props.text} labels={props.labels} />,
 )
 
 /**
@@ -331,7 +331,14 @@ export function TextEditor(props: FileViewerProps) {
     () => mdBlocks.some(block => block.kind === 'mermaid'),
     [mdBlocks],
   )
-  const codeLabels = { copyLabel: t('copy'), copiedLabel: t('copied') }
+  // The DSH MarkdownText takes ONE required `labels` object (fence copy
+  // labels + the footnotes heading). It reads `labels.code.*` for every ```
+  // fence and `labels.footnotes` for a footnote section, so a missing/partial
+  // labels crashes the preview (undefined.code) for exactly the md files that
+  // carry a code fence or footnote. Build the full object from this plugin's
+  // own dictionary (the primitives are cordis-free and would otherwise fall
+  // back to hardcoded copy). Render-time t() follows live locale switches.
+  const mdLabels: MarkdownLabels = { code: { copyLabel: t('copy'), copiedLabel: t('copied') }, footnotes: t('footnotes') }
 
   /**
    * Selection popup for the markdown preview: a mouse-up inside the preview
@@ -473,8 +480,8 @@ export function TextEditor(props: FileViewerProps) {
               parse; cross-fence references/footnotes stay intact); files
               without one render exactly as before. */}
           {hasMermaid
-            ? <LazyMermaidMarkdown text={mdText} codeLabels={codeLabels} />
-            : <MarkdownText text={mdText} codeLabels={codeLabels} />}
+            ? <LazyMermaidMarkdown text={mdText} labels={mdLabels} />
+            : <MarkdownText text={mdText} labels={mdLabels} />}
         </div>
       )}
       {html && mode === 'preview' && (

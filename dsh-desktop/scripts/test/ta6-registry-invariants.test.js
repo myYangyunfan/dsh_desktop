@@ -125,7 +125,9 @@ test('C. marker 单一数据源 + marker 出现在 transform 实现源码文本�
   for (const [name, value] of Object.entries(adapters.markers)) {
     if (typeof value !== 'string') continue;
     const used = PATCH_SPECS.some((s) => s.marker === value);
-    const knownUnused = new Set(['SLOT_ERROR_ISOLATE_MARKER']); // v1 marker，仅 v2 修复路径识别用
+    // 已知多形态常量：v1 marker 不再做任何 spec 的幂等判定，只供「在野旧副本」
+    // 的识别/升级路径与逆运算 LEGACY 变体使用（v2 = 基础 marker + ' (v2)'）。
+    const knownUnused = new Set(['SLOT_ERROR_ISOLATE_MARKER', 'SESSION_LOAD_GRACEFUL_MARKER']);
     if (!used) assert.ok(knownUnused.has(name), `marker ${name} 无任何 spec 引用`);
   }
 });
@@ -171,7 +173,11 @@ test('E. order 全局唯一、组内升序、补丁间依赖序成立', () => {
   // IntersectionObserver 顶部哨兵，滚到顶自动 loadOlder，不再需手动点「加载更早」）。
   // 57 = 56（上一基线）+ 1 项新增（conversation-assembly-resilience：dsh-client-ui-conversation
   // BoundConversation.accept 装配抛错改为安全重建 + 去重可见告警，直击「吞消息」）。
-  assert.equal(PATCH_SPECS.length, 57, 'spec 总数应为 57');
+  // 58 = 57（上一基线）+ 1 项新增（model-image-input：模型设置页逐模型「支持图片
+  // 输入」勾选——手声明路由不写 input 时 pi-ai 恒回落 ["text"]，多模态模型被当
+  // 文本模型拒收图片；靶 dsh-client-ui-settings-models/lib/client.js，与
+  // settings-models-resilience 同靶不同区段）。
+  assert.equal(PATCH_SPECS.length, 58, 'spec 总数应为 58');
   const orders = PATCH_SPECS.map((s) => s.order);
   assert.equal(new Set(orders).size, orders.length, 'order 必须全局唯一');
   const byId = Object.fromEntries(PATCH_SPECS.map((s) => [s.id, s]));
@@ -218,9 +224,9 @@ test('E3. device-auth 154 与 credentials-absent 153 相邻无干扰', () => {
   );
 });
 
-test('F. cli:true 恰为 25 项；failPolicy ∈ {warn,degrade}', () => {
+test('F. cli:true 恰为 26 项；failPolicy ∈ {warn,degrade}', () => {
   const cliSpecs = registry.getSpecsByCli();
-  assert.equal(cliSpecs.length, 25, 'cli:true 数量（含 skill-dirs-compat + pi-ai-4xx-dump + workspace-chip-label-hold）');
+  assert.equal(cliSpecs.length, 26, 'cli:true 数量（含 skill-dirs-compat + pi-ai-4xx-dump + workspace-chip-label-hold + model-image-input）');
   for (const s of cliSpecs) assert.equal(s.cli, true);
   for (const spec of PATCH_SPECS) {
     assert.ok(

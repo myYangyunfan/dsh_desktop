@@ -596,6 +596,8 @@ test('image-paste: defaultPrevented 的粘贴让位原生管道；未接管时�
   await new Promise((r) => setTimeout(r, 15));
   assert.equal(saved.length, 1, '降级路径仍应保存粘贴图');
   assert.match(saved[0].dataUrl, /^data:image\/png;base64,/);
+  assert.match(dom.textarea.value, /\[粘贴图片\]/, '提示应落进输入框（旧内核 textarea 通道）');
+  assert.match(dom.textarea.value, /完整路径：C:\\tmp\\p\.png/, '提示应带可分析的完整路径');
 });
 
 // ---------------------------------------------------------------------------
@@ -612,4 +614,165 @@ test('rc8 契约: dsh-file-drop client 的 require 全部在 rc8 种子表', () 
     assert.ok(RC8_SEED.includes(spec), `require("${spec}") 不在 rc8 种子表（#124 形态）`);
   }
   assert.ok(specs.includes('react'), '应有 react 依赖（按钮组件）');
+});
+
+// ---------------------------------------------------------------------------
+// 5) 当前内核契约回归（槽位只下发 hook + composer 是 contenteditable）
+//    本族缺陷：内核换代后 conversation.input.left 不再直下 input 快照，
+//    props.input 恒 undefined → railCount 恒 0（张数前置拦截失效）、
+//    草稿前缀读不到 → 发送时把用户正文直接擦掉（静默丢数据）。
+// ---------------------------------------------------------------------------
+
+test('纯逻辑：distillInput/parseInputMirror 往返，含草稿内嵌分隔符与空面容忍', () => {
+  const c = captured.factory(makeRequire({ react: makeReactStub() })).core;
+  assert.equal(c.distillInput(null), '');
+  assert.equal(c.distillInput(undefined), '');
+  assert.equal(c.parseInputMirror(''), null);
+  assert.equal(c.parseInputMirror('无分隔符'), null);
+  const mirror = c.distillInput({ phase: 'plain', draft: '你好\n第二行', imageIds: ['a', 'b', 'c'] });
+  const back = c.parseInputMirror(mirror);
+  assert.equal(back.draft, '你好\n第二行');
+  assert.equal(back.imageCount, 3);
+  assert.equal(back.phase, 'plain');
+  // 草稿里出现分隔符也不能丢内容（按剩余段无损回填）。
+  const nasty = c.distillInput({ phase: 'plain', draft: 'x\u0000y\u0000z', imageIds: [] });
+  assert.equal(c.parseInputMirror(nasty).draft, 'x\u0000y\u0000z');
+  assert.equal(c.parseInputMirror(nasty).imageCount, 0);
+  // imageIds 非数组（异形快照）不能抛错。
+  assert.equal(c.parseInputMirror(c.distillInput({ phase: 'plain', draft: '', imageIds: null })).imageCount, 0);
+});
+
+test('e2e: 当前内核（无 props.input，只有 useInput）→ 附件栏张数经镜像进限额裁决', async () => {
+  const e = await setupApplied();
+  // 栏内已有 18 张：单条消息上限 20 → 再选 3 张只能收 2 张。
+  // 旧代码（只看 props.input）会算成 0 张 → 3 张全收，即本用例的反面。
+  const state = { phase: 'plain', draft: '', imageIds: Array.from({ length: 18 }, (_, i) => 'img' + i) };
+  const useInput = (sel) => sel(state);
+  const entry = e.slotRegistrations[0].register();
+  const tree = entry.component({ inputActions: e.inputActions, useInput });
+  const fileInput = tree.children.find((c) => c.tag === 'input');
+  fileInput.props.onChange({
+    target: { files: [fakeFile('a.png', 'image/png', 10), fakeFile('b.png', 'image/png', 10), fakeFile('c.png', 'image/png', 10)] },
+  });
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(e.kernel.calls.create.length, 2, '18+3 超单条 20 张上限，应只进 2 张');
+});
+
+test('e2e: 当前内核（无 props.input）→ 发送物化保留用户正文（草稿经 useInput 镜像）', async () => {
+  const e = await setupApplied();
+  e.inputActions.submit = function () {};
+  const state = { phase: 'plain', draft: '用户已输入的正文', imageIds: [] };
+  const entry = e.slotRegistrations[0].register();
+  entry.component({ inputActions: e.inputActions, useInput: (sel) => sel(state) });
+  e.store.addPending(e.inputActions, e.mod.core.makePendingTextEntry('a.md', 5, '', 'hello'));
+  const domBefore = e.textarea.value;
+  e.inputActions.submit();
+  const last = e.setDraftCalls[e.setDraftCalls.length - 1];
+  assert.ok(/^用户已输入的正文\n<!-- 附件：a\.md -->/m.test(last), `草稿应以用户正文开头，实际：${JSON.stringify(last)}`);
+  // 权威坐标系：快照 draft 优先于 DOM（submit 前 DOM 桩为空，若 DOM 优先会丢前缀）。
+  assert.equal(domBefore, '', '写入前 textarea 桩为空，证明前缀来自快照镜像而非 DOM');
+});
+
+test('e2e: 快照 draft 为空时回落 DOM 实时值（旧内核/镜像缺席零回归）', async () => {
+  const e = await setupApplied();
+  e.textarea.value = 'DOM里的正文';
+  e.inputActions.submit = function () {};
+  const state = { phase: 'plain', draft: '', imageIds: [] };
+  const entry = e.slotRegistrations[0].register();
+  entry.component({ inputActions: e.inputActions, useInput: (sel) => sel(state) });
+  e.store.addPending(e.inputActions, e.mod.core.makePendingTextEntry('a.md', 5, '', 'x'));
+  e.inputActions.submit();
+  assert.match(e.setDraftCalls[e.setDraftCalls.length - 1], /^DOM里的正文\n/);
+});
+
+test('injectIntoComposer: contenteditable 走 insertText 并回读校验；写不进必报失败', () => {
+  const calls = [];
+  const ce = {
+    tagName: 'DIV', isContentEditable: true, textContent: '旧内容', value: undefined,
+    focus() { calls.push('focus'); }, dispatchEvent() {},
+  };
+  const sandbox = {
+    console,
+    setTimeout: (fn, ms) => setTimeout(fn, ms),
+    clearTimeout: (t) => clearTimeout(t),
+    Date, Promise,
+    Event: class { constructor(type, opts) { this.type = type; Object.assign(this, opts || {}); } },
+    HTMLTextAreaElement: function T() {},
+    document: {
+      activeElement: null,
+      querySelector: () => null,
+      addEventListener() {},
+      createRange: () => ({ selectNodeContents() {}, collapse() {} }),
+      execCommand: (cmd, ui, val) => { calls.push(cmd + ':' + val); ce.textContent += val; return true; },
+    },
+    window: { getSelection: () => ({ removeAllRanges() {}, addRange() {} }) },
+  };
+  const load = loadClient(PLUGIN, sandbox);
+  const c = load.captured.factory(makeRequire({ react: makeReactStub() })).core;
+  assert.equal(c.injectIntoComposer(ce, '新片段'), true, 'insertText 落上且回读命中 → true');
+  assert.ok(ce.textContent.includes('新片段'), 'contenteditable 应经 insertText 累加而非覆写');
+  assert.ok(ce.textContent.startsWith('旧内容'), '已有内容不得被劈开/丢掉');
+  // 写不进（execCommand 失败）必须给 false —— 静默“假装成功”就是上一代缺陷的病灶。
+  sandbox.document.execCommand = () => false;
+  assert.equal(c.injectIntoComposer({ tagName: 'DIV', isContentEditable: true, textContent: '', focus() {} }, '片段'), false);
+  // execCommand 抛错（部分内核不允许）同样降级为 false，不外溢。
+  sandbox.document.execCommand = () => { throw new Error('not allowed'); };
+  assert.equal(c.injectIntoComposer({ tagName: 'DIV', isContentEditable: true, textContent: '', focus() {} }, '片段'), false);
+});
+
+// ---------------------------------------------------------------------------
+// 6) dsh-image-paste 当前内核回归：composer 是 contenteditable，
+//    旧实现拿 textarea 原型 setter 打在 <div> 上抛 TypeError 被 .catch 吞掉，
+//    表现为「粘图后输入框丝毫没有反应且无任何提示」。
+// ---------------------------------------------------------------------------
+
+test('image-paste: 当前内核 contenteditable composer → 提示经 insertText 落上；写不上给可见提示', async () => {
+  const ce = { tagName: 'DIV', isContentEditable: true, textContent: '', value: undefined, focus() {}, dispatchEvent() {} };
+  let execOk = true;
+  let noticeHost = null;
+  const listeners = { document: {} };
+  const sandbox = {
+    console,
+    setTimeout: (fn, ms) => setTimeout(fn, ms),
+    clearTimeout: (t) => clearTimeout(t),
+    Date, Promise,
+    Event: class { constructor(type, opts) { this.type = type; Object.assign(this, opts || {}); } },
+    HTMLTextAreaElement: function T() {},
+    FileReader: class { readAsDataURL() { this.result = 'data:image/png;base64,AAA'; if (this.onload) setImmediate(this.onload); } },
+    document: {
+      // 真实粘贴时焦点常在 body 而非输入框 —— 旧实现因此第二步就找不到 composer。
+      activeElement: null,
+      body: { appendChild() {} },
+      createElement: () => { noticeHost = { setAttribute() {}, style: {}, textContent: '' }; return noticeHost; },
+      getElementById: () => null,
+      addEventListener(type, fn) { (listeners.document[type] = listeners.document[type] || []).push(fn); },
+      querySelector: (sel) => (sel === '[data-composer-input]' ? ce : null),
+      createRange: () => ({ selectNodeContents() {}, collapse() {} }),
+      execCommand: (cmd, ui, val) => { if (!execOk || cmd !== 'insertText') return false; ce.textContent += val; return true; },
+    },
+    window: {
+      getSelection: () => ({ removeAllRanges() {}, addRange() {} }),
+      dshDesktop: { imagePaste: { save: async () => ({ ok: true, path: 'C:\\tmp\\p.png', size: 5 }) } },
+    },
+  };
+  const load = loadClient(PASTE_PLUGIN, sandbox);
+  const mod = load.captured.factory(makeRequire({}));
+  mod.apply({});
+  const fire = () => listeners.document.paste[0]({
+    defaultPrevented: false,
+    clipboardData: { items: [{ kind: 'file', type: 'image/png', getAsFile: () => ({ name: 'p.png', size: 5, type: 'image/png' }) }], getData: () => '' },
+  });
+
+  fire();
+  await new Promise((r) => setTimeout(r, 20));
+  assert.match(ce.textContent, /\[粘贴图片\]/, 'contenteditable 上应经 insertText 落上提示');
+  assert.match(ce.textContent, /完整路径：C:\\tmp\\p\.png/, '路径主体不得丢');
+
+  // 写不上（insertText 失败）→ 必须给可见提示，不再静默吞。
+  ce.textContent = '';
+  execOk = false;
+  fire();
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(ce.textContent, '', 'insertText 失败时不应假装写入了内容');
+  assert.ok(noticeHost && /没能写进输入框/.test(noticeHost.textContent), `应弹可见提示，实际：${noticeHost && noticeHost.textContent}`);
 });

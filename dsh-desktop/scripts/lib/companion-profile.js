@@ -543,6 +543,13 @@ function syncCompanionFiles(opts) {
       }
     }
     for (const sub of SYNC_SUBDIRS) {
+      // node_modules 只随 shipsNodeModules 正件分发（companion-plugins.js 单一
+      // 数据源）；其余插件源目录里的 node_modules 一律视为本机安装残留，绝不同步
+      // ——实测 dev 树上 better-sidebar 的 pnpm 残留（1.3 万文件）会让每次同步
+      // 烧掉数分钟，unit-sync-cli 五用例全部 5 分钟超时判红。git 判据试过并否决：
+      // 测试把 PATH 收口到 System32 后 spawnSync('git') ENOENT，判据静默回退
+      // 「宁同步」，防线形同虚设——环境依赖的探针不可靠，用声明式标志。
+      if (sub === 'node_modules' && !p.shipsNodeModules) continue;
       syncDir(path.join(src, sub), path.join(dest, sub), log);
     }
     if (isBundle) {

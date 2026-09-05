@@ -84,8 +84,31 @@ rc() { mirror_dir "$1" "$2"; }
   done
 
 # ---- scripts / assets：全量镜像 ----
+# assets 下混着两类 node_modules，必须区别对待（v0.6.2 本地构建踩坑定案）：
+#   • 正件：dsh-hub（731 个跟踪文件）/ graph-memory（1177）/ billion-context-dsh
+#     （165）的 node_modules 是 git 跟踪进来的，插件运行期直接 require 它们，
+#     剔掉就是装完即挂（“全量 /XD node_modules”的错法，CI 口径也会被打穿）。
+#   • 残留：插件目录里本机跑过 pnpm/npm install 留下的 node_modules（gitignored，
+#     实测本晚 dsh-better-sidebar pnpm install 出 433MB）。pnpm 的 .pnpm 内容存储被
+#     robocopy 跟 junction 展开成真实路径后，NSIS 的 File 指令在 >260 字符处
+#     “failed opening file”直接中断建包（abort 于 installer.nsi:15383）。
+# 手法：//XD .pnpm 先把唯一会撑爆路径的形态挡在复制之外（全仓无任何被跟踪的
+# .pnpm 路径，三个正件树内也无），再按「git 有无跟踪」逐个剔除本地安装残留——
+# 判据自描述，新增正件插件无需改脚本；非 git 工作树（如发布 tarball 构建）
+# 整体跳过，宁留不误删。/XD 同时挡住 /MIR 删除，故 .pnpm 残留另需一行显式清理。
 mirror_dir "$SRC/scripts" "$DST/scripts"
-mirror_dir "$SRC/assets" "$DST/assets"
+mirror_dir "$SRC/assets" "$DST/assets" //XD .pnpm
+find "$DST/assets" -type d -name .pnpm -prune -exec rm -rf {} + 2>/dev/null || true
+if [ -n "$(git -C "$REPO_ROOT" rev-parse --is-inside-work-tree 2>/dev/null)" ]; then
+  for d in "$DST/assets/plugins"/*/; do
+    [ -d "$d/node_modules" ] || continue
+    name="$(basename "$d")"
+    if [ -z "$(git -C "$REPO_ROOT" ls-files -- "dsh-desktop/assets/plugins/$name/node_modules" | head -1)" ]; then
+      echo "[stage] 剔除 gitignored 插件依赖树（本机安装残留）: $name/node_modules"
+      rm -rf "$d/node_modules"
+    fi
+  done
+fi
 
 # ---- vendor：node 二进制（$NODE_BIN——win 为 node.exe，unix 为 node）+ npm 全量（插件安装/更新链用到）----
 # PD1 对账修复：历史 staging 残留会把另一平台的 node 二进制留在 DST（本机
@@ -210,6 +233,18 @@ if [ ! -f "$COMPAT_OUT" ]; then
   exit 1
 fi
 echo "[stage] OK: client-compat.js 在位 ($(wc -c < "$COMPAT_OUT" | tr -d ' ') bytes)"
+
+# ---- 补丁收口门禁（2026-09-05 实错拦截）----
+# payload 的 node_modules 是 dev 树的镜像：dev 树一旦落后于 patch-registry，
+# 已声明的修复就静默不进安装包（实测：0.6.2 payload 缺 4 枚 file 补丁 +
+# session-load-graceful v2，而全套测试当时全绿——它只核接线结构，不看磁盘字节）。
+# 更坑的是运行期也补不回来：升级补丁的 transform 代码本身就在没带上的那份里。
+# 判据与 dev 树单测共用 dsh-desktop/scripts/lib/patch-closure，不留两套口径。
+if ! node "$REPO_ROOT/dsh-desktop/scripts/verify-payload-patches.js" "$DST"; then
+  echo "[stage] FATAL: payload 补丁未收口——拒绝打包；按上方 LAG 清单回 dev 树跑" \
+       "node scripts/patch-deps.js 后重跑 stage" >&2
+  exit 1
+fi
 
 echo "[stage] 完成。体积统计："
 du -sm "$DST" "$DST/node_modules" "$DST/vendor" "$DST/assets" 2>/dev/null

@@ -35,7 +35,10 @@ Var DshLegacyTmp
 
 ; Electron 线（electron-builder，appId=com.deepseek.dsh.desktop）的注册表事实：
 ;   · 卸载键名 = UUID.v5(appId) = 62276e9d-c5f3-5091-b4ee-c7144d6db450
-;     （dsh-desktop/uninstaller/DSH_Desktop_Uninstaller.cs LegacyUninstallRegKey；
+;     （出处为 dsh-desktop/uninstaller/DSH_Desktop_Uninstaller.cs 里的
+;       LegacyUninstallRegKey；该目录已随 Electron 线下线由 02981194 从工作树
+;       移除，需核对原文时执行
+;       `git show 02981194^:dsh-desktop/uninstaller/DSH_Desktop_Uninstaller.cs`。
 ;       本机 Log.log 卸载记录亦实证该键曾存在于 HKCU）
 ;   · 安装键 = Software\DSH Desktop（INSTALL_REGISTRY_KEY，
 ;     APP_FILENAME = productName「DSH Desktop」，oneClick:false → 保留空格）

@@ -1,8 +1,8 @@
 'use strict';
 
 // 设备未授权指引补丁（device-auth-guidance）单测：
-// 锚点命中 pristine payload 副本 / 产物语法 / 幂等 / vm 行为（403+设备风控
-// 特征 → 追加中文指引；一般 401 密钥错 → 不追加；2xx 路径零变化）。
+// 锚点命中真实靶字节（剥离注入体还原 pristine）/ 产物语法 / 幂等 / vm 行为
+//（403+设备风控特征 → 追加中文指引；一般 401 密钥错 → 不追加；2xx 路径零变化）。
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -11,25 +11,33 @@ const os = require('node:os');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const { transformDeviceAuthGuidance } = require('../lib/patch-adapters');
+const { transformDeviceAuthGuidance, toPristineSource, markers } = require('../lib/patch-adapters');
+const { DS_LLM_DEEPSEEK_PKG_REL } = require('../lib/patch-target-resolver');
 
-const DEVICE_AUTH_MARKER_TEXT = 'dsh-desktop compat: device-auth guidance';
+const DEVICE_AUTH_MARKER_TEXT = markers.DEVICE_AUTH_GUIDANCE_MARKER;
 
-const PAYLOAD_TARGET = path.join(
-  __dirname, '..', '..', '..', '.tmp-rc2-stage',
-  'node_modules', '@deepseek-ai', 'dsh-llm-deepseek', 'lib', 'index.js',
-);
+// 靶文件候选：dev 安装树优先（与运行时同源），其次打包 payload 镜像（同一布局
+// 下的 dsh-desktop 子树）。两处都会被 boot 链 / stage-payload 就地打补丁，所以
+// 拿到字节后统一走 toPristineSource 剥离注入体 —— 基准不再是「某个目录恰好没
+// 被碰过」，而是真实发行字节的确定逆运算。
+// 早前这里抓 .tmp-rc2-stage 并回退到 package-payload 根（漏了 dsh-desktop 一层），
+// 前者已不存在、后者路径 ENOENT，四条用例全红。
+const TARGET_CANDIDATES = [
+  path.join(__dirname, '..', '..', 'node_modules', '@deepseek-ai', DS_LLM_DEEPSEEK_PKG_REL),
+  path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'package-payload', 'dsh-desktop',
+    'node_modules', '@deepseek-ai', DS_LLM_DEEPSEEK_PKG_REL),
+];
+
+const TARGET = TARGET_CANDIDATES.find((f) => fs.existsSync(f)) || null;
 
 function pristineSrc() {
-  // pristine 源选择：.tmp-rc2-stage（应用/boot 链碰不到）优先；缺失回退
-  // payload 镜像（可能被沙箱 boot 链原位打补丁——此时锚点用例会 already）。
-  const f = fs.existsSync(PAYLOAD_TARGET) ? PAYLOAD_TARGET : PAYLOAD_TARGET.replace('.tmp-rc2-stage', 'dsh-tauri' + String.fromCharCode(92,92) + 'package-payload');
-  return fs.readFileSync(f, 'utf8');
+  assert.ok(TARGET, '找不到 dsh-llm-deepseek 靶文件（dev 树与 payload 镜像均缺失）');
+  return toPristineSource('device-auth-guidance', fs.readFileSync(TARGET, 'utf8'));
 }
 
-test('锚点命中 pristine payload 副本（版本漂移哨兵）', () => {
+test('锚点命中真实靶字节（版本漂移哨兵）', { skip: TARGET ? false : '靶文件缺失' }, () => {
   const r = transformDeviceAuthGuidance(pristineSrc(), 'index.js');
-  assert.strictEqual(r.status, 'changed', `payload pristine 必须命中锚点（V2/V1 双形态），得 ${r.status}: ${r.detail || ''}`);
+  assert.strictEqual(r.status, 'changed', `pristine 必须命中锚点（V2/V1 双形态），得 ${r.status}: ${r.detail || ''}`);
 });
 
 test('双形态锚点：rc.8 老形态（2-tab + response.json）同样命中', () => {

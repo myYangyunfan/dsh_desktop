@@ -70,3 +70,18 @@ test('devDeps 排除清单与 node_modules 现状一致（electron* 不进 paylo
   // 被排除目录可以存在（源头装了 devDeps），但清单本身必须精确三件
   assert.equal(m[1], 'electron electron-builder electron-winstaller');
 });
+
+test('assets 镜像只剔「gitignored 插件依赖树」（正件 node_modules 必须留在包里）', () => {
+  // v0.6.2 本地构建实测：插件目录里本机 pnpm install 出的 .pnpm 存储被 robocopy
+  // 跟 junction 展开后，NSIS 的 File 指令在 >260 字符路径上 failed opening file
+  // → 建包中断。但“assets 一刀切 /XD node_modules”是错法：dsh-hub(731 个跟踪
+  // 文件) / graph-memory(1177) / billion-context-dsh(165) 的 node_modules 是 git
+  // 跟踪进来的运行期依赖，剔掉就是装完即挂。
+  assert.ok(/mirror_dir "\$SRC\/assets" "\$DST\/assets" \/\/XD \.pnpm/.test(sh),
+    'assets 镜像应只 //XD .pnpm');
+  assert.ok(!/mirror_dir "\$SRC\/assets"[^\n]*\/\/XD node_modules/.test(sh),
+    '不得对 assets 一刀切排除 node_modules——会误杀正件插件的运行期依赖');
+  // 残留判定必须走 git，而不是写死插件名单（新增插件无需改脚本）。
+  assert.ok(/ls-files -- "dsh-desktop\/assets\/plugins\/\$name\/node_modules"/.test(sh),
+    '应按 git 跟踪状态逐个判定本机安装残留');
+});

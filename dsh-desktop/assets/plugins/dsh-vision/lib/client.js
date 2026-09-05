@@ -49,6 +49,9 @@ window.__ModuleLoader__.load({
     const { Button, Tooltip, IconPaperclipOutline16 } = require("@deepseek-ai/dsh-client-ui-primitives");
 
     const NS = "dsh-vision";
+    // 选择器必须是模块级稳定身份：每次渲染新建函数会让 hook 每轮重算快照
+    // （与 dsh-file-drop 的 INPUT_SELECTOR 同一条纪律）。
+    const DRAFT_SELECTOR = (state) => (state && typeof state.draft === "string" ? state.draft : "");
     const DEFAULTS = {
       baseURL: "https://open.bigmodel.cn/api/paas/v4",
       model: "glm-4.6v-flash",
@@ -377,12 +380,23 @@ window.__ModuleLoader__.load({
       const canAttach = !!conversation && typeof conversation.createDraftImages === "function" &&
         typeof conversation.releaseDraftImages === "function";
 
-      function VisionImageButton({ inputActions, input }) {
+      function VisionImageButton({ inputActions, input, useInput }) {
         const fileRef = react.useRef(null);
         // 总开关关闭时整颗按钮消失（返回 null）：图片通道此时在宿主侧也已
         // 停用，留着入口只会让用户撞上「模型不支持图片输入」。默认关：快照
         // 未就绪（loading/unavailable）时保守隐藏，就绪且显式开启才显示。
         const enabledSnap = useScope((s) => (s.status === "ready" ? ((s.value || {}).enabled === true) : false));
+        // dsh-compat:input-draft-mirror —— 当前内核的 conversation.input.left 只下发
+        // hook（实测下发面为 useInput / inputActions / useChat / useSession / …），
+        // 不再直下 input 快照。于是旧写法 input?.draft 恒为 undefined，current 恒
+        // 是空串，appendDraft 退化成 setDraft(text) —— 用户输入框里已打的字会被
+        // 「插入文件引用」整体覆盖掉。草稿改经 useInput 镜像读，input 只作旧内核
+        // 兜底。hook 必须无条件调用且位于下面 return null 之前，否则打乱 React 的
+        // hook 顺序（条件化调用会让整颗按钮崩退位）。
+        let draftMirror = null;                            // null = 本内核未下发该 hook
+        try {
+          if (typeof useInput === "function") draftMirror = useInput(DRAFT_SELECTOR) || "";
+        } catch (_e0) { draftMirror = null; }
         const actions = inputActions || {};
         if (!enabledSnap) return null;
         const disabled = !canAttach || typeof actions.addImages !== "function" || typeof actions.setDraft !== "function";
@@ -393,7 +407,11 @@ window.__ModuleLoader__.load({
           if (typeof actions.notify === "function") actions.notify(level, message);
         };
         const appendDraft = (text) => {
-          const current = input && typeof input.draft === "string" ? input.draft : "";
+          // 镜像在场时它就是权威（空串表示「真的没草稿」，不能回退到 input 去猜）；
+          // 只有 hook 缺席（旧内核 / 测试）才用直下的 input 快照。
+          const current = draftMirror !== null
+            ? draftMirror
+            : (input && typeof input.draft === "string" ? input.draft : "");
           actions.setDraft(current + text);
         };
         const onChange = async (e) => {

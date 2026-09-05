@@ -291,13 +291,26 @@ test('syncCompanionFiles: keep-newer 且 gui/ 已存在（半残）→ 不触碰
   assert.ok(!fs.existsSync(path.join(destDir, 'gui', 'dist')), '目录已存在时不做增量注入（只补整目录缺失，避免新旧混排）');
 });
 
-test('syncCompanionFiles: 正常全量同步仍复制 gui/（SYNC_SUBDIRS 重构回归）', (t) => {
+test('syncCompanionFiles: 正常全量同步仍复制 gui/ 与 shipsNodeModules 的 node_modules/', (t) => {
   const { profileDir, assetsRoot, vendorRoot, plugins } = makeSyncOpts(t);
   addGuiTreeToAsset(assetsRoot, 'alpha');
+  // node_modules/ 只随标志分发：本用例锁「带标志正件 → 全量同步照常复制」。
+  plugins[0].shipsNodeModules = true;
   syncCompanionFiles(syncOpts(plugins, assetsRoot, profileDir, vendorRoot, []));
   const destDir = path.join(profileDir, 'node_modules', '@scope', 'alpha');
   assert.ok(fs.existsSync(path.join(destDir, 'gui', 'dist', 'index.html')), '全量同步必须复制 gui/');
-  assert.ok(fs.existsSync(path.join(destDir, 'node_modules', 'dep', 'x.js')), '全量同步仍复制 node_modules');
+  assert.ok(fs.existsSync(path.join(destDir, 'node_modules', 'dep', 'x.js')),
+    'shipsNodeModules 正件的 node_modules 随全量同步分发');
+});
+
+test('syncCompanionFiles: 未标 shipsNodeModules 的插件不同步 node_modules（残留防线）', (t) => {
+  const { profileDir, assetsRoot, vendorRoot, plugins } = makeSyncOpts(t);
+  // 模拟 dev 树上 pnpm install 出的残留（无标志插件的 node_modules）
+  fs.mkdirSync(path.join(assetsRoot, 'beta', 'node_modules', 'junk'), { recursive: true });
+  fs.writeFileSync(path.join(assetsRoot, 'beta', 'node_modules', 'junk', 'x.js'), 'residue');
+  syncCompanionFiles(syncOpts(plugins, assetsRoot, profileDir, vendorRoot, []));
+  assert.ok(!fs.existsSync(path.join(profileDir, 'node_modules', 'beta', 'node_modules')),
+    '无标志插件的 node_modules 视为本机残留，绝不同步');
 });
 
 test('syncCompanionFiles: keep-newer 且依赖缺失 → 内层补齐（issue #125 自愈）', (t) => {

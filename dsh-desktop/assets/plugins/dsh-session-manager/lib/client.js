@@ -156,7 +156,8 @@ window.__ModuleLoader__.load({
 		// 范围 → 光标消失、输入框却仍启用。这里订阅 sessions.list：检测到
 		// 「有会话被删且当前会话未变」后，双 rAF 等 DOM 稳定，把焦点与光标补回
 		// composer 输入框；删除当前会话时 current 变化/变 void 0、或输入框处于
-		// disabled/readOnly（hero 场景）会自动跳过，不抢焦点。
+		// disabled/readOnly（hero 场景）会自动跳过，不抢焦点。输入框形态两代：
+		// <textarea> 与 Lexical contenteditable，都要能认。
 		// 纯判断（无 DOM）与恢复动作分离，后者注入 document 便于单测。
 		// ------------------------------------------------------------------
 		function shouldRestoreFocusAfterRemoval(prev, next) {
@@ -170,18 +171,46 @@ window.__ModuleLoader__.load({
 			return true;
 		}
 
+		/** 光标置末尾：<textarea>/<input> 走 selection API，contenteditable 走 Range。
+		 *  两者都是「尽力而为」——桩环境或宿主不支持时静默跳过，不影响补焦结果。 */
+		function placeCaretAtEnd(field, doc) {
+			try {
+				if (typeof field.setSelectionRange === "function") {
+					const len = field.value ? field.value.length : 0;
+					field.setSelectionRange(len, len);
+					return;
+				}
+				if (typeof doc.createRange !== "function") return;
+				const win = doc.defaultView;
+				const sel = win && typeof win.getSelection === "function" ? win.getSelection() : null;
+				if (!sel || typeof sel.removeAllRanges !== "function" || typeof sel.addRange !== "function") return;
+				const range = doc.createRange();
+				range.selectNodeContents(field);
+				range.collapse(false);
+				sel.removeAllRanges();
+				sel.addRange(range);
+			} catch (_) { /* 忽略不支持 selection 的宿主 */ }
+		}
+
 		function restoreComposerFocus(doc) {
 			const wrap = doc && typeof doc.querySelector === "function" ? doc.querySelector("[data-input-scroll]") : null;
-			const textarea = wrap ? wrap.querySelector("textarea") : null;
-			if (!textarea || textarea.disabled || textarea.readOnly) return false;
+			if (!wrap || typeof wrap.querySelector !== "function") return false;
+			// dsh-compat:composer-editable —— 输入框两代都要认：旧内核是 <textarea>，
+			// 当前内核换成了 Lexical 的 contenteditable div（实机 [data-input-scroll] 内
+			// textarea=0、contenteditable=1）。只查 textarea 会让「删会话后补焦」整条
+			// 通道静默失效——函数永远 return false，不报错也不补焦。
+			const field = wrap.querySelector("textarea") || wrap.querySelector("[data-composer-input]") || wrap.querySelector("[contenteditable]");
+			if (!field || field.disabled || field.readOnly) return false;
+			// contenteditable 的「不可编辑」是属性值 false，不是 disabled。
+			if (field.isContentEditable === false || field.getAttribute?.("contenteditable") === "false") return false;
 			const active = doc.activeElement;
 			if (active && active !== doc.body && active !== doc.documentElement) {
 				const tag = active.tagName;
 				if (tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT" || active.isContentEditable) return false;
+				if (active === field) return false;
 			}
-			textarea.focus({ preventScroll: true });
-			const len = textarea.value ? textarea.value.length : 0;
-			try { textarea.setSelectionRange(len, len); } catch (_) { /* 忽略不支持 selection 的宿主 */ }
+			field.focus({ preventScroll: true });
+			placeCaretAtEnd(field, doc);
 			return true;
 		}
 

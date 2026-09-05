@@ -1212,6 +1212,59 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   flex: 1;
 }
 
+/* The persistent Explorer rail: the file-tree column that lives to the LEFT of
+   the tabbed workbench (VSCode's sidebar), inside .panelBody (a row flex). It
+   owns a fixed drag-adjustable width and the hairline separation; the tree
+   fills the remaining height. Reuses .editorTreeResize (the absolute right-edge
+   drag handle) and .editorTreePanel/.editorTreePanelFull (the tree surface). */
+.explorerRail {
+  position: relative;
+  flex: none;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--dsw-alias-border-l1);
+}
+
+.explorerRailHeader {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 4px 0 10px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.explorerRailTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* The collapsed rail: a thin always-present strip holding the expand button,
+   so collapsing never reflows the tab area's right edge and the reopen control
+   stays in the same place. */
+.explorerRailCollapsed {
+  flex: none;
+  width: 30px;
+  min-height: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 4px;
+  border-right: 1px solid var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-secondary);
+}
+
 .editorTreeSearch {
   flex: none;
   display: flex;

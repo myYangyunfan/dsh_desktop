@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-09-03T16:37:05.670Z",
+  "generatedAt": "2026-09-05T12:10:49.437Z",
   "kernelRoot": "@deepseek-ai",
-  "markerCount": 56,
+  "markerCount": 63,
   "surface": [
     {
       "file": "dsh-agent-loop/lib/index.js",
@@ -26,6 +26,13 @@
       ]
     },
     {
+      "file": "dsh-api-gateway/lib/client.js",
+      "sha256": "b5f6c6b5160e8550",
+      "markers": [
+        "continue history past seq gap"
+      ]
+    },
+    {
       "file": "dsh-api-remotes/lib/client.js",
       "sha256": "35c1285a31e08130",
       "markers": [
@@ -33,9 +40,17 @@
       ]
     },
     {
-      "file": "dsh-api-session-controller/lib/index.js",
-      "sha256": "04fb4f304081ad88",
+      "file": "dsh-api-session-controller/lib/client.js",
+      "sha256": "9d8c8b7c0ab7be49",
       "markers": [
+        "larger history page"
+      ]
+    },
+    {
+      "file": "dsh-api-session-controller/lib/index.js",
+      "sha256": "ad7867710cf1aabd",
+      "markers": [
+        "larger history page",
         "read the resolved HOST-side value",
         "read the resolved HOST-side value (settings.get), not the"
       ]
@@ -91,9 +106,17 @@
       ]
     },
     {
-      "file": "dsh-client-ui-conversation/lib/client.js",
-      "sha256": "93f3cda0e0f13912",
+      "file": "dsh-client-ui-chat/lib/client.js",
+      "sha256": "f87072ad0b0b22f2",
       "markers": [
+        "auto-load older via top sentinel"
+      ]
+    },
+    {
+      "file": "dsh-client-ui-conversation/lib/client.js",
+      "sha256": "cfbd0b310ae453c5",
+      "markers": [
+        "recover swallowed conversation assembly fault",
         "workspace chip keeps cwd label across projection gap"
       ]
     },
@@ -106,8 +129,11 @@
     },
     {
       "file": "dsh-client-ui-settings-models/lib/client.js",
-      "sha256": "9a294e148bc1ac08",
+      "sha256": "1cae83fbddb10249",
       "markers": [
+        "model image-input adopt",
+        "model image-input checkbox",
+        "model image-input locale",
         "settings-conflict retry",
         "settings-models namespace heal"
       ]
@@ -183,7 +209,7 @@
     },
     {
       "file": "dsh-session-persistence-jsonl/lib/index.js",
-      "sha256": "ea7dce478fbf65cc",
+      "sha256": "86d63cc05213d13e",
       "markers": [
         "degrade session load to last complete frame",
         "recover complete zstd frame torn JSONL tail",

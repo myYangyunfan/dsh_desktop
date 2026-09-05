@@ -8,8 +8,9 @@
 // 补丁：activate 首读的 stat/readFile 对瞬时错就地重试 3 次（递增退避），
 // ENOENT（合法空仓）与确定性错误不受影响。
 //
-// 覆盖：transform 对真实 vendored 产物命中/幂等 + 合成原始锚点注入契约 +
-// 注入体（CREDENTIALS_HELPERS_CODE）vm 行为验证（与落盘字节同源）。
+// 覆盖：transform 对真实 vendored 产物的命中/幂等（输入统一由逆运算剥回 pristine，
+// 不看磁盘运气）+ 半补丁态（marker 残留、注入体缺失）必须重打 + 注入体
+// （CREDENTIALS_HELPERS_CODE）vm 行为验证（与落盘字节同源）。
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -18,33 +19,78 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const {
-  CREDENTIALS_INITIAL_RETRY_MARKER,
   CREDENTIALS_HELPERS_CODE,
+  PRISTINE_INJECTIONS,
   transformCredentialsInitialRetry,
+  toPristineSource,
+  markers,
 } = require('../lib/patch-adapters');
+const { PATCH_SPECS } = require('../lib/patch-registry');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
-// 源选择（2026-08-22 重写教训）：dev node_modules 是在跑实例的 boot 链战场
-//（pristine↔patched 漂移+写入中途态），优先读应用碰不到的 pristine 暂存树。
-const PRISTINE_CRED = path.join(repoRoot, '..', '.tmp-rc2-stage', 'node_modules', '@deepseek-ai', 'dsh-credentials-local', 'lib', 'index.js');
-const DEV_CRED = path.join(repoRoot, 'node_modules', '@deepseek-ai', 'dsh-credentials-local', 'lib', 'index.js');
-const credFile = fs.existsSync(PRISTINE_CRED) ? PRISTINE_CRED : DEV_CRED;
+// 靶字节来源（2026-09-05 收口）：这里曾硬编码仓库根 .tmp-rc2-stage 当「pristine 暂存树」，
+// 而那株一次性 npm 装配产物早已被清理，existsSync 恒 false —— 注释承诺的「优先读应用碰
+// 不到的树」从未生效，实际一直在读 dev 副本；而 dev / payload 都会被 boot 链与打包链就地
+// 打补丁。现在统一取在野副本，再用 toPristineSource 剥回 pristine（同 unit-manual-sort /
+// unit-drift-sentinel-capture 的手法），changed 分支才被真正执行 —— 否则补丁态上报
+// already，真锚点漂移时同样上报 already，这条哨兵等于闭嘴。
+const CRED_REL = (PATCH_SPECS.find((s) => s.id === 'credentials-initial-retry') || {}).pkgRel;
+assert.ok(typeof CRED_REL === 'string' && CRED_REL, '注册表里找不到 credentials-initial-retry 的 pkgRel');
+const CRED_TARGETS = [
+  path.join(repoRoot, 'node_modules', '@deepseek-ai', CRED_REL),
+  path.join(repoRoot, '..', 'dsh-tauri', 'package-payload', 'dsh-desktop',
+    'node_modules', '@deepseek-ai', CRED_REL),
+];
+const credFile = CRED_TARGETS.find((f) => fs.existsSync(f)) || null;
+
+// marker 常量只经 patch-adapters 的 `markers` 子对象导出。本文件此前从顶层解构
+// CREDENTIALS_INITIAL_RETRY_MARKER，拿到的是 undefined，于是 src.includes(undefined)
+// 被强制成查找字面词 "undefined"（任何 JS 文件都命中）—— 「双态完整判定」与
+// assert.ok(...includes(MARKER)) 都永远不会失败。下面两条断言钉住这个出口。
+const MARKER = markers.CREDENTIALS_INITIAL_RETRY_MARKER;
+assert.equal(typeof MARKER, 'string',
+  'markers.CREDENTIALS_INITIAL_RETRY_MARKER 必须存在（解构到 undefined 会让下方断言永真）');
+assert.ok(MARKER.length > 10, 'marker 不得是空串：includes("") 恒真');
 
 test('credentials-initial-retry: 真实 vendored 产物锚点命中且幂等', () => {
-  const src = fs.readFileSync(credFile, 'utf8');
+  assert.ok(credFile, `找不到 vendored credentials-local 产物（候选：${CRED_TARGETS.join(' , ')}）`);
+  const src = toPristineSource('credentials-initial-retry', fs.readFileSync(credFile, 'utf8'));
+  assert.ok(!src.includes(MARKER), 'pristine 基准仍含 marker —— 逆运算没剥干净，changed 会退化成 already 假绿');
+  assert.ok(!src.includes('readInitialDocumentWithRetry'), 'pristine 基准仍含注入体 —— 逆运算没剥干净');
   const r = transformCredentialsInitialRetry(src, credFile);
-  // 双态完整判定（marker + 注入体同在才算已打——防写入中途态误入 already 分支）。
-  if (src.includes(CREDENTIALS_INITIAL_RETRY_MARKER) && src.includes('readInitialDocumentWithRetry')) {
-    assert.equal(r.status, 'already');
-    assert.ok(src.includes('readInitialDocumentWithRetry'));
-    assert.ok(src.includes('statInitialWithRetry'));
-    return;
-  }
   assert.equal(r.status, 'changed', '锚点应命中真实产物');
   assert.equal(transformCredentialsInitialRetry(r.src, credFile).status, 'already', '注入后幂等');
-  assert.ok(r.src.includes(CREDENTIALS_INITIAL_RETRY_MARKER));
+  assert.ok(r.src.includes(MARKER));
+  assert.ok(r.src.includes('readInitialDocumentWithRetry'));
+  assert.ok(r.src.includes('statInitialWithRetry'));
   assert.ok(r.src.includes('text = await readInitialDocumentWithRetry(this.spec.filename);'));
   assert.ok(r.src.includes('mode = (await statInitialWithRetry(filename)).mode;'));
+  // 往返闭合：产物再剥一次必须逐字节回到 pristine（钩住「登记表里的替换对」与
+  // 「transform 实际写的字节」没有各走各的）。
+  assert.equal(toPristineSource('credentials-initial-retry', r.src), src,
+    '逆运算与正向注入必须互为逆');
+});
+
+test('credentials-initial-retry: 任一处注入单独丢失都必须被重打回全量态', () => {
+  // 写入中途被杀 / 工具误删一个代码块，都会留下「只丢一处注入」的孤儿态。
+  // 旧实现下：丢调用点或丢注入体会被误判 already（永不重打），丢首读块则
+  // 因「要求三锚点同时在场」直接 anchor-missing（也永不重打）—— 三种都是静默留坏。
+  // 夹具直接从 PRISTINE_INJECTIONS 登记表反推（只剥其中一对），不手抄代码片段。
+  assert.ok(credFile, '缺少 vendored credentials-local 产物');
+  const src = toPristineSource('credentials-initial-retry', fs.readFileSync(credFile, 'utf8'));
+  const full = transformCredentialsInitialRetry(src, credFile);
+  assert.equal(full.status, 'changed', '前置：全量注入基准本身要能产出');
+  const pairs = PRISTINE_INJECTIONS['credentials-initial-retry'];
+  assert.ok(pairs.length >= 3, `登记表至少应有三对注入（首读块/权限 stat/注入体），实际 ${pairs.length}`);
+
+  pairs.forEach(([from, to], i) => {
+    assert.ok(full.src.includes(to), `前置：第 ${i + 1} 对的补丁态没出现在产物里，登记表与 transform 已不一致`);
+    const orphan = full.src.replace(to, from);
+    assert.notEqual(orphan, full.src, `第 ${i + 1} 对未能造成差异`);
+    const healed = transformCredentialsInitialRetry(orphan, credFile);
+    assert.equal(healed.status, 'changed', `第 ${i + 1} 对注入丢失后必须重打（不得误入 already / anchor-missing）`);
+    assert.equal(healed.src, full.src, `第 ${i + 1} 对重打后应与正常产物逐字节一致`);
+  });
 });
 
 test('credentials-initial-retry: 行为级——瞬时错重试、ENOENT 立即抛、确定性错不无限重试', async () => {

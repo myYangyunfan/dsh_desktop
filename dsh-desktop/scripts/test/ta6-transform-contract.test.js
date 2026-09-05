@@ -4,9 +4,9 @@
 // TA6 元测试 2：transform 契约三态语义统一（37 个 file transform 逐个实跑）。
 //
 // 对每个 transform 用三种输入各跑一遍：
-//   1) pristine 源（.tmp-rc2-stage 未经补丁的内核包文本；重定位补丁回退到
-//      .tmp-kernel 的 0.1.2-alpha.1 构建产物）→ status ∈ {changed, already,
-//      anchor-missing}；
+//   1) pristine 源（pristine-kernel-roots 给出的未补丁内核闭包树，历史上是
+//      .tmp-rc2-stage、现为 .tmp-kernel/.consumer-*/node_modules；重定位补丁回退到
+//      .tmp-kernel 的构建产物）→ status ∈ {changed, already, anchor-missing}；
 //        - changed：必须携带 string src 且与输入不同；
 //        - already：不得携带 src；
 //        - anchor-missing（自然退役）：detail 非空且含文件名；此时用
@@ -27,60 +27,41 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { PATCH_SPECS } = require('../lib/patch-registry');
+// pristine 源的定位统一收口在 pristine-kernel-roots：过去这里把单一
+// .tmp-rc2-stage（一次性 npm 装配产物）硬编码成唯一 pristine 根，该树被清理后
+// 本文件整片红；现在按「闭包树候选根 → 内核构建产物 → 桌面壳独有依赖」逐级回退。
+const { pristineRoots, findPristineTarget, describePristineRoots } = require('../lib/pristine-kernel-roots');
 
-const PRISTINE_RC2 = path.join(__dirname, '..', '..', '..', '.tmp-rc2-stage', 'node_modules');
 const PATCHED_DESKTOP = path.join(__dirname, '..', '..', 'node_modules'); // postinstall 后的真实已应用树
 const POISON_LABEL = 'TA6-POISON-TARGET.js';
-// 0.1.2-alpha.1：重定位补丁的目标包（dsh-api-session-controller / dsh-api-settings-
-// controller / dsh-client-ui-slots 等）不在 .tmp-rc2-stage（旧内核）中，三态契约需
-// 回退到 .tmp-kernel 的 pristine 构建产物（built lib）定位目标。
-const KERNEL_BUILD = path.join(__dirname, '..', '..', '..', '.tmp-kernel');
-let KERNEL_BY_NAME = null;
-function kernelTarget(pkgRel) {
-  if (KERNEL_BY_NAME === null) {
-    try {
-      const inv = JSON.parse(fs.readFileSync(path.join(KERNEL_BUILD, '.dsh-inventory.json'), 'utf8'));
-      KERNEL_BY_NAME = new Map(inv.map((p) => [p.name, p.dir]));
-    } catch { KERNEL_BY_NAME = new Map(); }
-  }
-  const parts = String(pkgRel).split(path.sep);
-  const rec = KERNEL_BY_NAME.get('@deepseek-ai/' + parts[0]);
-  if (!rec || typeof rec !== 'string') return null;
-  return path.join(KERNEL_BUILD, rec, ...parts.slice(1));
-}
 
-function targetFile(root, spec) {
+/**
+ * 定位 spec 的目标文件。
+ * @param {object} spec registry 条目
+ * @param {string} [root] 显式根（如真实已应用树 dsh-desktop/node_modules）；
+ *   省略 = 跨全部 pristine 候选源搜索。
+ */
+function targetFile(spec, root) {
+  if (root === undefined) return findPristineTarget(spec);
+  const rels = spec.pkgRels && spec.pkgRels.length ? spec.pkgRels : [spec.pkgRel];
   if (spec.layout === 'profile-boot-dirs') {
     const lib = path.join(root, '@deepseek-ai', 'dsh', 'lib');
-    try {
-      const files = fs.readdirSync(lib).filter((f) => /^profile-boot-.*\.js$/.test(f));
-      return files.length ? path.join(lib, files[0]) : null;
-    } catch { return null; }
+    let names = [];
+    try { names = fs.readdirSync(lib); } catch { return null; }
+    const hit = names.filter((f) => /^profile-boot-.*\.js$/.test(f)).sort();
+    return hit.length ? path.join(lib, hit[0]) : null;
   }
-  const rels = spec.pkgRels && spec.pkgRels.length ? spec.pkgRels : [spec.pkgRel];
   for (const rel of rels) {
     const p = path.join(root, '@deepseek-ai', rel);
     if (fs.existsSync(p)) return p;
   }
-  if (root === PRISTINE_RC2) {
-    for (const rel of rels) {
-      const p = kernelTarget(rel);
-      if (p && fs.existsSync(p)) return p;
-    }
-    // 桌面壳独有依赖（@openai/codex 等非 @deepseek-ai scope 包）在内核 pristine
-    // 树无源；postinstall/patch-deps 不碰它们，dsh-desktop/node_modules 对其是 pristine。
-    for (const rel of rels) {
-      const p = path.join(PATCHED_DESKTOP, rel);
-      if (fs.existsSync(p)) return p;
-    }
-  }
   return null;
 }
 
-/** pristine 输入：重定位补丁回退到 alpha.1 内核构建产物。 */
+/** pristine 输入：跨全部 pristine 候选源定位（见 pristine-kernel-roots）。 */
 function pristineInput(spec) {
-  const file = targetFile(PRISTINE_RC2, spec);
-  assert.ok(file, `${spec.id} 在 pristine 树中找不到目标文件`);
+  const file = targetFile(spec);
+  assert.ok(file, `${spec.id} 在 pristine 树中找不到目标文件（可用根：${describePristineRoots()}）`);
   const src = fs.readFileSync(file, 'utf8');
   return { file, src };
 }
@@ -100,8 +81,9 @@ function excavateAnchor(input, patched) {
 
 const fileSpecs = PATCH_SPECS.filter((s) => s.kind === 'file');
 
-test('前置条件：pristine rc.2 stage 树与真实已应用树均可用', () => {
-  assert.ok(fs.existsSync(PRISTINE_RC2), `缺 pristine 源 ${PRISTINE_RC2}`);
+test('前置条件：pristine 内核树与真实已应用树均可用', () => {
+  assert.ok(pristineRoots().length > 0,
+    '无任何可用 pristine 根（曾经硬编码 .tmp-rc2-stage，该树被清后本文件集体假红）：' + describePristineRoots());
   assert.ok(fs.existsSync(PATCHED_DESKTOP));
 });
 
@@ -125,7 +107,7 @@ for (const spec of fileSpecs) {
       assert.ok(r1.detail && r1.detail.includes(path.basename(file)),
         `${spec.id} 退役态 detail 应含文件名，得 "${r1.detail}"`);
       // 退役补丁在真实已应用树上必须表现为 already（幂等语义不因退役丢失）。
-      const patchedFile = targetFile(PATCHED_DESKTOP, spec);
+      const patchedFile = targetFile(spec, PATCHED_DESKTOP);
       if (patchedFile) {
         const rp = spec.transform(fs.readFileSync(patchedFile, 'utf8'), patchedFile);
         assert.equal(rp.status, 'already', `${spec.id} 在真实已应用树应 already，得 ${rp.status}`);
@@ -135,7 +117,7 @@ for (const spec of fileSpecs) {
     // 2) 已应用源（自产）：幂等 already。
     const applied = r1.status === 'changed' ? r1.src
       : r1.status === 'already' ? pristine
-        : fs.readFileSync(targetFile(PATCHED_DESKTOP, spec), 'utf8');
+        : fs.readFileSync(targetFile(spec, PATCHED_DESKTOP), 'utf8');
     const r2 = spec.transform(applied, file);
     assert.equal(r2.status, 'already', `${spec.id} 已应用源应 already，得 ${r2.status}`);
     assert.equal(r2.src, undefined);

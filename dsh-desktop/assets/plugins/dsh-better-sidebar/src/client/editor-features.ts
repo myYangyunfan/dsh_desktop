@@ -4,22 +4,24 @@
  * Self-contained by construction: it relies only on @codemirror/state +
  * @codemirror/view core machinery (ViewPlugin / Decoration / WidgetType /
  * GutterMarker / keymap — all already inside the editor chunk bundle), because
- * the vendored bundle cannot be rebuilt offline and @codemirror/search is not
- * part of the built chunk. The find panel is therefore a hand-rolled DOM
- * overlay hosted by a ViewPlugin, and folding is indentation-based (the
- * language-agnostic fallback editors use when no folder provider exists).
+ * @codemirror/search is not part of the built chunk. The find panel is therefore
+ * a hand-rolled DOM overlay hosted by a ViewPlugin, and folding is
+ * indentation-based (the language-agnostic fallback editors use when no folder
+ * provider exists).
  *
  * CSS is injected at runtime as one <style data-plugin-css> tag (the K28
- * file-changes-highlight pattern) instead of css-module hashing, so the
- * equivalent inline section in lib/client-editor.js needs no build pipeline.
+ * file-changes-highlight pattern) instead of css-module hashing, so the class
+ * names stay stable across rebuilds instead of being rewritten by the bundler.
  * Colors derive from `currentColor` + color-mix so both schemes read fine.
  *
  * The pure helpers (matchingBracketIndex / foldableBlocks / findMatchOffsets /
- * computeReplacedText) ship as `__internals` on the chunk export for Node vm
- * testing; lib/client-editor.js carries the equivalent inline section between
- * the `dsh-editor-features` markers (see
- * scripts/test/unit-better-sidebar-editor-features.test.js, which vm-evals
- * that very section).
+ * computeReplacedText) ship as `__internals` on the chunk export, so
+ * scripts/test/unit-better-sidebar-editor-features.test.js can vm-evaluate the
+ * shipped lib/client-editor.js and test the released bytes directly. (An earlier
+ * regime hand-inlined an equivalent section between `dsh-editor-features`
+ * markers in lib because the chunk could not be rebuilt; that is gone now that
+ * `npm run build` works — keep it that way, having both is a duplicate
+ * declaration.)
  */
 import { EditorSelection, StateEffect, StateField, type Extension } from '@codemirror/state'
 import {

@@ -14,31 +14,51 @@ const {
   transformPersistenceTornTail,
   PERSISTENCE_CORRUPT_MARKER,
   transformPersistenceCorruptGuard,
+  transformPersistenceAll,
 } = require('../lib/runtime-patches');
+const {
+  toPristineSource, transformSessionHeaderScanGuard, transformSessionLoadGraceful,
+} = require('../lib/patch-adapters');
 
-// 本单测绝不 patch 真实 dev node_modules：优先把仓库根 .tmp-rc2-stage 的
-// pristine 装配产物（或回退 dev node_modules）拷入 os.tmpdir 临时树，再对临时
-// 树应用 patchSessionPersistence 并断言产物。避免全量测试并发时污染共享 dev 树，
-// 进而让「内核源应命中锚点（pristine）」类断言假失败。
-const devNmRoot = path.join(path.resolve(__dirname, '..', '..'), 'node_modules');
-const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
-const PRISTINE_NM = path.join(REPO_ROOT, '.tmp-rc2-stage', 'node_modules');
+// 靶基准：dev node_modules 里的内核副本经 PRISTINE_FAMILIES 逆运算剥掉全部四个
+// 持久化补丁后的 pristine 字节。旧实现抓 .tmp-rc2-stage 装配产物、缺省静默回退
+// dev 副本 —— 而 dev 副本被 boot 链打过补丁，“基准”其实是补丁态，本文件最后
+// 那条「中帧损坏仍必须致命」的用例就是这样被掩盖掉的（K6 把它吞了）。
+// 行为用例把「pristine + 全链补丁」写成包内临时 .mjs 再 import：既不改真实
+// 文件、也不需整棵 node_modules 拷贝（旧做法单次 47~60s），同时裸 specifier
+// 仍能从包目录正常解析。
+const DESKTOP_ROOT = path.resolve(__dirname, '..', '..');
+const TARGET = path.join(DESKTOP_ROOT, 'node_modules', '@deepseek-ai', PERSISTENCE_PKG_REL);
 
-/** 惰性构建一份「已打 patch」的隔离 node_modules 树（进程内共享，仅拷一次）。 */
-let _shared = null;
-function sharedTree() {
-  if (_shared) return _shared;
+function kernelPristine() {
+  assert.ok(fs.existsSync(TARGET), '找不到内核靶文件：' + TARGET);
+  return toPristineSource('session-persistence-family', fs.readFileSync(TARGET, 'utf8'));
+}
+
+/** 只写「被改的那一个文件」进临时 nmRoot（root 应用器只碰这一个路径）。 */
+function tinyNmRoot(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-persist-rec-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const nmRoot = path.join(root, 'node_modules');
-  const src = fs.existsSync(PRISTINE_NM) ? PRISTINE_NM : devNmRoot;
-  fs.cpSync(src, nmRoot, { recursive: true });
   const target = path.join(nmRoot, '@deepseek-ai', PERSISTENCE_PKG_REL);
-  patchSessionPersistence(nmRoot);
-  process.on('exit', () => {
-    try { fs.rmSync(root, { recursive: true, force: true }); } catch { /* tmp 残留无害 */ }
-  });
-  _shared = { root, nmRoot, target };
-  return _shared;
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, kernelPristine());
+  return { nmRoot, target };
+}
+
+/** 装载「pristine + root 应用器 + registry 文件补丁（K5/K6）」全链产物的模块。 */
+async function loadFullStackKernel(t) {
+  let src = kernelPristine();
+  for (const step of [transformPersistenceAll, transformSessionHeaderScanGuard, transformSessionLoadGraceful]) {
+    const r = step(src, TARGET);
+    assert.equal(r.status, 'changed', '全链重放必须逐步 changed（得 ' + r.status + '：基准不 pristine 或上游已漂移）：' + (r.detail || ''));
+    src = r.src;
+  }
+  const file = path.join(path.dirname(TARGET),
+    'index.recovery-' + process.pid + '-' + Date.now() + '-' + Math.random().toString(36).slice(2) + '.mjs');
+  fs.writeFileSync(file, src);
+  t.after(() => fs.rmSync(file, { force: true }));
+  return import(pathToFileURL(file).href);
 }
 
 function frame(value) {
@@ -69,9 +89,10 @@ function fixture() {
   };
 }
 
-test('session persistence patch is applied and idempotent', () => {
-  const { nmRoot, target } = sharedTree();
-  patchSessionPersistence(nmRoot); // 幂等：临时树已应用，二次应用应 no-op
+test('session persistence patch is applied and idempotent', (t) => {
+  const { nmRoot, target } = tinyNmRoot(t);
+  const changed = patchSessionPersistence(nmRoot); // pristine 临时树 → 首遍应写盘
+  assert.equal(changed, 1, '首遍应应用 1 个文件（得 ' + changed + ' 说锚点未命中）');
   const source = fs.readFileSync(target, 'utf8');
   assert.match(source, new RegExp(PERSISTENCE_TORN_MARKER));
   assert.equal(transformPersistenceTornTail(source, target).status, 'already');
@@ -79,11 +100,12 @@ test('session persistence patch is applied and idempotent', () => {
   // 「损坏会话日志容错」补丁，两个补丁都应已应用（幂等）。
   assert.match(source, new RegExp(PERSISTENCE_CORRUPT_MARKER));
   assert.equal(transformPersistenceCorruptGuard(source, target).status, 'already');
+  assert.equal(patchSessionPersistence(nmRoot), 0, '二遍必须 no-op（幂等）');
+  assert.equal(fs.readFileSync(target, 'utf8'), source, '二遍不得重复注入');
 });
 
-test('complete final zstd frame with torn JSONL returns a repair marker', async () => {
-  const { target } = sharedTree();
-  const mod = await import(`${pathToFileURL(target).href}?recovery-final-frame`);
+test('complete final zstd frame with torn JSONL returns a repair marker', async (t) => {
+  const mod = await loadFullStackKernel(t);
   const backend = Object.create(mod.JsonlSessionPersistence.prototype);
   const { headerFrame, start } = fixture();
   const eventFrame = frame(JSON.stringify(start) + '\n{"type":"assistant/message","seq":1');
@@ -94,9 +116,8 @@ test('complete final zstd frame with torn JSONL returns a repair marker', async 
   assert.equal(result.tornMarker.truncateTo, headerFrame.length);
 });
 
-test('complete newline-terminated frame keeps the normal no-marker path', async () => {
-  const { target } = sharedTree();
-  const mod = await import(`${pathToFileURL(target).href}?recovery-clean-frame`);
+test('complete newline-terminated frame keeps the normal no-marker path', async (t) => {
+  const mod = await loadFullStackKernel(t);
   const backend = Object.create(mod.JsonlSessionPersistence.prototype);
   const { headerFrame, start } = fixture();
   const end = {
@@ -114,9 +135,12 @@ test('complete newline-terminated frame keeps the normal no-marker path', async 
   assert.equal(result.tornMarker, undefined);
 });
 
-test('torn JSONL in a non-final complete frame remains corruption', async () => {
-  const { target } = sharedTree();
-  const mod = await import(`${pathToFileURL(target).href}?recovery-middle-frame`);
+// 本用例跑的是「pristine + root 应用器 + K5 + K6」全链，不是单看 torn-tail：
+// K6（加载优雅降级）的 catch 一度不分位置地吞掉这个故意的硬抛，并把
+// commitRepair 的截盘范围扩大到损坏帧之后 —— 完好历史帧被静默销毁。末帧守卫
+// 落地后，中帧损坏必须回到硬抛。
+test('torn JSONL in a non-final complete frame remains corruption', async (t) => {
+  const mod = await loadFullStackKernel(t);
   const backend = Object.create(mod.JsonlSessionPersistence.prototype);
   const { headerFrame, start } = fixture();
   const tornFrame = frame(JSON.stringify(start) + '\n{"type":"assistant/message","seq":1');
@@ -127,8 +151,17 @@ test('torn JSONL in a non-final complete frame remains corruption', async () => 
     data: { turn: 0, reason: { kind: 'completed' } },
   }) + '\n');
 
-  await assert.rejects(
-    backend.readZstdPrefix(Buffer.concat([headerFrame, tornFrame, followingFrame])),
-    /complete frame contains a torn JSONL record/,
-  );
+  const warns = [];
+  const originalWarn = console.warn;
+  console.warn = (msg) => { warns.push(String(msg)); };
+  try {
+    await assert.rejects(
+      backend.readZstdPrefix(Buffer.concat([headerFrame, tornFrame, followingFrame])),
+      /complete frame contains a torn JSONL record/,
+    );
+  } finally {
+    console.warn = originalWarn;
+  }
+  assert.equal(warns.filter((w) => w.includes('degraded session load')).length, 0,
+    '中帧损坏不得走 K6 降级通道（那会连带截盘销毁 followingFrame）');
 });

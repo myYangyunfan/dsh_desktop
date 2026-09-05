@@ -12,6 +12,11 @@
 //
 // 纯逻辑挂在 window.__dshImagePasteCore 上（生产无副作用），供 node 测试
 // 套件直接评估本文件验证 —— 官方模块加载器只支持 classic script，不能 import。
+//
+// 降级通道的写入口适配（内核换代后）：composer 已由 <textarea> 换成 Lexical
+// contenteditable，拿 textarea 原型 setter 打在 <div> 上会抛 TypeError，被外层
+// .catch 吞成「粘贴石沉大海」—— 故注入按元素形态分流、注入后回读校验，
+// 写不上与存盘失败都给可见提示，不再静默降级。
 (function () {
   'use strict';
 
@@ -90,30 +95,112 @@
       imageFilesFrom: imageFilesFrom,
       sanitizeName: sanitizeName,
       buildPasteHint: buildPasteHint,
+      injectIntoComposer: injectIntoComposer,
     };
   }
 
   // ───────────────────────── DOM 粘合 ─────────────────────────
 
-  /** 找到当前会话的输入框（React 受控 textarea，与 dsh-file-drop 同款）。 */
-  function findComposer() {
-    var ae = typeof document !== 'undefined' ? document.activeElement : null;
-    if (ae && (ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return ae;
-    var root = document.querySelector('[data-slot="conversation.session"]');
-    var scope = root || document;
-    return scope.querySelector('textarea');
+  /** 在给定作用域里安全查询（测试桩里的“元素”可能没有 querySelector）。 */
+  function queryIn(scope, selector) {
+    try {
+      if (scope && typeof scope.querySelector === 'function') return scope.querySelector(selector);
+    } catch (_e) { /* 选择器非法/不可达 */ }
+    return null;
   }
 
-  /** 向 React 受控 textarea 注入文本（native setter + input 事件）。 */
-  function injectIntoComposer(textarea, text) {
-    if (!textarea || !text) return false;
-    textarea.focus();
-    var setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
-    var next = (textarea.value || '') + text;
-    if (!next.endsWith('\n')) next += '\n';
-    setter.call(textarea, next);
-    textarea.dispatchEvent(new Event('input', { bubbles: true }));
-    return true;
+  /**
+   * 找到当前会话输入框。两代内核两种形态都认：当前是 Lexical
+   * contenteditable（[data-composer-input] 为实测在位的稳定属性，全页已无
+   * textarea），旧版是 React 受控 textarea。粘贴时焦点常常在 body 而不
+   * 是输入框，所以必须先按权威锚点找，焦点元素只作兜底。
+   */
+  function findComposer() {
+    if (typeof document === 'undefined') return null;
+    var scope = queryIn(document, '[data-slot="conversation.session"]') || document;
+    return queryIn(scope, '[data-composer-input]')
+      || queryIn(scope, '[data-lexical-editor]')
+      || queryIn(scope, 'textarea')
+      || queryIn(document, '[data-composer-input]')
+      || (function () {
+        var ae = document.activeElement;
+        return ae && (ae.tagName === 'TEXTAREA' || ae.isContentEditable) ? ae : null;
+      })();
+  }
+
+  /** 读输入框当前文本（textarea 走 value，contenteditable 走 textContent）。 */
+  function composerText(el) {
+    if (!el) return null;
+    try {
+      if (typeof el.value === 'string') return el.value;
+      if (typeof el.textContent === 'string') return el.textContent;
+    } catch (_e) { /* 异形元素 */ }
+    return null;
+  }
+
+  /**
+   * 向输入框注入文本，按元素形态分流两条写路径：
+   *   · textarea（旧内核 React 受控）：native value setter + input 事件；
+   *   · contenteditable（当前 Lexical）：光标移到末尾后 execCommand
+   *     ('insertText')，经 beforeinput 管线让编辑器自己收下。
+   * 返回是否真的落上（回读校验）：调用须据此给可见提示，不得再
+   * 静默吞——旧实现拿 textarea 原型 setter 打在 <div> 上抛 TypeError 后被 .catch
+   * 吞掉，就是本插件「粘了图片但输入框丝毫没有反应」的直接原因。
+   */
+  function injectIntoComposer(el, text) {
+    if (!el || !text) return false;
+    var before = composerText(el) || '';
+    var payload = text.endsWith('\n') ? text : text + '\n';
+    try { el.focus(); } catch (_e) { /* 不可聚焦不影响写入 */ }
+    var isTextarea = el.tagName === 'TEXTAREA' || (typeof el.value === 'string' && !el.isContentEditable);
+    if (isTextarea) {
+      var desc = typeof HTMLTextAreaElement === 'function'
+        ? Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value') : null;
+      if (desc && typeof desc.set === 'function') desc.set.call(el, before + payload);
+      else el.value = before + payload;
+      try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (_e2) { /* 桩环境无 Event */ }
+    } else {
+      try {
+        var sel = typeof window !== 'undefined' && typeof window.getSelection === 'function' ? window.getSelection() : null;
+        var range = typeof document.createRange === 'function' ? document.createRange() : null;
+        if (sel && range && typeof range.selectNodeContents === 'function') {
+          range.selectNodeContents(el);
+          range.collapse(false); // 末尾——不劈开刚粘上的文本与引用 chip
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      } catch (_e3) { /* 选区不可得仍试一次 insertText */ }
+      try {
+        if (!document.execCommand('insertText', false, payload)) return false;
+      } catch (_e4) { return false; }
+    }
+    var after = composerText(el);
+    if (after === null) return true; // 回读不到（异形桩元素）→ 信任写入
+    return after.length > before.length && after.indexOf(text) >= 0;
+  }
+
+  var NOTICE_ID = 'dsh-image-paste-notice';
+
+  /** 降级通道的可见错误出口（本插件无槽位也无 ctx，只能自绘浮层）。 */
+  function showNotice(message) {
+    try {
+      if (typeof document === 'undefined' || !document.body || !document.createElement) return;
+      var host = document.getElementById(NOTICE_ID);
+      if (!host) {
+        host = document.createElement('div');
+        host.id = NOTICE_ID;
+        host.setAttribute('data-plugin', 'dsh-image-paste');
+        host.style.cssText = 'position:fixed;bottom:140px;left:50%;transform:translateX(-50%);z-index:2147483000;' +
+          'max-width:min(560px,86vw);padding:8px 14px;border-radius:10px;font-size:12.5px;line-height:18px;' +
+          'pointer-events:none;background:#16203a;color:#ff7a85;border:1px solid rgba(127,127,127,.35);' +
+          'font-family:system-ui,sans-serif;box-shadow:0 8px 28px rgba(0,0,0,.35);';
+        document.body.appendChild(host);
+      }
+      host.textContent = message;
+      host.style.display = 'block';
+      clearTimeout(showNotice._t);
+      showNotice._t = setTimeout(function () { host.style.display = 'none'; }, 6000);
+    } catch (_e) { /* 展示失败静默（不能因报错通道再报错） */ }
   }
 
   function saveViaBridge(file) {
@@ -154,9 +241,15 @@
       .then(function () {
         var all = hints.concat(missing);
         if (all.length === 0) return;
-        injectIntoComposer(findComposer(), window.__dshImagePasteCore.buildPasteHint({ images: all }));
+        // 注入失败必须可见：图已落盘，用户拿不到路径就等于丢图。
+        if (!injectIntoComposer(findComposer(), window.__dshImagePasteCore.buildPasteHint({ images: all }))) {
+          showNotice('粘贴图片已存到临时目录，但没能写进输入框——请重试，或直接把路径粘给 agent');
+        }
       })
-      .catch(function (_e) { /* 保存失败静默降级：不给输入框添乱 */ });
+      .catch(function (e) {
+        // 存盘失败也给出口：静默吞会让用户以为「粘上了但模型没看到」。
+        showNotice('粘贴图片降级保存失败：' + ((e && e.message) || '未知原因'));
+      });
   }
 
   function attachPasteHandler() {

@@ -7,7 +7,7 @@
  * `browser:<n>` the same way (no quota). The editor IS the files window
  * (the old standalone explorer merged into it).
  */
-import { IconBranchOutline16, IconCodeOutline16, IconFolderOpen16, IconNewChatOutline16, IconPanelLeftOutline16, IconThinkOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconBranchOutline16, IconFolderOpen16, IconNewChatOutline16, IconThinkOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Context } from '../../context-types.ts'
 import { allLeaves, isAgentTabId, type SidebarState } from '../state.ts'
 import { t } from '../locales.ts'
@@ -81,40 +81,23 @@ export function builtinTabs(ctx: Context, options: BuiltinTabOptions = {}): read
   return [
     {
       id: 'editor',
-      // The single files window: an editor tab with no path IS the file
-      // explorer (empty hint + docked tree); with a path it previews/edits
-      // the file. Visible in the + menu in the explorer's old slot.
+      // The FILE VIEWER tab: an editor tab with a path previews/edits that
+      // file. The file tree is no longer hosted in the tab — it is the
+      // persistent Explorer rail to the left of the workbench (ExplorerRail).
+      // dedupeKey = the path, so every file is one tab and a fresh click can
+      // never overwrite a tab already open (the reported preview-replace bug).
+      // Visible in the + menu in the explorer's old slot.
       title: () => t('files'),
       icon: (size: number) => <IconFolderOpen16 size={size} />,
       order: 10,
       hidden: false,
       dedupeKey: (tab) => tab.path,
-      // Declarative settings: the file-open behavior picker (in-place switch
-      // vs per-path windows) renders as an iconed select row under the
-      // editor card's gear in the Side card settings page; the "open with"
-      // configuration (SSH host + custom editors) is the custom panel BELOW
-      // those rows — the settings seam renders rows first, custom panel after.
+      // Declarative settings: the merged/separate "file open behavior" picker
+      // was RETIRED with the unified VSCode tab model (a single window with
+      // preview / pinned tabs is now the only behavior), so the editor card
+      // has no toggle rows left — only the "open with" custom panel (SSH host
+      // + external editors) below the (now-empty) rows list.
       settings: {
-        toggles: [{
-          key: 'editorExplorer',
-          type: 'select',
-          title: () => t('editorExplorer'),
-          desc: () => t('editorExplorerDesc'),
-          options: [
-            {
-              value: true,
-              icon: (size: number) => <IconPanelLeftOutline16 size={size} />,
-              title: () => t('editorExplorerMerged'),
-              desc: () => t('editorExplorerMergedDesc'),
-            },
-            {
-              value: false,
-              icon: (size: number) => <IconCodeOutline16 size={size} />,
-              title: () => t('editorExplorerSplit'),
-              desc: () => t('editorExplorerSplitDesc'),
-            },
-          ],
-        }],
         render: ({ pluginSettings, updatePluginSetting }) => (
           <OpenWithSettings pluginSettings={pluginSettings} updatePluginSetting={updatePluginSetting} />
         ),

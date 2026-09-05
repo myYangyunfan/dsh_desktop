@@ -47,8 +47,10 @@ export function TreePanel(props: {
   cwd: string | undefined
   expanded: string[]
   onToggle: (path: string) => void
-  /** Primary open (click / search result): preview in a side split. */
+  /** Primary open (single click / search result): open as a preview tab. */
   onOpenFile: (path: string) => void
+  /** Permanent open (double-click): pin the file's tab (passed through to FileTree). */
+  onOpenFilePermanent?: (path: string) => void
   /** File context-menu "preview" — full-area open (passed through to FileTree). */
   onPreviewFile?: (path: string) => void
   /** File context-menu "open in a new tab" (passed through to FileTree). */
@@ -65,7 +67,7 @@ export function TreePanel(props: {
    *  at a fixed width. */
   full?: boolean
 }) {
-  const { sessionId, cwd, expanded, onToggle, onOpenFile, onOpenFileNewTab, onPreviewFile, openWithTargets, openWithPinned, openWithSsh, onOpenWith, onToggleOpenWithPin, onReferenceFile, full } = props
+  const { sessionId, cwd, expanded, onToggle, onOpenFile, onOpenFilePermanent, onOpenFileNewTab, onPreviewFile, openWithTargets, openWithPinned, openWithSsh, onOpenWith, onToggleOpenWithPin, onReferenceFile, full } = props
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<{ matches: string[]; truncated: boolean } | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -225,6 +227,7 @@ export function TreePanel(props: {
           expanded={expanded}
           onToggle={onToggle}
           onOpenFile={onOpenFile}
+          onOpenFilePermanent={onOpenFilePermanent}
           onOpenFileNewTab={onOpenFileNewTab}
           onPreviewFile={onPreviewFile}
           openWithTargets={openWithTargets}

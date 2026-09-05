@@ -21,13 +21,21 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { transformManualSortFix, MANUAL_SORT_DRAG_MARKER } = require('../lib/patch-adapters');
+const { transformManualSortFix, toPristineSource, markers } = require('../lib/patch-adapters');
+const { WORKSPACE_PKG_REL } = require('../lib/patch-target-resolver');
 
-/** 定位内核 workspace client.js 源：优先 pristine rc2 stage，回退真实 node_modules。 */
+const MANUAL_SORT_DRAG_MARKER = markers.MANUAL_SORT_DRAG_MARKER;
+
+/** 定位内核 workspace client.js 靶文件：dev 安装树优先，其次 payload 镜像。
+ *  两处都会被 boot 链 / stage-payload 就地打补丁，取到字节后统一经
+ *  toPristineSource 剥回 pristine（见 patch-adapters 内该函数的背景注释）——
+ *  否则「未打补丁源应 changed」会在补丁态上报假红，真锚点漂移时同样报
+ *  already，哨兵失效。 */
 function resolveWorkspaceSource() {
   const candidates = [
-    path.join(__dirname, '..', '..', '..', '.tmp-rc2-stage', 'node_modules', '@deepseek-ai', 'dsh-client-ui-workspace', 'lib', 'client.js'),
-    path.join(__dirname, '..', '..', 'node_modules', '@deepseek-ai', 'dsh-client-ui-workspace', 'lib', 'client.js'),
+    path.join(__dirname, '..', '..', 'node_modules', '@deepseek-ai', WORKSPACE_PKG_REL),
+    path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'package-payload', 'dsh-desktop',
+      'node_modules', '@deepseek-ai', WORKSPACE_PKG_REL),
   ];
   for (const c of candidates) {
     if (fs.existsSync(c)) return c;
@@ -114,7 +122,7 @@ function reorderAfterDrag(accountSessionIds, draggedId, over, groupSessions) {
 // ---------------------------------------------------------------------------
 
 test('K25 transform：会话行 onDragStart 注入 flushSync，工作区行不受影响，幂等', { skip: !hasSource }, () => {
-  const pristine = fs.readFileSync(WORKSPACE_PATH, 'utf8');
+  const pristine = toPristineSource('manual-sort-drag-fix', fs.readFileSync(WORKSPACE_PATH, 'utf8'));
   const r = transformManualSortFix(pristine, 'client.js');
   assert.equal(r.status, 'changed', '未打补丁源应 changed');
   const src = r.src;

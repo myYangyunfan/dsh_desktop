@@ -6,7 +6,10 @@
 // syncCompanionFiles 路径，并锁两个契约：
 //   1. 每个清单内子目录都会被目录级同步（缺一个 = 对应插件资产静默丢失）；
 //   2. 清单外的顶层目录（docs/ 等文档目录）不进 profile——防止清单悄悄变
-//      成「全目录镜像」，把上游垃圾也搬进用户 profile。
+//      成「全目录镜像」，把上游垃圾也搬进用户 profile；
+//   3. node_modules/ 只随插件条目的 shipsNodeModules 标志分发（companion-plugins.js
+//      单一数据源）：git 跟踪的正件依赖树照常同步，未标记插件源里的 node_modules
+//      一律视为本机安装残留，绝不同步（残留可达成千上万文件，同步会烧数分钟）。
 // 另锁 HEAL_SUBDIRS 语义：keep-newer 分支只补清单内目录、跳过 node_modules/
 // （注入旧依赖树会经 require 解析顺序破坏新版本——注释契约的行为化锁定）。
 // 运行：node --test scripts/test/ta12-companion-sync-subdirs.test.js
@@ -49,7 +52,8 @@ test('SYNC_SUBDIRS 全清单：九个运行资产目录逐一被目录级同步�
   const profileDir = path.join(home, 'profiles', 'web');
   const assetsRoot = path.join(home, 'assets');
   fs.mkdirSync(assetsRoot, { recursive: true });
-  const plugins = [{ id: 'ta12-all', name: '@scope/ta12-all' }];
+  // shipsNodeModules: true = node_modules/ 是正件依赖树，随九目录清单同步分发。
+  const plugins = [{ id: 'ta12-all', name: '@scope/ta12-all', shipsNodeModules: true }];
   makeAsset(assetsRoot, 'ta12-all', '@scope/ta12-all', '1.0.0');
 
   syncCompanionFiles({ plugins, assetsRoot, profileDir, vendorRoot: path.join(home, 'vendor'), removedIds: new Set(), ...noops });
@@ -75,6 +79,22 @@ test('SYNC_SUBDIRS 白名单边界：清单外顶层目录（docs/）不进 prof
   const dest = path.join(profileDir, 'node_modules', 'ta12-boundary');
   assert.ok(!fs.existsSync(path.join(dest, 'docs')), 'docs/ 不在 SYNC_SUBDIRS，不得被同步进 profile');
   assert.ok(fs.existsSync(path.join(dest, 'lib', 'sentinel-lib.txt')), 'lib/ 应同步（对照）');
+});
+
+test('shipsNodeModules 契约：未标记的插件即使源里有 node_modules/ 也绝不同步（残留防线）', (t) => {
+  const home = tmpdir(t);
+  const profileDir = path.join(home, 'profiles', 'web');
+  const assetsRoot = path.join(home, 'assets');
+  fs.mkdirSync(assetsRoot, { recursive: true });
+  const plugins = [{ id: 'ta12-residue', name: 'ta12-residue' }];
+  makeAsset(assetsRoot, 'ta12-residue', 'ta12-residue', '1.0.0');
+
+  syncCompanionFiles({ plugins, assetsRoot, profileDir, vendorRoot: path.join(home, 'vendor'), removedIds: new Set(), ...noops });
+
+  const dest = path.join(profileDir, 'node_modules', 'ta12-residue');
+  assert.ok(!fs.existsSync(path.join(dest, 'node_modules')),
+    '未标 shipsNodeModules 的 node_modules/ 是本机残留，不得同步进 profile');
+  assert.ok(fs.existsSync(path.join(dest, 'lib', 'sentinel-lib.txt')), '其余 SYNC_SUBDIRS 照常同步（对照）');
 });
 
 test('keep-newer（HEAL_SUBDIRS）分支：缺整目录补齐，但 node_modules/ 绝不注入（require 解析顺序契约）', (t) => {

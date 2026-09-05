@@ -4,9 +4,9 @@
 // Architecture (all client-side, public services only):
 //   1. An invisible occupant in the "conversation.composer.dock" list slot
 //      mounts once per session. Its standard props carry sessionId +
-//      inputActions (setDraft/addImages/submit), and the useSession hook
-//      yields the chat-node snapshot — we distill it into { userMessages,
-//      turnEndSeqs } and remember the latest per session.
+//      inputActions (setDraft/addImages/submit) plus the snapshot hooks, and
+//      we distill the chat-node table into { users, turnEnds } and remember
+//      the latest per session.
 //   2. A MutationObserver decorates every user message row
 //      ([data-chat-flow-kind="user"]) with a hover "edit & rewind" button.
 //   3. On confirm: sessions.fork({ sessionId, atSeq: previousTurnEndSeq })
@@ -16,6 +16,16 @@
 //      child is opened, and once its composer mounts we setDraft(edited) +
 //      re-add images + submit(). If the child composer never surfaces, the
 //      edited text falls back to the clipboard with a toast.
+//
+// Node-table channel: the chat nodes used to hang off SessionSnapshot as
+// `snapshot.chat.nodes`; the kernel moved them into a dedicated ChatSnapshot
+// reached through the `useChat` standard prop (ui-chat itself reads
+// `useChat((s) => s.nodes)`). Reading only `useSession(...).chat.nodes` on a
+// current kernel yields undefined -> the selector returns '' -> the capture
+// stays empty -> every click died at "message context unavailable", i.e. the
+// button rendered but rewinding never did anything (v0.6.2 field report).
+// Both channels are read on every render (hook calls must stay unconditional)
+// and whichever yields data wins, so old and new kernels both work.
 window.__ModuleLoader__.load({ id: 'dsh-message-rewind', factory: (require) => {
   var module = { exports: {} }; var exports = module.exports;
 
@@ -99,41 +109,49 @@ window.__ModuleLoader__.load({ id: 'dsh-message-rewind', factory: (require) => {
   // to the NEXT turn's end (wrong prefix).
   const TURN_END_KINDS = new Set(['turn-tail', 'turn-error', 'turn-max-tokens'])
 
-  function selector(snapshot) {
-    try {
-      const nodes = snapshot && snapshot.chat && snapshot.chat.nodes
-      if (!nodes || typeof nodes.values !== 'function') return ''
-      const users = []
-      const turnEnds = []
-      for (const node of nodes.values()) {
-        if (!node) continue
-        if (node.kind === 'user') {
-          const d = node.data || {}
-          users.push({
-            key: node.key,
-            seq: node.anchorSeq,
-            text: blockText(d.content),
-            imageIds: blockImages(d.content),
-          })
-        } else if (TURN_END_KINDS.has(node.kind)) {
-          turnEnds.push(node.anchorSeq)
-        }
+  function distill(nodes) {
+    if (!nodes || typeof nodes.values !== 'function') return ''
+    const users = []
+    const turnEnds = []
+    for (const node of nodes.values()) {
+      if (!node) continue
+      if (node.kind === 'user') {
+        const d = node.data || {}
+        users.push({
+          key: node.key,
+          seq: node.anchorSeq,
+          text: blockText(d.content),
+          imageIds: blockImages(d.content),
+        })
+      } else if (TURN_END_KINDS.has(node.kind)) {
+        turnEnds.push(node.anchorSeq)
       }
-      users.sort((a, b) => a.seq - b.seq)
-      turnEnds.sort((a, b) => a.seq - b.seq)
-      return JSON.stringify({ users, turnEnds })
-    } catch (e) {
-      return ''
     }
+    users.sort((a, b) => a.seq - b.seq)
+    turnEnds.sort((a, b) => a.seq - b.seq)
+    return JSON.stringify({ users, turnEnds })
+  }
+
+  // Hoisted so the selector identity passed to the hooks never changes.
+  const CHAT_SELECTOR = (snapshot) => {
+    try { return distill(snapshot && snapshot.nodes) } catch (e) { return '' }
+  }
+  const SESSION_SELECTOR = (snapshot) => {
+    try { return distill(snapshot && snapshot.chat && snapshot.chat.nodes) } catch (e) { return '' }
   }
 
   // Invisible dock occupant: receives sessionId + inputActions as standard
   // props and mirrors the distilled snapshot. Renders null forever.
-  function RewindCapture({ sessionId, useSession, inputActions }) {
-    let summary = ''
+  function RewindCapture({ sessionId, useSession, useChat, inputActions }) {
+    let chatSummary = ''
+    let sessionSummary = ''
     try {
-      if (typeof useSession === 'function') summary = useSession(selector) || ''
-    } catch (e) { summary = '' }
+      if (typeof useChat === 'function') chatSummary = useChat(CHAT_SELECTOR) || ''
+    } catch (e) { chatSummary = '' }
+    try {
+      if (typeof useSession === 'function') sessionSummary = useSession(SESSION_SELECTOR) || ''
+    } catch (e) { sessionSummary = '' }
+    const summary = chatSummary || sessionSummary
     try {
       let cap = captures.get(sessionId)
       if (!cap) { cap = { inputActions: null, users: [], turnEnds: [] }; captures.set(sessionId, cap) }

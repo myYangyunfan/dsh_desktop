@@ -15,9 +15,10 @@
 //   层2（内核放宽）：prompt-context-literal 补丁——:118 name-invalid 抛错分支
 //     改为 warn + 字面透传；:122 unknown-variable 保持硬抛。
 //
-// 判定器不是复述实现：从 payload pristine 源逐字节抽出真实的 interpolate()
-// （含 VARIABLE_NAME / GROUP_AT 常量）在 vm 里执行；defuse 函数同样从
-// graph-memory 的 src 与 dist 文件里抽出真实源码执行。
+// 判定器不是复述实现：从 pristine 内核源（payload 装配产物，或经逆运算还原的
+// dev 副本）逐字节抽出真实的 interpolate()（含 VARIABLE_NAME / GROUP_AT 常量）
+// 在 vm 里执行；defuse 函数同样从 graph-memory 的 src 与 dist 文件里抽出真实
+// 源码执行。
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -27,21 +28,41 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { spawnSync } = require('node:child_process');
 
-const { transformPromptContextLiteral, markers } = require('../lib/patch-adapters');
+const { transformPromptContextLiteral, markers, toPristineSource } = require('../lib/patch-adapters');
 const { PATCH_SPECS, getSpecsByCli } = require('../lib/patch-registry');
 const { PROMPT_CONTEXT_LITERAL_PKG_RELS, resolvePatchTargets } = require('../lib/patch-target-resolver');
 const { applyAll } = require('../integration/patch-runner');
 
-const MARKER = 'dsh-desktop fix: prompt-context-literal';
+const MARKER = markers.PROMPT_CONTEXT_LITERAL_MARKER;
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 
-// payload 内核包 pristine 源（补丁判定的唯一基准；dsh-desktop/node_modules 开发
-// 副本可能被运行中实例的 boot 链实时应用过补丁，不作测试输入）。
+// pristine 内核源（补丁判定的唯一基准）。
+//   优先 payload 装配产物（真 pristine，未被任何补丁链碰过）；该目录是一次性
+//   构建产物，不在仓库里，故缺省回退 dev node_modules 副本 —— 但不再像早期
+//   那样“直接用打过补丁的副本当 pristine”（那会让 changed 退化成 already 假红，
+//   真漂移时同样只报 already = 哨兵闭嘴），而是用 PRISTINE_INJECTIONS 的逆运算
+//   把注入体剥掉。剥不干净时下方「基准自检」用例会直接红，不会悄悄失效。
 const PAYLOAD_KERNEL = path.join(
   REPO_ROOT, '.tmp-rc2-stage',
   'node_modules', '@deepseek-ai', 'dsh-system-prompt', 'lib', 'index.js'
 );
-const KERNEL_SOURCES = fs.existsSync(PAYLOAD_KERNEL) ? [PAYLOAD_KERNEL] : [];
+const DEV_KERNEL = path.join(
+  REPO_ROOT, 'dsh-desktop', 'node_modules', '@deepseek-ai', 'dsh-system-prompt', 'lib', 'index.js'
+);
+
+/** 基准包目录（供 applyAll 集成用例整包拷贝）。 */
+function kernelPkgDir() {
+  if (fs.existsSync(PAYLOAD_KERNEL)) return path.dirname(path.dirname(PAYLOAD_KERNEL));
+  if (fs.existsSync(DEV_KERNEL)) return path.dirname(path.dirname(DEV_KERNEL));
+  assert.fail('找不到 dsh-system-prompt 包（payload 与 dev node_modules 均缺失），无法做锚点验证');
+  return null;
+}
+
+/** pristine 内核字节（payload 优先；否则对 dev 副本跑逆运算）。 */
+function kernelPristineSource() {
+  if (fs.existsSync(PAYLOAD_KERNEL)) return fs.readFileSync(PAYLOAD_KERNEL, 'utf8');
+  return toPristineSource('prompt-context-literal', fs.readFileSync(DEV_KERNEL, 'utf8'));
+}
 
 // graph-memory 插件文件（src 镜像 + dist 编译产物 + DSH 适配器）。
 const GM_ROOT = path.join(REPO_ROOT, 'dsh-desktop', 'assets', 'plugins', 'graph-memory');
@@ -99,7 +120,7 @@ const defuseSrc = loadDefuse(GM_ASSEMBLE_TS);
 const defuse = defuseDist.fn;
 
 // 内核判定器：stock（补丁前）语义。warns 采集仅供诊断。
-const stockInterpolate = loadKernelInterpolate(fs.readFileSync(KERNEL_SOURCES[0], 'utf8'), console);
+const stockInterpolate = loadKernelInterpolate(kernelPristineSource(), console);
 
 // ---------------------------------------------------------------------------
 // 1：defuseTemplateGroups 纯函数性质。
@@ -197,8 +218,8 @@ test('defuse 后：真实内核 interpolate 三条路径全部字面透传（不
 });
 
 test('层1+层2 叠加：defuse 文本经补丁后内核同样透传（双层同时生效不冲突）', () => {
-  const pristine = fs.readFileSync(KERNEL_SOURCES[0], 'utf8');
-  const patched = transformPromptContextLiteral(pristine, KERNEL_SOURCES[0]);
+  const pristine = kernelPristineSource();
+  const patched = transformPromptContextLiteral(pristine, 'dsh-system-prompt/lib/index.js');
   assert.equal(patched.status, 'changed');
   const warns = [];
   const patchedInterpolate = loadKernelInterpolate(patched.src, { warn: (m) => warns.push(String(m)) });
@@ -243,30 +264,39 @@ test('push 点行为：按 dsh.js 同构组装（join + defuse）后，stock 内
 // 4：层2 补丁（prompt-context-literal）transform 三态 + 语法 + 幂等。
 // ---------------------------------------------------------------------------
 
-test('锚点命中 payload pristine 源', () => {
-  assert.ok(KERNEL_SOURCES.length >= 1, 'payload pristine 源缺失，无法做锚点验证');
-  for (const file of KERNEL_SOURCES) {
-    const out = transformPromptContextLiteral(fs.readFileSync(file, 'utf8'), file);
-    assert.equal(out.status, 'changed', file + ' pristine 源应命中锚点');
-    assert.ok(out.src.includes(MARKER), file + ' 产物应含 marker 注释');
-    assert.ok(out.src.includes('console.warn'), file + ' 产物应含告警日志');
+test('基准自检：pristine 不得带 marker，且重放产物与磁盘副本逐字节相同', () => {
+  // 这一条专为“基准被悄悄污染 / 逆运算推错历史”而设：以前直接把打过补丁的
+  // 副本当 pristine，changed 退化成 already，哨兵表面在跑其实已闭嘴。
+  const pristine = kernelPristineSource();
+  assert.ok(!pristine.includes(MARKER), 'pristine 基准不得含 marker（逆运算没剥干净）');
+  const replay = transformPromptContextLiteral(pristine, 'dsh-system-prompt/lib/index.js');
+  assert.equal(replay.status, 'changed', 'pristine 基准必须走 changed 分支（能跑 = 哨兵还灵）');
+  if (!fs.existsSync(PAYLOAD_KERNEL)) {
+    // 逆运算还原后的重放产物应逐字回到磁盘副本（证明“推的历史”就是在野字节）。
+    assert.equal(replay.src, fs.readFileSync(DEV_KERNEL, 'utf8'),
+      'chain(pristine) 应与 dev 副本逐字节相同 —— 否则逆运算与在野形态不一致');
   }
+});
+
+test('锚点命中 pristine 基准', () => {
+  const out = transformPromptContextLiteral(kernelPristineSource(), 'dsh-system-prompt/lib/index.js');
+  assert.equal(out.status, 'changed', 'pristine 源应命中锚点');
+  assert.ok(out.src.includes(MARKER), '产物应含 marker 注释');
+  assert.ok(out.src.includes('console.warn'), '产物应含告警日志');
 });
 
 test('transform 产物语法合法（node --check）', (t) => {
   const dir = tmpdir(t, 'dsh-ptd-check-');
-  for (const file of KERNEL_SOURCES) {
-    const out = transformPromptContextLiteral(fs.readFileSync(file, 'utf8'), file);
-    assert.equal(out.status, 'changed');
-    const checkFile = path.join(dir, path.basename(file));
-    fs.writeFileSync(checkFile, out.src);
-    const res = spawnSync(process.execPath, ['--check', checkFile], { encoding: 'utf8' });
-    assert.strictEqual(res.status, 0, path.basename(file) + ' 补丁产物必须语法合法: ' + (res.stderr || ''));
-  }
+  const out = transformPromptContextLiteral(kernelPristineSource(), 'dsh-system-prompt/lib/index.js');
+  assert.equal(out.status, 'changed');
+  const checkFile = path.join(dir, 'index.js');
+  fs.writeFileSync(checkFile, out.src);
+  const res = spawnSync(process.execPath, ['--check', checkFile], { encoding: 'utf8' });
+  assert.strictEqual(res.status, 0, '补丁产物必须语法合法: ' + (res.stderr || ''));
 });
 
 test('幂等：第二遍 already / marker 短路 / 无锚点 anchor-missing 不改写', () => {
-  const pristine = fs.readFileSync(KERNEL_SOURCES[0], 'utf8');
+  const pristine = kernelPristineSource();
   const changed = transformPromptContextLiteral(pristine, 't.js');
   assert.equal(changed.status, 'changed');
   assert.equal(transformPromptContextLiteral(changed.src, 't.js').status, 'already');
@@ -284,7 +314,7 @@ test('幂等：第二遍 already / marker 短路 / 无锚点 anchor-missing 不�
 // ---------------------------------------------------------------------------
 
 function makePatchedInterpolate() {
-  const pristine = fs.readFileSync(KERNEL_SOURCES[0], 'utf8');
+  const pristine = kernelPristineSource();
   const changed = transformPromptContextLiteral(pristine, 't.js');
   const warns = [];
   const fn = loadKernelInterpolate(changed.src, { warn: (m) => warns.push(String(m)) });
@@ -339,7 +369,7 @@ test('行为：多处非法组逐个透传，后续合法组仍正常插值', ()
 });
 
 test('产物纯净性：只移除 :118 抛错，:112 / :121 / :124 / :228 全部逐字保留', () => {
-  const pristine = fs.readFileSync(KERNEL_SOURCES[0], 'utf8');
+  const pristine = kernelPristineSource();
   const changed = transformPromptContextLiteral(pristine, 't.js');
   // :118 的抛错形态（malformed "{{name}}"）在产物中不再出现。
   assert.ok(!changed.src.includes('malformed prompt variable reference "{{${name}}}"'),
@@ -415,10 +445,11 @@ test('applyAll 集成：首遍 changed / 次遍 already，errors=0 且其余补�
   const home = tmpdir(t, 'dsh-ptd-home-');
   const appDir = tmpdir(t, 'dsh-ptd-app-');
   const userDataDir = tmpdir(t, 'dsh-ptd-ud-');
-  assert.ok(fs.existsSync(PAYLOAD_KERNEL), 'payload pristine 源缺失，无法做集成验证');
-  const payloadPkgDir = path.dirname(path.dirname(PAYLOAD_KERNEL)); // .../dsh-system-prompt
   const pkgDir = path.join(appDir, 'node_modules', '@deepseek-ai', 'dsh-system-prompt');
-  fs.cpSync(payloadPkgDir, pkgDir, { recursive: true });
+  fs.cpSync(kernelPkgDir(), pkgDir, { recursive: true });
+  // 无论基准取自 payload 还是 dev 副本，拷进临时 appDir 后都要把包内入口写回
+  // pristine 形态，否则首遍 applyAll 会被 marker 短路，changed 不再是 changed。
+  fs.writeFileSync(path.join(pkgDir, 'lib', 'index.js'), kernelPristineSource());
   const logs = [];
   const ctx = { home, appDir, userDataDir, wslMode: false, logs, log: (m) => logs.push(m) };
 

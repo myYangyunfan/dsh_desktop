@@ -32,6 +32,7 @@ import {
   MarkdownText,
   Menu,
   StateDot,
+  type MarkdownLabels,
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconHistoryOutline16, IconSaveOutline16 } from './icons.tsx'
@@ -104,6 +105,10 @@ interface RowLabels {
   copiedLabel: string
   thinkLabel: string
   injectionLabel: string
+  /** The localized MarkdownText chrome (fence copy + footnotes) shared by
+   *  every user/assistant row; built once here so the reference is stable
+   *  (MarkdownText discards its render cache on a new labels identity). */
+  markdown: MarkdownLabels
 }
 
 /** Merge history entries by event seq (newest wins), log order preserved. */
@@ -186,13 +191,13 @@ function renderRow(row: SidechatTranscriptRow, labels: RowLabels): React.ReactNo
     case 'user':
       return (
         <div key={`${row.kind}:${row.seq}`} className={css.sidechatUser}>
-          <MarkdownText text={row.text} codeLabels={labels} />
+          <MarkdownText text={row.text} labels={labels.markdown} />
         </div>
       )
     case 'assistant':
       return (
         <div key={`${row.kind}:${row.seq}`} className={css.sidechatAssistant}>
-          <MarkdownText text={row.text} codeLabels={labels} />
+          <MarkdownText text={row.text} labels={labels.markdown} />
         </div>
       )
     case 'reasoning':
@@ -247,6 +252,7 @@ export function SideChatView(props: {
       copiedLabel: t('copied'),
       thinkLabel: t('sideChatThink'),
       injectionLabel: t('sideChatInjection'),
+      markdown: { code: { copyLabel: t('copy'), copiedLabel: t('copied') }, footnotes: t('footnotes') },
     }),
     [],
   )

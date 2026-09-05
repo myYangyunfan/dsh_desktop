@@ -132,8 +132,10 @@ export function FileTree(props: {
   cwd: string | undefined
   expanded: string[]
   onToggle: (path: string) => void
-  /** Primary open (click / Enter / Space): preview in a side split. */
+  /** Primary open (single click / Enter / Space): open as a preview tab. */
   onOpenFile: (path: string) => void
+  /** Permanent open (double-click): pin the file's tab (VSCode promote). */
+  onOpenFilePermanent?: (path: string) => void
   /** Context-menu "preview" — full-area open (file rows; absent → no entry). */
   onPreviewFile?: (path: string) => void
   /** Context-menu "open in a new tab" (file rows; absent → no entry). */
@@ -160,7 +162,7 @@ export function FileTree(props: {
   /** True while an upload is in flight (drops are ignored). */
   busy: boolean
 }) {
-  const { sessionId, cwd, expanded, onToggle, onOpenFile, onOpenFileNewTab, onPreviewFile, openWithTargets, openWithPinned, openWithSsh, onOpenWith, onToggleOpenWithPin, onReferenceFile, refreshTick, onUploadRequest, busy } = props
+  const { sessionId, cwd, expanded, onToggle, onOpenFile, onOpenFilePermanent, onOpenFileNewTab, onPreviewFile, openWithTargets, openWithPinned, openWithSsh, onOpenWith, onToggleOpenWithPin, onReferenceFile, refreshTick, onUploadRequest, busy } = props
   const [data, setData] = useState<Record<string, LevelData>>({})
   const dataRef = useRef(data)
   /** The row whose path was just copied ("copied" label replaces its button). */
@@ -491,6 +493,7 @@ export function FileTree(props: {
           style={{ paddingLeft: depth * 22 + 6 }}
           title={entry.broken ? `${entry.path} — ${t('brokenSymlink')}` : entry.path}
           onClick={() => { onOpenFile(entry.path) }}
+          onDoubleClick={() => { onOpenFilePermanent?.(entry.path) }}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault()

@@ -187,6 +187,31 @@ body:has(.dsh-synapse-overlay:not([hidden])) [data-vlln-preview] { display: none
 				loadOlderEl.setAttribute("aria-label", loadOlderLabel);
 				loadOlderEl.innerHTML = "<svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.25\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M18 15l-6-6-6 6\"/></svg>";
 				const flowOf = () => document.querySelector("[data-chat-flow=\"\"]") ?? document.querySelector("[data-focus-flow=\"\"]");
+				/* dsh-compat:row-anchor — 行锚定两代内核都认。当前内核的行是
+				   [data-chat-flow-kind]（实测 user/turn-tail/assistant-step/tool-call
+				   等 8 类 26 行，每行都带 data-chat-turn）；旧内核的
+				   [data-time-hover-root] 已被内核删除（实机合成 hover 也查无），
+				   在位时仍优先采信。轮号旧内核由 turn-tail 行的
+				   data-turn-tail="<N>" 承载，当前内核改用 data-chat-turn。
+				   不修此处则导航点为空、滚轮跳轮失效、精选文本取不到。 */
+				const ROW_SELECTOR = "[data-time-hover-root], [data-chat-flow-kind]";
+				const rowOf = (el) => el?.closest?.(ROW_SELECTOR) ?? null;
+				const isRow = (el) => el !== null && el !== void 0 && typeof el.matches === "function" && el.matches(ROW_SELECTOR);
+				const numAttr = (row, name) => {
+					const raw = row?.getAttribute?.(name);
+					if (typeof raw !== "string" || raw === "") return NaN;
+					const n = Number(raw);
+					return Number.isFinite(n) ? n : NaN;
+				};
+				const turnOf = (row) => {
+					const turn = numAttr(row, "data-chat-turn");
+					return Number.isFinite(turn) ? turn : numAttr(row, "data-turn-tail");
+				};
+				const isUserRow = (row) => {
+					const kind = row.getAttribute("data-chat-flow-kind");
+					if (kind !== null) return kind === "user";
+					return !row.hasAttribute("data-turn-tail") && row.querySelector("[class*=\"bubble\"]") !== null;
+				};
 				const scrollerOf = () => {
 					const flow = flowOf();
 					if (flow === null) return null;
@@ -198,8 +223,8 @@ body:has(.dsh-synapse-overlay:not([hidden])) [data-vlln-preview] { display: none
 					}
 					return null;
 				};
-				const allRows = () => [...document.querySelectorAll("[data-time-hover-root]")].filter((row) => !row.hasAttribute("data-pending-steering"));
-				const userRows = () => allRows().filter((row) => !row.hasAttribute("data-turn-tail") && row.querySelector("[class*=\"bubble\"]") !== null);
+				const allRows = () => [...document.querySelectorAll(ROW_SELECTOR)].filter((row) => !row.hasAttribute("data-pending-steering"));
+				const userRows = () => allRows().filter(isUserRow);
 				const olderButtonOf = () => {
 					const flow = flowOf();
 					if (flow === null) return null;
@@ -305,7 +330,7 @@ body:has(.dsh-synapse-overlay:not([hidden])) [data-vlln-preview] { display: none
 				const showPreview = (row, anchor, pinnedRow = null) => {
 					let text;
 					if (pinnedRow !== null) {
-						const turn = Number(pinnedRow.getAttribute("data-turn-tail") ?? NaN);
+						const turn = turnOf(pinnedRow);
 						text = ((Number.isFinite(turn) && currentSessionId !== null ? pinStore.textOfTurn(currentSessionId, turn) : void 0) ?? pinnedRow.getAttribute("data-vlln-pin-text") ?? "").trim();
 						if (text === "") text = ((row.querySelector("[class*=\"bubble\"]") ?? row).textContent ?? "").trim();
 					} else text = ((row.querySelector("[class*=\"bubble\"]") ?? row).textContent ?? "").trim();
@@ -341,7 +366,7 @@ body:has(.dsh-synapse-overlay:not([hidden])) [data-vlln-preview] { display: none
 					for (let k = start; k < end; k++) {
 						const row = all[k];
 						if (row.hasAttribute("data-vlln-pinned")) return row;
-						const turn = Number(row.getAttribute("data-turn-tail") ?? NaN);
+						const turn = turnOf(row);
 						if (Number.isFinite(turn) && turns.has(turn)) return row;
 					}
 					return null;
@@ -629,10 +654,10 @@ body:has(.dsh-synapse-overlay:not([hidden])) [data-vlln-preview] { display: none
 					jumpToRow(rows[next]);
 				}, { passive: false });
 				const pinRowText = (button) => {
-					let el = button?.closest("[data-time-hover-root]") ?? null;
+					let el = rowOf(button);
 					while (el !== null) {
 						const bubble = el.querySelector("[class*=\"bubble\"]");
-						if (el.hasAttribute("data-time-hover-root") && bubble !== null) {
+						if (isRow(el) && bubble !== null) {
 							const text = ((bubble ?? el).textContent ?? "").trim();
 							return text.length > 160 ? `${text.slice(0, 160)}…` : text;
 						}
@@ -641,7 +666,7 @@ body:has(.dsh-synapse-overlay:not([hidden])) [data-vlln-preview] { display: none
 					return "";
 				};
 				const syncPinRow = (button, isPinned, text) => {
-					const row = button?.closest("[data-time-hover-root]");
+					const row = rowOf(button);
 					if (row === null || row === void 0) return;
 					if (isPinned) {
 						row.setAttribute("data-vlln-pinned", "");
@@ -673,7 +698,7 @@ body:has(.dsh-synapse-overlay:not([hidden])) [data-vlln-preview] { display: none
 						"aria-label": label,
 						onClick: () => {
 							const text = pinRowText(ref.current);
-							const turn = Number(ref.current?.closest("[data-time-hover-root]")?.getAttribute("data-turn-tail") ?? NaN);
+							const turn = turnOf(rowOf(ref.current));
 							const next = pinStore.toggle(sessionId, messageId, text, Number.isFinite(turn) ? turn : void 0);
 							setActive(next);
 							syncPinRow(ref.current, next, text);

@@ -42,6 +42,29 @@ for pair in "package-payload/dsh-desktop:dsh-desktop" "sidecar:sidecar" "ui:ui";
   rc=$?; [ $rc -lt 8 ] || { echo "[smoke] robocopy 失败($rc): $src"; exit 1; }
 done
 
+# ---- 出厂补丁在位断言 ----
+# 动机：“补丁只存在于 dev 树、安装树自带旧 scripts 因而 never 生效”这类失效
+# （实测“某些多模态模型仍说收不到图片”的真成因），在装完之后才暴露代价极高。
+# payload 是最终交付物：脚本缺件即硬失败（boot 链无补丁可应用）；产物是否已预打
+# 只做情报——CI 从干净 vendor 构建时 node_modules 是 pristine，boot 链首启才落盘，
+# 把它当失败会误拦健康包。
+assert_shipped_patch() {
+  id="$1"; script="$2"; target="$3"; marker="$4"
+  if [ ! -f "$SMOKE/resources/dsh-desktop/$script" ]; then
+    echo "[smoke] ✗ 补丁脚本未随包出厂: $id（缺 $script）——安装后 boot 链不会应用它"
+    exit 1
+  fi
+  if grep -qF "$marker" "$SMOKE/resources/dsh-desktop/node_modules/$target" 2>/dev/null; then
+    echo "[smoke] ✓ 补丁 $id 在位：脚本 + 产物已预打"
+  else
+    echo "[smoke] ✓ 补丁 $id 在位：脚本已随包，产物由 boot 链首启落盘"
+  fi
+}
+assert_shipped_patch model-image-input \
+  "scripts/lib/patch-model-image-input.js" \
+  "@deepseek-ai/dsh-client-ui-settings-models/lib/client.js" \
+  "model image-input checkbox"
+
 PRE_PIDS=$(listening_pids)
 
 # 真实 profile 模式：镜像本机 ~/.dsh（只读源 → 隔离 home；写发生在副本上）。

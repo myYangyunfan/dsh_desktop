@@ -143,6 +143,39 @@ test('extractUserMessages：按 order 取 user 节点文本；跳过非 user 与
   assert.equal(JSON.stringify(out), JSON.stringify(['first', 'with-image']));
 });
 
+test('extractUserMessages：当前内核形状（{nodes, order} + node.data.content）', () => {
+  const nodes = new Map([
+    ['k1', { kind: 'user', anchorSeq: 2, data: { content: [{ type: 'text', text: 'first' }] } }],
+    ['k2', { kind: 'assistant-step', data: { content: [{ type: 'text', text: 'reply' }] } }],
+    ['k3', { kind: 'user', anchorSeq: 8, data: { content: [{ type: 'image' }, { type: 'text', text: 'with-image' }] } }],
+    ['k4', { kind: 'user', anchorSeq: 11, data: { content: [{ type: 'image' }] } }], // 纯图 → 跳过
+  ]);
+  const out = core.extractUserMessages({ nodes, order: ['k1', 'k2', 'k3', 'k4'] });
+  assert.equal(JSON.stringify(out), JSON.stringify(['first', 'with-image']));
+});
+
+test('extractUserMessages：字符串 content 与块数组 content 同样可读', () => {
+  const nodes = new Map([
+    ['k1', { kind: 'user', data: { content: 'plain-string' } }],
+    ['k2', { kind: 'user', content: [{ type: 'text', text: 'blocks' }] }],
+  ]);
+  const out = core.extractUserMessages({ nodes, order: ['k1', 'k2'] });
+  assert.equal(JSON.stringify(out), JSON.stringify(['plain-string', 'blocks']));
+});
+
+test('extractUserMessages：当前内核 ChatNodeStore（get + values，无 forEach）可读', () => {
+  const backing = new Map([
+    ['k1', { kind: 'user', data: { content: [{ type: 'text', text: 'u1' }] } }],
+    ['k2', { kind: 'user', data: { content: [{ type: 'text', text: 'u2' }] } }],
+  ]);
+  // 内核真实形：只有 get/source/processSource/values()，没 forEach —— 当作 Map 判定会漏。
+  const store = { get: (k) => backing.get(k), values: () => [...backing.values()] };
+  assert.equal(core.isNodeStore(store), true, '无 forEach 也应认作节点表');
+  assert.equal(core.isMapLike(store), false, '它确实不是 Map 形态');
+  const out = core.extractUserMessages({ nodes: store, order: ['k1', 'k2'] });
+  assert.equal(JSON.stringify(out), JSON.stringify(['u1', 'u2']));
+});
+
 test('extractUserMessages：不可读形态返回 null', () => {
   assert.equal(core.extractUserMessages(null), null);
   assert.equal(core.extractUserMessages({}), null);
@@ -195,12 +228,22 @@ async function setupApplied() {
     submit: () => { submitted.push(dom.textarea.value); },
     addImages: () => true,
   };
-  // 会话快照：真实消息（最旧→最新）。
+  // 当前内核：节点表是 ChatSnapshot，nodes 为 ChatNodeStore（get + values()，
+  // 没有 forEach），用户消息文本在 data.content。
+  const chatBacking = new Map([
+    ['k1', { kind: 'user', anchorSeq: 3, data: { content: [{ type: 'text', text: 'hello' }] } }],
+    ['k2', { kind: 'user', anchorSeq: 9, data: { content: [{ type: 'text', text: 'world' }] } }],
+  ]);
+  const chat = {
+    nodes: { get: (k) => chatBacking.get(k), values: () => [...chatBacking.values()] },
+    order: ['k1', 'k2'],
+  };
+  // 旧内核：SessionSnapshot.chat，文本在 node.content（内容故意不同，用于区分通道）。
   const session = {
     chat: {
       nodes: new Map([
-        ['k1', { kind: 'user', content: [{ type: 'text', text: 'hello' }] }],
-        ['k2', { kind: 'user', content: [{ type: 'text', text: 'world' }] }],
+        ['k1', { kind: 'user', content: [{ type: 'text', text: 'old-hello' }] }],
+        ['k2', { kind: 'user', content: [{ type: 'text', text: 'old-world' }] }],
       ]),
       order: ['k1', 'k2'],
     },
@@ -217,8 +260,16 @@ async function setupApplied() {
   const react = makeReactStub();
   const mod = load.captured.factory(makeRequire({ react }));
   mod.apply(ctx);
+  // 槽位 props：当前内核只下发 hook（useChat / useSession / useInput），
+  // 不再直下 input、session 快照对象；两条快照通道同时在场时 chat 优先。
+  const props = {
+    inputActions,
+    useChat: (sel) => sel(chat),
+    useSession: (sel) => sel(session),
+    useInput: (sel) => sel(input),
+  };
   return {
-    ...load, mod, ctx, inputActions, input, session, slotRegistrations, react, setDraftCalls, submitted,
+    ...load, mod, ctx, inputActions, input, session, chat, props, slotRegistrations, react, setDraftCalls, submitted,
     dom, textarea: dom.textarea, listeners: dom.listeners, dispatched: dom.dispatched,
     store: load.sandbox.window.__dshInputHistoryStore,
     core: mod.core,
@@ -242,7 +293,7 @@ test('e2e: factory 物化 + apply 注册槽位与全局监听', async () => {
   assert.equal(entry.options.id, 'dsh-input-history');
   assert.equal(typeof entry.component, 'function');
   // 渲染组件（hook stub）：返回 null（无视觉元素），effect 注册 activeEnv。
-  const tree = entry.component({ inputActions: e.inputActions, input: e.input, session: e.session });
+  const tree = entry.component(e.props);
   assert.equal(tree, null);
   assert.equal(e.listeners.document.keydown.length, 1, '应注册 keydown 捕获监听');
   assert.equal(e.listeners.document.input.length, 1, '应注册 input 捕获监听');
@@ -250,7 +301,7 @@ test('e2e: factory 物化 + apply 注册槽位与全局监听', async () => {
 
 test('e2e: 空草稿才触发 ↑；历史从最新往回翻并写回草稿', async () => {
   const e = await setupApplied();
-  e.slotRegistrations[0].register().component({ inputActions: e.inputActions, input: e.input, session: e.session });
+  e.slotRegistrations[0].register().component(e.props);
   e.textarea.value = '';
   keydown(e, { key: 'ArrowUp', target: e.textarea });
   assert.deepEqual(e.setDraftCalls, ['world'], '首次 ↑ 应写回最新一条用户消息');
@@ -260,7 +311,7 @@ test('e2e: 空草稿才触发 ↑；历史从最新往回翻并写回草稿', as
 
 test('e2e: 非空草稿不触发 ↑（避免打断正在输入的内容）', async () => {
   const e = await setupApplied();
-  e.slotRegistrations[0].register().component({ inputActions: e.inputActions, input: e.input, session: e.session });
+  e.slotRegistrations[0].register().component(e.props);
   e.textarea.value = '正在输入';
   keydown(e, { key: 'ArrowUp', target: e.textarea });
   assert.deepEqual(e.setDraftCalls, [], '非空草稿不得回溯');
@@ -268,7 +319,7 @@ test('e2e: 非空草稿不触发 ↑（避免打断正在输入的内容）', as
 
 test('e2e: 回溯中 ↓ 逐条翻回较新，越过最新回到空', async () => {
   const e = await setupApplied();
-  e.slotRegistrations[0].register().component({ inputActions: e.inputActions, input: e.input, session: e.session });
+  e.slotRegistrations[0].register().component(e.props);
   e.textarea.value = '';
   keydown(e, { key: 'ArrowUp', target: e.textarea });       // world
   keydown(e, { key: 'ArrowUp', target: e.textarea });       // hello
@@ -279,7 +330,7 @@ test('e2e: 回溯中 ↓ 逐条翻回较新，越过最新回到空', async () =
 
 test('e2e: 手动编辑（input 事件）复位指针，下次 ↑ 从头开始', async () => {
   const e = await setupApplied();
-  e.slotRegistrations[0].register().component({ inputActions: e.inputActions, input: e.input, session: e.session });
+  e.slotRegistrations[0].register().component(e.props);
   e.textarea.value = '';
   keydown(e, { key: 'ArrowUp', target: e.textarea });       // world
   // 用户手动编辑：原生 input 事件 → 复位
@@ -298,9 +349,9 @@ test('e2e: 手动编辑（input 事件）复位指针，下次 ↑ 从头开始'
 
 test('e2e: 发送两条路径（submit 包装 + 回车捕获）都记录历史', async () => {
   const e = await setupApplied();
-  e.slotRegistrations[0].register().component({ inputActions: e.inputActions, input: e.input, session: e.session });
+  e.slotRegistrations[0].register().component(e.props);
   const hist = () => JSON.stringify(e.store.snapshotHistory(e.inputActions));
-  // 初始播种：session.chat 的 hello/world
+  // 初始播种：当前内核 chat 通道（useChat）的 hello/world
   assert.equal(hist(), JSON.stringify(['hello', 'world']));
 
   // 路径 1：点击发送按钮（包装后的 submit）
@@ -318,7 +369,7 @@ test('e2e: 发送两条路径（submit 包装 + 回车捕获）都记录历史',
 
 test('e2e: 回车连续重复（去重）与 shift+enter 不记录', async () => {
   const e = await setupApplied();
-  e.slotRegistrations[0].register().component({ inputActions: e.inputActions, input: e.input, session: e.session });
+  e.slotRegistrations[0].register().component(e.props);
   const hist = () => JSON.stringify(e.store.snapshotHistory(e.inputActions));
   assert.equal(hist(), JSON.stringify(['hello', 'world']));
 
@@ -334,14 +385,61 @@ test('e2e: 回车连续重复（去重）与 shift+enter 不记录', async () =>
 test('e2e: 按会话隔离（不同 inputActions 各自历史）', async () => {
   const e = await setupApplied();
   const entry = e.slotRegistrations[0].register();
-  entry.component({ inputActions: e.inputActions, input: e.input, session: e.session });
+  entry.component(e.props);
 
   const otherActions = { setDraft: () => {}, submit: () => {}, addImages: () => true };
-  const otherSession = { chat: { nodes: new Map([['k1', { kind: 'user', content: [{ type: 'text', text: 'other' }] }]]), order: ['k1'] } };
-  entry.component({ inputActions: otherActions, input: { draft: '', phase: 'plain', imageIds: [] }, session: otherSession });
+  const otherChat = {
+    nodes: (() => {
+      const m = new Map([['k1', { kind: 'user', data: { content: [{ type: 'text', text: 'other' }] } }]]);
+      return { get: (k) => m.get(k), values: () => [...m.values()] };
+    })(),
+    order: ['k1'],
+  };
+  entry.component({ inputActions: otherActions, useChat: (sel) => sel(otherChat) });
 
   assert.equal(JSON.stringify(e.store.snapshotHistory(e.inputActions)), JSON.stringify(['hello', 'world']));
   assert.equal(JSON.stringify(e.store.snapshotHistory(otherActions)), JSON.stringify(['other']));
+});
+
+test('e2e: 无 useChat（旧内核）时回退到 useSession().chat 仍能播种', async () => {
+  const e = await setupApplied();
+  const otherActions = { setDraft: () => {}, submit: () => {}, addImages: () => true };
+  e.slotRegistrations[0].register().component({
+    inputActions: otherActions,
+    useSession: (sel) => sel(e.session),   // 只有旧通道：old-hello / old-world
+  });
+  assert.equal(
+    JSON.stringify(e.store.snapshotHistory(otherActions)),
+    JSON.stringify(['old-hello', 'old-world']),
+  );
+});
+
+test('e2e: input 快照经 useInput 镜像，phase 忙时回车不记草稿', async () => {
+  const e = await setupApplied();
+  const busyActions = { setDraft: () => {}, submit: () => {}, addImages: () => true };
+  e.slotRegistrations[0].register().component({
+    inputActions: busyActions,
+    useChat: (sel) => sel(e.chat),
+    useInput: (sel) => sel({ draft: '', phase: 'submitting' }),
+  });
+  e.textarea.value = 'busy-send';
+  keydown(e, { key: 'Enter', keyCode: 13, target: e.textarea });
+  assert.equal(
+    JSON.stringify(e.store.snapshotHistory(busyActions)),
+    JSON.stringify(['hello', 'world']),
+    'submitting 中回车不会真发送，不应记入历史',
+  );
+  // 回到 plain 后同一条可记录
+  e.slotRegistrations[0].register().component({
+    inputActions: busyActions,
+    useChat: (sel) => sel(e.chat),
+    useInput: (sel) => sel({ draft: '', phase: 'plain' }),
+  });
+  keydown(e, { key: 'Enter', keyCode: 13, target: e.textarea });
+  assert.equal(
+    JSON.stringify(e.store.snapshotHistory(busyActions)),
+    JSON.stringify(['hello', 'world', 'busy-send']),
+  );
 });
 
 // ---------------------------------------------------------------------------

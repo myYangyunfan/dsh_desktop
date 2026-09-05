@@ -183,14 +183,19 @@
 			
 				// —— Q3 中央输入区（Qoder Quest 打开式）：去边框去嵌套，白底大圆角
 				//    开阔区域靠浅灰画布衬托轮廓，按钮与提示贴大区域下缘两端分布 ——
+				// dsh-compat:composer-editable —— 输入区这批规则原先全锚在 textarea 上：
+				// composer 换代成 Lexical contenteditable 后 :has(textarea) 命中 0、
+				// [class*="_composerStack"] textarea 也命中 0（实机 [data-input-scroll]
+				// 内 textarea=0、contenteditable=1），整个 Q3 输入区重皮静默失效。
+				// 现两代并列：旧内核照旧，当前内核经 [data-composer-input] 恢复生效。
 				// 外壳（hero 空态与 normal 会话态共用）：无框无影，豁达打开
 				// !important：压宿主自带边框，彻底解除“框中框”束缚
-				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea){position:relative;display:flex;flex-direction:column;background:transparent!important;border:none!important;box-shadow:none!important;border-radius:0;min-height:140px;padding:0 10px 2px!important;transition:box-shadow .18s var(--qdu-ease)}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea, [data-composer-input]){position:relative;display:flex;flex-direction:column;background:transparent!important;border:none!important;box-shadow:none!important;border-radius:0;min-height:140px;padding:0 10px 2px!important;transition:box-shadow .18s var(--qdu-ease)}',
 				// 聚焦反馈：仅顶部 2px 主色直线（平角）——下方不再出现任何弧形蓝边
-				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea):focus-within{box-shadow:none!important}',
-				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea):focus-within::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:color-mix(in srgb,var(--qdu-accent) 95%,transparent);border-radius:0;pointer-events:none}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea, [data-composer-input]):focus-within{box-shadow:none!important}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea, [data-composer-input]):focus-within::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:color-mix(in srgb,var(--qdu-accent) 95%,transparent);border-radius:0;pointer-events:none}',
 				// 空态 hero：大区域（240px）、内容顶到左上，与画布完全融合（无边角）
-				'body[data-dsh-quest-ui] [class*="_composerHero"] [class*="_root"]:has(textarea){border-radius:0;box-shadow:none!important;min-height:240px;display:flex;flex-direction:column;justify-content:flex-start}',
+				'body[data-dsh-quest-ui] [class*="_composerHero"] [class*="_root"]:has(textarea, [data-composer-input]){border-radius:0;box-shadow:none!important;min-height:240px;display:flex;flex-direction:column;justify-content:flex-start}',
 				'body[data-dsh-quest-ui] [class*="_composerHero"]{max-width:820px;margin:0 auto;width:100%}',
 				// 输入区内层完全透明化（宿主 card/backdrop 自带底色是“生搬感”根源）；
 				// card/scroll 纵向撑满使工具行贴底；打破宿主 780px 居中限宽 ——
@@ -198,10 +203,13 @@
 				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_card"]{position:static!important;border-radius:inherit;background:transparent!important;flex:1;display:flex;flex-direction:column;width:100%!important;max-width:none!important;margin-left:0!important;margin-right:0!important}',
 				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_card"] > [class*="_scroll"]{flex:1;width:100%!important;max-width:none!important;margin:0!important;padding-bottom:44px!important;box-sizing:border-box}',
 				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_grow"] [class*="_backdrop"]{background:transparent!important;border:none!important;box-shadow:none!important}',
-				// textarea：大幅打开 —— normal 态 72px、hero 态 96px，大呼吸内边距
-				'body[data-dsh-quest-ui] [class*="_composerStack"] textarea{background:transparent;border-radius:14px;padding:16px 18px 8px;min-height:72px}',
-				'body[data-dsh-quest-ui] [class*="_composerStack"] textarea::placeholder{color:var(--qdu-label-3);opacity:.75}',
-				'body[data-dsh-quest-ui] [class*="_composerHero"] textarea{min-height:96px}',
+				// 输入区本体：大幅打开 —— normal 态 72px、hero 态 96px，大呼吸内边距。
+				// 两代 composer：<textarea>（旧）与 [data-composer-input] 的 Lexical
+				// contenteditable（当前）。占位符旧内核走 ::placeholder，当前内核是一个
+				// 独立的 [data-composer-placeholder] 元素（实机 div.fbHfZa_placeholder）。
+				'body[data-dsh-quest-ui] [class*="_composerStack"] textarea,body[data-dsh-quest-ui] [class*="_composerStack"] [data-composer-input]{background:transparent;border-radius:14px;padding:16px 18px 8px;min-height:72px}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] textarea::placeholder,body[data-dsh-quest-ui] [class*="_composerStack"] [data-composer-placeholder]{color:var(--qdu-label-3);opacity:.75}',
+				'body[data-dsh-quest-ui] [class*="_composerHero"] textarea,body[data-dsh-quest-ui] [class*="_composerHero"] [data-composer-input]{min-height:96px}',
 				// 发送键：36px 圆形主色，无投影无浮动（下方干净利落）
 				// !important：宿主 normal 态自带 8px 方圆角与尺寸
 				'body[data-dsh-quest-ui] [class*="_composerStack"] button[class*="_primary"]{width:36px;height:36px;border-radius:999px!important;box-shadow:none!important;transition:opacity .15s ease}',
@@ -222,16 +230,22 @@
 				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_row"]{position:absolute;left:10px;right:10px;bottom:4px;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 8px;z-index:1}',
 				// 余额信息（dsh-balance dock，root 下独占一行）：绝对定位到
 				// 工具行同一最底层的中部，与发送键同层，下方不再多出一行
-				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea) > div:has(.dsh-balance-wrap){display:block;position:absolute;left:50%;transform:translateX(-50%);bottom:10px;margin:0!important;max-width:60%;overflow:hidden;white-space:nowrap;pointer-events:none;z-index:0}',
-				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea) > div:has(.dsh-balance-wrap) .dsh-balance-wrap{white-space:nowrap}',
+				// 注：当前内核里会话统计条与余额条已不在 composer root 之下（实机 _sep
+				// 已迁到聊天流的 context 行，dsh-balance-wrap 未安装），这几条定位规则
+				// 换代后不再命中；统计条配色由下面两条全局 _sep 规则负责，故不强行
+				// 改锚，以免把已换位置的内容钉到错地方。
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea, [data-composer-input]) > div:has(.dsh-balance-wrap){display:block;position:absolute;left:50%;transform:translateX(-50%);bottom:10px;margin:0!important;max-width:60%;overflow:hidden;white-space:nowrap;pointer-events:none;z-index:0}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea, [data-composer-input]) > div:has(.dsh-balance-wrap) .dsh-balance-wrap{white-space:nowrap}',
 				// 会话统计条：突破宿主 748px 居中限宽的外层 wrapper，左对齐贴缘，降噪小字
-				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea) > div:has([class*="_sep"]){width:100%!important;max-width:none!important;margin:0!important;padding:8px 14px 0;box-sizing:border-box}',
+				'body[data-dsh-quest-ui] [class*="_composerStack"] [class*="_root"]:has(textarea, [data-composer-input]) > div:has([class*="_sep"]){width:100%!important;max-width:none!important;margin:0!important;padding:8px 14px 0;box-sizing:border-box}',
 				'body[data-dsh-quest-ui] div:has(> span[class*="_sep"]){color:var(--qdu-label-3);font-size:11px;width:100%;max-width:none!important;justify-content:flex-start!important;flex-wrap:wrap}',
 				'body[data-dsh-quest-ui] span[class*="_sep"]{color:var(--qdu-line)}',
 			
 				// —— Q4 消息流降噪：助手消息圆角、去硬边框；用户消息仅圆角化
 				//    （不给背景，避免误伤宿主首子元素（如头像）的既有底色）——
-				'body[data-dsh-quest-ui] [data-chat-flow-kind="assistant"]{border-radius:var(--qdu-radius-card)}',
+				// 助手卡片圆角：当前内核的 kind 值域里没有 "assistant"（实机 26 行共
+				// 8 类，助手正文行是 "assistant-step"），两代都列上。
+				'body[data-dsh-quest-ui] [data-chat-flow-kind="assistant"],body[data-dsh-quest-ui] [data-chat-flow-kind="assistant-step"]{border-radius:var(--qdu-radius-card)}',
 				// !important：覆盖宿主 hashed 类气泡边框色（去硬边框改柔和）
 				'body[data-dsh-quest-ui] [class*="_flowItem"] [class*="_root"]{border-radius:var(--qdu-radius-card)}',
 				'body[data-dsh-quest-ui] [data-chat-flow-kind="user"] > *:first-child{border-radius:var(--qdu-radius-card)}',
@@ -285,7 +299,12 @@
 				// —— dsh-synapse 适配已上移为双 UI 通用的 SYNAPSE_CSS（v0.6.0）——
 			
 				// —— 空态建议卡：圆点前缀（::before 14px 描边圆）+ 40px 行高 +
-				//    hover 浅底；官方欢迎页有建议条目时才命中，无条目安静无效 ——
+				//    hover 浅底。dsh-compat:welcome-suggestions-inert —— 当前内核已无
+				//    「欢迎页建议条目」这一 UI：实测 dsh-client-ui-conversation 里
+				//    suggestion/example/starter/recommend/welcome 全部 0 命中，空态只有
+				//    EmptyHero/HeroShell（hero、heroWorkspaceRow）。故这三条今日命中 0、
+				//    安静无效（不会误伤别的元素：它们都在 body[data-dsh-quest-ui] 之下）。
+				//    保留是给上游哪天把建议卡放回原名时的前向兼容，不是「还在生效」的证据。 ——
 				'body[data-dsh-quest-ui] [class*="suggestion"] button,body[data-dsh-quest-ui] [class*="Suggestion"] button{position:relative;display:flex;align-items:center;min-height:40px;padding-left:32px;border-radius:var(--qdu-radius-item);transition:background-color .15s ease}',
 				'body[data-dsh-quest-ui] [class*="suggestion"] button::before,body[data-dsh-quest-ui] [class*="Suggestion"] button::before{content:"";position:absolute;left:9px;width:14px;height:14px;box-sizing:border-box;border:1.5px solid var(--qdu-label-3);border-radius:50%}',
 				'body[data-dsh-quest-ui] [class*="suggestion"] button:hover,body[data-dsh-quest-ui] [class*="Suggestion"] button:hover{background:var(--qdu-bg-hover)}'

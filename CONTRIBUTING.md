@@ -6,7 +6,8 @@
 
 | 路径 | 说明 |
 | --- | --- |
-| `dsh-desktop/` | 桌面客户端主体（Electron 外壳 + 内置 dsh CLI 与 Node 运行时） |
+| `dsh-desktop/` | 客户端主体：内置 dsh CLI 与 Node 运行时、构建期补丁与自愈脚本（原 Electron 外壳已下线） |
+| `dsh-tauri/` | 桌面壳（Rust + Tauri/WebView2）：`src-tauri/` Rust 工作区、`sidecar/` Node 侧车、`scripts/stage-payload.sh` 打包暂存 |
 | `dsh-desktop/scripts/` | 构建期补丁、自愈模块；测试统一放 `scripts/test/` |
 | `dsh-desktop/assets/plugins/` | 内置 Cordis 插件包 |
 | `dsh-desktop/assets/agent-presets/` | 内置 Agent 预设 |
@@ -16,21 +17,24 @@
 
 ## 开发环境
 
-- Windows 为主平台（Electron 集成测试依赖桌面环境；macOS/Linux 可做纯函数开发）
+- Windows 为主平台（桌面壳是 Tauri + WebView2，集成测试依赖桌面环境；macOS/Linux 可做纯函数开发）
 - Node.js ≥ 22（本地 v24 亦可）
 - 初始化与启动：
 
   ```powershell
   cd dsh-desktop
   npm ci
-  npm start
+
+  # 开发运行（入口在桌面壳侧；仓库根没有 npm start 脚本）
+  cd ..\dsh-tauri\src-tauri\src\app
+  cargo run
   ```
 
 ## 代码组织约定
 
 - **插件**：独立 npm 包放 `dsh-desktop/assets/plugins/<name>/`，通过 `cordis.patch.yml` 声明对宿主的扩展点
 - **Agent 预设**：`assets/agent-presets/<preset>/`，`agent.cordis.yml` 描述元数据，`.mjs` 文件作为生命周期入口
-- **主进程**：拆分独立脚本（watchdog、session-watcher、updater、balance、wsl-backend 等），通过 IPC/事件与 `main.js` 协作，不要堆叠进单文件
+- **主进程**：拆分独立脚本（watchdog、session-watcher、updater、balance、wsl-backend 等），通过 IPC/事件与桌面壳（`dsh-tauri/` Rust 侧 + `sidecar/` Node 侧车）协作，不要堆叠进单文件
 - **构建期补丁**：集中在 `scripts/patch-*.js`，按功能域命名，便于单独启用/禁用
 - **可单测纯函数**：收敛到 `scripts/lib/`（如 `patch-engine.js`、`versions.js`、`github-release-assets.js`），网络与文件编排留在调用方，方便 `node --test` 覆盖
 - **测试**：统一放 `scripts/test/`，按粒度命名（见下）
@@ -44,7 +48,8 @@
 | 新增纯函数 / 模块 | `scripts/test/unit-*.test.js`，覆盖主分支 + 边界 + 错误分支 | `npm test` |
 | bug 修复 | 必须带回归用例，测试头部注明 issue 号（参照 `unit-slot-compat` 的 #87） | `npm test` |
 | 桌面功能逻辑 | `scripts/test/desktop-*.test.js` | `npm test` |
-| 崩溃 / 自恢复场景（真实 Electron） | 在 `scripts/test/integration-runner.js` 追加场景 | `npm run test:integration` |
+| 崩溃 / 自恢复场景（真机启动链） | 在 `scripts/test/ta3-boot-chain.test.js`（启动链一条龙）或 `ta13-soak-*.test.js`（持久 / 盘故障 soak）追加场景 | `npm test` |
+| 桌面壳（Rust / sidecar） | `dsh-tauri/src-tauri` 下 `cargo test`；sidecar 用 `node --test dsh-tauri/sidecar/cli.test.js` | 见左 |
 
 测试守则：
 
@@ -110,5 +115,5 @@ push 后等待 `ci` workflow 通过（语法预检 + 全量单测）。**CI 红�
 - [ ] `node scripts/check-syntax.js` 通过
 - [ ] `npm test` 全绿
 - [ ] 涉及 UI 的改动附了截图
-- [ ] 涉及打包/构建的改动注明了验证方式（如 `npm run dist`、`dist:linux`）
+- [ ] 涉及打包/构建的改动注明了验证方式（如 `npm test`、`bash dsh-tauri/scripts/stage-payload.sh`、`cargo test --manifest-path dsh-tauri/src-tauri/Cargo.toml`）
 - [ ] 没有把 `.tmp-*`、`_*.js/.diff` 等临时文件带进提交
