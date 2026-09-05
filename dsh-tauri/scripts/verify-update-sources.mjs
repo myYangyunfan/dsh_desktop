@@ -178,12 +178,22 @@ async function headWithRedirects(urlStr) {
   throw new Error(`重定向超过 ${MAX_REDIRECTS} 跳: ${urlStr}`);
 }
 
-/** GET 小文件（边车，百来字节）。 */
+/** GET 小文件（边车，百来字节），跟随重定向（≤6 跳）。GitHub release/download
+ * 端点必然 302 到 release-assets 边缘节点——不跟随就会把正常发布误报成硬错。 */
 async function fetchSmallText(urlStr, maxBytes = 4096) {
-  const r = await requestOnce(urlStr, { method: 'GET' });
-  if (r.status !== 200) throw new Error(`下载边车返回 ${r.status}: ${urlStr}`);
-  if (r.body.length > maxBytes) throw new Error(`边车异常大（${r.body.length} 字节 > ${maxBytes}）: ${urlStr}`);
-  return r.body.toString('utf8');
+  let current = urlStr;
+  for (let i = 0; i <= MAX_REDIRECTS; i++) {
+    const r = await requestOnce(current, { method: 'GET' });
+    const loc = r.headers.location;
+    if ([301, 302, 303, 307, 308].includes(r.status) && loc) {
+      current = new URL(loc, current).toString();
+      continue;
+    }
+    if (r.status !== 200) throw new Error(`下载边车返回 ${r.status}: ${urlStr}`);
+    if (r.body.length > maxBytes) throw new Error(`边车异常大（${r.body.length} 字节 > ${maxBytes}）: ${urlStr}`);
+    return r.body.toString('utf8');
+  }
+  throw new Error(`重定向超过 ${MAX_REDIRECTS} 跳: ${urlStr}`);
 }
 
 // ── 边车/资产解析（纯函数，供 --test 复用）─────────────────────────────────
