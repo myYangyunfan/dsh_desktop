@@ -142,6 +142,17 @@ function loadShim() {
 
 function heapMB() { return process.memoryUsage().heapUsed / 1024 / 1024; }
 
+test('issue #182：原生标题栏菜单先注入公共视口样式', () => {
+  const src = fs.readFileSync(SHIM, 'utf8');
+  const inject = src.slice(src.indexOf('function injectChromeBar()'), src.indexOf('function onBodyReady'));
+  assert.ok(
+    inject.indexOf("right:8px;width:272px") < inject.indexOf('if (NATIVE_TITLE_BAR)'),
+    'macOS/Linux 分流前必须已注入 right 锚定的公共菜单样式',
+  );
+  const ball = src.slice(src.indexOf('function injectMenuBall()'), src.indexOf('function injectChromeBar()'));
+  assert.ok(ball.includes("style[data-for=\"' + BALL_ID + '\"]"), '悬浮按钮样式必须独立查重');
+});
+
 test('bridge 垫片 soak：事件风暴 1e4 + 菜单开/关 1000 轮，DOM 节点终态稳定 + 堆稳定', async () => {
   const { sandbox, doc, byId, eventHandlers } = loadShim();
   const dsh = sandbox.window.dshDesktop;
