@@ -792,12 +792,11 @@
   function injectMenuBall() {
     try {
       var head = document.head || document.documentElement;
-      // 菜单面板样式与全宽条形态共用同一份（style data-for=CHROME_ID 幂等；
-      // 条专属选择器都挂在 #CHROME_ID 下，对钮形态不命中，冗余无害）。
-      var css = document.querySelector('style[data-for="' + CHROME_ID + '"]');
+      // 悬浮钮样式独立查重；公共菜单样式已由 injectChromeBar 注入。
+      var css = document.querySelector('style[data-for="' + BALL_ID + '"]');
       if (!css) {
         css = document.createElement('style');
-        css.setAttribute('data-for', CHROME_ID);
+        css.setAttribute('data-for', BALL_ID);
         css.textContent =
           // 0.6.3（mac UI 反馈）：球放右下角——右上角与内核 web UI 顶栏的侧边栏开关等
           // 图标重合（球 z-index 顶格直接遮挡，侧边栏无可视入口）；右下为常见悬浮球位。
@@ -860,8 +859,6 @@
       if ((shellBar && shellBar.hasAttribute('data-tauri-drag-region')) || document.getElementById('titlebar')) return;
       // 平台门：原生标题栏平台（mac/linux）不注入全宽条，降级为 ⋯ 悬浮钮
       // （与 windows.rs decorations 平台门配套，防双份标题栏 + body 下推）。
-      if (NATIVE_TITLE_BAR) { injectMenuBall(); return; }
-
       var head = document.head || document.documentElement;
       // 样式幂等：自愈重注只补条本体，<head> 里的样式不动（SPA 反复摘条
       // 不得在 head 里无限叠 <style>——data-for 与条同 id 查重）。
@@ -977,6 +974,7 @@
           'box-shadow:0 0 0 2px color-mix(in srgb,var(--dsw-alias-bg-base,var(--dch-bg,#0b1220)) 88%,transparent)}';
         head.appendChild(css);
       }
+      if (NATIVE_TITLE_BAR) { injectMenuBall(); return; }
       // 内容区整体下移（对齐 Electron：普通流走 padding，fixed 侧边栏走属性声明）。
       var layout = document.querySelector('style[data-for="' + CHROME_ID + '-layout"]');
       if (!layout) {
