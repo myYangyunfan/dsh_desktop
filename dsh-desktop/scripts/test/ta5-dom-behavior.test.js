@@ -733,6 +733,104 @@ async function main() {
       && !s.doc.getElementById('dsh-tauri-chrome').querySelector('button.dch-menu-btn').classList.contains('dch-dot'));
   }
 
+  // ---- 3.7b 页面引导期主动补查（#189 回归）----
+  // 壳的启动检查在 webview 挂上监听之前就广播完了 client-update-available
+  // （updater_client.rs 模块文档已写明该风险），事件不重放 ⇒ 垫片必须在页面
+  // 就绪后主动补查一次，否则红点/通知/自动安装每次启动都落空。
+  console.log('\n[7b] 页面引导期主动补查 check-client-update（#189 回归）');
+  {
+    const acts = [];
+    const s = bootShim({
+      appInfo: Object.assign({}, APP_INFO, { autoInstallUpdates: true }),
+      routes: {
+        menu_action: (args) => {
+          acts.push(args.action);
+          if (args.action === 'check-client-update') return { ok: true, upToDate: true };
+          return undefined;
+        },
+      },
+    });
+    await flush();
+    check('引导后主动补查一次 check-client-update', acts.length === 1 && acts[0] === 'check-client-update', JSON.stringify(acts));
+    const btn = s.doc.getElementById('dsh-tauri-chrome').querySelector('button.dch-menu-btn');
+    check('补查 upToDate → 无红点 / 无通知 / 不安装',
+      !btn.classList.contains('dch-dot') && s.count('plugin:notification|notify') === 0
+      && !acts.includes('install-client-update'));
+    s.timers.advance(60000);
+    await flush();
+    check('补查每页一次（不随定时器重复）', acts.length === 1, JSON.stringify(acts));
+  }
+  {
+    const acts = [];
+    const s = bootShim({
+      appInfo: Object.assign({}, APP_INFO, { autoInstallUpdates: true }),
+      routes: {
+        menu_action: (args) => {
+          acts.push(args.action);
+          if (args.action === 'check-client-update') return { ok: true, next: '9.9.9', source: 'github' };
+          if (args.action === 'install-client-update') return { installing: true };
+          return undefined;
+        },
+      },
+    });
+    await flush();
+    const btn = s.doc.getElementById('dsh-tauri-chrome').querySelector('button.dch-menu-btn');
+    check('补查命中 → 红点', btn.classList.contains('dch-dot'));
+    check('补查命中 → 系统通知一次', s.count('plugin:notification|notify') === 1);
+    check('补查命中 + 无会话 → 自动安装（与事件链同闸门）', acts.includes('install-client-update'), JSON.stringify(acts));
+  }
+  {
+    const acts = [];
+    const s = bootShim({
+      appInfo: Object.assign({}, APP_INFO, { autoInstallUpdates: true }),
+      routes: {
+        menu_action: (args) => {
+          acts.push(args.action);
+          if (args.action === 'check-client-update') return { ok: true, next: '9.9.9' };
+          return undefined;
+        },
+      },
+    });
+    s.storage.setItem('dsh.sessions.current', JSON.stringify({ sessionId: 'busy' }));
+    s.timers.advance(3000); // 3s 轮询读到会话之后再补查
+    await flush();
+    check('有会话 → 补查只提醒不自动装', !acts.includes('install-client-update'), JSON.stringify(acts));
+    check('有会话 → 红点仍打上',
+      s.doc.getElementById('dsh-tauri-chrome').querySelector('button.dch-menu-btn').classList.contains('dch-dot'));
+  }
+  {
+    const acts = [];
+    const s = bootShim({
+      appInfo: APP_INFO,
+      pathname: '/loading.html',
+      routes: { menu_action: (args) => { acts.push(args.action); return { ok: true, next: '9.9.9' }; } },
+    });
+    await flush();
+    check('壳页（loading.html）不补查（跨 origin 会话态不可信）', acts.length === 0, JSON.stringify(acts));
+  }
+  {
+    const acts = [];
+    const s = bootShim({
+      appInfo: APP_INFO,
+      label: 'float',
+      routes: { menu_action: (args) => { acts.push(args.action); return { ok: true, next: '9.9.9' }; } },
+    });
+    await flush();
+    check('非主窗不补查（防浮窗/宠物窗并发安装）', acts.length === 0, JSON.stringify(acts));
+  }
+  {
+    const acts = [];
+    const s = bootShim({
+      appInfo: APP_INFO,
+      routes: { menu_action: (args) => { acts.push(args.action); throw new Error('[UPDATE_CHECK_FAILED] offline'); } },
+    });
+    await flush();
+    check('补查失败静默（不抛异常）', acts.length === 1 && acts[0] === 'check-client-update', JSON.stringify(acts));
+    check('补查失败 → 无红点 / 无通知',
+      !s.doc.getElementById('dsh-tauri-chrome').querySelector('button.dch-menu-btn').classList.contains('dch-dot')
+      && s.count('plugin:notification|notify') === 0);
+  }
+
   // ---- 3.8 拖放悬停层 ----
   console.log('\n[8] 拖放悬停层：enter 创建 / leave+drop 移除 / ESC 残留（现状）');
   {

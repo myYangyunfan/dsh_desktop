@@ -555,6 +555,31 @@
     }
     if (menuOpen) renderMenu();
   }
+  // 页面就绪后主动补查一次（U2 兜底，修 #189）：壳的启动检查在 webview 挂上
+  // 监听之前就广播完了 client-update-available（updater_client.rs 模块文档已
+  // 写明该风险：「启动早期 webview 可能尚未挂监听而错过该事件——垫片可经菜单
+  // check-client-update 通道主动再查兜底」），而 Tauri 事件不重放 ⇒ 每次启动
+  // 的检测结果都到不了本页，红点/通知/自动安装一起落空。这里复用 ⋯ 菜单同一条
+  // 通道主动再查一次，结果交给 handleClientUpdateAvailable 统一消费（主窗守卫/
+  // 同版本通知去重/自动安装闸门的口径与事件链完全一致）。
+  // 壳页（loading/recovery/poc）跳过：其 localStorage 属另一 origin，
+  // currentSessionId 恒为空，会让「无会话才自动装」的闸门误判。
+  // 每页一次；失败/形态异常静默（与壳的「更新检查失败（静默忽略）」同口径）。
+  var clientUpdateProbed = false;
+  function probeClientUpdate() {
+    if (clientUpdateProbed || !isMainWindow()) return;
+    try {
+      if (/(^|\/)(loading|recovery|poc)\.html$/.test(location.pathname)) return;
+    } catch (e) { return; }
+    clientUpdateProbed = true;
+    try {
+      dshDesktop.menu.action('check-client-update').then(function (r) {
+        if (!r || r.ok !== true) return; // 形态异常：菜单路径才就地报错
+        if (r.upToDate) return;          // 已是最新：无红点、无通知、不安装
+        if (r.next) handleClientUpdateAvailable({ next: r.next, source: r.source });
+      }).catch(function () { /* 检查失败静默：同壳口径 */ });
+    } catch (e) { /* 同上 */ }
+  }
   // 下载进度：直接改行尾文本（不整面板重渲染）；100% 转「正在安装…」
   //（Windows 下进程即将退出，页面随之消亡）。
   listeners.updProgress.push(function (p) {
@@ -1143,7 +1168,8 @@
 
   // 自初始化：回填 appVersion（失败静默——浏览器模式常见）+ 订阅客户端
   // 更新事件（启动自动检查命中：红点/通知/自动安装，仅主窗——见
-  // handleClientUpdateAvailable 的守卫说明）。
+  // handleClientUpdateAvailable 的守卫说明）；事件在启动期就已经广播完
+  // （webview 尚未挂监听），故 getInfo merge 之后再主动补查一次兜底。
   // RV3 P1-1：getInfo 结果必须 merge 进 menuState——否则 autoInstallUpdates
   // 恒为缺省 false，重启后「自动安装客户端更新」永不触发（除非本会话先
   // 开过一次 ⋯ 菜单触发 openMenu 的 getInfo）。
@@ -1154,8 +1180,8 @@
           try { menuState[k] = info[k]; } catch (e) { /* 只读字段跳过 */ }
         }
       }
-    }).catch(function () {});
-  } catch (e) {}
+    }).catch(function () {}).then(probeClientUpdate);
+  } catch (e) { probeClientUpdate(); }
   listeners.clientUpdate.push(handleClientUpdateAvailable);
 
   // ---- 文件拖放转发（F1，2026-08）----------------------------------------
