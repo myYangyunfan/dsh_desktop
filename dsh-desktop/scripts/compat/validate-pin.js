@@ -5,9 +5,10 @@
 // 职责（v0.6.0 M1，fail-closed）：
 //   1. kernel-pin.json 结构与语义校验（kernel.tag 精确 pin、services 清单唯一且
 //      非空、removed 项不得出现在 required）；
-//   2. 离线内核分发物（vendor/dsh-kernel/*.tgz）的版本与 pin 的 packageVersion
-//      一致（官方 developer preview 破坏性变更随时发生——pin 与实际不符即拒绝，
-//      禁止浮动，v0.1.2-alpha.1 升级的教训）；
+//   2. 离线内核分发物（vendor/dsh-kernel/*.tgz）以 SHA256SUMS 的逐文件摘要为
+//      完整性锚：缺失清单或摘要不符即 fail-closed（substring matching is not an
+//      integrity anchor）。版本策略只要求 @deepseek-ai/dsh* 族携带 pin 的
+//      packageVersion，framework 包按名接受；
 //   3. （可扩展）boot 接线点：presets/preflight 步骤调用本模块，pin 不符即
 //      fail-closed 进恢复页。
 //
@@ -16,8 +17,10 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 
 const PIN_REL = path.join('scripts', 'compat', 'kernel-pin.json');
+const SHA256SUMS_NAME = 'SHA256SUMS';
 
 function loadPin(repoRoot) {
   const p = path.join(repoRoot, PIN_REL);
@@ -75,11 +78,68 @@ function validateVendorDir(repoRoot, pin) {
   const want = pin.kernel.packageVersion;
   const tarballs = fs.readdirSync(dir).filter((f) => f.endsWith('.tgz'));
   if (tarballs.length === 0) { errors.push(`离线内核目录无 tarball: ${dir}`); return errors; }
-  const bad = tarballs.filter((f) => !f.includes(want));
+
+  // H-16: the sha256 manifest is the integrity anchor. A missing/empty/malformed
+  // manifest is fail-closed — never fall back to name/substring trust.
+  const manifestPath = path.join(dir, SHA256SUMS_NAME);
+  let sums = null;
+  try {
+    sums = parseSha256Sums(fs.readFileSync(manifestPath, 'utf8'), manifestPath);
+  } catch (err) {
+    errors.push(`SHA256SUMS 不可用（fail-closed）: ${err.message}`);
+  }
+
+  if (sums) {
+    const unlisted = [];
+    const mismatched = [];
+    for (const f of tarballs) {
+      const expected = sums.get(f);
+      if (!expected) { unlisted.push(f); continue; }
+      const actual = crypto.createHash('sha256').update(fs.readFileSync(path.join(dir, f))).digest('hex');
+      if (actual !== expected) mismatched.push(f);
+    }
+    if (unlisted.length > 0) {
+      errors.push(`tarball 未收录于 SHA256SUMS（fail-closed）: ${previewList(unlisted)}`);
+    }
+    if (mismatched.length > 0) {
+      errors.push(`tarball sha256 与 SHA256SUMS 不符（fail-closed）: ${previewList(mismatched)}`);
+    }
+  }
+
+  // Version policy: substring matching was never an integrity anchor. Only the
+  // @deepseek-ai/dsh* kernel family must carry the pinned version; framework
+  // packages (cordis/cosmokit/schemastery/node-addon-system*) are accepted by
+  // name with their own version lines. The digests above are the real anchor.
+  const bad = tarballs.filter((f) => isKernelFamilyFile(f) && !f.endsWith(`-${want}.tgz`));
   if (bad.length > 0) {
-    errors.push(`pin=packageVersion ${want} 与离线 tarball 不符（版本混装防线）：${bad.slice(0, 5).join(', ')}${bad.length > 5 ? ` 等 ${bad.length} 个` : ''}`);
+    errors.push(`pin=packageVersion ${want} 与离线 tarball 不符（版本混装防线）：${previewList(bad)}`);
   }
   return errors;
+}
+
+/** Parse a sha256sum-format manifest (`<64 hex>  <filename>` per line). Throws on malformed input. */
+function parseSha256Sums(text, manifestPath) {
+  const entries = new Map();
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim() || line.startsWith('#')) continue;
+    const m = /^([0-9a-fA-F]{64})\s+\*?(.+?)\s*$/.exec(line);
+    if (!m) throw new Error(`${manifestPath} 第 ${i + 1} 行格式非法`);
+    if (entries.has(m[2])) throw new Error(`${manifestPath} 中 ${m[2]} 重复`);
+    entries.set(m[2], m[1].toLowerCase());
+  }
+  if (entries.size === 0) throw new Error(`${manifestPath} 为空`);
+  return entries;
+}
+
+/** The @deepseek-ai/dsh* family is pinned; framework packages are not. */
+function isKernelFamilyFile(file) {
+  return file.startsWith('deepseek-ai-dsh-') || file === 'deepseek-ai-dsh.tgz';
+}
+
+function previewList(names, limit = 5) {
+  return `${names.slice(0, limit).join(', ')}${names.length > limit ? ` 等 ${names.length} 个` : ''}`;
 }
 
 function run(repoRoot) {
@@ -91,7 +151,7 @@ function run(repoRoot) {
   return { ok: errors.length === 0, errors, pinPath, pin };
 }
 
-module.exports = { loadPin, validatePin, validateVendorDir, run, PIN_REL };
+module.exports = { loadPin, validatePin, validateVendorDir, run, PIN_REL, SHA256SUMS_NAME, parseSha256Sums };
 
 if (require.main === module) {
   const root = path.resolve(__dirname, '..', '..');

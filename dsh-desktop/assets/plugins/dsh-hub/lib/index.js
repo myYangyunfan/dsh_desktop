@@ -38,6 +38,7 @@
  */
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { spawn, spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import {
   copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync,
 } from 'node:fs'
@@ -78,6 +79,57 @@ const GITHUB_MIRRORS = [
   'https://gh-proxy.com/',
   'https://ghproxy.net/',
 ]
+
+/**
+ * Security hardening 2026-09 (audit findings H-01 / H-02 / H-14).
+ *
+ * A source archive fetched from one of the mirrors above is anonymous
+ * third-party bytes: the mirror can swap the payload, and it explicitly makes
+ * no integrity promise. Every downloaded archive is therefore anchored:
+ *
+ *   1. a pinned sha256 for `<owner>/<repo>@<ref>` is always enforced when one
+ *      exists — see `plugin-source-pins.json` in the profile directory, or the
+ *      `DSH_HUB_SOURCE_PINS` env var (a JSON object with the same shape);
+ *   2. for immutable refs (a tag or a commit SHA — never a branch) the sha256
+ *      of the first successful OFFICIAL codeload download is remembered
+ *      (trust-on-first-use) and any later mirror download of that same ref must
+ *      match it;
+ *   3. a mirror download with no anchor at all is refused unless the operator
+ *      explicitly opts in with `DSH_HUB_ALLOW_UNVERIFIED_MIRROR=1`.
+ *
+ * This mirrors the fail-closed policy already implemented by
+ * `scripts/plugin-core/lib/updates.js`, which refuses an update without a
+ * sha512 from the registry.
+ */
+const SOURCE_PINS_FILE = 'plugin-source-pins.json'
+const SOURCE_PINS_ENV = 'DSH_HUB_SOURCE_PINS'
+const ALLOW_UNVERIFIED_MIRROR_ENV = 'DSH_HUB_ALLOW_UNVERIFIED_MIRROR'
+/** Immutable git refs only: 40-hex commit SHA, or a version-like tag. */
+const IMMUTABLE_REF_RE = /^(?:[0-9a-f]{40}|v?\d+\.\d+[0-9A-Za-z.+-]*)$/i
+/** Install-time lifecycle hooks that must never run from a downloaded archive. */
+const INSTALL_TIME_HOOKS = ['preinstall', 'install', 'postinstall']
+/** Windows reserved device names (mirrors plugin-core/lib/updates.js). */
+const WINDOWS_RESERVED_RE = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i
+/**
+ * Env keys a package manager legitimately needs (network plumbing included, so
+ * proxied setups keep working). Everything else is dropped before running
+ * downloaded code, so the user's API keys and registry tokens are not inherited
+ * by an attacker-declared `prepare` or `build`.
+ */
+const ENV_ALLOWLIST = [
+  'PATH', 'HOME', 'USERPROFILE', 'SystemRoot', 'windir', 'COMSPEC', 'ComSpec', 'PATHEXT',
+  'TEMP', 'TMP', 'TMPDIR', 'APPDATA', 'LOCALAPPDATA', 'USER', 'USERNAME', 'LOGNAME',
+  'LANG', 'LC_ALL', 'LC_CTYPE', 'TERM', 'SHELL', 'PWD', 'OS', 'PROCESSOR_ARCHITECTURE',
+  'NUMBER_OF_PROCESSORS', 'PROGRAMFILES', 'PROGRAMFILES(X86)', 'PROGRAMDATA', 'HOMEDRIVE',
+  'HOMEPATH', 'DSH_HOME', 'PNPM_HOME', 'COREPACK_HOME',
+  'XDG_CACHE_HOME', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'NODE_PATH',
+  // Network plumbing a package manager or curl legitimately needs.
+  'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'ALL_PROXY',
+  'http_proxy', 'https_proxy', 'no_proxy', 'all_proxy',
+  'SSL_CERT_FILE', 'SSL_CERT_DIR', 'CURL_CA_BUNDLE', 'REQUESTS_CA_BUNDLE',
+]
+/** Key names that look like secrets: never inherited by download/build children. */
+const SECRET_ENV_RE = /(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH|COOKIE|SESSION|PRIVATE)/i
 
 /** 客户端安装目录候选（DSH Desktop 等；可用 DSH_CLIENT_APP_DIR 覆盖/追加）。 */
 const DESKTOP_APP_DIRS = [
@@ -169,7 +221,7 @@ function runCli(command, args, timeoutMs, options = {}) {
   return new Promise((resolve) => {
     const child = spawn(command, args, {
       cwd: options.cwd ?? profileDir(),
-      env: process.env,
+      env: options.env ?? sanitizedEnv(),
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: options.shell ?? process.platform === 'win32',
@@ -1133,6 +1185,107 @@ async function downloadFile(url, dest, timeoutMs = DOWNLOAD_TIMEOUT_MS, extraCur
   return run.code === 0
 }
 
+/** SHA-256 of a file as lowercase hex. */
+function sha256File(file) {
+  return createHash('sha256').update(readFileSync(file)).digest('hex')
+}
+
+/**
+ * Environment handed to package managers and download tools. Allowlist based:
+ * any secret-looking key is stripped before a downloaded package could read it.
+ */
+function sanitizedEnv() {
+  const out = {}
+  for (const [key, value] of Object.entries(process.env)) {
+    if (typeof value !== 'string') continue
+    if (SECRET_ENV_RE.test(key)) continue
+    if (ENV_ALLOWLIST.includes(key) || /^(npm_config_|PNPM_|COREPACK_)/.test(key)) out[key] = value
+  }
+  return out
+}
+
+/** Pin-store key for one source coordinate. */
+function sourceKey(owner, repo, ref) {
+  return `${owner}/${repo}@${ref}`
+}
+
+function sourcePinsPath() {
+  return join(profileDir(), SOURCE_PINS_FILE)
+}
+
+/** Pins persisted locally (trust-on-first-use of official downloads). */
+function loadFilePins() {
+  const value = readJson(sourcePinsPath())
+  return value && typeof value === 'object' ? value : {}
+}
+
+/** Pins supplied out-of-band by the operator via env (never persisted). */
+function loadEnvPins() {
+  const raw = String(process.env[SOURCE_PINS_ENV] || '').trim()
+  if (raw === '') return {}
+  try {
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function loadSourcePins() {
+  return { ...loadFilePins(), ...loadEnvPins() }
+}
+
+function recordSourcePin(key, sha256) {
+  const pins = loadFilePins()
+  if (pins[key] === sha256) return
+  pins[key] = sha256
+  try { writeJson(sourcePinsPath(), pins) } catch {}
+}
+
+function allowUnverifiedMirror() {
+  return String(process.env[ALLOW_UNVERIFIED_MIRROR_ENV] || '').trim() === '1'
+}
+
+/**
+ * Anchor one downloaded archive. Returns null when it may be used, otherwise an
+ * operator-facing reason to refuse it. Fail-closed: a mirror download without
+ * any anchor is rejected unless explicitly opted in.
+ */
+export function anchorDownload({ owner, repo, ref, official, sha256 }) {
+  const key = sourceKey(owner, repo, ref)
+  const pinned = loadSourcePins()[key]
+  if (typeof pinned === 'string' && pinned !== '') {
+    if (pinned.toLowerCase() === sha256.toLowerCase()) return null
+    return `源码包校验失败：${key} 的 sha256 期望 ${pinned}，实际 ${sha256}，已拒绝安装。`
+  }
+  if (!official) {
+    const tofu = loadFilePins()[key]
+    if (typeof tofu === 'string' && tofu !== '') {
+      if (tofu.toLowerCase() === sha256.toLowerCase()) return null
+      return `镜像源码包校验失败：${key} 与官方源记录不一致（期望 ${tofu}，实际 ${sha256}），已拒绝安装。`
+    }
+    if (!allowUnverifiedMirror()) {
+      return `镜像源码包 ${key} 没有任何完整性锚点（未固定 sha256，本机也从未成功从官方源下载过同一 ref），已拒绝安装。修复：用环境变量 ${SOURCE_PINS_ENV} 固定其 sha256，或临时设置 ${ALLOW_UNVERIFIED_MIRROR_ENV}=1 明确接受风险。`
+    }
+    console.warn(`dsh-plugin-updates: 警告：${key} 来自镜像且无完整性锚点，按 ${ALLOW_UNVERIFIED_MIRROR_ENV}=1 继续。`)
+    return null
+  }
+  // A successful official download of an immutable ref becomes the local anchor.
+  if (IMMUTABLE_REF_RE.test(String(ref))) recordSourcePin(key, sha256)
+  return null
+}
+
+/** Refuse a downloaded package that declares an install-time lifecycle hook. */
+function findInstallTimeHook(pkgRoot) {
+  const pkg = readJson(join(pkgRoot, 'package.json'))
+  const scripts = pkg && pkg.scripts
+  if (!scripts || typeof scripts !== 'object') return null
+  for (const hook of INSTALL_TIME_HOOKS) {
+    if (typeof scripts[hook] === 'string' && scripts[hook].trim() !== '') return hook
+  }
+  return null
+}
+
 /** 依次尝试官方源与国内镜像，下载指定 tag 的 zip。
  *
  * 安全审计 2026-08：下载顺序改为「官方 codeload 优先，镜像兜底」——镜像
@@ -1154,14 +1307,23 @@ async function downloadGithubZip(owner, repo, tag) {
   const zip = join(dir, `${repo}-${raw.replace(/[^A-Za-z0-9._-]/g, '-')}.zip`)
   // 官方直连的连接阶段探测上限：只约束 TCP/TLS 建连，不缩短传输阶段。
   const OFFICIAL_CONNECT_TIMEOUT_S = 8
+  let lastError = ''
   try {
     for (const candidate of candidates) {
       const encodedTag = encodeURIComponent(candidate)
       // 官方 codeload 在前（信任锚），镜像兜底（可达性）。
-      const urls = [
-        { url: `https://codeload.github.com/${owner}/${repo}/zip/refs/tags/${encodedTag}`, official: true },
-        ...GITHUB_MIRRORS.map((mirror) => ({ url: `${mirror}https://github.com/${owner}/${repo}/archive/refs/tags/${encodedTag}.zip`, official: false })),
-      ]
+      // Security (H-01): a full commit SHA is addressed directly, so a self-update
+      // can target an immutable revision instead of the moving `main` branch.
+      const isCommitSha = /^[0-9a-f]{40}$/i.test(candidate)
+      const urls = isCommitSha
+        ? [
+            { url: `https://codeload.github.com/${owner}/${repo}/zip/${candidate}`, official: true },
+            ...GITHUB_MIRRORS.map((mirror) => ({ url: `${mirror}https://github.com/${owner}/${repo}/archive/${candidate}.zip`, official: false })),
+          ]
+        : [
+            { url: `https://codeload.github.com/${owner}/${repo}/zip/refs/tags/${encodedTag}`, official: true },
+            ...GITHUB_MIRRORS.map((mirror) => ({ url: `${mirror}https://github.com/${owner}/${repo}/archive/refs/tags/${encodedTag}.zip`, official: false })),
+          ]
       // main 分支：只推文件不打 tag 的仓库（如 dsh-hub 自身发布）走 refs/heads。
       if (candidate === 'main') {
         urls.push({ url: `https://codeload.github.com/${owner}/${repo}/zip/refs/heads/main`, official: true })
@@ -1169,13 +1331,26 @@ async function downloadGithubZip(owner, repo, tag) {
       }
       for (const { url, official } of urls) {
         const extra = official ? ['--connect-timeout', String(OFFICIAL_CONNECT_TIMEOUT_S)] : []
-        if (await downloadFile(url, zip, DOWNLOAD_TIMEOUT_MS, extra)) {
-          console.log(`dsh-plugin-updates: 已从${official ? '官方 codeload' : '镜像'}下载 ${owner}/${repo}#${candidate}`)
-          return { zip, dir }
+        if (!(await downloadFile(url, zip, DOWNLOAD_TIMEOUT_MS, extra))) continue
+        // Security (H-01): anchor every accepted artifact BEFORE it can reach the
+        // extract + pnpm install/build chain. A mirror download with no anchor is
+        // refused here unless the operator explicitly opted in.
+        let sha256 = ''
+        try { sha256 = sha256File(zip) } catch {}
+        if (sha256 === '') {
+          return { zip: null, dir, error: '源码包读取失败，无法计算 sha256，已拒绝安装。' }
         }
+        const anchorError = anchorDownload({ owner, repo, ref: candidate, official, sha256 })
+        if (anchorError) {
+          lastError = anchorError
+          try { rmSync(zip, { force: true }) } catch {}
+          continue
+        }
+        console.log(`dsh-plugin-updates: 已从${official ? '官方 codeload' : '镜像'}下载 ${owner}/${repo}#${candidate}（sha256 ${sha256.slice(0, 12)}…，已校验）`)
+        return { zip, dir, official, sha256, ref: candidate }
       }
     }
-    return { zip: null, dir }
+    return { zip: null, dir, ...(lastError !== '' ? { error: lastError } : {}) }
   } catch {
     return { zip: null, dir }
   }
@@ -1201,6 +1376,16 @@ function clearTreeKeepingNodeModules(dir) {
 /** 解压 zip（返回解压后顶层目录）。Windows/macOS 的 tar 是 bsdtar 直接支持 zip；
  *  Linux 的 GNU tar 不支持 zip，优先用 unzip（未安装时回退试 tar，多半失败并报错）。 */
 function extractZip(zip, workDir) {
+  // Security (H-14): a mirrored archive could carry `../` entries or link
+  // entries and write outside workDir (e.g. over the kernel payload that runs on
+  // the next start). Validate names and types BEFORE handing it to the extractor.
+  try {
+    const { names, types } = listArchive(zip)
+    assertArchiveSafe(names, types)
+  } catch (error) {
+    console.error(`dsh-plugin-updates: 归档预检失败，已拒绝解压。${String(error?.message ?? error)}`)
+    return null
+  }
   let ok = false
   if (process.platform === 'linux') ok = runCliSync('unzip', ['-o', zip, '-d', workDir])
   if (!ok) ok = runCliSync(TAR_BIN, ['-xf', zip, '-C', workDir])
@@ -1208,6 +1393,10 @@ function extractZip(zip, workDir) {
     if (process.platform === 'linux') {
       console.error('dsh-plugin-updates: 解压 zip 失败。Linux 下 GNU tar 不支持 zip，请安装 unzip（如 sudo apt install unzip）后重试。')
     }
+    return null
+  }
+  if (treeHasLinks(workDir)) {
+    console.error('dsh-plugin-updates: 解压结果包含符号链接/硬链接，已拒绝安装。')
     return null
   }
   const entries = readdirSync(workDir, { withFileTypes: true }).filter((e) => e.isDirectory())
@@ -1219,13 +1408,114 @@ function extractZip(zip, workDir) {
 function runCliSync(command, args, timeoutMs = DOWNLOAD_TIMEOUT_MS) {
   const result = spawnSync(command, args, {
     cwd: profileDir(),
-    env: process.env,
+    env: sanitizedEnv(),
     windowsHide: true,
     encoding: 'utf8',
     shell: false,
     timeout: timeoutMs,
   })
   return result.status === 0
+}
+
+/** Same as runCliSync but returns captured stdout/stderr (archive listing). */
+function runCliCapture(command, args, timeoutMs = DOWNLOAD_TIMEOUT_MS) {
+  const result = spawnSync(command, args, {
+    cwd: profileDir(),
+    env: sanitizedEnv(),
+    windowsHide: true,
+    encoding: 'utf8',
+    shell: false,
+    timeout: timeoutMs,
+  })
+  return {
+    ok: result.status === 0,
+    stdout: String(result.stdout || ''),
+    stderr: String(result.stderr || ''),
+  }
+}
+
+function splitArchiveLines(text) {
+  return String(text || '').split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== '')
+}
+
+/**
+ * Archive entry-name validation (H-14). Same rules as
+ * `scripts/plugin-core/lib/updates.js`: rejects absolute paths, `..` segments,
+ * drive letters, NTFS alternative data streams and reserved Windows names.
+ */
+export function validateArchiveEntryName(name) {
+  const n = String(name || '')
+  if (n === '') return false
+  if (n.includes('\0')) return false
+  if (n.startsWith('/') || n.startsWith('\\')) return false
+  if (/^[A-Za-z]:[\\/]/.test(n)) return false
+  for (const rawSeg of n.split(/[\\/]/)) {
+    if (rawSeg === '' || rawSeg === '.') continue
+    if (rawSeg === '..') return false
+    // Windows strips trailing dots/spaces, so `.. ` normalizes to `..`.
+    const seg = rawSeg.replace(/[. ]+$/, '')
+    if (seg === '..' || seg === '') return false
+    if (seg.includes(':')) return false
+    const dotIdx = seg.indexOf('.')
+    const stem = (dotIdx >= 0 ? seg.slice(0, dotIdx) : seg).replace(/[. ]+$/, '')
+    if (stem === '') continue
+    if (WINDOWS_RESERVED_RE.test(stem)) return false
+  }
+  return true
+}
+
+/** Pre-flight check over entry names and entry type flags. Throws on violation. */
+export function assertArchiveSafe(names, types) {
+  for (const name of names) {
+    if (!validateArchiveEntryName(name)) throw new Error(`归档包含越界条目: ${name}`)
+  }
+  for (const type of types) {
+    if (/[lhcbp]/.test(type)) throw new Error(`归档包含链接/设备条目（类型 ${type}），已拒绝`)
+  }
+  return true
+}
+
+/** List an archive's entry names and type flags. Throws when it cannot. */
+function listArchive(archive) {
+  // bsdtar (Windows/macOS built-in) reads zip too; GNU tar on Linux cannot.
+  const tarNames = runCliCapture(TAR_BIN, ['-tf', archive])
+  const tarTypes = tarNames.ok ? runCliCapture(TAR_BIN, ['-tvf', archive]) : { ok: false }
+  if (tarNames.ok && tarTypes.ok) {
+    return {
+      names: splitArchiveLines(tarNames.stdout),
+      types: splitArchiveLines(tarTypes.stdout).map((line) => line[0] || ''),
+    }
+  }
+  const zipNames = runCliCapture('unzip', ['-Z1', archive])
+  const zipTypes = zipNames.ok ? runCliCapture('unzip', ['-Z', archive]) : { ok: false }
+  if (zipNames.ok && zipTypes.ok) {
+    return {
+      names: splitArchiveLines(zipNames.stdout),
+      types: splitArchiveLines(zipTypes.stdout).filter((line) => /^[-dlbcps?]/.test(line)).map((line) => line[0]),
+    }
+  }
+  throw new Error('无法列出归档条目（tar/unzip 均不可用），已拒绝解压。')
+}
+
+/** True when a tree contains any symlink or hardlink (defence in depth). */
+function treeHasLinks(dir) {
+  let entries
+  try {
+    entries = readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return false
+  }
+  for (const entry of entries) {
+    const full = join(dir, entry.name)
+    try {
+      const info = lstatSync(full)
+      if (info.isSymbolicLink()) return true
+      if (info.isDirectory() && treeHasLinks(full)) return true
+    } catch {
+      return true
+    }
+  }
+  return false
 }
 
 /** 复制目录全部内容（含 node_modules，zip 一般没有）。 */
@@ -1245,9 +1535,21 @@ function entryPathOf(pkg) {
   return String(raw || '').replace(/^\.\//, '')
 }
 
-/** 在插件目录尝试构建：先 pnpm install（触发 prepare），再 pnpm run build。返回 { ok, error? }。 */
+/** 在插件目录尝试构建：先 pnpm install（触发 prepare），再 pnpm run build。返回 { ok, error? }。
+ *
+ * Security (H-02): the package being built was just downloaded from GitHub or a
+ * mirror, so its `package.json` is attacker-controlled. Install-time lifecycle
+ * hooks (preinstall/install/postinstall) are refused outright, the install runs
+ * with `--ignore-scripts` so nothing of the sort can execute, and the child
+ * process gets a scrubbed environment instead of the full `process.env`.
+ * The explicit `pnpm run build` is what this update path legitimately needs.
+ */
 async function tryBuildPlugin(realDir) {
-  const install = await runCli('pnpm', ['install', '--no-frozen-lockfile'], MUTATE_TIMEOUT_MS, { cwd: realDir })
+  const hook = findInstallTimeHook(realDir)
+  if (hook) {
+    return { ok: false, error: `下载的插件声明了安装期脚本 "${hook}"，出于安全考虑已拒绝执行。` }
+  }
+  const install = await runCli('pnpm', ['install', '--ignore-scripts', '--no-frozen-lockfile'], MUTATE_TIMEOUT_MS, { cwd: realDir })
   if (install.code === 0) return { ok: true }
   const installErr = cliFailure(install, 'install')
   const build = await runCli('pnpm', ['run', 'build'], MUTATE_TIMEOUT_MS, { cwd: realDir })
@@ -1322,6 +1624,12 @@ async function applyNewSource(realDir, root, preserveFiles = []) {
   if (!newPkg.version) {
     return { ok: false, error: '下载的新版本缺少 package.json，已取消更新。' }
   }
+  // Security (H-02): refuse install-time lifecycle hooks declared by the
+  // downloaded package before anything is copied over the live plugin.
+  const installHook = findInstallTimeHook(root)
+  if (installHook) {
+    return { ok: false, error: `下载的新版本声明了安装期脚本 "${installHook}"，出于安全考虑已拒绝更新。` }
+  }
   let backupDir = null
   try {
     pruneOldBackups()
@@ -1369,7 +1677,9 @@ async function applyNewSource(realDir, root, preserveFiles = []) {
     }
     let installErr = ''
     if (!(depsUnchanged && existsSync(nmDir) && entryExistsNow())) {
-      const install = await runCli('pnpm', ['install', '--no-frozen-lockfile'], MUTATE_TIMEOUT_MS, { cwd: realDir })
+      // Security (H-02): --ignore-scripts keeps install-time hooks of the freshly
+      // downloaded package from running; the env is already scrubbed by runCli.
+      const install = await runCli('pnpm', ['install', '--ignore-scripts', '--no-frozen-lockfile'], MUTATE_TIMEOUT_MS, { cwd: realDir })
       installErr = install.code === 0 ? '' : cliFailure(install, 'install')
     }
 
@@ -1432,6 +1742,23 @@ export function archiveRootMatchesRepo(repo, rootBase) {
     && rootBase.startsWith(repo + '-')
 }
 
+/**
+ * Resolve a branch or tag to an immutable commit SHA (security H-01). Returns ''
+ * when the API is unreachable, in which case callers fall back to the moving ref
+ * (and mirror downloads then require an explicit pin).
+ */
+export async function resolveCommitSha(owner, repo, ref) {
+  try {
+    const run = await runCurl(`https://api.github.com/repos/${owner}/${repo}/commits/${encodeURIComponent(ref)}`, GITHUB_TIMEOUT_MS)
+    if (run.code !== 0) return ''
+    const data = JSON.parse(run.stdout)
+    const sha = typeof data?.sha === 'string' ? data.sha : ''
+    return /^[0-9a-f]{40}$/i.test(sha) ? sha : ''
+  } catch {
+    return ''
+  }
+}
+
 async function updateLocalFromGithub(name, owner, repo, tag, realDirOverride, preserveFiles = []) {
   let realDir
   try {
@@ -1439,10 +1766,10 @@ async function updateLocalFromGithub(name, owner, repo, tag, realDirOverride, pr
   } catch {
     return { ok: false, error: '找不到插件源码目录（link 失效？）' }
   }
-  const { zip, dir } = await downloadGithubZip(owner, repo, tag)
+  const { zip, dir, error: downloadError } = await downloadGithubZip(owner, repo, tag)
   if (!zip) {
     rmSync(dir, { recursive: true, force: true })
-    return { ok: false, error: `镜像下载失败，请稍后重试或手动到 https://github.com/${owner}/${repo}/releases 下载。` }
+    return { ok: false, error: downloadError || `镜像下载失败，请稍后重试或手动到 https://github.com/${owner}/${repo}/releases 下载。` }
   }
   try {
     const extractDir = join(dir, 'extract')
@@ -2456,9 +2783,13 @@ class HubGateway extends TypertRemoteService {
       return { ok: false, error: `更新源配置异常（${UPDATE_REPO}）。` }
     }
     const selfDir = fileURLToPath(new URL('..', import.meta.url))
+    // Security (H-01): resolve `main` to an immutable commit SHA before
+    // downloading, so the artifact can be pinned/anchored. A branch hash changes
+    // on every commit and can never serve as a stable trust anchor.
+    const selfSha = await resolveCommitSha(owner, repo, 'main')
     // 复用旧引擎的本地源码更新链路：镜像下载 zip → 解压 → 备份 → 版本倒退保护 →
-    // 入口检查 → 失败回滚。tag 传 'main'（downloadGithubZip 已支持 refs/heads/main）。
-    const result = await updateLocalFromGithub('dsh-hub', owner, repo, 'main', selfDir)
+    // 入口检查 → 失败回滚。
+    const result = await updateLocalFromGithub('dsh-hub', owner, repo, selfSha || 'main', selfDir)
     if (!result.ok) {
       return { ok: false, error: result.error }
     }

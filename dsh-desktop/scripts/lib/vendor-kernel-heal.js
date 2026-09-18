@@ -4,27 +4,28 @@
 // vendor/dsh-kernel 陈旧内核 tarball 自愈（boot repair 步，尽力而为不阻断）。
 //
 // 问题（0.6.1 alpha.5 覆盖安装实测）：NSIS 覆盖安装只做「增/覆盖」不做「删」——
-// 旧安装 vendor/dsh-kernel 里 242 个 alpha.4 tgz 不会被清除，与新的 242 个
-// alpha.5 叠成 484（版本混装）。`scripts/compat/validate-pin.js` 的「版本混装
-// 防线」按 `f.includes(pin.kernel.packageVersion)` 判定，任何非 pin 版本 tgz 视
-// 为不一致 → boot 链 compat-pin 步 fail-closed 拒启 → 崩溃环 → 恢复页。
+// 旧安装 vendor/dsh-kernel 的陈旧 tgz 不会被清除，与新内核 tgz 叠成版本混装。
+// `scripts/compat/validate-pin.js` 以 vendor/dsh-kernel/SHA256SUMS 的逐文件摘要
+// 为完整性锚：任何未收录于清单的 tgz 视为不一致 → boot 链 compat-pin 步
+// fail-closed 拒启 → 崩溃环 → 恢复页。
 // 用户看不到清晰指引（只知道「版本仍 0.6.0、boot 起不来」），实际是安装器没
 // 有 purge 陈旧内核 tarball 的语义。
 //
 // 修复：boot 链 repair 步（healBeforeServer）在 compat-pin 校验之前，把 vendor
-// 里非 pin 版本的 tgz **移出 vendor 目录树**到 `vendor/_dsh-stale-kernel-quarantine/`
+// 里未收录于 SHA256SUMS 的 tgz **移出 vendor 目录树**到 `vendor/_dsh-stale-kernel-quarantine/`
 // （validate-pin 非递归 glob，天然忽略子目录；隔离到 sibling 更保险）。此后
-// compat-pin 只看当前 pin 版本 tarball → 校验通过 → boot 继续。
+// compat-pin 只看当前清单收录的 tarball → 校验通过 → boot 继续。
 //
 // 宁漏勿误原则：
 //   - kernel-pin.json 不在位 / 无 packageVersion / 无 vendorDir → 不修（下次
 //     boot 再试；半安装 / 未来 pin schema 演进时不炸）；
 //   - vendor 目录缺失 / 无 tgz → 不修（不是本模块的职责，交给 compat-pin 的
 //     「离线内核目录缺失 / 无 tarball」错误暴露真问题）；
-//   - 匹配 pin 的 tgz 数量为 0 → **绝不 prune**（否则会把 vendor 清成空目录，
-//     反而把「版本不一致」变成「无 tarball」，问题更严重：可能 install-kernel
-//     未跑 / 内核包还没铺到 vendor）；只日志告警不阻断，让 compat-pin 报出
-//     「pin=packageVersion X 与离线 tarball 不符」这条精确指引；
+//   - SHA256SUMS 缺失/不可读 → **绝不 prune**（fail-safe：无法区分当前集与陈旧集）；
+//   - 在 SHA256SUMS 中命中且实际存在的 tgz 数量为 0 → **绝不 prune**（否则会把
+//     vendor 清成空目录，反而把「版本不一致」变成「无 tarball」，问题更严重：
+//     可能 install-kernel 未跑 / 内核包还没铺到 vendor）；只日志告警不阻断，
+//     让 compat-pin 报出精确指引；
 //   - 单文件 rename 失败（跨设备 / 权限 / AV 抢占）→ 逐文件继续，不整体放弃；
 //   - 任何实现级异常由调用方（healBeforeServer try/catch）兜住——repair 步
 //     语义：告警不阻断启动。
@@ -35,7 +36,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { loadPin } = require('../compat/validate-pin');
+const { loadPin, parseSha256Sums, SHA256SUMS_NAME } = require('../compat/validate-pin');
 
 const QUARANTINE_DIR_NAME = '_dsh-stale-kernel-quarantine';
 
@@ -103,8 +104,29 @@ function healVendorStaleKernels({ appDir, log = () => {} } = {}) {
   const tarballs = entries.filter((f) => f.endsWith('.tgz'));
   if (tarballs.length === 0) { result.note = 'no-tarballs'; return result; }
 
-  const matching = tarballs.filter((f) => f.includes(want));
-  const stale = tarballs.filter((f) => !f.includes(want));
+  // H-16 companion: classify by the SHA256SUMS name set, never by substring.
+  // A tgz listed in the manifest belongs to the current pinned set (keep); one
+  // absent from it is stale. Framework packages with their own version lines are
+  // listed too, so they are never quarantined. A missing/unreadable manifest is
+  // fail-safe: we cannot tell current from stale, so we never prune.
+  let manifest;
+  try {
+    manifest = parseSha256Sums(fs.readFileSync(path.join(vendorDir, SHA256SUMS_NAME), 'utf8'), SHA256SUMS_NAME);
+  } catch (err) {
+    result.note = 'manifest-missing';
+    log('vendor-kernel 自愈跳过（SHA256SUMS 缺失/不可读，fail-safe 拒绝剪除）: ' + String((err && err.message) || err));
+    return result;
+  }
+
+  const tarballSet = new Set(tarballs);
+  const matching = tarballs.filter((f) => manifest.has(f));
+  const stale = tarballs.filter((f) => !manifest.has(f));
+  const absent = [...manifest.keys()].filter((f) => !tarballSet.has(f));
+  if (absent.length > 0) {
+    // Expected-but-absent entries are only reported; digest validation belongs to
+    // validate-pin, and this module never "repairs" by deleting/adding tarballs.
+    log('vendor-kernel 自愈: SHA256SUMS 收录但磁盘缺失 ' + absent.length + ' 个 tarball（不处理）');
+  }
 
   if (stale.length === 0) {
     // 完全干净——顺手把上轮可能残留的隔离目录清掉（幂等）。
@@ -115,11 +137,10 @@ function healVendorStaleKernels({ appDir, log = () => {} } = {}) {
     return result;
   }
   if (matching.length === 0) {
-    // 关键守护：pin 版本 tarball 一个都没有——绝不 prune（会把 vendor 掏空）。
-    // 只日志告警；compat-pin 会报「pin=packageVersion 与离线 tarball 不符」，
-    // 指引用户重装而不是让本模块悄悄把 vendor 干掉。
+    // 关键守护：SHA256SUMS 收录的 tarball 一个都不在——绝不 prune（会把 vendor 掏空）。
+    // 只日志告警；compat-pin 会报出精确指引，而不是让本模块悄悄把 vendor 干掉。
     result.note = 'refusing-to-prune-no-matching';
-    log('vendor-kernel 自愈放弃（pin=' + want + ' 版本 tarball 为 0，剪掉 stale 会掏空 vendor；请通过重装修复）: stale=' + stale.length + ' 个');
+    log('vendor-kernel 自愈放弃（SHA256SUMS 收录的 tarball 为 0，剪掉 stale 会掏空 vendor；请通过重装修复）: stale=' + stale.length + ' 个');
     return result;
   }
 
@@ -137,8 +158,8 @@ function healVendorStaleKernels({ appDir, log = () => {} } = {}) {
   result.changed = result.pruned.length > 0;
   result.quarantinedTo = result.changed ? qdir : null;
   if (result.changed) {
-    log('vendor-kernel 自愈完成: 移出 ' + result.pruned.length + ' 个非 pin(' + want + ') 内核 tarball 到 ' + qdir
-      + '（compat-pin 版本混装防线已解除；如需回退可从该目录手动移回）');
+    log('vendor-kernel 自愈完成: 移出 ' + result.pruned.length + ' 个未收录于 SHA256SUMS 的内核 tarball 到 ' + qdir
+      + '（compat-pin 校验已解除；如需回退可从该目录手动移回）');
   }
   return result;
 }

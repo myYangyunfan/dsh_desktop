@@ -38,3 +38,84 @@ test('archiveRootMatchesRepo：拒绝串包/替换形态', () => {
   assert.strictEqual(hub.archiveRootMatchesRepo('x', null), false, 'null rootBase 不抛错');
   assert.strictEqual(hub.archiveRootMatchesRepo(123, 'x-1'), false, '非字符串 repo 不抛错');
 });
+
+// 安全审计 2026-09 加固单测（H-01 源码包完整性锚点 / H-14 归档预检）。
+const os = require('node:os');
+const fs = require('node:fs');
+const path = require('node:path');
+
+test('validateArchiveEntryName：接受普通条目', () => {
+  assert.strictEqual(hub.validateArchiveEntryName('index.js'), true);
+  assert.strictEqual(hub.validateArchiveEntryName('lib/deep/file.ts'), true);
+  assert.strictEqual(hub.validateArchiveEntryName('a/./b.txt'), true);
+});
+
+test('validateArchiveEntryName：拒绝越界与危险条目', () => {
+  assert.strictEqual(hub.validateArchiveEntryName('../evil.js'), false, 'parent traversal');
+  assert.strictEqual(hub.validateArchiveEntryName('a/../../evil.js'), false, 'nested traversal');
+  assert.strictEqual(hub.validateArchiveEntryName('.. '), false, 'trailing space normalizes to ..');
+  assert.strictEqual(hub.validateArchiveEntryName('/etc/passwd'), false, 'absolute posix');
+  assert.strictEqual(hub.validateArchiveEntryName('\\\\server\\share'), false, 'UNC path');
+  assert.strictEqual(hub.validateArchiveEntryName('C:\\\\Windows\\\\x.dll'), false, 'drive letter');
+  assert.strictEqual(hub.validateArchiveEntryName('dir/file.txt:ads'), false, 'NTFS ADS');
+  assert.strictEqual(hub.validateArchiveEntryName('CON'), false, 'reserved device name');
+  assert.strictEqual(hub.validateArchiveEntryName('aux.txt'), false, 'reserved device with extension');
+  assert.strictEqual(hub.validateArchiveEntryName(''), false, 'empty name');
+  assert.strictEqual(hub.validateArchiveEntryName('a\0b'), false, 'NUL byte');
+});
+
+test('assertArchiveSafe：拒绝越界名与链接/设备类型', () => {
+  assert.strictEqual(hub.assertArchiveSafe(['ok.js', 'lib/x.js'], ['-', 'd']), true);
+  assert.throws(() => hub.assertArchiveSafe(['../evil'], ['-']), /越界/);
+  for (const type of ['l', 'h', 'c', 'b', 'p']) {
+    assert.throws(() => hub.assertArchiveSafe(['x'], [type]), /链接|设备/, `type ${type} must be rejected`);
+  }
+});
+
+/** Run `fn` with a throwaway DSH_HOME and the given extra env, then clean up. */
+function withTempHome(extraEnv, fn) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hub-pins-'));
+  const saved = { DSH_HOME: process.env.DSH_HOME, DSH_HUB_SOURCE_PINS: process.env.DSH_HUB_SOURCE_PINS, DSH_HUB_ALLOW_UNVERIFIED_MIRROR: process.env.DSH_HUB_ALLOW_UNVERIFIED_MIRROR };
+  process.env.DSH_HOME = dir;
+  fs.mkdirSync(path.join(dir, 'profiles', 'web'), { recursive: true });
+  for (const [key, value] of Object.entries(extraEnv || {})) process.env[key] = value;
+  try {
+    return fn(dir);
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('anchorDownload：pin coincidente se acepta, divergente se rechaza', () => {
+  const key = 'acme/plugin@v1.0.0';
+  withTempHome({ DSH_HUB_SOURCE_PINS: JSON.stringify({ [key]: 'a'.repeat(64) }) }, () => {
+    assert.strictEqual(hub.anchorDownload({ owner: 'acme', repo: 'plugin', ref: 'v1.0.0', official: false, sha256: 'a'.repeat(64) }), null);
+    assert.match(hub.anchorDownload({ owner: 'acme', repo: 'plugin', ref: 'v1.0.0', official: false, sha256: 'b'.repeat(64) }), /校验失败/);
+  });
+});
+
+test('anchorDownload：espejo sin ancla se rechaza salvo opt-in explícito', () => {
+  withTempHome({}, () => {
+    const args = { owner: 'acme', repo: 'plugin', ref: 'v2.0.0', official: false, sha256: 'c'.repeat(64) };
+    assert.match(hub.anchorDownload(args), /没有任何完整性锚点/);
+    process.env.DSH_HUB_ALLOW_UNVERIFIED_MIRROR = '1';
+    assert.strictEqual(hub.anchorDownload(args), null);
+    delete process.env.DSH_HUB_ALLOW_UNVERIFIED_MIRROR;
+  });
+});
+
+test('anchorDownload：la descarga oficial de un ref inmutable deja ancla local', () => {
+  withTempHome({}, () => {
+    const official = { owner: 'acme', repo: 'plugin', ref: 'v3.0.0', official: true, sha256: 'd'.repeat(64) };
+    assert.strictEqual(hub.anchorDownload(official), null, 'official download accepted');
+    assert.strictEqual(hub.anchorDownload({ ...official, official: false }), null, 'mirror matching the anchor accepted');
+    assert.match(hub.anchorDownload({ ...official, official: false, sha256: 'e'.repeat(64) }), /校验失败|不一致/);
+    // A branch ref is never recorded: its hash changes on every commit.
+    assert.strictEqual(hub.anchorDownload({ owner: 'acme', repo: 'plugin', ref: 'main', official: true, sha256: 'f'.repeat(64) }), null);
+    assert.match(hub.anchorDownload({ owner: 'acme', repo: 'plugin', ref: 'main', official: false, sha256: 'f'.repeat(64) }), /没有任何完整性锚点/);
+  });
+});
