@@ -13,19 +13,19 @@ window.__ModuleLoader__.load({
 		 * 轻量 ANSI 渲染（SGR 前景色/加粗）；非 PTY，全屏交互程序（vim 等）不支持。
 		 */
 
-		const TOKEN_KEY = "dsh.term.token";
-		// A1 修复：token 按会话隔离——不同会话各自持有持久 shell，
-		// 避免第一个会话的 shell 被全局 token 复用导致终端"钉"在它的目录。
-		const tokenKeyFor = (sid) => (sid ? TOKEN_KEY + "." + sid : TOKEN_KEY);
+		const SID_KEY = "dsh.term.token";
+		// A1: the shell id is a client-chosen session name (per DSH session).
+		// The credential is the host-issued secret, fetched separately below.
+		const sidKeyFor = (sid) => (sid ? SID_KEY + "." + sid : SID_KEY);
 
-		function newToken(key) {
+		function newSid(key) {
 			const t = (crypto && typeof crypto.randomUUID === "function")
 				? crypto.randomUUID()
 				: "t-" + Date.now() + "-" + Math.random().toString(36).slice(2);
 			try { localStorage.setItem(key, t); } catch {}
 			return t;
 		}
-		function savedToken(key) {
+		function savedSid(key) {
 			try { return localStorage.getItem(key) || ""; } catch { return ""; }
 		}
 
@@ -125,16 +125,17 @@ window.__ModuleLoader__.load({
 			const [input, setInput] = react.useState("");
 			const [history, setHistory] = react.useState([]);
 			const [histIdx, setHistIdx] = react.useState(-1);
-			// A1：token 跟随会话——切换会话时按新 sessionId 取/建 token；
-			// 同一会话内保持稳定（切标签页/刷新 15 分钟内不丢 shell 状态）。
-			const tokenRef = react.useRef("");
+			// A1: the shell id follows the session, stable within it (a tab switch
+			// or reload within 15 minutes keeps the shell). The host secret is not
+			// persisted here.
+			const sidRef = react.useRef("");
 			const lastSessionRef = react.useRef(null);
 			react.useEffect(() => {
 				const sid = sessionId || "";
 				if (lastSessionRef.current === sid) return;
 				lastSessionRef.current = sid;
-				const key = tokenKeyFor(sessionId);
-				tokenRef.current = savedToken(key) || newToken(key);
+				const key = sidKeyFor(sessionId);
+				sidRef.current = savedSid(key) || newSid(key);
 			}, [sessionId]);
 			const carryRef = react.useRef({ lines: [], cur: { text: "", cls: "" } });
 			const scrollRef = react.useRef(null);
@@ -153,21 +154,43 @@ window.__ModuleLoader__.load({
 			// web UI 自身的长连接已把池占满，SSE 会被排队永远连不上）。
 			const cwdRef = react.useRef("");
 			cwdRef.current = cwd;
+			const sessionIdRef = react.useRef("");
+			sessionIdRef.current = sessionId || "";
 			const watchRef = react.useRef(null);
 			const wsRef = react.useRef(null);
 			const intentionalRef = react.useRef(false);
 			const retryDelayRef = react.useRef(1000);
 			const retryTimerRef = react.useRef(null);
+			const connectRef = react.useRef(null);
+			const mountedRef = react.useRef(true);
 
-			const connect = react.useCallback(() => {
+			// H-06: the host issues a per-process secret; fetch it fresh on every
+			// connect so a host restart is picked up without a page reload.
+			const fetchSecret = react.useCallback(() => {
+				return fetch("/dsh-files/terminal-tab/auth", {
+					credentials: "same-origin",
+					cache: "no-store"
+				}).then((r) => {
+					if (!r.ok) throw new Error("HTTP " + r.status);
+					return r.json();
+				}).then((j) => {
+					if (!j || typeof j.token !== "string" || !j.token) throw new Error("invalid auth response");
+					return j.token;
+				});
+			}, []);
+
+			const openSocket = react.useCallback((secret) => {
 				const cur = cwdRef.current;
 				if (!cur) { setStatus("failed"); return; }
+				if (!mountedRef.current) return;
 				let ws;
 				try {
 					const proto = window.location.protocol === "https:" ? "wss" : "ws";
 					ws = new WebSocket(
 						proto + "://" + window.location.host +
-						"/dsh-files/terminal-tab/ws?token=" + encodeURIComponent(tokenRef.current) +
+						"/dsh-files/terminal-tab/ws?token=" + encodeURIComponent(secret) +
+						"&sid=" + encodeURIComponent(sidRef.current) +
+						"&sessionId=" + encodeURIComponent(sessionIdRef.current) +
 						"&cwd=" + encodeURIComponent(cur)
 					);
 				} catch (err) {
@@ -230,37 +253,63 @@ window.__ModuleLoader__.load({
 					const delay = retryDelayRef.current;
 					retryDelayRef.current = Math.min(delay * 2, 15000);
 					if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
-					retryTimerRef.current = setTimeout(() => connect(), delay);
+					retryTimerRef.current = setTimeout(() => {
+						retryTimerRef.current = null;
+						const again = connectRef.current;
+						if (again) again();
+					}, delay);
 				};
 				ws.onerror = () => {};
 			}, [append]);
+
+			// Re-bootstrap the secret, then open the socket; on failure keep the
+			// existing backoff retry alive.
+			const connect = react.useCallback(() => {
+				const cur = cwdRef.current;
+				if (!cur) { setStatus("failed"); return; }
+				setStatus("connecting");
+				fetchSecret().then((secret) => openSocket(secret)).catch(() => {
+					setStatus("failed");
+					const delay = retryDelayRef.current;
+					retryDelayRef.current = Math.min(delay * 2, 15000);
+					if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+					retryTimerRef.current = setTimeout(() => {
+						retryTimerRef.current = null;
+						const again = connectRef.current;
+						if (again) again();
+					}, delay);
+				});
+			}, [fetchSecret, openSocket]);
+			connectRef.current = connect;
 
 			const restart = react.useCallback(() => {
 				intentionalRef.current = true;
 				if (retryTimerRef.current) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; }
 				if (wsRef.current) { try { wsRef.current.close(); } catch {} wsRef.current = null; }
-				const old = tokenRef.current;
-				tokenRef.current = newToken();
+				const old = sidRef.current;
+				sidRef.current = newSid(sidKeyFor(sessionIdRef.current));
 				if (old) {
 					try {
-						fetch("/dsh-files/terminal-tab/close", {
+						fetchSecret().then((secret) => fetch("/dsh-files/terminal-tab/close", {
 							method: "POST",
 							headers: { "content-type": "application/json" },
-							body: JSON.stringify({ token: old }),
+							body: JSON.stringify({ token: secret, sid: old }),
 							keepalive: true
-						}).catch(() => {});
+						})).catch(() => {});
 					} catch {}
 				}
 				carryRef.current = { lines: [], cur: { text: "", cls: "" } };
 				setLines([]);
 				retryDelayRef.current = 1000;
 				connect();
-			}, [connect]);
+			}, [connect, fetchSecret]);
 
 			react.useEffect(() => {
 				if (!cwd) return;
+				mountedRef.current = true;
 				connect();
 				return () => {
+					mountedRef.current = false;
 					intentionalRef.current = true;
 					if (retryTimerRef.current) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; }
 					if (watchRef.current) { clearTimeout(watchRef.current); watchRef.current = null; }

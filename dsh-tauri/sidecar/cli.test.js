@@ -18,6 +18,10 @@ const { execFileSync, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const zlib = require('node:zlib');
+
+// Pure helpers under test (cli.js only runs main() when invoked as entry script).
+const cliLib = require('./cli.js');
 
 const SIDEAR = path.join(__dirname, 'cli.js');
 const APP_DIR = path.resolve(__dirname, '..', '..', 'dsh-desktop');
@@ -539,4 +543,108 @@ test('koffi-preflight（WSL 模式）：跳过且 stdout 末行逐字为 {"ok":t
   // WSL 跳过分支绝不能附加字段（skipped 之类会破坏该匹配）。
   assert.strictEqual(r.stdout.trimEnd().split('\n').pop(), '{"ok":true}');
   assert.match(r.stderr, /WSL 托管模式跳过/);
+});
+
+// ===========================================================================
+// 归档解压安全（H-13：zip-slip / 链接条目）
+// ===========================================================================
+
+/** Build one ustar header block (checksum computed per spec). */
+function tarHeader(name, size, typeChar) {
+  const h = Buffer.alloc(512);
+  h.write(name, 0, 100, 'utf8');
+  h.write('000644 \0', 100, 8, 'utf8'); // mode
+  h.write('000000 \0', 108, 8, 'utf8'); // uid
+  h.write('000000 \0', 116, 8, 'utf8'); // gid
+  h.write(size.toString(8).padStart(11, '0') + '\0', 124, 12, 'utf8');
+  h.write('00000000000\0', 136, 12, 'utf8'); // mtime
+  h.write('        ', 148, 8, 'utf8'); // checksum field stays spaces while summing
+  h[156] = typeChar.charCodeAt(0);
+  h.write('ustar\0' + '00', 257, 8, 'utf8');
+  let sum = 0;
+  for (const b of h) sum += b;
+  h.write(sum.toString(8).padStart(6, '0') + '\0 ', 148, 8, 'utf8');
+  return h;
+}
+
+/** Build an in-memory tar.gz fixture (malicious archives never touch disk). */
+function makeTarGz(entries) {
+  const parts = [];
+  for (const e of entries) {
+    const data = Buffer.from(e.data || '', 'utf8');
+    parts.push(tarHeader(e.name, data.length, e.type || '0'));
+    if (data.length) {
+      parts.push(data);
+      parts.push(Buffer.alloc(Math.ceil(data.length / 512) * 512 - data.length));
+    }
+  }
+  parts.push(Buffer.alloc(1024)); // end-of-archive blocks
+  return zlib.gzipSync(Buffer.concat(parts));
+}
+
+/** Sandbox with an `out` dir; parent dir catches any traversal write. */
+function tarSandbox(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-tar-test-'));
+  const outDir = path.join(root, 'out');
+  fs.mkdirSync(outDir);
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  return { root, outDir };
+}
+
+test('H-13 validateArchiveEntryName：拒绝空名/越界/绝对/UNC/盘符/ADS/保留名', () => {
+  const bad = [
+    '', '../evil.js', 'package/../../evil.js', '/etc/passwd', '\\\\server\\share\\x',
+    'C:/evil.js', 'C:evil.js', 'a\0b.js', 'package/a.js:evil', 'CON',
+    'package/com1.js', 'package/NUL.txt', 'package/.. ', 'package/...', 'nul.',
+  ];
+  for (const n of bad) {
+    assert.strictEqual(cliLib.validateArchiveEntryName(n), false, '应拒绝: ' + JSON.stringify(n));
+  }
+});
+
+test('H-13 validateArchiveEntryName：放行常规条目（行为不回归）', () => {
+  const good = [
+    'package/lib/index.js', './package/a.js', 'foo.', 'foo ', 'a//b',
+    'package/converter.js', 'package/console-helper.js', 'package/com0.js', 'package/com10.js',
+  ];
+  for (const n of good) {
+    assert.strictEqual(cliLib.validateArchiveEntryName(n), true, '应放行: ' + JSON.stringify(n));
+  }
+});
+
+test('H-13 extractTarGz：越界条目与链接/设备条目首个即抛错，且不落盘', (t) => {
+  const { root, outDir } = tarSandbox(t);
+  const maliciousNames = ['../evil.js', '/abs-evil.js', 'C:/drive-evil.js', 'package/../../evil.js', 'package/a.js:ads', 'CON'];
+  for (const name of maliciousNames) {
+    assert.throws(() => cliLib.extractTarGz(makeTarGz([{ name, data: 'x' }]), outDir), /越界/, '应拒绝: ' + name);
+  }
+  // Link/device ustar typeflags: 1 hardlink, 2 symlink, 3 char, 4 block, 6 FIFO.
+  for (const type of ['1', '2', '3', '4', '6']) {
+    assert.throws(
+      () => cliLib.extractTarGz(makeTarGz([{ name: 'package/link-' + type, type, data: '' }]), outDir),
+      /链接\/设备/, '类型 ' + type + ' 应拒绝',
+    );
+  }
+  assert.equal(fs.existsSync(path.join(root, 'evil.js')), false, '不得越界写盘');
+  assert.deepStrictEqual(fs.readdirSync(outDir), [], '非法归档不得部分落盘');
+});
+
+test('H-13 extractTarGz：合法归档行为不变（目录 + 普通文件）', (t) => {
+  const { outDir } = tarSandbox(t);
+  cliLib.extractTarGz(makeTarGz([
+    { name: 'package/', type: '5' },
+    { name: 'package/lib/', type: '5' },
+    { name: 'package/lib/index.js', type: '0', data: 'module.exports = 1;\n' },
+    { name: 'package/README.md', data: 'ok\n' },
+  ]), outDir);
+  assert.strictEqual(fs.readFileSync(path.join(outDir, 'package', 'lib', 'index.js'), 'utf8'), 'module.exports = 1;\n');
+  assert.strictEqual(fs.readFileSync(path.join(outDir, 'package', 'README.md'), 'utf8'), 'ok\n');
+  assert.ok(fs.statSync(path.join(outDir, 'package', 'lib')).isDirectory());
+});
+
+test('H-13 assertInsideDir：resolve 前缀纵深防线', (t) => {
+  const { outDir } = tarSandbox(t);
+  assert.doesNotThrow(() => cliLib.assertInsideDir(outDir, path.join(outDir, 'a', 'b.js')));
+  assert.doesNotThrow(() => cliLib.assertInsideDir(outDir, outDir));
+  assert.throws(() => cliLib.assertInsideDir(outDir, path.join(outDir, '..', 'x.js')), /越界/);
 });

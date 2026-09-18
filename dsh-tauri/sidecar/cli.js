@@ -265,6 +265,81 @@ function makeGuard(c) {
     log: (topic, msg) => process.stderr.write('[' + topic + '] ' + msg + '\n'),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Archive extraction safety (H-13: zip-slip / link-entry defence)
+// ---------------------------------------------------------------------------
+
+/** Windows reserved device names (case-insensitive, optional extension). */
+const WINDOWS_RESERVED_RE = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i;
+
+/** Archive entry name safety: reject empty names, traversal, absolute/UNC paths,
+ *  drive letters, NUL, NTFS ADS and Windows reserved names. Same rules as
+ *  validateArchiveEntryName in dsh-desktop/scripts/plugin-core/lib/updates.js
+ *  (kept local on purpose: no import across the sidecar / plugin-core boundary). */
+function validateArchiveEntryName(name) {
+  const n = String(name || '');
+  if (n === '') return false;
+  if (n.includes('\0')) return false;
+  if (n.startsWith('/') || n.startsWith('\\')) return false; // absolute / UNC
+  if (/^[A-Za-z]:[\\/]/.test(n)) return false; // drive-letter prefix
+  for (const rawSeg of n.split(/[\\/]/)) {
+    if (rawSeg === '' || rawSeg === '.') continue;
+    if (rawSeg === '..') return false;
+    // Windows strips trailing dots/spaces on create (`.. ` normalizes to `..`).
+    const seg = rawSeg.replace(/[. ]+$/, '');
+    if (seg === '..' || seg === '') return false;
+    if (seg.includes(':')) return false; // drive-letter residue / ADS stream
+    const dotIdx = seg.indexOf('.');
+    const stem = (dotIdx >= 0 ? seg.slice(0, dotIdx) : seg).replace(/[. ]+$/, '');
+    if (stem === '') continue;
+    if (WINDOWS_RESERVED_RE.test(stem)) return false;
+  }
+  return true;
+}
+
+/** Defence in depth: resolved write target must stay inside outDir. */
+function assertInsideDir(outDir, target) {
+  const base = path.resolve(outDir);
+  const resolved = path.resolve(target);
+  if (resolved !== base && !resolved.startsWith(base + path.sep)) {
+    throw new Error('归档条目越界，拒绝写出解压目录: ' + target);
+  }
+}
+
+/** Link/device ustar typeflags: 1 hardlink, 2 symlink, 3 char, 4 block, 6 FIFO. */
+const ARCHIVE_LINK_OR_DEVICE_TYPES = new Set([0x31, 0x32, 0x33, 0x34, 0x36]);
+
+/** Minimal tar.gz extractor (ustar entries; regular files only, enough for plugin
+ *  packages). H-13: every entry name and type is validated before any write; the
+ *  first bad entry aborts the whole extraction. */
+function extractTarGz(buf, outDir) {
+  const tar = require('node:zlib').gunzipSync(buf);
+  let off = 0;
+  while (off + 512 <= tar.length) {
+    const name = tar.slice(off, off + 100).toString('utf8').replace(/\0.*$/, '');
+    const sizeField = tar.slice(off + 124, off + 136).toString('utf8').replace(/\0.*$/, '').trim();
+    const size = parseInt(sizeField || '0', 8) || 0;
+    const type = tar[off + 156];
+    if (name) {
+      if (!validateArchiveEntryName(name)) throw new Error('归档包含越界条目: ' + name);
+      if (ARCHIVE_LINK_OR_DEVICE_TYPES.has(type)) {
+        throw new Error('归档包含链接/设备条目（类型 ' + String.fromCharCode(type) + '），已拒绝: ' + name);
+      }
+      const target = path.join(outDir, name.replace(/^package\//, 'package/'));
+      assertInsideDir(outDir, target);
+      if (type === 0x30 || type === 0) {
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        fs.writeFileSync(target, tar.slice(off + 512, off + 512 + size));
+      } else if (type === 0x35 || name.endsWith('/')) {
+        fs.mkdirSync(target, { recursive: true });
+      }
+    }
+    off += 512 + Math.ceil(size / 512) * 512;
+    if (!name && size === 0 && off >= tar.length) break;
+  }
+}
+
 function createPluginManager(mods, { appDir, home }) {
   const { COMPANION_PLUGINS } = mods.companionPlugins;
   const { togglePluginInPatch, setPluginRemoved } = mods.pluginManagerPatch;
@@ -624,29 +699,6 @@ function createPluginManager(mods, { appDir, home }) {
       return { ok: false, error: '安装失败: ' + ((err && err.message) || err) };
     } finally {
       try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
-    }
-  }
-
-  /** 最小 tar.gz 解包（ustar 条目；只落普通文件，够插件包用）。 */
-  function extractTarGz(buf, outDir) {
-    const tar = require('node:zlib').gunzipSync(buf);
-    let off = 0;
-    while (off + 512 <= tar.length) {
-      const name = tar.slice(off, off + 100).toString('utf8').replace(/\0.*$/, '');
-      const sizeField = tar.slice(off + 124, off + 136).toString('utf8').replace(/\0.*$/, '').trim();
-      const size = parseInt(sizeField || '0', 8) || 0;
-      const type = tar[off + 156];
-      if (name) {
-        const target = path.join(outDir, name.replace(/^package\//, 'package/'));
-        if (type === 0x30 || type === 0) {
-          fs.mkdirSync(path.dirname(target), { recursive: true });
-          fs.writeFileSync(target, tar.slice(off + 512, off + 512 + size));
-        } else if (type === 0x35 || name.endsWith('/')) {
-          fs.mkdirSync(target, { recursive: true });
-        }
-      }
-      off += 512 + Math.ceil(size / 512) * 512;
-      if (!name && size === 0 && off >= tar.length) break;
     }
   }
 
@@ -1277,4 +1329,10 @@ async function main() {
   }
 }
 
-main().catch((err) => { emit({ ok: false, error: String((err && err.message) || err) }); process.exit(1); });
+// Run the CLI only when invoked as the entry script; requiring this file (unit
+// tests) must not trigger main().
+if (require.main === module) {
+  main().catch((err) => { emit({ ok: false, error: String((err && err.message) || err) }); process.exit(1); });
+}
+
+module.exports = { validateArchiveEntryName, assertInsideDir, extractTarGz };

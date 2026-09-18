@@ -360,6 +360,12 @@ window.__ModuleLoader__.load({
 
 		const PREVIEW_PANEL_ID = "__dsh_file_preview__";
 
+		// H-04: previews are untrusted workspace content, so the frame ALWAYS
+		// keeps an opaque origin — never `allow-same-origin`, not even for the
+		// same-origin /dsh-files/static/ fallback. This blocks window.parent,
+		// localStorage and host route access from a previewed HTML file.
+		const PREVIEW_SANDBOX = "allow-scripts allow-forms allow-popups allow-modals";
+
 		/** 文件绝对路径 → 静态服务 URL。桌面壳有独立端口的静态服务器
 		 *  （不占 UI 连接池），否则回退到宿主 /dsh-files/static/。 */
 		let staticBasePromise = null;
@@ -412,7 +418,7 @@ window.__ModuleLoader__.load({
 				'<button class="dsh-pv-btn" data-act="close" title="关闭预览">✕</button>' +
 				'</div>' +
 				'<div class="dsh-pv-chips"></div>' +
-				'<div class="dsh-pv-body"><iframe class="dsh-pv-frame" title="preview" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"></iframe></div>' +
+				'<div class="dsh-pv-body"><iframe class="dsh-pv-frame" title="preview" sandbox="' + PREVIEW_SANDBOX + '"></iframe></div>' +
 				'<div class="dsh-pv-status">未加载</div>';
 			document.body.appendChild(root);
 
@@ -447,11 +453,12 @@ window.__ModuleLoader__.load({
 					state.index = state.history.length - 1;
 				}
 				input.value = url;
-				// 同源（宿主 /dsh-files/static/ 回退）→ 去掉 sandbox 以加载相对资源；
-				// 跨源（壳层静态端口 / 端口预览）→ sandbox 隔离（跨源下
-				// allow-same-origin 无逃逸风险，页面自身 origin 保持可用）。
-				if (/^\//.test(url)) frame.removeAttribute("sandbox");
-				else frame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms allow-popups allow-modals");
+				// H-04: both branches (host /dsh-files/static/ fallback and the
+				// shell static-port / port preview) run without allow-same-origin
+				// so the page keeps an opaque origin. Relative assets still load:
+				// relative URLs resolve against the frame URL, which the sandbox
+				// attribute does not change.
+				frame.setAttribute("sandbox", PREVIEW_SANDBOX);
 				frame.src = url;
 				setStatus("加载中… " + url);
 				checkOnline(url);

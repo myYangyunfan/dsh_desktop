@@ -65,6 +65,30 @@ fn default_main_window_geometry(app: &tauri::AppHandle) -> (f64, f64, Option<(f6
     (w, h, Some((x, y)))
 }
 
+/// Navigation fence (H-12): accept the Tauri internal protocol, or plain HTTP
+/// to a loopback host only. The URL is parsed instead of prefix-matched, so
+/// `http://127.0.0.1@evil.com/` (userinfo) and `http://127.0.0.1.evil.com/`
+/// (subdomain) are rejected. `tauri` is trusted unconditionally (as before);
+/// `http` requires host 127.0.0.1 / localhost / ::1 and no userinfo.
+/// `host_str()` keeps the brackets of an IPv6 host ("[::1]"), hence both forms.
+fn is_trusted_navigation_target(raw: &str) -> bool {
+    let Ok(url) = url::Url::parse(raw) else {
+        return false;
+    };
+    match url.scheme() {
+        "tauri" => true,
+        "http" => {
+            url.username().is_empty()
+                && url.password().is_none()
+                && matches!(
+                    url.host_str(),
+                    Some("127.0.0.1") | Some("localhost") | Some("[::1]") | Some("::1")
+                )
+        }
+        _ => false,
+    }
+}
+
 /// 主窗：decorations 平台门 + 导航围栏 + 垫片。初始加载 loading 页。
 ///
 /// Linux 例外：WebKitGTK 下 undecorated 窗口存在首帧不渲染/白屏的已知问题
@@ -112,11 +136,8 @@ pub fn create_main_window(
     // resizable:true 行为对齐。
     .resizable(true)
     .initialization_script(BRIDGE_SHIM_JS)
-    .on_navigation(|url| {
-        // 导航围栏：仅 127.0.0.1（内核/内嵌页）与 tauri 内部协议。
-        let s = url.as_str();
-        s.starts_with("http://127.0.0.1") || s.starts_with("tauri://") || s.starts_with("http://tauri.localhost")
-    });
+    // Navigation fence: loopback HTTP or the Tauri internal protocol (H-12).
+    .on_navigation(|url| is_trusted_navigation_target(url.as_str()));
     if let Some((x, y, w, h, maxed)) = saved {
         b = b.position(x as f64, y as f64).inner_size(w, h);
         if maxed {
@@ -291,7 +312,7 @@ pub fn build_float_window<R: tauri::Runtime>(
         .initialization_script(preset_script)
         .initialization_script(FLOAT_BAR_SCRIPT)
         .initialization_script(FLOAT_WATCHDOG_SCRIPT)
-        .on_navigation(|url| url.as_str().starts_with("http://127.0.0.1"))
+        .on_navigation(|url| is_trusted_navigation_target(url.as_str()))
         .build()
 }
 
@@ -499,7 +520,7 @@ pub fn build_pet_window<R: tauri::Runtime>(
     .initialization_script(BRIDGE_SHIM_JS)
     .initialization_script(PET_MODE_SCRIPT)
     .initialization_script(PET_WATCHDOG_SCRIPT)
-    .on_navigation(|url| url.as_str().starts_with("http://127.0.0.1"))
+    .on_navigation(|url| is_trusted_navigation_target(url.as_str()))
     .build()
 }
 
@@ -993,6 +1014,24 @@ mod tests {
         assert!(parse_url("http://127.0.0.1:51731/").is_ok());
         assert!(parse_url("not a url").is_err());
         // scheme 不设限（围栏在 on_navigation 层）；只测形态拒绝。
+    }
+
+    /// H-12：导航围栏按解析后的 scheme/host 判定，前缀匹配的绕过（userinfo /
+    /// 子域）必须被拒绝；tauri 内部协议与 loopback HTTP 仍放行。
+    #[test]
+    fn navigation_fence_parses_host_and_rejects_spoofing() {
+        assert!(is_trusted_navigation_target("http://127.0.0.1:51731/loading.html"));
+        assert!(is_trusted_navigation_target("http://127.0.0.1"));
+        assert!(is_trusted_navigation_target("http://localhost:8080/"));
+        assert!(is_trusted_navigation_target("http://[::1]:8080/"));
+        assert!(is_trusted_navigation_target("tauri://localhost"));
+        // Prefix-check bypasses: userinfo, subdomain, junk scheme.
+        assert!(!is_trusted_navigation_target("http://127.0.0.1@evil.com/"));
+        assert!(!is_trusted_navigation_target("http://127.0.0.1.evil.com/"));
+        assert!(!is_trusted_navigation_target("http://evil.com@127.0.0.1/"));
+        assert!(!is_trusted_navigation_target("https://127.0.0.1/"));
+        assert!(!is_trusted_navigation_target("file:///etc/passwd"));
+        assert!(!is_trusted_navigation_target("not a url"));
     }
 
     /// G3：主窗「最小化自动弹宠物窗」决策表（纯函数）——
