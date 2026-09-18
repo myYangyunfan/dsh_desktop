@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { opendir, stat, readFile } from "node:fs/promises";
-import { readdirSync, readFileSync } from "node:fs";
-import { isAbsolute, join, extname } from "node:path";
+import { opendir, stat, readFile, realpath } from "node:fs/promises";
+import { readdirSync, readFileSync, realpathSync, openSync, readSync, closeSync } from "node:fs";
+import { isAbsolute, join, extname, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -178,6 +178,12 @@ async function handleListRoute(req, res) {
 // 静态文件服务：GET /dsh-files/static/<绝对路径>
 // 路径直接嵌入 URL，HTML 的相对资源引用（./css、../img）随浏览器 URL 解析，
 // 因此站内预览与本地 file:// 行为一致。
+//
+// H-05: previews may only reach files inside a known workspace/session root.
+// Previously ANY absolute path was served (/etc/passwd, ~/.ssh/id_rsa,
+// ~/.dsh/.credentials.yaml); symlinks are now resolved before the root check,
+// a sensitive-name deny list guards the roots, and only allowlisted
+// extensions are served.
 // ---------------------------------------------------------------------------
 
 const STATIC_PREFIX = "/dsh-files/static/";
@@ -200,6 +206,39 @@ const MIME = {
 
 const TEXT_MIME = /^(text\/|application\/(json|javascript|xhtml\+xml|xml)|image\/svg)/;
 
+// Document MIMEs that get the CSP sandbox header (images/scripts/fonts are not
+// documents, so the header would be inert for them).
+const DOC_MIME = /^(text\/html|application\/xhtml\+xml|image\/svg\+xml|application\/xml|text\/xml)/;
+
+// Office/binary types the preview route may still serve (browser download).
+const OFFICE_EXT = new Set([".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".odt", ".ods", ".odp", ".rtf"]);
+
+// H-05 deny list: sensitive locations never served, even inside an allowed root.
+const DENY_SEGMENTS = new Set([".ssh", ".aws", ".gnupg", ".gpg", "credentials", "keychains", "keyrings"]);
+const DENY_NAMES = new Set([".npmrc", ".credentials.yaml", "cookies", "cookies-journal", "cookies.sqlite", "login data", "login data-journal"]);
+const DENY_EXTS = new Set([".pem", ".key", ".p12", ".pfx", ".jks", ".keystore", ".ppk", ".asc"]);
+
+/** Whether a root-relative path hits the sensitive-name deny list. */
+function isDeniedRelativePath(rel) {
+  const segs = String(rel || "").replace(/\\/g, "/").split("/").filter(Boolean);
+  if (segs.length === 0) return false;
+  for (const raw of segs) {
+    const seg = raw.toLowerCase();
+    if (DENY_SEGMENTS.has(seg)) return true;
+    if (seg.includes("keychain") || seg.includes("keyring")) return true;
+  }
+  const name = segs[segs.length - 1].toLowerCase();
+  if (DENY_NAMES.has(name)) return true;
+  if (name.startsWith(".env") || name.startsWith(".credentials")) return true;
+  return DENY_EXTS.has(extname(name).toLowerCase());
+}
+
+/** Extension allowlist: only previewable text/image/media/office types. */
+function isServablePath(p) {
+  const ext = extname(p).toLowerCase();
+  return MIME[ext] !== undefined || OFFICE_EXT.has(ext);
+}
+
 function mimeFor(p) {
   return MIME[extname(p).toLowerCase()] || "application/octet-stream";
 }
@@ -214,8 +253,100 @@ function pathFromStaticUrl(pathname) {
   }
   // 浏览器把 "//server" 折叠成 "/server"；仅恢复盘符路径（UNC 预览不支持）。
   if (/^\/[A-Za-z]:[\\/]/.test(p)) p = p.slice(1);
+  // The client encodes each path segment separately (so relative asset URLs
+  // resolve), which drops the root separator; restore it so the route still
+  // always resolves to an absolute path (containment is checked afterwards).
+  if (p && !p.startsWith("/") && !/^[A-Za-z]:[\\/]/.test(p)) p = "/" + p;
   if (!isAbsolute(p)) return "";
   return p;
+}
+
+// ---------------------------------------------------------------------------
+// Allowed roots (H-05): the process working directory (the workspace DSH was
+// launched in, also the last-resort session cwd) plus every session cwd this
+// plugin has resolved — so multiple workspaces keep working. Persisted session
+// headers are scanned lazily and cached; a symlinked file that escapes a root
+// fails the realpath containment check.
+// ---------------------------------------------------------------------------
+
+const resolvedSessionCwds = new Set();
+
+function rememberSessionCwd(cwd) {
+  const v = typeof cwd === "string" ? cwd.trim() : "";
+  if (v) resolvedSessionCwds.add(v);
+}
+
+const SESSION_HEAD_BYTES = 256 * 1024;
+let sessionScanCache = { at: 0, value: [] };
+
+function readFileHeadSync(p, max) {
+  const fd = openSync(p, "r");
+  try {
+    const buf = Buffer.alloc(max);
+    const n = readSync(fd, buf, 0, max, 0);
+    return buf.subarray(0, n);
+  } finally {
+    try { closeSync(fd); } catch {}
+  }
+}
+
+/** cwds recorded in persisted session headers (bounded head read, 30s cache). */
+function diskSessionCwds() {
+  const now = Date.now();
+  if (now - sessionScanCache.at < 30000) return sessionScanCache.value;
+  const found = new Set();
+  const walk = (dir) => {
+    let entries;
+    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) { walk(p); continue; }
+      if (e.name !== "session.jsonl.zstd") continue;
+      try {
+        let buf = readFileHeadSync(p, SESSION_HEAD_BYTES);
+        let frame = scanFirstZstdFrame(buf);
+        if (!frame && buf.length === SESSION_HEAD_BYTES) { buf = readFileSync(p); frame = scanFirstZstdFrame(buf); }
+        if (!frame) continue;
+        const text = zstdDecompressSync(buf.subarray(frame.start, frame.end)).toString("utf8");
+        const header = JSON.parse(text.split("\n", 1)[0]);
+        if (header && typeof header.cwd === "string" && header.cwd) found.add(header.cwd);
+      } catch {}
+    }
+  };
+  walk(dshSessionsRoot());
+  const value = [...found];
+  sessionScanCache = { at: Date.now(), value };
+  return value;
+}
+
+function isFilesystemRoot(p) {
+  const r = resolve(p);
+  return r === sep || /^[A-Za-z]:[\\/]$/.test(r);
+}
+
+/** Real paths of the allowed roots (disk scan only when explicitly requested). */
+function allowedRootsReal(includeDisk) {
+  const candidates = new Set(resolvedSessionCwds);
+  if (includeDisk) for (const c of diskSessionCwds()) candidates.add(c);
+  try { candidates.add(process.cwd()); } catch {}
+  const out = new Set();
+  for (const c of candidates) {
+    if (!c || !isAbsolute(c) || isFilesystemRoot(c)) continue;
+    try { out.add(realpathSync(c)); } catch {}
+  }
+  return [...out];
+}
+
+/** The allowed root containing realPath, or "" when outside every root. */
+function allowedRootFor(realPath, includeDisk) {
+  const win = process.platform === "win32";
+  const target = win ? realPath.toLowerCase() : realPath;
+  for (const root of allowedRootsReal(includeDisk)) {
+    const base = win ? root.toLowerCase() : root;
+    const prefix = base.endsWith(sep) ? base : base + sep;
+    if (target === base || target.startsWith(prefix)) return root;
+  }
+  return "";
 }
 
 async function handleStaticRoute(req, res) {
@@ -243,20 +374,54 @@ async function handleStaticRoute(req, res) {
     res.end("bad path");
     return;
   }
+  // resolve() collapses any encoded ".." the URL parser left in the path, then
+  // realpath() resolves symlinks so containment cannot be bypassed by a link.
+  let real;
   try {
-    const st = await stat(p);
+    real = await realpath(resolve(p));
+  } catch {
+    res.writeHead(404);
+    res.end("not found");
+    return;
+  }
+  // Cheap check against roots already known; only an unknown path pays for the
+  // session-header scan.
+  let root = allowedRootFor(real, false);
+  if (!root) root = allowedRootFor(real, true);
+  if (!root) {
+    sendJson(res, 403, { error: "path outside the allowed workspace roots" });
+    return;
+  }
+  const rel = real.length > root.length ? real.slice(root.length + 1) : "";
+  if (isDeniedRelativePath(rel)) {
+    sendJson(res, 403, { error: "path is blocked by the preview security policy" });
+    return;
+  }
+  if (!isServablePath(real)) {
+    sendJson(res, 415, { error: "file type is not allowed for preview" });
+    return;
+  }
+  try {
+    const st = await stat(real);
     if (!st.isFile()) {
       res.writeHead(404);
       res.end("not a file");
       return;
     }
-    const data = await readFile(p);
-    const mime = mimeFor(p);
-    res.writeHead(200, {
+    const data = await readFile(real);
+    const mime = mimeFor(real);
+    const headers = {
       "content-type": TEXT_MIME.test(mime) ? mime + "; charset=utf-8" : mime,
       "content-length": String(data.length),
-      "cache-control": "no-store"
-    });
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff"
+    };
+    // Defense-in-depth (H-04): a top-level load of a preview URL stays in an
+    // opaque origin, so it can never touch the GUI's origin.
+    if (DOC_MIME.test(mime)) {
+      headers["content-security-policy"] = "sandbox allow-scripts allow-forms allow-popups allow-modals; object-src 'none'";
+    }
+    res.writeHead(200, headers);
     res.end(req.method === "HEAD" ? undefined : data);
   } catch (err) {
     const code = err && (err.code === "ENOENT" || err.code === "EACCES" || err.code === "EPERM") ? 404 : 500;
@@ -450,7 +615,11 @@ function dshSessionsRoot() {
 
 function findSessionCwd(sessionId) {
   if (!sessionId) return "";
-  if (sessionCwdCache.has(sessionId)) return sessionCwdCache.get(sessionId);
+  if (sessionCwdCache.has(sessionId)) {
+    const cached = sessionCwdCache.get(sessionId);
+    rememberSessionCwd(cached);
+    return cached;
+  }
   let cwd = "";
   try {
     const walk = (dir) => {
@@ -476,6 +645,7 @@ function findSessionCwd(sessionId) {
     walk(dshSessionsRoot());
   } catch {}
   sessionCwdCache.set(sessionId, cwd);
+  rememberSessionCwd(cwd);
   return cwd;
 }
 

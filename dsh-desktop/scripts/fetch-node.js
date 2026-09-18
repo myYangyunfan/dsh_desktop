@@ -32,6 +32,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const https = require('node:https');
 const os = require('node:os');
+const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 
 const MAX_REDIRECTS = 5;
@@ -69,6 +70,53 @@ function httpDownload(url, destPath, redirects = 0) {
     });
     req.setTimeout(120000, () => req.destroy(new Error('下载超时: ' + url)));
     req.on('error', reject);
+  });
+}
+
+// Same redirect/timeout policy as httpDownload, but returns the body as text.
+// Used for the tiny official checksum manifest.
+function httpGetText(url, redirects = 0) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { headers: { 'User-Agent': 'dsh-desktop-build' } }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        if (redirects >= MAX_REDIRECTS) {
+          return reject(new Error(`重定向超过 ${MAX_REDIRECTS} 次: ${url}`));
+        }
+        return httpGetText(res.headers.location, redirects + 1).then(resolve, reject);
+      }
+      if (res.statusCode !== 200) {
+        res.resume();
+        return reject(new Error(`HTTP ${res.statusCode} ${url}`));
+      }
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => { body += chunk; });
+      res.on('end', () => resolve(body));
+      res.on('error', reject);
+    });
+    req.setTimeout(120000, () => req.destroy(new Error('下载超时: ' + url)));
+    req.on('error', reject);
+  });
+}
+
+// Parse a SHA256SUMS-style manifest (`<64 hex>  <filename>` per line) and return
+// the digest recorded for archiveName, or null when the archive is absent.
+function parseShasums256(text, archiveName) {
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^([0-9a-fA-F]{64})\s+\*?(.+?)\s*$/.exec(line);
+    if (m && m[2] === archiveName) return m[1].toLowerCase();
+  }
+  return null;
+}
+
+function sha256File(file) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(file);
+    stream.on('error', reject);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('end', () => resolve(hash.digest('hex')));
   });
 }
 
@@ -144,6 +192,22 @@ async function fetchCross(platform, arch) {
     process.exit(1);
   }
   console.log(`    -> ${archive} (${size} bytes)`);
+  // H-08: the download is only trusted after it matches the official
+  // SHA256SUMS manifest for this exact version (fail-closed).
+  const shasumsUrl = `https://nodejs.org/dist/${version}/SHASUMS256.txt`;
+  const expected = parseShasums256(await httpGetText(shasumsUrl), archiveName);
+  if (!expected) {
+    console.error(`SHASUMS256.txt 中缺少 ${archiveName}，拒绝使用下载产物: ${shasumsUrl}`);
+    fs.rmSync(archive, { force: true });
+    process.exit(1);
+  }
+  const actual = await sha256File(archive);
+  if (actual !== expected) {
+    console.error(`sha256 校验失败（下载产物已丢弃）: ${archiveName}\n  期望 ${expected}\n  实际 ${actual}`);
+    fs.rmSync(archive, { force: true });
+    process.exit(1);
+  }
+  console.log(`    -> sha256 校验通过 (${archiveName})`);
   // tar.gz 顶层目录名 = node-<version>-<platform>-<arch>（如
   // node-v24.15.0-darwin-x64），单文件提取需要它定位 bin/node。
   const pkgTop = isWin ? null : `node-${version}-${platform}-${arch}`;
@@ -156,7 +220,7 @@ async function fetchCross(platform, arch) {
   console.log(`Node ${version} / ${platform}-${arch} / ${fs.statSync(dest).size} bytes`);
 }
 
-(async () => {
+async function main() {
   const platform = argValue('platform') || process.platform;
   const arch = argValue('arch') || process.arch;
 
@@ -178,7 +242,15 @@ async function fetchCross(platform, arch) {
   console.log(`已复制 ${src}`);
   console.log(`    -> ${dest}`);
   console.log(`Node ${process.version} / ${process.platform}-${process.arch} / ${fs.statSync(dest).size} bytes`);
-})().catch((err) => {
-  console.error('fetch-node 失败: ' + (err && err.message ? err.message : err));
-  process.exit(1);
-});
+}
+
+// Run only when executed directly (npm run fetch-node); importing the helpers for
+// tests must not copy/download anything.
+if (require.main === module) {
+  main().catch((err) => {
+    console.error('fetch-node 失败: ' + (err && err.message ? err.message : err));
+    process.exit(1);
+  });
+}
+
+module.exports = { parseShasums256, sha256File, httpDownload, httpGetText, fetchCross };
