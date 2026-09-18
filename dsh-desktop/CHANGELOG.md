@@ -6,6 +6,39 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### security: supply-chain anchoring and isolation hardening (2026-09)
+
+Full record: `SECURITY.md` (policy) and `docs/security-fixes-2026-09.md` (finding by finding).
+
+- **dsh-hub remote installs are now anchored.** Every downloaded source archive is
+  verified against a pinned sha256 (`plugin-source-pins.json` / `DSH_HUB_SOURCE_PINS`) or
+  against the sha256 of the first official codeload download of that immutable ref; a
+  mirror download with no anchor is refused unless `DSH_HUB_ALLOW_UNVERIFIED_MIRROR=1`.
+  Self-update resolves `main` to an immutable commit SHA.
+- **Downloaded packages no longer execute install hooks with the user's environment.**
+  `preinstall`/`install`/`postinstall` are refused, installs use `--ignore-scripts`, and
+  the child process gets an allowlist-based environment (proxy/TLS kept, secrets dropped).
+- **Archive extraction is validated before writing** (zip-slip, absolute/UNC paths, drive
+  letters, NTFS ADS, reserved names and link/device entries) in both `dsh-hub` and the
+  Tauri sidecar.
+- **The vendored kernel has a real integrity anchor:**
+  `vendor/dsh-kernel/SHA256SUMS` (299 tarballs), verified fail-closed by
+  `install-kernel.mjs` and `validate-pin.js`; the idempotent fast path checks a manifest
+  generation marker instead of one package version. `fetch-node.js` verifies
+  `SHASUMS256.txt` before packaging the Node runtime.
+- **`package-lock.json` regenerated** to match `package.json` (299 `file:` entries, all
+  resolving, all with `sha512`).
+- **Workspace plugin isolation:** previews always run in an opaque origin, the file
+  preview route is confined to workspace roots with a credential deny list and extension
+  allowlist, and the integrated terminal now requires a server-generated secret plus exact
+  `Origin`/`Host` checks with a scrubbed spawn environment.
+- **Tauri:** the navigation fence parses scheme/host instead of prefix-matching, so
+  `http://127.0.0.1@evil.com/` and `http://127.0.0.1.evil.com/` are rejected.
+- **Tooling:** the plugin scanner covers more extensions, handles symlinks safely and
+  reports every match (documented as best-effort, not a boundary); patch-surface
+  recognizes the `DSH Desktop:` and `heal isolation:` marker families; the `custom-bash`
+  preset confines `workdir` to the session root.
+
 ### feat(plugins)：内置 dsh-easyrewrite 取代 dsh-message-rewind；修 prompt-optimizer 伴随 id 失配
 
 - **插件替换**：消息撤回/再编辑改用社区插件 `dsh-easyrewrite`（Renzic-Stone，MIT，
