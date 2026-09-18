@@ -29,6 +29,17 @@ const SNAP_REL = path.join('dsh-desktop', 'scripts', 'compat', 'patch-surface.sn
 // 带尾巴的垃圾标记名；patch (...) 形式以右括号定界，仍用 [^)]+。
 const MARKER_RE = /dsh-desktop (?:patch \(([^)]+)\)|fix:? ([^*"'`;{}<>\n\\]+)|compat:? ([^*"'`;{}<>\n\\]+)|guard:? ([^*"'`;{}<>\n\\]+)|isolation:? ([^*"'`;{}<>\n\\]+))/g;
 
+// Two registered marker families are not modeled by MARKER_RE above: the
+// mixed-case `DSH Desktop: <name>` (IMAGE_SEND_MARKER) and the
+// `dsh-desktop heal isolation: <name>` kind (FALLBACK_HEAL_ISOLATION_MARKER).
+// Match them only inside a quoted literal (how markers are declared) so
+// prose/comment tails are not collected. No registry import is used here:
+// `collectMarkers` stays purely regex-derived, and bare anchors
+// (`function loadUserPatchLayer`) are deliberately NOT recognized — they are
+// generic substrings that would pull unrelated kernel files into the surface
+// and trip `verify` with false "new intervention" drift.
+const MARKER_ALT_RE = /['"`](?:dsh-desktop heal isolation:|DSH Desktop:)\s*([^*'"`;{}<>\n\\]+)['"`]/gi;
+
 function sha(buf) {
   return crypto.createHash('sha256').update(buf).digest('hex').slice(0, 16);
 }
@@ -50,6 +61,11 @@ function collectMarkers(repoRoot) {
       // 「 — 解释文本」同行散文截断（fix:/compat: 注释常名字与说明同句），
       // 截断后与其它短名去重合并。
       const name = ((m[1] || m[2] || m[3] || m[4] || m[5] || '').trim()).split(' — ')[0].trim();
+      if (name) markers.add(name);
+    }
+    // Same shape for the two families MARKER_RE does not model.
+    for (const m of src.matchAll(MARKER_ALT_RE)) {
+      const name = ((m[1] || '').trim()).split(' — ')[0].trim();
       if (name) markers.add(name);
     }
   }

