@@ -14,7 +14,7 @@
 //     DSH_TAURI_WSL_HOME / DSH_TAURI_WSL_UNC_HOST / DSH_TAURI_WSL_UNC_HOME
 //     可跳过全部 wsl.exe 探测（单测 / 真机调试用，见各字段注释）。
 //   · effectiveDshHome 语义：WSL 模式下 DSH_HOME = WSL 安装目录的 UNC 等价
-//     路径（\\wsl.localhost\<distro>\<installDir>），插件同步 / 预设同步 /
+//     路径（\\wsl.localhost\<distro>\<installDir>），插件同步 /
 //     补丁半边全部经 UNC 写穿——fs 语义见 wsl-paths.js 头注释。
 //   · 失败回落（Electron issue #54）：配置错误（无发行版 / 缺 node 等）不
 //     阻断启动——detect 出 wsl 但解析失败时，调用方回落 local 模式继续 boot。

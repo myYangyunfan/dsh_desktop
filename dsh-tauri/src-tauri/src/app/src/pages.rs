@@ -130,7 +130,7 @@ pub const LOADING_HTML: &str = r#"<!doctype html>
       }).catch(function(){});
     } catch (e) {}
   }
-  var NAMES = { repair:'自愈检查', sync:'伴随插件同步', presets:'内置预设对账', patches:'运行时补丁', preflight:'就绪预检',
+  var NAMES = { repair:'自愈检查', sync:'伴随插件同步', patches:'运行时补丁', preflight:'就绪预检',
                 'sidecar-boot':'启动链', spawn:'内核拉起', 'wsl-install':'安装内核 agent（首次需几分钟）' };
   listen('boot-step', function(p){
     // （listen() 已解包信封，p 即 payload 本体。）
@@ -163,7 +163,7 @@ pub const LOADING_HTML: &str = r#"<!doctype html>
       if (exitEl) exitEl.removeAttribute('hidden');
     }, 1800);
   });
-  listen('pet-state', function(){});
+  // pet-state 空订阅（宠物窗占位）随 harness-pet 插件退役于 2026-10 移除。
   // #154 前端兜底出口（手动触发）：恢复页导航迟迟不发生时的用户出口。
   window.doRestartKernel = function(){
     try { B && B.recovery.restart(); } catch (e) {}
@@ -269,7 +269,7 @@ mod tests {
         assert!(LOADING_HTML.contains("windowControls.minimize"));
         assert!(LOADING_HTML.contains("dshDesktop"), "垫片可用前提下的降级引用");
         // 步骤名映射对齐 data-flow.md §3 boot 时序。
-        for (key, label) in [("repair", "自愈"), ("sync", "同步"), ("presets", "预设"), ("patches", "补丁"), ("preflight", "预检")] {
+        for (key, label) in [("repair", "自愈"), ("sync", "同步"), ("patches", "补丁"), ("preflight", "预检")] {
             assert!(LOADING_HTML.contains(key), "缺少步骤 {key}");
             assert!(LOADING_HTML.contains(label), "缺少步骤中文标签 {label}");
         }
@@ -355,13 +355,14 @@ mod tests {
         assert!(!boot_step_body.contains("titleEl.textContent ="), "boot-step 监听内不得改全局标题（含 !ok 分支）");
     }
 
-    /// 事件监听名不回归：boot-step / kernel-fail / pet-state 三订阅稳定
-    /// （supervisor 路由层 emit 名的页面侧契约）。
+    /// 事件监听名不回归：boot-step / kernel-fail 两订阅稳定
+    /// （supervisor 路由层 emit 名的页面侧契约；pet-state 随宠物窗退役移除）。
     #[test]
     fn loading_event_names_stable() {
-        for name in ["'boot-step'", "'kernel-fail'", "'pet-state'"] {
+        for name in ["'boot-step'", "'kernel-fail'"] {
             assert!(LOADING_HTML.contains(name), "缺事件订阅 {name}");
         }
+        assert!(!LOADING_HTML.contains("'pet-state'"), "已退役的 pet-state 订阅不得复活");
     }
 
     /// #154 前端兜底出口：kernel-fail 防抖到点后必须展示「重试启动内核」/

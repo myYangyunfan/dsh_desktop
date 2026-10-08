@@ -11,7 +11,7 @@
 //   ② Windows UNC 路径    \\wsl.localhost\Ubuntu\home\user\.dsh-desktop
 //                        （Windows 壳经 9P 文件系统直读 WSL 文件的视角；
 //                         Electron effectiveDshHome() = wslBackend.uncHome()，
-//                         插件同步 / 预设同步 / 补丁半边全部经此写穿）
+//                         插件同步 / 补丁半边全部经此写穿）
 //   ③ Windows 盘符路径    C:\Users\user\... ↔ WSL 内 /mnt/c/Users/user/...
 //                        （wslpath 的 drvfs 约定；本地资产 ↔ WSL 视角的
 //                         对照，用于日志对照与跨侧路径提示）

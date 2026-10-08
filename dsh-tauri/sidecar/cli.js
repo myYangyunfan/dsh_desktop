@@ -28,9 +28,6 @@
  *   node cli.js backup-restore-preview <in-file>
  *   node cli.js backup-restore-apply <in-file> <token>
  *   node cli.js diag-order | diag-order-apply <json> | diag-remove-bundle <names-json>
- *   node cli.js balance-fetch [--app-dir <dsh-desktop>] [--home <~/.dsh>]
- *                             # 余额单轮取数（stdout 末行 = 事件载荷 JSON；
- *                             # 轮询编排在 Rust 侧 commands/balance.rs）
  *
  * 环境变量：
  *   DSH_TAURI_APP_DIR  dsh-desktop 目录（默认：脚本位置 ../../../../dsh-desktop）
@@ -43,9 +40,9 @@
  *   解锁前的临时缝）或 DSH_DESKTOP_BACKEND=wsl → settings.json 的
  *   backend='wsl'（wslDistro/wslInstallDir 同文件）→ 默认 local。
  *   生效后 DSH_HOME 等价于 WSL 安装目录的 UNC 形态
- *   （\\wsl.localhost\<distro><installDir>，见 wsl-paths.js），boot 五步全部
- *   经 UNC 写穿：sync（companion → UNC profile）、presets（→ UNC agent 包，
- *   未就绪跳过）、patches（ctx.wslMode=true → wslLayout 双根）、preflight
+ *   （\\wsl.localhost\<distro><installDir>，见 wsl-paths.js），boot 各步全部
+ *   经 UNC 写穿：sync（companion → UNC profile）、patches
+ *   （ctx.wslMode=true → wslLayout 双根）、preflight
  *   （nm-roots 追加 agent 根）。repairProfileFallback / koffi 预检在 WSL 模式
  *   跳过（junction 语义不适用于 Linux 内核自管的 symlink；win32 预编译 koffi
  *   与 Linux 内核无关——原生模块由 WSL 内 npm 安装的 linux 变体提供）。
@@ -117,7 +114,6 @@ function loadModules(appDir) {
   const req = (rel) => require(path.join(appDir, rel));
   return {
     integration: req('scripts/integration'),
-    presetInstaller: req('scripts/install-minimal-win-preset'),
     pluginManagerPatch: req('scripts/plugin-manager-patch'),
     pluginManagerUpdate: req('scripts/plugin-manager-update'),
     companionPlugins: req('scripts/lib/companion-plugins'),
@@ -741,43 +737,14 @@ async function cmdBoot(args, ctx) {
     log('boot 步骤 ' + name + ' → ' + (ok ? 'OK' : 'FAIL ' + error) + ' (' + (Date.now() - s) + 'ms)' + (warning ? ' [警告] ' + warning : ''));
     return ok;
   };
-  // 对齐 main.js boot 链（local 模式）：repair → sync → presets → patches → preflight。
-  // presets 步（v0.5.1 迁移，落点根修正见 issue #174）：把 assets/agent-presets 下的
-  // 内置预设对账进**内核可发现的用户预设根** <DSH_HOME>/.agent-presets（内核
-  // dsh-agent-presets 的 includeUserRoot 落点：lib/index.js:1307
-  // dshHomePath(".agent-presets")，roots 只有「出厂集 + config.roots + 用户根」三类）。
-  // 断链成因：6e38c3b5 把 installBuiltinPresets 的参数语义从「dsh 包目录」改成
-  // 「DSH home」，本步调用点没跟着改——仍传 installedDshPackageDir()，8 个内置预设
-  // 被写进 <payload>/node_modules/@deepseek-ai/dsh/.agent-presets（没有任何 roots 扫那里）
-  // → 客户端模式列表只剩出厂四件套 standard/ptc/minimal/cordis（issue #174；0.6.2
-  // 安装副本实锤：sidecar/cli.js:752-753 仍传 installedDshPackageDir()）。
-  // 另两层巧合让故障不报错：payload 在 currentUser 安装下可写（写入成功）、
-  // repair 步另有无条件补写网（scripts/lib/preset-heal.js）——本步仍保留为「内容
-  // 对账到源」（上游预设更新要靠它传播）。
-  //   local：目标 = effective DSH home（$DSH_HOME 或 ~/.dsh；也是 per-machine 装到
-  //     Program Files 时唯一确定可写的落点）；
-  //   wsl：目标 = UNC home（WSL 内 agent 以 DSH_HOME=<安装目录> 运行，见
-  //     dsh-desktop/wsl-backend.js:455）——agent 未就绪（Rust 侧 ensureInstalled 未跑完 /
-  //     首启）时跳过不阻断，下次 boot 补齐（避开对未就绪 UNC 路径的无谓写失败告警）。
-  // 步骤语义照抄 sidecar 容忍策略：失败告警不阻断启动（Electron 侧同款 try/catch）。
+  // boot 链：repair → sync → patches → compat-pin → preflight。
+  // v1.0.0 纯净线拆掉了 presets 步（随包 Agent 预设子系统整体移除：写入器、落点自愈、
+  // 预设槽枚举都不再存在，内核只扫出厂集 + config.roots + 用户根 <DSH_HOME>/.agent-presets，
+  // 后者由内核自行发现，客户端不再写入）。步骤序列是 Rust supervisor 与 data-flow.md §3
+  // 的契约，改动要三处同迁。
   let ok = true;
   ok = (await step('repair', () => integration.healBeforeServer())) && ok;
   ok = (await step('sync', () => integration.syncPlugins())) && ok;
-  ok = (await step('presets', () => {
-    if (backend.wsl) {
-      // 就绪门控只看 agent 包（写落点已与包目录无关）。
-      if (!findWslDshPackageDir(home)) {
-        log('presets: WSL 内 dsh 包未就绪（' + path.join(home, 'agent', 'node_modules', '@deepseek-ai', 'dsh') + '），本次跳过（Rust 侧安装完成后下次 boot 补齐）');
-        return { ok: true, count: 0, note: 'wsl-agent-not-ready' };
-      }
-      const dests = mods.presetInstaller.installBuiltinPresets(home);
-      log('presets: ' + dests.length + ' 个内置预设对账完成 → WSL home ' + mods.presetInstaller.userPresetRoot(home));
-      return { ok: true, count: dests.length };
-    }
-    const dests = mods.presetInstaller.installBuiltinPresets(home);
-    log('presets: ' + dests.length + ' 个内置预设对账完成（minimal-win/router-standard/anchored 系/whoami/warmupbetter 系等）→ ' + mods.presetInstaller.userPresetRoot(home));
-    return { ok: true, count: dests.length };
-  })) && ok;
   ok = (await step('patches', () => integration.applyPatches())) && ok;
   ok = (await step('compat-pin', () => {
     // 兼容层 M1（v0.6.0）：kernel-pin fail-closed 校验——vendored tarball 与
@@ -1233,39 +1200,6 @@ async function main() {
         if (!id) { process.stderr.write('用法: guard-resolve-incident <id>'); process.exit(2); }
         const g = makeGuard(c);
         return emit(typeof g.resolveIncident === 'function' ? g.resolveIncident(String(id)) : { ok: false, error: 'guard 无 resolveIncident' });
-      }
-      case 'balance-fetch': {
-        // 余额单轮取数（Electron main.js ensureBalanceScheduler 的取数半边，
-        // 编排半边在 Rust 侧 commands/balance.rs）：复用 payload 的
-        // balance.js + balance-scheduler.js（refresh() 直刷 + pollMs:0 不装
-        // 轮询定时器），组装出与 Electron 完全同构的事件载荷
-        // （ok/balances/prices/priceTable/model/peak/opencodeGo/at，
-        // 契约见 docs/balance-architecture.md §2）。stdout 末行 JSON 即结果；
-        // 密钥不出本进程（Rust 只透传 JSON，见 balance-scheduler 出站模型）。
-        const c = ctx();
-        const balance = require(path.join(c.appDir, 'balance'));
-        const { createBalanceScheduler } = require(path.join(c.appDir, 'balance-scheduler'));
-        const settings = loadSettingsInline({ userDataDir: c.userDataDir });
-        let result = null;
-        const sched = createBalanceScheduler({
-          getHome: () => c.home,
-          getSettings: () => settings,
-          queryBalance: balance.queryBalance,
-          queryOpencodeUsage: balance.queryOpencodeUsage,
-          readActiveModel: balance.readActiveModel,
-          effectivePrice: balance.effectivePrice,
-          priceTable: balance.priceTable,
-          isPeakHour: balance.isPeakHour,
-          push: (r) => { result = r; },
-          log: (topic, msg) => process.stderr.write('[' + topic + '] ' + msg + '\n'),
-          pollMs: 0, // 一次性取数：本进程随取完退出（轮询/退避由 Rust 编排层负责）
-        });
-        try {
-          await sched.refresh(); // 直刷（绕过节流——调用方显式触发）
-        } finally {
-          sched.stop();
-        }
-        return emit(result || { ok: false, error: 'no-result', balances: [] });
       }
       default:
         process.stderr.write('未知子命令: ' + cmd + '\n');

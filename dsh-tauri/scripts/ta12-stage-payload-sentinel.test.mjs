@@ -71,42 +71,41 @@ test('devDeps 排除清单与 node_modules 现状一致（electron* 不进 paylo
 });
 
 // ---------------------------------------------------------------------------
-// v1.0.0 纯净线：内置插件与随包预设不进安装包（口径 = 三层，缺一层即形态漂移）
+// v1.0.0 纯净线：内置插件不进安装包（口径 = 三层，缺一层即形态漂移）
+//   随包预设（assets/agent-presets）已整树删除，不在本口径内。
 // ---------------------------------------------------------------------------
 
 /** 把 stage-payload.sh 源码按纯净线三层判据走一遍，返回违规清单（空 = 合规）。 */
 function pureShapeViolations(src) {
-  const v = [];
   const m = /mirror_dir "\$SRC\/assets" "\$DST\/assets"([^\n]*)/.exec(src);
+  const v = [];
   if (!m) {
     v.push('解析不到 assets 镜像行');
     return v;
   }
   const excluded = m[1];
-  for (const want of ['plugins', 'agent-presets']) {
-    if (!excluded.includes(want)) v.push(`assets 镜像未 //XD ${want}`);
-  }
-  if (!/^rm -rf "\$DST\/assets\/plugins" "\$DST\/assets\/agent-presets"$/m.test(src)) {
+  if (!excluded.includes('plugins')) v.push('assets 镜像未 //XD plugins');
+  if (!/^rm -rf "\$DST\/assets\/plugins"$/m.test(src)) {
     v.push('缺平台无关的镜像后显式 rm');
   }
-  if (!/for d in assets\/plugins assets\/agent-presets; do/.test(src)) {
+  if (!/for d in assets\/plugins; do/.test(src)) {
     v.push('缺 payload 纯净形态门禁');
   }
   if (/\bnode_modules\b/.test(excluded)) v.push('对 assets 一刀切排除 node_modules');
   return v;
 }
 
-test('纯净线：assets 镜像排除内置插件与预设 + 镜像后显式 rm + 收尾门禁，三层齐备', () => {
+test('纯净线：assets 镜像排除内置插件 + 镜像后显式 rm + 收尾门禁，三层齐备', () => {
   assert.deepEqual(pureShapeViolations(sh), [], 'stage-payload.sh 纯净线口径不完整');
 });
 
 test('反证：纯净线判据每一项都真的有捕获力（逐项拆掉必须变红）', () => {
   const mutants = [
-    ['丢掉 //XD plugins', (s) => s.replace('//XD .pnpm plugins agent-presets', '//XD .pnpm agent-presets')],
+    ['丢掉 //XD plugins', (s) => s.replace('//XD .pnpm plugins', '//XD .pnpm')],
     ['丢掉镜像后的显式 rm', (s) => s.replace(/^rm -rf "\$DST\/assets\/plugins".*$/m, '# (removed)')],
-    ['丢掉收尾门禁', (s) => s.replace(/for d in assets\/plugins assets\/agent-presets; do/, 'for d in ; do')],
+    ['丢掉收尾门禁', (s) => s.replace(/for d in assets\/plugins; do/, 'for d in ; do')],
     ['一刀切排除 node_modules（会误杀正件插件运行期依赖）',
-      (s) => s.replace('//XD .pnpm plugins agent-presets', '//XD .pnpm node_modules plugins agent-presets')],
+      (s) => s.replace('//XD .pnpm plugins', '//XD .pnpm node_modules plugins')],
   ];
   for (const [label, mutate] of mutants) {
     const mutated = mutate(sh);

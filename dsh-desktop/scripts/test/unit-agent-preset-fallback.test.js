@@ -337,7 +337,7 @@ test('registry：agent-preset-fallback 规格装配与布局正确', () => {
   assert.equal(spec.layout, 'runtime-local');
   assert.equal(spec.wslLayout, 'wsl');
   assert.equal(spec.failPolicy, 'warn');
-  assert.equal(spec.cli, false, 'cli:false（对齐 image-send-fix 先例，不动 CLI 清单）');
+  assert.equal(spec.cli, false, 'cli:false（仅桌面壳 boot 链应用，不进 CLI 清单）');
   assert.equal(spec.transform, transformAgentPresetFallback, 'transform 与 patch-adapters 导出同源');
   assert.equal(spec.marker, MARKER);
   assert.equal(markers.AGENT_PRESET_FALLBACK_MARKER, MARKER, 'marker 单一数据源导出');

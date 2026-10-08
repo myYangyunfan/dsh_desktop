@@ -28,7 +28,9 @@ dsh web 进程启动时按序叠加：
   | 插件开关（pluginManager.setEnabled） | [3] home patch 用户层 | `disabled` 条目 |
   | 伴随插件安装（sync-companion-plugins） | [4] overlay | `--patch` 指向的 cordis.patch.yml + node_modules 布局 |
   | 运行时文本手术（22 个 patch spec） | [4] overlay | 直接改写 node_modules 内目标文件（幂等标记） |
-  | 内核预设（presets 同步） | profile 侧 | agent 预设文件 |
+
+  Agent 预设不在表内：v1.0.0 起客户端**不写任何预设**（随包预设子系统整体移除）。内核
+  自行发现出厂集 + `config.roots` + 用户根 `<DSH_HOME>/.agent-presets`，后者只由用户放文件。
 
 ## 2. 桌面侧单一数据流（#121 语义）
 
@@ -61,8 +63,8 @@ app 启动
  ├─ [0] 单实例锁 + run-state + panic hook                      （shell-core/lib）
  ├─ [1] repair：损坏 manifest/home patch 自愈                  （sidecar boot 步骤①）
  ├─ [2] sync：伴随插件同步                                      （sidecar boot 步骤②）
- ├─ [3] presets：8 个壳层内置预设对账进 dsh 包                  （sidecar boot 步骤③，v0.5.1 迁移）
- ├─ [4] patches：22 个文本手术（幂等）                          （sidecar boot 步骤④）
+ ├─ [3] patches：22 个文本手术（幂等）                          （sidecar boot 步骤③）
+ ├─ [4] compat-pin：kernel-pin fail-closed 校验                 （sidecar boot 步骤④，143fa9e7 compat-layer M1）
  ├─ [5] preflight：补丁就绪 + koffi 预检 → 降级 overlay         （sidecar 步骤⑤）
  ├─ [6] guard-snapshot（boot 前快照，GUARD_FILES 四配置文件）
  ├─ [7] spawn：vendor-node bin.js web --no-open（120s 有界等待）
@@ -103,7 +105,7 @@ app 启动
 ```
 页面插件 ──invoke──▶ bridge command ──▶ 归属 crate ──▶ (sidecar | 内核 HTTP | OS)
     ▲                                                    │
-    └────────── event（balance-changed / notification-jump / pet-state / window-maximized）◀─┘
+    └────────── event（notification-jump / window-maximized）◀─┘
 ```
 
 - 事件方向固定：主进程 → 页面。页面→主进程只有 command（含 fire-and-forget 族）。
@@ -119,7 +121,7 @@ app 启动
 | 窗口状态 | `%APPDATA%/dsh-desktop/window-state.json` | 同名同 schema（bounds/maximized），双向兼容 |
 | 日志 | `%APPDATA%/dsh-desktop/logs/desktop.log` | 同路径（另含 `panics.log`） |
 | 隔离区 | `%APPDATA%/dsh-desktop/plugin-quarantine/` | 同路径 |
-| 粘贴临时 | `%TEMP%/dsh-paste/` | 同路径 |
+| 粘贴临时 | `%TEMP%/dsh-paste/` | 同路径。**消费方 `image_paste_save` 已于 2026-10 随插件退役**；路径解析保留（`shell-core::Paths::paste_tmp` 是「app_data/paste_tmp 恒为相对路径」回归用例的载体，删字段会连带丢那条 GUI cwd 漂移的历史缺陷覆盖） |
 
 > 设置文件沿用 updater.js 的 JSON schema（含已裁撤字段如 kernelUpdate.skipVersion：
 > 读取时忽略不删除——**回退兼容**，旧用户目录可安全回退 Electron 版；壳侧活跃

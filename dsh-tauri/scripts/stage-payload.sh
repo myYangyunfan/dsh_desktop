@@ -7,8 +7,8 @@
 #   2. node_modules 的 devDependencies（electron / electron-builder /
 #      electron-winstaller）——Electron 运行时与打包器，Tauri 版不需要
 #   3. vendor/node/node —— unix node 二进制（115MB，win-x64 包只带 node.exe）
-#   4. assets/{plugins,agent-presets} —— 内置插件与随包预设（v1.0.0 起对齐官方
-#      交付形态：仓库保留源，安装包不带；口径与失效语义见下方 assets 段）
+#   4. assets/plugins   —— 内置插件（v1.0.0 起对齐官方交付形态：仓库保留源，
+#      安装包不带；口径与失效语义见下方 assets 段）
 #
 # 产出布局（resources 映射 → <安装根>/resources/dsh-desktop/，
 # 与 lib.rs find_repo_root 的 exe-walk resources/ 子布局回退一致）：
@@ -60,8 +60,8 @@ echo "[stage] DEBUG: package.json exists: $(ls "$SRC/package.json" 2>&1)"
 echo "[stage] DEBUG: assets/ 顶层: $(ls "$SRC/assets" 2>&1 | tr '\n' ' ')"
 echo "[stage] DEBUG: node_modules count: $(ls "$SRC/node_modules" 2>/dev/null | wc -l)"
 
-# 必需件清单里**不含** assets/plugins 与 assets/agent-presets：v1.0.0 纯净线不把
-# 它们装进包（下方 assets 段显式剔除），装出来缺了反而才对。
+# 必需件清单里**不含** assets/plugins：v1.0.0 纯净线不把它装进包（下方 assets 段
+# 显式剔除），装出来缺了反而才对。
 for f in package.json "vendor/node/$NODE_BIN" \
          node_modules/@deepseek-ai/dsh/lib/bin.js \
          scripts/lib/companion-profile.js; do
@@ -88,18 +88,17 @@ rc() { mirror_dir "$1" "$2"; }
   done
 
 # ---- scripts / assets：镜像 + 纯净线收口 ----
-# v1.0.0 与官方桌面客户端对齐的交付形态：官方不随包第三方插件、也不注入自定义
-# agent 预设，所以 `assets/{plugins,agent-presets}` 只留在仓库里（开发树、约 25 个
-# 单测与同步链仍以它们为源），**不进安装包**。
+# v1.0.0 与官方桌面客户端对齐的交付形态：官方不随包第三方插件，所以
+# `assets/plugins` 只留在仓库里（开发树与同步链仍以它为源），**不进安装包**。
+# 随包预设（`assets/agent-presets`）在 v1.0.0 已整树删除、写入器与 boot 的
+# presets 步一并拆除，此处不再有它的剔除面。
 #
-# 剔掉之后运行期不会报错，两条链都是 fail-open，但语义不一样，都得知道：
-#   • boot 的 sync 步把「源缺失」的 40 个配套件计入 missingNames，随后**主动撤回**
+# 剔掉之后运行期不会报错，但链是 fail-open 的，语义要知道：
+#   • boot 的 sync 步把「源缺失」的配套件（清单条目数以
+#     scripts/lib/companion-plugins.js 为准，不在此处钉数字）计入 missingNames，随后**主动撤回**
 #     已装过的 cordis.patch 条目与 bundle 注册 —— 所以 COMPANION_PLUGINS 清单必须
 #     保持完整。清空清单会让老用户升级后留下一堆指向缺失目录的注册行，装配失败
 #     表现为 "entries did not activate"，一次致命启动会把 profile 的补丁层整体抹掉。
-#   • 预设侧 listPresetSlots 读不到源根返回空清单 → 安装 0 个内置预设；
-#     已装进 <DSH_HOME>/.agent-presets 的旧副本**不自动删**（那是用户目录下可能被
-#     改过的文件，稳定性原则③「用户数据不动」优先于形态纯净）。
 #
 # 手法：//XD 只是 Windows 快路径（少拷 73MB），真正的口径是镜像后的无条件 rm。
 # 两个理由都是实测过的坑：robocopy /XD 把排除项同时挡在「复制」与「/MIR 删除」
@@ -114,19 +113,19 @@ rc() { mirror_dir "$1" "$2"; }
 #     433MB），其 .pnpm 存储被 robocopy 跟 junction 展开成真实路径后，NSIS 的 File
 #     指令在 >260 字符处 "failed opening file" 直接中断建包（abort 于 installer.nsi:15383）。
 mirror_dir "$SRC/scripts" "$DST/scripts"
-mirror_dir "$SRC/assets" "$DST/assets" //XD .pnpm plugins agent-presets
+mirror_dir "$SRC/assets" "$DST/assets" //XD .pnpm plugins
 find "$DST/assets" -type d -name .pnpm -prune -exec rm -rf {} + 2>/dev/null || true
-rm -rf "$DST/assets/plugins" "$DST/assets/agent-presets"
+rm -rf "$DST/assets/plugins"
 
 # 纯净形态门禁：与上面的 rm 互为反证（排除面被改动 / 上游重新引入镜像时立刻红，
 # 而不是等到装出来一个带插件的"纯净版"）。
-for d in assets/plugins assets/agent-presets; do
+for d in assets/plugins; do
   if [ -e "$DST/$d" ]; then
     echo "[stage] FATAL: 纯净线 payload 混入 $d，拒绝打包" >&2
     exit 1
   fi
 done
-echo "[stage] OK: 纯净线形态 —— payload 不含内置插件与随包预设（仓库源保留）"
+echo "[stage] OK: 纯净线形态 —— payload 不含内置插件（仓库源保留）"
 
 # ---- vendor：node 二进制（$NODE_BIN——win 为 node.exe，unix 为 node）+ npm 全量（插件安装/更新链用到）----
 # PD1 对账修复：历史 staging 残留会把另一平台的 node 二进制留在 DST（本机

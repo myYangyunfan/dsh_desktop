@@ -14,8 +14,6 @@ const { detachedHits } = require('./lib/js-syntax-scan');
 
 const root = path.resolve(__dirname, '..');
 const entryFiles = [
-  'balance.js',
-  'balance-scheduler.js',
   'session-watcher.js',
   'renderer-recovery.js',
   'wsl-backend.js',
@@ -34,11 +32,6 @@ const entryFiles = [
   'scripts/lib/versions.js',
   'scripts/lib/github-release-assets.js',
   'scripts/lib/js-syntax-scan.js',
-  'scripts/lib/preset-guard.js',
-  // 内置预设落点自愈（boot repair 步接线，issue #174）与预设槽递归枚举
-  // （heal 与 installer 共用单一实现）——随包分发，必须过语法门。
-  'scripts/lib/preset-files.js',
-  'scripts/lib/preset-heal.js',
   // llm-pi-ai settings 自愈（boot repair 步接线，随包分发，必须过语法门）。
   'scripts/lib/pi-ai-settings-heal.js',
   // settings.yaml 整文档不可解析自愈（boot repair 步接线，「settings service is
@@ -55,7 +48,6 @@ const entryFiles = [
   'scripts/patch-slot-compat.js',
   'scripts/patch-pi-ai-opencode-go-models.js',
   'scripts/gpu-crash-guard.js',
-  'scripts/install-minimal-win-preset.js',
   'scripts/patch-deps.js',
   'scripts/patch-pi-ai-credits.js',
   'scripts/sync-companion-plugins.js',

@@ -58,27 +58,25 @@ test('环境自检：依赖齐备（否则全组跳过）', () => {
   assert.ok(true);
 });
 
-test('boot：沙箱 home 六步全过并建档', { skip: !HAVE_DEPS }, (t) => {
+test('boot：沙箱 home 五步全过并建档', { skip: !HAVE_DEPS }, (t) => {
   const sb = sandbox(t.name);
   t.after(() => fs.rmSync(sb.dir, { recursive: true, force: true }));
   const r = cli(['boot'], { env: sb.env, timeout: 180_000 });
   assert.strictEqual(r.code, 0, `stderr: ${r.stderr.slice(-500)}`);
   assert.strictEqual(r.json.ok, true, JSON.stringify(r.json));
-  // 固定顺序契约（data-flow.md §3；0.5.7 起加入 compat-pin 内核一致性校验步）。
-  assert.deepStrictEqual(r.json.steps.map((s) => s.name), ['repair', 'sync', 'presets', 'patches', 'compat-pin', 'preflight']);
+  // 固定顺序契约（data-flow.md §3；0.5.7 起加入 compat-pin 内核一致性校验步，
+  // v1.0.0 纯净线拆掉 presets 步）。
+  assert.deepStrictEqual(r.json.steps.map((s) => s.name), ['repair', 'sync', 'patches', 'compat-pin', 'preflight']);
   // 沙箱建档：web profile + patch 清单落盘。
   assert.ok(fs.existsSync(path.join(sb.dir, 'profiles', 'web', 'cordis.patch.yml')), 'profile patch 应建档');
   assert.ok(fs.existsSync(path.join(sb.dir, 'profiles', 'web', 'package.json')), 'profile package 应建档');
-  // #174 红线：内置预设必须落在**内核可发现的用户预设根** <DSH_HOME>/.agent-presets，
-  // 而不是 payload 包目录（旧 bug 写进 node_modules/@deepseek-ai/dsh/.agent-presets，
-  // 没有任何 roots 扫那里 → 客户端模式列表只剩出厂四件套）。
-  assert.ok(fs.existsSync(path.join(sb.dir, '.agent-presets', 'minimal-win', 'agent.cordis.yml')), '内置预设应落 <DSH_HOME>/.agent-presets');
-  assert.ok(fs.existsSync(path.join(sb.dir, '.agent-presets', 'router-standard', 'agent.cordis.yml')), 'v0.5.7 社区预设应在位');
-  assert.ok(fs.existsSync(path.join(sb.dir, '.agent-presets', '_preset', 'skill-search.mjs')), '_preset 共享模块应在位（zero/whoami 系依赖）');
+  // v1.0.0 纯净线：预设子系统（随包源 / 写入器 / boot 的 presets 步）整体拆除，
+  // 客户端不再写任何预设——用户根 <DSH_HOME>/.agent-presets 只由用户放文件，
+  // 由内核自行发现（老用户已有副本不受影响）。
   assert.equal(
-    fs.existsSync(path.join(APP_DIR, 'node_modules', '@deepseek-ai', 'dsh', '.agent-presets', 'minimal-win', 'agent.cordis.yml')),
+    fs.existsSync(path.join(sb.dir, '.agent-presets')),
     false,
-    '不得再往 payload 包目录写预设（旧落点死角）',
+    'boot 不得在用户 home 凭空建 .agent-presets',
   );
 });
 
@@ -217,102 +215,17 @@ test('未知插件卸载：ok:false 而非崩溃', { skip: !HAVE_DEPS }, (t) => 
 });
 
 // ===========================================================================
-// 余额单轮取数（balance-fetch：Electron ensureBalanceScheduler 取数半边的
-// sidecar 化——Rust 编排层 commands/balance.rs 每轮调用本子命令）
+// 余额遗留线退役反证（Electron balance-fetch 子命令不得复活）
+//
+// v1.0.0 拆 Electron 余额线：Rust 轮询环 → 本子命令 → dsh-desktop/balance.js
+// 整条链路无人消费（页面读余额走插件 dsh-balance 的两条回环路由）。这里锁「已退役」
+// 本身——若有人重新登记 balance-fetch 子命令，用例会从 exit 2 变成 exit 0 而判红。
 // ===========================================================================
 
-test('balance-fetch：本地 mock 端点 → 与 Electron 同构的事件载荷', { skip: !HAVE_DEPS }, async (t) => {
-  const sb = sandbox(t.name);
-  t.after(() => fs.rmSync(sb.dir, { recursive: true, force: true }));
-  // 本地回环 mock（integration-balance.test.js 同款隔离承诺：不出 127.0.0.1）。
-  // NO_PROXY 显式放行回环——防开发机全局 HTTP_PROXY 劫持测试端点。
-  const http = require('node:http');
-  const { spawn } = require('node:child_process');
-  const server = http.createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
-      is_available: true,
-      balance_infos: [{ currency: 'CNY', total_balance: '12.34', granted_balance: '1', topped_up_balance: '11.34' }],
-    }));
-  });
-  await new Promise((res) => server.listen(0, '127.0.0.1', res));
-  try {
-    const env = {
-      ...sb.env,
-      DEEPSEEK_API_KEY: 'k-test',
-      DEEPSEEK_BALANCE_URL: 'http://127.0.0.1:' + server.address().port + '/user/balance',
-      NO_PROXY: '127.0.0.1,localhost',
-    };
-    // 异步 spawn（spawnSync 会冻结本进程事件循环——mock server 无法应答，
-    // 子进程只能等满 15s 超时；余额链路测试必须让事件循环活着）。
-    const r = await new Promise((resolve, reject) => {
-      const p = spawn(NODE, [SIDEAR, 'balance-fetch', '--app-dir', APP_DIR], { env, stdio: ['ignore', 'pipe', 'pipe'] });
-      let stdout = '', stderr = '';
-      p.stdout.on('data', (c) => { stdout += c; });
-      p.stderr.on('data', (c) => { stderr += c; });
-      const timer = setTimeout(() => p.kill(), 120_000);
-      p.on('error', reject);
-      p.on('close', (code) => {
-        clearTimeout(timer);
-        const lastLine = stdout.trimEnd().split('\n').pop() || '';
-        let json = null;
-        try { json = JSON.parse(lastLine); } catch { /* 保持 null */ }
-        resolve({ code, json, stderr, stdout });
-      });
-    });
-    assert.strictEqual(r.code, 0, `stderr: ${r.stderr.slice(-500)}`);
-    // 载荷契约（docs/balance-architecture.md §2，Electron dsh:balance 同构）。
-    assert.strictEqual(r.json.ok, true, JSON.stringify(r.json));
-    assert.strictEqual(r.json.balances[0].total, 12.34);
-    assert.ok(r.json.prices && Number(r.json.prices.cacheMiss) > 0, 'prices 应附加');
-    assert.ok(r.json.priceTable && r.json.priceTable['deepseek-v4-pro'], 'priceTable 应含全模型');
-    assert.strictEqual(typeof r.json.peak, 'boolean', 'peak 应为布尔');
-    assert.strictEqual(typeof r.json.at, 'string', 'at 应为 ISO 串');
-    assert.ok(r.json.model, '默认模型应解析（缺省 v4-pro 兜底）');
-    assert.ok(r.json.opencodeGo && typeof r.json.opencodeGo === 'object', 'opencodeGo 字段应存在（无键=ok:false）');
-    // 密钥不出进程：载荷中不得出现 API Key。
-    assert.ok(!JSON.stringify(r.json).includes('k-test'), '载荷不得携带密钥');
-  } finally {
-    server.close();
-  }
-});
-
-test('balance-fetch：showBalanceDock=false → disabled 载荷（短路，零网络）', { skip: !HAVE_DEPS }, (t) => {
-  const sb = sandbox(t.name);
-  t.after(() => fs.rmSync(sb.dir, { recursive: true, force: true }));
-  // 预置桌面壳 settings（sandbox 的 DSH_TAURI_USERDATA = sb.dir/ud）。
-  fs.mkdirSync(path.join(sb.dir, 'ud'), { recursive: true });
-  fs.writeFileSync(path.join(sb.dir, 'ud', 'settings.json'), JSON.stringify({ showBalanceDock: false }));
-  // 端点指向必失败地址——若未短路会 ok:false/error 且耗 15s 超时。
-  const env = {
-    ...sb.env,
-    DEEPSEEK_API_KEY: 'k-test',
-    DEEPSEEK_BALANCE_URL: 'http://127.0.0.1:1/user/balance',
-    NO_PROXY: '127.0.0.1,localhost',
-  };
-  const r = cli(['balance-fetch'], { env });
-  assert.strictEqual(r.code, 0);
-  assert.strictEqual(r.json.ok, false, JSON.stringify(r.json));
-  assert.strictEqual(r.json.disabled, true, '关闭态须最先判 disabled');
-  assert.deepStrictEqual(r.json.balances, [], '禁用载荷 balances 空');
-  assert.strictEqual(r.json.opencodeGo && r.json.opencodeGo.disabled, true, 'opencodeGo 同步禁用');
-});
-
-test('balance-fetch：无密钥 → ok:false/no-key（不 panic、结构化降级）', { skip: !HAVE_DEPS }, (t) => {
-  const sb = sandbox(t.name);
-  t.after(() => fs.rmSync(sb.dir, { recursive: true, force: true }));
-  const env = {
-    ...sb.env,
-    DEEPSEEK_API_KEY: '',
-    DEEPSEEK_BALANCE_URL: 'http://127.0.0.1:1/user/balance',
-    NO_PROXY: '127.0.0.1,localhost',
-  };
-  delete env.DEEPSEEK_API_KEY;
-  const r = cli(['balance-fetch'], { env });
-  assert.strictEqual(r.code, 0);
-  assert.strictEqual(r.json.ok, false, JSON.stringify(r.json));
-  assert.strictEqual(r.json.error, 'no-key', '无密钥应结构化报 no-key');
-  assert.deepStrictEqual(r.json.balances, []);
+test('balance-fetch 已退役：未知子命令 exit 2（反证）', { skip: !HAVE_DEPS }, () => {
+  const r = cli(['balance-fetch']);
+  assert.strictEqual(r.code, 2, `应走「未知子命令」分支 exit 2，得到 ${r.code}`);
+  assert.match(String(r.stderr), /未知子命令/);
 });
 
 // ===========================================================================
@@ -462,7 +375,7 @@ function makeWslAgentLayout(uncHome) {
   return dshDir;
 }
 
-test('boot（WSL 半边）：六步全过，sync/presets 落 UNC home，本地 DSH_HOME 零写入', { skip: !HAVE_DEPS }, (t) => {
+test('boot（WSL 半边）：五步全过，sync 落 UNC home，本地 DSH_HOME 零写入', { skip: !HAVE_DEPS }, (t) => {
   const sb = sandbox(t.name);
   t.after(() => fs.rmSync(sb.dir, { recursive: true, force: true }));
   const uncHome = path.join(sb.dir, 'wsl-home'); // 普通目录模拟 \\wsl$ 布局形态
@@ -472,9 +385,9 @@ test('boot（WSL 半边）：六步全过，sync/presets 落 UNC home，本地 D
   const r = cli(['boot'], { env, timeout: 180_000 });
   assert.strictEqual(r.code, 0, `stderr: ${r.stderr.slice(-800)}`);
   assert.strictEqual(r.json.ok, true, JSON.stringify(r.json).slice(0, 400));
-  // 步骤契约不变（supervisor 消费 ok/steps；WSL 是同一六步链，0.5.7 起
-  // 含 compat-pin）。
-  assert.deepStrictEqual(r.json.steps.map((s) => s.name), ['repair', 'sync', 'presets', 'patches', 'compat-pin', 'preflight']);
+  // 步骤契约不变（supervisor 消费 ok/steps；WSL 是同一五步链，0.5.7 起
+  // 含 compat-pin，v1.0.0 拆掉 presets）。
+  assert.deepStrictEqual(r.json.steps.map((s) => s.name), ['repair', 'sync', 'patches', 'compat-pin', 'preflight']);
   for (const s of r.json.steps) assert.strictEqual(s.ok, true, JSON.stringify(s));
   // 后端观测字段。
   assert.strictEqual(r.json.backend, 'wsl');
@@ -486,17 +399,15 @@ test('boot（WSL 半边）：六步全过，sync/presets 落 UNC home，本地 D
   // 语义不适用于该层）。
   assert.ok(fs.existsSync(path.join(uncHome, 'profiles', 'web', 'cordis.patch.yml')), 'UNC profile patch 应建档');
   assert.ok(fs.existsSync(path.join(uncHome, 'profiles', 'web', 'node_modules')), 'UNC profile node_modules 应建档');
-  // presets 半边：内置 Agent 预设落 UNC home 的用户预设根（WSL 内 agent 以
-  // DSH_HOME=<安装目录> 运行，见 dsh-desktop/wsl-backend.js:455）。
-  // #174：旧实现传 dshDir（agent 包目录），写进无人读取的死角——现在必须落 home。
-  assert.ok(fs.existsSync(path.join(uncHome, '.agent-presets', 'minimal-win', 'agent.cordis.yml')), '内置预设应落 UNC home/.agent-presets');
-  assert.ok(fs.existsSync(path.join(uncHome, '.agent-presets', 'router-standard', 'agent.cordis.yml')), 'v0.5.7 社区预设应落 UNC home');
-  assert.equal(fs.existsSync(path.join(dshDir, '.agent-presets')), false, '不得再往 WSL agent 包目录写预设');
+  // 预设半边已随 v1.0.0 整体拆除：客户端不写预设，UNC home 与 WSL agent 包目录
+  // 都不该出现 .agent-presets（后者是 #174 里那个无人读取的死角）。
+  assert.equal(fs.existsSync(path.join(uncHome, '.agent-presets')), false, '不得在 UNC home 建 .agent-presets');
+  assert.equal(fs.existsSync(path.join(dshDir, '.agent-presets')), false, '不得往 WSL agent 包目录写预设');
   // 本地 DSH_HOME（沙箱）零写入——WSL 模式一切落点换到 UNC home。
   assert.strictEqual(fs.existsSync(path.join(sb.dir, 'profiles')), false, '本地 home 不应被写入');
 });
 
-test('boot（WSL 半边）：agent 未就绪 → presets 跳过不阻断（下次 boot 补齐）', { skip: !HAVE_DEPS }, (t) => {
+test('boot（WSL 半边）：agent 未就绪 → 五步全 fail-open 不阻断', { skip: !HAVE_DEPS }, (t) => {
   const sb = sandbox(t.name);
   t.after(() => fs.rmSync(sb.dir, { recursive: true, force: true }));
   const uncHome = path.join(sb.dir, 'wsl-home'); // 空目录：Rust 侧 ensureInstalled 未跑完的形态
@@ -504,13 +415,11 @@ test('boot（WSL 半边）：agent 未就绪 → presets 跳过不阻断（下�
   const r = cli(['boot'], { env, timeout: 180_000 });
   assert.strictEqual(r.code, 0, `stderr: ${r.stderr.slice(-800)}`);
   assert.strictEqual(r.json.ok, true, JSON.stringify(r.json).slice(0, 400));
-  const presets = r.json.steps.find((s) => s.name === 'presets');
-  assert.strictEqual(presets.ok, true, 'agent 未就绪不得阻断 boot');
-  assert.match(r.stderr, /WSL 内 dsh 包未就绪/);
+  assert.deepStrictEqual(r.json.steps.map((s) => s.name), ['repair', 'sync', 'patches', 'compat-pin', 'preflight']);
   assert.strictEqual(r.json.wsl.agentReady, false);
-  // agent 未就绪时 presets 步跳过，但 repair 步的只补不动兵（preset-heal）仍应
-  // 把缺失预设补到 UNC home——客户端能否看到预设与 agent 包安装进度无关。
-  assert.ok(fs.existsSync(path.join(uncHome, '.agent-presets', 'minimal-win', 'agent.cordis.yml')), 'repair 步兵底应补写预设');
+  // 未就绪时装配链拿不到 WSL 内 dsh 包锚点，必须容忍继续（稳定性原则①：
+  // 意外以日志收场，不把用户挡在启动外）。
+  for (const s of r.json.steps) assert.strictEqual(s.ok, true, `未就绪不得标步骤失败: ${JSON.stringify(s)}`);
 });
 
 test('boot（WSL 解析失败）：回落 local 继续启动（Electron issue #54 语义）', { skip: !HAVE_DEPS }, (t) => {

@@ -36,10 +36,9 @@ function tmpdir(t) {
 function runCli(t, home, extraArgs = []) {
   // 输出不经过管道（沙箱限制），只断言落盘结果。
   // PATH 收口到 System32：CLI 的 findDshPackageDir 会经 PATH 探测 `dsh` 命令，
-  // 环境 PATH 上的真实 dsh（如 harness 安装）会被当作预设同步目标，把
-  // assets/agent-presets 写进真实安装（内容相同、mtime 被改写）——测试必须
-  // 封闭，绝不触碰真实环境。System32 保证 where.exe（commandLocations 用）
-  // 可用。
+  // 环境 PATH 上的真实 dsh（如 harness 安装）会被当作配套件的 profile manifest
+  // 对账目标——测试必须封闭，绝不触碰真实环境。System32 保证 where.exe
+  // （commandLocations 用）可用。
   const res = spawnSync(process.execPath, [cli, home, ...extraArgs], {
     cwd: repoRoot,
     encoding: 'utf8',
@@ -99,8 +98,8 @@ test('sync CLI: 空 DSH_HOME 首次同步落盘正确（包/条目/禁用块）'
       assert.ok(patch.includes(`- insert:\n    - id: ${p.id}\n      name: '${p.name}'`), '非 bundle 插件应写 insert: ' + p.id);
     }
   }
-  // harness-pet 默认禁用块（bundle 校验通过才会写）
-  assert.ok(patch.includes('- id: harness-pet\n  disabled: true'), 'harness-pet 默认禁用块应写入');
+  // harness-pet 的默认禁用块（PET_DISABLE_BLOCK）随该伴随件 v1.0.0 退役一并从
+  // sync CLI 与 patch-surgery 拆除，故此处不再断言其写入。
   // billion-context-dsh 默认关闭：bundle 可装配 → 写 compaction-acp 自身禁用块，
   // 且不再自动禁用 compaction-basic（内核默认压缩保留）；缺 dist → 两者都不写。
   const acpOk = fs.existsSync(path.join(repoRoot, 'assets', 'plugins', 'billion-context-dsh', 'dist', 'index.js'));
@@ -161,7 +160,17 @@ test('sync CLI: 尊重用户手写 disabled 条目，不重复 insert', (t) => {
   const patch = fs.readFileSync(path.join(profileDir, 'cordis.patch.yml'), 'utf8');
   assert.strictEqual((patch.match(/id: balance/g) || []).length, 1, '用户禁用的插件不得再 insert');
   assert.ok(patch.includes('disabled: true'), '用户禁用条目原样保留');
-  assert.ok(patch.includes('- id: file-changes'), '其它插件照常注册');
+  // 「其它插件照常注册」不能写死名字：file-changes 自 v1.0.0 远端更新起改为自己声明
+  // dsh.bundle.patch（内核直接装载它随包的 cordis.patch.yml），profile 层不再出现它的
+  // insert 行——那是「首个同步」用例已单独锁住的正确形态。这里从清单现算一个
+  // 仍需 CLI 代写登记行的非 bundle 配套件。
+  const nonBundle = COMPANION_PLUGINS.find((p) => {
+    const dir = p.name.includes('/') ? p.name.slice(p.name.indexOf('/') + 1) : p.name;
+    const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'assets', 'plugins', dir, 'package.json'), 'utf8'));
+    return !(pkg.dsh && pkg.dsh.bundle && pkg.dsh.bundle.patch);
+  });
+  assert.ok(nonBundle, '清单里应仍有非 bundle 配套件（否则本断言失去意义）');
+  assert.ok(patch.includes(`- id: ${nonBundle.id}`), '其它插件照常注册: ' + nonBundle.id);
 });
 
 test('sync CLI: 卸载标记（removed: true）的配套 bundle 从 manifest 移除，且不进隔离记录', (t) => {

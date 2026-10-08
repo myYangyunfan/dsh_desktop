@@ -2,7 +2,7 @@
 //!
 //! 数据流契约（contracts/data-flow.md §3）：
 //! ```text
-//! sidecar boot（repair→sync→presets→patches→preflight）
+//! sidecar boot（repair→sync→patches→compat-pin→preflight）
 //!   → choose_stable_port（优先上次端口）
 //!   → spawn vendor-node（环境白名单 + DSH_DESKTOP_SUPERVISED=1）
 //!   → ReadyLineParser → kernel-ready → 主窗换页
@@ -394,7 +394,7 @@ impl Supervisor {
                 this.run_farm_repair();
             }
             // ---- [1] sidecar boot（WSL 模式 home=UNC，Windows 侧经 UNC 写穿：
-            //      sync/presets/patches/preflight 契约 §4.2）----
+            //      sync/patches/preflight 契约 §4.2）----
             this.set_state(RunState::Repair);
             let t0 = Instant::now();
             match this.run_sidecar_boot(&tx, gen) {
@@ -2360,7 +2360,7 @@ Content-Length: 0
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// 功能集成：真机 boot 链（sidecar 四步）在沙箱 home 上执行。
+    /// 功能集成：真机 boot 链（sidecar 五步）在沙箱 home 上执行。
     /// 覆盖：Supervisor::run_sidecar_boot（步骤解析 + ok 判定 + 事件转发）。
     #[test]
     fn sidecar_boot_sandbox_integration() {
@@ -2376,9 +2376,10 @@ Content-Length: 0
         std::env::remove_var("DSH_TAURI_USERDATA");
         assert!(result.is_ok(), "sidecar boot 应成功: {result:?}");
         // 步骤事件按固定顺序全部转发（data-flow.md §3）。
-        // 六步契约：compat-pin 为 143fa9e7（compat-layer M1）加入的 fail-closed 步骤。
-        let names: Vec<String> = rx.iter().map(|e| match e { SupervisorEvent::BootStep { name, .. } => name, _ => String::new() }).take(6).collect();
-        assert_eq!(names, vec!["repair", "sync", "presets", "patches", "compat-pin", "preflight"], "boot 步骤顺序契约");
+        // 五步契约：compat-pin 为 143fa9e7（compat-layer M1）加入的 fail-closed 步骤；
+        // presets 步随 v1.0.0 纯净线（随包 Agent 预设子系统整体移除）退役。
+        let names: Vec<String> = rx.iter().map(|e| match e { SupervisorEvent::BootStep { name, .. } => name, _ => String::new() }).take(5).collect();
+        assert_eq!(names, vec!["repair", "sync", "patches", "compat-pin", "preflight"], "boot 步骤顺序契约");
         // 沙箱 home 上 profile 结构确已建立（同步器落盘）。
         assert!(home.join("profiles").join("web").join("cordis.patch.yml").exists(), "profile patch 应已建立");
         let _ = std::fs::remove_dir_all(&home);
@@ -2426,7 +2427,7 @@ Content-Length: 0
                 Err(_) => panic!("150s 内未就绪（boot_steps={boot_steps:?}）"),
             }
         };
-        assert_eq!(boot_steps, vec!["repair", "sync", "presets", "patches", "compat-pin", "preflight"]);
+        assert_eq!(boot_steps, vec!["repair", "sync", "patches", "compat-pin", "preflight"]);
         assert!(url.starts_with("http://127.0.0.1:"), "就绪 URL 形态: {url}");
         assert_eq!(sv.state(), RunState::Ready);
         assert!(sv.kernel_url().is_some());
@@ -3098,8 +3099,8 @@ Content-Length: 0
                 Err(_) => panic!("300s 内未就绪（boot_steps={boot_steps:?} saw_install={saw_install}）"),
             }
         }
-        // 链路断言：六步全过（compat-pin 为 143fa9e7 加入）+ 安装步在场 + 运行态就绪 + actual port 落 Inner。
-        assert_eq!(boot_steps, vec!["repair", "sync", "presets", "patches", "compat-pin", "preflight"], "sidecar 六步契约（经 --home UNC）");
+        // 链路断言：五步全过（compat-pin 为 143fa9e7 加入）+ 安装步在场 + 运行态就绪 + actual port 落 Inner。
+        assert_eq!(boot_steps, vec!["repair", "sync", "patches", "compat-pin", "preflight"], "sidecar 五步契约（经 --home UNC）");
         assert!(saw_install, "agent 未就绪应触发 wsl-install 步（BootStep 进度上报）");
         assert!(sv.wsl_active().is_some(), "configure 成功后 WSL 运行态生效");
         assert_eq!(sv.backend_effective(), "wsl");

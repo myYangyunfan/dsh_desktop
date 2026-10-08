@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * TA9 混沌测试 —— 磁盘/IO 故障 × boot 链五步（repair/sync/presets/patches/preflight）。
+ * TA9 混沌测试 —— 磁盘/IO 故障 × boot 链四个写盘故障点（repair/sync/patches/preflight）。
  *
  * 运行：`node --test sidecar/ta9-boot-disk-faults.test.js`（仓库 dsh-tauri/ 下）。
  *
@@ -61,42 +61,10 @@ module.exports = {
 };
 `;
 
-const PRESET_STUB = `'use strict';
-const fs = require('node:fs');
-const path = require('node:path');
-const HOME = process.env.DSH_HOME;
-const STEP = process.env.DSH_TA9_FAULT_STEP;
-const CODE = process.env.DSH_TA9_FAULT_CODE || 'ENOSPC';
-module.exports = {
-  installedDshPackageDir() { return path.join(HOME, 'agent-dsh'); },
-  // 与 scripts/install-minimal-win-preset.js 的真实契约对齐（#174 后）：入参是
-  // DSH home，预设落 <home>/.agent-presets（内核可发现的用户预设根）。
-  userPresetRoot(home) { return path.join(home, '.agent-presets'); },
-  installBuiltinPresets(home) {
-    const dir = path.join(home, '.agent-presets');
-    fs.mkdirSync(dir, { recursive: true });
-    if (STEP === 'presets') {
-      const orig = fs.writeFileSync;
-      fs.writeFileSync = function () {
-        const e = new Error('ta9 注入写盘失败（模拟 ' + CODE + '）');
-        e.code = CODE; e.syscall = 'write'; e.errno = -1;
-        throw e;
-      };
-      try { fs.writeFileSync(path.join(dir, 'preset.yml'), 'x'); }
-      finally { fs.writeFileSync = orig; }
-    } else {
-      fs.writeFileSync(path.join(dir, 'preset.yml'), 'x');
-    }
-    return [path.join(dir, 'preset.yml')];
-  },
-};
-`;
-
 function makeFakeAppDir() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ta9-fake-appdir-'));
   const files = {
     'scripts/integration.js': INTEGRATION_STUB,
-    'scripts/install-minimal-win-preset.js': PRESET_STUB,
     'scripts/plugin-manager-patch.js': 'module.exports = { togglePluginInPatch: (t) => t, setPluginRemoved: (t) => t };',
     'scripts/plugin-manager-update.js': 'module.exports = { selectReleaseAsset: null, npmLatestUrl: () => "", githubReleaseApiUrl: () => "", githubAssetDownloadUrl: () => "", verifyIntegrity: () => {}, compareVersions: () => 0, findPackageRoot: () => null };',
     'scripts/plugin-core/lib/patch-surgery.js': 'module.exports = { quotePatchScalarValues: (t) => t, yamlQuoteIfNeeded: (t) => t };',
@@ -147,10 +115,11 @@ function lastJson(res) {
 }
 
 // ---------------------------------------------------------------------------
-// 矩阵：5 步 × ENOSPC/EPERM —— 告警不炸
+// 矩阵：4 个写盘故障点 × ENOSPC/EPERM —— 告警不炸
+//   （compat-pin 是 spawnSync 独立校验器，无本桩写盘点，不入矩阵）
 // ---------------------------------------------------------------------------
 
-const STEPS = ['repair', 'sync', 'presets', 'patches', 'preflight'];
+const STEPS = ['repair', 'sync', 'patches', 'preflight'];
 
 for (const code of ['ENOSPC', 'EPERM']) {
   for (const step of STEPS) {
@@ -176,7 +145,7 @@ for (const code of ['ENOSPC', 'EPERM']) {
   }
 }
 
-test('五步同时写盘全坏 → 仍然 ok:true，每步各带 warning（客户端必须能打开）', () => {
+test('故障点逐个写盘全坏 → 仍然 ok:true，每步各带 warning（客户端必须能打开）', () => {
   // 每步单独注入只能命中一步（env 单槽）——「同时坏」用 DSH_TA9_FAULT_STEP=all 语义：
   // 本文件的桩只识别精确步骤名，故用连续五次单步注入汇总验证（等价于全坏矩阵）。
   const appDir = makeFakeAppDir();
@@ -192,18 +161,19 @@ test('五步同时写盘全坏 → 仍然 ok:true，每步各带 warning（客�
   }
 });
 
-test('对照：无故障时六步全绿零 warning', () => {
+test('对照：无故障时五步全绿零 warning', () => {
   const appDir = makeFakeAppDir();
   try {
     const { res, home } = runBoot(appDir, {});
     assert.strictEqual(res.status, 0, res.stderr);
     const out = lastJson(res);
     assert.strictEqual(out.ok, true);
-    // 真实 boot 链顺序契约（0.5.7 起含 compat-pin；STEPS 仅是故障注入矩阵
-    // 的 stub 故障点清单，compat-pin 是 spawnSync 校验器无写盘故障点不入矩阵）。
+    // 真实 boot 链顺序契约（data-flow.md §3；0.5.7 起含 compat-pin，v1.0.0 拆掉
+    // presets）。STEPS 只是故障注入矩阵的 stub 故障点清单，compat-pin 是
+    // spawnSync 校验器、无写盘故障点，不入矩阵。
     assert.deepStrictEqual(
       out.steps.map((s) => s.name),
-      [...STEPS.slice(0, 4), 'compat-pin', STEPS[4]],
+      ['repair', 'sync', 'patches', 'compat-pin', 'preflight'],
       'boot 链顺序契约',
     );
     for (const s of out.steps) {

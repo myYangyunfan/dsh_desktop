@@ -3,8 +3,10 @@
 // ta14-upgrade-dirty-home.test.js — 「老用户升级到 v0.5.3」脏现场 × 自愈矩阵。
 //
 // 场景（全部临时目录仿真 DSH_HOME / 安装树，绝不触碰真实 ~/.dsh）：
-//   a) 0.5.0 形态 home：profile bundles 无 presets 步产物、会话引用
-//      minimal-win 预设 → installBuiltinPresets 真跑 + resume 回落链（W1）；
+//   a) 0.5.0 形态 home：profile bundles 无预设产物、会话引用
+//      minimal-win 预设 → resume 回落链（W1）；v1.0.0 纯净线已整体拆除预设
+//      子系统（随包源、写入器、boot 的 presets 步都没有了），老用户用户根里的
+//      遗留副本必须原样可用且仍被内核发现（稳定性原则③）；
 //   b) 悬空 junction（K1 根因）：profiles/node_modules/@deepseek-ai/* 指向
 //      已删除的 %TEMP% 便携安装 → compositionPreflight 重建（真建 junction）；
 //   c) 真实目录占位 → broken 显式报、不删（「不删」语义）；
@@ -17,7 +19,7 @@
 //   f) 陈旧单实例锁（pid 已死 / 复用）：Rust shell-core single_instance
 //      （ta14-upgrade-path-matrix.rs 真跑）；JS 侧无锁实现，不越界；
 //   4) 卸载重装：保留 %APPDATA%/home 的现场（悬空 + 缺失 + 半写并存）→
-//      重装链（installBuiltinPresets + compositionPreflight + boot 容错）
+//      重装链（compositionPreflight + boot 容错）
 //      全量重建走通 + NSIS 段 / 卸载器保留语义静态断言。
 //
 // 构造手法照抄 unit-composition-preflight.test.js / unit-agent-preset-fallback.test.js
@@ -34,7 +36,6 @@ const vm = require('node:vm');
 const { spawnSync } = require('node:child_process');
 
 const { compositionPreflight } = require('../integration/fault-isolation');
-const { installBuiltinPresets, installBuiltinPreset } = require('../install-minimal-win-preset');
 const {
   inspectBundleDir,
   scanProfileBundles,
@@ -81,7 +82,7 @@ function tmpdir(t, prefix) {
   return dir;
 }
 
-/** 0.5.0 形态 home：profile 声明 bundles、无任何 presets 步产物。 */
+/** 0.5.0 形态 home：profile 声明 bundles、无任何预设产物。 */
 function buildLegacyHome(t) {
   const root = tmpdir(t, 'ta14-home-');
   const home = path.join(root, 'home');
@@ -159,10 +160,10 @@ function rosterOf(home) {
 }
 
 // ---------------------------------------------------------------------------
-// a) 0.5.0 → 0.5.3：minimal-win 预设缺失的 resume 回落链 + installBuiltinPresets 真跑
+// a) 0.5.0 → 纯净线：minimal-win 预设缺失的 resume 回落链 + 客户端预设零写
 // ---------------------------------------------------------------------------
 
-test('a-050-form：无 presets 步产物，minimal-win 缺失时 resume 回落 minimal（warn 降级不硬失败）', (t) => {
+test('a-050-form：无预设产物，minimal-win 缺失时 resume 回落 minimal（warn 降级不硬失败）', (t) => {
   const home = buildLegacyHome(t);
   const { pkgDir } = buildInstallTree(t);
   // 0.5.0 现场：只装了 shipped roster（cordis/minimal/ptc/standard），无
@@ -181,37 +182,30 @@ test('a-050-form：无 presets 步产物，minimal-win 缺失时 resume 回落 m
   });
 });
 
-test('a-upgrade：installBuiltinPresets 真跑后 minimal-win 直通（无告警、无需回落）', (t) => {
+test('a-pure-line：客户端不写预设，老用户遗留副本原样可用且仍在内核 roster 里', (t) => {
   const home = buildLegacyHome(t);
   const { pkgDir } = buildInstallTree(t);
-  const dests = installBuiltinPresets(home);
-  assert.ok(dests.length >= 1, '至少装出 minimal-win');
-  const ids = rosterOf(home).map((p) => p.id);
-  assert.ok(ids.includes('minimal-win'), '升级后 roster 必须含 minimal-win: ' + ids.join(','));
-  // 预设完整性：agent.cordis.yml + preset.yml 双文件。
+  // v1.0.0 纯净线：预设子系统整体拆除（随包源 + 写入器 + boot 的 presets 步）。
+  // 剩下的契约只有「用户根只由用户放文件」——升级动作不得在 <DSH_HOME> 凭空建根。
+  assert.equal(fs.existsSync(path.join(home, '.agent-presets')), false, '干净 home 不应有预设根');
+
+  // 老用户现场：0.6.x 时代写进用户根的副本，升级后必须一字不改地继续可用。
   const dest = path.join(home, '.agent-presets', 'minimal-win');
-  assert.ok(fs.existsSync(path.join(dest, 'agent.cordis.yml')));
-  assert.ok(fs.existsSync(path.join(dest, 'preset.yml')));
+  fs.mkdirSync(dest, { recursive: true });
+  fs.writeFileSync(path.join(dest, 'agent.cordis.yml'), '# 用户旧副本（可能被改过）\n');
+  fs.writeFileSync(path.join(dest, 'preset.yml'), 'name: 极简模式_win\n');
+  const before = fs.readFileSync(path.join(dest, 'agent.cordis.yml'), 'utf8');
+  const mtimeBefore = fs.statSync(path.join(dest, 'agent.cordis.yml')).mtimeMs;
+  // 走一遍装配链（compositionPreflight 是本测试文件里唯一还活着的升级期写入者）。
+  compositionPreflight({ home, appDir, log: () => {} });
+  assert.equal(fs.readFileSync(path.join(dest, 'agent.cordis.yml'), 'utf8'), before, '遗留副本内容不得被覆盖');
+  assert.equal(Math.round(fs.statSync(path.join(dest, 'agent.cordis.yml')).mtimeMs), Math.round(mtimeBefore), '遗留副本 mtime 不得被触碰');
   const resolve = makeResolve(fs.readFileSync(path.join(pkgDir, 'lib', 'index.js'), 'utf8'));
   const roster = rosterOf(home);
   return resolve.call(roster, 'minimal-win').then((p) => {
-    assert.equal(p.id, 'minimal-win', '升级后 minimal-win 直通');
+    assert.equal(p.id, 'minimal-win', '旧副本仍在 roster 里，升级后直通');
     assert.equal(resolve.warns.length, 0, '已知 id 不得告警');
   });
-});
-
-test('a-idempotent：installBuiltinPresets 二遍幂等（已一致跳过写盘）', (t) => {
-  const home = buildLegacyHome(t);
-  const { pkgDir } = buildInstallTree(t);
-  installBuiltinPresets(home);
-  const probe = path.join(home, '.agent-presets', 'minimal-win', 'agent.cordis.yml');
-  const st1 = fs.statSync(probe);
-  installBuiltinPresets(home);
-  const st2 = fs.statSync(probe);
-  assert.equal(Math.round(st2.mtimeMs), Math.round(st1.mtimeMs), '二遍不得重写已一致文件');
-  // 单预设入口（老调用方形态）同样可用。
-  const d = installBuiltinPreset(home, 'minimal-win');
-  assert.equal(d, path.join(home, '.agent-presets', 'minimal-win'));
 });
 
 // ---------------------------------------------------------------------------
@@ -312,7 +306,7 @@ test('d-half-written-package-json：截断 JSON 的 bundle → boot 判定「源
 // 4) 卸载重装：保留 home 现场（悬空 + 缺失 + 半写并存）→ 重装链全量重建
 // ---------------------------------------------------------------------------
 
-test('reinstall：脏现场并存 → installBuiltinPresets + compositionPreflight + boot 容错全量走通', (t) => {
+test('reinstall：脏现场并存 → compositionPreflight + boot 容错全量走通', (t) => {
   const home = buildLegacyHome(t);
   // 脏现场 1：悬空 junction（卸载删除了安装目录）。
   const scope = path.join(home, 'profiles', 'node_modules', '@deepseek-ai');
@@ -328,15 +322,14 @@ test('reinstall：脏现场并存 → installBuiltinPresets + compositionPreflig
   // 脏现场 3：profile 自身 package.json 半写（boot 扫描链不得抛）。
   fs.writeFileSync(path.join(home, 'profiles', 'web', 'package.json'), '{"dsh": {"profile": {"bund');
 
-  // 重装链 1：预设全量重装（写入 <home>/.agent-presets）。
-  installBuiltinPresets(home);
-  assert.ok(rosterOf(home).some((p) => p.id === 'minimal-win'));
-  // 重装链 2：fallback junction 重建。
+  // 重装链 1：fallback junction 重建。
   const report = compositionPreflight({ home, appDir, log: () => {} });
   assert.equal(report.broken.length, 0, '悬空必须被重建: ' + JSON.stringify(report.broken));
   assert.equal(report.repaired.length, 1);
   assert.ok(fs.existsSync(fs.realpathSync(path.join(scope, 'dsh-credentials-local', 'package.json'))));
-  // 重装链 3：boot 容错半写包被跳过而非崩溃。
+  // 预设子系统已随 v1.0.0 拆除：重装链不得在用户根凭空建出 .agent-presets。
+  assert.equal(fs.existsSync(path.join(home, '.agent-presets')), false, '装配链不得凭空建用户预设根');
+  // 重装链 2：boot 容错半写包被跳过而非崩溃。
   assert.equal(inspectBundleDir(bad).code, BUNDLE_CHECK_CODES.PACKAGE_JSON_INVALID);
   assert.doesNotThrow(() => scanProfileBundles(path.join(home, 'profiles', 'web', 'node_modules'), new Set()));
 });

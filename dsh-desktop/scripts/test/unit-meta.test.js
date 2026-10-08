@@ -35,24 +35,12 @@ test('package.json 关键字段完整（版本/入口/私有标记）', () => {
   assert.ok(/^\d+\.\d+\.\d+$/.test(String(pkg.version)), 'version 应为 x.y.z 形式');
 });
 
-test('workspace-anchor 插件与 complete-persona 预设包含同一工作区锚点', () => {
+test('workspace-anchor 插件按预期注册工作区锚点', () => {
   const anchor = fs.readFileSync(path.join(repoRoot, 'assets', 'plugins', 'dsh-workspace-anchor', 'lib', 'index.js'), 'utf8');
   assert.ok(anchor.includes('name: "dsh:workspace-anchor"'), '插件应注册 dsh:workspace-anchor 节');
   assert.ok(anchor.includes('order: 1'), '锚点应紧跟 persona（order 1）');
   assert.ok(anchor.includes('Workspace: {{cwd}}.'), '锚点应渲染会话 cwd');
   assert.ok(anchor.includes('reference material, not a new project root'), '锚点应包含「搜索命中不是新项目根」规则');
-
-  const completePresets = [
-    'minimal-win',
-    'anchored-standard',
-    'zero-anchored-standard',
-    'whoami-standard',
-    'warmupbetter',
-    'warmupbetter-replay',
-  ];
-  for (const preset of completePresets) {
-    const text = fs.readFileSync(path.join(repoRoot, 'assets', 'agent-presets', preset, 'agent.cordis.yml'), 'utf8');
-    assert.ok(text.includes('Workspace: {{cwd}}.'), `${preset} persona 应包含工作区锚点`);
-    assert.ok(text.includes('complete: true'), `${preset} persona 应保持 complete 模式`);
-  }
+  // 另一半（6 个 complete-persona 预设的 persona 文本里写同一锚点）随 v1.0.0
+  // 随包预设退役一并撤除——assets/agent-presets 已不在仓库里。
 });

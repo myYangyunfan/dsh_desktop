@@ -178,9 +178,9 @@ jobs:
           cp dsh-desktop/package.json "$DEST/"
           cp -r dsh-desktop/scripts "$DEST/scripts"
           cp -r dsh-desktop/assets "$DEST/assets"
-          # v1.0.0 纯净线：内置插件与随包预设不进安装包（与 stage-payload.sh 同口径；
+          # v1.0.0 纯净线：内置插件不进安装包（与 stage-payload.sh 同口径；
           # 仓库源保留，只切断交付面。五个架构各有一份 staging，改一处必须五处同改）
-          rm -rf "$DEST/assets/plugins" "$DEST/assets/agent-presets"
+          rm -rf "$DEST/assets/plugins"
           mkdir -p "$DEST/vendor"
           cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
           cp -r dsh-desktop/vendor/npm "$DEST/vendor/npm" 2>/dev/null || true
@@ -459,9 +459,9 @@ jobs:
           cp dsh-desktop/package.json "$DEST/"
           cp -r dsh-desktop/scripts "$DEST/scripts"
           cp -r dsh-desktop/assets "$DEST/assets"
-          # v1.0.0 纯净线：内置插件与随包预设不进安装包（与 stage-payload.sh 同口径；
+          # v1.0.0 纯净线：内置插件不进安装包（与 stage-payload.sh 同口径；
           # 仓库源保留，只切断交付面。五个架构各有一份 staging，改一处必须五处同改）
-          rm -rf "$DEST/assets/plugins" "$DEST/assets/agent-presets"
+          rm -rf "$DEST/assets/plugins"
           mkdir -p "$DEST/vendor"
           cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
           cp -r dsh-desktop/vendor/npm "$DEST/vendor/npm" 2>/dev/null || true
@@ -665,9 +665,9 @@ jobs:
           cp dsh-desktop/package.json "$DEST/"
           cp -r dsh-desktop/scripts "$DEST/scripts"
           cp -r dsh-desktop/assets "$DEST/assets"
-          # v1.0.0 纯净线：内置插件与随包预设不进安装包（与 stage-payload.sh 同口径；
+          # v1.0.0 纯净线：内置插件不进安装包（与 stage-payload.sh 同口径；
           # 仓库源保留，只切断交付面。五个架构各有一份 staging，改一处必须五处同改）
-          rm -rf "$DEST/assets/plugins" "$DEST/assets/agent-presets"
+          rm -rf "$DEST/assets/plugins"
           mkdir -p "$DEST/vendor"
           cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
           cp -r dsh-desktop/vendor/npm "$DEST/vendor/npm" 2>/dev/null || true
@@ -919,9 +919,9 @@ jobs:
           cp dsh-desktop/package.json "$DEST/"
           cp -r dsh-desktop/scripts "$DEST/scripts"
           cp -r dsh-desktop/assets "$DEST/assets"
-          # v1.0.0 纯净线：内置插件与随包预设不进安装包（与 stage-payload.sh 同口径；
+          # v1.0.0 纯净线：内置插件不进安装包（与 stage-payload.sh 同口径；
           # 仓库源保留，只切断交付面。五个架构各有一份 staging，改一处必须五处同改）
-          rm -rf "$DEST/assets/plugins" "$DEST/assets/agent-presets"
+          rm -rf "$DEST/assets/plugins"
           mkdir -p "$DEST/vendor"
           cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
           cp -r dsh-desktop/vendor/npm "$DEST/vendor/npm" 2>/dev/null || true
@@ -1102,9 +1102,9 @@ jobs:
           cp dsh-desktop/package.json "$DEST/"
           cp -r dsh-desktop/scripts "$DEST/scripts"
           cp -r dsh-desktop/assets "$DEST/assets"
-          # v1.0.0 纯净线：内置插件与随包预设不进安装包（与 stage-payload.sh 同口径；
+          # v1.0.0 纯净线：内置插件不进安装包（与 stage-payload.sh 同口径；
           # 仓库源保留，只切断交付面。五个架构各有一份 staging，改一处必须五处同改）
-          rm -rf "$DEST/assets/plugins" "$DEST/assets/agent-presets"
+          rm -rf "$DEST/assets/plugins"
           mkdir -p "$DEST/vendor"
           cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
           cp -r dsh-desktop/vendor/npm "$DEST/vendor/npm" 2>/dev/null || true

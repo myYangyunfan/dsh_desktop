@@ -85,9 +85,10 @@ WSL 模式下的角色分摊（Electron 实证语义，逐条照抄）：
 <installDir>/profiles、sessions、settings.yaml     内核自身数据（DSH_HOME=<installDir>）
 ```
 
-配套插件与内置 Agent 预设**不**经 wsl.exe 同步：boot 链在 Windows 侧经
-UNC（`\\wsl.localhost\<distro><installDir 的反斜杠形态>`）直接写入 WSL
-profile 与 agent 包——与 Electron `effectiveDshHome()` 语义一致。
+配套插件**不**经 wsl.exe 同步：boot 链在 Windows 侧经
+UNC（`\\wsl.localhost\<distro><installDir 的反斜杠形态>`）直接写入 WSL 侧的
+effective DSH home 的 `profiles/`（与 Electron `effectiveDshHome()` 语义一致）。
+Agent 预设自 v1.0.0 起客户端完全不写（随包预设子系统整体移除）。
 
 ## 2. 命令契约（bridge 三通道，payload 形态不变）
 
@@ -190,8 +191,7 @@ WSL 模式下守护瀑布步骤调整（其余逻辑——快照/二层修复/�
 |------|-------|-----|--------------------------|
 | **[0] ensure_installed** | ——（payload 自带） | 预检 `<installDir>/agent/.../bin.js` 存在且版本 == 客户端 payload 内核版本；缺失/漂移 → WSL 内 npm staging 安装 + 原子切换（§4.5）。**必须先于插件/补丁链**：补丁目标含 `<home>/agent/node_modules`，agent 未就位则补丁锚点全空 | `await wslBackend.ensureInstalled()` 先于 `syncPlugins()`（main.js 4957-4958） |
 | farm-repair（junction 去材料化） | 跑 | **跳过**（WSL 内 profile fallback 由内核自行 heal；junction 是 Windows 本地概念） | `if (isWslMode())` 分支跳过 repairProfileFallback |
-| sidecar boot（repair/sync/presets/patches/preflight 五步） | `--app-dir <app>` | `--app-dir <app> --home <UNC> --wsl`：integration `wslMode:true` 走 `wslLayout` 布局（`<home>/agent/node_modules` + profile 两副本——patch-target-resolver.js 已实现，本契约只接线） | ensurePluginIntegration 的 `wslMode: () => isWslMode()` |
-| presets 步目标 | payload 内核包目录 | **`<UNC>/agent/node_modules/@deepseek-ai/dsh`**（getInstallAnchorDir 随 --wsl 切换） | `getInstallAnchorDir: () => path.dirname(dshPackageJson())`（WSL 下解析到 UNC） |
+| sidecar boot（repair/sync/patches/compat-pin/preflight 五步） | `--app-dir <app>` | `--app-dir <app> --home <UNC> --wsl`：integration `wslMode:true` 走 `wslLayout` 布局（`<home>/agent/node_modules` + profile 两副本——patch-target-resolver.js 已实现，本契约只接线） | ensurePluginIntegration 的 `wslMode: () => isWslMode()` |
 | koffi 预检 + picker overlay | 跑 | **跳过**（只作用于本地内置 dsh 的 win32 预编译二进制） | WSL 分支不调 runKoffiPreflight |
 | guard 快照/体检/回滚 | home=本地 | home=**UNC**（plugin-guard 纯 Node fs，UNC 可用） | ensureGuard 的 `getHome: () => effectiveDshHome()` |
 | 端口 choose_stable_port | 跑 | **跳过**（`--port 0`，实际端口从就绪行解析） | `expectedPort: null`（稳定端口持久化只作用于本地 spawn） |
@@ -321,7 +321,6 @@ WSL 模式下，Windows 侧一切「读内核数据」的组件必须把 home �
 | 组件 | 消费 | M 级 |
 |------|------|------|
 | session-watcher（会话完成通知） | `<home>/sessions` | M1 |
-| balance 取数链（sidecar balance-fetch `--home`） | `<home>/settings.yaml` 等 | M1 |
 | sidecar boot / guard-* / safe-overlay（`--home`） | profile/补丁/快照 | M1 |
 | 插件管理六通道（plugin_list 等 sidecar 命令） | profile patch + bundles | M1（同一 `--home` 通道） |
 | 诊断 / 备份 / fence file-open | profile / 会话日志 | M2 |
