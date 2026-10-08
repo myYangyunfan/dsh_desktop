@@ -1,16 +1,17 @@
 'use strict';
 
 // ===========================================================================
-// issue #168（2/3）：balance-scheduler.js 出站载荷的「增量计价」字段契约。
+// issue #168（2/3）：余额编排器出站载荷的「增量计价」字段契约
+// （被测对象 = 插件产物 lib/balance-scheduler.js + lib/balance-core.js）。
 //
-// 主进程新增三个字段（只增字段、不改既有字段语义）：
+// 推送新增三个字段（只增字段、不改既有字段语义）：
 //   · periodTables  { peak, off, legacy } —— 三张全模型价目表（与时刻无关）
 //   · pricingTier   'peak' | 'off' | 'legacy' —— 本次推送时刻所属档位
 //   · pricingSince  { peakPricing, weekendOffpeak } —— 规则生效节点（ISO）
 //
 // 双向兼容承诺（本文件重点守住）：
-//   A. 旧宿主（不注入新依赖，如 Tauri sidecar cli.js）→ 新字段缺席或降级，
-//      既有字段集合与语义逐字不变，旧/新客户端都能按老路消费；
+//   A. 宿主半边少注入某个定价依赖（凭据/设置/模型服务取不到时的真实形状）→ 新字段
+//      缺席或降级，既有字段集合与语义逐字不变，旧/新客户端都能按老路消费；
 //   B. 旧客户端收新载荷 → 只增字段，未知字段被忽略（语义不变由 A 的同构断言佐证）；
 //   C. 任何新字段组装异常都不得影响余额推送。
 // ===========================================================================
@@ -18,8 +19,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { createBalanceScheduler } = require('../../balance-scheduler');
-const balance = require('../../balance');
+const { createBalanceScheduler } = require('../../assets/plugins/dsh-balance/lib/balance-scheduler.js');
+const balance = require('../../assets/plugins/dsh-balance/lib/balance-core.js');
 
 const FLASH_PEAK = { cacheMiss: 3, cacheHit: 0.1, output: 9 };
 const PRO_PEAK = { cacheMiss: 9, cacheHit: 0.3, output: 27 };
@@ -246,10 +247,10 @@ test('#168 disabled 路径：字段集合与正常路径同构（档位置 null�
 });
 
 // ---------------------------------------------------------------------------
-// E. 与真实 balance.js 直连的契约不变量（防「档位 ↔ 价目」自相矛盾）
+// E. 与真实 balance-core.js 直连的契约不变量（防「档位 ↔ 价目」自相矛盾）
 // ---------------------------------------------------------------------------
 
-test('#168 真实 balance.js 接线：periodTables[tier] 恒等于 priceTable(同刻)', () => {
+test('#168 真实 balance-core.js 接线：periodTables[tier] 恒等于 priceTable(同刻)', () => {
   const samples = [
     '2026-08-16T15:59:59Z', // legacy 前 1s
     '2026-08-16T16:00:00Z', // 峰谷生效瞬间

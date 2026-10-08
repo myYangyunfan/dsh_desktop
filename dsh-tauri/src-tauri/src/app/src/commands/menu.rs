@@ -91,11 +91,6 @@ pub async fn menu_action(action: String, payload: Option<serde_json::Value>, app
             let state = app.state::<AppState>();
             let store = shell_core::SettingsStore::new(state.paths.settings.clone());
             let next = toggle_setting(&store, key).map_err(|e| BridgeError::internal(e.0))?;
-            // Electron main.js：toggle-balance 后立即刷一次余额（关闭态经
-            // disabled 数据即时隐藏 dock、重开即时取数），不等下一轮询周期。
-            if action == "toggle-balance" {
-                super::balance::trigger_fetch(&app);
-            }
             // 单键返回（垫片 merge 进菜单 state 后重渲染）。
             let mut out = serde_json::Map::new();
             out.insert(key.to_string(), serde_json::json!(next));

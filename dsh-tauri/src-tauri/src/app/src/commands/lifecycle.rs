@@ -1,6 +1,5 @@
 //! Phase 1 核心生命周期命令：app_init / 剪贴板 / 外部打开 / 页面心跳 /
 //! 当前会话 / 服务重启 / PoC 回显（ipc-commands.md §2.1）。
-//! （余额触发 balance_refresh 已随余额生产链迁往 [`super::balance`]。）
 
 use std::sync::atomic::Ordering;
 

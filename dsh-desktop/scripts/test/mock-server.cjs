@@ -1,5 +1,6 @@
 'use strict';
-// 可配置 HTTP mock server：balance.js 的 queryBalance / fetchJson 端到端测试用。
+// 可配置 HTTP mock server：余额数据层（插件 lib/balance-core.js）的 queryBalance /
+// fetchJson 端到端测试用。
 // 不触碰真实网络；所有请求/响应在进程内闭环。与 audit 期间的 mock-server 同构，
 // 补充：header 断言、slow-drip（逐块慢速响应，用于总超时测试）、分块大响应。
 //

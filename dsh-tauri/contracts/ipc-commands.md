@@ -1,8 +1,10 @@
 # 契约 2：Tauri command 清单（Electron IPC 映射表）
 
 > 溯源：`dsh-desktop/main.js`（43 处注册：36 个 `ipcMain.handle` + 7 个 `ipcMain.on`，
-> 提取于 2026-08-19，main@4affaf9）。
-> 目标命名法：Electron `chrome:*` / `dsh:*` / `float:*` / `pet:*` / `guard:*` 通道
+> 提取于 2026-08-19，main@4affaf9）。**现役 38 通道**：2026-10 伴随插件批量裁撤移出了
+> 6 条（宠物窗四通道 + 粘贴图落盘 + 文件还原，见 §2.4），同月拆 Electron 余额遗留线再移出
+> 1 条（`dsh:balance-refresh`），invoke 34 / send 4。
+> 目标命名法：Electron `chrome:*` / `dsh:*` / `float:*` / `guard:*` 通道
 > 统一映射为 snake_case 的 Tauri command；事件统一为 kebab-case。
 
 ## 1. 命名映射规则
@@ -12,11 +14,11 @@
 | `chrome:window {action}` | `window_control {action, window?}` | action 枚举原样保留（`minimize`/`toggle-maximize`/`close`/`is-maximized`） |
 | `chrome:menu {action, ...payload}` | `menu_action {action, payload}` | |
 | `dsh:xxx-yyy`（invoke） | `xxx_yyy` | 前缀 `dsh:` 去除 |
-| `float:close` / `pet:xxx`（send） | `float_close` / `pet_xxx` | fire-and-forget command，返回值固定 `Ok(())` |
+| `float:close`（send） | `float_close` | fire-and-forget command，返回值固定 `Ok(())`（`pet:*` 三条 send 通道已随 harness-pet 裁撤，见 §2.4） |
 | `guard:action` | `guard_action` | 插件保护中心交互面（status/check/incident/resolve-incident 分发；写动作仍走守护瀑布自动面） |
-| 事件 `dsh:balance` | event `balance-changed` | 冒号统一转连字符 |
+| 事件 `dsh:notification-jump` / `chrome:maximized` | event `notification-jump` / `window-maximized` | 冒号统一转连字符（事件 `dsh:balance` → `balance-changed` 已随 Electron 余额线退役，见 §2.4） |
 
-## 2. 全量映射表（45 通道：43 提取自 main.js + 2 Tauri 原生新增，见 §2.2）
+## 2. 全量映射表（38 通道：36 保留自 main.js 提取面 + 2 Tauri 原生新增，见 §2.2）
 
 ### 2.1 保留 —— Phase 1（核心生命周期，main.js:2868-3271）
 
@@ -33,21 +35,15 @@
 | `chrome:window` (2942) | `window_control` | app commands/window |
 | `chrome:menu` (2953) | `menu_action` | app commands/menu |
 | `chrome:restart-service` (2986) | `restart_service` | app commands/lifecycle（supervisor 执行重启；spawn/杀树域在 kernel-process crate） |
-| `dsh:image-paste-save` (3036) | `image_paste_save` | app commands/image |
 | `chrome:float-window` (3050) | `float_window` | app commands/window |
-| `chrome:pet-window` (3083) | `pet_window` | app commands/window |
 | `chrome:sponsor-window` (3155) | `sponsor_window` | app commands/window |
 | `dsh:copy-text` (3141) | `copy_text` | app commands/lifecycle |
 | `dsh:sponsor-qr` (3149) | `sponsor_qr` | app commands/window |
-| `dsh:balance-refresh` (3173) | `balance_refresh` | app commands/balance（余额生产链：sidecar balance-fetch + 轮询环） |
 | `dsh:open-external` (3254) | `open_external` | app commands/lifecycle |
 | `dsh:page-error`（on, 3162） | `page_error` | app commands/lifecycle |
 | `dsh:renderer-heartbeat`（on, 2896） | `renderer_heartbeat` | app commands/lifecycle |
 | `dsh:current-session`（on, 3168） | `current_session` | app commands/lifecycle（AppState.current_session；session-watcher crate 为 Phase 3 通知链预留，未接线） |
 | `float:close`（on, 3072） | `float_close` | app commands/window |
-| `pet:close`（on, 3106） | `pet_close` | app commands/window |
-| `pet:move-to`（on, 3114） | `pet_move_to` | app commands/window |
-| `pet:set-auto-open`（on, 3135） | `pet_set_auto_open` | app commands/window |
 
 ### 2.2 保留 —— Phase 2（sidecar 全链路）
 
@@ -66,7 +62,6 @@
 
 | Electron 通道（行号） | Tauri command | 实现位置 |
 |----------------------|---------------|-----------|
-| `dsh:file-revert` (3184) | `file_revert` | app commands/file（fence crate 围栏判定） |
 | `dsh:file-open` (3238) | `file_open` | app commands/file（fence crate 围栏判定） |
 | `dsh:diag-run` (3402) | `diag_run` | app commands/sidecar（`run_sidecar` 转发 → Node sidecar cli.js 执行） |
 | `dsh:backup-export` (3438) | `backup_export` | 同上 |
@@ -87,6 +82,10 @@
 |-------------------|----------|
 | `check-agent-update` 菜单动作（main.js:2963 → `runUpdateFlow`） | **内核自动更新链整体删除**（用户决策）。overlay 布局、`updater.checkLatest/applyUpdate/rollback`、定时触发器、skipVersion 设置、快照回滚联动全部不移植。**v0.5.3 后菜单项整体移除**：早期（v0.5.0–v0.5.2）曾保留为最简版本比对（本地内核版本 vs npm registry latest），随「内核随客户端分发、无 overlay 更新链」设计定案后，npm 内核检查动作连同菜单项一并退役；客户端更新检查由 `check-client-update`（GitHub+Gitee 双源 releases）完全取代 |
 | 客户端更新自研链（`runClientUpdateFlow`，菜单 `check-client-update`，main.js:4744-4954） | 由 `tauri-plugin-updater` 替代（minisign 签名校验，补上现状**无哈希/签名校验**的安全洞）。菜单动作保留但转发到 updater 插件 |
+| 宠物窗四通道（`chrome:pet-window` invoke + `pet:close` / `pet:move-to` / `pet:set-auto-open` send） | 2026-10 随 harness-pet 内置插件退役：宠物窗建窗链（`windows.rs` 的 PET 窗构建器 / 注入脚本 / 看门狗）、四个 command 与垫片 `petWindow` 六面整体裁撤，`chrome:pet-*` 通道号与命令名不复用。 |
+| `dsh:image-paste-save`（invoke） | 2026-10 随 dsh-image-paste 内置插件退役：剪贴板位图落 `%TEMP%/dsh-paste/` 的通道与对应命令移除，粘贴图走内核输入区自带的图片附件面。 |
+| `dsh:file-revert`（invoke） | 2026-10 随 dsh-client-file-changes 内置插件退役（官方 `@deepseek-ai/dsh-file-changes` 已在册，重复装配面）：按变更逆向还原的命令与 fence 围栏判定入口移除，`dsh:file-open` 等其余围栏通道不受影响。 |
+| `dsh:balance-refresh`（invoke）+ 事件 `dsh:balance` / `balance-changed` | 2026-10 拆 Electron 余额遗留线：页面余额的现役唯一链路是内置插件 `dsh-balance`（宿主半边在内核 webServer 注册 `GET /api/dsh-balance/state` + `POST /api/dsh-balance/refresh` 两条只认回环的 exact 路由，页面 60s 轮询），壳侧「Rust 轮询环 → sidecar `balance-fetch` → `app.emit("balance-changed")` → 垫片转发的页面事件」整条链**零消费方**却每 180s 真发一次 `/user/balance`，故命令、事件、轮询环与 `dsh-desktop/balance.js` / `balance-scheduler.js` 一并裁撤。通道号 3173 与命令名不复用；`menu_action` 的 `toggle-balance`（设置项 `showBalanceDock`）与插件设置页不在裁撤范围。 |
 
 ## 3. command 通用约定
 

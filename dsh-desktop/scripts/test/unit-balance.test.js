@@ -1,6 +1,6 @@
 'use strict';
 
-// balance.js 纯函数单测：峰谷定价切换、模型档位读取锚定、凭据读取顶层锚定、
+// balance-core.js 纯函数单测：峰谷定价切换、模型档位读取锚定、凭据读取顶层锚定、
 // 金额解析、用量窗口规整、端点覆盖、no-key 返回形态。
 // 不发起任何网络请求（网络路径在 integration-balance.test.js 用 mock server 覆盖）；
 // 不触碰真实 ~/.dsh（全部使用 os.tmpdir() 临时目录）。
@@ -11,7 +11,9 @@ const os = require('node:os');
 const path = require('node:path');
 const fs = require('node:fs');
 
-const balance = require('../../balance');
+// 遗留 dsh-desktop/balance.js 随 Electron 余额线整体拆除；价目与取数语义的唯一真源
+// 是插件产物，这里直接测它（Node ≥22.12 支持 require(esm)，该模块无顶层 await）。
+const balance = require('../../assets/plugins/dsh-balance/lib/balance-core.js');
 
 // ---------------------------------------------------------------------------
 // 辅助
@@ -371,7 +373,7 @@ test('readApiKey: 环境变量优先于 credentials', () => {
   }
 });
 
-test('readOpencodeGoKey: env(GO>兼容名) > credentials > 空', () => {
+test('readOpencodeGoKey: env(GO>兼容名) > credentials > 空', async () => {
   const dir = tmpHome();
   const savedGo = process.env.OPENCODE_GO_API_KEY;
   const savedCompat = process.env.OPENCODE_API_KEY;
@@ -379,11 +381,12 @@ test('readOpencodeGoKey: env(GO>兼容名) > credentials > 空', () => {
     delete process.env.OPENCODE_GO_API_KEY;
     delete process.env.OPENCODE_API_KEY;
     fs.writeFileSync(path.join(dir, '.credentials.yaml'), 'OPENCODE_GO_API_KEY: go-from-file\n', 'utf8');
-    assert.strictEqual(balance.readOpencodeGoKey(dir), 'go-from-file');
+    // 插件侧是 async（credentials 服务解析要走 await），遗留同步签名已随线拆除。
+    assert.strictEqual(await balance.readOpencodeGoKey(dir), 'go-from-file');
     process.env.OPENCODE_API_KEY = 'go-compat-env';
-    assert.strictEqual(balance.readOpencodeGoKey(dir), 'go-compat-env');
+    assert.strictEqual(await balance.readOpencodeGoKey(dir), 'go-compat-env');
     process.env.OPENCODE_GO_API_KEY = 'go-env';
-    assert.strictEqual(balance.readOpencodeGoKey(dir), 'go-env'); // 专用名优先
+    assert.strictEqual(await balance.readOpencodeGoKey(dir), 'go-env'); // 专用名优先
   } finally {
     cleanup(dir);
     if (savedGo === undefined) delete process.env.OPENCODE_GO_API_KEY; else process.env.OPENCODE_GO_API_KEY = savedGo;

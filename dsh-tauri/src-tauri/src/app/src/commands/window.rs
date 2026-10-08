@@ -1,9 +1,11 @@
-//! 窗口族命令：window_control / 浮窗 / 宠物窗 / 赞助（ipc-commands.md §2.1）。
+//! 窗口族命令：window_control / 浮窗 / 赞助（ipc-commands.md §2.1）。
 //!
 //! 建窗细节在 `crate::windows`；本模块只做 command 参数分发与 label 校验。
+//! 2026-10 宠物窗四通道（pet_window / pet_close / pet_move_to /
+//! pet_set_auto_open）随 harness-pet 插件裁撤一并移除。
 
 use bridge::BridgeError;
-use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
+use tauri::{AppHandle, Manager, WebviewWindow};
 
 use crate::AppState;
 
@@ -62,73 +64,6 @@ pub fn float_close(window: WebviewWindow) -> Result<serde_json::Value, BridgeErr
     if window.label().starts_with("float-") {
         let _ = window.close();
     }
-    Ok(serde_json::Value::Null)
-}
-
-#[tauri::command]
-pub fn pet_window(action: String, app: AppHandle, window: WebviewWindow) -> Result<serde_json::Value, BridgeError> {
-    if window.label() != "main" {
-        return Err(BridgeError::not_found("仅主窗可控制宠物窗"));
-    }
-    match action.as_str() {
-        "state" => Ok(serde_json::json!({ "ok": true, "open": app.get_webview_window("pet").is_some() })),
-        "open" | "toggle" => {
-            let existing = app.get_webview_window("pet");
-            if let Some(p) = existing {
-                if action == "toggle" {
-                    let _ = p.close();
-                    let _ = app.emit("pet-state", serde_json::json!({ "open": false }));
-                    return Ok(serde_json::json!({ "ok": true, "open": false }));
-                }
-                let _ = p.show();
-                let _ = p.set_focus();
-                return Ok(serde_json::json!({ "ok": true, "open": true, "reused": true }));
-            }
-            let state = app.state::<AppState>();
-            let sv = state.supervisor.lock().unwrap_or_else(|p| p.into_inner()).clone();
-            let sv = sv.ok_or_else(|| BridgeError::kernel_not_ready("内核未就绪"))?;
-            let url = sv.kernel_url().ok_or_else(|| BridgeError::kernel_not_ready("内核未就绪"))?;
-            crate::windows::open_pet_window(&app, &url)
-        }
-        other => Err(BridgeError::invalid_arg(format!("bad-action: {other}"))),
-    }
-}
-
-#[tauri::command]
-pub fn pet_close(window: WebviewWindow) -> Result<serde_json::Value, BridgeError> {
-    if window.label() == "pet" {
-        let _ = window.close();
-        let _ = window.app_handle().emit("pet-state", serde_json::json!({ "open": false }));
-    }
-    Ok(serde_json::Value::Null)
-}
-
-#[tauri::command]
-pub fn pet_move_to(x: f64, y: f64, window: WebviewWindow) -> Result<serde_json::Value, BridgeError> {
-    if window.label() != "pet" {
-        return Ok(serde_json::Value::Null);
-    }
-    // 钳制屏幕可视区（至少露 80px）——Electron 版语义。
-    if let Ok(mut mon) = window.current_monitor() {
-        if let Some(m) = mon.take() {
-            let sz = m.size();
-            let scale = m.scale_factor();
-            let w = (crate::windows::PET_W * scale).max(1.0);
-            let x = x.clamp(-w + 80.0, sz.width as f64 - 80.0);
-            let y = y.clamp(0.0, sz.height as f64 - 80.0);
-            let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(x as i32, y as i32)));
-            return Ok(serde_json::Value::Null);
-        }
-    }
-    let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(x, y)));
-    Ok(serde_json::Value::Null)
-}
-
-#[tauri::command]
-pub fn pet_set_auto_open(enabled: bool, app: AppHandle) -> Result<serde_json::Value, BridgeError> {
-    let state = app.state::<AppState>();
-    let store = shell_core::SettingsStore::new(state.paths.settings.clone());
-    store.set("pet.autoOpen", serde_json::json!(enabled)).map_err(|e| BridgeError::internal(e.0))?;
     Ok(serde_json::Value::Null)
 }
 

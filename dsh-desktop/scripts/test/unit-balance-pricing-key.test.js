@@ -11,9 +11,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 
-const { pricingKeyOf, effectivePrice } = require(path.join(__dirname, '..', '..', 'balance.js'));
+const { pricingKeyOf, effectivePrice } = require(path.join(
+  __dirname, '..', '..', 'assets', 'plugins', 'dsh-balance', 'lib', 'balance-core.js'));
 
-// 固定时刻：一个高峰、一个空闲（北京时区口径由 balance.js 内部判定）
+// 固定时刻：一个高峰、一个空闲（北京时区口径由 balance-core.js 内部判定）
 const PEAK = new Date('2026-09-11T03:00:00Z');     // 北京 11:00 → 高峰窗口
 const OFF = new Date('2026-09-12T22:00:00Z');      // 北京周六 06:00 → 周末全天空闲
 

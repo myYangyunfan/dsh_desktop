@@ -10,11 +10,17 @@
 ## 1. 暴露形态
 
 - 挂载点：`window.dshDesktop`（单一对象，无其他全局入口）。
-- 模式对象（浮窗/宠物窗）另有两个独立全局：`window.__DSH_FLOAT__`、`window.__DSH_PET__`（见 §5）。
+- 模式对象（浮窗）另有一个独立全局：`window.__DSH_FLOAT__`（见 §5）。宠物窗全局
+  `window.__DSH_PET__` 已于 2026-10 随 harness-pet 插件退役移除。
 - 所有请求-响应方法返回 `Promise`；错误拒绝时携带 `{ message }` 形态的 `Error`。
 - 订阅方法（`onMaximizeChange` / `onNotificationJump`）返回**取消订阅函数**。
 
-## 2. 方法总表（55 项：53 Electron 契约面 + 2 Tauri 原生新增，见 §2.7 末尾）
+## 2. 方法总表（46 项：44 Electron 契约面 + 2 Tauri 原生新增，见 §2.6 末尾）
+
+> 「#」列是方法稳定编号，**退役方法的编号不复用**：2026-10 伴随内置插件批量退役，
+> 移出了 `revertFiles`(5)、`imagePaste.save`(22)、`petWindow.*`(40–45) 共 8 项；
+> 同月拆 Electron 余额遗留线再移出 `refreshBalance`(3)。表内因此留有断号；
+> 新增方法一律追加新号。
 
 ### 2.1 顶层字段与方法
 
@@ -22,9 +28,7 @@
 |---|------|------|--------------------------------------|
 | 1 | `appVersion: string` | 应用版本；由 `getInfo()` 回填，初始 `''` | `chrome:init` → `app_init` |
 | 2 | `getInfo(): Promise<Info>` | 应用信息（版本/内核状态/平台等） | `chrome:init` → `app_init` |
-| 3 | `refreshBalance(): Promise<any>` | 触发余额刷新（dsh-balance 插件） | `dsh:balance-refresh` → `balance_refresh` |
 | 4 | `restartService(): Promise<any>` | 原地重启 dsh web 服务（装/卸插件后生效） | `chrome:restart-service` → `restart_service` |
-| 5 | `revertFiles(changes: Array<{path, op, oldText, newText}>): Promise<any>` | 「文件」视图还原（逆序应用） | `dsh:file-revert` → `file_revert` |
 | 6 | `openPath(path: string): Promise<any>` | 系统默认程序打开项目文件 | `dsh:file-open` → `file_open` |
 | 7 | `openExternal(url: string): Promise<any>` | 系统浏览器打开 URL（端口预览） | `dsh:open-external` → `open_external` |
 | 8 | `copyText(text: string): Promise<any>` | 复制到剪贴板 | `dsh:copy-text` → `copy_text` |
@@ -74,20 +78,14 @@
 | 20 | `saveConfig(cfg: WslConfig): Promise<any>` | 写 WSL 配置（含连通性探测） | `dsh:wsl-config-save` → `wsl_config_save` |
 | 21 | `recheck(): Promise<any>` | 重新探测 WSL 环境 | `dsh:wsl-recheck` → `wsl_recheck` |
 
-### 2.5 `imagePaste`（1 项）
-
-| # | 签名 | 语义 | 通道 |
-|---|------|------|------|
-| 22 | `save(payload): Promise<{ok, path, size}>` | 剪贴板图片存 `%TEMP%/dsh-paste/` | `dsh:image-paste-save` → `image_paste_save` |
-
-### 2.6 `floatWindow`（会话浮窗，2 项）
+### 2.5 `floatWindow`（会话浮窗，2 项）
 
 | # | 签名 | 语义 | 通道 |
 |---|------|------|------|
 | 23 | `open(sessionId: string): Promise<any>` | 会话弹出到独立浮窗 | `chrome:float-window{action:'open'}` → `float_window` |
 | 24 | `close(): void` | **同步 send**。浮窗自关闭 | `float:close` → command `float_close`（fire-and-forget） |
 
-### 2.7 `pluginManager`（插件管理，8 项；Phase 2 经 sidecar）
+### 2.6 `pluginManager`（插件管理，8 项；Phase 2 经 sidecar）
 
 | # | 签名 | 语义 | 通道 |
 |---|------|------|------|
@@ -100,7 +98,7 @@
 | 54 | `listDeadEntries(): Promise<{ok, patchExists, dead, stale}>` | 无效条目体检（**Tauri 原生新增，无 Electron 母本**）：`dead`=包不存在的死条目（可清理），`stale`=疑似陈旧禁用（只透出）。旧壳缺方法时页面可选链静默降级 | `dsh:plugin-list-dead-entries` → `plugin_list_dead_entries` |
 | 55 | `removeDeadEntries(ids: string[]): Promise<{ok, removed, backup, skipped, restartRequired}>` | 一键清理死条目（**Tauri 原生新增，无 Electron 母本**）：备份 + 原子写 + 幂等；sidecar 只清理当前体检仍判死的 id | `dsh:plugin-remove-dead-entries` → `plugin_remove_dead_entries` |
 
-### 2.8 `diagBackup`（诊断与备份，9 项）
+### 2.7 `diagBackup`（诊断与备份，9 项）
 
 | # | 签名 | 语义 | 通道 |
 |---|------|------|------|
@@ -114,18 +112,7 @@
 | 38 | `analyzeOrder(): Promise<any>` | bundle 顺序检测 | `dsh:diag-order` → `diag_order` |
 | 39 | `applyOrder(order): Promise<any>` | bundle 顺序应用 | `dsh:diag-order-apply` → `diag_order_apply` |
 
-### 2.9 `petWindow`（桌面宠物，6 项）
-
-| # | 签名 | 语义 | 通道 |
-|---|------|------|------|
-| 40 | `open(): Promise<any>` | 打开宠物窗 | `chrome:pet-window{action:'open'}` → `pet_window` |
-| 41 | `toggle(): Promise<any>` | 开关宠物窗 | `chrome:pet-window{action:'toggle'}` → `pet_window` |
-| 42 | `isOpen(): Promise<boolean>` | 宠物窗状态 | `chrome:pet-window{action:'state'}` → `pet_window` |
-| 43 | `close(): void` | **同步 send**。宠物窗自关闭 | `pet:close` → `pet_close` |
-| 44 | `moveTo(x: number, y: number): void` | **同步 send**。搬窗到绝对坐标 | `pet:move-to` → `pet_move_to` |
-| 45 | `setAutoOpen(enabled: boolean): void` | **同步 send**。设置最小化自动弹出 | `pet:set-auto-open` → `pet_set_auto_open` |
-
-### 2.10 `recovery`（恢复页，4 项）
+### 2.8 `recovery`（恢复页，4 项）
 
 | # | 签名 | 语义 | 通道 |
 |---|------|------|------|
@@ -134,7 +121,7 @@
 | 48 | `restart(): Promise<any>` | 重启应用 | `chrome:recovery-restart` → `recovery_restart` |
 | 49 | `openLogs(): Promise<any>` | 打开日志目录 | `chrome:recovery-open-logs` → `recovery_open_logs` |
 
-### 2.11 `guard`（插件保护中心交互面，4 项；只读面 + 轻量解）
+### 2.9 `guard`（插件保护中心交互面，4 项；只读面 + 轻量解）
 
 > `guard:action {action}` 单通道的分发迁移。写动作（snapshot/restore/repair）仍走
 > 守护瀑布自动面（supervisor boot_waterfall），**不在垫片面暴露**——手动回滚会与
@@ -147,34 +134,36 @@
 | 52 | `incident(id: string): Promise<{ok, content}>` | 读单条事故详情（content 截断 30KB） | `guard:action{action:'incident'}` → `guard_action` |
 | 53 | `resolveIncident(id: string): Promise<{ok}>` | 把事故重命名为 `.resolved.md`（软解决，不删盘） | `guard:action{action:'resolve-incident'}` → `guard_action` |
 
-## 3. 主进程 → 页面事件（3 项）
+## 3. 主进程 → 页面事件（1 项）
 
 | 页面侧表现 | 载荷 | 语义 | Tauri 事件名 |
 |-----------|------|------|--------------|
 | `dshDesktop.onNotificationJump` 回调 | `{sessionId: string}`（trim 后，≤256 字符，不合法丢弃） | 通知点击跳转（含订阅前补发） | `notification-jump` |
-| `window` CustomEvent `dsh-balance-changed` | `detail: any`（余额数据） | 余额推送 | `balance-changed` |
-| `window` CustomEvent `dsh-pet-state` | `detail: object` | 宠物窗状态推送 | `pet-state` |
 
-## 4. 页面 → 主进程 fire-and-forget（7 项，垫片内自发起，插件不直接消费）
+> 宠物状态事件 `dsh-pet-state`（Tauri 事件 `pet-state`）已随 harness-pet 退役移除。
+> 余额推送事件 `dsh-balance-changed`（Tauri 事件 `balance-changed`）已随 Electron 余额
+> 遗留线退役移除——页面余额改由内置插件 `dsh-balance` 的两条回环 HTTP 路由供给，
+> 壳侧不再有余额事件，`window` 上也没有余额 CustomEvent 监听方。
+
+## 4. 页面 → 主进程 fire-and-forget（4 项，垫片内自发起，插件不直接消费）
 
 | 上行 | 载荷/节律 | 语义 |
 |------|-----------|------|
 | renderer 心跳 | 5s 一次 + `visibilitychange` 可见时立即补报 | 挂起兜底判定（仅可见窗口） |
 | `page-error` | `window.onerror` / `unhandledrejection` 文本 | 页面异常 → desktop.log |
 | `current-session` | 3s 轮询 `localStorage['dsh.sessions.current']`，变化才发 | 当前观看会话（通知调试日志用） |
-| `float:close` / `pet:close` / `pet:move-to` / `pet:set-auto-open` | — | 见 §2.6 / §2.9 |
+| `float:close` | — | 见 §2.5（浮窗自关闭，同步 send 语义） |
 
-## 5. 模式全局（浮窗 / 宠物窗）
+## 5. 模式全局（浮窗）
 
 | 全局 | 注入条件 | 语义 |
 |------|----------|------|
 | `window.__DSH_FLOAT__ = {sessionId}` | 窗口以 `--dsh-float=<id>` 模式创建 | dsh-float-window 插件识别；**并预置** `localStorage['dsh.sessions.current']`（删 `subagentAddress`）——比启动后 `sessions.open()` 可靠（boot 早期会话服务未就绪会抛 unknown session） |
-| `window.__DSH_PET__ = {}` | 窗口以 `--dsh-pet=1` 模式创建 | harness-pet 插件识别；注入样式 `html,body{background:transparent!important;overflow:hidden!important}body>:not(#harness-pet-root){display:none!important}`（延迟到 DOMContentLoaded） |
 
 ## 6. Tauri 迁移注记（差异与风险）
 
-- **R1 `getPathForFile`**：Electron `webUtils.getPathForFile` 读浏览器 File 的磁盘路径。Tauri 无直接等价（WebView2 侧 File 对象拿不到完整路径）。迁移方案：拖拽改走 Tauri `onDragDropEvent`（Rust 侧给路径列表），垫片在 drop 事件里回填 `file.path`；Phase 2 落地，过渡期返回 `''`（与「浏览器打开 WebUI」时同语义，插件已有降级路径）。
-- **同步 send 方法**（`floatWindow.close` 等 4 个）：Tauri command 天然异步；垫片保持同步返回 `void` 语义（内部 fire-and-forget invoke，`.catch` 静默），插件不感知差异。
+- **R1 `getPathForFile`**：Electron `webUtils.getPathForFile` 读浏览器 File 的磁盘路径。Tauri 无直接等价（WebView2 侧 File 对象拿不到完整路径）。曾计划的迁移方案（拖拽改走 Tauri `onDragDropEvent`、Rust 侧给路径列表、垫片在 drop 事件里回填 `file.path`）随 dsh-file-drop 插件于 2026-10 一并裁撤，**现为恒等降级实现**：`file.path` 是字符串就透传，否则返回 `''`（与「浏览器打开 WebUI」时同语义，插件已有降级路径）。
+- **同步 send 方法**（仅 `floatWindow.close`）：Tauri command 天然异步；垫片保持同步返回 `void` 语义（内部 fire-and-forget invoke，`.catch` 静默），插件不感知差异。宠物窗三个同步 send 方法随 harness-pet 退役移除。
 - **远程页注入**：内核 Web UI 是 `http://127.0.0.1:<port>` 远程页。Tauri 2 经 capability `remote.urls` 放行该 origin 的 IPC；垫片作为 `initialization_script` 每次导航注入。命令侧再做 origin 白名单（沿用 Electron `pluginManagerIpcAllowed` 语义：插件管理通道仅主窗 origin 可调）。PoC-A 验证此链路。
 - **菜单裁撤**：内核自动更新链（overlay 布局 / runUpdateFlow / 定时触发）已删除；`check-agent-update`（npm registry 内核版本比对）已整体退役——Tauri 版内核随客户端分发、无 overlay 更新链，客户端更新检查（`check-client-update`，GitHub+Gitee 双源 releases）完全取代其在 ⋯ 菜单的位置。
 - **赞助窗实现注记（v0.5.0 终修）**：`sponsor_window` 为单例（已开则 show+focus 并返回 `{ok, reused:true}`）；HTML（内联 data URI 二维码图片）写 `%TEMP%\dsh-sponsor\sponsor.html` 后 `file://` 直载（绕开 WebView2 大 data URL 整页导航限制与 file:// 相对路径图片拦截）；原生标题栏（decorations+closable），不加自定义 CloseRequested 处理器（默认关闭即 destroy——回调内 destroy 曾致 UI 线程死锁）。

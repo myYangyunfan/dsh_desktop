@@ -8,8 +8,8 @@
 //   money 格式化边界（0/超大/非有限）
 //   rel=noopener noreferrer
 //   goUsageText 全空返回 null（不渲染空白 chip）
-//   单一投递（invoke 只触发、不消费返回值）
-// 隔离承诺：纯内存 vm，不触碰任何文件系统/网络/真实 React。
+//   单一投递（/refresh 只触发查询、数据只从 /state 进入）
+// 隔离承诺：纯内存 vm + 沙箱内注入的假 fetch，不触碰文件系统/真实网络/真实 React。
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -21,29 +21,27 @@ const CLIENT_PATH = path.join(__dirname, '..', '..', 'assets', 'plugins', 'dsh-b
 const SRC = fs.readFileSync(CLIENT_PATH, 'utf8');
 
 // ---------------------------------------------------------------------------
-// 测试床：每次 loadClient() 生成全新沙箱（模块级状态如 bridgePushedOnce 隔离）
+// 测试床：每次 loadClient() 生成全新沙箱（模块级状态如 hostPolledOnce/hostAbsent 隔离）
+//
+// 0.1.2 起余额数据面换成插件宿主半边在内核 webServer 上注册的两条路由
+// （GET /state 读载荷、POST /refresh 触发一轮查询）；自制壳时代的
+// window.dshDesktop.refreshBalance 与 dsh-balance-changed 事件已退役，
+// 所以这里注入的是沙箱内 window.fetch，而不是桥对象。URL 一律取自
+// __internals，不手抄字面量（改路由不改测试锚 = 假绿）。
 // ---------------------------------------------------------------------------
 
-function loadClient(bridgeOverrides) {
-  const calls = { refreshBalance: 0, handler: null };
-  const listeners = new Map();
+function loadClient(http = {}) {
+  const calls = { state: 0, refresh: 0 };
   const sandboxWindow = {
     __ModuleLoader__: { load: (obj) => { calls.captured = obj; } },
-    dshDesktop: bridgeOverrides && bridgeOverrides.dshDesktop !== undefined
-      ? bridgeOverrides.dshDesktop
-      : { refreshBalance: () => { calls.refreshBalance += 1; return Promise.resolve(); } },
-    addEventListener: (name, cb) => { listeners.set(name, cb); if (name === 'dsh-balance-changed') calls.handler = cb; },
-    removeEventListener: () => {},
-    dispatchEvent: () => {},
   };
   sandboxWindow.window = sandboxWindow;
   const sandbox = {
     window: sandboxWindow,
     document: { querySelector: () => null, createElement: () => ({ dataset: {}, textContent: '' }), head: { appendChild: () => {} } },
-    CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init && init.detail; } },
     console,
-    // client.js 的桥推送超时降级（setTimeout 4s 兜底）在浏览器合法，但 vm
-    // 沙箱默认无定时器 → ReferenceError（T1 实测「单一投递」两用例恒红）。
+    // client.js 的宿主请求时限（BRIDGE_PUSH_TIMEOUT_MS 的 4s 兜底）在浏览器合法，但 vm
+    // 沙箱默认无定时器 → ReferenceError。
     // unref：不清理的挂起定时器不阻塞测试进程退出。
     setTimeout: (fn, ms, ...args) => { const t = setTimeout(fn, ms, ...args); if (t.unref) t.unref(); return t; },
     clearTimeout,
@@ -94,6 +92,25 @@ function loadClient(bridgeOverrides) {
     throw new Error('unexpected require: ' + name);
   });
 
+  // ---------- 假 fetch：只服务本插件宿主半边的两条路由 ----------
+  // 缺省两条都 404 = 宿主半边缺席。宁可让用例显式喂载荷，也不让默认行为
+  // 凭空造出一份余额（本插件的「无数据」语义是 browserOnlyPayload，不是 200 + 空）。
+  const { STATE_URL, REFRESH_URL } = mod.__internals;
+  const routes = {
+    [STATE_URL]: 'state' in http ? http.state : 404,
+    [REFRESH_URL]: 'refresh' in http ? http.refresh : 404,
+  };
+  sandboxWindow.fetch = async (url, init) => {
+    const method = (init && init.method) || 'GET';
+    if (url === REFRESH_URL && method === 'POST') calls.refresh += 1;
+    else if (url === STATE_URL && method === 'GET') calls.state += 1;
+    else throw new Error('unexpected fetch: ' + method + ' ' + url);
+    const spec = routes[url];
+    if (spec === 404) return { status: 404, ok: false, json: async () => ({}) };
+    if (spec instanceof Error) throw spec;
+    return { status: 200, ok: true, json: async () => spec };
+  };
+
   let dockComponent = null;
   // dsh-balance 槽注册走 ctx.slots.inject(key, factory)（一方包正确姿势，
   // 消除「conversation 大 bundle 未就绪时 slots.register 硬抛 slot is not
@@ -128,7 +145,10 @@ function loadClient(bridgeOverrides) {
     for (const { cb } of pendingEffects) cb();
   }
 
-  return { calls, listeners, render, runEffects, resetHooks, dock: () => dockComponent, setPresetData: (d) => { presetData = d; } };
+  /** 冲刷 effect 里的 await 链（fetch → json → setData 全在微任务里跑完）。 */
+  const flush = () => new Promise((resolve) => { const t = setTimeout(resolve, 0); if (t.unref) t.unref(); });
+
+  return { calls, render, runEffects, resetHooks, flush, mod, dock: () => dockComponent, setPresetData: (d) => { presetData = d; } };
 }
 
 /**
@@ -138,7 +158,7 @@ function loadClient(bridgeOverrides) {
  * 应用本助手，避免“靠累加巧合通过”。
  */
 function renderFresh(usage, data, opts = {}) {
-  const h = loadClient(opts.bridge);
+  const h = loadClient(opts.http);
   return { h, r: h.render(usage, data, opts) };
 }
 
@@ -282,11 +302,22 @@ test('priceTable: usage 无模型字段 → 默认模型 + 「会话实际模型
   assert.ok(String(anchor.props.title).includes('按默认模型 deepseek-v4-flash 单价估算（会话实际模型未知）'));
 });
 
-test('纯浏览器降级：无 data 时按 FALLBACK_PRICES 计价', () => {
-  const h = loadClient({ dshDesktop: null }); // 无桌面壳 → hasBridge=false → data=null
+test('纯浏览器降级：宿主半边缺席（/state 404）时按 FALLBACK_PRICES 计价', async () => {
+  const h = loadClient({ state: 404, refresh: 404 });
   const usage = { uncachedInputTokens: 1e6, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
-  const r = h.render(usage, null);
+  // 首轮：载荷未落地 → loading 态不渲染（绝不闪现兜底数据）
+  assert.strictEqual(h.render(usage, undefined).result, null, '首次同步期不渲染');
+  h.runEffects();
+  await h.flush();
+  const r = h.render(usage, undefined);
   assert.strictEqual(costChipText(r), '本轮 ¥9.000', 'FALLBACK_PRICES.cacheMiss=9（与默认模型 deepseek-v4-pro 一致）');
+  // 缺席确认后载荷形态：不带 peak/pricingTier，浏览器侧不做北京时区判定
+  const payload = h.mod.__internals.browserOnlyPayload();
+  assert.strictEqual(payload.ok, false);
+  assert.strictEqual(payload.error, 'no-host');
+  assert.strictEqual(payload.model, h.mod.__internals.DEFAULT_MODEL);
+  assert.ok(!('peak' in payload) && !('pricingTier' in payload), '降级载荷不得自带峰谷档位');
+  assert.ok(!collectText(r.result).some((t) => String(t).startsWith('余额')), '无宿主 → 不显示余额');
 });
 
 test('sessionCost: prices 覆盖生效；非法价格字段回退内置默认档', () => {
@@ -375,35 +406,68 @@ test('rel: 余额 dock 与 Go dock 均携带 noopener noreferrer', () => {
 // 单一投递
 // ---------------------------------------------------------------------------
 
-test('单一投递: invoke 只触发刷新，不消费返回值（数据仅从事件通道进入）', () => {
+test('单一投递: /refresh 只触发查询，数据仅从 /state 进入', async () => {
+  // /refresh 的响应体刻意是另一份余额（1.5），若被当作数据源就会显示 ¥1.500
   const h = loadClient({
-    dshDesktop: { refreshBalance: () => { h.calls.refreshBalance += 1; return Promise.resolve(BALANCE_DATA); } },
+    refresh: { ok: true, balances: [{ currency: 'CNY', total: 1.5, granted: 0, toppedUp: 1.5 }], prices: FLASH },
+    state: BALANCE_DATA,
   });
-  // 首次挂载：loading 态隐藏；effect 触发一次 invoke
-  let r = h.render(null, undefined, { preset: false });
-  assert.strictEqual(r.result, null, '首挂载 loading 期不渲染');
+  const r0 = h.render(null, undefined);
+  assert.strictEqual(r0.result, null, '首次同步完成前不渲染');
   h.runEffects();
-  assert.strictEqual(h.calls.refreshBalance, 1, '首挂载应触发一次主动刷新');
-  // invoke 返回值被忽略：即便 resolve 了数据，状态仍是 loading → 不渲染
-  r = h.render(null, undefined, { preset: false });
-  assert.strictEqual(r.result, null, 'invoke 返回值不得作为数据源');
-  // 事件推送后才渲染数据
-  h.calls.handler({ detail: BALANCE_DATA });
-  h.setPresetData(BALANCE_DATA);
-  r = h.render(null, BALANCE_DATA);
-  assert.ok(collectText(r.result).includes('余额 ¥88.50'), '事件推送后才显示数据');
+  await h.flush();
+  assert.strictEqual(h.calls.refresh, 1, '首轮 force 触发一次 POST /refresh');
+  assert.strictEqual(h.calls.state, 1, '触发之后只读一次 GET /state');
+  const texts = collectText(h.render(null, undefined).result);
+  const balanceTexts = texts.filter((t) => String(t).startsWith('余额'));
+  assert.strictEqual(balanceTexts.length, 1, '余额只允许一条来源通道（实际：' + JSON.stringify(texts) + '）');
+  assert.strictEqual(balanceTexts[0], '余额 ¥88.50', '数据取自 /state 载荷');
 });
 
-test('单一投递: 收到过推送后，后续挂载不再重复触发刷新（会话切换零额外请求）', () => {
-  const h = loadClient();
-  h.render(null, undefined, { preset: false }); // 首挂载：注册 effect
+test('单一投递: 首轮已同步后，重挂载不再触发额外计费查询', async () => {
+  const h = loadClient({ state: BALANCE_DATA });
+  h.render(null, undefined); // 首挂载：注册 effect
   h.runEffects();
-  assert.strictEqual(h.calls.refreshBalance, 1);
-  h.calls.handler({ detail: BALANCE_DATA }); // 收到推送 → bridgePushedOnce=true
-  // 模拟组件重挂载：effect 再次执行
-  h.render(null, undefined, { preset: false });
+  await h.flush();
+  assert.strictEqual(h.calls.refresh, 1);
+  assert.strictEqual(h.calls.state, 1);
+  // 模拟组件重挂载（切会话 / dock 重建）：effect 再次执行
+  h.render(null, undefined);
   h.runEffects();
-  assert.strictEqual(h.calls.refreshBalance, 1, '已有数据后重挂载不应再触发刷新');
+  await h.flush();
+  assert.strictEqual(h.calls.refresh, 1, 'hostPolledOnce 之后不得再发 POST /refresh（零额外计费查询）');
+  assert.strictEqual(h.calls.state, 2, '重挂载只多一次只读 GET /state 缓存');
+});
+
+test('宿主通道原语: force 只多加一次 POST /refresh，载荷只来自 GET /state', async () => {
+  // 反证上一条「单一投递」用例的判据本身：不渲染、不走 React，直接盯 fetch 序列
+  // 与返回体来源。若实现改成消费 /refresh 响应，本用例先红。
+  const { fetchHostState, STATE_URL, REFRESH_URL } = loadClient().mod.__internals;
+  const seen = [];
+  const fetchImpl = async (url, init) => {
+    const method = (init && init.method) || 'GET';
+    seen.push(method + ' ' + url);
+    return { status: 200, ok: true, json: async () => ({ source: method === 'POST' ? 'refresh' : 'state' }) };
+  };
+  const first = await fetchHostState(true, { fetchImpl });
+  assert.deepStrictEqual(seen, ['POST ' + REFRESH_URL, 'GET ' + STATE_URL]);
+  // 跨 realm：包装对象在 vm 里 new，deepStrictEqual 会比原型；只深比来自宿主侧的 data
+  assert.strictEqual(first.status, 'ok');
+  assert.deepStrictEqual(first.data, { source: 'state' }, '载荷必须取自 /state');
+  seen.length = 0;
+  await fetchHostState(false, { fetchImpl });
+  assert.deepStrictEqual(seen, ['GET ' + STATE_URL], '非 force 轮次不得触发计费查询');
+});
+
+test('宿主通道原语: 404 归为 absent（宿主缺席），500 归为 error（本轮查询失败）', async () => {
+  const { fetchHostState } = loadClient().mod.__internals;
+  const absent = await fetchHostState(false, { fetchImpl: async () => ({ status: 404, ok: false }) });
+  assert.strictEqual(absent.status, 'absent', '404 是「没装宿主半边」，不是「这一轮失败」');
+  assert.strictEqual(absent.data, undefined);
+  const errored = await fetchHostState(false, { fetchImpl: async () => ({ status: 500, ok: false }) });
+  assert.strictEqual(errored.status, 'error');
+  const gone = await fetchHostState(false, { fetchImpl: async () => { throw new Error('connection refused'); } });
+  assert.strictEqual(gone.status, 'error');
 });
 
 test('渲染形态：loading / disabled 隐藏；有余额+用量+Go 三合一正常', () => {
@@ -430,9 +494,13 @@ test('渲染形态：loading / disabled 隐藏；有余额+用量+Go 三合一�
   assert.ok(Array.isArray(r.result.props.children));
 });
 
-test('渲染形态：仅用量（无余额无 Go）→ 单 dock 元素', () => {
-  const h = loadClient({ dshDesktop: null }); // 纯浏览器：无推送数据，仅显示本轮费用
-  const r = h.render({ uncachedInputTokens: 1e6, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }, null);
+test('渲染形态：仅用量（无余额无 Go）→ 单 dock 元素', async () => {
+  // 纯浏览器：宿主缺席 → 载荷只有兜底价目，故既无余额也无 Go chip
+  const h = loadClient({ state: 404 });
+  h.render({ uncachedInputTokens: 1e6, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }, undefined);
+  h.runEffects();
+  await h.flush();
+  const r = h.render({ uncachedInputTokens: 1e6, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }, undefined);
   assert.strictEqual(r.result.type, 'a');
   assert.ok(!r.threw);
 });

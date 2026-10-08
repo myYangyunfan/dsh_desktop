@@ -1,6 +1,6 @@
 'use strict';
 
-// balance-scheduler.js 编排器单测：节流 / in-flight 去重 / !stopped apply 守卫 /
+// 余额编排器单测（被测对象 = 插件产物 lib/balance-scheduler.js）：节流 / in-flight 去重 / !stopped apply 守卫 /
 // 指数退避重试 / 单一 now 一致性 / settings 单次读取 / 禁用短路 / 出站单一投递。
 // 注：latest-sequence 守卫（seq === latestSeq）在当前 API 下恒真（in-flight 去重已
 // 杜绝并发多请求），属防御性兜底、无独立触发路径，故不单独断言；其可达的
@@ -9,7 +9,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { createBalanceScheduler } = require('../../balance-scheduler');
+const { createBalanceScheduler } = require('../../assets/plugins/dsh-balance/lib/balance-scheduler.js');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

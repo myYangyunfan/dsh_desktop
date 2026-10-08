@@ -36,7 +36,7 @@ function sha(buf) {
 /** 扫描 repo 的补丁源码，收集全部干预标记名。
  *  递归遍历 <repo>/dsh-desktop/scripts 整棵子树（覆盖 scripts/lib、scripts/compat、
  *  scripts/integration 等子目录里声明的标记），跳过 node_modules/test/dist；
- *  外加 <repo>/dsh-desktop 顶层非递归 .js 扫描（balance.js 等）。 */
+ *  外加 <repo>/dsh-desktop 顶层非递归 .js 扫描（session-watcher.js 等）。 */
 function collectMarkers(repoRoot) {
   const markers = new Set();
   const seen = new Set();
@@ -70,7 +70,7 @@ function collectMarkers(repoRoot) {
     }
   })(path.join(repoRoot, 'dsh-desktop', 'scripts'));
 
-  // ② <repo>/dsh-desktop 顶层非递归 .js 扫描（balance.js 等）。
+  // ② <repo>/dsh-desktop 顶层非递归 .js 扫描（session-watcher.js 等）。
   let topEntries = [];
   try { topEntries = fs.readdirSync(path.join(repoRoot, 'dsh-desktop'), { withFileTypes: true }); } catch { /* 容错：顶层不可读则跳过 */ }
   for (const e of topEntries) {

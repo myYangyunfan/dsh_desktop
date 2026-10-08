@@ -42,12 +42,13 @@ commands.allow = [
 
 [[permission]]
 identifier = "bridge-phase3"
-description = "桥 command——Phase 3 围栏/诊断/备份/WSL/宠物窗"
+description = "桥 command——Phase 3 围栏/诊断/备份/WSL"
+# 2026-10 伴随插件裁撤：file_revert（客户端变更列表）、image_paste_save（粘贴图
+# 落盘）与宠物窗四通道 pet_window / pet_close / pet_move_to / pet_set_auto_open
+# 已从本放行清单与 contracts/ipc-commands.md §2 同步移除；同月拆 Electron 余额
+# 遗留线再移除 balance_refresh（contracts/ipc-commands.md §2.4）。
 commands.allow = [
-  "file_revert",
   "file_open",
-  "image_paste_save",
-  "balance_refresh",
   "diag_run",
   "diag_export",
   "diag_validate",
@@ -59,9 +60,5 @@ commands.allow = [
   "wsl_config_get",
   "wsl_config_save",
   "wsl_recheck",
-  "pet_window",
-  "pet_close",
-  "pet_move_to",
-  "pet_set_auto_open",
   "sponsor_qr",
 ]

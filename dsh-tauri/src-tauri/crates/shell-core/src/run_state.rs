@@ -16,7 +16,7 @@ pub enum RunState {
     Boot,
     /// sidecar：损坏 manifest/home patch 自愈。
     Repair,
-    /// sidecar：伴随插件同步 + presets。
+    /// sidecar：伴随插件同步。
     Sync,
     /// sidecar：22 个文本手术（幂等）。
     Patch,

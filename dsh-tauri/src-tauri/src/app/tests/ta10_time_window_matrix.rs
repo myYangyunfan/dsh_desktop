@@ -7,9 +7,11 @@
 //!   JUMP_FRESHNESS_MS）用 `#[path]` 编入直喂合成时间轴（u128 毫秒）；
 //! · kernel-process 的 CrashLoopDetector 是 app 直连依赖，record_crash 本就
 //!   接受注入的 now_ms —— 二维表（间隔 × 次数）直接打；
-//! · 嵌在闭包 / 线程里的判定（balance 节流 / 90s 导航抑制 / updater TTL /
+//! · 嵌在闭包 / 线程里的判定（90s 导航抑制 / updater TTL /
 //!   下载进度节流 / watcher 健康线）用纯函数重实现 + include_str! 源码锚点
 //!   （time_logic_audit.rs 同款做法），锚点断言生产源确实含该常量与判定式。
+//!   （原「balance 节流」一档随 Electron 余额遗留线退役整体移除，
+//!   见 contracts/ipc-commands.md §2.4。）
 //! 全部测试纯函数运行，无任何真实 sleep / 真等。
 
 // ---------------------------------------------------------------------------
@@ -37,13 +39,6 @@ pub struct AppState {
 
 pub mod commands {
     use super::*;
-
-    pub mod balance {
-        pub fn trigger_fetch(_app: &tauri::AppHandle) {}
-        pub fn trigger_fetch_throttled(app: &tauri::AppHandle) {
-            trigger_fetch(app);
-        }
-    }
 
     pub trait NoWindow {
         fn creation_flags_no_window(&mut self) -> &mut Self;
@@ -79,7 +74,6 @@ fn norm(src: &str) -> String {
 }
 
 const LIB_SRC: &str = include_str!("../src/lib.rs");
-const BALANCE_SRC: &str = include_str!("../src/commands/balance.rs");
 const SESSION_NOTIFY_SRC: &str = include_str!("../src/session_notify.rs");
 const UPDATER_SRC: &str = include_str!("../src/commands/updater_client.rs");
 const MENU_SRC: &str = include_str!("../src/commands/menu.rs");
@@ -187,33 +181,7 @@ fn ta10_watcher_health_line_boundaries() {
 }
 
 // ===========================================================================
-// 3) balance TURN_END_THROTTLE 29999/30000/30001（`< 30s` 拦截式重放 + 锚点）
-// ===========================================================================
-
-#[test]
-fn ta10_balance_turn_end_throttle_boundaries() {
-    // balance.rs:132 `last.is_some_and(|t| t.elapsed() < TURN_END_THROTTLE)` 重放：
-    // elapsed 为注入的 QPC 毫秒差。
-    fn throttled(elapsed_ms: u128) -> bool {
-        elapsed_ms < 30_000
-    }
-    assert!(throttled(29_999), "29999ms：窗内静默跳过");
-    assert!(!throttled(30_000), "恰 30000ms：放行刷新");
-    assert!(!throttled(30_001), "30001ms：放行刷新");
-    // 窗内拦截不推进 last_attempt（早退 return 在写之前）。
-    let src = norm(BALANCE_SRC);
-    assert!(
-        src.contains("const TURN_END_THROTTLE: std::time::Duration = std::time::Duration::from_secs(30);"),
-        "30s 节流常量锚点"
-    );
-    assert!(
-        src.contains("if last.is_some_and(|t| t.elapsed() < TURN_END_THROTTLE) {\n            return;"),
-        "`< 30s` 早退判定式锚点（恰 30s 放行）"
-    );
-}
-
-// ===========================================================================
-// 4) crash_loop：60s 窗 × 5 次 × 自动重启 5 次 —— 二维表（真实
+// 3) crash_loop：60s 窗 × 5 次 × 自动重启 5 次 —— 二维表（真实
 //    CrashLoopDetector，record_crash 注入 now_ms）
 // ===========================================================================
 
@@ -308,7 +276,7 @@ fn ta10_crash_loop_cooldown_boundaries() {
 }
 
 // ===========================================================================
-// 5) suppressible：89.9s / 90s / 90.1s × URL 同/异（lib.rs 纯函数重放 + 锚点）
+// 4) suppressible：89.9s / 90s / 90.1s × URL 同/异（lib.rs 纯函数重放 + 锚点）
 // ===========================================================================
 
 #[test]
@@ -353,7 +321,7 @@ fn ta10_kernel_nav_suppression_matrix() {
 }
 
 // ===========================================================================
-// 6) updater TTL：23h59m / 24h / 24h1m（`age > TTL` 严格）+ mtime 可控实证
+// 5) updater TTL：23h59m / 24h / 24h1m（`age > TTL` 严格）+ mtime 可控实证
 // ===========================================================================
 
 #[test]
@@ -414,7 +382,7 @@ fn ta10_updater_ttl_mtime_controllable() {
 }
 
 // ===========================================================================
-// 7) 下载进度节流：0.9% / 1% / 199ms / 200ms（menu.rs RV9 P1 重放 + 锚点）
+// 6) 下载进度节流：0.9% / 1% / 199ms / 200ms（menu.rs RV9 P1 重放 + 锚点）
 // ===========================================================================
 
 #[test]

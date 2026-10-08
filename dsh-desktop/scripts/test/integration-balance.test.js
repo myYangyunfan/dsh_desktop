@@ -1,7 +1,8 @@
 'use strict';
 
-// balance.js 集成测试：真实回环 HTTP/HTTPS mock server，覆盖 fetchJson /
-// queryBalance / queryOpencodeUsage 的完整网络路径。
+// 余额数据层集成测试（被测对象 = 插件产物 assets/plugins/dsh-balance/lib/balance-core.js；
+// 遗留 dsh-desktop/balance.js 已随 Electron 余额线整体拆除）：真实回环 HTTP/HTTPS mock
+// server，覆盖 fetchJson / queryBalance / queryOpencodeUsage 的完整网络路径。
 // 重点：
 // 重定向 Authorization 剥离（跨主机 / https→http 降级 / 同主机 https 保留）
 // OpenCode 用量 percent=null 保持 null
@@ -20,7 +21,7 @@ const fs = require('node:fs');
 
 const { createMockServer } = require('./mock-server.cjs');
 const { createTlsServer } = require('./mock-tls-server.cjs');
-const balance = require('../../balance');
+const balance = require('../../assets/plugins/dsh-balance/lib/balance-core.js');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function tmpHome() { return fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-balance-int-')); }

@@ -42,9 +42,10 @@ assets/plugins/<id>/
 
 1. 运行在内核 Web UI 页面（`http://127.0.0.1:<port>`）上，与内核前端同源同上下文。
 2. 可依赖的宿主 API 白名单：
-   - `window.dshDesktop.*`（本壳桥，53 方法）
-   - `window.__DSH_FLOAT__` / `window.__DSH_PET__`（模式全局）
-   - window CustomEvent：`dsh-balance-changed` / `dsh-pet-state`
+   - `window.dshDesktop.*`（本壳桥，46 方法，见 bridge-api.md §2）
+   - `window.__DSH_FLOAT__`（模式全局；`__DSH_PET__` 已随 harness-pet 插件退役移除）
+   - window CustomEvent：本壳已无派发方（`dsh-balance-changed` 随 Electron 余额遗留线
+     退役、`dsh-pet-state` 同上退役），插件不得依赖
    - 标准浏览器 API + 内核前端自身暴露的稳定挂点
 3. **不得依赖**：Electron/WebView 宿主细节、`require`、IPC 通道名、内部未文档化全局。
 4. 降级义务：桥方法全部可能失败（后端超时/裁撤），client.js 必须 try/catch 并有浏览器

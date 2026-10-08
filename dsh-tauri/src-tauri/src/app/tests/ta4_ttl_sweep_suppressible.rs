@@ -1,70 +1,19 @@
-//! TA4 回归锁定（形态级）三件套——今日修复中无法行为级注入的三处。
+//! TA4 回归锁定（形态级）两件套——修复中无法行为级注入的两处。
 //!
 //! 【为何形态而非行为】
-//! · balance `trigger_fetch_throttled`：节流状态 `last_attempt` 私有 +
-//!   函数需真实 `AppHandle`（fetch_once 会 spawn node 子进程）——不可注入
-//!   时钟/宿主，行为级需 mock_app + AppState 物化，超出「不改业务文件」边界。
 //! · updater `sweep_stale_update_dirs`：私有 fn + `std::env::temp_dir()` +
 //!   `modified()` 系统时钟均不可注入。
 //! · lib.rs `suppressible`：私有纯函数（lib.rs 单测已锁窗口表，此处补
 //!   窗口×URL 联合矩阵的形态面）。
 //!
 //! 一旦对应实现改为可注入（时钟参数 / pub mod），应升级为行为级测试。
+//!
+//! （原「balance turn-end 30s 节流 × 四路交互」两例随 Electron 余额遗留线
+//! 整体拆除，被测源 `commands/balance.rs` 已不存在，
+//! 见 contracts/ipc-commands.md §2.4。）
 
-const BALANCE_RS: &str = include_str!("../src/commands/balance.rs");
 const UPDATER_RS: &str = include_str!("../src/commands/updater_client.rs");
 const LIB_RS: &str = include_str!("../src/lib.rs");
-
-// ---------------------------------------------------------------------------
-// N2 P1-C：turn-end 非强制路径 30s 节流 × 四路交互
-// ---------------------------------------------------------------------------
-
-/// 节流门语义：窗口 30s、以「上次发起」计、窗内早退发生在写时间戳之前
-/// （被拦截的事件不延长窗口——Electron scheduler 同款）。
-#[test]
-fn turn_end_throttle_gate_semantics_shape() {
-    let seg = BALANCE_RS
-        .split("pub fn trigger_fetch_throttled")
-        .nth(1)
-        .and_then(|s| s.split("pub fn start_balance_loop").next())
-        .expect("trigger_fetch_throttled 函数体");
-    assert!(
-        seg.contains("Duration::from_secs(30)"),
-        "节流窗口必须 30s（Electron maybeRefreshBalance 同款）: {seg}"
-    );
-    // 早退在写时间戳之前：窗内事件被拦截且【不刷新 last_attempt】。
-    let early = seg.find("return;").expect("窗内必须早退");
-    let set = seg.find("*last = Some(").expect("过窗后写时间戳");
-    assert!(early < set, "早退必须先于时间戳写入（被拦截事件不延长窗口）");
-    // 节流以「上次发起」计：elapsed 对 last_attempt。
-    assert!(seg.contains("last.is_some_and(|t| t.elapsed() < TURN_END_THROTTLE)"), "以 last_attempt.elapsed 判窗: {seg}");
-    // 过窗后转强制路径（不经第二层节流）。
-    assert!(seg.contains("trigger_fetch(app)"), "过窗后转 trigger_fetch（强制路径）");
-}
-
-/// 四路交互：命令/菜单 = 强制（不节流）；turn-end = 节流；轮询环 = 直取
-/// （fetch_and_push，不受 turn-end 节流影响——30s 窗内轮询到期仍可刷）。
-#[test]
-fn four_path_interaction_throttle_vs_poll_shape() {
-    // 1) 命令路径 balance_refresh：强制（不调 trigger_fetch_throttled）。
-    let cmd = BALANCE_RS
-        .split("pub fn balance_refresh")
-        .nth(1)
-        .and_then(|s| s.split("// ---\n// 测试").next())
-        .expect("balance_refresh 函数体");
-    assert!(cmd.contains("trigger_fetch(&app)"), "命令路径强制刷");
-    assert!(!cmd.contains("trigger_fetch_throttled"), "命令路径不受节流");
-    // 2) 轮询环：三处刷新全部直调 fetch_and_push（无节流门）——30s 窗内
-    //    轮询到期 / 恢复可见补刷仍可刷（节流只约束 turn-end 路）。
-    let poll = BALANCE_RS
-        .split("pub fn start_balance_loop")
-        .nth(1)
-        .and_then(|s| s.split("/// 余额刷新触发").next())
-        .expect("start_balance_loop 函数体");
-    assert!(poll.matches("fetch_and_push(&app)").count() >= 3, "首刷/恢复补刷/到期轮询三处直取: {poll}");
-    assert!(!poll.contains("trigger_fetch_throttled"), "轮询环不得走 turn-end 节流（窗内仍可刷）");
-    assert!(poll.contains("in-flight") || BALANCE_RS.contains("fetching.swap(true"), "并发四路共享 in-flight 去重旗标");
-}
 
 // ---------------------------------------------------------------------------
 // U 线 V2 P2-2：下载临时目录 TTL 清扫边界

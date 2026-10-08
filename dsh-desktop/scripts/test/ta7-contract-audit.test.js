@@ -5,14 +5,15 @@
 // 核对面（七项）：
 //  1. bridge-api.md §2.3 act 枚举 ↔ menu.rs match 分支（含 toggle 合并行展开）
 //     + 每分支返回字段（md「返回」列 ↔ json! 键）双向；
-//  2. error-codes.md 全部 E_* ↔ Rust 常量（error.rs / wsl-backend / image.rs）
+//  2. error-codes.md 全部 E_* ↔ Rust 常量（error.rs / wsl-backend；
+//     commands/image.rs 已随 dsh-image-paste 退役删除）
 //     + JS 侧码字符串（bridge-shim.js），双向 + 「已退役」注记核对；
 //  3. ipc-commands.md §2 命令清单 ↔ lib.rs generate_handler 注册列表，双向；
 //  4. 根 README.md 与 dsh-tauri/README.md 双库更新链描述一致性（sha256/双源
 //     关键词在位；minisign / check-agent-update 旧词不得回潮）+ 最新版本号一致；
 //  5. wsl-backend.md 契约键（settings 三键 / §2.1 载荷 / §2.2 返回 / env 覆盖）
 //     ↔ commands/wsl.rs + sidecar/wsl-mode.js，双向；
-//  6. bridge-api.md 55 方法表 ↔ bridge-shim.js dshDesktop 对象实际挂载方法名，双向。
+//  6. bridge-api.md 46 方法表 ↔ bridge-shim.js dshDesktop 对象实际挂载方法名，双向。
 //
 // 已知漂移以 KNOWN_* 白名单锁定（新漂移进 diff 即失败，消账后从白名单移除）。
 // 本文件只读仓库源码/文档，不做任何写操作。
@@ -36,7 +37,6 @@ const errorRs = read('dsh-tauri/src-tauri/crates/bridge/src/error.rs');
 const libRs = read('dsh-tauri/src-tauri/src/app/src/lib.rs');
 const wslRs = read('dsh-tauri/src-tauri/src/app/src/commands/wsl.rs');
 const wslBackendRs = read('dsh-tauri/src-tauri/crates/wsl-backend/src/lib.rs');
-const imageRs = read('dsh-tauri/src-tauri/src/app/src/commands/image.rs');
 const shimJs = read('dsh-tauri/src-tauri/crates/bridge/dist/bridge-shim.js');
 const wslModeJs = read('dsh-tauri/sidecar/wsl-mode.js');
 const cliJs = read('dsh-tauri/sidecar/cli.js');
@@ -176,7 +176,8 @@ function parseRustErrorCodes() {
   for (const src of [errorRs, wslBackendRs]) {
     for (const m of src.matchAll(/pub const [A-Z_]+: &str = "(E_[A-Z_]+)"/g)) codes.add(m[1]);
   }
-  for (const m of imageRs.matchAll(/const [A-Z_]+: &str = "(E_[A-Z_]+)"/g)) codes.add(m[1]);
+  // commands/image.rs 曾贡献 E_IMAGE_PASTE，已随 dsh-image-paste 插件退役删除；
+  // 该码进 KNOWN_MD_ONLY_CODES（码值保留不复用）。
   return codes;
 }
 
@@ -187,10 +188,13 @@ function parseJsErrorCodes() {
 // 已知漂移白名单（消账后移除）：
 //  - E_AGENT_UPDATE_NETWORK：md 标注「已退役（v0.5.3）」——码值保留不复用，
 //    实装无活跃常量（menu.rs 仅有退役注释），属文档侧历史登记，非缺陷；
+//  - E_IMAGE_PASTE：md 标注「已退役（2026-10，随 dsh-image-paste 插件裁撤）」——
+//    命令 image_paste_save 与 codes::IMAGE_PASTE 常量一并移除，同样只留文档侧
+//    历史登记（历史错误串仍可识别、码值不复用）；
 //  - E_NO_HOST：bridge-shim.js 浏览器模式降级码——已补登记 error-codes.md（含「垫片本地码」口径），不再是漂移
 //    （文档侧待补，见漂移清单）。
 // E_NO_HOST：垫片本地降级码（契约注明无 Rust 载体），已登记 md。
-const KNOWN_MD_ONLY_CODES = ['E_AGENT_UPDATE_NETWORK', 'E_NO_HOST'];
+const KNOWN_MD_ONLY_CODES = ['E_AGENT_UPDATE_NETWORK', 'E_IMAGE_PASTE', 'E_NO_HOST'];
 const KNOWN_JS_ONLY_CODES = []; // E_NO_HOST 已登记，消账
 
 test('TA7-2a error-codes.md → Rust 常量：除已退役码外差集为空', () => {
@@ -256,7 +260,9 @@ function parseRegisteredCommands() {
 
 test('TA7-3a ipc-commands.md §2 → generate_handler：契约命令全注册', () => {
   const md = parseMdCommands();
-  assert.strictEqual(md.size, 45, `契约命令计数: ${md.size}`);
+  // 38 = crates/bridge/src/commands.rs CHANNELS 的 invoke+send 总数
+  // （2026-10 拆 Electron 余额遗留线移出 balance_refresh）。
+  assert.strictEqual(md.size, 38, `契约命令计数: ${md.size}`);
   const reg = parseRegisteredCommands();
   const missing = [...md].filter((c) => !reg.has(c));
   assert.deepStrictEqual(missing, [], '契约有而未注册的 command');
@@ -358,7 +364,7 @@ test('TA7-5e wsl-backend.md §4.2 wslMode 布局旗标 ↔ sidecar 实装', () =
 });
 
 // ----------------------------------------------------------------------------
-// 6. bridge-api.md 55 方法表 ↔ bridge-shim.js dshDesktop 挂载（双向）
+// 6. bridge-api.md 47 方法表 ↔ bridge-shim.js dshDesktop 挂载（双向）
 // ----------------------------------------------------------------------------
 
 function parseMdMethodSurfaces() {
@@ -422,9 +428,10 @@ function parseShimSurfaces() {
   return surfaces;
 }
 
-test('TA7-7a bridge-api.md 方法表（55）→ 垫片挂载：差集为空', () => {
+test('TA7-7a bridge-api.md 方法表（46）→ 垫片挂载：差集为空', () => {
   const md = parseMdMethodSurfaces();
-  assert.strictEqual(md.size, 55, `契约方法计数: ${md.size}`);
+  // 46 = shim.rs REQUIRED_SURFACES.len()（2026-10 拆余额遗留线移出 refreshBalance）。
+  assert.strictEqual(md.size, 46, `契约方法计数: ${md.size}`);
   const missing = diff(md, parseShimSurfaces());
   assert.deepStrictEqual(missing, [], '契约有而垫片缺的方法/字段');
 });

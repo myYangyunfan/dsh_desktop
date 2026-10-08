@@ -88,7 +88,8 @@ function loadClient(opts = {}) {
   let captured = null;
   const sandboxWindow = {
     __ModuleLoader__: { load: (obj) => { captured = obj; } },
-    dshDesktop: { refreshBalance: () => Promise.resolve() },
+    // 无 dshDesktop 桩：插件只走内核回环路由（/api/dsh-balance/*），
+    // 曾有的 refreshBalance 桩随 Electron 余额遗留线退役一并移除。
     addEventListener: () => {},
     removeEventListener: () => {},
     dispatchEvent: () => {},

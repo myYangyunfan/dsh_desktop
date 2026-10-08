@@ -1,4 +1,4 @@
-//! # session_notify —— 会话完成通知链（backlog C1）+ 会话完成即刷余额挂点（C2）
+//! # session_notify —— 会话完成通知链（backlog C1）
 //!
 //! Electron 语义母本：`dsh-desktop/main.js` `onSessionTurnEnd`（:2637-2680）
 //!
@@ -17,15 +17,14 @@
 //!        ├─ 读 stdout（capped 行协议）→ parse_watcher_line → handle_turn_end
 //!        ├─ 读 stderr → 转发 desktop.log（取证）
 //!        └─ 子进程退出 → 指数退避（1s…60s 封顶）自动重启；app 退出时收割
-//! handle_turn_end（Electron onSessionTurnEnd 同序）：
-//!   1. balance::trigger_fetch —— C2：回合完成即刷余额，先于一切通知门
-//!      （Electron 首行就是 maybeRefreshBalance，main.js:2642）
-//!   2. quitting 旗标 → 静默
-//!   3. 门：notifyOnTurnEnd 设置（!== false，默认开；menu.rs toggle-notify
+//! handle_turn_end（Electron onSessionTurnEnd 同序，余额触发 C2 已随
+//!   Electron 余额遗留线退役，见 contracts/ipc-commands.md §2.4）：
+//!   1. quitting 旗标 → 静默
+//!   2. 门：notifyOnTurnEnd 设置（!== false，默认开；menu.rs toggle-notify
 //!      持久化同 key）+ 主窗 visible && focused → 不打扰
-//!   4. 限流：NotifyThrottle（30s/会话 + 15s 全局）——后置咨询，
+//!   3. 限流：NotifyThrottle（30s/会话 + 15s 全局）——后置咨询，
 //!      被门拦截的 turn-end 不消耗限流额度（Electron 同序）
-//!   5. tauri-plugin-notification 弹通知（title||'DSH 任务完成' /
+//!   4. tauri-plugin-notification 弹通知（title||'DSH 任务完成' /
 //!      body||'会话任务已完成'；正文由 watcher 按 Electron emit 组装）
 //!      + 主窗未聚焦时请求任务栏注意力（request_user_attention → Windows
 //!        任务栏 DSH 图标闪烁）；与通知同一门控（开关 + 未聚焦 + 限流），
@@ -572,8 +571,7 @@ fn spawn_watcher_process(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        // GUI 进程起 console 子进程必须抑制终端窗（与 run_sidecar/
-        // balance fetch_once 同口径）。
+        // GUI 进程起 console 子进程必须抑制终端窗（与 run_sidecar 同口径）。
         .creation_flags_no_window();
     let mut child = cmd.spawn().map_err(|e| format!("spawn {:?}: {e}", paths.node))?;
     let stdout = child.stdout.take().ok_or("stdout 管道缺失")?;
@@ -616,12 +614,7 @@ fn sleep_unless_retired(my_gen: u64, total_ms: u64) -> bool {
 
 /// 单次 turn-end 的完整处理（Electron onSessionTurnEnd 同序）。
 fn handle_turn_end(app: &AppHandle, ev: &TurnEndLine) {
-    // 1. C2：回合完成 = 产生消耗 → 刷余额。Electron 首行就是它（main.js:2642），
-    //    先于通知开关/聚焦/限流门——门全关余额也刷。N2 P1-C：走 30s 节流的
-    //    非强制路径（Electron maybeRefreshBalance 的 scheduler 同款；流式多
-    //    回合不逐回合起取数子进程）。
-    crate::commands::balance::trigger_fetch_throttled(app);
-    // 2. quitting（Electron main.js:2643）。
+    // 1. quitting（Electron main.js:2643）。
     if QUITTING.load(Ordering::Relaxed) {
         return;
     }
@@ -630,7 +623,7 @@ fn handle_turn_end(app: &AppHandle, ev: &TurnEndLine) {
         "[notify] DEBUG turn detected: {{\"sid\":\"{}\",\"title\":{:?},\"enabled\":{enabled},\"focused\":{focused},\"current\":{is_current}}}",
         ev.event.session_id, ev.event.title
     ));
-    // 3+4. 限流后置（Electron 同序）：门未开就不咨询限流——聚焦/开关拦截
+    // 2+3. 限流后置（Electron 同序）：门未开就不咨询限流——聚焦/开关拦截
     //      不消耗限流额度。
     let gates_open = should_notify(enabled, focused, is_current, true);
     let throttle_ok = gates_open
@@ -639,7 +632,7 @@ fn handle_turn_end(app: &AppHandle, ev: &TurnEndLine) {
             .unwrap_or_else(|p| p.into_inner())
             .get_or_insert_with(NotifyThrottle::new)
             .decide(&ev.event.session_id, now_ms());
-    // 5. 总裁决 + 弹通知 + 请求任务栏注意力（同一门控：未聚焦才闪）。
+    // 4. 总裁决 + 弹通知 + 请求任务栏注意力（同一门控：未聚焦才闪）。
     if should_notify(enabled, focused, is_current, throttle_ok) {
         // 主窗未聚焦（should_notify 已含 !focused）→ 让任务栏 DSH 图标闪烁，
         // 提醒用户回来看结果；与通知同受 notifyOnTurnEnd 开关 + 限流约束，
@@ -1098,34 +1091,6 @@ mod shape_tests {
             .expect("on_window_event 接线段");
         assert!(seg.contains("\"main\""), "事件源须限定主窗 label: {seg}");
         assert!(seg.contains("Focused(true)"), "只消费获得焦点事件: {seg}");
-    }
-
-    /// C2 挂点形态：turn-end 处理首行（trigger_fetch 之前无通知门）。
-    #[test]
-    fn c2_hook_shape() {
-        let src = include_str!("session_notify.rs").replace("\r\n", "\n");
-        let seg = src
-            .split("fn handle_turn_end")
-            .nth(1)
-            .and_then(|s| s.split("fn notify_gates").next())
-            .expect("handle_turn_end 函数体");
-        let hook = seg.find("balance::trigger_fetch").expect("C2 挂点调用");
-        // C2 先于 quitting/门/限流（Electron main.js:2642 同序）。
-        for gate in ["QUITTING.load", "should_notify(", ".decide("] {
-            let pos = seg.find(gate).unwrap_or(usize::MAX);
-            assert!(hook < pos, "trigger_fetch 必须先于 {gate}");
-        }
-        // balance.rs 挂点注释（文档级锚点）：trigger_fetch 的文档必须标注
-        // C2（turn-end 消费方——session_notify::handle_turn_end 首行调用）。
-        let balance = include_str!("commands/balance.rs").replace("\r\n", "\n");
-        let doc = balance
-            .split("pub fn trigger_fetch")
-            .next()
-            .unwrap_or_default();
-        assert!(
-            doc.contains("C2") && doc.contains("turn-end"),
-            "trigger_fetch 文档必须标注 C2 挂点与 turn-end 消费方"
-        );
     }
 
     /// 任务栏闪烁接入形态：handle_turn_end 总裁决分支内、限流之后、与通知

@@ -27,10 +27,7 @@ use session_notify_live::{
 // ---------------------------------------------------------------------------
 
 use std::path::PathBuf;
-use std::sync::atomic::AtomicUsize;
 use std::sync::Mutex;
-
-pub static C2_CALLS: AtomicUsize = AtomicUsize::new(0);
 
 pub struct SupervisorShim {
     pub node_exe: PathBuf,
@@ -45,18 +42,6 @@ pub struct AppState {
 
 pub mod commands {
     use super::*;
-
-    pub mod balance {
-        use super::*;
-
-        pub fn trigger_fetch(_app: &tauri::AppHandle) {
-            C2_CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        }
-
-        pub fn trigger_fetch_throttled(app: &tauri::AppHandle) {
-            trigger_fetch(app);
-        }
-    }
 
     pub trait NoWindow {
         fn creation_flags_no_window(&mut self) -> &mut Self;
@@ -270,8 +255,10 @@ fn pending_jump_write_and_consume_semantics() {
     assert!(ok_branch < jump_write, "PENDING_JUMP 只在通知上屏后写");
 }
 
-/// 管线编排形态锚点：handle_turn_end 的 C2 先序（限流咨询前不触发 C2 的说法
-/// 不成立——C2 是首行；这里钉住「C2 → quitting → 门 → 限流 → 发射」顺序）。
+/// 管线编排形态锚点：handle_turn_end 的「quitting → 门 → 限流 → 发射」顺序。
+/// 原首行的 C2 余额挂点（trigger_fetch_throttled）已随 Electron 余额遗留线
+/// 整体退役（contracts/ipc-commands.md §2.4），此处改为反向断言：首行必须是
+/// quitting 旗标，且不得再出现余额触发（复活即红）。
 #[test]
 fn handle_turn_end_ordering_shape() {
     let src = std::fs::read_to_string(concat!(
@@ -285,13 +272,16 @@ fn handle_turn_end_ordering_shape() {
         .nth(1)
         .and_then(|s| s.split("fn notify_gates").next())
         .expect("handle_turn_end 函数体");
-    let c2 = seg.find("trigger_fetch_throttled").expect("C2 挂点");
+    assert!(
+        !seg.contains("trigger_fetch") && !seg.contains("balance::"),
+        "C2 余额挂点已退役，不得复活: {seg}"
+    );
     let quitting = seg.find("QUITTING.load").expect("quitting 旗标");
     let gates = seg.find("should_notify").expect("门");
     let throttle = seg.find(".decide(").expect("限流");
     let fire = seg.find("fire_notification").expect("通知发射");
-    assert!(c2 < quitting && quitting < gates && gates < throttle && throttle < fire,
-        "handle_turn_end 序：C2 → quitting → 门 → 限流 → 发射");
+    assert!(quitting < gates && gates < throttle && throttle < fire,
+        "handle_turn_end 序：quitting → 门 → 限流 → 发射（C2 已退役，quitting 为首道）");
 }
 
 /// Box::leak 让 &str 变 'static（脚本行构造便利；测试进程生命周期无碍）。

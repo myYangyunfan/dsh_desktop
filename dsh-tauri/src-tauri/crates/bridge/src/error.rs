@@ -20,7 +20,8 @@ pub mod codes {
     pub const TIMEOUT: &str = "E_TIMEOUT";
     pub const NOT_IMPLEMENTED: &str = "E_NOT_IMPLEMENTED";
     pub const UNAUTHORIZED: &str = "E_UNAUTHORIZED";
-    pub const IMAGE_PASTE: &str = "E_IMAGE_PASTE";
+    // E_IMAGE_PASTE（剪贴板粘贴图落盘）常量已随 dsh-image-paste 插件裁撤移除
+    // （2026-10）：码值按 §6.1「只追加不复用」在契约中保留占位，无生产方。
     // §2 内核进程域（kernel-process）
     pub const KERNEL_SPAWN: &str = "E_KERNEL_SPAWN";
     pub const KERNEL_PORT: &str = "E_KERNEL_PORT";
@@ -196,7 +197,6 @@ mod tests {
         assert_eq!(TIMEOUT, "E_TIMEOUT");
         assert_eq!(NOT_IMPLEMENTED, "E_NOT_IMPLEMENTED");
         assert_eq!(UNAUTHORIZED, "E_UNAUTHORIZED");
-        assert_eq!(IMAGE_PASTE, "E_IMAGE_PASTE");
         assert_eq!(KERNEL_SPAWN, "E_KERNEL_SPAWN");
         assert_eq!(KERNEL_PORT, "E_KERNEL_PORT");
         assert_eq!(KERNEL_CRASH_LOOP, "E_KERNEL_CRASH_LOOP");

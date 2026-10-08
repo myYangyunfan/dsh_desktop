@@ -42,13 +42,20 @@ function read(p) { return fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n'); }
   check('PENDING_JUMP 取出即清（take）', src.includes('PENDING_JUMP.lock().unwrap_or_else(|p| p.into_inner()).take()'));
 }
 
-// ---- 2. balance：轮询代数守卫 / 30s 节流 / in-flight 去重 ----
+// ---- 2. balance：壳侧轮询环已随 Electron 余额遗留线整体退役（反向守卫）----
+// 原本节锁 commands/balance.rs 的「轮询代数守卫 / 30s 节流 / in-flight 去重 /
+// 不可见暂停」四条热路径不变量；该模块与 sidecar `balance-fetch` 已整体拆除
+//（contracts/ipc-commands.md §2.4），本节点名改为反向守卫：源文件不得存在、
+// 生产侧不得再有轮询环/事件派发。全量裁撤面对账见 unit-balance-legacy-retire。
 {
-  const src = read(path.join(DSH_TAURI, 'src-tauri/src/app/src/commands/balance.rs'));
-  check('轮询环代数守卫（心跳环同款）', src.includes('static BALANCE_LOOP_GEN') && src.includes('BALANCE_LOOP_GEN.load(Ordering::Relaxed) != gen'));
-  check('turn-end 节流 30s（不逐回合起子进程）', src.includes('Duration::from_secs(30)') && src.includes('trigger_fetch_throttled'));
-  check('in-flight 去重（fetching 旗标）', src.includes('fetching.swap(true, Ordering::AcqRel)'));
-  check('不可见暂停轮询（5s tick 不空刷）', src.includes('BALANCE_TICK_MS: u64 = 5_000') && src.includes('if !visible'));
+  check(
+    '壳侧余额模块已删除',
+    !fs.existsSync(path.join(DSH_TAURI, 'src-tauri/src/app/src/commands/balance.rs')),
+  );
+  const lib = read(path.join(DSH_TAURI, 'src-tauri/src/app/src/lib.rs'));
+  check('lib.rs 不再起余额轮询环', !lib.includes('start_balance_loop') && !lib.includes('balance-changed'));
+  const notify = read(path.join(DSH_TAURI, 'src-tauri/src/app/src/session_notify.rs'));
+  check('turn-end 不再挂余额触发（C2 退役）', !notify.includes('trigger_fetch'));
 }
 
 // ---- 3. updater：client 复用 / 进度事件 / 启动一次性 ----
@@ -86,7 +93,11 @@ function read(p) { return fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n'); }
   check('新尝试取消防抖定时器', src.includes('clearTimeout(failTimer)'));
 }
 
-// ---- 6. 垫片：信封解包 / 心跳 5s / 拖放悬停层幂等 ----
+// ---- 6. 垫片：信封解包 / 心跳 5s / currentSession 变化才发 ----
+//（原第 6 节还锁「拖放悬停提示层幂等」（单一 DOM id，enter 创建 / leave+drop 移除）：
+//  那是已退役 dsh-file-drop 的壳侧半边，`__dsh_drop_hint__` 整块监听已随插件与
+//  file_drop.rs 一并拆除，垫片不再有任何 dragover/drop 面，故该项下线而非改锚；
+//  防复活锚点见 shim.rs::retired_plugin_surfaces_absent 的 drop_hint / DROP_HINT_ID。）
 {
   const src = read(path.join(DSH_TAURI, 'src-tauri/crates/bridge/dist/bridge-shim.js'));
   // F3（2026-08）起新契约：心跳载荷携带页面自报可见性 { hidden: document.hidden }
@@ -94,7 +105,7 @@ function read(p) { return fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n'); }
   // 恰好一个 setInterval(heartbeat, 5000) + visibilitychange 复报。
   check('心跳 5s interval（单监听）+ 载荷带 hidden（F3 契约）', (src.match(/setInterval\(heartbeat, 5000\)/g) || []).length === 1 && /send\('renderer_heartbeat', \{ hidden/.test(src));
   check('心跳 visibilitychange 补报（复用同一 heartbeat，不另起监听）', /document\.addEventListener\('visibilitychange', function \(\) \{\s*if \(!document\.hidden\) heartbeat\(\);/.test(src));
-  check('悬停层幂等（单一 DOM id，enter 创建/leave+drop 移除）', src.includes("var DROP_HINT_ID = '__dsh_drop_hint__'") && src.includes('getElementById(DROP_HINT_ID)'));
+  check('拖放悬停提示层已随 dsh-file-drop 退役（无复活面）', !src.includes('drop_hint') && !src.includes('DROP_HINT_ID') && !/addEventListener\(\s*['"]dragover/.test(src));
   check('currentSession 3s 轮询变化才发（不发常驻流量）', /var id = parsed[\s\S]*?if \(id && id !== last\)/.test(src));
 }
 
@@ -115,36 +126,10 @@ function read(p) { return fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n'); }
   check('轮询体仅 setTick（无每 tick IO/网络）', /setInterval\(\(\) => \{ try \{ setTick\(\(n\) => n \+ 1\); \} catch[\s\S]*?}, 1200\)/.test(src));
 }
 
-// ---- 9. file-drop：双报去重窗（纯逻辑复测） ----
-{
-  // client.js 是浏览器模块（顶层 window.__ModuleLoader__.load 注册）——
-  // 与 unit-dsh-file-drop-attach.test.js 同款 vm 手法取纯逻辑 core。
-  const vm = require('node:vm');
-  const file = path.join(ROOT, 'assets/plugins/dsh-file-drop/lib/client.js');
-  let captured = null;
-  const sandbox = { window: { __ModuleLoader__: { load: (reg) => { captured = reg; } } } };
-  vm.runInNewContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
-  const core = captured && captured.factory(() => ({})).core;
-  check('file-drop core 可加载', !!core && typeof core.dedupeEntries === 'function');
-  if (core) {
-    const seen = new Map();
-    const e1 = [{ path: 'C:/a.png', name: 'a.png', size: 10 }];
-    const t = 1_000_000;
-    const r1 = core.dedupeEntries(e1, seen, t, 1500);
-    // 双报：同名+大小（无路径形态）在窗口内被吞。
-    const e2 = [{ name: 'a.png', size: 10 }];
-    const r2 = core.dedupeEntries(e2, seen, t + 200, 1500);
-    check('双报去重：窗口内 名+大小 命中 path 键被吞', r1.length === 1 && r2.length === 0);
-    const r3 = core.dedupeEntries(e2, new Map(), t + 200, 1500);
-    check('窗口外/新 seen 放行', r3.length === 1);
-    // 1500ms 后同键可再入。
-    seen.clear(); seen.set('C:/a.png', t);
-    const r4 = core.dedupeEntries(e1, seen, t + 1600, 1500);
-    check('超窗后同路径再次放行', r4.length === 1);
-  }
-}
-
-// ---- 10. synapse：ResizeObserver 300ms 窗口后必 disconnect ----
+// （原 9 节「file-drop 双报去重窗」随 dsh-file-drop 退役下线：它 vm 装载
+//   assets/plugins/dsh-file-drop/lib/client.js 取 core.dedupeEntries 做纯逻辑复测，
+//   源目录已删、去重窗只存在于那份产物里，故整节删除而非改锚；后续小节顺次上移。）
+// ---- 9. synapse：ResizeObserver 300ms 窗口后必 disconnect ----
 {
   const src = read(path.join(ROOT, 'assets/plugins/dsh-synapse/app.js'));
   check('pin 窗口常量 300ms', src.includes('DETAIL_SCROLL_PIN_WINDOW = 300'));
@@ -153,30 +138,7 @@ function read(p) { return fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n'); }
   check('300ms 定时器到达即停', src.includes('detailScrollTimer = window.setTimeout(stopDetailScrollPin, DETAIL_SCROLL_PIN_WINDOW)'));
 }
 
-// ---- 11. plugin-manager 健康卡：进入一次性检测 + busy 防重入 ----
-{
-  const src = read(path.join(ROOT, 'assets/plugins/dsh-plugin-manager/lib/client.js'));
-  check('健康卡进入分区自动检测一次（useEffect []）', /useEffect\(\(\) => \{\s*detect\(\);[\s\S]*?\}, \[\]\);/.test(src));
-  check('busy 防重入（无并发检测风暴）', src.includes('if (busy) return;'));
-  check('检测是单次 list() 调用 + 本地 Map 判定（非逐服务探测）', src.includes('byId') && src.includes('CRITICAL_RUNTIME'));
-  // issue #175 防线：健康卡条目必须与静态关键服务清单同源。旧键 api-gateway /
-  // @deepseek-ai/dsh-host-apiproxy 是重构前命名，拿它查 live 注册表永远缺席 →
-  // 网关永久误报红条（实际挂载键见 dsh-base/cordis.patch.yml 的 typert-gateway 行）。
-  const { criticalServices } = require(path.join(ROOT, 'scripts/integration/composition-integrity.js'));
-  const runtimeRows = [...src.matchAll(/\{ id: "([a-z0-9_.-]+)", module: "([^"]+)"/g)]
-    .map((m) => ({ id: m[1], module: m[2] }));
-  const runtimeIds = new Set(runtimeRows.map((r) => r.id));
-  check('健康卡 15 项关键服务全解析', runtimeIds.size === 15);
-  check('健康卡不再用旧网关 loader 键 api-gateway', !runtimeIds.has('api-gateway'));
-  check('健康卡按实际挂载键监控网关', runtimeIds.has('typert-gateway')
-    && runtimeRows.some((r) => r.id === 'typert-gateway' && r.module === '@deepseek-ai/dsh-api-gateway'));
-  // base-bundle（dsh-base 容器）运行期无独立 loader 条目，故不入健康卡
-  const staticIds = criticalServices().map((s) => s.rowId).filter((id) => id !== 'base-bundle');
-  check('健康卡与 composition-integrity 关键清单同集（防两表漂移）',
-    staticIds.every((id) => runtimeIds.has(id)) && [...runtimeIds].every((id) => staticIds.includes(id)));
-}
-
-// ---- 12. 补丁链：readFileCached size+mtime 缓存（纯逻辑复测）----
+// ---- 10. 补丁链：readFileCached size+mtime 缓存（纯逻辑复测）----
 {
   const { readFileCached } = require(path.join(ROOT, 'scripts/lib/patch-io.js'));
   const os = require('node:os');

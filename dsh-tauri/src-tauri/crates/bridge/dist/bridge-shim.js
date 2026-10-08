@@ -8,11 +8,13 @@
  * 每一个页面（含远程内核页 http://127.0.0.1:<port>）。
  *
  * 设计约束：
- *  1. 签名与 Electron 版 preload.js 逐字段一致（53 方法，硬契约）；
+ *  1. 签名与 Electron 版 preload.js 逐字段一致（47 方法，硬契约；2026-10 随内置
+ *     插件退役移出「文件还原 / 粘贴图存盘 / 宠物窗」三组共 8 个方法面，
+ *     其锚点防复活锁见 shim.rs::retired_plugin_surfaces_absent）；
  *  2. 无 Tauri 内部件时降级为「浏览器模式」：方法返回 rejected Promise、
  *     getPathForFile 返回 ''（与 Electron 版浏览器降级同语义）；
  *  3. 错误统一 Error('[CODE] message')（contracts/error-codes.md）；
- *  4. 同步 send 语义的 4 个方法保持同步返回 void（内部 fire-and-forget）。
+ *  4. 同步 send 语义的方法（现仅 floatWindow.close）保持同步返回 void（内部 fire-and-forget）。
  */
 (function () {
   if (window.dshDesktop) return; // 幂等（重复注入防御）
@@ -59,7 +61,7 @@
   function send(cmd, args) { call(cmd, args).catch(function () { /* fire-and-forget：失败只静默 */ }); }
 
   // ---- 事件（主进程 → 页面）----
-  var listeners = { maximize: [], jump: [], balance: [], pet: [], clientUpdate: [], updProgress: [] };
+  var listeners = { maximize: [], jump: [], clientUpdate: [], updProgress: [] };
   function onEvent(name, queue, map) {
     if (!INVOKE || !TRANSFORM) return;
     try {
@@ -68,7 +70,7 @@
         target: { kind: 'Any' },
         // Tauri 2 事件回调收的是信封 {event, payload}（tauri-2.11.5 event/mod.rs
         // emit_js_script：fn({event, payload}, ids)）——此前按裸 payload 直读，
-        // notification-jump/balance-changed/pet-state/更新进度/拖放转发的字段
+        // notification-jump/更新进度转发的字段
         // 全部取成 undefined（事件链静默失效）。统一解包后交 map；无 payload
         // 形态回退 envelope 自身，防御未来双形态。
         handler: TRANSFORM(function (ev) {
@@ -91,21 +93,11 @@
     var id = p && typeof p.sessionId === 'string' ? p.sessionId.trim() : '';
     return id && id.length <= 256 ? Object.freeze({ sessionId: id }) : null;
   });
-  onEvent('balance-changed', listeners.balance, function (p) { return p; });
-  onEvent('pet-state', listeners.pet, function (p) { return p || {}; });
   // 客户端更新链（v0.5.3）：available = 启动自动检查命中（红点 badge +
   // 一次系统通知 + autoInstallUpdates 时的自动安装）；progress = 下载进度
   //（菜单行尾就地显示百分比，避免整面板重渲染抖动）。
   onEvent('client-update-available', listeners.clientUpdate, function (p) { return p || {}; });
   onEvent('client-update-progress', listeners.updProgress, function (p) { return p || {}; });
-
-  // ---- 余额 / 宠物状态 → window CustomEvent（契约 §3，dsh-balance / harness-pet 消费）----
-  listeners.balance.push(function (data) {
-    try { window.dispatchEvent(new CustomEvent('dsh-balance-changed', { detail: data })); } catch (e) {}
-  });
-  listeners.pet.push(function (data) {
-    try { window.dispatchEvent(new CustomEvent('dsh-pet-state', { detail: data })); } catch (e) {}
-  });
 
   // ---- 通知跳转补发（订阅前收到的最后一次保留）----
   var pendingJump = null;
@@ -184,7 +176,6 @@
         return info;
       });
     },
-    refreshBalance: function () { return call('balance_refresh'); },
     onNotificationJump: function (cb) {
       if (typeof cb !== 'function') return function () {};
       var wrapped = function (jump) { if (jump) { try { cb(jump); } catch (e) {} } };
@@ -201,17 +192,14 @@
       recheck: function () { return call('wsl_recheck'); }
     },
     restartService: function () { return call('restart_service', { intent: 'restart-service' }); },
-    revertFiles: function (changes) { return call('file_revert', { changes: changes || [] }); },
     openPath: function (path) { return call('file_open', { path: String(path || '') }); },
     openExternal: function (url) { return call('open_external', { url: String(url || '') }); },
     copyText: function (text) { return call('copy_text', { text: String(text == null ? '' : text) }); },
     // 浏览器 File → 磁盘路径：Tauri 无直接等价（bridge-api.md §6-R1）。
-    // Phase 2 由 drag-drop 事件回填 file.path；过渡期返回 ''（插件已有降级）。
+    // 曾计划的 DragDropEvent 回填链（F1）随 dsh-file-drop 插件于 2026-10 裁撤，
+    // 这里恒返回 ''（与「浏览器直开 WebUI」同语义，插件已有降级路径）。
     getPathForFile: function (file) {
       try { return (file && typeof file.path === 'string') ? file.path : ''; } catch (e) { return ''; }
-    },
-    imagePaste: {
-      save: function (payload) { return call('image_paste_save', { payload: payload || {} }); }
     },
     sponsorQr: function () { return call('sponsor_qr'); },
     sponsorWindow: function () { return call('sponsor_window'); },
@@ -250,14 +238,6 @@
       incident: function (id) { return call('guard_action', { action: 'incident', id: String(id || '') }); },
       resolveIncident: function (id) { return call('guard_action', { action: 'resolve-incident', id: String(id || '') }); }
     },
-    petWindow: {
-      open: function () { return call('pet_window', { action: 'open' }); },
-      toggle: function () { return call('pet_window', { action: 'toggle' }); },
-      isOpen: function () { return call('pet_window', { action: 'state' }); },
-      close: function () { send('pet_close'); },
-      moveTo: function (x, y) { send('pet_move_to', { x: Number(x) || 0, y: Number(y) || 0 }); },
-      setAutoOpen: function (enabled) { send('pet_set_auto_open', { enabled: !!enabled }); }
-    },
     recovery: {
       getState: function () { return call('recovery_state'); },
       reload: function () { return call('recovery_reload'); },
@@ -291,8 +271,10 @@
   //    → start_dragging；detail===2 → internal_toggle_maximize），垫片不另挂
   //    dblclick（会双重切换）；bare 属性只对「直接命中该元素」生效，故左侧
   //    每个装饰子元素都带属性，右侧按钮天然阻断。
-  //  - 浮窗（__DSH_FLOAT__，自带浮窗条）/宠物窗（__DSH_PET__）/壳页
-  //    （loading|recovery|poc.html 自带 #bar/#titlebar）跳过，防重复控制条。
+  //  - 浮窗（__DSH_FLOAT__，自带浮窗条）/壳页（loading|recovery|poc.html 自带
+  //    #bar/#titlebar）跳过，防重复控制条。宠物窗形态的模式旗标已随 harness-pet
+  //    退役（2026-10），其注入方 windows.rs 的宠物窗全链一并裁撤，这里不再有分支
+  //    （防复活锁见 shim.rs::retired_plugin_surfaces_absent）。
   //  - 平台门（与 windows.rs 主窗 decorations 平台门配套，改一侧必须同步）：
   //    仅 Windows 主窗自绘（decorations:false）注入全宽控制条；mac/linux 用
   //    原生标题栏（mac 用户只认红绿灯/全屏钮，实测「找不到关闭和全屏按钮」；
@@ -424,10 +406,10 @@
     } catch (e) { /* 同上 */ }
   }
   // 主窗判定（client-update-available 广播到所有窗，红点/通知/自动安装只
-  // 归主窗，防浮窗/宠物窗重复通知与并发安装）。
+  // 归主窗，防浮窗重复通知与并发安装）。
   function isMainWindow() {
     try {
-      if (window.__DSH_FLOAT__ || window.__DSH_PET__) return false;
+      if (window.__DSH_FLOAT__) return false;
       var meta = INTERNALS && INTERNALS.metadata;
       var label = meta && meta.currentWindow && meta.currentWindow.label;
       return !label || label === 'main'; // metadata 缺席的旧壳兜底放行
@@ -878,7 +860,7 @@
     try {
       // 幂等（两种形态互斥统一防重；重复注入/重注防御）。
       if (document.getElementById(CHROME_ID) || document.getElementById(BALL_ID)) return;
-      if (window.__DSH_FLOAT__ || window.__DSH_PET__) return; // 专属窗形态，各有各的条
+      if (window.__DSH_FLOAT__) return; // 专属窗形态，自带条
       if (/(^|\/)(loading|recovery|poc)\.html$/.test(location.pathname)) return; // 壳页自带标题栏
       var shellBar = document.getElementById('bar');
       if ((shellBar && shellBar.hasAttribute('data-tauri-drag-region')) || document.getElementById('titlebar')) return;
@@ -1182,50 +1164,6 @@
   } catch (e) { probeClientUpdate(); }
   listeners.clientUpdate.push(handleClientUpdateAvailable);
 
-  // ---- 文件拖放转发（F1，2026-08）----------------------------------------
-  // dragDropEnabled 默认 true：wry 在 WebView2 上注册 OLE DropTarget 并
-  // SetAllowExternalDrop(false)，页面 HTML5 drop 收不到外部文件。壳侧
-  // lib.rs 的 DragDropEvent（带完整路径）经 Tauri 事件 `client-file-drop`
-  // 广播到本页，这里转发为页面级 window CustomEvent `client-file-drop`
-  //（与 dsh-balance-changed 同款派发面；dsh-file-drop 插件经
-  // window.addEventListener('client-file-drop') 消费）。detail 契约
-  //（与 lib.rs 对齐；插件 normalizeDropPayload 取 detail.files，多余键
-  // 被其 sanitizer 忽略）：
-  //   { type: 'enter', count: N }
-  //   { type: 'leave' }
-  //   { type: 'drop',
-  //     files: [{ path, name, ext, size, kind: 'image'|'text'|'binary' }],
-  //     skipped: [{ path, name, reason }] }
-  // enter/leave 同时驱动全屏悬停提示层（drop 后移除）——纯增强，失败不
-  // 影响转发。
-  listeners.fileDrop = [];
-  onEvent('client-file-drop', listeners.fileDrop, function (p) { return p || {}; });
-  listeners.fileDrop.push(function (payload) {
-    try { window.dispatchEvent(new CustomEvent('client-file-drop', { detail: payload })); } catch (e) {}
-    if (!payload || typeof payload.type !== 'string') return;
-    if (payload.type === 'enter') showDropHover(payload.count || 0);
-    else if (payload.type === 'leave' || payload.type === 'drop') hideDropHover();
-  });
-  // 悬停提示层（幂等）：enter 创建、leave/drop 移除；body 未就绪（理论上
-  // 拖放必在页面加载后）静默跳过。
-  var DROP_HINT_ID = '__dsh_drop_hint__';
-  function showDropHover(count) {
-    try {
-      if (!document.body || document.getElementById(DROP_HINT_ID)) return;
-      var d = document.createElement('div');
-      d.id = DROP_HINT_ID;
-      d.textContent = '松开投喂 ' + (count > 0 ? count + ' 个文件' : '文件');
-      d.style.cssText = 'position:fixed;inset:0;z-index:2147483600;pointer-events:none;' +
-        'display:flex;align-items:center;justify-content:center;' +
-        'font:14px "Segoe UI","Microsoft YaHei",sans-serif;color:#e6ecff;' +
-        'background:rgba(11,18,32,.35);border:3px dashed rgba(120,160,255,.7);box-sizing:border-box';
-      document.body.appendChild(d);
-    } catch (e) { /* 提示失败不影响转发 */ }
-  }
-  function hideDropHover() {
-    try {
-      var d = document.getElementById(DROP_HINT_ID);
-      if (d && d.parentNode) d.parentNode.removeChild(d);
-    } catch (e) {}
-  }
+  // ---- 文件拖放转发（F1）已于 2026-10 随文件拖放插件裁撤整体移除：壳侧不再
+  // 广播该事件，页面级 CustomEvent 与全屏悬停提示层一并撤除，无残留消费方。
 })();

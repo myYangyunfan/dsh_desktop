@@ -1,8 +1,11 @@
 //! 垫片 JS 的嵌入与静态自检。
 //!
-//! `dist/bridge-shim.js` 是 contracts/bridge-api.md 的页面侧实现（55 方法：53
+//! `dist/bridge-shim.js` 是 contracts/bridge-api.md 的页面侧实现（46 方法：44
 //! Electron 契约面 + 2 Tauri 原生新增的插件死条目体检/清理），编进二进制后
 //! 由 app 层作为 `initialization_script` 注入每个页面。
+//! 2026-10 伴随插件裁撤：petWindow 六面 / imagePaste.save / revertFiles 已从
+//! 垫片与契约同步移除（码值与方法名不复用）；同月拆 Electron 余额遗留线再移除
+//! `refreshBalance` 面与 `balance-changed` → `dsh-balance-changed` 事件转发。
 
 /// 垫片 JS 全文。
 pub const BRIDGE_SHIM_JS: &str = include_str!("../dist/bridge-shim.js");
@@ -18,18 +21,15 @@ const REQUIRED_SURFACES: &[&str] = &[
     "windowControls.onMaximizeChange",
     "menu.action",
     "getInfo",
-    "refreshBalance",
     "onNotificationJump",
     "wsl.getConfig",
     "wsl.saveConfig",
     "wsl.recheck",
     "restartService",
-    "revertFiles",
     "openPath",
     "openExternal",
     "copyText",
     "getPathForFile",
-    "imagePaste.save",
     "sponsorQr",
     "sponsorWindow",
     "floatWindow.open",
@@ -55,12 +55,6 @@ const REQUIRED_SURFACES: &[&str] = &[
     "guard.check",
     "guard.incident",
     "guard.resolveIncident",
-    "petWindow.open",
-    "petWindow.toggle",
-    "petWindow.isOpen",
-    "petWindow.close",
-    "petWindow.moveTo",
-    "petWindow.setAutoOpen",
     "recovery.getState",
     "recovery.reload",
     "recovery.restart",
@@ -95,7 +89,7 @@ mod tests {
     fn all_surfaces_present() {
         let missing: Vec<&str> = REQUIRED_SURFACES.iter().copied().filter(|s| !defines(s)).collect();
         assert!(missing.is_empty(), "垫片缺失契约方法: {missing:?}");
-        assert_eq!(REQUIRED_SURFACES.len(), 55, "契约方法计数（51 + guard 4 面）");
+        assert_eq!(REQUIRED_SURFACES.len(), 46, "契约方法计数（42 + guard 4 面）");
     }
 
     /// check-agent-update 退役锚点（v0.5.3）：npm 内核更新链整体退役
@@ -112,7 +106,7 @@ mod tests {
 
     #[test]
     fn event_names_align_contract() {
-        for ev in ["window-maximized", "notification-jump", "balance-changed", "pet-state"] {
+        for ev in ["window-maximized", "notification-jump"] {
             assert!(BRIDGE_SHIM_JS.contains(ev), "事件 {ev} 缺失");
         }
         // 客户端更新链（v0.5.3）：available = 启动自动检查命中（红点/通知/
@@ -120,9 +114,17 @@ mod tests {
         for ev in ["client-update-available", "client-update-progress"] {
             assert!(BRIDGE_SHIM_JS.contains(ev), "客户端更新事件 {ev} 缺失");
         }
-        for js_ev in ["dsh-balance-changed", "dsh-pet-state"] {
-            assert!(BRIDGE_SHIM_JS.contains(js_ev), "页面 CustomEvent {js_ev} 缺失");
-        }
+        // 余额遗留线退役反证（contracts/ipc-commands.md §2.4）：垫片既不再监听
+        // Tauri 事件 balance-changed，也不再向页面派发 dsh-balance-changed
+        // CustomEvent——`balance-changed` 子串同时覆盖两种形态。
+        assert!(
+            !BRIDGE_SHIM_JS.contains("balance-changed"),
+            "余额事件转发已随 Electron 余额线退役，不得残留"
+        );
+        assert!(
+            !BRIDGE_SHIM_JS.contains("refreshBalance"),
+            "refreshBalance 面已随 Electron 余额线退役，不得残留"
+        );
     }
 
     #[test]
@@ -159,25 +161,32 @@ mod tests {
         }
     }
 
-    /// H6 收口锚点：`image_paste_save` 命令的参数是具名 `payload`
-    /// （`#[tauri::command] fn image_paste_save(payload: serde_json::Value)`），
-    /// 垫片调用体必须携带 `{ payload: ... }` 键——旧形态
-    /// `call('image_paste_save', payload || {})` 把 payload 当位置参数裸传，
-    /// Tauri 2 只按具名参数匹配会丢参（command 收到空对象，粘贴图落盘失败）。
-    /// 本测试锁住「调用体键名 = 命令具名参数」的一致性。
+    /// 裁撤锚点（2026-10 伴随插件退场）：宠物窗 / 粘贴图 / 文件还原 / 拖放悬停
+    /// 提示层四面已从垫片与契约同步摘除，不得以任何形态复活（方法名、通道名，
+    /// 连宠物窗的模式旗标 `__DSH_PET__` 与拖放提示层的 DOM id 都不得残留——
+    /// 它们的注入方已不存在，留着分支只会变成永远为假的死判据）。
     #[test]
-    fn image_paste_save_call_uses_named_payload_key() {
-        let block = BRIDGE_SHIM_JS
-            .split("imagePaste:")
-            .nth(1)
-            .and_then(|s| s.split("sponsorQr:").next())
-            .expect("imagePaste 块边界缺失");
-        assert!(block.contains("image_paste_save"), "imagePaste 块必须含 image_paste_save 调用: {block}");
-        assert!(block.contains("{ payload:"), "save 调用体必须携带具名 payload 键: {block}");
-        assert!(
-            !block.contains("call('image_paste_save', payload"),
-            "不得裸传 payload（位置参数形态）: {block}"
-        );
+    fn retired_plugin_surfaces_absent() {
+        for gone in [
+            "petWindow",
+            "pet_state",
+            "pet_close",
+            "pet_move_to",
+            "pet_set_auto_open",
+            "__DSH_PET__",
+            "imagePaste",
+            "image_paste_save",
+            "revertFiles",
+            "file_revert",
+            "client-file-drop",
+            "drop_hint",
+            "DROP_HINT_ID",
+        ] {
+            assert!(
+                !BRIDGE_SHIM_JS.contains(gone),
+                "已裁撤面 {gone} 不得在垫片复活（对应伴随插件已退役）"
+            );
+        }
     }
 }
 
@@ -227,7 +236,7 @@ mod window_chrome_tests {
         // 平台判定（UA：Windows UA 不含 Macintosh/Linux 两词，mac/linux 均含其一）。
         assert!(BRIDGE_SHIM_JS.contains("NATIVE_TITLE_BAR"), "缺平台门判定");
         assert!(BRIDGE_SHIM_JS.contains("/(Macintosh|Linux)/.test(navigator.userAgent"), "UA 判定形态漂移");
-        // 悬浮钮降级形态存在且为统一入口内分支（浮窗/宠物窗/壳页跳过后先分流）。
+        // 悬浮钮降级形态存在且为统一入口内分支（浮窗/壳页跳过后先分流）。
         assert!(BRIDGE_SHIM_JS.contains("injectMenuBall"), "缺悬浮钮注入函数");
         assert!(BRIDGE_SHIM_JS.contains("dsh-tauri-menu-ball"), "缺悬浮钮 id");
         assert!(
@@ -250,10 +259,12 @@ mod window_chrome_tests {
         );
     }
 
-    /// 控制条只注入内核页：浮窗/宠物窗/壳页各有标题栏，注入会重复遮挡。
+    /// 控制条只注入内核页：浮窗/壳页各有标题栏，注入会重复遮挡。
+    /// （宠物窗分支连同 `__DSH_PET__` 旗标已于 2026-10 随 harness-pet 退役移除，
+    /// 其防复活面见上方 retired_plugin_surfaces_absent。）
     #[test]
     fn window_chrome_scoped_to_kernel_page() {
-        for marker in ["__DSH_FLOAT__", "__DSH_PET__", "loading|recovery|poc"] {
+        for marker in ["__DSH_FLOAT__", "loading|recovery|poc"] {
             assert!(BRIDGE_SHIM_JS.contains(marker), "跳过条件缺 {marker}");
         }
         assert!(BRIDGE_SHIM_JS.contains("getElementById(CHROME_ID)"), "幂等检查（先查已存在标记）");
@@ -493,7 +504,7 @@ mod menu_copy_button_tests {
 
 /// 事件信封解包回归锚点（tauri-2.11.5 emit_js_script：回调收 {event, payload}）：
 /// onEvent 必须先解包 payload 再交 map/消费者——旧代码裸读导致 notification-jump/
-/// balance-changed/pet-state/更新进度/拖放转发全部字段 undefined（事件链静默失效）。
+/// 更新进度全部字段 undefined（事件链静默失效）。
 #[cfg(test)]
 mod event_envelope_tests {
     use super::BRIDGE_SHIM_JS;

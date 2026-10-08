@@ -56,8 +56,6 @@ pub struct AppState {
     pub supervisor_tx: Mutex<Option<std::sync::mpsc::Sender<SupervisorEvent>>>,
     /// 内核装配失败原因（supervisor 未建立时恢复页展示；None = 正常）。
     pub boot_error: Mutex<Option<String>>,
-    /// 余额链状态（commands/balance.rs：事件载荷缓存 + in-flight 去重）。
-    pub balance: commands::balance::BalanceState,
 }
 
 impl AppState {
@@ -75,7 +73,6 @@ impl AppState {
             paths: shell_core::DshPaths::resolve(),
             supervisor_tx: Mutex::new(None),
             boot_error: Mutex::new(None),
-            balance: commands::balance::BalanceState::new(),
         }
     }
 }
@@ -89,7 +86,7 @@ static INSTANCE_LOCK: std::sync::Mutex<Option<shell_core::SingleInstanceGuard>> 
 /// 退出竞态闸门（tao "cannot move state from Destroyed" panic 实测修复，
 /// boot-early.log 2026-08-31）：托盘「退出」先 shutdown() 杀内核 →
 /// app.exit(0) 拆 tao 事件循环，此刻内核就绪线程仍在飞的 KernelReady
-/// 若照常走触窗链（eval/show/focus/start_watcher/start_balance_loop），
+/// 若照常走触窗链（eval/show/focus/start_watcher），
 /// 对已 Destroyed 的事件循环戳窗口即 panic（与「内核退出 code=None」同秒）。
 /// 所有退出路径先置位；route_one_event 退出态只留日志直通。
 static EXITING: AtomicBool = AtomicBool::new(false);
@@ -295,9 +292,6 @@ pub fn run() {
             commands::plugin_list_dead_entries,
             commands::plugin_remove_dead_entries,
             // Phase 3
-            commands::file_revert,
-            commands::image_paste_save,
-            commands::balance_refresh,
             commands::diag_run,
             commands::diag_export,
             commands::diag_validate,
@@ -310,10 +304,6 @@ pub fn run() {
             commands::wsl_config_save,
             commands::wsl_recheck,
             commands::guard_action,
-            commands::pet_window,
-            commands::pet_close,
-            commands::pet_move_to,
-            commands::pet_set_auto_open,
             commands::sponsor_qr,
             // PoC 工具（非契约成员）
             commands::poc_echo_json,
@@ -441,25 +431,9 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     };
     #[allow(unused_variables)]
     let main_win = windows::create_main_window(app.handle(), &initial_url, saved)?;
-    // ---- 文件拖放接线（F1，2026-08）----
-    // dragDropEnabled 默认 true（tauri-utils WindowConfig 默认；windows.rs
-    // 建主窗未关闭）：wry 在 WebView2 上注册 OLE DropTarget 并
-    // SetAllowExternalDrop(false)——页面 HTML5 drop 收不到外部文件
-    // （dsh-file-drop 插件在桌面端此前完全失效）。原生 DragDropEvent 在
-    // Rust 侧带完整路径 → route_drag_drop 过滤/分类后 app.emit
-    // CLIENT_FILE_DROP_EVENT 广播全窗口，bridge 垫片转发为页面级 window
-    // CustomEvent `client-file-drop`（dsh-file-drop 插件经
-    // window.addEventListener 消费；契约见文件尾部「文件拖放」段）。
-    // on_window_event 追加式注册，与 windows.rs 既有监听
-    //（Resized/CloseRequested）并存。
-    {
-        let dd_handle = app.handle().clone();
-        main_win.on_window_event(move |e| {
-            if let tauri::WindowEvent::DragDrop(ev) = e {
-                route_drag_drop(&dd_handle, ev);
-            }
-        });
-    }
+    // 文件拖放接线（F1）已于 2026-10 随 dsh-file-drop 插件裁撤整体移除：
+    // 原生 DragDropEvent 不再有消费方（drag_drop_enabled 保持 tauri-utils
+    // WindowConfig 默认 true，未在本仓显式配置过——无需回补配置行）。
     // 诊断开关：DSH_TAURI_DEVTOOLS=1 打开 DevTools（debug build）。
     if std::env::var("DSH_TAURI_DEVTOOLS").ok().as_deref() == Some("1") {
         #[cfg(debug_assertions)]
@@ -671,7 +645,7 @@ fn kernel_ready_navigate(app: tauri::AppHandle, url: String) {
 fn route_one_event(app: &tauri::AppHandle, ev: SupervisorEvent) {
     // 退出竞态闸门：置位后仍在飞的事件（内核收割/就绪线程最后一批）只留
     // 日志直通，跳过全部触窗与子系统拉起动作——KernelReady 的 eval/show/
-    // watcher/balance 链对已 Destroyed 的 tao 事件循环操作 = EARLY-PANIC
+    // watcher 链对已 Destroyed 的 tao 事件循环操作 = EARLY-PANIC
     // 实测形态（boot-early.log 2026-08-31）。
     if EXITING.load(Ordering::Acquire) {
         route_log("[route] 退出中，丢弃在飞 supervisor 事件（触窗动作已跳过）".to_string());
@@ -711,9 +685,6 @@ fn route_one_event(app: &tauri::AppHandle, ev: SupervisorEvent) {
                 }
                 // renderer 心跳监测（Electron RendererRecovery 语义）：页面挂死自动重载。
                 watch_renderer_heartbeat(app.clone());
-                // 余额轮询环（Electron startBalanceLoop 语义：首刷延迟 500ms +
-                // 3 分钟轮询 + 最小化暂停 + 恢复补刷；幂等重入——代数守卫防线程累积）。
-                commands::balance::start_balance_loop(app.clone());
                 // C1：会话完成通知链（Electron main.js:6337 boot 成功后
                 // new SessionWatcher(...).start() 的同点位）——vendor node 直起
                 // payload 根级 session-watcher.js（stdout 行协议），崩溃退避
@@ -1339,9 +1310,10 @@ const RENDERER_WATCH_SLEEP_JUMP: std::time::Duration = std::time::Duration::from
 /// `setInterval(heartbeat, 5s)` 实际退化为 ~1 次/分钟。此时心跳缺失不代表
 /// 页面挂死，不得计入失联（否则最小化挂后台 ~5 分钟后每 ~40s 被误
 /// `location.reload()`——C 路径「后台长挂恢复后页面死/事件断」的壳侧主因，
-/// 2026-08 最小化 7 分钟真机复现实证）。与 commands/balance.rs
-/// `window_visibility` 同口径：查询失败按「定时器有效」处理（宁可漏判停摆
-/// 也不误杀节流中的正常页面；真挂死由内核探活环与下次可见期兜底）。
+/// 2026-08 最小化 7 分钟真机复现实证）。口径与 Electron balance-scheduler 的
+/// shouldSkipRefresh 注入判定一致（历史同源，壳侧余额环已退役）：查询失败
+/// 按「定时器有效」处理（宁可漏判停摆也不误杀节流中的正常页面；真挂死由
+/// 内核探活环与下次可见期兜底）。
 fn heartbeat_timer_active(visible: Option<bool>, minimized: Option<bool>) -> bool {
     visible.unwrap_or(true) && !minimized.unwrap_or(false)
 }
@@ -1884,7 +1856,7 @@ mod heartbeat_watcher_tests {
         );
     }
 
-    /// heartbeat_timer_active 决策表（与 balance.rs window_visibility 同口径）：
+    /// heartbeat_timer_active 决策表（与 Electron shouldSkipRefresh 同口径）：
     /// 可见且未最小化 → 计；不可见 / 最小化（Win32 下 is_visible 仍真）→ 豁免；
     /// 查询失败按「定时器有效」处理（宁可漏判停摆也不误杀节流页）。
     #[test]
@@ -1897,7 +1869,7 @@ mod heartbeat_watcher_tests {
         assert!(heartbeat_timer_active(None, None), "查询失败按定时器有效（不误杀）");
         assert!(heartbeat_timer_active(None, Some(false)), "可见性未知 + 未最小化：按有效");
         assert!(!heartbeat_timer_active(None, Some(true)), "可见性未知 + 最小化：豁免");
-        assert!(heartbeat_timer_active(Some(true), None), "最小化未知：按未最小化（与 balance 同默认）");
+        assert!(heartbeat_timer_active(Some(true), None), "最小化未知：按未最小化（不误杀）");
     }
 
     /// stall_exempt 决策表（F3，2026-08）：页面自报 hidden 时**无条件豁免**
@@ -2351,144 +2323,11 @@ mod panic_hook_tests {
     }
 }
 
-// ---------------------------------------------------------------------------
-// 文件拖放（F1，2026-08）：Rust DragDropEvent → client-file-drop 事件
-// ---------------------------------------------------------------------------
-//
-// 背景：Tauri 2 窗口默认 drag_drop_enabled=true（tauri-utils WindowConfig
-// 默认；windows.rs 建主窗未关闭），wry-0.55 在 WebView2 上据此注册 OLE
-// DropTarget 并 SetAllowExternalDrop(false)——页面 HTML5 dragover/drop 对
-// 外部文件不触发，dsh-file-drop 插件（document 级 drop 监听）在桌面端
-// 此前完全收不到拖放；网页端（浏览器直开 127.0.0.1）则原生工作——两端
-// 行为不一致的根源。修复路线：保持原生拦截（WebView2 远程页的 HTML5
-// File 本就拿不到完整路径，而插件对图片/二进制走「路径提示」语义正需要
-// 路径），Rust 侧 DragDropEvent::Drop{paths} 携带完整路径，过滤分类后
-// 广播给页面。
-//
-// 事件契约（壳→页面；bridge-shim.js 与 dsh-file-drop 插件消费方对齐）：
-// - 事件名：`client-file-drop`（app.emit 全窗口广播；垫片转发为页面级
-//   window CustomEvent 同名事件，插件 normalizeDropPayload 取
-//   detail.files，多余键被其 sanitizer 忽略）。
-// - 载荷：{"type":"drop","files":[{"path","name","ext","size","kind"}],
-//   "skipped":[{"path","name","reason"}]} / {"type":"enter","count":N} /
-//   {"type":"leave"}。
-// - kind 口径：image=内核附件白名单扩展名（dsh-attachment-local
-//   MEDIA_TYPES：png/jpeg/webp/gif）；text=插件 TEXT_EXT 同集或无扩展名；
-//   其余 binary。与插件 classifyFile 同判定序（image 优先）。
-
-/// 拖放广播事件名（垫片转发为页面级 window CustomEvent 同名事件，
-/// dsh-file-drop 插件消费）。
-pub const CLIENT_FILE_DROP_EVENT: &str = "client-file-drop";
-
-/// 单次拖放接受的文件数上限（超量部分进 skipped 而非悄悄丢弃）。
-pub const DROP_MAX_FILES: usize = 32;
-/// 单文件大小预检上限（路径提示语义不读内容，此为载荷/下游防御性上限）。
-pub const DROP_MAX_FILE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
-
-/// 图片扩展名白名单（内核 dsh-attachment-local MEDIA_TYPES 同口径）。
-pub const DROP_IMAGE_EXT: &[&str] = &[".png", ".jpg", ".jpeg", ".webp", ".gif"];
-/// 文本扩展名（与 dsh-file-drop 插件 client.js TEXT_EXT 同集）。
-pub const DROP_TEXT_EXT: &[&str] = &[
-    ".txt", ".md", ".markdown", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx",
-    ".json", ".jsonc", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf",
-    ".py", ".rb", ".go", ".rs", ".java", ".c", ".h", ".cpp", ".hpp", ".cs",
-    ".php", ".sh", ".bat", ".ps1", ".sql", ".html", ".htm", ".css", ".scss",
-    ".less", ".xml", ".csv", ".tsv", ".log", ".env", ".gitignore", ".npmrc",
-    ".lock", ".sum", ".properties", ".editorconfig", ".vue", ".svelte",
-];
-
-/// 扩展名（小写含点；无扩展名/隐藏文件首点 → 空串，与插件 extOf 的
-/// dot<=0 同语义——「.gitignore」按无扩展名处理）。
-pub fn drop_ext(file_name: &str) -> String {
-    match file_name.rfind('.') {
-        Some(dot) if dot > 0 => file_name[dot..].to_ascii_lowercase(),
-        _ => String::new(),
-    }
-}
-
-/// 文件分类：image（内核白名单）/ text（插件 TEXT_EXT 或无扩展名）/ binary。
-/// 与插件 classifyFile 同判定序：image 优先，其次 text，兜底 binary。
-pub fn drop_kind(ext: &str) -> &'static str {
-    if DROP_IMAGE_EXT.contains(&ext) {
-        "image"
-    } else if ext.is_empty() || DROP_TEXT_EXT.contains(&ext) {
-        "text"
-    } else {
-        "binary"
-    }
-}
-
-/// Drop 预检结果（JSON 载荷直出，供事件 payload 组装与单测断言）。
-pub struct DropPrecheck {
-    pub files: Vec<serde_json::Value>,
-    pub skipped: Vec<serde_json::Value>,
-}
-
-/// Drop 路径预检：目录/不存在/超大/超量剔除进 skipped（带 reason），存活
-/// 项带 {path,name,ext,size,kind} 进 files。只读元数据，不读文件内容。
-pub fn precheck_drop_paths(paths: &[std::path::PathBuf]) -> DropPrecheck {
-    let mut out = DropPrecheck { files: Vec::new(), skipped: Vec::new() };
-    for p in paths {
-        let name = p
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let skip = |reason: &str| {
-            serde_json::json!({ "path": p.display().to_string(), "name": name, "reason": reason })
-        };
-        let Ok(meta) = std::fs::metadata(p) else {
-            out.skipped.push(skip("missing"));
-            continue;
-        };
-        if !meta.is_file() {
-            out.skipped.push(skip("directory"));
-            continue;
-        }
-        if meta.len() > DROP_MAX_FILE_BYTES {
-            out.skipped.push(skip("too-large"));
-            continue;
-        }
-        if out.files.len() >= DROP_MAX_FILES {
-            out.skipped.push(skip("too-many"));
-            continue;
-        }
-        let ext = drop_ext(&name);
-        out.files.push(serde_json::json!({
-            "path": p.display().to_string(),
-            "name": name,
-            "ext": ext,
-            "size": meta.len(),
-            "kind": drop_kind(&ext),
-        }));
-    }
-    out
-}
-
-/// DragDropEvent 路由：Drop→预检+全窗口广播；Enter/Leave→悬停反馈；
-/// Over 为高频位置噪声，不转发。
-fn route_drag_drop(app: &tauri::AppHandle, ev: &tauri::DragDropEvent) {
-    match ev {
-        tauri::DragDropEvent::Drop { paths, .. } => {
-            let pre = precheck_drop_paths(paths);
-            let _ = app.emit(
-                CLIENT_FILE_DROP_EVENT,
-                serde_json::json!({ "type": "drop", "files": pre.files, "skipped": pre.skipped }),
-            );
-        }
-        tauri::DragDropEvent::Enter { paths, .. } => {
-            let _ = app.emit(
-                CLIENT_FILE_DROP_EVENT,
-                serde_json::json!({ "type": "enter", "count": paths.len() }),
-            );
-        }
-        tauri::DragDropEvent::Leave => {
-            let _ = app.emit(CLIENT_FILE_DROP_EVENT, serde_json::json!({ "type": "leave" }));
-        }
-        tauri::DragDropEvent::Over { .. } => {} // 位置高频噪声，不转发
-        // DragDropEvent 跨 crate 标记 non_exhaustive：未来新增变体默认静默。
-        _ => {}
-    }
-}
+// 文件拖放（F1）整段裁撤（2026-10）：Rust DragDropEvent → 拖放广播链及其
+// 预检/分类工具（CLIENT_FILE_DROP_EVENT / DROP_* 常量 / drop_ext / drop_kind /
+// DropPrecheck / precheck_drop_paths / route_drag_drop）的唯一消费方是已退役的
+// 内置伴随插件 dsh-file-drop，垫片侧转发也已同步移除，故整体删除。
+// 原生 drag_drop_enabled 未在仓内显式配置（保持 tauri-utils WindowConfig 默认）。
 
 // ---------------------------------------------------------------------------
 // TA1 测试加固门（用户批准的最小 cfg(test)] 门）：仅测试构建链接下方两个

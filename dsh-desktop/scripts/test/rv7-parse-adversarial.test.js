@@ -1,15 +1,16 @@
 'use strict';
 // RV7 边界对抗审查：解析面 malformed input 对抗（Node 侧可达面）。
 //
-// 覆盖三个解析面：
+// 覆盖两个解析面：
 //  1. composition-integrity.js parseServiceRows —— cordis.patch.yml 敌意形态
 //     （BOM / CRLF / 嵌套引号 / 巨型行 / 10 万服务行）。
-//  2. dsh-file-drop client.js core —— normalizeDropPayload / sanitizePath /
-//     normalizeDropEntry 敌意载荷（路径穿越 / size 谎报 / name 控制字符 /
-//     files 数组 10 万条 / 伪形态）。
-//  3. bridge-shim.js escHtml —— 从 dist 产物提取转义函数做 XSS fuzz；并对
+//  2. bridge-shim.js escHtml —— 从 dist 产物提取转义函数做 XSS fuzz；并对
 //     menuPanel.innerHTML 模板做「动态插值必须经 escHtml」的源审计断言
 //     （更新菜单文案 / 仓库地址是远端可控文本的注入点）。
+//
+// 曾经的第 2 面（dsh-file-drop client.js core 的拖放载荷对抗：normalizeDropPayload /
+// sanitizePath / normalizeDropEntry）随 v1.0.0 该插件退役、源目录
+// assets/plugins/dsh-file-drop 删除而整节下线，后续小节顺次上移。
 //
 // 运行：node --test scripts/test/rv7-parse-adversarial.test.js
 
@@ -93,97 +94,7 @@ test('rv7 ci: 空串 / 纯注释 / null 安全', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. dsh-file-drop：拖放载荷对抗
-// ---------------------------------------------------------------------------
-
-// client.js 是浏览器 IIFE（注册 __ModuleLoader__）：Node 下伪造最小 window
-// 捕获其纯逻辑 core（生产无副作用面）。
-function loadFileDropCore() {
-  const captured = {};
-  global.window = {
-    __ModuleLoader__: { load: (m) => { captured.core = m.factory(require).core; } },
-  };
-  try {
-    require('../../assets/plugins/dsh-file-drop/lib/client.js');
-  } finally {
-    delete global.window;
-  }
-  assert.ok(captured.core, '必须捕获 __dshFileDropCore');
-  return captured.core;
-}
-const core = loadFileDropCore();
-
-test('rv7 drop: 路径穿越 / UNC / 绝对路径混入——sanitizePath 只去控制字符与引号（记录形态）', () => {
-  const c = core;
-  // 设计事实：sanitizePath 不剥 ../（路径提示语义就是要完整路径）。穿越片段
-  // 会原样进入 composer 文本——但 Rust 侧 precheck 的 path 来自真实 fs 元数据，
-  // 此面仅在「内核页面被攻陷后伪造 window CustomEvent」时可达（P2，见报告）。
-  assert.equal(c.sanitizePath('..\\..\\evil.txt'), '..\\..\\evil.txt');
-  assert.equal(c.sanitizePath('\\\\server\\share\\f.bin'), '\\\\server\\share\\f.bin');
-  // 控制字符（含 NUL、\n 属 \u000a）与引号被剥。
-  assert.equal(c.sanitizePath('a\u0000b"c\'d\ne'), 'abcde');
-  // trim + 4096 截断。
-  assert.equal(c.sanitizePath('  x  '), 'x');
-  assert.equal(c.sanitizePath('x'.repeat(5000)).length, 4096);
-  // 空形态。
-  assert.equal(c.sanitizePath(null), '');
-  assert.equal(c.sanitizePath('\u0001\u0002'), '');
-});
-
-test('rv7 drop: name 控制字符 / 路径分隔符被剥，basename 兜底', () => {
-  const c = core;
-  const e = c.normalizeDropEntry({ path: 'C:\\dir\\sub\\a.txt', name: 'b\u0000a:d*?.txt' });
-  assert.equal(e.name, 'bad.txt');
-  // 无 name 时从净化后 path 取 basename（穿越段不进 name）。
-  const e2 = c.normalizeDropEntry({ path: '..\\..\\..\\evil.exe' });
-  assert.equal(e2.name, 'evil.exe');
-  assert.equal(e2.path, '..\\..\\..\\evil.exe'); // path 保留（提示语义）
-});
-
-test('rv7 drop: size 谎报归一（负数/NaN/Infinity/字符串→null 或数）', () => {
-  const c = core;
-  assert.equal(c.normalizeDropEntry({ path: 'p' }).size, null);
-  assert.equal(c.normalizeDropEntry({ path: 'p', size: -5 }).size, null);
-  assert.equal(c.normalizeDropEntry({ path: 'p', size: NaN }).size, null);
-  assert.equal(c.normalizeDropEntry({ path: 'p', size: Infinity }).size, null);
-  assert.equal(c.normalizeDropEntry({ path: 'p', size: '123' }).size, 123); // Number() 宽容
-  assert.equal(c.normalizeDropEntry({ path: 'p', size: 1e308 }).size, 1e308); // 不上限——展示层 formatSize 吞吐
-});
-
-test('rv7 drop: files 数组 10 万条洪水——归一 O(n) 且出口截断 100', () => {
-  const files = [];
-  for (let i = 0; i < 100000; i++) files.push({ path: 'C:\\f\\f' + i + '.txt', size: i });
-  const t0 = Date.now();
-  const out = core.normalizeDropPayload({ type: 'drop', files });
-  assert.ok(Date.now() - t0 < 3000, '10 万条归一须 <3s');
-  assert.equal(out.length, 100, '出口硬顶 100 条');
-});
-
-test('rv7 drop: 伪形态载荷全部安全降级为 []', () => {
-  const c = core;
-  assert.deepEqual(c.normalizeDropPayload(null), []);
-  assert.deepEqual(c.normalizeDropPayload('string'), []);
-  assert.deepEqual(c.normalizeDropPayload({ files: 'not-array' }), []);
-  assert.deepEqual(c.normalizeDropPayload({ files: [null, 42, 'x', {}, { name: '' }] }), []);
-  assert.equal(c.normalizeDropPayload({ files: [{ name: 'only-name' }] }).length, 1);
-  // dataUrl/base64 巨串（>160MB 字符）视为损坏丢弃。
-  const huge = { path: 'p', base64: 'A'.repeat(161 * 1024 * 1024) };
-  const e = c.normalizeDropEntry(huge);
-  assert.ok(!e.base64, '超长 base64 不得透传');
-});
-
-test('rv7 drop: buildDropHint 敌意 name/path 只产纯文本（无标记语言解释面）', () => {
-  const hint = core.buildDropHint([
-    { name: '<img src=x onerror=alert(1)>', path: '"><script>alert(2)</script>', size: 1 },
-  ]);
-  // 注入目标是 textarea.value（纯文本语义），非 innerHTML——断言内容完整吞吐
-  // 且函数本身不依赖任何 DOM 解释。
-  assert.ok(hint.includes('onerror=alert(1)'));
-  assert.ok(hint.includes('<script>'));
-});
-
-// ---------------------------------------------------------------------------
-// 3. bridge-shim：escHtml 提取 fuzz + innerHTML 模板源审计
+// 2. bridge-shim：escHtml 提取 fuzz + innerHTML 模板源审计
 // ---------------------------------------------------------------------------
 
 const SHIM = fs.readFileSync(

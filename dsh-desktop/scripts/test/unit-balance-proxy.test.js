@@ -1,6 +1,6 @@
 'use strict';
 
-// balance.js 代理与缓存单元测试（node --test）——pr-107（4704e63 + 2441d82）
+// 余额代理与缓存单元测试（node --test）——pr-107（4704e63 + 2441d82）
 // 的余额增强移植回 Tauri 线时一并移植，锚定三块能力：
 //   A. readFileCached：mtime+size 命中复用 / 修改重读 / 删除失效
 //   B. proxyFor：协议选代理 / NO_PROXY 三种形态 / 非法输入
@@ -14,8 +14,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const http = require('node:http');
-const https = require('node:https');
-const balance = require('../../balance');
+const net = require('node:net');
+const balance = require('../../assets/plugins/dsh-balance/lib/balance-core.js');
 
 const ENV_KEYS = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'NO_PROXY', 'no_proxy',
   'DEEPSEEK_API_KEY', 'DEEPSEEK_BALANCE_URL', 'DEEPSEEK_API_BASE'];
@@ -140,26 +140,41 @@ test('proxyFor: 非法代理 URL / 非 http(s) 协议 → null 直连', () => {
   });
 });
 
-test('ConnectProxyAgent: https 代理走 https.request / http 代理走 http.request（CONNECT 隧道）', (t) => {
-  const httpsCalls = [];
-  const httpCalls = [];
-  const fakeReq = { on: () => fakeReq, end: () => {} };
-  t.mock.method(https, 'request', (opts) => { httpsCalls.push(opts); return fakeReq; });
-  t.mock.method(http, 'request', (opts) => { httpCalls.push(opts); return fakeReq; });
-  // https:// 代理：必须先对代理自身 TLS（两层隧道），不能明文 http.request 连 443。
-  const httpsAgent = new balance.ConnectProxyAgent(new URL('https://proxy.local:8443'));
-  httpsAgent.createConnection({ host: 'api.example.com', port: 443 }, () => {});
-  assert.equal(httpsCalls.length, 1, 'https 代理应走 https.request');
-  assert.equal(httpCalls.length, 0, 'https 代理不应走明文 http.request');
-  assert.equal(httpsCalls[0].method, 'CONNECT');
-  assert.equal(httpsCalls[0].port, '8443', 'URL.port 为字符串');
-  // http:// 代理：明文直连 CONNECT。
-  const httpAgent = new balance.ConnectProxyAgent(new URL('http://proxy.local:8080'));
-  httpAgent.createConnection({ host: 'api.example.com', port: 443 }, () => {});
-  assert.equal(httpCalls.length, 1, 'http 代理应走 http.request');
-  assert.equal(httpsCalls.length, 1, 'http 代理不应再触发 https.request');
-  assert.equal(httpCalls[0].method, 'CONNECT');
-  assert.equal(httpCalls[0].port, '8080', 'URL.port 为字符串');
+test('ConnectProxyAgent: https 代理先对代理自身做 TLS，http 代理明文 CONNECT（字节级判据）', async () => {
+  // 判据形态变更的原因：插件产物是 ESM 且以 `import * as https` 取模块命名空间，
+  // CJS 侧的 t.mock.method(https,'request') 改不到它已捕获的引用（遗留 CJS 模块才 mock 得动）。
+  // 于是改看「代理端口上真实收到的首字节」——比调用计数更强：TLS ClientHello 首字节 0x16，
+  // 明文 CONNECT 以 ASCII "CONNECT " 开头，且顺带证明 URL.port 真的解析到了监听端口。
+  const probe = (scheme) => new Promise((resolve, reject) => {
+    const settled = (value, error) => {
+      clearTimeout(timer);
+      try { server.close(); } catch { /* 已关闭 */ }
+      if (error) reject(error); else resolve(value);
+    };
+    const server = net.createServer((socket) => {
+      socket.on('error', () => { /* 对端被我们主动销毁，属预期 */ });
+      socket.once('data', (chunk) => {
+        const bytes = Buffer.from(chunk);
+        socket.destroy();
+        settled(bytes, null);
+      });
+    });
+    const timer = setTimeout(() => settled(null, new Error(`${scheme} 代理 4s 内未收到任何字节`)), 4000);
+    server.listen(0, '127.0.0.1', () => {
+      const agent = new balance.ConnectProxyAgent(new URL(`${scheme}://127.0.0.1:${server.address().port}`));
+      // callback 收到的是「隧道没谈成」的错误，本用例不关心成败，只关心发出了什么字节。
+      agent.createConnection({ host: 'api.example.com', port: 443 }, () => {});
+    });
+  });
+
+  const overHttpsProxy = await probe('https');
+  assert.equal(overHttpsProxy[0], 0x16, 'https:// 代理必须先对代理自身建 TLS（首字节应为 handshake 记录 0x16）');
+  assert.ok(!overHttpsProxy.slice(0, 8).toString('latin1').startsWith('CONNECT'), 'https:// 代理不得明文发 CONNECT（单层明文会打在 TLS 端口上）');
+
+  const overHttpProxy = await probe('http');
+  const plain = overHttpProxy.toString('latin1');
+  assert.ok(plain.startsWith('CONNECT '), 'http:// 代理应明文 CONNECT: ' + plain.slice(0, 24));
+  assert.ok(plain.includes('api.example.com:443'), 'CONNECT 目标应为 host:port');
 });
 
 test('端到端: HTTP_PROXY 下 absolute-form GET 经代理命中（env URL 覆盖保留）', (t) => {

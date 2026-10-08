@@ -14,9 +14,9 @@
 | `E_NOT_FOUND` | 目标不存在（窗口/插件/会话/文件） | 各 command |
 | `E_CUT_FEATURE` | 该能力在 Tauri 版已裁撤（自研客户端更新链） | 命令位保留（v0.5.3 起无活跃返回方——`check-agent-update` 菜单动作已整体移除） |
 | `E_TIMEOUT` | 下游超时（内核 HTTP / sidecar 探活） | kernel-process / sidecar |
-| `E_NOT_IMPLEMENTED` | 能力已规划未实装（占位拒绝，非裁撤——区别于 `E_CUT_FEATURE`） | image_paste_save（Phase 3 剪贴板位图） |
+| `E_NOT_IMPLEMENTED` | 能力已规划未实装（占位拒绝，非裁撤——区别于 `E_CUT_FEATURE`） | `BridgeError::not_implemented` 构造器（当前无活跃命令返回方；原占位 `image_paste_save` 已随 dsh-image-paste 插件于 2026-10 裁撤） |
 | `E_UNAUTHORIZED` | 调用窗越权：主窗白名单（Electron `pluginManagerIpcAllowed` 同守卫面）外的窗口调插件管理/诊断/备份族或 `restart_service` | app commands（v0.5.2 实装，ipc-commands.md §3.3） |
-| `E_IMAGE_PASTE` | 剪贴板粘贴图落盘失败（dataUrl 缺失/非法、写盘失败） | bridge commands（image_paste_save） |
+| `E_IMAGE_PASTE` | 剪贴板粘贴图落盘失败（dataUrl 缺失/非法、写盘失败） | bridge commands（`image_paste_save`）。**已退役（2026-10）**：随 dsh-image-paste 内置插件裁撤，命令与 `codes::IMAGE_PASTE` 常量一并移除；码值保留不复用（历史错误串仍可识别）。粘贴图现走内核输入区的图片附件面 |
 | `E_AGENT_UPDATE_NETWORK` | npm registry 版本查询双源（npmmirror/npmjs）均不可达 | menu_action `check-agent-update` 最简比对链。**已退役（v0.5.3）**：npm 内核检查链随「内核随客户端分发」移除，`check-agent-update` 菜单动作删除；码值保留不复用（历史错误串仍可识别）。客户端更新网络失败现走 `E_UPDATER_NETWORK` |
 
 ## 2. 内核进程域（kernel-process）

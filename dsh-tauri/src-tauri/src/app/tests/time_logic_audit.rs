@@ -24,7 +24,6 @@
 mod session_notify_live;
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 pub struct SupervisorShim {
@@ -38,21 +37,7 @@ pub struct AppState {
     pub paths: shell_core::DshPaths,
 }
 
-pub static C2_CALLS: AtomicUsize = AtomicUsize::new(0);
-
 pub mod commands {
-    use super::*;
-
-    pub mod balance {
-        use super::*;
-        pub fn trigger_fetch(_app: &tauri::AppHandle) {
-            C2_CALLS.fetch_add(1, Ordering::Relaxed);
-        }
-        pub fn trigger_fetch_throttled(app: &tauri::AppHandle) {
-            trigger_fetch(app);
-        }
-    }
-
     pub trait NoWindow {
         fn creation_flags_no_window(&mut self) -> &mut Self;
     }
@@ -89,7 +74,6 @@ fn norm(src: &str) -> String {
 const WSL_BACKEND_SRC: &str = include_str!("../../../crates/wsl-backend/src/lib.rs");
 const SUPERVISOR_SRC: &str = include_str!("../src/supervisor.rs");
 const LIB_SRC: &str = include_str!("../src/lib.rs");
-const BALANCE_SRC: &str = include_str!("../src/commands/balance.rs");
 const SESSION_NOTIFY_SRC: &str = include_str!("../src/session_notify.rs");
 
 /// 双时钟样本：`(qpc_ms, interrupt_ms, wall_ms)` 三元组序列。
@@ -382,46 +366,6 @@ fn sleep_unless_retired_shortens_but_honors_retirement() {
 }
 
 // ===========================================================================
-// P2（核实为安全）：balance 30s 节流 + 3min 轮询（QPC elapsed——跳变方向良性）
-// （src/app/src/commands/balance.rs:127-138,161-202）
-// ===========================================================================
-
-/// 节流门重实现（balance.rs:132 `last.is_some_and(|t| t.elapsed() < 30s)`）：
-/// 睡眠使 elapsed 跳大 → 窗口视为已过 → 放行刷新（in-flight 去重兜并发）。
-#[test]
-fn balance_throttle_and_poll_after_wake_single_refetch() {
-    fn throttle_allows(last_attempt_qpc: u128, now_qpc: u128) -> bool {
-        !(now_qpc - last_attempt_qpc < 30_000)
-    }
-    let last = 0u128;
-    assert!(!throttle_allows(last, 5_000), "窗内拦");
-    assert!(!throttle_allows(last, 29_999), "边界内拦");
-    assert!(throttle_allows(last, 30_000), "恰 30s 放");
-    let woke = clocks_at(5_000, 3_600_000).qpc_ms;
-    assert!(throttle_allows(last, woke), "睡眠 1h 后放行（良性：数据确已陈旧）");
-    // 轮询环同向：last_fetch.elapsed() >= 180s → 唤醒后首个 5s tick 触发一次
-    // fetch_and_push；in-flight 旗标保证并发触发共享一次请求（balance.rs:101）。
-    let mut in_flight = false;
-    let fetches = [true, true].iter().filter(|_| {
-        if in_flight {
-            false // 第二个触发点被去重
-        } else {
-            in_flight = true;
-            true
-        }
-    }).count();
-    assert_eq!(fetches, 1, "唤醒瞬间的多路触发只产生 1 次真实请求");
-    // 形态锚点。
-    let src = norm(BALANCE_SRC);
-    // VB4 修复后轮询间隔走 retry_interval 阶梯（失败 30s→60s→120s→300s），
-    // 成功时 retry_interval(0)==BALANCE_POLL_SECS——锚点改为阶梯入口。
-    assert!(src.contains("retry_interval("), "VB4 失败加速重试阶梯在位");
-    assert!(src.contains("TURN_END_THROTTLE: std::time::Duration = std::time::Duration::from_secs(30)"));
-    // 阶梯化后不再直比 BALANCE_POLL_SECS（见 retry_interval 锚点）
-    assert!(src.contains("fetching.swap(true, Ordering::AcqRel)"), "in-flight 去重旗标锚点");
-}
-
-// ===========================================================================
 // P2（核实为安全）：渲染层心跳监测——宽限 deadline 被跳变截断是良性
 // （src/app/src/lib.rs:905-956）
 // ===========================================================================
@@ -450,8 +394,8 @@ fn heartbeat_grace_cut_short_by_sleep_is_benign() {
 }
 
 // ===========================================================================
-// 登记表锚点：JS 侧（bridge-shim 心跳/轮询 = setInterval 中断时钟；
-// file-drop 1.5s Date.now 去重窗）——供报告交叉引用的固化锚点。
+// 登记表锚点：JS 侧（bridge-shim 心跳/轮询 = setInterval 中断时钟）
+// ——供报告交叉引用的固化锚点。
 // ===========================================================================
 
 #[test]
@@ -463,8 +407,6 @@ fn js_side_timer_anchors() {
     assert!(shim.contains("setInterval(heartbeat, 5000);"));
     assert!(shim.contains("renderer_heartbeat', { hidden"));
     assert!(!shim.contains("Date.now"), "垫片不得使用 Date.now（避免与 setInterval 时基错配）");
-    let file_drop = norm(include_str!("../../../../../dsh-desktop/assets/plugins/dsh-file-drop/lib/client.js"));
-    // 1.5s 去重窗（Date.now 墙钟）：睡眠使其过期——最坏形态是同一次物理拖放
-    // 的双通道报告在唤醒后各处理一次（重复附件），无杀进程/风暴级影响。
-    assert!(file_drop.contains("core.dedupeEntries(entries, dropSeen, Date.now(), 1500);"));
+    // dsh-file-drop 的 1.5s Date.now 去重窗锚点已随插件退役（2026-10）一并下线：
+    // 壳侧 drag_drop 事件面与垫片转发都已移除，无消费方时钟可审。
 }

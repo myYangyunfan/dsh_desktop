@@ -1,7 +1,7 @@
 'use strict';
 
 // ===========================================================================
-// issue #168（1/3）：balance.js isPeakHour 周末规则 + 峰谷计价档位契约。
+// issue #168（1/3）：balance-core.js isPeakHour 周末规则 + 峰谷计价档位契约。
 //
 // 官方 2026-08-23 00:00（北京时间）起周六/周日全天按空闲价计；该规则此前缺失，
 // 导致周末高峰时段被按全价展示与计价。本文件守住三件事：
@@ -9,6 +9,11 @@
 //   2. 与 assets/plugins/dsh-offpeak（issue #158 产物）的口径交叉一致：
 //      生效日历日 + 高峰窗口边界 + 逐时刻对拍（两边实现独立，漂移即失败）；
 //   3. issue #168 新增的 pricingTier()/periodTables()/pricingSince() 契约。
+//
+// 被测对象是插件宿主半边 assets/plugins/dsh-balance/lib/balance-core.js：
+// Electron 余额遗留线（dsh-desktop/balance.js）已整体拆除，价目/档位只剩这一份真源，
+// 原先为「双拷贝不漂移」而设的第 4 节随遗留文件一起下线，现役定价口径改由 1–3 节
+// 直接求值覆盖（插件自带 test/ 不在 npm test 的 glob 内，这层在册覆盖不能缺）。
 //
 // 全部时刻用 UTC ISO 串或 Date.UTC 显式表达，不跟机器本地时区（CI 时区无关）。
 // ===========================================================================
@@ -18,11 +23,12 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const balance = require('../../balance');
+// Node ≥22.12 支持 require(esm)，balance-core.js 无顶层 await。
+const balance = require('../../assets/plugins/dsh-balance/lib/balance-core.js');
 
 const BEIJING_OFFSET_MS = 8 * 3600 * 1000;
 
-/** 北京时间日历字段 → UTC 时刻（与 balance.js 同一固定 +8 偏移）。 */
+/** 北京时间日历字段 → UTC 时刻（与 balance-core.js 同一固定 +8 偏移）。 */
 function bj(year, month, day, hour = 0, minute = 0) {
   return new Date(Date.UTC(year, month - 1, day, hour, minute) - BEIJING_OFFSET_MS);
 }
@@ -123,7 +129,7 @@ test('#168 交叉一致：生效门槛与 dsh-offpeak 常量指同一北京日�
   assert.equal(
     beijingDateStr(new Date(balance.WEEKEND_OFFPEAK_SINCE_UTC)),
     offpeakDay,
-    `balance.js 门槛平移 +8 后的北京日历日必须等于 dsh-offpeak 的 ${offpeakDay}`,
+    `balance-core.js 门槛平移 +8 后的北京日历日必须等于 dsh-offpeak 的 ${offpeakDay}`,
   );
   // offpeak 侧的周末判定语句仍在（被删除即为口径单方面漂移）
   assert.match(offpeakSrc, /weekday === 6 \|\| weekday === 7/, 'dsh-offpeak 周末判定锚点');
@@ -243,3 +249,4 @@ test('#168 effectivePrice 与周末规则联动：周日高峰窗口取半价', 
   assert.deepEqual(balance.effectivePrice('deepseek-v4-flash', SAT_BEFORE_GATE), { cacheMiss: 3, cacheHit: 0.1, output: 9 });
   assert.deepEqual(balance.effectivePrice('deepseek-v4-flash', MON_AFTER_GATE), { cacheMiss: 3, cacheHit: 0.1, output: 9 });
 });
+

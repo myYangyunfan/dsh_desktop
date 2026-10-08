@@ -36,12 +36,6 @@ pub struct AppState {
 }
 
 pub mod commands {
-    pub mod balance {
-        pub fn trigger_fetch(_app: &tauri::AppHandle) {}
-        pub fn trigger_fetch_throttled(app: &tauri::AppHandle) {
-            trigger_fetch(app);
-        }
-    }
     pub trait NoWindow {
         fn creation_flags_no_window(&mut self) -> &mut Self;
     }

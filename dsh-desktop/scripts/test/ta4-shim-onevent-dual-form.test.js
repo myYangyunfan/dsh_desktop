@@ -7,6 +7,10 @@
 // notification-jump / balance-changed / pet-state / 更新进度 / 拖放转发的
 // 字段全部取成 undefined（事件链静默失效）。修复统一解包 ev.payload，
 // 并保留「无 payload 形态回退 envelope 自身」的双形态防御。
+//（上面这份是**当时**的事件面名单：pet-state 与拖放转发两条已于 2026-10 随
+// harness-pet / dsh-file-drop 退役下线，balance-changed 同日随 Electron 余额
+// 遗留线整体退役（contracts/ipc-commands.md §2.4），现存事件面见
+// ta13-soak-bridge-shim。本测试只验 onEvent 的信封解包形态，事件名取现存面。）
 //
 // pages/shim 层已有形态测（信封字段存在性）；本文件补**行为级**：
 // 从 dist/bridge-shim.js 提取真实 onEvent 函数源，在 vm 里以桩 INVOKE/
@@ -54,10 +58,10 @@ function makeOnEvent() {
 test('onEvent 双形态：信封 {event,payload} 与裸 payload 都解出 payload', () => {
   const shim = makeOnEvent();
   const got = [];
-  const handler = shim.handlerFor('balance-changed', [(p) => got.push(p)], (p) => p);
+  const handler = shim.handlerFor('window-maximized', [(p) => got.push(p)], (p) => p);
 
   // 形态一（tauri 2.11.5 实际形态）：信封包裹。
-  handler({ event: 'balance-changed', payload: { ok: true, at: 42 } });
+  handler({ event: 'window-maximized', payload: { ok: true, at: 42 } });
   assert.deepEqual(got[0], { ok: true, at: 42 }, '信封形态必须取 ev.payload（修复主行为）');
 
   // 形态二（防御未来双形态）：裸 payload 直达。

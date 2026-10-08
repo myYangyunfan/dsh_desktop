@@ -28,12 +28,7 @@ mod session_notify_live;
 // ---------------------------------------------------------------------------
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
-
-/// C2 触发计数（真实实现里是 balance::trigger_fetch；这里只计数以便断言
-/// 调用序——本文件不跑 AppHandle 路径，静态保持 0 仅作占位）。
-pub static C2_CALLS: AtomicUsize = AtomicUsize::new(0);
 
 pub struct SupervisorShim {
     pub node_exe: PathBuf,
@@ -48,23 +43,6 @@ pub struct AppState {
 }
 
 pub mod commands {
-    use super::*;
-
-    pub mod balance {
-        use super::*;
-
-        /// C2 挂点垫片：真实实现 spawn 后台线程取数；此处只计数。
-        pub fn trigger_fetch(_app: &tauri::AppHandle) {
-            C2_CALLS.fetch_add(1, Ordering::Relaxed);
-        }
-
-        /// N2 P1-C 修复后 turn-end 走的非强制路径（真实实现 30s 节流后转
-        /// trigger_fetch；垫片同样计数，保持「C2 先于一切门」断言语义）。
-        pub fn trigger_fetch_throttled(app: &tauri::AppHandle) {
-            trigger_fetch(app);
-        }
-    }
-
     /// creation_flags_no_window 垫片（真实实现在 commands/common.rs）。
     pub trait NoWindow {
         fn creation_flags_no_window(&mut self) -> &mut Self;
@@ -318,20 +296,25 @@ fn lib_wiring_anchors() {
     assert!(exit_seg.contains("session_notify::shutdown_watcher();"), "Exit 收割");
 }
 
-/// C2 先序：trigger_fetch 必须先于 quitting/门/限流（Electron main.js:2642）。
+/// 余额触发退役反证（C2 挂点）：handle_turn_end 不得再调 balance 链
+/// （contracts/ipc-commands.md §2.4——Electron 余额遗留线整体拆除）；
+/// quitting 判定回到函数首行。
 #[test]
-fn c2_hook_ordering_anchor() {
+fn c2_balance_hook_retired_anchor() {
     let src = read_norm("src/session_notify.rs");
     let seg = src
         .split("fn handle_turn_end")
         .nth(1)
         .and_then(|s| s.split("fn notify_gates").next())
         .expect("handle_turn_end 函数体");
-    let hook = seg.find("balance::trigger_fetch").expect("C2 挂点");
-    for gate in ["QUITTING.load", "should_notify(", ".decide("] {
-        let pos = seg.find(gate).unwrap_or(usize::MAX);
-        assert!(hook < pos, "trigger_fetch 必须先于 {gate}");
-    }
+    assert!(
+        !seg.contains("trigger_fetch") && !seg.contains("balance::"),
+        "C2 余额触发已退役，不得复活: {seg}"
+    );
+    assert!(
+        seg.contains("QUITTING.load"),
+        "quitting 判定必须仍在 handle_turn_end 内"
+    );
 }
 
 /// 聚焦门组合：visible && focused，窗口缺失/查询失败按未聚焦（→通知）。

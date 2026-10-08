@@ -1,5 +1,4 @@
-//! TA1 并发测试：logging `append_capped` 双线程并发写 + 余额链
-//! `fetch_and_push` in-flight 去重形态验证。
+//! TA1 并发测试：logging `append_capped` 双线程并发写 + 超限轮转。
 //!
 //! append_capped 访问需私有 mod logging——经 lib.rs cfg(test)] 门以单元测试
 //! 形态接入（集成 tests/ 不可达）。
@@ -105,30 +104,4 @@ fn ta1_append_capped_rotation_moves_to_old() {
     let _ = std::fs::remove_file(&old_path);
     let _ = std::fs::remove_file(&path);
     let _ = std::fs::remove_file(path.with_extension("old"));
-}
-
-/// 余额链 in-flight 语义：fetch_and_push 需 AppHandle（tobo 注入不可行），
-/// 按任务口径用「形态验证」——源锚点断言（与 balance.rs 既有 shape 测试同法）：
-/// 1) 入口 swap 抢占旗标，抢占失败立即 return（并发仅一次执行）；
-/// 2) 出口必释放旗标（不因 fetch 失败漏放导致永久饿死）。
-#[test]
-fn ta1_fetch_and_push_inflight_shape() {
-    let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/commands/balance.rs"))
-        .expect("读 balance.rs");
-    let seg = src
-        .split("fn fetch_and_push")
-        .nth(1)
-        .and_then(|s| s.split("pub fn trigger_fetch").next())
-        .expect("fetch_and_push 函数体段");
-    assert!(
-        seg.contains("fetching.swap(true") && seg.contains("return false;"),
-        "入口必须有 swap 抢占 + 抢占失败立即返回（in-flight 去重）"
-    );
-    assert!(
-        seg.contains("fetching.store(false"),
-        "出口必须释放 in-flight 旗标（失败路径不饿死后续刷新）"
-    );
-    // 旗标释放恰一次（swap 占用 + store 释放成对）。
-    let stores = seg.matches("fetching.store(false").count();
-    assert_eq!(stores, 1, "释放点唯一（无双重释放/无遗漏分支）");
 }
