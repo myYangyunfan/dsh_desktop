@@ -13,8 +13,8 @@ Node 逻辑仍是活代码（Tauri sidecar 直接复用，零重写）。主平�
 | 目录 | 说明 |
 | --- | --- |
 | `dsh-tauri/` | 桌面壳主线：`contracts/`（五契约）、`src-tauri/`（Rust 工作区）、`sidecar/`（Node 薄封装）、`ui/`、`scripts/`（stage-payload / smoke-installed） |
-| `dsh-desktop/` | 内核侧 Node 逻辑：构建期补丁、自愈、插件同步、余额链、`assets/plugins/`、`assets/agent-presets/`、`vendor/dsh-kernel/`（pin 的离线内核 tgz，**必须入库**） |
-| `dsh-desktop/scripts/test/` | 全部 Node 测试（186 个 `*.test.js/.mjs`，另有 `fixtures/`、`ta16-snapshots/`、mock server），单测唯一去处 |
+| `dsh-desktop/` | 内核侧 Node 逻辑：构建期补丁、自愈、插件同步、余额链、`assets/plugins/`（仓库源，不进安装包；内置伴随插件在册 **28** 个，v1.0.0 由 39 精简、2026-10-07 移除 11 个；随包 agent 预设子系统已整体拆除）、`vendor/dsh-kernel/`（pin 的离线内核 tgz，**必须入库**） |
+| `dsh-desktop/scripts/test/` | 全部 Node 测试（185 个 `*.test.js/.mjs`，另有 `fixtures/`、`ta16-snapshots/`、mock server），单测唯一去处 |
 | `.github/workflows/` | `ci.yml`（PR 门禁）、`tauri-release.yml`（tag 发版，唯一发布入口）、`release.yml`（退役 Electron 线，全部 `if: false`） |
 
 ## 常用命令
@@ -56,7 +56,11 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   `lib.rs` 的契约审计测试要求「注册命令 ⊆ 契约表」，**加桥命令不改契约 = 测试红**。
   五步流程见 `development.md` §4；加伴随插件见 §5（登记进
   `scripts/lib/companion-plugins.js` 的 `COMPANION_PLUGINS`，id 必须与插件 `cordis.patch.yml`
-  的 loader id 一致）。
+  的 loader id 一致）；**移除**插件是同一条清单的反向操作：摘 `COMPANION_PLUGINS` + 进
+  `RETIRED_COMPANIONS`/`RETIRED_COMPANION_DIRS` 撤回账 + 删 `assets/plugins/<dir>` 源，
+  并同步**四处**逐名 1:1：`THIRD_PARTY_NOTICES.md` §4.1、`dsh-desktop/docs/builtin-plugins-inventory.md` §一、
+  `README.md` 与 `README.en.md` 的插件表。四处由 `unit-hub-registry` 的同一条 `ledgerDiff` 对
+  `package.json` 咬名称 / 版本 / 许可，README 两张表另咬行序对 `COMPANION_PLUGINS`、中英两份互对。
 - **补丁系统**：`dsh-desktop/scripts/lib/patch-registry.js` 是 PatchSpec 唯一清单，
   patch-runner 与健康预检共用同一数据源。它有计数哨兵测试
   （`ta6-registry-invariants`、`unit-patch-registry`）——增删补丁要同步更新哨兵，
@@ -101,21 +105,30 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
 - **稳定性三原则（评审默认立场）**：① 客户端必须能打开，装配失败终态恢复页而非退出；
   ② 兼容性不报错，意外以日志收场（`panics.log`）不以崩溃收场；③ 用户数据不动。
 - `unit-updater` 的两个 fallback 用例在依赖装好时显示 `skip`，属**预期**而非失败。
-- 文档里的测试基线数字常滞后（如 `development.md` 写 177 Rust 例 / 71 文件 Node，
-  实际 `scripts/test/` 已有 186 个测试文件）。**以实测输出为准**。
+- 文档里的测试基线数字常滞后。**现值（2026-10-08 二次实测）**：`scripts/test/` 185 个测试文件，
+  `npm test` = 1982 例 / 1975 pass / 0 fail / 7 skipped；skip 逐条都是环境缺料而非缺陷
+  （pristine 夹具缺 `@openai/codex` / `@earendil-works/pi-ai`、openclaw 双轨的兄弟目录
+  `../openclaw-dsh-bridge/` 不在盘、真实网络、`.tmp-kernel` 构建产物不可用），**条数随本机材料与缓存浮动**
+  （同一天早些时候记的是 1981/1973/8）——一律以现跑输出为准，**pass 与 fail 才是判据**。
+  Rust 侧按 `cargo test --workspace` 现跑现看。
+  `dsh-tauri/docs/development.md` 那组「177 Rust 例 / 71 文件 Node」是旧账——**一律以实测输出为准**。
 - 部分文件含 GBK 遗留注释（如 `dsh-tauri/src-tauri/Cargo.toml`），按 UTF-8 读会显示乱码；
   编辑这类文件时保持原编码，不要顺手「修正」成全角乱码以外的内容。
 - 调试开关（随产物保留）：`DSH_TAURI_DIAG=1` 页面探针、`DSH_TAURI_DEVTOOLS=1`、
   `DSH_TAURI_REPO_ROOT=<dir>` 显式内核目录、`DSH_HOME` / `DSH_TAURI_USERDATA` 数据目录重定向。
-- **`assets/plugins/dsh-better-sidebar` 的 `src/` 与 `lib/` 已经同源，重建是正常路径**：
-  该插件是 vendored 上游包，历史上曾经「`lib/` 领先 `src/`」——`lib/client-editor.js` 里的
-  「按变更查看 diff」（`splitLines` / `diffRows` / `diffStats` / `formatHistTime` /
-  `DiffTurnsPanel`）是直接手改进产物的，`src/` 没有；`src/client/sidebar.module.css` 另有一段
-  vendored 同步截断留下的孤立 `}`。**两处都已在 2026-09 补齐/删除**（补齐见 `src/client/diff-turns.ts`
-  + `DiffTurnsPanel.tsx`，删除见该 CSS 里的注释）。现在改行为的姿势是：改 `src/` → 在该目录跑
-  它的打包器（tsdown / bundle）→ 用「产物函数集合对等」+ `unit-better-sidebar-*` 测试核对。
-  两个频道产物由同一份 `src/client/index.tsx` 编两遍（`lib/client.js` 官方频道 / `lib/client-registry.js`
-  插件注册表频道），所以只改 src 就够，**不要只手改其中一个产物**。
+- **`assets/plugins/dsh-better-sidebar` 是重建出来的 vendored 上游包，改行为只改 `src/`**：
+  v1.0.0 起它是上游 0.24.1 整包（`docs/builtin-plugins-inventory.md` §5.2 #3），本机的构建链已实测跑通
+  （仓库外临时目录 `npm ci --legacy-peer-deps` + `tsc -p tsconfig.build.json` + `tsdown`），
+  所以改姿势是：改 `src/` → 跑它的 tsdown → 用 `unit-better-sidebar-*` 测试核对产物。
+  产物面是 **7 个文件、两类**：`lib/index.js` + `lib/invariant.js` 是 Node 半边；
+  `lib/client.js`（官方频道，注册 id = 包名）与 `lib/client-registry.js`（插件注册表频道，
+  注册 id = `dsh-external/dsh-better-sidebar`）由**同一份 `src/client/index.tsx` 编两遍**，只差注册 id
+  与文件名，不会漂移；`lib/client-{editor,locale,mermaid}.js` 是 lazy chunk
+  （`src/client/chunks/<name>.tsx`，两频道共用，走插件自己的 `/sidebar/bundle` 路由而非模块加载器）。
+  **不要只手改产物中的一处**——`tsconfig.build.json` 是 `emitDeclarationOnly`，不再有逐文件 `lib/*.js` 镜像。
+  历史上「`lib/` 领先 `src/`」的那批手改进产物（`splitLines`/`diffRows`/`DiffTurnsPanel` 一套）已随换代消失——
+  上游 0.24.1 自带 `src/client/DiffTab.tsx` 与 `src/client/diff/`，我们那份不再回吸，旧表述作废；
+  src↔产物同源由 `unit-better-sidebar-diff-surface` 按 `//#region <源路径>` 标记咬住。
 - **插件的运行时落点是 repo 的 `assets/plugins/`，不是 profile**：启动期的伴随插件同步会把
   payload 里的插件目录镜像进 `<DSH_HOME>/profiles/<name>/node_modules/`，所以手工往 profile
   里塞文件会在下次启动被覆盖——要改就改 `assets/plugins/`（开发机是仓库目录，安装机是
@@ -124,6 +137,14 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   `sidebarRightTabs.register` + `sidebar.right.pane.tab` 是公开两段式标签 API（内核自己的
   文件/文档预览/终端也用它）。本仓库的 better-sidebar 已经用它把工作台接成右栏里的一个标签，
   设计与踩坑见 `dsh-desktop/docs/better-sidebar-kernel-integration.md`。
+- **插件自带测试的夹具必须按宿主「真形状」造，否则用例在为已下线的契约作证**：2026-10-08 实测案例是
+  `assets/plugins/dsh-synapse` 的 `test/replay-watermark.test.js` 用 `makeSession()` 造 `{ id, header, events }`，
+  而 pin 的 rc.2 上 `Session.prototype` 已经没有 `events`（只有 `snapshotEvents`/`ownEvents`）——10 个测试文件
+  全绿的同时，`index.js` 的回填路径静默产出 0 条消息。这类「宿主运行时对象属性下线」**不在任何一条静态扫里**
+  （`kernel-pin.services.removed` 那 12 条全是服务 id，模块表判据只看具名导入），也不看版本号和 peer 区间。
+  排查姿势：反射 `Object.getOwnPropertyNames(KernelClass.prototype)` 对一遍插件读过的字段，再用两种形状
+  （旧夹具形 / 宿主真形）各跑一次被怀疑的入口；复算命令与完整证据链见
+  `dsh-desktop/docs/builtin-plugins-inventory.md` §5.5。
 
 ## 动敏感区域前先读
 

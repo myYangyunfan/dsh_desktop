@@ -4,6 +4,20 @@
 实现位于 `scripts/plugin-core/`，组装根为 `createPluginCenter`（`scripts/plugin-core/index.js`），
 `main.js` 只做接线，不再持有任何插件管理业务逻辑。
 
+> [!NOTE]
+> **适用范围（v1.0.0，2026-10-07）**：本文描述的**契约仍然生效**——`cordis.patch.yml` 的唯一写入口
+> （`patch-surgery`）、启停 / 卸载 / 恢复生命周期（`lifecycle`）、卸载与隔离决策的持久化点
+> （`PluginStateStore`，落 `<DSH_HOME>/desktop-plugin-state.json`）、能力鉴权与自动隔离四级防线，
+> 服务的仍是随包的 28 个内置配套插件与用户自行安装的第三方插件。
+> **已退役、本文不再描述其安装面的部分**：可视化插件市场 `dsh-community-market` 与其桌面服务桥
+> `dsh-market-desktop-bridge`、插件中枢 `dsh-hub`（仅用于挂载市场与 `graph-memory`）——三者连同
+> `graph-memory` / `harness-pet` / `dsh-cardian` 等于 2026-10-07 按用户点名移除（内置插件 39 → 28）。
+> 因此：§4.4 的更新链失去了内置市场 / 插件中枢这两个页面内调用方（壳层插件管理页的
+> `dsh:plugin-update` 通道仍是其使用面）；`sync-companion-plugins.js` / `companion-profile.js` 里
+> 针对 harness-pet / cardian / graph-memory 的「随包默认禁用」块随之失去对象。
+> 第三方安装本身仍是**用户主动行为**（`dsh plugin --profile web add …`），§7 的能力策略与 §8 的
+> 不变量对这类安装继续适用——这也是本套机制在退役后仍要保留的原因。
+
 ## 1. 目标与原则
 
 1. **单一门面**：main.js / CLI 只通过 `createPluginCenter`（及其共享 lib）与插件层交互。

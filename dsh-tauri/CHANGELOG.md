@@ -1,5 +1,134 @@
 # Changelog — DSH Desktop（Tauri 版，主线架构 v0.5.0 起）
 
+# DSH Desktop v1.0.0 — 纯净线（开发中，未发布）
+
+## 🔌 重点：在册 28 条内置插件逐条对 rc.2 宿主的更新判定与兼容修复（壳侧零改动）
+
+> 全部改动在 Node 侧与插件产物（peer 区间、better-sidebar 整包换代到 0.24.1、更新通道机器化 +
+> 三把收口锁、`.gitignore` 的 dist 入口例外），完整台账见
+> [`dsh-desktop/CHANGELOG.md`](../dsh-desktop/CHANGELOG.md) 的 `[Unreleased]` 同名条目与
+> [`dsh-desktop/docs/builtin-plugins-inventory.md`](../dsh-desktop/docs/builtin-plugins-inventory.md) §四 §五。
+> **（注记：本节立项时写的「better-sidebar 图标跨代回落」已整条作废——上游 0.24.1 换用自己的
+> `src/client/icons.tsx` + react-icons，`primitives-icons.ts` 垫片与 112 处 `?? Icon*Regular`
+> 回落都不存在了；壳侧同样零改动这条结论不变。**）
+
+- **壳侧为什么可以不动**：这轮修的是「插件挂不上宿主 / 挂了静默失效」两类，走的是
+  `peerDependencies` 区间与产物内的命名空间取用，都在 sidecar 驱动的 `dsh-desktop/scripts/`
+  与 `assets/plugins/` 里发生；五契约、`generate_handler!`、`CHANNELS`、补丁注册表计数、
+  NSIS 钩子一律未触（桥命令未增删 → `lib.rs` 契约审计测试无随迁需求）。
+- **交付面口径复核**：`stage-payload.sh` 与 `tauri-release.yml` 仍整目录剔除 `assets/plugins`
+  （v1.0.0 纯净线：插件留在仓库，不进安装包），所以本轮插件产物改动**不改变** payload 形状，
+  `ta12-stage-payload-sentinel` 无需随迁。
+- **更新判定现在是机器判据而不是抄录**：新增纯函数面 `dsh-desktop/scripts/lib/plugin-channels.js`
+  （版本分桶 + `identityVerdict` 四值 + `actionable` 双条件）与复算器
+  `dsh-desktop/scripts/compat/scan-plugin-channels.mjs`（d-pack 走本机克隆的 git 树，离线可重放；
+  npm 走 `/latest` 判身份）。2026-10-08 重算：d-pack 侧等版 20 / 我们更高 5 / 他们更高 1 / 无此件 2，
+  npm 侧命中 9（`same 4 / foreign 1 / unverifiable 2 / unknown 2`），**两条通道唯一的机器候选是
+  `synapse`**（按裁定只出差量报告，报告在台账 §5.5：它把立项写的「分叉件不可直更」更正成两个相反事实——
+  d-pack 0.3.1 就是本机 0.3.0 的换皮，npm/upstream 0.4.2 才是另一条功能线；顺手抓到本机 0.3.0 在 rc.2 上
+  读已下线的 `session.events` 致回填静默归零，属壳侧零改动、本轮不动产物）。三把收口锁进 `dsh-desktop/scripts/test/`：
+  `unit-plugin-channels`（11 例）、`unit-hub-registry` 的 §5.2 判定表逐行重放（结构四列 + 七个兼容实测数）、
+  以及 loader id ↔ 插件 `cordis.patch.yml` insert 命中审计（27/28，例外走显式点名名单）。
+  better-sidebar 换代随迁的两把锚点锁 `unit-plugin-kernel-anchor`（8 例）与 `unit-plugin-tab-host`（5 例）
+  现在锁的是 **0.24.1 的 tag 形态**，与 `unit-better-sidebar-diff-surface`（21 例）合计 34 例。
+- **两条待入库的入口产物（下次提交的硬缺口，不是可忽略差量）**：
+  `dsh-prompt-optimizer/dist/client.js`（本轮补了 `!assets/plugins/dsh-prompt-optimizer/dist{,/**}`
+  例外，现在 `git status` 可见）与 `dsh-reasoning-effort/lib/client/`（0.8.1 把 `./client` 换成
+  目录形入口，同批还有旧 `lib/client.js` 的删除）。二者只影响「全新 clone 后同步链能否装出可用
+  插件」，与安装器无关。
+- **本轮未跑的壳侧门禁（如实记录）**：`cargo test --workspace` 与 `sidecar/cli.test.js` ——
+  无 Rust/sidecar 改动，且本机 gnu 工具链与仓库外 target 的组合上一批已实测过；
+  `stage-payload` / `build` / `smoke-installed` 按「先只改文件，不重建」裁定整批未跑。
+
+## 🗑️ 重点：Electron 余额遗留线整体拆除（轮询环 + sidecar 子命令 + 桥命令 + 垫片转发）
+
+> 配套 Node 侧（`dsh-desktop/balance.js` / `balance-scheduler.js` 删除、存量测试改指
+> 插件 ESM 产物、反向守卫 `unit-balance-legacy-retire` 与人为复活反证）见
+> [`dsh-desktop/CHANGELOG.md`](../dsh-desktop/CHANGELOG.md) 的 `[Unreleased]` 同名条目。
+
+- **契约先行（先改契约再改码，审计测试咬合）**：`contracts/bridge-api.md` §2 方法总表
+  47 → 46 项（`refreshBalance` 原编号 3 断号不复用，§2 头部断号说明同步补一行）、
+  §3 事件面去掉 `balance-changed`；`contracts/ipc-commands.md` §1 命名规则行改指现役
+  两条事件面（`notification-jump` / `window-maximized`）、§2 通道表 39 → 38 条、
+  §2.4 新增裁撤台账行（通道号 3173 与命令名不复用，并明确 `menu_action` 的
+  `toggle-balance` / 设置项 `showBalanceDock` 不在裁撤范围）；`contracts/data-flow.md`
+  §4 数据流图的事件行去掉余额推送；`contracts/plugin-contract.md` 的 window
+  CustomEvent 说明改为「本壳已无派发方」。五份契约里的余额令牌此后**只能出现在
+  裁撤说明段**，这条由 Node 侧守卫机器核。
+- **壳侧实现删除**：`src/app/src/commands/balance.rs` 整模块（`start_balance_loop` /
+  `BalanceState` / `balance_refresh` / `trigger_fetch*`，含 7 例单测）、`commands/mod.rs`
+  的声明与重导出、`lib.rs` 的 AppState 余额字段 + KernelReady 后起轮询环 +
+  `generate_handler!` 条目（40 → 39）、`menu.rs` toggle 分支的 `balance::trigger_fetch`、
+  `session_notify.rs` 的 turn-end C2 挂点、`src/app/permissions/bridge.toml` 的
+  `balance_refresh` 授权行。
+- **桥与垫片**：`crates/bridge/src/commands.rs` 的 `CHANNELS` 39 → 38（invoke 35 → 34、
+  send 4 不变，计数哨兵 `channel_count_matches_contract` 同步下调）；
+  `crates/bridge/dist/bridge-shim.js`（dist 即源，`include_str!` 进二进制）删
+  `refreshBalance()` 面与 `balance-changed` → `dsh-balance-changed` 转发；
+  `shim.rs` 的 `REQUIRED_SURFACES` 47 → 46，并把「垫片源不得含 `balance-changed` /
+  `refreshBalance` 字面量」写成反向 marker 断言——已退役的面被重新注入即判红。
+- **sidecar**：`sidecar/cli.js` 的 `case 'balance-fetch'` 删除；`cli.test.js` 原
+  「单轮取数 stdout 末行 JSON」用例换成反证用例「`balance-fetch` 已退役：未知子命令
+  exit 2」——若有人重新登记该子命令，用例会从 exit 2 变 exit 0 而判红。
+- **Rust 测试随迁（−24 例，逐项对账，不是「删测试就绿」）**：
+  `commands/balance.rs` 的 7 例随模块删除；`src/app/tests/ta15-balance-four-way-race.rs`
+  （6 例）整体删除——四路竞态的现役等价覆盖在插件侧 `assets/plugins/dsh-balance/test/`
+  与 Node 的 `unit-balance-scheduler*`；`ta4_balance_throttle_ttl_suppressible.rs`
+  `git mv` 为 `ta4_ttl_sweep_suppressible.rs`（删 2 例余额节流形态锁，保留
+  `ttl_sweep_strict_boundary_shape` 与 `suppressible_joint_predicate_shape` 两件套，
+  全仓无文件名引用故重命名安全）；`ta10_time_window_matrix.rs` 删 `pub mod balance`
+  替身与 `BALANCE_SRC` 源码锚点（banner 顺次重编）；`ta3-notify-pipeline.rs` 的
+  「C2 挂点在位」正判据改反向断言（不得复活 `trigger_fetch` / `balance::`，
+  `handle_turn_end` 序以 quitting 为首道）；其余 4 例（`time_logic_audit` 的余额窗口
+  审计）已在上一批随形态退役移出，本轮不再重复计。
+- **验证**：`cargo test --workspace --target x86_64-pc-windows-gnu --no-fail-fast`
+  （gnu 链，本机无 MSVC；`CARGO_TARGET_DIR=C:\dsh-tauri-build`，TEMP 指仓库内
+  `.tmp-rust-tmp`）→ 36 个测试二进制 / **689 passed / 0 failed / 4 ignored**，
+  `CARGO_EXIT=0`；上一批基线 37/713 的差额 −24 逐项对账见上条，树内 `#[test]` 计数与
+  689 一致（排除「没跑起来的绿」）。`node --test sidecar/cli.test.js` **21/21**、
+  其余 sidecar 六文件 **69/69**（跑法同上一批：`vendor/node` 临时 junction 到仓库外副本，
+  跑完还原）。
+
+## 🗑️ 重点：伴随插件批量退役的壳侧收口（专属命令与契约面同步裁撤）
+
+> 配套 Node 侧（清单 39 → 28、回收机器、补丁面收窄）见
+> [`dsh-desktop/CHANGELOG.md`](../dsh-desktop/CHANGELOG.md) 的 `[Unreleased]` 同名条目。
+
+- **拆 6 条桥命令**：宠物窗四通道 `pet_window` / `pet_close` / `pet_move_to` /
+  `pet_set_auto_open`（harness-pet）、`image_paste_save`（dsh-image-paste）、
+  `file_revert`（dsh-client-file-changes）。四处同步：`lib.rs` 的
+  `generate_handler!`（实测 46 → 40）、`crates/bridge/src/commands.rs` 的 `CHANNELS`
+  （45 → 39）、`src/app/permissions/bridge.toml` 放行清单、`capabilities/default.json`。
+- **拆专属实现**：`windows.rs` 的宠物窗分支（`build_pet_window` / `open_pet_window` /
+  `PET_MODE_SCRIPT` / `PET_WATCHDOG_SCRIPT` 与最小化自动弹窗）、`commands/file.rs` 的
+  粘贴图落盘与变更回滚、`lib.rs` 末段的拖放预处理实现（`DropPrecheck` /
+  `precheck_drop_paths` / `drop_ext` / `drop_kind` / `route_drag_drop`——唯一消费方是
+  已退役的 dsh-file-drop，原生 `DragDropEvent` 自此无接收方），及测试件
+  `src/app/tests/file_drop.rs`。`drag_drop_enabled` 仍保持 tauri-utils 默认，注释就地说明。
+- **`E_IMAGE_PASTE` 常量移除**：按 `contracts/error-codes.md` §6.1「只追加不复用」，
+  码值在契约里保留占位、无生产方。
+- **契约随迁（先改契约再改码，审计测试咬合）**：`bridge-api.md` §2 方法总表
+  55 → 47 项（编号留断号，含 `pet-state` 与拖放转发两条事件面）；`ipc-commands.md`
+  §2 通道表 45 → 39 条（溯源面仍是 main.js 提取的 43，注明 2026-10 批量裁撤移出 6 条）。
+  `shim.rs` 的 `REQUIRED_SURFACES` 47 与 §2 逐一对齐，计数哨兵
+  `assert_eq!(REQUIRED_SURFACES.len(), 47)` / `channel_count_matches_contract`（35 invoke
+  + 4 send）同步下调——四数一致由 `contract_audit` 机器核，不是口头承诺。
+- **垫片与防复活锚点**：`crates/bridge/dist/bridge-shim.js`（dist 即源，`include_str!`
+  进二进制）两处 `window.__DSH_PET__` 分支删除（主窗判定 `:417`、拖放提示层 `:868`），
+  只留 `__DSH_FLOAT__` 判据；`shim.rs` 的窗体作用域 marker 表去掉 `__DSH_PET__`，
+  同时把它连同 `drop_hint` / `DROP_HINT_ID` 一起进 `retired_plugin_surfaces_absent`
+  锚点表（现 13 项）——已退役的面若被重新注入，测试直接红。
+- **Node 侧测试随迁**：`ta15-shim-mainwindow-interleave` 真值表去宠物窗态并补降级契约
+  （只带 `__DSH_PET__` 的 main 窗按主窗处理）；`ta5-dom-behavior` 的浮窗拒收用例改为
+  「撤销旗标即放行」（证明身份无锁存）；`ta4-shim-onevent-dual-form` 头注记录
+  `pet-state` / 拖放转发两条事件下线，现存 5 类事件面由 `ta13-soak-bridge-shim` 守；
+  `rv9-hotpath-smoke` 的拖放用例正判据改为「无复活面」反证。
+- **验证**：`cargo test --workspace --target x86_64-pc-windows-gnu --no-fail-fast`
+  （gnu 链，本机无 MSVC）→ 37 个测试二进制 / **713 passed / 0 failed / 4 ignored**，
+  `CARGO_EXIT=0`；`sidecar/cli.test.js` 以系统 node 副本 **23/23**（本机 `vendor/node/node.exe`
+  在仓库路径内，受机器级写入策略限制无法写 `%TEMP%` 沙箱 → EPERM，与本轮改动无关，
+  已用探针单独取证）。README 的通道数（43 → 39）与两份契约表述对账随迁。
+
 # DSH Desktop v0.6.5 - 2026-09-22
 
 ## 🚀 重点：0.6.5 正式版发布
@@ -525,7 +654,8 @@
 
 router-standard（flash）/ anchored-standard 系（pro）/ v4-flash-godmode-opencode-go
 （OpenCode Go · flash）/ warmupbetter 系（OpenCode Go · pro）。逐上游核对结论与许可
-注记见 [docs/agent-presets.md](../dsh-desktop/docs/agent-presets.md)。
+注记当时记录在 `dsh-desktop/docs/agent-presets.md`（该文档与随包预设子系统已随 v1.0.0
+纯净线一并删除，全文见 git 历史）。
 
 # DSH Desktop v0.5.6 — Tauri 2
 

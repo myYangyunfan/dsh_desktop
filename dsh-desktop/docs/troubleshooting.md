@@ -19,7 +19,7 @@
 | 选择工作区 / 添加文件夹弹「无法打开文件夹 directory picker failed: ... worker exited...」 | `win32 folder dialog worker exited` | koffi 3.1.3/3.1.4 坏二进制 | 锁定 koffi@3.1.5；启动前 FFI 预检，失败自动切浏览器内目录选择器 |
 | 启动弹「dsh web 启动失败（退出码 1）」 | `plugin tree failed to load` / `failed to apply loader entry` | profile patch 层插件不兼容 | 自动禁用问题插件（safe-boot.overlay.yml）并重试，弹窗显示日志 |
 | 启动弹「dsh web 启动失败（退出码 1）」 | `EPERM: operation not permitted, symlink ... profiles\node_modules` | 目录联接创建被拒/半成品缓存 | 自动改名备份 `profiles\node_modules`、重建联接并重试 |
-| 设置页看不到识图/自定义提示词/思考强度/插件市场 | 无明显报错 | apiproxy 白名单未覆盖更新后的 agent overlay | 启动时同时补内置 app、profile fallback、agent overlay 三处副本 |
+| 设置页看不到识图/自定义提示词/思考强度/插件市场 | 无明显报错 | apiproxy 白名单未覆盖更新后的 agent overlay | 启动时同时补内置 app、profile fallback、agent overlay 三处副本（v1.0.0 现状：识图与插件市场已随内置插件退役，白名单补丁仍服务自定义提示词 / 思考强度等在册插件） |
 | 客户端更新点了「立即重启」仍提示有待安装 | `apply-update.log`、`desktop.log` 中 `clientUpdateAttempt` | 更新脚本未完成（安装器被取消/拦截、文件占用） | 识别为「客户端更新未完成」，可重试安装 / 打开日志 / 24h 稍后；安装器失败自动拉起旧版 |
 | 进程无声消失 / 页面无响应 | `run-state.json cleanExit:false`、WER AppHang | 渲染挂起/崩溃 | watchdog + 渲染自恢复 + 崩溃转储（0.3.3 起） |
 
@@ -151,8 +151,10 @@ const SIDEBAR_AUTO_COLLAPSE = 1024;
 ```
 
 视口宽度 **< 1024 CSS px**（注意是 CSS 像素，不是物理像素）时，左侧栏只剩图标：
-新建会话 / 添加工作区 / 搜索会话 / 插件市场 / 知识中心 / 设置 —— 文字标签、工作区分组、
+新建会话 / 添加工作区 / 搜索会话 / 设置 —— 文字标签、工作区分组、
 历史会话列表**全部不渲染**，所以看上去像「UI 挂了」。宽度 ≥ 1024 时恢复成 280px 完整侧栏。
+（2026-10-07 前这一串还包括「插件市场」「知识中心」两个入口，它们由内置的
+`dsh-community-market` / `dsh-cardian` 注册，已随插件退役消失；塌栏机制与阈值不变。）
 
 新装机特别容易撞上：Windows 新机常见 125%/150% 缩放，1920 物理宽在 150% 下只有
 1280 CSS px；窗口没最大化、或屏幕更小（1366×768 的机器在 125% 下仅约 1092 CSS px），

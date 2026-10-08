@@ -31,7 +31,6 @@ Ships the full dsh runtime and official plugins — no Node.js install required,
 ### Experience
 
 - **Frameless glass window** — custom title bar with Win11 rounded corners; closing hides to the system tray
-- **Desktop pet** — a little whale companion that stays on your desktop (toggle in Settings → Plugins)
 - **Side session popup** — spin up an independent session window anytime, without disturbing the main one
 - **Session management** — archive / restore / delete conversations; history never piles up
 - **Balance widget** — real-time "this turn cost · balance" in the conversation stats bar, with OpenCode Go quota support; click to top up
@@ -57,7 +56,7 @@ Ships the full dsh runtime and official plugins — no Node.js install required,
 | Surface | Browser tab | Native window · frameless dark glass |
 | Sessions | Archive only | Archive / restore / delete |
 | Balance | None | Live "this turn cost · balance" + OpenCode Go |
-| Desktop | None | Tray / notifications / pet / side popup |
+| Desktop | None | Tray / notifications / side popup |
 | Updates | Manual | Built-in dual-source client update chain (GitHub/Gitee + sha256 fail-closed) |
 
 ## 🚀 Quick Start
@@ -154,19 +153,54 @@ Controlled by `bundle.targets` in `tauri.conf.json` — add or remove entries to
 
 ## 🧩 Bundled Plugin Ecosystem
 
-Shipped with the installer (full third-party inventory: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)):
+**28 companion plugins are registered in total.** Since v1.0.0 their sources ship with this repository only and are **excluded from the installer** (the delivery gate drops the whole directory — see §4 of [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)). The table below follows the registration order of `scripts/lib/companion-plugins.js`; package names and versions are read from each plugin's `package.json`. The "Source / license" column only reports what each package says about itself — per-plugin upstream reachability and licence text are audited in [the inventory](dsh-desktop/docs/builtin-plugins-inventory.md) §3, and the rc.2 host compatibility verdicts in §5.
 
-| Plugin | Description | Source |
-| --- | --- | --- |
-| `dsh-session-manager` | Session archive / restore / delete management | Built-in |
-| `dsh-better-sidebar` | Sidebar enhancements | [omdsh-dev/DSH-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) |
-| `dsh-super-injector` | Dev injection / hot-reload toolchain | @dsh-external community |
-| `dsh-vision` | OpenAI-compatible vision (OCR / screenshots / charts) | @dsh-external community |
-| `dsh-side-session` | Side session popup, three context levels | [hzhz314159/dsh-side-session](https://github.com/hzhz314159/dsh-side-session) |
-| `billion-context-dsh` | Context compaction enhancements | [Tyan66666/billion-context-dsh](https://github.com/Tyan66666/billion-context-dsh) |
-| `dsh-navbar` | Navbar replacement | [vlln/dsh-navbar](https://github.com/vlln/dsh-navbar) |
-| `dsh-hub` | Plugin hub: update engine / global memory / graph & market mount | [ARFCON/dsh-hub-DSH](https://github.com/ARFCON/dsh-hub-DSH) |
-| `harness-pet` | Desktop pet | [cakeni/harness-pet](https://github.com/cakeni/harness-pet) |
+> [!NOTE]
+> **Trimmed in v1.0.0: bundled plugins went from 39 down to 28** (the 11 were named for removal by a user on 2026-10-07).
+> No longer bundled: the visual plugin marketplace (`dsh-community-market`) and its desktop service bridge
+> (`dsh-market-desktop-bridge`), the plugin hub (`dsh-hub`), knowledge-graph memory (`graph-memory`), the knowledge
+> centre (`dsh-cardian`), the desktop pet (`harness-pet`), built-in image understanding via a VLM restatement
+> (`dsh-vision`), drag-in files (`dsh-file-drop`), paste-image-to-send (`dsh-image-paste`), the in-session terminal
+> tab (`@deepseek-ai/dsh-terminal-tab`) and one-click file-change revert (`@deepseek-ai/dsh-client-file-changes`).
+> The last two overlap the kernel's own official packages of the same/similar name, and their mirrored copies under
+> `profiles/web/node_modules` shadow the official ones — hence the recall.
+> Similar capabilities still ship: phone mirroring = `dsh-pocket`, file-change tracking = `dsh-file-changes`
+> (only its revert half depended on the shell-side `file_revert`, which is also gone).
+
+| Plugin (package) | Version | Description | Source / license |
+| --- | --- | --- | --- |
+| `@deepseek-ai/dsh-balance` | 0.1.2 | Account balance plus per-turn cost estimate, docked to the conversation stats bar | In-house · MIT |
+| `@deepseek-ai/dsh-file-changes` | 0.1.0 | Session file-change projection (collapses tool/result meta.diffs) | In-house · MIT |
+| `dsh-better-sidebar` | 0.24.1 | VSCode-style right pane: five built-in tabs (editor / git / subagent / sidechat / diff) plus a tab-registration service for other plugins | [omdsh-dev/DSH-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) · MIT |
+| `dsh-session-manager` | 0.1.0 | Session-row delete button plus an "Archived conversations" panel in Settings (restore / delete) | In-house · MIT (name collides with a published community package) |
+| `@deepseek-ai/dsh-conversation-tweaks` | 0.1.1 | Collapse long assistant outputs, plus a right-side navigation rail | In-house · MIT |
+| `@deepseek-ai/dsh-quest-ui` | 0.6.1 | One-toggle Quest-mode UI (grouped session rail + card composer + pill metadata bar), off by default | In-house · MIT |
+| `@dsh-external/dsh-super-injector` | 0.3.1 | Inject any local plugin package at runtime without restarting, hot reload, and a plugin-manager UI in Settings | Community (@dsh-external) · BSD-3-Clause (manifest label only, no licence text to cite) |
+| `@deepseek-ai/dsh-prompt-custom` | 0.3.5 | Override or append the official system prompt from the Settings page | In-house · MIT |
+| `@deepseek-ai/dsh-workspace-anchor` | 0.1.0 | Inject a {{cwd}} preference block into the stable system prompt to stop workspace drift | In-house · MIT |
+| `@deepseek-ai/dsh-wsl-settings` | 0.1.0 | A "WSL backend" section in Settings: local/WSL switching, distro and install dir, liveness probe | In-house · MIT |
+| `@dsh-external/dsh-side-session` | 0.3.1 | Floating side session that imports the main conversation context at three selectable depths (120 / 600 / 5000 messages), so follow-ups stay isolated | [hzhz314159/dsh-side-session](https://github.com/hzhz314159/dsh-side-session) · MIT (upstream ships no LICENSE, the MIT label is ours) |
+| `billion-context-dsh` | 0.2.26 | Active Context Pruning: model-driven context management, plus four model tools and the /acp-prune command | [Tyan66666/billion-context-dsh](https://github.com/Tyan66666/billion-context-dsh) · MIT |
+| `dsh-pocket` | 2.10.7 | Control the desktop web session from your phone by scanning a QR code (WebSocket passthrough + public tunnel) | [shaobeichen/dsh-pocket](https://github.com/shaobeichen/dsh-pocket) · GPL-2.0 |
+| `@deepseek-ai/dsh-openclaw-bridge` | 0.8.1 | Bridges WeChat / Feishu official channels into DSH agent sessions (chunked write-back, dedup, rate limit) | [hzhz314159/openclaw-dsh-bridge](https://github.com/hzhz314159/openclaw-dsh-bridge) · MIT |
+| `dsh-input-history` | 0.1.1 | Terminal-style ↑/↓ history of sent messages in the composer, scoped per session | In-house · MIT |
+| `dsh-easyrewrite` | 2.6.0 | Message recall and re-edit, a version pager, and its own settings centre | [Renzic-Stone/DSH-EasyRewrite](https://github.com/Renzic-Stone/DSH-EasyRewrite) · MIT |
+| `dsh-change-review` | 0.1.1 | AI change review: the model re-checks its own just-made edits for correctness, safety and intent | In-house · MIT |
+| `dsh-auto-compact` | 0.1.1 | Auto-sends /compact once contextPressure crosses a threshold (80% by default, configurable) | In-house · MIT |
+| `dsh-offpeak` | 1.0.1 | Tidal-price guard: warns before sending at peak, and can defer work to off-peak windows | [christophersmith2737-commits/OffPeak](https://github.com/christophersmith2737-commits/OffPeak) · MIT |
+| `dsh-settings-nav-custom` | 0.1.1 | Show / hide and reorder the left-hand Settings nav items (persisted in localStorage) | Ported from EAC [DSH-EAC/EAC-Desktop](https://github.com/DSH-EAC/EAC-Desktop) · MIT |
+| `dsh-settings-groups` | 0.1.1 | Folds low-frequency General-settings rows into a collapsible "Advanced" group | In-house · MIT |
+| `dsh-synapse` | 0.3.0 | Non-linear conversation canvas: drag-spread sessions, follow-ups and branches of one workspace | [liangmianya/dsh-synapse](https://github.com/liangmianya/dsh-synapse) · MIT (local fork line, upstream 0.4.2 deliberately not taken) |
+| `@dsh-external/dsh-subagent-lens` | 0.1.1 | Expandable Task/subagent activity view plus a header bar aggregating commands and files (no extra backend calls) | In-house · MIT (borrows the @dsh-external scope, which has no repository) |
+| `dsh-reasoning-effort` | 0.8.1 | Codex-style model + reasoning-effort selector, with copy-ready guidance for custom providers | [HanaAyane/dsh-reasoning-effort](https://github.com/HanaAyane/dsh-reasoning-effort) · MIT |
+| `dsh-basics-panel` | 0.4.1 | Visual management of MCP servers, skills, rules and archived sessions inside Settings | [yxsj245/dsh-Basics-Panel](https://github.com/yxsj245/dsh-Basics-Panel) · MIT |
+| `dsh-input-fold` | 0.1.1 | Collapses very long user prompts to a few lines with an "expand" overlay | In-house · MIT |
+| `dsh-prompt-optimizer` | 2.0.4 | One-click draft polishing in the composer (uses the current session model, zero-config streaming) | [winditer/dsh-prompt-optimizer](https://github.com/winditer/dsh-prompt-optimizer) · MIT |
+| `dsh-zcode-migrate` | 0.1.2 | Migrates zcode CLI session history into native dsh session logs (inspect / migrate / verify, /zcode) | In-house · MIT |
+
+> Earlier removals, also outside the 28 registered plugins: `dsh-navbar` (navbar replacement,
+> dropped from the list and its sources deleted in `v0.6.3-beta.3`, commit `ff421ac2`) and
+> `zat-dsh-engine` (the previous built-in marketplace, retired even earlier).
 
 ## 🏗 Architecture
 

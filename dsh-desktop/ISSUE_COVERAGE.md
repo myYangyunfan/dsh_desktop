@@ -10,7 +10,7 @@ instruction: "不要同步到远程仓库，本地处理就可以").
 |---|-------|--------------|
 | 48 | profile package.json reset by syncCompanionPlugins | profile-reconcile.js backs up `.broken-<ts>` before rebuild + preserves user bundles |
 | 54 | WSL config error crashes startup | main.js resolveBackendConfig catches WSL error → backendMode='local', wslFallbackReason |
-| 65 | built-in plugins missing dist build | graph-memory / billion-context-dsh dist/ now present/built |
+| 65 | built-in plugins missing dist build | billion-context-dsh dist/ now present/built. ~~graph-memory dist/~~ **retired 2026-10-07**: `graph-memory` was dropped from the bundled plugin set (39 → 28, user-requested removal), its `assets/plugins/graph-memory/` source tree is gone so that half of this fix no longer applies. |
 | 66 | closing plugin removes others in same insert block | plugin-manager-patch.js regex: non-greedy subtree + negative lookahead |
 | 67 | file-revert expands `$` in oldText + only first match | main.js uses content.split(newText).join(oldText) |
 | 68 | file fence rejects previews in ~5s after new session | main.js sessionFilesSignature() cache invalidation |

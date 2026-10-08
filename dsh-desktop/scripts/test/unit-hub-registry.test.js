@@ -11,8 +11,16 @@
 //      断言内置件全部被识别；
 //   3. 识别面取舍断言：内置件不再进 profile dependencies（issue #156 毒化
 //      pnpm 的写入面已废除）——桌面端 GetPluginsJson 列表仅剩用户自装件；
-//   4. 仓库级元数据收口断言：真实 assets/plugins 的 34 个配套件全部通过
-//      校验环节（防 dsh-vision 式 version 漂移回归）。
+//   4. 仓库级元数据收口断言：真实 assets/plugins 的 28 个配套件全部通过
+//      校验环节（防 dsh-vision 式 version 漂移回归、防覆盖上游时丢 private）；
+//   5. 文档账本收口：THIRD_PARTY_NOTICES.md §4.1（含许可列）与 docs/builtin-plugins-inventory.md §一
+//      逐名逐版本对 package.json 一致，nm 标记同时锁「磁盘实存 = shipsNodeModules 声明」；
+//   6. §5.2 逐插件判定表收口：序号 / loader id / 源目录 / 本机版本 + 「兼容实测」七个数
+//      全部本地重放（通道两列要网络，CI 不可重放，这里只咬离线可算的列）；
+//   7. 挂载面收口：每条在册件的 loader id 必须命中自己 cordis.patch.yml 的 insert 行，
+//      例外只能是显式点名的目录名单（名单本身也被反证咬住）；
+//   8. 门面收口：README.md / README.en.md 的插件表逐名逐版本逐许可对 package.json，
+//      行序对 COMPANION_PLUGINS，中英两份互相对一次（历史上门面是一张 5 行摘要，与在册清单不同源）。
 // 运行：node --test scripts/test/unit-hub-registry.test.js
 
 const test = require('node:test');
@@ -516,17 +524,417 @@ test('收口：真实 assets/plugins 全部配套件元数据校验通过（防�
   const onDisk = new Set(fs.readdirSync(assetsRoot).filter((n) => {
     try { return fs.statSync(path.join(assetsRoot, n)).isDirectory(); } catch { return false; }
   }));
-  // 清单 ↔ assets 目录一一对应（多目录/漏登记都算漂移）。RETIRED_COMPANION_DIRS
-  // 是唯一豁免面：退役伴随件的源目录按用户要求保留（源级用例仍读），但绝不进清单。
+  // 清单 ↔ assets 目录一一对应（多目录/漏登记都算漂移）。RETIRED_COMPANION_DIRS 是
+  // 「名字面」不是「源面」：真退役 = 摘清单 + 进名单 + **删源目录**三件事一起做，
+  // 名单只留给 companion-profile 认领老机器上镜像出去的副本做回收。
   const listed = new Set(COMPANION_PLUGINS.map(companionDirName));
   const retired = new Set(RETIRED_COMPANION_DIRS);
+  const sourceLeftBehind = (dir, onDiskSet) => onDiskSet.has(dir);
   for (const dir of retired) {
-    assert.ok(!listed.has(dir), '退役目录不得同时出现在清单里: ' + dir);
-    assert.ok(onDisk.has(dir), '退役目录的源应保留（要真退役就删源，不要只摘清单）: ' + dir);
+    assert.ok(!listed.has(dir), '退役条目不得同时出现在清单里: ' + dir);
+    assert.ok(!sourceLeftBehind(dir, onDisk), '退役条目必须删源（留源 = 没退干净）: ' + dir);
   }
+  // 反证：同一判据面对「源仍在盘」的形态必须判红（防恒真绿）。
+  assert.equal(sourceLeftBehind('dsh-plugin-manager', new Set(['dsh-plugin-manager'])), true,
+    '判据必须咬得住「只摘清单、源没删」的半退役形态');
   for (const dir of onDisk) {
-    if (retired.has(dir)) continue;
     assert.ok(listed.has(dir), 'assets/plugins/' + dir + ' 不在 COMPANION_PLUGINS 清单（会被过期清理误删或漏同步）');
   }
   for (const dir of listed) assert.ok(onDisk.has(dir), '清单声明的目录缺失: ' + dir);
+});
+
+test('收口：scoped（@deepseek-ai / @dsh-external）配套件必须 private:true', () => {
+  // 两条理由都是实打实的，不是装饰：
+  //   ① scripts/lib/companion-profile.js 的 isBuiltinCompanionMirror 把 `private === true`
+  //      当「这是壳同步镜像进 profile 的那一份」的强判据——丢了标记，退役回收就只能
+  //      撤账不能删目录（铁律 ②「删目录要有证据」）；
+  //   ② 这些包名占的是官方 / 外部命名空间，本仓库不该有任何把它们误发布的机会
+  //      （撞官方同名包的 profile 遮蔽见 unit-companion-shadow-reclaim）。
+  // 本轮实测教训：从上游 tarball 覆盖 package.json 时，本仓库追加的 private 行会
+  // 被整字段抹掉（8 条中招），所以这条断言必须常驻。
+  const assetsRoot = path.join(__dirname, '..', '..', 'assets', 'plugins');
+  const scoped = [];
+  const offenders = [];
+  for (const dir of fs.readdirSync(assetsRoot)) {
+    const file = path.join(assetsRoot, dir, 'package.json');
+    if (!fs.existsSync(file)) continue;
+    const pkg = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (typeof pkg.name !== 'string' || !pkg.name.startsWith('@')) continue;
+    scoped.push(pkg.name);
+    if (pkg.private !== true) offenders.push(dir + ' → ' + pkg.name);
+  }
+  // 反证锚：判据必须看得见真实成员（scoped 集若因名匹配写错而空转，这里先红）
+  assert.ok(scoped.includes('@deepseek-ai/dsh-openclaw-bridge'), 'scoped 判定没抓到已知成员: ' + scoped.join(', '));
+  assert.ok(scoped.length >= 11, 'scoped 成员数异常萎缩（应含 11 条）: ' + scoped.length);
+  assert.deepStrictEqual(offenders, [], 'scoped 自研包缺 private:true: ' + offenders.join(', '));
+});
+
+// ---------------------------------------------------------------------------
+// 文档账本 ↔ package.json 对账
+// ---------------------------------------------------------------------------
+// 本轮远端批量更新（d-pack 16 条 + 外部上游 4 条）改了 20 个版本号，而
+// THIRD_PARTY_NOTICES.md §4.1 与 docs/builtin-plugins-inventory.md §一 两处账本
+// 当时全停在旧值——AGENTS.md 早就写过「文档里的数字常滞后」，滞后的账本比没账本更坏
+// （它会让人以为装机版还是旧契约）。这里把「逐名逐版本 1:1」和「nm 标记 = 磁盘实存
+// = shipsNodeModules 声明」钉成机器判据。
+function ledgerRows(md, headingRe, cols) {
+  const at = md.search(headingRe);
+  if (at < 0) return null;
+  const lines = md.slice(at).split(/\r?\n/).slice(1);
+  const rows = [];
+  let sawSeparator = false;
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t.startsWith('|')) { if (sawSeparator && rows.length) break; continue; }
+    if (/^\|[\s:|-]+\|$/.test(t)) { sawSeparator = true; continue; }
+    if (!sawSeparator) continue;
+    const cells = t.slice(1, -1).split('|').map((c) => c.trim());
+    rows.push(cols(cells));
+  }
+  return rows;
+}
+
+/** 账本差集：doc 行（name/version/nm?/license?）对磁盘事实，返回逐条不一致描述。
+ *  可选列按「未声明即不判」处理：inventory §一 没有独立许可列，硬要它判就成了假判据。 */
+function ledgerDiff(disk, docRows) {
+  const out = [];
+  const seen = new Set();
+  for (const row of docRows) {
+    seen.add(row.name);
+    const fact = disk.get(row.name);
+    if (!fact) { out.push('账本里的 ' + row.name + ' 在 assets/plugins 找不到对应包'); continue; }
+    if (fact.version !== row.version) out.push(row.name + ' 版本漂移：账本 ' + row.version + ' / package.json ' + fact.version);
+    if (row.nm !== undefined && row.nm !== fact.nm) out.push(row.name + ' nm 标记漂移：账本 ' + row.nm + ' / 磁盘 ' + fact.nm);
+    if (row.license !== undefined && row.license !== fact.license) out.push(row.name + ' 许可漂移：账本 ' + row.license + ' / package.json ' + fact.license);
+  }
+  for (const name of disk.keys()) if (!seen.has(name)) out.push('磁盘有 ' + name + ' 但账本漏行');
+  return out;
+}
+
+/** 磁盘事实源：`assets/plugins` 逐目录读 `package.json`，三份账本共用同一个 map。 */
+function diskPluginFacts(assetsRoot = path.join(__dirname, '..', '..', 'assets', 'plugins')) {
+  const disk = new Map();
+  for (const dir of fs.readdirSync(assetsRoot)) {
+    const file = path.join(assetsRoot, dir, 'package.json');
+    if (!fs.existsSync(file)) continue;
+    const pkg = JSON.parse(fs.readFileSync(file, 'utf8'));
+    disk.set(pkg.name, {
+      dir,
+      version: pkg.version,
+      license: pkg.license || '',
+      nm: fs.existsSync(path.join(assetsRoot, dir, 'node_modules')),
+    });
+  }
+  return disk;
+}
+
+test('收口：两份内置插件账本与 package.json 逐名逐版本一致（防滞后的账本冒充事实）', () => {
+  const noticesPath = path.join(__dirname, '..', '..', '..', 'THIRD_PARTY_NOTICES.md');
+  const inventoryPath = path.join(__dirname, '..', '..', 'docs', 'builtin-plugins-inventory.md');
+
+  const declared = new Map(COMPANION_PLUGINS.map((p) => [p.name, !!p.shipsNodeModules]));
+  const disk = diskPluginFacts();
+  assert.equal(disk.size, COMPANION_PLUGINS.length, '磁盘包数应等于清单条数');
+  // 分发面判据本身：nm 磁盘实存必须与 shipsNodeModules 声明一致（未标的 nm 是本机残留，
+  // 同步面永远不会带上它，写在账本里就是假账）。
+  for (const [name, fact] of disk) {
+    assert.equal(fact.nm, !!declared.get(name), name + ' 的 node_modules 磁盘实存与 shipsNodeModules 声明不一致');
+  }
+
+  const notices = fs.existsSync(noticesPath) ? fs.readFileSync(noticesPath, 'utf8') : null;
+  assert.ok(notices, 'THIRD_PARTY_NOTICES.md 应在仓库根: ' + noticesPath);
+  const rowsA = ledgerRows(notices, /^### 4\.1 /m, (c) => ({ name: c[0], version: c[1], license: c[2] }));
+  assert.ok(Array.isArray(rowsA) && rowsA.length > 0, '§4.1 表应可解析');
+  assert.deepStrictEqual(ledgerDiff(disk, rowsA), [], 'THIRD_PARTY_NOTICES §4.1 对账失败');
+
+  const inventory = fs.readFileSync(inventoryPath, 'utf8');
+  const rowsB = ledgerRows(inventory, /^## 一、内置插件/m, (c) => {
+    const ticked = c[2].match(/`([^`]+)`/g) || [];
+    return {
+      name: (ticked[0] || c[2]).replace(/`/g, '').trim(),
+      version: c[3],
+      nm: /`nm`/.test(c[2]),
+    };
+  });
+  assert.ok(Array.isArray(rowsB) && rowsB.length > 0, 'inventory §一 表应可解析');
+  assert.deepStrictEqual(ledgerDiff(disk, rowsB), [], 'builtin-plugins-inventory §一 对账失败');
+
+  // 反证（防判据恒真）：同一 diff 面对「版本停在旧值」与「漏一行」必须各判一条红。
+  const stale = ledgerDiff(disk, rowsB.map((r) => ({ ...r, version: r.name === '@deepseek-ai/dsh-balance' ? '0.0.0-stale' : r.version })));
+  assert.equal(stale.length, 1, '版本漂移必须被咬住: ' + JSON.stringify(stale));
+  const missingOne = ledgerDiff(disk, rowsB.slice(1));
+  assert.equal(missingOne.length, 1, '漏行必须被咬住: ' + JSON.stringify(missingOne));
+  const phantom = ledgerDiff(disk, [...rowsB, { name: 'no-such-plugin', version: '1.0.0' }]);
+  assert.equal(phantom.length, 1, '账本里的幽灵包必须被咬住: ' + JSON.stringify(phantom));
+  // §4.1 多一列许可，判据也得能咬：把 dsh-pocket 的 GPL-2.0 改成 MIT 必须恰好一条红。
+  const licDrift = ledgerDiff(disk, rowsA.map((r) => ({ ...r, license: r.name === 'dsh-pocket' ? 'MIT' : r.license })));
+  assert.equal(licDrift.length, 1, '许可漂移必须被咬住: ' + JSON.stringify(licDrift));
+});
+
+// ---------------------------------------------------------------------------
+// §5.2 逐插件判定表收口：结构四列 + 「兼容实测」七数全部本地重放
+// ---------------------------------------------------------------------------
+// 上一版这张表是手抄的，实测有三行抄错（#4 的声明数、#17/#18 的声明数）。通道两列
+// （d-pack / npm）里 npm 半边要网络，CI 上不可重放，所以本层只咬**离线可算**的列：
+// 序号、loader id、源目录、本机版本、以及 `别名 / 成员 / 裸名 → 缺失 · 表外 · 声明 · 移除引用`。
+// 这五个数一旦与磁盘不同源（换代后忘刷台账、或再抄错），这里直接点名到行号。
+const MODULE_TABLE = require('../lib/plugin-module-table');
+const KERNEL_PIN = JSON.parse(
+  fs.readFileSync(path.join(__dirname, '..', 'compat', 'kernel-pin.json'), 'utf8'));
+const REMOVED_IDS = KERNEL_PIN.services.removed.map((s) => s.id);
+const MEASURED_RE = /^(\d+) 别名 \/ (\d+) 成员 \/ (\d+) 裸名 → 缺失 (\d+) · 表外 (\d+) · 声明 (\d+) · 移除引用 (\d+)$/;
+
+/** 插件正文里 `ctx.get("<已移除服务 id>")` 命中数（跳过内层 node_modules）。 */
+function removedServiceRefs(pluginDir) {
+  let text = '';
+  (function walk(dir) {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) { if (e.name !== 'node_modules') walk(p); continue; }
+      if (/\.(?:js|cjs|mjs|tsx?)$/.test(e.name)) text += fs.readFileSync(p, 'utf8');
+    }
+  })(pluginDir);
+  return MODULE_TABLE.findRemovedServiceRefs(text, REMOVED_IDS).length;
+}
+
+function verdictRow(cells) {
+  const strip = (s) => String(s).replace(/`/g, '').trim();
+  const m = MEASURED_RE.exec(cells[7]);
+  return {
+    n: Number(cells[0]),
+    id: strip(cells[1]),
+    dir: strip(cells[2]),
+    local: cells[3],
+    measured: m && {
+      alias: Number(m[1]), member: Number(m[2]), bare: Number(m[3]),
+      missing: Number(m[4]), offTable: Number(m[5]), decl: Number(m[6]), removed: Number(m[7]),
+    },
+  };
+}
+
+/** 台账行 → 与磁盘/判据源的重放差集（逐条可定位到行号）。抽出来是为了能喂变异体做反证。 */
+function verdictDiff(rows) {
+  const out = [];
+  const root = path.join(__dirname, '..', '..');
+  const ctx = MODULE_TABLE.makeContext({ root });
+  const assetsRoot = path.join(root, 'assets', 'plugins');
+  rows.forEach((row, i) => {
+    const e = COMPANION_PLUGINS[i];
+    if (!e) { out.push(`表里第 ${row.n} 行超出清单条数`); return; }
+    if (row.n !== i + 1) out.push(`序号列断了：第 ${i + 1} 行写的是 ${row.n}`);
+    if (row.id !== e.id) out.push(`#${row.n} loader id 漂移：表 ${row.id} / 清单 ${e.id}`);
+    const dir = companionDirName(e);
+    if (row.dir !== dir) out.push(`#${row.n} 源目录漂移：表 ${row.dir} / 清单 ${dir}`);
+    const pkgFile = path.join(assetsRoot, dir, 'package.json');
+    if (!fs.existsSync(pkgFile)) { out.push(`#${row.n} 源目录 ${dir} 不在磁盘上`); return; }
+    const pkg = JSON.parse(fs.readFileSync(pkgFile, 'utf8'));
+    if (pkg.name !== e.name) out.push(`#${row.n} 包名与清单不一致：${pkg.name} / ${e.name}`);
+    if (pkg.version !== row.local) out.push(`#${row.n} 本机版本漂移：表 ${row.local} / package.json ${pkg.version}`);
+    if (!row.measured) { out.push(`#${row.n} 兼容实测列不是「N 别名 / N 成员 / N 裸名 → 缺失 N · 表外 N · 声明 N · 移除引用 N」形态`); return; }
+    const pluginDir = path.join(assetsRoot, dir);
+    const s = MODULE_TABLE.scanPlugin(pluginDir, ctx) || { aliasCount: 0, memberCount: 0, missing: new Map(), offTable: new Map() };
+    const g = MODULE_TABLE.scanBrowserGraph(pluginDir, ctx);
+    const bare = g ? [...g.bare.values()].reduce((n, rec) => n + rec.length, 0) : 0;
+    const dsh = (pkg.dsh && pkg.dsh.client) || {};
+    const want = {
+      alias: s.aliasCount,
+      member: s.memberCount,
+      bare,
+      missing: s.missing.size,
+      offTable: s.offTable.size,
+      decl: (dsh.inject || []).length + (dsh.external || []).length,
+      removed: removedServiceRefs(pluginDir),
+    };
+    for (const k of Object.keys(want)) {
+      if (row.measured[k] !== want[k]) {
+        out.push(`#${row.n}(${row.id}) 兼容实测「${k}」表记 ${row.measured[k]} ≠ 本地重放 ${want[k]}`);
+      }
+    }
+  });
+  if (rows.length !== COMPANION_PLUGINS.length) {
+    out.push(`§5.2 行数 ${rows.length} ≠ 清单条数 ${COMPANION_PLUGINS.length}`);
+  }
+  return out;
+}
+
+test('收口：§5.2 判定表的序号/loader id/源目录/本机版本 + 七个兼容实测数与磁盘同源', () => {
+  const inventoryPath = path.join(__dirname, '..', '..', 'docs', 'builtin-plugins-inventory.md');
+  const md = fs.readFileSync(inventoryPath, 'utf8');
+  const rows = ledgerRows(md, /^### 5\.2 /m, verdictRow);
+  assert.ok(Array.isArray(rows), '§5.2 表应可解析（标题或表格形态变了）');
+  assert.equal(rows.length, COMPANION_PLUGINS.length, '§5.2 行数应等于在册条数');
+  assert.deepStrictEqual(verdictDiff(rows), [], '§5.2 逐插件判定表对账失败');
+
+  // 反证（防判据恒真）：① 改一个数字必须恰红一条，且红点落在被改的那一行；
+  const tampered = rows.map((r, i) => (i === 0 ? { ...r, measured: { ...r.measured, member: r.measured.member + 1 } } : r));
+  const d1 = verdictDiff(tampered);
+  assert.equal(d1.length, 1, '成员数被手改必须被咬住: ' + JSON.stringify(d1));
+  assert.ok(d1[0].includes('#1'), '红点必须定位到被改的行: ' + d1[0]);
+  // ② 换个 loader id 必须被咬住（否则「表 ↔ 清单」同序只是巧合）；
+  const d2 = verdictDiff(rows.map((r, i) => (i === 2 ? { ...r, id: 'not-the-list-id' } : r)));
+  assert.equal(d2.length, 1, 'loader id 漂移必须被咬住: ' + JSON.stringify(d2));
+  // ③ 少一行必须同时报「行数」与「序号断链」之外的至少一条红；
+  const d3 = verdictDiff(rows.slice(1));
+  assert.ok(d3.length >= 2, '漏一行必须报红: ' + JSON.stringify(d3));
+  // ④ 判据形态写歪（少一个数）必须报「形态」而不是静默跳过。
+  const d4 = verdictDiff(rows.map((r, i) => (i === 5 ? { ...r, measured: null } : r)));
+  assert.equal(d4.filter((m) => m.includes('形态')).length, 1, '实测列形态破坏必须报红: ' + JSON.stringify(d4));
+});
+
+// ---------------------------------------------------------------------------
+// loader id ↔ 插件自带 cordis.patch.yml 的挂载命中审计
+// ---------------------------------------------------------------------------
+// AGENTS.md §5 的硬约定：`COMPANION_PLUGINS` 的 id 必须与插件 `cordis.patch.yml`
+// insert 行的 id 一致——不一致时自愈的 dropBlocksByIds 永不命中残留行，
+// 老装机机器上会双登记并直接崩在启动（issue #104 的学费）。
+// 例外必须是**显式点名的名单**，且名单本身也要被反证咬住（名单里写了其实有补丁件的，
+// 说明名单陈旧；在册件缺补丁层又不在名单里的，说明挂载面破了）。
+const MOUNT_PATCH_EXCEPTION_DIRS = ['dsh-wsl-settings'];
+
+/** 剥掉 YAML 注释后的有效行（本仓这批补丁文件只用整行注释，没有行内注释形态）。 */
+function liveYamlLines(text) {
+  return text.split(/\r?\n/).filter((l) => l.trim() !== '' && !/^\s*#/.test(l));
+}
+
+/** 从一个 cordis.patch.yml 里抽 `- insert:` 块的 id/name 集。 */
+function patchMounts(text) {
+  const ids = [];
+  const names = [];
+  for (const line of liveYamlLines(text)) {
+    const id = /^\s*-\s*id:\s*(.+)$/.exec(line);
+    if (id) { ids.push(id[1].trim().replace(/^['"]|['"]$/g, '')); continue; }
+    const name = /^\s*name:\s*(.+)$/.exec(line);
+    if (name) names.push(name[1].trim().replace(/^['"]|['"]$/g, ''));
+  }
+  return { ids, names, hasInsert: liveYamlLines(text).some((l) => /^-\s*insert:\s*$/.test(l)) };
+}
+
+/** 在册件的挂载面审计：返回 {misses, mismatches}（misses = 没有补丁层/没有自挂载声明）。 */
+function auditMountPatch(entries, assetsRoot) {
+  const misses = [];
+  const mismatches = [];
+  for (const e of entries) {
+    const dir = companionDirName(e);
+    const pluginDir = path.join(assetsRoot, dir);
+    const pkgFile = path.join(pluginDir, 'package.json');
+    if (!fs.existsSync(pkgFile)) { misses.push(dir + '（源目录不在磁盘）'); continue; }
+    const pkg = JSON.parse(fs.readFileSync(pkgFile, 'utf8'));
+    const bundlePatch = !!(pkg.dsh && pkg.dsh.bundle && pkg.dsh.bundle.patch);
+    const yml = path.join(pluginDir, 'cordis.patch.yml');
+    if (!fs.existsSync(yml)) { misses.push(dir + '（无 cordis.patch.yml，dsh.bundle.patch=' + bundlePatch + '）'); continue; }
+    const got = patchMounts(fs.readFileSync(yml, 'utf8'));
+    if (!got.hasInsert) { mismatches.push(`${dir}：补丁文件没有顶层 - insert: 块`); continue; }
+    if (!got.ids.includes(e.id)) mismatches.push(`${dir}：insert 行 id=${JSON.stringify(got.ids)} 不含清单 id「${e.id}」`);
+    if (!got.names.includes(pkg.name)) mismatches.push(`${dir}：insert 行 name=${JSON.stringify(got.names)} ≠ 包名「${pkg.name}」`);
+    if (!bundlePatch) mismatches.push(`${dir}：有补丁层但未声明 dsh.bundle.patch（官方 CLI 装不进 bundle 栈）`);
+  }
+  return { misses, mismatches };
+}
+
+test('收口：每条在册件的 loader id 必须命中自己的 cordis.patch.yml，例外只能显式点名', () => {
+  const assetsRoot = path.join(__dirname, '..', '..', 'assets', 'plugins');
+  const { misses, mismatches } = auditMountPatch(COMPANION_PLUGINS, assetsRoot);
+  assert.deepStrictEqual(misses.map((m) => m.split('（')[0]).sort(), MOUNT_PATCH_EXCEPTION_DIRS.slice().sort(),
+    '缺补丁层/缺自挂载声明的件与例外名单不一致:\n  ' + misses.join('\n  '));
+  assert.deepStrictEqual(mismatches, [], 'loader id ↔ 补丁层失配（issue #104 同族风险）:\n  ' + mismatches.join('\n  '));
+  // 例外名单本身要能被证伪：名单里那条必须**确实**没有补丁层，否则名单是陈旧遗产。
+  for (const dir of MOUNT_PATCH_EXCEPTION_DIRS) {
+    assert.equal(fs.existsSync(path.join(assetsRoot, dir, 'cordis.patch.yml')), false,
+      dir + ' 已有 cordis.patch.yml，例外名单该撤了（不撤就会一直放过它的挂载面）');
+  }
+  // 命中面自检：27 条真命中，不能靠「空集也叫绿」。
+  assert.equal(COMPANION_PLUGINS.length - misses.length, 27,
+    '实际命中的补丁件数应是 27（28 减 1 条例外），当前判据脱靶');
+
+  // 反证 1：id 与清单不一致必须报失配（拿临时目录合成，不碰仓库）。
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-mount-audit-'));
+  try {
+    const fake = path.join(tmp, 'dsh-fake');
+    fs.mkdirSync(path.join(fake, 'lib'), { recursive: true });
+    fs.writeFileSync(path.join(fake, 'package.json'), JSON.stringify({
+      name: 'dsh-fake', version: '1.0.0', dsh: { bundle: { patch: './cordis.patch.yml' } },
+    }));
+    fs.writeFileSync(path.join(fake, 'cordis.patch.yml'),
+      '# comment only\n- insert:\n    - id: other-loader-id\n      name: \'dsh-fake\'\n');
+    const one = auditMountPatch([{ id: 'fake', name: 'dsh-fake' }], tmp);
+    assert.equal(one.mismatches.length, 1, 'id 失配没被咬住: ' + JSON.stringify(one));
+    assert.ok(one.mismatches[0].includes('other-loader-id'), one.mismatches[0]);
+    // 反证 2：补丁文件只有注释（没有 insert 块）必须报，而不是当成「命中集为空所以全绿」。
+    fs.writeFileSync(path.join(fake, 'cordis.patch.yml'), '# nothing here\n');
+    const two = auditMountPatch([{ id: 'fake', name: 'dsh-fake' }], tmp);
+    assert.equal(two.mismatches.length, 1, '空补丁层没被咬住: ' + JSON.stringify(two));
+    assert.ok(/insert/.test(two.mismatches[0]), two.mismatches[0]);
+    // 反证 3：缺 cordis.patch.yml 必须落 misses（于是与例外名单比对会红），不能静默通过。
+    fs.rmSync(path.join(fake, 'cordis.patch.yml'));
+    const three = auditMountPatch([{ id: 'fake', name: 'dsh-fake' }], tmp);
+    assert.equal(three.misses.length, 1, '缺补丁层没进 misses: ' + JSON.stringify(three));
+    // 反证 4：例外名单写歪（把其实有补丁件的行加进去）必须被名单比对那条红咬住。
+    const four = auditMountPatch(COMPANION_PLUGINS, assetsRoot);
+    const staleList = MOUNT_PATCH_EXCEPTION_DIRS.concat(['dsh-balance']);
+    assert.notDeepStrictEqual(
+      four.misses.map((m) => m.split('（')[0]).sort(), staleList.slice().sort(),
+      '例外名单里塞进真有补丁层的件必须判不一致');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+
+
+// ---------------------------------------------------------------------------
+// 收口第 8 层：README 中英两张插件表 ↔ package.json ↔ 在册顺序
+// ---------------------------------------------------------------------------
+// README 的插件表历史上是一张 5 行「主要增强项摘要」，与在册 28 条从不同源——换代和退役
+// 时它永远是滞后的一份，而且「摘要」没有可判的边界。现在按在册顺序逐名列出，交给与
+// §4.1/§一 同一套 ledgerDiff：名称、版本、许可三列对磁盘实值，行序对 COMPANION_PLUGINS
+// （表头那句话公开承诺了顺序），中英两份再互相对一次——历史上漂的是分别手改的两张表。
+const README_FILES = ['README.md', 'README.en.md'];
+const README_HEAD = {
+  'README.md': /^## 🧩 内置插件生态/m,
+  'README.en.md': /^## 🧩 Bundled Plugin Ecosystem/m,
+};
+
+/** README 表格行 → {name, version, license}：包名带反引号，许可是来源列「· X」的尾巴。 */
+function readmeRows(cells) {
+  return {
+    name: cells[0].replace(/`/g, '').trim(),
+    version: cells[1].trim(),
+    license: String(cells[3]).split('·').pop().split(/[（(]/)[0].trim(),
+  };
+}
+
+test('收口：README 中英插件表逐名逐版本逐许可对 package.json，行序对在册清单', () => {
+  const disk = diskPluginFacts();
+  const order = COMPANION_PLUGINS.map((p) => p.name);
+  const parsed = {};
+  for (const file of README_FILES) {
+    const md = fs.readFileSync(path.join(__dirname, '..', '..', '..', file), 'utf8');
+    const rows = ledgerRows(md, README_HEAD[file], readmeRows);
+    assert.ok(Array.isArray(rows), file + ' 里找不到插件表（改了标题或表头要先同步这里的锚点）');
+    assert.equal(rows.length, COMPANION_PLUGINS.length, file + ' 插件表行数应等于在册条数');
+    assert.deepStrictEqual(ledgerDiff(disk, rows), [], file + ' 插件表对账失败');
+    assert.deepStrictEqual(rows.map((r) => r.name), order, file + ' 插件表行序应与 COMPANION_PLUGINS 一致');
+    parsed[file] = rows;
+  }
+  const key = (r) => [r.name, r.version, r.license];
+  assert.deepStrictEqual(parsed['README.en.md'].map(key), parsed['README.md'].map(key),
+    'README 中英两份的行集 / 版本 / 许可必须逐项相等（只更新一边就是这张表历史上的漂移方式）');
+
+  // 反证（防判据恒真）：同一个 diff 面对「版本滞后」「漏一行」「幽灵包」「许可改标」
+  // 必须各判恰好一条红；行序判据必须看得出前两条被对调。
+  const base = parsed['README.md'];
+  const stale = ledgerDiff(disk, base.map((r) => ({ ...r, version: r.name === 'dsh-synapse' ? '0.2.0' : r.version })));
+  assert.equal(stale.length, 1, 'README 版本滞后必须被咬住: ' + JSON.stringify(stale));
+  const dropped = ledgerDiff(disk, base.slice(0, base.length - 1));
+  assert.equal(dropped.length, 1, 'README 漏掉最后一行必须被咬住: ' + JSON.stringify(dropped));
+  const phantom = ledgerDiff(disk, [...base, { name: 'dsh-no-such-plugin', version: '1.0.0', license: 'MIT' }]);
+  assert.equal(phantom.length, 1, 'README 里的幽灵包必须被咬住: ' + JSON.stringify(phantom));
+  const lic = ledgerDiff(disk, base.map((r) => ({ ...r, license: r.name === 'dsh-pocket' ? 'MIT' : r.license })));
+  assert.equal(lic.length, 1, 'README 许可漂移必须被咬住: ' + JSON.stringify(lic));
+  const swapped = base.slice();
+  [swapped[0], swapped[1]] = [swapped[1], swapped[0]];
+  assert.notDeepStrictEqual(swapped.map((r) => r.name), order, '行序判据必须能看出前两条被对调');
+  // 中英互对判据也不许恒真：只改英文那份的版本必须被那条相等断言的同类 face 咬住。
+  assert.notDeepStrictEqual(parsed['README.en.md'].map(key), parsed['README.md'].map((r) => key({ ...r, version: '9.9.9' })),
+    '两份 README 只更新一边时必须判不一致');
 });

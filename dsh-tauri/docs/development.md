@@ -15,6 +15,8 @@ dsh-tauri/
 │   │   ├── kernel-process    spawn 规格/就绪行/Job Object 杀树/崩溃环
 │   │   ├── bridge            dshDesktop 垫片 JS + initialization_script
 │   │   ├── fence             文件围栏（zstd 首帧 cwd）+ file-open/revert
+│   │   │                     （revert 的服务对象「文件视图一键还原」随 dsh-client-file-changes
+│   │   │                      于 v1.0.0 / 2026-10-07 插件退役，还原半边不再是内置功能）
 │   │   ├── preview-server    127.0.0.1 静态页 + /__diag/ 诊断端点
 │   │   └── session-watcher   通知限流/聚焦豁免决策逻辑（Phase 3 通知链接线目标，当前未接线零消费者；sidecar-orchestrator crate 已于 2026-08 分层重审裁撤——boot 编排由 app supervisor + Node sidecar boot 子命令直接承载）
 │   └── src/app/        装配根（只做接线：lib.rs / supervisor / commands / windows / pages）
@@ -29,8 +31,8 @@ dsh-tauri/
 
 | 契约 | 管什么 | 变更即破坏性？ |
 |------|--------|----------------|
-| `contracts/bridge-api.md` | `window.dshDesktop` 49 方法逐字段签名 + 页面事件（页面插件直接消费） | 是——升版本 + CHANGELOG 标注 |
-| `contracts/ipc-commands.md` | Electron IPC → Tauri command 43 通道映射 + 通用约定 | 是 |
+| `contracts/bridge-api.md` | `window.dshDesktop` 方法逐字段签名 + 页面事件（页面插件直接消费；方法数以该契约实测为准） | 是——升版本 + CHANGELOG 标注 |
+| `contracts/ipc-commands.md` | Electron IPC → Tauri command 通道映射 + 通用约定（通道数以该契约实测为准） | 是 |
 | `contracts/data-flow.md` | 配置叠加树 / 单一数据流 / **boot 守护瀑布** / 持久化与 env 覆盖通道 | 是 |
 | `contracts/plugin-contract.md` | 三层插件辨析（内核 cordis / 伴随 / 用户）+ seam 三角色 | 是 |
 | `contracts/error-codes.md` | 六域错误码（PluginError {code} 口径） | 是 |
@@ -38,7 +40,8 @@ dsh-tauri/
 **防漂移是机器强制的**（不是口头约定）：
 - `lib.rs` 的契约审计测试：注册命令必须出现在契约表内，否则
   `no_extra_commands_beyond_contract_and_poc` 失败——**加命令不改契约 = 测试红**。
-- sidecar `node --test`：boot 步骤顺序契约（repair→sync→presets→patches→preflight）。
+- sidecar `node --test`：boot 步骤顺序契约（repair→sync→patches→compat-pin→preflight，
+  五步；v1.0.0 纯净线拆掉了 presets 步）。
 - Electron 线 `unit-patch-engine` / `unit-compat-companion` 等对共享 Node 脚本
   的行为契约（两侧共用同一实现，一处修复双线同愈）。
 
@@ -88,6 +91,12 @@ npx --yes @tauri-apps/cli build --config src-tauri/src/app/tauri.conf.json \
 
 ## 5. 加一个伴随插件（桌面内置插件）
 
+> 在册伴随插件 **28 个**（v1.0.0 由 39 精简，2026-10-07 按用户点名移除 11 个）。逐名、版本、许可与
+> 来源核对见 `dsh-desktop/docs/builtin-plugins-inventory.md`；数量与登记以
+> `scripts/lib/companion-plugins.js` 的 `COMPANION_PLUGINS` 实测为准。移除一个插件的姿势是同一清单的
+> 反向操作：摘 `COMPANION_PLUGINS` 登记 + 进 `RETIRED_COMPANIONS` 撤回账 + 删 `assets/plugins/<dir>` 源
+> > （退役三件事缺一，存量 profile 里的副本就可能收不回）。
+
 1. **单一来源登记**：`dsh-desktop/scripts/lib/companion-plugins.js` 的
    `COMPANION_PLUGINS` 数组加条目（id 必须与该插件 cordis.patch.yml 的 loader
    id 一致——issue #104 教训；name 含 scope 则落 `node_modules/@scope/`）。
@@ -96,7 +105,10 @@ npx --yes @tauri-apps/cli build --config src-tauri/src/app/tauri.conf.json \
    `SYNC_SUBDIRS` 全量同步，keep-newer 分支只补**整目录缺失**）。
 3. **测试**：`dsh-desktop` 的 `unit-compat-companion.test.js`（同步语义）+
    `dsh-mini.test.js` 风格的插件自身用例。
-4. 打包时 `stage-payload.sh` 自动带入（assets/ 全量镜像）。
+4. **交付面**：`stage-payload.sh` **不**把 `assets/plugins` 装进安装包（v1.0.0 纯净线显式
+   `//XD plugins` + 事后 `rm -rf` 并门禁校验）——插件源只随仓库分发，运行期由 boot 的 sync 步
+   同步进 `<DSH_HOME>/profiles/<name>/node_modules/`。新增插件不需要动 stage 脚本。
+5. **许可对账**：`THIRD_PARTY_NOTICES.md` §4.1 的行集与本清单**必须逐名 1:1**（增删插件同步增删行）。
 
 ## 6. 打包与验证（win-x64）
 

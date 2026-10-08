@@ -10,13 +10,13 @@
 - [x] **C1 会话完成通知全链（M）**（2026-08-22 完成：session-watcher CLI 行协议 + session_notify.rs Electron 保真门控 + 30s/15s 双层限流 + 通知跳转主窗定向；N2 对抗验收 32 测 + 四 P1 修复（重启风暴退避/emit_to 注释修正+垫片 isMainWindow 守卫/C2 30s 节流/模块公开））：session-watcher crate 已写好但零接线；shim 已监听 notification-jump 但无人发射；notifyOnTurnEnd 是死开关。落点：sidecar `session-watch` 长驻子命令复用 payload session-watcher.js（stdout 行协议）→ Rust 消费 NotifyThrottle/CurrentSessionTracker + notification。需补 30s/会话+15s 全局限流。
 - [x] **C2 会话完成即刷余额（S）**（2026-08-22：trigger_fetch_throttled 挂 turn-end 首行，30s 节流与轮询环/强制路径四路互不冲突[TA15 竞态实证]）：balance.rs trigger_fetch 挂 turn-end 事件（W3 挂账点 docs/balance-architecture.md:210）。
 - [ ] **C11 托盘差距（S，2026-08-22 半开）**：左键唤起主窗（Win/Linux）已落（T1）；closeToTray 假开关与托盘会话通知 checkbox、首隐藏气泡未做。
-- [ ] **C10 宠物窗三件套（S）**：位置记忆/最小化自动弹出（pet_set_auto_open 只写不读）/默认右下角。
+- [x] ~~**C10 宠物窗三件套（S）**~~ **作废（2026-10-07）**：桌宠插件 `harness-pet` 已随 v1.0.0 内置插件精简（39 → 28）按用户点名移除，`assets/plugins/harness-pet` 源目录整树删除——宠物窗的位置记忆 / 最小化自动弹出（`pet_set_auto_open` 只写不读）/ 默认右下角三件套失去服务对象，不再补做。
 - [ ] **C16 页面 console.error 落 page_error（S）**：smoke 全在 grep 这些词，排障价值高；垫片包 console.error（5s 节流）。
 
 ## 第二波（体验补全）
 
 - [x] **C4 更新链激活（S）**（2026-08-22 改写：**双源 releases + sha256 路线**，非 minisign——updater_client.rs（GitHub digest/边车校验 fail-closed、Gitee 单源无锚拒绝、跨源换源重试）+ menu.rs 安装链 + CI sha256 边车/mirror-gitee + verify-update-sources.mjs；check-agent-update 退役）
-- [ ] **C5 文件预览静态服务（S-M）**：preview-server 加绝对路径+fence 路由，app_init 回填 staticPort（dsh-client-file-changes 的站内 HTML 预览当前降级）。
+- [x] ~~**C5 文件预览静态服务（S-M）**~~ **作废（2026-10-07）**：本项要救的「站内 HTML 预览降级」是 `dsh-client-file-changes`（「文件」视图 + 一键还原）的功能面，该插件已随 v1.0.0 内置插件精简（39 → 28）按用户点名移除（与内核官方同名包重叠、镜像副本遮蔽官方包），其还原依赖的壳侧 `file_revert` 亦退役——**降级问题不复存在**。preview-server 仍承担静态页与 `/__diag/` 诊断端点，不需要为此项加 fence 路由。文件浏览/预览入口见 `dsh-better-sidebar`（仍在包内）。
 - [ ] **C8 备份/诊断导出系统对话框（S）**：tauri-plugin-dialog save/open。
 - [ ] **C9 拖拽路径回填（S-M）**：onDragDropEvent→file.path（shim 已读恒空）。
 - [ ] **C12 M3 主题（M）**：preload 的 Material Design 3 注入整体搬垫片（纯页面侧）。

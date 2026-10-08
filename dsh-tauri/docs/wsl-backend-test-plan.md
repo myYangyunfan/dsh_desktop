@@ -88,7 +88,8 @@
 
 - `--wsl` 接线：`ctxFromArgs(['--wsl','--home',X])` → integration 构造的
   `wslMode()` 为 true、anchor 指向 `<X>/agent/node_modules/@deepseek-ai/dsh`
-  （经 boot 在沙箱 UNC 形态目录上跑 presets 步验证落点，或 spy 断言）。
+  （经 boot 在沙箱 UNC 形态目录上跑 sync/patches 步验证锚点切换，或 spy 断言；
+  v1.0.0 纯净线拆除了 presets 步，落点验证改由 sync 半边承担）。
 - 五步顺序契约不破（现有 cli.test.js boot 顺序例继续跑，--wsl 变体补一例）。
 - 共享层既有单测（patch-target-resolver wslLayout 族）继续全绿——接线不
   改语义。
@@ -131,8 +132,9 @@
 11. **版本对齐**：模拟 payload 版本前进（改本地 payload package.json）→
     启动触发 agent 重装 → agent-prev 保留；M2：手工破坏新 agent → 回退
     动作恢复旧版可用。
-12. **余额/会话通知**：effective home=UNC 下 balance-fetch 取到 WSL 内
-    settings.yaml、会话完成通知触发。
+12. **会话通知**：effective home=UNC 下会话完成通知触发（原并列的
+    `balance-fetch` 取数项已随 Electron 余额遗留线整体拆除——余额由内置插件
+    `dsh-balance` 的宿主半边在内核 Node 进程内自取，home 天然随内核）。
 13. **`.wslconfig` 异常**：`localhostForwarding=false` 机器 → 恢复页文案
     指路（R2 验证）；mirrored 网络模式兼容。
 14. **冷启动**：`wsl --shutdown` 后首启（探测/首装含 WSL 冷启动耗时段，

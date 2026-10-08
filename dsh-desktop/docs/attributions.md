@@ -8,7 +8,6 @@ DSH Desktop 集成了大量开源组件。本文件汇总主要第三方项目�
 |---|---|---|---|
 | [Zat-DSH Engine](https://github.com/mishibeikejie/zat-dsh-engine) | 0.4.0 | MIT | 设置 → 插件 → 插件市场（完整替换旧市场，随 v0.3.6 发布） |
 | [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) | 0.12.2 | MIT | 侧边栏工作台 bundle |
-| [harness-pet](https://github.com/cakeni/harness-pet) | 0.1.0 | MIT | 桌面宠物 bundle（鲸鱼素材见 `assets/plugins/harness-pet/assets/whale/ATTRIBUTION.md`） |
 | [@deepseek-ai/dsh](https://www.npmjs.com/package/@deepseek-ai/dsh) | 0.1.0-rc.6 | MIT | DeepSeek Harness CLI 与插件生态 |
 | [koffi](https://koffi.dev/) | 3.1.5 | MIT | 原生 FFI（目录选择器 / 原子写 / 会话持久化） |
 | [Electron](https://www.electronjs.org/) | 43.4.0 | MIT | 桌面壳运行时 |
@@ -19,7 +18,12 @@ DSH Desktop 集成了大量开源组件。本文件汇总主要第三方项目�
 | [electron-builder](https://www.electron.build/) | 26.15.3 | MIT | 打包工具（仅构建期） |
 | [Cordis / Cosmokit / Schemastery](https://github.com/deepseek-ai) | 随 dsh | MIT | 插件框架 |
 
-## Zat-DSH Engine（插件市场）
+## Zat-DSH Engine（插件市场，已退役）
+
+> 本行与本节是历史记录：`zat-dsh-engine`（旧内置市场）已从随包清单移出并删除源目录
+> （commit `4baa9beaf`「随包删除已退役的内置插件市场 zat-dsh-engine」），后续接替它的
+> `dsh-community-market` + `dsh-market-desktop-bridge` 也于 **2026-10-07** 随 v1.0.0 内置插件
+> 精简（39 → 28）整体退役。本仓库当前不再分发任何插件市场组件，下列路径已不存在。
 
 - 上游仓库：<https://github.com/mishibeikejie/zat-dsh-engine>
 - 许可证：MIT（全文见 `assets/plugins/zat-dsh-engine/LICENSE`，随安装包一并分发）
@@ -27,16 +31,12 @@ DSH Desktop 集成了大量开源组件。本文件汇总主要第三方项目�
 - 数据：社区目录实时来自 GitHub `dsh-plugin` 主题；内置 999 条中文简介与分类数据已编译进 `lib/index.js`。
 - 修改说明：本仓库按上游 release 原样打包，未做代码改动；运行时由 `syncCompanionPlugins` 同步为 web profile bundle。
 
-## 内置 Agent 预设（第三方预设来源）
+## Agent 预设（v1.0.0 起不再携带）
 
-详见 [docs/agent-presets.md](agent-presets.md)。主要上游：
-
-| 预设 | 上游 | 许可证 |
-|---|---|---|
-| `router-standard` | [yjh051108/dsh-routing-suite](https://github.com/yjh051108/dsh-routing-suite) / [dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) | MIT |
-| `anchored-standard`、`zero-anchored-standard`、`whoami-standard` | [xiaobright/dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard) | MIT |
-| `v4-flash-godmode-opencode-go` | [SheberDavid/v4-flash-godmode-opencode-go](https://github.com/SheberDavid/v4-flash-godmode-opencode-go) | ⚠️ 上游无 LICENSE，分发前需确认 |
-| `warmupbetter`、`warmupbetter-replay` | [0liveiraaa/myDshPresets](https://github.com/0liveiraaa/myDshPresets) | 上游附 `LICENSE.deepseek-harness`（MIT 文本），建议与作者确认 |
+v1.0.0 纯净线把 `assets/agent-presets` 整树删除，并拆除了预设写入器与 boot 的 `presets`
+步——本仓库不再分发任何第三方 Agent 预设，因此其许可义务不再适用，本文件不再为它们保留
+逐条许可表；曾随包分发的预设名与上游来源记录见 git 历史
+（`git log --diff-filter=D -- dsh-desktop/assets/agent-presets`）。
 
 ## 其他说明
 

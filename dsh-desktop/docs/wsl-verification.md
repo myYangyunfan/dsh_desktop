@@ -59,17 +59,17 @@
 
 ### 2.4 数据面与插件（wsl 模式）
 
-- [ ] WSL 内 `cat ~/.dsh-desktop/profiles/web/cordis.patch.yml` → 11 条 `- insert:`（余额/文件/终端/浮窗/插件市场/提示词/思考/识图/WSL 设置等）；
-- [ ] UI 中：对话底部余额小部件、详情面板「文件」标签页（diff 查看）、「终端」标签页（WSL 内走 `sh -i`，执行 `pwd` 应显示 WSL 路径）、会话浮窗、插件市场、设置页「自定义提示词」可用；
+- [ ] WSL 内 `cat ~/.dsh-desktop/profiles/web/cordis.patch.yml` → `- insert:` 条数与在册伴随插件一致（**数以 `scripts/lib/companion-plugins.js` 的 `COMPANION_PLUGINS` 实测为准**，v1.0.0 起在册 28 个；历史检查点里的「终端 / 插件市场 / 识图」三条已随 2026-10-07 插件退役不再出现，余额 / 文件变更 / 浮窗 / 提示词 / 思考 / WSL 设置等仍在）；
+- [ ] UI 中：对话底部余额小部件、插件侧文件变更投影、会话浮窗、设置页「自定义提示词」/「第三方模型思考强度」/「WSL 后端」可用；（详情面板「文件」标签页与「终端」标签页已于 v1.0.0 随 `dsh-client-file-changes` / `dsh-terminal-tab` 退役，不再是检查项；终端能力改由内核自带终端承担）
 - [ ] WSL 内目录布局正确：`agent/` `agent-prev/`（更新后）`agent-staging/`（仅安装期间）`profiles/` `sessions/` `dsh.pid`；
-- [ ] WSL 内 `ls ~/.dsh-desktop/agent/node_modules/@deepseek-ai/dsh/config/agent-presets` → 除 npm 包自带的 code/cordis/minimal/standard 外，还有 `minimal-win` / `router-standard` / `anchored-standard` 等 8 个壳内置预设与 `_preset` 共享模块；UI 的模式列表与 local 一致；
+- [ ] WSL 内 `ls ~/.dsh-desktop/agent/node_modules/@deepseek-ai/dsh/config/agent-presets` → 只有 npm 包自带的出厂预设（`minimal` / `standard` / `ptc` / `cordis`，随内核版本而异）；**v1.0.0 纯净线不再随包写预设**，UI 模式列表即出厂集。若用户自行往 `<DSH_HOME>/.agent-presets/`（WSL 内为 `~/.dsh-desktop/.agent-presets/`）放了预设，则出厂集 + 这些用户预设一并出现在列表里；
 - [ ] 会话完成 → Windows Toast 通知弹出（经 UNC 读 WSL 会话日志）；
-- [ ] 「文件」视图的**还原/打开**应被安全栅栏拒绝（WSL 会话不适用，预期行为；diff 查看不受影响）。
+- [ ] 原「文件」视图的**还原**（`file_revert`）已随 `dsh-client-file-changes` 于 v1.0.0 退役，不再是检查项；**打开**（`file_open`）这类依赖 Windows 本地文件能力的桥命令在 WSL 会话下应被安全栅栏拒绝（预期行为；插件侧 diff 投影不受影响）。
 
 ### 2.5 退出与重启服务
 
 - [ ] 退出应用 → WSL 内 `pgrep -f 'bin.js web'` 无残留、`dsh.pid` 已删除（**不要**用 `wsl --terminate` 测试，那会杀整个发行版）；
-- [ ] 插件市场安装/卸载插件后点「重启服务」→ 服务在 WSL 内重启、窗口重载到新端口（`desktop.log` 有 `WSL 托管模式：在 … 内启动 dsh web` 新行）。
+- [ ] （历史检查项，2026-10-07 起失效）「插件市场装/卸载后点『重启服务』」——内置市场 `dsh-community-market` 与桌面服务桥 `dsh-market-desktop-bridge` 已退役，页面内不再有该入口。改测：WSL 内用 `dsh plugin --profile web add <包名>` 装插件后重启应用 → 服务在 WSL 内重启、窗口重载到新端口（`desktop.log` 有 `WSL 托管模式：在 … 内启动 dsh web` 新行）。
 
 ### 2.6 自动更新与回退
 
@@ -86,11 +86,11 @@
 cd /home/ezio/workspace/dsh_desktop   # 在 WSL 里
 node dsh-desktop/scripts/sync-companion-plugins.js ~/.dsh --dry-run   # 先预览
 node dsh-desktop/scripts/sync-companion-plugins.js ~/.dsh --with-patches
-# 未自动找到你的 dsh 包时（预设同步日志会提示），追加: --dsh-package <dsh 包目录>
+# 未自动找到你的 dsh 包时（profile manifest 对账日志会提示），追加: --dsh-package <dsh 包目录>
 # 重启你自己的 dsh web（checkout: pnpm dsh web；npm 版: dsh web）
 ```
 
-- [ ] 重启后你的 dsh 设置页出现「WSL 后端」等全部配套栏目；补丁日志提示「已应用/无需变更」幂等；预设日志提示已同步 8 个内置 Agent 预设（未自动找到 dsh 包时用 `--dsh-package <包目录>` 指定）。
+- [ ] 重启后你的 dsh 设置页出现「WSL 后端」等全部配套栏目；补丁日志提示「已应用/无需变更」幂等；日志**不出现任何预设写入行**（v1.0.0 纯净线拆除了随包 Agent 预设子系统，脚本只同步插件；未自动找到 dsh 包时用 `--dsh-package <包目录>` 指定）。
 
 ## 3. 已在 WSL 内自动化验证过的项（无需重复）
 

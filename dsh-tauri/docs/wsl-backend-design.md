@@ -53,6 +53,9 @@
 commands 依赖它；sidecar 改动只在 cli.js 装配层（scripts/ 共享层零改动——
 WSL 半边 patch-target-resolver.js 已存在）。
 
+> 上图的 `presets` 步已在 v1.0.0 纯净线整体拆除（详见 §5.5 后的注记）；
+> `getInstallAnchorDir` 的 wsl 分支随 sync/patches/preflight 继续存在。
+
 ## 3. 端到端数据流（时序）
 
 ```text
@@ -185,8 +188,14 @@ wsl-backend（settings 解析属配置域，两处消费：supervisor + commands
 | `ctxFromArgs`（634） | 解析 `--wsl` flag → `ctx.wsl`；`--home` 已有（确认 resolveHome 显式值优先级高于 DSH_HOME env——现实现满足） |
 | `makeIntegration`（153） | `wslMode: () => !!wsl`（参数对象加 `wsl`）；`getInstallAnchorDir`：wsl → `path.join(home,'agent','node_modules','@deepseek-ai','dsh')`，local 现值 |
 | `cmdBoot`（584） | 步骤集不变（repair/sync/presets/patches/preflight 五步契约不动）；presets 步 dest 目标随 makeIntegration 的 anchor 自动切换；repair 步在 UNC 上的行为 = healBeforeServer 纯 fs（无 junction），无需分支 |
-| 其余子命令 | `makeGuard(c)`/`createPluginManager` 的 home 已从 ctx.home 流过——Rust 侧传 `--home <UNC>` 即全通（balance-fetch/diag 同理，M2 逐个接线） |
+| 其余子命令 | `makeGuard(c)`/`createPluginManager` 的 home 已从 ctx.home 流过——Rust 侧传 `--home <UNC>` 即全通（diag 同理，M2 逐个接线；原 `balance-fetch` 子命令已于 2026-10 随 Electron 余额遗留线整体拆除，不在接线面） |
 | `cli.test.js` | + `--wsl` 接线例（integration ctx.wslMode=true 断言经 spy/子进程 stderr 日志）+ presets 目标切 UNC anchor 例 |
+
+> **v1.0.0 注记**：本节的 `presets` 步与「presets 目标切 UNC anchor」已随纯净线失效——
+> 随包 Agent 预设子系统（源树 / 写入器 / 落点自愈 / boot 的 `presets` 步）整体拆除，boot 链
+> 现为 repair/sync/patches/compat-pin/preflight **五步**（契约见 `contracts/data-flow.md §3`
+> 与 `contracts/wsl-backend.md`）。`getInstallAnchorDir` 的 wsl 分支仍在，服务对象换成
+> sync/patches/preflight 的装配锚点探测。
 
 ### 5.6 `src/app/src/lib.rs` + 周边 commands
 
@@ -194,7 +203,7 @@ wsl-backend（settings 解析属配置域，两处消费：supervisor + commands
 |------|------|------|
 | `start_supervisor` | `Supervisor::new` 签名不变（backend 解析内置）；无 | — |
 | session-watcher 装配 | home 改 `sv.effective_home()` | M1 |
-| `commands/balance.rs` 的 sidecar 调用 | `--home <effective_home()>` | M1 |
+| ~~`commands/balance.rs` 的 sidecar 调用~~ | 本行已失效：Electron 余额遗留线（Rust 轮询环 `commands/balance.rs` + sidecar `balance-fetch`）2026-10 整体拆除，余额取数改由内置插件 `dsh-balance` 的宿主半边在内核 Node 进程内完成，home 天然随内核，无需 WSL 侧接线 | — |
 | 插件管理六通道 sidecar 调用（commands.rs 内 spawn 点） | 同上 `--home`（+ `--wsl`） | M1 |
 | diag/backup/fence | `--home` / 路径切换 | M2 |
 | `docs/development.md`、`docs/migration-roadmap.md` | 实装后勾掉「WSL 完整托管」遗留项 | M1 收尾 |

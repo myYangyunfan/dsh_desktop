@@ -9,8 +9,7 @@
 | `dsh-desktop/` | 客户端主体：内置 dsh CLI 与 Node 运行时、构建期补丁与自愈脚本（原 Electron 外壳已下线） |
 | `dsh-tauri/` | 桌面壳（Rust + Tauri/WebView2）：`src-tauri/` Rust 工作区、`sidecar/` Node 侧车、`scripts/stage-payload.sh` 打包暂存 |
 | `dsh-desktop/scripts/` | 构建期补丁、自愈模块；测试统一放 `scripts/test/` |
-| `dsh-desktop/assets/plugins/` | 内置 Cordis 插件包 |
-| `dsh-desktop/assets/agent-presets/` | 内置 Agent 预设 |
+| `dsh-desktop/assets/plugins/` | 内置 Cordis 插件包（v1.0.0 起不进安装包） |
 | `.github/workflows/tauri-release.yml` | Tauri 三平台发布流水线（tag 触发） |
 
 ## 开发环境
@@ -31,7 +30,15 @@
 ## 代码组织约定
 
 - **插件**：独立 npm 包放 `dsh-desktop/assets/plugins/<name>/`，通过 `cordis.patch.yml` 声明对宿主的扩展点
-- **Agent 预设**：`assets/agent-presets/<preset>/`，`agent.cordis.yml` 描述元数据，`.mjs` 文件作为生命周期入口
+- **Agent 预设**：v1.0.0 纯净线不携带预设——`assets/agent-presets` 源树、预设写入器
+  （`scripts/install-minimal-win-preset.js`）、落点自愈（`scripts/lib/preset-heal.js`）与 boot 的
+  `presets` 步已整体拆除，客户端不再写任何预设文件。用户侧落点仍是内核自行发现的用户根
+  `<DSH_HOME>/.agent-presets/<id>/`（`agent.cordis.yml` + `preset.yml`），由用户放文件，
+  升级路径不得清除。保留的兼容网是内核 agent-preset 回落补丁
+  （`scripts/lib/patch-adapters.js`，`minimal-win` → `minimal`），护老用户 resume，不要拆。
+  要内置预设等于重新引入整套子系统，请先开 issue 议形态（交付面口径、
+  `stage-payload.sh` 与 `tauri-release.yml` 的 assets 剔除清单（现在只剩 `plugins`）、
+  boot 链的五步形状与 `data-flow.md §3` 步骤契约都要同迁）
 - **主进程**：拆分独立脚本（watchdog、session-watcher、updater、balance、wsl-backend 等），通过 IPC/事件与桌面壳（`dsh-tauri/` Rust 侧 + `sidecar/` Node 侧车）协作，不要堆叠进单文件
 - **构建期补丁**：集中在 `scripts/patch-*.js`，按功能域命名，便于单独启用/禁用
 - **可单测纯函数**：收敛到 `scripts/lib/`（如 `patch-engine.js`、`versions.js`、`github-release-assets.js`），网络与文件编排留在调用方，方便 `node --test` 覆盖

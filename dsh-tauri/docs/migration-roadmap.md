@@ -145,6 +145,9 @@ Rust 壳（7 个单向依赖的 crate）+ Node sidecar（复用 `dsh-desktop/scr
 - 托盘 + 通知（限流与聚焦豁免：session-watcher 已有决策逻辑，接系统 API）。
 - 浮窗（分屏）/ 赞助窗 / 宠物窗（透明窗 PoC 先行：WebView2 transparent 已知有坑，
   失败则宠物窗降级为不透明圆角小窗）。
+  > **现状注（2026-10-07）**：内置桌宠插件 `harness-pet` 已随 v1.0.0 伴随插件精简（39 → 28）移除，
+  > 宠物窗失去服务对象——本项与其 PoC 不再是待办（下方风险 R2 同步失去对象），相关收口见
+  > `migration-backlog.md` C10（作废）。
 - fence 实装：zstd 首帧 cwd 解析、file-revert 逆序应用、备份/恢复/诊断命令族。
 - WSL 后端通道（wsl_config_* 三通道，sidecar 复用 wsl-backend.js 逻辑）。
 - **验收**：对齐 Electron 版集成测试清单逐项（kill-renderer / float-crash / early-crash /

@@ -8,7 +8,7 @@
 内置运行时（Node v24.15.0 + npm 11.12.1）与 Tauri/Rust 壳层（`src-tauri/Cargo.lock`，531 个 crate）。
 
 与旧版清单的两点实质差异：① **不再有 Electron**——壳层是 Tauri 2，渲染后端为系统 WebView（Windows 的 WebView2 / macOS 的 WKWebView / Linux 的 WebKitGTK），
-electron / electron-builder / electron-winstaller 已从载荷中排除；② **内置插件与随包预设不进安装包**（见第 4 节），
+electron / electron-builder / electron-winstaller 已从载荷中排除；② **内置插件不进安装包**（见第 4 节），
 它们只作为仓库源码随本仓库分发。
 
 ---
@@ -724,58 +724,47 @@ Windows 目标另依赖系统 **WebView2 Runtime**（微软 Edge WebView2，随 
 
 ## 4. 随仓库分发、但**不进安装包**的组件
 
-v1.0.0 起与官方桌面客户端形态对齐：安装包不携带第三方插件与自定义 Agent 预设（`dsh-tauri/scripts/stage-payload.sh` 显式剔除并有门禁）。下列内容仍随**本仓库源码**分发，其许可证义务因此仍然适用：
+v1.0.0 起与官方桌面客户端形态对齐：安装包不携带第三方插件（`dsh-tauri/scripts/stage-payload.sh` 显式剔除并有门禁）。下列内容仍随**本仓库源码**分发，其许可证义务因此仍然适用（自定义 Agent 预设在 v1.0.0 已连同源目录整体拆除，仓库不再携带，故不在此列）：
 
-### 4.1 `dsh-desktop/assets/plugins`（40 个配套插件）
+### 4.1 `dsh-desktop/assets/plugins`（28 个配套插件）
+
+> **v1.0.0 精简（2026-10-07）**：内置伴随插件由 39 个减为 28 个——用户点名移除 11 个，其源目录已从
+> `dsh-desktop/assets/plugins/` 整树删除，仓库不再携带，故其许可义务不再适用、本表相应撤除其行：
+> `@deepseek-ai/dsh-client-file-changes`、`@deepseek-ai/dsh-terminal-tab`（这两者与内核官方同名包重叠，
+> 镜像进 `profiles/web/node_modules` 会遮蔽官方包）、`harness-pet`、`@dsh-external/dsh-vision`、`graph-memory`、
+> `dsh-community-market`、`dsh-market-desktop-bridge`（仅服务于市场）、`dsh-hub`（仅挂载 graph-memory 与市场）、
+> `dsh-file-drop`、`dsh-image-paste`、`dsh-cardian`。这些包自带的内层 `node_modules` 依赖树随包一并移除。
 
 | 插件 | 版本 | 许可证 |
 |---|---|---|
-| @deepseek-ai/dsh-balance | 0.1.1 | MIT |
-| @deepseek-ai/dsh-client-file-changes | 0.1.0 | MIT |
-| @deepseek-ai/dsh-conversation-tweaks | 0.1.0 | MIT |
+| @deepseek-ai/dsh-balance | 0.1.2 | MIT |
+| @deepseek-ai/dsh-conversation-tweaks | 0.1.1 | MIT |
 | @deepseek-ai/dsh-file-changes | 0.1.0 | MIT |
-| @deepseek-ai/dsh-openclaw-bridge | 0.8.0 | MIT |
-| @deepseek-ai/dsh-plugin-manager | 0.1.2 | MIT |
-| @deepseek-ai/dsh-prompt-custom | 0.1.1 | MIT |
-| @deepseek-ai/dsh-quest-ui | 0.6.0 | MIT |
-| @deepseek-ai/dsh-terminal-tab | 0.1.0 | MIT |
+| @deepseek-ai/dsh-openclaw-bridge | 0.8.1 | MIT |
+| @deepseek-ai/dsh-prompt-custom | 0.3.5 | MIT |
+| @deepseek-ai/dsh-quest-ui | 0.6.1 | MIT |
 | @deepseek-ai/dsh-workspace-anchor | 0.1.0 | MIT |
 | @deepseek-ai/dsh-wsl-settings | 0.1.0 | MIT |
 | @dsh-external/dsh-side-session | 0.3.1 | MIT |
-| @dsh-external/dsh-subagent-lens | 0.1.0 | MIT |
+| @dsh-external/dsh-subagent-lens | 0.1.1 | MIT |
 | @dsh-external/dsh-super-injector | 0.3.1 | BSD-3-Clause |
-| @dsh-external/dsh-vision | 0.3.0 | BSD-3-Clause |
-| billion-context-dsh | 0.2.1 | MIT |
-| dsh-auto-compact | 0.1.0 | MIT |
-| dsh-basics-panel | 0.1.0 | MIT |
-| dsh-better-sidebar | 0.15.3 | MIT |
-| dsh-cardian | 0.14.0 | MIT |
-| dsh-change-review | 0.1.0 | MIT |
-| dsh-community-market | 0.1.1 | MIT |
-| dsh-easyrewrite | 2.5.2 | MIT |
-| dsh-file-drop | 0.3.0 | MIT |
-| dsh-hub | 1.1.5 | MIT |
-| dsh-image-paste | 0.1.0 | MIT |
-| dsh-input-fold | 0.1.0 | MIT |
-| dsh-input-history | 0.1.0 | MIT |
-| dsh-market-desktop-bridge | 0.1.1 | MIT |
-| dsh-offpeak | 1.0.0 | MIT |
-| dsh-pocket | 2.10.6 | GPL-2.0 |
-| dsh-prompt-optimizer | 2.0.3 | MIT |
-| dsh-reasoning-effort | 0.7.0 | MIT |
+| billion-context-dsh | 0.2.26 | MIT |
+| dsh-auto-compact | 0.1.1 | MIT |
+| dsh-basics-panel | 0.4.1 | MIT |
+| dsh-better-sidebar | 0.24.1 | MIT |
+| dsh-change-review | 0.1.1 | MIT |
+| dsh-easyrewrite | 2.6.0 | MIT |
+| dsh-input-fold | 0.1.1 | MIT |
+| dsh-input-history | 0.1.1 | MIT |
+| dsh-offpeak | 1.0.1 | MIT |
+| dsh-pocket | 2.10.7 | GPL-2.0 |
+| dsh-prompt-optimizer | 2.0.4 | MIT |
+| dsh-reasoning-effort | 0.8.1 | MIT |
 | dsh-session-manager | 0.1.0 | MIT |
-| dsh-settings-groups | 0.1.0 | MIT |
-| dsh-settings-nav-custom | 0.1.0 | MIT |
+| dsh-settings-groups | 0.1.1 | MIT |
+| dsh-settings-nav-custom | 0.1.1 | MIT |
 | dsh-synapse | 0.3.0 | MIT |
-| dsh-zcode-migrate | 0.1.1 | MIT |
-| graph-memory | 1.6.0-beta.1 | 未声明（见包内 LICENSE） |
-| harness-pet | 0.2.0 | MIT |
-
-### 4.2 `dsh-desktop/assets/agent-presets`（9 个预设目录）
-
-预设是配置文档（YAML/JSON）而非可执行代码，逐目录名如下：
-
-`anchored-standard`、`minimal-win`、`router-standard`、`v4-flash-godmode-opencode-go`、`warmupbetter`、`warmupbetter-replay`、`whoami-standard`、`zero-anchored-standard`、`_preset`
+| dsh-zcode-migrate | 0.1.2 | MIT |
 
 ---
 

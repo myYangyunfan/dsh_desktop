@@ -19,6 +19,380 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### docs(companion)：README 门面换成逐名 28 行实测表并进机器锁；§一「一句话作用」列逐格审计修 5 处
+
+- **门面无同源是这张表的历史形态**：`README.md` / `README.en.md` 里只有一张 5 行「主要增强项摘要」，
+  与在册 28 条从不同源，换代与退役时它永远是滞后的一份（本轮逐格复核：它那 5 行里唯一带具体功能宣称的
+  `dsh-side-session`「三档上下文」**实测成立**——`lib/client.js:1209-1211` 的 `contextLength` 三档
+  = 120 条 / 600 条 / 5000 条，已把档位写进新表；真正的问题是**缺 23 行**，加上引言那句
+  「随安装包分发」与下一句「不进安装包」自相矛盾）。
+  现在两份 README 各出一张 **28 行**表，包名 / 版本 / 许可逐格取 `assets/plugins/<dir>/package.json` 实值，
+  行序取 `COMPANION_PLUGINS` 顺序，来源列的 12 条上游链接全部是 §三 实测可达过的那批仓库路径（不新造 URL），
+  并把 §三 3.5 的四条许可保留意见带进门面（#4 撞名、#7 仅 manifest 自标、#11 上游无 LICENSE、#23 借作用域）。
+  引言那句「随安装包分发」一并改掉——v1.0.0 起插件源**不进安装包**，那句话与下一句自相矛盾。
+- **收口第 8 层**（`scripts/test/unit-hub-registry.test.js` 新增 1 例，本文件 23 → 24）：
+  README 两张表复用与 §4.1 / §一 同一条 `ledgerDiff`，另咬行序对 `COMPANION_PLUGINS`、中英两份逐格相等。
+  `ledgerDiff` 顺带长出**许可列**（可选列，「未声明即不判」——inventory §一 没有独立许可列，硬判就成了假判据），
+  §4.1 从此也咬许可。反证按惯例配足五种变异：版本滞后 / 漏最后一行 / 幽灵包 / 许可改标 / 前两行对调，
+  各判恰好一条红；**并在仓库外真改一次**（把两份 README 的 `dsh-synapse` 改成 0.2.0 → 该用例真红，
+  只把英文版前两行对调 → 行序断言真红），不是只在测试内部的合成 face 里自证。
+- **§一「一句话作用」列的 5 处不符已就地更正**（逐格对包体实交付字节重放，命中行号随文记录）：
+  #3 `better-sidebar` 的 `tasks` 是 subagent 标签的**标题**而不是第四个内置 id（`builtinTabs()` 实测
+  editor/git/subagent/sidechat/diff 五个，全树 `id: "tasks"` 0 命中）；#7 `dsh-super-injector` 漏记 0.3.1 的
+  设置页插件管理 UI（`lib/index.js:3375` 起 `settings.section` 半边后端 + `POST /ingest` 目录「内化」）；
+  #12 `billion-context-dsh` 漏记 `compress`/`decompress`/`search_context`/`acp_status` 四工具与 `/acp-prune`
+  （`dist/index.js:6338` 的 `tools.register` 循环、`:6352` 的 `ctx.get("commands")`）；#16 `dsh-easyrewrite`
+  漏记版本翻页器与自带设置中心（`lib/client.js:2577/4324`、`lib/index.js:319`）；#25 `dsh-basics-panel` 的
+  `FEATURES` 实测 **4 项**不是 3 项，多出的「归档会话」与 #4 `dsh-session-manager` 职责重叠。
+  这一列不在机器锁里（名字 / 版本 / `nm` / §5.2 七数才是），所以它靠逐格对产物维护，改动必须附命中行号。
+
+### feat(plugins)：内置插件更新通道落成机器判据，28 条判定表整表重算并配三把收口锁
+
+- **为什么要单独一层**：§四/§5.2 的每条判定都要回答「远端有没有既**同源**又**更新**的版本」，
+  而此前这个答案一半靠抄录。两个坑都被实测咬过：按包名比对 d-pack 会得出「重叠 0」的假结论
+  （发布面包名全是 `@dsh-pack/<裸名>`）；npm 上「版本号更高」不等于「是上游」——
+  #4 `dsh-session-manager@0.6.2`（`hkkz9522`）与 #15 `dsh-input-history@0.3.2`（`sunshaobei`）
+  是撞名的第三方实现，按名更新会把别人的代码覆盖进本仓源目录。
+- **新增纯函数面 `scripts/lib/plugin-channels.js` + 复算器 `scripts/compat/scan-plugin-channels.mjs`**：
+  前者给 `versionBucket`（等版 / 我们更高 / 他们更高 / 无此件，版本比较复用全仓唯一实现
+  `scripts/lib/versions.js`）、`identityVerdict`（`same` / `foreign` / `unverifiable` / `unknown`）、
+  `channelRow.actionable`（**d-pack shipped 且更高** 或 **npm 更高且身份 `same`**）与 `summarize`；
+  后者只做 IO（d-pack 走本机克隆的 `git ls-tree`/`git show`，离线可重放；npm 走 `/latest`，
+  官方源失败自动退 npmmirror）。台账数字现在是它的输出，不再是抄录。
+- **2026-10-08 重算结果**：d-pack 通道 28 条 = 等版 20（含 2 条置于 `not-shipped/`）/ 我们更高 5 /
+  他们更高 1 / 无此件 2；`origin/main` 自上次对齐**零漂移**（`git rev-list --count a064e10..origin/main` = 0）。
+  npm 通道命中 9 / 未发布 19，身份计数 `same 4 / foreign 1 / unverifiable 2 / unknown 2`。
+  **两条通道合起来的机器候选只有 1 条 = `synapse`**（d-pack 0.3.1，按裁定只出差量报告不动产物，
+  报告见 `docs/builtin-plugins-inventory.md` §5.5，其结论把本条与 §一/§3.1/§4.1 的旧判据都改了）；
+  npm 侧零候选——三条「远端更高」里没有一条是同身份上游。上一轮点名吸纳的 `better-sidebar` 0.24.1
+  这次由机器确认身份 `same`（`omdsh-dev/DSH-better-sidebar`），不再只是人工比对。
+- **§3.5 的许可与命名风险升级为机器判定**：风险 4（撞名）现记 `unverifiable`，风险 5（同名仓）
+  #24 记 `foreign`、#12/#22 记 `unknown`——「靠版本比对定原创」的措辞从推断改成了判据输出。
+- **三把新锁（每条都带反证）**：`scripts/test/unit-plugin-channels.test.js`（11 例：四态/四值/双条件
+  逐条翻面 + 真数据「本地 repository 自述面」+ d-pack 半边无克隆时按既有惯例 skip）；
+  `unit-hub-registry` 的 §5.2 判定表收口（序号/loader id/源目录/本机版本 + `别名/成员/裸名/缺失/表外/声明/移除引用`
+  七数全部本地重放，改一个数字必须恰红一条——上一版这张表有三行是手抄错的）；
+  `unit-hub-registry` 的 loader id ↔ `cordis.patch.yml` insert 命中审计（27/28 命中，例外只能走
+  **显式点名的目录名单**，并反证「名单里那条确实没有补丁层」）。
+- **写锁时抓到判据自身的缺陷**：`parseRepoSlug` 对无 scheme 的 `github.com/o/r` 形态会把 owner
+  读成 `github.com`（不同项目可能被并成同一条 slug）。今天 28 条的 repository 全是 `git+https://…`
+  形态，台账数字未受影响，但用例已把「四种形态必须归一到同一 slug」钉住。
+- **`synapse` 差量报告（#66，落 `docs/builtin-plugins-inventory.md` §5.5）把「分叉件不可直更」拆成了两个相反的事实**：
+  d-pack `origin/main` 的那份 0.3.1 **就是本机 0.3.0 的换皮**——`app.js`/`styles.css`/`test/`(10 文件)/`docs/`/
+  `LICENSE`/svg 归一后逐字节相同，真实差异只剩 `@dsh-pack/` scope 三处排版 + 13 行 `sessionEvents()` 兼容口；
+  npm/upstream 0.4.2 才是另一条功能线（`app.js` +630/−439、33 个新符号：快捷词 CRUD 与持久化、选区追问、
+  卡片详情面板、画布整理/定位/缩放、会话地图视图切换…）。上一版台账那句「d-pack 0.3.1 也会覆盖掉本仓
+  `perf`/`fix`」是**行尾噪声喂出来的错账**：本机插件文件 CRLF、两个外部源 LF，不归一时对 npm 那份做 `diff -u`，
+  8 个文本文件**全部**各报成一个「整文件重写」hunk（归一后 `LICENSE`/`deepseek-mark.svg`/`cordis.patch.yml`
+  其实逐字节相等），人眼一看全红就放弃了
+  逐条核对。§一 #22、§3.1 #22、§4.1、§五 intro 四处已同步更正；整包仍判不取，但理由换成实测的三笔账：
+  0.4.2 要收我们 `index.js` 12 个 + `app.js` 37 个自有符号（`viewActive` 本机 14 处命中、0.4.2 侧 0 处）、
+  `client.js` 的深色适配桥（`b9ca67a9e` 的 +18 行），以及**一整套 2645 行测试**（git 实测 `test/` 0 行来自上游，
+  全部由 `c1e23447f`/`e9753ca6a`/`ae66ff534` 三次本仓提交写出，而 0.4.2 的 tarball 连 `test/` 都不发）。
+- **同一份报告抓到本轮唯一一条真宿主断链**：本机 0.3.0 的 `projectSession` 回填读 `session.events`，而这个属性
+  在 pin 的 `0.2.0-rc.2` 上已下线——`Session.prototype` 反射 own 名单实测无 `events`（只有 `snapshotEvents`/
+  `ownEvents`），`dsh-session/lib/types/index.d.ts:452` 的 `list(): Session[]` 证真 `ctx.sessions` 给的就是这个类。
+  行为面用同一段探针两面跑：喂旧夹具形状（字面 `events` 数组）得 `messages=2`，喂 rc.2 形状（只有
+  `snapshotEvents`）得 **`messages=0` / 水位线 `null`**；d-pack 那份两种形状都得 2。影响面刻意收窄：`session/event`
+  仍在发（`dsh-session/lib/index.js:1496`）、实时链走显式入参、`firstLiveSeq`/`header` 仍是实例字段，所以症状是
+  **重启/切会话时历史回填空档**，不报错不崩溃——正是规程里「无报错是弱证据」那一类。为什么 1981 例全绿也抓不到：
+  `test/replay-watermark.test.js:20` 的 `makeSession()` 造的正是宿主已经不再提供的形状（夹具替错契约作证），
+  而 §5.2 这一行的七数是 `0 别名 / 0 成员 / 0 裸名 / 缺失 0 / 表外 0 / 声明 0 / 移除引用 0`——「宿主运行时对象上的
+  属性下线」不在六条静态扫里（`kernel-pin.services.removed` 那 12 条全是服务 id，且 d-pack 的修复刻意把回退分支
+  写成 `session["events"]`，扫字面量会两头漏）。盲区进 §5.4 末条（第七个），处置姿势与反证要求写在 §5.5 末段；
+  本轮按裁定**不动产物**，插件版本仍为 0.3.0。
+- **登记一条待核缺口**：`dsh-wsl-settings`（#10）盘上无 `cordis.patch.yml`、`package.json` 也无
+  `dsh.bundle.patch`，boot 的 sync 对 `isBundle=false` 的件只镜像文件、不进 `dsh.profile.bundles`，
+  profile 层也没有代写 `- insert:` 的机器——它靠什么挂进插件栈**尚未证实**，本轮只登记不处置。
+- **文档随迁**：`docs/builtin-plugins-inventory.md` §四 重写为 4.1/4.2/4.3（含 npm 身份表与两条口径雷区），
+  §5.1 的真产物变异反证改为「注入旧后缀取用必须逐名报红、带回落不许报红」的现形判据，
+  §5.2 整表由脚本重生成并补 npm 身份列，§5.3 复算命令加扫描器三条 invocations，§5.4 补通道来源、
+  身份自述天花板、第三通道不重放、挂载面缺口四条边界，**新增 §5.5 三源文件级差量报告**（差量矩阵 +
+  三段证据链 + 复算命令），§5.4 补第七个盲区一条；§一 #22 / §3.1 #22 / §4.1 / §五 intro 的 synapse 判据按实测更正。
+  `AGENTS.md` 同步 better-sidebar 产物拓扑
+  （2 频道 bundle + 3 lazy chunk + Node 半边两文件）与测试基线现值（185 文件 / 1981 例 / 0 fail）。
+
+### feat(better-sidebar)：吸纳上游 0.15.3 → 0.24.1 整包换代，三项自研能力实测已被上游吸收
+
+- **取上游的裁定与代价**：按用户点名「对远端仓库吸纳性更新进来，新功能好功能吸收进来」，
+  #3 直接镜像 npm `dsh-better-sidebar` **0.24.1** 全量重皮（含 9 个构建面文件）。上一轮
+  「d-pack 0.15.4 / npm 0.24.1 均不取」的判据**作废** —— 当时忌的是上游同期引入的 ~28 项重依赖
+  与第三方 peer `@huanlin/dsh-plugin-better-locale`，本轮按上游形态接受（插件不进 payload，
+  代价只落在仓库体积与同步面，不落在安装包）。
+- **上游把「查看变更」整面重做了，我们的手改物随之消失**：退役
+  `diff-turns.ts` / `DiffTurnsPanel.tsx` / `file-changes-highlight.ts`（数据源
+  `window.__dshFileChanges` 全局 store + CodeMirror 三色装饰 + `dsh-editor-diff-add/mod` class），
+  换成共享 diff 栈 `src/client/diff/{rows,highlight,DiffRows,DiffFiles,use-git-diff}` +
+  `src/client/changes/{ops,change-tree,ChangesTab,DiffPane,GitLens,SessionLens}` + `DiffTab.tsx`，
+  经 `builtins/tabs.tsx` 的 `git`（ChangesTab + `opCountOf` 角标）与 `diff`（DiffTab，`hidden`、
+  `order: -1`）两个描述符接线 —— 数据源改为**直接读会话事件日志**，不再依赖外部插件发布全局 store。
+  顺带：文件与编辑器合并成单个 editor 标签，terminal/browser 交还宿主。
+- **原判「我们侧只剩三项能力回吸」是错账，换代收尾已复算证伪**：① `chunk-availability.ts` 的
+  lazy chunk 自动重试、② `editor-features.ts` 编辑器增强、③ #171 的 fsRead 退避 / 重新可见即重拉 /
+  `<pre>` 只读预览兜底——**三项都已在 0.24.1 的 `src/` 与产物里在位**（对 0.15.3 备份用
+  `diff -u --strip-trailing-cr` 复算 + 交付字节逐名核命中：`createChunkRetryLoop`/`ensureChunkAutoRetry`
+  在 `chunk-loader.ts:56/305/321/346` 接线（`visibilitychange` 调 `loop.poke()` 立即重探）、`editor-features.ts` 与备份
+  696 行逐字节相同、`failCountRef`+`reloadSeq` 在 `EditorHost.tsx:122-136`、`TextFallback` 在
+  `builtins/viewers.tsx:53-75`）。本仓唯一被上游丢掉的是 `isChunkRegistered()`——全仓 0 调用者的
+  死代码，不补。**所以本条的实质产物是台账更正，不是改 `src/` 重建**；能力锁本来就成对存在
+  （`unit-better-sidebar-chunk-retry` 锁 ①③、`unit-better-sidebar-editor-features` 锁 ②），
+  没有为「已作废的待办」新加恒红守卫。
+  姿势条款保留：真要改行为仍是**改 `src/` 后本地重跑上游构建，零手改产物** —— 这是与上一轮
+  「src 与 lib 同形双写」的姿态差别。
+- **构建拓扑变了，核对姿势跟着变**：0.24.1 的 `tsconfig.build.json` 是 `emitDeclarationOnly`，
+  不再产出逐文件 `lib/<name>.js` 镜像 —— **随包 bundle 就是唯一事实源**。tsdown 保留 tab 缩进的
+  `//#region <src 路径>` 标记且不混淆，所以纯函数仍能从交付字节里切出来在 `vm` 实跑
+  （夹具 `scripts/test/fixtures/better-sidebar-region.js`：多区段拼接 + `plain()` 归一 +
+  `sameRealm` 模式，跨 realm 会多一个 microtask hop，曾咬坏一个 soak 用例）。
+  本机 `npm run build` 实测可跑（`✔ Build complete in 2036ms`），上一轮「跑不了它的构建」不再成立。
+- **机器锁随迁（替代，不是删除）**：`unit-better-sidebar-editor-diff.test.js` 与
+  `unit-file-changes-highlight.test.js` 锁的名字在 src 与产物里 **0 命中**，已移入
+  `.tmp-retired-tests/` 待随提交删除；新增 `unit-better-sidebar-diff-surface.test.js`（**21 例**）
+  成对替代 —— ① 行为实跑交付字节（LCS 与 git unified 两个生产者、hunk/fold 折叠与可展性、
+  行内着色、会话事件 → 文件操作的 0.1.6 wrapper / 0.1.7 上浮两形态）；② src ↔ 产物同源护栏
+  （区段定界唯一 + 产物区段顶层名 ⊆ src 顶层名，产物缺的名字必须逐名解释为 tree-shake 或常量内联，
+  `HUNK_CONTEXT`→`context = 3`、`MIN_FOLD`→`count >= 3` 的折叠字面量当场验在位）；
+  ③ 接线锁 + 退役面反向锁（旧锚点复活即红）。侧栏组 2026-10-08 复跑实测 **70/70 绿**
+  （`unit-better-sidebar-chunk-retry` 22 + `unit-better-sidebar-editor-features` 20 +
+  `unit-better-sidebar-diff-surface` 21 + `unit-sidebar-md-code-guard` 7；先前记的 72 是滞后账）；
+  连同换代新锚的两把锁 `unit-plugin-kernel-anchor` 8 + `unit-plugin-tab-host` 5 共 **76/76**。
+- **上一轮两处 better-sidebar 兼容改动作废并撤除**：14 键 peer 放宽（上游已直接声明
+  `^0.2.0-rc.1`，rc.2 上 **0 DENIED**；含 rc.2 已不存在的 `@deepseek-ai/dsh-client-runtime` 键
+  也随上游表一并撤掉，`unit-plugin-peer-floor` 的该条豁免随之退役）、
+  23 个旧图标成员 × 112 处两级回落（`primitives-icons.ts` 垫片整目录不存在，上游图标面换成
+  `src/client/icons.tsx` + react-icons 后无此项，模块表 **0 断链**）。
+- **账本随迁**：`THIRD_PARTY_NOTICES.md` §4.1、`docs/builtin-plugins-inventory.md` §一 #3 /
+  §3.1 / §四 / §5.2 #3 / §5.4 全部改到 0.24.1 口径；`unit-hub-registry` 的两账本逐名逐版本
+  收口用例 **21/21 绿**。
+
+### fix(plugins)：在册 28 条内置插件逐条对 rc.2 宿主做更新判定与兼容修复（fleet sweep）
+
+- **规程与总结论**：按 `github.com/oh-my-dsh/dsh-plugin-upgrade-skill` 的 fleet-sweep 五条 standing
+  rules（在目标宿主上验证 / 先做廉价静态扫 / 无报错是弱证据 / 逐插件修复不做混合提交 / 跨代兼容优先）
+  逐条实测，台账见 `docs/builtin-plugins-inventory.md` §五（含 28 行逐插件判定表与复算命令）。
+  **「更新」半边零版本 bump**：d-pack 通道 等版 18 / 我们更高 4 / d-pack 更高但刻意不取 2
+  （#3 better-sidebar 用户点名、#22 synapse 本仓分叉件）/ 在册而 d-pack 无 4；
+  npm 侧 4 条候选逐条判不取（#3 引入 ~28 项重依赖与第三方 peer、#4 `hkkz9522` 与 #15 `sunshaobei`
+  是**同名第三方**不是上游 —— 按名更新会装到别人的实现）。实质工作全在「兼容」半边。
+  **（后记：#3 由上节反转为「取」—— 用户点名吸纳上游后 d-pack 高于我们的只剩 synapse 一条；
+  #4/#15 撞名禁更判据不变。复扫口径见 inventory §四。）**
+- **peer 下限放宽 2 条（DSH-0.2.0-RC1-01 静默拒挂）**：内核按 `peerDependencies` 硬判兼容，
+  不满足的行被**静默** `disabled: true`，stderr 只有一行 `dsh: disabling profile plugin row`。
+  `billion-context-dsh` 5 键上界 `<0.1.6-0` → `<0.3.0-0`；`dsh-better-sidebar` 14 键
+  `^0.1.0-rc.8` → `^0.1.0-rc.8 || ^0.2.0-rc.1`。修后 28/28 可挂（11 条声明 dsh 族 peer，共 46 键）。
+  锁：`scripts/test/unit-plugin-peer-floor.test.js`（4 用例，oracle 与 pin 同源交叉断言 + 反向捕获力）。
+  **（后记：`dsh-better-sidebar` 那条已被上一节作废 —— 上游 0.24.1 自带 `^0.2.0-rc.1` 表。）**
+- **better-sidebar 图标跨代回落（立项时判为「本轮唯一硬断链」）**：rc.2 的 primitives 只剩 94 `Icon*Regular`
+  + 94 `Icon*Medium`，`*14/*16` 后缀全部不存在；产物里 23 个旧成员 × 4 个 bundle = **112 处未守卫取用**
+  （症状是 React #130，整个 slot entry 静默消失）。按确定性规则 `name.replace(/\d+$/,'')+'Regular'`
+  改成两级回落 `旧名 ?? Icon*Regular`，源侧同步 `src/client/primitives-icons.ts`（23 成员）
+  + 18 个 `src` 文件把图标名从 primitives 拆到该垫片 —— src 与 lib 同形双写，本机跑不了它的构建。
+  **（后记：整条已作废。上游 0.24.1 换用 `src/client/icons.tsx` + react-icons，垫片目录不存在，
+  回落点与「跑不了构建」的前提都不成立；判据仍由 `unit-plugin-module-table` 守，实测 0 断链。）**
+- **新机器锁 `scripts/test/unit-plugin-module-table.test.js`（13 用例）+ 纯函数面
+  `scripts/lib/plugin-module-table.js`**：补的是 `unit-plugin-esm-link` 的盲区 —— 打包器把具名导入
+  改写成 `var _p = require("<spec>")` + `_p.<member>`，源里有 import、产物里没有。六条静态扫现值：
+  75 处别名改写 / 322 处成员取用 **0 未守卫断链、0 表外 require**；25 条有 `./client` 入口的插件
+  浏览器模块图 46 处裸名取用 **0 表外**；56 条 `dsh.client` 声明 **0 落空**；
+  `kernel-pin.services.removed` 12 条 id 的 `ctx.get` 引用 **0 命中**；56 条 manifest 入口
+  **0 磁盘缺失、0 被 gitignore 遮蔽**。
+- **判据扩面抓到的两个真实盲区（不是版本号游戏）**：
+  ① `walkPluginFiles` 的 `SKIP_DIR` 整目录跳过 `dist/`，而 `dsh-prompt-optimizer` 的浏览器入口
+  恰好在 `dist/client.js` —— 该插件此前对判据完全隐形。改成「manifest 入口及其相对闭包一定穿过目录
+  白名单」后别名计数 70 → 75（新增 5 处全在这份 dist 产物里），并修掉白名单在**相对**插件根下
+  按字符串前缀比对而静默失效的自写 bug（用例 2 现锁「相对根与绝对根扫描结果逐字段相等」）。
+  ② 同一份 `dist/client.js` 被 `dsh-desktop/.gitignore` 的通用 `dist/` 规则挡住：本机有、库里没有，
+  全新 clone 后这条插件的 UI 槽位静默消失（同 billion-context-dsh 的 issue #65 类）。本轮补
+  `!assets/plugins/dsh-prompt-optimizer/dist{,/**}` 例外；`dsh-reasoning-effort` 0.8.1 把 `./client`
+  换成目录形 `lib/client/index.js`，**新入口与旧入口的删除需在同一次提交里成对收**（本轮按裁定不提交）。
+- **未动面**：任何插件的运行时行为语义、`COMPANION_PLUGINS` 清单、补丁注册表计数、壳侧契约与 Rust。
+
+### refactor(balance)：Electron 余额遗留线整体拆除（六层链路 + 存量测试改指插件 ESM）
+
+- **拆的是哪条链**：自制壳时代的 `dsh-desktop/balance.js` + `balance-scheduler.js`
+  → sidecar `node cli.js balance-fetch` → Rust `start_balance_loop`
+  → `app.emit("balance-changed")` → 垫片派发页面事件 `dsh-balance-changed`。
+  `dsh-balance` 0.1.2 起页面零消费方，但这条链每 180s 仍**真发一次** DeepSeek
+  `/user/balance`（网络与凭据读取都发生）。上一批只登记撤回账，本轮按自己写在
+  `docs/balance-architecture.md` §1.2 的四步前置端到端拆除；壳侧同步面（Rust /
+  sidecar / 桥命令 / 垫片 / 五契约）见 `dsh-tauri/CHANGELOG.md` 的同名条目。
+- **Node 侧删除**：`balance.js` 与 `balance-scheduler.js` 整文件删除，
+  `scripts/check-syntax.js` 的 `entryFiles` 同步摘除两条入口（留着会让语法门咬住
+  不存在的文件）。
+- **存量测试改指插件 ESM，不减覆盖**：`unit-balance` / `unit-balance-proxy` /
+  `unit-balance-pricing-key` / `unit-balance-scheduler` / `unit-balance-scheduler-payload` /
+  `unit-balance-weekend` / `unit-balance-ledger` / `integration-balance` /
+  `ta10-time-window-matrix` 一律改 `require('../../assets/plugins/dsh-balance/lib/*.js')`
+  （Node ≥22.12 的 `require(esm)`，两个模块无顶层 await，CJS 测试可直接驱动）。
+  `unit-balance-weekend` 里专为「双拷贝不漂移」设的第 4 节随 `balance.js` 一同下线，
+  现役价目/档位口径改由 1–3 节直接对 `balance-core.js` 求值把守，与 `dsh-offpeak`
+  源码常量的交叉对拍保留；`unit-balance-ledger` 去掉
+  `window.dshDesktop.refreshBalance` 桩（插件只走内核回环路由，桩留着就是把退役面
+  当成在用面）。
+- **新增反向守卫 `unit-balance-legacy-retire.test.js`（6 例）**：逐层断言遗留源文件 /
+  语法门入口清单 / sidecar 子命令 / Rust 模块与命令注册与菜单与通知链挂点 /
+  桥 `CHANNELS` / 权限真源 / 垫片面 / 五份契约行都不含余额链，并**反向核对现役唯一
+  链路还活着**（插件四件套文件在位 + 两条路由字面量在位 + 插件不依赖
+  `refreshBalance` / `dsh-balance-changed`）——否则「守卫把唯一活链路一起删了」这种
+  事故测不出来。判据形态经过三轮收敛才不假绿：散文（契约说明、Rust 注释）里出现
+  令牌是合法的，故代码侧按**登记形态**判（`m(...)` 条目行、`"balance_refresh",` 授权行、
+  `REQUIRED_SURFACES` 数组字面量本体、垫片 `x: function (` 方法行），文档侧按**段落级**
+  判（出现遗留令牌的段落必须含退役/裁撤/移出/已无/已随/零消费方之一）。
+- **守卫可信性用人为复活反证**：一次性夹具跑六场景（重建 `dsh-desktop/balance.js`、
+  垫片追加 `onEvent('balance-changed', …)`、`bridge-api.md` 复活 `refreshBalance` 行、
+  `CHANNELS` 复活 `dsh:balance-refresh` 条目、`REQUIRED_SURFACES` 复活 `"refreshBalance"`、
+  `balance-core.js` 把代理客户端选择压成 `http` 以咬 `unit-balance-proxy` 的字节级
+  TLS 用例），每场景快照→注入→跑（tap，判红 + 样本量不得为 0）→**先还原再逐字节比对**
+  ——六例全 PASS，收尾两守卫双绿，夹具已删。
+- **文档随迁**：`docs/balance-architecture.md` §1.2 由「遗留线登记」改写为**拆除台账**
+  （六行环节 → 处置 + 防复活说明，并明确 `menu_action` 的 `toggle-balance` 与设置项
+  `showBalanceDock` 不在裁撤范围）、§1.3 表格列名改考古口径、§7「价目常量存两份」
+  改为「只有一份真源」、§9 表头与 §10 维护约定删掉双拷贝指令、§10 测试命令去掉
+  `balance-fetch` 与 `commands/balance.rs` 两项；`README.md` 目录结构把 `balance.js`
+  标为【已删除】并注明现役落点；`docs/builtin-plugins-inventory.md` §二 第 6 行改
+  「壳侧无命令」；`assets/plugins/dsh-side-session/lib/index.js` 的凭据注释改指
+  `dsh-balance/lib/balance-core.js`（该插件只有 lib/，无 src/ 同源面）。
+- **验证**：`npm test` → **1931 例 / 1923 pass / 0 fail / 8 skipped**（本轮净增的 6 例
+  即反向守卫；skip 里 `example.com` 真实 socket 那条随本机网络浮动，与本轮无关）；
+  `node scripts/check-syntax.js` 全部入口通过、`validate-pin.js` →
+  `dsh-v0.2.0-rc.2（0.2.0-rc.2，offline-tarball）`、
+  `patch-surface.js verify` → 67 文件无漂移、`verify-balance-dock.cjs` → 全部断言通过，
+  四者退出码实测均为 0；`node --test sidecar/cli.test.js`（含新增的
+  「`balance-fetch` 已退役：未知子命令 exit 2」反证）**21/21**、其余 sidecar 六文件
+  （farm-repair / ta9-boot-disk-faults / ta9-data-corruption / ta9-patch-io-halfwrite /
+  wsl-mode / wsl-paths）**69/69**，退出码均为 0
+  ——跑法是把 `dsh-desktop/vendor/node` 临时换成指向仓库外 node 副本的 junction
+  （机器级策略：仓库内 exe 不能写 `%TEMP%` 沙箱），跑完已按 sha1 核对还原。
+
+### feat(plugins)：内置伴随插件远端批量更新（22 目录 / 20 条版本上跳）+ 余额投递契约换代随迁
+
+- **通道与判据（两段式）**：先用 d-pack 私源（本地预览 registry 的 `@dsh-pack/*`）逐目录
+  覆盖，再对同一批目录查外部上游（npm `dist-tags.latest` 与 GitHub 默认分支的
+  `package.json`）；只有外部版本更高、且与 pin 的 `0.2.0-rc.2` 内核兼容时才二次覆盖。
+  包名回灌保持在册名字（不把 `@dsh-pack/` 前缀落进源目录），`dsh-better-sidebar`
+  按点名不更新（保持 0.15.3）。实测落点：`assets/plugins` 下 **22 个目录被改写、
+  20 条 `version` 上跳**；`dsh-file-changes` / `dsh-workspace-anchor` 版本不变，
+  但补齐 d-pack 的 `dsh.bundle.patch` 声明 + `files` 白名单 + `LICENSE`。
+- **d-pack 批次 18 条**：`dsh-balance` 0.1.1→0.1.2、`dsh-openclaw-bridge`
+  0.8.0→0.8.1、`dsh-conversation-tweaks` 0.1.0→0.1.1、`dsh-prompt-custom`
+  0.1.1→0.3.5、`dsh-pocket` 2.10.6→2.10.7、`dsh-prompt-optimizer` 2.0.3→2.0.4、
+  `dsh-offpeak` 1.0.0→1.0.1、`dsh-zcode-migrate` 0.1.1→0.1.2、`dsh-quest-ui`
+  0.6.0→0.6.1、`dsh-auto-compact` / `dsh-change-review` / `dsh-input-fold` /
+  `dsh-input-history` / `dsh-settings-groups` / `dsh-settings-nav-custom` /
+  `dsh-subagent-lens` 各 0.1.0→0.1.1，外加上述两条规范化件。`dsh-pocket` 2.10.7 与
+  `dsh-prompt-optimizer` 2.0.4 比 npm 侧（2.10.6 / 2.0.3）更新，属 d-pack 领先。
+- **外部上游二次覆盖 4 条**：`billion-context-dsh` 0.2.1→**0.2.26**（npm）、
+  `dsh-easyrewrite` 2.5.2→**2.6.0**（npm，高于 d-pack 的 2.5.3）、
+  `dsh-reasoning-effort` 0.7.0→**0.8.1**（GitHub 默认分支；npm 侧只到 0.2.8）、
+  `dsh-basics-panel` 0.1.0→**0.4.1**（npm 未收录，按点名「本地跑它的构建」：
+  拉上游 `src/` 跑它自带的 tsdown 出 `lib/`，不手改产物）。
+- **判定不更新（逐条实测，非默认保守）**：`dsh-synapse` 保持 0.3.0——上游 0.4.2 的
+  `dsh.client.inject` 声明 4 个 `@deepseek-ai/dsh-api-*` remote 服务，而我们的版本已把它
+  裁成 `inject: []`（多声明内核不存在的服务 = loader 永久 pending 隔离、全部路由静默缺失），
+  `client.js` 另带本地「DSH Desktop 深色适配桥（0.6.3 第三案）」手改段；整目录覆盖会同时
+  复活这两处（形状差异实测 `index.js` 48,688B↔39,242B、`app.js` 91,662B↔103,126B）。
+  d-pack 未收录的 4 条按原样保留：`dsh-session-manager` 0.1.0、`dsh-super-injector` 0.3.1、
+  `dsh-side-session` 0.3.1、`dsh-wsl-settings` 0.1.0。
+- **页面可见的行为换代 4 条**：
+  - `dsh-balance` 0.1.2——余额投递从「自制壳 push → 渲染进程 `dsh-balance-changed` 事件」
+    换成插件宿主半边在内核 `webServer` 上注册的两条**只认回环**路由
+    （`GET /api/dsh-balance/state` 读缓存载荷、`POST /api/dsh-balance/refresh` 只触发查询，
+    其响应体被客户端忽略），客户端 60s 轮询；路由 404 时降级为「只显示本轮费用」。
+    Electron 遗留线（`balance.js` → sidecar `balance-fetch` → Rust `start_balance_loop` →
+    `app.emit("balance-changed")` → shim）**已无消费者但仍在跑**，代价是每 180s 仍真发一次
+    `/user/balance` 查询；本轮只登记撤回账不拆（跨 `bridge-api.md` 契约），拆除前置见
+    `docs/balance-architecture.md` §1.2。
+  - `dsh-conversation-tweaks` 0.1.1 与 `dsh-openclaw-bridge` 0.8.1——内核没有
+    `ctx.settings.register`（全内核 0 处命中），d-pack 用
+    `tools/codemod/apply-settings-scope.mjs` 生成的 `settings-host` 垫片替换它
+    （`settings.configure` + `describe/mutate` + `settings/document-updated` 订阅，
+    openclaw 侧是 codegen 块，**勿单包手改**）；ns 语义随之变成 profile 条目 id。
+  - `dsh-offpeak` 1.0.1——定时任务执行出口从内核根本不存在的 `apiProxy` 换成真实服务
+    `sessionController.prompt`（旧写法每次到点落进 catch、任务标 failed，功能静默不可用）；
+    `inject` 随之加 `sessionController`。
+  - `billion-context-dsh` 0.2.26——上游 tsup 从 0.2.26 起把 `acp-kernel` 内联进
+    `dist/index.js`（不再有 `from "acp-kernel"` 的运行时导入），内层 `node_modules` 副本与
+    `COMPANION_PLUGINS` 上该条目的 `shipsNodeModules: true` 同批下线（判据注记留在
+    `scripts/lib/companion-plugins.js:58-61`）；`dependencies` 清空、改走宿主闭包的
+    dsh-session / dsh-settings / dsh-llm / dsh-tools / dsh-compaction / schemastery，
+    其 peer 范围 `>=0.1.5-alpha.1 <0.1.6-0` 窄于我们 pin 的 `0.2.0-rc.2`，兼容性由
+    `unit-plugin-esm-link` 的具名导入离线核对背书（该守卫正是为这类换代断裂而存在）。
+- **测试随迁（更新造成的 18 条红全绿）**：`edge-client`（余额投递换代：假 fetch 走
+  loading→ready、404 归 `absent`、`/refresh` 响应体不参与投递，21 例）、
+  `unit-plugin-dom-contract`、`unit-companion-client-rc8`、`unit-openclaw-settings-inject`、
+  `unit-sync-cli`、`unit-zcode-migrate-registration`、`unit-dsh-subagent-lens`、
+  `unit-plugin-esm-link`、`unit-hub-registry`。事件通道退役属**正当换代**，不删旧用例、
+  改配反向锁（不得复活 `dsh-balance-changed` 监听）。
+- **新增机器锁 4 条**：`unit-hub-registry` 加「scoped 配套件必须 `private:true`」收口
+  （防覆盖上游时丢标记 → 被当作用户自装件误清）与「`THIRD_PARTY_NOTICES.md` §4.1 ↔
+  `docs/builtin-plugins-inventory.md` §一 ↔ 各 `package.json` 逐名逐版本一致」账本对账，
+  `nm` 标记同时锁「磁盘实存 = `shipsNodeModules` 声明」（该文件 21 例）；
+  `unit-balance-weekend` 加第 4 节「现役侧 `assets/plugins/dsh-balance/lib/balance-core.js`
+  ↔ 遗留侧 `balance.js` 逐时刻对拍 + 对 dsh-offpeak 参考实现逐小时对拍」（14 例，含
+  `peakHits > 0` / 周末样本 ≥24 的反空转锚）。锁可信性用人为漂移反证：价目 9→8.5、
+  周末门槛 +1 天、高峰窗口 9:00→8:00 三例均判红。
+- **CI 独立校验器随迁**：`scripts/test/verify-balance-dock.cjs` 场景4/4b 按新通道重写
+  （假 fetch + 挂载计数，`ci.yml:42` 单独一步、`npm test` 不收 `.cjs`，属既往盲区）。
+  过程中踩到并修掉一个假绿：`flush()` 用 unref 定时器会让进程在 `await` 中途退出、
+  只打印到第一条断言仍 EXIT=0；场景5/6 与汇总/`process.exit` 一并移入 async 主块。
+- **文档随迁**：`docs/balance-architecture.md` 按现役链路整体改写（四层图、通道形态与
+  节流层次 60s/30s/180s/4s、SSE 否决理由、遗留线撤回账与拆除前置、双份价目常量与
+  双拷贝锁、§8 登记插件自带 test 不在 `npm test` 内并给出可跑命令）；`README.md`
+  「DeepSeek 余额小部件」一节重写并把 Electron 时代文件标注【已删除】；
+  `docs/builtin-plugins-inventory.md` §二 与 `docs/security-telemetry.md` 的 `/user/balance`
+  出口条目同步。
+- **验证**：`npm test` → **1927 例 / 1920 pass / 0 fail / 7 skipped**（上一批基线
+  1924/1917/0/7；本轮改动的守卫文件实测 `unit-balance-weekend` 14、`unit-hub-registry` 21、
+  `edge-client` 21，全绿）；`node scripts/check-syntax.js`、`node scripts/compat/validate-pin.js`
+  → `dsh-v0.2.0-rc.2（offline-tarball）`、`node scripts/compat/patch-surface.js verify` →
+  67 文件无漂移、`node scripts/test/verify-balance-dock.cjs` → 全部断言通过，四者退出码实测
+  均为 0。本批只动 `dsh-desktop/`，`dsh-tauri/` 源码零改动（Rust 面沿上一批基线）。
+
+### refactor(plugins)：内置伴随插件批量退役（39 → 28）+ 专属补丁面与随包依赖收窄
+
+- **点名退役 11 条**：`dsh-client-file-changes` / `dsh-terminal-tab` / `harness-pet` /
+  `dsh-vision` / `graph-memory` / `dsh-community-market` / `dsh-market-desktop-bridge` /
+  `dsh-hub` / `dsh-file-drop` / `dsh-image-paste` / `dsh-cardian` 从 `COMPANION_PLUGINS`
+  摘清单并整体删除源目录。实测对账：`COMPANION_PLUGINS` 28、`assets/plugins` 28 个目录，
+  一一对应；`RETIRED_COMPANIONS` / `RETIRED_COMPANION_DIRS` 各 12 条（含前一批
+  `plugin-manager`）——退役＝「摘清单 + 进 RETIRED + 删源目录」三件事，缺一即阴影残留。
+- **批量退役回收机器（新增，boot 与 CLI 双入口共用）**：`removeRetiredCompanionDirs`
+  （目录 + profile manifest 撤账）与 `removeRetiredCompanionPatchRows`（patch 层按
+  loader id + `legacyIds` 双认领）接进启动链「退役认领 → 登记撤账」两步
+  （`scripts/integration/plugin-sync.js:410` → `:469`），CLI 侧同款接线在
+  `scripts/sync-companion-plugins.js:297`。判据链：目录能证明是壳镜像副本
+  （`package.json` 的 `private` + 描述含 DSH Desktop）才删目录并撤 manifest；证明不了则
+  **保留目录与登记，只撤账**——不改用户意图（graph-memory / harness-pet / dsh-cardian
+  三条正是这种：上游 `package.json` 与我们的镜像逐字段相同，无判别证据，而未登记目录
+  是惰性的、loader 不挂载）；`dirsOnly` 条目（`plugin-manager`，包名撞官方内核包）
+  不进手术面。历史「随包默认禁用」三条形状行
+  （harness-pet / cardian / graph-memory）按形状继续认领，留着会每 boot 刷一次缺包栈。
+  守卫：`scripts/test/unit-companion-bulk-retire.test.js`（表驱动 14 例，含「无镜像证据
+  的同名目录既不删也不撤账」与 `dryRun` 零落盘的反证）。
+- **补丁面收窄**：`image-send-fix` 从 `PATCH_SPECS` 摘除（59 → 58），`patch-adapters`
+  里的 transform 与 `IMAGE_SEND_*` / `VISION_KEY_*` / `VISION_TOGGLE_*`（含从未登记的
+  vision-key / vision-toggle 两个休眠变体）整体删除；`SETTINGS_NAMESPACES` 4 → 3
+  （`dsh-vision` 出列）。判据是「只为已退役插件存在」，反例保留并在
+  `patch-registry.js` 头注立档：`prompt-context-literal`、pi-ai / ds-tool 系工具名与
+  schema 净化、`content-has-image-guard` 都是通用 wire/schema 守卫，graph-memory 与
+  cardian 只是历史触发源。
+- **随包文件/依赖瘦身**：`PLUGIN_FILES` 去掉 `lib/vlm.js`（唯一携带者 dsh-vision）与
+  `lib/typert.host.*`（唯一携带者 dsh-hub / dsh-cardian）；`VENDOR_DEPS` 去掉
+  `ajv` / `ajv-formats` / `semver`（dsh-community-market 独占）。两者对现存 28 件均
+  实测零命中。三个只为退役件存在的脚本随之下线：`scripts/verify-vision-upgrade.js`、
+  `scripts/patch-community-market-restart.js`、`scripts/test/unit-image-send-fix.test.js`。
+- **测试随迁**：`unit-pure-bundle-line` 由单步升级为「按 boot 步序两步撤账」组合用例，
+  并加夹具防腐断言（`terminal` 必已退役走按名字认领、`balance` 必仍在册走
+  `missingNames` 认领），阈值 35 → 20；`unit-plugin-esm-link` 覆盖面哨兵同比例下调
+  （插件 30 → 22、具名导入 150 → 100，实测 128），`PROTOCOL_PARITY_STRICT/SHAPE`
+  清空（在册件里已无 `@deepseek-ai/*` 内嵌副本，档位保留为「待命中」）；
+  `ta4` / `ta5` / `ta15` / `rv9` 中 `__DSH_PET__` 与拖放提示层的分支判据改为**退役反证**
+  （不得复活），`ta15` B 档身份态提出循环并把哨兵改成精确计数（`200 × (态数−1)`）。
+- **验证**：`node --test scripts/test/*.test.js` → 1902 例 / 1894 pass / 0 fail / 8 skip；
+  `*.test.mjs` 18/18；`check-syntax.js` 通过；`validate-pin.js` →
+  `dsh-v0.2.0-rc.2（offline-tarball）`；`patch-surface verify` → 67 文件无漂移。
+  壳侧配套改动见 `dsh-tauri/CHANGELOG.md` 同名条目。
+
 ### feat(plugins)：内置 dsh-easyrewrite 取代 dsh-message-rewind；修 prompt-optimizer 伴随 id 失配
 
 - **插件替换**：消息撤回/再编辑改用社区插件 `dsh-easyrewrite`（Renzic-Stone，MIT，

@@ -60,13 +60,14 @@
 
 ## DeepSeek 余额小部件
 
-- 桌面端读取 `~/.dsh/.credentials.yaml` 的 `DEEPSEEK_API_KEY`（或环境变量），调用 `https://api.deepseek.com/user/balance`，每 3 分钟轮询，并在「启动 / 窗口显示 / 会话回合完成 / 页面加载 / 菜单开关」时触发刷新（30 秒节流；失败按 30s→1m→2m→5m 指数退避自动重试，成功即恢复），通过 preload 推送到 Web UI。
+- 余额链现在跑在**内核自己的 Node 进程**里（插件宿主半边 `assets/plugins/dsh-balance/lib/`）：读取 `~/.dsh/.credentials.yaml` 的 `DEEPSEEK_API_KEY`（或环境变量），调用 `https://api.deepseek.com/user/balance`；宿主后台每 3 分钟刷一次，路由侧 30 秒节流，失败按 30s→1m→2m→5m 指数退避自动重试（成功即恢复）。
+- 页面取数走两条本地 HTTP 路由（只允许回环地址访问，非回环 403）：60 秒轮询 `GET /api/dsh-balance/state` 读缓存载荷，dock 首次挂载额外 `POST /api/dsh-balance/refresh` 强制刷一轮，文档由隐藏转可见时再取一次。**「壳推页面」那一步已不存在**（Electron `preload.js` 随壳退役；v1.0.0 遗留的 Rust/sidecar 推送链已无消费者，见 `docs/balance-architecture.md` §1.2）。
 - 配套 dsh 客户端插件（`assets/plugins/dsh-balance`）在每次启动时自动同步进 web profile 并注册到 `conversation.composer.dock`，在对话底部统计栏内联显示：**本轮 ¥X.XX · 余额 ¥Y.YY**（本轮费用按 token 用量 × 价格档估算，缓存命中/未命中/输出分别计价；会话投影携带真实模型时按真实模型计价，否则明确标注「按默认模型估算」）。
 - **OpenCode Go 订阅额度**：同一小部件内追加显示 `Go 5h x% 周 x% 月 x%`——调用 `https://opencode.ai/zen/go/v1/usage` 读取 **5 小时滚动 / 每周 / 每月** 三个窗口的已用百分比与重置时间；密钥取自 `OPENCODE_GO_API_KEY`（环境变量或 `~/.dsh/.credentials.yaml`，回退 OpenCode CLI 的 `auth.json`），未配置时自动省略该段。
-- 价格档默认（2026-08-17 起峰谷定价，¥/百万 token）：deepseek-v4-flash 高峰 3/0.1/9、空闲 1.5/0.05/4.5；deepseek-v4-pro 高峰 9/0.3/27、空闲 4.5/0.15/13.5；deepseek-chat / deepseek-reasoner 为旧模型名别名。可在 `<数据目录>\settings.json` 的 `balancePrices.<model>` 覆盖。
-- 代理/镜像环境变量：`DEEPSEEK_BALANCE_URL`（余额端点完整 URL）或 `DEEPSEEK_API_BASE`（自动拼接 `/user/balance`）；`OPENCODE_USAGE_URL`（OpenCode Go 端点完整 URL）。使用 `http://` 端点时 API Key 明文传输，桌面端会记录告警，仅建议用于本地代理。
-- 不需要余额提示时：chrome 栏 ⋯ 菜单 →「显示余额/本轮费用」取消勾选，整个 dock 会隐藏（第三方中转/非官方直连用户推荐关闭）。
-- 纯浏览器打开 Web UI 时无桌面壳推送，小部件只显示「本轮」费用（内置默认价格档）。
+- 价格档默认（2026-08-17 起峰谷定价，¥/百万 token）：deepseek-v4-flash 高峰 3/0.1/9、空闲 1.5/0.05/4.5；deepseek-v4-pro 高峰 9/0.3/27、空闲 4.5/0.15/13.5；deepseek-chat / deepseek-reasoner 为旧模型名别名；2026-08-23 起周六/周日全天空闲价。覆盖写在 `balance` 条目的 config 块 `balancePrices.<model>`（用户侧落点：`$DSH_HOME/cordis.patch.yml` 的 `- id: balance` 行——patch 按 id 整行替换，config 块只能整体给出，不能只给半份）。
+- 代理/镜像环境变量：`DEEPSEEK_BALANCE_URL`（余额端点完整 URL）或 `DEEPSEEK_API_BASE`（自动拼接 `/user/balance`）；`OPENCODE_USAGE_URL`（OpenCode Go 端点完整 URL）。使用 `http://` 端点时 API Key 明文传输，宿主侧会记录告警，仅建议用于本地代理。
+- 不需要余额提示时：把 `balance` 条目的 `showBalanceDock` 置为 `false`（同上一条的 config 块里写），整个 dock 会隐藏（第三方中转/非官方直连用户推荐关闭）。原 chrome 栏 ⋯ 菜单的「显示余额/本轮费用」勾选项随 Electron 壳退役，不再存在。
+- 纯浏览器打开 Web UI、或插件宿主半边没挂载（路由 404）时，小部件只显示「本轮」费用（内置默认价格档，无余额与峰谷 chip）。
 
 ## 自定义注入提示词
 
@@ -84,16 +85,8 @@
 - 新增配套插件 `@deepseek-ai/dsh-workspace-anchor`：在每个 agent 的**稳定 system prompt** 中注入一段约 70 token 的工作区偏好，以 `{{cwd}}` 渲染真实工作区路径，每次请求重复、不被会话滚动或压缩吞掉。
 - 锚点规则：默认在 cwd 内编辑/构建/交付；优先使用相对路径（工具会按 cwd 解析）；允许读取或搜索任何位置，但搜索命中的外部目录只是参考材料，不是新项目根；仅当用户显式指定路径或确有必要时才离开 cwd，随后返回。
 - 纯提示词偏好，**不修改任何权限/沙箱行为**。
-- `minimal-win`、`anchored-standard`、`zero-anchored-standard`、`whoami-standard`、`warmupbetter`、`warmupbetter-replay` 六个 complete-persona 预设会丢弃插件注入节，因此同一锚点已直接写入它们各自的 `agent.cordis.yml` persona 文本；`standard`、`code`、`router-standard`、`v4-flash-godmode-opencode-go` 等非 complete 预设由插件节覆盖。
+- 历史上六个 complete-persona 随包预设（`minimal-win` / `anchored-standard` / `zero-anchored-standard` / `whoami-standard` / `warmupbetter` / `warmupbetter-replay`）会丢弃插件注入节，所以同一锚点当时也直接写进了它们的 persona 文本；v1.0.0 纯净线把随包预设整树删除后，这条手抄不再需要维护。
 
-
-## 识图插件（dsh-vision）
-
-- 设置 →「识图插件（view_image）」：填写任意 OpenAI 兼容 VLM 的 **API 地址 / 密钥 / 模型 / 备用模型**，保存后热生效。
-- 默认智谱免费 `glm-4.6v-flash`；也支持通义 qwen3-vl、Ollama 本地（`http://localhost:11434/v1`，无需密钥）等。
-- 配置也可通过环境变量：`DSH_VISION_API_KEY`（兼容 `ZHIPUAI_API_KEY` / `DASHSCOPE_API_KEY`）。
-- 会话中直接让模型调用 `view_image`：支持本地图片路径、http(s) URL 和 data URL。
-- **文本模型也能发送图片**：发送入口检测到当前模型不支持图片输入时，自动复用本插件配置的 VLM 把图片转述为详细文字（含逐字 OCR）后再发送；模型支持图片时仍走原生图片通道。转述服务未配置/调用失败时会给出明确提示，不会静默丢图。
 
 ## 第三方模型思考强度
 
@@ -101,28 +94,40 @@
 - **默认关闭**：避免向百炼等严格校验请求体的第三方 API 注入 `reasoning_effort` 导致接口报错。
 - 仅当 provider 支持时才开启；字段名可改为 provider 要求的名称，留空表示只显示档位、不注入参数。
 
-## 插件市场（dsh-community-market）
+## 内置插件精简（v1.0.0，2026-10-07）
 
-- **市场整体切换**：设置 → 插件 → 市场页由 **[dsh-community-market](https://github.com/anywhere-labs/deepseek-harness-desktop/tree/master/dsh-community-market)**（anywhere-labs/deepseek-harness-desktop，MIT License）提供——开放目录源架构：内置 **DSH 1024Store** 与 **dshfind** 两个合作目录适配器 + 标准 HTTP 目录源，任何人都可以按公开 Schema（`docs/schemas/`）提供、接入和使用插件目录源；目录收录不代表审核或推荐。
-- **搜索与安装**：分类/关键词搜索，一键安装走 npm registry 精确版本 + 完整性校验（tarball SHA 校验、禁装产品包/生命周期脚本防护），安装失败自动回滚；启停 / 卸载与安装回执管理。
-- **桌面服务桥**：随包内置 `dsh-market-desktop-bridge` 配套插件，为市场提供 `desktopProfiles` / `desktopPnpm` / `desktopPlugins` / `desktopActions` 四个 host 服务——包操作转 `dsh plugin` CLI 重入（含 pnpm 兼容恢复），启停读写 `cordis.patch.yml`（与壳层插件管理页双向兼容），重启经壳层监管通道（`window.dshDesktop.restartService`）原地拉起。
-- 市场与桥以 bundle 形式随桌面端分发（`assets/plugins/dsh-community-market` + `assets/plugins/dsh-market-desktop-bridge`），启动时自动同步进 web profile；历史内置市场（zat-dsh-engine → dshmarket）的存量装配由同步链一次性退役清理。
-- 上游市场的目录源契约与适配器开发文档见包内 `docs/`（catalog-provider-contract / catalog-adapter-guide / install-and-uninstall）。
+内置伴随插件由 **39 个减为 28 个**。以下 11 个按用户点名移除，源目录已从 `assets/plugins/` 删除，不再随仓库分发：
+
+| loader id | 包名 | 移除原因 |
+| --- | --- | --- |
+| `client-file-changes` | `@deepseek-ai/dsh-client-file-changes` | 与内核官方同名包重叠，镜像进 `profiles/web/node_modules` 会遮蔽官方包 |
+| `terminal` | `@deepseek-ai/dsh-terminal-tab` | 同上（与内核官方终端能力同名/近名） |
+| `harness-pet` | `harness-pet` | 用户点名移除 |
+| `dsh-vision` | `@dsh-external/dsh-vision` | 用户点名移除 |
+| `graph-memory` | `graph-memory` | 用户点名移除 |
+| `community-market` | `dsh-community-market` | 用户点名移除 |
+| `market-desktop-bridge` | `dsh-market-desktop-bridge` | 只为 `community-market` 服务，随市场一并移除 |
+| `dsh-hub` | `dsh-hub` | 仅用于挂载 `graph-memory` 与市场，随二者一并移除 |
+| `file-drop` | `dsh-file-drop` | 用户点名移除 |
+| `image-paste` | `dsh-image-paste` | 用户点名移除 |
+| `cardian` | `dsh-cardian` | 用户点名移除 |
+
+对用户可见的功能变化：内置的**可视化插件市场 / 插件中枢 / 知识图谱记忆 / 桌面宠物 / 内置识图（VLM 转述）/ 拖入文件 / 图片粘贴发送 / 知识中心（cardian）/ 会话内终端标签 / 文件变更一键还原**不再随包提供。相近能力仍在内置清单里：**手机同屏**由 `dsh-pocket` 提供，**文件变更追踪**由 `dsh-file-changes` 提供（只有它的「一键还原」半边依赖壳侧 `file_revert` 桥命令，该命令也一并移除了）。第三方插件仍可照旧用 `dsh plugin --profile web add <包名>` 自行安装（见下方排障一节）。
 
 ## 侧边栏工作台（dsh-better-sidebar）
 
-- [omdsh-dev/DSH-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar)（MIT）内置：会话隔离的 VSCode 式右侧边栏（资源管理器 / 编辑器 / 终端 / Git / 浏览器），并开放服务供其他插件注册边栏页与文件查看器。
+- [omdsh-dev/DSH-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar)（MIT）内置：会话隔离的 VSCode 式右侧边栏，0.24.1 的内置标签是 **editor / git / subagent（标题「任务管理」）/ sidechat / diff 五个**（`builtinTabs()` 实测；终端与浏览器交还宿主），并开放服务供其他插件注册边栏页与文件查看器。
 - 以 bundle 形式随桌面端分发（`assets/plugins/dsh-better-sidebar`，含 LICENSE、预编译 lib 与源码）；启动时自动同步进 web profile。
 
-## 桌面宠物（harness-pet）
+## 对话节点导航条（dsh-navbar，已退役）
 
-- [cakeni/harness-pet](https://github.com/cakeni/harness-pet)（MIT）内置：会话旁的鲸鱼小宠物，素材与归因随包分发（`assets/plugins/harness-pet`）。
-- 同样以 bundle 形式自动同步进 web profile。
+> **已不在内置清单**：`dsh-navbar` 早在 v0.6.3-beta.3 就从伴随插件清单移出并删除源目录
+> （commit `ff421ac2`「移除 dsh-navbar 源目录（清单已移除，防安装器回装）」），因此它既不在
+> `assets/plugins/` 也不在 v1.0.0 的 28 个在册插件里。下面两段是它随包期间的行为记录，保留备查；
+> 它当年取代的 conversation-tweaks 导航滑轨（dct-rail）今日的归属未在仓库内验证，不在此断言。
 
-## 对话节点导航条（dsh-navbar）
-
-- [vlln/dsh-navbar](https://github.com/vlln/dsh-navbar)（MIT）内置：对话区右缘的节点串导航条——每 user 消息一个节点，悬停预览（6 行截断）、点击平滑跳转 + 品牌蓝高亮、连续悬停/滚轮切换、>11 节点自动滑动窗口、<2 条 user 消息自动隐藏；消息精选 pin（assistant 操作条 📌，精选轮次渲染为金色椭圆盘，状态按会话持久化）。实现 dsh-external/issues#144 规格，纯浏览器端 bundle（`assets/plugins/dsh-navbar`，含 LICENSE 与预编译 lib），启动时自动同步进 web profile。
-- **取代** `dsh-conversation-tweaks` 内置的会话右侧导航滑轨（dct-rail，已移除），对话区右缘导航由 dsh-navbar 统一提供；conversation-tweaks 保留「隐藏对话输出」能力。
+- [vlln/dsh-navbar](https://github.com/vlln/dsh-navbar)（MIT）曾内置：对话区右缘的节点串导航条——每 user 消息一个节点，悬停预览（6 行截断）、点击平滑跳转 + 品牌蓝高亮、连续悬停/滚轮切换、>11 节点自动滑动窗口、<2 条 user 消息自动隐藏；消息精选 pin（assistant 操作条 📌，精选轮次渲染为金色椭圆盘，状态按会话持久化）。实现 dsh-external/issues#144 规格，纯浏览器端 bundle（曾位于 `assets/plugins/dsh-navbar`，含 LICENSE 与预编译 lib），启动时自动同步进 web profile。
+- 随包期间**取代** `dsh-conversation-tweaks` 内置的会话右侧导航滑轨（dct-rail）；conversation-tweaks 保留「隐藏对话输出」能力。
 
 ## 侧边临时会话（dsh-side-session）
 
@@ -167,10 +172,8 @@
  - **渲染进程崩溃自动恢复**：`render-process-gone` 后指数退避重载（0.8s 起步，封顶 15s），连续失败第 3 次重建 BrowserWindow（保持隐藏/托盘状态）；超过上限显示本地恢复页（重新加载 / 重启客户端 / 打开日志）并通知；稳定存活 30s 才清零计数
 - **渲染心跳与假死恢复**：preload 每 5 秒上报心跳，主进程 30 秒未收到则恢复；`unresponsive` 15 秒后同样恢复。
 - **会话历史兼容**：打包时 `afterPack` 自动修补内置 `@deepseek-ai/dsh-session` 事件词汇表，接受 dsh-agent-teams / dsh-message-edit / dsh-web-search-exa 的事件，修复 `SessionFormatUnsupportedError`。
-- **内置 Agent 预设（8 个）**：`minimal-win`、`router-standard`、`anchored-standard`、`zero-anchored-standard`、`whoami-standard`、`v4-flash-godmode-opencode-go`、`warmupbetter`、`warmupbetter-replay`，打包时自动写入内置 dsh CLI；详细来源与许可见 [docs/agent-presets.md](docs/agent-presets.md)。
-- **dsh-routing-suite**：`router-standard`（官方 API flash 方案）与 `dsh-super-injector` 的 `dev_*` 注入/热重载/自愈工具一并内置。
-- **dsh-anchored-standard**：`anchored-standard` / `zero-anchored-standard` / `whoami-standard`（官方 API pro 方案）三个实验性预设一并内置。
-- **opencode-go 预设**：`v4-flash-godmode-opencode-go`（flash）与 `warmupbetter` / `warmupbetter-replay`（pro）内置。
+- **Agent 预设（v1.0.0 纯净线：不携带）**：随包预设源（`assets/agent-presets`，历史上 8 个）、预设写入器（`scripts/install-minimal-win-preset.js`）、落点自愈（`scripts/lib/preset-heal.js` / `preset-files.js`）与 boot 的 `presets` 步已整体拆除——客户端不再写任何预设文件，模式列表只出内核出厂集（`standard` / `ptc` / `minimal` / `cordis`）。用户自带的预设放 `<DSH_HOME>/.agent-presets/<id>/`，由内核自行发现；老用户目录里的历史副本不被清除、继续可用。
+- **dsh-super-injector**：`dev_*` 注入 / 热重载 / 自愈工具作为配套插件随仓库内置（与预设无关，不进安装包）。
 
 
 
@@ -181,25 +184,27 @@
 
 ## 文件更改追踪与回退
 
-- 详情面板新增「文件」标签页（与 对话/轨迹 并列）：聚合当前会话 agent 改过的所有文件，展示新建/修改/删除标记、行数变化与行级 diff。
-- **数据来源**：只读复用官方会话日志已持久化的 `tool/result.data.meta.diffs`（`ctx.fs` 写前锁内全文），配套 host 插件 `@deepseek-ai/dsh-file-changes` 注册 `fileChanges` 会话投影，零写入、零格式变更，对 dsh 升级完全稳定。
-- **还原**：逐文件或全部还原 —— 客户端把该文件的变更按逆序发给桌面壳，壳层做**内容精确匹配后替换**（新建→删除、删除→恢复、修改→回写写前全文）；文件已被后续改动时提示冲突，绝不覆盖未知内容。
-- **对话回退**：沿用 dsh 内置的会话分叉（消息尾部「从此处分叉」），可与文件还原组合使用。
-- 配套插件随桌面端分发（`assets/plugins/`），每次启动自动同步进 web profile 并幂等注册。
+- **追踪仍在内置**：配套 host 插件 `@deepseek-ai/dsh-file-changes`（loader id `file-changes`）注册 `fileChanges` 会话投影——只读复用官方会话日志已持久化的 `tool/result.data.meta.diffs`（`ctx.fs` 写前锁内全文），零写入、零格式变更，对 dsh 升级完全稳定。
+- **「文件」标签页与一键还原已退役（v1.0.0，2026-10-07）**：更改列表 UI 与逐文件/全部还原由 `@deepseek-ai/dsh-client-file-changes`（loader id `client-file-changes`）提供，还原动作由壳侧 `file_revert` 桥命令执行。该插件与内核官方同名包重叠、镜像副本会遮蔽官方包，故与 `file_revert` 一并移除；「还原」不再随包提供，历史会话的 `meta.diffs` 数据不受影响（用户数据不动）。
+- **对话回退**：沿用 dsh 内置的会话分叉（消息尾部「从此处分叉」）。
+- 配套插件每次启动自动同步进 web profile 并幂等注册。
 
 ## 项目文件树与 HTML/端口预览
 
-- 「文件」标签页内新增「全部文件」子视图：VSCode 风格的层级文件树（懒加载、目录优先排序、文件大小/修改时间、本会话改过的文件带绿点标记），点击文件用系统默认程序打开；配套 host 插件注册 `GET /api/dsh-files/list`（仅回环）。
-- **站内侧边预览**（可拖宽，宽度持久化）：树中 HTML 文件的悬停「▶」按钮或「本会话修改」列表的「预览」按钮打开右侧预览面板；宿主插件以 `GET /dsh-files/static/<绝对路径>` 提供静态文件服务，HTML 的相对资源引用（`./css`、`../img`）随 URL 自然解析，与本地打开一致。
-- **端口预览**：预览面板地址栏可直接输入 `3000` / `localhost:5173` 等，宿主插件探测本机回环监听端口（`GET /api/dsh-files/ports`）并以徽章列出，点击即预览；`GET /api/dsh-files/check` 提供在线状态检查（面板状态栏显示 HTTP 状态）。
-- 预览面板带前进/后退/刷新/外部打开（系统浏览器）；全部路由仅接受回环地址请求。
+- **HTTP API 面仍在内置**：配套 host 插件 `@deepseek-ai/dsh-file-changes` 继续注册
+  `GET /api/dsh-files/list`（一层目录列表，「全部文件」树）、`GET /dsh-files/static/<绝对路径>`（HTML 站内侧边预览的静态服务，相对资源随 URL 自然解析）、
+  `GET /api/dsh-files/ports`（本机回环监听端口探测）、`GET /api/dsh-files/check?url=...`（回环 URL 在线状态）、
+  `GET /api/dsh-files/session-cwd`（按会话 ID 查会话 cwd）——全部路由仅接受回环地址请求。
+- **承载这些 API 的「文件」标签页 UI 已退役（v1.0.0）**：该标签页（更改列表 + 「全部文件」子视图 + 预览面板入口）由
+  `@deepseek-ai/dsh-client-file-changes` 提供，已随该插件移除；因此本节描述的**界面入口**不再随包提供，插件侧 API 保持不变。
+  侧边栏工作台 `dsh-better-sidebar` 自带资源管理器与文件预览，是仍在包内的文件浏览入口。
 
-## 会话内终端
+## 会话内终端（已退役，v1.0.0）
 
-- 新增「终端」标签页（与 对话/轨迹/文件 并列）：在当前会话的项目目录下启动持久 PowerShell shell，SSE 流式输出、命令历史（↑/↓）、清屏、重启、断线自动重连（切换标签页/刷新不丢，回放最近 512KB 输出）。
-- **编码**：宿主插件用显式 UTF-8 的 mini-REPL（自建读行循环 + `Invoke-Expression`）绕开 PowerShell 5.1 原生 REPL 对重定向 stdin 的编码漂移，中文输入输出双向干净。
-- **限制**：非 PTY（vim/htop 等全屏交互程序不支持）；PowerShell 语法（`&&` 用 `;` 或 `if ($?)` 替代）；多行脚本请用 `;` 分行。
-- 宿主插件路由：`GET /dsh-files/term/events`（SSE）、`POST /dsh-files/term/input`、`POST /dsh-files/term/close`，全部仅接受回环地址请求；断开后 shell 保留 15 分钟。
+> 本节描述的「终端」标签页由配套插件 `@deepseek-ai/dsh-terminal-tab`（loader id `terminal`）提供，
+> 该插件已于 2026-10-07 按用户点名移除（与内核官方同名/近名包重叠，镜像副本会遮蔽官方包），源目录
+> `assets/plugins/dsh-terminal-tab` 已删除，**不再随包提供**。终端能力改由内核自带的终端承担（壳不再镜像同名包），
+> 侧边栏工作台 `dsh-better-sidebar` 也保留自己的 PTY 终端页。
 
 ## 会话完成通知
 
@@ -284,13 +289,13 @@ npm test                       # 全量测试（node --test 自动发现 scripts
 
 ### 把配套插件装进你自己 WSL 里的 dsh（可选，与后端模式无关）
 
-如果你在 WSL 里另有自己装的 dsh（checkout 开发版或 npm 版）——壳自带的配套插件（余额、文件视图、终端、浮窗、插件市场、自定义提示词、工作区锚点、第三方思考、识图等）是壳私有打包的（不进 npm），想让它也用上，在 WSL 里执行：
+如果你在 WSL 里另有自己装的 dsh（checkout 开发版或 npm 版）——壳自带的配套插件（余额、文件变更投影、侧边浮窗、自定义提示词、工作区锚点、第三方思考强度等）是壳私有打包的（不进 npm），想让它也用上，在 WSL 里执行：
 
 ```bash
 node dsh-desktop/scripts/sync-companion-plugins.js ~/.dsh --with-patches
 ```
 
-（`--dry-run` 可先预览；`--with-patches` 额外应用「会话列表闪跳修复 + 设置暴露白名单」两个运行时补丁，否则自定义提示词/第三方思考的设置页可能显示「设置不可用」。脚本同时会把壳内置的 8 个 Agent 预设同步进能找到的 dsh 包 `config/agent-presets`——`<DSH_HOME>/agent`（如 WSL 托管布局的 `~/.dsh-desktop/agent`）与 PATH 上的 dsh 命令会自动探测，其它安装位置可用 `--dsh-package <dsh 包目录>` 显式指定。）插件与预设都在 **dsh web 重启后**才挂载（profile 补丁层与包内预设目录在启动时读取）：重启 `dsh web`（checkout 开发模式 `pnpm dsh web`；npm 安装版 `dsh web`），注意会中断正在跑的会话（会话数据在磁盘上，可继续）。终端插件在 POSIX 下自动使用 `sh -i`，其余插件跨平台。卸载：删掉 `cordis.patch.yml` 中对应 `insert` 条目与 `profiles/web/node_modules` 下的对应包目录即可。
+（`--dry-run` 可先预览；`--with-patches` 额外应用「会话列表闪跳修复 + 设置暴露白名单」两个运行时补丁，否则自定义提示词/第三方思考的设置页可能显示「设置不可用」；`--dsh-package` 指定 profile manifest 对账的目标 dsh 包目录，缺省自动探测 `<DSH_HOME>/agent` 与 PATH 上的 dsh 命令。脚本只同步配套插件——v1.0.0 纯净线拆除了随包 Agent 预设子系统，不再向 `<DSH_HOME>/.agent-presets` 写任何东西；你要自带预设，直接把 `<id>/` 目录放进那个用户根即可被内核发现。）插件在 **dsh web 重启后**才挂载（profile 补丁层在启动时读取）：重启 `dsh web`（checkout 开发模式 `pnpm dsh web`；npm 安装版 `dsh web`），注意会中断正在跑的会话（会话数据在磁盘上，可继续）。内置插件跨平台（v1.0.0 起随包的会话内终端插件已退役，POSIX 下不再有 `sh -i` 特例）。卸载：删掉 `cordis.patch.yml` 中对应 `insert` 条目与 `profiles/web/node_modules` 下的对应包目录即可。
 
 ### wsl：壳在 WSL 里托管自己的 dsh（自动更新全闭环）
 
@@ -301,11 +306,11 @@ node dsh-desktop/scripts/sync-companion-plugins.js ~/.dsh --with-patches
   - `wslDistro`（`DSH_DESKTOP_WSL_DISTRO`）：发行版名，默认 `wsl -l -q` 第一个；
   - `wslInstallDir`（`DSH_DESKTOP_WSL_DIR`）：WSL 内安装目录（Linux 绝对路径，**不含空白**），默认 `~/.dsh-desktop`——刻意不默认 `~/.dsh`，避免与你自己的 dsh 共用 DSH_HOME 互相改写 profile；想共享会话就显式设成 `~/.dsh`；
   - 前置条件：WSL 内要有 node + npm（`sh -lc 'node --version'` 能出结果即可，fnm/nvm 皆可；缺失时保存配置会提示、启动会弹窗引导）。
-- 首次启动流程：显示加载页 → 探测 WSL/node → 缺 agent 时在 WSL 内 `npm install @deepseek-ai/dsh@<内置版本>`（约 2–3 分钟，之后复用 npm 缓存）→ 配套插件经 UNC 同步进 WSL profile、内置 Agent 预设经 UNC 写入 WSL agent 包 `config/agent-presets`（与 local 模式列表一致）→ 运行时补丁覆盖 WSL profile/agent → `wsl.exe -e sh -lc` 启动 `dsh web --host 127.0.0.1 --port 0` → 解析就绪 URL（与 local 同规则）→ Windows 经 localhost 转发加载窗口。
+- 首次启动流程：显示加载页 → 探测 WSL/node → 缺 agent 时在 WSL 内 `npm install @deepseek-ai/dsh@<内置版本>`（约 2–3 分钟，之后复用 npm 缓存）→ 配套插件经 UNC 同步进 WSL profile（v1.0.0 纯净线不再同步任何 Agent 预设）→ 运行时补丁覆盖 WSL profile/agent → `wsl.exe -e sh -lc` 启动 `dsh web --host 127.0.0.1 --port 0` → 解析就绪 URL（与 local 同规则）→ Windows 经 localhost 转发加载窗口。
 - 目录布局（WSL 内）：`<dir>/agent`（当前版本，`DSH_HOME=<dir>`）、`agent-prev`（回退）、`agent-staging`（更新中转）、`dsh.pid`（退出清理）、`profiles`/`sessions`（数据）。
 - **自动更新**：检查仍在 Windows 侧（npm registry 查询），安装走 WSL 内 npm（staging + 原子切换，失败自动保留旧版），重启应用生效；启动失败弹窗可「回退到上一版本」。
-- 退出/重启服务：按 `dsh.pid` 发 SIGTERM 优雅收尾（绝不 `wsl --terminate`）；插件市场的「重启服务」在托管模式下可用（重启 WSL 内的 dsh web）。
-- 会话通知、余额小部件、文件 diff 查看照常（经 UNC 直读 WSL 文件）；「文件」视图的还原/打开仍是 Windows 本地功能，不适用于 WSL 会话。
+- 退出/重启服务：按 `dsh.pid` 发 SIGTERM 优雅收尾（绝不 `wsl --terminate`）；原先由内置插件市场承载的页面内「重启服务」入口随市场退役，不再随包提供。
+- 会话通知、余额小部件、文件 diff 查看照常（经 UNC 直读 WSL 文件）；依赖 Windows 本地文件能力的功能（如用系统程序打开文件）不适用于 WSL 会话；原「文件」视图本身已于 v1.0.0 退役（见上）。
 - 已知边界：Windows 侧访问依赖 WSL2 的 localhost 转发——**推荐**在 `.wslconfig` 设 `[wsl2] networkingMode=mirrored`（Win11 22H2+）走 localhost 直连，根治 NAT 转发的偶发断线/输出中断；未 mirrored 时壳也不再因转发抖动误杀 WSL 内还活着的内核（断线后前端重连同一内核续上，详见 docs/wsl-verification.md 常见问题）；`wslInstallDir` 路径不能含空格。
 
 ## 日志与排障
@@ -327,26 +332,31 @@ node dsh-desktop/scripts/sync-companion-plugins.js ~/.dsh --with-patches
 - **无法打开文件夹（`directory picker failed: ... win32 folder dialog worker exited...`）**：v0.3.4 已根治（koffi@3.1.5 + 启动预检自动降级 browse 选择器）。旧版本请升级到 0.3.4。
 - **启动失败（`dsh web 启动失败（退出码 1）`）**：v0.3.4 会自动进入安全模式或自愈并重试，弹窗内直接显示最近日志。日志出现 `plugin tree failed to load` = 插件配置不兼容（自动禁用问题插件）；出现 `EPERM ... symlink` = 目录联接被拒（自动备份重建）；日志戛然而止且退出码 `3221225477`（0xC0000005）= koffi 原生崩溃（0.3.4 已换修复版）。
 - **安装后启动即弹「应用初始化失败：home is not defined」**：v0.3.8 已修复（启动路径上的 settings 注册防护函数 `applySettingsSectionGuard` 缺少 `home` 变量声明，启动必现崩溃）。请升级到 v0.3.8，或从 GitHub / Gitee release 下载最新安装包。
-- **设置页看不到插件设置（识图插件 / 自定义提示词 / 思考强度 / 插件市场）**：v0.3.4 已修复 agent 更新后白名单丢失的问题；仍不可见时重启应用一次，必要时查看 `desktop.log` 中「提示词暴露补丁」记录。
+- **设置页看不到插件设置（自定义提示词 / 思考强度）**：v0.3.4 已修复 agent 更新后白名单丢失的问题；仍不可见时重启应用一次，必要时查看 `desktop.log` 中「提示词暴露补丁」记录。（此前同一条还覆盖识图插件与插件市场，两者已于 v1.0.0 退役。）
 - **客户端更新点了「立即重启」后仍提示有待安装的更新**：v0.3.4 起会识别「客户端更新未完成」并提供重试安装 / 打开更新日志；若反复出现，把 `%APPDATA%\DSH Desktop\updates\apply-update.log` 发给技术支持。
-- **如何手动安装第三方插件**：推荐在设置页「插件市场」（Zat-DSH Engine）搜索并安装（支持 npm 包名、`github:owner/repo#分支` 与镜像源）；安装完成后按提示重启服务。如果本机另装了 dsh CLI，也可以执行 `dsh plugin --profile web add <包名或 github 源>`，效果相同。
+- **如何手动安装第三方插件**：内置可视化插件市场已于 v1.0.0 退役（`dsh-community-market` 及其桌面服务桥 `dsh-market-desktop-bridge` 不再随包），改用命令行：本机装了 dsh CLI 时执行 `dsh plugin --profile web add <包名或 github 源>`（支持 npm 包名与 `github:owner/repo#分支`），装完按提示重启 `dsh web` 生效。
 - **端口被占**：应用会复用上次保存的端口；若该端口被其他程序占用，会自动选新端口并保存，无需手动处理。注意：端口变化会导致该次启动的界面本地偏好（如会话分组）重新初始化，正常重启不会发生。
 
 ## 目录结构
 
+> ⚠ 本节滞后：`main.js` / `preload.js` / `updater.js` / `client-updater.js` 已随
+> Electron 壳退役（v1.0.0）从仓库删除；余额链的现役落点是
+> `assets/plugins/dsh-balance/`（`balance.js` / `balance-scheduler.js` 那条零消费者的
+> Electron 遗留线已于 2026-10 整体拆除，见 `docs/balance-architecture.md` §1.2）。
+> 完整现役树以目录实测为准。
+
 ```
 dsh-desktop/
-├── main.js               # Electron 主进程（无边框窗口/托盘/自绘 chrome IPC + 余额推送 + 客户端自更新 + 快捷方式维护）
-├── updater.js            # dsh agent 官方更新引擎（检查 / 同意后安装 / 回退）
-├── client-updater.js     # 客户端（封装层）自更新引擎（GitHub/Gitee 双源 + 分片合并 + 原地替换）
-├── balance.js            # DeepSeek 账户余额查询（主进程）
+├── main.js               # 【已删除】Electron 主进程（无边框窗口/托盘/自绘 chrome IPC + 余额推送 + 客户端自更新 + 快捷方式维护）
+├── updater.js            # 【已删除】dsh agent 官方更新引擎（检查 / 同意后安装 / 回退）
+├── client-updater.js     # 【已删除】客户端（封装层）自更新引擎（GitHub/Gitee 双源 + 分片合并 + 原地替换），随 Electron 壳退役
+├── balance.js            # 【已删除】DeepSeek 账户余额查询（Electron 余额遗留线：2026-10 与 balance-scheduler.js、sidecar `balance-fetch`、Rust 轮询环一并拆除；余额改由 assets/plugins/dsh-balance 供给）
 ├── session-watcher.js    # 会话完成监听（zstd 多帧解码 + turn/end 检测）
-├── preload.js            # 沙箱预加载（自绘玻璃标题栏 + 窗口控制/菜单 IPC + 余额事件桥 + WSL 配置桥）
+├── preload.js            # 【已删除】沙箱预加载（自绘玻璃标题栏 + 窗口控制/菜单 IPC + 余额事件桥 + WSL 配置桥），随 Electron 壳退役
 ├── wsl-backend.js        # WSL 托管后端（发行版探测 / bootstrap 安装 / 启动停止 / 更新回退）
 ├── assets/               # 加载页、更新进度页、恢复页、图标、托盘图标、配套 dsh 插件
 │   ├── sponsor/          # 赞助收款码（支付宝 / 微信，「请作者喝咖啡」面板与本文档共用）
-│   ├── agent-presets/    # 8 个内置预设（minimal-win / router-standard / anchored-standard / zero-anchored-standard / whoami-standard / v4-flash-godmode-opencode-go / warmupbetter / warmupbetter-replay），local 打包写入 / WSL 启动与更新时经 UNC 同步
-│   └── plugins/          # dsh-balance / dsh-file-changes / dsh-vision / zat-dsh-engine / dsh-better-sidebar / dsh-navbar / harness-pet / dsh-super-injector / dsh-side-session / billion-context-dsh / dsh-wsl-settings（设置页「WSL 后端」栏）等，启动时自动同步进 web profile
+│   └── plugins/          # 内置伴随插件源目录（在册 28 个：dsh-balance / dsh-file-changes / dsh-better-sidebar / dsh-session-manager / dsh-side-session / dsh-super-injector / dsh-pocket / billion-context-dsh / dsh-wsl-settings（设置页「WSL 后端」栏）等），启动时自动同步进 web profile；v1.0.0 由 39 减为 28，退役 11 个的源目录已整树删除（见「内置插件精简」一节）
 ├── scripts/
 │   ├── fetch-node.js     # 内置 node.exe 复制脚本
 │   ├── fetch-npm.js      # 内置 npm CLI 复制脚本
@@ -354,9 +364,8 @@ dsh-desktop/
 │   ├── check-latest.js   # agent 更新链路测试工具
 │   ├── check-client-latest.js # 客户端更新链路测试工具
 │   ├── patch-event-vocabulary.js # dsh-session 事件词汇表补丁（当前无调用方，接线随 Electron 壳下线 — 见脚本头 Status）
-│   ├── install-minimal-win-preset.js # 内置 8 个 Agent 预设安装（sidecar cli.js / preset-heal / WSL 同步调用）
 │   ├── test-watcher.js   # 通知检测单测
-│   ├── sync-companion-plugins.js # 把配套插件与内置 Agent 预设同步进任意 dsh（独立于壳）
+│   ├── sync-companion-plugins.js # 把配套插件同步进任意 dsh（独立于壳；v1.0.0 起不再涉及 Agent 预设）
 │   └── inspect-session.js# 会话日志解析工具
 ├── build/icon.png        # electron-builder 图标源
 ├── vendor/               # 内置 node.exe / npm CLI（fetch-runtime 生成，不入库）
@@ -367,7 +376,9 @@ dsh-desktop/
 ## 第三方组件与许可
 
 本项目使用了大量 MIT 开源项目，完整清单与许可文本见 [docs/attributions.md](docs/attributions.md)。
-主要组件：[@deepseek-ai/dsh](https://www.npmjs.com/package/@deepseek-ai/dsh)（MIT）、[Zat-DSH Engine](https://github.com/mishibeikejie/zat-dsh-engine)（MIT）、[koffi](https://koffi.dev)（MIT）、Electron / Chromium / Node.js（各组件许可随包分发）等。`zat-dsh-engine` 的 LICENSE 与双语 README 随安装包一并分发于 `assets/plugins/zat-dsh-engine/`。
+主要组件：[@deepseek-ai/dsh](https://www.npmjs.com/package/@deepseek-ai/dsh)（MIT）、[koffi](https://koffi.dev)（MIT）、Node.js（内置运行时）等。
+进安装包的载荷逐项许可见仓库根 [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)（§4 单列「随仓库分发但不进安装包」的内置插件）。
+历史上的旧内置市场 `zat-dsh-engine` 已随包退役并删除源目录（commit `4baa9beaf`），其 LICENSE 不再随包分发。
 
 ## License
 

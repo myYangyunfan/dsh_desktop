@@ -20,14 +20,19 @@ client-updater / plugin-manager）、内核（@deepseek-ai/dsh 0.1.1-rc.1 全家
 
 - `https://api.deepseek.com`（+ `/anthropic/v1`）— 唯一默认 API 目标；密钥仅出现在
   `Authorization: Bearer` 请求头，发往 `llm-deepseek.baseURL ?? 环境变量 ?? 官方域`。
-- `https://api.deepseek.com/user/balance` — 余额查询（balance.js）；跨主机/降级 http
+- `https://api.deepseek.com/user/balance` — 余额查询，唯一出口在插件宿主半边
+  `assets/plugins/dsh-balance/lib/balance-core.js`（自制壳遗留线 `dsh-desktop/balance.js`
+  已于 2026-10 整体拆除，同月拆线后不再有第二条会发这个请求的代码，见
+  `docs/balance-architecture.md` §1.2）；跨主机/降级 http
   的重定向会剥离 Authorization。
 - 更新链（GitHub api / gitee api / registry.npmjs.org / registry.npmmirror.com /
   codeload.github.com 及 gh 镜像）— **请求不带任何凭据**，只有 User-Agent。
 - 用户显式配置的第三方端点（自担风险，见下）：
-  - 识图插件 dsh-vision 的 VLM baseURL（默认指向 open.bigmodel.cn，用其**独立** apiKey）；
   - openclaw-bridge 的 customBaseURL（如 siliconflow，独立 key）；
   - side-session 摘要模型的自配端点。
+
+  > 2026-08 审计时该清单还有一条「识图插件 `dsh-vision` 的 VLM baseURL（默认 open.bigmodel.cn，
+  > 独立 apiKey）」；该插件已于 2026-10-07 退役、不再随包，故从现行清单移出（出网点历史记录保留在此）。
 
 **结论：没有任何代码路径把 DEEPSEEK_API_KEY 发往 deepseek 官方域与用户自配端点之外。**
 
@@ -68,6 +73,10 @@ client-updater / plugin-manager）、内核（@deepseek-ai/dsh 0.1.1-rc.1 全家
   镜像下载同样过校验，无校验和的资产直接拒绝。
 - 壳层客户端自更新：GitHub/Gitee Release 安装包，当前仅 64MB 下限 + content-length
   完整性，无签名（已知差距，规划中）。
-- dsh-hub / 插件市场：从 GitHub/镜像安装**第三方插件属主动安装任意代码**——插件在
-  内核进程内运行，理论上可读 `~/.dsh` 与调用模型（= 花你的钱）。请只装信任来源的
-  插件；2026-08 加固后源码包从官方 codeload 优先下载并做顶层目录锚点校验。
+- 第三方插件安装（**内置市场与插件中枢已随 v1.0.0 退役**）：`dsh-community-market`（可视化插件市场）与
+  `dsh-hub`（插件中枢，仅用于挂载市场与 `graph-memory`）已于 2026-10-07 按用户点名移除，客户端不再提供
+  页面内的搜索/安装/更新入口。**风险论述不变**：经 `dsh plugin --profile web add <包名或 github 源>`
+  或 `dsh-super-injector` 的 `dev_*` 注入装进来的第三方插件，**属主动安装任意代码**——插件在
+  内核进程内运行，理论上可读 `~/.dsh` 与调用模型（= 花你的钱）。请只装信任来源的插件。
+  历史：2026-08 曾对内置市场的下载链做加固（源码包从官方 codeload 优先下载 + 顶层目录锚点校验），
+  该下载链随市场/插件中枢一并退役；`dsh plugin` CLI 的完整性校验行为以内核官方实现为准。

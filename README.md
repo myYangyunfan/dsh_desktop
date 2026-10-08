@@ -31,7 +31,6 @@
 ### 体验增强
 
 - **深色玻璃无边框窗口** — 自绘标题栏、Win11 圆角，关闭默认隐藏到系统托盘
-- **桌面宠物** — 随行小鲸鱼常驻桌面，陪伴工作（设置 → 插件可一键开关）
 - **侧边会话浮窗** — 随时唤起独立会话窗口，与主会话互不干扰
 - **会话管理** — 归档 / 恢复 / 删除对话，历史不再堆积
 - **余额小部件** — 对话底部实时显示「本轮费用 · 余额」，支持 OpenCode Go 订阅额度，点击直达充值
@@ -57,7 +56,7 @@
 | 界面 | 浏览器标签页 | 桌面原生窗口 · 深色玻璃无边框 |
 | 会话管理 | 仅归档 | 归档 / 恢复 / 删除 |
 | 余额 | 无 | 实时「本轮费用 · 余额」+ OpenCode Go |
-| 桌面能力 | 无 | 托盘常驻 / 完成通知 / 桌面宠物 / 侧边浮窗 |
+| 桌面能力 | 无 | 托盘常驻 / 完成通知 / 侧边浮窗 |
 | 更新 | 手动 | 客户端双源更新链（GitHub/Gitee + sha256 校验 fail-closed） |
 
 ## 🚀 快速开始
@@ -143,32 +142,60 @@ v0.5.0 起发布走 **Tauri GitHub Actions 云端流水线**（[`tauri-release.y
 
 ## 🧩 内置插件生态
 
-随安装包分发（完整第三方组件清单见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)）：
+内置伴随插件在册共 **28 个**（v1.0.0 起插件源只随本仓库分发、**不进安装包**，交付面整目录剔除，见 THIRD_PARTY_NOTICES 第 4 节；完整第三方组件清单同文件）。下表按 `scripts/lib/companion-plugins.js` 的在册顺序逐名列出，包名与版本取自各插件 `package.json` 实值；「上游 / 许可」一列只到「包内自己怎么说」这一层，逐条原仓库可达性与许可原文实测见 [内置插件清单](dsh-desktop/docs/builtin-plugins-inventory.md) §三，逐条对 rc.2 宿主的兼容判定见 §五：
 
-| 插件 | 说明 | 来源 |
-| --- | --- | --- |
-| `dsh-session-manager` | 会话归档 / 恢复 / 删除管理 | 内置 |
-| `dsh-better-sidebar` | 侧边栏增强 | [omdsh-dev/DSH-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) |
-| `dsh-super-injector` | 开发注入 / 热重载工具链 | @dsh-external 社区 |
-| `dsh-vision` | OpenAI 兼容识图（OCR / 看图 / 读图表） | @dsh-external 社区 |
-| `dsh-side-session` | 侧边会话浮窗，三档上下文 | [hzhz314159/dsh-side-session](https://github.com/hzhz314159/dsh-side-session) |
-| `billion-context-dsh` | 上下文压缩（compaction）增强 | [Tyan66666/billion-context-dsh](https://github.com/Tyan66666/billion-context-dsh) |
-| `dsh-navbar` | 导航栏替换 | [vlln/dsh-navbar](https://github.com/vlln/dsh-navbar) |
-| `dsh-hub` | 插件中枢：更新引擎 / 全局记忆 / 图谱与市场挂载 | [ARFCON/dsh-hub-DSH](https://github.com/ARFCON/dsh-hub-DSH) |
-| `harness-pet` | 桌面宠物 | [cakeni/harness-pet](https://github.com/cakeni/harness-pet) |
+> [!NOTE]
+> **v1.0.0 精简：内置插件由 39 个减为 28 个**（用户于 2026-10-07 点名移除）。不再内置的 11 个：
+> 可视化插件市场（`dsh-community-market`）与其桌面服务桥（`dsh-market-desktop-bridge`）、插件中枢（`dsh-hub`）、
+> 知识图谱记忆（`graph-memory`）、知识中心（`dsh-cardian`）、桌面宠物（`harness-pet`）、内置识图 VLM 转述（`dsh-vision`）、
+> 拖入文件（`dsh-file-drop`）、图片粘贴发送（`dsh-image-paste`）、会话内终端标签（`@deepseek-ai/dsh-terminal-tab`）、
+> 文件变更一键还原（`@deepseek-ai/dsh-client-file-changes`）。其中 `@deepseek-ai/dsh-client-file-changes` 与
+> `@deepseek-ai/dsh-terminal-tab` 与内核官方同名包重叠，镜像副本会遮蔽官方包，故一并撤回。
+> 相近能力仍在包内：手机同屏 = `dsh-pocket`，文件变更追踪 = `dsh-file-changes`（仅其「一键还原」半边依赖已移除的壳侧 `file_revert`）。
 
-## 🧠 社区预设
+| 插件（包名） | 版本 | 说明 | 来源 / 许可 |
+| --- | --- | --- | --- |
+| `@deepseek-ai/dsh-balance` | 0.1.2 | 账户余额 + 本轮会话费用估算（挂在对话统计栏 dock） | 自研 · MIT |
+| `@deepseek-ai/dsh-file-changes` | 0.1.0 | 会话文件更改投影（折叠 tool/result 的 meta.diffs） | 自研 · MIT |
+| `dsh-better-sidebar` | 0.24.1 | VSCode 式右栏：editor / git / subagent / sidechat / diff 五个内置标签，并向其他插件开放标签注册服务 | [omdsh-dev/DSH-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) · MIT |
+| `dsh-session-manager` | 0.1.0 | 会话行删除按钮 + 设置内「归档对话管理」面板（恢复 / 删除） | 自研 · MIT（包名撞社区已发布包） |
+| `@deepseek-ai/dsh-conversation-tweaks` | 0.1.1 | 隐藏长篇对话输出 + 会话右侧导航滑轨 | 自研 · MIT |
+| `@deepseek-ai/dsh-quest-ui` | 0.6.1 | Quest 模式界面一键开关（分组会话栏 + 卡片输入区 + 药丸元数据条，默认关闭） | 自研 · MIT |
+| `@dsh-external/dsh-super-injector` | 0.3.1 | 运行时注入任意本地插件包（不重启）+ 热重载 + 设置页插件管理 UI | @dsh-external 社区 · BSD-3-Clause（仅 manifest 自标，无许可原文可引） |
+| `@deepseek-ai/dsh-prompt-custom` | 0.3.5 | 在设置页自定义官方注入的系统提示词（整体替换 / 追加） | 自研 · MIT |
+| `@deepseek-ai/dsh-workspace-anchor` | 0.1.0 | 往稳定系统提示注入 {{cwd}} 偏好块，防 agent 工作目录漂移 | 自研 · MIT |
+| `@deepseek-ai/dsh-wsl-settings` | 0.1.0 | 设置页「WSL 后端」栏：local↔wsl 切换、发行版与安装目录、状态探活 | 自研 · MIT |
+| `@dsh-external/dsh-side-session` | 0.3.1 | 临时会话悬浮窗：自动导入主对话上下文（长度三档 120 / 600 / 5000 条），追问不污染主会话 | [hzhz314159/dsh-side-session](https://github.com/hzhz314159/dsh-side-session) · MIT（上游无 LICENSE 文件，MIT 系我方自标） |
+| `billion-context-dsh` | 0.2.26 | Active Context Pruning：模型驱动上下文管理，另注册 4 个模型工具与 /acp-prune 命令 | [Tyan66666/billion-context-dsh](https://github.com/Tyan66666/billion-context-dsh) · MIT |
+| `dsh-pocket` | 2.10.7 | 手机扫码实时同屏操控桌面 web（WebSocket 透传 + 公网隧道 + 二维码配对） | [shaobeichen/dsh-pocket](https://github.com/shaobeichen/dsh-pocket) · GPL-2.0 |
+| `@deepseek-ai/dsh-openclaw-bridge` | 0.8.1 | 微信 / 飞书官方频道桥接入 DSH agent 会话（分片回写、去重限流） | [hzhz314159/openclaw-dsh-bridge](https://github.com/hzhz314159/openclaw-dsh-bridge) · MIT |
+| `dsh-input-history` | 0.1.1 | 输入框 ↑/↓ 终端式已发送消息回溯（按会话隔离） | 自研 · MIT |
+| `dsh-easyrewrite` | 2.6.0 | 消息撤回 / 重编辑 + 版本翻页器 + 自带设置中心 | [Renzic-Stone/DSH-EasyRewrite](https://github.com/Renzic-Stone/DSH-EasyRewrite) · MIT |
+| `dsh-change-review` | 0.1.1 | AI 变更审核：让模型复查自己刚做的改动（正确性 / 安全性 / 目标一致性） | 自研 · MIT |
+| `dsh-auto-compact` | 0.1.1 | contextPressure 达阈值（默认 80%，可调）自动发送 /compact | 自研 · MIT |
+| `dsh-offpeak` | 1.0.1 | 峰谷价格卫士：高峰时段拦截发送提醒，可定时到低价时段自动执行 | [christophersmith2737-commits/OffPeak](https://github.com/christophersmith2737-commits/OffPeak) · MIT |
+| `dsh-settings-nav-custom` | 0.1.1 | 设置页左侧导航项显示 / 隐藏与排序（localStorage 持久化） | EAC 移植 [DSH-EAC/EAC-Desktop](https://github.com/DSH-EAC/EAC-Desktop) · MIT |
+| `dsh-settings-groups` | 0.1.1 | 把设置「常规」页低频选项收进底部可折叠「高级选项」组 | 自研 · MIT |
+| `dsh-synapse` | 0.3.0 | 非线性对话画布：同工作区的会话 / 追问 / 分支可视化拖拽 | [liangmianya/dsh-synapse](https://github.com/liangmianya/dsh-synapse) · MIT（本地分叉线，不取上游 0.4.2） |
+| `@dsh-external/dsh-subagent-lens` | 0.1.1 | Task/subagent 展开式活动视图 + 会话头部命令/文件聚合条（零额外后端请求） | 自研 · MIT（借 @dsh-external 作用域，名下无仓库） |
+| `dsh-reasoning-effort` | 0.8.1 | Codex 式「模型 + 推理强度」选择器，含自定义 provider 的 copy-ready 指引 | [HanaAyane/dsh-reasoning-effort](https://github.com/HanaAyane/dsh-reasoning-effort) · MIT |
+| `dsh-basics-panel` | 0.4.1 | 设置页可视化并管理 MCP 服务器 / 技能 / 规则 / 归档会话 | [yxsj245/dsh-Basics-Panel](https://github.com/yxsj245/dsh-Basics-Panel) · MIT |
+| `dsh-input-fold` | 0.1.1 | 超长用户提示词默认折叠为前几行 + 「展开」遮罩 | 自研 · MIT |
+| `dsh-prompt-optimizer` | 2.0.4 | 输入框一键润色草稿（默认当前会话模型，零配置流式） | [winditer/dsh-prompt-optimizer](https://github.com/winditer/dsh-prompt-optimizer) · MIT |
+| `dsh-zcode-migrate` | 0.1.2 | zcode CLI 历史会话 → dsh 原生会话日志（inspect / migrate / verify + /zcode） | 自研 · MIT |
 
-除官方内核自带的 `standard` / `ptc` / `minimal` / `cordis` 外，随安装包共内置 8 个 Agent 预设——7 个来自下表社区仓库（新会话设置中直接可选），另加自研的 `minimal-win`；逐预设清单、上游同步与许可细节见 [dsh-desktop/docs/agent-presets.md](dsh-desktop/docs/agent-presets.md)。按模型/接入方式的选型建议：
+> 历史上还随包过 `dsh-navbar`（导航栏替换，v0.6.3-beta.3 已移出清单并删源 `ff421ac2`）、
+> `zat-dsh-engine`（旧内置市场，更早退役）——两者均不在上面的 28 个在册清单里。
 
-| 预设（内置 id） | 用途 | 上游仓库 | 上游作者 | 许可证 |
-| --- | --- | --- | --- | --- |
-| `router-standard` | 官方 API · **flash** 模型（任务感知路由） | [dsh-routing-suite](https://github.com/yjh051108/dsh-routing-suite) | [@yjh051108](https://github.com/yjh051108) | MIT |
-| `anchored-standard`（含 `zero-anchored-standard` / `whoami-standard` 变体） | 官方 API · **pro** 模型（两段式：Minimal 引导 → 全量 Standard） | [dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard) | [@xiaobright](https://github.com/xiaobright) | MIT |
-| `v4-flash-godmode-opencode-go` | OpenCode Go · **flash** 模型（build/fix 内路由） | [v4-flash-godmode-opencode-go](https://github.com/SheberDavid/v4-flash-godmode-opencode-go) | [@SheberDavid](https://github.com/SheberDavid) | ⚠️ 上游无 LICENSE 文件（作者声明基于 MIT 的 dsh-routing-suite 改编，分发前建议与作者确认） |
-| `warmupbetter` / `warmupbetter-replay` | OpenCode Go · **pro** 模型（首轮长 COT 热身 / 回放） | [myDshPresets](https://github.com/0liveiraaa/myDshPresets) | [@0liveiraaa](https://github.com/0liveiraaa) | 上游 README 声明修改按 MIT（附 MIT 的 `LICENSE.deepseek-harness`） |
+## 🧠 Agent 预设
 
-> 致谢以上社区作者；预设的改编与适配细节见各预设目录内 `NOTICE` / `README`。`router-standard` 依赖的运行时注入器以 [dsh-super-injector](https://github.com/yjh051108/dsh-super-injector) 插件形态随包内置（见上表插件生态）。
+**v1.0.0 纯净线不携带任何 Agent 预设**——与官方桌面客户端的交付形态对齐：模式列表只出
+内核自带的出厂集（`standard` / `ptc` / `minimal` / `cordis`），安装包不注入自定义 persona，
+客户端也不写入任何预设文件（随包预设源、预设写入器与 boot 的 `presets` 步已一并拆除）。
+
+想用自己的预设：放进 `<DSH_HOME>/.agent-presets/<id>/` 即可被内核发现（`agent.cordis.yml`
++ `preset.yml`）；老用户目录里的历史副本不会被清除。历史上随包过的社区/自研预设来自第三方
+作者，已整树删除，来源与致谢记录见 git 历史（`git log --diff-filter=D -- dsh-desktop/assets/agent-presets`）。
 
 ## 🏗 架构
 
@@ -181,7 +208,7 @@ v0.5.0 起发布走 **Tauri GitHub Actions 云端流水线**（[`tauri-release.y
 │    → 探活 → 崩溃环原地重启（任何不兼容形态都不白屏）        │
 │  · shell-core        路径 / 设置（损坏自愈）/ 单实例        │
 │  · kernel-process    spawn 规格 / 就绪行 / Job Object 杀树  │
-│  · bridge            Electron IPC 43 通道 → Tauri command  │
+│  · bridge            Electron IPC 38 通道 → Tauri command  │
 │                     全量映射 + 垫片 JS（window.dshDesktop） │
 │  · fence / preview-server / session-watcher /              │
 │    sidecar-orchestrator（boot 时序 + Node sidecar 复用     │

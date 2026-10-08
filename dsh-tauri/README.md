@@ -28,8 +28,8 @@ DeepSeek Harness 桌面客户端的 Tauri 2 重构。**v0.5.0 起为仓库主线
 ```
 dsh-tauri/
 ├── contracts/          # ★ 契约单一来源（先于代码存在；注册命令⊆契约由测试强制）
-│   ├── bridge-api.md   #   window.dshDesktop 49 方法硬契约（溯源到 Electron preload.js）
-│   ├── ipc-commands.md #   Electron IPC → Tauri command 43 通道映射（43-2 注册）
+│   ├── bridge-api.md   #   window.dshDesktop 46 方法硬契约（溯源到 Electron preload.js；2026-10 随插件退役 8 项 + 拆余额遗留线 1 项，编号留断号）
+│   ├── ipc-commands.md #   Electron IPC → Tauri command 38 通道映射（43 面溯源提取，2026-10 裁撤 7 条）
 │   ├── data-flow.md    #   配置叠加树 + 单一数据流 + boot 守护瀑布 + 持久化/env 覆盖通道
 │   ├── plugin-contract.md # 三层插件辨析（内核 cordis / 伴随 / 用户）与消费规范
 │   └── error-codes.md  #   统一错误码（E_* 只追加不复用）
