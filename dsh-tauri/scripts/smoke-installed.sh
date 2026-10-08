@@ -58,6 +58,17 @@ for pair in "package-payload/dsh-desktop:dsh-desktop" "sidecar:sidecar" "ui:ui";
   rc=$?; [ $rc -lt 8 ] || { echo "[smoke] robocopy 失败($rc): $src"; exit 1; }
 done
 
+# ---- 内置插件随包断言（v1.0.0 内置线）----
+# 安装包必须带插件源：payload 的门禁在 stage 阶段跑过，这里核**安装布局**这一份
+# （robocopy //MIR 组布局与真实安装包同源），防止「stage 通过、装出来是空的」。
+src_n=$( (find "$REPO_ROOT/dsh-desktop/assets/plugins" -mindepth 1 -maxdepth 1 -type d 2>/dev/null || true) | wc -l | tr -d ' ')
+ship_n=$( (find "$SMOKE/resources/dsh-desktop/assets/plugins" -mindepth 1 -maxdepth 1 -type d 2>/dev/null || true) | wc -l | tr -d ' ')
+if [ "$ship_n" != "$src_n" ] || [ "$ship_n" = "0" ]; then
+  echo "[smoke] ✗ 安装布局里的内置插件不完整：仓库源 ${src_n} 个 / 包内 ${ship_n} 个"
+  exit 1
+fi
+echo "[smoke] ✓ 内置插件随包：${ship_n} 个插件源在安装布局内"
+
 # ---- 出厂补丁在位断言 ----
 # 动机：“补丁只存在于 dev 树、安装树自带旧 scripts 因而 never 生效”这类失效
 # （实测“某些多模态模型仍说收不到图片”的真成因），在装完之后才暴露代价极高。
@@ -196,6 +207,23 @@ if grep -q "Failed to load plugins\|missed the module table\|invalid plugin\|ent
   exit 1
 fi
 echo "[smoke] ✓ 插件加载零致命错误"
+
+# ---- 内置线端到端断言：包里的插件源真的被 boot 镜像进了 profile ----
+# 「装进去了」不等于「开箱可用」：sync 步在开机时把 payload 的 assets/plugins 镜像进
+# <DSH_HOME>/profiles/<name>/node_modules/，这一步没跑通用户看到的还是空插件页。
+# 只判「有没有」不判条数——装机首启的镜像量与 keep-newer 判定有关，钉死数字会变成假红。
+plugged=0
+for i in 1 2 3 4 5 6; do
+  n=$( (find "$SMOKE/home/profiles/web/node_modules" -mindepth 2 -maxdepth 2 -name package.json 2>/dev/null || true) | wc -l | tr -d ' ')
+  if [ "${n:-0}" -ge 5 ]; then plugged=1; echo "[smoke] ✓ 内置插件已镜像进 profile（node_modules 内 ${n} 个包）"; break; fi
+  sleep 5
+done
+if [ "$plugged" != "1" ]; then
+  echo "[smoke] ✗ boot 未把包内插件镜像进 profile（node_modules 里不足 5 个包）——内置线端到端断了"
+  find "$SMOKE/home/profiles/web/node_modules" -maxdepth 2 2>/dev/null | head -6
+  taskkill //IM "dsh-tauri-app.exe" //F //T > /dev/null 2>&1
+  exit 1
+fi
 
 # ---- 深检：page-error 全量溯源 + 内核端点抽检 + 轻压测（内核存活时进行） ----
 echo "[smoke] --- page-error 全量（溯源 failed-to-fetch 类） ---"

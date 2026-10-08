@@ -13,7 +13,7 @@ Node 逻辑仍是活代码（Tauri sidecar 直接复用，零重写）。主平�
 | 目录 | 说明 |
 | --- | --- |
 | `dsh-tauri/` | 桌面壳主线：`contracts/`（五契约）、`src-tauri/`（Rust 工作区）、`sidecar/`（Node 薄封装）、`ui/`、`scripts/`（stage-payload / smoke-installed） |
-| `dsh-desktop/` | 内核侧 Node 逻辑：构建期补丁、自愈、插件同步、余额链、`assets/plugins/`（仓库源，不进安装包；内置伴随插件在册 **28** 个，v1.0.0 由 39 精简、2026-10-07 移除 11 个；随包 agent 预设子系统已整体拆除）、`vendor/dsh-kernel/`（pin 的离线内核 tgz，**必须入库**） |
+| `dsh-desktop/` | 内核侧 Node 逻辑：构建期补丁、自愈、插件同步、余额链、`assets/plugins/`（**随安装包分发**——v1.0.0 内置线，2026-10-08 裁定；内置伴随插件在册 **28** 个，v1.0.0 由 39 精简、2026-10-07 移除 11 个；随包 agent 预设子系统已整体拆除）、`vendor/dsh-kernel/`（pin 的离线内核 tgz，**必须入库**） |
 | `dsh-desktop/scripts/test/` | 全部 Node 测试（185 个 `*.test.js/.mjs`，另有 `fixtures/`、`ta16-snapshots/`、mock server），单测唯一去处 |
 | `.github/workflows/` | `ci.yml`（PR 门禁）、`tauri-release.yml`（tag 发版，唯一发布入口）、`release.yml`（退役 Electron 线，全部 `if: false`） |
 
@@ -105,12 +105,16 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
 - **稳定性三原则（评审默认立场）**：① 客户端必须能打开，装配失败终态恢复页而非退出；
   ② 兼容性不报错，意外以日志收场（`panics.log`）不以崩溃收场；③ 用户数据不动。
 - `unit-updater` 的两个 fallback 用例在依赖装好时显示 `skip`，属**预期**而非失败。
-- 文档里的测试基线数字常滞后。**现值（2026-10-08 二次实测）**：`scripts/test/` 185 个测试文件，
-  `npm test` = 1982 例 / 1975 pass / 0 fail / 7 skipped；skip 逐条都是环境缺料而非缺陷
+- 文档里的测试基线数字常滞后。**现值（2026-10-08 三次实测，内置线重打包后）**：`scripts/test/` 186 个测试文件，
+  `npm test` = 1990 例 / 1983 pass / 0 fail / 7 skipped；skip 逐条都是环境缺料而非缺陷
   （pristine 夹具缺 `@openai/codex` / `@earendil-works/pi-ai`、openclaw 双轨的兄弟目录
   `../openclaw-dsh-bridge/` 不在盘、真实网络、`.tmp-kernel` 构建产物不可用），**条数随本机材料与缓存浮动**
   （同一天早些时候记的是 1981/1973/8）——一律以现跑输出为准，**pass 与 fail 才是判据**。
-  Rust 侧按 `cargo test --workspace` 现跑现看。
+  Rust 侧现值 **689 passed / 0 failed / 4 ignored**（36 个 target）——本机只能走 gnu 链，
+  **`cargo test` 必须带 `--target x86_64-pc-windows-gnu`**（与 `RUSTUP_TOOLCHAIN` 配对）：漏了它会去写
+  `<CARGO_TARGET_DIR>/debug/`（host 目录，复用不到三元组目录里的增量），链接期炸成
+  `final link failed: memory exhausted` + 「crate … required in rlib format」+ 上百条 ICE 级联，
+  看着像代码坏了其实只是工具链指错了。
   `dsh-tauri/docs/development.md` 那组「177 Rust 例 / 71 文件 Node」是旧账——**一律以实测输出为准**。
 - 部分文件含 GBK 遗留注释（如 `dsh-tauri/src-tauri/Cargo.toml`），按 UTF-8 读会显示乱码；
   编辑这类文件时保持原编码，不要顺手「修正」成全角乱码以外的内容。

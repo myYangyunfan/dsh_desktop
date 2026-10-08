@@ -24,11 +24,13 @@
 > `commands.rs:103` = `assert_eq!(CHANNELS.len(), 38)`、`shim.rs:15` = `REQUIRED_SURFACES`（同文件 `:92` 锁 46）、
 > `companion-plugins.js:68-71` = openclaw-bridge 出处注释。
 >
-> **v1.0.0 纯净线口径**：本清单里的插件**不进安装包**——`dsh-tauri/scripts/stage-payload.sh` 与
-> `.github/workflows/tauri-release.yml` 的 staging 显式剔出 `assets/plugins`（交付面门禁只认这一条，
-> `ta12-stage-payload-sentinel` 逐条变异反证）。
-> 插件仓库保留源，boot 的 sync 步按这份名单把「历史上装过的配套件」计入 `missingNames` 并撤回它们的 `cordis.patch` 条目
-> 与 bundle 注册。要恢复随包分发，改的是 staging 排除面，不是这份清单。
+> **v1.0.0 内置线口径**（2026-10-08 裁定，反转此前的「官方形状 / 插件不进包」）：本清单里的 28 条插件
+> **整树进安装包**——`dsh-tauri/scripts/stage-payload.sh` 与 `.github/workflows/tauri-release.yml`
+> 的五个架构 staging 都镜像 `assets/plugins`，并以「源目录数 = payload 目录数」门禁把守
+> （交付面门禁只认这一条，`ta12-stage-payload-sentinel` 逐条变异反证）。装机后首次开机由 boot 的
+> sync 步把它镜像进 `<DSH_HOME>/profiles/<name>/node_modules/`，开箱可用。
+> 同一份清单还承担反方向职责：源缺失时把「历史上装过的配套件」计入 `missingNames` 并撤回它们的
+> `cordis.patch` 条目与 bundle 注册——所以清单**不能清空**，它是撤回依据。
 > （随包 agent 预设不在此列：v1.0.0 已把源树、写入器与 boot 的 `presets` 步整体拆除，boot 链现为
 > repair→sync→patches→compat-pin→preflight **五步**，见 `dsh-tauri/contracts/data-flow.md §3`。）
 >
@@ -55,7 +57,8 @@
 > `nm` 一条（#13 `dsh-pocket`）与 `shipsNodeModules` 声明一致；#12 `compaction-acp` 的 `nm` 已随 0.2.26 下线
 > （上游 tsup 把 `acp-kernel` 内联进 `dist/index.js`，改用宿主闭包，见 `companion-plugins.js:57-61` 注记），
 > `assets/plugins` 目录数同为 28、清单外余集为空。
-> 这 28 条**都不进安装包**（交付面整目录剔除），清单存在的意义是给 boot 的 sync 步做「历史配套件撤回」的依据。
+> 这 28 条**整树进安装包**（内置线，交付面有「源数 = payload 数」门禁），同一份清单还是 boot 的 sync 步
+> 做「历史配套件撤回」的依据——两个职责共用一份名单，别把「随包分发」误读成「清单只是分发清单」。
 > **「一句话作用」列的 2026-10-08 逐格审计**：五格与包体实交付字节不符，已就地更正——#3 `better-sidebar`
 > 的 `tasks` 是 subagent 标签的标题不是第四个 id（`builtinTabs()` 实测 5 个 id）、#7 `dsh-super-injector` 漏记
 > 设置页插件管理 UI、#12 `billion-context-dsh` 漏记四个模型工具与 `/acp-prune`、#16 `dsh-easyrewrite` 漏记版本翻页器

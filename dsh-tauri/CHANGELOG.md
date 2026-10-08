@@ -2,6 +2,46 @@
 
 # DSH Desktop v1.0.0 — 纯净线（开发中，未发布）
 
+## 📦 重点：交付口径反转 —— 28 条内置插件随安装包分发（内置线）
+
+> 2026-10-08 裁定「装进去：真内置 28 条」，推翻 v1.0.0 立项时的「插件源不进安装包」口径。
+> 装完首次开机由 boot 的 sync 步把 payload 里的插件整树镜像进 profile，开箱可用。
+
+- **三层闸反转 + 一层新门禁**（`dsh-tauri/scripts/stage-payload.sh`）：assets 镜像不再 `//XD plugins`、
+  镜像后不再 `rm -rf "$DST/assets/plugins"`，收尾从「payload 里必须不存在」改成「**源目录数 = payload
+  目录数**」的数量门禁；必需件清单加回 `assets/plugins`。`.github/workflows/tauri-release.yml` 五个架构
+  的 staging 同步同口径（否则出现「本地带插件、CI 不带」）。
+- **两条必须保留的防线**：`//XD .pnpm` + 镜像后 `find … -name .pnpm -prune -exec rm -rf`（robocopy 跟
+  junction 展开成真实路径后，NSIS 的 `File` 指令在 >260 字符处 `failed opening file` 直接中断建包，
+  实错 installer.nsi:15383）；**不得对 assets 一刀切排除 `node_modules`**（dsh-pocket 的 392 个 git 跟踪
+  正件依赖会被一起杀掉）。两条都由 ta12 哨兵的反证变异咬住。
+- **新风险与新判据**：插件进包后 dev 树的本机 install 残留（历史实测 433MB）会原样进安装包。交付面
+  改用与同步面同一份声明式数据源 —— 新增纯函数 `dsh-desktop/scripts/lib/payload-plugin-deps.js`
+  （`residueNodeModules` / `overlongFiles` / `longestInstallPath`）+ 编排器
+  `dsh-tauri/scripts/stage-plugin-gate.mjs`：只保留声明了 `shipsNodeModules` 者的内层 `node_modules`，
+  `.pnpm` 在位即 FATAL，按最坏安装前缀算超长（阈值 240，留 20 字符余量）即 FATAL 并列 top8。
+  2026-10-08 实测最长安装路径 143 字符，判据当前不咬红。
+- **随迁的锁**：`ta12-stage-payload-sentinel`（10 例，judge 从「必须剔干净」翻成「必须整树随包 +
+  四层闸逐层反证」）、`unit-pure-bundle-line` → `unit-bundled-plugin-line`（5 例，git mv + 重写：bundle
+  件走 manifest 因而**不出现在 `cordis.patch.yml`**，非 bundle 有源件才补 insert 行且幂等）、
+  新增 `unit-payload-plugin-deps`（7 例，含「恰好 240 放行 / +1 判红」边界与「换更长前缀必须从不判变成
+  判红」的防恒真夹具）。
+- **冒烟随迁**（`dsh-tauri/scripts/smoke-installed.sh`）：安装布局插件数必须等于仓库源数；开机后端到端
+  断言 profile `node_modules` 里 ≥5 个包（轮询 6×5s），失败即打印树并结束进程判红——把「payload 带了源
+  但同步链没跑通」这类只在装完之后才暴露的代价前移到冒烟。
+- **壳侧仍零改动**：五契约、`generate_handler!`、`CHANNELS`、补丁注册表计数、NSIS 钩子一律未触；
+  改的是 Node 侧交付面与文档口径（AGENTS / CONTRIBUTING / README 中英 / dsh-desktop README /
+  `development.md` §5 / inventory §一 §二 / `companion-plugins.js` 头注释 / THIRD_PARTY_NOTICES §4 与新增 §4.2）。
+- **2026-10-08 全链实测（第三版 1.0.0 包）**：`stage-payload.sh` 打
+  `[gate] OK: 28 个插件目录 / 1160 个文件进包，最长安装路径 143 字符（< 240），剪除残留 node_modules 0 处`，
+  payload 892MB；gnu 链 build 出包 **189,866,310 字节（181.07 MiB）**（上一版 176.6MB → +4.5MB，
+  插件正文只有 1160 个文件），SHA256 `553617de1c30fe53535cc09019c3b5df5505f9b62f5e7bbd58d8d9cfb7a07eb5`。
+  冒烟 PASS：`✓ 内置插件随包：28 个插件源在安装布局内`、`✓ 内置插件已镜像进 profile`，
+  按 `COMPANION_PLUGINS` 逐名核对沙箱 profile 落点 **28/28 未缺失**，插件加载零致命错误 / page-error 0 /
+  杀壳残留 0。门禁复跑：Node 1990 例 / 1983 pass / 0 fail / 7 skipped，`ta12-stage-payload-sentinel` 10/10，
+  `sidecar/cli.test.js` 21/21，Rust 689 passed / 0 failed / 4 ignored，`check-syntax` /
+  `validate-pin`（✓ dsh-v0.2.0-rc.2）/ `patch-surface verify`（✓ 67 文件无漂移）全绿。
+
 ## 🔌 重点：在册 28 条内置插件逐条对 rc.2 宿主的更新判定与兼容修复（壳侧零改动）
 
 > 全部改动在 Node 侧与插件产物（peer 区间、better-sidebar 整包换代到 0.24.1、更新通道机器化 +
@@ -16,9 +56,10 @@
   `peerDependencies` 区间与产物内的命名空间取用，都在 sidecar 驱动的 `dsh-desktop/scripts/`
   与 `assets/plugins/` 里发生；五契约、`generate_handler!`、`CHANNELS`、补丁注册表计数、
   NSIS 钩子一律未触（桥命令未增删 → `lib.rs` 契约审计测试无随迁需求）。
-- **交付面口径复核**：`stage-payload.sh` 与 `tauri-release.yml` 仍整目录剔除 `assets/plugins`
-  （v1.0.0 纯净线：插件留在仓库，不进安装包），所以本轮插件产物改动**不改变** payload 形状，
-  `ta12-stage-payload-sentinel` 无需随迁。
+- **交付面口径复核**：⚠️ 本条结论已被下方的「📦 内置线」整条反转——写这条时 `stage-payload.sh`
+  与 `tauri-release.yml` 仍整目录剔除 `assets/plugins`（v1.0.0 纯净线：插件留在仓库，不进安装包），
+  所以当时那轮插件产物改动不改变 payload 形状、`ta12-stage-payload-sentinel` 无需随迁。
+  2026-10-08 改判「真内置 28 条」后，payload 形状与那把哨兵都随迁了，见下方条目。
 - **更新判定现在是机器判据而不是抄录**：新增纯函数面 `dsh-desktop/scripts/lib/plugin-channels.js`
   （版本分桶 + `identityVerdict` 四值 + `actionable` 双条件）与复算器
   `dsh-desktop/scripts/compat/scan-plugin-channels.mjs`（d-pack 走本机克隆的 git 树，离线可重放；

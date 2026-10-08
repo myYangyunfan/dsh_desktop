@@ -9,7 +9,7 @@
 | `dsh-desktop/` | 客户端主体：内置 dsh CLI 与 Node 运行时、构建期补丁与自愈脚本（原 Electron 外壳已下线） |
 | `dsh-tauri/` | 桌面壳（Rust + Tauri/WebView2）：`src-tauri/` Rust 工作区、`sidecar/` Node 侧车、`scripts/stage-payload.sh` 打包暂存 |
 | `dsh-desktop/scripts/` | 构建期补丁、自愈模块；测试统一放 `scripts/test/` |
-| `dsh-desktop/assets/plugins/` | 内置 Cordis 插件包（v1.0.0 起不进安装包） |
+| `dsh-desktop/assets/plugins/` | 内置 Cordis 插件包（v1.0.0 内置线：随安装包分发） |
 | `.github/workflows/tauri-release.yml` | Tauri 三平台发布流水线（tag 触发） |
 
 ## 开发环境

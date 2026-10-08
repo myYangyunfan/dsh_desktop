@@ -153,7 +153,7 @@ Controlled by `bundle.targets` in `tauri.conf.json` — add or remove entries to
 
 ## 🧩 Bundled Plugin Ecosystem
 
-**28 companion plugins are registered in total.** Since v1.0.0 their sources ship with this repository only and are **excluded from the installer** (the delivery gate drops the whole directory — see §4 of [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)). The table below follows the registration order of `scripts/lib/companion-plugins.js`; package names and versions are read from each plugin's `package.json`. The "Source / license" column only reports what each package says about itself — per-plugin upstream reachability and licence text are audited in [the inventory](dsh-desktop/docs/builtin-plugins-inventory.md) §3, and the rc.2 host compatibility verdicts in §5.
+**28 companion plugins are registered in total.** Under the v1.0.0 bundled line (user decision, 2026-10-08) their sources ship **inside the installer**: the delivery gate mirrors `assets/plugins` as a whole, and the first boot syncs it into the profile, so everything below works out of the box (see §4 of [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the delivery gates and the full third-party list). The table below follows the registration order of `scripts/lib/companion-plugins.js`; package names and versions are read from each plugin's `package.json`. The "Source / license" column only reports what each package says about itself — per-plugin upstream reachability and licence text are audited in [the inventory](dsh-desktop/docs/builtin-plugins-inventory.md) §3, and the rc.2 host compatibility verdicts in §5.
 
 > [!NOTE]
 > **Trimmed in v1.0.0: bundled plugins went from 39 down to 28** (the 11 were named for removal by a user on 2026-10-07).

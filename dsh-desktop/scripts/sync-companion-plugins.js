@@ -325,7 +325,8 @@ function syncPlugins(home, dryRun, dshPkgDir) {
 
   // 知识中心（dsh-cardian / cardian）与桌面宠物（harness-pet）、知识图谱记忆
   // （graph-memory）的「随包默认禁用」段已在 v1.0.0 批量退役中整体拆除：三条
-  // 都已摘出 COMPANION_PLUGINS，源目录不再随包到达，bundleNames 永远不含它们，
+  // 都已摘出 COMPANION_PLUGINS，源目录已从仓库删除（内置线随包的是在册 28 条，
+  // 不含它们），bundleNames 永远不含它们，
   // 而保留这段会在每次同步里给已消失的插件重新写回 disabled 行（写完后一次
   // 致命启动又会把补丁层改名抹掉）。存量禁用行与登记行的撤回见上方
   // removeRetiredCompanionPatchRows。

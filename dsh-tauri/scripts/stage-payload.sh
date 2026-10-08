@@ -2,13 +2,15 @@
 # stage-payload.sh —— 打包前置：暂存运行时 payload 到 package-payload/dsh-desktop/
 # ==========================================================================
 # Tauri 安装包的内核资源（supervisor 的 app_dir）。从 dsh-desktop/ 源头按
-# 「Electron extraResources + 生产依赖」口径组装，排除四类大件/杂质：
+# 「Electron extraResources + 生产依赖」口径组装，排除三类大件/杂质：
 #   1. dist/            —— 旧构建产物（>2GB，与运行时无关）
 #   2. node_modules 的 devDependencies（electron / electron-builder /
 #      electron-winstaller）——Electron 运行时与打包器，Tauri 版不需要
 #   3. vendor/node/node —— unix node 二进制（115MB，win-x64 包只带 node.exe）
-#   4. assets/plugins   —— 内置插件（v1.0.0 起对齐官方交付形态：仓库保留源，
-#      安装包不带；口径与失效语义见下方 assets 段）
+#
+# `assets/plugins` **随包分发**（v1.0.0 内置线，2026-10-08 裁定）：28 条内置插件
+# 整树进安装包，装完首次开机由 boot 的 sync 步镜像进 profile，开箱可用。
+# 口径与失效语义见下方 assets 段。
 #
 # 产出布局（resources 映射 → <安装根>/resources/dsh-desktop/，
 # 与 lib.rs find_repo_root 的 exe-walk resources/ 子布局回退一致）：
@@ -60,11 +62,12 @@ echo "[stage] DEBUG: package.json exists: $(ls "$SRC/package.json" 2>&1)"
 echo "[stage] DEBUG: assets/ 顶层: $(ls "$SRC/assets" 2>&1 | tr '\n' ' ')"
 echo "[stage] DEBUG: node_modules count: $(ls "$SRC/node_modules" 2>/dev/null | wc -l)"
 
-# 必需件清单里**不含** assets/plugins：v1.0.0 纯净线不把它装进包（下方 assets 段
-# 显式剔除），装出来缺了反而才对。
+# 必需件清单**含** assets/plugins：内置线把它装进包，源头缺它就是一个不带插件的
+# 空壳包（下方 assets 段镜像 + 收尾门禁会红，但这里 fail-fast 更早）。
 for f in package.json "vendor/node/$NODE_BIN" \
          node_modules/@deepseek-ai/dsh/lib/bin.js \
-         scripts/lib/companion-profile.js; do
+         scripts/lib/companion-profile.js \
+         assets/plugins; do
   if [ ! -e "$SRC/$f" ]; then
     echo "[stage] 缺少运行时必需件: dsh-desktop/$f —— 先在 dsh-desktop/ npm install" >&2
     exit 1
@@ -87,45 +90,54 @@ rc() { mirror_dir "$1" "$2"; }
     [ -f "$f" ] && cp -f "$f" "$DST/"
   done
 
-# ---- scripts / assets：镜像 + 纯净线收口 ----
-# v1.0.0 与官方桌面客户端对齐的交付形态：官方不随包第三方插件，所以
-# `assets/plugins` 只留在仓库里（开发树与同步链仍以它为源），**不进安装包**。
+# ---- scripts / assets：镜像 + 内置线收口 ----
+# v1.0.0 内置线（2026-10-08 裁定反转此前的「官方形状/插件不进包」口径）：
+# `assets/plugins` 整树随安装包分发，装机后 boot 的 sync 步把它镜像进
+# <DSH_HOME>/profiles/<name>/node_modules/，28 条内置插件开箱可用。
 # 随包预设（`assets/agent-presets`）在 v1.0.0 已整树删除、写入器与 boot 的
 # presets 步一并拆除，此处不再有它的剔除面。
 #
-# 剔掉之后运行期不会报错，但链是 fail-open 的，语义要知道：
-#   • boot 的 sync 步把「源缺失」的配套件（清单条目数以
+# 运行期语义（改动前必须知道的两条失效面）：
+#   • sync 步把「源缺失」的配套件（清单条目数以
 #     scripts/lib/companion-plugins.js 为准，不在此处钉数字）计入 missingNames，随后**主动撤回**
-#     已装过的 cordis.patch 条目与 bundle 注册 —— 所以 COMPANION_PLUGINS 清单必须
-#     保持完整。清空清单会让老用户升级后留下一堆指向缺失目录的注册行，装配失败
-#     表现为 "entries did not activate"，一次致命启动会把 profile 的补丁层整体抹掉。
+#     已装过的 cordis.patch 条目与 bundle 注册 —— 所以 payload 一旦丢了 assets/plugins
+#     （例如有人重新加回剔除行），升级装机不是「少几个插件」而是把用户 profile 的插件层
+#     整体撤掉。清空 COMPANION_PLUGINS 清单更致命：撤回依据没了，profile 里留下指向
+#     缺失目录的注册行，装配失败表现为 "entries did not activate"，一次致命启动会把
+#     补丁层改名 .bak 并恢复出厂（sanitizeProfile）。
+#   • 手工往 profile 塞文件会在下次开机被 payload 覆盖——要改插件永远改 `assets/plugins`。
 #
-# 手法：//XD 只是 Windows 快路径（少拷 73MB），真正的口径是镜像后的无条件 rm。
-# 两个理由都是实测过的坑：robocopy /XD 把排除项同时挡在「复制」与「/MIR 删除」
-# 之外，上一代 payload 里已有的 assets/plugins 不会被 /MIR 清掉；而 mirror_dir 的
-# unix 分支（CI linux/mac）根本不读附加参数，只靠 //XD 会造出
-# 「win 纯净、linux/mac 仍带插件」的双形态包。
-# .pnpm 那一层仍是必需的：assets 下混着两类 node_modules ——
-#   • 正件：dsh-hub(731 个跟踪文件) / graph-memory(1177) / billion-context-dsh(165)
-#     的 node_modules 是 git 跟踪进来的运行期依赖（本条对**未剔 plugins 的其它形态**
-#     才相关，别再对 assets 一刀切 /XD node_modules）。
-#   • 残留：插件目录里本机 pnpm/npm install 留下的 gitignored node_modules（实测
+# .pnpm 那一层排除仍是必需的（与是否带插件无关）：assets 下混着两类 node_modules ——
+#   • 正件：dsh-pocket(392 个跟踪文件，唯一声明 shipsNodeModules 的插件) 自带的运行期依赖
+#     是 git 跟踪进来的（**别再对 assets 一刀切 /XD node_modules**，那会把它一起杀掉）。
+#   • 残留：插件目录里本机 pnpm/npm install 留下的 gitignored node_modules（历史实测
 #     433MB），其 .pnpm 存储被 robocopy 跟 junction 展开成真实路径后，NSIS 的 File
 #     指令在 >260 字符处 "failed opening file" 直接中断建包（abort 于 installer.nsi:15383）。
+# 手法：//XD 只是 Windows 快路径，真正的口径是镜像后的无条件 find（mirror_dir 的
+# unix 分支（CI linux/mac）根本不读附加参数，只靠 //XD 会造出双形态包）。
 mirror_dir "$SRC/scripts" "$DST/scripts"
-mirror_dir "$SRC/assets" "$DST/assets" //XD .pnpm plugins
+mirror_dir "$SRC/assets" "$DST/assets" //XD .pnpm
 find "$DST/assets" -type d -name .pnpm -prune -exec rm -rf {} + 2>/dev/null || true
-rm -rf "$DST/assets/plugins"
 
-# 纯净形态门禁：与上面的 rm 互为反证（排除面被改动 / 上游重新引入镜像时立刻红，
-# 而不是等到装出来一个带插件的"纯净版"）。
-for d in assets/plugins; do
-  if [ -e "$DST/$d" ]; then
-    echo "[stage] FATAL: 纯净线 payload 混入 $d，拒绝打包" >&2
-    exit 1
-  fi
-done
-echo "[stage] OK: 纯净线形态 —— payload 不含内置插件（仓库源保留）"
+# 内置线交付门禁：剪除「未声明 shipsNodeModules 的插件」的内层 node_modules（本机 install
+# 残留此前被「插件不进包」口径挡着，现在会原样进安装包），并校验安装态最长路径不过 260 断点。
+# 判据是纯函数（scripts/lib/payload-plugin-deps.js，单测咬住），这里只接线。
+node "$REPO_ROOT/dsh-tauri/scripts/stage-plugin-gate.mjs" "$DST" || {
+  echo "[stage] FATAL: 内置插件交付门禁未过——拒绝打包" >&2
+  exit 1
+}
+
+# 内置形态门禁：与镜像互为反证（排除面被重新加回 / 源目录丢失时立刻红，
+# 而不是等到装出来一个「内置插件版」的空壳包）。条数不硬编码——以源目录实际
+# 插件文件夹数为准，robocopy /MIR 与 unix cp -a 都必须把它原样带过来。
+src_plugin_count=$( (find "$SRC/assets/plugins" -mindepth 1 -maxdepth 1 -type d 2>/dev/null || true) | wc -l | tr -d ' ')
+dst_plugin_count=$( (find "$DST/assets/plugins" -mindepth 1 -maxdepth 1 -type d 2>/dev/null || true) | wc -l | tr -d ' ')
+if [ ! -d "$DST/assets/plugins" ] || [ "$dst_plugin_count" -ne "$src_plugin_count" ]; then
+  echo "[stage] FATAL: payload 内置插件不完整（源 ${src_plugin_count} 个 / payload ${dst_plugin_count} 个）" >&2
+  echo "[stage]        检查 assets 镜像行是否被重新加了 //XD plugins、或镜像后有没有 rm" >&2
+  exit 1
+fi
+echo "[stage] OK: 内置线形态 —— payload 带 ${dst_plugin_count} 个插件源（与仓库源同数）"
 
 # ---- vendor：node 二进制（$NODE_BIN——win 为 node.exe，unix 为 node）+ npm 全量（插件安装/更新链用到）----
 # PD1 对账修复：历史 staging 残留会把另一平台的 node 二进制留在 DST（本机

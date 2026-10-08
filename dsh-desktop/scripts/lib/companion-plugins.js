@@ -15,13 +15,19 @@
 //                     缺省 false：源里的 node_modules 视为本机安装残留，绝不同步
 //                     （dev 树上一次 pnpm install 就能产出 1.3 万文件的残留树）。
 //
-// v1.0.0 纯净线：这份清单**不再随安装包分发**（`dsh-desktop/assets/plugins` 被
-// stage-payload.sh 与 tauri-release.yml 的 staging 显式剔出 payload），但清单本身
-// 必须保持完整、不得清空 —— 交付包里没有源目录时，boot 的 sync 步正是按这份
-// 名单把「历史上装过的配套件」计入 missingNames，进而撤回它们的 cordis.patch 条目
-// 与 bundle 注册。清空名单等于放弃撤回：老用户升级后 profile 里会留着指向缺失
-// 目录的注册行，装配失败表现为 "entries did not activate"，而一次致命启动会把
-// profile 的补丁层整体改名抹掉。要恢复随包分发，改的是 staging 排除面，不是这里。
+// v1.0.0 内置线（2026-10-08 裁定，反转此前的「官方形状 / 插件不进包」口径）：这份清单
+// 里的 28 条插件**随安装包分发**——`dsh-desktop/assets/plugins` 整树由 stage-payload.sh
+// 与 tauri-release.yml 的五个架构 staging 镜像进 payload，装机后首次开机由 boot 的 sync 步
+// 镜像进 profile，开箱可用。
+//
+// 无论分发与否，清单本身都必须保持完整、不得清空 —— 交付门禁万一破了（剔除行被加回来 /
+// 手工裁包 / payload 指向不存在的 assets），boot 的 sync 步正是按这份名单把「历史上装过的
+// 配套件」计入 missingNames，进而撤回它们的 cordis.patch 条目与 bundle 注册。清空名单等于
+// 放弃撤回：老用户升级后 profile 里会留着指向缺失目录的注册行，装配失败表现为
+// "entries did not activate"，而一次致命启动会把 profile 的补丁层整体改名抹掉。
+//
+// 交付面的两道防线判据不在这里，在 `scripts/lib/payload-plugin-deps.js`（残留依赖树 ⇔
+// shipsNodeModules、安装态超长路径）与 `dsh-tauri/scripts/ta12-stage-payload-sentinel`。
 //
 // 但「退役」与「源缺失」是两条不同的回收路径：仍在清单里的条目走 missingNames
 // 通用撤账；**摘出清单的条目立刻失去这条路径**，必须由同文件 RETIRED_COMPANIONS

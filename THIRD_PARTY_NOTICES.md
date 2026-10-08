@@ -3,13 +3,14 @@
 > DSH Desktop（本项目）许可证：**MIT**，见 [LICENSE](LICENSE)。
 > 本文件声明本项目使用、引用或分发的第三方开源组件及其许可证。各组件的完整许可证文本以其各自源仓库为准。
 
-**口径（v1.0.0 纯净线）**：本清单按**实际进安装包的载荷**现场重算——
+**口径（v1.0.0 内置线）**：本清单按**实际进安装包的载荷**现场重算——
 `dsh-tauri/package-payload/dsh-desktop` 的 `node_modules` 全树（768 个唯一 `包名@版本`，其中 DeepSeek 官方 330 个）、
+随包内置插件树（`assets/plugins`，28 个插件 + 其自带依赖树，见第 4 节）、
 内置运行时（Node v24.15.0 + npm 11.12.1）与 Tauri/Rust 壳层（`src-tauri/Cargo.lock`，531 个 crate）。
 
 与旧版清单的两点实质差异：① **不再有 Electron**——壳层是 Tauri 2，渲染后端为系统 WebView（Windows 的 WebView2 / macOS 的 WKWebView / Linux 的 WebKitGTK），
-electron / electron-builder / electron-winstaller 已从载荷中排除；② **内置插件不进安装包**（见第 4 节），
-它们只作为仓库源码随本仓库分发。
+electron / electron-builder / electron-winstaller 已从载荷中排除；② **内置插件随包分发**（2026-10-08 裁定，见第 4 节）——
+`assets/plugins` 曾按「官方桌面形态」只随仓库源码分发、交付面整目录剔除，现已整树装回安装包，首次开机由 boot 的同步步镜像进 profile。
 
 ---
 
@@ -722,9 +723,19 @@ Windows 目标另依赖系统 **WebView2 Runtime**（微软 Edge WebView2，随 
 
 ---
 
-## 4. 随仓库分发、但**不进安装包**的组件
+## 4. 随安装包分发的内置插件（`dsh-desktop/assets/plugins`）
 
-v1.0.0 起与官方桌面客户端形态对齐：安装包不携带第三方插件（`dsh-tauri/scripts/stage-payload.sh` 显式剔除并有门禁）。下列内容仍随**本仓库源码**分发，其许可证义务因此仍然适用（自定义 Agent 预设在 v1.0.0 已连同源目录整体拆除，仓库不再携带，故不在此列）：
+v1.0.0 内置线（2026-10-08 裁定）：`dsh-desktop/assets/plugins` **整树进安装包**
+（`dsh-tauri/scripts/stage-payload.sh` 镜像它并以「源数 = payload 数」门禁把守，
+CI 五个架构的 staging 同口径），装机后首次开机由 boot 的插件同步步镜像进
+`<DSH_HOME>/profiles/<name>/node_modules/`。因此下表的许可证义务不仅由仓库源码分发触发，
+也由二进制安装包分发触发（自定义 Agent 预设在 v1.0.0 已连同源目录整体拆除，仓库不再携带，故不在此列）：
+
+> **GPL-2.0 一条的对应源码**：`dsh-pocket` 是下表里唯一的 copyleft 组件，其「完整对应源码」
+> 就是随包一并分发的 `dsh-desktop/assets/plugins/dsh-pocket/`（TypeScript 源 + `node_modules`
+> 依赖树均在仓库与包内，未做混淆、可完整重建）；上游按 `shaobeichen/dsh-pocket` 记录（可达性与
+> 许可原文实测见 `dsh-desktop/docs/builtin-plugins-inventory.md` §三 #13），许可原文见该目录内的
+> `LICENSE`（标准 GPL-2.0 文本）。
 
 ### 4.1 `dsh-desktop/assets/plugins`（28 个配套插件）
 
@@ -765,6 +776,42 @@ v1.0.0 起与官方桌面客户端形态对齐：安装包不携带第三方插�
 | dsh-settings-nav-custom | 0.1.1 | MIT |
 | dsh-synapse | 0.3.0 | MIT |
 | dsh-zcode-migrate | 0.1.2 | MIT |
+
+### 4.2 插件自带依赖树（随包进入安装包，此前不在 768 计数内）
+
+28 条插件里只有 `dsh-pocket` 声明 `shipsNodeModules: true`（`scripts/lib/companion-plugins.js`），
+其内层 `node_modules` 是 git 跟踪的正件依赖树，随内置线一并进安装包。
+下表按包目录现场读取 `package.json` 重算（26 个唯一 `包名@版本`；`qrcode-terminal` 无 `license` 字段，
+按其包内 `LICENSE` 文本记为 Apache-2.0）：
+
+| 包名 | 版本 | 许可证 |
+|---|---|---|
+| @deepseek-ai/cordis | 4.0.2 | MIT |
+| @deepseek-ai/cosmokit | 1.8.3 | MIT |
+| @standard-schema/spec | 1.1.0 | MIT |
+| ansi-styles | 4.3.0 | MIT |
+| camelcase | 5.3.1 | MIT |
+| cliui | 6.0.0 | ISC |
+| color-convert | 2.0.1 | MIT |
+| color-name | 1.1.4 | MIT |
+| decamelize | 1.2.0 | MIT |
+| dijkstrajs | 1.0.3 | MIT |
+| emoji-regex | 8.0.0 | MIT |
+| get-caller-file | 2.0.5 | ISC |
+| is-fullwidth-code-point | 3.0.0 | MIT |
+| pngjs | 5.0.0 | MIT |
+| qrcode | 1.5.4 | MIT |
+| qrcode-terminal | 0.12.0 | Apache-2.0 |
+| require-directory | 2.1.1 | MIT |
+| require-main-filename | 2.0.0 | ISC |
+| set-blocking | 2.0.0 | ISC |
+| string-width | 4.2.3 | MIT |
+| strip-ansi | 6.0.1 | MIT |
+| which-module | 2.0.1 | ISC |
+| wrap-ansi | 6.2.0 | MIT |
+| y18n | 4.0.3 | ISC |
+| yargs | 15.4.1 | MIT |
+| yargs-parser | 18.1.3 | ISC |
 
 ---
 

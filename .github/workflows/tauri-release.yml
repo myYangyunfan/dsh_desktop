@@ -178,9 +178,21 @@ jobs:
           cp dsh-desktop/package.json "$DEST/"
           cp -r dsh-desktop/scripts "$DEST/scripts"
           cp -r dsh-desktop/assets "$DEST/assets"
-          # v1.0.0 纯净线：内置插件不进安装包（与 stage-payload.sh 同口径；
-          # 仓库源保留，只切断交付面。五个架构各有一份 staging，改一处必须五处同改）
-          rm -rf "$DEST/assets/plugins"
+          # v1.0.0 内置线：assets/plugins 随包分发（与 stage-payload.sh 同口径；
+          # 五个架构各有一份 staging，改一处必须五处同改）。.pnpm 残留必须清——
+          # 它被 robocopy 跟 junction 展开成真实路径后，NSIS 的 File 指令会在
+          # >260 字符处 "failed opening file" 中断建包（历史实错 installer.nsi:15383）。
+          find "$DEST/assets" -type d -name .pnpm -prune -exec rm -rf {} + 2>/dev/null || true
+          # 交付门禁：剪除未声明 shipsNodeModules 的插件内层 node_modules（dev 树残留），
+          # 并校验安装态最长路径不过 NSIS 的 260 字符断点——与 stage-payload.sh 同一份判据。
+          node dsh-tauri/scripts/stage-plugin-gate.mjs "$DEST"
+          n_src=$( (find dsh-desktop/assets/plugins -mindepth 1 -maxdepth 1 -type d 2>/dev/null || true) | wc -l)
+          n_dst=$( (find "$DEST/assets/plugins" -mindepth 1 -maxdepth 1 -type d 2>/dev/null || true) | wc -l)
+          if [ "$n_src" != "$n_dst" ] || [ "$n_dst" = "0" ]; then
+            echo "FATAL: payload 内置插件不完整（源 $n_src 个 / payload $n_dst 个）——拒绝打包"
+            exit 1
+          fi
+          echo "OK: payload 带 $n_dst 个内置插件源（与仓库源同数）"
           mkdir -p "$DEST/vendor"
           cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
           cp -r dsh-desktop/vendor/npm "$DEST/vendor/npm" 2>/dev/null || true
@@ -459,9 +471,21 @@ jobs:
           cp dsh-desktop/package.json "$DEST/"
           cp -r dsh-desktop/scripts "$DEST/scripts"
           cp -r dsh-desktop/assets "$DEST/assets"
-          # v1.0.0 纯净线：内置插件不进安装包（与 stage-payload.sh 同口径；
-          # 仓库源保留，只切断交付面。五个架构各有一份 staging，改一处必须五处同改）
-          rm -rf "$DEST/assets/plugins"
+          # v1.0.0 内置线：assets/plugins 随包分发（与 stage-payload.sh 同口径；
+          # 五个架构各有一份 staging，改一处必须五处同改）。.pnpm 残留必须清——
+          # 它被 robocopy 跟 junction 展开成真实路径后，NSIS 的 File 指令会在
+          # >260 字符处 "failed opening file" 中断建包（历史实错 installer.nsi:15383）。
+          find "$DEST/assets" -type d -name .pnpm -prune -exec rm -rf {} + 2>/dev/null || true
+          # 交付门禁：剪除未声明 shipsNodeModules 的插件内层 node_modules（dev 树残留），
+          # 并校验安装态最长路径不过 NSIS 的 260 字符断点——与 stage-payload.sh 同一份判据。
+          node dsh-tauri/scripts/stage-plugin-gate.mjs "$DEST"
+          n_src=$( (find dsh-desktop/assets/plugins -mindepth 1 -maxdepth 1 -type d 2>/dev/null || true) | wc -l)
+          n_dst=$( (find "$DEST/assets/plugins" -mindepth 1 -maxdepth 1 -type d 2>/dev/null || true) | wc -l)
+          if [ "$n_src" != "$n_dst" ] || [ "$n_dst" = "0" ]; then
+            echo "FATAL: payload 内置插件不完整（源 $n_src 个 / payload $n_dst 个）——拒绝打包"
+            exit 1
+          fi
+          echo "OK: payload 带 $n_dst 个内置插件源（与仓库源同数）"
           mkdir -p "$DEST/vendor"
           cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
           cp -r dsh-desktop/vendor/npm "$DEST/vendor/npm" 2>/dev/null || true
@@ -665,9 +689,21 @@ jobs:
           cp dsh-desktop/package.json "$DEST/"
           cp -r dsh-desktop/scripts "$DEST/scripts"
           cp -r dsh-desktop/assets "$DEST/assets"
-          # v1.0.0 纯净线：内置插件不进安装包（与 stage-payload.sh 同口径；
-          # 仓库源保留，只切断交付面。五个架构各有一份 staging，改一处必须五处同改）
-          rm -rf "$DEST/assets/plugins"
+          # v1.0.0 内置线：assets/plugins 随包分发（与 stage-payload.sh 同口径；
+          # 五个架构各有一份 staging，改一处必须五处同改）。.pnpm 残留必须清——
+          # 它被 robocopy 跟 junction 展开成真实路径后，NSIS 的 File 指令会在
+          # >260 字符处 "failed opening file" 中断建包（历史实错 installer.nsi:15383）。
+          find "$DEST/assets" -type d -name .pnpm -prune -exec rm -rf {} + 2>/dev/null || true
+          # 交付门禁：剪除未声明 shipsNodeModules 的插件内层 node_modules（dev 树残留），
+          # 并校验安装态最长路径不过 NSIS 的 260 字符断点——与 stage-payload.sh 同一份判据。
+          node dsh-tauri/scripts/stage-plugin-gate.mjs "$DEST"
+          n_src=$( (find dsh-desktop/assets/plugins -mindepth 1 -maxdepth 1 -type d 2>/dev/null || true) | wc -l)
+          n_dst=$( (find "$DEST/assets/plugins" -mindepth 1 -maxdepth 1 -type d 2>/dev/null || true) | wc -l)
+          if [ "$n_src" != "$n_dst" ] || [ "$n_dst" = "0" ]; then
+            echo "FATAL: payload 内置插件不完整（源 $n_src 个 / payload $n_dst 个）——拒绝打包"
+            exit 1
+          fi
+          echo "OK: payload 带 $n_dst 个内置插件源（与仓库源同数）"
           mkdir -p "$DEST/vendor"
           cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
           cp -r dsh-desktop/vendor/npm "$DEST/vendor/npm" 2>/dev/null || true
@@ -919,9 +955,21 @@ jobs:
           cp dsh-desktop/package.json "$DEST/"
           cp -r dsh-desktop/scripts "$DEST/scripts"
           cp -r dsh-desktop/assets "$DEST/assets"
-          # v1.0.0 纯净线：内置插件不进安装包（与 stage-payload.sh 同口径；
-          # 仓库源保留，只切断交付面。五个架构各有一份 staging，改一处必须五处同改）
-          rm -rf "$DEST/assets/plugins"
+          # v1.0.0 内置线：assets/plugins 随包分发（与 stage-payload.sh 同口径；
+          # 五个架构各有一份 staging，改一处必须五处同改）。.pnpm 残留必须清——
+          # 它被 robocopy 跟 junction 展开成真实路径后，NSIS 的 File 指令会在
+          # >260 字符处 "failed opening file" 中断建包（历史实错 installer.nsi:15383）。
+          find "$DEST/assets" -type d -name .pnpm -prune -exec rm -rf {} + 2>/dev/null || true
+          # 交付门禁：剪除未声明 shipsNodeModules 的插件内层 node_modules（dev 树残留），
+          # 并校验安装态最长路径不过 NSIS 的 260 字符断点——与 stage-payload.sh 同一份判据。
+          node dsh-tauri/scripts/stage-plugin-gate.mjs "$DEST"
+          n_src=$( (find dsh-desktop/assets/plugins -mindepth 1 -maxdepth 1 -type d 2>/dev/null || true) | wc -l)
+          n_dst=$( (find "$DEST/assets/plugins" -mindepth 1 -maxdepth 1 -type d 2>/dev/null || true) | wc -l)
+          if [ "$n_src" != "$n_dst" ] || [ "$n_dst" = "0" ]; then
+            echo "FATAL: payload 内置插件不完整（源 $n_src 个 / payload $n_dst 个）——拒绝打包"
+            exit 1
+          fi
+          echo "OK: payload 带 $n_dst 个内置插件源（与仓库源同数）"
           mkdir -p "$DEST/vendor"
           cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
           cp -r dsh-desktop/vendor/npm "$DEST/vendor/npm" 2>/dev/null || true
@@ -1102,9 +1150,21 @@ jobs:
           cp dsh-desktop/package.json "$DEST/"
           cp -r dsh-desktop/scripts "$DEST/scripts"
           cp -r dsh-desktop/assets "$DEST/assets"
-          # v1.0.0 纯净线：内置插件不进安装包（与 stage-payload.sh 同口径；
-          # 仓库源保留，只切断交付面。五个架构各有一份 staging，改一处必须五处同改）
-          rm -rf "$DEST/assets/plugins"
+          # v1.0.0 内置线：assets/plugins 随包分发（与 stage-payload.sh 同口径；
+          # 五个架构各有一份 staging，改一处必须五处同改）。.pnpm 残留必须清——
+          # 它被 robocopy 跟 junction 展开成真实路径后，NSIS 的 File 指令会在
+          # >260 字符处 "failed opening file" 中断建包（历史实错 installer.nsi:15383）。
+          find "$DEST/assets" -type d -name .pnpm -prune -exec rm -rf {} + 2>/dev/null || true
+          # 交付门禁：剪除未声明 shipsNodeModules 的插件内层 node_modules（dev 树残留），
+          # 并校验安装态最长路径不过 NSIS 的 260 字符断点——与 stage-payload.sh 同一份判据。
+          node dsh-tauri/scripts/stage-plugin-gate.mjs "$DEST"
+          n_src=$( (find dsh-desktop/assets/plugins -mindepth 1 -maxdepth 1 -type d 2>/dev/null || true) | wc -l)
+          n_dst=$( (find "$DEST/assets/plugins" -mindepth 1 -maxdepth 1 -type d 2>/dev/null || true) | wc -l)
+          if [ "$n_src" != "$n_dst" ] || [ "$n_dst" = "0" ]; then
+            echo "FATAL: payload 内置插件不完整（源 $n_src 个 / payload $n_dst 个）——拒绝打包"
+            exit 1
+          fi
+          echo "OK: payload 带 $n_dst 个内置插件源（与仓库源同数）"
           mkdir -p "$DEST/vendor"
           cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
           cp -r dsh-desktop/vendor/npm "$DEST/vendor/npm" 2>/dev/null || true

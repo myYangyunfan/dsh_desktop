@@ -173,7 +173,7 @@
 - **渲染心跳与假死恢复**：preload 每 5 秒上报心跳，主进程 30 秒未收到则恢复；`unresponsive` 15 秒后同样恢复。
 - **会话历史兼容**：打包时 `afterPack` 自动修补内置 `@deepseek-ai/dsh-session` 事件词汇表，接受 dsh-agent-teams / dsh-message-edit / dsh-web-search-exa 的事件，修复 `SessionFormatUnsupportedError`。
 - **Agent 预设（v1.0.0 纯净线：不携带）**：随包预设源（`assets/agent-presets`，历史上 8 个）、预设写入器（`scripts/install-minimal-win-preset.js`）、落点自愈（`scripts/lib/preset-heal.js` / `preset-files.js`）与 boot 的 `presets` 步已整体拆除——客户端不再写任何预设文件，模式列表只出内核出厂集（`standard` / `ptc` / `minimal` / `cordis`）。用户自带的预设放 `<DSH_HOME>/.agent-presets/<id>/`，由内核自行发现；老用户目录里的历史副本不被清除、继续可用。
-- **dsh-super-injector**：`dev_*` 注入 / 热重载 / 自愈工具作为配套插件随仓库内置（与预设无关，不进安装包）。
+- **dsh-super-injector**：`dev_*` 注入 / 热重载 / 自愈工具作为配套插件随仓库内置（v1.0.0 内置线：与其它 27 条一起进安装包，与预设无关）。
 
 
 
@@ -377,7 +377,7 @@ dsh-desktop/
 
 本项目使用了大量 MIT 开源项目，完整清单与许可文本见 [docs/attributions.md](docs/attributions.md)。
 主要组件：[@deepseek-ai/dsh](https://www.npmjs.com/package/@deepseek-ai/dsh)（MIT）、[koffi](https://koffi.dev)（MIT）、Node.js（内置运行时）等。
-进安装包的载荷逐项许可见仓库根 [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)（§4 单列「随仓库分发但不进安装包」的内置插件）。
+进安装包的载荷逐项许可见仓库根 [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)（§4 单列「随安装包分发的内置插件」及其自带依赖树）。
 历史上的旧内置市场 `zat-dsh-engine` 已随包退役并删除源目录（commit `4baa9beaf`），其 LICENSE 不再随包分发。
 
 ## License

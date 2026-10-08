@@ -19,6 +19,27 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### build(plugins)：交付口径反转 —— 28 条内置插件随安装包分发（内置线）
+
+- **改的是口径不是插件**：2026-10-08 裁定「装进去：真内置 28 条」，推翻 v1.0.0 立项时的
+  「插件留在仓库、不进安装包」。`assets/plugins` 整树进 payload，装完首次开机由 boot 的 sync 步
+  镜像进 `<DSH_HOME>/profiles/<name>/node_modules/`，开箱可用。壳侧零改动。
+- **Node 侧新增的判据**：`scripts/lib/payload-plugin-deps.js`（纯函数：`residueNodeModules` 按
+  `shipsNodeModules` 声明决定哪个内层 `node_modules` 是正件、`overlongFiles` / `longestInstallPath`
+  按最坏安装前缀算 NSIS 断点）+ `dsh-tauri/scripts/stage-plugin-gate.mjs`（编排 + 落盘剪枝 + FATAL 口径）。
+  动机是插件进包后 dev 树的本机 install 残留（历史实测 433MB）会原样进安装包；同步面早有声明式标志
+  （`scripts/lib/companion-plugins.js` 的 `shipsNodeModules`），交付面必须共用同一份声明而不是再看磁盘。
+- **随迁的锁**：`unit-pure-bundle-line` → `unit-bundled-plugin-line`（git mv + 重写 5 例，钉住 bundle 件
+  走 manifest 因而**不写 `cordis.patch.yml`**、非 bundle 有源件才补 insert 行且幂等）、
+  新增 `unit-payload-plugin-deps`（7 例：240 边界 + 换更长前缀必须从不判变判红的防恒真夹具 + 两条变异反证）；
+  `dsh-tauri/scripts/ta12-stage-payload-sentinel` 的 judge 整面翻向（10 例，6 条变异各命中一条）。
+- **文档口径随迁**：本文件与 `dsh-tauri/CHANGELOG.md` 新条目、`AGENTS.md`、`CONTRIBUTING.md`、
+  两份 README、`dsh-desktop/README.md`、`dsh-tauri/docs/development.md` §5、
+  `docs/builtin-plugins-inventory.md`、`companion-plugins.js` 头注释与 `THIRD_PARTY_NOTICES.md`
+  （§4 标题改为「随安装包分发的内置插件」，新增 §4.2 逐条列 dsh-pocket 26 个内层依赖的实测许可）。
+  `scripts/sync-companion-plugins.js` 的「源目录不再随包到达」注释改成「已从仓库删除」——
+  退役三件与在册 28 件是两回事，前者删源，后者现在真的进包。
+
 ### docs(companion)：README 门面换成逐名 28 行实测表并进机器锁；§一「一句话作用」列逐格审计修 5 处
 
 - **门面无同源是这张表的历史形态**：`README.md` / `README.en.md` 里只有一张 5 行「主要增强项摘要」，
@@ -30,6 +51,8 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
   行序取 `COMPANION_PLUGINS` 顺序，来源列的 12 条上游链接全部是 §三 实测可达过的那批仓库路径（不新造 URL），
   并把 §三 3.5 的四条许可保留意见带进门面（#4 撞名、#7 仅 manifest 自标、#11 上游无 LICENSE、#23 借作用域）。
   引言那句「随安装包分发」一并改掉——v1.0.0 起插件源**不进安装包**，那句话与下一句自相矛盾。
+  **（注记：这半句已被上方的内置线条目反转——README 引言现在重新写「随安装包分发」，
+  与当时的判据相反但与本文件 `[Unreleased]` 顶部一致；两张 28 行表与机器锁不受影响。）**
 - **收口第 8 层**（`scripts/test/unit-hub-registry.test.js` 新增 1 例，本文件 23 → 24）：
   README 两张表复用与 §4.1 / §一 同一条 `ledgerDiff`，另咬行序对 `COMPANION_PLUGINS`、中英两份逐格相等。
   `ledgerDiff` 顺带长出**许可列**（可选列，「未声明即不判」——inventory §一 没有独立许可列，硬判就成了假判据），

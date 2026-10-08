@@ -105,9 +105,12 @@ npx --yes @tauri-apps/cli build --config src-tauri/src/app/tauri.conf.json \
    `SYNC_SUBDIRS` 全量同步，keep-newer 分支只补**整目录缺失**）。
 3. **测试**：`dsh-desktop` 的 `unit-compat-companion.test.js`（同步语义）+
    `dsh-mini.test.js` 风格的插件自身用例。
-4. **交付面**：`stage-payload.sh` **不**把 `assets/plugins` 装进安装包（v1.0.0 纯净线显式
-   `//XD plugins` + 事后 `rm -rf` 并门禁校验）——插件源只随仓库分发，运行期由 boot 的 sync 步
-   同步进 `<DSH_HOME>/profiles/<name>/node_modules/`。新增插件不需要动 stage 脚本。
+4. **交付面**：`stage-payload.sh` **把** `assets/plugins` 装进安装包（v1.0.0 内置线，
+   2026-10-08 裁定）——assets 镜像不带 `plugins` 排除项，随后 `stage-plugin-gate.mjs`
+   剪掉未声明 `shipsNodeModules` 的插件内层 `node_modules` 并校验安装态最长路径，
+   再由「源目录数 = payload 目录数」数量门禁收口；CI 五个架构的 staging 同口径。
+   运行期由 boot 的 sync 步把包里的源同步进 `<DSH_HOME>/profiles/<name>/node_modules/`。
+   新增插件不需要动 stage 脚本（镜像整树，天然带上新目录）。
 5. **许可对账**：`THIRD_PARTY_NOTICES.md` §4.1 的行集与本清单**必须逐名 1:1**（增删插件同步增删行）。
 
 ## 6. 打包与验证（win-x64）

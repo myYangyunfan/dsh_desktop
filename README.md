@@ -142,7 +142,7 @@ v0.5.0 起发布走 **Tauri GitHub Actions 云端流水线**（[`tauri-release.y
 
 ## 🧩 内置插件生态
 
-内置伴随插件在册共 **28 个**（v1.0.0 起插件源只随本仓库分发、**不进安装包**，交付面整目录剔除，见 THIRD_PARTY_NOTICES 第 4 节；完整第三方组件清单同文件）。下表按 `scripts/lib/companion-plugins.js` 的在册顺序逐名列出，包名与版本取自各插件 `package.json` 实值；「上游 / 许可」一列只到「包内自己怎么说」这一层，逐条原仓库可达性与许可原文实测见 [内置插件清单](dsh-desktop/docs/builtin-plugins-inventory.md) §三，逐条对 rc.2 宿主的兼容判定见 §五：
+内置伴随插件在册共 **28 个**（v1.0.0 内置线，2026-10-08 裁定：插件源**整树进安装包**，装机后首次开机由 boot 的同步链镜像进 profile，开箱可用；交付面门禁见 THIRD_PARTY_NOTICES 第 4 节，完整第三方组件清单同文件）。下表按 `scripts/lib/companion-plugins.js` 的在册顺序逐名列出，包名与版本取自各插件 `package.json` 实值；「上游 / 许可」一列只到「包内自己怎么说」这一层，逐条原仓库可达性与许可原文实测见 [内置插件清单](dsh-desktop/docs/builtin-plugins-inventory.md) §三，逐条对 rc.2 宿主的兼容判定见 §五：
 
 > [!NOTE]
 > **v1.0.0 精简：内置插件由 39 个减为 28 个**（用户于 2026-10-07 点名移除）。不再内置的 11 个：

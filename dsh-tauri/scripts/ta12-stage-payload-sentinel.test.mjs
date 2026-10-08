@@ -34,6 +34,7 @@ test('前置校验清单（脚本 for f in …）全部在 dsh-desktop/ 在位',
     'vendor/node/node.exe',            // Windows（含 Git Bash）分支的 NODE_BIN
     'node_modules/@deepseek-ai/dsh/lib/bin.js',
     'scripts/lib/companion-profile.js',
+    'assets/plugins',                  // 内置线：插件源是安装包载荷，缺它=空壳包
   ];
   const missing = required.filter((f) => !fs.existsSync(path.join(SRC, f)));
   assert.deepEqual(missing, [], 'stage-payload 前置必需件缺失: ' + missing.join(', '));
@@ -71,12 +72,17 @@ test('devDeps 排除清单与 node_modules 现状一致（electron* 不进 paylo
 });
 
 // ---------------------------------------------------------------------------
-// v1.0.0 纯净线：内置插件不进安装包（口径 = 三层，缺一层即形态漂移）
+// v1.0.0 内置线（2026-10-08 裁定，反转此前的「官方形状 / 插件不进包」口径）：
+// `assets/plugins` 整树进安装包。口径 = 四层，缺一层即形态漂移：
+//   ① assets 镜像行不得排除 plugins（但仍须排除 .pnpm，且不得一刀切 node_modules）
+//   ② 镜像后不得再有 `rm -rf "$DST/assets/plugins"`
+//   ③ 交付门禁 stage-plugin-gate.mjs 必须接线（剪残留依赖树 + 校验安装态超长路径）
+//   ④ 数量门禁「源目录数 = payload 目录数」必须在位
 //   随包预设（assets/agent-presets）已整树删除，不在本口径内。
 // ---------------------------------------------------------------------------
 
-/** 把 stage-payload.sh 源码按纯净线三层判据走一遍，返回违规清单（空 = 合规）。 */
-function pureShapeViolations(src) {
+/** 把 stage-payload.sh 源码按内置线四层判据走一遍，返回违规清单（空 = 合规）。 */
+function bundledShapeViolations(src) {
   const m = /mirror_dir "\$SRC\/assets" "\$DST\/assets"([^\n]*)/.exec(src);
   const v = [];
   if (!m) {
@@ -84,33 +90,38 @@ function pureShapeViolations(src) {
     return v;
   }
   const excluded = m[1];
-  if (!excluded.includes('plugins')) v.push('assets 镜像未 //XD plugins');
-  if (!/^rm -rf "\$DST\/assets\/plugins"$/m.test(src)) {
-    v.push('缺平台无关的镜像后显式 rm');
+  if (/\bplugins\b/.test(excluded)) v.push('assets 镜像仍在排除 plugins（内置线必须整树随包）');
+  if (/^\s*rm -rf "\$DST\/assets\/plugins"/m.test(src)) v.push('镜像后又把 assets/plugins 删了');
+  if (!/stage-plugin-gate\.mjs/.test(src)) v.push('内置线交付门禁（残留 + 超长路径）未接线');
+  // 咬实际比较式而不是变量名——变量名在 echo 里也出现，只判「有没有提到」等于没判。
+  if (!/"\$dst_plugin_count" -ne "\$src_plugin_count"/.test(src)) {
+    v.push('缺「源目录数 = payload 目录数」数量门禁');
   }
-  if (!/for d in assets\/plugins; do/.test(src)) {
-    v.push('缺 payload 纯净形态门禁');
-  }
+  if (!excluded.includes('.pnpm')) v.push('assets 镜像未 //XD .pnpm');
   if (/\bnode_modules\b/.test(excluded)) v.push('对 assets 一刀切排除 node_modules');
   return v;
 }
 
-test('纯净线：assets 镜像排除内置插件 + 镜像后显式 rm + 收尾门禁，三层齐备', () => {
-  assert.deepEqual(pureShapeViolations(sh), [], 'stage-payload.sh 纯净线口径不完整');
+test('内置线：assets 镜像带 plugins + 交付门禁接线 + 数量门禁，四层齐备', () => {
+  assert.deepEqual(bundledShapeViolations(sh), [], 'stage-payload.sh 内置线口径不完整');
 });
 
-test('反证：纯净线判据每一项都真的有捕获力（逐项拆掉必须变红）', () => {
+test('反证：内置线判据每一项都真的有捕获力（逐项拆掉必须变红）', () => {
   const mutants = [
-    ['丢掉 //XD plugins', (s) => s.replace('//XD .pnpm plugins', '//XD .pnpm')],
-    ['丢掉镜像后的显式 rm', (s) => s.replace(/^rm -rf "\$DST\/assets\/plugins".*$/m, '# (removed)')],
-    ['丢掉收尾门禁', (s) => s.replace(/for d in assets\/plugins; do/, 'for d in ; do')],
-    ['一刀切排除 node_modules（会误杀正件插件运行期依赖）',
-      (s) => s.replace('//XD .pnpm plugins', '//XD .pnpm node_modules plugins')],
+    ['把 //XD plugins 加回来', (s) => s.replace('mirror_dir "$SRC/assets" "$DST/assets" //XD .pnpm',
+      'mirror_dir "$SRC/assets" "$DST/assets" //XD .pnpm plugins')],
+    ['把镜像后的 rm 加回来', (s) => s.replace('find "$DST/assets" -type d -name .pnpm',
+      'rm -rf "$DST/assets/plugins"\nfind "$DST/assets" -type d -name .pnpm')],
+    ['摘掉交付门禁接线', (s) => s.replace(/node "\$REPO_ROOT\/dsh-tauri\/scripts\/stage-plugin-gate\.mjs"[\s\S]*?\r?\n\}\r?\n/, '# (gate removed)\n')],
+    ['摘掉数量门禁', (s) => s.replace(/if \[ ! -d "\$DST\/assets\/plugins" \][\s\S]*?\r?\nfi\r?\n/, '')],
+    ['一刀切排除 node_modules（会误杀 dsh-pocket 的正件依赖树）',
+      (s) => s.replace('//XD .pnpm', '//XD .pnpm node_modules')],
+    ['连 .pnpm 防线一起拆掉', (s) => s.replace('//XD .pnpm', '')],
   ];
   for (const [label, mutate] of mutants) {
     const mutated = mutate(sh);
     assert.notEqual(mutated, sh, `反证夹具无效：变异未改变源码（${label}）`);
-    assert.notDeepEqual(pureShapeViolations(mutated), [], `判据对「${label}」无捕获力`);
+    assert.notDeepEqual(bundledShapeViolations(mutated), [], `判据对「${label}」无捕获力`);
   }
 });
 
