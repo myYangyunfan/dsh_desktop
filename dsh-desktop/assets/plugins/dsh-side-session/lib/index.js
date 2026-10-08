@@ -82,7 +82,7 @@ function clamp(text, max) {
 }
 
 // ---------------------------------------------------------------------------
-// dsh 全局凭据解析（取自 dsh-desktop/balance.js 的实测实现，逐行对齐）
+// dsh 全局凭据解析（取自同族插件 dsh-balance/lib/balance-core.js 的实测实现，逐行对齐）
 // v0.3.0 起改为「当前会话供应商感知」：不再只认 DEEPSEEK_API_KEY，
 // 而是实时读取 agent-default-model 的 provider/model，再解析该供应商的
 // apiKeyEnv（settings.yaml 的 llm-pi-ai.providers.<p>.apiKeyEnv 优先，

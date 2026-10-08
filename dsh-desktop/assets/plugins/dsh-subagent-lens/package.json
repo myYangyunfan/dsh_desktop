@@ -1,9 +1,9 @@
 {
   "name": "@dsh-external/dsh-subagent-lens",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "DSH Desktop 内置子代理活动快视插件：为 Task/subagent 委派调用提供展开式活动视图（内联显示子代理执行过的命令与涉及的源码文件），并在会话头部聚合当前会话的命令/文件清单，明细全部来自客户端已有的会话事件流，零额外后端请求。",
-  "private": true,
   "type": "module",
+  "private": true,
   "main": "lib/index.js",
   "exports": {
     ".": {
@@ -15,8 +15,9 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "lib",
-    "dsh.plugin.json"
+    "cordis.patch.yml",
+    "dsh.plugin.json",
+    "lib"
   ],
   "license": "MIT",
   "engines": {
@@ -29,21 +30,26 @@
     }
   },
   "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "inject": [
-        "@deepseek-ai/dsh-client-ui-settings"
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-primitives"
       ],
       "external": [
-        "@deepseek-ai/dsh-client-ui-renderer"
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-primitives/client"
       ],
       "platform": "web"
     }
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "*",
-    "@deepseek-ai/dsh-client-ui-primitives": "*",
-    "@deepseek-ai/dsh-client-ui-settings": "*",
-    "@deepseek-ai/dsh-settings": "*",
+    "@deepseek-ai/dsh-client-ui-primitives": ">=0.1.0-rc.6 <2",
+    "@deepseek-ai/dsh-client-ui-settings": ">=0.1.0-rc.6 <2",
+    "@deepseek-ai/dsh-settings": ">=0.1.0-rc.6 <2",
     "@deepseek-ai/schemastery": "*",
     "react": ">=18"
   }

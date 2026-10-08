@@ -2,10 +2,11 @@
  * CodeMirror 6 theme pieces for the sidebar editor. The editor surface
  * (background, caret, gutter) rides the DSH theme tokens so it blends with
  * the panel in both schemes; only the syntax token colors need concrete
- * values, and those come from the same designed palettes the app's code
- * surfaces use — the one-dark family for dark, the one-light family for
- * light. The scheme flip reconfigures these via a compartment (see
- * TextEditor), so the document, undo history and scroll survive re-theming.
+ * values, and those come from the same designed syntax families the app's
+ * code surfaces use — one-dark for dark, one-light for light
+ * (one-dark-palette.ts, shared with the terminal's ANSI palette). The
+ * scheme flip reconfigures these via a compartment (see TextEditor), so
+ * the document, undo history and scroll survive re-theming.
  */
 import { Compartment } from '@codemirror/state';
 /** Token-driven surface shared by both schemes (pure CSS values). */

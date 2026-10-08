@@ -34,12 +34,9 @@ window.__ModuleLoader__.load({
 				};
 			}
 		} catch { /* 模块不在页面表（rc.7 及更早内核）→ 走下一级回落 */ }
-		if (!bindSnapshotSelector) {
-			try {
-				const webReactMod = require("@deepseek-ai/dsh-client-web-react");
-				if (typeof webReactMod.bindSnapshotSelector === "function") bindSnapshotSelector = webReactMod.bindSnapshotSelector;
-			} catch { /* compat 未注入（罕见）→ react 原生兜底 */ }
-		}
+		// 注：此处原有第二级 compat 回落（一个官方内核并不存在的 React 绑定包名），
+		// 浏览器模块系统对未知裸标识符一律 throw，该 rung 永远进不去、异常也被下面
+		// 的空 catch 吞掉，实际行为一直是「ui-renderer → react 原生」两级。已删除。
 		if (!bindSnapshotSelector) {
 			const { useSyncExternalStore } = require("react");
 			bindSnapshotSelector = (source) => {
@@ -51,6 +48,72 @@ window.__ModuleLoader__.load({
 		const { Button, Input } = require("@deepseek-ai/dsh-client-ui-primitives");
 
 		const NS = "openclaw-bridge";
+		const SETTINGS_ENTRY_ID = "openclaw-bridge";
+
+// settings.describe()/mutate 的 ns 是 **profile 条目 id**，不是包名也不是旧 NS。
+// // <<BEGIN settings-scope（由 tools/codemod/apply-settings-scope.mjs 生成，勿单包手改）>>
+function bindSettingsScope(ctx, entryId) {
+	let snapshot = { status: "loading", value: undefined, writable: false, revision: undefined };
+	const listeners = /* @__PURE__ */ new Set();
+	const emit = () => { for (const fn of [...listeners]) fn(); };
+	// 快照引用必须稳定：selector 走 Object.is 比较，每轮都换新对象会自激重渲染。
+	const adopt = (next) => {
+		if (next.status === snapshot.status && next.writable === snapshot.writable
+			&& JSON.stringify(next.value) === JSON.stringify(snapshot.value)) return;
+		snapshot = next;
+		emit();
+	};
+	async function refresh() {
+		let response;
+		try {
+			response = await ctx.remote.settings.describe();
+		} catch (error) {
+			adopt({ ...snapshot, status: "failed" });
+			return;
+		}
+		if (!response || !response.ok) {
+			adopt({ ...snapshot, status: "failed" });
+			return;
+		}
+		const rows = response.value && Array.isArray(response.value.namespaces) ? response.value.namespaces : [];
+		const view = rows.find((row) => row.ns === entryId);
+		if (view === undefined) {
+			// 条目不在 describe() 里 = 它的 Config 没有任何 volatile 字段，
+			// 内核就不为它生成表单（volatileForm(schema) 为空即跳过）。
+			adopt({ ...snapshot, status: "missing" });
+			return;
+		}
+		adopt({
+			status: "ready",
+			value: view.value,
+			writable: response.value.writable !== false,
+			revision: view.revision
+		});
+	}
+	void refresh();
+	return {
+		getSnapshot: () => snapshot,
+		subscribe(fn) {
+			listeners.add(fn);
+			return () => { listeners.delete(fn); };
+		},
+		// 旧 API 的 watch(cb) 与 subscribe(cb) 同义，保留名字免得调用方各写一套。
+		watch(fn) {
+			return this.subscribe(fn);
+		},
+		async set(field, value) {
+			const next = await ctx.remote.settings.mutate(entryId, [{ op: "set", path: [field], value }], snapshot.revision);
+			if (next && next.ok && next.value) {
+				adopt({ ...snapshot, value: next.value.value, revision: next.value.revision });
+				return;
+			}
+			await refresh();
+			if (!next || !next.ok) throw new Error(next && next.error && next.error.message || "settings write rejected");
+		},
+		refresh
+	};
+}
+// <<END settings-scope>>
 
 		const L = {
 			nav: "ClawBot",
@@ -653,7 +716,7 @@ window.__ModuleLoader__.load({
 		}
 
 		function apply(ctx) {
-			const scope = ctx.settingsScope.bind({ namespace: NS });
+			const scope = bindSettingsScope(ctx, SETTINGS_ENTRY_ID);
 			const useScope = bindSnapshotSelector(scope);
 			const injected = () => ({ useScope, scope });
 			ctx.slots.inject("settings.section", () => ctx.slots.register({
@@ -665,7 +728,7 @@ window.__ModuleLoader__.load({
 			}, ClawBotCard), "dsh-openclaw-bridge: settings section entry");
 		}
 
-		const inject = ["slots", "settingsScope"];
+		const inject = ["slots", "remote", "remote.settings"];
 		exports.apply = apply;
 		exports.inject = inject;
 		return module.exports;

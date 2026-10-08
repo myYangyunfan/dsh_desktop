@@ -33,3 +33,29 @@ export declare function isAbsolutePath(path: string): boolean;
  * relative text keeps the caller's own casing.
  */
 export declare function relativeTo(cwd: string, path: string): string;
+/**
+ * Whether `target` lies under `base` (or equals it), tolerant of separator
+ * style and — on Windows-style drive paths — of letter case. A client-side
+ * mirror of the host's `isWithin` (fs-tree.ts) used to decide whether a
+ * git-derived path can be opened in the editor (a linked worktree outside
+ * the session workspace cannot: the host's workspace fence would reject it).
+ */
+export declare function isWithinWorkspace(base: string, target: string): boolean;
+/**
+ * The last path segment of a '/'- or '\'-separated path (a diff tab title,
+ * a worktree label). Returns the whole string when no separator is present.
+ */
+export declare function baseName(path: string): string;
+/**
+ * The lowercased file extension of a path ('' when none). The dot must sit
+ * inside the last segment — a dot in a directory name is not an extension.
+ * Shared by the editor language mapping (lang.ts) and the viewer registry's
+ * extension matching (service.ts), which both live in the core bundle.
+ */
+export declare function extOf(path: string): string;
+/**
+ * Resolve a (possibly relative) path against the session cwd for the sidebar.
+ * Absolute detection mirrors the host (see {@link isAbsolutePath}): POSIX
+ * roots, drive letters and UNC shares must not be joined onto the cwd.
+ */
+export declare function resolveSidebarPath(cwd: string | undefined, path: string): string;

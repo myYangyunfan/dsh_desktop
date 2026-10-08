@@ -8,11 +8,10 @@
  */
 import type { Context } from '../../context-types.ts';
 import type { BetterSidebarService } from '../service.ts';
-import { type BuiltinTabOptions } from './tabs.tsx';
 /**
  * Register all built-in tabs and viewers with the service. Returns a
  * disposer that unregisters everything (cordis auto-invokes it on fiber
  * disposal). The `ctx` is threaded into tab descriptors that need it
  * (EditorHost reads `ctx.betterSidebar` for file-viewer matching).
  */
-export declare function registerBuiltins(ctx: Context, service: BetterSidebarService, options?: BuiltinTabOptions): () => void;
+export declare function registerBuiltins(ctx: Context, service: BetterSidebarService): () => void;

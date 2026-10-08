@@ -3,7 +3,7 @@
  *
  * Kept as a pure module so the "what re-renders a tab cell" contract is unit
  * testable: geometry/store re-renders of the Sidebar shell must NOT reconcile
- * every mounted tab (xterm/CodeMirror/FileTree subtrees — issue #315), while
+ * every mounted tab (CodeMirror/FileTree subtrees — issue #315), while
  * locale switches (localeRevision), tab-registry updates (tabsVersion), and
  * a tab MOVING BETWEEN PANES (paneId — onOpenDiff closes over the pane id,
  * and moveTab reuses the SAME tab object, so only the pane id identifies the
@@ -22,6 +22,8 @@ export interface TabContentMemoKey {
     cwd: string | undefined;
     visible: boolean;
     expanded: string[];
+    /** Files highlighted in the file tree (the "Show in folder" reveal). */
+    revealed: string[];
     localeRevision: string;
     tabsVersion: number;
 }

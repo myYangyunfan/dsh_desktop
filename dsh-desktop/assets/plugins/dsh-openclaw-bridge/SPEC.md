@@ -36,6 +36,13 @@ DSH 会话映射 + 白名单 + 配额」机制，把 IM 消息驱动成真实的
 `openclaw-bridge` 命名空间），避免破坏性迁移；文档/UI 品牌改为「IM 桥接」。
 `@dsh-external/` 前缀更名列为 P4 可选后续（届时拆迁移脚本）。
 
+> **D-01 已被推翻（2026-09，「退役自制壳、改为纯插件包」阶段 2）**：`@deepseek-ai/*`
+> 这个 scope 不归我们所有，把它用在自研包上会让用户误以为是官方出品，且与我们要发布的
+> `@dsh-pack/*` 全家桶重名混淆。npm 包名现为 **`@deepseek-ai/dsh-openclaw-bridge`**。
+> 两点**不变**，是有意的：loader id 仍是 `openclaw-bridge`（cordis 补丁按 id 整行寻址，
+> 改 id 会让用户写在 `$DSH_HOME/cordis.patch.yml` 里的 `- id: openclaw-bridge` 覆盖失配），
+> 设置命名空间仍是 `openclaw-bridge`（用户既有配置无缝延续）。
+
 ---
 
 ## 2. 决策记录（用户已确认 2026-08-16）

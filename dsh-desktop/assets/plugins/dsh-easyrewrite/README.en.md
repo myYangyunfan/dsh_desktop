@@ -18,47 +18,96 @@
 
 Click your own message bubble to edit it in place; hit the recall button beside copy to withdraw it and everything after it. Nothing is ever really changed until you commit — the conversation, the model context, and the session log stay untouched until you press **Confirm** (rewrite) or **Send** (recall).
 
-> Compatible with DeepSeek Harness Web (**2.4.0 requires dsh 0.1.2-rc.1+**; users on dsh 0.1.1-rc.2 and older hosts, please stay on **2.3.1** — the final release of that line, fully functional, no further features). Built on official extension points only — no source patches.
+> Compatible with DeepSeek Harness Web (**v2.6.0 fully supports both dsh 0.1.7-rc.1+ and 0.1.2-rc.1+**; users on dsh 0.1.1-rc.2 and older hosts, please stay on **2.3.1** — the final release of that line, fully functional, no further features). Built on official extension points only — no source patches.
 
 ---
 
+## 📸 Visual Tour
+
+<div align="center">
+  <img src="docs/images/drag-drop-dual-dropzone.png" alt="Dual dropzone and synchronized expansion" width="920" />
+  <p><em>✨ <b>Dual-dropzone & synchronized 2.5x expansion</b>: smart drag-and-drop dispatch (drop onto the bubble to add images to current edit, or drop into the 2.5x expanded bottom composer to stage for new sessions — strictly isolated with zero leakage)</em></p>
+</div>
+
+---
+
+## Quick Start
+
+```sh
+# One-line install via npm
+dsh plugin --profile web add dsh-easyrewrite
+```
+
 ## Features (what we've built)
 
-### Recall (撤回) — done, end to end
-- **Recall key** next to the official copy key on every user message.
-- **Inline confirmation capsule** (dsh-styled grey pill: `撤回这条消息及其后 x 条提问？` + white-on-black **Confirm / Cancel** pills).
-- **Lazy commit**: confirming only fills the composer — the real truncation happens when you press **Send**. Close dsh mid-way and nothing in the conversation changes.
-- **"正在修改" bar** inside the composer (divider + label + round ×) — × cancels the recall and restores your original draft.
-- **Overwrite / merge** fill modes; in overwrite mode your pre-recall draft is always restored after send or cancel. Zero information loss.
-- **Live count of what will be removed** (user questions only, toggleable) — 0 remaining shows `是否撤回这条消息？`.
-- **One pending operation per session**, drafts persist per session across reloads and tab switches.
-- **Seamless replacement**: send executes the recall — the original session is **archived**, a **same-titled** session (history truncated before the target message) takes its place, and your edited text is sent automatically. Feels like editing the original conversation, not forking a new one.
+### Bubble Inline Edit (Rewrite) — Shipped (M2/M4)
+- **Click to edit**: Click your message bubble to enter inline editing directly (original Markdown source preserved), Esc to cancel / Ctrl+Enter to confirm.
+- **Adjustable width modes**: Compact (starts at bubble width, up to 360px) / Standard (fixed 360px) / Expanded (full message width) / Custom, with automatic vertical expansion and smooth inner scrolling.
+- **On-the-spot model & effort switching**: Native dropdown menu embedded inside the bubble editor allows instant switching of provider, model, and reasoning effort for the resend.
+- **Rich image support & drag-drop management**: Multi-image messages render in equal-width thumbnail strips, supporting individual `×` deletion, clipboard paste, and drag-and-drop addition. Edits survive tab switching and page reloads.
 
-### Rewrite (inline edit) — shipped (M2)
-- Click the bubble → inline editor (original Markdown source preserved), Esc cancels / Ctrl+Enter confirms.
-- **Three editable widths** (Compact: starts at bubble width, up to 360px / Standard: fixed 360px / Expanded: 748px), auto-grow + inner scroll.
-- Edit mode keeps the recall key (hides copy); **Confirm** = truncate-style edit-resend: truncate → archive original → same-titled session → edited text sent automatically.
-- Edit drafts persist per session (survive tab switch / refresh).
-- **Full image support for Rewrite — recall key & bubble edit**: images send together with your edited text; inside bubble edit you can delete (×), paste or drag-and-drop new images, switch model & reasoning effort on the spot, and your edit progress survives a page refresh. No comparable feature in any competitor.
+<div align="center">
+  <img src="docs/images/bubble-edit-active.png" alt="Bubble inline edit" width="380" />
+  &nbsp;&nbsp;
+  <img src="docs/images/bubble-edit-model-select.png" alt="Model & reasoning selection" width="380" />
+</div>
+<div align="center" style="margin-top: 8px;">
+  <img src="docs/images/bubble-edit-images.png" alt="Bubble image editing" width="380" />
+</div>
 
-### Settings — shipped (M3)
-- **Settings → Plugins → Plugin config**: an official-style collapsible card (click the header to expand/collapse); UI language follows the interface (中文 / English / 日本語).
-- Every option applies instantly: bubble edit toggle, show recall key when bubble edit is off, recall confirmation capsule, recall visual mode (Simple / Minimal / Info), recall stats scope (user questions only), composer fill mode (Overwrite / Merge), edit width (Compact / Standard / Expanded / Custom).
+<br>
 
-### Draft auto-backup — shipped (M3)
-- A pending draft left untouched for more than 10s is auto-backed-up to a local file (refreshed every 5s); the backup is removed once the draft is handled (Confirm / Send).
-- Location: `$DSH_HOME/dsh-easyrewrite/backups/<sessionId>.json`.
-- Recovery fallback: restore only when there is no local pending state — never overwrites a draft you are actively editing.
+### Message Recall (撤回) — Done, End to End
+- **Native & frictionless action**: Permanent recall button placed cleanly next to the official copy button on hover.
+- **Inline confirmation capsule**: Native-styled capsule (`撤回这条消息及其后 x 条提问？` + Confirm / Cancel pills), calculating the exact count of subsequent user prompts to be truncated in real time.
+- **Lazy commit & "正在修改" editing bar**: Confirming only populates the composer with a top editing bar; truncation only commits when you press **Send**. Cancelling (`×`) at any point cleanly restores your draft with zero context disruption.
+- **Seamless replacement & context folding**: Subsequent conversation turns are automatically folded and hidden during edit. Resending archives the original session and seamlessly replaces it with the truncated new session.
 
-### Version pager (< X >) — shipped (M3)
-- After every recall/edit resend, the **`‹ X/N ›`** control appears in the final reply's action strip; click (or ←/→ keys) to switch versions — **the following context follows the displayed version**.
-- **Archive swap**: switching = restore the target → open it → archive every other family member — **the workspace list always keeps exactly one active version**, a seamless switch.
-- **Viewport anchoring**: the scroll position never jumps (restored via the official `data-chat-anchor-key`).
-- Even if everything is archived, restore any version via **Settings → Plugins → Plugin config → “Versions” section**.
+<div align="center">
+  <img src="docs/images/message-hover-actions.png" alt="Message hover actions" width="220" />
+  &nbsp;&nbsp;
+  <img src="docs/images/recall-confirm-capsule.png" alt="Inline confirmation capsule" width="300" />
+</div>
+<div align="center" style="margin-top: 8px;">
+  <img src="docs/images/recall-editing.png" alt="Recall editing and context fold" width="780" />
+</div>
 
-### Recall hotkey — shipped (M3, Beta)
-- A **master toggle, off by default** (so it never clashes with other plugins' shortcuts); once enabled you can **record** any combination (at least one modifier required).
-- Triggers when the input is unfocused and the latest message in the current session is yours — equivalent to clicking that message's recall key (the confirmation capsule appears as usual).
+<br>
+
+### Version Pager (< X >) — Shipped (M3)
+- **Seamless history version navigation**: The **`‹ X/N ›`** control is embedded directly inside the action strip of the final reply after every recall/edit resend.
+- **Context synchronization**: Clicking arrows (or pressing ←/→ keys) toggles the target branch, and **all subsequent dialogue context automatically syncs with the active version**.
+- **Archive swap & smooth viewport anchoring**: The workspace list keeps only one active session at any time, while the chat viewport stays rock-solid without jumping.
+
+<div align="center">
+  <img src="docs/images/version-pager.png" alt="Version pager" width="620" />
+</div>
+
+<br>
+
+### Settings & Customization — Shipped (M3/M4)
+- **Integrated settings card**: Integrates into **Settings → Plugins → EasyRewrite** with native design tokens and automatic trilingual localization (中文 / English / 日本語).
+- **Rich toggles & fine-grained control**:
+  - Bubble edit toggle & fallback recall button
+  - Bubble editor width presets (Compact / Standard / Expanded / Custom)
+  - Recall confirmation capsule & visual display modes (Simple / Minimal / Info)
+  - Customizable shortcut recording (trigger recall with one keystroke when composer is unfocused)
+  - Composer conflict resolution (Overwrite mode safely restores pre-existing draft upon send/cancel)
+  - Full version history tree explorer with manual restoration
+  - Built-in one-click plugin update check & auto-upgrade
+
+<div align="center">
+  <img src="docs/images/settings-panel-1.png" alt="Settings panel part 1" width="440" />
+  &nbsp;&nbsp;
+  <img src="docs/images/settings-panel-2.png" alt="Settings panel part 2" width="440" />
+</div>
+
+<br>
+
+### Draft Auto-Backup — Shipped (M3)
+- Pending drafts untouched for over 10 seconds with recent changes are safely backed up locally; deleted immediately upon Confirm/Send.
+- Path: `$DSH_HOME/dsh-easyrewrite/backups/<sessionId>.json`.
+- Crash recovery: restores draft automatically only when there is no active local draft — never overwriting your live input.
 
 ---
 

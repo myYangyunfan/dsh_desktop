@@ -17,6 +17,7 @@
  * snapshot inside the boundary prompt.
  */
 import type { SidebarHistoryEntry, SidebarSessionSummary } from './context-types.ts';
+import type { AssistantLiveChunk } from './assistant-live.ts';
 /** The durable thread-label prefix (also the row filter in the client list). */
 export declare const SIDE_LABEL_PREFIX = "Side: ";
 /** The pinned label of a freshly created thread that no prompt has reached
@@ -30,10 +31,14 @@ export declare const LABEL_MAX_CHARS = 48;
  *  rows starting with it (same first line as dsh-sidechain's boundary, so
  *  the two plugins' threads render consistently in either UI). */
 export declare const SIDE_BOUNDARY_PREFIX = "Side conversation boundary";
-/** The plugin identity stamped on the source of context-injection messages
- *  (boundary prompt + parked snapshot), so the transcript recognizes them
- *  structurally — not by text prefix. */
-export declare const SIDE_INJECTION_PLUGIN = "dsh-better-sidebar";
+/** The plugin's producer-owned source kind, stamped on the source of
+ *  context-injection messages (boundary prompt + parked snapshot) so the
+ *  transcript recognizes them structurally — not by text prefix. Session
+ *  format v4 retired the bare `kind: 'plugin'` + `plugin` pair; a plugin is
+ *  now identified by its own `plugin:<name>` kind, which is exactly what
+ *  DSH's own v3→v4 migration derives for rows this plugin wrote earlier, so
+ *  both generations read back under one shape. */
+export declare const SIDE_INJECTION_SOURCE_KIND = "plugin:dsh-better-sidebar";
 /**
  * The boundary prompt delivered as the thread's first user message: the
  * inherited seed is reference context only, never active instruction.
@@ -66,6 +71,40 @@ export interface SidechatLogEvent {
     time: number;
     data: unknown;
 }
+/**
+ * One live assistant delta on the plugin's wire, mirroring DSH 0.1.5's
+ * client-only `assistant/live-chunk` presentation row.
+ *
+ * DSH 0.1.5 no longer logs `assistant/chunk`: an in-flight attempt's deltas
+ * are process-local frames (`agent/assistant-stream`, folded by
+ * {@link ./assistant-live.ts}) and reach the transcript through the plugin's
+ * own `sidechat.events` route as these rows. They are NOT durable — the
+ * route returns the current attempt's rows on every poll and the client
+ * replaces its live set each time; the durable `assistant/message` settles
+ * them by `turn:step`.
+ */
+export interface SidechatLiveEvent {
+    type: 'assistant/live-chunk';
+    /** Ordering key among live rows only; durable seqs stay authoritative. */
+    seq: number;
+    time: number;
+    data: {
+        attemptId: string;
+        turn: number;
+        step: number;
+        /** Dense zero-based position within the attempt. */
+        index: number;
+        /** The raw model stream chunk. */
+        chunk: Record<string, unknown>;
+    };
+}
+/**
+ * Project buffered live chunks into wire rows.
+ * @param chunks - the session's active-attempt chunks, in index order.
+ * @param tailSeq - the session's last durable seq (live rows order after it).
+ * @returns the rows to append to the transcript feed.
+ */
+export declare function liveEventsOf(chunks: readonly AssistantLiveChunk[], tailSeq: number): SidechatLiveEvent[];
 /** The result of cutting a parent log into a side-thread inheritance. */
 export interface SidechatInheritance {
     /** The child seed: contiguous from seq 0, ends outside any open turn. */
@@ -87,18 +126,25 @@ export declare function hasDanglingToolCall(events: readonly SidechatLogEvent[],
 /**
  * Build the side-thread inheritance for one parent log: the full event log
  * up to the click moment, honestly closed when it ends inside an open turn.
+ * @param events - the parent's log (live or persisted).
+ * @param live - the parent's in-flight stream chunks (DSH 0.1.5+ publishes
+ *   them outside the log); used only by the snapshot fallback.
  */
-export declare function buildSidechatInheritance(events: readonly SidechatLogEvent[]): SidechatInheritance;
-/** The seed half of {@link buildSidechatInheritance} (test convenience). */
-export declare function sidechatSeed(events: readonly SidechatLogEvent[]): SeedEvent[];
+export declare function buildSidechatInheritance(events: readonly SidechatLogEvent[], live?: readonly AssistantLiveChunk[]): SidechatInheritance;
 /**
  * Structured text snapshot of the parent's OPEN turn (from its `turn/start`
- * to the log tail): the accumulated assistant/reasoning output verbatim
- * (code blocks ride the raw deltas) and the tool activity — executed tools
- * with their result text, the still-executing one marked. Returns null when
- * there is no open turn or nothing to show.
+ * to the log tail): the assistant/reasoning output so far and the tool
+ * activity — executed tools with their result text, the still-executing one
+ * marked. Returns null when there is no open turn or nothing to show.
+ *
+ * The in-flight step's text is NOT in the log on DSH 0.1.5 (the model stream
+ * is process-local until it settles), so it comes from `live`; settled steps
+ * read their durable `assistant/message` content, and a failed attempt reads
+ * its embedded `assistant/attempt.stream`.
+ * @param events - the parent's log.
+ * @param live - the parent's in-flight stream chunks, in index order.
  */
-export declare function buildOpenTurnSnapshot(events: readonly SidechatLogEvent[]): string | null;
+export declare function buildOpenTurnSnapshot(events: readonly SidechatLogEvent[], live?: readonly AssistantLiveChunk[]): string | null;
 /** One side-thread row in the client's thread list. */
 export interface SideThreadRow {
     id: string;
@@ -149,7 +195,10 @@ export interface SidechatThreadInfo {
     preset?: string;
 }
 /** The events a thread produced itself: everything after the LAST
- *  `session/end-seed` marker (the fork-seed boundary). */
+ *  `session/end-seed` marker (the fork-seed boundary). A log with no marker
+ *  (a thread created before seeding existed) is returned whole. */
+export declare function threadOwnLogEvents(events: readonly SidechatLogEvent[]): SidechatLogEvent[];
+/** {@link threadOwnLogEvents} over history rows (the client cache shape). */
 export declare function threadOwnEvents(entries: readonly SidebarHistoryEntry[]): SidechatLogEvent[];
 /**
  * Whether the thread has at least one completed turn — the save-as-new-

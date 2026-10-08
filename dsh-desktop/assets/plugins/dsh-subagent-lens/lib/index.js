@@ -13,6 +13,42 @@
  */
 import z from '@deepseek-ai/schemastery';
 
+// <<BEGIN settings-host（由 tools/codemod/apply-settings-scope.mjs 生成，勿单包手改）>>
+const VOLATILE_WRITE = Symbol.for("cosmokit.volatile.write");
+
+/** 把 config 里的 volatile 引用摊平成普通值（同 dsh-settings 的 plainConfig）。 */
+function plainSettings(value) {
+	if (typeof value !== "object" || value === null) return value;
+	if (VOLATILE_WRITE in value) return plainSettings(typeof value.get === "function" ? value.get() : undefined);
+	if (Array.isArray(value)) return value.map(plainSettings);
+	return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, plainSettings(child)]));
+}
+
+/**
+ * 用声明式 Config 顶掉不存在的 ctx.settings.register。
+ * @param ctx - 本插件作用域
+ * @param entryConfig - apply 第二参（resolveConfig 校验过的 profile 行 config）
+ * @param entryId - **profile 条目 id**，即 settings/document-updated 回传的 ns
+ * @returns 与旧 scope 同名的 { get(), watch(fn) }，调用方不必改形状
+ */
+function mountSettingsScope(ctx, entryConfig, entryId) {
+	const state = { current: plainSettings(entryConfig) || {} };
+	const listeners = /* @__PURE__ */ new Set();
+	ctx.on("settings/document-updated", (ns) => {
+		if (ns !== entryId) return;
+		state.current = plainSettings(entryConfig) || {};
+		for (const fn of [...listeners]) fn(state.current);
+	});
+	return {
+		get: () => state.current,
+		watch(fn) {
+			listeners.add(fn);
+			return () => { listeners.delete(fn); };
+		}
+	};
+}
+// <<END settings-host>>
+
 
 export const name = 'dsh-subagent-lens';
 export const inject = ['settings'];
@@ -37,7 +73,7 @@ const NS = 'dsh-subagent-lens';
 
 export function apply(ctx, config) {
     try {
-        ctx.settings.register(NS, Config, { base: config || {} });
+        mountSettingsScope(ctx, config, "dsh-subagent-lens");
     } catch (error) {
         // 存储的配置节非法（或 settings 面不可用）时降级为组合配置，不阻断启动。
         console.warn('[dsh-subagent-lens] settings section unavailable (invalid stored config); lens falls back to defaults: ' + ((error && error.message) || error));

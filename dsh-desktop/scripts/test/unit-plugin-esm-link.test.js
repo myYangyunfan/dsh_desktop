@@ -152,8 +152,12 @@ function scan() {
 test('插件具名导入必须都被内核实际导出（离线 ESM 链接，防换代静默断链）', () => {
   const r = scan();
   // 判据自检（不先证这个，「全绿」只可能是什么都没扫到）。
-  assert.ok(r.plugins >= 30, `只扫到 ${r.plugins} 册插件，覆盖面已脱靶`);
-  assert.ok(r.named >= 150, `只核到 ${r.named} 处具名导入，采集已脱靶`);
+  // 下限 22 = 在册 28 的约 8 成（2026-10 批量退役 11 条后从 39→28；原阈值 30 同比例下调）。
+  // 这是「扫描器没脱靶」的覆盖哨兵而非清单锁——精确对账由 unit-hub-registry /
+  // unit-composition-integrity 负责，这里只保证本守卫真的扫到了插件群。
+  assert.ok(r.plugins >= 22, `只扫到 ${r.plugins} 册插件，覆盖面已脱靶`);
+  // 下限 100（2026-10 实测 128）：随插件群 39→28 同比例下调，原阈值 150 已不可能达到。
+  assert.ok(r.named >= 100, `只核到 ${r.named} 处具名导入，采集已脱靶`);
   assert.equal(r.unresolved, 0, `有 ${r.unresolved} 处 specifier 解析不到模块，判据已失效`);
   // 两个方向的控制组：真被 rc.1 移除的名字必须判「缺失」，仍在位的必须判「在场」。
   const sp = resolveSpec('@deepseek-ai/dsh-system-prompt', path.join(DSH, 'scripts', 'x.js'));
@@ -185,15 +189,20 @@ test('插件具名导入必须都被内核实际导出（离线 ESM 链接，防
 // 不做全量强制：全量比导出面会把一堆实际兼容的包一律判红，噪声淹掉真信号。
 // 新增跨界副本时必须在此登记并选档。
 //
-// SHAPE 档当前为空（2026-10-05 撤销登记）。原条目登记的是 better-sidebar 内嵌
-// @deepseek-ai/dsh-tools —— 那份副本**从未入库**：better-sidebar 把整套 dsh-* 都列在
-// peerDependencies（由宿主供给），而且它不在 companion-plugins.js 的 shipsNodeModules
-// 名单内，所以伴随同步与 stage-payload 两条路都不会带上任何 node_modules。
-// 「登记项必须真实存在」这条清单防腐判据就是为这种情况准备的：盯着空气的守卫不是守卫，
-// 它只在装过依赖的开发机上偶然为真。
-const PROTOCOL_PARITY_STRICT = [
-	{ plugin: 'dsh-hub', pkg: '@deepseek-ai/dsh-typert-protocol' },
-];
+// 两档当前均为空，都是「登记项必须真实存在」这条防腐判据的直接后果——盯着空气的守卫
+// 不是守卫，它只在装过依赖的开发机上偶然为真：
+//   · SHAPE（2026-10-05 撤销）：原条目是 better-sidebar 内嵌 @deepseek-ai/dsh-tools，
+//     那份副本**从未入库**——better-sidebar 把整套 dsh-* 列在 peerDependencies（由宿主
+//     供给），且它不在 companion-plugins.js 的 shipsNodeModules 名单内，伴随同步与
+//     stage-payload 两条路都不会带上任何 node_modules。
+//   · STRICT（2026-10 随 dsh-hub 批量退役撤销）：dsh-hub 目录已从 assets/plugins 移除，
+//     那份 rc.6 副本随之消失。2026-10 实测在册 28 插件里只剩 dsh-pocket 带
+//     node_modules（billion-context-dsh 0.2.26 起把 acp-kernel 内联进 dist，内层副本与
+//     shipsNodeModules 标记同批下线），且 dsh-pocket 内只有 cordis / cosmokit 两个纯第三方
+//     作用域，没有任何 @deepseek-ai/* 跨界副本可比。
+// 结论：本档目前是**待命中**而非废弃——一旦有插件重新内嵌 @deepseek-ai/* 包，就在这里
+// 登记并选档；下面的 pin 形态自检仍保证判据本身没坏。
+const PROTOCOL_PARITY_STRICT = [];
 const PROTOCOL_PARITY_SHAPE = [];
 
 function nestedPkgPath(plugin, pkg) {

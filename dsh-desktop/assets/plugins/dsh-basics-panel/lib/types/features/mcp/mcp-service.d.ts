@@ -13,15 +13,24 @@ export interface McpServerRow {
     url?: string;
     headers?: Record<string, string>;
     toolCallTimeoutMs?: number;
+    /**
+     * Live status. `probe` says how trustworthy it is: `global` rows are
+     * observed in this process's Loader tree and tool registry, `preset` rows
+     * are read from their preset's composition inventory (the server itself
+     * starts inside a session's scoped world, where its tools stay invisible to
+     * the host registry), and `unknown` means no inventory answered.
+     */
     runtime: {
         mounted: boolean;
         toolCount: number;
+        probe: 'global' | 'preset' | 'unknown';
     };
 }
 /** One scope group in the list. */
 export interface McpGroup {
     scope: 'profile' | 'preset';
     scopeLabel: string;
+    /** Declaring file; empty for a preset declaration read from the Loader tree. */
     path: string;
     readOnly: boolean;
     servers: McpServerRow[];

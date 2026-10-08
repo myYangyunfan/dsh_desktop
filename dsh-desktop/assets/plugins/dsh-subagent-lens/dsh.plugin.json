@@ -1,6 +1,6 @@
 {
   "id": "@dsh-external/dsh-subagent-lens",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "main": "./lib/index.js",
   "description": "Subagent activity lens: an expandable view for Task/subagent delegation calls showing the child's executed commands and touched source files, plus a session-header activity summary strip; all detail derives from already-loaded session event streams with zero extra backend requests",
   "engines": { "dsh": ">=0.0.1" },

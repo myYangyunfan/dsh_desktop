@@ -2,7 +2,7 @@
 # 说明：patch 按 id 整行替换，config 需给出完整配置（不做字段级 merge）。
 - insert:
     - id: zcode-migrate
-      name: dsh-zcode-migrate
+      name: 'dsh-zcode-migrate'
       config:
         # zcode CLI 的会话库（支持 ~ 家目录写法）。
         dbPath: ~/.zcode/cli/db/db.sqlite

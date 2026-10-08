@@ -21,7 +21,7 @@ export interface KernelConfigInput {
     readonly nudgeMinContextLimitPct?: number;
     /** Nudge window upper bound — over-limit guarantee line. Kernel default: 0.75. */
     readonly nudgeMaxContextLimitPct?: number;
-    /** Emergency nudge threshold (bypasses per-turn dedup). Kernel default: 0.95. */
+    /** Emergency nudge threshold (bypasses per-turn dedup; capped at 3 injections per user turn — issue #108). Kernel default: 0.95. */
     readonly nudgeEmergencyThresholdPct?: number;
     /** Any other acp-kernel Config override (the billion-context-pi escape hatch). */
     readonly coreOverrides?: Partial<Config>;

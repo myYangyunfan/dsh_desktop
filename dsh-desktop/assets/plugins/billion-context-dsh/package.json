@@ -1,6 +1,6 @@
 {
 	"name": "billion-context-dsh",
-	"version": "0.2.1",
+	"version": "0.2.26",
 	"description": "Active Context Pruning (ACP) for the DeepSeek Harness — model-driven context management as a CompactionEngine backend.",
 	"keywords": [
 		"deepseek",
@@ -43,26 +43,37 @@
 	"scripts": {
 		"typecheck": "tsc --noEmit",
 		"build": "tsup && tsc --emitDeclarationOnly",
-		"test": "node --import tsx --test tests/*.test.ts"
-	},
-	"dependencies": {
-		"acp-kernel": "0.0.24"
+		"test": "node --import tsx --test tests/*.test.ts tests/kernel-upstream/*.test.ts",
+		"test:e2e": "node scripts/e2e/run-e2e.mjs"
 	},
 	"peerDependencies": {
 		"@deepseek-ai/cordis": "^4.0.1",
-		"@deepseek-ai/dsh-compaction": "^0.1.0-rc.6"
+		"@deepseek-ai/dsh-compaction": ">=0.1.5-alpha.1 <0.3.0-0",
+		"@deepseek-ai/dsh-session": ">=0.1.5-alpha.1 <0.3.0-0",
+		"@deepseek-ai/dsh-llm": ">=0.1.5-alpha.1 <0.3.0-0",
+		"@deepseek-ai/dsh-tools": ">=0.1.5-alpha.1 <0.3.0-0",
+		"@deepseek-ai/dsh-settings": ">=0.1.5-alpha.1 <0.3.0-0",
+		"@deepseek-ai/schemastery": "^3.18.2"
 	},
 	"devDependencies": {
-		"@deepseek-ai/cordis": "4.0.1",
-		"@deepseek-ai/dsh-agent": "0.1.0-rc.6",
-		"@deepseek-ai/dsh-commands": "0.1.0-rc.6",
-		"@deepseek-ai/dsh-compaction": "0.1.0-rc.6",
-		"@deepseek-ai/dsh-llm": "0.1.0-rc.6",
-		"@deepseek-ai/dsh-session": "0.1.0-rc.6",
-		"@deepseek-ai/dsh-token-meter": "^0.1.0-rc.6",
-		"@deepseek-ai/dsh-tools": "0.1.0-rc.6",
-		"@deepseek-ai/schemastery": "3.18.1",
+		"acp-kernel": "0.0.63",
+		"@deepseek-ai/cordis": "4.0.2",
+		"@deepseek-ai/dsh-agent": "0.1.5-rc.2",
+		"@deepseek-ai/dsh-agent-loop": "0.1.5-rc.2",
+		"@deepseek-ai/dsh-agent-loop-testkit": "0.1.5-rc.2",
+		"@deepseek-ai/dsh-commands": "0.1.5-rc.2",
+		"@deepseek-ai/dsh-compaction": "0.1.5-rc.2",
+		"@deepseek-ai/dsh-llm": "0.1.5-rc.2",
+		"@deepseek-ai/dsh-llm-deepseek": "0.1.5-rc.2",
+		"@deepseek-ai/dsh-session": "0.1.5-rc.2",
+		"@deepseek-ai/dsh-session-format-v0-to-v1": "0.1.5-rc.2",
+		"@deepseek-ai/dsh-session-projection": "0.1.5-rc.2",
+		"@deepseek-ai/dsh-settings": "0.1.5-rc.2",
+		"@deepseek-ai/dsh-token-meter": "0.1.5-rc.2",
+		"@deepseek-ai/dsh-tools": "0.1.5-rc.2",
+		"@deepseek-ai/schemastery": "3.18.2",
 		"@types/node": "^26.1.2",
+		"semver": "^7.7.1",
 		"tsup": "^8.5.1",
 		"tsx": "^4.23.1",
 		"typescript": "^7.0.2"

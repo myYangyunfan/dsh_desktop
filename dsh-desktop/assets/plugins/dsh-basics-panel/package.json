@@ -1,17 +1,26 @@
 {
   "name": "dsh-basics-panel",
-  "version": "0.1.0",
+  "version": "0.4.1",
   "private": true,
-  "description": "DSH Desktop built-in basics panel (upstream: yxsj245/dsh-Basics-Panel, MIT): a native Settings panel for visualizing and managing MCP servers, skills and rules with a modular feature registry. · DSH Desktop 内置基础能力面板：可视化并管理 MCP 服务器、技能与规则（含空态「新建」入口）。",
+  "description": "DSH Desktop built-in basics panel (upstream: yxsj245/dsh-Basics-Panel, MIT): a native Settings panel for visualizing and managing MCP servers, skills, rules and archived sessions with a modular feature registry. · DSH Desktop 内置基础能力面板：可视化并管理 MCP 服务器、技能、规则与归档会话（含空态「新建」入口）。",
   "type": "module",
   "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
   "exports": {
-    ".": "./lib/index.js",
-    "./client": "./lib/client.js",
-    "./cordis.patch.yml": "./cordis.patch.yml",
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
-  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
@@ -21,15 +30,34 @@
         "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-ui-slots"
       ],
-      "external": [],
       "platform": "web"
     }
   },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "lib/client-registry.js",
+    "lib/types/**/*.d.ts",
+    "src",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node -e \"require('node:fs').rmSync('lib',{recursive:true,force:true})\" && tsc -p tsconfig.build.json && tsdown",
+    "sync": "node scripts/sync-profile.mjs",
+    "sync:check": "node scripts/sync-profile.mjs --check",
+    "typecheck": "tsc --noEmit",
+    "watch": "tsdown --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-home-paths": "^0.1.0-rc.6",
-    "@deepseek-ai/schemastery": "^3.18.0",
-    "cordis": "^4.0.0-rc.7"
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/dsh-home-paths": "^0.1.2-rc.1 || >=0.2.0-rc.1 <0.3.0",
+    "@deepseek-ai/schemastery": "^3.18.2",
+    "cordis": "^4.0.0-rc.8"
   },
   "peerDependenciesMeta": {
     "cordis": {
@@ -38,5 +66,23 @@
   },
   "dependencies": {
     "yaml": "^2.5.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/dsh-client-locale": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-home-paths": "0.2.0-rc.2",
+    "@deepseek-ai/schemastery": "^3.18.2",
+    "@types/node": "^24.0.0",
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.1",
+    "cordis": "^4.0.0-rc.8",
+    "lightningcss": "^1.32.0",
+    "react": "^18.2.0",
+    "react-dom": "18.2.0",
+    "tsdown": "^0.22.2",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.8"
   }
 }

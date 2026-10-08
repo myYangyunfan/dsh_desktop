@@ -1,16 +1,16 @@
 /**
- * Lazy chunk loader for the client bundle. The heavy preview/terminal
- * libraries (CodeMirror, xterm — the editor/terminal stacks, several MB)
- * live in separate build-time bundles (`lib/client-<name>.js`) fetched only
- * on first use of the feature that needs them, so startup downloads/parses
- * only the ~1MB core bundle. (The office stack — Univer / docx-preview /
+ * Lazy chunk loader for the client bundle. The heavy preview libraries
+ * (CodeMirror's editor stack, mermaid — several MB) live in separate
+ * build-time bundles (`lib/client-<name>.js`) fetched only on first use of
+ * the feature that needs them, so startup downloads/parses only the ~1MB
+ * core bundle. (The office stack — Univer / docx-preview /
  * pptx-renderer — is no longer bundled here: Office previews moved to the
  * recommended office plugin, see plugins-viewers.ts.)
  *
  * How a chunk script works (see tsdown.config.ts chunkBundle):
  *
  *   globalThis.__dshChunks__ = globalThis.__dshChunks__ || {};
- *   globalThis.__dshChunks__["terminal"] = (require) => { ...exports };
+ *   globalThis.__dshChunks__["editor"] = (require) => { ...exports };
  *
  * The script registers its factory on a plugin-owned global registry (NOT
  * through window.__ModuleLoader__.load — the module loader's import() only
@@ -23,8 +23,9 @@
  *    arbitrary file names, so the plugin's own host route serves the chunks),
  * 2. read the factory from the global registry,
  * 3. call it with a require that resolves the platform externals through
- *    `__DSH_MODULES__.import(spec)` — the seed-word branch, the one part of
- *    the module system that is stable across versions.
+ *    the injected module system's `import(spec)` (the `ctx.modules` service)
+ *    — the seed-word branch, the one part of the module system that is
+ *    stable across versions.
  *
  * Caching contract (three layers, each with a failure path):
  * - In-memory: one in-flight promise per chunk, memoized until
@@ -49,9 +50,7 @@
  * client.js); an edit that does land while a core HMR happens is caught by
  * the ETag comparison on the next activation.
  */
-import { type ChunkRetryEvent } from './chunk-availability.ts';
-export type { ChunkRetryEvent } from './chunk-availability.ts';
-export type ChunkName = 'terminal' | 'editor' | 'mermaid';
+export type ChunkName = 'editor' | 'mermaid' | 'locale';
 /** The module exports a chunk factory provides (namespace-ish record). */
 export type ChunkExports = Record<string, unknown>;
 /**
@@ -59,19 +58,18 @@ export type ChunkExports = Record<string, unknown>;
  * CLIENT_EXTERNALS in tsdown.config.ts — the chunk builds keep these
  * external and the loader resolves them here). A superset is safe: the
  * require only answers what the chunk actually asks for. The shell's static
- * module table seeds React, Cordis, and the UI libraries (primitives/slots);
- * `dsh-client-runtime/client` normalizes onto the runtime package row
- * (stripClientSuffix). dsh-client-web-react / dsh-client-schema-form were
- * dropped in DSH 0.1.0-rc.8 (no rc.8 publish, nothing requires them) — the
- * chunks never asked for them, so they no longer belong here.
+ * module table seeds React, Cordis, and the UI libraries (primitives/slots).
+ * `@deepseek-ai/dsh-client-runtime` was removed upstream in DSH 0.1.2-alpha
+ * (its seed row became bare-name `@deepseek-ai/dsh-client-store`) and no
+ * chunk ever required it, so its row is gone; so are dsh-client-web-react /
+ * dsh-client-schema-form, dropped back in DSH 0.1.0-rc.8.
  */
 export declare const CHUNK_EXTERNALS: readonly string[];
 /**
  * The client module system surface this loader needs to resolve externals.
  * DSH 0.1.0-rc.8 provides it as the `ctx.modules` service (no page global
  * anymore); the plugin injects it at activation via
- * {@link setChunkModuleSystem}. The rc.7-era `window.__DSH_MODULES__` global
- * remains as a fallback so older hosts and the test harness keep working.
+ * {@link setChunkModuleSystem}.
  */
 export interface ChunkModuleSystem {
     import(specifier: string): Promise<unknown>;
@@ -96,16 +94,6 @@ export declare function registerChunkForTests(name: ChunkName, loader: () => Pro
  * @param name - the chunk to load.
  */
 export declare function loadChunk(name: ChunkName): Promise<ChunkExports>;
-/**
- * Subscribe to the chunk's auto-retry loop after a failed load. The loop
- * probes the module system (cheap check) and re-attempts the load every
- * round with exponential backoff (2s → 30s cap, unlimited); events update
- * the view's "waiting" copy, `ready: true` tells it to re-load and
- * hot-recover. Returns the unsubscribe — the view's effect cleanup calls
- * it; when the LAST view of a chunk unsubscribes the loop (and its timer)
- * is dropped entirely.
- */
-export declare function ensureChunkAutoRetry(name: ChunkName, onEvent: (event: ChunkRetryEvent) => void): () => void;
 /**
  * Drop all chunk state for a fresh plugin activation (HMR-safe): clear the
  * in-memory cache and any test-registry entries, so the next lazy open

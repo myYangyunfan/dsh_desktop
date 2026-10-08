@@ -167,6 +167,7 @@ function LeafView(props: {
   return (
     <div
       className={clsx(css.pane, dropZone !== null && css.paneDrop)}
+      data-dsh-pane={leaf.id}
       onPointerDown={() => { actions.focusPane(leaf.id) }}
       onDragOver={(event) => {
         event.preventDefault()
@@ -211,10 +212,9 @@ function LeafView(props: {
       {leaf.tabs.length > 0 ? (
         /*
           Every tab stays MOUNTED (inactive ones hidden), so switching tabs
-          never tears down the content: a terminal keeps its pty connection
-          and scrollback, an editor keeps its CodeMirror view and unsaved
-          draft, explorer/git keep their loaded data. The unmount (and the
-          terminal's close frame) happens only when a tab is truly closed.
+          never tears down the content: an editor keeps its CodeMirror view
+          and unsaved draft, explorer/git keep their loaded data. The unmount
+          happens only when a tab is truly closed.
         */
         <div className={css.paneContent}>
           {leaf.tabs.map(tab => (
@@ -308,7 +308,7 @@ export function Workbench(props: {
   return (
     <div className={css.workbench}>
       <NodeView
-        node={tree ?? state.splits}
+        node={tree ?? state.bottomSplits}
         state={state}
         newTabOptions={newTabOptions}
         actions={actions}

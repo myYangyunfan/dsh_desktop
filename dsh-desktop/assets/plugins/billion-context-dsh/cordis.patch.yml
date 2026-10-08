@@ -1,11 +1,32 @@
-# dsh bundle patch: inserts the ACP compaction backend into a profile's layer stack.
+# dsh bundle patch: makes billion-context-dsh ACTIVE right after a one-command
+# install — the plugin store and `dsh plugin --profile web add
+# billion-context-dsh` both run the same command, and this file (declared in
+# package.json as `dsh.bundle.patch`) becomes a layer of the profile's
+# composition automatically. No manual configuration is needed.
 #
-# This is what makes the package installable via `dsh plugin --profile web add
-# billion-context-dsh` (declared in package.json as `dsh.bundle.patch`). The row
-# below is exactly the manual composition row documented in docs/INSTALL.md (§2a),
-# minus config: omitting `modelContextLimit` means auto-detection (fallback 128000),
-# and the built-in prompt copy (config.prompts) is used. Users who want custom
-# config can still write the row by hand in their profile patch.
+# Two rows land in the profile's composition root:
+#   1. `compaction-basic` disabled — the host's own auto-compaction backend
+#      would otherwise register `ctx.compaction` at the root realm too, and
+#      only one provider per realm may own that service name. (On dsh
+#      0.1.0-rc.6+ the web-app bundle already ships this disable; the row is
+#      idempotent and keeps the plugin self-sufficient on every supported DSH.)
+#   2. `compaction-acp` — the ACP engine, mounted at the HOST plane, so its
+#      model tools (`compress`, `decompress`, `search_context`, `acp_status`),
+#      the `/acp-prune` command, the advisory nudge, and the guidance section reach
+#      EVERY mode (standard / code / minimal / cordis / custom presets) of the
+#      profile the plugin was installed into.
+#
+# No `config` is set on purpose: the context window is auto-detected from the
+# model API (fallback 128000) and the built-in prompt copy is used. Users who
+# want custom config write a SAME-ID `compaction-acp` row in their profile's
+# own `cordis.patch.yml` — it overrides this row (see README).
+#
+# Shipped presets (standard / code / cordis) keep their realm-local
+# compaction-basic fallback (automatic pressure compression); minimal and
+# presets without a compaction realm use the host ACP engine directly.
+- id: compaction-basic
+  disabled: true
+
 - insert:
     - id: compaction-acp
       name: 'billion-context-dsh'

@@ -17,7 +17,6 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const vm = require('node:vm');
-const { pathToFileURL } = require('node:url');
 const zlib = require('node:zlib');
 
 const REPO = path.join(__dirname, '..', '..');
@@ -224,11 +223,13 @@ test('属性：compareVersions 毒化不抛 + 反对称/传递（×500）', () =
 
 // ---------------------------------------------------------------------------
 // 5) chunk-availability：1000 订阅者 × 退避循环
+//    取数夹具见 fixtures/better-sidebar-region.js（0.24.1 起无逐文件编译镜像，
+//    真实实现只在 lib/client.js 的 //#region src/client/chunk-availability.ts 里）。
 // ---------------------------------------------------------------------------
-const CHUNK_AVAIL = path.join(REPO, 'assets', 'plugins', 'dsh-better-sidebar', 'lib', 'chunk-availability.js');
+const { loadChunkAvailability } = require('./fixtures/better-sidebar-region.js');
 
 test('压力：1000 订阅者共享单循环单定时器，退订后零 pending', { timeout: 60_000 }, async () => {
-  const { createChunkRetryLoop, nextDelayMs } = await import(pathToFileURL(CHUNK_AVAIL).href);
+  const { createChunkRetryLoop, nextDelayMs } = loadChunkAvailability({ sameRealm: true });
   // 退避序列契约
   assert.equal(nextDelayMs(1), 2000);
   assert.equal(nextDelayMs(2), 4000);

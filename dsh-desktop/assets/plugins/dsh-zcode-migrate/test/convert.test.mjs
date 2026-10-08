@@ -275,7 +275,7 @@ test('synthetic user messages are attributed to the plugin, not the human', () =
   const { events } = convertSession(sessionRow(), messages)
   const userEvents = events.filter((event) => event.type === 'user/message')
   assert.deepEqual(userEvents[0].data.source, { kind: 'user' })
-  assert.equal(userEvents[1].data.source.kind, 'plugin')
+  assert.equal(userEvents[1].data.source.kind, 'plugin:zcode')
   // The title cites the human prompt, never the injected one.
   const title = events.find((event) => event.type === 'session/title')
   assert.deepEqual(title.data.messageSeqs, [userEvents[0].seq])

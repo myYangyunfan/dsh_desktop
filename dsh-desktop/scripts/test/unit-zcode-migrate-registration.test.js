@@ -31,7 +31,8 @@ test('COMPANION_PLUGINS 登记 zcode-migrate（append，不扰动既有条目）
   assert.equal(hits.length, 1, '必须恰好登记一次（重复登记 = 双挂载）');
   assert.equal(hits[0].name, 'dsh-zcode-migrate', 'name 必须是 profile node_modules 下的包名');
   // append 语义：既有条目必须原样在位（这条锁住「顺手重排清单」这类改动）。
-  for (const id of ['better-sidebar', 'harness-pet', 'dsh-session-manager']) {
+  // 抽样点覆盖清单头/中/尾；原抽的 harness-pet 已随 v1.0.0 批量退役，换成 dsh-pocket。
+  for (const id of ['better-sidebar', 'dsh-session-manager', 'dsh-pocket']) {
     assert.ok(COMPANION_PLUGINS.some((p) => p.id === id), `既有条目 ${id} 不得被挤掉`);
   }
   assert.ok(
@@ -61,7 +62,11 @@ test('loader id 一致性（issue #104 的坑：不一致会双挂载）', () =>
   assert.ok(loaderId !== undefined, 'cordis.patch.yml 里找不到 insert 行的 loader id');
   assert.equal(loaderId, registryId, '登记 id 必须与 cordis.patch.yml 的 loader id 一致');
   // 包名同样要对上（bundle 迁移按 name 判定「这个 bundle 是否已挂」）。
-  const loaderName = (patch.match(/^\s*name:\s*(\S+)\s*$/m) || [])[1];
+  // 实测 28 份 cordis.patch.yml 里 26 份的 name 是 YAML 单引号形态、2 份裸写——
+  // 引号不是语义的一部分（内核用 YAML 解析器读），所以剥掉两侧引号再比，
+  // 免得「顺手去掉一对引号」被误报成双挂载缺陷。
+  const rawName = (patch.match(/^\s*name:\s*(\S+)\s*$/m) || [])[1];
+  const loaderName = rawName === undefined ? undefined : rawName.replace(/^['"]+|['"]+$/g, '');
   assert.equal(loaderName, 'dsh-zcode-migrate', 'insert 行的 name 必须是包名');
 });
 

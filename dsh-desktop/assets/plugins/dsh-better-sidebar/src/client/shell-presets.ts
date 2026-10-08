@@ -5,11 +5,12 @@
  * the SAME generic strip variable and CSS-injection mechanism — adding a
  * shell is adding data, never a code path.
  *
- * Inclusion rule (maintained in AGENTS.md §8): only shells that (a) appear
+ * Inclusion rule (maintained in docs/external-plugin-guide.md §12): only shells that (a) appear
  * in this repo's issues/PRs (a user actually hit a problem) and (b) have
  * 100+ GitHub stars (a real user base). The mechanism is opt-in: auto
  * detection never applies a preset — the settings badge only SUGGESTS it.
  */
+import { t } from './locales.ts'
 import type { DesktopEnv } from './desktop-env.ts'
 
 export interface ShellPreset {
@@ -17,8 +18,10 @@ export interface ShellPreset {
   readonly id: string
   /** User-facing name of the shell. */
   readonly title: string
-  /** One-line description shown in the settings popup. */
-  readonly desc: string
+  /** One-line description shown in the settings popup (i18n friendly:
+   *  string or () => string — the plain string form is the raw-text
+   *  fallback when no dictionary key covers the preset). */
+  readonly desc: string | (() => string)
   /**
    * The top strip (px) this shell reserves over web content, per
    * environment — the fallback used when neither the standard WCO API nor
@@ -53,7 +56,7 @@ export interface ShellPreset {
 const DSH_DESKTOP: ShellPreset = {
   id: 'dsh-desktop',
   title: 'DeepSeek Harness Desktop',
-  desc: 'Electron 高级模式（无边框）：macOS 顶栏 20px、Windows 无 WCO 时 32px 标题栏让位',
+  desc: () => t('presetDshDesktopDesc'),
   stripFor: (env) => {
     if (env.mode !== 'advanced') return undefined
     if (env.platform === 'darwin') return 20

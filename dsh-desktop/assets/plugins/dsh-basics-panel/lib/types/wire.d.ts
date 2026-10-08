@@ -6,7 +6,7 @@
  */
 import type { BasicsHttpRequest, BasicsHttpResponse } from './context-types.ts';
 /** Machine-readable error codes of the basics API. */
-export type BasicsErrorCode = 'bad-request' | 'not-found' | 'forbidden' | 'method-error' | 'fs-error' | 'skill-error' | 'rule-error' | 'mcp-error' | 'conflict' | 'read-only' | 'internal';
+export type BasicsErrorCode = 'bad-request' | 'not-found' | 'forbidden' | 'method-error' | 'fs-error' | 'skill-error' | 'rule-error' | 'mcp-error' | 'archive-error' | 'conflict' | 'read-only' | 'internal';
 /** One API failure with its wire code and HTTP status. */
 export declare class BasicsError extends Error {
     readonly code: BasicsErrorCode;
@@ -40,3 +40,16 @@ export declare function requireString(payload: unknown, key: string): string;
 export declare function optionalString(payload: unknown, key: string): string | undefined;
 /** Narrow an unknown payload value to a boolean. */
 export declare function requireBoolean(payload: unknown, key: string): boolean;
+/**
+ * Narrow an unknown payload value to a non-empty list of unique non-empty
+ * strings (order preserved, duplicates dropped).
+ *
+ * The raw list length is checked BEFORE any de-duplication work, so an
+ * oversized body cannot buy a long synchronous scan; the returned list is
+ * capped by the same bound.
+ * @param payload - request payload.
+ * @param key - the array field name.
+ * @param max - maximum accepted entries (the batch cap).
+ * @returns the de-duplicated ids.
+ */
+export declare function requireStringList(payload: unknown, key: string, max: number): string[];

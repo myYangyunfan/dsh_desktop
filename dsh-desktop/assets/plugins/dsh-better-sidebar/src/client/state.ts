@@ -1,8 +1,8 @@
 /**
- * Per-session sidebar state: the panel geometry, the split-pane workbench
- * tree, open tabs, and the explorer expansion set. One state instance per
- * conversation id, persisted to localStorage under `dsh-sidebar:v1:<id>` so
- * a reload restores the exact layout of the session it belongs to — switching
+ * Per-session sidebar state: the bottom workbench's split-pane tree, open
+ * tabs, and the explorer expansion set. One state instance per conversation
+ * id, persisted to localStorage under `dsh-sidebar:v1:<id>` so a reload
+ * restores the exact layout of the session it belongs to — switching
  * conversations swaps the whole state (memory + isolation).
  *
  * The split tree is a recursive structure: a leaf holds a tab group, a split
@@ -10,7 +10,6 @@
  * operations are pure functions over the node, unit-tested in tests/state.spec.ts.
  */
 import { SIDEBAR_PREFS_DEFAULTS, type SidebarPrefs } from '../prefs-shared.ts'
-import { isNarrowWidth } from './breakpoints.ts'
 
 /**
  * Tab type identifier. Builtins register their ids (editor / git / terminal
@@ -22,8 +21,8 @@ export type TabType = string
 
 /** What a diff tab shows: a worktree/index change of one path, or one commit's full patch. */
 export type SidebarDiffRef =
-  | { kind: 'worktree'; path: string; staged: boolean; untracked?: boolean }
-  | { kind: 'commit'; hash: string; hashFull: string; subject: string }
+  | { kind: 'worktree'; path: string; staged: boolean; untracked?: boolean; worktree?: string; repoRoot?: string }
+  | { kind: 'commit'; hash: string; hashFull: string; subject: string; worktree?: string; repoRoot?: string }
 
 /** One open tab. `path` carries the file (editor) or is absent (git/terminal);
  *  `diff` carries the change a diff tab shows; `meta` (v0.12.0+) carries
@@ -60,76 +59,34 @@ export type SplitNode = SidebarLeaf | SidebarSplit
 
 /** The full per-session state. */
 export interface SidebarState {
-  panelOpen: boolean
-  width: number
-  /**
-   * Whether the persistent Explorer rail (the file tree that lives to the
-   * LEFT of the tabbed workbench, VSCode-style) is shown. Unlike the old
-   * per-tab docked tree, the rail is decoupled from any tab, so it stays
-   * put while files open as tabs beside it. Defaults open on upgrade.
-   */
-  explorerOpen: boolean
-  /** The Explorer rail's width in px (drag-resized, clamped to the contract). */
-  explorerWidth: number
-  /** The pane receiving newly opened tabs (last pane the user touched).
-   *  Pane ids are globally unique across BOTH trees (shared uid counter), so
-   *  one field resolves into either tree — see {@link treeOf}. */
+  /** The pane receiving newly opened tabs (the last pane the user touched). */
   activePane: string | null
-  /** Monotonic terminal tab counter (ids survive reloads). */
-  nextTerminal: number
-  /** Monotonic browser tab counter (ids survive reloads; mirrors nextTerminal). */
+  /** Monotonic browser tab counter (ids survive reloads). */
   nextBrowser: number
   /** Explorer expansion set (absolute directory paths). */
   expanded: string[]
-  /** The right sidebar's split tree (the original workbench). */
-  splits: SplitNode
-  /** Whether the bottom panel (a second, independent workbench) is open. */
+  /**
+   * Explorer rows highlighted by a "Show in folder" reveal (absolute paths).
+   * Transient by design: sanitizeState never restores it, so a reload starts
+   * unhighlighted.
+   */
+  revealed: string[]
+  /** Whether the bottom panel (the plugin's one workbench) is open. */
   bottomOpen: boolean
   /** The bottom panel's height (clamped to the contract range). */
   bottomHeight: number
-  /**
-   * Whether the bottom panel has been expanded at least once in this
-   * session — the FIRST expansion tries to auto-open a terminal tab (gated
-   * on the bottomPanelAutoTerminal pref); later expansions never do.
-   */
-  bottomOpenedOnce: boolean
-  /** The bottom panel's own split tree (panes/tabs live only in ONE tree;
-   *  tabs never cross panels — the two panels only share panel-size drags). */
+  /** The bottom workbench's split tree. */
   bottomSplits: SplitNode
 }
 
-export const PANEL_MIN = 280
-export const PANEL_MAX = 640
-export const PANEL_DEFAULT = 400
-/** Minimum width the center conversation column keeps when the right panel is
- * at its widest. Mirrors the vertical contract in {@link setBottomHeight}
- * (which reserves PANEL_MIN tall for the center): without a horizontal floor
- * the panel could be dragged to swallow the whole viewport — the reported
- * "drag it right and it covers the page / a small screen is fully covered". */
-export const CENTER_MIN = PANEL_MIN
 export const TAB_MAX_WIDTH = 160
-
-/** Upper bound for the right panel width at a given viewport width: keep at
- * least {@link CENTER_MIN} for the center conversation column. Falls back to
- * PANEL_MAX when the viewport is unknown (SSR/tests). Always ≥ PANEL_MIN. */
-export function maxPanelWidthFor(viewportWidth: number): number {
-  if (!Number.isFinite(viewportWidth)) return PANEL_MAX
-  return Math.max(PANEL_MIN, viewportWidth - CENTER_MIN)
-}
-/** Bottom panel geometry contract (mirrors the width contract; the upper
- * bound is the viewport, enforced by {@link setBottomHeight}). */
+/** Bottom panel geometry contract (the upper bound is the viewport, enforced
+ *  by {@link setBottomHeight}). */
 export const BOTTOM_MIN = 120
 export const BOTTOM_DEFAULT = 220
-
-/** Explorer rail geometry contract (the persistent file-tree column). */
-export const EXPLORER_WIDTH_MIN = 140
-export const EXPLORER_WIDTH_MAX = 480
-export const EXPLORER_WIDTH_DEFAULT = 240
-
-/** Clamp one Explorer rail width into the contract range. */
-export function clampExplorerWidth(value: number): number {
-  return Math.min(EXPLORER_WIDTH_MAX, Math.max(EXPLORER_WIDTH_MIN, Math.round(value)))
-}
+/** The conversation column keeps at least this much height when the bottom
+ *  workbench claims space (see {@link setBottomHeight}). */
+export const CONVERSATION_MIN = 280
 
 let nextIdCounter = 0
 /** Unique pane/tab id within one state instance. */
@@ -140,7 +97,7 @@ function uid(prefix: string): string {
 
 /** Mint a fresh uid-based tab id. The `'editor:' + path` convention only
  *  covers openSidebarFile opens (per-path dedupe); opens that must not
- *  dedupe (the primary tree-click side split) mint through here. */
+ *  dedupe (the tree's "open to the side") mint through here. */
 export function mintTabId(): string {
   return uid('tab')
 }
@@ -174,75 +131,27 @@ function maxCounterId(parsed: unknown): number {
       for (const child of record.children) walk(child)
     }
   }
-  walk((parsed as Record<string, unknown> | null)?.splits)
   walk((parsed as Record<string, unknown> | null)?.bottomSplits)
   return max
 }
 
-/** The default tab a fresh session seeds. */
-export type DefaultSeed = 'editor-home' | 'none'
-
-/** A fresh default state: one seeded tab in one pane, open per the caller's
- * preference. `width` is the caller's preferred panel width (default
- * PANEL_DEFAULT) and `panelOpen` whether the panel starts expanded (default
- * true); the store seeds new sessions from the user's side card prefs.
- * `seed` picks the seeded tab: 'editor-home' places the EMPTY files window
- * (an editor tab with no path whose tree panel starts open,
- * `meta.treeOpen: true`) — in BOTH editorExplorer modes that window is the
- * file explorer page — and 'none' starts with an empty pane (the store
- * passes it when the user disabled the editor tab type in settings). */
-export function makeDefaultState(width = PANEL_DEFAULT, panelOpen = true, seed: DefaultSeed = 'editor-home'): SidebarState {
-  const leaf: SidebarLeaf = { kind: 'leaf', id: uid('pane'), tabs: [], active: null }
-  if (seed === 'editor-home') {
-    // No path: the editor host renders its empty-state hint and the docked
-    // tree panel (treeOpen defaults open for path-less tabs; meta pins it).
-    leaf.tabs = [{ id: uid('tab'), type: 'editor', title: 'Files', meta: { treeOpen: true } }]
-    leaf.active = leaf.tabs[0]!.id
-  }
-  // The bottom panel starts closed with an empty pane (its welcome cards
-  // offer the openable types on first use).
+/**
+ * A fresh default state: one empty pane in the bottom workbench, closed.
+ * (The right column belongs to DSH's native Sidebar, so this plugin's own
+ * layout has nothing to seed — its welcome cards offer the openable types on
+ * first expansion.)
+ */
+export function makeDefaultState(): SidebarState {
   const bottomLeaf: SidebarLeaf = { kind: 'leaf', id: uid('pane'), tabs: [], active: null }
   return {
-    panelOpen,
-    width,
-    explorerOpen: true,
-    explorerWidth: EXPLORER_WIDTH_DEFAULT,
-    activePane: leaf.id,
-    nextTerminal: 1,
+    activePane: bottomLeaf.id,
     nextBrowser: 1,
     expanded: [],
-    splits: leaf,
+    revealed: [],
     bottomOpen: false,
     bottomHeight: BOTTOM_DEFAULT,
-    bottomOpenedOnce: false,
     bottomSplits: bottomLeaf,
   }
-}
-
-/** Whether a tree node (or any descendant) carries the given pane/split id. */
-function treeHasId(node: SplitNode, id: string): boolean {
-  if (node.id === id) return true
-  if (node.kind === 'split') return node.children.some(child => treeHasId(child, id))
-  return false
-}
-
-/**
- * Which of the two workbench trees a pane lives in (or a landing is aimed
- * at): `'splits'` is the right sidebar's tree (the original workbench),
- * `'bottomSplits'` the bottom panel's. Pane ids are globally unique across
- * both trees, so an id alone never says which tree to use — callers that
- * must land in a SPECIFIC place name the tree explicitly (see
- * {@link rehostTab}).
- */
-export type SidebarTreeKey = 'splits' | 'bottomSplits'
-
-/** Which tree owns a pane/split id: 'bottomSplits' when the id lives in the
- *  bottom panel's tree, else 'splits' (the right panel's tree). Ids are
- *  globally unique (the shared uid counter), so an id in neither tree falls
- *  back to the right tree, where tree operations no-op on a missing node —
- *  the pre-bottom-panel behavior. */
-export function treeOf(state: SidebarState, id: string): SidebarTreeKey {
-  return treeHasId(state.bottomSplits, id) ? 'bottomSplits' : 'splits'
 }
 
 /** Walk the tree and apply `visit` to the leaf with the given id. */
@@ -269,44 +178,6 @@ export function firstLeaf(node: SplitNode): SidebarLeaf {
   return firstLeaf(node.children[0]!)
 }
 
-/** Empty every leaf of a tree (the bottom tree after its tabs migrate out). */
-function clearAllTabs(node: SplitNode): SplitNode {
-  if (node.kind === 'leaf') return { ...node, tabs: [], active: null }
-  return { ...node, children: node.children.map(clearAllTabs) }
-}
-
-/**
- * Narrow-viewport migration: the bottom panel's tabs are thrown INTO the
- * right sidebar — the "merged display" on mobile is the right panel alone,
- * whose tab strips now carry the bottom tree's tabs (depth-first order,
- * appended to the right tree's FIRST leaf). The bottom tree is emptied (its
- * structure stays — the desktop bottom panel re-renders its welcome cards)
- * and the panel closes. The active pane moves to the right tree's first
- * leaf so every new tab lands in the visible panel.
- *
- * Idempotent: a bottom tree with no tabs and a closed panel returns the
- * same reference. Runs when the viewport enters narrow (see the Sidebar
- * shell); migrating is permanent for the session — the tabs now live in the
- * right tree, exactly like the user "threw them in".
- */
-export function migrateBottomTabs(state: SidebarState): SidebarState {
-  const bottomTabs = allLeaves(state.bottomSplits).flatMap(leaf => leaf.tabs)
-  const activeInBottom = state.activePane !== null && treeHasId(state.bottomSplits, state.activePane)
-  if (bottomTabs.length === 0 && !state.bottomOpen && !activeInBottom) return state
-  const target = firstLeaf(state.splits)
-  return {
-    ...state,
-    activePane: target.id,
-    bottomOpen: false,
-    splits: bottomTabs.length > 0
-      ? mapLeaf(state.splits, target.id, leaf => {
-        leaf.tabs = [...leaf.tabs, ...bottomTabs]
-      })
-      : state.splits,
-    bottomSplits: bottomTabs.length > 0 ? clearAllTabs(state.bottomSplits) : state.bottomSplits,
-  }
-}
-
 /** Find the leaf containing a tab id, if any. */
 export function leafWithTab(node: SplitNode, tabId: string): SidebarLeaf | undefined {
   if (node.kind === 'leaf') {
@@ -325,10 +196,9 @@ export function allLeaves(node: SplitNode): SidebarLeaf[] {
   return node.children.flatMap(allLeaves)
 }
 
-/** Whether a tab exists anywhere in a state (either tree, any pane). */
+/** Whether a tab is open anywhere in the session's workbench. */
 export function tabOpenIn(state: SidebarState, tabId: string): boolean {
-  return allLeaves(state.splits).some(leaf => leaf.tabs.some(tab => tab.id === tabId))
-    || allLeaves(state.bottomSplits).some(leaf => leaf.tabs.some(tab => tab.id === tabId))
+  return allLeaves(state.bottomSplits).some(leaf => leaf.tabs.some(tab => tab.id === tabId))
 }
 
 /** Replace a leaf with a split of it plus a fresh empty leaf. */
@@ -384,9 +254,6 @@ export type DropZone = 'left' | 'right' | 'up' | 'down' | 'center'
  * The VSCode drag gesture: move a tab out of its pane and either merge it
  * into the target pane (center) or split the target pane with the tab in a
  * fresh leaf (edge). The source pane collapses when it empties.
- *
- * The panes may live in DIFFERENT trees (dragging a tab between the two
- * panels): the tab then leaves its own tree and lands in the other one.
  */
 export function moveTabToEdge(
   state: SidebarState,
@@ -399,38 +266,7 @@ export function moveTabToEdge(
     // Dropped back onto its own pane's center: reorder to the end.
     return moveTab(state, fromPane, tabId, toPane, -1)
   }
-  const key = treeOf(state, fromPane)
-  const toKey = treeOf(state, toPane)
-  if (key !== toKey) {
-    // Cross-panel drop: remove the tab from its own tree, then merge (center)
-    // or split (edge) a pane of the OTHER tree with the tab.
-    const source = leafWithTab(state[key], tabId)
-    if (source === undefined) return state
-    const tab = source.tabs.find(candidate => candidate.id === tabId)!
-    let emptied = false
-    let sourceNode = mapLeaf(state[key], source.id, (leaf) => {
-      leaf.tabs = leaf.tabs.filter(candidate => candidate.id !== tabId)
-      if (leaf.active === tabId) leaf.active = leaf.tabs[leaf.tabs.length - 1]?.id ?? null
-      if (leaf.tabs.length === 0) emptied = true
-    })
-    if (emptied) sourceNode = removeLeafAt(sourceNode, source.id)
-    let targetNode = state[toKey]
-    let activePane: string
-    if (zone === 'center') {
-      targetNode = mapLeaf(targetNode, toPane, (leaf) => {
-        leaf.tabs = [...leaf.tabs, tab]
-        leaf.active = tab.id
-      })
-      activePane = toPane
-    } else {
-      const dir = zone === 'left' || zone === 'right' ? 'row' : 'col'
-      const result = insertLeafAt(targetNode, toPane, dir, tab, zone === 'left' || zone === 'up')
-      targetNode = result.node
-      activePane = result.leafId
-    }
-    return { ...state, [key]: sourceNode, [toKey]: targetNode, activePane }
-  }
-  const node = state[key]
+  const node = state.bottomSplits
   const source = leafWithTab(node, tabId)
   if (source === undefined) return state
   const tab = source.tabs.find(candidate => candidate.id === tabId)!
@@ -446,11 +282,11 @@ export function moveTabToEdge(
       leaf.tabs = [...leaf.tabs, tab]
       leaf.active = tab.id
     })
-    return { ...state, [key]: splits, activePane: toPane }
+    return { ...state, bottomSplits: splits, activePane: toPane }
   }
   const dir = zone === 'left' || zone === 'right' ? 'row' : 'col'
   const result = insertLeafAt(splits, toPane, dir, tab, zone === 'left' || zone === 'up')
-  return { ...state, [key]: result.node, activePane: result.leafId }
+  return { ...state, bottomSplits: result.node, activePane: result.leafId }
 }
 
 /**
@@ -473,7 +309,7 @@ export function removeLeafAt(node: SplitNode, paneId: string): SplitNode {
 
 /** Close a tab; an emptied leaf is removed (unless it is the only pane). */
 export function closeTab(state: SidebarState, paneId: string, tabId: string): SidebarState {
-  const key = treeOf(state, paneId)
+  const key = 'bottomSplits'
   let emptied = false
   const splits = mapLeaf(state[key], paneId, (leaf) => {
     leaf.tabs = leaf.tabs.filter(tab => tab.id !== tabId)
@@ -485,7 +321,7 @@ export function closeTab(state: SidebarState, paneId: string, tabId: string): Si
 
 /** Activate a tab in its pane (the pane's own tree). */
 export function activateTab(state: SidebarState, paneId: string, tabId: string): SidebarState {
-  const key = treeOf(state, paneId)
+  const key = 'bottomSplits'
   return {
     ...state,
     activePane: paneId,
@@ -498,182 +334,68 @@ export function activateTab(state: SidebarState, paneId: string, tabId: string):
 /** Update the display fields of one open tab (title / path / meta) without
  *  re-opening it. The browser tab persists its current URL and hostname
  *  title through this reducer so a reload restores the visited page. A
- *  missing tab id is a no-op. The tab may live in either tree. */
+ *  missing tab id is a no-op. The tab may live in either tree or a free
+ *  window. */
 export function patchTab(
   state: SidebarState,
   tabId: string,
   patch: { title?: string; path?: string; meta?: unknown },
 ): SidebarState {
   let changed = false
+  const apply = (tab: SidebarTab): SidebarTab => {
+    changed = true
+    return {
+      ...tab,
+      ...(patch.title !== undefined ? { title: patch.title } : {}),
+      ...(patch.path !== undefined ? { path: patch.path } : {}),
+      ...(patch.meta !== undefined ? { meta: patch.meta } : {}),
+    }
+  }
   const walk = (node: SplitNode): SplitNode => {
     if (node.kind === 'leaf') {
-      const tabs = node.tabs.map(tab => {
-        if (tab.id !== tabId) return tab
-        changed = true
-        return {
-          ...tab,
-          ...(patch.title !== undefined ? { title: patch.title } : {}),
-          ...(patch.path !== undefined ? { path: patch.path } : {}),
-          ...(patch.meta !== undefined ? { meta: patch.meta } : {}),
-        }
-      })
+      const tabs = node.tabs.map(tab => (tab.id === tabId ? apply(tab) : tab))
       return tabs === node.tabs ? node : { ...node, tabs }
     }
     const children = node.children.map(walk)
     return children === node.children ? node : { ...node, children }
   }
-  const splits = walk(state.splits)
   const bottomSplits = walk(state.bottomSplits)
-  return changed ? { ...state, splits, bottomSplits } : state
+  return changed ? { ...state, bottomSplits } : state
 }
 
 /**
- * Land a tab in the active pane (or focus its existing instance by id).
- * Dedup strategies (single-instance, per-path, per-change) are owned by the
- * tab descriptor through {@link BetterSidebarService.openTab} / `dedupeKey`;
- * this reducer only handles the id-based safety net (reconcile and
- * openDiffTab already check existence before calling) and the landing
- * itself — the service's dedupe path delegates here after its dedupeKey
- * check misses.
- *
- * The active pane may live in EITHER tree (pane ids are globally unique):
- * a stale id that survives in neither tree falls back to the right tree's
- * first pane instead of swallowing the open.
+ * Land a tab in the workbench's first pane — the plugin's own opens (its
+ * bottom-panel + menu, and every open when no native surface is installed):
+ * the plugin owns no right column any more (DSH's native sidebar is the
+ * right one), so the bottom workbench is the only tree.
+ * @param state - the session state.
+ * @param tab - the tab to land.
+ * @returns the next state, with the bottom panel open.
  */
-export function openTabInActivePane(state: SidebarState, tab: SidebarTab): SidebarState {
-  let targetId = state.activePane ?? firstLeaf(state.splits).id
-  // A stale activePane (its pane was closed since) must not swallow the
-  // open: fall back to the first pane of the right tree instead of dropping
-  // the tab.
-  if (!allLeaves(state[treeOf(state, targetId)]).some(leaf => leaf.id === targetId)) {
-    targetId = firstLeaf(state.splits).id
-  }
-  const targetKey = treeOf(state, targetId)
+export function openTabInBottomPane(state: SidebarState, tab: SidebarTab): SidebarState {
+  const targetId = firstLeaf(state.bottomSplits).id
   // Id-based safety net: if a tab with the same id exists, focus it.
-  for (const leaf of allLeaves(state.splits).concat(allLeaves(state.bottomSplits))) {
+  for (const leaf of allLeaves(state.bottomSplits)) {
     const existing = leaf.tabs.find(candidate => candidate.id === tab.id)
     if (existing !== undefined) return activateTab(state, leaf.id, existing.id)
   }
   return {
     ...state,
+    bottomOpen: true,
     activePane: targetId,
-    [targetKey]: mapLeaf(state[targetKey], targetId, (leaf) => {
+    bottomSplits: mapLeaf(state.bottomSplits, targetId, (leaf) => {
       leaf.tabs = [...leaf.tabs, tab]
       leaf.active = tab.id
     }),
   }
-}
-
-/** Read a tab's meta as a plain record (a malformed / absent meta reads as
- *  empty). Shared by the preview-tab reducers. */
-function metaRecord(tab: SidebarTab): Record<string, unknown> {
-  return tab.meta !== null && typeof tab.meta === 'object' && !Array.isArray(tab.meta)
-    ? tab.meta as Record<string, unknown>
-    : {}
-}
-
-/**
- * Whether a tab is a transient "preview" tab (the VSCode italic editor).
- * The flag rides on `meta.preview` so it persists with the layout and
- * survives a tab move / split / reload — no new SidebarTab field, and the
- * existing meta plumbing (openTab seed, patchTab, sanitize) carries it.
- */
-export function isPreviewTab(tab: SidebarTab): boolean {
-  return metaRecord(tab).preview === true
-}
-
-/**
- * Open a file as the pane's transient PREVIEW tab (the VSCode single-click
- * gesture). All in ONE pane's tab strip — never a side split: a tab already
- * showing this path is focused instead of duplicating; an existing preview
- * slot is replaced in place (so a run of single-clicks reuses one italic
- * tab); only when neither exists is a fresh preview tab appended.
- */
-export function openPreviewTab(state: SidebarState, paneId: string, tab: SidebarTab): SidebarState {
-  const key = treeOf(state, paneId)
-  return {
-    ...state,
-    activePane: paneId,
-    [key]: mapLeaf(state[key], paneId, (leaf) => {
-      const samePath = leaf.tabs.find(candidate => candidate.type === tab.type && candidate.path === tab.path)
-      if (samePath !== undefined) {
-        leaf.active = samePath.id
-        return
-      }
-      const previewIndex = leaf.tabs.findIndex(candidate => candidate.type === tab.type && isPreviewTab(candidate))
-      if (previewIndex !== -1) {
-        const next = [...leaf.tabs]
-        next[previewIndex] = tab
-        leaf.tabs = next
-      } else {
-        leaf.tabs = [...leaf.tabs, tab]
-      }
-      leaf.active = tab.id
-    }),
-  }
-}
-
-/**
- * Open (or focus) a file as a PERMANENT tab (the VSCode double-click /
- * explicit-open gesture). An existing tab for the path is focused AND
- * promoted out of preview; a missing one is appended already-permanent.
- */
-export function openPermanentTab(state: SidebarState, paneId: string, tab: SidebarTab): SidebarState {
-  const key = treeOf(state, paneId)
-  return {
-    ...state,
-    activePane: paneId,
-    [key]: mapLeaf(state[key], paneId, (leaf) => {
-      const index = leaf.tabs.findIndex(candidate => candidate.type === tab.type && candidate.path === tab.path)
-      if (index !== -1) {
-        const existing = leaf.tabs[index]!
-        if (isPreviewTab(existing)) {
-          const next = [...leaf.tabs]
-          next[index] = { ...existing, meta: { ...metaRecord(existing), preview: false } }
-          leaf.tabs = next
-        }
-        leaf.active = existing.id
-        return
-      }
-      leaf.tabs = [...leaf.tabs, tab]
-      leaf.active = tab.id
-    }),
-  }
-}
-
-/**
- * Promote a preview tab to permanent by id (the first edit pins it). A
- * missing or already-permanent tab is a strict no-op (same reference), so
- * the store skips the persist/notify churn.
- */
-export function promotePreviewTab(state: SidebarState, tabId: string): SidebarState {
-  let changed = false
-  const walk = (node: SplitNode): SplitNode => {
-    if (node.kind === 'leaf') {
-      let leafChanged = false
-      const tabs = node.tabs.map(tab => {
-        if (tab.id !== tabId || !isPreviewTab(tab)) return tab
-        leafChanged = true
-        return { ...tab, meta: { ...metaRecord(tab), preview: false } }
-      })
-      if (!leafChanged) return node
-      changed = true
-      return { ...node, tabs }
-    }
-    const children = node.children.map(walk)
-    return children.every((child, i) => child === node.children[i]) ? node : { ...node, children }
-  }
-  const splits = walk(state.splits)
-  const bottomSplits = walk(state.bottomSplits)
-  return changed ? { ...state, splits, bottomSplits } : state
 }
 
 /** Move a tab from one pane to another (insert at index; -1 appends).
  *  The panes may live in DIFFERENT trees — dragging a tab between the two
  *  panels removes it from its own tree and lands it in the other one. */
 export function moveTab(state: SidebarState, fromPane: string, tabId: string, toPane: string, index = -1): SidebarState {
-  const fromKey = treeOf(state, fromPane)
-  const toKey = treeOf(state, toPane)
+  const fromKey = 'bottomSplits'
+  const toKey = 'bottomSplits'
   if (fromKey !== toKey) {
     let moved: SidebarTab | undefined
     let emptied = false
@@ -718,37 +440,10 @@ export function moveTab(state: SidebarState, fromPane: string, tabId: string, to
   return { ...state, [fromKey]: splits, activePane: toPane }
 }
 
-/**
- * Land an already-open tab in a NAMED tree, whatever pane happens to be
- * active (see {@link SidebarTreeKey}). `openTab` normally follows the active
- * pane — VSCode's "open where the focus is" — but a FILE open must land where
- * the user reads files: the file preview belongs to the right sidebar, and
- * once the bottom panel exists its pane is routinely the active one (its
- * auto-terminal tab activates it), so following the focus quietly strands
- * every preview in the bottom panel while the right workbench stays empty
- * (observed: the right tree held no tabs at all while every clicked file
- * landed in the bottom leaf).
- *
- * A tab already in the target tree is merely activated (no churn); one in the
- * other tree MOVES over, emptying-and-pruning its old leaf — the target pane
- * is the target tree's active pane when it has one, else its first leaf.
- */
-export function rehostTab(state: SidebarState, tabId: string, host: SidebarTreeKey): SidebarState {
-  const from = allLeaves(state.splits)
-    .concat(allLeaves(state.bottomSplits))
-    .find(leaf => leaf.tabs.some(tab => tab.id === tabId))?.id
-  if (from === undefined) return state
-  if (treeOf(state, from) === host) return activateTab(state, from, tabId)
-  const active = state.activePane
-  const target = (active !== null ? allLeaves(state[host]).find(leaf => leaf.id === active) : undefined)
-    ?? firstLeaf(state[host])
-  return moveTab(state, from, tabId, target.id)
-}
-
 /** Split the active pane (or the pane containing the active tab). */
 export function splitPane(state: SidebarState, dir: 'row' | 'col'): SidebarState {
-  const paneId = state.activePane ?? firstLeaf(state.splits).id
-  const key = treeOf(state, paneId)
+  const paneId = state.activePane ?? firstLeaf(state.bottomSplits).id
+  const key = 'bottomSplits'
   return { ...state, [key]: splitLeafAt(state[key], paneId, dir) }
 }
 
@@ -767,14 +462,14 @@ export function splitPane(state: SidebarState, dir: 'row' | 'col'): SidebarState
  * @returns the new state, with the diff pane active.
  */
 export function openDiffTab(state: SidebarState, sourcePaneId: string, tab: SidebarTab): SidebarState {
-  const existingLeaf = leafWithTab(state.splits, tab.id)
+  const existingLeaf = leafWithTab(state.bottomSplits, tab.id)
   if (existingLeaf !== undefined) return activateTab(state, existingLeaf.id, tab.id)
-  const diffLeaf = allLeaves(state.splits).find(leaf => leaf.tabs.some(candidate => candidate.type === 'diff'))
+  const diffLeaf = allLeaves(state.bottomSplits).find(leaf => leaf.tabs.some(candidate => candidate.type === 'diff'))
   if (diffLeaf !== undefined) {
     return {
       ...state,
       activePane: diffLeaf.id,
-      splits: mapLeaf(state.splits, diffLeaf.id, (leaf) => {
+      bottomSplits: mapLeaf(state.bottomSplits, diffLeaf.id, (leaf) => {
         leaf.tabs = [...leaf.tabs, tab]
         leaf.active = tab.id
       }),
@@ -783,51 +478,26 @@ export function openDiffTab(state: SidebarState, sourcePaneId: string, tab: Side
   // First diff: split the source pane, the diff tab in the new LOWER leaf.
   // (A stale sourcePaneId — its pane closed meanwhile — degrades to the
   // regular open path instead of dropping the tab into an orphaned leaf.)
-  if (!allLeaves(state.splits).some(leaf => leaf.id === sourcePaneId)) {
-    return openTabInActivePane(state, tab)
+  if (!allLeaves(state.bottomSplits).some(leaf => leaf.id === sourcePaneId)) {
+    return openTabInBottomPane(state, tab)
   }
-  const result = insertLeafAt(state.splits, sourcePaneId, 'col', tab, false)
-  return { ...state, splits: result.node, activePane: result.leafId }
+  const result = insertLeafAt(state.bottomSplits, sourcePaneId, 'col', tab, false)
+  return { ...state, bottomSplits: result.node, activePane: result.leafId }
 }
 
-/** Toggle the panel open/closed (opening restores the previous layout). */
-export function togglePanel(state: SidebarState): SidebarState {
-  return { ...state, panelOpen: !state.panelOpen }
-}
-
-/** Toggle the bottom panel open/closed (independent of the right panel). */
+/** Expand/collapse the bottom workbench. */
 export function toggleBottomPanel(state: SidebarState): SidebarState {
   return { ...state, bottomOpen: !state.bottomOpen }
 }
 
-/** Set the panel width (clamped to the contract range; the upper bound
- * reserves {@link CENTER_MIN} for the center conversation column so the panel
- * can never be dragged to cover the whole window). */
-export function setWidth(state: SidebarState, width: number): SidebarState {
-  const max = typeof window !== 'undefined' ? maxPanelWidthFor(window.innerWidth) : PANEL_MAX
-  return { ...state, width: Math.min(max, Math.max(PANEL_MIN, Math.round(width))) }
-}
-
-/** Set the bottom panel height (clamped to the contract range). The upper
- * bound leaves the center column (the agent output area) at least PANEL_MIN
- * tall — without the cap the bottom panel could swallow the whole viewport
- * and squeeze the conversation to zero height. */
+/** Set the bottom workbench height (clamped to the contract range). The
+ * upper bound leaves the conversation column at least {@link CONVERSATION_MIN}
+ * tall — without the cap the workbench could swallow the whole viewport and
+ * squeeze the conversation to zero height. */
 export function setBottomHeight(state: SidebarState, height: number): SidebarState {
   const viewport = typeof window !== 'undefined' ? window.innerHeight : Infinity
-  const max = Math.max(BOTTOM_MIN, viewport - PANEL_MIN)
+  const max = Math.max(BOTTOM_MIN, viewport - CONVERSATION_MIN)
   return { ...state, bottomHeight: Math.min(max, Math.max(BOTTOM_MIN, Math.round(height))) }
-}
-
-/** Toggle the persistent Explorer rail (the file-tree column beside the
- *  tabbed workbench) open/closed. The rail is decoupled from any tab, so
- *  hiding it never touches the open editor tabs. */
-export function toggleExplorer(state: SidebarState): SidebarState {
-  return { ...state, explorerOpen: !state.explorerOpen }
-}
-
-/** Set the Explorer rail width (clamped to the contract range). */
-export function setExplorerWidth(state: SidebarState, width: number): SidebarState {
-  return { ...state, explorerWidth: clampExplorerWidth(width) }
 }
 
 /** Toggle a directory in the explorer expansion set. */
@@ -836,6 +506,38 @@ export function toggleExpanded(state: SidebarState, path: string): SidebarState 
     ? state.expanded.filter(item => item !== path)
     : [...state.expanded, path]
   return { ...state, expanded }
+}
+
+/**
+ * Reveal files in the explorer: expand every ancestor directory between the
+ * explorer root and each file (so the lazy tree actually shows the row) and
+ * record the paths for highlighting. The reveal set is transient —
+ * sanitizeState never restores it, so a reload starts unhighlighted.
+ * @param state - current sidebar state.
+ * @param cwd - the explorer's root (session working directory).
+ * @param files - absolute paths to highlight (parent dirs are expanded).
+ * @returns the next state, or the same reference when nothing is revealed.
+ */
+export function revealPaths(state: SidebarState, cwd: string | undefined, files: readonly string[]): SidebarState {
+  const expanded = new Set(state.expanded)
+  const revealed: string[] = []
+  const rootParts = (cwd ?? '').split(/[\\/]+/).filter(part => part !== '')
+  for (const file of files) {
+    if (typeof file !== 'string' || file === '') continue
+    revealed.push(file)
+    const parts = file.split(/[\\/]+/).filter(part => part !== '' && part !== '.')
+    const separator = file.includes('\\') ? '\\' : '/'
+    // Keep the original leading separator(s) when rebuilding ancestor dirs:
+    // FileTree matches expansion against ABSOLUTE paths, so dropping the
+    // root (POSIX `/w/src` �W `w/src`) or a UNC prefix (`\\server\share`)
+    // would leave every ancestor collapsed and the row unreachable.
+    const prefix = file.startsWith('/') ? '/' : file.startsWith('\\\\') ? '\\\\' : file.startsWith('\\') ? '\\' : ''
+    for (let i = rootParts.length; i < parts.length - 1; i++) {
+      expanded.add(prefix + parts.slice(0, i + 1).join(separator))
+    }
+  }
+  if (revealed.length === 0) return state
+  return { ...state, expanded: [...expanded], revealed }
 }
 
 /** Adjust one split divider: `i` is the left/top child index, delta in fractions. */
@@ -859,78 +561,21 @@ export function resizeSplit(node: SplitNode, splitId: string, index: number, del
 /** State-level {@link resizeSplit} route: the divider may live in either
  *  tree (split ids are globally unique). */
 export function resizeSplitIn(state: SidebarState, splitId: string, index: number, delta: number): SidebarState {
-  const key = treeOf(state, splitId)
+  const key = 'bottomSplits'
   return { ...state, [key]: resizeSplit(state[key], splitId, index, delta) }
-}
-
-/** Prefix marking a tab id as an agent-owned terminal (suffix is the uuid). */
-export const AGENT_TAB_PREFIX = 'agent:'
-
-/** Whether a tab id refers to an agent-owned terminal. */
-export function isAgentTabId(tabId: string): boolean {
-  return tabId.startsWith(AGENT_TAB_PREFIX)
-}
-
-/** Extract the agent terminal uuid from an `agent:<uuid>` tab id. */
-export function agentUuidOf(tabId: string): string {
-  return tabId.slice(AGENT_TAB_PREFIX.length)
-}
-
-/** Build the sidebar tab id for one agent terminal uuid. */
-export function agentTabId(uuid: string): string {
-  return `${AGENT_TAB_PREFIX}${uuid}`
-}
-
-/**
- * Reconcile the sidebar's agent-terminal tabs with the host's live list.
- * The host pushes the current list of agent terminals (created by the model
- * through the `terminal_create` tool) over a dedicated WebSocket; this
- * reducer mirrors that list into tabs: new uuids get a tab, vanished uuids
- * lose theirs. The agent owns the lifetime — the user closing a tab sends a
- * WS close frame that kills the pty, which fires a change, which converges
- * the view. Idempotent: a no-op when the lists already match.
- * @param state - the current per-session sidebar state.
- * @param agentTerminals - the live agent terminal snapshots from the host.
- * @returns the next state (or the same reference if no change was needed).
- */
-export function reconcileAgentTerminals(
-  state: SidebarState,
-  agentTerminals: ReadonlyArray<{ uuid: string; title: string }>,
-): SidebarState {
-  const existingTabs = allLeaves(state.splits).concat(allLeaves(state.bottomSplits)).flatMap(leaf => leaf.tabs)
-  const existingAgentTabs = existingTabs.filter(tab => isAgentTabId(tab.id))
-  const existingUuids = new Set(existingAgentTabs.map(tab => agentUuidOf(tab.id)))
-  const serverUuids = new Set(agentTerminals.map(t => t.uuid))
-  const toAdd = agentTerminals.filter(t => !existingUuids.has(t.uuid))
-  const toRemove = existingAgentTabs.filter(tab => !serverUuids.has(agentUuidOf(tab.id)))
-  if (toAdd.length === 0 && toRemove.length === 0) return state
-  // Remove tabs whose uuids vanished from the server list (the agent closed
-  // them, or the pty exited and was reaped). Reuse closeTab's leaf cleanup.
-  let splits = state.splits
-  for (const tab of toRemove) {
-    const leaf = leafWithTab(splits, tab.id)
-    if (leaf !== undefined) {
-      splits = closeTab({ ...state, splits }, leaf.id, tab.id).splits
-    }
-  }
-  // Add tabs for new uuids (the agent created a terminal). They land in the
-  // active pane via openTabInActivePane; the next reconcile is a no-op for them.
-  let next: SidebarState = { ...state, splits }
-  for (const terminal of toAdd) {
-    const tab: SidebarTab = {
-      id: agentTabId(terminal.uuid),
-      type: 'terminal',
-      title: terminal.title,
-    }
-    next = openTabInActivePane(next, tab)
-  }
-  return next
 }
 
 // ── The per-session store ──────────────────────────────────────────────────
 
 const STORAGE_PREFIX = 'dsh-sidebar:v1'
 
+/**
+ * Cross-session panel width: the last dragged width, shared by EVERY
+ * conversation (the panel width is a layout preference, not per-session
+ * content). Written on every persist, read at session load and on
+ * cache-hit session switches, so a drag in one conversation carries to all
+ * the others (last drag wins).
+ */
 /** Immutable snapshot handed to React (replaced only on real changes). */
 export interface SidebarSnapshot {
   sessionId: string | undefined
@@ -943,44 +588,50 @@ export interface SidebarSnapshot {
   prefs: SidebarPrefs
 }
 
-/** Default panel width for one viewport: the prefs percent of the window,
- * clamped to the panel floor (a tiny percent must stay usable) and to the
- * viewport (a large one must never cover the whole window). */
-export function defaultWidthFor(viewport: number, percent: number): number {
-  return Math.min(maxPanelWidthFor(viewport), Math.max(PANEL_MIN, Math.round(viewport * percent / 100)))
+/**
+ * URL escape hatch (#369): loading the app with `?dsh-sidebar-reset` drops
+ * the persisted layout for the session instead of restoring it. When a
+ * restored tab hangs the page on mount (the #369 freeze loop), reloading
+ * into the same state replays the hang forever; this param starts from the
+ * default layout and clears the stored copy, breaking the loop. Persisting
+ * resumes as soon as the param is gone from the URL.
+ */
+const RESET_PARAM = 'dsh-sidebar-reset'
+
+/** Whether the current page load asked for a persisted-state reset. */
+function resetRequested(): boolean {
+  try {
+    return new URLSearchParams(window.location.search).has(RESET_PARAM)
+  } catch {
+    return false
+  }
 }
 
-function loadState(sessionId: string, prefs: SidebarPrefs): SidebarState {
-  try {
-    const raw = localStorage.getItem(`${STORAGE_PREFIX}:${sessionId}`)
-    if (raw !== null) {
-      const parsed = JSON.parse(raw) as unknown
-      // Seed the uid counter past the persisted ids (it resets on reload);
-      // sanitize re-ids any duplicates the pre-seeding counter left behind.
-      nextIdCounter = maxCounterId(parsed)
-      const sanitized = sanitizeState(parsed)
-      if (sanitized !== undefined) return sanitized
+function loadState(sessionId: string): SidebarState {
+  const reset = resetRequested()
+  if (reset) {
+    try {
+      localStorage.removeItem(`${STORAGE_PREFIX}:${sessionId}`)
+    } catch {
+      // Storage unavailable: the default layout below is still the escape.
     }
-  } catch {
-    // Corrupt or unavailable storage: fall through to the default.
   }
-  // New sessions seed from the user's side card prefs: the width is the
-  // chosen percent of the window (clamped to the panel floor and the
-  // viewport so a huge percent can never crush the app shell), and the panel
-  // starts open only when the preference says so. The workbench pane always
-  // starts EMPTY ('none'): the file tree lives in the persistent Explorer
-  // rail beside it, so there is no reason to seed a path-less "home" tab.
-  // On a NARROW viewport a brand-new session starts collapsed instead — the
-  // panel is a full-screen drawer there, and auto-opening it on first paint
-  // would cover the conversation before the user asked. Only the first
-  // seeding is affected: once the user expands the drawer, `panelOpen: true`
-  // persists like any other state.
-  const viewport = typeof window !== 'undefined' ? window.innerWidth : undefined
-  const width = viewport === undefined
-    ? PANEL_DEFAULT
-    : defaultWidthFor(viewport, prefs.defaultWidthPercent)
-  const openByDefault = prefs.openByDefault && (viewport === undefined || !isNarrowWidth(viewport))
-  return makeDefaultState(width, openByDefault, 'none')
+  if (!reset) {
+    try {
+      const raw = localStorage.getItem(`${STORAGE_PREFIX}:${sessionId}`)
+      if (raw !== null) {
+        const parsed = JSON.parse(raw) as unknown
+        // Seed the uid counter past the persisted ids (it resets on reload);
+        // sanitize re-ids any duplicates the pre-seeding counter left behind.
+        nextIdCounter = maxCounterId(parsed)
+        const sanitized = sanitizeState(parsed)
+        if (sanitized !== undefined) return sanitized
+      }
+    } catch {
+      // Corrupt or unavailable storage: fall through to the default.
+    }
+  }
+  return makeDefaultState()
 }
 
 /**
@@ -994,37 +645,30 @@ function loadState(sessionId: string, prefs: SidebarPrefs): SidebarState {
 export function sanitizeState(parsed: unknown): SidebarState | undefined {
   if (parsed === null || typeof parsed !== 'object') return undefined
   const record = parsed as Record<string, unknown>
-  if (typeof record.panelOpen !== 'boolean') return undefined
-  if (typeof record.width !== 'number' || !Number.isFinite(record.width)) return undefined
-  if (typeof record.nextTerminal !== 'number' || !Number.isInteger(record.nextTerminal) || record.nextTerminal < 1) {
-    return undefined
-  }
-  // nextBrowser arrived in a later build; a missing or malformed value on an
-  // OLDER persisted state defaults to 1 so existing layouts keep loading
-  // (unlike nextTerminal, which is strict — it predates the v1 shape).
+  // A missing or malformed counter defaults to 1 rather than rejecting the
+  // whole layout: these counters only name NEW tabs, so restarting one at 1
+  // can at worst reuse a free id, while refusing the state would drop every
+  // open tab of a session that was persisted by an older build.
   const nextBrowser = typeof record.nextBrowser === 'number' && Number.isInteger(record.nextBrowser) && record.nextBrowser >= 1
     ? record.nextBrowser
     : 1
   if (typeof record.activePane !== 'string' && record.activePane !== null) return undefined
   if (!Array.isArray(record.expanded) || record.expanded.some(item => typeof item !== 'string')) return undefined
-  // The seen/reid maps are SHARED across both trees: pane/split ids must be
-  // globally unique (the runtime uid counter is shared too), so a duplicate
-  // seen first in the right tree gets a fresh id when it reappears in the
-  // bottom tree.
+  // Pane/split ids must be globally unique (the runtime uid counter is
+  // shared), so a duplicate id gets a fresh one.
   const seen = new Set<string>()
   const reid = new Map<string, string>()
-  const restoredSplits = sanitizeNode(record.splits, seen, reid)
-  if (restoredSplits === undefined) return undefined
-  const splits = pruneEmptyPanes(restoredSplits)
-  // Bottom-panel fields arrived in a later build: a missing or malformed
-  // value on an OLDER persisted state defaults (closed / default height /
-  // empty pane) so existing layouts keep loading, like nextBrowser.
+  // Workbench fields arrived in a later build: a missing or malformed value
+  // on an OLDER persisted state defaults (closed / default height / empty
+  // pane) so existing layouts keep loading, like nextBrowser.
   const bottomOpen = record.bottomOpen === true
-  // Cap the persisted height so the center column (the agent output area)
-  // keeps at least PANEL_MIN tall (a stale full-height bottom panel from an
-  // older build must never squeeze the conversation to zero).
+  // Cap the persisted height so the conversation column (the agent output
+  // area) keeps a usable minimum (a stale full-height panel from an older
+  // build must never squeeze the conversation to zero). The cap is
+  // setBottomHeight's own contract, or a restored height would snap on the
+  // first drag.
   const maxHeight = typeof window !== 'undefined' ? window.innerHeight : Infinity
-  const bottomCap = Math.max(BOTTOM_MIN, maxHeight - PANEL_MIN)
+  const bottomCap = Math.max(BOTTOM_MIN, maxHeight - CONVERSATION_MIN)
   const rawHeight = typeof record.bottomHeight === 'number' && Number.isFinite(record.bottomHeight)
     ? record.bottomHeight
     : BOTTOM_DEFAULT
@@ -1036,33 +680,18 @@ export function sanitizeState(parsed: unknown): SidebarState | undefined {
     : null
   const activePane = requestedActivePane === null
     ? null
-    : treeHasId(splits, requestedActivePane) || treeHasId(bottomSplits, requestedActivePane)
+    : allLeaves(bottomSplits).some(leaf => leaf.id === requestedActivePane)
       ? requestedActivePane
-      : firstLeaf(splits).id
-  const maxWidth = typeof window !== 'undefined' ? maxPanelWidthFor(window.innerWidth) : Infinity
+      : firstLeaf(bottomSplits).id
   return {
-    panelOpen: record.panelOpen,
-    width: Math.max(PANEL_MIN, Math.min(record.width, maxWidth)),
-    // The Explorer rail arrived later: an older persisted state has no
-    // explorerOpen / explorerWidth, so it upgrades to OPEN at the default
-    // width (every existing session gets the persistent tree column).
-    explorerOpen: typeof record.explorerOpen === 'boolean' ? record.explorerOpen : true,
-    explorerWidth: typeof record.explorerWidth === 'number' && Number.isFinite(record.explorerWidth)
-      ? clampExplorerWidth(record.explorerWidth)
-      : EXPLORER_WIDTH_DEFAULT,
     // A stale duplicate pane id may have been re-ided; follow the rename so
     // new tabs still land in the pane the user was using.
     activePane,
-    nextTerminal: record.nextTerminal,
     nextBrowser,
     expanded: record.expanded as string[],
-    splits,
+    revealed: [],
     bottomOpen,
     bottomHeight,
-    // An older persisted state never expanded the bottom panel (the field
-    // arrived later): defaulting to false gives it the first-expansion
-    // auto-terminal exactly once after the upgrade.
-    bottomOpenedOnce: record.bottomOpenedOnce === true,
     bottomSplits,
   }
 }
@@ -1097,6 +726,46 @@ function uniqueNodeId(id: string, seen: Set<string>, reid: Map<string, string>):
   return fresh
 }
 
+/**
+ * Validate one persisted tab record. @returns the clean tab, `'diff'` for an
+ * ephemeral diff tab (dropped everywhere — diff tabs never survive a reload),
+ * or undefined when the record is malformed (structural corruption when it
+ * comes from a split-tree leaf; a malformed FLOAT tab only drops the window).
+ */
+function sanitizePersistedTab(tab: unknown): SidebarTab | 'diff' | undefined {
+  if (tab === null || typeof tab !== 'object') return undefined
+  const candidate = tab as Record<string, unknown>
+  if (typeof candidate.id !== 'string' || typeof candidate.title !== 'string') return undefined
+  if (candidate.type === 'diff') return 'diff'
+  // Tab types are an open set (external plugins register their own); accept
+  // any string type here — an unregistered type renders an <OrphanedTab/> at
+  // view time and recovers if its plugin loads later.
+  if (typeof candidate.type !== 'string') return undefined
+  // The standalone explorer tab type merged INTO the editor (the single
+  // files window): a persisted explorer tab reopens as an editor home tab —
+  // no path, tree panel open (an existing meta object survives).
+  if (candidate.type === 'explorer') {
+    const meta = candidate.meta !== null && typeof candidate.meta === 'object' && !Array.isArray(candidate.meta)
+      ? candidate.meta as Record<string, unknown>
+      : undefined
+    return { id: candidate.id, type: 'editor', title: 'Files', meta: { treeOpen: true, ...meta } }
+  }
+  // `meta` is plugin-owned JSON-serializable state (v0.12.0+): the persisted
+  // value already went through JSON.parse, so it is inherently serializable —
+  // carry it through verbatim (absent on older states).
+  const result: SidebarTab = {
+    id: candidate.id,
+    type: candidate.type,
+    title: candidate.title,
+    ...(typeof candidate.path === 'string' ? { path: candidate.path } : {}),
+    ...(candidate.meta !== undefined ? { meta: candidate.meta } : {}),
+  }
+  // A persisted `pin` (the removed pinned-terminal marker) is simply not
+  // copied into the rebuilt tab: only known fields survive, so a stale
+  // layout loads unpinned instead of failing validation.
+  return result
+}
+
 /** Validate one split-tree node (leaf or split) and rebuild it cleanly. */
 function sanitizeNode(node: unknown, seen: Set<string>, reid: Map<string, string>): SplitNode | undefined {
   if (node === null || typeof node !== 'object') return undefined
@@ -1105,53 +774,19 @@ function sanitizeNode(node: unknown, seen: Set<string>, reid: Map<string, string
     if (typeof record.id !== 'string' || !Array.isArray(record.tabs)) return undefined
     const tabs: SidebarTab[] = []
     let droppedDiff = false
-    let droppedHome = false
     for (const tab of record.tabs) {
-      if (tab === null || typeof tab !== 'object') return undefined
-      const candidate = tab as Record<string, unknown>
-      if (typeof candidate.id !== 'string' || typeof candidate.title !== 'string') return undefined
-      // Diff tabs are ephemeral by nature (like VSCode's diff editors):
-      // they never survive a reload, so a stale ref (e.g. a wrong staged
-      // side persisted by an older build) cannot resurface as a dead tab
-      // showing "no text changes" after every refresh.
-      if (candidate.type === 'diff') {
+      const clean = sanitizePersistedTab(tab)
+      if (clean === undefined) return undefined
+      if (clean === 'diff') {
         droppedDiff = true
         continue
       }
-      // Tab types are an open set (external plugins register their own);
-      // accept any string type here — an unregistered type renders an
-      // <OrphanedTab/> at view time and recovers if its plugin loads later.
-      if (typeof candidate.type !== 'string') return undefined
-      // The file tree is now a PERSISTENT rail beside the workbench, not a
-      // tab. Two legacy tab shapes are dropped on load:
-      //  - the old standalone 'explorer' tab type,
-      //  - the path-less editor "home" tab (title 'Files', meta.treeOpen) that
-      //    used to host the docked tree inside an editor.
-      // The rail always renders the tree, so these tabs are dead weight; the
-      // explorer is no longer part of the split tree, so activePane resolves
-      // straight to a workbench pane.
-      const pathlessEditor =
-        candidate.type === 'editor'
-        && !(typeof candidate.path === 'string' && candidate.path !== '')
-      if (candidate.type === 'explorer' || pathlessEditor) {
-        droppedHome = true
-        continue
-      }
-      // `meta` is plugin-owned JSON-serializable state (v0.12.0+): the
-      // persisted value already went through JSON.parse, so it is inherently
-      // serializable — carry it through verbatim (absent on older states).
-      tabs.push({
-        id: candidate.id,
-        type: candidate.type,
-        title: candidate.title,
-        ...(typeof candidate.path === 'string' ? { path: candidate.path } : {}),
-        ...(candidate.meta !== undefined ? { meta: candidate.meta } : {}),
-      })
+      tabs.push(clean)
     }
     const active = typeof record.active === 'string' ? record.active : null
-    // An active pointer into a dropped diff/home tab is expected after the
-    // drop; any other missing active is structural corruption → reset state.
-    if (active !== null && !tabs.some(tab => tab.id === active) && !droppedDiff && !droppedHome) return undefined
+    // An active pointer into a dropped diff tab is expected after the drop;
+    // any other missing active is structural corruption → reset the state.
+    if (active !== null && !tabs.some(tab => tab.id === active) && !droppedDiff) return undefined
     return { kind: 'leaf', id: uniqueNodeId(record.id, seen, reid), tabs, active: active !== null && tabs.some(tab => tab.id === active) ? active : null }
   }
   if (record.kind === 'split') {
@@ -1235,7 +870,7 @@ export class SidebarStore {
     } else {
       let state = this.bySession.get(sessionId)
       if (state === undefined) {
-        state = loadState(sessionId, this.prefs)
+        state = loadState(sessionId)
         this.bySession.set(sessionId, state)
       } else {
         // Cache hit: another session's load/ops may have left the uid
@@ -1285,6 +920,19 @@ export class SidebarStore {
     return state !== undefined && tabOpenIn(state, tabId)
   }
 
+  /**
+   * Read-only view of EVERY cached session's state (v0.17.0+). The
+   * PinnedRail uses this to collect pinned terminals across sessions
+   * without each render reading private fields. The map is the live
+   * `bySession` reference — callers MUST treat it as read-only (mutations
+   * go through {@link reduce} / {@link reduceFor}). A session that has
+   * never been visited in this run is absent (its pinned tabs are not
+   * visible until first load — accepted as YAGNI by the design).
+   */
+  getSessionStates(): ReadonlyMap<string, SidebarState> {
+    return new Map(this.bySession)
+  }
+
   /** Apply a pure reducer (returns the next state). */
   reduce(reducer: (state: SidebarState) => SidebarState): void {
     const sessionId = this.snapshot.sessionId
@@ -1319,7 +967,7 @@ export class SidebarStore {
     const counterBefore = nextIdCounter
     let state = this.bySession.get(sessionId)
     if (state === undefined) {
-      state = loadState(sessionId, this.prefs)
+      state = loadState(sessionId)
       this.bySession.set(sessionId, state)
     } else {
       // Re-seed the uid counter past THIS session's persisted ids, exactly

@@ -9,57 +9,49 @@
 /** The user-settings namespace holding the side card preferences. */
 export const SIDEBAR_PREFS_NS = 'dsh-better-sidebar'
 
-/** User-facing side card preferences (new-conversation defaults). */
+/** User-facing side card preferences. */
 export interface SidebarPrefs {
-  /** Whether a brand-new conversation opens the side card by default. */
-  openByDefault: boolean
-  /** Default panel width as a percent of the window width (20–60). */
-  defaultWidthPercent: number
   /**
-   * Whether the sidebar auto-activates (opens the panel) and expands the
-   * Subagent page when the current conversation spawns a new subagent.
+   * Whether the sidebar auto-activates the Tasks page when the current
+   * conversation spawns a new subagent.
    */
   autoOpenSubagent: boolean
   /**
-   * Whether the sidebar auto-activates (opens the panel) and expands the
-   * Jobs page when a NEW background job appears for the current
+   * Whether the sidebar auto-activates the Tasks page containing the
+   * background-jobs section when a NEW job appears for the current
    * conversation (any new job id, not just the first one).
    */
   autoOpenJobs: boolean
   /**
-   * Whether the model-facing agent terminal tools (terminal_create / list /
-   * send / read / wait_for / resize / signal / close) are injected into the
-   * model's toolset. Off by default: the feature stays dormant until the
-   * user explicitly enables it in the side card settings.
+   * The Tasks page's default presentation: the workflow graph canvas or the
+   * classic indentation tree (the in-page toggle still flips it ad hoc).
    */
-  agentTerminalTools: boolean
+  tasksViewMode: 'graph' | 'tree'
   /**
-   * Custom terminal font-family stack (a CSS font-family value, e.g.
-   * `'JetBrains Mono', monospace`). Empty string follows the app's theme
-   * monospace font (`--ds-font-family-code`). Applied live to every
-   * terminal tab; configured under the terminal card's secondary settings.
+   * MOBILE ADAPTATION (narrow viewports, `isNarrowWidth`): while the viewport
+   * is narrow, do not auto-activate the Tasks page for background activity —
+   * it suppresses BOTH triggers (`autoOpenSubagent` and `autoOpenJobs`) at
+   * once, because on a phone the takeover costs the whole screen. The two
+   * individual switches keep their own meaning on wide viewports.
    */
-  terminalFontFamily: string
+  mobileNoAutoOpen: boolean
   /**
-   * Custom terminal font size in px (9–32). Applied live to every terminal
-   * tab; configured under the terminal card's secondary settings.
+   * MOBILE ADAPTATION (narrow viewports): open the Tasks page in the classic
+   * TREE by default instead of the workflow graph — a narrow screen cannot
+   * show a layered graph legibly, while the tree's indentation still reads.
+   * It only picks the DEFAULT: the in-page view toggle still flips this
+   * session's page ad hoc, and `tasksViewMode` keeps deciding on wide
+   * viewports.
    */
-  terminalFontSize: number
+  mobileDefaultTree: boolean
   /**
-   * Whether expanding the bottom panel for the FIRST time in a session tries
-   * to open a fresh terminal tab there (the terminal quota/type still gates
-   * the attempt). On by default; the switch lives under the terminal tab's
-   * row in the Side card settings.
+   * Whether the model-facing `sidebar_open` tool is injected into the
+   * model's toolset — one tool that lets the model actively open a local
+   * file, a local folder (as a tree rooted there), or an HTTP(S) page in
+   * the calling session's sidebar. Off by default: the feature stays
+   * dormant until the user explicitly enables it in the side card settings.
    */
-  bottomPanelAutoTerminal: boolean
-  /**
-   * Whether chat-side file opens (tool-row path links, the produced-files
-   * row, prose file mentions — every path that funnels through the client
-   * runtime's `ctx.workspaces.openPath`) open in the sidebar editor instead
-   * of the Host OS's default application. On by default; the editor tab's
-   * own enable switch gates it too (both must be on for the takeover).
-   */
-  interceptOpenPath: boolean
+  agentOpenTools: boolean
   /**
    * Whether the editor tab runs in merged mode: a path input replaces the
    * plain header and a toggleable file-tree panel (with a global name
@@ -69,21 +61,6 @@ export interface SidebarPrefs {
    * Side card settings; off restores the pre-merge editor exactly.
    */
   editorExplorer: boolean
-  /**
-   * The shell the UI and agent terminals spawn (absolute path or bare
-   * executable name). Empty (default) keeps the legacy resolution order:
-   * `cordis.patch.yml` `config.shell`, then `$SHELL` / login shell /
-   * `powershell.exe` on Windows. Set it from the terminal card's gear in
-   * the Side card settings (or the yaml) to pin a specific shell — takes
-   * effect for terminals opened afterwards.
-   */
-  terminalShell: string
-  /**
-   * Explicit arguments for `terminalShell`, space-separated (empty keeps
-   * the platform defaults; when set, they fully replace them — same
-   * contract as the yaml `shellArgs`).
-   */
-  terminalShellArgs: string
   /**
    * Title-bar / shell compatibility scheme (the "位置兼容模式" setting):
    * - `auto` (default): CONSERVATIVE — only the standard Window Controls
@@ -142,40 +119,6 @@ export interface SidebarPrefs {
    */
   htmlViewerDefaultUnsafe: boolean
   /**
-   * Whether the browser tab drops its sandboxed iframe. Sandbox ON (the
-   * default) keeps browsed sites in an opaque origin with no GUI access;
-   * turning it OFF runs any visited site with the GUI's own origin — it
-   * can read session data and act as the logged-in GUI. Only for trusted
-   * sites; the setting copy warns.
-   */
-  browserNoSandbox: boolean
-  /**
-   * MASTER switch: whether clicking an EXTERNAL link in the GUI (chat
-   * messages, tool rows, prose mentions) is taken over into the sidebar at
-   * all. On by default; the per-protocol granularity lives in
-   * `browserInterceptHttp` / `browserInterceptHttps` (the protocol flag
-   * must also be on), and the target tab's own enable switch gates it too.
-   * Ctrl/Cmd+click always bypasses the takeover. Kept as the master so old
-   * documents keep their meaning with no migration (an explicit `false`
-   * stays "never take over").
-   */
-  browserInterceptLinks: boolean
-  /**
-   * Whether clicking an http EXTERNAL link in the GUI opens the sidebar
-   * (the built-in browser tab, or a plugin tab that declares `urlTarget`)
-   * instead of a new browser tab. On by default; gated on the
-   * `browserInterceptLinks` master and the target tab's own enable switch.
-   */
-  browserInterceptHttp: boolean
-  /**
-   * Whether clicking an https EXTERNAL link in the GUI opens the sidebar
-   * instead of a new browser tab. OFF by default — most https sites (e.g.
-   * GitHub) refuse iframe embedding, so the system browser is the smoother
-   * default; gated on the `browserInterceptLinks` master and the target
-   * tab's own enable switch.
-   */
-  browserInterceptHttps: boolean
-  /**
    * Per-tab enable switches, keyed by tab descriptor id (`'explorer'`,
    * `'my-plugin:db'`). An ABSENT key means enabled — only an explicit
    * `false` disables a tab type (hidden from the + menu, `openTab` refuses,
@@ -201,30 +144,7 @@ export interface SidebarPrefs {
    * numbers / booleans; custom panels are responsible for their own).
    */
   pluginSettings: Record<string, Record<string, unknown>>
-  /**
-   * 是否把工作台接进内核自带右栏。`'auto'`（默认）：内核提供右栏服务
-   * （@deepseek-ai/dsh-client-ui-sidebar-right）时，整块工作台作为右栏里的一个标签
-   * 渲染，列宽/开关/全屏交给内核，插件不再自绘浮层；内核没有该服务时自动退回整合
-   * 前的浮层（legacy）。`'legacy'` 强制保留浮层形态（逃生阀）。改动在下次启动生效
-   * （注册发生在插件 apply 期）。
-   */
-  kernelRightbar: 'auto' | 'legacy'
-  /**
-   * 展开内核右栏时自动打开本插件的工作台标签（默认开）。内核 dock 里没有标签时先
-   * 显示引导页；关掉后展开落在引导页，要再点一次本插件卡片才进工作台。
-   */
-  kernelRightbarAutoOpen: boolean
 }
-
-/** Range contract of {@link SidebarPrefs.defaultWidthPercent}. */
-export const WIDTH_PERCENT_MIN = 20
-export const WIDTH_PERCENT_MAX = 60
-export const WIDTH_PERCENT_DEFAULT = 35
-
-/** Range contract of {@link SidebarPrefs.terminalFontSize}. */
-export const TERMINAL_FONT_SIZE_MIN = 9
-export const TERMINAL_FONT_SIZE_MAX = 32
-export const TERMINAL_FONT_SIZE_DEFAULT = 13
 
 /** Range contract of {@link SidebarPrefs.titleBarStripPx}. */
 export const TITLE_BAR_STRIP_MIN = 0
@@ -237,18 +157,15 @@ export type TitleBarScheme = typeof TITLE_BAR_SCHEMES[number]
 
 /** Fallback prefs used whenever the settings document is unreachable or malformed. */
 export const SIDEBAR_PREFS_DEFAULTS: SidebarPrefs = {
-  openByDefault: false,
-  defaultWidthPercent: WIDTH_PERCENT_DEFAULT,
   autoOpenSubagent: true,
   autoOpenJobs: true,
-  agentTerminalTools: false,
-  bottomPanelAutoTerminal: true,
-  terminalFontFamily: '',
-  terminalFontSize: TERMINAL_FONT_SIZE_DEFAULT,
-  interceptOpenPath: true,
-  editorExplorer: true,
-  terminalShell: '',
-  terminalShellArgs: '',
+  tasksViewMode: 'graph',
+  // Both mobile adaptations are ON by default: a phone is the case they exist
+  // for, and each one only ever changes what happens on a NARROW viewport.
+  mobileNoAutoOpen: true,
+  mobileDefaultTree: true,
+  agentOpenTools: false,
+  editorExplorer: false,
   titleBarScheme: 'auto',
   titleBarPresetId: '',
   customCss: '',
@@ -256,25 +173,9 @@ export const SIDEBAR_PREFS_DEFAULTS: SidebarPrefs = {
   titleBarStripPx: TITLE_BAR_STRIP_DEFAULT,
   htmlViewerNoSandbox: false,
   htmlViewerDefaultUnsafe: false,
-  browserNoSandbox: false,
-  browserInterceptLinks: true,
-  browserInterceptHttp: true,
-  browserInterceptHttps: false,
   tabsEnabled: {},
   viewersEnabled: {},
   pluginSettings: {},
-  kernelRightbar: 'auto',
-  kernelRightbarAutoOpen: true,
-}
-
-/** Clamp one width percent into the contract range (shared by schema and client reads). */
-export function clampWidthPercent(value: number): number {
-  return Math.min(WIDTH_PERCENT_MAX, Math.max(WIDTH_PERCENT_MIN, Math.round(value)))
-}
-
-/** Clamp one terminal font size into the contract range (shared by schema and client reads). */
-export function clampTerminalFontSize(value: number): number {
-  return Math.min(TERMINAL_FONT_SIZE_MAX, Math.max(TERMINAL_FONT_SIZE_MIN, Math.round(value)))
 }
 
 /** Clamp one title-bar strip height into the contract range (shared by schema and client reads). */

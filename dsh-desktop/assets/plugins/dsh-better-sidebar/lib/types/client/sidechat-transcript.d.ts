@@ -1,20 +1,49 @@
 /**
- * Side Chat transcript mapping (browser half): turns a thread child's
- * history rows (`session.history` — the generic RPC, which reads the durable
- * log without activating the child) into compact display rows.
+ * Side Chat transcript mapping (browser half): turns a thread child's own
+ * events (`sidechat.events` — the plugin route, which reads the log without
+ * activating the child and cuts the inherited seed host-side) into compact
+ * display rows.
  *
  * A thread child's log starts with the ENTIRE inherited parent log as its
- * fork seed. The mapping therefore cuts everything up to the LAST
- * `session/end-seed` marker and maps context injections (the "Side
- * conversation boundary" prompt, plugin-sourced context) onto a collapsible
- * injection row, so the view shows only the thread's own conversation.
+ * fork seed. The route already cuts everything up to the LAST
+ * `session/end-seed` marker; the mapping re-applies the same cut so any
+ * seed event that somehow crosses the wire still never renders, and maps
+ * context injections (the "Side conversation boundary" prompt,
+ * plugin-sourced context) onto a collapsible injection row, so the view
+ * shows only the thread's own conversation.
  *
  * Live streaming: `assistant/message` events only land when a step
- * completes, but `assistant/chunk` events stream token-level text and
- * reasoning deltas. The mapping accumulates both per block and supersedes
- * them with the assembled message once it lands (settled rows).
+ * completes, but the host's `assistant/live-chunk` rows stream token-level
+ * text and reasoning deltas (DSH 0.1.5 publishes them outside the session
+ * log — see assistant-live.ts). The mapping accumulates both per block and
+ * supersedes them with the assembled message once it lands (settled rows).
  */
+import type { DiffHunk, ReadBlockLine } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { SidebarHistoryEntry } from '../context-types.ts';
+/**
+ * Structured render payload for a tool row that maps onto one of the host's
+ * ui-primitives Blocks (the same atoms the main conversation renders). Derived
+ * defensively from raw `tool/call` arguments and `tool/result` `meta` — the
+ * producing tool owns the meta shape, so every field is narrowed and any
+ * malformed input silently falls back to the generic text row.
+ */
+export type SidechatToolCard = {
+    type: 'terminal';
+    command: string;
+    cwd?: string;
+    output?: string;
+    exitCode?: number;
+    signal?: string;
+} | {
+    type: 'diff';
+    diffs: DiffHunk[];
+} | {
+    type: 'read';
+    label: string;
+    lines: ReadBlockLine[];
+    totalLines: number;
+    lang?: string;
+};
 /** One compact transcript row rendered in the thread view. `seq` is the
  *  source event's log sequence — stable row identity for React keys across
  *  polls (streaming caches ride the key, so window slides must not re-key
@@ -55,7 +84,25 @@ export type SidechatTranscriptRow = {
     resultText?: string;
     /** True while the call's result has not landed yet. */
     executing?: boolean;
+    /** Structured render payload (host Block atoms); absent = generic row. */
+    card?: SidechatToolCard;
+}
+/** One turn's tail metrics, emitted at `turn/end`: the turn's token usage
+ *  (aggregated from `assistant/message.usage`) and wall duration (envelope
+ *  time delta from `turn/start`), whichever are computable. */
+ | {
+    kind: 'turnSummary';
+    seq: number;
+    inputTokens?: number;
+    outputTokens?: number;
+    durationMs?: number;
 };
+/** Compact token count the way the main conversation prints usage
+ *  (517 / 12.2K / 1.2M — the host's own formatter is not exported). */
+export declare function formatTokens(n: number): string;
+/** Compact duration the way the main conversation prints run times
+ *  (45.2s / 2m42s — sub-minute keeps one decimal). */
+export declare function formatDurationMs(ms: number): string;
 /** Extract the visible text of a content-block list (`text` blocks verbatim,
  *  joined by blank lines); empty reads `…` so rows never render blank. */
 export declare function blockText(content: readonly unknown[]): string;
@@ -66,38 +113,15 @@ export declare function blockText(content: readonly unknown[]): string;
  */
 export declare function toolArgsSummary(args: string | undefined): string;
 /**
- * Collect the thread's OWN events on first attach: walk backward from the
- * log tail (oldest-first accumulation) until the `session/end-seed` marker
- * surfaces, then keep everything after it.
- *
- * Page size matters: cold reads re-expand persisted chunk-rows into one
- * `assistant/chunk` event per delta, so a single streamed answer can be
- * HUNDREDS of events. A small walk window (the old 8×32 = 256 events) let
- * earlier `tool/call` events fall out of the loaded window — the tool rows
- * vanished on re-entry while the settled text survived. The walk therefore
- * pages big; tail polls stay small.
- *
- * Exhaustion (log start reached without a marker — a thread created before
- * seeding existed, or a pathological log) returns `seedBoundary: 0` so the
- * caller stops re-walking and renders the window as-is.
- *
- * @param fetchPage - one history page (newest-first window ending at
- *   `beforeSeq`, exclusive; omit for the tail page).
- * @param pageCap - safety bound on backward pages.
- */
-export declare function collectOwnEvents(fetchPage: (beforeSeq?: number) => Promise<readonly SidebarHistoryEntry[]>, pageCap?: number): Promise<{
-    seedBoundary: number;
-    entries: SidebarHistoryEntry[];
-}>;
-/**
  * Map a thread child's history rows onto compact transcript rows: the
  * inherited fork seed is cut at the last `session/end-seed`, context
- * injections map onto a collapsible injection row, `assistant/chunk`
+ * injections map onto a collapsible injection row, `assistant/live-chunk`
  * deltas accumulate into streaming rows per (turn, step, block) and are
  * superseded by the assembled `assistant/message`, and tool invocations
  * render one expandable line each (arguments, paired result text, failure
  * marker; a still-executing call is marked until its result lands).
- * @param entries - history rows (event + host-computed view) in seq order.
+ * @param entries - history rows (event + host-computed view) in seq order,
+ *   the live deltas of the in-flight attempt appended after the durable tail.
  * @returns display rows in log order.
  */
-export declare function transcriptRows(entries: readonly SidebarHistoryEntry[]): SidechatTranscriptRow[];
+export declare function transcriptRows(entries: readonly SidebarHistoryEntry[], prev?: readonly SidechatTranscriptRow[]): SidechatTranscriptRow[];

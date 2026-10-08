@@ -1,7 +1,7 @@
 {
   "name": "dsh-change-review",
   "description": "AI 变更审核（DSH Desktop 配套插件）：监控会话的文件更改投影（fileChanges），手动或自动向当前对话发送审核请求，让 AI 复查自己刚做的改动（正确性 / 安全性 / 目标一致性），配合「文件」页的一键还原使用",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -10,6 +10,9 @@
     "./package.json": "./package.json"
   },
   "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "platform": "web",
       "inject": [
@@ -18,5 +21,10 @@
       ]
     }
   },
-  "license": "MIT"
+  "license": "MIT",
+  "files": [
+    "LICENSE",
+    "cordis.patch.yml",
+    "lib"
+  ]
 }

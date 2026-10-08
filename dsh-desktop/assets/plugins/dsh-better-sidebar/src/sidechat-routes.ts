@@ -1,6 +1,7 @@
 /**
  * Side Chat routes of the /sidebar JSON API ('sidechat.start' /
- * 'sidechat.prompt' / 'sidechat.cancel' / 'sidechat.dispose').
+ * 'sidechat.prompt' / 'sidechat.cancel' / 'sidechat.dispose' /
+ * 'sidechat.info' / 'sidechat.events').
  *
  * A side thread is a child session the plugin creates ITSELF with a custom
  * seed — the parent's full event log up to the click moment, honestly closed
@@ -26,6 +27,7 @@ import type { Agent, AgentSetup, CreateAgentOptions, ResumeAgentOptions } from '
 import { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 import type { Context as CordisContext } from '@deepseek-ai/cordis'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
+import { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type {
   Context,
   SidebarAgentPresetsService,
@@ -35,18 +37,39 @@ import type {
 import {
   boundaryDelivered,
   buildSidechatInheritance,
+  liveEventsOf,
   resolvePresetId,
   SIDE_BOUNDARY_PROMPT,
-  SIDE_INJECTION_PLUGIN,
+  SIDE_INJECTION_SOURCE_KIND,
   SIDE_NEW_THREAD_TITLE,
   sideLabel,
   type SeedEvent,
+  type SidechatLiveEvent,
   type SidechatLogEvent,
   type SidechatThreadInfo,
+  threadOwnLogEvents,
 } from './sidechat-core.ts'
+import type { AssistantLiveBuffer } from './assistant-live.ts'
 import { requireString, SidebarError } from './wire.ts'
+import { readPersistedSession } from './session-store.ts'
 
-/** The five Side Chat routes of the sidebar API (wire method names). */
+/**
+ * The plugin's producer-owned message source kind. Message sources are a
+ * merge-extensible sum type — DSH 0.1.7 has no shared catch-all `plugin`
+ * kind, so every producer declares its own in its own module (the same
+ * `declare module` seam dsh-time-context / dsh-tmux-context use). The kind
+ * itself is {@link SIDE_INJECTION_SOURCE_KIND}: exactly the `plugin:<name>`
+ * value DSH's own v3→v4 migration derives for the rows this plugin wrote
+ * under 0.1.6, so old and new logs carry one shape.
+ */
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    /** Side-chat context injection (boundary prompt + parked in-progress snapshot). */
+    'dsh-better-sidebar': { kind: typeof SIDE_INJECTION_SOURCE_KIND }
+  }
+}
+
+/** The six Side Chat routes of the sidebar API (wire method names). */
 export interface SidechatRoutes {
   /** Create a side thread child seeded with the parent's log up to now.
    *  `question` is optional: empty creates an EMPTY thread (Codex-style
@@ -61,11 +84,23 @@ export interface SidechatRoutes {
   'sidechat.dispose'(payload: unknown): Promise<{ accepted: true }>
   /** Live state + agent identity for the thread header. */
   'sidechat.info'(payload: unknown): Promise<SidechatThreadInfo>
+  /** The thread's OWN transcript events, seed-cut host-side (the inherited
+   *  parent log never crosses the wire); `afterSeq` narrows the response to
+   *  the delta beyond it (poll tail). `live` carries the thread's in-flight
+   *  model deltas, which DSH 0.1.5 publishes outside the session log — it is
+   *  the CURRENT attempt's rows on every poll, never a delta. */
+  'sidechat.events'(payload: unknown): Promise<{ events: SidechatLogEvent[]; live: SidechatLiveEvent[] }>
 }
 
 /** Timeout guarding the create call (the registry detaches it before the
  *  handle becomes visible, so the child is never cancelled by it). */
 const CREATE_TIMEOUT_MS = 15_000
+
+/** Head cap of one `sidechat.events` response (the ceiling the old
+ *  client-side walk could load: 40 pages × 200 events). A pathological
+ *  thread beyond it renders its tail window — the same degradation the
+ *  capped walk had, never a failed poll. */
+const EVENTS_CAP = 8_000
 
 /** Per-activation disposers of created thread agents (the dispose route
  *  releases them; the session and its history always stay persisted). */
@@ -104,8 +139,8 @@ async function composePersistedSetup(
   if (persistence === undefined) {
     return () => Promise.resolve()
   }
-  const inspected = await persistence.inspect(childId)
-  const presetId = resolvePresetId(inspected.meta, inspected.events)
+  const inspected = await readPersistedSession(persistence, childId)
+  const presetId = resolvePresetId(inspected.header, inspected.events)
   const presets = ctx.get('agentPresets') as SidebarAgentPresetsService | undefined
   if (presets === undefined || presetId === undefined) {
     return () => Promise.resolve()
@@ -134,13 +169,15 @@ function admitFollowup(agent: Agent, blocks: ContentBlock[]): void {
  * log therefore records two user/message events (injection, then question)
  * instead of one wrapped blob: the transcript shows the question as a user
  * bubble and collapses the injection as a context row. The injection source
- * is stamped `kind: 'plugin'` so recognition is structural; its text still
- * opens with SIDE_BOUNDARY_PREFIX, keeping boundaryDelivered intact.
+ * carries the plugin's producer-owned kind (`plugin:dsh-better-sidebar` —
+ * session format v4 refuses the retired bare `kind: 'plugin'`) so recognition
+ * is structural; its text still opens with SIDE_BOUNDARY_PREFIX, keeping
+ * boundaryDelivered intact.
  */
 function admitFirstContact(agent: Agent, injectionText: string, question: string): void {
   agent.inject(createUserMessage({
     content: textPrompt(injectionText),
-    source: { kind: 'plugin', plugin: SIDE_INJECTION_PLUGIN },
+    source: { kind: SIDE_INJECTION_SOURCE_KIND },
   }))
   admitFollowup(agent, textPrompt(question))
 }
@@ -151,10 +188,46 @@ function liveThreadAgent(ctx: Context, childId: string): Agent | undefined {
   return agents?.get(childId)
 }
 
+/**
+ * The thread's event log (seed + its own events, already expanded): the live
+ * agent's in-memory log while the thread is attached — the freshest read,
+ * including events not yet flushed — else the persisted logical log. Both
+ * DSH generations expose these seams with the same shape (the 0.1.2
+ * persistence layer packs chunk rows on disk but expands them on inspect;
+ * the live log is `Session.snapshotEvents()`, the 0.1.2-alpha.4 rename of
+ * the `Session.events` property), which is why the transcript reads here
+ * instead of the client's session-history RPC: that face
+ * (`ctx.connection.api`) was removed in 0.1.2-alpha.1's Remote-gateway
+ * migration.
+ */
+async function threadLogEvents(ctx: Context, childId: string): Promise<readonly SidechatLogEvent[]> {
+  const agent = liveThreadAgent(ctx, childId)
+  if (agent !== undefined) {
+    return agent.session.snapshotEvents() as unknown as readonly SidechatLogEvent[]
+  }
+  const persistence = ctx.get('sessionPersistence') as SidebarSessionPersistenceService | undefined
+  if (persistence === undefined) {
+    throw new SidebarError('sidechat-error', 'the session persistence service is unavailable', 503)
+  }
+  try {
+    const inspected = await readPersistedSession(persistence, childId)
+    return inspected.events as unknown as readonly SidechatLogEvent[]
+  } catch (error: unknown) {
+    throw new SidebarError(
+      'not-found',
+      `thread "${childId}" is not available: ${error instanceof Error ? error.message : String(error)}`,
+      404,
+    )
+  }
+}
+
 /** Build the Side Chat routes (all optional services degrade to a wire
  *  error the tab surfaces inline). The record keys are the FULL wire method
- *  names the /sidebar/api dispatcher looks up (`api[method]`). */
-export function buildSidechatApi(ctx: Context): SidechatRoutes {
+ *  names the /sidebar/api dispatcher looks up (`api[method]`).
+ *  @param ctx - host plugin context.
+ *  @param live - the live assistant stream buffer; absent only in tests that
+ *    never exercise streaming (then every `live` response is empty). */
+export function buildSidechatApi(ctx: Context, live?: AssistantLiveBuffer): SidechatRoutes {
   return {
     'sidechat.start': async (payload: unknown) => {
       const sessionId = requireString(payload, 'sessionId')
@@ -166,11 +239,12 @@ export function buildSidechatApi(ctx: Context): SidechatRoutes {
       }
       const parentSession = parent.session
       const inheritance = buildSidechatInheritance(
-        parentSession.events as unknown as readonly SidechatLogEvent[],
+        parentSession.snapshotEvents() as unknown as readonly SidechatLogEvent[],
+        live?.chunksFor(sessionId) ?? [],
       )
       const { agentPreset, setup } = await composeChildSetup(
         ctx,
-        resolvePresetId(parentSession.header, parentSession.events),
+        resolvePresetId(parentSession.header, parentSession.snapshotEvents()),
       )
       const childId = `session-${randomUUID()}` as SessionId
       const label = question === '' ? SIDE_NEW_THREAD_TITLE : sideLabel(question)
@@ -193,17 +267,28 @@ export function buildSidechatApi(ctx: Context): SidechatRoutes {
         data: descriptor as unknown as Record<string, unknown>,
       }
       const seed = [...inheritance.seed, descriptorEvent]
+      // Fork-marker fields (the exact shape the host's own session.fork uses,
+      // api-session-controller): without `isSeeded` + `inheritedEventCount` the
+      // session treats the whole seed as the child's OWN events, so the child's
+      // Inbox constructor replays the parent's `agent/inbox/spliced` events and
+      // inherits whatever input sat UNCLAIMED in the parent at the click moment
+      // (a queued follow-up, or a tool-result context spliced into next-step
+      // between step boundaries of a long-running turn). The first side prompt
+      // would then claim and send that stale message BEFORE the boundary +
+      // question. The marker keeps `ownEvents()` at the end-seed boundary, so
+      // the inherited inbox replays to empty.
       const options: CreateAgentOptions = {
         sessionId: childId,
         meta: {
           ...(parentSession.header.cwd === undefined ? {} : { cwd: parentSession.header.cwd }),
           parentSession: parentSession.id,
-          seedLength: seed.length,
+          isSeeded: true,
           origin: 'subagent',
           delegationDepth: (parentSession.header.delegationDepth ?? 0) + 1,
           ...(agentPreset === undefined ? {} : { agentPreset }),
         },
         seed: seed as unknown as readonly SessionEvent[],
+        inheritedEventCount: SessionLogOffset(seed.length),
         agentOptions: { ...parent.options },
         setup,
         signal: AbortSignal.timeout(CREATE_TIMEOUT_MS),
@@ -267,7 +352,7 @@ export function buildSidechatApi(ctx: Context): SidechatRoutes {
           throw new SidebarError('sidechat-error', `thread resume failed: ${error instanceof Error ? error.message : String(error)}`, 500)
         }
       }
-      if (boundaryDelivered(agent.session.events as unknown as readonly SidechatLogEvent[])) {
+      if (boundaryDelivered(agent.session.snapshotEvents() as unknown as readonly SidechatLogEvent[])) {
         admitFollowup(agent, textPrompt(text))
       } else {
         // First message of an immediately-created thread: it carries the
@@ -331,14 +416,33 @@ export function buildSidechatApi(ctx: Context): SidechatRoutes {
       const persistence = ctx.get('sessionPersistence') as SidebarSessionPersistenceService | undefined
       if (persistence !== undefined) {
         try {
-          const inspected = await persistence.inspect(childId)
-          const preset = resolvePresetId(inspected.meta, inspected.events)
+          const inspected = await readPersistedSession(persistence, childId)
+          const preset = resolvePresetId(inspected.header, inspected.events)
           return { live: false, ...(preset === undefined ? {} : { preset }) }
         } catch {
           // Unknown/gone session: report a bare cold info.
         }
       }
       return { live: false }
+    },
+
+    'sidechat.events': async (payload: unknown) => {
+      const childId = requireString(payload, 'childId')
+      const rawAfter = (payload as { afterSeq?: unknown }).afterSeq
+      if (rawAfter !== undefined
+        && (typeof rawAfter !== 'number' || !Number.isSafeInteger(rawAfter) || rawAfter < 0)) {
+        throw new SidebarError('bad-request', 'afterSeq must be a non-negative integer')
+      }
+      const events = await threadLogEvents(ctx, childId)
+      const own = threadOwnLogEvents(events)
+      const fresh = rawAfter === undefined ? own : own.filter(event => event.seq > rawAfter)
+      const tailSeq = own.at(-1)?.seq ?? -1
+      return {
+        events: fresh.length > EVENTS_CAP ? fresh.slice(fresh.length - EVENTS_CAP) : fresh,
+        // The live rows ride every poll: they are process-local, so there is
+        // no durable seq to page them by. An idle thread has none.
+        live: liveEventsOf(live?.chunksFor(childId) ?? [], tailSeq),
+      }
     },
   }
 }

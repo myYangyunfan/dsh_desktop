@@ -48,7 +48,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	let react_dom_client = require("react-dom/client");
 	let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
 	let react_jsx_runtime = require("react/jsx-runtime");
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-Y2CYZVJY.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-Y2CYZVJY.mjs
 	var __defProp$1, __name$1, __export$1;
 	var init_chunk_Y2CYZVJY = __esmMin((() => {
 		__defProp$1 = Object.defineProperty;
@@ -64,7 +64,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dayjs@1.11.23/node_modules/dayjs/dayjs.min.js
+	//#region node_modules/dayjs/dayjs.min.js
 	var require_dayjs_min = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		(function(t, e) {
 			"object" == typeof exports && "undefined" != typeof module ? module.exports = e() : "function" == typeof define && define.amd ? define(e) : (t = "undefined" != typeof globalThis ? globalThis : t || self).dayjs = e();
@@ -362,11 +362,11 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		}));
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-X3CZISLH.mjs
-	var import_dayjs_min$2, LEVELS, log, setLogLevel, format$1;
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-X3CZISLH.mjs
+	var import_dayjs_min$1, LEVELS, log, setLogLevel, format$1;
 	var init_chunk_X3CZISLH = __esmMin((() => {
 		init_chunk_Y2CYZVJY();
-		import_dayjs_min$2 = /* @__PURE__ */ __toESM$1(require_dayjs_min(), 1);
+		import_dayjs_min$1 = /* @__PURE__ */ __toESM$1(require_dayjs_min(), 1);
 		LEVELS = {
 			trace: 0,
 			debug: 1,
@@ -402,11 +402,11 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			if (numericLevel <= LEVELS.trace) log.trace = console.debug ? console.debug.bind(console, format$1("TRACE"), "color: lightgreen") : console.log.bind(console, "\x1B[32m", format$1("TRACE"));
 		}, "setLogLevel");
 		format$1 = /* @__PURE__ */ __name$1((level) => {
-			return `%c${(0, import_dayjs_min$2.default)().format("ss.SSS")} : ${level} : `;
+			return `%c${(0, import_dayjs_min$1.default)().format("ss.SSS")} : ${level} : `;
 		}, "format");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/utils/channel.js
+	//#region node_modules/khroma/dist/utils/channel.js
 	var Channel;
 	var init_channel$1 = __esmMin((() => {
 		Channel = {
@@ -483,7 +483,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/utils/lang.js
+	//#region node_modules/khroma/dist/utils/lang.js
 	var Lang;
 	var init_lang = __esmMin((() => {
 		Lang = {
@@ -497,7 +497,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/utils/unit.js
+	//#region node_modules/khroma/dist/utils/unit.js
 	var Unit;
 	var init_unit = __esmMin((() => {
 		Unit = { dec2hex: (dec) => {
@@ -506,7 +506,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		} };
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/utils/index.js
+	//#region node_modules/khroma/dist/utils/index.js
 	var Utils$1;
 	var init_utils = __esmMin((() => {
 		init_channel$1();
@@ -519,7 +519,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/constants.js
+	//#region node_modules/khroma/dist/constants.js
 	var DEC2HEX, TYPE;
 	var init_constants = __esmMin((() => {
 		init_utils();
@@ -532,7 +532,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/channels/type.js
+	//#region node_modules/khroma/dist/channels/type.js
 	var Type$3;
 	var init_type = __esmMin((() => {
 		init_constants();
@@ -556,7 +556,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/channels/index.js
+	//#region node_modules/khroma/dist/channels/index.js
 	var Channels;
 	var init_channels = __esmMin((() => {
 		init_utils();
@@ -672,7 +672,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/channels/reusable.js
+	//#region node_modules/khroma/dist/channels/reusable.js
 	var channels;
 	var init_reusable = __esmMin((() => {
 		init_channels();
@@ -684,7 +684,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		}, "transparent");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/color/hex.js
+	//#region node_modules/khroma/dist/color/hex.js
 	var Hex;
 	var init_hex = __esmMin((() => {
 		init_reusable();
@@ -719,7 +719,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/color/hsl.js
+	//#region node_modules/khroma/dist/color/hsl.js
 	var HSL;
 	var init_hsl = __esmMin((() => {
 		init_utils();
@@ -760,7 +760,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/color/keyword.js
+	//#region node_modules/khroma/dist/color/keyword.js
 	var Keyword$1;
 	var init_keyword = __esmMin((() => {
 		init_hex();
@@ -927,7 +927,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/color/rgb.js
+	//#region node_modules/khroma/dist/color/rgb.js
 	var RGB;
 	var init_rgb$1 = __esmMin((() => {
 		init_utils();
@@ -955,7 +955,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/color/index.js
+	//#region node_modules/khroma/dist/color/index.js
 	var Color$2;
 	var init_color$2 = __esmMin((() => {
 		init_hex();
@@ -987,7 +987,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/methods/change.js
+	//#region node_modules/khroma/dist/methods/change.js
 	var change;
 	var init_change = __esmMin((() => {
 		init_utils();
@@ -999,7 +999,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/methods/rgba.js
+	//#region node_modules/khroma/dist/methods/rgba.js
 	var rgba$2;
 	var init_rgba = __esmMin((() => {
 		init_utils();
@@ -1018,7 +1018,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/methods/channel.js
+	//#region node_modules/khroma/dist/methods/channel.js
 	var channel;
 	var init_channel = __esmMin((() => {
 		init_utils();
@@ -1028,7 +1028,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/methods/luminance.js
+	//#region node_modules/khroma/dist/methods/luminance.js
 	var luminance;
 	var init_luminance = __esmMin((() => {
 		init_utils();
@@ -1040,7 +1040,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/methods/is_light.js
+	//#region node_modules/khroma/dist/methods/is_light.js
 	var isLight;
 	var init_is_light = __esmMin((() => {
 		init_luminance();
@@ -1049,7 +1049,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/methods/is_dark.js
+	//#region node_modules/khroma/dist/methods/is_dark.js
 	var isDark;
 	var init_is_dark = __esmMin((() => {
 		init_is_light();
@@ -1058,7 +1058,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/methods/adjust_channel.js
+	//#region node_modules/khroma/dist/methods/adjust_channel.js
 	var adjustChannel;
 	var init_adjust_channel = __esmMin((() => {
 		init_utils();
@@ -1072,7 +1072,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/methods/lighten.js
+	//#region node_modules/khroma/dist/methods/lighten.js
 	var lighten;
 	var init_lighten = __esmMin((() => {
 		init_adjust_channel();
@@ -1081,7 +1081,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/methods/darken.js
+	//#region node_modules/khroma/dist/methods/darken.js
 	var darken;
 	var init_darken = __esmMin((() => {
 		init_adjust_channel();
@@ -1090,7 +1090,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/methods/transparentize.js
+	//#region node_modules/khroma/dist/methods/transparentize.js
 	var transparentize;
 	var init_transparentize = __esmMin((() => {
 		init_adjust_channel();
@@ -1099,7 +1099,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/methods/adjust.js
+	//#region node_modules/khroma/dist/methods/adjust.js
 	var adjust$1;
 	var init_adjust = __esmMin((() => {
 		init_color$2();
@@ -1115,7 +1115,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/methods/mix.js
+	//#region node_modules/khroma/dist/methods/mix.js
 	var mix;
 	var init_mix = __esmMin((() => {
 		init_color$2();
@@ -1136,7 +1136,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/methods/invert.js
+	//#region node_modules/khroma/dist/methods/invert.js
 	var invert;
 	var init_invert = __esmMin((() => {
 		init_color$2();
@@ -1150,7 +1150,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/methods/index.js
+	//#region node_modules/khroma/dist/methods/index.js
 	var init_methods = __esmMin((() => {
 		init_rgba();
 		init_channel();
@@ -1162,13 +1162,16 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_invert();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/khroma@2.1.0/node_modules/khroma/dist/index.js
+	//#region node_modules/khroma/dist/index.js
 	var init_dist$1 = __esmMin((() => {
 		init_methods();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dompurify@3.4.14/node_modules/dompurify/dist/purify.es.mjs
-	/*! @license DOMPurify 3.4.14 | (c) Cure53 and other contributors | Released under the Apache license 2.0 and Mozilla Public License 2.0 | github.com/cure53/DOMPurify/blob/3.4.14/LICENSE */
+	//#region node_modules/dompurify/dist/purify.es.mjs
+	/*! @license DOMPurify 3.4.16 | (c) Cure53 and other contributors | Released under the Apache license 2.0 and Mozilla Public License 2.0 | github.com/cure53/DOMPurify/blob/3.4.16/LICENSE */
+	function _OverloadYield(e, d) {
+		this.v = e, this.k = d;
+	}
 	function _arrayLikeToArray$1(r, a) {
 		(null == a || a > r.length) && (a = r.length);
 		for (var e = 0, n = Array(a); e < a; e++) n[e] = r[e];
@@ -1180,12 +1183,14 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	function _iterableToArrayLimit$1(r, l) {
 		var t = null == r ? null : "undefined" != typeof Symbol && r[Symbol.iterator] || r["@@iterator"];
 		if (null != t) {
-			var e, n, i, u, a = [], f = true, o = false;
+			var e, n, i, u, a = [], f = !0, o = !1;
 			try {
-				if (i = (t = t.call(r)).next, 0 === l);
-				else for (; !(f = (e = i.call(t)).done) && (a.push(e.value), a.length !== l); f = !0);
+				if (i = (t = t.call(r)).next, 0 === l) {
+					if (Object(t) !== t) return;
+					f = !1;
+				} else for (; !(f = (e = i.call(t)).done) && (a.push(e.value), a.length !== l); f = !0);
 			} catch (r) {
-				o = true, n = r;
+				o = !0, n = r;
 			} finally {
 				try {
 					if (!f && null != t.return && (u = t.return(), Object(u) !== u)) return;
@@ -1199,6 +1204,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	function _nonIterableRest$1() {
 		throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
 	}
+	/*! regenerator-runtime -- Copyright (c) 2014-present, Facebook, Inc. -- license (MIT): https://github.com/babel/babel/blob/main/packages/babel-helpers/LICENSE */
 	function _slicedToArray$1(r, e) {
 		return _arrayWithHoles$1(r) || _iterableToArrayLimit$1(r, e) || _unsupportedIterableToArray$1(r, e) || _nonIterableRest$1();
 	}
@@ -1208,6 +1214,44 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			var t = {}.toString.call(r).slice(8, -1);
 			return "Object" === t && r.constructor && (t = r.constructor.name), "Map" === t || "Set" === t ? Array.from(r) : "Arguments" === t || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(t) ? _arrayLikeToArray$1(r, a) : void 0;
 		}
+	}
+	function AsyncGenerator(e) {
+		var t, n;
+		function resume(t, n) {
+			try {
+				var r = e[t](n), o = r.value, u = o instanceof _OverloadYield;
+				Promise.resolve(u ? o.v : o).then(function(n) {
+					if (u) {
+						var i = "return" === t && o.k ? t : "next";
+						if (!o.k || n.done) return resume(i, n);
+						n = e[i](n).value;
+					}
+					settle(!!r.done, n);
+				}, function(e) {
+					resume("throw", e);
+				});
+			} catch (e) {
+				settle(2, e);
+			}
+		}
+		function settle(e, r) {
+			2 === e ? t.reject(r) : t.resolve({
+				value: r,
+				done: e
+			}), (t = t.next) ? resume(t.key, t.arg) : n = null;
+		}
+		this._invoke = function(e, r) {
+			return new Promise(function(o, u) {
+				var i = {
+					key: e,
+					arg: r,
+					resolve: o,
+					reject: u,
+					next: null
+				};
+				n ? n = n.next = i : (t = n = i, resume(e, r));
+			});
+		}, "function" != typeof e.return && (this.return = void 0);
 	}
 	/**
 	* Creates a new function that calls the given function with a specified thisArg and arguments.
@@ -1350,7 +1394,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	function createDOMPurify() {
 		let window = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : getGlobal();
 		const DOMPurify = (root) => createDOMPurify(root);
-		DOMPurify.version = "3.4.14";
+		DOMPurify.version = "3.4.16";
 		DOMPurify.removed = [];
 		if (!window || !window.document || window.document.nodeType !== NODE_TYPE.document || !window.Element) {
 			DOMPurify.isSupported = false;
@@ -1367,6 +1411,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		const ElementPrototype = Element.prototype;
 		const cloneNode = lookupGetter(ElementPrototype, "cloneNode");
 		const remove = lookupGetter(ElementPrototype, "remove");
+		const removeAttributeNode = lookupGetter(ElementPrototype, "removeAttributeNode");
 		const getNextSibling = lookupGetter(ElementPrototype, "nextSibling");
 		const getChildNodes = lookupGetter(ElementPrototype, "childNodes");
 		const getParentNode = lookupGetter(ElementPrototype, "parentNode");
@@ -1821,7 +1866,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		*/
 		const _stripAttributeNode = function _stripAttributeNode(element, attribute, name) {
 			try {
-				element.removeAttributeNode(attribute);
+				removeAttributeNode(element, attribute);
 			} catch (_) {
 				try {
 					element.removeAttribute(name);
@@ -1894,7 +1939,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				from: element
 			});
 			try {
-				if (attr) element.removeAttributeNode(attr);
+				if (attr) removeAttributeNode(element, attr);
 				else element.removeAttribute(name);
 			} catch (_) {
 				try {
@@ -2140,7 +2185,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			const realTagName = getNodeName ? getNodeName(element) : null;
 			if (typeof realTagName !== "string") return false;
 			if (transformCaseFunc(realTagName) !== "form") return false;
-			return typeof element.nodeName !== "string" || typeof element.textContent !== "string" || typeof element.removeChild !== "function" || element.attributes !== getAttributes(element) || typeof element.removeAttribute !== "function" || typeof element.setAttribute !== "function" || typeof element.namespaceURI !== "string" || typeof element.insertBefore !== "function" || typeof element.hasChildNodes !== "function" || element.nodeType !== getNodeType(element) || element.childNodes !== getChildNodes(element);
+			return typeof element.nodeName !== "string" || typeof element.textContent !== "string" || typeof element.removeChild !== "function" || element.attributes !== getAttributes(element) || typeof element.removeAttribute !== "function" || typeof element.removeAttributeNode !== "function" || typeof element.getAttributeNode !== "function" || typeof element.setAttribute !== "function" || typeof element.namespaceURI !== "string" || typeof element.insertBefore !== "function" || typeof element.hasChildNodes !== "function" || element.nodeType !== getNodeType(element) || element.childNodes !== getChildNodes(element);
 		};
 		/**
 		* Checks whether the given value is a DocumentFragment from any realm.
@@ -2339,7 +2384,10 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			}
 			if (FORBID_TAGS[tagName] || !(EXTRA_ELEMENT_HANDLING.tagCheck instanceof Function && EXTRA_ELEMENT_HANDLING.tagCheck(tagName)) && !ALLOWED_TAGS[tagName]) {
 				const removed = _sanitizeDisallowedNode(currentNode, tagName, root);
-				if (removed === false) _executeHooks(hooks.afterSanitizeElements, currentNode, null);
+				if (removed === false) {
+					_executeHooks(hooks.afterSanitizeElements, currentNode, null);
+					if (_handleHookDetachedNode(currentNode, root)) return true;
+				}
 				return removed;
 			}
 			if (_readNodeType(currentNode) === NODE_TYPE.element && !_checkValidNamespace(currentNode)) {
@@ -2358,7 +2406,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				}
 			}
 			_executeHooks(hooks.afterSanitizeElements, currentNode, null);
-			return false;
+			return _handleHookDetachedNode(currentNode, root);
 		};
 		/**
 		* _isValidAttribute
@@ -2425,24 +2473,38 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		/**
 		* Write a modified attribute value back onto the element. On
 		* success, re-probe for clobbering introduced by the new value and
-		* remove the element when found; otherwise pop the removal entry
-		* recorded by the earlier _removeAttribute (long-standing pairing
-		* with the SANITIZE_NAMED_PROPS path - do not "fix" casually). On
+		* remove the element when found; otherwise, when this writeback is the
+		* recreate half of the SANITIZE_NAMED_PROPS remove-and-recreate, pop the
+		* removal entry that path recorded so it does not show as removed. On
 		* failure, remove the attribute instead.
+		*
+		* Returns true only on a clean write (the value was set and the new value
+		* introduced no clobbering). The caller uses that, together with its own
+		* knowledge of whether this attribute pushed a DOMPurify.removed record, to
+		* decide whether to pop that record. The pop must happen ONLY for the
+		* named-prop remove-and-recreate; popping on any other value change (trim,
+		* template scrubbing, Trusted Types) would consume an unrelated _forceRemove
+		* subtree-cleanup record and let that detached subtree keep a live event
+		* handler through the IN_PLACE neutralization pass (SO-001).
 		*
 		* @param currentNode the element carrying the attribute
 		* @param name the attribute name as present on the element
 		* @param namespaceURI the attribute's namespace, if any
 		* @param value the new attribute value
+		* @return true if the value was written without introducing clobbering
 		*/
 		const _setAttributeValue = function _setAttributeValue(currentNode, name, namespaceURI, value) {
 			try {
 				if (namespaceURI) currentNode.setAttributeNS(namespaceURI, name, value);
 				else currentNode.setAttribute(name, value);
-				if (_isClobbered(currentNode)) _forceRemove(currentNode);
-				else arrayPop(DOMPurify.removed);
+				if (_isClobbered(currentNode)) {
+					_forceRemove(currentNode);
+					return false;
+				}
+				return true;
 			} catch (_) {
 				_removeAttribute(name, currentNode);
+				return false;
 			}
 		};
 		/**
@@ -2454,9 +2516,11 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		* @protect setAttribute
 		*
 		* @param currentNode to sanitize
+		* @param root the current walk root
 		*/
-		const _sanitizeAttributes = function _sanitizeAttributes(currentNode) {
+		const _sanitizeAttributes = function _sanitizeAttributes(currentNode, root) {
 			_executeHooks(hooks.beforeSanitizeAttributes, currentNode, null);
+			if (_handleHookDetachedNode(currentNode, root)) return;
 			const attributes = currentNode.attributes;
 			if (!attributes || _isClobbered(currentNode)) return;
 			ALLOWED_ATTR = _forkSharedAllowlist(hooks.uponSanitizeAttribute, ALLOWED_ATTR, DEFAULT_ALLOWED_ATTR, SET_CONFIG_ALLOWED_ATTR);
@@ -2475,6 +2539,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				const lcName = transformCaseFunc(name);
 				const initValue = attrValue;
 				let value = name === "value" ? initValue : stringTrim(initValue);
+				let recreatedNamedProp = false;
 				hookEvent.attrName = lcName;
 				hookEvent.attrValue = value;
 				hookEvent.keepAttr = true;
@@ -2484,6 +2549,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				if (SANITIZE_NAMED_PROPS && (lcName === "id" || lcName === "name") && stringIndexOf(value, SANITIZE_NAMED_PROPS_PREFIX) !== 0) {
 					_removeAttribute(name, currentNode, attr);
 					value = SANITIZE_NAMED_PROPS_PREFIX + value;
+					recreatedNamedProp = true;
 				}
 				if (SAFE_FOR_XML && regExpTest(/((--!?|])>)|<\/(style|script|title|xmp|textarea|noscript|iframe|noembed|noframes)/i, value)) {
 					_removeAttribute(name, currentNode, attr);
@@ -2508,9 +2574,12 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 					continue;
 				}
 				value = _applyTrustedTypesToAttribute(lcTag, lcName, namespaceURI, value);
-				if (value !== initValue) _setAttributeValue(currentNode, name, namespaceURI, value);
+				if (value !== initValue) {
+					if (_setAttributeValue(currentNode, name, namespaceURI, value) && recreatedNamedProp) arrayPop(DOMPurify.removed);
+				}
 			}
 			_executeHooks(hooks.afterSanitizeAttributes, currentNode, null);
+			_handleHookDetachedNode(currentNode, root);
 		};
 		/**
 		* _sanitizeShadowDOM
@@ -2524,7 +2593,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			while (shadowNode = shadowIterator.nextNode()) {
 				_executeHooks(hooks.uponSanitizeShadowNode, shadowNode, null);
 				_sanitizeElements(shadowNode, fragment);
-				_sanitizeAttributes(shadowNode);
+				_sanitizeAttributes(shadowNode, fragment);
 				if (_isDocumentFragment(shadowNode.content)) _sanitizeShadowDOM2(shadowNode.content);
 				if (_readNodeType(shadowNode) === NODE_TYPE.element) {
 					const innerSr = getShadowRoot(shadowNode);
@@ -2642,7 +2711,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				if (importedNode.nodeType === NODE_TYPE.element && importedNode.nodeName === "BODY") body = importedNode;
 				else if (importedNode.nodeName === "HTML") body = importedNode;
 				else body.appendChild(importedNode);
-				_sanitizeAttachedShadowRoots(importedNode);
+				_sanitizeAttachedShadowRoots(body);
 			} else {
 				if (!RETURN_DOM && !SAFE_FOR_TEMPLATES && !WHOLE_DOCUMENT && dirty.indexOf("<") === -1) return trustedTypesPolicy && RETURN_TRUSTED_TYPE ? _createTrustedHTML(dirty) : dirty;
 				body = _initDocument(dirty);
@@ -2654,7 +2723,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				const nodeIterator = _createNodeIterator(walkRoot);
 				while (currentNode = nodeIterator.nextNode()) {
 					_sanitizeElements(currentNode, walkRoot);
-					_sanitizeAttributes(currentNode);
+					_sanitizeAttributes(currentNode, walkRoot);
 					if (_isDocumentFragment(currentNode.content)) _sanitizeShadowDOM2(currentNode.content);
 				}
 			} catch (error) {
@@ -2667,9 +2736,14 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				throw error;
 			}
 			if (inPlace) {
+				let rootWasRemoved = false;
 				arrayForEach(DOMPurify.removed, (entry) => {
-					if (entry.element) _neutralizeSubtree(entry.element);
+					if (entry.element) {
+						if (entry.element === dirty) rootWasRemoved = true;
+						_neutralizeSubtree(entry.element);
+					}
 				});
+				if (rootWasRemoved) throw typeErrorCreate("a node selected for removal could not be safely returned; refusing to sanitize in place");
 				if (SAFE_FOR_TEMPLATES) _scrubTemplateExpressions2(dirty);
 				return dirty;
 			}
@@ -2730,8 +2804,17 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 		return DOMPurify;
 	}
-	var entries, setPrototypeOf, isFrozen, getPrototypeOf, getOwnPropertyDescriptor, freeze, seal, create$2, _ref, apply$2, construct, arrayForEach, arrayLastIndexOf, arrayPop, arrayPush$2, arraySplice, arrayIsArray, stringToLowerCase, stringToString, stringMatch, stringReplace, stringIndexOf, stringTrim, numberToString, booleanToString, bigintToString, symbolToString$2, objectHasOwnProperty, objectToString$2, regExpTest, typeErrorCreate, html$1, svg$1, svgFilters, svgDisallowed, mathMl$1, mathMlDisallowed, text$1, html, svg, mathMl, xml, MUSTACHE_EXPR, ERB_EXPR, TMPLIT_EXPR, DATA_ATTR, ARIA_ATTR, IS_ALLOWED_URI, IS_SCRIPT_OR_DATA, ATTR_WHITESPACE, DOCTYPE_NAME, CUSTOM_ELEMENT, ELEMENT_MARKUP_PROBE, COMMENT_MARKUP_PROBE, FALLBACK_TAG_CLOSE, SELF_CLOSING_TAG, NODE_TYPE, LITERAL_TEXT_ELEMENT_NAMES, LITERAL_TEXT_ELEMENTS, LITERAL_TEXT_CLOSE, getGlobal, _createTrustedTypesPolicy, _createHooksMap, _resolveSetOption, _resolveObjectOption, purify;
+	var entries, setPrototypeOf, isFrozen, getPrototypeOf, getOwnPropertyDescriptor, freeze, seal, create$2, _ref, apply$2, construct, arrayForEach, arrayLastIndexOf, arrayPop, arrayPush$2, arraySplice, arrayIsArray, stringToLowerCase, stringToString, stringMatch, stringReplace, stringIndexOf, stringTrim, numberToString, booleanToString, bigintToString, symbolToString$2, objectHasOwnProperty, objectToString$2, regExpTest, typeErrorCreate, html$1, svg$1, svgFilters, svgDisallowed, mathMl$1, mathMlDisallowed, text$1, html, svg, mathMl, xml, MUSTACHE_EXPR, ERB_EXPR, TMPLIT_EXPR, DATA_ATTR, ARIA_ATTR, IS_ALLOWED_URI, IS_SCRIPT_OR_DATA, ATTR_WHITESPACE, DOCTYPE_NAME, CUSTOM_ELEMENT, ELEMENT_MARKUP_PROBE, COMMENT_MARKUP_PROBE, FALLBACK_TAG_CLOSE, SELF_CLOSING_TAG, NODE_TYPE, LITERAL_TEXT_ELEMENT_NAMES, LITERAL_TEXT_ELEMENTS, LITERAL_TEXT_CLOSE, getGlobal, _createTrustedTypesPolicy, _createHooksMap, _resolveSetOption, _resolveObjectOption, purify_default;
 	var init_purify_es = __esmMin((() => {
+		AsyncGenerator.prototype["function" == typeof Symbol && Symbol.asyncIterator || "@@asyncIterator"] = function() {
+			return this;
+		}, AsyncGenerator.prototype.next = function(e) {
+			return this._invoke("next", e);
+		}, AsyncGenerator.prototype.throw = function(e) {
+			return this._invoke("throw", e);
+		}, AsyncGenerator.prototype.return = function(e) {
+			return this._invoke("return", e);
+		};
 		entries = Object.entries;
 		setPrototypeOf = Object.setPrototypeOf;
 		isFrozen = Object.isFrozen;
@@ -2758,9 +2841,11 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return new Func(...args);
 		};
 		arrayForEach = unapply(Array.prototype.forEach);
+		Array.prototype.indexOf;
 		arrayLastIndexOf = unapply(Array.prototype.lastIndexOf);
 		arrayPop = unapply(Array.prototype.pop);
 		arrayPush$2 = unapply(Array.prototype.push);
+		Array.prototype.slice;
 		arraySplice = unapply(Array.prototype.splice);
 		arrayIsArray = Array.isArray;
 		stringToLowerCase = unapply(String.prototype.toLowerCase);
@@ -3514,10 +3599,10 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			const value = objectHasOwnProperty(cfg, key) ? cfg[key] : void 0;
 			return value && typeof value === "object" ? clone$5(value) : makeFallback();
 		};
-		purify = createDOMPurify();
+		purify_default = createDOMPurify();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/katex@0.16.47/node_modules/katex/dist/katex.js
+	//#region node_modules/katex/dist/katex.js
 	var require_katex = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		(function webpackUniversalModuleDefinition(root, factory) {
 			if (typeof exports === "object" && typeof module === "object") module.exports = factory();
@@ -30170,13 +30255,13 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		});
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-DU6HZSFF.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-DU6HZSFF.mjs
 	function setupDompurifyHooks() {
 		const TEMPORARY_ATTRIBUTE = "data-temp-href-target";
-		purify.addHook("beforeSanitizeAttributes", (node) => {
+		purify_default.addHook("beforeSanitizeAttributes", (node) => {
 			if (node.tagName === "A" && node.hasAttribute("target")) node.setAttribute(TEMPORARY_ATTRIBUTE, node.getAttribute("target") ?? "");
 		});
-		purify.addHook("afterSanitizeAttributes", (node) => {
+		purify_default.addHook("afterSanitizeAttributes", (node) => {
 			if (node.tagName === "A" && node.hasAttribute(TEMPORARY_ATTRIBUTE)) {
 				node.setAttribute("target", node.getAttribute(TEMPORARY_ATTRIBUTE) ?? "");
 				node.removeAttribute(TEMPORARY_ATTRIBUTE);
@@ -35512,7 +35597,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		__name$1(setupDompurifyHooks, "setupDompurifyHooks");
 		removeScript = /* @__PURE__ */ __name$1((txt) => {
 			setupDompurifyHooksIfNotSetup();
-			return purify.sanitize(txt);
+			return purify_default.sanitize(txt);
 		}, "removeScript");
 		sanitizeMore = /* @__PURE__ */ __name$1((text, config2) => {
 			if (getEffectiveHtmlLabels(config2)) {
@@ -35529,8 +35614,8 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		}, "sanitizeMore");
 		sanitizeText$1 = /* @__PURE__ */ __name$1((text, config2) => {
 			if (!text) return text;
-			if (config2.dompurifyConfig) text = purify.sanitize(sanitizeMore(text, config2), config2.dompurifyConfig).toString();
-			else text = purify.sanitize(sanitizeMore(text, config2), { FORBID_TAGS: ["style"] }).toString();
+			if (config2.dompurifyConfig) text = purify_default.sanitize(sanitizeMore(text, config2), config2.dompurifyConfig).toString();
+			else text = purify_default.sanitize(sanitizeMore(text, config2), { FORBID_TAGS: ["style"] }).toString();
 			return text;
 		}, "sanitizeText");
 		sanitizeTextOrArray = /* @__PURE__ */ __name$1((a, config2) => {
@@ -35893,19 +35978,19 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-array@3.2.4/node_modules/d3-array/src/ascending.js
+	//#region node_modules/d3-array/src/ascending.js
 	function ascending$2(a, b) {
 		return a == null || b == null ? NaN : a < b ? -1 : a > b ? 1 : a >= b ? 0 : NaN;
 	}
 	var init_ascending = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-array@3.2.4/node_modules/d3-array/src/descending.js
+	//#region node_modules/d3-array/src/descending.js
 	function descending$1(a, b) {
 		return a == null || b == null ? NaN : b < a ? -1 : b > a ? 1 : b >= a ? 0 : NaN;
 	}
 	var init_descending$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-array@3.2.4/node_modules/d3-array/src/bisector.js
+	//#region node_modules/d3-array/src/bisector.js
 	function bisector(f) {
 		let compare1, compare2, delta;
 		if (f.length !== 2) {
@@ -35957,7 +36042,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_descending$1();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-array@3.2.4/node_modules/d3-array/src/number.js
+	//#region node_modules/d3-array/src/number.js
 	function number$5(x) {
 		return x === null ? NaN : +x;
 	}
@@ -35972,7 +36057,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		bisector(number$5).center;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/internmap@2.0.3/node_modules/internmap/src/index.js
+	//#region node_modules/internmap/src/index.js
 	function intern_get({ _intern, _key }, value) {
 		const key = _key(value);
 		return _intern.has(key) ? _intern.get(key) : value;
@@ -36020,7 +36105,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-array@3.2.4/node_modules/d3-array/src/ticks.js
+	//#region node_modules/d3-array/src/ticks.js
 	function tickSpec(start, stop, count) {
 		const step = (stop - start) / Math.max(0, count), power = Math.floor(Math.log10(step)), error = step / Math.pow(10, power), factor = error >= e10 ? 10 : error >= e5 ? 5 : error >= e2 ? 2 : 1;
 		let i1, i2, inc;
@@ -36075,7 +36160,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		e2 = Math.sqrt(2);
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-array@3.2.4/node_modules/d3-array/src/max.js
+	//#region node_modules/d3-array/src/max.js
 	function max$4(values, valueof) {
 		let max;
 		if (valueof === void 0) {
@@ -36088,7 +36173,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_max$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-array@3.2.4/node_modules/d3-array/src/min.js
+	//#region node_modules/d3-array/src/min.js
 	function min$5(values, valueof) {
 		let min;
 		if (valueof === void 0) {
@@ -36101,7 +36186,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_min$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-array@3.2.4/node_modules/d3-array/src/range.js
+	//#region node_modules/d3-array/src/range.js
 	function range$1(start, stop, step) {
 		start = +start, stop = +stop, step = (n = arguments.length) < 2 ? (stop = start, start = 0, 1) : n < 3 ? 1 : +step;
 		var i = -1, n = Math.max(0, Math.ceil((stop - start) / step)) | 0, range = new Array(n);
@@ -36110,7 +36195,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_range$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-array@3.2.4/node_modules/d3-array/src/index.js
+	//#region node_modules/d3-array/src/index.js
 	var init_src$30 = __esmMin((() => {
 		init_bisect();
 		init_ascending();
@@ -36124,13 +36209,13 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_range$1();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-axis@3.0.0/node_modules/d3-axis/src/identity.js
+	//#region node_modules/d3-axis/src/identity.js
 	function identity_default$3(x) {
 		return x;
 	}
 	var init_identity$3 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-axis@3.0.0/node_modules/d3-axis/src/axis.js
+	//#region node_modules/d3-axis/src/axis.js
 	function translateX(x) {
 		return "translate(" + x + ",0)";
 	}
@@ -36229,12 +36314,12 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		epsilon$3 = 1e-6;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-axis@3.0.0/node_modules/d3-axis/src/index.js
+	//#region node_modules/d3-axis/src/index.js
 	var init_src$29 = __esmMin((() => {
 		init_axis();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-dispatch@3.0.1/node_modules/d3-dispatch/src/dispatch.js
+	//#region node_modules/d3-dispatch/src/dispatch.js
 	function dispatch$1() {
 		for (var i = 0, n = arguments.length, _ = {}, t; i < n; ++i) {
 			if (!(t = arguments[i] + "") || t in _ || /[\s.]/.test(t)) throw new Error("illegal type: " + t);
@@ -36303,12 +36388,12 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-dispatch@3.0.1/node_modules/d3-dispatch/src/index.js
+	//#region node_modules/d3-dispatch/src/index.js
 	var init_src$28 = __esmMin((() => {
 		init_dispatch$1();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/namespaces.js
+	//#region node_modules/d3-selection/src/namespaces.js
 	var xhtml, namespaces_default;
 	var init_namespaces = __esmMin((() => {
 		xhtml = "http://www.w3.org/1999/xhtml";
@@ -36321,7 +36406,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/namespace.js
+	//#region node_modules/d3-selection/src/namespace.js
 	function namespace_default(name) {
 		var prefix = name += "", i = prefix.indexOf(":");
 		if (i >= 0 && (prefix = name.slice(0, i)) !== "xmlns") name = name.slice(i + 1);
@@ -36334,7 +36419,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_namespaces();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/creator.js
+	//#region node_modules/d3-selection/src/creator.js
 	function creatorInherit(name) {
 		return function() {
 			var document = this.ownerDocument, uri = this.namespaceURI;
@@ -36355,7 +36440,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_namespaces();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selector.js
+	//#region node_modules/d3-selection/src/selector.js
 	function none() {}
 	function selector_default(selector) {
 		return selector == null ? none : function() {
@@ -36364,7 +36449,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_selector = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/select.js
+	//#region node_modules/d3-selection/src/selection/select.js
 	function select_default$2(select) {
 		if (typeof select !== "function") select = selector_default(select);
 		for (var groups = this._groups, m = groups.length, subgroups = new Array(m), j = 0; j < m; ++j) for (var group = groups[j], n = group.length, subgroup = subgroups[j] = new Array(n), node, subnode, i = 0; i < n; ++i) if ((node = group[i]) && (subnode = select.call(node, node.__data__, i, group))) {
@@ -36378,13 +36463,13 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_selector();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/array.js
+	//#region node_modules/d3-selection/src/array.js
 	function array$1(x) {
 		return x == null ? [] : Array.isArray(x) ? x : Array.from(x);
 	}
 	var init_array$2 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selectorAll.js
+	//#region node_modules/d3-selection/src/selectorAll.js
 	function empty() {
 		return [];
 	}
@@ -36395,7 +36480,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_selectorAll = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/selectAll.js
+	//#region node_modules/d3-selection/src/selection/selectAll.js
 	function arrayAll(select) {
 		return function() {
 			return array$1(select.apply(this, arguments));
@@ -36416,7 +36501,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_selectorAll();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/matcher.js
+	//#region node_modules/d3-selection/src/matcher.js
 	function matcher_default(selector) {
 		return function() {
 			return this.matches(selector);
@@ -36429,7 +36514,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_matcher = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/selectChild.js
+	//#region node_modules/d3-selection/src/selection/selectChild.js
 	function childFind(match) {
 		return function() {
 			return find$1.call(this.children, match);
@@ -36447,7 +36532,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		find$1 = Array.prototype.find;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/selectChildren.js
+	//#region node_modules/d3-selection/src/selection/selectChildren.js
 	function children() {
 		return Array.from(this.children);
 	}
@@ -36465,7 +36550,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		filter$2 = Array.prototype.filter;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/filter.js
+	//#region node_modules/d3-selection/src/selection/filter.js
 	function filter_default$2(match) {
 		if (typeof match !== "function") match = matcher_default(match);
 		for (var groups = this._groups, m = groups.length, subgroups = new Array(m), j = 0; j < m; ++j) for (var group = groups[j], n = group.length, subgroup = subgroups[j] = [], node, i = 0; i < n; ++i) if ((node = group[i]) && match.call(node, node.__data__, i, group)) subgroup.push(node);
@@ -36476,13 +36561,13 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_matcher();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/sparse.js
+	//#region node_modules/d3-selection/src/selection/sparse.js
 	function sparse_default(update) {
 		return new Array(update.length);
 	}
 	var init_sparse = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/enter.js
+	//#region node_modules/d3-selection/src/selection/enter.js
 	function enter_default() {
 		return new Selection$1(this._enter || this._groups.map(sparse_default), this._parents);
 	}
@@ -36513,7 +36598,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/constant.js
+	//#region node_modules/d3-selection/src/constant.js
 	function constant_default$4(x) {
 		return function() {
 			return x;
@@ -36521,7 +36606,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_constant$5 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/data.js
+	//#region node_modules/d3-selection/src/selection/data.js
 	function bindIndex(parent, group, enter, update, exit, data) {
 		var i = 0, node, groupLength = group.length, dataLength = data.length;
 		for (; i < dataLength; ++i) if (node = group[i]) {
@@ -36577,7 +36662,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_constant$5();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/exit.js
+	//#region node_modules/d3-selection/src/selection/exit.js
 	function exit_default() {
 		return new Selection$1(this._exit || this._groups.map(sparse_default), this._parents);
 	}
@@ -36586,7 +36671,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_selection$2();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/join.js
+	//#region node_modules/d3-selection/src/selection/join.js
 	function join_default(onenter, onupdate, onexit) {
 		var enter = this.enter(), update = this, exit = this.exit();
 		if (typeof onenter === "function") {
@@ -36603,7 +36688,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_join = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/merge.js
+	//#region node_modules/d3-selection/src/selection/merge.js
 	function merge_default$1(context) {
 		var selection = context.selection ? context.selection() : context;
 		for (var groups0 = this._groups, groups1 = selection._groups, m0 = groups0.length, m1 = groups1.length, m = Math.min(m0, m1), merges = new Array(m0), j = 0; j < m; ++j) for (var group0 = groups0[j], group1 = groups1[j], n = group0.length, merge = merges[j] = new Array(n), node, i = 0; i < n; ++i) if (node = group0[i] || group1[i]) merge[i] = node;
@@ -36614,7 +36699,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_selection$2();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/order.js
+	//#region node_modules/d3-selection/src/selection/order.js
 	function order_default() {
 		for (var groups = this._groups, j = -1, m = groups.length; ++j < m;) for (var group = groups[j], i = group.length - 1, next = group[i], node; --i >= 0;) if (node = group[i]) {
 			if (next && node.compareDocumentPosition(next) ^ 4) next.parentNode.insertBefore(node, next);
@@ -36624,7 +36709,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_order$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/sort.js
+	//#region node_modules/d3-selection/src/selection/sort.js
 	function sort_default$1(compare) {
 		if (!compare) compare = ascending$1;
 		function compareNode(a, b) {
@@ -36643,7 +36728,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_selection$2();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/call.js
+	//#region node_modules/d3-selection/src/selection/call.js
 	function call_default() {
 		var callback = arguments[0];
 		arguments[0] = this;
@@ -36652,13 +36737,13 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_call = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/nodes.js
+	//#region node_modules/d3-selection/src/selection/nodes.js
 	function nodes_default() {
 		return Array.from(this);
 	}
 	var init_nodes = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/node.js
+	//#region node_modules/d3-selection/src/selection/node.js
 	function node_default() {
 		for (var groups = this._groups, j = 0, m = groups.length; j < m; ++j) for (var group = groups[j], i = 0, n = group.length; i < n; ++i) {
 			var node = group[i];
@@ -36668,7 +36753,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_node = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/size.js
+	//#region node_modules/d3-selection/src/selection/size.js
 	function size_default() {
 		let size = 0;
 		for (const node of this) ++size;
@@ -36676,20 +36761,20 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_size$2 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/empty.js
+	//#region node_modules/d3-selection/src/selection/empty.js
 	function empty_default() {
 		return !this.node();
 	}
 	var init_empty = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/each.js
+	//#region node_modules/d3-selection/src/selection/each.js
 	function each_default$1(callback) {
 		for (var groups = this._groups, j = 0, m = groups.length; j < m; ++j) for (var group = groups[j], i = 0, n = group.length, node; i < n; ++i) if (node = group[i]) callback.call(node, node.__data__, i, group);
 		return this;
 	}
 	var init_each$2 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/attr.js
+	//#region node_modules/d3-selection/src/selection/attr.js
 	function attrRemove$1(name) {
 		return function() {
 			this.removeAttribute(name);
@@ -36736,13 +36821,13 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_namespace();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/window.js
+	//#region node_modules/d3-selection/src/window.js
 	function window_default(node) {
 		return node.ownerDocument && node.ownerDocument.defaultView || node.document && node || node.defaultView;
 	}
 	var init_window = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/style.js
+	//#region node_modules/d3-selection/src/selection/style.js
 	function styleRemove$1(name) {
 		return function() {
 			this.style.removeProperty(name);
@@ -36770,7 +36855,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_window();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/property.js
+	//#region node_modules/d3-selection/src/selection/property.js
 	function propertyRemove(name) {
 		return function() {
 			delete this[name];
@@ -36793,7 +36878,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_property$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/classed.js
+	//#region node_modules/d3-selection/src/selection/classed.js
 	function classArray(string) {
 		return string.trim().split(/^|\s+/);
 	}
@@ -36857,7 +36942,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/text.js
+	//#region node_modules/d3-selection/src/selection/text.js
 	function textRemove() {
 		this.textContent = "";
 	}
@@ -36877,7 +36962,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_text$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/html.js
+	//#region node_modules/d3-selection/src/selection/html.js
 	function htmlRemove() {
 		this.innerHTML = "";
 	}
@@ -36897,7 +36982,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_html$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/raise.js
+	//#region node_modules/d3-selection/src/selection/raise.js
 	function raise() {
 		if (this.nextSibling) this.parentNode.appendChild(this);
 	}
@@ -36906,7 +36991,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_raise = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/lower.js
+	//#region node_modules/d3-selection/src/selection/lower.js
 	function lower() {
 		if (this.previousSibling) this.parentNode.insertBefore(this, this.parentNode.firstChild);
 	}
@@ -36915,7 +37000,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_lower = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/append.js
+	//#region node_modules/d3-selection/src/selection/append.js
 	function append_default(name) {
 		var create = typeof name === "function" ? name : creator_default(name);
 		return this.select(function() {
@@ -36926,7 +37011,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_creator();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/insert.js
+	//#region node_modules/d3-selection/src/selection/insert.js
 	function constantNull() {
 		return null;
 	}
@@ -36941,7 +37026,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_selector();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/remove.js
+	//#region node_modules/d3-selection/src/selection/remove.js
 	function remove() {
 		var parent = this.parentNode;
 		if (parent) parent.removeChild(this);
@@ -36951,7 +37036,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_remove$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/clone.js
+	//#region node_modules/d3-selection/src/selection/clone.js
 	function selection_cloneShallow() {
 		var clone = this.cloneNode(false), parent = this.parentNode;
 		return parent ? parent.insertBefore(clone, this.nextSibling) : clone;
@@ -36965,13 +37050,13 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_clone$2 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/datum.js
+	//#region node_modules/d3-selection/src/selection/datum.js
 	function datum_default(value) {
 		return arguments.length ? this.property("__data__", value) : this.node().__data__;
 	}
 	var init_datum = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/on.js
+	//#region node_modules/d3-selection/src/selection/on.js
 	function contextListener(listener) {
 		return function(event) {
 			listener.call(this, event, this.__data__);
@@ -37035,7 +37120,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_on$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/dispatch.js
+	//#region node_modules/d3-selection/src/selection/dispatch.js
 	function dispatchEvent(node, type, params) {
 		var window = window_default(node), event = window.CustomEvent;
 		if (typeof event === "function") event = new event(type, params);
@@ -37063,13 +37148,13 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_window();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/iterator.js
+	//#region node_modules/d3-selection/src/selection/iterator.js
 	function* iterator_default$1() {
 		for (var groups = this._groups, j = 0, m = groups.length; j < m; ++j) for (var group = groups[j], i = 0, n = group.length, node; i < n; ++i) if (node = group[i]) yield node;
 	}
 	var init_iterator$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/selection/index.js
+	//#region node_modules/d3-selection/src/selection/index.js
 	function Selection$1(groups, parents) {
 		this._groups = groups;
 		this._parents = parents;
@@ -37157,7 +37242,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/select.js
+	//#region node_modules/d3-selection/src/select.js
 	function select_default$1(selector) {
 		return typeof selector === "string" ? new Selection$1([[document.querySelector(selector)]], [document.documentElement]) : new Selection$1([[selector]], root$1);
 	}
@@ -37165,7 +37250,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_selection$2();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-selection@3.0.0/node_modules/d3-selection/src/index.js
+	//#region node_modules/d3-selection/src/index.js
 	var init_src$27 = __esmMin((() => {
 		init_creator();
 		init_select$1();
@@ -37180,13 +37265,13 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_window();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-drag@3.0.0/node_modules/d3-drag/src/index.js
+	//#region node_modules/d3-drag/src/index.js
 	var init_src$26 = __esmMin((() => {
 		init_src$28();
 		init_src$27();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-color@3.1.0/node_modules/d3-color/src/define.js
+	//#region node_modules/d3-color/src/define.js
 	function define_default(constructor, factory, prototype) {
 		constructor.prototype = factory.prototype = prototype;
 		prototype.constructor = constructor;
@@ -37198,7 +37283,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_define = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-color@3.1.0/node_modules/d3-color/src/color.js
+	//#region node_modules/d3-color/src/color.js
 	function Color$1() {}
 	function color_formatHex() {
 		return this.rgb().formatHex();
@@ -37529,14 +37614,14 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		}));
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-color@3.1.0/node_modules/d3-color/src/math.js
+	//#region node_modules/d3-color/src/math.js
 	var radians, degrees$1;
 	var init_math$1 = __esmMin((() => {
 		radians = Math.PI / 180;
 		degrees$1 = 180 / Math.PI;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-color@3.1.0/node_modules/d3-color/src/lab.js
+	//#region node_modules/d3-color/src/lab.js
 	function labConvert(o) {
 		if (o instanceof Lab) return new Lab(o.l, o.a, o.b, o.opacity);
 		if (o instanceof Hcl) return hcl2lab(o);
@@ -37632,7 +37717,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		}));
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-color@3.1.0/node_modules/d3-color/src/index.js
+	//#region node_modules/d3-color/src/index.js
 	var init_src$25 = __esmMin((() => {
 		init_color$1();
 		init_lab();
@@ -37644,13 +37729,13 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_basis$1();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-interpolate@3.0.1/node_modules/d3-interpolate/src/constant.js
+	//#region node_modules/d3-interpolate/src/constant.js
 	var constant_default$3;
 	var init_constant$4 = __esmMin((() => {
 		constant_default$3 = (x) => () => x;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-interpolate@3.0.1/node_modules/d3-interpolate/src/color.js
+	//#region node_modules/d3-interpolate/src/color.js
 	function linear$1(a, d) {
 		return function(t) {
 			return a + t * d;
@@ -37699,7 +37784,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		})(1);
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-interpolate@3.0.1/node_modules/d3-interpolate/src/numberArray.js
+	//#region node_modules/d3-interpolate/src/numberArray.js
 	function numberArray_default(a, b) {
 		if (!b) b = [];
 		var n = a ? Math.min(b.length, a.length) : 0, c = b.slice(), i;
@@ -37713,7 +37798,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_numberArray = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-interpolate@3.0.1/node_modules/d3-interpolate/src/array.js
+	//#region node_modules/d3-interpolate/src/array.js
 	function genericArray(a, b) {
 		var nb = b ? b.length : 0, na = a ? Math.min(nb, a.length) : 0, x = new Array(na), c = new Array(nb), i = 0;
 		for (; i < na; ++i) x[i] = value_default(a[i], b[i]);
@@ -37727,7 +37812,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_value();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-interpolate@3.0.1/node_modules/d3-interpolate/src/date.js
+	//#region node_modules/d3-interpolate/src/date.js
 	function date_default(a, b) {
 		var d = /* @__PURE__ */ new Date();
 		return a = +a, b = +b, function(t) {
@@ -37736,7 +37821,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_date = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-interpolate@3.0.1/node_modules/d3-interpolate/src/number.js
+	//#region node_modules/d3-interpolate/src/number.js
 	function number_default(a, b) {
 		return a = +a, b = +b, function(t) {
 			return a * (1 - t) + b * t;
@@ -37744,7 +37829,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_number$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-interpolate@3.0.1/node_modules/d3-interpolate/src/object.js
+	//#region node_modules/d3-interpolate/src/object.js
 	function object_default(a, b) {
 		var i = {}, c = {}, k;
 		if (a === null || typeof a !== "object") a = {};
@@ -37760,7 +37845,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_value();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-interpolate@3.0.1/node_modules/d3-interpolate/src/string.js
+	//#region node_modules/d3-interpolate/src/string.js
 	function zero(b) {
 		return function() {
 			return b;
@@ -37809,7 +37894,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		reB = new RegExp(reA.source, "g");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-interpolate@3.0.1/node_modules/d3-interpolate/src/value.js
+	//#region node_modules/d3-interpolate/src/value.js
 	function value_default(a, b) {
 		var t = typeof b, c;
 		return b == null || t === "boolean" ? constant_default$3(b) : (t === "number" ? number_default : t === "string" ? (c = color(b)) ? (b = c, rgb_default) : string_default : b instanceof color ? rgb_default : b instanceof Date ? date_default : isNumberArray(b) ? numberArray_default : Array.isArray(b) ? genericArray : typeof b.valueOf !== "function" && typeof b.toString !== "function" || isNaN(b) ? object_default : number_default)(a, b);
@@ -37826,7 +37911,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_numberArray();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-interpolate@3.0.1/node_modules/d3-interpolate/src/round.js
+	//#region node_modules/d3-interpolate/src/round.js
 	function round_default$1(a, b) {
 		return a = +a, b = +b, function(t) {
 			return Math.round(a * (1 - t) + b * t);
@@ -37834,7 +37919,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_round$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-interpolate@3.0.1/node_modules/d3-interpolate/src/transform/decompose.js
+	//#region node_modules/d3-interpolate/src/transform/decompose.js
 	function decompose_default(a, b, c, d, e, f) {
 		var scaleX, scaleY, skewX;
 		if (scaleX = Math.sqrt(a * a + b * b)) a /= scaleX, b /= scaleX;
@@ -37863,7 +37948,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-interpolate@3.0.1/node_modules/d3-interpolate/src/transform/parse.js
+	//#region node_modules/d3-interpolate/src/transform/parse.js
 	function parseCss(value) {
 		const m = new (typeof DOMMatrix === "function" ? DOMMatrix : WebKitCSSMatrix)(value + "");
 		return m.isIdentity ? identity$6 : decompose_default(m.a, m.b, m.c, m.d, m.e, m.f);
@@ -37881,7 +37966,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_decompose();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-interpolate@3.0.1/node_modules/d3-interpolate/src/transform/index.js
+	//#region node_modules/d3-interpolate/src/transform/index.js
 	function interpolateTransform(parse, pxComma, pxParen, degParen) {
 		function pop(s) {
 			return s.length ? s.pop() + " " : "";
@@ -37950,7 +38035,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		interpolateTransformSvg = interpolateTransform(parseSvg, ", ", ")", ")");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-interpolate@3.0.1/node_modules/d3-interpolate/src/hcl.js
+	//#region node_modules/d3-interpolate/src/hcl.js
 	function hcl(hue) {
 		return function(start, end) {
 			var h = hue((start = hcl$1(start)).h, (end = hcl$1(end)).h), c = nogamma(start.c, end.c), l = nogamma(start.l, end.l), opacity = nogamma(start.opacity, end.opacity);
@@ -37970,7 +38055,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		hcl_default = hcl(hue);
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-interpolate@3.0.1/node_modules/d3-interpolate/src/index.js
+	//#region node_modules/d3-interpolate/src/index.js
 	var init_src$24 = __esmMin((() => {
 		init_value();
 		init_array$1();
@@ -37989,7 +38074,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_hcl();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-timer@3.0.1/node_modules/d3-timer/src/timer.js
+	//#region node_modules/d3-timer/src/timer.js
 	function now$2() {
 		return clockNow || (setFrame(clearNow), clockNow = clock.now() + clockSkew);
 	}
@@ -38089,7 +38174,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-timer@3.0.1/node_modules/d3-timer/src/timeout.js
+	//#region node_modules/d3-timer/src/timeout.js
 	function timeout_default(callback, delay, time) {
 		var t = new Timer();
 		delay = delay == null ? 0 : +delay;
@@ -38103,13 +38188,13 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_timer();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-timer@3.0.1/node_modules/d3-timer/src/index.js
+	//#region node_modules/d3-timer/src/index.js
 	var init_src$23 = __esmMin((() => {
 		init_timer();
 		init_timeout();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/transition/schedule.js
+	//#region node_modules/d3-transition/src/transition/schedule.js
 	function schedule_default(node, name, id, index, group, timing) {
 		var schedules = node.__transition;
 		if (!schedules) node.__transition = {};
@@ -38210,7 +38295,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		emptyTween = [];
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/interrupt.js
+	//#region node_modules/d3-transition/src/interrupt.js
 	function interrupt_default$1(node, name) {
 		var schedules = node.__transition, schedule, active, empty = true, i;
 		if (!schedules) return;
@@ -38232,7 +38317,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_schedule();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/selection/interrupt.js
+	//#region node_modules/d3-transition/src/selection/interrupt.js
 	function interrupt_default(name) {
 		return this.each(function() {
 			interrupt_default$1(this, name);
@@ -38242,7 +38327,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_interrupt$1();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/transition/tween.js
+	//#region node_modules/d3-transition/src/transition/tween.js
 	function tweenRemove(id, name) {
 		var tween0, tween1;
 		return function() {
@@ -38301,7 +38386,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_schedule();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/transition/interpolate.js
+	//#region node_modules/d3-transition/src/transition/interpolate.js
 	function interpolate_default(a, b) {
 		var c;
 		return (typeof b === "number" ? number_default : b instanceof color ? rgb_default : (c = color(b)) ? (b = c, rgb_default) : string_default)(a, b);
@@ -38311,7 +38396,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_src$24();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/transition/attr.js
+	//#region node_modules/d3-transition/src/transition/attr.js
 	function attrRemove(name) {
 		return function() {
 			this.removeAttribute(name);
@@ -38367,7 +38452,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_interpolate();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/transition/attrTween.js
+	//#region node_modules/d3-transition/src/transition/attrTween.js
 	function attrInterpolate(name, i) {
 		return function(t) {
 			this.setAttribute(name, i.call(this, t));
@@ -38410,7 +38495,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_src$27();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/transition/delay.js
+	//#region node_modules/d3-transition/src/transition/delay.js
 	function delayFunction(id, value) {
 		return function() {
 			init$1(this, id).delay = +value.apply(this, arguments);
@@ -38429,7 +38514,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_schedule();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/transition/duration.js
+	//#region node_modules/d3-transition/src/transition/duration.js
 	function durationFunction(id, value) {
 		return function() {
 			set$2(this, id).duration = +value.apply(this, arguments);
@@ -38448,7 +38533,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_schedule();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/transition/ease.js
+	//#region node_modules/d3-transition/src/transition/ease.js
 	function easeConstant(id, value) {
 		if (typeof value !== "function") throw new Error();
 		return function() {
@@ -38463,7 +38548,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_schedule();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/transition/easeVarying.js
+	//#region node_modules/d3-transition/src/transition/easeVarying.js
 	function easeVarying(id, value) {
 		return function() {
 			var v = value.apply(this, arguments);
@@ -38479,7 +38564,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_schedule();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/transition/filter.js
+	//#region node_modules/d3-transition/src/transition/filter.js
 	function filter_default$1(match) {
 		if (typeof match !== "function") match = matcher_default(match);
 		for (var groups = this._groups, m = groups.length, subgroups = new Array(m), j = 0; j < m; ++j) for (var group = groups[j], n = group.length, subgroup = subgroups[j] = [], node, i = 0; i < n; ++i) if ((node = group[i]) && match.call(node, node.__data__, i, group)) subgroup.push(node);
@@ -38490,7 +38575,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_transition$1();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/transition/merge.js
+	//#region node_modules/d3-transition/src/transition/merge.js
 	function merge_default(transition) {
 		if (transition._id !== this._id) throw new Error();
 		for (var groups0 = this._groups, groups1 = transition._groups, m0 = groups0.length, m1 = groups1.length, m = Math.min(m0, m1), merges = new Array(m0), j = 0; j < m; ++j) for (var group0 = groups0[j], group1 = groups1[j], n = group0.length, merge = merges[j] = new Array(n), node, i = 0; i < n; ++i) if (node = group0[i] || group1[i]) merge[i] = node;
@@ -38501,7 +38586,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_transition$1();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/transition/on.js
+	//#region node_modules/d3-transition/src/transition/on.js
 	function start(name) {
 		return (name + "").trim().split(/^|\s+/).every(function(t) {
 			var i = t.indexOf(".");
@@ -38525,7 +38610,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_schedule();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/transition/remove.js
+	//#region node_modules/d3-transition/src/transition/remove.js
 	function removeFunction(id) {
 		return function() {
 			var parent = this.parentNode;
@@ -38538,7 +38623,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_remove = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/transition/select.js
+	//#region node_modules/d3-transition/src/transition/select.js
 	function select_default(select) {
 		var name = this._name, id = this._id;
 		if (typeof select !== "function") select = selector_default(select);
@@ -38555,7 +38640,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_schedule();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/transition/selectAll.js
+	//#region node_modules/d3-transition/src/transition/selectAll.js
 	function selectAll_default(select) {
 		var name = this._name, id = this._id;
 		if (typeof select !== "function") select = selectorAll_default(select);
@@ -38572,7 +38657,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_schedule();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/transition/selection.js
+	//#region node_modules/d3-transition/src/transition/selection.js
 	function selection_default() {
 		return new Selection(this._groups, this._parents);
 	}
@@ -38582,7 +38667,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		Selection = selection.prototype.constructor;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/transition/style.js
+	//#region node_modules/d3-transition/src/transition/style.js
 	function styleNull(name, interpolate) {
 		var string00, string10, interpolate0;
 		return function() {
@@ -38630,7 +38715,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_interpolate();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/transition/styleTween.js
+	//#region node_modules/d3-transition/src/transition/styleTween.js
 	function styleInterpolate(name, i, priority) {
 		return function(t) {
 			this.style.setProperty(name, i.call(this, t), priority);
@@ -38655,7 +38740,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_styleTween = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/transition/text.js
+	//#region node_modules/d3-transition/src/transition/text.js
 	function textConstant(value) {
 		return function() {
 			this.textContent = value;
@@ -38674,7 +38759,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_tween();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/transition/textTween.js
+	//#region node_modules/d3-transition/src/transition/textTween.js
 	function textInterpolate(i) {
 		return function(t) {
 			this.textContent = i.call(this, t);
@@ -38699,7 +38784,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_textTween = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/transition/transition.js
+	//#region node_modules/d3-transition/src/transition/transition.js
 	function transition_default$1() {
 		var name = this._name, id0 = this._id, id1 = newId();
 		for (var groups = this._groups, m = groups.length, j = 0; j < m; ++j) for (var group = groups[j], n = group.length, node, i = 0; i < n; ++i) if (node = group[i]) {
@@ -38718,7 +38803,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_schedule();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/transition/end.js
+	//#region node_modules/d3-transition/src/transition/end.js
 	function end_default() {
 		var on0, on1, that = this, id = that._id, size = that.size();
 		return new Promise(function(resolve, reject) {
@@ -38742,7 +38827,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_schedule();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/transition/index.js
+	//#region node_modules/d3-transition/src/transition/index.js
 	function Transition$1(groups, parents, name, id) {
 		this._groups = groups;
 		this._parents = parents;
@@ -38814,18 +38899,18 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-ease@3.0.1/node_modules/d3-ease/src/cubic.js
+	//#region node_modules/d3-ease/src/cubic.js
 	function cubicInOut(t) {
 		return ((t *= 2) <= 1 ? t * t * t : (t -= 2) * t * t + 2) / 2;
 	}
 	var init_cubic = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-ease@3.0.1/node_modules/d3-ease/src/index.js
+	//#region node_modules/d3-ease/src/index.js
 	var init_src$22 = __esmMin((() => {
 		init_cubic();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/selection/transition.js
+	//#region node_modules/d3-transition/src/selection/transition.js
 	function inherit(node, id) {
 		var timing;
 		while (!(timing = node.__transition) || !(timing = timing[id])) if (!(node = node.parentNode)) throw new Error(`transition ${id} not found`);
@@ -38852,7 +38937,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/selection/index.js
+	//#region node_modules/d3-transition/src/selection/index.js
 	var init_selection = __esmMin((() => {
 		init_src$27();
 		init_interrupt();
@@ -38861,7 +38946,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		selection.prototype.transition = transition_default;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-transition@3.0.1_d3-selection@3.0.0/node_modules/d3-transition/src/index.js
+	//#region node_modules/d3-transition/src/index.js
 	var init_src$21 = __esmMin((() => {
 		init_selection();
 		init_transition$1();
@@ -38889,12 +38974,12 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		].map(type$1);
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-brush@3.0.0/node_modules/d3-brush/src/index.js
+	//#region node_modules/d3-brush/src/index.js
 	var init_src$20 = __esmMin((() => {
 		init_brush();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-path@3.1.0/node_modules/d3-path/src/path.js
+	//#region node_modules/d3-path/src/path.js
 	function append$1(strings) {
 		this._ += strings[0];
 		for (let i = 1, n = strings.length; i < n; ++i) this._ += arguments[i] + strings[i];
@@ -38976,43 +39061,43 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		path.prototype = Path.prototype;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-path@3.1.0/node_modules/d3-path/src/index.js
+	//#region node_modules/d3-path/src/index.js
 	var init_src$19 = __esmMin((() => {
 		init_path$2();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-chord@3.0.1/node_modules/d3-chord/src/index.js
+	//#region node_modules/d3-chord/src/index.js
 	var init_src$18 = __esmMin((() => {
 		init_src$19();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-contour@4.0.2/node_modules/d3-contour/src/index.js
+	//#region node_modules/d3-contour/src/index.js
 	var init_src$17 = __esmMin((() => {
 		init_src$30();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-delaunay@6.0.4/node_modules/d3-delaunay/src/index.js
+	//#region node_modules/d3-delaunay/src/index.js
 	var init_src$16 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-dsv@3.0.1/node_modules/d3-dsv/src/index.js
+	//#region node_modules/d3-dsv/src/index.js
 	var init_src$15 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-fetch@3.0.1/node_modules/d3-fetch/src/index.js
+	//#region node_modules/d3-fetch/src/index.js
 	var init_src$14 = __esmMin((() => {
 		init_src$15();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-quadtree@3.0.1/node_modules/d3-quadtree/src/index.js
+	//#region node_modules/d3-quadtree/src/index.js
 	var init_src$13 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-force@3.0.0/node_modules/d3-force/src/index.js
+	//#region node_modules/d3-force/src/index.js
 	var init_src$12 = __esmMin((() => {
 		init_src$13();
 		init_src$28();
 		init_src$23();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-format@3.1.2/node_modules/d3-format/src/formatDecimal.js
+	//#region node_modules/d3-format/src/formatDecimal.js
 	function formatDecimal_default(x) {
 		return Math.abs(x = Math.round(x)) >= 1e21 ? x.toLocaleString("en").replace(/,/g, "") : x.toString(10);
 	}
@@ -39023,7 +39108,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_formatDecimal = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-format@3.1.2/node_modules/d3-format/src/exponent.js
+	//#region node_modules/d3-format/src/exponent.js
 	function exponent_default(x) {
 		return x = formatDecimalParts(Math.abs(x)), x ? x[1] : NaN;
 	}
@@ -39031,7 +39116,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_formatDecimal();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-format@3.1.2/node_modules/d3-format/src/formatGroup.js
+	//#region node_modules/d3-format/src/formatGroup.js
 	function formatGroup_default(grouping, thousands) {
 		return function(value, width) {
 			var i = value.length, t = [], j = 0, g = grouping[0], length = 0;
@@ -39046,7 +39131,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_formatGroup = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-format@3.1.2/node_modules/d3-format/src/formatNumerals.js
+	//#region node_modules/d3-format/src/formatNumerals.js
 	function formatNumerals_default(numerals) {
 		return function(value) {
 			return value.replace(/[0-9]/g, function(i) {
@@ -39056,7 +39141,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_formatNumerals = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-format@3.1.2/node_modules/d3-format/src/formatSpecifier.js
+	//#region node_modules/d3-format/src/formatSpecifier.js
 	function formatSpecifier(specifier) {
 		if (!(match = re$1.exec(specifier))) throw new Error("invalid format: " + specifier);
 		var match;
@@ -39094,7 +39179,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-format@3.1.2/node_modules/d3-format/src/formatTrim.js
+	//#region node_modules/d3-format/src/formatTrim.js
 	function formatTrim_default(s) {
 		out: for (var n = s.length, i = 1, i0 = -1, i1; i < n; ++i) switch (s[i]) {
 			case ".":
@@ -39112,7 +39197,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_formatTrim = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-format@3.1.2/node_modules/d3-format/src/formatPrefixAuto.js
+	//#region node_modules/d3-format/src/formatPrefixAuto.js
 	function formatPrefixAuto_default(x, p) {
 		var d = formatDecimalParts(x, p);
 		if (!d) return prefixExponent = void 0, x.toPrecision(p);
@@ -39124,7 +39209,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_formatDecimal();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-format@3.1.2/node_modules/d3-format/src/formatRounded.js
+	//#region node_modules/d3-format/src/formatRounded.js
 	function formatRounded_default(x, p) {
 		var d = formatDecimalParts(x, p);
 		if (!d) return x + "";
@@ -39135,7 +39220,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_formatDecimal();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-format@3.1.2/node_modules/d3-format/src/formatTypes.js
+	//#region node_modules/d3-format/src/formatTypes.js
 	var formatTypes_default;
 	var init_formatTypes = __esmMin((() => {
 		init_formatDecimal();
@@ -39158,13 +39243,13 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-format@3.1.2/node_modules/d3-format/src/identity.js
+	//#region node_modules/d3-format/src/identity.js
 	function identity_default$2(x) {
 		return x;
 	}
 	var init_identity$2 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-format@3.1.2/node_modules/d3-format/src/locale.js
+	//#region node_modules/d3-format/src/locale.js
 	function locale_default(locale) {
 		var group = locale.grouping === void 0 || locale.thousands === void 0 ? identity_default$2 : formatGroup_default(map$3.call(locale.grouping, Number), locale.thousands + ""), currencyPrefix = locale.currency === void 0 ? "" : locale.currency[0] + "", currencySuffix = locale.currency === void 0 ? "" : locale.currency[1] + "", decimal = locale.decimal === void 0 ? "." : locale.decimal + "", numerals = locale.numerals === void 0 ? identity_default$2 : formatNumerals_default(map$3.call(locale.numerals, String)), percent = locale.percent === void 0 ? "%" : locale.percent + "", minus = locale.minus === void 0 ? "−" : locale.minus + "", nan = locale.nan === void 0 ? "NaN" : locale.nan + "";
 		function newFormat(specifier, options) {
@@ -39263,7 +39348,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		];
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-format@3.1.2/node_modules/d3-format/src/defaultLocale.js
+	//#region node_modules/d3-format/src/defaultLocale.js
 	function defaultLocale$1(definition) {
 		locale$1 = locale_default(definition);
 		format = locale$1.format;
@@ -39280,7 +39365,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		});
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-format@3.1.2/node_modules/d3-format/src/precisionFixed.js
+	//#region node_modules/d3-format/src/precisionFixed.js
 	function precisionFixed_default(step) {
 		return Math.max(0, -exponent_default(Math.abs(step)));
 	}
@@ -39288,7 +39373,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_exponent();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-format@3.1.2/node_modules/d3-format/src/precisionPrefix.js
+	//#region node_modules/d3-format/src/precisionPrefix.js
 	function precisionPrefix_default(step, value) {
 		return Math.max(0, Math.max(-8, Math.min(8, Math.floor(exponent_default(value) / 3))) * 3 - exponent_default(Math.abs(step)));
 	}
@@ -39296,7 +39381,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_exponent();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-format@3.1.2/node_modules/d3-format/src/precisionRound.js
+	//#region node_modules/d3-format/src/precisionRound.js
 	function precisionRound_default(step, max) {
 		step = Math.abs(step), max = Math.abs(max) - step;
 		return Math.max(0, exponent_default(max) - exponent_default(step)) + 1;
@@ -39305,7 +39390,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_exponent();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-format@3.1.2/node_modules/d3-format/src/index.js
+	//#region node_modules/d3-format/src/index.js
 	var init_src$11 = __esmMin((() => {
 		init_defaultLocale$1();
 		init_locale$1();
@@ -39315,12 +39400,12 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_precisionRound();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-geo@3.1.1/node_modules/d3-geo/src/index.js
+	//#region node_modules/d3-geo/src/index.js
 	var init_src$10 = __esmMin((() => {
 		init_src$30();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-hierarchy@3.1.2/node_modules/d3-hierarchy/src/hierarchy/count.js
+	//#region node_modules/d3-hierarchy/src/hierarchy/count.js
 	function count(node) {
 		var sum = 0, children = node.children, i = children && children.length;
 		if (!i) sum = 1;
@@ -39332,7 +39417,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_count = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-hierarchy@3.1.2/node_modules/d3-hierarchy/src/hierarchy/each.js
+	//#region node_modules/d3-hierarchy/src/hierarchy/each.js
 	function each_default(callback, that) {
 		let index = -1;
 		for (const node of this) callback.call(that, node, ++index, this);
@@ -39340,7 +39425,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_each$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-hierarchy@3.1.2/node_modules/d3-hierarchy/src/hierarchy/eachBefore.js
+	//#region node_modules/d3-hierarchy/src/hierarchy/eachBefore.js
 	function eachBefore_default(callback, that) {
 		var node = this, nodes = [node], children, i, index = -1;
 		while (node = nodes.pop()) {
@@ -39351,7 +39436,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_eachBefore = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-hierarchy@3.1.2/node_modules/d3-hierarchy/src/hierarchy/eachAfter.js
+	//#region node_modules/d3-hierarchy/src/hierarchy/eachAfter.js
 	function eachAfter_default(callback, that) {
 		var node = this, nodes = [node], next = [], children, i, n, index = -1;
 		while (node = nodes.pop()) {
@@ -39363,14 +39448,14 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_eachAfter = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-hierarchy@3.1.2/node_modules/d3-hierarchy/src/hierarchy/find.js
+	//#region node_modules/d3-hierarchy/src/hierarchy/find.js
 	function find_default$1(callback, that) {
 		let index = -1;
 		for (const node of this) if (callback.call(that, node, ++index, this)) return node;
 	}
 	var init_find$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-hierarchy@3.1.2/node_modules/d3-hierarchy/src/hierarchy/sum.js
+	//#region node_modules/d3-hierarchy/src/hierarchy/sum.js
 	function sum_default(value) {
 		return this.eachAfter(function(node) {
 			var sum = +value(node.data) || 0, children = node.children, i = children && children.length;
@@ -39380,7 +39465,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_sum = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-hierarchy@3.1.2/node_modules/d3-hierarchy/src/hierarchy/sort.js
+	//#region node_modules/d3-hierarchy/src/hierarchy/sort.js
 	function sort_default(compare) {
 		return this.eachBefore(function(node) {
 			if (node.children) node.children.sort(compare);
@@ -39388,7 +39473,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_sort$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-hierarchy@3.1.2/node_modules/d3-hierarchy/src/hierarchy/path.js
+	//#region node_modules/d3-hierarchy/src/hierarchy/path.js
 	function path_default(end) {
 		var start = this, ancestor = leastCommonAncestor(start, end), nodes = [start];
 		while (start !== ancestor) {
@@ -39416,7 +39501,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_path$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-hierarchy@3.1.2/node_modules/d3-hierarchy/src/hierarchy/ancestors.js
+	//#region node_modules/d3-hierarchy/src/hierarchy/ancestors.js
 	function ancestors_default() {
 		var node = this, nodes = [node];
 		while (node = node.parent) nodes.push(node);
@@ -39424,13 +39509,13 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_ancestors = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-hierarchy@3.1.2/node_modules/d3-hierarchy/src/hierarchy/descendants.js
+	//#region node_modules/d3-hierarchy/src/hierarchy/descendants.js
 	function descendants_default() {
 		return Array.from(this);
 	}
 	var init_descendants = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-hierarchy@3.1.2/node_modules/d3-hierarchy/src/hierarchy/leaves.js
+	//#region node_modules/d3-hierarchy/src/hierarchy/leaves.js
 	function leaves_default() {
 		var leaves = [];
 		this.eachBefore(function(node) {
@@ -39440,7 +39525,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_leaves = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-hierarchy@3.1.2/node_modules/d3-hierarchy/src/hierarchy/links.js
+	//#region node_modules/d3-hierarchy/src/hierarchy/links.js
 	function links_default() {
 		var root = this, links = [];
 		root.each(function(node) {
@@ -39453,7 +39538,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_links = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-hierarchy@3.1.2/node_modules/d3-hierarchy/src/hierarchy/iterator.js
+	//#region node_modules/d3-hierarchy/src/hierarchy/iterator.js
 	function* iterator_default() {
 		var node = this, current, next = [node], children, i, n;
 		do {
@@ -39466,7 +39551,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_iterator = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-hierarchy@3.1.2/node_modules/d3-hierarchy/src/hierarchy/index.js
+	//#region node_modules/d3-hierarchy/src/hierarchy/index.js
 	function hierarchy(data, children) {
 		if (data instanceof Map) {
 			data = [void 0, data];
@@ -39540,14 +39625,14 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-hierarchy@3.1.2/node_modules/d3-hierarchy/src/accessors.js
+	//#region node_modules/d3-hierarchy/src/accessors.js
 	function required(f) {
 		if (typeof f !== "function") throw new Error();
 		return f;
 	}
 	var init_accessors = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-hierarchy@3.1.2/node_modules/d3-hierarchy/src/constant.js
+	//#region node_modules/d3-hierarchy/src/constant.js
 	function constantZero() {
 		return 0;
 	}
@@ -39558,7 +39643,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_constant$3 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-hierarchy@3.1.2/node_modules/d3-hierarchy/src/treemap/round.js
+	//#region node_modules/d3-hierarchy/src/treemap/round.js
 	function round_default(node) {
 		node.x0 = Math.round(node.x0);
 		node.y0 = Math.round(node.y0);
@@ -39567,7 +39652,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_round = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-hierarchy@3.1.2/node_modules/d3-hierarchy/src/treemap/dice.js
+	//#region node_modules/d3-hierarchy/src/treemap/dice.js
 	function dice_default(parent, x0, y0, x1, y1) {
 		var nodes = parent.children, node, i = -1, n = nodes.length, k = parent.value && (x1 - x0) / parent.value;
 		while (++i < n) {
@@ -39577,7 +39662,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_dice = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-hierarchy@3.1.2/node_modules/d3-hierarchy/src/treemap/slice.js
+	//#region node_modules/d3-hierarchy/src/treemap/slice.js
 	function slice_default(parent, x0, y0, x1, y1) {
 		var nodes = parent.children, node, i = -1, n = nodes.length, k = parent.value && (y1 - y0) / parent.value;
 		while (++i < n) {
@@ -39587,7 +39672,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_slice = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-hierarchy@3.1.2/node_modules/d3-hierarchy/src/treemap/squarify.js
+	//#region node_modules/d3-hierarchy/src/treemap/squarify.js
 	function squarifyRatio(ratio, parent, x0, y0, x1, y1) {
 		var rows = [], nodes = parent.children, row, nodeValue, i0 = 0, i1 = 0, n = nodes.length, dx, dy, value = parent.value, sumValue, minValue, maxValue, newRatio, minRatio, alpha, beta;
 		while (i0 < n) {
@@ -39638,7 +39723,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		})(phi);
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-hierarchy@3.1.2/node_modules/d3-hierarchy/src/treemap/index.js
+	//#region node_modules/d3-hierarchy/src/treemap/index.js
 	function treemap_default() {
 		var tile = squarify_default, round = false, dx = 1, dy = 1, paddingStack = [0], paddingInner = constantZero, paddingTop = constantZero, paddingRight = constantZero, paddingBottom = constantZero, paddingLeft = constantZero;
 		function treemap(root) {
@@ -39708,7 +39793,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_constant$3();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-hierarchy@3.1.2/node_modules/d3-hierarchy/src/index.js
+	//#region node_modules/d3-hierarchy/src/index.js
 	var init_src$9 = __esmMin((() => {
 		init_hierarchy();
 		init_constant$3();
@@ -39719,13 +39804,13 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_squarify();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-polygon@3.0.1/node_modules/d3-polygon/src/index.js
+	//#region node_modules/d3-polygon/src/index.js
 	var init_src$8 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-random@3.0.1/node_modules/d3-random/src/index.js
+	//#region node_modules/d3-random/src/index.js
 	var init_src$7 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-scale@4.0.2/node_modules/d3-scale/src/init.js
+	//#region node_modules/d3-scale/src/init.js
 	function initRange(domain, range) {
 		switch (arguments.length) {
 			case 0: break;
@@ -39738,7 +39823,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_init = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-scale@4.0.2/node_modules/d3-scale/src/ordinal.js
+	//#region node_modules/d3-scale/src/ordinal.js
 	function ordinal() {
 		var index = new InternMap(), domain = [], range = [], unknown = implicit;
 		function scale(d) {
@@ -39777,7 +39862,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		implicit = Symbol("implicit");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-scale@4.0.2/node_modules/d3-scale/src/band.js
+	//#region node_modules/d3-scale/src/band.js
 	function band() {
 		var scale = ordinal().unknown(void 0), domain = scale.domain, ordinalRange = scale.range, r0 = 0, r1 = 1, step, bandwidth, round = false, paddingInner = 0, paddingOuter = 0, align = .5;
 		delete scale.unknown;
@@ -39834,7 +39919,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_ordinal();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-scale@4.0.2/node_modules/d3-scale/src/constant.js
+	//#region node_modules/d3-scale/src/constant.js
 	function constants(x) {
 		return function() {
 			return x;
@@ -39842,13 +39927,13 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_constant$2 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-scale@4.0.2/node_modules/d3-scale/src/number.js
+	//#region node_modules/d3-scale/src/number.js
 	function number$3(x) {
 		return +x;
 	}
 	var init_number = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-scale@4.0.2/node_modules/d3-scale/src/continuous.js
+	//#region node_modules/d3-scale/src/continuous.js
 	function identity$5(x) {
 		return x;
 	}
@@ -39940,7 +40025,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		unit = [0, 1];
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-scale@4.0.2/node_modules/d3-scale/src/tickFormat.js
+	//#region node_modules/d3-scale/src/tickFormat.js
 	function tickFormat(start, stop, count, specifier) {
 		var step = tickStep(start, stop, count), precision;
 		specifier = formatSpecifier(specifier == null ? ",f" : specifier);
@@ -39966,7 +40051,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_src$11();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-scale@4.0.2/node_modules/d3-scale/src/linear.js
+	//#region node_modules/d3-scale/src/linear.js
 	function linearish(scale) {
 		var domain = scale.domain;
 		scale.ticks = function(count) {
@@ -40025,7 +40110,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_tickFormat();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-scale@4.0.2/node_modules/d3-scale/src/nice.js
+	//#region node_modules/d3-scale/src/nice.js
 	function nice(domain, interval) {
 		domain = domain.slice();
 		var i0 = 0, i1 = domain.length - 1, x0 = domain[i0], x1 = domain[i1], t;
@@ -40039,7 +40124,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_nice = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-time@3.1.0/node_modules/d3-time/src/interval.js
+	//#region node_modules/d3-time/src/interval.js
 	function timeInterval(floori, offseti, count, field) {
 		function interval(date) {
 			return floori(date = arguments.length === 0 ? /* @__PURE__ */ new Date() : /* @__PURE__ */ new Date(+date)), date;
@@ -40118,7 +40203,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		millisecond.range;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-time@3.1.0/node_modules/d3-time/src/duration.js
+	//#region node_modules/d3-time/src/duration.js
 	var durationSecond, durationMinute, durationHour, durationDay, durationWeek, durationMonth, durationYear;
 	var init_duration = __esmMin((() => {
 		durationSecond = 1e3;
@@ -40218,7 +40303,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		unixDay.range;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-time@3.1.0/node_modules/d3-time/src/week.js
+	//#region node_modules/d3-time/src/week.js
 	function timeWeekday(i) {
 		return timeInterval((date) => {
 			date.setDate(date.getDate() - (date.getDay() + 7 - i) % 7);
@@ -40341,7 +40426,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		utcYear.range;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-time@3.1.0/node_modules/d3-time/src/ticks.js
+	//#region node_modules/d3-time/src/ticks.js
 	function ticker(year, month, week, day, hour, minute) {
 		const tickIntervals = [
 			[
@@ -40468,7 +40553,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		[timeTicks, timeTickInterval] = ticker(timeYear, timeMonth, timeSunday, timeDay, timeHour, timeMinute);
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-time@3.1.0/node_modules/d3-time/src/index.js
+	//#region node_modules/d3-time/src/index.js
 	var init_src$6 = __esmMin((() => {
 		init_interval();
 		init_millisecond();
@@ -40482,7 +40567,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_ticks();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-time-format@4.1.0/node_modules/d3-time-format/src/locale.js
+	//#region node_modules/d3-time-format/src/locale.js
 	function localDate(d) {
 		if (0 <= d.y && d.y < 100) {
 			var date = new Date(-1, d.m, d.d, d.H, d.M, d.S, d.L);
@@ -41035,7 +41120,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		requoteRe = /[\\^$*+?|[\]().{}]/g;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-time-format@4.1.0/node_modules/d3-time-format/src/defaultLocale.js
+	//#region node_modules/d3-time-format/src/defaultLocale.js
 	function defaultLocale(definition) {
 		locale = formatLocale(definition);
 		timeFormat = locale.format;
@@ -41101,13 +41186,13 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		});
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-time-format@4.1.0/node_modules/d3-time-format/src/index.js
+	//#region node_modules/d3-time-format/src/index.js
 	var init_src$5 = __esmMin((() => {
 		init_defaultLocale();
 		init_locale();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-scale@4.0.2/node_modules/d3-scale/src/time.js
+	//#region node_modules/d3-scale/src/time.js
 	function date(t) {
 		return new Date(t);
 	}
@@ -41154,7 +41239,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_nice();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-scale@4.0.2/node_modules/d3-scale/src/index.js
+	//#region node_modules/d3-scale/src/index.js
 	var init_src$4 = __esmMin((() => {
 		init_band();
 		init_linear$1();
@@ -41171,7 +41256,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_tickFormat();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-scale-chromatic@3.1.0/node_modules/d3-scale-chromatic/src/colors.js
+	//#region node_modules/d3-scale-chromatic/src/colors.js
 	function colors_default(specifier) {
 		var n = specifier.length / 6 | 0, colors = new Array(n), i = 0;
 		while (i < n) colors[i] = "#" + specifier.slice(i * 6, ++i * 6);
@@ -41179,14 +41264,14 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_colors = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-scale-chromatic@3.1.0/node_modules/d3-scale-chromatic/src/categorical/Tableau10.js
+	//#region node_modules/d3-scale-chromatic/src/categorical/Tableau10.js
 	var Tableau10_default;
 	var init_Tableau10 = __esmMin((() => {
 		init_colors();
 		Tableau10_default = colors_default("4e79a7f28e2ce1575976b7b259a14fedc949af7aa1ff9da79c755fbab0ab");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-scale-chromatic@3.1.0/node_modules/d3-scale-chromatic/src/index.js
+	//#region node_modules/d3-scale-chromatic/src/index.js
 	var init_src$3 = __esmMin((() => {
 		init_colors();
 		init_Tableau10();
@@ -41194,7 +41279,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_src$25();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/constant.js
+	//#region node_modules/d3-shape/src/constant.js
 	function constant_default$1(x) {
 		return function constant() {
 			return x;
@@ -41202,7 +41287,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_constant$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/math.js
+	//#region node_modules/d3-shape/src/math.js
 	function acos(x) {
 		return x > 1 ? 0 : x < -1 ? pi : Math.acos(x);
 	}
@@ -41223,7 +41308,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		tau = 2 * pi;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/path.js
+	//#region node_modules/d3-shape/src/path.js
 	function withPath(shape) {
 		let digits = 3;
 		shape.digits = function(_) {
@@ -41242,7 +41327,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_src$19();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/arc.js
+	//#region node_modules/d3-shape/src/arc.js
 	function arcInnerRadius(d) {
 		return d.innerRadius;
 	}
@@ -41374,7 +41459,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_path();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/array.js
+	//#region node_modules/d3-shape/src/array.js
 	function array_default(x) {
 		return typeof x === "object" && "length" in x ? x : Array.from(x);
 	}
@@ -41382,7 +41467,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		Array.prototype.slice;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/curve/linear.js
+	//#region node_modules/d3-shape/src/curve/linear.js
 	function Linear(context) {
 		this._context = context;
 	}
@@ -41418,7 +41503,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/point.js
+	//#region node_modules/d3-shape/src/point.js
 	function x$2(p) {
 		return p[0];
 	}
@@ -41427,7 +41512,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_point = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/line.js
+	//#region node_modules/d3-shape/src/line.js
 	function line_default(x, y) {
 		var defined = constant_default$1(true), context = null, curve = linear_default, output = null, path = withPath(line);
 		x = typeof x === "function" ? x : x === void 0 ? x$2 : constant_default$1(x);
@@ -41469,19 +41554,19 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_point();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/descending.js
+	//#region node_modules/d3-shape/src/descending.js
 	function descending_default(a, b) {
 		return b < a ? -1 : b > a ? 1 : b >= a ? 0 : NaN;
 	}
 	var init_descending = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/identity.js
+	//#region node_modules/d3-shape/src/identity.js
 	function identity_default$1(d) {
 		return d;
 	}
 	var init_identity$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/pie.js
+	//#region node_modules/d3-shape/src/pie.js
 	function pie_default() {
 		var value = identity_default$1, sortValues = descending_default, sort = null, startAngle = constant_default$1(0), endAngle = constant_default$1(tau), padAngle = constant_default$1(0);
 		function pie(data) {
@@ -41531,7 +41616,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_math();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/curve/bump.js
+	//#region node_modules/d3-shape/src/curve/bump.js
 	function bumpX(context) {
 		return new Bump(context, true);
 	}
@@ -41575,11 +41660,11 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/noop.js
+	//#region node_modules/d3-shape/src/noop.js
 	function noop_default$1() {}
 	var init_noop$2 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/curve/basis.js
+	//#region node_modules/d3-shape/src/curve/basis.js
 	function point$3(that, x, y) {
 		that._context.bezierCurveTo((2 * that._x0 + that._x1) / 3, (2 * that._y0 + that._y1) / 3, (that._x0 + 2 * that._x1) / 3, (that._y0 + 2 * that._y1) / 3, (that._x0 + 4 * that._x1 + x) / 6, (that._y0 + 4 * that._y1 + y) / 6);
 	}
@@ -41630,7 +41715,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/curve/basisClosed.js
+	//#region node_modules/d3-shape/src/curve/basisClosed.js
 	function BasisClosed(context) {
 		this._context = context;
 	}
@@ -41688,7 +41773,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/curve/basisOpen.js
+	//#region node_modules/d3-shape/src/curve/basisOpen.js
 	function BasisOpen(context) {
 		this._context = context;
 	}
@@ -41735,7 +41820,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/curve/bundle.js
+	//#region node_modules/d3-shape/src/curve/bundle.js
 	function Bundle(context, beta) {
 		this._basis = new Basis(context);
 		this._beta = beta;
@@ -41777,7 +41862,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		})(.85);
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/curve/cardinal.js
+	//#region node_modules/d3-shape/src/curve/cardinal.js
 	function point$2(that, x, y) {
 		that._context.bezierCurveTo(that._x1 + that._k * (that._x2 - that._x0), that._y1 + that._k * (that._y2 - that._y0), that._x2 + that._k * (that._x1 - x), that._y2 + that._k * (that._y1 - y), that._x2, that._y2);
 	}
@@ -41837,7 +41922,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		})(0);
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/curve/cardinalClosed.js
+	//#region node_modules/d3-shape/src/curve/cardinalClosed.js
 	function CardinalClosed(context, tension) {
 		this._context = context;
 		this._k = (1 - tension) / 6;
@@ -41901,7 +41986,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		})(0);
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/curve/cardinalOpen.js
+	//#region node_modules/d3-shape/src/curve/cardinalOpen.js
 	function CardinalOpen(context, tension) {
 		this._context = context;
 		this._k = (1 - tension) / 6;
@@ -41955,7 +42040,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		})(0);
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/curve/catmullRom.js
+	//#region node_modules/d3-shape/src/curve/catmullRom.js
 	function point$1(that, x, y) {
 		var x1 = that._x1, y1 = that._y1, x2 = that._x2, y2 = that._y2;
 		if (that._l01_a > 1e-12) {
@@ -42033,7 +42118,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		})(.5);
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/curve/catmullRomClosed.js
+	//#region node_modules/d3-shape/src/curve/catmullRomClosed.js
 	function CatmullRomClosed(context, alpha) {
 		this._context = context;
 		this._alpha = alpha;
@@ -42104,7 +42189,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		})(.5);
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/curve/catmullRomOpen.js
+	//#region node_modules/d3-shape/src/curve/catmullRomOpen.js
 	function CatmullRomOpen(context, alpha) {
 		this._context = context;
 		this._alpha = alpha;
@@ -42165,7 +42250,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		})(.5);
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/curve/linearClosed.js
+	//#region node_modules/d3-shape/src/curve/linearClosed.js
 	function LinearClosed(context) {
 		this._context = context;
 	}
@@ -42191,7 +42276,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/curve/monotone.js
+	//#region node_modules/d3-shape/src/curve/monotone.js
 	function sign(x) {
 		return x < 0 ? -1 : 1;
 	}
@@ -42286,7 +42371,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/curve/natural.js
+	//#region node_modules/d3-shape/src/curve/natural.js
 	function Natural(context) {
 		this._context = context;
 	}
@@ -42338,7 +42423,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/curve/step.js
+	//#region node_modules/d3-shape/src/curve/step.js
 	function Step(context, t) {
 		this._context = context;
 		this._t = t;
@@ -42391,7 +42476,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@3.2.0/node_modules/d3-shape/src/index.js
+	//#region node_modules/d3-shape/src/index.js
 	var init_src$2 = __esmMin((() => {
 		init_arc();
 		init_array();
@@ -42418,7 +42503,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_step();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-zoom@3.0.0/node_modules/d3-zoom/src/transform.js
+	//#region node_modules/d3-zoom/src/transform.js
 	function Transform(k, x, y) {
 		this.k = k;
 		this.x = x;
@@ -42470,19 +42555,19 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		transform.prototype = Transform.prototype;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-zoom@3.0.0/node_modules/d3-zoom/src/zoom.js
+	//#region node_modules/d3-zoom/src/zoom.js
 	var init_zoom = __esmMin((() => {
 		init_src$21();
 		init_transform();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-zoom@3.0.0/node_modules/d3-zoom/src/index.js
+	//#region node_modules/d3-zoom/src/index.js
 	var init_src$1 = __esmMin((() => {
 		init_zoom();
 		init_transform();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3@7.9.0/node_modules/d3/src/index.js
+	//#region node_modules/d3/src/index.js
 	var init_src = __esmMin((() => {
 		init_src$30();
 		init_src$29();
@@ -42516,7 +42601,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_src$1();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-CLGD4ZFX.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-CLGD4ZFX.mjs
 	var selectSvgElement;
 	var init_chunk_CLGD4ZFX = __esmMin((() => {
 		init_chunk_DU6HZSFF();
@@ -42530,7 +42615,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		}, "selectSvgElement");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-P2QGCYS3.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-P2QGCYS3.mjs
 	var solidStateFill, normalizeStyleList, compileStyles, styles2Map, isLabelStyle, styles2String, userNodeOverrides, getStrokeDashArray;
 	var init_chunk_P2QGCYS3 = __esmMin((() => {
 		init_chunk_DU6HZSFF();
@@ -42625,7 +42710,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		}, "getStrokeDashArray");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@iconify+utils@3.1.4/node_modules/@iconify/utils/lib/icon/defaults.js
+	//#region node_modules/@iconify/utils/lib/icon/defaults.js
 	var defaultIconDimensions, defaultIconTransformations, defaultIconProps, defaultExtendedIconProps;
 	var init_defaults$2 = __esmMin((() => {
 		defaultIconDimensions = Object.freeze({
@@ -42650,7 +42735,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		});
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@iconify+utils@3.1.4/node_modules/@iconify/utils/lib/customisations/defaults.js
+	//#region node_modules/@iconify/utils/lib/customisations/defaults.js
 	var defaultIconSizeCustomisations, defaultIconCustomisations;
 	var init_defaults$1 = __esmMin((() => {
 		init_defaults$2();
@@ -42664,7 +42749,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		});
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@iconify+utils@3.1.4/node_modules/@iconify/utils/lib/icon/name.js
+	//#region node_modules/@iconify/utils/lib/icon/name.js
 	var stringToIcon, validateIconName;
 	var init_name = __esmMin((() => {
 		stringToIcon = (value, validate, allowSimpleName, provider = "") => {
@@ -42710,7 +42795,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@iconify+utils@3.1.4/node_modules/@iconify/utils/lib/icon/transformations.js
+	//#region node_modules/@iconify/utils/lib/icon/transformations.js
 	/**
 	* Merge transformations
 	*/
@@ -42724,7 +42809,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_transformations = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/@iconify+utils@3.1.4/node_modules/@iconify/utils/lib/icon/merge.js
+	//#region node_modules/@iconify/utils/lib/icon/merge.js
 	/**
 	* Merge icon and alias
 	*
@@ -42743,7 +42828,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_transformations();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@iconify+utils@3.1.4/node_modules/@iconify/utils/lib/icon-set/tree.js
+	//#region node_modules/@iconify/utils/lib/icon-set/tree.js
 	/**
 	* Resolve icon set icons
 	*
@@ -42768,7 +42853,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_tree = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/@iconify+utils@3.1.4/node_modules/@iconify/utils/lib/icon-set/get-icon.js
+	//#region node_modules/@iconify/utils/lib/icon-set/get-icon.js
 	/**
 	* Get icon data, using prepared aliases tree
 	*/
@@ -42796,7 +42881,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_tree();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@iconify+utils@3.1.4/node_modules/@iconify/utils/lib/svg/size.js
+	//#region node_modules/@iconify/utils/lib/svg/size.js
 	function calculateSize(size, ratio, precision) {
 		if (ratio === 1) return size;
 		precision = precision || 100;
@@ -42824,7 +42909,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		unitsTest = /^-?[0-9.]*[0-9]+[0-9.]*$/g;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@iconify+utils@3.1.4/node_modules/@iconify/utils/lib/svg/defs.js
+	//#region node_modules/@iconify/utils/lib/svg/defs.js
 	function splitSVGDefs(content, tag = "defs") {
 		let defs = "";
 		const index = content.indexOf("<" + tag);
@@ -42857,7 +42942,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_defs = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/@iconify+utils@3.1.4/node_modules/@iconify/utils/lib/svg/build.js
+	//#region node_modules/@iconify/utils/lib/svg/build.js
 	/**
 	* Get SVG attributes and content from icon + customisations
 	*
@@ -42889,13 +42974,14 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			const hFlip = props.hFlip;
 			const vFlip = props.vFlip;
 			let rotation = props.rotate;
-			if (hFlip) if (vFlip) rotation += 2;
-			else {
-				transformations.push("translate(" + (box.width + box.left).toString() + " " + (0 - box.top).toString() + ")");
-				transformations.push("scale(-1 1)");
-				box.top = box.left = 0;
-			}
-			else if (vFlip) {
+			if (hFlip) {
+				if (vFlip) rotation += 2;
+				else {
+					transformations.push("translate(" + (box.width + box.left).toString() + " " + (0 - box.top).toString() + ")");
+					transformations.push("scale(-1 1)");
+					box.top = box.left = 0;
+				}
+			} else if (vFlip) {
 				transformations.push("translate(" + (0 - box.left).toString() + " " + (box.height + box.top).toString() + ")");
 				transformations.push("scale(1 -1)");
 				box.top = box.left = 0;
@@ -42970,7 +43056,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		isUnsetKeyword = (value) => value === "unset" || value === "undefined" || value === "none";
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@iconify+utils@3.1.4/node_modules/@iconify/utils/lib/svg/id.js
+	//#region node_modules/@iconify/utils/lib/svg/id.js
 	/**
 	* Get unique new ID
 	*/
@@ -43003,7 +43089,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		counters = /* @__PURE__ */ new Map();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@iconify+utils@3.1.4/node_modules/@iconify/utils/lib/svg/html.js
+	//#region node_modules/@iconify/utils/lib/svg/html.js
 	/**
 	* Generate <svg>
 	*/
@@ -43014,7 +43100,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_html = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/@iconify+utils@3.1.4/node_modules/@iconify/utils/lib/index.js
+	//#region node_modules/@iconify/utils/lib/index.js
 	var init_lib = __esmMin((() => {
 		init_name();
 		init_get_icon();
@@ -43023,7 +43109,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_html();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-PWAF6VOD.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-PWAF6VOD.mjs
 	var unknownIcon, iconsStore, loaderStore, registerIconPacks, getRegisteredIconData, isIconAvailable, getIconSVG;
 	var init_chunk_PWAF6VOD = __esmMin((() => {
 		init_chunk_DU6HZSFF();
@@ -43098,7 +43184,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		}, "getIconSVG");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@braintree+sanitize-url@7.1.2/node_modules/@braintree/sanitize-url/dist/constants.js
+	//#region node_modules/@braintree/sanitize-url/dist/constants.js
 	var require_constants = /* @__PURE__ */ __commonJSMin(((exports) => {
 		Object.defineProperty(exports, "__esModule", { value: true });
 		exports.BLANK_URL = exports.relativeFirstCharacters = exports.whitespaceEscapeCharsRegex = exports.urlSchemeRegex = exports.ctrlCharactersRegex = exports.htmlCtrlEntityRegex = exports.htmlEntitiesRegex = exports.invalidProtocolRegex = void 0;
@@ -43112,7 +43198,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		exports.BLANK_URL = "about:blank";
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@braintree+sanitize-url@7.1.2/node_modules/@braintree/sanitize-url/dist/index.js
+	//#region node_modules/@braintree/sanitize-url/dist/index.js
 	var require_dist = /* @__PURE__ */ __commonJSMin(((exports) => {
 		Object.defineProperty(exports, "__esModule", { value: true });
 		exports.sanitizeUrl = sanitizeUrl;
@@ -43165,7 +43251,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		}
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/compat/predicate/isArray.mjs
+	//#region node_modules/es-toolkit/dist/compat/predicate/isArray.mjs
 	/**
 	* Checks if the given value is an array.
 	*
@@ -43191,7 +43277,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_isArray$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/compat/predicate/isPlainObject.mjs
+	//#region node_modules/es-toolkit/dist/compat/predicate/isPlainObject.mjs
 	/**
 	* Checks if a given value is a plain object.
 	*
@@ -43230,7 +43316,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_isPlainObject$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/function/noop.mjs
+	//#region node_modules/es-toolkit/dist/function/noop.mjs
 	/**
 	* A no-operation function that does nothing.
 	* This can be used as a placeholder or default function.
@@ -43243,13 +43329,13 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	function noop$4() {}
 	var init_noop$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/compat/_internal/getSymbols.mjs
+	//#region node_modules/es-toolkit/dist/compat/_internal/getSymbols.mjs
 	function getSymbols$1(object) {
 		return Object.getOwnPropertySymbols(object).filter((symbol) => Object.prototype.propertyIsEnumerable.call(object, symbol));
 	}
 	var init_getSymbols = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/compat/_internal/getTag.mjs
+	//#region node_modules/es-toolkit/dist/compat/_internal/getTag.mjs
 	/**
 	* Gets the `toStringTag` of `value`.
 	*
@@ -43263,7 +43349,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_getTag = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/compat/_internal/tags.mjs
+	//#region node_modules/es-toolkit/dist/compat/_internal/tags.mjs
 	var regexpTag$5, stringTag$6, numberTag$5, booleanTag, argumentsTag, symbolTag$5, dateTag$5, mapTag$9, setTag$9, arrayTag$4, arrayBufferTag$5, objectTag$6, dataViewTag$6, uint8ArrayTag, uint8ClampedArrayTag, uint16ArrayTag, uint32ArrayTag, int8ArrayTag, int16ArrayTag, int32ArrayTag, float32ArrayTag, float64ArrayTag;
 	var init_tags = __esmMin((() => {
 		regexpTag$5 = "[object RegExp]";
@@ -43290,7 +43376,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		float64ArrayTag = "[object Float64Array]";
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/_internal/globalThis.mjs
+	//#region node_modules/es-toolkit/dist/_internal/globalThis.mjs
 	var globalThis_;
 	var init_globalThis = __esmMin((() => {
 		globalThis_ = typeof globalThis === "object" && globalThis || typeof window === "object" && window || typeof self === "object" && self || typeof global === "object" && global || (function() {
@@ -43298,7 +43384,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		})();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/predicate/isBuffer.mjs
+	//#region node_modules/es-toolkit/dist/predicate/isBuffer.mjs
 	/**
 	* Checks if the given value is a Buffer instance.
 	*
@@ -43324,7 +43410,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_globalThis();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/predicate/isLength.mjs
+	//#region node_modules/es-toolkit/dist/predicate/isLength.mjs
 	/**
 	* Checks if a given value is a valid length.
 	*
@@ -43351,7 +43437,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_isLength$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/compat/predicate/isArrayLike.mjs
+	//#region node_modules/es-toolkit/dist/compat/predicate/isArrayLike.mjs
 	/**
 	* Checks if `value` is array-like.
 	*
@@ -43373,7 +43459,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_isLength$1();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/_internal/isUnsafeProperty.mjs
+	//#region node_modules/es-toolkit/dist/_internal/isUnsafeProperty.mjs
 	/**
 	* Checks if a property key is unsafe to access or copy directly.
 	*
@@ -43392,7 +43478,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_isUnsafeProperty = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/predicate/isPrimitive.mjs
+	//#region node_modules/es-toolkit/dist/predicate/isPrimitive.mjs
 	/**
 	* Checks whether a value is a JavaScript primitive.
 	* JavaScript primitives include null, undefined, strings, numbers, booleans, symbols, and bigints.
@@ -43419,7 +43505,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_isPrimitive = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/predicate/isTypedArray.mjs
+	//#region node_modules/es-toolkit/dist/predicate/isTypedArray.mjs
 	/**
 	* Checks if a value is a TypedArray.
 	* @param x The value to check.
@@ -43440,7 +43526,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_isTypedArray$2 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/object/cloneDeepWith.mjs
+	//#region node_modules/es-toolkit/dist/object/cloneDeepWith.mjs
 	/**
 	* Deeply clones the given object.
 	*
@@ -43624,7 +43710,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_isBuffer$1();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/compat/object/cloneDeepWith.mjs
+	//#region node_modules/es-toolkit/dist/compat/object/cloneDeepWith.mjs
 	/**
 	* Creates a deep clone of the given object using a customizer function.
 	*
@@ -43698,7 +43784,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_cloneDeepWith$1();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/compat/object/cloneDeep.mjs
+	//#region node_modules/es-toolkit/dist/compat/object/cloneDeep.mjs
 	/**
 	* Creates a deep clone of the given object.
 	*
@@ -43752,7 +43838,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_cloneDeepWith();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/compat/predicate/isArguments.mjs
+	//#region node_modules/es-toolkit/dist/compat/predicate/isArguments.mjs
 	/**
 	* Checks if the given value is an arguments object.
 	*
@@ -43780,7 +43866,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_getTag();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/compat/predicate/isObjectLike.mjs
+	//#region node_modules/es-toolkit/dist/compat/predicate/isObjectLike.mjs
 	/**
 	* Checks if the given value is object-like.
 	*
@@ -43809,7 +43895,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_isObjectLike$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/compat/predicate/isArrayLikeObject.mjs
+	//#region node_modules/es-toolkit/dist/compat/predicate/isArrayLikeObject.mjs
 	/**
 	* Checks if the given value is a non-primitive, array-like object.
 	*
@@ -43830,7 +43916,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_isObjectLike$1();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/compat/predicate/isTypedArray.mjs
+	//#region node_modules/es-toolkit/dist/compat/predicate/isTypedArray.mjs
 	/**
 	* Checks if a value is a TypedArray.
 	* @param x The value to check.
@@ -43853,14 +43939,14 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_isTypedArray$2();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/compat/_internal/isPrototype.mjs
+	//#region node_modules/es-toolkit/dist/compat/_internal/isPrototype.mjs
 	function isPrototype$2(value) {
 		const constructor = value?.constructor;
 		return value === (typeof constructor === "function" ? constructor.prototype : Object.prototype);
 	}
 	var init_isPrototype = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/compat/function/memoize.mjs
+	//#region node_modules/es-toolkit/dist/compat/function/memoize.mjs
 	/**
 	* Creates a function that memoizes the result of func. If resolver is provided it determines the cache key for
 	* storing the result based on the arguments provided to the memoized function. By default, the first argument
@@ -43889,7 +43975,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		memoize$3.Cache = Map;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/compat/object/clone.mjs
+	//#region node_modules/es-toolkit/dist/compat/object/clone.mjs
 	/**
 	* Creates a shallow clone of the given object.
 	*
@@ -44046,7 +44132,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_isTypedArray$1();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/object/clone.mjs
+	//#region node_modules/es-toolkit/dist/object/clone.mjs
 	/**
 	* Creates a shallow clone of the given object.
 	*
@@ -44108,7 +44194,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_isTypedArray$2();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/compat/object/mergeWith.mjs
+	//#region node_modules/es-toolkit/dist/compat/object/mergeWith.mjs
 	/**
 	* Merges the properties of one or more source objects into the target object using a customizer function.
 	*
@@ -44220,7 +44306,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_isTypedArray$1();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/compat/object/merge.mjs
+	//#region node_modules/es-toolkit/dist/compat/object/merge.mjs
 	/**
 	* Merges the properties of one or more source objects into the target object.
 	*
@@ -44266,7 +44352,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_mergeWith();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/compat/predicate/isEmpty.mjs
+	//#region node_modules/es-toolkit/dist/compat/predicate/isEmpty.mjs
 	/**
 	* Checks if a given value is empty.
 	*
@@ -44315,7 +44401,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_isTypedArray$1();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/es-toolkit@1.52.0/node_modules/es-toolkit/dist/compat/index.mjs
+	//#region node_modules/es-toolkit/dist/compat/index.mjs
 	var init_compat = __esmMin((() => {
 		init_memoize$1();
 		init_clone$1();
@@ -44323,7 +44409,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_isEmpty$1();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-75Z2AOVW.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-75Z2AOVW.mjs
 	function interpolateToCurve(interpolate, defaultCurve) {
 		if (!interpolate) return defaultCurve;
 		return d3CurveTypes[`curve${interpolate.charAt(0).toUpperCase() + interpolate.slice(1)}`] ?? defaultCurve;
@@ -44788,7 +44874,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		__name$1(isLabelCoordinateInPath, "isLabelCoordinateInPath");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/fastdom@1.0.12/node_modules/fastdom/fastdom.js
+	//#region node_modules/fastdom/fastdom.js
 	var require_fastdom = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		(function(win) {
 			/**
@@ -44988,7 +45074,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		})(typeof window !== "undefined" ? window : typeof exports != "undefined" ? exports : globalThis);
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/fastdom@1.0.12/node_modules/fastdom/extensions/fastdom-promised.js
+	//#region node_modules/fastdom/extensions/fastdom-promised.js
 	var require_fastdom_promised = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		(function() {
 			/**
@@ -45064,7 +45150,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		})();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/marked@16.4.2/node_modules/marked/lib/marked.esm.js
+	//#region node_modules/marked/lib/marked.esm.js
 	/**
 	* marked v16.4.2 - a markdown parser
 	* Copyright (c) 2018-2025, MarkedJS. (MIT License)
@@ -46600,7 +46686,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
 		x$1.lex;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/ts-dedent@2.3.0/node_modules/ts-dedent/esm/index.js
+	//#region node_modules/ts-dedent/esm/index.js
 	function dedent(templ) {
 		var values = [];
 		for (var _i = 1; _i < arguments.length; _i++) values[_i - 1] = arguments[_i];
@@ -46635,7 +46721,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
 	}
 	var init_esm = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-GMAD6QVW.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-GMAD6QVW.mjs
 	function preprocessMarkdown(markdown, { markdownAutoWrap }) {
 		const withoutExtraSpaces = dedent(markdown.replace(/<br\/>/g, "\n").replace(/\n{2,}/g, "\n"));
 		if (markdownAutoWrap === false) {}
@@ -47158,7 +47244,7 @@ raf(cb) {
 		}, "createText");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/roughjs@4.6.6/node_modules/roughjs/bundled/rough.cjs.js
+	//#region node_modules/roughjs/bundled/rough.cjs.js
 	var require_rough_cjs = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		var t = function(e, n) {
 			return t = Object.setPrototypeOf || { __proto__: [] } instanceof Array && function(t, e) {
@@ -48548,7 +48634,7 @@ raf(cb) {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-4HAMMTFA.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-4HAMMTFA.mjs
 	async function configureLabelImages(container) {
 		const images = container.getElementsByTagName("img");
 		if (!images || images.length === 0) return;
@@ -48752,7 +48838,7 @@ raf(cb) {
 		const shapeSvg = parent.insert("g").attr("class", cssClasses).attr("id", node.domId || node.id);
 		const radius = 1;
 		const { cssStyles } = node;
-		const rc = import_rough_cjs$5.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {
 			fill: "black",
 			stroke: "none",
@@ -48837,7 +48923,7 @@ raf(cb) {
 			},
 			...generateArcPoints(w / 2, h / 2, w / 2, -h / 2, rx, ry, true)
 		];
-		const rc = import_rough_cjs$6.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -48879,7 +48965,7 @@ raf(cb) {
 		const { cssStyles } = node;
 		const group = shapeSvg.insert("g", ":first-child").attr("class", "basic label-container");
 		if (node.look === "handDrawn") {
-			const roughNode = import_rough_cjs$7.default.svg(shapeSvg).path(body, userNodeOverrides(node, {}));
+			const roughNode = import_rough_cjs$4.default.svg(shapeSvg).path(body, userNodeOverrides(node, {}));
 			group.node()?.appendChild(roughNode);
 			if (cssStyles) group.attr("style", cssStyles);
 		} else group.append("path").attr("d", body).attr("style", nodeStyles);
@@ -48921,7 +49007,7 @@ raf(cb) {
 		}
 		let rect;
 		if (node.look === "handDrawn") {
-			const rc = import_rough_cjs$8.default.svg(shapeSvg);
+			const rc = import_rough_cjs$4.default.svg(shapeSvg);
 			const roughOpts = userNodeOverrides(node, {
 				fill,
 				stroke,
@@ -48986,7 +49072,7 @@ raf(cb) {
 		const { cssStyles } = node;
 		const group = shapeSvg.insert("g", ":first-child").attr("class", "basic label-container");
 		if (node.look === "handDrawn") {
-			const roughNode = import_rough_cjs$9.default.svg(shapeSvg).path(createRoundedRectPathD(-w / 2, top, w, h, radius), userNodeOverrides(node, {}));
+			const roughNode = import_rough_cjs$4.default.svg(shapeSvg).path(createRoundedRectPathD(-w / 2, top, w, h, radius), userNodeOverrides(node, {}));
 			group.node()?.appendChild(roughNode);
 			if (cssStyles) group.attr("style", cssStyles);
 		} else group.append("rect").attr("x", -w / 2).attr("y", top).attr("width", w).attr("height", h).attr("rx", radius).attr("ry", radius).attr("style", nodeStyles);
@@ -49043,7 +49129,7 @@ raf(cb) {
 		let polygon;
 		const { cssStyles } = node;
 		if (node.look === "handDrawn") {
-			const rc = import_rough_cjs$10.default.svg(shapeSvg);
+			const rc = import_rough_cjs$4.default.svg(shapeSvg);
 			const options = userNodeOverrides(node, {});
 			const pathData = createPathFromPoints(points);
 			const roughNode = rc.path(pathData, options);
@@ -49081,7 +49167,7 @@ raf(cb) {
 				y: 0
 			}
 		];
-		const rc = import_rough_cjs$11.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -49108,7 +49194,7 @@ raf(cb) {
 		let circleElem;
 		const { cssStyles } = node;
 		if (node.look === "handDrawn") {
-			const rc = import_rough_cjs$12.default.svg(shapeSvg);
+			const rc = import_rough_cjs$4.default.svg(shapeSvg);
 			const options2 = userNodeOverrides(node, {});
 			const roughNode = rc.circle(0, 0, radius * 2, options2);
 			circleElem = shapeSvg.insert(() => roughNode, ":first-child");
@@ -49159,7 +49245,7 @@ raf(cb) {
 		const { cssStyles } = node;
 		const group = shapeSvg.insert("g", ":first-child").attr("class", "basic label-container");
 		if (node.look === "handDrawn") {
-			const roughNode = import_rough_cjs$13.default.svg(shapeSvg).path(createRoundedRectPathD(-w / 2, top, w, h, radius), userNodeOverrides(node, {}));
+			const roughNode = import_rough_cjs$4.default.svg(shapeSvg).path(createRoundedRectPathD(-w / 2, top, w, h, radius), userNodeOverrides(node, {}));
 			group.node()?.appendChild(roughNode);
 			if (cssStyles) group.attr("style", cssStyles);
 		} else group.append("rect").attr("x", -w / 2).attr("y", top).attr("width", w).attr("height", h).attr("rx", radius).attr("ry", radius).attr("style", nodeStyles);
@@ -49202,7 +49288,7 @@ raf(cb) {
 		const shapeSvg = parent.insert("g").attr("class", getNodeClasses(node)).attr("id", node.domId ?? node.id);
 		const radius = Math.max(30, node?.width ?? 0);
 		const { cssStyles } = node;
-		const rc = import_rough_cjs$14.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -49295,7 +49381,7 @@ raf(cb) {
 				y: h / 2 + radius
 			}
 		];
-		const rc = import_rough_cjs$15.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, { fill: "none" });
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -49388,7 +49474,7 @@ raf(cb) {
 				y: h / 2 + radius
 			}
 		];
-		const rc = import_rough_cjs$16.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, { fill: "none" });
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -49507,7 +49593,7 @@ raf(cb) {
 			},
 			...generateCirclePoints4(-w / 2 + radius + radius / 2, h / 2, radius, 30, -180, -270)
 		];
-		const rc = import_rough_cjs$17.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, { fill: "none" });
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -49546,7 +49632,7 @@ raf(cb) {
 		const h = Math.max(minHeight, bbox.height + labelPaddingY * 2, node?.height ?? 0);
 		const radius = h / 2;
 		const { cssStyles } = node;
-		const rc = import_rough_cjs$18.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -49607,7 +49693,7 @@ raf(cb) {
 		const group = shapeSvg.insert("g", ":first-child").attr("class", "basic label-container");
 		const { cssStyles } = node;
 		if (node.look === "handDrawn") {
-			const rc = import_rough_cjs$19.default.svg(shapeSvg);
+			const rc = import_rough_cjs$4.default.svg(shapeSvg);
 			const options = userNodeOverrides(node, {});
 			const body = rc.path(createRoundedRectPathD(-w / 2, bodyTop, w, bodyHeight, bodyRadius), options);
 			const head = rc.circle(0, top + headRadius, headRadius * 2, options);
@@ -49659,7 +49745,7 @@ raf(cb) {
 		let cylinder2;
 		const { cssStyles } = node;
 		if (node.look === "handDrawn") {
-			const rc = import_rough_cjs$20.default.svg(shapeSvg);
+			const rc = import_rough_cjs$4.default.svg(shapeSvg);
 			const outerPathData = createOuterCylinderPathD(0, 0, w, h, rx, ry);
 			const innerPathData = createInnerCylinderPathD(0, ry, w, h, rx, ry);
 			const options = userNodeOverrides(node, {});
@@ -49707,7 +49793,7 @@ raf(cb) {
 			ry = options.ry;
 		}
 		if (node.look === "handDrawn") {
-			const rc = import_rough_cjs$21.default.svg(shapeSvg);
+			const rc = import_rough_cjs$4.default.svg(shapeSvg);
 			const options2 = userNodeOverrides(node, {});
 			const roughNode = rx || ry ? rc.path(createRoundedRectPathD(x, y, totalWidth, totalHeight, rx || 0), options2) : rc.rectangle(x, y, totalWidth, totalHeight, options2);
 			rect = shapeSvg.insert(() => roughNode, ":first-child");
@@ -49738,7 +49824,7 @@ raf(cb) {
 			labelPaddingY: labelPaddingY ?? padding ?? 0
 		});
 		if (node.look === "handDrawn") {
-			const rc = import_rough_cjs$22.default.svg(rect);
+			const rc = import_rough_cjs$4.default.svg(rect);
 			const nodeOverrideOptions = userNodeOverrides(node, {});
 			const borderSelection = rect.select(".basic.label-container > path:nth-child(2)");
 			const borderPath = borderSelection.node();
@@ -49769,7 +49855,7 @@ raf(cb) {
 		const x = -w / 2;
 		const y = -h / 2 - rectOffset2 / 2;
 		const { cssStyles } = node;
-		const rc = import_rough_cjs$23.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -49829,7 +49915,7 @@ raf(cb) {
 		let circleGroup;
 		const { cssStyles } = node;
 		if (node.look === "handDrawn") {
-			const rc = import_rough_cjs$24.default.svg(shapeSvg);
+			const rc = import_rough_cjs$4.default.svg(shapeSvg);
 			const outerOptions = userNodeOverrides(node, {
 				roughness: .2,
 				strokeWidth: 2.5
@@ -49866,7 +49952,7 @@ raf(cb) {
 		const shapeSvg = parent.insert("g").attr("class", getNodeClasses(node)).attr("id", node.domId ?? node.id);
 		const radius = 7;
 		const { cssStyles } = node;
-		const rc = import_rough_cjs$25.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const { nodeBorder } = themeVariables;
 		const options = userNodeOverrides(node, { fillStyle: "solid" });
 		if (node.look !== "handDrawn") options.roughness = 0;
@@ -49915,7 +50001,7 @@ raf(cb) {
 			}
 		];
 		const { cssStyles } = node;
-		const rc = import_rough_cjs$26.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -49982,7 +50068,7 @@ raf(cb) {
 		const { cssStyles } = node;
 		let folderShape;
 		if (node.look === "handDrawn") {
-			const roughNode = import_rough_cjs$27.default.svg(shapeSvg).path(pathData, userNodeOverrides(node, {}));
+			const roughNode = import_rough_cjs$4.default.svg(shapeSvg).path(pathData, userNodeOverrides(node, {}));
 			folderShape = shapeSvg.insert(() => roughNode, ":first-child").attr("class", "basic label-container");
 			if (cssStyles) folderShape.attr("style", cssStyles);
 		} else folderShape = shapeSvg.insert("path", ":first-child").attr("d", pathData).attr("class", "basic label-container").attr("style", nodeStyles);
@@ -50011,7 +50097,7 @@ raf(cb) {
 		}
 		const x = -1 * width / 2;
 		const y = -1 * height / 2;
-		const rc = import_rough_cjs$28.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {
 			stroke: themeVariables.lineColor,
 			fill: themeVariables.lineColor
@@ -50052,7 +50138,7 @@ raf(cb) {
 		const h = (node?.height ? node?.height : Math.max(minHeight, bbox.height)) + paddingY * 2;
 		const radius = h / 2;
 		const { cssStyles } = node;
-		const rc = import_rough_cjs$29.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -50140,7 +50226,7 @@ raf(cb) {
 		let polygon;
 		const { cssStyles } = node;
 		if (node.look === "handDrawn") {
-			const rc = import_rough_cjs$30.default.svg(shapeSvg);
+			const rc = import_rough_cjs$4.default.svg(shapeSvg);
 			const options = userNodeOverrides(node, {});
 			const pathData = createHexagonPathD(0, 0, w, h, m);
 			const roughNode = rc.path(pathData, options);
@@ -50164,7 +50250,7 @@ raf(cb) {
 		const w = Math.max(30, node?.width ?? 0);
 		const h = Math.max(30, node?.height ?? 0);
 		const { cssStyles } = node;
-		const rc = import_rough_cjs$31.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -50219,7 +50305,7 @@ raf(cb) {
 		const x = -width / 2;
 		const y = -height / 2;
 		const labelPadding = node.label ? 8 : 0;
-		const rc = import_rough_cjs$32.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {
 			stroke: "none",
 			fill: "none"
@@ -50348,7 +50434,7 @@ raf(cb) {
 		const topLabel = node.pos === "t";
 		const { nodeBorder, mainBkg } = themeVariables;
 		const { stylesMap } = compileStyles(node);
-		const rc = import_rough_cjs$33.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -50405,7 +50491,7 @@ raf(cb) {
 		const x = -width / 2;
 		const y = -height / 2;
 		const labelPadding = node.label ? 8 : 0;
-		const rc = import_rough_cjs$34.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -50536,7 +50622,7 @@ raf(cb) {
 		const x = -width / 2;
 		const y = -height / 2;
 		const labelPadding = node.label ? 8 : 0;
-		const rc = import_rough_cjs$35.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -50670,7 +50756,7 @@ raf(cb) {
 		const x = -imageWidth / 2;
 		const y = -imageHeight / 2;
 		const labelPadding = node.label ? 8 : 0;
-		const rc = import_rough_cjs$36.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -50806,7 +50892,7 @@ raf(cb) {
 		let polygon;
 		const { cssStyles } = node;
 		if (node.look === "handDrawn") {
-			const rc = import_rough_cjs$37.default.svg(shapeSvg);
+			const rc = import_rough_cjs$4.default.svg(shapeSvg);
 			const options = userNodeOverrides(node, {});
 			const pathData = createPathFromPoints(points);
 			const roughNode = rc.path(pathData, options);
@@ -50864,7 +50950,7 @@ raf(cb) {
 		let polygon;
 		const { cssStyles } = node;
 		if (node.look === "handDrawn") {
-			const rc = import_rough_cjs$38.default.svg(shapeSvg);
+			const rc = import_rough_cjs$4.default.svg(shapeSvg);
 			const options = userNodeOverrides(node, {});
 			const pathData = createPathFromPoints(points);
 			const roughNode = rc.path(pathData, options);
@@ -50910,7 +50996,7 @@ raf(cb) {
 		let polygon;
 		const { cssStyles } = node;
 		if (node.look === "handDrawn") {
-			const rc = import_rough_cjs$39.default.svg(shapeSvg);
+			const rc = import_rough_cjs$4.default.svg(shapeSvg);
 			const options = userNodeOverrides(node, {});
 			const pathData = createPathFromPoints(points);
 			const roughNode = rc.path(pathData, options);
@@ -50961,7 +51047,7 @@ raf(cb) {
 				y: height - gap / 2
 			}
 		];
-		const rc = import_rough_cjs$40.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -51004,7 +51090,7 @@ raf(cb) {
 		let cylinder2;
 		const { cssStyles } = node;
 		if (node.look === "handDrawn") {
-			const rc = import_rough_cjs$41.default.svg(shapeSvg);
+			const rc = import_rough_cjs$4.default.svg(shapeSvg);
 			const outerPathData = createOuterCylinderPathD2(0, 0, w, h, rx, ry, outerOffset);
 			const innerPathData = createInnerCylinderPathD2(0, ry, w, h, rx, ry);
 			const options = userNodeOverrides(node, {});
@@ -51054,7 +51140,7 @@ raf(cb) {
 		const waveAmplitude = node.look === "neo" ? h / 4 : h / 8;
 		const finalH = h + waveAmplitude;
 		const { cssStyles } = node;
-		const rc = import_rough_cjs$42.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -51123,7 +51209,7 @@ raf(cb) {
 		const x = -w / 2;
 		const y = -h / 2;
 		const { cssStyles } = node;
-		const rc = import_rough_cjs$43.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		const outerPathPoints = [
 			{
@@ -51322,7 +51408,7 @@ raf(cb) {
 				y
 			}
 		];
-		const rc = import_rough_cjs$44.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -51355,7 +51441,7 @@ raf(cb) {
 		const x = -totalWidth / 2;
 		const y = -totalHeight / 2;
 		const { cssStyles } = node;
-		const rc = import_rough_cjs$45.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {
 			fill: themeVariables.noteBkgColor,
 			stroke: themeVariables.noteBorderColor
@@ -51404,7 +51490,7 @@ raf(cb) {
 		let polygon;
 		const { cssStyles } = node;
 		if (node.look === "handDrawn") {
-			const rc = import_rough_cjs$46.default.svg(shapeSvg);
+			const rc = import_rough_cjs$4.default.svg(shapeSvg);
 			const options = userNodeOverrides(node, {});
 			const pathData = createDecisionBoxPathD(0, 0, s);
 			const roughNode = rc.path(pathData, options);
@@ -51483,7 +51569,7 @@ raf(cb) {
 			}
 		];
 		const { cssStyles } = node;
-		const rc = import_rough_cjs$47.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -51547,7 +51633,7 @@ raf(cb) {
 		let rect;
 		let innerLine;
 		if (node.look === "handDrawn") {
-			const rc = import_rough_cjs$48.default.svg(shapeSvg);
+			const rc = import_rough_cjs$4.default.svg(shapeSvg);
 			const options = userNodeOverrides(node, {});
 			const roughNode = rc.path(createRoundedRectPathD(x, y, totalWidth, totalHeight, node.rx || 0), options);
 			const roughLine = rc.line(-bbox.width / 2 - halfPadding, -bbox.height / 2 - halfPadding + titleBox.height + halfPadding, bbox.width / 2 + halfPadding, -bbox.height / 2 - halfPadding + titleBox.height + halfPadding, options);
@@ -51594,7 +51680,7 @@ raf(cb) {
 		const x = FRAME_WIDTH - totalWidth / 2;
 		const y = -totalHeight / 2;
 		const { cssStyles } = node;
-		const rc = import_rough_cjs$49.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -51660,7 +51746,7 @@ raf(cb) {
 		const x = -w / 2;
 		const y = -h / 2;
 		const { cssStyles } = node;
-		const rc = import_rough_cjs$50.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -51721,7 +51807,7 @@ raf(cb) {
 		const w = bbox.width + h / 4 + (node.look === "neo" ? labelPaddingX * 2 : labelPaddingX);
 		const radius = h / 2;
 		const { cssStyles } = node;
-		const rc = import_rough_cjs$51.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -51774,7 +51860,7 @@ raf(cb) {
 		if (!node.width) node.width = 14;
 		if (!node.height) node.height = 14;
 		const shapeSvg = parent.insert("g").attr("class", "node default").attr("id", node.domId ?? node.id);
-		const rc = import_rough_cjs$52.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -51821,7 +51907,7 @@ raf(cb) {
 		const shapeSvg = parent.insert("g").attr("class", "node default").attr("id", node.domId || node.id);
 		let circle2;
 		if (node.look === "handDrawn") {
-			const roughNode = import_rough_cjs$53.default.svg(shapeSvg).circle(0, 0, node.width, solidStateFill(lineColor));
+			const roughNode = import_rough_cjs$4.default.svg(shapeSvg).circle(0, 0, node.width, solidStateFill(lineColor));
 			circle2 = shapeSvg.insert(() => roughNode);
 			circle2.attr("class", "state-start").attr("r", (node.width ?? 7) / 2).attr("width", node.width ?? 14).attr("height", node.height ?? 14);
 		} else {
@@ -51895,7 +51981,7 @@ raf(cb) {
 			}
 		];
 		if (node.look === "handDrawn") {
-			const rc = import_rough_cjs$54.default.svg(shapeSvg);
+			const rc = import_rough_cjs$4.default.svg(shapeSvg);
 			const options = userNodeOverrides(node, {});
 			const roughNode = rc.rectangle(x, y, w + 16, h, options);
 			const l1 = rc.line(x + FRAME_WIDTH2, y, x + FRAME_WIDTH2, y + h, options);
@@ -51935,7 +52021,7 @@ raf(cb) {
 		const x = -w / 2;
 		const y = -h / 2;
 		const { cssStyles } = node;
-		const rc = import_rough_cjs$55.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		const rectPoints = [
 			{
@@ -52002,7 +52088,7 @@ raf(cb) {
 		const tagHeight = .2 * h;
 		const finalH = h + waveAmplitude;
 		const { cssStyles } = node;
-		const rc = import_rough_cjs$56.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -52099,7 +52185,7 @@ raf(cb) {
 		const { cssStyles } = node;
 		let cylinder2;
 		if (node.look === "handDrawn") {
-			const rc = import_rough_cjs$57.default.svg(shapeSvg);
+			const rc = import_rough_cjs$4.default.svg(shapeSvg);
 			const outerPathData = createOuterCylinderPathD3(0, 0, w, h, rx, ry);
 			const innerPathData = createInnerCylinderPathD3(0, 0, w, h, rx, ry);
 			const outerNode = rc.path(outerPathData, userNodeOverrides(node, {}));
@@ -52163,7 +52249,7 @@ raf(cb) {
 		let polygon;
 		const { cssStyles } = node;
 		if (node.look === "handDrawn") {
-			const rc = import_rough_cjs$58.default.svg(shapeSvg);
+			const rc = import_rough_cjs$4.default.svg(shapeSvg);
 			const options = userNodeOverrides(node, {});
 			const pathData = createPathFromPoints(points);
 			const roughNode = rc.path(pathData, options);
@@ -52196,7 +52282,7 @@ raf(cb) {
 		const w = (node?.width ? node?.width : bbox.width) + labelPaddingX * 2;
 		const h = (node?.height ? node?.height : bbox.height) + labelPaddingY * 2;
 		const { cssStyles } = node;
-		const rc = import_rough_cjs$59.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -52271,7 +52357,7 @@ raf(cb) {
 			}
 		];
 		const { cssStyles } = node;
-		const rc = import_rough_cjs$60.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -52314,7 +52400,7 @@ raf(cb) {
 		const { cssStyles } = node;
 		const widthDif = 14 - w;
 		const extraW = widthDif > 0 ? widthDif / 2 : 0;
-		const rc = import_rough_cjs$61.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -52370,7 +52456,7 @@ raf(cb) {
 		const waveAmplitude = h / 8;
 		const finalH = h + waveAmplitude * 2;
 		const { cssStyles } = node;
-		const rc = import_rough_cjs$62.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -52417,7 +52503,7 @@ raf(cb) {
 		const x = -w / 2;
 		const y = -h / 2;
 		const { cssStyles } = node;
-		const rc = import_rough_cjs$63.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		const outerPathPoints = [
 			{
@@ -52554,7 +52640,7 @@ raf(cb) {
 			if (maxCommentWidth > 0) maxCommentWidth += difference / totalWidthSections;
 		}
 		const maxWidth = maxTypeWidth + maxNameWidth + maxKeysWidth + maxCommentWidth;
-		const rc = import_rough_cjs$64.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -52816,7 +52902,7 @@ raf(cb) {
 		const styles = classNode.styles?.join(";") || nodeStyles || "";
 		if (!node.cssStyles) node.cssStyles = styles.replaceAll("!important", "").split(";");
 		const renderExtraBox = classNode.members.length === 0 && classNode.methods.length === 0 && !config.class?.hideEmptyMembersBox;
-		const rc = import_rough_cjs$65.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -52939,7 +53025,7 @@ raf(cb) {
 		const totalHeight = (shapeSvg.node()?.getBBox().height ?? 200) + padding;
 		const x = -totalWidth / 2;
 		const y = -totalHeight / 2;
-		const rc = import_rough_cjs$66.default.svg(shapeSvg);
+		const rc = import_rough_cjs$4.default.svg(shapeSvg);
 		const options = userNodeOverrides(node, {});
 		if (node.look !== "handDrawn") {
 			options.roughness = 0;
@@ -53061,7 +53147,7 @@ raf(cb) {
 		const { rx, ry } = kanbanNode;
 		const { cssStyles } = kanbanNode;
 		if (kanbanNode.look === "handDrawn") {
-			const rc = import_rough_cjs$67.default.svg(shapeSvg);
+			const rc = import_rough_cjs$4.default.svg(shapeSvg);
 			const options2 = userNodeOverrides(kanbanNode, {});
 			const roughNode = rx || ry ? rc.path(createRoundedRectPathD(x, y, totalWidth, totalHeight, rx || 0), options2) : rc.rectangle(x, y, totalWidth, totalHeight, options2);
 			rect = shapeSvg.insert(() => roughNode, ":first-child");
@@ -53119,7 +53205,7 @@ raf(cb) {
     a${r},${r} 1 0,0 ${effectiveWidth * .1},${-1 * effectiveHeight * .33}
   H0 V0 Z`;
 		if (node.look === "handDrawn") {
-			const rc = import_rough_cjs$68.default.svg(shapeSvg);
+			const rc = import_rough_cjs$4.default.svg(shapeSvg);
 			const options = userNodeOverrides(node, {});
 			const roughNode = rc.path(path, options);
 			bangElem = shapeSvg.insert(() => roughNode, ":first-child");
@@ -53164,7 +53250,7 @@ raf(cb) {
     a${r4},${r4} 1 0,1 ${w * .1},${-1 * h * .65}
   H0 V0 Z`;
 		if (node.look === "handDrawn") {
-			const rc = import_rough_cjs$69.default.svg(shapeSvg);
+			const rc = import_rough_cjs$4.default.svg(shapeSvg);
 			const options = userNodeOverrides(node, {});
 			const roughNode = rc.path(path, options);
 			cloudElem = shapeSvg.insert(() => roughNode, ":first-child");
@@ -53230,7 +53316,7 @@ raf(cb) {
 	function isValidShape(shape) {
 		return shape in shapes$1;
 	}
-	var import_rough_cjs$5, import_rough_cjs$6, import_rough_cjs$7, import_rough_cjs$8, import_rough_cjs$9, import_rough_cjs$10, import_rough_cjs$11, import_rough_cjs$12, import_rough_cjs$13, import_rough_cjs$14, import_rough_cjs$15, import_rough_cjs$16, import_rough_cjs$17, import_rough_cjs$18, import_rough_cjs$19, import_rough_cjs$20, import_rough_cjs$21, import_rough_cjs$22, import_rough_cjs$23, import_rough_cjs$24, import_rough_cjs$25, import_rough_cjs$26, import_rough_cjs$27, import_rough_cjs$28, import_rough_cjs$29, import_rough_cjs$30, import_rough_cjs$31, import_rough_cjs$32, import_rough_cjs$33, import_rough_cjs$34, import_rough_cjs$35, import_rough_cjs$36, import_rough_cjs$37, import_rough_cjs$38, import_rough_cjs$39, import_rough_cjs$40, import_rough_cjs$41, import_rough_cjs$42, import_rough_cjs$43, import_rough_cjs$44, import_rough_cjs$45, import_rough_cjs$46, import_rough_cjs$47, import_rough_cjs$48, import_rough_cjs$49, import_rough_cjs$50, import_rough_cjs$51, import_rough_cjs$52, import_rough_cjs$53, import_rough_cjs$54, import_rough_cjs$55, import_rough_cjs$56, import_rough_cjs$57, import_rough_cjs$58, import_rough_cjs$59, import_rough_cjs$60, import_rough_cjs$61, import_rough_cjs$62, import_rough_cjs$63, import_rough_cjs$64, import_rough_cjs$65, import_rough_cjs$66, import_rough_cjs$67, import_rough_cjs$68, import_rough_cjs$69, ELEMENT_NODE, TEXT_NODE, SECTION_GAP, MIN_WRAP_WIDTH, c4LabelHelper, labelHelper, insertLabel, updateNodeBounds, getNodeClasses, intersect_rect_default, createRoundedRectPathD, createLabel_default, intersect_node_default, intersect_ellipse_default, intersect_circle_default, intersect_line_default, intersect_default, INDICATOR_ROW_HEIGHT, SEPARATOR_GAP, MIN_WIDTH, RADIUS, DIRECTION_ORDER, POINT_KEY, expandAndDeduplicateDirections, getDirectionKey, arrowPointFactories, getArrowPoints, NOTCH_SIZE, createCylinderPathD, createOuterCylinderPathD, createInnerCylinderPathD, MIN_HEIGHT, MIN_WIDTH2, MIN_HEIGHT2, MIN_WIDTH3, createHexagonPathD, createCylinderPathD2, createOuterCylinderPathD2, createInnerCylinderPathD2, MIN_HEIGHT3, MIN_WIDTH4, createDecisionBoxPathD, FRAME_WIDTH, FRAME_WIDTH2, TAG_RATIO, createCylinderPathD3, createOuterCylinderPathD3, createInnerCylinderPathD3, MIN_HEIGHT4, MIN_WIDTH5, MIN_HEIGHT5, MIN_WIDTH6, rectOffset, COLOR_THEMES$3, REDUX_THEMES, colorFromPriority, shapesDefs, shapes$1;
+	var import_rough_cjs$4, ELEMENT_NODE, TEXT_NODE, SECTION_GAP, MIN_WRAP_WIDTH, c4LabelHelper, labelHelper, insertLabel, updateNodeBounds, getNodeClasses, intersect_rect_default, createRoundedRectPathD, createLabel_default, intersect_node_default, intersect_ellipse_default, intersect_circle_default, intersect_line_default, intersect_default, INDICATOR_ROW_HEIGHT, SEPARATOR_GAP, MIN_WIDTH, RADIUS, DIRECTION_ORDER, POINT_KEY, expandAndDeduplicateDirections, getDirectionKey, arrowPointFactories, getArrowPoints, NOTCH_SIZE, createCylinderPathD, createOuterCylinderPathD, createInnerCylinderPathD, MIN_HEIGHT, MIN_WIDTH2, MIN_HEIGHT2, MIN_WIDTH3, createHexagonPathD, createCylinderPathD2, createOuterCylinderPathD2, createInnerCylinderPathD2, MIN_HEIGHT3, MIN_WIDTH4, createDecisionBoxPathD, FRAME_WIDTH, FRAME_WIDTH2, TAG_RATIO, createCylinderPathD3, createOuterCylinderPathD3, createInnerCylinderPathD3, MIN_HEIGHT4, MIN_WIDTH5, MIN_HEIGHT5, MIN_WIDTH6, rectOffset, COLOR_THEMES$3, REDUX_THEMES, colorFromPriority, shapesDefs, shapes$1;
 	var init_chunk_4HAMMTFA = __esmMin((() => {
 		init_chunk_P2QGCYS3();
 		init_chunk_GMAD6QVW();
@@ -53240,71 +53326,7 @@ raf(cb) {
 		init_chunk_X3CZISLH();
 		init_chunk_Y2CYZVJY();
 		init_src();
-		import_rough_cjs$5 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$6 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$7 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$8 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$9 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$10 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$11 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$12 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$13 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$14 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$15 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$16 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$17 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$18 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$19 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$20 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$21 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$22 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$23 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$24 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$25 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$26 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$27 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$28 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$29 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$30 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$31 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$32 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$33 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$34 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$35 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$36 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$37 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$38 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$39 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$40 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$41 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$42 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$43 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$44 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$45 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$46 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$47 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$48 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$49 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$50 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$51 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$52 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$53 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$54 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$55 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$56 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$57 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$58 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$59 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$60 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$61 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$62 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$63 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$64 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$65 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$66 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$67 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$68 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$69 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
+		import_rough_cjs$4 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
 		ELEMENT_NODE = 1;
 		TEXT_NODE = 3;
 		__name$1(configureLabelImages, "configureLabelImages");
@@ -54725,7 +54747,7 @@ raf(cb) {
 		__name$1(isValidShape, "isValidShape");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-GVQU2GXP.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-GVQU2GXP.mjs
 	async function insertNode(elem, node, renderOptions) {
 		let newEl;
 		let el;
@@ -54785,8 +54807,8 @@ raf(cb) {
 		}, "positionNode");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-L3NEJ4N5.mjs
-	var import_rough_cjs$3, import_rough_cjs$4, swimlane, rect, shapes, clusterElems, insertCluster, clear$2;
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-L3NEJ4N5.mjs
+	var import_rough_cjs$3, swimlane, rect, shapes, clusterElems, insertCluster, clear$2;
 	var init_chunk_L3NEJ4N5 = __esmMin((() => {
 		init_chunk_GVQU2GXP();
 		init_chunk_4HAMMTFA();
@@ -54797,7 +54819,6 @@ raf(cb) {
 		init_chunk_Y2CYZVJY();
 		init_src();
 		import_rough_cjs$3 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
-		import_rough_cjs$4 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
 		swimlane = /* @__PURE__ */ __name$1(async (parent, node) => {
 			const siteConfig = getConfig2$2();
 			const { themeVariables, handDrawnSeed } = siteConfig;
@@ -54840,7 +54861,7 @@ raf(cb) {
 				const bodyX = laneLeft + titleWidth;
 				const bodyWidth = Math.max(0, width - titleWidth);
 				if (node.look === "handDrawn") {
-					const rc = import_rough_cjs$4.default.svg(shapeSvg);
+					const rc = import_rough_cjs$3.default.svg(shapeSvg);
 					const titleOptions = userNodeOverrides(node, {
 						roughness: .7,
 						fill: clusterBkg,
@@ -54876,7 +54897,7 @@ raf(cb) {
 				const contentHeight = Math.max(0, laneBottom - bodyY);
 				const x = node.x - width / 2;
 				if (node.look === "handDrawn") {
-					const rc = import_rough_cjs$4.default.svg(shapeSvg);
+					const rc = import_rough_cjs$3.default.svg(shapeSvg);
 					const titleOptions = userNodeOverrides(node, {
 						roughness: .7,
 						fill: clusterBkg,
@@ -55207,7 +55228,7 @@ raf(cb) {
 		}, "clear");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-OSK3NFVY.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-OSK3NFVY.mjs
 	function calculateDeltaAndAngle(point1, point2) {
 		if (point1 === void 0 || point2 === void 0) return {
 			angle: 0,
@@ -56238,13 +56259,13 @@ raf(cb) {
 		markers_default = insertMarkers$1;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_freeGlobal.js
+	//#region node_modules/lodash-es/_freeGlobal.js
 	var freeGlobal;
 	var init__freeGlobal = __esmMin((() => {
 		freeGlobal = typeof global == "object" && global && global.Object === Object && global;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_root.js
+	//#region node_modules/lodash-es/_root.js
 	var freeSelf$1, root;
 	var init__root = __esmMin((() => {
 		init__freeGlobal();
@@ -56252,14 +56273,14 @@ raf(cb) {
 		root = freeGlobal || freeSelf$1 || Function("return this")();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_Symbol.js
+	//#region node_modules/lodash-es/_Symbol.js
 	var Symbol$1;
 	var init__Symbol = __esmMin((() => {
 		init__root();
 		Symbol$1 = root.Symbol;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_getRawTag.js
+	//#region node_modules/lodash-es/_getRawTag.js
 	/**
 	* A specialized version of `baseGetTag` which ignores `Symbol.toStringTag` values.
 	*
@@ -56289,7 +56310,7 @@ raf(cb) {
 		symToStringTag$2 = Symbol$1 ? Symbol$1.toStringTag : void 0;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_objectToString.js
+	//#region node_modules/lodash-es/_objectToString.js
 	/**
 	* Converts `value` to a string using `Object.prototype.toString`.
 	*
@@ -56305,7 +56326,7 @@ raf(cb) {
 		nativeObjectToString$1 = Object.prototype.toString;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseGetTag.js
+	//#region node_modules/lodash-es/_baseGetTag.js
 	/**
 	* The base implementation of `getTag` without fallbacks for buggy environments.
 	*
@@ -56327,7 +56348,7 @@ raf(cb) {
 		symToStringTag$1 = Symbol$1 ? Symbol$1.toStringTag : void 0;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/isObjectLike.js
+	//#region node_modules/lodash-es/isObjectLike.js
 	/**
 	* Checks if `value` is object-like. A value is object-like if it's not `null`
 	* and has a `typeof` result of "object".
@@ -56357,7 +56378,7 @@ raf(cb) {
 	}
 	var init_isObjectLike = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/isSymbol.js
+	//#region node_modules/lodash-es/isSymbol.js
 	/**
 	* Checks if `value` is classified as a `Symbol` primitive or object.
 	*
@@ -56385,7 +56406,7 @@ raf(cb) {
 		symbolTag$4 = "[object Symbol]";
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_arrayMap.js
+	//#region node_modules/lodash-es/_arrayMap.js
 	/**
 	* A specialized version of `_.map` for arrays without support for iteratee
 	* shorthands.
@@ -56402,13 +56423,13 @@ raf(cb) {
 	}
 	var init__arrayMap = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/isArray.js
+	//#region node_modules/lodash-es/isArray.js
 	var isArray;
 	var init_isArray = __esmMin((() => {
 		isArray = Array.isArray;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseToString.js
+	//#region node_modules/lodash-es/_baseToString.js
 	/**
 	* The base implementation of `_.toString` which doesn't convert nullish
 	* values to empty strings.
@@ -56435,7 +56456,7 @@ raf(cb) {
 		symbolToString$1 = symbolProto$3 ? symbolProto$3.toString : void 0;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_trimmedEndIndex.js
+	//#region node_modules/lodash-es/_trimmedEndIndex.js
 	/**
 	* Used by `_.trim` and `_.trimEnd` to get the index of the last non-whitespace
 	* character of `string`.
@@ -56454,7 +56475,7 @@ raf(cb) {
 		reWhitespace$1 = /\s/;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseTrim.js
+	//#region node_modules/lodash-es/_baseTrim.js
 	/**
 	* The base implementation of `_.trim`.
 	*
@@ -56471,7 +56492,7 @@ raf(cb) {
 		reTrimStart$1 = /^\s+/;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/isObject.js
+	//#region node_modules/lodash-es/isObject.js
 	/**
 	* Checks if `value` is the
 	* [language type](http://www.ecma-international.org/ecma-262/7.0/#sec-ecmascript-language-types)
@@ -56503,7 +56524,7 @@ raf(cb) {
 	}
 	var init_isObject = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/toNumber.js
+	//#region node_modules/lodash-es/toNumber.js
 	/**
 	* Converts `value` to a number.
 	*
@@ -56551,7 +56572,7 @@ raf(cb) {
 		freeParseInt$1 = parseInt;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/toFinite.js
+	//#region node_modules/lodash-es/toFinite.js
 	/**
 	* Converts `value` to a finite number.
 	*
@@ -56588,7 +56609,7 @@ raf(cb) {
 		MAX_INTEGER$1 = 17976931348623157e292;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/toInteger.js
+	//#region node_modules/lodash-es/toInteger.js
 	/**
 	* Converts `value` to an integer.
 	*
@@ -56623,7 +56644,7 @@ raf(cb) {
 		init_toFinite();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/identity.js
+	//#region node_modules/lodash-es/identity.js
 	/**
 	* This method returns the first argument it receives.
 	*
@@ -56645,7 +56666,7 @@ raf(cb) {
 	}
 	var init_identity = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/isFunction.js
+	//#region node_modules/lodash-es/isFunction.js
 	/**
 	* Checks if `value` is classified as a `Function` object.
 	*
@@ -56678,14 +56699,14 @@ raf(cb) {
 		proxyTag$1 = "[object Proxy]";
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_coreJsData.js
+	//#region node_modules/lodash-es/_coreJsData.js
 	var coreJsData;
 	var init__coreJsData = __esmMin((() => {
 		init__root();
 		coreJsData = root["__core-js_shared__"];
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_isMasked.js
+	//#region node_modules/lodash-es/_isMasked.js
 	/**
 	* Checks if `func` has its source masked.
 	*
@@ -56705,7 +56726,7 @@ raf(cb) {
 		}();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_toSource.js
+	//#region node_modules/lodash-es/_toSource.js
 	/**
 	* Converts `func` to its source code.
 	*
@@ -56729,7 +56750,7 @@ raf(cb) {
 		funcToString$3 = Function.prototype.toString;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseIsNative.js
+	//#region node_modules/lodash-es/_baseIsNative.js
 	/**
 	* The base implementation of `_.isNative` without bad shim checks.
 	*
@@ -56757,7 +56778,7 @@ raf(cb) {
 		reIsNative$1 = RegExp("^" + funcToString$2.call(hasOwnProperty$15).replace(reRegExpChar$1, "\\$&").replace(/hasOwnProperty|(function).*?(?=\\\()| for .+?(?=\\\])/g, "$1.*?") + "$");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_getValue.js
+	//#region node_modules/lodash-es/_getValue.js
 	/**
 	* Gets the value at `key` of `object`.
 	*
@@ -56771,7 +56792,7 @@ raf(cb) {
 	}
 	var init__getValue = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_getNative.js
+	//#region node_modules/lodash-es/_getNative.js
 	/**
 	* Gets the native function at `key` of `object`.
 	*
@@ -56789,7 +56810,7 @@ raf(cb) {
 		init__getValue();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_WeakMap.js
+	//#region node_modules/lodash-es/_WeakMap.js
 	var WeakMap;
 	var init__WeakMap = __esmMin((() => {
 		init__getNative();
@@ -56797,7 +56818,7 @@ raf(cb) {
 		WeakMap = getNative$1(root, "WeakMap");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseCreate.js
+	//#region node_modules/lodash-es/_baseCreate.js
 	var objectCreate$1, baseCreate;
 	var init__baseCreate = __esmMin((() => {
 		init_isObject();
@@ -56815,7 +56836,7 @@ raf(cb) {
 		}();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_apply.js
+	//#region node_modules/lodash-es/_apply.js
 	/**
 	* A faster alternative to `Function#apply`, this function invokes `func`
 	* with the `this` binding of `thisArg` and the arguments of `args`.
@@ -56837,7 +56858,7 @@ raf(cb) {
 	}
 	var init__apply = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/noop.js
+	//#region node_modules/lodash-es/noop.js
 	/**
 	* This method returns `undefined`.
 	*
@@ -56853,7 +56874,7 @@ raf(cb) {
 	function noop$3() {}
 	var init_noop = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_copyArray.js
+	//#region node_modules/lodash-es/_copyArray.js
 	/**
 	* Copies the values of `source` to `array`.
 	*
@@ -56870,7 +56891,7 @@ raf(cb) {
 	}
 	var init__copyArray = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_shortOut.js
+	//#region node_modules/lodash-es/_shortOut.js
 	/**
 	* Creates a function that'll short out and invoke `identity` instead
 	* of `func` when it's called `HOT_COUNT` or more times in `HOT_SPAN`
@@ -56898,7 +56919,7 @@ raf(cb) {
 		nativeNow$1 = Date.now;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/constant.js
+	//#region node_modules/lodash-es/constant.js
 	/**
 	* Creates a function that returns `value`.
 	*
@@ -56925,7 +56946,7 @@ raf(cb) {
 	}
 	var init_constant = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_defineProperty.js
+	//#region node_modules/lodash-es/_defineProperty.js
 	var defineProperty;
 	var init__defineProperty = __esmMin((() => {
 		init__getNative();
@@ -56938,7 +56959,7 @@ raf(cb) {
 		}();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseSetToString.js
+	//#region node_modules/lodash-es/_baseSetToString.js
 	var baseSetToString;
 	var init__baseSetToString = __esmMin((() => {
 		init_constant();
@@ -56954,7 +56975,7 @@ raf(cb) {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_setToString.js
+	//#region node_modules/lodash-es/_setToString.js
 	var setToString;
 	var init__setToString = __esmMin((() => {
 		init__baseSetToString();
@@ -56962,7 +56983,7 @@ raf(cb) {
 		setToString = shortOut$1(baseSetToString);
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_arrayEach.js
+	//#region node_modules/lodash-es/_arrayEach.js
 	/**
 	* A specialized version of `_.forEach` for arrays without support for
 	* iteratee shorthands.
@@ -56979,7 +57000,7 @@ raf(cb) {
 	}
 	var init__arrayEach = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseFindIndex.js
+	//#region node_modules/lodash-es/_baseFindIndex.js
 	/**
 	* The base implementation of `_.findIndex` and `_.findLastIndex` without
 	* support for iteratee shorthands.
@@ -56998,7 +57019,7 @@ raf(cb) {
 	}
 	var init__baseFindIndex = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseIsNaN.js
+	//#region node_modules/lodash-es/_baseIsNaN.js
 	/**
 	* The base implementation of `_.isNaN` without support for number objects.
 	*
@@ -57011,7 +57032,7 @@ raf(cb) {
 	}
 	var init__baseIsNaN = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_strictIndexOf.js
+	//#region node_modules/lodash-es/_strictIndexOf.js
 	/**
 	* A specialized version of `_.indexOf` which performs strict equality
 	* comparisons of values, i.e. `===`.
@@ -57029,7 +57050,7 @@ raf(cb) {
 	}
 	var init__strictIndexOf = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseIndexOf.js
+	//#region node_modules/lodash-es/_baseIndexOf.js
 	/**
 	* The base implementation of `_.indexOf` without `fromIndex` bounds checks.
 	*
@@ -57048,7 +57069,7 @@ raf(cb) {
 		init__strictIndexOf();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_arrayIncludes.js
+	//#region node_modules/lodash-es/_arrayIncludes.js
 	/**
 	* A specialized version of `_.includes` for arrays without support for
 	* specifying an index to search from.
@@ -57065,7 +57086,7 @@ raf(cb) {
 		init__baseIndexOf();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_isIndex.js
+	//#region node_modules/lodash-es/_isIndex.js
 	/**
 	* Checks if `value` is a valid array-like index.
 	*
@@ -57085,7 +57106,7 @@ raf(cb) {
 		reIsUint$1 = /^(?:0|[1-9]\d*)$/;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseAssignValue.js
+	//#region node_modules/lodash-es/_baseAssignValue.js
 	/**
 	* The base implementation of `assignValue` and `assignMergeValue` without
 	* value checks.
@@ -57108,7 +57129,7 @@ raf(cb) {
 		init__defineProperty();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/eq.js
+	//#region node_modules/lodash-es/eq.js
 	/**
 	* Performs a
 	* [`SameValueZero`](http://ecma-international.org/ecma-262/7.0/#sec-samevaluezero)
@@ -57146,7 +57167,7 @@ raf(cb) {
 	}
 	var init_eq = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_assignValue.js
+	//#region node_modules/lodash-es/_assignValue.js
 	/**
 	* Assigns `value` to `key` of `object` if the existing value is not equivalent
 	* using [`SameValueZero`](http://ecma-international.org/ecma-262/7.0/#sec-samevaluezero)
@@ -57168,7 +57189,7 @@ raf(cb) {
 		hasOwnProperty$14 = Object.prototype.hasOwnProperty;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_copyObject.js
+	//#region node_modules/lodash-es/_copyObject.js
 	/**
 	* Copies properties of `source` to `object`.
 	*
@@ -57197,7 +57218,7 @@ raf(cb) {
 		init__baseAssignValue();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_overRest.js
+	//#region node_modules/lodash-es/_overRest.js
 	/**
 	* A specialized version of `baseRest` which transforms the rest array.
 	*
@@ -57225,7 +57246,7 @@ raf(cb) {
 		nativeMax$3 = Math.max;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseRest.js
+	//#region node_modules/lodash-es/_baseRest.js
 	/**
 	* The base implementation of `_.rest` which doesn't validate or coerce arguments.
 	*
@@ -57243,7 +57264,7 @@ raf(cb) {
 		init__setToString();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/isLength.js
+	//#region node_modules/lodash-es/isLength.js
 	/**
 	* Checks if `value` is a valid array-like length.
 	*
@@ -57278,7 +57299,7 @@ raf(cb) {
 		MAX_SAFE_INTEGER$1 = 9007199254740991;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/isArrayLike.js
+	//#region node_modules/lodash-es/isArrayLike.js
 	/**
 	* Checks if `value` is array-like. A value is considered array-like if it's
 	* not a function and has a `value.length` that's an integer greater than or
@@ -57312,7 +57333,7 @@ raf(cb) {
 		init_isLength();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_isIterateeCall.js
+	//#region node_modules/lodash-es/_isIterateeCall.js
 	/**
 	* Checks if the given arguments are from an iteratee call.
 	*
@@ -57336,7 +57357,7 @@ raf(cb) {
 		init_isObject();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_createAssigner.js
+	//#region node_modules/lodash-es/_createAssigner.js
 	/**
 	* Creates a function like `_.assign`.
 	*
@@ -57365,7 +57386,7 @@ raf(cb) {
 		init__isIterateeCall();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_isPrototype.js
+	//#region node_modules/lodash-es/_isPrototype.js
 	/**
 	* Checks if `value` is likely a prototype object.
 	*
@@ -57382,7 +57403,7 @@ raf(cb) {
 		objectProto$4 = Object.prototype;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseTimes.js
+	//#region node_modules/lodash-es/_baseTimes.js
 	/**
 	* The base implementation of `_.times` without support for iteratee shorthands
 	* or max array length checks.
@@ -57399,7 +57420,7 @@ raf(cb) {
 	}
 	var init__baseTimes = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseIsArguments.js
+	//#region node_modules/lodash-es/_baseIsArguments.js
 	/**
 	* The base implementation of `_.isArguments`.
 	*
@@ -57417,7 +57438,7 @@ raf(cb) {
 		argsTag$4 = "[object Arguments]";
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/isArguments.js
+	//#region node_modules/lodash-es/isArguments.js
 	var objectProto$3, hasOwnProperty$13, propertyIsEnumerable$2, isArguments;
 	var init_isArguments = __esmMin((() => {
 		init__baseIsArguments();
@@ -57432,7 +57453,7 @@ raf(cb) {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/stubFalse.js
+	//#region node_modules/lodash-es/stubFalse.js
 	/**
 	* This method returns `false`.
 	*
@@ -57451,7 +57472,7 @@ raf(cb) {
 	}
 	var init_stubFalse = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/isBuffer.js
+	//#region node_modules/lodash-es/isBuffer.js
 	var freeExports$3, freeModule$3, Buffer$2, isBuffer;
 	var init_isBuffer = __esmMin((() => {
 		init__root();
@@ -57462,7 +57483,7 @@ raf(cb) {
 		isBuffer = (Buffer$2 ? Buffer$2.isBuffer : void 0) || stubFalse$1;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseIsTypedArray.js
+	//#region node_modules/lodash-es/_baseIsTypedArray.js
 	/**
 	* The base implementation of `_.isTypedArray` without Node.js optimizations.
 	*
@@ -57507,7 +57528,7 @@ raf(cb) {
 		typedArrayTags$1[argsTag$3] = typedArrayTags$1[arrayTag$3] = typedArrayTags$1[arrayBufferTag$4] = typedArrayTags$1[boolTag$4] = typedArrayTags$1[dataViewTag$5] = typedArrayTags$1[dateTag$4] = typedArrayTags$1[errorTag$3] = typedArrayTags$1[funcTag$2] = typedArrayTags$1[mapTag$8] = typedArrayTags$1[numberTag$4] = typedArrayTags$1[objectTag$5] = typedArrayTags$1[regexpTag$4] = typedArrayTags$1[setTag$8] = typedArrayTags$1[stringTag$5] = typedArrayTags$1[weakMapTag$3] = false;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseUnary.js
+	//#region node_modules/lodash-es/_baseUnary.js
 	/**
 	* The base implementation of `_.unary` without support for storing metadata.
 	*
@@ -57522,7 +57543,7 @@ raf(cb) {
 	}
 	var init__baseUnary = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_nodeUtil.js
+	//#region node_modules/lodash-es/_nodeUtil.js
 	var freeExports$2, freeModule$2, freeProcess$1, nodeUtil;
 	var init__nodeUtil = __esmMin((() => {
 		init__freeGlobal();
@@ -57538,7 +57559,7 @@ raf(cb) {
 		}();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/isTypedArray.js
+	//#region node_modules/lodash-es/isTypedArray.js
 	var nodeIsTypedArray$1, isTypedArray;
 	var init_isTypedArray = __esmMin((() => {
 		init__baseIsTypedArray();
@@ -57548,7 +57569,7 @@ raf(cb) {
 		isTypedArray = nodeIsTypedArray$1 ? baseUnary$1(nodeIsTypedArray$1) : baseIsTypedArray$1;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_arrayLikeKeys.js
+	//#region node_modules/lodash-es/_arrayLikeKeys.js
 	/**
 	* Creates an array of the enumerable property names of the array-like `value`.
 	*
@@ -57573,7 +57594,7 @@ raf(cb) {
 		hasOwnProperty$12 = Object.prototype.hasOwnProperty;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_overArg.js
+	//#region node_modules/lodash-es/_overArg.js
 	/**
 	* Creates a unary function that invokes `func` with its argument transformed.
 	*
@@ -57589,14 +57610,14 @@ raf(cb) {
 	}
 	var init__overArg = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_nativeKeys.js
+	//#region node_modules/lodash-es/_nativeKeys.js
 	var nativeKeys;
 	var init__nativeKeys = __esmMin((() => {
 		init__overArg();
 		nativeKeys = overArg$1(Object.keys, Object);
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseKeys.js
+	//#region node_modules/lodash-es/_baseKeys.js
 	/**
 	* The base implementation of `_.keys` which doesn't treat sparse arrays as dense.
 	*
@@ -57617,7 +57638,7 @@ raf(cb) {
 		hasOwnProperty$11 = Object.prototype.hasOwnProperty;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/keys.js
+	//#region node_modules/lodash-es/keys.js
 	/**
 	* Creates an array of the own enumerable property names of `object`.
 	*
@@ -57655,7 +57676,7 @@ raf(cb) {
 		init_isArrayLike();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_nativeKeysIn.js
+	//#region node_modules/lodash-es/_nativeKeysIn.js
 	/**
 	* This function is like
 	* [`Object.keys`](http://ecma-international.org/ecma-262/7.0/#sec-object.keys)
@@ -57672,7 +57693,7 @@ raf(cb) {
 	}
 	var init__nativeKeysIn = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseKeysIn.js
+	//#region node_modules/lodash-es/_baseKeysIn.js
 	/**
 	* The base implementation of `_.keysIn` which doesn't treat sparse arrays as dense.
 	*
@@ -57694,7 +57715,7 @@ raf(cb) {
 		hasOwnProperty$10 = Object.prototype.hasOwnProperty;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/keysIn.js
+	//#region node_modules/lodash-es/keysIn.js
 	/**
 	* Creates an array of the own and inherited enumerable property names of `object`.
 	*
@@ -57727,7 +57748,7 @@ raf(cb) {
 		init_isArrayLike();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_isKey.js
+	//#region node_modules/lodash-es/_isKey.js
 	/**
 	* Checks if `value` is a property name and not a property path.
 	*
@@ -57750,14 +57771,14 @@ raf(cb) {
 		reIsPlainProp$1 = /^\w*$/;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_nativeCreate.js
+	//#region node_modules/lodash-es/_nativeCreate.js
 	var nativeCreate;
 	var init__nativeCreate = __esmMin((() => {
 		init__getNative();
 		nativeCreate = getNative$1(Object, "create");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_hashClear.js
+	//#region node_modules/lodash-es/_hashClear.js
 	/**
 	* Removes all key-value entries from the hash.
 	*
@@ -57773,7 +57794,7 @@ raf(cb) {
 		init__nativeCreate();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_hashDelete.js
+	//#region node_modules/lodash-es/_hashDelete.js
 	/**
 	* Removes `key` and its value from the hash.
 	*
@@ -57791,7 +57812,7 @@ raf(cb) {
 	}
 	var init__hashDelete = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_hashGet.js
+	//#region node_modules/lodash-es/_hashGet.js
 	/**
 	* Gets the hash value for `key`.
 	*
@@ -57816,7 +57837,7 @@ raf(cb) {
 		hasOwnProperty$9 = Object.prototype.hasOwnProperty;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_hashHas.js
+	//#region node_modules/lodash-es/_hashHas.js
 	/**
 	* Checks if a hash value for `key` exists.
 	*
@@ -57836,7 +57857,7 @@ raf(cb) {
 		hasOwnProperty$8 = Object.prototype.hasOwnProperty;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_hashSet.js
+	//#region node_modules/lodash-es/_hashSet.js
 	/**
 	* Sets the hash `key` to `value`.
 	*
@@ -57859,7 +57880,7 @@ raf(cb) {
 		HASH_UNDEFINED$2 = "__lodash_hash_undefined__";
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_Hash.js
+	//#region node_modules/lodash-es/_Hash.js
 	/**
 	* Creates a hash object.
 	*
@@ -57888,7 +57909,7 @@ raf(cb) {
 		Hash$1.prototype.set = hashSet$1;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_listCacheClear.js
+	//#region node_modules/lodash-es/_listCacheClear.js
 	/**
 	* Removes all key-value entries from the list cache.
 	*
@@ -57902,7 +57923,7 @@ raf(cb) {
 	}
 	var init__listCacheClear = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_assocIndexOf.js
+	//#region node_modules/lodash-es/_assocIndexOf.js
 	/**
 	* Gets the index at which the `key` is found in `array` of key-value pairs.
 	*
@@ -57920,7 +57941,7 @@ raf(cb) {
 		init_eq();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_listCacheDelete.js
+	//#region node_modules/lodash-es/_listCacheDelete.js
 	/**
 	* Removes `key` and its value from the list cache.
 	*
@@ -57944,7 +57965,7 @@ raf(cb) {
 		splice$1 = Array.prototype.splice;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_listCacheGet.js
+	//#region node_modules/lodash-es/_listCacheGet.js
 	/**
 	* Gets the list cache value for `key`.
 	*
@@ -57962,7 +57983,7 @@ raf(cb) {
 		init__assocIndexOf();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_listCacheHas.js
+	//#region node_modules/lodash-es/_listCacheHas.js
 	/**
 	* Checks if a list cache value for `key` exists.
 	*
@@ -57979,7 +58000,7 @@ raf(cb) {
 		init__assocIndexOf();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_listCacheSet.js
+	//#region node_modules/lodash-es/_listCacheSet.js
 	/**
 	* Sets the list cache `key` to `value`.
 	*
@@ -58002,7 +58023,7 @@ raf(cb) {
 		init__assocIndexOf();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_ListCache.js
+	//#region node_modules/lodash-es/_ListCache.js
 	/**
 	* Creates an list cache object.
 	*
@@ -58031,7 +58052,7 @@ raf(cb) {
 		ListCache$1.prototype.set = listCacheSet$1;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_Map.js
+	//#region node_modules/lodash-es/_Map.js
 	var Map$2;
 	var init__Map = __esmMin((() => {
 		init__getNative();
@@ -58039,7 +58060,7 @@ raf(cb) {
 		Map$2 = getNative$1(root, "Map");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_mapCacheClear.js
+	//#region node_modules/lodash-es/_mapCacheClear.js
 	/**
 	* Removes all key-value entries from the map.
 	*
@@ -58061,7 +58082,7 @@ raf(cb) {
 		init__Map();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_isKeyable.js
+	//#region node_modules/lodash-es/_isKeyable.js
 	/**
 	* Checks if `value` is suitable for use as unique object key.
 	*
@@ -58075,7 +58096,7 @@ raf(cb) {
 	}
 	var init__isKeyable = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_getMapData.js
+	//#region node_modules/lodash-es/_getMapData.js
 	/**
 	* Gets the data for `map`.
 	*
@@ -58092,7 +58113,7 @@ raf(cb) {
 		init__isKeyable();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_mapCacheDelete.js
+	//#region node_modules/lodash-es/_mapCacheDelete.js
 	/**
 	* Removes `key` and its value from the map.
 	*
@@ -58111,7 +58132,7 @@ raf(cb) {
 		init__getMapData();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_mapCacheGet.js
+	//#region node_modules/lodash-es/_mapCacheGet.js
 	/**
 	* Gets the map value for `key`.
 	*
@@ -58128,7 +58149,7 @@ raf(cb) {
 		init__getMapData();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_mapCacheHas.js
+	//#region node_modules/lodash-es/_mapCacheHas.js
 	/**
 	* Checks if a map value for `key` exists.
 	*
@@ -58145,7 +58166,7 @@ raf(cb) {
 		init__getMapData();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_mapCacheSet.js
+	//#region node_modules/lodash-es/_mapCacheSet.js
 	/**
 	* Sets the map `key` to `value`.
 	*
@@ -58166,7 +58187,7 @@ raf(cb) {
 		init__getMapData();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_MapCache.js
+	//#region node_modules/lodash-es/_MapCache.js
 	/**
 	* Creates a map cache object to store key-value pairs.
 	*
@@ -58195,7 +58216,7 @@ raf(cb) {
 		MapCache$1.prototype.set = mapCacheSet$1;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/memoize.js
+	//#region node_modules/lodash-es/memoize.js
 	/**
 	* Creates a function that memoizes the result of `func`. If `resolver` is
 	* provided, it determines the cache key for storing the result based on the
@@ -58259,7 +58280,7 @@ raf(cb) {
 		memoize$2.Cache = MapCache$1;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_memoizeCapped.js
+	//#region node_modules/lodash-es/_memoizeCapped.js
 	/**
 	* A specialized version of `_.memoize` which clears the memoized function's
 	* cache when it exceeds `MAX_MEMOIZE_SIZE`.
@@ -58282,7 +58303,7 @@ raf(cb) {
 		MAX_MEMOIZE_SIZE$1 = 500;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_stringToPath.js
+	//#region node_modules/lodash-es/_stringToPath.js
 	var rePropName$1, reEscapeChar$1, stringToPath;
 	var init__stringToPath = __esmMin((() => {
 		init__memoizeCapped();
@@ -58298,7 +58319,7 @@ raf(cb) {
 		});
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/toString.js
+	//#region node_modules/lodash-es/toString.js
 	/**
 	* Converts `value` to a string. An empty string is returned for `null`
 	* and `undefined` values. The sign of `-0` is preserved.
@@ -58327,7 +58348,7 @@ raf(cb) {
 		init__baseToString();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_castPath.js
+	//#region node_modules/lodash-es/_castPath.js
 	/**
 	* Casts `value` to a path array if it's not one.
 	*
@@ -58347,7 +58368,7 @@ raf(cb) {
 		init_toString();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_toKey.js
+	//#region node_modules/lodash-es/_toKey.js
 	/**
 	* Converts `value` to a string key if it's not a string or symbol.
 	*
@@ -58366,7 +58387,7 @@ raf(cb) {
 		INFINITY$1 = 1 / 0;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseGet.js
+	//#region node_modules/lodash-es/_baseGet.js
 	/**
 	* The base implementation of `_.get` without support for default values.
 	*
@@ -58386,7 +58407,7 @@ raf(cb) {
 		init__toKey();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/get.js
+	//#region node_modules/lodash-es/get.js
 	/**
 	* Gets the value at `path` of `object`. If the resolved value is
 	* `undefined`, the `defaultValue` is returned in its place.
@@ -58420,7 +58441,7 @@ raf(cb) {
 		init__baseGet();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_arrayPush.js
+	//#region node_modules/lodash-es/_arrayPush.js
 	/**
 	* Appends the elements of `values` to `array`.
 	*
@@ -58436,7 +58457,7 @@ raf(cb) {
 	}
 	var init__arrayPush = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_isFlattenable.js
+	//#region node_modules/lodash-es/_isFlattenable.js
 	/**
 	* Checks if `value` is a flattenable `arguments` object or array.
 	*
@@ -58455,7 +58476,7 @@ raf(cb) {
 		spreadableSymbol$1 = Symbol$1 ? Symbol$1.isConcatSpreadable : void 0;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseFlatten.js
+	//#region node_modules/lodash-es/_baseFlatten.js
 	/**
 	* The base implementation of `_.flatten` with support for restricting flattening.
 	*
@@ -58485,7 +58506,7 @@ raf(cb) {
 		init__isFlattenable();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/flatten.js
+	//#region node_modules/lodash-es/flatten.js
 	/**
 	* Flattens `array` a single level deep.
 	*
@@ -58507,7 +58528,7 @@ raf(cb) {
 		init__baseFlatten();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_flatRest.js
+	//#region node_modules/lodash-es/_flatRest.js
 	/**
 	* A specialized version of `baseRest` which flattens the rest array.
 	*
@@ -58524,14 +58545,14 @@ raf(cb) {
 		init__setToString();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_getPrototype.js
+	//#region node_modules/lodash-es/_getPrototype.js
 	var getPrototype;
 	var init__getPrototype = __esmMin((() => {
 		init__overArg();
 		getPrototype = overArg$1(Object.getPrototypeOf, Object);
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/isPlainObject.js
+	//#region node_modules/lodash-es/isPlainObject.js
 	/**
 	* Checks if `value` is a plain object, that is, an object created by the
 	* `Object` constructor or one with a `[[Prototype]]` of `null`.
@@ -58580,7 +58601,7 @@ raf(cb) {
 		objectCtorString = funcToString$1.call(Object);
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_hasUnicode.js
+	//#region node_modules/lodash-es/_hasUnicode.js
 	/**
 	* Checks if `string` contains Unicode symbols.
 	*
@@ -58596,7 +58617,7 @@ raf(cb) {
 		reHasUnicode = RegExp("[\\u200d\\ud800-\\udfff\\u0300-\\u036f\\ufe20-\\ufe2f\\u20d0-\\u20ff\\ufe0e\\ufe0f]");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_arrayReduce.js
+	//#region node_modules/lodash-es/_arrayReduce.js
 	/**
 	* A specialized version of `_.reduce` for arrays without support for
 	* iteratee shorthands.
@@ -58617,7 +58638,7 @@ raf(cb) {
 	}
 	var init__arrayReduce = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_stackClear.js
+	//#region node_modules/lodash-es/_stackClear.js
 	/**
 	* Removes all key-value entries from the stack.
 	*
@@ -58633,7 +58654,7 @@ raf(cb) {
 		init__ListCache();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_stackDelete.js
+	//#region node_modules/lodash-es/_stackDelete.js
 	/**
 	* Removes `key` and its value from the stack.
 	*
@@ -58650,7 +58671,7 @@ raf(cb) {
 	}
 	var init__stackDelete = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_stackGet.js
+	//#region node_modules/lodash-es/_stackGet.js
 	/**
 	* Gets the stack value for `key`.
 	*
@@ -58665,7 +58686,7 @@ raf(cb) {
 	}
 	var init__stackGet = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_stackHas.js
+	//#region node_modules/lodash-es/_stackHas.js
 	/**
 	* Checks if a stack value for `key` exists.
 	*
@@ -58680,7 +58701,7 @@ raf(cb) {
 	}
 	var init__stackHas = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_stackSet.js
+	//#region node_modules/lodash-es/_stackSet.js
 	/**
 	* Sets the stack `key` to `value`.
 	*
@@ -58714,7 +58735,7 @@ raf(cb) {
 		LARGE_ARRAY_SIZE$2 = 200;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_Stack.js
+	//#region node_modules/lodash-es/_Stack.js
 	/**
 	* Creates a stack cache object to store key-value pairs.
 	*
@@ -58740,7 +58761,7 @@ raf(cb) {
 		Stack$1.prototype.set = stackSet$1;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseAssign.js
+	//#region node_modules/lodash-es/_baseAssign.js
 	/**
 	* The base implementation of `_.assign` without support for multiple sources
 	* or `customizer` functions.
@@ -58758,7 +58779,7 @@ raf(cb) {
 		init_keys();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseAssignIn.js
+	//#region node_modules/lodash-es/_baseAssignIn.js
 	/**
 	* The base implementation of `_.assignIn` without support for multiple sources
 	* or `customizer` functions.
@@ -58776,7 +58797,7 @@ raf(cb) {
 		init_keysIn();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_cloneBuffer.js
+	//#region node_modules/lodash-es/_cloneBuffer.js
 	/**
 	* Creates a clone of  `buffer`.
 	*
@@ -58800,7 +58821,7 @@ raf(cb) {
 		allocUnsafe$1 = Buffer$1 ? Buffer$1.allocUnsafe : void 0;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_arrayFilter.js
+	//#region node_modules/lodash-es/_arrayFilter.js
 	/**
 	* A specialized version of `_.filter` for arrays without support for
 	* iteratee shorthands.
@@ -58820,7 +58841,7 @@ raf(cb) {
 	}
 	var init__arrayFilter = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/stubArray.js
+	//#region node_modules/lodash-es/stubArray.js
 	/**
 	* This method returns a new empty array.
 	*
@@ -58844,7 +58865,7 @@ raf(cb) {
 	}
 	var init_stubArray = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_getSymbols.js
+	//#region node_modules/lodash-es/_getSymbols.js
 	var propertyIsEnumerable$1, nativeGetSymbols$1, getSymbols;
 	var init__getSymbols = __esmMin((() => {
 		init__arrayFilter();
@@ -58860,7 +58881,7 @@ raf(cb) {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_copySymbols.js
+	//#region node_modules/lodash-es/_copySymbols.js
 	/**
 	* Copies own symbols of `source` to `object`.
 	*
@@ -58877,7 +58898,7 @@ raf(cb) {
 		init__getSymbols();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_getSymbolsIn.js
+	//#region node_modules/lodash-es/_getSymbolsIn.js
 	var getSymbolsIn;
 	var init__getSymbolsIn = __esmMin((() => {
 		init__arrayPush();
@@ -58894,7 +58915,7 @@ raf(cb) {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_copySymbolsIn.js
+	//#region node_modules/lodash-es/_copySymbolsIn.js
 	/**
 	* Copies own and inherited symbols of `source` to `object`.
 	*
@@ -58911,7 +58932,7 @@ raf(cb) {
 		init__getSymbolsIn();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseGetAllKeys.js
+	//#region node_modules/lodash-es/_baseGetAllKeys.js
 	/**
 	* The base implementation of `getAllKeys` and `getAllKeysIn` which uses
 	* `keysFunc` and `symbolsFunc` to get the enumerable property names and
@@ -58932,7 +58953,7 @@ raf(cb) {
 		init_isArray();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_getAllKeys.js
+	//#region node_modules/lodash-es/_getAllKeys.js
 	/**
 	* Creates an array of own enumerable property names and symbols of `object`.
 	*
@@ -58949,7 +58970,7 @@ raf(cb) {
 		init_keys();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_getAllKeysIn.js
+	//#region node_modules/lodash-es/_getAllKeysIn.js
 	/**
 	* Creates an array of own and inherited enumerable property names and
 	* symbols of `object`.
@@ -58967,7 +58988,7 @@ raf(cb) {
 		init_keysIn();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_DataView.js
+	//#region node_modules/lodash-es/_DataView.js
 	var DataView$1;
 	var init__DataView = __esmMin((() => {
 		init__getNative();
@@ -58975,7 +58996,7 @@ raf(cb) {
 		DataView$1 = getNative$1(root, "DataView");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_Promise.js
+	//#region node_modules/lodash-es/_Promise.js
 	var Promise$2;
 	var init__Promise = __esmMin((() => {
 		init__getNative();
@@ -58983,7 +59004,7 @@ raf(cb) {
 		Promise$2 = getNative$1(root, "Promise");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_Set.js
+	//#region node_modules/lodash-es/_Set.js
 	var Set$2;
 	var init__Set = __esmMin((() => {
 		init__getNative();
@@ -58991,7 +59012,7 @@ raf(cb) {
 		Set$2 = getNative$1(root, "Set");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_getTag.js
+	//#region node_modules/lodash-es/_getTag.js
 	var mapTag$7, objectTag$3, promiseTag$1, setTag$7, weakMapTag$2, dataViewTag$4, dataViewCtorString$1, mapCtorString$1, promiseCtorString$1, setCtorString$1, weakMapCtorString$1, getTag$1, _getTag_default;
 	var init__getTag = __esmMin((() => {
 		init__DataView();
@@ -59027,7 +59048,7 @@ raf(cb) {
 		_getTag_default = getTag$1;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_initCloneArray.js
+	//#region node_modules/lodash-es/_initCloneArray.js
 	/**
 	* Initializes an array clone.
 	*
@@ -59048,14 +59069,14 @@ raf(cb) {
 		hasOwnProperty$6 = Object.prototype.hasOwnProperty;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_Uint8Array.js
+	//#region node_modules/lodash-es/_Uint8Array.js
 	var Uint8Array$1;
 	var init__Uint8Array = __esmMin((() => {
 		init__root();
 		Uint8Array$1 = root.Uint8Array;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_cloneArrayBuffer.js
+	//#region node_modules/lodash-es/_cloneArrayBuffer.js
 	/**
 	* Creates a clone of `arrayBuffer`.
 	*
@@ -59072,7 +59093,7 @@ raf(cb) {
 		init__Uint8Array();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_cloneDataView.js
+	//#region node_modules/lodash-es/_cloneDataView.js
 	/**
 	* Creates a clone of `dataView`.
 	*
@@ -59089,7 +59110,7 @@ raf(cb) {
 		init__cloneArrayBuffer();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_cloneRegExp.js
+	//#region node_modules/lodash-es/_cloneRegExp.js
 	/**
 	* Creates a clone of `regexp`.
 	*
@@ -59107,7 +59128,7 @@ raf(cb) {
 		reFlags$1 = /\w*$/;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_cloneSymbol.js
+	//#region node_modules/lodash-es/_cloneSymbol.js
 	/**
 	* Creates a clone of the `symbol` object.
 	*
@@ -59125,7 +59146,7 @@ raf(cb) {
 		symbolValueOf$2 = symbolProto$2 ? symbolProto$2.valueOf : void 0;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_cloneTypedArray.js
+	//#region node_modules/lodash-es/_cloneTypedArray.js
 	/**
 	* Creates a clone of `typedArray`.
 	*
@@ -59142,7 +59163,7 @@ raf(cb) {
 		init__cloneArrayBuffer();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_initCloneByTag.js
+	//#region node_modules/lodash-es/_initCloneByTag.js
 	/**
 	* Initializes an object clone based on its `toStringTag`.
 	*
@@ -59207,7 +59228,7 @@ raf(cb) {
 		uint32Tag$2 = "[object Uint32Array]";
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_initCloneObject.js
+	//#region node_modules/lodash-es/_initCloneObject.js
 	/**
 	* Initializes an object clone.
 	*
@@ -59224,7 +59245,7 @@ raf(cb) {
 		init__isPrototype();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseIsMap.js
+	//#region node_modules/lodash-es/_baseIsMap.js
 	/**
 	* The base implementation of `_.isMap` without Node.js optimizations.
 	*
@@ -59242,7 +59263,7 @@ raf(cb) {
 		mapTag$5 = "[object Map]";
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/isMap.js
+	//#region node_modules/lodash-es/isMap.js
 	var nodeIsMap$1, isMap;
 	var init_isMap = __esmMin((() => {
 		init__baseIsMap();
@@ -59252,7 +59273,7 @@ raf(cb) {
 		isMap = nodeIsMap$1 ? baseUnary$1(nodeIsMap$1) : baseIsMap$1;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseIsSet.js
+	//#region node_modules/lodash-es/_baseIsSet.js
 	/**
 	* The base implementation of `_.isSet` without Node.js optimizations.
 	*
@@ -59270,7 +59291,7 @@ raf(cb) {
 		setTag$5 = "[object Set]";
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/isSet.js
+	//#region node_modules/lodash-es/isSet.js
 	var nodeIsSet$1, isSet;
 	var init_isSet = __esmMin((() => {
 		init__baseIsSet();
@@ -59280,7 +59301,7 @@ raf(cb) {
 		isSet = nodeIsSet$1 ? baseUnary$1(nodeIsSet$1) : baseIsSet$1;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseClone.js
+	//#region node_modules/lodash-es/_baseClone.js
 	/**
 	* The base implementation of `_.clone` and `_.cloneDeep` which tracks
 	* traversed objects.
@@ -59395,7 +59416,7 @@ raf(cb) {
 		cloneableTags$1[errorTag$2] = cloneableTags$1[funcTag$1] = cloneableTags$1[weakMapTag$1] = false;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/cloneDeep.js
+	//#region node_modules/lodash-es/cloneDeep.js
 	/**
 	* This method is like `_.clone` except that it recursively clones `value`.
 	*
@@ -59424,7 +59445,7 @@ raf(cb) {
 		CLONE_SYMBOLS_FLAG$1 = 4;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_setCacheAdd.js
+	//#region node_modules/lodash-es/_setCacheAdd.js
 	/**
 	* Adds `value` to the array cache.
 	*
@@ -59444,7 +59465,7 @@ raf(cb) {
 		HASH_UNDEFINED$1 = "__lodash_hash_undefined__";
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_setCacheHas.js
+	//#region node_modules/lodash-es/_setCacheHas.js
 	/**
 	* Checks if `value` is in the array cache.
 	*
@@ -59459,7 +59480,7 @@ raf(cb) {
 	}
 	var init__setCacheHas = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_SetCache.js
+	//#region node_modules/lodash-es/_SetCache.js
 	/**
 	*
 	* Creates an array cache object to store unique values.
@@ -59481,7 +59502,7 @@ raf(cb) {
 		SetCache$1.prototype.has = setCacheHas$1;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_arraySome.js
+	//#region node_modules/lodash-es/_arraySome.js
 	/**
 	* A specialized version of `_.some` for arrays without support for iteratee
 	* shorthands.
@@ -59499,7 +59520,7 @@ raf(cb) {
 	}
 	var init__arraySome = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_cacheHas.js
+	//#region node_modules/lodash-es/_cacheHas.js
 	/**
 	* Checks if a `cache` value for `key` exists.
 	*
@@ -59513,7 +59534,7 @@ raf(cb) {
 	}
 	var init__cacheHas = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_equalArrays.js
+	//#region node_modules/lodash-es/_equalArrays.js
 	/**
 	* A specialized version of `baseIsEqualDeep` for arrays with support for
 	* partial deep comparisons.
@@ -59569,7 +59590,7 @@ raf(cb) {
 		COMPARE_UNORDERED_FLAG$4 = 2;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_mapToArray.js
+	//#region node_modules/lodash-es/_mapToArray.js
 	/**
 	* Converts `map` to its key-value pairs.
 	*
@@ -59586,7 +59607,7 @@ raf(cb) {
 	}
 	var init__mapToArray = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_setToArray.js
+	//#region node_modules/lodash-es/_setToArray.js
 	/**
 	* Converts `set` to an array of its values.
 	*
@@ -59603,7 +59624,7 @@ raf(cb) {
 	}
 	var init__setToArray = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_equalByTag.js
+	//#region node_modules/lodash-es/_equalByTag.js
 	/**
 	* A specialized version of `baseIsEqualDeep` for comparing objects of
 	* the same `toStringTag`.
@@ -59677,7 +59698,7 @@ raf(cb) {
 		symbolValueOf$1 = symbolProto$1 ? symbolProto$1.valueOf : void 0;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_equalObjects.js
+	//#region node_modules/lodash-es/_equalObjects.js
 	/**
 	* A specialized version of `baseIsEqualDeep` for objects with support for
 	* partial deep comparisons.
@@ -59731,7 +59752,7 @@ raf(cb) {
 		hasOwnProperty$5 = Object.prototype.hasOwnProperty;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseIsEqualDeep.js
+	//#region node_modules/lodash-es/_baseIsEqualDeep.js
 	/**
 	* A specialized version of `baseIsEqual` for arrays and objects which performs
 	* deep comparisons and tracks traversed objects enabling objects with circular
@@ -59789,7 +59810,7 @@ raf(cb) {
 		hasOwnProperty$4 = Object.prototype.hasOwnProperty;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseIsEqual.js
+	//#region node_modules/lodash-es/_baseIsEqual.js
 	/**
 	* The base implementation of `_.isEqual` which supports partial comparisons
 	* and tracks traversed objects.
@@ -59814,7 +59835,7 @@ raf(cb) {
 		init_isObjectLike();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseIsMatch.js
+	//#region node_modules/lodash-es/_baseIsMatch.js
 	/**
 	* The base implementation of `_.isMatch` without support for iteratee shorthands.
 	*
@@ -59854,7 +59875,7 @@ raf(cb) {
 		COMPARE_UNORDERED_FLAG$2 = 2;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_isStrictComparable.js
+	//#region node_modules/lodash-es/_isStrictComparable.js
 	/**
 	* Checks if `value` is suitable for strict equality comparisons, i.e. `===`.
 	*
@@ -59870,7 +59891,7 @@ raf(cb) {
 		init_isObject();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_getMatchData.js
+	//#region node_modules/lodash-es/_getMatchData.js
 	/**
 	* Gets the property names, values, and compare flags of `object`.
 	*
@@ -59895,7 +59916,7 @@ raf(cb) {
 		init_keys();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_matchesStrictComparable.js
+	//#region node_modules/lodash-es/_matchesStrictComparable.js
 	/**
 	* A specialized version of `matchesProperty` for source values suitable
 	* for strict equality comparisons, i.e. `===`.
@@ -59913,7 +59934,7 @@ raf(cb) {
 	}
 	var init__matchesStrictComparable = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseMatches.js
+	//#region node_modules/lodash-es/_baseMatches.js
 	/**
 	* The base implementation of `_.matches` which doesn't clone `source`.
 	*
@@ -59934,7 +59955,7 @@ raf(cb) {
 		init__matchesStrictComparable();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseHasIn.js
+	//#region node_modules/lodash-es/_baseHasIn.js
 	/**
 	* The base implementation of `_.hasIn` without support for deep paths.
 	*
@@ -59948,7 +59969,7 @@ raf(cb) {
 	}
 	var init__baseHasIn = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_hasPath.js
+	//#region node_modules/lodash-es/_hasPath.js
 	/**
 	* Checks if `path` exists on `object`.
 	*
@@ -59979,7 +60000,7 @@ raf(cb) {
 		init__toKey();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/hasIn.js
+	//#region node_modules/lodash-es/hasIn.js
 	/**
 	* Checks if `path` is a direct or inherited property of `object`.
 	*
@@ -60014,7 +60035,7 @@ raf(cb) {
 		init__hasPath();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseMatchesProperty.js
+	//#region node_modules/lodash-es/_baseMatchesProperty.js
 	/**
 	* The base implementation of `_.matchesProperty` which doesn't clone `srcValue`.
 	*
@@ -60043,7 +60064,7 @@ raf(cb) {
 		COMPARE_UNORDERED_FLAG$1 = 2;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseProperty.js
+	//#region node_modules/lodash-es/_baseProperty.js
 	/**
 	* The base implementation of `_.property` without support for deep paths.
 	*
@@ -60058,7 +60079,7 @@ raf(cb) {
 	}
 	var init__baseProperty = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_basePropertyDeep.js
+	//#region node_modules/lodash-es/_basePropertyDeep.js
 	/**
 	* A specialized version of `baseProperty` which supports deep paths.
 	*
@@ -60075,7 +60096,7 @@ raf(cb) {
 		init__baseGet();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/property.js
+	//#region node_modules/lodash-es/property.js
 	/**
 	* Creates a function that returns the value at `path` of a given object.
 	*
@@ -60108,7 +60129,7 @@ raf(cb) {
 		init__toKey();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseIteratee.js
+	//#region node_modules/lodash-es/_baseIteratee.js
 	/**
 	* The base implementation of `_.iteratee`.
 	*
@@ -60130,7 +60151,7 @@ raf(cb) {
 		init_property();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_createBaseFor.js
+	//#region node_modules/lodash-es/_createBaseFor.js
 	/**
 	* Creates a base function for methods like `_.forIn` and `_.forOwn`.
 	*
@@ -60150,14 +60171,14 @@ raf(cb) {
 	}
 	var init__createBaseFor = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseFor.js
+	//#region node_modules/lodash-es/_baseFor.js
 	var baseFor;
 	var init__baseFor = __esmMin((() => {
 		init__createBaseFor();
 		baseFor = createBaseFor$1();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseForOwn.js
+	//#region node_modules/lodash-es/_baseForOwn.js
 	/**
 	* The base implementation of `_.forOwn` without support for iteratee shorthands.
 	*
@@ -60174,7 +60195,7 @@ raf(cb) {
 		init_keys();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_createBaseEach.js
+	//#region node_modules/lodash-es/_createBaseEach.js
 	/**
 	* Creates a `baseEach` or `baseEachRight` function.
 	*
@@ -60196,7 +60217,7 @@ raf(cb) {
 		init_isArrayLike();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseEach.js
+	//#region node_modules/lodash-es/_baseEach.js
 	var baseEach;
 	var init__baseEach = __esmMin((() => {
 		init__baseForOwn();
@@ -60204,7 +60225,7 @@ raf(cb) {
 		baseEach = createBaseEach$1(baseForOwn$1);
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/now.js
+	//#region node_modules/lodash-es/now.js
 	var now;
 	var init_now = __esmMin((() => {
 		init__root();
@@ -60213,7 +60234,7 @@ raf(cb) {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/defaults.js
+	//#region node_modules/lodash-es/defaults.js
 	var objectProto$1, hasOwnProperty$3, defaults$10;
 	var init_defaults = __esmMin((() => {
 		init__baseRest();
@@ -60243,7 +60264,7 @@ raf(cb) {
 		});
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_assignMergeValue.js
+	//#region node_modules/lodash-es/_assignMergeValue.js
 	/**
 	* This function is like `assignValue` except that it doesn't assign
 	* `undefined` values.
@@ -60261,7 +60282,7 @@ raf(cb) {
 		init_eq();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/isArrayLikeObject.js
+	//#region node_modules/lodash-es/isArrayLikeObject.js
 	/**
 	* This method is like `_.isArrayLike` except that it also checks if `value`
 	* is an object.
@@ -60295,7 +60316,7 @@ raf(cb) {
 		init_isObjectLike();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_safeGet.js
+	//#region node_modules/lodash-es/_safeGet.js
 	/**
 	* Gets the value at `key`, unless `key` is "__proto__" or "constructor".
 	*
@@ -60311,7 +60332,7 @@ raf(cb) {
 	}
 	var init__safeGet = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/toPlainObject.js
+	//#region node_modules/lodash-es/toPlainObject.js
 	/**
 	* Converts `value` to a plain object flattening inherited enumerable string
 	* keyed properties of `value` to own properties of the plain object.
@@ -60344,7 +60365,7 @@ raf(cb) {
 		init_keysIn();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseMergeDeep.js
+	//#region node_modules/lodash-es/_baseMergeDeep.js
 	/**
 	* A specialized version of `baseMerge` for arrays and objects which performs
 	* deep merges and tracks traversed objects enabling objects with circular
@@ -60412,7 +60433,7 @@ raf(cb) {
 		init_toPlainObject();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseMerge.js
+	//#region node_modules/lodash-es/_baseMerge.js
 	/**
 	* The base implementation of `_.merge` without support for multiple sources.
 	*
@@ -60446,7 +60467,7 @@ raf(cb) {
 		init__safeGet();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_arrayIncludesWith.js
+	//#region node_modules/lodash-es/_arrayIncludesWith.js
 	/**
 	* This function is like `arrayIncludes` except that it accepts a comparator.
 	*
@@ -60463,7 +60484,7 @@ raf(cb) {
 	}
 	var init__arrayIncludesWith = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/last.js
+	//#region node_modules/lodash-es/last.js
 	/**
 	* Gets the last element of `array`.
 	*
@@ -60484,7 +60505,7 @@ raf(cb) {
 	}
 	var init_last = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_castFunction.js
+	//#region node_modules/lodash-es/_castFunction.js
 	/**
 	* Casts `value` to `identity` if it's not a function.
 	*
@@ -60499,7 +60520,7 @@ raf(cb) {
 		init_identity();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/forEach.js
+	//#region node_modules/lodash-es/forEach.js
 	/**
 	* Iterates over elements of `collection` and invokes `iteratee` for each element.
 	* The iteratee is invoked with three arguments: (value, index|key, collection).
@@ -60540,12 +60561,12 @@ raf(cb) {
 		init_isArray();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/each.js
+	//#region node_modules/lodash-es/each.js
 	var init_each = __esmMin((() => {
 		init_forEach();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseFilter.js
+	//#region node_modules/lodash-es/_baseFilter.js
 	/**
 	* The base implementation of `_.filter` without support for iteratee shorthands.
 	*
@@ -60565,7 +60586,7 @@ raf(cb) {
 		init__baseEach();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/filter.js
+	//#region node_modules/lodash-es/filter.js
 	/**
 	* Iterates over elements of `collection`, returning an array of all elements
 	* `predicate` returns truthy for. The predicate is invoked with three
@@ -60617,7 +60638,7 @@ raf(cb) {
 		init_isArray();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_createFind.js
+	//#region node_modules/lodash-es/_createFind.js
 	/**
 	* Creates a `_.find` or `_.findLast` function.
 	*
@@ -60645,7 +60666,7 @@ raf(cb) {
 		init_keys();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/findIndex.js
+	//#region node_modules/lodash-es/findIndex.js
 	/**
 	* This method is like `_.find` except that it returns the index of the first
 	* element `predicate` returns truthy for instead of the element itself.
@@ -60696,7 +60717,7 @@ raf(cb) {
 		nativeMax$2 = Math.max;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/find.js
+	//#region node_modules/lodash-es/find.js
 	var find;
 	var init_find = __esmMin((() => {
 		init__createFind();
@@ -60704,7 +60725,7 @@ raf(cb) {
 		find = createFind$1(findIndex$1);
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseMap.js
+	//#region node_modules/lodash-es/_baseMap.js
 	/**
 	* The base implementation of `_.map` without support for iteratee shorthands.
 	*
@@ -60725,7 +60746,7 @@ raf(cb) {
 		init_isArrayLike();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/map.js
+	//#region node_modules/lodash-es/map.js
 	/**
 	* Creates an array of values by running each element in `collection` thru
 	* `iteratee`. The iteratee is invoked with three arguments:
@@ -60778,7 +60799,7 @@ raf(cb) {
 		init_isArray();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/forIn.js
+	//#region node_modules/lodash-es/forIn.js
 	/**
 	* Iterates over own and inherited enumerable string keyed properties of an
 	* object and invokes `iteratee` for each property. The iteratee is invoked
@@ -60816,7 +60837,7 @@ raf(cb) {
 		init_keysIn();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/forOwn.js
+	//#region node_modules/lodash-es/forOwn.js
 	/**
 	* Iterates over own enumerable string keyed properties of an object and
 	* invokes `iteratee` for each property. The iteratee is invoked with three
@@ -60853,7 +60874,7 @@ raf(cb) {
 		init__castFunction();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseGt.js
+	//#region node_modules/lodash-es/_baseGt.js
 	/**
 	* The base implementation of `_.gt` which doesn't coerce arguments.
 	*
@@ -60868,7 +60889,7 @@ raf(cb) {
 	}
 	var init__baseGt = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseHas.js
+	//#region node_modules/lodash-es/_baseHas.js
 	/**
 	* The base implementation of `_.has` without support for deep paths.
 	*
@@ -60885,7 +60906,7 @@ raf(cb) {
 		hasOwnProperty$2 = Object.prototype.hasOwnProperty;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/has.js
+	//#region node_modules/lodash-es/has.js
 	/**
 	* Checks if `path` is a direct property of `object`.
 	*
@@ -60921,7 +60942,7 @@ raf(cb) {
 		init__hasPath();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/isString.js
+	//#region node_modules/lodash-es/isString.js
 	/**
 	* Checks if `value` is classified as a `String` primitive or object.
 	*
@@ -60950,7 +60971,7 @@ raf(cb) {
 		stringTag$1 = "[object String]";
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseValues.js
+	//#region node_modules/lodash-es/_baseValues.js
 	/**
 	* The base implementation of `_.values` and `_.valuesIn` which creates an
 	* array of `object` property values corresponding to the property names
@@ -60970,7 +60991,7 @@ raf(cb) {
 		init__arrayMap();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/values.js
+	//#region node_modules/lodash-es/values.js
 	/**
 	* Creates an array of the own enumerable string keyed property values of `object`.
 	*
@@ -61005,7 +61026,7 @@ raf(cb) {
 		init_keys();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/isEmpty.js
+	//#region node_modules/lodash-es/isEmpty.js
 	/**
 	* Checks if `value` is an empty object, collection, map, or set.
 	*
@@ -61063,7 +61084,7 @@ raf(cb) {
 		hasOwnProperty$1 = Object.prototype.hasOwnProperty;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/isUndefined.js
+	//#region node_modules/lodash-es/isUndefined.js
 	/**
 	* Checks if `value` is `undefined`.
 	*
@@ -61086,7 +61107,7 @@ raf(cb) {
 	}
 	var init_isUndefined = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseLt.js
+	//#region node_modules/lodash-es/_baseLt.js
 	/**
 	* The base implementation of `_.lt` which doesn't coerce arguments.
 	*
@@ -61101,7 +61122,7 @@ raf(cb) {
 	}
 	var init__baseLt = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/mapValues.js
+	//#region node_modules/lodash-es/mapValues.js
 	/**
 	* Creates an object with the same keys as `object` and values generated
 	* by running each own enumerable string keyed property of `object` thru
@@ -61144,7 +61165,7 @@ raf(cb) {
 		init__baseIteratee();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseExtremum.js
+	//#region node_modules/lodash-es/_baseExtremum.js
 	/**
 	* The base implementation of methods like `_.max` and `_.min` which accepts a
 	* `comparator` to determine the extremum value.
@@ -61167,7 +61188,7 @@ raf(cb) {
 		init_isSymbol();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/max.js
+	//#region node_modules/lodash-es/max.js
 	/**
 	* Computes the maximum value of `array`. If `array` is empty or falsey,
 	* `undefined` is returned.
@@ -61195,7 +61216,7 @@ raf(cb) {
 		init_identity();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/merge.js
+	//#region node_modules/lodash-es/merge.js
 	var merge$2;
 	var init_merge = __esmMin((() => {
 		init__baseMerge();
@@ -61205,7 +61226,7 @@ raf(cb) {
 		});
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/min.js
+	//#region node_modules/lodash-es/min.js
 	/**
 	* Computes the minimum value of `array`. If `array` is empty or falsey,
 	* `undefined` is returned.
@@ -61233,7 +61254,7 @@ raf(cb) {
 		init_identity();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/minBy.js
+	//#region node_modules/lodash-es/minBy.js
 	/**
 	* This method is like `_.min` except that it accepts `iteratee` which is
 	* invoked for each element in `array` to generate the criterion by which
@@ -61266,7 +61287,7 @@ raf(cb) {
 		init__baseLt();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseSet.js
+	//#region node_modules/lodash-es/_baseSet.js
 	/**
 	* The base implementation of `_.set`.
 	*
@@ -61302,7 +61323,7 @@ raf(cb) {
 		init__toKey();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_basePickBy.js
+	//#region node_modules/lodash-es/_basePickBy.js
 	/**
 	* The base implementation of  `_.pickBy` without support for iteratee shorthands.
 	*
@@ -61326,7 +61347,7 @@ raf(cb) {
 		init__castPath();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseSortBy.js
+	//#region node_modules/lodash-es/_baseSortBy.js
 	/**
 	* The base implementation of `_.sortBy` which uses `comparer` to define the
 	* sort order of `array` and replaces criteria objects with their corresponding
@@ -61345,7 +61366,7 @@ raf(cb) {
 	}
 	var init__baseSortBy = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_compareAscending.js
+	//#region node_modules/lodash-es/_compareAscending.js
 	/**
 	* Compares values to sort them in ascending order.
 	*
@@ -61367,7 +61388,7 @@ raf(cb) {
 		init_isSymbol();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_compareMultiple.js
+	//#region node_modules/lodash-es/_compareMultiple.js
 	/**
 	* Used by `_.orderBy` to compare multiple properties of a value to another
 	* and stable sort them.
@@ -61397,7 +61418,7 @@ raf(cb) {
 		init__compareAscending();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseOrderBy.js
+	//#region node_modules/lodash-es/_baseOrderBy.js
 	/**
 	* The base implementation of `_.orderBy` without param guards.
 	*
@@ -61441,14 +61462,14 @@ raf(cb) {
 		init_isArray();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_asciiSize.js
+	//#region node_modules/lodash-es/_asciiSize.js
 	var asciiSize;
 	var init__asciiSize = __esmMin((() => {
 		init__baseProperty();
 		asciiSize = baseProperty$1("length");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_unicodeSize.js
+	//#region node_modules/lodash-es/_unicodeSize.js
 	/**
 	* Gets the size of a Unicode `string`.
 	*
@@ -61492,7 +61513,7 @@ raf(cb) {
 		reUnicode = RegExp(rsFitz + "(?=" + rsFitz + ")|" + rsSymbol + rsSeq, "g");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_stringSize.js
+	//#region node_modules/lodash-es/_stringSize.js
 	/**
 	* Gets the number of symbols in `string`.
 	*
@@ -61509,7 +61530,7 @@ raf(cb) {
 		init__unicodeSize();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_basePick.js
+	//#region node_modules/lodash-es/_basePick.js
 	/**
 	* The base implementation of `_.pick` without support for individual
 	* property identifiers.
@@ -61529,7 +61550,7 @@ raf(cb) {
 		init_hasIn();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/pick.js
+	//#region node_modules/lodash-es/pick.js
 	var pick;
 	var init_pick = __esmMin((() => {
 		init__basePick();
@@ -61539,7 +61560,7 @@ raf(cb) {
 		});
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseRange.js
+	//#region node_modules/lodash-es/_baseRange.js
 	/**
 	* The base implementation of `_.range` and `_.rangeRight` which doesn't
 	* coerce arguments.
@@ -61565,7 +61586,7 @@ raf(cb) {
 		nativeMax$1 = Math.max;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_createRange.js
+	//#region node_modules/lodash-es/_createRange.js
 	/**
 	* Creates a `_.range` or `_.rangeRight` function.
 	*
@@ -61591,14 +61612,14 @@ raf(cb) {
 		init_toFinite();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/range.js
+	//#region node_modules/lodash-es/range.js
 	var range;
 	var init_range = __esmMin((() => {
 		init__createRange();
 		range = createRange();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseReduce.js
+	//#region node_modules/lodash-es/_baseReduce.js
 	/**
 	* The base implementation of `_.reduce` and `_.reduceRight`, without support
 	* for iteratee shorthands, which iterates over `collection` using `eachFunc`.
@@ -61620,7 +61641,7 @@ raf(cb) {
 	}
 	var init__baseReduce = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/reduce.js
+	//#region node_modules/lodash-es/reduce.js
 	/**
 	* Reduces `collection` to a value which is the accumulated result of running
 	* each element in `collection` thru `iteratee`, where each successive
@@ -61670,7 +61691,7 @@ raf(cb) {
 		init_isArray();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/size.js
+	//#region node_modules/lodash-es/size.js
 	/**
 	* Gets the size of `collection` by returning its length for array-like
 	* values or the number of own enumerable string keyed properties for objects.
@@ -61710,7 +61731,7 @@ raf(cb) {
 		setTag$1 = "[object Set]";
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/sortBy.js
+	//#region node_modules/lodash-es/sortBy.js
 	var sortBy;
 	var init_sortBy = __esmMin((() => {
 		init__baseFlatten();
@@ -61726,7 +61747,7 @@ raf(cb) {
 		});
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_createSet.js
+	//#region node_modules/lodash-es/_createSet.js
 	var createSet;
 	var init__createSet = __esmMin((() => {
 		init__Set();
@@ -61737,7 +61758,7 @@ raf(cb) {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseUniq.js
+	//#region node_modules/lodash-es/_baseUniq.js
 	/**
 	* The base implementation of `_.uniqBy` without support for iteratee shorthands.
 	*
@@ -61785,7 +61806,7 @@ raf(cb) {
 		LARGE_ARRAY_SIZE$1 = 200;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/union.js
+	//#region node_modules/lodash-es/union.js
 	var union;
 	var init_union = __esmMin((() => {
 		init__baseFlatten();
@@ -61797,7 +61818,7 @@ raf(cb) {
 		});
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/uniqueId.js
+	//#region node_modules/lodash-es/uniqueId.js
 	/**
 	* Generates a unique ID. If `prefix` is given, the ID is appended to it.
 	*
@@ -61825,7 +61846,7 @@ raf(cb) {
 		idCounter = 0;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/_baseZipObject.js
+	//#region node_modules/lodash-es/_baseZipObject.js
 	/**
 	* This base implementation of `_.zipObject` which assigns values using `assignFunc`.
 	*
@@ -61845,7 +61866,7 @@ raf(cb) {
 	}
 	var init__baseZipObject = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/zipObject.js
+	//#region node_modules/lodash-es/zipObject.js
 	/**
 	* This method is like `_.fromPairs` except that it accepts two arrays,
 	* one of property identifiers and one of corresponding values.
@@ -61870,7 +61891,7 @@ raf(cb) {
 		init__baseZipObject();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/lodash-es@4.18.1/node_modules/lodash-es/lodash.js
+	//#region node_modules/lodash-es/lodash.js
 	var init_lodash = __esmMin((() => {
 		init_isSymbol();
 		init__baseToString();
@@ -62025,7 +62046,7 @@ raf(cb) {
 	* Copyright Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
 	*/
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/graphlib/graph.js
+	//#region node_modules/dagre-d3-es/src/graphlib/graph.js
 	/**
 	* @param {Record<NodeID, number>} map - Object mapping node IDs to counts.
 	* @param {NodeID | number} k - Node ID.
@@ -62843,12 +62864,12 @@ raf(cb) {
 		Graph.prototype._edgeCount = 0;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/graphlib/index.js
+	//#region node_modules/dagre-d3-es/src/graphlib/index.js
 	var init_graphlib = __esmMin((() => {
 		init_graph();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/sizeCapture-INFHLROL.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/sizeCapture-INFHLROL.mjs
 	var sizeCapture_INFHLROL_exports = /* @__PURE__ */ __exportAll({
 		captureNodeSizes: () => captureNodeSizes,
 		shouldCaptureSizes: () => shouldCaptureSizes
@@ -62908,7 +62929,7 @@ raf(cb) {
 		__name$1(captureNodeSizes, "captureNodeSizes");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-2E4U76K2.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-2E4U76K2.mjs
 	function createLayoutElementGroups(element, { edgePathsClass = "edges edgePaths" } = {}) {
 		const rootGroups = element.insert("g").attr("class", "root");
 		return {
@@ -63421,7 +63442,7 @@ raf(cb) {
 		__name$1(positionRenderedEdgeLabel, "positionRenderedEdgeLabel");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-LNGE3PJU.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-LNGE3PJU.mjs
 	function getDefaultExportFromCjs$1(x) {
 		return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, "default") ? x["default"] : x;
 	}
@@ -65973,7 +65994,7 @@ raf(cb) {
 		({Type: Type$2, Schema, FAILSAFE_SCHEMA, JSON_SCHEMA, CORE_SCHEMA, DEFAULT_SCHEMA, load, loadAll, dump, YAMLException, types, safeLoad, safeLoadAll, safeDump} = /* @__PURE__ */ getDefaultExportFromCjs$1(requireJsYaml()));
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/data/list.js
+	//#region node_modules/dagre-d3-es/src/dagre/data/list.js
 	function unlink(entry) {
 		entry._prev._next = entry._next;
 		entry._next._prev = entry._prev;
@@ -66020,7 +66041,7 @@ raf(cb) {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/greedy-fas.js
+	//#region node_modules/dagre-d3-es/src/dagre/greedy-fas.js
 	function greedyFAS(g, weightFn) {
 		if (g.nodeCount() <= 1) return [];
 		var state = buildState(g, weightFn || DEFAULT_WEIGHT_FN);
@@ -66113,7 +66134,7 @@ raf(cb) {
 		DEFAULT_WEIGHT_FN = constant$1(1);
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/acyclic.js
+	//#region node_modules/dagre-d3-es/src/dagre/acyclic.js
 	function run$3(g) {
 		forEach$1(g.graph().acyclicer === "greedy" ? greedyFAS(g, weightFn(g)) : dfsFAS(g), function(e) {
 			var label = g.edge(e);
@@ -66162,7 +66183,7 @@ raf(cb) {
 		init_greedy_fas();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/util.js
+	//#region node_modules/dagre-d3-es/src/dagre/util.js
 	function addDummyNode(g, type, attrs, name) {
 		var v;
 		do
@@ -66306,7 +66327,7 @@ raf(cb) {
 		init_graphlib();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/add-border-segments.js
+	//#region node_modules/dagre-d3-es/src/dagre/add-border-segments.js
 	function addBorderSegments(g) {
 		function dfs(v) {
 			var children = g.children(v);
@@ -66341,7 +66362,7 @@ raf(cb) {
 		init_util$1();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/coordinate-system.js
+	//#region node_modules/dagre-d3-es/src/dagre/coordinate-system.js
 	function adjust(g) {
 		var rankDir = g.graph().rankdir.toLowerCase();
 		if (rankDir === "lr" || rankDir === "rl") swapWidthHeight(g);
@@ -66399,7 +66420,7 @@ raf(cb) {
 		init_lodash();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/normalize.js
+	//#region node_modules/dagre-d3-es/src/dagre/normalize.js
 	function run$2(g) {
 		g.graph().dummyChains = [];
 		forEach$1(g.edges(), function(edge) {
@@ -66483,7 +66504,7 @@ raf(cb) {
 		init_util$1();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/rank/util.js
+	//#region node_modules/dagre-d3-es/src/dagre/rank/util.js
 	function longestPath(g) {
 		var visited = {};
 		function dfs(v) {
@@ -66505,7 +66526,7 @@ raf(cb) {
 		init_lodash();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/rank/feasible-tree.js
+	//#region node_modules/dagre-d3-es/src/dagre/rank/feasible-tree.js
 	function feasibleTree(g) {
 		var t = new Graph({ directed: false });
 		var start = g.nodes()[0];
@@ -66552,7 +66573,7 @@ raf(cb) {
 		init_lodash();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/graphlib/alg/dijkstra-all.js
+	//#region node_modules/dagre-d3-es/src/graphlib/alg/dijkstra-all.js
 	var init_dijkstra_all = __esmMin((() => {
 		init_dijkstra();
 	}));
@@ -66560,7 +66581,7 @@ raf(cb) {
 		init_lodash();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/graphlib/alg/topsort.js
+	//#region node_modules/dagre-d3-es/src/graphlib/alg/topsort.js
 	/**
 	* An implementation of [topological sorting](https://en.wikipedia.org/wiki/Topological_sorting).
 	*
@@ -66615,12 +66636,12 @@ raf(cb) {
 		CycleException.prototype = /* @__PURE__ */ new Error();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/graphlib/alg/is-acyclic.js
+	//#region node_modules/dagre-d3-es/src/graphlib/alg/is-acyclic.js
 	var init_is_acyclic = __esmMin((() => {
 		init_topsort();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/graphlib/alg/dfs.js
+	//#region node_modules/dagre-d3-es/src/graphlib/alg/dfs.js
 	/**
 	* A helper that preforms a pre- or post-order traversal on the input graph
 	* and returns the nodes in the order they were visited. If the graph is
@@ -66669,7 +66690,7 @@ raf(cb) {
 		init_lodash();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/graphlib/alg/postorder.js
+	//#region node_modules/dagre-d3-es/src/graphlib/alg/postorder.js
 	/**
 	* This function performs a [postorder traversal][] of the graph `g` starting
 	* at the nodes `vs`. For each node visited, `v`,  the function `callback(v)`
@@ -66701,7 +66722,7 @@ raf(cb) {
 		init_dfs();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/graphlib/alg/preorder.js
+	//#region node_modules/dagre-d3-es/src/graphlib/alg/preorder.js
 	/**
 	* This function performs a [preorder traversal][] of the graph `g` starting
 	* at the nodes `vs`. For each node visited, `v`,  the function `callback(v)`
@@ -66736,12 +66757,12 @@ raf(cb) {
 		init_dfs();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/graphlib/alg/prim.js
+	//#region node_modules/dagre-d3-es/src/graphlib/alg/prim.js
 	var init_prim = __esmMin((() => {
 		init_graph();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/graphlib/alg/index.js
+	//#region node_modules/dagre-d3-es/src/graphlib/alg/index.js
 	var init_alg = __esmMin((() => {
 		init_dijkstra();
 		init_dijkstra_all();
@@ -66753,7 +66774,7 @@ raf(cb) {
 		init_topsort();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/rank/network-simplex.js
+	//#region node_modules/dagre-d3-es/src/dagre/rank/network-simplex.js
 	function networkSimplex(g) {
 		g = simplify(g);
 		longestPath(g);
@@ -66886,7 +66907,7 @@ raf(cb) {
 		networkSimplex.exchangeEdges = exchangeEdges;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/rank/index.js
+	//#region node_modules/dagre-d3-es/src/dagre/rank/index.js
 	function rank(g) {
 		switch (g.graph().ranker) {
 			case "network-simplex":
@@ -66916,7 +66937,7 @@ raf(cb) {
 		longestPathRanker = longestPath;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/nesting-graph.js
+	//#region node_modules/dagre-d3-es/src/dagre/nesting-graph.js
 	function run$1(g) {
 		var root = addDummyNode(g, "root", {}, "_root");
 		var depths = treeDepths(g);
@@ -67003,7 +67024,7 @@ raf(cb) {
 		init_util$1();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/order/add-subgraph-constraints.js
+	//#region node_modules/dagre-d3-es/src/dagre/order/add-subgraph-constraints.js
 	function addSubgraphConstraints(g, cg, vs) {
 		var prev = {}, rootPrev;
 		forEach$1(vs, function(v) {
@@ -67029,7 +67050,7 @@ raf(cb) {
 		init_lodash();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/order/build-layer-graph.js
+	//#region node_modules/dagre-d3-es/src/dagre/order/build-layer-graph.js
 	function buildLayerGraph(g, rank, relationship) {
 		var root = createRootNode(g), result = new Graph({ compound: true }).setGraph({ root }).setDefaultNodeLabel(function(v) {
 			return g.node(v);
@@ -67061,7 +67082,7 @@ raf(cb) {
 		init_graphlib();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/order/cross-count.js
+	//#region node_modules/dagre-d3-es/src/dagre/order/cross-count.js
 	function crossCount(g, layering) {
 		var cc = 0;
 		for (var i = 1; i < layering.length; ++i) cc += twoLayerCrossCount(g, layering[i - 1], layering[i]);
@@ -67104,7 +67125,7 @@ raf(cb) {
 		init_lodash();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/order/init-order.js
+	//#region node_modules/dagre-d3-es/src/dagre/order/init-order.js
 	function initOrder(g) {
 		var visited = {};
 		var simpleNodes = filter$1(g.nodes(), function(v) {
@@ -67131,7 +67152,7 @@ raf(cb) {
 		init_lodash();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/order/barycenter.js
+	//#region node_modules/dagre-d3-es/src/dagre/order/barycenter.js
 	function barycenter$1(g, movable) {
 		return map$2(movable, function(v) {
 			var inV = g.inEdges(v);
@@ -67159,7 +67180,7 @@ raf(cb) {
 		init_lodash();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/order/resolve-conflicts.js
+	//#region node_modules/dagre-d3-es/src/dagre/order/resolve-conflicts.js
 	function resolveConflicts(entries, cg) {
 		var mappedEntries = {};
 		forEach$1(entries, function(entry, i) {
@@ -67239,7 +67260,7 @@ raf(cb) {
 		init_lodash();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/order/sort.js
+	//#region node_modules/dagre-d3-es/src/dagre/order/sort.js
 	function sort(entries, biasRight) {
 		var parts = partition(entries, function(entry) {
 			return Object.prototype.hasOwnProperty.call(entry, "barycenter");
@@ -67284,7 +67305,7 @@ raf(cb) {
 		init_util$1();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/order/sort-subgraph.js
+	//#region node_modules/dagre-d3-es/src/dagre/order/sort-subgraph.js
 	function sortSubgraph(g, v, cg, biasRight) {
 		var movable = g.children(v);
 		var node = g.node(v);
@@ -67347,7 +67368,7 @@ raf(cb) {
 		init_sort();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/order/index.js
+	//#region node_modules/dagre-d3-es/src/dagre/order/index.js
 	function order(g) {
 		var maxRank$1 = maxRank(g), downLayerGraphs = buildLayerGraphs(g, range(1, maxRank$1 + 1), "inEdges"), upLayerGraphs = buildLayerGraphs(g, range(maxRank$1 - 1, -1, -1), "outEdges");
 		var layering = initOrder(g);
@@ -67399,7 +67420,7 @@ raf(cb) {
 		init_sort_subgraph();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/parent-dummy-chains.js
+	//#region node_modules/dagre-d3-es/src/dagre/parent-dummy-chains.js
 	function parentDummyChains(g) {
 		var postorderNums = postorder(g);
 		forEach$1(g.graph().dummyChains, function(v) {
@@ -67464,7 +67485,7 @@ raf(cb) {
 		init_lodash();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/position/bk.js
+	//#region node_modules/dagre-d3-es/src/dagre/position/bk.js
 	function findType1Conflicts(g, layering) {
 		/** @type {{[nodeId: string | number]: {[nodeId: string | number]: true}}} */
 		var conflicts = {};
@@ -67742,7 +67763,7 @@ raf(cb) {
 		init_util$1();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/position/index.js
+	//#region node_modules/dagre-d3-es/src/dagre/position/index.js
 	function position$2(g) {
 		g = asNonCompoundGraph(g);
 		positionY(g);
@@ -67770,7 +67791,7 @@ raf(cb) {
 		init_bk();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/layout.js
+	//#region node_modules/dagre-d3-es/src/dagre/layout.js
 	function layout$3(g, opts) {
 		var time$2 = opts && opts.debugTiming ? time : notime;
 		time$2("layout", () => {
@@ -68133,7 +68154,7 @@ raf(cb) {
 		edgeAttrs = ["labelpos"];
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dagre-d3-es@7.0.14/node_modules/dagre-d3-es/src/dagre/index.js
+	//#region node_modules/dagre-d3-es/src/dagre/index.js
 	var init_dagre = __esmMin((() => {
 		init_acyclic();
 		init_layout();
@@ -68141,7 +68162,7 @@ raf(cb) {
 		init_rank();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/dagre-GXQ25YYZ.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/dagre-GXQ25YYZ.mjs
 	var dagre_GXQ25YYZ_exports = /* @__PURE__ */ __exportAll({
 		applyDagreLayoutResult: () => applyDagreLayoutResult,
 		getEdgesToRender: () => getEdgesToRender,
@@ -68732,7 +68753,7 @@ raf(cb) {
 		});
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/swimlanes-42K2YHIH.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/swimlanes-42K2YHIH.mjs
 	var swimlanes_42K2YHIH_exports = /* @__PURE__ */ __exportAll({ render: () => render$2 });
 	function buildSegmentList(points) {
 		const segments = [];
@@ -75661,7 +75682,7 @@ EPSILON: 1e-6 };
 		});
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/cytoscape@3.34.2/node_modules/cytoscape/dist/cytoscape.esm.mjs
+	//#region node_modules/cytoscape/dist/cytoscape.esm.mjs
 	/**
 	* Copyright (c) 2016-2026, The Cytoscape Consortium.
 	*
@@ -103502,7 +103523,7 @@ EPSILON: 1e-6 };
 			}
 			return style;
 		};
-		version = "3.34.2";
+		version = "3.34.3";
 		cytoscape$1 = function cytoscape(options) {
 			if (options === void 0) options = {};
 			if (plainObject(options)) return new Core(options);
@@ -103521,7 +103542,7 @@ EPSILON: 1e-6 };
 		cytoscape$1.stylesheet = cytoscape$1.Stylesheet = _Stylesheet;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/layout-base@1.0.2/node_modules/layout-base/layout-base.js
+	//#region node_modules/layout-base/layout-base.js
 	var require_layout_base$1 = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		(function webpackUniversalModuleDefinition(root, factory) {
 			if (typeof exports === "object" && typeof module === "object") module.exports = factory();
@@ -106363,7 +106384,7 @@ EPSILON: 1e-6 };
 		});
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/cose-base@1.0.3/node_modules/cose-base/cose-base.js
+	//#region node_modules/cose-base/cose-base.js
 	var require_cose_base$1 = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		(function webpackUniversalModuleDefinition(root, factory) {
 			if (typeof exports === "object" && typeof module === "object") module.exports = factory(require_layout_base$1());
@@ -107261,7 +107282,7 @@ EPSILON: 1e-6 };
 		});
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/cytoscape-cose-bilkent@4.1.0_cytoscape@3.34.2/node_modules/cytoscape-cose-bilkent/cytoscape-cose-bilkent.js
+	//#region node_modules/cytoscape-cose-bilkent/cytoscape-cose-bilkent.js
 	var require_cytoscape_cose_bilkent = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		(function webpackUniversalModuleDefinition(root, factory) {
 			if (typeof exports === "object" && typeof module === "object") module.exports = factory(require_cose_base$1());
@@ -107546,7 +107567,7 @@ EPSILON: 1e-6 };
 		});
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/cose-bilkent-JH36ORCC.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/cose-bilkent-JH36ORCC.mjs
 	var cose_bilkent_JH36ORCC_exports = /* @__PURE__ */ __exportAll({ render: () => render2$1 });
 	function addNodes(nodes, cy) {
 		nodes.forEach((node) => {
@@ -107811,7 +107832,7 @@ EPSILON: 1e-6 };
 		}, "render");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-TLUHSLCS.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-TLUHSLCS.mjs
 	var internalHelpers, layoutAlgorithms, registerLayoutLoaders, render$1, getRegisteredLayoutAlgorithm;
 	var init_chunk_TLUHSLCS = __esmMin((() => {
 		init_chunk_L3NEJ4N5();
@@ -107885,7 +107906,7 @@ EPSILON: 1e-6 };
 		}, "getRegisteredLayoutAlgorithm");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/stylis@4.4.0/node_modules/stylis/src/Enum.js
+	//#region node_modules/stylis/src/Enum.js
 	var COMMENT = "comm";
 	var RULESET = "rule";
 	var DECLARATION = "decl";
@@ -107894,7 +107915,7 @@ EPSILON: 1e-6 };
 	var KEYFRAMES = "@keyframes";
 	var LAYER = "@layer";
 	//#endregion
-	//#region node_modules/.pnpm/stylis@4.4.0/node_modules/stylis/src/Utility.js
+	//#region node_modules/stylis/src/Utility.js
 	/**
 	* @param {number}
 	* @return {number}
@@ -107961,7 +107982,7 @@ EPSILON: 1e-6 };
 		return array.push(value), value;
 	}
 	//#endregion
-	//#region node_modules/.pnpm/stylis@4.4.0/node_modules/stylis/src/Tokenizer.js
+	//#region node_modules/stylis/src/Tokenizer.js
 	var line = 1;
 	var column = 1;
 	var length = 0;
@@ -108142,7 +108163,7 @@ EPSILON: 1e-6 };
 		return slice(index, position);
 	}
 	//#endregion
-	//#region node_modules/.pnpm/stylis@4.4.0/node_modules/stylis/src/Parser.js
+	//#region node_modules/stylis/src/Parser.js
 	/**
 	* @param {string} value
 	* @return {object[]}
@@ -108316,7 +108337,7 @@ EPSILON: 1e-6 };
 		return node(value, root, parent, DECLARATION, substr(value, 0, length), substr(value, length + 1, -1), length, siblings);
 	}
 	//#endregion
-	//#region node_modules/.pnpm/stylis@4.4.0/node_modules/stylis/src/Serializer.js
+	//#region node_modules/stylis/src/Serializer.js
 	/**
 	* @param {object[]} children
 	* @param {function} callback
@@ -108347,7 +108368,7 @@ EPSILON: 1e-6 };
 		return strlen(children = serialize(element.children, callback)) ? element.return = element.value + "{" + children + "}" : "";
 	}
 	//#endregion
-	//#region node_modules/.pnpm/stylis@4.4.0/node_modules/stylis/src/Middleware.js
+	//#region node_modules/stylis/src/Middleware.js
 	/**
 	* @param {function[]} collection
 	* @return {function}
@@ -108361,7 +108382,7 @@ EPSILON: 1e-6 };
 		};
 	}
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-F27PBJKO.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-F27PBJKO.mjs
 	var import_dist$2, drawRect$1, drawBackgroundRect$1, drawText$3, drawImage, drawEmbeddedImage, getNoteRect$1, getTextObj$1, createTooltip;
 	var init_chunk_F27PBJKO = __esmMin((() => {
 		init_chunk_DU6HZSFF();
@@ -108455,7 +108476,7 @@ EPSILON: 1e-6 };
 		}, "createTooltip");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/c4Diagram-7LVT6UL2.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/c4Diagram-7LVT6UL2.mjs
 	var c4Diagram_7LVT6UL2_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$35 });
 	function calcC4ShapeTextWH(textType, c4Shape, c4ShapeTextWrap, textConf, textLimitWidth) {
 		const textElement = c4Shape[textType];
@@ -112138,7 +112159,7 @@ ${elementFontStyles()}
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-5VM5RSS4.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-5VM5RSS4.mjs
 	var getIconStyles;
 	var init_chunk_5VM5RSS4 = __esmMin((() => {
 		init_chunk_Y2CYZVJY();
@@ -112159,7 +112180,7 @@ ${elementFontStyles()}
 `, "getIconStyles");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-XXDRQBXY.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-XXDRQBXY.mjs
 	var getDiagramElement;
 	var init_chunk_XXDRQBXY = __esmMin((() => {
 		init_chunk_Y2CYZVJY();
@@ -112171,7 +112192,7 @@ ${elementFontStyles()}
 		}, "getDiagramElement");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-POPQ4Y6H.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-POPQ4Y6H.mjs
 	var setupViewPortForSVG, calculateDimensionsWithPadding, createViewBox;
 	var init_chunk_POPQ4Y6H = __esmMin((() => {
 		init_chunk_DU6HZSFF();
@@ -112204,7 +112225,7 @@ ${elementFontStyles()}
 		}, "createViewBox");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-SHT3W25Y.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-SHT3W25Y.mjs
 	var MERMAID_DOM_ID_PREFIX$1, FlowDB, flowRenderer_v3_unified_default, parser$27, flow_default, newParser, flowParser_default, fade$2, styles_default$8, createFlowDiagram, diagram$34;
 	var init_chunk_SHT3W25Y = __esmMin((() => {
 		init_chunk_5VM5RSS4();
@@ -112615,7 +112636,7 @@ You have to call mermaid.initialize.`);
 					const rect = e.currentTarget?.getBoundingClientRect();
 					tooltipElem.transition().duration(200).style("opacity", ".9");
 					tooltipElem.text(el.attr("title")).style("left", window.scrollX + rect.left + (rect.right - rect.left) / 2 + "px").style("top", window.scrollY + rect.bottom + "px");
-					tooltipElem.html(purify.sanitize(title));
+					tooltipElem.html(purify_default.sanitize(title));
 					el.classed("hover", true);
 				}).on("mouseout", (e) => {
 					tooltipElem.transition().duration(500).style("opacity", 0);
@@ -117020,7 +117041,7 @@ You have to call mermaid.initialize.`);
 		diagram$34 = createFlowDiagram();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/flowDiagram-HODETNUW.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/flowDiagram-HODETNUW.mjs
 	var flowDiagram_HODETNUW_exports = /* @__PURE__ */ __exportAll({
 		createFlowDiagram: () => createFlowDiagram,
 		diagram: () => diagram$34
@@ -117044,7 +117065,7 @@ You have to call mermaid.initialize.`);
 		init_chunk_X3CZISLH();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/swimlanesDiagram-VR7AAH4N.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/swimlanesDiagram-VR7AAH4N.mjs
 	var swimlanesDiagram_VR7AAH4N_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$33 });
 	var diagram$33;
 	var init_swimlanesDiagram_VR7AAH4N = __esmMin((() => {
@@ -117078,7 +117099,7 @@ You have to call mermaid.initialize.`);
 		});
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/erDiagram-RLTQ6QDP.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/erDiagram-RLTQ6QDP.mjs
 	var erDiagram_RLTQ6QDP_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$32 });
 	var parser$26, erDiagram_default, ErDB, erRenderer_unified_exports, draw$9, fade$1, COLOR_THEMES$2, genColor$2, diagram$32;
 	var init_erDiagram_RLTQ6QDP = __esmMin((() => {
@@ -119375,7 +119396,7 @@ You have to call mermaid.initialize.`);
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-2Q5K7J3B.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-2Q5K7J3B.mjs
 	var ImperativeState;
 	var init_chunk_2Q5K7J3B = __esmMin((() => {
 		init_chunk_Y2CYZVJY();
@@ -119396,7 +119417,7 @@ You have to call mermaid.initialize.`);
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-JWPE2WC7.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-JWPE2WC7.mjs
 	function populateCommonDb(ast, db) {
 		if (ast.accDescr) db.setAccDescription?.(ast.accDescr);
 		if (ast.accTitle) db.setAccTitle?.(ast.accTitle);
@@ -119407,7 +119428,7 @@ You have to call mermaid.initialize.`);
 		__name$1(populateCommonDb, "populateCommonDb");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-FOHPRMQF.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-FOHPRMQF.mjs
 	function isAstNode(obj) {
 		return typeof obj === "object" && obj !== null && typeof obj.$type === "string";
 	}
@@ -146488,7 +146509,7 @@ ${content}`;
 	*)
 	*/
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-I5DQTOEV.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-I5DQTOEV.mjs
 	function createRadarServices(context = EmptyFileSystem) {
 		const shared = inject(createDefaultSharedCoreModule(context), MermaidGeneratedSharedModule);
 		const Radar = inject(createDefaultCoreModule({ shared }), RadarGrammarGeneratedModule, RadarModule);
@@ -146516,7 +146537,7 @@ ${content}`;
 		__name(createRadarServices, "createRadarServices");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-OUJLGHUK.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-OUJLGHUK.mjs
 	function createRailroadServices(context = EmptyFileSystem) {
 		const shared = inject(createDefaultSharedCoreModule(context), MermaidGeneratedSharedModule);
 		const Railroad = inject(createDefaultCoreModule({ shared }), RailroadGrammarGeneratedModule, RailroadModule);
@@ -146586,7 +146607,7 @@ ${content}`;
 		__name(createRailroadServices, "createRailroadServices");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-2ZTRR5NV.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-2ZTRR5NV.mjs
 	function createRailroadEbnfServices(context = EmptyFileSystem) {
 		const shared = inject(createDefaultSharedCoreModule(context), MermaidGeneratedSharedModule);
 		const RailroadEbnf = inject(createDefaultCoreModule({ shared }), RailroadEbnfGrammarGeneratedModule, RailroadEbnfModule);
@@ -146657,7 +146678,7 @@ ${content}`;
 		__name(createRailroadEbnfServices, "createRailroadEbnfServices");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-XHIXRSVI.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-XHIXRSVI.mjs
 	function createRailroadAbnfServices(context = EmptyFileSystem) {
 		const shared = inject(createDefaultSharedCoreModule(context), MermaidGeneratedSharedModule);
 		const RailroadAbnf = inject(createDefaultCoreModule({ shared }), RailroadAbnfGrammarGeneratedModule, RailroadAbnfModule);
@@ -146701,7 +146722,7 @@ ${content}`;
 		__name(createRailroadAbnfServices, "createRailroadAbnfServices");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-747NJXEK.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-747NJXEK.mjs
 	function createRailroadPegServices(context = EmptyFileSystem) {
 		const shared = inject(createDefaultSharedCoreModule(context), MermaidGeneratedSharedModule);
 		const RailroadPeg = inject(createDefaultCoreModule({ shared }), RailroadPegGrammarGeneratedModule, RailroadPegModule);
@@ -146771,7 +146792,7 @@ ${content}`;
 		__name(createRailroadPegServices, "createRailroadPegServices");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-6K3QC6MW.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-6K3QC6MW.mjs
 	function registerValidationChecks$1(services) {
 		const validator = services.validation.TreemapValidator;
 		const registry = services.validation.ValidationRegistry;
@@ -146857,7 +146878,7 @@ ${content}`;
 		__name(createTreemapServices, "createTreemapServices");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-ICYGCRZG.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-ICYGCRZG.mjs
 	function createWardleyServices(context = EmptyFileSystem) {
 		const shared = inject(createDefaultSharedCoreModule(context), MermaidGeneratedSharedModule);
 		const Wardley = inject(createDefaultCoreModule({ shared }), WardleyGrammarGeneratedModule, WardleyModule);
@@ -146885,7 +146906,7 @@ ${content}`;
 		__name(createWardleyServices, "createWardleyServices");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-6TQVIW2G.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-6TQVIW2G.mjs
 	function createCynefinServices(context = EmptyFileSystem) {
 		const shared = inject(createDefaultSharedCoreModule(context), MermaidGeneratedSharedModule);
 		const Cynefin = inject(createDefaultCoreModule({ shared }), CynefinGrammarGeneratedModule, CynefinModule);
@@ -146913,7 +146934,7 @@ ${content}`;
 		__name(createCynefinServices, "createCynefinServices");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-KI3K4JFJ.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-KI3K4JFJ.mjs
 	function createGitGraphServices(context = EmptyFileSystem) {
 		const shared = inject(createDefaultSharedCoreModule(context), MermaidGeneratedSharedModule);
 		const GitGraph = inject(createDefaultCoreModule({ shared }), GitGraphGrammarGeneratedModule, GitGraphModule);
@@ -146941,7 +146962,7 @@ ${content}`;
 		__name(createGitGraphServices, "createGitGraphServices");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-5V3GS4D5.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-5V3GS4D5.mjs
 	function createInfoServices(context = EmptyFileSystem) {
 		const shared = inject(createDefaultSharedCoreModule(context), MermaidGeneratedSharedModule);
 		const Info = inject(createDefaultCoreModule({ shared }), InfoGrammarGeneratedModule, InfoModule);
@@ -146969,7 +146990,7 @@ ${content}`;
 		__name(createInfoServices, "createInfoServices");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-UY3FDG6J.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-UY3FDG6J.mjs
 	function createPacketServices(context = EmptyFileSystem) {
 		const shared = inject(createDefaultSharedCoreModule(context), MermaidGeneratedSharedModule);
 		const Packet = inject(createDefaultCoreModule({ shared }), PacketGrammarGeneratedModule, PacketModule);
@@ -146997,7 +147018,7 @@ ${content}`;
 		__name(createPacketServices, "createPacketServices");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-3Z5EZCMW.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-3Z5EZCMW.mjs
 	function createPieServices(context = EmptyFileSystem) {
 		const shared = inject(createDefaultSharedCoreModule(context), MermaidGeneratedSharedModule);
 		const Pie = inject(createDefaultCoreModule({ shared }), PieGrammarGeneratedModule, PieModule);
@@ -147034,7 +147055,7 @@ ${content}`;
 		__name(createPieServices, "createPieServices");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-IH6LHLGP.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-IH6LHLGP.mjs
 	function createTreeViewServices(context = EmptyFileSystem) {
 		const shared = inject(createDefaultSharedCoreModule(context), MermaidGeneratedSharedModule);
 		const TreeView = inject(createDefaultCoreModule({ shared }), TreeViewGrammarGeneratedModule, TreeViewModule);
@@ -147078,7 +147099,7 @@ ${content}`;
 		__name(createTreeViewServices, "createTreeViewServices");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-6AZGARVD.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-6AZGARVD.mjs
 	function createArchitectureServices(context = EmptyFileSystem) {
 		const shared = inject(createDefaultSharedCoreModule(context), MermaidGeneratedSharedModule);
 		const Architecture = inject(createDefaultCoreModule({ shared }), ArchitectureGrammarGeneratedModule, ArchitectureModule);
@@ -147123,7 +147144,7 @@ ${content}`;
 		__name(createArchitectureServices, "createArchitectureServices");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-6EIED4P4.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/chunk-6EIED4P4.mjs
 	function registerValidationChecks(services) {
 		const validator = services.validation.EventModelingValidator;
 		const registry = services.validation.ValidationRegistry;
@@ -147194,7 +147215,7 @@ ${content}`;
 		__name(createEventModelingServices, "createEventModelingServices");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/info-A6RAGUB7.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/info-A6RAGUB7.mjs
 	var info_A6RAGUB7_exports = /* @__PURE__ */ __exportAll({
 		InfoModule: () => InfoModule,
 		createInfoServices: () => createInfoServices
@@ -147204,7 +147225,7 @@ ${content}`;
 		init_chunk_FOHPRMQF();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/packet-AYTQ26CC.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/packet-AYTQ26CC.mjs
 	var packet_AYTQ26CC_exports = /* @__PURE__ */ __exportAll({
 		PacketModule: () => PacketModule,
 		createPacketServices: () => createPacketServices
@@ -147214,7 +147235,7 @@ ${content}`;
 		init_chunk_FOHPRMQF();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/pie-WAS4IAKB.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/pie-WAS4IAKB.mjs
 	var pie_WAS4IAKB_exports = /* @__PURE__ */ __exportAll({
 		PieModule: () => PieModule,
 		createPieServices: () => createPieServices
@@ -147224,7 +147245,7 @@ ${content}`;
 		init_chunk_FOHPRMQF();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/treeView-Q6P3EWNA.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/treeView-Q6P3EWNA.mjs
 	var treeView_Q6P3EWNA_exports = /* @__PURE__ */ __exportAll({
 		TreeViewModule: () => TreeViewModule,
 		createTreeViewServices: () => createTreeViewServices
@@ -147234,7 +147255,7 @@ ${content}`;
 		init_chunk_FOHPRMQF();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/architecture-7GRP2DOG.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/architecture-7GRP2DOG.mjs
 	var architecture_7GRP2DOG_exports = /* @__PURE__ */ __exportAll({
 		ArchitectureModule: () => ArchitectureModule,
 		createArchitectureServices: () => createArchitectureServices
@@ -147244,7 +147265,7 @@ ${content}`;
 		init_chunk_FOHPRMQF();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/gitGraph-4MIJSDKK.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/gitGraph-4MIJSDKK.mjs
 	var gitGraph_4MIJSDKK_exports = /* @__PURE__ */ __exportAll({
 		GitGraphModule: () => GitGraphModule,
 		createGitGraphServices: () => createGitGraphServices
@@ -147254,7 +147275,7 @@ ${content}`;
 		init_chunk_FOHPRMQF();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/eventmodeling-NTZA5JFV.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/eventmodeling-NTZA5JFV.mjs
 	var eventmodeling_NTZA5JFV_exports = /* @__PURE__ */ __exportAll({
 		EventModelingModule: () => EventModelingModule,
 		createEventModelingServices: () => createEventModelingServices
@@ -147264,7 +147285,7 @@ ${content}`;
 		init_chunk_FOHPRMQF();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/radar-RG4KPBEZ.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/radar-RG4KPBEZ.mjs
 	var radar_RG4KPBEZ_exports = /* @__PURE__ */ __exportAll({
 		RadarModule: () => RadarModule,
 		createRadarServices: () => createRadarServices
@@ -147274,7 +147295,7 @@ ${content}`;
 		init_chunk_FOHPRMQF();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/railroad-74A4TZTK.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/railroad-74A4TZTK.mjs
 	var railroad_74A4TZTK_exports = /* @__PURE__ */ __exportAll({
 		RailroadModule: () => RailroadModule,
 		createRailroadServices: () => createRailroadServices
@@ -147284,7 +147305,7 @@ ${content}`;
 		init_chunk_FOHPRMQF();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/railroad-ebnf-LZEXJU2U.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/railroad-ebnf-LZEXJU2U.mjs
 	var railroad_ebnf_LZEXJU2U_exports = /* @__PURE__ */ __exportAll({
 		RailroadEbnfModule: () => RailroadEbnfModule,
 		createRailroadEbnfServices: () => createRailroadEbnfServices
@@ -147294,7 +147315,7 @@ ${content}`;
 		init_chunk_FOHPRMQF();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/railroad-abnf-HS5TGJTU.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/railroad-abnf-HS5TGJTU.mjs
 	var railroad_abnf_HS5TGJTU_exports = /* @__PURE__ */ __exportAll({
 		RailroadAbnfModule: () => RailroadAbnfModule,
 		createRailroadAbnfServices: () => createRailroadAbnfServices
@@ -147304,7 +147325,7 @@ ${content}`;
 		init_chunk_FOHPRMQF();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/railroad-peg-WCYAUIDC.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/railroad-peg-WCYAUIDC.mjs
 	var railroad_peg_WCYAUIDC_exports = /* @__PURE__ */ __exportAll({
 		RailroadPegModule: () => RailroadPegModule,
 		createRailroadPegServices: () => createRailroadPegServices
@@ -147314,7 +147335,7 @@ ${content}`;
 		init_chunk_FOHPRMQF();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/treemap-WGGIJYW6.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/treemap-WGGIJYW6.mjs
 	var treemap_WGGIJYW6_exports = /* @__PURE__ */ __exportAll({
 		TreemapModule: () => TreemapModule,
 		createTreemapServices: () => createTreemapServices
@@ -147324,7 +147345,7 @@ ${content}`;
 		init_chunk_FOHPRMQF();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/wardley-WFR3VGLG.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/wardley-WFR3VGLG.mjs
 	var wardley_WFR3VGLG_exports = /* @__PURE__ */ __exportAll({
 		WardleyModule: () => WardleyModule,
 		createWardleyServices: () => createWardleyServices
@@ -147334,7 +147355,7 @@ ${content}`;
 		init_chunk_FOHPRMQF();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/cynefin-OW5HDTMX.mjs
+	//#region node_modules/@mermaid-js/parser/dist/chunks/mermaid-parser.core/cynefin-OW5HDTMX.mjs
 	var cynefin_OW5HDTMX_exports = /* @__PURE__ */ __exportAll({
 		CynefinModule: () => CynefinModule,
 		createCynefinServices: () => createCynefinServices
@@ -147344,7 +147365,7 @@ ${content}`;
 		init_chunk_FOHPRMQF();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@mermaid-js+parser@1.2.1/node_modules/@mermaid-js/parser/dist/mermaid-parser.core.mjs
+	//#region node_modules/@mermaid-js/parser/dist/mermaid-parser.core.mjs
 	async function parse$1(diagramType, text) {
 		const initializer = initializers[diagramType];
 		if (!initializer) throw new Error(`Unknown diagram type: ${diagramType}`);
@@ -147452,7 +147473,7 @@ ${content}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/gitGraphDiagram-WWUBYQGX.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/gitGraphDiagram-WWUBYQGX.mjs
 	var gitGraphDiagram_WWUBYQGX_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$31 });
 	function getID() {
 		return random({ length: 7 });
@@ -148619,7 +148640,7 @@ ${content}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dayjs@1.11.23/node_modules/dayjs/plugin/isoWeek.js
+	//#region node_modules/dayjs/plugin/isoWeek.js
 	var require_isoWeek = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		(function(e, t) {
 			"object" == typeof exports && "undefined" != typeof module ? module.exports = t() : "function" == typeof define && define.amd ? define(t) : (e = "undefined" != typeof globalThis ? globalThis : e || self).dayjs_plugin_isoWeek = t();
@@ -148648,7 +148669,7 @@ ${content}`;
 		}));
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dayjs@1.11.23/node_modules/dayjs/plugin/customParseFormat.js
+	//#region node_modules/dayjs/plugin/customParseFormat.js
 	var require_customParseFormat = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		(function(e, t) {
 			"object" == typeof exports && "undefined" != typeof module ? module.exports = t() : "function" == typeof define && define.amd ? define(t) : (e = "undefined" != typeof globalThis ? globalThis : e || self).dayjs_plugin_customParseFormat = t();
@@ -148811,7 +148832,7 @@ ${content}`;
 		}));
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dayjs@1.11.23/node_modules/dayjs/plugin/advancedFormat.js
+	//#region node_modules/dayjs/plugin/advancedFormat.js
 	var require_advancedFormat = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		(function(e, t) {
 			"object" == typeof exports && "undefined" != typeof module ? module.exports = t() : "function" == typeof define && define.amd ? define(t) : (e = "undefined" != typeof globalThis ? globalThis : e || self).dayjs_plugin_advancedFormat = t();
@@ -148848,7 +148869,7 @@ ${content}`;
 		}));
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/dayjs@1.11.23/node_modules/dayjs/plugin/duration.js
+	//#region node_modules/dayjs/plugin/duration.js
 	var require_duration = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		(function(t, s) {
 			"object" == typeof exports && "undefined" != typeof module ? module.exports = s() : "function" == typeof define && define.amd ? define(s) : (t = "undefined" != typeof globalThis ? globalThis : t || self).dayjs_plugin_duration = s();
@@ -149012,7 +149033,7 @@ ${content}`;
 		}));
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/ganttDiagram-EL5Y4UJY.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/ganttDiagram-EL5Y4UJY.mjs
 	var ganttDiagram_EL5Y4UJY_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$30 });
 	function getTaskTags(data, task, tags2) {
 		let matchFound = true;
@@ -149029,7 +149050,7 @@ ${content}`;
 			});
 		}
 	}
-	var import_dist$1, import_dayjs_min, import_isoWeek, import_customParseFormat, import_advancedFormat, import_dayjs_min$1, import_duration, parser$24, gantt_default, WEEKEND_START_DAY, dateFormat, axisFormat, tickInterval, todayMarker, includes, excludes, links$1, sections$4, tasks$2, currentSection$2, displayMode, tags, funs, diagramId$1, inclusiveEndDates, topAxis, weekday, weekend, lastOrder, clear2$8, setDiagramId, setAxisFormat, getAxisFormat, setTickInterval, getTickInterval, setTodayMarker, getTodayMarker, setDateFormat, enableInclusiveEndDates, endDatesAreInclusive, enableTopAxis, topAxisEnabled, setDisplayMode, getDisplayMode, getDateFormat, mergeTokens, setIncludes, getIncludes, setExcludes, getExcludes, getLinks, addSection$2, getSections$3, getTasks$2, isInvalidDate, setWeekday, getWeekday, setWeekend, checkTaskDates, fixTaskDates, getStartDate, parseDuration, getEndDate, taskCnt, parseId, compileData, parseData, lastTask, lastTaskID, rawTasks$2, taskDb, addTask$2, findTaskById, addTaskOrg$2, compileTasks$2, setLink, setClass, setClickFun, pushFun, ganttDb_default, setConf$3, mapWeekdayToTimeFunction, getMaxIntersections, w, MAX_TICK_COUNT, diagram$30;
+	var import_dist$1, import_dayjs_min, import_isoWeek, import_customParseFormat, import_advancedFormat, import_duration, parser$24, gantt_default, WEEKEND_START_DAY, dateFormat, axisFormat, tickInterval, todayMarker, includes, excludes, links$1, sections$4, tasks$2, currentSection$2, displayMode, tags, funs, diagramId$1, inclusiveEndDates, topAxis, weekday, weekend, lastOrder, clear2$8, setDiagramId, setAxisFormat, getAxisFormat, setTickInterval, getTickInterval, setTodayMarker, getTodayMarker, setDateFormat, enableInclusiveEndDates, endDatesAreInclusive, enableTopAxis, topAxisEnabled, setDisplayMode, getDisplayMode, getDateFormat, mergeTokens, setIncludes, getIncludes, setExcludes, getExcludes, getLinks, addSection$2, getSections$3, getTasks$2, isInvalidDate, setWeekday, getWeekday, setWeekend, checkTaskDates, fixTaskDates, getStartDate, parseDuration, getEndDate, taskCnt, parseId, compileData, parseData, lastTask, lastTaskID, rawTasks$2, taskDb, addTask$2, findTaskById, addTaskOrg$2, compileTasks$2, setLink, setClass, setClickFun, pushFun, ganttDb_default, setConf$3, mapWeekdayToTimeFunction, getMaxIntersections, w, MAX_TICK_COUNT, diagram$30;
 	var init_ganttDiagram_EL5Y4UJY = __esmMin((() => {
 		init_chunk_75Z2AOVW();
 		init_chunk_DU6HZSFF();
@@ -149040,7 +149061,6 @@ ${content}`;
 		import_isoWeek = /* @__PURE__ */ __toESM$1(require_isoWeek(), 1);
 		import_customParseFormat = /* @__PURE__ */ __toESM$1(require_customParseFormat(), 1);
 		import_advancedFormat = /* @__PURE__ */ __toESM$1(require_advancedFormat(), 1);
-		import_dayjs_min$1 = /* @__PURE__ */ __toESM$1(require_dayjs_min(), 1);
 		import_duration = /* @__PURE__ */ __toESM$1(require_duration(), 1);
 		init_src();
 		parser$24 = (function() {
@@ -150545,7 +150565,7 @@ ${content}`;
 			setWeekend
 		};
 		__name$1(getTaskTags, "getTaskTags");
-		import_dayjs_min$1.default.extend(import_duration.default);
+		import_dayjs_min.default.extend(import_duration.default);
 		setConf$3 = /* @__PURE__ */ __name$1(function() {
 			log.debug("Something is calling, setConf, remove the call");
 		}, "setConf");
@@ -150773,14 +150793,14 @@ ${content}`;
 							if (maxTime === void 0 || endTime > maxTime) maxTime = endTime;
 						}
 						if (!minTime || !maxTime) return;
-						if ((0, import_dayjs_min$1.default)(maxTime).diff((0, import_dayjs_min$1.default)(minTime), "year") > 5) {
+						if ((0, import_dayjs_min.default)(maxTime).diff((0, import_dayjs_min.default)(minTime), "year") > 5) {
 							log.warn("The difference between the min and max time is more than 5 years. This will cause performance issues. Skipping drawing exclude days.");
 							return;
 						}
 						const dateFormat2 = diagObj.db.getDateFormat();
 						const excludeRanges = [];
 						let range = null;
-						let d = (0, import_dayjs_min$1.default)(minTime);
+						let d = (0, import_dayjs_min.default)(minTime);
 						while (d.valueOf() <= maxTime) {
 							if (diagObj.db.isInvalidDate(d, dateFormat2, excludes2, includes2)) {
 								if (!range) range = {
@@ -150802,7 +150822,7 @@ ${content}`;
 					function getEstimatedTickCount(minTime, maxTime, every, interval) {
 						if (every <= 0 || minTime > maxTime) return Infinity;
 						const timeDiffMs = maxTime - minTime;
-						const intervalMs = import_dayjs_min$1.default.duration({ [interval ?? "day"]: every }).asMilliseconds();
+						const intervalMs = import_dayjs_min.default.duration({ [interval ?? "day"]: every }).asMilliseconds();
 						if (intervalMs <= 0) return Infinity;
 						return Math.ceil(timeDiffMs / intervalMs);
 					}
@@ -151230,7 +151250,7 @@ ${content}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/infoDiagram-27XIBGKW.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/infoDiagram-27XIBGKW.mjs
 	var infoDiagram_27XIBGKW_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$29 });
 	var parser$23, DEFAULT_INFO_DB, diagram$29;
 	var init_infoDiagram_27XIBGKW = __esmMin((() => {
@@ -151256,7 +151276,7 @@ ${content}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/pieDiagram-E7YTZNPT.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/pieDiagram-E7YTZNPT.mjs
 	var pieDiagram_E7YTZNPT_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$28 });
 	var DEFAULT_PIE_CONFIG, DEFAULT_PIE_DB, sections$3, showData, config, db$5, populateDb$6, parser$22, pieStyles_default, createPieArcs, diagram$28;
 	var init_pieDiagram_E7YTZNPT = __esmMin((() => {
@@ -151494,7 +151514,7 @@ ${content}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/quadrantDiagram-AXDQQJYC.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/quadrantDiagram-AXDQQJYC.mjs
 	var quadrantDiagram_AXDQQJYC_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$27 });
 	function validateHexCode(value) {
 		return !/^#?([\dA-Fa-f]{6}|[\dA-Fa-f]{3})$/.test(value);
@@ -151594,7 +151614,7 @@ ${content}`;
 		quadrantBuilder.setData({ titleText: getDiagramTitle() });
 		return quadrantBuilder.build();
 	}
-	var parser$21, quadrant_default, defaultThemeVariables, QuadrantBuilder, InvalidStyleError, quadrantBuilder, quadrantDb_default, diagram$27;
+	var parser$21, quadrant_default, defaultThemeVariables, QuadrantBuilder, InvalidStyleError, quadrantBuilder, diagram$27;
 	var init_quadrantDiagram_AXDQQJYC = __esmMin((() => {
 		init_chunk_DU6HZSFF();
 		init_chunk_X3CZISLH();
@@ -153654,35 +153674,34 @@ ${content}`;
 		__name$1(setWidth, "setWidth");
 		__name$1(setHeight, "setHeight");
 		__name$1(getQuadrantData, "getQuadrantData");
-		quadrantDb_default = {
-			setWidth,
-			setHeight,
-			setQuadrant1Text,
-			setQuadrant2Text,
-			setQuadrant3Text,
-			setQuadrant4Text,
-			setXAxisLeftText,
-			setXAxisRightText,
-			setYAxisTopText,
-			setYAxisBottomText,
-			parseStyles,
-			addPoint,
-			addClass,
-			getQuadrantData,
-			clear: /* @__PURE__ */ __name$1(function() {
-				quadrantBuilder.clear();
-				clear$4();
-			}, "clear"),
-			setAccTitle,
-			getAccTitle,
-			setDiagramTitle,
-			getDiagramTitle,
-			getAccDescription,
-			setAccDescription
-		};
 		diagram$27 = {
 			parser: quadrant_default,
-			db: quadrantDb_default,
+			db: {
+				setWidth,
+				setHeight,
+				setQuadrant1Text,
+				setQuadrant2Text,
+				setQuadrant3Text,
+				setQuadrant4Text,
+				setXAxisLeftText,
+				setXAxisRightText,
+				setYAxisTopText,
+				setYAxisBottomText,
+				parseStyles,
+				addPoint,
+				addClass,
+				getQuadrantData,
+				clear: /* @__PURE__ */ __name$1(function() {
+					quadrantBuilder.clear();
+					clear$4();
+				}, "clear"),
+				setAccTitle,
+				getAccTitle,
+				setDiagramTitle,
+				getDiagramTitle,
+				getAccDescription,
+				setAccDescription
+			},
 			renderer: { draw: /* @__PURE__ */ __name$1((txt, id, _version, diagObj) => {
 				function getDominantBaseLine(horizontalPos) {
 					return horizontalPos === "top" ? "hanging" : "middle";
@@ -153729,7 +153748,7 @@ ${content}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/xychartDiagram-S5SC5T6Z.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/xychartDiagram-S5SC5T6Z.mjs
 	var xychartDiagram_S5SC5T6Z_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$26 });
 	function isBarPlot(data) {
 		return data.type === "bar";
@@ -156362,7 +156381,7 @@ ${content}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/requirementDiagram-BXWQKSXE.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/requirementDiagram-BXWQKSXE.mjs
 	var requirementDiagram_BXWQKSXE_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$25 });
 	var parser$19, requirementDiagram_default, RequirementDB, genColor, styles_default$7, requirementRenderer_exports, draw$8, diagram$25;
 	var init_requirementDiagram_BXWQKSXE = __esmMin((() => {
@@ -158827,7 +158846,7 @@ ${content}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/sequenceDiagram-WJ2MYXX4.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/sequenceDiagram-WJ2MYXX4.mjs
 	var sequenceDiagram_WJ2MYXX4_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$24 });
 	async function boundMessage(_diagram, msgModel) {
 		bounds$1.bumpVerticalPos(10);
@@ -164276,7 +164295,7 @@ ${content}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-TICWLB2K.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-TICWLB2K.mjs
 	var parser$17, classDiagram_default, visibilityValues, ClassMember, MERMAID_DOM_ID_PREFIX, classCounter, sanitizeText2$1, ClassDB, styles_default$5, classRenderer_v3_unified_default;
 	var init_chunk_TICWLB2K = __esmMin((() => {
 		init_chunk_5VM5RSS4();
@@ -167229,7 +167248,7 @@ ${content}`;
 						if (!title) return;
 						const rect = event.currentTarget.getBoundingClientRect();
 						tooltipElem.transition().duration(200).style("opacity", ".9");
-						tooltipElem.html(purify.sanitize(title)).style("left", `${window.scrollX + rect.left + rect.width / 2}px`).style("top", `${window.scrollY + rect.bottom + 4}px`);
+						tooltipElem.html(purify_default.sanitize(title)).style("left", `${window.scrollX + rect.left + rect.width / 2}px`).style("top", `${window.scrollY + rect.bottom + 4}px`);
 						el.classed("hover", true);
 					}).on("mouseout", (event) => {
 						tooltipElem.transition().duration(500).style("opacity", 0);
@@ -168078,7 +168097,7 @@ g.classGroup line {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/classDiagram-ZZMXUADV.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/classDiagram-ZZMXUADV.mjs
 	var classDiagram_ZZMXUADV_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$23 });
 	var diagram$23;
 	var init_classDiagram_ZZMXUADV = __esmMin((() => {
@@ -168112,7 +168131,7 @@ g.classGroup line {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/classDiagram-v2-VYDZK3BY.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/classDiagram-v2-VYDZK3BY.mjs
 	var classDiagram_v2_VYDZK3BY_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$22 });
 	var diagram$22;
 	var init_classDiagram_v2_VYDZK3BY = __esmMin((() => {
@@ -168146,7 +168165,7 @@ g.classGroup line {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-IMKFNOWR.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-IMKFNOWR.mjs
 	function stateDomId(itemId = "", counter = 0, type = "", typeSpacer = DOMID_TYPE_SPACER) {
 		return `${DOMID_STATE}-${itemId}${type !== null && type.length > 0 ? `${typeSpacer}${type}` : ""}-${counter}`;
 	}
@@ -170429,7 +170448,7 @@ g.classGroup line {
 					const rect = e.currentTarget?.getBoundingClientRect();
 					tooltipElem.transition().duration(200).style("opacity", ".9");
 					tooltipElem.style("left", window.scrollX + rect.left + (rect.right - rect.left) / 2 + "px").style("top", window.scrollY + rect.bottom + "px");
-					tooltipElem.html(purify.sanitize(title));
+					tooltipElem.html(purify_default.sanitize(title));
 					el.classed("hover", true);
 				}).on("mouseout", (e) => {
 					tooltipElem.transition().duration(500).style("opacity", 0);
@@ -170745,7 +170764,7 @@ g.stateGroup line {
 `, "getStyles");
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/stateDiagram-D77RDMKH.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/stateDiagram-D77RDMKH.mjs
 	var stateDiagram_D77RDMKH_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$21 });
 	var drawStartState, drawDivider, drawSimpleState, drawDescrState, addTitleAndBox, drawEndState, drawForkJoinState, _drawLongText, drawNote, drawState, edgeCount$1, drawEdge, conf$1, transformationLog, setConf$1, insertMarkers, draw$6, getLabelWidth, renderDoc, diagram$21;
 	var init_stateDiagram_D77RDMKH = __esmMin((() => {
@@ -171113,7 +171132,7 @@ g.stateGroup line {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/stateDiagram-v2-MP3YSRHH.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/stateDiagram-v2-MP3YSRHH.mjs
 	var stateDiagram_v2_MP3YSRHH_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$20 });
 	var diagram$20;
 	var init_stateDiagram_v2_MP3YSRHH = __esmMin((() => {
@@ -171147,7 +171166,7 @@ g.stateGroup line {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/journeyDiagram-3NMN7TZE.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/journeyDiagram-3NMN7TZE.mjs
 	var journeyDiagram_3NMN7TZE_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$19 });
 	function drawActorLegend(diagram2) {
 		const conf2 = getConfig2$2().journey;
@@ -172374,7 +172393,7 @@ g.stateGroup line {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/timeline-definition-24CTP7MA.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/timeline-definition-24CTP7MA.mjs
 	var timeline_definition_24CTP7MA_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$18 });
 	function wrap(text, width) {
 		text.each(function() {
@@ -173882,7 +173901,7 @@ g.stateGroup line {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/uuid@14.0.2/node_modules/uuid/dist/stringify.js
+	//#region node_modules/uuid/dist/stringify.js
 	function unsafeStringify(arr, offset = 0) {
 		return (byteToHex[arr[offset + 0]] + byteToHex[arr[offset + 1]] + byteToHex[arr[offset + 2]] + byteToHex[arr[offset + 3]] + "-" + byteToHex[arr[offset + 4]] + byteToHex[arr[offset + 5]] + "-" + byteToHex[arr[offset + 6]] + byteToHex[arr[offset + 7]] + "-" + byteToHex[arr[offset + 8]] + byteToHex[arr[offset + 9]] + "-" + byteToHex[arr[offset + 10]] + byteToHex[arr[offset + 11]] + byteToHex[arr[offset + 12]] + byteToHex[arr[offset + 13]] + byteToHex[arr[offset + 14]] + byteToHex[arr[offset + 15]]).toLowerCase();
 	}
@@ -173892,7 +173911,7 @@ g.stateGroup line {
 		for (let i = 0; i < 256; ++i) byteToHex.push((i + 256).toString(16).slice(1));
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/uuid@14.0.2/node_modules/uuid/dist/rng.js
+	//#region node_modules/uuid/dist/rng.js
 	function rng() {
 		return crypto.getRandomValues(rnds8);
 	}
@@ -173901,7 +173920,7 @@ g.stateGroup line {
 		rnds8 = /* @__PURE__ */ new Uint8Array(16);
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/uuid@14.0.2/node_modules/uuid/dist/v4.js
+	//#region node_modules/uuid/dist/v4.js
 	function v4(options, buf, offset) {
 		if (!buf && !options && crypto.randomUUID) return crypto.randomUUID();
 		return _v4(options, buf, offset);
@@ -173925,14 +173944,14 @@ g.stateGroup line {
 		init_stringify();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/uuid@14.0.2/node_modules/uuid/dist/index.js
+	//#region node_modules/uuid/dist/index.js
 	var init_dist = __esmMin((() => {
 		init_stringify();
 		init_rng();
 		init_v4();
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/mindmap-definition-YA3MSWOX.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/mindmap-definition-YA3MSWOX.mjs
 	var mindmap_definition_YA3MSWOX_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$17 });
 	var parser$13, mindmap_default, MAX_SECTIONS, nodeType$1, MindmapDB, mindmapRenderer_default, genSections$1, genGradient, diagram$17;
 	var init_mindmap_definition_YA3MSWOX = __esmMin((() => {
@@ -175208,7 +175227,7 @@ g.stateGroup line {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/kanban-definition-UXKFOSKX.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/kanban-definition-UXKFOSKX.mjs
 	var kanban_definition_UXKFOSKX_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$16 });
 	var parser$12, kanban_default, nodes$1, sections, cnt$1, elements, clear, getSection, getSections, getData, addNode$1, nodeType, kanbanDb_default, kanbanRenderer_default, genSections, diagram$16;
 	var init_kanban_definition_UXKFOSKX = __esmMin((() => {
@@ -176452,7 +176471,7 @@ g.stateGroup line {
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-array@2.12.1/node_modules/d3-array/dist/d3-array.js
+	//#region node_modules/d3-sankey/node_modules/d3-array/dist/d3-array.js
 	var require_d3_array = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		(function(global, factory) {
 			typeof exports === "object" && typeof module !== "undefined" ? factory(exports) : typeof define === "function" && define.amd ? define(["exports"], factory) : (global = typeof globalThis !== "undefined" ? globalThis : global || self, factory(global.d3 = global.d3 || {}));
@@ -177307,7 +177326,7 @@ g.stateGroup line {
 		}));
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-path@1.0.9/node_modules/d3-path/dist/d3-path.js
+	//#region node_modules/d3-sankey/node_modules/d3-path/dist/d3-path.js
 	var require_d3_path = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		(function(global, factory) {
 			typeof exports === "object" && typeof module !== "undefined" ? factory(exports) : typeof define === "function" && define.amd ? define(["exports"], factory) : (global = global || self, factory(global.d3 = global.d3 || {}));
@@ -177377,7 +177396,7 @@ g.stateGroup line {
 		});
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-shape@1.3.7/node_modules/d3-shape/dist/d3-shape.js
+	//#region node_modules/d3-sankey/node_modules/d3-shape/dist/d3-shape.js
 	var require_d3_shape = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		(function(global, factory) {
 			typeof exports === "object" && typeof module !== "undefined" ? factory(exports, require_d3_path()) : typeof define === "function" && define.amd ? define(["exports", "d3-path"], factory) : (global = global || self, factory(global.d3 = global.d3 || {}, global.d3));
@@ -178847,7 +178866,7 @@ g.stateGroup line {
 		});
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/d3-sankey@0.12.3/node_modules/d3-sankey/dist/d3-sankey.js
+	//#region node_modules/d3-sankey/dist/d3-sankey.js
 	var require_d3_sankey = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		(function(global, factory) {
 			typeof exports === "object" && typeof module !== "undefined" ? factory(exports, require_d3_array(), require_d3_shape()) : typeof define === "function" && define.amd ? define([
@@ -179199,7 +179218,7 @@ g.stateGroup line {
 		});
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/sankeyDiagram-P5KCCOFB.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/sankeyDiagram-P5KCCOFB.mjs
 	var sankeyDiagram_P5KCCOFB_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$15 });
 	var import_d3_sankey, parser$11, sankey_default, links, nodes, nodesMap, clear2$5, SankeyLink, addLink$1, SankeyNode, sankeyDB_default, Uid, alignmentsMap, findCentralNodeLayer, sankeyRenderer_default, prepareTextForParsing, styles_default$2, originalParse, diagram$15;
 	var init_sankeyDiagram_P5KCCOFB = __esmMin((() => {
@@ -179987,7 +180006,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/diagram-Z3DM3KII.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/diagram-Z3DM3KII.mjs
 	var diagram_Z3DM3KII_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$14 });
 	var DEFAULT_PACKET_CONFIG, PacketDB, maxPacketSize, populate$4, getNextFittingBlock, parser$10, draw$3, drawWord, renderer$5, defaultPacketStyleOptions, diagram$14;
 	var init_diagram_Z3DM3KII = __esmMin((() => {
@@ -180174,7 +180193,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/diagram-UQ7AKVKN.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/diagram-UQ7AKVKN.mjs
 	var diagram_UQ7AKVKN_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$13 });
 	function drawCurves(g, axes, curves, minValue, maxValue, graticule, config) {
 		const numAxes = axes.length;
@@ -180464,7 +180483,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/blockDiagram-I7D4REHJ.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/blockDiagram-I7D4REHJ.mjs
 	var blockDiagram_I7D4REHJ_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$12 });
 	function typeStr2Type(typeStr) {
 		log.debug("typeStr2Type", typeStr);
@@ -182836,7 +182855,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/diagram-S7CK7UJ4.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/diagram-S7CK7UJ4.mjs
 	var diagram_S7CK7UJ4_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$11 });
 	function isBoxDrawingFormat(lines) {
 		return lines.some((line) => ALL_BOX_CHARS.test(line));
@@ -183239,7 +183258,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/layout-base@2.0.1/node_modules/layout-base/layout-base.js
+	//#region node_modules/cytoscape-fcose/node_modules/layout-base/layout-base.js
 	var require_layout_base = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		(function webpackUniversalModuleDefinition(root, factory) {
 			if (typeof exports === "object" && typeof module === "object") module.exports = factory();
@@ -186527,7 +186546,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		});
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/cose-base@2.2.0/node_modules/cose-base/cose-base.js
+	//#region node_modules/cytoscape-fcose/node_modules/cose-base/cose-base.js
 	var require_cose_base = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		(function webpackUniversalModuleDefinition(root, factory) {
 			if (typeof exports === "object" && typeof module === "object") module.exports = factory(require_layout_base());
@@ -188647,7 +188666,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		});
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/cytoscape-fcose@2.2.0_cytoscape@3.34.2/node_modules/cytoscape-fcose/cytoscape-fcose.js
+	//#region node_modules/cytoscape-fcose/cytoscape-fcose.js
 	var require_cytoscape_fcose = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		(function webpackUniversalModuleDefinition(root, factory) {
 			if (typeof exports === "object" && typeof module === "object") module.exports = factory(require_cose_base());
@@ -189735,7 +189754,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		});
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/architectureDiagram-5GKGNRK7.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/architectureDiagram-5GKGNRK7.mjs
 	var architectureDiagram_5GKGNRK7_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$10 });
 	function withSeededRandom(seed, fn) {
 		if (seed === 0) return fn();
@@ -190751,7 +190770,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/diagram-VSXAHHWV.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/diagram-VSXAHHWV.mjs
 	var diagram_VSXAHHWV_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$9 });
 	function reset() {
 		store = {};
@@ -191305,7 +191324,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/ishikawaDiagram-5VMMS53U.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/ishikawaDiagram-5VMMS53U.mjs
 	var ishikawaDiagram_5VMMS53U_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$8 });
 	var import_rough_cjs$1, parser$4, ishikawa_default, IshikawaDB, FONT_SIZE_DEFAULT, SPINE_BASE_LENGTH, BONE_STUB, BONE_BASE, BONE_PER_CHILD, ANGLE, COS_A, SIN_A, applyPaddedViewBox, draw$1, sideStats, drawHead, flattenTree, drawCauseLabel, drawArrowMarker, drawBranch, splitLines, wrapText$1, drawMultilineText, lerp, drawLine, diagram$8;
 	var init_ishikawaDiagram_5VMMS53U = __esmMin((() => {
@@ -192277,7 +192296,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/@upsetjs+venn.js@2.0.0/node_modules/@upsetjs/venn.js/build/venn.esm.js
+	//#region node_modules/@upsetjs/venn.js/build/venn.esm.js
 	/**
 	* Returns the intersection area of a bunch of circles (where each circle
 	* is an object having an x,y and radius property)
@@ -193836,7 +193855,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		SMALL = 1e-10;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/vennDiagram-4TSXK5OY.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/vennDiagram-4TSXK5OY.mjs
 	var vennDiagram_4TSXK5OY_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$7 });
 	function getConfig2() {
 		return cleanAndMerge(DEFAULT_VENN_CONFIG, getConfig().venn);
@@ -195082,7 +195101,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/diagram-VX7I27RA.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/diagram-VX7I27RA.mjs
 	var diagram_VX7I27RA_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$6 });
 	function buildHierarchy(items) {
 		if (!items.length) return [];
@@ -195515,7 +195534,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/wardleyDiagram-VM6X3IG4.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/wardleyDiagram-VM6X3IG4.mjs
 	var wardleyDiagram_VM6X3IG4_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$5 });
 	function getConfig3() {
 		return getConfig2$2()["wardley-beta"];
@@ -196390,7 +196409,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/cynefinDiagram-5FMLGOSQ.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/cynefinDiagram-5FMLGOSQ.mjs
 	var cynefinDiagram_5FMLGOSQ_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$4 });
 	function seededRandom(seed) {
 		let t = seed + 1831565813 | 0;
@@ -196869,7 +196888,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/chunk-SVP7TREG.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-SVP7TREG.mjs
 	var diagramTitle, accTitle, accDescription, rules, ruleMap, sanitizeText2, sanitizeAstNode, clear2, setTitle, getTitle, db, DEFAULT_RAILROAD_CONFIG, COLOR_VALUE_PATTERN, FONT_FAMILY_PATTERN, RAILROAD_STYLE_OPTION_KEYS, isRailroadStyleOptions, extractRailroadOverrides, extractThemeOverrides, sanitizeColorValue, sanitizeFontFamilyValue, sanitizeNumberValue, parseThemeFontSize, buildThemeDefaults, buildRailroadStyleOptions, getStyles, PathBuilder, RailroadRenderer, configureRailroadSvgSize, renderer$1;
 	var init_chunk_SVP7TREG = __esmMin((() => {
 		init_chunk_CLGD4ZFX();
@@ -197555,7 +197574,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		}, "draw") };
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/railroadDiagram-O6MQD6OU.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/railroadDiagram-O6MQD6OU.mjs
 	var railroadDiagram_O6MQD6OU_exports = /* @__PURE__ */ __exportAll({
 		default: () => railroadDiagram_default,
 		diagram: () => diagram$3
@@ -197649,7 +197668,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		railroadDiagram_default = diagram$3;
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/ebnfDiagram-PWID7BFC.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/ebnfDiagram-PWID7BFC.mjs
 	var ebnfDiagram_PWID7BFC_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$2 });
 	var langiumParser$2, transformChoice, transformSequence$1, transformPrimary$2, transformPostfix, transformTerm, transformRule$2, populateDb$2, diagram$2;
 	var init_ebnfDiagram_PWID7BFC = __esmMin((() => {
@@ -197773,7 +197792,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/abnfDiagram-VCTEODGH.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/abnfDiagram-VCTEODGH.mjs
 	var abnfDiagram_VCTEODGH_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$1 });
 	var langiumParser$1, transformAlternation, transformConcatenation, parseRepeat, transformElement, transformPrimary$1, transformRule$1, populateDb$1, diagram$1;
 	var init_abnfDiagram_VCTEODGH = __esmMin((() => {
@@ -197883,7 +197902,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/chunks/mermaid.core/pegDiagram-XKGWAZYB.mjs
+	//#region node_modules/mermaid/dist/chunks/mermaid.core/pegDiagram-XKGWAZYB.mjs
 	var pegDiagram_XKGWAZYB_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram });
 	var langiumParser, transformOrderedChoice, transformSequence, transformPrefix, nodeToLabel, transformSuffix, transformPrimary, transformRule, populateDb, diagram;
 	var init_pegDiagram_XKGWAZYB = __esmMin((() => {
@@ -197999,7 +198018,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		};
 	}));
 	//#endregion
-	//#region node_modules/.pnpm/mermaid@11.17.2/node_modules/mermaid/dist/mermaid.core.mjs
+	//#region node_modules/mermaid/dist/mermaid.core.mjs
 	init_chunk_CLGD4ZFX();
 	init_chunk_2E4U76K2();
 	init_chunk_LNGE3PJU();
@@ -198977,7 +198996,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 			if (isSandboxed) {
 				const svgEl = root.select(enclosingDivID_selector + " svg").node();
 				code = putIntoIFrame(code, svgEl);
-			} else if (!isLooseSecurityLevel) code = purify.sanitize(code, {
+			} else if (!isLooseSecurityLevel) code = purify_default.sanitize(code, {
 				ADD_TAGS: DOMPURIFY_TAGS,
 				ADD_ATTR: DOMPURIFY_ATTR,
 				HTML_INTEGRATION_POINTS: { foreignobject: true }
@@ -199255,9 +199274,29 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		};
 	}
 	//#endregion
+	//#region src/client/markdown-labels.tsx
+	/** MarkdownText props carrying the nested chrome labels. */
+	function markdownTextProps(text, labels) {
+		return {
+			text,
+			labels: {
+				code: {
+					copyLabel: labels.copyLabel,
+					copiedLabel: labels.copiedLabel,
+					toolbarLabels: {
+						codeLabel: labels.codeLabel,
+						wrapLabel: labels.wrapLabel,
+						unwrapLabel: labels.unwrapLabel
+					}
+				},
+				footnotes: ""
+			}
+		};
+	}
+	//#endregion
 	//#region src/client/locales.ts
 	/**
-	* Minimal zh/en copy for the sidebar. The copy follows the DSH i18n system:
+	* Minimal zh/en/ja copy for the sidebar. The copy follows the DSH i18n system:
 	* the client apply attaches the locale service (`ctx.locale`, provided by
 	* `@deepseek-ai/dsh-client-locale`) through {@link attachLocale}, and
 	* `t()`/`isZh()` resolve the active locale from it — the Host-backed
@@ -199265,12 +199304,51 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 	* Without an attached service (standalone/test compositions) the browser
 	* language is used, matching the previous behavior. The dictionaries are
 	* also registered into the DSH locale registry under {@link LOCALE_NS}.
+	*
+	* ja (Japanese) is opt-in through `@huanlin/dsh-plugin-better-locale`: when
+	* that plugin is installed, the client apply also calls
+	* {@link attachBetterLocale} with the override store. `t()` then consults
+	* the store's active override id first; if it is `'ja'` (or any id whose
+	* dict has the requested key) the ja text wins, otherwise the existing
+	* zh/en chain runs unchanged. better-locale itself patches
+	* `LocaleRuntime.prototype.lookup` so DSH's own translate chain also
+	* returns ja where the `betterSidebar` namespace has a ja entry — that
+	* path covers external callers of `ctx.locale.bind('betterSidebar')`,
+	* while the override-aware `t()` here covers better-sidebar's own
+	* components (which bypass `ctx.locale` and call `t()` directly).
 	*/
 	/** The zh dictionary (also registered into the DSH locale registry under {@link LOCALE_NS}). */
 	const zh = {
 		files: "文件",
+		guideDescFiles: "浏览工作区文件树，点开即预览或编辑",
+		guideDescGit: "Git 变更与本轮文件改动，双视角合一",
+		guideDescSubagent: "工作流图 · 团队任务板 · 后台任务，实时状态",
+		guideDescSidechat: "继承当前会话上下文的独立追问线程",
+		guideDescTerminal: "真实 shell 终端（xterm + pty），断线重连",
+		guideDescBrowser: "内嵌网页浏览器，可接管聊天里的外链",
+		changesSessionEmpty: "本会话还没有文件操作",
+		changesRead: "读取",
+		changesMdReading: "阅读",
+		changesMdRaw: "原文",
+		changesHtmlRender: "渲染",
+		changesHtmlRaw: "原文",
+		changesPdfRender: "渲染",
+		changesPdfRaw: "原文",
+		changesWrite: "写入",
+		changesEdit: "编辑",
+		changesRunning: "执行中",
+		changesError: "出错",
+		changesRedactOn: "已开启脱敏：敏感内容以 [REDACTED] 显示；点击关闭（自担风险）",
+		changesRedactOff: "脱敏已关闭：将原样显示文件内容；点击开启",
+		changesRedactOnLabel: "脱敏中",
+		changesRedactOffLabel: "脱敏关",
+		changesRedactBanner: "已脱敏",
+		changesFold: "{count} 行…点击展开",
+		changesFoldLoading: "展开中…",
+		changesFoldUnavailable: "上下文未加载",
+		changesContext: "上下文",
+		changesPriorUnknown: "变更前的内容不在窗口内，显示为全新增",
 		explorer: "资源管理器",
-		git: "源代码管理",
 		terminal: "终端",
 		editor: "编辑器",
 		editorExplorer: "文件打开方式",
@@ -199280,8 +199358,6 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		editorExplorerSplit: "独立",
 		editorExplorerSplitDesc: "无路径窗口即资源管理器（仅文件树）；文件各自新开窗口（带文件树，默认收起）",
 		editorTreeToggle: "文件树面板",
-		explorerCollapse: "收起文件树",
-		explorerExpand: "展开文件树",
 		editorPathPlaceholder: "输入文件路径（相对会话目录或绝对路径），Enter 打开",
 		editorSearchPlaceholder: "按文件名搜索…",
 		editorSearchNoResults: "无匹配文件",
@@ -199289,6 +199365,12 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		editorEmptyHint: "从右侧文件树或上方路径输入框选择文件开始预览",
 		openFileNewTab: "在新 Tab 中打开",
 		openFileSide: "在侧边打开",
+		zipProgress: "正在打包 {done}/{total}",
+		settingsOpenWithPluginTitle: "始终显示插件自研的打开方式",
+		settingsOpenWithPluginDesc: "默认只在宿主探测不到本机关联应用时显示插件自研的打开方式（资源管理器 / VS Code / Cursor / Zed / 自定义编辑器、SSH 远端）；打开后宿主应用与插件目标并存",
+		zipDownload: "压缩并下载",
+		zipDownloadCount: "压缩并下载（{count} 项）",
+		zipFailed: "打包失败：{message}",
 		openWithMenu: "在应用中打开",
 		openWithSshSuffix: " (SSH)",
 		pinOpenWith: "固定到菜单",
@@ -199309,18 +199391,41 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		openWithSettingsFamilyDesc: "该编辑器使用 VSCode 的 URL 协议（支持 SSH 远端打开）",
 		openWithSettingsRemove: "删除",
 		openWithSettingsInvalidHint: "名称或模板（需含 {path} 且以 scheme:// 开头）未填写的编辑器不会出现在菜单中",
+		openInAppDefault: "用默认应用打开",
+		openInAppEmpty: "没有可用于打开它的应用",
+		openInAppFailed: "无法打开：{path}",
+		revealInFileManager: "在文件管理器中显示",
+		filesSelected: "已选择 {count} 项",
+		clearSelection: "取消选择",
+		copyPaths: "复制路径",
+		deleteSelected: "删除所选",
+		deleteSelectedTitle: "删除选中的 {count} 项？",
+		deleteSelectedDesc: "这些文件与文件夹将被永久删除，无法恢复。",
+		newFolder: "新建文件夹",
+		newFolderPlaceholder: "文件夹名称",
+		newFolderInvalid: "文件夹名称无效",
+		filesTruncated: "该目录条目过多，仅显示前一部分",
+		gitStatusModified: "已修改",
+		gitStatusAdded: "新增",
+		gitStatusDeleted: "已删除",
+		gitStatusUntracked: "未跟踪",
+		gitStatusRenamed: "已重命名",
+		gitStatusConflict: "有冲突",
+		changesClean: "工作区没有变更",
+		changesNoHistory: "还没有提交历史",
+		changesStageFailed: "暂存失败：{message}",
+		changesOpGone: "该操作已不在会话记录中",
 		newTab: "新建标签页",
-		openExplorer: "资源管理器",
 		brokenSymlink: "失效的软链接",
-		openGit: "Git 面板",
-		newTerminal: "新终端",
-		terminalLimit: "终端数量已达上限 (3)",
 		close: "关闭",
 		closeOtherTabs: "关闭其他页签",
 		closeLeftTabs: "关闭左侧页签",
 		closeRightTabs: "关闭右侧页签",
-		collapse: "折叠侧边栏",
-		expand: "展开侧边栏",
+		pinTerminal: "固定终端",
+		pinAgentTerminal: "固定 Agent 终端",
+		pinToWorkspace: "固定到工作区",
+		pinToGlobal: "固定到全局",
+		unpinTerminal: "取消固定",
 		collapseBottomPanel: "折叠底部面板",
 		expandBottomPanel: "展开底部面板",
 		terminalError: "终端连接失败",
@@ -199329,10 +199434,14 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		chunkAutoRetryWaiting: "正在等待后端就绪，将自动恢复…（第 {n} 次尝试）",
 		fsReadRetryWaiting: "后端暂时不可达，正在自动重试读取…（第 {n} 次）",
 		chunkFallbackNotice: "编辑器组件暂不可用，已切换为只读预览",
+		terminalWaitBanner: "Agent 正在等待 {needle}",
+		terminalSkipWait: "跳过等待",
 		terminalDepsFailed: "终端依赖 node-pty 加载失败",
 		terminalDepsHint: "在 DSH 所在环境的终端或 cmd 中执行以下命令修复，然后点重试（node-pty 与 DSH 核心保持同一版本）：",
 		terminalDepsProfile: "（检测到 profile：{profile}）",
+		terminalShellNotFound: "未找到配置的 Shell：{name}，请到 设置 → 侧边卡片 → 终端 检查 Shell 路径",
 		preview: "预览",
+		toc: "目录",
 		edit: "编辑",
 		mermaidError: "Mermaid 渲染失败",
 		mermaidZoomIn: "放大",
@@ -199340,6 +199449,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		mermaidZoomReset: "重置",
 		mermaidZoomHint: "滚轮缩放 · 拖拽平移 · Esc 关闭",
 		refresh: "刷新",
+		refreshUnsavedConfirm: "文件已在磁盘更新，刷新将丢弃未保存编辑。继续吗？",
 		save: "保存",
 		saved: "已保存",
 		unsaved: "未保存",
@@ -199349,23 +199459,27 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		loading: "加载中…",
 		error: "加载失败",
 		retry: "重试",
-		splitLeft: "向左分栏",
-		splitRight: "向右分栏",
-		splitUp: "向上分栏",
-		splitDown: "向下分栏",
 		notRepo: "当前目录不是 git 仓库",
-		noChanges: "没有变更",
+		statusTruncated: "变更过多，仅显示前 2000 条",
 		stage: "暂存",
 		unstage: "取消暂存",
 		stageAll: "全部暂存",
 		unstageAll: "全部取消暂存",
 		commitPlaceholder: "提交信息 (Ctrl+Enter)",
 		commit: "提交",
-		commitError: "提交失败",
 		branch: "分支",
+		worktree: "工作树",
 		checkoutError: "切换分支失败",
 		history: "历史",
-		changes: "变更",
+		changes: "文件变动",
+		changesGitLens: "Git",
+		changesSessionLens: "本轮文件",
+		changesFilterAll: "全部",
+		changesFilterEmpty: "没有此类操作",
+		changesOpenDiffTab: "在独立页签中打开",
+		changesClosePreview: "关闭预览",
+		changesResizePreview: "调整预览高度",
+		changesLoadError: "会话文件记录暂不可用",
 		staged: "已暂存",
 		unstaged: "未暂存",
 		cancel: "取消",
@@ -199376,7 +199490,6 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		diffDeleted: "删除",
 		diffRenamed: "重命名",
 		diffExpand: "展开其余 {count} 行",
-		diffCollapse: "收起",
 		discard: "放弃更改",
 		discardTitle: "放弃更改",
 		discardDesc: "将丢弃「{path}」的工作区修改（不可恢复）。",
@@ -199397,24 +199510,26 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		loadMore: "加载更多",
 		historyLoadError: "加载更多历史失败",
 		produced: "本次产出",
-		producedOpen: "在侧边栏中打开",
+		showInFolder: "在文件夹中显示",
 		disconnected: "终端连接断开，重连中…",
 		exited: "终端进程已退出",
 		noSession: "选择一个会话以使用侧边栏",
 		pluginNotLoaded: "插件未加载，标签页暂不可用：",
-		hiddenFiles: "隐藏文件",
 		parent: "上级目录",
-		editorBack: "返回上级",
 		copied: "已复制",
 		copy: "复制",
-		footnotes: "脚注",
-		newFile: "新文件",
 		openEditor: "打开编辑器",
-		gitDetail: "查看变更详情",
 		referenceFile: "@文件",
 		addToConversation: "添加到对话",
 		copyRelative: "复制相对地址",
 		copyAbsolute: "复制绝对地址",
+		rename: "重命名",
+		renameInvalid: "名称不能为空，且不能包含路径分隔符。",
+		delete: "删除",
+		deleteTitle: "删除「{name}」？",
+		deleteDescFile: "将永久删除该文件，此操作不可撤销。",
+		deleteDescDir: "将永久删除该目录及其全部内容，此操作不可撤销。",
+		dismiss: "关闭",
 		download: "下载",
 		uploadFiles: "上传文件",
 		uploadFolder: "上传文件夹",
@@ -199433,13 +199548,8 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		settingsIntro: "管理侧边卡片的显示内容与默认行为",
 		settingsPopupDesc: "为「{feature}」配置相关选项",
 		settingsDone: "完成",
-		settingsOpenTitle: "新会话默认打开",
-		settingsOpenDesc: "新建会话时自动展开侧边卡片；已存在的会话保持各自布局",
-		settingsWidthTitle: "默认宽度占比",
-		settingsWidthDesc: "新建会话时侧边卡片占窗口宽度的百分比 (20–60)",
-		settingsWidthSuffix: "%",
-		settingsOpenPathTitle: "聊天区文件在侧边栏打开",
-		settingsOpenPathDesc: "在聊天里点击文件链接（工具行、产物列表、文件提及）时，在侧边栏编辑器中打开，不再调用系统默认应用",
+		settingsOpenToolsTitle: "为模型注入侧边栏打开工具",
+		settingsOpenToolsDesc: "开启后，模型可通过 sidebar_open 工具在侧边栏主动打开文件、文件夹和 HTTP(S) 网页（默认关闭）",
 		settingsTitleBarTitle: "位置兼容模式",
 		settingsTitleBarDesc: "选择顶栏兼容方案：自动检测（默认，保守）/ DSH官方Web / 已知桌面壳 / 自定义方案（下移距离 + 自定义 CSS）",
 		settingsTitleBarStripTitle: "下移距离",
@@ -199452,16 +199562,15 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		settingsSchemeCustomDesc: "完全由你控制：注入自定义 CSS（可覆盖内置样式），并指定标题栏下移距离",
 		settingsSchemeDetectedSuffix: "已检测",
 		settingsCustomCssTitle: "自定义 CSS",
-		settingsCustomCssDesc: "追加到页面末尾的样式（同优先级下后写胜出；覆盖 JS 内联变量需用 !important）",
 		settingsCustomCssPlaceholder: "/* 例：为自绘标题栏的壳预留 36px */\nhtml[data-dsh-title-bar-height=\"36\"] {\n  --dsh-title-bar-strip: 36px !important;\n}",
 		settingsSaveFailed: "保存失败",
 		settingsConflict: "设置已被其他窗口修改，请重试",
 		binaryNoPreview: "此文件类型不支持预览",
 		downloadToView: "下载查看",
-		settingsSubagentTitle: "检测到子代理时自动展开任务管理页",
-		settingsSubagentDesc: "当前会话产生新的子代理时，自动展开侧边栏并打开任务管理页；关闭后需手动打开",
-		settingsJobsTitle: "有新后台任务时自动展开后台任务页",
-		settingsJobsDesc: "当前会话出现新的后台任务时，自动展开侧边栏并打开后台任务页（每个新任务都会触发）；关闭后需手动打开",
+		settingsSubagentTitle: "检测到子代理时自动激活任务管理页",
+		settingsSubagentDesc: "当前会话产生新的子代理时，自动激活任务管理页；宽屏同时展开侧边栏，窄屏不强制展开全屏抽屉；关闭后需手动打开",
+		settingsJobsTitle: "有新后台任务时自动激活任务管理页",
+		settingsJobsDesc: "当前会话出现新的后台任务时，自动激活任务管理页（每个新任务都会触发）；宽屏同时展开侧边栏，窄屏不强制展开全屏抽屉；关闭后需手动打开",
 		settingsToolsTitle: "为模型注入终端工具",
 		settingsToolsDesc: "开启后，模型可通过 terminal_create 等 8 个工具创建并操作侧边栏终端（默认关闭）",
 		settingsBottomTerminalTitle: "底部面板首次展开自动开终端",
@@ -199471,7 +199580,6 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		settingsFontFamilyPlaceholder: "\"JetBrains Mono\", monospace",
 		settingsFontSizeTitle: "终端字号",
 		settingsFontSizeDesc: "终端字号（9–32，默认 13）",
-		settingsFontSizeSuffix: "px",
 		settingsShellTitle: "Shell 路径",
 		settingsShellDesc: "UI 与模型终端启动的 shell（绝对路径或可执行名）。留空按既有顺序解析：yaml 的 config.shell → $SHELL / 登录 shell / Windows 的 powershell.exe。对之后打开的终端生效",
 		settingsShellPlaceholder: "如 /bin/zsh（留空自动解析）",
@@ -199480,14 +199588,16 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		settingsShellArgsPlaceholder: "如 -l（留空用默认参数）",
 		settingsTabsTitle: "侧边栏内容",
 		settingsViewersTitle: "文件预览",
+		settingsMobileTitle: "手机",
+		settingsMobileNoAutoOpenTitle: "窄屏时不自动弹出",
+		settingsMobileNoAutoOpenDesc: "在手机 / 窄屏下，新的子代理或后台任务都不再自动切到任务页（页内仍可手动打开）",
+		settingsMobileTreeTitle: "窄屏时任务页默认树状图",
+		settingsMobileTreeDesc: "手机 / 窄屏下任务页默认用经典树，而不是工作流图；页内切换仍可临时改成图",
 		settingsGeneralTitle: "常规",
 		settingsPopup: "功能设置",
 		settingsViewerCatchAll: "兜底：任意文件",
-		viewerImage: "图片",
-		viewerPdf: "PDF",
 		viewerMarkdown: "Markdown",
 		viewerCode: "代码",
-		viewerBinary: "二进制下载",
 		viewerHtml: "HTML",
 		browser: "浏览器",
 		browserPlaceholder: "输入网址，例如 example.com",
@@ -199498,7 +199608,6 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		browserBlockedScheme: "已阻止：仅支持 http/https 链接",
 		browserBlockedLoopback: "已阻止：不允许在浏览器中访问本机或内部地址",
 		browserInvalid: "无效的网址",
-		browserNoSandboxWarning: "沙箱已关闭：当前页面与界面同源，拥有完整会话权限（可在设置中恢复）",
 		htmlNoSandboxWarning: "沙箱已关闭：此 HTML 与界面同源，可读取会话文件与内部接口（可在设置中恢复）",
 		sandboxStatusOn: "沙箱模式：已启用 · 页面无法访问界面数据与本地文件，登录态与第三方 Cookie 可能不可用",
 		sandboxUnlock: "临时解锁（不安全）",
@@ -199509,30 +199618,22 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		settingsHtmlSandboxDesc: "关闭后，预览的 HTML 将与界面同源运行，可读取会话文件、本地存储并调用内部接口。仅对完全可信的文件开启",
 		settingsBrowserSandboxTitle: "关闭浏览器沙箱（不安全）",
 		settingsBrowserSandboxDesc: "关闭后，访问的任何网站都将与界面同源运行，可读取会话数据并冒充你的登录状态。仅对完全可信的站点开启",
-		settingsBrowserLinksTitle: "聊天区外链在侧边栏打开",
-		settingsBrowserLinksDesc: "开启后，点击聊天或界面中的外链时在侧边栏打开，不再弹出新窗口；HTTP 与 HTTPS 可分别通过下方开关控制；Ctrl/Cmd 点击可临时放行",
-		settingsBrowserHttpTitle: "侧边打开HTTP网页",
-		settingsBrowserHttpDesc: "开启后，点击聊天或界面中的 HTTP 外链时在侧边栏打开（声明了 urlTarget 的插件页面优先）；Ctrl/Cmd 点击可临时放行",
-		settingsBrowserHttpsTitle: "侧边打开HTTPS网页",
-		settingsBrowserHttpsDesc: "开启后，点击聊天或界面中的 HTTPS 外链时在侧边栏打开。默认关闭：多数 HTTPS 站点拒绝被嵌入，走系统浏览器更顺畅",
+		settingsBrowserLoopbackTitle: "允许访问的本机地址",
+		settingsBrowserLoopbackDesc: "逗号分隔的本地回环地址白名单（如 localhost:5174 或 127.0.0.1:8080），侧边栏浏览器可访问这些本地服务；默认留空则本机地址全部拦截。沙箱隔离仍然生效，页面无法读取界面数据",
+		settingsBrowserLoopbackPlaceholder: "例如 localhost:5174, 127.0.0.1:8080",
 		browserOpenExternal: "在浏览器中打开",
 		browserEmbedBlocked: "{host} 拒绝了嵌入请求",
 		browserEmbedBlockedDesc: "该站点通过 X-Frame-Options / frame-ancestors 禁止在其它页面中显示，无法在侧边栏内加载。可在浏览器中直接打开",
 		browserEmbedAnyway: "仍然加载",
 		subagent: "任务管理",
-		openSubagent: "任务管理",
 		subagentMainAgent: "主代理",
 		subagentEmpty: "暂无子代理",
 		subagentEmptyDesc: "当前主代理派生的子代理将显示在这里",
-		subagentRunning: "运行中",
 		subagentInactive: "空闲",
 		subagentModeOneShot: "一次性",
 		subagentModeContinuable: "可续接",
 		subagentCount: "{count} 个子代理",
 		subagentCountRunning: "{count} 个子代理 · {running} 运行中",
-		subagentDiagCorrupt: "目录损坏",
-		subagentDiagUnsupported: "不支持的条目",
-		subagentDiagUnavailable: "不可用",
 		subagentThinking: "思考中…",
 		sideChat: "侧边对话(beta)",
 		sideChatNew: "新建对话",
@@ -199553,11 +199654,29 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		sideChatThink: "思考过程",
 		sideChatInjection: "已注入上下文",
 		sideChatSend: "发送",
-		sideChatCancel: "停止",
 		sideChatCancelTitle: "中止当前回合（保留队列）",
-		sideChatClose: "关闭线程",
-		sideChatCloseTitle: "释放线程的 agent（历史保留）",
 		sideChatError: "侧边对话出错：{message}",
+		sideChatTurnUsage: "输入 {input} tok · 输出 {output} tok",
+		sideChatBlockCollapse: "收起",
+		sideChatBlockCollapseAria: "收起",
+		sideChatBlockExpand: "展开 {hidden} 行",
+		sideChatBlockExpandAria: "展开其余 {hidden} 行",
+		sideChatBlockSignal: "信号终止：{signal}",
+		sideChatBlockExitCode: "退出码 {code}",
+		sideChatBlockNoExitCode: "已结束（无退出码）",
+		sideChatBlockRunning: "运行中",
+		sideChatBlockFailed: "失败",
+		sideChatBlockDone: "完成",
+		sideChatBlockNoOutput: "（无输出）",
+		codeBlockTitle: "代码块",
+		codeBlockWrap: "自动换行",
+		codeBlockUnwrap: "取消自动换行",
+		sideChatBlockWindow: "共 {total} 行 · 显示 {shown} 行",
+		sideChatConnDisconnected: "连接已断开，点击立即重连",
+		sideChatConnConnecting: "正在重连…",
+		sideChatConnRecovered: "连接已恢复",
+		sideChatConnReconnectAction: "立即重连",
+		sideChatConnRestartAction: "重新发起连接",
 		jobs: "后台任务",
 		jobsCount: "{count} 个后台任务",
 		jobsCountRunning: "{count} 个后台任务 · {running} 运行中",
@@ -199570,7 +199689,6 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		jobDurationMinutes: "{minutes} 分 {seconds} 秒",
 		jobDurationHours: "{hours} 小时 {minutes} 分",
 		jobViewOutput: "查看输出",
-		jobHideOutput: "收起输出",
 		jobNoOutput: "暂无输出",
 		jobNotReadYet: "等待模型读取该任务的输出（模型执行 job_output 后，输出会显示在这里）",
 		jobOutputTruncated: "输出过长，已截断显示",
@@ -199578,6 +199696,86 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		jobKill: "终止",
 		jobKillConfirm: "再次点击确认终止",
 		jobKillError: "终止失败",
+		tasksViewGraph: "工作流图",
+		tasksViewTree: "树状图",
+		tasksViewSwitchToGraph: "切换为工作流图",
+		tasksViewSwitchToTree: "切换为树状图",
+		settingsViewModeTitle: "任务管理默认视图",
+		settingsViewModeDesc: "任务管理页打开时的默认展示方式（页内仍可临时切换）",
+		settingsViewModeGraph: "工作流图",
+		settingsViewModeGraphDesc: "分层节点图，可缩放平移",
+		settingsViewModeTree: "树状图",
+		settingsViewModeTreeDesc: "经典缩进树，键盘可导航",
+		tasksFoldIdleGroup: "N 个待命",
+		tasksFoldIdle: "{count} 待命",
+		tasksFoldCompleted: "✓ {count} 已完成",
+		tasksFoldOne: "收进已完成聚合",
+		tasksFoldExpand: "展开已完成的节点",
+		tasksFoldCollapse: "折叠已完成的节点",
+		tasksZoomIn: "放大",
+		tasksZoomOut: "缩小",
+		tasksZoomFit: "适应画布",
+		tasksNodeJump: "查看转录",
+		tasksNodeDetail: "节点详情",
+		workflowRun: "工作流",
+		tasksNodeState: "状态",
+		tasksNodeMode: "模式",
+		tasksNodeModel: "模型",
+		tasksNodeTeamRole: "团队角色",
+		tasksNodeActivity: "最近活动",
+		tasksStateRunning: "运行中",
+		tasksStateIdle: "待命",
+		tasksStateProvisioning: "部署中",
+		tasksStateDone: "已完成",
+		tasksStateError: "出错",
+		tasksKindSubagent: "子代理",
+		tasksKindTeammate: "成员",
+		tasksKindWorkflow: "工作流",
+		taskWindowCreate: "新建任务",
+		taskWindowDetail: "任务详情",
+		teamBoard: "团队任务板",
+		teamChip: "团队 {members} 成员 · {tasks} 任务",
+		teamTasksEmpty: "暂无共享任务",
+		teamTaskCreate: "新建任务",
+		teamTaskSubject: "标题",
+		teamTaskDescription: "描述",
+		teamTaskOwner: "负责人",
+		teamTaskUnowned: "未认领",
+		teamTaskPending: "待办",
+		teamTaskInProgress: "进行中",
+		teamTaskCompleted: "已完成",
+		teamTaskBlocked: "阻塞",
+		teamTaskClaim: "认领",
+		teamTaskComplete: "完成",
+		teamTaskReopen: "重开",
+		teamTaskDelete: "删除",
+		teamTaskDeleteConfirm: "确认删除",
+		teamTaskEdit: "编辑",
+		teamTaskSave: "保存",
+		teamTaskCancel: "取消",
+		teamTaskConflict: "任务已被他人修改，已刷新",
+		teamTaskError: "操作失败：{message}",
+		teamTaskDeleted: "已删除",
+		teamTaskActions: "任务操作",
+		teamTaskDetail: "任务详情",
+		teamTaskNoDescription: "暂无描述，点击「编辑」补充",
+		teamTaskBlockedBy: "被阻塞",
+		teamTaskSubjectPlaceholder: "一句话说明要做什么",
+		teamTaskDescriptionPlaceholder: "补充说明（可选）",
+		teamFilterAll: "全部",
+		tasksNodeTasks: "共享任务",
+		jobCopyOutput: "复制输出",
+		jobCopied: "已复制",
+		jobFollowTail: "跟随最新",
+		jobDragHint: "拖动浮窗",
+		workflowRunning: "进行中",
+		workflowCompleted: "已完成",
+		workflowCancelled: "已取消",
+		workflowFailed: "失败",
+		workflowPhaseUnnamed: "未命名阶段",
+		workflowMembers: "{done}/{total} 成员",
+		jobsAutoCollapsed: "代理较多，已自动折叠",
+		catalogLoadFailed: "{count} 个分支加载失败",
 		addPluginsTabCard: "添加 Tab 插件",
 		addPluginsTabCardDesc: "注册新的侧边栏页面",
 		addPluginsViewerCard: "添加预览插件",
@@ -199591,25 +199789,78 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		addPluginsEmpty: "暂未收录插件，欢迎在 GitHub topic 下发布你的插件",
 		openPlugin: "跳转",
 		copyInstall: "复制安装命令",
+		pluginMdExportDesc: "在 better-sidebar 的 Markdown 工具栏上新增「导出」按钮：一键把当前 .md 渲染为独立 HTML（表格/代码块/Mermaid 图表内联，布局跟随预览主题）直接保存到同目录，或通过打印对话框导出为 PDF",
 		pluginOfficeDesc: "为 better-sidebar 编辑器提供 Office 三件套预览（.docx / .xlsx / .pptx），把重型 Office 渲染库拆出主包、按需安装",
 		pluginFlowglassDesc: "实时会话流程图：三列泳道展示用户、助手与工具调用，支持并行分组、子代理支线、逐层钻取和实时状态；安装 better-sidebar 后注册原生「流镜」Tab，未安装时保留独立抽屉",
 		pluginGitForgeDesc: "better-sidebar「Git 凭据」Tab：GitHub/Gitea 等 Forge 账号库 + 按项目授权 + push 策略硬拦；token 仅存本地 secrets，不进模型上下文；提供只读 GitForge 工具与 agent HTTPS credential helper",
+		pluginGithubWorkbenchDesc: "better-sidebar「GitHub 工作台」Tab：远端仓库目录树 + Issues / Pull requests / Actions 页签，读之外支持新建 Issue/PR、评论、编辑、关闭重开、squash·merge·rebase 合并（强确认）与重跑/取消 CI；仓库弹层自动拉取有权限列表并支持公开仓搜索；未装 better-sidebar 时自动降级为独立右侧面板",
+		pluginSuhuangScrollDesc: "把本地苏黄共阅 Runtime 接入 DSH 设置与 better-sidebar，支持模型配置、连接测试和连续阅卷控制；使用前需安装 Suhuang Scroll Runtime 与 dsh-better-sidebar",
+		pluginBetterOverleafDesc: "better-sidebar 的 Overleaf 标签页：直连 CDP 浏览器登录（支持第三方 Chromium），项目列表/切换，<workspace>/overleaf/ 本地 git 镜像，git 双向同步（API 只读兜底），文件预览走侧边栏工作台",
 		pluginGitRemotesDesc: "better-sidebar Git 远程 Tab：看分支/上游/ahead-behind，fetch（可 prune）、ff-only pull、确认后才 push。不替换内置 Git 的暂存/提交，也不提供 force-push 或模型自动推送",
 		pluginSentinelDesc: "条件驱动的 agent 唤醒系统：文件/进程/端口/HTTP/命令/webhook 传感器，条件达成自动唤醒休眠会话；注册「哨兵」Tab 展示服务器全局监控表",
+		pluginServerDeckDesc: "服务器卡片仪表盘：每台服务器一张卡片，展示在线状态、OS、运行时长、CPU/内存/磁盘用量与延迟；点卡片进入 xterm.js 交互终端，支持 ~/.ssh/config 一键导入（自动跳过 Git 托管别名）；安装 better-sidebar 后注册原生「服务器」Tab，未安装时保留独立抽屉",
 		pluginSidebarQaDesc: "基于 better-sidebar 的划选提问tab分页: 对话划选 → 右侧面板提问 → 同工作区独立追问会话（❓追问·主题）：快速无思考模型压缩主对话上下文后与引文一起注入，不打断主对话；追问可嵌套、可继续、可归档",
+		pluginSidenoteDesc: "Codex 风格侧边聊天与划选注释：从当前会话 fork 出独立侧边会话（归档隐藏、多实例并存、/side 命令、刷新/重启后恢复、模型跟随主会话）；assistant 消息划选 → 编号角标 + 注解编辑器 →「N 条注释」chip 随消息发出，也可直接进入侧边聊天提问",
 		pluginSshTunnelDesc: "better-sidebar「SSH 隧道」Tab：多机主机清单 + 按项目授权 + 密钥本地保管；模型工具 SSHManager（exec/SFTP/会话策略）；中央交互终端与双栏 SFTP",
 		pluginTurnReviewDesc: "对「刚刚这一回合」的 diff 做 Approve / Request changes 的人闸门：只审上一回合，不 fork 会话；文件按主会话/子代理/未归因分组，按文件勾选打回 + 可选评语，点文件先看回合开始快照 vs 现在的 diff。不是 /rewind",
 		pluginVideoPreviewDesc: "在 better-sidebar 编辑器内联预览视频文件（.mp4/.webm/.mov/.mkv/.avi 等），自带支持 HTTP Range（206）的 /video 宿主路由，可拖动进度条、不受 20MB mediaLimit 限制",
+		pluginCodeNavDesc: "代码预览导航：按文件类型自动识别语言并高亮语法，符号大纲（类/方法/变量筛选 + 一键跳转），文件内查找（全部匹配高亮、上/下一处、区分大小写），接管 better-sidebar 的代码文件预览",
 		pluginDocsPanelDesc: "DSH 侧边栏里的「全局文档」：全局 Markdown 笔记，任何工作区随时可读——列表点选阅读、悬浮大纲跳转、Chrome / VS Code 外部打开、代码复制，目录可配置（默认 ~/.dsh/docs）",
-		kernelTabTitle: "工作台",
-		kernelGuideTitle: "侧边工作台",
-		kernelGuideDescription: "文件树 + 编辑器 + 终端 + 源代码管理 + 浏览器（本插件的工作台，停在内核自带右栏里）"
+		pluginEgoBrowserDesc: "把 CitroLabs/ego-lite 接进 DeepSeek Harness 的 agent 浏览器：32 个 ego_* 工具驱动真实 Chromium，侧边栏原生「ego 浏览器」Tab 实时观察 agent 逛的每个页面，可直接点击/拖拽/输入接管；装 better-sidebar 时自动注册 Tab，没装则退回浮动浮窗",
+		pluginBilingualReaderDesc: "在 DSH 侧边栏读论文 PDF：原生 PDF 显示，选中一段文字即用大模型划词翻译，结合上下文、完全隔离主对话，只作阅读辅助",
+		pluginSentinelName: "dsh-sentinel 唤醒系统",
+		pluginEgoBrowserName: "ego-browser Agent 浏览器",
+		pluginBetterOverleafName: "dsh-better-overleaf Overleaf 标签页",
+		pluginDocsPanelName: "dsh-docs-panel 全局文档",
+		pluginFlowglassName: "dsh-flowglass 流镜",
+		pluginGitForgeName: "dsh-git-forge Git 凭据",
+		pluginGitRemotesName: "dsh-git-remotes Git 远程",
+		pluginGithubWorkbenchName: "dsh-github-workbench GitHub 工作台",
+		pluginSidebarQaName: "dsh-sidebar-qa 划选追问",
+		pluginSidenoteName: "dsh-sidenote 侧边聊天",
+		pluginServerDeckName: "dsh-server-deck 服务器甲板",
+		pluginSuhuangScrollName: "dsh-suhuang-scroll 苏黄共阅",
+		pluginSshTunnelName: "dsh-ssh-tunnel SSH 隧道",
+		pluginTurnReviewName: "dsh-turn-review 本轮审查",
+		pluginBilingualReaderName: "dsh-bilingual-reader 双语阅读",
+		pluginOfficeName: "Office 预览插件",
+		pluginMdExportName: "Markdown 导出插件",
+		pluginCodeNavName: "代码预览导航",
+		pluginVideoPreviewName: "视频预览插件",
+		presetDshDesktopDesc: "Electron 高级模式（无边框）：macOS 顶栏 20px、Windows 无 WCO 时 32px 标题栏让位"
 	};
 	/** The en dictionary (key-set-equal to zh, enforced by the type annotation). */
 	const en = {
 		files: "Files",
+		guideDescFiles: "Browse the workspace tree; click a file to preview or edit",
+		guideDescGit: "Git changes and this session's file edits, in one tab",
+		guideDescSubagent: "Workflow graph, team task board, and background jobs, live",
+		guideDescSidechat: "An independent follow-up thread inheriting this session's context",
+		guideDescTerminal: "A real shell (xterm + pty) with reconnect",
+		guideDescBrowser: "An embedded browser that can take over chat links",
+		changesSessionEmpty: "No file operations in this session yet",
+		changesRead: "Read",
+		changesMdReading: "Reading",
+		changesMdRaw: "Raw",
+		changesHtmlRender: "Render",
+		changesHtmlRaw: "Raw",
+		changesPdfRender: "Render",
+		changesPdfRaw: "Raw",
+		changesWrite: "Write",
+		changesEdit: "Edit",
+		changesRunning: "running",
+		changesError: "error",
+		changesRedactOn: "Redaction on: secrets render as [REDACTED]; click to disable (at your own risk)",
+		changesRedactOff: "Redaction off: file content renders verbatim; click to enable",
+		changesRedactOnLabel: "Redacting",
+		changesRedactOffLabel: "Redaction off",
+		changesRedactBanner: "Redacted",
+		changesFold: "{count} lines…click to expand",
+		changesFoldLoading: "Expanding…",
+		changesFoldUnavailable: "Context unavailable",
+		changesContext: "context",
+		changesPriorUnknown: "Prior content is outside the loaded window; shown as all-added",
 		explorer: "Explorer",
-		git: "Source Control",
 		terminal: "Terminal",
 		editor: "Editor",
 		editorExplorer: "File open behavior",
@@ -199619,8 +199870,6 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		editorExplorerSplit: "Separate",
 		editorExplorerSplitDesc: "Path-less windows are the standalone explorer (tree only); each file opens its own window (tree docked, closed by default)",
 		editorTreeToggle: "File tree panel",
-		explorerCollapse: "Collapse explorer",
-		explorerExpand: "Expand explorer",
 		editorPathPlaceholder: "File path (relative to the session directory or absolute), Enter to open",
 		editorSearchPlaceholder: "Search files by name…",
 		editorSearchNoResults: "No matching files",
@@ -199628,6 +199877,12 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		editorEmptyHint: "Pick a file from the tree panel or the path input above to start previewing",
 		openFileNewTab: "Open in New Tab",
 		openFileSide: "Open to the Side",
+		zipProgress: "Archiving {done}/{total}",
+		settingsOpenWithPluginTitle: "Always show the plugin’s own Open with targets",
+		settingsOpenWithPluginDesc: "By default the plugin’s own targets (file manager / VS Code / Cursor / Zed / custom editors, SSH remotes) show only when the host reports no local associated application; turn this on to keep both side by side",
+		zipDownload: "Zip and download",
+		zipDownloadCount: "Zip and download ({count} items)",
+		zipFailed: "Archive failed: {message}",
 		openWithMenu: "Open with",
 		openWithSshSuffix: " (SSH)",
 		pinOpenWith: "Pin to menu",
@@ -199648,18 +199903,41 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		openWithSettingsFamilyDesc: "This editor speaks the VSCode URL dialect (supports SSH-remote opens)",
 		openWithSettingsRemove: "Remove",
 		openWithSettingsInvalidHint: "Editors with a missing name or a template without {path} / scheme:// are not shown in the menu",
+		openInAppDefault: "Open with default app",
+		openInAppEmpty: "No application can open it",
+		openInAppFailed: "Could not open: {path}",
+		revealInFileManager: "Reveal in File Manager",
+		filesSelected: "{count} selected",
+		clearSelection: "Clear selection",
+		copyPaths: "Copy paths",
+		deleteSelected: "Delete selected",
+		deleteSelectedTitle: "Delete {count} selected items?",
+		deleteSelectedDesc: "These files and folders will be permanently deleted. This cannot be undone.",
+		newFolder: "New folder",
+		newFolderPlaceholder: "Folder name",
+		newFolderInvalid: "Invalid folder name",
+		filesTruncated: "This folder has too many entries; only the first ones are shown",
+		gitStatusModified: "Modified",
+		gitStatusAdded: "Added",
+		gitStatusDeleted: "Deleted",
+		gitStatusUntracked: "Untracked",
+		gitStatusRenamed: "Renamed",
+		gitStatusConflict: "Conflicted",
+		changesClean: "No changes in the working tree",
+		changesNoHistory: "No commits yet",
+		changesStageFailed: "Staging failed: {message}",
+		changesOpGone: "This operation is no longer in the session log",
 		newTab: "New tab",
-		openExplorer: "Explorer",
 		brokenSymlink: "Broken symlink",
-		openGit: "Git panel",
-		newTerminal: "New terminal",
-		terminalLimit: "Terminal limit reached (3)",
 		close: "Close",
 		closeOtherTabs: "Close Other Tabs",
 		closeLeftTabs: "Close Tabs to the Left",
 		closeRightTabs: "Close Tabs to the Right",
-		collapse: "Collapse sidebar",
-		expand: "Expand sidebar",
+		pinTerminal: "Pin Terminal",
+		pinAgentTerminal: "Pin Agent Terminal",
+		pinToWorkspace: "Pin to Workspace",
+		pinToGlobal: "Pin Globally",
+		unpinTerminal: "Unpin",
 		collapseBottomPanel: "Collapse bottom panel",
 		expandBottomPanel: "Expand bottom panel",
 		terminalError: "Terminal connection failed",
@@ -199668,10 +199946,14 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		chunkAutoRetryWaiting: "Waiting for the backend to come back — recovering automatically… (attempt {n})",
 		fsReadRetryWaiting: "Backend temporarily unreachable — re-reading automatically… (attempt {n})",
 		chunkFallbackNotice: "Editor component unavailable — showing read-only preview",
+		terminalWaitBanner: "Agent is waiting for {needle}",
+		terminalSkipWait: "Skip wait",
 		terminalDepsFailed: "Terminal dependency node-pty failed to load",
 		terminalDepsHint: "Run the command below in a terminal or cmd on the DSH machine to repair it, then retry (node-pty stays in sync with the DSH core version):",
 		terminalDepsProfile: " (detected profile: {profile})",
+		terminalShellNotFound: "Configured shell not found: {name} — check the shell path under Settings → Side card → Terminal",
 		preview: "Preview",
+		toc: "Table of contents",
 		edit: "Edit",
 		mermaidError: "Mermaid render failed",
 		mermaidZoomIn: "Zoom in",
@@ -199679,6 +199961,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		mermaidZoomReset: "Reset",
 		mermaidZoomHint: "Scroll to zoom · drag to pan · Esc to close",
 		refresh: "Refresh",
+		refreshUnsavedConfirm: "The file changed on disk. Refreshing will discard unsaved edits. Continue?",
 		save: "Save",
 		saved: "Saved",
 		unsaved: "Unsaved",
@@ -199688,23 +199971,27 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		loading: "Loading…",
 		error: "Failed to load",
 		retry: "Retry",
-		splitLeft: "Split left",
-		splitRight: "Split right",
-		splitUp: "Split up",
-		splitDown: "Split down",
 		notRepo: "This directory is not a git repository",
-		noChanges: "No changes",
+		statusTruncated: "Too many changes; showing the first 2,000 entries",
 		stage: "Stage",
 		unstage: "Unstage",
 		stageAll: "Stage all",
 		unstageAll: "Unstage all",
 		commitPlaceholder: "Commit message (Ctrl+Enter)",
 		commit: "Commit",
-		commitError: "Commit failed",
 		branch: "Branch",
+		worktree: "Worktree",
 		checkoutError: "Branch switch failed",
 		history: "History",
 		changes: "Changes",
+		changesGitLens: "Git",
+		changesSessionLens: "Session",
+		changesFilterAll: "All",
+		changesFilterEmpty: "No operations of this kind",
+		changesOpenDiffTab: "Open in a diff tab",
+		changesClosePreview: "Close preview",
+		changesResizePreview: "Resize preview",
+		changesLoadError: "Session file records are unavailable right now",
 		staged: "Staged",
 		unstaged: "Unstaged",
 		cancel: "Cancel",
@@ -199715,7 +200002,6 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		diffDeleted: "Deleted",
 		diffRenamed: "Renamed",
 		diffExpand: "Expand {count} more rows",
-		diffCollapse: "Collapse",
 		discard: "Discard changes",
 		discardTitle: "Discard changes",
 		discardDesc: "This discards the worktree changes of \"{path}\" (not recoverable).",
@@ -199736,24 +200022,26 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		loadMore: "Load more",
 		historyLoadError: "Failed to load more history",
 		produced: "Produced",
-		producedOpen: "Open in sidebar",
+		showInFolder: "Show in folder",
 		disconnected: "Terminal disconnected, reconnecting…",
 		exited: "Terminal process exited",
 		noSession: "Select a conversation to use the sidebar",
 		pluginNotLoaded: "Plugin not loaded; tab unavailable:",
-		hiddenFiles: "Hidden files",
 		parent: "Parent directory",
-		editorBack: "Back",
 		copied: "Copied",
 		copy: "Copy",
-		footnotes: "Footnotes",
-		newFile: "New file",
 		openEditor: "Open editor",
-		gitDetail: "View change details",
 		referenceFile: "@file",
 		addToConversation: "Add to conversation",
 		copyRelative: "Copy relative path",
 		copyAbsolute: "Copy absolute path",
+		rename: "Rename",
+		renameInvalid: "The name cannot be empty or contain path separators.",
+		delete: "Delete",
+		deleteTitle: "Delete \"{name}\"?",
+		deleteDescFile: "This permanently deletes the file. This cannot be undone.",
+		deleteDescDir: "This permanently deletes the directory and everything inside it. This cannot be undone.",
+		dismiss: "Dismiss",
 		download: "Download",
 		uploadFiles: "Upload files",
 		uploadFolder: "Upload folder",
@@ -199772,13 +200060,8 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		settingsIntro: "Manage what the side card shows and how it behaves",
 		settingsPopupDesc: "Configure related options for {feature}",
 		settingsDone: "Done",
-		settingsOpenTitle: "Open by default for new conversations",
-		settingsOpenDesc: "Expand the side card automatically for brand-new conversations; existing conversations keep their own layouts",
-		settingsWidthTitle: "Default width share",
-		settingsWidthDesc: "The side card's default share of the window width for new conversations (20–60)",
-		settingsWidthSuffix: "%",
-		settingsOpenPathTitle: "Open chat files in the sidebar",
-		settingsOpenPathDesc: "Open file links in the chat (tool rows, produced files, mentions) in the sidebar editor instead of the system default app",
+		settingsOpenToolsTitle: "Inject the sidebar-open tool for the model",
+		settingsOpenToolsDesc: "When enabled, the model can actively open files, folders, and HTTP(S) pages in the sidebar through the sidebar_open tool (off by default)",
 		settingsTitleBarTitle: "Position compatibility mode",
 		settingsTitleBarDesc: "Pick the title-bar compatibility scheme: auto-detect (default, conservative) / DSH official web / known desktop shells / custom (shift distance + custom CSS)",
 		settingsTitleBarStripTitle: "Shift distance",
@@ -199791,16 +200074,15 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		settingsSchemeCustomDesc: "Full control: inject custom CSS (can override built-in styles) and set the title-bar shift distance",
 		settingsSchemeDetectedSuffix: "detected",
 		settingsCustomCssTitle: "Custom CSS",
-		settingsCustomCssDesc: "Styles appended at the end of the page (later in the cascade wins ties; use !important to override JS-written inline variables)",
 		settingsCustomCssPlaceholder: "/* e.g. reserve 36px for a shell with a custom-drawn title bar */\nhtml[data-dsh-title-bar-height=\"36\"] {\n  --dsh-title-bar-strip: 36px !important;\n}",
 		settingsSaveFailed: "Failed to save",
 		settingsConflict: "The setting changed in another window — please retry",
 		binaryNoPreview: "This file type cannot be previewed",
 		downloadToView: "Download to view",
-		settingsSubagentTitle: "Auto-open the Tasks page when a subagent appears",
-		settingsSubagentDesc: "Expand the side card and open the Tasks page when the current conversation spawns a new subagent; turn off to open it manually",
-		settingsJobsTitle: "Auto-open the Jobs page on a new background job",
-		settingsJobsDesc: "Expand the side card and open the Jobs page whenever a new background job appears for the current conversation (every new job triggers); turn off to open it manually",
+		settingsSubagentTitle: "Auto-activate the Tasks page when a subagent appears",
+		settingsSubagentDesc: "Activate the Tasks page when the current conversation spawns a new subagent; wide viewports also expand the side card, while narrow full-screen drawers are not forced open; turn off to open it manually",
+		settingsJobsTitle: "Auto-activate the Tasks page on a new background job",
+		settingsJobsDesc: "Activate the Tasks page whenever a new background job appears for the current conversation (every new job triggers); wide viewports also expand the side card, while narrow full-screen drawers are not forced open; turn off to open it manually",
 		settingsToolsTitle: "Inject terminal tools for the model",
 		settingsToolsDesc: "When enabled, the model can create and drive sidebar terminals through the 8 terminal_* tools (off by default)",
 		settingsBottomTerminalTitle: "Auto-open a terminal on the bottom panel's first expansion",
@@ -199816,17 +200098,18 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		settingsShellArgsDesc: "Explicit shell arguments, space-separated; when non-empty they fully replace the defaults (same contract as the yaml shellArgs)",
 		settingsShellArgsPlaceholder: "e.g. -l (empty = defaults)",
 		settingsFontSizeDesc: "Terminal font size in px (9–32, default 13)",
-		settingsFontSizeSuffix: "px",
 		settingsTabsTitle: "Sidebar content",
 		settingsViewersTitle: "File viewers",
+		settingsMobileTitle: "Mobile",
+		settingsMobileNoAutoOpenTitle: "Don't auto-open on narrow screens",
+		settingsMobileNoAutoOpenDesc: "On a phone / narrow viewport, a new subagent or background job no longer switches to the Tasks page by itself (you can still open it by hand)",
+		settingsMobileTreeTitle: "Default the Tasks page to the tree",
+		settingsMobileTreeDesc: "On a phone / narrow viewport the Tasks page opens as the classic tree instead of the workflow graph; the in-page toggle still switches it ad hoc",
 		settingsGeneralTitle: "General",
 		settingsPopup: "Feature settings",
 		settingsViewerCatchAll: "Catch-all: any file",
-		viewerImage: "Image",
-		viewerPdf: "PDF",
 		viewerMarkdown: "Markdown",
 		viewerCode: "Code",
-		viewerBinary: "Binary download",
 		viewerHtml: "HTML",
 		browser: "Browser",
 		browserPlaceholder: "Enter a URL, e.g. example.com",
@@ -199837,7 +200120,6 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		browserBlockedScheme: "Blocked: only http/https URLs are allowed",
 		browserBlockedLoopback: "Blocked: local and internal addresses cannot be browsed here",
 		browserInvalid: "Invalid URL",
-		browserNoSandboxWarning: "Sandbox off: the current page runs with full GUI privileges (re-enable in settings)",
 		htmlNoSandboxWarning: "Sandbox off: this HTML runs with full GUI privileges (re-enable in settings)",
 		sandboxStatusOn: "Sandbox mode: on · pages cannot access the GUI's data or local files; logins and third-party cookies may not work",
 		sandboxUnlock: "Temporarily disable (unsafe)",
@@ -199848,30 +200130,22 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		settingsHtmlSandboxDesc: "With the sandbox off, previewed HTML runs with the same origin as the GUI: it can read session files, local storage and call internal APIs. Only enable for fully trusted files",
 		settingsBrowserSandboxTitle: "Disable browser sandbox (unsafe)",
 		settingsBrowserSandboxDesc: "With the sandbox off, any visited site runs with the same origin as the GUI: it can read session data and act as your logged-in session. Only enable for fully trusted sites",
-		settingsBrowserLinksTitle: "Open chat external links in the sidebar",
-		settingsBrowserLinksDesc: "When on, clicking an external link in the chat or GUI opens the sidebar instead of a new window; HTTP and HTTPS are controlled separately by the switches below; Ctrl/Cmd+click always bypasses",
-		settingsBrowserHttpTitle: "Open HTTP pages in the sidebar",
-		settingsBrowserHttpDesc: "When on, clicking an HTTP external link in the chat or GUI opens the sidebar (plugin pages declaring urlTarget win); Ctrl/Cmd+click always bypasses",
-		settingsBrowserHttpsTitle: "Open HTTPS pages in the sidebar",
-		settingsBrowserHttpsDesc: "When on, clicking an HTTPS external link in the chat or GUI opens the sidebar. Off by default: most HTTPS sites refuse to be embedded, so the system browser is the smoother default",
+		settingsBrowserLoopbackTitle: "Allowed local addresses",
+		settingsBrowserLoopbackDesc: "Comma-separated allowlist of loopback addresses (e.g. localhost:5174 or 127.0.0.1:8080) the sidebar browser may visit; empty blocks all local addresses by default. The sandbox still applies — pages cannot read GUI data",
+		settingsBrowserLoopbackPlaceholder: "e.g. localhost:5174, 127.0.0.1:8080",
 		browserOpenExternal: "Open in browser",
 		browserEmbedBlocked: "{host} refused to be embedded",
 		browserEmbedBlockedDesc: "The site forbids being displayed inside other pages (X-Frame-Options / frame-ancestors), so it cannot load in the sidebar. Open it directly in your browser instead.",
 		browserEmbedAnyway: "Load anyway",
 		subagent: "Tasks",
-		openSubagent: "Tasks",
 		subagentMainAgent: "Main agent",
 		subagentEmpty: "No subagents",
 		subagentEmptyDesc: "Subagents spawned under the main agent will appear here",
-		subagentRunning: "Running",
 		subagentInactive: "Inactive",
 		subagentModeOneShot: "One-shot",
 		subagentModeContinuable: "Continuable",
 		subagentCount: "{count} subagents",
 		subagentCountRunning: "{count} subagents · {running} running",
-		subagentDiagCorrupt: "Corrupt",
-		subagentDiagUnsupported: "Unsupported",
-		subagentDiagUnavailable: "Unavailable",
 		subagentThinking: "Thinking…",
 		sideChat: "Side Chat (beta)",
 		sideChatNew: "New thread",
@@ -199892,11 +200166,29 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		sideChatThink: "Thinking",
 		sideChatInjection: "Context injected",
 		sideChatSend: "Send",
-		sideChatCancel: "Stop",
 		sideChatCancelTitle: "Abort the running turn (queued work is kept)",
-		sideChatClose: "Close thread",
-		sideChatCloseTitle: "Release the thread's agent (history is kept)",
 		sideChatError: "Side Chat error: {message}",
+		sideChatTurnUsage: "Input {input} tok · Output {output} tok",
+		sideChatBlockCollapse: "Collapse",
+		sideChatBlockCollapseAria: "Collapse",
+		sideChatBlockExpand: "Expand {hidden} lines",
+		sideChatBlockExpandAria: "Expand {hidden} more lines",
+		sideChatBlockSignal: "Killed by signal: {signal}",
+		sideChatBlockExitCode: "Exit code {code}",
+		sideChatBlockNoExitCode: "Ended without an exit code",
+		sideChatBlockRunning: "Running",
+		sideChatBlockFailed: "Failed",
+		sideChatBlockDone: "Done",
+		sideChatBlockNoOutput: "(no output)",
+		codeBlockTitle: "Code block",
+		codeBlockWrap: "Wrap lines",
+		codeBlockUnwrap: "Do not wrap lines",
+		sideChatBlockWindow: "{shown} of {total} lines",
+		sideChatConnDisconnected: "Disconnected, reconnect now",
+		sideChatConnConnecting: "Reconnecting…",
+		sideChatConnRecovered: "Connection restored",
+		sideChatConnReconnectAction: "Reconnect now",
+		sideChatConnRestartAction: "Restart connection",
 		jobs: "Background jobs",
 		jobsCount: "{count} background jobs",
 		jobsCountRunning: "{count} background jobs · {running} running",
@@ -199909,7 +200201,6 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		jobDurationMinutes: "{minutes}m {seconds}s",
 		jobDurationHours: "{hours}h {minutes}m",
 		jobViewOutput: "View output",
-		jobHideOutput: "Hide output",
 		jobNoOutput: "No output yet",
 		jobNotReadYet: "Waiting for the model to read this job; its output appears here once the model runs job_output",
 		jobOutputTruncated: "Output truncated",
@@ -199917,6 +200208,86 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		jobKill: "Kill",
 		jobKillConfirm: "Click again to confirm kill",
 		jobKillError: "Kill failed",
+		tasksViewGraph: "Workflow graph",
+		tasksViewTree: "Tree",
+		tasksViewSwitchToGraph: "Switch to the workflow graph",
+		tasksViewSwitchToTree: "Switch to the tree",
+		settingsViewModeTitle: "Tasks page default view",
+		settingsViewModeDesc: "How the Tasks page renders on open (the in-page toggle still flips it ad hoc)",
+		settingsViewModeGraph: "Workflow graph",
+		settingsViewModeGraphDesc: "Layered node graph with zoom and pan",
+		settingsViewModeTree: "Tree",
+		settingsViewModeTreeDesc: "Classic indentation tree, keyboard navigable",
+		tasksFoldIdleGroup: "N waiting",
+		tasksFoldIdle: "Idle {count}",
+		tasksFoldCompleted: "✓ {count} completed",
+		tasksFoldOne: "Fold into completed",
+		tasksFoldExpand: "Expand the completed nodes",
+		tasksFoldCollapse: "Collapse the completed nodes",
+		tasksZoomIn: "Zoom in",
+		tasksZoomOut: "Zoom out",
+		tasksZoomFit: "Fit to canvas",
+		tasksNodeJump: "Open transcript",
+		tasksNodeDetail: "Node detail",
+		workflowRun: "Workflow",
+		tasksNodeState: "State",
+		tasksNodeMode: "Mode",
+		tasksNodeModel: "Model",
+		tasksNodeTeamRole: "Team role",
+		tasksNodeActivity: "Latest activity",
+		tasksStateRunning: "Running",
+		tasksStateIdle: "Idle",
+		tasksStateProvisioning: "Provisioning",
+		tasksStateDone: "Done",
+		tasksStateError: "Error",
+		tasksKindSubagent: "Subagent",
+		tasksKindTeammate: "Teammate",
+		tasksKindWorkflow: "Workflow",
+		taskWindowCreate: "New task",
+		taskWindowDetail: "Task detail",
+		teamBoard: "Team task board",
+		teamChip: "Team {members} members · {tasks} tasks",
+		teamTasksEmpty: "No shared tasks yet",
+		teamTaskCreate: "New task",
+		teamTaskSubject: "Subject",
+		teamTaskDescription: "Description",
+		teamTaskOwner: "Owner",
+		teamTaskUnowned: "Unclaimed",
+		teamTaskPending: "Pending",
+		teamTaskInProgress: "In progress",
+		teamTaskCompleted: "Completed",
+		teamTaskBlocked: "Blocked",
+		teamTaskClaim: "Claim",
+		teamTaskComplete: "Complete",
+		teamTaskReopen: "Reopen",
+		teamTaskDelete: "Delete",
+		teamTaskDeleteConfirm: "Confirm delete",
+		teamTaskEdit: "Edit",
+		teamTaskSave: "Save",
+		teamTaskCancel: "Cancel",
+		teamTaskConflict: "The task changed elsewhere; refreshed",
+		teamTaskError: "Operation failed: {message}",
+		teamTaskDeleted: "Deleted",
+		teamTaskActions: "Task actions",
+		teamTaskDetail: "Task detail",
+		teamTaskNoDescription: "No description yet — click Edit to add one",
+		teamTaskBlockedBy: "Blocked by",
+		teamTaskSubjectPlaceholder: "One line describing the work",
+		teamTaskDescriptionPlaceholder: "Extra context (optional)",
+		teamFilterAll: "All",
+		tasksNodeTasks: "Shared tasks",
+		jobCopyOutput: "Copy output",
+		jobCopied: "Copied",
+		jobFollowTail: "Follow latest",
+		jobDragHint: "Drag to move",
+		workflowRunning: "Running",
+		workflowCompleted: "Completed",
+		workflowCancelled: "Cancelled",
+		workflowFailed: "Failed",
+		workflowPhaseUnnamed: "Unnamed phase",
+		workflowMembers: "{done}/{total} members",
+		jobsAutoCollapsed: "Auto-collapsed (many agents)",
+		catalogLoadFailed: "{count} branches failed to load",
 		addPluginsTabCard: "Add tab plugins",
 		addPluginsTabCardDesc: "Register a new sidebar page",
 		addPluginsViewerCard: "Add preview plugins",
@@ -199930,19 +200301,45 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		addPluginsEmpty: "No plugins curated yet — publish yours under the GitHub topic",
 		openPlugin: "Open",
 		copyInstall: "Copy install command",
+		pluginMdExportDesc: "Adds an \"Export\" button to the Markdown toolbar in better-sidebar: one click renders the current .md into standalone HTML (tables / code blocks / Mermaid diagrams inlined, layout follows the preview theme) and saves it next to the .md, or exports to PDF via the print dialog",
 		pluginOfficeDesc: "Office-suite preview (.docx / .xlsx / .pptx) for the better-sidebar editor, keeping the heavy Office render libraries out of the core bundle",
 		pluginFlowglassDesc: "Live session flowgraph with three lanes for user, assistant, and tool calls, plus parallel groups, sub-agent branches, drill-down, and live status; registers a native Flowglass tab when better-sidebar is installed and keeps its standalone drawer as a fallback",
 		pluginGitForgeDesc: "Git Forge tab: GitHub/Gitea (and other forge) account library + per-project grants + hard push policy; tokens stay in local secrets (never in model context); read-only GitForge tool and agent HTTPS credential helper",
+		pluginGithubWorkbenchDesc: "GitHub Workbench tab: remote repo tree + Issues / Pull requests / Actions with full write support — create Issue/PR, comment, edit, close/reopen, squash·merge·rebase merge (strong confirm), re-run/cancel CI; the repo switcher auto-lists accessible repos and searches public ones; falls back to a standalone right-side panel without better-sidebar",
 		pluginGitRemotesDesc: "Git Remotes tab: branch/upstream/ahead-behind, fetch (optional prune), ff-only pull, and push only after an in-tab confirm. Does not replace the built-in Git stage/commit tab, and does not offer force-push or a model auto-push tool",
+		pluginServerDeckDesc: "Server card dashboard: one card per host showing online status, OS, uptime and CPU/mem/disk usage with latency; click a card to open an interactive xterm.js terminal; one-click ~/.ssh/config import (git-hosting aliases auto-skipped). Registers a native \"Servers\" tab when better-sidebar is installed and keeps its standalone drawer as a fallback",
 		pluginSentinelDesc: "Condition-driven agent wakeup: file/process/port/http/command/webhook sensors wake dormant sessions when conditions fire; registers a \"Sentinel\" tab with the server-wide watch table",
 		pluginSidebarQaDesc: "Select-and-ask: Select conversation text → ask in the right-side panel → a dedicated follow-up session (❓追问) in the same workspace; a fast no-thinking model compresses the main context and injects it with the quote, without interrupting the main conversation. Follow-ups nest, continue, and archive",
+		pluginSidenoteDesc: "Codex-style side chat + selection annotations: fork the current session into a persistent side panel (archived out of the session list, multi-instance, /side command, survives reload, model follows the main session); select assistant text → numbered badge + note editor → an \"N annotations\" chip that rides your next message, or ask straight into a side chat",
 		pluginSshTunnelDesc: "SSH Tunnel tab: multi-host inventory + per-project grants + local secrets; SSHManager tool (exec/SFTP/session strategies); center interactive terminal and dual-pane SFTP",
+		pluginSuhuangScrollDesc: "Connect the local Suhuang Scroll Runtime to DSH settings and better-sidebar for model configuration, connection tests, and continuous grading controls; requires Suhuang Scroll Runtime and dsh-better-sidebar",
 		pluginTurnReviewDesc: "A human gate on the just-finished turn: Approve / Request changes per path with an optional comment; paths grouped by main session / subagent / unattributed; inline snapshot-vs-now diff before you decide. No fork, no /rewind",
 		pluginVideoPreviewDesc: "Inline video preview (.mp4/.webm/.mov/.mkv/.avi etc.) for the better-sidebar editor, backed by a dedicated /video host route with HTTP Range (206) support — scrubbing works and files are not capped by the 20MB mediaLimit",
+		pluginCodeNavDesc: "Code preview navigator: detects the language by file type and highlights syntax, symbol outline (class / method / variable filters + one-click jump), and in-file search (highlight all matches, prev/next, match case) — takes over code file preview in the better-sidebar editor",
 		pluginDocsPanelDesc: "Global docs in the DSH sidebar: read your own Markdown notes from any workspace — a file list, an outline, open in Chrome / VS Code, and copy buttons; the docs directory is configurable (default ~/.dsh/docs)",
-		kernelTabTitle: "Workbench",
-		kernelGuideTitle: "Side workbench",
-		kernelGuideDescription: "File tree + editor + terminal + source control + browser — this plugin’s workbench, docked in the kernel’s own right sidebar"
+		pluginEgoBrowserDesc: "The agent browser for DeepSeek Harness: 32 ego_* tools drive a real Chromium, with a native sidebar \"ego browser\" tab giving a live view of every page the agent visits — you can click, drag, and type to take over. Registers the tab automatically when better-sidebar is present, otherwise falls back to a floating bubble",
+		pluginBetterOverleafDesc: "Overleaf tab for better-sidebar: direct-CDP browser login (third-party Chromium supported), project list/switch, local git mirrors under <workspace>/overleaf/, two-way git sync with read-only API fallback, and file preview through the sidebar workbench",
+		pluginBilingualReaderDesc: "Read paper PDFs in the DSH sidebar: native PDF rendering, select text to translate it with the LLM, using context while staying fully isolated from the main conversation — a reading aid only",
+		pluginSentinelName: "dsh-sentinel Wake-up System",
+		pluginEgoBrowserName: "ego-browser Agent Browser",
+		pluginBetterOverleafName: "dsh-better-overleaf Overleaf Tab",
+		pluginDocsPanelName: "dsh-docs-panel Global Docs",
+		pluginFlowglassName: "dsh-flowglass Flowglass",
+		pluginGitForgeName: "dsh-git-forge Git Credentials",
+		pluginGitRemotesName: "dsh-git-remotes Git Remotes",
+		pluginGithubWorkbenchName: "dsh-github-workbench GitHub Workbench",
+		pluginSidebarQaName: "dsh-sidebar-qa Select & Ask",
+		pluginSidenoteName: "dsh-sidenote Side Chat",
+		pluginServerDeckName: "dsh-server-deck Server Deck",
+		pluginSuhuangScrollName: "dsh-suhuang-scroll Suhuang Scroll",
+		pluginSshTunnelName: "dsh-ssh-tunnel SSH Tunnel",
+		pluginTurnReviewName: "dsh-turn-review Turn Review",
+		pluginBilingualReaderName: "dsh-bilingual-reader Bilingual Reader",
+		pluginOfficeName: "Office Preview",
+		pluginMdExportName: "Markdown Export",
+		pluginCodeNavName: "Code Preview Navigator",
+		pluginVideoPreviewName: "Video Preview",
+		presetDshDesktopDesc: "Electron advanced (frameless) mode: macOS reserves a 20px top strip; Windows reserves a 32px title bar when WCO is unavailable"
 	};
 	/**
 	* The active locale id ('zh' | 'en'): the DSH locale service's snapshot when
@@ -199953,7 +200350,9 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 	}
 	/** Translate a copy key; `{name}` placeholders interpolate from `params`. */
 	function t(key, params) {
-		let text = (activeLocale().toLowerCase().startsWith("zh") ? zh : en)[key];
+		let text = void 0;
+		if (text === void 0) text = (activeLocale().toLowerCase().startsWith("zh") ? zh : en)[key];
+		if (text === void 0) text = key;
 		if (params !== void 0) for (const [name, value] of Object.entries(params)) text = text.replaceAll(`{${name}}`, String(value));
 		return text;
 	}
@@ -200041,8 +200440,84 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		return new XMLSerializer().serializeToString(doc.documentElement);
 	}
 	//#endregion
-	//#region \0dsh-css:C:\Users\delinger\Desktop\dsh\dsh-desktop\assets\plugins\dsh-better-sidebar\src\client\sidebar.module.css.mjs
-	const css = "[data-dsh-panel-host]{z-index:1001;pointer-events:none;position:fixed;inset:0}body:has([class$=_overlay]) [data-dsh-panel-host]{z-index:40}[data-dsh-panel-host][data-dsh-panel-host-degraded]{position:absolute;top:0;left:0}._4ve_2a_toggleCluster{top:calc(3px + env(safe-area-inset-top));z-index:45;pointer-events:auto;flex-direction:row;gap:4px;display:flex;position:absolute;right:10px}._4ve_2a_panel:not(._4ve_2a_panelHidden) ._4ve_2a_tabBar{padding-right:72px}._4ve_2a_toggleButton{width:28px;height:28px;color:var(--dsw-alias-label-secondary);cursor:pointer;transition:background var(--ds-transition-duration-slow) var(--ds-ease-in-out), color var(--ds-transition-duration-slow) var(--ds-ease-in-out);background:0 0;border:none;border-radius:50%;justify-content:center;align-items:center;display:flex}._4ve_2a_toggleButton:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_toggleButton:disabled{opacity:.4;cursor:default}._4ve_2a_panelResize{cursor:col-resize;z-index:2;touch-action:none;width:8px;position:absolute;top:0;bottom:0;left:-4px}._4ve_2a_panelResizeActive{background:var(--dsw-alias-interactive-bg-hover-accent)}._4ve_2a_panelBody{flex:1;min-width:0;min-height:0;display:flex}._4ve_2a_bottomPanel{z-index:40;background:var(--dsw-alias-bg-layer-1);border-top:1px solid var(--dsw-alias-border-l2);pointer-events:auto;padding-bottom:env(safe-area-inset-bottom);transition:transform var(--ds-transition-duration-slow) var(--ds-ease-in-out), height var(--ds-transition-duration-slow) var(--ds-ease-in-out);flex-direction:column;display:flex;position:absolute;bottom:0}._4ve_2a_bottomPanelHidden{pointer-events:none;visibility:hidden;transition:transform var(--ds-transition-duration-slow) var(--ds-ease-in-out), height var(--ds-transition-duration-slow) var(--ds-ease-in-out), visibility 0s linear var(--ds-transition-duration-slow);transform:translateY(102%)}._4ve_2a_bottomPanel[data-dragging]{transition:none}._4ve_2a_panel,._4ve_2a_bottomPanel{contain:layout style}._4ve_2a_kernelPane{flex-direction:column;display:flex;position:absolute;inset:0;overflow:hidden}._4ve_2a_panelKernel{visibility:visible;flex-direction:column;flex:auto;width:100%;height:100%;min-height:0;display:flex;position:relative;inset:auto;overflow:hidden;transform:none}body[data-dsh-sidebar-dragging] ._4ve_2a_panel,body[data-dsh-sidebar-dragging] ._4ve_2a_bottomPanel{will-change:transform}._4ve_2a_bottomResize{cursor:row-resize;z-index:2;touch-action:none;height:8px;position:absolute;top:-4px;left:0;right:0}._4ve_2a_bottomResizeActive{background:var(--dsw-alias-interactive-bg-hover-accent)}._4ve_2a_bottomClose{z-index:4;width:28px;height:28px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:50%;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex;position:absolute;top:3px;right:6px}._4ve_2a_bottomClose:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_bottomPanel ._4ve_2a_tabBar{padding-right:40px}._4ve_2a_toggleCluster,._4ve_2a_toggleButton,._4ve_2a_tabBar{-webkit-app-region:no-drag}body[data-dsh-title-bar-compat] ._4ve_2a_toggleCluster{top:calc(var(--dsh-title-bar-strip,40px) + 3px)}body[data-dsh-title-bar-compat] ._4ve_2a_panel{padding-top:var(--dsh-title-bar-strip,40px)}._4ve_2a_cornerHandle{left:-6px;bottom:calc(var(--dsh-sidebar-height,0px) + 6px);z-index:2;cursor:nwse-resize;touch-action:none;width:12px;height:12px;position:absolute}._4ve_2a_cornerHandle:hover,._4ve_2a_cornerHandle[data-dragging]{background:var(--dsw-alias-interactive-bg-hover-accent)}._4ve_2a_iconButton{width:28px;height:28px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:50%;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}._4ve_2a_iconButton:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_iconButton:disabled{opacity:.4;cursor:default}._4ve_2a_workbench,._4ve_2a_split{flex:1;min-width:0;min-height:0;display:flex}._4ve_2a_splitRow{flex-direction:row}._4ve_2a_splitCol{flex-direction:column}._4ve_2a_splitChild{display:flex;position:relative;overflow:hidden}body:not([data-dsh-sidebar-collapsed]) ._9JjVLG_slot{display:block!important}body:not([data-dsh-sidebar-collapsed]) ._9JjVLG_frame{right:calc(-16px - var(--dsh-composer-side-clearance,16px))!important}._4ve_2a_divider{z-index:3;touch-action:none;flex:none;position:relative}._4ve_2a_dividerRow:after,._4ve_2a_dividerCol:after{content:\"\";background:var(--dsw-alias-border-l2);transition:background var(--ds-transition-duration-slow) var(--ds-ease-in-out);position:absolute}._4ve_2a_dividerRow{cursor:col-resize;width:7px;margin:0 -2px}._4ve_2a_dividerRow:after{width:1px;top:0;bottom:0;left:50%;transform:translate(-50%)}._4ve_2a_dividerCol{cursor:row-resize;height:7px;margin:-2px 0}._4ve_2a_dividerCol:after{height:1px;top:50%;left:0;right:0;transform:translateY(-50%)}._4ve_2a_divider:hover:after,._4ve_2a_dividerActive:after{background:var(--dsw-alias-interactive-bg-hover-accent)}._4ve_2a_pane{background:var(--dsw-alias-bg-base);flex-direction:column;flex:1;min-width:0;min-height:0;display:flex;position:relative}._4ve_2a_paneDrop{outline:1px solid var(--dsw-alias-interactive-bg-hover-accent);outline-offset:-1px}._4ve_2a_dropOverlay{z-index:6;pointer-events:none;background:var(--dsw-alias-interactive-bg-hover-accent);opacity:.5;position:absolute}._4ve_2a_dropLeft{width:25%;top:0;bottom:0;left:0}._4ve_2a_dropRight{width:25%;top:0;bottom:0;right:0}._4ve_2a_dropUp{height:25%;top:0;left:0;right:0}._4ve_2a_dropDown{height:25%;bottom:0;left:0;right:0}._4ve_2a_dropCenter{outline:2px dashed var(--dsw-alias-interactive-bg-hover-accent);outline-offset:-2px;background:0 0;inset:25%}._4ve_2a_paneContent{flex-direction:column;flex:1;min-height:0;display:flex;overflow:hidden}._4ve_2a_paneTab{flex-direction:column;flex:1;min-height:0;display:flex}._4ve_2a_paneTabHidden{display:none}._4ve_2a_paneEmptyCards{flex:1;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));align-content:start;gap:8px;min-height:0;padding:12px;display:grid;overflow:hidden}._4ve_2a_paneCard{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);min-width:0;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-strong-12);cursor:pointer;text-align:center;border-radius:8px;flex-direction:column;justify-content:center;align-items:center;gap:6px;padding:12px 8px;display:flex}._4ve_2a_paneCard:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l2)}._4ve_2a_paneCard:disabled{opacity:.45;cursor:default}._4ve_2a_tabBar{border-bottom:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);flex:none;align-items:stretch;height:34px;display:flex}._4ve_2a_tabBarDrop{outline:1px dashed var(--dsw-alias-interactive-bg-hover-accent);outline-offset:-1px}._4ve_2a_tabList{scrollbar-width:none;flex:1;min-width:0;display:flex;overflow-x:auto}._4ve_2a_tabList::-webkit-scrollbar{display:none}._4ve_2a_tab{min-width:64px;max-width:160px;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-secondary);border-right:1px solid var(--dsw-alias-border-l1);cursor:pointer;user-select:none;background:0 0;flex:none;align-items:center;gap:4px;padding:0 4px 0 10px;display:flex}._4ve_2a_tab:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_tabActive{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-active)}._4ve_2a_tabTitle{text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;overflow:hidden}._4ve_2a_tabBadge{min-width:16px;height:15px;font:var(--dsw-font-xxxs-strong-11);background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-brand-primary);border-radius:8px;flex:none;justify-content:center;align-items:center;padding:0 4px;display:inline-flex}._4ve_2a_tabClose{width:18px;height:18px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:4px;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}._4ve_2a_tabClose:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_tabBarPlus{background:var(--dsw-alias-bg-layer-1);width:22px;height:22px;color:var(--dsw-alias-label-tertiary);cursor:pointer;border:none;border-radius:5px;flex:none;justify-content:center;align-self:center;align-items:center;margin:0 6px;padding:0;display:inline-flex;position:sticky;right:0}._4ve_2a_tabBarPlus:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_explorer{flex-direction:column;flex:1;min-height:0;display:flex}._4ve_2a_explorerHeader{flex:none;justify-content:space-between;align-items:center;gap:8px;height:36px;padding:0 8px 0 12px;display:flex}._4ve_2a_explorerRoot{font:var(--dsw-font-s-14);color:var(--dsw-alias-label-secondary);text-overflow:ellipsis;white-space:nowrap;overflow:hidden}._4ve_2a_explorerBody{flex:1;min-height:0;padding:2px 6px 8px;overflow:hidden auto}._4ve_2a_explorerRow{box-sizing:border-box;width:100%;max-width:100%;height:34px;font:var(--dsw-font-s-14);color:var(--dsw-alias-label-primary);text-align:left;cursor:pointer;white-space:nowrap;animation:_4ve_2a_dsh-row-in .15s var(--ds-ease-in-out);background:0 0;border:none;border-radius:8px;align-items:center;gap:6px;padding:0 8px;display:flex}._4ve_2a_explorerRow:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_explorerDir{font:var(--dsw-font-s-strong-14)}._4ve_2a_explorerHidden{opacity:.45}._4ve_2a_explorerSymlink{color:var(--dsw-alias-label-tertiary);flex:none}._4ve_2a_explorerBroken ._4ve_2a_explorerName{color:var(--dsw-alias-state-error-primary)}._4ve_2a_explorerName{text-overflow:ellipsis;white-space:nowrap;min-width:0;overflow:hidden}._4ve_2a_explorerRef{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);height:20px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-strong-11);cursor:pointer;border-radius:999px;flex:none;align-items:center;padding:0 8px;display:none}._4ve_2a_explorerRef:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_explorerRow:hover ._4ve_2a_explorerRef,._4ve_2a_explorerRow:focus-within ._4ve_2a_explorerRef{display:inline-flex}._4ve_2a_explorerCopied{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);flex:none}._4ve_2a_explorerError{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-error-primary);cursor:default}@keyframes _4ve_2a_dsh-row-in{0%{opacity:0}}._4ve_2a_explorerEmpty{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);text-align:center;padding:16px}body{--dsh-file-icon-folder:#b98a3e;--dsh-file-icon-js:#c9a000;--dsh-file-icon-ts:#3178c6;--dsh-file-icon-json:#a4912a;--dsh-file-icon-md:#4f9a50;--dsh-file-icon-css:#c86b2f;--dsh-file-icon-html:#d46a1f;--dsh-file-icon-image:#a855b0}body[data-ds-dark-theme]{--dsh-file-icon-folder:#dcb67a;--dsh-file-icon-js:#e8c44b;--dsh-file-icon-ts:#56a8d8;--dsh-file-icon-json:#cbcb41;--dsh-file-icon-md:#69a864;--dsh-file-icon-css:#d18f52;--dsh-file-icon-html:#e37933;--dsh-file-icon-image:#c586e0}._4ve_2a_explorerIconFolder{color:var(--dsh-file-icon-folder)}._4ve_2a_explorerIconJs{color:var(--dsh-file-icon-js)}._4ve_2a_explorerIconTs{color:var(--dsh-file-icon-ts)}._4ve_2a_explorerIconJson{color:var(--dsh-file-icon-json)}._4ve_2a_explorerIconMd{color:var(--dsh-file-icon-md)}._4ve_2a_explorerIconCss{color:var(--dsh-file-icon-css)}._4ve_2a_explorerIconHtml{color:var(--dsh-file-icon-html)}._4ve_2a_explorerIconImage{color:var(--dsh-file-icon-image)}._4ve_2a_explorerRowDropTarget{background:var(--dsw-alias-interactive-bg-hover);outline:1px dashed var(--dsw-alias-interactive-bg-hover-accent);outline-offset:-1px}._4ve_2a_uploadDropZone{z-index:1001;pointer-events:none;border:2px dashed var(--dsw-alias-interactive-bg-hover-accent);box-shadow:0 0 0 200vmax var(--dsw-alias-bg-mask-drop);animation:_4ve_2a_dsh-row-in .15s var(--ds-ease-in-out);border-radius:10px;justify-content:center;align-items:flex-start;padding:12px;display:flex;position:fixed}._4ve_2a_uploadDropHero{flex-direction:column;align-items:center;gap:10px;max-width:100%;padding-top:8px;display:flex}._4ve_2a_uploadDropZonePill{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);max-width:100%;box-shadow:var(--dsw-shadow-lv2);color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-strong-12);border-radius:999px;align-items:center;gap:6px;padding:6px 12px;display:flex}._4ve_2a_uploadDropZoneText{white-space:nowrap;text-overflow:ellipsis;overflow:hidden}._4ve_2a_uploadDropChatHint{z-index:1002;pointer-events:none;animation:_4ve_2a_dsh-row-in .15s var(--ds-ease-in-out);justify-content:center;align-items:center;padding:24px;display:flex;position:fixed;top:0;bottom:0;left:0}._4ve_2a_uploadDropChatCard{text-align:center;max-width:100%;color:var(--dsw-alias-label-primary);font:var(--dsw-font-s-strong-14);flex-direction:column;align-items:center;gap:12px;display:flex}._4ve_2a_uploadOverlay{z-index:30;background:var(--dsw-alias-bg-mask-1);backdrop-filter:var(--dsw-mask-blur);animation:_4ve_2a_dsh-row-in .15s var(--ds-ease-in-out);justify-content:center;align-items:center;display:flex;position:absolute;inset:0}._4ve_2a_uploadOverlayCard{border:1px solid var(--dsw-alias-border-inverted);background:var(--dsw-alias-bg-layer-2);min-width:280px;max-width:min(420px,100% - 48px);box-shadow:var(--dsw-shadow-lv3);border-radius:24px;flex-direction:column;gap:12px;padding:20px 24px;display:flex}._4ve_2a_uploadOverlayTitle{font:var(--dsw-font-s-strong-14);color:var(--dsw-alias-label-primary);align-items:center;gap:8px;display:flex}._4ve_2a_uploadOverlayTitle>svg{flex:none}._4ve_2a_uploadOverlayTitle>span{white-space:nowrap;text-overflow:ellipsis;min-width:0;overflow:hidden}._4ve_2a_uploadOverlayProgress{background:var(--dsw-alias-border-l2);border-radius:3px;height:6px;overflow:hidden}._4ve_2a_uploadOverlayProgressFill{background:var(--dsw-alias-interactive-bg-hover-accent);height:100%;transition:width .15s var(--ds-ease-in-out);border-radius:3px}._4ve_2a_uploadOverlayStatus{min-height:1em;font:var(--dsw-font-xxs-12);font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-tertiary);white-space:nowrap;text-overflow:ellipsis;overflow:hidden}._4ve_2a_uploadOverlayCancel{border:1px solid var(--dsw-alias-border-l2);height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-strong-12);cursor:pointer;background:0 0;border-radius:8px;align-self:flex-end;padding:0 14px}._4ve_2a_uploadOverlayCancel:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);border-color:var(--dsw-alias-border-l2)}._4ve_2a_uploadOverlayCancel:disabled{opacity:.4;cursor:default}._4ve_2a_editor{flex-direction:column;flex:1;min-height:0;display:flex}._4ve_2a_editorHeader{border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;align-items:center;gap:6px;padding:4px 8px;display:flex}._4ve_2a_editorBack{width:22px;height:22px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:6px;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}._4ve_2a_editorBack:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_editorTitle{min-width:0;font:var(--dsw-font-xxs-strong-12);color:var(--dsw-alias-label-secondary);text-overflow:ellipsis;white-space:nowrap;flex:1;overflow:hidden}._4ve_2a_editorPathInput{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);min-width:0;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);border-radius:6px;flex:1;padding:0 10px}._4ve_2a_editorPathInput:focus{border-color:var(--dsw-alias-border-l2);outline:none}._4ve_2a_editorTreeToggleActive{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-active)}._4ve_2a_editorBody{flex:1;min-height:0;display:flex}._4ve_2a_editorMain{flex-direction:column;flex:1;min-width:0;min-height:0;display:flex}._4ve_2a_editorTreeDock{border-right:1px solid var(--dsw-alias-border-l1);flex:none;min-height:0;display:flex;position:relative}._4ve_2a_editorTreeResize{cursor:col-resize;touch-action:none;z-index:3;width:6px;position:absolute;top:0;bottom:0;right:0}._4ve_2a_editorTreeResize:hover{background:var(--dsw-alias-border-l2)}._4ve_2a_editorTreePanel{flex-direction:column;flex:1;min-width:0;min-height:0;display:flex;position:relative}._4ve_2a_editorTreePanelFull{flex:1}._4ve_2a_explorerRail{border-right:1px solid var(--dsw-alias-border-l1);flex-direction:column;flex:none;min-width:0;min-height:0;display:flex;position:relative}._4ve_2a_explorerRailHeader{border-bottom:1px solid var(--dsw-alias-border-l1);height:30px;color:var(--dsw-alias-label-secondary);flex:none;align-items:center;gap:6px;padding:0 4px 0 10px;display:flex}._4ve_2a_explorerRailTitle{text-overflow:ellipsis;white-space:nowrap;letter-spacing:.04em;text-transform:uppercase;flex:1;min-width:0;font-size:11px;font-weight:600;overflow:hidden}._4ve_2a_explorerRailCollapsed{border-right:1px solid var(--dsw-alias-border-l1);width:30px;min-height:0;color:var(--dsw-alias-label-secondary);flex:none;justify-content:center;align-items:flex-start;padding-top:4px;display:flex}._4ve_2a_editorTreeSearch{border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;align-items:center;gap:4px;padding:6px 8px;display:flex}._4ve_2a_editorSearchInput{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);min-width:0;height:26px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);border-radius:6px;flex:1;padding:0 10px}._4ve_2a_editorSearchInput:focus{border-color:var(--dsw-alias-border-l2);outline:none}._4ve_2a_editorSearchHint{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);padding:8px 12px}._4ve_2a_editorSearchResult{width:100%;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);text-align:left;cursor:pointer;text-overflow:ellipsis;white-space:nowrap;background:0 0;border:none;border-radius:6px;padding:4px 8px;display:block;overflow:hidden}._4ve_2a_editorSearchResult:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_editorStatus{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}._4ve_2a_editorStatusError{color:var(--dsw-alias-state-error-primary)}._4ve_2a_dirtyDot{background:var(--dsw-alias-state-warn-primary);border-radius:50%;flex:none;width:7px;height:7px}._4ve_2a_editorPlaceholder{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);text-align:center;flex:1;justify-content:center;align-items:center;padding:16px;display:flex}._4ve_2a_orphanedType{opacity:.7;overflow-wrap:anywhere;margin-top:8px;font-size:12px;display:block}._4ve_2a_editorBinary{text-align:center;flex-direction:column;flex:1;justify-content:center;align-items:center;gap:12px;padding:24px 16px;display:flex}._4ve_2a_editorBinaryNotice{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary)}._4ve_2a_editorDownloadLink{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-strong-12);cursor:pointer;transition:background var(--ds-transition-duration-slow) var(--ds-ease-in-out), border-color var(--ds-transition-duration-slow) var(--ds-ease-in-out);border-radius:6px;align-items:center;gap:6px;padding:6px 14px;text-decoration:none;display:inline-flex}._4ve_2a_editorDownloadLink:hover{background:var(--dsw-alias-interactive-bg-hover);border-color:var(--dsw-alias-border-l2)}._4ve_2a_editorError{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-error-primary);padding:12px 16px}._4ve_2a_editorBanner{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-state-warn-label);background:var(--dsw-alias-state-warn-tertiary);flex:none;padding:4px 12px}._4ve_2a_sandboxStatus{font:var(--dsw-font-xxxs-11);flex:none;align-items:center;gap:8px;padding:4px 10px;display:flex}._4ve_2a_sandboxStatusOn{color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-bg-layer-1);border-bottom:1px solid var(--dsw-alias-border-l1)}._4ve_2a_sandboxStatusOff{color:var(--dsw-alias-state-error-primary);background:color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent);border-bottom:1px solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent)}._4ve_2a_sandboxDot{background:var(--dsw-alias-state-success-primary);border-radius:50%;flex:none;width:6px;height:6px}._4ve_2a_sandboxStatusOff ._4ve_2a_sandboxDot{background:var(--dsw-alias-state-error-primary)}._4ve_2a_sandboxStatusText{text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;overflow:hidden}._4ve_2a_sandboxAction{border:1px solid var(--dsw-alias-border-l2);font:inherit;color:inherit;cursor:pointer;background:0 0;border-radius:6px;flex:none;padding:2px 8px}._4ve_2a_sandboxAction:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_editorHtml{background:var(--dsw-alias-bg-base);border:none;flex:1;width:100%;min-height:0}._4ve_2a_browser{flex-direction:column;flex:1;min-height:0;display:flex}._4ve_2a_browserBar{border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;align-items:center;gap:4px;padding:6px 8px;display:flex}._4ve_2a_browserInput{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);min-width:0;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);border-radius:6px;flex:1;padding:0 10px}._4ve_2a_browserInput:focus{border-color:var(--dsw-alias-border-l2);outline:none}._4ve_2a_browserMessage{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-state-warn-label);background:var(--dsw-alias-state-warn-tertiary);flex:none;padding:4px 12px}._4ve_2a_browserFrame{background:var(--dsw-alias-bg-base);border:none;flex:1;width:100%;min-height:0}._4ve_2a_browserStart{text-align:center;min-height:0;font:var(--dsw-font-xs-13);color:var(--dsw-alias-label-tertiary);flex:1;justify-content:center;align-items:center;padding:20px;display:flex}._4ve_2a_browserBlocked{text-align:center;min-height:0;color:var(--dsw-alias-state-warn-primary);flex-direction:column;flex:1;justify-content:center;align-items:center;gap:6px;padding:24px;display:flex}._4ve_2a_browserBlockedTitle{font:var(--dsw-font-xxs-strong-12);color:var(--dsw-alias-label-primary)}._4ve_2a_browserBlockedDesc{max-width:280px;font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-secondary)}._4ve_2a_browserBlockedActions{gap:8px;margin-top:6px;display:flex}._4ve_2a_browserBlockedButton{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxxs-11);cursor:pointer;border-radius:6px;padding:4px 12px}._4ve_2a_browserBlockedButton:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_editorCm{background:0 0;flex:1;min-height:0;overflow:hidden}._4ve_2a_editorCmHidden{display:none}._4ve_2a_editorCm .cm-editor{height:100%}._4ve_2a_editorCm .cm-editor.cm-focused{outline:none}._4ve_2a_editorModeToggle{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);border-radius:6px;flex:none;align-items:center;gap:2px;padding:2px;display:inline-flex}._4ve_2a_editorModeButton{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);cursor:pointer;background:0 0;border:none;border-radius:4px;padding:2px 8px}._4ve_2a_editorModeButton:hover{color:var(--dsw-alias-label-primary)}._4ve_2a_editorModeActive{background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary)}._4ve_2a_editorImageWrap{flex:1;justify-content:center;align-items:center;min-height:0;padding:12px;display:flex;overflow:auto}._4ve_2a_editorImage{object-fit:contain;max-width:100%;max-height:100%}._4ve_2a_editorMd{min-height:0;font:var(--dsw-font-xs-13);--dsh-md-accent:var(--dsw-alias-state-business-primary);--dsh-md-border:var(--dsw-alias-border-l2);--dsh-md-quote-bg:color-mix(in srgb, var(--dsw-alias-state-business-primary) 8%, transparent);--dsh-md-table-head-bg:var(--dsw-alias-interactive-bg-hover);--dsh-md-table-stripe:color-mix(in srgb, var(--dsw-alias-interactive-bg-hover) 45%, transparent);flex:1;padding:10px 14px;overflow-y:auto}._4ve_2a_editorMd h1,._4ve_2a_editorMd h2{border-bottom:1px solid var(--dsh-md-border);color:var(--dsw-alias-label-primary);padding-bottom:.35em;font-weight:700}._4ve_2a_editorMd h3,._4ve_2a_editorMd h4,._4ve_2a_editorMd h5,._4ve_2a_editorMd h6{color:var(--dsw-alias-label-secondary)}._4ve_2a_editorMd a{text-underline-offset:3px}._4ve_2a_editorMd blockquote{border-left:3px solid var(--dsh-md-accent);background:var(--dsh-md-quote-bg);color:var(--dsw-alias-label-secondary);border-radius:0 8px 8px 0;margin:16px 0;padding:6px 14px}._4ve_2a_editorMd blockquote p:last-child{margin-bottom:0}._4ve_2a_editorMd .md-code-block{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-markdown-code-block);border-radius:10px;overflow:hidden}._4ve_2a_editorMd .md-code-block pre{background:var(--dsw-alias-markdown-code-block)!important}._4ve_2a_editorMd th{background:var(--dsh-md-table-head-bg);font-weight:650}._4ve_2a_editorMd th,._4ve_2a_editorMd td{border:1px solid var(--dsh-md-border)}._4ve_2a_editorMd tbody tr:nth-child(2n){background:var(--dsh-md-table-stripe)}._4ve_2a_editorMd li::marker{color:var(--dsh-md-accent)}._4ve_2a_editorMd img{border:1px solid var(--dsw-alias-border-l1);border-radius:8px}._4ve_2a_mermaidWrap{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);border-radius:6px;margin:6px 0;overflow:hidden}._4ve_2a_mermaidHeader{border-bottom:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);justify-content:space-between;align-items:center;gap:6px;padding:4px 8px;display:flex}._4ve_2a_mermaidInfo{font:var(--dsw-font-xxxs-strong-11);color:var(--dsw-alias-label-tertiary)}._4ve_2a_mermaidCopy{height:20px;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);cursor:pointer;background:0 0;border:none;border-radius:4px;align-items:center;gap:4px;padding:0 6px;display:inline-flex}._4ve_2a_mermaidCopy:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_mermaidBody{cursor:zoom-in;justify-content:center;padding:10px;display:flex;overflow:auto}._4ve_2a_mermaidBody svg{max-width:100%;height:auto}._4ve_2a_mermaidError{border-bottom:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-state-error-primary);font:var(--dsw-font-xxxs-11);padding:6px 10px}._4ve_2a_mermaidCode{font:var(--dsw-font-xxxs-11);margin:0;padding:8px 10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow:auto}._4ve_2a_mermaidMarkdown .md-code-block[data-mermaid-processed]{display:contents}._4ve_2a_mermaidModal{z-index:1000;background:var(--dsw-alias-bg-mask-1);backdrop-filter:blur(2px);flex-direction:column;justify-content:center;align-items:center;display:flex;position:fixed;inset:0}._4ve_2a_mermaidModalToolbar{z-index:10;gap:8px;display:flex;position:absolute;top:16px;right:16px}._4ve_2a_mermaidModalButton{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);width:36px;height:36px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xs-strong-13);cursor:pointer;border-radius:8px;justify-content:center;align-items:center;display:inline-flex}._4ve_2a_mermaidModalButton:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_mermaidModalStage{justify-content:center;align-items:center;width:90vw;height:80vh;display:flex;position:relative;overflow:hidden}._4ve_2a_mermaidModalStage svg{cursor:grab;transform-origin:50%;user-select:none;-webkit-user-drag:none;background:var(--dsw-alias-bg-layer-1);border-radius:12px;max-width:none;max-height:none;padding:16px}._4ve_2a_mermaidModalStage svg:active{cursor:grabbing}._4ve_2a_mermaidModalHint{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);pointer-events:none;position:absolute;bottom:16px;left:50%;transform:translate(-50%)}._4ve_2a_selectionPopup{z-index:60;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxxs-strong-11);white-space:nowrap;cursor:pointer;border-radius:6px;align-items:center;padding:0 10px;display:inline-flex;position:fixed;transform:translate(-50%,calc(-100% - 8px))}._4ve_2a_selectionPopup:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_editorPdf{background:var(--dsw-alias-bg-base);flex-direction:column;flex:1;min-height:0;display:flex}._4ve_2a_editorPdfToolbar{border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;justify-content:flex-end;padding:6px 8px;display:flex}._4ve_2a_editorPdfStage{flex:1;min-height:0;display:flex;position:relative}._4ve_2a_editorPdfFrame{background:var(--dsw-alias-bg-base);border:none;flex:1;width:100%;min-height:0}._4ve_2a_editorPdfFrameBlocked{pointer-events:none}._4ve_2a_editorPdfDragShield{z-index:4;pointer-events:none;background:0 0;position:absolute;inset:0}._4ve_2a_editorPdfDragShieldActive{pointer-events:auto}body[data-dsh-tab-dragging] ._4ve_2a_editorPdfFrame{pointer-events:none!important}body[data-dsh-tab-dragging] ._4ve_2a_editorPdfDragShield{pointer-events:auto!important}._4ve_2a_terminalWrap{background:var(--dsw-alias-bg-base);flex-direction:column;flex:1;min-height:0;display:flex;position:relative}._4ve_2a_terminal{flex:1;min-height:0;padding:6px 4px 6px 8px}._4ve_2a_terminal .xterm{height:100%}._4ve_2a_terminalBanner{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-state-warn-label);background:var(--dsw-alias-state-warn-tertiary);flex-wrap:wrap;flex:none;align-items:center;gap:8px;padding:3px 10px;display:flex}._4ve_2a_terminalBannerUrl{word-break:break-all;opacity:.85;flex-basis:100%;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}._4ve_2a_boundaryError{z-index:50;background:var(--dsw-alias-bg-layer-1);border-left:1px solid var(--dsw-alias-border-l2);font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-error-primary);flex-direction:column;align-items:flex-start;gap:8px;padding:16px;display:flex;position:fixed;top:0;bottom:0;right:0;overflow:auto}._4ve_2a_terminalRetry{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-strong-11);cursor:pointer;border-radius:999px;flex:none;padding:1px 8px}._4ve_2a_terminalRetry:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_terminalDepsBanner{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-warn-label);background:var(--dsw-alias-state-warn-tertiary);flex-direction:column;flex:none;gap:6px;padding:10px;display:flex}._4ve_2a_terminalDepsTitle{font:var(--dsw-font-xxs-strong-12);color:var(--dsw-alias-state-warn-primary)}._4ve_2a_terminalDepsHint{opacity:.9}._4ve_2a_terminalDepsCommandRow{align-items:flex-start;gap:8px;display:flex}._4ve_2a_terminalRepairCommand{white-space:pre-wrap;word-break:break-all;user-select:text;min-width:0;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l2);border-radius:4px;flex:1;max-height:160px;margin:0;padding:6px 8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.5;overflow:auto}._4ve_2a_terminalDepsNote{opacity:.85}._4ve_2a_terminalDepsActions{align-items:center;gap:8px;display:flex}._4ve_2a_tabBoundaryError{min-height:0;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-error-primary);flex-direction:column;flex:1;align-items:flex-start;gap:8px;padding:12px 16px;display:flex;overflow:auto}._4ve_2a_git{flex-direction:column;flex:1;min-width:0;min-height:0;display:flex;overflow:hidden auto}._4ve_2a_gitHeader{flex:none;align-items:center;gap:8px;height:36px;padding:0 8px 0 12px;display:flex}._4ve_2a_gitBranchSelect{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);min-width:0;height:26px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);border-radius:6px;flex:1;padding:0 6px}._4ve_2a_gitSection{border-top:1px solid var(--dsw-alias-border-l1)}._4ve_2a_gitSectionHeader{font:var(--dsw-font-xxxs-strong-11);color:var(--dsw-alias-label-tertiary);text-transform:uppercase;justify-content:space-between;align-items:center;padding:6px 12px 4px;display:flex}._4ve_2a_gitLink{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-brand-primary);cursor:pointer;background:0 0;border:none;padding:0}._4ve_2a_gitLink:hover:not(:disabled){text-decoration:underline}._4ve_2a_gitLink:disabled{opacity:.4;cursor:default}._4ve_2a_gitRow{min-height:34px;animation:_4ve_2a_dsh-row-in .15s var(--ds-ease-in-out);border-radius:8px;align-items:center;gap:6px;margin:0 6px;padding:0 8px;display:flex}._4ve_2a_gitRow:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_gitRowSelected{background:var(--dsw-alias-interactive-bg-active)}._4ve_2a_gitRowMain{cursor:pointer;text-align:left;background:0 0;border:none;flex:1;align-items:center;gap:8px;min-width:0;padding:3px 0;display:flex}._4ve_2a_gitBadge{width:20px;height:16px;font:var(--dsw-font-xxxs-strong-11);background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);border-radius:4px;flex:none;justify-content:center;align-items:center;display:inline-flex}._4ve_2a_gitName{text-overflow:ellipsis;white-space:nowrap;min-width:0;font:var(--dsw-font-s-14);color:var(--dsw-alias-label-primary);flex:1;overflow:hidden}._4ve_2a_gitEmpty{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);padding:4px 12px 8px}._4ve_2a_gitPlaceholder{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);text-align:center;padding:16px}._4ve_2a_gitError{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-error-primary);white-space:pre-wrap;padding:8px 12px}._4ve_2a_gitDiff{border-top:1px solid var(--dsw-alias-border-l1);padding:8px}._4ve_2a_gitDiffTab{flex-direction:column;flex:1;min-width:0;min-height:0;display:flex;overflow:hidden auto}._4ve_2a_gitDiffTabHeader{border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;align-items:center;gap:8px;height:36px;padding:0 8px 0 12px;display:flex}._4ve_2a_gitDiffTabTitle{text-overflow:ellipsis;white-space:nowrap;min-width:0;font:var(--dsw-font-xxs-strong-12);color:var(--dsw-alias-label-primary);flex:1;overflow:hidden}._4ve_2a_gitDiffFile{width:100%;color:inherit;text-align:left;cursor:pointer;background:0 0;border:0;align-items:baseline;gap:6px;padding:8px 2px 2px;display:flex}._4ve_2a_gitDiffFile:disabled{cursor:default}._4ve_2a_gitDiffFile:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_gitDiffFileChevron{color:var(--dsw-alias-label-tertiary);flex:none;transform:rotate(0)}._4ve_2a_gitDiffFileChevronExpanded{transform:rotate(90deg)}._4ve_2a_gitDiffFilePath{font:var(--dsw-font-xxs-strong-12);color:var(--dsw-alias-label-primary);text-overflow:ellipsis;white-space:nowrap;overflow:hidden}._4ve_2a_gitDiffFileOld{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);text-overflow:ellipsis;white-space:nowrap;flex:none;max-width:40%;overflow:hidden}._4ve_2a_gitDiffFileTag{border:1px solid var(--dsw-alias-border-l2);font:var(--dsw-font-xxxs-strong-11);color:var(--dsw-alias-label-secondary);border-radius:999px;flex:none;padding:0 6px}._4ve_2a_gitDiffHunk{font:var(--dsw-font-markdown-code-block-small);color:var(--dsw-alias-label-tertiary);gap:8px;padding:3px 2px;display:flex}._4ve_2a_gitDiffHunkHeader{color:var(--dsw-alias-label-secondary);flex:none}._4ve_2a_gitDiffHunkSection{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}._4ve_2a_gitDiffLine{font:var(--dsw-font-markdown-code-block-small);white-space:pre-wrap;overflow-wrap:anywhere;align-items:stretch;min-width:0;line-height:20px;display:flex}._4ve_2a_gitDiffNum{text-align:right;width:36px;color:var(--dsw-alias-label-tertiary);user-select:none;flex:none;padding-right:8px}._4ve_2a_gitDiffCode{flex:1;min-width:0;overflow:visible}._4ve_2a_gitDiffCtx{color:var(--dsw-alias-label-primary)}._4ve_2a_gitDiffDel{color:var(--dsw-alias-state-error-primary);background:color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent)}._4ve_2a_gitDiffAdd{color:var(--dsw-alias-state-success-primary);background:color-mix(in srgb, var(--dsw-alias-state-success-primary) 12%, transparent)}._4ve_2a_gitDiffMeta{padding-left:2px}._4ve_2a_gitDiffMetaText{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);font-style:italic}._4ve_2a_gitDiffExpand{width:100%;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-brand-primary);cursor:pointer;text-align:center;background:0 0;border:none;margin:4px 0;display:block}._4ve_2a_gitDiffExpand:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_gitConfirmDesc{font:var(--dsw-font-s-14);color:var(--dsw-alias-label-primary);white-space:pre-wrap;margin:0}._4ve_2a_gitCommit{border-top:1px solid var(--dsw-alias-border-l1);align-items:center;gap:6px;padding:8px 12px;display:flex}._4ve_2a_gitCommitInput{flex:1;min-width:0}._4ve_2a_gitCommitButton{background:var(--dsw-alias-button-primary-fill);height:26px;color:var(--dsw-alias-label-primary-inverted);font:var(--dsw-font-xxs-strong-12);cursor:pointer;border:none;border-radius:6px;flex:none;padding:0 12px}._4ve_2a_gitCommitButton:hover:not(:disabled){background:var(--dsw-alias-button-primary-hover)}._4ve_2a_gitCommitButton:disabled{opacity:.45;cursor:default}._4ve_2a_gitLogRow{cursor:pointer;border-radius:8px;flex-direction:column;gap:2px;padding:5px 12px;display:flex}._4ve_2a_gitLogRow:hover{background:var(--dsw-alias-interactive-bg-hover)}._4ve_2a_gitLogLine1{align-items:baseline;gap:8px;min-width:0;display:flex}._4ve_2a_gitLogHash{font:var(--dsw-font-markdown-code-block-small);color:var(--dsw-alias-label-tertiary);flex:none}._4ve_2a_gitLogLine2{flex-wrap:wrap;align-items:center;gap:6px;min-width:0;display:flex}._4ve_2a_gitLogRef{border:1px solid var(--dsw-alias-border-l2);font:var(--dsw-font-xxxs-strong-11);color:var(--dsw-alias-brand-primary);white-space:nowrap;border-radius:999px;flex:none;padding:0 5px}._4ve_2a_gitLogSubject{text-overflow:ellipsis;white-space:nowrap;min-width:0;font:var(--dsw-font-s-14);color:var(--dsw-alias-label-primary);flex:1;overflow:hidden}._4ve_2a_gitLogMeta{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}._4ve_2a_gitLogMore{border:1px solid var(--dsw-alias-border-l2);width:calc(100% - 24px);font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border-radius:6px;margin:4px 12px 8px;padding:6px 0;display:block}._4ve_2a_gitLogMore:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_gitLogMore:disabled{opacity:.5;cursor:default}._4ve_2a_producedRow{flex-wrap:wrap;align-items:center;gap:8px;padding:4px 0;display:flex}._4ve_2a_producedLabel{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary)}._4ve_2a_producedChip{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);max-width:200px;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12);cursor:pointer;border-radius:999px;align-items:center;gap:4px;padding:2px 8px;display:inline-flex;overflow:hidden}._4ve_2a_producedChip:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_producedChip span{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}._4ve_2a_producedMore{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary)}._4ve_2a_toggleButton:focus-visible,._4ve_2a_bottomClose:focus-visible,._4ve_2a_iconButton:focus-visible,._4ve_2a_tab:focus-visible,._4ve_2a_tabClose:focus-visible,._4ve_2a_tabBarPlus:focus-visible,._4ve_2a_paneCard:focus-visible,._4ve_2a_explorerRow:focus-visible,._4ve_2a_explorerRef:focus-visible,._4ve_2a_gitRowMain:focus-visible,._4ve_2a_gitLink:focus-visible,._4ve_2a_gitCommitButton:focus-visible,._4ve_2a_gitLogRow:focus-visible,._4ve_2a_gitLogMore:focus-visible,._4ve_2a_gitDiffFile:focus-visible,._4ve_2a_gitDiffExpand:focus-visible,._4ve_2a_terminalRetry:focus-visible,._4ve_2a_editorModeButton:focus-visible,._4ve_2a_editorDownloadLink:focus-visible,._4ve_2a_editorPptxButton:focus-visible,._4ve_2a_editorDocxZoomRange:focus-visible{outline:2px solid var(--dsw-alias-interactive-bg-hover-accent);outline-offset:-1px}@media (prefers-reduced-motion:reduce){._4ve_2a_panel,._4ve_2a_panelHidden,._4ve_2a_bottomPanel,._4ve_2a_bottomPanelHidden,._4ve_2a_toggleCluster,._4ve_2a_toggleButton,._4ve_2a_tab,._4ve_2a_tabBarPlus,._4ve_2a_paneCard,._4ve_2a_explorerRow,._4ve_2a_gitRow,._4ve_2a_divider,._4ve_2a_dividerRow:after,._4ve_2a_dividerCol:after{transition:none;animation:none}}@media (width<=767px){._4ve_2a_panel:not(._4ve_2a_panelHidden) ._4ve_2a_tabBar{padding-right:40px}._4ve_2a_tab{min-width:48px;max-width:128px}}._4ve_2a_openWithLabel{align-items:center;gap:8px;width:100%;min-width:0;display:flex}._4ve_2a_openWithName{text-overflow:ellipsis;white-space:nowrap;flex:auto;min-width:0;overflow:hidden}._4ve_2a_openWithChevron{color:var(--dsw-alias-label-tertiary);flex:none}._4ve_2a_openWithPin{width:20px;height:20px;color:var(--dsw-alias-label-tertiary);cursor:pointer;border-radius:6px;flex:none;justify-content:center;align-items:center;display:inline-flex}._4ve_2a_openWithPin:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}._4ve_2a_openWithPinActive{color:var(--dsw-alias-state-business-primary)}";
+	//#region src/client/mermaid-blocks.ts
+	/** CommonMark opening fence: 0-3 spaces indent + a run of 3+ backticks or tildes. */
+	const OPEN_FENCE_RE = /^ {0,3}(`{3,}|~{3,})/;
+	/** A closing-fence line: 0-3 spaces indent + 3+ backticks/tildes + trailing spaces only. */
+	const CLOSE_FENCE_RE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/;
+	/** Parse the info string from the line tail after the fence run; null when invalid. */
+	function fenceInfo(rest, fence) {
+		const info = rest.trimStart().split(/\s+/)[0] ?? "";
+		if (fence.charAt(0) === "`" && info.includes("`")) return null;
+		return info;
+	}
+	/** True when the fence info string names mermaid (bare or `mermaid{...}`). */
+	function isMermaidInfo(info) {
+		const word = info.toLowerCase();
+		return word === "mermaid" || word.startsWith("mermaid{");
+	}
+	/**
+	* Split markdown source into md/mermaid blocks for detection: only fences
+	* whose info string names mermaid are lifted; every other line stays in the
+	* markdown stream untouched. CommonMark fence rules are honored — opening
+	* fences of 3+ backticks OR tildes, and a closing fence must use the same
+	* character with at least as many characters as the opening fence. An
+	* unterminated mermaid fence swallows the rest of the file (the same
+	* recovery CommonMark applies to open fences).
+	*/
+	function splitMermaidBlocks(text) {
+		if (text === "") return [];
+		const lines = text.split("\n");
+		const blocks = [];
+		let markdown = [];
+		let index = 0;
+		const flushMarkdown = () => {
+			if (markdown.length === 0) return;
+			blocks.push({
+				kind: "markdown",
+				text: markdown.join("\n")
+			});
+			markdown = [];
+		};
+		while (index < lines.length) {
+			const line = lines[index] ?? "";
+			const fenceMatch = OPEN_FENCE_RE.exec(line);
+			if (fenceMatch === null) {
+				markdown.push(line);
+				index += 1;
+				continue;
+			}
+			const fence = fenceMatch[1];
+			const info = fenceInfo(line.slice(fenceMatch.index + fenceMatch[0].length), fence);
+			if (info === null || !isMermaidInfo(info)) {
+				markdown.push(line);
+				index += 1;
+				continue;
+			}
+			flushMarkdown();
+			const char = fence.charAt(0);
+			const length = fence.length;
+			const code = [];
+			index += 1;
+			while (index < lines.length) {
+				const candidate = lines[index] ?? "";
+				const close = CLOSE_FENCE_RE.exec(candidate);
+				if (close !== null && close[1].charAt(0) === char && close[1].length >= length) break;
+				code.push(candidate);
+				index += 1;
+			}
+			index += 1;
+			blocks.push({
+				kind: "mermaid",
+				code: code.join("\n")
+			});
+		}
+		flushMarkdown();
+		return blocks;
+	}
+	//#endregion
+	//#region \0dsh-css:C:\Users\delinger\Desktop\dsh\dsh-desktop\.tmp-bs-build\src\client\sidebar.module.css.mjs
+	const css = "[data-dsh-panel-host]{z-index:25;pointer-events:none;position:fixed;inset:0;overflow:clip}html[data-platform] body>[data-dsh-better-sidebar],[data-dsh-panel-host]{-webkit-app-region:initial!important}[data-dsh-panel-host]>*{-webkit-app-region:no-drag}[data-dsh-panel-host][data-dsh-panel-host-degraded]{position:absolute;top:0;left:0}.EGBF5W_toggleButton{width:28px;height:28px;color:var(--dsw-alias-label-secondary);cursor:pointer;transition:background var(--ds-transition-duration-slow) var(--ds-ease-in-out), color var(--ds-transition-duration-slow) var(--ds-ease-in-out);background:0 0;border:none;border-radius:50%;justify-content:center;align-items:center;display:flex}.EGBF5W_toggleButton:hover:not(:disabled):not([aria-disabled=true]){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.EGBF5W_toggleButton:disabled,.EGBF5W_toggleButton[aria-disabled=true]{opacity:.4;cursor:default}.EGBF5W_panelBody{flex:1;min-width:0;min-height:0;display:flex}.EGBF5W_bottomPanel{z-index:40;background:var(--dsw-alias-bg-layer-1);border-top:1px solid var(--dsw-alias-border-l2);pointer-events:auto;padding-bottom:env(safe-area-inset-bottom);transition:transform var(--ds-transition-duration-slow) var(--ds-ease-in-out), height var(--ds-transition-duration-slow) var(--ds-ease-in-out);flex-direction:column;display:flex;position:absolute;bottom:0}.EGBF5W_bottomPanelHidden{pointer-events:none;visibility:hidden;transition:transform var(--ds-transition-duration-slow) var(--ds-ease-in-out), height var(--ds-transition-duration-slow) var(--ds-ease-in-out), visibility 0s linear var(--ds-transition-duration-slow);transform:translateY(102%)}.EGBF5W_bottomPanel[data-dragging]{transition:none}.EGBF5W_bottomPanel{contain:layout style}body[data-dsh-sidebar-dragging] .EGBF5W_panel,body[data-dsh-sidebar-dragging] .EGBF5W_bottomPanel{will-change:transform}.EGBF5W_bottomResize{cursor:row-resize;z-index:2;touch-action:none;height:8px;position:absolute;top:-4px;left:0;right:0}.EGBF5W_bottomResizeActive{background:var(--dsw-alias-interactive-bg-hover-accent)}.EGBF5W_bottomClose{z-index:4;width:28px;height:28px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:50%;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex;position:absolute;top:3px;right:6px}.EGBF5W_bottomClose:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.EGBF5W_bottomPanel .EGBF5W_tabBar{padding-right:40px}.EGBF5W_toggleButton,.EGBF5W_tabBar{-webkit-app-region:no-drag}.EGBF5W_iconButton{width:28px;height:28px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:50%;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}.EGBF5W_iconButton:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.EGBF5W_iconButton:disabled{opacity:.4;cursor:default}.EGBF5W_workbench,.EGBF5W_split{flex:1;min-width:0;min-height:0;display:flex}.EGBF5W_splitRow{flex-direction:row}.EGBF5W_splitCol{flex-direction:column}.EGBF5W_splitChild{display:flex;position:relative;overflow:hidden}.EGBF5W_divider{z-index:3;touch-action:none;flex:none;position:relative}.EGBF5W_dividerRow:after,.EGBF5W_dividerCol:after{content:\"\";background:var(--dsw-alias-border-l2);transition:background var(--ds-transition-duration-slow) var(--ds-ease-in-out);position:absolute}.EGBF5W_dividerRow{cursor:col-resize;width:7px;margin:0 -2px}.EGBF5W_dividerRow:after{width:1px;top:0;bottom:0;left:50%;transform:translate(-50%)}.EGBF5W_dividerCol{cursor:row-resize;height:7px;margin:-2px 0}.EGBF5W_dividerCol:after{height:1px;top:50%;left:0;right:0;transform:translateY(-50%)}.EGBF5W_divider:hover:after,.EGBF5W_dividerActive:after{background:var(--dsw-alias-interactive-bg-hover-accent)}.EGBF5W_pane{background:var(--dsw-alias-bg-base);flex-direction:column;flex:1;min-width:0;min-height:0;display:flex;position:relative}.EGBF5W_paneDrop{outline:1px solid var(--dsw-alias-interactive-bg-hover-accent);outline-offset:-1px}.EGBF5W_dropOverlay{z-index:6;pointer-events:none;background:var(--dsw-alias-interactive-bg-hover-accent);opacity:.5;position:absolute}.EGBF5W_dropLeft{width:25%;top:0;bottom:0;left:0}.EGBF5W_dropRight{width:25%;top:0;bottom:0;right:0}.EGBF5W_dropUp{height:25%;top:0;left:0;right:0}.EGBF5W_dropDown{height:25%;bottom:0;left:0;right:0}.EGBF5W_dropCenter{outline:2px dashed var(--dsw-alias-interactive-bg-hover-accent);outline-offset:-2px;background:0 0;inset:25%}.EGBF5W_paneContent{flex-direction:column;flex:1;min-height:0;display:flex;overflow:hidden}.EGBF5W_chipIcon{flex:none;align-items:center;margin-right:6px;display:inline-flex}.EGBF5W_paneTab{flex-direction:column;flex:1;min-height:0;display:flex}.EGBF5W_paneTabHidden{display:none}.EGBF5W_paneEmptyCards{flex:1;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));align-content:start;gap:12px;min-height:0;padding:12px;display:grid;overflow:hidden}.EGBF5W_paneCard{box-sizing:border-box;border:.5px solid var(--dsw-alias-border-l4);background:var(--dsw-alias-bg-layer-1);min-width:0;min-height:56px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-s-strong-14);cursor:pointer;text-align:left;border-radius:24px;flex-direction:row;justify-content:flex-start;align-items:center;gap:14px;padding:14px 20px;display:flex}.EGBF5W_paneCard>svg{color:var(--dsw-alias-label-secondary);flex:none}.EGBF5W_paneCard:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);border-color:var(--dsw-alias-border-l4)}.EGBF5W_paneCard:disabled{opacity:.45;cursor:default}.EGBF5W_tabBar{border-bottom:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);flex:none;align-items:stretch;height:34px;display:flex}.EGBF5W_tabBarDrop{outline:1px dashed var(--dsw-alias-interactive-bg-hover-accent);outline-offset:-1px}.EGBF5W_tabList{scrollbar-width:none;flex:1;min-width:0;display:flex;overflow-x:auto}.EGBF5W_tabList::-webkit-scrollbar{display:none}.EGBF5W_tab{min-width:64px;max-width:160px;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-secondary);border-right:1px solid var(--dsw-alias-border-l1);cursor:pointer;user-select:none;background:0 0;flex:none;align-items:center;gap:4px;padding:0 4px 0 10px;display:flex}.EGBF5W_tab:hover{background:var(--dsw-alias-interactive-bg-hover)}.EGBF5W_tabActive{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-active)}.EGBF5W_tabTitle{text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;overflow:hidden}.EGBF5W_tabBadge{min-width:16px;height:15px;font:var(--dsw-font-xxxs-strong-11);background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-brand-primary);border-radius:8px;flex:none;justify-content:center;align-items:center;padding:0 4px;display:inline-flex}.EGBF5W_tabClose{width:18px;height:18px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:4px;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}.EGBF5W_tabClose:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.EGBF5W_tabBarPlus{background:var(--dsw-alias-bg-layer-1);width:22px;height:22px;color:var(--dsw-alias-label-tertiary);cursor:pointer;border:none;border-radius:5px;flex:none;justify-content:center;align-self:center;align-items:center;margin:0 6px;padding:0;display:inline-flex;position:sticky;right:0}.EGBF5W_tabBarPlus:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.EGBF5W_explorer{flex-direction:column;flex:1;min-height:0;display:flex}.EGBF5W_explorerHeader{flex:none;justify-content:space-between;align-items:center;gap:8px;height:36px;padding:0 8px 0 12px;display:flex}.EGBF5W_explorerRoot{font:var(--dsw-font-s-14);color:var(--dsw-alias-label-secondary);text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.EGBF5W_explorerBody{flex:1;min-height:0;padding:4px 8px 8px;overflow:hidden auto}.EGBF5W_explorerRow{box-sizing:border-box;width:100%;max-width:100%;height:28px;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-primary);text-align:left;cursor:pointer;white-space:nowrap;animation:EGBF5W_dsh-row-in .15s var(--ds-ease-in-out);background:0 0;border:none;border-radius:4px;align-items:center;gap:6px;padding:0 8px;display:flex;position:relative}.EGBF5W_explorerRow:hover{background:var(--dsw-alias-interactive-bg-hover)}.EGBF5W_explorerRowSelected{background:var(--dsw-alias-interactive-bg-active)}.EGBF5W_explorerRowSelected:before{content:\"\";background:var(--dsw-alias-state-business-primary);border-radius:1px;width:2px;position:absolute;top:4px;bottom:4px;left:0}.EGBF5W_explorerGitName[data-git-tone=modified]{color:var(--dsw-alias-state-warn-primary)}.EGBF5W_explorerGitName[data-git-tone=added],.EGBF5W_explorerGitName[data-git-tone=untracked]{color:var(--dsw-alias-state-success-primary)}.EGBF5W_explorerGitName[data-git-tone=deleted]{color:var(--dsw-alias-state-error-primary)}.EGBF5W_explorerGitName[data-git-tone=renamed]{color:var(--dsw-alias-state-business-primary)}.EGBF5W_explorerGitName[data-git-tone=copied]{color:var(--dsw-alias-state-success-primary)}.EGBF5W_explorerGitName[data-git-tone=conflict]{color:var(--dsw-alias-state-error-primary)}.EGBF5W_explorerDirChanged{color:var(--dsw-alias-state-business-primary)}.EGBF5W_explorerRowRevealed{background:var(--dsw-alias-state-business-tertiary)}.EGBF5W_explorerRowRevealed+.EGBF5W_explorerRowRevealed{border-top-left-radius:0;border-top-right-radius:0}.EGBF5W_explorerRowRevealed:has(+.EGBF5W_explorerRowRevealed){border-bottom-right-radius:0;border-bottom-left-radius:0}.EGBF5W_explorerDir{font:var(--dsw-font-xxs-strong-12)}.EGBF5W_explorerHidden{opacity:.45}.EGBF5W_explorerSymlink{color:var(--dsw-alias-label-tertiary);flex:none}.EGBF5W_explorerBroken .EGBF5W_explorerName{color:var(--dsw-alias-state-error-primary)}.EGBF5W_explorerName{text-overflow:ellipsis;white-space:nowrap;min-width:0;overflow:hidden}.EGBF5W_explorerRenaming{cursor:text}.EGBF5W_explorerRenameInput{box-sizing:border-box;border:1px solid var(--dsw-alias-state-business-primary);background:var(--dsw-alias-bg-layer-1);min-width:0;height:22px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);border-radius:3px;flex:auto;padding:0 6px}.EGBF5W_explorerRenameInput:focus{border-color:var(--dsw-alias-state-business-primary);outline:none}.EGBF5W_explorerActionError{box-sizing:border-box;border:1px solid var(--dsw-alias-state-error-primary);background:var(--dsw-alias-bg-layer-1);border-radius:8px;align-items:flex-start;gap:6px;width:100%;margin-bottom:4px;padding:6px 8px;display:flex}.EGBF5W_explorerActionErrorText{overflow-wrap:anywhere;min-width:0;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-error-primary);flex:auto}.EGBF5W_explorerSelectionBar{z-index:1;box-sizing:border-box;background:var(--dsw-alias-bg-layer-2);border-radius:4px;align-items:center;gap:6px;width:100%;min-height:28px;margin-top:4px;padding:2px 8px;display:flex;position:sticky;bottom:0}.EGBF5W_explorerSelectionText{text-overflow:ellipsis;white-space:nowrap;min-width:0;font:var(--dsw-font-xxs-strong-12);color:var(--dsw-alias-label-secondary);flex:auto;overflow:hidden}.EGBF5W_explorerSelectionActions{flex-wrap:wrap;flex:none;justify-content:flex-end;gap:4px;max-width:72%;display:flex}.EGBF5W_explorerAppIcon{object-fit:contain;width:14px;height:14px;display:block}.EGBF5W_explorerHiddenPane{display:none}.EGBF5W_explorerRef,.EGBF5W_explorerCopied{margin-left:auto}.EGBF5W_explorerRef{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);height:20px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-strong-11);cursor:pointer;border-radius:999px;flex:none;align-items:center;padding:0 8px;display:none}.EGBF5W_explorerRef:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.EGBF5W_explorerRow:hover .EGBF5W_explorerRef,.EGBF5W_explorerRow:focus-within .EGBF5W_explorerRef{display:inline-flex}.EGBF5W_explorerCopied{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);flex:none}.EGBF5W_explorerError{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-error-primary);cursor:default}@keyframes EGBF5W_dsh-row-in{0%{opacity:0}}.EGBF5W_explorerEmpty{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);text-align:center;padding:16px}.EGBF5W_explorerRowDropTarget{background:var(--dsw-alias-interactive-bg-hover-accent);outline:1px dashed var(--dsw-alias-state-business-primary);outline-offset:-1px}.EGBF5W_uploadDropMask{z-index:1001;pointer-events:none;background:color-mix(in srgb, var(--dsw-alias-bg-base) 62%, transparent);animation:EGBF5W_dsh-row-in .15s var(--ds-ease-in-out);position:fixed;inset:0}.EGBF5W_uploadDropZone{z-index:1002;pointer-events:none;border:2px dashed var(--dsw-alias-border-l2);background:color-mix(in srgb, var(--dsw-alias-state-business-primary) 4%, transparent);animation:EGBF5W_dsh-row-in .15s var(--ds-ease-in-out);border-radius:8px;justify-content:center;align-items:flex-start;padding:12px;display:flex;position:fixed}.EGBF5W_uploadDropHero{flex-direction:column;align-items:center;gap:8px;max-width:100%;padding-top:8px;display:flex}.EGBF5W_uploadDropArtPrimary{color:var(--dsw-alias-state-business-primary)}.EGBF5W_uploadDropArtAccent{color:var(--dsw-alias-state-business-tertiary)}.EGBF5W_uploadDropArtCut{color:var(--dsw-alias-bg-layer-1)}.EGBF5W_uploadDropZonePill{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);max-width:100%;height:28px;box-shadow:var(--dsw-shadow-lv2);color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxxs-11);border-radius:999px;align-items:center;gap:6px;padding:0 12px;display:flex}.EGBF5W_uploadDropZoneText{white-space:nowrap;text-overflow:ellipsis;overflow:hidden}.EGBF5W_uploadDropChatHint{z-index:1003;pointer-events:none;animation:EGBF5W_dsh-row-in .15s var(--ds-ease-in-out);justify-content:center;align-items:center;padding:24px;display:flex;position:fixed;top:0;bottom:0;left:0}.EGBF5W_uploadDropChatCard{text-align:center;max-width:100%;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-strong-12);flex-direction:column;align-items:center;gap:10px;display:flex}.EGBF5W_uploadOverlay{z-index:30;background:var(--dsw-alias-bg-mask-1);backdrop-filter:var(--dsw-mask-blur);animation:EGBF5W_dsh-row-in .15s var(--ds-ease-in-out);justify-content:center;align-items:center;display:flex;position:absolute;inset:0}.EGBF5W_uploadOverlayCard{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);min-width:240px;max-width:min(420px,100% - 48px);box-shadow:var(--dsw-shadow-lv3);border-radius:8px;flex-direction:column;gap:10px;padding:16px;display:flex}.EGBF5W_uploadOverlayTitle{font:var(--dsw-font-xxs-strong-12);color:var(--dsw-alias-label-primary);align-items:center;gap:6px;display:flex}.EGBF5W_uploadOverlayTitle>svg{flex:none}.EGBF5W_uploadOverlayTitle>span{white-space:nowrap;text-overflow:ellipsis;min-width:0;overflow:hidden}.EGBF5W_uploadOverlayProgress{background:var(--dsw-alias-border-l2);border-radius:3px;height:6px;overflow:hidden}.EGBF5W_uploadOverlayProgressFill{background:var(--dsw-alias-interactive-bg-hover-accent);height:100%;transition:width .15s var(--ds-ease-in-out);border-radius:3px}.EGBF5W_uploadOverlayStatus{min-height:1em;font:var(--dsw-font-xxxs-11);font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-tertiary);white-space:nowrap;text-overflow:ellipsis;overflow:hidden}.EGBF5W_uploadOverlayCancel{border:1px solid var(--dsw-alias-border-l2);height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-strong-12);cursor:pointer;background:0 0;border-radius:4px;align-self:flex-end;padding:0 12px}.EGBF5W_uploadOverlayCancel:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);border-color:var(--dsw-alias-border-l2)}.EGBF5W_uploadOverlayCancel:disabled{opacity:.4;cursor:default}.EGBF5W_editor{flex-direction:column;flex:1;min-height:0;display:flex}.EGBF5W_editorHeader{border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;align-items:center;gap:6px;padding:6px 8px;display:flex}.EGBF5W_editorTitle{min-width:0;font:var(--dsw-font-xxs-strong-12);color:var(--dsw-alias-label-secondary);text-overflow:ellipsis;white-space:nowrap;flex:1;overflow:hidden}.EGBF5W_editorPathInput{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);min-width:0;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);border-radius:6px;flex:1;padding:0 10px}.EGBF5W_editorPathInput:focus{border-color:var(--dsw-alias-border-l2);outline:none}.EGBF5W_editorTreeToggleActive{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-active)}.EGBF5W_editorBody{flex:1;min-height:0;display:flex}.EGBF5W_editorMain{flex-direction:column;flex:1;min-width:0;min-height:0;display:flex}.EGBF5W_editorTreeDock{border-left:1px solid var(--dsw-alias-border-l1);flex:none;min-height:0;display:flex;position:relative}.EGBF5W_editorTreeResize{cursor:col-resize;touch-action:none;z-index:3;width:6px;position:absolute;top:0;bottom:0;left:0}.EGBF5W_editorTreeResize:hover{background:var(--dsw-alias-border-l2)}.EGBF5W_editorTreePanel{flex-direction:column;flex:1;min-width:0;min-height:0;display:flex;position:relative}.EGBF5W_editorTreePanelFull{flex:1}.EGBF5W_editorTreeSearch{border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;align-items:center;gap:6px;padding:6px 8px;display:flex}.EGBF5W_editorSearchInput{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);min-width:0;height:26px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);border-radius:6px;flex:1;padding:0 10px}.EGBF5W_editorSearchInput:focus{border-color:var(--dsw-alias-border-l2);outline:none}.EGBF5W_editorSearchHint{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);padding:8px 12px}.EGBF5W_editorSearchResult{box-sizing:border-box;width:100%;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);text-align:left;cursor:pointer;text-overflow:ellipsis;white-space:nowrap;background:0 0;border:none;border-radius:4px;padding:0 8px;line-height:28px;display:block;overflow:hidden}.EGBF5W_editorSearchResult:hover{background:var(--dsw-alias-interactive-bg-hover)}.EGBF5W_editorStatus{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}.EGBF5W_editorStatusError{color:var(--dsw-alias-state-error-primary)}.EGBF5W_dirtyDot{background:var(--dsw-alias-state-warn-primary);border-radius:50%;flex:none;width:7px;height:7px}.EGBF5W_editorPlaceholder{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);text-align:center;flex:1;justify-content:center;align-items:center;padding:16px;display:flex}.EGBF5W_orphanedType{opacity:.7;overflow-wrap:anywhere;margin-top:8px;font-size:12px;display:block}.EGBF5W_editorBinary{text-align:center;flex-direction:column;flex:1;justify-content:center;align-items:center;gap:12px;padding:24px 16px;display:flex}.EGBF5W_editorBinaryNotice{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary)}.EGBF5W_editorDownloadLink{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-strong-12);cursor:pointer;transition:background var(--ds-transition-duration-slow) var(--ds-ease-in-out), border-color var(--ds-transition-duration-slow) var(--ds-ease-in-out);border-radius:6px;align-items:center;gap:6px;padding:6px 14px;text-decoration:none;display:inline-flex}.EGBF5W_editorDownloadLink:hover{background:var(--dsw-alias-interactive-bg-hover);border-color:var(--dsw-alias-border-l2)}.EGBF5W_editorError{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-error-primary);padding:12px 16px}.EGBF5W_editorBanner{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-state-warn-label);background:var(--dsw-alias-state-warn-tertiary);flex:none;padding:4px 8px}.EGBF5W_sandboxStatus{font:var(--dsw-font-xxxs-11);flex:none;align-items:center;gap:8px;padding:4px 10px;display:flex}.EGBF5W_sandboxStatusOn{color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-bg-layer-1);border-bottom:1px solid var(--dsw-alias-border-l1)}.EGBF5W_sandboxStatusOff{color:var(--dsw-alias-state-error-primary);background:color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent);border-bottom:1px solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent)}.EGBF5W_sandboxDot{background:var(--dsw-alias-state-success-primary);border-radius:50%;flex:none;width:6px;height:6px}.EGBF5W_sandboxStatusOff .EGBF5W_sandboxDot{background:var(--dsw-alias-state-error-primary)}.EGBF5W_sandboxStatusText{text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;overflow:hidden}.EGBF5W_sandboxAction{border:1px solid var(--dsw-alias-border-l2);font:inherit;color:inherit;cursor:pointer;background:0 0;border-radius:6px;flex:none;padding:2px 8px}.EGBF5W_sandboxAction:hover{background:var(--dsw-alias-interactive-bg-hover)}.EGBF5W_editorHtml{background:var(--dsw-alias-bg-base);border:none;flex:1;width:100%;min-height:0}.EGBF5W_browser{flex-direction:column;flex:1;min-height:0;display:flex}.EGBF5W_browserBar{border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;align-items:center;gap:4px;padding:6px 8px;display:flex}.EGBF5W_browserInput{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);min-width:0;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);border-radius:6px;flex:1;padding:0 10px}.EGBF5W_browserInput:focus{border-color:var(--dsw-alias-border-l2);outline:none}.EGBF5W_browserMessage{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-state-warn-label);background:var(--dsw-alias-state-warn-tertiary);flex:none;padding:4px 12px}.EGBF5W_browserFrame{background:var(--dsw-alias-bg-base);border:none;flex:1;width:100%;min-height:0}.EGBF5W_browserStart{text-align:center;min-height:0;font:var(--dsw-font-xs-13);color:var(--dsw-alias-label-tertiary);flex:1;justify-content:center;align-items:center;padding:20px;display:flex}.EGBF5W_browserBlocked{text-align:center;min-height:0;color:var(--dsw-alias-state-warn-primary);flex-direction:column;flex:1;justify-content:center;align-items:center;gap:6px;padding:24px;display:flex}.EGBF5W_browserBlockedTitle{font:var(--dsw-font-xxs-strong-12);color:var(--dsw-alias-label-primary)}.EGBF5W_browserBlockedDesc{max-width:280px;font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-secondary)}.EGBF5W_browserBlockedActions{gap:8px;margin-top:6px;display:flex}.EGBF5W_browserBlockedButton{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxxs-11);cursor:pointer;border-radius:6px;padding:4px 12px}.EGBF5W_browserBlockedButton:hover{background:var(--dsw-alias-interactive-bg-hover)}.EGBF5W_editorCm{background:0 0;flex:1;min-height:0;overflow:hidden}.EGBF5W_editorCmHidden{display:none}.EGBF5W_editorCm .cm-editor{height:100%}.EGBF5W_editorCm .cm-scroller{padding:12px 16px}.EGBF5W_editorCm .cm-editor.cm-focused{outline:none}.EGBF5W_editorModeToggle{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);border-radius:6px;flex:none;align-items:center;gap:2px;padding:2px;display:inline-flex}.EGBF5W_editorModeButton{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);cursor:pointer;background:0 0;border:none;border-radius:4px;padding:2px 8px}.EGBF5W_editorModeButton:hover{color:var(--dsw-alias-label-primary)}.EGBF5W_editorModeActive{background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary)}.EGBF5W_editorMd{min-height:0;font:var(--dsw-font-xs-13);flex:1;padding:12px 16px;overflow-y:auto}.EGBF5W_editorMd .md-code-block:not([data-mermaid-processed])>div:first-child{z-index:auto;position:static}.EGBF5W_mermaidWrap{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);border-radius:6px;margin:6px 0;overflow:hidden}.EGBF5W_mermaidHeader{border-bottom:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);justify-content:space-between;align-items:center;gap:6px;padding:4px 8px;display:flex}.EGBF5W_mermaidInfo{font:var(--dsw-font-xxxs-strong-11);color:var(--dsw-alias-label-tertiary)}.EGBF5W_mermaidCopy{height:20px;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);cursor:pointer;background:0 0;border:none;border-radius:4px;align-items:center;gap:4px;padding:0 6px;display:inline-flex}.EGBF5W_mermaidCopy:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.EGBF5W_mermaidBody{cursor:zoom-in;justify-content:center;padding:10px;display:flex;overflow:auto}.EGBF5W_mermaidBody svg{max-width:100%;height:auto}.EGBF5W_mermaidError{border-bottom:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-state-error-primary);font:var(--dsw-font-xxxs-11);padding:6px 10px}.EGBF5W_mermaidCode{font:var(--dsw-font-xxxs-11);margin:0;padding:8px 10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow:auto}.EGBF5W_mermaidMarkdown .md-code-block[data-mermaid-processed]{display:contents}.EGBF5W_mermaidModal{z-index:1000;background:var(--dsw-alias-bg-mask-1);backdrop-filter:blur(2px);flex-direction:column;justify-content:center;align-items:center;display:flex;position:fixed;inset:0;-webkit-app-region:initial!important}.EGBF5W_mermaidModalToolbar{z-index:10;gap:8px;display:flex;position:absolute;top:16px;right:16px}.EGBF5W_mermaidModalButton{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);width:36px;height:36px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xs-strong-13);cursor:pointer;border-radius:8px;justify-content:center;align-items:center;display:inline-flex}.EGBF5W_mermaidModalButton:hover{background:var(--dsw-alias-interactive-bg-hover)}.EGBF5W_mermaidModalStage{justify-content:center;align-items:center;width:90vw;height:80vh;display:flex;position:relative;overflow:hidden}.EGBF5W_mermaidModalStage svg{cursor:grab;transform-origin:50%;user-select:none;-webkit-user-drag:none;background:var(--dsw-alias-bg-layer-1);border-radius:12px;max-width:none;max-height:none;padding:16px}.EGBF5W_mermaidModalStage svg:active{cursor:grabbing}.EGBF5W_mermaidModalHint{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);pointer-events:none;position:absolute;bottom:16px;left:50%;transform:translate(-50%)}.EGBF5W_selectionPopup{z-index:60;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxxs-strong-11);white-space:nowrap;cursor:pointer;border-radius:6px;align-items:center;padding:0 10px;display:inline-flex;position:fixed;transform:translate(-50%,calc(-100% - 8px))}.EGBF5W_selectionPopup:hover{background:var(--dsw-alias-interactive-bg-hover)}.EGBF5W_editorPdf{background:var(--dsw-alias-bg-base);flex-direction:column;flex:1;min-height:0;display:flex}.EGBF5W_editorPdfToolbar{border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;justify-content:flex-end;padding:6px 8px;display:flex}.EGBF5W_editorPdfStage{flex:1;min-height:0;display:flex;position:relative}.EGBF5W_editorPdfFrame{background:var(--dsw-alias-bg-base);border:none;flex:1;width:100%;min-height:0}.EGBF5W_editorPdfFrameBlocked{pointer-events:none}.EGBF5W_editorPdfDragShield{z-index:4;pointer-events:none;background:0 0;position:absolute;inset:0}.EGBF5W_editorPdfDragShieldActive{pointer-events:auto}body[data-dsh-tab-dragging] .EGBF5W_editorPdfFrame{pointer-events:none!important}body[data-dsh-tab-dragging] .EGBF5W_editorPdfDragShield{pointer-events:auto!important}.EGBF5W_boundaryError{z-index:50;background:var(--dsw-alias-bg-layer-1);border-left:1px solid var(--dsw-alias-border-l2);font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-error-primary);flex-direction:column;align-items:flex-start;gap:8px;padding:16px;display:flex;position:fixed;top:0;bottom:0;right:0;overflow:auto}.EGBF5W_terminalRetry{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-strong-11);cursor:pointer;border-radius:999px;flex:none;padding:1px 8px}.EGBF5W_terminalRetry:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.EGBF5W_tabBoundaryError{min-height:0;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-error-primary);flex-direction:column;flex:1;align-items:flex-start;gap:8px;padding:12px 16px;display:flex;overflow:auto}.EGBF5W_nativeTabHost{flex-direction:column;height:100%;min-height:0;display:flex}.EGBF5W_gitEmpty{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);padding:4px 12px 8px}.EGBF5W_gitPlaceholder{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);text-align:center;padding:16px}.EGBF5W_gitError{font:var(--dsw-font-xxs-12);color:var(--dsw-alias-state-error-primary);white-space:pre-wrap;padding:8px 12px}.EGBF5W_gitDiffTab{flex-direction:column;flex:1;min-width:0;min-height:0;display:flex;overflow:hidden auto}.EGBF5W_gitDiffTabHeader{border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;align-items:center;gap:8px;height:36px;padding:0 8px 0 12px;display:flex}.EGBF5W_gitDiffTabTitle{text-overflow:ellipsis;white-space:nowrap;min-width:0;font:var(--dsw-font-xxs-strong-12);color:var(--dsw-alias-label-primary);flex:1;overflow:hidden}.EGBF5W_toggleButton:focus-visible,.EGBF5W_bottomClose:focus-visible,.EGBF5W_iconButton:focus-visible,.EGBF5W_tab:focus-visible,.EGBF5W_tabClose:focus-visible,.EGBF5W_tabBarPlus:focus-visible,.EGBF5W_paneCard:focus-visible,.EGBF5W_explorerRow:focus-visible,.EGBF5W_explorerRef:focus-visible,.EGBF5W_terminalRetry:focus-visible,.EGBF5W_editorModeButton:focus-visible,.EGBF5W_editorDownloadLink:focus-visible,.EGBF5W_editorPptxButton:focus-visible,.EGBF5W_editorDocxZoomRange:focus-visible{outline:2px solid var(--dsw-alias-interactive-bg-hover-accent);outline-offset:-1px}@media (prefers-reduced-motion:reduce){.EGBF5W_bottomPanel,.EGBF5W_bottomPanelHidden,.EGBF5W_toggleButton,.EGBF5W_tab,.EGBF5W_tabBarPlus,.EGBF5W_paneCard,.EGBF5W_explorerRow,.EGBF5W_divider,.EGBF5W_dividerRow:after,.EGBF5W_dividerCol:after{transition:none;animation:none}}@media (width<=767px){.EGBF5W_tab{min-width:48px;max-width:128px}}.EGBF5W_openWithLabel{align-items:center;gap:8px;width:100%;min-width:0;display:flex}.EGBF5W_openWithName{text-overflow:ellipsis;white-space:nowrap;flex:auto;min-width:0;overflow:hidden}.EGBF5W_openWithChevron{color:var(--dsw-alias-label-tertiary);flex:none}.EGBF5W_openWithPin{width:16px;height:16px;color:var(--dsw-alias-label-tertiary);cursor:pointer;border-radius:5px;flex:none;justify-content:center;align-items:center;display:inline-flex}.EGBF5W_openWithPin:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.EGBF5W_openWithPinActive{color:var(--dsw-alias-state-business-primary)}.EGBF5W_editorHtmlBlock{margin:8px 0}.EGBF5W_editorHtmlBlock img,.EGBF5W_editorHtmlBlock video{max-width:100%}.EGBF5W_editorHtmlBlock details{margin:4px 0;padding:4px 0}.EGBF5W_editorHtmlBlock summary{cursor:pointer}.EGBF5W_tocBar{z-index:7;pointer-events:none;justify-content:flex-end;height:0;display:flex;position:sticky;top:0}.EGBF5W_tocButton{pointer-events:auto;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);width:26px;height:26px;color:var(--dsw-alias-label-secondary);cursor:pointer;border-radius:6px;justify-content:center;align-items:center;margin:4px 2px 0 0;padding:0;display:inline-flex}.EGBF5W_tocButton:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.EGBF5W_tocPanel{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);width:min(300px,82%);max-height:60vh;box-shadow:var(--dsw-shadow-lv2);pointer-events:auto;border-radius:8px;flex-direction:column;padding:4px;display:flex;position:absolute;top:32px;right:2px;overflow-y:auto}.EGBF5W_tocItem{min-width:0;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12);text-align:left;cursor:pointer;background:0 0;border:none;border-radius:6px;align-items:baseline;gap:8px;padding:4px 8px;display:flex}.EGBF5W_tocItem:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.EGBF5W_tocItem[data-level=\"2\"]{padding-left:18px}.EGBF5W_tocItem[data-level=\"3\"]{padding-left:28px}.EGBF5W_tocItem[data-level=\"4\"]{padding-left:38px}.EGBF5W_tocItem[data-level=\"5\"]{padding-left:48px}.EGBF5W_tocItem[data-level=\"6\"]{padding-left:58px}.EGBF5W_tocItemLevel{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);flex:none}.EGBF5W_tocItemText{text-overflow:ellipsis;white-space:nowrap;flex:auto;min-width:0;overflow:hidden}@keyframes EGBF5W_dsh-toc-flash{0%,60%{background:var(--dsw-alias-interactive-bg-hover)}to{background:0 0}}.EGBF5W_tocFlash{border-radius:4px;animation:1.2s ease-out EGBF5W_dsh-toc-flash}";
 	const tagId = "dsh-better-sidebar/sidebar.module.css";
 	if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
 		const tag = document.createElement("style");
@@ -200052,240 +200527,189 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		document.head.appendChild(tag);
 	}
 	var sidebar_module_css_default = {
-		"terminalDepsActions": "_4ve_2a_terminalDepsActions",
-		"mermaidModal": "_4ve_2a_mermaidModal",
-		"sandboxStatusOff": "_4ve_2a_sandboxStatusOff",
-		"terminalBannerUrl": "_4ve_2a_terminalBannerUrl",
-		"mermaidMarkdown": "_4ve_2a_mermaidMarkdown",
-		"terminalDepsBanner": "_4ve_2a_terminalDepsBanner",
-		"gitDiffAdd": "_4ve_2a_gitDiffAdd",
-		"uploadOverlayProgressFill": "_4ve_2a_uploadOverlayProgressFill",
-		"sandboxStatusText": "_4ve_2a_sandboxStatusText",
-		"browserBlockedTitle": "_4ve_2a_browserBlockedTitle",
-		"gitLogSubject": "_4ve_2a_gitLogSubject",
-		"explorerRow": "_4ve_2a_explorerRow",
-		"uploadDropZoneText": "_4ve_2a_uploadDropZoneText",
-		"editorBinary": "_4ve_2a_editorBinary",
-		"explorerBroken": "_4ve_2a_explorerBroken",
-		"terminal": "_4ve_2a_terminal",
-		"editorDocxZoomRange": "_4ve_2a_editorDocxZoomRange",
-		"gitDiffTab": "_4ve_2a_gitDiffTab",
-		"paneTabHidden": "_4ve_2a_paneTabHidden",
-		"mermaidCode": "_4ve_2a_mermaidCode",
-		"tabBarDrop": "_4ve_2a_tabBarDrop",
-		"bottomPanel": "_4ve_2a_bottomPanel",
-		"gitSectionHeader": "_4ve_2a_gitSectionHeader",
-		"editorPdfFrame": "_4ve_2a_editorPdfFrame",
-		"browserBlockedButton": "_4ve_2a_browserBlockedButton",
-		"gitRowSelected": "_4ve_2a_gitRowSelected",
-		"editorBinaryNotice": "_4ve_2a_editorBinaryNotice",
-		"terminalDepsTitle": "_4ve_2a_terminalDepsTitle",
-		"explorerHidden": "_4ve_2a_explorerHidden",
-		"editorMd": "_4ve_2a_editorMd",
-		"gitSection": "_4ve_2a_gitSection",
-		"mermaidHeader": "_4ve_2a_mermaidHeader",
-		"browserInput": "_4ve_2a_browserInput",
-		"mermaidModalHint": "_4ve_2a_mermaidModalHint",
-		"gitDiff": "_4ve_2a_gitDiff",
-		"gitDiffFileOld": "_4ve_2a_gitDiffFileOld",
-		"explorerRailTitle": "_4ve_2a_explorerRailTitle",
-		"editorModeButton": "_4ve_2a_editorModeButton",
-		"editorStatusError": "_4ve_2a_editorStatusError",
-		"panel": "_4ve_2a_panel",
-		"mermaidCopy": "_4ve_2a_mermaidCopy",
-		"gitDiffFile": "_4ve_2a_gitDiffFile",
-		"sandboxStatusOn": "_4ve_2a_sandboxStatusOn",
-		"editorImageWrap": "_4ve_2a_editorImageWrap",
-		"editorModeToggle": "_4ve_2a_editorModeToggle",
-		"editorTreeDock": "_4ve_2a_editorTreeDock",
-		"iconButton": "_4ve_2a_iconButton",
-		"uploadDropChatHint": "_4ve_2a_uploadDropChatHint",
-		"producedLabel": "_4ve_2a_producedLabel",
-		"browserBlockedDesc": "_4ve_2a_browserBlockedDesc",
-		"editorMain": "_4ve_2a_editorMain",
-		"gitDiffFilePath": "_4ve_2a_gitDiffFilePath",
-		"gitDiffMeta": "_4ve_2a_gitDiffMeta",
-		"producedRow": "_4ve_2a_producedRow",
-		"gitConfirmDesc": "_4ve_2a_gitConfirmDesc",
-		"dividerActive": "_4ve_2a_dividerActive",
-		"gitRowMain": "_4ve_2a_gitRowMain",
-		"gitLogRef": "_4ve_2a_gitLogRef",
-		"openWithPinActive": "_4ve_2a_openWithPinActive",
-		"explorer": "_4ve_2a_explorer",
-		"editorPdf": "_4ve_2a_editorPdf",
-		"paneTab": "_4ve_2a_paneTab",
-		"explorerIconHtml": "_4ve_2a_explorerIconHtml",
-		"editorCm": "_4ve_2a_editorCm",
-		"tabTitle": "_4ve_2a_tabTitle",
-		"editorModeActive": "_4ve_2a_editorModeActive",
-		"uploadOverlayTitle": "_4ve_2a_uploadOverlayTitle",
-		"gitHeader": "_4ve_2a_gitHeader",
-		"gitDiffFileChevron": "_4ve_2a_gitDiffFileChevron",
-		"splitCol": "_4ve_2a_splitCol",
-		"gitDiffCtx": "_4ve_2a_gitDiffCtx",
-		"gitDiffHunkSection": "_4ve_2a_gitDiffHunkSection",
-		"uploadOverlayCancel": "_4ve_2a_uploadOverlayCancel",
-		"browser": "_4ve_2a_browser",
-		"browserFrame": "_4ve_2a_browserFrame",
-		"dropCenter": "_4ve_2a_dropCenter",
-		"browserBlockedActions": "_4ve_2a_browserBlockedActions",
-		"toggleButton": "_4ve_2a_toggleButton",
-		"bottomClose": "_4ve_2a_bottomClose",
-		"paneCard": "_4ve_2a_paneCard",
-		"split": "_4ve_2a_split",
-		"bottomPanelHidden": "_4ve_2a_bottomPanelHidden",
-		"explorerName": "_4ve_2a_explorerName",
-		"gitRow": "_4ve_2a_gitRow",
-		"editorSearchHint": "_4ve_2a_editorSearchHint",
-		"panelResize": "_4ve_2a_panelResize",
-		"editorDownloadLink": "_4ve_2a_editorDownloadLink",
-		"tab": "_4ve_2a_tab",
-		"uploadOverlayCard": "_4ve_2a_uploadOverlayCard",
-		"mermaidModalButton": "_4ve_2a_mermaidModalButton",
-		"editorPdfDragShieldActive": "_4ve_2a_editorPdfDragShieldActive",
-		"explorerCopied": "_4ve_2a_explorerCopied",
-		"explorerIconCss": "_4ve_2a_explorerIconCss",
-		"gitDiffHunk": "_4ve_2a_gitDiffHunk",
-		"selectionPopup": "_4ve_2a_selectionPopup",
-		"editorError": "_4ve_2a_editorError",
-		"bottomResize": "_4ve_2a_bottomResize",
-		"openWithName": "_4ve_2a_openWithName",
-		"toggleCluster": "_4ve_2a_toggleCluster",
-		"uploadDropChatCard": "_4ve_2a_uploadDropChatCard",
-		"explorerIconMd": "_4ve_2a_explorerIconMd",
-		"editorTreeToggleActive": "_4ve_2a_editorTreeToggleActive",
-		"splitChild": "_4ve_2a_splitChild",
-		"paneContent": "_4ve_2a_paneContent",
-		"openWithChevron": "_4ve_2a_openWithChevron",
-		"editorBody": "_4ve_2a_editorBody",
-		"explorerSymlink": "_4ve_2a_explorerSymlink",
-		"editorTreeResize": "_4ve_2a_editorTreeResize",
-		"dropOverlay": "_4ve_2a_dropOverlay",
-		"editorHtml": "_4ve_2a_editorHtml",
-		"explorerRailHeader": "_4ve_2a_explorerRailHeader",
-		"editorTreePanel": "_4ve_2a_editorTreePanel",
-		"gitBadge": "_4ve_2a_gitBadge",
-		"tabBar": "_4ve_2a_tabBar",
-		"editorTreeSearch": "_4ve_2a_editorTreeSearch",
-		"gitError": "_4ve_2a_gitError",
-		"gitLogHash": "_4ve_2a_gitLogHash",
-		"mermaidWrap": "_4ve_2a_mermaidWrap",
-		"dividerCol": "_4ve_2a_dividerCol",
-		"terminalDepsHint": "_4ve_2a_terminalDepsHint",
-		"paneDrop": "_4ve_2a_paneDrop",
-		"browserMessage": "_4ve_2a_browserMessage",
-		"openWithPin": "_4ve_2a_openWithPin",
-		"uploadOverlayStatus": "_4ve_2a_uploadOverlayStatus",
-		"mermaidModalStage": "_4ve_2a_mermaidModalStage",
-		"gitEmpty": "_4ve_2a_gitEmpty",
-		"dividerRow": "_4ve_2a_dividerRow",
-		"dropRight": "_4ve_2a_dropRight",
-		"tabBadge": "_4ve_2a_tabBadge",
-		"gitDiffCode": "_4ve_2a_gitDiffCode",
-		"uploadOverlay": "_4ve_2a_uploadOverlay",
-		"editor": "_4ve_2a_editor",
-		"terminalRepairCommand": "_4ve_2a_terminalRepairCommand",
-		"gitCommit": "_4ve_2a_gitCommit",
-		"editorPdfFrameBlocked": "_4ve_2a_editorPdfFrameBlocked",
-		"pane": "_4ve_2a_pane",
-		"gitDiffHunkHeader": "_4ve_2a_gitDiffHunkHeader",
-		"panelBody": "_4ve_2a_panelBody",
-		"paneEmptyCards": "_4ve_2a_paneEmptyCards",
-		"browserStart": "_4ve_2a_browserStart",
-		"dirtyDot": "_4ve_2a_dirtyDot",
-		"uploadDropHero": "_4ve_2a_uploadDropHero",
-		"explorerHeader": "_4ve_2a_explorerHeader",
-		"mermaidInfo": "_4ve_2a_mermaidInfo",
-		"panelResizeActive": "_4ve_2a_panelResizeActive",
-		"editorPdfDragShield": "_4ve_2a_editorPdfDragShield",
-		"gitLogRow": "_4ve_2a_gitLogRow",
-		"tabList": "_4ve_2a_tabList",
-		"browserBlocked": "_4ve_2a_browserBlocked",
-		"gitCommitInput": "_4ve_2a_gitCommitInput",
-		"explorerIconJson": "_4ve_2a_explorerIconJson",
-		"gitDiffFileTag": "_4ve_2a_gitDiffFileTag",
-		"uploadDropZonePill": "_4ve_2a_uploadDropZonePill",
-		"explorerIconTs": "_4ve_2a_explorerIconTs",
-		"editorBanner": "_4ve_2a_editorBanner",
-		"editorPdfStage": "_4ve_2a_editorPdfStage",
-		"explorerIconImage": "_4ve_2a_explorerIconImage",
-		"explorerIconJs": "_4ve_2a_explorerIconJs",
-		"uploadOverlayProgress": "_4ve_2a_uploadOverlayProgress",
-		"producedMore": "_4ve_2a_producedMore",
-		"tabActive": "_4ve_2a_tabActive",
-		"gitLogMore": "_4ve_2a_gitLogMore",
-		"gitDiffNum": "_4ve_2a_gitDiffNum",
-		"uploadDropZone": "_4ve_2a_uploadDropZone",
-		"gitName": "_4ve_2a_gitName",
-		"tabBarPlus": "_4ve_2a_tabBarPlus",
-		"editorTitle": "_4ve_2a_editorTitle",
-		"editorTreePanelFull": "_4ve_2a_editorTreePanelFull",
-		"gitLink": "_4ve_2a_gitLink",
-		"dropLeft": "_4ve_2a_dropLeft",
-		"terminalDepsNote": "_4ve_2a_terminalDepsNote",
-		"editorPathInput": "_4ve_2a_editorPathInput",
-		"gitLogMeta": "_4ve_2a_gitLogMeta",
-		"git": "_4ve_2a_git",
-		"editorPptxButton": "_4ve_2a_editorPptxButton",
-		"gitDiffFileChevronExpanded": "_4ve_2a_gitDiffFileChevronExpanded",
-		"panelKernel": "_4ve_2a_panelKernel",
-		"sandboxStatus": "_4ve_2a_sandboxStatus",
-		"explorerRail": "_4ve_2a_explorerRail",
-		"editorStatus": "_4ve_2a_editorStatus",
-		"terminalDepsCommandRow": "_4ve_2a_terminalDepsCommandRow",
-		"explorerEmpty": "_4ve_2a_explorerEmpty",
-		"gitDiffTabTitle": "_4ve_2a_gitDiffTabTitle",
-		"mermaidError": "_4ve_2a_mermaidError",
-		"editorBack": "_4ve_2a_editorBack",
-		"cornerHandle": "_4ve_2a_cornerHandle",
-		"explorerIconFolder": "_4ve_2a_explorerIconFolder",
-		"boundaryError": "_4ve_2a_boundaryError",
-		"explorerBody": "_4ve_2a_explorerBody",
-		"gitDiffExpand": "_4ve_2a_gitDiffExpand",
-		"tabClose": "_4ve_2a_tabClose",
-		"gitLogLine1": "_4ve_2a_gitLogLine1",
-		"gitDiffLine": "_4ve_2a_gitDiffLine",
-		"gitLogLine2": "_4ve_2a_gitLogLine2",
-		"workbench": "_4ve_2a_workbench",
-		"editorSearchResult": "_4ve_2a_editorSearchResult",
-		"mermaidBody": "_4ve_2a_mermaidBody",
-		"dsh-row-in": "_4ve_2a_dsh-row-in",
-		"bottomResizeActive": "_4ve_2a_bottomResizeActive",
-		"explorerRef": "_4ve_2a_explorerRef",
-		"dropDown": "_4ve_2a_dropDown",
-		"explorerRoot": "_4ve_2a_explorerRoot",
-		"explorerRailCollapsed": "_4ve_2a_explorerRailCollapsed",
-		"editorSearchInput": "_4ve_2a_editorSearchInput",
-		"dropUp": "_4ve_2a_dropUp",
-		"tabBoundaryError": "_4ve_2a_tabBoundaryError",
-		"producedChip": "_4ve_2a_producedChip",
-		"divider": "_4ve_2a_divider",
-		"gitDiffDel": "_4ve_2a_gitDiffDel",
-		"terminalRetry": "_4ve_2a_terminalRetry",
-		"sandboxAction": "_4ve_2a_sandboxAction",
-		"browserBar": "_4ve_2a_browserBar",
-		"kernelPane": "_4ve_2a_kernelPane",
-		"editorCmHidden": "_4ve_2a_editorCmHidden",
-		"gitPlaceholder": "_4ve_2a_gitPlaceholder",
-		"splitRow": "_4ve_2a_splitRow",
-		"explorerDir": "_4ve_2a_explorerDir",
-		"mermaidModalToolbar": "_4ve_2a_mermaidModalToolbar",
-		"terminalBanner": "_4ve_2a_terminalBanner",
-		"explorerRowDropTarget": "_4ve_2a_explorerRowDropTarget",
-		"editorImage": "_4ve_2a_editorImage",
-		"openWithLabel": "_4ve_2a_openWithLabel",
-		"terminalWrap": "_4ve_2a_terminalWrap",
-		"editorHeader": "_4ve_2a_editorHeader",
-		"editorPlaceholder": "_4ve_2a_editorPlaceholder",
-		"editorPdfToolbar": "_4ve_2a_editorPdfToolbar",
-		"gitDiffTabHeader": "_4ve_2a_gitDiffTabHeader",
-		"gitDiffMetaText": "_4ve_2a_gitDiffMetaText",
-		"gitCommitButton": "_4ve_2a_gitCommitButton",
-		"orphanedType": "_4ve_2a_orphanedType",
-		"panelHidden": "_4ve_2a_panelHidden",
-		"sandboxDot": "_4ve_2a_sandboxDot",
-		"explorerError": "_4ve_2a_explorerError",
-		"gitBranchSelect": "_4ve_2a_gitBranchSelect"
+		"editorModeToggle": "EGBF5W_editorModeToggle",
+		"bottomPanel": "EGBF5W_bottomPanel",
+		"bottomResizeActive": "EGBF5W_bottomResizeActive",
+		"dropUp": "EGBF5W_dropUp",
+		"explorerBody": "EGBF5W_explorerBody",
+		"uploadDropZone": "EGBF5W_uploadDropZone",
+		"uploadDropZoneText": "EGBF5W_uploadDropZoneText",
+		"uploadDropChatCard": "EGBF5W_uploadDropChatCard",
+		"explorerSelectionBar": "EGBF5W_explorerSelectionBar",
+		"uploadOverlayProgress": "EGBF5W_uploadOverlayProgress",
+		"editorTreePanel": "EGBF5W_editorTreePanel",
+		"explorerRow": "EGBF5W_explorerRow",
+		"editorTreeSearch": "EGBF5W_editorTreeSearch",
+		"explorerCopied": "EGBF5W_explorerCopied",
+		"explorerDir": "EGBF5W_explorerDir",
+		"tabBarDrop": "EGBF5W_tabBarDrop",
+		"explorerAppIcon": "EGBF5W_explorerAppIcon",
+		"explorerEmpty": "EGBF5W_explorerEmpty",
+		"editorHeader": "EGBF5W_editorHeader",
+		"sandboxStatusOn": "EGBF5W_sandboxStatusOn",
+		"dividerCol": "EGBF5W_dividerCol",
+		"editorBanner": "EGBF5W_editorBanner",
+		"editorHtml": "EGBF5W_editorHtml",
+		"editorCmHidden": "EGBF5W_editorCmHidden",
+		"mermaidInfo": "EGBF5W_mermaidInfo",
+		"uploadOverlayCard": "EGBF5W_uploadOverlayCard",
+		"mermaidModal": "EGBF5W_mermaidModal",
+		"editorPdfToolbar": "EGBF5W_editorPdfToolbar",
+		"panel": "EGBF5W_panel",
+		"tabBoundaryError": "EGBF5W_tabBoundaryError",
+		"toggleButton": "EGBF5W_toggleButton",
+		"gitDiffTabHeader": "EGBF5W_gitDiffTabHeader",
+		"editorHtmlBlock": "EGBF5W_editorHtmlBlock",
+		"explorerBroken": "EGBF5W_explorerBroken",
+		"explorerRenaming": "EGBF5W_explorerRenaming",
+		"explorerActionError": "EGBF5W_explorerActionError",
+		"gitDiffTab": "EGBF5W_gitDiffTab",
+		"tocBar": "EGBF5W_tocBar",
+		"editorTreeDock": "EGBF5W_editorTreeDock",
+		"editorDownloadLink": "EGBF5W_editorDownloadLink",
+		"uploadDropZonePill": "EGBF5W_uploadDropZonePill",
+		"editorPdfDragShield": "EGBF5W_editorPdfDragShield",
+		"nativeTabHost": "EGBF5W_nativeTabHost",
+		"editorTreePanelFull": "EGBF5W_editorTreePanelFull",
+		"gitDiffTabTitle": "EGBF5W_gitDiffTabTitle",
+		"browserBlockedDesc": "EGBF5W_browserBlockedDesc",
+		"explorerError": "EGBF5W_explorerError",
+		"panelBody": "EGBF5W_panelBody",
+		"uploadDropChatHint": "EGBF5W_uploadDropChatHint",
+		"tabTitle": "EGBF5W_tabTitle",
+		"sandboxDot": "EGBF5W_sandboxDot",
+		"tabList": "EGBF5W_tabList",
+		"editorPdfFrame": "EGBF5W_editorPdfFrame",
+		"tocButton": "EGBF5W_tocButton",
+		"openWithChevron": "EGBF5W_openWithChevron",
+		"tocItem": "EGBF5W_tocItem",
+		"gitPlaceholder": "EGBF5W_gitPlaceholder",
+		"tocPanel": "EGBF5W_tocPanel",
+		"editorModeButton": "EGBF5W_editorModeButton",
+		"uploadDropHero": "EGBF5W_uploadDropHero",
+		"boundaryError": "EGBF5W_boundaryError",
+		"paneTab": "EGBF5W_paneTab",
+		"uploadOverlayTitle": "EGBF5W_uploadOverlayTitle",
+		"editorTitle": "EGBF5W_editorTitle",
+		"tabActive": "EGBF5W_tabActive",
+		"editorTreeToggleActive": "EGBF5W_editorTreeToggleActive",
+		"editorPptxButton": "EGBF5W_editorPptxButton",
+		"openWithPinActive": "EGBF5W_openWithPinActive",
+		"editorDocxZoomRange": "EGBF5W_editorDocxZoomRange",
+		"browserFrame": "EGBF5W_browserFrame",
+		"explorerRenameInput": "EGBF5W_explorerRenameInput",
+		"mermaidMarkdown": "EGBF5W_mermaidMarkdown",
+		"browserInput": "EGBF5W_browserInput",
+		"explorerHeader": "EGBF5W_explorerHeader",
+		"tabBadge": "EGBF5W_tabBadge",
+		"explorerRowDropTarget": "EGBF5W_explorerRowDropTarget",
+		"tocItemLevel": "EGBF5W_tocItemLevel",
+		"explorerRef": "EGBF5W_explorerRef",
+		"explorerHiddenPane": "EGBF5W_explorerHiddenPane",
+		"mermaidModalButton": "EGBF5W_mermaidModalButton",
+		"paneEmptyCards": "EGBF5W_paneEmptyCards",
+		"editorPdfDragShieldActive": "EGBF5W_editorPdfDragShieldActive",
+		"editorSearchResult": "EGBF5W_editorSearchResult",
+		"explorerSelectionActions": "EGBF5W_explorerSelectionActions",
+		"explorerName": "EGBF5W_explorerName",
+		"explorerGitName": "EGBF5W_explorerGitName",
+		"uploadDropArtAccent": "EGBF5W_uploadDropArtAccent",
+		"editorCm": "EGBF5W_editorCm",
+		"editorModeActive": "EGBF5W_editorModeActive",
+		"editor": "EGBF5W_editor",
+		"editorPdfFrameBlocked": "EGBF5W_editorPdfFrameBlocked",
+		"mermaidWrap": "EGBF5W_mermaidWrap",
+		"mermaidCopy": "EGBF5W_mermaidCopy",
+		"editorStatus": "EGBF5W_editorStatus",
+		"editorError": "EGBF5W_editorError",
+		"explorerRowRevealed": "EGBF5W_explorerRowRevealed",
+		"dropCenter": "EGBF5W_dropCenter",
+		"paneDrop": "EGBF5W_paneDrop",
+		"splitCol": "EGBF5W_splitCol",
+		"dropRight": "EGBF5W_dropRight",
+		"dsh-row-in": "EGBF5W_dsh-row-in",
+		"uploadDropArtCut": "EGBF5W_uploadDropArtCut",
+		"uploadOverlayProgressFill": "EGBF5W_uploadOverlayProgressFill",
+		"editorSearchInput": "EGBF5W_editorSearchInput",
+		"tabBarPlus": "EGBF5W_tabBarPlus",
+		"explorerSymlink": "EGBF5W_explorerSymlink",
+		"paneTabHidden": "EGBF5W_paneTabHidden",
+		"sandboxStatusText": "EGBF5W_sandboxStatusText",
+		"browserBlocked": "EGBF5W_browserBlocked",
+		"chipIcon": "EGBF5W_chipIcon",
+		"browserBlockedButton": "EGBF5W_browserBlockedButton",
+		"dirtyDot": "EGBF5W_dirtyDot",
+		"mermaidHeader": "EGBF5W_mermaidHeader",
+		"mermaidModalToolbar": "EGBF5W_mermaidModalToolbar",
+		"openWithName": "EGBF5W_openWithName",
+		"explorerSelectionText": "EGBF5W_explorerSelectionText",
+		"dropLeft": "EGBF5W_dropLeft",
+		"tocFlash": "EGBF5W_tocFlash",
+		"paneCard": "EGBF5W_paneCard",
+		"tab": "EGBF5W_tab",
+		"uploadOverlayCancel": "EGBF5W_uploadOverlayCancel",
+		"dropDown": "EGBF5W_dropDown",
+		"editorBinaryNotice": "EGBF5W_editorBinaryNotice",
+		"dividerRow": "EGBF5W_dividerRow",
+		"editorStatusError": "EGBF5W_editorStatusError",
+		"dividerActive": "EGBF5W_dividerActive",
+		"editorPdf": "EGBF5W_editorPdf",
+		"explorerActionErrorText": "EGBF5W_explorerActionErrorText",
+		"browserBar": "EGBF5W_browserBar",
+		"split": "EGBF5W_split",
+		"workbench": "EGBF5W_workbench",
+		"editorMd": "EGBF5W_editorMd",
+		"iconButton": "EGBF5W_iconButton",
+		"tocItemText": "EGBF5W_tocItemText",
+		"uploadOverlay": "EGBF5W_uploadOverlay",
+		"orphanedType": "EGBF5W_orphanedType",
+		"uploadDropMask": "EGBF5W_uploadDropMask",
+		"browser": "EGBF5W_browser",
+		"browserStart": "EGBF5W_browserStart",
+		"explorerHidden": "EGBF5W_explorerHidden",
+		"uploadOverlayStatus": "EGBF5W_uploadOverlayStatus",
+		"splitChild": "EGBF5W_splitChild",
+		"sandboxStatus": "EGBF5W_sandboxStatus",
+		"mermaidError": "EGBF5W_mermaidError",
+		"terminalRetry": "EGBF5W_terminalRetry",
+		"sandboxStatusOff": "EGBF5W_sandboxStatusOff",
+		"editorSearchHint": "EGBF5W_editorSearchHint",
+		"sandboxAction": "EGBF5W_sandboxAction",
+		"tabClose": "EGBF5W_tabClose",
+		"mermaidBody": "EGBF5W_mermaidBody",
+		"selectionPopup": "EGBF5W_selectionPopup",
+		"explorer": "EGBF5W_explorer",
+		"uploadDropArtPrimary": "EGBF5W_uploadDropArtPrimary",
+		"dsh-toc-flash": "EGBF5W_dsh-toc-flash",
+		"divider": "EGBF5W_divider",
+		"tabBar": "EGBF5W_tabBar",
+		"mermaidCode": "EGBF5W_mermaidCode",
+		"explorerRoot": "EGBF5W_explorerRoot",
+		"mermaidModalStage": "EGBF5W_mermaidModalStage",
+		"editorPdfStage": "EGBF5W_editorPdfStage",
+		"editorBinary": "EGBF5W_editorBinary",
+		"openWithPin": "EGBF5W_openWithPin",
+		"openWithLabel": "EGBF5W_openWithLabel",
+		"pane": "EGBF5W_pane",
+		"editorPathInput": "EGBF5W_editorPathInput",
+		"bottomPanelHidden": "EGBF5W_bottomPanelHidden",
+		"bottomClose": "EGBF5W_bottomClose",
+		"paneContent": "EGBF5W_paneContent",
+		"editorTreeResize": "EGBF5W_editorTreeResize",
+		"browserBlockedActions": "EGBF5W_browserBlockedActions",
+		"explorerRowSelected": "EGBF5W_explorerRowSelected",
+		"bottomResize": "EGBF5W_bottomResize",
+		"explorerDirChanged": "EGBF5W_explorerDirChanged",
+		"mermaidModalHint": "EGBF5W_mermaidModalHint",
+		"browserBlockedTitle": "EGBF5W_browserBlockedTitle",
+		"browserMessage": "EGBF5W_browserMessage",
+		"gitError": "EGBF5W_gitError",
+		"dropOverlay": "EGBF5W_dropOverlay",
+		"splitRow": "EGBF5W_splitRow",
+		"editorMain": "EGBF5W_editorMain",
+		"gitEmpty": "EGBF5W_gitEmpty",
+		"editorPlaceholder": "EGBF5W_editorPlaceholder",
+		"editorBody": "EGBF5W_editorBody"
 	};
 	//#endregion
 	//#region src/client/mermaid.tsx
@@ -200323,6 +200747,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 			startOnLoad: false,
 			securityLevel: "strict",
 			htmlLabels: false,
+			suppressErrorRendering: true,
 			theme: isDarkScheme() ? "dark" : "default"
 		});
 	}
@@ -200569,7 +200994,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 						onClick: onCopy,
 						"aria-label": t("copy"),
 						title: t("copy"),
-						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCopyOutline16, {}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: copied ? t("copied") : t("copy") })]
+						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCopyOutlineRegular, {}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: copied ? t("copied") : t("copy") })]
 					})]
 				}),
 				error !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
@@ -200597,18 +201022,41 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		});
 	}
 	/**
-	* True when a rendered CodeBlock is a mermaid fence. The DSH CodeBlock has
-	* two bodies: the shiki path carries the `language-*` class on generated
-	* <code> elements, while the plain path (which is always the one mermaid
-	* takes — no shiki grammar) only shows the language in the banner
-	* infostring (first element of the banner row; CSS-module classes are
-	* hashed, so that match is structural).
+	* Fence bodies of every mermaid fence in the source, normalized for matching
+	* against the rendered block.
+	* @param text - the markdown source the same component renders.
+	* @returns the trailing-whitespace-normalized diagram sources.
 	*/
-	function isMermaidBlock(block) {
+	function mermaidFenceBodies(text) {
+		const bodies = /* @__PURE__ */ new Set();
+		for (const block of splitMermaidBlocks(text)) if (block.kind === "mermaid") bodies.add(block.code.trimEnd());
+		return bodies;
+	}
+	/** The block's fence body as rendered: CodeBlock trims one trailing newline. */
+	function blockBody(block) {
+		return (block.querySelector("code")?.textContent ?? "").trimEnd();
+	}
+	/**
+	* True when a rendered CodeBlock is a mermaid fence.
+	*
+	* The match is by FENCE BODY, not by the header: DSH ≤ 0.1.7-alpha.1 rendered a
+	* banner whose info string said `mermaid`, but rc.1's code card shows
+	* `labels.codeLabel` for any language the highlighter does not know, and
+	* mermaid has no shiki grammar — so once the card is adopted the language word
+	* is nowhere in the DOM. The body is, in both card variants, and the component
+	* already has the source that produced it.
+	*
+	* The `language-mermaid` class stays as the first probe: the highlighted arm
+	* would carry it if a grammar ever appears for the fence.
+	* @param block - one rendered `.md-code-block`.
+	* @param bodies - {@link mermaidFenceBodies} of the source being rendered.
+	* @returns whether this block holds a mermaid diagram.
+	*/
+	function isMermaidBlock(block, bodies) {
 		const code = block.querySelector("code");
-		if (code !== null && [...code.classList].some((c) => c.startsWith("language-mermaid"))) return true;
-		const infostring = block.firstElementChild?.firstElementChild?.firstElementChild;
-		return infostring !== null && infostring !== void 0 && (infostring.textContent ?? "").trim() === "mermaid";
+		if (code === null) return false;
+		if ([...code.classList].some((c) => c.startsWith("language-mermaid"))) return true;
+		return bodies.has(blockBody(block));
 	}
 	/**
 	* The chunk-resident markdown preview renderer: ONE MarkdownText pass over
@@ -200620,7 +201068,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 	* Only mounted when the source contains at least one mermaid fence (see
 	* TextEditor.tsx).
 	*/
-	function MermaidMarkdown({ text, labels }) {
+	function MermaidMarkdown({ text, codeLabels }) {
 		const containerRef = (0, react.useRef)(null);
 		const mountsRef = (0, react.useRef)(/* @__PURE__ */ new Map());
 		(0, react.useLayoutEffect)(() => {
@@ -200628,9 +201076,10 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 			if (container === null) return;
 			const mounts = mountsRef.current;
 			const seen = /* @__PURE__ */ new Set();
+			const bodies = mermaidFenceBodies(text);
 			for (const block of container.querySelectorAll(".md-code-block")) {
 				const mount = mounts.get(block);
-				if (!isMermaidBlock(block)) {
+				if (!isMermaidBlock(block, bodies)) {
 					if (mount !== void 0) {
 						mount.root.unmount();
 						block.replaceChildren(...mount.removed);
@@ -200672,10 +201121,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 			className: sidebar_module_css_default.mermaidMarkdown,
 			ref: containerRef,
-			children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.MarkdownText, {
-				text,
-				labels
-			})
+			children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.MarkdownText, { ...markdownTextProps(text, codeLabels) })
 		});
 	}
 	//#endregion

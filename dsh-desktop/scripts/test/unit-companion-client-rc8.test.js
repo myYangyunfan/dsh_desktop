@@ -221,7 +221,17 @@ test('修复自检: 使用 bindSnapshotSelector 的插件都带 rc.8 等价重�
     const src = fs.readFileSync(path.join(PLUGINS_ROOT, name, 'lib', 'client.js'), 'utf8');
     return /bindSnapshotSelector\(/.test(src.replace(/^\s*\/\/.*$/gm, ''));
   });
-  assert.ok(users.length >= 5, `预期至少 5 个插件消费 bindSnapshotSelector，实际 ${users.length}`);
+  // 成员点名而不是「≥N」：点名能在「某个插件的阶梯被整体删掉」时立刻指出是谁，
+  // 而下限哨兵会放过去（2026-10 远端更新实测：dsh-prompt-custom 0.3.5 换成
+  // 「独立移植版，不依赖内核 settings API」，自带选择器阶梯随之外移，消费面 5→4）。
+  const EXPECTED_USERS = [
+    'dsh-conversation-tweaks',
+    'dsh-openclaw-bridge',
+    'dsh-quest-ui',
+    'dsh-subagent-lens',
+  ];
+  assert.deepStrictEqual(users, EXPECTED_USERS,
+    '消费 bindSnapshotSelector 的插件集合发生漂移（新增要确认阶梯正确，减少要确认它真的不再需要 settings 快照）');
   for (const name of users) {
     const src = fs.readFileSync(path.join(PLUGINS_ROOT, name, 'lib', 'client.js'), 'utf8');
     assert.ok(src.includes('useSyncExternalStoreWithSelector'),

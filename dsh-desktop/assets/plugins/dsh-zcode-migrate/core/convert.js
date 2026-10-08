@@ -298,7 +298,7 @@ export function convertSession(session, messages, options = {}) {
         continue
       }
       const synthetic = data.synthetic === true || (data.source && data.source.kind && data.source.kind !== 'user')
-      const source = synthetic ? { kind: 'plugin', plugin: 'zcode' } : { kind: 'user' }
+      const source = synthetic ? { kind: 'plugin:zcode' } : { kind: 'user' }
       const messageSeq = emit(
         'user/message',
         message.timeCreated,

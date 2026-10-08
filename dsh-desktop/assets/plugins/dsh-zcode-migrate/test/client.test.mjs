@@ -14,10 +14,14 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { pathToFileURL } from 'node:url'
 import { join, dirname } from 'node:path'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const BUNDLE = join(HERE, '..', 'lib', 'client.js')
+// 注册名的期望值取 package.json，别写死字面量：内核是按包名向 boot graph 要这一行的，
+// 写死会让测试和门禁各认一份名字（真机就是因为两边都写裸名而一起错）。
+const PKG_NAME = JSON.parse(readFileSync(join(HERE, '..', 'package.json'), 'utf8')).name
 
 const T = 1_760_000_000_000
 const CWD = 'C:/proj-a'
@@ -90,7 +94,7 @@ async function mount() {
     globalThis.window = previousWindow
   }
   assert.equal(loaded.length, 1, 'bundle 必须恰好调用一次 __ModuleLoader__.load')
-  assert.equal(loaded[0].id, 'dsh-zcode-migrate')
+  assert.equal(loaded[0].id, PKG_NAME)
 
   const { react, begin, onRender } = makeReact()
   const require = (name) => {

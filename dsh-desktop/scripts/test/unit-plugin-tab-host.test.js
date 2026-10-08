@@ -7,10 +7,23 @@
 // 空的。用户实报：「点击侧边栏文件后不会在右边预览」「我希望的是在右边侧边栏能够
 // 预览」——预览其实开了，只是开在了会话列下方那条底部面板里。
 //
-// 判据：文件打开（openSidebarFile 的 editor 种子）必须显式点名落点树 'splits'
-// （右侧 workbench），且 service 侧必须真的把 seed.host 应用到落点（rehostTab：
-// 已在目标树 → 仅激活；在另一棵树 → 搬过去并清空/剪掉原 leaf）。
-// src 与随包分发的两个 lib 双向校验（源与产物同源，漏改任一侧即红）。
+// 0.24.1 重皮后这一面的模型换了，**故障面不变（落点必须可见、同文件不重复开）**，
+// 判据随迁：
+//   · 插件不再自绘右列 —— 右列归内核（`sidebarRightTabs` 注册 + native surface），
+//     内部树只剩 `bottomSplits` 一棵。所以 0.15.3 时代我们手改进产物的
+//     「三棵树 + seed.host 点名落点」整套形态（`SidebarTreeKey` / `rehostTab` /
+//     `host: 'splits'` / `src/client/intercept.tsx`）在 src 与产物里**整体绝迹**，
+//     本文件末尾把它做成反向锁（复活即红），而不是留着空转。
+//   · 落点可见性改由两处保证：service 的 land 走 `openTabInBottomPane`（它自己置
+//     `bottomOpen: true`），且 reducer 收尾再兜一次 `landed.bottomOpen ? landed : {..., bottomOpen: true}`；
+//     有 native surface 时改走 `surface.openTab({ revealIfOpened, preferNewPane })`。
+//   · 同文件不重复开由 editor 描述符的 `dedupeKey: (tab) => tab.path` + 路径派生 id
+//     （`editor:<absolute>`）双保证。
+//
+// 判据来源：落点 reducer 是**纯函数**，但 0.24.1 起 `state.ts` 被折进产物 factory 的
+// 无标记前奏（既没有逐文件镜像，也没有自己的 `//#region`），所以本文件自带一个
+// 按缩进配对花括号切函数的取数器（并当场断言定义唯一），切出的字节在 vm 里实跑 ——
+// 测的就是随包交付的那份实现。源侧与两个频道产物三向校验（漏一侧即红）。
 //
 // 用法：node --test scripts/test/unit-plugin-tab-host.test.js
 
@@ -18,95 +31,153 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
-const PLUGIN = path.join(__dirname, '..', '..', 'assets', 'plugins', 'dsh-better-sidebar');
+const { PLUGIN_DIR } = require('./fixtures/better-sidebar-region.js');
 
-/** 源码 + 两个随包产物（同一 src/client/index.tsx 编两遍：官方频道 / 注册表频道）。 */
-const SRC = 'src/client/service.ts';
-const STATE_SRC = 'src/client/state.ts';
-const INTERCEPT_SRC = 'src/client/intercept.tsx';
-const BUNDLES = ['lib/client.js', 'lib/client-registry.js'];
+const FILE_SRC = 'src/client/sidebar-file.ts';
+const SVC_SRC = 'src/client/service.ts';
+const TABS_SRC = 'src/client/builtins/tabs.tsx';
+const BUNDLES = ['client.js', 'client-registry.js'];
 
 function read(rel) {
-  return fs.readFileSync(path.join(PLUGIN, rel), 'utf8');
+  return fs.readFileSync(path.join(PLUGIN_DIR, rel), 'utf8');
 }
 
-test('文件打开必须点名右侧 workbench（host: splits），不得回到「跟随 activePane」', () => {
-  const offenders = [];
-  // openTab({ type: 'editor', … host: 'splits' })：种子里的 id 值是模板串
-  // （`editor:${absolute}`），字面量里带花括号，故窗口式匹配而不是 [^}]*。
-  const seedRe = (q) => new RegExp(
-    `openTab\\(\\{[\\s\\S]{0,400}?type:\\s*${q}editor${q}[\\s\\S]{0,400}?host:\\s*${q}splits${q}`,
-  );
+/**
+ * 从产物原文里按名字切出一个顶层函数：起点是 `function NAME(` 所在行的行首缩进，
+ * 终点是同缩进、只有 `}` 的那一行（函数体内层的收尾都更深）。
+ * 定义唯一性当场断言 —— 0.24.1 把 `state.ts` 整块折进了产物的无标记前奏
+ * （只有 `prefs.ts`/`service.ts` 这类有自己的 `//#region`），所以只能全文件扫 + 数定义。
+ */
+function sliceTopLevelFunction(text, name) {
+  const re = new RegExp(`^([ \\t]*)function ${name}\\(`, 'gm');
+  const starts = [...text.matchAll(re)];
+  assert.equal(starts.length, 1, `${name} 的定义应唯一，实得 ${starts.length}（多实现漂移前兆）`);
+  const match = starts[0];
+  const esc = match[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const body = text.slice(match.index);
+  const close = new RegExp(`^${esc}}$`, 'm').exec(body);
+  assert.ok(close !== null, `${name} 的收尾花括号未与函数同缩进（取数器假设失效，需随迁）`);
+  return body.slice(0, close.index + close[0].length);
+}
 
-  // 1) 文件打开漏斗：openSidebarFile 的 editor 种子必须带 host。
-  const interceptSrc = read(INTERCEPT_SRC);
-  if (!seedRe("'").test(interceptSrc)) {
-    offenders.push(`${INTERCEPT_SRC}：openSidebarFile 的 editor 种子缺 host: 'splits'`);
-  }
+/**
+ * 切出 `openTabInBottomPane` 及其依赖闭包（mapLeaf / firstLeaf / allLeaves / activateTab），
+ * 在 vm 里物化 —— 交回的就是交付字节里的那份实现。
+ */
+function loadLanding(bundleRel) {
+  const text = read(`lib/${bundleRel}`);
+  const names = ['openTabInBottomPane', 'mapLeaf', 'firstLeaf', 'allLeaves', 'activateTab'];
+  const source = names.map((n) => sliceTopLevelFunction(text, n)).join('\n');
+  const made = vm.runInNewContext(`${source}\n({ openTabInBottomPane })`, vm.createContext({ console }));
+  return { openTabInBottomPane: made.openTabInBottomPane, source };
+}
+
+/** 一个收起的默认工作台（字段形态取自 state.ts makeDefaultState）。 */
+function collapsedState(splits = { kind: 'leaf', id: 'p1', tabs: [], active: null }) {
+  return {
+    activePane: splits.id, nextBrowser: 1, expanded: [], revealed: [],
+    bottomOpen: false, bottomHeight: 220, bottomSplits: splits,
+  };
+}
+
+/** 编辑器 tab 种子（与 sidebar-file.ts 的漏斗同形）。 */
+function editorTab(absolute) {
+  return { id: `editor:${absolute}`, type: 'editor', title: absolute.slice(absolute.lastIndexOf('/') + 1), path: absolute };
+}
+
+// --- 落点语义：实跑交付字节 --------------------------------------------------
+
+test('文件打开必须把收起的工作台翻开并点亮落点（同树不重复开）', () => {
   for (const rel of BUNDLES) {
-    if (!seedRe('"').test(read(rel))) {
-      offenders.push(`${rel}：openSidebarFile 的 editor 种子缺 host: "splits"（产物未同步）`);
-    }
-  }
+    const { openTabInBottomPane } = loadLanding(rel);
+    const next = openTabInBottomPane(collapsedState(), editorTab('/w/a.md'));
+    assert.equal(next.bottomOpen, true, `${rel}：收起的面板打开文件后仍收起 → 就是 0.6.5 的「预览不出」原症状`);
+    assert.equal(next.activePane, 'p1', `${rel}：activePane 必须指向落点 leaf`);
+    assert.equal(next.bottomSplits.active, 'editor:/w/a.md', `${rel}：落点 leaf 未激活新 tab`);
+    // 跨 realm：vm 里 map 出来的 Array 不是本 realm 的原型，deepEqual 会假红，逐字段比。
+    const firstIds = next.bottomSplits.tabs.map((t) => t.id);
+    assert.equal(firstIds.length, 1, `${rel}：首开应只有 1 个 tab`);
+    assert.equal(firstIds[0], 'editor:/w/a.md', `${rel}：首开落点内容不对`);
 
-  // 2) seed 契约：OpenTabSeed 必须声明 host，且 openTab 必须真的用它。
-  const svc = read(SRC);
-  if (!/host\?:\s*SidebarTreeKey/.test(svc)) offenders.push(`${SRC}：OpenTabSeed 未声明 host?: SidebarTreeKey`);
-  if (!/seed\.host\s*!==\s*undefined[\s\S]{0,80}rehostTab\(landed,\s*tab\.id,\s*seed\.host\)/.test(svc)) {
-    offenders.push(`${SRC}：openTab 未把 seed.host 应用到落点（缺 rehostTab 调用）`);
-  }
-  for (const rel of BUNDLES) {
-    const s = read(rel);
-    if (!/seed\.host !== void 0\)\s*landed = rehostTab\(landed, tab\.id, seed\.host\)/.test(s)) {
-      offenders.push(`${rel}：产物里 openTab 未应用 seed.host（缺 rehostTab 调用）`);
-    }
-  }
+    // 同一 id 再开：只聚焦，不新增、不改写既有 tab（标题是 descriptor 的权威值）。
+    const refocused = openTabInBottomPane(next, { ...editorTab('/w/a.md'), title: '改名了' });
+    assert.equal(refocused.bottomSplits.tabs.length, 1, `${rel}：同 id 重复打开必须去重为聚焦`);
+    assert.equal(refocused.bottomSplits.tabs[0].title, 'a.md', `${rel}：聚焦不得覆盖既有 tab 的标题`);
 
-  // 3) 落点搬运语义：rehostTab 必须在（纯函数，state 侧）。
-  const stateSrc = read(STATE_SRC);
-  if (!/export function rehostTab\(state: SidebarState, tabId: string, host: SidebarTreeKey\)/.test(stateSrc)) {
-    offenders.push(`${STATE_SRC}：缺 rehostTab 纯函数`);
+    // 分栏树：落在 firstLeaf（不是当前 activePane，也不再是「谁最后被激活跟谁」）。
+    const split = {
+      kind: 'split', id: 's1', dir: 'row', sizes: [0.5, 0.5],
+      children: [
+        { kind: 'leaf', id: 'left', tabs: [], active: null },
+        { kind: 'leaf', id: 'right', tabs: [{ ...editorTab('/w/old.ts'), id: 'x' }], active: 'x' },
+      ],
+    };
+    const landed = openTabInBottomPane(collapsedState(split), editorTab('/w/new.ts'));
+    assert.equal(landed.bottomSplits.children[0].tabs.length, 1, `${rel}：应落进 firstLeaf`);
+    assert.equal(landed.bottomSplits.children[1].tabs.length, 1, `${rel}：不该动另一棵 leaf`);
+    assert.equal(landed.activePane, 'left', `${rel}：activePane 必须跟随实际落点`);
   }
-  for (const rel of BUNDLES) {
-    if (!/function rehostTab\(state, tabId, host\)/.test(read(rel))) {
-      offenders.push(`${rel}：产物里缺 rehostTab 实现`);
-    }
-  }
-
-  assert.deepEqual(offenders, [], '文件打开落点未固定到右侧 workbench：\n' + offenders.join('\n'));
 });
 
-test('rehostTab 必须是「同树仅激活、跨树才搬移」，且搬移后清空的原 leaf 要被剪掉', () => {
-  const src = read(STATE_SRC);
-  const fnStart = src.indexOf('export function rehostTab(');
-  assert.notEqual(fnStart, -1, 'state.ts 里找不到 rehostTab');
-  // 取到函数体结束（下一个顶层 export function 之前）
-  const nextTop = src.indexOf('\nexport function ', fnStart + 10);
-  const body = src.slice(fnStart, nextTop === -1 ? src.length : nextTop);
+// --- 漏斗与两条分支：源与两个频道产物对等 -----------------------------------
 
-  const offenders = [];
-  if (!/treeOf\(state, from\) === host\)\s*return activateTab\(state, from, tabId\)/.test(body)) {
-    offenders.push('缺「已在目标树 → 仅激活」的短路（否则每次打开都会把 tab 重新搬一遍）');
+test('文件打开只有一个漏斗，且 id 按绝对路径派生（src 与两产物同形）', () => {
+  // 种子对象在产物里被拆行，用窗口式匹配而不是 [^}]*。
+  const funnelSrc = (q) => 'ctx\\.get\\(' + q + 'betterSidebar' + q +
+    '\\)\\?\\.openTab\\(\\{[\\s\\S]{0,240}?id: `editor:\\$\\{absolute\\}`';
+  const funnel = (q) => new RegExp(funnelSrc(q));
+  assert.ok(funnel("'").test(read(FILE_SRC)), `${FILE_SRC}：openSidebarFile 的 editor 种子缺路径派生 id`);
+  for (const rel of BUNDLES) assert.ok(funnel('"').test(read(`lib/${rel}`)), `lib/${rel}：漏斗形态与 src 不同源`);
+  // 去重的另一半：editor 描述符按 path 去重（id 只是同 path 的的稳定形）。
+  assert.match(read(TABS_SRC), /dedupeKey: \(tab\) => tab\.path/, `${TABS_SRC}：editor 描述符未按 path 去重`);
+  for (const rel of BUNDLES) {
+    assert.match(read(`lib/${rel}`), /dedupeKey: \(tab\) => tab\.path/, `lib/${rel}：产物里 editor 去重键丢失`);
   }
-  if (!/return moveTab\(state, from, tabId, target\.id\)/.test(body)) {
-    offenders.push('缺跨树搬移（moveTab 负责清空/剪掉原 leaf 并设置 activePane）');
-  }
-  if (!/firstLeaf\(state\[host\]\)/.test(body)) {
-    offenders.push('目标树的 activePane 不在该树时的兜底缺失（应退回该树 firstLeaf）');
-  }
-  assert.deepEqual(offenders, [], offenders.join('\n'));
 });
 
-test('两个频道产物同源：编辑 seed 的 host 值必须一致（改一侧忘另一侧即红）', () => {
-  const offenders = [];
-  const markers = [];
+test('落点两条分支都在场：无 native surface 走工作台并兜底翻开，有则交内核 surface', () => {
+  const src = read(SVC_SRC);
+  assert.match(src, /const land = openTabInBottomPane/, `${SVC_SRC}：内部落点不再是 openTabInBottomPane`);
+  assert.match(src, /return landed\.bottomOpen \? landed : \{ \.\.\.landed, bottomOpen: true \}/,
+    `${SVC_SRC}：reducer 收尾的翻开兜底丢失（可见性只靠 land 一处，回归面翻倍）`);
+  assert.match(src, /surface\.openTab\(\{[\s\S]{0,200}revealIfOpened/, `${SVC_SRC}：native surface 分支缺 revealIfOpened`);
   for (const rel of BUNDLES) {
-    const s = read(rel);
-    const hits = s.match(/host: "splits"/g) || [];
-    markers.push(hits.length);
-    if (hits.length < 1) offenders.push(`${rel}：host: "splits" 缺失`);
+    const s = read(`lib/${rel}`);
+    assert.match(s, /const land = openTabInBottomPane/, `lib/${rel}：内部落点分支丢失`);
+    assert.match(s, /return landed\.bottomOpen \? landed : \{/, `lib/${rel}：翻开兜底分支丢失`);
+    assert.ok((s.match(/surface\.openTab\(/g) || []).length >= 2, `lib/${rel}：native surface 分支调用数少于 2`);
   }
-  assert.deepEqual(offenders, [], offenders.join('\n'));
-  assert.equal(markers[0], markers[1], '两个频道的 host 出现次数不一致（产物不同源）');
+});
+
+// --- 反向锁：0.15.3 的手改进物形态不得复活 ----------------------------------
+
+test('反向锁：三棵树 + seed.host 点名的旧形态在 src 与产物里必须绝迹', () => {
+  const RETIRED = ['SidebarTreeKey', 'rehostTab', "host: 'splits'", 'host: "splits"', 'treeOf('];
+  const sources = [FILE_SRC, SVC_SRC, 'src/client/state.ts', TABS_SRC, ...BUNDLES.map((b) => `lib/${b}`)];
+  const revived = [];
+  for (const rel of sources) {
+    const text = read(rel);
+    for (const token of RETIRED) if (text.includes(token)) revived.push(`${rel} 复活了 ${token}`);
+  }
+  assert.deepEqual(revived, [], '旧落点形态复活：\n' + revived.join('\n'));
+  // intercept.tsx 由上游自己删的（turnTail 从 chain 变 list 后重复），漏斗已搬进 sidebar-file.ts。
+  assert.equal(fs.existsSync(path.join(PLUGIN_DIR, 'src', 'client', 'intercept.tsx')), false,
+    'src/client/intercept.tsx 不应存在：0.24.1 已把文件打开半段搬进 sidebar-file.ts');
+});
+
+// --- 反证（防判据恒真）------------------------------------------------------
+
+test('反证：抽掉交付字节里的 bottomOpen 置位，落点判据必须当场变红', () => {
+  const { openTabInBottomPane, source } = loadLanding('client.js');
+  assert.equal(openTabInBottomPane(collapsedState(), editorTab('/w/a.md')).bottomOpen, true,
+    '夹具自身：现网字节必须翻开');
+  const mutated = source.replace('bottomOpen: true,', '');
+  assert.notEqual(mutated, source, '夹具自身：变异点必须命中');
+  const broken = vm.runInNewContext(`${mutated}\n({ openTabInBottomPane })`, vm.createContext({ console }));
+  assert.equal(broken.openTabInBottomPane(collapsedState(), editorTab('/w/a.md')).bottomOpen, false,
+    '判据恒真：去掉置位后面板仍是开的');
+  // 取数器自身的失效模式也要被咬：函数名不存在 → 直接抛，而不是静默少切一块。
+  assert.throws(() => sliceTopLevelFunction(source, 'noSuchReducer'));
 });

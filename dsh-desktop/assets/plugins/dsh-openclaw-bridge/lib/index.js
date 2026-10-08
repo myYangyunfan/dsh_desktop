@@ -8,7 +8,7 @@
 // 设计要点：
 //  - 会话映射：OpenClaw 端配置的 model 名 -> 一个常驻 DSH Agent（跨轮记忆与工具状态连续）；
 //  - 注入 API：与官方 dsh-headless 一次性驱动器相同的核心调用链
-//    （agents.create + agent.followup + agent.whenIdle + session.events）；
+//    （agents.create + agent.followup + agent.whenIdle + ctx.on("session/event")）；
 //  - 历史去重：OpenClaw 每轮回放完整 messages，本插件只注入"尚未注入过"的用户消息，
 //    已注入计数随 history 压缩自动重置；
 //  - 隔离：每个映射会话有独立工作目录 ~/.dsh/openclaw-bridge/workspace/<key>；
@@ -45,6 +45,44 @@ import { segmentReply, sessionIdFor, createSessionMap } from "./core/session.js"
 import { qrSvg } from "./core/qrcode.js";
 import { OpenAiCompatAdapter, PROVIDER_ID } from "./openai-compat.js";
 
+// <<BEGIN settings-host（由 tools/codemod/apply-settings-scope.mjs 生成，勿单包手改）>>
+const VOLATILE_WRITE = Symbol.for("cosmokit.volatile.write");
+
+/** 把 config 里的 volatile 引用摊平成普通值（同 dsh-settings 的 plainConfig）。 */
+function plainSettings(value) {
+	if (typeof value !== "object" || value === null) return value;
+	if (VOLATILE_WRITE in value) return plainSettings(typeof value.get === "function" ? value.get() : undefined);
+	if (Array.isArray(value)) return value.map(plainSettings);
+	return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, plainSettings(child)]));
+}
+
+/**
+ * 用声明式 Config 顶掉不存在的 ctx.settings.register。
+ * @param ctx - 本插件作用域
+ * @param entryConfig - apply 第二参（resolveConfig 校验过的 profile 行 config）
+ * @param entryId - **profile 条目 id**，即 settings/document-updated 回传的 ns
+ * @returns 与旧 scope 同名的 { get(), watch(fn) }，调用方不必改形状
+ */
+function mountSettingsScope(ctx, entryConfig, entryId) {
+	const state = { current: plainSettings(entryConfig) || {} };
+	const listeners = /* @__PURE__ */ new Set();
+	ctx.on("settings/document-updated", (ns) => {
+		if (ns !== entryId) return;
+		state.current = plainSettings(entryConfig) || {};
+		for (const fn of [...listeners]) fn(state.current);
+	});
+	return {
+		get: () => state.current,
+		watch(fn) {
+			listeners.add(fn);
+			return () => { listeners.delete(fn); };
+		}
+	};
+}
+// <<END settings-host>>
+
+// 必须与 bundle 补丁行里的 name 以及 client.js 的 __ModuleLoader__ id 一致，
+// 改名后若留旧值，页内半边会因 id 对不上而静默不加载。
 const name = "@deepseek-ai/dsh-openclaw-bridge";
 // "settings" 必须在 inject 里：ctx.settings 是 cordis 服务代理，未声明即访问
 // 抛 "cannot get property 'settings' without inject"——apply() 里设置节注册
@@ -61,38 +99,38 @@ const NS = "openclaw-bridge";
 const Config = z.object({
   // "provider/model" 或仅 "model"（provider 缺省时沿用 DSH 默认模型的 provider）；
   // 留空 = 使用 DSH 设置的默认模型。
-  model: z.string().default(""),
+  model: z.string().volatile().default(""),
   // 桥接 Bearer token；留空 = 环境变量 OPENCLAW_BRIDGE_TOKEN 或
   // ~/.dsh/openclaw-bridge/token.txt 自动生成值。
-  token: z.string().default(""),
+  token: z.string().volatile().default(""),
   // 微信会话的工作目录（绝对路径）；留空 = 使用隔离的桥接工作区。
   // 远程办公时把它指到你的真实项目目录（如 C:\Users\you\Desktop\work）。
-  workspace: z.string().default(""),
+  workspace: z.string().volatile().default(""),
   // 微信用户白名单（逗号分隔的 from_user_id，形如 xxx@im.wechat）；
   // 留空 = 允许所有给你发消息的人驱动 agent。
-  allowlist: z.string().default(""),
+  allowlist: z.string().volatile().default(""),
   // 第三方 OpenAI 兼容端点（别家公司的模型）。customBaseURL 非空时，
   // 接收模型改走通用适配器（provider "openclaw-custom"，需 customModel）。
-  customBaseURL: z.string().default(""),
-  customApiKey: z.string().default(""),
-  customModel: z.string().default(""),
+  customBaseURL: z.string().volatile().default(""),
+  customApiKey: z.string().volatile().default(""),
+  customModel: z.string().volatile().default(""),
   // ---- IM 桥接（SPEC §8：微信 + 飞书双通道；QQ 由官方 @tencent-connect/dsh-qqbot 独立提供）----
   // 渠道开关："1" = 开，"0" = 关；微信/飞书留空 = 默认开（保持旧行为 + 配置迁移语义）。
-  enableWechat: z.string().default(""),
-  enableFeishu: z.string().default(""),
+  enableWechat: z.string().volatile().default(""),
+  enableFeishu: z.string().volatile().default(""),
   // 每渠道白名单（逗号分隔 id）；微信兼容旧字段 allowlist（whitelistWechat 优先）。
-  whitelistWechat: z.string().default(""),
-  whitelistFeishu: z.string().default(""),
+  whitelistWechat: z.string().volatile().default(""),
+  whitelistFeishu: z.string().volatile().default(""),
   // 飞书企业自建应用（P1）：AppID / App Secret / Encrypt Key（后两者不回显）。
-  feishuAppId: z.string().default(""),
-  feishuAppSecret: z.string().default(""),
-  feishuEncryptKey: z.string().default(""),
+  feishuAppId: z.string().volatile().default(""),
+  feishuAppSecret: z.string().volatile().default(""),
+  feishuEncryptKey: z.string().volatile().default(""),
   // 群聊回复署名 [群友 用户名]（A-03 默认开）。
-  groupSignature: z.string().default("1"),
+  groupSignature: z.string().volatile().default("1"),
   // agent 池上限（A-02：默认 16，可调大；池满按 LRU 淘汰空闲）。
-  maxAgents: z.string().default(""),
+  maxAgents: z.string().volatile().default(""),
   // 严格鉴权："1" = 回环地址也要求 Token（默认 "" = 回环免 Token，保持旧兼容）。
-  authAlways: z.string().default(""),
+  authAlways: z.string().volatile().default(""),
 });
 let liveConfig = () => ({}); // 取配置的 getter；setSource 会被替换为 settings scope 读取器
 
@@ -413,7 +451,7 @@ async function ensureAgent(ctx, key, cwdOverride) {
       let stored = false;
       if (persistence && typeof persistence.list === "function") {
         try {
-          stored = (await persistence.list()).some((h) => h && h.id === sid);
+          stored = (await persistence.list()).some((entry) => headerOf(entry)?.id === sid);
         } catch {
           stored = false;
         }
@@ -474,6 +512,18 @@ function wrapAgent(ctx, agent) {
   };
 }
 
+/**
+ * `sessionPersistence.list()` 的条目形状兼容口。
+ * 内核 0.1.7-rc.1 起条目是 `{ header, revision }`（dsh-session-persistence-jsonl 的
+ * list()），cwd/id 都在 `entry.header` 上；更早的内核直接把 header 摊在条目上。
+ * 真机教训：老代码按 `entry.id` 取，`/attach` 与「重启后 resume」都变成
+ * 「session not found / 每次新建」，而 mock 里条目写的就是 header 本身 —— 一路假绿。
+ */
+function headerOf(entry) {
+  if (!entry) return void 0;
+  return entry.header && typeof entry.header === "object" ? entry.header : entry;
+}
+
 /** 按会话 id 取活体 agent，否则从持久化恢复（与 dsh-host-apiproxy ensureSession 同构）。 */
 async function attachRec(ctx, sessionId) {
   const agents = ctx.get("agents");
@@ -485,7 +535,7 @@ async function attachRec(ctx, sessionId) {
   if (!selection) throw new Error("no model configured");
   const persistence = ctx.get("sessionPersistence");
   if (persistence) {
-    const stored = (await persistence.list()).find((header) => header && header.id === sessionId);
+    const stored = (await persistence.list()).find((entry) => headerOf(entry)?.id === sessionId);
     if (stored !== void 0) {
       const { agent } = await agents.resume({
         resumeSessionId: sessionId,
@@ -500,20 +550,47 @@ async function attachRec(ctx, sessionId) {
   throw new Error("session not found: " + sessionId);
 }
 
-/** 取 firstSeq 之后最后一条 assistant 文本（与 dsh-headless 的 summarize 同构）。 */
-function lastAssistantText(agent, firstSeq) {
-  let text = "";
-  for (const event of agent.session.events) {
-    if (event.seq < firstSeq) continue;
+// ---- 会话事件读数（订阅式）----
+// 内核 0.1.7-rc.1 的 Session 里**没有** events 数组（0.6.x 时代有，旧代码直接
+// 逐个读 agent.session.events，真机表现为整条 chat 链路 500：
+// "agent.session.events is not iterable"）。eventAt()/snapshotEvents() 仍在但已被
+// 内核标 deprecated（dsh-session 的 2026-09-09 agent note），官方读取姿势是
+// ctx.on("session/event", (session, event) => …) 并自行按会话身份过滤 ——
+// dsh-headless 的 json-stream 投影与 dsh-agent-loop 都这么写。
+// 本插件只需要两样东西：本回合最后一条 assistant 文本、本回合的 turn/end 原因。
+// 只留「最新一条 + seq」，不缓存事件数组：长回合事件成千上万，留尾巴既费内存
+// 又可能被截断，而我们要的永远是最后一条。
+const sessionFacts = new WeakMap(); // Session -> { text, textSeq, reason, reasonSeq }
+
+/** 订阅会话事件，维护上面那份 per-session 事实（apply 里挂一次，随 fiber 释放）。 */
+function watchSessionEvents(ctx) {
+  return ctx.on("session/event", (session, event) => {
+    if (!session || !event) return;
+    const known = sessionFacts.get(session);
+    const facts = known || { text: "", textSeq: -1, reason: void 0, reasonSeq: -1 };
     if (event.type === "assistant/message") {
       const joined = (event.data?.message?.content || [])
         .filter((b) => b && b.type === "text")
         .map((b) => b.text || "")
         .join("");
-      if (joined) text = joined;
+      if (!joined) return; // 只有工具调用的回合不产出文本，不覆盖上一段（保持旧语义）
+      facts.text = joined;
+      facts.textSeq = event.seq;
+    } else if (event.type === "turn/end") {
+      facts.reason = event.data?.reason;
+      facts.reasonSeq = event.seq;
+    } else {
+      return;
     }
-  }
-  return text;
+    if (!known) sessionFacts.set(session, facts);
+  });
+}
+
+/** 取 firstSeq 之后最后一条 assistant 文本（与 dsh-headless 的 summarize 同构）。 */
+function lastAssistantText(session, firstSeq) {
+  const facts = session ? sessionFacts.get(session) : void 0;
+  if (!facts || facts.textSeq < firstSeq) return "";
+  return facts.text || "";
 }
 
 /**
@@ -527,12 +604,13 @@ async function runTurn(rec, toInject, emit) {
     const agent = rec.agent;
     await agent.whenIdle(); // 吸收上一轮超时后仍在跑的回合
     if (toInject.length === 0) return { text: rec.lastText, reason: { kind: "skipped" } };
-    const firstSeq = agent.session.seq;
+    const session = agent.session;
+    const firstSeq = session.seq;
     let timer = null;
     let emitted = 0;
     if (emit) {
       timer = setInterval(() => {
-        const text = lastAssistantText(agent, firstSeq);
+        const text = lastAssistantText(session, firstSeq);
         if (text.length > emitted) {
           emit(text.slice(emitted));
           emitted = text.length;
@@ -549,18 +627,16 @@ async function runTurn(rec, toInject, emit) {
         );
         await withTimeout(agent.whenIdle(), TURN_TIMEOUT_MS, "agent turn exceeded " + TURN_TIMEOUT_MS + "ms");
       }
-      await rec.sessions.flush(agent.session);
+      await rec.sessions.flush(session);
     } finally {
       if (timer) clearInterval(timer);
     }
-    let text = lastAssistantText(agent, firstSeq);
+    let text = lastAssistantText(session, firstSeq);
     if (emit && text.length > emitted) emit(text.slice(emitted));
-    let reason;
-    for (const event of agent.session.events) {
-      if (event.seq < firstSeq) continue;
-      if (event.type === "turn/end") reason = event.data?.reason;
-    }
+    const facts = sessionFacts.get(session);
+    const reason = facts && facts.reasonSeq >= firstSeq ? facts.reason : void 0;
     if (reason && reason.kind === "error") {
+      console.warn("[openclaw-bridge] turn failed: " + String((reason.error && (reason.error.stack || reason.error.message)) || reason));
       const err = new Error((reason.error && reason.error.message) || "agent turn failed");
       err.status = 502;
       throw err;
@@ -632,14 +708,16 @@ async function handleChannelCommand(ctx, p) {
       for (const agent of agents.list()) {
         const session = agent && agent.session;
         if (!session) continue;
-        rows.push("live  " + session.id + "  (" + (session.meta?.cwd || "?") + ")");
+        rows.push("live  " + session.id + "  (" + (session.header?.cwd || "?") + ")");
       }
     }
     if (persistence) {
       const stored = await persistence.list();
-      for (const header of stored) {
+      for (const entry of stored) {
+        const header = headerOf(entry);
+        if (!header || !header.id) continue;
         if (agents && agents.get && agents.get(header.id)) continue; // 已在 live 列表
-        rows.push("saved " + header.id + "  (" + (header.meta?.cwd || header.cwd || "?") + ")");
+        rows.push("saved " + header.id + "  (" + (header.cwd || "?") + ")");
       }
     }
     if (rows.length === 0) {
@@ -808,6 +886,7 @@ function handleHealth(ctx, req, res) {
 
 function apply(ctx, config) {
   liveConfig = () => config || {};
+  watchSessionEvents(ctx); // 会话事件订阅（apply 内挂一次，随 fiber 释放）
   // 通用 OpenAI 兼容 provider：每次调用经 liveConfig() 读 baseURL/key/model，热生效
   const customAdapter = new OpenAiCompatAdapter(() => {
     const cfg = liveConfig() || {};
@@ -822,10 +901,10 @@ function apply(ctx, config) {
   try {
     let scope;
     try {
-      scope = ctx.settings.register(NS, Config, { base: config || {} });
+      scope = mountSettingsScope(ctx, config, "openclaw-bridge");
     } catch (baseError) {
       console.warn("[openclaw-bridge] stored config rejected, retrying with defaults: " + ((baseError && baseError.message) || baseError));
-      scope = ctx.settings.register(NS, Config, { base: {} });
+      scope = mountSettingsScope(ctx, config, "openclaw-bridge");
     }
     liveConfig = () => scope.get(); // source 是 () => scope.get() 的取值函数
     scope.watch(() => {

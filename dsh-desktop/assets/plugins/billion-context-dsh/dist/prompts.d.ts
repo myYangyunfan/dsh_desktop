@@ -22,13 +22,13 @@ export type PromptOverride<T> = {
     [K in keyof T]?: PromptInput;
 };
 export interface NudgePrompts {
-    /** 普通档首句。占位符:{pct} {philosophy} */
+    /** 普通档首句。占位符:{pct}（`{philosophy}` 仍被校验器接受,但 B6 会把渲染出的哲学段摘掉——它只能经系统提示到达模型) */
     normal: string;
-    /** 紧急档首句。占位符:{pct} {philosophy} */
+    /** 紧急档首句。占位符:{pct}（`{philosophy}` 同上) */
     emergency: string;
     /** 指导行（HOW_TO_COMPRESS_RULES）。无占位符 */
     guidance: string;
-    /** tier 蒸馏行。占位符:{tier} {count} {prevTier} {tokens} {seqs} */
+    /** tier 蒸馏行。占位符:{tier} {count} {prevTier} {tokens} {seqs} {firstSeq} {lastSeq} */
     tier: string;
     /** 上下文分解。占位符:{system} {tool} {summaries} {code} {text} */
     breakdown: string;

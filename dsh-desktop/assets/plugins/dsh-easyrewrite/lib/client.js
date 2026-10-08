@@ -11,6 +11,31 @@ window.__ModuleLoader__.load({
     var React = require("react");
     var Primitives = require("@deepseek-ai/dsh-client-ui-primitives");
 
+    /**
+     * 取第一个可用的图标导出。
+     *
+     * dsh 0.1.7 重排了图标导出名：名字里的数字从**尺寸**改成了**字重**
+     * （IconCheckOutline16 → IconCheckOutlineRegular；尺寸仍由 size prop 控制，
+     * 各字形的默认绘制尺寸没变）。旧名在新版解析为 undefined，而
+     * React.createElement(undefined) 会抛 #130 —— 崩的是整个
+     * conversation.chat.node 槽条目，不是"少一个图标"：撤回按钮会连同气泡一起消失。
+     *
+     * 所以两种写法都取：先旧名，保住 0.1.5 及以下；再新名，让 0.1.7 起恢复。
+     * 都取不到时退回空组件而不是 undefined —— 图标缺失只该少一个 glyph，
+     * 不该把整个气泡拖崩。
+     */
+    function pickIcon() {
+      for (var i = 0; i < arguments.length; i++) {
+        if (arguments[i]) return arguments[i];
+      }
+      return function EmptyIcon() { return null; };
+    }
+
+    var IconCheckOutline = pickIcon(Primitives.IconCheckOutline16, Primitives.IconCheckOutlineRegular);
+    var IconCopyOutline = pickIcon(Primitives.IconCopyOutline16, Primitives.IconCopyOutlineRegular);
+    var IconChevronLeftOutline = pickIcon(Primitives.IconChevronLeftOutline14, Primitives.IconChevronLeftOutlineRegular);
+    var IconChevronRightOutline = pickIcon(Primitives.IconChevronRightOutline14, Primitives.IconChevronRightOutlineRegular);
+
     var NS = "dsh-easyrewrite";
 
     /** 统一日志：默认静默（仅上报 host 落盘）；调试模式（localStorage dsh-easyrewrite:debug=1）时打印控制台。 */
@@ -422,7 +447,7 @@ window.__ModuleLoader__.load({
 
     // ---------- dsh 宿主版本比较（v2.4.0） ----------
     var MIN_DSH_VERSION = "0.1.2-rc.1";
-    var MAX_TESTED_DSH_VERSION = "0.1.2-rc.1";
+    var MAX_TESTED_DSH_VERSION = "0.1.7-rc.2";
     function dshVerRank(v) {
       var m = String(v || "").trim().match(/^(\d+)\.(\d+)\.(\d+)(?:-(alpha|rc)\.(\d+))?$/);
       if (!m) return null;
@@ -505,6 +530,122 @@ window.__ModuleLoader__.load({
       return React.useSyncExternalStore(subscribePending, function () { return readPending(sessionId); });
     }
 
+    /** 定位主发送/停止按钮（官方 card 区域内） */
+    function findPrimaryButton() {
+      try {
+        var card = document.querySelector("[data-composer-card]");
+        if (!card) return null;
+        var btns = card.querySelectorAll("button[aria-label]");
+        for (var i = 0; i < btns.length; i++) {
+          var al = (btns[i].getAttribute("aria-label") || "").toLowerCase();
+          if (al.indexOf("发送") !== -1 || al.indexOf("send") !== -1 || al.indexOf("停止") !== -1 || al.indexOf("stop") !== -1) return btns[i];
+        }
+      } catch (e) { /* ignore */ }
+      return null;
+    }
+
+    /** 判断按钮是否为运行中的「停止生成」按钮 */
+    function isStopButton(btn) {
+      if (!btn) return false;
+      var al = (btn.getAttribute("aria-label") || "").toLowerCase();
+      return al.indexOf("停止") !== -1 || al.indexOf("stop") !== -1;
+    }
+
+    var primaryButtonSendingTimer = null;
+    /** 发送按钮置灰与状态锁：长对话 fork/切换期间置灰且设为不可点击，防二次击穿 */
+    function setPrimaryButtonSendingState(sending) {
+      try {
+        var btn = findPrimaryButton();
+        if (primaryButtonSendingTimer) {
+          clearTimeout(primaryButtonSendingTimer);
+          primaryButtonSendingTimer = null;
+        }
+        if (!btn) return;
+        if (sending) {
+          btn.setAttribute("data-dsh-easyrewrite-sending", "true");
+          btn.disabled = true;
+          btn.style.setProperty("opacity", "0.45", "important");
+          btn.style.setProperty("pointer-events", "none", "important");
+          btn.style.setProperty("cursor", "not-allowed", "important");
+          btn.style.setProperty("filter", "grayscale(1)", "important");
+          // 15 秒超时兜底解锁（防任何异常或宿主卡死导致按钮永久置灰）
+          primaryButtonSendingTimer = setTimeout(function () {
+            setPrimaryButtonSendingState(false);
+          }, 15000);
+        } else {
+          btn.removeAttribute("data-dsh-easyrewrite-sending");
+          btn.disabled = false;
+          btn.style.removeProperty("opacity");
+          btn.style.removeProperty("pointer-events");
+          btn.style.removeProperty("cursor");
+          btn.style.removeProperty("filter");
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    /** 安全打开会话：多重降级通道，确保可靠切换会话 */
+    function safeOpenSession(targetId, props) {
+      if (props && typeof props.openSession === "function") {
+        try {
+          var r1 = props.openSession(targetId);
+          if (r1 !== false) return true;
+        } catch (e1) {
+          log("warn", "session", "props.openSession 失败，尝试降级通道", { targetId: targetId, err: String(e1 && e1.message ? e1.message : e1) });
+        }
+      }
+      try {
+        if (ctxUiWorkspaceRef && typeof ctxUiWorkspaceRef.openSession === "function") {
+          ctxUiWorkspaceRef.openSession(targetId);
+          return true;
+        }
+      } catch (e2) {
+        log("warn", "session", "ctxUiWorkspaceRef.openSession 失败", { targetId: targetId, err: String(e2 && e2.message ? e2.message : e2) });
+      }
+      try {
+        if (props && props.ctxSessions && typeof props.ctxSessions.open === "function") {
+          props.ctxSessions.open(targetId);
+          return true;
+        }
+      } catch (e3) {
+        log("warn", "session", "ctxSessions.open 失败", { targetId: targetId, err: String(e3 && e3.message ? e3.message : e3) });
+      }
+      log("error", "session", "所有切换会话通道均不可用", { targetId: targetId });
+      return false;
+    }
+
+    /**
+     * 向 Host 端请求物理拔除 fork 继承的幽灵队列（Issue #10 根治核心）。
+     * DSH 的 sessions.fork 会贪婪切入 boundary 到下一个 turn/start 之间的非回合事件，
+     * 导致旧消息的 agent/inbox/spliced 入队事件被子会话继承，而配对出队事件被截断，
+     * 在 Host 端的 Agent.inbox.nextTurn 留下悬空旧消息。
+     * 本函数直接调用 Host 路由 /bubble/clean-ghost 操作宿主 agent.inbox 彻底移除它。
+     */
+    async function requestCleanGhostQueue(targetSessionId) {
+      if (!targetSessionId) return { ok: false, cleared: 0, removedIds: [] };
+      try {
+        var resp = await fetch("/bubble/clean-ghost", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ sessionId: targetSessionId })
+        });
+        if (resp.ok) {
+          var data = await resp.json();
+          log("info", "clean-ghost", "Host 幽灵队列清理完成", {
+            sessionId: targetSessionId,
+            cleared: data.cleared,
+            removedIds: data.removedIds
+          });
+          return data;
+        }
+      } catch (e) {
+        log("warn", "clean-ghost", "请求 clean-ghost 异常（降级继续）", {
+          sessionId: targetSessionId,
+          err: String(e && e.message ? e.message : e)
+        });
+      }
+      return { ok: false, cleared: 0, removedIds: [] };
+    }
+
     /**
      * 「正在修改」条：**注入到输入框内部、文本输入位置上方**（textarea 正前方）。
      * 组成：灰色分割线（上边线）+ 左上「正在修改」标签 + 右上圆形 ×。
@@ -516,6 +657,8 @@ window.__ModuleLoader__.load({
       var L = useUILocaleDict();
       var pending = usePending(sessionId);
       var active = pending && pending.type === "recall";
+      var sendingRef = React.useRef(false);
+      var barRef = React.useRef(null);
 
       React.useEffect(function () {
         if (!active) return;
@@ -525,6 +668,7 @@ window.__ModuleLoader__.load({
         var scrollEl = document.querySelector("[data-input-scroll]");
         if (!scrollEl || !scrollEl.parentNode) return;
         var bar = document.createElement("div");
+        barRef.current = bar;
         bar.setAttribute("data-dsh-easyrewrite", "recall-bar");
         // bar 外挂且宽度动态=card 宽 → 左右零 margin/padding，label 与 × 直达 card 左右边缘（与输入框严格对齐；
         // margin:0 16px + 水平 padding 是分割线时代遗物，2026-09-04 用户反馈"离边框有点距离"后移除）
@@ -667,7 +811,9 @@ window.__ModuleLoader__.load({
           try { document.removeEventListener("dsh-easyrewrite:bar-tune", onBarTune); } catch (eBT2) { /* ignore */ }
         var onWinResize = function () { try { placeBar(); } catch (e) { /* ignore */ } };
         window.addEventListener("resize", onWinResize);
-          try { window.removeEventListener("resize", onWinResize); } catch (e4) { /* ignore */ } if (bar.parentNode) bar.parentNode.removeChild(bar);
+          try { window.removeEventListener("resize", onWinResize); } catch (e4) { /* ignore */ }
+          if (bar.parentNode) bar.parentNode.removeChild(bar);
+          barRef.current = null;
         };
       }, [active, sessionId, pending]);
 
@@ -767,23 +913,7 @@ window.__ModuleLoader__.load({
       }, [active, pending, sessionId]);
 
       // ---- 发送钩子：pending 存在时拦截 Enter 与发送按钮，先真正撤回再发送 ----
-      function findPrimaryButton() {
-        var card = document.querySelector("[data-composer-card]");
-        if (!card) return null;
-        var btns = card.querySelectorAll("button[aria-label]");
-        for (var i = 0; i < btns.length; i++) {
-          // 官方文案：zh "发送消息"/"停止…"；en "Send message"/"Stop…" → 子串匹配更稳
-          var al = (btns[i].getAttribute("aria-label") || "").toLowerCase();
-          if (al.indexOf("发送") !== -1 || al.indexOf("send") !== -1 || al.indexOf("停止") !== -1 || al.indexOf("stop") !== -1) return btns[i];
-        }
-        return null;
-      }
-      // review M1：停止生成按钮（运行中主按钮文案切换）——不得劫持
-      function isStopButton(btn) {
-        if (!btn) return false;
-        var al = (btn.getAttribute("aria-label") || "").toLowerCase();
-        return al.indexOf("停止") !== -1 || al.indexOf("stop") !== -1;
-      }
+      // （findPrimaryButton / isStopButton / setPrimaryButtonSendingState 在模块级已定义）
       // 撤回发送失败的可见提示：输入滚动区上方插入临时错误条（3.5s 自动移除）
       function showRecallError(text) {
         try {
@@ -902,10 +1032,22 @@ window.__ModuleLoader__.load({
         return chosen;
       }
 
-      var recallInFlight = false; // review M2：in-flight 锁，防 Enter/按钮并发重复 fork
       async function doRecallThenSend(p) {
-        if (recallInFlight) return;
-        recallInFlight = true;
+        if (sendingRef.current) return;
+        sendingRef.current = true;
+        setPrimaryButtonSendingState(true);
+
+        // 视觉反馈：更新撤回条标签为「正在准备新会话…」
+        try {
+          if (barRef.current) {
+            var labelEl = barRef.current.querySelector("span");
+            if (labelEl) {
+              labelEl.textContent = L.preparingSession || "正在准备新会话…";
+              labelEl.style.opacity = "0.75";
+            }
+          }
+        } catch (eUi) { /* ignore */ }
+
         try {
           var sid = props.sessionId;
           // 读取输入框当前文本（用户可能已修改）：重置/重发都使用修改后的内容
@@ -946,6 +1088,8 @@ window.__ModuleLoader__.load({
                 resetConversation(sid, "edit", sendText, props, latestInputImageIds.slice());
               } else {
                 showRecallError(L.errGeneric);
+                setPrimaryButtonSendingState(false);
+                sendingRef.current = false;
               }
               return;
             }
@@ -957,13 +1101,15 @@ window.__ModuleLoader__.load({
           log("info", "attach", "撤回收集完成（镜像 imageIds）", { count: imgIds.length });
           // 1) 官方 client fork：child 进入会话列表（可打开）+ 继承原标题。
           //    官方 fork(atSeq) 即截断边界器；fork-unavailable 按原文子串分流：
-    //    "has not completed the turn"=回合未结束→提示等待；"has no completed turn to fork from"=无前置边界→重置对话。
+          //    "has not completed the turn"=回合未结束→提示等待；"has no completed turn to fork from"=无前置边界→重置对话。
           var newId = null;
           try {
             newId = await props.ctxSessions.fork({ sessionId: sid, atSeq: boundary });
           } catch (e) {
             var em = String(e && e.message ? e.message : e);
             log("error", "recall", "fork 失败（发送中止）", { err: em });
+            setPrimaryButtonSendingState(false);
+            sendingRef.current = false;
             if (/has not completed the turn/i.test(em)) {
               showRecallError(L.turnOpenNotice || L.errGeneric); // 回合未结束：等待回复完成
             } else if (/has no completed turn to fork from/i.test(em)) {
@@ -974,7 +1120,8 @@ window.__ModuleLoader__.load({
             }
             return;
           }
-          writePending(sid, null);
+          // Issue #10 根治防御：fork 成功返回即请求 Host 端物理拔除继承的幽灵旧消息
+          await requestCleanGhostQueue(newId);
           // review M6：resume-send 带时间戳（30s TTL，防陈旧草稿幽灵自动发送）
           try { localStorage.setItem("dsh-easyrewrite:resume-send:" + newId, JSON.stringify({ draftText: sendText, t: Date.now(), imageIds: imgIds, sel: msel })); } catch (e) { /* ignore */ }
           // 2) 无痕替换：归档原会话 → 打开新会话
@@ -987,15 +1134,28 @@ window.__ModuleLoader__.load({
             }
           } catch (e) { log("warn", "recall", "归档原会话失败", { err: String(e && e.message ? e.message : e) }); }
           log("info", "recall", "撤回完成：归档原会话 + 打开新会话", { newId: newId, archived: archived });
-          if (typeof props.openSession === "function") props.openSession(newId);
+
+          // 稳健切换会话（多重通道与降级）
+          var opened = safeOpenSession(newId, props);
+          if (!opened) {
+            log("error", "recall", "打开新会话失败，回滚状态", { newId: newId });
+            try { localStorage.removeItem("dsh-easyrewrite:resume-send:" + newId); } catch (e) {}
+            setPrimaryButtonSendingState(false);
+            sendingRef.current = false;
+            showRecallError(L.errGeneric);
+            return;
+          }
+
+          // 确认会话切换派发成功后再清除 pending 数据（保持 sendingRef 保护，直到组件随新会话打开而卸载）
+          writePending(sid, null);
         } catch (err) {
           log("error", "recall", "撤回请求失败（发送中止）", { err: String(err && err.message ? err.message : err) });
-        } finally {
-          recallInFlight = false;
+          setPrimaryButtonSendingState(false);
+          sendingRef.current = false;
         }
       }
       React.useEffect(function () {
-        if (!active || !pending) return;
+        if (!active && !sendingRef.current) return;
         var p = pending;
         function onKeyDownCapture(e) {
           if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
@@ -1009,7 +1169,8 @@ window.__ModuleLoader__.load({
           if (!isComposer) return;
           e.preventDefault();
           e.stopPropagation();
-          doRecallThenSend(p);
+          if (sendingRef.current) return; // 正在切换会话，坚决阻断重复触发
+          if (p) doRecallThenSend(p);
         }
         function onClickCapture(e) {
           var btn = findPrimaryButton();
@@ -1017,13 +1178,15 @@ window.__ModuleLoader__.load({
           if (isStopButton(btn)) return; // review M1：停止生成照常放行，不劫持
           e.preventDefault();
           e.stopPropagation();
-          doRecallThenSend(p);
+          if (sendingRef.current) return; // 正在切换会话，坚决阻断重复触发
+          if (p) doRecallThenSend(p);
         }
         document.addEventListener("keydown", onKeyDownCapture, true);
         document.addEventListener("click", onClickCapture, true);
         return function () {
           document.removeEventListener("keydown", onKeyDownCapture, true);
           document.removeEventListener("click", onClickCapture, true);
+          setPrimaryButtonSendingState(false);
         };
       }, [active, sessionId, pending]);
 
@@ -1071,34 +1234,92 @@ window.__ModuleLoader__.load({
             if (savedIds.length > 0 && typeof ia.addImages === "function") {
               try { ia.addImages(savedIds); } catch (e) { log("warn", "attach", "addImages 异常（忽略，文字照发）", { err: String(e && e.message ? e.message : e) }); }
             }
-            var doSubmit = function () {
-              setTimeout(function () {
+            // Issue #10 深度防御：清空宿主 fork 继承而来的悬空 next-turn 幽灵队列
+            // DSH 的 sessions.fork 机制会贪婪复制 turn/end 到 turn/start 之间的非回合事件，
+            // 导致目标消息当初发送时的 agent/inbox/spliced 入队事件被复制到新会话，
+            // 而出队事件被截断丢弃，从而在宿主端留下幽灵消息。
+            // 在提交新消息前，向 Host 端发起物理清理，彻底拔除残留幽灵项，
+            // 并辅以客户端 snapshot 清理作为次级防御，确保新消息排在队首第一位被消费。
+            var cleanGhostQueue = function () {
+              return requestCleanGhostQueue(sessionId).then(function (hostRes) {
+                if (hostRes && hostRes.cleared > 0) {
+                  log("info", "recall", "resume 时 Host 幽灵队列已清空", { sessionId: sessionId, cleared: hostRes.cleared, ids: hostRes.removedIds });
+                }
                 try {
-                  ia.submit();
-                  log("info", "recall", "resume 已提交", { sessionId: sessionId });
-                  // Phase 2：底部暂存草稿及图片在新会话中回填保留（隔离发送，不混入气泡重发消息）
-                  if (r.stagedDraft && (r.stagedDraft.text || (Array.isArray(r.stagedDraft.imageIds) && r.stagedDraft.imageIds.length > 0))) {
-                    setTimeout(function () {
-                      try {
-                        var stg = r.stagedDraft;
-                        if (typeof stg.text === "string" && stg.text.length > 0 && typeof ia.setDraft === "function") {
-                          ia.setDraft(stg.text);
+                  var binding = (props.ctxSessions && typeof props.ctxSessions.binding === "function")
+                    ? props.ctxSessions.binding(sessionId)
+                    : null;
+                  var sessInst = binding ? binding.session : null;
+                  var qItems = (sessInst && typeof sessInst.getSnapshot === "function")
+                    ? sessInst.getSnapshot().queue
+                    : ((props.session && Array.isArray(props.session.queue)) ? props.session.queue : []);
+                  var ghostItems = Array.isArray(qItems) ? qItems.filter(function (it) { return it && it.id; }) : [];
+                  if (ghostItems.length > 0) {
+                    log("info", "recall", "检测到 snapshot 中存在幽灵队列项，开始客户端清理", {
+                      sessionId: sessionId,
+                      count: ghostItems.length,
+                      ids: ghostItems.map(function (it) { return it.id; })
+                    });
+                    var pList = [];
+                    for (var gi = 0; gi < ghostItems.length; gi++) {
+                      var gId = ghostItems[gi].id;
+                      if (sessInst && typeof sessInst.updateQueue === "function") {
+                        try {
+                          pList.push(sessInst.updateQueue(gId, { kind: "remove" }));
+                        } catch (eUp) {
+                          log("warn", "recall", "调用 updateQueue 异常", { id: gId, err: String(eUp && eUp.message ? eUp.message : eUp) });
                         }
-                        var stgImgs = Array.isArray(stg.imageIds) ? stg.imageIds : [];
-                        if (stgImgs.length > 0 && typeof ia.addImages === "function") {
-                          ia.addImages(stgImgs);
+                      } else if (typeof props.updateQueue === "function") {
+                        try {
+                          pList.push(props.updateQueue(gId, { kind: "remove" }));
+                        } catch (eUp2) {
+                          log("warn", "recall", "调用 props.updateQueue 异常", { id: gId, err: String(eUp2 && eUp2.message ? eUp2.message : eUp2) });
                         }
-                        log("info", "recall", "resume 第二阶段：底部暂存草稿及图片已回填", {
-                          hasText: !!(stg.text && stg.text.length > 0),
-                          imgCount: stgImgs.length
-                        });
-                      } catch (eStg) {
-                        log("warn", "recall", "回填暂存草稿异常", { err: String(eStg && eStg.message ? eStg.message : eStg) });
                       }
-                    }, 160);
+                    }
+                    if (pList.length > 0) {
+                      return Promise.allSettled(pList).then(function () {
+                        log("info", "recall", "客户端 snapshot 幽灵队列项清理完成", { count: pList.length });
+                      });
+                    }
                   }
-                } catch (e) { log("error", "recall", "自动发送失败（resume）", { err: String(e && e.message ? e.message : e) }); }
-              }, 60);
+                } catch (eClean) {
+                  log("warn", "recall", "清理客户端幽灵队列异常（继续发送）", { err: String(eClean && eClean.message ? eClean.message : eClean) });
+                }
+                return Promise.resolve();
+              });
+            };
+
+            var doSubmit = function () {
+              cleanGhostQueue().then(function () {
+                setTimeout(function () {
+                  try {
+                    ia.submit();
+                    log("info", "recall", "resume 已提交", { sessionId: sessionId });
+                    // Phase 2：底部暂存草稿及图片在新会话中回填保留（隔离发送，不混入气泡重发消息）
+                    if (r.stagedDraft && (r.stagedDraft.text || (Array.isArray(r.stagedDraft.imageIds) && r.stagedDraft.imageIds.length > 0))) {
+                      setTimeout(function () {
+                        try {
+                          var stg = r.stagedDraft;
+                          if (typeof stg.text === "string" && stg.text.length > 0 && typeof ia.setDraft === "function") {
+                            ia.setDraft(stg.text);
+                          }
+                          var stgImgs = Array.isArray(stg.imageIds) ? stg.imageIds : [];
+                          if (stgImgs.length > 0 && typeof ia.addImages === "function") {
+                            ia.addImages(stgImgs);
+                          }
+                          log("info", "recall", "resume 第二阶段：底部暂存草稿及图片已回填", {
+                            hasText: !!(stg.text && stg.text.length > 0),
+                            imgCount: stgImgs.length
+                          });
+                        } catch (eStg) {
+                          log("warn", "recall", "回填暂存草稿异常", { err: String(eStg && eStg.message ? eStg.message : eStg) });
+                        }
+                      }, 160);
+                    }
+                  } catch (e) { log("error", "recall", "自动发送失败（resume）", { err: String(e && e.message ? e.message : e) }); }
+                }, 60);
+              });
             };
             // v2.1.1：先把捕获的原模型/挡位写进新会话（官方 selectModel 持久化通道），再自动发送
             if (r.sel && props.modelSel) {
@@ -1314,7 +1535,7 @@ window.__ModuleLoader__.load({
       );
     }
 
-    // ---------- 设置页组件（设置 → 插件 → EasyRewrite 标签页；中英日三语） ----------
+    // ---------- 设置卡片（设置 → 插件 → 插件配置；中英日三语） ----------
     var SETTINGS_I18N = {
       zh: {
         title: "EasyRewrite",
@@ -1355,6 +1576,7 @@ window.__ModuleLoader__.load({
         pagerPrev: "上一个版本",
         pagerNext: "下一个版本",
         modifying: "正在修改",
+        preparingSession: "正在准备新会话…",
         confirm: "确定",
         cancel: "取消",
         copied: "已复制",
@@ -1447,6 +1669,7 @@ window.__ModuleLoader__.load({
         pagerPrev: "Previous version",
         pagerNext: "Next version",
         modifying: "Modifying",
+        preparingSession: "Preparing new session…",
         confirm: "Confirm",
         cancel: "Cancel",
         copied: "Copied",
@@ -1539,6 +1762,7 @@ window.__ModuleLoader__.load({
         pagerPrev: "前のバージョン",
         pagerNext: "次のバージョン",
         modifying: "変更中",
+        preparingSession: "新しいセッションを準備中…",
         confirm: "確定",
         cancel: "キャンセル",
         copied: "コピー済み",
@@ -1624,10 +1848,19 @@ window.__ModuleLoader__.load({
       );
       return SETTINGS_I18N[active] || SETTINGS_I18N.zh;
     }
-    /** 设置页组件：0.2.0-rc.2 起注册进 settings.plugins.tab（设置 → 插件 → 独立标签页）。 */
+    /** 设置卡片：注册进 settings.plugin.item（设置 → 插件 → 插件配置）。 */
     function EasyRewriteSettingsCard(props) {
+      /**
+       * 是否由外部容器提供卡片外壳。
+       *
+       * 0.1.7 的插件页（plugins.item）自己画行外壳、标题取自插槽 label，卡片再画一层头部
+       * 就成了嵌套折叠；旧插槽 settings.plugin.item 没有外壳，卡片必须自画。由挂载方经
+       * inject 面传入，默认 false，保持旧行为。
+       */
+      var embedded = !!(props && props.embedded);
       var L = useUILocaleDict();
-      var openState = React.useState(false);
+      // embedded 时头部不渲染，但「展开时检查更新」这类 side effect 仍要照跑，故初始即展开。
+      var openState = React.useState(embedded);
       var open = openState[0];
       var setOpen = openState[1];
       // 控件状态（初始化自 localStorage）
@@ -1889,7 +2122,7 @@ window.__ModuleLoader__.load({
             "aria-disabled": disabled || undefined,
             style: Object.assign({}, checkStyle, disabled ? { cursor: "not-allowed" } : null),
             onClick: function (e) { e.stopPropagation(); if (disabled) return; onChange(!value); }
-          }, value ? React.createElement(Primitives.IconCheckOutline16, null) : null)
+          }, value ? React.createElement(IconCheckOutline, null) : null)
         );
       }
       // Apple 风格分段控件：灰色药丸长条 + 白色小药丸高亮当前项（滑动过渡，主题自适应）
@@ -1945,22 +2178,13 @@ window.__ModuleLoader__.load({
         );
       }
 
-      return React.createElement("li", { style: Object.assign({}, cardStyle, open ? cardOpenStyle : null), "data-dsh-easyrewrite": "settings-card" },
-        React.createElement("button", {
-          type: "button",
-          style: headStyle,
-          "aria-expanded": open,
-          "aria-label": (open ? L.collapse : L.expand) + ": " + L.title,
-          onClick: function () { setOpen(!open); }
-        },
-          React.createElement("span", { style: headTextStyle },
-            React.createElement("span", { style: titleStyle }, L.title),
-            React.createElement("span", { style: subStyle }, L.subtitle)
-          ),
-          React.createElement("svg", { width: "18", height: "18", viewBox: "0 0 24 24", style: Object.assign({}, chevronStyle, open ? chevronOpenStyle : null) },
-            React.createElement("path", { d: "M9 6l6 6-6 6", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }))
-        ),
-        open ? React.createElement("div", { style: bodyStyle },
+      // 配置主体：两种挂法共用。
+      //
+      // 0.1.7 起卡片挂进 plugins.item，页面已经给了行外壳（标题来自插槽 label、描述、
+      // 展开由页面管），卡片只该交出主体。自带 <li> + 可点头部会变成页面里多出来的一层
+      // 折叠 —— 列表上一个下拉，点进去还有一个。旧插槽 settings.plugin.item 没有外壳，
+      // 那种挂法仍旧要卡片自画，所以分流在函数末尾按 embedded 做。
+      var cardBody = React.createElement("div", { style: bodyStyle },
           // —— 编辑 ——
           React.createElement("div", { style: sectionStyle },
             React.createElement("span", { style: groupTitleStyle }, L.sectionEdit),
@@ -2189,7 +2413,28 @@ window.__ModuleLoader__.load({
             )
           ),
           React.createElement("span", { style: hintStyle }, L.instant)
-        ) : null
+      );
+      // plugins.item（0.1.7 起）：页面把同一个组件按 view 渲染两次 —— summary 当列表行与
+      // 详情页的一行描述，page 当配置主体。图标、标题（取自插槽 label）、启用开关与详情页
+      // 外壳都由页面提供，所以这里两者都不画头部。
+      if (embedded) return props.view === "summary" ? L.subtitle : cardBody;
+      // settings.plugin.item（0.1.5 及以下）：插槽不提供外壳，卡片自画可点头部。
+      return React.createElement("li", { style: Object.assign({}, cardStyle, open ? cardOpenStyle : null), "data-dsh-easyrewrite": "settings-card" },
+        React.createElement("button", {
+          type: "button",
+          style: headStyle,
+          "aria-expanded": open,
+          "aria-label": (open ? L.collapse : L.expand) + ": " + L.title,
+          onClick: function () { setOpen(!open); }
+        },
+          React.createElement("span", { style: headTextStyle },
+            React.createElement("span", { style: titleStyle }, L.title),
+            React.createElement("span", { style: subStyle }, L.subtitle)
+          ),
+          React.createElement("svg", { width: "18", height: "18", viewBox: "0 0 24 24", style: Object.assign({}, chevronStyle, open ? chevronOpenStyle : null) },
+            React.createElement("path", { d: "M9 6l6 6-6 6", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }))
+        ),
+        open ? cardBody : null
       );
     }
 
@@ -2201,7 +2446,7 @@ window.__ModuleLoader__.load({
       log("info", "pager", "切换版本", { from: sessionId, to: next, index: nextIndex + 1, count: fam.versions.length });
       // 历史版本都是归档会话（无痕替换副作用），先恢复再打开；恢复失败也照常打开（幂等）
       var doOpen = function () {
-        if (typeof props.openSession === "function") props.openSession(next);
+        safeOpenSession(next, props);
         // 等当前会话确认为 next（轮询 current，不猜时间）后，归档家族其余版本——列表只保留目标一个。
         // open 未确认（超时 8s）则放弃归档，绝不误伤任何会话。
         if (cleanupRef.current !== null) { clearInterval(cleanupRef.current); cleanupRef.current = null; }
@@ -2288,7 +2533,7 @@ window.__ModuleLoader__.load({
             try { localStorage.setItem("dsh-easyrewrite:resume-send:" + parentId, JSON.stringify({ draftText: text, t: Date.now(), imageIds: imageIds || [], sel: msel, stagedDraft: stagedDraft || null })); } catch (e) { /* ignore */ }
           }
           var doOpenParent = function () {
-            if (typeof props.openSession === "function") props.openSession(parentId);
+            safeOpenSession(parentId, props);
           };
           if (typeof props.restoreSession === "function") {
             try { props.restoreSession(parentId).then(doOpenParent, doOpenParent); return; } catch (e) { /* fallthrough */ }
@@ -2320,42 +2565,7 @@ window.__ModuleLoader__.load({
               try { localStorage.setItem("dsh-easyrewrite:resume-send:" + newId, JSON.stringify({ draftText: text, t: Date.now(), imageIds: imageIds || [], sel: msel, stagedDraft: stagedDraft || null })); } catch (e) { /* ignore */ }
             }
             log("info", "reset", "空白新会话已就绪", { newId: newId, mode: mode });
-            if (typeof props.openSession === "function") props.openSession(newId);
-            // 编辑模式：空白会话可能不渲染 dock（resume 依赖挂载不成立）——主动轮询 composer 就绪后发送
-            if (mode === "edit" && typeof text === "string") {
-              var tries2 = 0;
-              var timer2 = setInterval(function () {
-                tries2++;
-                try {
-                  var ia2 = props.inputActions;
-                  if (ia2 && typeof ia2.setDraft === "function" && typeof ia2.submit === "function") {
-                    clearInterval(timer2);
-                    ia2.setDraft(text);
-                    var fireSubmit = function () {
-                      setTimeout(function () {
-                        try {
-                          ia2.submit();
-                          if (stagedDraft && (stagedDraft.text || (Array.isArray(stagedDraft.imageIds) && stagedDraft.imageIds.length > 0))) {
-                            setTimeout(function () {
-                              try {
-                                if (stagedDraft.text && typeof ia2.setDraft === "function") ia2.setDraft(stagedDraft.text);
-                                var sImgs = Array.isArray(stagedDraft.imageIds) ? stagedDraft.imageIds : [];
-                                if (sImgs.length > 0 && typeof ia2.addImages === "function") ia2.addImages(sImgs);
-                                log("info", "reset", "第二阶段：底部暂存草稿及图片已回填", { hasText: !!stagedDraft.text, imgCount: sImgs.length });
-                              } catch (eStgR) { /* ignore */ }
-                            }, 160);
-                          }
-                        } catch (e) { log("error", "reset", "空白会话自动发送失败", { err: String(e && e.message ? e.message : e) }); }
-                      }, 80);
-                    };
-                    if (msel && props.modelSel) { props.modelSel.apply(newId, msel).then(fireSubmit, fireSubmit); } else { fireSubmit(); }
-                    log("info", "reset", "编辑文本已自动发送", { newId: newId });
-                    return;
-                  }
-                } catch (e) { /* ignore */ }
-                if (tries2 >= 50) clearInterval(timer2); // 最多等 5s
-              }, 100);
-            }
+            safeOpenSession(newId, props);
           }).catch(function () { log("warn", "reset", "空白会话创建失败（回 hero）"); });
           return;
         }
@@ -2444,7 +2654,7 @@ window.__ModuleLoader__.load({
           disabled: atFirst,
           "aria-label": L.pagerPrev,
           onClick: function () { go(-1); }
-        }, React.createElement(Primitives.IconChevronLeftOutline14, null)),
+        }, React.createElement(IconChevronLeftOutline, null)),
         React.createElement("span", { style: { padding: "0 4px", fontSize: "14px", whiteSpace: "nowrap" } }, (index + 1) + "/" + count),
         React.createElement("button", {
           type: "button",
@@ -2453,7 +2663,7 @@ window.__ModuleLoader__.load({
           disabled: atLast,
           "aria-label": L.pagerNext,
           onClick: function () { go(1); }
-        }, React.createElement(Primitives.IconChevronRightOutline14, null))
+        }, React.createElement(IconChevronRightOutline, null))
       );
     }
 
@@ -2490,8 +2700,8 @@ window.__ModuleLoader__.load({
         onMouseLeave: function (e) { e.currentTarget.style.background = "transparent"; },
         onClick: function (e) { e.stopPropagation(); copy(); }
       }, copied
-        ? React.createElement(Primitives.IconCheckOutline16, { size: 14 })
-        : React.createElement(Primitives.IconCopyOutline16, { size: 14 }));
+        ? React.createElement(IconCheckOutline, { size: 14 })
+        : React.createElement(IconCopyOutline, { size: 14 }));
     }
 
     /** clipboard API 不可用时的回退复制。 */
@@ -3174,9 +3384,6 @@ window.__ModuleLoader__.load({
         log("warn", "count", "会话快照读取失败（数量显示 0）", { err: String(err && err.message ? err.message : err) });
       }
       // 发送时间（hover 显示，对齐官方 data-time-hover-root 机制）
-      // dsh-compat:hover-root-self-owned —— 本插件的 [data-time-hover-root]
-      // 是自己渲染在自家节点上的属性（见下方 row div），并非宿主行锚；
-      // 当前内核该宿主属性已删除（实机命中 0），不影响此处 CSS/选择器命中。
       var msgTime = data && typeof data.time === "number" ? data.time : (typeof node.time === "number" ? node.time : 0);
 
       var rowStyle = { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px", padding: "2px 0" };
@@ -3187,8 +3394,8 @@ window.__ModuleLoader__.load({
         padding: "8px 14px",
         whiteSpace: "pre-wrap",
         wordBreak: "break-word",
-        fontSize: "14px",
-        lineHeight: "22px",
+        fontSize: "var(--dsh-content-font-size, 14px)",
+        lineHeight: "calc(22px + var(--dsh-content-font-delta, 0px))",
         color: "var(--dsw-alias-label-primary, inherit)"
       };
       var actionsStyle = { display: "flex", gap: "2px", alignItems: "center" };
@@ -3205,8 +3412,8 @@ window.__ModuleLoader__.load({
           background: "var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.10))",
           borderRadius: "14px",
           padding: "8px 14px",
-          fontSize: "14px",
-          lineHeight: "22px",
+          fontSize: "var(--dsh-content-font-size, 14px)",
+          lineHeight: "calc(22px + var(--dsh-content-font-delta, 0px))",
           cursor: "pointer",
           color: "var(--dsw-alias-label-tertiary)",
           whiteSpace: "pre-wrap",
@@ -3244,6 +3451,7 @@ window.__ModuleLoader__.load({
           showPreview ? origImages : null,
           showPreview ? React.createElement(
             "div", {
+              className: "dsh-easyrewrite-bubble",
               style: grayBubbleStyle,
               title: L.collapse,
               onClick: togglePreview
@@ -3251,6 +3459,7 @@ window.__ModuleLoader__.load({
             text || L.emptyMsg
           ) : React.createElement(
             "div", {
+              className: "dsh-easyrewrite-bubble",
               style: grayBubbleStyle,
               title: L.viewOriginal,
               onClick: togglePreview
@@ -3313,6 +3522,7 @@ window.__ModuleLoader__.load({
       async function confirmEdit() {
         if (editInFlight) return;
         editInFlight = true;
+        setPrimaryButtonSendingState(true);
         try {
           // 惰性提交：编辑的「确定」= 真正修改点（与撤回的「发送」等价）——截断重发
           var newText = editText;
@@ -3356,6 +3566,7 @@ window.__ModuleLoader__.load({
           if (!data || !data.ok) {
             var errCode2 = (data && data.error) || "unknown";
             log("warn", "edit", "编辑重发失败（边界）", { error: errCode2 });
+            setPrimaryButtonSendingState(false);
             if (errCode2 === "turn-open" || errCode2 === "no-boundary") {
               // 极限场景（说一半截断 / 首条无边界）：重置对话，编辑文本带到新起点
               setEditing(false);
@@ -3375,11 +3586,12 @@ window.__ModuleLoader__.load({
             newId = await props.ctxSessions.fork({ sessionId: sid, atSeq: data.boundary });
           } catch (e) {
             log("error", "edit", "fork 失败（编辑重发中止）", { err: String(e && e.message ? e.message : e) });
+            setPrimaryButtonSendingState(false);
             setEditing(true); // 恢复编辑态
             return;
           }
-          // 成功：清除 pending（编辑草稿已消费）
-          if (isEditPending) writePending(sid, null);
+          // Issue #10 根治防御：fork 成功返回即请求 Host 端物理拔除继承的幽灵旧消息
+          await requestCleanGhostQueue(newId);
           // review M6：resume-send 带 TTL 时间戳；M4：图片附件引用随行（重发保留）；stagedDraft：新会话草稿隔离保留
           try {
             localStorage.setItem("dsh-easyrewrite:resume-send:" + newId, JSON.stringify({
@@ -3397,9 +3609,21 @@ window.__ModuleLoader__.load({
             }
           } catch (e) { log("warn", "edit", "归档原会话失败", { err: String(e && e.message ? e.message : e) }); }
           log("info", "edit", "编辑重发：归档原会话 + 打开新会话", { newId: newId });
-          if (typeof props.openSession === "function") props.openSession(newId);
+
+          var opened2 = safeOpenSession(newId, props);
+          if (!opened2) {
+            log("error", "edit", "打开新会话失败，回滚状态", { newId: newId });
+            try { localStorage.removeItem("dsh-easyrewrite:resume-send:" + newId); } catch (e) {}
+            setPrimaryButtonSendingState(false);
+            setEditing(true);
+            setOpError(L.errGeneric);
+            return;
+          }
+          // 成功打开新会话后再清除 pending
+          if (isEditPending) writePending(sid, null);
         } catch (err) {
           log("error", "edit", "编辑重发请求失败", { err: String(err && err.message ? err.message : err) });
+          setPrimaryButtonSendingState(false);
           setEditing(true); // 网络异常也恢复编辑态
         } finally {
           editInFlight = false;
@@ -3446,8 +3670,8 @@ window.__ModuleLoader__.load({
           background: "transparent",
           resize: "none",
           font: "inherit",
-          fontSize: "14px",
-          lineHeight: "22px",
+          fontSize: "var(--dsh-content-font-size, 14px)",
+          lineHeight: "calc(22px + var(--dsh-content-font-delta, 0px))",
           color: "var(--dsw-alias-label-primary)",
           whiteSpace: "pre-wrap",
           wordBreak: "break-word",
@@ -3654,7 +3878,7 @@ window.__ModuleLoader__.load({
         "div", { style: rowStyle, "data-dsh-easyrewrite": "user", "data-time-hover-root": true },
         renderMessageImagesCompat(msgImages, props),
         React.createElement(
-          "div", { style: bubbleStyle, onClick: onBubbleClick, title: L.clickEdit },
+          "div", { className: "dsh-easyrewrite-bubble", style: bubbleStyle, onClick: onBubbleClick, title: L.clickEdit },
           text || L.emptyMsg
         ),
         confirming
@@ -3861,9 +4085,42 @@ window.__ModuleLoader__.load({
             wRef.__dshEasyRewrite.bar = apiRef;
           }
         } catch (eDbg) { /* ignore */ }
-        try { ctxConversationRef = ctx.conversation; } catch (e) { ctxConversationRef = null; }
-        try { ctxUiConversationRef = (typeof ctx.get === "function") ? (ctx.get("uiConversation") || null) : null; } catch (eUic) { ctxUiConversationRef = null; }
-        try { ctxUiWorkspaceRef = (typeof ctx.get === "function") ? (ctx.get("uiWorkspace") || null) : null; } catch (eUiw) { ctxUiWorkspaceRef = null; }
+        try { ctxUiWorkspaceRef = ctx.uiWorkspace || ((typeof ctx.get === "function") ? (ctx.get("uiWorkspace") || null) : null); } catch (eUiw) { ctxUiWorkspaceRef = null; }
+        function invokeOpenSession(id) {
+          try {
+            if (ctx.uiWorkspace && typeof ctx.uiWorkspace.openSession === "function") {
+              ctx.uiWorkspace.openSession(id);
+              return true;
+            }
+          } catch (e1) {}
+          try {
+            var uiW = (typeof ctx.get === "function") ? ctx.get("uiWorkspace") : null;
+            if (uiW && typeof uiW.openSession === "function") {
+              uiW.openSession(id);
+              return true;
+            }
+          } catch (e2) {}
+          try {
+            if (ctxUiWorkspaceRef && typeof ctxUiWorkspaceRef.openSession === "function") {
+              ctxUiWorkspaceRef.openSession(id);
+              return true;
+            }
+          } catch (e3) {}
+          try {
+            if (ctx.sessions && typeof ctx.sessions.open === "function") {
+              ctx.sessions.open(id);
+              return true;
+            }
+          } catch (e4) {}
+          try {
+            if (ctx.workspaces && typeof ctx.workspaces.openSession === "function") {
+              ctx.workspaces.openSession(id);
+              return true;
+            }
+          } catch (e5) {}
+          log("error", "session", "所有 openSession 途径均不可用", { id: id });
+          return false;
+        }
           // 陈旧版本树键清扫（review #6：lineage 已接管；旧 localStorage 键为死数据，启动时一次清掉）
           try {
             var stale = [];
@@ -3952,7 +4209,7 @@ window.__ModuleLoader__.load({
                 }
               } catch (eSh2) { inputShell2 = null; }
               return {
-                openSession: function (id) { ctx.sessions.open(id); },
+                openSession: invokeOpenSession,
                 ctxWorkspaces: ctx.workspaces,
                 ctxSessions: ctx.sessions,
                 modelSel: modelSel,
@@ -3995,9 +4252,23 @@ window.__ModuleLoader__.load({
               } catch (eShell) { inputShell = null; }
               return {
                 sessionId: sessionId,
-                openSession: function (id) { ctx.sessions.open(id); },
+                openSession: invokeOpenSession,
                 ctxWorkspaces: ctx.workspaces,
                 ctxSessions: ctx.sessions,
+                updateQueue: function (itemId, action) {
+                  try {
+                    if (conversationSvc && typeof conversationSvc.updateQueue === "function") {
+                      return conversationSvc.updateQueue(itemId, action);
+                    }
+                    var binding = (ctx.sessions && typeof ctx.sessions.binding === "function")
+                      ? ctx.sessions.binding(sessionId)
+                      : null;
+                    if (binding && binding.session && typeof binding.session.updateQueue === "function") {
+                      return binding.session.updateQueue(itemId, action);
+                    }
+                  } catch (eQ) { /* ignore */ }
+                  return Promise.resolve();
+                },
                 modelSel: modelSel,
                 inputActions: inputShell && inputShell.actions ? inputShell.actions : null,
                 inputState: inputShell || null,
@@ -4017,24 +4288,39 @@ window.__ModuleLoader__.load({
           }, RecallBanner);
         });
         if (typeof d3 === "function") disposers.push(d3);
-        // 设置页入口：0.2.0-rc.2 移除了 `settings.plugin.item` 槽（上游只保留
-        // `settings.plugins.tab`），注册进内核未声明的槽会让 SlotCore.register
-        // 必抛、该 UI 静默永不挂载——因此改为在「设置 → 插件」下独占一个标签页。
-        var d4 = ctx.slots.inject("settings.plugins.tab", function () {
-          return ctx.slots.register({
-            name: "settings.plugins.tab",
-            id: "dsh-easyrewrite",
-            order: 30,
-            label: "EasyRewrite",
-            inject: function () {
-              return {
-                openSession: function (id) { ctx.sessions.open(id); },
-                ctxSessions: ctx.sessions
-              };
-            }
-          }, EasyRewriteSettingsCard);
-        });
-        if (typeof d4 === "function") disposers.push(d4);
+        // 设置卡片。两种挂载方式各注册一次：
+        //
+        //   ≤0.1.5  keyed 插槽 settings.plugin.item（按命名空间分发），插槽不给外壳，
+        //           卡片自画可点头部。
+        //   0.1.7+  改用插件页。第三方 bundle 的配置属于它自己那一行，走
+        //           plugins.row.config，key 为 `<包名>#<行 id>`；页面因此会给该行一个
+        //           Configure 控件，打开它自己的配置页。
+        //
+        // 特意**不用** plugins.item：那是官方插件专用（页面文档写明 "for an official
+        // plugin"），挂上去会落到插件列表的「官方」分组里，和官方插件混在一起。
+        //
+        // 两个都注册：没被声明的那个 inject 不会触发，被声明的那个渲染卡片，于是
+        // 0.1.5 与 0.1.7 各走各的，一份代码两边都在。
+        function registerSettingsCard(slotName, kind, embedded) {
+          return ctx.slots.inject(slotName, function () {
+            return ctx.slots.register(Object.assign({
+              name: slotName,
+              inject: function () {
+                return {
+                  openSession: invokeOpenSession,
+                  ctxSessions: ctx.sessions,
+                  // 页面提供行外壳的挂法，卡片只交出配置主体（见组件里的 embedded）。
+                  embedded: !!embedded
+                };
+              }
+            }, kind), EasyRewriteSettingsCard);
+          });
+        }
+        var d4 = [
+          registerSettingsCard("settings.plugin.item", { key: "dsh-easyrewrite" }),
+          registerSettingsCard("plugins.row.config", { key: "dsh-easyrewrite#dsh-easyrewrite" }, true)
+        ];
+        d4.forEach(function (d) { if (typeof d === "function") disposers.push(d); });
         // 版本翻页器 < X >：assistant 消息操作区（最后回答底部）
         var d5 = ctx.slots.inject("conversation.chat.assistant-actions", function () {
           return ctx.slots.register({
@@ -4043,7 +4329,7 @@ window.__ModuleLoader__.load({
             order: 10,
             inject: function () {
               return {
-                openSession: function (id) { ctx.sessions.open(id); },
+                openSession: invokeOpenSession,
                 ctxSessions: ctx.sessions,
                 archiveSession: function (id) {
                   // review #5：官方 archiveSession 幂等且 sessionKnown 接受归档会话（dsh-workspace L424/L439）——
@@ -4062,7 +4348,18 @@ window.__ModuleLoader__.load({
                   }
                 },
                 currentSessionId: function () {
-                  try { var s = ctx.sessions.list.getSnapshot(); return s ? s.current : null; } catch (e) { return null; }
+                  try {
+                    var s = ctx.sessions.list.getSnapshot();
+                    if (!s) return null;
+                    if (s.current) return s.current;
+                    if (s.byId) {
+                      var found = Object.values(s.byId).find(function (r) {
+                        return r && r.retainedBy && (r.retainedBy.mainView > 0);
+                      });
+                      if (found && found.id) return found.id;
+                    }
+                    return null;
+                  } catch (e) { return null; }
                 },
                 restoreSession: function (id) {
                   return fetch("/bubble/unarchive", {

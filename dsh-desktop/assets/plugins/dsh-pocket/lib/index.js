@@ -241,6 +241,32 @@ function performUpdate(profile, { timeoutMs = 180_000 } = {}) {
   });
 }
 
+/**
+ * 受监督宿主判定（纯函数，便于单测）。
+ *
+ * 规则：认出桌面宿主 ⇒ 关；**什么都没认出来 ⇒ 也关**（安全侧）。
+ * 只有显式 allowHostControl: true 才允许插件自行更新/重启宿主。
+ * 判反方向的代价完全不对称：误判为「受监督」只是少一个应用内更新按钮；
+ * 误判为「独立进程」则让插件在官方客户端强制更新期间 detached 重启它的宿主。
+ * @returns {{supervised: boolean, reason: 'override-desktop'|'override-standalone'|'detected'|'host-control-allowed'|'unconfirmed'}}
+ */
+export function supervisionDecision({
+  override,
+  allowHostControl,
+  detected,
+} = {}) {
+  // 只有真正的布尔量才算「显式指定」。null / 0 / "" 一律视为未指定，
+  // 否则一个缺失值会被当成 override=false，直接解锁插件重启宿主 —— 那正是本函数要防的方向。
+  if (override === true || override === false) {
+    return override
+      ? { supervised: true, reason: 'override-desktop' }
+      : { supervised: false, reason: 'override-standalone' };
+  }
+  if (detected) return { supervised: true, reason: 'detected' };
+  if (allowHostControl === true) return { supervised: false, reason: 'host-control-allowed' };
+  return { supervised: true, reason: 'unconfirmed' };
+}
+
 export function apply(ctx, config = {}, internals = {}) {
   const logger = ctx.logger?.(name) ?? console;
   const dshPort = internals.dshPort ?? ctx.webServer?.port;
@@ -259,14 +285,37 @@ export function apply(ctx, config = {}, internals = {}) {
   }
 
   // 桌面端环境识别（官方兼容模式，见 desktop 的 plugin-development.md）：
-  // desktopProfiles / desktopPnpm 只在 DSH Desktop（Electron）里存在。
-  // 桌面端有自己的更新/进程管理，我们这两项功能在此环境**关闭**（不删除），
-  // 避免与 desktopPnpm / Electron 进程模型冲突；扫码同屏等正常功能照常。
-  const isDesktop = internals.isDesktop !== undefined
-    ? internals.isDesktop === true
-    : ctx.get?.('desktopProfiles') !== undefined || ctx.get?.('desktopPnpm') !== undefined;
+  // 「是不是跑在受监督的桌面宿主里」——决定要不要关掉 pocket 自己的更新/重启。
+  //
+  // 判据换过一版，原因是一个真实的静默回归：旧写法靠 `desktopProfiles` / `desktopPnpm`
+  // 这两个 cordis 服务是否存在来判断，而那两个服务由我们自己写的
+  // dsh-market-desktop-bridge 提供。该桥已随「退役自制壳」删掉，于是这个表达式在
+  // **官方桌面客户端里恒为 false** ⇒ 更新/重启不再被关闭 ⇒ pocket 会 detached
+  // 重新拉起宿主进程。官方客户端有强制更新准入锁（锁定期把 connection/request 打成
+  // 503），插件去重启它的宿主正好是最坏时机的破坏动作。
+  //
+  // 现在语义从「是不是 DSH Desktop」放宽为「是不是受监督宿主（官方客户端 + 认不出的环境）」，
+  // 因为认不出时也必须关掉才安全；下游 desktopAdvanced / injectHtml 继续用同一个布尔量。
+  // 真正独立跑 `dsh web` 的人用 config.allowHostControl: true 显式打开。
+  // 开关必须走 config 而不是 internals —— internals 是 apply 的第三个位置参数，
+  // cordis 加载器只会传 (ctx, config)，所以它只是测试缝隙，用户改不到。
+  const looksLikeDesktopHost =
+    process.env.ELECTRON_RUN_AS_NODE === '1' ||
+    typeof process.env.DSH_DESKTOP_NODE_EXECUTABLE === 'string' ||
+    !!process.versions?.electron ||
+    ctx.get?.('desktopProfiles') !== undefined ||
+    ctx.get?.('desktopPnpm') !== undefined;
+  const { supervised: isDesktop, reason } = supervisionDecision({
+    override: internals.isDesktop,
+    allowHostControl: config.allowHostControl,
+    detected: looksLikeDesktopHost,
+  });
   if (isDesktop) {
-    logger.info('dsh-pocket: DSH Desktop detected — update/restart disabled here | 检测到桌面端环境，更新/重启已关闭');
+    logger.info(
+      reason === 'detected'
+        ? 'dsh-pocket: 检测到桌面宿主，更新/重启已关闭 | desktop host detected — update/restart disabled'
+        : `dsh-pocket: 宿主未确认（${reason}），出于安全关闭更新/重启；独立跑 dsh web 时可设 config.allowHostControl: true | host not proven standalone — update/restart disabled`
+    );
   }
 
   // 桌面端 advanced 模式检测（issue #19）：dsh-plugin-desktop 的 mode 配置存在

@@ -8,7 +8,8 @@
  * all, so the mermaid chunk is only fetched when needed (unit-tested in
  * tests/mermaid-blocks.spec.ts).
  */
-import type { MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
+
+import type { MarkdownCopyLabels } from './markdown-labels.tsx'
 
 /** One fenced mermaid diagram lifted out of the markdown source. */
 export interface MermaidBlock {
@@ -29,19 +30,17 @@ export type MdBlock = MarkdownBlock | MermaidBlock
 export interface MermaidMarkdownProps {
   /** The full markdown source (rendered in a single MarkdownText pass). */
   text: string
-  /** The localized MarkdownText chrome (fence copy labels + footnotes
-   *  heading), forwarded verbatim to the inner MarkdownText. */
-  labels: MarkdownLabels
+  codeLabels: MarkdownCopyLabels
 }
 
 /** CommonMark opening fence: 0-3 spaces indent + a run of 3+ backticks or tildes. */
-const OPEN_FENCE_RE = /^ {0,3}(`{3,}|~{3,})/
+export const OPEN_FENCE_RE = /^ {0,3}(`{3,}|~{3,})/
 
 /** A closing-fence line: 0-3 spaces indent + 3+ backticks/tildes + trailing spaces only. */
-const CLOSE_FENCE_RE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/
+export const CLOSE_FENCE_RE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/
 
 /** Parse the info string from the line tail after the fence run; null when invalid. */
-function fenceInfo(rest: string, fence: string): string | null {
+export function fenceInfo(rest: string, fence: string): string | null {
   const info = rest.trimStart().split(/\s+/)[0] ?? ''
   // CommonMark: a backtick fence's info string may not contain backticks —
   // such a line is not an opening fence at all.

@@ -4,4 +4,4 @@
 # （entry.options.name = 图行 id = bundle 必须注册的 load id），id 为 fiber/入口标识。
 - insert:
     - id: prompt-optimizer
-      name: dsh-prompt-optimizer
+      name: 'dsh-prompt-optimizer'

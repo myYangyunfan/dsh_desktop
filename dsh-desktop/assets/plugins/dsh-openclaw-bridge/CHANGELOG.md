@@ -4,6 +4,74 @@
 （QQ 自 v0.8.0 起由官方 @tencent-connect/dsh-qqbot 提供）。
 版本号遵循语义化版本；每次发布附测试状态（单元断言数由 `scripts/test.ps1` 输出）。
 
+## 0.8.1
+
+### Patch Changes
+
+- 修「桥接对内核 `Session` / `sessionPersistence` 的两处形状失配」。
+
+  内核 0.1.7-rc.1 的两处变更把这个包的静默路径打穿了：
+
+  1. **`session.meta` → `session.header`。** `Session` 上的 `meta` 已移除，
+     建会话元数据（含 `cwd`）改由 `header` 承载。`/list` 里 `session.meta?.cwd`
+     恒为 `undefined`，用户看到的是每一行工作目录都是 `?`。
+  2. **`sessionPersistence.list()` 的条目是快照不是裸 header。**
+     真实返回 `[{ header: {id, cwd, …}, revision, sizeBytes? }]`。
+     本包三处都按裸 header 读（`.find((h) => h.id === …)` / `.some((h) => h.id === …)`），
+     于是 `/attach` 永远说找不到会话、IM 续接**每次重启都新建一段上下文**，
+     而白名单/鉴权全都正常 —— 最难查的那种「功能不报错，只是不生效」。
+
+  改法：加 `headerOf(entry)`（`entry.header` 在就用它，否则退回条目本身），
+  三处调用点统一走它；`/list` 与 `/attach` 的 `cwd` 改读 `session.header?.cwd`。
+  `agents.create({ meta: { cwd } })` 这个**入参**名核对过内核
+  （`CreateAgentOptions.meta`，dsh-agent/lib/types/index.d.ts）仍然成立，未改。
+
+  配套：
+
+  - `test/bridge.test.mjs` 的 mock 原先造的是「裸 header 数组」——**假绿**。
+    改成按内核真实形状返回后，`/attach 成功接管持久化会话` 立刻转红，
+    证明旧 mock 一直在掩盖这个 bug；修 lib 后才重新绿（66/66）。
+  - 真机探针（隔离实例、真内核、一次性 `live-probe` 插件，只活在 %TEMP% 不落仓库）
+    11/11 全绿，其中两条是**反证**：同一批真实条目上，旧写法 `entry.id === sid`
+    必须找不到、而 `headerOf(entry).id === sid` 必须找得到；
+    另加 `session.events === undefined`、`session.header.cwd` 承载 `meta.cwd`、
+    `agents.resume` 真跑通（IM 续接的最后一跳）。
+    `/list`、`/attach`、IM 续接走的是微信/飞书渠道，HTTP 端点触发不到，
+    所以用探针把同一处接缝单独立起来跑。
+
+- 修「设置开关永久禁用、控制台零报错」。
+
+  上一轮把页内半边从幽灵的 `ctx.settingsScope` 换成 `ctx.remote.settings` 之后，
+  真浏览器里设置行**渲染出来了但点不动**：`disabled: true`，且控制台一行错误都没有。
+
+  根因：`inject` 里只声明了 `"remote"`，没声明 `"remote.settings"`。
+  这种时候 `ctx.remote.settings` 拿到的不是 undefined（所以不抛错），而是一个
+  **永不 settle 的代理** —— `describe()` 的 promise 既不 resolve 也不 reject，
+  于是快照永远停在 `loading`，控件永久禁用。
+  官方 5 个用它的包（dsh-client-ui-settings / -general / -models /
+  permission-presets / agent-preset）全都同时声明两个名字。
+
+  - 6 个包的 `inject` 补上 `"remote.settings"`。
+  - `tools/audit/settings-api.js` 加第 ④ 条判据：调 `ctx.remote.settings.*` 却没声明
+    `"remote.settings"` 即 error；配套两条反证用例（缺声明必红、补上必绿）。
+  - AGENTS.md 契约 11 记下这条，因为它的不失败症状是「什么都不发生」，最难查。
+
+  端到端实测（隔离实例、真浏览器、真点击）：
+  开关可点 → `aria-checked` 翻转 → `data-dsh-quiet-output="1"` 立即生效 →
+  **整页重载后仍为 true** → 临时 profile 的 `cordis.patch.yml` 里出现
+  `- id: conversation-tweaks / config: quietOutput: true`（写路径经内核 config editor、
+  按 profile 条目 id 落盘）。
+
+- 设置子系统全部改到内核真实 API（详见 AGENTS.md 契约 11）。
+
+  - 宿主半边：不存在的 `settings.register` / `settings.get` → 声明式 `Config` + `describe()` 读、`update()` 写。
+  - 页内半边：不存在的 `ctx.settingsScope.bind` → `ctx.remote.settings`，inject 相应换成 `remote`。
+  - ns 一律改成 **profile 条目 id**（多处原先写的是包名，find 永不命中 ⇒ 设置静默失效）。
+  - dsh-better-sidebar：界面偏好从 PrefsSchema 并进导出的 Config（不并就永远不进设置页），
+    schemastery 换成 @deepseek-ai/schemastery（`.volatile()` 是这个 fork 的扩展）。
+  - dsh-offpeak：定时执行改走真实存在的 `ctx.sessionController.prompt`（旧代码等的 apiProxy 不存在）。
+  - dsh-easyrewrite：删掉恒假的 typeof 守卫死代码。
+
 ## [0.8.0] — 2026-08（QQ 移交官方插件）
 
 > 按用户要求以官方 https://github.com/tencent-connect/dsh-qqbot 替换本插件的自研 QQ 实现。

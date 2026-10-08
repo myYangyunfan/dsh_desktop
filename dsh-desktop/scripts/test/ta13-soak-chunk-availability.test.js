@@ -1,7 +1,8 @@
 'use strict';
 
 // ta13-soak-chunk-availability.test.js — TA13 极限压测（W2 退避环 soak）：
-// dsh-better-sidebar/lib/chunk-availability.js createChunkRetryLoop 的
+// dsh-better-sidebar 的 createChunkRetryLoop（从发行产物 lib/client.js 的
+// //#region src/client/chunk-availability.ts 区段取数，见 fixtures 夹具）
 // 订阅/退订 ×500 轮（每轮多退避回合，注入同步 schedule 驱动）。
 //
 // 断言：
@@ -13,10 +14,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { pathToFileURL } = require('node:url');
-const path = require('node:path');
 
-const MOD = path.join(__dirname, '..', '..', 'assets', 'plugins', 'dsh-better-sidebar', 'lib', 'chunk-availability.js');
+const { loadChunkAvailability } = require('./fixtures/better-sidebar-region.js');
 
 const ROUNDS = 500;
 const HEAP_SLOPE_LIMIT_MB = 30;
@@ -24,7 +23,7 @@ const HEAP_SLOPE_LIMIT_MB = 30;
 function heapMB() { return process.memoryUsage().heapUsed / 1024 / 1024; }
 
 test('chunk-availability 退避环 soak：订阅/退订 ×500 轮，计时器归零 + 堆稳定', async () => {
-  const { createChunkRetryLoop } = await import(pathToFileURL(MOD).href);
+  const { createChunkRetryLoop } = loadChunkAvailability({ sameRealm: true });
 
   // 注入同步 schedule：pendingTimerCount 追踪存活计时器（泄漏探针）
   let pendingTimerCount = 0;

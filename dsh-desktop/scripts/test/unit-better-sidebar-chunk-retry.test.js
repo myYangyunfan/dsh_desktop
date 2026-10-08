@@ -9,11 +9,13 @@
 // 普通用户不知道要点重试，体验即「变砖」（第二轮没法接受提示词）。
 //
 // 修复契约（assets/plugins/dsh-better-sidebar）：
-//   1) lib/chunk-availability.js（src/client/chunk-availability.ts 的编译镜像）
-//      提供纯函数与可注入重试环：
+//   1) src/client/chunk-availability.ts 的纯函数与可注入重试环——取数夹具是
+//      发行产物 lib/client.js 里的 //#region 区段（0.24.1 起构建只出
+//      lib/types/*.d.ts，逐文件编译镜像已不存在），提供：
 //        - nextDelayMs(failedAttempts)：2s/4s/8s/16s/32s→封顶 30s，无限轮；
-//        - isModuleSystemAvailable(globalLike)：__DSH_MODULES__.import 可调用；
-//        - isChunkRegistered(globalLike, name)：__dshChunks__ 工厂已注册；
+//        - isModuleSystemAvailable(globalLike)：__DSH_MODULES__.import 可调用
+//          （rc.8+ 无该全局时回落探测插件自有的 __dshSidebarModuleSystem__）；
+//        - moduleSystemUnavailableMessage(chunk)：与 loadChunk 抛错逐字同源；
 //        - createChunkRetryLoop(name, {isAvailable, attemptLoad, schedule})：
 //          每 chunk 单循环单定时器，退避轮询，成功即 ready 唤醒，最后一个
 //          订阅者退订 / dispose() 全清（无定时器泄漏），订阅者异常互相隔离。
@@ -33,14 +35,24 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const { pathToFileURL } = require('node:url');
 
 const PLUGIN_DIR = path.join(__dirname, '..', '..', 'assets', 'plugins', 'dsh-better-sidebar');
-const CHUNK_AVAIL = path.join(PLUGIN_DIR, 'lib', 'chunk-availability.js');
 const BUNDLES = ['client.js', 'client-registry.js'].map((f) => path.join(PLUGIN_DIR, 'lib', f));
 
-/** ESM 编译镜像只导入一次（CJS 测试文件里用动态 import）。 */
-const importChunkAvailability = async () => import(pathToFileURL(CHUNK_AVAIL).href);
+/**
+ * 取数夹具见 fixtures/better-sidebar-region.js：0.24.1 起 `tsc -p tsconfig.build.json`
+ * 只出 `lib/types/*.d.ts`，不再有逐文件的 `lib/<name>.js` 编译镜像，所以纯函数从
+ * **发行产物本体**里取 tsdown 保留的 `//#region src/client/chunk-availability.ts`
+ * 区段（自包含：纯函数 + 一个字面量表，零 import），vm 求值后交回符号。
+ */
+const { loadChunkAvailability } = require('./fixtures/better-sidebar-region.js');
+
+let chunkAvailability;
+/** 与旧 `import(pathToFileURL(lib/chunk-availability.js))` 同签名的取数入口。 */
+const importChunkAvailability = async () => {
+  if (chunkAvailability === undefined) chunkAvailability = loadChunkAvailability();
+  return chunkAvailability;
+};
 
 // ---------------------------------------------------------------------------
 // 可控假调度器：记录延迟、手动触发、统计取消（证明无泄漏）
@@ -123,26 +135,31 @@ test('isModuleSystemAvailable: 只认带可调用 import 的 __DSH_MODULES__', a
 });
 
 test('isModuleSystemAvailable: 缺省参数探测 globalThis（内核重启窗口 = false）', async () => {
-  const { isModuleSystemAvailable } = await importChunkAvailability();
-  const g = globalThis;
-  assert.equal(isModuleSystemAvailable(), false, 'globalThis 无 __DSH_MODULES__ 时不可用');
-  g.__DSH_MODULES__ = { import() {} };
+  const { isModuleSystemAvailable, sandbox } = await importChunkAvailability();
+  // 区段在 vm 沙箱里求值，模块内的 `globalThis` 就是 sandbox —— 往沙箱上挂
+  // __DSH_MODULES__ 等价于往页面全局上挂，缺省参数那条分支因此可测。
+  assert.equal(isModuleSystemAvailable(), false, '沙箱无 __DSH_MODULES__ 时不可用');
+  sandbox.__DSH_MODULES__ = { import() {} };
   try {
     assert.equal(isModuleSystemAvailable(), true, '内核就绪后变为可用');
   } finally {
-    delete g.__DSH_MODULES__;
+    delete sandbox.__DSH_MODULES__;
   }
   assert.equal(isModuleSystemAvailable(), false, '清理后恢复不可用');
 });
 
-test('isChunkRegistered: 认 __dshChunks__ 上已注册的工厂函数', async () => {
-  const { isChunkRegistered } = await importChunkAvailability();
-  assert.equal(isChunkRegistered(null, 'editor'), false);
-  assert.equal(isChunkRegistered({}, 'editor'), false);
-  assert.equal(isChunkRegistered({ __dshChunks__: {} }, 'editor'), false);
-  assert.equal(isChunkRegistered({ __dshChunks__: { editor: 'not-a-fn' } }, 'editor'), false);
-  assert.equal(isChunkRegistered({ __dshChunks__: { terminal: () => ({}) } }, 'editor'), false, '其它 chunk 不算');
-  assert.equal(isChunkRegistered({ __dshChunks__: { editor: () => ({}) } }, 'editor'), true);
+test('isModuleSystemAvailable: rc.8+ 只认插件自有的注入全局', async () => {
+  const { isModuleSystemAvailable, sandbox } = await importChunkAvailability();
+  // rc.8 内核不再暴露 __DSH_MODULES__，chunk 外部解析走 ctx.modules 注入的
+  // __dshSidebarModuleSystem__（见 chunk-loader.ts setChunkModuleSystem）。
+  sandbox.__dshSidebarModuleSystem__ = { import() {} };
+  try {
+    assert.equal(isModuleSystemAvailable(sandbox), true, '注入全局在场即可用');
+  } finally {
+    delete sandbox.__dshSidebarModuleSystem__;
+  }
+  assert.equal(isModuleSystemAvailable(sandbox), false, '两代全局都缺席 → 不可用');
+  assert.equal(isModuleSystemAvailable({ __DSH_MODULES__: {} }), false, '有对象但 import 不可调用 → 不可用');
 });
 
 test('moduleSystemUnavailableMessage: 与线上红字逐字一致（单一来源）', async () => {
@@ -484,13 +501,15 @@ test('F1-2: error 态 tab 重新可见（visible false→true）触发重拉', (
   for (const file of BUNDLES) {
     const src = fs.readFileSync(file, 'utf8');
     const rel = path.basename(file);
-    // 重新可见且当前是 error 态时才 bump attempt → effect 重跑重新读取
+    // 重新可见且当前是 error 态时才 bump 序列 → effect 重跑重新读取。
+    // 判据咬合（而非两个独立 includes）：0.24.1 上游的手动刷新同样调
+    // setReloadSeq，只有「error 态条件」与「bump」相邻出现才证明是重拉路径。
     assert.ok(
-      src.includes('!prevVisibleRef.current && visible && loadRef.current.status === "error"'),
-      `${rel}: error 态重新可见触发重拉的条件`,
+      /!prevVisibleRef\.current && visible && loadRef\.current\.status === "error"\)\s*setReloadSeq\(\(sequence\) => sequence \+ 1\)/.test(src),
+      `${rel}: error 态重新可见 → setReloadSeq 重拉（条件与 bump 相邻）`,
     );
-    // bump attempt 复用同一读取 effect（依赖数组含 attempt）
-    assert.ok(src.includes('setAttempt((a) => a + 1)'), `${rel}: 重拉通过 setAttempt 触发`);
+    // bump 复用同一读取 effect：reloadSeq 必须在该 effect 的依赖数组里
+    assert.ok(/\bisDir,\s*reloadSeq\s*\]/.test(src), `${rel}: 读取 effect 依赖数组含 reloadSeq`);
   }
 });
 

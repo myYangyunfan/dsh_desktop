@@ -1,6 +1,6 @@
 import z from "@deepseek-ai/schemastery";
 import { access, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { isMap, isScalar, isSeq, parseDocument } from "yaml";
 import { dshHomeDisplay, resolveDshHome } from "@deepseek-ai/dsh-home-paths";
 /** The public config schema. */
@@ -13,8 +13,14 @@ const Config = z.object({
 	maxBodyBytes: z.number().min(1).default(1048576),
 	/** Additional absolute composition-file paths the panel may edit (deployment-managed). */
 	extraMcpFiles: z.array(z.string()).default([]),
-	/** Force the whole panel read-only (no MCP toggle, no skill save, no rule edit). */
-	readOnly: z.boolean().default(false)
+	/** Force the whole panel read-only (no MCP toggle, no skill save, no rule edit, no archive restore/delete). */
+	readOnly: z.boolean().default(false),
+	/** Upper bound on the session ids one archived-session restore/delete call may address. */
+	maxBatchIds: z.number().min(1).default(200),
+	/** Allow deleting archived sessions (their durable artifacts) from the panel. */
+	allowSessionDelete: z.boolean().default(true),
+	/** Durable session-artifact root; empty resolves `$DSH_HOME/sessions` (the JSONL backend's default). */
+	sessionsRoot: z.string().default("")
 });
 /** Normalize raw config (for direct callers that bypass the Loader schema). */
 function resolveBasicsConfig(config) {
@@ -23,7 +29,10 @@ function resolveBasicsConfig(config) {
 		maxRuleBytes: config?.maxRuleBytes ?? 1048576,
 		maxBodyBytes: config?.maxBodyBytes ?? 1048576,
 		extraMcpFiles: config?.extraMcpFiles ?? [],
-		readOnly: config?.readOnly ?? false
+		readOnly: config?.readOnly ?? false,
+		maxBatchIds: config?.maxBatchIds ?? 200,
+		allowSessionDelete: config?.allowSessionDelete ?? true,
+		sessionsRoot: config?.sessionsRoot ?? ""
 	};
 }
 //#endregion
@@ -105,6 +114,32 @@ function requireBoolean(payload, key) {
 	const value = payload?.[key];
 	if (typeof value !== "boolean") throw new BasicsError("bad-request", `missing or invalid "${key}"`);
 	return value;
+}
+/**
+* Narrow an unknown payload value to a non-empty list of unique non-empty
+* strings (order preserved, duplicates dropped).
+*
+* The raw list length is checked BEFORE any de-duplication work, so an
+* oversized body cannot buy a long synchronous scan; the returned list is
+* capped by the same bound.
+* @param payload - request payload.
+* @param key - the array field name.
+* @param max - maximum accepted entries (the batch cap).
+* @returns the de-duplicated ids.
+*/
+function requireStringList(payload, key, max) {
+	const value = payload?.[key];
+	if (!Array.isArray(value) || value.length === 0) throw new BasicsError("bad-request", `缺少或非法的 "${key}" 列表`);
+	if (value.length > max) throw new BasicsError("bad-request", `"${key}" 列表超过单次上限 ${max} 项，请分批操作`);
+	const seen = /* @__PURE__ */ new Set();
+	const ids = [];
+	for (const entry of value) {
+		if (typeof entry !== "string" || entry === "") throw new BasicsError("bad-request", `"${key}" 列表中包含非法项`);
+		if (seen.has(entry)) continue;
+		seen.add(entry);
+		ids.push(entry);
+	}
+	return ids;
 }
 //#endregion
 //#region src/trust-fence.ts
@@ -373,42 +408,75 @@ function registerSkills(fc) {
 		const cwd = optionalString(payload, "cwd");
 		return cwd === void 0 ? fc.sessionCwdOf(payload) : cwd;
 	};
-	/** Resolve the viewing scope key (the live Agent) so scoped skill providers are included. */
-	const scopeOf = (payload) => {
-		const record = payload;
-		const sessionId = typeof record?.sessionId === "string" ? record.sessionId : "";
-		if (sessionId === "") return void 0;
-		const agents = ctx.get("agents");
-		if (agents === void 0 || typeof agents.get !== "function") return void 0;
+	/** The most recently registered live top-level Agent (the newest open session). */
+	const lastLiveAgent = (agents) => {
 		try {
-			return agents.get(sessionId);
+			const roots = typeof agents.roots === "function" ? agents.roots() : agents.list?.() ?? [];
+			return roots[roots.length - 1];
 		} catch {
 			return;
 		}
 	};
+	/**
+	* Resolve the viewing scope key (the live Agent) so preset-scoped skill
+	* providers are included. DSH ≥0.1.7 mounts the filesystem skill provider
+	* inside each session preset's composition, so a read with no scope observes
+	* the global layer alone — which holds no skills at all. When the caller
+	* cannot name a live session, fall back to the newest live Agent and report
+	* that choice instead of rendering a silently empty list.
+	*/
+	const resolveScope = (payload) => {
+		const record = payload;
+		const sessionId = typeof record?.sessionId === "string" ? record.sessionId : "";
+		const agents = ctx.get("agents");
+		if (agents !== void 0 && typeof agents.get === "function") {
+			if (sessionId !== "") try {
+				const agent = agents.get(sessionId);
+				if (agent !== void 0) return {
+					scope: agent,
+					sessionId,
+					source: "session"
+				};
+			} catch {}
+			const fallback = lastLiveAgent(agents);
+			if (fallback !== void 0) return {
+				scope: fallback,
+				...typeof fallback.id === "string" && fallback.id !== "" ? { sessionId: fallback.id } : {},
+				source: "fallback"
+			};
+		}
+		return { source: "none" };
+	};
 	const view = (payload) => {
 		const cwd = cwdOf(payload);
-		const scope = scopeOf(payload);
+		const { scope } = resolveScope(payload);
 		return {
 			cwd,
 			...scope !== void 0 ? { scope } : {}
 		};
 	};
 	const list = async (payload) => {
-		const snapshot = await ctx.skills.snapshot(view(payload));
+		const cwd = cwdOf(payload);
+		const { scope, sessionId, source } = resolveScope(payload);
+		const snapshot = await ctx.skills.snapshot({
+			...cwd !== void 0 ? { cwd } : {},
+			...scope !== void 0 ? { scope } : {}
+		});
 		const groups = /* @__PURE__ */ new Map();
 		for (const summary of snapshot.skills) {
-			const scope = scopeOfSource(summary.source);
-			const bucket = groups.get(scope) ?? [];
+			const scopeKey = scopeOfSource(summary.source);
+			const bucket = groups.get(scopeKey) ?? [];
 			bucket.push(toRow(summary, resolved.readOnly));
-			groups.set(scope, bucket);
+			groups.set(scopeKey, bucket);
 		}
 		return {
-			groups: SCOPE_ORDER.filter((scope) => groups.has(scope)).map((scope) => ({
-				scope,
-				skills: groups.get(scope)
+			groups: SCOPE_ORDER.filter((key) => groups.has(key)).map((key) => ({
+				scope: key,
+				skills: groups.get(key)
 			})),
-			complete: snapshot.complete
+			complete: snapshot.complete,
+			scopeSource: source,
+			...sessionId !== void 0 ? { sessionId } : {}
 		};
 	};
 	const get = async (payload) => {
@@ -477,52 +545,98 @@ function registerSkills(fc) {
 //#endregion
 //#region src/features/mcp/composition-scan.ts
 /**
-* Composition scanning: locate every file that may declare MCP servers and
-* extract the `mcp-client` rows it holds. Sources are (a) the profile patch
-* layers (home-level and per-profile), (b) agent-preset compositions (through
-* the roster when present, else a user-root directory scan), and (c) any
-* deployment-declared extra files. Shipped (system) presets are read-only.
+* Composition scanning: locate every source that may declare MCP servers and
+* extract the `mcp-client` rows it holds.
+*
+* Sources are (a) the profile patch layers (home-level and per-profile),
+* (b) the agent-preset declarations those files carry — DSH ≥0.1.7 keeps a
+* preset's composition in the declaration row's `config.plugins`, so a preset
+* is scanned by descending into that list, (c) agent-preset declarations
+* mounted from installed bundles, whose effective `config` is read from the
+* Loader entry and which stay read-only, and (d) any deployment-declared extra
+* files. Legacy directory presets (`$DSH_HOME/.agent-presets/<id>/`) are read
+* only when no agent-preset roster service exists: DSH ≥0.1.7 reads no such
+* directory, so listing it would show inert configuration.
 */
 /** Whether a plugin module specifier names the MCP client bridge. */
-function isMcpClientName$1(name) {
+function isMcpClientName(name) {
 	return typeof name === "string" && /mcp-client/.test(name);
 }
+/** Whether a plugin module specifier names the agent-preset declaration. */
+function isAgentPresetName(name) {
+	return typeof name === "string" && /dsh-agent-preset/.test(name);
+}
+/** Preset identity a declaration publishes (`config.id`), when it is readable. */
+function presetIdOfConfig(config) {
+	if (config === null || typeof config !== "object") return void 0;
+	const id = config.id;
+	return typeof id === "string" && id !== "" ? id : void 0;
+}
+/** Read one `mcp-client` row from a composition row object. */
+function toRowFile(obj, presetId) {
+	const config = obj.config ?? {};
+	return {
+		rowId: typeof obj.id === "string" ? obj.id : null,
+		serverName: typeof config.serverName === "string" ? config.serverName : "",
+		disabled: obj.disabled === true,
+		config,
+		...presetId !== void 0 ? { presetId } : {}
+	};
+}
 /**
-* Extract every `mcp-client` row from a composition document (top-level YAML
-* array). Handles both preset rows (`{id, name, config}`) and patch entries
-* (`{insert: [{id, name, config}, ...]}`).
+* Walk a composition value, collecting `mcp-client` rows. A preset declaration
+* re-scopes the rows below it to that preset; an `insert` list and a group's
+* child list are walked in place.
+*/
+function walkValue(node, presetId, rows) {
+	if (Array.isArray(node)) {
+		for (const item of node) walkValue(item, presetId, rows);
+		return;
+	}
+	if (node === null || typeof node !== "object") return;
+	const obj = node;
+	if (isAgentPresetName(obj.name)) {
+		const declared = presetIdOfConfig(obj.config);
+		if (declared === void 0) return;
+		walkValue(obj.config?.plugins, declared, rows);
+		return;
+	}
+	if (Array.isArray(obj.insert)) for (const item of obj.insert) walkValue(item, presetId, rows);
+	if (isMcpClientName(obj.name)) rows.push(toRowFile(obj, presetId));
+	if (Array.isArray(obj.config)) walkValue(obj.config, presetId, rows);
+}
+/** Every MCP row declared in one already-parsed composition value. */
+function collectMcpRowsFromValue(value) {
+	const rows = [];
+	walkValue(value, void 0, rows);
+	return rows;
+}
+/** Every MCP row declared in one already-parsed preset plugin list. */
+function collectPresetRows(presetId, plugins) {
+	const rows = [];
+	walkValue(plugins, presetId, rows);
+	return rows;
+}
+/**
+* Extract every `mcp-client` row from a composition document (a top-level YAML
+* array). Handles profile patch entries (`{insert: [...]}`), plain rows, preset
+* declarations (`{id, name, config: {plugins}}`) and entry groups alike.
 */
 function collectMcpRows(text) {
 	const doc = parseDocument(text);
 	if (doc.errors.length > 0) return [];
-	const rows = [];
-	const consider = (obj) => {
-		if (!isMcpClientName$1(obj.name)) return;
-		const config = obj.config ?? {};
-		const serverName = typeof config.serverName === "string" ? config.serverName : "";
-		const rowId = typeof obj.id === "string" ? obj.id : null;
-		rows.push({
-			rowId,
-			serverName,
-			disabled: obj.disabled === true,
-			config
-		});
-	};
-	const walk = (node) => {
-		if (Array.isArray(node)) {
-			for (const item of node) walk(item);
-			return;
-		}
-		if (node !== null && typeof node === "object") {
-			const obj = node;
-			if (Array.isArray(obj.insert)) {
-				for (const item of obj.insert) if (item !== null && typeof item === "object") consider(item);
-			}
-			consider(obj);
-		}
-	};
-	walk(doc.toJS());
-	return rows;
+	return collectMcpRowsFromValue(doc.toJS());
+}
+/** Group rows by their owning preset, preserving declaration order. */
+function byPreset(rows) {
+	const groups = /* @__PURE__ */ new Map();
+	for (const row of rows) {
+		if (row.presetId === void 0) continue;
+		const bucket = groups.get(row.presetId) ?? [];
+		bucket.push(row);
+		groups.set(row.presetId, bucket);
+	}
+	return groups;
 }
 async function isFile(path) {
 	try {
@@ -545,68 +659,109 @@ async function rowsOf(path) {
 		return [];
 	}
 }
-/** Resolve the agent-preset roster: the service when mounted, else the user root scan. */
-async function listPresets(ctx) {
-	const agentPresets = ctx.get("agentPresets");
-	if (agentPresets !== void 0) try {
-		return (await agentPresets.list()).map((row) => ({
-			id: row.id,
-			path: row.path,
-			trust: row.trust
-		}));
+/** Preset declarations mounted from installed bundles, with their live config. */
+function loaderPresetRows(ctx) {
+	const found = [];
+	try {
+		const loader = ctx.get("loader");
+		if (loader === void 0 || typeof loader.entries !== "function") return found;
+		for (const entry of loader.entries()) {
+			if (!isAgentPresetName(entry.options?.name)) continue;
+			const config = entry.options?.config;
+			const id = presetIdOfConfig(config) ?? entry.options?.id;
+			if (typeof id !== "string" || id === "") continue;
+			const plugins = config?.plugins;
+			found.push({
+				id,
+				rows: collectPresetRows(id, plugins)
+			});
+		}
 	} catch {}
-	const root = join(resolveDshHome(), ".agent-presets");
-	return (await listDirs(root)).map((id) => ({
-		id,
-		path: join(root, id, "agent.cordis.yml"),
-		trust: "user"
-	}));
+	return found;
 }
-/** Discover every composition source and its MCP rows. */
-async function scanMcpSources(ctx, resolved) {
-	const home = resolveDshHome();
+/**
+* Legacy directory presets (`$DSH_HOME/.agent-presets/<id>/agent.cordis.yml`),
+* the DSH ≤0.1.6 layout. Read only when no roster service answers, because
+* DSH ≥0.1.7 mounts no such directory (its own migration guide says so).
+*/
+async function legacyDirectoryPresets(ctx) {
+	if (ctx.get("agentPresets") !== void 0) return [];
+	const root = join(resolveDshHome(), ".agent-presets");
 	const sources = [];
-	const homePatch = join(home, "cordis.patch.yml");
-	if (await isFile(homePatch)) sources.push({
-		scope: "profile",
-		scopeLabel: "home",
-		path: homePatch,
-		readOnly: false,
-		rows: await rowsOf(homePatch)
-	});
-	for (const profileName of await listDirs(join(home, "profiles"))) {
-		const path = join(home, "profiles", profileName, "cordis.patch.yml");
-		if (await isFile(path)) sources.push({
-			scope: "profile",
-			scopeLabel: profileName,
+	for (const id of await listDirs(root)) {
+		const path = join(root, id, "agent.cordis.yml");
+		if (!await isFile(path)) continue;
+		sources.push({
+			scope: "preset",
+			scopeLabel: id,
 			path,
 			readOnly: false,
 			rows: await rowsOf(path)
 		});
 	}
-	for (const preset of await listPresets(ctx)) sources.push({
-		scope: "preset",
-		scopeLabel: preset.id,
-		path: preset.path,
-		readOnly: preset.trust === "system",
-		rows: await rowsOf(preset.path)
-	});
-	for (const extra of resolved.extraMcpFiles) if (await isFile(extra)) sources.push({
-		scope: "profile",
-		scopeLabel: "extra",
-		path: extra,
-		readOnly: false,
-		rows: await rowsOf(extra)
-	});
 	return sources;
+}
+/** Discover every composition source and its MCP rows. */
+async function scanMcpSources(ctx, resolved) {
+	const home = resolveDshHome();
+	const profiles = [];
+	const presets = [];
+	const seenPresets = /* @__PURE__ */ new Set();
+	/** Split one file's rows into its profile source and one source per preset. */
+	const addFile = (scopeLabel, path, rows) => {
+		profiles.push({
+			scope: "profile",
+			scopeLabel,
+			path,
+			readOnly: false,
+			rows: rows.filter((row) => row.presetId === void 0)
+		});
+		for (const [presetId, presetRows] of byPreset(rows)) {
+			seenPresets.add(presetId);
+			presets.push({
+				scope: "preset",
+				scopeLabel: presetId,
+				path,
+				readOnly: false,
+				rows: presetRows
+			});
+		}
+	};
+	const homePatch = join(home, "cordis.patch.yml");
+	if (await isFile(homePatch)) addFile("home", homePatch, await rowsOf(homePatch));
+	for (const profileName of await listDirs(join(home, "profiles"))) {
+		const path = join(home, "profiles", profileName, "cordis.patch.yml");
+		if (await isFile(path)) addFile(profileName, path, await rowsOf(path));
+	}
+	for (const extra of resolved.extraMcpFiles) if (await isFile(extra)) addFile("extra", extra, await rowsOf(extra));
+	presets.push(...await legacyDirectoryPresets(ctx));
+	for (const preset of loaderPresetRows(ctx)) {
+		if (seenPresets.has(preset.id) || preset.rows.length === 0) continue;
+		seenPresets.add(preset.id);
+		presets.push({
+			scope: "preset",
+			scopeLabel: preset.id,
+			path: "",
+			readOnly: true,
+			rows: preset.rows
+		});
+	}
+	return [...profiles, ...presets.filter((source) => source.rows.length > 0)];
 }
 //#endregion
 //#region src/features/mcp/yaml-edit.ts
 /**
 * Round-trip editing of a composition document: flip one row's `disabled`
-* flag while preserving comments and every other key. Editing works on the
-* yaml Document node tree (never on the plain JS value) so the file text
-* other than the one flag is byte-stable.
+* flag or update one row's `config`, while preserving comments and every other
+* key. Editing works on the yaml Document node tree (never on the plain JS
+* value) so the file text other than the edited keys is byte-stable.
+*
+* A target names its scope: a profile row lives at the document's top level or
+* inside an `insert` list, while a preset row lives inside the `plugins` list
+* of an `@deepseek-ai/dsh-agent-preset` declaration (DSH ≥0.1.7 composition
+* shape). The lookup therefore descends into preset declarations and entry
+* groups, and never matches a row from a different scope than the target asks
+* for — two presets may declare servers with the same name.
 */
 /** Read a scalar node as a string (empty for non-scalars). */
 function scalarString(node) {
@@ -614,38 +769,46 @@ function scalarString(node) {
 	const value = node.value;
 	return typeof value === "string" || typeof value === "number" ? String(value) : "";
 }
-/** Whether a plugin module specifier names the MCP client bridge. */
-function isMcpClientName(name) {
-	return /mcp-client/.test(name);
-}
-/**
-* Locate the YAML mapping of the row matching `target` (by serverName, then
-* by rowId), walking insert lists and direct rows alike.
-*/
-function findRowNode(node, target) {
-	if (isSeq(node)) {
-		for (const item of node.items) {
-			const found = findRowNode(item, target);
-			if (found !== void 0) return found;
-		}
-		return;
-	}
-	if (isMap(node)) {
-		const insert = node.get("insert", true);
-		if (isSeq(insert)) for (const item of insert.items) {
-			if (!isMap(item)) continue;
-			const found = considerRow(item, target);
-			if (found !== void 0) return found;
-		}
-		return considerRow(node, target);
-	}
-}
-function considerRow(map, target) {
+/** Whether the row at hand matches the target inside the scope being walked. */
+function considerRow(map, target, presetId) {
 	if (!isMcpClientName(scalarString(map.get("name", true)))) return void 0;
+	if ((target.presetId ?? null) !== presetId) return void 0;
 	const config = map.get("config", true);
 	const serverName = isMap(config) ? scalarString(config.get("serverName", true)) : "";
 	if (serverName !== "" && serverName === target.serverName) return map;
 	if (target.rowId != null && scalarString(map.get("id", true)) === target.rowId) return map;
+}
+/**
+* Locate the YAML mapping of the row matching `target`, walking insert lists,
+* entry-group child lists and preset declarations alike.
+*/
+function findRowNode(node, target, presetId) {
+	if (isSeq(node)) {
+		for (const item of node.items) {
+			const found = findRowNode(item, target, presetId);
+			if (found !== void 0) return found;
+		}
+		return;
+	}
+	if (!isMap(node)) return void 0;
+	if (isAgentPresetName(scalarString(node.get("name", true)))) {
+		const config = node.get("config", true);
+		if (!isMap(config)) return void 0;
+		const declared = scalarString(config.get("id", true));
+		if (declared === "" || (target.presetId ?? null) !== declared) return void 0;
+		return findRowNode(config.get("plugins", true), target, declared);
+	}
+	const insert = node.get("insert", true);
+	if (isSeq(insert)) for (const item of insert.items) {
+		const found = findRowNode(item, target, presetId);
+		if (found !== void 0) return found;
+	}
+	const config = node.get("config", true);
+	if (isSeq(config)) {
+		const found = findRowNode(config, target, presetId);
+		if (found !== void 0) return found;
+	}
+	return considerRow(node, target, presetId);
 }
 /**
 * Flip one row's `disabled` flag in a composition document. `disabled === true`
@@ -659,7 +822,7 @@ function setRowDisabled(text, target, disabled) {
 		ok: false,
 		text
 	};
-	const row = findRowNode(doc.contents, target);
+	const row = findRowNode(doc.contents, target, null);
 	if (row === void 0) return {
 		ok: false,
 		text
@@ -672,40 +835,10 @@ function setRowDisabled(text, target, disabled) {
 	};
 }
 /**
-* Update one row's `config` mapping in place. A null/absent patch value is
-* skipped; an explicit null deletes the key. Values are converted through the
-* document's node factory so nested objects/arrays serialize correctly.
-*/
-function setRowConfig(text, target, patch) {
-	const doc = parseDocument(text);
-	if (doc.errors.length > 0) return {
-		ok: false,
-		text
-	};
-	const row = findRowNode(doc.contents, target);
-	if (row === void 0) return {
-		ok: false,
-		text
-	};
-	const rawConfig = row.get("config", true);
-	const config = isMap(rawConfig) ? rawConfig : doc.createNode({});
-	if (!isMap(rawConfig)) row.set("config", config);
-	for (const [key, value] of Object.entries(patch)) {
-		if (value === void 0) continue;
-		if (value === null) config.delete(key);
-		else config.set(key, doc.createNode(value));
-	}
-	return {
-		ok: true,
-		text: doc.toString()
-	};
-}
-/**
-* Append a new `mcp-client` row to a composition document. The row lands
-* inside an existing top-level `insert` list when one is present, otherwise a
-* fresh `insert` block is created; an empty document is seeded with a fresh
-* `insert` block. Returns the edited text, or the original text with
-* `ok: false` when the document shape is unsupported.
+* Append a new row to a composition document. The row lands inside an existing
+* top-level `insert` list when one is present, otherwise a fresh `insert` block
+* is created; an empty document is seeded with one. Comments and every other
+* key stay byte-stable because the edit happens on the node tree.
 */
 function addRow(text, row) {
 	const doc = parseDocument(text);
@@ -724,7 +857,8 @@ function addRow(text, row) {
 	}
 	if (isSeq(contents)) {
 		let insert;
-		for (const item of contents.items) if (isMap(item)) {
+		for (const item of contents.items) {
+			if (!isMap(item)) continue;
 			const candidate = item.get("insert", true);
 			if (isSeq(candidate)) {
 				insert = candidate;
@@ -750,6 +884,35 @@ function addRow(text, row) {
 	return {
 		ok: false,
 		text
+	};
+}
+/**
+* Update one row's `config` mapping in place. A null/absent patch value is
+* skipped; an explicit null deletes the key. Values are converted through the
+* document's node factory so nested objects/arrays serialize correctly.
+*/
+function setRowConfig(text, target, patch) {
+	const doc = parseDocument(text);
+	if (doc.errors.length > 0) return {
+		ok: false,
+		text
+	};
+	const row = findRowNode(doc.contents, target, null);
+	if (row === void 0) return {
+		ok: false,
+		text
+	};
+	const rawConfig = row.get("config", true);
+	const config = isMap(rawConfig) ? rawConfig : doc.createNode({});
+	if (!isMap(rawConfig)) row.set("config", config);
+	for (const [key, value] of Object.entries(patch)) {
+		if (value === void 0) continue;
+		if (value === null) config.delete(key);
+		else config.set(key, doc.createNode(value));
+	}
+	return {
+		ok: true,
+		text: doc.toString()
 	};
 }
 //#endregion
@@ -802,11 +965,12 @@ function maskUrl(url) {
 //#region src/features/mcp/mcp-service.ts
 /**
 * MCP feature (host): list every MCP server grouped by source scope, report
-* its masked config and live runtime status, and toggle a server on/off by
+* its masked config and live runtime status, toggle a server on/off by
 * flipping the `disabled` flag in its source file (profile patches hot-reload;
-* preset compositions take effect for new sessions).
+* preset compositions take effect for new sessions), and append a new server
+* row into an editable patch layer.
 */
-function maskedView(row, editable, mounted, toolCount) {
+function maskedView(row, editable, mounted, toolCount, probe) {
 	const c = row.config;
 	const transport = c.transport === "streamable-http" ? "streamable-http" : c.transport === "stdio" ? "stdio" : "unknown";
 	return {
@@ -824,7 +988,8 @@ function maskedView(row, editable, mounted, toolCount) {
 		...typeof c.toolCallTimeoutMs === "number" ? { toolCallTimeoutMs: c.toolCallTimeoutMs } : {},
 		runtime: {
 			mounted,
-			toolCount
+			toolCount,
+			probe
 		}
 	};
 }
@@ -872,21 +1037,74 @@ function toolCountFor(serverName, toolNames) {
 	for (const name of toolNames) if (name.startsWith(prefix)) count += 1;
 	return count;
 }
+/**
+* The cordis `FiberState.ACTIVE` ordinal. The inventory reports the raw numeric
+* enum (0 PENDING, 1 LOADING, 2 ACTIVE, 3 FAILED, 4 DISPOSED, 5 UNLOADING), so
+* a string comparison would silently read every row as inactive.
+*/
+const FIBER_STATE_ACTIVE = 2;
+/**
+* Live activation of the MCP rows inside each preset's composition, keyed
+* `presetId::rowId`. A preset's plugins mount in that preset's own scoped
+* world, so the host Loader tree and tool registry cannot see them; the preset
+* registry's inventory is the only host-side witness that the row activated.
+* A row the inventory reports without a fiber state stays out of the map, which
+* the caller reads as "activation unknown" rather than "not active".
+*/
+async function presetRowStates(ctx) {
+	const states = /* @__PURE__ */ new Map();
+	const agentPresets = ctx.get("agentPresets");
+	if (agentPresets === void 0 || typeof agentPresets.compositionInventory !== "function") return states;
+	try {
+		for (const preset of await agentPresets.compositionInventory()) for (const row of preset.rows) {
+			if (row.entryId === null || !isMcpClientName(row.moduleName)) continue;
+			if (typeof row.fiberState !== "number") continue;
+			states.set(`${preset.id}::${row.entryId}`, row.fiberState === FIBER_STATE_ACTIVE);
+		}
+	} catch {}
+	return states;
+}
 /** Build the MCP feature API. */
 function registerMcp(fc) {
 	const { ctx, resolved } = fc;
 	const list = async () => {
 		const sources = await scanMcpSources(ctx, resolved);
 		const { mountedByServer, toolNames } = runtimeFacts(ctx);
+		const presetStates = await presetRowStates(ctx);
 		return { groups: sources.map((source) => ({
 			scope: source.scope,
 			scopeLabel: source.scopeLabel,
 			path: source.path,
 			readOnly: source.readOnly,
 			servers: source.rows.map((row) => {
-				return maskedView(row, !resolved.readOnly && !source.readOnly, mountedByServer.get(row.serverName) ?? false, toolCountFor(row.serverName, toolNames));
+				const editable = !resolved.readOnly && !source.readOnly;
+				if (source.scope === "preset") {
+					const state = row.rowId === null ? void 0 : presetStates.get(`${source.scopeLabel}::${row.rowId}`);
+					return maskedView(row, editable, state === true, 0, state === void 0 ? "unknown" : "preset");
+				}
+				return maskedView(row, editable, mountedByServer.get(row.serverName) ?? false, toolCountFor(row.serverName, toolNames), "global");
 			})
 		})) };
+	};
+	/**
+	* Resolve the addressed row inside the editable scan. A file may declare the
+	* same server name in its profile rows and inside a preset declaration, so
+	* the client's `presetId` (the group it rendered) selects the scope; without
+	* it the first source holding a matching row wins, which keeps older client
+	* bundles working.
+	*/
+	const resolveTarget = (sources, path, match, presetId) => {
+		const candidates = sources.filter((s) => s.path !== "" && !s.readOnly && samePath(s.path, path));
+		if (candidates.length === 0) throw new BasicsError("forbidden", "该文件不在可编辑范围内", 403);
+		for (const source of candidates) {
+			if (presetId !== null && (source.scope !== "preset" || source.scopeLabel !== presetId)) continue;
+			const row = source.rows.find(match);
+			if (row !== void 0) return {
+				source,
+				row
+			};
+		}
+		throw new BasicsError("not-found", "配置中未找到对应的 MCP 服务器行", 404);
 	};
 	const setEnabled = async (payload) => {
 		if (resolved.readOnly) throw new BasicsError("read-only", "面板处于只读模式", 403);
@@ -894,9 +1112,9 @@ function registerMcp(fc) {
 		const serverName = requireString(payload, "serverName");
 		const rowId = optionalString(payload, "rowId") ?? null;
 		const enabled = requireBoolean(payload, "enabled");
-		const source = (await scanMcpSources(ctx, resolved)).find((s) => samePath(s.path, path) && !s.readOnly);
-		if (source === void 0) throw new BasicsError("forbidden", "该文件不在可编辑范围内", 403);
-		if (source.rows.find((r) => r.serverName === serverName || rowId !== null && r.rowId === rowId) === void 0) throw new BasicsError("not-found", `未找到 MCP 服务器 "${serverName}"`, 404);
+		const presetId = optionalString(payload, "presetId") ?? null;
+		const sources = await scanMcpSources(ctx, resolved);
+		const { source, row } = resolveTarget(sources, path, (r) => r.serverName === serverName || rowId !== null && r.rowId === rowId, presetId);
 		let text;
 		try {
 			text = await readFile(path, "utf8");
@@ -905,7 +1123,8 @@ function registerMcp(fc) {
 		}
 		const result = setRowDisabled(text, {
 			rowId,
-			serverName
+			serverName,
+			presetId: row.presetId ?? null
 		}, !enabled);
 		if (!result.ok) throw new BasicsError("mcp-error", `配置中未找到服务器 "${serverName}" 对应的行`, 400);
 		try {
@@ -924,11 +1143,10 @@ function registerMcp(fc) {
 		const path = requireString(payload, "path");
 		const serverName = requireString(payload, "serverName");
 		const rowId = optionalString(payload, "rowId") ?? null;
+		const presetId = optionalString(payload, "presetId") ?? null;
 		const patch = payload?.patch ?? {};
-		const source = (await scanMcpSources(ctx, resolved)).find((s) => samePath(s.path, path) && !s.readOnly);
-		if (source === void 0) throw new BasicsError("forbidden", "该文件不在可编辑范围内", 403);
-		const row = source.rows.find((r) => r.serverName === serverName || rowId !== null && r.rowId === rowId);
-		if (row === void 0) throw new BasicsError("not-found", `未找到 MCP 服务器 "${serverName}"`, 404);
+		const sources = await scanMcpSources(ctx, resolved);
+		const { row } = resolveTarget(sources, path, (r) => r.serverName === serverName || rowId !== null && r.rowId === rowId, presetId);
 		let text;
 		try {
 			text = await readFile(path, "utf8");
@@ -937,7 +1155,8 @@ function registerMcp(fc) {
 		}
 		const result = setRowConfig(text, {
 			rowId,
-			serverName
+			serverName,
+			presetId: row.presetId ?? null
 		}, resolveMaskedPatch(patch, row.config));
 		if (!result.ok) throw new BasicsError("mcp-error", `配置中未找到服务器 "${serverName}" 对应的行`, 400);
 		try {
@@ -947,26 +1166,30 @@ function registerMcp(fc) {
 		}
 		return { ok: true };
 	};
+	/**
+	* Append a new `mcp-client` row. Without an explicit `path` the row lands in
+	* the first editable profile source, falling back to the home-level patch when
+	* the deployment has none yet — the empty-state case this method exists for.
+	*/
 	const create = async (payload) => {
 		if (resolved.readOnly) throw new BasicsError("read-only", "面板处于只读模式", 403);
 		const serverName = requireString(payload, "serverName");
 		const transport = requireString(payload, "transport");
 		if (transport !== "stdio" && transport !== "streamable-http") throw new BasicsError("bad-request", "非法的传输方式 \"transport\"（仅 stdio / streamable-http）");
-		const record = payload;
+		const record = payload ?? {};
 		const command = optionalString(payload, "command");
 		const url = optionalString(payload, "url");
 		const cwd = optionalString(payload, "cwd");
-		const argsValue = record?.args;
-		const args = Array.isArray(argsValue) ? argsValue.filter((value) => typeof value === "string") : void 0;
-		const envValue = record?.env;
+		const args = Array.isArray(record.args) ? record.args.filter((value) => typeof value === "string") : void 0;
+		const envValue = record.env;
 		const env = envValue !== null && typeof envValue === "object" && !Array.isArray(envValue) ? envValue : void 0;
-		const toolCallTimeoutMs = typeof record?.toolCallTimeoutMs === "number" ? record.toolCallTimeoutMs : void 0;
+		const toolCallTimeoutMs = typeof record.toolCallTimeoutMs === "number" ? record.toolCallTimeoutMs : void 0;
 		const sources = await scanMcpSources(ctx, resolved);
 		if (sources.some((source) => source.rows.some((row) => row.serverName === serverName))) throw new BasicsError("conflict", `MCP 服务器 "${serverName}" 已存在`, 409);
 		const pathParam = optionalString(payload, "path");
 		let target;
 		if (pathParam !== void 0) {
-			const source = sources.find((candidate) => samePath(candidate.path, pathParam) && !candidate.readOnly);
+			const source = sources.find((candidate) => candidate.path !== "" && !candidate.readOnly && samePath(candidate.path, pathParam));
 			if (source === void 0) throw new BasicsError("forbidden", "该文件不在可编辑范围内", 403);
 			target = source.path;
 		} else target = sources.find((source) => source.scope === "profile" && !source.readOnly)?.path ?? join(resolveDshHome(), "cordis.patch.yml");
@@ -1337,6 +1560,504 @@ function registerRules(fc) {
 	};
 }
 //#endregion
+//#region src/features/archived/archive-store.ts
+/** Whether a value is a plain non-null object. */
+function isRecord(value) {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+/** Read a state object's archived ids as a string list. */
+function toStringList(value) {
+	return Array.isArray(value) ? value.map((id) => String(id)) : void 0;
+}
+/** Read the workspace domain's global state, preferring the domain over any cached snapshot. */
+function readState(registry, global) {
+	try {
+		const fromDomain = global?.get();
+		if (isRecord(fromDomain)) return fromDomain;
+	} catch {}
+	return isRecord(registry.state) ? registry.state : void 0;
+}
+/**
+* Build the archive store over one host context.
+*
+* Both services are resolved on EVERY call, never captured while the plugin
+* applies: Cordis's `ctx.get` (strict) answers `undefined` until the fiber
+* that provides a service is ACTIVE, and `dsh-workspace` opens the workspace
+* domain, recovers pending mutations, and indexes stored headers across
+* several awaits before it publishes `workspaceRegistry`. This plugin, whose
+* own `inject` list never names that service, therefore applies inside that
+* window — a captured value would be `undefined` for the whole process
+* lifetime even though the registry is live a moment later.
+*/
+function createArchiveStore(ctx) {
+	/** The workspace registry as it stands now (undefined while its fiber is not active). */
+	const registryOf = () => ctx.get("workspaceRegistry");
+	/** The `workspace` domain's global singleton as it stands now. */
+	const globalOf = () => {
+		try {
+			return ctx.get("storageDomain")?.get?.("workspace")?.global;
+		} catch {
+			return;
+		}
+	};
+	const idsOf = (registry, global) => {
+		try {
+			const direct = toStringList(registry?.archivedSessionIds);
+			if (direct !== void 0) return direct;
+		} catch {}
+		return toStringList(readState(registry ?? {}, global)?.archivedSessionIds) ?? [];
+	};
+	const ids = () => idsOf(registryOf(), globalOf());
+	const writable = () => {
+		const registry = registryOf();
+		if (registry === void 0) return false;
+		if (typeof registry.unarchiveSession === "function") return true;
+		if (typeof registry.setState === "function") return true;
+		return typeof globalOf()?.set === "function";
+	};
+	/**
+	* Commit one whole state value through the registry's own write path when it
+	* exists. The fallback path pre-flights the in-process snapshot assignment
+	* BEFORE the durable write: a build whose registry state cannot be
+	* resynchronized is refused instead of leaving a medium that the next
+	* registry write would silently revert.
+	*/
+	const commit = async (registry, global, next) => {
+		if (typeof registry.setState === "function") {
+			await registry.setState(next);
+			return registry.state === next;
+		}
+		if (!("state" in registry) || typeof global?.set !== "function") throw new BasicsError("archive-error", "当前 DSH 版本未暴露归档集合的写入通道，无法恢复会话", 500);
+		try {
+			registry.state = registry.state;
+			await global.set(next);
+			registry.state = next;
+		} catch (error) {
+			throw new BasicsError("archive-error", `写入归档集合失败：${error instanceof Error ? error.message : String(error)}`, 500);
+		}
+		return registry.state === next;
+	};
+	const drop = async (remove) => {
+		const registry = registryOf();
+		if (registry === void 0) throw new BasicsError("archive-error", "当前部署未挂载工作区注册表（workspaceRegistry），无法管理归档会话", 500);
+		const global = globalOf();
+		const wanted = new Set(remove);
+		const before = idsOf(registry, global);
+		if (before.every((id) => !wanted.has(id))) return {
+			archivedIds: before,
+			absent: [...wanted],
+			staleSnapshot: false
+		};
+		if (typeof registry.unarchiveSession === "function") {
+			const removed = [...wanted].filter((id) => before.includes(id));
+			for (const id of removed) await registry.unarchiveSession(id);
+			return {
+				archivedIds: idsOf(registry, global),
+				absent: [...wanted].filter((id) => !removed.includes(id)),
+				staleSnapshot: false
+			};
+		}
+		let staleSnapshot = false;
+		let removed = [];
+		const write = async () => {
+			const current = readState(registry, global);
+			const currentIds = toStringList(current?.archivedSessionIds);
+			if (current === void 0 || currentIds === void 0) throw new BasicsError("archive-error", "无法读取 DSH 的归档集合状态，无法恢复会话", 500);
+			const filtered = currentIds.filter((id) => !wanted.has(id));
+			if (filtered.length === currentIds.length) return;
+			removed = [...wanted].filter((id) => currentIds.includes(id));
+			staleSnapshot = !await commit(registry, global, {
+				...current,
+				archivedSessionIds: filtered
+			});
+		};
+		if (typeof registry.enqueueOperation === "function") await registry.enqueueOperation(write);
+		else await write();
+		return {
+			archivedIds: idsOf(registry, global),
+			absent: [...wanted].filter((id) => !removed.includes(id)),
+			staleSnapshot
+		};
+	};
+	return {
+		get mounted() {
+			return registryOf() !== void 0;
+		},
+		ids,
+		writable,
+		drop
+	};
+}
+//#endregion
+//#region src/features/archived/session-artifacts.ts
+/**
+* Session-artifact lookup and deletion (host, filesystem level).
+*
+* DSH's persistence seam has no delete operation, so the archived-sessions
+* feature removes a session's durable artifacts itself: the per-session
+* directory the JSONL backend owns (`<root>/<project-dir>/<session-id>/`,
+* holding one generation log `session[.vN].jsonl[.zstd]` plus any
+* session-local auxiliary files).
+*
+* Two rules keep this safe:
+* - the directory is FOUND by scanning the configured root for a direct child
+*   named exactly like the session id, never re-derived from a cwd (the
+*   project-directory encoding is the backend's private business) and never
+*   taken from the client;
+* - a directory is only removed after it proved to be that session's artifact
+*   (expected basename, inside the root, holds a generation log), so a miss or
+*   a shape change refuses instead of guessing.
+*/
+/**
+* Canonical generation log names: `session.jsonl`, `session.jsonl.zstd`,
+* `session.v3.jsonl`, … Version zero keeps the suffix-only name, so `.v0` and
+* leading-zero versions are deliberately not canonical (mirrors the backend's
+* own filename parser).
+*/
+const SESSION_LOG_NAME = /^session(?:\.v[1-9]\d*)?\.jsonl(?:\.zstd)?$/;
+/** The id must be one plain path segment (DSH session ids are `[session-]<uuid>`). */
+const SAFE_SEGMENT = /^[A-Za-z0-9._-]{1,128}$/;
+/**
+* Whether a raw session id may be used as one path segment (no separators, no
+* traversal, no NUL). Mirrors the backend's "encode before use" intent: an id
+* that needs escaping is refused rather than re-encoded here.
+* @param id - candidate session id.
+* @returns true when the id is a safe single path segment.
+*/
+function isSafeSessionId(id) {
+	return SAFE_SEGMENT.test(id) && id !== "." && id !== "..";
+}
+/** Whether a file name is a canonical session generation log. */
+function isSessionLogName(name) {
+	return SESSION_LOG_NAME.test(name);
+}
+/**
+* Whether `target` is strictly inside `root` (no traversal escape).
+* @param root - container directory.
+* @param target - candidate path.
+* @returns true when the resolved target lives under the resolved root.
+*/
+function isInside(root, target) {
+	const rel = relative(resolve(root), resolve(target));
+	return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
+}
+/**
+* Describe one candidate session directory, refusing anything that is not the
+* named session's artifact (wrong basename, outside the root, no generation log).
+* @param root - the configured sessions root.
+* @param sessionId - the session the directory must belong to.
+* @param directory - candidate directory (absolute).
+* @returns the artifact facts, or undefined when the candidate is refused.
+*/
+async function describeSessionArtifact(root, sessionId, directory) {
+	if (!isSafeSessionId(sessionId)) return void 0;
+	if (basename(resolve(directory)) !== sessionId) return void 0;
+	if (!isInside(root, directory)) return void 0;
+	let entries;
+	try {
+		entries = await readdir(resolve(directory), { withFileTypes: true });
+	} catch {
+		return;
+	}
+	const logs = [];
+	let bytes = 0;
+	for (const entry of entries) {
+		if (!entry.isFile()) continue;
+		const path = join(resolve(directory), entry.name);
+		const info = await stat(path).catch(() => void 0);
+		if (info !== void 0) bytes += info.size;
+		if (isSessionLogName(entry.name)) logs.push(path);
+	}
+	if (logs.length === 0) return void 0;
+	return {
+		directory: resolve(directory),
+		logs,
+		bytes
+	};
+}
+/**
+* Locate one session's artifact directory under the configured sessions root.
+* The scan mirrors the backend's own session-directory lookup: one level of
+* project directories, then a child named exactly like the session id.
+* @param root - the JSONL backend's sessions root (`$DSH_HOME/sessions` by default).
+* @param sessionId - the stored session id.
+* @returns the located artifact, or undefined when no project directory owns it.
+*/
+async function findSessionArtifact(root, sessionId) {
+	if (!isSafeSessionId(sessionId)) return void 0;
+	const rootResolved = resolve(root);
+	let projectDirs;
+	try {
+		projectDirs = (await readdir(rootResolved, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+	} catch {
+		return;
+	}
+	for (const projectDir of projectDirs) {
+		const artifact = await describeSessionArtifact(rootResolved, sessionId, join(rootResolved, projectDir, sessionId));
+		if (artifact !== void 0) return artifact;
+	}
+}
+/**
+* Delete one located session-artifact directory recursively.
+* @param root - the sessions root the artifact was found under.
+* @param sessionId - the session the directory must belong to.
+* @param directory - the located session directory.
+* @returns the number of bytes removed.
+* @throws when the directory no longer passes the shape checks (never deletes blind).
+*/
+async function removeSessionArtifact(root, sessionId, directory) {
+	const fresh = await describeSessionArtifact(root, sessionId, directory);
+	if (fresh === void 0) throw new Error("会话目录已失效或不是有效的会话产物，已跳过删除");
+	await rm(fresh.directory, {
+		recursive: true,
+		force: true
+	});
+	return fresh.bytes;
+}
+//#endregion
+//#region src/features/archived/archived-service.ts
+/**
+* Archived-sessions feature (host): list every archived session, restore a
+* selection, and delete a selection.
+*
+* DSH archives one-way (a session hidden from every grouping surface keeps its
+* log and its Workspace slot; older builds expose no unarchive action), so this
+* feature supplies the missing surface:
+* - **list** — the registry-global archive set joined with the durable session
+*   listing (cwd, size, event count) and this process's liveness, so the panel
+*   can also show archive entries whose artifacts are already gone;
+* - **restore** — drop ids from the archive set (durable, in-memory, and the
+*   `domain/changed` event every Workspace surface follows), leaving the log
+*   and the accounting slot untouched;
+* - **delete** — remove the session's durable artifact directory, prune its
+*   Workspace accounting slot, then drop it from the archive set. Only
+*   archived sessions that are NOT running are deletable, and the filesystem
+*   work is driven by a fresh scan of the configured sessions root — never by
+*   a client-supplied path.
+*
+* Liveness has two distinct levels, and the panel shows both:
+* - `loaded` — `ctx.sessions.get(id)` answers, i.e. the session object sits in
+*   this process's in-memory store. Archiving never unloads a session, so a
+*   session that is still open in a client stays loaded indefinitely;
+* - `running` — the session's Agent exists and its status is `running`
+*   (dsh-agent's `AgentStatus`), i.e. a driver is actively draining turns.
+*   This is the same predicate the harness's own session list reports.
+* Delete blocks only on `running`: a loaded-but-idle session has no driver to
+* race, so removing its artifacts cannot interleave with a write in flight.
+*/
+/** Message of any thrown value. */
+function messageOf(error) {
+	return error instanceof Error ? error.message : String(error);
+}
+/** Build the archived feature API. */
+function registerArchived(fc) {
+	const { ctx, resolved } = fc;
+	const store = createArchiveStore(ctx);
+	/** The sessions root the JSONL backend owns (configured override, else `$DSH_HOME/sessions`). */
+	const sessionsRoot = () => resolved.sessionsRoot !== "" ? resolved.sessionsRoot : join(resolveDshHome(), "sessions");
+	/**
+	* Display form of the sessions root: `~/.dsh/sessions` (or `$DSH_HOME/...`)
+	* when it lives under the harness home, the absolute path otherwise.
+	* `dshHomeDisplay` only names the home itself, so the tail is joined here.
+	*/
+	const displayRoot = () => {
+		const root = sessionsRoot();
+		const home = resolveDshHome();
+		if (isInside(home, root)) return `${dshHomeDisplay(home)}/${relative(home, root).replaceAll("\\", "/")}`;
+		return root.replaceAll("\\", "/");
+	};
+	/** Read the durable session listing, or undefined when the backend cannot answer. */
+	const storedSessions = async () => {
+		const persistence = ctx.get("sessionPersistence");
+		if (persistence === void 0 || typeof persistence.list !== "function") return void 0;
+		try {
+			const snapshots = await persistence.list();
+			const map = /* @__PURE__ */ new Map();
+			for (const snapshot of snapshots) {
+				const id = snapshot?.header?.id;
+				if (typeof id === "string" && id !== "") map.set(id, snapshot);
+			}
+			return map;
+		} catch {
+			return;
+		}
+	};
+	/**
+	* The live Agent registry as it stands now. Resolved per call, never captured
+	* while this plugin applies — the same Cordis strict-`get` window that hides
+	* `workspaceRegistry` also hides `agents`.
+	*/
+	const agentsOf = () => {
+		try {
+			const agents = ctx.get("agents");
+			return agents !== void 0 && typeof agents.get === "function" ? agents : void 0;
+		} catch {
+			return;
+		}
+	};
+	/** Whether the session is attached to an Agent in this process. */
+	const isLoaded = (id) => {
+		try {
+			return ctx.sessions.get(id) !== void 0;
+		} catch {
+			return false;
+		}
+	};
+	/** Whether the session's Agent is draining turns right now. */
+	const isRunning = (agents, id) => {
+		if (agents === void 0) return false;
+		try {
+			return agents.get(id)?.status === "running";
+		} catch {
+			return false;
+		}
+	};
+	/** Prune deleted ids from every Workspace's accounting slot (best-effort). */
+	const detachFromWorkspaces = async (ids) => {
+		const registry = ctx.get("workspaceRegistry");
+		if (registry === void 0 || typeof registry.list !== "function") return;
+		let workspaces;
+		try {
+			workspaces = registry.list();
+		} catch {
+			return;
+		}
+		for (const workspace of workspaces) for (const id of ids) {
+			if (!workspace.sessionIds.includes(id)) continue;
+			try {
+				await workspace.detachSession(id);
+			} catch {}
+		}
+	};
+	const list = async () => {
+		const archivedIds = store.ids();
+		const writable = store.writable();
+		const mounted = store.mounted;
+		const agents = agentsOf();
+		const persisted = await storedSessions();
+		const rows = archivedIds.map((id) => {
+			const snapshot = persisted?.get(id);
+			const header = snapshot?.header;
+			const running = isRunning(agents, id);
+			const stored = snapshot !== void 0;
+			return {
+				id,
+				...typeof header?.cwd === "string" && header.cwd !== "" ? { cwd: header.cwd } : {},
+				...typeof header?.createdAt === "number" ? { createdAt: header.createdAt } : {},
+				...typeof snapshot?.sizeBytes === "number" ? { sizeBytes: snapshot.sizeBytes } : {},
+				...typeof snapshot?.eventCount === "number" ? { eventCount: snapshot.eventCount } : {},
+				loaded: isLoaded(id),
+				running,
+				stored,
+				restorable: !resolved.readOnly && writable,
+				deletable: !resolved.readOnly && resolved.allowSessionDelete && persisted !== void 0 && !running
+			};
+		});
+		rows.sort((left, right) => (right.createdAt ?? 0) - (left.createdAt ?? 0));
+		return {
+			rows,
+			archivedIds,
+			totalBytes: rows.reduce((sum, row) => sum + (row.sizeBytes ?? 0), 0),
+			writable,
+			mounted,
+			readOnly: resolved.readOnly,
+			deleteEnabled: resolved.allowSessionDelete,
+			maxBatchIds: resolved.maxBatchIds,
+			listingFailed: persisted === void 0,
+			sessionsRoot: displayRoot()
+		};
+	};
+	const restore = async (payload) => {
+		if (resolved.readOnly) throw new BasicsError("read-only", "面板处于只读模式", 403);
+		const ids = requireStringList(payload, "ids", resolved.maxBatchIds);
+		const result = await store.drop(ids);
+		const absent = new Set(result.absent);
+		return {
+			ok: true,
+			changed: ids.filter((id) => !absent.has(id)),
+			skipped: result.absent.map((id) => ({
+				id,
+				reason: "该会话不在归档集合中"
+			})),
+			archivedIds: result.archivedIds,
+			freedBytes: 0,
+			staleSnapshot: result.staleSnapshot
+		};
+	};
+	const remove = async (payload) => {
+		if (resolved.readOnly) throw new BasicsError("read-only", "面板处于只读模式", 403);
+		if (!resolved.allowSessionDelete) throw new BasicsError("forbidden", "当前部署已禁用归档会话删除（allowSessionDelete: false）", 403);
+		const ids = requireStringList(payload, "ids", resolved.maxBatchIds);
+		const root = sessionsRoot();
+		const archived = new Set(store.ids());
+		const agents = agentsOf();
+		const changed = [];
+		const skipped = [];
+		let freedBytes = 0;
+		for (const id of ids) {
+			if (!archived.has(id)) {
+				skipped.push({
+					id,
+					reason: "该会话未归档，本页仅支持删除已归档会话"
+				});
+				continue;
+			}
+			if (isRunning(agents, id)) {
+				skipped.push({
+					id,
+					reason: "该会话正在运行（Agent 状态为 running），请先结束该回合再删除"
+				});
+				continue;
+			}
+			const artifact = await findSessionArtifact(root, id);
+			if (artifact === void 0) {
+				if (!isSafeSessionId(id)) {
+					skipped.push({
+						id,
+						reason: "会话 ID 无法安全映射到目录名，未做删除"
+					});
+					continue;
+				}
+				changed.push(id);
+				continue;
+			}
+			try {
+				freedBytes += await removeSessionArtifact(root, id, artifact.directory);
+				changed.push(id);
+			} catch (error) {
+				skipped.push({
+					id,
+					reason: `删除失败：${messageOf(error)}`
+				});
+			}
+		}
+		let staleSnapshot = false;
+		let warning;
+		if (changed.length > 0) {
+			await detachFromWorkspaces(changed);
+			try {
+				staleSnapshot = (await store.drop(changed)).staleSnapshot;
+			} catch (error) {
+				warning = `会话文件已删除，但归档记录清理失败：${messageOf(error)}`;
+			}
+		}
+		return {
+			ok: true,
+			changed,
+			skipped,
+			archivedIds: store.ids(),
+			freedBytes,
+			staleSnapshot,
+			...warning !== void 0 ? { warning } : {}
+		};
+	};
+	return {
+		"archived.list": list,
+		"archived.restore": restore,
+		"archived.delete": remove
+	};
+}
+//#endregion
 //#region src/index.ts
 /**
 * dsh-basics-panel host half: a single fenced /basics JSON API that merges
@@ -1391,6 +2112,10 @@ function apply(ctx, config) {
 		{
 			id: "rules",
 			register: registerRules
+		},
+		{
+			id: "archived",
+			register: registerArchived
 		}
 	], {
 		ctx,

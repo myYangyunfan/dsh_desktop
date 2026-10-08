@@ -1,0 +1,324 @@
+/* The unified changes tab: the 36px lens header + Git lens + session lens +
+   the shared preview pane. Token-only by contract (`tests/theme.spec.ts` scans
+   every module sheet) and cut to the plugin's native scale — 12px body, 11px
+   meta, 28px rows/controls, 2/3/4px radii (see
+   docs/plans/2026-09-27-files-changes-uiux.md §1).
+
+   The generic chrome — icon buttons, chips, section bands, badges, empty /
+   loading / error lines and the confirm dialog — now lives in
+   `src/client/ui/kit.module.css`; this sheet keeps only layout and the
+   surfaces unique to this tab. */
+
+.root { display: flex; flex-direction: column; min-height: 0; height: 100%; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: var(--dsw-font-xxs-12); }
+
+/* ── Lens header ───────────────────────────────────────────────────────── */
+
+.head { flex: none; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 8px 0 12px; border-bottom: 1px solid var(--dsw-alias-border-l1); }
+.headAction { margin-left: auto; }
+
+/* ── Git lens (the former git panel) ───────────────────────────────────── */
+
+.git {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  /* Tab pages never scroll horizontally: content wraps or truncates to the
+     panel width instead of panning sideways. */
+  overflow-x: hidden;
+}
+
+/* The selector band: branch / repository / worktree pickers (only rendered
+   for real choices) and nothing else — the counts live in the section bands. */
+.selectors { flex: none; display: flex; align-items: center; gap: 6px; padding: 6px 12px 0; }
+
+.select {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 3px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-12);
+}
+
+/* A single branch has nothing to choose: it reads as the row's label. */
+.branchLabel { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxxs-11); }
+
+/* ── Change groups (one directory tree each) ───────────────────────────── */
+
+/* One group is its own block so its sticky header is released exactly when the
+   group scrolls past (two headers in one block would stack on top of each
+   other). */
+.group { display: flex; flex-direction: column; padding-bottom: 2px; }
+
+/* The header band stays readable while its group scrolls under it. The extra
+   class keeps the opaque fill above the kit's transparent band no matter which
+   sheet lands first in the bundle. */
+.group .groupHeader {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--dsw-alias-bg-base);
+}
+
+/* The group's change count, as a small capsule on the label's baseline. */
+.countPill {
+  flex: none;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-strong-11);
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A band action (stage all / unstage all) stays out of the way until the band
+   is hovered or holds focus — a keyboard tab reveals it too. Touch devices
+   have no hover, so there it is always visible. */
+.group .headerAction { opacity: 0; transition: opacity 120ms var(--ds-ease-in-out); }
+.group .groupHeader:hover .headerAction,
+.group .groupHeader:focus-within .headerAction { opacity: 1; }
+@media (hover: none) {
+  .group .headerAction { opacity: 1; }
+}
+
+/* The tree body: rows are flush bands, the gutter lives here. */
+.tree { display: flex; flex-direction: column; padding: 0 6px; }
+
+/* One nesting level: 12px of indent, with the guide line drawn at its edge so
+   the depth stays readable without a second colour. */
+.treeChildren {
+  display: flex;
+  flex-direction: column;
+  margin-left: 11px;
+  border-left: 1px solid var(--dsw-alias-border-l1);
+}
+
+/* A directory row's disclosure button. It shares the `.row` band with a file
+   row (the band owns the hover/selected fill and the trailing action), so this
+   button is only the row's main hit area. */
+.dirRow {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.dirRow:focus-visible { outline: 2px solid var(--dsw-alias-interactive-bg-hover-accent); outline-offset: -1px; }
+
+.chevron { flex: none; display: inline-flex; color: var(--dsw-alias-label-tertiary); transition: transform 140ms var(--ds-ease-in-out); }
+.chevron[data-open='true'] { transform: rotate(90deg); }
+
+.dirName { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--dsw-font-xxs-12); }
+
+/* One changed file: file artwork + porcelain badge + name + the trailing
+   action (revealed on hover/focus). */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  min-height: 28px;
+  padding: 0 2px;
+  border-radius: 4px;
+  animation: dsh-row-in 150ms var(--ds-ease-in-out);
+}
+.row:hover { background: var(--dsw-alias-interactive-bg-hover); }
+/* Selected and hovered are different pictures: the selected row keeps the
+   active fill AND the design's 2px accent marker — a pseudo element inset 4px
+   (the tasks page's own recipe), so the row stays shadowless and no metric
+   shifts between rows. */
+.row[data-selected='true'],
+.opRow[data-selected='true'],
+.logRow[data-selected='true'] {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+.row[data-selected='true']::before,
+.opRow[data-selected='true']::before,
+.logRow[data-selected='true']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.rowMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.rowMain:focus-visible { outline: 2px solid var(--dsw-alias-interactive-bg-hover-accent); outline-offset: -1px; }
+
+/* The row's icons are content at the plugin's own scale, not chrome. */
+.rowIcon { flex: none; display: inline-flex; align-items: center; }
+
+.rowName { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-primary); }
+
+/* The row action is invisible until its row is hovered or holds focus (a
+   keyboard tab lands on it and reveals it). The three-class form outranks the
+   kit's own disabled rule, which would otherwise pin every button to a dim but
+   visible 0.4 whenever a git action is in flight. */
+.row:not(:hover):not(:focus-within) .rowAction { opacity: 0; }
+@media (hover: none) {
+  .row:not(:hover):not(:focus-within) .rowAction { opacity: 1; }
+}
+
+/* ── Commit bar (docked to the bottom edge of the scroll area) ─────────── */
+
+.commitBar {
+  position: sticky;
+  bottom: 0;
+  /* Above the sticky group headers: the commit bar is the surface the user
+     interacts with when they scroll to the bottom of the list. */
+  z-index: 3;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-bg-base);
+}
+.commitRow { display: flex; align-items: center; gap: 6px; }
+.commitInput { flex: 1; min-width: 0; }
+
+/* ── History ───────────────────────────────────────────────────────────── */
+
+/* A history row: line 1 = short-hash badge + subject, line 2 = ref pills +
+   author·time flushed right (the badges live on the second line so they never
+   crowd the subject, and the time never pushes the refs around). */
+.logRow {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 10px;
+  margin: 0 6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.logRow:hover { background: var(--dsw-alias-interactive-bg-hover); }
+
+.logLine1 { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.logHash {
+  flex: none;
+  padding: 1px 4px;
+  border-radius: 2px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-markdown-code-block-small);
+}
+.logLine2 { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
+.logRef { flex: none; padding: 0 6px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; font: var(--dsw-font-xxxs-strong-11); color: var(--dsw-alias-brand-primary); white-space: nowrap; }
+.logSubject { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--dsw-font-xxs-strong-12); color: var(--dsw-alias-label-primary); }
+.logMeta { margin-left: auto; font: var(--dsw-font-xxxs-11); color: var(--dsw-alias-label-tertiary); white-space: nowrap; }
+
+.logMore {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 4px 12px 8px;
+  height: 28px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 3px;
+  background: transparent;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+.logMore:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.logMore:disabled { opacity: 0.5; cursor: default; }
+
+/* ── Session lens (this round's files) ─────────────────────────────────── */
+
+.session { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.filterRow { flex: none; display: flex; gap: 4px; padding: 6px 12px; flex-wrap: wrap; }
+.sessionList { flex: 1; min-height: 0; overflow-y: auto; padding: 0 6px 10px; }
+
+.fileGroup { margin-bottom: 6px; }
+/* The group label sits between op blocks: extra head padding separates it from
+   the previous file's rows, the first group starts flush. */
+.filePath { display: block; color: var(--dsw-alias-label-tertiary); font-family: var(--ds-font-family-code, monospace); font-size: 11px; padding: 6px 4px 2px; word-break: break-all; }
+.fileGroup:first-child .filePath { padding-top: 2px; }
+
+.opRow { position: relative; display: flex; align-items: center; gap: 6px; width: 100%; min-height: 24px; border: 0; border-radius: 4px; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 11px; padding: 0 5px; cursor: pointer; text-align: left; }
+.opRow:hover { background: var(--dsw-alias-interactive-bg-hover); }
+/* A failed op carries a quiet error inset bar (the flag chip names it). */
+.opRow[data-op-error='true'] { box-shadow: inset 2px 0 0 var(--dsw-alias-state-error-primary); }
+/* Size + relative time ride as one right-aligned cluster so the kind badges
+   form a scannable left rail and the meta column stays flush right. */
+.opMeta { margin-left: auto; display: inline-flex; align-items: baseline; gap: 8px; flex: none; min-width: 0; }
+.opTime { color: var(--dsw-alias-label-tertiary); font-size: 10px; flex: none; }
+.opFlag { color: var(--dsw-alias-state-business-primary); font-size: 10px; flex: none; }
+.opFlagError { color: var(--dsw-alias-state-error-primary); font-size: 10px; flex: none; }
+.opSize { color: var(--dsw-alias-label-tertiary); font-size: 10px; flex: none; font-family: var(--ds-font-family-code, monospace); }
+
+/* ── Shared preview pane ───────────────────────────────────────────────── */
+
+.redactBanner { flex: none; font: var(--dsw-font-xxxs-strong-11); padding: 2px 8px; border-radius: 2px; color: var(--dsw-alias-state-warn-primary); background: var(--dsw-alias-interactive-bg-hover); white-space: nowrap; }
+.mdBody { padding: 12px 16px 20px; font: var(--dsw-font-xs-regular-13); line-height: 1.6; min-height: 0; overflow-y: auto; }
+.htmlPane { flex: 1; min-height: 0; display: flex; }
+.htmlFrame { flex: 1; width: 100%; border: none; background: var(--dsw-alias-bg-base); }
+
+.diffPane { border-top: 1px solid var(--dsw-alias-border-l1); display: flex; flex-direction: column; flex: none; min-height: 0; }
+.dragHandle { flex: none; height: 8px; cursor: ns-resize; position: relative; background: var(--dsw-alias-bg-base); }
+.dragHandle::after { content: ''; position: absolute; left: calc(50% - 18px); top: 3px; width: 36px; height: 2px; border-radius: 1px; background: var(--dsw-alias-border-l2); }
+.dragHandle:hover::after, .dragHandle:focus-visible::after { background: var(--dsw-alias-state-business-primary); }
+.diffHead { display: flex; align-items: center; gap: 6px; padding: 3px 8px 3px 10px; border-bottom: 1px solid var(--dsw-alias-border-l1); }
+/* The path keeps its tail (the file name is the identity; directories are
+   context): an RTL paragraph renders an ASCII path in reading order while
+   clipping its HEAD under the ellipsis. */
+.diffPath { flex: 1; direction: rtl; font-family: var(--ds-font-family-code, monospace); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--dsw-alias-label-primary); min-width: 0; }
+.diffStats { flex: none; display: inline-flex; gap: 5px; font-size: 10px; font-family: var(--ds-font-family-code, monospace); }
+
+.paneBody { flex: 1; min-height: 0; overflow-y: auto; }
+/* An op's error body: the kit's error ink with the row's inset bar. */
+.readError { border-left: 3px solid var(--dsw-alias-state-error-primary); margin: 6px 8px; padding: 6px 10px; word-break: break-word; }
+
+/* The op preview whose callId left the loaded event window. */
+.paneGone { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--dsw-alias-border-l1); }
+
+/* ── Shared bits ───────────────────────────────────────────────────────── */
+
+/* Mount fade for rows (the app's session-row reveal). */
+@keyframes dsh-row-in {
+  from { opacity: 0; }
+}
+
+/* Keyboard focus rings match the shared sidebar convention (the kit atoms and
+   the tree rows carry their own). */
+.logRow:focus-visible, .logMore:focus-visible, .select:focus-visible, .dragHandle:focus-visible {
+  outline: 2px solid var(--dsw-alias-interactive-bg-hover-accent);
+  outline-offset: -1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row { animation: none; }
+}

@@ -1,35 +1,39 @@
 /**
- * The 6 built-in file viewer descriptors: every preview surface is a
- * registered viewer (image / pdf / markdown / html / code /
- * binary-download), exactly like external plugins register theirs. Office
- * previews (.docx / .xlsx / .pptx) are NOT built in anymore — they moved to
- * the recommended office plugin (see plugins-viewers.ts), which registers
- * the same ids through this service.
+ * The 3 built-in file viewer descriptors (markdown / html / code), exactly
+ * like external plugins register theirs.
  *
- * The `binary-download` viewer sniffs NUL bytes via `detect` for unknown
- * binaries and serves legacy doc/xls/ppt by extension; `code` is the
- * catch-all (`exts: []`, lowest priority) that claims any file no other
- * viewer did.
+ * DSH 0.1.7 ships `ui-sidebar-documentpreview`, its own code / spreadsheet /
+ * office / pdf / image / html / markdown / text previews with zoom and
+ * auto-refresh, so this plugin yields every READ-ONLY preview it used to own
+ * and keeps only the surfaces where it is not equivalent:
+ *  - `markdown` — this plugin's own renderer (front matter, embedded HTML
+ *    sanitation, floating TOC), which the user prefers to the host's;
+ *  - `html` — the sandboxed iframe preview plus the host-less
+ *    `htmlViewerNoSandbox` / `htmlViewerDefaultUnsafe` escape hatches;
+ *  - `code` — the catch-all (`exts: []`, lowest priority) that claims any
+ *    file no other viewer did, and it is an EDITABLE CodeMirror with save —
+ *    the host's equivalents are read-only previews.
+ * The yielded ids (image / pdf / binary-download) are deliberately NOT
+ * registered here; an external plugin may still claim them through this
+ * service. Office previews (.docx / .xlsx / .pptx) were already not built
+ * in — they live in the recommended office plugin (see plugins-viewers.ts),
+ * which registers the same ids through this service.
  *
  * The heavy viewers (the CodeMirror-backed markdown/html/code) render
  * through {@link lazyChunkComponent} wrappers — their libraries are fetched
  * only when such a file is first opened (see chunk-loader.ts). The
- * descriptor metadata (id/exts/priority/detect) is identical either way,
- * so matching semantics and external-plugin overrides are unaffected; the
+ * descriptor metadata (id/exts/priority) is identical either way, so
+ * matching semantics and external-plugin overrides are unaffected; the
  * `component` wrapper keeps the descriptor contract `(props) => ReactNode`.
  *
  * Every viewer carries the declarative settings-surface fields — `title`
  * and `icon` — so the Side card settings page can render the enable/disable
  * inventory without hardcoding (eating our own dogfood).
  */
-import { IconCodeOutline16, IconDownloadOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCodeOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { lazyChunkComponent } from '../lazy-chunk.tsx'
-import { PdfView } from '../PdfView.tsx'
-import { BinaryDownload } from '../binary-download.tsx'
 import {
-  IconImageOutline16,
   IconMarkdownOutline16,
-  IconPdfOutline16,
   IconHtmlOutline16,
 } from '../icons.tsx'
 import type { ComponentType, ReactNode } from 'react'
@@ -38,10 +42,16 @@ import { t } from '../locales.ts'
 import css from '../sidebar.module.css'
 
 /**
- * Read-only plain-text fallback used when the editor chunk cannot load: the
- * content is already in props (fsRead strategy fetched it through the host),
- * so the file stays viewable (a <pre> with the truncation banner) while the
- * chunk's auto-retry keeps working toward the real CodeMirror editor.
+ * Lazy wrapper over the chunk-resident viewer component. The `pick`
+ * function is module-level (stable identity — the wrapper effect depends
+ * on it); the cast bridges the chunk exports record to the descriptor prop
+ * shape (the view reads only its own subset of FileViewerProps).
+ */
+/**
+ * Read-only fallback renderer for the editor chunk. `fsRead` has already put
+ * the file's text in the props, so a chunk that cannot load (kernel restart
+ * window, missing bundle route) degrades to a plain `<pre>` preview instead of
+ * hiding the file — issue #171's "the file is always visible" half.
  */
 function TextFallback(props: FileViewerProps): ReactNode {
   const content = props.content ?? ''
@@ -67,43 +77,15 @@ function TextFallback(props: FileViewerProps): ReactNode {
   )
 }
 
-/**
- * Lazy wrapper over the chunk-resident viewer component. The `pick`
- * function is module-level (stable identity — the wrapper effect depends
- * on it); the cast bridges the chunk exports record to the descriptor prop
- * shape (the view reads only its own subset of FileViewerProps).
- */
 const LazyTextEditor = lazyChunkComponent<FileViewerProps>(
   'editor',
   (mod) => mod.TextEditor as ComponentType<FileViewerProps> | undefined,
   TextFallback,
 )
 
-/** The 6 built-in file viewer descriptors. */
+/** The 3 built-in file viewer descriptors. */
 export function builtinViewers(): readonly FileViewerDescriptor[] {
   return [
-    {
-      id: 'image',
-      title: () => t('viewerImage'),
-      icon: (size: number) => <IconImageOutline16 size={size} />,
-      exts: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico', 'avif'],
-      fetchStrategy: 'mediaUrl',
-      component: ({ mediaUrl: url, title }) => (
-        <div className={css.editorImageWrap}>
-          <img className={css.editorImage} src={url} alt={title} />
-        </div>
-      ),
-    },
-    {
-      id: 'pdf',
-      title: () => t('viewerPdf'),
-      icon: (size: number) => <IconPdfOutline16 size={size} />,
-      exts: ['pdf'],
-      fetchStrategy: 'mediaUrl',
-      component: ({ scope, path, title }) => (
-        <PdfView scope={scope} path={path} title={title} />
-      ),
-    },
     {
       id: 'markdown',
       title: () => t('viewerMarkdown'),
@@ -137,23 +119,11 @@ export function builtinViewers(): readonly FileViewerDescriptor[] {
     {
       id: 'code',
       title: () => t('viewerCode'),
-      icon: (size: number) => <IconCodeOutline16 size={size} />,
+      icon: (size: number) => <IconCodeOutlineRegular size={size} />,
       exts: [],
       priority: -100,
       fetchStrategy: 'fsRead',
       component: (props) => <LazyTextEditor {...props} />,
-    },
-    {
-      id: 'binary-download',
-      title: () => t('viewerBinary'),
-      icon: (size: number) => <IconDownloadOutline16 size={size} />,
-      exts: ['doc', 'xls', 'ppt'],
-      priority: -50,
-      fetchStrategy: 'binary-download',
-      // NUL probe: a file whose head bytes contain a NUL is binary — claimed
-      // before the catch-all code viewer on the head re-match.
-      detect: (_path, head) => head.includes(0),
-      component: ({ scope, path }) => <BinaryDownload scope={scope} path={path} />,
     },
   ]
 }

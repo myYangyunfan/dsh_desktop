@@ -1,37 +1,49 @@
 /**
- * The editor tab host: the FILE VIEWER for one path. It resolves the file's
+ * The editor tab host: the single FILES WINDOW. It resolves a file's
  * previewer through the sidebar registry (`matchFileViewer`), fetches bytes
- * per the matched viewer's fetch strategy, and renders its component — or the
- * shared download pane when nothing can render the file.
+ * per the matched viewer's fetch strategy, and renders its component — or
+ * the shared download pane when nothing can render the file. A tab without
+ * a path (the seeded "Files" home) renders an empty-state hint instead of
+ * the viewer loading flow; that path-less window IS the file explorer.
  *
- * The file tree is no longer hosted here: it is the persistent Explorer rail
- * that lives to the LEFT of the workbench (see ExplorerRail.tsx), decoupled
- * from any tab. So every editor tab carries a real path and renders only the
- * viewer chrome (a path-less tab — a leftover from an older layout the store
- * drops on load — still degrades to the empty-state hint instead of the load
- * flow, so a stale frame never crashes).
- *
- * The path input's Enter routes through `openSidebarFile`, the SAME per-path
- * dedupe open the rail uses: a run of opens accumulates distinct tabs and
- * never replaces one already open (no transient preview slot).
+ * The chrome depends on the `editorExplorer` mode (read reactively so
+ * toggling it re-renders without a reload):
+ * - merged (in-place): tree click / path-input Enter switch the CURRENT
+ *   tab in place (updateTab rewrites path/title; the tab keeps its id and
+ *   meta, so treeOpen/treeWidth survive the switch);
+ * - split: they open through `openSidebarFile` (a per-path dedupe tab),
+ *   and a PATH-LESS window is the standalone explorer — it renders ONLY
+ *   the tree panel (search + FileTree, full-window), no editor chrome.
+ *   Editor tabs (with a path) keep the full chrome in both modes.
+ * The tree's context menu offers the explicit escapes in both modes: open
+ * in a new tab (per-path dedupe) or to the side (a fresh tab in a fresh
+ * rightward split of the current pane).
  *
  * The strategy dispatch is pure (planFirstMatch / planFsReadOutcome in
  * editor-load.ts); this component only wires it to the host APIs.
  */
-import { createElement, useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { createElement } from 'react'
 import clsx from 'clsx'
-import { IconCheckOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCheckOutlineRegular, IconFolderOpenRegular, IconRefreshOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Context } from '../context-types.ts'
 import { api, mediaUrl, SidebarApiError, type SessionScope } from './api.ts'
 import { BinaryDownload } from './binary-download.tsx'
-import { planFirstMatch, planFsReadOutcome, type EditorLoadAction } from './editor-load.ts'
 import { nextDelayMs } from './chunk-availability.ts'
-import { openSidebarFile } from './intercept.tsx'
+import { planFirstMatch, planFsReadOutcome, type EditorLoadAction } from './editor-load.ts'
+import { baseName } from './FileTree.tsx'
+import { createFrameBatcher } from './frame-batcher.ts'
+import { openSidebarFile } from './sidebar-file.ts'
+import { openWithSshActive, openWithUrl, parseOpenWithConfig, resolveOpenWithTargets } from './open-with.ts'
+import { updatePluginSettings } from './plugin-settings.ts'
+import { createOpenInApp } from './open-in-app.ts'
+import { TreePanel } from './TreePanel.tsx'
 import { t } from './locales.ts'
 import { relativeTo } from './paths.ts'
-import { resolveSidebarPath } from './produced-files.ts'
+import { resolveSidebarPath } from './paths.ts'
+import { closePathTabs, retargetPathTabs } from './tree-mutations.ts'
 import type { EditorToolbarControls, EditorToolbarState, FileViewerDescriptor } from './service.ts'
-import type { SidebarStore, SidebarTab } from './state.ts'
+import { firstLeaf, insertLeafAt, leafWithTab, mintTabId, type SidebarStore, type SidebarTab } from './state.ts'
 import css from './sidebar.module.css'
 
 type EditorLoad =
@@ -40,46 +52,233 @@ type EditorLoad =
   | { status: 'ready'; viewer: FileViewerDescriptor; content?: string; truncated?: boolean; mediaUrl?: string; customData?: unknown }
   | { status: 'binary' }
 
+/** The docked tree panel's width bounds (drag-resize clamps into them). */
+const TREE_WIDTH_DEFAULT = 240
+const TREE_WIDTH_MIN = 160
+const TREE_WIDTH_MAX = 480
+
+/** Stable empty blob for the editor pluginSettings read (a fresh `?? {}`
+ *  would change identity every snapshot and loop useSyncExternalStore). */
+const EMPTY_PLUGIN_BLOB: Record<string, unknown> = {}
+
+/** The tab's persisted meta object (a malformed meta reads as empty). */
+function metaOf(tab: SidebarTab): Record<string, unknown> {
+  return tab.meta !== null && typeof tab.meta === 'object' && !Array.isArray(tab.meta)
+    ? tab.meta as Record<string, unknown>
+    : {}
+}
+
+/** Read the persisted tree-panel flag of one editor tab: an explicit
+ *  boolean meta wins; otherwise path-less tabs (the seeded home) default
+ *  open and file tabs default closed. */
+function treeOpenOf(tab: SidebarTab): boolean {
+  const treeOpen = metaOf(tab).treeOpen
+  return typeof treeOpen === 'boolean' ? treeOpen : (tab.path === undefined || tab.path === '')
+}
+
+/** Read the persisted tree-panel width (clamped; default 240). */
+function treeWidthOf(tab: SidebarTab): number {
+  const width = metaOf(tab).treeWidth
+  return typeof width === 'number' && Number.isFinite(width)
+    ? Math.min(TREE_WIDTH_MAX, Math.max(TREE_WIDTH_MIN, Math.round(width)))
+    : TREE_WIDTH_DEFAULT
+}
+
+/** Merge a patch into the tab's persisted meta (rides the layout). */
+function patchMeta(ctx: Context, tab: SidebarTab, patch: Record<string, unknown>): void {
+  ctx.get('betterSidebar')?.updateTab(tab.id, { meta: { ...metaOf(tab), ...patch } })
+}
+
+/** Clamp one dock width into the contract range. */
+function clampTreeWidth(value: number): number {
+  return Math.min(TREE_WIDTH_MAX, Math.max(TREE_WIDTH_MIN, Math.round(value)))
+}
+
 export function EditorHost(props: {
   ctx: Context
   store: SidebarStore
   scope: SessionScope
   tab: SidebarTab
-  expanded?: string[]
-  onToggleDir?: (path: string) => void
-  onReferenceFile?: (path: string) => void
+  /** Whether this tab is the active one with its panel open: a parked tab
+   *  must not keep polling (the workbench keeps every tab body mounted). */
   visible?: boolean
+  expanded: string[]
+  revealed: string[]
+  onToggleDir: (path: string) => void
+  onReferenceFile: (path: string, isDir: boolean) => void
 }) {
-  const { ctx, store, scope, tab } = props
+  const { ctx, store, scope, tab, expanded, revealed, onToggleDir, onReferenceFile } = props
+  const visible = props.visible !== false
   const path = tab.path ?? ''
   const title = tab.title
+  // A folder window: the model's `sidebar_open` (or any caller) opens a
+  // directory as an editor tab carrying `meta.dir: true` with the directory
+  // as its path. It renders the file tree rooted at that folder instead of
+  // the viewer loading flow (a directory is not a file).
+  const isDir = metaOf(tab).dir === true
   const [load, setLoad] = useState<EditorLoad>({ status: 'loading' })
-  const [attempt, setAttempt] = useState(0)
+  // Manual refresh (issue #167): bumping the sequence re-runs the load effect
+  // with the same path/scope — the only reload entry besides open/close.
+  const [reloadSeq, setReloadSeq] = useState(0)
+  // Issue #171 (F1-1/F1-2): network-class read failures retry on the chunk
+  // loader's backoff curve, and an error-state tab that becomes visible again
+  // re-pulls — a file must never stay stuck on a dead error banner.
   const failCountRef = useRef(0)
   const failKeyRef = useRef('')
   const loadRef = useRef(load)
   loadRef.current = load
-  const visible = props.visible !== false
   const prevVisibleRef = useRef(visible)
   useEffect(() => {
-    // Re-activating a tab whose load ended in an error re-triggers the fetch
-    // (a re-click on the same file must never stay stuck on a dead error).
     if (!prevVisibleRef.current && visible && loadRef.current.status === 'error') {
-      setAttempt(a => a + 1)
+      setReloadSeq(sequence => sequence + 1)
     }
     prevVisibleRef.current = visible
   }, [visible])
 
-  // A path-less tab (a leftover home window the store drops on load) shows the
-  // empty-state hint instead of running the viewer load flow. In the new model
-  // every editor tab has a path, so this is a graceful-degradation guard only.
-  const showEmpty = path === ''
+  // Manual refresh (issue #167 + PR #228): a dirty draft is dropped by the
+  // reload (the editor instance remounts), so confirm before discarding it.
+  const refreshFile = (): void => {
+    if (toolbar?.dirty === true) {
+      const confirmed = typeof window.confirm === 'function'
+        ? window.confirm(t('refreshUnsavedConfirm'))
+        : false
+      if (!confirmed) return
+    }
+    setReloadSeq(sequence => sequence + 1)
+  }
 
-  /** The header path input's Enter open: the SAME per-path dedupe tab the tree
-   *  rail uses, so it focuses an existing tab or appends a new one — never a
-   *  preview replacement. */
+  // Reactive prefs read: flipping editorExplorer re-renders this tab with no
+  // reload. The snapshot is the bare boolean so unrelated store churn never
+  // re-renders the editor.
+  const inPlace = useSyncExternalStore(
+    useCallback((callback: () => void) => store.subscribe(callback), [store]),
+    useCallback(() => store.getSnapshot().prefs.editorExplorer, [store]),
+  )
+  // The DSH-native "open with" capability (host open-in-app): one adapter per
+  // window, shared by every row menu below. The plugin no longer owns a
+  // target list, a URL vocabulary or a spawn route — the host reports which
+  // applications are actually installed for THIS path.
+  const openInApp = useMemo(() => createOpenInApp(ctx), [ctx])
+  // The plugin's own service (native-tab opens, "open to the side"): absent in
+  // stripped-down hosts, where every flow degrades to the bottom workbench.
+  const service = ctx.get('betterSidebar')
+  // The file tree's "open with" configuration (pluginSettings['editor']): a
+  // blob subscription, so a pin click or a settings-page edit re-renders the
+  // menu immediately. The parsed config also drives which targets are shown
+  // (SSH mode hides the host-local ones).
+  const editorBlob = useSyncExternalStore(
+    useCallback((callback: () => void) => store.subscribe(callback), [store]),
+    useCallback(() => store.getSnapshot().prefs.pluginSettings['editor'] ?? EMPTY_PLUGIN_BLOB, [store]),
+  )
+  const openWithConfig = useMemo(() => parseOpenWithConfig(editorBlob.openWith), [editorBlob])
+  const openWithTargets = useMemo(() => resolveOpenWithTargets(openWithConfig), [openWithConfig])
+  // The declarative "always show the plugin's own targets" switch (the editor
+  // card's pluginToggles row): a plain boolean on the SAME blob, so both the
+  // settings page and the tree's menu see one value. Absent/false keeps the
+  // host-first behavior (the tree decides what to hide).
+  const openWithShowPluginTargets = editorBlob.openWithPluginTargets === true
+  // A path-less tab shows the empty-state hint in merged mode — and in split
+  // mode it is the standalone explorer (tree-only, see the render below). A
+  // folder tab is a folder window in BOTH modes: the tree rooted at the
+  // folder, no editor chrome.
+  const showEmpty = path === ''
+  const treeOnly = showEmpty && !inPlace
+  const folderRoot = isDir ? path : undefined
+
+  /**
+   * Open a file from THIS window (tree click / search row / path input):
+   * merged mode switches this tab in place (stable id, meta survives);
+   * split mode opens a per-path dedupe tab through openSidebarFile.
+   */
   const openFile = (absolute: string): void => {
-    openSidebarFile(ctx, store, scope.sessionId, absolute)
+    if (inPlace) {
+      ctx.get('betterSidebar')?.updateTab(tab.id, { path: absolute, title: baseName(absolute) })
+    } else {
+      openSidebarFile(ctx, scope.sessionId, absolute)
+    }
+  }
+
+  /** The context menu's explicit "new tab" escape (per-path dedupe). */
+  const openFileNewTab = (absolute: string): void => {
+    openSidebarFile(ctx, scope.sessionId, absolute)
+  }
+
+  /**
+   * The context menu's "open to the side": a fresh editor tab (uid id — the
+   * `'editor:' + path` convention would clash with the id safety net on a
+   * second side-open of the same file) in a rightward split of THIS pane.
+   *
+   * Native right-Sidebar tabs do NOT live in `bottomSplits`, so the bottom
+   * branch would fall through to `firstLeaf` — a pane the user has not
+   * expanded, i.e. "nothing happened". Those tabs instead ask the host for a
+   * second pane through the service (`target: 'side'` → the host's
+   * `preferNewPane`), which is the same gesture in the surface the user is
+   * actually looking at.
+   */
+  const openFileSide = (absolute: string): void => {
+    // `store.tabOpen` answers from THIS session's own state map — the bottom
+    // workbench's splits. A natively-hosted tab (right Sidebar) is absent
+    // from them even while it is on screen.
+    if (service !== undefined && !store.tabOpen(scope.sessionId, tab.id)) {
+      service.openTab({ type: 'editor', path: absolute, target: 'side' }, scope)
+      return
+    }
+    store.reduce((state) => {
+      const pane = leafWithTab(state.bottomSplits, tab.id) ?? firstLeaf(state.bottomSplits)
+      const fresh: SidebarTab = {
+        id: mintTabId(),
+        type: 'editor',
+        title: baseName(absolute),
+        path: absolute,
+        meta: { treeOpen: false },
+      }
+      const { node, leafId } = insertLeafAt(state.bottomSplits, pane.id, 'row', fresh, false)
+      return { ...state, bottomSplits: node, activePane: leafId }
+    })
+  }
+
+  /** The context menu's "open with" action: reveal the path in the OS file
+   *  manager, or hand the target's URL to its opener — local `file` URLs go
+   *  to the host's external opener, while the SSH-remote form for
+   *  VSCode-family editors launches on the browser/client machine (see
+   *  api.openExternal). Failures are logged only — a missing handler is the
+   *  OS's/browser's dialog, not a sidebar error. */
+  const openWith = (targetId: string, absolute: string): void => {
+    const target = openWithTargets.find(item => item.id === targetId)
+    if (target === undefined) return
+    if (target.kind === 'reveal') {
+      void api.openExternal({ action: 'reveal', path: absolute }).catch(
+        (error: unknown) => { console.error('open external failed', error) },
+      )
+      return
+    }
+    const url = openWithUrl(target, absolute, openWithConfig)
+    if (url === undefined) return
+    void api.openExternal({ action: 'url', url }).catch(
+      (error: unknown) => { console.error('open external failed', error) },
+    )
+  }
+
+  /** Toggle one target's pinned state. The write is serialized (see
+   *  plugin-settings.ts) and the menu re-renders when the store prefs land. */
+  const toggleOpenWithPin = (targetId: string): void => {
+    updatePluginSettings(store, 'editor', (blob) => {
+      const config = parseOpenWithConfig(blob.openWith)
+      const pinned = config.pinned.includes(targetId)
+        ? config.pinned.filter(id => id !== targetId)
+        : [...config.pinned, targetId]
+      return { ...blob, openWith: { ...config, pinned } }
+    })
+  }
+
+  // Tree mutations reconcile the OPEN tabs (both split trees, the bottom
+  // panel, free windows): a rename retargets its tab to the new path; a
+  // delete closes tabs at or under the removed path. See tree-mutations.ts.
+  const onPathRenamed = (oldPath: string, newPath: string): void => {
+    retargetPathTabs(ctx, store, oldPath, newPath)
+  }
+  const onPathDeleted = (path: string): void => {
+    closePathTabs(ctx, store, path)
   }
 
   // The viewer's toolbar, hoisted into THIS header: the text editor reports
@@ -94,13 +293,56 @@ export function EditorHost(props: {
     controlsRef.current = controls
   }, [])
 
+  // The docked panel's drag-resize: pointer capture on the handle itself
+  // (no window listeners — the captured pointer keeps tracking even off the
+  // handle). Local width while dragging, persisted into meta.treeWidth on
+  // release. The panel docks right, so dragging LEFT widens it.
+  // Moves are BATCHED per frame (createFrameBatcher): applying every
+  // pointermove is a setState that re-renders this host AND the editor
+  // viewer below it (CodeMirror re-lays out on the width change) at event
+  // cadence — the visible drag lag on slower CPUs (#315). The batch applies
+  // the latest width once per frame; release flushes it and commits.
+  const [dragWidth, setDragWidth] = useState<number | null>(null)
+  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
+  const pendingWidthRef = useRef(0)
+  const dragBatcher = useRef(createFrameBatcher()).current
+  useEffect(() => () => dragBatcher.dispose(), [dragBatcher])
+  const treeWidth = dragWidth ?? treeWidthOf(tab)
+
+  const onResizeStart = (event: React.PointerEvent): void => {
+    event.preventDefault()
+    // jsdom lacks setPointerCapture — the tests dispatch plain MouseEvents.
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+    dragRef.current = { startX: event.clientX, startWidth: treeWidth }
+  }
+  const onResizeMove = (event: React.PointerEvent): void => {
+    const drag = dragRef.current
+    if (drag === null) return
+    pendingWidthRef.current = clampTreeWidth(drag.startWidth + (drag.startX - event.clientX))
+    dragBatcher.schedule(() => setDragWidth(pendingWidthRef.current))
+  }
+  const onResizeEnd = (event: React.PointerEvent): void => {
+    const drag = dragRef.current
+    if (drag === null) return
+    // Flush the last pending frame (a release can land with the final move
+    // still queued; without the flush a stray frame would re-apply the
+    // drag width AFTER the null below). Both setStates batch into this same
+    // event, so the committed treeWidth wins visually.
+    dragBatcher.flushNow()
+    dragRef.current = null
+    setDragWidth(null)
+    const finalWidth = clampTreeWidth(drag.startWidth + (drag.startX - event.clientX))
+    if (finalWidth !== treeWidthOf(tab)) patchMeta(ctx, tab, { treeWidth: finalWidth })
+  }
+
   useEffect(() => {
     // A (re)load or a path-less tab clears any hoisted toolbar state — the
     // fresh viewer re-registers its own.
     setToolbar(null)
-    // The path-less window (no path) never loads a viewer — the empty-state
-    // hint renders until the user picks a file from the Explorer rail.
-    if (showEmpty) return
+    // The seeded home tab (no path) never loads a viewer — the empty-state
+    // hint renders until the user picks a file. A folder tab never loads a
+    // viewer either — its tree is rooted at the folder.
+    if (showEmpty || isDir) return
     let cancelled = false
     let retryTimer: number | undefined
     // Aborts the matched viewer's `load` when the editor tears down (tab
@@ -127,7 +369,7 @@ export function EditorHost(props: {
         // same exponential backoff the chunk loader uses, until the read lands.
         failCountRef.current += 1
         retryTimer = window.setTimeout(() => {
-          if (!cancelled) setAttempt(a => a + 1)
+          if (!cancelled) setReloadSeq(sequence => sequence + 1)
         }, nextDelayMs(failCountRef.current))
       }
     }
@@ -170,7 +412,7 @@ export function EditorHost(props: {
               content: result.kind === 'text' ? result.content : '',
               truncated: result.truncated,
               head: result.kind === 'binary' ? result.head : undefined,
-            }, (head) => ctx.betterSidebar?.matchFileViewer(path, head), mediaUrlOf)
+            }, (head) => ctx.get('betterSidebar')?.matchFileViewer(path, head), mediaUrlOf)
             apply(outcome)
           }).catch((error: unknown) => {
             if (cancelled) return
@@ -179,18 +421,72 @@ export function EditorHost(props: {
           return
       }
     }
-    apply(planFirstMatch(ctx.betterSidebar?.matchFileViewer(path), mediaUrlOf))
+    apply(planFirstMatch(ctx.get('betterSidebar')?.matchFileViewer(path), mediaUrlOf))
     return () => {
       cancelled = true
       if (retryTimer !== undefined) window.clearTimeout(retryTimer)
       controller.abort()
     }
-  }, [scope.sessionId, scope.cwd, path, ctx, showEmpty, attempt])
+    // The deps are deliberately granular: the scope object's identity churns,
+    // only its sessionId / cwd fields gate the (re)fetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope.sessionId, scope.cwd, path, ctx, showEmpty, isDir, reloadSeq])
 
+  // Save-then-refresh in preview mode (issue #167 part C): the edge into
+  // 'saved' (never a lingering 'saved' state) triggers exactly one reload, so
+  // a preview-mode Ctrl+S shows the fresh content immediately. Edit mode is
+  // left alone — reloading would remount the editor and drop the caret.
+  const prevSaveState = useRef<EditorToolbarState['saveState'] | undefined>(undefined)
+  useEffect(() => {
+    const current = toolbar?.saveState
+    if (prevSaveState.current !== 'saved' && current === 'saved' && toolbar?.mode === 'preview') {
+      setReloadSeq(sequence => sequence + 1)
+    }
+    prevSaveState.current = current
+  }, [toolbar?.saveState, toolbar?.mode])
+
+  const treeOpen = treeOpenOf(tab)
+  /** Persist the panel flag on the tab (survives reloads with the layout). */
+  const toggleTree = (): void => { patchMeta(ctx, tab, { treeOpen: !treeOpen }) }
   const saveLabel = toolbar === null ? ''
     : toolbar.saveState === 'saving' ? t('loading')
       : toolbar.saveState === 'saved' ? t('saved')
         : toolbar.saveState === 'failed' ? t('saveFailed') : ''
+
+  // Split mode: the path-less window IS the standalone explorer — the tree
+  // panel fills the whole tab (search + FileTree, full form), no editor
+  // chrome. File opens land in new per-path tabs through openFile above.
+  // A folder window (meta.dir, any mode) renders the SAME surface rooted
+  // at the folder instead of the session cwd.
+  if (treeOnly || folderRoot !== undefined) {
+    return (
+      <div className={css.editor}>
+        <TreePanel
+          full
+          visible={visible}
+          sessionId={scope.sessionId}
+          cwd={folderRoot ?? scope.cwd}
+          expanded={expanded}
+          revealed={revealed}
+          onToggle={onToggleDir}
+          onOpenFile={openFile}
+          onOpenFileNewTab={openFileNewTab}
+          onOpenFileSide={openFileSide}
+          openInApp={openInApp}
+          openWithShowPluginTargets={openWithShowPluginTargets}
+          openWithTargets={openWithTargets}
+          openWithPinned={openWithConfig.pinned}
+          openWithSsh={openWithSshActive(openWithConfig)}
+          onOpenWith={openWith}
+          onToggleOpenWithPin={toggleOpenWithPin}
+          onReferenceFile={onReferenceFile}
+          onPathRenamed={onPathRenamed}
+          onPathDeleted={onPathDeleted}
+          service={ctx.get('betterSidebar')}
+        />
+      </div>
+    )
+  }
 
   return (
     <div className={css.editor}>
@@ -201,7 +497,16 @@ export function EditorHost(props: {
             <button
               type="button"
               className={clsx(css.editorModeButton, toolbar.mode === 'preview' && css.editorModeActive)}
-              onClick={() => { controlsRef.current?.setMode('preview') }}
+              onClick={() => {
+                // Issue #167 part B: returning from edit to preview reloads so
+                // the preview renders the just-saved content. A dirty draft
+                // (or a failed save) suppresses the reload — the draft only
+                // lives in the editor instance and a remount would drop it.
+                if (toolbar.mode === 'edit' && toolbar.dirty !== true && toolbar.saveState !== 'failed') {
+                  setReloadSeq(sequence => sequence + 1)
+                }
+                controlsRef.current?.setMode('preview')
+              }}
             >
               {t('preview')}
             </button>
@@ -223,12 +528,33 @@ export function EditorHost(props: {
             title={`${t('save')} (Ctrl/Cmd+S)`}
             onClick={() => { controlsRef.current?.save() }}
           >
-            <IconCheckOutline16 size={14} />
+            <IconCheckOutlineRegular size={14} />
           </button>
         )}
         {saveLabel !== '' && (
           <span className={clsx(css.editorStatus, toolbar?.saveState === 'failed' && css.editorStatusError)}>{saveLabel}</span>
         )}
+        {toolbar !== null && (
+          <button
+            type="button"
+            className={css.iconButton}
+            aria-label={t('refresh')}
+            title={t('refresh')}
+            onClick={refreshFile}
+          >
+            <IconRefreshOutlineRegular size={14} />
+          </button>
+        )}
+        <button
+          type="button"
+          className={clsx(css.iconButton, treeOpen && css.editorTreeToggleActive)}
+          aria-label={t('editorTreeToggle')}
+          title={t('editorTreeToggle')}
+          aria-pressed={treeOpen}
+          onClick={toggleTree}
+        >
+          <IconFolderOpenRegular size={14} />
+        </button>
       </div>
       <div className={css.editorBody}>
         <div className={css.editorMain}>
@@ -237,10 +563,9 @@ export function EditorHost(props: {
           {!showEmpty && load.status === 'error' && (
             <div className={css.editorError}>
               <span>{load.message}</span>
-              {load.autoAttempt !== undefined && <span>{t('fsReadRetryWaiting', { n: load.autoAttempt })}</span>}
-              <button type="button" className={css.terminalRetry} onClick={() => { setAttempt(a => a + 1) }}>
-                {t('terminalRetry')}
-              </button>
+              {load.autoAttempt !== undefined && (
+                <span>{t('fsReadRetryWaiting', { n: load.autoAttempt })}</span>
+              )}
             </div>
           )}
           {!showEmpty && load.status === 'binary' && <BinaryDownload scope={scope} path={path} />}
@@ -257,6 +582,42 @@ export function EditorHost(props: {
             onToolbarControls,
           })}
         </div>
+        {treeOpen && (
+          <div className={css.editorTreeDock} style={{ width: treeWidth }}>
+            <div
+              className={css.editorTreeResize}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label={t('editorTreeToggle')}
+              onPointerDown={onResizeStart}
+              onPointerMove={onResizeMove}
+              onPointerUp={onResizeEnd}
+              onPointerCancel={onResizeEnd}
+            />
+            <TreePanel
+              visible={visible}
+              sessionId={scope.sessionId}
+              cwd={scope.cwd}
+              expanded={expanded}
+              revealed={revealed}
+              onToggle={onToggleDir}
+              onOpenFile={openFile}
+              onOpenFileNewTab={openFileNewTab}
+              onOpenFileSide={openFileSide}
+              openInApp={openInApp}
+              openWithShowPluginTargets={openWithShowPluginTargets}
+              openWithTargets={openWithTargets}
+              openWithPinned={openWithConfig.pinned}
+              openWithSsh={openWithSshActive(openWithConfig)}
+              onOpenWith={openWith}
+              onToggleOpenWithPin={toggleOpenWithPin}
+              onReferenceFile={onReferenceFile}
+              onPathRenamed={onPathRenamed}
+              onPathDeleted={onPathDeleted}
+              service={ctx.get('betterSidebar')}
+            />
+          </div>
+        )}
       </div>
     </div>
   )
@@ -266,9 +627,9 @@ export function EditorHost(props: {
  * The header's path input: shows the current file relative to the session
  * cwd (absolute when outside it). Enter resolves the typed path (relative
  * input joins onto the cwd — the same resolution `openSidebarFile` uses)
- * and opens it through the parent's per-path dedupe open. Escape/blur
- * restores the current value. The parent keys it by `path` so a re-open of
- * the same file remounts and reseeds the draft.
+ * and opens it through the parent's mode-aware open (in-place switch or a
+ * per-path dedupe tab); Escape/blur restores the current value. The parent
+ * keys it by `path` so an in-place switch remounts and reseeds the draft.
  */
 function EditorPathInput(props: { path: string; cwd: string | undefined; onOpen: (path: string) => void }) {
   const { path, cwd, onOpen } = props
@@ -282,8 +643,9 @@ function EditorPathInput(props: { path: string; cwd: string | undefined; onOpen:
       return
     }
     onOpen(resolveSidebarPath(cwd, input))
-    // The open lands in a NEW/deduped editor tab — THIS tab's path stays, so
-    // the input falls back to its own display value.
+    // Split mode: the open lands in a NEW/deduped editor tab — THIS tab's
+    // path stays, so the input falls back to its own display value. (Merged
+    // mode remounts this input on the new path; the reset is harmless.)
     setValue(display)
   }
 

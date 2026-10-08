@@ -339,13 +339,11 @@ test('matchChildEntry：精确 / 包含 / 未命中 / 脏目录', () => {
   assert.equal(lens.matchChildEntry({ entries: [null, { kind: 'child', id: 's9' }] }, ''), undefined);
 });
 
-test('resolveOpenablePath：绝对路径透传 / 相对路径拼 cwd', () => {
-  assert.equal(lens.resolveOpenablePath('C:\\src\\a.js', 'C:/work'), 'C:\\src\\a.js');
-  assert.equal(lens.resolveOpenablePath('/home/u/a.js', '/home/u'), '/home/u/a.js');
-  assert.equal(lens.resolveOpenablePath('\\\\server\\share\\a.js', 'C:/w'), '\\\\server\\share\\a.js');
-  assert.equal(lens.resolveOpenablePath('src/a.js', 'C:\\work\\repo/'), 'C:\\work\\repo/src/a.js');
-  assert.equal(lens.resolveOpenablePath('src/a.js', ''), 'src/a.js');
-  assert.equal(lens.resolveOpenablePath('', 'C:/w'), '');
+test('resolveOpenablePath 已退役（自制壳 openPath 支路随壳退场）', () => {
+  // 0.1.1 起打开文件的唯一通路是内核在 toolview 槽位给的 openFile，不再需要
+  // cwd 拼绝对路径；v1.0.0 拆除自制壳后 window.dshDesktop.openPath 没有替身。
+  // 留这条断言当撤回账：若哪天有人「顺手补回」路径拼接，本用例会红并逼出说明。
+  assert.equal(lens.resolveOpenablePath, undefined, 'resolveOpenablePath 不应再存在');
 });
 
 // ---------------------------------------------------------------------------
@@ -355,8 +353,31 @@ function makeFakeCtx() {
   const registered = [];
   const injections = [];
   const disposers = [];
+  const describeCalls = { n: 0 };
+  // 0.1.1 起设置面走 ctx.remote.settings（describe 读表单、mutate 按 profile 条目 id 写），
+  // 幽灵的 ctx.settingsScope 已退役。回执形状照内核契约：namespaces[].ns = 条目 id，
+  // writable 挂在 value 层。
+  const settingsCalls = [];
+  const remote = {
+    settings: {
+      describe: async () => {
+        describeCalls.n += 1;
+        return {
+          ok: true,
+          value: {
+            namespaces: [{ ns: 'dsh-subagent-lens', value: { enabled: true, maxItems: 50, commandChars: 400 }, revision: 'rev-1' }],
+            writable: true,
+          },
+        };
+      },
+      mutate: async (entryId, ops, revision) => {
+        settingsCalls.push({ entryId, ops, revision });
+        return { ok: true, value: { value: { enabled: false }, revision: 'rev-2' } };
+      },
+    },
+  };
   return {
-    registered, injections,
+    registered, injections, describeCalls, settingsCalls, remote,
     slots: {
       inject(slotName, factory, comment) {
         const produced = factory();
@@ -371,15 +392,6 @@ function makeFakeCtx() {
       register(entry, comp) {
         registered.push({ entry, comp });
         return () => { const i = registered.findIndex((r) => r.entry === entry); if (i >= 0) registered.splice(i, 1); };
-      },
-    },
-    settingsScope: {
-      bind() {
-        return {
-          getSnapshot: () => ({ status: 'ready', value: { enabled: true }, writable: true }),
-          subscribe: () => () => {},
-          set: async () => {},
-        };
       },
     },
     sessions: { binding: () => undefined, openSubagent: () => {} },
@@ -415,11 +427,12 @@ test('vm 沙箱：apply 注册 toolview（按 key）/ 会话头聚合条 / 设�
 test('vm 沙箱：services 缺席时 apply 静默降级（不注册设置卡、不炸）', () => {
   const mod = loadClientModule();
   const ctx = makeFakeCtx();
-  ctx.settingsScope = undefined;
+  ctx.remote = undefined;
   ctx.sessions = undefined;
   assert.doesNotThrow(() => mod.apply(ctx));
   assert.ok(ctx.registered.some((r) => r.entry.name === 'tool.call.toolview'), 'toolview 仍应注册');
-  assert.ok(!ctx.registered.some((r) => r.entry.name === 'settings.section'), 'settingsScope 缺席时不注册设置卡');
+  assert.ok(!ctx.registered.some((r) => r.entry.name === 'settings.section'), 'remote.settings 缺席时不注册设置卡');
+  assert.equal(ctx.describeCalls.n, 0, 'remote 缺席时不得调用 describe');
 });
 
 test('vm 沙箱：委派行组件渲染冒烟（react stub，坏数据也不炸）', () => {
@@ -479,15 +492,21 @@ test('vm 沙箱：聚合条组件渲染冒烟（空会话 null / 有活动渲染
   assert.doesNotThrow(() => strip({}));
 });
 
-test('vm 沙箱：设置卡渲染冒烟（未就绪 / 就绪两态）', () => {
+test('vm 沙箱：设置卡渲染冒烟（未就绪 / 就绪两态）', async () => {
   const mod = loadClientModule();
   const ctx = makeFakeCtx();
   mod.apply(ctx);
   const card = ctx.registered.find((r) => r.entry.name === 'settings.section');
   const Card = card.comp;
   const injected = card.entry.inject ? card.entry.inject() : {};
+  // 未就绪：describe 还没落地（快照停在 loading）
   assert.doesNotThrow(() => Card(injected));
-  const readyScope = { useScope: (sel) => sel({ status: 'ready', value: { enabled: true }, writable: true }) };
+  // 就绪：等 describe 的 promise settle 后快照转 ready
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(ctx.describeCalls.n, 1, 'apply 应触发一次 describe');
+  assert.doesNotThrow(() => Card(card.entry.inject()));
+  // 合成 ready 快照（不依赖远端回执形状）
+  const readyScope = { useScope: (sel) => sel({ status: 'ready', value: { enabled: true }, writable: true }), scope: { set: async () => {} } };
   assert.doesNotThrow(() => Card(readyScope));
 });
 
@@ -507,7 +526,7 @@ test('assets 元数据过 hub 校验（inspectCompanionMeta 全绿）', () => {
   const check = inspectCompanionMeta(PLUGIN_DIR, { id: 'dsh-subagent-lens', name: '@dsh-external/dsh-subagent-lens' });
   assert.deepEqual(check.reasons, [], '元数据不应有不合格项');
   assert.equal(check.ok, true);
-  assert.equal(check.version, '0.1.0');
+  assert.equal(check.version, '0.1.1');
 });
 
 test('同步文件清单覆盖：插件文件均在 PLUGIN_FILES/SYNC_SUBDIRS 同步范围内', () => {
@@ -521,9 +540,18 @@ test('同步文件清单覆盖：插件文件均在 PLUGIN_FILES/SYNC_SUBDIRS �
   };
   const pluginFiles = listOf('PLUGIN_FILES');
   const syncSubdirs = listOf('SYNC_SUBDIRS');
-  for (const f of fs.readdirSync(PLUGIN_DIR)) {
+  // 有意「只进仓库、不进 profile」的条目：CHANGELOG.md 是溯源账，test/ 是上游自带
+  // 单测——两者都不在运行时 require 路径上，上游 tarball 的 files 字段同样不含。
+  const REPO_ONLY = ['CHANGELOG.md', 'test'];
+  const entries = fs.readdirSync(PLUGIN_DIR);
+  for (const f of entries) {
+    if (REPO_ONLY.includes(f)) continue;
     const covered = pluginFiles.includes(f) || syncSubdirs.includes(f);
     assert.ok(covered, '未被同步机制收录的文件/目录: ' + f);
+  }
+  // 白名单不许腐烂：列了却已不存在的条目会让本守卫变成橡皮章
+  for (const f of REPO_ONLY) {
+    assert.ok(entries.includes(f), 'repo-only 允许集里的条目已不存在，应撤除: ' + f);
   }
   // lib 内全部文件经 SYNC_SUBDIRS 的 lib/ 目录级同步覆盖
   for (const f of fs.readdirSync(path.join(PLUGIN_DIR, 'lib'))) {

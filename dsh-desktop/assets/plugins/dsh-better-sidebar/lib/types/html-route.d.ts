@@ -53,7 +53,7 @@ export declare function encodeHtmlUrl(sessionId: string, path: string): string;
  * Decode a route pathname into the session + absolute file path. Rejects
  * a wrong prefix (404), an empty path, malformed percent encoding, and a
  * missing sessionId or file path (400). The caller still must bound the
- * decoded path with requireAbsolute + isWithin(cwd) — a decoded `..`
+ * decoded path with the workspace real-path guard — a decoded `..`
  * segment resolves outside the cwd and is refused there.
  */
 export declare function decodeHtmlUrl(pathname: string): HtmlDecodeResult;

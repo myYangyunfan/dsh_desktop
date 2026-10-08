@@ -1,6 +1,6 @@
 {
   "name": "dsh-zcode-migrate",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "zcode → dsh 会话迁移插件：把 zcode CLI 的历史会话转换成 dsh 原生会话日志，迁移后可在 dsh 里直接恢复",
   "type": "module",
   "main": "src/index.js",
@@ -50,11 +50,21 @@
     "archive"
   ],
   "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "platform": "web",
       "inject": [
-        "@deepseek-ai/dsh-client-ui-settings"
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-primitives"
+      ],
+      "external": [
+        "@deepseek-ai/dsh-client-ui-primitives/client"
       ]
     }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*"
   }
 }

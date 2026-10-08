@@ -49,19 +49,11 @@ export function parseDesktopEnv(): DesktopEnv {
   const platformParam = params.get('dsh-desktop-platform')
   const platform = platformParam !== null && platformParam !== '' ? platformParam.toLowerCase() : null
   const desktop = mode !== null || hasPreloadMarker
-  // Backward-compatible titlebar inset: the documented `dsh-desktop-titlebar-inset`
-  // URL contract wins; the legacy desktop shell announces its self-drawn title-bar
-  // height on <html data-dsh-title-bar-height="N"> (kept as a fallback so the
-  // pre-v0.15 shell keeps working without a URL stamp).
-  const titlebarInsetRaw = params.get('dsh-desktop-titlebar-inset')
-    ?? (hasWindow && typeof document !== 'undefined'
-      ? document.documentElement.getAttribute('data-dsh-title-bar-height')
-      : null)
   cached = {
     desktop,
     mode,
     platform,
-    titlebarInset: parseTitlebarInset(titlebarInsetRaw),
+    titlebarInset: parseTitlebarInset(params.get('dsh-desktop-titlebar-inset')),
   }
   return cached
 }

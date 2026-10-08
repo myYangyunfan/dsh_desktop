@@ -24,72 +24,81 @@
    containing block for every panel element. Panels are ABSOLUTE within it
    (not fixed), so a desktop shell's intermediate wrapper transform can
    never hijack their containing block — the host itself is the only fixed
-   element, appended directly to document.body. The layer sits at z-index 40
-   (below the app's overlay stack at 100+); each panel re-enables pointer
+   element, appended directly to document.body. The layer sits at z-index 25:
+   above the app's shell overlay (AppFrame overlayLayer, 20) and in-flow
+   content, below DSH's ui-cordis dynamic-plugin panel (fixed, 30 — the
+   inventory/surfacing surface must never be hidden behind the workbench),
+   and below the app's overlay stack at 100+; each panel re-enables pointer
    events on itself. Degraded mode ([data-dsh-panel-host-degraded]) covers
    the rare shell that transforms <html>/<body> itself: the host becomes
    absolute and the mount self-check pins it to the viewport every frame. */
 :global([data-dsh-panel-host]) {
   position: fixed;
   inset: 0;
-  /* 必须高于内置侧栏抽屉的遮罩（实测官方前端 _root_w1urq_2 = position:fixed;
-     z-index:1000）：host 原先 40，遮罩盖住右上角折叠按钮簇与插件自身
-     mermaidModal/uploadDropZone，点击全部落在遮罩上（点不到）。
-     host 自身是层叠上下文，子元素无法越出去，故在此抬到 1001。 */
-  z-index: 1001;
+  z-index: 25;
   pointer-events: none;
+  /* Clip at the viewport edge: collapsed panels slide off-screen with
+     `transform: translate(102%)`, and a transformed element still
+     contributes to its ancestors' scrollable overflow — without this the
+     hidden panels extended the document's scrollable area, making the whole
+     page draggable left-right and up-down while any panel was collapsed.
+     The host is exactly viewport-sized (inset: 0), so the clip is invisible
+     until a panel slides in from the edge; internal scroll containers and
+     the app's fixed overlay stack are unaffected. `clip`, not `hidden`: a
+     hidden box stays a PROGRAMMATICALLY scrollable container, and a
+     scrollIntoView fired from panel content (the file tree's "Show in
+     folder" reveal) scrolled the host itself — shifting the whole panel,
+     tab bar included, out of the viewport with no way to scroll back.
+     The same class covers any scroll-into-view fixup — focus moving into
+     an off-viewport region, a nested iframe/workbench claiming focus
+     while it loads — so the guard belongs on the layer itself, not per
+     call site. The `hidden` declaration BEFORE `clip` is an old-engine
+     fallback, not dead style: engines without `clip` support (Safari < 16)
+     drop the `clip` line, which would leave this box `overflow: visible`
+     — no clipping at all, and the page-draggable regression above
+     returns. With `hidden` first those engines keep the clipping (plus
+     its pre-clip scrollability) while every clip-aware engine applies
+     the later `clip`. */
+  overflow: hidden;
+  overflow: clip;
 }
 
-/* 但应用级浮层（设置面板等）打开时必须退到它之下——否则设置界面被面板层盖住
-   （用户实报：「打开侧边栏后打开设置界面，设置界面因为层级低而被遮挡」）。
-   实测设置面板 = position:fixed / z-index:1000（类名 VOzbGW_overlay），与抽屉遮罩
-   同值，所以任何「高于遮罩」的值都会同时高于设置面板。
-   标记选 [class$="_overlay"]（类名以 _overlay 结尾）：实测开着设置时精确命中那一个
-   浮层，关闭时命中 0 个（overlayAnchor / overlayLayer 这类同名子串不会误命中，
-   故不会把宿主永久压到 40 而回归 #52）。宿主 pointer-events 本来就是 none，
-   这里只改绘制层级；浮层关闭 → :has() 失配 → 自动回到 1001。 */
-body:has([class$='_overlay']) :global([data-dsh-panel-host]) {
-  z-index: 40;
+/* Desktop drag regions ignore pointer-events: the shell's base stylesheet
+   makes every direct body child `no-drag`, and the plugin HOST is one — in
+   Electron that value also reaches the viewport-sized panel layer inside it
+   (#772's CDP reading; the browser engine used by the mount lane does not
+   propagate it, so the layer's own rule below is belt-and-braces), which is
+   what cancelled every window-drag strip beneath it once the shell
+   recomputed regions (window drags worked once, then stopped). Take the host
+   and layer out of the app-region computation; `!important` because the
+   shell's `body > :not(#root)` selector outranks ours. The panels themselves
+   stay no-drag so their controls keep receiving clicks.
+   The plugin's OTHER persistent viewport-sized body child — the mermaid zoom
+   modal — carries the same reset on its own rule further down, or opening a
+   diagram would blank window drag (and the macOS double-click-title zoom)
+   while it is up. It is a modal SCRIM, so it does get the reset even though
+   it is interactive: only its widgets (`<button>` …) need to stay no-drag,
+   and the residual is that its backdrop inside the shell's top drag band
+   starts a window drag instead of closing the modal — the deliberate trade
+   for keeping the window draggable while a diagram is enlarged.
+   Deliberately NOT applied to the other interactive popups (`.selectionPopup`
+   is a `<button>`; FloatingWindow / AnchoredPopover own pointer drags and are
+   not scrims): the shell's `:is(button, a, input, …)` rule already keeps those
+   no-drag, and `initial !important` would outrank it and start a window drag on
+   press instead — the click-swallow regression of issues #103/#111. */
+:global(html[data-platform] body > [data-dsh-better-sidebar]),
+:global([data-dsh-panel-host]) {
+  -webkit-app-region: initial !important;
 }
 
-/* 注：面板让位只走 layout.css 的 #root margin 推挤（--dsh-sidebar-width）
-   单一机制。历史上的双保险——本规则曾用 right 让位（56px clearance）与
-   .cHLsAW_frame 的 --dsh-official-push padding——与 margin 并存时产生
-   「导航栏与文件面板之间 explorer+8px(+56px) 的巨隙」（用户实报），
-   已全部移除；勿再叠加第二套让位。 */
+:global([data-dsh-panel-host]) > * {
+  -webkit-app-region: no-drag;
+}
 
 :global([data-dsh-panel-host][data-dsh-panel-host-degraded]) {
   position: absolute;
   top: 0;
   left: 0;
-}
-
-/* The persistent expand/collapse cluster at the top-right corner: two rail
-   controls side by side (bottom panel's glyph LEFT of the right panel's).
-   Always pinned to the viewport corner — inside the right panel's top-right
-   while it is open, sitting flush in the 34px tab strip (28px buttons at
-   top: 3) whose right end it really squeezes. z-index 45: above the panels
-   (40) but below the app's overlay stack (menus/tooltips/modals sit at
-   100+), so a cordis approval popup is never hidden behind the workbench
-   (issue #52). Absolute within the panel host (the host's inset: 0 makes
-   viewport coordinates identical). */
-.toggleCluster {
-  position: absolute;
-  /* env() resolves to 0 on devices without a top inset (desktops). */
-  top: calc(3px + env(safe-area-inset-top));
-  right: 10px;
-  z-index: 45;
-  display: flex;
-  flex-direction: row;
-  gap: 4px;
-  pointer-events: auto;
-}
-
-/* The tab strip of the OPEN right panel reserves the cluster's width at its
-   right end, so the tabs and the + menu genuinely yield space to the cluster
-   (never hiding under it). */
-.panel:not(.panelHidden) .tabBar {
-  padding-right: 72px;
 }
 
 /* The closed-state affordance is the native rail icon control: a plain
@@ -113,38 +122,15 @@ body:has([class$='_overlay']) :global([data-dsh-panel-host]) {
     color var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }
 
-.toggleButton:hover:not(:disabled) {
+.toggleButton:hover:not(:disabled):not([aria-disabled='true']) {
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
 }
 
-.toggleButton:disabled {
+.toggleButton:disabled,
+.toggleButton[aria-disabled='true'] {
   opacity: 0.4;
   cursor: default;
-}
-
-/* 注：此处原有两行残留（`transition: none;` + 孤立的 `}`，没有选择器也没有 @media
-   头）——vendored 源被同步截断留下的重复块：同样的 `transition: none` 已由本文件
-   末尾 `@media (prefers-reduced-motion: reduce)` 的 .panel/.toggleButton/... 那一组
-   覆盖（随包 lib 的编译产物里也只有那一组，没有第二处），故直接删除。
-   它同时是 `npm run bundle` 在这个检出里无法完成的唯一原因：lightningcss 解析
-   整个文件时在孤立 `}` 处报 `Invalid token in pseudo element`。 */
-
-.panelResize {
-  position: absolute;
-  /* Centered on the panel edge (an 8px hit strip straddling the border, the
-     same pattern as the host's own frame handles). */
-  left: -4px;
-  top: 0;
-  bottom: 0;
-  width: 8px;
-  cursor: col-resize;
-  z-index: 2;
-  touch-action: none;
-}
-
-.panelResizeActive {
-  background: var(--dsw-alias-interactive-bg-hover-accent);
 }
 
 .panelBody {
@@ -160,9 +146,11 @@ body:has([class$='_overlay']) :global([data-dsh-panel-host]) {
    column only (the Sidebar shell writes left/right inline: from the app's
    own left sidebar to the right panel's left edge) — the sidebars never
    give up any position. Same surface as the right panel, with a top
-   hairline instead of the left one. z-index 40 mirrors the right panel
-   (issue #52: below the app's overlay stack so popups win over the
-   workbench). */
+   hairline instead of the left one. Host-internal z-index 40 mirrors the
+   right panel; the absolute global layer comes from the host (25), below
+   DSH's ui-cordis dynamic-plugin panel (30) so the cordis inventory
+   surface floats above the workbench, and below the app's overlay stack
+   (100+) so popups win over the workbench (issue #52). */
 .bottomPanel {
   position: absolute;
   bottom: 0;
@@ -203,39 +191,8 @@ body:has([class$='_overlay']) :global([data-dsh-panel-host]) {
    will-change: transform is only live while a drag is (the body attribute
    toggles with the drag state), promoting the panels to their own layer
    without paying the compositing cost at rest. */
-.panel,
 .bottomPanel {
   contain: layout style;
-}
-
-/* 内核自带右栏接入（kernel-rightbar.tsx）：pane 里的填充宿主 + 被 portal 进
-   pane 的面板。内核 dockkit 的 paneBody 是 position:relative 的**定高滚动容器**
-   （实测 647px + overflow:auto），中间隔着两层 display:contents 的 slot outlet，
-   所以宿主必须绝对铺满它——static + flex:1 在这里拿不到确定高度，面板会撑成内容
-   高度（实测 13858px）。列宽/开关/全屏仍由内核负责。 */
-.kernelPane {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.panelKernel {
-  position: relative;
-  inset: auto;
-  transform: none;
-  visibility: visible;
-  /* .panelBody/.workbench/.pane 全靠 flex:1 + min-height:0 撑满父级；legacy 里
-     面板是绝对定位的定高盒子，这里必须显式补上 flex 列上下文，否则 paneBody 会
-     按内容高度铺开（实测编辑器被撑到 4586px、下半截被 pane 裁掉且不可滚动）。 */
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: hidden;
 }
 
 body[data-dsh-sidebar-dragging] .panel,
@@ -303,7 +260,6 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
    `no-drag` itself — some shells (Tauri, older desktop builds, third-party
    wrappers) have no blanket button rule. The property is a no-op in plain
    browsers and in shells without drag regions — safe everywhere. */
-.toggleCluster,
 .toggleButton,
 .tabBar {
   -webkit-app-region: no-drag;
@@ -314,48 +270,10 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
 /* Windows frameless / hidden-title-bar windows draw the native caption
    strip (minimize / maximize / close) at the window's top-right corner,
    OVER the web content. When the user enables the "position compatibility"
-   pref, the sidebar yields the strip: the toggle cluster drops below it and
-   the right panel's content starts below it — the panel's surface still
-   spans the full height, so the caption buttons float over empty sidebar
-   fill (the VSCode hidden-title-bar look). The strip height is user-tunable
-   (`--dsh-title-bar-strip`, written by the Sidebar shell from
-   `titleBarStripPx`; 40px fallback). The bottom panel is unaffected: it
-   sits at the window's bottom, never under the top strip. */
-:global(body[data-dsh-title-bar-compat]) .toggleCluster {
-  top: calc(var(--dsh-title-bar-strip, 40px) + 3px);
-}
-
-:global(body[data-dsh-title-bar-compat]) .panel {
-  /* The caption strip is drawn over the panel's own top edge: keep the
-     surface full-height and push the content (the tab strip) below the
-     strip instead. .panelResize is absolutely positioned and unaffected. */
-  padding-top: var(--dsh-title-bar-strip, 40px);
-}
-
-/* The shared corner (both panels open): the intersection of the right
-   panel's left edge and the bottom panel's top edge. Horizontal drags
-   resize the width, vertical drags the height — the two panels drag
-   against each other. Rendered INSIDE the right panel and positioned
-   relative to it (left edge + the bottom panel's height from the layout
-   variable), so no JS-written viewport coordinates are involved. The
-   z-index is panel-local (above the panel's content; the panel itself sits
-   at 40, below the app's overlay stack). */
-.cornerHandle {
-  position: absolute;
-  left: -6px;
-  bottom: calc(var(--dsh-sidebar-height, 0px) + 6px);
-  width: 12px;
-  height: 12px;
-  z-index: 2;
-  cursor: nwse-resize;
-  touch-action: none;
-}
-
-.cornerHandle:hover,
-.cornerHandle[data-dragging] {
-  background: var(--dsw-alias-interactive-bg-hover-accent);
-}
-
+   pref, the Sidebar shell publishes the strip height as
+   `--dsh-title-bar-strip` plus `body[data-dsh-title-bar-compat]` for the
+   user's own CSS; the plugin's remaining chrome (the bottom workbench) sits
+   at the window's bottom and is never under the top strip. */
 /* Icon button: the app's own icon-button pattern (ui-workspace) — a 28px
    circle, secondary label, hover fill; no border so the icon alone is the
    affordance. */
@@ -412,22 +330,6 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   position: relative;
   display: flex;
   overflow: hidden;
-}
-/* 面板打开时强制显示官方消息导航条：官方在 center column 变窄（含本插件面板占用）时会响应式隐藏它。
-   注：._9JjVLG_slot 是 0.1.1-rc 系内核的 css-modules hash——内核升级漂移时
-   本规则自然失配（无害）；新内核若需要同等强显，请先实机探出新 hash 再改。 */
-:global(body:not([data-dsh-sidebar-collapsed])) :global(._9JjVLG_slot) { display: block !important; }
-
-/* 面板打开时导航条（TurnNavigator frame）收回右衬带、右缘贴住面板左边框。
-   官方把 rail 摆在对话列右缘外 20px（right:calc(12px - (16px+16px))，贴
-   消息内容的右衬）；面板打开后列右缘=面板左缘，那 20px 落在面板下方
-   （面板 host z-40 盖住 rail z-7）——28px 宽的条被盖 20px，几乎不可见
-   （用户实报「导航栏不见了/没贴着侧边栏」）。衬带（scroll 右 padding）
-   = clearance(16px)+16px = 32px，恰好容纳 28px 的条：右缘贴列缘（=面板
-   左边框），整体在衬带内不压正文，像 Cursor 等工具的消息导航一样。拖动
-   调宽时 right 无 transition，恒等跟手。hash 漂移时规则自然失配，无害。 */
-:global(body:not([data-dsh-sidebar-collapsed])) :global(._9JjVLG_frame) {
-  right: calc(-16px - var(--dsh-composer-side-clearance, 16px)) !important;
 }
 
 .divider {
@@ -550,6 +452,17 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   overflow: hidden;
 }
 
+/* The native tab chip's glyph (drawn by the plugin inside the host's
+   `sidebar.right.pane.tab.title` slot, which is the chip's content): sized to
+   the text, aligned on its baseline box, and separated from the title the way
+   the workbench strip separates its own glyph from its label. */
+.chipIcon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 6px;
+  flex: none;
+}
+
 /* One tab's mounted content; inactive tabs stay mounted but hidden so
    switching never tears down terminals/editors (state survives). */
 .paneTab {
@@ -563,41 +476,60 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   display: none;
 }
 
-/* An empty pane's welcome cards: a responsive grid of compact cards — as
+/* An empty pane's welcome cards: a responsive grid of openable types — as
    many per row as the pane width allows; rows that cannot fit the pane
-   height are clipped (never scrolled or squeezed smaller). */
+   height are clipped (never scrolled or squeezed smaller).
+
+   The card itself mirrors DSH's OWN guide capsule (the built-in tab types'
+   entry box, `ui-sidebar-right`'s GuideBody / `ui-sidebar-terminal`'s
+   TerminalGuide): one hairline in the l4 weight, a 24px radius, the layer-1
+   fill and the 56px floor. The two surfaces are the same thing — "pick what
+   opens here" — so they must not read as two different design systems.
+   The column floor is wider than before because a 24px radius needs the
+   room; the vertical gap keeps the capsule proportions. */
 .paneEmptyCards {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   align-content: start;
-  gap: 8px;
+  gap: 12px;
   padding: 12px;
   overflow: hidden;
 }
 
 .paneCard {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
+  justify-content: flex-start;
+  gap: 14px;
   min-width: 0;
-  padding: 12px 8px;
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 8px;
+  min-height: 56px;
+  box-sizing: border-box;
+  padding: 14px 20px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: 24px;
   background: var(--dsw-alias-bg-layer-1);
-  color: var(--dsw-alias-label-secondary);
-  font: var(--dsw-font-xxs-strong-12);
+  color: var(--dsw-alias-label-primary);
+  /* The host capsule sets a raw `font-size: 15px` with no token behind it;
+     the ladder's nearest step is the 14px medium row, so the label reads at
+     the same weight as DSH's own entry without inventing a literal. */
+  font: var(--dsw-font-s-strong-14);
   cursor: pointer;
-  text-align: center;
+  text-align: left;
+}
+
+/* The glyph takes the host capsule's secondary ink; the label carries the
+   primary ink (same split as the host's guide entry). */
+.paneCard > svg {
+  flex: none;
+  color: var(--dsw-alias-label-secondary);
 }
 
 .paneCard:hover:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
-  border-color: var(--dsw-alias-border-l2);
+  border-color: var(--dsw-alias-border-l4);
 }
 
 .paneCard:disabled {
@@ -761,14 +693,15 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   overflow-y: auto;
   /* Deep trees truncate their labels instead of scrolling horizontally. */
   overflow-x: hidden;
-  padding: 2px 6px 8px;
+  padding: 4px 8px 8px;
 }
 
-/* One tree row: the app's session-row cell (34px, radius 8, inset, hover
-   fill, 22px indent step, 14px ink) with a mount fade so expanding a
+/* One tree row: the plugin's native list rhythm (28px, radius 4, inset,
+   hover fill, 22px indent step, 12px ink) with a mount fade so expanding a
    directory reveals its children gently (stable keys keep existing rows from
    replaying it). */
 .explorerRow {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -778,16 +711,16 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   box-sizing: border-box;
   width: 100%;
   max-width: 100%;
-  height: 34px;
+  height: 28px;
   padding: 0 8px;
   border: none;
   background: transparent;
-  font: var(--dsw-font-s-14);
+  font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-label-primary);
   text-align: left;
   cursor: pointer;
   white-space: nowrap;
-  border-radius: 8px;
+  border-radius: 4px;
   animation: dsh-row-in 150ms var(--ds-ease-in-out);
 }
 
@@ -795,8 +728,67 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+/* A multi-selected row: the native selected fill plus the design's 2px
+   inset accent bar (a pseudo element, so metrics never shift between rows).
+   Distinct from the reveal tint below — a reveal is "here it is", a
+   selection is "this is the batch's member". */
+.explorerRowSelected {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+.explorerRowSelected::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--dsw-alias-state-business-primary);
+}
+
+/* Git-changed file names (VS Code's ink): the row keeps one class and the
+   tone arrives as a data attribute, so the mapping lives in one place. */
+.explorerGitName[data-git-tone='modified'] { color: var(--dsw-alias-state-warn-primary); }
+.explorerGitName[data-git-tone='added'] { color: var(--dsw-alias-state-success-primary); }
+.explorerGitName[data-git-tone='untracked'] { color: var(--dsw-alias-state-success-primary); }
+.explorerGitName[data-git-tone='deleted'] { color: var(--dsw-alias-state-error-primary); }
+.explorerGitName[data-git-tone='renamed'] { color: var(--dsw-alias-state-business-primary); }
+.explorerGitName[data-git-tone='copied'] { color: var(--dsw-alias-state-success-primary); }
+.explorerGitName[data-git-tone='conflict'] { color: var(--dsw-alias-state-error-primary); }
+
+/* A directory with a change anywhere below it: tinted, but never lettered
+   (the letter belongs to the file that actually changed). */
+.explorerDirChanged {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+/* A "Show in folder" reveal highlight: the target row stays tinted until
+   the transient reveal set is cleared (a reload starts unhighlighted).
+   The DSH business-blue surface (the same source the host's nav items use
+   for their active accent) — a flat tint, deliberately no left bar. */
+.explorerRowRevealed {
+  background: var(--dsw-alias-state-business-tertiary);
+}
+
+/* Reveal sets usually list sibling files — consecutive tinted rows merge
+   into ONE rounded block: the touching edges square off, so a multi-file
+   highlight has no per-row radius notches. A solo revealed row (or the
+   first/last of a run) keeps its full radius. Rows are flat siblings in
+   the tree body (depth is inline padding), so the sibling combinator sees
+   every adjacency. */
+.explorerRowRevealed + .explorerRowRevealed {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.explorerRowRevealed:has(+ .explorerRowRevealed) {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
 .explorerDir {
-  font: var(--dsw-font-s-strong-14);
+  font: var(--dsw-font-xxs-strong-12);
 }
 
 .explorerHidden {
@@ -824,9 +816,122 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   white-space: nowrap;
 }
 
+/* ── Inline rename / new-folder editor ───────────────────────────────────
+   The level's top (or a row) swaps in a plain input (same row metrics: 28px
+   height, 6px gap, 12px type); only tokens, no hardcoded colors. */
+.explorerRenaming {
+  cursor: text;
+}
+
+.explorerRenameInput {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--dsw-alias-state-business-primary);
+  border-radius: 3px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.explorerRenameInput:focus {
+  outline: none;
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+/* The dismissable mutation-failure strip above the root row (rename/delete
+   refusals — raw server text, same policy as the fence notice). */
+.explorerActionError {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  box-sizing: border-box;
+  width: 100%;
+  margin-bottom: 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--dsw-alias-state-error-primary);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.explorerActionErrorText {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* The multi-selection bar: the LAST child of the tree's scroll container, so
+   it docks at the panel's bottom edge (sticky) and its appearance never
+   pushes the rows around the way a top bar did. Sticky (not absolute) keeps
+   it in flow: scrolled to the bottom it sits below the last row and covers
+   nothing, while mid-scroll it stays reachable. It WRAPS instead of
+   overflowing, so a narrow panel gets a second line of chips rather than a
+   clipped control or a horizontal scrollbar. 28px rhythm, token-only (§1). */
+.explorerSelectionBar {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 28px;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.explorerSelectionText {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--dsw-font-xxs-strong-12);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.explorerSelectionActions {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  max-width: 72%;
+}
+
+/* The leading glyph of one "open in app" menu entry (the host's icon route
+   or a data URL). Fixed box: the menu's own icon slot sizing. */
+.explorerAppIcon {
+  display: block;
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+}
+
+/* The tree parked while the search results panel owns the surface (the tree
+   must stay MOUNTED: its level cache is the whole point). */
+.explorerHiddenPane {
+  display: none;
+}
+
 /* The hover-revealed @-reference button at the row's far right (and the
-   transient "copied" label that replaces it after a copy). Hidden rows
-   keep the name at full width; hovering or focusing the row reveals it. */
+   transient "copied" label that replaces it after a copy). The only auto
+   margin in the row absorbs the filename's spare width, so a short name
+   cannot leave either affordance stranded in the middle. */
+.explorerRef,
+.explorerCopied {
+  margin-left: auto;
+}
+
+/* Hidden rows keep the name at full width; hovering or focusing the row
+   reveals the reference button. */
 .explorerRef {
   flex: none;
   display: none;
@@ -875,105 +980,92 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   text-align: center;
 }
 
-/* ── File tree icon tones ──────────────────────────────────────────────── */
-
-/* VS Code-style per-file-type icon coloring. Deliberate exception to the
-   token-only rule (like the editor/xterm designed palettes): concrete hues
-   give every file family a recognizable glyph tint — TypeScript blue,
-   Markdown green, JSON yellow, CSS/HTML orange, images purple, folders a
-   warm bronze. The values sit on `body` (light defaults) and flip on
-   `body[data-ds-dark-theme]` (dark, brighter), so a scheme flip recolors
-   the tree instantly with no re-render. */
-:global(body) {
-  --dsh-file-icon-folder: #b98a3e;
-  --dsh-file-icon-js: #c9a000;
-  --dsh-file-icon-ts: #3178c6;
-  --dsh-file-icon-json: #a4912a;
-  --dsh-file-icon-md: #4f9a50;
-  --dsh-file-icon-css: #c86b2f;
-  --dsh-file-icon-html: #d46a1f;
-  --dsh-file-icon-image: #a855b0;
-}
-
-:global(body[data-ds-dark-theme]) {
-  --dsh-file-icon-folder: #dcb67a;
-  --dsh-file-icon-js: #e8c44b;
-  --dsh-file-icon-ts: #56a8d8;
-  --dsh-file-icon-json: #cbcb41;
-  --dsh-file-icon-md: #69a864;
-  --dsh-file-icon-css: #d18f52;
-  --dsh-file-icon-html: #e37933;
-  --dsh-file-icon-image: #c586e0;
-}
-
-.explorerIconFolder { color: var(--dsh-file-icon-folder); }
-.explorerIconJs { color: var(--dsh-file-icon-js); }
-.explorerIconTs { color: var(--dsh-file-icon-ts); }
-.explorerIconJson { color: var(--dsh-file-icon-json); }
-.explorerIconMd { color: var(--dsh-file-icon-md); }
-.explorerIconCss { color: var(--dsh-file-icon-css); }
-.explorerIconHtml { color: var(--dsh-file-icon-html); }
-.explorerIconImage { color: var(--dsh-file-icon-image); }
-
-/* Drag a file/folder over a tree row: the target directory row gets a filled
-   highlight (drops land inside it; file rows target their parent directory).
-   The zone frame around the whole tree is the portaled .uploadDropZone. */
+/* Drag a file/folder over a tree row: the target directory row takes the
+   accent-tinted fill and a dashed business edge (drops land inside it; file
+   rows target their parent directory). The zone frame around the whole tree
+   is the portaled .uploadDropZone. */
 .explorerRowDropTarget {
-  background: var(--dsw-alias-interactive-bg-hover);
-  outline: 1px dashed var(--dsw-alias-interactive-bg-hover-accent);
+  background: var(--dsw-alias-interactive-bg-hover-accent);
+  outline: 1px dashed var(--dsw-alias-state-business-primary);
   outline-offset: -1px;
 }
 
+/* The drop mask: one pointer-inert scrim over the whole viewport, portaled
+   to document.body BELOW the zone frame — the panel-host float layer is
+   z-1000 (DSH's own page mask sits there too), so 1001/1002 keep this
+   transient surface on top. The mask is deliberately light: the conversation
+   column beneath it still takes drops into the chat natively, and the user
+   never loses sight of the tree. */
+.uploadDropMask {
+  position: fixed;
+  inset: 0;
+  z-index: 1001;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--dsw-alias-bg-base) 62%, transparent);
+  animation: dsh-row-in 150ms var(--ds-ease-in-out);
+}
+
 /* The sidebar's drop surface: a pointer-inert frame portaled to
-   document.body, fixed over the explorer body's viewport rect at z-1001 —
-   above DSH's own whole-page drop mask (z-1000, see InputBar's
-   document-level intake). The giant box-shadow spread IS the full-viewport
-   mask (same token DSH uses for its drop mask): everything dims except the
-   zone rect, teaching the zone split — the dimmed conversation column still
-   takes drops into the chat natively, the clear frame marks the tree as the
-   workspace-upload zone. Deliberate exception to the "panel stays below the
-   DSH float stack" rule: transient and pointer-events none, so the drop
-   always lands on the row beneath. The hint pill docks at the TOP edge of
-   the zone (right under the search row, the first thing the eye meets),
-   leaving the rows — the actual drop targets — aimable. */
+   document.body, fixed over the explorer body's viewport rect. The hint pill
+   docks at the TOP edge of the zone (right under the search row, the first
+   thing the eye meets), leaving the rows — the actual drop targets —
+   aimable. */
 .uploadDropZone {
   position: fixed;
-  z-index: 1001;
+  z-index: 1002;
   pointer-events: none;
   display: flex;
   align-items: flex-start;
   justify-content: center;
   padding: 12px;
-  border: 2px dashed var(--dsw-alias-interactive-bg-hover-accent);
-  border-radius: 10px;
-  box-shadow: 0 0 0 200vmax var(--dsw-alias-bg-mask-drop);
+  border: 2px dashed var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 4%, transparent);
   animation: dsh-row-in 150ms var(--ds-ease-in-out);
 }
 
 /* The zone's drop hero, docked at the TOP edge (right under the search
-   row, the first thing the eye meets): the colorful tray illustration over
-   the hint pill — stacked so the rows below stay aimable. */
+   row, the first thing the eye meets): the tray illustration over the hint
+   pill — stacked so the rows below stay aimable. */
 .uploadDropHero {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   max-width: 100%;
   padding-top: 8px;
+}
+
+/* The drop art's two inks (the SVG strokes/fills take them via
+   currentColor): the accent for the rising arrow and the front card, a quiet
+   tint for the tray body and the back card, and the surface ink for the
+   motifs cut out of the cards. */
+.uploadDropArtPrimary {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.uploadDropArtAccent {
+  color: var(--dsw-alias-state-business-tertiary);
+}
+
+.uploadDropArtCut {
+  color: var(--dsw-alias-bg-layer-1);
 }
 
 .uploadDropZonePill {
   display: flex;
   align-items: center;
   gap: 6px;
+  box-sizing: border-box;
+  height: 28px;
   max-width: 100%;
-  padding: 6px 12px;
+  padding: 0 12px;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 999px;
-  background: var(--dsw-alias-bg-layer-2);
+  background: var(--dsw-alias-bg-layer-1);
   box-shadow: var(--dsw-shadow-lv2);
   color: var(--dsw-alias-label-primary);
-  font: var(--dsw-font-xxs-strong-12);
+  font: var(--dsw-font-xxxs-11);
 }
 
 .uploadDropZoneText {
@@ -990,7 +1082,7 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   top: 0;
   left: 0;
   bottom: 0;
-  z-index: 1002;
+  z-index: 1003;
   pointer-events: none;
   display: flex;
   align-items: center;
@@ -999,19 +1091,16 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   animation: dsh-row-in 150ms var(--ds-ease-in-out);
 }
 
-/* The invitation's content: the colorful photo-cards illustration over the
-   label — the drop overlay is this flow's one brand moment, so it gets the
-   color the rest of the UI never does (palette borrowed from DSH's native
-   drop illustration so the two zones read as one family). */
+/* The invitation's content: the photo-cards illustration over the label. */
 .uploadDropChatCard {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   max-width: 100%;
   text-align: center;
   color: var(--dsw-alias-label-primary);
-  font: var(--dsw-font-s-strong-14);
+  font: var(--dsw-font-xxs-strong-12);
 }
 
 /* Full-window upload progress: blurred scrim + card (same mask/backdrop
@@ -1032,12 +1121,12 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
 .uploadOverlayCard {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  min-width: 280px;
+  gap: 10px;
+  min-width: 240px;
   max-width: min(420px, calc(100% - 48px));
-  padding: 20px 24px;
-  border: 1px solid var(--dsw-alias-border-inverted);
-  border-radius: 24px;
+  padding: 16px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
   background: var(--dsw-alias-bg-layer-2);
   box-shadow: var(--dsw-shadow-lv3);
 }
@@ -1045,8 +1134,8 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
 .uploadOverlayTitle {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font: var(--dsw-font-s-strong-14);
+  gap: 6px;
+  font: var(--dsw-font-xxs-strong-12);
   color: var(--dsw-alias-label-primary);
 }
 
@@ -1077,7 +1166,7 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
 
 .uploadOverlayStatus {
   min-height: 1em;
-  font: var(--dsw-font-xxs-12);
+  font: var(--dsw-font-xxxs-11);
   font-variant-numeric: tabular-nums;
   color: var(--dsw-alias-label-tertiary);
   white-space: nowrap;
@@ -1088,9 +1177,9 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
 .uploadOverlayCancel {
   align-self: flex-end;
   height: 28px;
-  padding: 0 14px;
+  padding: 0 12px;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
+  border-radius: 4px;
   background: transparent;
   color: var(--dsw-alias-label-primary);
   font: var(--dsw-font-xxs-strong-12);
@@ -1121,28 +1210,8 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px;
+  padding: 6px 8px;
   border-bottom: 1px solid var(--dsw-alias-border-l1);
-}
-
-.editorBack {
-  width: 22px;
-  height: 22px;
-  color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  flex: none;
-  justify-content: center;
-  align-items: center;
-  display: inline-flex;
-  padding: 0;
-}
-
-.editorBack:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
 }
 
 .editorTitle {
@@ -1160,6 +1229,7 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
 .editorPathInput {
   flex: 1;
   min-width: 0;
+  box-sizing: border-box;
   height: 28px;
   padding: 0 10px;
   border: 1px solid var(--dsw-alias-border-l1);
@@ -1196,25 +1266,23 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
 }
 
 /* The docked file tree: the wrapper owns the (drag-adjustable) width and
-   the hairline separation; the tree docks at the tab's LEFT edge (VSCode
-   explorer), so the hairline is its right border and the resize handle is
-   a wider invisible strip on that right edge with a hover affordance. */
+   the hairline separation; the resize handle is a wider invisible strip on
+   its left edge with a hover affordance. */
 .editorTreeDock {
   position: relative;
   flex: none;
   min-height: 0;
   display: flex;
-  border-right: 1px solid var(--dsw-alias-border-l1);
+  border-left: 1px solid var(--dsw-alias-border-l1);
 }
 
 .editorTreeResize {
   position: absolute;
   top: 0;
   bottom: 0;
-  /* Inside the dock (right edge — the tree's seam against the editor):
-     pointer capture on the handle keeps the drag alive even when the
-     pointer leaves the strip. */
-  right: 0;
+  /* Inside the dock (left edge): pointer capture on the handle keeps the
+     drag alive even when the pointer leaves the strip. */
+  left: 0;
   width: 6px;
   cursor: col-resize;
   touch-action: none;
@@ -1240,64 +1308,11 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   flex: 1;
 }
 
-/* The persistent Explorer rail: the file-tree column that lives to the LEFT of
-   the tabbed workbench (VSCode's sidebar), inside .panelBody (a row flex). It
-   owns a fixed drag-adjustable width and the hairline separation; the tree
-   fills the remaining height. Reuses .editorTreeResize (the absolute right-edge
-   drag handle) and .editorTreePanel/.editorTreePanelFull (the tree surface). */
-.explorerRail {
-  position: relative;
-  flex: none;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  border-right: 1px solid var(--dsw-alias-border-l1);
-}
-
-.explorerRailHeader {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 4px 0 10px;
-  border-bottom: 1px solid var(--dsw-alias-border-l1);
-  color: var(--dsw-alias-label-secondary);
-}
-
-.explorerRailTitle {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-/* The collapsed rail: a thin always-present strip holding the expand button,
-   so collapsing never reflows the tab area's right edge and the reopen control
-   stays in the same place. */
-.explorerRailCollapsed {
-  flex: none;
-  width: 30px;
-  min-height: 0;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding-top: 4px;
-  border-right: 1px solid var(--dsw-alias-border-l1);
-  color: var(--dsw-alias-label-secondary);
-}
-
 .editorTreeSearch {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   padding: 6px 8px;
   border-bottom: 1px solid var(--dsw-alias-border-l1);
 }
@@ -1327,13 +1342,16 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
 
 .editorSearchResult {
   display: block;
+  box-sizing: border-box;
   width: 100%;
-  padding: 4px 8px;
+  height: 28px;
+  padding: 0 8px;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
   color: var(--dsw-alias-label-primary);
   font: var(--dsw-font-xxs-12);
+  line-height: 28px;
   text-align: left;
   cursor: pointer;
   overflow: hidden;
@@ -1430,7 +1448,7 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
 
 .editorBanner {
   flex: none;
-  padding: 4px 12px;
+  padding: 4px 8px;
   font: var(--dsw-font-xxxs-11);
   color: var(--dsw-alias-state-warn-label);
   background: var(--dsw-alias-state-warn-tertiary);
@@ -1633,6 +1651,12 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   height: 100%;
 }
 
+/* Code lines get the same 12/16 inset as the markdown preview, so toggling
+   preview/edit never jumps the text's resting position. */
+.editorCm :global(.cm-scroller) {
+  padding: 12px 16px;
+}
+
 .editorCm :global(.cm-editor.cm-focused) {
   outline: none;
 }
@@ -1668,122 +1692,25 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   color: var(--dsw-alias-label-primary);
 }
 
-.editorImageWrap {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: auto;
-  padding: 12px;
-}
-
-.editorImage {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-}
-
 .editorMd {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 10px 14px;
+  padding: 12px 16px;
   font: var(--dsw-font-xs-13);
 }
 
-/* ── Markdown reading theme ────────────────────────────────────────────── */
-
-/* A self-contained reading theme for the markdown preview (TextEditor's
-   `.editorMd`, which renders MarkdownText). Styled for long-doc readability
-   with a VSCode-Office flavor, but strictly on DSH tokens — the color-mix
-   derivations adapt to light/dark automatically, so no external theme is
-   fetched and skins keep working. The primitives' own `.markdown` sheet
-   supplies the base typography; these rules ADD structure (heading rules,
-   quote tint, code-block card, table zebra) over that baseline. */
-.editorMd {
-  --dsh-md-accent: var(--dsw-alias-state-business-primary);
-  --dsh-md-border: var(--dsw-alias-border-l2);
-  --dsh-md-quote-bg: color-mix(in srgb, var(--dsw-alias-state-business-primary) 8%, transparent);
-  --dsh-md-table-head-bg: var(--dsw-alias-interactive-bg-hover);
-  --dsh-md-table-stripe: color-mix(in srgb, var(--dsw-alias-interactive-bg-hover) 45%, transparent);
-}
-
-/* Headings: a hairline anchor under h1/h2 and a slightly dimmed 3–6 so the
-   hierarchy reads at a glance. */
-.editorMd :global(h1),
-.editorMd :global(h2) {
-  border-bottom: 1px solid var(--dsh-md-border);
-  padding-bottom: 0.35em;
-  font-weight: 700;
-  color: var(--dsw-alias-label-primary);
-}
-
-.editorMd :global(h3),
-.editorMd :global(h4),
-.editorMd :global(h5),
-.editorMd :global(h6) {
-  color: var(--dsw-alias-label-secondary);
-}
-
-/* Links: keep the primitives' brand ink but fix the underline offset so the
-   underline clears descenders. */
-.editorMd :global(a) {
-  text-underline-offset: 3px;
-}
-
-/* Blockquotes: a muted tint plus an accent bar (VSCode quote chrome). */
-.editorMd :global(blockquote) {
-  margin: 16px 0;
-  padding: 6px 14px;
-  border-left: 3px solid var(--dsh-md-accent);
-  background: var(--dsh-md-quote-bg);
-  border-radius: 0 8px 8px 0;
-  color: var(--dsw-alias-label-secondary);
-}
-
-.editorMd :global(blockquote p:last-child) {
-  margin-bottom: 0;
-}
-
-/* Fenced code blocks (MarkdownText's CodeBlock root carries the stable
-   `.md-code-block` class): a bordered, rounded, tinted card. Shiki already
-   supplies the theme-aware syntax colors; this only dresses the container. */
-.editorMd :global(.md-code-block) {
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 10px;
-  background: var(--dsw-alias-markdown-code-block);
-  overflow: hidden;
-}
-
-.editorMd :global(.md-code-block pre) {
-  background: var(--dsw-alias-markdown-code-block) !important;
-}
-
-/* Tables: header fill, full cell hairlines, zebra striping. */
-.editorMd :global(th) {
-  background: var(--dsh-md-table-head-bg);
-  font-weight: 650;
-}
-
-.editorMd :global(th),
-.editorMd :global(td) {
-  border: 1px solid var(--dsh-md-border);
-}
-
-.editorMd :global(tbody tr:nth-child(even)) {
-  background: var(--dsh-md-table-stripe);
-}
-
-/* Lists: accent markers echo the link/quotes color. */
-.editorMd :global(li::marker) {
-  color: var(--dsh-md-accent);
-}
-
-/* Images: a hairline frame so screenshots read as figures, not flotsam. */
-.editorMd :global(img) {
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 8px;
+/* The DSH CodeBlock banner is position:sticky (top:0, z-index:6) so a block
+   keeps its copy action reachable inside a per-message scroll container —
+   the right call in chat, where each block owns its scroll box. In the file
+   preview every fence shares one `.editorMd` scroll container, so that sticky
+   banner pins to the top of the viewport until the *whole block* scrolls
+   past, which reads as a floating header over the document. Neutralize the
+   stickiness here (bannerWrap is the first element child of `.md-code-block`;
+   mermaid mounts are excluded since their own chrome replaces the banner). */
+.editorMd :global(.md-code-block:not([data-mermaid-processed])) > :global(div):first-child {
+  position: static;
+  z-index: auto;
 }
 
 /* ── Mermaid diagram block (markdown preview, mermaid lazy chunk) ────────
@@ -1882,6 +1809,15 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
 .mermaidModal {
   position: fixed;
   inset: 0;
+  /* Viewport-sized body child: the shell makes every direct body child
+     `no-drag` (`html[data-platform=darwin] body > :not(#root)`, an
+     id-bearing selector, hence `!important`), and app-region ignores
+     pointer-events — without this reset the open modal cancels every
+     window-drag strip under it plus the macOS double-click-title zoom.
+     Same contract as the panel host rule above; `initial` computes to the
+     neutral `none`, and the toolbar's buttons keep their own no-drag from
+     the shell's `:is(button, …)` rule. */
+  -webkit-app-region: initial !important;
   z-index: 1000;
   display: flex;
   flex-direction: column;
@@ -2038,46 +1974,7 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   pointer-events: auto !important;
 }
 
-/* ── Terminal ──────────────────────────────────────────────────────────── */
-
-.terminalWrap {
-  flex: 1;
-  min-height: 0;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  background: var(--dsw-alias-bg-base);
-}
-
-.terminal {
-  flex: 1;
-  min-height: 0;
-  padding: 6px 4px 6px 8px;
-}
-
-.terminal :global(.xterm) {
-  height: 100%;
-}
-
-.terminalBanner {
-  flex: none;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 3px 10px;
-  font: var(--dsw-font-xxxs-11);
-  color: var(--dsw-alias-state-warn-label);
-  background: var(--dsw-alias-state-warn-tertiary);
-}
-
-/* The attempted ws URL, shown when the connection failed (diagnosis). */
-.terminalBannerUrl {
-  flex-basis: 100%;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  word-break: break-all;
-  opacity: 0.85;
-}
+/* ── Crash containment ─────────────────────────────────────────────────── */
 
 .boundaryError {
   position: fixed;
@@ -2097,6 +1994,8 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   overflow: auto;
 }
 
+/* The retry pill of the crash UI: the per-tab RenderBoundary block and the
+   lazy-chunk load failure both render it, so the terminal-era name stays. */
 .terminalRetry {
   flex: none;
   padding: 1px 8px;
@@ -2111,65 +2010,6 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
 .terminalRetry:hover {
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
-}
-
-/* The node-pty dependency failure banner (issue #140): a taller warn block
-   carrying the pasteable repair command (bash / cmd / PowerShell). */
-.terminalDepsBanner {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px;
-  font: var(--dsw-font-xxs-12);
-  color: var(--dsw-alias-state-warn-label);
-  background: var(--dsw-alias-state-warn-tertiary);
-}
-
-.terminalDepsTitle {
-  font: var(--dsw-font-xxs-strong-12);
-  color: var(--dsw-alias-state-warn-primary);
-}
-
-.terminalDepsHint {
-  opacity: 0.9;
-}
-
-.terminalDepsCommandRow {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-/* The command the user pastes into a terminal / cmd. Selectable, wrapping,
-   and scrollable when long (Windows paths can get very long). */
-.terminalRepairCommand {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  padding: 6px 8px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-all;
-  user-select: text;
-  color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-bg-layer-2);
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 4px;
-  max-height: 160px;
-  overflow: auto;
-}
-
-.terminalDepsNote {
-  opacity: 0.85;
-}
-
-.terminalDepsActions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
 /* The PER-TAB error strip: fills one tab's content area (unlike
@@ -2188,127 +2028,27 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   color: var(--dsw-alias-state-error-primary);
 }
 
-/* ── Git ───────────────────────────────────────────────────────────────── */
-
-.git {
-  flex: 1;
-  min-height: 0;
-  min-width: 0;
+/* ── Native right-Sidebar tab-body host ──────────────────────────────────
+   DSH's native tab body host (`.paneBody` in dsh-client-ui-dockkit) is a
+   BLOCK scroller with a definite height, not a flex container — the host's
+   own tab bodies (TextPreview, FilesBody) declare `height: 100%` on their
+   root for exactly this reason. Our tab roots declare `flex: 1; min-height:
+   0`, which collapses to content height in that block host (the side-chat
+   composer would float mid-pane). A column flex host of `height: 100%`
+   restores the `flex: 1` semantics our tab roots rely on, and gives
+   third-party descriptors' components the same box inside the native pane.
+   The wrapper div carries `data-dsh-native-tab-host` so the e2e lane can
+   assert the fill (mirroring `data-dsh-better-sidebar`). */
+.nativeTabHost {
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  /* Tab pages never scroll horizontally: content wraps or truncates to the
-     panel width instead of panning sideways. */
-  overflow-x: hidden;
+  height: 100%;
+  min-height: 0;
 }
 
-.gitHeader {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 36px;
-  padding: 0 8px 0 12px;
-}
-
-.gitBranchSelect {
-  flex: 1;
-  min-width: 0;
-  height: 26px;
-  padding: 0 6px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 6px;
-  background: var(--dsw-alias-bg-base);
-  color: var(--dsw-alias-label-primary);
-  font: var(--dsw-font-xxs-12);
-}
-
-.gitSection {
-  border-top: 1px solid var(--dsw-alias-border-l1);
-}
-
-.gitSectionHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 12px 4px;
-  font: var(--dsw-font-xxxs-strong-11);
-  color: var(--dsw-alias-label-tertiary);
-  text-transform: uppercase;
-}
-
-.gitLink {
-  border: none;
-  background: transparent;
-  font: var(--dsw-font-xxxs-11);
-  color: var(--dsw-alias-brand-primary);
-  cursor: pointer;
-  padding: 0;
-}
-
-.gitLink:hover:not(:disabled) {
-  text-decoration: underline;
-}
-
-.gitLink:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.gitRow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 34px;
-  margin: 0 6px;
-  padding: 0 8px;
-  border-radius: 8px;
-  animation: dsh-row-in 150ms var(--ds-ease-in-out);
-}
-
-.gitRow:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.gitRowSelected {
-  background: var(--dsw-alias-interactive-bg-active);
-}
-
-.gitRowMain {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: none;
-  background: transparent;
-  padding: 3px 0;
-  cursor: pointer;
-  text-align: left;
-}
-
-.gitBadge {
-  flex: none;
-  width: 20px;
-  height: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  font: var(--dsw-font-xxxs-strong-11);
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-secondary);
-}
-
-.gitName {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font: var(--dsw-font-s-14);
-  color: var(--dsw-alias-label-primary);
-}
+/* ── Diff tab (generic states + shell; the changes tab owns the rest in
+   changes.module.css, and the diff rows themselves live in
+   diff/diff.module.css) ────────────────────────────────────────────────── */
 
 .gitEmpty {
   padding: 4px 12px 8px;
@@ -2330,13 +2070,9 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   white-space: pre-wrap;
 }
 
-.gitDiff {
-  border-top: 1px solid var(--dsw-alias-border-l1);
-  padding: 8px;
-}
-
-/* The diff tab (a change opened from the git panel, like VSCode's diff
-   editor): header + scrollable diff body, no horizontal panning. */
+/* The diff tab (a change expanded from the changes tab's preview, like
+   VSCode's diff editor): header + scrollable diff body, no horizontal
+   panning; rows render through the shared diff module. */
 .gitDiffTab {
   flex: 1;
   min-height: 0;
@@ -2367,322 +2103,12 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   color: var(--dsw-alias-label-primary);
 }
 
-/* One changed file's section: path header, hunk headers, aligned lines. */
-.gitDiffFile {
-  width: 100%;
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 8px 2px 2px;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.gitDiffFile:disabled {
-  cursor: default;
-}
-
-.gitDiffFile:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.gitDiffFileChevron {
-  flex: none;
-  color: var(--dsw-alias-label-tertiary);
-  transform: rotate(0deg);
-}
-
-.gitDiffFileChevronExpanded {
-  transform: rotate(90deg);
-}
-
-.gitDiffFilePath {
-  font: var(--dsw-font-xxs-strong-12);
-  color: var(--dsw-alias-label-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.gitDiffFileOld {
-  flex: none;
-  font: var(--dsw-font-xxxs-11);
-  color: var(--dsw-alias-label-tertiary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 40%;
-}
-
-.gitDiffFileTag {
-  flex: none;
-  padding: 0 6px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 999px;
-  font: var(--dsw-font-xxxs-strong-11);
-  color: var(--dsw-alias-label-secondary);
-}
-
-.gitDiffHunk {
-  display: flex;
-  gap: 8px;
-  padding: 3px 2px;
-  font: var(--dsw-font-markdown-code-block-small);
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.gitDiffHunkHeader {
-  flex: none;
-  color: var(--dsw-alias-label-secondary);
-}
-
-.gitDiffHunkSection {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* One aligned diff line: old gutter / new gutter / code. Lines WRAP instead
    of scrolling horizontally (the tab-page rule: fill the width adaptively),
    with the long-token fallback breaking anywhere a space never comes. */
-.gitDiffLine {
-  display: flex;
-  align-items: stretch;
-  font: var(--dsw-font-markdown-code-block-small);
-  line-height: 20px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  min-width: 0;
-}
-
-.gitDiffNum {
-  flex: none;
-  width: 36px;
-  padding-right: 8px;
-  text-align: right;
-  color: var(--dsw-alias-label-tertiary);
-  user-select: none;
-}
-
-.gitDiffCode {
-  flex: 1;
-  min-width: 0;
-  overflow: visible;
-}
-
-.gitDiffCtx {
-  color: var(--dsw-alias-label-primary);
-}
-
-.gitDiffDel {
-  color: var(--dsw-alias-state-error-primary);
-  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent);
-}
-
-.gitDiffAdd {
-  color: var(--dsw-alias-state-success-primary);
-  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 12%, transparent);
-}
-
-.gitDiffMeta {
-  padding-left: 2px;
-}
-
-.gitDiffMetaText {
-  font: var(--dsw-font-xxxs-11);
-  font-style: italic;
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.gitDiffExpand {
-  display: block;
-  width: 100%;
-  margin: 4px 0;
-  border: none;
-  background: transparent;
-  font: var(--dsw-font-xxs-12);
-  color: var(--dsw-alias-brand-primary);
-  cursor: pointer;
-  text-align: center;
-}
-
-.gitDiffExpand:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.gitConfirmDesc {
-  margin: 0;
-  font: var(--dsw-font-s-14);
-  color: var(--dsw-alias-label-primary);
-  white-space: pre-wrap;
-}
-
-.gitCommit {
-  display: flex;
-  gap: 6px;
-  padding: 8px 12px;
-  border-top: 1px solid var(--dsw-alias-border-l1);
-  align-items: center;
-}
-
-.gitCommitInput {
-  flex: 1;
-  min-width: 0;
-}
-
-.gitCommitButton {
-  flex: none;
-  height: 26px;
-  padding: 0 12px;
-  border: none;
-  border-radius: 6px;
-  background: var(--dsw-alias-button-primary-fill);
-  color: var(--dsw-alias-label-primary-inverted);
-  font: var(--dsw-font-xxs-strong-12);
-  cursor: pointer;
-}
-
-.gitCommitButton:hover:not(:disabled) {
-  background: var(--dsw-alias-button-primary-hover);
-}
-
-.gitCommitButton:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
 
 /* A history row: line 1 = hash + subject, line 2 = ref badges + author/date
    (badges live on the second line so they never crowd the subject). */
-.gitLogRow {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 5px 12px;
-  cursor: pointer;
-  border-radius: 8px;
-}
-
-.gitLogRow:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.gitLogLine1 {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-}
-
-.gitLogHash {
-  flex: none;
-  font: var(--dsw-font-markdown-code-block-small);
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.gitLogLine2 {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  flex-wrap: wrap;
-}
-
-.gitLogRef {
-  flex: none;
-  padding: 0 5px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 999px;
-  font: var(--dsw-font-xxxs-strong-11);
-  color: var(--dsw-alias-brand-primary);
-  white-space: nowrap;
-}
-
-.gitLogSubject {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font: var(--dsw-font-s-14);
-  color: var(--dsw-alias-label-primary);
-}
-
-.gitLogMeta {
-  font: var(--dsw-font-xxxs-11);
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.gitLogMore {
-  display: block;
-  width: calc(100% - 24px);
-  margin: 4px 12px 8px;
-  padding: 6px 0;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 6px;
-  background: transparent;
-  font: var(--dsw-font-xxs-12);
-  color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
-}
-
-.gitLogMore:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
-}
-
-.gitLogMore:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-/* ── Intercepted produced-files row ────────────────────────────────────── */
-
-.producedRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 4px 0;
-}
-
-.producedLabel {
-  font: var(--dsw-font-xxs-12);
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.producedChip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 200px;
-  padding: 2px 8px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 999px;
-  background: var(--dsw-alias-bg-layer-2);
-  color: var(--dsw-alias-label-secondary);
-  font: var(--dsw-font-xxs-12);
-  cursor: pointer;
-  overflow: hidden;
-}
-
-.producedChip:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
-}
-
-.producedChip span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.producedMore {
-  font: var(--dsw-font-xxs-12);
-  color: var(--dsw-alias-label-tertiary);
-}
 
 /* ── Shared interaction rules ──────────────────────────────────────────── */
 
@@ -2697,13 +2123,6 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
 .paneCard:focus-visible,
 .explorerRow:focus-visible,
 .explorerRef:focus-visible,
-.gitRowMain:focus-visible,
-.gitLink:focus-visible,
-.gitCommitButton:focus-visible,
-.gitLogRow:focus-visible,
-.gitLogMore:focus-visible,
-.gitDiffFile:focus-visible,
-.gitDiffExpand:focus-visible,
 .terminalRetry:focus-visible,
 .editorModeButton:focus-visible,
 .editorDownloadLink:focus-visible,
@@ -2715,17 +2134,13 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
 
 /* Reduced motion: no slides, fades or color transitions. */
 @media (prefers-reduced-motion: reduce) {
-  .panel,
-  .panelHidden,
   .bottomPanel,
   .bottomPanelHidden,
-  .toggleCluster,
   .toggleButton,
   .tab,
   .tabBarPlus,
   .paneCard,
   .explorerRow,
-  .gitRow,
   .divider,
   .dividerRow::after,
   .dividerCol::after {
@@ -2737,20 +2152,10 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
 /* ── Narrow (mobile) viewport ──────────────────────────────────────────── */
 
 /* Pairs with NARROW_MAX_WIDTH = 768 in src/client/breakpoints.ts: widths
-   strictly below 768px (i.e. max-width: 767px) switch the sidebar to the
-   mobile layout — one full-screen drawer (the bottom panel's tabs were
-   migrated into the right tree), one toggle button. The structural
-   switches (which panels render, the migration) are JS-driven via
-   useNarrowViewport; this block only adapts the pure style details. */
+   strictly below 768px (i.e. max-width: 767px) get the phone-width tab
+   rhythm; the bottom workbench keeps its own geometry (it spans the center
+   column at every width). */
 @media (max-width: 767px) {
-  /* The toggle cluster holds a single button on narrow viewports (the
-     bottom panel button is not rendered), so the open panel's tab strip
-     reserves 40px instead of the desktop 72px — the tabs and + menu still
-     yield space to the one remaining control. */
-  .panel:not(.panelHidden) .tabBar {
-    padding-right: 40px;
-  }
-
   /* Narrower tabs: a phone-width drawer fits more open tabs before the
      strip scrolls. */
   .tab {
@@ -2759,11 +2164,12 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   }
 }
 
-/* The file tree "open with" menu rows: the label area is a BLOCK-level flex
-   row that fills the primitives `.itemLabel` span (which is itself `flex: 1`
-   inside the row), so the trailing control — the pushpin on submenu rows,
-   the chevron on the submenu parent — docks at the row's far right, exactly
-   like the trailing check on selected rows of every other menu. */
+/* The file tree's plugin "open with" menu rows: the label area is a
+   BLOCK-level flex row that fills the primitives `.itemLabel` span (which is
+   itself `flex: 1` inside the row), so the trailing control — the pushpin on
+   submenu rows, the chevron on the submenu parent — docks at the row's far
+   right, exactly like the trailing check on selected rows of every other
+   menu. */
 .openWithLabel {
   display: flex;
   align-items: center;
@@ -2788,15 +2194,16 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
 }
 
 /* The pushpin toggle on an "open with" submenu row: brand ink once the
-   target is pinned to the menu's top level. */
+   target is pinned to the menu's top level. Sized for the compact menu's
+   26px rows (16px box, 12px glyph) — proportionate without overflowing. */
 .openWithPin {
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
   color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
 }
@@ -2810,8 +2217,138 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   color: var(--dsw-alias-state-business-primary);
 }
 
-/* 注：旧的 .cHLsAW_frame padding-right 推挤（--dsh-official-push）已删除：
-   explorer rail 在 panel 内部，push 公式却再叠一份 explorer 宽（双计），
-   与 #root margin 推挤叠加后对话列被推离面板一个 explorer+8px 的巨隙
-   （用户实报「导航栏和文件目录间隙太大」）；拖动中 push 由 400ms 轮询
-   兜底同步，导航条呈阶梯跳变（「不恒等跟随」）。让位回归 margin 单机制。 */
+/* ── Markdown preview: raw-HTML runs + table of contents ─────────────────
+   The HTML runs lifted out of the markdown source (MarkdownHtml.tsx) render
+   as sanitized block leaves; the TOC is a zero-height sticky bar keeping the
+   outline button pinned at the preview's top-right without consuming layout.
+   All visuals ride the alias tokens (skin system follows automatically). */
+
+/* A sanitized HTML run leaf (block-level box; content is DOMPurify output). */
+.editorHtmlBlock {
+  margin: 8px 0;
+}
+
+.editorHtmlBlock img,
+.editorHtmlBlock video {
+  max-width: 100%;
+}
+
+.editorHtmlBlock details {
+  margin: 4px 0;
+  padding: 4px 0;
+}
+
+.editorHtmlBlock summary {
+  cursor: pointer;
+}
+
+/* The zero-height sticky bar: occupies no layout, keeps the button visible
+   while the preview scrolls, and lets pointer events pass through the bar
+   itself (only the interactive children re-enable them). The bar's stacking
+   context also frames the outline panel, so its z-index must clear the DSH
+   CodeBlock banner (z-index:6) or the popover paints beneath a sticky fence
+   header. 7 sits just above that banner and below the portalled selection
+   popup (60) / mermaid modal (1000). */
+.tocBar {
+  position: sticky;
+  top: 0;
+  z-index: 7;
+  display: flex;
+  justify-content: flex-end;
+  height: 0;
+  pointer-events: none;
+}
+
+.tocButton {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin: 4px 2px 0 0;
+  padding: 0;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.tocButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* The outline popover, anchored under the button (the bar is the containing
+   block; its height is 0, so the panel drops below the pinned button row). */
+.tocPanel {
+  position: absolute;
+  top: 32px;
+  right: 2px;
+  display: flex;
+  flex-direction: column;
+  width: min(300px, 82%);
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-2);
+  box-shadow: var(--dsw-shadow-lv2);
+  pointer-events: auto;
+}
+
+.tocItem {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tocItem:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* Indent by heading level (h2 = one step, h3 = two steps…). */
+.tocItem[data-level='2'] { padding-left: 18px; }
+.tocItem[data-level='3'] { padding-left: 28px; }
+.tocItem[data-level='4'] { padding-left: 38px; }
+.tocItem[data-level='5'] { padding-left: 48px; }
+.tocItem[data-level='6'] { padding-left: 58px; }
+
+/* The tiny level number keeps deep outlines scannable. */
+.tocItemLevel {
+  flex: none;
+  font: var(--dsw-font-xxxs-11);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.tocItemText {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The jumped-to heading flashes once (the class is added to the host-rendered
+   heading element by md-toc.tsx; @keyframes rides the CSS module). */
+@keyframes dsh-toc-flash {
+  0%, 60% { background: var(--dsw-alias-interactive-bg-hover); }
+  100% { background: transparent; }
+}
+
+.tocFlash {
+  animation: dsh-toc-flash 1.2s ease-out;
+  border-radius: 4px;
+}

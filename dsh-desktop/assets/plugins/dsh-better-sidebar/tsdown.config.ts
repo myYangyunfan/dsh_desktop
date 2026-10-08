@@ -27,8 +27,8 @@
  * - each artifact registers itself via window.__ModuleLoader__.load({id,
  *   factory}) with the (require) => exports CJS closure shape.
  *
- * Lazy chunks (lib/client-<name>.js): the heavy preview/terminal libraries
- * (CodeMirror, xterm) build as two standalone chunk bundles
+ * Lazy chunks (lib/client-<name>.js): the heavy preview libraries
+ * (CodeMirror, mermaid) build as standalone chunk bundles
  * (src/client/chunks/<name>.tsx), shared by both channels. Each script
  * assigns its factory to the plugin-owned global registry
  * (globalThis.__dshChunks__) and is fetched by
@@ -55,7 +55,7 @@ const NODE_BUILTINS = new Set([
   ...builtinModules.map(id => `node:${id}`),
 ])
 
-/** Module specifiers the web shell shares into the frozen module table (the official PLATFORM_MODULES list, plus the runtime/client exemption). */
+/** Module specifiers the web shell shares into the frozen module table (the official PLATFORM_MODULES list; `dsh-client-runtime` was removed upstream in DSH 0.1.2-alpha and no chunk requires it). */
 const CLIENT_EXTERNALS = [
   'react',
   'react/jsx-runtime',
@@ -64,7 +64,6 @@ const CLIENT_EXTERNALS = [
   'cordis',
   '@deepseek-ai/dsh-client-ui-slots',
   '@deepseek-ai/dsh-client-ui-primitives',
-  '@deepseek-ai/dsh-client-runtime/client',
 ]
 
 /**
@@ -325,7 +324,7 @@ function makeCssPlugin(pluginId: string): BuildPlugin {
 }
 
 /** The lazy chunk names (keep in sync with src/bundle-route.ts CHUNK_NAMES). */
-const CHUNKS = ['terminal', 'editor', 'mermaid']
+const CHUNKS = ['editor', 'mermaid', 'locale']
 
 export default [
   {
@@ -343,7 +342,10 @@ export default [
   },
   // Official profile channel: bundle id = package name (package.json `name`).
   clientBundle('dsh-better-sidebar', 'client.js'),
-  // Plugin-registry channel: bundle id = manifest id (dsh.plugin.json `id`).
+  // Third-party registry channel: bundle id = the market manifest's id
+  // (dsh.plugin.json). DSH never reads that file — the official profile
+  // channel is the package-name bundle above, declared through
+  // package.json's `dsh.bundle.patch`.
   clientBundle('dsh-external/dsh-better-sidebar', 'client-registry.js'),
   // Lazy chunks: shared by both channels, fetched on first use through the
   // plugin's /sidebar/bundle route (see src/client/chunk-loader.ts).

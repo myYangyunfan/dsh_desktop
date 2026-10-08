@@ -195,7 +195,7 @@ npx @deepseek-ai/dsh web
 
 ```sh
 npm install
-node client/build.mjs   # 改 client/ 后重新打包
+node scripts/build-client.mjs   # 改 client/ 后重新打包
 npm test                # 代理 / 认证 / 压缩 / 隧道 / 服务 / RPC / 设置（109 测试）
 ```
 

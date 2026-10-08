@@ -10,19 +10,18 @@ window.__ModuleLoader__.load({
 		 * DeepSeek 账户余额 + 本轮会话费用，内联渲染在对话底部统计栏
 		 * （conversation.composer.dock list slot，排在 StatsLine 之后）。
 		 *
-		 * 数据来源：DSH Desktop 壳层通过 preload 派发的
-		 * window "dsh-balance-changed" 事件（detail = { ok, balances, prices,
-		 * priceTable, model, peak, opencodeGo, at }，契约见
-		 * docs/balance-architecture.md）；纯浏览器环境（无桌面壳）时只显示
-		 * 「本轮费用」，价格用内置默认档。
+		 * 数据来源：本插件宿主半边在内核 webServer 上注册的
+		 * GET /api/dsh-balance/state（载荷 = BalancePush，契约见
+		 * docs/balance-architecture.md §2）。宿主缺席（404）时只显示「本轮费用」，
+		 * 价格用内置默认档。
 		 *
-		 * 单一投递契约：数据只从事件通道进入（window.dshDesktop.refreshBalance
-		 * 只用于触发刷新、不消费其返回值），杜绝「IPC 返回值 + 事件推送」
-		 * 双通道重复渲染。
+		 * 单一投递契约：数据只从 state 路由进入（/refresh 只触发查询、不消费其
+		 * 响应），杜绝「触发返回值 + 缓存读」双通道重复渲染。
 		 */
-		// 纯浏览器降级（无桌面壳）时的兜底价格档：与全链路默认模型
+		// 纯浏览器降级（无宿主半边）时的兜底价格档：与全链路默认模型
 		// DEFAULT_MODEL = deepseek-v4-pro 一致（保守档，避免少报费用）。
 		const FALLBACK_PRICES = { cacheMiss: 9, cacheHit: 0.3, output: 27 };
+		const DEFAULT_MODEL = "deepseek-v4-pro";
 
 		/**
 		 * token 用量归一化 —— 单一真源。
@@ -311,7 +310,7 @@ window.__ModuleLoader__.load({
 			const { delta, grew } = usageDelta(rec.seen, u);
 			if (!grew) return ledgerTotalOf(rec); // 无增量：历史不重算，不写盘
 			const tier = tierOf(data);
-			const model = u.model || (data && typeof data.model === "string" && data.model) || "deepseek-v4-pro";
+			const model = u.model || (data && typeof data.model === "string" && data.model) || DEFAULT_MODEL;
 			const prices = pricesForModel(data, tier, model);
 			const cost = costOfBuckets(delta, prices);
 			const bucketKey = model + "|" + tier;
@@ -361,40 +360,123 @@ window.__ModuleLoader__.load({
 			return v.toFixed(4);
 		}
 
-		// 本页面生命周期内是否已收到过余额推送（模块级）：已收到则后续挂载
-		// 不再触发强制刷新（会话切换零额外 HTTP），数据由事件通道持续更新。
-		let bridgePushedOnce = false;
-		// 桥在场但事件迟迟不来（Tauri 版余额数据链 Phase 3 前未实装——壳只
-		// 探活内核、无人投递 dsh-balance-changed）的降级时限：超时后视同
-		// 「无桌面壳」的浏览器模式（本轮费用按内置价目，余额区不渲染），
+		// ---------------------------------------------------------------------
+		// 宿主数据通道：本插件宿主半边的 HTTP 路由（取代自制壳的 IPC 推送）
+		//
+		// 刻意选轮询而不是 SSE：SSE 意味着每个标签页一条长连接，而官方客户端的
+		// 更新准入锁在安装期间对 connection/request 一律 503，长连接会成片断掉并
+		// 引发重连风暴；在 60s 这个节奏上它带来的收益为零。
+		// ---------------------------------------------------------------------
+		const STATE_URL = "/api/dsh-balance/state";
+		const REFRESH_URL = "/api/dsh-balance/refresh";
+		const BALANCE_POLL_MS = 60000;
+		// 单请求时限：沿用自制壳时代的降级时限与它的不变量 ——
 		// 绝不让整个 dock 因 {loading:true} 永挂而消失。
 		const BRIDGE_PUSH_TIMEOUT_MS = 4000;
+		// 本页面生命周期内是否已确认「宿主半边缺席」（404）：确认后不再反复探测。
+		let hostAbsent = false;
+		// 是否已发起过首轮同步：首轮带 force 让服务端真查一次，之后切会话/重挂载
+		// 只读缓存载荷，零额外计费查询（对齐旧 bridgePushedOnce 的取向）。
+		let hostPolledOnce = false;
 
-		/** 订阅桌面壳推送的余额数据（首次挂载触发一次主动刷新，数据只走事件通道）。 */
+		/**
+		 * 纯浏览器降级载荷（宿主半边缺席 / 首轮就没取到）：形态与 BalancePush
+		 * 同构，但刻意不带 peak / pricingTier —— 浏览器侧不做北京时区判定，
+		 * 无 peak 即不渲染峰谷 chip，档位由 tierOf 归 'unknown'。
+		 */
+		function browserOnlyPayload() {
+			return {
+				ok: false,
+				error: "no-host",
+				balances: [],
+				prices: { ...FALLBACK_PRICES },
+				priceTable: { [DEFAULT_MODEL]: { ...FALLBACK_PRICES } },
+				model: DEFAULT_MODEL,
+				at: new Date().toISOString(),
+			};
+		}
+
+		/** 单次宿主请求（限时 BRIDGE_PUSH_TIMEOUT_MS）；404 归一为 absent 标记异常。 */
+		async function hostFetchJson(url, init, fetchImpl) {
+			const doFetch = fetchImpl || (typeof window !== "undefined" && typeof window.fetch === "function"
+				? (...args) => window.fetch(...args) : null);
+			if (!doFetch) {
+				const err = new Error("no fetch");
+				err.absent = true;
+				throw err;
+			}
+			const signal = typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
+				? AbortSignal.timeout(BRIDGE_PUSH_TIMEOUT_MS) : void 0;
+			const res = await doFetch(url, { cache: "no-store", ...init, ...(signal ? { signal } : {}) });
+			// 404 = 宿主半边未挂载（未装/被禁用），与「这一轮查询失败」是两件事。
+			if (res && res.status === 404) {
+				const err = new Error("host absent");
+				err.absent = true;
+				throw err;
+			}
+			if (!res || !res.ok) throw new Error("HTTP " + (res ? res.status : "0"));
+			const json = await res.json();
+			if (!json || typeof json !== "object") throw new Error("bad payload");
+			return json;
+		}
+
+		/**
+		 * 取一次宿主状态。force=true 先 POST /refresh 让服务端真发一轮查询，再读
+		 * /state —— 始终只从 state 一个面读数据，杜绝「响应 + 缓存」双投递。
+		 * @returns {Promise<{status:'ok',data:object}|{status:'absent'}|{status:'error',error:string}>}
+		 */
+		async function fetchHostState(force, deps = {}) {
+			const call = deps.hostFetchJson || hostFetchJson;
+			if (force) await call(REFRESH_URL, { method: "POST" }, deps.fetchImpl).catch(() => {});
+			try {
+				return { status: "ok", data: await call(STATE_URL, void 0, deps.fetchImpl) };
+			} catch (err) {
+				if (err && err.absent) return { status: "absent" };
+				return { status: "error", error: String((err && err.message) || err) };
+			}
+		}
+
+		/** 订阅宿主余额状态：挂载即强制同步一次，此后 60s 一次、转可见时一次。 */
 		function useBalanceData() {
-			const hasBridge = typeof window !== "undefined" && window.dshDesktop && typeof window.dshDesktop.refreshBalance === "function";
-			const [data, setData] = react.useState(() => hasBridge && !bridgePushedOnce ? { loading: true } : null);
+			const [data, setData] = react.useState(() => hostAbsent ? browserOnlyPayload() : { loading: true });
 			react.useEffect(() => {
+				if (hostAbsent) return;
 				let alive = true;
-				const apply = (next) => { if (alive && next) { bridgePushedOnce = true; setData(next); } };
-				const handler = (event) => apply(event.detail);
-				window.addEventListener("dsh-balance-changed", handler);
-				const bridge = window.dshDesktop;
-				let timer = null;
-				if (bridge && typeof bridge.refreshBalance === "function") {
-					// 只触发刷新，不消费返回值（处理器按单一投递契约不返回数据）。
-					if (!bridgePushedOnce) bridge.refreshBalance().catch(() => {});
-					// 超时降级：时限内无任何推送 → 桥的事件链未实装（或网络久未
-					// 回包），转浏览器模式兜底；之后真实事件到达时 apply 仍会接管
-					// （loading=false 不阻断后续 setData）。
-					timer = setTimeout(() => {
-						if (alive && !bridgePushedOnce) setData(null);
-					}, BRIDGE_PUSH_TIMEOUT_MS);
+				let settledOnce = false;
+				const sync = (force) => {
+					const first = !hostPolledOnce;
+					if (first) hostPolledOnce = true;
+					return fetchHostState(force || first).then((res) => {
+						if (!alive) return;
+						if (res.status === "ok") {
+							settledOnce = true;
+							setData(res.data);
+							return;
+						}
+						if (res.status === "absent") {
+							hostAbsent = true;
+							setData(browserOnlyPayload());
+							return;
+						}
+						// 查询失败：一次数据都没落过地才降级，避免把已有余额刷成空。
+						if (!settledOnce) setData(browserOnlyPayload());
+					});
+				};
+				sync(false);
+				const timer = typeof setInterval === "function" ? setInterval(() => sync(false), BALANCE_POLL_MS) : null;
+				if (timer && typeof timer.unref === "function") timer.unref();
+				const onVisibility = () => {
+					if (typeof document !== "undefined" && document.visibilityState === "visible") sync(false);
+				};
+				if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+					document.addEventListener("visibilitychange", onVisibility);
 				}
 				return () => {
 					alive = false;
-					if (timer) clearTimeout(timer);
-					window.removeEventListener("dsh-balance-changed", handler);
+					if (timer && typeof clearInterval === "function") clearInterval(timer);
+					if (typeof document !== "undefined" && typeof document.removeEventListener === "function") {
+						document.removeEventListener("visibilitychange", onVisibility);
+					}
 				};
 			}, []);
 			return data;
@@ -433,7 +515,7 @@ window.__ModuleLoader__.load({
 			// 计价模型说明：usage 带真实模型且价目表可用 → 按真实模型；否则明确
 			// 标注「按默认模型估算」（会话实际模型不可知时不假装精确）。
 			const table = data && typeof data.priceTable === "object" ? data.priceTable : null;
-			const defaultModel = (data && typeof data.model === "string" && data.model) || "deepseek-v4-pro";
+			const defaultModel = (data && typeof data.model === "string" && data.model) || DEFAULT_MODEL;
 			let priceNote;
 			if (usageModel && table && table[usageModel]) {
 				priceNote = "按会话模型 " + usageModel + " 单价估算";
@@ -581,9 +663,18 @@ window.__ModuleLoader__.load({
 
 		exports.apply = apply;
 		exports.inject = ["slots"];
-		// 纯函数暴露给单测（不触发 DOM / React 副作用），口径对齐
+		// 纯函数与宿主通道原语暴露给单测（不触发 DOM / React 副作用），口径对齐
 		// dsh-client-file-changes 的同名惯例。
 		exports.__internals = {
+			hostFetchJson,
+			fetchHostState,
+			browserOnlyPayload,
+			STATE_URL,
+			REFRESH_URL,
+			BALANCE_POLL_MS,
+			BRIDGE_PUSH_TIMEOUT_MS,
+			FALLBACK_PRICES,
+			DEFAULT_MODEL,
 			normalizeUsage,
 			hasUsage,
 			sessionCost,

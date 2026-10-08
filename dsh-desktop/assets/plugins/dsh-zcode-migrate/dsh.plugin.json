@@ -1,6 +1,6 @@
 {
   "id": "dsh-zcode-migrate",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "main": "./src/index.js",
   "description": "zcode → dsh 会话迁移：把 zcode CLI 的历史会话转换成 dsh 原生会话日志（session.jsonl.zstd），迁移后可在 dsh 里直接恢复",
   "engines": {

@@ -193,7 +193,7 @@ Such tools take over all traffic and often cut cloudflared's tunnel-edge connect
 
 ```sh
 npm install
-node client/build.mjs   # rebuild after editing client/
+node scripts/build-client.mjs   # rebuild after editing client/
 npm test                # proxy / auth / compression / tunnel / service / RPC / settings (109 tests)
 ```
 

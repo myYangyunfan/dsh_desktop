@@ -4,39 +4,37 @@
  *
  * The route takes the already-resolved topology root (`rootSessionId`),
  * enumerates the whole descendant tree ONCE through the host subagent
- * runtime (`ctx.get('subagents')` / `listDescendants`), keeps only rows the
- * catalog reports running (`activity: 'running'` — the same gate the client
- * renders cards on), and folds the newest text/tool activity from each
- * child's attached session event log. It never touches DSH source and never
- * reads the model's `job_output` cursor.
+ * runtime (`ctx.get('subagents')` / `listDescendants`), and folds EVERY child
+ * session's newest process range with {@link foldProcess} — the plugin's port
+ * of the main agent's merged process summary (category counts + the one
+ * running call + its detail). It never touches DSH source and never reads the
+ * model's `job_output` cursor.
+ *
+ * Folding a settled child is cheap by construction: the default fold stops at
+ * the first range boundary it can report, so a child that is idle between
+ * turns costs a handful of event reads (`snapshotEvents()` itself returns the
+ * session's cached frozen snapshot, not a per-call copy).
  *
  * Degradation contract:
  * - `ctx.get('subagents')` missing or `listDescendants` failure → 503 (the
  *   Subagent page has no topology to show in such deployments anyway).
- * - One child's events missing/corrupt → that child is skipped, the rest of
- *   the batch still returns.
+ * - One child's events missing/corrupt → that child is still REPORTED (its
+ *   `running` flag is the catalog's), just without a summary; the rest of the
+ *   batch is unaffected.
  */
-import type { Context } from './context-types.ts';
-import { type LastActivity } from './subagent-activity.ts';
+import type { Context, SidebarChildLiveView } from './context-types.ts';
 /** The live-preview routes of the /sidebar JSON API. */
 export interface SidebarSubagentLiveRoutes {
     /**
-     * Fold one tree's running subagent histories into a compact live map.
+     * Fold one tree's subagent activity into a compact live map.
      * @param payload - `{ rootSessionId }`.
-     * @returns `{ live: Record<childSessionId, LastActivity> }`; children with
-     *   no text/tool yet are omitted.
+     * @returns `{ live: Record<sessionId, SidebarChildLiveView> }` over the
+     *   whole descendant catalog plus the topology root.
      */
     live(payload: unknown): Promise<{
-        live: Record<string, LastActivity>;
+        live: Record<string, SidebarChildLiveView>;
     }>;
 }
-/**
- * The recent-message window of the live preview: only the last 12 surface
- * messages of a child's log are folded, matching the old per-card
- * `subagents.history({ maxMessages: 12 })` window. Keeps stale tool calls
- * out of the preview and bounds the backward scan per child.
- */
-export declare const LIVE_WINDOW_MESSAGES = 12;
 /**
  * Build the live-preview routes bound to the plugin context.
  * @param ctx - host plugin context.

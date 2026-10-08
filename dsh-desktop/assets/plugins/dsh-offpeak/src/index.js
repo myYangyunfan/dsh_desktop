@@ -10,9 +10,9 @@
  *    跨过高峰边界仍在执行的命令不会被打断——提醒只在下一条命令（高峰内）
  *    到达时出现。
  * 2. 定时执行：POST /ds-offpeak/schedule 登记 { 命令文本, atMs, 会话 }，
- *    持久化到 profile 目录 offpeak.json；服务端定时器到点后经 apiProxy
- *    的 sessions.prompt（与浏览器提交命令完全同一条路径）把命令文本重新
- *    提交给原会话，浏览器无需在线。
+ *    持久化到 profile 目录 offpeak.json；服务端定时器到点后经
+ *    ctx.sessionController.prompt（与浏览器提交命令同一条 admission 路径）把命令文本
+ *    重新提交给原会话，浏览器无需在线。
  * 3. 路由只接受同源 POST；除本地外不向任何地方上报数据。
  */
 import { randomUUID } from "node:crypto";
@@ -24,10 +24,13 @@ import { dirname, join } from "node:path";
 export const name = "offpeak";
 
 /** 注入服务声明（node 侧 cordis 标准形态：apply 内直接属性访问）。
- * 只声明内核真实存在的服务：apiProxy / logger 在当前内核不存在，
- * 多声明会导致 loader-isolation 永久 pending 隔离（13:54 实测），
- * 全部路由静默缺失。日志直接用 console（stderr → web-err 可见）。 */
-export const inject = ["webServer", "agentDefaultModel"];
+ * 只声明内核真实存在的服务 —— 属性访问未声明的服务会被注入守卫拦成
+ * 「cannot get property X without inject」→ 整插件被隔离、全部路由静默缺失；
+ * 反过来多声明一个不存在的服务会让 loader 永久 pending。
+ * `webServer` 提醒/预览/执行的路由面；`agentDefaultModel` 峰谷判定要读当前模型；
+ * `sessionController` 定时到点后向会话投递提示词（旧代码里等的 apiProxy 不存在）。
+ * 日志直接用 console（stderr → web-err 可见）。 */
+export const inject = ["webServer", "agentDefaultModel", "sessionController"];
 
 /** 调价后价目表（元 / 百万 tokens，2026-08-17 生效）。 */
 export const PRICES = {
@@ -285,44 +288,31 @@ export function apply(ctx, config = {}) {
     };
   };
 
-  /** 执行一条定时任务（与浏览器 session.prompt 同路径）。 */
-  let apiProxyRef = null; // 由 inject 回调捕获（插件自身 ctx 取不到该服务）
+  /** 执行一条定时任务：直接走内核真实存在的 sessionController 服务。
+   *
+   * 原先这里等一个名为 `apiProxy` 的服务（`api.sessions.prompt({rpcId, payload})`），
+   * 但 `apiProxy` 在当前内核**根本不存在**（@deepseek-ai/* 全文 0 处命中），
+   * 于是每次到点都落进 catch、任务标成 failed —— 功能整体静默不可用。
+   * 真实出口是 `ctx.sessionController.prompt(request, signal)`
+   * （@deepseek-ai/dsh-api-session-controller，服务名 sessionController、remote namespace `session`），
+   * request 直接就是 `{ sessionId, content, requestId }`，没有 rpcId/payload 那层信封，
+   * 返回值也不是 `{ok, value|error}` 包壳 —— 成功即 resolve、失败即 throw（RemoteError）。
+   */
   const executeTask = async (task) => {
     if (task.status === "executed" || task.status === "cancelled") return { ok: true, skipped: true };
     task.status = "running";
     try {
-      // 只用注入捕获的引用（apiProxyRef）：主 ctx 未声明 apiProxy，属性访问会被
-      // 注入守卫拦截（without inject）——不再回落主 ctx 越权访问。
-      const api = apiProxyRef;
-      if (api === undefined || api === null || api.sessions === undefined || typeof api.sessions.prompt !== "function") {
-        throw new Error(`apiProxy sessions.prompt unavailable (api=${api === undefined ? "undefined" : api === null ? "null" : "object"}, sessions=${api !== undefined && api !== null && api.sessions !== undefined ? "ok" : "missing"}, prompt=${api !== undefined && api !== null && api.sessions !== undefined && typeof api.sessions.prompt === "function" ? "ok" : "missing"})`);
+      const controller = ctx.sessionController;
+      if (controller === undefined || typeof controller.prompt !== "function") {
+        throw new Error("sessionController.prompt 不可用（profile 未组合 dsh-api-session-controller？）");
       }
-      const result = await api.sessions.prompt({
-        rpcId: `offpeak-${task.id}`,
-        payload: {
-          sessionId: task.sessionId,
-          mode: "queue",
-          content: [{ type: "text", text: task.text }],
-        },
-      });
-      // 服务端返回 `{ rpcId, result: { ok, value|error } }`（ok/err 辅助函数
-      // 把业务结果包在 result 字段下）；兼容两种层级。
-      const envelope = result !== null && typeof result === "object"
-        ? result
-        : null;
-      const outcome = envelope !== null && envelope.result !== null && typeof envelope.result === "object"
-        ? envelope.result
-        : envelope;
-      if (outcome !== null && outcome.ok === true) {
-        task.status = "executed";
-        task.error = undefined;
-      } else {
-        task.status = "failed";
-        const errBody = outcome !== null && outcome.error !== null && typeof outcome.error === "object" ? outcome.error : null;
-        task.error = errBody !== null
-          ? String(errBody.message ?? "unknown error")
-          : "unknown error";
-      }
+      await controller.prompt({
+        sessionId: task.sessionId,
+        requestId: `offpeak-${task.id}`,
+        content: [{ type: "text", text: task.text }],
+      }, new AbortController().signal);
+      task.status = "executed";
+      task.error = undefined;
     } catch (error) {
       task.status = "failed";
       task.error = error instanceof Error ? error.message : String(error);
@@ -363,11 +353,6 @@ export function apply(ctx, config = {}) {
   // ---- HTTP 路由 ----
   // 立即执行块：webCtx 即注入后的主 ctx（属性访问形态，见模块级 inject 导出）。
   ((webCtx) => {
-    // apiProxy：当前内核无此服务（属性访问即触发注入守卫，实测
-    // 「cannot get property apiProxy without inject」→ 整插件被隔离），
-    // apiProxyRef 保持 null 降级：executeTask 走既有兑底报错，
-    // 路由/提醒主功能不受影响；后续按新内核服务形态重接定时执行。
-    console.warn("[offpeak] apiProxy 服务在当前内核不存在——定时执行暂不可用（提醒/路由不受影响）");
     const sameOrigin = (req) => {
       const origin = req.headers.origin;
       const host = req.headers.host;

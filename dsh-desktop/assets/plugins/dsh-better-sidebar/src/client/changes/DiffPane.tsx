@@ -1,0 +1,472 @@
+/**
+ * The changes tab's shared bottom preview pane: one selected target — a git
+ * worktree change, a commit patch, or a session file op — rendered through
+ * the unified diff stack (the same one the diff tab uses). Git targets load
+ * through the shared {@link useGitDiffTarget} hook (refreshable, with the
+ * untracked full-addition fallback); op targets are pure snapshots (diff /
+ * read view / error text). The pane is resizable by drag (clamped; the
+ * height commits to the tab's persisted meta on release) and by keyboard;
+ * git targets can expand into a dedicated diff tab via the shell.
+ */
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { IconCloseOutlineRegular, IconRefreshOutlineRegular, IconRightUpOutlineRegular, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { SessionScope } from '../api.ts'
+import { htmlUrl } from '../api.ts'
+import { t } from '../locales.ts'
+import { baseName } from '../paths.ts'
+import { resolveSidebarPath } from '../paths.ts'
+import { HTML_IFRAME_SANDBOX } from '../html-preview.ts'
+import type { SidebarDiffRef, SidebarTab } from '../state.ts'
+import { DiffRows, ReadRows } from '../diff/DiffRows.tsx'
+import { PdfView } from '../PdfView.tsx'
+import { DiffFiles } from '../diff/DiffFiles.tsx'
+import { langOfPath } from '../diff/highlight.ts'
+import { buildDiffSegments, diffLines, diffStats, parseUnifiedDiff, unifiedSegments, type DiffRow } from '../diff/rows.ts'
+import { useGitDiffTarget } from '../diff/use-git-diff.ts'
+import { parseReadContent, parseReadLines, type FileOp } from './ops.ts'
+import { redactText } from '../redact.ts'
+import { rewriteLocalImageUrls } from '../markdown-images.ts'
+import { markdownTextProps } from '../markdown-labels.tsx'
+import { splitMermaidBlocks } from '../mermaid-blocks.ts'
+import { LazyMermaidMarkdown } from '../mermaid-lazy.tsx'
+import { createFrameBatcher } from '../frame-batcher.ts'
+import { Chip, IconButton, Notice, StatusBadge } from '../ui/index.ts'
+import css from './changes.module.css'
+import diffCss from '../diff/diff.module.css'
+
+/** Drag handle height clamp (px) and keyboard-resize step. */
+const HEIGHT_MIN = 140
+const HEIGHT_STEP = 24
+
+/**
+ * Clamp one pane height to the pane's own bounds: never below the content
+ * minimum, never above 70% of the window. Both the drag handler and the
+ * RESTORE path (a height persisted under a taller window) run through this,
+ * so a saved value can never open the pane taller than the viewport allows.
+ */
+export function clampPaneHeight(value: number): number {
+  return Math.min(Math.max(value, HEIGHT_MIN), Math.round(window.innerHeight * 0.7))
+}
+
+/** The redaction preference, persisted under the repo's sidebar storage
+ *  prefix (see state.ts's `dsh-sidebar:v1`). */
+const REDACTION_KEY = 'dsh-sidebar:v1:redaction'
+
+/** What the pane is showing right now. */
+export type ChangesPreview =
+  | { kind: 'git'; ref: SidebarDiffRef }
+  | { kind: 'op'; path: string; op: FileOp; prior?: string }
+
+/** Diff material for one op snapshot: an edit reconstructs the full file
+ *  from the window's known prior content when possible (hunk-style context);
+ *  a write with unknown prior content renders all-added. */
+function diffOf(op: FileOp, prior: string | undefined): readonly DiffRow[] {
+  if (op.kind === 'read') return []
+  if (op.kind === 'edit' && op.edit !== undefined) {
+    const { oldString, newString } = op.edit
+    if (prior !== undefined && prior.includes(oldString)) {
+      const newFile = prior.replace(oldString, newString)
+      return diffLines(prior, newFile)
+    }
+    return diffLines(oldString, newString)
+  }
+  if (op.kind === 'write') {
+    const content = op.content ?? ''
+    const old = prior !== undefined && prior !== content ? prior : undefined
+    return diffLines(old ?? '', content)
+  }
+  return []
+}
+
+/** The render view of one html op target: the route-src iframe. Extracted
+ *  (and exported) so the always-sandboxed contract is pinned directly by the
+ *  sandbox spec — this surface has NO no-sandbox escape hatch. */
+export function HtmlRenderPreview(props: { src: string; title: string }) {
+  return (
+    <div className={css.htmlPane}>
+      <iframe
+        className={css.htmlFrame}
+        title={props.title}
+        src={props.src}
+        sandbox={HTML_IFRAME_SANDBOX}
+        referrerPolicy="no-referrer"
+        allow=""
+      />
+    </div>
+  )
+}
+
+/** One header pill toggle — the redaction / reading / render toggles share the
+ *  shape: the global {@link Chip} (its active state is the "on" picture). */
+function PaneToggle(props: { on: boolean; label: string; title?: string; onClick: () => void }) {
+  return <Chip active={props.on} title={props.title} onClick={props.onClick}>{props.label}</Chip>
+}
+
+/** The reading-mode body of one markdown op target: the shared MarkdownText
+ *  pass (local image destinations already rewritten to the media route by
+ *  the caller). Mermaid fences render through the same chunk-resident
+ *  renderer the editor preview uses (one MarkdownText pass with the fences
+ *  lifted out); the plain path stays byte-for-byte for documents without
+ *  any. */
+function MdReadingView(props: { text: string }) {
+  const codeLabels = {
+    copyLabel: t('copy'),
+    copiedLabel: t('copied'),
+    codeLabel: t('codeBlockTitle'),
+    wrapLabel: t('codeBlockWrap'),
+    unwrapLabel: t('codeBlockUnwrap'),
+  }
+  const hasMermaid = splitMermaidBlocks(props.text).some((block) => block.kind === 'mermaid')
+  return (
+    <div className={css.paneBody}>
+      <div className={css.mdBody}>
+        {hasMermaid
+          ? <LazyMermaidMarkdown text={props.text} codeLabels={codeLabels} />
+          : <MarkdownText {...markdownTextProps(props.text, codeLabels)} />}
+      </div>
+    </div>
+  )
+}
+
+/** The diff tab a git preview expands into (the shell owns placement). */
+export function diffTabOf(ref: SidebarDiffRef): SidebarTab {
+  if (ref.kind === 'worktree') {
+    return {
+      id: `diff:w:${encodeURIComponent(ref.worktree ?? '')}:${ref.staged ? 's' : 'u'}:${ref.path}`,
+      type: 'diff',
+      title: baseName(ref.path),
+      diff: ref,
+    }
+  }
+  return {
+    id: `diff:c:${encodeURIComponent(ref.worktree ?? '')}:${ref.hashFull}`,
+    type: 'diff',
+    title: `${ref.hash} ${ref.subject}`,
+    diff: ref,
+  }
+}
+
+export interface DiffPaneProps {
+  target: ChangesPreview
+  scope: SessionScope
+  /** The persisted pane height (px); drag commits a new one upwards. */
+  height: number
+  onHeightCommit: (height: number) => void
+  onClose: () => void
+  /** Expand the current git target into a dedicated diff tab. */
+  onExpand: () => void
+}
+
+export function DiffPane({ target, scope, height, onHeightCommit, onClose, onExpand }: DiffPaneProps) {
+  // ── Git target loading (the shared loader: staged-side fallback, the
+  //    untracked full-addition fallback, refresh by tick, fold cache). ─────
+  const gitRef = target.kind === 'git' ? target.ref : null
+  const { loading, error, diffText, untracked, refresh, resolveFold } = useGitDiffTarget(gitRef, scope)
+
+  // ── Op target material (pure snapshots; the prior content came with the
+  //    target so a running op shows what is already known). ────────────────
+  const opRaw = target.kind === 'op' ? target.op : null
+  const priorRaw = target.kind === 'op' ? target.prior : undefined
+  // Secret redaction: on by default, toggle persists per browser (localStorage).
+  // Every op payload consumer below (diff rows, read rows, markdown source,
+  // error text) renders from the REDACTED shape, so masked payloads are the
+  // only thing that can reach the DOM while the toggle is on. Display-only:
+  // session events and the fs layer keep their original bytes.
+  const [redactionOn, setRedactionOn] = useState((): boolean => {
+    try { return localStorage.getItem(REDACTION_KEY) !== '0' } catch { return true }
+  })
+  const toggleRedaction = (): void => {
+    setRedactionOn((prev) => {
+      const next = !prev
+      try { localStorage.setItem(REDACTION_KEY, next ? '1' : '0') } catch { /* storage unavailable */ }
+      return next
+    })
+  }
+  const { op, prior, redactionHit } = useMemo(() => {
+    if (opRaw === null || !redactionOn) return { op: opRaw, prior: priorRaw, redactionHit: false }
+    const path = target.kind === 'op' ? target.path : ''
+    // One redactText pass per field: the outcome carries both the masked
+    // text and whether anything was hit.
+    const mask = (text: string | undefined): { masked: string | undefined; hit: boolean } => {
+      if (text === undefined) return { masked: undefined, hit: false }
+      const outcome = redactText(path, text)
+      return { masked: outcome.text, hit: outcome.hit }
+    }
+    const read = mask(opRaw.read)
+    const content = mask(opRaw.content)
+    const editOld = mask(opRaw.edit?.oldString)
+    const editNew = mask(opRaw.edit?.newString)
+    const errorText = mask(opRaw.errorText)
+    const priorMasked = mask(priorRaw)
+    const hit = read.hit || content.hit || editOld.hit || editNew.hit || errorText.hit || priorMasked.hit
+    if (!hit) return { op: opRaw, prior: priorRaw, redactionHit: false }
+    const redacted: FileOp = {
+      ...opRaw,
+      ...(read.masked !== undefined ? { read: read.masked } : {}),
+      ...(content.masked !== undefined ? { content: content.masked } : {}),
+      ...(opRaw.edit !== undefined
+        ? { edit: { oldString: editOld.masked ?? opRaw.edit.oldString, newString: editNew.masked ?? opRaw.edit.newString } }
+        : {}),
+      ...(errorText.masked !== undefined ? { errorText: errorText.masked } : {}),
+    }
+    return { op: redacted, prior: priorMasked.masked, redactionHit: true }
+  }, [opRaw, priorRaw, target, redactionOn])
+  const opLang = useMemo(() => (target.kind === 'op' ? langOfPath(target.path) : undefined), [target])
+  const opRows = useMemo(() => (op === null ? [] : diffOf(op, prior)), [op, prior])
+  const opSegments = useMemo(() => buildDiffSegments(opRows), [opRows])
+  const opStats = useMemo(() => diffStats(opSegments), [opSegments])
+  const opReadLines = useMemo(
+    () => (op?.kind === 'read' && op.read !== undefined ? parseReadLines(op.read) : []),
+    [op],
+  )
+
+  // ── Markdown reading mode: .md op targets (read/write/edit, non-error)
+  //    toggle between the raw/diff view and the rendered document — the same
+  //    shared MarkdownText pass the editor preview uses, with local image
+  //    destinations rewritten through the /sidebar/file media route. ──────
+  const mdOp = target.kind === 'op' && !target.op.isError && /\.(md|markdown|mdx)$/i.test(target.path)
+  const [reading, setReading] = useState(false)
+  const readingSrc = useMemo(() => {
+    if (!mdOp || op === null) return ''
+    if (op.kind === 'read') return parseReadContent(op.read ?? '')
+    if (op.kind === 'write') return op.content ?? ''
+    if (op.kind === 'edit' && op.edit !== undefined) {
+      if (prior !== undefined && prior.includes(op.edit.oldString)) {
+        return prior.replace(op.edit.oldString, op.edit.newString)
+      }
+      return op.edit.newString
+    }
+    return ''
+  }, [mdOp, op, prior])
+  const readingText = useMemo(
+    () => (mdOp && reading && readingSrc !== '' && target.kind === 'op'
+      ? rewriteLocalImageUrls(readingSrc, scope, target.path, window.location.origin)
+      : ''),
+    [mdOp, reading, readingSrc, scope, target],
+  )
+
+  // ── HTML render mode: .html/.htm op targets (the editor html viewer's
+  //    ext set) load the SAVED file through the same /sidebar/html route the
+  //    editor's html viewer uses — relative assets (./style.css, img/x.png)
+  //    resolve inside the route, and a segmented read still renders the
+  //    whole document (the route serves the file, not the op snapshot). The
+  //    frame is always sandboxed (the attribute plus the route's CSP sandbox
+  //    header); the editor tab owns the warned no-sandbox escape hatch. ──
+  const htmlOp = target.kind === 'op' && !target.op.isError && /\.(html?)$/i.test(target.path)
+  const [rendering, setRendering] = useState(false)
+  const htmlRenderSrc = useMemo(() => {
+    if (!htmlOp || target.kind !== 'op') return ''
+    return htmlUrl(scope, resolveSidebarPath(scope.cwd, target.path))
+  }, [htmlOp, scope, target])
+
+  // ── PDF render mode: .pdf op targets (read / write / edit, non-error) reuse
+  //    the editor's PdfView verbatim — media-route bytes wrapped into an
+  //    explicitly-typed Blob so the browser's native PDF viewer opens (a
+  //    direct iframe src can fall back to a download). ──────────────────────
+  const pdfOp = target.kind === 'op' && !target.op.isError && /\.pdf$/i.test(target.path)
+  const [renderingPdf, setRenderingPdf] = useState(false)
+  const pdfRenderPath = useMemo(() => {
+    if (!pdfOp || target.kind !== 'op') return ''
+    return resolveSidebarPath(scope.cwd, target.path)
+  }, [pdfOp, scope, target])
+
+  // Header stats for git targets come off the parsed patch text.
+  const gitStats = useMemo(() => {
+    if (target.kind !== 'git' || diffText === null || diffText === '') return null
+    let added = 0
+    let deleted = 0
+    for (const file of parseUnifiedDiff(diffText).files) {
+      const stats = diffStats(unifiedSegments(file))
+      added += stats.added
+      deleted += stats.deleted
+    }
+    return { added, deleted }
+  }, [target, diffText])
+
+  // ── Resize: drag the top handle; commit on release (persisted by the
+  //    shell). Arrow keys resize by a step for keyboard users. ────────────
+  const [dragHeight, setDragHeight] = useState<number | null>(null)
+  const paneHeight = dragHeight ?? height
+  const clamp = clampPaneHeight
+  const dragOrigin = useRef<{ y: number; h: number } | null>(null)
+  // Pointer streams fire several times per frame; one setState per event
+  // re-rendered the whole pane at event cadence (see frame-batcher).
+  const dragBatcher = useRef(createFrameBatcher()).current
+  useEffect(() => () => dragBatcher.dispose(), [dragBatcher])
+  const onHandleDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    event.preventDefault()
+    dragOrigin.current = { y: event.clientY, h: paneHeight }
+    const onMove = (ev: PointerEvent): void => {
+      if (dragOrigin.current === null) return
+      const next = clamp(dragOrigin.current.h + (dragOrigin.current.y - ev.clientY))
+      dragBatcher.schedule(() => { setDragHeight(next) })
+    }
+    const onUp = (): void => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      dragOrigin.current = null
+      dragBatcher.flushNow()
+      setDragHeight(current => {
+        if (current !== null) onHeightCommit(current)
+        return null
+      })
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
+  const title = target.kind === 'op'
+    ? target.path
+    : target.ref.kind === 'worktree' ? target.ref.path : `${target.ref.hash} ${target.ref.subject}`
+  const stats = gitStats ?? (target.kind === 'op' && op !== null && op.kind !== 'read' && !op.isError ? opStats : null)
+
+  return (
+    <div className={css.diffPane} style={{ height: paneHeight }}>
+      <div
+        className={css.dragHandle}
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label={t('changesResizePreview')}
+        tabIndex={0}
+        onPointerDown={onHandleDown}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowUp') { event.preventDefault(); onHeightCommit(clamp(paneHeight + HEIGHT_STEP)) }
+          if (event.key === 'ArrowDown') { event.preventDefault(); onHeightCommit(clamp(paneHeight - HEIGHT_STEP)) }
+        }}
+      />
+      <div className={css.diffHead}>
+        {target.kind === 'op' && (
+          <StatusBadge tone={target.op.kind}>
+            {t(target.op.kind === 'read' ? 'changesRead' : target.op.kind === 'write' ? 'changesWrite' : 'changesEdit')}
+          </StatusBadge>
+        )}
+        {target.kind === 'git' && target.ref.kind === 'worktree' && (
+          <StatusBadge tone="neutral">{target.ref.staged ? t('staged') : t('unstaged')}</StatusBadge>
+        )}
+        {target.kind === 'git' && target.ref.kind === 'commit' && (
+          <StatusBadge tone="neutral">{target.ref.hash}</StatusBadge>
+        )}
+        <span className={css.diffPath} title={title}>{title}</span>
+        {stats !== null && (stats.added > 0 || stats.deleted > 0) && (
+          <span className={css.diffStats}>
+            {stats.added > 0 && <span className={diffCss.statAdd}>+{String(stats.added)}</span>}
+            {stats.deleted > 0 && <span className={diffCss.statDel}>−{String(stats.deleted)}</span>}
+          </span>
+        )}
+        {target.kind === 'git' && (
+          <>
+            <IconButton
+              size="sm"
+              icon={<IconRefreshOutlineRegular size={14} />}
+              label={t('refresh')}
+              disabled={loading}
+              onClick={refresh}
+            />
+            <IconButton
+              size="sm"
+              icon={<IconRightUpOutlineRegular size={14} />}
+              label={t('changesOpenDiffTab')}
+              onClick={onExpand}
+            />
+          </>
+        )}
+        {redactionHit && (
+          <span className={css.redactBanner} role="status">{t('changesRedactBanner')}</span>
+        )}
+        {target.kind === 'op' && (
+          <PaneToggle
+            on={redactionOn}
+            label={redactionOn ? t('changesRedactOnLabel') : t('changesRedactOffLabel')}
+            title={redactionOn ? t('changesRedactOff') : t('changesRedactOn')}
+            onClick={toggleRedaction}
+          />
+        )}
+        {mdOp && (
+          <PaneToggle
+            on={reading}
+            label={t(reading ? 'changesMdRaw' : 'changesMdReading')}
+            onClick={() => { setReading(value => !value) }}
+          />
+        )}
+        {htmlOp && (
+          <PaneToggle
+            on={rendering}
+            label={t(rendering ? 'changesHtmlRaw' : 'changesHtmlRender')}
+            onClick={() => { setRendering(value => !value) }}
+          />
+        )}
+        {pdfOp && (
+          <PaneToggle
+            on={renderingPdf}
+            label={t(renderingPdf ? 'changesPdfRaw' : 'changesPdfRender')}
+            onClick={() => { setRenderingPdf(value => !value) }}
+          />
+        )}
+        <IconButton
+          size="sm"
+          icon={<IconCloseOutlineRegular size={14} />}
+          label={t('changesClosePreview')}
+          onClick={onClose}
+        />
+      </div>
+      {target.kind === 'op' && htmlOp && rendering && htmlRenderSrc !== ''
+        ? <HtmlRenderPreview src={htmlRenderSrc} title={target.path} />
+        : target.kind === 'op' && pdfOp && renderingPdf && pdfRenderPath !== ''
+        ? (
+          <div className={css.htmlPane}>
+            <PdfView scope={scope} path={pdfRenderPath} title={target.path} />
+          </div>
+        )
+        : target.kind === 'op' && mdOp && reading && readingText !== ''
+        ? <MdReadingView text={readingText} />
+        : target.kind === 'op' && op !== null && op.isError
+        ? (
+          <div className={css.paneBody}>
+            <Notice kind="error" className={css.readError}>
+              {op.errorText ?? t('changesError')}
+            </Notice>
+          </div>
+        )
+        : target.kind === 'op' && op !== null && op.kind === 'read'
+          ? (
+            <div className={css.paneBody}>
+              <ReadRows lines={opReadLines} lang={opLang} />
+            </div>
+          )
+          : target.kind === 'op'
+            ? (
+              <div className={css.paneBody}>
+                {op !== null && op.kind === 'write'
+                  && prior === undefined
+                  && <Notice kind="hint" tone="inline">{t('changesPriorUnknown')}</Notice>}
+                <DiffRows key={target.op.callId} segments={opSegments} lang={opLang} />
+              </div>
+            )
+            : loading
+              ? <div className={css.paneBody}><Notice kind="loading" tone="page">{t('loading')}</Notice></div>
+              : error !== null
+                ? (
+                  <div className={css.paneBody}>
+                    <Notice kind="error">{t('diffLoadError')}: {error}</Notice>
+                  </div>
+                )
+                : (
+                  <div className={css.paneBody}>
+                    {/* The untracked fallback has NO diff text (git diff never
+                        lists the file): its content is the whole render. */}
+                    {((diffText !== null && diffText !== '') || untracked !== undefined) && (
+                      <DiffFiles
+                        diff={diffText ?? ''}
+                        resolveFold={resolveFold}
+                        untrackedPath={untracked !== undefined && target.ref.kind === 'worktree' ? target.ref.path : undefined}
+                        untrackedContent={untracked}
+                      />
+                    )}
+                    {diffText === '' && untracked === undefined && (
+                      <Notice kind="empty" tone="page">{t('diffEmpty')}</Notice>
+                    )}
+                  </div>
+                )}
+    </div>
+  )
+}

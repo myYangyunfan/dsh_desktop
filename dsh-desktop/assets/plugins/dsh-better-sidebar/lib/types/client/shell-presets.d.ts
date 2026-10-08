@@ -1,23 +1,13 @@
-/**
- * Built-in desktop-shell presets for the "位置兼容模式" secondary setting
- * (scheme `preset`). DATA-DRIVEN by design: each shell's adaptation lives
- * in one entry (strip values / optional CSS), the core applies it through
- * the SAME generic strip variable and CSS-injection mechanism — adding a
- * shell is adding data, never a code path.
- *
- * Inclusion rule (maintained in AGENTS.md §8): only shells that (a) appear
- * in this repo's issues/PRs (a user actually hit a problem) and (b) have
- * 100+ GitHub stars (a real user base). The mechanism is opt-in: auto
- * detection never applies a preset — the settings badge only SUGGESTS it.
- */
 import type { DesktopEnv } from './desktop-env.ts';
 export interface ShellPreset {
     /** Stable preset id (persisted in `titleBarPresetId`). */
     readonly id: string;
     /** User-facing name of the shell. */
     readonly title: string;
-    /** One-line description shown in the settings popup. */
-    readonly desc: string;
+    /** One-line description shown in the settings popup (i18n friendly:
+     *  string or () => string — the plain string form is the raw-text
+     *  fallback when no dictionary key covers the preset). */
+    readonly desc: string | (() => string);
     /**
      * The top strip (px) this shell reserves over web content, per
      * environment — the fallback used when neither the standard WCO API nor

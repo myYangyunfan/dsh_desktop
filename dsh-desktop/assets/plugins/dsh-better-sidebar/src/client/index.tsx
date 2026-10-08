@@ -2,38 +2,51 @@
  * Client half of dsh-better-sidebar: resolves the user's "Side card"
  * preferences through the plugin's own fenced settings route, mounts the
  * right sidebar portal (inside an error boundary so a rendering failure
- * shows an error strip instead of a blank panel), registers the turn-tail
- * interception, and contributes the Side card settings section to the DSH
- * Settings shell. Requires the runtime's slots and sessions services; the
- * bundle itself is a module-table consumer only (react + ui-primitives +
- * xterm, all provided or inlined).
+ * shows an error strip instead of a blank panel), and contributes the Side
+ * card settings section to the DSH Settings shell. Requires the runtime's
+ * slots and sessions services; the bundle itself is a module-table consumer
+ * only (react + ui-primitives, all provided or inlined — the editor and
+ * mermaid libraries arrive as lazy chunks).
  */
 import { createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { Context } from '../context-types.ts'
-import { allLeaves, createSidebarStore, isAgentTabId } from './state.ts'
+import { createSidebarStore } from './state.ts'
 import { createBetterSidebarService, matchUrlTarget } from './service.ts'
 import { revalidateChunksOnReactivate, setChunkModuleSystem } from './chunk-loader.ts'
 import { registerBuiltins } from './builtins/index.ts'
 import { Sidebar } from './Sidebar.tsx'
-import { integrateKernelRightbar, readKernelRightbarSeam } from './kernel-rightbar.tsx'
 import { RenderBoundary } from './RenderBoundary.tsx'
-import { registerOpenPathInterception, registerRemoteOpenPathInterception, registerTurnTailInterception } from './intercept.tsx'
-import { registerLinkInterception } from './link-intercept.ts'
+import { createNativeTabRecords } from './native/tab-adapter.tsx'
+import { registerNativeSurface } from './native/index.ts'
+import { registerBottomToggle } from './sidebar/bottom-toggle.tsx'
+import { createNativeSurface } from './native/surface.ts'
+import { isTargetAvailable, openInterceptedLink, registerLinkInterception, shouldTakeOverLink } from './link-intercept.ts'
 import { registerImeGuard } from './ime-guard.ts'
 import { registerSettingsNavIcon } from './settings-nav-icon.ts'
-import { loadExternalDisable, loadPrefs } from './prefs.ts'
+import { loadBootDecision } from './prefs.ts'
 import { SideCardSection } from './SideCardSection.tsx'
 import { api } from './api.ts'
-import { LOCALE_NS, attachLocale, t, zh, en } from './locales.ts'
+import { LOCALE_NS, attachLocale, attachBetterLocale, t, zh, en } from './locales.ts'
+import { loadChunk } from './chunk-loader.ts'
 import css from './sidebar.module.css'
 import './layout.css'
 
 /** Services required before mounting (provided by the client runtime; the
  *  locale service backs the sidebar's copy — see locales.ts). `modules`
  *  (rc.8+) is the client module system the chunk loader resolves its
- *  externals through — Cordis guards service access without inject. */
-export const inject = ['slots', 'sessions', 'connection', 'workspaces', 'locale', 'modules']
+ *  externals through; `connection` (0.1.2-alpha.2+) is the Remote transport's
+ *  recovery lifecycle the side chat's disconnect banner reads — Cordis guards
+ *  service access without inject.
+ *
+ *  `remote` / `remote.session` (0.1.7) are the Host Remote namespace the
+ *  "open in app" adapter calls (`canOpenWorkspacePath` /
+ *  `workspacePathApplications` / `openWorkspacePath`). BOTH entries are
+ *  required: Cordis validates the nested property access
+ *  (`ctx.get('remote').session`) against the inject list, and a missing
+ *  entry throws `cannot get property "remote.session" without inject` —
+ *  which, thrown from a render path, blanks the whole sidebar panel. */
+export const inject = ['slots', 'sessions', 'locale', 'modules', 'connection', 'remote', 'remote.session']
 
 /**
  * Error boundary over the sidebar tree (root scope): a render error in the
@@ -58,6 +71,93 @@ export function apply(ctx: Context): void {
     const offEn = ctx.locale.register(LOCALE_NS, 'en', en)
     return () => { offZh(); offEn() }
   }, 'dsh-better-sidebar: dictionaries')
+
+  // Opt-in third-language support through @huanlin/dsh-plugin-better-locale.
+  // When that plugin is installed, it publishes `ctx.betterLocale` (the
+  // override store) and patches LocaleRuntime.prototype.lookup to consult
+  // it. We mirror the same override awareness into the sidebar's own `t()`:
+  // attachBetterLocale() makes t() consult the store's getOverride first,
+  // so the sidebar's chrome (which bypasses ctx.locale and calls t()
+  // directly) also switches to the override language. We also register
+  // the ja dict with the better-locale store so external callers of
+  // ctx.locale.lookup('betterSidebar', key) get the override text too.
+  //
+  // Activation-order-safe: ctx.get('betterLocale') is a non-reactive read
+  // (cordis only re-evaluates declared `inject` deps). If better-locale
+  // activates after better-sidebar, the initial read returns undefined.
+  // We subscribe to the locale revision — better-locale bumps it on
+  // activation (when a persisted override exists) and on every override
+  // switch — and re-check ctx.get on each bump, attaching + registering
+  // the ja dict once the store becomes available.
+  ctx.effect(() => {
+    let dispose: (() => void) | undefined
+    // Guards the async chunk registration below: a sync() re-run (or fiber
+    // disposal) that lands while the chunk is still in flight must render
+    // that registration moot.
+    let generation = 0
+    const sync = (): void => {
+      generation += 1
+      dispose?.()
+      dispose = undefined
+      const store = ctx.get('betterLocale') as
+        | {
+            readonly active: string | undefined
+            getOverride(dshActive: string, ns: string, key: string): string | undefined
+            isOverrideActive(dshActive: string): boolean
+            register(ns: string, dicts: Record<string, Record<string, string>>): () => void
+            subscribe(listener: () => void): () => void
+          }
+        | undefined
+      attachBetterLocale(store)
+      if (store !== undefined) {
+        // The 19 override dictionaries ride the lazy `locale` chunk: until
+        // it lands, the store has no betterSidebar entries and t() keeps
+        // the zh/en chain; the store's own revision bump on register
+        // re-renders the chrome once the dicts arrive.
+        const myGeneration = generation
+        void loadChunk('locale')
+          .then(mod => {
+            if (myGeneration !== generation) return
+            dispose = store.register(LOCALE_NS, mod.localeDicts as Record<string, Record<string, string>>)
+          })
+          .catch(() => { /* the dicts stay unregistered; the zh/en chain runs */ })
+      }
+    }
+    // Initial check (picks up the store if better-locale activated first).
+    sync()
+    // Re-check on every locale revision bump (better-locale bumps when it
+    // activates with a persisted override, and when the user switches).
+    const unsubscribe = ctx.locale.subscribe(sync)
+    return () => {
+      generation += 1
+      unsubscribe()
+      dispose?.()
+      attachBetterLocale(undefined)
+    }
+  }, 'dsh-better-sidebar: better-locale lazy integration')
+  // A failure anywhere in the client lifecycle must never take the app down
+  // silently: log with the plugin prefix and pin a visible diagnostic strip
+  // to the page so a blank panel is never the only symptom. This strip is
+  // the last-resort reporter (no CSS module is reachable from here), so its
+  // colors go through skin token chains with the previous hexes as the
+  // chain tails — worst case (no skin tokens on the page) it renders
+  // byte-identical to the old hardcoded bar, and any `--dsw-alias-*` skin
+  // re-themes it (guide §12: no hardcoded colors).
+  const fail = (phase: string, error: unknown): void => {
+    console.error(`[dsh-better-sidebar] ${phase} error:`, error)
+    try {
+      const bar = document.createElement('div')
+      bar.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:2147483000;max-width:70vw;padding:8px 12px;'
+        + 'font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;'
+        + 'color:var(--dsw-alias-state-error-primary,#f2a1a1);'
+        + 'background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-base,#1b1b22));'
+        + 'border:1px solid var(--dsw-alias-state-error-primary,#f2a1a1);border-radius:8px;white-space:pre-wrap'
+      bar.textContent = `[dsh-better-sidebar] ${phase} error: ${error instanceof Error ? error.message : String(error)}`
+      document.body.appendChild(bar)
+    } catch {
+      // Nothing left to report with.
+    }
+  }
   // One store instance per activation: production code creates it only here,
   // then hands it to the mounted panel and closes over it in the slot
   // registrations (the official createXXXStore() factory rule — no
@@ -69,68 +169,41 @@ export function apply(ctx: Context): void {
   // are ready by the time the sidebar renders.
   const service = createBetterSidebarService(sidebarStore)
   ctx.provide('betterSidebar', service)
-  // Terminal tab titles use the host's effective shell name (e.g. bash/zsh)
-  // instead of "Terminal 1". Start with a safe fallback and replace it as
-  // soon as the host shell info resolves. Tabs created before the response
-  // arrives keep the fallback title, so also retitle any already-open UI
-  // terminal tabs that still carry it.
-  const fallbackTitle = t('terminal')
-  let terminalTitle = fallbackTitle
-  void api.shellGet().then(({ name }) => {
-    terminalTitle = name
-    const snapshot = service.getSnapshot()
-    if (snapshot.state === undefined) return
-    const tabs = allLeaves(snapshot.state.splits)
-      .concat(allLeaves(snapshot.state.bottomSplits))
-      .flatMap(leaf => leaf.tabs)
-    for (const tab of tabs) {
-      if (tab.type === 'terminal' && !isAgentTabId(tab.id) && tab.title === fallbackTitle) {
-        service.updateTab(tab.id, { title: name })
-      }
-    }
-  }).catch(() => { /* keep fallback */ })
+  // The native right-Sidebar surface: the plugin's content is registered as
+  // DSH tab types (one per descriptor) and every open routes there, so the
+  // right column belongs to the host and only the bottom workbench stays
+  // plugin-owned. Both halves live for this fiber's lifetime.
+  const nativeRecords = createNativeTabRecords()
+  const nativeSurface = createNativeSurface(ctx, nativeRecords)
+  service.setSurface(nativeSurface)
+  ctx.effect(
+    () => registerNativeSurface({
+      ctx, store: sidebarStore, service, records: nativeRecords,
+      reportFailure: (phase, error) => { fail(`native ${phase}`, error) },
+    }),
+    'dsh-better-sidebar: native right-Sidebar registrations',
+  )
+  // The bottom workbench's expand/collapse button in DSH's session header
+  // (the header's corner seat belongs to the native sidebar's own control).
+  ctx.effect(
+    () => registerBottomToggle(ctx, sidebarStore),
+    'dsh-better-sidebar: bottom-workbench toggle',
+  )
+  ctx.effect(
+    () => () => { nativeSurface.dispose(); service.setSurface(undefined) },
+    'dsh-better-sidebar: native right-Sidebar surface',
+  )
   // Register the plugin's own built-in tabs and viewers through the same
   // service (eating our own dogfood). The disposer unregisters them on
   // fiber disposal (HMR-safe).
   ctx.effect(
-    () => registerBuiltins(ctx, service, { terminalTitle: () => terminalTitle }),
+    () => registerBuiltins(ctx, service),
     'dsh-better-sidebar: register built-in tabs and viewers',
   )
-  // 内核自带右栏接入（可选，见 kernel-rightbar.tsx）：内核提供 sidebarRightTabs /
-  // sidebarRight 时，把整块工作台注册成右栏里的一个标签，右侧面板随后被 portal 进
-  // 内核给的 pane；内核缺这两个服务时这段回调根本不触发，插件保持整合前的自绘浮层。
-  // 故意**不**把该包写进 package.json 的 dsh.client.inject：inject 是硬前置，写进去
-  // 会让插件在缺少该服务的内核上整体不加载，而我们要的是「有没有都活」。
-  ctx.inject(['sidebarRightTabs', 'sidebarRight'], (kernelCtx) => {
-    if (sidebarStore.getPrefs().kernelRightbar === 'legacy') return
-    const seam = readKernelRightbarSeam(kernelCtx as unknown as Context)
-    if (seam === null) return
-    ctx.effect(
-      () => integrateKernelRightbar(ctx, sidebarStore, seam),
-      'dsh-better-sidebar: kernel right bar',
-    )
-  })
-  // A failure anywhere in the client lifecycle must never take the app down
-  // silently: log with the plugin prefix and pin a visible diagnostic strip
-  // to the page so a blank panel is never the only symptom.
-  const fail = (phase: string, error: unknown): void => {
-    console.error(`[dsh-better-sidebar] ${phase} error:`, error)
-    try {
-      const bar = document.createElement('div')
-      bar.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:2147483000;max-width:70vw;padding:8px 12px;'
-        + 'font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#f2a1a1;background:#1b1b22;'
-        + 'border:1px solid #f2a1a1;border-radius:8px;white-space:pre-wrap'
-      bar.textContent = `[dsh-better-sidebar] ${phase} error: ${error instanceof Error ? error.message : String(error)}`
-      document.body.appendChild(bar)
-    } catch {
-      // Nothing left to report with.
-    }
-  }
   try {
-    // rc.8+ exposes the client module system as the `ctx.modules` service
-    // (no window.__DSH_MODULES__ page global anymore); the chunk loader needs
-    // it to resolve its externals, so inject it before anything can load a
-    // lazy chunk. The loader falls back to the rc.7 global when absent.
+    // rc.8+ exposes the client module system as the `ctx.modules` service;
+    // the chunk loader needs it to resolve its externals, so inject it
+    // before anything can load a lazy chunk.
     setChunkModuleSystem(ctx.modules)
     // Fresh chunk state for this activation: drop per-test fixtures and
     // revalidate loaded chunk scripts against the bundle route's ETags —
@@ -234,24 +307,26 @@ export function apply(ctx: Context): void {
       }
       const sync = async (): Promise<void> => {
         if (disposed) return
-        // Resolve the user's side card prefs BEFORE the first session seeds,
-        // so a brand-new conversation opens (or stays closed) at the chosen
-        // width from first paint. A settings route failure falls back to the
-        // schema defaults; the sidebar still mounts (a stalled wire gives up
-        // after the timeout and mounts on the defaults).
-        const prefs = await Promise.race([
-          loadPrefs(api),
-          new Promise<null>(resolve => { const timer = window.setTimeout(() => resolve(null), 2000) }),
+        // Resolve the user's side card prefs and the external-disable flag
+        // from ONE settings fetch BEFORE the first session seeds, so a
+        // brand-new conversation opens (or stays closed) at the chosen width
+        // from first paint. A settings route failure falls back to the schema
+        // defaults; the sidebar still mounts (a stalled wire gives up after
+        // the timeout and mounts on the defaults — the external-disable check
+        // rides the same fetch, so one round trip covers both decisions).
+        const decision = await Promise.race([
+          loadBootDecision(api),
+          new Promise<null>(resolve => { window.setTimeout(() => resolve(null), 2000) }),
         ])
-        if (prefs !== null) sidebarStore.setPrefs(prefs)
         if (disposed) return
-        // Mutual exclusion with the dsh-web-ui family right panel: while the
-        // aionui-panel provider is selected, the sidebar must not mount at
-        // all. Re-evaluated on every settings-document update (live switch).
-        const suspended = await loadExternalDisable(api)
-        if (disposed) return
-        sidebarStore.setSuspended(suspended)
-        if (suspended) unmount()
+        if (decision !== null) {
+          sidebarStore.setPrefs(decision.prefs)
+          // Mutual exclusion with the dsh-web-ui family right panel: while the
+          // aionui-panel provider is selected, the sidebar must not mount at
+          // all. Re-evaluated on every settings-document update (live switch).
+          sidebarStore.setSuspended(decision.suspended)
+        }
+        if (decision?.suspended) unmount()
         else mount()
       }
       void sync()
@@ -271,78 +346,48 @@ export function apply(ctx: Context): void {
     ctx.effect(
       () => {
         try {
-          return registerTurnTailInterception(ctx, sidebarStore)
-        } catch (error) {
-          fail('interception', error)
-          return undefined
-        }
-      },
-      'dsh-better-sidebar: turn-tail interception',
-    )
-
-    ctx.effect(
-      () => {
-        try {
-          return registerOpenPathInterception(ctx, sidebarStore)
-        } catch (error) {
-          fail('interception', error)
-          return undefined
-        }
-      },
-      'dsh-better-sidebar: open-path interception',
-    )
-
-    ctx.effect(
-      () => {
-        try {
-          return registerRemoteOpenPathInterception(ctx, sidebarStore)
-        } catch (error) {
-          fail('interception', error)
-          return undefined
-        }
-      },
-      'dsh-better-sidebar: remote open-path interception',
-    )
-
-    ctx.effect(
-      () => {
-        try {
-          // External http(s) links in the chat/GUI open the sidebar instead
-          // of a new window. Gated on the browserInterceptLinks MASTER pref,
-          // the URL's protocol flag (browserInterceptHttp / Https — https
-          // defaults OFF: most https sites refuse iframe embedding), and the
-          // target tab's enable switch; Ctrl/Cmd+click always bypasses. The
-          // target is the first registered tab whose `urlTarget` claims the
-          // URL (enabled tabs only), else the built-in browser tab.
+          // External links are taken over ONLY when a registered tab type
+          // claims the URL through `urlTarget` (and this sidebar is not
+          // suspended); Ctrl/Cmd+click and non-http(s) / same-origin links
+          // always bypass. Everything else is left to the host: since DSH
+          // 0.1.7 the destination of a chat link is decided by the user's
+          // `linkOpening` setting plus the host's own browser tab — a kind
+          // the Web profile leaves disabled — so `preventDefault`ing an
+          // unclaimed link would swallow it (the host's `MarkdownAnchor`
+          // does not re-check `defaultPrevented`, and plugin-drawn markdown
+          // — sidechat transcripts, editor previews, HTML previews, diff
+          // panes — would lose the click entirely). Host-rendered chat prose
+          // therefore goes back to the host's `openExternalLink`, and
+          // plugin-drawn markdown to the anchor's own `window.open`.
           const urlTargetOf = (url: URL): string | undefined => {
             const prefs = sidebarStore.getPrefs()
             const enabled = service.getTabs().filter(tab => prefs.tabsEnabled[tab.id] !== false)
             return matchUrlTarget(enabled, url)?.id
           }
           return registerLinkInterception({
-            takeoverEnabled: (url) => {
-              if (sidebarStore.getSuspended()) return false
-              const prefs = sidebarStore.getPrefs()
-              if (prefs.browserInterceptLinks === false) return false
-              const protocolOn = url.protocol === 'https:'
-                ? prefs.browserInterceptHttps !== false
-                : prefs.browserInterceptHttp !== false
-              if (!protocolOn) return false
-              // A plugin claim is the target (already enabled-filtered);
-              // otherwise the built-in browser must be enabled.
-              return urlTargetOf(url) !== undefined || prefs.tabsEnabled['browser'] !== false
-            },
+            takeoverEnabled: (url) => shouldTakeOverLink(url, {
+              suspended: sidebarStore.getSuspended(),
+              resolveTarget: urlTargetOf,
+            }),
             openInSidebar: (url) => {
-              let title: string | undefined
-              try { title = new URL(url).hostname } catch { /* keep the default title */ }
-              const type = urlTargetOf(new URL(url)) ?? 'browser'
-              ctx.betterSidebar?.openTab({ type, url, title })
+              openInterceptedLink(url, {
+                resolveTarget: urlTargetOf,
+                // Re-checked at open time: the claim above and this open are
+                // separate turns, so the type may be gone (plugin unloaded,
+                // switched off) by now.
+                isAvailable: (type) => isTargetAvailable(
+                  type,
+                  service.getTabs(),
+                  sidebarStore.getPrefs().tabsEnabled,
+                ),
+                sidebar: ctx.get('betterSidebar'),
+              })
             },
             selfOrigin: window.location.origin,
           })
         } catch (error) {
           fail('interception', error)
-          return undefined
+          return () => {}
         }
       },
       'dsh-better-sidebar: link interception',
@@ -362,7 +407,7 @@ export function apply(ctx: Context): void {
           return registerImeGuard()
         } catch (error) {
           fail('ime guard', error)
-          return undefined
+          return () => {}
         }
       },
       'dsh-better-sidebar: IME composition guard',

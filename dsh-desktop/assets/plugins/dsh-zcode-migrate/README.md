@@ -85,7 +85,7 @@ dsh plugin --profile web add /path/to/dsh-zcode-migrate
 ```yaml
 - insert:
     - id: zcode-migrate
-      name: dsh-zcode-migrate
+      name: 'dsh-zcode-migrate'
       config:
         dbPath: ~/.zcode/cli/db/db.sqlite
         dshRoot: ~/.dsh/sessions
@@ -261,7 +261,7 @@ node cli.mjs verify "<...>/session.jsonl.zstd"
 | `tool` 片段 | `assistant/message` 里的 `tool-call` 块 **+** 独立的 `tool/call` / `tool/result` 事件对 |
 | `message.finish` | `turn/end` 的 reason（`tool-calls` 表示回合继续，不开新的 turn/end） |
 | `message.tokens` | `assistant/message` 的 `usage`（camelCase，零值字段省略） |
-| `synthetic` / 非 user 来源的 user 消息 | `source: {kind: 'plugin'}`（不冒充人类输入，也不会被标题事件引用） |
+| `synthetic` / 非 user 来源的 user 消息 | `source: {kind: 'plugin:zcode'}`（不冒充人类输入，也不会被标题事件引用） |
 
 **关键顺序**：dsh 要求 `step/start` 在进入该 step 的消息**之前**（真实 dsh 日志即 `turn/start → step/start → user/message → assistant/message`）。顺序错了，dsh 的 v2 格式迁移会报 `cannot acquire a system head without changing chronology` 而拒绝加载。
 

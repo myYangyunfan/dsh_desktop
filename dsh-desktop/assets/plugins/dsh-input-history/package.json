@@ -1,7 +1,7 @@
 {
   "name": "dsh-input-history",
   "description": "终端式命令历史回溯（DSH Desktop 配套插件）：在会话输入框按 ↑ 回溯上一条已发送的用户消息、按 ↓ 往前翻回较新的消息，行为对齐终端命令行历史（空草稿才触发、越界回到空、编辑即复位、按会话隔离）。纯客户端，宿主半边 no-op。",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -10,6 +10,9 @@
     "./package.json": "./package.json"
   },
   "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "platform": "web",
       "inject": [
@@ -19,8 +22,13 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "*",
-    "@deepseek-ai/dsh-client-ui-conversation": "*",
+    "@deepseek-ai/dsh-client-ui-conversation": ">=0.1.0-rc.6 <2",
     "react": ">=18"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "files": [
+    "LICENSE",
+    "cordis.patch.yml",
+    "lib"
+  ]
 }

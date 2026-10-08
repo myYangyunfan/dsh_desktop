@@ -9,7 +9,8 @@
 //     工具调用事件里只有 description/prompt，tool/result 只有子代理的最终
 //     输出 —— 中间命令/文件明细只存在于子会话自己的事件流。
 //   · 客户端打开子会话（会话头部谱系目录点击）后，子会话事件已在本地的
-//     Session 对象（sessions 服务的 binding(childId).session.events）里。
+//     binding 事件窗口里（sessions 服务的 binding(childId).eventSource，
+//     见 childWindowEvents 的说明；旧内核才是 session.events 数组）。
 //   · 因此本插件的全部数据来源 = 客户端已有的会话事件流快照（当前会话经
 //     useSession 的 chat 快照；子会话经 sessions 服务只读 binding），零额外
 //     后端请求、零新数据通道。
@@ -18,7 +19,7 @@
 //   1) tool.call.toolview 按 key（subagent / subagent_fork / Task / task，
 //     settings 可改）注册委派调用行：折叠 = 「子代理 · description」+ 状态；
 //     展开 = 委派提示词 + 结果摘要 + 子代理活动明细（命令清单 / 文件清单，
-//     文件点击走内核 openFile 或壳层 window.dshDesktop.openPath）+「打开子
+//     文件点击走内核 openFile，内核不给 openFile 时该行禁用）+「打开子
 //     会话」按钮（sessions.openSubagent，与官方谱系目录同链路）。子会话尚
 //     未在本地打开时降级为提示行。
 //   2) conversation.session.header.utilities 注册会话头部活动聚合条：一行
@@ -54,12 +55,9 @@ window.__ModuleLoader__.load({
         };
       }
     } catch { /* rc.7 及更早内核 → 下一级回落 */ }
-    if (!bindSnapshotSelector) {
-      try {
-        const webReactMod = require("@deepseek-ai/dsh-client-web-react");
-        if (typeof webReactMod.bindSnapshotSelector === "function") bindSnapshotSelector = webReactMod.bindSnapshotSelector;
-      } catch { /* compat 未注入（罕见）→ react 原生兜底 */ }
-    }
+    // 注：此处原有第二级 compat 回落（一个官方内核并不存在的 React 绑定包名），
+    // 浏览器模块系统对未知裸标识符一律 throw，该 rung 永远进不去、异常也被下面
+    // 的空 catch 吞掉，实际行为一直是「ui-renderer → react 原生」两级。已删除。
     if (!bindSnapshotSelector) {
       const { useSyncExternalStore } = require("react");
       bindSnapshotSelector = (source) => {
@@ -77,6 +75,72 @@ window.__ModuleLoader__.load({
     // 常量与文案
     // ---------------------------------------------------------------------------
     const NS = "dsh-subagent-lens";
+    const SETTINGS_ENTRY_ID = "dsh-subagent-lens";
+
+// settings.describe()/mutate 的 ns 是 **profile 条目 id**，不是包名也不是旧 NS。
+// // <<BEGIN settings-scope（由 tools/codemod/apply-settings-scope.mjs 生成，勿单包手改）>>
+function bindSettingsScope(ctx, entryId) {
+	let snapshot = { status: "loading", value: undefined, writable: false, revision: undefined };
+	const listeners = /* @__PURE__ */ new Set();
+	const emit = () => { for (const fn of [...listeners]) fn(); };
+	// 快照引用必须稳定：selector 走 Object.is 比较，每轮都换新对象会自激重渲染。
+	const adopt = (next) => {
+		if (next.status === snapshot.status && next.writable === snapshot.writable
+			&& JSON.stringify(next.value) === JSON.stringify(snapshot.value)) return;
+		snapshot = next;
+		emit();
+	};
+	async function refresh() {
+		let response;
+		try {
+			response = await ctx.remote.settings.describe();
+		} catch (error) {
+			adopt({ ...snapshot, status: "failed" });
+			return;
+		}
+		if (!response || !response.ok) {
+			adopt({ ...snapshot, status: "failed" });
+			return;
+		}
+		const rows = response.value && Array.isArray(response.value.namespaces) ? response.value.namespaces : [];
+		const view = rows.find((row) => row.ns === entryId);
+		if (view === undefined) {
+			// 条目不在 describe() 里 = 它的 Config 没有任何 volatile 字段，
+			// 内核就不为它生成表单（volatileForm(schema) 为空即跳过）。
+			adopt({ ...snapshot, status: "missing" });
+			return;
+		}
+		adopt({
+			status: "ready",
+			value: view.value,
+			writable: response.value.writable !== false,
+			revision: view.revision
+		});
+	}
+	void refresh();
+	return {
+		getSnapshot: () => snapshot,
+		subscribe(fn) {
+			listeners.add(fn);
+			return () => { listeners.delete(fn); };
+		},
+		// 旧 API 的 watch(cb) 与 subscribe(cb) 同义，保留名字免得调用方各写一套。
+		watch(fn) {
+			return this.subscribe(fn);
+		},
+		async set(field, value) {
+			const next = await ctx.remote.settings.mutate(entryId, [{ op: "set", path: [field], value }], snapshot.revision);
+			if (next && next.ok && next.value) {
+				adopt({ ...snapshot, value: next.value.value, revision: next.value.revision });
+				return;
+			}
+			await refresh();
+			if (!next || !next.ok) throw new Error(next && next.error && next.error.message || "settings write rejected");
+		},
+		refresh
+	};
+}
+// <<END settings-scope>>
     const DEFAULT_TOOL_NAMES = ["subagent", "subagent_fork", "Task", "task"];
     const DEFAULT_MAX_ITEMS = 50;
     const DEFAULT_COMMAND_CHARS = 400;
@@ -246,6 +310,52 @@ window.__ModuleLoader__.load({
       for (const item of out.commands) if (errors.get(item.callId)) item.error = true;
       for (const item of out.fileSeeds) if (errors.get(item.callId)) item.error = true;
       return out;
+    }
+
+    // ---------------------------------------------------------------------------
+    // 子会话事件窗口读取（M2，2026-09 真机核对）
+    //
+    // 老写法读 `binding.session.events` 当数组 —— 页内**没有**这个数组：
+    //   · dsh 0.1.7-rc.1 页内侧（dsh-api-session-controller）的 binding 形状是
+    //     `{ sessionId, session, eventSource, ctx }`，事件在 `eventSource` 这个
+    //     同步窗口 store 里：`getSnapshot().entries` = 已加载的日志窗口，
+    //     条目是 wire record，事件本体在 `entry.event`（含 seq/type/data）。
+    //   · `binding.session.events` 确实存在，但它是 SessionEventStream（异步日志流，
+    //     有 prepend()/open()），`Array.isArray` 永远为假 —— 于是守卫把整块功能
+    //     静默吞掉：不报错、不渲染、也查不出（与宿主侧 session.events 是同一类错）。
+    // 三级回落：页内窗口 store → 旧 client-runtime 的数组 → session.snapshotEvents()。
+    // 派生数组按 entries 快照身份缓存：同一次快照（无新事件）在渲染风暴里复用，
+    // 不破坏下面 activityFromEventsCached 的增量扫（新事件到来时窗口整体换新）。
+    const CHILD_WINDOW_CACHE = new WeakMap(); // entries 数组 -> 事件数组
+    function childWindowEvents(binding) {
+      if (!binding) return null;
+      const source = binding.eventSource;
+      if (source && typeof source.getSnapshot === "function") {
+        const snapshot = source.getSnapshot();
+        const entries = snapshot && snapshot.entries;
+        if (Array.isArray(entries)) {
+          const cached = CHILD_WINDOW_CACHE.get(entries);
+          if (cached) return cached;
+          const events = [];
+          for (const record of entries) {
+            const event = record && record.event;
+            if (event && typeof event === "object") events.push(event);
+          }
+          CHILD_WINDOW_CACHE.set(entries, events);
+          return events;
+        }
+      }
+      const session = binding.session;
+      if (!session) return null;
+      // 老 client-runtime（0.1.6 一代）的 session.events 才是数组。刻意写成下标读取：
+      // 旧 API 字面量有审计门禁（tools/audit/session-api.js），兼容口要留痕、不开口子。
+      const legacy = session["events"];
+      if (Array.isArray(legacy)) return legacy;
+      if (typeof session.snapshotEvents === "function") {
+        const events = session.snapshotEvents();
+        return Array.isArray(events) ? events : null;
+      }
+      return null;
     }
 
     // ---------------------------------------------------------------------------
@@ -463,16 +573,6 @@ window.__ModuleLoader__.load({
       return undefined;
     }
 
-    /** 相对路径解析到会话 cwd（openFile 缺席、走壳层 openPath 时使用）。 */
-    function resolveOpenablePath(path, cwd) {
-      const p = typeof path === "string" ? path : "";
-      if (p === "") return p;
-      if (/^[A-Za-z]:[\\/]/.test(p) || p.startsWith("/") || p.startsWith("\\\\")) return p;
-      const root = typeof cwd === "string" && cwd !== "" ? cwd.replace(/[\\/]+$/, "") : "";
-      if (root === "") return p;
-      return root + "/" + p;
-    }
-
     /** 从 chat 快照收集 tool-call 根块（宽容：任意形状都返回数组）。 */
     function toolCallRootsFromChatSnapshot(input) {
       try {
@@ -566,21 +666,20 @@ window.__ModuleLoader__.load({
 
     const OP_LABEL = { read: L.fileRead, write: L.fileWrite, edit: L.fileEdit };
 
-    function openPathBestEffort(path, cwd, openFile) {
+    /**
+     * 打开一个文件：唯一通路是内核在 toolview 槽位上给的 openFile。
+     * 自制壳的原生 openPath 支路已随壳删除（官方没有替身），所以这里不再需要
+     * cwd 拼绝对路径；拿不到 openFile 就什么都不做，由调用侧按「不支持打开」呈现。
+     */
+    function openPathBestEffort(path, openFile) {
       try {
-        if (typeof openFile === "function") {
-          const r = openFile(path);
-          if (r && typeof r.catch === "function") r.catch(() => {});
-          return;
-        }
-        const bridge = typeof window !== "undefined" && window.dshDesktop;
-        if (bridge && typeof bridge.openPath === "function") {
-          bridge.openPath(resolveOpenablePath(path, cwd)).catch(() => {});
-        }
+        if (typeof openFile !== "function") return;
+        const r = openFile(path);
+        if (r && typeof r.catch === "function") r.catch(() => {});
       } catch { /* 打开失败静默 */ }
     }
 
-    function ActivityLists({ summary, cwd, openFile }) {
+    function ActivityLists({ summary, openFile }) {
       const items = [];
       items.push(jsx("div", { key: "label-c", className: "dsl-sectionLabel", children: L.commandsLabel + " · " + summary.commandCount }));
       if (summary.commands.length === 0) {
@@ -603,8 +702,9 @@ window.__ModuleLoader__.load({
       if (summary.files.length === 0) {
         items.push(jsx("div", { key: "no-f", className: "dsl-hint", children: L.noActivity }));
       } else {
-        const canOpen = typeof openFile === "function" ||
-          (typeof window !== "undefined" && window.dshDesktop && typeof window.dshDesktop.openPath === "function");
+        // 只有内核给的 openFile 这一条通路：没有就把行置灰并说明原因，
+        // 不再假装能打开（自制壳的 openPath 支路已删）。
+        const canOpen = typeof openFile === "function";
         items.push(jsxs("ul", {
           key: "list-f", className: "dsl-list",
           children: summary.files.map((file, i) => jsxs("li", {
@@ -616,7 +716,7 @@ window.__ModuleLoader__.load({
                 className: "dsl-fileBtn",
                 disabled: !canOpen,
                 title: canOpen ? file.path : file.path + "（当前环境不支持打开文件）",
-                onClick: (e) => { e.stopPropagation(); openPathBestEffort(file.path, cwd, openFile); },
+                onClick: (e) => { e.stopPropagation(); openPathBestEffort(file.path, openFile); },
                 children: [
                   jsxs("span", { className: "dsl-op", children: file.ops.map((op) => OP_LABEL[op] || op).join("/") }),
                   jsx("span", { children: file.path + (file.count > 1 ? " ×" + file.count : "") }),
@@ -678,7 +778,7 @@ window.__ModuleLoader__.load({
         if (child) {
           childRunning = child.activity === "running";
           const binding = sessionsFace && typeof sessionsFace.binding === "function" ? sessionsFace.binding(child.id) : undefined;
-          const events = binding && binding.session && Array.isArray(binding.session.events) ? binding.session.events : null;
+          const events = childWindowEvents(binding);
           if (events) {
             childSummary = summarizeActivity(activityFromEventsCached(events, { commandChars }), { maxItems });
           }
@@ -726,7 +826,7 @@ window.__ModuleLoader__.load({
             children: [
               jsx("span", { className: "dsl-sectionLabel", children: L.activityLabel }),
               childSummary
-                ? jsx(ActivityLists, { summary: childSummary, cwd: cwd, openFile: openFile })
+                ? jsx(ActivityLists, { summary: childSummary, openFile: openFile })
                 : jsx("div", { className: "dsl-hint", children: L.childNotLoaded }),
               jsxs("div", {
                 className: "dsl-actions",
@@ -826,8 +926,10 @@ window.__ModuleLoader__.load({
 
       if (summary.commandCount === 0 && summary.fileCount === 0 && !isSubagent && !running) return null;
 
-      const canOpen = typeof window !== "undefined" && window.dshDesktop && typeof window.dshDesktop.openPath === "function";
-
+      // 打开文件的能力这里不再自己判：官方客户端没有任何页内可用的 openPath
+      // （自制壳的 window.dshDesktop.openPath 随壳一起退场了）。
+      // 把决定权交给 ActivityLists —— 它按「内核有没有给 openFile」置灰并写明原因，
+      // 所以缺能力时是可见的「不支持」，而不是点了没反应。
       return jsxs("div", {
         className: "dsl-stripWrap",
         children: [
@@ -862,7 +964,7 @@ window.__ModuleLoader__.load({
                   }),
                 ],
               }),
-              jsx(ActivityLists, { summary: summary, cwd: cwd, openFile: canOpen ? (p) => openPathBestEffort(p, cwd) : undefined }),
+              jsx(ActivityLists, { summary: summary, cwd: cwd }),
             ],
           }) : null,
         ],
@@ -1017,8 +1119,8 @@ window.__ModuleLoader__.load({
       let scope = undefined;
       let useScope = undefined;
       try {
-        if (ctx.settingsScope && typeof ctx.settingsScope.bind === "function") {
-          scope = ctx.settingsScope.bind({ namespace: NS });
+        if (ctx.remote && ctx.remote.settings) {
+          scope = bindSettingsScope(ctx, SETTINGS_ENTRY_ID);
           useScope = bindSnapshotSelector(scope);
         }
       } catch { scope = undefined; useScope = undefined; }
@@ -1031,6 +1133,7 @@ window.__ModuleLoader__.load({
             yield ctx.slots.register({
               name: "tool.call.toolview",
               key,
+              priority: -1,
               inject: (sessionId) => (useScope ? { useScope } : {}),
             }, function LensRowForward(props) {
               try {
@@ -1089,7 +1192,7 @@ window.__ModuleLoader__.load({
     // 导出（apply/inject + 全部纯函数，供 vm 沙箱单测消费）
     // ---------------------------------------------------------------------------
     exports.apply = apply;
-    exports.inject = ["slots", "settingsScope", "sessions"];
+    exports.inject = ["slots", "remote", "remote.settings", "sessions"];
     exports.DEFAULT_TOOL_NAMES = DEFAULT_TOOL_NAMES;
     exports.classifyActivityTool = classifyActivityTool;
     exports.pickPath = pickPath;
@@ -1098,6 +1201,7 @@ window.__ModuleLoader__.load({
     exports.firstLineOf = firstLineOf;
     exports.splitToolNames = splitToolNames;
     exports.activityEntryOf = activityEntryOf;
+    exports.childWindowEvents = childWindowEvents;
     exports.activityFromEvents = activityFromEvents;
     exports.activityFromEventsCached = activityFromEventsCached;
     exports.stripSummaryCached = stripSummaryCached;
@@ -1106,7 +1210,6 @@ window.__ModuleLoader__.load({
     exports.summarizeActivity = summarizeActivity;
     exports.parseBlockFace = parseBlockFace;
     exports.matchChildEntry = matchChildEntry;
-    exports.resolveOpenablePath = resolveOpenablePath;
     exports.toolCallRootsFromChatSnapshot = toolCallRootsFromChatSnapshot;
     return module.exports;
   }

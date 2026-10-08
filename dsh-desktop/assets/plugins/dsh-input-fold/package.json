@@ -1,7 +1,7 @@
 {
   "name": "dsh-input-fold",
   "description": "会话用户提示词折叠（DSH Desktop 配套插件）：对用户发出去的超长提示词（user 消息）默认折叠为前几行 + 「展开」遮罩，点击展开全文、再点「收起」收回。仅当纯文本超过 400 字符或 8 行才折叠，短消息零侵入；不碰代码块/图片/表格，展开后原样（不丢内容、复制选中正常）。纯客户端，宿主半边 no-op。",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -10,6 +10,9 @@
     "./package.json": "./package.json"
   },
   "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "platform": "web",
       "inject": [
@@ -19,7 +22,12 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "*",
-    "@deepseek-ai/dsh-client-ui-conversation": "*"
+    "@deepseek-ai/dsh-client-ui-conversation": ">=0.1.0-rc.6 <2"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "files": [
+    "LICENSE",
+    "cordis.patch.yml",
+    "lib"
+  ]
 }

@@ -1,13 +1,25 @@
 {
   "name": "@deepseek-ai/dsh-workspace-anchor",
   "version": "0.1.0",
-  "private": true,
   "description": "DSH Desktop workspace-anchor companion: injects a compact {{cwd}} preference block into the stable system prompt so agents default to the session workspace instead of drifting into unrelated directories. Prompt-level bias only; permissions are untouched.",
+  "private": true,
   "type": "module",
   "main": "lib/index.js",
   "exports": {
-    ".": { "default": "./lib/index.js" },
+    ".": {
+      "default": "./lib/index.js"
+    },
     "./package.json": "./package.json"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "files": [
+    "LICENSE",
+    "cordis.patch.yml",
+    "lib"
+  ]
 }

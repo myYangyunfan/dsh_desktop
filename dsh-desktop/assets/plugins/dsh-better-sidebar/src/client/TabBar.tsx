@@ -1,18 +1,18 @@
 /**
  * The tab strip of one pane: tabs capped at TAB_MAX_WIDTH (ellipsized),
  * overflow scrolls horizontally, a close button per tab, a four-way split
- * button cluster, and the + menu that opens new tabs (explorer / git /
- * terminal). Tabs are draggable; dropping onto another tab inserts before it,
- * dropping on the strip background appends to this pane. Right-clicking a
- * tab opens the tab context menu (close / close others / close to the left /
- * close to the right, all scoped to this pane).
+ * button cluster, and the + menu that opens new tabs (explorer / git). Tabs
+ * are draggable; dropping onto another tab inserts before it, dropping on the
+ * strip background appends to this pane. Right-clicking a tab opens the tab
+ * context menu (close / close others / close to the left / close to the
+ * right, the close ones scoped to this pane).
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  IconCloseFill14, IconPlusOutline16, Menu,
+  IconCloseFillRegular, IconPlusOutlineRegular, Menu,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { isPreviewTab, type SidebarTab } from './state.ts'
+import type { SidebarTab } from './state.ts'
 import { t } from './locales.ts'
 import css from './sidebar.module.css'
 
@@ -74,7 +74,7 @@ export function TabBar(props: {
   } = props
   const [menuOpen, setMenuOpen] = useState(false)
   // The tab right-click context menu: the target tab plus the cursor
-  // position (the portaled Menu anchors there, following GitView/FileTree).
+  // position (the portaled Menu anchors there, following the git lens/FileTree).
   const [tabMenu, setTabMenu] = useState<{ tabId: string; x: number; y: number } | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
@@ -213,7 +213,7 @@ export function TabBar(props: {
           >
             {getTabIcon?.(tab) ?? null}
             {getTabBadge?.(tab) ?? null}
-            <span className={css.tabTitle} style={isPreviewTab(tab) ? { fontStyle: 'italic' } : undefined}>{tab.title}</span>
+            <span className={css.tabTitle}>{tab.title}</span>
             <button
               type="button"
               className={css.tabClose}
@@ -223,7 +223,7 @@ export function TabBar(props: {
                 onClose(tab.id)
               }}
             >
-              <IconCloseFill14 />
+              <IconCloseFillRegular size={14} />
             </button>
           </div>
         ))}
@@ -246,6 +246,7 @@ export function TabBar(props: {
             setMenuOpen(false)
           }}
           portal
+          compact
           align="end"
           anchor={(
             <button
@@ -255,7 +256,7 @@ export function TabBar(props: {
               title={t('newTab')}
               onClick={() => { setMenuOpen(v => !v); setTabMenu(null) }}
             >
-              <IconPlusOutline16 />
+              <IconPlusOutlineRegular />
             </button>
           )}
         />
@@ -264,8 +265,8 @@ export function TabBar(props: {
           so the panel's overflow clip cannot crop it). Close operations are
           scoped to THIS pane: "close others/left/right" walk the render-time
           tab snapshot and reuse the per-tab onClose path (which routes
-          through the service and releases terminals), so the target tab is
-          never closed and the pane never empties mid-loop.
+          through the service), so the target tab is never closed and the
+          pane never empties mid-loop.
         */}
         <Menu
           open={tabMenu !== null && tabMenuIndex >= 0}
@@ -295,6 +296,7 @@ export function TabBar(props: {
             }
           }}
           portal
+          compact
           align="start"
           getAnchorRect={() => (tabMenu === null ? null : new DOMRect(tabMenu.x, tabMenu.y, 0, 0))}
           anchor={<span />}

@@ -10,9 +10,7 @@
  */
 import type { api } from './api.ts'
 import {
-  clampTerminalFontSize,
   clampTitleBarStrip,
-  clampWidthPercent,
   SIDEBAR_PREFS_DEFAULTS,
   TITLE_BAR_SCHEMES,
   TITLE_BAR_STRIP_DEFAULT,
@@ -24,9 +22,7 @@ export {
   SIDEBAR_PREFS_DEFAULTS,
   TITLE_BAR_SCHEMES,
   TITLE_BAR_STRIP_DEFAULT,
-  clampTerminalFontSize,
   clampTitleBarStrip,
-  clampWidthPercent,
 }
 export type { SidebarPrefs, TitleBarScheme }
 
@@ -43,39 +39,24 @@ export function parsePrefs(value: unknown): SidebarPrefs {
   if (value === null || typeof value !== 'object') return { ...SIDEBAR_PREFS_DEFAULTS }
   const record = value as Record<string, unknown>
   return {
-    openByDefault: typeof record.openByDefault === 'boolean'
-      ? record.openByDefault
-      : SIDEBAR_PREFS_DEFAULTS.openByDefault,
-    defaultWidthPercent: typeof record.defaultWidthPercent === 'number' && Number.isFinite(record.defaultWidthPercent)
-      ? clampWidthPercent(record.defaultWidthPercent)
-      : SIDEBAR_PREFS_DEFAULTS.defaultWidthPercent,
     autoOpenSubagent: typeof record.autoOpenSubagent === 'boolean'
       ? record.autoOpenSubagent
       : SIDEBAR_PREFS_DEFAULTS.autoOpenSubagent,
     autoOpenJobs: typeof record.autoOpenJobs === 'boolean'
       ? record.autoOpenJobs
       : SIDEBAR_PREFS_DEFAULTS.autoOpenJobs,
-    agentTerminalTools: typeof record.agentTerminalTools === 'boolean'
-      ? record.agentTerminalTools
-      : SIDEBAR_PREFS_DEFAULTS.agentTerminalTools,
-    bottomPanelAutoTerminal: typeof record.bottomPanelAutoTerminal === 'boolean'
-      ? record.bottomPanelAutoTerminal
-      : SIDEBAR_PREFS_DEFAULTS.bottomPanelAutoTerminal,
-    terminalFontFamily: typeof record.terminalFontFamily === 'string'
-      ? record.terminalFontFamily
-      : SIDEBAR_PREFS_DEFAULTS.terminalFontFamily,
-    terminalShell: typeof record.terminalShell === 'string'
-      ? record.terminalShell
-      : SIDEBAR_PREFS_DEFAULTS.terminalShell,
-    terminalShellArgs: typeof record.terminalShellArgs === 'string'
-      ? record.terminalShellArgs
-      : SIDEBAR_PREFS_DEFAULTS.terminalShellArgs,
-    terminalFontSize: typeof record.terminalFontSize === 'number' && Number.isFinite(record.terminalFontSize)
-      ? clampTerminalFontSize(record.terminalFontSize)
-      : SIDEBAR_PREFS_DEFAULTS.terminalFontSize,
-    interceptOpenPath: typeof record.interceptOpenPath === 'boolean'
-      ? record.interceptOpenPath
-      : SIDEBAR_PREFS_DEFAULTS.interceptOpenPath,
+    tasksViewMode: record.tasksViewMode === 'tree' || record.tasksViewMode === 'graph'
+      ? record.tasksViewMode
+      : SIDEBAR_PREFS_DEFAULTS.tasksViewMode,
+    mobileNoAutoOpen: typeof record.mobileNoAutoOpen === 'boolean'
+      ? record.mobileNoAutoOpen
+      : SIDEBAR_PREFS_DEFAULTS.mobileNoAutoOpen,
+    mobileDefaultTree: typeof record.mobileDefaultTree === 'boolean'
+      ? record.mobileDefaultTree
+      : SIDEBAR_PREFS_DEFAULTS.mobileDefaultTree,
+    agentOpenTools: typeof record.agentOpenTools === 'boolean'
+      ? record.agentOpenTools
+      : SIDEBAR_PREFS_DEFAULTS.agentOpenTools,
     editorExplorer: typeof record.editorExplorer === 'boolean'
       ? record.editorExplorer
       : SIDEBAR_PREFS_DEFAULTS.editorExplorer,
@@ -107,18 +88,6 @@ export function parsePrefs(value: unknown): SidebarPrefs {
     htmlViewerDefaultUnsafe: typeof record.htmlViewerDefaultUnsafe === 'boolean'
       ? record.htmlViewerDefaultUnsafe
       : SIDEBAR_PREFS_DEFAULTS.htmlViewerDefaultUnsafe,
-    browserNoSandbox: typeof record.browserNoSandbox === 'boolean'
-      ? record.browserNoSandbox
-      : SIDEBAR_PREFS_DEFAULTS.browserNoSandbox,
-    browserInterceptLinks: typeof record.browserInterceptLinks === 'boolean'
-      ? record.browserInterceptLinks
-      : SIDEBAR_PREFS_DEFAULTS.browserInterceptLinks,
-    browserInterceptHttp: typeof record.browserInterceptHttp === 'boolean'
-      ? record.browserInterceptHttp
-      : SIDEBAR_PREFS_DEFAULTS.browserInterceptHttp,
-    browserInterceptHttps: typeof record.browserInterceptHttps === 'boolean'
-      ? record.browserInterceptHttps
-      : SIDEBAR_PREFS_DEFAULTS.browserInterceptHttps,
     tabsEnabled: booleanMapOf(record.tabsEnabled),
     viewersEnabled: booleanMapOf(record.viewersEnabled),
     pluginSettings: pluginSettingsMapOf(record.pluginSettings),
@@ -203,5 +172,24 @@ export async function loadExternalDisable(settings: SidebarSettingsClient): Prom
     return view.externalDisable === true
   } catch {
     return false
+  }
+}
+
+/** The boot decision both the prefs and the external-disable flag need:
+ *  ONE settings fetch answers both (the boot path used to await
+ *  {@link loadPrefs} and {@link loadExternalDisable} serially — two round
+ *  trips of the same document before the first paint, and the second had no
+ *  timeout, so a stalled wire could keep the sidebar unmounted forever). */
+export interface BootDecision {
+  prefs: SidebarPrefs
+  suspended: boolean
+}
+
+export async function loadBootDecision(settings: SidebarSettingsClient): Promise<BootDecision> {
+  try {
+    const view = await settings.settingsGet()
+    return { prefs: parsePrefs(view.value), suspended: view.externalDisable === true }
+  } catch {
+    return { prefs: { ...SIDEBAR_PREFS_DEFAULTS }, suspended: false }
   }
 }

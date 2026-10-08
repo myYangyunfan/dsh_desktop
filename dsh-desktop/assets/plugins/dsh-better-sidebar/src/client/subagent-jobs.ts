@@ -1,18 +1,19 @@
 /**
  * Pure derivations for the Subagent page's background-job section. Kept
  * framework-free so the node test environment can unit-test them: the job
- * rows arrive through the harness `session/jobs` push mirror
- * (`jobsBySession` in the sessions list feed) — nothing here issues
- * requests, and the row ordering / status mapping mirror the official
- * ui-jobs header list.
+ * rows are collected from the per-session lists the client reads through the
+ * plugin's `jobs.list` route (DSH 0.1.7 dropped the harness `session/jobs`
+ * push mirror that used to feed `jobsBySession`, and the registry's access
+ * fence admits a job only to its OWNER session — so the caller fans one read
+ * out per tree session). Nothing here issues requests, and the row ordering /
+ * status mapping mirror the official ui-jobs header list.
  */
 import type {
-  SidebarSessionList,
-  SidebarSessionSummary,
   SidebarJobStatus,
   SidebarJobView,
 } from '../context-types.ts'
 import type { CopyKey } from './locales.ts'
+import { treeSessionIds } from './subagent-lineage.ts'
 
 /** One row of the jobs section: the job plus its owning session's title. */
 export interface TreeJob {
@@ -26,73 +27,38 @@ export function isJobLive(job: SidebarJobView): boolean {
   return job.status === 'running' || job.status === 'stopping'
 }
 
-/**
- * Every session id of the topology tree rooted at `rootId` (the root plus
- * each session whose uninterrupted subagent-origin chain reaches it — same
- * lineage semantics as {@link countSubagentDescendants}; cycles fail soft).
- * Sessions outside the tree (orphans, other trees) are excluded, so the
- * jobs section never shows foreign work.
- */
-export function treeSessionIds(
-  byId: SidebarSessionList['byId'],
-  rootId: string | undefined,
-): Set<string> {
-  const ids = new Set<string>()
-  if (rootId === undefined) return ids
-  for (const summary of Object.values(byId)) {
-    const seen = new Set<string>()
-    let current: SidebarSessionSummary | undefined = summary
-    let reachesRoot = false
-    while (current !== undefined && !seen.has(current.id)) {
-      seen.add(current.id)
-      if (current.id === rootId) {
-        reachesRoot = true
-        break
-      }
-      if (current.origin !== 'subagent' || current.parentId === undefined) break
-      current = byId[current.parentId]
-    }
-    if (reachesRoot) ids.add(summary.id)
-  }
-  return ids
-}
+// The lineage walk itself lives in ./subagent-lineage.ts (the single shared
+// subagent-origin chain implementation); re-exported for the established
+// import sites of this module.
+export { treeSessionIds }
 
 /**
- * Whether a NEW background job appeared for one session between two
- * consecutive list snapshots (a job id the previous snapshot lacked).
- * Unlike the subagent auto-open (0 → N only), ANY new job id triggers: the
- * agent may start several jobs over a session, and each new one should
- * surface the Jobs page (a fresh page load never triggers — its baseline
- * starts at the current snapshot).
+ * Whether a NEW background job appeared for the current session between two
+ * roster frames (a job id the previous frame lacked). Unlike the subagent
+ * auto-open (0 → N only), ANY new job id triggers: the agent may start
+ * several jobs over a session, and each new one should surface the Tasks page
+ * that contains the background-jobs section.
+ *
+ * `since` (epoch ms) is the moment the caller STARTED watching the roster, and
+ * it is what keeps a page load honest now that the roster arrives as a push
+ * stream: the host's client jobs model drops a session's key when it sees no
+ * jobs, so an empty first frame is indistinguishable from "not delivered yet".
+ * A job that already existed when the watcher opened therefore looks brand new
+ * to an id-set diff — comparing its start time against `since` filters it out,
+ * while a job the agent starts afterwards still triggers.
+ *
+ * @param prev - the previous frame's rows.
+ * @param next - the current frame's rows.
+ * @param since - epoch ms the watch began; omitted skips the age test.
+ * @returns whether genuinely new work appeared.
  */
 export function detectNewJob(
-  prev: SidebarSessionList,
-  next: SidebarSessionList,
-  sessionId: string,
+  prev: readonly SidebarJobView[],
+  next: readonly SidebarJobView[],
+  since?: number,
 ): boolean {
-  const prevIds = new Set((prev.jobsBySession?.[sessionId] ?? []).map(job => job.id))
-  return (next.jobsBySession?.[sessionId] ?? []).some(job => !prevIds.has(job.id))
-}
-
-/**
- * Collect the background jobs of the whole current tree, owner-labeled.
- * Sessions without a mirror entry contribute nothing; an absent mirror
- * (runtime older than the jobs feed) yields an empty list.
- */
-export function collectTreeJobs(
-  byId: SidebarSessionList['byId'],
-  jobsBySession: Readonly<Record<string, readonly SidebarJobView[]>> | undefined,
-  rootId: string | undefined,
-): TreeJob[] {
-  const rows: TreeJob[] = []
-  if (jobsBySession === undefined) return rows
-  for (const sessionId of treeSessionIds(byId, rootId)) {
-    const jobs = jobsBySession[sessionId]
-    if (jobs === undefined || jobs.length === 0) continue
-    const ownerTitle = byId[sessionId]?.displayTitle ?? sessionId
-    for (const job of jobs) rows.push({ ownerSessionId: sessionId, ownerTitle, job })
-  }
-  return rows
+  const prevIds = new Set(prev.map(job => job.id))
+  return next.some(job => !prevIds.has(job.id) && (since === undefined || job.startedAt >= since))
 }
 
 /**

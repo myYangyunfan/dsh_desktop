@@ -11,8 +11,13 @@
  * custom-provider models the directory does not describe. It never writes
  * settings itself and never overrides catalog-declared levels.
  *
- * `compat` is only meaningful for `openai-completions` routes; the snippet
- * generator carries it onto those routes and drops it elsewhere.
+ * A `compat` block is written verbatim into the generated snippet, and the
+ * generator never sees the route's protocol: it cannot withhold the block from
+ * a model whose wire protocol refuses those fields (`llm-pi-ai` rejects the
+ * whole route instead of ignoring them). Set `compat` only where every route an
+ * entry can match speaks `openai-completions`, and prefer leaving it out: an
+ * absent block lets the adapter read the endpoint address, which is right for
+ * an unrecognized endpoint and for a recognized vendor alike.
  *
  * @module dsh-reasoning-effort/knowledge
  */

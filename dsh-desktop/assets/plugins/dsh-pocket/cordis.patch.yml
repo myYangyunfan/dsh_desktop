@@ -2,4 +2,4 @@
 # 单包单插件：装一次，设置页「手机访问」全部功能到位。
 - insert:
     - id: dsh-pocket
-      name: dsh-pocket
+      name: 'dsh-pocket'

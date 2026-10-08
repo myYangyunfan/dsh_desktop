@@ -12,10 +12,14 @@ build/*
 !build/icon.ico
 !build/icon.png
 # 内置 bundle 插件的 dist 产物必须入库：否则全新环境（clone/解压）下入口文件
-# 缺失，服务重启必失败、Web UI 不可用（issue #65）。这两处是随包分发的可装配
-# bundle，例外于通用的 dist/ 忽略规则。
-!assets/plugins/graph-memory/dist/
+# 缺失，服务重启必失败、Web UI 不可用（issue #65）。随包分发的可装配 bundle
+# 例外于通用的 dist/ 忽略规则（graph-memory 的 dist 例外已随该插件退役移除，2026-10-07）。
 !assets/plugins/billion-context-dsh/dist/
+# dsh-prompt-optimizer 的浏览器入口是 exports['./client'] → dist/client.js（上游 2.0.4
+# 覆盖式同步带进来的产物，无 src 可本地重建）。同 issue #65 的判据：被通用 `dist/`
+# 规则挡住时本机正常、仓库里没有，全新 clone 后该插件的 UI 槽位静默消失。
+!assets/plugins/dsh-prompt-optimizer/dist/
+!assets/plugins/dsh-prompt-optimizer/dist/**
 # billion-context-dsh 离线依赖 acp-kernel 必须随包携带：profile 装配只拷贝
 # 目录不跑 npm install，依赖不入库会导致启动崩溃（ERR_MODULE_NOT_FOUND，
 # issue #93）。

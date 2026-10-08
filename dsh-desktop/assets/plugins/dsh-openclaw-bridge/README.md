@@ -76,9 +76,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
 > ⚠️ **装配方式（v0.7.2 部署教训）**：本插件是**普通 Cordis 插件**
 > （`dsh.client.inject` + `apply(ctx)`），**不是 profile bundle**——请**不要**把它写进
 > `~/.dsh/profiles/web/package.json` 的 `dsh.profile.bundles`。bundle 层要求包声明
-> `dsh.bundle.patch`，缺了内核自 0.2.0-rc.2 起会**跳过该 bundle** 并在 stderr 打
-> `skipping profile bundle "…": … declares no dsh.bundle ... in its package.json`
-> ——应用照常启动、这个插件静默不加载（rc.2 之前是直接 exit 1）。正确装配 = 依赖 `link:` + `cordis.patch.yml` 的 `insert` 条目
+> `dsh.bundle.patch`，缺了 DSH 启动会报 `declares no dsh.bundle ... in its package.json`
+> 并 exit 1。正确装配 = 依赖 `link:` + `cordis.patch.yml` 的 `insert` 条目
 > （install.ps1 第 3 步就是这条路径），重启后由 include 层加载，与其他普通插件一致。
 
 > 注意：第 4 步改的是 DSH 核心包（MIT 许可），DSH Desktop 更新后可能被覆盖，

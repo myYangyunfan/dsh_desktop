@@ -126,7 +126,7 @@ function MobileNavToggle({ toggleSidebar, t }) {
       title: t("open"),
       onClick: () => toggleSidebar()
     },
-    /* @__PURE__ */ React.createElement(import_dsh_client_ui_primitives.IconPanelLeftOutline16, { size: 16 })
+    /* @__PURE__ */ React.createElement(import_dsh_client_ui_primitives.IconPanelLeftOutlineRegular, { size: 16 })
   ), /* @__PURE__ */ React.createElement(
     "button",
     {
@@ -136,7 +136,7 @@ function MobileNavToggle({ toggleSidebar, t }) {
       title: t("files"),
       onClick: toggleExplorer
     },
-    /* @__PURE__ */ React.createElement(import_dsh_client_ui_primitives.IconFolderOpenOutline16, { size: 16 })
+    /* @__PURE__ */ React.createElement(import_dsh_client_ui_primitives.IconFolderOpenOutlineRegular, { size: 16 })
   ));
 }
 
@@ -364,7 +364,7 @@ function MobileNavOverlay({ toggleSidebar, t }) {
       title: t("open"),
       onClick: () => toggleSidebar()
     },
-    /* @__PURE__ */ React.createElement(import_dsh_client_ui_primitives2.IconPanelLeftOutline16, { size: 18 })
+    /* @__PURE__ */ React.createElement(import_dsh_client_ui_primitives2.IconPanelLeftOutlineRegular, { size: 18 })
   ));
 }
 
@@ -385,7 +385,7 @@ function MobileDrawerFooter({ useSessions, downloadSessionLog, toggleSidebar, t 
       title: t("files"),
       onClick: openExplorer
     },
-    /* @__PURE__ */ React.createElement(import_dsh_client_ui_primitives3.IconPanelLeftOutline16, { size: 14 }),
+    /* @__PURE__ */ React.createElement(import_dsh_client_ui_primitives3.IconPanelLeftOutlineRegular, { size: 14 }),
     /* @__PURE__ */ React.createElement("span", null, t("files"))
   ), /* @__PURE__ */ React.createElement(
     "button",
@@ -399,7 +399,7 @@ function MobileDrawerFooter({ useSessions, downloadSessionLog, toggleSidebar, t 
         if (sessionId !== void 0) downloadSessionLog(sessionId);
       }
     },
-    /* @__PURE__ */ React.createElement(import_dsh_client_ui_primitives3.IconDownloadOutline16, { size: 14 }),
+    /* @__PURE__ */ React.createElement(import_dsh_client_ui_primitives3.IconDownloadOutlineRegular, { size: 14 }),
     /* @__PURE__ */ React.createElement("span", null, t("sessionLog"))
   ));
 }
