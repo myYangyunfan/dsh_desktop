@@ -113,7 +113,8 @@ test('防护类补丁与包级补丁均已登记（无遗漏 apply*）', () => {
 test('getSpecsByCli：返回 26 个 cli:true 补丁（8 runtime + 4 数据完整性 + 1 设置写入韧性 + 3 内核韧性 + 1 pi-ai 超限文案 + 2 本地二进制回落 + 1 skill 目录兼容 + 1 pi-ai 4xx 落盘 + 1 工作区标签闪跳 + 3 pi-ai 工具名/配额系 + 1 空工具名指引 + 1 会话持久化 + 1 工具源兼容）', () => {
   const specs = getSpecsByCli();
   // 26 = 28（上一基线）− atomic-write-orphan-lock − model-image-input（rc.2 退役两条，
-  // 均 cli:true 规格）；guard 组与 image-send 系仍为 false，只在桌面壳运行时应用。
+  // 均 cli:true 规格）；guard 组仍为 false，只在桌面壳运行时应用（image-send 一族
+  // 曾属此类，2026-10 随识图插件整体退役，不影响本计数）。
   assert.equal(specs.length, 26, 'cli 清单应恰为 26 项');
   const expected = new Set([
     'slot-legacy-key', 'slot-unkeyed-compat', 'slot-error-isolation',

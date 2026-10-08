@@ -6,11 +6,12 @@
 // 所有运行时补丁的「变换」纯函数都从这里取用：
 //   - runtime-patches.js 的 9 个 transform 原样 re-export（变换实现仍留在该
 //     模块，锚点常量/注入代码字节级不变）；
-//   - 原 main.js 内联的 transform 在此声明化（image-send / profile-patch-guard /
-//     plugin-inventory-tab-merge / profile patch-layer guard 等；vision-key /
-//     vision-toggle / workspace-search-rail / settings-section-guard 等锚点已随
-//     换代消失者，要么在函数上方写明休眠理由留在休眠名单里，要么直接删除，
-//     见 unit-patch-deps-coverage.test.js G 的可达性判据）；
+//   - 原 main.js 内联的 transform 在此声明化（profile-patch-guard /
+//     plugin-inventory-tab-merge / profile patch-layer guard 等；workspace-search-rail /
+//     settings-section-guard 等锚点已随换代消失者，要么在函数上方写明休眠理由留在休眠名单里，要么直接删除，
+//     见 unit-patch-deps-coverage.test.js G 的可达性判据；image-send /
+//     vision-key / vision-toggle 一族属「只为已退役插件存在」，2026-10 连常量带
+//     transform 整体删除，理由见下方退役说明）；
 //   - profile-bundle-guard-appboot 与 profile-patch-layer-guard 两个 transform
 //     委托 profile-bundle-heal.js 的唯一实现（rc.2 起 profile-boot 半边装配面消失，
 //     原 profile-bundle-guard-profileboot 由 readProfilePatches 层的补丁层防护取代）；
@@ -128,269 +129,19 @@ const { patchEmptyToolName } = require('./empty-tool-name-patch');
 // 即红）。实现与单测保留在各自 patch 文件，需要时重登记 spec。
 
 // ---------------------------------------------------------------------------
-// 文本模型自动识图补丁（原 main.js applyImageSendFix 内联 transform）。
+// 【已退役·2026-10 内置伴随插件批量拆除】文本模型自动识图（image-send-fix 及
+// 其 vision-key / vision-toggle 两个休眠变体）的 transform 与全部锚点常量整体
+// 删除。判据是「只为已退役插件存在」：注入体读的就是 dsh-vision 的设置命名空间
+// （settings.get("dsh-vision") + describe 回落），门槛替换体也只为把图片转述成
+// 文字再发；识图插件不在，这条 transform 连一条能跑到的路径都没有（旧内核树里的
+// describeImagesWithVision helper 也随补丁态一并消失）。同批删除的还有
+// scripts/verify-vision-upgrade.js（只检 assets/plugins/dsh-vision 与 settings.yaml
+// 的 dsh-vision: 段）。
+// 历史沿革（0.1.2-alpha.1 随内核拆分摘除 → alpha.5 按真实代码重锚并重新登记 →
+// apiKey 宿主侧读取与 enabled 总开关内联进 helper 后两个变体转休眠）见
+// CHANGELOG 与 git 记录。「锚点失配即自然退役」的休眠参照改指仍留在本文件的
+// workspace-search-rail-fix（休眠名单见 unit-patch-deps-coverage.test.js G 的可达性判据）。
 // ---------------------------------------------------------------------------
-const IMAGE_SEND_MARKER = 'DSH Desktop: reuse the dsh-vision VLM config';
-// 0.2.0-rc.2 重锚：helper 注入点从 routeServed 换成 resolvePromptFileReceipts
-// （rc.2 删掉了 routeServed，改用 modelAvailable / 内联 listProviders）。
-// resolvePromptFileReceipts 在两代内核里都是模块作用域、逐字唯一命中，
-// 函数声明提升让 helper 在更早的调用点也可用。
-const IMAGE_SEND_HELPER_ANCHOR = 'function resolvePromptFileReceipts(content, stagedFile) {';
-const IMAGE_SEND_HELPER = `
-/** DSH Desktop: reuse the dsh-vision VLM config to describe images as text so text-only models can "see" them. */
-async function describeImagesWithVision(ctx, content) {
-	const settings = ctx.get("settings");
-	let vision = null;
-	// 是否见过 dsh-vision 这一设置命名空间（区分「没装识图插件」与「装了但没配」）。
-	let visionEntrySeen = false;
-	if (settings !== void 0 && typeof settings.get === "function") {
-		// dsh-desktop fix: read the resolved HOST-side value (settings.get), not the
-		// redacted wire snapshot. redactSecrets strips role('secret') fields, so
-		// describe({redactSecrets:true}) drops apiKey and every keyed VLM endpoint
-		// answers 401 — image sends failed for configured users.
-		const resolved = settings.get("dsh-vision");
-		if (resolved !== void 0 && typeof resolved === "object") {
-			vision = resolved;
-			visionEntrySeen = true;
-		}
-	}
-	if (vision === null && settings !== void 0 && typeof settings.describe === "function") {
-		// 0.2.0-rc.2 起 SettingsForms 不再有 get()：host 侧 describe()（不传
-		// options）返回未脱敏的实时 value，正是上面那条修复要的形状；先按未脱敏
-		// 读，抛错再退回脱敏形态（旧内核的 describe 可能要求 options）。
-		for (const options of [void 0, { redactSecrets: true }]) {
-			try {
-				const descriptor = settings.describe(options).find((candidate) => String(candidate.ns) === "dsh-vision");
-				if (descriptor === void 0) continue;
-				visionEntrySeen = true;
-				if (descriptor.value !== void 0 && typeof descriptor.value === "object") vision = descriptor.value;
-				break;
-			} catch {}
-		}
-	}
-	// dsh-vision 根本没装（纯净版客户端的常态）：与用户主动关闭同路处理，回落
-	// 上游 MODEL_DOES_NOT_SUPPORT_IMAGES，而不是指向一个不存在的设置页。
-	if (vision === null && visionEntrySeen === false) {
-		const notInstalled = new Error("dsh-vision entry is not installed");
-		notInstalled.dshVisionDisabled = true;
-		throw notInstalled;
-	}
-	// DSH Desktop: dsh-vision master switch (enabled) — off means the user turned
-	// the whole capability off in 设置 → 识图插件：skip conversion and flag the
-	// throw so the gate below restores the upstream MODEL_DOES_NOT_SUPPORT_IMAGES
-	// rejection (the exact pre-plugin behavior: images neither sent nor converted).
-	if (vision !== null && vision.enabled === false) {
-		const visionDisabled = new Error("dsh-vision disabled");
-		visionDisabled.dshVisionDisabled = true;
-		throw visionDisabled;
-	}
-	if (vision === null || typeof vision.baseURL !== "string" || vision.baseURL.trim() === "" || typeof vision.model !== "string" || vision.model.trim() === "") {
-		throw new Error("未配置识图服务：请到 设置 → 识图插件（view_image） 填写 VLM 接口地址与模型");
-	}
-	const apiKey = typeof vision.apiKey === "string" ? vision.apiKey.trim() : "";
-	const endpoint = vision.baseURL.replace(/\\/+$/, "") + "/chat/completions";
-	const out = [];
-	let imageNo = 0;
-	for (const part of content) {
-		if (part.type !== "image") {
-			if (part.type === "text") out.push(part);
-			continue;
-		}
-		imageNo += 1;
-		const dataUrl = \`data:\${part.mediaType};base64,\${part.data}\`;
-		const payload = {
-			model: vision.model,
-			stream: false,
-			messages: [
-				{ role: "system", content: "You are an image understanding assistant. Describe the image in exhaustive detail and transcribe every visible text (OCR). If it is a UI, document, table, chart or code, preserve its structure. Answer in Chinese unless the user's language clearly differs." },
-				{ role: "user", content: [
-					{ type: "text", text: "请把这张图片完整转述为文字：包含画面内容、结构与全部可见文字（逐字 OCR）。" },
-					{ type: "image_url", image_url: { url: dataUrl } }
-				] }
-			]
-		};
-		const headers = { "content-type": "application/json" };
-		if (apiKey !== "") headers.authorization = "Bearer " + apiKey;
-		const response = await fetch(endpoint, {
-			method: "POST",
-			headers,
-			body: JSON.stringify(payload),
-			signal: AbortSignal.timeout(120000)
-		});
-		if (!response.ok) {
-			const bodyText = await response.text().catch(() => "");
-			throw new Error("识图服务返回 HTTP " + response.status + "：" + bodyText.slice(0, 400));
-		}
-		const data = await response.json();
-		const description = data && data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : "";
-		if (typeof description !== "string" || description.trim() === "") throw new Error("识图服务未返回有效文字描述");
-		out.push({ type: "text", text: "[图片" + imageNo + "] " + description.trim() });
-	}
-	return out;
-}
-`;
-// --- 0.1.2-alpha.5 重锚：dsh-api-session-controller/lib/index.js 的
-// SessionCommandController.prompt（:745 hasImage / :751 图片门槛 / :754 准入）。
-// 三处锚点均为该文件逐字唯一命中（tab 缩进，锚点串从首个非空白字符起匹配，
-// 前导 tab 原样保留在产物中）。一条 transform 承担两件事：
-//   故障②（本补丁的真实靶点）：文本模型（inputModalities 不含 image）收到图片
-//     本应由 dsh-vision VLM 转述成文字再发，alpha.5 上游直接 throw
-//     MODEL_DOES_NOT_SUPPORT_IMAGES 拒绝 → 输入框 toast「当前模型不支持图片」。
-//     门槛改为转述；dsh-vision 关闭（enabled===false）或转述失败时，按上游原样
-//     抛回 MODEL_DOES_NOT_SUPPORT_IMAGES / 追加 IMAGE_DESCRIPTION_FAILED 指引。
-//   :745 content 空值守卫（纵深防御，经取证**不是**故障①的根因，见下）：
-//     content ?? [] 让非数组调用不再触发裸 TypeError，hasImage 随之 false，
-//     admittedContent 恒为数组后下游 admitPromptContent 也不会二次崩（同文件
-//     imageBlockIn 早已有 !Array.isArray 守卫，上游此处漏防属其自身不一致）。
-// 故障①（「本轮运行失败 Cannot read properties of undefined (reading 'some')」）
-// 的取证结论：该文案唯一来源是 turn/end{reason.kind:"error"}（dsh-client-ui-chat
-// /lib/client.js:6218 failureFrom → TurnErrorItem），而 prompt() 准入失败走的是
-// 输入框 toast `${error.message} (${error.code})`（dsh-client-ui-conversation
-// /lib/client.js:15359）；且 typert strict codec 的 SessionPromptRequest 里
-// content 为必填数组（dsh-api-session-controller/lib/typert.remote-client.js:561
-// 起 schema；网关 dsh-api-gateway/lib/index.js:1058 decode → schema.parse）——
-// 故 :745 的 undefined 经官方 wire 不可达，也不可能是「本轮运行失败」。轮内裸
-// .some 站点收敛为两处：dsh-llm/lib/index.js:558 contentHasImage（8 个轮内调用
-// 点共享的递归图片遍历，仅在所选模型 inputModalities 不含 image 时求值）与
-// dsh-tools/lib/index.js:1295 result.content.some；抛错均经 adapterFailureChunk
-// / schedulerFailure → turn/end{code:"UNKNOWN"} → 该文案。本机数据目录 65 个
-// 会话全量逐帧解压零命中，无法就地定案 → 按「根因未定案不写守卫」纪律，不对其
-// 预先打补丁（详见交付报告遗留项）。
-// image-send-fix 于 0.1.2-alpha.1（b5d5c4a5「退役已原生化的补丁」）随内核拆分
-// 一并从注册表摘除，转述功能就此在 alpha 世代失效；此处按 alpha.5 真实代码重锚
-// 并重新登记（enabled 总开关与 apiKey 宿主侧读取已内联进 IMAGE_SEND_HELPER，
-// 无需再复活 vision-key-fix / vision-toggle-gate）。
-const IMAGE_SEND_HASIMAGE_OLD = 'const hasImage = request.content.some((part) => part.type === "image");';
-// 入口守卫：content ?? [] 让 undefined 不再触发裸 TypeError，hasImage 随之 false；
-// admittedContent 默认取 promptContent（恒为数组），门槛命中时改挂转述结果。
-const IMAGE_SEND_HASIMAGE_NEW = [
-  'const promptContent = request.content ?? [];',
-  '\t\tlet admittedContent = promptContent;',
-  '\t\tconst hasImage = promptContent.some((part) => part.type === "image");',
-].join('\n');
-// alpha.5 门槛原句（单行 throw）——逐字锚点。
-const IMAGE_SEND_GATE_OLD = 'if (model.inputModalities !== void 0 && !model.inputModalities.includes("image")) throw new RemoteError("session/attachment-invalid", `Model "${current.model}" does not support image input.`, { reason: "MODEL_DOES_NOT_SUPPORT_IMAGES" });';
-// 门槛替换体：文本模型 + 图片 → VLM 转述写 admittedContent；dsh-vision 关闭
-// （dshVisionDisabled）回落上游 MODEL_DOES_NOT_SUPPORT_IMAGES；其它失败给可操作
-// 指引。alpha.5 用 this.ctx / throw（非旧 ctx / return err(request,{））。
-const IMAGE_SEND_GATE_NEW = [
-  'if (model.inputModalities !== void 0 && !model.inputModalities.includes("image")) {',
-  '\t\t\t\t\t\ttry {',
-  '\t\t\t\t\t\t\tadmittedContent = await describeImagesWithVision(this.ctx, promptContent);',
-  '\t\t\t\t\t\t} catch (visionError) {',
-  '\t\t\t\t\t\t\tif (visionError && visionError.dshVisionDisabled === true) {',
-  '\t\t\t\t\t\t\t\tthrow new RemoteError("session/attachment-invalid", `Model "${current.model}" does not support image input.`, { reason: "MODEL_DOES_NOT_SUPPORT_IMAGES" });',
-  '\t\t\t\t\t\t\t}',
-  '\t\t\t\t\t\t\tthrow new RemoteError("session/attachment-invalid", `图片自动转述失败：${visionError instanceof Error ? visionError.message : String(visionError)}。请在 设置 → 识图插件（view_image） 配置 VLM 后重试。`, { reason: "IMAGE_DESCRIPTION_FAILED" });',
-  '\t\t\t\t\t\t}',
-  '\t\t\t\t\t}',
-].join('\n');
-// 准入使用转述后的内容（admittedContent 默认 = promptContent，永不为 undefined）。
-// 0.1.5-rc.1 重锚：上游 prompt 改走 resolvePromptFileReceipts → admission.content，
-// 且 admitPromptContent 变为实例方法形态（this.ctx.attachments.admitPromptContent(...)）。
-const IMAGE_SEND_ADMIT_OLD = 'this.ctx.attachments.admitPromptContent(admission.content)';
-const IMAGE_SEND_ADMIT_NEW = 'this.ctx.attachments.admitPromptContent(admittedContent)';
-
-function transformImageSendFix(src, file) {
-  if (src.includes(IMAGE_SEND_MARKER)) return { status: 'already' };
-  // 上游若原生内置同名 helper：不重复插入（避免遮蔽死代码），仅重写门槛与准入。
-  const nativeHelper = src.includes('async function describeImagesWithVision');
-  if (!nativeHelper) {
-    const anchorIdx = src.indexOf(IMAGE_SEND_HELPER_ANCHOR);
-    if (anchorIdx === -1) {
-      return { status: 'anchor-missing', detail: '未找到 helper 插入锚点（routeServed，版本可能已变更），跳过 ' + file };
-    }
-    src = src.slice(0, anchorIdx) + IMAGE_SEND_HELPER + '\n' + src.slice(anchorIdx);
-  }
-  // 1) prompt 入口：content 空值守卫（纵深防御）+ admittedContent 声明
-  const hasImageIdx = src.indexOf(IMAGE_SEND_HASIMAGE_OLD);
-  if (hasImageIdx === -1) {
-    return { status: 'anchor-missing', detail: '未找到 hasImage 入口（request.content，版本可能已变更），跳过 ' + file };
-  }
-  src = src.slice(0, hasImageIdx) + IMAGE_SEND_HASIMAGE_NEW + src.slice(hasImageIdx + IMAGE_SEND_HASIMAGE_OLD.length);
-  // 2) 图片门槛：文本模型 → VLM 转述；关闭/失败回落上游拒绝（故障②）
-  const gateIdx = src.indexOf(IMAGE_SEND_GATE_OLD);
-  if (gateIdx === -1) {
-    return { status: 'anchor-missing', detail: '未找到模型图片门槛（alpha.5 throw 形态，版本可能已变更），跳过 ' + file };
-  }
-  src = src.slice(0, gateIdx) + IMAGE_SEND_GATE_NEW + src.slice(gateIdx + IMAGE_SEND_GATE_OLD.length);
-  // 3) admitPromptContent 使用转述后的内容
-  const callIdx = src.indexOf(IMAGE_SEND_ADMIT_OLD);
-  if (callIdx === -1) {
-    return { status: 'anchor-missing', detail: '未找到 admitPromptContent 调用（版本可能已变更），跳过 ' + file };
-  }
-  src = src.slice(0, callIdx) + IMAGE_SEND_ADMIT_NEW + src.slice(callIdx + IMAGE_SEND_ADMIT_OLD.length);
-  return { status: 'changed', src };
-}
-
-// ---------------------------------------------------------------------------
-// 【休眠·未登记】图片自动转述 apiKey 修复（原 main.js applyVisionKeyFix 内联
-// transform）：锚点为旧内核的 settings.describe 形态；alpha.5 重锚后同等语义已
-// 内联进 IMAGE_SEND_HELPER（settings.get 优先 + describe 兼容回落），仅留作参照。
-// ---------------------------------------------------------------------------
-const VISION_KEY_MARKER = 'dsh-desktop fix: read the resolved HOST-side value';
-const VISION_KEY_FROM = '\tlet vision = null;\n\tif (settings !== void 0 && typeof settings.describe === "function") {\n\t\ttry {\n\t\t\tconst descriptor = settings.describe({ redactSecrets: true }).find((candidate) => String(candidate.ns) === "dsh-vision");\n\t\t\tif (descriptor !== void 0 && descriptor.value !== void 0 && typeof descriptor.value === "object") vision = descriptor.value;\n\t\t} catch {}\n\t}';
-const VISION_KEY_TO = '\tlet vision = null;\n\tif (settings !== void 0 && typeof settings.get === "function") {\n\t\t// dsh-desktop fix: read the resolved HOST-side value (settings.get), not the\n\t\t// redacted wire snapshot. redactSecrets strips role(\'secret\') fields, so\n\t\t// describe({redactSecrets:true}) drops apiKey and every keyed VLM endpoint\n\t\t// answers 401 — image sends failed for configured users.\n\t\tconst resolved = settings.get("dsh-vision");\n\t\tif (resolved !== void 0 && typeof resolved === "object") vision = resolved;\n\t}\n\tif (vision === null && settings !== void 0 && typeof settings.describe === "function") {\n\t\ttry {\n\t\t\tconst descriptor = settings.describe({ redactSecrets: true }).find((candidate) => String(candidate.ns) === "dsh-vision");\n\t\t\tif (descriptor !== void 0 && descriptor.value !== void 0 && typeof descriptor.value === "object") vision = descriptor.value;\n\t\t} catch {}\n\t}';
-
-function transformVisionKeyFix(src, file) {
-  if (src.includes(VISION_KEY_MARKER)) return { status: 'already' };
-  if (!src.includes(VISION_KEY_FROM)) {
-    return { status: 'anchor-missing', detail: '锚点未匹配（版本可能已变化），跳过 ' + file };
-  }
-  return { status: 'changed', src: src.replace(VISION_KEY_FROM, VISION_KEY_TO) };
-}
-
-// ---------------------------------------------------------------------------
-// 【休眠·未登记】识图总开关（enabled）门槛增量补丁：历史上用于给「已应用旧版
-// image-send-fix」的旧内核树补挂「dsh-vision 关闭 → 不转述、按上游原样拒绝」。
-// 0.1.2-alpha.5 重锚后不再需要：enabled 判定与 dshVisionDisabled 回落已直接写进
-// IMAGE_SEND_HELPER / IMAGE_SEND_GATE_NEW，注册表里也没有对应 PatchSpec。
-// 下方两处锚点（VISION_TOGGLE_HELPER_ANCHOR 之外的 GATE_FROM）仍是 alpha.1 前的
-// ctx / return err(request,{ 形态，对 alpha.5 树必然 anchor-missing——保留仅为
-// 历史参照（同 vision-key-fix 休眠先例），请勿据此推断 alpha.5 仍缺开关。
-// ---------------------------------------------------------------------------
-const VISION_TOGGLE_MARKER = 'DSH Desktop: dsh-vision master switch (enabled)';
-const VISION_TOGGLE_HELPER_ANCHOR = '\tif (vision === null || typeof vision.baseURL !== "string" || vision.baseURL.trim() === "" || typeof vision.model !== "string" || vision.model.trim() === "") {';
-const VISION_TOGGLE_HELPER_CHECK = [
-  '\t// DSH Desktop: dsh-vision master switch (enabled) — off means the user turned',
-  '\t// the whole capability off in 设置 → 识图插件：skip conversion and flag the',
-  '\t// throw so the gate below restores the upstream MODEL_DOES_NOT_SUPPORT_IMAGES',
-  '\t// rejection (the exact pre-plugin behavior: images neither sent nor converted).',
-  '\tif (vision !== null && vision.enabled === false) {',
-  '\t\tconst visionDisabled = new Error("dsh-vision disabled");',
-  '\t\tvisionDisabled.dshVisionDisabled = true;',
-  '\t\tthrow visionDisabled;',
-  '\t}',
-  '',
-].join('\n');
-// 旧 gate 的 catch 头（含转述调用行作唯一性前缀，避免命中文件内其它 catch）。
-const VISION_TOGGLE_GATE_FROM = '\t\t\t\t\t\t\t\t\tadmittedContent = await describeImagesWithVision(ctx, content);\n\t\t\t\t\t\t\t\t} catch (error) {\n\t\t\t\t\t\t\t\t\treturn err(request, {';
-const VISION_TOGGLE_GATE_TO = [
-  '\t\t\t\t\t\t\t\t\tadmittedContent = await describeImagesWithVision(ctx, content);',
-  '\t\t\t\t\t\t\t\t} catch (error) {',
-  '\t\t\t\t\t\t\t\t\tif (error && error.dshVisionDisabled === true) {',
-  '\t\t\t\t\t\t\t\t\t\treturn err(request, {',
-  "\t\t\t\t\t\t\t\t\t\t\tcode: 'attachment-error',",
-  '\t\t\t\t\t\t\t\t\t\t\tmessage: `Model "${current.model}" does not support image input.`,',
-  "\t\t\t\t\t\t\t\t\t\t\tdetails: { reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' }",
-  '\t\t\t\t\t\t\t\t\t\t});',
-  '\t\t\t\t\t\t\t\t\t}',
-  '\t\t\t\t\t\t\t\t\treturn err(request, {',
-].join('\n');
-
-function transformVisionToggleGate(src, file) {
-  if (src.includes(VISION_TOGGLE_MARKER)) return { status: 'already' };
-  // helper 不存在 = image-send-fix 本身没打上（或上游原生内置 helper 且无该
-  // 检查行）——本补丁无从谈起，按失配跳过。
-  const helperIdx = src.indexOf(VISION_TOGGLE_HELPER_ANCHOR);
-  const gateIdx = src.indexOf(VISION_TOGGLE_GATE_FROM);
-  if (helperIdx === -1 || gateIdx === -1) {
-    return { status: 'anchor-missing', detail: '未找到识图 helper/门槛锚点（版本可能已变更或 image-send 未应用），跳过 ' + file };
-  }
-  const out = src.replace(VISION_TOGGLE_HELPER_ANCHOR, VISION_TOGGLE_HELPER_CHECK + VISION_TOGGLE_HELPER_ANCHOR)
-    .replace(VISION_TOGGLE_GATE_FROM, VISION_TOGGLE_GATE_TO);
-  return { status: 'changed', src: out };
-}
 
 // ---------------------------------------------------------------------------
 // dsh 装配层防护：profile patch 损坏自愈加载（原 applyProfilePatchGuard）。
@@ -551,7 +302,7 @@ function transformPluginInventoryTabMergeFix(src, file) {
 // 完成路径逐字不变（race 只加 abort 分支）；pwsh / bash 两包共用同一
 // transform，方言（reset reason 措辞）按包内既有字面量推导。
 // 上游修复意向：上游在 persistent 工具内内置 abort race 后，本补丁经
-// already / anchor-missing 自然退役（参照 vision-key-fix 休眠先例）。
+// already / anchor-missing 自然退役（参照 workspace-search-rail-fix 休眠先例）。
 // ---------------------------------------------------------------------------
 const PERSISTENT_ABORT_RACE_MARKER = 'dsh-desktop fix: race the persistent send against tool abort';
 const PERSISTENT_ABORT_RACE_ANCHOR = '\t\t\t\tfirst = false;\n\t\t\t\tresult = await operation.done;';
@@ -657,7 +408,7 @@ function transformTerminalInterruptEscalation(src, file) {
 // 目标双文件：lib/index.js（运行时经 exports "." 实际加载的唯一入口）与同源
 // 的 lib/invariant.js（无人加载，一并覆盖防未来消费方；两文件锚点文本一致）。
 // 上游修复意向：上游在 resolve()/resume 链内置同款回落后，本补丁经 already /
-// anchor-missing 自然退役（参照 vision-key-fix 休眠先例）。
+// anchor-missing 自然退役（参照 workspace-search-rail-fix 休眠先例）。
 //
 // rc.2 重锚（2026-10-05）：预设 roster 包 dsh-agent-presets 已拆成
 // dsh-agent-preset（声明）+ dsh-agent-preset-registry（注册表，UnknownPresetError
@@ -754,12 +505,15 @@ function transformAgentPresetFallback(src, file) {
 // ---------------------------------------------------------------------------
 // prompt-context-literal 补丁（context/section 文本里的字面 {{...}} 不再炸整轮）。
 //
-// 根因（真实用户现场）：内核 dsh-system-prompt 的 interpolate() 对所有 section
-// 与 context 文本做 {{name}} 插值扫描，VARIABLE_NAME=/^[a-z][a-z0-9_]*$/：字面量
-// {{state.gold}}（graph-memory 从图数据库 recall 出的节点/episode 内容，属不可信
-// 数据而非模板作者手笔）名字带点 → malformed 硬抛 → 整轮 prompt 组装失败，会话
-// 每轮必瘫。这是「不可信数据进了模板插值器」的经典注入类问题：任何把动态/用户
-// 数据拼进 context 的插件都会中招。
+// 立论理由（插件无关）：内核 dsh-system-prompt 的 interpolate() 对所有 section 与
+// context 文本做 {{name}} 插值扫描，VARIABLE_NAME=/^[a-z][a-z0-9_]*$/，而这两类文本
+// 里装的大量是**不可信数据**——任何把动态内容（DB 行、检索原文、用户粘贴文本）拼进
+// context 的插件，其数据里只要有一个字面量长得像 {{state.gold}}（名字带点），就
+// malformed 硬抛 → 整轮 prompt 组装失败，会话每轮必瘫。这是「不可信数据进了模板
+// 插值器」的经典注入类问题，守卫按数据面立论，不随某个插件的存废失效。
+// 历史触发源（2026-09 真实用户现场）：graph-memory 从图数据库 recall 出的节点/
+// episode 内容里存了这类字面量；该插件已随 2026-10 内置伴随插件批量退役，本补丁
+// 保留——中招的一直是「写入非法变量名模板的任意插件」这一整类。
 //
 // 修法：name 不合法（含点、大写、空格等）时不再硬抛，改为 console.warn（附
 // kind / context 名 / 原文字面组 / 邻近片段）+ 按字面透传该组，渲染继续。
@@ -769,10 +523,11 @@ function transformAgentPresetFallback(src, file) {
 // 模板作者语法（dsh-workspace-anchor 的 section 就有意引用 {{cwd}}），引用了未
 // 注册变量是真实作者错误，静默透传会把真错误漏成悄悄不渲染的文本——必须响亮。
 // value===void 0 分支同理不动（合法引用取到 undefined 属装配期真错误）。
-// 与 graph-memory 插件侧 defuseTemplateGroups（打断 {{ / }} 序列，护存量 DB）
-// 互补：插件净化护住本插件，内核放宽兜住其他一切动态数据源。
+// 原与 graph-memory 插件侧 defuseTemplateGroups（打断 {{ / }} 序列，护存量 DB）
+// 双层互补；该半边随插件退役消失后，内核侧放宽就是唯一一层，兜的仍是其他一切
+// 动态数据源。
 // 上游修复意向：上游在 interpolate 内置同款「无效名透传 + warn」后，本补丁经
-// already / anchor-missing 自然退役（参照 vision-key-fix 休眠先例）。
+// already / anchor-missing 自然退役（参照 workspace-search-rail-fix 休眠先例）。
 // ---------------------------------------------------------------------------
 const PROMPT_CONTEXT_LITERAL_MARKER = 'dsh-desktop fix: prompt-context-literal';
 // 锚点 = interpolate() 的 name-invalid 抛错整行（含上一行 const name 取组名，
@@ -1037,7 +792,7 @@ function transformDeviceAuthGuidance(src, file) {
 // 浏览器直接可见）。非 WSL 的 Linux 裸机行为不变（真在 Linux 桌面前的用户
 // zenity 仍是最优交互）。
 // 上游修复意向：上游 resolver 内置同款 WSL 判定后，本补丁经 already /
-// anchor-missing 自然退役（参照 vision-key-fix 休眠先例）。
+// anchor-missing 自然退役（参照 workspace-search-rail-fix 休眠先例）。
 // ---------------------------------------------------------------------------
 const WSL_PICKER_BROWSE_MARKER = 'dsh-desktop fix: WSL picker must browse, not zenity into WSLg';
 // 锚点 = resolveDirectoryPickerBackend 的 SSH 分支行（该函数唯一出现处，
@@ -2669,7 +2424,8 @@ module.exports = {
   transformTerminalInterruptEscalation,
   // agent-preset 未知 id 回落（0.5.0 存量用户 resume 变砖修复）。
   transformAgentPresetFallback,
-  // dsh-system-prompt 字面量透传（graph-memory {{state.gold}} 模板注入瘫会话修复）。
+  // dsh-system-prompt 字面量透传（任何插件写入的非法变量名模板都不再炸整轮；
+  // 历史触发源 graph-memory）。
   transformPromptContextLiteral,
   // K1（credentials service is absent 偶发）两层修复（第三层 fallback-heal 已随
   // rc.2 删除 heal 子系统而退役）。
@@ -2707,8 +2463,6 @@ module.exports = {
   // K1 注入体常量（单测 vm 行为验证用，与 transform 同源；非 marker）。
   CREDENTIALS_HELPERS_CODE,
   // 包级补丁 node_modules 根应用器（唯一实现）。
-  // 文本模型自动识图（识图门槛转述 + prompt content 空值守卫，0.1.2-alpha.5 重锚）。
-  transformImageSendFix,
   rootAppliers: {
     patchWebSearchBaseUrl,
     patchMenuViewport,
@@ -2731,7 +2485,6 @@ module.exports = {
   // transform 同源），bundle-guard 系来自 profile-bundle-heal，loader 隔离系
   // 来自 loader-isolation，其余为本文档声明化。
   markers: {
-    IMAGE_SEND_MARKER,
   DS_TOOL_SCHEMA_SANITIZE_MARKER,
   PI_AI_TOOL_SCHEMA_SANITIZE_MARKER,
   PI_AI_RESPONSES_TOOL_NAME_SANITIZE_MARKER,

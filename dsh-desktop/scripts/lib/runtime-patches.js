@@ -39,8 +39,10 @@ const {
 const FLASH_OLD = '(value) => baselineByKey.get(keyOf(value))).filter((value) => value !== void 0);';
 const FLASH_NEW = '(value) => baselineByKey.get(keyOf(value)) ?? value).filter((value) => value !== void 0);';
 
-/** 设置暴露白名单（dsh-prompt / 第三方思考 / 识图 / 会话调整）。 */
-const SETTINGS_NAMESPACES = ['dsh-prompt', 'dsh-third-party-thinking', 'dsh-vision', 'dsh-conversation-tweaks'];
+/** 设置暴露白名单（dsh-prompt / 第三方思考 / 会话调整）。
+ *  'dsh-vision' 已随识图插件（2026-10 内置伴随插件批量退役）摘除：白名单里留着
+ *  一个没有插件写入的命名空间，设置页只会多出一个空白分组。 */
+const SETTINGS_NAMESPACES = ['dsh-prompt', 'dsh-third-party-thinking', 'dsh-conversation-tweaks'];
 // dsh rc.7 replaced the static allow-list with plugin-owned dynamic settings
 // descriptors. Such a source already exposes every registered namespace, so
 // the legacy list injection is unnecessary and must be treated as idempotent.

@@ -2,12 +2,12 @@
 
 // 把 DSH Desktop 的配套插件同步进任意 dsh 的 web profile（独立于 Electron 壳，
 // 同步逻辑与 main.js 的 syncCompanionPlugins 共用 scripts/lib/companion-profile.js
-// 的同一实现），并顺带把壳内置的 Agent 预设（assets/agent-presets）同步进
-// <DSH_HOME>/.agent-presets（内核 0.1.2-alpha.1 起 dsh-agent-presets 的用户预设
-// 根），避免 WSL / Linux 里的 dsh 模式列表比 Windows 内置 dsh 少。典型用途：
-// 把自己 WSL / Linux 里另装的 dsh（checkout 开发版或 npm 版）也配上壳自带的
-// 插件（余额、文件改动视图、终端、浮窗、插件市场、自定义提示词、第三方思考、
-// 识图等）。
+// 的同一实现）。典型用途：把自己 WSL / Linux 里另装的 dsh（checkout 开发版或
+// npm 版）也配上壳自带的插件（余额、文件改动视图、终端、浮窗、插件市场、
+// 自定义提示词、第三方思考、识图等）。
+//
+// v1.0.0 纯净线：Agent 预设不再随包（`assets/agent-presets` 已删除，预设写入器
+// 与落点自愈一并拆除），本脚本只管插件与运行时补丁。
 //
 // 用法（WSL / Linux / Windows 均可执行）：
 //   node scripts/sync-companion-plugins.js [DSH_HOME] [--with-patches] [--dry-run] [--dsh-package <目录>]
@@ -18,8 +18,8 @@
 //     --dsh-package  profile manifest 对账的目标 dsh 包目录（缺省自动探测
 //                    <DSH_HOME>/agent 与 PATH 上的 dsh 命令）
 //
-// 生效方式：同步只落盘；dsh web 在启动时读取 profile 补丁层与 <DSH_HOME>/
-// .agent-presets 预设目录，因此需要重启 WSL 里的 dsh web 后插件才会挂载
+// 生效方式：同步只落盘；dsh web 在启动时读取 profile 补丁层，因此需要重启 WSL
+// 里的 dsh web 后插件才会挂载
 // （checkout 开发模式 `pnpm dsh web`，npm 安装版 `dsh web`）。注意：重启 dsh
 // web 会中断当前正在跑的会话（会话数据在磁盘上，重启后可继续）。
 //
@@ -30,7 +30,6 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { installBuiltinPresets } = require('./install-minimal-win-preset');
 const { COMPANION_PLUGINS } = require('./lib/companion-plugins');
 const { CORE_BUNDLE_NAMES } = require('../profile-manifest');
 const { writeFileAtomic } = require('./lib/patch-io');
@@ -41,12 +40,12 @@ const { quotePatchScalarValues } = require('./plugin-core/lib/patch-surgery');
 const { PluginStateStore } = require('./plugin-core/lib/state-store');
 const { syncHubRecognition } = require('./lib/hub-registry');
 const {
-  ACP_SELF_DISABLE_BLOCK, PET_DISABLE_BLOCK,
-  CARDIAN_DISABLE_BLOCK, GRAPH_MEMORY_DISABLE_BLOCK,
+  ACP_SELF_DISABLE_BLOCK,
   removeAcpBasicDisableBlock,
   ensureDisabledPatchEntry, removeLegacyMarketplacePatchLines,
   removeRetiredDshMarketPatchRows, removeRetiredThirdPartyThinkingPatchRows,
   removeRetiredDshFloatWindowPatchRows, removeRetiredDshMiniPatchRows,
+  removeRetiredCompanionPatchRows,
   registerCompanionPatchEntries, syncCompanionFiles, removedPluginIdsFromPatch,
 } = require('./lib/companion-profile');
 
@@ -59,11 +58,9 @@ function warn(msg) {
 }
 
 // ---------------------------------------------------------------------------
-// 内置 Agent 预设同步：0.1.2-alpha.1 起内核把内置预设移入
-// @deepseek-ai/dsh-agent-presets（cordis / minimal / ptc / standard），用户预设
-// 从 <DSH_HOME>/.agent-presets 发现。这里把 assets/agent-presets 幂等复制进
-// <DSH_HOME>/.agent-presets，让两端（Windows 内置 / WSL·Linux 另装）模式列表
-// 一致且与新版内置 roster 共存（不依赖已移除的 code / minimal-win 上游 id）。
+// dsh 包目录探测：profile manifest 对账要知道目标 dsh 装在哪（自动探测
+// <DSH_HOME>/agent、<DSH_HOME>/profiles、<DSH_HOME> 三种布局，再回落 PATH 上
+// 的 dsh 命令；也可用 --dsh-package 显式指定）。
 // ---------------------------------------------------------------------------
 
 function isDshPackageDir(dir) {
@@ -146,20 +143,6 @@ function findDshPackageDir(home, explicit) {
     if (dir) return dir;
   }
   return '';
-}
-
-function syncBuiltinPresets(home, dryRun) {
-  const destRoot = path.join(home, '.agent-presets');
-  if (dryRun) {
-    log(`dry-run: 将同步内置 Agent 预设（assets/agent-presets）→ ${destRoot}`);
-    return;
-  }
-  try {
-    const dests = installBuiltinPresets(home);
-    log(`已同步 ${dests.length} 个内置 Agent 预设 → ${destRoot}: ${dests.map((d) => path.basename(d)).join(', ')}`);
-  } catch (err) {
-    warn('内置 Agent 预设同步失败: ' + (err && err.message ? err.message : err));
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -306,9 +289,21 @@ function syncPlugins(home, dryRun, dshPkgDir) {
     log('已从 cordis.patch.yml 移除退役插件 dsh-mini 条目');
   }
 
+  // v1.0.0 批量退役 11 条配套件（表驱动，名单见 companion-plugins.js 的
+  // RETIRED_COMPANIONS）：insert 内层 / 顶层块 / 随包默认禁用行一次性撤回。
+  // 摘出清单即失去 missingNames 通用撤账路径，patch 层只能由这里认领；目录与
+  // profile manifest 的撤账在 syncCompanionFiles 内的 removeRetiredCompanionDirs
+  // 处理（与 boot 入口 scripts/integration/plugin-sync.js 同款接线）。
+  const retiredBulk = removeRetiredCompanionPatchRows(patch);
+  patch = retiredBulk.patch;
+  if (retiredBulk.changed) {
+    changed = true;
+    log('已从 cordis.patch.yml 撤回批量退役配套件登记: ' + retiredBulk.removed.join(', '));
+  }
+
   // billion-context-dsh（compaction-acp，模型驱动的 ACP 压缩后端）默认关闭：
-  // 用户反馈其在上下文占用未及 1/4 时仍频繁压缩。改为随包默认禁用（harness-pet
-  // 同款顶层 disabled 块一票否决 bundle 自身 insert），需要时在设置 → 插件 →
+  // 用户反馈其在上下文占用未及 1/4 时仍频繁压缩。改为随包默认禁用（顶层
+  // disabled 块一票否决 bundle 自身 insert），需要时在设置 → 插件 →
   // 管理 一键开启。同时撤销历史自动写入的 compaction-basic 禁用块、恢复内核
   // 默认压缩（billion-context-dsh 不再默认接管，两后端互斥的前提随之消失）。
   if (bundleNames.has('billion-context-dsh')) {
@@ -328,66 +323,12 @@ function syncPlugins(home, dryRun, dshPkgDir) {
     }
   }
 
-  // 桌面宠物（harness-pet）默认关闭：客户端常驻 rAF 逐帧绘制 canvas 是
-  // 软渲染/流式输出下的持续阻塞源（issue #34），且旧版保存的开关值会覆盖
-  // 客户端默认。插件级 disabled 条目一票否决任何已保存状态；需要时可在
-  // 设置 → 插件 → 管理 一键开启。幂等：已存在 harness-pet 条目则不动。
-  if (bundleNames.has('harness-pet')) {
-    // #183：默认禁用只交付一次。用户在插件管理开启（移除禁用条目）后，
-    // 旧行为在每次 boot 同步都会把禁用块重新写回（idPattern 只判「条目不
-    // 存在」），用户的开启被永久打回关闭。判据升级为「历史快照（plugin-guard
-    // 每次 boot 录制 rollbacks/<profile>/cordis.patch.yml）或当前 patch 曾出现
-    // harness-pet 条目 → 默认禁用已交付，不再写回」；仅全新 profile（无快照、
-    // 无条目）写入一次默认禁用（保留 issue #34 的性能初衷）。
-    const petDelivered = (() => {
-      if (/id:\s*harness-pet(?![A-Za-z0-9_.-])/.test(patch)) return true;
-      try {
-        const rbDir = path.join(home, 'rollbacks', 'web');
-        if (fs.existsSync(rbDir)) {
-          for (const e of fs.readdirSync(rbDir)) {
-            const f = path.join(rbDir, e, 'cordis.patch.yml');
-            try { if (fs.existsSync(f) && /id:\s*harness-pet(?![A-Za-z0-9_.-])/.test(fs.readFileSync(f, 'utf8'))) return true; } catch { /* 单份快照不可读则跳过 */ }
-          }
-        }
-      } catch { /* 历史不可读时按未交付处理（保守，最多恢复旧行为） */ }
-      return false;
-    })();
-    const pet = petDelivered ? { patch, changed: false } : ensureDisabledPatchEntry(patch, new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*harness-pet(?![A-Za-z0-9_.-])'), PET_DISABLE_BLOCK);
-    if (pet.changed) {
-      patch = pet.patch;
-      changed = true;
-      if (dryRun) log(`dry-run: 将向 ${patchFile} 写入 harness-pet 禁用条目`);
-      else log('已写入 harness-pet 禁用条目（桌面宠物默认关闭）');
-    } else {
-      log('harness-pet 禁用条目已存在（跳过）');
-    }
-  }
-
-  // 知识中心（dsh-cardian / cardian）默认关闭：可在设置 → 插件 → 管理一键开启。
-  if (bundleNames.has('dsh-cardian')) {
-    const cardian = ensureDisabledPatchEntry(patch, new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*cardian(?![A-Za-z0-9_.-])'), CARDIAN_DISABLE_BLOCK);
-    if (cardian.changed) {
-      patch = cardian.patch;
-      changed = true;
-      if (dryRun) log(`dry-run: 将向 ${patchFile} 写入 cardian 禁用条目`);
-      else log('已写入 cardian 禁用条目（知识中心默认关闭）');
-    } else {
-      log('cardian 禁用条目已存在（跳过）');
-    }
-  }
-
-  // 知识图谱记忆（graph-memory）默认关闭：可在设置 → 插件 → 管理一键开启。
-  if (bundleNames.has('graph-memory')) {
-    const gm = ensureDisabledPatchEntry(patch, new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*graph-memory(?![A-Za-z0-9_.-])'), GRAPH_MEMORY_DISABLE_BLOCK);
-    if (gm.changed) {
-      patch = gm.patch;
-      changed = true;
-      if (dryRun) log(`dry-run: 将向 ${patchFile} 写入 graph-memory 禁用条目`);
-      else log('已写入 graph-memory 禁用条目（知识图谱记忆默认关闭）');
-    } else {
-      log('graph-memory 禁用条目已存在（跳过）');
-    }
-  }
+  // 知识中心（dsh-cardian / cardian）与桌面宠物（harness-pet）、知识图谱记忆
+  // （graph-memory）的「随包默认禁用」段已在 v1.0.0 批量退役中整体拆除：三条
+  // 都已摘出 COMPANION_PLUGINS，源目录不再随包到达，bundleNames 永远不含它们，
+  // 而保留这段会在每次同步里给已消失的插件重新写回 disabled 行（写完后一次
+  // 致命启动又会把补丁层改名抹掉）。存量禁用行与登记行的撤回见上方
+  // removeRetiredCompanionPatchRows。
 
   if (changed) {
     if (dryRun) log(`dry-run: 将写入 ${patchFile}`);
@@ -483,14 +424,12 @@ function main() {
     }
   }
   // dsh 包目录（profile manifest 对账的第一解析锚点）；定位不到时对账降级为
-  // 只以 profile node_modules 为锚点。内置 Agent 预设改同步进 <DSH_HOME>/
-  // .agent-presets，不再依赖 dsh 包目录。
+  // 只以 profile node_modules 为锚点。
   const dshPkgDir = findDshPackageDir(home, dshPackageArg);
   syncPlugins(home, dryRun, dshPkgDir);
-  syncBuiltinPresets(home, dryRun);
   if (withPatches) applyRuntimePatches(home, dryRun);
   console.log('[sync] 完成。');
-  console.log('[sync] 提示：插件与内置 Agent 预设在 dsh web 启动时才会挂载 —— 请重启 WSL 里的 dsh web：');
+  console.log('[sync] 提示：插件在 dsh web 启动时才会挂载 —— 请重启 WSL 里的 dsh web：');
   console.log('[sync]   checkout 开发模式:  cd <harness 目录> && pnpm dsh web');
   console.log('[sync]   npm 安装版:        dsh web');
   console.log('[sync]   重启会中断当前正在跑的会话；会话数据在磁盘上，重启后可继续。');

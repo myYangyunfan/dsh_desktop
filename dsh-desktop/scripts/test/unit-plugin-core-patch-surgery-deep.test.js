@@ -3,6 +3,12 @@
 // patch-surgery 深测：开关/卸载文本手术的翻转与幂等、EOL、无尾换行、点号/引号、
 // 行级解析契约、去重/块移除/配套注册/隔离默认禁用/自愈工具。纯文本，零文件系统
 // （bundlePatchEntryIds / collectBundleEntryIds 除外）。
+//
+// 夹具身份（2026-10 调整）：历史上这些通用手术面拿 harness-pet 当样本名、并用
+// PET_DISABLE_BLOCK 验默认禁用块；harness-pet 已在 v1.0.0 退役、该常量随之下线，
+// 样本换成仍随清单分发的 better-sidebar（id `better-sidebar` / 包 `dsh-better-sidebar`），
+// 禁用块改锚到仍存在的 ACP_SELF_DISABLE_BLOCK（compaction-acp 自身禁用）。
+// 断言语义一条没动，只换名字与块。
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -11,7 +17,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const {
-  PATCH_HEADER, ACP_DISABLE_BLOCK, PET_DISABLE_BLOCK,
+  PATCH_HEADER, ACP_DISABLE_BLOCK, ACP_SELF_DISABLE_BLOCK,
   parsePatchRows, patchRowIds, togglePluginInPatch, setPluginRemoved,
   dedupePatchEntries, dropBlocksByIds, topLevelBlocks, ensurePatchArray,
   configLinesFor, normalizeRowConfigIndent, healSoulMdPatchRow, healRowConfig,
@@ -334,8 +340,8 @@ test('registerCompanionPatchEntries: bundle 名单跳过注册', () => {
 
 test('registerCompanionPatchEntries: removedIds 跳过注册（卸载不复活）', () => {
   const r = registerCompanionPatchEntries('', {
-    plugins: [{ id: 'pet', name: 'harness-pet' }],
-    bundleNames: new Set(), missingNames: new Set(), removedIds: new Set(['pet']),
+    plugins: [{ id: 'better-sidebar', name: 'dsh-better-sidebar' }],
+    bundleNames: new Set(), missingNames: new Set(), removedIds: new Set(['better-sidebar']),
   });
   assert.ok(!r.changed);
   assert.deepEqual(r.added, []);
@@ -379,21 +385,23 @@ test('healPatchListSyntax: 移除与列表混存的顶层 []，幂等；纯 [] �
   assert.equal(healPatchListSyntax('[]').healed, false);
 });
 
-test('ensureDisabledPatchEntry: ACP/PET 默认禁用块 + 幂等', () => {
+test('ensureDisabledPatchEntry: 两块互不相关的默认禁用块 + 幂等', () => {
   const acp = ensureDisabledPatchEntry('', /compaction-basic/, ACP_DISABLE_BLOCK);
   assert.ok(acp.changed);
   assert.ok(acp.patch.includes('compaction-basic'));
   assert.ok(acp.patch.includes('disabled: true'));
   assert.equal(ensureDisabledPatchEntry(acp.patch, /compaction-basic/, ACP_DISABLE_BLOCK).changed, false);
 
-  const pet = ensureDisabledPatchEntry('', /harness-pet/, PET_DISABLE_BLOCK);
-  assert.ok(pet.changed);
-  assert.ok(pet.patch.includes('harness-pet'));
-  assert.equal(ensureDisabledPatchEntry(pet.patch, /harness-pet/, PET_DISABLE_BLOCK).changed, false);
+  // 旧此处用 PET_DISABLE_BLOCK + harness-pet 验第二块；两块随插件退役下线，
+  // 换仍存在的 ACP_SELF_DISABLE_BLOCK（compaction-acp 自身默认禁用）承担「第二块」角色。
+  const self = ensureDisabledPatchEntry('', /compaction-acp(?![A-Za-z0-9_.-])/, ACP_SELF_DISABLE_BLOCK);
+  assert.ok(self.changed);
+  assert.ok(self.patch.includes('compaction-acp'));
+  assert.equal(ensureDisabledPatchEntry(self.patch, /compaction-acp(?![A-Za-z0-9_.-])/, ACP_SELF_DISABLE_BLOCK).changed, false);
 
-  const bare = ensureDisabledPatchEntry('[]', /harness-pet/, PET_DISABLE_BLOCK);
+  const bare = ensureDisabledPatchEntry('[]', /compaction-acp(?![A-Za-z0-9_.-])/, ACP_SELF_DISABLE_BLOCK);
   assert.ok(bare.changed);
-  assert.ok(bare.patch.includes('harness-pet'));
+  assert.ok(bare.patch.includes('compaction-acp'));
   assert.ok(!bare.patch.includes('[]'));
 });
 
@@ -427,10 +435,11 @@ test('healSoulMdPatchRow / healRowConfig: 缺 config 补 config，幂等、空�
   assert.deepEqual(healSoulMdPatchRow(s.patch).healed, []);
   assert.deepEqual(healSoulMdPatchRow(''), { patch: '', healed: [] });
 
-  const h = healRowConfig("- id: harness-pet\n  name: 'harness-pet'\n", 'harness-pet', { fullRoot: 'x' });
-  assert.match(h.patch, /fullRoot/);
-  assert.deepEqual(healRowConfig(h.patch, 'harness-pet', { fullRoot: 'x' }).healed, []);
-  const noop = healRowConfig(h.patch, 'harness-pet', null);
+  // config 键用 better-sidebar 真实存在的 config.shell（其 bundle cordis.patch.yml 注释即此）。
+  const h = healRowConfig("- id: better-sidebar\n  name: 'dsh-better-sidebar'\n", 'better-sidebar', { shell: '/bin/zsh' });
+  assert.match(h.patch, /shell/);
+  assert.deepEqual(healRowConfig(h.patch, 'better-sidebar', { shell: '/bin/zsh' }).healed, []);
+  const noop = healRowConfig(h.patch, 'better-sidebar', null);
   assert.deepEqual(noop.healed, []);
   assert.equal(noop.patch, h.patch);
 });
@@ -506,7 +515,7 @@ test('quotePatchScalarValues: 裸 @ 包名补引号，健康文件零改写（�
   assert.equal(r2.changed, true);
   assert.ok(r2.text.includes("name: '@deepseek-ai/dsh-balance'"));
   // ③ 健康文件：全为安全 id → 零改写（零写入幂等）。
-  const healthy = '- id: dsh-balance\n  disabled: true\n- insert:\n    - id: dsh-pet\n      name: dsh-pet\n';
+  const healthy = '- id: dsh-balance\n  disabled: true\n- insert:\n    - id: dsh-pocket\n      name: dsh-pocket\n';
   const r3 = quotePatchScalarValues(healthy);
   assert.equal(r3.changed, false);
   assert.equal(r3.text, healthy);

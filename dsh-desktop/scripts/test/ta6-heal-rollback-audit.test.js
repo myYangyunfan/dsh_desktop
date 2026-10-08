@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 // TA6 元测试 5：heal / 回滚面审计（静态分类，报告清单，不实现反向变换）。
 //
-// 对 44 个 file transform 逐个回答「如何撤销」：
+// 对 43 个 file transform 逐个回答「如何撤销」：
 //   - npm-ci 可恢复：目标都在 node_modules/@deepseek-ai 包内，重装即回
 //     pristine（全部 file 补丁皆然——这也是 rc.2→rc.8 升级后补丁自然退役
 //     的机制）；
@@ -14,7 +14,7 @@
 //   - 多点注入：一次 transform 改多处（回滚需逐点处理）。
 //
 // 审计约束（守卫价值）：
-//   1. 分类必须覆盖全部 44 个 file transform（无「无法回滚」盲区）；
+//   1. 分类必须覆盖全部 43 个 file transform（无「无法回滚」盲区）；
 //   2. 每个带 marker 的 transform，marker 必须能定位回滚点（marker 出现在
 //      其 changed 产物中——用 pristine 实跑验证）；
 //   3. root 应用器（15 个）只碰 node_modules 内文件 → npm ci 可整体恢复。
@@ -120,8 +120,11 @@ const EXPECTED_NON_VENDORED = [
 // 退役三条都带 marker 或 FROM/TO 对，不新增回滚盲区；npm-ci 可恢复面不变
 // （靶全在 node_modules 内）。root 侧同批退役 atomic-write-orphan-lock /
 // model-image-input / profile-bundle-guard-profileboot，见审计 3。
-test('审计 1：分类覆盖全部 44 个 file transform（无回滚盲区）', () => {
-  assert.equal(fileSpecs.length, 44);
+// 43 = 44 − image-send-fix（2026-10 内置伴随插件批量拆除）：注入体连 marker
+// 一起从 patch-adapters 删除，磁盘上的旧产物仍在 node_modules 内、npm ci 即回
+// pristine，故不产生新的回滚盲区。
+test('审计 1：分类覆盖全部 43 个 file transform（无回滚盲区）', () => {
+  assert.equal(fileSpecs.length, 43);
   const report = [];
   for (const spec of fileSpecs) {
     const pair = INVERSE_PAIR_HINTS[spec.id];

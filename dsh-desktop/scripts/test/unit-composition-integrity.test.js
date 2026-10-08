@@ -146,6 +146,27 @@ test('criticalServices：清单非空且带缺席后果文案', () => {
   assert.notEqual(criticalServices()[0].rowId, 'mutated');
 });
 
+// issue #175 表自锁（原锁在 rv9 的 plugin-manager 健康卡一节；该伴随件 v1.0.0
+// 退役、源目录删除后，判据收敛到清单本身）：网关行必须按**实际挂载键**登记。
+// 旧键 api-gateway / @deepseek-ai/dsh-host-apiproxy 是重构前命名，拿它查 live
+// 注册表永远缺席 → 网关永久误报红条（现键见 dsh-base/cordis.patch.yml 的 typert-gateway 行）。
+test('criticalServices：网关行走实际挂载键 typert-gateway（#175 防漂移）', () => {
+  const gatewayRowOk = (list) =>
+    list.some((s) => s.rowId === 'typert-gateway' && s.moduleName === '@deepseek-ai/dsh-api-gateway')
+    && !list.some((s) => s.rowId === 'api-gateway' || s.moduleName === '@deepseek-ai/dsh-host-apiproxy');
+
+  assert.ok(gatewayRowOk(criticalServices()), '现表必须按 typert-gateway + dsh-api-gateway 登记');
+
+  // 反证（防恒真判据）：旧键形态必须被同一判据判红。
+  assert.equal(gatewayRowOk([
+    { rowId: 'api-gateway', moduleName: '@deepseek-ai/dsh-host-apiproxy' },
+  ]), false, '判据对旧网关键形态必须不放过');
+  assert.equal(gatewayRowOk([
+    { rowId: 'typert-gateway', moduleName: '@deepseek-ai/dsh-host-apiproxy' },
+  ]), false, '判据对「行 id 已迁但包名回退」的半迁形态必须不放过');
+  assert.equal(gatewayRowOk([]), false, '判据对「网关行整体缺席」必须不放过');
+});
+
 test('packageNameOf：@scope/名、子路径、裸名映射', () => {
   assert.equal(packageNameOf('@deepseek-ai/dsh-web-app/startup'), '@deepseek-ai/dsh-web-app');
   assert.equal(packageNameOf('@deepseek-ai/dsh-tool-subagent-control/list-agents'), '@deepseek-ai/dsh-tool-subagent-control');

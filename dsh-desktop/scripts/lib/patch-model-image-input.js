@@ -23,8 +23,8 @@
 //      「未声明」：resolveModel 仍返回 inputModalities: [...resolvedModel.input]
 //      （:1760），恒为数组、恒非 undefined。
 //   3) 于是两处下游同时按文本模型处理：
-//      · 服务端门槛 dsh-api-session-controller/lib/index.js:753（image-send-fix
-//        重锚处）判定 !inputModalities.includes("image") → 走 VLM 转述；转述失败
+//      · 服务端门槛 dsh-api-session-controller/lib/index.js:753（原 image-send-fix
+//        重锚处，该补丁已随 dsh-vision 于 2026-10 退役）判定 !inputModalities.includes("image") → 走 VLM 转述；转述失败
 //        即抛 MODEL_DOES_NOT_SUPPORT_IMAGES → 客户端 attachmentErrorText 映射为
 //        「当前模型不支持图片，请切换支持图片的模型」（正是用户所见文案）。
 //      · 即便绕过门槛，dsh-llm/lib/index.js:1701 projectImagesForTextModel 会把

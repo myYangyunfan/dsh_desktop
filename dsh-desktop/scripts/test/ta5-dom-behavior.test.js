@@ -460,9 +460,14 @@ async function main() {
     const got = [];
     s.win.dshDesktop.onNotificationJump(j => got.push(j));
     s.emit('notification-jump', { sessionId: 's3' });
-    s.win.__DSH_FLOAT__ = false; s.win.__DSH_PET__ = true;
+    check('__DSH_FLOAT__ 标记拒收（非主窗）', got.length === 0, JSON.stringify(got));
+    // 原第二发用 __DSH_PET__ 顶替浮窗旗标继续判「拒收」——宠物窗旗标已随
+    // harness-pet 退役（注入方 windows.rs 与守卫分支同时删除），该维度不再存在。
+    // 改测反向：旗标撤销后同一监听立即放行，证明身份是逐事件求值、无锁存
+    //（ta15 B 矩阵的同款不变量，这里是 DOM 级物化路径）。
+    s.win.__DSH_FLOAT__ = false;
     s.emit('notification-jump', { sessionId: 's3' });
-    check('__DSH_FLOAT__ / __DSH_PET__ 标记拒收', got.length === 0);
+    check('浮窗旗标撤销即放行（身份无锁存）', got.length === 1 && got[0].sessionId === 's3', JSON.stringify(got));
   }
   {
     const s = bootShim({ appInfo: APP_INFO });
@@ -486,24 +491,27 @@ async function main() {
     check('pendingJump 取出即清（第二订阅者不收）', got2.length === 0);
   }
 
-  // ---- 3.3 事件链：balance / pet / file-drop 转发 window CustomEvent ----
-  console.log('\n[3] 事件链：balance / pet / file-drop → window CustomEvent');
+  // ---- 3.3 事件链：余额转发已退役（行为级反向守卫）----
+  // 退役同批下线：pet-state（harness-pet）与 client-file-drop（dsh-file-drop）两条
+  // 转发半边随插件与壳侧能力（pet_* 命令 / file_drop.rs）一起拆除；
+  // balance-changed → dsh-balance-changed 半边于 2026-10 随 Electron 余额遗留线
+  // 整体退役（contracts/ipc-commands.md §2.4——事件生产方 Rust 轮询环与 sidecar
+  // balance-fetch 均已删除，插件走内核回环路由自取）。本段改为反向守卫：
+  // 即便页面收到同名事件，垫片也不得再派发 window CustomEvent。
+  console.log('\n[3] 事件链：余额转发已退役（不派发 CustomEvent）');
   {
     const s = bootShim({ appInfo: APP_INFO });
     await flush();
     const evts = [];
-    ['dsh-balance-changed', 'dsh-pet-state', 'client-file-drop'].forEach(t =>
+    ['dsh-balance-changed'].forEach(t =>
       s.win.addEventListener(t, e => evts.push(e)));
     s.emit('balance-changed', { balance: '1.23', turnCost: '0.4' });
-    check('balance-changed → dsh-balance-changed CustomEvent detail 原样',
-      evts[0] && evts[0].type === 'dsh-balance-changed' && evts[0].detail.balance === '1.23');
-    s.emit('pet-state', { open: true });
-    check('pet-state → dsh-pet-state CustomEvent', evts[1] && evts[1].type === 'dsh-pet-state' && evts[1].detail.open === true);
-    const dropPayload = { type: 'drop', files: [{ path: 'C:/a.png', name: 'a.png', kind: 'image' }], skipped: [] };
-    s.emit('client-file-drop', dropPayload);
-    check('file-drop 转发 window CustomEvent client-file-drop（detail 契约）',
-      evts[2] && evts[2].type === 'client-file-drop' && evts[2].detail.type === 'drop'
-      && evts[2].detail.files[0].path === 'C:/a.png');
+    await flush();
+    check('balance-changed 不再派发 dsh-balance-changed CustomEvent',
+      evts.length === 0, `实际收到 ${evts.length} 条`);
+    const shimSrc = SHIM_SRC.replace(/\r\n/g, '\n');
+    check('垫片源不含余额事件字面量（balance-changed / dsh-balance-changed）',
+      !shimSrc.includes('balance-changed') && !shimSrc.includes('refreshBalance'));
   }
 
   // ---- 3.4 控制条注入 ----
@@ -831,28 +839,10 @@ async function main() {
       && s.count('plugin:notification|notify') === 0);
   }
 
-  // ---- 3.8 拖放悬停层 ----
-  console.log('\n[8] 拖放悬停层：enter 创建 / leave+drop 移除 / ESC 残留（现状）');
-  {
-    const s = bootShim({ appInfo: APP_INFO });
-    await flush();
-    const HINT = '__dsh_drop_hint__';
-    s.emit('client-file-drop', { type: 'enter', count: 3 });
-    const d = s.doc.getElementById(HINT);
-    check('enter 创建悬停层', !!d && s.doc.body.contains(d));
-    check('文案「松开投喂 3 个文件」', d.textContent === '松开投喂 3 个文件');
-    s.emit('client-file-drop', { type: 'leave' });
-    check('leave 移除悬停层', s.doc.getElementById(HINT) === null);
-    s.emit('client-file-drop', { type: 'enter', count: 0 });
-    check('enter count=0 文案「松开投喂 文件」', s.doc.getElementById(HINT).textContent === '松开投喂 文件');
-    s.emit('client-file-drop', { type: 'drop', files: [] });
-    check('drop 移除悬停层', s.doc.getElementById(HINT) === null);
-    // ESC：菜单关但悬停层不关 —— 断言现状（bug 记录，不修）
-    s.emit('client-file-drop', { type: 'enter', count: 1 });
-    s.doc.dispatchEvent({ type: 'keydown', key: 'Escape' });
-    check('现状断言：ESC 不移除悬停层（bug：无 Escape 处理）', s.doc.getElementById(HINT) !== null);
-    s.emit('client-file-drop', { type: 'leave' });
-  }
+  // ---- 3.8 拖放悬停层：整节随 dsh-file-drop 退役删除 ----
+  // 原用例（enter 建层 / leave+drop 移除 / ESC 现状断言）打的是垫片里
+  // `client-file-drop` 的悬停层半边；插件与壳侧 file_drop.rs 一并下线后垫片不再
+  // 有这条链，段号保留空位不重排（其它节的编号是标识不是序列）。
 
   // ---- 3.9 心跳 / currentSession 轮询 ----
   console.log('\n[9] 心跳 5s + visibilitychange / currentSession 3s 轮询');

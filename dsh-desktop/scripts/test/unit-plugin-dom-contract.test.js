@@ -6,14 +6,18 @@
 // 会让插件的 DOM 锚点「静默」失效——守卫早退、选择器命中 0，表现为「功能在，按了
 // 没反应」，既不报错也不进日志。本文件把这类失效变成会自动红的测试：
 //   G1 死锚登记表：代码里出现「换代后命中 0」的锚点，所在文件必须带 dsh-compat: 标记
-//      （证明是刻意的两代兼容/降级，而不是忘了改）；
+//      （证明是刻意的两代兼容/降级，而不是忘了改）。唯一豁免口径：[data-time-hover-root]
+//      若由插件自己写入、且每处读取都被 [data-dsh-*] 收窄或有显式回退，则该锚已不是宿主锚
+//      （easyrewrite 2.6.0 起正是这个形态），不要求降级标记；判据见 hoverRootIsSelfOwned，
+//      用例内配反证防恒真；
 //   G2 旧行锚 [data-time-hover-root] 不得是唯一命中路径：同行并代新行锚，或紧邻处有
 //      显式回退（|| / ??）；
 //   G3 composer 并代：:has(textarea) 不得单代出现；kind="assistant" 必须与 assistant-step 并列；
 //   G4 已修形态在场：tweaks / quest-ui / session-manager / input-fold 的四代锚逐个点名
 //      （navbar 已于 0.6.3-beta.3 随本体退役，G4 里留一条退役锁防「取回本体却忘了补守卫」）；
 //   G5-G7 tweaks 标记扫描行为：新内核 DOM 早退不打标记、旧内核仍正确标记每轮总结、
-//      开关关闭时只清标记；
+//      开关关闭时只清标记。0.1.1 起设置通道是 ctx.remote.settings（describe/mutate，
+//      ns=profile 条目 id），幽灵服务 settingsScope 已不存在，describe 异步故用例排空微任务；
 //   G8 覆盖面锁：插件客户端入口以 package.json exports['./client'] 为权威，不再靠
 //      「有没有 lib/ 目录」猜（上一版因此让 dsh-offpeak / dsh-synapse 整半逃检）；
 //   G9 类名新鲜度：[class*="X"] 的局部名必须仍在内核 CSS/JS 里在场，否则逐条登记为惰性；
@@ -58,6 +62,33 @@ const DEAD_ANCHORS = [
 	'[class*="Suggestion"]'
 ];
 const COMPAT_MARK = 'dsh-compat:';
+
+/**
+ * 「插件自己就是该属性的作者」判定（G1 豁免，仅对 [data-time-hover-root] 生效）：
+ * easyrewrite 2.6.0 起把 data-time-hover-root 打在自己渲染的行上（"data-time-hover-root": true），
+ * 并用 [data-dsh-easyrewrite][data-time-hover-root] 收窄选择器 —— 这条锚已经不再是宿主锚，
+ * 不存在换代失配面，所以不该再被要求挂 dsh-compat: 降级标记。
+ * 判据两个都要成立：文件里有写入处 + 每一处读取都自家命名空间收窄或有显式回退
+ * （与 G2 同一口径），漏一个就照旧判红。裸用宿主属性仍然会被抓（见用例内反证）。
+ */
+const HOVER_ANCHOR = '[data-time-hover-root]';
+const HOVER_WRITE_RE = /(setAttribute\(\s*['"]data-time-hover-root|dataset\.timeHoverRoot\s*=|["']data-time-hover-root["']\s*:\s*(?:true|["'][^"']*["']))/;
+
+function hoverRootIsSelfOwned(src) {
+	if (!HOVER_WRITE_RE.test(src.raw)) return false;
+	const lines = src.code;
+	let hits = 0;
+	for (let i = 0; i < lines.length; i += 1) {
+		const l = lines[i];
+		if (!l.text.includes(HOVER_ANCHOR)) continue;
+		hits += 1;
+		const win = lines.slice(Math.max(0, i - 2), i + 3).map((x) => x.text).join('\n');
+		const scoped = /\[data-dsh-[a-z0-9-]+\]/.test(win);
+		const fallback = /\|\||\?\?/.test(win);
+		if (!scoped && !fallback) return false;
+	}
+	return hits > 0;
+}
 
 /** 客户端入口以 package.json 的 exports['./client'] 为权威（字符串或条件导出对象）。 */
 function manifestClientFile(plugin) {
@@ -145,14 +176,30 @@ test('G1 死锚必须带 dsh-compat 标记（防止“忘了改”冒充“刻�
 			for (const anchor of DEAD_ANCHORS) {
 				if (!code.includes(anchor)) continue;
 				checked += 1;
-				if (!src.raw.includes(COMPAT_MARK)) {
-					offenders.push(plugin + '/' + src.base + ' 引用 ' + anchor + ' 但全文无 ' + COMPAT_MARK + ' 标记');
-				}
+				if (src.raw.includes(COMPAT_MARK)) continue;
+				if (anchor === HOVER_ANCHOR && hoverRootIsSelfOwned(src)) continue;
+				offenders.push(plugin + '/' + src.base + ' 引用 ' + anchor + ' 但全文无 ' + COMPAT_MARK + ' 标记');
 			}
 		}
 	}
 	assert.ok(checked > 0, '一个死锚引用都没扫到，登记表或扫描路径可能已失效');
 	assert.deepEqual(offenders, [], '未标记者：\n' + offenders.join('\n'));
+
+	// 反证（防豁免判据恒真）：同一条锚若只是裸读宿主属性，即使文件里有别的写法也必须判红。
+	const bareHost = {
+		raw: "var host = row.querySelector('[data-time-hover-root]');",
+		code: [{ line: 1, text: "var host = row.querySelector('[data-time-hover-root]');" }]
+	};
+	assert.equal(hoverRootIsSelfOwned(bareHost), false, '裸用宿主属性不得被豁免');
+	const writerOnlyReaderUnscoped = {
+		raw: 'x.setAttribute("data-time-hover-root", "1");',
+		code: [{ line: 1, text: "s.querySelector('[data-time-hover-root] .body') " }]
+	};
+	assert.equal(hoverRootIsSelfOwned(writerOnlyReaderUnscoped), false, '有写入但未收窄的读取不得被豁免');
+	// 正证：真实产物里的 easyrewrite 形态确实满足豁免（否则上面那条 continue 是死代码）。
+	const easyrewrite = sourcesOf('dsh-easyrewrite').find((s) => s.base === 'client.js');
+	assert.ok(easyrewrite, 'easyrewrite/lib/client.js 应在扫描面内');
+	assert.equal(hoverRootIsSelfOwned(easyrewrite), true, 'easyrewrite 应为 data-time-hover-root 的自名作者');
 });
 
 test('G2 旧行锚 [data-time-hover-root] 不得作为唯一命中路径', () => {
@@ -498,8 +545,21 @@ function runTweaksApply(rows, quiet) {
 	assert.equal(loads.length, 1, 'tweaks 应恰好注册一个模块');
 
 	const snapshot = { status: 'ready', writable: true, value: { quietOutput: quiet } };
+	// 0.1.1 换代：设置通道从幽灵服务 ctx.settingsScope 迁到 ctx.remote.settings
+	// （describe/mutate，ns 是 profile 条目 id "conversation-tweaks"，不是包名）。
+	// describe 异步 → 首帧快照是 loading，body 标记要等微任务落定后才由
+	// scope.subscribe(applyQuiet) 写入，所以用例必须 await flush()。
+	const describeCalls = { n: 0 };
 	const ctx = {
-		settingsScope: { bind: () => ({ getSnapshot: () => snapshot, subscribe: () => () => {} }) },
+		remote: {
+			settings: {
+				describe: async () => {
+					describeCalls.n += 1;
+					return { ok: true, value: { writable: true, namespaces: [{ ns: 'conversation-tweaks', value: snapshot.value, revision: 'rev-1' }] } };
+				},
+				mutate: async () => ({ ok: true, value: { value: snapshot.value, revision: 'rev-2' } }),
+			},
+		},
 		slots: { inject: () => {}, register: () => () => {} },
 		effect: () => () => {}
 	};
@@ -516,19 +576,22 @@ function runTweaksApply(rows, quiet) {
 		}
 		if (id === 'react/jsx-runtime') return { jsx: () => null, jsxs: () => null };
 		if (id === '@deepseek-ai/dsh-client-ui-renderer') return {};
-		if (id === '@deepseek-ai/dsh-client-web-react') return {};
 		throw new Error('unexpected require: ' + id);
 	});
 	api.apply(ctx);
-	return { doc, rows, all: [body, ...rows.flatMap((r) => [r, ...collect(r)])] };
+	// 微任务多轮排空：describe 的 await + adopt 的回调链跨 vm/host 两个 realm。
+	const flush = async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); };
+	return { doc, rows, flush, describeCalls, all: [body, ...rows.flatMap((r) => [r, ...collect(r)])] };
 }
 
 const flatAll = (rows, doc) => [doc.body, ...rows.flatMap((r) => [r, ...collect(r)])];
 const markedKeep = (nodes) => nodes.filter((n) => n.getAttribute('data-dsh-keep-summary') !== null);
 
-test('G5 新内核 DOM：标记扫描早退，不再往节点上打 data-dsh-keep-summary', () => {
+test('G5 新内核 DOM：标记扫描早退，不再往节点上打 data-dsh-keep-summary', async () => {
 	const rows = newKernelRows();
-	const { doc } = runTweaksApply(rows, true);
+	const { doc, flush, describeCalls } = runTweaksApply(rows, true);
+	await flush();
+	assert.equal(describeCalls.n, 1, '设置快照应经 ctx.remote.settings.describe 取一次');
 	assert.equal(doc.body.getAttribute('data-dsh-quiet-output'), '1', '开关应把 body 标记打开（这部分一直有效）');
 	const nodes = flatAll(rows, doc);
 	assert.deepEqual(markedKeep(nodes), [], '当前内核由 CSS 属性契约决定可见性，不该再有 DOM 打标记');
@@ -551,9 +614,10 @@ test('G5b 新内核 DOM：属性契约规则确实随样式注入（藏什么由
 	}
 });
 
-test('G6 旧内核 DOM：每轮最后一个带正文的助手消息仍被标为总结', () => {
+test('G6 旧内核 DOM：每轮最后一个带正文的助手消息仍被标为总结', async () => {
 	const rows = legacyKernelRows();
-	const { doc } = runTweaksApply(rows, true);
+	const { doc, flush } = runTweaksApply(rows, true);
+	await flush();
 	const roots = flatAll(rows, doc).filter((n) => n.matches('.Sxvs8a_root'));
 	assert.equal(roots.length, 2, '桩里应有两个旧内核消息卡');
 	const kept = markedKeep(roots);
@@ -561,9 +625,10 @@ test('G6 旧内核 DOM：每轮最后一个带正文的助手消息仍被标为�
 	assert.equal(roots[1], kept[0], '保留的应是 DOM 顺序上最后一个带正文的助手卡');
 });
 
-test('G7 旧内核 DOM + 开关关闭：只清除标记，不新增', () => {
+test('G7 旧内核 DOM + 开关关闭：只清除标记，不新增', async () => {
 	const rows = legacyKernelRows();
-	const { doc } = runTweaksApply(rows, false);
+	const { doc, flush } = runTweaksApply(rows, false);
+	await flush();
 	assert.equal(doc.body.hasAttribute('data-dsh-quiet-output'), false, '关闭时 body 标记不应存在');
 	assert.deepEqual(markedKeep(flatAll(rows, doc)), [], '关闭时不该有任何 keep-summary 标记');
 });
@@ -575,7 +640,8 @@ test('G8 覆盖面：声明了 dsh.client 的插件必须真的被扫到（守�
 		try { if (!fs.statSync(path.join(PLUGINS, d)).isDirectory()) return false; } catch { return false; }
 		return hasClientDecl(d);
 	});
-	assert.ok(declared.length >= 30, '声明客户端半边的插件数=' + declared.length + '，枚举判据可能已失效');
+	// 下限随内置清单收缩：2026-10 批量退役 11 条后在册 28，其中 25 条声明 dsh.client。
+	assert.ok(declared.length >= 24, '声明客户端半边的插件数=' + declared.length + '，枚举判据可能已失效');
 	const unseen = declared.filter((d) => (scanned.get(d) || []).length === 0);
 	assert.deepEqual(unseen, [], '声明了客户端半边却没有一个文件被扫到：\n' + unseen.join('\n'));
 	let total = 0;
@@ -845,12 +911,11 @@ function propReadsOf(params, body) {
 
 // 「读了但确实不下发、且核为刻意可选」的登记：逐条带理由（同 G9 惰性名单纪律），
 // 且过期即红 —— 防止豁免名单变成再也没人敢删的杂物抽屉。
+// 豁免登记表：组件读了槽不下发的 props，但那条读法是可选的（有默认值/判空）。
+// 2026-10 内置插件批量退役后本表清空——原两条都属 dsh-community-market（已退役）。
+// 保留空表而不是删掉机制：新增豁免必须写理由，且下面 G10 会反向咬「登记已不对应
+// 任何实际读取」的过期条目。
 const OPTIONAL_PROP_READS = new Map([
-	['dsh-community-market/MarketSettingsTab::initialView',
-		'settings.plugins.tab 的 ownerProps 明示为空（刻意不带宿主 props）；组件按 '
-		+ 'initialView === void 0 决定是否下传，MarketSurface 形参有默认值 "installable"。'],
-	['dsh-community-market/MarketOverlay::initialView',
-		'shell.overlay 无宿主 props；overlay 开在哪一视图由 store（marketView）决定，未下发即回落默认。'],
 ]);
 
 /** 跑一条判据：entries = [{ label, raw }]。 */

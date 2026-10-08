@@ -31,14 +31,12 @@ const { reconcileProfileBundles, resolveBundleDirLike } = require('../lib/profil
 const {
   ACP_SELF_DISABLE_BLOCK,
   removeAcpBasicDisableBlock,
-  PET_DISABLE_BLOCK,
-  CARDIAN_DISABLE_BLOCK,
-  GRAPH_MEMORY_DISABLE_BLOCK,
   removeLegacyMarketplacePatchLines,
   removeRetiredDshMarketPatchRows,
   removeRetiredThirdPartyThinkingPatchRows,
   removeRetiredDshFloatWindowPatchRows,
   removeRetiredDshMiniPatchRows,
+  removeRetiredCompanionPatchRows,
   removedPluginIdsFromPatch,
   ensureDisabledPatchEntry,
   registerCompanionPatchEntries,
@@ -403,6 +401,19 @@ function createPluginSync(ctx) {
         }
       } catch {}
 
+      // v1.0.0 批量退役 11 条配套件：patch 层登记行 + 随包默认禁用块一次性撤回
+      // （目录与 manifest 在 syncCompanionFiles 内的 removeRetiredCompanionDirs 已
+      // 处理）。同 float-window/dsh-mini 那一类「调用方职责」——漏接就会让老 profile
+      // 每 boot 刷一次 Cannot find package '<退役包>'。
+      try {
+        const bulkRaw = fs.readFileSync(patchFile, 'utf8');
+        const bulk = removeRetiredCompanionPatchRows(bulkRaw);
+        if (bulk.changed) {
+          writeFileAtomic(patchFile, bulk.patch);
+          log('已从 cordis.patch.yml 撤回批量退役配套件登记: ' + bulk.removed.join(', '));
+        }
+      } catch {}
+
       // billion-context-dsh（compaction-acp，模型驱动的 ACP 压缩后端）默认关闭：
       // 用户反馈其在上下文占用未及 1/4 时仍频繁压缩。改为随包默认禁用（顶层
       // disabled 块一票否决 bundle 自身 insert），需要时在设置 → 插件 → 管理
@@ -420,51 +431,6 @@ function createPluginSync(ctx) {
           }
         } catch (err) {
           log('写入 compaction-acp 默认禁用条目失败: ' + err.message);
-        }
-      }
-
-      // 桌面宠物（harness-pet）默认关闭。
-      if (bundleNames.has('harness-pet')) {
-        try {
-          let patch = '';
-          try { patch = fs.readFileSync(patchFile, 'utf8'); } catch { /* 全新 profile：patch 文件尚未创建，视为空 */ }
-          const entry = ensureDisabledPatchEntry(patch, new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*harness-pet\\b'), PET_DISABLE_BLOCK);
-          if (entry.changed) {
-            writeFileAtomic(patchFile, entry.patch);
-            log('已默认关闭桌面宠物（harness-pet，可在插件管理开启）');
-          }
-        } catch (err) {
-          log('写入 harness-pet 禁用条目失败: ' + err.message);
-        }
-      }
-
-      // dsh-cardian（cardian，知识中心）默认关闭。
-      if (bundleNames.has('dsh-cardian')) {
-        try {
-          let patch = '';
-          try { patch = fs.readFileSync(patchFile, 'utf8'); } catch { /* 全新 profile：patch 文件尚未创建，视为空 */ }
-          const entry = ensureDisabledPatchEntry(patch, new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*cardian\\b'), CARDIAN_DISABLE_BLOCK);
-          if (entry.changed) {
-            writeFileAtomic(patchFile, entry.patch);
-            log('已默认关闭知识中心（cardian，可在插件管理开启）');
-          }
-        } catch (err) {
-          log('写入 cardian 禁用条目失败: ' + err.message);
-        }
-      }
-
-      // graph-memory（知识图谱记忆）默认关闭。
-      if (bundleNames.has('graph-memory')) {
-        try {
-          let patch = '';
-          try { patch = fs.readFileSync(patchFile, 'utf8'); } catch { /* 全新 profile：patch 文件尚未创建，视为空 */ }
-          const entry = ensureDisabledPatchEntry(patch, new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*graph-memory\\b'), GRAPH_MEMORY_DISABLE_BLOCK);
-          if (entry.changed) {
-            writeFileAtomic(patchFile, entry.patch);
-            log('已默认关闭知识图谱记忆（graph-memory，可在插件管理开启）');
-          }
-        } catch (err) {
-          log('写入 graph-memory 禁用条目失败: ' + err.message);
         }
       }
 

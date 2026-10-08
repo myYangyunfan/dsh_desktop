@@ -11,7 +11,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { COMPANION_PLUGINS, companionDirName, RETIRED_COMPANION_DIRS } = require('./companion-plugins');
+const { COMPANION_PLUGINS, companionDirName, RETIRED_COMPANION_DIRS, RETIRED_COMPANIONS } = require('./companion-plugins');
 const { dropBlocksByIds } = require('../../profile-patch-heal');
 const { writeFileAtomic } = require('./patch-io');
 const { bundlePatchRel, verifyBundleDir } = require('../../profile-bundle-heal');
@@ -20,40 +20,40 @@ const {
   PATCH_HEADER,
   ACP_DISABLE_BLOCK,
   ACP_SELF_DISABLE_BLOCK,
-  PET_DISABLE_BLOCK,
-  CARDIAN_DISABLE_BLOCK,
-  GRAPH_MEMORY_DISABLE_BLOCK,
   removedPluginIdsFromPatch,
   removeLegacyMarketplacePatchLines,
   ensureDisabledPatchEntry,
   removeAcpBasicDisableBlock,
+  removeDisabledRowsByIds,
   registerCompanionPatchEntries,
 } = require('../plugin-core/lib/patch-surgery');
 
 // 同步进 profile 的固定文件清单（根目录平铺布局的第三方插件也在内）。
+// v1.0.0 批量退役后去掉了 `lib/vlm.js`（唯一携带者是已退役的 dsh-vision）与
+// `lib/typert.host.*`（唯一携带者是已退役的 dsh-hub / dsh-cardian）——
+// 现存 28 个配套件里没有任何一个带这两个文件（实测 find 零命中）。
 const PLUGIN_FILES = [
   'package.json', 'cordis.patch.yml', 'LICENSE', 'README.md', 'README.zh.md',
-  'lib/index.js', 'lib/index.mjs', 'lib/client.js', 'lib/vlm.js', 'lib/typert.host.js', 'lib/typert.host.d.ts',
+  'lib/index.js', 'lib/index.mjs', 'lib/client.js',
   'dsh.plugin.json',
   'index.js', 'client.js', 'app.js', 'styles.css', 'deepseek-mark.svg',
 ];
 
 // 配套插件引用的私有依赖（dsh 核心闭包之外）。
-// dsh-community-market 的运行时依赖（ajv 契约校验 / semver 版本 / yaml 解析，
-// 加上游市场宿主面的 @deepseek-ai/schemastery、@deepseek-ai/dsh-settings）
-// 随源同步进 profile node_modules。sharp（原生模块，市场媒体图标规整用）
-// 不在此列：由 loader 经安装根 node_modules 解析（同 dsh-hub 的
-// @deepseek-ai/dsh-typert-protocol 运行时导入先例），避免 @img 平台二进制
-// 的多平台同步问题。
+// v1.0.0 批量退役去掉了 dsh-community-market 独占的三项（ajv / ajv-formats /
+// semver：契约校验、版本比较、市场回执）——现存配套件的 package.json 既不声明
+// 也不 require 它们（实测 grep 零命中）。保留的 schemastery/cosmokit/yaml 与两个
+// @deepseek-ai 条目仍由 better-sidebar / basics-panel / openclaw-bridge /
+// prompt-custom / reasoning-effort / side-session / subagent-lens /
+// super-injector 声明使用。sharp（原生模块）不在此列：由 loader 经安装根
+// node_modules 解析，避免 @img 平台二进制的多平台同步问题。
 const VENDOR_DEPS = [
   'schemastery', 'cosmokit', '@standard-schema/spec',
-  'ajv', 'ajv-formats', 'semver', 'yaml',
+  'yaml',
   '@deepseek-ai/schemastery', '@deepseek-ai/dsh-settings',
 ];
 
 // 目录级同步的运行资产子目录（正常复制路径全量走这份清单）。
-// core：dsh-cardian 的框架无关知识中心库（宿主 main 已 bundle 进 lib/index.js，
-// core 随包保留源码供审阅与再构建，同步以保包内自洽）。
 const SYNC_SUBDIRS = ['lib', 'client', 'data', 'assets', 'src', 'core', 'dist', 'public', 'gui', 'node_modules'];
 
 // keep-newer 分支的「缺失资产补齐」清单：与 SYNC_SUBDIRS 的差异是不含
@@ -424,6 +424,140 @@ function removeRetiredDshFloatWindowPatchRows(patch) {
 }
 
 // ---------------------------------------------------------------------------
+// v1.0.0 批量退役回收机器（表驱动，唯一实现）
+//
+// 单点退役（dshmarket / dsh-mini / float-window）各写一个 removeRetiredXxx 是划算
+// 的；一次退役 11 条就不能再复制 11 遍了，这里按 companion-plugins 的
+// RETIRED_COMPANIONS 表驱动。
+//
+// 两条铁律（都来自实测，不是保险丝式兜底）：
+//  ① **撤账必做**：patch 层登记行与 profile manifest 的 bundles/dependencies 一律
+//     撤回。摘出 COMPANION_PLUGINS 的条目会失去「源缺失 → missingNames → 通用撤账」
+//     这条路，不主动撤账就等于把指向缺失目录的注册行留给老用户——装配失败表现为
+//     "entries did not activate"，而一次致命启动会把补丁层整体改名抹掉。
+//  ② **删目录要有证据**：只有能从 package.json 证明「这是壳同步镜像进去的那一份」
+//     才删。npm 拒绝发布 private:true 的包，所以 `private === true` 是本地镜像的强
+//     证据；我们改写过 description 加「DSH Desktop」字样的条目同理。剩下的
+//     graph-memory / harness-pet / dsh-cardian 三类**上游 package.json 与我们镜像
+//     的逐字段相同**，无法与用户自装副本区分——它们只撤账不删目录（未注册的包目录
+//     是惰性的，不会被 loader 挂载），用户数据一个字节都不动。
+// ---------------------------------------------------------------------------
+
+/** 镜像副本装配特征（见上方铁律 ②）。 */
+function isBuiltinCompanionMirror(pkg, name) {
+  if (!pkg || pkg.name !== name) return false;
+  if (pkg.private === true) return true;
+  return typeof pkg.description === 'string' && /DSH Desktop/.test(pkg.description);
+}
+
+/** 退役条目在 patch 层的 loader id（条目 id + 该条目声明的历史别名）。 */
+function retiredCompanionPatchIds() {
+  const ids = [];
+  for (const p of RETIRED_COMPANIONS) {
+    if (p.dirsOnly) continue; // 官方同名件不做 patch 手术（见 companion-plugins 注释）
+    if (p.id) ids.push(p.id);
+    for (const legacy of p.legacyIds || []) ids.push(legacy);
+  }
+  return ids;
+}
+
+/**
+ * 批量退役的目录 + manifest 回收（幂等，boot 与 CLI 双入口共用）。
+ * @param {string} profileDir web profile 目录
+ * @param {Object} hooks { log, fail, plan, dryRun }
+ * @returns {{ removedDirs: string[], retracted: string[], keptUserDirs: string[] }}
+ */
+function removeRetiredCompanionDirs(profileDir, hooks = {}) {
+  const { log, fail, plan, dryRun = false } = hooks;
+  const removedDirs = [];
+  const retracted = [];
+  const keptUserDirs = [];
+  const modulesRoot = path.join(profileDir, 'node_modules');
+  for (const p of RETIRED_COMPANIONS) {
+    if (p.dirsOnly) continue;
+    const pkgDir = path.join(modulesRoot, ...String(p.name).split('/'));
+    const present = fs.existsSync(pkgDir);
+    // 目录残缺（package.json 读不出）按既有先例视为可清理的镜像。
+    let mirror = true;
+    if (present) {
+      try { mirror = isBuiltinCompanionMirror(JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8')), p.name); }
+      catch { mirror = true; }
+    }
+    if (present && !mirror) {
+      keptUserDirs.push(p.name);
+      if (log) log('退役配套件 ' + p.name + ' 的目录无法证明是壳镜像副本（疑似用户自装），保留目录仅撤账');
+    } else if (present) {
+      if (dryRun) {
+        if (plan) plan('dry-run: 将移除已退役配套件 ' + p.name);
+      } else {
+        try {
+          fs.rmSync(pkgDir, { recursive: true, force: true });
+          removedDirs.push(p.name);
+          if (log) log('已移除已退役配套件: ' + p.name);
+        } catch (err) {
+          if (fail) fail('移除已退役配套件失败 ' + p.name + ': ' + err.message);
+        }
+      }
+    }
+    // manifest 撤账：目录不属于我们时**一并保留登记**——那说明这个包是用户自己
+    // 装的、要用的，撤了反而改变用户意图。目录缺席或属于我们时必撤。
+    if (present && !mirror) continue;
+    const manifestFile = path.join(profileDir, 'package.json');
+    try {
+      const m = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+      if (!m || typeof m !== 'object') continue;
+      let changed = false;
+      const bare = companionDirName(p);
+      const names = new Set([p.name, bare]);
+      if (m.dsh && m.dsh.profile && Array.isArray(m.dsh.profile.bundles)) {
+        const kept = m.dsh.profile.bundles.filter((n) => !names.has(n));
+        if (kept.length !== m.dsh.profile.bundles.length) { m.dsh.profile.bundles = kept; changed = true; }
+      }
+      if (m.dependencies && typeof m.dependencies === 'object') {
+        for (const n of names) {
+          if (Object.prototype.hasOwnProperty.call(m.dependencies, n)) {
+            delete m.dependencies[n];
+            changed = true;
+          }
+        }
+        if (Object.keys(m.dependencies).length === 0) delete m.dependencies;
+      }
+      if (changed) {
+        if (dryRun) {
+          if (plan) plan('dry-run: 将从 profile manifest 移除 ' + p.name + ' 登记（bundles/dependencies）');
+        } else {
+          writeFileAtomic(manifestFile, JSON.stringify(m, null, 2) + '\n');
+          retracted.push(p.name);
+          if (log) log('已从 profile manifest 移除已退役配套件登记: ' + p.name);
+        }
+      }
+    } catch (err) {
+      if (fail) fail('清理 ' + p.name + ' manifest 登记失败: ' + err.message);
+    }
+  }
+  return { removedDirs, retracted, keptUserDirs };
+}
+
+/**
+ * 批量退役的 patch 层回收：撤回登记行（insert 内层条目 / 纯 insert 块 / name-only
+ * 顶层条目）+ 撤回「随包默认禁用」块（harness-pet / cardian / graph-memory 三条
+ * 常量已随插件下线，但老 profile 里写过的 disabled 形状行必须按形状继续认领，
+ * 否则留着一条指向缺失包的顶层条目每 boot 刷一次缺包栈）。
+ * 纯文本变换，由调用方在自己的 patch 快照上调用后统一落盘。
+ * @param {string} patch cordis.patch.yml 原文
+ * @returns {{ patch: string, changed: boolean, removed: string[] }}
+ */
+function removeRetiredCompanionPatchRows(patch) {
+  const ids = retiredCompanionPatchIds();
+  const text = String(patch || '');
+  const drop = dropBlocksByIds(text, ids);
+  const disabled = removeDisabledRowsByIds(drop.text, ids);
+  const removed = [...new Set([...drop.removed, ...disabled.removed])];
+  if (removed.length > 0) return { patch: disabled.text, changed: true, removed };
+  return { patch: text, changed: false, removed: [] };
+}
+
+// ---------------------------------------------------------------------------
 // 目录级同步（递归比对 size+mtime 精确值，一致时跳过）
 // ---------------------------------------------------------------------------
 
@@ -497,8 +631,8 @@ function syncCompanionFiles(opts) {
   // 误删当前插件 → 删除重拷抖动 + 保留更新版本分支失效」回归）。
   const currentDirs = new Set((plugins || []).map((p) => companionDirName(p)));
   removeStaleCompanionPlugins(profileModules, { log, fail, plan, dryRun, expectedDirs: currentDirs });
-  // 非 scope 落点（dsh-better-sidebar / harness-pet / graph-memory / dshmarket /
-  // dsh-hub / billion-context-dsh 等）同样过清理（修复历史「非 scope 旧目录
+  // 非 scope 落点（dsh-better-sidebar / dsh-session-manager / dshmarket /
+  // billion-context-dsh 等）同样过清理（修复历史「非 scope 旧目录
   // 永不清理」）。
   removeStaleCompanionPlugins(path.join(profileDir, 'node_modules'), { log, fail, plan, dryRun, expectedDirs: currentDirs });
   removeLegacyMarketplaceDir(path.join(profileDir, 'node_modules'), { log, fail, plan, dryRun });
@@ -515,6 +649,12 @@ function syncCompanionFiles(opts) {
   // dsh-mini 退役（0.6.4，dsh-pocket 等位替代）：bundle 插件，manifest/patch 由
   // 源缺失通用路径清账，这里补 scoped 目录清理。
   removeRetiredDshMiniDir(profileDir, { log, fail, plan, dryRun });
+  // v1.0.0 批量退役（RETIRED_COMPANIONS 表驱动，11 条）：目录按镜像证据回收、
+  // manifest 撤账。上面几个单点清理都只认自己那一个包，且 removeStaleCompanionPlugins
+  // **只扫 @deepseek-ai 与顶层两种落点**——@dsh-external（已退役的 dsh-vision）
+  // 与 graph-memory/dsh-hub 这类第三方 scope 从来没人认领，这里按完整包名路径补齐。
+  // patch 行仍由调用方对快照调用 removeRetiredCompanionPatchRows 清理。
+  removeRetiredCompanionDirs(profileDir, { log, fail, plan, dryRun });
 
   const bundleNames = new Set();
   for (const name of VENDOR_DEPS) {
@@ -656,9 +796,6 @@ module.exports = {
   PATCH_HEADER,
   ACP_DISABLE_BLOCK,
   ACP_SELF_DISABLE_BLOCK,
-  PET_DISABLE_BLOCK,
-  CARDIAN_DISABLE_BLOCK,
-  GRAPH_MEMORY_DISABLE_BLOCK,
   KNOWN_COMPANION_DIR_NAMES,
   removeStaleCompanionPlugins,
   removeLegacyMarketplaceDir,
@@ -670,6 +807,10 @@ module.exports = {
   removeRetiredDshFloatWindowPatchRows,
   removeRetiredDshMiniDir,
   removeRetiredDshMiniPatchRows,
+  removeRetiredCompanionDirs,
+  removeRetiredCompanionPatchRows,
+  retiredCompanionPatchIds,
+  isBuiltinCompanionMirror,
   removeLegacyMarketplacePatchLines,
   removedPluginIdsFromPatch,
   ensureDisabledPatchEntry,

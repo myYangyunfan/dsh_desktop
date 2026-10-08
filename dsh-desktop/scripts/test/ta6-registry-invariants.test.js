@@ -85,8 +85,9 @@ test('A. file spec transform 均为函数且来自收口导出（无内联孤儿
   const adapterExports = new Set(Object.values(adapters).filter((v) => typeof v === 'function'));
   const loaderExports = new Set(Object.values(loaderIsolation).filter((v) => typeof v === 'function'));
   const fileSpecs = PATCH_SPECS.filter((s) => s.kind === 'file');
-  // 44 = rc.2 重靶后的 file 型规格数（64 项总盘中 root 15 + file 44 = 59，另见 E）。
-  assert.equal(fileSpecs.length, 44, `file spec 应有 44 个，得 ${fileSpecs.length}`);
+  // 43 = 44（rc.2 重靶后的 file 型规格数）− image-send-fix（2026-10 随识图插件
+  // 整体退役；64 项总盘中 root 15 + file 43 = 58，另见 E）。
+  assert.equal(fileSpecs.length, 43, `file spec 应有 43 个，得 ${fileSpecs.length}`);
   for (const spec of fileSpecs) {
     assert.equal(typeof spec.transform, 'function', `${spec.id} 缺 transform`);
     assert.ok(
@@ -196,7 +197,12 @@ test('E. order 全局唯一、组内升序、补丁间依赖序成立', () => {
   //      readProfilePatches 用户补丁层防护）。
   // 另：workspace-pin（侧栏工作区置顶，order 215）与 open-project-dir / session-manage
   // 三处 UI 靶均在 rc.2 重锚后仍在册。
-  assert.equal(PATCH_SPECS.length, 59, 'spec 总数应为 59');
+  // 58 = 59（上一基线）− image-send-fix（2026-10 内置伴随插件批量拆除）：该 spec 的
+  //   注入体读的是 dsh-vision 的设置命名空间，识图插件退役后没有任何可达路径，属
+  //   「只为已退役插件存在」一类；transform 与锚点常量同批从 patch-adapters 删除，
+  //   靶常量 SESSION_CTRL_INDEX_PKG_REL 仍由 history-page-size 使用故保留。
+  //   cli:true 计数不受影响（它是 cli:false）。
+  assert.equal(PATCH_SPECS.length, 58, 'spec 总数应为 58');
   const orders = PATCH_SPECS.map((s) => s.order);
   assert.equal(new Set(orders).size, orders.length, 'order 必须全局唯一');
   const byId = Object.fromEntries(PATCH_SPECS.map((s) => [s.id, s]));

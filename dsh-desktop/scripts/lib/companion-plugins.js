@@ -22,15 +22,21 @@
 // 与 bundle 注册。清空名单等于放弃撤回：老用户升级后 profile 里会留着指向缺失
 // 目录的注册行，装配失败表现为 "entries did not activate"，而一次致命启动会把
 // profile 的补丁层整体改名抹掉。要恢复随包分发，改的是 staging 排除面，不是这里。
+//
+// 但「退役」与「源缺失」是两条不同的回收路径：仍在清单里的条目走 missingNames
+// 通用撤账；**摘出清单的条目立刻失去这条路径**，必须由同文件 RETIRED_COMPANIONS
+// 的专属回收机器接管（patch 行撤回 + profile manifest 撤账 + 目录认领）。
+// 所以摘清单从来不是单点动作 —— 见下方 RETIRED_COMPANIONS。
 // ---------------------------------------------------------------------------
 
 const COMPANION_PLUGINS = [
   { id: 'balance', name: '@deepseek-ai/dsh-balance' },
   { id: 'file-changes', name: '@deepseek-ai/dsh-file-changes' },
-  { id: 'client-file-changes', name: '@deepseek-ai/dsh-client-file-changes' },
-  { id: 'terminal', name: '@deepseek-ai/dsh-terminal-tab' },
+  // v1.0.0 批量退役 11 条（client-file-changes / terminal / harness-pet / dsh-vision /
+  // graph-memory / community-market / market-desktop-bridge / dsh-hub / file-drop /
+  // image-paste / cardian）：条目已摘出本清单、源目录 assets/plugins/<dir> 已删除，
+  // 存量登记与镜像副本的回收见同文件 RETIRED_COMPANIONS（三件事一起做）。
   { id: 'better-sidebar', name: 'dsh-better-sidebar' },
-  { id: 'harness-pet', name: 'harness-pet' },
 // @vlln/dsh-navbar（对话节点导航条）已按用户要求移除（0.6.3-beta.3）；
 	// 恢复方式：git 历史取回本清单条目 + assets/plugins/dsh-navbar。
   // 对话删除与归档管理（本仓库内置）：会话行菜单删除按钮 + 设置内归档管理
@@ -47,43 +53,12 @@ const COMPANION_PLUGINS = [
   { id: 'prompt-custom', name: '@deepseek-ai/dsh-prompt-custom' },
   { id: 'workspace-anchor', name: '@deepseek-ai/dsh-workspace-anchor' },
   { id: 'wsl-settings', name: '@deepseek-ai/dsh-wsl-settings' },
-  { id: 'dsh-vision', name: '@dsh-external/dsh-vision' },
   { id: 'side-session', name: '@dsh-external/dsh-side-session' },
-  { id: 'compaction-acp', name: 'billion-context-dsh', shipsNodeModules: true },
-  // v1.0.0 退役 `plugin-manager`（源目录 assets/plugins/dsh-plugin-manager 保留，
-  // 其健康卡用例 rv9 仍读源）：该伴随件的包名与官方内核包 @deepseek-ai/dsh-plugin-manager
-  // **同名**，而它的 host 半边是 Electron 时代的空壳（插件管理曾由壳主进程经 preload 桥
-  // window.dshDesktop.pluginManager 提供，Tauri 线没有这座桥）。镜像进
-  // profiles/web/node_modules 后按 Node 解析顺序它会遮蔽安装锚点里的官方包 →
-  // 官方 pluginManager 服务不再挂载 → 内核插件页判「本部署没有可管理的 profile」。
-  // 存量遮蔽由 companion-profile 的过期配套清理回收（见 KNOWN_COMPANION_DIR_NAMES）。
-  // 要复活：包名与 loader id 都得换 —— id 'plugin-manager' 同样撞
-  // dsh-base/cordis.patch.yml 的官方行 id，补丁层「按 id 整行替换」会劫持官方那一行。
-  // 补丁层不做手术：本机实测 profiles/web 的 cordis.yml / cordis.patch.yml 及其
-  // .bak-* 备份都没有 plugin-manager 行，遮蔽纯由目录造成。若哪天遇到历史机器上
-  // 残留 `- id: plugin-manager … disabled: true`，它会连带禁用官方实现，届时按
-  // 「行内必须含 disabled: true」窄判据回收（宽判据会误删官方的 config 覆盖行）。
-  // 知识图谱记忆（adoresever/graph-memory，MIT）：跨会话图记忆 + PageRank /
-  // 社区检测 + 向量去重；作者为 DSH 提供原生适配器（graph-memory/dsh 入口），
-  // 内置后随壳分发，dsh-hub 中枢页直接显示装配状态与图谱统计。
-  { id: 'graph-memory', name: 'graph-memory', shipsNodeModules: true },
-  // 可视化插件市场（anywhere-labs/deepseek-harness-desktop 的 dsh-community-market，
-  // MIT）：开放目录源（DSH 1024Store / dshfind / 标准 HTTP 源，用户自行添加
-  // 与启用）、搜索、npm registry 校验安装、启停与回执管理。内置市场整体切换为
-  // dsh-community-market（原 dshmarket 已退役：存量装配由 companion-profile 的
-  // removeRetiredDshMarketDir / removeRetiredDshMarketPatchRows 一次性清理，
-  // patch 层锚定 dropBlocksByIds('dsh-market')）。
-  { id: 'community-market', name: 'dsh-community-market' },
-  // 市场桌面服务桥（本仓库内置）：为 dsh-community-market 提供
-  // desktopProfiles / desktopPnpm / desktopPlugins / desktopActions 四个
-  // host 服务（上游市场在 DSH Plugin Desktop 壳层环境下的依赖契约）——
-  // 包操作转 dsh CLI 重入、启停读写 cordis.patch.yml（与壳层插件管理页
-  // 双向兼容）、重启走壳层监管通道。与市场本体同装卸载，无客户端半边。
-  { id: 'market-desktop-bridge', name: 'dsh-market-desktop-bridge' },
-  // 插件中枢（ARFCON/dsh-hub-DSH，MIT）：插件更新引擎（版本对比/一键更新/
-  // 启停/卸载/启动自检修复）+ 全局记忆 + graph-memory / dsh-market 挂载 +
-  // 自身更新检查；原生适配 Gitee 版客户端版本双源对比。
-  { id: 'dsh-hub', name: 'dsh-hub', shipsNodeModules: true },
+  // 0.2.26 起上游 tsup 把 acp-kernel 内联进 dist/index.js（不再有 `from "acp-kernel"`），
+  // 内层 node_modules 与 shipsNodeModules 标记同批下线；它改用宿主闭包的 dsh-session/
+  // dsh-settings/dsh-llm/dsh-tools/dsh-compaction/schemastery，具名导入由
+  // unit-plugin-esm-link 离线核对。
+  { id: 'compaction-acp', name: 'billion-context-dsh' },
   // 手机同屏（shaobeichen/dsh-pocket，GPL-2.0）：手机扫码实时同屏操控桌面 web
   // （WebSocket 全透传 + cloudflared 公网隧道内置 + 二维码配对）。
   // 0.6.4 摘除 dsh-mini 改用本插件：dsh-mini 自建移动 UI 的 CSS Module 哈希锚
@@ -95,13 +70,9 @@ const COMPANION_PLUGINS = [
   // @tencent-connect/dsh-qqbot 提供，不在本插件范围。
   { id: 'openclaw-bridge', name: '@deepseek-ai/dsh-openclaw-bridge' },
   // —— 效率插件包（借鉴 EAC 移植，纯客户端） ——
-  // 拖入文件到对话：拖入文本/代码注入内容，图片/二进制注入路径提示。
-  { id: 'file-drop', name: 'dsh-file-drop' },
   // 终端式上下键命令历史回溯：↑ 回溯上一条已发送用户消息、↓ 往前翻回较新，
   // 空草稿才触发、越界回到空、编辑即复位、按会话隔离。
   { id: 'input-history', name: 'dsh-input-history' },
-  // 图片粘贴发送：Ctrl/Cmd+V 粘贴图片存临时目录后注入路径提示。
-  { id: 'image-paste', name: 'dsh-image-paste' },
   // 消息撤回/重编辑（Renzic-Stone/DSH-EasyRewrite，MIT）：消息 hover 撤回与
   // 再编辑，原版体验。0.6.4 起取代本仓库自带的 dsh-message-rewind（功能同域，
   // 上游维护更活跃、rc.2 适配无漂移）。
@@ -140,10 +111,7 @@ const COMPANION_PLUGINS = [
   // 折叠为前几行 + 「展开」遮罩，点击展开全文、再点「收起」收回；短消息零
   // 侵入、不碰代码块/图片/表格。纯客户端（DOM 定位 + CSS 折叠 + 事件委托）。
   { id: 'input-fold', name: 'dsh-input-fold' },
-  // 知识中心（myYangyunfan/dsh_cardian，MIT）：RepoWiki / 知识卡片 / 记忆三区知识库；
-  // 0.6.3 曾短暂内置卸载，实测后恢复（用户决定保留）。
-  { id: 'cardian', name: 'dsh-cardian' },
-  // prompt 润色优化（WestFox-AwA/dsh-prompt-optimizer）：输入框一键把草稿润色为
+  // prompt 润色优化（winditer/dsh-prompt-optimizer，MIT）：输入框一键把草稿润色为
   // 更清晰、更结构化的高质量 prompt；默认用当前会话模型（零配置 SSE 流式），
   // 也支持自配 OpenAI 兼容 API。零外部运行时依赖，纯客户端。
   // id 必须与其 bundle 层 cordis.patch.yml 声明的 loader id（prompt-optimizer）
@@ -164,12 +132,64 @@ function companionDirName(p) {
   return slash >= 0 ? p.name.slice(slash + 1) : p.name;
 }
 
-// 已退役、但**源目录仍保留**在 assets/plugins 下的伴随件目录名（源级用例如 rv9
-// 健康卡仍读它们，纯净线也不随包分发）。退役即「从 COMPANION_PLUGINS 摘出 + 进这份
-// 名单」，两个动作一起做完：companion-profile 的过期配套清理据此回收历史上镜像进
-// profiles/<name>/node_modules 的副本，清单↔源目录的收口断言据此豁免。
-// 目前唯一条目 dsh-plugin-manager 的退役原因见 COMPANION_PLUGINS 内注释（包名撞
-// 官方内核包，镜像副本会遮蔽官方 pluginManager 服务）。
-const RETIRED_COMPANION_DIRS = ['dsh-plugin-manager'];
+// 已退役伴随件的登记表——**源目录 assets/plugins/<dir> 本身已删除**，这份名单留的是
+// 「名字」而不是「源」：companion-profile 据此回收历史上镜像进
+// profiles/<name>/node_modules 的副本，并撤回它们在 cordis.patch.yml / profile
+// manifest 里的登记（老装机机器上的遮蔽与死注册行只能靠名字认领）。
+// 退役即三个动作一起做：从 COMPANION_PLUGINS 摘出 + 进这份名单 + 删源目录
+// （机器锁见 scripts/test/unit-hub-registry.test.js 的收口用例，含 sourceLeftBehind 反证）。
+const RETIRED_COMPANIONS = [
+  // v1.0.0 退役 `plugin-manager`（原读该源做健康卡断言的 rv9 一节随之下线，
+  // #175 的网关键防漂移锁迁到 scripts/test/unit-composition-integrity.test.js
+  // 直接锁清单本身）：该伴随件的包名与官方内核包 @deepseek-ai/dsh-plugin-manager
+  // **同名**，而它的 host 半边是 Electron 时代的空壳（插件管理曾由壳主进程经 preload 桥
+  // window.dshDesktop.pluginManager 提供，Tauri 线没有这座桥）。镜像进
+  // profiles/web/node_modules 后按 Node 解析顺序它会遮蔽安装锚点里的官方包 →
+  // 官方 pluginManager 服务不再挂载 → 内核插件页判「本部署没有可管理的 profile」。
+  // 要复活：包名与 loader id 都得换 —— id 'plugin-manager' 同样撞
+  // dsh-base/cordis.patch.yml 的官方行 id，补丁层「按 id 整行替换」会劫持官方那一行。
+  // 补丁层不做手术：本机实测 profiles/web 的 cordis.yml / cordis.patch.yml 及其
+  // .bak-* 备份都没有 plugin-manager 行，遮蔽纯由目录造成。若哪天遇到历史机器上
+  // 残留 `- id: plugin-manager … disabled: true`，它会连带禁用官方实现，届时按
+  // 「行内必须含 disabled: true」窄判据回收（宽判据会误删官方的 config 覆盖行）。
+  // dirsOnly：批量回收机器对这条**只认领目录、绝不做 manifest/patch 手术**——
+  // 包名与官方内核包同名，profile manifest 里合法的官方 dependency 行会被误撤，
+  // 目录回收由 companion-profile 的三重判定过期清理完成（private + 描述含 DSH Desktop）。
+  { id: 'plugin-manager', name: '@deepseek-ai/dsh-plugin-manager', dirsOnly: true },
+  // v1.0.0 批量退役 11 条（用户点名 3/4/6/14/17/18/19/20/23/25/37）：
+  // 官方内核包的同名/近名件（client-file-changes、terminal-tab）由内核自带，
+  // 我们那份是重复装配面；其余为功能面收窄或上游许可/来源不明
+  // （见 docs/builtin-plugins-inventory.md §三 3.5 的风险清单）。
+  // 这 11 条的内核补丁面（dsh-vision 图片转述三补丁、graph-memory 模板、
+  // cardian 工具名清洗）与壳侧专属能力（pet_* 五命令 + 宠物窗口、
+  // image_paste_save、file_revert、file_drop.rs）一并退役。
+  { id: 'client-file-changes', name: '@deepseek-ai/dsh-client-file-changes' },
+  // legacyIds：老装机机器 patch 层用过的 loader id（issue #87 就是 dsh-terminal 与
+  // dsh-terminal-tab 的 \b 边界事故）。回收必须把这些别名行一并撤掉，否则每 boot
+  // 都会以「Cannot find package」重刷一遍。
+  { id: 'terminal', name: '@deepseek-ai/dsh-terminal-tab', legacyIds: ['dsh-terminal'] },
+  { id: 'harness-pet', name: 'harness-pet' },
+  { id: 'dsh-vision', name: '@dsh-external/dsh-vision' },
+  // 知识图谱记忆（adoresever/graph-memory，MIT）：跨会话图记忆 + PageRank /
+  // 社区检测 + 向量去重。曾随壳分发并由 dsh-hub 中枢页显示装配状态。
+  { id: 'graph-memory', name: 'graph-memory' },
+  // 可视化插件市场（anywhere-labs/dsh-desktop，MIT）+ 它的桌面服务桥
+  // （本仓库内置，提供 desktopProfiles/desktopPnpm/desktopPlugins/desktopActions
+  // 四个 host 服务）。市场能力整体下线后桥也失去唯一消费者，同装卸载。
+  { id: 'community-market', name: 'dsh-community-market' },
+  { id: 'market-desktop-bridge', name: 'dsh-market-desktop-bridge' },
+  // 插件中枢（ARFCON/dsh-hub-DSH，MIT）：插件更新引擎 + 全局记忆 +
+  // graph-memory / dsh-market 挂载。它依赖的两个挂载对象同批退役。
+  { id: 'dsh-hub', name: 'dsh-hub' },
+  // 拖入文件到对话、图片粘贴发送（EAC 移植 + 本仓库内置）：两者的宿主半边
+  // 是壳侧 file_revert / image_paste_save 命令，随壳侧能力一起拆。
+  { id: 'file-drop', name: 'dsh-file-drop' },
+  { id: 'image-paste', name: 'dsh-image-paste' },
+  // 知识中心（myYangyunfan/dsh_cardian，MIT）：RepoWiki / 知识卡片 / 记忆三区知识库。
+  { id: 'cardian', name: 'dsh-cardian' },
+];
 
-module.exports = { COMPANION_PLUGINS, companionDirName, RETIRED_COMPANION_DIRS };
+/** 退役登记表 → assets/plugins 目录名（去 scope 前缀），供过期清理认领。 */
+const RETIRED_COMPANION_DIRS = RETIRED_COMPANIONS.map((p) => companionDirName(p));
+
+module.exports = { COMPANION_PLUGINS, companionDirName, RETIRED_COMPANIONS, RETIRED_COMPANION_DIRS };

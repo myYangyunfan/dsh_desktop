@@ -38,7 +38,8 @@
 //              skill-dirs-compat + pi-ai 系 4xx 落盘/schema 净化/Responses 名字净化 +
 //              workspace-chip-label-hold）；计数哨兵见
 //              ta6-registry-invariants.test.js F 与 unit-patch-registry.test.js；
-//              image-send/vision-key 与 guard 组为 false，仅桌面壳运行时应用；
+//              guard 组为 false，仅桌面壳运行时应用（image-send / vision-key 一族
+//              曾属此类，已随识图插件退役整体摘除，见 patch-adapters 的退役注释）；
 //   failPolicy 'warn'（失配告警跳过，多数现状）| 'degrade'（失配降级 +
 //              升级提示）| 'fatal'（仅 build 期保留）；作用于规格级异常
 //              （applyAll 的 catch 分支），逐文件/逐根异常由下层吸收并计入
@@ -51,7 +52,8 @@
 //              failLog(root, err)，与 logs 不同，属 root 应用器专用）。
 //   退役说明（0.1.5-rc.1 重靶期）：preset-seat-fix / token-meter-clamp 已由
 //              上游原生修复，从 PATCH_SPECS 摘除（patch 脚本保留休眠）；
-//              其余失配项已重锚（image-send / profile 系 / menu-viewport
+//              其余失配项已重锚（image-send（2026-10 又随识图插件整体退役）/
+//              profile 系 / menu-viewport
 //              #182 / open-project-dir / session-persistence corrupt /
 //              wsl-picker / header-scan / ds-tool / conversation-assembly /
 //              reasoning-row / unknown-event）。
@@ -63,6 +65,15 @@
 //              从 PATCH_SPECS 摘除，transformOrphanLock 保留休眠；
 //              menu-viewport 的 #182 半边同批退役（上游 useLayoutEffect 改为逐帧
 //              requestAnimationFrame 重定位，首帧 lw=0 的横向溢出下一帧即被修正）。
+//   退役说明（2026-10 内置伴随插件批量拆除）：image-send-fix 从 PATCH_SPECS 摘除，
+//              patch-adapters 里的 transform 与 IMAGE_SEND_* / VISION_KEY_* /
+//              VISION_TOGGLE_* 常量（含从未登记的 vision-key / vision-toggle 两个
+//              休眠变体）一并整体删除——判据是「只为已退役插件存在」：注入体读的是
+//              dsh-vision 的设置命名空间，识图插件不在后没有任何可达路径。
+//              反例（保留，仅改注释）：prompt-context-literal（任何插件写入的非法
+//              变量名模板）、pi-ai / ds-tool 系工具名与 schema 净化、
+//              content-has-image-guard——它们是通用 wire/schema 守卫，graph-memory
+//              与 cardian 只是历史触发源。
 // ---------------------------------------------------------------------------
 
 const path = require('node:path');
@@ -104,8 +115,6 @@ const {
 
 const {
   transformFlashFix,
-  // 文本模型自动识图（识图门槛 VLM 转述 + prompt content 空值守卫，0.1.2-alpha.5 重锚）。
-  transformImageSendFix,
   transformLegacySlotKey,
   transformSlotUnkeyedCompat,
   transformSlotErrorIsolation,
@@ -158,7 +167,6 @@ const {
 
 const {
   SLOT_KEY_COMPAT_MARKER,
-  IMAGE_SEND_MARKER,
   SLOT_UNKEYED_COMPAT_MARKER,
   SLOT_ERROR_ISOLATE_MARKER_V2,
   PROFILE_PATCH_GUARD_MARKER,
@@ -329,53 +337,26 @@ const PATCH_SPECS = [
   },
 
   // -------------------------------------------------------------------------
+  // 【已退役·2026-10 内置伴随插件批量拆除】文本模型自动识图（image-send-fix，
+  // order 80，cli:false，靶 SESSION_CTRL_INDEX_PKG_REL）：其注入体读的就是
+  // dsh-vision 的设置命名空间（settings.get("dsh-vision") + describe 回落），
+  // 门槛替换体只做一件事——把图片交给该插件配的 VLM 转述成文字再发。识图插件
+  // 退役后这条 transform 没有任何可达路径（无插件时恒回落上游原句），故按
+  // 「只为已退役插件存在」判据连 transform 与锚点常量（patch-adapters 的
+  // IMAGE_SEND_* / VISION_KEY_* / VISION_TOGGLE_*，含两个从未登记的休眠变体）
+  // 一并删除，order 80 空出不回收；该靶常量仍由 history-page-size 使用。
+  // 「文本模型收到图片」就此回到上游原生的 MODEL_DOES_NOT_SUPPORT_IMAGES 拒绝
+  // 语义；轮内图片判定的通用防线是 content-has-image-guard（非数组 content 不
+  // 炸整轮），与识图插件存废无关，保留。取证细节（:745 的 content 空值守卫并非
+  // 故障① 根因、typert strict codec 把 content 强制为必填数组等）见 CHANGELOG
+  // 与 git 记录。
+  // -------------------------------------------------------------------------
+
+  // -------------------------------------------------------------------------
   // code preset 兼容补丁（mode: code → both）。
   // -------------------------------------------------------------------------
   // 图片字节信任补丁。
   // -------------------------------------------------------------------------
-  // -------------------------------------------------------------------------
-  // 文本模型自动识图补丁（image-send-fix，0.1.2-alpha.5 重锚 + 重新登记）：
-  // 0.1.2-alpha.1（b5d5c4a5「退役已原生化的补丁」）内核拆分时，本补丁（连同
-  // vision-key-fix / vision-toggle-gate）从注册表摘除，但 alpha 世代内核并未
-  // 原生内置识图转述（node_modules 零命中 describeImagesWithVision）——功能就
-  // 此失效（用户故障②「当前模型不支持图片」）。且 alpha.5 重写 SessionCommand
-  // Controller.prompt 后，旧锚点（content.some / modelInfo / return err(request,{）
-  // 全部失配，即便登记也 0 命中。此处按 alpha.5 真实代码重锚 lib/index.js：
-  //   故障②（门槛）：文本模型（inputModalities 不含 image）收到图片时，改为调
-  //     VLM（describeImagesWithVision）转述成文字再发；dsh-vision 关闭或转述失败
-  //     时按上游原样抛回 MODEL_DOES_NOT_SUPPORT_IMAGES / 追加可操作指引。
-  //   入口守卫（纵深防御）：同一条 transform 把 :745 改为 request.content ?? []，
-  //     并让 admitPromptContent 走恒为数组的 admittedContent，绝不再裸崩 TypeError。
-  //     取证已推翻「:745 即故障①」的假设：该 wire 的 content 由 typert strict codec
-  //     强制为必填数组，undefined 不可达；而用户截图的「本轮运行失败」唯一来源是
-  //     轮内 turn/end 失败（准入失败只弹输入框 toast），故障①站点收敛为 dsh-llm
-  //     contentHasImage 与 dsh-tools result.content.some 两处，本机无留痕、未定案，
-  //     故不预防性打补丁（详见 patch-adapters 注释与交付报告遗留项）。
-  //     enabled 总开关与 apiKey 宿主侧读取已内联进 IMAGE_SEND_HELPER，故无需复活
-  //     vision-key-fix / vision-toggle-gate。
-  // cli:false（对齐 agent-preset-fallback 先例：桌面壳 boot 链全量应用，CLI 同步
-  // 期不碰内核包源码之外的目标）。详见 patch-adapters transformImageSendFix。
-  // -------------------------------------------------------------------------
-  {
-    id: 'image-send-fix',
-    group: 'runtime',
-    order: 80,
-    kind: 'file',
-    layout: 'runtime-local',
-    wslLayout: 'wsl',
-    pkgRel: SESSION_CTRL_INDEX_PKG_REL,
-    transform: transformImageSendFix,
-    marker: IMAGE_SEND_MARKER,
-    requires: [],
-    failPolicy: 'warn',
-    cli: false,
-    logs: {
-      prefix: '识图发送补丁',
-      alreadyLog: alreadySkip,
-      doneLog: (file) => '已启用文本模型图片自动转述（含 prompt content 空值守卫） ' + file,
-      failLog: (file, err) => '识图发送补丁失败(' + file + '): ' + err.message,
-    },
-  },
   {
     id: 'attachment-mime-trust',
     group: 'runtime',
@@ -411,7 +392,7 @@ const PATCH_SPECS = [
   //      中断 2s 后仍未 settle 即 close("interrupt escalation")，不再等
   //      300s（兜底其他消费方）。
   // 上游修复意向：上游内置同款 abort race / 中断升级后，两补丁经 already /
-  // anchor-missing 自然退役（参照 vision-key-fix 休眠先例），无需手工摘除。
+  // anchor-missing 自然退役（参照 workspace-search-rail-fix 休眠先例），无需手工摘除。
   // -------------------------------------------------------------------------
   {
     id: 'persistent-shell-abort-race',
@@ -804,7 +785,7 @@ const PATCH_SPECS = [
   // 已把 this.remotePresets(ctx) 双重错误（模块级函数误加 this + ctx 应为
   // this.ctx）改为 this.ctx.remote.agentPresets.select(...)，且 select 返回
   // { ok, error } 结果对象（!result.ok 分支复位 busy）——busy 卡死根因已原生
-  // 修复，补丁无增量。patch-preset-seat.js 保留（休眠，参照 vision-key-fix 先例）。
+  // 修复，补丁无增量。patch-preset-seat.js 保留（休眠，参照 workspace-search-rail-fix 先例）。
   // -------------------------------------------------------------------------
   {
     id: 'session-persistence',
@@ -1101,8 +1082,8 @@ const PATCH_SPECS = [
   // 内核 dsh-agent-presets roster 无此 id → resolve() 抛 UnknownPresetError →
   // resume 硬失败白屏。补丁把该分支改为 warn 降级回落（minimal-win→minimal、
   // 其余未知 id→standard），PresetMountError 保持硬抛。详见 patch-adapters 的
-  // transformAgentPresetFallback 注释。cli:false（对齐 image-send-fix 先例：
-  // 桌面壳 boot 链 applyAll 全量应用，CLI 同步期不碰内核包源码之外的目标）。
+  // transformAgentPresetFallback 注释。cli:false（对齐 prompt-context-literal
+  // 先例：桌面壳 boot 链 applyAll 全量应用，CLI 同步期不碰内核包源码之外的目标）。
   // -------------------------------------------------------------------------
   {
     id: 'agent-preset-fallback',
@@ -1126,15 +1107,19 @@ const PATCH_SPECS = [
   },
 
   // -------------------------------------------------------------------------
-  // prompt 插值 name-invalid 字面透传补丁（graph-memory recall 字面量
-  // {{state.gold}} 每轮炸瘫 prompt 组装修复，追加条目）。
+  // prompt 插值 name-invalid 字面透传补丁（任何插件写入的非法变量名模板不再
+  // 每轮炸瘫 prompt 组装修复，追加条目）。
   //
-  // 内核 dsh-system-prompt interpolate() 把所有 context/section 文本当 {{name}}
-  // 模板扫描：graph-memory recall 出的 DB 节点/episode 内容（不可信数据）里存了
-  // 字面 {{state.gold}}，名字带点不过 VARIABLE_NAME → 硬抛 → 整轮 prompt 组装
-  // 失败，会话每轮必瘫。补丁把该分支改为 warn + 字面透传；unknown-variable
-  // 分支保持硬抛（真实模板作者错误，如 dsh-workspace-anchor 有意引用 {{cwd}}）。
-  // 与 graph-memory 插件侧 defuseTemplateGroups 双层互补。cli:false（对齐
+  // 立论理由与具体插件无关：内核 dsh-system-prompt interpolate() 把所有
+  // context/section 文本当 {{name}} 模板扫描，而这两类文本里装的大量是不可信
+  // 数据——任何把动态内容（DB 行、检索原文、用户粘贴文本）拼进 context 的插件，
+  // 只要数据里有一个字面量长得像 {{state.gold}}，名字带点不过 VARIABLE_NAME →
+  // 硬抛 → 整轮 prompt 组装失败，会话每轮必瘫。补丁把该分支改为 warn + 字面
+  // 透传；unknown-variable 分支保持硬抛（真实模板作者错误，如 dsh-workspace-anchor
+  // 有意引用 {{cwd}}）。历史触发源（2026-09 真实现场）是 graph-memory 的 recall
+  // 内容，该插件已随 2026-10 内置伴随插件批量退役，本补丁保留——中招的一直是
+  // 「写入非法变量名模板的任意插件」这一整类；原与之互补的插件侧
+  // defuseTemplateGroups 随插件下线，内核放宽因此是唯一一层。cli:false（对齐
   // agent-preset-fallback 先例：桌面壳 boot 链 applyAll 全量应用，CLI 同步期
   // 不碰内核包源码之外的目标）。详见 patch-adapters 的
   // transformPromptContextLiteral 注释。
@@ -1413,9 +1398,12 @@ const PATCH_SPECS = [
   // -------------------------------------------------------------------------
   // pi-ai 工具 schema+函数名净化补丁（pi-ai-tool-schema-sanitize）：DeepSeek/
   // LiteLLM 系路由严格校验：①属性级 required:true/false（JSON Schema 非法位置，
-  // cardian 系 26 工具携带）②函数名含 . 等非法字符（OpenAI 规范仅
-  // [a-zA-Z0-9_-]）③空 required 数组——任一即整请求 400 MODEL_TOOL_NOT_SUPPORTED
-  //（实测 a.b→400/ab→200；required:false 工具单发全 400）。glm/qwen/kimi 不校验。
+  // 工具工厂批量生成 schema 的插件普遍携带）②函数名含 . 等非法字符（OpenAI 规范
+  // 仅 [a-zA-Z0-9_-]，任何带命名空间前缀的插件工具名都会踩）③空 required 数组
+  //——任一即整请求 400 MODEL_TOOL_NOT_SUPPORTED（实测 a.b→400/ab→200；
+  // required:false 工具单发全 400）。glm/qwen/kimi 不校验。守卫针对的是「任意
+  // 插件产出的非法 schema / 非法名字」这一形状，与是哪个插件无关；历史触发源
+  //（2026-09 现场）= 已随 2026-10 批量退役的 cardian 系 26 工具。
   // 净化：出口剥属性级布尔 required+删空 required 数组+名字规范化（非法字符→
   // 下划线），解析侧回映射还原原名分发。cli:true。
   // -------------------------------------------------------------------------
@@ -1445,9 +1433,11 @@ const PATCH_SPECS = [
   // 上面那条只清洗 Chat Completions 序列化（openai-completions.js），而
   // openai-responses / azure-openai-responses / openai-codex-responses 三条路由
   // 共用 openai-responses-shared.js 的 convertResponsesTools + 流式槽位构造，
-  // 全程零清洗 → dsh-cardian 的 `cardian.*` 带点号工具名直上 wire，被 OpenAI
+  // 全程零清洗 → 任何带命名空间点号的插件工具名直上 wire（历史触发源 = 已随
+  // 2026-10 批量退役的 dsh-cardian 的 `cardian.*`），被 OpenAI
   // 兼容网关按 pattern ^[a-zA-Z0-9_-]+$ 拒为 400 invalid_value（在野整轮失败，
-  // 报文 "OpenAI API error (400): Invalid 'tools[1].name'"）。6 落点：出站
+  // 报文 "OpenAI API error (400): Invalid 'tools[1].name'"）。守卫按 wire 形状
+  // 立论，插件换成谁都一样要洗。6 落点：出站
   // grammar/function 两分支 name + 历史回放两处 name（回放的必须也是 wire 名）、
   // 入站 function_call/custom_tool_call 槽位 name 还原原名分发。规则与回映射
   // 语义同 completions 补丁，但两文件属不同模块作用域、映射表各自独立。cli:true。
@@ -1476,8 +1466,9 @@ const PATCH_SPECS = [
   // pi-ai 适配层工具名 wire 中央收口（一处覆盖全部 provider）。
   // 为什么还要一条：completions 与 Responses 两条逐适配器补丁只盖住 OpenAI 家族，而
   // anthropic-messages / google / bedrock / mistral 同样把 name 原样塞进请求，且这四家
-  // 的函数名规则都不收点号（Anthropic 是 ^[a-zA-Z0-9_-]{1,64}$）—— dsh-cardian 的
-  // cardian.backlinks 一类名字在任一家的请求里都会 400。逐适配器打补丁等于长期追上游
+  // 的函数名规则都不收点号（Anthropic 是 ^[a-zA-Z0-9_-]{1,64}$）——带点号前缀的
+  // 插件工具名（历史触发源：已随 2026-10 批量退役的 dsh-cardian 的
+  // cardian.backlinks 一类）在任一家的请求里都会 400。逐适配器打补丁等于长期追上游
   // 尾巴，故在内核与 pi-ai 的唯一交界处收口。与两条逐适配器补丁可并存：清洗幂等
   // （wire 名再洗不变），还原按映射表命中才改。cli:true。
   // -------------------------------------------------------------------------

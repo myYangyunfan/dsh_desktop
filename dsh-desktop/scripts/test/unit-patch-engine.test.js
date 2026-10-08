@@ -38,7 +38,7 @@ const { DSHTOOLS_REL } = require('../lib/patch-target-resolver');
 // 变换类单测的起点一律取真 pristine 闭包树（详见 pristineShell 注释）。
 const { findPristineFile } = require('../lib/pristine-kernel-roots');
 const {
-  PATCH_HEADER, ACP_DISABLE_BLOCK, PET_DISABLE_BLOCK,
+  PATCH_HEADER, ACP_DISABLE_BLOCK,
   ACP_SELF_DISABLE_BLOCK, removeAcpBasicDisableBlock,
   ensureDisabledPatchEntry, removeLegacyMarketplacePatchLines,
   registerCompanionPatchEntries, syncCompanionFiles, removedPluginIdsFromPatch,
@@ -391,22 +391,24 @@ test('runtime-patches: keyed slot 兼容覆盖顶层与 dsh 嵌套依赖副本',
 
 test('companion-plugins: 既有前缀顺序与 workspace-anchor 位置唯一（漂移防线）', () => {
   const ids = COMPANION_PLUGINS.map((p) => p.id);
+  // 2026-10 内置伴随插件批量退役后，client-file-changes / terminal / harness-pet /
+  // dsh-vision / graph-memory / community-market 六条从前 18 位里退出，其余条目整体
+  // 前移（workspace-anchor 11→8）；本锁的原意不变——既有相对顺序不得漂移。
   assert.deepStrictEqual(
     ids.slice(0, 18),
     [
-      'balance', 'file-changes', 'client-file-changes', 'terminal',
-      'better-sidebar', 'harness-pet', 'dsh-session-manager',
-      'conversation-tweaks',
-      'quest-ui', 'dsh-super-injector', 'prompt-custom', 'workspace-anchor',
-      'wsl-settings', 'dsh-vision', 'side-session', 'compaction-acp',
-      'graph-memory', 'community-market',
+      'balance', 'file-changes', 'better-sidebar', 'dsh-session-manager',
+      'conversation-tweaks', 'quest-ui', 'dsh-super-injector', 'prompt-custom',
+      'workspace-anchor', 'wsl-settings', 'side-session', 'compaction-acp',
+      'dsh-pocket', 'openclaw-bridge', 'input-history', 'dsh-easyrewrite',
+      'change-review', 'auto-compact',
     ],
-    '既有前缀顺序不得漂移（新增/改名须同步更新本测试；dsh-navbar 已随内核换代退役、graph-memory 内置后随壳分发；plugin-manager 于 v1.0.0 退役——包名与官方内核包同名会遮蔽 profiles/web 里的官方 pluginManager）'
+    '既有前缀顺序不得漂移（新增/改名须同步更新本测试；dsh-navbar 已随内核换代退役；plugin-manager 于 v1.0.0 退役——包名与官方内核包同名会遮蔽 profiles/web 里的官方 pluginManager）'
   );
-  assert.strictEqual(ids.indexOf('workspace-anchor'), 11, 'workspace-anchor 应固定在 prompt-custom 之后');
+  assert.strictEqual(ids.indexOf('workspace-anchor'), 8, 'workspace-anchor 应固定在 prompt-custom 之后');
   assert.strictEqual(ids.filter((id) => id === 'workspace-anchor').length, 1, 'workspace-anchor 不得重复');
   assert.strictEqual(companionDirName({ name: '@deepseek-ai/dsh-balance' }), 'dsh-balance');
-  assert.strictEqual(companionDirName({ name: 'harness-pet' }), 'harness-pet');
+  assert.strictEqual(companionDirName({ name: 'dsh-session-manager' }), 'dsh-session-manager');
 });
 
 // ---------------------------------------------------------------------------
@@ -423,10 +425,11 @@ test('ensureDisabledPatchEntry: 已存在/[] 形态/空文件/追加 四种形�
   assert.strictEqual(emptyList.changed, true);
   assert.strictEqual(emptyList.patch,
     '# billion-context-dsh：禁用 preset realm 的 compaction-basic（ACP 模型驱动后端接管压缩决策）\n- id: compaction-basic\n  disabled: true\n');
-  // 空文件形态
-  const empty = ensureDisabledPatchEntry('', idRe('harness-pet'), PET_DISABLE_BLOCK);
+  // 空文件形态（用 compaction-acp 的默认禁用块——harness-pet 的 PET_DISABLE_BLOCK
+  // 已随 2026-10 内置伴随插件批量退役删除，本段验证的是通用追加语义而非某个插件）
+  const empty = ensureDisabledPatchEntry('', idRe('compaction-acp'), ACP_SELF_DISABLE_BLOCK);
   assert.strictEqual(empty.changed, true);
-  assert.strictEqual(empty.patch, PATCH_HEADER + PET_DISABLE_BLOCK.trim());
+  assert.strictEqual(empty.patch, PATCH_HEADER + ACP_SELF_DISABLE_BLOCK.trim());
   // 追加形态
   const base = '# dsh web profile patch（由 DSH Desktop 维护）\n- insert:\n    - id: balance\n';
   const appended = ensureDisabledPatchEntry(base, idRe('compaction-basic'), ACP_DISABLE_BLOCK);
@@ -437,7 +440,7 @@ test('ensureDisabledPatchEntry: 已存在/[] 形态/空文件/追加 四种形�
 
 test('removeAcpBasicDisableBlock: 精确撤销自动块、尊重用户手写、幂等', () => {
   const idRe = (id) => new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*' + id + '\\b');
-  const base = '# dsh web profile patch（由 DSH Desktop 维护）\n- id: harness-pet\n  disabled: true\n';
+  const base = '# dsh web profile patch（由 DSH Desktop 维护）\n- id: balance\n  disabled: true\n';
   // 旧路径追加一段自动 compaction-basic 禁用块，再用 heal 撤销 → 保留无关条目。
   const auto = ensureDisabledPatchEntry(base, idRe('compaction-basic'), ACP_DISABLE_BLOCK);
   assert.strictEqual(auto.changed, true);
@@ -445,7 +448,7 @@ test('removeAcpBasicDisableBlock: 精确撤销自动块、尊重用户手写、�
   const healed = removeAcpBasicDisableBlock(auto.patch);
   assert.strictEqual(healed.changed, true);
   assert.ok(!healed.patch.includes('- id: compaction-basic'), 'compaction-basic 禁用块应被撤销');
-  assert.ok(healed.patch.includes('- id: harness-pet\n  disabled: true'), '无关条目不得被误删');
+  assert.ok(healed.patch.includes('- id: balance\n  disabled: true'), '无关条目不得被误删');
   // 幂等：块已不在位 → 零改写。
   const again = removeAcpBasicDisableBlock(healed.patch);
   assert.strictEqual(again.changed, false);
@@ -466,10 +469,10 @@ test('removeLegacyMarketplacePatchLines: 移除旧市场 insert 条目且幂等'
 });
 
 test('registerCompanionPatchEntries: 空文件注册/幂等/改名/尊重用户禁用/迁移去重', () => {
-  const nonBundleNames = new Set(['@deepseek-ai/dsh-balance', '@deepseek-ai/dsh-terminal-tab']);
+  const nonBundleNames = new Set(['@deepseek-ai/dsh-balance', '@deepseek-ai/dsh-quest-ui']);
   const plugins = [
     { id: 'balance', name: '@deepseek-ai/dsh-balance' },
-    { id: 'terminal', name: '@deepseek-ai/dsh-terminal-tab' },
+    { id: 'quest-ui', name: '@deepseek-ai/dsh-quest-ui' },
     { id: 'sidebar', name: 'dsh-better-sidebar' },
   ];
   const bundleNames = new Set(); // 先全部按非 bundle 注册
@@ -477,21 +480,21 @@ test('registerCompanionPatchEntries: 空文件注册/幂等/改名/尊重用户�
   // 空文件 → header + insert
   const r1 = registerCompanionPatchEntries('', { plugins, bundleNames, missingNames });
   assert.strictEqual(r1.changed, true);
-  assert.deepStrictEqual(r1.added, ['balance', 'terminal', 'sidebar']);
+  assert.deepStrictEqual(r1.added, ['balance', 'quest-ui', 'sidebar']);
   assert.strictEqual(r1.patch, PATCH_HEADER
     + '- insert:\n    - id: balance\n      name: \'@deepseek-ai/dsh-balance\'\n'
-    + '- insert:\n    - id: terminal\n      name: \'@deepseek-ai/dsh-terminal-tab\'\n'
+    + '- insert:\n    - id: quest-ui\n      name: \'@deepseek-ai/dsh-quest-ui\'\n'
     + '- insert:\n    - id: sidebar\n      name: \'dsh-better-sidebar\'\n');
   // 幂等：二次零变化
   const r2 = registerCompanionPatchEntries(r1.patch, { plugins, bundleNames, missingNames });
   assert.strictEqual(r2.changed, false);
   assert.strictEqual(r2.patch, r1.patch);
-  // 改名：terminal 的 name 改成旧包名 → 就地改回
-  const renamed = r1.patch.replace('@deepseek-ai/dsh-terminal-tab', '@deepseek-ai/dsh-terminal');
+  // 改名：quest-ui 的 name 改成旧包名 → 就地改回
+  const renamed = r1.patch.replace('@deepseek-ai/dsh-quest-ui', '@deepseek-ai/dsh-quest');
   const r3 = registerCompanionPatchEntries(renamed, { plugins, bundleNames, missingNames });
   assert.strictEqual(r3.changed, true);
-  assert.deepStrictEqual(r3.updated, ['terminal']);
-  assert.ok(r3.patch.includes('@deepseek-ai/dsh-terminal-tab'));
+  assert.deepStrictEqual(r3.updated, ['quest-ui']);
+  assert.ok(r3.patch.includes('@deepseek-ai/dsh-quest-ui'));
   // 尊重用户禁用：balance 有 disabled 条目 → 不再 insert（已在第一次注册后存在 insert……
   // 这里用全新文本验证「id 已出现则跳过」）
   const userDisabled = '# 用户配置\n- id: balance\n  disabled: true\n';
@@ -539,8 +542,8 @@ test('registerCompanionPatchEntries: 清单 id 与 patch/bundle 层 loader id �
 
 test('removedPluginIdsFromPatch: 卸载标记提取（正常/损坏 YAML/insert 块不误伤）', () => {
   // 插件管理写入的标记形态：顶层条目带 removed: true
-  const patch = '# header\n- insert:\n    - id: balance\n      name: \'@deepseek-ai/dsh-balance\'\n- id: terminal\n  name: \'dsh-terminal-tab\'\n  disabled: true\n  removed: true\n- id: vision\n  config:\n    keep: 1\n  removed: true\n';
-  assert.deepStrictEqual([...removedPluginIdsFromPatch(patch)].sort(), ['terminal', 'vision']);
+  const patch = '# header\n- insert:\n    - id: balance\n      name: \'@deepseek-ai/dsh-balance\'\n- id: quest-ui\n  name: \'@deepseek-ai/dsh-quest-ui\'\n  disabled: true\n  removed: true\n- id: side-session\n  config:\n    keep: 1\n  removed: true\n';
+  assert.deepStrictEqual([...removedPluginIdsFromPatch(patch)].sort(), ['quest-ui', 'side-session']);
   // insert 块内层条目（缩进 >= 4）即使带 removed 字样也不参与
   const inner = '- insert:\n    - id: x\n      removed: true\n';
   assert.deepStrictEqual([...removedPluginIdsFromPatch(inner)], []);
@@ -555,16 +558,16 @@ test('removedPluginIdsFromPatch: 卸载标记提取（正常/损坏 YAML/insert 
 test('registerCompanionPatchEntries: 卸载标记显式跳过注册', () => {
   const plugins = [
     { id: 'balance', name: '@deepseek-ai/dsh-balance' },
-    { id: 'terminal', name: 'dsh-terminal-tab' },
+    { id: 'side-session', name: '@dsh-external/dsh-side-session' },
   ];
   const bundleNames = new Set();
   const missingNames = new Set();
   // 不传 removedIds：两者都注册（既有行为）
   const r1 = registerCompanionPatchEntries('', { plugins, bundleNames, missingNames });
-  assert.deepStrictEqual(r1.added, ['balance', 'terminal']);
-  // removedIds 含 balance：只注册 terminal，且不产生 balance 的任何行
+  assert.deepStrictEqual(r1.added, ['balance', 'side-session']);
+  // removedIds 含 balance：只注册 side-session，且不产生 balance 的任何行
   const r2 = registerCompanionPatchEntries('', { plugins, bundleNames, missingNames, removedIds: new Set(['balance']) });
-  assert.deepStrictEqual(r2.added, ['terminal']);
+  assert.deepStrictEqual(r2.added, ['side-session']);
   assert.ok(!r2.patch.includes('balance'), '已卸载插件不得写入任何注册');
   // 已存在的 removed 标记条目：不重复 insert、不改写（与未传 removedIds 的旧侥幸路径一致）
   const withMarker = '# user\n- id: balance\n  disabled: true\n  removed: true\n';

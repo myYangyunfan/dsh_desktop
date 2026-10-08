@@ -1,7 +1,8 @@
 'use strict';
 
 // 单测：scripts/lib/companion-profile.js 的 removed 标记识别与补丁条目
-// id 边界防御（issue #87 回归：\b 词边界把 dsh-terminal 误命中 dsh-terminal-tab）。
+// id 边界防御（issue #87 回归：\b 词边界把短 id 误命中同前缀长 id ——
+// 现场是 dsh-terminal vs 已退役的 dsh-terminal-tab，样本见下方用例注释）。
 // 运行：node --test scripts/test/unit-companion-profile.test.js
 
 const test = require('node:test');
@@ -11,9 +12,7 @@ const {
   ensureDisabledPatchEntry,
   registerCompanionPatchEntries,
   ACP_DISABLE_BLOCK,
-  PET_DISABLE_BLOCK,
-  CARDIAN_DISABLE_BLOCK,
-  GRAPH_MEMORY_DISABLE_BLOCK,
+  ACP_SELF_DISABLE_BLOCK,
 } = require('../lib/companion-profile');
 
 test('removedPluginIdsFromPatch: 大小写不敏感的 removed: true 被识别（issue #87）', () => {
@@ -45,66 +44,72 @@ test('ensureDisabledPatchEntry: id 前缀不误命中（compaction-basic vs comp
   assert.strictEqual(again.changed, false, '精确 id 已存在时必须幂等跳过');
 });
 
-test('CARDIAN_DISABLE_BLOCK 与 GRAPH_MEMORY_DISABLE_BLOCK: 默认禁用块格式正确且幂等', () => {
-  assert.match(CARDIAN_DISABLE_BLOCK, /id:\s*cardian\b/);
-  assert.match(CARDIAN_DISABLE_BLOCK, /disabled:\s*true/);
-  assert.match(GRAPH_MEMORY_DISABLE_BLOCK, /id:\s*graph-memory\b/);
-  assert.match(GRAPH_MEMORY_DISABLE_BLOCK, /disabled:\s*true/);
+test('禁用块机器：两块默认禁用条目顺序写入同一 patch 且各自幂等', () => {
+  // 原用例打的是 CARDIAN_DISABLE_BLOCK / GRAPH_MEMORY_DISABLE_BLOCK——两个默认禁用块
+  // 随 cardian / graph-memory 退役从 patch-surgery 与 companion-profile 导出面删除，
+  // 这里把同一台「ensureDisabledPatchEntry 机器」改锚到仍在写的两个活块：
+  // ACP_DISABLE_BLOCK（compaction-basic，见上一用例）与 ACP_SELF_DISABLE_BLOCK
+  // （compaction-acp 自禁用，sync-companion-plugins.js:317 的实调用点）。
+  assert.match(ACP_SELF_DISABLE_BLOCK, /id:\s*compaction-acp\b/);
+  assert.match(ACP_SELF_DISABLE_BLOCK, /disabled:\s*true/);
 
-  // 验证写入全新 patch
-  const cardianPattern = new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*cardian(?![A-Za-z0-9_.-])');
-  const gmPattern = new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*graph-memory(?![A-Za-z0-9_.-])');
+  const acpSelfPattern = new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*compaction-acp(?![A-Za-z0-9_.-])');
+  const acpBasicPattern = new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*compaction-basic(?![A-Za-z0-9_.-])');
 
-  let patch = '- insert:\n    - id: balance\n';
-  const out1 = ensureDisabledPatchEntry(patch, cardianPattern, CARDIAN_DISABLE_BLOCK);
+  // 验证写入全新 patch（两块顺序落同一段文本）
+  const out1 = ensureDisabledPatchEntry('- insert:\n    - id: balance\n', acpSelfPattern, ACP_SELF_DISABLE_BLOCK);
   assert.strictEqual(out1.changed, true);
-  assert.ok(out1.patch.includes('id: cardian'));
+  assert.ok(out1.patch.includes('id: compaction-acp'));
 
-  const out2 = ensureDisabledPatchEntry(out1.patch, gmPattern, GRAPH_MEMORY_DISABLE_BLOCK);
+  const out2 = ensureDisabledPatchEntry(out1.patch, acpBasicPattern, ACP_DISABLE_BLOCK);
   assert.strictEqual(out2.changed, true);
-  assert.ok(out2.patch.includes('id: graph-memory'));
+  assert.ok(out2.patch.includes('id: compaction-basic'));
 
   // 验证幂等：再次执行不再改动
-  const out3 = ensureDisabledPatchEntry(out2.patch, cardianPattern, CARDIAN_DISABLE_BLOCK);
+  const out3 = ensureDisabledPatchEntry(out2.patch, acpSelfPattern, ACP_SELF_DISABLE_BLOCK);
   assert.strictEqual(out3.changed, false);
-  const out4 = ensureDisabledPatchEntry(out2.patch, gmPattern, GRAPH_MEMORY_DISABLE_BLOCK);
+  const out4 = ensureDisabledPatchEntry(out2.patch, acpBasicPattern, ACP_DISABLE_BLOCK);
   assert.strictEqual(out4.changed, false);
 });
 
-test('registerCompanionPatchEntries: dsh-terminal 不得误判 dsh-terminal-tab 已存在（issue #87）', () => {
-  const patch = '- insert:\n    - id: dsh-terminal-tab\n      name: \'@deepseek-ai/dsh-terminal-tab\'\n';
+test('registerCompanionPatchEntries: 短 id 不得被同前缀长 id 挡掉（issue #87 词边界防线）', () => {
+  // 现场：`\b` 缺失时长 id 的锚点会命中同前缀的更长 id，误判「已登记」而静默不写。
+  // 历史样本是 dsh-terminal vs dsh-terminal-tab（后者随 terminal 退役不再是活体形态），
+  // 防线本身与身份无关，故换成「活配套 file-changes + 同前缀合成兄弟行 file-changes-x」
+  // （合成兄弟行与上方 compaction-basic-x 用例同款手法）。
+  const patch = '- insert:\n    - id: file-changes-x\n      name: \'@deepseek-ai/dsh-file-changes-x\'\n';
   const out = registerCompanionPatchEntries(patch, {
-    plugins: [{ id: 'dsh-terminal', name: '@deepseek-ai/dsh-terminal' }],
+    plugins: [{ id: 'file-changes', name: '@deepseek-ai/dsh-file-changes' }],
     bundleNames: new Set(),
     missingNames: new Set(),
     removedIds: new Set(),
     onDrop: () => {},
     onEntry: () => {},
   });
-  assert.ok(out.changed, 'dsh-terminal 未被登记时必须插入条目（不得被 dsh-terminal-tab 挡掉）');
-  assert.ok(out.patch.includes('id: dsh-terminal'), '应插入 dsh-terminal 条目');
-  assert.ok(!out.patch.includes('id: dsh-terminal-tab\n      name: \'@deepseek-ai/dsh-terminal\''),
-    '不得把 dsh-terminal-tab 的 name 误改成 dsh-terminal');
+  assert.ok(out.changed, 'file-changes 未被登记时必须插入条目（不得被 file-changes-x 挡掉）');
+  assert.ok(/- id: file-changes(?![A-Za-z0-9_.-])/.test(out.patch), '应插入 file-changes 条目');
+  assert.ok(!out.patch.includes('id: file-changes-x\n      name: \'@deepseek-ai/dsh-file-changes\''),
+    '不得把 file-changes-x 的 name 误改成 file-changes');
 });
 
 test('registerCompanionPatchEntries: 精确 id 已存在时改名生效但不误伤前缀兄弟', () => {
   const patch = [
     '- insert:',
-    "    - id: dsh-terminal",
-    "      name: '@deepseek-ai/dsh-terminal-old'",
-    "    - id: dsh-terminal-tab",
-    "      name: '@deepseek-ai/dsh-terminal-tab'",
+    "    - id: file-changes",
+    "      name: '@deepseek-ai/dsh-file-changes-old'",
+    "    - id: file-changes-x",
+    "      name: '@deepseek-ai/dsh-file-changes-x'",
   ].join('\n');
   const out = registerCompanionPatchEntries(patch, {
-    plugins: [{ id: 'dsh-terminal', name: '@deepseek-ai/dsh-terminal' }],
+    plugins: [{ id: 'file-changes', name: '@deepseek-ai/dsh-file-changes' }],
     bundleNames: new Set(),
     missingNames: new Set(),
     removedIds: new Set(),
     onDrop: () => {},
     onEntry: () => {},
   });
-  assert.ok(out.patch.includes("name: '@deepseek-ai/dsh-terminal'"), '精确 id 的 name 应就地改名');
-  assert.ok(out.patch.includes("name: '@deepseek-ai/dsh-terminal-tab'"), '前缀兄弟条目 name 不得被误改');
+  assert.ok(out.patch.includes("name: '@deepseek-ai/dsh-file-changes'"), '精确 id 的 name 应就地改名');
+  assert.ok(out.patch.includes("name: '@deepseek-ai/dsh-file-changes-x'"), '前缀兄弟条目 name 不得被误改');
 });
 // ---------------------------------------------------------------------------
 // dsh-mini 退役清理（0.6.4，dsh-pocket 等位替代）：目录 + manifest + patch 行全套

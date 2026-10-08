@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "全部窗口的桥通道权限。远程 origin 放行仅限 127.0.0.1（内核 Web UI / loading / recovery）；桥 command 经 permissions/bridge.toml 三阶段权限放行；拖拽需要 start-dragging。",
-  "windows": ["main", "float-*", "pet", "sponsor", "recovery"],
+  "windows": ["main", "float-*", "sponsor", "recovery"],
   "remote": {
     "urls": ["http://127.0.0.1", "http://127.0.0.1:*"]
   },

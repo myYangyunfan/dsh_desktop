@@ -2,6 +2,11 @@
 
 // patch-surgery 单测：统一 id 字符集（点号）、EOL 保持、三种引号 name 改名、
 // 幂等性。与历史行为逐字兼容（LF 输入输出逐字节不变）。
+//
+// 夹具身份（2026-10 调整）：这些机器都是通用补丁手术面，历史上用 harness-pet /
+// terminal 当样本名；两条伴随件已在 v1.0.0 退役，样本换成仍随清单分发的
+// better-sidebar（id `better-sidebar` / 包 `dsh-better-sidebar`）与 synapse
+// （id `synapse` / 包 `dsh-synapse`）——断言的语义一条没动，只换名字。
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -32,11 +37,11 @@ test('togglePluginInPatch: 点号 id（历史「能写不能愈」修复）', ()
 
 test('setPluginRemoved: 卸载写 disabled+removed；恢复清标记', () => {
   const text = '';
-  const off = setPluginRemoved(text, 'harness-pet', true, 'harness-pet');
+  const off = setPluginRemoved(text, 'better-sidebar', true, 'dsh-better-sidebar');
   assert.match(off, /disabled: true/);
   assert.match(off, /removed: true/);
-  const on = setPluginRemoved(off, 'harness-pet', false, 'harness-pet');
-  assert.ok(!on.includes('harness-pet'), '恢复后无 config 条目移除（同步器重新 insert）');
+  const on = setPluginRemoved(off, 'better-sidebar', false, 'dsh-better-sidebar');
+  assert.ok(!on.includes('better-sidebar'), '恢复后无 config 条目移除（同步器重新 insert）');
 });
 
 test('dedupePatchEntries: 重复注册去重（保留首次，含点号 id）', () => {
@@ -73,8 +78,8 @@ test('healSoulMdPatchRow / healRowConfig: 缺 config 补 config，幂等', () =>
   const r2 = healSoulMdPatchRow(r1.patch);
   assert.deepEqual(r2.healed, []);
   assert.equal(r2.patch, r1.patch);
-  const pet = "- id: harness-pet\n  name: 'harness-pet'\n";
-  const pr = healRowConfig(pet, 'harness-pet', { fullRoot: 'x' });
+  const side = "- id: better-sidebar\n  name: 'dsh-better-sidebar'\n";
+  const pr = healRowConfig(side, 'better-sidebar', { fullRoot: 'x' });
   assert.match(pr.patch, /fullRoot/);
 });
 
@@ -87,43 +92,43 @@ test('healPatchListSyntax: 与列表混存的顶层 [] 移除', () => {
 });
 
 test('removedPluginIdsFromPatch: 顶层 removed 行提取，insert 块不误伤', () => {
-  const text = '- id: pet\n  name: \'harness-pet\'\n  disabled: true\n  removed: true\n- insert:\n    - id: x\n      name: \'x\'\n      removed: true\n';
-  assert.deepEqual([...removedPluginIdsFromPatch(text)], ['pet']);
+  const text = '- id: sidebar\n  name: \'dsh-better-sidebar\'\n  disabled: true\n  removed: true\n- insert:\n    - id: x\n      name: \'x\'\n      removed: true\n';
+  assert.deepEqual([...removedPluginIdsFromPatch(text)], ['sidebar']);
 });
 
 test('ensureDisabledPatchEntry: 四种形态 + 幂等', () => {
-  const a = ensureDisabledPatchEntry('', /harness-pet/, '- id: harness-pet\n  disabled: true\n');
+  const a = ensureDisabledPatchEntry('', /better-sidebar/, '- id: better-sidebar\n  disabled: true\n');
   assert.ok(a.changed);
-  const b = ensureDisabledPatchEntry(a.patch, /harness-pet/, '- id: harness-pet\n  disabled: true\n');
+  const b = ensureDisabledPatchEntry(a.patch, /better-sidebar/, '- id: better-sidebar\n  disabled: true\n');
   assert.ok(!b.changed);
-  const c = ensureDisabledPatchEntry('[]', /harness-pet/, '- id: harness-pet\n  disabled: true\n');
-  assert.match(c.patch, /- id: harness-pet/);
+  const c = ensureDisabledPatchEntry('[]', /better-sidebar/, '- id: better-sidebar\n  disabled: true\n');
+  assert.match(c.patch, /- id: better-sidebar/);
 });
 
 test('registerCompanionPatchEntries: 三种引号形态 name 改名修复', () => {
   for (const quote of ["'", '"']) {
-    const text = `- insert:\n    - id: terminal\n      name: ${quote}old-name${quote}\n`;
+    const text = `- insert:\n    - id: synapse\n      name: ${quote}old-name${quote}\n`;
     const r = registerCompanionPatchEntries(text, {
-      plugins: [{ id: 'terminal', name: 'new-name' }],
+      plugins: [{ id: 'synapse', name: 'new-name' }],
       bundleNames: new Set(), missingNames: new Set(), removedIds: new Set(),
     });
-    assert.ok(r.updated.includes('terminal'), quote + ' 引号形态应改名');
+    assert.ok(r.updated.includes('synapse'), quote + ' 引号形态应改名');
     assert.ok(r.patch.includes('new-name'));
   }
   // 无引号形态
-  const bare = '- insert:\n    - id: terminal\n      name: old-name\n';
+  const bare = '- insert:\n    - id: synapse\n      name: old-name\n';
   const r2 = registerCompanionPatchEntries(bare, {
-    plugins: [{ id: 'terminal', name: 'new-name' }],
+    plugins: [{ id: 'synapse', name: 'new-name' }],
     bundleNames: new Set(), missingNames: new Set(), removedIds: new Set(),
   });
-  assert.ok(r2.updated.includes('terminal'));
+  assert.ok(r2.updated.includes('synapse'));
   assert.ok(r2.patch.includes('new-name'));
 });
 
 test('registerCompanionPatchEntries: removedIds 显式跳过注册（卸载不复活）', () => {
   const r = registerCompanionPatchEntries('', {
-    plugins: [{ id: 'pet', name: 'harness-pet' }],
-    bundleNames: new Set(), missingNames: new Set(), removedIds: new Set(['pet']),
+    plugins: [{ id: 'better-sidebar', name: 'dsh-better-sidebar' }],
+    bundleNames: new Set(), missingNames: new Set(), removedIds: new Set(['better-sidebar']),
   });
   assert.ok(!r.changed);
 });

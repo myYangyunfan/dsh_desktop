@@ -26,20 +26,16 @@ const PATCH_HEADER = '# dsh web profile patch（由 DSH Desktop 维护）\n';
 // billion-context-dsh（compaction-acp）与默认 compaction-basic 互斥的禁用块。
 const ACP_DISABLE_BLOCK = '\n# billion-context-dsh：禁用 preset realm 的 compaction-basic（ACP 模型驱动后端接管压缩决策）\n- id: compaction-basic\n  disabled: true\n';
 
-// 桌面宠物（harness-pet）默认关闭的禁用块。
-const PET_DISABLE_BLOCK = '\n# harness-pet：桌面宠物默认关闭（设置 → 插件 → 管理 可一键开启）\n- id: harness-pet\n  disabled: true\n';
-
-// billion-context-dsh（compaction-acp）自身默认关闭的禁用块（harness-pet 同款）。
+// billion-context-dsh（compaction-acp）自身默认关闭的禁用块。
 // 用户反馈模型驱动压缩在占用率未及 1/4 时仍频繁压缩，改为默认关闭；需要时在
 // 设置 → 插件 → 管理 一键开启。禁用顶层条目一票否决 bundle 自身 cordis.patch.yml
 // 的 insert 注册（loader disabled 覆盖语义），内核默认 compaction-basic 随即接管。
 const ACP_SELF_DISABLE_BLOCK = '\n# billion-context-dsh（compaction-acp）：模型驱动压缩默认关闭（频繁自动压缩反馈；设置 → 插件 → 管理 可一键开启）\n- id: compaction-acp\n  disabled: true\n';
 
-// dsh-cardian（cardian）：知识中心默认关闭（设置 → 插件 → 管理 可一键开启）
-const CARDIAN_DISABLE_BLOCK = '\n# dsh-cardian（cardian）：知识中心默认关闭（设置 → 插件 → 管理 可一键开启）\n- id: cardian\n  disabled: true\n';
-
-// graph-memory：知识图谱记忆默认关闭（设置 → 插件 → 管理 可一键开启）
-const GRAPH_MEMORY_DISABLE_BLOCK = '\n# graph-memory：知识图谱记忆默认关闭（设置 → 插件 → 管理 可一键开启）\n- id: graph-memory\n  disabled: true\n';
+// v1.0.0 起 harness-pet / cardian / graph-memory 三条「随包默认禁用」块随插件一并
+// 退役（旧常量全文见 git 历史）。旧装机机器上已经写进 cordis.patch.yml 的禁用块由
+// 下面的 removeDisabledRowsByIds 回收——它按形状判定而非按常量字符串判定，所以
+// 常量下线后老 profile 里的那几行仍然认得出、删得掉。
 
 // 顶层条目 id 行（缩进 0-2）：统一字符集，含点号。
 const ID_ROW_RE = /^(\s*)-\s*id:\s*([A-Za-z0-9][A-Za-z0-9_.-]*)/;
@@ -435,6 +431,61 @@ function dropBlocksByIds(text, ids) {
   return { text: joinLines(ensurePatchArray(out), eol), removed };
 }
 
+/**
+ * 移除「已退役插件」的**随包默认禁用块**：顶层 `- id: X` 且块体只有 name/disabled
+ * 子行（`disabled: true` 必须在），连带删除紧邻块上方、正文点名该 id 的注释行。
+ *
+ * 为什么 dropBlocksByIds 不够：它对非 insert 的顶层块只认「纯 name 行」这一种形状
+ * （带 disabled/config 的一律保留——那是用户在插件管理里改出来的合法覆盖），而
+ * 默认禁用块恰好是 disabled 形状，必须按形状单独认领。
+ *
+ * 判据取窄（plugin-manager 的教训）：块体除 name/disabled 外还有别的键（config 等）
+ * 就不动，避免同名官方 id 的 config 覆盖行被误删。
+ * @param {string} text cordis.patch.yml 原文
+ * @param {string[]} ids 退役插件的 loader id 集合
+ * @returns {{ text: string, removed: string[] }}
+ */
+function removeDisabledRowsByIds(text, ids) {
+  const removal = new Set((ids || []).filter((i) => typeof i === 'string' && i));
+  if (removal.size === 0) return { text, removed: [] };
+  const eol = detectEol(text);
+  const lines = splitLines(text);
+  const blocks = topLevelBlocks(lines);
+  if (blocks.length === 0) return { text, removed: [] };
+  const drop = new Set();
+  const removed = [];
+  for (const block of blocks) {
+    if (block.insert) continue;
+    const m = ANY_ID_ROW_RE.exec(block.lines[0]);
+    if (!m || !removal.has(m[2])) continue;
+    const body = block.lines.slice(1).filter((l) => l.trim() !== '' && !/^\s*#/.test(l));
+    const onlyToggleShape = body.length > 0 && body.every((l) => /^\s*(name|disabled)\s*:/.test(l));
+    const disabled = body.some((l) => /^\s*disabled\s*:\s*true\b/i.test(l));
+    if (!onlyToggleShape || !disabled) continue;
+    removed.push(m[2]);
+    // 只删到「最后一个非注释/非空行」：块尾空行与注释在 YAML 上属于本块行区间，
+    // 语义上却是下一个条目的说明头（cordis.patch.yml 里成对出现），一并删掉会
+    // 把邻居的注释吃掉。
+    let bodyEnd = block.end;
+    while (bodyEnd > block.begin + 1) {
+      const l = lines[bodyEnd - 1];
+      if (l.trim() === '' || /^\s*#/.test(l)) bodyEnd -= 1;
+      else break;
+    }
+    for (let i = block.begin; i < bodyEnd; i += 1) drop.add(i);
+    for (let i = block.begin - 1; i >= 0; i -= 1) {
+      const l = lines[i];
+      if (l.trim() === '') continue;
+      if (!/^\s*#/.test(l) || !l.includes(m[2])) break;
+      drop.add(i);
+    }
+  }
+  if (removed.length === 0) return { text, removed: [] };
+  const out = [];
+  for (let i = 0; i < lines.length; i += 1) if (!drop.has(i)) out.push(lines[i]);
+  return { text: joinLines(ensurePatchArray(out), eol), removed };
+}
+
 // ---------------------------------------------------------------------------
 // 行级配置自愈（历史 patch-row-heal.js，唯一实现 + EOL 保持）
 // ---------------------------------------------------------------------------
@@ -660,7 +711,7 @@ function removeAcpBasicDisableBlock(patch) {
 
 
 /**
- * 幂等写入默认禁用条目（compaction-basic / harness-pet）。
+ * 幂等写入默认禁用条目（compaction-basic / compaction-acp）。
  * @returns {{ patch: string, changed: boolean }}
  */
 function ensureDisabledPatchEntry(patch, idPattern, block) {
@@ -957,9 +1008,6 @@ module.exports = {
   PATCH_HEADER,
   ACP_DISABLE_BLOCK,
   ACP_SELF_DISABLE_BLOCK,
-  PET_DISABLE_BLOCK,
-  CARDIAN_DISABLE_BLOCK,
-  GRAPH_MEMORY_DISABLE_BLOCK,
   LOADER_ID_RE,
   parsePatchRows,
   patchRowIds,
@@ -967,6 +1015,7 @@ module.exports = {
   setPluginRemoved,
   dedupePatchEntries,
   dropBlocksByIds,
+  removeDisabledRowsByIds,
   topLevelBlocks,
   ensurePatchArray,
   configLinesFor,

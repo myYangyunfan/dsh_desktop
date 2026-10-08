@@ -4,12 +4,20 @@
 //
 // 手法（与 Rust 半边 dsh-tauri/src-tauri/src/app/tests/ta10_time_window_matrix.rs
 // 同一套路，注入时钟，非 sleep 真等）：
-//   · 可注入的纯函数/工厂直接喂合成时间（file-drop dedupeEntries(now,windowMs)、
-//     chunk-availability nextDelayMs / createChunkRetryLoop({schedule})、
-//     balance-scheduler retryDelaysMs + Date.now/setTimeout 假桶）；
+//   · 可注入的纯函数/工厂直接喂合成时间（chunk-availability nextDelayMs /
+//     createChunkRetryLoop({schedule})、balance-scheduler retryDelaysMs +
+//     Date.now/setTimeout 假桶）；
 //   · 不可注入的内联定时器（Tauri 加载页 1.8s 防抖 / synapse 700ms+300ms /
 //     subagent-lens 1.2s）用「假 timer 桶 + 判定式重放 + 源码锚点」覆盖，
 //     并登记为盲区（建议注入点见各用例注释）。
+//
+// 原「2) file-drop 1.5s 双报去重窗」一节随 v1.0.0 dsh-file-drop 退役删除（源目录
+// assets/plugins/dsh-file-drop 已删，矩阵打的是那份产物里的 core.dedupeEntries，
+// `now - prev <= windowMs` 的恰界形态只存在于那里）。不另寻改锚：JS 半边再无
+// 「参数化 (now, windowMs) 双报去重窗」的活实现——web-crash-shield 的风暴/归因窗
+// 已由 scripts/test/unit-web-crash-shield-deep.test.js 穷举覆盖，gpu-crash-guard 的
+// dedupeMs 在 Electron 壳退役后无在野调用方，改锚过去只是把矩阵搬进重复用例。
+// 后续小节顺次上移。
 //
 // 运行：node --test scripts/test/ta10-time-window-matrix.test.js
 
@@ -17,7 +25,6 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const vm = require('node:vm');
 
 // ---------------------------------------------------------------------------
 // 假 timer 桶：把 setTimeout/setInterval 收进可手动推进的队列。
@@ -119,50 +126,7 @@ test('ta10 loading 页 kernel-fail 1.8s 防抖边界：1799 不翻 / 恰 1800 �
 });
 
 // ===========================================================================
-// 2) file-drop 去重窗 1.5s：1499 / 1500 / 1501（真实 core.dedupeEntries，
-//    now/windowMs 均为参数 → 直接注入）
-// ===========================================================================
-
-const FILE_DROP = path.join(__dirname, '..', '..', 'assets', 'plugins', 'dsh-file-drop', 'lib', 'client.js');
-
-function loadFileDropCore() {
-  let captured = null;
-  const sandbox = { __ModuleLoader__: { load: (reg) => { captured = reg; } } };
-  sandbox.window = sandbox;
-  vm.runInNewContext(fs.readFileSync(FILE_DROP, 'utf8'), sandbox, { filename: FILE_DROP });
-  assert.ok(captured && typeof captured.factory === 'function');
-  return captured.factory(() => { throw new Error('missed module'); }).core;
-}
-
-test('ta10 file-drop 1.5s 去重窗边界：1499 重复 / 恰 1500 仍重复（<=）/ 1501 放行', () => {
-  const core = loadFileDropCore();
-  const mkEntry = (name, size) => ({ name, type: 'image/png', size, path: 'C:\\x\\' + name });
-  // 第一次物理拖放 @t=0：两条记录（HTML5 与壳层通道同键）。
-  let seen = {};
-  let keep = core.dedupeEntries([mkEntry('a.png', 10)], seen, 0, 1500);
-  assert.equal(keep.length, 1, '首条放行');
-  keep = core.dedupeEntries([mkEntry('a.png', 10)], seen, 1499, 1500);
-  assert.equal(keep.length, 0, '同键 1499ms：重复（<= 窗）');
-  keep = core.dedupeEntries([mkEntry('a.png', 10)], seen, 1500, 1500);
-  assert.equal(keep.length, 0, '同键恰 1500ms：仍重复（判定是 `now - prev <= windowMs`）');
-  keep = core.dedupeEntries([mkEntry('a.png', 10)], seen, 1501, 1500);
-  assert.equal(keep.length, 1, '同键 1501ms：放行（双通道切换期抖动结束）');
-  // windowMs 缺省回退 1500（生产调用点 core.dedupeEntries(e, seen, Date.now(), 1500)）。
-  const seen2 = {};
-  core.dedupeEntries([mkEntry('b.png', 20)], seen2, 0);
-  assert.equal(core.dedupeEntries([mkEntry('b.png', 20)], seen2, 1500).length, 0, 'windowMs 缺省按 1500（恰界仍拦）');
-  // 异键不互拦：不同 path/size 各自独立。
-  const seen3 = {};
-  core.dedupeEntries([mkEntry('c.png', 1)], seen3, 0, 1500);
-  assert.equal(core.dedupeEntries([mkEntry('d.png', 2)], seen3, 100, 1500).length, 1, '异键不受彼此窗影响');
-  // 源码锚点：生产接线确用 Date.now + 1500。
-  const src = fs.readFileSync(FILE_DROP, 'utf8').replace(/\r\n/g, '\n');
-  assert.ok(src.includes('core.dedupeEntries(entries, dropSeen, Date.now(), 1500);'), '拖放通道接线锚点');
-  assert.ok(src.includes('var fresh = core.dedupeEntries(entries, dropSeen, Date.now(), 1500);'), '壳层通道接线锚点');
-});
-
-// ===========================================================================
-// 3) synapse：defer 700ms（防抖重挂）+ pin 300ms 窗（判定式重放 + 锚点；
+// 2) synapse：defer 700ms（防抖重挂）+ pin 300ms 窗（判定式重放 + 锚点；
 //    盲区：window.setTimeout 内联，建议注入点见下）
 // ===========================================================================
 
@@ -220,21 +184,14 @@ test('ta10 synapse 滚动 pin 300ms 窗：299ms 内继续钉住 / 恰 300ms 关�
 });
 
 // ===========================================================================
-// 4) better-sidebar chunk 重试：2/4/8/16s…封顶 30s 序列表（真实
+// 3) better-sidebar chunk 重试：2/4/8/16s…封顶 30s 序列表（真实
 //    nextDelayMs + createChunkRetryLoop 注入假 schedule）
 // ===========================================================================
 
-const CHUNK_AVAIL = path.join(__dirname, '..', '..', 'assets', 'plugins', 'dsh-better-sidebar', 'lib', 'chunk-availability.js');
-
-function loadChunkAvailability() {
-  // 源文件是 ESM（export {}）；剥掉 export 行后在 vm 里以 CJS 形态物化。
-  const raw = fs.readFileSync(CHUNK_AVAIL, 'utf8').replace(/\r\n/g, '\n');
-  const stripped = raw.replace(/export \{[^}]*\}/, '');
-  const sandbox = { module: { exports: {} }, console };
-  const glue = '\nmodule.exports = { nextDelayMs, createChunkRetryLoop, isModuleSystemAvailable, CHUNK_RETRY_BASE_DELAY_MS, CHUNK_RETRY_MAX_DELAY_MS };';
-  vm.runInNewContext(stripped + glue, sandbox, { filename: CHUNK_AVAIL });
-  return sandbox.module.exports;
-}
+// 取数夹具见 fixtures/better-sidebar-region.js：0.24.1 起没有逐文件编译镜像，
+// 真实 nextDelayMs / createChunkRetryLoop 从 lib/client.js 的 //#region
+// src/client/chunk-availability.ts 区段物化。
+const { loadChunkAvailability } = require('./fixtures/better-sidebar-region.js');
 
 test('ta10 chunk nextDelayMs 序列表：2/4/8/16/30 封顶 + 脏输入回退 1', () => {
   const m = loadChunkAvailability();
@@ -311,11 +268,14 @@ test('ta10 chunk createChunkRetryLoop 假时钟全序列：2/4/8/16/30/30 后成
 });
 
 // ===========================================================================
-// 5) balance-scheduler 退避 30s→1m→2m→5min 封顶：序列表边界（真实
+// 4) balance-scheduler 退避 30s→1m→2m→5min 封顶：序列表边界（真实
 //    scheduleRetry 判定式注入参数验证 + 缩短序列活体驱动）
+//
+//    被测对象是插件产物 assets/plugins/dsh-balance/lib/balance-scheduler.js；
+//    遗留 dsh-desktop/balance-scheduler.js 已随 Electron 余额线整体拆除。
 // ===========================================================================
 
-const SCHED = require(path.join(__dirname, '..', '..', 'balance-scheduler.js'));
+const SCHED = require(path.join(__dirname, '..', '..', 'assets', 'plugins', 'dsh-balance', 'lib', 'balance-scheduler.js'));
 
 test('ta10 balance-scheduler 默认退避序列边界：30s/1m/2m/5min，第 4 次起封顶', () => {
   assert.deepEqual(SCHED.DEFAULT_RETRY_DELAYS_MS, [30000, 60000, 120000, 300000], '默认退避序列常量');
@@ -331,7 +291,10 @@ test('ta10 balance-scheduler 默认退避序列边界：30s/1m/2m/5min，第 4 �
     '失败 1→30s、2→60s、3→120s、≥4→300s 封顶（0 次安全钳到首档）'
   );
   // 源码锚点：重排式与「新失败按最新计数重排」（clearTimeout 旧定时器）。
-  const src = fs.readFileSync(path.join(__dirname, '..', '..', 'balance-scheduler.js'), 'utf8').replace(/\r\n/g, '\n');
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'assets', 'plugins', 'dsh-balance', 'lib', 'balance-scheduler.js'),
+    'utf8',
+  ).replace(/\r\n/g, '\n');
   assert.ok(
     src.includes('const idx = Math.min(Math.max(consecutiveFailures - 1, 0), retryDelaysMs.length - 1);'),
     '退避索引判定式锚点'
@@ -394,7 +357,7 @@ test('ta10 balance-scheduler 活体退避梯（注入缩短序列 [20,40,80,160]
 });
 
 // ===========================================================================
-// 6) subagent-lens 1.2s 低频轮询（判定式重放 + 锚点；盲区：interval 字面量）
+// 5) subagent-lens 1.2s 低频轮询（判定式重放 + 锚点；盲区：interval 字面量）
 // ===========================================================================
 
 const LENS = path.join(__dirname, '..', '..', 'assets', 'plugins', 'dsh-subagent-lens', 'lib', 'client.js');

@@ -1,7 +1,0 @@
-# Pet asset attribution
-
-`whale-animation-v6.webp` was generated specifically for Harness Pet with OpenAI image generation on 2026-08-14, using the project owner's supplied HarnessPet concept sheet as the visual reference. It was processed and validated with OpenAI's Apache-2.0-licensed [`hatch-pet`](https://github.com/openai/skills/tree/main/skills/.curated/hatch-pet) workflow: individual action strips were extracted into fixed 192×208 frames, bottom-centered, composed into a transparent 8×9 atlas, checked for edge collisions and transparent RGB residue, and rendered as per-row motion previews for visual QA. The atlas contains idle, right/left drag movement, wave/click, connected water-spout success, red-orange overheated fault/error, waiting, active work, and a flipper-held magnifying-glass search animation. It is an original blue-whale pixel sprite and was not downloaded from the internet. It is distributed with this project under the MIT license to the extent permitted by applicable law and the image service terms.
-
-The earlier `whale-animation-v3.png`, `whale-animation-v4.png`, and `whale-animation-v5.webp` files were likewise generated specifically for this project with OpenAI image generation on 2026-08-14. They are retained only as development comparisons and are excluded from the published package; no third-party mascot or downloaded artwork was used.
-
-The procedural Canvas whale remains in the source as an offline fallback. Any future replacement added to this directory must list its source, author, and license here before distribution.

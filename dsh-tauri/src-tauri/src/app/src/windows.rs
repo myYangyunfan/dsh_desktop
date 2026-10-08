@@ -1,22 +1,20 @@
-//! 多窗管理：主窗（loading→内核页）、浮窗（分屏）、宠物窗（透明）、赞助窗。
+//! 多窗管理：主窗（loading→内核页）、浮窗（分屏）、赞助窗。
 //!
-//! 参数对齐 Electron 版（main.js createFloatWindow/createPetWindow/createSponsorWindow）：
+//! 参数对齐 Electron 版（main.js createFloatWindow/createSponsorWindow）：
 //! - 浮窗 900×640（min 480×360），同会话复用、上限 4 个；
-//! - 宠物窗 160×160 透明置顶、跳过任务栏、不可调尺寸、位置记忆；
 //! - 赞助窗原生边框小窗：内嵌资产占位页 + initialization_script 注入
 //!   （零 file://、零本地端口、零磁盘写入——v0.5.0 安装版三联症终修）。
 //!
+//! 宠物窗（160×160 透明置顶 + `__DSH_PET__` 模式注入 + 最小化自动弹窗 +
+//! 看门狗）已于 2026-10 随 harness-pet 插件退役整体裁撤。
+//!
 //! 所有窗都注入 bridge 垫片（initialization_script 对每次导航生效）；
-//! 浮窗/宠物窗追加模式注入脚本（`__DSH_FLOAT__` / `__DSH_PET__`，契约 bridge-api.md §5）。
-
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+//! 浮窗追加模式注入脚本（`__DSH_FLOAT__`，契约 bridge-api.md §5）。
 
 use bridge::{BridgeError, BRIDGE_SHIM_JS};
 use tauri::{Emitter, Manager, WebviewUrl};
 
 pub const FLOAT_MAX: usize = 4;
-pub const PET_W: f64 = 160.0;
-pub const PET_H: f64 = 160.0;
 
 /// 浮窗会话注册表（label 前缀 float-）。
 pub fn float_label(session_id: &str) -> String {
@@ -133,34 +131,14 @@ pub fn create_main_window(
     }
     let win = b.build()?;
     let handle = app.clone();
-    let was_minimized = std::sync::Arc::new(AtomicBool::new(false));
     win.on_window_event(move |e| {
         if matches!(e, tauri::WindowEvent::Resized(_)) {
             if let Some(w) = handle.get_webview_window("main") {
                 if let Ok(max) = w.is_maximized() {
                     let _ = handle.emit("window-maximized", max);
                 }
-                // G3：主窗「最小化自动弹宠物窗」。tauri 2 的 WindowEvent 无
-                // Minimized 变体（tao Windows 源码注释「if we decide to
-                // implement one」），故在 Resized 里轮询 is_minimized()
-                // （Win32 IsIconic 直问 OS）抓 WM_SIZE/SIZE_MINIMIZED 上升沿，
-                // 语义对齐 Electron mainWindow.on('minimize')。
-                if let Ok(min) = w.is_minimized() {
-                    let was = was_minimized.swap(min, Ordering::Relaxed);
-                    if min && !was {
-                        if let Some(state) = handle.try_state::<crate::AppState>() {
-                            let store = shell_core::SettingsStore::new(state.paths.settings.clone());
-                            let auto_open = pet_auto_open_from_store(&store);
-                            let pet_exists = handle.get_webview_window("pet").is_some();
-                            if should_open_pet_on_minimize(auto_open, pet_exists) {
-                                let sv = state.supervisor.lock().unwrap_or_else(|p| p.into_inner()).clone();
-                                if let Some(url) = sv.as_ref().and_then(|s| s.kernel_url()) {
-                                    let _ = open_pet_window(&handle, &url);
-                                }
-                            }
-                        }
-                    }
-                }
+                // G3 宠物窗分支（最小化自动弹宠物窗：Resized 内轮询 is_minimized
+                // 抓上升沿）已于 2026-10 随 harness-pet 插件退役整体移除。
             }
         }
         if let tauri::WindowEvent::CloseRequested { api, .. } = e {
@@ -408,14 +386,10 @@ const FLOAT_WATCHDOG_SCRIPT: &str = r#"
 })();
 "#;
 
-static PET_SEQ: AtomicU64 = AtomicU64::new(0);
-
-/// G3：读 settings.json 的 pet.autoOpen（写侧 commands/window.rs
-/// `pet_set_auto_open`，扁平键）。缺省 false（Electron `let petAutoOpen = false`
-/// 同口径）；未设置/损坏/非布尔一律不弹。
-pub fn pet_auto_open_from_store(store: &shell_core::SettingsStore) -> bool {
-    store.get("pet.autoOpen").ok().flatten().and_then(|v| v.as_bool()).unwrap_or(false)
-}
+// 宠物窗全链（PET_SEQ / pet_auto_open_from_store / should_open_pet_on_minimize /
+// open_pet_window / build_pet_window / PET_MODE_SCRIPT / PET_WATCHDOG_SCRIPT 与
+// PET_W·PET_H 尺寸常量）已于 2026-10 随 harness-pet 插件退役整体裁撤。
+// 下方 close_to_tray_from_store 保留——它服务托盘关窗（commands/menu.rs），与宠物无关。
 
 /// #160：读 settings.json 的 closeToTray（写侧 commands/menu.rs `toggle_setting`
 /// 经 `toggle-close-to-tray`，扁平键）。缺省 **true**——对齐 Electron
@@ -424,133 +398,6 @@ pub fn pet_auto_open_from_store(store: &shell_core::SettingsStore) -> bool {
 pub fn close_to_tray_from_store(store: &shell_core::SettingsStore) -> bool {
     store.get("closeToTray").ok().flatten().and_then(|v| v.as_bool()).unwrap_or(true)
 }
-
-/// G3：主窗最小化时应否自动弹宠物窗（纯判定，供事件分支与单测共用）。
-/// `auto_open` 为 settings 的 pet.autoOpen；`pet_exists` 为宠物窗是否已存在
-/// （防 minimize 反复触发重复弹）。二者缺一不可。
-pub fn should_open_pet_on_minimize(auto_open: bool, pet_exists: bool) -> bool {
-    auto_open && !pet_exists
-}
-
-/// 宠物窗：透明置顶小窗。WebView2 透明窗为已知风险点（roadmap R2）——
-/// 创建失败仅日志，不拖垮主流程。
-///
-/// K23 卡死根治：建窗必须在独立线程——同步 command（pet_window）与主窗
-/// on_window_event（最小化自动弹宠物窗 G3）里 `build()` 都会在 Windows 上
-/// 死锁（Tauri 2 官方 Known issues）。复用/URL 校验同步返回，建窗 + show +
-/// pet-state 事件移入独立线程（与赞助窗/更新进度弹窗同款模式）。
-pub fn open_pet_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>, kernel_url: &str) -> Result<serde_json::Value, BridgeError> {
-    if let Some(existing) = app.get_webview_window("pet") {
-        let _ = existing.show();
-        let _ = existing.set_focus();
-        return Ok(serde_json::json!({ "ok": true, "open": true, "reused": true }));
-    }
-    // 同步校验 URL：非法立即报错，不落入线程静默失败（白屏）。
-    let url = kernel_url.trim_end_matches('/').to_string();
-    let parsed = parse_url(&url)?;
-    let handle = app.clone();
-    std::thread::Builder::new()
-        .name("pet-window".into())
-        .spawn(move || {
-            // 双击竞态复检：两个线程同时过了外层检查时，后来者只聚焦。
-            if let Some(existing) = handle.get_webview_window("pet") {
-                let _ = existing.show();
-                let _ = existing.set_focus();
-                return;
-            }
-            let _seq = PET_SEQ.fetch_add(1, Ordering::Relaxed);
-            match build_pet_window(&handle, parsed) {
-                Ok(win) => {
-                    let _ = win.show();
-                    let _ = handle.emit("pet-state", serde_json::json!({ "open": true }));
-                }
-                Err(e) => eprintln!("[pet] 宠物窗创建失败（不影响主窗）: {e}"),
-            }
-        })
-        .map_err(|e| BridgeError::internal(format!("宠物窗线程启动: {e}")))?;
-    Ok(serde_json::json!({ "ok": true, "open": true, "async": true }))
-}
-
-/// 宠物窗构造（独立函数供集成测试复用——mock runtime 下走与生产完全
-/// 同款的 builder 路径，验证窗口属性与销毁）。泛型 R 兼容 Wry/MockRuntime。
-pub fn build_pet_window<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
-    url: tauri::Url,
-) -> Result<tauri::WebviewWindow<R>, tauri::Error> {
-    let b = tauri::webview::WebviewWindowBuilder::new(
-        app,
-        "pet",
-        WebviewUrl::External(url),
-    )
-    .title("DSH 宠物")
-    .inner_size(PET_W, PET_H)
-    .decorations(false);
-    // 透明窗口需要平台特定支持：Windows 直接开透明；macOS 上 transparent()
-    // 方法仅 macos-private-api feature 才存在（未启用，调用即编译失败），
-    // Linux 虽有该方法但需 webkit 特定配置——非 Windows 统一不调用，
-    // 默认即不透明（宠物窗有实底色，视觉降级可接受）。
-    #[cfg(target_os = "windows")]
-    let b = b.transparent(true);
-    b.always_on_top(true)
-    .skip_taskbar(true)
-    .resizable(false)
-    .maximizable(false)
-    .shadow(false)
-    .initialization_script(BRIDGE_SHIM_JS)
-    .initialization_script(PET_MODE_SCRIPT)
-    .initialization_script(PET_WATCHDOG_SCRIPT)
-    .on_navigation(|url| url.as_str().starts_with("http://127.0.0.1"))
-    .build()
-}
-
-/// 宠物窗模式注入：__DSH_PET__ + 隐藏非宠物节点 + 透明背景（DOMContentLoaded）。
-const PET_MODE_SCRIPT: &str = r#"
-(function(){
-  try { window.__DSH_PET__ = {}; } catch (e) {}
-  function inject(){
-    var s = document.createElement('style');
-    s.textContent = 'html,body{background:transparent!important;overflow:hidden!important}body>:not(#harness-pet-root){display:none!important}';
-    (document.head || document.documentElement).appendChild(s);
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', inject);
-  else inject();
-})();
-"#;
-
-/// 宠物窗白屏看门狗（K23，对齐 FW1 浮窗看门狗）：
-/// - initialization_script 通道（每次导航/reload 必执行），about:blank 预导航
-///   文档直接跳过（protocol 守卫）；
-/// - 3s 后 body 仍无任何子元素（内核页未监听/重启窗口期导航失败 → 白窗）
-///   → 自动 reload 一次（sessionStorage 记次数，每窗最多一次）；
-/// - reload 后 3s 仍死 → 关闭宠物窗（160×160 透明小窗无内容即无意义，
-///   绝不留白窗；宠物窗白屏此前无任何兜底——FW1 只覆盖了浮窗）。
-const PET_WATCHDOG_SCRIPT: &str = r#"
-(function(){
-  if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
-  var FLAG = '__dsh_pet_watchdog_reloaded__';
-  function flag(){
-    try { return sessionStorage.getItem(FLAG) === '1'; } catch (e) { return false; }
-  }
-  function setFlag(v){
-    try { if (v) sessionStorage.setItem(FLAG, '1'); else sessionStorage.removeItem(FLAG); } catch (e) {}
-  }
-  function alive(){
-    try { return !!(document.body && document.body.childElementCount > 0); } catch (e) { return false; }
-  }
-  function closeWin(){
-    try {
-      if (window.dshDesktop && window.dshDesktop.petWindow && window.dshDesktop.petWindow.close) {
-        window.dshDesktop.petWindow.close();
-      } else if (window.close) { window.close(); }
-    } catch (e) {}
-  }
-  setTimeout(function(){
-    if (alive()) { setFlag(false); return; }
-    if (!flag()) { setFlag(true); location.reload(); return; }
-    closeWin();
-  }, 3000);
-})();
-"#;
 
 /// 赞助小窗（v0.5.0 用户实测「打开卡死 + 无图 + 关不掉」第五轮终修）。
 ///
@@ -979,11 +826,9 @@ mod tests {
         assert!(evil.contains("a\\\";alert(1);//"), "应 JSON 转义: {evil}");
     }
 
+    /// 浮窗模式注入形态（宠物窗注入脚本随 harness-pet 退役一并删除）。
     #[test]
-    fn pet_and_float_mode_scripts_present() {
-        assert!(PET_MODE_SCRIPT.contains("__DSH_PET__"));
-        assert!(PET_MODE_SCRIPT.contains("harness-pet-root"), "对齐 Electron：只保留宠物根节点");
-        assert!(PET_MODE_SCRIPT.contains("background:transparent"));
+    fn float_mode_scripts_present() {
         assert!(FLOAT_BAR_SCRIPT.contains("__dsh_desktop_floatbar__"));
         assert!(FLOAT_BAR_SCRIPT.contains("floatWindow.close"));
     }
@@ -993,65 +838,6 @@ mod tests {
         assert!(parse_url("http://127.0.0.1:51731/").is_ok());
         assert!(parse_url("not a url").is_err());
         // scheme 不设限（围栏在 on_navigation 层）；只测形态拒绝。
-    }
-
-    /// G3：主窗「最小化自动弹宠物窗」决策表（纯函数）——
-    /// 仅「设置开启 + 宠物窗未存在」才开；设置关闭 / 已开一律不弹。
-    #[test]
-    fn should_open_pet_on_minimize_decision_table() {
-        assert!(should_open_pet_on_minimize(true, false), "开启+未开 → 应开");
-        assert!(!should_open_pet_on_minimize(true, true), "开启+已开 → 不重复开");
-        assert!(!should_open_pet_on_minimize(false, false), "关闭+未开 → 不弹");
-        assert!(!should_open_pet_on_minimize(false, true), "关闭+已开 → 不弹");
-    }
-
-    /// G3：pet.autoOpen 读取口径——true 才弹；缺省/非布尔/损坏一律回落 false
-    /// （Electron `let petAutoOpen = false` 同口径，绝不因坏配置误弹）。
-    #[test]
-    fn pet_auto_open_reads_flat_key_defaults_false() {
-        let mut path = std::env::temp_dir();
-        path.push(format!("dsh-pet-autoopen-{}-{}.json", std::process::id(), line!()));
-        let _ = std::fs::remove_file(&path);
-        let store = shell_core::SettingsStore::new(&path);
-        // 缺省：未写入 → false。
-        assert!(!pet_auto_open_from_store(&store));
-        // 显式 true/false 往返。
-        store.set("pet.autoOpen", serde_json::json!(true)).unwrap();
-        assert!(pet_auto_open_from_store(&store));
-        store.set("pet.autoOpen", serde_json::json!(false)).unwrap();
-        assert!(!pet_auto_open_from_store(&store));
-        // 非布尔（字符串）→ 回落缺省 false。
-        store.set("pet.autoOpen", serde_json::json!("yes")).unwrap();
-        assert!(!pet_auto_open_from_store(&store));
-        let _ = std::fs::remove_file(&path);
-
-        // 损坏文件 → load 自愈为空 → 回落 false。
-        let mut bad = std::env::temp_dir();
-        bad.push(format!("dsh-pet-autoopen-bad-{}-{}.json", std::process::id(), line!()));
-        let _ = std::fs::remove_file(&bad);
-        std::fs::write(&bad, "{not json").unwrap();
-        let broken = shell_core::SettingsStore::new(&bad);
-        assert!(!pet_auto_open_from_store(&broken));
-        let _ = std::fs::remove_file(&bad);
-        let _ = std::fs::remove_file(bad.with_extension("json.broken"));
-    }
-
-    /// G3 接线形态：主窗 Resized 轮询 is_minimized（tauri 2 无 Minimized 事件），
-    /// 上升沿经 should_open_pet_on_minimize → open_pet_window，防回退到 V16
-    /// 「只写不读」缺口（设置持久化了但从不生效）。
-    #[test]
-    fn minimize_auto_opens_pet_window_shape() {
-        let src = include_str!("windows.rs");
-        let seg = src
-            .split("pub fn create_main_window")
-            .nth(1)
-            .and_then(|s| s.split("pub fn hide_main_to_tray").next())
-            .expect("create_main_window 函数体");
-        assert!(seg.contains("is_minimized"), "必须轮询最小化态（tauri 2 无 Minimized 事件）: {seg}");
-        assert!(seg.contains("was_minimized"), "必须上升沿去重（防反复触发）: {seg}");
-        assert!(seg.contains("pet_auto_open_from_store"), "必须经 pet_auto_open_from_store 读键: {seg}");
-        assert!(seg.contains("should_open_pet_on_minimize"), "必须走纯判定门: {seg}");
-        assert!(seg.contains("open_pet_window"), "判定为真必须打开宠物窗: {seg}");
     }
 
     /// 原生标题栏平台门：主窗 decorations 必须平台门控——Linux 退回原生
@@ -1074,29 +860,6 @@ mod tests {
             !seg.contains(".decorations(false)"),
             "主窗不得硬编码 decorations(false)（Linux 白屏回归面）: {seg}"
         );
-    }
-
-    /// G3：非主窗 minimize 不触发自动弹宠物窗——自动弹窗只接在主窗
-    /// create_main_window 的 on_window_event 里；宠物/浮窗/赞助窗创建路径
-    /// 不得出现 is_minimized / pet_auto_open_from_store / should_open_pet_on_minimize
-    /// 触发逻辑（否则最小化宠物/浮窗也会反向弹新宠物窗，形成互相触发的坏循环）。
-    #[test]
-    fn non_main_windows_do_not_auto_open_pet_shape() {
-        let src = include_str!("windows.rs");
-        for (fn_name, end_marker) in [
-            ("pub fn open_float_window", "/// URL 解析 helper"),
-            ("pub fn open_pet_window", "/// 宠物窗模式注入"),
-            ("pub fn open_sponsor_window", "pub fn build_sponsor_window"),
-        ] {
-            let seg = src
-                .split(fn_name)
-                .nth(1)
-                .and_then(|s| s.split(end_marker).next())
-                .unwrap_or_else(|| panic!("{fn_name} 函数体边界缺失"));
-            assert!(!seg.contains("should_open_pet_on_minimize"), "{fn_name} 不得含自动弹宠物窗判定: {seg}");
-            assert!(!seg.contains("pet_auto_open_from_store"), "{fn_name} 不得读 pet.autoOpen 触发弹窗: {seg}");
-            assert!(!seg.contains("is_minimized"), "{fn_name} 不得轮询最小化态触发弹窗: {seg}");
-        }
     }
 
     /// FW1 白屏双保险——壳层看门狗形态锚点：
@@ -1140,50 +903,6 @@ mod tests {
         assert!(seg.contains("std::thread::Builder"), "浮窗建窗必须移出同步 command 线程: {seg}");
         assert!(seg.contains("build_float_window(&handle"), "必须经 build_float_window 建窗: {seg}");
         assert!(seg.contains("parse_url(&url)?"), "URL 必须同步校验（非法立即报错不白屏）: {seg}");
-    }
-
-    /// K23：宠物窗建窗必须移入独立线程（同步 command + 主窗 on_window_event
-    /// 最小化自动弹宠物窗里 build() 都在 Windows 死锁）。open_pet_window 只做
-    /// 复用/URL 同步校验，建窗 + show + pet-state 全在 std::thread 线程内。
-    #[test]
-    fn pet_window_creation_threaded_shape() {
-        let src = include_str!("windows.rs");
-        let seg = src
-            .split("pub fn open_pet_window")
-            .nth(1)
-            .and_then(|s| s.split("pub fn build_pet_window").next())
-            .expect("open_pet_window 函数体");
-        assert!(seg.contains("std::thread::Builder"), "宠物窗建窗必须移出同步 command/事件线程: {seg}");
-        assert!(seg.contains("build_pet_window(&handle"), "必须经 build_pet_window 建窗: {seg}");
-        assert!(seg.contains("parse_url(&url)?"), "URL 必须同步校验（非法立即报错不白屏）: {seg}");
-    }
-
-    /// K23 宠物窗白屏看门狗形态锚点（对齐 FW1 浮窗看门狗）：
-    /// - 3s 活性探测 + reload 恰好一次（sessionStorage 防抖）+ 二次失败关窗；
-    /// - about:blank 预导航守卫（protocol 守卫）；
-    /// - 关窗走桥 petWindow.close 优先，退化 window.close。
-    #[test]
-    fn pet_watchdog_script_shape() {
-        assert!(PET_WATCHDOG_SCRIPT.contains("3000"), "3s 活性探测: {PET_WATCHDOG_SCRIPT}");
-        assert!(PET_WATCHDOG_SCRIPT.contains("location.reload()"), "死后必须自动 reload: {PET_WATCHDOG_SCRIPT}");
-        assert!(PET_WATCHDOG_SCRIPT.contains("__dsh_pet_watchdog_reloaded__"), "reload 只做一次（标记）: {PET_WATCHDOG_SCRIPT}");
-        assert!(PET_WATCHDOG_SCRIPT.contains("petWindow.close"), "二次失败关窗（桥优先）: {PET_WATCHDOG_SCRIPT}");
-        assert!(PET_WATCHDOG_SCRIPT.contains("location.protocol"), "预导航 about:blank 守卫: {PET_WATCHDOG_SCRIPT}");
-        assert!(PET_WATCHDOG_SCRIPT.contains("childElementCount"), "活性探测盯 body 子元素: {PET_WATCHDOG_SCRIPT}");
-    }
-
-    /// 宠物窗看门狗必须接进 builder（initialization_script 通道，reload 后仍生效）。
-    #[test]
-    fn pet_window_builder_wires_watchdog_shape() {
-        let src = include_str!("windows.rs");
-        let seg = src
-            .split("pub fn build_pet_window")
-            .nth(1)
-            .and_then(|s| s.split("/// 宠物窗模式注入").next())
-            .expect("build_pet_window 函数体");
-        assert!(seg.contains(".initialization_script(PET_WATCHDOG_SCRIPT)"), "宠物窗必须注入看门狗: {seg}");
-        assert!(seg.contains(".initialization_script(PET_MODE_SCRIPT)"), "宠物模式注入不得回退丢失: {seg}");
-        assert!(seg.contains(".initialization_script(BRIDGE_SHIM_JS)"), "桥垫片不得回退丢失: {seg}");
     }
 
     /// 主窗 CloseRequested 语义（#160）：读 closeToTray——true（缺省）拦截默认

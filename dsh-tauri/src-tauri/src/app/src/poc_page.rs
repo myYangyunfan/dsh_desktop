@@ -118,7 +118,8 @@ pub const POC_PAGE_HTML: &str = r#"<!doctype html>
     // A2 桥对象存在 + 形状抽查
     var a2 = add('A2 window.dshDesktop 形状');
     if (!B) { done('A2 window.dshDesktop 形状', false, '垫片未注入'); return; }
-    var need = ['windowControls', 'menu', 'wsl', 'pluginManager', 'diagBackup', 'petWindow', 'recovery',
+    // 面清单随宠物窗（petWindow）2026-10 裁撤同步收缩。
+    var need = ['windowControls', 'menu', 'wsl', 'pluginManager', 'diagBackup', 'recovery',
       'getInfo', 'restartService', 'getPathForFile', 'onNotificationJump'];
     var miss = need.filter(function (k) { return !(k in B); });
     done('A2 window.dshDesktop 形状', miss.length === 0, miss.length ? '缺: ' + miss : need.length + ' 个命名空间/方法齐备');
@@ -132,8 +133,9 @@ pub const POC_PAGE_HTML: &str = r#"<!doctype html>
     } catch (e) { done('A3 app_init invoke', false, String(e.message || e)); }
 
     // A4 事件下行（window-maximized，自动 toggle 两轮触发再还原）。
-    // （原 A4 监听 balance-changed 已废：v0.5.1 余额收口后事件由 balance
-    //   轮询环生产，PoC 模式不启动 supervisor——无生产者，恒失败。）
+    // （原 A4 监听 balance-changed 已废：v0.5.1 起该事件由余额轮询环生产、
+    //   PoC 模式不启动 supervisor 故恒失败；2026-10 事件与轮询环随 Electron
+    //   余额遗留线整体退役，见 contracts/ipc-commands.md §2.4。）
     var a4 = add('A4 事件下行 window-maximized');
     var got4 = false;
     B.windowControls.onMaximizeChange(function (isMax) {

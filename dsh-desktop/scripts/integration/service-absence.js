@@ -14,8 +14,9 @@
 // （权威、无误报），扫描已安装插件声明的 inject，命中登记表里的服务时产出一条
 // 人可读的诊断（明确点名「依赖已移除服务 X + 作者适配指引」），供：
 //   - boot 链（scripts/integration/index.js）落一行 topic='boot' 日志；
-//   - 插件管理健康卡体系做 UI 可见提示；
 //   - CLI（node service-absence.js --app-dir <root>）离线核查。
+//   （曾经还有第三个消费方——plugin-manager 伴随件的健康卡做 UI 可见提示；该伴随件
+//    v1.0.0 退役后 UI 面撤下，本报告只落日志与 CLI，内核插件页不消费它。）
 //
 // 与 composition-integrity.js（第一层·静态层）的分工：
 //   - composition-integrity 判「宿主组合的关键服务行是否在位」；
@@ -26,7 +27,9 @@
 //   服务名（typertGateway / webServer / agentDefaultModel 等）是各模块内部注册的
 //   别名，组合 yml 的行 id 与之并不对应；静态推「全集」极易误报——健康卡里
 //   「api-gateway 行按旧行 id 查 live 永远缺席 → 永久误报红条」就是前车之鉴
-//   （见 dsh-plugin-manager/lib/client.js 的 CRITICAL_RUNTIME 注释）。因此这里
+//   （issue #175，现锁在 scripts/test/unit-composition-integrity.test.js 的
+//   「网关行走实际挂载键」用例；判据原先挂在已退役的 dsh-plugin-manager 健康卡上）。
+//   因此这里
 //   只对**确证的、上游有意移除**的服务出诊断，宁可漏报不误报。
 // ---------------------------------------------------------------------------
 

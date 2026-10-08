@@ -2,7 +2,7 @@
 
 // ta13-soak-bridge-shim.test.js — TA13 极限压测：bridge 垫片
 // （dsh-tauri/src-tauri/crates/bridge/dist/bridge-shim.js）整文件 vm 物化：
-//   · 事件风暴 ×10⁴ —— 经 TRANSFORM 捕获的 6 类事件 handler，喂
+//   · 事件风暴 ×10⁴ —— 经 TRANSFORM 捕获的 5 类事件 handler，喂
 //     {event, payload} 信封（解包分配：map 后新对象/字符串拼接路径）；
 //   · ⋯ 菜单开/关 ×1000 —— 驱动菜单按钮 onclick（openMenu/closeMenu，
 //     含 renderMenu 整面板 innerHTML 重写 + document 点击外部关闭路径），
@@ -20,6 +20,16 @@ const SHIM = path.resolve(__dirname, '..', '..', '..', 'dsh-tauri', 'src-tauri',
 const EVENT_STORM = 10000;
 const MENU_ROUNDS = 1000;
 const HEAP_SLOPE_LIMIT_MB = 40;
+
+// 垫片实际注册的事件面（contracts/bridge-api.md §3）。pet-state 已随 harness-pet
+// 于 2026-10 退役，balance-changed 同日随 Electron 余额遗留线整体退役
+//（contracts/ipc-commands.md §2.4），风暴喂的就是这 4 类，与 onEvent 注册数逐一对应。
+const STORM_EVENTS = [
+  'window-maximized',
+  'notification-jump',
+  'client-update-available',
+  'client-update-progress',
+];
 
 // ---------------------------------------------------------------------------
 // fake DOM：节点创建/存活计数（泄漏探针）
@@ -157,7 +167,7 @@ test('bridge 垫片 soak：事件风暴 1e4 + 菜单开/关 1000 轮，DOM 节�
   const { sandbox, doc, byId, eventHandlers } = loadShim();
   const dsh = sandbox.window.dshDesktop;
   assert.ok(dsh && typeof dsh.getInfo === 'function' && typeof dsh.menu.action === 'function', '垫片应挂 window.dshDesktop');
-  assert.ok(eventHandlers.length >= 6, '应注册 6 类事件 handler（实际 ' + eventHandlers.length + '）');
+  assert.strictEqual(eventHandlers.length, 4, '应注册 4 类事件 handler（实际 ' + eventHandlers.length + '）');
 
   // 控制条应已注入（脚本装载期 injectChromeBar）
   const bar = byId.get('dsh-tauri-bar') || doc.body.children.find((c) => c.attrs && c.attrs.id === 'dsh-tauri-bar') || null;
@@ -181,7 +191,7 @@ test('bridge 垫片 soak：事件风暴 1e4 + 菜单开/关 1000 轮，DOM 节�
   for (let i = 0; i < EVENT_STORM; i++) {
     const kind = i % eventHandlers.length;
     const ev = {
-      event: ['window-maximized', 'notification-jump', 'balance-changed', 'pet-state', 'client-update-available', 'client-update-progress'][kind % 6],
+      event: STORM_EVENTS[kind % STORM_EVENTS.length],
       payload: {
         sessionId: 'sess-' + (i % 50),
         title: 't' + i,

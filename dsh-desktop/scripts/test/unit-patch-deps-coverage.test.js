@@ -303,6 +303,9 @@ test('F：stage-payload.sh 必须带补丁收口门禁（防回退到只镜像�
 // load-all-history(+Ui) / skill-ui-zh）：其中 3 个头部写了【休眠】理由，其余 5 个
 // 的注释读起来像「修复已存在」，而它们的锚点在现 vendor 树已全部 0 命中——后人会据此
 // 判断“这个 BUG 已修”，这就是事故本身。
+// 2026-10 内置伴随插件批量拆除：vision-key / vision-toggle 两条已从本文件删除（它们
+// 服务的 image-send-fix 只为已退役的识图插件存在），休眠名单随之 8→6；其余六条仍在等
+// 版本回退，不在本批范围。
 //
 // 判据取两侧：“可达”或“就地写明休眠理由”，二者必得其一；新增死函数若无理由就红，
 // 若有理由也必须写进下面的休眠名单（改动必须显眼）。
@@ -312,10 +315,12 @@ test('F：stage-payload.sh 必须带补丁收口门禁（防回退到只镜像�
 
 const IMPL_FILES_G = ['lib/patch-adapters.js', 'lib/runtime-patches.js', 'lib/loader-isolation.js'];
 // 休眠名单（只允许变短；新增必须同时给函数上方补【休眠】理由）。
+// 6 = 8（对账轮基线）− transformVisionKeyFix − transformVisionToggleGate（2026-10
+// 随 image-send-fix 一并从 patch-adapters 删除，识图插件退役后无残留参照）。
 const DORMANT_TRANSFORMS = [
   'transformApiGatewayAbsent', 'transformLoadAllHistory', 'transformLoadAllHistoryUi',
-  'transformSessionEventBound', 'transformSkillUiZh', 'transformVisionKeyFix',
-  'transformVisionToggleGate', 'transformWorkspaceSearchRailFix',
+  'transformSessionEventBound', 'transformSkillUiZh',
+  'transformWorkspaceSearchRailFix',
 ];
 
 /**

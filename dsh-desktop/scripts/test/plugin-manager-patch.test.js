@@ -1,5 +1,9 @@
 'use strict';
 // 单元测试：scripts/plugin-manager-patch.js（cordis.patch.yml 用户层 disabled 开关）
+// 被测对象是通用文本手术（togglePluginInPatch / setPluginRemoved），用例里的插件
+// id 只是样本：2026-10 内置伴随插件批量退役后，terminal / terminal-tab / vision
+// 三个旧样本改锚到存活插件（side-session × side-session-tab 前缀对、
+// prompt-custom），断言逻辑与 issue #66（\b 前缀误伤）的原意完全不变。
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { togglePluginInPatch, setPluginRemoved } = require('../plugin-manager-patch');
@@ -10,8 +14,8 @@ const FIXTURE = [
   '    - id: balance',
   "      name: '@deepseek-ai/dsh-balance'",
   '- insert:',
-  '    - id: terminal',
-  "      name: '@deepseek-ai/dsh-terminal-tab'",
+  '    - id: side-session',
+  "      name: '@deepseek-ai/dsh-side-session'",
   '- id: llm-deepseek',
   "  name: '@deepseek-ai/dsh-llm-deepseek'",
   '  disabled: true',
@@ -27,19 +31,19 @@ function countId(text, id) {
 }
 
 test('禁用：文件中不存在该 id 时追加顶层 disabled 条目', () => {
-  const out = togglePluginInPatch(FIXTURE, 'vision', false, '@dsh-external/dsh-vision');
-  assert.equal(countId(out, 'vision'), 1);
-  assert.match(out, /- id: vision\s*\n\s*name: '@dsh-external\/dsh-vision'\s*\n\s*disabled: true/);
+  const out = togglePluginInPatch(FIXTURE, 'prompt-custom', false, '@deepseek-ai/dsh-prompt-custom');
+  assert.equal(countId(out, 'prompt-custom'), 1);
+  assert.match(out, /- id: prompt-custom\s*\n\s*name: '@deepseek-ai\/dsh-prompt-custom'\s*\n\s*disabled: true/);
   // 既有内容与注释不受影响
   assert.ok(out.includes('# dsh web profile patch（由 DSH Desktop 维护）'));
   assert.ok(out.includes('- id: web'));
 });
 
 test('禁用：id 在 insert 块内时移出并保证只登记一处', () => {
-  const out = togglePluginInPatch(FIXTURE, 'terminal', false, '@deepseek-ai/dsh-terminal-tab');
-  assert.ok(!out.includes('    - id: terminal'), '应已从 insert 块移除');
-  assert.equal(countId(out, 'terminal'), 1, '全文件只保留一个登记点');
-  assert.match(out, /- id: terminal\s*\n\s*name: '@deepseek-ai\/dsh-terminal-tab'\s*\n\s*disabled: true/);
+  const out = togglePluginInPatch(FIXTURE, 'side-session', false, '@deepseek-ai/dsh-side-session');
+  assert.ok(!out.includes('    - id: side-session'), '应已从 insert 块移除');
+  assert.equal(countId(out, 'side-session'), 1, '全文件只保留一个登记点');
+  assert.match(out, /- id: side-session\s*\n\s*name: '@deepseek-ai\/dsh-side-session'\s*\n\s*disabled: true/);
   // 同块其它条目与孤立空块清理
   assert.ok(out.includes('    - id: balance'));
   assert.ok(!out.includes('- insert:\n\n'), '被掏空的 insert 块应被清理');
@@ -53,16 +57,16 @@ test('禁用：顶层条目已存在（无 disabled 行）时就地补行', () =
 });
 
 test('禁用：已禁用条目幂等（重复调用结果一致）', () => {
-  const once = togglePluginInPatch(FIXTURE, 'terminal', false, '@deepseek-ai/dsh-terminal-tab');
-  const twice = togglePluginInPatch(once, 'terminal', false, '@deepseek-ai/dsh-terminal-tab');
+  const once = togglePluginInPatch(FIXTURE, 'side-session', false, '@deepseek-ai/dsh-side-session');
+  const twice = togglePluginInPatch(once, 'side-session', false, '@deepseek-ai/dsh-side-session');
   assert.equal(once, twice);
 });
 
 test('启用：无 config 的顶层条目整个移除', () => {
-  const disabled = togglePluginInPatch(FIXTURE, 'vision', false, '@dsh-external/dsh-vision');
-  const out = togglePluginInPatch(disabled, 'vision', true, '@dsh-external/dsh-vision');
-  assert.equal(countId(out, 'vision'), 0);
-  assert.ok(!out.includes("name: '@dsh-external/dsh-vision'"), 'vision 条目已不存在');
+  const disabled = togglePluginInPatch(FIXTURE, 'prompt-custom', false, '@deepseek-ai/dsh-prompt-custom');
+  const out = togglePluginInPatch(disabled, 'prompt-custom', true, '@deepseek-ai/dsh-prompt-custom');
+  assert.equal(countId(out, 'prompt-custom'), 0);
+  assert.ok(!out.includes("name: '@deepseek-ai/dsh-prompt-custom'"), 'prompt-custom 条目已不存在');
 });
 
 test('启用：带 config 的条目只移除 disabled 行，config 保留', () => {
@@ -77,9 +81,9 @@ test('启用：带 config 的条目只移除 disabled 行，config 保留', () =
 });
 
 test('往返：禁用→启用后文件回到无该条目状态（等待启动同步重新 insert）', () => {
-  const disabled = togglePluginInPatch(FIXTURE, 'terminal', false, '@deepseek-ai/dsh-terminal-tab');
-  const enabled = togglePluginInPatch(disabled, 'terminal', true, '@deepseek-ai/dsh-terminal-tab');
-  assert.equal(countId(enabled, 'terminal'), 0);
+  const disabled = togglePluginInPatch(FIXTURE, 'side-session', false, '@deepseek-ai/dsh-side-session');
+  const enabled = togglePluginInPatch(disabled, 'side-session', true, '@deepseek-ai/dsh-side-session');
+  assert.equal(countId(enabled, 'side-session'), 0);
 });
 
 test('开关其它插件不影响 web 的 config 块', () => {
@@ -161,11 +165,11 @@ function removedCount(text) {
 }
 
 test('卸载：insert 块条目移出，顶层条目带 disabled + removed 标记', () => {
-  const out = setPluginRemoved(FIXTURE, 'terminal', true, '@deepseek-ai/dsh-terminal-tab');
-  assert.ok(!out.includes('    - id: terminal'), '应已从 insert 块移除');
-  assert.equal(countId(out, 'terminal'), 1, '全文件只保留一个登记点');
+  const out = setPluginRemoved(FIXTURE, 'side-session', true, '@deepseek-ai/dsh-side-session');
+  assert.ok(!out.includes('    - id: side-session'), '应已从 insert 块移除');
+  assert.equal(countId(out, 'side-session'), 1, '全文件只保留一个登记点');
   assert.equal(removedCount(out), 1, '恰好一个 removed: true');
-  assert.match(out, /- id: terminal[\s\S]*disabled: true[\s\S]*removed: true/);
+  assert.match(out, /- id: side-session[\s\S]*disabled: true[\s\S]*removed: true/);
   assert.ok(!out.includes('- insert:\n\n'), '被掏空的 insert 块应被清理');
 });
 
@@ -176,9 +180,9 @@ test('卸载：重复卸载幂等', () => {
 });
 
 test('恢复：移除 removed/disabled，无 config 条目整体消失（等待启动同步恢复）', () => {
-  const removed = setPluginRemoved(FIXTURE, 'terminal', true, '@deepseek-ai/dsh-terminal-tab');
-  const out = setPluginRemoved(removed, 'terminal', false);
-  assert.equal(countId(out, 'terminal'), 0, '条目已移除');
+  const removed = setPluginRemoved(FIXTURE, 'side-session', true, '@deepseek-ai/dsh-side-session');
+  const out = setPluginRemoved(removed, 'side-session', false);
+  assert.equal(countId(out, 'side-session'), 0, '条目已移除');
   assert.equal(removedCount(out), 0, 'removed 标记已清');
 });
 
@@ -206,27 +210,27 @@ test('卸载→恢复→卸载 往返不堆积注释', () => {
 test('issue #66: 关闭一个插件不吞掉同 insert 块内的兄弟条目', () => {
   const src = [
     '- insert:',
-    '    - id: terminal',
-    '      name: terminal',
+    '    - id: side-session',
+    '      name: side-session',
     '    - id: file-changes',
     '      name: file-changes',
     '',
   ].join('\n');
-  const out = togglePluginInPatch(src, 'terminal', false);
+  const out = togglePluginInPatch(src, 'side-session', false);
   assert.equal(countId(out, 'file-changes'), 1, '兄弟条目 file-changes 必须保留');
-  assert.equal(countId(out, 'terminal'), 1, 'terminal 顶层 disabled 条目保留');
-  assert.ok(out.includes('disabled: true'), 'terminal 被禁用');
+  assert.equal(countId(out, 'side-session'), 1, 'side-session 顶层 disabled 条目保留');
+  assert.ok(out.includes('disabled: true'), 'side-session 被禁用');
 });
 
-test('issue #66: 关闭 terminal 不误改前缀匹配的 terminal-tab（\b 缺陷）', () => {
+test('issue #66: 关闭 side-session 不误改前缀匹配的 side-session-tab（\b 缺陷）', () => {
   const src = [
     '- insert:',
-    '    - id: terminal-tab',
-    '      name: terminal-tab',
+    '    - id: side-session-tab',
+    '      name: side-session-tab',
     '',
   ].join('\n');
-  const out = togglePluginInPatch(src, 'terminal', false);
-  assert.equal(countId(out, 'terminal-tab'), 1, 'terminal-tab 必须原样保留');
+  const out = togglePluginInPatch(src, 'side-session', false);
+  assert.equal(countId(out, 'side-session-tab'), 1, 'side-session-tab 必须原样保留');
 });
 
 test('issue #100: id「foo」不误中带后缀的「- id: foo bar」条目（边界放宽到空白后）', () => {

@@ -1,7 +1,7 @@
 'use strict';
 
 // ---------------------------------------------------------------------------
-// TA6 元测试 6：59 补丁 × pristine 内核形态判定矩阵（基线快照，长期价值最高）。
+// TA6 元测试 6：58 补丁 × pristine 内核形态判定矩阵（基线快照，长期价值最高）。
 //
 // 对 pristine 内核闭包按 registry order 编排序跑一遍全部 file transform——同文件
 // 多补丁时，后一条的输入就是前一条的产物，判定与引擎真实顺序一致；root 规格记
@@ -41,9 +41,12 @@ const FORM = kernel.packageVersion;
 // 规格总数计数锁。沿革：64（0.1.x 线）→ 59 = 64 − 0.2.0-rc.2 重靶期退役 6 项
 // （loader-tree-isolation / fallback-heal-isolation / settings-section-guard /
 // atomic-write-orphan-lock / model-image-input / profile-bundle-guard-profileboot）
-// + 1 项取代新增（profile-patch-layer-guard，order 130，readProfilePatches 层）。
+// + 1 项取代新增（profile-patch-layer-guard，order 130，readProfilePatches 层）
+// → 58 = 59 − image-send-fix（2026-10 内置伴随插件批量拆除：注入体只读 dsh-vision
+// 的设置命名空间，识图插件退役后无可达路径；同批删除 patch-adapters 的
+// IMAGE_SEND_* / VISION_KEY_* / VISION_TOGGLE_* 常量，靶常量本身仍在册）。
 // 逐项理由见 ta6-registry-invariants.test.js 的 E。
-const SPEC_COUNT = 59;
+const SPEC_COUNT = 58;
 
 /** 与 kernel-pin 同版的 pristine 闭包根；不在场返回 null（调用侧响亮失败）。 */
 function formRoot() {
@@ -112,24 +115,28 @@ function integrityProblems(ids, baseline) {
 
 // ===========================================================================
 // 基线快照（2026-10-05 重录：0.2.0-rc.2 形态 = .tmp-kernel/.consumer-0.2.0-rc.2
-// 的 npm 闭包解包树，44 file + 15 root = 59 项，逐项由本文件 computeMatrix 真跑
-// 录入，不是手工填值。判定构成：39 changed / 15 root / 5 target-absent，
+// 的 npm 闭包解包树，43 file + 15 root = 58 项（image-send-fix 已于 2026-10 随
+// 识图插件退役，其 'changed' 行同批摘除），逐项由本文件 computeMatrix 真跑
+// 录入，不是手工填值。判定构成：38 changed / 15 root / 5 target-absent，
 // 零 anchor-missing、零 already、零 THROW —— 与 scripts/patch-deps.js 的
 // 「失配 0 / 失败 0」实况同源，两者互为对账。）
 //
 // 与旧代快照的差异（rc.2 真闭包 vs 旧 stage 树；逐条都是「旧值来自残缺树或双
 // 前缀口径」的纠正，不是锚点漂移）：
-//   · runtime-flash-fix / image-send-fix / credentials-absent-guidance /
+//   · runtime-flash-fix / credentials-absent-guidance /
 //     slot-legacy-key / slot-error-isolation / history-page-size /
 //     journal-prepend-continuity / chat-scroll-autoload-older /
 //     reasoning-row-collapse-width / session-unknown-event-tolerance /
 //     claude-local-bin-fallback → 现 'changed'：旧 stage 树缺对应包；
+//     （image-send-fix 当时也在此列，2026-10 随识图插件整体退役，行已摘）
 //   · terminal-interrupt-escalation / profile-bundle-guard-appboot /
 //     agent-preset-fallback / pi-ai-tool-name-wire → 现 'changed'：旧值是重靶前
 //     的失配/双前缀口径残留；
 //   · atomic-write-orphan-lock / model-image-input / loader-tree-isolation /
 //     fallback-heal-isolation / settings-section-guard /
 //     profile-bundle-guard-profileboot → 已从注册表摘除，不再出现在本快照；
+//   · image-send-fix → 2026-10 内置伴随插件批量拆除时摘除（只为已退役的识图插件
+//     存在），本快照不再覆盖；
 //   · profile-patch-layer-guard → 新增行（取代 profile-boot 半边）。
 // ===========================================================================
 const BASELINE = {
@@ -139,7 +146,6 @@ const BASELINE = {
     'slot-error-isolation': 'changed',
     'runtime-flash-fix': 'changed',
     'shell-description-compat': 'changed',
-    'image-send-fix': 'changed',
     'attachment-mime-trust': 'changed',
     'persistent-shell-abort-race': 'changed',
     'terminal-interrupt-escalation': 'changed',

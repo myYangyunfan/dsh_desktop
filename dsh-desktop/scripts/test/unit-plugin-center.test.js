@@ -34,9 +34,9 @@ const tmp = (t) => {
  * 构造一个真实的 createPluginCenter + 已播种的 profile。
  *
  * 默认播种：
- *   - profiles/web/package.json：bundles ['@deepseek-ai/dsh-base','harness-pet',
+ *   - profiles/web/package.json：bundles ['@deepseek-ai/dsh-base','dsh-pocket',
  *     'broken-third-party'] + 对应 dependencies；
- *   - profiles/web/cordis.patch.yml：一个 removed:true 的配套条目 image-paste
+ *   - profiles/web/cordis.patch.yml：一个 removed:true 的配套条目 input-history
  *     （让清单出现 removed 组且 restorable=true）；
  *   - node_modules 下对应的包目录（可卸载/可扫描）。
  */
@@ -45,10 +45,10 @@ function makeCenter(t, opts = {}) {
   const profileDir = path.join(home, 'profiles', 'web');
   fs.mkdirSync(profileDir, { recursive: true });
 
-  const bundles = opts.bundles || ['@deepseek-ai/dsh-base', 'harness-pet', 'broken-third-party'];
+  const bundles = opts.bundles || ['@deepseek-ai/dsh-base', 'dsh-pocket', 'broken-third-party'];
   const dependencies = opts.dependencies !== undefined ? opts.dependencies : {
     '@deepseek-ai/dsh-base': '1.0.0',
-    'harness-pet': '1.0.0',
+    'dsh-pocket': '1.0.0',
     'broken-third-party': '1.0.0',
   };
 
@@ -61,15 +61,15 @@ function makeCenter(t, opts = {}) {
 
   fs.writeFileSync(path.join(profileDir, 'cordis.patch.yml'), opts.patch !== undefined ? opts.patch : (
     '# dsh web profile patch（由 DSH Desktop 维护）\n'
-    + '- id: image-paste\n'
-    + "  name: 'dsh-image-paste'\n"
+    + '- id: input-history\n'
+    + "  name: 'dsh-input-history'\n"
     + '  removed: true\n'
     + '  disabled: true\n'
   ));
 
   const seedModules = opts.seedModules !== undefined
     ? opts.seedModules
-    : ['@deepseek-ai/dsh-base', 'harness-pet', 'broken-third-party'];
+    : ['@deepseek-ai/dsh-base', 'dsh-pocket', 'broken-third-party'];
   for (const name of seedModules) {
     const dir = path.join(profileDir, 'node_modules', ...name.split('/'));
     fs.mkdirSync(dir, { recursive: true });
@@ -169,7 +169,7 @@ test('inventory: 播种夹具的分组正确（core/companion/community/removed�
   assert.equal(core.toggleable, false);
   assert.equal(core.restorable, false);
 
-  const companion = rows.find((r) => r.id === 'harness-pet');
+  const companion = rows.find((r) => r.id === 'dsh-pocket');
   assert.ok(companion);
   assert.equal(companion.group, 'companion');
   assert.equal(companion.toggleable, true);
@@ -181,7 +181,7 @@ test('inventory: 播种夹具的分组正确（core/companion/community/removed�
   assert.equal(community.toggleable, true);
   assert.equal(community.restorable, false);
 
-  const removed = rows.find((r) => r.id === 'image-paste');
+  const removed = rows.find((r) => r.id === 'input-history');
   assert.ok(removed, '带 removed 标记的配套条目归入 removed 组');
   assert.equal(removed.group, 'removed');
   assert.equal(removed.removed, true);
@@ -201,16 +201,16 @@ test('inventory: 播种夹具的分组正确（core/companion/community/removed�
 test('lifecycle.setEnabled: 关闭写入 disabled 覆盖行，二次调用幂等（字节不变）', async (t) => {
   const c = makeCenter(t);
 
-  const res = await c.center.lifecycle.setEnabled('harness-pet', false);
+  const res = await c.center.lifecycle.setEnabled('dsh-pocket', false);
   assert.equal(res.ok, true);
   assert.equal(res.restartRequired, true);
 
   let patch = fs.readFileSync(c.patchFile, 'utf8');
-  assert.match(patch, /- id: harness-pet/);
+  assert.match(patch, /- id: dsh-pocket/);
   assert.match(patch, /disabled: true/);
 
   const afterFirst = fs.readFileSync(c.patchFile, 'utf8');
-  await c.center.lifecycle.setEnabled('harness-pet', false);
+  await c.center.lifecycle.setEnabled('dsh-pocket', false);
   const afterSecond = fs.readFileSync(c.patchFile, 'utf8');
   assert.equal(afterSecond, afterFirst, '二次关闭幂等，patch 字节不变');
 });
@@ -263,30 +263,30 @@ test('lifecycle.uninstall: 第三方插件四层全清 + restore 拒绝（PLUGIN
 test('lifecycle: 配套插件卸载→恢复往返（状态清除 + patch 条目移除）', async (t) => {
   const c = makeCenter(t);
   // 假装的配套包目录（恢复语义：sync 下次重新装配复制）。
-  const dir = path.join(c.profileDir, 'node_modules', 'dsh-file-drop');
+  const dir = path.join(c.profileDir, 'node_modules', 'dsh-change-review');
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'dsh-file-drop', version: '1.0.0' }));
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'dsh-change-review', version: '1.0.0' }));
 
-  const res1 = await c.center.lifecycle.uninstall('file-drop');
+  const res1 = await c.center.lifecycle.uninstall('change-review');
   assert.equal(res1.ok, true);
 
   // 全层：状态 / patch removed / 目录 gone。
-  assert.ok(c.center.state.isUninstalled('file-drop'));
+  assert.ok(c.center.state.isUninstalled('change-review'));
   let patch = fs.readFileSync(c.patchFile, 'utf8');
-  assert.match(patch, /- id: file-drop/);
+  assert.match(patch, /- id: change-review/);
   assert.match(patch, /removed: true/);
-  assert.ok(!fs.existsSync(path.join(c.profileDir, 'node_modules', 'dsh-file-drop')), '目录已移出');
+  assert.ok(!fs.existsSync(path.join(c.profileDir, 'node_modules', 'dsh-change-review')), '目录已移出');
 
   // 卸载后 group 变 removed，但 restorable 仍成立（恢复资格与分组解耦）。
-  const rowAfter = c.center.inventory.rows().find((r) => r.id === 'file-drop');
+  const rowAfter = c.center.inventory.rows().find((r) => r.id === 'change-review');
   assert.equal(rowAfter.group, 'removed');
   assert.equal(rowAfter.restorable, true);
 
-  const res2 = await c.center.lifecycle.restore('file-drop');
+  const res2 = await c.center.lifecycle.restore('change-review');
   assert.equal(res2.ok, true);
-  assert.equal(c.center.state.isUninstalled('file-drop'), false, '卸载决策清除');
+  assert.equal(c.center.state.isUninstalled('change-review'), false, '卸载决策清除');
   patch = fs.readFileSync(c.patchFile, 'utf8');
-  assert.ok(!patch.includes('file-drop'), '恢复后 patch 条目移除（sync 会重新复制）');
+  assert.ok(!patch.includes('change-review'), '恢复后 patch 条目移除（sync 会重新复制）');
 });
 
 // ── 6. quarantine.apply + setEnabled 用户恢复闭环 ─────────────────────────────
@@ -331,19 +331,19 @@ test('quarantine.applyBySource: 按包名命中 applied；未映射来源 applie
 test('removedIds: patch removed 行 ∪ state.uninstalled；卸载后含 id，恢复后不含', async (t) => {
   const c = makeCenter(t);
 
-  // 播种的 patch removed 行（image-paste）无 state 决策，也进并集。
-  assert.ok(c.center.removedIds().has('image-paste'));
+  // 播种的 patch removed 行（input-history）无 state 决策，也进并集。
+  assert.ok(c.center.removedIds().has('input-history'));
 
-  const dir = path.join(c.profileDir, 'node_modules', 'dsh-file-drop');
+  const dir = path.join(c.profileDir, 'node_modules', 'dsh-change-review');
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'dsh-file-drop', version: '1.0.0' }));
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'dsh-change-review', version: '1.0.0' }));
 
-  await c.center.lifecycle.uninstall('file-drop');
-  assert.ok(c.center.removedIds().has('file-drop'), '卸载后并集包含该 id');
-  assert.ok(c.center.removedIds().has('image-paste'), '其余 removed 行仍保留');
+  await c.center.lifecycle.uninstall('change-review');
+  assert.ok(c.center.removedIds().has('change-review'), '卸载后并集包含该 id');
+  assert.ok(c.center.removedIds().has('input-history'), '其余 removed 行仍保留');
 
-  await c.center.lifecycle.restore('file-drop');
-  assert.ok(!c.center.removedIds().has('file-drop'), '恢复后并集不含该 id');
+  await c.center.lifecycle.restore('change-review');
+  assert.ok(!c.center.removedIds().has('change-review'), '恢复后并集不含该 id');
 });
 
 // ── 9. markers：跨 chunk 累积解析往返 ────────────────────────────────────────
@@ -423,16 +423,16 @@ test('supervision: api.isMutating 接线到 isBusy（变更进行中不触发假
   const c = makeCenter(t);
   const clock = withFakeClock(t);
 
-  const dir = path.join(c.profileDir, 'node_modules', 'dsh-file-drop');
+  const dir = path.join(c.profileDir, 'node_modules', 'dsh-change-review');
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'dsh-file-drop', version: '1.0.0' }));
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'dsh-change-review', version: '1.0.0' }));
 
   // 用状态写锁把卸载「架」在半空，制造确定性的「变更进行中」窗口。
   let releaseStateGate;
   const hold = c.center.state.gate.run('desktop-plugin-state', () => new Promise((resolve) => {
     releaseStateGate = resolve;
   }));
-  const pending = c.center.lifecycle.uninstall('file-drop');
+  const pending = c.center.lifecycle.uninstall('change-review');
   assert.equal(c.center.isMutating(), true, '卸载在途时 isMutating 为真');
 
   let zombie = 0;
@@ -530,14 +530,14 @@ test('scan.profile: 命中 TROJAN_DOWNLOAD_EXEC；内置配套名豁免', (t) =>
 
   // 第三方（非内置）：命中。
   fs.writeFileSync(path.join(c.profileDir, 'node_modules', 'broken-third-party', 'index.js'), trojan);
-  // 内置配套（harness-pet）：同内容豁免。
-  fs.writeFileSync(path.join(c.profileDir, 'node_modules', 'harness-pet', 'index.js'), trojan);
+  // 内置配套（dsh-pocket）：同内容豁免。
+  fs.writeFileSync(path.join(c.profileDir, 'node_modules', 'dsh-pocket', 'index.js'), trojan);
 
   const findings = c.center.scan.profile();
   assert.ok(findings.length > 0, '第三方高危文件应产生 findings');
   assert.ok(findings.some((f) => f.code === 'TROJAN_DOWNLOAD_EXEC'
     && f.file.includes('broken-third-party')), '命中 TROJAN_DOWNLOAD_EXEC');
-  assert.ok(!findings.some((f) => f.file.includes('harness-pet')), '内置配套名被豁免');
+  assert.ok(!findings.some((f) => f.file.includes('dsh-pocket')), '内置配套名被豁免');
 });
 
 // ── 12. bootCleanup()：陈旧 .trash / .bak 清理 ────────────────────────────────

@@ -1,1 +1,0 @@
-{"version":3,"file":"index.js","names":[],"sources":["../src/index.ts"],"sourcesContent":["/**\r\n * Host-side registration point. Harness imports the package root while\r\n * composing the Cordis tree; all behavior lives in the separately discovered\r\n * browser client bundle.\r\n */\r\nexport function apply(): void {}\r\n"],"mappings":";;;;;;AAKA,SAAgB,QAAc,CAAC"}

@@ -1,7 +1,7 @@
 'use strict';
 
 // ---------------------------------------------------------------------------
-// TA6 元测试 2：transform 契约三态语义统一（44 个 file transform 逐个实跑）。
+// TA6 元测试 2：transform 契约三态语义统一（43 个 file transform 逐个实跑）。
 //
 // 对每个 transform 用三种输入各跑一遍：
 //   1) pristine 源（pristine-kernel-roots 给出的未补丁内核闭包树，历史上是
@@ -167,8 +167,10 @@ for (const spec of fileSpecs) {
 // 44 = 47（上一基线）− 3 条退役（0.2.0-rc.2 重靶）：loader-tree-isolation（靶
 //   cordis-plugin-loader 1.0.5 原生逐条目隔离）、settings-section-guard（register
 //   调用点全内核 0 命中）、fallback-heal-isolation（heal 回环原生逐名 try/catch）。
-test('契约面完整性：44 个 file transform 全部被本文件覆盖', () => {
-  assert.equal(fileSpecs.length, 44);
+// 43 = 44 − image-send-fix（2026-10 内置伴随插件批量拆除：只为已退役的识图插件
+//   存在，transform 与锚点常量同批删除）。
+test('契约面完整性：43 个 file transform 全部被本文件覆盖', () => {
+  assert.equal(fileSpecs.length, 43);
 });
 
 // 反「静默停摆」哨兵：诚实跳过集合必须恰为已知的 5 条非 vendored 目标——
