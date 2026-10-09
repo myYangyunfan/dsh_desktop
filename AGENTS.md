@@ -1,7 +1,8 @@
 # AGENTS.md — DSH Desktop 工作区指引
 
-> 本文件给 ZCode agent 用。逐字段接口规范以 `dsh-tauri/contracts/` 五份契约为准，
-> 开发流程的完整版见 `dsh-tauri/docs/development.md`（本文件不复制其内容）。
+> 本文件给 ZCode agent 用。逐字段接口规范以 `dsh-tauri/contracts/` 六份契约为准
+> （五份核心 + `wsl-backend.md`），开发流程的完整版见 `dsh-tauri/docs/development.md`
+> （本文件不复制其内容）。
 
 ## 仓库是什么
 
@@ -12,9 +13,9 @@ Node 逻辑仍是活代码（Tauri sidecar 直接复用，零重写）。主平�
 
 | 目录 | 说明 |
 | --- | --- |
-| `dsh-tauri/` | 桌面壳主线：`contracts/`（五契约）、`src-tauri/`（Rust 工作区）、`sidecar/`（Node 薄封装）、`ui/`、`scripts/`（stage-payload / smoke-installed） |
-| `dsh-desktop/` | 内核侧 Node 逻辑：构建期补丁、自愈、插件同步、余额链、`assets/plugins/`（**随安装包分发**——v1.0.0 内置线，2026-10-08 裁定；内置伴随插件在册 **28** 个，v1.0.0 由 39 精简、2026-10-07 移除 11 个；随包 agent 预设子系统已整体拆除）、`vendor/dsh-kernel/`（pin 的离线内核 tgz，**必须入库**） |
-| `dsh-desktop/scripts/test/` | 全部 Node 测试（185 个 `*.test.js/.mjs`，另有 `fixtures/`、`ta16-snapshots/`、mock server），单测唯一去处 |
+| `dsh-tauri/` | 桌面壳主线：`contracts/`（六份契约）、`src-tauri/`（Rust 工作区）、`sidecar/`（Node 薄封装）、`ui/`（frontendDist 占位页）、`dlls/`（D3DCOMPILER_47.dll）、`package-payload/`（打包暂存，gitignored）、`ta13-soak/`（Rust soak 压测）、`scripts/`（stage-payload / stage-plugin-gate / smoke-installed）、`docs/` |
+| `dsh-desktop/` | 内核侧 Node 逻辑：构建期补丁、自愈（根级 boot 链脚本 `watchdog.js` / `*-heal.js` 等）、插件同步、余额链、`docs/`、`assets/plugins/`（**随安装包分发**——v1.0.0 内置线，2026-10-08 裁定；内置伴随插件在册 **28** 个，v1.0.0 由 39 精简、2026-10-07 移除 11 个；随包 agent 预设子系统已整体拆除）、`vendor/`（node/npm 运行时 + `dsh-kernel/` pin 的离线内核 tgz，后者**必须入库**） |
+| `dsh-desktop/scripts/test/` | 全部 Node 测试（187 个 `*.test.js/.mjs`，另有 `fixtures/`、`ta16-snapshots/`、mock server），单测唯一去处 |
 | `.github/workflows/` | `ci.yml`（PR 门禁）、`tauri-release.yml`（tag 发版，唯一发布入口）、`release.yml`（退役 Electron 线，全部 `if: false`） |
 
 ## 常用命令
@@ -35,11 +36,15 @@ cd dsh-tauri && node --test sidecar/cli.test.js      # sidecar 真机流程（�
 cd dsh-tauri/src-tauri/src/app && cargo run          # 开发运行（loading→内核→Web UI）
 
 # --- 打包（win-x64，三步）---
-bash dsh-tauri/scripts/stage-payload.sh              # ① payload 暂存（~500MB，fail-fast）
+bash dsh-tauri/scripts/stage-payload.sh              # ① payload 暂存到 package-payload/（~890MB，fail-fast）
 cd dsh-tauri && npx --yes @tauri-apps/cli build \
   --config src-tauri/src/app/tauri.conf.json --target x86_64-pc-windows-msvc   # ② NSIS
 bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
 ```
+
+**本机**：`cargo` 目标目录在仓库外（`CARGO_TARGET_DIR=C:\dsh-tauri-build`，TEMP 指仓库内
+`.tmp-rust-tmp`，实测 ~18G）；成品安装包收集在 `C:\Users\delinger\Desktop\dsh-tauri-out`
+（`.sha256` 同目录，`superseded/` 存历史包）。
 
 **没有 lint / typecheck / 格式化工具链**（无 eslint、无 tsconfig、无 prettier）——
 语法门禁只有 `check-syntax.js` 与测试，没有可用的 lint 脚本，不要凭空发明。
@@ -51,9 +56,12 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   `src/app/` 是装配根，**只接线不实现**。
 - **Node 逻辑全部活在 `dsh-desktop/scripts/`**，`dsh-tauri/sidecar/cli.js` 只是薄封装
   （stdout 末行单个 JSON，日志走 stderr）。修内核侧行为改 `dsh-desktop/`，别在 sidecar 里重写。
-- **契约先行，且机器强制**：`dsh-tauri/contracts/` 五份文件是接口唯一事实源
-  （`bridge-api.md` / `ipc-commands.md` / `data-flow.md` / `plugin-contract.md` / `error-codes.md`）。
-  `lib.rs` 的契约审计测试要求「注册命令 ⊆ 契约表」，**加桥命令不改契约 = 测试红**。
+- **契约先行，且机器强制**：`dsh-tauri/contracts/` 六份文件是接口唯一事实源（五份核心：
+  `bridge-api.md` / `ipc-commands.md` / `data-flow.md` / `plugin-contract.md` / `error-codes.md`；
+  第六份 `wsl-backend.md` = WSL 托管后端全链语义）。机器锁两条：`lib.rs` 契约审计测试要求
+  「注册命令 ⊆ 契约表」（`no_extra_commands_beyond_contract_and_poc`）；Node 哨兵
+  `ta7-contract-audit` 把契约文档与代码实装双向核对（桥方法面 / 通道表 / 错误码 / WSL 契约键）。
+  **加桥命令不改契约 = 测试红**。
   五步流程见 `development.md` §4；加伴随插件见 §5（登记进
   `scripts/lib/companion-plugins.js` 的 `COMPANION_PLUGINS`，id 必须与插件 `cordis.patch.yml`
   的 loader id 一致）；**移除**插件是同一条清单的反向操作：摘 `COMPANION_PLUGINS` + 进
@@ -79,7 +87,7 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
 - 可单测纯函数收敛到 `scripts/lib/`，网络与文件编排留在调用方。
 - **内核版本 pin 在 `scripts/compat/kernel-pin.json`（exact，禁止浮动）**，
   `vendor/dsh-kernel/*.tgz` 随库提交；换版 = 显式改 pin + 重跑适配器判定 + 全量测试。
-- 临时文件（`.tmp-*`、`_*.js`、`*.log`、`portable*/`）已在 `.gitignore` 中，**不要提交**。
+- 临时文件（`.tmp-*`、`_*.js`、`*.log`、`portable*/`）已在 `.gitignore` 中，**不要提交**；`.tmp-kernel` / `.tmp-bs-*` 一类是历史取证物，**默认别清理**。
 
 ## 已知坑
 
@@ -104,12 +112,12 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   脚本，用 `/D=<临时目录>` 跑 `/S`，别在真安装目录上试。
 - **稳定性三原则（评审默认立场）**：① 客户端必须能打开，装配失败终态恢复页而非退出；
   ② 兼容性不报错，意外以日志收场（`panics.log`）不以崩溃收场；③ 用户数据不动。
-- `unit-updater` 的两个 fallback 用例在依赖装好时显示 `skip`，属**预期**而非失败。
-- 文档里的测试基线数字常滞后。**现值（2026-10-08 三次实测，内置线重打包后）**：`scripts/test/` 186 个测试文件，
-  `npm test` = 1990 例 / 1983 pass / 0 fail / 7 skipped；skip 逐条都是环境缺料而非缺陷
-  （pristine 夹具缺 `@openai/codex` / `@earendil-works/pi-ai`、openclaw 双轨的兄弟目录
-  `../openclaw-dsh-bridge/` 不在盘、真实网络、`.tmp-kernel` 构建产物不可用），**条数随本机材料与缓存浮动**
-  （同一天早些时候记的是 1981/1973/8）——一律以现跑输出为准，**pass 与 fail 才是判据**。
+- 文档里的测试基线数字常滞后。**现值（2026-10-09 实测，settingsScope 退役 + better-sidebar 文件栏迁移后）**：
+  `scripts/test/` 187 个测试文件，`npm test` = 2006 例 / **0 fail**；pass 与 skip 的分界随本机材料
+  与网络浮动（同日三次全量实测 pass 1997–1998 / skip 8–9，差额来自 `example.com` 真实网络用例），
+  skip 逐条都是环境缺料而非缺陷（pristine 夹具缺 `@openai/codex` / `@earendil-works/pi-ai`、
+  openclaw 双轨的兄弟目录 `../openclaw-dsh-bridge/` 不在盘、本机无 `D:\workspace\dsh-pack` 克隆、
+  真实网络、`.tmp-kernel` 构建产物不可用）——一律以现跑输出为准，**pass 与 fail 才是判据**。
   Rust 侧现值 **689 passed / 0 failed / 4 ignored**（36 个 target）——本机只能走 gnu 链，
   **`cargo test` 必须带 `--target x86_64-pc-windows-gnu`**（与 `RUSTUP_TOOLCHAIN` 配对）：漏了它会去写
   `<CARGO_TARGET_DIR>/debug/`（host 目录，复用不到三元组目录里的增量），链接期炸成
@@ -122,8 +130,10 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   `DSH_TAURI_REPO_ROOT=<dir>` 显式内核目录、`DSH_HOME` / `DSH_TAURI_USERDATA` 数据目录重定向。
 - **`assets/plugins/dsh-better-sidebar` 是重建出来的 vendored 上游包，改行为只改 `src/`**：
   v1.0.0 起它是上游 0.24.1 整包（`docs/builtin-plugins-inventory.md` §5.2 #3），本机的构建链已实测跑通
-  （仓库外临时目录 `npm ci --legacy-peer-deps` + `tsc -p tsconfig.build.json` + `tsdown`），
-  所以改姿势是：改 `src/` → 跑它的 tsdown → 用 `unit-better-sidebar-*` 测试核对产物。
+  （沙箱是工作树内 gitignore 目录 `dsh-desktop/.tmp-bs-build/`：`npm ci --legacy-peer-deps` 装依赖后
+  跑沙箱包的 `build` 脚本 = `rmSync lib && tsc -p tsconfig.build.json && tsdown`，
+  `tsc` 是类型门禁——它非零退出时 `&&` 链会挡住 `tsdown`，别只看产物生成与否），
+  所以改姿势是：改 `src/` → 沙箱里重跑 `build` → 用 `unit-better-sidebar-*` 测试核对产物。
   产物面是 **7 个文件、两类**：`lib/index.js` + `lib/invariant.js` 是 Node 半边；
   `lib/client.js`（官方频道，注册 id = 包名）与 `lib/client-registry.js`（插件注册表频道，
   注册 id = `dsh-external/dsh-better-sidebar`）由**同一份 `src/client/index.tsx` 编两遍**，只差注册 id
@@ -154,7 +164,7 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
 
 | 要改什么 | 先读 |
 | --- | --- |
-| 桥命令 / IPC / 页面 API | `dsh-tauri/contracts/` 五契约 + `docs/development.md` §2 §4 |
+| 桥命令 / IPC / 页面 API | `dsh-tauri/contracts/` 六份契约 + `docs/development.md` §2 §4 |
 | 打包 / 发版 / 更新链 | `.github/RELEASE_RUNBOOK.md`、`dsh-tauri/docs/release-keys.md`、`docs/development.md` §6 §7 |
 | 补丁 / 自愈 / 插件同步 | `dsh-desktop/scripts/lib/patch-registry.js` 头部注释、`dsh-desktop/docs/plugin-center-architecture.md` |
 | 余额链 | `dsh-desktop/docs/balance-architecture.md` |
