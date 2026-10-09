@@ -39,6 +39,31 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
   插件面余下 4 套 42 例）；全量 `npm test` **2006 例 / 1998 pass / 0 fail / 8 skip**；台账随改三处
   （inventory §一 #3 cell、§5.2 #3 判定列、§5.4 构建边界）+ `better-sidebar-kernel-integration.md`。
 
+### fix(companion)：退役幽灵服务 settingsScope —— session-manager 摘名 + side-session 换 ctx.remote.settings
+
+- **报障现场（用户实测）**：Tauri 壳启动后 web boot 半程报 `Failed to load plugins`，
+  两条 `pending (waiting for service: settingsScope)`（dsh-session-manager 与
+  @dsh-external/dsh-side-session）永不激活。机制：内核 rc.2 里**没有** settingsScope 这个服务
+  （`@deepseek-ai/*` 全文 0 处命中），boot 审计（`assertEntriesActive`）对 inject 里解析不到的
+  service 判 pending 即拒装；真实形状是 `ctx.remote.settings`（dotted 名，
+  conversation-tweaks / subagent-lens / quest-ui 已实证）。
+- **两半修**：session-manager 正文从未消费该名 → `exports.inject` 摘名即恢复激活；
+  side-session 客户端改写为 `ctx.remote.settings` 适配器（`describe()`/`mutate()` + revision
+  收成旧 scope 形状的 getSnapshot / subscribe / set，inject 改
+  `["slots", "remote", "remote.settings", "commandUi"]`）；宿主半边把作废的
+  `ctx.settings.register` 换成声明式 Config + settings-host 垫片：Config 六字段全 `.volatile()`
+  （内核 `settings.describe()` 只收录含 volatile 字段的条目）、`settings/document-updated`
+  触发重取、`configure({ auto: false })` 关内核自动设置页，避免同一设置两处可改；
+  `handleAsk` 的 apiKey 合并优先级反转（页内远端 describe 对 secret 脱敏、apiKey 恒空串，
+  不得反盖宿主本地读取的真值）；凭据源从裸 `schemastery` 换宿主分叉 `@deepseek-ai/schemastery`
+  （`volatile()` 只有分叉有），声明同迁 `dependencies` → `peerDependencies`。
+- **新锁 `unit-settings-scope-retire`（16 例三层）**：① 全插件清扫——注入名与正文去注释/字符串
+  后不得再出现幽灵名（历史回归「`inject` 里留 settingsScope」正是靠这条抓）；② 受害两插件点名锁
+  （session-manager 摘名 / side-session 适配器形状）；③ 宿主半锁（volatile 六字段、settings-host
+  垫片行为、apiKey 合并优先级）。判据边界：本清扫只咬「名字回流」，设置功能面由适配器行为测承担。
+- **实测**：新锁 16 例 / 0 fail；全量 `npm test` 2006 例 / 1998 pass / 0 fail / 8 skip
+  （总量 1990→2006 = 本锁 +16；skip 条数随本机材料浮动，同 AGENTS.md 口径）。
+
 ### build(plugins)：交付口径反转 —— 28 条内置插件随安装包分发（内置线）
 
 - **改的是口径不是插件**：2026-10-08 裁定「装进去：真内置 28 条」，推翻 v1.0.0 立项时的

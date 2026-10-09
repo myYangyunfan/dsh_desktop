@@ -17,14 +17,17 @@
 // 再在 /ask 时读取这些文件的【当前磁盘内容】注入上下文——这比 meta.diffs
 // 更全：连 agent 读取过的文件也能纳入（符合「所有调用的文件」语义）。
 
-import * as schem from "schemastery";
-const z = schem.z || (schem.default && schem.default.z) || schem.default;
+// volatile() 只在宿主内核的 schemastery 分叉上（@deepseek-ai/schemastery），
+// 裸 schemastery 没有该方法——设置形必须用宿主分叉声明。
+import z from "@deepseek-ai/schemastery";
 import { readFileSync, readdirSync, statSync, promises as fsp } from "node:fs";
 import { join, isAbsolute } from "node:path";
 import { homedir } from "node:os";
 import { zstdDecompressSync } from "node:zlib";
 
-const NS = "dsh-side-session";
+// 设置条目的 loader id（profile 条目 id）——settings 服务与 document-updated 事件
+// 都以它索引，**不是包名、也不是历史上的 "dsh-side-session"**（见 cordis.patch.yml 的 `- id:`）。
+const ENTRY_ID = "side-session";
 const CONTEXT_ROUTE = "/api/dsh-side-session/context";
 const ASK_ROUTE = "/api/dsh-side-session/ask";
 
@@ -49,28 +52,72 @@ const MAX_FILE_BLOCK_CHARS = 200 * 1024; // 标准档文件内容合计（兼容
 const MAX_TRANSCRIPT_MSGS = 120; // 标准档消息数（兼容引用）
 const MAX_TRANSCRIPT_CHARS = 40 * 1024; // 标准档字符上限（兼容引用）
 
+// <<BEGIN settings-host（由 tools/codemod/apply-settings-scope.mjs 生成，勿单包手改）>>
+const VOLATILE_WRITE = Symbol.for("cosmokit.volatile.write");
+
+/** 把 config 里的 volatile 引用摊平成普通值（同 dsh-settings 的 plainConfig）。 */
+function plainSettings(value) {
+	if (typeof value !== "object" || value === null) return value;
+	if (VOLATILE_WRITE in value) return plainSettings(typeof value.get === "function" ? value.get() : undefined);
+	if (Array.isArray(value)) return value.map(plainSettings);
+	return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, plainSettings(child)]));
+}
+
+/**
+ * 用声明式 Config 顶掉不存在的 ctx.settings.register。
+ * @param ctx - 本插件作用域
+ * @param entryConfig - apply 第二参（resolveConfig 校验过的 profile 行 config）
+ * @param entryId - **profile 条目 id**，即 settings/document-updated 回传的 ns
+ * @returns 与旧 scope 同名的 { get(), watch(fn) }，调用方不必改形状
+ */
+function mountSettingsScope(ctx, entryConfig, entryId) {
+	const state = { current: plainSettings(entryConfig) || {} };
+	const listeners = /* @__PURE__ */ new Set();
+	ctx.on("settings/document-updated", (ns) => {
+		if (ns !== entryId) return;
+		state.current = plainSettings(entryConfig) || {};
+		for (const fn of [...listeners]) fn(state.current);
+	});
+	return {
+		get: () => state.current,
+		watch(fn) {
+			listeners.add(fn);
+			return () => { listeners.delete(fn); };
+		}
+	};
+}
+// <<END settings-host>>
+
 // ---------------------------------------------------------------------------
 // 设置节（与 Spec.txt 三模式对应）
+// 全部字段必须 volatile：内核 settings.describe() 只收录「至少一个 volatile 字段」
+// 的条目（volatileForm 为空即跳过），页内设置卡（client 半边）经
+// ctx.remote.settings.describe()/mutate() 读写的正是这里的形状；apply 第二参里
+// volatile 字段是活载体（.get() 现取，写入不重挂 fiber），settings-host 垫片摊平取值。
 // ---------------------------------------------------------------------------
 const Config = z.object({
   mode: z
     .string()
+    .volatile()
     .default("1")
     .description(
       "回答引擎模式：1=复用 dsh 全局 Key；2=插件自带 Key；3=纯服务端走 dsh 宿主 LLM（ctx.llm，不读任何 key）"
     ),
-  apiKey: z.string().role("secret").default("").description("mode=2 时使用的 API Key"),
-  model: z.string().default(DEFAULT_MODEL).description("mode=2 时的模型名"),
+  apiKey: z.string().role("secret").volatile().default("").description("mode=2 时使用的 API Key"),
+  model: z.string().volatile().default(DEFAULT_MODEL).description("mode=2 时的模型名"),
   endpoint: z
     .string()
+    .volatile()
     .default(DEFAULT_BASE)
     .description("mode=2 时的 API 基址（自动拼接 /chat/completions）"),
   contextLength: z
     .string()
+    .volatile()
     .default("2")
     .description("上下文长度：1=标准（120 条/40K，省 token）；2=加长（600 条/200K，推荐）；3=完整（5000 条/2M，最接近通读，token 消耗大）"),
   animMs: z
     .number()
+    .volatile()
     .default(500)
     .description("浮窗弹出动画时长（毫秒，0=关闭动画）"),
 });
@@ -1031,7 +1078,12 @@ async function handleAsk(req, res) {
   }
 
   const parsed = parseSession(sessionId);
-  const cfg = await resolveKeyForMode(mode, body.pluginSettings || lastSettings, body, parsed);
+  // 页内 body.pluginSettings 经远端 describe 脱敏而来：role("secret") 字段被整个摘掉，
+  // apiKey 恒为空串——不能拿它覆盖宿主本地读取的真值（settings-host 垫片，不脱敏）。
+  const pageSettings = body.pluginSettings || {};
+  const merged = Object.assign({}, lastSettings, pageSettings);
+  if (!merged.apiKey) merged.apiKey = lastSettings.apiKey || "";
+  const cfg = await resolveKeyForMode(mode, merged, body, parsed);
   if (cfg.reason === "unknown-provider") {
     // 报错时列出内置已支持清单 + 配置指引，降低排查成本（保持 400 + error 码结构不变）。
     const supported = Object.keys(KNOWN_PROVIDERS).sort().join("、");
@@ -1063,7 +1115,7 @@ async function handleAsk(req, res) {
   if (!cfg.key) {
     const msg =
       mode === "2"
-        ? "插件 API Key 为空：请在临时会话面板「插件密钥」处填写，或在设置里配置 dsh-side-session.apiKey"
+        ? "插件 API Key 为空：请在「设置 → 侧边临时会话」填写 API Key，或切换到其他模式。"
         : "DSH 全局 Key 为空：当前供应商「" +
           cfg.provider +
           "」未获取到凭据（期望环境变量 " +
@@ -1145,29 +1197,32 @@ const inject = ["settings", "webServer", "llm"];
 
 function apply(ctx, config) {
   ctxRef = ctx;
-  // 注册设置节（失败不阻断启动；重复注册 = 旧代 fiber 残留 → 摘除后重注册，热重载自愈）
+  // 旧代「ctx.settings.register + scope」已整体作废：rc 内核的 SettingsForms 没有
+  // register（幽灵 API，全内核 0 处命中），此处原 try/catch 每次都被降级成一行 warn
+  // ⇒ 设置从未持久化过。改走声明式 Config + settings-host 垫片：apply 第二参是
+  // resolveConfig 校验过的本条目配置（volatile 字段为活载体），settings/document-updated
+  // 触发重取；apiKey 走本地读取、不经远端脱敏，mode2 凭据以此为准。
   try {
-    const scope = ctx.settings.register(NS, Config, { base: config || {} });
-    lastSettings = scope.get();
+    const scope = mountSettingsScope(ctx, config, ENTRY_ID);
+    lastSettings = scope.get() || {};
     scope.watch(() => {
-      lastSettings = scope.get();
+      lastSettings = scope.get() || {};
     });
   } catch (err) {
-    try {
-      if (ctx.settings.registrations && ctx.settings.registrations.has(NS)) {
-        ctx.settings.registrations.delete(NS);
-        const scope = ctx.settings.register(NS, Config, { base: config || {} });
-        lastSettings = scope.get();
-        scope.watch(() => {
-          lastSettings = scope.get();
-        });
-      }
-    } catch (err2) {
-      console.warn(
-        "[dsh-side-session] 设置节注册失败（将使用默认配置）：" +
-          String((err2 && err2.message) || err2)
-      );
-    }
+    console.warn(
+      "[dsh-side-session] 设置挂载失败（将使用默认配置）：" +
+        String((err && err.message) || err)
+    );
+  }
+
+  // 页内自带设置卡（client 半边 settings.section 槽），关掉内核自动生成页，避免同一设置两处可改。
+  try {
+    ctx.effect(
+      () => ctx.settings.configure({ auto: false }, ctx.fiber),
+      "dsh-side-session: settings presentation"
+    );
+  } catch (err) {
+    console.warn("[dsh-side-session] 关闭内核自动设置页失败：" + String((err && err.message) || err));
   }
 
   const disposers = [];
@@ -1234,6 +1289,9 @@ export {
   apply,
   inject,
   name,
+  // 声明式设置形：cordis resolveConfig 用它校验 profile 行的 config；
+  // 内核 settings.describe() 也按它生成表单（必须有 volatile 字段才会被收录）。
+  Config,
   parseSession,
   resetParseCacheForTest,
   KNOWN_PROVIDERS,

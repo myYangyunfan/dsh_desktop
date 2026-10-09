@@ -330,7 +330,11 @@ window.__ModuleLoader__.load({
 		}
 
 		exports.apply = apply;
-		exports.inject = ["slots", "settingsScope", "workspaces", "sessions"];
+		// settingsScope 是已退役的幽灵服务（内核 rc.2 全文 0 处命中；boot 审计会对
+		// 未解析的 service 判 "pending (waiting for service: settingsScope)" 拒装本条目）。
+		// 本插件正文从未消费它，摘名即恢复激活。将来若真需要设置面，走
+		// ctx.remote.settings（形态见 dsh-side-session / dsh-conversation-tweaks 的适配器）。
+		exports.inject = ["slots", "workspaces", "sessions"];
 		// 纯函数导出：仅供 node 单测与插件自检（runtime 只消费 apply/inject）。
 		exports.focusGuard = { shouldRestoreFocusAfterRemoval, restoreComposerFocus };
 		// issue #122/#129 回归锚点：「signal timed out」类裸 DOMException 的人

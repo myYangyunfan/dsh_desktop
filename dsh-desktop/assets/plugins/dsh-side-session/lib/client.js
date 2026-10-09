@@ -83,9 +83,19 @@ window.__ModuleLoader__.load({
     }
 
     // ------------------------------------------------------------------
-    // 设置（dsh-side-session 命名空间，持久化）
+    // 设置（profile 条目 id = ENTRY_ID，持久化经 ctx.remote.settings）
     // ------------------------------------------------------------------
-    var settingsScope = null;
+    // 内核里**没有** settingsScope 这个服务（幽灵；boot 审计会按
+    // "pending (waiting for service)" 拒装本插件），真实形状是 ctx.remote.settings：
+    //   describe() → { ok, value: { writable, namespaces: [view] } }
+    //   mutate(ns, [{ op: "set", path: [field], value }], revision) → { ok, value: view }
+    // ⚠ ns 是 **profile 条目 id**（cordis.patch.yml 的 `- id:`），不是包名，
+    //   更不是历史上的 "dsh-side-session"——用错键静默取不到值。
+    // 适配器与 dsh-conversation-tweaks 的 bindSettingsScope 逐行同源。
+    // 模块内句柄统一叫 settingsAdapter（不再沿用幽灵服务的历史变量名）。
+    var ENTRY_ID = "side-session";
+    var settingsAdapter = null;
+    var settingsWarned = false;
     var pluginSettings = {
       mode: "1",
       apiKey: "",
@@ -95,22 +105,101 @@ window.__ModuleLoader__.load({
       animMs: 500,
     };
 
+    /** 把 remote.settings 收成旧 scope 形状（getSnapshot / subscribe / set）。 */
+    function bindSettingsScope(ctx, entryId) {
+      var snapshot = { status: "loading", value: undefined, writable: false, revision: undefined };
+      var listeners = new Set();
+      function emit() {
+        listeners.forEach(function (fn) {
+          fn();
+        });
+      }
+      // 快照引用必须稳定：每轮都换新对象会自激重渲染；内容不变则不 emit。
+      function adopt(next) {
+        if (JSON.stringify(next.value) === JSON.stringify(snapshot.value)
+          && next.status === snapshot.status && next.writable === snapshot.writable) return;
+        snapshot = next;
+        emit();
+      }
+      async function refresh() {
+        if (!ctx.remote || !ctx.remote.settings || typeof ctx.remote.settings.describe !== "function") {
+          adopt(Object.assign({}, snapshot, { status: "failed" }));
+          return;
+        }
+        var response;
+        try {
+          response = await ctx.remote.settings.describe();
+        } catch (e) {
+          adopt(Object.assign({}, snapshot, { status: "failed" }));
+          return;
+        }
+        if (!response || !response.ok) {
+          adopt(Object.assign({}, snapshot, { status: "failed" }));
+          return;
+        }
+        var rows = response.value && Array.isArray(response.value.namespaces) ? response.value.namespaces : [];
+        var view = null;
+        for (var i = 0; i < rows.length; i++) {
+          if (rows[i].ns === entryId) { view = rows[i]; break; }
+        }
+        if (view === null) {
+          // 条目没出现在 describe() 里 = 它的 Config 没有任何 volatile 字段，
+          // 内核就不为它生成表单（volatileForm(schema) 为空即跳过）。
+          adopt(Object.assign({}, snapshot, { status: "missing" }));
+          return;
+        }
+        adopt({
+          status: "ready",
+          value: view.value,
+          writable: response.value.writable !== false,
+          revision: view.revision,
+        });
+      }
+      refresh();
+      return {
+        getSnapshot: function () { return snapshot; },
+        subscribe: function (fn) {
+          listeners.add(fn);
+          return function () { listeners.delete(fn); };
+        },
+        set: async function (field, value) {
+          var next = await ctx.remote.settings.mutate(entryId, [{ op: "set", path: [field], value: value }], snapshot.revision);
+          if (next && next.ok && next.value) {
+            adopt(Object.assign({}, snapshot, { value: next.value.value, revision: next.value.revision }));
+            return;
+          }
+          await refresh();
+          if (!next || !next.ok) throw new Error((next && next.error && next.error.message) || "settings write rejected");
+        },
+      };
+    }
+
     function applySettingsSnapshot() {
       try {
-        var snap = settingsScope.getSnapshot();
-        if (snap && snap.status === "ready" && snap.value) {
-          var v = snap.value;
-          pluginSettings = {
-            mode: String(v.mode || "1"),
-            apiKey: v.apiKey || "",
-            model: v.model || "deepseek-chat",
-            endpoint: v.endpoint || "https://api.deepseek.com",
-            contextLength: String(v.contextLength || "2"),
-            animMs: Number(v.animMs != null ? v.animMs : 500),
-          };
-          if (getState().mode !== pluginSettings.mode) setState({ mode: pluginSettings.mode });
-          applyAnimDuration();
+        var snap = settingsAdapter ? settingsAdapter.getSnapshot() : null;
+        if (!snap) return;
+        if (snap.status !== "ready") {
+          if (!settingsWarned && (snap.status === "failed" || snap.status === "missing")) {
+            settingsWarned = true;
+            console.warn(
+              "[dsh-side-session] 设置" + (snap.status === "missing" ? "条目缺席（宿主 Config 缺 volatile 字段？）" : "读取失败") + "，暂时使用内存默认配置"
+            );
+          }
+          return;
         }
+        var v = snap.value || {};
+        pluginSettings = {
+          mode: String(v.mode || "1"),
+          // 远端 describe 走脱敏：role("secret") 字段被整个摘掉，v.apiKey 缺席是常态。
+          // 缺席时保留本地已输入值（首载为空属正确姿态：密文不回显，宿主侧凭据照常生效）。
+          apiKey: v.apiKey != null ? String(v.apiKey) : pluginSettings.apiKey || "",
+          model: v.model || "deepseek-chat",
+          endpoint: v.endpoint || "https://api.deepseek.com",
+          contextLength: String(v.contextLength || "2"),
+          animMs: Number(v.animMs != null ? v.animMs : 500),
+        };
+        if (getState().mode !== pluginSettings.mode) setState({ mode: pluginSettings.mode });
+        applyAnimDuration();
       } catch (e) {}
     }
 
@@ -123,27 +212,35 @@ window.__ModuleLoader__.load({
     }
 
     function bindSettings(ctx) {
+      settingsAdapter = bindSettingsScope(ctx, ENTRY_ID);
+      settingsAdapter.subscribe(applySettingsSnapshot);
+      // 首帧（loading）先落内存默认值；describe 就绪后订阅回调会自动补真值。
+      applySettingsSnapshot();
+    }
+
+    // 设置写入是异步的（remote 桥），失败只 warn 不抛——保持旧 try/catch 的静默降级
+    // 语义，避免输入框每敲一键冒未处理 rejection（旧 scope.set 是同步 try/catch）。
+    function persistSetting(key, val) {
       try {
-        settingsScope = ctx.settingsScope.bind({ namespace: "dsh-side-session" });
-        applySettingsSnapshot();
-        settingsScope.subscribe(applySettingsSnapshot);
+        var pending = settingsAdapter && settingsAdapter.set(key, val);
+        if (pending && typeof pending.catch === "function") {
+          pending.catch(function (e) {
+            console.warn("[dsh-side-session] 设置写入失败（" + key + "）：" + String((e && e.message) || e));
+          });
+        }
       } catch (e) {
-        console.warn("[dsh-side-session] settingsScope 不可用，使用内存默认配置");
+        console.warn("[dsh-side-session] 设置写入失败（" + key + "）：" + String((e && e.message) || e));
       }
     }
 
     function setMode(m) {
       setState({ mode: m });
       pluginSettings.mode = m;
-      try {
-        if (settingsScope) settingsScope.set("mode", m);
-      } catch (e) {}
+      persistSetting("mode", m);
     }
     function setPluginSetting(key, val) {
       pluginSettings[key] = val;
-      try {
-        if (settingsScope) settingsScope.set(key, val);
-      } catch (e) {}
+      persistSetting(key, val);
     }
 
     // ------------------------------------------------------------------
@@ -311,14 +408,9 @@ window.__ModuleLoader__.load({
       if (s.streaming || !question || !question.trim()) return;
       var mode = s.mode;
 
-      // 密钥缺失友好提示（mode1/2）
-      if (mode === "2" && !pluginSettings.apiKey) {
-        setState({
-          streaming: false,
-          error: "插件 API Key 为空：请在「设置 → 临时会话」填写 API Key，或切换到其他模式。",
-        });
-        return;
-      }
+      // mode2 的 key 不再在客户端预检：远端 describe 脱敏后页内 apiKey 恒为空串
+      // （secret 字段被整个摘掉），预检会误拦「宿主已持久化 key」的用户；
+      // 宿主 /ask 的 no-key 400 是唯一权威判据（提示文案也在宿主侧）。
 
       var userMsg = { role: "user", text: question };
       var assistantMsg = { role: "assistant", text: "" };
@@ -1167,9 +1259,6 @@ window.__ModuleLoader__.load({
     function SettingsCard(props) {
       useStore();
       var mode = pluginSettings.mode;
-      var apiKey = pluginSettings.apiKey;
-      var model = pluginSettings.model;
-      var endpoint = pluginSettings.endpoint;
       // 上下文长度：本地暂存，点「确定」才写入设置（避免 select 每次 change 都持久化导致卡顿）
       var ctxDraftState = useState(pluginSettings.contextLength || "2");
       var ctxDraft = ctxDraftState[0];
@@ -1178,6 +1267,18 @@ window.__ModuleLoader__.load({
       var animDraftState = useState(pluginSettings.animMs != null ? pluginSettings.animMs : 500);
       var animDraft = animDraftState[0];
       var setAnimDraft = animDraftState[1];
+      // 文本输入（API Key / 模型 / 基址）：草稿本地化，失焦或回车才落一次持久化写入。
+      // 持久化现为 remote 异步 mutate（带 revision 冲突判定），逐键写会相互踩版本号；
+      // 且受控 input 不在 onChange 里更新状态会被 React 立刻回滚字符。
+      var apiKeyDraftState = useState(pluginSettings.apiKey || "");
+      var apiKeyDraft = apiKeyDraftState[0];
+      var setApiKeyDraft = apiKeyDraftState[1];
+      var modelDraftState = useState(pluginSettings.model || "");
+      var modelDraft = modelDraftState[0];
+      var setModelDraft = modelDraftState[1];
+      var endpointDraftState = useState(pluginSettings.endpoint || "");
+      var endpointDraft = endpointDraftState[0];
+      var setEndpointDraft = endpointDraftState[1];
 
       return h(
         "div",
@@ -1264,8 +1365,12 @@ window.__ModuleLoader__.load({
                   className: "dss-set-input",
                   type: "password",
                   placeholder: "sk-...",
-                  value: apiKey,
-                  onChange: function (e) { setPluginSetting("apiKey", e.target.value); },
+                  value: apiKeyDraft,
+                  onChange: function (e) { setApiKeyDraft(e.target.value); },
+                  onBlur: function () { setPluginSetting("apiKey", apiKeyDraft); },
+                  onKeyDown: function (e) {
+                    if (e.key === "Enter") setPluginSetting("apiKey", apiKeyDraft);
+                  },
                 })
               ),
               h(
@@ -1275,8 +1380,12 @@ window.__ModuleLoader__.load({
                 h("input", {
                   className: "dss-set-input",
                   placeholder: "deepseek-chat",
-                  value: model,
-                  onChange: function (e) { setPluginSetting("model", e.target.value); },
+                  value: modelDraft,
+                  onChange: function (e) { setModelDraft(e.target.value); },
+                  onBlur: function () { setPluginSetting("model", modelDraft); },
+                  onKeyDown: function (e) {
+                    if (e.key === "Enter") setPluginSetting("model", modelDraft);
+                  },
                 })
               ),
               h(
@@ -1286,10 +1395,15 @@ window.__ModuleLoader__.load({
                 h("input", {
                   className: "dss-set-input",
                   placeholder: "https://api.deepseek.com",
-                  value: endpoint,
-                  onChange: function (e) { setPluginSetting("endpoint", e.target.value); },
+                  value: endpointDraft,
+                  onChange: function (e) { setEndpointDraft(e.target.value); },
+                  onBlur: function () { setPluginSetting("endpoint", endpointDraft); },
+                  onKeyDown: function (e) {
+                    if (e.key === "Enter") setPluginSetting("endpoint", endpointDraft);
+                  },
                 })
-              )
+              ),
+              h("div", { className: "dss-set-hint" }, "输入完成（失焦或回车）即保存；API Key 只写入本地配置，不回显明文。")
             )
           : null,
         h("div", { className: "dss-set-hint" }, "浮窗可自由拖动/缩放；左下角侧栏图标或 Ctrl+Shift+S 唤起。"),
@@ -1430,7 +1544,9 @@ window.__ModuleLoader__.load({
     }
 
     exports.apply = apply;
-    exports.inject = ["slots", "settingsScope", "commandUi"];
+    // remote.settings 是 dotted 服务名，按 rc.2 内核契约可直接 inject（conversation-tweaks /
+    // subagent-lens / quest-ui 已实证）；幽灵服务 settingsScope 不得回流（boot 审计拒装）。
+    exports.inject = ["slots", "remote", "remote.settings", "commandUi"];
     return module.exports;
   }
 });

@@ -15,8 +15,8 @@
     "./package.json": "./package.json"
   },
   "license": "MIT",
-  "dependencies": {
-    "schemastery": "^3.18.0"
+  "peerDependencies": {
+    "@deepseek-ai/schemastery": "^3.18.0"
   },
   "dsh": {
     "bundle": {
