@@ -49,6 +49,34 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
   `README.md` / `README.en.md` 两张逐名表、`THIRD_PARTY_NOTICES.md` §4.1、inventory §一 与
   §版本对照各一行）。
 
+### test(companion)：dsh-prompt-custom 回归套件重建（host 16 例 + client 10 例）+ 插件 CHANGELOG 补 0.2.0→0.3.5 脉络
+
+- **是重建不是移植**：2026-10 的交接包只给了文档与证据输出，验证台脚本（`repro-*.mjs` /
+  `harness-core.mjs` / `repro-client.mjs`）**没有随包交付**，本机也没有那台 F: 机器。两套新锁按
+  「真实内核包 + 真实插件源码」的实测行为重造判据，断言集合对齐交接文档 01（HTTP 契约）/
+  03（改动历史）/ 05（验证套件）里记录的现象——不冒充逐字移植，能力面差异写在文件头。
+- **host 半边 `unit-prompt-custom-host`（16 例，含 3 条反证）**：真内核（pin 的
+  `@deepseek-ai/cordis` / `dsh-system-prompt` / `dsh-scope`）+ 真 `lib/index.js`；复刻夹具只造
+  插件真实消费过的面（FakeWebServer / FakeAgents），agent 作用域用内核自己的 `createScope` 铸造
+  （不手搓层级模型）。锁住的是这条语义链：内核节注册表分层（`ScopedLayers`）、判重只在同层内发生、
+  「替换官方人设」= 同名节注册到更近的 agent 作用域。
+- **client 半边 `unit-prompt-custom-client`（10 例，含 1 条反证）**：本机没有 jsdom / happy-dom /
+  react-test-renderer 也不凭空增设依赖，挂载改为「mini 钩子驱动」——用仓库真实 React 18 +
+  `react/jsx-runtime`，经 React 内部 dispatcher 槽位手驱 useState/useRef/useCallback/useEffect
+  把真实 `Card` 组件跑起来（fetch 走 mock）。覆盖模块加载契约 / `statusLine` 三态与「跨版本不谎报」/
+  版本错配顶部告警与反例 / 旧宿主只有 `text` 时的预览退化 / 未保存编辑不被开关操作偷提交 /
+  POST 失败回滚 / 变量告警入 UI。**未覆盖如实留档**：真事件冒泡、真滚动布局、真 fetch 网络栈。
+- **反证常驻套件**（不是另跑的临时变异，将来判据退化成空转会立刻红）：删 `!Array.isArray` 守卫 →
+  `unknownConfigKeys` 重现 `['0','1']` 误报；写盘变异回 `{ ...cfg }` → 陌生键被抹掉；注册变异回插件根
+  ctx → `lastError` 捕获内核重名错且 replace 不生效（官方 persona 未被遮蔽）——三条正是历史事故形状；
+  client 拿掉 `statusLine` 的「未知则沉默」守卫 → 「未知」被谎报成停用（`tone:'muted'`）。
+- **文档半**：插件 `CHANGELOG.md` 补写 0.2.0→0.3.5 七节（0.2.0 独立移植起点、0.3.0 注入静默失效根治、
+  0.3.1 预览语义与变量插值、0.3.2 宿主/client 版本错配、0.3.3 schema 演进警报、0.3.4 非破坏性合并、
+  0.3.5 数组误报），并记进因果：「0.2.0 移植时丢了『按 agent 注册』，才埋下 0.3.0 的洞」。
+  本轮只补测试与台账，插件代码面与版本号不动。
+- **实测**：host 16 例 / 0 fail、client 10 例 / 0 fail；全量 `npm test` 基线 2006 → 2033 例 / 0 fail
+  （本两套 +26，余 1 例为上一条价目锁新增用例）。
+
 ### feat(companion)：better-sidebar 文件体验迁移 PACK/VSCode 统一模型（常驻左文件栏 + 每文件去重标签）
 
 - **改的是文件体验，不是标签面**：按用户点名从桌面版 `dsh-PACK` 迁移 VSCode 式文件系统——
