@@ -50,6 +50,8 @@
  * client.js); an edit that does land while a core HMR happens is caught by
  * the ETag comparison on the next activation.
  */
+import { type ChunkRetryEvent } from './chunk-availability.ts';
+export type { ChunkRetryEvent } from './chunk-availability.ts';
 export type ChunkName = 'editor' | 'mermaid' | 'locale';
 /** The module exports a chunk factory provides (namespace-ish record). */
 export type ChunkExports = Record<string, unknown>;
@@ -94,6 +96,16 @@ export declare function registerChunkForTests(name: ChunkName, loader: () => Pro
  * @param name - the chunk to load.
  */
 export declare function loadChunk(name: ChunkName): Promise<ChunkExports>;
+/**
+ * Subscribe to the chunk's auto-retry loop after a failed load. The loop
+ * probes the module system (cheap check) and re-attempts the load every
+ * round with exponential backoff (2s → 30s cap, unlimited); events update
+ * the view's "waiting" copy, `ready: true` tells it to re-load and
+ * hot-recover. Returns the unsubscribe — the view's effect cleanup calls
+ * it; when the LAST view of a chunk unsubscribes the loop (and its timer)
+ * is dropped entirely.
+ */
+export declare function ensureChunkAutoRetry(name: ChunkName, onEvent: (event: ChunkRetryEvent) => void): () => void;
 /**
  * Drop all chunk state for a fresh plugin activation (HMR-safe): clear the
  * in-memory cache and any test-registry entries, so the next lazy open

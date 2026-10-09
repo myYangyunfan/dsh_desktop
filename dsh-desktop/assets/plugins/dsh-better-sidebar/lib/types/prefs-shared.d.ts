@@ -51,15 +51,6 @@ export interface SidebarPrefs {
      */
     agentOpenTools: boolean;
     /**
-     * Whether the editor tab runs in merged mode: a path input replaces the
-     * plain header and a toggleable file-tree panel (with a global name
-     * search) docks at the tab's right edge. On by default; also makes brand
-     * new sessions seed an empty editor tab (tree panel open) instead of the
-     * explorer tab. The switch lives under the editor card's gear in the
-     * Side card settings; off restores the pre-merge editor exactly.
-     */
-    editorExplorer: boolean;
-    /**
      * Title-bar / shell compatibility scheme (the "位置兼容模式" setting):
      * - `auto` (default): CONSERVATIVE — only the standard Window Controls
      *   Overlay API (present in frameless Chromium shells that draw the

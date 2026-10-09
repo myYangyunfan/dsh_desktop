@@ -1224,8 +1224,8 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   white-space: nowrap;
 }
 
-/* Merged mode (the editorExplorer pref): the header's path input replaces
-   the plain title, and a toggleable file tree docks at the tab's right edge. */
+/* The header's path input (the unified model): typing a path and pressing
+   Enter opens the file as a per-path dedupe tab. */
 .editorPathInput {
   flex: 1;
   min-width: 0;
@@ -1244,13 +1244,6 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   border-color: var(--dsw-alias-border-l2);
 }
 
-/* The tree-panel toggle in the header: active = panel open (the selected
-   fill of the tab strip). */
-.editorTreeToggleActive {
-  color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-interactive-bg-active);
-}
-
 .editorBody {
   flex: 1;
   min-height: 0;
@@ -1265,32 +1258,73 @@ body[data-dsh-sidebar-dragging] .bottomPanel {
   flex-direction: column;
 }
 
-/* The docked file tree: the wrapper owns the (drag-adjustable) width and
-   the hairline separation; the resize handle is a wider invisible strip on
-   its left edge with a hover affordance. */
-.editorTreeDock {
+/* The persistent Explorer rail (see ExplorerRail.tsx): the file-tree column
+   at the editor body's LEFT edge, sized inline (state.explorerWidth) and
+   separated by a hairline; its drag handle is a wider invisible strip on the
+   right edge with a hover affordance. */
+.explorerRail {
   position: relative;
   flex: none;
+  min-width: 0;
   min-height: 0;
   display: flex;
-  border-left: 1px solid var(--dsw-alias-border-l1);
+  flex-direction: column;
+  border-right: 1px solid var(--dsw-alias-border-l1);
 }
 
-.editorTreeResize {
+.explorerRailHeader {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 4px 0 10px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.explorerRailTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* The rail's right-edge resize strip: an absolutely positioned wider
+   invisible strip (pointer capture keeps the drag alive even when the
+   pointer leaves it). */
+.explorerRailResize {
   position: absolute;
   top: 0;
   bottom: 0;
-  /* Inside the dock (left edge): pointer capture on the handle keeps the
-     drag alive even when the pointer leaves the strip. */
-  left: 0;
+  right: 0;
   width: 6px;
   cursor: col-resize;
   touch-action: none;
   z-index: 3;
 }
 
-.editorTreeResize:hover {
+.explorerRailResize:hover {
   background: var(--dsw-alias-border-l2);
+}
+
+/* The collapsed rail: a thin strip with the single reopen affordance,
+   pinned to the same edge so the collapse never reflows the viewer. */
+.explorerRailCollapsed {
+  flex: none;
+  width: 30px;
+  min-height: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 4px;
+  border-right: 1px solid var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-secondary);
 }
 
 .editorTreePanel {

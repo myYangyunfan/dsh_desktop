@@ -6,4 +6,14 @@
  * Never import this module from the core bundle: it pulls CodeMirror into
  * the startup path.
  */
+import { computeReplacedText, findMatchOffsets, foldableBlocks, matchingBracketIndex } from '../editor-features.ts';
 export { TextEditor } from '../TextEditor.tsx';
+/** Node-vm test surface: the editor-features pure helpers
+ * (scripts/test/unit-better-sidebar-editor-features.test.js). The chunk
+ * loader only picks `TextEditor`, so the extra export is inert at runtime. */
+export declare const __internals: {
+    matchingBracketIndex: typeof matchingBracketIndex;
+    foldableBlocks: typeof foldableBlocks;
+    findMatchOffsets: typeof findMatchOffsets;
+    computeReplacedText: typeof computeReplacedText;
+};

@@ -33,7 +33,6 @@ const SIDEBAR_PREFS_DEFAULTS = {
 	mobileNoAutoOpen: true,
 	mobileDefaultTree: true,
 	agentOpenTools: false,
-	editorExplorer: false,
 	titleBarScheme: "auto",
 	titleBarPresetId: "",
 	customCss: "",
@@ -99,7 +98,6 @@ const PrefsSchema = z.object({
 	mobileNoAutoOpen: z.boolean().default(true),
 	mobileDefaultTree: z.boolean().default(true),
 	agentOpenTools: z.boolean().default(false),
-	editorExplorer: z.boolean().default(false),
 	titleBarScheme: z.union([
 		z.const("auto"),
 		z.const("web"),

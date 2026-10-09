@@ -71,6 +71,16 @@ export interface SidebarState {
    * unhighlighted.
    */
   revealed: string[]
+  /**
+   * Whether the persistent Explorer rail (the file-tree column at the LEFT
+   * edge of every editor window) is open. A session-level layout preference:
+   * every editor tab renders the same rail, so opening/closing files never
+   * resets it (the unified model's "the tree stays put while files open as
+   * tabs beside it").
+   */
+  explorerOpen: boolean
+  /** The Explorer rail's width (clamped to the contract range below). */
+  explorerWidth: number
   /** Whether the bottom panel (the plugin's one workbench) is open. */
   bottomOpen: boolean
   /** The bottom panel's height (clamped to the contract range). */
@@ -87,6 +97,16 @@ export const BOTTOM_DEFAULT = 220
 /** The conversation column keeps at least this much height when the bottom
  *  workbench claims space (see {@link setBottomHeight}). */
 export const CONVERSATION_MIN = 280
+
+/** Explorer rail geometry contract (drag-resize clamps into it). */
+export const EXPLORER_WIDTH_MIN = 140
+export const EXPLORER_WIDTH_MAX = 480
+export const EXPLORER_WIDTH_DEFAULT = 240
+
+/** Clamp one Explorer rail width into the contract range. */
+export function clampExplorerWidth(value: number): number {
+  return Math.min(EXPLORER_WIDTH_MAX, Math.max(EXPLORER_WIDTH_MIN, Math.round(value)))
+}
 
 let nextIdCounter = 0
 /** Unique pane/tab id within one state instance. */
@@ -148,6 +168,8 @@ export function makeDefaultState(): SidebarState {
     nextBrowser: 1,
     expanded: [],
     revealed: [],
+    explorerOpen: true,
+    explorerWidth: EXPLORER_WIDTH_DEFAULT,
     bottomOpen: false,
     bottomHeight: BOTTOM_DEFAULT,
     bottomSplits: bottomLeaf,
@@ -508,6 +530,16 @@ export function toggleExpanded(state: SidebarState, path: string): SidebarState 
   return { ...state, expanded }
 }
 
+/** Toggle the persistent Explorer rail (collapse strip <-> full column). */
+export function toggleExplorer(state: SidebarState): SidebarState {
+  return { ...state, explorerOpen: !state.explorerOpen }
+}
+
+/** Commit a drag-resized Explorer rail width into the contract range. */
+export function setExplorerWidth(state: SidebarState, width: number): SidebarState {
+  return { ...state, explorerWidth: clampExplorerWidth(width) }
+}
+
 /**
  * Reveal files in the explorer: expand every ancestor directory between the
  * explorer root and each file (so the lazy tree actually shows the row) and
@@ -675,6 +707,15 @@ export function sanitizeState(parsed: unknown): SidebarState | undefined {
   const bottomHeight = Math.min(bottomCap, Math.max(BOTTOM_MIN, Math.round(rawHeight)))
   const bottomSplits = pruneEmptyPanes(sanitizeNode(record.bottomSplits, seen, reid)
     ?? { kind: 'leaf' as const, id: uid('pane'), tabs: [], active: null })
+  // The Explorer rail arrived with the unified model: a state persisted by an
+  // older build carries neither key, and the rail's default is OPEN (the
+  // PACK/VSCode model — a missing flag upgrades rather than dropping the
+  // layout), while a malformed width falls back to the default instead of
+  // failing the whole state.
+  const explorerOpen = typeof record.explorerOpen === 'boolean' ? record.explorerOpen : true
+  const explorerWidth = typeof record.explorerWidth === 'number' && Number.isFinite(record.explorerWidth)
+    ? clampExplorerWidth(record.explorerWidth)
+    : EXPLORER_WIDTH_DEFAULT
   const requestedActivePane = typeof record.activePane === 'string'
     ? (reid.get(record.activePane) ?? record.activePane)
     : null
@@ -690,6 +731,8 @@ export function sanitizeState(parsed: unknown): SidebarState | undefined {
     nextBrowser,
     expanded: record.expanded as string[],
     revealed: [],
+    explorerOpen,
+    explorerWidth,
     bottomOpen,
     bottomHeight,
     bottomSplits,
@@ -742,13 +785,12 @@ function sanitizePersistedTab(tab: unknown): SidebarTab | 'diff' | undefined {
   // view time and recovers if its plugin loads later.
   if (typeof candidate.type !== 'string') return undefined
   // The standalone explorer tab type merged INTO the editor (the single
-  // files window): a persisted explorer tab reopens as an editor home tab —
-  // no path, tree panel open (an existing meta object survives).
+  // files window): a persisted explorer tab reopens as the path-less files
+  // window. Its old `meta.treeOpen` is NOT carried over — the per-tab docked
+  // tree died with the unified model (the rail is a session-level column
+  // now), so a stale flag would be a dead key.
   if (candidate.type === 'explorer') {
-    const meta = candidate.meta !== null && typeof candidate.meta === 'object' && !Array.isArray(candidate.meta)
-      ? candidate.meta as Record<string, unknown>
-      : undefined
-    return { id: candidate.id, type: 'editor', title: 'Files', meta: { treeOpen: true, ...meta } }
+    return { id: candidate.id, type: 'editor', title: 'Files' }
   }
   // `meta` is plugin-owned JSON-serializable state (v0.12.0+): the persisted
   // value already went through JSON.parse, so it is inherently serializable —

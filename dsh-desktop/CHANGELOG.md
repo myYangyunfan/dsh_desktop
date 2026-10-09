@@ -19,6 +19,26 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### feat(companion)：better-sidebar 文件体验迁移 PACK/VSCode 统一模型（常驻左文件栏 + 每文件去重标签）
+
+- **改的是文件体验，不是标签面**：按用户点名从桌面版 `dsh-PACK` 迁移 VSCode 式文件系统——
+  `EditorHost.tsx` 重写：编辑器标签体内常驻**左侧文件栏**（可收起 / 可拖宽 140–480 / 按会话记忆；
+  `state.ts` 增 `explorerOpen/explorerWidth` 与 `toggleExplorer/setExplorerWidth`，新增
+  `src/client/ExplorerRail.tsx`），点文件开成**每文件一个去重标签**（`editor:<path>`），不再原地替换；
+  「合并/独立」的 `editorExplorer` 三选一选择器连同停靠树一并退役（选键 + 7 条文案 ×20 份字典摘除，
+  新文案 `explorerCollapse/explorerExpand` 补齐 20 份）。栏画在每个编辑器标签体内——内核右栏没有
+  pane 级插槽，所以非 editor 标签不显示栏（已知差异，记在 kernel-integration 文档）。
+- **产物全量重建回填**（改 `src/` → 上游构建链 `rmSync lib && tsc -p tsconfig.build.json && tsdown`
+  → 整目录替换 `lib/` → `diff -rq` 复算 `Only in assets` 0 命中）：7 个 JS 面 + 5 份 sourcemap 全更新；
+  `lib/types` 177→180，新增 `ExplorerRail.d.ts`，并补齐 `editor-features.d.ts` / `chunk-availability.d.ts`
+  两张此前未随包的类型面。
+- **同轮修掉 tsc 门禁的 5 处存量错**（`editor-features.ts`，自研件 `f3634367c` 的括号配对/折叠/查找三特性）：
+  `noUncheckedIndexedAccess` 下 `text[pos]` 判空 ×4（L66/68/79/81）与私有 `state` 跨类型转换 ×1
+  （L647 改 `as unknown as`）——修复行为等价，全链首次 0 退出（边界记在 inventory §5.4）。
+- **实测**：靶向 125 例 / 0 fail（better-sidebar 五组锁 76 例 + `unit-sidebar-md-code-guard` 7 例 +
+  插件面余下 4 套 42 例）；全量 `npm test` **2006 例 / 1998 pass / 0 fail / 8 skip**；台账随改三处
+  （inventory §一 #3 cell、§5.2 #3 判定列、§5.4 构建边界）+ `better-sidebar-kernel-integration.md`。
+
 ### build(plugins)：交付口径反转 —— 28 条内置插件随安装包分发（内置线）
 
 - **改的是口径不是插件**：2026-10-08 裁定「装进去：真内置 28 条」，推翻 v1.0.0 立项时的

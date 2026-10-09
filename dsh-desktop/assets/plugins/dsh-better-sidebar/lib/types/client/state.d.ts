@@ -76,6 +76,16 @@ export interface SidebarState {
      * unhighlighted.
      */
     revealed: string[];
+    /**
+     * Whether the persistent Explorer rail (the file-tree column at the LEFT
+     * edge of every editor window) is open. A session-level layout preference:
+     * every editor tab renders the same rail, so opening/closing files never
+     * resets it (the unified model's "the tree stays put while files open as
+     * tabs beside it").
+     */
+    explorerOpen: boolean;
+    /** The Explorer rail's width (clamped to the contract range below). */
+    explorerWidth: number;
     /** Whether the bottom panel (the plugin's one workbench) is open. */
     bottomOpen: boolean;
     /** The bottom panel's height (clamped to the contract range). */
@@ -91,6 +101,12 @@ export declare const BOTTOM_DEFAULT = 220;
 /** The conversation column keeps at least this much height when the bottom
  *  workbench claims space (see {@link setBottomHeight}). */
 export declare const CONVERSATION_MIN = 280;
+/** Explorer rail geometry contract (drag-resize clamps into it). */
+export declare const EXPLORER_WIDTH_MIN = 140;
+export declare const EXPLORER_WIDTH_MAX = 480;
+export declare const EXPLORER_WIDTH_DEFAULT = 240;
+/** Clamp one Explorer rail width into the contract range. */
+export declare function clampExplorerWidth(value: number): number;
 /** Mint a fresh uid-based tab id. The `'editor:' + path` convention only
  *  covers openSidebarFile opens (per-path dedupe); opens that must not
  *  dedupe (the tree's "open to the side") mint through here. */
@@ -192,6 +208,10 @@ export declare function toggleBottomPanel(state: SidebarState): SidebarState;
 export declare function setBottomHeight(state: SidebarState, height: number): SidebarState;
 /** Toggle a directory in the explorer expansion set. */
 export declare function toggleExpanded(state: SidebarState, path: string): SidebarState;
+/** Toggle the persistent Explorer rail (collapse strip <-> full column). */
+export declare function toggleExplorer(state: SidebarState): SidebarState;
+/** Commit a drag-resized Explorer rail width into the contract range. */
+export declare function setExplorerWidth(state: SidebarState, width: number): SidebarState;
 /**
  * Reveal files in the explorer: expand every ancestor directory between the
  * explorer root and each file (so the lazy tree actually shows the row) and

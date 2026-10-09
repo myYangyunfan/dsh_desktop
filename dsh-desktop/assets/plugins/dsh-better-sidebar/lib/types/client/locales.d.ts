@@ -52,15 +52,10 @@ export declare const zh: {
     changesContext: string;
     changesPriorUnknown: string;
     explorer: string;
+    explorerCollapse: string;
+    explorerExpand: string;
     terminal: string;
     editor: string;
-    editorExplorer: string;
-    editorExplorerDesc: string;
-    editorExplorerMerged: string;
-    editorExplorerMergedDesc: string;
-    editorExplorerSplit: string;
-    editorExplorerSplitDesc: string;
-    editorTreeToggle: string;
     editorPathPlaceholder: string;
     editorSearchPlaceholder: string;
     editorSearchNoResults: string;
@@ -134,6 +129,9 @@ export declare const zh: {
     terminalError: string;
     terminalConnectFailed: string;
     terminalRetry: string;
+    chunkAutoRetryWaiting: string;
+    fsReadRetryWaiting: string;
+    chunkFallbackNotice: string;
     terminalWaitBanner: string;
     terminalSkipWait: string;
     terminalDepsFailed: string;

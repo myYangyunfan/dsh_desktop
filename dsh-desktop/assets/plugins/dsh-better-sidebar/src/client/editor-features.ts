@@ -63,6 +63,9 @@ export function matchingBracketIndex(text: string, head: number): BracketPair | 
   for (const pos of [head - 1, head]) {
     if (pos < 0 || pos >= text.length) continue
     const ch = text[pos]
+    // noUncheckedIndexedAccess widening: the bounds check above already
+    // guarantees a char; this guard only satisfies the compiler.
+    if (ch === undefined) continue
     if (ch in BRACKET_OPEN) {
       const open = ch
       const close = BRACKET_OPEN[ch] as string
@@ -644,7 +647,9 @@ export function findPanelExtension(): Extension {
           // Fish the plugin instance out of the view's plugin set.
           const p = view.plugin(plugin)
           if (p === null) return false
-          ;(p as DshFindPanelInternals).openPanel()
+          // `state` is private on the view-side plugin type, so a direct cast
+          // is rejected; the internals interface is the runtime shape.
+          ;(p as unknown as DshFindPanelInternals).openPanel()
           return true
         },
       },

@@ -12,7 +12,6 @@
  * from the chat's http(s) links) owns embedded pages. See
  * docs/plans/2026-09-21-dsh-0.1.6-alpha.2-adaptation.md.
  */
-import { IconCodeOutlineRegular, IconPanelLeftOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   changesTabIcon, filesTabIcon, sidechatTabIcon, tasksTabIcon,
 } from './tab-icons.tsx'
@@ -33,41 +32,23 @@ export function builtinTabs(): readonly TabDescriptor[] {
     {
       id: 'editor',
       description: () => t('guideDescFiles'),
-      // The single files window: an editor tab with no path IS the file
-      // explorer (empty hint + docked tree); with a path it previews/edits
-      // the file. Visible in the + menu in the explorer's old slot.
+      // The single files window: an editor tab with no path is the files
+      // home (empty hint beside the persistent Explorer rail); with a path
+      // it previews/edits the file. Visible in the + menu in the explorer's
+      // old slot.
       title: () => t('files'),
       icon: filesTabIcon,
       order: 10,
       hidden: false,
       dedupeKey: (tab) => tab.path,
-      // Declarative settings: the file-open behavior picker (in-place switch
-      // vs per-path windows) renders as an iconed select row under the
-      // editor card's gear in the Side card settings page; the "open with"
-      // configuration (SSH host + custom editors) is the custom panel BELOW
-      // those rows — the settings seam renders rows first, custom panel after.
-      // The workspace-fence switch is GONE: there is no containment to toggle.
+      // Declarative settings: only the "open with" configuration (SSH host +
+      // custom editors) remains — the file-open behavior picker (in-place
+      // switch vs per-path windows) is GONE with the unified model: every
+      // open is a per-path dedupe tab and the tree is the persistent rail,
+      // so there is nothing left to choose. The plugin-owned rows (values
+      // live in `pluginSettings['editor']`) render ABOVE the custom panel —
+      // the settings seam renders rows first, custom panel after.
       settings: {
-        toggles: [{
-          key: 'editorExplorer',
-          type: 'select',
-          title: () => t('editorExplorer'),
-          desc: () => t('editorExplorerDesc'),
-          options: [
-            {
-              value: true,
-              icon: (size: number) => <IconPanelLeftOutlineRegular size={size} />,
-              title: () => t('editorExplorerMerged'),
-              desc: () => t('editorExplorerMergedDesc'),
-            },
-            {
-              value: false,
-              icon: (size: number) => <IconCodeOutlineRegular size={size} />,
-              title: () => t('editorExplorerSplit'),
-              desc: () => t('editorExplorerSplitDesc'),
-            },
-          ],
-        }],
         // Plugin-owned rows (values live in `pluginSettings['editor']`): the
         // plugin's own open-with targets are shown only when the host reports
         // no local application, unless the user asks for both side by side.

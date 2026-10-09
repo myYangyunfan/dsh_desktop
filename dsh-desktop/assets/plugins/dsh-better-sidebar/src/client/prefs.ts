@@ -57,9 +57,6 @@ export function parsePrefs(value: unknown): SidebarPrefs {
     agentOpenTools: typeof record.agentOpenTools === 'boolean'
       ? record.agentOpenTools
       : SIDEBAR_PREFS_DEFAULTS.agentOpenTools,
-    editorExplorer: typeof record.editorExplorer === 'boolean'
-      ? record.editorExplorer
-      : SIDEBAR_PREFS_DEFAULTS.editorExplorer,
     // The title-bar scheme (auto | web | preset | custom). The schema
     // declares the field WITHOUT a default, so documents written by older
     // plugin versions resolve without it — migrate from the legacy fields:
