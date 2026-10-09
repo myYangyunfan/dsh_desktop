@@ -5,7 +5,7 @@
 ## 🚀 重点：v1.0.0 正式版发布（纯净线首版 · 全平台，本版起不镜像 Gitee）
 
 - **发布形态**：推 `v1.0.0` tag → `tauri-release.yml` 三平台远端构建——Windows x64（NSIS 安装包 +
-  完整版/Lite 双便携版）、Windows ARM64（实验性，`continue-on-error`）、Linux x64（AppImage + deb）、
+  便携版 zip + 轻量便携版 zip）、Windows ARM64（实验性，`continue-on-error`）、Linux x64（AppImage + deb）、
   macOS ARM64（dmg）。publish job 逐主资产生成同名 `.sha256` 边车（自动更新链校验取首段 hex），
   并过版本一致性四道闸：强制检出 `refs/tags/v<ver>`、`tauri.conf.json` version 与 tag fail-fast 比对、
   产物文件名内嵌版本断言（含 Info.plist）、publish 汇总断言（全部资产含版本号 + 体积 >50MB + 上传核对）。
@@ -13,8 +13,23 @@
   注释里（**没有**写成 `false && <原条件>` 那类复合短路式——退役的 `release.yml` 踩过「假短路」）；
   代码与资产都不推 Gitee，`verify-update-sources.mjs` 的双源核验相应只剩 GitHub 单源有意义。
 - **发布公告模板同轮重写**：`Generate release notes` 的 heredoc 此前硬编码「覆盖 v0.6.1 + v0.6.2」，
-  且 v0.6.5 也是带着这份旧公告发的（模板与实装不同源的历史形态）；本版按实际内容重写，并把两条
-  已知问题如实写进公告（dsh-synapse 重启/切会话时历史回填空档、win-arm64 的原生模块仍是 x64 prebuild）。
+  且 v0.6.5 也是带着这份旧公告发的（模板与实装不同源的历史形态）；本版按实际内容重写，并把三条
+  已知问题如实写进公告（dsh-synapse 重启/切会话时历史回填空档、win-arm64 的原生模块仍是 x64 prebuild、
+  两个便携包都不含内置 node.exe）。
+- **发布后资产实测（2026-10-09，run 37910747727 = Success / 34m39s）**：`api.github.com` 在本机仍 502，
+  改用 `github.com` 的 HTML/Range 探测核验——7 个主资产与 7 份 `.sha256` 边车逐个 HTTP 200
+  （Setup win-x64 183,736,553B / Setup win-arm64 179,992,730B / 便携 zip 与轻量便携 zip 各
+  261,149,074B / dmg 277,456,617B / AppImage 321,329,656B / deb 266,636,774B），边车格式 `<sha256>  <文件名>`。
+  **核出交付缺口**：两个便携包体积逐字节相同、中央目录条目数同为 39,097，包内
+  `resources/dsh-desktop/vendor/node/` 只剩空目录条目（同层 `vendor/npm/`、`vendor/dsh-kernel/*.tgz` 在位）
+  —— 即「完整便携版」与「Lite 版」是同一份 payload，`build-portable` 的 lite 分支（删 node.exe）无从生效。
+  同一形状在 v0.5.7 / 0.6.0 / 0.6.3 / 0.6.5 同样成立（0.6.5 两包同为 179,115,706B），**非本版回归**；
+  根因是 N1 门禁「降级为告警（非 exit 1）」把缺件吞了 4 个版本。本机 PS 5.1 用真 91MB node.exe 复现过
+  `Compress-Archive`，条目正常在位，所以吞文件者不是压缩步骤；`Download vendor node` / Stage payload /
+  robocopy 哪一环出事需要 run 日志才能钉死（匿名 `/checks/<id>/logs/N` → 404，需 GitHub 加速恢复后读）。
+  安装包是否内置 node.exe **未能核验**（NSIS 尾部无明文文件名，本机真装会静默卸载现有版本）。
+  本版按裁定只改文案不重发；「N1 改 fail-closed + 下载后断言 node.exe 体积 + lite 必须显著小于 full」
+  留待后续版本，核对姿势已记入 `AGENTS.md` 已知坑。
 - **壳侧在本版内的净变化**（上方两节 🗑️ 的收口）：Electron 余额遗留线与伴随插件批量退役两组裁撤
   落地——`bridge-api.md` §2 方法总表 55 → 47 → 46 项（断号不复用）、`ipc-commands.md` §2 通道表
   45 → 39 → 38 条、`generate_handler!` 46 → 40 → 39、`CHANNELS` 45 → 39 → 38（34 invoke + 4 send）、

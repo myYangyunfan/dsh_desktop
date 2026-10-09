@@ -31,13 +31,26 @@ _（v1.0.0 已于 2026-10-09 发布，其内容见下方 `[1.0.0]` 段；此后�
   inventory §四 §五）；`dsh-better-sidebar` 换代 0.24.1 并迁入 VSCode 式文件体验；`settingsScope`
   幽灵服务退役（两条被启动审计拒装的插件恢复激活）+ 设置子系统全量改到内核真实 API；
   `dsh-balance` 0.1.3 价目对齐官网；`dsh-prompt-custom` 回归套件重建（host 16 + client 10 例）。
-- **发布形态**：推 `v1.0.0` tag → `tauri-release.yml` 云端构建 Windows x64（NSIS + 完整版/Lite
-  双便携版）、Windows ARM64（实验性）、Linux（AppImage + deb）、macOS ARM64（dmg）；publish job
+- **发布形态**：推 `v1.0.0` tag → `tauri-release.yml` 云端构建 Windows x64（NSIS 安装包 + 便携版 zip +
+  轻量便携版 zip）、Windows ARM64（实验性）、Linux（AppImage + deb）、macOS ARM64（dmg）；publish job
   逐资产生成 `.sha256` 边车并过版本一致性四道闸（强制检出 tag / `tauri.conf.json` 比对 /
   产物文件名内嵌版本断言 / 汇总断言）。
 - **交付口径变更**：自本版起 release 资产**不镜像 Gitee**（`mirror-gitee` job 整条 `if: false`
   停用、实现原样保留以便恢复），代码也不再推 Gitee；`verify-update-sources.mjs` 的双源核验相应
   只剩 GitHub 单源有意义，发布公告与 `.github/workflows/tauri-release.yml` 头注释同轮改口径。
+- **发布后资产实测（2026-10-09，run 37910747727 = Success / 34m39s）**：7 个主资产与 7 份 `.sha256`
+  边车逐个 HTTP 200（Setup win-x64 175.2MB / Setup win-arm64 171.7MB / 便携 zip 249.1MB / 轻量便携 zip
+  249.1MB / macOS dmg 264.6MB / AppImage 306.4MB / deb 254.3MB），边车内容为 `<sha256>  <文件名>` 格式。
+  核出**一个长期存在的交付缺口：两个便携包都不含内置 `vendor/node/node.exe`** —— 二者体积逐字节相同
+  （261,149,074）、zip 中央目录条目数同为 39,097，包内 `DSH Desktop/resources/dsh-desktop/vendor/node/`
+  只剩一条空目录条目（同层 `vendor/npm/`、`vendor/dsh-kernel/*.tgz` 都在位），所以「内置 Node 完整便携版」
+  与「轻量 Lite 版」实为**同一份 payload**，lite 分支的 `Remove-Item node.exe` 无从生效。同一形状在
+  v0.5.7 / 0.6.0 / 0.6.3 / 0.6.5 的便携包里同样成立（0.6.5 两包同为 179,115,706 字节）——**不是本版回归**，
+  而是被 `build-portable` 的 N1 门禁长期吞掉（该步骤注释自写「降级为告警（非 exit 1）」）。影响面：便携版
+  用户只剩三级解析链的「系统 Node ≥22」兜底，机器上无 node 者走清晰报错路径；安装包侧因 CI 日志匿名取不到
+  （`/checks/<id>/logs/N` → 404）、本机又不能真装（NSIS PREINSTALL 会静默卸载现有版本）而**未能核验**。
+  核对姿势记入 `AGENTS.md` 已知坑。本版按裁定**只改对外文案、不重发**；把 N1 改 fail-closed、
+  「下载后断言 node.exe 体积」与「lite 必须显著小于 full」三道闸，以及吞文件环节的定位，留待后续版本。
 - **发布时实测基线**：`scripts/test/` 189 个文件 / `npm test` **2033 例 / 0 fail**（9 条 skip 逐条
   是环境缺料）；`dsh-tauri/sidecar/cli.test.js` **21/21 / 0 fail**；`check-syntax`、`validate-pin`
   （✓ dsh-v0.2.0-rc.2）、`patch-surface verify` 全绿。Rust 面自余额遗留线拆除后本轮未再改动，

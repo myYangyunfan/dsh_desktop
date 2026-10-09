@@ -1469,8 +1469,8 @@ jobs:
           | 平台 | 格式 |
           |------|------|
           | Windows x64 | 安装包 DSH-Desktop-Setup-${VERSION}-win-x64.exe |
-          | Windows x64 | 便携版 DSH-Desktop-Portable-${VERSION}-win-x64.zip（解压即用，数据存 exe 旁 data/ 目录） |
-          | Windows x64 | 轻量便携版 DSH-Desktop-Portable-${VERSION}-win-x64-lite.zip（不带 Node，机器上已有 node 的用户选它） |
+          | Windows x64 | 便携版 DSH-Desktop-Portable-${VERSION}-win-x64.zip（解压即用，数据存 exe 旁 data/ 目录；需本机已有 Node ≥22） |
+          | Windows x64 | 轻量便携版 DSH-Desktop-Portable-${VERSION}-win-x64-lite.zip（当前与上一行同一份内容，同样需本机 Node ≥22） |
           | Windows ARM64 | 实验性安装包 DSH-Desktop-Setup-${VERSION}-win-arm64.exe（continue-on-error，原生模块靠模拟兜底） |
           | Linux x64 | AppImage DSH-Desktop-${VERSION}-linux-x64.AppImage / deb dsh-desktop_${VERSION}_amd64.deb |
           | macOS ARM64 | DSH-Desktop-${VERSION}-macos-arm64.dmg |
@@ -1485,6 +1485,10 @@ jobs:
             §5.5，本版按裁定未处置。
           - **Windows ARM64**：payload 内原生模块仍是 x64 prebuild，靠 Windows 11 模拟层兜底，
             标为实验性产物。
+          - **两个便携包都不含内置 Node**：包内 `resources/dsh-desktop/vendor/node/` 是空目录
+            （v1.0.0 实测：便携 zip 与轻量便携 zip 同为 261,149,074 字节 / 39,097 条目，内容一致）。
+            内核三级解析链因此回落「系统 Node ≥22」——**用便携版请先装 Node 22+**，否则启动会走到
+            清晰报错路径。该缺口自 v0.5.7 起长期存在，流水线侧待改为缺件即拒绝发布（fail-closed）。
 
           ## 升级说明
 
