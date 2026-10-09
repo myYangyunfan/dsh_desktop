@@ -112,9 +112,9 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   脚本，用 `/D=<临时目录>` 跑 `/S`，别在真安装目录上试。
 - **稳定性三原则（评审默认立场）**：① 客户端必须能打开，装配失败终态恢复页而非退出；
   ② 兼容性不报错，意外以日志收场（`panics.log`）不以崩溃收场；③ 用户数据不动。
-- 文档里的测试基线数字常滞后。**现值（2026-10-09 实测，settingsScope 退役 + better-sidebar 文件栏迁移后）**：
-  `scripts/test/` 187 个测试文件，`npm test` = 2006 例 / **0 fail**；pass 与 skip 的分界随本机材料
-  与网络浮动（同日三次全量实测 pass 1997–1998 / skip 8–9，差额来自 `example.com` 真实网络用例），
+- 文档里的测试基线数字常滞后。**现值（2026-10-09 实测，settingsScope 退役 + better-sidebar 迁移 + prompt-custom 测试重建 + dsh-balance 0.1.3 价目修复后）**：
+  `scripts/test/` 189 个测试文件，`npm test` = 2033 例 / **0 fail**；pass 与 skip 的分界随本机材料
+  与网络浮动（本次全量实测 pass 2024 / skip 9，差额来自 `example.com` 真实网络用例），
   skip 逐条都是环境缺料而非缺陷（pristine 夹具缺 `@openai/codex` / `@earendil-works/pi-ai`、
   openclaw 双轨的兄弟目录 `../openclaw-dsh-bridge/` 不在盘、本机无 `D:\workspace\dsh-pack` 克隆、
   真实网络、`.tmp-kernel` 构建产物不可用）——一律以现跑输出为准，**pass 与 fail 才是判据**。
