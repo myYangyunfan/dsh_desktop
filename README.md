@@ -155,7 +155,7 @@ v0.5.0 起发布走 **Tauri GitHub Actions 云端流水线**（[`tauri-release.y
 
 | 插件（包名） | 版本 | 说明 | 来源 / 许可 |
 | --- | --- | --- | --- |
-| `@deepseek-ai/dsh-balance` | 0.1.2 | 账户余额 + 本轮会话费用估算（挂在对话统计栏 dock） | 自研 · MIT |
+| `@deepseek-ai/dsh-balance` | 0.1.3 | 账户余额 + 本轮会话费用估算（挂在对话统计栏 dock） | 自研 · MIT |
 | `@deepseek-ai/dsh-file-changes` | 0.1.0 | 会话文件更改投影（折叠 tool/result 的 meta.diffs） | 自研 · MIT |
 | `dsh-better-sidebar` | 0.24.1 | VSCode 式右栏：editor / git / subagent / sidechat / diff 五个内置标签，并向其他插件开放标签注册服务 | [omdsh-dev/DSH-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) · MIT |
 | `dsh-session-manager` | 0.1.0 | 会话行删除按钮 + 设置内「归档对话管理」面板（恢复 / 删除） | 自研 · MIT（包名撞社区已发布包） |

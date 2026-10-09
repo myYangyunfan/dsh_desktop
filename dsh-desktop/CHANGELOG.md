@@ -19,6 +19,36 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### fix(balance)：flash 价目对齐官网 + 补上内核真实模型 id —— 「本轮费用 / 命中缓存算错」双缺陷根治（dsh-balance 0.1.3）
+
+- **报障现场（用户实测）**：对话统计栏 dock 的「本轮消费」偏大、缓存命中像被算错了。查下来是**两处
+  独立缺陷叠在同一条查表路径上**（`balance-core.js` 按会话模型名精确取价目档，`priceTable()` 逐名求值）：
+  ① 内核真实下发的模型 id `deepseek-flash`（`dsh-llm-deepseek` 的 `DEFAULT_MODELS`）**不在价目表内**，
+  未命中即静默落回 pro 档——命中价按 0.3 计，是官方 flash 档 0.04 的 **7.5 倍**（主因）；
+  ② flash 档价目本身（3 / 0.1 / 9）从来是按 pro÷3 推导的，官方「高峰时段」列是未命中 2 / 命中 0.04 /
+  输出 8，命中价高估 **2.5 倍**。两条都不抛错、只是数一直偏大，所以此前从没被抓到。
+- **修法（纯数据层，客户端零改动）**：`PEAK_PRICES` 新增 `deepseek-flash` 键并把 flash 系三个 id
+  （`deepseek-flash` / `deepseek-v4-flash` / `deepseek-chat`）统一改为官方值 {2, 0.04, 8}；
+  `LEGACY_PRICES` 同步镜像 `deepseek-flash` 旧价 {1, 0.02, 2}（峰谷门槛 2026-08-17 之前的会话现在
+  重算同样不得跳 pro 旧价）；`PRICING_MODELS` 补该 id。空闲=高峰一半、真正未知模型回退 pro 最高档
+  （宁可多报不少报）两条既有口径原样保留；宿主侧 `priceTable` / `periodTables` 因遍历
+  `PRICING_MODELS` 自动覆盖新键，插件页与 dock 无需改。
+- **回归锁与文档随迁**：`unit-balance-pricing-key` 新增点名用例（真实 id 命中 flash 档 /
+  `deepseek-flash-250610` 后缀变体归本档 / 空闲半价 {1, 0.02, 4} / 旧版期镜像 {1, 0.02, 2}），并把
+  「flash 明显低于 pro」的比例前提从 3 倍改钉为 **4.5 倍**（pro 9 / flash 2）；`unit-balance`、
+  `unit-balance-weekend` 与插件自带 `test/balance-core.test.js` 逐格改钉官方值。
+  `docs/balance-architecture.md` 缺陷表补该 🟠 行，维护约定把「新增模型别名」升级为
+  「新增 id 先核对 `DEFAULT_MODELS` 真实下发名，且 `PRICING_MODELS` + `PEAK_PRICES` + `LEGACY_PRICES`
+  **三处同步**——只加名单漏价格键就是静默 pro 兜底（0.1.3 前的缺陷形态）」。
+- **反证（变异必须判红，两次均已复原）**：各跑 `unit-balance` + `unit-balance-pricing-key`（27 例）——
+  A 删 `deepseek-flash` 键 → 3 例红，红信直接显出 `{9, 0.3, 27}` 的 pro 回退形状（即历史事故本身）；
+  B flash 改回 pro÷3 推导值 {3, 0.1, 9} → 6 例红，含比例前提 `3 !== 4.5`。
+- **实测**：仓库侧余额链 10 套 **120 例 / 0 fail**；插件自带 2 套 **38 例 / 0 fail**；
+  `verify-balance-dock.cjs` 全断言通过（它不被 `npm test` 收，须单独跑）；全量 `npm test`
+  **2033 例 / 0 fail**。版本 0.1.2→0.1.3 随迁六处台账（插件 `package.json` 与插件 CHANGELOG、
+  `README.md` / `README.en.md` 两张逐名表、`THIRD_PARTY_NOTICES.md` §4.1、inventory §一 与
+  §版本对照各一行）。
+
 ### feat(companion)：better-sidebar 文件体验迁移 PACK/VSCode 统一模型（常驻左文件栏 + 每文件去重标签）
 
 - **改的是文件体验，不是标签面**：按用户点名从桌面版 `dsh-PACK` 迁移 VSCode 式文件系统——

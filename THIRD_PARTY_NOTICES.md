@@ -748,7 +748,7 @@ CI 五个架构的 staging 同口径），装机后首次开机由 boot 的插�
 
 | 插件 | 版本 | 许可证 |
 |---|---|---|
-| @deepseek-ai/dsh-balance | 0.1.2 | MIT |
+| @deepseek-ai/dsh-balance | 0.1.3 | MIT |
 | @deepseek-ai/dsh-conversation-tweaks | 0.1.1 | MIT |
 | @deepseek-ai/dsh-file-changes | 0.1.0 | MIT |
 | @deepseek-ai/dsh-openclaw-bridge | 0.8.1 | MIT |

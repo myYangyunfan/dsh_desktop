@@ -52,10 +52,10 @@ test('effectivePrice: 峰谷切换与旧版固定价（按 UTC 时刻精确断�
   assert.deepStrictEqual(balance.effectivePrice('deepseek-v4-flash', legacyDate), { cacheMiss: 1, cacheHit: 0.02, output: 2 });
   // 之后：北京时间高峰（9:00-12:00、14:00-18:00）全价。
   const peakDate = new Date('2026-08-17T02:30:00Z'); // 北京 10:30
-  assert.deepStrictEqual(balance.effectivePrice('deepseek-v4-flash', peakDate), { cacheMiss: 3, cacheHit: 0.1, output: 9 });
+  assert.deepStrictEqual(balance.effectivePrice('deepseek-v4-flash', peakDate), { cacheMiss: 2, cacheHit: 0.04, output: 8 });
   // 空闲时段半价。
   const offDate = new Date('2026-08-17T05:00:00Z'); // 北京 13:00
-  assert.deepStrictEqual(balance.effectivePrice('deepseek-v4-flash', offDate), { cacheMiss: 1.5, cacheHit: 0.05, output: 4.5 });
+  assert.deepStrictEqual(balance.effectivePrice('deepseek-v4-flash', offDate), { cacheMiss: 1, cacheHit: 0.02, output: 4 });
   // 未知模型（峰谷期）：统一按 v4-pro 高估档回退，避免少报费用，且与旧版期回退档位一致。
   assert.deepStrictEqual(balance.effectivePrice('unknown-model', peakDate), { cacheMiss: 9, cacheHit: 0.3, output: 27 });
   // 未知模型（旧版固定价期）：同样按 v4-pro 旧版价回退，杜绝两时期回退档位跳变。
@@ -73,30 +73,32 @@ test('effectivePrice: 峰谷生效临界点 ±1ms 与别名档', () => {
   const peakDate = new Date('2026-08-17T02:30:00Z');
   assert.deepStrictEqual(balance.effectivePrice('deepseek-chat', peakDate), balance.effectivePrice('deepseek-v4-flash', peakDate));
   assert.deepStrictEqual(balance.effectivePrice('deepseek-reasoner', peakDate), balance.effectivePrice('deepseek-v4-pro', peakDate));
+  // 内核真实模型 id deepseek-flash 必须命中 flash 档而非落回 pro（本轮「命中缓存算错」的根因回归锁）
+  assert.deepStrictEqual(balance.effectivePrice('deepseek-flash', peakDate), balance.effectivePrice('deepseek-v4-flash', peakDate));
   // 空白模型名（'  '）同样兜底 pro
   assert.deepStrictEqual(balance.effectivePrice('   ', peakDate), balance.effectivePrice('deepseek-v4-pro', peakDate));
   // 无效日期：Date 无效 → isPeakHour false → 空闲半价（峰谷期）
   const bad = balance.effectivePrice('deepseek-v4-flash', new Date('not-a-date'));
-  assert.deepStrictEqual(bad, { cacheMiss: 1.5, cacheHit: 0.05, output: 4.5 });
+  assert.deepStrictEqual(bad, { cacheMiss: 1, cacheHit: 0.02, output: 4 });
   // 返回全新对象：修改返回值不影响后续调用
   const a = balance.effectivePrice('deepseek-v4-flash', peakDate);
   a.cacheMiss = 999;
-  assert.strictEqual(balance.effectivePrice('deepseek-v4-flash', peakDate).cacheMiss, 3);
+  assert.strictEqual(balance.effectivePrice('deepseek-v4-flash', peakDate).cacheMiss, 2);
 });
 
 test('effectivePrice: 北京时间 9/12/14/18 四个切换边界', () => {
   // 北京 08:59:59.999（00:59:59.999Z）空闲；09:00:00（01:00:00Z）高峰
-  assert.strictEqual(balance.effectivePrice('deepseek-v4-flash', new Date('2026-08-17T00:59:59.999Z')).cacheMiss, 1.5);
-  assert.strictEqual(balance.effectivePrice('deepseek-v4-flash', new Date('2026-08-17T01:00:00Z')).cacheMiss, 3);
+  assert.strictEqual(balance.effectivePrice('deepseek-v4-flash', new Date('2026-08-17T00:59:59.999Z')).cacheMiss, 1);
+  assert.strictEqual(balance.effectivePrice('deepseek-v4-flash', new Date('2026-08-17T01:00:00Z')).cacheMiss, 2);
   // 北京 11:59:59.999 高峰；12:00:00 午间空闲
-  assert.strictEqual(balance.effectivePrice('deepseek-v4-flash', new Date('2026-08-17T03:59:59.999Z')).cacheMiss, 3);
-  assert.strictEqual(balance.effectivePrice('deepseek-v4-flash', new Date('2026-08-17T04:00:00Z')).cacheMiss, 1.5);
+  assert.strictEqual(balance.effectivePrice('deepseek-v4-flash', new Date('2026-08-17T03:59:59.999Z')).cacheMiss, 2);
+  assert.strictEqual(balance.effectivePrice('deepseek-v4-flash', new Date('2026-08-17T04:00:00Z')).cacheMiss, 1);
   // 北京 13:59:59.999 空闲；14:00:00 高峰
-  assert.strictEqual(balance.effectivePrice('deepseek-v4-flash', new Date('2026-08-17T05:59:59.999Z')).cacheMiss, 1.5);
-  assert.strictEqual(balance.effectivePrice('deepseek-v4-flash', new Date('2026-08-17T06:00:00Z')).cacheMiss, 3);
+  assert.strictEqual(balance.effectivePrice('deepseek-v4-flash', new Date('2026-08-17T05:59:59.999Z')).cacheMiss, 1);
+  assert.strictEqual(balance.effectivePrice('deepseek-v4-flash', new Date('2026-08-17T06:00:00Z')).cacheMiss, 2);
   // 北京 17:59:59.999 高峰；18:00:00 空闲
-  assert.strictEqual(balance.effectivePrice('deepseek-v4-flash', new Date('2026-08-17T09:59:59.999Z')).cacheMiss, 3);
-  assert.strictEqual(balance.effectivePrice('deepseek-v4-flash', new Date('2026-08-17T10:00:00Z')).cacheMiss, 1.5);
+  assert.strictEqual(balance.effectivePrice('deepseek-v4-flash', new Date('2026-08-17T09:59:59.999Z')).cacheMiss, 2);
+  assert.strictEqual(balance.effectivePrice('deepseek-v4-flash', new Date('2026-08-17T10:00:00Z')).cacheMiss, 1);
 });
 
 // ---------------------------------------------------------------------------
@@ -140,8 +142,9 @@ test('isPeakHour: 无效日期 / 非 Date 输入不抛异常且语义明确', ()
 test('priceTable: 全部模型同刻求值，别名与主名同档', () => {
   const peakDate = new Date('2026-08-17T02:30:00Z');
   const table = balance.priceTable(peakDate);
-  assert.deepStrictEqual(Object.keys(table).sort(), ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v4-flash', 'deepseek-v4-pro']);
-  assert.deepStrictEqual(table['deepseek-v4-flash'], { cacheMiss: 3, cacheHit: 0.1, output: 9 });
+  assert.deepStrictEqual(Object.keys(table).sort(), ['deepseek-chat', 'deepseek-flash', 'deepseek-reasoner', 'deepseek-v4-flash', 'deepseek-v4-pro']);
+  assert.deepStrictEqual(table['deepseek-v4-flash'], { cacheMiss: 2, cacheHit: 0.04, output: 8 });
+  assert.deepStrictEqual(table['deepseek-flash'], table['deepseek-v4-flash']);
   assert.deepStrictEqual(table['deepseek-chat'], table['deepseek-v4-flash']);
   assert.deepStrictEqual(table['deepseek-reasoner'], table['deepseek-v4-pro']);
 });

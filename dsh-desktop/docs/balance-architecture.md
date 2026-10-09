@@ -414,6 +414,7 @@ DISJOINT 计数）：
 | 🟢 低 | IPC 双通道重复投递 | 当时：IPC 只触发不返回、client 只消费事件、`bridgePushedOnce` 防重复触发。**现形态**：数据只从 `GET /state` 进页面，`POST /refresh` 的响应体被忽略；`hostPolledOnce` 取代 `bridgePushedOnce`（首轮之后不再强制刷） |
 | 🟠 高 | **本轮（dsh-balance 0.1.2 随迁）**：CI 独立步骤 `verify-balance-dock.cjs` 场景4 仍按「window 事件推送」建模 → 客户端不再注册监听，校验器 `handler is not a function` 崩在断言中途（`npm test` 不收 `.cjs`，全量套件全绿也看不见） | 场景4 改走假 fetch 的 `POST /refresh` + `GET /state` 链路，新增 4b（404 缺席降级 + 不再反复探测）与反向锁（window 监听数为 0）；`flush()` 的定时器**绝不 unref**（unref 会让进程在 await 中途退出、EXIT=0 假绿） |
 | 🟡 中 | **本轮**：现役价目（插件 `balance-core.js`）没有任何在册测试把守——`unit-balance-weekend` 只对遗留 `balance.js` 求值，插件自带 `test/` 不进 `npm test` | `unit-balance-weekend.test.js` 新增第 4 节：现役/遗留逐时刻对拍 + 现役侧与 dsh-offpeak 参考实现对拍（已实测三例人为漂移均判红）。**后续**：遗留线 2026-10 拆除后本行只剩单向语义——该文件整体改指 `balance-core.js` 直接求值，双拷贝对拍随 `balance.js` 一同下线 |
+| 🟠 高 | **本轮（dsh-balance 0.1.3）**：flash 档自迁入起就与官网不符——① 内核真实模型 id `deepseek-flash`（`dsh-llm-deepseek` 的 DEFAULT_MODELS 下发名）不在价目表内，查表未命中静默落回 pro 档（会话模型 `deepseek-flash` 按命中价 0.3 计，为官方 0.04 的 7.5 倍，即「命中缓存算错」的主因）；② flash 峰值 3/0.1/9 是按 pro÷3 推导的，官方为 未命中 2 / 命中 0.04 / 输出 8，命中价高估 2.5 倍 | `balance-core.js` 的 `PEAK_PRICES` 新增 `deepseek-flash` 键并把 flash 档改为官方值（`deepseek-v4-flash` / `deepseek-chat` 同改）、`LEGACY_PRICES` 镜像 `deepseek-flash` 旧价 {1, 0.02, 2}；宿主侧 `priceTable` / `periodTables` 因遍历 `PRICING_MODELS` 自动覆盖真实 id，客户端零改动。回归锁：`unit-balance-pricing-key.test.js`（真实 id 命中档 / 后缀变体 / 旧版期镜像，配变异红验证） |
 
 
 ## 10. 维护约定
@@ -428,7 +429,10 @@ DISJOINT 计数）：
   `unit-balance-weekend.test.js` 的源码交叉断言把守（从 offpeak 正则读
   `WEEKEND_OFFPEAK_EFFECTIVE_FROM` / `DEFAULT_PEAK_WINDOWS` 对拍）；
   历史门槛类常量只能新增、不可改写（不溯及既往）。
-- 新增模型别名：加入 `balance-core.js` 的 `PRICING_MODELS`。
+- 新增模型 id / 别名（先核对 `dsh-llm-deepseek` 的 DEFAULT_MODELS 真实下发名——它才是
+  会话模型名，别名只是历史称呼）：**三处同步**——`PRICING_MODELS` + `PEAK_PRICES` +
+  `LEGACY_PRICES` 各补该键。只加 `PRICING_MODELS` 而漏价格键，`priceTable` 会静默产出
+  pro 兜底档（0.1.3 前 `deepseek-flash` 的缺陷形态）。
 - 新增网络边界参数：一律走 `fetchJson` options（timeoutMs / maxRedirects /
   maxBodyBytes），默认值集中在 `balance-core.js` 顶部常量。
 - 新增出站字段：先更新本文档 §2 契约，再改代码；可选项向后兼容。

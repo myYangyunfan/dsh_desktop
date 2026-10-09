@@ -205,7 +205,7 @@ test('#168 pricingTier: legacy / peak / off 三档与 isPeakHour、effectivePric
 test('#168 periodTables: 三张全模型表，peak 全价 / off 半峰 / legacy 旧版固定价', () => {
   const tables = balance.periodTables();
   assert.deepEqual(Object.keys(tables).sort(), ['legacy', 'off', 'peak']);
-  const models = ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-chat', 'deepseek-reasoner'];
+  const models = ['deepseek-flash', 'deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-chat', 'deepseek-reasoner'];
   for (const tier of ['peak', 'off', 'legacy']) {
     for (const m of models) {
       assert.ok(tables[tier][m], `${tier} 表须含 ${m}`);
@@ -245,8 +245,10 @@ test('#168 pricingSince: 两个生效节点均为 ISO 串且先后有序', () =>
 });
 
 test('#168 effectivePrice 与周末规则联动：周日高峰窗口取半价', () => {
-  assert.deepEqual(balance.effectivePrice('deepseek-v4-flash', SUN_AFTER_GATE), { cacheMiss: 1.5, cacheHit: 0.05, output: 4.5 });
-  assert.deepEqual(balance.effectivePrice('deepseek-v4-flash', SAT_BEFORE_GATE), { cacheMiss: 3, cacheHit: 0.1, output: 9 });
-  assert.deepEqual(balance.effectivePrice('deepseek-v4-flash', MON_AFTER_GATE), { cacheMiss: 3, cacheHit: 0.1, output: 9 });
+  assert.deepEqual(balance.effectivePrice('deepseek-v4-flash', SUN_AFTER_GATE), { cacheMiss: 1, cacheHit: 0.02, output: 4 });
+  assert.deepEqual(balance.effectivePrice('deepseek-v4-flash', SAT_BEFORE_GATE), { cacheMiss: 2, cacheHit: 0.04, output: 8 });
+  assert.deepEqual(balance.effectivePrice('deepseek-v4-flash', MON_AFTER_GATE), { cacheMiss: 2, cacheHit: 0.04, output: 8 });
+  // 内核真实模型 id 同档（0.1.3 回归锁：deepseek-flash 不得落回 pro）
+  assert.deepEqual(balance.effectivePrice('deepseek-flash', MON_AFTER_GATE), { cacheMiss: 2, cacheHit: 0.04, output: 8 });
 });
 

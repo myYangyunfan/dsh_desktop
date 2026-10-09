@@ -65,26 +65,33 @@ export function readFileCached(p) {
 // 字段：{ cacheMiss 输入未命中, cacheHit 输入命中, output 输出 }。
 // ---------------------------------------------------------------------------
 
-// 高峰全价（2026-08-17 起生效）。
+// 高峰全价（2026-08-17 起生效）。flash 档取官方价目表「高峰时段」列
+// （输入命中 0.04 / 未命中 2 / 输出 8）；此前 3/0.1/9 是按 pro÷3 推导的，
+// 命中价高估 2.5 倍。
 export const PEAK_PRICES = {
-  'deepseek-v4-flash': { cacheMiss: 3, cacheHit: 0.1, output: 9 },
+  // 内核真实模型 id（dsh-llm-deepseek 的 DEFAULT_MODELS 下发）——曾因缺此键，
+  // 查表未命中静默落回 pro 档（命中价 0.3 为官方的 7.5 倍），是「命中缓存算错」
+  // 的主因；回归锁见 unit-balance-pricing-key.test.js。
+  'deepseek-flash': { cacheMiss: 2, cacheHit: 0.04, output: 8 },
+  'deepseek-v4-flash': { cacheMiss: 2, cacheHit: 0.04, output: 8 },
   'deepseek-v4-pro': { cacheMiss: 9, cacheHit: 0.3, output: 27 },
-  // 旧模型名别名：deepseek-chat 对应 v4-flash，deepseek-reasoner 对应 v4-pro。
-  'deepseek-chat': { cacheMiss: 3, cacheHit: 0.1, output: 9 },
+  // 旧模型名别名：deepseek-chat 对应 flash 档，deepseek-reasoner 对应 pro 档。
+  'deepseek-chat': { cacheMiss: 2, cacheHit: 0.04, output: 8 },
   'deepseek-reasoner': { cacheMiss: 9, cacheHit: 0.3, output: 27 },
 };
 
 // 2026-08-17 前的旧版固定价（历史结算参考）。
 export const LEGACY_PRICES = {
+  'deepseek-flash': { cacheMiss: 1, cacheHit: 0.02, output: 2 },
   'deepseek-v4-flash': { cacheMiss: 1, cacheHit: 0.02, output: 2 },
   'deepseek-v4-pro': { cacheMiss: 3, cacheHit: 0.025, output: 6 },
   'deepseek-chat': { cacheMiss: 1, cacheHit: 0.02, output: 2 },
   'deepseek-reasoner': { cacheMiss: 3, cacheHit: 0.025, output: 6 },
 };
 
-// 价目表内的全部模型名（别名在内）。priceTable() 逐名取值，客户端按会话
-// 实际模型选档。
-export const PRICING_MODELS = ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-chat', 'deepseek-reasoner'];
+// 价目表内的全部模型名（内核真实 id + 别名都在内）。priceTable() 逐名取值，
+// 客户端按会话实际模型选档。
+export const PRICING_MODELS = ['deepseek-flash', 'deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-chat', 'deepseek-reasoner'];
 
 // 峰谷定价生效节点：2026-08-17 00:00 北京时间 = 2026-08-16 16:00 UTC。
 export const PEAK_PRICING_SINCE_UTC = Date.UTC(2026, 7, 16, 16, 0, 0);

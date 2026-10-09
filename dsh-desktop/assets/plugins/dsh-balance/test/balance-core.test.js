@@ -72,10 +72,12 @@ test("parseAmount：负数按业务钳为 0（余额不可能为负）", () => {
 // 定价：模型名解析 + 峰谷门槛
 // ---------------------------------------------------------------------------
 
-test("pricingKeyOf：变体名不得回退到 v4-pro（曾致 flash 高估 3 倍）", () => {
+test("pricingKeyOf：变体名与内核真实 id 都不得回退到 v4-pro（曾致 flash 高估 4.5~7.5 倍）", () => {
   assert.equal(pricingKeyOf("deepseek-v4-flash-250610"), "deepseek-v4-flash");
   assert.equal(pricingKeyOf("deepseek-v4-pro-0813"), "deepseek-v4-pro");
   assert.equal(pricingKeyOf("deepseek-chat-V3"), "deepseek-chat");
+  assert.equal(pricingKeyOf("deepseek-flash"), "deepseek-flash", "内核真实模型 id 必须在价目表内有键");
+  assert.equal(pricingKeyOf("deepseek-flash-250610"), "deepseek-flash");
   assert.equal(pricingKeyOf(""), DEFAULT_MODEL);
   assert.equal(pricingKeyOf(null), DEFAULT_MODEL);
   assert.equal(pricingKeyOf("gpt-9-turbo"), "gpt-9-turbo", "未知模型保持原值（沿用老行为）");
@@ -127,7 +129,14 @@ test("effectivePrice：空闲档恒为高峰一半，旧版期走 LEGACY 表", (
   const off = effectivePrice("deepseek-v4-pro", offAt);
   assert.deepEqual(peak, { cacheMiss: 9, cacheHit: 0.3, output: 27 });
   assert.deepEqual(off, { cacheMiss: 4.5, cacheHit: 0.15, output: 13.5 });
-  assert.deepEqual(effectivePrice("deepseek-v4-flash", offAt), { cacheMiss: 1.5, cacheHit: 0.05, output: 4.5 });
+  assert.deepEqual(effectivePrice("deepseek-v4-flash", offAt), { cacheMiss: 1, cacheHit: 0.02, output: 4 });
+  assert.deepEqual(effectivePrice("deepseek-flash", peakAt), { cacheMiss: 2, cacheHit: 0.04, output: 8 }, "内核真实 id 命中 flash 高峰档（官方值）");
+  assert.deepEqual(effectivePrice("deepseek-flash", offAt), { cacheMiss: 1, cacheHit: 0.02, output: 4 }, "空闲半价");
+  assert.deepEqual(
+    effectivePrice("deepseek-flash", new Date(PEAK_PRICING_SINCE_UTC - 1000)),
+    { cacheMiss: 1, cacheHit: 0.02, output: 2 },
+    "旧版期镜像 flash 旧价（不得落回 pro 旧价）",
+  );
   assert.deepEqual(
     effectivePrice("deepseek-v4-pro", new Date(PEAK_PRICING_SINCE_UTC - 1000)),
     { cacheMiss: 3, cacheHit: 0.025, output: 6 },

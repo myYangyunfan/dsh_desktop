@@ -169,7 +169,7 @@ Controlled by `bundle.targets` in `tauri.conf.json` — add or remove entries to
 
 | Plugin (package) | Version | Description | Source / license |
 | --- | --- | --- | --- |
-| `@deepseek-ai/dsh-balance` | 0.1.2 | Account balance plus per-turn cost estimate, docked to the conversation stats bar | In-house · MIT |
+| `@deepseek-ai/dsh-balance` | 0.1.3 | Account balance plus per-turn cost estimate, docked to the conversation stats bar | In-house · MIT |
 | `@deepseek-ai/dsh-file-changes` | 0.1.0 | Session file-change projection (collapses tool/result meta.diffs) | In-house · MIT |
 | `dsh-better-sidebar` | 0.24.1 | VSCode-style right pane: five built-in tabs (editor / git / subagent / sidechat / diff) plus a tab-registration service for other plugins | [omdsh-dev/DSH-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) · MIT |
 | `dsh-session-manager` | 0.1.0 | Session-row delete button plus an "Archived conversations" panel in Settings (restore / delete) | In-house · MIT (name collides with a published community package) |
