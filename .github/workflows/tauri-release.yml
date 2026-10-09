@@ -15,10 +15,14 @@ name: Tauri Release
 #   Linux x64    AppImage → DSH-Desktop-<ver>-linux-x64.AppImage
 #   Linux x64    deb    → dsh-desktop_<ver>_amd64.deb（deb 标准命名）
 #   自动更新校验边车 → 每个主资产附带 <主资产名>.sha256（publish job 统一生成，
-#   内容=sha256sum 格式「<64位小写hex>  <文件名>」，壳侧更新器解析取首段 hex；
-#   Gitee 镜像 job 一并镜像，镜像后由 verify-update-sources.mjs 做双源核验）
+#   内容=sha256sum 格式「<64位小写hex>  <文件名>」，壳侧更新器解析取首段 hex。
+#   Gitee 镜像自 v1.0.0 起停用（mirror-gitee job 整条 `if: false`，实现保留以便恢复），
+#   故 verify-update-sources.mjs 的双源核验当前只咬得到 GitHub 单源）
 #
 # 用法：git tag v0.5.1 && git push origin v0.5.1   ← 正式发版唯一入口
+#        （⚠ 推 tag 前先用 `git remote -v` 确认 origin 就是 GitHub 上的
+#         myYangyunfan/dsh_desktop——开发机上存在把兄弟仓库挂在 origin 位的克隆，
+#         那种机器上要显式推对应远端名，否则 tag 落错仓库、流水线根本不会被触发）
 #        手动 dispatch 仅用于给【已存在的 tag】补传/重建资产：流水线会强制
 #        checkout refs/tags/v<版本>，绝不从分支头构建——v0.5.0 事故中分支头
 #        已 bump 到 0.5.1，从分支头重建产出了「文件名 0.5.0 / 内嵌 0.5.1」
@@ -1397,42 +1401,68 @@ jobs:
           TAG='${{ steps.ver.outputs.tag }}'
           VERSION='${{ steps.ver.outputs.version }}'
           cat > release-notes.md << EOF
-          # DSH Desktop ${VERSION} — 全平台
+          # DSH Desktop ${VERSION} — 全平台（纯净线首版）
 
-          > 覆盖 v0.6.1 + v0.6.2：① 单项根治「多模态模型说我发不了图片」；② 内核输入区
-          > （composer）换代漂移整族修复——9 个插件静默失效全部迁移修复；③ 插件同步
-          > 把残留依赖树整树分发导致的卡死根治；④ 历史对话完整回溯与「吞消息」根治。
+          > v1.0.0 是 Tauri 主线的第一个正式包，四条主线：① 交付口径反转——28 条内置伴随插件
+          > 随安装包分发，装完首次开机自动镜像进 profile，开箱可用；② 内核 pin 在 0.2.0-rc.2
+          > （离线 tarball 随包，启动链 fail-closed 校验版本一致，禁止浮动）；③ 在册 28 条插件
+          > 逐条对 rc.2 宿主做过更新判定与兼容修复，幽灵服务与失效注入清零；④ Electron 时代
+          > 遗留面整体拆除（余额轮询环、宠物窗、拖放预处理），桥方法收到 46 项、IPC 通道 38 条，
+          > 契约同轮随迁并由机器审计咬合（注册命令 ⊆ 契约表 + 双向哨兵）。
 
           ## ✨ 新功能
 
-          **模型卡「支持图片输入」勾选**
-          设置 → 模型管理，每个模型一行一个勾选框：勾上 = 显式声明支持图片，发图不再被
-          「当前模型不支持图片」拒绝；取消 = 恢复纯文本。适合「模型本身支持视觉、但接口
-          没声明」的场景（第三方中转 / 开源模型常见）。从「获取模型」目录挑选模型时会
-          自动带上接口自报的图片能力。视频暂不提供勾选：当前内核协议只支持 text / image。
+          **28 条内置插件随安装包分发（内置线）**
+          安装包首次开机由启动链的同步步骤把随包插件整树镜像进 profile，不需要再手动装插件。
+          交付门禁保证「仓库源目录数 = 安装包内插件目录数」，并剪除开发机的残留依赖树与超长路径
+          （Windows NSIS 在 >260 字符路径处会中断建包）。
 
-          **历史对话完整回溯（v0.6.1）**
-          - 历史加载每页 50 → 200 条；滚到聊天顶部自动翻页加载更早记录；
-          - 根治「历史只显示约三分之一」「翻到头早期对话仍缺失」——跨页断头自动续读。
+          **工作台文件体验（dsh-better-sidebar 0.24.1）**
+          上游整包换代到 0.24.1，并把桌面版那套 VSCode 式文件系统迁进来：编辑器标签体内常驻
+          左侧文件栏（可收起 / 可拖宽 140–480 / 按会话记忆），点文件开成「每文件一个去重标签」，
+          不再原地替换；「合并/独立」选择器与停靠树一并退役。
 
-          **「编辑并回退」重做（v0.6.2）**
-          消息悬停「编辑并回退」：从任意一条历史消息处分叉新会话、预填原文重发，旧会话
-          原样保留。此功能在输入区换代后一度完全失效，本版修复并实测通过。
+          **自定义系统提示词（dsh-prompt-custom 0.3.5）**
+          替换或追加官方人设，带官方提示词预览与变量插值。本版把它的宿主侧/页内侧回归网按
+          真实内核 + 真实插件源码重建（26 例，含 4 条变异反证）。
+
+          **账户余额与本轮费用（dsh-balance 0.1.3）**
+          余额 dock 挂在对话统计栏上，峰谷价目按官方价目表取值（本版已对齐，见下方修复）。
 
           ## 🛠 修复
 
-          **「吞消息」根治（v0.6.1）**
-          偶发「消息发出去了、界面却不显示」：现在遇到装配异常自动从持久化完整历史窗口
-          安全重建，不再丢消息；极端情况输出 [dsh-assembly-resilience] 前缀日志可取证。
+          **开机报 Failed to load plugins（两条插件被启动审计拒装）**
+          幽灵服务 settingsScope 在 rc.2 内核里并不存在，注入它的两条插件（dsh-session-manager、
+          dsh-side-session）永远停在 pending，启动审计判定「2 entries did not activate」即拒装。
+          前者摘除注入名即恢复激活，后者改写为 ctx.remote.settings 适配器。
 
-          **输入区换代适配（9 个插件静默失效全修，v0.6.2）**
-          编辑并回退 / 输入历史 ↑ 回溯 / 拖拽文件到对话 / 粘贴图片发送 / 对话导航条 /
-          对话界面增强 / 长消息折叠 / 峰谷价格卫士 / 识图插件草稿被覆盖——全部修复，
-          每处均做了修复前后交叉验证。
+          **设置改了不生效**
+          作废的 ctx.settings.register 换成内核真实 API（声明式 Config + describe()/update()）；
+          插件设置命名空间一律改成 profile 条目 id（原先多处写的是包名，查找永不命中 ⇒ 静默失效）；
+          关掉内核自动设置页，避免同一设置两处可改；页内远端读取对密钥脱敏返回空串，
+          不再反盖宿主本地读到的真值。
 
-          **配套插件同步卡死（v0.6.2）**
-          同步会把开发机残留依赖树（上万个文件）整树拷贝、卡数分钟。现在只分发随包正件，
-          同步从分钟级回到秒级。
+          **本轮消费偏大 / 缓存命中价算错（dsh-balance 0.1.3）**
+          两处独立缺陷叠在同一条查表路径上：内核真实下发的模型 id deepseek-flash 不在价目表内，
+          未命中即静默落回 pro 档（命中价按 0.3 计，是官方 flash 档 0.04 的 7.5 倍）；flash 档
+          价目本身又是按 pro÷3 推导的。本版按官方价目表改正（高峰：未命中 2 / 命中 0.04 / 输出 8，
+          空闲为半价），并补上价目键回归锁与变异反证。
+
+          **配套插件同步把开发机残留依赖树整树分发**
+          内置线要求插件随包，同步面只分发声明过的正件（声明式 shipsNodeModules），
+          开发机残留不再进安装包。
+
+          ## ✅ 验证
+
+          - Node 侧（2026-10-09 实测）：scripts/test/ 189 个测试文件，npm test = 2033 例 / **0 fail**
+            （9 条 skip 逐条是环境缺料）；check-syntax / validate-pin（✓ dsh-v0.2.0-rc.2）/
+            patch-surface verify 全绿。
+          - Rust 侧（同轮实测）：cargo test --workspace = 689 passed / 0 failed / 4 ignored
+            （含契约审计测试）。
+          - 端到端：安装布局冒烟 smoke-installed.sh PASS——内置插件 28/28 随包并镜像进 profile、
+            插件加载零致命错误（2026-10-08 第三版 1.0.0 包实测）。
+          - 发版防线：版本一致性四道闸（强制检出 tag、tauri.conf.json 版本比对、产物文件名内嵌
+            版本断言、publish 汇总断言），每个主资产附带同名 .sha256 边车。
 
           ## 安装包
 
@@ -1440,19 +1470,34 @@ jobs:
           |------|------|
           | Windows x64 | 安装包 DSH-Desktop-Setup-${VERSION}-win-x64.exe |
           | Windows x64 | 便携版 DSH-Desktop-Portable-${VERSION}-win-x64.zip（解压即用，数据存 exe 旁 data/ 目录） |
-          | Windows ARM64 | 实验性安装包 DSH-Desktop-Setup-${VERSION}-win-arm64.exe |
-          | Linux x64 | AppImage / .deb |
-          | macOS ARM64 | .dmg |
+          | Windows x64 | 轻量便携版 DSH-Desktop-Portable-${VERSION}-win-x64-lite.zip（不带 Node，机器上已有 node 的用户选它） |
+          | Windows ARM64 | 实验性安装包 DSH-Desktop-Setup-${VERSION}-win-arm64.exe（continue-on-error，原生模块靠模拟兜底） |
+          | Linux x64 | AppImage DSH-Desktop-${VERSION}-linux-x64.AppImage / deb dsh-desktop_${VERSION}_amd64.deb |
+          | macOS ARM64 | DSH-Desktop-${VERSION}-macos-arm64.dmg |
+
+          > 自 v1.0.0 起**只发布到 GitHub，不镜像 Gitee**（镜像 job 已在流水线里停用）。
+          > 更新页的 Gitee 源在本版没有对应资产，取包请直接用 GitHub 链接。
+
+          ## 已知问题
+
+          - **dsh-synapse（会话地图）**：重启或切换会话时历史回填可能出现空档——宿主 rc.2 下线了
+            Session 上的 events 属性而插件仍读旧字段（不报错、不崩溃）。已登记在内置插件台账
+            §5.5，本版按裁定未处置。
+          - **Windows ARM64**：payload 内原生模块仍是 x64 prebuild，靠 Windows 11 模拟层兜底，
+            标为实验性产物。
 
           ## 升级说明
 
-          1. 完全退出当前 DSH Desktop（托盘右键 → 退出）
-          2. 下载对应平台安装包并运行（覆盖安装，装回原目录，数据不丢失）
-          3. 首次启动自动对齐补丁与插件
+          1. 完全退出当前 DSH Desktop（托盘右键 → 退出；点窗口关闭只是隐藏到托盘、内核进程仍在跑）
+          2. 下载对应平台安装包并运行（覆盖安装，装回原目录，用户数据不动）
+          3. 首次启动会自动对齐补丁并把内置插件镜像进 profile
 
           ## 详细更新日志
 
-          见 [CHANGELOG.md](https://github.com/myYangyunfan/dsh_desktop/blob/main/dsh-tauri/CHANGELOG.md)
+          壳侧（Tauri / Rust / 六份契约）见
+          [dsh-tauri/CHANGELOG.md](https://github.com/myYangyunfan/dsh_desktop/blob/main/dsh-tauri/CHANGELOG.md)，
+          Node 侧与内置插件见
+          [dsh-desktop/CHANGELOG.md](https://github.com/myYangyunfan/dsh_desktop/blob/main/dsh-desktop/CHANGELOG.md)
           EOF
 
       - name: Upload assets to Release
@@ -1550,7 +1595,13 @@ jobs:
   mirror-gitee:
     name: Mirror Release to Gitee
     needs: [publish]
-    if: always() && !cancelled() && needs.publish.result == 'success'
+    # ── 2026-10-09 裁定：v1.0.0 起不镜像 Gitee（代码与 release 资产都不推）。
+    #    本 job 整条停用，保留全部实现以便随时恢复；恢复姿势=把下面那行
+    #    `if: false` 删掉、还原原条件（原条件原文照抄在下一行注释里）。
+    #    ⚠ 别改写成 `false && <原条件>` 一类的复合短路式——那种写法在历史上有过
+    #    「假短路」（退役的 release.yml），判据可读性也差。
+    #    if: always() && !cancelled() && needs.publish.result == 'success'
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 75
     env:

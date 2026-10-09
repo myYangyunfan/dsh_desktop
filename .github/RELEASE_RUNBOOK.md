@@ -1,6 +1,7 @@
 # DSH Desktop 发版 Runbook（Tauri 线）
 
-> 适用仓库：`myYangyunfan/dsh_desktop`，分支 `tauri/modular`。
+> 适用仓库：`myYangyunfan/dsh_desktop`，主线分支（v1.0.0 起为 `main`；`tauri/modular` 是
+> Tauri 线立项时的分支名，现已不再是发版落点）。
 > 现役发布流水线：`.github/workflows/tauri-release.yml`（Tauri 2）。
 > Electron 旧线 `release.yml` 已归档（所有 job `if: false`，仅留考古入口）。
 > 本文档随 v0.5.0 版本混装事故整改而建立——先读「事故档案」再发版。
@@ -10,18 +11,23 @@
 ## 0. 30 秒速查
 
 ```
-# ① 前置：版本号已 bump、CHANGELOG 已更新、已合入 tauri/modular
+# ① 前置：版本号已 bump、CHANGELOG 已更新、已合入主线分支
 grep '"version"' dsh-tauri/src-tauri/src/app/tauri.conf.json
 
 # ② 打 tag 并推（正式发版唯一入口）
-git tag v0.5.1 && git push origin v0.5.1
+git tag v0.5.1 && git push origin v0.5.1   # ← origin 必须是 GitHub 上的 dsh_desktop，
+                                           #   先 `git remote -v` 核对（开发机上 origin 位
+                                           #   可能挂着别的仓库，推错 = 流水线根本不被触发）
 
-# ③ 等 Actions 里 "Tauri Release" run 全绿（5 个 build + publish + mirror-gitee）
+# ③ 等 Actions 里 "Tauri Release" run 全绿（5 个 build + publish；mirror-gitee 自 v1.0.0 起
+#    整条 `if: false` 停用，run 里显示为 skipped 属预期）
 
-# ④ 核对资产（6 个主资产 + 6 个 .sha256 边车、无重复、大小正常）
+# ④ 核对资产（主资产上限 7 个：win-x64 setup / portable / portable-lite / win-arm64（实验性）
+#    / linux AppImage / linux deb / macos dmg，每个都应有同名 .sha256 边车；
+#    三个 continue-on-error 平台可能缺席，缺不缺失逐条看 run）
 gh release view v0.5.1 --json assets --jq '.assets[] | "\(.name)\t\(.size)"'
 
-# ⑤ 双源核验（GitHub + Gitee，发布后必跑；详见 §8）
+# ⑤ 发布后核验（v1.0.0 起 Gitee 不再镜像，双源核验只剩 GitHub 单源有意义；详见 §8）
 node dsh-tauri/scripts/verify-update-sources.mjs --expect-version 0.5.1
 ```
 
@@ -33,7 +39,7 @@ node dsh-tauri/scripts/verify-update-sources.mjs --expect-version 0.5.1
 |---|---|---|
 | `tauri.conf.json` 的 `version` == 待发版本 | `grep '"version"' dsh-tauri/src-tauri/src/app/tauri.conf.json`（顶层第一个即安装包内嵌版本唯一来源） | CI 第二道闸 fail-fast，浪费一次 run |
 | CHANGELOG 已有待发版本段落 | `dsh-tauri/CHANGELOG.md` | release notes 链接指向过时内容 |
-| 待发 commit 已在 `tauri/modular` 上且本地 CI 绿 | push 前跑 `ci.yml` 同款检查（见 CONTRIBUTING.md） | 带病发版 |
+| 待发 commit 已在主线分支头（现为 `main`）且本地 CI 绿 | push 前跑 `ci.yml` 同款检查（见 CONTRIBUTING.md） | 带病发版 |
 | tag 指向的 commit 就是 bump 过版本的那个 | `git log --oneline -3` 确认 | 混装（CI 会拦，但会浪费 run） |
 
 版本号三处对齐（当前口径）：
@@ -44,8 +50,10 @@ node dsh-tauri/scripts/verify-update-sources.mjs --expect-version 0.5.1
 ## 2. 正式发版（唯一入口：推 tag）
 
 ```bash
-git tag v0.5.1            # 打在 tauri/modular 分支头（版本已 bump 的 commit）
-git push origin v0.5.1    # 只推 tag；分支另行常规推送
+git tag v0.5.1            # 打在主线分支头（版本已 bump 的 commit）
+git push origin v0.5.1    # 只推 tag；分支另行常规推送。⚠ origin 必须是 GitHub 上的
+                          #   myYangyunfan/dsh_desktop——先 `git remote -v` 核对远端表，
+                          #   推错仓库不会报错，只会让流水线安静地不触发
 ```
 
 **为什么必须走 tag**：push tag 事件里 `actions/checkout` 默认检出
@@ -62,7 +70,7 @@ git push origin v0.5.1    # 只推 tag；分支另行常规推送
 | build-linux | `dsh-desktop_<v>_amd64.deb`（底线）+ `DSH-Desktop-<v>-linux-x64.AppImage`（可选） | continue-on-error，AppImage 偶发失败有 deb 兜底 |
 | build-macos | `DSH-Desktop-<v>-macos-arm64.dmg` | continue-on-error，但**签名校验失败会自动重签重打**，绝不带病出仓 |
 | publish | 汇总上传 GitHub Release（含生成/上传 `.sha256` 边车） | 总闸：版本/体积/边车断言不通过一律拒绝发布 |
-| mirror-gitee | 镜像资产到 Gitee release（含边车，见 §8） | 依赖 publish 成功；缺 GITEE_TOKEN secret 会 fail |
+| mirror-gitee | ~~镜像资产到 Gitee release（含边车，见 §8）~~ **自 v1.0.0 起整条 `if: false` 停用**（实现保留以便恢复） | 停用后在 run 里显示为 skipped，属预期；恢复时还原原条件即可 |
 
 注意：同一 ref 的 run 串行排队（concurrency 不取消），重复推同一 tag 会排队重建，
 不会互相打断。
@@ -170,6 +178,11 @@ dispatch 输入 `version` 必须是已 push 的 tag（带不带 `v` 前缀均可
 （如 `DSH-Desktop-Setup-0.5.3-win-x64.exe`）后**强制校验同名 `.sha256` 边车**；
 Gitee 缺失的资产（>100MB）自动回落 GitHub 源下载。发布链路的责任分工：
 
+> ⚠️ **自 v1.0.0 起不再镜像 Gitee**（`mirror-gitee` job 整条 `if: false`，代码与资产都不推）。
+> 更新器代码仍按双源轮询，但 Gitee 侧从 v1.0.0 起没有对应 release——取包请直接走 GitHub
+> 链接。本节里凡涉及镜像的条目（8.1 的「镜像 / 前置 secret / tag 同步」三条、8.2 的双源
+> 判定、8.4 的镜像重建步骤）都是为**恢复镜像**时准备的，现状发版不必执行。
+
 ### 8.1 边车约定（唯一规范）
 
 - **命名**：`<主资产名>.sha256`，如 `DSH-Desktop-Setup-0.5.3-win-x64.exe.sha256`。
@@ -195,9 +208,9 @@ Gitee 缺失的资产（>100MB）自动回落 GitHub 源下载。发布链路的
   人工处理：Gitee 仓库管理→强制同步，或本地 `git push gitee v<x.y.z>`，
   然后重跑 mirror job。
 
-### 8.2 发布后必跑：双源核验
+### 8.2 发布后必跑：核验（v1.0.0 起实际只有 GitHub 单源）
 
-publish + mirror-gitee 全绿后，本地（或 CI）跑只读核验工具：
+publish 全绿后（v1.0.0 起 mirror-gitee 停用，不再等它），本地（或 CI）跑只读核验工具：
 
 ```bash
 node dsh-tauri/scripts/verify-update-sources.mjs --expect-version 0.5.3
@@ -207,15 +220,21 @@ node dsh-tauri/scripts/verify-update-sources.mjs --expect-version 0.5.3
 
 核验内容与判定：
 - 双源 `releases/latest` tag 必须一致（漂移=FAIL）且等于 `--expect-version`；
-- **时机**：publish 创建的 release 初始为 Pre-release，而 `releases/latest`
-  不含 prerelease——须在 release 页面转正（Edit → 取消 Pre-release）后再跑
-  verify（壳侧更新器同样只认 latest，转正=自动更新正式放行）；
+  **v1.0.0 起的实际判据只看 GitHub 侧**（Gitee 无 release，比对必然落空，勿据此判红）；
+- **时机**：publish 创建 release **不带 `--prerelease`**（0.5.7 整改的结论：出生即
+  prerelease 会让更新器的 `releases/latest` 永远看不到新版本，「自动更新一直不生效」
+  的全局根因），所以正常路径下**无需**再去页面「转正」；若某天发现 release 是
+  Pre-release，那是人工改出来的，先查是谁改的再跑 verify；
 - 资产对照表：Gitee 缺 >100MB 资产属预期；缺小资产/缺边车=WARN 或 FAIL；
 - 每个主资产：有边车→格式校验 + 与 GitHub API `digest`（sha256:…）交叉核对
   （不下载大文件即可确认边车哈希==已上传资产哈希）；HEAD 下载 URL 核
   content-length == API size；镜像侧 HEAD 核 content-length == GitHub size；
 - 退出码：**0=可发布（允许 WARN），1=硬错（API 不可达/tag 漂移/边车格式坏/
   哈希不符/大小不符）**。网络不可达类 HEAD 失败记 WARN（CN 环境常见）。
+- **v1.0.0 起的读法**：脚本没有「关源」开关，Gitee 的 `releases/latest` 会停在最后一次
+  镜像的旧版本，于是「镜像漂移」判 FAIL——**这是停用镜像的预期结果，不是发版缺陷**。
+  判据取 GitHub 侧三段输出（latest tag == 期望版本 / 资产逐个有边车且格式合法 /
+  边车哈希与 API `digest` 交叉核对一致）；要连 Gitee 一起判，就把镜像恢复起来（见 §8.1）。
 
 ### 8.3 旧版本无边车的兼容期
 

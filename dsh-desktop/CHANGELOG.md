@@ -19,6 +19,30 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+_（v1.0.0 已于 2026-10-09 发布，其内容见下方 `[1.0.0]` 段；此后新的开发条目写在这里。）_
+
+## [1.0.0] - 2026-10-09
+
+### feat(release)：v1.0.0 正式版发布（纯净线首版 · 全平台）
+
+- **本版收口的内容**：内核 pin `0.2.0-rc.2`（`vendor/dsh-kernel` 离线 tarball 随包 + boot 链
+  fail-closed 校验，禁止浮动）；28 条内置伴随插件随安装包分发（内置线，见本节 `build(plugins)` 条）；
+  在册 28 条逐条对 rc.2 宿主做过更新判定与兼容修复（`scripts/lib/plugin-channels.js` +
+  inventory §四 §五）；`dsh-better-sidebar` 换代 0.24.1 并迁入 VSCode 式文件体验；`settingsScope`
+  幽灵服务退役（两条被启动审计拒装的插件恢复激活）+ 设置子系统全量改到内核真实 API；
+  `dsh-balance` 0.1.3 价目对齐官网；`dsh-prompt-custom` 回归套件重建（host 16 + client 10 例）。
+- **发布形态**：推 `v1.0.0` tag → `tauri-release.yml` 云端构建 Windows x64（NSIS + 完整版/Lite
+  双便携版）、Windows ARM64（实验性）、Linux（AppImage + deb）、macOS ARM64（dmg）；publish job
+  逐资产生成 `.sha256` 边车并过版本一致性四道闸（强制检出 tag / `tauri.conf.json` 比对 /
+  产物文件名内嵌版本断言 / 汇总断言）。
+- **交付口径变更**：自本版起 release 资产**不镜像 Gitee**（`mirror-gitee` job 整条 `if: false`
+  停用、实现原样保留以便恢复），代码也不再推 Gitee；`verify-update-sources.mjs` 的双源核验相应
+  只剩 GitHub 单源有意义，发布公告与 `.github/workflows/tauri-release.yml` 头注释同轮改口径。
+- **发布时实测基线**：`scripts/test/` 189 个文件 / `npm test` **2033 例 / 0 fail**（9 条 skip 逐条
+  是环境缺料）；`dsh-tauri/sidecar/cli.test.js` **21/21 / 0 fail**；`check-syntax`、`validate-pin`
+  （✓ dsh-v0.2.0-rc.2）、`patch-surface verify` 全绿。Rust 面自余额遗留线拆除后本轮未再改动，
+  现值 **689 passed / 0 failed / 4 ignored**（2026-10-08 实测；本版每个 build job 都会重跑一遍）。
+
 ### fix(balance)：flash 价目对齐官网 + 补上内核真实模型 id —— 「本轮费用 / 命中缓存算错」双缺陷根治（dsh-balance 0.1.3）
 
 - **报障现场（用户实测）**：对话统计栏 dock 的「本轮消费」偏大、缓存命中像被算错了。查下来是**两处

@@ -1,6 +1,35 @@
 # Changelog — DSH Desktop（Tauri 版，主线架构 v0.5.0 起）
 
-# DSH Desktop v1.0.0 — 纯净线（开发中，未发布）
+# DSH Desktop v1.0.0 — 纯净线（2026-10-09 正式版）
+
+## 🚀 重点：v1.0.0 正式版发布（纯净线首版 · 全平台，本版起不镜像 Gitee）
+
+- **发布形态**：推 `v1.0.0` tag → `tauri-release.yml` 三平台远端构建——Windows x64（NSIS 安装包 +
+  完整版/Lite 双便携版）、Windows ARM64（实验性，`continue-on-error`）、Linux x64（AppImage + deb）、
+  macOS ARM64（dmg）。publish job 逐主资产生成同名 `.sha256` 边车（自动更新链校验取首段 hex），
+  并过版本一致性四道闸：强制检出 `refs/tags/v<ver>`、`tauri.conf.json` version 与 tag fail-fast 比对、
+  产物文件名内嵌版本断言（含 Info.plist）、publish 汇总断言（全部资产含版本号 + 体积 >50MB + 上传核对）。
+- **交付口径变更（本版）**：`mirror-gitee` job 整条 `if: false` 停用，实现原样保留、恢复姿势写在
+  注释里（**没有**写成 `false && <原条件>` 那类复合短路式——退役的 `release.yml` 踩过「假短路」）；
+  代码与资产都不推 Gitee，`verify-update-sources.mjs` 的双源核验相应只剩 GitHub 单源有意义。
+- **发布公告模板同轮重写**：`Generate release notes` 的 heredoc 此前硬编码「覆盖 v0.6.1 + v0.6.2」，
+  且 v0.6.5 也是带着这份旧公告发的（模板与实装不同源的历史形态）；本版按实际内容重写，并把两条
+  已知问题如实写进公告（dsh-synapse 重启/切会话时历史回填空档、win-arm64 的原生模块仍是 x64 prebuild）。
+- **壳侧在本版内的净变化**（上方两节 🗑️ 的收口）：Electron 余额遗留线与伴随插件批量退役两组裁撤
+  落地——`bridge-api.md` §2 方法总表 55 → 47 → 46 项（断号不复用）、`ipc-commands.md` §2 通道表
+  45 → 39 → 38 条、`generate_handler!` 46 → 40 → 39、`CHANNELS` 45 → 39 → 38（34 invoke + 4 send）、
+  `REQUIRED_SURFACES` 47 → 46；`E_IMAGE_PASTE` 按「只追加不复用」留占位。四数一致由 `contract_audit`
+  机器核，反向锚点 `retired_plugin_surfaces_absent`（现 13 项）拦已退役面复活。
+- **Node 侧随本版交付的内容**（壳侧零改动，逐条见 `dsh-desktop/CHANGELOG.md` 的 `[1.0.0]`）：28 条
+  内置插件随安装包分发、在册 28 条逐条对 rc.2 的更新判定与兼容修复、better-sidebar 0.24.1 迁入
+  VSCode 式文件体验、`settingsScope` 幽灵服务退役 + 设置子系统改内核真实 API、dsh-balance 0.1.3
+  价目对齐官网、prompt-custom 回归套件重建（host 16 + client 10 例）。
+- **发布时实测**：`dsh-tauri/sidecar/cli.test.js` **21/21 / 0 fail**（2026-10-09 本机现跑）；
+  Node 全量 `scripts/test/` 189 文件 / **2033 例 / 0 fail**，`check-syntax`、`validate-pin`
+  （✓ dsh-v0.2.0-rc.2）、`patch-surface verify` 全绿。Rust 面自余额遗留线拆除后本轮未再改动，
+  现值 **689 passed / 0 failed / 4 ignored**（2026-10-08 实测，gnu 链 + `--target x86_64-pc-windows-gnu`；
+  本版每个 build job 会在云端重跑一遍）；安装布局冒烟 `smoke-installed.sh` PASS（28/28 内置插件
+  随包并镜像进 profile，插件加载零致命错误，同日前述实测）。
 
 ## 📦 重点：交付口径反转 —— 28 条内置插件随安装包分发（内置线）
 

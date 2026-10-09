@@ -9,7 +9,9 @@
 DSH Desktop —— 基于 `@deepseek-ai/dsh`（DeepSeek Harness）的桌面客户端。
 **v0.5.0 起主线是 Tauri 2（Rust）**；Electron 壳已退役，但 `dsh-desktop/` 的内核侧
 Node 逻辑仍是活代码（Tauri sidecar 直接复用，零重写）。主平台 Windows，
-同时镜像 GitHub / Gitee（`main` 双向同步）。
+**v1.0.0 起不再向 Gitee 同步**：代码不推 `gitee` 远端，release 资产也不镜像
+（`tauri-release.yml` 的 `mirror-gitee` job 整条 `if: false` 停用，实现保留；恢复姿势见
+`.github/RELEASE_RUNBOOK.md` §8）。此前「双向同步」的描述只适用于 v0.6.5 及以前。
 
 | 目录 | 说明 |
 | --- | --- |
