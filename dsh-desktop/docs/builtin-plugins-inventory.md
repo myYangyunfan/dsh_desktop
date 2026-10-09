@@ -579,8 +579,9 @@ node -e "const l=require('./scripts/lib/plugin-module-table'),p=require('path'),
   0.24.1 的 `tsconfig.build.json` 是 `emitDeclarationOnly`，**不再产出逐文件 `lib/<name>.js` 镜像**，
   所以纯函数的可执行事实源只有 bundle 本体——夹具 `scripts/test/fixtures/better-sidebar-region.js`
   按 `//#region <源路径>` 切段在 vm 里实跑，测的就是交付的那份字节。
-  **2026-10-09 首轮功能改动实测**：`npm run build`（`rmSync lib && tsc -p tsconfig.build.json && tsdown`）
-  全链 0 退出——此前的 `tsc` 步实测因 `editor-features.ts` 的 5 处存量错非零退出（改法与证据见 §5.2 #3）；
+  **2026-10-09 首轮功能改动实测**：沙箱包（`.tmp-bs-build/`）的 `build` 脚本
+  （`rmSync lib && tsc -p tsconfig.build.json && tsdown`）全链 0 退出——此前的 `tsc` 步实测因
+  `editor-features.ts` 的 5 处存量错非零退出（改法与证据见 §5.2 #3）；
   台账里的 `lib/types`（177 张）比 `src/` 缺 `editor-features.d.ts` 与 `chunk-availability.d.ts` 两张
   （本次重建补齐到 180，emit 面与 `src/` 对齐）。回填用整目录替换 + `diff -rq` 复算
   （`Only in assets` 0 命中，无丢件，7 个 JS 面 + 5 份 sourcemap 全更新）。
