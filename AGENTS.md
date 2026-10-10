@@ -105,6 +105,17 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   姿势：`npm ci` 重收敛 → `node scripts/compat/patch-surface.js snapshot node_modules/@deepseek-ai ..`
   → `verify` 复绿 → 与改动同一提交推。本机复现 CI 红用同一条 verify 命令对照 CI 日志逐字核
   （CI 日志 `gh run view --log-failed` 取不到时改走 `gh api repos/<owner>/<repo>/actions/jobs/<job_id>/logs`）。
+- **CI 全量单测有两类「本机假绿」环境差（2026-10-10 根治，勿重复踩）**：
+  ① 本机 node 24 容忍「await 一个被 unref 的 0ms 定时器」，CI 的 node 22 会整体
+  `cancelledByParent`（`Promise resolution is still pending but the event loop has already
+  resolved`）——测试床冲刷辅助一律用 `setImmediate`，**别写 `setTimeout(...).unref()`**；
+  本机复现 CI 环境：`npx --yes node@22 --test <file>`。
+  ② 7 个文件的 51 例 pristine 哨兵（ta6-transform-contract / ta6-baseline-matrix /
+  ta6-heal-rollback-audit / unit-patch-engine / unit-pi-ai-tool-name-wire /
+  unit-released-v0-history-recovery / unit-session-header-scan-guard）按设计硬断言
+  「pristine 闭包在位」而非 skip——ci.yml 已固定在全量单测前跑
+  `node scripts/install-pristine-kernel.mjs`（离线 vendor tarball 解出，幂等）；
+  本机删 `.tmp-kernel` 即复现同款红。
 - **冒烟测试绝不跑真安装器**：NSIS 的 PREINSTALL 会静默卸载本机真实版本。
   冒烟用手拼安装布局 + `DSH_HOME`/`DSH_TAURI_USERDATA` 隔离。
 - **NSIS 钩子（installerHooks.nsh）改动必须过 `makensis` 编译验证**——宏展开、栈平衡、

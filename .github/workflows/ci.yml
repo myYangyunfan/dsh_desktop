@@ -36,6 +36,8 @@ jobs:
         run: node scripts/compat/patch-surface.js verify node_modules/@deepseek-ai ..
       - name: 语法预检（构建门禁同款，prepack/predist 自动执行）
         run: node scripts/check-syntax.js
+      - name: 装 pristine 内核闭包（离线 vendor tarball 解出；锚点哨兵/三态契约/基线矩阵的供料，缺失会硬红 51 例）
+        run: node scripts/install-pristine-kernel.mjs
       - name: 全量单测（unit-* / desktop-*，node --test 自动发现）
         run: npm test
       - name: 余额链路验证（逻辑级 dock）

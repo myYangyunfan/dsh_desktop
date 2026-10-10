@@ -145,8 +145,13 @@ function loadClient(http = {}) {
     for (const { cb } of pendingEffects) cb();
   }
 
+  // setImmediate 而非 setTimeout+unref：node 22 的测试运行器在「唯一挂起句柄是
+  // unref 定时器」时判定事件循环已空，await 中的用例整体 cancelledByParent
+  // （"Promise resolution is still pending but the event loop has already
+  // resolved"，CI node 22 上 12 例连坐；node 24 恰好容忍，本机不复现）。
+  // setImmediate 默认持引、必在同一轮 check 相位触发，微任务链同样先排空。
   /** 冲刷 effect 里的 await 链（fetch → json → setData 全在微任务里跑完）。 */
-  const flush = () => new Promise((resolve) => { const t = setTimeout(resolve, 0); if (t.unref) t.unref(); });
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
 
   return { calls, render, runEffects, resetHooks, flush, mod, dock: () => dockComponent, setPresetData: (d) => { presetData = d; } };
 }

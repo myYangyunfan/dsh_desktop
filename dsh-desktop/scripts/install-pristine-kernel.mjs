@@ -132,7 +132,7 @@ function main() {
   if (!version) throw new Error('install-pristine-kernel: kernel-pin.json 缺 kernel.packageVersion');
 
   const consumerDir = rootArg
-    ? join(rootArg, 'node_modules')
+    ? join(rootArg.slice('--root='.length), 'node_modules')
     : join(REPO_ROOT, '.tmp-kernel', `.consumer-${version}`, 'node_modules');
   const stampPath = join(dirname(consumerDir), '.pristine-kernel.json');
   const marker = join(consumerDir, '@deepseek-ai', 'dsh', 'package.json');

@@ -36,6 +36,26 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
   重取快照（surface 67 文件不变，markerCount 82→80，仅上述两文件 hash 变更）后 `verify` 复绿。
 - **影响面**：纯守卫元数据，运行时字节零变化（fresh 收敛态即 CI 构建与安装包的既有形态）。
 
+### fix(ci)：全量单测两处断链根治 —— node 22 flush 死锁 12 例连坐 + pristine 闭包缺供 51 例硬红（2026-10-10）
+
+- **现场**：漂移锁复绿后的 run（`38051140321`）里全量单测首次完整运行：2043 例中
+  **fail 51 + cancelled 12**（pass 1958 / skip 22），两类根因互不相关。
+- **A：edge-client.test.js 异步组 12 例 cancelledByParent 连坐**。测试床 `flush()` 冲刷辅助
+  （等 fetch→json→setData 微任务链跑完）给其 0ms 定时器显式 `unref()`；node 22 测试运行器在
+  「唯一挂起句柄是 unref 定时器」时判定事件循环已空，await 中的用例整体 cancelled
+  （`Promise resolution is still pending but the event loop has already resolved`；
+  node 24 恰好容忍，故本机全量长期假绿）。修复：改 `setImmediate`（持引、同轮 check 相位触发，
+  微任务链同样先排空）；沙箱里给 client.js 兜底时限的那只 unref 定时器（防挂起不阻塞退出）不动。
+- **B：7 文件 51 例 pristine 哨兵硬红**。ta6-transform-contract（38）/ unit-released-v0-history-recovery（4）/
+  unit-pi-ai-tool-name-wire（3）/ unit-patch-engine（3）/ unit-session-header-scan-guard（1）/
+  ta6-heal-rollback-audit（1）/ ta6-baseline-matrix（1）按设计硬断言「pristine 内核闭包在位
+  （`.tmp-rc2-stage` 或 `.tmp-kernel/.consumer-*`）」而非静默 skip，而 ci.yml 从未供料过它。
+  修复：全量单测前插 `node scripts/install-pristine-kernel.mjs` 步骤（离线 vendor tarball 解出、
+  不跑 npm 不联网、已在位幂等快路径）；顺带修该脚本 `--root=` 选项未剥前缀被当相对路径拼接的
+  老 bug（缺省根不受影响；`--root=` 探测路径已实测 331 包解出 + 二次调用幂等跳过）。
+- **验证**：本机 `npx node@22` 逐态复现——修前 edge-client 12 cancelled 与 CI 报错逐字一致，
+  修后 21/21 / 0 cancelled；node 24 同 21/21 无回归。CI 侧待新 run 全量复验。
+
 ## [1.0.1] - 2026-10-10
 
 ### fix(release)：v1.0.1 补丁版发布（全平台）
