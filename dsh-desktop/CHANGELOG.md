@@ -54,7 +54,9 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
   不跑 npm 不联网、已在位幂等快路径）；顺带修该脚本 `--root=` 选项未剥前缀被当相对路径拼接的
   老 bug（缺省根不受影响；`--root=` 探测路径已实测 331 包解出 + 二次调用幂等跳过）。
 - **验证**：本机 `npx node@22` 逐态复现——修前 edge-client 12 cancelled 与 CI 报错逐字一致，
-  修后 21/21 / 0 cancelled；node 24 同 21/21 无回归。CI 侧待新 run 全量复验。
+  修后 21/21 / 0 cancelled；node 24 同 21/21 无回归。CI 复验（run `38051848631`，`21f729fce`）：
+  全步骤绿，全量单测 2043 例 / **0 fail / 0 cancelled**（pass 2032 / skip 11，本机同口径
+  2033 pass / 10 skip，1 例差额为环境条件差异）。
 
 ## [1.0.1] - 2026-10-10
 
