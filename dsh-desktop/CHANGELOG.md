@@ -19,7 +19,21 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
-_（v1.0.0 已于 2026-10-09 发布，其内容见下方 `[1.0.0]` 段；此后新的开发条目写在这里。）_
+_（暂无未发布条目；v1.0.1 已于 2026-10-10 发布，其内容见下方 `[1.0.1]` 段。）_
+
+## [1.0.1] - 2026-10-10
+
+### fix(release)：v1.0.1 补丁版发布（全平台）
+
+- **触发**：macOS v1.0.0 实机报障「首启弹『未能保存设置，请重试。』且点重试无反应」+ 部分 Windows
+  用户同症；本机 Windows 沙箱逐字复现（9 条插件 `failed to load — auto-isolated`、1 条 pending）。
+- **内容**：修正下方 `fix(companion)` 一条；其余交付内容与 v1.0.0 相同（28 条内置插件随包、
+  内核 pin `0.2.0-rc.2` 离线随包、四平台资产形态不变）。壳侧零改动（Rust / 契约 / IPC 未触）。
+- **发布形态**：推 `v1.0.1` tag → `tauri-release.yml` 云端构建 + publish 边车/四道闸，与 v1.0.0 同形态
+  （`mirror-gitee` 维持 `if: false` 停用）。
+- **发布时实测基线**：190 个测试文件 / `npm test` **2043 例 / 0 fail**（9 条 skip 逐条是环境缺料）；
+  `dsh-tauri/sidecar/cli.test.js` **21/21 / 0 fail**；`check-syntax`、`validate-pin`（✓ dsh-v0.2.0-rc.2）、
+  `patch-surface verify`（✓ 67 文件无漂移）全绿。Rust 面本版零改动，沿用 689 passed / 0 failed / 4 ignored。
 
 ### fix(companion)：首启「未能保存设置」toast + 9 插件 failed to load 根治（mac + 部分 Windows 用户）—— profile 链接落点同步自愈（2026-10-10）
 

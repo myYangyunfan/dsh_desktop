@@ -1,5 +1,30 @@
 # Changelog — DSH Desktop（Tauri 版，主线架构 v0.5.0 起）
 
+# DSH Desktop v1.0.1 — 补丁版（2026-10-10 正式发布）
+
+## 🐛 重点：首启「未能保存设置」toast + 9 插件 failed to load 根治（壳侧零改动）
+
+- **发布形态**：推 `v1.0.1` tag → `tauri-release.yml` 三平台云端构建（Windows x64 NSIS + 双便携 zip、
+  Windows ARM64 实验性、Linux x64 AppImage+deb、macOS ARM64 dmg），publish 逐主资产生成 `.sha256`
+  边车并过版本一致性四道闸——与 v1.0.0 同形态；`mirror-gitee` 维持 `if: false` 停用，无流程变更。
+- **壳侧零改动**：修的是 Node 侧伴随插件同步链（`dsh-desktop/scripts/lib/companion-profile.js`）——
+  五契约、`generate_handler!`、`CHANNELS`、补丁注册表计数、NSIS 钩子一律未触（桥命令未增删 →
+  `lib.rs` 契约审计测试无随迁需求）；Rust 工作区未改一行，`Cargo.lock` 仅随 workspace 版本号 bump。
+- **修的是什么**（macOS v1.0.0 实机报障 + 部分 Windows 用户同症，本机 Windows 沙箱逐字复现）：
+  首启弹「未能保存设置，请重试。」且点重试无效，日志里 settings / better-sidebar / conversation-tweaks /
+  quest-ui / side-session / openclaw-bridge / dsh-subagent-lens / reasoning-effort / basics-panel
+  共 9 条 failed to load — auto-isolated。根因：profile 的 `@deepseek-ai/schemastery` 是旧装配期遗留的
+  符号链接/junction 落点、指向残缺副本（缺 `lib/index.mjs`），rc.2 解析路由对 profile 内候选
+  statSync 命中即直达、无可用性回退 → 设置服务缺席。旧同步实现撞链三种坏法：顶层抛错被吞进不落盘的
+  boot 日志、嵌套悬空 junction 触发 cpSync 原生崩溃（status 3221226505，JS 层不可 catch）、嵌套有效
+  junction 静默写穿。修复：复制前按源树形状摘除全部链接落点（含悬空、不递归穿透），摘除失败跳过本次
+  复制并落日志（绝不让 cpSync 以原生崩溃收场）；插件落点与 `lib/` 单点先摘链重建。完整内容见
+  `dsh-desktop/CHANGELOG.md` 的 `[1.0.1]` 与回归套件 `unit-companion-link-dest.test.js`（10 例）。
+- **发布时实测**：`dsh-tauri/sidecar/cli.test.js` **21/21 / 0 fail**（2026-10-10 本机现跑）；Node 全量
+  `scripts/test/` 190 文件 / **2043 例 / 0 fail**（9 条 skip 逐条是环境缺料）；`check-syntax`、
+  `validate-pin`（✓ dsh-v0.2.0-rc.2）、`patch-surface verify`（✓ 67 文件无漂移）全绿。Rust 面本版
+  零改动，沿用 **689 passed / 0 failed / 4 ignored**（2026-10-08 实测，gnu 链 + `--target x86_64-pc-windows-gnu`）。
+
 # DSH Desktop v1.0.0 — 纯净线（2026-10-09 正式版）
 
 ## 🚀 重点：v1.0.0 正式版发布（纯净线首版 · 全平台，本版起不镜像 Gitee）
