@@ -38,6 +38,11 @@ _（暂无未发布条目；v1.0.2 已于 2026-10-11 以 GitHub **预发布**形
   改回 `'false'`）。**prerelease 不进 GitHub `releases/latest`，在线更新检查看不到本版——这是刻意的**：
   根因修复只经 mac 现场取证 + 本机单测闭环，未取得多平台实机复验，不该自动推给全量用户；
   需要本版的人手动下载安装包。`mirror-gitee` 维持 `if: false` 停用。
+- **发布后实测（run `38073333753`，2026-10-11）**：五个构建 job + Publish 全绿、Gitee 镜像 job
+  按停用 skipped；`isPrerelease=true`、标题带「（预发布）」、14 资产（7 主 + 7 边车）大小与
+  边车哈希双重核对通过。**注意 `releases/latest` 仍停在 v1.0.0**——v1.0.1 的 release 已被删除
+  （tag 在、`gh release view v1.0.1` 返 404），叠加本版 prerelease，在线更新通道对存量用户
+  当前一律显示「无更新」；取 1.0.2 必须给预发布页直链手动安装。
 - **发布时实测基线（2026-10-11，退出码一律直取不经管道）**：192 个测试文件 / `npm test`
   **2063 例 / 0 fail / 0 cancelled**（pass 2053、skip 10，逐条是环境缺料）；
   `dsh-tauri/sidecar/cli.test.js` **21/21 / 0 fail**（exit 0）；`check-syntax`、`validate-pin`

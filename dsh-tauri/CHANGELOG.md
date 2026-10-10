@@ -30,6 +30,17 @@
   `patch-surface verify`（✓ 68 文件）/ `verify-balance-dock.cjs` 全绿。
   公告模板已本地干跑核对（heredoc 渲染 109 行、反引号 0 处、`${VERSION}` 六处展开正确），
   `--prerelease` 分支用桩 `gh` 反证过四态（true / false / 开关缺失 / release 已存在时零调用）。
+- **发布后实测（run `38073333753`，2026-10-11）**：五个构建 job + Publish 全绿，
+  `Mirror Release to Gitee` 按 `if: false` skipped；release 元数据
+  `isPrerelease=true / isDraft=false`，标题「DSH Desktop v1.0.2（预发布）」，正文 110 行与
+  本地干跑同源；14 个资产（7 主 + 7 边车）逐个通过流水线的大小一致断言，边车内容哈希与
+  GitHub API `digest` 七个全部交叉一致（mac dmg = `10581367bc43a5d5…`）。
+  runner 侧真实执行到预发布分支（日志行 `RELEASE_PRERELEASE=true —— 以预发布形态创建`）。
+- **顺带查出一条与更新链有关的事实**：`releases/latest` 现在回的是 **v1.0.0**，不是 v1.0.1——
+  v1.0.1 的 tag 还在（`ce5b3c0ef`）但 **release 已被删除**（`gh release view v1.0.1` = 404，
+  release 列表 v1.0.2 → v1.0.0 → v0.6.5 直接跳过它）。叠加本版是 prerelease，当前状态是
+  **在线更新通道对存量用户一律显示「无更新」**：拿到 1.0.2 只能给预发布页直链手动安装，
+  不能承诺「等着自动更新」。读法已写进 runbook §8.2 与 AGENTS 已知坑。
 
 ## 🔍 壳侧一件：`run_sidecar_boot` 成功路径不再丢弃 sidecar stderr
 
