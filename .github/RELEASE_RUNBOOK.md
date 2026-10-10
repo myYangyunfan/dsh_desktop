@@ -221,10 +221,19 @@ node dsh-tauri/scripts/verify-update-sources.mjs --expect-version 0.5.3
 核验内容与判定：
 - 双源 `releases/latest` tag 必须一致（漂移=FAIL）且等于 `--expect-version`；
   **v1.0.0 起的实际判据只看 GitHub 侧**（Gitee 无 release，比对必然落空，勿据此判红）；
-- **时机**：publish 创建 release **不带 `--prerelease`**（0.5.7 整改的结论：出生即
+- **时机**：publish 创建 release **缺省不带 `--prerelease`**（0.5.7 整改的结论：出生即
   prerelease 会让更新器的 `releases/latest` 永远看不到新版本，「自动更新一直不生效」
   的全局根因），所以正常路径下**无需**再去页面「转正」；若某天发现 release 是
-  Pre-release，那是人工改出来的，先查是谁改的再跑 verify；
+  Pre-release 而并非下列开关所致，那是人工改出来的，先查是谁改的再跑 verify；
+- **预发布开关（v1.0.2 起）**：`tauri-release.yml` 顶层 `env.RELEASE_PRERELEASE`
+  置 `'true'` 时，publish 用 `gh release create --prerelease` 且标题带「（预发布）」——
+  用于「修复未经多平台实机复验、先出包但不自动推送」的版本。此时 §8.2 第一条的
+  「latest tag == `--expect-version`」判据**必然落空**（GitHub 的 latest 端点跳过
+  prerelease），这是开关的预期结果，不是发版缺陷：判据改取 GitHub 侧「资产在位 +
+  边车格式合法 + 边车哈希与 API `digest` 交叉核对一致」三段。恢复正式形态 = 开关改回
+  `'false'`（或删除该行，缺省即正式）；把已发的预发布转正 =
+  `gh release edit v1.0.2 --prerelease=false`，流水线只在 release 不存在时写元数据，
+  重跑 dispatch 不会回头覆盖（上传纪律第 1 条，已用桩 `gh` 反证过四种开关态）。
 - 资产对照表：Gitee 缺 >100MB 资产属预期；缺小资产/缺边车=WARN 或 FAIL；
 - 每个主资产：有边车→格式校验 + 与 GitHub API `digest`（sha256:…）交叉核对
   （不下载大文件即可确认边车哈希==已上传资产哈希）；HEAD 下载 URL 核

@@ -19,6 +19,32 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+_（暂无未发布条目；v1.0.2 已于 2026-10-11 以 GitHub **预发布**形态发布，其内容见下方 `[1.0.2]` 段。）_
+
+## [1.0.2] - 2026-10-11
+
+### fix(release)：v1.0.2 预发布版（全平台 · GitHub prerelease，不进 /releases/latest）
+
+- **触发**：v1.0.1 装到 macOS 实机**逐字复现**同一故障（首启「未能保存设置，请重试。」+ 9 条插件
+  `failed to load`），证明 v1.0.1 修的「profile 链接落点三种坏法」不是本案根因；同期 CI 全量单测
+  自 10-06 起的 chronic 红与 10-10 的两处断链已根治但未随 1.0.1 出包。
+- **内容**：下方四条——`fix(companion)`（profile 别名链接劫持 scoped 解析，**真根因**，自愈接进 boot
+  `repair` 步）、`feat(diag)`（loader 导入失败 + prompt 准入异常两条 guard 诊断补丁，把静默链的
+  原文请出 stderr）、`fix(ci)`（node 22 flush 死锁 12 例 + pristine 闭包缺供 51 例）、
+  `fix(compat)`（patch-surface 快照重收敛复绿漂移锁）。壳侧有改动：`run_sidecar_boot` 成功路径的
+  sidecar stderr 逐行转进 `desktop.log`（上限 400 行，超出留末尾并注明截断量）。
+- **发布形态**：推 `v1.0.2` tag → `tauri-release.yml` 云端构建 + publish 边车/四道闸；release 以
+  `--prerelease` 创建（工作流顶层新增 `RELEASE_PRERELEASE` 开关，本版置 `'true'`，下一个正式版
+  改回 `'false'`）。**prerelease 不进 GitHub `releases/latest`，在线更新检查看不到本版——这是刻意的**：
+  根因修复只经 mac 现场取证 + 本机单测闭环，未取得多平台实机复验，不该自动推给全量用户；
+  需要本版的人手动下载安装包。`mirror-gitee` 维持 `if: false` 停用。
+- **发布时实测基线（2026-10-11，退出码一律直取不经管道）**：192 个测试文件 / `npm test`
+  **2063 例 / 0 fail / 0 cancelled**（pass 2053、skip 10，逐条是环境缺料）；
+  `dsh-tauri/sidecar/cli.test.js` **21/21 / 0 fail**（exit 0）；`check-syntax`、`validate-pin`
+  （✓ dsh-v0.2.0-rc.2）、`patch-surface verify`（✓ 68 文件与快照一致）、
+  `verify-balance-dock.cjs`（exit 0）全绿。Rust 面本版有改动（`run_sidecar_boot` stderr 转出 +
+  3 例新单测），全量数字见 `dsh-tauri/CHANGELOG.md` 同名段。
+
 ### fix(compat)：patch-surface 快照重收敛——CI 漂移锁自 10-06 起 chronic 红根治（2026-10-10）
 
 - **现场**：`ci.yml`「补丁干预面漂移校验」自 2026-10-06 起 5 次 main push 连续红在同一格；

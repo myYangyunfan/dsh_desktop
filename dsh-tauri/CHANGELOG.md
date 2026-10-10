@@ -1,6 +1,35 @@
 # Changelog — DSH Desktop（Tauri 版，主线架构 v0.5.0 起）
 
-# DSH Desktop v1.0.2 — 开发中（静默失败诊断：boot 通道 stderr 转出）
+# DSH Desktop v1.0.2 — 预发布版（2026-10-11，GitHub prerelease）
+
+## 🚀 重点：v1.0.2 预发布版发布（全平台 · 不进 releases/latest）
+
+- **本版交付（壳侧一件 + Node 侧四条）**：壳侧只有 `run_sidecar_boot` 的 stderr 转出（见下条）；
+  Node 侧带 profile 别名链接根因修复（`fix(companion)`，mac 端 9 插件 `failed to load` + 首启
+  「未能保存设置」的**真根因**）、两条静默诊断补丁（`feat(diag)`）、CI 两处断链根治（`fix(ci)`）、
+  patch-surface 快照重收敛（`fix(compat)`），逐条见
+  [`dsh-desktop/CHANGELOG.md`](../dsh-desktop/CHANGELOG.md) 的 `[1.0.2]` 段。
+- **发布形态＝预发布**：`tauri-release.yml` 顶层新增 `RELEASE_PRERELEASE` 开关，本版置 `'true'`
+  → publish 用 `gh release create --prerelease`，标题带「（预发布）」。**副作用是刻意的**：
+  GitHub `releases/latest` 跳过 prerelease，所以壳侧更新器（轮询 `releases/latest`）看不到本版，
+  存量用户不会被自动推到这包——根因修复只经 mac 现场取证 + 本机单测闭环，未经多平台实机复验。
+  下一版恢复正式发布的姿势：把开关改回 `'false'`；若要把本版转正，人工
+  `gh release edit v1.0.2 --prerelease=false` 即可（流水线只在 release 不存在时写元数据，
+  不会回头覆盖）。
+- **发布后核验的读法随迁**：`verify-update-sources.mjs --expect-version 1.0.2` 的
+  「latest tag == 期望版本」判据在 prerelease 下**必然落空**，那是开关的预期结果，不是发版缺陷；
+  判据取 GitHub 侧「资产逐个在位 + 边车格式合法 + 边车哈希与 API `digest` 交叉核对一致」三段。
+  详见 `.github/RELEASE_RUNBOOK.md` §8.2。
+- **发布时实测基线（2026-10-11，`RUSTUP_TOOLCHAIN=stable-x86_64-pc-windows-gnu` 与
+  `--target x86_64-pc-windows-gnu` 配对、退出码直取不经管道）**：
+  `cargo test --workspace --target x86_64-pc-windows-gnu` → **692 passed / 0 failed /
+  4 ignored（36 个 target，exit 0）**，较 v1.0.1 的 689 正好多出本版新增的 3 例
+  `sidecar_boot_log_lines` 单测；告警面是存量（unused fn、`Atomic::fetch_update` 弃用等），
+  无 error。Node 侧同口径复跑：`npm test` 2063 例 / 0 fail / 0 cancelled（192 个测试文件）、
+  `sidecar/cli.test.js` 21/21、`check-syntax` / `validate-pin`（✓ dsh-v0.2.0-rc.2）/
+  `patch-surface verify`（✓ 68 文件）/ `verify-balance-dock.cjs` 全绿。
+  公告模板已本地干跑核对（heredoc 渲染 109 行、反引号 0 处、`${VERSION}` 六处展开正确），
+  `--prerelease` 分支用桩 `gh` 反证过四态（true / false / 开关缺失 / release 已存在时零调用）。
 
 ## 🔍 壳侧一件：`run_sidecar_boot` 成功路径不再丢弃 sidecar stderr
 
@@ -8,7 +37,7 @@
   `failed to load — auto-isolated` + 「未能保存设置」两轮排查无果。Node 侧真因
   （rc.2 起插件导入失败只进 cordis 内存环形缓冲、非核心条目不再抛 StartupError）
   由 `loader-import-failure-report` / `prompt-admission-reason-report` 两条补丁解决，
-  见 [`dsh-desktop/CHANGELOG.md`](../dsh-desktop/CHANGELOG.md) `[Unreleased]` 同名条目。
+  见 [`dsh-desktop/CHANGELOG.md`](../dsh-desktop/CHANGELOG.md) `[1.0.2]` 同名条目。
   **壳侧是第二重盲**：`run_sidecar_boot` 用 `.output()` 收全 stderr，却只在
   退出码非 0 时透出尾部 10 行——boot 五步（repair/sync/patches/compat-pin/preflight）
   在成功路径上写的日志一行都进不了 `desktop.log`。
@@ -40,7 +69,10 @@
   只给 `--target x86_64-pc-windows-gnu` 不够——build script 仍在 msvc host 上链接，
   会撞 Git Bash 的 `link`（`link: extra operand`）。必须
   `RUSTUP_TOOLCHAIN=stable-x86_64-pc-windows-gnu` 与 `--target` 配对。
-- **未发版**：v1.0.2 等 mac 现场捕获（真因）到位后一并备货。
+- **随本版发（原「未发版」条兑现）**：mac 现场捕获已到位——2026-10-11 只读体检脚本逐 bundle
+  真跑 `import()` 拿到 `SyntaxError: The requested module '@deepseek-ai/cosmokit' does not
+  provide an export named 'createVolatile'`，真根因是 profile 里 pnpm `npm:` 别名链接劫持
+  scoped 解析，修复在 Node 侧（`healProfileAliasLinks` 接进 boot `repair` 步），壳侧零改动。
 
 # DSH Desktop v1.0.1 — 补丁版（2026-10-10 正式发布）
 

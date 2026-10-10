@@ -52,6 +52,14 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # 发布形态开关（v1.0.2 专项，2026-10-11 裁定）：'true' → publish 用
+  # `gh release create --prerelease`，标题带「（预发布）」。
+  # 副作用是刻意的：GitHub 的 /releases/latest 端点跳过 prerelease，而壳侧更新器轮询的
+  # 正是 latest——本版因此【不会】被自动推给存量用户（根因修复只经 mac 现场取证 +
+  # 本机单测闭环，未取得多平台实机复验，先以预发布形态出包）。
+  # 恢复正式发布：改回 'false'。把本版转正：`gh release edit v1.0.2 --prerelease=false`
+  #（publish 只在 release 不存在时写元数据，重跑不会回头覆盖，见上传纪律 1）。
+  RELEASE_PRERELEASE: 'true'
 
 jobs:
   build-windows:
@@ -1401,44 +1409,67 @@ jobs:
           TAG='${{ steps.ver.outputs.tag }}'
           VERSION='${{ steps.ver.outputs.version }}'
           cat > release-notes.md << EOF
-          # DSH Desktop ${VERSION} — 全平台补丁版
+          # DSH Desktop ${VERSION} — 预发布版（全平台）
 
-          > v1.0.1 是 v1.0.0 的补丁版，只含一处根因的根治：首启弹「未能保存设置，请重试。」
-          > 且点重试无效、9 条内置插件 failed to load 被自动隔离（macOS 实机报障 + 部分
-          > Windows 用户同症，本机 Windows 沙箱逐字复现）。其余交付内容与 v1.0.0 相同——
-          > 28 条内置插件随包、内核 pin 0.2.0-rc.2 离线随包、全平台资产形态不变。
+          > 本版标为**预发布（pre-release）**：GitHub 的 latest 端点会跳过预发布，而客户端的在线
+          > 更新检查轮询的正是 latest——所以本版【不会】自动推给存量用户。这是刻意的发布形态：
+          > 核心修复只经 macOS 现场取证与本机单测闭环，尚未取得多平台实机复验。需要本版请从下方
+          > 资产表手动取包安装；在线推送随下一个正式版。
 
           ## 🛠 修复
 
-          **首启弹「未能保存设置，请重试。」/ 9 条插件 failed to load（mac + 部分 Windows）**
-          现场：开机后下方弹「未能保存设置，请重试。」，点重试无反应；日志里 settings /
-          better-sidebar / conversation-tweaks / quest-ui / side-session / openclaw-bridge /
-          dsh-subagent-lens / reasoning-effort / basics-panel 共 9 条 failed to load —
-          auto-isolated，dsh-easyrewrite 停在 pending (waiting for settings)。
-          根因：profile 的 node_modules/@deepseek-ai/schemastery 是旧装配期遗留的符号链接 /
-          junction 落点、指向残缺副本（缺 lib/index.mjs）。内核 rc.2 的解析路由对 profile 内
-          候选 statSync 命中即直达、无可用性回退——设置服务（依赖 schemastery）因此缺席，
-          前台保存永远失败、9 个依赖它的插件全部被隔离。旧同步实现撞链有三种坏法（node v24
-          实测）：顶层落点抛 ERR_FS_CP_DIR_TO_NON_DIR 被吞进不落盘的 boot 日志；嵌套悬空
-          junction 触发 cpSync 原生崩溃（Windows status 3221226505，JS 层 catch 不到）；
-          嵌套有效 junction 静默写穿（副本文件倒进链接目标）。重启 / 重试 / 覆盖安装均不自愈。
-          修复：目录同步改为复制前按源树形状摘除全部链接落点（含悬空、不递归穿透）；摘除
-          失败（杀软 / 句柄锁）时跳过本次复制并落日志，绝不让 cpSync 以原生崩溃收场。插件
-          落点与 lib/ 单点同样先摘链重建；单文件复制撞悬空链接时摘链重试一次。修复对
-          junction 与 symlink 是同一路径，随本版首启自动完成，无需用户操作。
+          **macOS 首启「未能保存设置，请重试。」+ 9 条内置插件 failed to load（真根因）**
+          现场：v1.0.0 与 v1.0.1 装到 mac 上症状逐字相同——settings / better-sidebar /
+          conversation-tweaks / quest-ui / side-session / openclaw-bridge / dsh-subagent-lens /
+          reasoning-effort / basics-panel 共 9 条 failed to load — auto-isolated，dsh-easyrewrite
+          停在 pending (waiting for settings)，前台保存设置永远失败。
+          取证：逐 bundle 真跑 import 拿到原文 SyntaxError: The requested module
+          '@deepseek-ai/cosmokit' does not provide an export named 'createVolatile'——不是模块
+          找不到，而是 ESM 具名导出在链接期就不存在，条目连 fiber 都没建成，日志里因此只剩一行
+          failed to load。
+          根因：profile 里一条 pnpm 别名链接 node_modules/@deepseek-ai/cosmokit 指向 ../cosmokit，
+          把 scoped 规格符指到了未 scoped 的 cosmokit 1.8.1（没有 createVolatile；应用闭包里是
+          @deepseek-ai/cosmokit 1.8.5）。该链接来自第三方插件安装，不是我们的同步写出来的；共享
+          farm 侧的同名链接是健康的，只是永远轮不到——profile 自身的 node_modules 优先。
+          @deepseek-ai/dsh-settings 同死，于是设置服务缺席。
+          修复：新增别名 / 悬空链接自愈，判据是「链接落点的包名 ≠ 目标 package.json 的 name」，
+          并接进启动链的 repair 步（原先为同类场景写的自愈只挂在 guard-* 子命令上，启动从不触及）。
+          同名 link: 开发安装不误伤；farm 对应物不健康时一条不动；真目录副本刻意不删（会和随后的
+          同步步骤互相拉锯）。装上本版后首启自动回落 farm 的 1.8.5，无需用户操作。
+          注：v1.0.1 修的是同一条症状的另一面（profile 链接落点让目录复制坏掉），那次修复是有效
+          的，但不是本案根因——所以 mac 装 1.0.1 仍逐字复现。
+
+          **发送文件恒报 prompt rejected（session/agent-busy）——同一根因，且原文不再被吞**
+          准入链的兜底会把任何非 RemoteError 的异常统一标成 session/agent-busy，真原因只落在
+          details.reason 而界面不渲染；设置服务缺席时上面那条故障就表现成「agent 忙」。
+          本版新增诊断补丁，把原始异常连同 cause 链写进 stderr（前缀 [prompt-admission]），
+          报文 code 与 details 一律不变（换 code 属契约变更，须走 error-codes 契约）。
+
+          **两处静默失败「原文上身」（可观测性）**
+          ① 插件导入失败：内核 rc.2 起加载器只把错误交给纯内存环形缓冲的 logger，非核心条目不再
+          抛 StartupError，原始错误从不落地——补一条 guard 补丁把导入异常连同 cause 链写到 stderr
+          （前缀 [loader-diagnostic]）。② 启动通道 stderr：壳侧过去只在退出码非 0 时透出尾行，
+          boot 五步（repair / sync / patches / compat-pin / preflight）成功路径上的日志整段丢弃——
+          现逐行转进 desktop.log（上限 400 行，超出保留末尾并注明截断量；一次启动实测 115 行 /
+          15KB）。以后「看不到报错」不再等于「没有报错」。
+
+          **CI 全量单测两处断链（工程侧，运行时字节零变化）**
+          node 22 下 12 例因被 unref 的 0ms 定时器整体 cancelledByParent 连坐；pristine 闭包缺供
+          让 51 例硬红。已把测试床冲刷辅助统一改 setImmediate，流水线在全量单测前先离线解出
+          pristine 内核。同批重取补丁干预面快照，自 2026-10-06 起 chronic 红的漂移校验复绿。
 
           ## ✅ 验证
 
-          - 新增回归套件 unit-companion-link-dest.test.js 10 例：mac 形态逐字复现 + cpSync
-            原生崩溃回归锁 + 「不写穿链接目标」负向断言 + 摘链失败兜底反证。
-          - 沙箱端到端：修复前同环境内核启动 9 failed + 1 pending → 修复后 0 + 0；二次同步
-            零改写幂等。
-          - Node 侧（2026-10-10 实测）：scripts/test/ 190 个测试文件，npm test = 2043 例 /
-            **0 fail**（9 条 skip 逐条是环境缺料）；check-syntax / validate-pin
-            （✓ dsh-v0.2.0-rc.2）/ patch-surface verify 全绿。
+          - Node 侧（2026-10-11 实测）：scripts/test/ 192 个测试文件，npm test = 2063 例 /
+            **0 fail / 0 cancelled**（pass 2053 / skip 10，skip 逐条是环境缺料而非缺陷）；
+            check-syntax、validate-pin（✓ dsh-v0.2.0-rc.2）、patch-surface verify
+            （✓ 68 文件与快照一致，无漂移）全绿。
           - sidecar：dsh-tauri/sidecar/cli.test.js 21/21 / 0 fail。
-          - Rust 侧：本版壳侧零改动（Rust / 契约 / IPC 通道未触），沿用 689 passed /
-            0 failed / 4 ignored（2026-10-08 实测）。
+          - 新增回归：别名链接自愈 8 例（别名摘除 / 同名 link: 不误伤 / farm 不健康一条不动 /
+            悬空摘除 / 真目录不动 / guard 路径同判据 / 缺目录早退 / 幂等）+ 启动链接线回归 1 例
+            （幂等断言带阳性对照，防「实例没跑起来也能过」）；诊断补丁 9 例在真字节上跑导入与
+            准入两段 catch。
+          - Rust 侧：本版壳侧一处改动（boot stderr 转出）+ 3 例新单测；其余沿用既有全量基线。
           - 发版防线：版本一致性四道闸（强制检出 tag、tauri.conf.json 版本比对、产物文件名内嵌
             版本断言、publish 汇总断言），每个主资产附带同名 .sha256 边车。
 
@@ -1473,12 +1504,13 @@ jobs:
 
           1. 完全退出当前 DSH Desktop（托盘右键 → 退出；点窗口关闭只是隐藏到托盘、内核进程仍在跑）
           2. 下载对应平台安装包并运行（覆盖安装，装回原目录，用户数据不动）
-          3. 首次启动会自动对齐补丁、把内置插件镜像进 profile，并顺带自愈本篇修复的链接落点
-             （受首启 toast / 插件隔离影响的用户无需任何操作）
+          3. 首次启动会自动对齐补丁、把内置插件镜像进 profile，并顺带自愈本篇修复的别名 /
+             悬空链接（含 v1.0.1 那轮的链接落点），受首启 toast 与插件隔离影响的用户无需任何操作
 
-          > 无法等待更新、想立刻自救的用户：也可以手工删掉 profile 内
-          > node_modules/@deepseek-ai/schemastery 落点后重启（Windows：rmdir /S /Q，
-          > macOS/Linux：rm -rf；对 junction / 悬空链接 / 真实目录均安全，不伤链接目标）。
+          > 无法等待更新、想立刻自救的用户：手工删掉 profile 里被劫持的 scoped 落点后重启即可——
+          > macOS/Linux 对 ~/.dsh/profiles/web/node_modules/@deepseek-ai/cosmokit 执行 rm
+          > （删的是链接，不伤链接目标），并把该 profile 的 package.json 里对应的 npm: 别名条目
+          > 一并删掉，否则下次 pnpm 安装会重建；Windows 同类落点用 rmdir /S /Q。
 
           ## 详细更新日志
 
@@ -1512,11 +1544,16 @@ jobs:
           TAG='${{ steps.ver.outputs.tag }}'
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             echo "release $TAG 不存在——创建（仅此一次触碰 release 元数据）"
-            # 不带 --prerelease：更新器的 /releases/latest 端点跳过 prerelease，
+            # 缺省不带 --prerelease：更新器的 /releases/latest 端点跳过 prerelease，
             # 出生即 prerelease 意味着更新检查永远看不到新版本（直到手动翻
             # latest——v0.5.7 首发即踩，「自动更新一直不生效」的全局根因之一）。
-            # 正式 release 自动成为 latest，更新链路即刻可见。
-            gh release create "$TAG" --title "DSH Desktop $TAG" --notes-file release-notes.md
+            # 需要预发布形态时由工作流顶层 RELEASE_PRERELEASE 开关显式开启（v1.0.2）。
+            if [ "${RELEASE_PRERELEASE}" = "true" ]; then
+              echo "RELEASE_PRERELEASE=true —— 以预发布形态创建（不进 /releases/latest，更新器看不到本版）"
+              gh release create "$TAG" --prerelease --title "DSH Desktop $TAG（预发布）" --notes-file release-notes.md
+            else
+              gh release create "$TAG" --title "DSH Desktop $TAG" --notes-file release-notes.md
+            fi
           fi
           for f in release-assets/*; do
             name=$(basename "$f")

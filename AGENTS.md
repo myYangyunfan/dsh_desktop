@@ -95,6 +95,9 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
 
 - **发版唯一入口是推 `v*` tag** → `tauri-release.yml`。`release.yml` 是退役 Electron 线，
   历史上写 `false && A || B` 造成过「假短路」，别去复活它。流程见 `.github/RELEASE_RUNBOOK.md`。
+  发布形态由该工作流顶层 `env.RELEASE_PRERELEASE` 决定（v1.0.2 置 `'true'`）：prerelease **不进**
+  GitHub `releases/latest`，而壳侧更新器轮询的正是 latest，于是「装了新版本却从不提示更新」是
+  **刻意的预期结果，不是待修的 bug**（转正姿势与核验读法见 runbook §8.2）。
 - **版本号要三处同步**：`dsh-desktop/package.json`、`dsh-tauri/src-tauri/Cargo.toml`
   （`workspace.package.version`）、`dsh-tauri/src-tauri/src/app/tauri.conf.json`。
   其中 `tauri.conf.json` 的 version 会被 CI 与 tag 做 fail-fast 比对，漏改直接发版失败。
@@ -142,9 +145,10 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   再取中央目录解析（几 MB，无需拖整包）；`.sha256` 边车直接 GET 即可读内容。
 - **稳定性三原则（评审默认立场）**：① 客户端必须能打开，装配失败终态恢复页而非退出；
   ② 兼容性不报错，意外以日志收场（`panics.log`）不以崩溃收场；③ 用户数据不动。
-- 文档里的测试基线数字常滞后。**现值（2026-10-10 实测，profile 链接落点自愈 + mac 端「未能保存设置」根治后）**：
-  `scripts/test/` 190 个测试文件，`npm test` = 2043 例 / **0 fail**；pass 与 skip 的分界随本机材料
-  与网络浮动（本次全量实测 pass 2034 / skip 9，差额来自 `example.com` 真实网络用例），
+- 文档里的测试基线数字常滞后。**现值（2026-10-11 实测，v1.0.2 备货——profile 别名链接根因修复 +
+  两条静默诊断补丁 + CI 两处断链根治到位后）**：
+  `scripts/test/` 192 个测试文件，`npm test` = 2063 例 / **0 fail / 0 cancelled**；pass 与 skip 的分界随本机材料
+  与网络浮动（本次全量实测 pass 2053 / skip 10，差额来自 `example.com` 真实网络用例），
   skip 逐条都是环境缺料而非缺陷（pristine 夹具缺 `@openai/codex` / `@earendil-works/pi-ai`、
   openclaw 双轨的兄弟目录 `../openclaw-dsh-bridge/` 不在盘、本机无 `D:\workspace\dsh-pack` 克隆、
   真实网络、`.tmp-kernel` 构建产物不可用）——一律以现跑输出为准，**pass 与 fail 才是判据**。
