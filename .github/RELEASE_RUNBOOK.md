@@ -234,6 +234,11 @@ node dsh-tauri/scripts/verify-update-sources.mjs --expect-version 0.5.3
   `'false'`（或删除该行，缺省即正式）；把已发的预发布转正 =
   `gh release edit v1.0.2 --prerelease=false`，流水线只在 release 不存在时写元数据，
   重跑 dispatch 不会回头覆盖（上传纪律第 1 条，已用桩 `gh` 反证过四种开关态）。
+  ⚠ **开关读的是「被运行的那份工作流文件」**：tag push 用 tag 提交里的版本，而
+  `workflow_dispatch` 用你选择的目标分支（通常 main）——所以给**旧 tag 补传/重建资产**时，
+  若 main 上开关仍是 `'true'`，重建出来的 release 会被标成预发布。重建前先确认该 tag 应有的
+  形态：要么把开关改回 `'false'` 再 dispatch，要么建完立刻
+  `gh release edit <tag> --prerelease=false`（v1.0.1 那类「release 被删后重建」就是这种场合）。
 - 资产对照表：Gitee 缺 >100MB 资产属预期；缺小资产/缺边车=WARN 或 FAIL；
 - 每个主资产：有边车→格式校验 + 与 GitHub API `digest`（sha256:…）交叉核对
   （不下载大文件即可确认边车哈希==已上传资产哈希）；HEAD 下载 URL 核
