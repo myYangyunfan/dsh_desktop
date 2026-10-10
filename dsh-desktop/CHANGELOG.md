@@ -19,7 +19,22 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
-_（暂无未发布条目；v1.0.1 已于 2026-10-10 发布，其内容见下方 `[1.0.1]` 段。）_
+### fix(compat)：patch-surface 快照重收敛——CI 漂移锁自 10-06 起 chronic 红根治（2026-10-10）
+
+- **现场**：`ci.yml`「补丁干预面漂移校验」自 2026-10-06 起 5 次 main push 连续红在同一格；
+  10-06 首红 1 行（`dsh-client-ui-workspace/lib/client.js` 内容漂移），10-08 起 2 行
+  （增 `dsh-api-session-controller/lib/index.js` 标记集变更）。`gh run view --log-failed` 走
+  results-receiver 被网络封，经 `gh api …/actions/jobs/<id>/logs` 取到逐行漂移输出。
+- **根因（两轮补丁产物变更后快照未重取，本机 dev 树因幂等守卫留在旧态互证「假绿」）**：
+  ① `efcbe11b7`（rc.2 换代重锚）时 session-manage 对 ws client.js 的删除守卫已重写为
+  `typeof window.__dshSessionManager.deleteSession === "function"` 强判，重锚快照收到的仍是旧
+  可选链判 undefined 字节；② `df342e55c`（识图插件批量退役）删掉休眠 vision 变换后 asc index
+  不再注入 `describeImagesWithVision` helper，快照里由其注释派生的
+  `read the resolved HOST-side value` 两条散文垃圾标记随之失效。
+- **修复与验证**：本机 `npm ci` 重收敛后 `verify` 逐字复现 CI 的两行漂移输出；收敛态全量门禁
+  复跑全绿（2043 例 / 0 fail / 9 skip、`check-syntax`、`verify-balance-dock.cjs`、`validate-pin`）；
+  重取快照（surface 67 文件不变，markerCount 82→80，仅上述两文件 hash 变更）后 `verify` 复绿。
+- **影响面**：纯守卫元数据，运行时字节零变化（fresh 收敛态即 CI 构建与安装包的既有形态）。
 
 ## [1.0.1] - 2026-10-10
 

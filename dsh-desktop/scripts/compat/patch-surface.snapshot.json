@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-10-05T19:37:38.412Z",
+  "generatedAt": "2026-10-10T12:05:33.221Z",
   "kernelRoot": "@deepseek-ai",
-  "markerCount": 82,
+  "markerCount": 80,
   "surface": [
     {
       "file": "dsh-agent-loop/lib/index.js",
@@ -50,11 +50,9 @@
     },
     {
       "file": "dsh-api-session-controller/lib/index.js",
-      "sha256": "79be7b994736dd9f",
+      "sha256": "57627bfa6813d6fd",
       "markers": [
-        "larger history page",
-        "read the resolved HOST-side value",
-        "read the resolved HOST-side value (settings.get), not the"
+        "larger history page"
       ]
     },
     {
@@ -197,7 +195,7 @@
     },
     {
       "file": "dsh-client-ui-workspace/lib/client.js",
-      "sha256": "2684fd4e428c2ab3",
+      "sha256": "ec4cfacdec0e3a5b",
       "markers": [
         "manual sort drag sync",
         "open project dir",

@@ -98,6 +98,13 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
 - **版本号要三处同步**：`dsh-desktop/package.json`、`dsh-tauri/src-tauri/Cargo.toml`
   （`workspace.package.version`）、`dsh-tauri/src-tauri/src/app/tauri.conf.json`。
   其中 `tauri.conf.json` 的 version 会被 CI 与 tag 做 fail-fast 比对，漏改直接发版失败。
+- **`patch-surface.snapshot.json` 悬空快照会「假绿」——改过补丁产物必须重收敛 + 重取快照同提交入库**：
+  补丁变换带幂等守卫，改注入文案 / 删变换后本机 dev 树不重跑 `npm ci` 仍停在旧字节，与旧快照
+  互证 `verify` 绿；只有新鲜收敛态（CI 的 `npm ci`）才暴露漂移。2026-10-06~10 的 chronic 红即两轮
+  只改源未重取快照（rc.2 重锚改 ws client.js 守卫字节、识图退役删 asc index 注入体+其散文垃圾标记）。
+  姿势：`npm ci` 重收敛 → `node scripts/compat/patch-surface.js snapshot node_modules/@deepseek-ai ..`
+  → `verify` 复绿 → 与改动同一提交推。本机复现 CI 红用同一条 verify 命令对照 CI 日志逐字核
+  （CI 日志 `gh run view --log-failed` 取不到时改走 `gh api repos/<owner>/<repo>/actions/jobs/<job_id>/logs`）。
 - **冒烟测试绝不跑真安装器**：NSIS 的 PREINSTALL 会静默卸载本机真实版本。
   冒烟用手拼安装布局 + `DSH_HOME`/`DSH_TAURI_USERDATA` 隔离。
 - **NSIS 钩子（installerHooks.nsh）改动必须过 `makensis` 编译验证**——宏展开、栈平衡、
