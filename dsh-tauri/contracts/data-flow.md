@@ -63,7 +63,8 @@ app 启动
  ├─ [0] 单实例锁 + run-state + panic hook                      （shell-core/lib）
  ├─ [1] repair：损坏 manifest/home patch 自愈                  （sidecar boot 步骤①）
  ├─ [2] sync：伴随插件同步                                      （sidecar boot 步骤②）
- ├─ [3] patches：22 个文本手术（幂等）                          （sidecar boot 步骤③）
+ ├─ [3] patches：补丁注册表全量（PATCH_SPECS 现 60 项 = 45 file + 15 root，幂等；
+ │                 计数锁见 ta6-registry-invariants / ta6-baseline-matrix）（sidecar boot 步骤③）
  ├─ [4] compat-pin：kernel-pin fail-closed 校验                 （sidecar boot 步骤④，143fa9e7 compat-layer M1）
  ├─ [5] preflight：补丁就绪 + koffi 预检 → 降级 overlay         （sidecar 步骤⑤）
  ├─ [6] guard-snapshot（boot 前快照，GUARD_FILES 四配置文件）
@@ -98,6 +99,12 @@ app 启动
 - panic 全局 hook：落盘 `%APPDATA%/dsh-desktop/logs/panics.log`，进程存活优先。
 
 - 步骤 [1]-[4] 全部经 sidecar（Node 脚本复用 `dsh-desktop/scripts/`），Rust 只编排不实现。
+- **boot 通道 stderr 逐行进壳层日志（含退出码 0 的成功路径）**：`run_sidecar_boot` 把
+  sidecar stderr 经 `log_line` 转进 `desktop.log`，上限 400 行、超出保留末尾并在首行
+  注明截断量。理由：repair/sync/patches 三级的自愈与告警行（如「补丁应用汇总: …/
+  失配 N 项…」「宿主组合关键服务自检: 已修复 profile 模块 fallback 链接（X）」）只在
+  这里出现，此前只在非零退出时透出，成功即整段丢弃 = 补丁静默失效无从查证（2026-10-10
+  mac 端 9 插件 failed to load 排查的第二重盲）。实测一次 boot = 115 行 / 15KB。
 - **无 overlay 更新链**：Electron 版在 [2] 前的「检查/应用内核更新」整体不存在；overlay 布局恒为随版本分发的静态副本。
 
 ## 4. 运行时数据流（桥 + 事件）

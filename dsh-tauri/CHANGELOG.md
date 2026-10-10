@@ -1,5 +1,47 @@
 # Changelog — DSH Desktop（Tauri 版，主线架构 v0.5.0 起）
 
+# DSH Desktop v1.0.2 — 开发中（静默失败诊断：boot 通道 stderr 转出）
+
+## 🔍 壳侧一件：`run_sidecar_boot` 成功路径不再丢弃 sidecar stderr
+
+- **症状（不是崩溃，是查不到）**：mac 端 v1.0.0/v1.0.1 首启 9 个伴随插件
+  `failed to load — auto-isolated` + 「未能保存设置」两轮排查无果。Node 侧真因
+  （rc.2 起插件导入失败只进 cordis 内存环形缓冲、非核心条目不再抛 StartupError）
+  由 `loader-import-failure-report` / `prompt-admission-reason-report` 两条补丁解决，
+  见 [`dsh-desktop/CHANGELOG.md`](../dsh-desktop/CHANGELOG.md) `[Unreleased]` 同名条目。
+  **壳侧是第二重盲**：`run_sidecar_boot` 用 `.output()` 收全 stderr，却只在
+  退出码非 0 时透出尾部 10 行——boot 五步（repair/sync/patches/compat-pin/preflight）
+  在成功路径上写的日志一行都进不了 `desktop.log`。
+- **丢的是什么（实测真形，一次 boot = 115 行 / 15.4KB）**：
+  `补丁应用汇总: 写入 0 处 / 失配 0 项 / 失败 0 项 / 降级 0 项 / 告警 0 项 / 共 60 项`
+  ——补丁到底有没有落到盘，只有这一行能证明；以及
+  `宿主组合关键服务自检: 已修复 profile 模块 fallback 链接（@deepseek-ai/dsh-credentials-local）
+  ——不修复的话保存 API key 会报 credentials service is absent`
+  这类自愈行（名字直接点名被修坏的包）。失配非零的现场过去只能从崩溃里捞。
+- **改法（朴素：全量转出 + 有界）**：`.output()` 之后、状态判定之前逐行 `log_line`
+  转出，成功/失败两条路径同源；纯函数 `sidecar_boot_log_lines(stderr, cap)` 做
+  trim/去空行/保序，上限 `SIDECAR_BOOT_LOG_CAP = 400` 行，超出**保留末尾**（死因在
+  末尾判据与 `tail_lines` 一致：V8 fatal/abort 报告总是最后才出）并在首行显式注明
+  「共 N 行 / 仅转出末尾 M 行 / 丢弃前 K 行」——绝不静默丢行，本次修的正是静默丢整段。
+- **契约随迁两处**（`contracts/data-flow.md`）：§3 补「boot 通道 stderr 逐行进壳层
+  日志（含退出码 0）」口径与实测体积；顺手校正 §3 时序图里 [3] patches 的陈旧计数
+  「22 个文本手术」→「PATCH_SPECS 现 60 项 = 45 file + 15 root」（与
+  `ta6-registry-invariants` / `ta6-baseline-matrix` 计数锁同源）。桥命令/通道表/错误码
+  一律未触（`E_SIDECAR_EXIT` 语义不变），`lib.rs` 契约审计与 ta7 哨兵均无随迁需求。
+- **验证（退出码直取，不经管道——本仓库踩过 `| tail` 掩盖 `$?` 的坑）**：
+  新增 3 例 Rust 单测（全量保序 / 超上限留末尾且注明截断量 / 空输入不刷行）；
+  `cargo test -p dsh-tauri-app --target x86_64-pc-windows-gnu --lib supervisor`
+  → **49 passed / 0 failed**（exit 0）；整目标 `--lib` → **235 passed / 0 failed /
+  1 ignored**（exit 0，152.5s）。Node 侧同口径复跑：`npm test` 2054 例 0 fail、
+  `sidecar/cli.test.js` 21/21、`ta7-contract-audit` 18/18、`ta3-boot-chain` 在 pristine
+  源上跑生产 `applyAll(60)` 一条龙绿。仅剩既有两条 warning（`Atomic::fetch_update`
+  弃用、`fetch_sidecar_sha256` 未使用），与本改动无关。
+- **构建姿势（本机踩过一次「假绿」**：默认 host 是 `stable-x86_64-pc-windows-msvc`，
+  只给 `--target x86_64-pc-windows-gnu` 不够——build script 仍在 msvc host 上链接，
+  会撞 Git Bash 的 `link`（`link: extra operand`）。必须
+  `RUSTUP_TOOLCHAIN=stable-x86_64-pc-windows-gnu` 与 `--target` 配对。
+- **未发版**：v1.0.2 等 mac 现场捕获（真因）到位后一并备货。
+
 # DSH Desktop v1.0.1 — 补丁版（2026-10-10 正式发布）
 
 ## 🐛 重点：首启「未能保存设置」toast + 9 插件 failed to load 根治（壳侧零改动）

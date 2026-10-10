@@ -820,6 +820,16 @@ impl Supervisor {
                 eprintln!("[boot] {msg}");
                 msg
             })?;
+        // boot 通道 stderr 逐行进壳层日志——**成功路径也要**（2026-10-10 补）：
+        // repair/sync/patches 三级的自愈与告警行只在这里出现，退出码 0 时整段丢弃
+        // 等于把「静默失效」的第二现场也抹掉。实测真形：一次 boot = 115 行 / 15KB
+        // （60 补丁全量），其中「补丁应用汇总: …/失配 N 项…」「宿主组合关键服务
+        // 自检: 已修复 profile 模块 fallback 链接（@deepseek-ai/dsh-credentials-
+        // local）」正是 mac 端 9 插件 failed to load 排查里唯一能证明补丁到底落到
+        // 没有的证据。上限只防异常输出（崩溃回环）灌爆 desktop.log，截断显式注明。
+        for line in sidecar_boot_log_lines(&String::from_utf8_lossy(&out.stderr), SIDECAR_BOOT_LOG_CAP) {
+            log_line(&line);
+        }
         if !out.status.success() {
             // 死因在输出**末尾**：sidecar 自身进度行先刷屏，V8 fatal/OOM/abort
             // 报告最后才出（0xC0000409 真机日志此前 take(6) 只留头部，只剩
@@ -2090,6 +2100,45 @@ mod tests {
         assert_eq!(tail_lines("\n \n\t\n", 5), "");
     }
 
+    /// boot stderr 转出：保序、trim、去空行，未超上限就全量——「补丁应用汇总」
+    /// 与各类自愈行都在中段，按头/尾切片会把它们切掉（这次修的就是这个）。
+    #[test]
+    fn sidecar_boot_log_lines_keeps_all_in_order() {
+        let got = sidecar_boot_log_lines(
+            "[sidecar] boot 步骤 repair → OK (25ms)\n\n   \n[sidecar] 补丁应用汇总: 写入 0 处 / 失配 0 项 / 共 60 项\n  [sidecar] 尾行 \n",
+            400,
+        );
+        assert_eq!(
+            got,
+            vec![
+                "[sidecar] boot 步骤 repair → OK (25ms)".to_string(),
+                "[sidecar] 补丁应用汇总: 写入 0 处 / 失配 0 项 / 共 60 项".to_string(),
+                "[sidecar] 尾行".to_string(),
+            ]
+        );
+    }
+
+    /// 超上限：留**末尾**（死因在末尾，与 tail_lines 同判据），且第一行显式注明
+    /// 截断量——绝不静默丢行（本次修的正是「静默丢整段」）。
+    #[test]
+    fn sidecar_boot_log_lines_over_cap_keeps_tail_and_says_so() {
+        let s = "L1\nL2\nL3\nL4\n";
+        let got = sidecar_boot_log_lines(s, 2);
+        assert_eq!(got.len(), 3, "notice + 末尾 2 行");
+        assert_eq!(got[1], "L3");
+        assert_eq!(got[2], "L4");
+        assert!(got[0].contains("共 4 行"), "notice 应注明总行数: {}", got[0]);
+        assert!(got[0].contains("末尾 2 行"), "notice 应注明转出量: {}", got[0]);
+        assert!(got[0].contains("丢弃前 2 行"), "notice 应注明丢弃量: {}", got[0]);
+    }
+
+    /// 空/纯空白 → 空集：不给 desktop.log 刷空行（也不产生 notice）。
+    #[test]
+    fn sidecar_boot_log_lines_empty_is_quiet() {
+        assert!(sidecar_boot_log_lines("", 400).is_empty());
+        assert!(sidecar_boot_log_lines("\n \n\t\n", 400).is_empty());
+    }
+
     /// IO 作用域：只认 `mark` 之后追加的本次内核输出——mark 之后无新内容
     /// （Node 缺失等未 spawn 即失败）不得引用上一次运行的残留报错（旧根因
     /// 安到新失败上）。显式路径 + 纯函数组合，不重定向全局环境（并行套件
@@ -3209,6 +3258,34 @@ fn tail_lines(s: &str, n: usize) -> String {
     }
     let start = lines.len().saturating_sub(n);
     lines[start..].join(" | ")
+}
+
+/// sidecar boot stderr 的转出上限：一次 boot 实测 115 行 / 15KB（60 补丁全量、
+/// 已收敛态），首启全量注入时更长——400 行足够覆盖，超出即截断且**显式注明**。
+const SIDECAR_BOOT_LOG_CAP: usize = 400;
+
+/// 纯函数：sidecar boot 的 stderr → 待转入壳层日志的行（trim、去空行、保序）。
+/// 未超上限全量转出；超上限保留**末尾** cap 行，并在最前一行注明截断量——死因
+/// 在末尾判据与 [`tail_lines`] 同源（V8 fatal/abort 报告总是最后才出）。
+/// 空/纯空白输入 → 空集（不往 desktop.log 刷空行）。
+fn sidecar_boot_log_lines(stderr: &str, cap: usize) -> Vec<String> {
+    let lines: Vec<&str> = stderr.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+    if lines.is_empty() {
+        return Vec::new();
+    }
+    if lines.len() <= cap {
+        return lines.iter().map(|l| l.to_string()).collect();
+    }
+    let skipped = lines.len() - cap;
+    let mut out = Vec::with_capacity(cap + 1);
+    out.push(format!(
+        "[sidecar] boot stderr 共 {} 行，仅转出末尾 {} 行（丢弃前 {} 行）",
+        lines.len(),
+        cap,
+        skipped
+    ));
+    out.extend(lines[skipped..].iter().map(|l| l.to_string()));
+    out
 }
 
 #[cfg(test)]

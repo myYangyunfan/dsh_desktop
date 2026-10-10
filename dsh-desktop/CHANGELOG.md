@@ -110,9 +110,9 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
   4.5 段（逐 bundle 真跑 `import()`，Windows 侧对照实测 28 个入口全 OK）与第 5 段
   `<DSH_HOME>/logs/startup-*.log` 检索；`dsh-mac-trace.mjs` v2 改为注入上述两处
   （v1 注入点选错：`inactiveDiagnostic` 对 `fiber === void 0` 只回字面量
-  "failed to import"，本身不含真因）。壳层侧还有一处缺口未修：`run_sidecar_boot`
-  只在退出码非 0 时转发 sidecar stderr，boot 五步（repair/sync/patches/compat-pin/
-  preflight）的 anchor-missing 告警在成功路径上被丢弃。
+  "failed to import"，本身不含真因）。
+  壳层第三处缺口已同批修好（boot 五步的 stderr 在退出码 0 时被整段丢弃）：见
+  `dsh-tauri/CHANGELOG.md` v1.0.2 段与 `supervisor.rs::sidecar_boot_log_lines`。
 
 ## [1.0.1] - 2026-10-10
 
