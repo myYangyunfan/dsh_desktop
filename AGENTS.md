@@ -153,6 +153,13 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   `<CARGO_TARGET_DIR>/debug/`（host 目录，复用不到三元组目录里的增量），链接期炸成
   `final link failed: memory exhausted` + 「crate … required in rlib format」+ 上百条 ICE 级联，
   看着像代码坏了其实只是工具链指错了。
+  **「配对」是硬要求，只给 `--target` 不够（2026-10-10 实测）**：本机 default host 是
+  `stable-x86_64-pc-windows-msvc`，`--target …-gnu` 时 **build script 仍在 msvc host 上链接**，
+  于是 `link.exe` 解析到 Git Bash 的 coreutils `link`，报 `link: extra operand '…rcgu.o'`
+  ——看着像依赖坏了。正确姿势：
+  `RUSTUP_TOOLCHAIN=stable-x86_64-pc-windows-gnu CARGO_TARGET_DIR=C:/dsh-tauri-build cargo test -p <crate> --target x86_64-pc-windows-gnu …`。
+  取退出码别接管道：`cargo test … > 日志 2>&1; echo exit=$?`（`| tail` 会把 `$?` 换成 tail 的 0，
+  本次就是这么错过一次编译失败的）。
   `dsh-tauri/docs/development.md` 那组「177 Rust 例 / 71 文件 Node」是旧账——**一律以实测输出为准**。
 - 部分文件含 GBK 遗留注释（如 `dsh-tauri/src-tauri/Cargo.toml`），按 UTF-8 读会显示乱码；
   编辑这类文件时保持原编码，不要顺手「修正」成全角乱码以外的内容。
