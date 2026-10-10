@@ -124,9 +124,9 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   再取中央目录解析（几 MB，无需拖整包）；`.sha256` 边车直接 GET 即可读内容。
 - **稳定性三原则（评审默认立场）**：① 客户端必须能打开，装配失败终态恢复页而非退出；
   ② 兼容性不报错，意外以日志收场（`panics.log`）不以崩溃收场；③ 用户数据不动。
-- 文档里的测试基线数字常滞后。**现值（2026-10-09 实测，settingsScope 退役 + better-sidebar 迁移 + prompt-custom 测试重建 + dsh-balance 0.1.3 价目修复后）**：
-  `scripts/test/` 189 个测试文件，`npm test` = 2033 例 / **0 fail**；pass 与 skip 的分界随本机材料
-  与网络浮动（本次全量实测 pass 2024 / skip 9，差额来自 `example.com` 真实网络用例），
+- 文档里的测试基线数字常滞后。**现值（2026-10-10 实测，profile 链接落点自愈 + mac 端「未能保存设置」根治后）**：
+  `scripts/test/` 190 个测试文件，`npm test` = 2043 例 / **0 fail**；pass 与 skip 的分界随本机材料
+  与网络浮动（本次全量实测 pass 2034 / skip 9，差额来自 `example.com` 真实网络用例），
   skip 逐条都是环境缺料而非缺陷（pristine 夹具缺 `@openai/codex` / `@earendil-works/pi-ai`、
   openclaw 双轨的兄弟目录 `../openclaw-dsh-bridge/` 不在盘、本机无 `D:\workspace\dsh-pack` 克隆、
   真实网络、`.tmp-kernel` 构建产物不可用）——一律以现跑输出为准，**pass 与 fail 才是判据**。
@@ -159,6 +159,15 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   payload 里的插件目录镜像进 `<DSH_HOME>/profiles/<name>/node_modules/`，所以手工往 profile
   里塞文件会在下次启动被覆盖——要改就改 `assets/plugins/`（开发机是仓库目录，安装机是
   `<安装根>/dsh-desktop/assets/plugins/`）。
+- **profile 里的链接落点是同步盲区，`cpSync` 撞上它有三种坏法（node v24 实测）**：目录级
+  `cpSync(src, dest)` 的 dest 是链接时——顶层落点 → 抛 `ERR_FS_CP_DIR_TO_NON_DIR`（可被 catch，
+  旧实现吞进日志）；嵌套悬空 junction → **Node 原生崩溃**（fail-fast，JS 层根本 catch 不到）；
+  嵌套非悬空 junction → 静默写穿，把新文件倒进链接目标。mac 首启「未能保存设置」toast
+  （settings + 8 个插件 `failed to load`、easyrewrite pending）就是旧装配期 schemastery
+  junction 指向残缺副本、上述三种坏法各占一段而成；boot 通道日志不落 desktop.log 又让失败
+  双重静默。`companion-profile.js` 的 `syncDir` 现已在复制前按 src 树形状摘除全部链接落点
+  （含悬空、不穿透），插件落点 / `lib/` 落点 / 单文件复制各有摘链兜底，回归锁
+  `unit-companion-link-dest`（含原生崩溃用例与「不写穿」负向断言）。
 - **内核右栏是可扩展面，别去改内核包**：`dsh-client-ui-sidebar-right` 的
   `sidebarRightTabs.register` + `sidebar.right.pane.tab` 是公开两段式标签 API（内核自己的
   文件/文档预览/终端也用它）。本仓库的 better-sidebar 已经用它把工作台接成右栏里的一个标签，

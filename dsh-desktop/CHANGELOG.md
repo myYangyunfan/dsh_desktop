@@ -21,6 +21,30 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 _（v1.0.0 已于 2026-10-09 发布，其内容见下方 `[1.0.0]` 段；此后新的开发条目写在这里。）_
 
+### fix(companion)：mac 端首启「未能保存设置」toast + 9 插件 failed to load 根治 —— profile 链接落点同步自愈（2026-10-10）
+
+- **现场**（macOS v1.0.0 实机日志 + 本机沙箱逐字复现）：settings / better-sidebar /
+  conversation-tweaks / quest-ui / side-session / openclaw-bridge / dsh-subagent-lens /
+  reasoning-effort / basics-panel 共 9 条 `failed to load — auto-isolated`；
+  `dsh-easyrewrite` `pending (waiting for settings)`；前台弹「未能保存设置，请重试。」
+  且点击重试无效（设置服务缺席，保存永远失败）。
+- **根因**：profile 的 `node_modules/@deepseek-ai/schemastery` 是旧装配期遗留的
+  symlink/junction 落点、指向残缺副本（缺 `lib/index.mjs`）——rc.2 解析路由对 profile
+  内候选 statSync 命中即直达、无可用性回退，schemastery 修不好则设置服务（依赖方）
+  缺席、9 个依赖 schemastery 的伴随插件全部隔离。旧同步实现修不好链接落点，撞链
+  有三种坏法（node v24 实测）：顶层落点 → `ERR_FS_CP_DIR_TO_NON_DIR` 抛错被吞进
+  boot 日志（boot 通道日志不落 desktop.log，双重静默）；嵌套悬空 junction →
+  **cpSync 原生崩溃**（status 3221226505，JS 层不可 catch）；嵌套非悬空 junction →
+  静默写穿，副本文件倒进链接目标。重启 / 重试 / 覆盖安装均不自愈。
+- **修复**（`dsh-desktop/scripts/lib/companion-profile.js`）：目录级同步 `syncDir` 复制前
+  按 src 树形状摘除全部链接落点（`unlinkLinkDests`，含悬空、不递归穿透）；摘除失败
+  （杀软 / handle 锁）跳过本次复制并落日志，绝不让 cpSync 以原生崩溃收场。插件落点
+  与 `lib/` 单点同样先摘链重建；单文件复制撞悬空链接时摘链重试一次。
+- **验证**：新增 `scripts/test/unit-companion-link-dest.test.js` 10 例（mac 形态逐字
+  复现 + 原生崩溃回归锁 + 「不写穿链接」负向断言 + 摘链失败兜底反证）；沙箱端到端：
+  修复前同环境内核启动 9 failed + 1 pending → 修复后 0 + 0，二次同步零改写幂等；
+  反证探针实测 `status 3221226505`。全量：190 文件 / 2043 例 / 0 fail。
+
 ## [1.0.0] - 2026-10-09
 
 ### feat(release)：v1.0.0 正式版发布（纯净线首版 · 全平台）

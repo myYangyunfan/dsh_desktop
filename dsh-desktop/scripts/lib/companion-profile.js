@@ -585,11 +585,84 @@ function dirNeedsSync(src, dest) {
   return false;
 }
 
+/** 摘除单个链接（symlink/junction，含悬空），返回是否摘除。Windows junction 需
+ * unlinkSync（实测可用且不动链接目标）；失败再退 rmSync（recursive 只删链接本身）。 */
+function forceUnlinkLink(p) {
+  try { fs.unlinkSync(p); return true; } catch { /* fallthrough */ }
+  try {
+    fs.rmSync(p, { force: true, recursive: true, maxRetries: 3, retryDelay: 150 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** p 为链接（symlink/junction，含悬空）时摘除，返回是否摘除。 */
+function unlinkLinkDest(p) {
+  let lst;
+  try { lst = fs.lstatSync(p); } catch { return false; }
+  if (!lst.isSymbolicLink()) return false;
+  return forceUnlinkLink(p);
+}
+
+/** p 当前是否为链接（含悬空）。 */
+function isLink(p) {
+  try { return fs.lstatSync(p).isSymbolicLink(); } catch { return false; }
+}
+
+/**
+ * 按 src 树形状清理 dest 内的链接落点，返回 { removed, remaining }。必须在
+ * cpSync 之前调用：实测（node v24.15.0 / Windows）「src 有同名目录条目、dest
+ * 却是悬空 junction」会让 cpSync **原生崩溃**（fail-fast，JS 层根本 catch
+ * 不到）；「dest 是非悬空 junction」则被静默写穿——把副本文件倒进链接目标
+ * （旧构建树）里，profile 自身永远不自愈。顶层落点是链接时 cpSync 抛
+ * ERR_FS_CP_DIR_TO_NON_DIR 并会被旧实现吞进日志（boot 通道日志不落
+ * desktop.log，双重静默）。mac 端实测形态：profile 的
+ * @deepseek-ai/schemastery 是旧装配期链接、指向残缺副本，导致设置服务与全部
+ * schemastery 依赖方 failed to load（前台「未能保存设置」toast 的真实根因）。
+ * src 树驱动遍历——cp 只会触碰这些路径；dest 多出的条目一律不动（与 cp 的
+ * 「不删多余文件」语义一致）。链接一律不递归穿透（防环）。remaining = 摘除
+ * 失败（如被杀软/handle 锁住）仍为链接的个数，调用方应据此跳过复制。
+ */
+function unlinkLinkDests(srcDir, destDir) {
+  const out = { removed: 0, remaining: 0 };
+  let entries;
+  try { entries = fs.readdirSync(srcDir, { withFileTypes: true }); } catch { return out; }
+  for (const e of entries) {
+    const d = path.join(destDir, e.name);
+    let lst;
+    try { lst = fs.lstatSync(d); } catch { continue; }
+    if (lst.isSymbolicLink()) {
+      if (forceUnlinkLink(d)) out.removed += 1;
+      else out.remaining += 1;
+      continue;
+    }
+    if (e.isDirectory() && lst.isDirectory()) {
+      const sub = unlinkLinkDests(path.join(srcDir, e.name), d);
+      out.removed += sub.removed;
+      out.remaining += sub.remaining;
+    }
+  }
+  return out;
+}
+
 /** 目录级同步：内容一致时跳过；源不存在时 no-op。失败仅告警不抛出。 */
 function syncDir(src, dest, log) {
   if (!fs.existsSync(src)) return;
   try {
     if (fs.existsSync(dest) && !dirNeedsSync(src, dest)) return;
+    // 需要复制时先摘链接落点（顶层 + 按 src 形状的全部嵌套位），再整体复制。
+    const topUnlinked = unlinkLinkDest(dest);
+    if (topUnlinked && log) log('同步目录：顶层落点为链接，已摘链重建 ' + dest);
+    const nested = topUnlinked ? { removed: 0, remaining: 0 } : unlinkLinkDests(src, dest);
+    if (nested.removed > 0 && log) log('同步目录：清理 ' + nested.removed + ' 个链接落点后重建 ' + dest);
+    // 摘除失败的链接落点留在 src 形状位上时，cpSync 对悬空 junction 会原生
+    // 崩溃（JS 层不可 catch）→ 宁可跳过本次复制（下次启动重试），绝不以
+    // 进程级 fail-fast 收场（稳定性三原则：崩溃是唯一不可接受的降级）。
+    if (nested.remaining > 0 || (!topUnlinked && isLink(dest))) {
+      if (log) log('同步目录：链接落点摘除失败，跳过本次复制（防 cpSync 原生崩溃）: ' + dest);
+      return;
+    }
     fs.cpSync(src, dest, { recursive: true, force: true, preserveTimestamps: true });
   } catch (err) {
     if (log) log('同步目录失败 ' + src + ': ' + err.message);
@@ -751,6 +824,13 @@ function syncCompanionFiles(opts) {
       if (plan) plan(`dry-run: 将安装 ${p.name} → ${dest}${isBundle ? '（bundle 插件）' : ''}`);
       continue;
     }
+    // 链接落点（symlink/junction，含悬空）先摘链再按真实目录重建：不摘的话
+    // ① 按文件复制会写穿链接、污染链接目标（旧构建树）；② 悬空链接使 mkdir/
+    // 复制全数失败（onCopyFail 仅告警）→ 插件永远装不上——与 VENDOR_DEPS 同属
+    // 「链接落点永不自愈」类。lib/ 单点同样处理（悬空 lib 链接让 mkdir 直接
+    // 抛出、整个同步中断）。
+    if (unlinkLinkDest(dest) && log) log('插件 ' + p.id + ' 落点原为链接，已摘链重建为真实目录');
+    if (unlinkLinkDest(path.join(dest, 'lib')) && log) log('插件 ' + p.id + ' lib/ 落点原为链接，已摘链重建为真实目录');
     fs.mkdirSync(path.join(dest, 'lib'), { recursive: true });
     for (const f of PLUGIN_FILES) {
       const sf = path.join(src, f);
@@ -765,6 +845,16 @@ function syncCompanionFiles(opts) {
       try {
         fs.cpSync(sf, df, { force: true, preserveTimestamps: true });
       } catch (err) {
+        // 悬空链接落点的单文件形式：先摘链接再重试一次（否则该文件每次同步都
+        // 失败且只有 onCopyFail 告警，插件长期缺文件）。
+        let dfLst = null;
+        try { dfLst = fs.lstatSync(df); } catch { /* 目标缺失按原错误处理 */ }
+        if (dfLst && dfLst.isSymbolicLink() && !fs.existsSync(df) && forceUnlinkLink(df)) {
+          try {
+            fs.cpSync(sf, df, { force: true, preserveTimestamps: true });
+            continue;
+          } catch { /* 重试仍失败 → 走 onCopyFail */ }
+        }
         if (onCopyFail) onCopyFail(sf, err);
       }
     }
