@@ -209,9 +209,21 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   2026-10-10 已加两条 guard 组诊断补丁把原文请出 stderr：`loader-import-failure-report`
   （`[loader-diagnostic]`）与 `prompt-admission-reason-report`（`[prompt-admission]`，报文
   另带原因摘要，**code 与 details 不动**——换 code 是契约变更，须走 error-codes.md + 哨兵）。
-  读旧日志时记住：诊断行只在补丁装上后的启动里才有，历史 boot 一律静默。另一处缺口未修：
-  `run_sidecar_boot` 只在退出码非 0 时转发 sidecar stderr，boot 五步
-  （repair/sync/patches/compat-pin/preflight）成功路径上的 anchor-missing 告警被丢弃。
+  读旧日志时记住：诊断行只在补丁装上后的启动里才有，历史 boot 一律静默。同批补上第三重
+  盲（2026-10-10）：`run_sidecar_boot` 过去只在退出码非 0 时透出 stderr 尾行，boot 五步
+  （repair/sync/patches/compat-pin/preflight）成功路径上的 anchor-missing 告警整段丢弃——
+  现已逐行转进 `desktop.log`（上限 400 行、超出留末尾并显式注明截断量，
+  `supervisor.rs::sidecar_boot_log_lines`），一次 boot 实测 115 行 / 15KB。
+- **profile 里的 pnpm `npm:` 别名链接会劫持 scoped 解析——mac 端 9 插件 failed to load 的真根因（2026-10-11 取证）**：
+  `profiles/web/node_modules/@deepseek-ai/cosmokit -> ../cosmokit` 把 scoped 规格符指到未 scoped 的
+  `cosmokit@1.8.1`（没有 `createVolatile`，payload 的 `@deepseek-ai/cosmokit@1.8.5` 才有），于是 importer
+  在 **ESM 链接期** SyntaxError → 条目连 fiber 都没有 → 只剩一行 `failed to load`；`@deepseek-ai/dsh-settings`
+  同死就是「未能保存设置」toast + `pending (waiting for settings)`。三点教训：① 判据是「链接落点的包名 ≠
+  目标 `package.json` 的 name」（`link:` 开发安装同名，不动），实现见 `profile-module-heal.js::healProfileAliasLinks`，
+  已接进 boot `repair` 步——原先为这场景写的 `healProfileModuleShadowing` **只在 `guard-*` 子命令里跑**，
+  boot 链从不触及；② repair 步**别摘真目录副本**，companion-profile 的 sync 每 boot 按 VENDOR_DEPS 重写它们，
+  删了就是拉锯；③ 排查解析问题必须按 **scoped 全名**逐个解析——`VENDOR_DEPS` 里是未 scoped 的
+  `cosmokit`/`schemastery`，只按它探测会连续两轮得出「包都能解析」的假结论。
 - **内核右栏是可扩展面，别去改内核包**：`dsh-client-ui-sidebar-right` 的
   `sidebarRightTabs.register` + `sidebar.right.pane.tab` 是公开两段式标签 API（内核自己的
   文件/文档预览/终端也用它）。本仓库的 better-sidebar 已经用它把工作台接成右栏里的一个标签，

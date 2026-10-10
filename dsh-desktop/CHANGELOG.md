@@ -114,6 +114,61 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
   壳层第三处缺口已同批修好（boot 五步的 stderr 在退出码 0 时被整段丢弃）：见
   `dsh-tauri/CHANGELOG.md` v1.0.2 段与 `supervisor.rs::sidecar_boot_log_lines`。
 
+### fix(companion)：mac 端「9 插件 failed to load + 未能保存设置」真根因 —— profile 别名链接劫持 scoped 解析（2026-10-11）
+
+- **现场取证（dsh-doctor.txt 4.5 段「逐 bundle 真跑 import」，macOS 26.6.2 / arm64 / 已装 v1.0.1）**：
+  ```
+  IMPORT-FAIL dsh-better-sidebar (lib/index.js) :: SyntaxError: The requested module
+    '@deepseek-ai/cosmokit' does not provide an export named 'createVolatile'
+  IMPORT-FAIL @deepseek-ai/dsh-settings (lib/index.js) :: 同上
+  …basics-panel / reasoning-effort / side-session / subagent-lens / openclaw-bridge 同一条
+  ```
+  不是模块找不到——是 **ESM 具名导出在链接期就不存在**，所以条目连 fiber 都没有，正是
+  `loader-activation-isolation` 里 `fiber === void 0` 那条「failed to load」。
+  `@deepseek-ai/dsh-settings` 同死 → 设置服务缺席 → 首启「未能保存设置，请重试。」toast +
+  `dsh-easyrewrite` 的 `pending (waiting for settings)`。三条症状一次解释干净。
+- **根因（profile 里一条 pnpm `npm:` 别名链接）**：
+  ```
+  profiles/web/node_modules/@deepseek-ai/cosmokit -> ../cosmokit   （10月4 00:40 写入）
+  ```
+  它把 **scoped 规格符**指到了 profile 里那份**未 scoped** 的 `cosmokit@1.8.1`。本机对照
+  （`node_modules/cosmokit` 1.8.1 的 `lib/index.cjs`/`index.mjs`）里 `createVolatile`
+  命中数 = **0**，而 payload 的 `@deepseek-ai/cosmokit@1.8.5`（`vendor/dsh-kernel` 离线
+  tgz 装的）有。共享 farm 侧 `profiles/node_modules/@deepseek-ai/cosmokit -> payload`
+  是**健康**的（9月18 建，doctor §2 实证），只是永远轮不到——profile 自身优先。
+  来源是第三方插件安装（同 profile 里有 `.pnpm`/`.pnpm-workspace-state-v1.json`、
+  `billion-context-dsh`、`@photostructure` 等外来看客），不是我们的同步写出来的
+  （`git log -S"@deepseek-ai/cosmokit"` 全库 0 命中）。
+- **为什么 v1.0.1 没治好、两轮排查也没看见**：
+  ① 为这个场景写的 `healProfileModuleShadowing` **不在 boot 链上**——只有 `plugin-guard.js:354`
+  （`guard-*` 子命令）会调它，boot 五步从不触及；② 即便跑到，它的链接分支只认
+  「目标在本 profile 的 `.pnpm` store 内」，而别名链接指向 store 外的兄弟目录，被当成
+  `link:` 开发安装**故意保留**；③ 前两版 doctor 的名字表里只有未 scoped 的 `cosmokit`
+  （VENDOR_DEPS 就是这个名字），从没问过 `@deepseek-ai/cosmokit`——于是「包都能解析、
+  文件都在位」两轮都成立。
+- **改动**：
+  · `profile-module-heal.js` 新增 `healProfileAliasLinks(home, profile, log)`，判据是
+  「链接落点的包名 ≠ 目标 `package.json` 的 name」→ 别名；悬空链接一并摘。保留 issue #7
+  守卫：只有该规格符在 farm 里有健康对应物才动手；`link:` 开发安装目标同名 → 不碰。
+  · `healProfileModuleShadowing` 的链接分支同用这一判据（两处口径一致）。
+  · `scripts/integration/index.js::healBeforeServer` 逐 profile 调用（全容忍、不阻断启动），
+  把自愈接进 boot 链——本次缺的从来不是规则，是接线。
+  · **刻意不摘真目录副本**：companion-profile 的 sync 每 boot 会按 VENDOR_DEPS 重写
+  `@deepseek-ai/schemastery` / `dsh-settings` 等真实副本，若 repair 也删就成了拉锯 +
+  每启动重铺 MB 级；那条规则留在 guard 路径。
+- **验证**：`unit-profile-alias-heal.test.js` 8 例（别名摘除 / 同名 link: 不误伤 / farm
+  不健康时一条不动 / 悬空摘除 / 真目录不动 / guard 路径同判据 / 缺目录早退 / 幂等）；
+  `unit-plugin-integration.test.js` 新增接线回归 1 例——断言二遍零动作时带**阳性对照**
+  （把别名链接造回去必须再次摘掉并落日志），因为 `integration` 上没有 `.opts`
+  （真句柄是 `.ctx`），写错就会拿一个没跑起来的实例空转通过，这次实测踩过。
+  全量 `npm test`（退出码直取）= **2063 例 / 0 fail / 0 cancelled / 9 skip**，
+  `scripts/test/` 192 个文件；doctor 4.6 段（同一判据的只读体检）在合成 home 上三点全过：
+  点得别名、不误报同名 link:、报得出 farm 健康度。
+- **用户自救（不等发版，一条命令）**：
+  `rm ~/.dsh/profiles/web/node_modules/@deepseek-ai/cosmokit`（删的是链接、不伤目标），
+  若 `profiles/web/package.json` 里有 `"@deepseek-ai/cosmokit": "npm:cosmokit@…"` 别名条目
+  一并删掉，否则下次 pnpm 安装会重建。重启后解析回落 farm → payload 的 1.8.5。
+
 ## [1.0.1] - 2026-10-10
 
 ### fix(release)：v1.0.1 补丁版发布（全平台）

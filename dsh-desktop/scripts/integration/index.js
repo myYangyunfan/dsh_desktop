@@ -12,6 +12,7 @@
 
 const path = require('node:path');
 const os = require('node:os');
+const fs = require('node:fs');
 const { createPluginSync } = require('./plugin-sync');
 const { applyAll } = require('./patch-runner');
 const { preflight } = require('./fault-isolation');
@@ -33,6 +34,14 @@ const { runServiceAbsenceDiagnosis } = require('./service-absence');
 // dependencies 里的 `@deepseek-ai/*` 孤儿条目（内核闭包没有、npm 也拿不到）会让
 // 内核 boot 直接 ERR_MODULE_NOT_FOUND 退出，并让后续 pnpm 安装撞 404（#156/#170 欠账）。
 const { healProfileOrphanDeps } = require('../lib/profile-orphan-dep-heal');
+// profile 别名/悬空链接自愈（mac 端 9 伴随插件 failed to load + 首启「未能保存设置」
+// 的**真根因**，2026-10-11 现场取证）：pnpm 的 `npm:` 别名会在 profile 里留下
+// `node_modules/@deepseek-ai/cosmokit -> ../cosmokit` 这类「路径名与目标包名不一致」
+// 的链接，于是 scoped 规格符解析到未 scoped 的 cosmokit 1.8.1（没有 createVolatile），
+// 所有 importer 在 **ESM 链接期**就 SyntaxError → 条目没有 fiber → 隔离行只剩
+// 「failed to load」，dsh-settings 同死 = 设置服务缺席。原本为此写的
+// healProfileModuleShadowing 只在 guard-* 子命令里跑，boot 链从不触及。
+const { healProfileAliasLinks } = require('../../profile-module-heal');
 
 /**
  * @param {Object} opts
@@ -107,6 +116,28 @@ function createPluginIntegration(opts) {
       healProfileOrphanDeps({ appDir, home: getHome() || path.join(os.homedir(), '.dsh'), log });
     } catch (err) {
       log('profile 孤儿依赖自愈异常（容忍继续，不阻断启动）: ' + String((err && err.message) || err));
+    }
+    // profile 别名/悬空链接自愈（逐 profile，全容忍）：必须早于 sync——sync 只负责
+    // 把 VENDOR_DEPS/插件文件铺到位，救不了「解析优先级被别名链接劫持」。这里刻意
+    // **只摘链接**，不动真目录副本：后者与本步之后的 sync 是拉锯关系（sync 每 boot
+    // 重写 VENDOR_DEPS 副本），判据与代价见 profile-module-heal 注释。
+    try {
+      const homeRoot = getHome() || path.join(os.homedir(), '.dsh');
+      const profilesRoot = path.join(homeRoot, 'profiles');
+      let profileNames = [];
+      try {
+        profileNames = fs.readdirSync(profilesRoot, { withFileTypes: true })
+          .filter((d) => d.isDirectory() && d.name !== 'node_modules')
+          .map((d) => d.name);
+      } catch { profileNames = []; }
+      for (const name of profileNames) {
+        const removed = healProfileAliasLinks(homeRoot, name, (m) => log('alias-heal[' + name + '] ' + m));
+        if (removed.length > 0) {
+          log('已摘除 profile [' + name + '] 的别名/悬空链接 ' + removed.length + ' 条（解析回落共享 farm）: ' + removed.join(', '));
+        }
+      }
+    } catch (err) {
+      log('profile 别名链接自愈异常（容忍继续，不阻断启动）: ' + String((err && err.message) || err));
     }
     pluginSync.healProfilePatch();
     pluginSync.healHomePatch();
