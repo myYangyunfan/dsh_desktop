@@ -58,6 +58,62 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
   全步骤绿，全量单测 2043 例 / **0 fail / 0 cancelled**（pass 2032 / skip 11，本机同口径
   2033 pass / 10 skip，1 例差额为环境条件差异）。
 
+### feat(diag)：静默失败「原文上身」——loader 导入失败与 prompt 准入异常两处诊断补丁（2026-10-10）
+
+- **现场**：mac 端 v1.0.0 / v1.0.1 连续两轮首启「未能保存设置」+ 9 个伴随插件
+  `[loader-isolation] entry …: failed to load — auto-isolated`，日志到此为止；
+  另有一条独立症状「发送文件恒报 `prompt rejected(session/agent-busy)`」。
+  两轮排查（含两版只读体检脚本 + 逐包 `createRequire` 解析探针）都停在「文件都在位、
+  包都能解析」，因为**真实异常从来没有被打出来过**——不是没发生，是无人打印。
+- **根因（三段叠加的静默链，逐段有字节依据）**：
+  ① rc.2 起插件导入失败不再抛出：`cordis-plugin-loader` 的 `Entry._init` 只
+  `this.ctx.logger.error(error); return;`，条目就此没有 fiber（`fiber === void 0`
+  = 我们激活隔离里那条「failed to load」）；这条退役判定见 patch-registry 的
+  loader-tree-isolation 注释，其 ⚠ 代价行早已写明「核心条目失败也只剩一行 error 日志」。
+  ② cordis 默认 `LoggerService` 的 exporter 是**纯内存环形缓冲**
+  （`cordis/lib/index.js`：`self.exporter({ export: (m) => { self.buffer.push(m); … } })`），
+  没有任何 console sink——`logger.error` 天生不落地。
+  ③ `dsh-app-boot` 的 `boot()` 另挂诊断 exporter 把 warn/error 收进 `startupLogs`，
+  只在抛 `StartupError` 时才由 `dsh/lib/bin.js::reportStartupFailure` 落盘
+  `<DSH_HOME>/logs/startup-*.log`；而 `loader-activation-isolation` 让非核心条目
+  **不再抛** StartupError。三段合起来：真实导入错误既不进 stderr、也不进文件。
+  发送文件那条同型：`dsh-api-session-controller` 的 prompt 准入链兜底把**任何**非
+  RemoteError 一律标成 `session/agent-busy` + `"prompt rejected"`，真因只落在
+  `details.reason`，UI 不渲染——「agent 忙」是把磁盘/权限/模块身份问题误标成并发冲突。
+- **改动（guard 组两条，判定面一字不动）**：
+  · `loader-import-failure-report`（order 148，靶 `cordis-plugin-loader/lib/index.js`）：
+  catch 体首补一行 stderr `[loader-diagnostic] entry <id> (<name>) import failed: <栈 <- cause 链>`，
+  自身 try 包裹、6000 字截断；`ctx.logger.error` 与 `return` 原样保留。
+  · `prompt-admission-reason-report`（order 150，靶 `dsh-api-session-controller/lib/index.js`）：
+  兜底分支补 stderr `[prompt-admission] …`（同 cause 链），并把原因摘要带进报文
+  `prompt rejected: <message≤400>`；**code `session/agent-busy` 与 `details.reason` 不动**
+  （error-codes 契约与前端分支都吃这两样，换 code 属于契约变更，另议）。
+  · 前缀刻意避开壳层标记机（`plugin-core/lib/markers.js` 只认 `[loader-isolation]` /
+  `[crash-shield]`），故不会多喂一次 quarantine 事件——已作为用例锁死。
+- **哨兵基线同步**：`ta6-registry-invariants` spec 总数 58→60、file 型 43→45；
+  `ta6-heal-rollback-audit` / `ta6-transform-contract` file 型 43→45（两条各带
+  FROM/TO 常量对，归类 inverse-replace，靶均在 vendor/dsh-kernel 离线闭包内）；
+  `unit-loader-isolation-deep` marker 单一数据源 3→5；`patch-surface.snapshot.json`
+  重收敛重取（68 文件 / 82 标记家族，`verify` 绿，与改动同提交）。
+- **验证**：新增 `unit-loader-diagnostic-report.test.js` 9 例，其中两条是**运行时反证**——
+  把真实字节里的 `_init` 方法体与 `catch (error) {}` 块原文取出用 `new Function` 执行，
+  喂一次真的 `ERR_MODULE_NOT_FOUND`：补丁前 stderr 收到 0 个字节（机制复现），
+  补丁后恰好 1 行且带真实错误码与 cause；另含「诊断自身抛异常不得反噬宿主」用例。
+  全量单测与 check-syntax 结果见下方收口行。
+- **收口实测（本机，退出码直取不经管道）**：`npm test` = **2054 例 / 0 fail / 0 cancelled /
+  9 skip**（`scripts/test/` 现 191 个测试文件，上一基线 2043 例 ＋ 本文件 9 例 − 计数口径
+  微调）；`node scripts/check-syntax.js` 通过；`ta3-boot-chain`（pristine 源上跑生产
+  `applyAll(60)` 一条龙 + 二遍幂等）2/2 绿；`ta6-baseline-matrix` 3/3 绿且两条新判定
+  由真跑录入为 `changed`（40 changed / 15 root / 5 target-absent）。
+- **仍未决（诚实记账）**：mac 端那 9 条的**真因**仍缺一次现场捕获——本改动只保证
+  「下一次启动一定有原文」，不给旧日志补字。补具已就绪：`dsh-mac-doctor.sh` 新增
+  4.5 段（逐 bundle 真跑 `import()`，Windows 侧对照实测 28 个入口全 OK）与第 5 段
+  `<DSH_HOME>/logs/startup-*.log` 检索；`dsh-mac-trace.mjs` v2 改为注入上述两处
+  （v1 注入点选错：`inactiveDiagnostic` 对 `fiber === void 0` 只回字面量
+  "failed to import"，本身不含真因）。壳层侧还有一处缺口未修：`run_sidecar_boot`
+  只在退出码非 0 时转发 sidecar stderr，boot 五步（repair/sync/patches/compat-pin/
+  preflight）的 anchor-missing 告警在成功路径上被丢弃。
+
 ## [1.0.1] - 2026-10-10
 
 ### fix(release)：v1.0.1 补丁版发布（全平台）

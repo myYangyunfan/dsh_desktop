@@ -97,6 +97,7 @@ const {
   TERMINAL_BASH_REL,
   ATTACH_LOCAL_REL,
   APP_BOOT_PKG_REL,
+  LOADER_PKG_REL,
   AGENT_PRESET_FALLBACK_PKG_RELS,
   PROMPT_CONTEXT_LITERAL_PKG_RELS,
   KERNEL_WEB_INDEX_REL,
@@ -192,6 +193,8 @@ const {
   SESSION_LOAD_GRACEFUL_MARKER_V3,
   LOADER_ACTIVATION_ISOLATION_MARKER,
   FAIL_LOUD_ISOLATION_MARKER,
+  LOADER_IMPORT_REPORT_MARKER,
+  PROMPT_ADMISSION_REASON_MARKER,
   CODEX_LOCAL_BIN_MARKER,
   CLAUDE_LOCAL_BIN_MARKER,
   PI_AI_4XX_DUMP_MARKER,
@@ -214,6 +217,8 @@ const {
 const {
   transformLoaderActivationIsolation,
   transformFailLoudIsolation,
+  transformLoaderImportFailureReport,
+  transformPromptAdmissionReasonReport,
 } = require('./loader-isolation');
 
 /** 通用「已应用」日志主体（多数运行时补丁沿用）。 */
@@ -548,6 +553,60 @@ const PATCH_SPECS = [
       prefix: 'fail-loud 就绪后隔离',
       doneLog: (file) => '已注入到 ' + file,
       failLog: (file, err) => 'fail-loud 就绪后隔离失败: ' + err.message,
+    },
+  },
+  // -------------------------------------------------------------------------
+  // 静默失败「原文上身」两条（2026-10-10，mac 端 9 插件 failed to load + 发送文件
+  // 恒报 prompt rejected 两轮发布查不下去的直接原因）。
+  //   rc.2 起插件导入失败不再抛出：Entry._init 只 ctx.logger.error + return，
+  //   而 cordis 默认 logger exporter 是纯内存环形缓冲（不打印），boot() 的诊断
+  //   exporter 收下的 warn/error 也只在抛 StartupError 时才由 bin.js
+  //   reportStartupFailure 落盘 <DSH_HOME>/logs/startup-*.log——我们的激活隔离
+  //   恰好让非核心条目不再抛 StartupError，于是三重静默，日志只剩一行
+  //   「failed to load — auto-isolated」。prompt 准入链同型：兜底分支把任何
+  //   非 RemoteError 标成 session/agent-busy，真因只在 details.reason、UI 不渲染。
+  //   这两条只把「内核本来就握着」的异常写进 stderr（B 另把原因摘要带进报文，
+  //   code 与 details 不变），不改判定、不改返回值，且各自 try 包裹——诊断绝不
+  //   反噬宿主。前缀 [loader-diagnostic] / [prompt-admission] 不是壳层标记
+  //   （plugin-core/lib/markers.js 只认 [loader-isolation] / [crash-shield]），
+  //   故不会多喂一次 quarantine 事件。
+  // -------------------------------------------------------------------------
+  {
+    id: 'loader-import-failure-report',
+    group: 'guard',
+    order: 148,
+    kind: 'file',
+    layout: 'guard',
+    wslLayout: 'guard',
+    pkgRel: LOADER_PKG_REL,
+    transform: transformLoaderImportFailureReport,
+    marker: LOADER_IMPORT_REPORT_MARKER,
+    requires: [],
+    failPolicy: 'warn',
+    cli: false,
+    logs: {
+      prefix: 'loader 导入失败原文',
+      doneLog: (file) => '已注入导入失败诊断到 ' + file,
+      failLog: (file, err) => 'loader 导入失败原文注入失败: ' + err.message,
+    },
+  },
+  {
+    id: 'prompt-admission-reason-report',
+    group: 'guard',
+    order: 150,
+    kind: 'file',
+    layout: 'guard',
+    wslLayout: 'guard',
+    pkgRel: SESSION_CTRL_INDEX_PKG_REL,
+    transform: transformPromptAdmissionReasonReport,
+    marker: PROMPT_ADMISSION_REASON_MARKER,
+    requires: [],
+    failPolicy: 'warn',
+    cli: false,
+    logs: {
+      prefix: 'prompt 准入异常原文',
+      doneLog: (file) => '已注入准入异常诊断到 ' + file,
+      failLog: (file, err) => 'prompt 准入异常原文注入失败: ' + err.message,
     },
   },
   // -------------------------------------------------------------------------

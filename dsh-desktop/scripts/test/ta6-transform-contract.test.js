@@ -169,8 +169,10 @@ for (const spec of fileSpecs) {
 //   调用点全内核 0 命中）、fallback-heal-isolation（heal 回环原生逐名 try/catch）。
 // 43 = 44 − image-send-fix（2026-10 内置伴随插件批量拆除：只为已退役的识图插件
 //   存在，transform 与锚点常量同批删除）。
-test('契约面完整性：43 个 file transform 全部被本文件覆盖', () => {
-  assert.equal(fileSpecs.length, 43);
+// 45 = 43 ＋ loader-import-failure-report ＋ prompt-admission-reason-report
+//   （2026-10-10 静默失败「原文上身」两条诊断补丁，靶均在离线内核闭包内）。
+test('契约面完整性：45 个 file transform 全部被本文件覆盖', () => {
+  assert.equal(fileSpecs.length, 45);
 });
 
 // 反「静默停摆」哨兵：诚实跳过集合必须恰为已知的 5 条非 vendored 目标——

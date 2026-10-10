@@ -6,13 +6,13 @@
 // 手法：pristine 源取自 pristine-kernel-roots 给出的「未被任何补丁碰过」的内核
 // 闭包树（历史上是仓库根 .tmp-rc2-stage，现为 .tmp-kernel/.consumer-*/node_modules）；
 // 拷入两个临时目录充当 appDir 与 home（绝不碰真实
-// ~/.dsh 与在用实例），跑生产 applyAll（58 补丁注册表全量，rc.2 重靶后含
+// ~/.dsh 与在用实例），跑生产 applyAll（60 补丁注册表全量，rc.2 重靶后含
 // readProfilePatches 层自愈读取 profile-patch-layer-guard，以及 0.6.4 新增的
 // released-v0-history-recovery、Responses 路径工具名净化
 // pi-ai-responses-tool-name-sanitize、内核↔pi-ai 唯一交界的中央收口
 // pi-ai-tool-name-wire 与配额耗尽不重试 pi-ai-quota-not-retryable）+ 只读预检 +
 // 关键服务修复探测，断言：
-//   1. 一遍：58 补丁全部执行、changed > 0、零 errors；
+//   1. 一遍：60 补丁全部执行、changed > 0、零 errors；
 //   2. composition 字段（sources/services/criticalMissing/parseIssues）与
 //      CLI 退出码契约（关键服务全在位 → 0）；
 //   3. fault-isolation preflight：打补丁后 unpatched 为空；
@@ -79,18 +79,20 @@ async function buildTempRoots(t) {
   return { root, appDir, home, ctx, logs };
 }
 
-test('boot 链一条龙：applyAll(58) → composition-integrity → preflight → 二遍幂等', { skip: !hasPristine() && SKIP_NO_PRISTINE }, async (t) => {
+test('boot 链一条龙：applyAll(60) → composition-integrity → preflight → 二遍幂等', { skip: !hasPristine() && SKIP_NO_PRISTINE }, async (t) => {
   const { appDir, home, ctx } = await buildTempRoots(t);
 
-  // ---- 1. 一遍 applyAll：58 补丁全执行、有落盘、零 errors ----
-  // 58 = 64（0.1.x 线基线）− 0.2.0-rc.2 重靶期退役 6 项 − image-send-fix
+  // ---- 1. 一遍 applyAll：60 补丁全执行、有落盘、零 errors ----
+  // 60 = 64（0.1.x 线基线）− 0.2.0-rc.2 重靶期退役 6 项 − image-send-fix + 2 项
+  // 静默失败诊断（loader-import-failure-report / prompt-admission-reason-report，
+  // 2026-10-10，见 patch-registry 注释）
   // （2026-10 随 dsh-vision 批量退役）+ 1 项取代新增
   // （profile-patch-layer-guard，order 130，readProfilePatches 层自愈读取，
   // 取代已消失的 profile-boot 半边）。逐项理由见 ta6-registry-invariants 的 E，
   // 逐补丁在 pristine 闭包上的判定见 ta6-baseline-matrix。
   const r1 = applyAll(ctx);
-  assert.equal(r1.total, 58, `注册表应有 58 个补丁（实际 ${r1.total}）`);
-  assert.equal(PATCH_SPECS.length, 58, 'PATCH_SPECS 与编排 total 一致');
+  assert.equal(r1.total, 60, `注册表应有 60 个补丁（实际 ${r1.total}）`);
+  assert.equal(PATCH_SPECS.length, 60, 'PATCH_SPECS 与编排 total 一致');
   assert.ok(r1.changed > 0, `pristine 源一遍必须有写入（实际 changed=${r1.changed}）`);
   assert.deepEqual(r1.errors, [], `一遍不得有 errors：${JSON.stringify(r1.errors)}`);
   // degrade/fatal 档补丁的 anchor-missing 分流进 degraded（设计语义：降级告警
@@ -139,7 +141,7 @@ test('boot 链一条龙：applyAll(58) → composition-integrity → preflight �
   const r2 = applyAll(ctx);
   // total = 处理的 spec 数（含 target-absent，applyAll 内每 spec 无条件 +1），
   // 与一遍同源必相等，均等于 PATCH_SPECS.length；二遍只是 changed 归零。
-  assert.equal(r2.total, 58, `二遍 total 应与一遍一致（实际 ${r2.total}）`);
+  assert.equal(r2.total, 60, `二遍 total 应与一遍一致（实际 ${r2.total}）`);
   assert.deepEqual(r2.errors, [], `二遍不得有 errors：${JSON.stringify(r2.errors)}`);
   assert.equal(r2.changed, 0, `二遍应幂等（一遍 changed=${changedFirst}，二遍 changed=${r2.changed}）`);
 

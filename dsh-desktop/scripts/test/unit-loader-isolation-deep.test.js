@@ -459,12 +459,16 @@ function FAIL_LOUD_RELEASE_BLOCK_NEW_TEXT() {
 }
 
 // ── 4. marker 单一数据源 + stderr 标记格式 ───────────────────────────────────
-test('marker 单一数据源: patch-adapters.markers 与 loader-isolation.markers 三 marker 值一致', () => {
+test('marker 单一数据源: patch-adapters.markers 与 loader-isolation.markers 五 marker 值一致', () => {
   const { markers: adapterMarkers } = require('../lib/patch-adapters');
-  assert.equal(Object.keys(loaderMarkers).length, 3);
+  // 5 = 三条在役隔离 + 两条「原文上身」诊断（loader-import-failure-report /
+  // prompt-admission-reason-report，2026-10-10；含已退役的 tree-isolation 常量）。
+  assert.equal(Object.keys(loaderMarkers).length, 5);
   assert.equal(adapterMarkers.LOADER_TREE_ISOLATION_MARKER, loaderMarkers.LOADER_TREE_ISOLATION_MARKER);
   assert.equal(adapterMarkers.LOADER_ACTIVATION_ISOLATION_MARKER, loaderMarkers.LOADER_ACTIVATION_ISOLATION_MARKER);
   assert.equal(adapterMarkers.FAIL_LOUD_ISOLATION_MARKER, loaderMarkers.FAIL_LOUD_ISOLATION_MARKER);
+  assert.equal(adapterMarkers.LOADER_IMPORT_REPORT_MARKER, loaderMarkers.LOADER_IMPORT_REPORT_MARKER);
+  assert.equal(adapterMarkers.PROMPT_ADMISSION_REASON_MARKER, loaderMarkers.PROMPT_ADMISSION_REASON_MARKER);
 });
 
 test('stderr 标记格式: 发射行满足 plugin-core markers.js LOADER_ISOLATION_RE', () => {

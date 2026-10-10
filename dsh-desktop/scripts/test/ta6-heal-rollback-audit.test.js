@@ -69,6 +69,11 @@ const INVERSE_PAIR_HINTS = {
   'content-has-image-guard': ['CONTENT_HAS_IMAGE_OLD', 'CONTENT_HAS_IMAGE_NEW', 'TOOLS_IMAGE_RESULT_OLD', 'TOOLS_IMAGE_RESULT_NEW'],
   'session-load-graceful': ['SESSION_LOAD_GRACEFUL_DECODER_OLD', 'SESSION_LOAD_GRACEFUL_DECODER_NEW'],
   'workspace-chip-label-hold': ['WORKSPACE_CHIP_LABEL_ANCHOR', 'WORKSPACE_CHIP_LABEL_NEW'],
+  // 2026-10-10 两条「静默失败原文上身」诊断：各自 FROM/TO 常量对齐全
+  // （loader 那条是在 catch 头部插入、TO 里保住原 logger.error + return；
+  //  prompt 那条是整行替换兜底 throw），回滚都走 npm ci 即 pristine。
+  'loader-import-failure-report': ['LOADER_IMPORT_CATCH_OLD', 'LOADER_IMPORT_CATCH_NEW'],
+  'prompt-admission-reason-report': ['PROMPT_ADMISSION_CATCHALL_OLD', 'PROMPT_ADMISSION_CATCHALL_NEW'],
 };
 
 const MULTI_SITE = new Set([
@@ -123,8 +128,12 @@ const EXPECTED_NON_VENDORED = [
 // 43 = 44 − image-send-fix（2026-10 内置伴随插件批量拆除）：注入体连 marker
 // 一起从 patch-adapters 删除，磁盘上的旧产物仍在 node_modules 内、npm ci 即回
 // pristine，故不产生新的回滚盲区。
-test('审计 1：分类覆盖全部 43 个 file transform（无回滚盲区）', () => {
-  assert.equal(fileSpecs.length, 43);
+// 45 = 43 ＋ loader-import-failure-report ＋ prompt-admission-reason-report
+// （2026-10-10 静默失败诊断两条）：靶 cordis-plugin-loader 与
+// dsh-api-session-controller 都在 vendor/dsh-kernel 离线闭包内，两条各带
+// FROM/TO 常量对（见上表），回滚 = npm ci 即 pristine，不新增盲区。
+test('审计 1：分类覆盖全部 45 个 file transform（无回滚盲区）', () => {
+  assert.equal(fileSpecs.length, 45);
   const report = [];
   for (const spec of fileSpecs) {
     const pair = INVERSE_PAIR_HINTS[spec.id];

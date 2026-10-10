@@ -44,9 +44,11 @@ const FORM = kernel.packageVersion;
 // + 1 项取代新增（profile-patch-layer-guard，order 130，readProfilePatches 层）
 // → 58 = 59 − image-send-fix（2026-10 内置伴随插件批量拆除：注入体只读 dsh-vision
 // 的设置命名空间，识图插件退役后无可达路径；同批删除 patch-adapters 的
-// IMAGE_SEND_* / VISION_KEY_* / VISION_TOGGLE_* 常量，靶常量本身仍在册）。
+// IMAGE_SEND_* / VISION_KEY_* / VISION_TOGGLE_* 常量，靶常量本身仍在册）
+// → 60 = 58 ＋ loader-import-failure-report ＋ prompt-admission-reason-report
+// （2026-10-10 静默失败「原文上身」两条诊断补丁，见 patch-registry 注释）。
 // 逐项理由见 ta6-registry-invariants.test.js 的 E。
-const SPEC_COUNT = 58;
+const SPEC_COUNT = 60;
 
 /** 与 kernel-pin 同版的 pristine 闭包根；不在场返回 null（调用侧响亮失败）。 */
 function formRoot() {
@@ -115,9 +117,9 @@ function integrityProblems(ids, baseline) {
 
 // ===========================================================================
 // 基线快照（2026-10-05 重录：0.2.0-rc.2 形态 = .tmp-kernel/.consumer-0.2.0-rc.2
-// 的 npm 闭包解包树，43 file + 15 root = 58 项（image-send-fix 已于 2026-10 随
+// 的 npm 闭包解包树，45 file + 15 root = 60 项（image-send-fix 已于 2026-10 随
 // 识图插件退役，其 'changed' 行同批摘除），逐项由本文件 computeMatrix 真跑
-// 录入，不是手工填值。判定构成：38 changed / 15 root / 5 target-absent，
+// 录入，不是手工填值。判定构成：40 changed / 15 root / 5 target-absent，
 // 零 anchor-missing、零 already、零 THROW —— 与 scripts/patch-deps.js 的
 // 「失配 0 / 失败 0」实况同源，两者互为对账。）
 //
@@ -154,6 +156,8 @@ const BASELINE = {
     'profile-patch-layer-guard': 'changed',
     'loader-activation-isolation': 'changed',
     'fail-loud-isolation': 'changed',
+    'loader-import-failure-report': 'changed',
+    'prompt-admission-reason-report': 'changed',
     'manual-sort-drag-fix': 'changed',
     'credentials-initial-retry': 'changed',
     'credentials-absent-guidance': 'changed',

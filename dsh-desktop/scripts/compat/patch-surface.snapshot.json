@@ -1,8 +1,15 @@
 {
-  "generatedAt": "2026-10-10T12:05:33.221Z",
+  "generatedAt": "2026-10-10T14:31:19.071Z",
   "kernelRoot": "@deepseek-ai",
-  "markerCount": 80,
+  "markerCount": 82,
   "surface": [
+    {
+      "file": "cordis-plugin-loader/lib/index.js",
+      "sha256": "c9debacff90c8cf4",
+      "markers": [
+        "loader import failures keep their original error on stderr"
+      ]
+    },
     {
       "file": "dsh-agent-loop/lib/index.js",
       "sha256": "1e8b208aa4ed3be4",
@@ -50,9 +57,10 @@
     },
     {
       "file": "dsh-api-session-controller/lib/index.js",
-      "sha256": "57627bfa6813d6fd",
+      "sha256": "1da70f23b7d74e0f",
       "markers": [
-        "larger history page"
+        "larger history page",
+        "prompt admission keeps its original error on stderr"
       ]
     },
     {

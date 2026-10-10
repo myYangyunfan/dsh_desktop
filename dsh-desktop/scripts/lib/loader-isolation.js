@@ -22,6 +22,21 @@
 //     横幅之后）时不再 exit(1)，改为记录后返回——就绪后的插件运行时
 //     rejection 不再杀死宿主；启动期仍保持 fail-fast（壳层启动自愈照常）。
 //
+// 同族还有一条**诊断线**（不是隔离线，判定面一字不动）：
+//   · transformLoaderImportFailureReport / transformPromptAdmissionReasonReport
+//     把两处「被静默吞掉的真实异常」原文补写进 stderr。动机是 mac 端彻查
+//     2026-10-10：rc.2 起插件导入失败不再抛出，只 `ctx.logger.error(error)`，
+//     而 cordis 默认 logger exporter 是纯内存环形缓冲（不打印），boot() 的诊断
+//     exporter 收到的 warn/error 又只在抛 StartupError 时才落盘
+//     <DSH_HOME>/logs/startup-*.log——我们的激活隔离让非核心条目不再抛
+//     StartupError，三重叠加后日志只剩一行「failed to load」。prompt 准入链
+//     同型：任何非 RemoteError 一律标成 session/agent-busy + "prompt rejected"，
+//     真因只在 details.reason、UI 不渲染（发送文件恒报「agent 忙」的那条）。
+//   · 注入的 stderr 写入各自 try 包裹：诊断绝不反噬宿主。
+//   · 前缀 [loader-diagnostic] / [prompt-admission] 刻意避开壳层标记机
+//     （plugin-core/lib/markers.js 只认 [loader-isolation] / [crash-shield]），
+//     不额外喂一次 quarantine 事件。
+//
 // 所有 transform 为纯函数：锚点失配返回 anchor-missing（调用方告警跳过），
 // 已注入返回 already（幂等）。锚点与 vendored rc.7 构建产物逐字节对齐
 // （单测直接对 node_modules 真实产物断言命中）。
@@ -30,6 +45,8 @@
 const LOADER_TREE_ISOLATION_MARKER = 'dsh-desktop isolation: a failed loader entry must not take down the tree';
 const LOADER_ACTIVATION_ISOLATION_MARKER = 'dsh-desktop isolation: inactive entries are skipped instead of aborting the boot';
 const FAIL_LOUD_ISOLATION_MARKER = 'dsh-desktop isolation: post-ready load failures are isolated';
+const LOADER_IMPORT_REPORT_MARKER = 'dsh-desktop isolation: loader import failures keep their original error on stderr';
+const PROMPT_ADMISSION_REASON_MARKER = 'dsh-desktop isolation: prompt admission keeps its original error on stderr';
 
 // ── cordis-plugin-loader：EntryGroup.update 失败分支 ─────────────────────────
 const LOADER_UPDATE_OUTCOMES_OLD = [
@@ -283,16 +300,103 @@ function transformFailLoudIsolation(src, file) {
   return { status: 'changed', src: crlf ? out.replace(/\n/g, '\r\n') : out };
 }
 
+// ── cordis-plugin-loader：导入失败真身（诊断，不改判定）──────────────────────
+//
+// 0.2.0-rc.2 起插件「导入失败」不再抛出（Entry._init 只 ctx.logger.error + return，
+// 条目就此没有 fiber）。而 cordis 默认 logger exporter 是纯内存环形缓冲
+// （cordis/lib/index.js 只 push 进 self.buffer，不打印），boot() 另挂的诊断 exporter
+// 收下的 warn/error 也只在抛 StartupError 时由 bin.js reportStartupFailure 落盘。
+// 我们的 loader-activation-isolation 让非核心条目不再抛 StartupError——于是真实
+// 导入错误三重静默，只剩一行「failed to load」。mac 端 9 个伴随插件 + 首启「未能
+// 保存设置」排查两轮发布无果，缺的就是这一行原文。
+// 本补丁只在 catch 体首插入一次 stderr 写入（try 包裹，诊断绝不反噬宿主）。
+const LOADER_IMPORT_CATCH_OLD = [
+  '\t\t\texports = await this.parent.tree.import(this.options.name, this.getOuterStack);',
+  '\t\t} catch (error) {',
+  '\t\t\tthis.ctx.logger.error(error);',
+].join('\n');
+
+const LOADER_IMPORT_CATCH_NEW = [
+  '\t\t\texports = await this.parent.tree.import(this.options.name, this.getOuterStack);',
+  '\t\t} catch (error) {',
+  '\t\t\ttry {',
+  '\t\t\t\tconst _ir = [];',
+  '\t\t\t\tfor (let _ie = error, _in = 0; _in < 5 && _ie; _in += 1) { _ir.push(_ie.stack ?? String(_ie)); _ie = _ie.cause; }',
+  '\t\t\t\tprocess.stderr.write(`[loader-diagnostic] entry ${this.options.id} (${this.options.name}) import failed: ${_ir.join(" <- ").slice(0, 6000)}\\n`);',
+  '\t\t\t} catch {}',
+  '\t\t\tthis.ctx.logger.error(error);',
+].join('\n');
+
+/**
+ * cordis-plugin-loader/lib/index.js 变换：Entry._init 的导入失败 catch 补一行
+ * stderr 原文（含 cause 链），只加日志、不改控制流与返回值。
+ * @returns {{status:'already'|'anchor-missing'|'changed', src?: string, detail?: string}}
+ */
+function transformLoaderImportFailureReport(src, file) {
+  const crlf = src.includes('\r\n');
+  const text = crlf ? src.replace(/\r\n/g, '\n') : src;
+  const injected = text.includes('[loader-diagnostic] entry ');
+  if (text.includes(LOADER_IMPORT_REPORT_MARKER) && injected) return { status: 'already' };
+  if (!text.includes(LOADER_IMPORT_CATCH_OLD)) {
+    return { status: 'anchor-missing', detail: '未找到 loader 导入失败锚点（版本可能已变更），跳过 ' + file };
+  }
+  let out = text.replace(LOADER_IMPORT_CATCH_OLD, LOADER_IMPORT_CATCH_NEW);
+  if (!out.includes(LOADER_IMPORT_REPORT_MARKER)) out = '// ' + LOADER_IMPORT_REPORT_MARKER + '\n' + out;
+  return { status: 'changed', src: crlf ? out.replace(/\n/g, '\r\n') : out };
+}
+
+// ── dsh-api-session-controller：prompt 准入 catch-all 真身 ──────────────────
+//
+// 准入链（模型图像能力 → 附件回执 → admitPromptContent → bindPrompt → steer/followup）
+// 的兜底分支把**任何**非 RemoteError 一律标成 session/agent-busy + "prompt rejected"，
+// 真实原因只落在 details.reason，UI 不渲染——用户看到「agent 忙」，实际可能是磁盘/
+// 权限/模块身份问题（发送文件恒报此错的排查即卡在此）。本补丁：① 原始异常全文进
+// stderr；② 报文带上原因摘要（code 不动，避免牵动 error-codes 契约与前端分支）。
+const PROMPT_ADMISSION_CATCHALL_OLD = '\t\t\t\tthrow new RemoteError("session/agent-busy", "prompt rejected", { reason: String(error) });';
+
+const PROMPT_ADMISSION_CATCHALL_NEW = [
+  '\t\t\t\ttry {',
+  '\t\t\t\t\tconst _pr = [];',
+  '\t\t\t\t\tfor (let _pe = error, _pn = 0; _pn < 5 && _pe; _pn += 1) { _pr.push(_pe.stack ?? String(_pe)); _pe = _pe.cause; }',
+  '\t\t\t\t\tprocess.stderr.write(`[prompt-admission] 准入链非 RemoteError 异常（被标为 session/agent-busy）: ${_pr.join(" <- ").slice(0, 6000)}\\n`);',
+  '\t\t\t\t} catch {}',
+  '\t\t\t\tthrow new RemoteError("session/agent-busy", `prompt rejected: ${String(error && error.message ? error.message : error).slice(0, 400)}`, { reason: String(error) });',
+].join('\n');
+
+/**
+ * dsh-api-session-controller/lib/index.js 变换：prompt 准入兜底分支补 stderr 原文，
+ * 并把原因摘要带进报文（RemoteError 的 code 与 details.reason 保持不变）。
+ * @returns {{status:'already'|'anchor-missing'|'changed', src?: string, detail?: string}}
+ */
+function transformPromptAdmissionReasonReport(src, file) {
+  const crlf = src.includes('\r\n');
+  const text = crlf ? src.replace(/\r\n/g, '\n') : src;
+  const injected = text.includes('[prompt-admission] 准入链非 RemoteError 异常');
+  if (text.includes(PROMPT_ADMISSION_REASON_MARKER) && injected) return { status: 'already' };
+  if (!text.includes(PROMPT_ADMISSION_CATCHALL_OLD)) {
+    return { status: 'anchor-missing', detail: '未找到 prompt 准入兜底锚点（版本可能已变更），跳过 ' + file };
+  }
+  let out = text.replace(PROMPT_ADMISSION_CATCHALL_OLD, PROMPT_ADMISSION_CATCHALL_NEW);
+  if (!out.includes(PROMPT_ADMISSION_REASON_MARKER)) out = '// ' + PROMPT_ADMISSION_REASON_MARKER + '\n' + out;
+  return { status: 'changed', src: crlf ? out.replace(/\n/g, '\r\n') : out };
+}
+
 module.exports = {
   LOADER_TREE_ISOLATION_MARKER,
   LOADER_ACTIVATION_ISOLATION_MARKER,
   FAIL_LOUD_ISOLATION_MARKER,
+  LOADER_IMPORT_REPORT_MARKER,
+  PROMPT_ADMISSION_REASON_MARKER,
   markers: {
     LOADER_TREE_ISOLATION_MARKER,
     LOADER_ACTIVATION_ISOLATION_MARKER,
     FAIL_LOUD_ISOLATION_MARKER,
+    LOADER_IMPORT_REPORT_MARKER,
+    PROMPT_ADMISSION_REASON_MARKER,
   },
   transformLoaderTreeIsolation,
   transformLoaderActivationIsolation,
   transformFailLoudIsolation,
+  transformLoaderImportFailureReport,
+  transformPromptAdmissionReasonReport,
 };

@@ -190,6 +190,21 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   Windows `rmdir /S /Q`、macOS `rm -rf`，对 junction / 悬空 junction / 真实目录均实测
   安全（不伤链接目标；PowerShell 删 junction 的历史 bug 在本机 PS 5.1.26100 上实测已
   不复发，但给用户的命令仍统一用 `rmdir`，少一个变量）。
+- **排查插件失败前，先确认「原始错误有没有被打出来」——rc.2 起有三段叠加的静默链**：
+  ① 插件导入失败不再抛出，`cordis-plugin-loader` 的 `Entry._init` 只 `ctx.logger.error(error)`
+  + `return`（条目没有 fiber，就是我们日志里的 `failed to load`）；② cordis 默认 logger 的
+  exporter 是**纯内存环形缓冲**（`self.buffer.push`，无 console sink），`logger.error` 不落地；
+  ③ `boot()` 的诊断 exporter 把 warn/error 收进 `startupLogs`，只在抛 `StartupError` 时才由
+  `bin.js::reportStartupFailure` 写 `<DSH_HOME>/logs/startup-*.log`——而我们的
+  `loader-activation-isolation` 让非核心条目**不再抛**。同型问题在 prompt 准入链：
+  `dsh-api-session-controller` 兜底把任何非 RemoteError 标成 `session/agent-busy`
+  + `"prompt rejected"`，真因只在 `details.reason`、UI 不渲染（「发送文件恒报 agent 忙」即此）。
+  2026-10-10 已加两条 guard 组诊断补丁把原文请出 stderr：`loader-import-failure-report`
+  （`[loader-diagnostic]`）与 `prompt-admission-reason-report`（`[prompt-admission]`，报文
+  另带原因摘要，**code 与 details 不动**——换 code 是契约变更，须走 error-codes.md + 哨兵）。
+  读旧日志时记住：诊断行只在补丁装上后的启动里才有，历史 boot 一律静默。另一处缺口未修：
+  `run_sidecar_boot` 只在退出码非 0 时转发 sidecar stderr，boot 五步
+  （repair/sync/patches/compat-pin/preflight）成功路径上的 anchor-missing 告警被丢弃。
 - **内核右栏是可扩展面，别去改内核包**：`dsh-client-ui-sidebar-right` 的
   `sidebarRightTabs.register` + `sidebar.right.pane.tab` 是公开两段式标签 API（内核自己的
   文件/文档预览/终端也用它）。本仓库的 better-sidebar 已经用它把工作台接成右栏里的一个标签，

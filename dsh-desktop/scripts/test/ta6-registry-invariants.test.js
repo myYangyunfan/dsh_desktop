@@ -85,9 +85,11 @@ test('A. file spec transform 均为函数且来自收口导出（无内联孤儿
   const adapterExports = new Set(Object.values(adapters).filter((v) => typeof v === 'function'));
   const loaderExports = new Set(Object.values(loaderIsolation).filter((v) => typeof v === 'function'));
   const fileSpecs = PATCH_SPECS.filter((s) => s.kind === 'file');
+  // 45 = 43 ＋ loader-import-failure-report ＋ prompt-admission-reason-report
+  // （2026-10-10 两条「静默失败原文上身」诊断补丁，见 E 的 60 基线说明）。
   // 43 = 44（rc.2 重靶后的 file 型规格数）− image-send-fix（2026-10 随识图插件
   // 整体退役；64 项总盘中 root 15 + file 43 = 58，另见 E）。
-  assert.equal(fileSpecs.length, 43, `file spec 应有 43 个，得 ${fileSpecs.length}`);
+  assert.equal(fileSpecs.length, 45, `file spec 应有 45 个，得 ${fileSpecs.length}`);
   for (const spec of fileSpecs) {
     assert.equal(typeof spec.transform, 'function', `${spec.id} 缺 transform`);
     assert.ok(
@@ -202,7 +204,12 @@ test('E. order 全局唯一、组内升序、补丁间依赖序成立', () => {
   //   「只为已退役插件存在」一类；transform 与锚点常量同批从 patch-adapters 删除，
   //   靶常量 SESSION_CTRL_INDEX_PKG_REL 仍由 history-page-size 使用故保留。
   //   cli:true 计数不受影响（它是 cli:false）。
-  assert.equal(PATCH_SPECS.length, 58, 'spec 总数应为 58');
+  // 60 = 58 ＋ loader-import-failure-report（order 148）＋ prompt-admission-reason-report
+  // （order 150）：两条「静默失败原文上身」诊断补丁（2026-10-10，mac 端 9 插件
+  // failed to load 与发送文件恒报 prompt rejected 两轮发布查不下去的直接原因——
+  // rc.2 导入失败只进 cordis 内存环形缓冲、非核心条目不再抛 StartupError，真因
+  // 三重静默）。均 cli:false，故 cli:true 计数不变。
+  assert.equal(PATCH_SPECS.length, 60, 'spec 总数应为 60');
   const orders = PATCH_SPECS.map((s) => s.order);
   assert.equal(new Set(orders).size, orders.length, 'order 必须全局唯一');
   const byId = Object.fromEntries(PATCH_SPECS.map((s) => [s.id, s]));
