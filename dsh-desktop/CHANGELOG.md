@@ -21,11 +21,11 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 _（v1.0.0 已于 2026-10-09 发布，其内容见下方 `[1.0.0]` 段；此后新的开发条目写在这里。）_
 
-### fix(companion)：mac 端首启「未能保存设置」toast + 9 插件 failed to load 根治 —— profile 链接落点同步自愈（2026-10-10）
+### fix(companion)：首启「未能保存设置」toast + 9 插件 failed to load 根治（mac + 部分 Windows 用户）—— profile 链接落点同步自愈（2026-10-10）
 
-- **现场**（macOS v1.0.0 实机日志 + 本机沙箱逐字复现）：settings / better-sidebar /
-  conversation-tweaks / quest-ui / side-session / openclaw-bridge / dsh-subagent-lens /
-  reasoning-effort / basics-panel 共 9 条 `failed to load — auto-isolated`；
+- **现场**（macOS v1.0.0 实机日志 + 部分 Windows 用户同症 + 本机 Windows 沙箱逐字复现）：
+  settings / better-sidebar / conversation-tweaks / quest-ui / side-session / openclaw-bridge /
+  dsh-subagent-lens / reasoning-effort / basics-panel 共 9 条 `failed to load — auto-isolated`；
   `dsh-easyrewrite` `pending (waiting for settings)`；前台弹「未能保存设置，请重试。」
   且点击重试无效（设置服务缺席，保存永远失败）。
 - **根因**：profile 的 `node_modules/@deepseek-ai/schemastery` 是旧装配期遗留的
@@ -39,7 +39,10 @@ _（v1.0.0 已于 2026-10-09 发布，其内容见下方 `[1.0.0]` 段；此后�
 - **修复**（`dsh-desktop/scripts/lib/companion-profile.js`）：目录级同步 `syncDir` 复制前
   按 src 树形状摘除全部链接落点（`unlinkLinkDests`，含悬空、不递归穿透）；摘除失败
   （杀软 / handle 锁）跳过本次复制并落日志，绝不让 cpSync 以原生崩溃收场。插件落点
-  与 `lib/` 单点同样先摘链重建；单文件复制撞悬空链接时摘链重试一次。
+  与 `lib/` 单点同样先摘链重建；单文件复制撞悬空链接时摘链重试一次。修复跨平台
+  （junction 与 symlink 同路径）；带上本次更新的用户首启即自愈，不能等待的用户手工
+  删掉 profile 内该落点后重启亦可（Windows `rmdir /S /Q`、macOS `rm -rf`，对
+  junction / 悬空 junction / 真实目录均实测安全、不伤链接目标）。
 - **验证**：新增 `scripts/test/unit-companion-link-dest.test.js` 10 例（mac 形态逐字
   复现 + 原生崩溃回归锁 + 「不写穿链接」负向断言 + 摘链失败兜底反证）；沙箱端到端：
   修复前同环境内核启动 9 failed + 1 pending → 修复后 0 + 0，二次同步零改写幂等；

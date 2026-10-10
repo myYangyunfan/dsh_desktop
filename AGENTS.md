@@ -162,12 +162,16 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
 - **profile 里的链接落点是同步盲区，`cpSync` 撞上它有三种坏法（node v24 实测）**：目录级
   `cpSync(src, dest)` 的 dest 是链接时——顶层落点 → 抛 `ERR_FS_CP_DIR_TO_NON_DIR`（可被 catch，
   旧实现吞进日志）；嵌套悬空 junction → **Node 原生崩溃**（fail-fast，JS 层根本 catch 不到）；
-  嵌套非悬空 junction → 静默写穿，把新文件倒进链接目标。mac 首启「未能保存设置」toast
-  （settings + 8 个插件 `failed to load`、easyrewrite pending）就是旧装配期 schemastery
-  junction 指向残缺副本、上述三种坏法各占一段而成；boot 通道日志不落 desktop.log 又让失败
-  双重静默。`companion-profile.js` 的 `syncDir` 现已在复制前按 src 树形状摘除全部链接落点
-  （含悬空、不穿透），插件落点 / `lib/` 落点 / 单文件复制各有摘链兜底，回归锁
-  `unit-companion-link-dest`（含原生崩溃用例与「不写穿」负向断言）。
+  嵌套非悬空 junction → 静默写穿，把新文件倒进链接目标。v1.0.0 首启「未能保存设置」toast
+  （settings + 8 个插件 `failed to load`、easyrewrite pending；mac 实机报告 + 部分 Windows
+  用户同症）就是旧装配期 schemastery junction 指向残缺副本、上述三种坏法各占一段而成；
+  boot 通道日志不落 desktop.log 又让失败双重静默。`companion-profile.js` 的 `syncDir`
+  现已在复制前按 src 树形状摘除全部链接落点（含悬空、不穿透），插件落点 / `lib/` 落点 /
+  单文件复制各有摘链兜底，回归锁 `unit-companion-link-dest`（含原生崩溃用例与「不写穿」
+  负向断言）。手工自救（不能等发版的用户）：删 profile 内该落点后重启即自愈——
+  Windows `rmdir /S /Q`、macOS `rm -rf`，对 junction / 悬空 junction / 真实目录均实测
+  安全（不伤链接目标；PowerShell 删 junction 的历史 bug 在本机 PS 5.1.26100 上实测已
+  不复发，但给用户的命令仍统一用 `rmdir`，少一个变量）。
 - **内核右栏是可扩展面，别去改内核包**：`dsh-client-ui-sidebar-right` 的
   `sidebarRightTabs.register` + `sidebar.right.pane.tab` 是公开两段式标签 API（内核自己的
   文件/文档预览/终端也用它）。本仓库的 better-sidebar 已经用它把工作台接成右栏里的一个标签，
