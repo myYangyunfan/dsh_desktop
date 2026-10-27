@@ -1476,9 +1476,21 @@ jobs:
           echo "degraded=true" >> "$GITHUB_OUTPUT"
 
       - name: Generate release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: myYangyunfan/dsh_desktop
         run: |
           TAG='${{ steps.ver.outputs.tag }}'
           VERSION='${{ steps.ver.outputs.version }}'
+          NOTES_PATH=".github/release-notes/v${VERSION}.md"
+          # 正文优先取仓库内按版本落盘的文件（发版前写好、随代码一起评审）；
+          # 下面的内嵌模板只是兜底，它记的是某一版的数字——v1.0.6 / v1.0.7 / v1.0.8 三次
+          # 都栽在「模板没跟着改」，发出去的正文写着上一版的内核与插件数。
+          if gh api "repos/${GH_REPO}/contents/${NOTES_PATH}?ref=${TAG}" --jq .content 2>/dev/null | base64 -d > release-notes.md && [ -s release-notes.md ]; then
+            echo "release notes: 取自 ${NOTES_PATH}@${TAG}"
+            exit 0
+          fi
+          echo "::warning::仓库缺 ${NOTES_PATH}，回落到内嵌模板——务必逐项核对正文里的版本号与数字"
           cat > release-notes.md << EOF
           # DSH Desktop ${VERSION}（正式版 · 随包内核换代）
 

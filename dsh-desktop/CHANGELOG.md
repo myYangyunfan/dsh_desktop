@@ -5,6 +5,16 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### build(release)：发版正文改为仓库内按版本落盘，内嵌模板只作兜底（2026-10-27）
+
+- **病灶**：`tauri-release.yml` 的 `Generate release notes` 把正文写死在 YAML 里，记的是**某一版**的数字。
+  v1.0.6 → v1.0.7 → v1.0.8 连续三次发出去的正文都在讲上一版的内核版本、tgz 份数与插件条数
+  （v1.0.7 还因一次错误的 PATCH 变成 PowerShell 对象串，事后手工修）。模板跟着改不是可靠做法。
+- **修法**：工作流先按 tag 从仓库取 `.github/release-notes/v<version>.md`（`gh api contents?ref=<tag>`
+  → `base64 -d`），取到即用并 `exit 0`；取不到才回落内嵌模板，并打一条 `::warning::` 提示逐项核对。
+  发版正文从此是**可评审的文件**，随代码一起进 tag。
+- **随本版落盘**：`.github/release-notes/v1.0.8.md`（本版实际正文；v1.0.8 已发布，正文由
+  `gh release edit v1.0.8 --notes-file` 就地替换，未重建 release、资产与下载数不动）。
 ## [1.0.8] - 2026-10-27
 
 （本轮随包内核换代 0.2.1-rc.2 → 0.2.1-rc.4，内容见下节；壳层与插件代码零改动。）

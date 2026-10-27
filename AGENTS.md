@@ -98,6 +98,12 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   发布形态由该工作流顶层 `env.RELEASE_PRERELEASE` 决定（v1.0.2 置 `'true'`）：prerelease **不进**
   GitHub `releases/latest`，而壳侧更新器轮询的正是 latest，于是「装了新版本却从不提示更新」是
   **刻意的预期结果，不是待修的 bug**（转正姿势与核验读法见 runbook §8.2）。
+  **发版正文取自仓库 `.github/release-notes/v<version>.md`**（2026-10-27 起：`Generate release notes`
+  先按 tag 用 `gh api contents?ref=<tag>` 取该文件、`base64 -d` 落盘即 `exit 0`，取不到才回落工作流里
+  那份内嵌模板并打 `::warning::`）。模板是**某一版的历史快照**——v1.0.6 / v1.0.7 / v1.0.8 连续三次发出去的
+  正文都在讲上一版的内核与插件数，别指望「顺手改模板」。**发版前先写这个文件**，发版后核一次正文首行的
+  版本号；已发布的正文要改就 `gh release edit <tag> --notes-file <file>`（就地改，不重建 release，
+  资产与下载数不动）。
 - **版本号要三处同步**：`dsh-desktop/package.json`、`dsh-tauri/src-tauri/Cargo.toml`
   （`workspace.package.version`）、`dsh-tauri/src-tauri/src/app/tauri.conf.json`。
   其中 `tauri.conf.json` 的 version 会被 CI 与 tag 做 fail-fast 比对，漏改直接发版失败。
