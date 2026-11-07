@@ -30,9 +30,9 @@
 //   5. @deepseek-ai/dsh-client-ui-workspace —— 会话行 ⋯ 菜单在「归档会话」
 //      下方增加「删除对话」（当前会话行也显示），点击走
 //      window.__dshSessionManager（由配套插件 dsh-session-manager 提供：
-//      确认框 + RPC + 错误提示）。【0.2.0-rc.2 起该菜单改为
-//      sidebar.workspaces.session.menu.item 的 slot 列表，本层改为注册
-//      order 450 的 DeleteSessionMenuItem】
+//      确认框 + RPC + 错误提示）。【0.2.0-rc.2 起该菜单改为 slot 列表；
+//      0.2.2-rc.1 起再改为 registerSessionMenus 里的 contextMenus 数据项，
+//      本层改为注册 order 650 的数据项，见第 7 节】
 //
 // 孤儿进程清理（旧 patch-session-orphans.js 的职责）已内联到 deleteSession：
 // 删除会话后复用内核自有 owner 清理 API（jobs.disposeOwned / terminals
@@ -310,18 +310,42 @@ const REMOTES_INVOKE_INSERT = [
 // ---------------------------------------------------------------------------
 // 7. dsh-client-ui-workspace：会话行菜单「删除对话」+ 翻译
 // ---------------------------------------------------------------------------
-// 0.2.0-rc.2 重锚：会话行 ⋯ 菜单不再是内联数组（旧 UI_MENU/UI_SELECT 那套
-// `if (id === "archive") onArchive(node.id)` 已随上游重构消失），改成了
-// `sidebar.workspaces.session.menu.item` 的 slot 列表（pin 100 / rename 200 /
-// fork 300 / archive 400）。本层因此改为「注册第 5 行」：注入组件
-// DeleteSessionMenuItem + props 闭包 deleteInjected + 一条 slots.register。
-const UI_MENU_ANCHOR = "\t\t\t\t\tid: \"archive\",\n\t\t\t\t\torder: 400,\n\t\t\t\t\tlocale: NS,\n\t\t\t\t\tinject: archiveInjected\n\t\t\t\t}, ArchiveSessionMenuItem);";
-const UI_MENU_INSERT = "\t\t\t\t\tid: \"archive\",\n\t\t\t\t\torder: 400,\n\t\t\t\t\tlocale: NS,\n\t\t\t\t\tinject: archiveInjected\n\t\t\t\t}, ArchiveSessionMenuItem);\n\t\t\t\t// dsh-desktop patch (session manage): 归档下方增加「删除对话」（order 450）。\n\t\t\t\tyield ctx.slots.register({\n\t\t\t\t\tname: \"sidebar.workspaces.session.menu.item\",\n\t\t\t\t\tid: \"delete\",\n\t\t\t\t\torder: 450,\n\t\t\t\t\tlocale: NS,\n\t\t\t\t\tinject: deleteInjected\n\t\t\t\t}, DeleteSessionMenuItem);";
-
-const UI_COMP_ANCHOR = "\t\tfunction ArchiveSessionMenuItem({ sessionId, useArchived, useMenuOpenState, useShortcuts, archiveSession, unarchiveSession, t }) {";
-const UI_COMP_INSERT = "\t\t/**\n\t\t* dsh-desktop patch (session manage): Menu row (order 450): 删除对话。\n\t\t* 桥缺失（未装 dsh-session-manager）时整行不渲染——显式降级，不是点了没反应。\n\t\t* @param props - 菜单开闭态与删除动作。\n\t\t* @returns the row, or nothing when the desktop bridge is absent.\n\t\t*/\n\t\tfunction DeleteSessionMenuItem({ sessionId, useMenuOpenState, deleteSession, t }) {\n\t\t\tconst [, setMenuOpen] = useMenuOpenState();\n\t\t\tif (!(" + DELETE_SESSION_MENU_GUARD + ")) return null;\n\t\t\treturn (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.MenuItemButton, {\n\t\t\t\tdanger: true,\n\t\t\t\tonSelect: () => {\n\t\t\t\t\tsetMenuOpen(false);\n\t\t\t\t\tdeleteSession(sessionId);\n\t\t\t\t},\n\t\t\t\tchildren: t(\"menu.deleteSession\")\n\t\t\t});\n\t\t}\n\t\tfunction ArchiveSessionMenuItem({ sessionId, useArchived, useMenuOpenState, useShortcuts, archiveSession, unarchiveSession, t }) {";
-const UI_INJECT_ANCHOR = "\t\t\tconst archiveInjected = () => ({";
-const UI_INJECT_INSERT = "\t\t\t// dsh-desktop patch (session manage): 「删除对话」的 props 注入闭包。删除\n\t\t\t// 动作走 window.__dshSessionManager（配套插件 dsh-session-manager 提供：\n\t\t\t// 确认框 + workspace.deleteSession RPC + 错误提示）；桥缺失时组件不渲染该行。\n\t\t\tconst deleteInjected = () => ({\n\t\t\t\tdeleteSession: (sessionId) => {\n\t\t\t\t\twindow.__dshSessionManager?.deleteSession(sessionId);\n\t\t\t\t}\n\t\t\t});\n\t\t\tconst archiveInjected = () => ({";
+// 0.2.2-rc.1 重锚（第三次结构变化）：会话 ⋯ 菜单再一次重构——
+//   · 上游把 slot 列表（pin 100 / rename 200 / fork 300 / archive 400 /
+//     session-id 450 + 五个 *SessionMenuItem 组件）整块删除，改为
+//     `registerSessionMenus(ctx, actions)` 里的数据项注册：
+//     `ctx.contextMenus.register({ id: \`session.${id}\`, target: "session",
+//      order, observe, resolve })`，条目 = { id, label, icon?, danger?,
+//     separatorBefore?, commandId?, run }；
+//   · 于是 DeleteSessionMenuItem 组件与 deleteInjected 闭包一并消失，
+//     本层改为「在 registerSessionMenus 里注册第 6 个数据项」：order 650
+//     （archive 600 之后，视觉仍紧贴归档项）。
+// 锚点取原生 archive 项的 run 收尾 + 该 register 调用收尾三行（全文件唯一，
+// 16 个候选锚点里实测 1 命中）。insert 原样保留锚点字节（链式安全）。
+const UI_MENU_ANCHOR = [
+	'\t\t\t\t\t(restoring ? actions.unarchiveSession : actions.archiveSession)(target.sessionId);',
+	'\t\t\t\t\t}',
+	'\t\t\t\t}];',
+	'\t\t\t});',
+].join('\n');
+const UI_MENU_INSERT = [
+	UI_MENU_ANCHOR,
+	'\t\t\t// dsh-desktop patch (session manage): 归档下方增加「删除对话」（order 650）。',
+	'\t\t\t// 桥缺失（未装 dsh-session-manager）时 resolve 返回空数组 = 整行不渲染——',
+	'\t\t\t// 显式降级，不是点了没反应。',
+	'\t\t\tregister("delete", 650, [], (target) => {',
+	'\t\t\t\tif (!(' + DELETE_SESSION_MENU_GUARD + ')) return [];',
+	'\t\t\t\treturn [{',
+	'\t\t\t\t\tid: "delete",',
+	'\t\t\t\t\tlabel: t("menu.deleteSession"),',
+	'\t\t\t\t\tdanger: true,',
+	'\t\t\t\t\tseparatorBefore: true,',
+	'\t\t\t\t\trun: () => {',
+	'\t\t\t\t\t\twindow.__dshSessionManager?.deleteSession(target.sessionId);',
+	'\t\t\t\t\t}',
+	'\t\t\t\t}];',
+	'\t\t\t});',
+].join('\n');
 
 const UI_ZH_ANCHOR = "\t\t\t\"menu.archiveSession\": \"归档会话\",";
 const UI_ZH_INSERT = "\t\t\t\"menu.archiveSession\": \"归档会话\",\n\t\t\t\"menu.deleteSession\": \"删除对话\",";
@@ -457,8 +481,6 @@ const TARGETS = [
       // 'deleteInjected' has already been declared），工作区侧栏整块坏掉。注入体内的
       // 注释行不会被别的补丁触碰，故一律用它。
       { anchor: UI_MENU_ANCHOR, insert: UI_MENU_INSERT, done: 'dsh-desktop patch (session manage): 归档下方增加「删除对话」' },
-      { anchor: UI_COMP_ANCHOR, insert: UI_COMP_INSERT, done: 'dsh-desktop patch (session manage): Menu row (order 450)' },
-      { anchor: UI_INJECT_ANCHOR, insert: UI_INJECT_INSERT, done: 'dsh-desktop patch (session manage): 「删除对话」的 props 注入闭包' },
       { anchor: UI_ZH_ANCHOR, insert: UI_ZH_INSERT, done: '"menu.deleteSession": "删除对话"' },
       { anchor: UI_EN_ANCHOR, insert: UI_EN_INSERT, done: '"menu.deleteSession": "Delete conversation"' },
     ],

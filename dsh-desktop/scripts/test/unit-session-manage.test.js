@@ -4,7 +4,7 @@
 //
 // 覆盖四层：
 //   1. 全链一次应用：6 个目标文件（dsh-session / workspace-controller 三处
-//      typert 协议同步 / api-remotes 客户端描述符 / 页内 slot 菜单）都写入，
+//      typert 协议同步 / api-remotes 客户端描述符 / 页内 contextMenus 数据项）都写入，
 //      关键注入产物齐备；
 //   2. 逐项幂等：二遍零写入（本补丁用「insert/done 自身判完成」而非全局 MARKER
 //      跳过，存量安装才能被后续新增替换项追补）；
@@ -13,9 +13,9 @@
 //   4. 锚点唯一性 + 链式安全：每个锚在自己的夹具里恰好命中一次，且每个 insert
 //      都原样保留自己的锚（open-project-dir 会接在同一段原生代码之后，两补丁
 //      任意先后都能命中）；
-//   5. 链式幂等（真 pristine 字节）：与共享同一原生锚的 open-project-dir /
-//      workspace-pin 连跑两遍，注入体必须各只有一份且产物可解析 —— 这是
-//      2026-10-06 实测 P0 的回归位（见文件末尾两例）。
+//   5. 链式共存（真 pristine 字节）：与 open-project-dir / workspace-pin 同落一份
+//      client.js，三个注入体必须各只有一份、两种应用顺序都成立、产物可解析 ——
+//      这是 2026-10-06 实测 P0 的回归位（见文件末尾两例）。
 //
 // 用法：node --test scripts/test/unit-session-manage.test.js
 
@@ -41,9 +41,10 @@ function makeTree(t, fixtures) {
   return { root, files };
 }
 
-/** 默认夹具：每包一份「只含本包锚点」的拼接文本。 */
+/** 默认夹具：每包一份「只含本包锚点」的拼接文本。行尾先归一到 LF——
+ *  多行锚在 CRLF 下 String.replace 会静默空转，反证用例就成了替「未变异体」判绿。 */
 function defaultFixtures() {
-  return buildFixtures();
+  return buildFixtures().map((fx) => ({ rel: fx.rel, text: fx.text.replace(/\r\n/g, '\n') }));
 }
 
 test('全链一次应用：6 个目标文件写入且关键产物齐备', (t) => {
@@ -86,15 +87,34 @@ test('全链一次应用：6 个目标文件写入且关键产物齐备', (t) =>
   assert.ok(remotes.includes('WorkspaceDeleteSessionRequest'), 'remotes 应含请求类型符号');
   assert.ok(remotes.includes('_deepseek_ai_dsh_api_workspace_controller_workspace_deleteSession_parameter_0_strict$schema'),
     'remotes 应含 strict 入参 schema（strictCodec.create 的引用目标，缺一个就是半个注入）');
-  // 6. 页内：slot 注册 + 组件 + 注入闭包 + zh/en。
-  assert.ok(ui.includes('id: "delete"') && ui.includes('order: 450'), '页内应注册 order 450 的删除行');
-  assert.ok(ui.includes('function DeleteSessionMenuItem('), '页内应注入删除组件');
-  // 桥缺失则整行不渲染。判定式按引用取契约常量（scripts/lib/host-capabilities
-  // 的 DELETE_SESSION_MENU_GUARD，与 patch-session-manage 注入体逐字同源，并由
-  // unit-host-capabilities 做跨文件核对）——这里原先手抄的是旧形态
-  // `?.deleteSession === void 0`，注入体早已改成 `&& typeof … === "function"`，
-  // 手抄漂移只会让断言钉不住真实字节。
-  assert.ok(ui.includes('if (!(' + DELETE_SESSION_MENU_GUARD + ')) return null;'), '桥缺失时应整行不渲染');
+  // 6. 页内：registerSessionMenus 里的 contextMenus 数据项 + zh/en。
+  //    0.2.2-rc.1 第三次重构：五个 *SessionMenuItem 组件与 deleteInjected 闭包
+  //    整块删除，改为 `register(id, order, endpoints, resolve)` 注册数据项，
+  //    条目 = { id, label, icon?, danger?, separatorBefore?, run }。判据因此从
+  //    「组件在场」改成「那一行 register(...) 调用在场」——裸的 id/danger/
+  //    separatorBefore 在 pristine 上本来就有别处的同名项，单独当判据必然空转。
+  assert.ok(ui.includes('register("delete", 650, [], (target) => {'), '页内应注册 order 650 的删除行');
+  assert.ok(
+    ui.includes(
+      '\t\t\t\t\tid: "delete",\n\t\t\t\t\tlabel: t("menu.deleteSession"),\n\t\t\t\t\tdanger: true,\n\t\t\t\t\tseparatorBefore: true,'
+    ),
+    '删除项应为「危险 + 分隔线前置」的数据项'
+  );
+  assert.ok(ui.includes('window.__dshSessionManager?.deleteSession(target.sessionId)'), '点击应走 dsh-session-manager 桥');
+  // 桥缺失则 resolve 返回空数组 = 整行不渲染。判定式按引用取契约常量（scripts/lib/
+  // host-capabilities 的 DELETE_SESSION_MENU_GUARD，与 patch-session-manage 注入体
+  // 逐字同源，并由 unit-host-capabilities 做跨文件核对）——这里原先手抄的是旧形态
+  // `?.deleteSession === void 0`，手抄漂移只会让断言钉不住真实字节。
+  assert.ok(
+    ui.includes('if (!(' + DELETE_SESSION_MENU_GUARD + ')) return [];'),
+    '桥缺失时 resolve 应返回空数组（整行不渲染）'
+  );
+  // 下面两条是「向后不许回退」的护栏，不是「删掉注入体必红」的判据（注入体被删时
+  // 它们仍绿）：它们锁的是组件时代的旧形态不得回流。
+  assert.ok(
+    !ui.includes('if (!(' + DELETE_SESSION_MENU_GUARD + ')) return null;'),
+    '不得退回组件时代「返回 null」的整行不渲染形态'
+  );
   assert.ok(!ui.includes('?.deleteSession === void 0'), '不得退回旧的可选链判空形态');
   assert.ok(ui.includes('"menu.deleteSession": "删除对话"'), '应写入中文翻译');
   assert.ok(ui.includes('"menu.deleteSession": "Delete conversation"'), '应写入英文翻译');
@@ -166,21 +186,24 @@ test('dryRun 不得写盘', (t) => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. 链式幂等（真 pristine 字节）—— 2026-10-06 实测 P0 的回归位。
+// 5. 链式共存（真 pristine 字节）—— 2026-10-06 实测 P0 的回归位。
 //
-// 故障：dsh-client-ui-workspace/lib/client.js 同时是 session-manage(190)、
-// open-project-dir(200)、workspace-pin(215) 三个 root 应用器的靶，而前两者共用
-// 同两行原生锚（`function ArchiveSessionMenuItem(…)` / `const archiveInjected
-// = () => ({`）。open-project-dir 把自己的注入体插在锚点行之前，那段位置正落在
-// session-manage 的 insert 字节区间内部 → 「用 insert 判已完成」被从中间劈开 →
-// 二遍 boot 重插一次 → DeleteSessionMenuItem / deleteInjected 各声明两遍 →
-// 该 bundle 直接 SyntaxError（Identifier 'deleteInjected' has already been
-// declared）。dsh-desktop/node_modules 的存量树当时实测已坏（delInj=2）。
+// 历史故障（0.2.1 及以前的字节形态）：dsh-client-ui-workspace/lib/client.js 同时是
+// session-manage(190)、open-project-dir(200)、workspace-pin(215) 三个 root 应用器的
+// 靶，而前两者共用同两行原生锚（`function ArchiveSessionMenuItem(…)` /
+// `const archiveInjected = () => ({`）。opd 把自己的注入体插在锚点行之前，那段位置
+// 正落在 sm 的 insert 字节区间内部 → 「用 insert 判已完成」被从中间劈开 → 二遍 boot
+// 重插一次 → DeleteSessionMenuItem / deleteInjected 各声明两遍 → 该 bundle 直接
+// SyntaxError（Identifier 'deleteInjected' has already been declared）。
 //
-// 为什么单测里原来抓不到：上面「逐项幂等」跑的是 sm 自己的合成夹具（没有第二
-// 个补丁来劈它），而劈它的补丁只在真字节 + 全链编排里才动到那一段。ta3-boot-chain
-// 的「二遍幂等」断言是这类跨补丁劈裂的通用守卫（changed 必须归零），本组两例是
-// 它的定点版本（能直接指出坏在哪个注入体、判据是哪一条）。
+// 0.2.2-rc.1 起劈裂前提消失：三个补丁的靶全部搬到 ctx.contextMenus 数据项，各自的
+// 锚点区间互不相交（sm 锚 archive 项的 run 收尾、opd 锚 session-id 项收尾与
+// workspace.delete 收尾、wp 锚 workspace.rename 收尾），且 insert 一律原样保留锚。
+// 于是「把 done 退回 insert 字节就会重插」这条反证在新形状下**必然空转**（insert
+// 不再被谁劈开，二遍照样零写入，断言 n===1 只会恒 false）。它替换成新形状下仍然
+// 成立的那一条：三个补丁同落一份文件时必须各存活一份、且换序后同样成立 ——
+// 任一处锚点区间把邻家的注册行吞掉，计数立刻变 0，判据不空跑。
+// （`done` 判据——注入体内的独有文案——保留为纵深防御，见 patch-session-manage 第 7 节。）
 // ---------------------------------------------------------------------------
 
 const WS_REL = path.join('@deepseek-ai', 'dsh-client-ui-workspace', 'lib', 'client.js');
@@ -201,15 +224,27 @@ function makeWsTree(t) {
   return { root, file };
 }
 
-/** 三个注入体各出现几次（>1 即重复注入）。 */
+/** 读产物的「可断言文本」：行尾归一到 LF（多行键在 CRLF 下 split/includes 恒 0）。 */
+function readSrc(file) {
+  return fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+}
+
+/**
+ * 三个注入体各出现几次（>1 即重复注入，0 即被邻家吞掉）。
+ * 键面按 0.2.2-rc.1 的数据项注册行取：裸的 id / order / danger 在 pristine 上
+ * 本来就有同名项（`id: "delete"`、`order: 200`、`danger: true` 各 ≥1 命中），
+ * 拿它们当判据等于空转，必须咬住整条 register(...) 调用。
+ */
 function injectionCounts(src) {
   return {
-    deleteMenuItem: src.split('function DeleteSessionMenuItem(').length - 1,
-    deleteInjected: src.split('const deleteInjected = ').length - 1,
-    deleteRow: src.split('id: "delete",\n\t\t\t\t\torder: 450').length - 1,
-    openDirItem: src.split('function OpenProjectDirMenuItem(').length - 1,
+    deleteRow: src.split('register("delete", 650').length - 1,
+    openDirRow: src.split('register("openDir", 500').length - 1,
+    openDirIcon: src.split('"workspace.openDir": _deepseek_ai_dsh_client_ui_primitives.IconFolderOpenRegular').length - 1,
+    pinToggle: src.split('id: "workspace.pinToggle"').length - 1,
   };
 }
+
+const EXPECT_ONE_EACH = { deleteRow: 1, openDirRow: 1, openDirIcon: 1, pinToggle: 1 };
 
 /** ESM 语法可解析性（node --check 只认 .mjs/.cjs 后缀，故落一份 .mjs 副本）。 */
 function syntaxErrorOf(root, src) {
@@ -235,39 +270,52 @@ const wsChain = (root) => {
   ];
 };
 
-test('链式幂等（真字节）：sm→opd→wp 连跑两遍，注入体各一份且语法可解析', { skip: wsPristineFile ? false : SKIP_NO_WS }, (t) => {
+test('链式共存（真字节）：sm→opd→wp 连跑两遍，注入体各一份且语法可解析', { skip: wsPristineFile ? false : SKIP_NO_WS }, (t) => {
   const { root, file } = makeWsTree(t);
-  assert.deepEqual(wsChain(root).slice(1), [1, 1], '一遍应写入 opd / wp 各 1 个文件');
+  const firstPass = wsChain(root);
+  assert.deepEqual(firstPass.slice(1), [1, 1], '一遍应写入 opd / wp 各 1 个文件');
+  assert.deepEqual(firstPass, [1, 1, 1], '一遍三个应用器各写 1 个文件');
   const first = fs.readFileSync(file, 'utf8');
-  assert.deepEqual(injectionCounts(first), { deleteMenuItem: 1, deleteInjected: 1, deleteRow: 1, openDirItem: 1 },
-    '一遍后四个注入体都应恰好一份');
-  assert.equal(syntaxErrorOf(root, first), null, '一遍后必须可解析');
+  assert.deepEqual(injectionCounts(readSrc(file)), EXPECT_ONE_EACH, '一遍后四个注入体都应恰好一份');
+  assert.equal(syntaxErrorOf(root, readSrc(file)), null, '一遍后必须可解析');
 
   const second = wsChain(root);
   const after = fs.readFileSync(file, 'utf8');
   assert.deepEqual(second, [0, 0, 0], `二遍三个应用器都应零写入（实际 sm=${second[0]} opd=${second[1]} wp=${second[2]}）`);
   assert.equal(after, first, '二遍字节不得变化');
-  assert.deepEqual(injectionCounts(after), { deleteMenuItem: 1, deleteInjected: 1, deleteRow: 1, openDirItem: 1 }, '不得出现重复声明');
-  assert.equal(syntaxErrorOf(root, after), null, '二遍后仍须可解析');
+  assert.deepEqual(injectionCounts(readSrc(file)), EXPECT_ONE_EACH, '不得出现重复声明，也不得被邻家吞掉');
+  assert.equal(syntaxErrorOf(root, readSrc(file)), null, '二遍后仍须可解析');
 });
 
-test('反证：done 判据退回 insert 字节 → 链式二遍立刻重复注入并坏掉语法', { skip: wsPristineFile ? false : SKIP_NO_WS }, (t) => {
+test('反证：三个补丁同落一份文件，删除行 / 打开目录行 / 置顶行必须各存活一份', { skip: wsPristineFile ? false : SKIP_NO_WS }, (t) => {
   const { root, file } = makeWsTree(t);
-  assert.deepEqual(wsChain(root), [1, 1, 1], '前置：一遍各写 1');
-  const ui = TARGETS.find((x) => x.rel.join('/').includes('dsh-client-ui-workspace'));
-  const saved = ui.replacements.map((r) => r.done);
-  try {
-    // 复刻修复前形态：除第 0 项外都不声明 done，幂等判据退回「insert 全字节」。
-    ui.replacements.forEach((r, i) => { if (i !== 0) r.done = undefined; });
-    const n = patchSessionManage(root, () => {}, { anchorMissing: 0, failed: 0 });
-    const src = fs.readFileSync(file, 'utf8');
-    assert.equal(n, 1, 'insert 字节判据下二遍必然重写工作区文件（判据确实被劈开）');
-    assert.equal(injectionCounts(src).deleteMenuItem, 2, '重写的后果是 DeleteSessionMenuItem 声明两遍');
-    assert.equal(injectionCounts(src).deleteInjected, 2, 'deleteInjected 同样两遍');
-    assert.ok(syntaxErrorOf(root, src), '产物必须是语法错误 —— 否则本反证没有证明任何东西');
-  } finally {
-    ui.replacements.forEach((r, i) => { r.done = saved[i]; });
-  }
-  // 判据复原后同一棵树立刻停止恶化（零写入）—— 起作用的是判据本身，不是文件状态。
-  assert.deepEqual(wsChain(root), [0, 0, 0], 'done 判据复原后应零写入');
+  assert.deepEqual(wsChain(root), [1, 1, 1], '前置：一遍三个应用器各写 1');
+  const src = readSrc(file);
+  // 判据粒度是「整条 register(...) 调用」：sm 的删除行锚在 registerSessionMenus 的
+  // archive 项收尾、opd 的 openDir 行锚在 session-id 项收尾（同一函数、相邻两块），
+  // wp 的 pinToggle 锚在 workspace.rename 的收尾。任一处区间把邻家那行吞掉（或被
+  // 邻家重写抹平），这里的计数就变 0 → 本用例红，不是空跑。
+  assert.deepEqual(injectionCounts(src), EXPECT_ONE_EACH, 'sm / opd / wp 三个注入体必须各存活一份');
+  assert.equal(src.split('register("delete", 650').length - 1, 1, '删除行应恰好 1 条');
+  assert.equal(src.split('register("openDir", 500').length - 1, 1, '打开目录行应恰好 1 条');
+  assert.equal(syntaxErrorOf(root, src), null, '三补丁共存后必须仍可解析');
+});
+
+test('反证：换序（opd / wp 先跑）同样各存活一份，且二遍仍零写入', { skip: wsPristineFile ? false : SKIP_NO_WS }, (t) => {
+  const { root, file } = makeWsTree(t);
+  const { patchOpenProjectDir } = require('../patch-open-project-dir');
+  const { patchWorkspacePin } = require('../patch-workspace-pin');
+  const reversed = [
+    patchOpenProjectDir(root, () => {}, { anchorMissing: 0, failed: 0 }),
+    patchWorkspacePin(root, () => {}, { anchorMissing: 0, failed: 0 }),
+    patchSessionManage(root, () => {}, { anchorMissing: 0, failed: 0 }),
+  ];
+  assert.deepEqual(reversed, [1, 1, 1], '换序后三个应用器仍各写 1');
+  const src = readSrc(file);
+  assert.deepEqual(injectionCounts(src), EXPECT_ONE_EACH, '换序后三个注入体仍各一份（锚点区间互不侵占）');
+  assert.equal(syntaxErrorOf(root, src), null, '换序产物必须可解析');
+
+  const second = wsChain(root);
+  assert.deepEqual(second, [0, 0, 0], `换序后二遍仍应零写入（实际 sm=${second[0]} opd=${second[1]} wp=${second[2]}）`);
+  assert.equal(readSrc(file), src, '换序后二遍字节不得变化');
 });

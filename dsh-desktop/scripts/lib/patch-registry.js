@@ -94,6 +94,7 @@ const {
   PW_REL,
   BASH_REL,
   DSHTOOLS_REL,
+  PTC_REL,
   PERSISTENT_SHELL_PKG_RELS,
   TERMINAL_BASH_REL,
   ATTACH_LOCAL_REL,
@@ -338,7 +339,7 @@ const PATCH_SPECS = [
     // description 仅用于 UI/日志展示，不应让整个工具调用失败。共三靶：
     // pwsh/bash（shell 工具）+ dsh-tools（run_code，code 模式）。transform 内
     // run_code 步先于 shell 步（run_code 3-tab validate 行含 shell 1-tab 锚点子串）。
-    pkgRels: [PW_REL, BASH_REL, DSHTOOLS_REL],
+    pkgRels: [PW_REL, BASH_REL, PTC_REL],
     transform: transformShellDescriptionOptional,
     marker: null,
     requires: [],
@@ -823,21 +824,6 @@ const PATCH_SPECS = [
     successLog: (root) => 'web-search baseURL 补丁: 已应用到 ' + root,
     failLog: (root, err) => 'web-search baseURL 补丁失败(' + root + '): ' + err.message,
   },
-  {
-    id: 'menu-viewport',
-    group: 'package',
-    order: 180,
-    kind: 'root',
-    layout: 'nm-roots',
-    wslLayout: 'nm-roots',
-    apply: rootAppliers.patchMenuViewport,
-    marker: null,
-    requires: [],
-    failPolicy: 'warn',
-    cli: false,
-    successLog: (root) => 'menu 视口补丁: 已应用到 ' + root,
-    failLog: (root, err) => 'menu 视口补丁失败(' + root + '): ' + err.message,
-  },
   // -------------------------------------------------------------------------
   // 对话删除 / 归档管理补丁（删除 + 恢复归档 + 客户端「删除对话」菜单项）。
   // 在 dsh-workspace / dsh-session / dsh-api-workspace-controller /
@@ -1111,21 +1097,6 @@ const PATCH_SPECS = [
   // ToolRuntime 补挂 Symbol.for 进程全局镜像——跨副本查询经镜像真正命中。
   // 见 scripts/lib/scheduler-guard-patch.js。
   // -------------------------------------------------------------------------
-  {
-    id: 'agent-loop-scheduler-guard',
-    group: 'package',
-    order: 246,
-    kind: 'root',
-    layout: 'nm-roots',
-    wslLayout: 'nm-roots',
-    apply: rootAppliers.patchSchedulerGuard,
-    marker: null,
-    requires: [],
-    failPolicy: 'warn',
-    cli: true,
-    successLog: (root) => '调度器防崩补丁: 已应用到 ' + root,
-    failLog: (root, err) => '调度器防崩补丁失败(' + root + '): ' + err.message,
-  },
 
   // -------------------------------------------------------------------------
   // 工具调用 name 为空指引补丁（K11，用户实机反馈 `unknown tool ""` 死循环
@@ -1330,7 +1301,7 @@ const PATCH_SPECS = [
     kind: 'file',
     layout: 'runtime-local',
     wslLayout: 'wsl',
-    pkgRels: [LLM_PKG_REL, DSHTOOLS_REL],
+    pkgRels: [LLM_PKG_REL, PTC_REL],
     transform: transformContentHasImageGuard,
     marker: CONTENT_HAS_IMAGE_GUARD_MARKER,
     requires: [],

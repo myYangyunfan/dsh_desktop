@@ -11,9 +11,20 @@
 //     就地补合成 callId（recovered-seq-<seq>）并拉齐 block.toolCallId，旧会话
 //     能重新打开；修复写入失败（对象已冻结等）时保留原严格报错。两侧 callId
 //     都非空且不一致仍是真损坏，继续拒绝。
-//   · 写端（dsh-agent-loop appendToolCall/appendToolResult）：block.id 为空时
-//     合成 recovered-<turn>-<step>-call 并告警，name 空则落 invalid-tool-call，
-//     保证 tool/call 与 tool/result 使用同一合成 id，不再写入非法事件。
+//   · 写端：block.id 为空时合成 recovered-<turn>-<step>-call 并告警，name 空则落
+//     invalid-tool-call，保证 tool/call 与 tool/result 使用同一合成 id，不再写入
+//     非法事件。
+//
+//     0.2.2-rc.1 重靶：上游把写端整体搬出了 dsh-agent-loop——新版 agent-loop
+//     里 tool/call 字面量 0 命中（appendToolCall/appendToolResult 两个本地函数
+//     已删），工具批改走 this.loopCtx.tools.execute({ calls, log: { turn, step } })；
+//     真正落账的是 @deepseek-ai/dsh-tools 的 BatchSettlement.start/commit/skip
+//     （lib/pipeline.js，:185 start / :196 commit，由 dsh-tool-executor-native 与
+//     -ptc 经公开子路径 dsh-tools/pipeline 加载）。护栏因此搬到该包的批入口
+//     executeToolBatch：在 calls 拆包处一次归一，下游 start/commit/skip 与
+//     exec.callId 拿到同一个非空 id。目标文件按 lib/*.js 扫锚点解析（同
+//     empty-tool-name-patch.js 的 resolveTargetFiles，0.2.2-rc.1 起 dsh-tools
+//     由 index.js + shared-<hash>.js 组成，哈希名逐版变化，不写死）。
 
 const path = require('node:path');
 const fs = require('node:fs');
@@ -21,6 +32,8 @@ const { applyPatchToFiles } = require('./patch-engine');
 
 const SESSION_VALIDATION_REL = path.join('dsh-session', 'lib', 'index.js');
 const AGENT_LOOP_REL = path.join('dsh-agent-loop', 'lib', 'index.js');
+/** 写端宿主（0.2.2-rc.1 起）：dsh-tools 的 lib 目录，按锚点扫文件。 */
+const TOOLS_LIB_DIR_REL = path.join('dsh-tools', 'lib');
 
 // ---------------------------------------------------------------------------
 // 读端：assertMessageEventShape 空 tool source 容错
@@ -80,67 +93,65 @@ function transformToolSourceTolerance(src, file) {
 }
 
 // ---------------------------------------------------------------------------
-// 写端：appendToolCall / appendToolResult 空 id 防护
+// 写端：tool-call 空 id/name 防护（0.2.2-rc.1 迁到 dsh-tools 的批次入口）
 // ---------------------------------------------------------------------------
 const EMPTY_TOOLCALL_MARKER = 'dsh-desktop compat: synthesize empty tool-call ids';
 
-const EMPTY_TOOLCALL_OLD_1 = [
-  'function appendToolCall(session, turn, step, block) {',
-  '\treturn session.append("tool/call", {',
-  '\t\tturn,',
-  '\t\tstep,',
-  '\t\tcallId: block.id,',
-  '\t\tname: block.name,',
-  '\t\targuments: block.arguments',
-  '\t}).seq;',
-  '}',
-].join('\n');
+// 锚点原文（dsh-tools/lib/pipeline.js :29，executeToolBatch 的 calls 拆包行；tab 缩进）。
+const EMPTY_TOOLCALL_OLD_1 = '\tconst { calls: toolCalls, signal, agent, toolSet, maxParallelToolCalls } = input;';
 
 const EMPTY_TOOLCALL_NEW_1 = [
-  'function appendToolCall(session, turn, step, block) {',
+  '\tconst { calls: rawToolCalls, signal, agent, toolSet, maxParallelToolCalls } = input;',
   '\t// ' + EMPTY_TOOLCALL_MARKER + '. A model can emit a tool-call block with empty id/name;',
   '\t// persisting that produces a tool/result with empty callId which bricks restore',
-  '\t// validation. Synthesize a deterministic non-empty id/name instead.',
-  '\tconst callId = typeof block.id === "string" && block.id !== "" ? block.id : `recovered-${turn}-${step}-call`;',
-  '\tconst name = typeof block.name === "string" && block.name !== "" ? block.name : "invalid-tool-call";',
-  '\tif (callId !== block.id) console.warn(`[dsh-agent-loop] empty tool-call id at turn=${turn} step=${step}; synthesized ${callId}`);',
-  '\treturn session.append("tool/call", {',
-  '\t\tturn,',
-  '\t\tstep,',
-  '\t\tcallId,',
-  '\t\tname,',
-  '\t\targuments: block.arguments',
-  '\t}).seq;',
-  '}',
-].join('\n');
-
-const EMPTY_TOOLCALL_OLD_2 = [
-  'function appendToolResult(session, turn, step, block, result, callSeq) {',
-  '\tconst message = createToolResultMessage({',
-  '\t\tcallId: block.id,',
-  '\t\tcontent: result.content,',
-  '\t\tisError: result.isError',
+  '\t// validation. Normalize once at the batch entry so start/commit/skip and',
+  '\t// exec.callId all carry the same non-empty identity.',
+  '\tconst toolCalls = rawToolCalls.map((block) => {',
+  '\t\tconst callId = typeof block.id === "string" && block.id !== "" ? block.id : `recovered-${input.log === void 0 ? "na" : input.log.turn}-${input.log === void 0 ? "na" : input.log.step}-call`;',
+  '\t\tconst name = typeof block.name === "string" && block.name !== "" ? block.name : "invalid-tool-call";',
+  '\t\tif (callId === block.id && name === block.name) return block;',
+  '\t\tconsole.warn(`[dsh-tools] empty tool-call id/name at turn=${input.log === void 0 ? "na" : input.log.turn} step=${input.log === void 0 ? "na" : input.log.step}; synthesized ${callId} / ${name}`);',
+  '\t\treturn { ...block, id: callId, name };',
   '\t});',
 ].join('\n');
 
-const EMPTY_TOOLCALL_NEW_2 = [
-  'function appendToolResult(session, turn, step, block, result, callSeq) {',
-  '\t// ' + EMPTY_TOOLCALL_MARKER + '. Must match appendToolCall synthesis so tool/result',
-  '\t// source.callId stays non-empty and consistent with its tool/call event.',
-  '\tconst callId = typeof block.id === "string" && block.id !== "" ? block.id : `recovered-${turn}-${step}-call`;',
-  '\tconst message = createToolResultMessage({',
-  '\t\tcallId,',
-  '\t\tcontent: result.content,',
-  '\t\tisError: result.isError',
-  '\t});',
-].join('\n');
+/**
+ * 解析写端宿主文件：dsh-tools/lib 下含锚点（或已含 marker）的 .js。
+ * 0.2.2-rc.1 起 dsh-tools 是 index.js + shared-<hash>.js + pipeline.js 多文件，
+ * 哈希名逐版变化，故不写死文件名（与 empty-tool-name-patch.js 同策略）。
+ * @returns {string[]} 待处理文件绝对路径；无命中时返回全部候选以保留 anchor-missing 告警
+ */
+function resolveEmptyToolCallTargets(nmRoot) {
+  const libDir = path.join(nmRoot, '@deepseek-ai', TOOLS_LIB_DIR_REL);
+  let names;
+  try {
+    names = fs.readdirSync(libDir).filter((n) => n.endsWith('.js'));
+  } catch {
+    return [];
+  }
+  const all = names.map((n) => path.join(libDir, n));
+  const hits = all.filter((f) => {
+    let src;
+    try { src = fs.readFileSync(f, 'utf8'); } catch { return false; }
+    return src.includes(EMPTY_TOOLCALL_OLD_1) || src.includes(EMPTY_TOOLCALL_MARKER);
+  });
+  if (hits.length > 0) return hits;
+  // 无命中：只留一个候选做 anchor-missing 告警，别把 lib/ 下每个 .js 都报一遍
+  //（stats.anchorMissing 是计数哨兵，噪声会污染它）。
+  const fallback = all.find((f) => path.basename(f) === 'pipeline.js')
+    ?? all.find((f) => path.basename(f) === 'index.js');
+  return fallback === undefined ? [] : [fallback];
+}
 
 function transformEmptyToolCallGuard(src, file) {
   if (src.includes(EMPTY_TOOLCALL_MARKER)) return { status: 'already' };
-  if (!src.includes(EMPTY_TOOLCALL_OLD_1) || !src.includes(EMPTY_TOOLCALL_OLD_2)) {
-    return { status: 'anchor-missing', detail: '未找到 appendToolCall/appendToolResult 锚点（版本可能已变更），跳过 ' + file };
+  if (!src.includes(EMPTY_TOOLCALL_OLD_1)) {
+    return {
+      status: 'anchor-missing',
+      detail: '未找到 tool-call 批次入口锚点（executeToolBatch 的 calls 拆包行，0.2.2-rc.1 起写端在 dsh-tools/lib/pipeline.js，版本可能已变更），跳过 ' + file,
+    };
   }
-  const out = src.replace(EMPTY_TOOLCALL_OLD_1, EMPTY_TOOLCALL_NEW_1).replace(EMPTY_TOOLCALL_OLD_2, EMPTY_TOOLCALL_NEW_2);
+  const out = src.replace(EMPTY_TOOLCALL_OLD_1, EMPTY_TOOLCALL_NEW_1);
   return { status: 'changed', src: out };
 }
 
@@ -172,11 +183,11 @@ function patchToolSourceCompat(nmRoot, log = () => {}, stats, options = {}) {
       stats,
     });
   }
-  const loopFile = path.join(nmRoot, '@deepseek-ai', AGENT_LOOP_REL);
-  if (fs.existsSync(loopFile)) {
+  const writeTargets = resolveEmptyToolCallTargets(nmRoot);
+  if (writeTargets.length > 0) {
     changed += applyPatchToFiles({
       prefix: '空 tool-call 写端防护补丁',
-      files: [loopFile],
+      files: writeTargets,
       log,
       transform: transformEmptyToolCallGuard,
       alreadyLog: (f) => '已应用，跳过 ' + f,
@@ -195,8 +206,10 @@ function patchToolSourceCompat(nmRoot, log = () => {}, stats, options = {}) {
 module.exports = {
   SESSION_VALIDATION_REL,
   AGENT_LOOP_REL,
+  TOOLS_LIB_DIR_REL,
   TOOL_SOURCE_MARKER,
   EMPTY_TOOLCALL_MARKER,
+  resolveEmptyToolCallTargets,
   transformToolSourceTolerance,
   transformEmptyToolCallGuard,
   patchToolSourceCompat,

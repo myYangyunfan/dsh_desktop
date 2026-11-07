@@ -38,7 +38,19 @@ test('loader-isolation: 真实 vendored cordis-plugin-loader 已退役（rc.2 �
   assert.equal(src.split(LOADER_TREE_ISOLATION_MARKER).length - 1, 0, '不得残留本补丁 marker');
   assert.equal(src.split('[loader-isolation]').length - 1, 0, '不得残留本补丁标记行');
   assert.ok(src.includes('Promise.allSettled'), '上游 await 走 allSettled（原生隔离正证）');
-  assert.equal((src.match(/\bthrow\b/g) || []).length, 3, '全文件 throw 只剩条目查找错误 3 处（旧形态是 25 处）');
+  // 0.2.2-rc.1 的 cordis-plugin-loader 1.1.0 全文件 4 处 throw（上一代 3 处；新增的是
+  // `entry ${id} already exists in the target tree` 这条树结构校验，不在加载路径上）。
+  // 判据不只看数量：每一处都必须仍是「条目查找 / 条目结构」错误——上游哪天把逐条目隔离
+  // 改回「整体抛」，暴增的 throw 与形状检查会当场翻红，提醒把补丁重新靶回去。
+  const throwLines = src.split('\n').filter((line) => /\bthrow\b/.test(line));
+  assert.equal(throwLines.length, 4, '全文件 throw 只剩条目查找/结构校验 4 处（旧形态是 25 处）');
+  for (const line of throwLines) {
+    assert.match(
+      line,
+      /cannot resolve entry|is not a group|already exists in the target tree/,
+      '不得出现「整份加载失败」型 throw（原生逐条目隔离会因此失效）：' + line.trim(),
+    );
+  }
 });
 
 test('loader-isolation: 合成夹具锚点命中（与真实产物无关的漂移防线）', () => {

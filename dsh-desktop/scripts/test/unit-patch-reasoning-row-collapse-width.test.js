@@ -141,9 +141,19 @@ test('产物 CSS 注释配对（marker 注释不破坏样式串）', () => {
   const src = readPristine();
   const r = transformReasoningRowCollapseWidth(src, 'chat/client.js');
   assert.equal(r.status, 'changed');
-  const open = r.src.split('/*').length - 1;
-  const close = r.src.split('*/').length - 1;
-  assert.equal(open, close, `CSS 注释应配对（open=${open} close=${close}）`);
+  const count = (s, t) => s.split(t).length - 1;
+  // 不能拿「全文 open === close」当判据：0.2.2-rc.1 的 client.js 截图式样式字面量里本就带一个
+  // 不成对的 `*/`（实测 pristine open=599 / close=600），用全文配对会把上游既有形态误判成
+  // 我们注入造成的破坏。真正要钉的是「本补丁注入的注释是配对的一对」——增量口径对两代都成立。
+  const dOpen = count(r.src, '/*') - count(src, '/*');
+  const dClose = count(r.src, '*/') - count(src, '*/');
+  assert.equal(dOpen, 1, `应恰好注入 1 个 CSS 注释开头（实际增量 ${dOpen}）`);
+  assert.equal(dClose, 1, `注入的 CSS 注释必须闭合（实际增量 ${dClose}）`);
+  // 注入体整体在位（成对的注释 + 去掉 size containment 的规则）。
+  assert.ok(
+    r.src.includes('.lcKema_root:not([data-expanded]){contain:layout;/* ' + REASONING_ROW_COLLAPSE_MARKER),
+    '注入的规则应带成对 marker 注释且 contain:layout',
+  );
 });
 
 test('产物 node --check 语法合法', () => {

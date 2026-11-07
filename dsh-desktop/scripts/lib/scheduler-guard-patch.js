@@ -119,7 +119,17 @@ const TOOLS_FIELD_NEW = TOOLS_FIELD_OLD + '\n' + SCHEDULER_MIRROR_FIELD;
 function transformSchedulerMirror(src, file) {
   if (src.includes(SCHEDULER_MIRROR_MARKER)) return { status: 'already' };
   if (!src.includes(TOOLS_FIELD_OLD)) {
-    return { status: 'anchor-missing', detail: '未找到 dsh-tools ToolRuntime 调度器字段锚点（版本可能已变更），跳过 ' + file };
+    // 0.2.2-rc.1：上游把 ToolRuntime 的 TOOL_RUNTIME_SCHEDULER 符号字段整块删掉了
+    //（dsh-tools 只剩 ToolsService.execute；调度协议收进 lib/pipeline.js + lib/batch.js
+    // 的 registry 内部 staged 方法，不再经符号暴露），dsh-agent-loop 也改为
+    // this.loopCtx.tools.execute(...)——镜像面与裸读面同时消失，本补丁在上游已无对应语义。
+    const obsolete = !src.includes('TOOL_RUNTIME_SCHEDULER');
+    return {
+      status: 'anchor-missing',
+      detail: (obsolete
+        ? '上游已移除 ToolRuntime 的 TOOL_RUNTIME_SCHEDULER 调度器字段（0.2.2-rc.1 起调度协议内化，本补丁无锚点可重锚，建议退役），跳过 '
+        : '未找到 dsh-tools ToolRuntime 调度器字段锚点（版本可能已变更），跳过 ') + file,
+    };
   }
   return { status: 'changed', src: src.replace(TOOLS_FIELD_OLD, TOOLS_FIELD_NEW) };
 }

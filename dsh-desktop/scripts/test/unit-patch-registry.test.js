@@ -100,26 +100,35 @@ test('防护类补丁与包级补丁均已登记（无遗漏 apply*）', () => {
     'persistent-shell-abort-race', 'terminal-interrupt-escalation',
     'profile-patch-guard', 'profile-bundle-guard-appboot', 'profile-patch-layer-guard',
     'plugin-inventory-tab-merge',
-    'web-search-baseurl', 'menu-viewport', 'open-project-dir',
+    'web-search-baseurl', 'open-project-dir',
     'session-persistence', 'tool-source-compat',
     'pi-ai-credits', 'pi-ai-reasoning-defaults', 'pi-ai-overflow-message',
     'settings-models-resilience',
-    'bundle-arrival-retry', 'agent-loop-scheduler-guard',
+    'bundle-arrival-retry',
     'empty-tool-name-guidance',
   ];
   for (const id of expected) assert.ok(ids.has(id), `遗漏补丁 ${id}`);
+  // 反证：0.2.2-rc.1 退役的两条不得复活（menu-viewport 上游用 useAnchoredPosition +
+  // --dsh-anchored-max-height 自实现；agent-loop-scheduler-guard 的
+  // TOOL_RUNTIME_SCHEDULER 符号面整体删除，364 个包 0 命中）。
+  for (const id of ['menu-viewport', 'agent-loop-scheduler-guard']) {
+    assert.ok(!ids.has(id), `${id} 已随 0.2.2-rc.1 退役，不得重新登记`);
+  }
 });
 
-test('getSpecsByCli：返回 26 个 cli:true 补丁（8 runtime + 3 数据完整性 + 1 设置写入韧性 + 3 内核韧性 + 1 pi-ai 超限文案 + 2 本地二进制回落 + 1 skill 目录兼容 + 1 pi-ai 4xx 落盘 + 1 工作区标签闪跳 + 3 pi-ai 工具名/配额系 + 1 空工具名指引 + 1 会话持久化 + 1 工具源兼容 + 1 appboot-bootstrap-singleton）', () => {
+test('getSpecsByCli：返回 25 个 cli:true 补丁（8 runtime + 3 数据完整性 + 1 设置写入韧性 + 2 内核韧性 + 1 pi-ai 超限文案 + 2 本地二进制回落 + 1 skill 目录兼容 + 1 pi-ai 4xx 落盘 + 1 工作区标签闪跳 + 3 pi-ai 工具名/配额系 + 1 空工具名指引 + 1 会话持久化 + 1 工具源兼容 + 1 appboot-bootstrap-singleton）', () => {
   const specs = getSpecsByCli();
-  // 26 = 25（上一基线）＋ appboot-bootstrap-singleton（2026-10-11 macOS 实机取证）：
+  // 25 = 26 − agent-loop-scheduler-guard（0.2.2-rc.1 退役：TOOL_RUNTIME_SCHEDULER
+  // 符号面整体删除，工具批改走 this.loopCtx.tools.execute({...})）。
+  // 同批退役的 menu-viewport 是 cli:false，不影响本计数。
+  // 26 = 25 ＋ appboot-bootstrap-singleton（2026-10-11 macOS 实机取证）：
   // 设置写入全线失败的功能性修复，必须进 payload 的 CLI 同步期。
   // 25 = 26 − pi-ai-opencode-go-models（0.2.1 退役：端点与 catalog 都
   // 不再有 deepseek-v4-flash-vision-exp，补丁前提消失）；此前 26 = 28（rc.2 基线）
   // − atomic-write-orphan-lock − model-image-input（两条 rc.2 退役，均 cli:true）；
   // guard 组仍为 false，只在桌面壳运行时应用（image-send 一族
   // 曾属此类，2026-10 随识图插件整体退役，不影响本计数）。
-  assert.equal(specs.length, 26, 'cli 清单应恰为 26 项');
+  assert.equal(specs.length, 25, 'cli 清单应恰为 25 项');
   const expected = new Set([
     'slot-legacy-key', 'slot-unkeyed-compat', 'slot-error-isolation',
     'runtime-flash-fix', 'shell-description-compat',
@@ -127,7 +136,7 @@ test('getSpecsByCli：返回 26 个 cli:true 补丁（8 runtime + 3 数据完整
     'tool-source-compat', 'pi-ai-credits',
     'pi-ai-reasoning-defaults', 'pi-ai-overflow-message',
     'settings-models-resilience',
-    'bundle-arrival-retry', 'agent-loop-scheduler-guard',
+    'bundle-arrival-retry',
     'empty-tool-name-guidance',
     'codex-local-bin-fallback', 'claude-local-bin-fallback',
     'skill-dirs-compat',
@@ -187,7 +196,6 @@ test('getSpecsByCli：每个 spec 的 transform/apply 与 patch-adapters 导出�
     'pi-ai-overflow-message': adapters.rootAppliers.patchPiAiOverflowMessage,
     'settings-models-resilience': adapters.rootAppliers.patchSettingsModelsResilience,
     'bundle-arrival-retry': adapters.rootAppliers.patchBundleArrivalRetry,
-    'agent-loop-scheduler-guard': adapters.rootAppliers.patchSchedulerGuard,
     'empty-tool-name-guidance': adapters.rootAppliers.patchEmptyToolName,
   };
   for (const spec of getSpecsByCli()) {

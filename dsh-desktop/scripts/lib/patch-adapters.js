@@ -1123,6 +1123,15 @@ const CONTENT_HAS_IMAGE_NEW = 'function contentHasImage(content) {\n\tif (!Array
 const TOOLS_IMAGE_RESULT_OLD = '\t\t\t\t\t\t\tif (!result.isError && result.content.some((block) => block.type === "image")) exec.deferContext(createUserMessage({';
 const TOOLS_IMAGE_RESULT_NEW = '\t\t\t\t\t\t\t// ' + CONTENT_HAS_IMAGE_GUARD_MARKER + ' (dsh-tools: a tool-result block may carry non-array content; guard the image scan instead of crashing the turn)\n' + '\t\t\t\t\t\t\tif (!result.isError && Array.isArray(result.content) && result.content.some((block) => block.type === "image")) exec.deferContext(createUserMessage({';
 
+// 0.2.2-rc.1：run_code/PTC 从 dsh-tools/lib/index.js 拆到独立包
+// @deepseek-ai/dsh-tool-executor-ptc，同一行图片扫描的缩进从 7 tab 变成 8 tab（工厂层多一级）。
+// 写死 tab 数只能打中一边，故锚点改成缩进捕获整行正则，替换体按 $1 回填同一缩进。
+const TOOLS_IMAGE_RESULT_RE = /^(\t*)if \(!result\.isError && result\.content\.some\(\(block\) => block\.type === "image"\)\) exec\.deferContext\(createUserMessage\(\{$/gm;
+function toolsImageResultReplacement(indent) {
+  return indent + '// ' + CONTENT_HAS_IMAGE_GUARD_MARKER + ' (dsh-tools: a tool-result block may carry non-array content; guard the image scan instead of crashing the turn)\n'
+    + indent + 'if (!result.isError && Array.isArray(result.content) && result.content.some((block) => block.type === "image")) exec.deferContext(createUserMessage({';
+}
+
 /** contentHasImage / result.content.some 非数组守卫（多靶：dsh-llm + dsh-tools，按锚点分派）。 */
 function transformContentHasImageGuard(src, file) {
   if (src.includes(CONTENT_HAS_IMAGE_GUARD_MARKER)) return { status: 'already' };
@@ -1134,6 +1143,18 @@ function transformContentHasImageGuard(src, file) {
     return { status: 'changed', src: src.replace(CONTENT_HAS_IMAGE_OLD, CONTENT_HAS_IMAGE_NEW) };
   }
   // dsh-tools 家族：run_code/PTC 图片结果 finalize 处 result.content.some 守卫。
+  // 正则先行（缩进无关，覆盖 0.2.1 的 7 tab 与 0.2.2 的 8 tab 两种落点），
+  // 字符串锚点作为旧布局兜底（正则命中后它已不存在）。
+  TOOLS_IMAGE_RESULT_RE.lastIndex = 0;
+  if (TOOLS_IMAGE_RESULT_RE.test(src)) {
+    TOOLS_IMAGE_RESULT_RE.lastIndex = 0;
+    let hits = 0;
+    const out = src.replace(TOOLS_IMAGE_RESULT_RE, (_m, indent) => { hits++; return toolsImageResultReplacement(indent); });
+    if (hits !== 1) {
+      return { status: 'anchor-missing', detail: 'dsh-tools result.content.some 锚点非唯一（' + hits + ' 处），跳过 ' + file };
+    }
+    return { status: 'changed', src: out };
+  }
   if (src.includes(TOOLS_IMAGE_RESULT_OLD)) {
     if (src.split(TOOLS_IMAGE_RESULT_OLD).length - 1 !== 1) {
       return { status: 'anchor-missing', detail: 'dsh-tools result.content.some 锚点非唯一，跳过 ' + file };
@@ -2484,8 +2505,11 @@ module.exports = {
   // contentHasImage 非数组守卫（v0.6.0 本轮运行失败 reading 'some' 根治）。
   transformContentHasImageGuard,
   // 多靶守卫锚点常量（dsh-llm contentHasImage + dsh-tools result.content.some，单测同源引用）。
+  CONTENT_HAS_IMAGE_OLD,
+  CONTENT_HAS_IMAGE_NEW,
   TOOLS_IMAGE_RESULT_OLD,
   TOOLS_IMAGE_RESULT_NEW,
+  TOOLS_IMAGE_RESULT_RE,
   transformSessionHeaderScanGuard,
   transformSessionLoadGraceful,
   // Codex / Claude 子代理本地二进制回落（安装包瘦身移除原生二进制后）。

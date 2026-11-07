@@ -151,9 +151,16 @@ test('补丁脚本：目标包缺失时返回 0 且不抛异常', (t) => {
 });
 
 // ---------------------------------------------------------------------------
-// 真实字节新鲜度：夹具抄得再像也是二手货。这一条直接打 vendored tarball 里
-// compat-pin 版本（当前 0.2.0-rc.2）的 dsh-client-ui-primitives/lib/index.js，
-// 内核换代导致 #36 锚漂移时当场红。
+// 真实字节新鲜度 + 退役哨兵：夹具抄得再像也是二手货。这一条直接打 vendored tarball 里
+// compat-pin 版本的 dsh-client-ui-primitives/lib/index.js。
+//
+// 0.2.2-rc.1 判定：menu-viewport 补丁**已退役**（registry 里摘除，见
+// ta6-registry-invariants 的 E）——上游用 `useAnchoredPosition` +
+// `--dsh-anchored-max-height` + `.Menu.module.css .scrollable` 自己实现了菜单视口约束，
+// 我们原来那条 `maxHeight: "min(calc(100vh - 24px), 560px)"` 注入点不复存在。
+// 于是这条用例的判据从「#36 命中并改写」改成「退役哨兵」：上游若把旧实现改回来
+// （或又冒出裸 `#182`、或丢掉 useAnchoredPosition），这里当场红，提示把补丁重新靶回去，
+// 而不是让它在「注册表里已经没有这条补丁」的状态下静默失能。
 // ---------------------------------------------------------------------------
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const PRIMITIVES_TARBALL = path.join(
@@ -161,7 +168,7 @@ const PRIMITIVES_TARBALL = path.join(
   `deepseek-ai-dsh-client-ui-primitives-${kernel.packageVersion}.tgz`,
 );
 
-test(`补丁脚本：vendored ${kernel.packageVersion} 真实字节 → #36 命中、幂等、产物可解析`, (t) => {
+test(`退役哨兵：vendored ${kernel.packageVersion} 的菜单由上游 useAnchoredPosition 实现（#36 锚应整段失配）`, (t) => {
   assert.ok(fs.existsSync(PRIMITIVES_TARBALL), '缺 vendored primitives tarball: ' + PRIMITIVES_TARBALL);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-menu-real-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -174,28 +181,22 @@ test(`补丁脚本：vendored ${kernel.packageVersion} 真实字节 → #36 命�
   const pristineFile = path.join(dir, 'package', 'lib', 'index.js');
   const pristine = fs.readFileSync(pristineFile, 'utf8');
 
+  // —— 退役正证：上游自己的实现必须在位，我们的注入体必须不在位 ——
+  assert.equal(pristine.split(MARKER).length - 1, 0, 'pristine 不得带我们的 marker');
+  assert.ok(!pristine.includes('#182'), '旧实现的 #182 残留不应再存在');
+  assert.ok(pristine.includes('useAnchoredPosition'), '上游应以 useAnchoredPosition 定位菜单');
+  assert.ok(pristine.includes('--dsh-anchored-max-height'), '上游应以 --dsh-anchored-max-height 封顶菜单高度');
+  const menuCss = fs.readFileSync(path.join(dir, 'package', 'lib', 'Menu.module.css'), 'utf8');
+  assert.ok(menuCss.includes('.scrollable'), 'Menu.module.css 应含 .scrollable 滚动容器');
+
+  // —— 退役形态必须是「整段失配」而非「静默错配」：应用器零写入 + anchorMissing 计数 ——
   const nmRoot = path.join(dir, 'nm');
   const target = path.join(nmRoot, '@deepseek-ai', 'dsh-client-ui-primitives', 'lib', 'index.js');
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.writeFileSync(target, pristine);
-
-  const stats = {};
-  assert.strictEqual(patchMenuViewport(nmRoot, () => {}, stats), 1, '真实字节上应命中并改写 1 个文件');
-  assert.strictEqual(stats.anchorMissing || 0, 0, '#36 锚不得失配');
-  const patched = fs.readFileSync(target, 'utf8');
-  assert.ok(patched.includes(MARKER), '#36 标记应在位');
-  assert.ok(patched.includes('maxHeight: "min(calc(100vh - 24px), 560px)"'), '视口封顶 maxHeight 应注入');
-  assert.ok(
-    patched.includes('if (lh > 0) y = Math.min(Math.max(y, overlayTopMargin(MARGIN)),'),
-    '真实字节注入后仍应保留 overlayTopMargin 下界',
-  );
-  assert.ok(!patched.includes('#182'), '真实字节上也不得留 #182 残留');
-  // 幂等
-  assert.strictEqual(patchMenuViewport(nmRoot, () => {}, {}), 0, '第二遍应零写入');
-  assert.strictEqual(fs.readFileSync(target, 'utf8'), patched, '第二遍内容不应变化');
-  // 产物语法合法（真文件是 ESM）
-  const checkFile = path.join(dir, 'check.mjs');
-  fs.writeFileSync(checkFile, patched);
-  assert.doesNotThrow(() => execFileSync(process.execPath, ['--check', checkFile], { stdio: 'pipe' }),
-    '打补丁后的真实产物必须 node --check 通过');
+  const stats = { anchorMissing: 0, failed: 0 };
+  assert.strictEqual(patchMenuViewport(nmRoot, () => {}, stats), 0, '退役后不应再改写任何文件');
+  assert.strictEqual(stats.anchorMissing, 1, '新旧锚点都不在时失配必须计入 stats.anchorMissing');
+  assert.strictEqual(stats.failed, 0, '失配不得计 failed');
+  assert.strictEqual(fs.readFileSync(target, 'utf8'), pristine, '失配时文件字节级不变');
 });

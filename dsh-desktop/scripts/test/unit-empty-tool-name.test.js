@@ -22,6 +22,7 @@ const {
   transformEmptyToolName,
   EMPTY_TOOL_NAME_MARKER,
   TOOLS_REL,
+  resolveTargetFiles,
 } = require('../lib/empty-tool-name-patch');
 
 /** ToolNotFoundError 上游 pristine 形态（2-tab 缩进，含最小 HarnessError 桩供 eval）。 */
@@ -42,7 +43,10 @@ function instantiate(src) {
   return new Function(src + '\nreturn ToolNotFoundError;')();
 }
 
-const PKG_DIR = path.resolve(__dirname, '..');
+// 仓库根（dsh-desktop/）：本文件在 scripts/test/ 下，故要上溯两级。
+// 旧值 `path.resolve(__dirname, '..')` 落在 scripts/，于是 `PKG_DIR/node_modules/...`
+// 恒不存在、下面第 5 条用例静默 early-return —— 看着绿，判据根本没跑（假绿）。
+const PKG_DIR = path.resolve(__dirname, '..', '..');
 
 test('transform: pristine 命中 → 空 name 特判 + 指引注入', () => {
   const r = transformEmptyToolName(PRISTINE, 'x.js');
@@ -106,16 +110,24 @@ test('注册表: empty-tool-name-guidance 条目登记齐全', () => {
   assert.ok(spec.successLog && spec.failLog);
 });
 
-test('dev node_modules: 补丁后目标文件含 marker 且裸报错已替换', () => {
-  const file = path.join(PKG_DIR, 'node_modules', '@deepseek-ai', TOOLS_REL);
-  if (!fs.existsSync(file)) {
-    // CI 干净环境可能未 npm install；postinstall 会补，跳过即可。
-    return;
-  }
-  const n = patchEmptyToolName(path.join(PKG_DIR, 'node_modules'), () => {});
-  const src = fs.readFileSync(file, 'utf8');
-  assert.ok(src.includes(EMPTY_TOOL_NAME_MARKER), 'dev node_modules 应含空工具名指引 marker（本断言前已幂等应用）');
-  assert.ok(src.includes('工具调用 name 为空'), 'dev node_modules 应含中文指引正文');
+test('dev node_modules: 补丁后承载 ToolNotFoundError 的文件含 marker 且裸报错已替换', () => {
+  const nmRoot = path.join(PKG_DIR, 'node_modules');
+  // 0.2.2-rc.1 起 dsh-tools 由单文件 bundle 拆成 lib/index.js + lib/shared-<内容哈希>.js，
+  // ToolNotFoundError 搬进哈希 chunk（index.js 只 re-export）。故不写死 index.js，
+  // 也不写死哈希名——按「实际承载锚点/marker 的文件」解析。文件不在场才允许跳过
+  // （CI 干净环境未 npm install；postinstall 会补），且此刻应已是补丁后形态。
+  const files = resolveTargetFiles(nmRoot);
+  assert.ok(files.length > 0, 'dev node_modules 缺 dsh-tools/lib/index.js（跑 npm ci）');
+  assert.equal(patchEmptyToolName(nmRoot, () => {}), 0, 'dev 树应已是补丁态（幂等 0 写入）');
+  const carriers = files.filter((f) => fs.readFileSync(f, 'utf8').includes(EMPTY_TOOL_NAME_MARKER));
+  assert.equal(carriers.length, 1,
+    `应恰有一个文件承载空工具名指引（实得 ${carriers.length}）；候选=${files.join(', ')}`);
+  // 承载文件必须是拆分后的 chunk（哈希名逐版变，只咬形状，绝不写死具体哈希）。
+  assert.ok(/shared-[0-9A-Za-z_-]+\.js$/.test(carriers[0]),
+    'carrier 应为 lib/shared-<hash>.js（单文件 bundle 已拆），实得 ' + path.basename(carriers[0]));
+  const src = fs.readFileSync(carriers[0], 'utf8');
+  assert.ok(src.includes(EMPTY_TOOL_NAME_MARKER), 'dev 树应含空工具名指引 marker');
+  assert.ok(src.includes('工具调用 name 为空'), 'dev 树应含中文指引正文');
   // 裸 `unknown tool ""` 分支已被替换：原始 super 行不应再存在。
   assert.ok(!src.includes('super(reachableFrom === void 0 ? `unknown tool "${toolName}"` : `unknown tool "${toolName}": ${reachableFrom}`, "UNKNOWN_TOOL");'), '原始 super 行应已替换');
   // 非空 name 两分支逐字保留。

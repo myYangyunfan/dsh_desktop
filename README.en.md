@@ -6,7 +6,7 @@ Not just another DSH shell: we pick the plugins, fix compatibility, integrate th
 Install and go — no Node.js setup, no plugin hunting, no version-conflict archaeology.
 
 > [!IMPORTANT]
-> **v1.0.8 — the bundled kernel moves to 0.2.1-rc.4.** The official dsh runtime ships with **34 selected companion plugins**:
+> **v1.0.8 — the bundled kernel moves to 0.2.2-rc.1.** The official dsh runtime ships with **34 selected companion plugins**:
 > **DeepSeek-Bot** (main bot + long-lived bots + group chats), the Better Sidebar file workbench, Free Search,
 > the plugin shop, Prompt Optimizer, the conversation map, desktop notifications, the MCP toolbox, and more —
 > all working out of the box, with one place to inspect, toggle and update them under **Settings → Plugins → Built-in plugins**.
@@ -142,7 +142,7 @@ never auto-pushed to stable users by design. See the [release runbook](.github/R
 
 ## 🧩 Bundled Plugin Ecosystem
 
-**34 companion plugins are registered in total.** Under the v1.0.0 bundled line (user decision, 2026-10-08) their sources ship **inside the installer**: the delivery gate mirrors `assets/plugins` as a whole, and the first boot syncs it into the profile, so everything below works out of the box (on 2026-10-22 the side session `side-session` was removed and DeepSeek-Bot (`bot`) was added, keeping the roster at 34; see §4 of [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the delivery gates and the full third-party list). The table below follows the registration order of `scripts/lib/companion-plugins.js`; package names and versions are read from each plugin's `package.json`. The "Source / license" column only reports what each package says about itself — per-plugin upstream reachability and licence text are audited in [the inventory](dsh-desktop/docs/builtin-plugins-inventory.md) §3, and the `0.2.1-rc.4` host compatibility verdicts in §5.
+**34 companion plugins are registered in total.** Under the v1.0.0 bundled line (user decision, 2026-10-08) their sources ship **inside the installer**: the delivery gate mirrors `assets/plugins` as a whole, and the first boot syncs it into the profile, so everything below works out of the box (on 2026-10-22 the side session `side-session` was removed and DeepSeek-Bot (`bot`) was added, keeping the roster at 34; see §4 of [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the delivery gates and the full third-party list). The table below follows the registration order of `scripts/lib/companion-plugins.js`; package names and versions are read from each plugin's `package.json`. The "Source / license" column only reports what each package says about itself — per-plugin upstream reachability and licence text are audited in [the inventory](dsh-desktop/docs/builtin-plugins-inventory.md) §3, and the `0.2.2-rc.1` host compatibility verdicts in §5.
 
 > [!NOTE]
 > **Trimmed in v1.0.0: bundled plugins went from 39 down to 28** (the 11 were named for removal by a user on 2026-10-07).

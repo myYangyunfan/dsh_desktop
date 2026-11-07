@@ -40,6 +40,34 @@ const { applyPatchToFiles } = require('./patch-engine');
 /** 目标文件（相对 @deepseek-ai 前缀；dsh-tools 为内核包，走 nm-roots 布局）。 */
 const TOOLS_REL = path.join('dsh-tools', 'lib', 'index.js');
 
+/**
+ * 解析实际承载 ToolNotFoundError 的文件。
+ * 0.2.2-rc.1 起 dsh-tools 由单文件 bundle 拆成 `lib/index.js` + 带内容哈希的
+ * 共享 chunk（`lib/shared-<hash>.js`，报错类都搬进 chunk，index.js 只 re-export），
+ * 所以锚点不再固定在 index.js。策略：index.js 命中就直接用它；否则扫同目录
+ * `lib/*.js`，取含锚点（或已含 marker）的那一个。哈希文件名逐版变化，故不写死。
+ * @returns {string[]} 待处理文件绝对路径（无命中时返回 index.js 以保留 anchor-missing 告警）
+ */
+function resolveTargetFiles(nmRoot) {
+  const libDir = path.join(nmRoot, '@deepseek-ai', 'dsh-tools', 'lib');
+  const primary = path.join(nmRoot, '@deepseek-ai', TOOLS_REL);
+  if (!fs.existsSync(primary)) return [];
+  let siblings = [];
+  try {
+    siblings = fs.readdirSync(libDir).filter((n) => n.endsWith('.js'));
+  } catch {
+    return [primary];
+  }
+  const hits = siblings
+    .map((n) => path.join(libDir, n))
+    .filter((f) => {
+      let src;
+      try { src = fs.readFileSync(f, 'utf8'); } catch { return false; }
+      return src.includes(EMPTY_TOOL_NAME_ANCHOR) || src.includes(EMPTY_TOOL_NAME_MARKER);
+    });
+  return hits.length > 0 ? hits : [primary];
+}
+
 const EMPTY_TOOL_NAME_MARKER = 'dsh-desktop-patch: empty-tool-name-guidance';
 
 // 锚点 = ToolNotFoundError 构造器内唯一一处 super(...) 行（2-tab 缩进，
@@ -83,11 +111,11 @@ function patchEmptyToolName(nmRoot, log = () => {}, stats, options = {}) {
   const donePrefix = options && options.donePrefix;
   const anchorLog = (options && options.anchorLog) || log;
   const dryRun = options && options.dryRun;
-  const file = path.join(nmRoot, '@deepseek-ai', TOOLS_REL);
-  if (!fs.existsSync(file)) return 0; // 该根未装 dsh-tools，静默跳过
+  const files = resolveTargetFiles(nmRoot);
+  if (files.length === 0) return 0; // 该根未装 dsh-tools，静默跳过
   return applyPatchToFiles({
     prefix: '空工具名指引补丁',
-    files: [file],
+    files,
     log,
     transform: transformEmptyToolName,
     alreadyLog: (f) => '已应用，跳过 ' + f,
@@ -106,6 +134,7 @@ module.exports = {
   EMPTY_TOOL_NAME_MARKER,
   EMPTY_TOOL_NAME_ANCHOR,
   EMPTY_TOOL_NAME_REPLACEMENT,
+  resolveTargetFiles,
   transformEmptyToolName,
   patchEmptyToolName,
 };

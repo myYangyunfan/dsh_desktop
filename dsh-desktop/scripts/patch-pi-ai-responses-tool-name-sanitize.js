@@ -91,8 +91,11 @@ const SITES = [
   },
   {
     key: '入站⑤ processResponsesStream function_call 槽位 name',
-    from: 'name: item.name,\n                arguments: {},',
-    to: 'name: __dshRestoreToolName(item.name),\n                arguments: {},',
+    // 0.2.2-rc.1 重靶：上游把该槽位改成流式参数累积
+    // （`arguments: item.arguments ? args.append(item.arguments) : {}`），
+    // 并在 block 上新增 namespace 透传；`arguments: {},` 两行锚点已不存在。
+    from: 'name: item.name,\n                arguments: item.arguments ? args.append(item.arguments) : {},',
+    to: 'name: __dshRestoreToolName(item.name),\n                arguments: item.arguments ? args.append(item.arguments) : {},',
   },
   {
     key: '入站⑥ processResponsesStream custom_tool_call 槽位 name',

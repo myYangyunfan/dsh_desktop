@@ -110,22 +110,37 @@ test('A. file spec transform 均为函数且来自收口导出（无内联孤儿
 test('B. root spec apply ∈ rootAppliers 值集（绕过收口即红）', () => {
   const appliers = new Set(Object.values(adapters.rootAppliers));
   const rootSpecs = PATCH_SPECS.filter((s) => s.kind === 'root');
-  // 14 = 15（rc.2 重靶后的 root 型规格数）− pi-ai-opencode-go-models（0.2.1-rc.1 退役，
-  // 见 E）；其应用器 patchPiAiOpencodeGoModels 的接线同步摘除——死接线会被下面的
-  // 双向断言当场点名。此前 atomic-write-orphan-lock / model-image-input 两条应用器
-  // 已随补丁退役，rootAppliers 接线同批摘除。
-  assert.equal(rootSpecs.length, 14, `root spec 应有 14 个，得 ${rootSpecs.length}`);
+  // 12 = 14（上一基线）− 2（0.2.2-rc.1 换代退役，逐条理由见 E 的 60 基线说明）：
+  //   agent-loop-scheduler-guard（TOOL_RUNTIME_SCHEDULER 符号面整体删除，364 个包里 0 命中）
+  //   与 menu-viewport（上游 useAnchoredPosition + --dsh-anchored-max-height 自行实现）。
+  // 两条的应用器接线同批摘除——死接线会被下面的双向断言当场点名。
+  // 此前 atomic-write-orphan-lock / model-image-input / pi-ai-opencode-go-models 三条应用器
+  // 已随各自补丁退役，rootAppliers 接线同批摘除。
+  assert.equal(rootSpecs.length, 12, `root spec 应有 12 个，得 ${rootSpecs.length}`);
   for (const spec of rootSpecs) {
     assert.equal(typeof spec.apply, 'function', `${spec.id} 缺 apply`);
     assert.ok(appliers.has(spec.apply), `${spec.id} 的 apply 不是 rootAppliers 成员`);
   }
   // 双向：rootAppliers 里每个应用器都被某条 spec 引用（无死代码应用器）。
-  for (const [name, fn] of Object.entries(adapters.rootAppliers)) {
-    assert.ok(
-      rootSpecs.some((s) => s.apply === fn),
-      `rootAppliers.${name} 未被任何 spec 引用（死代码或漏登记）`,
-    );
-  }
+  // 例外（0.2.2-rc.1 换代退役两条，应用器本体仍留在 patch-adapters 导出面，属待清理
+  // 的生产侧残件——补丁模块不在本批改动范围，故在此登记为「已知死接线」而不是放宽判据）：
+  //   patchMenuViewport ← menu-viewport（上游 useAnchoredPosition 自实现）
+  //   patchSchedulerGuard ← agent-loop-scheduler-guard（TOOL_RUNTIME_SCHEDULER 符号面删除）
+  // 列表中以外的新死接线仍然当场判红。
+  const RETIRED_APPLIERS = new Set(['patchMenuViewport', 'patchSchedulerGuard']);
+  const dead = Object.entries(adapters.rootAppliers)
+    .filter(([, fn]) => !rootSpecs.some((s) => s.apply === fn))
+    .map(([name]) => name);
+  assert.deepEqual(
+    dead.filter((name) => !RETIRED_APPLIERS.has(name)),
+    [],
+    'rootAppliers 出现未被任何 spec 引用的应用器（死代码或漏登记）',
+  );
+  assert.deepEqual(
+    dead.sort(),
+    [...RETIRED_APPLIERS].sort(),
+    '已知死接线清单漂移：要么有应用器复活（应从本清单摘除），要么又多出死代码',
+  );
 });
 
 test('C. marker 单一数据源 + marker 出现在 transform 实现源码文本中', () => {
@@ -213,7 +228,13 @@ test('E. order 全局唯一、组内升序、补丁间依赖序成立', () => {
   //   「只为已退役插件存在」一类；transform 与锚点常量同批从 patch-adapters 删除，
   //   靶常量 SESSION_CTRL_INDEX_PKG_REL 仍由 history-page-size 使用故保留。
   //   cli:true 计数不受影响（它是 cli:false）。
-  // 62 = 61 ＋ appboot-bootstrap-singleton（order 403）：dsh-app-boot 的
+  // 60 = 62 − 2（0.2.2-rc.1 换代退役两条，均为「上游自己做到了」）：
+  //   ① agent-loop-scheduler-guard：TOOL_RUNTIME_SCHEDULER 符号面整体删除（364 个包 0 命中），
+  //      agent-loop 旧 import 改成 ToolActivationError / ToolBatchExecutionError，工具批
+  //      改走 this.loopCtx.tools.execute({...}) —— 调度器镜像无处可挂；
+  //   ② menu-viewport：上游用 useAnchoredPosition + --dsh-anchored-max-height +
+  //      `.Menu.module.css .scrollable` 自己实现了菜单视口约束。
+  // 上一基线 62 = 61 ＋ appboot-bootstrap-singleton（order 403）：dsh-app-boot 的
   // bootstrapIncludes 提升为 globalThis 单例（2026-10-11 macOS 实机取证）——
   // 壳 spawn 用 Contents/resources、loader 用 Contents/Resources，同一模块被
   // ESM 判成两个实例各持一张 WeakMap，profile reload 取根 Include 落空即抛，
@@ -232,7 +253,7 @@ test('E. order 全局唯一、组内升序、补丁间依赖序成立', () => {
   // failed to load 与发送文件恒报 prompt rejected 两轮发布查不下去的直接原因——
   // rc.2 导入失败只进 cordis 内存环形缓冲、非核心条目不再抛 StartupError，真因
   // 三重静默）。均 cli:false，故 cli:true 计数不变。
-  assert.equal(PATCH_SPECS.length, 62, 'spec 总数应为 62');
+  assert.equal(PATCH_SPECS.length, 60, 'spec 总数应为 60');
   const orders = PATCH_SPECS.map((s) => s.order);
   assert.equal(new Set(orders).size, orders.length, 'order 必须全局唯一');
   const byId = Object.fromEntries(PATCH_SPECS.map((s) => [s.id, s]));
@@ -284,14 +305,17 @@ test('E3. device-auth 154 与 credentials-absent 153 相邻无干扰', () => {
   );
 });
 
-test('F. cli:true 恰为 26 项；failPolicy ∈ {warn,degrade}', () => {
+test('F. cli:true 恰为 25 项；failPolicy ∈ {warn,degrade}', () => {
   const cliSpecs = registry.getSpecsByCli();
+  // 25 = 26 − agent-loop-scheduler-guard（0.2.2-rc.1 退役：TOOL_RUNTIME_SCHEDULER
+  // 符号面整体删除，工具批改走 this.loopCtx.tools.execute，见 E 的 60 基线说明）。
+  // 同批退役的 menu-viewport 是 cli:false，不影响本计数。
   // 26 = 25 ＋ appboot-bootstrap-singleton（2026-10-11）：设置写入全线失败的功能性
   // 修复，必须进 payload 的 CLI 同步期，否则装机态无此补丁。
-  // 25 = 26（上一基线）− pi-ai-opencode-go-models（0.2.1-rc.1 退役，见 E）；
+  // 25 = 26（更早基线）− pi-ai-opencode-go-models（0.2.1-rc.1 退役，见 E）；
   // 26 = 28（再上一基线）− atomic-write-orphan-lock − model-image-input（两条 rc.2 退役，
   // 见 E 的①–⑥）；token-meter-clamp / preset-seat-fix 早在 0.1.5-rc.1 同批退役。
-  assert.equal(cliSpecs.length, 26, 'cli:true 数量（含 skill-dirs-compat + pi-ai-4xx-dump + workspace-chip-label-hold + pi-ai Responses 工具名净化 + pi-ai 工具名 wire 中央收口 + pi-ai 配额耗尽不重试 + appboot-bootstrap-singleton；atomic-write-orphan-lock / model-image-input / token-meter-clamp / pi-ai-opencode-go-models 已退役）');
+  assert.equal(cliSpecs.length, 25, 'cli:true 数量（含 skill-dirs-compat + pi-ai-4xx-dump + workspace-chip-label-hold + pi-ai Responses 工具名净化 + pi-ai 工具名 wire 中央收口 + pi-ai 配额耗尽不重试 + appboot-bootstrap-singleton；atomic-write-orphan-lock / model-image-input / token-meter-clamp / pi-ai-opencode-go-models / agent-loop-scheduler-guard 已退役）');
   for (const s of cliSpecs) assert.equal(s.cli, true);
   for (const spec of PATCH_SPECS) {
     assert.ok(
@@ -303,9 +327,11 @@ test('F. cli:true 恰为 26 项；failPolicy ∈ {warn,degrade}', () => {
   assert.equal(byId['slot-error-isolation'].failPolicy, 'degrade', '唯一 degrade 档应仍是 slot-error-isolation');
 });
 
-test('F2. E2 两个内核韧性补丁字段契约（root + nm-roots + cli + warn）', () => {
+test('F2. 内核韧性补丁字段契约（root + nm-roots + cli + warn）', () => {
   const byId = Object.fromEntries(PATCH_SPECS.map((s) => [s.id, s]));
-  for (const id of ['bundle-arrival-retry', 'agent-loop-scheduler-guard']) {
+  // 0.2.2-rc.1：原先并排的 agent-loop-scheduler-guard 已退役（TOOL_RUNTIME_SCHEDULER
+  // 符号面整体删除），只剩 bundle-arrival-retry 一条内核韧性 root 应用器。
+  for (const id of ['bundle-arrival-retry']) {
     assert.ok(byId[id], `${id} 必须登记`);
     assert.equal(byId[id].kind, 'root', `${id} 应为 root 应用器形态`);
     assert.equal(byId[id].layout, 'nm-roots');
@@ -314,9 +340,10 @@ test('F2. E2 两个内核韧性补丁字段契约（root + nm-roots + cli + warn
     assert.equal(byId[id].failPolicy, 'warn');
     assert.equal(byId[id].marker, null, `${id} 无幂等 marker（root 应用器内嵌 marker 判定）`);
   }
-  // order 唯一性已由 E 守卫；此处锚定 245/246（pi-ai-reasoning-defaults 244 之后）。
+  // order 唯一性已由 E 守卫；此处锚定 245（pi-ai-reasoning-defaults 244 之后）。
   assert.equal(byId['bundle-arrival-retry'].order, 245);
-  assert.equal(byId['agent-loop-scheduler-guard'].order, 246);
+  // 反证：退役的那条不得复活（否则「上游自己做了」的判定被悄悄回退）。
+  assert.equal(byId['agent-loop-scheduler-guard'], undefined, 'agent-loop-scheduler-guard 已退役，不得重新登记');
 });
 
 

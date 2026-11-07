@@ -70,6 +70,8 @@ const BASH_REL = path.join('dsh-tool-bash', 'lib', 'index.js');
 // 参数与 shell 工具同构（required:true + execute 内 args.description.trim() 校验），
 // 模型省略时同样抛 missing required property → 与 shell-description-compat 共靶。
 const DSHTOOLS_REL = path.join('dsh-tools', 'lib', 'index.js');
+// 0.2.2-rc.1 起 run_code / contentHasImage 的实现在独立包里（dsh-tools 单文件 bundle 已拆）
+const PTC_REL = path.join('dsh-tool-executor-ptc', 'lib', 'index.js');
 // 持久 shell（pwsh / bash persistent）与其 PTY 后端的停止修复补丁目标。
 const PWSH_PERSIST_REL = path.join('dsh-tool-pwsh-persistent', 'lib', 'index.js');
 const BASH_PERSIST_REL = path.join('dsh-tool-bash-persistent', 'lib', 'index.js');
@@ -327,6 +329,7 @@ module.exports = {
   PW_REL,
   BASH_REL,
   DSHTOOLS_REL,
+  PTC_REL,
   PWSH_PERSIST_REL,
   BASH_PERSIST_REL,
   PERSISTENT_SHELL_PKG_RELS,

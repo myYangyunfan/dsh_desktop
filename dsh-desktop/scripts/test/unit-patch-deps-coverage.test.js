@@ -38,9 +38,10 @@ const { runDevTreePatch, buildDevCtx } = patchDeps;
 
 test('A：注册表全部 root 规格都在 patch-deps 默认覆盖集内（含历史漏接的 2 项）', () => {
   const rootIds = PATCH_SPECS.filter((s) => s.kind === 'root').map((s) => s.id);
-  // 14 = 15（rc.2 重靶后的 root 规格数）− pi-ai-opencode-go-models（0.2.1-rc.1 退役：
-  // 端点与 pi-ai catalog 都不再有 deepseek-v4-flash-vision-exp，前提消失）。
-  assert.equal(rootIds.length, 14, `root 规格应为 14，实际 ${rootIds.length}`);
+  // 12 = 14（上一基线）− 2（0.2.2-rc.1 换代退役：agent-loop-scheduler-guard 的
+  // TOOL_RUNTIME_SCHEDULER 符号面整体删除、menu-viewport 由上游 useAnchoredPosition +
+  // --dsh-anchored-max-height 自实现）；更早 14 = 15 − pi-ai-opencode-go-models。
+  assert.equal(rootIds.length, 12, `root 规格应为 12，实际 ${rootIds.length}`);
   // 默认覆盖集 = getSpecsByGroup() 全量（root + file）；漏接防线：root 全在。
   const covered = new Set(PATCH_SPECS.map((s) => s.id));
   for (const id of rootIds) assert.ok(covered.has(id), `root 规格 ${id} 不在覆盖集`);

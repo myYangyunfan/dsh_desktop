@@ -3252,9 +3252,13 @@ Content-Length: 0
         assert!(sv.wsl_cfg.is_some(), "settings backend=wsl 应解析为 WSL 意图");
         let (tx, rx) = std::sync::mpsc::channel();
         sv.spawn_boot(tx, None);
-        // 兜底窗口 300s：本用例在 workspace 全量并行下实测偶发超 150s
+        // 兜底窗口 900s：本用例在 workspace 全量并行下实测偶发超 150s
         // （image/logging 等 env 关键区测试同进程抢 CPU），非产品缺陷。
-        let deadline = Instant::now() + Duration::from_secs(300);
+        // 2026-11-07 内核换代 0.2.1-rc.4 → 0.2.2-rc.1 后放宽：随包家族 340 → 364 个包，
+        // 真机 WSL（Ubuntu-24.04，profile 在 \\wsl.localhost UNC 上）实测 repair 54.7s +
+        // sync 182.5s 就把 300s 吃掉，五步虽全过但 KernelReady 未到点即判红——
+        // 这是 UNC 同步体量，不是契约或逻辑变化。
+        let deadline = Instant::now() + Duration::from_secs(900);
         let mut saw_install = false;
         let mut boot_steps: Vec<String> = Vec::new();
         loop {
@@ -3272,7 +3276,7 @@ Content-Length: 0
                 }
                 Ok(SupervisorEvent::CrashLoop { .. }) => panic!("WSL 注桩链不应进恢复页"),
                 Ok(other) => { let _ = other; }
-                Err(_) => panic!("300s 内未就绪（boot_steps={boot_steps:?} saw_install={saw_install}）"),
+                Err(_) => panic!("900s 内未就绪（boot_steps={boot_steps:?} saw_install={saw_install}）"),
             }
         }
         // 链路断言：五步全过（compat-pin 为 143fa9e7 加入）+ 安装步在场 + 运行态就绪 + actual port 落 Inner。

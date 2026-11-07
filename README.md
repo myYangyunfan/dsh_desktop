@@ -6,7 +6,7 @@
 装好即用——不用装 Node.js，不用逐个找插件，也不用为版本冲突折腾。
 
 > [!IMPORTANT]
-> **v1.0.8：随包内核升到 0.2.1-rc.4。** 官方 dsh 运行时与 34 个精选伴随插件随包交付：
+> **v1.0.8：随包内核升到 0.2.2-rc.1。** 官方 dsh 运行时与 34 个精选伴随插件随包交付：
 > **DeepSeek-Bot**（主 Bot + 长期 Bot + 群聊）、Better Sidebar 文件工作台、Free Search、
 > 插件商店、Prompt Optimizer、会话地图、桌面通知、MCP 工具箱……全部开箱可用，
 > 并能在「设置 → 插件 → 内置插件」里统一查看、启停和检查更新。
@@ -154,7 +154,7 @@ bash dsh-tauri/scripts/smoke-installed.sh
 
 ## 🧩 内置插件生态
 
-内置伴随插件在册共 **34 个**（v1.0.0 内置线，2026-10-08 裁定：插件源**整树进安装包**，装机后首次开机由 boot 的同步链镜像进 profile，开箱可用；2026-10-22 移除「临时对话」`side-session`、新增 DeepSeek-Bot（`bot`），在册仍为 34；交付面门禁见 THIRD_PARTY_NOTICES 第 4 节，完整第三方组件清单同文件）。下表按 `scripts/lib/companion-plugins.js` 的在册顺序逐名列出，包名与版本取自各插件 `package.json` 实值；「上游 / 许可」一列只到「包内自己怎么说」这一层，逐条原仓库可达性与许可原文实测见 [内置插件清单](dsh-desktop/docs/builtin-plugins-inventory.md) §三，逐条对 `0.2.1-rc.4` 宿主的兼容判定见 §五：
+内置伴随插件在册共 **34 个**（v1.0.0 内置线，2026-10-08 裁定：插件源**整树进安装包**，装机后首次开机由 boot 的同步链镜像进 profile，开箱可用；2026-10-22 移除「临时对话」`side-session`、新增 DeepSeek-Bot（`bot`），在册仍为 34；交付面门禁见 THIRD_PARTY_NOTICES 第 4 节，完整第三方组件清单同文件）。下表按 `scripts/lib/companion-plugins.js` 的在册顺序逐名列出，包名与版本取自各插件 `package.json` 实值；「上游 / 许可」一列只到「包内自己怎么说」这一层，逐条原仓库可达性与许可原文实测见 [内置插件清单](dsh-desktop/docs/builtin-plugins-inventory.md) §三，逐条对 `0.2.2-rc.1` 宿主的兼容判定见 §五：
 
 > [!NOTE]
 > **v1.0.0 精简：内置插件由 39 个减为 28 个**（用户于 2026-10-07 点名移除）。不再内置的 11 个：

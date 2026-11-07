@@ -28,13 +28,14 @@ const {
   SHELL_DESC_MARKER, SHELL_DESC_SCHEMA_OLD, SHELL_DESC_SCHEMA_NEW,
   SHELL_DESC_SCHEMA_OPTIONAL, PW_REL, BASH_REL, transformShellDescriptionOptional,
   RUNCODE_DESC_MARKER, RUNCODE_SCHEMA_OLD, RUNCODE_SCHEMA_OPTIONAL,
+  RUNCODE_SCHEMA_OLD_NESTED, RUNCODE_SCHEMA_OPTIONAL_NESTED,
   ATTACH_MIME_MARKER, ATTACH_MIME_OLD, ATTACH_MIME_NEW, ATTACH_LOCAL_REL, transformAttachmentMimeTrust,
   SLOT_KEY_COMPAT_PKG_REL, SLOT_UNKEYED_COMPAT_PKG_REL,
   SLOT_KEY_COMPAT_MARKER, SLOT_KEY_COMPAT_OLD, SLOT_KEY_COMPAT_NEW, transformLegacySlotKey,
   SLOT_UNKEYED_COMPAT_MARKER, SLOT_UNKEYED_COMPAT_OLD, SLOT_UNKEYED_COMPAT_NEW, transformSlotUnkeyedCompat,
 } = require('../lib/runtime-patches');
 const { COMPANION_PLUGINS, companionDirName } = require('../lib/companion-plugins');
-const { DSHTOOLS_REL } = require('../lib/patch-target-resolver');
+const { DSHTOOLS_REL, PTC_REL } = require('../lib/patch-target-resolver');
 // 变换类单测的起点一律取真 pristine 闭包树（详见 pristineShell 注释）。
 const { findPristineFile } = require('../lib/pristine-kernel-roots');
 const {
@@ -255,19 +256,27 @@ test('tool-compat: shell description 兜底变换（真 pristine 文件 + 幂等
   }
 });
 
-test('tool-compat: run_code（dsh-tools）同构变换两半齐上且幂等', () => {
-  const { file, src } = pristineShell(DSHTOOLS_REL);
+test('tool-compat: run_code（dsh-tool-executor-ptc）扁平+nested 两处 schema 与 validate 齐上且幂等', () => {
+  // 0.2.2-rc.1 起 run_code 从 dsh-tools/lib/index.js 搬到独立包 dsh-tool-executor-ptc，
+  // 且同一文件里有两处同名 description schema：3-tab 扁平块 + 4-tab nested 块
+  // （parameters(...) 工厂里）。早先「只按 3-tab 打两处」的口径已经作废——两处缩进不同，
+  // 只认 3-tab 会漏掉 nested 那处，于是「schema 可选」只上一半，模型省略 description 时
+  // 仍被引擎通用 required 校验先拒（正是本补丁要修的故障）。
+  const { file, src } = pristineShell(PTC_REL);
   const out = transformShellDescriptionOptional(src, file);
-  assert.strictEqual(out.status, 'changed', 'dsh-tools run_code 应可补丁');
+  assert.strictEqual(out.status, 'changed', 'dsh-tool-executor-ptc 的 run_code 应可补丁');
   assert.match(out.note, /run_code: description 改为可选/, 'run_code schema 半边必须命中');
   assert.match(out.note, /run_code: validate 兜底/, 'run_code validate 半边必须命中');
-  // 反证（作用域）：run_code 的三 tab validate 行以 shell 的一 tab 锚点为子串，
-  // 若 shell 半边在 dsh-tools 里也开火，会用 args.command 误改 run_code 行 ——
+  // 反证（作用域）：run_code 的 validate 行以 shell 的一 tab 锚点为子串，
+  // 若 shell 半边在 ptc 里也开火，会用 args.command 误改 run_code 行 ——
   // 步骤顺序（run_code 先跑）就是这条的守卫。
-  assert.doesNotMatch(out.note, /shell:/, 'dsh-tools 不得被 shell 半边改写');
+  assert.doesNotMatch(out.note, /shell:/, 'ptc 不得被 shell 半边改写');
   assert.ok(out.src.includes(RUNCODE_DESC_MARKER), '应写入 run_code 幂等标记');
-  assert.strictEqual(out.src.split(RUNCODE_SCHEMA_OLD).length - 1, 0, '两处 required:true 块都应消除');
-  assert.strictEqual(out.src.split(RUNCODE_SCHEMA_OPTIONAL).length - 1, 2, '两处 description 都应改为可选');
+  // 两处 required:true 块（4-tab nested + 3-tab 扁平）都必须消除，且各只剩一处可选形态。
+  assert.strictEqual(out.src.split(RUNCODE_SCHEMA_OLD_NESTED).length - 1, 0, 'nested（4-tab）required:true 块应消除');
+  assert.strictEqual(out.src.split(RUNCODE_SCHEMA_OLD).length - 1, 0, '扁平（3-tab）required:true 块应消除');
+  assert.strictEqual(out.src.split(RUNCODE_SCHEMA_OPTIONAL_NESTED).length - 1, 1, 'nested 块应改为可选（1 处）');
+  assert.strictEqual(out.src.split(RUNCODE_SCHEMA_OPTIONAL).length - 1, 1, '扁平块应改为可选（1 处）');
   assert.ok(out.src.includes('args.description = args.code.trim().split'), '缺省 description 应从 code 首行生成');
   assert.ok(out.src.includes('code: {' + '\n' + '\t\t\t\ttype: "string",' + '\n' + '\t\t\t\trequired: true'), 'code 仍须保持 required: true');
   assert.deepStrictEqual(transformShellDescriptionOptional(out.src, file), { status: 'already' }, '二次应用应幂等');

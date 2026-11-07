@@ -12,18 +12,28 @@ const { pathToFileURL } = require('node:url');
 
 const {
   SESSION_VALIDATION_REL,
-  AGENT_LOOP_REL,
   TOOL_SOURCE_MARKER,
   EMPTY_TOOLCALL_MARKER,
   transformToolSourceTolerance,
   transformEmptyToolCallGuard,
   patchToolSourceCompat,
+  resolveEmptyToolCallTargets,
 } = require('../lib/tool-source-patch');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 const nmRoot = path.join(repoRoot, 'node_modules');
 const sessionTarget = path.join(nmRoot, '@deepseek-ai', SESSION_VALIDATION_REL);
-const loopTarget = path.join(nmRoot, '@deepseek-ai', AGENT_LOOP_REL);
+
+/** 写端落点：0.2.2-rc.1 起从 dsh-agent-loop/lib/index.js 迁到 dsh-tools 的批入口。
+ *  dsh-tools 现为 index.js + shared-<hash>.js + pipeline.js 多文件，哈希名逐版变，
+ *  故按锚点（或已注入的 marker）探测，绝不写死文件名；命中必须唯一且是 pipeline.js
+ *  ——若哪天搬到别处，这条会先红，而不是让下面的断言退化成读一个没有锚点的文件。 */
+function writeTarget() {
+  const hits = resolveEmptyToolCallTargets(nmRoot);
+  assert.equal(hits.length, 1, '写端锚点应唯一命中 dsh-tools/lib 下一个文件，实得: ' + JSON.stringify(hits));
+  assert.equal(path.basename(hits[0]), 'pipeline.js', '写端落点应为 dsh-tools/lib/pipeline.js，实得: ' + hits[0]);
+  return hits[0];
+}
 
 function badToolResultEvent(seq) {
   // 事故形态：tool/result 的 source.callId 与消息级 toolCallId 都是空串。
@@ -66,12 +76,13 @@ test('读端变换：真实 vendored 文件锚点命中、幂等', () => {
   }
 });
 
-test('写端变换：真实 vendored 文件锚点命中、幂等', () => {
-  const src = fs.readFileSync(loopTarget, 'utf8');
-  const r1 = transformEmptyToolCallGuard(src, loopTarget);
+test('写端变换：真实 dev 树 dsh-tools/lib/pipeline.js 锚点命中、幂等', () => {
+  const file = writeTarget();
+  const src = fs.readFileSync(file, 'utf8');
+  const r1 = transformEmptyToolCallGuard(src, file);
   assert.ok(r1.status === 'changed' || r1.status === 'already', '锚点应命中: ' + r1.status);
   if (r1.status === 'changed') {
-    const r2 = transformEmptyToolCallGuard(r1.src, loopTarget);
+    const r2 = transformEmptyToolCallGuard(r1.src, file);
     assert.equal(r2.status, 'already');
   }
 });
@@ -79,7 +90,7 @@ test('写端变换：真实 vendored 文件锚点命中、幂等', () => {
 test('patchToolSourceCompat 应用到 dev node_modules 且幂等', () => {
   patchToolSourceCompat(nmRoot);
   const s1 = fs.readFileSync(sessionTarget, 'utf8');
-  const s2 = fs.readFileSync(loopTarget, 'utf8');
+  const s2 = fs.readFileSync(writeTarget(), 'utf8');
   assert.match(s1, new RegExp(TOOL_SOURCE_MARKER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.match(s2, new RegExp(EMPTY_TOOLCALL_MARKER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   // 二次应用返回 0 变更。

@@ -32,7 +32,7 @@ const { spawnSync, execFileSync } = require('node:child_process');
 
 const { transformContentHasImageGuard, TOOLS_IMAGE_RESULT_OLD, TOOLS_IMAGE_RESULT_NEW, markers } = require('../lib/patch-adapters');
 const { PATCH_SPECS, getSpecsByCli } = require('../lib/patch-registry');
-const { LLM_PKG_REL, DSHTOOLS_REL } = require('../lib/patch-target-resolver');
+const { LLM_PKG_REL, PTC_REL } = require('../lib/patch-target-resolver');
 const { kernel } = require('../compat/kernel-pin.json');
 
 const MARKER = markers.CONTENT_HAS_IMAGE_GUARD_MARKER;
@@ -130,21 +130,30 @@ test('7. registry 装配：pkgRel/transform/marker 同源、cli:false 不进 CLI
   assert.equal(spec.cli, false);
   assert.ok(Array.isArray(spec.pkgRels), 'content-has-image-guard 现应为多靶 pkgRels');
   assert.ok(spec.pkgRels.includes(LLM_PKG_REL), 'pkgRels 应含 dsh-llm/lib/index.js');
-  assert.ok(spec.pkgRels.includes(DSHTOOLS_REL), 'pkgRels 应含 dsh-tools/lib/index.js（同 bug 类残留点一并根治）');
+  assert.ok(spec.pkgRels.includes(PTC_REL), 'pkgRels 应含 dsh-tool-executor-ptc/lib/index.js（0.2.2-rc.1 起 run_code 落点）');
   assert.equal(spec.transform, transformContentHasImageGuard, 'transform 应与 patch-adapters 导出同源');
   assert.equal(spec.marker, MARKER, 'marker 应为共享常量 CONTENT_HAS_IMAGE_GUARD_MARKER');
   assert.ok(!getSpecsByCli().some((s) => s.id === 'content-has-image-guard'), 'cli:false 补丁不得进 CLI 清单');
 });
 
-test('8. 多靶：dsh-tools result.content.some 守卫（真实 vendored 文件 + 幂等 + 精准）', () => {
-  const file = path.join(REPO_ROOT, 'dsh-desktop', 'node_modules', '@deepseek-ai', DSHTOOLS_REL);
-  // 还原官方形态：已注入守卫退回裸 result.content.some（连带去掉本 marker）。
-  const src = fs.readFileSync(file, 'utf8').split(TOOLS_IMAGE_RESULT_NEW).join(TOOLS_IMAGE_RESULT_OLD);
-  assert.ok(src.includes(TOOLS_IMAGE_RESULT_OLD), '起点应含裸 result.content.some 锚点');
+test('8. 多靶：dsh-tool-executor-ptc result.content.some 守卫（真实 dev 文件 + 幂等 + 精准）', () => {
+  // 0.2.2-rc.1：run_code 的图片 result finalize 已从 dsh-tools/lib/index.js 拆到独立包
+  // @deepseek-ai/dsh-tool-executor-ptc，且缩进从 7 tab 变成 8 tab（工厂层多一级）。
+  // 既不能写死文件路径（旧的 DSHTOOLS_REL 已无该行），也不能按 7-tab 常量还原——
+  // 常量还原打不中 8-tab 注入体，「起点仍是补丁态」会让下面的 changed 断言变成假判据。
+  // 所以还原走缩进无关正则。
+  const file = path.join(REPO_ROOT, 'dsh-desktop', 'node_modules', '@deepseek-ai', PTC_REL);
+  const patched = fs.readFileSync(file, 'utf8');
+  assert.ok(patched.includes(MARKER), 'dev 树应已是补丁态（缺 marker 说明 patch-deps 未收敛）');
+  const src = patched
+    .replace(/^\t*\/\/ dsh-desktop fix: contentHasImage non-array guard[^\n]*\n/gm, '')
+    .replace(/if \(!result\.isError && Array\.isArray\(result\.content\) && /g, 'if (!result.isError && ');
+  assert.ok(src.includes('result.content.some((block) => block.type === "image")'), '起点应含裸 result.content.some 锚点');
+  assert.ok(!src.includes(MARKER), '还原后不得残留 marker（否则 already 分支短路，判据空转）');
   const out = transformContentHasImageGuard(src, file);
-  assert.equal(out.status, 'changed', 'dsh-tools result.content.some 应可补丁');
-  assert.ok(out.src.includes(TOOLS_IMAGE_RESULT_NEW), '应注入 Array.isArray 守卫');
-  assert.ok(!out.src.includes(TOOLS_IMAGE_RESULT_OLD), '不得残留裸 result.content.some');
+  assert.equal(out.status, 'changed', 'ptc 的 result.content.some 应可补丁');
+  assert.ok(/^\t*\/\/ dsh-desktop fix: contentHasImage non-array guard/.test(out.src.split('\n').find((l) => l.includes(MARKER)) || ''), '应注入守卫注释（保留原缩进）');
   assert.ok(/Array\.isArray\(result\.content\)/.test(out.src), '守卫应含 Array.isArray(result.content)');
+  assert.strictEqual(out.src.split('result.content.some((block) => block.type === "image")').length - 1, 1, '注入后只剩守卫那一处扫描');
   assert.equal(transformContentHasImageGuard(out.src, file).status, 'already', '二次应用应幂等');
 });

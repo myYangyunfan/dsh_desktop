@@ -24,12 +24,8 @@ const {
   patchBundleArrivalRetry,
 } = require('../lib/bundle-arrival-retry-patch');
 const {
-  AGENT_LOOP_REL,
-  TOOLS_REL,
-  patchSchedulerGuard,
-} = require('../lib/scheduler-guard-patch');
-const {
   SESSION_VALIDATION_REL,
+  TOOLS_LIB_DIR_REL,
   patchToolSourceCompat,
 } = require('../lib/tool-source-patch');
 const {
@@ -62,23 +58,6 @@ const LOADER_PRISTINE = [
   '\t\t});',
 ].join('\n');
 
-const SCHED_LOOP_PRISTINE = [
-  'import { TOOL_ABORTED_BEFORE_DISPATCH, TOOL_RUNTIME_SCHEDULER } from "@deepseek-ai/dsh-tools";',
-  'const a = ctx.tools[TOOL_RUNTIME_SCHEDULER];',
-  'const b = ctx.tools[TOOL_RUNTIME_SCHEDULER];',
-  'const c = ctx.tools[TOOL_RUNTIME_SCHEDULER];',
-  'const d = ctx.tools[TOOL_RUNTIME_SCHEDULER];',
-].join('\n');
-
-const SCHED_TOOLS_PRISTINE = [
-  '\t[TOOL_RUNTIME_SCHEDULER] = {',
-  '\t\tprepare: (exec) => this.prepareScheduledExecution(exec),',
-  '\t\tdispatch: (exec) => this.dispatchScheduledExecution(exec),',
-  '\t\tfinalize: (exec, result) => this.finalizeScheduledExecution(exec, result),',
-  '\t\tfinish: (exec, result) => this.finishScheduledExecution(exec, result)',
-  '\t};',
-].join('\n');
-
 // ⚠ 夹具逐字节即生产锚点：0.2.0-rc.2 把 callId 的镜像位从 content[0] 块
 // （block["toolCallId"]）上移到消息记录自身（messageRecord["toolCallId"]），此前这里没随迁，
 // transformToolSourceTolerance 因 OLD_2 失配整份 anchor-missing（真实 pristine 是 changed）。
@@ -88,22 +67,13 @@ const TOOL_SESSION_PRISTINE = [
   '\tif (messageRecord["toolCallId"] !== sourceRecord["callId"]) throw new Error(`${subject} message has mismatched tool call ids`);',
 ].join('\n');
 
-const TOOL_LOOP_PRISTINE = [
-  'function appendToolCall(session, turn, step, block) {',
-  '\treturn session.append("tool/call", {',
-  '\t\tturn,',
-  '\t\tstep,',
-  '\t\tcallId: block.id,',
-  '\t\tname: block.name,',
-  '\t\targuments: block.arguments',
-  '\t}).seq;',
-  '}',
-  'function appendToolResult(session, turn, step, block, result, callSeq) {',
-  '\tconst message = createToolResultMessage({',
-  '\t\tcallId: block.id,',
-  '\t\tcontent: result.content,',
-  '\t\tisError: result.isError',
-  '\t});',
+// tool-source 写端（空 tool-call 补 ids）：0.2.2-rc.1 起写端从 dsh-agent-loop/lib/index.js
+// 迁到 dsh-tools 的批入口 lib/pipeline.js（单文件 bundle 已拆成
+// index.js + pipeline.js + shared-<hash>.js，哈希名逐版变，故按目录 + 文件名定位，
+// 绝不在用例里写死哈希）。锚点 = executeToolBatch 的 calls 拆包行。
+const TOOL_PIPELINE_REL = path.join(TOOLS_LIB_DIR_REL, 'pipeline.js');
+const TOOL_WRITE_PRISTINE = [
+  '\tconst { calls: toolCalls, signal, agent, toolSet, maxParallelToolCalls } = input;',
 ].join('\n');
 
 const AW_PRISTINE = [
@@ -202,27 +172,14 @@ test('bundle-arrival-retry: anchor-missing 计入 stats.anchorMissing', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2) scheduler-guard
+// 2) scheduler-guard —— 已退役
+//
+// 0.2.2-rc.1 把 TOOL_RUNTIME_SCHEDULER 符号面整体删除（364 个包 0 命中），
+// agent-loop 的旧 import 改成 ToolActivationError / ToolBatchExecutionError，工具批改走
+// this.loopCtx.tools.execute({...})：scheduler-guard 的两条 root 应用器（agent-loop 半边 +
+// tools 半边）连同 registry 规格一并退役。判据没有落脚点可留（锚点在 pin 闭包里 0 命中），
+// 故整组退役，不保留空转的 dry-run 用例。
 // ---------------------------------------------------------------------------
-
-test('scheduler-guard: dry-run 零落盘 + 真实写 2 文件 + 幂等', () => {
-  assertDryRunAndWrite(
-    patchSchedulerGuard,
-    {
-      [AGENT_LOOP_REL]: SCHED_LOOP_PRISTINE,
-      [TOOLS_REL]: SCHED_TOOLS_PRISTINE,
-    },
-    2,
-  );
-});
-
-test('scheduler-guard: anchor-missing 计入 stats.anchorMissing', () => {
-  assertAnchorMissingCount(
-    patchSchedulerGuard,
-    { [AGENT_LOOP_REL]: 'export {};\n' },
-    1,
-  );
-});
 
 // ---------------------------------------------------------------------------
 // 3) tool-source-compat
@@ -233,7 +190,7 @@ test('tool-source-compat: dry-run 零落盘 + 真实写 2 文件 + 幂等', () =
     patchToolSourceCompat,
     {
       [SESSION_VALIDATION_REL]: TOOL_SESSION_PRISTINE,
-      [AGENT_LOOP_REL]: TOOL_LOOP_PRISTINE,
+      [TOOL_PIPELINE_REL]: TOOL_WRITE_PRISTINE,
     },
     2,
   );
@@ -305,13 +262,12 @@ function driftedFixtureLines(fixture, pkgRel) {
 }
 
 // 逐字节手抄、必须与生产同源的夹具。
-// 不纳入 SCHED_LOOP_PRISTINE：其中 `const a/b/c/d = ctx.tools[...]` 是占位行
-// （该 transform 按表达式片段 replaceAll，不是整行锚点），要求逐行 verbatim 会假红。
+// 0.2.2-rc.1：scheduler-guard(tools) 已退役（TOOL_RUNTIME_SCHEDULER 符号面删除），
+// 其夹具无法在 pin 闭包里找到载体，故从本表移除（不是放宽判据，是判据失去对象）。
 const VERBATIM_FIXTURES = [
   ['tool-source 读端', TOOL_SESSION_PRISTINE, SESSION_VALIDATION_REL],
-  ['tool-source 写端', TOOL_LOOP_PRISTINE, AGENT_LOOP_REL],
+  ['tool-source 写端', TOOL_WRITE_PRISTINE, TOOL_PIPELINE_REL],
   ['bundle-arrival-retry', LOADER_PRISTINE, CLIENT_MODULES_CLIENT_REL],
-  ['scheduler-guard(tools)', SCHED_TOOLS_PRISTINE, TOOLS_REL],
 ];
 
 for (const [label, fixture, rel] of VERBATIM_FIXTURES) {

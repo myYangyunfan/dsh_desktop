@@ -8,11 +8,13 @@
 // 于是跨代留存的会话永久无法加载，界面表现为
 // 「历史加载失败：... has unexpected member "tier"」。
 //
-// 三类实测来源：
+// 两类实测来源（0.2.2-rc.1 起由三类收窄为两类——第三条上游自己实现了）：
 //   1) compaction/summary 的 tier/kernelBlockId/parentBlockIds/directMessageIds/
 //      effectiveMessageIds —— 第三方压缩插件 billion-context-dsh(acp-kernel) 的块账本；
 //   2) permission/preset 的 origin:"default" —— 早期写入方的溯源信息；
-//   3) subagent/descriptor 的 version:2 —— 字段集是 v3 子集，上游只在 v0 分支拒它。
+//   3) ~~subagent/descriptor 的 version:2~~ —— 0.2.2-rc.1 上游把描述符版本集合扩成
+//      SUBAGENT_DESCRIPTOR_VERSIONS = [1,2,3]，v0 分支不再只认 3，本补丁的「盖章为 3」
+//      一条腿随之退役（详见下方两条断言：锚点只两处、detail 只点名两处）。
 //
 // 本补丁只放宽「准入清单」，并且**保留成员不删**（剥掉会丢插件语义）。
 // 未知垃圾成员、必填缺失、类型/形状校验一律照拒 —— 由反向控制组钉住。
@@ -50,22 +52,23 @@ test('marker 单一数据源：runtime-patches 与 adapters.markers 同一实例
   assert.equal(markers.RELEASED_V0_HISTORY_MARKER, RELEASED_V0_HISTORY_MARKER);
 });
 
-test('锚点命中 pristine → changed，三处齐备且成员是「保留」而非「剥离」', () => {
+test('锚点命中 pristine → changed，两处齐备且成员是「保留」而非「剥离」', () => {
   const p = pristineSource();
   assert.ok(p, '找不到 pristine v0→v1 内核源（先跑 scripts/install-pristine-kernel.mjs）');
   assert.ok(!p.src.includes(RELEASED_V0_HISTORY_MARKER), 'pristine 基线不得已带 marker');
   const r = transformReleasedV0KeysTolerance(p.src, p.file);
   assert.equal(r.status, 'changed');
   const out = r.src;
-  // 三处 marker 注释（1/3、2/3、3/3）。
-  assert.equal(out.split(RELEASED_V0_HISTORY_MARKER).length - 1, 3, '三处改动都要带 marker 注释');
+  // 两处 marker 注释（1/2、2/2）——descriptor 腿随 0.2.2-rc.1 上游自实现退役。
+  assert.equal(out.split(RELEASED_V0_HISTORY_MARKER).length - 1, 2, '两处改动都要带 marker 注释');
   for (const f of ['tier', 'kernelBlockId', 'parentBlockIds', 'directMessageIds', 'effectiveMessageIds']) {
     assert.ok(out.includes('"' + f + '"'), 'compaction/summary 准入应含块账本字段 ' + f);
   }
   assert.ok(/"permission\/preset": disposition\(\["preset"\], \[\s*"origin"/.test(out),
     'permission/preset 准入应含 origin');
-  assert.ok(out.includes('if (version === 0 && descriptorVersion === 2) data["version"] = 3;'),
-    '描述符 v2 应盖章为 3');
+  // 反证（退役腿不得复活）：不得再注入描述符盖章逻辑。
+  assert.ok(!out.includes('if (version === 0 && descriptorVersion === 2) data["version"] = 3;'),
+    '描述符盖章腿已退役（上游 SUBAGENT_DESCRIPTOR_VERSIONS = [1,2,3]），不得重新注入');
   // 关键反向锁：不得引入任何删除成员的行为（剥离会丢第三方插件语义）。
   assert.ok(!/delete record\[key\]/.test(out), '不得剥离未知成员（会丢 billion-context-dsh 的块账本）');
   // 原有拒载能力必须原样保留。
@@ -79,10 +82,12 @@ test('幂等：二次 already；无关源码 anchor-missing 且 detail 不含糊
   assert.equal(transformReleasedV0KeysTolerance(once.src, p.file).status, 'already');
   const none = transformReleasedV0KeysTolerance('function unrelated() {}', 'x.js');
   assert.equal(none.status, 'anchor-missing');
-  // 三处锚点全缺时 detail 必须逐处点名（换代时能直接看出是哪一处上游改了）。
-  for (const w of ['compaction/summary', 'permission/preset', 'subagent/descriptor']) {
+  // 两处锚点全缺时 detail 必须逐处点名（换代时能直接看出是哪一处上游改了）。
+  for (const w of ['compaction/summary', 'permission/preset']) {
     assert.ok(none.detail.includes(w), 'anchor-missing detail 应点名缺失锚：' + w);
   }
+  // 反证：已退役的 descriptor 腿不得再出现在 detail 里（否则说明锚点表没随退役收敛）。
+  assert.ok(!none.detail.includes('subagent/descriptor'), 'descriptor 腿已退役，detail 不应再点名它');
 });
 
 test('部分锚点缺失时整补丁不落地（避免半投导致准入与校验不一致）', () => {
@@ -153,12 +158,14 @@ test('功能：permission/preset 带 origin 可加载且 origin 保留', async (
   assert.equal(ev.data.origin, 'default', 'origin 属溯源信息，必须保留');
 });
 
-test('功能：subagent/descriptor version:2 盖章为 3 后仍受严格形状校验', async () => {
+test('功能：subagent/descriptor version:2 由上游原样接受（本补丁不再盖章为 3）', async () => {
   const m = await patched();
   const ev = { type: 'subagent/descriptor', seq: 6, time: 1, data: { mode: 'one-shot', version: 2, provider: 'deepseek' } };
   m.assertReleasedEventPayload(ev, 0);
-  assert.equal(ev.data.version, 3, '应盖章为 3（下游 v2→v3 硬要求 3）');
-  // 盖章后不是直接放行：形状不合法仍要照拒。
+  // 0.2.2-rc.1：SUBAGENT_DESCRIPTOR_VERSIONS = [1,2,3]，v2 原生合法，不再需要我们的盖章腿。
+  // 这条锁住「上游确实自己做到了」——若哪天又只认 3，这里立刻红（而不是被静默打回原形）。
+  assert.equal(ev.data.version, 2, 'v2 应原样保留（上游已接受 [1,2,3]）');
+  // 形状不合法仍要照拒（准入放宽不等于不校验）。
   const bad = { type: 'subagent/descriptor', seq: 7, time: 1, data: { mode: 'one-shot', version: 2, provider: 42 } };
   assert.throws(() => m.assertReleasedEventPayload(bad, 0), /provider/);
 });

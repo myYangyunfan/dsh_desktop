@@ -5,6 +5,51 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### build(kernel)：随包内核换代 0.2.1-rc.4 → 0.2.2-rc.1（2026-11-07）
+
+- **pin / vendor**：`scripts/compat/kernel-pin.json` 改 `dsh-v0.2.2-rc.1` / `0.2.2-rc.1`；
+  `vendor/dsh-kernel/` = **377 份离线 tgz**（364 个 dsh 包含根包 + 13 个框架件）。每个 tarball 入库前
+  校 registry `dist.integrity` 的 sha512 + 内嵌 `package.json` 的 name/version。rc.4 家族 347 份整体
+  移出到 `.tmp-kernel-rc4-vendor/`，vendor 内零混版。
+- **家族清算**（判据＝目标版本是否发布过，**不是**根包依赖链——依赖链只看得到 320 个，会把 44 个只挂在
+  bundle/profile 上的包误判成退役）：**退役 1**（`dsh-client-ui-deepseek-model-label-1017`，0.2.2 线未再发布、
+  无同名替代）、**新增 25**（action-cards / client-ui-{action-cards,context-menu,creation-recommendations,
+  file-actions,file-drag,plugin-recommendations} / creation-recommendations / deliverable-file-references /
+  experimental-{client-ui-forge,client-ui-stats,forge,forge-bundle,forge-github,forge-session,liveshare,
+  liveshare-protocol} / fs-patch / message-quotes / official-bundles / personalized-recommendations /
+  plugin-{detail,recommendations} / tool-executor-{native,ptc}）。
+- **框架线升级**：cordis 4.0.5→**4.1.0**、cordis-plugin-include 1.0.10→**1.1.0**、cordis-plugin-loader
+  1.0.6→**1.1.0**、cordis-plugin-timer 1.1.7→**1.2.0**、cordis-plugin-group 1.0.5→**1.1.0**、
+  schemastery 3.18.5→**3.19.0**、cosmokit 1.8.6→**1.9.0**；libreoffice-kit 0.1.5 与 node-addon-system
+  0.1.2（含 4 个平台变体）不变。
+- **锁与依赖**：`package.json` 335 条 dsh 依赖 + 根包 + `devDependencies` 的 `dsh-session-turn-outline`
+  全改 0.2.2-rc.1（**它住在 devDependencies**，且要求 `cordis ~4.0.5`，是第一轮 ERESOLVE 的真凶）；
+  `generate-kernel-lock.mjs` 重写锁内 377 个 `file:` 条目 / 1063 个包。
+- **补丁层 62 → 60 项**（全绿：写入 0（幂等）/ 失配 0 / 失败 0 / 降级 0 / 告警 0）：
+  上游 0.2.2-rc.1 有三处结构性变化，**不是锚点漂移能解决的**——① 引入 `ctx.contextMenus` 服务，行菜单改
+  数据项注册（`{id,target,order,resolve}`），右键菜单成为上游原生能力 → 我们自造的 `onContextMenu` /
+  `menuRect` / 内联 `workspaceMenuItems` 脚手架整块退役，注入改落 `registerSessionMenus` 与 `ProjectRow`；
+  ② `dsh-tools` 单文件 bundle 拆成 `index.js` + `pipeline.js` + `shared-<hash>.js`，各工具实现拆成独立包
+  （`run_code` → `dsh-tool-executor-ptc`，新增 `dsh-tool-executor-native`）→ 靶面常量新增 `PTC_REL`，
+  `shell-description-compat` / `content-has-image-guard` 的 `pkgRels` 改挂 PTC；含 `ToolNotFoundError` 的
+  shared chunk 名带内容哈希，落点改为扫 `dsh-tools/lib/*.js` 取含锚点者；③ `TOOL_RUNTIME_SCHEDULER` 符号面
+  **整体删除**（364 包 0 命中）→ `agent-loop-scheduler-guard` 无靶可打；`menu-viewport` 的职责被上游
+  `useAnchoredPosition` + `--dsh-anchored-max-height` + `.Menu.module.css .scrollable` 以更优形态实现
+  （硬贴会裁掉子菜单）。两条**退役**（模块文件保留休眠，接线由 `ta6-registry-invariants` 的死接线白名单承认）。
+  其余按真字节重锚：空 tool-call 写端（agent-loop → `dsh-tools/lib/pipeline.js`）、历史分页容量
+  （`request.maxMessages ?? 50` 三处）、released-v0（`subagent/descriptor` 腿上游已自实现，3 腿→2 腿）、
+  pi-ai Responses 工具名净化（function_call 槽位 arguments 改流式累积）。
+- **patch-surface**：快照重取 **90 个被干预文件 / 85 个标记家族**，verify 零漂移。
+- **验证**：`npm test` = **2222 例 / 2213 pass / 9 skip / 0 fail / 0 cancelled**（skip 全是环境缺料）；
+  Rust 本地分段实测 **500 passed / 0 failed / 3 ignored**（19 个 target：其余 crate 71 + app lib 235 +
+  app 集成 194），`update_progress_window`（2 例）的测试 exe 被本机安全软件拒执行（`os error 5`，见 AGENTS 坑位），
+  以 CI 为准；`validate-pin` / `check-syntax` / `patch-surface verify` 全绿。
+- **修掉一条假绿**：`unit-empty-tool-name.test.js` 的 `PKG_DIR` 落在 `scripts/`，导致「dev node_modules 含 marker」
+  那例 `existsSync` 恒 false、静默 early-return——改为 `resolve(__dirname,"..","..")` 后真的在验。
+- **修掉一条环境性偶发红**：`wsl_stub_boot_to_kernel_ready_e2e` 的 300s 就绪预算被新内核体量顶破（真机 WSL
+  实测 repair 54.7s + sync 182.5s），放宽到 900s 并写明理由，单跑 279.5s 通过。
+
+
 ### build(release)：发版正文改为仓库内按版本落盘，内嵌模板只作兜底（2026-10-27）
 
 - **病灶**：`tauri-release.yml` 的 `Generate release notes` 把正文写死在 YAML 里，记的是**某一版**的数字。

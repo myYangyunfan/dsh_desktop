@@ -16,17 +16,18 @@
 // hook 订阅版本号；SessionTree 把版本号塞进 groups useMemo 的 deps ——
 // 切换置顶即时重排，无需整页刷新。
 //
-// 锚点新鲜度（0.2.0-rc.2 重锚，registry order 215）：
-//   · UI_CORE 现锚 ProjectRowItem 的原生签名行（rc.2 形参表新增
-//     containsCurrentDescendant / newShortcut）；
-//   · UI_HOOKS 锚 ProjectRowItem 的 label 行（全文件唯一），不再用旧的
-//     menuOpen + menuRect 三连锚——menuRect 在 rc.2 原生代码里 0 命中，它是
-//     open-project-dir 补丁自己的产物，当原生锚必然失配；
-//   · UI_TREE 锚 SessionTree 的 expandedGroups useMemo（rc.2 里基于
-//     parents/workspaces），UI_DEPS 锚 groups useMemo deps 尾段（含 statuses），
-//     两者同函数体，由 verifyVersionScope() 配对校验，不通过则整体放弃本补丁；
-//   · UI_ZH/UI_EN 锚原生 "menu.unarchiveSession" 行（旧锚 menu.openProjectDir
-//     同样是 open-project-dir 的产物）。
+// 锚点新鲜度（0.2.2-rc.1 重锚）：
+//   · UI_CORE 锚 ProjectRowItem(props) 分派器行（旧的多字段解构签名已不存在）；
+//   · UI_HOOKS / UI_FOLDER / UI_TITLE 锚 ProjectRow 本体（分组行与未分组行
+//     共用的那个组件，两个薄包装都落到它），全文件唯一整行命中；
+//   · UI_MENU 锚原生 workspace.rename 菜单注册的收尾行 —— 0.2.2-rc.1 把项目行
+//     菜单整体搬到 ctx.contextMenus 服务，旧的 workspaceMenuItems 数组 /
+//     onSelect id guard 两个锚点已消失，菜单项改为数据项注册；
+//   · UI_TREE 锚 SessionTree 的 expandedGroups useMemo，UI_DEPS 锚 groups useMemo
+//     deps 尾段（含 statuses），两者同函数体，由 verifyVersionScope() 配对校验，
+//     不通过则整体放弃本补丁；
+//   · UI_ZH/UI_EN 锚原生 "menu.unarchiveSession" 行（本补丁插入其后，
+//     open-project-dir 插入其前，两者顺序无关）。
 //
 // 与 open-project-dir（order 200）互不依赖：两补丁锚点字节区间不重叠，且各自
 // insert 都保留自己的锚，任意先后都能命中。
@@ -110,16 +111,19 @@ const CORE = [
 // dsh-client-ui-workspace/lib/client.js 的外科手术点
 // ---------------------------------------------------------------------------
 
-// 1a. store + 排序逻辑注入（ProjectRowItem 签名前，模块工厂作用域内）。
-const UI_CORE_ANCHOR = "\t\tfunction ProjectRowItem({ group, containsCurrentDescendant = false, onToggle, onCreate, actions, drag, home, newShortcut, t }) {";
+// 1a. store + 排序逻辑注入（模块工厂作用域，ProjectRowItem 分派器之前）。
+// 0.2.2-rc.1 重锚：上游把行渲染拆成 ProjectRowItem(props) 分派器 +
+// WorkspaceProjectRow / UngroupedProjectRow 两个薄包装，三者最终都渲染同一个
+// ProjectRow（真正持有 label / 菜单 / 图标 / 标题的组件）。因此 store 挂在
+// 模块作用域（锚分派器行即可），行内注入（1b/1e/1f）挂在 ProjectRow 本体上，
+// **分组行与未分组行共用同一处注入**——两半都由这一处覆盖，未分组半边由
+// row.workspaceId === void 0 的既有判据排除（上游同样不给它工作区菜单）。
+const UI_CORE_ANCHOR = '\t\tfunction ProjectRowItem(props) {';
 const UI_CORE_INSERT = CORE + '\n' + UI_CORE_ANCHOR;
 
-// 1b. 项目行 hooks 区：订阅版本号 + 读取置顶态（无条件 hook，Rules of Hooks 安全）。
-// rc.2 重锚：旧三连锚里的 `menuRect` state 在 rc.2 原生代码里全文件 0 命中（它其实是
-// open-project-dir 补丁自己的产物），拿来当原生锚必然失配。现锚在 ProjectRowItem 自己的
-// label 行（全文件唯一整行命中，且紧跟 `const row = group;` —— row 已声明）。
-// 与 open-project-dir 的 UI_PROJECT_STATE 锚（active + menuOpen 两行）字节区间不重叠，
-// 两个补丁任意先后都能命中。
+// 1b. 行内 hooks 区：订阅版本号 + 读取置顶态（无条件 hook，Rules of Hooks 安全）。
+// 0.2.2-rc.1：该 label 行仍在 ProjectRow 体内（分组行与未分组行共用），全文件
+// 唯一整行命中，且紧随 `const row = group;` —— row 已声明。
 const UI_HOOKS_ANCHOR = [
 	'			const label = row.workspaceId === void 0 ? t("group.ungrouped") : row.label;',
 ].join('\n');
@@ -130,35 +134,30 @@ const UI_HOOKS_INSERT = [
 	'			const dshPinned = dshWorkspacePinState(row.workspaceId);',
 ].join('\n');
 
-// 1c. 菜单项：rename 之前插入 pin 项（未分组桶无 workspaceId 不显示；icon 缺席
-//     有先例——会话行 delete 项同样无 icon，Menu 的 entry.icon 可选）。
-const UI_ITEMS_ANCHOR = [
-	'			const workspaceMenuItems = [{',
-	'				id: "rename",',
-].join('\n');
-const UI_ITEMS_INSERT = [
-	'			const workspaceMenuItems = [{',
-	'				// dsh-desktop patch (workspace pin): 置顶/取消置顶（仅工作区分组行显示）。',
-	'				...(row.workspaceId !== void 0 ? [{',
-	'					id: "pin",',
-	'					label: dshPinned ? t("workspace.unpin") : t("workspace.pin")',
-	'				}] : []),',
-	'				id: "rename",',
-].join('\n');
-
-// 1d. onSelect：pin 分支放在 open-project-dir 的 id guard 之前（互不触碰）。
-// rc.2 原生 guard 为 `if (id !== "rename" && id !== "delete") return;`（其上还有一行
-// `/* v8 ignore next */` 注释）；pin 分支在 setMenuOpen(false) 之后先行 return，
-// 既不被 guard 拒掉，也不碰 open-project-dir 改写的 guard 行。
-const UI_SELECT_ANCHOR = [
-	'							onSelect: (id) => {',
-	'								setMenuOpen(false);',
-].join('\n');
-const UI_SELECT_INSERT = [
-	'							onSelect: (id) => {',
-	'								setMenuOpen(false);',
-	'								// dsh-desktop patch (workspace pin): 置顶切换（先于 id guard 返回）。',
-	'								if (id === "pin") { dshToggleWorkspacePin(row.workspaceId); return; }',
+// 1c. 菜单项：工作区行 ⋯ 菜单加「置顶/取消置顶」数据项。
+// 0.2.2-rc.1 重锚：上游把项目行菜单从内联 workspaceMenuItems 数组改成
+// ctx.contextMenus 数据项（register({ id, target: "workspace", order, resolve })），
+// 旧的 UI_ITEMS（数组首项）与 UI_SELECT（onSelect 的 id guard 前插分支）两个锚点
+// 因此整体消失。现锚在原生 workspace.rename 注册的收尾行（全文件唯一），
+// order 200 排在 rename(100) 与 delete(300) 之间；未分组桶没有 workspaceId，
+// 上游也不为它开工作区菜单，故不显示置顶项（与旧语义一致）。
+const UI_MENU_ANCHOR = '\t\t\t}), "workspace: rename menu action");';
+const UI_MENU_INSERT = [
+	UI_MENU_ANCHOR,
+	'\t\t\t// dsh-desktop patch (workspace pin): 置顶/取消置顶（仅工作区分组行）。',
+	'\t\t\tctx.effect(() => ctx.contextMenus.register({',
+	'\t\t\t\tid: "workspace.pinToggle",',
+	'\t\t\t\ttarget: "workspace",',
+	'\t\t\t\torder: 200,',
+	'\t\t\t\tresolve: ({ workspaceId }) => [{',
+	'\t\t\t\t\tid: dshWorkspacePinState(workspaceId) ? "unpin" : "pin",',
+	'\t\t\t\t\tlabel: ctx.locale.bind(NS)(dshWorkspacePinState(workspaceId) ? "workspace.unpin" : "workspace.pin"),',
+	'\t\t\t\t\ticon: { key: dshWorkspacePinState(workspaceId) ? "workspace.unpin" : "workspace.pin" },',
+	'\t\t\t\t\trun: () => {',
+	'\t\t\t\t\t\tdshToggleWorkspacePin(workspaceId);',
+	'\t\t\t\t\t}',
+	'\t\t\t\t}],',
+	'\t\t\t}), "workspace: pin menu action");',
 ].join('\n');
 
 // 1e. folder 图标：置顶时着主题色（与 folderActive 同色系；active 另有行背景）。
@@ -246,8 +245,7 @@ const UI_EN_INSERT = [
 const UI_REPLACEMENTS = [
 	{ anchor: UI_CORE_ANCHOR, insert: UI_CORE_INSERT },
 	{ anchor: UI_HOOKS_ANCHOR, insert: UI_HOOKS_INSERT },
-	{ anchor: UI_ITEMS_ANCHOR, insert: UI_ITEMS_INSERT },
-	{ anchor: UI_SELECT_ANCHOR, insert: UI_SELECT_INSERT },
+	{ anchor: UI_MENU_ANCHOR, insert: UI_MENU_INSERT },
 	{ anchor: UI_FOLDER_ANCHOR, insert: UI_FOLDER_INSERT },
 	{ anchor: UI_TITLE_ANCHOR, insert: UI_TITLE_INSERT },
 	{ anchor: UI_SORT_ANCHOR, insert: UI_SORT_INSERT },

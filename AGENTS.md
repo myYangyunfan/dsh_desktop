@@ -212,7 +212,7 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   **多行锚点的反证用例静默空转**（`src.includes('…{\n\t\tsetAction(…')` 恒 false，`replace` 什么都没换；
   带 `assert.ok(锚点在位)` 的当场判红，不带的就把「未变异的成功渲染」当成反证结果判绿——
   **用例红都不等于判据在跑**）。2026-10-18 起用仓库根 `.gitattributes`（`* text=auto eol=lf`
-  + `*.tgz`/图像/原生件 `-text`，防 vendor 353 个内核 tgz 被规整化）钉死，本机与 CI 从此同一字节；
+  + `*.tgz`/图像/原生件 `-text`，防 vendor 377 个内核 tgz 被规整化）钉死，本机与 CI 从此同一字节；
   再遇到「这条用例只在 CI 红」先查行尾，别改测试逻辑。
 - **冒烟测试绝不跑真安装器**：NSIS 的 PREINSTALL 会静默卸载本机真实版本。
   冒烟用手拼安装布局 + `DSH_HOME`/`DSH_TAURI_USERDATA` 隔离。
@@ -276,10 +276,11 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   `.gitattributes`（见「CI 全量单测有三类本机假绿环境差」第 ③ 条）。
 - **稳定性三原则（评审默认立场）**：① 客户端必须能打开，装配失败终态恢复页而非退出；
   ② 兼容性不报错，意外以日志收场（`panics.log`）不以崩溃收场；③ 用户数据不动。
-- 文档里的测试基线数字常滞后。**现值（2026-10-27 实测，随包内核 0.2.1-rc.4；基线含
+- 文档里的测试基线数字常滞后。**现值（2026-11-07 实测，随包内核 0.2.2-rc.1；基线含
   与 GitHub 侧 v1.0.3 合流 + Windows 路径门禁 + 两件插件提交闸门 + `dsh-prompt-optimizer`
-  换为 vendored 上游 0.6.1 + better-sidebar「资源管理器栏头折叠 / 在本地打开」两条根治；补丁层净数 62 = 换代退役一条后的 61
-  ＋ 吸收 `appboot-bootstrap-singleton`；rc.2 → rc.4 换代零重靶，62 项判定矩阵逐 id 不变）**：
+  换为 vendored 上游 0.6.1 + better-sidebar「资源管理器栏头折叠 / 在本地打开」两条根治；补丁层净数 **60** = rc.4 的 62 退役两条（`menu-viewport` 上游已自实现、`agent-loop-scheduler-guard` 的
+  `TOOL_RUNTIME_SCHEDULER` 符号面被整体删除）；0.2.2-rc.1 换代 13 处锚点失配全部按真字节重靶，
+  判定矩阵 43 changed / 12 root / 5 target-absent）**：
   `scripts/test/` 202 个测试文件（`*.test.js` 201 + `*.test.mjs` 1；`dsh-prompt-optimizer`
   自研线的四个套件 `unit-prompt-optimizer-{context-intent,lexical-write,project-goal,upgrade}`
   随目录替换 `git rm`，新增 vendored 机器锁 `unit-prompt-optimizer-vendored`；更早
@@ -293,10 +294,12 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   skip 逐条都是环境缺料而非缺陷（pristine 夹具缺 `@openai/codex` / `@earendil-works/pi-ai`、
   openclaw 双轨的兄弟目录 `../openclaw-dsh-bridge/` 不在盘、本机无 `D:\workspace\dsh-pack` 克隆、
   真实网络、`.tmp-kernel` 构建产物不可用、无特权创建文件级符号链接）——一律以现跑输出为准，**pass 与 fail 才是判据**。
-  Rust 侧现值（2026-10-27 本批实跑）**603 passed / 0 failed / 3 ignored / 31 个 target**：
-  `cargo test --workspace --exclude kernel-process`（551）+ `cargo test -p kernel-process` 的 lib 半边（52）＝ 603；
-  缺口是 `kernel-process` 的集成测试 exe（`ta1_crash_loop_property` 等 4 例）**本机被安全软件拒绝执行**
-  （见下条），不是代码红。参照值：2026-10-22 的 607/4/33 含那 4 例。`crates/session-watcher`
+  Rust 侧现值（2026-11-07 本批实跑，分段绕过被安全软件挡住的 exe）**500 passed / 0 failed / 3 ignored / 19 个 target**：
+  其余 crate 71 + `dsh-tauri-app --lib` 235 + app 集成 194 ＝ 500。缺口两类，都是本机环境而非代码红
+  （见下条坑位）：`update_progress_window`（2 例）与 `kernel-process` 的集成测试 exe（`ta1_crash_loop_property` 等 4 例）
+  **被安全软件拒绝执行**（`os error 5`）。参照值：rc.4 时代的 551/0/3/30 与 2026-10-22 的 607/4/33。
+  另注：`wsl_stub_boot_to_kernel_ready_e2e` 的就绪预算已从 300s 放宽到 900s——新内核 364 个包，真机 WSL 走 UNC
+  实测 repair 54.7s + sync 182.5s，300s 会把它顶成假红。`crates/session-watcher`
   因 `Cargo.toml` 成员行被 GBK 注释行粘连而不在 workspace 内，是零消费者储备件，不计入。
   **跑 Rust 全量前先清掉终端里的 `DSH_HOME` / `DSH_TAURI_USERDATA`**：`shell-core` 的
   `windows_layout_matches_electron` / `unix_layout_home_fallback_not_relative` 会优先读生产覆盖通道，

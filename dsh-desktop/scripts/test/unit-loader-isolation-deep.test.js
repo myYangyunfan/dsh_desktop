@@ -422,7 +422,17 @@ test('vendored cordis-plugin-loader: rc.2 锚点整份失配 = 退役，非静�
   assert.equal(transformLoaderTreeIsolation(src, loaderFile).status, 'anchor-missing');
   // 上游原生隔离的正证（回归旧形态时这里翻红 → 重新上补丁）。
   assert.ok(src.includes('Promise.allSettled'), 'EntryTree.await 走 allSettled');
-  assert.equal((src.match(/\bthrow\b/g) || []).length, 3, 'throw 只剩条目查找错误 3 处');
+  // 4 处 = 上一代 3 处 ＋ `already exists in the target tree`（1.1.0 新增的树结构校验，
+  // 不在加载路径上）。形状检查保证「只剩条目查找/结构错误」，旧的整体抛形态会立刻翻红。
+  const throwLines = src.split('\n').filter((line) => /\bthrow\b/.test(line));
+  assert.equal(throwLines.length, 4, 'throw 只剩条目查找/结构校验 4 处');
+  for (const line of throwLines) {
+    assert.match(
+      line,
+      /cannot resolve entry|is not a group|already exists in the target tree/,
+      '不得出现「整份加载失败」型 throw：' + line.trim(),
+    );
+  }
 });
 
 test('vendored dsh-app-boot: 激活审计与 installFailLoud 均已变换 → marker + 注入体', () => {

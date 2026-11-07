@@ -1,7 +1,7 @@
 'use strict';
 
 // ---------------------------------------------------------------------------
-// TA6 元测试 6：62 补丁 × pristine 内核形态判定矩阵（基线快照，长期价值最高）。
+// TA6 元测试 6：60 补丁 × pristine 内核形态判定矩阵（基线快照，长期价值最高）。
 //
 // 对 pristine 内核闭包按 registry order 编排序跑一遍全部 file transform——同文件
 // 多补丁时，后一条的输入就是前一条的产物，判定与引擎真实顺序一致；root 规格记
@@ -55,8 +55,10 @@ const FORM = kernel.packageVersion;
 // bootstrapIncludes 提升为 globalThis 单例；两条锚点在 0.2.1-rc.1 的
 // dsh-app-boot/lib/index.js 逐字在位，真跑判定 changed，与 npm ci 的
 // 「写入 75 处 / 失配 0 / 共 62 项」互为对账）。
+// → 60 = 62 − agent-loop-scheduler-guard − menu-viewport（0.2.2-rc.1 换代退役两条，
+// 均为「上游自己做到了」，见 ta6-registry-invariants 的 E 与下方 60 基线说明）。
 // 逐项理由见 ta6-registry-invariants.test.js 的 E。
-const SPEC_COUNT = 62;
+const SPEC_COUNT = 60;
 
 /** 与 kernel-pin 同版的 pristine 闭包根；不在场返回 null（调用侧响亮失败）。 */
 function formRoot() {
@@ -124,31 +126,32 @@ function integrityProblems(ids, baseline) {
 }
 
 // ===========================================================================
-// 基线快照（2026-10-18 重录：0.2.1-rc.2 形态 = .tmp-kernel/.consumer-0.2.1-rc.2
-// 的 npm 闭包解包树（node scripts/install-pristine-kernel.mjs 按 vendor tarball
-// 离线解出 352 包），48 file + 14 root = 62 项，逐项由本文件 computeMatrix 真跑
-// 录入，不是手工填值。判定构成：43 changed / 14 root / 5 target-absent，
-// 零 anchor-missing、零 already、零 THROW —— 与 scripts/patch-deps.js 的实况同源：
-// 首次 npm ci 写入 74 处 + web-search client 失配 1 项，按 rc.2 新字节重锚后增量
-// 写入 1 处 / 失配 0，合计 75 处、62 项全落地，两者互为对账。
+// 基线快照（2026-11-07 重录：0.2.2-rc.1 形态 = .tmp-kernel/.consumer-0.2.2-rc.1
+// 的 npm 闭包解包树，由 node scripts/install-pristine-kernel.mjs 按 vendor tarball
+// 离线解出；48 file + 12 root = 60 项，逐项由本文件 computeMatrix 真跑录入，
+// 不是手工填值）。判定构成：43 changed / 12 root / 5 target-absent，
+// 零 anchor-missing、零 already、零 THROW —— 与 scripts/patch-deps.js 的实况同源
+// （换 rc.1 后实跑「失配 0 / 失败 0 / 共 60 项」），两者互为对账。
 //
-// 0.2.1-rc.1 → 0.2.1-rc.2 的矩阵**逐项不变**：四份上游字节变动（settings-account
-// 的版本号、web-search 设置页重写 + 新 Search/Fetch 字段、cordis-client-runner 的
-// 内置件清单、web-search-deepseek 的 thinking 参数与错误文案）全部在补丁层重锚后
-// 仍判 changed，没有新增 anchor-missing，也没有补丁因此退役。
-//
-// 0.2.1-rc.2 → 0.2.1-rc.4 的矩阵**同样逐项不变**（2026-10-27 重录，root =
-// .tmp-kernel/.consumer-0.2.1-rc.4，353 包）：仍是 43 changed / 14 root /
-// 5 target-absent，与 rc.2 基线逐 id 相同，零 anchor-missing、零 already、
-// 零 THROW；patch-deps 实况同为「写入 75 处 / 失配 0 / 失败 0 / 降级 0 / 告警 0 /
-// 共 62 项」，两边互为对账。上游这两代是「加功能不加破坏」的一轮：rc.3 给左栏、
-// 会话视图、右栏各加一个「更多」菜单（浏览与创建插件），带来家族里**唯一的新包**
-// `@deepseek-ai/dsh-client-ui-entry-customization`（rc.4 起随 vendor 入库）；rc.3
-// 还修了「切换会话后点新会话找不回未发送草稿」；rc.4 只把 DeepSeek API Key 适配器
-// 的模型列表刷新口径与账号登录模式对齐。62 项补丁的锚点全部原样命中，无需重靶。
+// 0.2.1-rc.4 → 0.2.2-rc.1 的矩阵变化只有「两条退役 + 若干文件改判 changed 的靶移位」，
+// 逐条是上游自己做了：
+//   ① agent-loop-scheduler-guard → 退役：TOOL_RUNTIME_SCHEDULER 符号面整体删除
+//      （364 个包 0 命中），agent-loop 的旧 import 改成 ToolActivationError /
+//      ToolBatchExecutionError，工具批改走 this.loopCtx.tools.execute({...})；
+//   ② menu-viewport → 退役：上游用 useAnchoredPosition + --dsh-anchored-max-height +
+//      `.Menu.module.css .scrollable` 自己实现了菜单视口约束；
+//   ③ tool-compat / content-has-image-guard 的写端随 run_code 迁到
+//      dsh-tool-executor-ptc（4-tab nested + 3-tab 扁平两处 schema），矩阵里仍是
+//      changed，但靶文件已换；④ released-v0-history-recovery 少一条 descriptor 腿
+//      （上游 SUBAGENT_DESCRIPTOR_VERSIONS = [1,2,3]），仍是 changed。
+// 沿革（只记变化量）：64 → 59（rc.2 重靶退役 6 项 + profile-patch-layer-guard 取代）
+// → 58（− image-send-fix）→ 60（＋ 两条诊断补丁）→ 62（＋ 两条 onboarding）
+// → 61（− pi-ai-opencode-go-models）→ 62（＋ appboot-bootstrap-singleton）
+// → 60（− agent-loop-scheduler-guard − menu-viewport，本批）。
+// 逐项理由见 ta6-registry-invariants.test.js 的 E。
 // ===========================================================================
 const BASELINE = {
-  '0.2.1-rc.4': {
+  '0.2.2-rc.1': {
     'slot-legacy-key': 'changed',
     'slot-unkeyed-compat': 'changed',
     'slot-error-isolation': 'changed',
@@ -173,7 +176,6 @@ const BASELINE = {
     'onboarding-step-progress-timeout': 'changed',
     'onboarding-guard-report': 'changed',
     'web-search-baseurl': 'root',
-    'menu-viewport': 'root',
     'session-manage': 'root',
     'open-project-dir': 'root',
     'session-persistence': 'root',
@@ -185,7 +187,6 @@ const BASELINE = {
     'settings-models-resilience': 'root',
     'pi-ai-reasoning-defaults': 'root',
     'bundle-arrival-retry': 'root',
-    'agent-loop-scheduler-guard': 'root',
     'empty-tool-name-guidance': 'root',
     'prompt-context-literal': 'changed',
     'wsl-picker-browse': 'changed',

@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### build(kernel)：随包内核换代 0.2.1-rc.4 → 0.2.2-rc.1（2026-11-07）
+
+- **壳层代码零改动**：随包内核换代只动 `dsh-desktop/` 侧的 pin / vendor / 补丁层，`src-tauri/` 的
+  Rust 源码唯一改动是 `supervisor.rs` 里 WSL e2e 测试的就绪预算（300s → 900s）：新内核家族 340 → 364 个包，
+  真机 WSL（Ubuntu-24.04，profile 在 `\\wsl.localhost` UNC 上）实测 `repair` 54.7s + `sync` 182.5s 就把 300s
+  吃掉，五步虽全过但 `KernelReady` 未到点即判红——是 UNC 同步体量，不是契约或逻辑变化。放宽后单跑 279.5s 通过。
+- **Rust 实测**：其余 crate 71 + app lib 235 + app 集成 194 = **500 passed / 0 failed / 3 ignored**（19 个 target）。
+  缺口是 `update_progress_window`（2 例）的测试 exe 被本机安全软件拒执行（`os error 5`），与 `kernel-process`
+  集成 exe 同源环境限制，以 CI 为准。
+
+
 ## [1.0.8] — 2026-10-27
 
 壳层代码本轮零改动：只把随包内核从 0.2.1-rc.2 换到 0.2.1-rc.4（内容见 `dsh-desktop/CHANGELOG.md` 同名节）。版本号三处同步至 1.0.8，供 `tauri-release.yml` 与 tag 做 fail-fast 比对。

@@ -296,8 +296,12 @@ function transformPersistenceCorruptGuard(src, file) {
 //   2) permission/preset 多 origin:"default" —— 早期写入方的溯源信息。
 //   3) subagent/descriptor version:2 —— 字段集与 v3 完全相同；上游只在 v0 分支拒它
 //      （v1 分支直接 return 容忍），而下游 v2→v3 又硬要求 3，属单纯过度收紧。
-// 三处一律「只放宽准入、不放宽校验」：必填/类型/语义校验全部保留，
-// 第 3 类盖章后**继续落到原有严格形状校验**，非 2 的未知版本仍照拒。
+//      【0.2.2-rc.1 已退役】：上游自己补上了白名单——`SUBAGENT_DESCRIPTOR_VERSIONS
+//      = [1, 2, 3]`（session-format-v0-to-v1/lib/index.js :1288）+
+//      `!SUBAGENT_DESCRIPTOR_VERSIONS.some((known) => known === data["version"])`
+//      （:1608）才进 v0 拒绝分支，v2 直接落到下方的严格形状校验，与我们那份
+//      「盖章后继续走严格校验」语义等价且更干净。故本补丁只剩 1)/2) 两处。
+// 三处一律「只放宽准入、不放宽校验」：必填/类型/语义校验全部保留。
 const RELEASED_V0_HISTORY_MARKER = 'dsh-desktop compat: released v0 history recovery';
 const RELEASED_V0_SUMMARY_OLD = [
   '\t"compaction/summary": disposition([',
@@ -331,7 +335,7 @@ const RELEASED_V0_SUMMARY_NEW = [
   '\t\t"usage",',
   '\t\t"rawOutput",',
   '\t\t"llmStreamCall",',
-  '\t\t/* ' + RELEASED_V0_HISTORY_MARKER + ' (1/3): 第三方压缩插件',
+  '\t\t/* ' + RELEASED_V0_HISTORY_MARKER + ' (1/2): 第三方压缩插件',
   '\t\t   billion-context-dsh(acp-kernel) 的块账本字段。原样保留到 v3，',
   '\t\t   不剥离、不重写 —— 剥掉会丢插件的 tier/块身份语义。 */',
   '\t\t"tier",',
@@ -342,35 +346,16 @@ const RELEASED_V0_SUMMARY_NEW = [
   '\t]),',
 ].join('\n');
 const RELEASED_V0_PRESET_OLD = '\t"permission/preset": disposition(["preset"]),';
-const RELEASED_V0_PRESET_NEW = '\t/* ' + RELEASED_V0_HISTORY_MARKER + ' (2/3): 早期写入方的 origin 属展示/溯源信息，准入不影响语义。 */\n'
+const RELEASED_V0_PRESET_NEW = '\t/* ' + RELEASED_V0_HISTORY_MARKER + ' (2/2): 早期写入方的 origin 属展示/溯源信息，准入不影响语义。 */\n'
   + '\t"permission/preset": disposition(["preset"], [\n\t\t"origin"\n\t]),';
-const RELEASED_V0_DESCRIPTOR_OLD = [
-  '\tif (event.type === "subagent/descriptor" && data["version"] !== 3) {',
-  '\t\tconst descriptorVersion = sessionFormatCount(data["version"], `${event.type} ${event.seq} version`);',
-  '\t\tif (version === 0) throw new SessionFormatUnsupportedMigrationError(`${event.type} ${event.seq} uses unsupported descriptor version ${descriptorVersion}`);',
-  '\t\treturn;',
-  '\t}',
-].join('\n');
-const RELEASED_V0_DESCRIPTOR_NEW = [
-  '\tif (event.type === "subagent/descriptor" && data["version"] !== 3) {',
-  '\t\tconst descriptorVersion = sessionFormatCount(data["version"], `${event.type} ${event.seq} version`);',
-  '\t\t/* ' + RELEASED_V0_HISTORY_MARKER + ' (3/3): v0 构建写过的 version:2 字段集是 v3 的',
-  '\t\t   子集，仅盖章为 3 后**继续走原有的严格形状校验**（不 return、不跳过校验）；',
-  '\t\t   其它未知版本仍照拒。v1 分支行为逐字不变。 */',
-  '\t\tif (version === 0 && descriptorVersion === 2) data["version"] = 3;',
-  '\t\telse if (version === 0) throw new SessionFormatUnsupportedMigrationError(`${event.type} ${event.seq} uses unsupported descriptor version ${descriptorVersion}`);',
-  '\t\telse return;',
-  '\t}',
-].join('\n');
 
-/** released-v0 历史恢复变换（目标 dsh-session-format-v0-to-v1/lib/index.js，三处一起成/一起不成）。 */
+/** released-v0 历史恢复变换（目标 dsh-session-format-v0-to-v1/lib/index.js，两处一起成/一起不成）。 */
 function transformReleasedV0KeysTolerance(src, file) {
   if (typeof src !== 'string') return { status: 'anchor-missing', detail: '非字符串源，跳过 ' + file };
   if (src.includes(RELEASED_V0_HISTORY_MARKER)) return { status: 'already' };
   const missing = [];
   if (!src.includes(RELEASED_V0_SUMMARY_OLD)) missing.push('compaction/summary 准入清单');
   if (!src.includes(RELEASED_V0_PRESET_OLD)) missing.push('permission/preset 准入清单');
-  if (!src.includes(RELEASED_V0_DESCRIPTOR_OLD)) missing.push('subagent/descriptor 版本分支');
   if (missing.length > 0) {
     return {
       status: 'anchor-missing',
@@ -379,7 +364,6 @@ function transformReleasedV0KeysTolerance(src, file) {
   }
   let out = src.replace(RELEASED_V0_SUMMARY_OLD, RELEASED_V0_SUMMARY_NEW);
   out = out.replace(RELEASED_V0_PRESET_OLD, RELEASED_V0_PRESET_NEW);
-  out = out.replace(RELEASED_V0_DESCRIPTOR_OLD, RELEASED_V0_DESCRIPTOR_NEW);
   return { status: 'changed', src: out };
 }
 /** 会话持久化全部容错变换：尾部擕裂恢复 + 损坏会话跳过，依次应用。 */
@@ -555,8 +539,14 @@ const SHELL_DESC_SCHEMA_NEW = "\t\t\t\tdescription: {\n\t\t\t\t\ttype: \"string\
 // 模型省略 description 时通用校验器先拒 → run_code 调用失败。修法同 shell：删
 // required:true（可选）+ validate 缺省时用 args.code 首行补值。
 const RUNCODE_DESC_MARKER = "dsh-desktop compat: optional run_code description";
+// 0.2.2-rc.1：run_code 从 dsh-tools/lib/index.js 搬到独立包
+// @deepseek-ai/dsh-tool-executor-ptc/lib/index.js，且**同文件两处**同名 schema 块，
+// 两处缩进不同（:327 为 3-tab、:693 在 parameters(...) 工厂里为 4-tab）。3-tab 锚点
+// 是 4-tab 块的子串，故 transform 里必须先替换 nested 变体、再替换扁平变体。
 const RUNCODE_SCHEMA_OLD = "\t\t\tdescription: {\n\t\t\t\ttype: \"string\",\n\t\t\t\trequired: true,\n\t\t\t\tdescription: RUN_CODE_DESCRIPTION_PARAM_DESCRIPTION";
 const RUNCODE_SCHEMA_OPTIONAL = "\t\t\tdescription: {\n\t\t\t\ttype: \"string\",\n\t\t\t\tdescription: RUN_CODE_DESCRIPTION_PARAM_DESCRIPTION";
+const RUNCODE_SCHEMA_OLD_NESTED = "\t\t\t\tdescription: {\n\t\t\t\t\ttype: \"string\",\n\t\t\t\t\trequired: true,\n\t\t\t\t\tdescription: RUN_CODE_DESCRIPTION_PARAM_DESCRIPTION";
+const RUNCODE_SCHEMA_OPTIONAL_NESTED = "\t\t\t\tdescription: {\n\t\t\t\t\ttype: \"string\",\n\t\t\t\t\tdescription: RUN_CODE_DESCRIPTION_PARAM_DESCRIPTION";
 const RUNCODE_VALIDATE_OLD = "\t\t\tif (args.description.trim().length === 0) throw new Error(\"invalid description: expected a non-empty string\");";
 const RUNCODE_VALIDATE_NEW = "\t\t\tif (typeof args.description !== \"string\" || args.description.trim().length === 0) {\n\t\t\t\t// " + RUNCODE_DESC_MARKER + ": description is only for UI/log; derive one from the program when the model omits it.\n\t\t\t\targs.description = args.code.trim().split(/\\r?\\n/)[0].slice(0, 80) || \"Run program\";\n\t\t\t}";
 
@@ -568,6 +558,8 @@ function transformShellDescriptionOptional(src, file) {
   let out = src;
   const notes = [];
   // === run_code 家族（dsh-tools；必须先跑，见上）===
+  // nested（4-tab，0.2.2-rc.1 的 ptc 工厂块）先于扁平（3-tab）：后者是前者的子串。
+  if (out.includes(RUNCODE_SCHEMA_OLD_NESTED)) { out = out.replaceAll(RUNCODE_SCHEMA_OLD_NESTED, RUNCODE_SCHEMA_OPTIONAL_NESTED); notes.push("run_code: description 改为可选（nested schema 块）"); }
   if (out.includes(RUNCODE_SCHEMA_OLD)) { out = out.replaceAll(RUNCODE_SCHEMA_OLD, RUNCODE_SCHEMA_OPTIONAL); notes.push("run_code: description 改为可选（两处 schema 块）"); }
   if (out.includes(RUNCODE_VALIDATE_OLD)) { out = out.replace(RUNCODE_VALIDATE_OLD, RUNCODE_VALIDATE_NEW); notes.push("run_code: validate 兜底"); }
   // === shell (pwsh/bash) 家族 ===
@@ -576,7 +568,8 @@ function transformShellDescriptionOptional(src, file) {
   if (out.includes(SHELL_DESC_VALIDATE_OLD)) { out = out.replace(SHELL_DESC_VALIDATE_OLD, SHELL_DESC_VALIDATE_NEW); notes.push("shell: validate 兜底"); }
   if (notes.length > 0) return { status: "changed", src: out, note: notes.join("; ") };
   const done = out.includes(SHELL_DESC_MARKER) || out.includes(SHELL_DESC_SCHEMA_OPTIONAL)
-    || out.includes(RUNCODE_DESC_MARKER) || out.includes(RUNCODE_SCHEMA_OPTIONAL);
+    || out.includes(RUNCODE_DESC_MARKER) || out.includes(RUNCODE_SCHEMA_OPTIONAL)
+    || out.includes(RUNCODE_SCHEMA_OPTIONAL_NESTED);
   if (done) return { status: "already" };
   return { status: "anchor-missing", detail: "未找到 shell/run_code description 锚点（版本可能已变更），跳过 " + file };
 }
@@ -641,9 +634,12 @@ const HISTORY_PAGE_SIZE_NEW = '200';
  */
 function transformHistoryPageSize(src, file) {
   if (src.includes(HISTORY_PAGE_MARKER)) return { status: 'already' };
-  const patched = src
-    .replace(/(\bmaxMessages:\s*)50\b/g, '$1' + HISTORY_PAGE_SIZE_NEW)
-    .replace(/\b(DEFAULT_MAX_MESSAGES\s*=\s*)50\b/, '$1' + HISTORY_PAGE_SIZE_NEW);
+  // 0.2.2-rc.1 重靶：`const DEFAULT_MAX_MESSAGES = 50` 常量被上游内联掉了，
+  // 默认值改写成三处 `request.maxMessages ?? 50`（:1135 turnWindow 校验、
+  // :2008 返回页声明、:2258 assistantOutput 预算）。语义不变：仍是「客户端未
+  // 指定时的服务端分页默认值」。`?? 500`（客户端 HISTORY_PAGE_OPTIONS 的
+  // maxMessages: 500）因 \b 边界不会被误改。
+  const patched = src.replace(/(\brequest\.maxMessages \?\? )50\b/g, '$1' + HISTORY_PAGE_SIZE_NEW);
   if (patched === src) {
     return { status: 'anchor-missing', detail: '未找到历史分页容量锚点（版本可能已变更），跳过 ' + file };
   }
@@ -713,6 +709,8 @@ module.exports = {
   RUNCODE_DESC_MARKER,
   RUNCODE_SCHEMA_OLD,
   RUNCODE_SCHEMA_OPTIONAL,
+  RUNCODE_SCHEMA_OLD_NESTED,
+  RUNCODE_SCHEMA_OPTIONAL_NESTED,
   RUNCODE_VALIDATE_OLD,
   RUNCODE_VALIDATE_NEW,
   PW_REL,

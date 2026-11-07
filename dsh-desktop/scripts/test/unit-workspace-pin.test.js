@@ -2,7 +2,7 @@
 
 // 工作区置顶补丁（workspace-pin）单测。
 //
-// 覆盖三层：
+// 覆盖四层：
 //   1. 锚点/幂等契约：夹具（buildUiFixture）应用 → changed=1 + marker 落盘 +
 //      产物 node --check 语法过；二遍 changed=0；锚点缺失时跳过不落盘；
 //   2. 核心行为（CORE 直接 eval —— 测试验的与注入 bundle 跑的是同一份代码）：
@@ -10,7 +10,9 @@
 //      持久化与损坏容错 / 版本号通知；
 //   3. 真实 vendored 产物锚点命中（只读）：现场（已打 open-project-dir）的
 //      dsh-client-ui-workspace/lib/client.js 必须包含全部锚点——内核升级导致
-//      形态漂移时，此处先于 boot 链报出来。
+//      形态漂移时，此处先于 boot 链报出来；
+//   4. 判据不得空转：MUTATES 豁免表里每一条都必须仍被某个改写型锚命中（0.2.2-rc.1
+//      把项目行菜单搬到 ctx.contextMenus，内联数组时代的豁免项已 0 命中）。
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -44,11 +46,30 @@ test('夹具应用：changed=1、marker 落盘、菜单/排序/翻译注入齐',
     const n = patchWorkspacePin(sb.dir, (m) => logs.push(m));
     assert.equal(n, 1, '应修改 1 个文件');
     assert.equal(logs.filter((l) => l.includes('已应用')).length, 1);
-    const out = fs.readFileSync(sb.file, 'utf8');
+    const out = fs.readFileSync(sb.file, 'utf8').replace(/\r\n/g, '\n');
     assert.ok(out.includes(MARKER), 'marker 应落盘（幂等锚）');
     assert.ok(out.includes('dshToggleWorkspacePin'), 'store 应注入');
     assert.ok(out.includes('dshApplyWorkspacePins(groups)'), '分组排序应接线');
-    assert.ok(out.includes('"workspace.pin"') && out.includes('"workspace.unpin"'), 'zh/en 翻译应注入');
+    // 0.2.2-rc.1：菜单项由内联 workspaceMenuItems 数组改成 ctx.contextMenus 数据项，
+    // 图标键直接复用上游的 workspace.pin / workspace.unpin（上游图标表里本来就有
+    // 这两个键，故不能拿裸的 `"workspace.pin"` 当判据——那份字节原生就在，删掉注入体
+    // 仍然绿；判据必须落在本补丁独有的 id / 翻译文案上）。
+    assert.ok(
+      out.includes('\t\t\t\tid: "workspace.pinToggle",\n\t\t\t\ttarget: "workspace",\n\t\t\t\torder: 200,'),
+      '置顶项应注册为 workspace 目标 order 200 的 contextMenus 数据项'
+    );
+    assert.ok(
+      out.includes('icon: { key: dshWorkspacePinState(workspaceId) ? "workspace.unpin" : "workspace.pin" }'),
+      '图标应复用上游 workspace.pin / workspace.unpin 键'
+    );
+    assert.ok(
+      out.includes('label: ctx.locale.bind(NS)(dshWorkspacePinState(workspaceId) ? "workspace.unpin" : "workspace.pin")'),
+      '标签应随置顶态切换上游 workspace.pin / workspace.unpin 词条'
+    );
+    assert.ok(out.includes('"workspace.pin": "置顶到列表顶部"'), 'zh「置顶」翻译应注入');
+    assert.ok(out.includes('"workspace.unpin": "取消置顶"'), 'zh「取消置顶」翻译应注入');
+    assert.ok(out.includes('"workspace.pin": "Pin to top"'), 'en「Pin to top」翻译应注入');
+    assert.ok(out.includes('"workspace.unpin": "Unpin"'), 'en「Unpin」翻译应注入');
     assert.ok(out.includes('dshWsPinVersion'), 'SessionTree 版本号应进作用域与 deps');
     // 注：夹具是锚点拼接（未闭合的字面量，open-project-dir 同款设计），不作
     // 语法检查——语法验证由下一测在真实 vendored 副本上做。
@@ -92,7 +113,7 @@ test('锚点缺失：整文件跳过、绝不落盘半截', () => {
     // 抽掉一个锚（排序锚的 "Keep navigation presentation" 尾注释，0.1.6 重锚
     // 后的后文标记），applyReplacements 应在该锚前回滚（前面锚点的替换只发生
     // 在内存 src，未落盘）。
-    let fixture = buildUiFixture();
+    let fixture = buildUiFixture().replace(/\r\n/g, '\n');
     fixture = fixture.replace('* Keep navigation presentation independent', '* GONE');
     fs.writeFileSync(sb.file, fixture, 'utf8');
     const stats = { anchorMissing: 0 };
@@ -110,7 +131,7 @@ test('锚点缺失：整文件跳过、绝不落盘半截', () => {
 // 锚、UI_ZH/EN 的 menu.openProjectDir 锚（那是 open-project-dir 自己的产物，不是
 // 原生字节）就是这样被这条测出来必须重锚的。
 test('逐锚点反证：任一锚缺失都必须整文件跳过且不落盘', (t) => {
-  const full = buildUiFixture();
+  const full = buildUiFixture().replace(/\r\n/g, '\n');
   UI_REPLACEMENTS.forEach((r, i) => {
     const broken = full.replace(r.anchor, '/* ANCHOR-GONE */');
     assert.notStrictEqual(broken, full, `夹具里找不到锚 #${i}: ${r.anchor.slice(0, 40)}`);
@@ -131,21 +152,22 @@ test('逐锚点反证：任一锚缺失都必须整文件跳过且不落盘', (t
 // 锚点必须互不嵌套：夹具是锚点顺序拼接，某锚若在另一锚体内再出现，real bundle 上
 // 的 String.replace 就可能打到错误的那一处（置顶接线打进了兄弟函数）。
 test('锚点唯一性：夹具中每个锚恰好命中一次', () => {
-  const fx = buildUiFixture();
+  const fx = buildUiFixture().replace(/\r\n/g, '\n');
   UI_REPLACEMENTS.forEach((r, i) => {
     const hits = fx.split(r.anchor).length - 1;
     assert.strictEqual(hits, 1, `锚 #${i} 应命中 1 次，实为 ${hits}：${r.anchor.slice(0, 50)}`);
   });
 });
 
-// 链式安全：insert 默认原样保留自己的锚，这样共享同一原生锚的补丁（open-project-dir）
-// 无论谁先跑都能命中；确实改写原生字节的须显式登记。
+// 链式安全：insert 默认原样保留自己的锚，这样共享同一原生锚的补丁（open-project-dir
+// 共用 `menu.unarchiveSession` 翻译锚）无论谁先跑都能命中；确实改写原生字节的须显式登记。
+// 0.2.2-rc.1 重录（旧表的 `const workspaceMenuItems = [{` 是内联数组时代的锚点首行，
+// 新版内核里 0 命中——豁免项僵留会让「豁免」二字变成空话，故下面另有一条用例咬它）。
 const MUTATES = [
-  'const workspaceMenuItems = [{',                 // rename 前插 pin 项
-  'className: clsx(Rows_module_css_default.slot',  // folder 图标着色（插 style 行）
-  'className: Rows_module_css_default.projectText',// 标题前小圆点（jsx→jsxs）
-  'return groups;',                               // 分组产出改走置顶重排
-  'statuses,',                                    // deps 尾项追加版本号
+  'className: clsx(Rows_module_css_default.slot',  // folder 图标着色（span 里插 style 行）
+  'className: Rows_module_css_default.projectText', // 标题 span：jsx→jsxs 并插置顶小圆点
+  'return groups;',                                // 分组产出改走置顶重排
+  'statuses,',                                     // deps 尾项追加版本号
 ];
 test('链式安全：insert 保留锚，改写原生字节的须进 MUTATES 豁免表', () => {
   UI_REPLACEMENTS.forEach((r, i) => {
@@ -154,6 +176,18 @@ test('链式安全：insert 保留锚，改写原生字节的须进 MUTATES 豁�
       MUTATES.some((head) => r.anchor.includes(head)),
       `锚 #${i} 的 insert 未保留锚，也未登记为改写型：${r.anchor.slice(0, 60)}`
     );
+  });
+});
+
+// 豁免表反向咬合：每一条豁免都必须真的落在某个「不保留锚」的替换上。
+// 旧内核片段的僵留（如 workspaceMenuItems 时代那几行）在这里当场判红，而不是
+// 悄悄躺在表里当装饰——「旧键 0 命中」正是换代后判据空转最常见的那一种。
+test('MUTATES 豁免项必须仍锚在新字节上（旧内核片段不得僵留）', () => {
+  const mutating = UI_REPLACEMENTS.filter((r) => !r.insert.includes(r.anchor));
+  assert.ok(mutating.length > 0, '夹具里应存在改写型替换（否则豁免表本身失去意义）');
+  MUTATES.forEach((head) => {
+    const used = mutating.filter((r) => r.anchor.includes(head)).length;
+    assert.equal(used, 1, `豁免项应恰好被一个改写型锚命中，实为 ${used}（旧内核片段，应删除或按新字节重录）：${head}`);
   });
 });
 
@@ -230,7 +264,9 @@ test('localStorage 损坏/畸形内容整体忽略（容错优先）', () => {
 // ---------------------------------------------------------------------------
 
 test('现场 vendored 产物：全部锚点在位且声明与 deps 同作用域（内核形态漂移先于此报出）', { skip: !fs.existsSync(VENDORED) ? 'vendored dsh-client-ui-workspace 不在位' : false }, () => {
-  const src = fs.readFileSync(VENDORED, 'utf8');
+  // 行尾归一：多行锚（UI_HOOKS / UI_FOLDER / UI_TITLE / UI_SORT / UI_TREE / UI_DEPS）
+  // 在 CRLF 下 includes 恒 false —— 不归一就是判据静默空转。
+  const src = fs.readFileSync(VENDORED, 'utf8').replace(/\r\n/g, '\n');
   if (src.includes(MARKER)) {
     assert.ok(src.includes('dshApplyWorkspacePins(groups)'), '已打补丁的现场应含排序接线');
     // 0.6.5 实爆回归：已打补丁的现场也曾「看起来正常」（marker 在位、排序接线在位），
