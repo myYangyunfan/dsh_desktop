@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [1.0.9] — 2026-11-07
+
+壳层代码本版零功能改动：只把随包内核从 0.2.1-rc.4 换到 0.2.2-rc.1（内容见 `dsh-desktop/CHANGELOG.md` 同名节），另加 WSL e2e 就绪预算放宽。版本号三处同步至 1.0.9，供 `tauri-release.yml` 与 tag 做 fail-fast 比对。
+
 ### build(kernel)：随包内核换代 0.2.1-rc.4 → 0.2.2-rc.1（2026-11-07）
 
 - **壳层代码零改动**：随包内核换代只动 `dsh-desktop/` 侧的 pin / vendor / 补丁层，`src-tauri/` 的

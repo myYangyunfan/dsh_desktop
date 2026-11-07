@@ -6,7 +6,7 @@
 装好即用——不用装 Node.js，不用逐个找插件，也不用为版本冲突折腾。
 
 > [!IMPORTANT]
-> **v1.0.8：随包内核升到 0.2.2-rc.1。** 官方 dsh 运行时与 34 个精选伴随插件随包交付：
+> **v1.0.9：随包内核升到 0.2.2-rc.1。** 官方 dsh 运行时与 34 个精选伴随插件随包交付：
 > **DeepSeek-Bot**（主 Bot + 长期 Bot + 群聊）、Better Sidebar 文件工作台、Free Search、
 > 插件商店、Prompt Optimizer、会话地图、桌面通知、MCP 工具箱……全部开箱可用，
 > 并能在「设置 → 插件 → 内置插件」里统一查看、启停和检查更新。
@@ -86,16 +86,16 @@ DSH Desktop 把这件事做完：**精选，整合，随包交付。**
 
 ### 下载安装
 
-到 [GitHub Releases](https://github.com/myYangyunfan/dsh_desktop/releases/latest) 下载最新版 **1.0.8**：
+到 [GitHub Releases](https://github.com/myYangyunfan/dsh_desktop/releases/latest) 下载最新版 **1.0.9**：
 
 | 平台 | 安装包 |
 | --- | --- |
-| 💻 Windows x64 | `DSH-Desktop-Setup-1.0.8-win-x64.exe`（NSIS 安装包，约 187 MB，`currentUser` 模式免管理员，已内置 WebView2 引导器） |
-| 🍎 macOS 12+ | `1.0.8-macos-arm64.dmg`（以 Releases 页为准） |
-| 🐧 Linux x64 | `1.0.8-linux-x64.AppImage` / `dsh-desktop_1.0.8_amd64.deb`（以 Releases 页为准） |
+| 💻 Windows x64 | `DSH-Desktop-Setup-1.0.9-win-x64.exe`（NSIS 安装包，约 187 MB，`currentUser` 模式免管理员，已内置 WebView2 引导器） |
+| 🍎 macOS 12+ | `1.0.9-macos-arm64.dmg`（以 Releases 页为准） |
+| 🐧 Linux x64 | `1.0.9-linux-x64.AppImage` / `dsh-desktop_1.0.9_amd64.deb`（以 Releases 页为准） |
 
 - **覆盖安装**：自动定位旧目录、保留数据并装回原位置；profile、会话与插件配置不迁移、不丢失。
-- **便携版**：Windows 另有 `DSH-Desktop-Portable-1.0.8-win-x64.zip`，解压即用，数据存在 exe 旁 `data\`。
+- **便携版**：Windows 另有 `DSH-Desktop-Portable-1.0.9-win-x64.zip`，解压即用，数据存在 exe 旁 `data\`。
 - **首次启动**：从安装包内的 `assets/plugins` 同步 34 个精选插件到 profile；之后可在
   「设置 → 插件 → 内置插件」里查看、启停和检查更新。
 - **数据位置**：Windows 安装版在 `%APPDATA%\DSH Desktop\`，便携版在 exe 旁 `data\`；

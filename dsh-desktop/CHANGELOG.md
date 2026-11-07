@@ -5,6 +5,11 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+## [1.0.9] — 2026-11-07
+
+本版只换随包内核：`0.2.1-rc.4` → `0.2.2-rc.1`（pin / vendor / 锁 / 补丁层 / 基线锁同批收敛），
+`src-tauri/` 侧唯一代码改动是 WSL e2e 就绪预算 300s → 900s。版本号三处同步至 **1.0.9**。
+
 ### build(kernel)：随包内核换代 0.2.1-rc.4 → 0.2.2-rc.1（2026-11-07）
 
 - **pin / vendor**：`scripts/compat/kernel-pin.json` 改 `dsh-v0.2.2-rc.1` / `0.2.2-rc.1`；

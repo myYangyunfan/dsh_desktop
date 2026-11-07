@@ -6,7 +6,7 @@ Not just another DSH shell: we pick the plugins, fix compatibility, integrate th
 Install and go — no Node.js setup, no plugin hunting, no version-conflict archaeology.
 
 > [!IMPORTANT]
-> **v1.0.8 — the bundled kernel moves to 0.2.2-rc.1.** The official dsh runtime ships with **34 selected companion plugins**:
+> **v1.0.9 — the bundled kernel moves to 0.2.2-rc.1.** The official dsh runtime ships with **34 selected companion plugins**:
 > **DeepSeek-Bot** (main bot + long-lived bots + group chats), the Better Sidebar file workbench, Free Search,
 > the plugin shop, Prompt Optimizer, the conversation map, desktop notifications, the MCP toolbox, and more —
 > all working out of the box, with one place to inspect, toggle and update them under **Settings → Plugins → Built-in plugins**.
@@ -76,16 +76,16 @@ DSH Desktop does that work for you: **curated, integrated, shipped in the box.**
 
 ### Download and install
 
-Get the latest **1.0.8** build from [GitHub Releases](https://github.com/myYangyunfan/dsh_desktop/releases/latest):
+Get the latest **1.0.9** build from [GitHub Releases](https://github.com/myYangyunfan/dsh_desktop/releases/latest):
 
 | Platform | Installer |
 | --- | --- |
-| 💻 Windows x64 | `DSH-Desktop-Setup-1.0.8-win-x64.exe` (NSIS, ~187 MB, per-user install, WebView2 bootstrapper included) |
-| 🍎 macOS 12+ | `1.0.8-macos-arm64.dmg` (see the Releases page) |
-| 🐧 Linux x64 | `1.0.8-linux-x64.AppImage` / `dsh-desktop_1.0.8_amd64.deb` (see the Releases page) |
+| 💻 Windows x64 | `DSH-Desktop-Setup-1.0.9-win-x64.exe` (NSIS, ~187 MB, per-user install, WebView2 bootstrapper included) |
+| 🍎 macOS 12+ | `1.0.9-macos-arm64.dmg` (see the Releases page) |
+| 🐧 Linux x64 | `1.0.9-linux-x64.AppImage` / `dsh-desktop_1.0.9_amd64.deb` (see the Releases page) |
 
 - **Upgrade in place**: the installer finds the old directory, keeps your data and reinstalls to the same location; profiles, sessions and plugin settings are preserved.
-- **Portable build**: Windows also ships `DSH-Desktop-Portable-1.0.8-win-x64.zip`; unzip and run, with data stored in a `data\` folder next to the executable.
+- **Portable build**: Windows also ships `DSH-Desktop-Portable-1.0.9-win-x64.zip`; unzip and run, with data stored in a `data\` folder next to the executable.
 - **First launch**: the 34 curated plugins are synced from the bundled `assets/plugins` into the profile. Afterwards, inspect, toggle and update them under **Settings → Plugins → Built-in plugins**.
 - **Data locations**: Windows installer `%APPDATA%\DSH Desktop\`, portable build `data\` next to the executable; macOS `~/Library/Application Support/DSH Desktop/`. Set `DSH_HOME` to override the dsh config directory.
 

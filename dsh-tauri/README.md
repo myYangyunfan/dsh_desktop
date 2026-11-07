@@ -1,6 +1,6 @@
 # DSH Desktop — Tauri 版（主线架构，v0.5.0 起）
 
-> 当前发布线：**v1.0.8**（2026-10-27；随包 34 个精选插件，含 DeepSeek-Bot 团队、Better Sidebar、
+> 当前发布线：**v1.0.9**（2026-11-07；随包 34 个精选插件，含 DeepSeek-Bot 团队、Better Sidebar、
 > Free Search、插件商店与桌面通知）。历史架构说明从 v0.5.0 起保留在下方。
 
 DeepSeek Harness 桌面客户端的 Tauri 2 重构。**v0.5.0 起为仓库主线架构**——Electron 壳已退役
