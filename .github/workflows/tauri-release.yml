@@ -1089,7 +1089,12 @@ jobs:
 
   build-macos:
     name: macOS ARM64 (dmg)
-    runs-on: macos-14
+    # v1.0.9 发版实测（2026-11-07）：`macos-14` 队列即拒，1 秒内 cancelled、runner 为空，
+    # 注解 `The configuration 'macos-14-arm64-us-default' is not supported`；v1.0.8（10-27）
+    # 同一行还是绿的，故不是本仓改动。一次性探针（四标签矩阵，见 CHANGELOG）实测：
+    # macos-14 = cancelled，macos-15 / macos-latest = success —— 换成 macos-15。
+    # 目标三元组是显式 `aarch64-apple-darwin`（见下方 targets），与 runner 架构无关。
+    runs-on: macos-15
     timeout-minutes: 75
     continue-on-error: true
     steps:

@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### fix(ci)：`build-macos` 的 runner 标签 `macos-14` → `macos-15`（2026-11-07）
+
+- **故障形态**：v1.0.9 发版 run `42363298028` 里 `macOS ARM64 (dmg)` **1 秒内 cancelled**
+  （`started_at` 10:17:10 / `completed_at` 10:17:11、`runner_name` 为空、零 step 执行），
+  注解 `The configuration 'macos-14-arm64-us-default' is not supported` —— 是队列期拒绝，
+  不是构建失败。同一个 `runs-on: macos-14` 在 v1.0.8（run `40452948402`，10-27）还是绿的，
+  所以不是本仓改动、也不是 `continue-on-error` 吞错。
+- **判定**：一次性探针工作流（四标签矩阵，跑完即删分支 `probe/macos-runner`）实测
+  **`macos-14` = cancelled（runner 为空）、`macos-15` 与 `macos-latest` = success** ——
+  标签本身在 GitHub 侧失效，换标签即可。
+- **改法**：`tauri-release.yml` 的 `build-macos.runs-on` 改 `macos-15`。产物三元组本就是
+  显式 `--target aarch64-apple-darwin`（`targets: aarch64-apple-darwin`），与 runner 架构无关，
+  dmg 文件名 `DSH-Desktop-<ver>-macos-arm64.dmg` 不变。
+- **后果（发版闸门按设计生效）**：dmg 缺件 → `publish` 的 `Assert required assets` 判
+  `degraded=true` → v1.0.9 以**预发布**形态创建（不进 `releases/latest`，更新器看不到）。
+  补齐 dmg 后按 `.github/RELEASE_RUNBOOK.md` §5 dispatch 重建资产 + §8.2
+  `gh release edit v1.0.9 --prerelease=false` 转正。
+
 ## [1.0.9] — 2026-11-07
 
 壳层代码本版零功能改动：只把随包内核从 0.2.1-rc.4 换到 0.2.2-rc.1（内容见 `dsh-desktop/CHANGELOG.md` 同名节），另加 WSL e2e 就绪预算放宽。版本号三处同步至 1.0.9，供 `tauri-release.yml` 与 tag 做 fail-fast 比对。
