@@ -788,7 +788,7 @@ CI 五个架构的 staging 同口径），装机后首次开机由 boot 的插�
 | dsh-synapse | 0.3.1 | MIT |
 | dsh-free-search | 0.9.39 | MIT |
 | dsh-plugin-shop | 0.9.3 | Apache-2.0 |
-| @local/dsh-network-proxy | 1.0.0 | MIT |
+| @local/dsh-network-proxy | 1.0.4 | MIT |
 | dsh-toolbox-ui | 1.10.1 | MIT |
 | @bittersmilezzz/dsh-notify | 0.4.5 | MIT |
 | dsh-context | 0.83.0 | Apache-2.0 |

@@ -5,6 +5,28 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### chore(companion)：network-proxy 随上游升到 1.0.4（GitHub 通道，2026-11-09）
+
+按用户「看看 github 方面有没有需要更新的插件」扫描 18 个有 GitHub 仓库的内置件（repo 取自各自
+`package.json` 的 `repository` 与 inventory §3.1 的上游登记；读 default branch 的 `package.json` 版本、
+latest release 与 tag 面），只有一件有真实可落地的更新：
+
+- **`network-proxy` 1.0.0 → 1.0.4**（唯一 `kind: 'github'` 的更新源；上游 1.0.1~1.0.4 四次发布都没有 release
+  资产，壳侧走 zipball archive 模式）。整包替换后 `index.js` 40KB→61KB、`client.js` 28KB→32KB，
+  8 个根文件 + `locale/*` 与上游 `v1.0.4` 逐字节一致（`test/`、`.github/` 不进包）。
+- 两处随包 fork 改动**已被上游吸收同款实现**（`writeFileSync(temporary, body, { encoding: 'utf8', mode: 0o600 })`
+  的凭据落盘、`snapshot.active ?? snapshot.id ?? snapshot.locale` 的 locale 快照读法），故这次是纯替换；
+  `unit-vendored-upstream-plugins` 的两条反证继续覆盖，任一处被改回即红。
+
+扫描后未动的（结论同时记入 inventory §4.4）：
+
+- `better-sidebar`（上游 0.30.1）、`synapse`（0.5.7）、`ds-bot`（0.3.1）——本地分别是重建件 / 带 `dsw-`
+  深色适配桥的定制版 / vendored patch，照搬会抹掉本地修复，升级只能手工重放。
+- `basics-panel`（上游 main 0.4.3）——本地同源已分叉较深（`src/client/features/mcp/McpSection.tsx`
+  516 行 vs 上游 387 行，另有本地独有的 `src/trust-fence.ts`、`tests/mcp-create.spec.ts`），不是版本号领先，需单独重建。
+- `prompt-optimizer`（上游 0.6.3）——与 0.6.1 的**构建产物逐字节相同**（只动了 README 与版本号），无需动作。
+- `openclaw-bridge`——上游 main 0.8.0，本地 0.8.1 反而领先。
+
 ### chore(companion)：内置件更新一轮，8 件升到 npm latest（2026-11-09）
 
 按用户「看看我们内置插件有没有可以更新的，更新一下」。扫描口径与 inventory §4.4 同源：33 条在册件逐条

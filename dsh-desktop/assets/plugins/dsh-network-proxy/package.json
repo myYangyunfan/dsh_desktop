@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-network-proxy",
-  "version": "1.0.0",
+  "version": "1.0.4",
   "private": true,
   "type": "module",
   "description": "HTTP proxy preference in General Settings: direct, follow the Windows/macOS system proxy, or a custom proxy URL, applied to Harness egress immediately without restarting.",
@@ -17,6 +17,9 @@
     "http-proxy",
     "system-proxy"
   ],
+  "scripts": {
+    "test": "node --test test/unit.test.mjs test/client.test.mjs"
+  },
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

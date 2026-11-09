@@ -98,7 +98,7 @@
 | 26 | `goal-completion` | `@deepseek-ai/dsh-goal-completion` | 0.1.0 | 内核右栏「目标收尾」标签页：当前会话目标的状态机（phase 四态 + activation + 轮次/修订 + 受阻原因），并补上官方 GoalBar 没有的 `complete` 动词（两次点击确认，CAS 由内核判） | 自研（2026-10-16 新增；界面走 sanctioned 面——`ctx.locale.register/bind` 字典命名空间 + 槽位 `locale: NS` 由 renderer 注 `t`，控件用内核原语 `Tag`（八档语义色）/ `Button`（四档 variant），不覆盖原品配色） |
 | 27 | `web-search-free` | `dsh-free-search` | 0.9.39 | 免费多引擎搜索：注册 `ctx.web` 搜索 provider，内置 `web_search` 自动选用（loader id 是 `web-search-free`，不是包名） | `DDDMUC/dsh-free-search`，MIT |
 | 28 | `shop` | `dsh-plugin-shop` | 0.9.3 | 插件商店：浏览 / 安装 / 启停 / 更新 dsh 插件（loader id 是 `shop`，客户端 bundle id 才是包名） | `LivXue/dsh-plugin-shop`，**Apache-2.0** |
-| 29 | `network-proxy` | `@local/dsh-network-proxy` | 1.0.0 | 运行时代理：设置「通用」里的 HTTP 代理行，读系统代理并热切换 fetch dispatcher；包名保留上游 `@local/*`（改名会让 GitHub 更新回来的行对不上） | `baizhizzl/dsh-network-proxy`，MIT |
+| 29 | `network-proxy` | `@local/dsh-network-proxy` | 1.0.4 | 运行时代理：设置「通用」里的 HTTP 代理行，读系统代理并热切换 fetch dispatcher；包名保留上游 `@local/*`（改名会让 GitHub 更新回来的行对不上） | `baizhizzl/dsh-network-proxy`，MIT |
 | 30 | `mcp-manager-ui` | `dsh-toolbox-ui` | 1.10.1 | MCP / 技能工具箱：右下悬浮面板，MCP 市场与技能管理；宿主半边静态导入 `smol-toml`（BSD-3-Clause，见 `THIRD_PARTY_NOTICES.md` §1.1） | `Imzl-zl/dsh-toolbox-ui`，MIT |
 | 31 | `dsh-notify` | `@bittersmilezzz/dsh-notify` | 0.4.5 | 桌面通知：渲染进程 Web Notification 六类事件 + 点击回会话，v1.0.6 起取代壳层「回合完成」通知 | `bitterSmilezzz/dsh-notify`，MIT |
 | 32 | `dsh-context` | `dsh-context` | 0.83.0 | 上下文透视：右栏上下文看板 + `/context` 命令，拆解当前上下文由什么构成、如何随轮次演变（bundle 层 loader id 与包名同形；宿主半边只依赖 zod / `dsh-session` / schemastery，无内层依赖树） | `bowenliang123/dsh-context`，**Apache-2.0** |
@@ -461,6 +461,38 @@ sha256——`differ=0 & onlyLocal=0 & onlyRemote=0` 才叫纯 vendored；`billio
   实现装进来；`prompt-optimizer` 的裸名同样 `foreign`（`winditer` 的另一实现），真上游
   `@y1x1n/dsh-prompt-optimizer` npm 最新 **0.5.0 < 我们的 vendored 0.6.1**，本来也无事可做。
 
+### 4.5 2026-11-09 GitHub 通道复核：1 件落盘（按用户「看看 github 方面有没有需要更新的插件」）
+
+扫描口径：以各件 `package.json` 的 `repository` 与本章 §3.1 的上游登记为 repo 来源（共 18 个仓库），
+取 Github `repos/{r}` 的 default branch + `releases/latest` + 近 5 个 tag，再读该分支根 `package.json` 的
+`version` 与本地比对。结论：**1 件有真实可落地更新 / 1 件产物等价 / 4 件本地领先或已分叉 / 其余等版**。
+
+| 仓库 | 本地 | 上游 | 结论 |
+| --- | --- | --- | --- |
+| `baizhizzl/dsh-network-proxy` | 1.0.0 | release `v1.0.4`（无资产，archive 模式） | **已落盘 1.0.4**，两处 fork 改动上游同款吸收 |
+| `Y1X1n/dsh-prompt-optimizer` | 3.0.0（vendored 自 0.6.1） | release `v0.6.3` | 0.6.3 与 0.6.1 的 `lib/` 逐字节相同，只动 README/版本号 → 无需动作 |
+| `yxsj245/dsh-Basics-Panel` | 0.4.2 分叉 | main 0.4.3 | 本地已分叉（`McpSection.tsx` 516 vs 387 行、`trust-fence.ts` 本地独有）→ 需单独重建，不做机械换版 |
+| `omdsh-dev/DSH-better-sidebar` | 0.24.2（本仓重建件） | release `v0.30.1` | 策略排除（`UPDATE_EXCLUSIONS`），升级走 `.tmp-bs-build` 重建链 |
+| `liangmianya/dsh-synapse` | 0.3.1 | tag `v0.5.7` | 会覆盖 `dsw-` 深色适配桥，需手工重放 |
+| `Fei2411/DeepSeek-Bot` | 0.2.0（vendored patch） | release `v0.3.1`（18 资产，桌面安装包为主） | 策略排除：上游 patch 会接管 `web.searchProvider` |
+| `hzhz314159/openclaw-dsh-bridge` | 0.8.1 | main 0.8.0 | 本地领先，无动作 |
+| `Tyan66666/billion-context-dsh` | 0.2.27 | main 0.2.27 | 等版 |
+| `shaobeichen/dsh-pocket` | 2.12.0 | release `v2.12.0` | 等版 |
+| `Renzic-Stone/DSH-EasyRewrite` | 3.0.1 | release `v3.0.1` | 等版 |
+| `DDDMUC/dsh-free-search` | 0.9.39 | release `v0.9.39` | 等版 |
+| `Imzl-zl/dsh-toolbox-ui` | 1.10.1 | release `v1.10.1` | 等版 |
+| `bowenliang123/dsh-context` | 0.83.0 | release `v0.83.0` | 等版 |
+| `liguobao/ds-harness-remote` | 0.6.4 | release `v0.6.4` | 等版 |
+| `bitterSmilezzz/dsh-notify` | 0.4.5 | tag `v0.4.5` | 等版 |
+| `LivXue/dsh-plugin-shop` | 0.9.3 | tag `v0.9.3` | 等版 |
+| `christophersmith2737-commits/OffPeak` | 1.0.1 | 无 release/tag 面 | 无法比对 |
+| `DSH-EAC/EAC-Desktop` | 0.1.1（EAC 移植） | 应用 `v6.0.0` / launcher | 不同发布面，不比 |
+
+落盘细节：`network-proxy` 的 8 个根文件（`index.js` / `client.js` / `package.json` / `cordis.patch.yml` /
+`LICENSE` / `README.md` / `icon.svg`）与 `locale/{en,zh}.json` 与上游 `v1.0.4` 逐字节一致；`index.js`
+40KB→61KB、`client.js` 28KB→32KB。`unit-vendored-upstream-plugins` 的版本表同步 1.0.4，两条 fork 反证
+（`mode: 0o600` 凭据落盘、`snapshot.active` locale 读法）在 1.0.4 上仍然成立、继续咬住。
+
 ## 五、舰队更新与兼容 sweep（2026-10-08 立项 · 目标宿主 `0.2.0-rc.2`；**2026-10-17 六条静态扫按 `0.2.1-rc.1` 全量复算**；**2026-10-18 按 `0.2.1-rc.2` 复核，判据值逐项不变、全绿**；**2026-10-27 按 `0.2.2-rc.1` 复核自动化面，判据值逐项不变、全绿**）
 
 > **2026-10-27 换代复核口径（rc.2 → rc.4）**：这一代上游只增不破，复核走机器判据而非逐件手测——
@@ -599,7 +631,7 @@ npm 列额外带 `身份 <same|foreign|unverifiable|unknown>／维护者`——*
 | 26 | `goal-completion` | `dsh-goal-completion` | 0.1.0 | 2 peer `>=0.1.0-rc.6 <2` | 无此件 | 未发布 | 2 别名 / 0 成员 / 3 裸名 → 缺失 0 · 表外 0 · 声明 0 · 移除引用 0 | **新增（本仓库自研，2026-10-16）**：只做官方 GoalBar 没暴露的那一个动词 `remote.goals.complete` + 状态机可见性（`phase` 四态里官方字典连 `complete` 档都没有，`blocked` 的 code/message 也不显眼）。宿主面全部实测在位：`sidebarRightTabs.register` + `sidebar.right.pane.tab`（0.1.6 起的公开标签 API，同款接线见 `docs/better-sidebar-kernel-integration.md`）、`ctx.locale.register/bind`（renderer 按槽位 `locale: NS` 注 `t`，切语言整体重渲染）、原语 `Tag`/`Button`（rc.2 导出面逐一核过）。裸名 3 = `react` / `react/jsx-runtime` / `@deepseek-ai/dsh-client-ui-primitives`（在模块表内、表外 0）；成员 0 是解构式引入（无命名空间取用，判据无从判——与 #29 同形）。**两条只有真内核才能撞出来的宿主契约（2026-10-16 隔离安装布局 + 页面探针实测）**：① `ctx.remote.goals.get(sessionId)` 回的是**信封** `{ok:true, value:view}`，不是裸 view——按裸 view 解析时 `view.id` 恒 undefined，界面把有目标的会话显示成「还没有目标」，而同一时刻官方 GoalBar 正常显示；② 投影快照是 `{goal:{id,revision,objective,phase,maxGoalRounds}, roundsStarted, createdAt, updatedAt}`，**`activation` 不在投影里**（只在远端那份 value 里），官方 GoalBar 也是「goal 取投影、activation 另走观测线」的两条线组合，所以本插件按 id+revision 对齐后合并，两者都缺才落空态。回归锁 `unit-goal-completion-client` 27 例（含 5 条反证），夹具的 `get` 默认回信封形状 |
 | 27 | `web-search-free` | `dsh-free-search` | 0.9.39 | 5 peer `^0.1.7-rc.1 或 ^0.2.0-rc.1` | 无此件 | 0.9.39（等版｜身份 same｜DDDMUC） | 3 别名 / 0 成员 / 3 裸名 → 缺失 0 · 表外 0 · 声明 3 · 移除引用 0 | **新增（2026-10-22 用户点名内置，MIT）**：注册 `ctx.web` 搜索 provider（id `ddg` / `fs-quality-fetch`），首启在 provider 未显式选中时接管；宿主 8 条 `/api/dsh-free-search-settings/*` 路由 + settings + systemPrompt 节 + 6 个工具，0.2.1-rc.2 兼容 oracle 实测 0 拒挂。**随包改动 1 处**：`lib/cache.js` 的 research 缓存落点由写死 `~/.cache` 改为 `DSH_HOME` 优先（保留 `RESEARCH_CACHE_DIR` 覆盖口，隔离测试不再写真实用户缓存）。更新源 `web-search-free` → npm `dsh-free-search`。 |
 | 28 | `shop` | `dsh-plugin-shop` | 0.9.3 | 3 peer `>=0.1.1-rc.2 <0.3.0-0` | 无此件 | 0.9.3（等版｜身份 same｜LivXue） | 2 别名 / 0 成员 / 2 裸名 → 缺失 0 · 表外 0 · 声明 0 · 移除引用 0 | **新增（2026-10-22 用户点名内置，Apache-2.0）**：插件商店（浏览/安装/启停/更新第三方插件）；`exports["./client"]` + `lib/typert.host.js` 是加载期硬依赖，故取 npm tarball 全量产物随包。**Desktop 限制**：安装/更新最终都走 pnpm，而 payload 只带 npm → 统一 `pnpm-missing`（浏览、详情、启停可用）；内置件的查看/更新由 `dsh-builtin-manager` 承担（B 案）。更新源 `shop` → npm `dsh-plugin-shop`。 |
-| 29 | `network-proxy` | `dsh-network-proxy` | 1.0.0 | 0 peer | 无此件 | 未发布（`@local` 私有 scope） | 1 别名 / 0 成员 / 1 裸名 → 缺失 0 · 表外 0 · 声明 2 · 移除引用 0 | **新增（2026-10-22 用户点名内置，MIT）**：设置-通用「HTTP 代理」行（直连/跟随系统/自定义），`ctx.connection.fetch.register` 挂 `/api/network-proxy`（未认证 401、owner principal 403）；Windows 读 WinINET、macOS `scutil`，WSL/Linux 降级为 system-unreadable。**随包改动 2 处**：凭据文件 `network-proxy.json` 写 0600（POSIX）；客户端 locale 快照改读 `snapshot.active`（rc.2 幽灵字段）。更新源 `network-proxy` → GitHub release 无资产时取 zipball（无 digest 明示跳过校验）。 |
+| 29 | `network-proxy` | `dsh-network-proxy` | 1.0.4 | 0 peer | 无此件 | 未发布（`@local` 私有 scope） | 1 别名 / 0 成员 / 1 裸名 → 缺失 0 · 表外 0 · 声明 2 · 移除引用 0 | **新增（2026-10-22 用户点名内置，MIT）**：设置-通用「HTTP 代理」行（直连/跟随系统/自定义），`ctx.connection.fetch.register` 挂 `/api/network-proxy`（未认证 401、owner principal 403）；Windows 读 WinINET、macOS `scutil`，WSL/Linux 降级为 system-unreadable。**随包改动 2 处**：凭据文件 `network-proxy.json` 写 0600（POSIX）；客户端 locale 快照改读 `snapshot.active`（rc.2 幽灵字段）。更新源 `network-proxy` → GitHub release 无资产时取 zipball（无 digest 明示跳过校验）。 |
 | 30 | `mcp-manager-ui` | `dsh-toolbox-ui` | 1.10.1 | 9 peer `>=0.2.1-rc.5 <0.3.0` | 无此件 | 1.10.1（等版｜身份 same｜Imzl-zl） | 1 别名 / 0 成员 / 1 裸名 → 缺失 0 · 表外 0 · 声明 1 · 移除引用 0 | **新增（2026-10-22 用户点名内置，MIT）**：右下悬浮「工具箱」+ 侧栏底部入口（MCP 市场 / 技能管理，typert 37 个 Remote）；`mcp-import-sources` 静态导入 `smol-toml`（BSD-3-Clause），已加入 `dsh-desktop/package.json` 依赖与 `VENDOR_DEPS`。更新源 `mcp-manager-ui` → npm `dsh-toolbox-ui`。 |
 | 31 | `dsh-notify` | `dsh-notify` | 0.4.5 | 12 peer `^0.2.1-rc.2` | 无此件 | 0.4.5（等版｜身份 same｜bitterSmilezzz） | 3 别名 / 3 成员 / 3 裸名 → 缺失 0 · 表外 0 · 声明 7 · 移除引用 0 | **新增（2026-10-22 用户点名内置，MIT）**：渲染进程 Web Notification 六类事件（审批/提问/轮次/会话结束/出错/子代理）+ 点击回会话；宿主半边是空 apply + volatile Config，零副作用。**接入后壳层「回合完成」通知下线**（保留 session watcher 的 `active_turns` 假死判定与 ACP/崩溃通知）。更新源 `dsh-notify` → npm `@bittersmilezzz/dsh-notify`。 |
 | 32 | `dsh-context` | `dsh-context` | 0.83.0 | 2 peer `>=0.2.0-rc.2 或 >=0.2.1-rc.2 或 >=0.2.2-rc.1` | 无此件 | 0.83.0（等版｜身份 same／bowenliang123） | 0 别名 / 0 成员 / 0 裸名 → 缺失 0 · 表外 0 · 声明 6 · 移除引用 0 | **2026-11-09 新增（上游整包 vendored 0.82.1）**：右栏上下文看板 + `/context` 命令；宿主半边只用宿主闭包的 `dsh-session`/`schemastery` 与 VENDOR_DEPS 的 `zod`，自身不带依赖树。0.83.0 于 2026-11-09 由 0.82.1 升级（先前按用户点名落的是 0.82.1） |

@@ -25,23 +25,30 @@ window.__ModuleLoader__.load({
       'custom.placeholder': 'http://127.0.0.1:7890',
       'custom.save': '保存',
       'custom.saving': '保存中…',
+      'custom.unsaved': '尚未保存',
       'status.active': '当前生效：{url}',
       'status.direct': '当前生效：直连',
+      'status.launch': '当前生效：启动时的代理策略（来自环境变量）',
       'status.reachable': '已连通',
       'status.unreachable': '无法连接',
       'status.pac': 'PAC 自动配置',
       'common.loading': '加载中…',
+      'error.retry': '重试',
+      'error.timeout': 'Host 响应超时，请重试。',
       'error.offline': '无法连接到 Host；请刷新页面后重试。',
       'code.systemDisabled': '系统代理已关闭',
       'code.systemNone': '未检测到系统代理',
       'code.systemUnreadable': '无法读取系统代理设置',
       'code.pacDetected': '使用 PAC 自动配置脚本',
       'code.pacFailed': 'PAC 自动配置脚本无法解析',
+      'code.wpadUnsupported': '已启用自动检测（WPAD），暂不支持',
       'code.socksUnsupported': '检测到 SOCKS 代理，暂不支持',
       'code.proxyUnreachable': '代理端口无法连接',
       'code.invalidCustom': '代理地址无效，请使用 http:// 或 https://',
       'code.undiciUnavailable': '当前运行时缺少网络组件，无法切换',
       'code.applyFailed': '切换失败',
+      'code.persistFailed': '设置已生效，但保存失败（重启后会丢失）',
+      'code.bypassAll': '旁路列表为 *，所有流量都直连',
       'code.unknown': '未知状态',
     };
 
@@ -63,23 +70,30 @@ window.__ModuleLoader__.load({
       'custom.placeholder': 'http://127.0.0.1:7890',
       'custom.save': 'Save',
       'custom.saving': 'Saving…',
+      'custom.unsaved': 'Not saved',
       'status.active': 'In effect: {url}',
       'status.direct': 'In effect: direct',
+      'status.launch': 'In effect: the launch-time proxy policy (from environment variables)',
       'status.reachable': 'reachable',
       'status.unreachable': 'unreachable',
       'status.pac': 'via PAC',
       'common.loading': 'Loading…',
+      'error.retry': 'Retry',
+      'error.timeout': 'The Host took too long to respond; try again.',
       'error.offline': 'Cannot reach the Host; reload the page and try again.',
       'code.systemDisabled': 'System proxy is turned off',
       'code.systemNone': 'No system proxy detected',
       'code.systemUnreadable': 'Could not read the system proxy settings',
       'code.pacDetected': 'A PAC auto-config script is in use',
       'code.pacFailed': 'The PAC auto-config script could not be resolved',
+      'code.wpadUnsupported': 'Automatic proxy detection (WPAD) is enabled, which is not supported yet',
       'code.socksUnsupported': 'A SOCKS proxy was detected, which is not supported yet',
       'code.proxyUnreachable': 'The proxy port is unreachable',
       'code.invalidCustom': 'Invalid proxy address; use an http:// or https:// URL with a port',
       'code.undiciUnavailable': 'This runtime lacks the network component needed to switch',
       'code.applyFailed': 'Could not switch',
+      'code.persistFailed': 'Applied, but saving failed; it will be lost after a restart',
+      'code.bypassAll': 'The bypass list is *, so every request connects directly',
       'code.unknown': 'Unknown status',
     };
 
@@ -97,11 +111,15 @@ window.__ModuleLoader__.load({
       'system-unreadable': 'code.systemUnreadable',
       'pac-detected': 'code.pacDetected',
       'pac-failed': 'code.pacFailed',
+      'wpad-unsupported': 'code.wpadUnsupported',
       'socks-unsupported': 'code.socksUnsupported',
       'proxy-unreachable': 'code.proxyUnreachable',
       'invalid-custom': 'code.invalidCustom',
       'undici-unavailable': 'code.undiciUnavailable',
       'apply-failed': 'code.applyFailed',
+      'persist-failed': 'code.persistFailed',
+      'bypass-all': 'code.bypassAll',
+      'timeout': 'error.timeout',
     };
 
     /** Codes that describe a broken state rather than a mere notice. */
@@ -123,8 +141,6 @@ window.__ModuleLoader__.load({
       try {
         const locale = clientCtx === null ? undefined : clientCtx.get('locale');
         const snapshot = locale && typeof locale.getSnapshot === 'function' ? locale.getSnapshot() : undefined;
-        // 0.2.x 的 locale 快照是 { active, locales, revision }；旧写法 id ?? locale
-        // 是幽灵字段（rc.2 实测恒 undefined），只是被 bind 的 seatTranslate 掩盖。
         const id = String((snapshot && (snapshot.active ?? snapshot.id ?? snapshot.locale)) ?? 'en').toLowerCase();
         return id.startsWith('zh') ? zh : en;
       } catch (error) { return en; }
@@ -192,6 +208,7 @@ window.__ModuleLoader__.load({
         : (record !== null && record.reachable === false ? false : null);
       return {
         active,
+        source: asText(record === null ? null : record.source),
         url: active ? (sample ?? http ?? https) : null,
         reachable,
         pac: record !== null && record.pac === true,
@@ -220,6 +237,8 @@ window.__ModuleLoader__.load({
     async function hostCall(payload) {
       const base = new URL('.', document.baseURI);
       const url = new URL('api/network-proxy', base);
+      const controller = typeof AbortController === 'function' ? new AbortController() : null;
+      const timer = controller === null ? null : window.setTimeout(() => controller.abort(), 15000);
       let response;
       try {
         response = await fetch(url.toString(), {
@@ -227,9 +246,17 @@ window.__ModuleLoader__.load({
           credentials: 'same-origin',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(payload),
+          ...(controller === null ? {} : { signal: controller.signal }),
         });
       } catch (cause) {
-        throw carry(new Error(cause && cause.message ? cause.message : 'network error'), undefined, true);
+        const aborted = controller !== null && controller.signal.aborted;
+        throw carry(
+          new Error(aborted ? 'request timed out' : (cause && cause.message ? cause.message : 'network error')),
+          aborted ? 'timeout' : undefined,
+          aborted ? false : true,
+        );
+      } finally {
+        if (timer !== null) window.clearTimeout(timer);
       }
       const text = await response.text();
       let data = null;
@@ -294,6 +321,24 @@ window.__ModuleLoader__.load({
       return translate('system.none');
     }
 
+    /** The authority of a URL as written, without userinfo. */
+    function rawAuthority(text) {
+      const start = text.indexOf('//');
+      const rest = start === -1 ? text : text.slice(start + 2);
+      const end = rest.search(/[/?#]/);
+      const authority = end === -1 ? rest : rest.slice(0, end);
+      const at = authority.lastIndexOf('@');
+      return at === -1 ? authority : authority.slice(at + 1);
+    }
+
+    /** The port the text writes, even when it is the scheme's default. */
+    function explicitPort(text) {
+      const match = /^(?:\[[^\]]+\]|[^:]+):(\d{1,5})$/.exec(rawAuthority(text));
+      if (match === null) return null;
+      const port = Number(match[1]);
+      return port >= 1 && port <= 65535 ? String(port) : null;
+    }
+
     /** Validate a typed proxy URL the same way the Host does. */
     function isProxyUrl(value) {
       const text = String(value ?? '').trim();
@@ -302,7 +347,14 @@ window.__ModuleLoader__.load({
       try {
         const url = new URL(text);
         if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
-        if (url.hostname === '' || url.port === '') return false;
+        if (url.hostname === '') return false;
+        // `url.port` is empty for the scheme's default port, so recover the
+        // digits from the text; a port must still be written explicitly.
+        if (url.port === '' && explicitPort(text) === null) return false;
+        // Match the Host: malformed percent escapes would make every proxied
+        // request throw URIError inside undici's ProxyAgent.
+        decodeURIComponent(url.username);
+        decodeURIComponent(url.password);
         return true;
       } catch (error) { return false; }
     }
@@ -320,6 +372,7 @@ window.__ModuleLoader__.load({
       const [customText, setCustomText] = React.useState('');
       const [customFailure, setCustomFailure] = React.useState(null);
       const [pending, setPending] = React.useState(null);
+      const [attempt, setAttempt] = React.useState(0);
 
       /** Adopt one successful response and optionally pin the visible mode. */
       const adopt = (response, pinnedMode) => {
@@ -333,24 +386,33 @@ window.__ModuleLoader__.load({
           failure: null,
         });
         setMode(typeof pinnedMode === 'string' ? pinnedMode : settings.mode);
+        // Re-sync the editable field: an unsaved edit is discarded when the
+        // Host confirms a mode, so the row never shows a value the Host lacks.
+        setCustomText(settings.custom);
+        setCustomFailure(null);
         return settings;
       };
 
       React.useEffect(() => {
         let cancelled = false;
+        setView({ phase: 'loading', settings: null, status: null, detection: null, failure: null });
         hostCall({ action: 'get' }).then((response) => {
           if (cancelled) return;
-          const settings = adopt(response, undefined);
-          setCustomText(settings.custom);
-          setCustomFailure(null);
+          adopt(response, undefined);
         }, (error) => {
           if (cancelled) return;
           setView({ phase: 'error', settings: null, status: null, detection: null, failure: toFailure(error) });
         });
         return () => { cancelled = true; };
-        // The row asks the Host once per mount; later refreshes are user-driven.
+        // One ask per mount or explicit retry; mode changes carry their own response.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-      }, []);
+      }, [attempt]);
+
+      /** Re-run the initial load after a transient failure. */
+      const retry = () => {
+        if (pending !== null) return;
+        setAttempt((value) => value + 1);
+      };
 
       /** Swap the active mode; the Host applies it before the selection moves. */
       const selectMode = (next) => {
@@ -385,7 +447,7 @@ window.__ModuleLoader__.load({
       const detect = () => {
         if (pending !== null) return;
         setPending('detect');
-        hostCall({ action: 'set', mode: 'system' }).then((response) => {
+        hostCall({ action: 'set', mode: 'system', refresh: true }).then((response) => {
           setPending(null);
           adopt(response, 'system');
         }, (error) => {
@@ -426,6 +488,9 @@ window.__ModuleLoader__.load({
         onClick: () => selectMode(entry.id),
       }, translate(entry.key)));
 
+      const savedCustom = view.settings === null ? '' : view.settings.custom;
+      const dirty = mode === 'custom' && String(customText ?? '').trim() !== savedCustom;
+
       let detail = null;
       if (mode === 'system') {
         detail = h('div', { className: 'dnp-detail' },
@@ -452,6 +517,8 @@ window.__ModuleLoader__.load({
               setCustomFailure(null);
             },
             onKeyDown: (event) => {
+              // Enter that confirms an IME candidate must not submit the field.
+              if (event.nativeEvent?.isComposing || event.nativeEvent?.keyCode === 229) return;
               if (event.key !== 'Enter') return;
               event.preventDefault();
               saveCustom();
@@ -463,6 +530,7 @@ window.__ModuleLoader__.load({
             disabled: busy,
             onClick: saveCustom,
           }, translate(pending === 'save' ? 'custom.saving' : 'custom.save')),
+          dirty ? h('span', { className: 'dnp-unsaved' }, translate('custom.unsaved')) : null,
           customFailure === null ? null : h('div', {
             className: 'dnp-inlineError',
             role: 'alert',
@@ -479,9 +547,15 @@ window.__ModuleLoader__.load({
       } else if (view.status !== null) {
         const summary = summarizeStatus(view.status);
         const pacOnly = summary.active && summary.pac && summary.url === null;
-        const parts = [summary.url === null
-          ? (pacOnly ? translate('status.active', { url: translate('status.pac') }) : translate('status.direct'))
-          : translate('status.active', { url: summary.url })];
+        let headline;
+        if (summary.source === 'launch') {
+          headline = translate('status.launch');
+        } else if (summary.url === null) {
+          headline = pacOnly ? translate('status.active', { url: translate('status.pac') }) : translate('status.direct');
+        } else {
+          headline = translate('status.active', { url: summary.url });
+        }
+        const parts = [headline];
         if (summary.url !== null && summary.pac) parts.push(translate('status.pac'));
         let tone = 'normal';
         if (summary.url !== null && summary.reachable === false) {
@@ -511,7 +585,16 @@ window.__ModuleLoader__.load({
           className: 'dnp-status',
           'data-tone': 'error',
           role: 'alert',
-        }, failureText(view.failure, translate)));
+        },
+        failureText(view.failure, translate),
+        view.phase === 'error'
+          ? h('button', {
+            type: 'button',
+            className: 'dnp-mini dnp-retry',
+            disabled: busy,
+            onClick: retry,
+          }, translate('error.retry'))
+          : null));
       }
 
       return h('div', { className: 'dnp-group' },
@@ -552,6 +635,8 @@ window.__ModuleLoader__.load({
       '.dnp-primary:hover:not(:disabled){background:color-mix(in srgb,var(--dsw-alias-brand-primary) 20%,transparent)}',
       '.dnp-primary:disabled{opacity:.55;cursor:default}',
       '.dnp-inlineError{flex:1 1 100%;color:var(--dsw-alias-state-error-primary);font-size:12px;line-height:18px}',
+      '.dnp-unsaved{flex:none;color:var(--dsw-alias-state-warn-primary);font-size:11px;line-height:16px}',
+      '.dnp-retry{margin-left:8px;height:22px;padding:0 8px}',
       '.dnp-statusGroup{display:flex;flex-direction:column;gap:2px;min-width:0}',
       '.dnp-status{color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}',
       '.dnp-status[data-tone=muted]{color:var(--dsw-alias-label-tertiary)}',
@@ -578,17 +663,30 @@ window.__ModuleLoader__.load({
         return () => { tag.remove(); };
       }, 'network-proxy: styles');
 
-      ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+      ctx.effect(() => ctx.slots.inject('settings.general.item', () => ctx.slots.register({
         name: 'settings.general.item',
         id: 'network-proxy',
         order: 13,
         locale: NS,
-      }, NetworkProxyRow));
+      }, NetworkProxyRow)), 'network-proxy: settings row');
     }
 
     return {
       inject: ['slots', 'locale'],
       apply,
+      // Pure helpers for `test/client.test.mjs`; the ModuleLoader ignores extra exports.
+      __test: {
+        codeKeys: CODE_KEYS,
+        codeText,
+        dictionaries: { zh, en },
+        explicitPort,
+        failureText,
+        fill,
+        isProxyUrl,
+        normalizeSettings,
+        summarizeStatus,
+        systemText,
+      },
     };
   },
 });
