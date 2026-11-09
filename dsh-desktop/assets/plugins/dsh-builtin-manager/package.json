@@ -1,6 +1,6 @@
 {
   "name": "dsh-builtin-manager",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "DSH Desktop 内置插件管理页：在「设置 → 插件」里逐条查看与启停随安装包内置的插件（数据与写入都走桌面壳已接线的插件管理链，不改内核管理面）",
   "private": true,
   "license": "MIT",

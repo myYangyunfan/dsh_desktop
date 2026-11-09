@@ -643,6 +643,31 @@ test('better-sidebar：后端即使回 hasUpdate 也不画任何更新控件（�
   assert.ok(textAll(cBs).includes('v0.24.2'), '版本号仍要正常显示');
 });
 
+test('接管期说明：bili-native 行直说「/compact 消失是接管生效」，非接管件不跟风', async () => {
+  // 报障原型（2026-11-09）：「上下文压缩插件有问题」——实际是接管成功把预设的
+  // compaction-basic / command-compact 停了，用户看到的是 /compact 命令消失。
+  const bridge = {
+    list: async () => ([
+      row({ id: 'bili-native', name: 'billion-context', description: '上下文压缩' }),
+      row({ id: 'easyrewrite', name: 'dsh-easyrewrite', description: '改写' })
+    ])
+  };
+  const { Component } = loadPanel({ dshDesktop: { pluginManager: bridge } });
+  const tree = await createMounter(Component, {}).settle();
+
+  const text = textAll(cardOf(tree, 'bili-native'));
+  assert.match(text, /接管期说明/, '接管类内置件必须在行内把话说明白，别指望用户去翻文档');
+  assert.match(text, /\/compact/, '要指名用户实际看见消失的那个命令');
+  assert.match(text, /compaction-basic/, '说清它改的是预设里的哪两行（否则读起来像玄学）');
+
+  assert.doesNotMatch(textAll(cardOf(tree, 'easyrewrite')), /接管期说明/,
+    '阳性对照：文案按 id 精确命中，不得画给所有行');
+
+  // 中英两份字典都要有这条（页面按 navigator.language 取字典，漏一份就是半边哑）
+  const src = fs.readFileSync(CLIENT_FILE, 'utf8');
+  assert.equal((src.match(/takeoverCompaction:/g) || []).length, 2, 'ZH / EN 两份字典都要带这条文案');
+});
+
 test('包面一致：bundle 层 loader id 与在册清单同 id，client 入口在 exports 里可达', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(PKG_DIR, 'package.json'), 'utf8'));
   assert.equal(pkg.dsh.bundle.patch, 'cordis.patch.yml');
@@ -804,4 +829,18 @@ test('反证 7：摘掉更新失败分支后，失败会被报成「已更新到
   tree = await mounter.settle();
   assert.ok(textAll(cardOf(tree, 'easyrewrite')).includes('已更新到'),
     '守卫摘掉后失败会被谎报成成功——这正是失败原文那条断言要防的');
+});
+
+test('反证 8：摘掉行内接管期说明后，bili-native 行上那句话消失（渲染断言因此真在咬）', async () => {
+  const bridge = { list: async () => ([row({ id: 'bili-native', name: 'billion-context' })]) };
+  const anchor = 'caveat ? note(caveat, "muted") : null,';
+  const { Component } = loadPanel({ dshDesktop: { pluginManager: bridge } }, {
+    mutate: (src) => {
+      assert.ok(src.includes(anchor), '反证锚点必须存在（渲染行形状变了要同步本套件）');
+      return src.replace(anchor, '');
+    }
+  });
+  const tree = await createMounter(Component, {}).settle();
+  assert.doesNotMatch(textAll(cardOf(tree, 'bili-native')), /接管期说明/,
+    '渲染色块摘掉后文案必须消失——否则上面的用例是在为不存在的渲染作证');
 });

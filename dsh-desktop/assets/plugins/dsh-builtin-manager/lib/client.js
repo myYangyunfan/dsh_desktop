@@ -85,7 +85,10 @@ window.__ModuleLoader__.load({
       locked: "这一项由内核或交付清单管理，不能在这里改。",
       removed: "已卸载，不能在这里改。",
       configLock: "带自定义配置，禁止在此停用。",
-      selfLock: "这是本管理页自己：停用后这条唯一的内置插件开关面就跟着消失，界面上再也开不回来，所以不能在这里关。"
+      selfLock: "这是本管理页自己：停用后这条唯一的内置插件开关面就跟着消失，界面上再也开不回来，所以不能在这里关。",
+      takeoverCompaction: "接管期说明：本件会把预设里的 compaction-basic 与 command-compact 两行改成停用，"
+        + "压缩改由它自己的代理执行——所以会话里看不到 /compact 命令，模型也不再走内核那套自动压缩。"
+        + "这是接管生效的样子，不是装坏了。"
     };
     const EN = {
       tab: "Built-in plugins",
@@ -134,7 +137,10 @@ window.__ModuleLoader__.load({
       removed: "Uninstalled; not editable here.",
       configLock: "Has custom configuration, so it cannot be switched here.",
       selfLock: "This is the manager page itself. Switching it off also removes the only built-in plugin switch surface, "
-        + "and the UI can no longer turn it back on, so it cannot be disabled here."
+        + "and the UI can no longer turn it back on, so it cannot be disabled here.",
+      takeoverCompaction: "Takeover note: this plugin disables the preset’s compaction-basic and command-compact rows and "
+        + "compacts through its own proxy — so the /compact command disappears from sessions and the kernel’s own "
+        + "auto-compaction no longer runs. That is what a working takeover looks like, not a broken install."
     };
     // 语言每次渲染时取：页面刷新即换，不值得为它订阅字典事件。
     const dict = () => (String((typeof navigator !== "undefined" && navigator.language) || "")
@@ -146,6 +152,20 @@ window.__ModuleLoader__.load({
     // 不参与「单个更新」的件：better-sidebar 随包整包换代（sidecar 的 checkUpdates 也
     // 把它排除了）。按 id 兜底，避免后端契约变化时界面画出必然失败的按钮。
     const UPDATE_EXCLUDED_ID = "better-sidebar";
+
+    // 接管类内置件：它们装上去的第一件事是**改掉内核原有行为**，而用户看到的是
+    // 「某个功能不见了」。这类误解是本仓库真付过代价的一类报障（「上下文压缩插件有问题」），
+    // 所以按 id 在行内直说一句，而不是指望用户去翻文档。
+    //   bili-native（billion-context 0.1.213）：bili-compaction-gate 把预设里的
+    //   compaction-basic / command-compact 两行改成 disabled，压缩迁到它的代理侧 →
+    //   会话里的 /compact 命令随之消失（回归锁 unit-billion-context-gate）。
+    const TAKEOVER_NOTES = { "bili-native": "takeoverCompaction" };
+
+    /** 行内「接管期说明」文案；不在表里就返回空串（render 据此整段不画）。 */
+    function takeoverNote(row, L) {
+      const key = row && TAKEOVER_NOTES[row.id];
+      return key && L[key] ? L[key] : "";
+    }
 
     // 颜色与圆角全走内核设计系统变量（--dsw-*）。
     const S = {
@@ -419,6 +439,7 @@ window.__ModuleLoader__.load({
               const rowBusy = busy[row.id] === true;
               const rowUpdating = updating[row.id] === true;
               const rowNote = notes[row.id];
+              const caveat = takeoverNote(row, L);
               // 更新链只对「有检查结果且判定可更新」的行开控件；removed 行与
               // better-sidebar（随包整包换代）不画按钮。检查失败/已是最新另走行内说明。
               const upd = updates[row.id];
@@ -450,6 +471,7 @@ window.__ModuleLoader__.load({
                         ]
                       }, "head"),
                       row.description ? jsx("div", { style: S.desc, title: row.description, children: row.description }, "desc") : null,
+                      caveat ? note(caveat, "muted") : null,
                       locked ? note(why, "muted") : null,
                       upd && !excluded && upd.error
                         ? note(L.checkItemFailed + String(upd.error), "error")

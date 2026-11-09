@@ -2,6 +2,27 @@
 
 DSH Desktop 自研内置插件管理页（随安装包分发，登记在 `scripts/lib/companion-plugins.js`）。
 
+## [0.2.1] - 2026-11-09
+
+### fix：接管类内置件在行内直说「功能不见了是接管生效」
+
+- **缘起**：用户报「有人说上下文压缩插件有问题」。实查结论是**没坏**——`billion-context`
+  0.1.213 的 `bili-compaction-gate` 会把四个出厂预设里的 `compaction-basic` 与
+  `command-compact` 两行改成 `disabled: true`（压缩迁到它的代理侧），于是会话里的
+  `/compact` 命令消失、内核那套自动压缩也不再跑。这正说明接管成功了，但界面上一个字
+  都没说，用户只能靠猜。
+- **改法**：`TAKEOVER_NOTES`（id → 字典键）+ 纯函数 `takeoverNote(row, L)`，命中才在
+  该行描述下画一行 muted 说明；目前只有 `bili-native` 一条，中英双字典各一句。
+  文案指名用户实际看到消失的 `/compact`，并说清它把哪两行改成了停用，收尾一句
+  「这是接管生效的样子，不是装坏了」。
+- **不动的面**：宿主半边（仍不写文件）、启停写入链（仍只有 sidecar 一个写者）、
+  自锁行语义、无桥兜底、生效时机两层措辞。
+- **回归证据**：`scripts/test/unit-builtin-manager-client.test.js` 新增 2 例——
+  渲染用例（`bili-native` 行含「接管期说明」「/compact」「compaction-basic」，且
+  `easyrewrite` 行**不含**，阳性对照钉住「按 id 精确命中」；另核对中英字典各一份）
+  与反证 8（把渲染色块摘掉后那句话必须消失，证明渲染断言真在咬）。
+  接管机制本体由 `scripts/test/unit-billion-context-gate.test.js` 咬死。
+
 ## [0.2.0] - 2026-10-15
 
 ### feat：交互与视觉重做 —— 搜索 + 状态筛选 + 单列表行内反馈

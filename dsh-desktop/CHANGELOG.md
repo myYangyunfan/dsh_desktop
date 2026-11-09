@@ -5,6 +5,27 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### fix(builtin-manager)：接管类内置件行内直说「/compact 消失是接管生效」+ 接管面回归锁（2026-11-09）
+
+上一批把压缩件换成 `billion-context` 0.1.213 之后，用户侧看到的第一个变化是**会话里 `/compact` 命令没了**
+（`bili-compaction-gate` 把四个预设里的 `compaction-basic` / `command-compact` 改成 `disabled: true`，
+压缩迁到代理侧）。这是接管生效的样子，但界面上一个字都没说，报障口径就成了「压缩插件有问题」。两条补救：
+
+- **管理页（`dsh-builtin-manager` 0.2.0 → 0.2.1）**：`TAKEOVER_NOTES`（id → 字典键）+ 纯函数
+  `takeoverNote(row, L)`，命中才在该行描述下画一句 muted 说明；目前只有 `bili-native` 一条，指名
+  `/compact`、说清它把哪两行改成停用，中英双字典各一句。宿主半边与启停写入链零改动。
+  回归：`unit-builtin-manager-client` 新增渲染用例（含「非接管件不跟风」阳性对照）+ 反证 8，
+  套件 21→**23 例**。四处版本台账同步（`THIRD_PARTY_NOTICES.md` §4.1、inventory §一/§5.2、
+  README 中英两张表）。
+- **接管面机器锁（新套件 `unit-billion-context-gate`，13 例）**：直接 import 真产物
+  `assets/plugins/billion-context/dist/agent/dsh-compaction-gate.js`，用假 ctx 收 `internal/config`
+  监听器、以预设真形状的 config 触发，断言 `compaction-basic`/`command-compact` 变 `disabled: true`、
+  `tool-result-pruner` 一个字不动、改写不就地变异输入、`{ global: true }` 与 `provide('biliBasicCompactionPolicy')`
+  在位、verdict 未置位时原样返回（反证）；另咬 `cordis.patch.yml` 形状（gate 条目不得带 `disabled`、
+  四条 `preset-*` 带 inject、`retryPolicy` 两行含 `MALFORMED_RESPONSE`）与**pin 内核四个预设的
+  compaction 组仍只挂 gate 硬编码的那两个包名**——上游改名/增行时这里先红，而不是用户那头静默失效。
+  反证方式：临时短路 verdict 判定与给 gate 条目加 `disabled: true`，两条用例当场变红（复原后哈希一致）。
+
 ### feat(companion)：上下文压缩插件整体换成上游统一版 billion-context 0.1.213（2026-11-09）
 
 按用户「有人说上下文压缩插件有问题，你看看」查证后换代。旧件 `billion-context-dsh` 0.2.27 的接管姿势

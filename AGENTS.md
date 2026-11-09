@@ -17,7 +17,7 @@ Node 逻辑仍是活代码（Tauri sidecar 直接复用，零重写）。主平�
 | --- | --- |
 | `dsh-tauri/` | 桌面壳主线：`contracts/`（六份契约）、`src-tauri/`（Rust 工作区）、`sidecar/`（Node 薄封装）、`ui/`（frontendDist 占位页）、`dlls/`（D3DCOMPILER_47.dll）、`package-payload/`（打包暂存，gitignored）、`ta13-soak/`（Rust soak 压测）、`scripts/`（stage-payload / stage-plugin-gate / smoke-installed）、`docs/` |
 | `dsh-desktop/` | 内核侧 Node 逻辑：构建期补丁、自愈（根级 boot 链脚本 `watchdog.js` / `*-heal.js` 等）、插件同步、余额链、`docs/`、`assets/plugins/`（**随安装包分发**——v1.0.0 内置线，2026-10-08 裁定；内置伴随插件在册 **33** 个（v1.0.0 由 39 精简、2026-10-07 移除 11 个，2026-10-11 增自研 `dsh-builtin-manager` 内置插件管理页，2026-10-16 增自研 `dsh-goal-completion` 目标收尾标签页，2026-10-17 随内核 0.2.1 换代退役 `dsh-reasoning-effort`，2026-11-08 按用户要求退役 `dsh-quest-ui` / `dsh-auto-compact` / `dsh-zcode-migrate` 三件，2026-11-09 按用户要求新增 `dsh-context` 与 `ds-harness-remote` 两件，同日按用户要求把 8 件内置件升到 npm latest：shop 0.9.3 / toolbox-ui 1.10.1 / context 0.83.0 / billion-context-dsh 0.2.27 / free-search 0.9.39 / pocket 2.12.0 / easyrewrite 3.0.1 / harness-remote 0.6.4；同日再按用户要求把上下文压缩件整体换成上游统一版 `billion-context` 0.1.213——旧 `billion-context-dsh` 0.2.27 退役，理由见「已知坑」里 preset 隔离那条）；随包 agent 预设子系统已整体拆除）、`vendor/`（node/npm 运行时 + `dsh-kernel/` pin 的离线内核 tgz，后者**必须入库**） |
-| `dsh-desktop/scripts/test/` | 全部 Node 测试（200 个 `*.test.js/.mjs`，另有 `fixtures/`、`ta16-snapshots/`、mock server），单测唯一去处 |
+| `dsh-desktop/scripts/test/` | 全部 Node 测试（201 个 `*.test.js/.mjs`，另有 `fixtures/`、`ta16-snapshots/`、mock server），单测唯一去处 |
 | `.github/workflows/` | `ci.yml`（PR 门禁）、`tauri-release.yml`（tag 发版，唯一发布入口）、`release.yml`（退役 Electron 线，全部 `if: false`） |
 
 ## 常用命令
@@ -182,6 +182,13 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   `dist/index.js`），只抄 `exports["."]` 会让子进程 `Cannot find module .../dist/index.js`，而父进程只说
   `bili: proxy child exited before becoming healthy (code 1)`；真因在 `%TEMP%\bili-proxy-<port>.log`。
   已知上游仍未修（0.1.213）：`ranxianglei/billion-context` #5911 / #5984 / #6010 的 ref 账本分叉与幻影引用、#5596 的 4096 钳制。
+  用户侧最先看见的症状是**会话里 `/compact` 命令消失**（gate 把预设的 `compaction-basic` 与 `command-compact` 两行
+  改成 `disabled: true`，压缩迁到代理侧）——这是接管生效的样子，不是装坏了；`dsh-builtin-manager` 0.2.1 起在
+  `bili-native` 行内直说（`TAKEOVER_NOTES` + `takeoverNote(row, L)`，中英双字典），别再让用户靠猜。
+  接管本体由 `scripts/test/unit-billion-context-gate.test.js`（13 例）咬住：真 import 产物 + 假 ctx 收
+  `internal/config`，断言两行变 disabled、`tool-result-pruner` 不动、`{global:true}` 与 provide 在位、verdict
+  未置位时原样返回（反证），并核对 **pin 内核四个预设的 compaction 组仍只挂 gate 硬编码的那两个包名**——
+  上游改名 / 增行 / 拿掉 `group: true` 时这里先红，而不是用户那头静默失效。
 - **内核撤掉「公开提示词变量」这类隐式契约时，坏的是发消息本身，而静态扫与 boot 全绿——换代必须真发一条消息（2026-10-17 实测）**：
   rc.2 的 `dsh-agent-loop` 注册 `provider / model / cwd` 三个 `systemPrompt.variable`，0.2.1-rc.1 只剩前两个；
   内置插件 `dsh-workspace-anchor` 的锚点节带 `{{cwd}}`，于是**每一条 prompt 的装配期**抛
@@ -297,7 +304,7 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   换为 vendored 上游 0.6.1 + better-sidebar「资源管理器栏头折叠 / 在本地打开」两条根治；补丁层净数 **60** = rc.4 的 62 退役两条（`menu-viewport` 上游已自实现、`agent-loop-scheduler-guard` 的
   `TOOL_RUNTIME_SCHEDULER` 符号面被整体删除）；0.2.2-rc.1 换代 13 处锚点失配全部按真字节重靶，
   判定矩阵 43 changed / 12 root / 5 target-absent）**：
-  `scripts/test/` **200 个测试文件**（`*.test.js` 199 + `*.test.mjs` 1；`dsh-prompt-optimizer`
+  `scripts/test/` **201 个测试文件**（`*.test.js` 200 + `*.test.mjs` 1；`dsh-prompt-optimizer`
   自研线的四个套件 `unit-prompt-optimizer-{context-intent,lexical-write,project-goal,upgrade}`
   随目录替换 `git rm`，新增 vendored 机器锁 `unit-prompt-optimizer-vendored`；更早
   `unit-patch-pi-ai-opencode-go-models` 随该补丁退役一并 `git rm`，另有新增
@@ -308,6 +315,7 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   其中最后一件的 change-review 半边保留并改名 `unit-change-review-gate`），
   `npm test` = 2193 例 / **0 fail / 0 cancelled**；pass 与 skip 的分界随本机材料
   与网络浮动（2026-11-09 全量实测（含新增 `dsh-context` / `ds-harness-remote` 两件）pass 2184 / skip 9；
+  同日「接管期说明 + 接管面回归锁」批实测 **2208 例 / pass 2199 / skip 9 / fail 0**；
   退役三件前的参照值是 2222 例 / pass 2213），
   skip 逐条都是环境缺料而非缺陷（pristine 夹具缺 `@openai/codex` / `@earendil-works/pi-ai`、
   openclaw 双轨的兄弟目录 `../openclaw-dsh-bridge/` 不在盘、本机无 `D:\workspace\dsh-pack` 克隆、

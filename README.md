@@ -191,7 +191,7 @@ bash dsh-tauri/scripts/smoke-installed.sh
 | `dsh-basics-panel` | 0.4.2 | 设置页可视化并管理 MCP 服务器 / 技能 / 规则 / 归档会话 | [yxsj245/dsh-Basics-Panel](https://github.com/yxsj245/dsh-Basics-Panel) · MIT |
 | `dsh-input-fold` | 0.1.1 | 超长用户提示词默认折叠为前几行 + 「展开」遮罩 | 自研 · MIT |
 | `dsh-prompt-optimizer` | 3.0.0 | 输入框旁一键分析并优化草稿（SSE 流式上屏；默认实时复用当前会话模型；无上下文走结构模板、有上下文提炼目的顺势润色；保真自检、斜杠命令前缀保护；结果可替换/撤回/复制；设置页可配模型、调用参数与上下文） | [Y1X1n/dsh-prompt-optimizer](https://github.com/Y1X1n/dsh-prompt-optimizer) · MIT |
-| `dsh-builtin-manager` | 0.2.0 | 「设置 → 插件」里的内置插件页：搜索 / 状态筛选 + 单列表逐条查看随包内置件并启停（行内反馈；启停下次启动生效） | 自研 · MIT |
+| `dsh-builtin-manager` | 0.2.1 | 「设置 → 插件」里的内置插件页：搜索 / 状态筛选 + 单列表逐条查看随包内置件并启停（行内反馈；启停下次启动生效） | 自研 · MIT |
 | `@deepseek-ai/dsh-goal-completion` | 0.1.0 | 内核右栏「目标收尾」标签页：当前会话目标的状态机 + 官方 GoalBar 没有的 complete（标记完成，两次点击确认） | 自研 · MIT |
 | `dsh-free-search` | 0.9.39 | 免费多引擎搜索：注册 `ctx.web` 搜索 provider，内置 web_search 自动选用（loader id 是 `web-search-free`，不是包名） | [DDDMUC/dsh-free-search](https://github.com/DDDMUC/dsh-free-search) · MIT |
 | `dsh-plugin-shop` | 0.9.3 | 插件商店：浏览 / 安装 / 启停 / 更新 dsh 插件（loader id 是 `shop`，客户端 bundle id 才是包名） | [LivXue/dsh-plugin-shop](https://github.com/LivXue/dsh-plugin-shop) · Apache-2.0 |

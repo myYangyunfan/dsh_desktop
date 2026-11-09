@@ -774,7 +774,7 @@ CI 五个架构的 staging 同口径），装机后首次开机由 boot 的插�
 | ds-bot | 0.2.0 | Apache-2.0 |
 | dsh-basics-panel | 0.4.2 | MIT |
 | dsh-better-sidebar | 0.24.2 | MIT |
-| dsh-builtin-manager | 0.2.0 | MIT |
+| dsh-builtin-manager | 0.2.1 | MIT |
 | dsh-change-review | 0.1.2 | MIT |
 | dsh-easyrewrite | 3.0.1 | MIT |
 | dsh-input-fold | 0.1.1 | MIT |
