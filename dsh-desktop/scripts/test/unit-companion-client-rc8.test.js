@@ -227,7 +227,6 @@ test('修复自检: 使用 bindSnapshotSelector 的插件都带 rc.8 等价重�
   const EXPECTED_USERS = [
     'dsh-conversation-tweaks',
     'dsh-openclaw-bridge',
-    'dsh-quest-ui',
     'dsh-subagent-lens',
   ];
   assert.deepStrictEqual(users, EXPECTED_USERS,

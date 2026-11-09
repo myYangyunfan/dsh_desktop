@@ -1,0 +1,31 @@
+import { Event } from "../../imports/common";
+import { GenericNack, RtcpTransportLayerFeedback } from "../..";
+import type { Processor } from "./interface";
+import type { RtpOutput } from "./rtpCallback";
+export type NackHandlerInput = RtpOutput;
+export type NackHandlerOutput = RtpOutput;
+export declare class NackHandlerBase implements Processor<NackHandlerInput, NackHandlerOutput> {
+    private senderSsrc;
+    private onNack;
+    private newEstSeqNum;
+    private _lost;
+    private clearNackInterval?;
+    private internalStats;
+    readonly onNackSent: Event<[GenericNack]>;
+    readonly onPacketLost: Event<[number]>;
+    mediaSourceSsrc?: number;
+    readonly retryCount = 10;
+    stopped: boolean;
+    constructor(senderSsrc: number, onNack: (rtcp: RtcpTransportLayerFeedback) => Promise<void>);
+    toJSON(): Record<string, any>;
+    private get lostSeqNumbers();
+    private getLost;
+    private setLost;
+    private removeLost;
+    processInput: (input: RtpOutput) => RtpOutput[];
+    private addPacket;
+    private pruneLost;
+    private stop;
+    private updateRetryCount;
+    private sendNack;
+}

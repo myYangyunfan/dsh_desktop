@@ -16,8 +16,8 @@ Node 逻辑仍是活代码（Tauri sidecar 直接复用，零重写）。主平�
 | 目录 | 说明 |
 | --- | --- |
 | `dsh-tauri/` | 桌面壳主线：`contracts/`（六份契约）、`src-tauri/`（Rust 工作区）、`sidecar/`（Node 薄封装）、`ui/`（frontendDist 占位页）、`dlls/`（D3DCOMPILER_47.dll）、`package-payload/`（打包暂存，gitignored）、`ta13-soak/`（Rust soak 压测）、`scripts/`（stage-payload / stage-plugin-gate / smoke-installed）、`docs/` |
-| `dsh-desktop/` | 内核侧 Node 逻辑：构建期补丁、自愈（根级 boot 链脚本 `watchdog.js` / `*-heal.js` 等）、插件同步、余额链、`docs/`、`assets/plugins/`（**随安装包分发**——v1.0.0 内置线，2026-10-08 裁定；内置伴随插件在册 **34** 个（v1.0.0 由 39 精简、2026-10-07 移除 11 个，2026-10-11 增自研 `dsh-builtin-manager` 内置插件管理页，2026-10-16 增自研 `dsh-goal-completion` 目标收尾标签页，2026-10-17 随内核 0.2.1 换代退役 `dsh-reasoning-effort`）；随包 agent 预设子系统已整体拆除）、`vendor/`（node/npm 运行时 + `dsh-kernel/` pin 的离线内核 tgz，后者**必须入库**） |
-| `dsh-desktop/scripts/test/` | 全部 Node 测试（202 个 `*.test.js/.mjs`，另有 `fixtures/`、`ta16-snapshots/`、mock server），单测唯一去处 |
+| `dsh-desktop/` | 内核侧 Node 逻辑：构建期补丁、自愈（根级 boot 链脚本 `watchdog.js` / `*-heal.js` 等）、插件同步、余额链、`docs/`、`assets/plugins/`（**随安装包分发**——v1.0.0 内置线，2026-10-08 裁定；内置伴随插件在册 **33** 个（v1.0.0 由 39 精简、2026-10-07 移除 11 个，2026-10-11 增自研 `dsh-builtin-manager` 内置插件管理页，2026-10-16 增自研 `dsh-goal-completion` 目标收尾标签页，2026-10-17 随内核 0.2.1 换代退役 `dsh-reasoning-effort`，2026-11-08 按用户要求退役 `dsh-quest-ui` / `dsh-auto-compact` / `dsh-zcode-migrate` 三件，2026-11-09 按用户要求新增 `dsh-context` 0.82.1 与 `ds-harness-remote` 0.5.19 两件）；随包 agent 预设子系统已整体拆除）、`vendor/`（node/npm 运行时 + `dsh-kernel/` pin 的离线内核 tgz，后者**必须入库**） |
+| `dsh-desktop/scripts/test/` | 全部 Node 测试（200 个 `*.test.js/.mjs`，另有 `fixtures/`、`ta16-snapshots/`、mock server），单测唯一去处 |
 | `.github/workflows/` | `ci.yml`（PR 门禁）、`tauri-release.yml`（tag 发版，唯一发布入口）、`release.yml`（退役 Electron 线，全部 `if: false`） |
 
 ## 常用命令
@@ -256,7 +256,8 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   `Content-Range: bytes 0-0/<size>` 核在位与体积，条目名用 Range 取末尾 64B 解 EOCD 得 `cd_off/cd_size`
   再取中央目录解析（几 MB，无需拖整包）；`.sha256` 边车直接 GET 即可读内容。
 - **插件「替用户提交」必须先过草稿与空闲两道闸门——`setDraft` 是整篇替换且没有恢复通道（2026-10-18 用户报障）**：
-  内置件 `dsh-auto-compact` / `dsh-change-review` 都用 `inputActions.setDraft(text) + submit()` 以用户身份发命令，
+  内置件 `dsh-auto-compact` / `dsh-change-review` 都用 `inputActions.setDraft(text) + submit()` 以用户身份发命令
+  （`dsh-auto-compact` 已于 2026-11-08 退役，现役只剩 `dsh-change-review`；本条教训对任何「替用户提交」的插件继续成立），
   而内核这条 API 的契约是 **Replace the whole draft**（`@deepseek-ai/dsh-client-ui-conversation/lib/client.js:15023`），
   `publish()` 会立刻把它写进该会话的**持久化**草稿（`:15708-15716` + `:17965` `bindDraftPersistence`），
   成功提交后 `commit-draft` 还砍掉 undo 栈（`lib/types/client/contract/input.d.ts:380-388`）——
@@ -269,7 +270,8 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   读快照的 sanctioned 来源是 dock occupant 的注入面 `hooks.input = shell.state`（`:19738-19753`）——
   **`inputActions` 只有 8 个方法**（`:14932-14958`），没有 `state`/`getDraft`/`draft`/`busy`/`canSubmit`，
   按那些字段读恒 `undefined`、守卫静默死（本仓第三次踩幽灵字段）。回归锁
-  `unit-auto-compact-gate.test.js` 17 例含反证四条。
+  `unit-change-review-gate.test.js` 6 例含反证两条（原名 `unit-auto-compact-gate` 17 例含反证四条，
+  随 `dsh-auto-compact` 退役只剩 change-review 半边）。
   同批再记一条行尾教训：写这批反证时发现两份插件 `lib/client.js` 本机工作树是 **CRLF**
   （index 为 LF，`git ls-files --eol` 实测 `i/lf w/crlf`），多行锚点的 `src.replace` 静默空转、
   变异体等于原件而用例报绿——夹具进门必须 `.replace(/\r\n/g,'\n')`，仓库级修法是新加的
@@ -281,16 +283,18 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   换为 vendored 上游 0.6.1 + better-sidebar「资源管理器栏头折叠 / 在本地打开」两条根治；补丁层净数 **60** = rc.4 的 62 退役两条（`menu-viewport` 上游已自实现、`agent-loop-scheduler-guard` 的
   `TOOL_RUNTIME_SCHEDULER` 符号面被整体删除）；0.2.2-rc.1 换代 13 处锚点失配全部按真字节重靶，
   判定矩阵 43 changed / 12 root / 5 target-absent）**：
-  `scripts/test/` 202 个测试文件（`*.test.js` 201 + `*.test.mjs` 1；`dsh-prompt-optimizer`
+  `scripts/test/` **200 个测试文件**（`*.test.js` 199 + `*.test.mjs` 1；`dsh-prompt-optimizer`
   自研线的四个套件 `unit-prompt-optimizer-{context-intent,lexical-write,project-goal,upgrade}`
   随目录替换 `git rm`，新增 vendored 机器锁 `unit-prompt-optimizer-vendored`；更早
   `unit-patch-pi-ai-opencode-go-models` 随该补丁退役一并 `git rm`，另有新增
   `unit-patch-output-parsable`、`unit-workspace-anchor-cwd`、`unit-plugin-inject-services`、
-  mac 设置写入根治的 `unit-appboot-singleton-patch`、「弹窗清草稿」根治的
-  `unit-auto-compact-gate` 与右上角「文件资源管理器」双坏的
-  `unit-better-sidebar-explorer-open`），
-  `npm test` = 2222 例 / **0 fail / 0 cancelled**；pass 与 skip 的分界随本机材料
-  与网络浮动（本次全量实测 pass 2213 / skip 9），
+  mac 设置写入根治的 `unit-appboot-singleton-patch`、右上角「文件资源管理器」双坏的
+  `unit-better-sidebar-explorer-open`；2026-11-08 退役三件内置插件时 `git rm` 了
+  `unit-quest-ui` / `unit-zcode-migrate-registration` / `unit-auto-compact-gate`，
+  其中最后一件的 change-review 半边保留并改名 `unit-change-review-gate`），
+  `npm test` = 2193 例 / **0 fail / 0 cancelled**；pass 与 skip 的分界随本机材料
+  与网络浮动（2026-11-09 全量实测（含新增 `dsh-context` / `ds-harness-remote` 两件）pass 2184 / skip 9；
+  退役三件前的参照值是 2222 例 / pass 2213），
   skip 逐条都是环境缺料而非缺陷（pristine 夹具缺 `@openai/codex` / `@earendil-works/pi-ai`、
   openclaw 双轨的兄弟目录 `../openclaw-dsh-bridge/` 不在盘、本机无 `D:\workspace\dsh-pack` 克隆、
   真实网络、`.tmp-kernel` 构建产物不可用、无特权创建文件级符号链接）——一律以现跑输出为准，**pass 与 fail 才是判据**。
@@ -335,6 +339,21 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   历史上「`lib/` 领先 `src/`」的那批手改进产物（`splitLines`/`diffRows`/`DiffTurnsPanel` 一套）已随换代消失——
   上游 0.24.2 自带 `src/client/DiffTab.tsx` 与 `src/client/diff/`，我们那份不再回吸，旧表述作废；
   src↔产物同源由 `unit-better-sidebar-diff-surface` 按 `//#region <源路径>` 标记咬住。
+- **vendored 插件的入口在 `dist/`、真依赖在自己的 `node_modules/` 时，两条通用 gitignore 规则会把它吞成空包（2026-11-09 实测）**：
+  `dsh-desktop/.gitignore` 的 `dist/` 与 `node_modules/` 对所有层级生效，`ds-harness-remote` 的入口
+  `dist/index.js` 与运行时依赖（werift / ws / qrcode / zod@3 / @xterm/*）因此既不入库也进不了 payload →
+  新 clone / 解压装出空目录。判据是 `unit-plugin-module-table` 的「manifest 入口被 gitignore 遮蔽」用例
+  （走 `git check-ignore`，不是「文件在不在」——本机文件全在时它也照样红）。修法三件一起做：
+  ① 按既有 `billion-context-dsh` 的形加 `!assets/plugins/<dir>/dist/**` 与 `!…/node_modules/**` 例外；
+  ② 清单条目写 `shipsNodeModules: true`（交付面 `payload-plugin-deps` 与运行期 sync 共用这一份声明决定剥不剥内层树，
+  `unit-payload-plugin-deps` 的「正件集合」是硬断言，加第二件必须同改）；
+  ③ `optionalDependencies` 里的原生件可以不装（`@roamhq/wrtc` 是 8.5MB 单平台 `.node`，插件自带纯 JS
+  `werift` 兜底）——装没装都要在 inventory §5.2 记账，别让台账与实际字节分叉。
+  交付面两条路径墙本机可复算：按 `payload-plugin-deps` 的 `INSTALL_PREFIX_DEFAULT` / `nsisSourcePrefixFrom(...)`
+  量全树（本轮 5248 文件实测安装态最长 **177** / 构建期 **211**，上限 240 / 258，都还有余量）。
+  同批修了一处判据假红：G10 的 ownerProps 提取器原先只认「行首标识符 + 冒号」，内核 TS 口的
+  `readonly view: 'summary' | 'page'` 整片漏读 → 读 `props.view` 的 vendored 件被判「读了下发面没有的 props」，
+  正则补 `(?:readonly\s+)?` 后复绿（控制组与反证都在同套件里）。
 - **插件的运行时落点是 repo 的 `assets/plugins/`，不是 profile**：启动期的伴随插件同步会把
   payload 里的插件目录镜像进 `<DSH_HOME>/profiles/<name>/node_modules/`，所以手工往 profile
   里塞文件会在下次启动被覆盖——要改就改 `assets/plugins/`（开发机是仓库目录，安装机是

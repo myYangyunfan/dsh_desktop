@@ -1,0 +1,1 @@
+{"version":3,"file":"session-id.d.ts","sourceRoot":"","sources":["../../src/codex/session-id.ts"],"names":[],"mappings":"AAEA,yFAAyF;AACzF,wBAAgB,mBAAmB,CAAC,KAAK,EAAE,OAAO,GAAG;IAAE,SAAS,EAAE,MAAM,CAAC;IAAC,QAAQ,EAAE,MAAM,CAAA;CAAE,GAAG,SAAS,CAIvG;AAED,wBAAgB,qBAAqB,CAAC,KAAK,EAAE,OAAO,GAAG;IAAE,SAAS,EAAE,MAAM,CAAC;IAAC,QAAQ,EAAE,MAAM,CAAA;CAAE,CAI7F"}

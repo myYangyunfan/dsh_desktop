@@ -1,0 +1,1 @@
+{"version":3,"file":"util.js","sourceRoot":"","sources":["../../../../src/types/util.ts"],"names":[],"mappings":"","sourcesContent":["export type CallbackWithValue<T> =\n  | ((e: T) => void)\n  | ((e: T) => Promise<void>)\n  | null\n  | undefined;\n\nexport type Callback = (() => void) | (() => Promise<void>) | null | undefined;\n"]}

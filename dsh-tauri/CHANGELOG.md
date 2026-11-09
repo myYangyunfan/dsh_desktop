@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### test(supervisor)：伴随插件自愈用例的受害样本换件（2026-11-08）
+
+- `broken_companion_file_is_healed_by_sync` 原拿 `dsh-auto-compact` 当「写语法垃圾」的受害目录，
+  而该插件已按用户要求退役（源目录已删）——`assert!(victim.exists())` 会退化成假红。
+  样本换成仍在册、且同样有 `lib/index.js` 的 `dsh-change-review`，判据与流程一字未改。
+
 ### fix(ci)：`build-macos` 的 runner 标签 `macos-14` → `macos-15`（2026-11-07）
 
 - **故障形态**：v1.0.9 发版 run `42363298028` 里 `macOS ARM64 (dmg)` **1 秒内 cancelled**

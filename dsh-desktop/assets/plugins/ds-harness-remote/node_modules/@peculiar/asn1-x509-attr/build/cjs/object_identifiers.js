@@ -1,0 +1,17 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.id_at_clearance = exports.id_at_role = exports.id_at = exports.id_aca_encAttrs = exports.id_aca_group = exports.id_aca_chargingIdentity = exports.id_aca_accessIdentity = exports.id_aca_authenticationInfo = exports.id_aca = exports.id_ce_targetInformation = exports.id_pe_ac_proxying = exports.id_pe_aaControls = exports.id_pe_ac_auditIdentity = void 0;
+const asn1_x509_1 = require("@peculiar/asn1-x509");
+exports.id_pe_ac_auditIdentity = `${asn1_x509_1.id_pe}.4`;
+exports.id_pe_aaControls = `${asn1_x509_1.id_pe}.6`;
+exports.id_pe_ac_proxying = `${asn1_x509_1.id_pe}.10`;
+exports.id_ce_targetInformation = `${asn1_x509_1.id_ce}.55`;
+exports.id_aca = `${asn1_x509_1.id_pkix}.10`;
+exports.id_aca_authenticationInfo = `${exports.id_aca}.1`;
+exports.id_aca_accessIdentity = `${exports.id_aca}.2`;
+exports.id_aca_chargingIdentity = `${exports.id_aca}.3`;
+exports.id_aca_group = `${exports.id_aca}.4`;
+exports.id_aca_encAttrs = `${exports.id_aca}.6`;
+exports.id_at = "2.5.4";
+exports.id_at_role = `${exports.id_at}.72`;
+exports.id_at_clearance = "2.5.1.5.55";

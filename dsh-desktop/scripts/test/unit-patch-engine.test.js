@@ -407,14 +407,14 @@ test('companion-plugins: 既有前缀顺序与 workspace-anchor 位置唯一（�
     ids.slice(0, 18),
     [
       'balance', 'file-changes', 'better-sidebar', 'dsh-session-manager',
-      'conversation-tweaks', 'quest-ui', 'dsh-super-injector', 'prompt-custom',
+      'conversation-tweaks', 'dsh-super-injector', 'prompt-custom',
       'workspace-anchor', 'wsl-settings', 'bot', 'compaction-acp',
       'dsh-pocket', 'openclaw-bridge', 'input-history', 'dsh-easyrewrite',
-      'change-review', 'auto-compact',
+      'change-review', 'offpeak', 'settings-nav-custom',
     ],
-    '既有前缀顺序不得漂移（新增/改名须同步更新本测试；dsh-navbar 已随内核换代退役；plugin-manager 于 v1.0.0 退役——包名与官方内核包同名会遮蔽 profiles/web 里的官方 pluginManager）'
+    '既有前缀顺序不得漂移（新增/改名须同步更新本测试；dsh-navbar 已随内核换代退役；plugin-manager 于 v1.0.0 退役——包名与官方内核包同名会遮蔽 profiles/web 里的官方 pluginManager；quest-ui / auto-compact 于 2026-11-08 退役）'
   );
-  assert.strictEqual(ids.indexOf('workspace-anchor'), 8, 'workspace-anchor 应固定在 prompt-custom 之后');
+  assert.strictEqual(ids.indexOf('workspace-anchor'), 7, 'workspace-anchor 应固定在 prompt-custom 之后');
   assert.strictEqual(ids.filter((id) => id === 'workspace-anchor').length, 1, 'workspace-anchor 不得重复');
   assert.strictEqual(companionDirName({ name: '@deepseek-ai/dsh-balance' }), 'dsh-balance');
   assert.strictEqual(companionDirName({ name: 'dsh-session-manager' }), 'dsh-session-manager');
@@ -478,10 +478,10 @@ test('removeLegacyMarketplacePatchLines: 移除旧市场 insert 条目且幂等'
 });
 
 test('registerCompanionPatchEntries: 空文件注册/幂等/改名/尊重用户禁用/迁移去重', () => {
-  const nonBundleNames = new Set(['@deepseek-ai/dsh-balance', '@deepseek-ai/dsh-quest-ui']);
+  const nonBundleNames = new Set(['@deepseek-ai/dsh-balance', '@deepseek-ai/dsh-prompt-custom']);
   const plugins = [
     { id: 'balance', name: '@deepseek-ai/dsh-balance' },
-    { id: 'quest-ui', name: '@deepseek-ai/dsh-quest-ui' },
+    { id: 'prompt-custom', name: '@deepseek-ai/dsh-prompt-custom' },
     { id: 'sidebar', name: 'dsh-better-sidebar' },
   ];
   const bundleNames = new Set(); // 先全部按非 bundle 注册
@@ -489,21 +489,21 @@ test('registerCompanionPatchEntries: 空文件注册/幂等/改名/尊重用户�
   // 空文件 → header + insert
   const r1 = registerCompanionPatchEntries('', { plugins, bundleNames, missingNames });
   assert.strictEqual(r1.changed, true);
-  assert.deepStrictEqual(r1.added, ['balance', 'quest-ui', 'sidebar']);
+  assert.deepStrictEqual(r1.added, ['balance', 'prompt-custom', 'sidebar']);
   assert.strictEqual(r1.patch, PATCH_HEADER
     + '- insert:\n    - id: balance\n      name: \'@deepseek-ai/dsh-balance\'\n'
-    + '- insert:\n    - id: quest-ui\n      name: \'@deepseek-ai/dsh-quest-ui\'\n'
+    + '- insert:\n    - id: prompt-custom\n      name: \'@deepseek-ai/dsh-prompt-custom\'\n'
     + '- insert:\n    - id: sidebar\n      name: \'dsh-better-sidebar\'\n');
   // 幂等：二次零变化
   const r2 = registerCompanionPatchEntries(r1.patch, { plugins, bundleNames, missingNames });
   assert.strictEqual(r2.changed, false);
   assert.strictEqual(r2.patch, r1.patch);
-  // 改名：quest-ui 的 name 改成旧包名 → 就地改回
-  const renamed = r1.patch.replace('@deepseek-ai/dsh-quest-ui', '@deepseek-ai/dsh-quest');
+  // 改名：prompt-custom 的 name 改成旧包名 → 就地改回
+  const renamed = r1.patch.replace('@deepseek-ai/dsh-prompt-custom', '@deepseek-ai/dsh-prompt');
   const r3 = registerCompanionPatchEntries(renamed, { plugins, bundleNames, missingNames });
   assert.strictEqual(r3.changed, true);
-  assert.deepStrictEqual(r3.updated, ['quest-ui']);
-  assert.ok(r3.patch.includes('@deepseek-ai/dsh-quest-ui'));
+  assert.deepStrictEqual(r3.updated, ['prompt-custom']);
+  assert.ok(r3.patch.includes('@deepseek-ai/dsh-prompt-custom'));
   // 尊重用户禁用：balance 有 disabled 条目 → 不再 insert（已在第一次注册后存在 insert……
   // 这里用全新文本验证「id 已出现则跳过」）
   const userDisabled = '# 用户配置\n- id: balance\n  disabled: true\n';
@@ -551,8 +551,8 @@ test('registerCompanionPatchEntries: 清单 id 与 patch/bundle 层 loader id �
 
 test('removedPluginIdsFromPatch: 卸载标记提取（正常/损坏 YAML/insert 块不误伤）', () => {
   // 插件管理写入的标记形态：顶层条目带 removed: true
-  const patch = '# header\n- insert:\n    - id: balance\n      name: \'@deepseek-ai/dsh-balance\'\n- id: quest-ui\n  name: \'@deepseek-ai/dsh-quest-ui\'\n  disabled: true\n  removed: true\n- id: side-session\n  config:\n    keep: 1\n  removed: true\n';
-  assert.deepStrictEqual([...removedPluginIdsFromPatch(patch)].sort(), ['quest-ui', 'side-session']);
+  const patch = '# header\n- insert:\n    - id: balance\n      name: \'@deepseek-ai/dsh-balance\'\n- id: prompt-custom\n  name: \'@deepseek-ai/dsh-prompt-custom\'\n  disabled: true\n  removed: true\n- id: side-session\n  config:\n    keep: 1\n  removed: true\n';
+  assert.deepStrictEqual([...removedPluginIdsFromPatch(patch)].sort(), ['prompt-custom', 'side-session']);
   // insert 块内层条目（缩进 >= 4）即使带 removed 字样也不参与
   const inner = '- insert:\n    - id: x\n      removed: true\n';
   assert.deepStrictEqual([...removedPluginIdsFromPatch(inner)], []);

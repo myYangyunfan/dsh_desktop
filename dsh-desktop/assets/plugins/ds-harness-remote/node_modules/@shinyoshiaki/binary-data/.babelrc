@@ -1,0 +1,14 @@
+{
+  "env": {
+    "test": {
+      "plugins": [
+        ["istanbul", {
+          "exclude": [
+            "!**/node_modules/**",
+            "**/test/**"
+          ]
+        }]
+      ]
+    }
+  }
+}

@@ -58,11 +58,11 @@ test('残留判据按包名→目录名换算（scoped 包落点是去 scope 的
     ['dsh-balance/node_modules']);
 });
 
-test('在册插件全被判给：以真实 COMPANION_PLUGINS 过一遍，正件集合恰好是 dsh-pocket', () => {
+test('在册插件全被判给：以真实 COMPANION_PLUGINS 过一遍，正件集合恰好是 dsh-pocket 与 ds-harness-remote', () => {
   const present = COMPANION_PLUGINS.map(companionDirName);
   const doomed = new Set(residueNodeModules(COMPANION_PLUGINS, present, companionDirName));
   const shipped = COMPANION_PLUGINS.filter((p) => p.shipsNodeModules).map(companionDirName);
-  assert.deepEqual(shipped, ['dsh-pocket'], '当前唯一声明 shipsNodeModules 的是 dsh-pocket');
+  assert.deepEqual(shipped.sort(), ['ds-harness-remote', 'dsh-pocket'], '声明 shipsNodeModules 的是 dsh-pocket 与 ds-harness-remote');
   for (const dir of shipped) assert.equal(doomed.has(dir + '/node_modules'), false);
   assert.equal(doomed.size, COMPANION_PLUGINS.length - shipped.length);
 });

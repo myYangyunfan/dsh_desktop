@@ -1,0 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.id_authData = exports.id_encryptedData = exports.id_digestedData = exports.id_envelopedData = exports.id_signedData = exports.id_data = exports.id_ct_contentInfo = void 0;
+exports.id_ct_contentInfo = "1.2.840.113549.1.9.16.1.6";
+exports.id_data = "1.2.840.113549.1.7.1";
+exports.id_signedData = "1.2.840.113549.1.7.2";
+exports.id_envelopedData = "1.2.840.113549.1.7.3";
+exports.id_digestedData = "1.2.840.113549.1.7.5";
+exports.id_encryptedData = "1.2.840.113549.1.7.6";
+exports.id_authData = "1.2.840.113549.1.9.16.1.2";

@@ -5,7 +5,7 @@
 
 **口径（v1.0.0 内置线）**：本清单按**实际进安装包的载荷**现场重算——
 `dsh-tauri/package-payload/dsh-desktop` 的 `node_modules` 全树（768 个唯一 `包名@版本`，其中 DeepSeek 官方 330 个）、
-随包内置插件树（`assets/plugins`，34 个插件 + 其自带依赖树，见第 4 节）、
+随包内置插件树（`assets/plugins`，33 个插件 + 其自带依赖树，见第 4 节）、
 内置运行时（Node v24.15.0 + npm 11.12.1）与 Tauri/Rust 壳层（`src-tauri/Cargo.lock`，531 个 crate）。
 
 与旧版清单的两点实质差异：① **不再有 Electron**——壳层是 Tauri 2，渲染后端为系统 WebView（Windows 的 WebView2 / macOS 的 WKWebView / Linux 的 WebKitGTK），
@@ -738,7 +738,7 @@ CI 五个架构的 staging 同口径），装机后首次开机由 boot 的插�
 > 许可原文实测见 `dsh-desktop/docs/builtin-plugins-inventory.md` §三 #13），许可原文见该目录内的
 > `LICENSE`（标准 GPL-2.0 文本）。
 
-### 4.1 `dsh-desktop/assets/plugins`（34 个配套插件）
+### 4.1 `dsh-desktop/assets/plugins`（33 个配套插件）
 
 > **v1.0.0 精简（2026-10-07）**：内置伴随插件由 39 个减为 28 个——用户点名移除 11 个，其源目录已从
 > `dsh-desktop/assets/plugins/` 整树删除，仓库不再携带，故其许可义务不再适用、本表相应撤除其行：
@@ -766,13 +766,11 @@ CI 五个架构的 staging 同口径），装机后首次开机由 boot 的插�
 | @deepseek-ai/dsh-goal-completion | 0.1.0 | MIT |
 | @deepseek-ai/dsh-openclaw-bridge | 0.8.1 | MIT |
 | @deepseek-ai/dsh-prompt-custom | 0.5.0 | MIT |
-| @deepseek-ai/dsh-quest-ui | 0.6.1 | MIT |
 | @deepseek-ai/dsh-workspace-anchor | 0.1.1 | MIT |
 | @deepseek-ai/dsh-wsl-settings | 0.1.0 | MIT |
 | @dsh-external/dsh-subagent-lens | 0.1.1 | MIT |
 | @dsh-external/dsh-super-injector | 0.3.1 | BSD-3-Clause |
 | billion-context-dsh | 0.2.26 | MIT |
-| dsh-auto-compact | 0.1.2 | MIT |
 | ds-bot | 0.2.0 | Apache-2.0 |
 | dsh-basics-panel | 0.4.2 | MIT |
 | dsh-better-sidebar | 0.24.2 | MIT |
@@ -788,13 +786,21 @@ CI 五个架构的 staging 同口径），装机后首次开机由 boot 的插�
 | dsh-settings-groups | 0.1.1 | MIT |
 | dsh-settings-nav-custom | 0.1.1 | MIT |
 | dsh-synapse | 0.3.1 | MIT |
-| dsh-zcode-migrate | 0.1.2 | MIT |
 | dsh-free-search | 0.9.11 | MIT |
 | dsh-plugin-shop | 0.9.0 | Apache-2.0 |
 | @local/dsh-network-proxy | 1.0.0 | MIT |
 | dsh-toolbox-ui | 1.8.2 | MIT |
 | @bittersmilezzz/dsh-notify | 0.4.5 | MIT |
+| dsh-context | 0.82.1 | Apache-2.0 |
+| ds-harness-remote | 0.5.19 | MIT |
 
+> **2026-11-09 新增 2 个（31→33，按用户要求）**：`dsh-context`（[bowenliang123/dsh-context](https://github.com/bowenliang123/dsh-context)，Apache-2.0）、
+> `ds-harness-remote`（[liguobao/ds-harness-remote](https://github.com/liguobao/ds-harness-remote)，MIT，内层依赖树随包分发）。
+>
+> **2026-11-08 移除 3 个（34→31，按用户要求）**：`@deepseek-ai/dsh-quest-ui`（Quest 沉浸式界面，MIT）、
+> `dsh-auto-compact`（contextPressure 达阈值自动发 `/compact`，MIT）、`dsh-zcode-migrate`（zcode 历史会话 → dsh 原生会话日志，
+> MIT）。三者源目录已从 `assets/plugins/` 删除，不再随包分发；许可条目随之下线。
+>
 > **2026-10-22 新增 5 个上游插件（29→34）**：`dsh-free-search`（[DDDMUC/dsh-free-search](https://github.com/DDDMUC/dsh-free-search)，MIT）、
 > `dsh-plugin-shop`（[LivXue/dsh-plugin-shop](https://github.com/LivXue/dsh-plugin-shop)，Apache-2.0）、
 > `@local/dsh-network-proxy`（[baizhizzl/dsh-network-proxy](https://github.com/baizhizzl/dsh-network-proxy)，MIT）、

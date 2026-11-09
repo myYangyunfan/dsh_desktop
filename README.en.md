@@ -6,7 +6,7 @@ Not just another DSH shell: we pick the plugins, fix compatibility, integrate th
 Install and go — no Node.js setup, no plugin hunting, no version-conflict archaeology.
 
 > [!IMPORTANT]
-> **v1.0.9 — the bundled kernel moves to 0.2.2-rc.1.** The official dsh runtime ships with **34 selected companion plugins**:
+> **v1.0.9 — the bundled kernel moves to 0.2.2-rc.1.** The official dsh runtime ships with **33 selected companion plugins**:
 > **DeepSeek-Bot** (main bot + long-lived bots + group chats), the Better Sidebar file workbench, Free Search,
 > the plugin shop, Prompt Optimizer, the conversation map, desktop notifications, the MCP toolbox, and more —
 > all working out of the box, with one place to inspect, toggle and update them under **Settings → Plugins → Built-in plugins**.
@@ -28,7 +28,7 @@ DSH Desktop does that work for you: **curated, integrated, shipped in the box.**
 
 ### Curated, not collected
 
-- **34 companion plugins, each one chosen** — we optimise for quality, not count. Every bundled plugin gets a host-compatibility check, a licence review and a real boot test; the roster and evidence live in [the inventory](dsh-desktop/docs/builtin-plugins-inventory.md).
+- **33 companion plugins, each one chosen** — we optimise for quality, not count. Every bundled plugin gets a host-compatibility check, a licence review and a real boot test; the roster and evidence live in [the inventory](dsh-desktop/docs/builtin-plugins-inventory.md).
 - **One installer, one complete experience** — Bot team and group chats (DeepSeek-Bot), the Better Sidebar file workbench, free multi-engine search (Free Search), the plugin shop, prompt optimisation, the conversation map, desktop notifications, the MCP / skills toolbox, balance and cost, session archiving, peak/off-peak price guard — all there after install.
 - **One place to manage them** — **Settings → Plugins → Built-in plugins** lists every bundled plugin with its version, an on/off switch and an update check. Update sources and exclusions come from one table, so the same plugin cannot show different states in different entry points.
 - **Traceable upstreams** — every bundled plugin records its source repository, version and licence. Third-party licences are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); compatibility verdicts and test evidence are in §5 of the inventory.
@@ -142,7 +142,7 @@ never auto-pushed to stable users by design. See the [release runbook](.github/R
 
 ## 🧩 Bundled Plugin Ecosystem
 
-**34 companion plugins are registered in total.** Under the v1.0.0 bundled line (user decision, 2026-10-08) their sources ship **inside the installer**: the delivery gate mirrors `assets/plugins` as a whole, and the first boot syncs it into the profile, so everything below works out of the box (on 2026-10-22 the side session `side-session` was removed and DeepSeek-Bot (`bot`) was added, keeping the roster at 34; see §4 of [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the delivery gates and the full third-party list). The table below follows the registration order of `scripts/lib/companion-plugins.js`; package names and versions are read from each plugin's `package.json`. The "Source / license" column only reports what each package says about itself — per-plugin upstream reachability and licence text are audited in [the inventory](dsh-desktop/docs/builtin-plugins-inventory.md) §3, and the `0.2.2-rc.1` host compatibility verdicts in §5.
+**33 companion plugins are registered in total.** Under the v1.0.0 bundled line (user decision, 2026-10-08) their sources ship **inside the installer**: the delivery gate mirrors `assets/plugins` as a whole, and the first boot syncs it into the profile, so everything below works out of the box (on 2026-10-22 the side session `side-session` was removed and DeepSeek-Bot (`bot`) was added; on 2026-11-08 `quest-ui` / `auto-compact` / `zcode-migrate` were removed and on 2026-11-09 `dsh-context` / `ds-harness-remote` were added, bringing the roster to 33; see §4 of [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the delivery gates and the full third-party list). The table below follows the registration order of `scripts/lib/companion-plugins.js`; package names and versions are read from each plugin's `package.json`. The "Source / license" column only reports what each package says about itself — per-plugin upstream reachability and licence text are audited in [the inventory](dsh-desktop/docs/builtin-plugins-inventory.md) §3, and the `0.2.2-rc.1` host compatibility verdicts in §5.
 
 > [!NOTE]
 > **Trimmed in v1.0.0: bundled plugins went from 39 down to 28** (the 11 were named for removal by a user on 2026-10-07).
@@ -163,7 +163,6 @@ never auto-pushed to stable users by design. See the [release runbook](.github/R
 | `dsh-better-sidebar` | 0.24.2 | VSCode-style right pane: five built-in tabs (editor / git / subagent / sidechat / diff) plus a tab-registration service for other plugins | [omdsh-dev/DSH-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) · MIT |
 | `dsh-session-manager` | 0.1.0 | Session-row delete button plus an "Archived conversations" panel in Settings (restore / delete) | In-house · MIT (name collides with a published community package) |
 | `@deepseek-ai/dsh-conversation-tweaks` | 0.1.1 | Collapse long assistant outputs, plus a right-side navigation rail | In-house · MIT |
-| `@deepseek-ai/dsh-quest-ui` | 0.6.1 | One-toggle Quest-mode UI (grouped session rail + card composer + pill metadata bar), off by default | In-house · MIT |
 | `@dsh-external/dsh-super-injector` | 0.3.1 | Inject any local plugin package at runtime without restarting, hot reload, and a plugin-manager UI in Settings | Community (@dsh-external) · BSD-3-Clause (manifest label only, no licence text to cite) |
 | `@deepseek-ai/dsh-prompt-custom` | 0.5.0 | Override or append the official system prompt from the Settings page, with one-click prompt-card switching and save-back to the active card | In-house · MIT |
 | `@deepseek-ai/dsh-workspace-anchor` | 0.1.1 | Anchor the current working directory into the stable system prompt to stop workspace drift (from kernel 0.2.1 the `{{cwd}}` prompt variable is no longer registered, so the plugin fills the real path itself) | In-house · MIT |
@@ -175,7 +174,6 @@ never auto-pushed to stable users by design. See the [release runbook](.github/R
 | `dsh-input-history` | 0.1.1 | Terminal-style ↑/↓ history of sent messages in the composer, scoped per session | In-house · MIT |
 | `dsh-easyrewrite` | 2.6.0 | Message recall and re-edit, a version pager, and its own settings centre | [Renzic-Stone/DSH-EasyRewrite](https://github.com/Renzic-Stone/DSH-EasyRewrite) · MIT |
 | `dsh-change-review` | 0.1.2 | AI change review: the model re-checks its own just-made edits for correctness, safety and intent | In-house · MIT |
-| `dsh-auto-compact` | 0.1.2 | Auto-sends /compact once contextPressure crosses a threshold (80% by default, configurable) | In-house · MIT |
 | `dsh-offpeak` | 1.0.1 | Tidal-price guard: warns before sending at peak, and can defer work to off-peak windows | [christophersmith2737-commits/OffPeak](https://github.com/christophersmith2737-commits/OffPeak) · MIT |
 | `dsh-settings-nav-custom` | 0.1.1 | Show / hide and reorder the left-hand Settings nav items (persisted in localStorage) | Ported from EAC [DSH-EAC/EAC-Desktop](https://github.com/DSH-EAC/EAC-Desktop) · MIT |
 | `dsh-settings-groups` | 0.1.1 | Folds low-frequency General-settings rows into a collapsible "Advanced" group | In-house · MIT |
@@ -184,7 +182,6 @@ never auto-pushed to stable users by design. See the [release runbook](.github/R
 | `dsh-basics-panel` | 0.4.2 | Visual management of MCP servers, skills, rules and archived sessions inside Settings | [yxsj245/dsh-Basics-Panel](https://github.com/yxsj245/dsh-Basics-Panel) · MIT |
 | `dsh-input-fold` | 0.1.1 | Collapses very long user prompts to a few lines with an "expand" overlay | In-house · MIT |
 | `dsh-prompt-optimizer` | 3.0.0 | One-click draft analysis and polishing next to the composer (SSE streaming; reuses the current session model in real time; template-based rewrite without context, intent-first polish with context; fidelity self-check and slash-command prefix protection; replace/undo/copy results; model, call-parameter and context settings in Settings) | [Y1X1n/dsh-prompt-optimizer](https://github.com/Y1X1n/dsh-prompt-optimizer) · MIT |
-| `dsh-zcode-migrate` | 0.1.2 | Migrates zcode CLI session history into native dsh session logs (inspect / migrate / verify, /zcode) | In-house · MIT |
 | `dsh-builtin-manager` | 0.2.0 | Built-in plugin page under Settings → Plugins: search and state filters with a single-card list to view and toggle every bundled plugin (inline feedback; takes effect on next launch) | In-house · MIT |
 | `@deepseek-ai/dsh-goal-completion` | 0.1.0 | "Goal wrap-up" tab in the kernel right bar: the current session's goal state machine plus the `complete` verb the official GoalBar never exposes (two-click confirm) | In-house · MIT |
 | `dsh-free-search` | 0.9.11 | Free multi-engine web search: registers a `ctx.web` search provider that the built-in web_search picks up (loader id is `web-search-free`, not the package name) | [DDDMUC/dsh-free-search](https://github.com/DDDMUC/dsh-free-search) · MIT |
@@ -192,12 +189,27 @@ never auto-pushed to stable users by design. See the [release runbook](.github/R
 | `@local/dsh-network-proxy` | 1.0.0 | HTTP proxy row under Settings → General: reads the system proxy and hot-swaps the fetch dispatcher (keeps the upstream `@local/*` name so GitHub updates still line up) | [baizhizzl/dsh-network-proxy](https://github.com/baizhizzl/dsh-network-proxy) · MIT |
 | `dsh-toolbox-ui` | 1.8.2 | MCP / skills toolbox: bottom-right floating panel with an MCP marketplace and skill management (loader id is `mcp-manager-ui`; its host half statically imports `smol-toml`) | [Imzl-zl/dsh-toolbox-ui](https://github.com/Imzl-zl/dsh-toolbox-ui) · MIT |
 | `@bittersmilezzz/dsh-notify` | 0.4.5 | Desktop notifications: six renderer-side Web Notification events plus click-to-session, replacing the shell's "turn complete" toast from v1.0.7 | [bitterSmilezzz/dsh-notify](https://github.com/bitterSmilezzz/dsh-notify) · MIT |
+| `dsh-context` | 0.82.1 | Context insight: a right-pane context dashboard plus the `/context` command, breaking down what the current context is made of and how it evolves turn by turn | [bowenliang123/dsh-context](https://github.com/bowenliang123/dsh-context) · Apache-2.0 |
+| `ds-harness-remote` | 0.5.19 | End-to-end encrypted remote access: control this DSH from desktop / web / Android, with dsh-TUI Host support (inner dependency tree ships in the installer; WebRTC uses pure-JS werift) | [liguobao/ds-harness-remote](https://github.com/liguobao/ds-harness-remote) · MIT |
 
-> Earlier removals, also outside the 34 registered plugins: `dsh-navbar` (navbar replacement,
+> Earlier removals, also outside the 33 registered plugins: `dsh-navbar` (navbar replacement,
 > dropped from the list and its sources deleted in `v0.6.3-beta.3`, commit `ff421ac2`),
 > `zat-dsh-engine` (the previous built-in marketplace, retired even earlier) and
 > `dsh-reasoning-effort` (reasoning-effort selector, retired 2026-10-17 with the 0.2.1 kernel
 > generation — the official Settings page can now declare a custom model's effort levels itself).
+>
+> **2026-11-08: three plugins removed at the user's request (34 → 31)** —
+> `@deepseek-ai/dsh-quest-ui` (Quest-mode UI), `dsh-auto-compact` (auto-sends `/compact` once
+> contextPressure crosses a threshold) and `dsh-zcode-migrate` (zcode history → native dsh session
+> logs, which also contributed the `zcode_inspect` / `zcode_migrate` / `zcode_verify` tools and the
+> `/zcode` command). Their sources are gone from `assets/plugins/`; existing installs get their
+> cordis.patch rows and profile mirrors reclaimed on next launch via `RETIRED_COMPANIONS` in
+> `scripts/lib/companion-plugins.js`.
+>
+> **2026-11-09: two plugins added at the user's request (31 → 33)** — `dsh-context`
+> (context insight, 0.82.1) and `ds-harness-remote` (end-to-end encrypted remote access, 0.5.19).
+> Both are vendored upstream packages; the latter ships its own `node_modules` tree
+> (`shipsNodeModules`).
 
 ## 🏗 Architecture
 

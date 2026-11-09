@@ -56,7 +56,7 @@ function sourceFiles(dir, out = []) {
 /**
  * 从源码里抠出工具注册用的字面量名字。
  * 覆盖本仓库实际存在的两种写法：
- *   register(ctx, 'cardian.status', { … })      /  register(ctx, 'zcode_inspect', { … })
+ *   register(ctx, 'cardian.status', { … })      /  register(ctx, 'view_image', { … })
  *   ctx.tools.register({ name: 'view_image', … })
  */
 function registeredNames(source) {
@@ -123,12 +123,6 @@ test('内置插件源码里注册的工具名必须匹配 ^[a-zA-Z0-9_-]+$（棘
   }
 });
 
-test('迁移插件的三个工具名是下划线写法（回归锁：别改回带点）', () => {
-  const { declared, source } = collect().get('dsh-zcode-migrate');
-  assert.deepEqual(declared, ['zcode_inspect', 'zcode_migrate', 'zcode_verify'], 'manifest 声明的工具名');
-  const names = source.map((s) => s.name).sort();
-  assert.deepEqual(names, ['zcode_inspect', 'zcode_migrate', 'zcode_verify'], '源码注册的工具名');
-  for (const name of [...declared, ...names]) {
-    assert.ok(TOOL_NAME_PATTERN.test(name), `${name} 不合法`);
-  }
-});
+// 注：迁移插件 dsh-zcode-migrate 的「三个工具名是下划线写法」回归锁随该件退役
+// （2026-11-08）一并下线——它贡献的 zcode_inspect / zcode_migrate / zcode_verify
+// 已不在宿主工具面。

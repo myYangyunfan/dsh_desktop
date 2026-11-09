@@ -1,0 +1,10 @@
+import { RTCRtpCodecParameters } from "./parameters";
+export declare const useH264: (props?: Partial<RTCRtpCodecParameters>) => RTCRtpCodecParameters;
+export declare const useVP8: (props?: Partial<RTCRtpCodecParameters>) => RTCRtpCodecParameters;
+export declare const useVP9: (props?: Partial<RTCRtpCodecParameters>) => RTCRtpCodecParameters;
+export declare const useAV1X: (props?: Partial<RTCRtpCodecParameters>) => RTCRtpCodecParameters;
+export declare const useOPUS: (props?: Partial<RTCRtpCodecParameters>) => RTCRtpCodecParameters;
+export declare const usePCMU: (props?: Partial<RTCRtpCodecParameters>) => RTCRtpCodecParameters;
+export declare const supportedCodecs: string[];
+export declare const supportedVideoCodecs: string[];
+export declare const supportedAudioCodecs: string[];

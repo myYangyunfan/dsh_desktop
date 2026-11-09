@@ -1,0 +1,1 @@
+{"version":3,"file":"message.js","sourceRoot":"","sources":["../../../../../ice/src/stun/message.ts"],"names":[],"mappings":";;;;;;;;;;;;;;;;AAAA,uEAAqD","sourcesContent":["export * from \"../../../ice-server/src/stun/message\";\n"]}

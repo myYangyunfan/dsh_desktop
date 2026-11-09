@@ -6,7 +6,7 @@
 装好即用——不用装 Node.js，不用逐个找插件，也不用为版本冲突折腾。
 
 > [!IMPORTANT]
-> **v1.0.9：随包内核升到 0.2.2-rc.1。** 官方 dsh 运行时与 34 个精选伴随插件随包交付：
+> **v1.0.9：随包内核升到 0.2.2-rc.1。** 官方 dsh 运行时与 33 个精选伴随插件随包交付：
 > **DeepSeek-Bot**（主 Bot + 长期 Bot + 群聊）、Better Sidebar 文件工作台、Free Search、
 > 插件商店、Prompt Optimizer、会话地图、桌面通知、MCP 工具箱……全部开箱可用，
 > 并能在「设置 → 插件 → 内置插件」里统一查看、启停和检查更新。
@@ -28,7 +28,7 @@ DSH Desktop 把这件事做完：**精选，整合，随包交付。**
 
 ### 精选，而不是堆积
 
-- **34 个伴随插件，逐个选过** — 不以数量取胜：每个内置件都经过宿主兼容验证、许可核对和真机启动检查，
+- **33 个伴随插件，逐个选过** — 不以数量取胜：每个内置件都经过宿主兼容验证、许可核对和真机启动检查，
   清单、上游与判定记录在 [内置插件清单](dsh-desktop/docs/builtin-plugins-inventory.md)。
 - **一个安装包，一套完整体验** — Bot 团队与群聊（DeepSeek-Bot）、文件工作台（Better Sidebar）、
   免费多引擎搜索（Free Search）、插件商店、提示词优化、会话地图、桌面通知、MCP / 技能工具箱、
@@ -74,7 +74,7 @@ DSH Desktop 把这件事做完：**精选，整合，随包交付。**
 | --- | --- | --- |
 | 启动 | 手动安装 Node.js、敲命令 | 双击即用，内置独立运行时 |
 | 界面 | 浏览器标签页 | 桌面原生窗口 · 深色玻璃无边框 |
-| 插件 | 自己逐个找、装、调兼容 | **34 个精选插件随包交付**，统一查看 / 启停 / 更新 |
+| 插件 | 自己逐个找、装、调兼容 | **33 个精选插件随包交付**，统一查看 / 启停 / 更新 |
 | 会话管理 | 仅归档 | 归档 / 恢复 / 删除 + 会话地图 |
 | 余额 | 无 | 实时「本轮费用 · 余额」+ OpenCode Go |
 | 桌面能力 | 无 | 托盘常驻 / 原生通知 / 文件工作台 / Bot 群聊 |
@@ -96,7 +96,7 @@ DSH Desktop 把这件事做完：**精选，整合，随包交付。**
 
 - **覆盖安装**：自动定位旧目录、保留数据并装回原位置；profile、会话与插件配置不迁移、不丢失。
 - **便携版**：Windows 另有 `DSH-Desktop-Portable-1.0.9-win-x64.zip`，解压即用，数据存在 exe 旁 `data\`。
-- **首次启动**：从安装包内的 `assets/plugins` 同步 34 个精选插件到 profile；之后可在
+- **首次启动**：从安装包内的 `assets/plugins` 同步 33 个精选插件到 profile；之后可在
   「设置 → 插件 → 内置插件」里查看、启停和检查更新。
 - **数据位置**：Windows 安装版在 `%APPDATA%\DSH Desktop\`，便携版在 exe 旁 `data\`；
   macOS 在 `~/Library/Application Support/DSH Desktop/`。设置 `DSH_HOME` 可强制指定 dsh 配置目录。
@@ -154,7 +154,7 @@ bash dsh-tauri/scripts/smoke-installed.sh
 
 ## 🧩 内置插件生态
 
-内置伴随插件在册共 **34 个**（v1.0.0 内置线，2026-10-08 裁定：插件源**整树进安装包**，装机后首次开机由 boot 的同步链镜像进 profile，开箱可用；2026-10-22 移除「临时对话」`side-session`、新增 DeepSeek-Bot（`bot`），在册仍为 34；交付面门禁见 THIRD_PARTY_NOTICES 第 4 节，完整第三方组件清单同文件）。下表按 `scripts/lib/companion-plugins.js` 的在册顺序逐名列出，包名与版本取自各插件 `package.json` 实值；「上游 / 许可」一列只到「包内自己怎么说」这一层，逐条原仓库可达性与许可原文实测见 [内置插件清单](dsh-desktop/docs/builtin-plugins-inventory.md) §三，逐条对 `0.2.2-rc.1` 宿主的兼容判定见 §五：
+内置伴随插件在册共 **33 个**（v1.0.0 内置线，2026-10-08 裁定：插件源**整树进安装包**，装机后首次开机由 boot 的同步链镜像进 profile，开箱可用；2026-10-22 移除「临时对话」`side-session`、新增 DeepSeek-Bot（`bot`）；2026-11-08 按用户要求移除 `quest-ui` / `auto-compact` / `zcode-migrate` 三件，34 → 31；2026-11-09 按用户要求新增 `dsh-context` 与 `ds-harness-remote`，31 → 33；交付面门禁见 THIRD_PARTY_NOTICES 第 4 节，完整第三方组件清单同文件）。下表按 `scripts/lib/companion-plugins.js` 的在册顺序逐名列出，包名与版本取自各插件 `package.json` 实值；「上游 / 许可」一列只到「包内自己怎么说」这一层，逐条原仓库可达性与许可原文实测见 [内置插件清单](dsh-desktop/docs/builtin-plugins-inventory.md) §三，逐条对 `0.2.2-rc.1` 宿主的兼容判定见 §五：
 
 > [!NOTE]
 > **v1.0.0 精简：内置插件由 39 个减为 28 个**（用户于 2026-10-07 点名移除）。不再内置的 11 个：
@@ -172,7 +172,6 @@ bash dsh-tauri/scripts/smoke-installed.sh
 | `dsh-better-sidebar` | 0.24.2 | VSCode 式右栏：editor / git / subagent / sidechat / diff 五个内置标签，并向其他插件开放标签注册服务 | [omdsh-dev/DSH-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) · MIT |
 | `dsh-session-manager` | 0.1.0 | 会话行删除按钮 + 设置内「归档对话管理」面板（恢复 / 删除） | 自研 · MIT（包名撞社区已发布包） |
 | `@deepseek-ai/dsh-conversation-tweaks` | 0.1.1 | 隐藏长篇对话输出 + 会话右侧导航滑轨 | 自研 · MIT |
-| `@deepseek-ai/dsh-quest-ui` | 0.6.1 | Quest 模式界面一键开关（分组会话栏 + 卡片输入区 + 药丸元数据条，默认关闭） | 自研 · MIT |
 | `@dsh-external/dsh-super-injector` | 0.3.1 | 运行时注入任意本地插件包（不重启）+ 热重载 + 设置页插件管理 UI | @dsh-external 社区 · BSD-3-Clause（仅 manifest 自标，无许可原文可引） |
 | `@deepseek-ai/dsh-prompt-custom` | 0.5.0 | 在设置页自定义官方注入的系统提示词（整体替换 / 追加），提示词卡即切即用：点芯片切换、正文写回当前卡 | 自研 · MIT |
 | `@deepseek-ai/dsh-workspace-anchor` | 0.1.1 | 把当前工作目录写进稳定系统提示的锚点块，防 agent 工作目录漂移（0.2.1 起内核不再注册 `{{cwd}}` 变量，锚点由插件自己填实路径） | 自研 · MIT |
@@ -184,7 +183,6 @@ bash dsh-tauri/scripts/smoke-installed.sh
 | `dsh-input-history` | 0.1.1 | 输入框 ↑/↓ 终端式已发送消息回溯（按会话隔离） | 自研 · MIT |
 | `dsh-easyrewrite` | 2.6.0 | 消息撤回 / 重编辑 + 版本翻页器 + 自带设置中心 | [Renzic-Stone/DSH-EasyRewrite](https://github.com/Renzic-Stone/DSH-EasyRewrite) · MIT |
 | `dsh-change-review` | 0.1.2 | AI 变更审核：让模型复查自己刚做的改动（正确性 / 安全性 / 目标一致性） | 自研 · MIT |
-| `dsh-auto-compact` | 0.1.2 | contextPressure 达阈值（默认 80%，可调）自动发送 /compact | 自研 · MIT |
 | `dsh-offpeak` | 1.0.1 | 峰谷价格卫士：高峰时段拦截发送提醒，可定时到低价时段自动执行 | [christophersmith2737-commits/OffPeak](https://github.com/christophersmith2737-commits/OffPeak) · MIT |
 | `dsh-settings-nav-custom` | 0.1.1 | 设置页左侧导航项显示 / 隐藏与排序（localStorage 持久化） | EAC 移植 [DSH-EAC/EAC-Desktop](https://github.com/DSH-EAC/EAC-Desktop) · MIT |
 | `dsh-settings-groups` | 0.1.1 | 把设置「常规」页低频选项收进底部可折叠「高级选项」组 | 自研 · MIT |
@@ -193,7 +191,6 @@ bash dsh-tauri/scripts/smoke-installed.sh
 | `dsh-basics-panel` | 0.4.2 | 设置页可视化并管理 MCP 服务器 / 技能 / 规则 / 归档会话 | [yxsj245/dsh-Basics-Panel](https://github.com/yxsj245/dsh-Basics-Panel) · MIT |
 | `dsh-input-fold` | 0.1.1 | 超长用户提示词默认折叠为前几行 + 「展开」遮罩 | 自研 · MIT |
 | `dsh-prompt-optimizer` | 3.0.0 | 输入框旁一键分析并优化草稿（SSE 流式上屏；默认实时复用当前会话模型；无上下文走结构模板、有上下文提炼目的顺势润色；保真自检、斜杠命令前缀保护；结果可替换/撤回/复制；设置页可配模型、调用参数与上下文） | [Y1X1n/dsh-prompt-optimizer](https://github.com/Y1X1n/dsh-prompt-optimizer) · MIT |
-| `dsh-zcode-migrate` | 0.1.2 | zcode CLI 历史会话 → dsh 原生会话日志（inspect / migrate / verify + /zcode） | 自研 · MIT |
 | `dsh-builtin-manager` | 0.2.0 | 「设置 → 插件」里的内置插件页：搜索 / 状态筛选 + 单列表逐条查看随包内置件并启停（行内反馈；启停下次启动生效） | 自研 · MIT |
 | `@deepseek-ai/dsh-goal-completion` | 0.1.0 | 内核右栏「目标收尾」标签页：当前会话目标的状态机 + 官方 GoalBar 没有的 complete（标记完成，两次点击确认） | 自研 · MIT |
 | `dsh-free-search` | 0.9.11 | 免费多引擎搜索：注册 `ctx.web` 搜索 provider，内置 web_search 自动选用（loader id 是 `web-search-free`，不是包名） | [DDDMUC/dsh-free-search](https://github.com/DDDMUC/dsh-free-search) · MIT |
@@ -201,10 +198,22 @@ bash dsh-tauri/scripts/smoke-installed.sh
 | `@local/dsh-network-proxy` | 1.0.0 | 设置「通用」里的 HTTP 代理行：读系统代理并热切换 fetch dispatcher（包名保留上游 `@local/*`，改名会让更新回来的行对不上） | [baizhizzl/dsh-network-proxy](https://github.com/baizhizzl/dsh-network-proxy) · MIT |
 | `dsh-toolbox-ui` | 1.8.2 | MCP / 技能工具箱：右下悬浮面板，MCP 市场与技能管理（loader id 是 `mcp-manager-ui`；宿主半边静态导入 `smol-toml`） | [Imzl-zl/dsh-toolbox-ui](https://github.com/Imzl-zl/dsh-toolbox-ui) · MIT |
 | `@bittersmilezzz/dsh-notify` | 0.4.5 | 桌面通知：渲染进程 Web Notification 六类事件 + 点击回会话，v1.0.7 起取代壳层「回合完成」通知 | [bitterSmilezzz/dsh-notify](https://github.com/bitterSmilezzz/dsh-notify) · MIT |
+| `dsh-context` | 0.82.1 | 上下文透视：右栏上下文看板 + `/context` 命令，拆解当前上下文由什么构成、如何随轮次演变 | [bowenliang123/dsh-context](https://github.com/bowenliang123/dsh-context) · Apache-2.0 |
+| `ds-harness-remote` | 0.5.19 | 端到端加密远程访问：桌面 / Web / 安卓远控本机 DSH，含 dsh-TUI Host 支持（内层依赖树随包分发，WebRTC 走纯 JS werift） | [liguobao/ds-harness-remote](https://github.com/liguobao/ds-harness-remote) · MIT |
 
 > 历史上还随包过 `dsh-navbar`（导航栏替换，v0.6.3-beta.3 已移出清单并删源 `ff421ac2`）、
 > `zat-dsh-engine`（旧内置市场，更早退役）、`dsh-reasoning-effort`（推理强度选择器，2026-10-17
-> 随内核 0.2.1 换代退役——0.2.1 的官方设置页已能直接声明自定义模型的强度档）——三者均不在上面的 34 个在册清单里。
+> 随内核 0.2.1 换代退役——0.2.1 的官方设置页已能直接声明自定义模型的强度档）——均不在上面的 33 个在册清单里。
+>
+> **2026-11-08 按用户要求移除 3 件（34 → 31）**：`@deepseek-ai/dsh-quest-ui`（Quest 沉浸式界面）、
+> `dsh-auto-compact`（contextPressure 达阈值自动发 `/compact`）、`dsh-zcode-migrate`（zcode 历史会话
+> → dsh 原生日志迁移，含 `zcode_inspect` / `zcode_migrate` / `zcode_verify` 三工具与 `/zcode` 命令）。
+> 源目录已从 `assets/plugins/` 删除，老装机机器的 cordis.patch 注册行与 profile 镜像副本由
+> `scripts/lib/companion-plugins.js` 的 `RETIRED_COMPANIONS` 在下次开机时回收。
+>
+> **2026-11-09 按用户要求新增 2 件（31 → 33）**：`dsh-context`（上下文透视，0.82.1）与
+> `ds-harness-remote`（端到端加密远程访问，0.5.19）。两件都是上游整包 vendored 进来，
+> 后者内层 `node_modules` 随包正件分发（`shipsNodeModules`）。
 
 ## 🧠 Agent 预设
 

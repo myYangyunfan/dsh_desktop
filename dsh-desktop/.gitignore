@@ -20,3 +20,11 @@ build/*
 # issue #93）。
 !assets/plugins/billion-context-dsh/node_modules/
 !assets/plugins/billion-context-dsh/node_modules/**
+# ds-harness-remote（2026-11-09 新增内置件）同时踩两条通用忽略规则：它的入口在
+# `dist/`（上一条 `dist/` 会连入口一起吞掉 → 新 clone 装出空目录），运行时真依赖
+# （werift / ws / qrcode / zod@3 / @xterm/*）在 `node_modules/` 里且宿主闭包不提供，
+# 必须随包正件分发（shipsNodeModules）。两处都按 vendored 包原样入库。
+!assets/plugins/ds-harness-remote/dist/
+!assets/plugins/ds-harness-remote/dist/**
+!assets/plugins/ds-harness-remote/node_modules/
+!assets/plugins/ds-harness-remote/node_modules/**

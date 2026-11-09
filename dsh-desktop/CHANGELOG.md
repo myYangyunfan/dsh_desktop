@@ -5,6 +5,55 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### feat(companion)：按用户要求新增两件内置插件（31 → 33，2026-11-09）
+
+- **新增清单**（均按用户点名版本落盘，上游整包 vendored，不改字节）：
+  - `dsh-context` **0.82.1**（bowenliang123/dsh-context，Apache-2.0）：右栏上下文看板 + `/context` 命令，
+    拆解当前上下文由什么构成、如何随轮次演变。bundle 层 `cordis.patch.yml` 的 loader id 是 `dsh-context`
+    （与包名同形）。宿主半边只依赖 `zod`（VENDOR_DEPS 已在位）、宿主闭包的 `@deepseek-ai/dsh-session` 与
+    `@deepseek-ai/schemastery`，自身不带依赖树，源目录 14 文件 / 0.96MB。
+  - `ds-harness-remote` **0.5.19**（liguobao/ds-harness-remote，MIT）：端到端加密远程访问，桌面 / Web /
+    安卓远控本机 DSH，含 dsh-TUI Host 支持。它的 `dist/` 是 esbuild 产物，运行时真依赖 `werift` / `ws` /
+    `qrcode` / `zod@3` / `@xterm/headless` / `@xterm/addon-serialize`（宿主闭包与 VENDOR_DEPS 都不提供），
+    故**内层 `node_modules` 随包正件分发**（`shipsNodeModules: true`，28.4MB / 3413 文件，安装态最长路径
+    实测 177 字符 < 240 上限）。
+- **依赖面的一处刻意取舍**：不装 `optionalDependencies` 的 `@roamhq/wrtc`（14.9MB 的单平台原生 `.node`），
+  WebRTC 走纯 JS 的 `werift` 兜底路径——该件在上游即为 optional，缺它属正常形态。
+- **bundle patch 两条 insert 行**：`ds-harness-remote`（桌面行，清单登记的 id）与 `ds-harness-remote-tui`
+  （TUI 行，`!!js` 条件在无 `dsh-tui` 时禁用；`inject` 里的 `tuiCommandTrees` / `tuiScenes` 只存在于 TUI 宿主）。
+  两条行的 `name` 都是包名，`unit-hub-registry` 的挂载面收口按「id 命中」判定，桌面行即登记 id。
+- **四处逐名 1:1 同步**：`THIRD_PARTY_NOTICES.md` §4.1（31→33，补两条许可行：Apache-2.0 / MIT）、
+  `docs/builtin-plugins-inventory.md`（§一 与 §5.2 各追加 32/33 两行，标题与「这 N 条」随迁）、
+  `README.md` 与 `README.en.md` 插件表（各补两行 + 「31 → 33」说明；英文侧顺带修掉此前滞后的三处 `34`）。
+- **测试随迁**：`unit-plugin-peer-floor`（在册 31→33，`withFamily` 17→19、`familyKeys` 62→78）、
+  `unit-plugin-channels`（行数 31→33）、`unit-hub-registry`（挂载命中 30→32）。两件的 dsh 族 peer 以 pin
+  内核 0.2.2-rc.1 判定 **0 拒挂**（`evaluatePluginCompatibility` 实跑），不需要豁免通道。
+
+### feat(companion)：按用户要求退役三件内置插件（34 → 31，2026-11-08）
+
+- **退役清单**：`dsh-quest-ui` 0.6.1（Quest 沉浸式界面：分组会话栏 + 卡片输入区 + 药丸元数据条，
+  默认关闭）、`dsh-auto-compact` 0.1.2（contextPressure 达阈值默认 80% 自动发 `/compact`）、
+  `dsh-zcode-migrate` 0.1.2（zcode 历史会话 → dsh 原生会话日志，含 `zcode_inspect` / `zcode_migrate` /
+  `zcode_verify` 三工具与 `/zcode` 命令）。三者均为自研件、0 peer，退役后**三个工具与 `/zcode` 命令从
+  宿主工具面消失**；已迁移过的会话日志不受影响（早已是 dsh 原生格式）。
+- **三件事一起做**（`scripts/lib/companion-plugins.js`）：条目摘出 `COMPANION_PLUGINS` → 进
+  `RETIRED_COMPANIONS`（走通用撤回机器 `removeRetiredCompanionPatchRows` + `syncCompanionFiles`，
+  存量机器的 patch 行与 profile 镜像下次开机回收）→ 删源目录
+  `dsh-desktop/assets/plugins/{dsh-quest-ui,dsh-auto-compact,dsh-zcode-migrate}`。
+- **四处逐名 1:1 同步**：`THIRD_PARTY_NOTICES.md` §4.1（34→31，许可行下线）、
+  `docs/builtin-plugins-inventory.md`（§一 表删 3 行并重编号 1..31、§5.2 判定表同步重编号、
+  §3.1/§3.2/§3.4 的 `#` 引用重映射、§3.3 自研名单 15→12，通道快照标注退役）、
+  `README.md` 与 `README.en.md` 插件表（含「34 → 31」退役说明）。
+- **测试随迁**：`git rm` 三个专属套件（`unit-quest-ui`、`unit-zcode-migrate-registration`、
+  `unit-auto-compact-gate`）；`unit-auto-compact-gate` 的 **change-review 半边**保留并改名为
+  `unit-change-review-gate.test.js`（6 例 / 反证 2 条：闸门恒 ready 必覆盖草稿、摘掉 blocked 分支必清空待审内容）。
+  `unit-patch-engine` 的前缀顺序锁随退役重录（quest-ui / auto-compact 退出、workspace-anchor 8→7）并把
+  fixture 里的 `quest-ui` 换成 `prompt-custom`；`unit-hub-registry` 的挂载命中数 33→30、
+  `unit-plugin-peer-floor` 的在册数 34→31、`unit-companion-client-rc8` 的 `bindSnapshotSelector` 消费面
+  4→3、`unit-plugin-dom-contract` 的 G4 改为退役锁、`unit-plugin-tool-names` 的 zcode 三工具锁下线。
+- **壳侧**：`supervisor.rs::broken_companion_file_is_healed_by_sync` 的受害插件样本由 `dsh-auto-compact`
+  换成仍在册的 `dsh-change-review`（源已删，原样本会让 `assert!(victim.exists())` 假红）。
+
 ## [1.0.9] — 2026-11-07
 
 本版只换随包内核：`0.2.1-rc.4` → `0.2.2-rc.1`（pin / vendor / 锁 / 补丁层 / 基线锁同批收敛），

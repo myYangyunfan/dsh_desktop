@@ -16,7 +16,7 @@
 //                     （dev 树上一次 pnpm install 就能产出 1.3 万文件的残留树）。
 //
 // v1.0.0 内置线（2026-10-08 裁定，反转此前的「官方形状 / 插件不进包」口径）：这份清单
-// 里的 34 条插件**随安装包分发**——`dsh-desktop/assets/plugins` 整树由 stage-payload.sh
+// 里的 33 条插件**随安装包分发**——`dsh-desktop/assets/plugins` 整树由 stage-payload.sh
 // 与 tauri-release.yml 的五个架构 staging 镜像进 payload，装机后首次开机由 boot 的 sync 步
 // 镜像进 profile，开箱可用。
 //
@@ -49,9 +49,9 @@ const COMPANION_PLUGINS = [
   // 面板（恢复/删除）。依赖 patch-session-manage.js 的官方包运行时补丁。
   { id: 'dsh-session-manager', name: 'dsh-session-manager' },
   { id: 'conversation-tweaks', name: '@deepseek-ai/dsh-conversation-tweaks' },
-  // Quest 模式界面（本仓库内置）：设置-通用里一键开关类 Quest 沉浸式界面
-  // （分组会话栏 + 卡片式输入区 + 药丸元数据条），默认关闭、关闭时零开销。
-  { id: 'quest-ui', name: '@deepseek-ai/dsh-quest-ui' },
+  // 2026-11-08 按用户要求退役 quest-ui（Quest 沉浸式界面）：条目摘出本清单，源目录
+  // assets/plugins/dsh-quest-ui 已删除，存量机器的 patch 行与 profile 镜像由
+  // RETIRED_COMPANIONS 的专属回收机器接管（见该表）。
   // id 必须与该插件 bundle 层 cordis.patch.yml 声明的 loader id 一致
   // （dsh-super-injector）。曾声明为 super-injector 导致 bundle 迁移自愈的
   // dropBlocksByIds 永不命中残留 insert 块 → 双登记启动崩溃（issue #104）。
@@ -90,8 +90,7 @@ const COMPANION_PLUGINS = [
   { id: 'dsh-easyrewrite', name: 'dsh-easyrewrite' },
   // AI 变更审核：审查模型刚做的改动（正确性/安全性/一致性）。
   { id: 'change-review', name: 'dsh-change-review' },
-  // 自动压缩：接近上下文上限时自动发送 /compact。
-  { id: 'auto-compact', name: 'dsh-auto-compact' },
+  // 2026-11-08 按用户要求退役 auto-compact（contextPressure 到阈值自动发 /compact）。
   // 峰谷价格卫士：高峰时段发送前拦截提醒，可定时到闲时价自动执行。
   { id: 'offpeak', name: 'dsh-offpeak' },
   // 设置页左侧边栏自定义：显示/隐藏与排序设置导航项。
@@ -124,13 +123,10 @@ const COMPANION_PLUGINS = [
   // id 必须与其 bundle 层 cordis.patch.yml 声明的 loader id（prompt-optimizer）
   // 一致——写成包名会步 super-injector 的后尘（自愈 dropBlocksByIds 永不命中）。
   { id: 'prompt-optimizer', name: 'dsh-prompt-optimizer' },
-  // zcode → dsh 会话迁移（本仓库内置）：把 zcode CLI 的历史会话（SQLite）转成 dsh
-  // 原生会话日志（session.jsonl.zstd），迁完即可在会话列表里恢复。宿主侧 bundle
-  // 插件，贡献 zcode_inspect / zcode_migrate / zcode_verify 三个工具与 /zcode 命令。
-  // id 必须与其 bundle 层 cordis.patch.yml 的 loader id（zcode-migrate）一致 ——
-  // 不一致会让自愈的 dropBlocksByIds 永不命中，造成重复挂载（issue #104）。
-  // 追加在清单末尾：前 18 条的顺序被 unit-patch-engine 的漂移防线钉住。
-  { id: 'zcode-migrate', name: 'dsh-zcode-migrate' },
+  // 2026-11-08 按用户要求退役 zcode-migrate（zcode 历史会话 → dsh 原生会话日志，
+  // 曾贡献 zcode_inspect / zcode_migrate / zcode_verify 三工具与 /zcode 命令）：
+  // 条目摘出本清单，源目录 assets/plugins/dsh-zcode-migrate 已删除，存量机器的
+  // patch 行与 profile 镜像由 RETIRED_COMPANIONS 接管。
   // 内置插件管理页（本仓库自研）：在「设置 → 插件」里逐条查看与启停随包内置件。
   // 清单数据与启停写入都走**已接线好**的那条链（dsh:plugin-list / dsh:plugin-set-enabled
   // → sidecar createPluginManager → profile cordis.patch.yml 的 disabled 覆盖），插件本身
@@ -168,6 +164,23 @@ const COMPANION_PLUGINS = [
   // 六类事件 + 点击回会话；v1.0.6 起取代壳层「回合完成」通知（壳只保留 watcher
   // 的 active_turns 与 ACP/崩溃通知）。
   { id: 'dsh-notify', name: '@bittersmilezzz/dsh-notify' },
+  // —— 2026-11-09 用户点名的两件（随安装包内置，在册 31 → 33） ——
+  // 上下文透视（bowenliang123/dsh-context，Apache-2.0，0.82.1）：右栏上下文看板 +
+  // `/context` 命令，拆解当前上下文由什么构成、如何随轮次演变。loader id 是
+  // bundle 层 cordis.patch.yml 的 `dsh-context`（与包名同形）。宿主半边只依赖
+  // zod / @deepseek-ai/dsh-session / @deepseek-ai/schemastery——前两者由宿主闭包
+  // 与 VENDOR_DEPS 提供，自身无内层依赖树（不设 shipsNodeModules）。
+  { id: 'dsh-context', name: 'dsh-context' },
+  // 端到端加密远程访问（liguobao/ds-harness-remote，MIT，0.5.19）：桌面 / Web / 安卓
+  // 远控本机 DSH，含 dsh-TUI Host 支持。它的 dist 是 esbuild 产物，运行时真依赖
+  // werift / ws / qrcode / zod@3 / @xterm/*（宿主闭包与 VENDOR_DEPS 都不提供），
+  // 故内层 node_modules 随包正件分发（shipsNodeModules）。
+  // 与上游整包的唯一差别：不装 optionalDependencies 的 @roamhq/wrtc（14.9MB 的
+  // 单平台原生 .node），WebRTC 走纯 JS 的 werift 兜底路径。
+  // bundle 层 cordis.patch.yml 有两条 insert 行（`ds-harness-remote` 桌面行 +
+  // `ds-harness-remote-tui` TUI 行），本清单登记的是桌面行的 id；TUI 行靠自己的
+  // `!!js` 条件在无 dsh-tui 时禁用。
+  { id: 'ds-harness-remote', name: 'ds-harness-remote', shipsNodeModules: true },
 ];
 
 /** 包名 → assets/plugins 下的目录名（去 scope 前缀）。 */
@@ -251,6 +264,23 @@ const RETIRED_COMPANIONS = [
   // 上游本身没有 LICENSE 文件（见 docs/builtin-plugins-inventory.md §三 3.5），
   // 移除后也不再承担该再分发风险。
   { id: 'side-session', name: '@dsh-external/dsh-side-session' },
+  // 2026-11-08 按用户要求退役三件（在册 34→31）：
+  //   · quest-ui（@deepseek-ai/dsh-quest-ui 0.6.1）：Quest 沉浸式界面——分组会话栏 +
+  //     卡片输入区 + 药丸元数据条，默认关闭。它靠给 <body> 打 data-dsh-quest-ui 属性
+  //     做整站 reskin，退役后设置-通用里那一行随之消失。
+  //   · auto-compact（dsh-auto-compact 0.1.2）：contextPressure 达阈值（默认 80%）自动
+  //     向当前会话发 /compact。用户不再要自动压缩（2026-10-18 那轮「清掉半篇草稿」
+  //     的提交闸门 composerGate 因此失去 compose 侧主体；同套件的 change-review 半边
+  //     仍在位，回归锁改名为 unit-change-review-gate）。
+  //   · zcode-migrate（dsh-zcode-migrate 0.1.2）：zcode CLI 历史会话 → dsh 原生会话
+  //     日志迁移，贡献 zcode_inspect / zcode_migrate / zcode_verify 三工具 + /zcode 命令；
+  //     退役后这三个工具与命令**从宿主工具面消失**，已迁移过的会话日志不受影响（它们
+  //     早已是 dsh 原生格式）。
+  // 三件都走通用撤回路径（removeRetiredCompanionPatchRows + syncCompanionFiles），
+  // 无需 dirsOnly。
+  { id: 'quest-ui', name: '@deepseek-ai/dsh-quest-ui' },
+  { id: 'auto-compact', name: 'dsh-auto-compact' },
+  { id: 'zcode-migrate', name: 'dsh-zcode-migrate' },
 ];
 
 /** 退役登记表 → assets/plugins 目录名（去 scope 前缀），供过期清理认领。 */

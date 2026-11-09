@@ -1,0 +1,80 @@
+import { type RtcPeerConnectionFactory } from '@dsh-remote/webrtc';
+import type { ConnectionController } from './connection-controller.js';
+import type { ResolvedConfig } from './config.js';
+import type { HostIdentity, IdentityStore } from './identity-store.js';
+import type { SafeLogger } from './logging.js';
+import type { HostServerApi } from './server-api.js';
+interface WebSocketLike {
+    readonly readyState: number;
+    onopen: ((event: unknown) => void) | null;
+    onmessage: ((event: {
+        data: unknown;
+    }) => void) | null;
+    onerror: ((event: unknown) => void) | null;
+    onclose: ((event: {
+        code: number;
+        reason: string;
+    }) => void) | null;
+    send(data: string): void;
+    close(code?: number, reason?: string): void;
+}
+export type WebSocketFactory = (url: string) => WebSocketLike;
+export declare class HostServerConnection {
+    private readonly config;
+    private readonly identity;
+    private readonly identities;
+    private readonly api;
+    private readonly connections;
+    private readonly logger;
+    private readonly createWebSocket;
+    private readonly rtcFactoryProvider?;
+    private readonly hostCapabilities;
+    private readonly harnessVersion?;
+    private socket?;
+    private running?;
+    private stopped;
+    private online;
+    private retryWake?;
+    private readonly tunnels;
+    private terminalError?;
+    private lastActiveAt?;
+    private reconnectRequested;
+    private resumeQueued;
+    private authRecoveryAttempted;
+    private rtcFactory?;
+    private negotiatedCapabilities;
+    private controlFrameLimits;
+    private webRtcNegotiateTimeoutMs;
+    constructor(config: ResolvedConfig, identity: HostIdentity, identities: IdentityStore, api: HostServerApi, connections: ConnectionController, logger: SafeLogger, createWebSocket?: WebSocketFactory, rtcFactoryProvider?: (() => Promise<RtcPeerConnectionFactory | undefined>) | undefined, hostCapabilities?: () => readonly string[], harnessVersion?: string | undefined);
+    start(): void;
+    resume(): void;
+    stop(): Promise<void>;
+    isOnline(): boolean;
+    lastError(): string | undefined;
+    lastActivity(): number | undefined;
+    isReconnecting(): boolean;
+    reconnect(): void;
+    private run;
+    private connectOnce;
+    private handleFrame;
+    private handleConnectIncoming;
+    private handleHandshake;
+    private completeHandshake;
+    private resumePendingHandshake;
+    private handleRelay;
+    private handleSignalOffer;
+    private handleSignalIce;
+    private handleTransportSelected;
+    private canUseWebRtc;
+    private sendRtcSignal;
+    private handleRtcOpened;
+    private handleRtcFailed;
+    private sendTransportSelected;
+    private sendRelay;
+    private sendControl;
+    private dropTunnels;
+    private dropTunnel;
+    private waitBeforeRetry;
+}
+export {};
+//# sourceMappingURL=server-connection.d.ts.map

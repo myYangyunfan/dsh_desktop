@@ -13,8 +13,9 @@
 //   G2 旧行锚 [data-time-hover-root] 不得是唯一命中路径：同行并代新行锚，或紧邻处有
 //      显式回退（|| / ??）；
 //   G3 composer 并代：:has(textarea) 不得单代出现；kind="assistant" 必须与 assistant-step 并列；
-//   G4 已修形态在场：tweaks / quest-ui / session-manager / input-fold 的四代锚逐个点名
-//      （navbar 已于 0.6.3-beta.3 随本体退役，G4 里留一条退役锁防「取回本体却忘了补守卫」）；
+//   G4 已修形态在场：tweaks / session-manager / input-fold 的三代锚逐个点名
+//      （navbar 已于 0.6.3-beta.3、quest-ui 已于 2026-11-08 随本体退役，G4 里各留一条
+//      退役锁防「取回本体却忘了补守卫」）；
 //   G5-G7 tweaks 标记扫描行为：新内核 DOM 早退不打标记、旧内核仍正确标记每轮总结、
 //      开关关闭时只清标记。0.1.1 起设置通道是 ctx.remote.settings（describe/mutate，
 //      ns=profile 条目 id），幽灵服务 settingsScope 已不存在，describe 异步故用例排空微任务；
@@ -273,10 +274,12 @@ test('G4 四个插件的两代锚形态逐个点名', () => {
 	assert.ok(tweaks.includes('dsh-compat:quiet-output-attrs'), 'dsh-conversation-tweaks 应保留兼容标记');
 	assert.ok(/function legacyQuietDom\(\)/.test(tweaks), 'tweaks 的新/旧内核判定函数应在场（早退依据）');
 
-	const quest = srcOf('dsh-quest-ui', 'client.js');
-	assert.ok(quest.includes(':has(textarea, [data-composer-input])'), 'dsh-quest-ui 输入区规则应并代');
-	assert.ok(quest.includes('[data-composer-placeholder]'), 'dsh-quest-ui 占位符应认独立元素形态');
-	assert.ok(quest.includes('dsh-compat:composer-editable'), 'dsh-quest-ui 应保留兼容标记');
+	// dsh-quest-ui（Quest 沉浸式界面）已于 2026-11-08 按用户要求退役，它的输入区并代
+	// 规则（`:has(textarea, [data-composer-input])` / `[data-composer-placeholder]` /
+	// `dsh-compat:composer-editable`）随本体一起下线；那条并代锚的同型覆盖仍由
+	// dsh-conversation-tweaks 与 dsh-input-fold 点名（见上/下）。
+	assert.equal(fs.existsSync(path.join(PLUGINS, 'dsh-quest-ui')), false,
+		'dsh-quest-ui 已退役，不该回到 assets/plugins；取回它请同时把并代锚点名补回来');
 
 	const sm = srcOf('dsh-session-manager', 'client.js');
 	assert.ok(sm.includes('[data-composer-input]'), 'dsh-session-manager 补焦应认 contenteditable composer');
@@ -813,7 +816,11 @@ function slotContract() {
 		const set = new Set(['children']);
 		for (const p of e.standardProps || []) set.add(String(p).split(':')[0].trim());
 		for (const s of e.ownerProps || []) {
-			for (const m of String(s).matchAll(/^\s*([A-Za-z_$][\w$]*)\??\s*:/gm)) set.add(m[1]);
+			// ownerProps 是内核 TS 口的面（`/** … */ readonly view: 'summary' | 'page'`）：
+			// 只认「行首标识符 + 冒号」会漏掉带 `readonly` 修饰的字段——2026-11-09 实测
+			// `plugins.row.config` / `plugins.bundle.config` 的 `view` / `form` 全被漏读，
+			// 于是 vendored 的 ds-harness-remote 被判成「读了下发面没有的 props」（假红）。
+			for (const m of String(s).matchAll(/^\s*(?:readonly\s+)?([A-Za-z_$][\w$]*)\??\s*:/gm)) set.add(m[1]);
 		}
 		if (e.kind === 'chain') set.add('matched');   // 选举结果由渲染器下发
 		map.set(e.key, set);

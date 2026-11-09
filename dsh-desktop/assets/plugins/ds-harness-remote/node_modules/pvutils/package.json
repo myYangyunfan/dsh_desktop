@@ -1,0 +1,63 @@
+{
+  "name": "pvutils",
+  "version": "1.2.0",
+  "description": "Common utilities for products from Peculiar Ventures",
+  "license": "MIT",
+  "author": {
+    "name": "Yury Strozhevsky",
+    "email": "yury@strozhevsky.com"
+  },
+  "contributors": [
+    {
+      "email": "rmh@unmitigatedrisk.com",
+      "name": "Ryan Hurst"
+    },
+    {
+      "email": "microshine@mail.ru",
+      "name": "Miroshin Stepan"
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PeculiarVentures/pvutils"
+  },
+  "files": [
+    "build",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./build/utils.js",
+  "module": "./build/utils.es.js",
+  "types": "./build/index.d.ts",
+  "scripts": {
+    "prepare": "npm run build",
+    "test": "vitest run",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "build": "rollup -c",
+    "coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "@vitest/coverage-v8": "^4.1.10",
+    "oxfmt": "^0.61.0",
+    "oxlint": "^1.76.0",
+    "rollup": "^4.62.3",
+    "rollup-plugin-dts": "^6.4.1",
+    "rollup-plugin-typescript2": "^0.37.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": ">=10",
+      "onFail": "error"
+    }
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

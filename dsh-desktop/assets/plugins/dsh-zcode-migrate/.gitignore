@@ -1,5 +1,0 @@
-node_modules/
-*.log
-*.tmp
-*.migrate-snapshot
-.DS_Store

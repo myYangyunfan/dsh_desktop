@@ -1,0 +1,166 @@
+{
+  "name": "ds-harness-remote",
+  "version": "0.5.19",
+  "description": "End-to-end encrypted remote access to DeepSeek Harness and experimental Codex workspaces from desktop, web, and Android, with dsh-TUI Host support.",
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "codex",
+    "remote-development",
+    "end-to-end-encryption",
+    "webrtc"
+  ],
+  "homepage": "https://github.com/liguobao/ds-harness-remote#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/liguobao/ds-harness-remote.git"
+  },
+  "bugs": {
+    "url": "https://github.com/liguobao/ds-harness-remote/issues"
+  },
+  "author": "liguobao <lgb835485368@gmail.com>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "ds-harness-remote": "./bin/ds-harness-remote.js"
+  },
+  "types": "./public.d.ts",
+  "exports": {
+    ".": {
+      "types": "./public.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./client": "./dist/client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "dsh-plugin.json",
+    "cordis.patch.yml",
+    "locale",
+    "public.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-settings-general",
+        "@deepseek-ai/dsh-client-ui-plugin-manager",
+        "@deepseek-ai/dsh-client-ui-settings-plugin-inventory",
+        "@deepseek-ai/dsh-client-ui-settings-plugins"
+      ],
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/verify-version-sync.mjs && tsc -p tsconfig.json && node scripts/build-bundles.mjs",
+    "check": "node scripts/verify-version-sync.mjs && tsc -p tsconfig.test.json",
+    "test": "node scripts/verify-version-sync.mjs && vitest run"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.5",
+    "qrcode": "^1.5.4",
+    "werift": "0.24.4",
+    "zod": "^3.24.1",
+    "ws": "^8.21.3",
+    "@xterm/headless": "6.0.0",
+    "@xterm/addon-serialize": "0.14.0"
+  },
+  "optionalDependencies": {
+    "@roamhq/wrtc": "0.10.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.1 <5 || >=4.0.5-alpha.1 <4.0.6-0",
+    "@deepseek-ai/dsh-api-gateway": ">=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.2.2-0 || >=0.2.2-0 <0.2.3-0",
+    "@deepseek-ai/dsh-client-connection": ">=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.2.2-0 || >=0.2.2-0 <0.2.3-0",
+    "@deepseek-ai/dsh-client-locale": ">=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.2.2-0 || >=0.2.2-0 <0.2.3-0",
+    "@deepseek-ai/dsh-client-ui-settings": ">=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.2.2-0 || >=0.2.2-0 <0.2.3-0",
+    "@deepseek-ai/dsh-client-ui-settings-plugins": ">=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.2.2-0 || >=0.2.2-0 <0.2.3-0",
+    "@deepseek-ai/dsh-client-ui-sidebar": ">=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.2.2-0 || >=0.2.2-0 <0.2.3-0",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.2.2-0 || >=0.2.2-0 <0.2.3-0",
+    "@deepseek-ai/dsh-settings": ">=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.2.2-0 || >=0.2.2-0 <0.2.3-0",
+    "react": ">=18.2.0 <19",
+    "@deepseek-ai/dsh-client-ui-settings-general": ">=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.2.2-0 || >=0.2.2-0 <0.2.3-0",
+    "@deepseek-ai/dsh-client-ui-plugin-manager": ">=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.2.2-0 || >=0.2.2-0 <0.2.3-0",
+    "@deepseek-ai/dsh-client-ui-settings-plugin-inventory": ">=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.2.2-0 || >=0.2.2-0 <0.2.3-0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-client-connection": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-locale": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-sidebar": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-slots": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-settings": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-settings-plugins": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-settings-general": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-plugin-manager": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-settings-plugin-inventory": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.5",
+    "@deepseek-ai/cordis-plugin-include": "1.0.10",
+    "@deepseek-ai/cordis-plugin-loader": "1.0.6",
+    "@deepseek-ai/dsh-api-gateway": "0.2.1-rc.1",
+    "@deepseek-ai/dsh-api-remote-access": "0.2.1-rc.1",
+    "@deepseek-ai/dsh-typert-registry": "0.2.1-rc.1",
+    "@deepseek-ai/dsh-brand": "0.2.1-rc.1",
+    "@deepseek-ai/dsh-client-connection": "0.2.1-rc.1",
+    "@deepseek-ai/dsh-client-locale": "0.2.1-rc.1",
+    "@deepseek-ai/dsh-client-ui-settings": "0.2.1-rc.1",
+    "@deepseek-ai/dsh-client-ui-settings-plugins": "0.2.1-rc.1",
+    "@deepseek-ai/dsh-client-ui-sidebar": "0.2.1-rc.1",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.1-rc.1",
+    "@deepseek-ai/dsh-scope": "0.2.1-rc.1",
+    "@deepseek-ai/dsh-session": "0.2.1-rc.1",
+    "@deepseek-ai/dsh-settings": "0.2.1-rc.1",
+    "@dsh-remote/client-core": "workspace:*",
+    "@dsh-remote/crypto": "workspace:*",
+    "@dsh-remote/protocol": "workspace:*",
+    "@dsh-remote/webrtc": "workspace:*",
+    "@types/qrcode": "^1.5.5",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8",
+    "@types/ws": "^8.18.1",
+    "@deepseek-ai/dsh-client-ui-settings-general": "0.2.1-rc.1",
+    "@deepseek-ai/dsh-client-ui-plugin-manager": "0.2.1-rc.1",
+    "@deepseek-ai/dsh-client-ui-settings-plugin-inventory": "0.2.1-rc.1"
+  }
+}

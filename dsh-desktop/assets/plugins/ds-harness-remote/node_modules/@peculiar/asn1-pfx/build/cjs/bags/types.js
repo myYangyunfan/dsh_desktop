@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.id_pkcs_9 = exports.id_SafeContents = exports.id_SecretBag = exports.id_CRLBag = exports.id_certBag = exports.id_pkcs8ShroudedKeyBag = exports.id_keyBag = void 0;
+const object_identifiers_1 = require("../object_identifiers");
+exports.id_keyBag = `${object_identifiers_1.id_bagtypes}.1`;
+exports.id_pkcs8ShroudedKeyBag = `${object_identifiers_1.id_bagtypes}.2`;
+exports.id_certBag = `${object_identifiers_1.id_bagtypes}.3`;
+exports.id_CRLBag = `${object_identifiers_1.id_bagtypes}.4`;
+exports.id_SecretBag = `${object_identifiers_1.id_bagtypes}.5`;
+exports.id_SafeContents = `${object_identifiers_1.id_bagtypes}.6`;
+exports.id_pkcs_9 = "1.2.840.113549.1.9";

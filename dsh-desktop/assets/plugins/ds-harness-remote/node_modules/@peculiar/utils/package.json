@@ -1,0 +1,111 @@
+{
+  "name": "@peculiar/utils",
+  "version": "2.0.3",
+  "description": "Modern byte, encoding, converter registry, and PEM utilities for TypeScript projects.",
+  "type": "module",
+  "main": "./build/cjs/index.js",
+  "module": "./build/esm/index.js",
+  "types": "./build/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./build/types/index.d.ts",
+      "import": "./build/esm/index.js",
+      "require": "./build/cjs/index.js"
+    },
+    "./bytes": {
+      "types": "./build/types/bytes/index.d.ts",
+      "import": "./build/esm/bytes/index.js",
+      "require": "./build/cjs/bytes/index.js"
+    },
+    "./encoding": {
+      "types": "./build/types/encoding/index.d.ts",
+      "import": "./build/esm/encoding/index.js",
+      "require": "./build/cjs/encoding/index.js"
+    },
+    "./encoding/*": {
+      "types": "./build/types/encoding/*.d.ts",
+      "import": "./build/esm/encoding/*.js",
+      "require": "./build/cjs/encoding/*.js"
+    },
+    "./converters": {
+      "types": "./build/types/converters/index.d.ts",
+      "import": "./build/esm/converters/index.js",
+      "require": "./build/cjs/converters/index.js"
+    },
+    "./pem": {
+      "types": "./build/types/pem/index.d.ts",
+      "import": "./build/esm/pem/index.js",
+      "require": "./build/cjs/pem/index.js"
+    },
+    "./legacy": {
+      "types": "./build/types/legacy/index.d.ts",
+      "import": "./build/esm/legacy/index.js",
+      "require": "./build/cjs/legacy/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "build/cjs/**/*.js",
+    "build/cjs/package.json",
+    "build/esm/**/*.js",
+    "build/types/**/*.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "clear": "rimraf build",
+    "rebuild": "npm run clear && npm run build",
+    "build": "node scripts/prune-legacy-build-outputs.mjs && tsc -p tsconfig.build.types.json && tsc -p tsconfig.build.esm.json && tsc -p tsconfig.build.cjs.json && node scripts/write-cjs-package-json.mjs",
+    "prepack": "npm run build",
+    "publish:manual": "npm run check && npm run build && npm publish --ignore-scripts",
+    "lint:check": "eslint . --fix-dry-run",
+    "check": "npm run lint:check && tsc --noEmit && npm test",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "keywords": [
+    "typescript",
+    "utils",
+    "buffer",
+    "bytes",
+    "convert",
+    "encoding",
+    "base64",
+    "base64url",
+    "hex",
+    "utf8",
+    "utf16",
+    "pem",
+    "pki",
+    "peculiar"
+  ],
+  "author": "PeculiarVentures",
+  "contributors": [
+    "Miroshin Stepan<microshine@mail.ru>"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PeculiarVentures/pvtsutils"
+  },
+  "bugs": {
+    "url": "https://github.com/PeculiarVentures/pvtsutils/issues"
+  },
+  "homepage": "https://github.com/PeculiarVentures/pvtsutils#readme",
+  "dependencies": {
+    "tslib": "^2.8.1"
+  },
+  "devDependencies": {
+    "@peculiar/eslint-config-base": "^0.2.9",
+    "@types/node": "^25.6.0",
+    "@vitest/coverage-v8": "^4.1.5",
+    "rimraf": "^6.1.3",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  }
+}

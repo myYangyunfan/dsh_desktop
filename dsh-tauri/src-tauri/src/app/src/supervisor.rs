@@ -3465,8 +3465,9 @@ mod stability_tests {
         let (tx0, rx0) = std::sync::mpsc::channel();
         sv0.run_sidecar_boot(&tx0, 0).expect("基线 boot");
         drop(rx0);
-        // 2) 破坏一个伴随插件入口（写语法垃圾）。
-        let victim = home.join("profiles").join("web").join("node_modules").join("dsh-auto-compact");
+        // 2) 破坏一个伴随插件入口（写语法垃圾）。目标件必须仍在册——原用 dsh-auto-compact，
+        // 该件已于 2026-11-08 按用户要求退役（源目录删除），换用仍在册的 dsh-change-review。
+        let victim = home.join("profiles").join("web").join("node_modules").join("dsh-change-review");
         assert!(victim.exists(), "伴随插件应已同步：{}", victim.display());
         let entry = victim.join("lib").join("index.js");
         if !entry.exists() {
