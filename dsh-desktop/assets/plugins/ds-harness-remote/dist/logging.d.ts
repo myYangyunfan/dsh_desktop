@@ -8,7 +8,7 @@ export interface LogSink {
 export declare class SafeLogger {
     private readonly sink;
     private readonly threshold;
-    constructor(sink: LogSink, threshold?: LogLevel);
+    constructor(sink: LogSink, threshold?: LogLevel | (() => LogLevel));
     debug(message: string, fields?: Record<string, unknown>): void;
     info(message: string, fields?: Record<string, unknown>): void;
     warn(message: string, fields?: Record<string, unknown>): void;

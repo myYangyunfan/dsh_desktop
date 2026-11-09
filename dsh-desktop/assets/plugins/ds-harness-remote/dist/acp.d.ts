@@ -50,7 +50,7 @@ export interface AcpIdeConfig {
     cwd?: string;
 }
 export declare const DEFAULT_ACP_IDES: readonly AcpIdeConfig[];
-/** JSON-RPC stdio bridge for ACP agents (Cursor/Kimi/CodeX). */
+/** JSON-RPC stdio bridge for ACP agents (Cursor/Kimi/Antigravity). Codex is not an ACP backend; it uses the codex.app.* App Server protocol. */
 export declare class StdioAcpAdapter {
     private readonly config;
     readonly backend: AcpBackend;

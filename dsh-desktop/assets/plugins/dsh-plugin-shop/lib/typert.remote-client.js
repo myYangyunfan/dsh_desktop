@@ -51,10 +51,15 @@ const dsh_plugin_shop_shop_catalog_result$schema = z.object({
 })]).optional(),
   'dshPeers': z.union([z.undefined(), z.record(z.string(), z.string())]).optional(),
   'manifestVersion': z.union([z.undefined(), z.string()]).optional(),
+  'engines': z.union([z.undefined(), z.string()]).optional(),
+  'dependencies': z.union([z.undefined(), z.number()]).optional(),
+  'bin': z.union([z.undefined(), z.array(z.string())]).optional(),
+  'installScripts': z.union([z.undefined(), z.literal(false), z.literal(true)]).optional(),
   'unpackedSize': z.union([z.undefined(), z.number()]).optional(),
   'installSize': z.union([z.undefined(), z.number()]).optional(),
   'archived': z.union([z.undefined(), z.literal(false), z.literal(true)]).optional(),
   'forked': z.union([z.undefined(), z.literal(false), z.literal(true)]).optional(),
+  'icon': z.union([z.undefined(), z.string()]).optional(),
 })),
   'denied': z.array(z.object({
   'name': z.string(),
@@ -63,6 +68,7 @@ const dsh_plugin_shop_shop_catalog_result$schema = z.object({
 })),
   'notAShop': z.union([z.undefined(), z.array(z.string())]).optional(),
   'stars': z.record(z.string(), z.number()),
+  'icons': z.record(z.string(), z.string()),
   'incompatible': z.record(z.string(), z.array(z.string())),
   'incompatibleHarness': z.record(z.string(), z.object({
   'dsh': z.union([z.undefined(), z.object({
@@ -119,6 +125,7 @@ const dsh_plugin_shop_shop_installStatus_result$schema = z.object({
   'activation': z.union([z.undefined(), z.literal("live"), z.literal("reload"), z.literal("restart")]).optional(),
   'restartReason': z.union([z.undefined(), z.literal("no-patch"), z.literal("not-simple"), z.literal("host-unsupported"), z.literal("timeout"), z.literal("mount-failed"), z.literal("already-loaded")]).optional(),
   'detail': z.union([z.undefined(), z.string()]).optional(),
+  'command': z.union([z.undefined(), z.string()]).optional(),
 })
 const dsh_plugin_shop_shop_restart_result$schema = z.union([z.object({
   'ok': z.literal(true),
@@ -127,6 +134,18 @@ const dsh_plugin_shop_shop_restart_result$schema = z.union([z.object({
   'pid': z.union([z.undefined(), z.number()]).optional(),
 }), z.object({
   'ok': z.literal(false),
+  'detail': z.string(),
+})])
+const dsh_plugin_shop_shop_rollbackStart_parameter_0$schema = z.object({
+  'key': z.string(),
+})
+const dsh_plugin_shop_shop_rollbackStart_result$schema = z.union([z.object({
+  'ok': z.literal(true),
+  'installId': z.string(),
+  'state': z.union([z.literal("downloading"), z.literal("running"), z.literal("done"), z.literal("failed")]),
+}), z.object({
+  'ok': z.literal(false),
+  'code': z.union([z.literal("not-in-catalog"), z.literal("denied"), z.literal("version-mismatch"), z.literal("needs-acknowledgement"), z.literal("tarball-integrity"), z.literal("ambiguous-identity"), z.literal("name-taken"), z.literal("desktop-profile")]),
   'detail': z.string(),
 })])
 const dsh_plugin_shop_shop_setEnabled_parameter_0$schema = z.object({
@@ -140,6 +159,18 @@ const dsh_plugin_shop_shop_setEnabled_result$schema = z.union([z.object({
   'ok': z.literal(false),
   'detail': z.string(),
 })])
+const dsh_plugin_shop_shop_setFavorite_parameter_0$schema = z.object({
+  'key': z.string(),
+  'favorite': z.boolean(),
+})
+const dsh_plugin_shop_shop_setFavorite_result$schema = z.object({
+  'ok': z.boolean(),
+  'detail': z.union([z.undefined(), z.string()]).optional(),
+})
+const dsh_plugin_shop_shop_state_result$schema = z.object({
+  'favorites': z.array(z.string()),
+  'rollback': z.record(z.string(), z.string()),
+})
 const dsh_plugin_shop_shop_uninstallStart_parameter_0$schema = z.object({
   'name': z.string(),
 })
@@ -159,6 +190,7 @@ const dsh_plugin_shop_shop_updateStart_result$schema = z.union([z.object({
   'state': z.union([z.literal("downloading"), z.literal("running"), z.literal("done"), z.literal("failed")]),
 }), z.object({
   'ok': z.literal(false),
+  'code': z.union([z.undefined(), z.literal("desktop-manual")]).optional(),
   'detail': z.string(),
 })])
 const dsh_plugin_shop_shop_version_result$schema = z.object({
@@ -168,6 +200,7 @@ const dsh_plugin_shop_shop_version_result$schema = z.object({
   'restartBlocked': z.union([z.literal(null), z.literal("desktop"), z.literal("from-default-profile"), z.literal("windows"), z.literal("systemd"), z.literal("port-zero")]),
   'pendingVersion': z.union([z.undefined(), z.literal(null), z.string()]).optional(),
   'bootId': z.union([z.undefined(), z.string()]).optional(),
+  'selfUpdate': z.union([z.undefined(), z.literal(null), z.literal("dsh-page")]).optional(),
 })
 
 export const TYPERT_REMOTE = {
@@ -199,7 +232,7 @@ export const TYPERT_REMOTE = {
         schema: dsh_plugin_shop_shop_catalog_result$schema,
         create: () => dsh_plugin_shop_shop_catalog_result$schema,
       },
-      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":1314,"column":9},
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":1384,"column":9},
     },
     {
       id: 'dsh-plugin-shop#shop/installed',
@@ -215,7 +248,7 @@ export const TYPERT_REMOTE = {
         schema: dsh_plugin_shop_shop_installed_result$schema,
         create: () => dsh_plugin_shop_shop_installed_result$schema,
       },
-      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":1821,"column":9},
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2226,"column":9},
     },
     {
       id: 'dsh-plugin-shop#shop/installedSpecs',
@@ -231,7 +264,7 @@ export const TYPERT_REMOTE = {
         schema: dsh_plugin_shop_shop_installedSpecs_result$schema,
         create: () => dsh_plugin_shop_shop_installedSpecs_result$schema,
       },
-      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":1812,"column":9},
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2064,"column":9},
     },
     {
       id: 'dsh-plugin-shop#shop/installStart',
@@ -259,7 +292,7 @@ export const TYPERT_REMOTE = {
         schema: dsh_plugin_shop_shop_installStart_result$schema,
         create: () => dsh_plugin_shop_shop_installStart_result$schema,
       },
-      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":1440,"column":9},
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":1511,"column":9},
     },
     {
       id: 'dsh-plugin-shop#shop/installStatus',
@@ -286,7 +319,7 @@ export const TYPERT_REMOTE = {
         schema: dsh_plugin_shop_shop_installStatus_result$schema,
         create: () => dsh_plugin_shop_shop_installStatus_result$schema,
       },
-      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":1788,"column":3},
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2040,"column":3},
     },
     {
       id: 'dsh-plugin-shop#shop/restart',
@@ -302,7 +335,34 @@ export const TYPERT_REMOTE = {
         schema: dsh_plugin_shop_shop_restart_result$schema,
         create: () => dsh_plugin_shop_shop_restart_result$schema,
       },
-      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2072,"column":9},
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2477,"column":9},
+    },
+    {
+      id: 'dsh-plugin-shop#shop/rollbackStart',
+      service: 'shop',
+      namespace: 'shop',
+      method: 'rollbackStart',
+      invocation: { kind: 'direct' },
+      parameters: [
+        {
+          name: 'args',
+          wire: 'args',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: 'dsh-plugin-shop#shop/rollbackStart:args',
+            schema: dsh_plugin_shop_shop_rollbackStart_parameter_0$schema,
+            create: () => dsh_plugin_shop_shop_rollbackStart_parameter_0$schema,
+          },
+        },
+      ],
+      result: {
+        mode: 'strict',
+        typeSymbol: 'dsh-plugin-shop/types#ShopInstallResult',
+        schema: dsh_plugin_shop_shop_rollbackStart_result$schema,
+        create: () => dsh_plugin_shop_shop_rollbackStart_result$schema,
+      },
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2157,"column":9},
     },
     {
       id: 'dsh-plugin-shop#shop/setEnabled',
@@ -329,7 +389,51 @@ export const TYPERT_REMOTE = {
         schema: dsh_plugin_shop_shop_setEnabled_result$schema,
         create: () => dsh_plugin_shop_shop_setEnabled_result$schema,
       },
-      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":966,"column":9},
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":1036,"column":9},
+    },
+    {
+      id: 'dsh-plugin-shop#shop/setFavorite',
+      service: 'shop',
+      namespace: 'shop',
+      method: 'setFavorite',
+      invocation: { kind: 'direct' },
+      parameters: [
+        {
+          name: 'args',
+          wire: 'args',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: 'dsh-plugin-shop#shop/setFavorite:args',
+            schema: dsh_plugin_shop_shop_setFavorite_parameter_0$schema,
+            create: () => dsh_plugin_shop_shop_setFavorite_parameter_0$schema,
+          },
+        },
+      ],
+      result: {
+        mode: 'strict',
+        typeSymbol: 'dsh-plugin-shop#shop/setFavorite:result',
+        schema: dsh_plugin_shop_shop_setFavorite_result$schema,
+        create: () => dsh_plugin_shop_shop_setFavorite_result$schema,
+      },
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2114,"column":9},
+    },
+    {
+      id: 'dsh-plugin-shop#shop/state',
+      service: 'shop',
+      namespace: 'shop',
+      method: 'state',
+      implementation: 'shopState',
+      invocation: { kind: 'direct' },
+      parameters: [
+      ],
+      result: {
+        mode: 'strict',
+        typeSymbol: 'dsh-plugin-shop/types#ShopStateResult',
+        schema: dsh_plugin_shop_shop_state_result$schema,
+        create: () => dsh_plugin_shop_shop_state_result$schema,
+      },
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2079,"column":9},
     },
     {
       id: 'dsh-plugin-shop#shop/uninstallStart',
@@ -357,7 +461,7 @@ export const TYPERT_REMOTE = {
         schema: dsh_plugin_shop_shop_uninstallStart_result$schema,
         create: () => dsh_plugin_shop_shop_uninstallStart_result$schema,
       },
-      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":1966,"column":9},
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2371,"column":9},
     },
     {
       id: 'dsh-plugin-shop#shop/updateStart',
@@ -384,7 +488,7 @@ export const TYPERT_REMOTE = {
         schema: dsh_plugin_shop_shop_updateStart_result$schema,
         create: () => dsh_plugin_shop_shop_updateStart_result$schema,
       },
-      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2179,"column":9},
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2585,"column":9},
     },
     {
       id: 'dsh-plugin-shop#shop/version',
@@ -400,7 +504,7 @@ export const TYPERT_REMOTE = {
         schema: dsh_plugin_shop_shop_version_result$schema,
         create: () => dsh_plugin_shop_shop_version_result$schema,
       },
-      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2136,"column":9},
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2541,"column":9},
     },
   ],
 }

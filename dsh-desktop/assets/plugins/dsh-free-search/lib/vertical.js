@@ -4,6 +4,8 @@
 
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { httpsJson, htmlToText } from "./fetch_upstream.js";
+import { stripLoneSurrogates } from "./safe_text.js";
+import { promptLanguageOf, toolDescription, toolParam, localizedEffect } from "./prompt_i18n.js";
 
 const UA = { "User-Agent": "dsh-free-search/0.8 (plugin)", Accept: "application/json" };
 
@@ -657,18 +659,21 @@ export const ENGINES = {
   so360, sogou,
 };
 
-export function registerDomainSearchTool(ctx, { wrapUntrustedBlock }) {
+export function registerDomainSearchTool(ctx, { wrapUntrustedBlock, getConfig = () => ({}), ns, isToolDisabled = () => false } = {}) {
   ctx.inject(["tools"], (sctx) => {
-    sctx.effect(() => {
+    localizedEffect(sctx, {
+      label: "free-search: domain search tool",
+      ns,
+      getLang: () => promptLanguageOf(getConfig()),
+      getEnabled: () => !isToolDisabled("domain_search"),
+      register: (lang) => {
       const dispose = sctx.tools.register(
         defineTool({
           name: "domain_search",
-          description:
-            "Direct lookup in a vertical source (all keyless public APIs). engine: " +
-            Object.entries(ENGINES).map(([k, e]) => `${k} (${e.desc})`).join("; "),
+          description: toolDescription(lang, "domain_search"),
           parameters: {
-            engine: { type: "string", description: `One of: ${Object.keys(ENGINES).join(", ")}.` },
-            query: { type: "string", description: "The lookup query (package name, keyword, owner/repo, product…)." },
+            engine: { type: "string", description: toolParam(lang, "domain_search", "engine", { ids: Object.keys(ENGINES).join(", ") }) },
+            query: { type: "string", description: toolParam(lang, "domain_search", "query") },
           },
           output: {
             schema: {
@@ -682,7 +687,10 @@ export function registerDomainSearchTool(ctx, { wrapUntrustedBlock }) {
               },
             },
             render(_args, value) {
-              if (value.error) return [{ type: "text", text: `domain_search (${value.engine}) failed: ${value.error}` }];
+              if (value.error) {
+                const message = stripLoneSurrogates(String(value.error));
+                return [{ type: "text", text: `domain_search (${value.engine}) failed: ${message}` }];
+              }
               const lines = value.sources.map((s, i) => `- [${i + 1}] ${s.title} — ${s.url}${s.publishedAt ? ` _(${s.publishedAt})_` : ""}${s.snippet ? `\n      ${s.snippet}` : ""}`);
               return [{ type: "text", text: wrapUntrustedBlock(`domain_search ${value.engine} — ${value.query}:\n${lines.join("\n") || "No results."}`) }];
             },
@@ -700,6 +708,6 @@ export function registerDomainSearchTool(ctx, { wrapUntrustedBlock }) {
         })
       );
       return () => dispose();
-    }, "free-search: domain search tool");
+    } });
   });
 }

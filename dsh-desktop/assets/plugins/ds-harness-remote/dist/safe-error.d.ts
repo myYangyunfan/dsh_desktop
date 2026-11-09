@@ -5,4 +5,8 @@ export declare class RpcError extends Error {
     constructor(code: string, message: string, details?: unknown | undefined, retryable?: boolean);
 }
 export declare function safeErrorCode(error: unknown): string;
+export declare function safeStartupError(error: unknown): {
+    code: string;
+    message: string;
+};
 //# sourceMappingURL=safe-error.d.ts.map

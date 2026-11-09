@@ -231,6 +231,9 @@ export interface InstallStatusShape {
     activation?: Activation;
     restartReason?: HotRestartReason;
     detail?: string;
+    /** The terminal line that ran, in the form a reader can retry by hand
+     * (design 2026-11-02-market-borrowings §5). Present on a failure only. */
+    command?: string;
 }
 /** The install view state machine (§7.2). `phase` distinguishes the download
  * that runs ahead of the per-profile mutex from the install that holds it.
@@ -259,6 +262,7 @@ export type InstallView = {
     kind: 'failed';
     detail: string;
     log: string[];
+    command?: string;
 };
 /** One event the install view reacts to. */
 export type InstallEvent = {
@@ -451,6 +455,66 @@ export declare function hasGithubHome(entry: CatalogEntry): boolean;
 export declare function authorOf(entry: CatalogEntry): string | null;
 export declare function npmPageUrl(entry: CatalogEntry): string | null;
 /**
+ * The GitHub `owner/slug` a plugin's repository lives on, from either the
+ * entry's `repo` (a github source holds it directly) or its `repository` URL
+ * (an npm source holds a URL), or null when neither names one this code will
+ * put in a URL path (design 2026-11-05-failure-report.md §1).
+ *
+ * The URL forms npm actually sees are handled: `https://github.com/o/s`,
+ * `git+https://…`, `git@github.com:o/s.git` and the `github:o/s` shorthand.
+ * Everything else — a GitLab URL, a shorthand that names another host — is
+ * null rather than a guess: an issue filed on the wrong repository is worse
+ * than no link.
+ */
+export declare function githubSlugOf(repo: string | null | undefined, repository: string | null | undefined): string | null;
+/** What the failure report needs from the flow it reports. */
+export interface FailureReportInput {
+    verb: 'install' | 'update';
+    name: string;
+    version: string;
+    source: 'npm' | 'github';
+    /** Already resolved `owner/slug`, or null when the entry names none. */
+    repo: string | null;
+    /** The host's published copy, which a failure may leave empty. */
+    detail: string;
+    log: readonly string[];
+    /** The running shop's version, when the tab knows it. */
+    shopVersion?: string;
+}
+/**
+ * A prefilled GitHub issue against the plugin's own repository, or null when
+ * no honest one can be built (design 2026-11-05-failure-report.md §1).
+ *
+ * The shop fills in what it knows and says so in the first line, so a
+ * reporter is not handed a form that pretends to be complete. It never
+ * claims a harness version it does not have: the author asks for
+ * `dsh --version` in their template, and a wrong one would send the report
+ * down the wrong path.
+ */
+export declare function failureReportUrl(input: FailureReportInput): string | null;
+/**
+ * Where an update's changes can be read, or null when no link can be built
+ * honestly (design 2026-11-02-market-borrowings §4).
+ *
+ * Built from the installed row alone, never from `entry.repository`: that
+ * field is author-declared text and is not the install source, so a link made
+ * from it could send a reader to a repository that serves different code.
+ * `row.repo` is the catalog's own github identity, the thing that installed.
+ *
+ * - npm: the npm page of the target version, which lists its own release
+ *   notes when the author wrote them, and its publication date either way.
+ * - github commit to commit: the compare view, which is the diff itself.
+ * - anything else on github (a release tag, or a value that is not a commit):
+ *   the repository's releases, which exists even when no release does.
+ */
+export declare function whatChangedUrl(row: {
+    source: 'npm' | 'github';
+    name: string;
+    repo?: string;
+    installed: string;
+    latest: string;
+}): string | null;
+/**
  * One entry's install identity — the value the catalog guarantees unique, and
  * therefore the only safe React key for a shelf card.
  *
@@ -478,6 +542,14 @@ export declare function entryKey(entry: CatalogEntry): string;
  * shelf that hides the plugin.
  */
 export declare function listedOnShelf(entry: CatalogEntry, cleared: ReadonlySet<string>): boolean;
+/**
+ * An entry's icon as the catalog's data URL, or undefined to draw the default:
+ * it declares none, the catalog predates the icons file, or the sidecar
+ * degraded and the map does not carry its sha256. The map is keyed by 64-hex
+ * sha256, so no name from the catalog is ever used as a lookup here (design
+ * 2026-10-23-shop-plugin-icons §7).
+ */
+export declare function iconOf(entry: CatalogEntry | undefined, icons: Readonly<Record<string, string>>): string | undefined;
 /**
  * One entry's star count from the sidecar, or undefined when it has none.
  *

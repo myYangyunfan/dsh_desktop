@@ -11,7 +11,7 @@
   <a href="https://www.npmjs.com/package/dsh-toolbox-ui"><img src="https://img.shields.io/npm/dm/dsh-toolbox-ui" alt="downloads"></a>
   <a href="https://github.com/Imzl-zl/dsh-toolbox-ui/actions/workflows/ci.yml"><img src="https://github.com/Imzl-zl/dsh-toolbox-ui/actions/workflows/ci.yml/badge.svg" alt="ci"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/npm/l/dsh-toolbox-ui" alt="license"></a>
-  <img src="https://img.shields.io/badge/DSH-%E2%89%A50.2.0--rc.1-blue" alt="DSH >= 0.2.0-rc.1">
+  <img src="https://img.shields.io/badge/DSH-%E2%89%A50.2.1--rc.5-blue" alt="DSH >= 0.2.1-rc.5">
 </p>
 
 <p align="center"><b>中文</b> | <a href="README.en.md">English</a></p>
@@ -45,6 +45,8 @@
 - **跨工作区搬运**：把本项目的 MCP 复制到另一个已注册工作区（在宿主内完成，凭据不经过浏览器），或导出成 JSON 备份 / 分享
 - **工具延迟加载（ToolSearch）**：让某个服务器的工具不再每轮常驻上下文——模型先看到一份**只列工具名**的目录，用内置的 `tool_search` 搜到（关键词或 `select:<确切名字>`）之后，完整参数 schema 才进它的工具列表并可直接调用。默认不开：行上的「延迟 / 全量」标签点一下就切（或列表顶部一键「全部延迟」）；环境变量 `DSH_MCP_TOOL_SEARCH=off` 整体退回全量注入。机制的三个上限（一次返回条数 / 目录行数 / 已发现集大小）可在「延迟参数」里调，写进 profile patch 的 `config.toolSearch`
 
+- **工具加载**：面板顶部「工具加载」是一张**工具列表**——内置工具、其他插件的工具与 MCP 工具按名字列出，逐个选「常驻 / 按需」，默认全部常驻（MCP 服务器自身的启停仍在 MCP 列表，这里不重复加开关，但它的工具照样进这张表，组级/单工具的加载方式因此可以在同一处改）。选成「按需」的工具，模型要先经 `tool_search` 拿到 schema 才能用；**没有可搜的工具时（全部常驻或全部停用）搜索入口本身不出现**，模型不会白搜一次空目录，搜索入口也不会被用户策略藏掉
+
 **技能面**
 
 - 真实作用域与同名遮蔽：同名技能跨作用域是合法配置，面板逐条列出并标出哪一份生效
@@ -63,10 +65,10 @@
 
 ```sh
 # 推荐：npm 安装 —— 之后 `dsh plugin update` 在 ^1.x 内自动升小版本
-dsh plugin --profile web add dsh-toolbox-ui@^1.8.2
+dsh plugin --profile web add dsh-toolbox-ui@^1.10.1
 
 # 或固定 GitHub release tag（不自动跨版本，升级要换 tag 重新 add）
-dsh plugin --profile web add github:Imzl-zl/dsh-toolbox-ui#v1.8.2
+dsh plugin --profile web add github:Imzl-zl/dsh-toolbox-ui#v1.10.1
 ```
 
 装完**重启 `dsh web`**。卸载（不会删除 profile 里已有的 MCP 条目）：
@@ -129,7 +131,7 @@ dsh plugin --profile web update dsh-toolbox-ui
 
 **单台怎么开，在哪儿开？** 列表每一行都有一颗标签：显示「全量」= 这台的工具常驻，显示「延迟」= 已按需加载。**点它就切**，不用进「编辑」框（项目视图里出现的全局条目要在「全局」标签页里改）；想一次全开/全关用列表顶部的 ⚡「全部延迟」。工具数很少的服务器勾了也生效，面板会提示省下的空间可能不多。
 
-**三个上限在哪儿调？** 面板 MCP → 顶部「延迟参数」：`maxResults`（一次搜索最多返回几个工具，默认 10）、`maxCatalogLines`（目录最多列多少行，默认 300）、`maxDiscovered`（已发现集上限，默认 20）。保存后写进 profile patch 的 `config.toolSearch`，**当前会话立即生效**（不需要重启）；与默认相同的值不写盘，所以将来默认值调整时你会跟着走。也可以直接手写这段配置，改完重启 `dsh web` 生效——⚠️ 拼错键会让插件**加载失败并报出具体路径**（不是静默忽略），改对再重启即可。
+**两个上限在哪儿调？** 面板 MCP → 顶部「延迟参数」：`maxResults`（一次搜索最多返回几个工具，默认 10）、`maxDiscovered`（已发现集上限，默认 20）；另外有一个**默认关着**的「限制目录大小」开关（`maxCatalogChars`）——关着就是全部工具都列进目录，只有工具特别多、又想压上下文时才需要打开它（打开时预填 12500，那只是建议起点）。保存后写进 profile patch 的 `config.toolSearch`，**当前会话立即生效**（不需要重启）；与默认相同的值不写盘，所以将来默认值调整时你会跟着走。也可以直接手写这段配置，改完重启 `dsh web` 生效——⚠️ 拼错键会让插件**加载失败并报出具体路径**（不是静默忽略），改对再重启即可。
 
 **「挂载失败」「连接失败」「作用域隔离失败」怎么区分？** 三件不同的事：**挂载失败**=会话挂载阶段就没挂上；**连接失败**=`mcp-client` 连不上或重连耗尽；**作用域隔离失败**=连接正常但工具不在共享作用域层。详情页会给具体原因，排查见[设计与限制](docs/design.md#连接状态语义)。
 
@@ -139,14 +141,11 @@ dsh plugin --profile web update dsh-toolbox-ui
 
 | 项目 | 已验证 |
 |---|---|
-| DeepSeek Harness | `0.2.0-rc.1` 及以上（`0.2.0-rc.2` 与 `0.2.1-rc.2` 都跑过全量；0.2.1 宿主自带的 cordis 4.0.5 / loader 1.0.6 也在覆盖内） |
+| DeepSeek Harness | 支持准入从 `0.2.1-rc.5` 起；已验证 `0.2.1-rc.5`（Cordis 4.0.5 / Loader 1.0.6）与 `0.2.2-rc.1`（Cordis 4.1.0 / Loader 1.1.0）。旧宿主仅保留历史回归，不属于当前发布支持面。 |
 | Node.js | DSH 自带/支持的运行时 |
 | 平台 | Windows；Linux/macOS 使用同一 DSH Web 契约 |
 
-只支持 0.2.x 起：ToolSearch 依赖 0.2 的 per-agent 呈现模式（`ctx.tools.modeFor(agent)`）与
-`tools:sdk` 手册段，0.1.x 上这两样都不存在。不为旧版本保留降级分支。
-支持面就是 **0.2.0 与 0.2.1 两条线**：两者之间宿主换了两代 loader（1.0.3 → 1.0.6），
-启动错误传播与 dispose 写盘行为都变了，插件对这两处做了显式适配并各有一条常驻用例。
+当前发布支持从 **0.2.1-rc.5** 起：ToolSearch 的 0.2.1 兼容适配与 0.2.2 的 step-owned toolSet / 独立 executor 路径均已覆盖。更早宿主只保留历史 loader 回归，不再作为发布准入；新版 Loader/Include 生命周期按目标宿主整套验证。
 
 ## 开发
 

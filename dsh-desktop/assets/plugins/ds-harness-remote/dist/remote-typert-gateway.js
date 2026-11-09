@@ -11,11 +11,16 @@ export class RemoteTypertGateway {
     client;
     compatibility;
     harnessVersion;
+    deferStreamDisconnect;
     frameTransfers;
-    constructor(client, compatibility, harnessVersion) {
+    constructor(client, compatibility, harnessVersion, 
+    // Native snapshot consumers treat wire errors as terminal. Their local
+    // carrier is reset by subscribeRemoteRecovery only after reauthentication.
+    deferStreamDisconnect = false) {
         this.client = client;
         this.compatibility = compatibility;
         this.harnessVersion = harnessVersion;
+        this.deferStreamDisconnect = deferStreamDisconnect;
     }
     async invoke(request) {
         const result = await this.dispatch(`${request.namespace}/${request.method}`, { args: request.args }, request.signal ?? new AbortController().signal);
@@ -78,18 +83,15 @@ export class RemoteTypertGateway {
         return { ok: true, value };
     }
     async open(endpoint, payload, signal) {
-        if (this.frameTransfers === undefined) {
-            const description = await this.client.rpc('harness.transport.describe', {}, signal);
-            this.frameTransfers = isRecord(description) && Array.isArray(description.capabilities)
-                && description.capabilities.includes('harness.remote.stream.transfer.v1');
-        }
         signal.throwIfAborted();
         const streamId = uuidV7();
         const queue = new AsyncValueQueue();
         const lifetime = new AbortController();
         const transferSignal = AbortSignal.any([signal, lifetime.signal]);
+        let disconnected = false;
         const unsubscribe = this.client.onEvent(event => routeStreamEvent(event, streamId, queue));
         const unsubscribeClose = this.client.onClose(() => {
+            disconnected = true;
             lifetime.abort();
             queue.fail(new RemoteClientError('TRANSPORT_CLOSED', 'The remote Harness stream transport closed.'));
         });
@@ -102,6 +104,12 @@ export class RemoteTypertGateway {
         };
         signal.addEventListener('abort', onAbort, { once: true });
         try {
+            if (this.frameTransfers === undefined) {
+                const description = await this.client.rpc('harness.transport.describe', {}, signal);
+                this.frameTransfers = isRecord(description) && Array.isArray(description.capabilities)
+                    && description.capabilities.includes('harness.remote.stream.transfer.v1');
+            }
+            signal.throwIfAborted();
             await this.client.rpc('harness.remote.stream.open', {
                 streamId, endpoint, payload, ...(this.frameTransfers ? { transferFrames: true } : {}),
             }, signal);
@@ -112,11 +120,12 @@ export class RemoteTypertGateway {
             unsubscribeClose();
             lifetime.abort();
             void this.client.rpc('harness.remote.stream.close', { streamId }).catch(() => undefined);
+            await this.deferDisconnect(error, disconnected, signal);
             throw error;
         }
-        return this.iterate(streamId, endpoint, queue, unsubscribe, unsubscribeClose, signal, onAbort, lifetime, transferSignal);
+        return this.iterate(streamId, endpoint, queue, unsubscribe, unsubscribeClose, signal, onAbort, lifetime, transferSignal, () => disconnected);
     }
-    async *iterate(streamId, endpoint, queue, unsubscribe, unsubscribeClose, signal, onAbort, lifetime, transferSignal) {
+    async *iterate(streamId, endpoint, queue, unsubscribe, unsubscribeClose, signal, onAbort, lifetime, transferSignal, disconnected) {
         try {
             for await (const item of queue) {
                 let frame = item;
@@ -144,6 +153,10 @@ export class RemoteTypertGateway {
                     : normalizeAssistantMessageStreamValue(endpoint, value);
             }
         }
+        catch (error) {
+            await this.deferDisconnect(error, disconnected(), signal);
+            throw error;
+        }
         finally {
             lifetime.abort();
             signal.removeEventListener('abort', onAbort);
@@ -152,6 +165,18 @@ export class RemoteTypertGateway {
             queue.close();
             await this.client.rpc('harness.remote.stream.close', { streamId }).catch(() => undefined);
         }
+    }
+    async deferDisconnect(error, disconnected, signal) {
+        if (!this.deferStreamDisconnect || !disconnected || signal.aborted)
+            return;
+        // Host business/permission failures remain terminal, even if a transport
+        // close races them. Only the actual onClose path may defer a failure;
+        // queue overflow uses TRANSPORT_CLOSED too but must not hang forever.
+        if (isRecord(error) && error.isDSHRemoteError === true)
+            return;
+        // Keep the native consumer alive until its carrier is replaced (or the
+        // page/selection is disposed). Do not reopen streams or replay RPCs here.
+        await new Promise(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
     }
     async callTransferred(encoded, signal) {
         if (encoded.byteLength > MAX_HARNESS_API_TRANSFER_BYTES) {

@@ -770,29 +770,29 @@ CI 五个架构的 staging 同口径），装机后首次开机由 boot 的插�
 | @deepseek-ai/dsh-wsl-settings | 0.1.0 | MIT |
 | @dsh-external/dsh-subagent-lens | 0.1.1 | MIT |
 | @dsh-external/dsh-super-injector | 0.3.1 | BSD-3-Clause |
-| billion-context-dsh | 0.2.26 | MIT |
+| billion-context-dsh | 0.2.27 | MIT |
 | ds-bot | 0.2.0 | Apache-2.0 |
 | dsh-basics-panel | 0.4.2 | MIT |
 | dsh-better-sidebar | 0.24.2 | MIT |
 | dsh-builtin-manager | 0.2.0 | MIT |
 | dsh-change-review | 0.1.2 | MIT |
-| dsh-easyrewrite | 2.6.0 | MIT |
+| dsh-easyrewrite | 3.0.1 | MIT |
 | dsh-input-fold | 0.1.1 | MIT |
 | dsh-input-history | 0.1.1 | MIT |
 | dsh-offpeak | 1.0.1 | MIT |
-| dsh-pocket | 2.10.7 | GPL-2.0 |
+| dsh-pocket | 2.12.0 | GPL-2.0 |
 | dsh-prompt-optimizer | 3.0.0 | MIT |
 | dsh-session-manager | 0.1.0 | MIT |
 | dsh-settings-groups | 0.1.1 | MIT |
 | dsh-settings-nav-custom | 0.1.1 | MIT |
 | dsh-synapse | 0.3.1 | MIT |
-| dsh-free-search | 0.9.11 | MIT |
-| dsh-plugin-shop | 0.9.0 | Apache-2.0 |
+| dsh-free-search | 0.9.39 | MIT |
+| dsh-plugin-shop | 0.9.3 | Apache-2.0 |
 | @local/dsh-network-proxy | 1.0.0 | MIT |
-| dsh-toolbox-ui | 1.8.2 | MIT |
+| dsh-toolbox-ui | 1.10.1 | MIT |
 | @bittersmilezzz/dsh-notify | 0.4.5 | MIT |
-| dsh-context | 0.82.1 | Apache-2.0 |
-| ds-harness-remote | 0.5.19 | MIT |
+| dsh-context | 0.83.0 | Apache-2.0 |
+| ds-harness-remote | 0.6.4 | MIT |
 
 > **2026-11-09 新增 2 个（31→33，按用户要求）**：`dsh-context`（[bowenliang123/dsh-context](https://github.com/bowenliang123/dsh-context)，Apache-2.0）、
 > `ds-harness-remote`（[liguobao/ds-harness-remote](https://github.com/liguobao/ds-harness-remote)，MIT，内层依赖树随包分发）。

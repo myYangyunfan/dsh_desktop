@@ -2,6 +2,7 @@ import { dirname, join } from 'node:path'
 import { evaluateExpression, toTemplate } from './env-expression.js'
 import { duplicateServerNames, normalizeMcpImport } from './mcp-config.js'
 import { setOwn } from './own-property.js'
+import { normalizePolicyConfig } from './tool-loading-policy.js'
 
 /**
  * 项目级 MCP 配置文件（<workspace>/.dsh/mcp.json）的读写。
@@ -123,6 +124,9 @@ export async function readWorkspaceConfig(cwd, readFileFn) {
     return { servers: [], exclude: [], error: `${WORKSPACE_CONFIG_REL.join('/')} 根节点必须是 JSON 对象` }
   }
   const exclude = Array.isArray(parsed.exclude) ? parsed.exclude.filter((value) => typeof value === 'string') : []
+  // 项目级工具加载策略（本插件自有，与 `exclude` 同一种"插件扩展键"的做法）。
+  // 读侧宽容：手改坏了按"没配"处理，不让面板整页打不开；写侧严格（validatePolicyConfig）。
+  const toolLoading = normalizePolicyConfig(parsed.toolLoading)
   try {
     const normalized = normalizeMcpImport({ mcpServers: parsed.mcpServers })
     // 文件是"一整份配置"：里面出现归一化后同名的条目就是自相矛盾，整份拒绝比静默少一条好。
@@ -131,22 +135,49 @@ export async function readWorkspaceConfig(cwd, readFileFn) {
     if (duplicates.length) {
       return { servers: [], exclude, error: `${WORKSPACE_CONFIG_REL.join('/')} 里有归一化后同名的条目（${duplicates.join('、')}）：同一作用域内 serverName 只能有一条`, path }
     }
-    return { servers: normalized.servers, exclude, error: '', warnings: normalized.warnings, path }
+    return { servers: normalized.servers, exclude, toolLoading, error: '', warnings: normalized.warnings, path, raw: parsed }
   } catch (error) {
-    return { servers: [], exclude, error: `${WORKSPACE_CONFIG_REL.join('/')} 配置无效：${error?.message ?? error}`, path }
+    return { servers: [], exclude, toolLoading, error: `${WORKSPACE_CONFIG_REL.join('/')} 配置无效：${error?.message ?? error}`, path }
   }
 }
 
 /**
  * 写入项目配置。servers 为内部 spec 列表；exclude 为全局 serverName 列表。
+ *
+ * **读改写，不重建**：`previous` 是读进来的整份原文（含本插件不认识的顶层键）。
+ * 旧实现只按 `{mcpServers, exclude, toolLoading}` 重新拼一份文档，于是用户在同一个文件里
+ * 写的任何扩展键（其它工具/编辑器的字段）会在一次"保存"之后凭空消失——那不是本插件的财产。
+ *
+ * @param {string} cwd
+ * @param {{servers: object[], exclude?: string[], toolLoading?: object|null, previous?: object}} input
+ *   `toolLoading === null` 表示显式删掉该键；`undefined` 表示这次不改它。
  */
-export async function writeWorkspaceConfig(cwd, { servers, exclude }, writeFileFn, mkdirFn) {
+export async function writeWorkspaceConfig(cwd, { servers, exclude, toolLoading, previous }, writeFileFn, mkdirFn) {
   const path = configPath(cwd)
   const mcpServers = {}
   // serverName 可能合法地叫 `__proto__`（SERVER_NAME_PATTERN 允许），普通赋值会丢掉它。
   for (const server of servers) setOwn(mcpServers, server.name, specToMcpEntry(server))
-  const doc = { mcpServers }
-  if (Array.isArray(exclude) && exclude.length) doc.exclude = [...exclude]
+  const doc = previous !== null && typeof previous === 'object' && !Array.isArray(previous) ? { ...previous } : {}
+  doc.mcpServers = mcpServers
+  // exclude 是"整份列表"语义：传了数组就按它写（空数组 = 明确清空该键）。
+  if (Array.isArray(exclude)) {
+    if (exclude.length) doc.exclude = [...exclude]
+    else delete doc.exclude
+  }
+  // 只写用户真的设过的东西：legacy 省略 mode，但不能因此丢掉 tools/groups 覆盖。
+  // 项目策略可以只表达逐工具/分组例外；把它当成“空策略”会让保存 MCP 时静默抹掉用户设置。
+  if (toolLoading !== undefined) {
+    if (toolLoading === null) {
+      delete doc.toolLoading
+    } else {
+      const sparse = {}
+      if (toolLoading.mode && toolLoading.mode !== 'legacy') sparse.mode = toolLoading.mode
+      if (Object.keys(toolLoading.groups ?? {}).length) sparse.groups = { ...toolLoading.groups }
+      if (Object.keys(toolLoading.tools ?? {}).length) sparse.tools = { ...toolLoading.tools }
+      if (Object.keys(sparse).length) doc.toolLoading = sparse
+      else delete doc.toolLoading
+    }
+  }
   const text = JSON.stringify(doc, null, 2) + '\n'
   await mkdirFn(dirname(path), { recursive: true })
   await writeFileFn(path, text)

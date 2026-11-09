@@ -177,11 +177,11 @@ bash dsh-tauri/scripts/smoke-installed.sh
 | `@deepseek-ai/dsh-workspace-anchor` | 0.1.1 | 把当前工作目录写进稳定系统提示的锚点块，防 agent 工作目录漂移（0.2.1 起内核不再注册 `{{cwd}}` 变量，锚点由插件自己填实路径） | 自研 · MIT |
 | `@deepseek-ai/dsh-wsl-settings` | 0.1.0 | 设置页「WSL 后端」栏：local↔wsl 切换、发行版与安装目录、状态探活 | 自研 · MIT |
 | `ds-bot` | 0.2.0 | Bot 团队：主 Bot + 长期 Bot + 群聊，Bot 间 @ 转交与共享记忆，开箱即用的协作工作台（loader id `bot`） | [Fei2411/DeepSeek-Bot](https://github.com/Fei2411/DeepSeek-Bot) · Apache-2.0 |
-| `billion-context-dsh` | 0.2.26 | Active Context Pruning：模型驱动上下文管理，另注册 4 个模型工具与 /acp-prune 命令 | [Tyan66666/billion-context-dsh](https://github.com/Tyan66666/billion-context-dsh) · MIT |
-| `dsh-pocket` | 2.10.7 | 手机扫码实时同屏操控桌面 web（WebSocket 透传 + 公网隧道 + 二维码配对） | [shaobeichen/dsh-pocket](https://github.com/shaobeichen/dsh-pocket) · GPL-2.0 |
+| `billion-context-dsh` | 0.2.27 | Active Context Pruning：模型驱动上下文管理，另注册 4 个模型工具与 /acp-prune 命令 | [Tyan66666/billion-context-dsh](https://github.com/Tyan66666/billion-context-dsh) · MIT |
+| `dsh-pocket` | 2.12.0 | 手机扫码实时同屏操控桌面 web（WebSocket 透传 + 公网隧道 + 二维码配对） | [shaobeichen/dsh-pocket](https://github.com/shaobeichen/dsh-pocket) · GPL-2.0 |
 | `@deepseek-ai/dsh-openclaw-bridge` | 0.8.1 | 微信 / 飞书官方频道桥接入 DSH agent 会话（分片回写、去重限流） | [hzhz314159/openclaw-dsh-bridge](https://github.com/hzhz314159/openclaw-dsh-bridge) · MIT |
 | `dsh-input-history` | 0.1.1 | 输入框 ↑/↓ 终端式已发送消息回溯（按会话隔离） | 自研 · MIT |
-| `dsh-easyrewrite` | 2.6.0 | 消息撤回 / 重编辑 + 版本翻页器 + 自带设置中心 | [Renzic-Stone/DSH-EasyRewrite](https://github.com/Renzic-Stone/DSH-EasyRewrite) · MIT |
+| `dsh-easyrewrite` | 3.0.1 | 消息撤回 / 重编辑 + 版本翻页器 + 自带设置中心 | [Renzic-Stone/DSH-EasyRewrite](https://github.com/Renzic-Stone/DSH-EasyRewrite) · MIT |
 | `dsh-change-review` | 0.1.2 | AI 变更审核：让模型复查自己刚做的改动（正确性 / 安全性 / 目标一致性） | 自研 · MIT |
 | `dsh-offpeak` | 1.0.1 | 峰谷价格卫士：高峰时段拦截发送提醒，可定时到低价时段自动执行 | [christophersmith2737-commits/OffPeak](https://github.com/christophersmith2737-commits/OffPeak) · MIT |
 | `dsh-settings-nav-custom` | 0.1.1 | 设置页左侧导航项显示 / 隐藏与排序（localStorage 持久化） | EAC 移植 [DSH-EAC/EAC-Desktop](https://github.com/DSH-EAC/EAC-Desktop) · MIT |
@@ -193,13 +193,13 @@ bash dsh-tauri/scripts/smoke-installed.sh
 | `dsh-prompt-optimizer` | 3.0.0 | 输入框旁一键分析并优化草稿（SSE 流式上屏；默认实时复用当前会话模型；无上下文走结构模板、有上下文提炼目的顺势润色；保真自检、斜杠命令前缀保护；结果可替换/撤回/复制；设置页可配模型、调用参数与上下文） | [Y1X1n/dsh-prompt-optimizer](https://github.com/Y1X1n/dsh-prompt-optimizer) · MIT |
 | `dsh-builtin-manager` | 0.2.0 | 「设置 → 插件」里的内置插件页：搜索 / 状态筛选 + 单列表逐条查看随包内置件并启停（行内反馈；启停下次启动生效） | 自研 · MIT |
 | `@deepseek-ai/dsh-goal-completion` | 0.1.0 | 内核右栏「目标收尾」标签页：当前会话目标的状态机 + 官方 GoalBar 没有的 complete（标记完成，两次点击确认） | 自研 · MIT |
-| `dsh-free-search` | 0.9.11 | 免费多引擎搜索：注册 `ctx.web` 搜索 provider，内置 web_search 自动选用（loader id 是 `web-search-free`，不是包名） | [DDDMUC/dsh-free-search](https://github.com/DDDMUC/dsh-free-search) · MIT |
-| `dsh-plugin-shop` | 0.9.0 | 插件商店：浏览 / 安装 / 启停 / 更新 dsh 插件（loader id 是 `shop`，客户端 bundle id 才是包名） | [LivXue/dsh-plugin-shop](https://github.com/LivXue/dsh-plugin-shop) · Apache-2.0 |
+| `dsh-free-search` | 0.9.39 | 免费多引擎搜索：注册 `ctx.web` 搜索 provider，内置 web_search 自动选用（loader id 是 `web-search-free`，不是包名） | [DDDMUC/dsh-free-search](https://github.com/DDDMUC/dsh-free-search) · MIT |
+| `dsh-plugin-shop` | 0.9.3 | 插件商店：浏览 / 安装 / 启停 / 更新 dsh 插件（loader id 是 `shop`，客户端 bundle id 才是包名） | [LivXue/dsh-plugin-shop](https://github.com/LivXue/dsh-plugin-shop) · Apache-2.0 |
 | `@local/dsh-network-proxy` | 1.0.0 | 设置「通用」里的 HTTP 代理行：读系统代理并热切换 fetch dispatcher（包名保留上游 `@local/*`，改名会让更新回来的行对不上） | [baizhizzl/dsh-network-proxy](https://github.com/baizhizzl/dsh-network-proxy) · MIT |
-| `dsh-toolbox-ui` | 1.8.2 | MCP / 技能工具箱：右下悬浮面板，MCP 市场与技能管理（loader id 是 `mcp-manager-ui`；宿主半边静态导入 `smol-toml`） | [Imzl-zl/dsh-toolbox-ui](https://github.com/Imzl-zl/dsh-toolbox-ui) · MIT |
+| `dsh-toolbox-ui` | 1.10.1 | MCP / 技能工具箱：右下悬浮面板，MCP 市场与技能管理（loader id 是 `mcp-manager-ui`；宿主半边静态导入 `smol-toml`） | [Imzl-zl/dsh-toolbox-ui](https://github.com/Imzl-zl/dsh-toolbox-ui) · MIT |
 | `@bittersmilezzz/dsh-notify` | 0.4.5 | 桌面通知：渲染进程 Web Notification 六类事件 + 点击回会话，v1.0.7 起取代壳层「回合完成」通知 | [bitterSmilezzz/dsh-notify](https://github.com/bitterSmilezzz/dsh-notify) · MIT |
-| `dsh-context` | 0.82.1 | 上下文透视：右栏上下文看板 + `/context` 命令，拆解当前上下文由什么构成、如何随轮次演变 | [bowenliang123/dsh-context](https://github.com/bowenliang123/dsh-context) · Apache-2.0 |
-| `ds-harness-remote` | 0.5.19 | 端到端加密远程访问：桌面 / Web / 安卓远控本机 DSH，含 dsh-TUI Host 支持（内层依赖树随包分发，WebRTC 走纯 JS werift） | [liguobao/ds-harness-remote](https://github.com/liguobao/ds-harness-remote) · MIT |
+| `dsh-context` | 0.83.0 | 上下文透视：右栏上下文看板 + `/context` 命令，拆解当前上下文由什么构成、如何随轮次演变 | [bowenliang123/dsh-context](https://github.com/bowenliang123/dsh-context) · Apache-2.0 |
+| `ds-harness-remote` | 0.6.4 | 端到端加密远程访问：桌面 / Web / 安卓远控本机 DSH，含 dsh-TUI Host 支持（内层依赖树随包分发，WebRTC 走纯 JS werift） | [liguobao/ds-harness-remote](https://github.com/liguobao/ds-harness-remote) · MIT |
 
 > 历史上还随包过 `dsh-navbar`（导航栏替换，v0.6.3-beta.3 已移出清单并删源 `ff421ac2`）、
 > `zat-dsh-engine`（旧内置市场，更早退役）、`dsh-reasoning-effort`（推理强度选择器，2026-10-17
@@ -211,9 +211,15 @@ bash dsh-tauri/scripts/smoke-installed.sh
 > 源目录已从 `assets/plugins/` 删除，老装机机器的 cordis.patch 注册行与 profile 镜像副本由
 > `scripts/lib/companion-plugins.js` 的 `RETIRED_COMPANIONS` 在下次开机时回收。
 >
-> **2026-11-09 按用户要求新增 2 件（31 → 33）**：`dsh-context`（上下文透视，0.82.1）与
-> `ds-harness-remote`（端到端加密远程访问，0.5.19）。两件都是上游整包 vendored 进来，
+> **2026-11-09 按用户要求新增 2 件（31 → 33）**：`dsh-context`（上下文透视）与
+> `ds-harness-remote`（端到端加密远程访问）。两件都是上游整包 vendored 进来，
 > 后者内层 `node_modules` 随包正件分发（`shipsNodeModules`）。
+>
+> **2026-11-09 同日内置件更新一轮，8 件升到 npm latest**：`dsh-plugin-shop` 0.9.3、
+> `dsh-toolbox-ui` 1.10.1、`dsh-context` 0.83.0、`billion-context-dsh` 0.2.27、`dsh-free-search` 0.9.39、
+> `dsh-pocket` 2.12.0、`dsh-easyrewrite` 3.0.1、`ds-harness-remote` 0.6.4。判据只认「身份 same 且远端更高」；
+> `better-sidebar`（本地重建件）、`ds-bot`（vendored patch）与三条撞名件按策略不动，清单见
+> `dsh-desktop/docs/builtin-plugins-inventory.md` §4.4。
 
 ## 🧠 Agent 预设
 

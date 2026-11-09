@@ -146,6 +146,76 @@ function compareNames(a, b) {
   return a < b ? -1 : a > b ? 1 : 0
 }
 
+/** `select:` 命中一条时的返回形状（`score: Infinity` 表示"按名精确取"，不参与排序）。 */
+function selectMatch(entry) {
+  return { name: entry.name, description: entry.description, parameters: entry.parameters, score: Infinity, found: true }
+}
+
+/**
+ * 裸名解析：公开名是 `mcp__<server>__<raw>`，目录段显示的是 `<raw>`，所以 `<raw>` 的命中判据
+ * 只能是「全名以 `__<raw>` 结尾」。**不做前缀猜测、不做模糊/编辑距离匹配**（红线 R1/R2）——
+ * 这里只把模型抄来的短名与全名的后缀对齐；同一 `<raw>` 在多台服务器上都有时**全部返回**，
+ * 由模型按描述挑（消歧不靠猜）。
+ * @param {Map<string, object>} catalog - 目录（键为公开全名）。
+ * @param {string} requested - 模型写的名字，可以是全名、裸名，大小写不限。
+ * @returns {object[]} 命中的目录条目；空数组表示确实不存在。
+ */
+function resolveBareName(catalog, requested) {
+  const wanted = requested.toLowerCase()
+  const suffix = `__${wanted}`
+  const hits = []
+  for (const entry of catalog.values()) {
+    const name = entry.name.toLowerCase()
+    if (name === wanted || name.endsWith(suffix)) hits.push(entry)
+  }
+  return hits
+}
+
+/** 按名字取条目，大小写不敏感（先用精确键走 Map，未中再线性扫一次）。 */
+function entryByName(catalog, name) {
+  const exact = catalog.get(name)
+  if (exact !== undefined) return exact
+  const wanted = name.toLowerCase()
+  for (const entry of catalog.values()) {
+    if (entry.name.toLowerCase() === wanted) return entry
+  }
+  return undefined
+}
+
+/**
+ * 把模型**自己拼出来的名字**还原成目录里真实存在的全名。
+ *
+ * 为什么值得做：目录把服务器放在组头、裸名放在列表项，模型很自然地连成
+ * `browser.take_screenshot` / `browser take_screenshot` / `browser_take_screenshot`。这属于
+ * **我们已经知道答案**的情形——拼回 `mcp__<server>__<tool>` 查一下在不在就知道了，不该靠提示词
+ * 去劝它别这么写（靠模型的措辞没有确定性）。
+ *
+ * 为什么不是猜（红线 R2）——判据有两条，缺一不可：
+ * ① **分隔符必须是"合法名字里不可能出现的字符"**。宿主把模型可见的工具名归一化成
+ *    `[A-Za-z0-9_-]`（`mcp-client/src/tools.ts:51,83`：非法字符替换成 `_`），所以 `.` 与空格
+ *    **不可能**是名字的一部分 ⇒ 用它们拆分只有**一种**解释，不存在"在两种意思里挑一个"。
+ *    单个 `_` 是合法名字字符（`repo_read_file` 可能就是一张真工具的名字），所以**不认**——
+ *    认了就是策略不是事实（早期版本认过，是错误）。
+ * ② **反拼出来的名字必须真的在目录里**。不依赖服务器名单、不解析 `mcp__`/`__` 的结构；
+ *    拼不回去就一个字都不返回，绝不返回"最像的那个"；同一串有多种拆法且都能对上时**全部返回**
+ *    （消歧交给模型按描述挑，与裸名解析同一处置）。
+ *
+ * @param {Map<string, object>} catalog - 目录（键为公开全名）。
+ * @param {string} requested - 模型写的名字（可能用 `.` 或空格把服务器与工具连起来）。
+ * @returns {object[]} 命中的目录条目；空数组表示这种拼法对不上任何现有工具。
+ */
+function resolveJoinedName(catalog, requested) {
+  const hits = []
+  // 只有这两个：它们在 `[A-Za-z0-9_-]` 之外，所以拆法唯一（见上方注释）。`_` 故意不在其中。
+  for (const separator of ['.', ' ']) {
+    for (let index = requested.indexOf(separator); index > 0; index = requested.indexOf(separator, index + 1)) {
+      const entry = entryByName(catalog, `mcp__${requested.slice(0, index)}__${requested.slice(index + 1)}`)
+      if (entry !== undefined && !hits.includes(entry)) hits.push(entry)
+    }
+  }
+  return hits
+}
+
 /**
  * 在目录上执行一次检索。select 形态按请求顺序原样回报（缺失的也回报，标注 found:false）；
  * 其余形态返回按分数降序的至多 maxResults 条。
@@ -161,15 +231,24 @@ export function searchCatalog(catalog, query, maxResults = 5, stem = false) {
   if (parsed.kind === 'select') {
     const matches = []
     const seen = new Set()
-    for (const name of parsed.names) {
-      if (seen.has(name)) continue
-      seen.add(name)
-      const entry = catalog.get(name)
-      if (entry === undefined) {
-        matches.push({ name, found: false })
+    for (const requested of parsed.names) {
+      if (seen.has(requested)) continue
+      seen.add(requested)
+      const entry = catalog.get(requested)
+      if (entry !== undefined) {
+        matches.push(selectMatch(entry))
         continue
       }
-      matches.push({ name: entry.name, description: entry.description, parameters: entry.parameters, score: Infinity, found: true })
+      // 裸名：目录段显示的是剥掉 `mcp__<server>__` 之后的那一段，模型会照着它写 select:。
+      // 不吃裸名的话，目录改格式就把这条主路径废掉了。
+      const resolved = resolveBareName(catalog, requested)
+      // 裸名对不上时再试"自己拼出来的名字"：能拼回目录里存在的全名就认，拼不回去才算不存在。
+      const hits = resolved.length > 0 ? resolved : resolveJoinedName(catalog, requested)
+      if (hits.length === 0) {
+        matches.push({ name: requested, found: false })
+        continue
+      }
+      for (const hit of hits) matches.push(selectMatch(hit))
     }
     return matches
   }

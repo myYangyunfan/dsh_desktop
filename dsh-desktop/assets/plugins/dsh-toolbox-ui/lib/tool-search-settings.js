@@ -3,7 +3,10 @@
 //
 // 为什么只开三个（证据在 `.tasks/mcp-tool-search/TUNING-DECISIONS.md`）：
 //   · maxResults      —— Q2/F4：serena 28 工具实测 top5 漏 33%，top10 到 100%
-//   · maxCatalogLines —— Q4：目录行的体积口径，仍是**外推**，所以它尤其需要能被调
+//   · maxCatalogChars —— Q4 + 2026-10-26：目录的**字符**预算（原「行数」口径已废弃，
+//                        行不是成本、字符才是）。**缺省不设 = 不截断**：不截断的代价是
+//                        可见的（prompt 变长），截断的代价是静默的（半张地图 → 模型谎报
+//                        "没有这个能力"）。用户显式写正整数才启用，那是他自己给的资源预算
 //   · maxDiscovered   —— Q2：20 + 常驻 12 ≈ 32，落在 30–50 退化带的下沿
 //
 // **不开** requireDiscovery（Q6：关掉 = 让模型凭记忆直调未加载工具，准确性灾难），也不开
@@ -22,16 +25,19 @@ import { readFileSync } from 'node:fs'
 import { parseDocument, YAMLMap, isMap, isSeq } from 'yaml'
 import { z } from 'zod'
 import { DEFAULTS, resolveRuntimeConfig } from './tool-search-runtime.js'
+import { normalizePolicyConfig, validatePolicyConfig } from './tool-loading-policy.js'
 import { getNode, getValue } from './yaml-node.js'
 
 /** 插件配置里的键名。面板文案与文档都引用它，所以是常量而不是散落的字面量。 */
 export const TOOL_SEARCH_CONFIG_KEY = 'toolSearch'
+/** 统一加载策略的键名（profile 的 `config.toolLoading`）。 */
+export const TOOL_LOADING_CONFIG_KEY = 'toolLoading'
 
 /**
  * 开放给用户的三项。**顺序即面板顺序**（面板按这份清单渲染字段，不另抄一遍）。
  * 其余参数（toolName / stem / requireDiscovery）不在这里 —— 见文件头的理由。
  */
-export const EXPOSED_SETTING_KEYS = ['maxResults', 'maxCatalogLines', 'maxDiscovered']
+export const EXPOSED_SETTING_KEYS = ['maxResults', 'maxCatalogChars', 'maxDiscovered']
 
 /**
  * 宿主加载时校验的 schema（`McpManagerGateway.Config`）。
@@ -45,10 +51,51 @@ export const EXPOSED_SETTING_KEYS = ['maxResults', 'maxCatalogLines', 'maxDiscov
 export const ToolSearchConfigSchema = z.object({
   [TOOL_SEARCH_CONFIG_KEY]: z.object({
     maxResults: z.number().int().min(1).optional(),
-    maxCatalogLines: z.number().int().min(1).optional(),
+    maxCatalogChars: z.number().int().min(1).optional(),
     maxDiscovered: z.number().int().min(1).optional(),
   }).strict().optional(),
+  // 统一加载策略（与 toolSearch 同一层、同一份严格口径）。`legacy` 不可写：
+  // "回到既有行为"用删掉这个键表达，避免出现"写着 legacy 却留着覆盖"的半状态。
+  [TOOL_LOADING_CONFIG_KEY]: z.object({
+    // 缺席 = 跟随既有行为；只做逐工具覆盖时可以不写 mode。
+    mode: z.enum(['recommended', 'all-resident']).optional(),
+    // 非 MCP 工具（内置 / 其他插件）与 MCP 工具走同一张覆盖表：默认常驻，逐工具可改。
+    // 早先这里还有一个 `manageBuiltin` 布尔（"纳管内置工具"），但决策层从未读过它——
+    // 写了不生效的死字段比没有更糟，已删除；写侧会对它明确报错。
+    groups: z.record(z.string(), z.enum(['resident', 'deferred'])).optional(),
+    tools: z.record(z.string(), z.enum(['resident', 'deferred'])).optional(),
+  }).strict().optional(),
 }).strict().default({})
+
+/**
+ * 保存载荷的严格校验（RPC 侧的 `ToolSearchConfigSchema`）。
+ *
+ * 为什么需要它：**加载**那条路的 config schema 一直是 strict 的（拼错键当场报错），而
+ * **保存**那条路的 wire codec 是 `z.unknown()`（三边契约按 `$any` 生成）。于是同一份配置
+ * 有两个口径：盘上写错会被拒，而从 RPC 传进来的 `maxResutls` 会被"只按已知键摘值"静默
+ * 吞成 `{}`——那不是忽略一个错键，是把用户此前的设置整份当成"恢复默认"写掉。
+ *
+ * 校验放在这里而不是网关里：规则只有一份，读/写/加载三处共用同一个键清单。
+ *
+ * @param {unknown} payload - 保存 RPC 的原始载荷。
+ * @returns {object} 校验过的 `settings` 对象（稀疏，可省略键）。
+ */
+export function assertToolSearchSettingsPayload(payload) {
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('延迟加载参数必须以 { settings } 对象提交')
+  }
+  const extra = Object.keys(payload).filter((key) => key !== 'settings')
+  if (extra.length) throw new Error(`未知的延迟加载载荷字段：${extra.join('、')}（只接受 settings）`)
+  const settings = payload.settings
+  if (settings === null || typeof settings !== 'object' || Array.isArray(settings)) {
+    throw new Error('settings 必须是对象（省略某个键表示它跟随默认值）')
+  }
+  const unknown = Object.keys(settings).filter((key) => !EXPOSED_SETTING_KEYS.includes(key))
+  if (unknown.length) {
+    throw new Error(`未知的延迟加载参数：${unknown.join('、')}（支持：${EXPOSED_SETTING_KEYS.join('、')}）`)
+  }
+  return settings
+}
 
 /** 从插件 config（已过 schema）取出**稀疏**的用户值。未提供的键不补默认值。 */
 export function readToolSearchSettings(config) {
@@ -69,7 +116,7 @@ export function effectiveToolSearchSettings(settings = {}) {
   const resolved = resolveRuntimeConfig({ ...readToolSearchSettings({ [TOOL_SEARCH_CONFIG_KEY]: settings }), deferServers: [], serverNames: [] })
   return {
     maxResults: resolved.maxResults,
-    maxCatalogLines: resolved.maxCatalogLines,
+    maxCatalogChars: resolved.maxCatalogChars,
     maxDiscovered: resolved.maxDiscovered,
   }
 }
@@ -155,6 +202,58 @@ export function readToolSearchSettingsFromPatch(content, identity = {}) {
  */
 export function setToolSearchSettingsInPatch(content, settings, identity = {}) {
   const sparse = normalizeToolSearchSettings(settings)
+  return writeConfigKey(content, TOOL_SEARCH_CONFIG_KEY, Object.keys(sparse).length === 0 ? null : settingsMap(sparse), identity)
+}
+
+/** 从 profile config 读统一加载策略（读侧宽容：坏值按"没配"处理）。 */
+export function readToolLoadingPolicy(config) {
+  return normalizePolicyConfig(config?.[TOOL_LOADING_CONFIG_KEY])
+}
+
+/** 从 patch 内容读统一加载策略（写入的逆运算）。 */
+export function readToolLoadingPolicyFromPatch(content, identity = {}) {
+  const doc = parsePatch(content)
+  const found = findSettingsEntry(doc, identity)
+  if (found === null) return normalizePolicyConfig(undefined)
+  return normalizePolicyConfig(getValue(getNode(found.entry, 'config'), TOOL_LOADING_CONFIG_KEY))
+}
+
+/**
+ * 把统一加载策略写进 `config.toolLoading`。
+ *
+ * `legacy`（= 回到既有行为）用**删掉这个键**表达，不落 `mode: legacy`：
+ * 同一件事只有一种写法，读取侧也就不必再猜"写着 legacy 但下面还挂着覆盖"是什么意思。
+ */
+export function setToolLoadingPolicyInPatch(content, policy, identity = {}) {
+  const validated = policy === null || policy === undefined ? null : validatePolicyConfig(policy)
+  if (validated === null) return writeConfigKey(content, TOOL_LOADING_CONFIG_KEY, null, identity)
+  const map = new YAMLMap()
+  if (validated.mode !== undefined) map.set('mode', validated.mode)
+  if (Object.keys(validated.groups).length) {
+    const groups = new YAMLMap()
+    for (const [key, value] of Object.entries(validated.groups)) groups.set(key, value)
+    map.set('groups', groups)
+  }
+  if (Object.keys(validated.tools).length) {
+    const tools = new YAMLMap()
+    for (const [key, value] of Object.entries(validated.tools)) tools.set(key, value)
+    map.set('tools', tools)
+  }
+  return writeConfigKey(content, TOOL_LOADING_CONFIG_KEY, map, identity)
+}
+
+/**
+ * 插件自己那条配置里某个键的写入原语（`toolSearch` / `toolLoading` 共用）。
+ *
+ * 四条约定：
+ *   · `valueNode` 为 null → 删这个键；`config` 因此变空时连 `config` 一起删，
+ *     覆盖形态下这条条目没有别的键了就整条删（不留空壳）；
+ *   · 同一条目里其它 config 键、以及别的条目/注释，一个字都不动；
+ *   · **没有现成条目时追加一条 id 定向覆盖**（真实安装形态就是如此），而不是凭空 insert 一个
+ *     第二个插件实例——那会把插件挂两遍；
+ *   · 非法值在调用方先校验，绝不落盘（部分写入比拒绝写入坏得多）。
+ */
+function writeConfigKey(content, configKey, valueNode, identity) {
   const doc = parsePatch(content)
   const found = findSettingsEntry(doc, identity)
 
@@ -163,11 +262,11 @@ export function setToolSearchSettingsInPatch(content, settings, identity = {}) {
     if (typeof identity.id !== 'string' || identity.id === '') {
       throw new Error(`找不到 name 为 ${identity.name} 的插件条目，也没有条目 id：无法定位自己的配置`)
     }
-    if (Object.keys(sparse).length === 0) return content
+    if (valueNode === null) return content
     const entry = new YAMLMap()
     entry.set('id', identity.id)
     const config = new YAMLMap()
-    config.set(TOOL_SEARCH_CONFIG_KEY, settingsMap(sparse))
+    config.set(configKey, valueNode)
     entry.set('config', config)
     doc.contents.items.push(entry)
     return String(doc)
@@ -177,15 +276,15 @@ export function setToolSearchSettingsInPatch(content, settings, identity = {}) {
   const existingConfig = getNode(entry, 'config')
   const config = isMap(existingConfig) ? existingConfig : new YAMLMap()
 
-  if (Object.keys(sparse).length === 0) {
-    config.delete(TOOL_SEARCH_CONFIG_KEY)
+  if (valueNode === null) {
+    config.delete(configKey)
   } else {
-    const existing = getNode(config, TOOL_SEARCH_CONFIG_KEY)
+    const existing = getNode(config, configKey)
     // 非映射（例如用户写成 `toolSearch: 20`）不能猜着改写：那是用户的文件，报错让人看见。
     if (existing !== undefined && !isMap(existing)) {
-      throw new Error(`config.${TOOL_SEARCH_CONFIG_KEY} 必须是映射（键值对），当前是：${JSON.stringify(getValue(config, TOOL_SEARCH_CONFIG_KEY))}`)
+      throw new Error(`config.${configKey} 必须是映射（键值对），当前是：${JSON.stringify(getValue(config, configKey))}`)
     }
-    config.set(TOOL_SEARCH_CONFIG_KEY, settingsMap(sparse))
+    config.set(configKey, valueNode)
   }
 
   if (config.items.length === 0) {

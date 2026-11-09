@@ -1,3 +1,4 @@
+import { HostPairing } from './host-pairing.js';
 import { WorkspaceUploadHost } from './workspace-upload.js';
 import { workspaceUploadRootResolver } from './workspace-upload-authority.js';
 import { LoopbackHost } from './loopback-host.js';
@@ -27,6 +28,7 @@ export class HostPluginRuntime {
     fileViewerHost;
     terminalSpawner;
     pluginRoutes;
+    schedule;
     connections;
     terminalOwners = new Map();
     loopbackHosts = new Set();
@@ -36,6 +38,7 @@ export class HostPluginRuntime {
     serverApi;
     serverConnection;
     harnessVersion;
+    pairing;
     closed = false;
     codex;
     acp;
@@ -46,7 +49,9 @@ export class HostPluginRuntime {
     localAcpPublish = async () => undefined;
     constructor(config, identities, logger, localGateway, fileViewerHost, 
     /** PTY-backed terminal provider from the Host `subprocess` service, when present. */
-    terminalSpawner, pluginRoutes) {
+    terminalSpawner, pluginRoutes, 
+    /** Host `schedule` service; absent on Hosts whose composition omits reminders. */
+    schedule) {
         this.config = config;
         this.identities = identities;
         this.logger = logger;
@@ -54,6 +59,7 @@ export class HostPluginRuntime {
         this.fileViewerHost = fileViewerHost;
         this.terminalSpawner = terminalSpawner;
         this.pluginRoutes = pluginRoutes;
+        this.schedule = schedule;
         this.terminalEnabled = config.terminal.enabled;
         this.loopbackPorts = [...config.loopback.ports];
         this.codex = new CodexRemoteDomain(config.codex, logger);
@@ -61,7 +67,7 @@ export class HostPluginRuntime {
         this.connections = new ConnectionController(this.identities, (context, send) => {
             const peerGateway = this.localGateway?.createPeer?.() ?? this.localGateway;
             const harnessRemote = peerGateway?.supportsCarrier === true
-                ? new HarnessRemoteBridge(peerGateway, (event, data) => send(createEvent(event, data)), this.logger, this.harnessVersion, new TerminalPolicy(() => this.terminalEnabled, context.peerDeviceId, this.terminalOwners), new CodexWorkspaceBridge((threadId, signal) => this.codex.resolveThreadWorkspace(context.connectionId, threadId), () => this.terminalEnabled, this.codexWorkspaceState, this.terminalSpawner))
+                ? new HarnessRemoteBridge(peerGateway, (event, data) => send(createEvent(event, data)), this.logger, this.harnessVersion, new TerminalPolicy(() => this.terminalEnabled, context.peerDeviceId, this.terminalOwners), new CodexWorkspaceBridge((threadId, signal) => this.codex.resolveThreadWorkspace(context.connectionId, threadId), () => this.terminalEnabled, this.codexWorkspaceState, this.terminalSpawner), workspaceUploadRootResolver(peerGateway, () => harnessSessionGeneration(this.harnessVersion) === 'v3', threadId => this.codex.resolveThreadWorkspace(context.connectionId, threadId), sessionId => this.acp.resolveUploadWorkspace(context.connectionId, sessionId)), this.schedule)
                 : undefined;
             const fileViewer = new RemoteFileViewerBridge(() => this.fileViewerHost?.(), this.logger);
             const codex = this.codex.createPeer(context, (event, data) => send(createEvent(event, data)));
@@ -73,7 +79,7 @@ export class HostPluginRuntime {
             const pluginRoute = dispatcher === undefined ? undefined : new PluginRouteBridge(dispatcher, this.logger);
             return new RpcRouter(undefined, this.logger, fileViewer, harnessRemote, () => this.hostCapabilities(), codex, cursor, 
             // Handles and their lifetime belong to this connection; only policy is shared.
-            this.createLoopbackHost(), () => this.hostWorkspaceTypes(), pluginRoute, new WorkspaceUploadHost(workspaceUploadRootResolver(peerGateway, () => harnessSessionGeneration(this.harnessVersion) === 'v3', threadId => this.codex.resolveThreadWorkspace(context.connectionId, threadId), sessionId => this.acp.resolveUploadWorkspace(context.connectionId, sessionId))));
+            this.createLoopbackHost(), () => this.hostWorkspaceTypes(), pluginRoute, new WorkspaceUploadHost(workspaceUploadRootResolver(peerGateway, () => harnessSessionGeneration(this.harnessVersion) === 'v3', threadId => this.codex.resolveThreadWorkspace(context.connectionId, threadId), sessionId => this.acp.resolveUploadWorkspace(context.connectionId, sessionId)), undefined, context.transportMode));
         }, this.logger);
         if (config.serverUrl !== undefined) {
             this.serverApi = new HostServerApi(config.serverUrl, new ServerCredentialStore(identities.directory));
@@ -124,6 +130,8 @@ export class HostPluginRuntime {
             this.harnessVersion = await this.readHarnessVersion();
             this.serverApi.setHarnessVersion(this.harnessVersion);
             this.serverApi.bindIdentity(this.identity);
+            await this.serverApi.loadStoredPolicy();
+            this.initializePairing();
             this.serverConnection = this.createServerConnection(this.identity);
             if (this.config.hostControl?.enabled !== false)
                 this.serverConnection.start();
@@ -146,15 +154,41 @@ export class HostPluginRuntime {
             configured: this.serverApi !== undefined,
             online: this.serverConnection?.isOnline() ?? false,
             reconnecting: this.serverConnection?.isReconnecting() ?? false,
+            recoveryExpiresAt: this.serverConnection?.recoveryExpiresAt(),
             ...(this.serverConnection?.lastActivity() === undefined
                 ? {}
                 : { lastActiveAt: this.serverConnection.lastActivity() }),
             ...(error === undefined ? {} : { error }),
             ...(authorization?.account === undefined ? {} : { account: authorization.account }),
             authorized: authorization !== undefined,
-            accountRequired: error === 'ACCOUNT_AUTH_REQUIRED' || error === 'AUTH_INVALID' || error === 'TOKEN_EXPIRED' || error === 'DEVICE_REVOKED',
+            pairingHostOnly: this.serverApi?.pairingHostOnly() ?? false,
+            accountRequired: error === 'ACCOUNT_AUTH_REQUIRED' || error === 'AUTH_REQUIRED' || error === 'AUTH_INVALID' || error === 'TOKEN_EXPIRED' || error === 'DEVICE_REVOKED' || error === 'DEVICE_OWNERSHIP_REQUIRED',
             connectedClients: this.listConnectedClients(),
         };
+    }
+    initializePairing() {
+        this.pairing?.close();
+        if (!this.serverApi || !this.identity || !this.config.serverUrl) {
+            this.pairing = undefined;
+            return;
+        }
+        this.pairing = new HostPairing(this.config.serverUrl, this.identities.directory, this.identity, {
+            deviceId: this.identity.deviceId, name: this.identity.name, role: 'host', platform: process.platform,
+            identityKey: this.identity.publicKey,
+            ...(this.harnessVersion === undefined ? {} : { harnessVersion: this.harnessVersion }),
+        }, async (result) => { await this.serverApi.adoptPairing(result); if (!this.closed)
+            this.serverConnection?.reconnect(); });
+    }
+    async pairingControl(action, input) {
+        if (this.pairing === undefined || this.closed)
+            throw new ServerApiError('SERVER_NOT_CONFIGURED', 'Configure and save the Server URL before pairing.', false);
+        if (action === 'start')
+            return this.pairing.start();
+        if (action === 'status')
+            return this.pairing.status();
+        if (typeof input.sessionId !== 'string')
+            throw new ServerApiError('INVALID_MESSAGE', 'A specific pairing session is required.', false);
+        return action === 'confirm' ? this.pairing.confirm(input.sessionId, input.verificationCode) : this.pairing.cancel(input.sessionId);
     }
     async hasStoredAuthorization() {
         return this.serverApi?.hasStoredAuthorization() ?? false;
@@ -199,9 +233,12 @@ export class HostPluginRuntime {
         }
         const result = await this.serverApi.pollOAuthQrLogin(this.currentIdentity(), qrId, async () => {
             await this.serverConnection?.stop();
+            await this.pairing?.discard();
+            this.pairing = undefined;
             this.identity = await this.identities.reset(this.config.deviceName);
             this.serverApi.bindIdentity(this.identity);
             this.serverConnection = this.createServerConnection(this.identity);
+            this.initializePairing();
             return this.identity;
         });
         if (result.status === 'complete') {
@@ -211,6 +248,8 @@ export class HostPluginRuntime {
         return result;
     }
     async clearHostAuthorization() {
+        await this.pairing?.discard();
+        this.pairing = undefined;
         await this.serverConnection?.stop();
         let revokeFailure;
         try {
@@ -223,6 +262,7 @@ export class HostPluginRuntime {
         this.serverApi?.bindIdentity(this.identity);
         if (this.serverApi !== undefined)
             this.serverConnection = this.createServerConnection(this.identity);
+        this.initializePairing();
         this.logger.info('Host authorization cleared');
         if (revokeFailure !== undefined)
             throw revokeFailure;
@@ -239,9 +279,12 @@ export class HostPluginRuntime {
             if (!(error instanceof ServerApiError) || error.code !== 'DEVICE_REVOKED')
                 throw error;
             await this.serverConnection?.stop();
+            await this.pairing?.discard();
+            this.pairing = undefined;
             this.identity = await this.identities.reset(this.config.deviceName);
             this.serverApi.bindIdentity(this.identity);
             this.serverConnection = this.createServerConnection(this.identity);
+            this.initializePairing();
             result = await this.serverApi.authorizeOwnedRole(this.identity, accessToken, account);
             this.logger.info('Rotated revoked Host identity before owned-device authorization');
         }
@@ -255,9 +298,12 @@ export class HostPluginRuntime {
         }
         const result = await this.serverApi.authorizeWithAccount(this.currentIdentity(), email, password, async () => {
             await this.serverConnection?.stop();
+            await this.pairing?.discard();
+            this.pairing = undefined;
             this.identity = await this.identities.reset(this.config.deviceName);
             this.serverApi.bindIdentity(this.identity);
             this.serverConnection = this.createServerConnection(this.identity);
+            this.initializePairing();
             this.logger.info('Rotated revoked Host identity before account authorization');
             return this.identity;
         });
@@ -328,6 +374,7 @@ export class HostPluginRuntime {
         if (this.closed)
             return;
         this.closed = true;
+        this.pairing?.close();
         this.serverApi?.close();
         await this.serverConnection?.stop();
         await this.connections.close();
@@ -414,7 +461,7 @@ export class HostPluginRuntime {
         for (const backend of this.acp.enabledBackends()) {
             types.push({
                 id: backend,
-                name: backend === 'claude' ? 'Claude' : backend === 'pi' ? 'Pi' : backend === 'cursor' ? 'Cursor' : backend === 'antigravity' ? 'Antigravity' : backend === 'opencode' ? 'OpenCode' : backend,
+                name: backend === 'claude' ? 'Claude' : backend === 'hermes' ? 'Hermes' : backend === 'pi' ? 'Pi' : backend === 'cursor' ? 'Cursor' : backend === 'antigravity' ? 'Antigravity' : backend === 'opencode' ? 'OpenCode' : backend,
                 capability: `agent.acp.${backend}.v1`,
                 available: readyBackends.includes(backend),
             });

@@ -31,7 +31,7 @@ export class TerminalPolicy {
         for (const [key, attachment] of this.attachments)
             if (this.owners.get(key) !== this.deviceId || this.claims.get(key) !== attachment.claim)
                 this.attachments.delete(key);
-        const args = z.object({ args: z.record(z.unknown()) }).strict().parse(payload).args;
+        const args = z.object({ args: z.record(z.string(), z.unknown()) }).strict().parse(payload).args;
         const rawSessionId = args.agentId ?? args.sessionId;
         const sessionId = id.parse(rawSessionId);
         // CodeX sessions are deliberately opaque keys here. Their thread/cwd

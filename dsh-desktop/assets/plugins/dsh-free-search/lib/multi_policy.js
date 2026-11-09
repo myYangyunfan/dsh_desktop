@@ -208,7 +208,7 @@ export function rankMergedResults(items, { appliesFreshness = false } = {}) {
  * `if (!key) return { error: "<ENV> not configured" }` 的引擎**，与代码自身对
  * 「缺 key」的声明严格一致。
  *   - 免 key 引擎 ddg/ddg-lite/bing/searxng 不收；
- *   - 有免 key 兜底的 anysearch（key 可空）/ exa、parallel（回落 MCP）不收；
+ *   - 有免 key 兜底的 anysearch（key 可空）/ exa、parallel（回落 MCP）/ you（无 key 走免 key 档）不收；
  *   - tavily/keenable/firecrawl 分支没有 not configured 检查（缺 key 时会带着空串去请求，
  *     以鉴权失败收场），暂不收——那属于另一个行为变更，需单独决定。
  * settings 字段必须带上：只在环境变量里找 key 会漏掉「仅填在设置页」的用户。
@@ -219,6 +219,8 @@ export const REQUIRED_CREDENTIALS = {
   "deepseek-tools": [{ env: "DEEPSEEK_API_KEY", settings: "deepseekApiKey" }],
   serpbase: [{ env: "SERPBASE_API_KEY", settings: "serpbaseApiKey" }],
   serply: [{ env: "SERPLY_API_KEY", settings: "serplyApiKey" }],
+  outcrawl: [{ env: "OUTCRAWL_API_KEY", settings: "outcrawlApiKey" }],
+  google: [{ env: "GOOGLE_CSE_API_KEY", settings: "googleCseApiKey" }],
   tinyfish: [{ env: "TINYFISH_API_KEY", settings: "tinyfishApiKey" }],
   jina: [{ env: "JINA_API_KEY", settings: "jinaApiKey" }],
   baidu: [{ env: "BAIDU_API_KEY", settings: "baiduApiKey" }],
@@ -236,7 +238,6 @@ export const REQUIRED_CREDENTIALS = {
     { env: "GOOGLE_API_KEY", settings: null },
   ],
   claude: [{ env: "ANTHROPIC_API_KEY", settings: "claudeApiKey" }],
-  you: [{ env: "YOUCOM_API_KEY", settings: "youcomApiKey" }],
 };
 
 /** 该引擎需要哪些凭据描述符；不需要凭据（免 key / 有兜底）时返回 null。 */

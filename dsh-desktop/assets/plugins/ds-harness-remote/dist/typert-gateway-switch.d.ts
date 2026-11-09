@@ -20,9 +20,17 @@ export declare class TypertGatewaySwitch {
     private remoteSupport;
     private target?;
     private installed;
-    constructor(gateway: TypertGatewayLike);
+    /** Lazily-created owner Peer supplied when a local open carries none. */
+    private readonly fallbackPeer?;
+    /**
+     * @param gateway - official Typert Gateway service.
+     * @param fallbackPeer - owner Peer factory for local opens whose caller has no
+     *   per-connection Peer. Harness 0.2.2 rejects a forwarded-event open without a
+     *   live Peer (`peer.signal`), so a peerless local carrier must still carry one.
+     */
+    constructor(gateway: TypertGatewayLike, fallbackPeer?: () => unknown);
     /** Original local dispatcher, used by the Host bridge without switch recursion. */
-    local(peer?: unknown): LocalTypertGateway;
+    local(callingPeer?: unknown): LocalTypertGateway;
     supportsCarrier(): boolean;
     status(): {
         mode: 'local' | 'remote';

@@ -22,6 +22,20 @@ import { createWriteStream } from 'node:fs';
 // 正是该错误体，与 issue 完全一致。
 export const QUICK_TUNNEL_URL_RE = /https:\/\/(?!api\.)[a-z0-9-]+\.trycloudflare\.com/i;
 
+// cloudflared 必须直连 Cloudflare 边缘，不能继承本机拦截代理：
+// 本机常挂着 HTTP_PROXY/HTTPS_PROXY（指向 127.0.0.1 的本地代理，如 Clash 透明代理/
+// 各类代理软件注入的 env），一旦 cloudflared 继承这些变量，隧道边缘数据面会被绕进
+// 本地代理而连不上 → 手机端 error 1033（Tunnel error）。TUN 模式卸载、系统级代理关闭
+// 都不影响 shell 里的 env 变量，故这里主动剥离，强制 cloudflared 直连。
+const PROXY_ENV_KEYS = ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy', 'NO_PROXY', 'no_proxy'];
+
+/** 给 cloudflared 子进程用的环境：复制当前环境但剥离所有代理变量，强制直连边缘。 */
+export function cloudflaredEnv(extra = {}) {
+  const env = { ...process.env, ...extra };
+  for (const k of PROXY_ENV_KEYS) delete env[k];
+  return env;
+}
+
 /**
  * 从 cloudflared 输出里提取最有诊断价值的一段（issue #78）。
  *
@@ -451,7 +465,7 @@ export async function startNamedTunnel({ token, home, signal, onPhase = () => {}
   // `tunnel run` 子命令层级的该 flag，但全局位置仍有效（issue #78）
   const child = spawn(bin, ['--no-autoupdate', 'tunnel', 'run', '--protocol', 'http2'], {
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, TUNNEL_TOKEN: String(token ?? '') },
+    env: cloudflaredEnv({ TUNNEL_TOKEN: String(token ?? '') }),
   });
   let cleanup = null;
   let rejectErr = null;
@@ -541,6 +555,7 @@ export async function startQuickTunnel({ port, home, signal, onPhase = () => {} 
   // `--no-autoupdate` 必须在全局位置（子命令之前，见 issue #78 同款修复）
   const child = spawn(bin, ['--no-autoupdate', 'tunnel', '--url', `http://127.0.0.1:${port}`, '--protocol', 'http2'], {
     stdio: ['ignore', 'pipe', 'pipe'],
+    env: cloudflaredEnv(),
   });
   // H1：spawn 失败（缓存二进制损坏等）必须接住，否则 uncaughtException 崩宿主
   child.on('error', (err) => {

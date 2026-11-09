@@ -1,4 +1,10 @@
 import type { AcpClientLike } from './virtual-contract.js';
+/** Every ACP backend the Host can project into the Client's virtual Harness. */
+export type AcpCatalogBackend = 'cursor' | 'antigravity' | 'pi' | 'opencode' | 'claude' | 'hermes';
+export declare function acpWorkspacePrefix(backend: AcpCatalogBackend): string;
+export declare function acpBackendLabel(backend: AcpCatalogBackend): string;
+export declare function acpBackendProvider(backend: AcpCatalogBackend): string;
+export declare const ACP_CATALOG_BACKENDS: readonly AcpCatalogBackend[];
 export interface AcpVirtualWorkspaceView {
     workspaceId: string;
     path: string;
@@ -9,11 +15,11 @@ export interface AcpVirtualWorkspaceView {
     updatedAt: string;
 }
 /** Build a backend-scoped virtual Workspace id for an absolute Host cwd. */
-export declare function acpCwdWorkspaceId(path: string, backend: "cursor" | "antigravity" | "pi" | "opencode" | "claude"): string;
-export declare function createAcpWorkspaceView(path: string, backend: "cursor" | "antigravity" | "pi" | "opencode" | "claude", title?: string): AcpVirtualWorkspaceView;
+export declare function acpCwdWorkspaceId(path: string, backend: AcpCatalogBackend): string;
+export declare function createAcpWorkspaceView(path: string, backend: AcpCatalogBackend, title?: string): AcpVirtualWorkspaceView;
 /** Discover ACP virtual workspaces visible on the Host. */
-export declare function discoverAcpVirtualWorkspaces(client: AcpClientLike, backend: "cursor" | "antigravity" | "pi" | "opencode" | "claude", signal?: AbortSignal): Promise<AcpVirtualWorkspaceView[]>;
-export declare function recreateWorkspaceFromId(workspaceId: string, backend: "cursor" | "antigravity" | "pi" | "opencode" | "claude"): AcpVirtualWorkspaceView | undefined;
+export declare function discoverAcpVirtualWorkspaces(client: AcpClientLike, backend: AcpCatalogBackend, signal?: AbortSignal): Promise<AcpVirtualWorkspaceView[]>;
+export declare function recreateWorkspaceFromId(workspaceId: string, backend: AcpCatalogBackend): AcpVirtualWorkspaceView | undefined;
 export declare function nativeWorkspace(view: AcpVirtualWorkspaceView): Omit<AcpVirtualWorkspaceView, 'sessionCount'>;
 export interface AcpModelSelection {
     provider: string;
@@ -33,7 +39,7 @@ export interface AcpModelView {
         defaultEffort?: string;
     };
 }
-export declare function modelCatalog(backend?: "cursor" | "antigravity" | "pi" | "opencode" | "claude"): {
+export declare function modelCatalog(backend?: AcpCatalogBackend): {
     default: AcpModelSelection;
     routableProviders: string[];
     groups: Array<{

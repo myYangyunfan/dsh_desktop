@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Version Pager",
+    "description": "Provides < X / Y > version pager in assistant actions, allowing smooth navigation between edit/recall branches."
+  }
+}

@@ -18,7 +18,7 @@
 
 Click your own message bubble to edit it in place; hit the recall button beside copy to withdraw it and everything after it. Nothing is ever really changed until you commit — the conversation, the model context, and the session log stay untouched until you press **Confirm** (rewrite) or **Send** (recall).
 
-> Compatible with DeepSeek Harness Web (**v2.6.0 fully supports both dsh 0.1.7-rc.1+ and 0.1.2-rc.1+**; users on dsh 0.1.1-rc.2 and older hosts, please stay on **2.3.1** — the final release of that line, fully functional, no further features). Built on official extension points only — no source patches.
+> Compatible with DeepSeek Harness Web (**v3.0.0 fully compatible with dsh 0.2.x and 0.1.7 series**, featuring independent shadow Vault and universal attachment lossless relay; users on 0.1.1-rc.2 or earlier please stay on **2.3.1**). Pure official extension points, zero DSH source modification.
 
 ---
 
@@ -111,20 +111,28 @@ dsh plugin --profile web add dsh-easyrewrite
 
 ---
 
-## How we differ from similar plugins
+## Landscape & How We Differ from Similar Plugins
 
-| Capability | dsh-easyrewrite | Other recall/edit plugins |
-| :--- | :---: | :--- |
-| Recall | ✅ | Basic capability |
-| **Seamless replacement** (feels like a *native* feature — frictionless edit-resend) | ✅ | Basic capability, but ours is **more refined** |
-| **Lazy commit** (context changes only after you confirm; closing mid-way changes nothing) | ✅ | Some competitors edit immediately, causing cache-hit / context issues |
-| **Bubble inline edit (Rewrite)** | ✅ | **No comparable feature in any competitor** |
-| **Version pager < X >** (switch history versions — a **gold-standard design** proven by countless Chatbox users) | ✅ | **No comparable feature in any competitor** |
-| **Draft persistence + timeout auto-backup + crash recovery** (solid recovery that protects every bit of your thinking) | ✅ | **No comparable feature in any competitor** |
-| **Attachment-preserving edit resend** | ✅ | No comparable feature in any competitor |
-| **Official extension points only** (zero source patches, clean uninstall) | ✅ | Competitors rely on source patches — hard to uninstall, complex dependencies |
-| Trilingual UI & i18n | ✅ | Few have proper i18n; we natively support multiple languages with three presets |
-| **Every feature can be toggled off** | ✅ | **No competitor does it better** |
+In the DSH rollback and state restoration ecosystem, different technical routes have formed (our plugin currently ranks in the **Top 4 overall**, and **#1 in the pure chat bubble editing and interaction category**):
+
+1. **Workspace/Code File Rollback Pioneers (e.g., `dsh-rewind` 231⭐, `dsh-turn-rewind` 144⭐)**:
+   - Focused on tracking workspace file changes (Change Ledger) and rewinding code alongside chat. Some adopt in-window event log modifications to avoid session branches, but offer limited fine-grained UI interaction (in-bubble editing, document attachments, draft isolation).
+2. **Global System Disaster Recovery (e.g., `dsh-undo-savepoint` 197⭐)**:
+   - Dedicated to full system snapshots, offline rescue GUIs, and crash restoration — a heavy global safety caretaker rather than an everyday lightweight chat interaction plugin.
+3. **Immersive In-Bubble Editing & Seamless UX (🌟 `DSH-EasyRewrite` 129⭐)**:
+   - Dedicated to making message editing and recall feel truly native. v3.0.0 introduces the **independent shadow Vault engine**, completely preventing sidebar archive pollution without hacking fragile memory logs, while delivering the only in-bubble expansion and universal attachment relay experience.
+
+| Core Capabilities | 🌟 dsh-easyrewrite (v3.0.0) | Traditional Recall Plugins (e.g. recall-plugin) | Code/File Rollback (e.g. dsh-rewind/turn-rewind) | Global Savepoint (e.g. savepoint) |
+| :--- | :---: | :---: | :---: | :---: |
+| **Bubble Inline Edit (Rewrite)** | **✅ Exclusive** (click bubble to expand inline) | ❌ None (jumps to composer only) | ❌ None (modal/CLI only) | ❌ None |
+| **Message Recall** | ✅ (next to native copy button) | ✅ (basic recall) | ✅ (command/button) | ⚠️ (full rollback) |
+| **Sidebar Cleanliness (Anti-archive pollution)** | **✅ Autonomous Vault, 100% pure sidebar** | ❌ Pollutes with grey archived sessions | ⚠️ No branch but hacks memory logs | ⚠️ Snapshot overwrite |
+| **Multi-version History Navigation** | **✅ Top `< X / Y >` + settings family tree** | ❌ None | ⚠️ Linear rewind only | ⚠️ Savepoint index |
+| **Universal Attachments (Images + Docs) Relay** | **✅ Official FileCard aligned, draft isolation** | ❌ Partial images only | ⚠️ Code files only | ❌ Binary image only |
+| **Inline Model & Reasoning Effort Switch** | **✅ In-bubble official selector & badge** | ❌ None | ❌ None | ❌ None |
+| **Lazy Commit (Context untouched until confirm)** | **✅ Context untouched before send** | ❌ Some edit immediately | ❌ Immediate rewind | ❌ Restore overwrite |
+| **Trilingual Native i18n** | **✅ Full zh / en / ja coverage** | ❌ Chinese only | ⚠️ Partial English | ⚠️ Partial |
+| **Official Extension Points Only** | **✅ Zero source patches, clean uninstall** | ⚠️ Some need patches | ⚠️ Deep internal APIs | ⚠️ Standalone daemon |
 
 ---
 
@@ -143,8 +151,8 @@ dsh plugin --profile web add dsh-easyrewrite
 - Original interactions stay intact: copy key, hover timestamps, bubble look — all preserved.
 - **Invisible**: day-to-day use barely notices the plugin — features live where you expect them, results match intuition; no popups, no interrupted rhythm.
 - **Lazy commit** is the foundation: entering edit mode or confirming a recall is purely local draft state; **context changes only at "确定" (rewrite) or "发送" (recall)**. Close dsh mid-way and nothing moves.
-- **Seamless replacement**: after a recall it *feels* like the original conversation was edited — the old session is archived, a same-titled replacement takes over, and your edited text is sent for you. No "a new conversation appeared" split.
-- **Bubble edit (landing soon)**: click the bubble to edit in place, what you edit is what you send — the natural extension of the same seamless philosophy.
+- **Seamless replacement**: after a recall it feels like the original conversation was edited — autonomous versioning via the shadow Vault without "a new conversation appeared" split or sidebar clutter.
+- **Bubble edit (v3.0.0 fully shipped)**: click the bubble to edit in place, what you edit is what you send — the natural extension of the same seamless philosophy.
 
 **3. Persistent & accident-proof**
 

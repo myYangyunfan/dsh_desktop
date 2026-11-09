@@ -73,7 +73,7 @@ export declare const compressParameters: {
                         readonly description: 'First surface seq of the range.';
                     }, {
                         readonly type: 'string';
-                        readonly description: 'Seq as text; a trailing #callId fragment is ignored.';
+                        readonly description: 'Seq as text; a trailing #callId fragment is ignored. A drilldown mN ref ("m00306") or a kernel block id ("b1", as acp_status lists) is also accepted — a block id resolves to that block\'s checkpoint seq, which makes the fold a tier 2/3 distillation.';
                     }];
                 };
                 readonly endSeq: {
@@ -83,7 +83,7 @@ export declare const compressParameters: {
                         readonly description: 'Inclusive last surface seq of the range.';
                     }, {
                         readonly type: 'string';
-                        readonly description: 'Seq as text; a trailing #callId fragment is ignored.';
+                        readonly description: 'Seq as text; a trailing #callId fragment is ignored. Also accepts a drilldown mN ref or a kernel block id ("b3") — for a multi-block condense name the LAST block id (tier 3).';
                     }];
                 };
                 readonly summary: {
@@ -107,6 +107,8 @@ export declare const compressParameters: {
         };
     };
 };
+/** Exported so the ref-width contract test can pin it without a 100K-message fixture. */
+export declare function mnRefIndex(value: string): number | null;
 /**
  * Pure gate helpers for the compress tool's CURRENT-instruction-row rejection.
  *
@@ -121,8 +123,12 @@ export declare const compressParameters: {
  * manual path consistent with the system-side GC's iron rule (PR2: never
  * clear a group's newest row). STALE copies stay compressible: removing them
  * while the newest stays visible is the actual cleanup and triggers no
- * re-injection. The range table (buildCompressibleSeqRanges) never offers
- * these rows, so the gate only fires on hand-built ranges.
+ * re-injection. Skill-catalog rows joined the guard set for a DIFFERENT
+ * reason (issue #185): they are not self-healing at all — the host resends
+ * the catalog only when its digest changes, so a folded catalog stays gone
+ * until the catalog actually changes. The range table
+ * (buildCompressibleSeqRanges) never offers these rows, so the gate only fires
+ * on hand-built ranges.
  *
  * `guardedRowsInSpan` is the overlap probe. It takes the POSITIONAL span the
  * transaction will actually shadow (`shadowedSeqsOf`), never a numeric
@@ -140,7 +146,17 @@ export declare const compressParameters: {
  * `guardedSurfaceSeqsOf` supplies the protected set.
  */
 export declare function guardedRowsInSpan(guarded: ReadonlySet<number>, shadowed: readonly number[]): number[];
-export declare function protectedRowRejectionNote(start: number, end: number, hits: readonly number[], shadowed: readonly number[]): string;
+/**
+ * Advisory note for a plain range that would fold a LIVE block's checkpoint
+ * carrier (see `liveCheckpointCarriersInSpan`). Names the block ids the model
+ * can use instead — a block-ref boundary is the call that legitimately folds
+ * carriers (tier 2/3 distillation).
+ */
+export declare function liveCarrierRejectionNote(start: number, end: number, carriers: readonly {
+    seq: number;
+    kernelBlockId: string;
+}[]): string;
+export declare function protectedRowRejectionNote(start: number, end: number, hits: readonly number[], shadowed: readonly number[], session?: Session): string;
 /**
  * Kernel ref for one RESOLVED range edge's surface node (issue #155).
  * Resolved edges are tool-pairing-balanced and anchorable, but NO LONGER

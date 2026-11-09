@@ -51,10 +51,15 @@ const dsh_plugin_shop_shop_catalog_result$schema = z.object({
 })]).optional(),
   'dshPeers': z.union([z.undefined(), z.record(z.string(), z.string())]).optional(),
   'manifestVersion': z.union([z.undefined(), z.string()]).optional(),
+  'engines': z.union([z.undefined(), z.string()]).optional(),
+  'dependencies': z.union([z.undefined(), z.number()]).optional(),
+  'bin': z.union([z.undefined(), z.array(z.string())]).optional(),
+  'installScripts': z.union([z.undefined(), z.literal(false), z.literal(true)]).optional(),
   'unpackedSize': z.union([z.undefined(), z.number()]).optional(),
   'installSize': z.union([z.undefined(), z.number()]).optional(),
   'archived': z.union([z.undefined(), z.literal(false), z.literal(true)]).optional(),
   'forked': z.union([z.undefined(), z.literal(false), z.literal(true)]).optional(),
+  'icon': z.union([z.undefined(), z.string()]).optional(),
 })),
   'denied': z.array(z.object({
   'name': z.string(),
@@ -63,6 +68,7 @@ const dsh_plugin_shop_shop_catalog_result$schema = z.object({
 })),
   'notAShop': z.union([z.undefined(), z.array(z.string())]).optional(),
   'stars': z.record(z.string(), z.number()),
+  'icons': z.record(z.string(), z.string()),
   'incompatible': z.record(z.string(), z.array(z.string())),
   'incompatibleHarness': z.record(z.string(), z.object({
   'dsh': z.union([z.undefined(), z.object({
@@ -119,6 +125,7 @@ const dsh_plugin_shop_shop_installStatus_result$schema = z.object({
   'activation': z.union([z.undefined(), z.literal("live"), z.literal("reload"), z.literal("restart")]).optional(),
   'restartReason': z.union([z.undefined(), z.literal("no-patch"), z.literal("not-simple"), z.literal("host-unsupported"), z.literal("timeout"), z.literal("mount-failed"), z.literal("already-loaded")]).optional(),
   'detail': z.union([z.undefined(), z.string()]).optional(),
+  'command': z.union([z.undefined(), z.string()]).optional(),
 })
 const dsh_plugin_shop_shop_restart_result$schema = z.union([z.object({
   'ok': z.literal(true),
@@ -127,6 +134,18 @@ const dsh_plugin_shop_shop_restart_result$schema = z.union([z.object({
   'pid': z.union([z.undefined(), z.number()]).optional(),
 }), z.object({
   'ok': z.literal(false),
+  'detail': z.string(),
+})])
+const dsh_plugin_shop_shop_rollbackStart_parameter_0$schema = z.object({
+  'key': z.string(),
+})
+const dsh_plugin_shop_shop_rollbackStart_result$schema = z.union([z.object({
+  'ok': z.literal(true),
+  'installId': z.string(),
+  'state': z.union([z.literal("downloading"), z.literal("running"), z.literal("done"), z.literal("failed")]),
+}), z.object({
+  'ok': z.literal(false),
+  'code': z.union([z.literal("not-in-catalog"), z.literal("denied"), z.literal("version-mismatch"), z.literal("needs-acknowledgement"), z.literal("tarball-integrity"), z.literal("ambiguous-identity"), z.literal("name-taken"), z.literal("desktop-profile")]),
   'detail': z.string(),
 })])
 const dsh_plugin_shop_shop_setEnabled_parameter_0$schema = z.object({
@@ -140,6 +159,18 @@ const dsh_plugin_shop_shop_setEnabled_result$schema = z.union([z.object({
   'ok': z.literal(false),
   'detail': z.string(),
 })])
+const dsh_plugin_shop_shop_setFavorite_parameter_0$schema = z.object({
+  'key': z.string(),
+  'favorite': z.boolean(),
+})
+const dsh_plugin_shop_shop_setFavorite_result$schema = z.object({
+  'ok': z.boolean(),
+  'detail': z.union([z.undefined(), z.string()]).optional(),
+})
+const dsh_plugin_shop_shop_state_result$schema = z.object({
+  'favorites': z.array(z.string()),
+  'rollback': z.record(z.string(), z.string()),
+})
 const dsh_plugin_shop_shop_uninstallStart_parameter_0$schema = z.object({
   'name': z.string(),
 })
@@ -159,6 +190,7 @@ const dsh_plugin_shop_shop_updateStart_result$schema = z.union([z.object({
   'state': z.union([z.literal("downloading"), z.literal("running"), z.literal("done"), z.literal("failed")]),
 }), z.object({
   'ok': z.literal(false),
+  'code': z.union([z.undefined(), z.literal("desktop-manual")]).optional(),
   'detail': z.string(),
 })])
 const dsh_plugin_shop_shop_version_result$schema = z.object({
@@ -168,6 +200,7 @@ const dsh_plugin_shop_shop_version_result$schema = z.object({
   'restartBlocked': z.union([z.literal(null), z.literal("desktop"), z.literal("from-default-profile"), z.literal("windows"), z.literal("systemd"), z.literal("port-zero")]),
   'pendingVersion': z.union([z.undefined(), z.literal(null), z.string()]).optional(),
   'bootId': z.union([z.undefined(), z.string()]).optional(),
+  'selfUpdate': z.union([z.undefined(), z.literal(null), z.literal("dsh-page")]).optional(),
 })
 
 export const TYPERT = {
@@ -202,7 +235,7 @@ export const TYPERT = {
         schema: dsh_plugin_shop_shop_catalog_result$schema,
         create: () => dsh_plugin_shop_shop_catalog_result$schema,
       },
-      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":1314,"column":9},
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":1384,"column":9},
     },
     {
       id: 'dsh-plugin-shop#shop/installed',
@@ -218,7 +251,7 @@ export const TYPERT = {
         schema: dsh_plugin_shop_shop_installed_result$schema,
         create: () => dsh_plugin_shop_shop_installed_result$schema,
       },
-      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":1821,"column":9},
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2226,"column":9},
     },
     {
       id: 'dsh-plugin-shop#shop/installedSpecs',
@@ -234,7 +267,7 @@ export const TYPERT = {
         schema: dsh_plugin_shop_shop_installedSpecs_result$schema,
         create: () => dsh_plugin_shop_shop_installedSpecs_result$schema,
       },
-      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":1812,"column":9},
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2064,"column":9},
     },
     {
       id: 'dsh-plugin-shop#shop/installStart',
@@ -262,7 +295,7 @@ export const TYPERT = {
         schema: dsh_plugin_shop_shop_installStart_result$schema,
         create: () => dsh_plugin_shop_shop_installStart_result$schema,
       },
-      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":1440,"column":9},
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":1511,"column":9},
     },
     {
       id: 'dsh-plugin-shop#shop/installStatus',
@@ -289,7 +322,7 @@ export const TYPERT = {
         schema: dsh_plugin_shop_shop_installStatus_result$schema,
         create: () => dsh_plugin_shop_shop_installStatus_result$schema,
       },
-      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":1788,"column":3},
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2040,"column":3},
     },
     {
       id: 'dsh-plugin-shop#shop/restart',
@@ -305,7 +338,34 @@ export const TYPERT = {
         schema: dsh_plugin_shop_shop_restart_result$schema,
         create: () => dsh_plugin_shop_shop_restart_result$schema,
       },
-      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2072,"column":9},
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2477,"column":9},
+    },
+    {
+      id: 'dsh-plugin-shop#shop/rollbackStart',
+      service: 'shop',
+      namespace: 'shop',
+      method: 'rollbackStart',
+      invocation: { kind: 'direct' },
+      parameters: [
+        {
+          name: 'args',
+          wire: 'args',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: 'dsh-plugin-shop#shop/rollbackStart:args',
+            schema: dsh_plugin_shop_shop_rollbackStart_parameter_0$schema,
+            create: () => dsh_plugin_shop_shop_rollbackStart_parameter_0$schema,
+          },
+        },
+      ],
+      result: {
+        mode: 'strict',
+        typeSymbol: 'dsh-plugin-shop/types#ShopInstallResult',
+        schema: dsh_plugin_shop_shop_rollbackStart_result$schema,
+        create: () => dsh_plugin_shop_shop_rollbackStart_result$schema,
+      },
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2157,"column":9},
     },
     {
       id: 'dsh-plugin-shop#shop/setEnabled',
@@ -332,7 +392,51 @@ export const TYPERT = {
         schema: dsh_plugin_shop_shop_setEnabled_result$schema,
         create: () => dsh_plugin_shop_shop_setEnabled_result$schema,
       },
-      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":966,"column":9},
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":1036,"column":9},
+    },
+    {
+      id: 'dsh-plugin-shop#shop/setFavorite',
+      service: 'shop',
+      namespace: 'shop',
+      method: 'setFavorite',
+      invocation: { kind: 'direct' },
+      parameters: [
+        {
+          name: 'args',
+          wire: 'args',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: 'dsh-plugin-shop#shop/setFavorite:args',
+            schema: dsh_plugin_shop_shop_setFavorite_parameter_0$schema,
+            create: () => dsh_plugin_shop_shop_setFavorite_parameter_0$schema,
+          },
+        },
+      ],
+      result: {
+        mode: 'strict',
+        typeSymbol: 'dsh-plugin-shop#shop/setFavorite:result',
+        schema: dsh_plugin_shop_shop_setFavorite_result$schema,
+        create: () => dsh_plugin_shop_shop_setFavorite_result$schema,
+      },
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2114,"column":9},
+    },
+    {
+      id: 'dsh-plugin-shop#shop/state',
+      service: 'shop',
+      namespace: 'shop',
+      method: 'state',
+      implementation: 'shopState',
+      invocation: { kind: 'direct' },
+      parameters: [
+      ],
+      result: {
+        mode: 'strict',
+        typeSymbol: 'dsh-plugin-shop/types#ShopStateResult',
+        schema: dsh_plugin_shop_shop_state_result$schema,
+        create: () => dsh_plugin_shop_shop_state_result$schema,
+      },
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2079,"column":9},
     },
     {
       id: 'dsh-plugin-shop#shop/uninstallStart',
@@ -360,7 +464,7 @@ export const TYPERT = {
         schema: dsh_plugin_shop_shop_uninstallStart_result$schema,
         create: () => dsh_plugin_shop_shop_uninstallStart_result$schema,
       },
-      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":1966,"column":9},
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2371,"column":9},
     },
     {
       id: 'dsh-plugin-shop#shop/updateStart',
@@ -387,7 +491,7 @@ export const TYPERT = {
         schema: dsh_plugin_shop_shop_updateStart_result$schema,
         create: () => dsh_plugin_shop_shop_updateStart_result$schema,
       },
-      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2179,"column":9},
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2585,"column":9},
     },
     {
       id: 'dsh-plugin-shop#shop/version',
@@ -403,7 +507,7 @@ export const TYPERT = {
         schema: dsh_plugin_shop_shop_version_result$schema,
         create: () => dsh_plugin_shop_shop_version_result$schema,
       },
-      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2136,"column":9},
+      sourceLocation: {"file":"packages/dsh-plugin-shop/src/host/index.ts","line":2541,"column":9},
     },
   ],
   model: {
@@ -459,6 +563,27 @@ export const TYPERT = {
           },
           {
             "kind": "method",
+            "name": "shopState",
+            "signature": "@Remote('state') async shopState(): Promise<ShopStateResult>",
+            "summary": "What the shop remembers between visits: the reader's favorites and, per install identity, the version an update replaced (design 2026-11-02-market-borrowings §6–§7).",
+            "jsDoc": "/**\n * What the shop remembers between visits: the reader's favorites and, per\n * install identity, the version an update replaced (design\n * 2026-11-02-market-borrowings §6–§7).\n *\n * `rollback` carries a VERSION rather than a spec: the client renders it as\n * the offer (\"roll back to 1.2.3\"), and the spec that installs it is built\n * by the host from the same record. A malformed or missing file reads as\n * empty state — losing stars must never take the page down.\n */"
+          },
+          {
+            "kind": "method",
+            "name": "setFavorite",
+            "signature": "@Remote('setFavorite') async setFavorite(args: { key: string; favorite: boolean }): Promise<{ ok: boolean; detail?: string }>",
+            "summary": "Star or unstar one install identity (§7).",
+            "jsDoc": "/**\n * Star or unstar one install identity (§7).\n *\n * A write failure is reported rather than swallowed: the client flips its\n * star optimistically and would otherwise show a favorite that is gone on\n * the next visit. The key is stored verbatim — it is the identity the\n * catalog itself uses, and an unknown one is harmless until it matches.\n */"
+          },
+          {
+            "kind": "method",
+            "name": "rollbackStart",
+            "signature": "@Remote('rollbackStart') async rollbackStart(args: { key: string }): Promise<ShopInstallResult>",
+            "summary": "Re-install the version an entry was updated from (§6).",
+            "jsDoc": "/**\n * Re-install the version an entry was updated from (§6).\n *\n * Takes only the install identity. The spec is built by `rollbackSpec` from\n * this host's own record, so a client cannot name a version or a spec the\n * shop never wrote — the same invariant `installStart` holds by building\n * its spec from the snapshot. The install then runs through the ordinary\n * CLI path, with the same records, activation verdict and notices an\n * update gets.\n */"
+          },
+          {
+            "kind": "method",
             "name": "installed",
             "signature": "@Remote('installed') async installed(): Promise<ShopInstalledEntry[]>",
             "summary": "Installed catalog plugins (§7.3): every entry of the snapshot the profile manifest declares as a dependency, with the Host's `outdated` verdict attached.",
@@ -500,7 +625,7 @@ export const TYPERT = {
           },
           {
             "name": "CatalogEntry",
-            "declaration": "export interface CatalogEntry {\n    name: string;\n    version: string;\n    integrity: string | null;\n    publishedAt: string | null;\n    repository: string | null;\n    license: string | null;\n    tier: 'verified' | 'verified-stale' | 'community';\n    metadata: 'declared' | 'derived';\n    review?: { reviewedVersion?: string; reviewedCommit?: string; reviewedSha256?: string; repo?: string; reviewer: string; reviewCommit: string; notes: string; };\n    catalog?: CatalogSection;\n    source: 'npm' | 'github';\n    publisher?: string;\n    repo?: string;\n    subdir?: string;\n    tarball?: { url: string; sha256: string; };\n    added?: string;\n    peers?: string[];\n    compatibility?: { dsh?: string; profiles?: string[]; };\n    dshPeers?: Record<string, string>;\n    manifestVersion?: string;\n    unpackedSize?: number;\n    installSize?: number;\n    archived?: boolean;\n    forked?: boolean;\n}"
+            "declaration": "export interface CatalogEntry {\n    name: string;\n    version: string;\n    integrity: string | null;\n    publishedAt: string | null;\n    repository: string | null;\n    license: string | null;\n    tier: 'verified' | 'verified-stale' | 'community';\n    metadata: 'declared' | 'derived';\n    review?: { reviewedVersion?: string; reviewedCommit?: string; reviewedSha256?: string; repo?: string; reviewer: string; reviewCommit: string; notes: string; };\n    catalog?: CatalogSection;\n    source: 'npm' | 'github';\n    publisher?: string;\n    repo?: string;\n    subdir?: string;\n    tarball?: { url: string; sha256: string; };\n    added?: string;\n    peers?: string[];\n    compatibility?: { dsh?: string; profiles?: string[]; };\n    dshPeers?: Record<string, string>;\n    manifestVersion?: string;\n    engines?: string;\n    dependencies?: number;\n    bin?: string[];\n    installScripts?: boolean;\n    unpackedSize?: number;\n    installSize?: number;\n    archived?: boolean;\n    forked?: boolean;\n    icon?: string;\n}"
           },
           {
             "name": "CatalogSection",
@@ -536,7 +661,7 @@ export const TYPERT = {
           },
           {
             "name": "InstallStatus",
-            "declaration": "export interface InstallStatus {\n    state: InstallState;\n    log: string[];\n    activation?: Activation;\n    restartReason?: HotRestartReason;\n    detail?: string;\n}"
+            "declaration": "export interface InstallStatus {\n    state: InstallState;\n    log: string[];\n    activation?: Activation;\n    restartReason?: HotRestartReason;\n    detail?: string;\n    command?: string;\n}"
           },
           {
             "name": "PeerVerdict",
@@ -552,7 +677,7 @@ export const TYPERT = {
           },
           {
             "name": "ShopCatalogResult",
-            "declaration": "export interface ShopCatalogResult {\n    schemaVersion: number;\n    builtAt: string;\n    stale: boolean;\n    plugins: CatalogEntry[];\n    denied: DeniedEntry[];\n    notAShop?: string[];\n    stars: Record<string, number>;\n    incompatible: Record<string, string[]>;\n    incompatibleHarness: Record<string, HarnessVerdict>;\n}"
+            "declaration": "export interface ShopCatalogResult {\n    schemaVersion: number;\n    builtAt: string;\n    stale: boolean;\n    plugins: CatalogEntry[];\n    denied: DeniedEntry[];\n    notAShop?: string[];\n    stars: Record<string, number>;\n    icons: Record<string, string>;\n    incompatible: Record<string, string[]>;\n    incompatibleHarness: Record<string, HarnessVerdict>;\n}"
           },
           {
             "name": "ShopInstalledEntry",
@@ -575,16 +700,20 @@ export const TYPERT = {
             "declaration": "export type ShopSetEnabledResult = { ok: true; activation: Activation; } | { ok: false; detail: string; };"
           },
           {
+            "name": "ShopStateResult",
+            "declaration": "export interface ShopStateResult {\n    favorites: string[];\n    rollback: Record<string, string>;\n}"
+          },
+          {
             "name": "ShopUninstallResult",
             "declaration": "export type ShopUninstallResult = { ok: true; installId: string; } | { ok: false; detail: string; };"
           },
           {
             "name": "ShopUpdateResult",
-            "declaration": "export type ShopUpdateResult = { ok: true; installId: string; state: InstallState; } | { ok: false; detail: string; };"
+            "declaration": "export type ShopUpdateResult = { ok: true; installId: string; state: InstallState; } | { ok: false; code?: 'desktop-manual'; detail: string; };"
           },
           {
             "name": "ShopVersionResult",
-            "declaration": "export interface ShopVersionResult {\n    installed: string;\n    latest: string | null;\n    outdated: boolean;\n    restartBlocked: RestartBlockedReason | null;\n    pendingVersion?: string | null;\n    bootId?: string;\n}"
+            "declaration": "export interface ShopVersionResult {\n    installed: string;\n    latest: string | null;\n    outdated: boolean;\n    restartBlocked: RestartBlockedReason | null;\n    pendingVersion?: string | null;\n    bootId?: string;\n    selfUpdate?: 'dsh-page' | null;\n}"
           }
         ]
       }

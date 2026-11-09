@@ -1,6 +1,7 @@
 import { type Config, type ConfigInput, type ResolvedConfig } from './config.js';
 import { type ClientModeRuntime, type HostConnectionHandle, type HostAuthorizationControl } from './client-runtime.js';
 import { type HostWebServerLike } from './control-route.js';
+import type { PluginUpdateSnapshot } from './update-check.js';
 export interface PluginSettingsView {
     config: Config;
     deviceName: string;
@@ -9,9 +10,18 @@ export interface PluginSettingsView {
     association?: PluginAssociation;
     associations: Partial<Record<'host' | 'client', PluginAssociation>>;
     acpAvailability?: Record<string, boolean>;
+    acpInstallResult?: {
+        backend: string;
+        action: 'configured' | 'installed' | 'download_required';
+        downloadUrl?: string;
+    };
+    startupError?: {
+        code: string;
+        message: string;
+    };
 }
 export interface PluginAssociation {
-    method: 'account' | 'host_registration_code' | 'owned_device';
+    method: 'account' | 'host_registration_code' | 'owned_device' | 'device_pairing';
     account?: string;
 }
 /**
@@ -32,17 +42,31 @@ export interface PluginSettingsBinding {
 /** Loopback-only control plane shared by Local/Remote switching and plugin setup. */
 export declare class PluginControlRuntime {
     private config;
-    private readonly identityDirectory;
+    private identityDirectory;
     private readonly settings;
     private client;
     private host;
     private readonly switchServer?;
+    /** Update-check snapshots merged into every `status` result; absent when the plugin is disabled. */
+    private readonly updates?;
+    private readonly useDefaultStorage;
     private logoutFlight?;
     private serverSwitchFlight?;
+    private startupFailure?;
+    private storageAvailable;
+    setStartupFailure(error: unknown, options?: {
+        storageAvailable?: boolean;
+    }): void;
+    clearStartupFailure(): void;
+    setIdentityDirectory(directory: string): void;
     constructor(config: ResolvedConfig, identityDirectory: string, settings: PluginSettingsBinding | undefined, client: ClientModeRuntime | undefined, host: HostAuthorizationControl | undefined, switchServer?: ((config: ResolvedConfig) => Promise<{
         client: ClientModeRuntime | undefined;
         host: HostAuthorizationControl;
-    }>) | undefined);
+    }>) | undefined, 
+    /** Update-check snapshots merged into every `status` result; absent when the plugin is disabled. */
+    updates?: {
+        snapshot(): PluginUpdateSnapshot | undefined;
+    } | undefined, useDefaultStorage?: boolean);
     register(connection: HostConnectionHandle, webServer?: HostWebServerLike): () => Promise<void>;
     /**
      * Read the value the status event stream pushes. It resolves through the same
@@ -54,13 +78,17 @@ export declare class PluginControlRuntime {
     private configure;
     private setServer;
     private applyServer;
+    private resetIdentity;
+    private applyResetIdentity;
     private setRole;
     private setDevelopment;
+    private setAppearance;
     private setCodex;
     private setCursor;
     private setAcp;
     private addAcp;
     private removeAcp;
+    private installOrConfigureAcp;
     private authorizeOwnedRole;
     private logout;
     private clearAuthorization;

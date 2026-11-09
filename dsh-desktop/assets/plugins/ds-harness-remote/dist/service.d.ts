@@ -1,3 +1,4 @@
+import type { HostPairingView } from './pairing-contract.js';
 import { type RemoteWorkspaceTypeDescription } from '@dsh-remote/protocol';
 import { ConnectionController } from './connection-controller.js';
 import type { ResolvedConfig } from './config.js';
@@ -5,6 +6,7 @@ import type { HostIdentity, IdentityStore } from './identity-store.js';
 import type { SafeLogger } from './logging.js';
 import { type FileViewerHostServiceLike } from './file-viewer-bridge.js';
 import { type DeviceAuthorization, type OAuthProvider, type OAuthProviderInfo, type OAuthQrPollResult, type OAuthQrSession } from './server-api.js';
+import { type ScheduleCreateService } from './harness-remote-bridge.js';
 import type { PluginRouteDispatcher } from './plugin-route-bridge.js';
 import type { LocalTypertGateway } from './typert-gateway-contract.js';
 import type { AuthenticatedPeerChannel } from './types.js';
@@ -24,11 +26,13 @@ export interface HostRemoteStatus {
     configured: boolean;
     online: boolean;
     reconnecting: boolean;
+    recoveryExpiresAt?: number;
     lastActiveAt?: number;
     error?: string;
     account?: string;
     authorized: boolean;
     accountRequired: boolean;
+    pairingHostOnly?: boolean;
     connectedClients: HostConnectedClient[];
 }
 export declare class HostPluginRuntime {
@@ -40,6 +44,8 @@ export declare class HostPluginRuntime {
     /** PTY-backed terminal provider from the Host `subprocess` service, when present. */
     private readonly terminalSpawner?;
     private readonly pluginRoutes?;
+    /** Host `schedule` service; absent on Hosts whose composition omits reminders. */
+    private readonly schedule?;
     readonly connections: ConnectionController;
     private readonly terminalOwners;
     private readonly loopbackHosts;
@@ -49,6 +55,7 @@ export declare class HostPluginRuntime {
     private readonly serverApi?;
     private serverConnection?;
     private harnessVersion?;
+    private pairing?;
     private closed;
     private readonly codex;
     private readonly acp;
@@ -59,7 +66,9 @@ export declare class HostPluginRuntime {
     private localAcpPublish;
     constructor(config: ResolvedConfig, identities: IdentityStore, logger: SafeLogger, localGateway?: LocalTypertGateway | undefined, fileViewerHost?: (() => FileViewerHostServiceLike | undefined) | undefined, 
     /** PTY-backed terminal provider from the Host `subprocess` service, when present. */
-    terminalSpawner?: RemoteTerminalSpawner | undefined, pluginRoutes?: ((peer?: unknown) => PluginRouteDispatcher | undefined) | undefined);
+    terminalSpawner?: RemoteTerminalSpawner | undefined, pluginRoutes?: ((peer?: unknown) => PluginRouteDispatcher | undefined) | undefined, 
+    /** Host `schedule` service; absent on Hosts whose composition omits reminders. */
+    schedule?: ScheduleCreateService | undefined);
     setTerminalEnabled(enabled: boolean): void;
     setLoopbackPorts(ports: readonly number[]): void;
     private backendUpdate;
@@ -69,6 +78,11 @@ export declare class HostPluginRuntime {
     currentIdentity(): HostIdentity;
     acceptAuthenticatedPeer(channel: AuthenticatedPeerChannel): Promise<void>;
     hostStatus(): HostRemoteStatus;
+    private initializePairing;
+    pairingControl(action: 'start' | 'status' | 'confirm' | 'cancel', input: {
+        sessionId?: string;
+        verificationCode?: string;
+    }): Promise<HostPairingView | undefined>;
     hasStoredAuthorization(): Promise<boolean>;
     private listConnectedClients;
     localHarnessVersion(): string | undefined;

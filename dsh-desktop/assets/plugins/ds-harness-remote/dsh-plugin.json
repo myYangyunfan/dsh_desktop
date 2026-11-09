@@ -2,7 +2,7 @@
   "$schema": "https://dsh.community/schemas/dsh-plugin-0.15.json",
   "id": "com.r2049.ds-harness-remote",
   "name": "ds-harness-remote",
-  "version": "0.5.19",
+  "version": "0.6.4",
   "manifestVersion": "0.15",
   "facets": {
     "host": {
@@ -10,29 +10,6 @@
       "apiVersion": "v1alpha1"
     }
   },
-  "requires": {
-    "contracts": [
-      {
-        "apiVersion": "commands.dsh/v1alpha1",
-        "kind": "Command"
-      }
-    ]
-  },
-  "contributes": {
-    "commands": [
-      {
-        "id": "ds-harness.remote",
-        "title": "Manage Remote Host login and connection status"
-      }
-    ]
-  },
-  "permissions": [
-    {
-      "name": "commands.invoke",
-      "scope": "ds-harness.remote",
-      "reason": "run /remote status, login, and logout from dsh-TUI"
-    }
-  ],
   "subscriptions": [],
   "license": "MIT",
   "source": {

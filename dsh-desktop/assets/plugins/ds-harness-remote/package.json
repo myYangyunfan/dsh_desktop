@@ -1,7 +1,7 @@
 {
   "name": "ds-harness-remote",
-  "version": "0.5.19",
-  "description": "End-to-end encrypted remote access to DeepSeek Harness and experimental Codex workspaces from desktop, web, and Android, with dsh-TUI Host support.",
+  "version": "0.6.4",
+  "description": "P2P-based, end-to-end encrypted remote access to DeepSeek Harness, CodeX, Claude Code, Pi, and other workspaces from web and mobile clients.",
   "keywords": [
     "deepseek",
     "deepseek-harness",
@@ -15,7 +15,8 @@
   "homepage": "https://github.com/liguobao/ds-harness-remote#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/liguobao/ds-harness-remote.git"
+    "url": "git+https://github.com/liguobao/ds-harness-remote.git",
+    "directory": "packages/plugin"
   },
   "bugs": {
     "url": "https://github.com/liguobao/ds-harness-remote/issues"
@@ -41,17 +42,20 @@
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./client": "./dist/client.js",
     "./locale/*.json": "./locale/*.json",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./icon": "./icon.png"
   },
   "files": [
     "bin",
     "dist",
+    "!dist/**/*.map",
     "dsh-plugin.json",
     "cordis.patch.yml",
     "locale",
     "public.d.ts",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "icon.png"
   ],
   "dsh": {
     "bundle": {
@@ -80,8 +84,7 @@
   "dependencies": {
     "@deepseek-ai/schemastery": "^3.18.5",
     "qrcode": "^1.5.4",
-    "werift": "0.24.4",
-    "zod": "^3.24.1",
+    "zod": "^4.6.7",
     "ws": "^8.21.3",
     "@xterm/headless": "6.0.0",
     "@xterm/addon-serialize": "0.14.0"
@@ -158,6 +161,7 @@
     "esbuild": "^0.25.0",
     "typescript": "^5.7.3",
     "vitest": "^2.1.8",
+    "werift": "0.26.0",
     "@types/ws": "^8.18.1",
     "@deepseek-ai/dsh-client-ui-settings-general": "0.2.1-rc.1",
     "@deepseek-ai/dsh-client-ui-plugin-manager": "0.2.1-rc.1",

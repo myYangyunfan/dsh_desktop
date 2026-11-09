@@ -16,7 +16,7 @@ export type CursorAcpInboundHandler = (message: CursorAcpInbound) => void;
 export type CursorAcpUnavailableHandler = (code: string) => void;
 export type SpawnCursorAcp = (binary: string) => ChildProcessWithoutNullStreams;
 export interface CursorAcpOptions {
-    modelBackend?: 'cursor' | 'claude';
+    modelBackend?: 'cursor' | 'claude' | 'hermes';
     args?: string[];
     cwd?: string;
     /** null uses Host-local pre-authentication; undefined preserves Cursor login. */

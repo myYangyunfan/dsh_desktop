@@ -42,7 +42,7 @@ export class ConnectionController {
             });
         }
         await Promise.all(replaced.map(connection => this.disconnect(connection, 'CONNECTION_REPLACED')));
-        const router = this.createRouter({ connectionId, peerDeviceId: channel.peerDeviceId }, message => this.sendTo(connectionId, channel, message));
+        const router = this.createRouter({ connectionId, peerDeviceId: channel.peerDeviceId, transportMode: () => channel.mode }, message => this.sendTo(connectionId, channel, message));
         const connection = {
             channel,
             router,
@@ -115,9 +115,20 @@ export class ConnectionController {
             const response = await connection.router.handle(message);
             if (!this.isActive(connection))
                 return;
-            const outbound = encodeMessage(response).byteLength <= MAX_SECURE_MESSAGE_BYTES
-                ? response
-                : createRpcError(message.id, 'RESPONSE_TOO_LARGE', 'The Host response is too large for the secure Remote channel. Request a smaller page.', { maxBytes: MAX_SECURE_MESSAGE_BYTES }, true);
+            const responseBytes = encodeMessage(response).byteLength;
+            let outbound;
+            if (responseBytes <= MAX_SECURE_MESSAGE_BYTES) {
+                outbound = response;
+            }
+            else {
+                const endpoint = extractEndpoint(message);
+                this.logger?.warn('host response exceeds secure channel', {
+                    endpoint,
+                    bytes: responseBytes,
+                    limit: MAX_SECURE_MESSAGE_BYTES,
+                });
+                outbound = createRpcError(message.id, 'RESPONSE_TOO_LARGE', 'The Host response is too large for the secure Remote channel. Request a smaller page.', { maxBytes: MAX_SECURE_MESSAGE_BYTES }, true);
+            }
             await connection.channel.send(outbound);
         }
         catch (error) {
@@ -184,7 +195,26 @@ export class ConnectionRejectedError extends Error {
 }
 function diagnosticReason(error) {
     const message = error instanceof Error ? error.message : String(error);
-    return message.replace(/[\r\n]+/g, ' ').slice(0, 160) || 'Unknown peer connection failure.';
+    return message.replace(/\s+/g, ' ').slice(0, 160) || 'Unknown peer connection failure.';
+}
+function extractEndpoint(message) {
+    if (!isRecord(message) || !isRecord(message.payload))
+        return undefined;
+    const payload = message.payload;
+    if (isRecord(payload.params)) {
+        if (typeof payload.params.endpoint === 'string')
+            return payload.params.endpoint;
+        if (typeof payload.params.method === 'string')
+            return payload.params.method;
+    }
+    if (typeof payload.endpoint === 'string')
+        return payload.endpoint;
+    if (typeof payload.method === 'string')
+        return payload.method;
+    return undefined;
+}
+function isRecord(value) {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 function shortId(value) { return value.length <= 12 ? value : `${value.slice(0, 8)}…${value.slice(-4)}`; }
 //# sourceMappingURL=connection-controller.js.map

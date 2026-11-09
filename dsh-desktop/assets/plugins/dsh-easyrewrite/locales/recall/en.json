@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Message Recall",
+    "description": "Native-style recall button at message bottom, with confirmation capsule, global hotkey, and conflict protection."
+  }
+}

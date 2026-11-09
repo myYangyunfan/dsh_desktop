@@ -24,9 +24,9 @@ export interface ClientControlContext {
     readonly openRemoteWorkspace: (targetDeviceId: string, path: string, signal?: AbortSignal) => Promise<Record<string, unknown>>;
     readonly openCodexWorkspace: (targetDeviceId: string, workspaceId: string, signal?: AbortSignal) => Promise<Record<string, unknown>>;
     readonly createCodexWorkspace: (targetDeviceId: string, path: string, signal?: AbortSignal) => Promise<Record<string, unknown>>;
-    readonly listCursorWorkspaces: (targetDeviceId: string, signal?: AbortSignal, backend?: "cursor" | "antigravity" | "pi" | "opencode" | "claude") => Promise<AcpVirtualWorkspaceView[]>;
-    readonly openCursorWorkspace: (targetDeviceId: string, workspaceId: string, signal?: AbortSignal, backend?: "cursor" | "antigravity" | "pi" | "opencode" | "claude") => Promise<Record<string, unknown>>;
-    readonly createCursorWorkspace: (targetDeviceId: string, path: string, signal?: AbortSignal, backend?: "cursor" | "antigravity" | "pi" | "opencode" | "claude") => Promise<Record<string, unknown>>;
+    readonly listCursorWorkspaces: (targetDeviceId: string, signal?: AbortSignal, backend?: "cursor" | "antigravity" | "pi" | "opencode" | "claude" | "hermes") => Promise<AcpVirtualWorkspaceView[]>;
+    readonly openCursorWorkspace: (targetDeviceId: string, workspaceId: string, signal?: AbortSignal, backend?: "cursor" | "antigravity" | "pi" | "opencode" | "claude" | "hermes") => Promise<Record<string, unknown>>;
+    readonly createCursorWorkspace: (targetDeviceId: string, path: string, signal?: AbortSignal, backend?: "cursor" | "antigravity" | "pi" | "opencode" | "claude" | "hermes") => Promise<Record<string, unknown>>;
     readonly consumeWorkspaceSelection: (selection: RemoteWorkspaceSelection) => Record<string, unknown>;
     readonly callRemoteFileViewer: (endpoint: RemoteFileViewerEndpoint, payload: unknown, signal?: AbortSignal) => Promise<unknown>;
     readonly activeCodexRemote: () => ConnectedRemote | undefined;

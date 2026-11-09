@@ -10,7 +10,7 @@ export function workspaceUploadRootResolver(gateway, supportsHarnessSessions, co
                 throw unavailable();
             return codex(parsed.threadId);
         }
-        if (/^(acp|cursor|pi|opencode|claude):/.test(sessionId))
+        if (/^(acp|cursor|pi|opencode|claude|hermes):/.test(sessionId))
             return acp(sessionId);
         if (!gateway?.supportsCarrier || !supportsHarnessSessions())
             throw unavailable();

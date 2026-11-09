@@ -7,13 +7,13 @@ This document distinguishes between a regular install and a local development in
 
 ## Requirements
 
-- DeepSeek Harness `0.2.0-rc.1` or later (`0.2.0-rc.2` and `0.2.1-rc.2` both run the full suite; the cordis 4.0.5 / loader 1.0.6 pair that ships with 0.2.1 is covered too)
+- DeepSeek Harness `0.2.1-rc.5` or later; verified `0.2.1-rc.5` (Cordis 4.0.5 / Loader 1.0.6) and `0.2.2-rc.1` (Cordis 4.1.0 / Loader 1.1.0)
 - An initialized `web` profile
 - Node.js and pnpm callable normally by DSH's plugin commands
 
-The plugin declares the DSH host API as a peer dependency of `>=0.2.0-rc.1 <0.3.0`. It only supports 0.2.x because ToolSearch is built on capabilities that only exist from 0.2: the per-agent presentation mode (`ctx.tools.modeFor(agent)`, which decides whether a session gets a function list or the `tools:sdk` manual), the PTC manual section `tools:sdk`, and the session projection service (`ctx.sessionProjections`, the only legitimate way to restore the discovered set). None of the three exists on 0.1.x, so no downgrade branches are kept for it.
+The plugin declares the DSH host API as `>=0.2.1-rc.5 <0.3.0` in both `peerDependencies` and `engines.dsh`. Current release admission starts at 0.2.1-rc.5; older hosts remain historical loader regression targets, while the 0.2.2 executor path is verified with its matched Loader/Include host set.
 
-**The supported surface is the 0.2.0 and 0.2.1 lines.** Between them the host swapped loader generations (`cordis-plugin-loader` 1.0.3 → 1.0.6); the plugin adapts to both differences explicitly, each with a standing test (`test/loader-compat.test.mjs`):
+Historical loader regression notes (0.2.0 is not current release admission):
 
 - **Startup-error propagation**: 1.0.3 throws from `Entry.update()` when `apply` fails, so `loader.create()` itself rejects; 1.0.6 only logs it, so `create()` always resolves and the error hangs off the fiber. The plugin waits on `fiber.await()` instead — otherwise adding a server that cannot connect would not roll the patch back.
 - **What a dispose writes**: 1.0.3's unload handler had an `_disposing` early-return guard; 1.0.6 dropped it, so `fiber.entry.parent.tree.write()` really runs — for an include-subtree entry that is `Include.write()`, which writes the base config together with **every remaining patch row**. The plugin marks the entry `disabled` before removing it (the only remaining early-return criterion in that handler); otherwise removing one server would bake its siblings' patch rows into `cordis.yml`.
@@ -25,14 +25,14 @@ The development baseline tracks the latest verified RC and mirrors every peer de
 Installing via npm is recommended: the `^1.x` range in the package lets a later `dsh plugin update` upgrade minor versions automatically.
 
 ```sh
-dsh plugin --profile web add dsh-toolbox-ui@^1.8.2
+dsh plugin --profile web add dsh-toolbox-ui@^1.10.1
 ```
 
 You can also pin a GitHub release tag (useful when you need to lock a specific version):
 
 ```sh
 # 固定 release tag
-dsh plugin --profile web add github:Imzl-zl/dsh-toolbox-ui#v1.8.2
+dsh plugin --profile web add github:Imzl-zl/dsh-toolbox-ui#v1.10.1
 
 # 或固定某个 commit
 dsh plugin --profile web add github:Imzl-zl/dsh-toolbox-ui#<commit>
@@ -83,7 +83,7 @@ The behavior differs depending on the spec used at install time:
 
 | Install spec | Effect of `update` | How to cross versions |
 |---|---|---|
-| `dsh-toolbox-ui@^1.8.2` (npm, recommended) | Automatically upgrades to the latest minor version within `^1.x`, never crossing into 2.0.0 | Already automatic; for a major version, explicitly install `@^2` |
+| `dsh-toolbox-ui@^1.10.1` (npm, recommended) | Automatically upgrades to the latest minor version within `^1.x`, never crossing into 2.0.0 | Already automatic; for a major version, explicitly install `@^2` |
 | `github:...#v1.4.0` (tag) | Re-resolves the same tag, **does not move** | Switch to a new tag and `add` again: `... #<new tag>` |
 | `github:...#<commit>` | Same as above, pinned to the commit | `add` again with a new commit/tag |
 | `github:...#main` (branch) | Pulls the latest main | Already automatic; but not recommended for production (no release gate) |
@@ -123,7 +123,7 @@ dsh web    # 打开面板点一遍
 # 3) 提交并推 tag（CI 会校验 tag 与 version 一致，不一致就拒绝发布）
 git add -A && git commit -m "..."
 git push origin main
-git tag -a v1.8.2 -m "dsh-toolbox-ui 1.8.2" && git push origin v1.8.2
+git tag -a v1.10.1 -m "dsh-toolbox-ui 1.10.1" && git push origin v1.10.1
 ```
 
 After the tag is pushed, CI does the following in order: verify the version → `pnpm install --frozen-lockfile` → `npm test` → `npm publish` (trusted publishing, no token needed) → `gh release create`.
@@ -142,7 +142,7 @@ Why this cannot be delegated to CI: the symptom of this class of failure is a **
 
 ```sh
 npm publish          # 会弹 2FA 挑战；若用 bypass-2FA 的 granular token 则非交互
-gh release create v1.8.2 --title "dsh-toolbox-ui v1.8.2" --notes-file <notes>
+gh release create v1.10.1 --title "dsh-toolbox-ui v1.10.1" --notes-file <notes>
 ```
 
 The session token from `npm login` lasts only 2 hours; once it expires you must log in again. Classic tokens have been permanently revoked by npm, so the only remaining way to publish non-interactively is a granular access token with **Bypass 2FA** checked — but npm is narrowing that (it can no longer perform account/package management operations, and from 2027-01 it will lose the ability to publish directly), so the long-term solution is trusted publishing as described above.

@@ -12,6 +12,9 @@ export class ClientControl {
         try {
             if (endpoint === 'status')
                 return ok(await this.context.detailedStatus());
+            if (endpoint === 'client.authorization.status') {
+                return ok({ hasCredentials: await this.context.server.hasStoredAuthorization() });
+            }
             if (endpoint === 'devices')
                 return ok(await this.context.devices());
             if (endpoint === 'client.account.providers')
@@ -184,6 +187,26 @@ export class ClientControl {
                 }
                 return ok(await this.context.createCursorWorkspace(value.targetDeviceId, value.path, signal, 'claude'));
             }
+            if (endpoint === 'hermes.workspaces.list') {
+                const value = record(payload);
+                if (typeof value.targetDeviceId !== 'string')
+                    throw new ClientModeError('INVALID_MESSAGE', 'A Host is required.');
+                return ok(await this.context.listCursorWorkspaces(value.targetDeviceId, signal, 'hermes'));
+            }
+            if (endpoint === 'hermes.workspace.open') {
+                const value = record(payload);
+                if (typeof value.targetDeviceId !== 'string' || typeof value.workspaceId !== 'string') {
+                    throw new ClientModeError('INVALID_MESSAGE', 'A Host and Hermes Workspace are required.');
+                }
+                return ok(await this.context.openCursorWorkspace(value.targetDeviceId, value.workspaceId, signal, 'hermes'));
+            }
+            if (endpoint === 'hermes.workspace.create') {
+                const value = record(payload);
+                if (typeof value.targetDeviceId !== 'string' || typeof value.path !== 'string') {
+                    throw new ClientModeError('INVALID_MESSAGE', 'A Host and Hermes project directory are required.');
+                }
+                return ok(await this.context.createCursorWorkspace(value.targetDeviceId, value.path, signal, 'hermes'));
+            }
             if (endpoint === 'workspace.selection.consume') {
                 const value = record(payload);
                 if (typeof value.targetDeviceId !== 'string' || typeof value.workspaceId !== 'string') {
@@ -192,7 +215,7 @@ export class ClientControl {
                 return ok(this.context.consumeWorkspaceSelection({
                     targetDeviceId: value.targetDeviceId,
                     workspaceId: value.workspaceId,
-                    ...(value.backend === 'codex' || value.backend === 'cursor' || value.backend === 'antigravity' || value.backend === 'pi' || value.backend === 'opencode' || value.backend === 'claude' ? { backend: value.backend } : {}),
+                    ...(value.backend === 'codex' || value.backend === 'cursor' || value.backend === 'antigravity' || value.backend === 'pi' || value.backend === 'opencode' || value.backend === 'claude' || value.backend === 'hermes' ? { backend: value.backend } : {}),
                     ...(typeof value.sessionId === 'string' ? { sessionId: value.sessionId } : {}),
                 }));
             }

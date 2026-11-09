@@ -7,22 +7,25 @@ import { interpolate } from "@deepseek-ai/cordis-plugin-loader";
 import { withFileLock, writeFileAtomic } from "@deepseek-ai/dsh-atomic-write";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { appendSelectedBuiltinMcpServers, BUILTIN_MCP_SERVERS, builtinMcpCatalog, builtinSpec, MANAGED_CONFIG_FIELDS, normalizeMcpImport, PLUGIN_OWN_CONFIG_FIELDS, readManagedMcpServers, setManagedMcpDisabled, updateManagedMcpPatch } from "./mcp-config.js";
+import { appendSelectedBuiltinMcpServers, BUILTIN_MCP_SERVERS, builtinMcpCatalog, builtinSpec, MANAGED_CONFIG_FIELDS, normalizeMcpImport, readManagedMcpServers, setManagedMcpDisabled, updateManagedMcpPatch } from "./mcp-config.js";
 import { admitImportedServers } from "./import-admission.js";
 import { collectImportLocations, missingEnvNames, resolveImportLocation } from "./mcp-import-sources.js";
 import { deriveMcpPhase, formatMcpLog, sanitizeMcpLog } from "./mcp-observability.js";
-import { allMcpEntries, entriesForName, MCP_NAME, projectToolSchema, revisionOf, toolInventory } from "./mcp-registry.js";
+import { allMcpEntries, entriesForName, projectToolSchema, revisionOf, toolInventory } from "./mcp-registry.js";
 import { diagnoseSkill } from "./skills-frontmatter.js";
 import { invocationOf, listSkillViews, resolveSkillReference, resolveTargetReference, skillRowKey, skillTargetsView } from "./skills-registry.js";
 import { importSkill, readSkillDocument, removeSkill, scanDisabledSkills, setSkillEnabled, setSkillModelInvocable, setSkillUserInvocable } from "./skills-file-ops.js";
 import { downloadHubArchive, hubCategories, hubSkillDetail, searchHubSkills } from "./skillhub.js";
 import { setOwn } from "./own-property.js";
+import { commitProfilePatches, composedRowVisible, ProfileMutationError, profileSources } from "./profile-composition.js";
 import { WHATS_NEW } from "./whats-new.js";
-import { evaluateEnvExpression, jsExpressionToTemplate, specToMcpEntry } from "./workspace-config.js";
+import { evaluateEnvExpression, jsExpressionToTemplate, specToMcpEntry, toMcpClientConfig } from "./workspace-config.js";
 import { canonicalWorkspacePath, assertRegisteredWorkspace, installAgentRuntime, listWorkspaceRecords, liveWorkspaceAgentCount, projectConnectionsView, readWorkspaceConfigCached, reconcileWorkspaceConnections, reconcileWorkspaceRestricts, reconnectWorkspaceServer, withRegisteredWorkspaceWrite, workspaceConnectionStatus, workspaceMountErrorsView, workspaceRestrictErrorView, workspaceScopeErrorsView, workspaceToolSchemas, writeWorkspaceConfigFile } from "./workspace-runtime.js";
-import { installToolSearchRuntime } from "./tool-search-runtime.js";
-import { deferServersOf, serverNamesOf } from "./tool-search-config.js";
-import { TOOL_SEARCH_CONFIG_KEY, ToolSearchConfigSchema, effectiveToolSearchSettings, normalizeToolSearchSettings, pluginPatchIdentity, readToolSearchSettings, setToolSearchSettingsInPatch } from "./tool-search-settings.js";
+import { installToolSearchRuntime, uniqueOwner } from "./tool-search-runtime.js";
+import { agentWorkspace, deferServersOf, residentServersOf, serverNamesOf, toolSearchDisabled } from "./tool-search-config.js";
+import { normalizePolicyConfig, resolveToolLoadingPolicy, validatePolicyConfig } from "./tool-loading-policy.js";
+import { TOOL_LOADING_CONFIG_KEY, TOOL_SEARCH_CONFIG_KEY, ToolSearchConfigSchema, assertToolSearchSettingsPayload, effectiveToolSearchSettings, normalizeToolSearchSettings, pluginPatchIdentity, readToolLoadingPolicy, readToolSearchSettings, setToolLoadingPolicyInPatch, setToolSearchSettingsInPatch } from "./tool-search-settings.js";
+import { agentToolLoadingPolicy, liveAgents, setAgentToolLoadingPolicy } from "./workspace-runtime.js";
 
 var __runInitializers = function(thisArg, initializers, value) {
 	var useValue = arguments.length > 2;
@@ -186,12 +189,40 @@ function managedLiveEntry(ctx, state, name) {
  *   - 三个上限是**装配期取值**：它们会写进模型可见的工具定义（`max_results` 的取值范围与
  *     默认值），所以改它们必须重装，见 `updateToolSearchSettings`。
  */
-function installToolSearch(ctx, settings) {
+function installToolSearch(ctx, settings, policyFor) {
 	return installToolSearchRuntime(ctx, {
-		deferServers: () => deferServersOf(ctx),
-		serverNames: () => serverNamesOf(ctx),
+		// 两个 thunk 都接受 agent：项目族的 defer 只按**本会话所在项目**解析。
+		deferServers: (agent) => deferServersOf(ctx, agent),
+		serverNames: (agent) => serverNamesOf(ctx, agent),
+		// 统一策略（逐工具 / 项目覆盖 / 保护名单）在网关里合成，运行时只消费结果。
+		...(typeof policyFor === "function" ? { policyFor } : {}),
 		...settings,
 	});
+}
+
+function installToolSearchIsolated(ctx, settings, policyFor) {
+	try {
+		const dispose = installToolSearch(ctx, settings, policyFor);
+		// `dispose` 同时带 `status()`（能力状态）与 `generation`：面板/诊断读它，
+		// 而不是靠"装上了"推断"延迟加载真的生效"。
+		return { settings, dispose, status: () => dispose?.status?.(), error: undefined };
+	} catch (error) {
+		const message = `mcp-manager: ToolSearch 初始化失败，MCP 与 skills 管理仍保持可用：${error?.message ?? error}`;
+		ctx.logger?.error?.(message);
+		return {
+			settings,
+			dispose: () => {},
+			status: () => ({
+				presentation: { state: "failed", reason: message },
+				nativeDeclaration: { state: "failed", reason: message },
+				ptcSdk: { state: "failed", reason: message },
+				signatures: { state: "failed", reason: message },
+				restore: { state: "failed", reason: message },
+				diagnostics: [{ code: "TOOL_SEARCH_INIT_FAILED", message }],
+			}),
+			error: { code: "TOOL_SEARCH_INIT_FAILED", message },
+		};
+	}
 }
 function patchPath(ctx) {
 	const entry = [...ctx.loader.entries()].find((candidate) => candidate.options.id === ROOT_INCLUDE_ID && candidate.options.name === "cordis:include");
@@ -211,17 +242,39 @@ async function readProfilePatchFile(path) {
 	if (!info.isFile()) throw new Error("profile patch is not a regular file");
 	return { content, target: path, version: patchVersion(content), mode: info.mode & 0o777 || 0o600 };
 }
+/**
+ * 本 app root 当前是否已经持有 HMR 事务锁（用于拒绝嵌套）。
+ * 键是 ctx：同一个 root 可能并存多个插件实例（测试/HMR），锁深度必须各自计。
+ */
+const hmrLockDepth = new WeakMap();
 function withPatchWrite(ctx, operation) {
 	const previous = patchWriteQueues.get(ctx) || Promise.resolve();
 	const run = async () => {
 		const path = patchPath(ctx);
 		if (!path) throw new Error("root include unavailable; cannot locate profile patch");
-		return withFileLock(path, operation);
+		const locked = () => withFileLock(path, operation);
+		// 锁顺序：HMR.runExclusive → 官方同一 profile package.json 文件锁。反过来会与官方的
+		// 配置编辑器互等（它先拿文件锁，再在锁内做 HMR 相关动作）。
+		const hmr = typeof ctx.get === "function" ? ctx.get("hmr") : undefined;
+		if (typeof hmr?.runExclusive !== "function") return locked();
+		const depth = hmrLockDepth.get(ctx) ?? 0;
+		if (depth > 0) {
+			// 嵌套 HMR 事务会自锁（runExclusive 不可重入）。明确失败好过静默死等：
+			// 事务入口只有一个，出现嵌套即为实现错误。
+			throw new Error("mcp-manager: 检测到嵌套的 HMR 事务（同一阶段只能有一个事务入口）");
+		}
+		hmrLockDepth.set(ctx, depth + 1);
+		try {
+			return await hmr.runExclusive(locked);
+		} finally {
+			hmrLockDepth.set(ctx, depth);
+		}
 	};
 	const current = previous.then(run, run);
 	patchWriteQueues.set(ctx, current.catch(() => {}));
 	return current;
 }
+
 async function readPatch(ctx) {
 	const path = patchPath(ctx);
 	if (!path) throw new Error("root include unavailable; cannot locate profile patch");
@@ -238,85 +291,83 @@ async function managedState(ctx) {
 	const parsed = readManagedMcpServers(patch.content);
 	return { ...patch, servers: parsed.servers, byName: new Map(parsed.servers.map((server) => [server.name, server])), entryIds: new Map(Object.entries(parsed.entryIds)) };
 }
+/**
+ * 写盘 + 生效的**唯一**入口（实现见 `lib/profile-composition.js`）。
+ *
+ * 之前这里有三份"活操作"实现（`createLiveEntries` / `entry.update` / `entry.parent.remove`），
+ * 与官方 `reconcileProfilePatches` 并存——同一件事两个实现，写盘的行与运行中的条目迟早漂移。
+ * 现在所有变更型入口都从这里过：写盘、判定"最终组合里我这一行算不算数"、reconcile、
+ * 失败回滚，全在一处。
+ *
+ * @param {object} ctx
+ * @param {{content: string, version: string, target: string}} state - 写盘前的快照。
+ * @param {string} nextContent - 新的 profile patch 内容。
+ * @param {object} [options] - 见 commitProfilePatches（entryId/expect/requiredIds/doomedIds/…）。
+ */
+function commitPatch(ctx, state, nextContent, options = {}) {
+	return commitProfilePatches(ctx, {
+		content: state.content,
+		version: state.version,
+		target: state.target,
+		write: (content, version) => writePatch(state, content, version),
+	}, nextContent, options);
+}
+/**
+ * 这次写入会让哪些**本 profile 管理的** MCP 行消失。
+ *
+ * 只算 patch 文件里管的那几条：别的配置层（bundle/preset）提供的 MCP 条目不在 patch 里，
+ * 扫过去把它们置成 disabled 等于替用户关掉了别人的插件。返回的 id 交给 reconcile 之前
+ * 先标脏——rc.5 的卸载钩子会因此早退，不会把已应用树写回 base 配置（见 profile-composition）。
+ */
+function doomedMcpIds(state, nextContent) {
+	const next = new Set(Object.values(readManagedMcpServers(nextContent).entryIds));
+	return [...state.entryIds.values()].filter((id) => !next.has(id));
+}
+/**
+ * 技能文件是我们直接写的（不经过 `ctx.skills`），所以写完之后必须让宿主的技能目录缓存失效——
+ * 否则模型看到的还是旧内容（面板自己每次 list 都重读，看起来"已经生效"，模型那边却没有）。
+ * 宿主没提供失效入口时如实报 skipped，不假装。
+ */
+function refreshSkillCatalog(ctx) {
+	const skills = typeof ctx.get === "function" ? ctx.get("skills") : undefined;
+	if (typeof skills?.invalidateCache !== "function") {
+		return { live: "skipped", liveReason: "宿主没有提供技能目录失效入口（ctx.skills.invalidateCache）" };
+	}
+	skills.invalidateCache();
+	return { live: "applied" };
+}
+/**
+ * 变更型 RPC 的结构化结果：写盘事实与运行中事实分开报。
+ *
+ * live 既可以是枚举字符串，也可以是 { live, liveReason? }（refreshSkillCatalog 与
+ * commitProfilePatches 都返回后一种形状）——只有一处归一化，调用点不必各写一遍展开。
+ */
+function mutationResult(persisted, live, extra = {}) {
+	const state = typeof live === "string" ? { live } : live;
+	return {
+		persisted,
+		live: state.live,
+		diagnostics: state.diagnostics ?? [],
+		...(state.liveReason ? { liveReason: state.liveReason } : {}),
+		...extra,
+	};
+}
+/**
+ * 只翻 defer 的"活"那半：同步运行中条目的遮罩位。
+ *
+ * defer 不参与连接（`deferServersOf` 读的就是这几个 options），所以**不**为它 reconcile：
+ * reconcile 会重启 mcp-client 的 fiber 重新建连（serena 冷启动实测 1-1.5 分钟），而用户
+ * 只是把一个显示开关翻过来。行的增删改（生命周期变了）才走 reconcile。
+ */
+function applyDeferMask(entries, defer) {
+	for (const entry of entries) entry.options.config.defer = defer;
+}
 /** 刚写出的 patch 内容 → 该 serverName 对应的 loader 条目 id。
  *  `resolveManagedEntry` 靠这个 id 认人（认不上的条目会被划成 external，面板既不能改也不能卸），
  *  所以创建活条目时用的 id 必须与 patch 行一致，不能另起一个。 */
 function entryIdOf(patchContent, name) {
 	const ids = readManagedMcpServers(patchContent).entryIds;
 	return Object.hasOwn(ids, name) ? ids[name] : null;
-}
-/**
- * 写盘之后的"活操作"失败 → 把 patch 写回写盘前的版本。
- *
- * 形状与 update()/setDisabled() 原有的一致，抽出来是因为 add / removeServer /
- * installBuiltins 也要走同一条路——三处各写一遍迟早漂移（尤其是 AggregateError
- * 那条：漏了它，"活操作失败"和"patch 也没还原"两个事实就只剩一个）。
- */
-async function rollbackLiveChange(state, version, label, error) {
-	try {
-		await writePatch(state, state.content, version);
-	} catch (rollbackError) {
-		throw new AggregateError([error, rollbackError], `${label}失败，且 profile patch 回滚失败`);
-	}
-	throw error;
-}
-/**
- * 在**运行中的进程**里创建 loader 条目（add / installBuiltins 的"活"那半）。
- *
- * **根部创建（parent 省略）**，这是实测出来的安全形状：
- *   - `loader.create(options, 'include')` 走 `group.tree.write()` → `Include.write()`
- *     把**含 patch 插入条目的整个 root.data** 写回 base 配置文件（applyEntryPatches
- *     对没有 id 的 insert 无条件 push）→ 首次 create 就把 patch 条目烙进 cordis.yml，
- *     下次启动 patch 再 insert → 重复条目。
- *   - 根部 `Loader.write()` 是 no-op，patch 文件一个字节都不动。
- *   - 根部条目不会被划成 external：add() 已先把 id 写进 patch，`managedIds` 逃生门兜住
- *     （真 loader 夹具实测 `list()` 报 managed:true, connected）。
- *
- * 任一条失败就把**这一批已经创建的**全部停掉再抛——半套条目比一套都没有更坏
- * （用户会看到"加了两台、只有一台在跑"）。滚回 patch 是调用方的事：它才知道写盘前的版本。
- */
-/**
- * 等这次"活变更"真正落地，并把启动错误抛回调用方。
- *
- * 为什么不能只 `await ctx.loader.create()` / `await entry.update()`：
- * `cordis-plugin-loader@1.0.3`（0.2.0 宿主）在 `Entry.update()` 里对 apply 失败
- * `throw updateError("apply", …)`，所以这两条调用**自己就 reject**；`1.0.6`（0.2.1 宿主，
- * `@deepseek-ai/dsh@0.2.1-rc.2` 声明 `~1.0.6`）把那套 throw 换成了 `logger.error/warn`，
- * 于是它们**总是 resolve**——启动失败变成静默，调用方的回滚分支永远进不去，
- * patch 里留下一条连不上的行 / 一份连不上的新配置。
- *
- * `fiber.await()` 在两个版本语义一致（"等生命周期结束并重抛启动错误"，cordis 4.0.2 与
- * 4.0.5 的实现逐字相同），所以它是这三条入口（create / update / setDisabled）共同的判据；
- * 只在 `createLiveEntries` 里补一次就会漏掉用户改配置和启用这两条路——它们同样会重启 fiber。
- */
-async function settleLiveEntry(ctx, id) {
-	const entry = [...ctx.loader.entries()].find((candidate) => candidate.options.id === id);
-	if (!entry) throw new Error(`loader 条目不存在：${id}`);
-	// disabled 行按设计不启动，没有启动结果可等（patch 里带 disabled 的条目走这条路）。
-	if (!entry.fiber) return entry;
-	await entry.fiber.await();
-	return entry;
-}
-async function createLiveEntries(ctx, entries) {
-	const created = [];
-	try {
-		for (const entry of entries) {
-			const createdId = await ctx.loader.create(entry);
-			created.push(entry.id);
-			await settleLiveEntry(ctx, createdId);
-		}
-	} catch (error) {
-		const rollbackErrors = [];
-		for (const id of created.reverse()) {
-			try {
-				await ctx.loader.remove(id);
-			} catch (rollbackError) {
-				rollbackErrors.push(rollbackError);
-			}
-		}
-		if (rollbackErrors.length) throw new AggregateError([error, ...rollbackErrors], "MCP 条目创建失败，且已创建条目的回滚失败");
-		throw error;
-	}
 }
 function profileMcpEntries(ctx) {
 	const include = [...ctx.loader.entries()].find((entry) => entry.options.id === ROOT_INCLUDE_ID && entry.options.name === "cordis:include");
@@ -631,45 +682,37 @@ function listRevision(servers) {
 function normalizeOne(spec) {
 	return normalizeMcpImport({ mcpServers: { [spec.name]: spec } }).servers[0];
 }
-/** spec → mcp-client 的 config。字段面与 mcp-config.updateEntry **同一份清单**
- *  （MANAGED_CONFIG_FIELDS + PLUGIN_OWN_CONFIG_FIELDS），不在这里另抄一套。
- *  产出的形状就是**运行中 loader 条目**的形状（`!!js` 已转成 `__jsExpr`，见下），
- *  所以 add/installBuiltins 创建活条目与 update 重连走的是同一份 config。 */
-function entryConfigOf(spec) {
-	const config = { serverName: spec.name };
-	for (const field of MANAGED_CONFIG_FIELDS) if (spec[field] !== undefined) config[field] = toLiveConfigValue(spec[field]);
-	for (const field of PLUGIN_OWN_CONFIG_FIELDS) if (spec[field] !== undefined) config[field] = spec[field];
-	return config;
-}
-/**
- * 内部 spec 的 `!!js <expr>` → loader 的 `{ __jsExpr: <expr> }`（递归进对象与数组）。
- *
- * 为什么必须转：loader 只在 apply 之前对 `__jsExpr` 求值（`interpolate`，
- * cordis-plugin-loader/lib/index.js），**raw 字符串原样透传**。真 loader 实测
- * （scripts 探针）：把 `!!js (process.env.HOME ?? "")` 直接交给 `loader.create`，
- * 子进程拿到的是这串字面量本身；换成 `__jsExpr` 对象才拿到 HOME 的值。
- * 于是"添加成功但 env 是错的、服务器行为莫名其妙"——正是"看起来成功了其实没生效"。
- *
- * `entry.options.config` 因此与生产条目同形：盘上是 `!!js`、内存里是 `__jsExpr`，
- * 宿主写回时再简化成 `!!js`。`reveal()` 的 `resolveLiveConfigValue`（同一个 interpolate）
- * 也正是为这个形状存在的。
- */
-function toLiveConfigValue(value) {
-	if (typeof value === "string" && value.startsWith("!!js ")) return { __jsExpr: value.slice(5) };
-	if (Array.isArray(value)) return value.map(toLiveConfigValue);
-	if (value && typeof value === "object") {
-		const result = {};
-		for (const [key, item] of Object.entries(value)) setOwn(result, key, toLiveConfigValue(item));
-		return result;
-	}
-	return value;
-}
 /** 逐字段比较（不整体 JSON.stringify：两侧 key 顺序不可靠，会误报"变了"）。 */
 function sameConfigValue(left, right) {
 	return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
 }
-/** 这次改动是否碰了"必须重连才生效"的字段。defer 不在其列——它是纯遮罩。 */
+/**
+ * 这份 spec 里有没有"表达式值"（`${VAR}` / 写入后成 `!!js` 的标量）？
+ *
+ * 用它是为了决定**能不能做 config 深比较**：`toMcpClientConfig()` 会把表达式**求值**成
+ * 当时的字符串（实测 `${TEST_TOKEN}` 且变量未设 → `""`），而组合结果保留的是
+ * `{ __jsExpr: '…' }`。两者不同形，拿它当期望值会把正常保存判成"被覆盖"。
+ *
+ * 所以含表达式的行跳过深比较（退回到"条目在不在 + disabled 对不对"），其余行照常对齐官方判据。
+ */
+function containsExpressionValue(value, depth = 0) {
+	if (depth > 8 || value === null || value === undefined) return false;
+	if (typeof value === "string") return value.includes("!!js") || value.includes("${");
+	if (typeof value !== "object") return false;
+	if (Object.hasOwn(value, "__jsExpr")) return true;
+	if (Array.isArray(value)) return value.some((item) => containsExpressionValue(item, depth + 1));
+	return Object.values(value).some((item) => containsExpressionValue(item, depth + 1));
+}
+/**
+ * 这次改动是否碰了"必须重建条目才生效"的字段。defer 不在其列——它是纯遮罩。
+ *
+ * `disabled` 也不在 `MANAGED_CONFIG_FIELDS` 里（它是 loader 条目的外壳字段，不是 mcp-client
+ * 的 config），但它**改变条目的生命周期**：禁用要停掉 fiber 并撤掉工具，启用要重新连。
+ * 只比 MANAGED_CONFIG_FIELDS 会把它误判成"纯遮罩"，于是盘上写了 disabled、运行中照旧，
+ * 还回一句"立即生效"——盘上与运行中直接相反。两者都算，判据才完整。
+ */
 function touchesConnection(spec, current) {
+	if ((spec.disabled === true) !== (current.disabled === true)) return true;
 	return MANAGED_CONFIG_FIELDS.some((field) => !sameConfigValue(spec[field], current[field]));
 }
 function reservedEntryIds(ctx, releasedIds = new Set()) {
@@ -870,12 +913,18 @@ async function applyManagedImport(ctx, normalized, mode) {
 		const preview = mergePreview(state.servers, importable.servers, importable, conflicts);
 		const releasedNames = mode === "replace" ? state.servers.map((server) => server.name) : preview.updated;
 		const releasedIds = new Set(releasedNames.map((name) => state.entryIds.get(name)).filter(Boolean));
-		await writePatch(state, updateManagedMcpPatch(state.content, importable.servers, { replace: mode === "replace", reservedIds: reservedEntryIds(ctx, releasedIds) }));
+		const next = updateManagedMcpPatch(state.content, importable.servers, { replace: mode === "replace", reservedIds: reservedEntryIds(ctx, releasedIds) });
+		// replace 会整批换掉行：消失的行要按 reconcile 的语义被移除（doomed 先标脏），
+		// 新增的行必须真的起来（requiredIds）。两者都走同一个事务入口。
+		const doomedIds = mode === "replace" ? doomedMcpIds(state, next) : [];
+		const requiredIds = preview.added.map((name) => entryIdOf(next, name)).filter((id) => typeof id === "string");
+		const outcome = await commitPatch(ctx, state, next, { label: "MCP 导入", doomedIds, requiredIds });
 		return {
 			added: preview.added,
 			updated: preview.updated,
 			removed: mode === "replace" ? preview.removed : [],
 			warnings: preview.warnings,
+			...outcome,
 			note: withSkipped(mode === "replace" ? "已替换当前 profile 管理的 MCP 配置" : "已合并 MCP 配置", [...admitted.skipped, ...conflicts]),
 		};
 	});
@@ -896,8 +945,15 @@ function workspaceImportPreview(config, normalized) {
 // 而 reconcile 是唯一会回收"配置里已不存在"的连接的路径 —— 对齐失败时它会留到空闲超时或卸载。
 // 这是有意的取舍（写已经成功，不该因为一次 teardown 失败就报错），所以日志要如实说清后果。
 async function alignWorkspaceConnections(ctx, wsPath) {
-	try { await reconcileWorkspaceConnections(ctx, wsPath); }
-	catch (error) { ctx.logger?.error?.(`mcp-manager: 项目 MCP 配置已写入，但对齐连接失败（下次会话挂载会重新对齐现存条目；若本次是删除，该连接要等空闲超时或插件卸载才回收）: ${error?.message ?? error}`); }
+	try {
+		await reconcileWorkspaceConnections(ctx, wsPath);
+		return [];
+	} catch (error) {
+		const message = `mcp-manager: 项目 MCP 配置已写入，但对齐连接失败（下次会话挂载会重新对齐现存条目；若本次是删除，该连接要等空闲超时或插件卸载才回收）: ${error?.message ?? error}`;
+		ctx.logger?.error?.(message);
+		// 写是既成事实，对齐失败只意味着"没立刻生效"——所以吞成诊断，不能吞成事实。
+		return [{ code: "WORKSPACE_ALIGN_FAILED", message }];
+	}
 }
 // 项目族的延迟开关：整份重写 `.dsh/mcp.json`，只翻 defer 位。
 // 与全局族分开两条写路径——项目配置不归 profile patch 管，混在一起会写错文件。
@@ -929,8 +985,9 @@ async function applyProjectDefer(ctx, wsPath, next, names) {
 					: `已把 ${names[0]} 切回全量常驻`),
 		};
 	});
-	await alignWorkspaceConnections(ctx, wsPath);
-	return result;
+	if (result.changed === 0) return mutationResult("unchanged", "unchanged", result);
+	const diagnostics = await alignWorkspaceConnections(ctx, wsPath);
+	return mutationResult("applied", diagnostics.length ? "failed" : "applied", { ...result, diagnostics });
 }
 // 全局族的延迟开关：改 `<profile>/cordis.patch.yml`，只翻 defer 位。
 //
@@ -960,13 +1017,17 @@ async function applyGlobalDefer(ctx, next, names) {
 			liveEntries.push(entry);
 		}
 		if (names !== undefined && !specs.length) throw new Error("当前 Web profile 没有这个 MCP");
-		if (!specs.length) return { changed: 0, note: "当前 Web profile 没有可修改的 MCP" };
-		await writePatch(state, updateManagedMcpPatch(state.content, specs, {
+		if (!specs.length) return { changed: 0, persisted: "unchanged", live: "unchanged", diagnostics: [], note: "当前 Web profile 没有可修改的 MCP" };
+		const content = updateManagedMcpPatch(state.content, specs, {
 			replace: false,
 			reservedIds: reservedEntryIds(ctx, new Set(specs.map((spec) => state.entryIds.get(spec.name)).filter(Boolean))),
-		}));
-		for (const entry of liveEntries) entry.options.config.defer = next;
+		});
+		const outcome = await commitPatch(ctx, state, content, {
+			label: "MCP 延迟开关",
+			applyLive: () => applyDeferMask(liveEntries, next),
+		});
 		return {
+			...outcome,
 			changed: specs.length,
 			note: names === undefined
 				? (next
@@ -995,8 +1056,8 @@ async function applyWorkspaceImport(ctx, wsPath, normalized, mode) {
 		};
 	});
 	// 导入同样是写盘：就地对齐存活会话（新增即挂、删除即撤、改动即重载）——但在锁外做。
-	await alignWorkspaceConnections(ctx, wsPath);
-	return result;
+	const diagnostics = await alignWorkspaceConnections(ctx, wsPath);
+	return mutationResult("applied", diagnostics.length ? "failed" : "applied", { ...result, diagnostics });
 }
 
 // 复制计划的**唯一**解析：校验（目标已注册、源配置可读、选中的名字都在源里）+ 算出会新增/覆盖/
@@ -1127,7 +1188,7 @@ function workspaceServerView(server) {
 
 
 // 全局 MCP 列表核心（list / getWorkspaceView 共用）。
-async function listMcpServers(ctx) {
+async function listMcpServers(ctx, deferStateOf) {
 	ensureLogCapture(ctx);
 	const state = await managedState(ctx);
 	const inventory = toolInventory(ctx);
@@ -1147,7 +1208,10 @@ async function listMcpServers(ctx) {
 		const conflict = entries.length > 1;
 		const managed = entry.options.id === profileId ? state.byName.get(name) : null;
 		const duplicates = entries.filter((candidate) => candidate !== entry);
-		servers.push(summarize(entry, inventory, managed, conflict, lastLogFor(ctx, name, entry.fiber), duplicates));
+		const row = summarize(entry, inventory, managed, conflict, lastLogFor(ctx, name, entry.fiber), duplicates);
+		// 统一策略下的实际延迟状态：与工具页同源（同一份 rows 的判定），芯片读这个而不是旧 defer。
+		if (typeof deferStateOf === 'function') Object.assign(row, deferStateOf(name));
+		servers.push(row);
 	}
 	return {
 		servers,
@@ -1159,6 +1223,7 @@ async function listMcpServers(ctx) {
 let McpManagerGateway = (() => {
 	let _classSuper = TypertRemoteService;
 	let _instanceExtraInitializers = [];
+	let _toolLoadingSettings_decorators, _updateToolLoadingSettings_decorators, _workspaceToolLoading_decorators, _setWorkspaceToolLoading_decorators;
 	let _list_decorators, _status_decorators, _enable_decorators, _disable_decorators, _reconnect_decorators, _tools_decorators, _builtins_decorators, _installBuiltins_decorators, _add_decorators, _update_decorators, _remove_decorators, _setDeferAll_decorators, _setDefer_decorators, _toolSearchSettings_decorators, _updateToolSearchSettings_decorators, _reveal_decorators, _previewImport_decorators, _importJson_decorators, _scanImportSources_decorators, _previewImportSource_decorators, _importSource_decorators, _listWorkspaces_decorators, _getWorkspaceView_decorators, _addWorkspaceServer_decorators, _updateWorkspaceServer_decorators, _removeWorkspaceServer_decorators, _setWorkspaceExclude_decorators, _installWorkspaceBuiltins_decorators, _previewWorkspaceImport_decorators, _importWorkspaceJson_decorators, _copyWorkspaceServers_decorators, _previewWorkspaceCopy_decorators, _exportWorkspaceJson_decorators, _revealWorkspaceServer_decorators, _projectConnections_decorators, _reconnectWorkspaceServer_decorators, _updateHint_decorators, _whatsNew_decorators;
 	return class McpManagerGateway extends _classSuper {
 		static {
@@ -1200,6 +1265,15 @@ let McpManagerGateway = (() => {
 			__esDecorate(this, null, _toolSearchSettings_decorators, { kind: "method", name: "toolSearchSettings", static: false, private: false, access: { has: (obj) => "toolSearchSettings" in obj, get: (obj) => obj.toolSearchSettings }, metadata: _metadata }, null, _instanceExtraInitializers);
 			_updateToolSearchSettings_decorators = [Remote("updateToolSearchSettings")];
 			__esDecorate(this, null, _updateToolSearchSettings_decorators, { kind: "method", name: "updateToolSearchSettings", static: false, private: false, access: { has: (obj) => "updateToolSearchSettings" in obj, get: (obj) => obj.updateToolSearchSettings }, metadata: _metadata }, null, _instanceExtraInitializers);
+			// 统一工具加载策略：全局读写 + 项目读写。三边清单（@Remote / typert / client）必须同序。
+			_toolLoadingSettings_decorators = [Remote("toolLoadingSettings")];
+			__esDecorate(this, null, _toolLoadingSettings_decorators, { kind: "method", name: "toolLoadingSettings", static: false, private: false, access: { has: (obj) => "toolLoadingSettings" in obj, get: (obj) => obj.toolLoadingSettings }, metadata: _metadata }, null, _instanceExtraInitializers);
+			_updateToolLoadingSettings_decorators = [Remote("updateToolLoadingSettings")];
+			__esDecorate(this, null, _updateToolLoadingSettings_decorators, { kind: "method", name: "updateToolLoadingSettings", static: false, private: false, access: { has: (obj) => "updateToolLoadingSettings" in obj, get: (obj) => obj.updateToolLoadingSettings }, metadata: _metadata }, null, _instanceExtraInitializers);
+			_workspaceToolLoading_decorators = [Remote("workspaceToolLoading")];
+			__esDecorate(this, null, _workspaceToolLoading_decorators, { kind: "method", name: "workspaceToolLoading", static: false, private: false, access: { has: (obj) => "workspaceToolLoading" in obj, get: (obj) => obj.workspaceToolLoading }, metadata: _metadata }, null, _instanceExtraInitializers);
+			_setWorkspaceToolLoading_decorators = [Remote("setWorkspaceToolLoading")];
+			__esDecorate(this, null, _setWorkspaceToolLoading_decorators, { kind: "method", name: "setWorkspaceToolLoading", static: false, private: false, access: { has: (obj) => "setWorkspaceToolLoading" in obj, get: (obj) => obj.setWorkspaceToolLoading }, metadata: _metadata }, null, _instanceExtraInitializers);
 			_reveal_decorators = [Remote("reveal")];
 			__esDecorate(this, null, _reveal_decorators, { kind: "method", name: "reveal", static: false, private: false, access: { has: (obj) => "reveal" in obj, get: (obj) => obj.reveal }, metadata: _metadata }, null, _instanceExtraInitializers);
 			_previewImport_decorators = [Remote("previewImport")];
@@ -1271,11 +1345,26 @@ let McpManagerGateway = (() => {
 			// 照旧，`ptc` 另裁 `tools:sdk` 手册），**只有 `both` 是 inert**。
 			// "非 native 就 inert" 会把 PTC 整个关掉，是这条判据最容易写错的地方。
 			//
-			// C2：三个有证据的参数（maxResults / maxCatalogLines / maxDiscovered）由插件自己的
+			// C2：三个有证据的参数（maxResults / maxCatalogChars / maxDiscovered）由插件自己的
 			// config（`config.toolSearch`，已过 Config schema）提供，装配时传**生效值**。
 			// 改参数走 updateToolSearchSettings：写盘 + **重装**本运行时（理由见那里的注释）。
 			const toolSearchSettings = effectiveToolSearchSettings(readToolSearchSettings(config));
-			this.toolSearchRuntime = { settings: toolSearchSettings, dispose: installToolSearch(ctx, toolSearchSettings) };
+			// 统一加载策略：全局这一份随插件 config 一起进内存，项目那一份由挂载路径带进会话状态。
+			// 策略是**活值**（每次视图重建重新合成），所以改完不需要重装运行时。
+			// 会话清单必须**独立于项目 MCP 挂载**地维护：没有项目配置的工作区一样有会话，
+			// 而 DSH 0.2 把大量模型可见工具放在 agent 作用域里——不记这些 agent，面板就只能看到全局那几个。
+			this.liveAgents = new Set();
+			ctx.on("agent/created", (payload) => {
+				const agent = payload?.agent;
+				if (agent) this.liveAgents.add(agent);
+			});
+			ctx.on("agent/disposed", (payload) => {
+				const agent = payload?.agent;
+				if (agent) this.liveAgents.delete(agent);
+			});
+			this.globalToolLoading = readToolLoadingPolicy(config);
+			const policyFor = (agent, schemas) => this.loadingPolicy(agent, schemas);
+			this.toolSearchRuntime = installToolSearchIsolated(ctx, toolSearchSettings, policyFor);
 			// 闭包读 this.toolSearchRuntime：重装之后 teardown 拿到的才是最新那份 disposer。
 			ctx.effect(() => () => this.toolSearchRuntime.dispose(), "mcp-manager.toolSearch");
 			// 技能服务作为**子插件**在同一个 patch 条目内挂载（SPEC 约束 15）：
@@ -1286,7 +1375,7 @@ let McpManagerGateway = (() => {
 			__runInitializers(this, _instanceExtraInitializers);
 		}
 		async list() {
-			return listMcpServers(this.ctx);
+			return listMcpServers(this.ctx, typeof this.deferStateOf === "function" ? (name) => this.deferStateOf(name) : undefined);
 		}
 		async status(name) {
 			ensureLogCapture(this.ctx);
@@ -1313,17 +1402,26 @@ let McpManagerGateway = (() => {
 				const state = await managedState(this.ctx);
 				const entry = managedLiveEntry(this.ctx, state, name);
 				if (!entry) throw new Error("此 MCP 来自其他 bundle，或不属于当前 Web profile，不能修改");
-				const persistedDisabled = state.byName.get(name)?.disabled === true;
-				if (entry.disabled === disabled && persistedDisabled === disabled) return { note: disabled ? "already disabled" : "already enabled" };
-				const outcome = await writePatch(state, setManagedMcpDisabled(state.content, name, disabled));
-				if (entry.disabled === disabled) return { note: disabled ? "已校准 profile patch 为禁用" : "已校准 profile patch 为启用" };
-				try {
-					await entry.update({ disabled });
-					await settleLiveEntry(this.ctx, entry.options.id);
-				} catch (error) {
-					await rollbackLiveChange(state, outcome.version, "MCP 状态更新", error);
-				}
-				return { note: disabled ? "已禁用并写入 profile patch" : "已启用并写入 profile patch" };
+				const entryId = entry.options.id;
+				const next = setManagedMcpDisabled(state.content, name, disabled);
+				const alreadyThere = next === state.content && entry.disabled === disabled;
+				// 内容没变也照样 reconcile：盘上早就是 disabled、运行中却还在跑（或反过来）正是
+				// 需要"校准"的状态，不能因为"文件不用改"就把它留下。
+				const result = await commitPatch(this.ctx, state, next, {
+					label: "MCP 状态更新",
+					entryId,
+					expect: { present: true, disabled },
+					verifyLive: (entries) => {
+						if (entries.length !== 1) throw new Error(`MCP 条目 ${entryId} 生效后 live owner 数量异常：${entries.length}`);
+						if (entries[0].disabled !== disabled) throw new Error(`MCP 条目 ${entryId} 的${disabled ? "禁用" : "启用"}未生效`);
+					},
+				});
+				const note = alreadyThere
+					? (disabled ? "already disabled" : "already enabled")
+					: result.live === "applied"
+						? (disabled ? "已禁用并写入 profile patch" : "已启用并写入 profile patch")
+						: `已写入 profile patch；${result.liveReason ?? "本部署没有热应用入口"}，重启宿主后${disabled ? "才会停" : "才会启动"}`;
+				return { ...result, note };
 			});
 		}
 		async reconnect(name) {
@@ -1332,9 +1430,17 @@ let McpManagerGateway = (() => {
 			const entry = managedLiveEntry(this.ctx, state, value);
 			if (!entry) throw new Error("此 MCP 来自其他 bundle，或不属于当前 Web profile，不能重连");
 			if (entry.disabled) throw new Error("MCP 已禁用，请先启用");
-			if (entry.fiber) await entry.fiber.restart();
-			else await entry.refresh();
-			return { note: "restart requested" };
+			try {
+				if (entry.fiber) await entry.fiber.restart();
+				else await entry.refresh();
+			} catch (error) {
+				throw new ProfileMutationError(`MCP 重连失败：${error?.message ?? error}`, mutationResult("unchanged", "failed", {
+					diagnostics: [{ code: "MCP_RECONNECT_FAILED", message: String(error?.message ?? error) }],
+					cause: error,
+				}));
+			}
+			// 重连不改配置：盘上 unchanged，运行中的连接已经按当前配置重建。
+			return mutationResult("unchanged", "applied", { note: "restart requested" });
 		}
 		async tools(payload) {
 			// 契约声明的是一个 payload 对象：全局 MCP 只需 name，项目 MCP 还要 wsPath。跳作用域
@@ -1367,24 +1473,34 @@ let McpManagerGateway = (() => {
 				if (result.added.length) notes.push(`已追加：${result.added.join(", ")}`);
 				if (result.skipped.length) notes.push(`已存在并跳过：${result.skipped.join(", ")}`);
 				const { content: _content, ...summary } = result;
-				if (!result.added.length) return { ...summary, note: notes.join("；") || "未修改配置" };
-				const outcome = await writePatch(state, result.content);
-				// 追加的条目也要在运行中的进程里真建出来：只写盘的话，用户点完"安装"
-				// 连不上、也没工具，必须重启宿主。id 取自刚写出的 patch（与 add 同一条规则）。
+				if (!result.added.length) return { ...summary, persisted: "unchanged", live: "unchanged", note: notes.join("；") || "未修改配置" };
+				// 追加的条目也要在运行中的进程里真跑起来：只写盘的话，用户点完"安装"连不上、
+				// 也没工具，必须重启宿主。id 取自刚写出的 patch（与 add 同一条规则）。
 				const pending = [];
 				for (const builtin of BUILTIN_MCP_SERVERS) {
 					if (!result.added.includes(builtin.id)) continue;
 					const entryId = entryIdOf(result.content, builtin.name);
 					if (!entryId) throw new Error(`内置 MCP 追加后未在 profile patch 中找到条目 id：${builtin.name}`);
-					pending.push({ id: entryId, name: MCP_NAME, config: entryConfigOf(builtinSpec(builtin)) });
+					pending.push(entryId);
 				}
 				if (pending.length !== result.added.length) throw new Error(`内置 MCP 追加数与 patch 条目数不一致：${result.added.join(", ")}`);
-				try {
-					await createLiveEntries(this.ctx, pending);
-				} catch (error) {
-					await rollbackLiveChange(state, outcome.version, "内置 MCP 安装", error);
-				}
-				return { ...summary, note: `${notes.join("；")}，已开始连接（无需重启宿主）` };
+				const outcome = await commitPatch(this.ctx, state, result.content, {
+					label: "内置 MCP 安装",
+					requiredIds: pending,
+					verifyLive: () => {
+						for (const entryId of pending) {
+							const live = [...this.ctx.loader.entries()].filter((entry) => entry.options.id === entryId);
+							if (live.length !== 1) throw new Error(`内置 MCP 条目 ${entryId} 生效后 live owner 数量异常：${live.length}`);
+						}
+					},
+				});
+				return {
+					...summary,
+					...outcome,
+					note: outcome.live === "applied"
+						? `${notes.join("；")}，已开始连接（无需重启宿主）`
+						: `${notes.join("；")}；${outcome.liveReason ?? "本部署没有热应用入口"}，重启宿主后生效`,
+				};
 			});
 		}
 		async add(spec) {
@@ -1394,20 +1510,31 @@ let McpManagerGateway = (() => {
 				const state = await managedState(this.ctx);
 				if (hasExternalMcpName(this.ctx, state, normalized.name) || state.byName.has(normalized.name)) throw new Error("MCP already exists: " + normalized.name);
 				const next = updateManagedMcpPatch(state.content, [normalized], { replace: false, reservedIds: reservedEntryIds(this.ctx) });
-				const outcome = await writePatch(state, next);
-				// 写盘之后立刻在**运行中的进程**里创建 loader 条目。只写盘的话，用户点完
-				// "添加"连不上、也没工具，必须重启宿主——曾经这里只写盘，note 如实写
-				// "重启后生效"（再早还假称"正在热加载"）。
-				// id 必须与 patch 行一致：resolveManagedEntry 靠它认人。见 createLiveEntries
-				// 的根部创建说明（为什么不用 include 子树）。
-				const entryId = entryIdOf(outcome.after, normalized.name);
+				// id 必须与 patch 行一致：resolveManagedEntry 靠它认人。它同时也是 reconcile 的
+				// requiredIds（这一行起不来就必须报错，而不是留一条连不上的行）。
+				const entryId = entryIdOf(next, normalized.name);
 				if (!entryId) throw new Error(`新增 MCP 后未在 profile patch 中找到条目 id：${normalized.name}`);
-				try {
-					await createLiveEntries(this.ctx, [{ id: entryId, name: MCP_NAME, config: entryConfigOf(normalized) }]);
-				} catch (error) {
-					await rollbackLiveChange(state, outcome.version, "MCP 新增", error);
-				}
-				return { note: "已添加并开始连接（无需重启宿主）" };
+				const result = await commitPatch(this.ctx, state, next, {
+					label: "MCP 新增",
+					entryId,
+					// 覆盖判定对齐官方：**整份 config 深比较**。含表达式的行跳过这一半（见
+					// containsExpressionValue 的注释），否则会把正常保存判成"被覆盖"。
+					expect: {
+						present: true,
+						disabled: false,
+						...(containsExpressionValue(normalized) ? {} : { config: toMcpClientConfig(normalized) }),
+					},
+					requiredIds: [entryId],
+					verifyLive: (entries) => {
+						if (entries.length !== 1) throw new Error(`MCP 条目 ${entryId} 生效后 live owner 数量异常：${entries.length}`);
+					},
+				});
+				return {
+					...result,
+					note: result.live === "applied"
+						? "已添加并开始连接（无需重启宿主）"
+						: `已写入 profile 配置；${result.liveReason ?? "本部署没有热应用入口"}，重启宿主后生效`,
+				};
 			});
 		}
 		async update(spec) {
@@ -1417,28 +1544,38 @@ let McpManagerGateway = (() => {
 				const current = state.byName.get(requestedName);
 				const entry = current && managedLiveEntry(this.ctx, state, requestedName);
 				if (!current || !entry) throw new Error("此 MCP 不属于当前 Web profile，不能编辑");
+				const entryId = entry.options.id;
 				const normalized = normalizeOne(restoreRedactedSpec(spec, current));
 				if (!Object.hasOwn(normalized, "disabled") && current.disabled) normalized.disabled = true;
-				const outcome = await writePatch(state, updateManagedMcpPatch(state.content, [normalized], { replace: false, reservedIds: reservedEntryIds(this.ctx, new Set([state.entryIds.get(normalized.name)].filter(Boolean))) }));
-
-				// 生效路径按"这次改了什么"分流。两条都不走的话就是本 bug：patch 已是新值、
-				// 运行中的会话永远读旧值，表现为"改完不生效，必须重启进程"。
+				const next = updateManagedMcpPatch(state.content, [normalized], { replace: false, reservedIds: reservedEntryIds(this.ctx, new Set([state.entryIds.get(normalized.name)].filter(Boolean))) });
+				// 生效路径按"这次改了什么"分流，两条都走同一个事务（写盘 + 回滚）：
 				//
-				//   - 只翻 defer（纯遮罩、与连接无关）→ 同步内存 entry 即可。同进程立即生效，
-				//     不重连：ToolSearch 的 deferServersOf 是 thunk、视图按 revision 自愈。
-				//   - 动了连接身份/行为字段 → 必须 restart mcp-client 的 fiber 才会重连。
-				//     走 loader 的 entry.update()（与 setDisabled 同一姿势，含失败回滚）。
+				//   - 只翻 defer（纯遮罩、与连接无关）→ 同步运行中的 options 即可。为翻一个布尔位
+				//     重启 mcp-client（serena 冷启动 1-1.5 分钟）是不该付的代价。
+				//   - 动了连接身份/行为字段 → reconcile 重启该行的 fiber、重连，并判定它真的起来了。
 				if (!touchesConnection(normalized, current)) {
-					entry.options.config.defer = normalized.defer === true;
-					return { note: "已更新 profile patch，立即生效" };
+					const result = await commitPatch(this.ctx, state, next, {
+						label: "MCP 更新",
+						entryId,
+						applyLive: () => applyDeferMask([entry], normalized.defer === true),
+					});
+					return { ...result, note: "已更新 profile patch，立即生效" };
 				}
-				try {
-					await entry.update({ config: entryConfigOf(normalized) });
-					await settleLiveEntry(this.ctx, entry.options.id);
-				} catch (error) {
-					await rollbackLiveChange(state, outcome.version, "MCP 更新", error);
-				}
-				return { note: "已更新 profile patch，正在重连" };
+				const result = await commitPatch(this.ctx, state, next, {
+					label: "MCP 更新",
+					entryId,
+					// 同 add()：表达式行跳过 config 深比较，其余行照常。
+					expect: {
+						present: true,
+						disabled: normalized.disabled === true,
+						...(containsExpressionValue(normalized) ? {} : { config: toMcpClientConfig(normalized) }),
+					},
+					requiredIds: normalized.disabled === true ? [] : [entryId],
+					verifyLive: (entries) => {
+						if (entries.length !== 1) throw new Error(`MCP 条目 ${entryId} 生效后 live owner 数量异常：${entries.length}`);
+					},
+				});
+				return { ...result, note: result.live === "applied" ? "已更新 profile patch，正在重连" : `已更新 profile patch；${result.liveReason ?? "本部署没有热应用入口"}，重启宿主后生效` };
 			});
 		}
 		/**
@@ -1479,8 +1616,18 @@ let McpManagerGateway = (() => {
 			const next = payload?.defer === true;
 			const requested = typeof payload?.wsPath === "string" ? payload.wsPath.trim() : "";
 			const wsPath = requested ? canonicalWorkspacePath(requested) : "";
-			if (wsPath) return applyProjectDefer(this.ctx, wsPath, next, [name]);
-			return applyGlobalDefer(this.ctx, next, [name]);
+			const outcome = wsPath ? await applyProjectDefer(this.ctx, wsPath, next, [name]) : await applyGlobalDefer(this.ctx, next, [name]);
+			// 写完再看**模型实际会看到**的状态。策略层（组级 / 单工具覆盖）的优先级高于这台服务器的
+			// 开关，被压着的时候翻开关不会有任何变化——必须当场说出来，否则用户看到"已切到延迟"
+			// 却什么也没发生，那是最难排查的一种反馈。
+			const effective = this.deferStateOf(name);
+			if (effective.toolCountForDefer === 0 || effective.deferEffective === next) return outcome;
+			const message = "这台服务器的加载方式由「工具」页的策略决定（组级或单工具覆盖优先于服务器开关），本次开关没有改变模型看到的工具列表";
+			return {
+				...outcome,
+				note: outcome.note ? `${outcome.note}；${message}` : message,
+				diagnostics: [...(outcome.diagnostics ?? []), { code: "DEFER_GOVERNED_BY_POLICY", message }],
+			};
 		}
 		/**
 		 * C2：读延迟加载参数（面板表单的初值、默认值，以及哪些值此刻不是默认）。
@@ -1489,12 +1636,233 @@ let McpManagerGateway = (() => {
 		 * `config` 要重启才生效。面板若显示"盘上写着什么"，就等于展示一个用户此刻并没有得到的
 		 * 行为——与「延迟徽标只表示配置」那条注释是同一类诚实问题。
 		 */
+		/**
+		 * 合成一份会话可见的工具加载策略。**唯一决策点**：目录、搜索、守卫、PTC 手册与面板
+		 * 全都读同一份结果（纯层是 tool-loading-policy.js）。
+		 *
+		 * 保护名单刻意写死在这两处而不是暴露成配置：搜索入口被隐藏就再也搜不回来；
+		 * `run_code` 是 PTC 的 transport，宿主明确不允许它被 restrict。
+		 */
+		loadingPolicy(agent, schemas, options = {}) {
+			// 没有 agent（面板读取）时用**全局可见集**：那正是面板要列的东西。
+			// 早先这里只认 `agent.ctx.tools.schemas`，于是面板拿到空列表，永远显示
+			// "当前没有可管理的工具"——一个只在真宿主上才看得见的空状态。
+			const available = schemas ?? (agent?.ctx?.tools?.schemas
+				? agent.ctx.tools.schemas(agent)
+				: (typeof this.ctx.tools?.schemas === "function" ? this.ctx.tools.schemas() : []));
+			const ownerSet = new Set(options.serverNames ?? serverNamesOf(this.ctx, agent));
+			return resolveToolLoadingPolicy({
+				tools: available.map((schema) => ({ name: schema?.name })),
+				ownerOf: (name) => uniqueOwner(name, ownerSet),
+				policy: options.policy ?? this.globalToolLoading,
+				projectPolicy: options.projectPolicy ?? (agent === undefined ? undefined : agentToolLoadingPolicy(agent)),
+				legacyDeferServers: options.legacyDeferServers ?? deferServersOf(this.ctx, agent),
+				legacyResidentServers: options.legacyResidentServers ?? residentServersOf(this.ctx, agent),
+				protectedNames: [this.toolSearchRuntime?.settings?.toolName ?? "tool_search", "run_code"],
+				// 总开关在所有策略路径上统一生效（全局/项目/旧 defer/逐工具覆盖），且**不删偏好**：
+				// 关掉再看，用户设置还在。只放在 deferServersOf 里是不够的——统一策略不经过它。
+				masterSwitch: toolSearchDisabled() ? "off" : "on",
+			});
+		}
+
 		async toolSearchSettings() {
 			return {
 				settings: { ...this.toolSearchRuntime.settings },
 				defaults: effectiveToolSearchSettings({}),
 				configKey: TOOL_SEARCH_CONFIG_KEY,
 			};
+		}
+
+		/** 读统一加载策略（全局）+ 当前可见工具的实际决策（面板据此显示"设置"与"实际"两列）。 */
+		// 面板与策略共用的一份"可见工具"枚举：根作用域 + 每个 MCP 条目自己的作用域 + 每个存活会话。
+	// 0.2.2 把 MCP 工具注册在条目作用域里（根的 schemas() 看不到），只读根会得到"没有 MCP 工具"。
+	collectAvailableTools() {
+		const available = [];
+		const seen = new Set();
+		const collect = (list) => {
+			for (const schema of list ?? []) {
+				const name = schema?.name;
+				if (typeof name !== "string" || name === "" || seen.has(name)) continue;
+				seen.add(name);
+				available.push(schema);
+			}
+		};
+		collect(typeof this.ctx.tools?.schemas === "function" ? this.ctx.tools.schemas() : []);
+		for (const entry of allMcpEntries(this.ctx)) {
+			try {
+				const entryCtx = entry?.fiber?.ctx;
+				if (typeof entryCtx?.tools?.schemas === "function") collect(entryCtx.tools.schemas(entryCtx));
+			} catch { /* 单个条目视图读失败不影响其余 */ }
+		}
+		for (const agent of [...liveAgents(), ...(this.liveAgents ?? [])]) {
+			try {
+				collect(agent?.ctx?.tools?.schemas ? agent.ctx.tools.schemas(agent) : []);
+			} catch { /* 单个会话视图读失败不影响其余 */ }
+		}
+		return available;
+	}
+
+	// 一台服务器在**统一策略**下的实际延迟状态（不是旧 config.defer）：该服务器名下的工具
+	// 全部判定为 deferred 才算"延迟"。面板芯片必须用它，否则组级/单工具设置一改，芯片还在说"全量"。
+	deferStateOf(serverName) {
+		const prefix = `mcp__${serverName}__`;
+		const available = this.collectAvailableTools().filter((schema) => String(schema?.name).startsWith(prefix));
+		if (available.length === 0) return { deferEffective: false, deferredCount: 0, toolCountForDefer: 0 };
+		const resolution = this.loadingPolicy(undefined, available);
+		const deferred = available.filter((schema) => resolution.entries.get(schema.name)?.policy === "deferred").length;
+		return { deferEffective: deferred === available.length, deferredCount: deferred, toolCountForDefer: available.length };
+	}
+	async toolLoadingSettings() {
+			const policy = { ...this.globalToolLoading, groups: { ...this.globalToolLoading.groups }, tools: { ...this.globalToolLoading.tools } };
+			// 全局视图 + 每个存活会话的可见集：DSH 0.2 的模型可见工具大多注册在 agent 作用域，
+			// 只看全局会漏掉它们（实测只看到 4 个）。同名以后者为准，描述用第一份非空的。
+			const available = this.collectAvailableTools();
+
+			const descriptions = new Map(available.map((schema) => [schema?.name, schema?.description ?? ""]));
+			const resolution = this.loadingPolicy(undefined, available);
+			const ownerSet = new Set(serverNamesOf(this.ctx));
+			const tools = [];
+			for (const [name, entry] of resolution.entries) {
+				const owner = uniqueOwner(name, ownerSet);
+                if (name.startsWith("mcp__") && owner === null) continue;
+                const inheritedTools = { ...policy.tools };
+                delete inheritedTools[name];
+                const inherited = this.loadingPolicy(undefined, [{ name }], {
+                    policy: { ...policy, tools: inheritedTools },
+                }).entries.get(name);
+				// kind 让面板能分组：MCP 工具按服务器，非 MCP 工具单独一组（并可被总开关关掉）。
+				// description 只给面板显示用途；它不进策略计算。
+				tools.push({
+					name,
+					owner,
+					kind: owner === null ? "builtin" : "mcp",
+					description: descriptions.get(name) ?? "",
+					// 保护标记与"当前是否纳管"无关：搜索入口永远不可被隐藏，面板据此把它从可设置列表里去掉。
+					protected: name === (this.toolSearchRuntime?.settings?.toolName ?? "tool_search") || name === "run_code",
+					policy: entry.policy,
+					reason: entry.reason,
+                    inheritedPolicy: inherited?.policy,
+                    inheritedReason: inherited?.reason,
+				});
+			}
+			return { policy, tools, configKey: TOOL_LOADING_CONFIG_KEY };
+		}
+
+		/**
+		 * 写全局加载策略。`policy: null` = 回到既有行为（删掉这个键）。
+		 *
+		 * 先校验再落盘；运行值在写锁内更新，保证"盘上写的是 A、内存里是 B"不会发生。
+		 * 不重装运行时：策略是活值，下一次组装自己就用到新结果（与 defer 开关同一条语义）。
+		 */
+		async updateToolLoadingSettings(payload) {
+			if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
+				throw new Error("工具加载策略必须以 { policy } 对象提交");
+			}
+			const extra = Object.keys(payload).filter((key) => key !== "policy");
+			if (extra.length) throw new Error(`未知的工具加载载荷字段：${extra.join("、")}（只接受 policy）`);
+			const requested = payload.policy === null || payload.policy === undefined ? null : validatePolicyConfig(payload.policy);
+			let changedLive = false;
+			const identity = pluginPatchIdentity();
+			// 同 updateToolSearchSettings：走唯一事务入口，拿到覆盖判定与回滚，而不是自己 writePatch。
+			// 策略是活值（下一次组装就用新结果），所以 applyLive 只换内存里那一份，不重装运行时、
+			// 不重连任何 MCP。
+			const canCheckOverride = await composedRowVisible(this.ctx, identity.id);
+			const outcome = await withPatchWrite(this.ctx, async () => {
+				const state = await readPatch(this.ctx);
+				const content = setToolLoadingPolicyInPatch(state.content, requested, identity);
+				return commitPatch(this.ctx, state, content, {
+					label: "工具加载策略",
+					...(canCheckOverride ? { entryId: identity.id, expect: { present: true } } : {}),
+					applyLive: () => {
+						const next = normalizePolicyConfig(requested);
+						if (JSON.stringify(next) === JSON.stringify(this.globalToolLoading)) return;
+						changedLive = true;
+						this.globalToolLoading = next;
+					},
+				});
+			});
+			return mutationResult(outcome.persisted, changedLive ? "applied" : "unchanged", {
+				diagnostics: outcome.diagnostics ?? [],
+				policy: { ...this.globalToolLoading },
+				configKey: TOOL_LOADING_CONFIG_KEY,
+			});
+		}
+
+		/** 读某个项目的加载策略与该作用域实际可见工具（面板项目页签）。 */
+		async workspaceToolLoading(payload) {
+			const wsPath = canonicalWorkspacePath(String(payload?.wsPath ?? ""));
+			assertRegisteredWorkspace(this.ctx, wsPath);
+			const config = await readWorkspaceConfigCached(this.ctx, wsPath);
+			if (config.error) throw new Error(config.error);
+			const projectPolicy = normalizePolicyConfig(config.toolLoading);
+			const globalSchemas = typeof this.ctx.tools?.schemas === "function" ? this.ctx.tools.schemas() : [];
+			const projectSchemas = [];
+			for (const agent of new Set([...liveAgents(), ...(this.liveAgents ?? [])])) {
+				if (agentWorkspace(agent) !== wsPath) continue;
+				try {
+					for (const schema of agent?.ctx?.tools?.schemas?.(agent) ?? []) projectSchemas.push(schema);
+				} catch { /* 某个会话读取失败时仍返回其它可见工具 */ }
+			}
+			const available = [];
+			const seen = new Set();
+			for (const schema of [...globalSchemas, ...projectSchemas]) {
+				if (!schema || typeof schema.name !== "string" || schema.name === "" || seen.has(schema.name)) continue;
+				seen.add(schema.name);
+				available.push(schema);
+			}
+			const ownerSet = new Set(serverNamesOf(this.ctx, { session: { header: { cwd: wsPath } } }));
+			const scopeAgent = { session: { header: { cwd: wsPath } } };
+            const resolution = this.loadingPolicy(scopeAgent, available, {
+                serverNames: ownerSet,
+                projectPolicy,
+            });
+			const descriptions = new Map();
+			for (const schema of available) {
+				if (!descriptions.get(schema.name) && schema.description) descriptions.set(schema.name, schema.description);
+			}
+			const tools = [...resolution.entries].map(([name, entry]) => {
+				const owner = uniqueOwner(name, ownerSet);
+                const inheritedTools = { ...projectPolicy.tools };
+                delete inheritedTools[name];
+                const inherited = this.loadingPolicy(scopeAgent, [{ name }], {
+                    serverNames: ownerSet,
+                    projectPolicy: { ...projectPolicy, tools: inheritedTools },
+                }).entries.get(name);
+				return {
+					name,
+					owner,
+					kind: owner === null ? "builtin" : "mcp",
+					description: descriptions.get(name) ?? "",
+					protected: name === (this.toolSearchRuntime?.settings?.toolName ?? "tool_search") || name === "run_code",
+					policy: entry.policy,
+					reason: entry.reason,
+                    inheritedPolicy: inherited?.policy,
+                    inheritedReason: inherited?.reason,
+				};
+			});
+			return { wsPath, policy: projectPolicy, tools, configKey: TOOL_LOADING_CONFIG_KEY };
+		}
+
+		/**
+		 * 写项目策略：只动 `.dsh/mcp.json` 的 `toolLoading` 键，服务器与 exclude 原样保留，
+		 * 并且**不触及连接**（加载策略不是连接配置）。
+		 */
+		async setWorkspaceToolLoading(payload) {
+			const wsPath = canonicalWorkspacePath(String(payload?.wsPath ?? ""));
+			assertRegisteredWorkspace(this.ctx, wsPath);
+			const requested = payload?.policy === null || payload?.policy === undefined ? null : validatePolicyConfig(payload.policy);
+			const policy = normalizePolicyConfig(requested);
+			let persisted = "unchanged";
+			await withRegisteredWorkspaceWrite(this.ctx, wsPath, async () => {
+				const config = await readWorkspaceConfigCached(this.ctx, wsPath);
+				if (config.error) throw new Error(config.error);
+				// 写盘函数本身不做变更检测（它按内容整体重写），所以"有没有改"在这里判：
+				// 与当前生效值相同的一键保存不该在盘上刷一次 mtime，也不该报"已改"。
+				persisted = JSON.stringify(normalizePolicyConfig(config.toolLoading)) === JSON.stringify(policy) ? "unchanged" : "applied";
+				await writeWorkspaceConfigFile(wsPath, config.servers, config.exclude, policy);
+			});
+			const live = setAgentToolLoadingPolicy(this.ctx, wsPath, policy);
+			return mutationResult(persisted, "applied", { wsPath, policy: { ...policy }, liveAgents: live, configKey: TOOL_LOADING_CONFIG_KEY });
 		}
 		/**
 		 * C2：写延迟加载参数 —— 写进**插件自己那条 patch 条目的 `config.toolSearch`**，然后在
@@ -1510,38 +1878,67 @@ let McpManagerGateway = (() => {
 		 * 免得"只在本进程生效、盘上没写"在下次重启时静默回退）→ 最后重装。
 		 */
 		async updateToolSearchSettings(payload) {
-			const next = effectiveToolSearchSettings(normalizeToolSearchSettings(payload?.settings ?? {}));
-			const live = this.toolSearchRuntime.settings;
-			await withPatchWrite(this.ctx, async () => {
+			// 严格校验放在最前：拼错的键（`maxResutls`）与已删除的键（`threshold`）必须当场报错。
+			// 少这一步，`normalizeToolSearchSettings` 会把它静默过滤成 {}，用户此前的设置
+			// 随之被当作"恢复默认"写掉——那不是忽略一个错键，是改坏一份配置。
+			const settings = assertToolSearchSettingsPayload(payload);
+			const next = effectiveToolSearchSettings(normalizeToolSearchSettings(settings));
+			const identity = pluginPatchIdentity();
+			let changedLive = false;
+			// 只有组合层里**真能看见我自己那一行**时才做覆盖判定：看不见（极简 profile / 测试夹具）
+			// 时判"不算数"是假失败，如实跳过而不是拒绝用户的保存。
+			const canCheckOverride = await composedRowVisible(this.ctx, identity.id);
+			// **比较、落盘、判定覆盖、重装四件事在同一个串行操作里**。旧写法把 `live` 快照取在
+			// 等锁之前，两个标签页几乎同时保存时，后来的那次会拿一个过期的 live 判出"参数没有
+			// 变化"，于是盘上写成了 B、运行时停在 A。
+			//
+			// 走 `commitPatch`（= 全插件唯一的写盘事务入口）而不是自己 writePatch：
+			//   · 覆盖判定：被 home patch / CLI overlay 盖住时**回滚并报错**，不再"写成功、
+			//     下次重启发现不是这个值"；
+			//   · 重装失败同样回滚：盘上与运行中必须一致。留一个"已写入、重启后生效"的假成功，
+			//     正是本项目最不接受的那种状态。
+			const outcome = await withPatchWrite(this.ctx, async () => {
 				const state = await readPatch(this.ctx);
 				// 身份从出货文件读（包名 + 条目 id）：`dsh plugin add` 装成 bundle 时，那条 insert
 				// 住在**包自己的** patch 里，用户 profile 的 patch 只有（或将有）一条 id 定向覆盖。
-				const content = setToolSearchSettingsInPatch(state.content, next, pluginPatchIdentity());
-				// 内容没变就不写：无变化的保存不该动 patch 的版本号。
-				if (content === state.content) return;
-				await writePatch(state, content);
+				const content = setToolSearchSettingsInPatch(state.content, next, identity);
+				return commitPatch(this.ctx, state, content, {
+					label: "延迟加载参数",
+					// 没有条目 id 或组合里看不见自己那行时不做覆盖判定（如实跳过，不假装检查过）。
+					...(canCheckOverride ? { entryId: identity.id, expect: { present: true } } : {}),
+					applyLive: () => {
+						const live = this.toolSearchRuntime.settings;
+						if (JSON.stringify(next) === JSON.stringify(live)) return;
+						changedLive = true;
+						const policyFor = (agent, schemas) => this.loadingPolicy(agent, schemas);
+						const previous = this.toolSearchRuntime;
+						// 先拆后装：同名工具会让 `chooseToolName` 把第二个改名，且两个守卫 / 两个
+						// assemble 处理器会同时生效。两步都是同步的，宿主看不到中间态。
+						previous.dispose();
+						try {
+							const nextRuntime = installToolSearchIsolated(this.ctx, next, policyFor);
+							if (nextRuntime.error !== undefined) throw new Error(nextRuntime.error.message);
+							this.toolSearchRuntime = nextRuntime;
+						} catch (error) {
+							// 重装失败必须把旧配置装回来：少一个优化，远好过功能整个消失。
+							this.toolSearchRuntime = installToolSearchIsolated(this.ctx, previous.settings, policyFor);
+							throw error;
+						}
+					},
+				});
 			});
-			const changed = JSON.stringify(next) !== JSON.stringify(live);
-			if (changed) {
-				const previous = this.toolSearchRuntime;
-				// 先拆后装：同名工具会让 `chooseToolName` 把第二个改名，且两个守卫/两个 assemble
-				// 处理器会同时生效。两步都是同步的，宿主看不到中间态。
-				previous.dispose();
-				try {
-					this.toolSearchRuntime = { settings: next, dispose: installToolSearch(this.ctx, next) };
-				} catch (error) {
-					// 重装失败必须把旧配置装回来：少一个优化，远好过功能整个消失。
-					this.toolSearchRuntime = { settings: previous.settings, dispose: installToolSearch(this.ctx, previous.settings) };
-					throw new Error(`延迟加载参数已写入配置，但当前进程重装失败（重启后生效）：${error?.message ?? error}`);
-				}
-			}
-			return {
+			// live 用 changedLive 判定，不用常量：运行值本来就等于目标值时，「生效了」与「没变化」
+			// 对调用方是两种事实（面板据此决定是否提示"已立即生效"）。
+			return mutationResult(outcome.persisted, changedLive ? "applied" : "unchanged", {
+				diagnostics: outcome.diagnostics ?? [],
 				settings: { ...next },
 				defaults: effectiveToolSearchSettings({}),
 				configKey: TOOL_SEARCH_CONFIG_KEY,
-				changed,
-				note: changed ? "已写入 profile 配置，当前会话立即生效" : "参数没有变化（与当前生效值相同）",
-			};
+				changed: changedLive || outcome.persisted === "applied",
+				note: changedLive || outcome.persisted === "applied"
+					? "已写入 profile 配置，当前会话立即生效"
+					: "参数没有变化（与当前生效值相同）",
+			});
 		}
 		async removeServer(name) {
 			const value = String(name);
@@ -1549,44 +1946,30 @@ let McpManagerGateway = (() => {
 				const state = await managedState(this.ctx);
 				const entry = managedLiveEntry(this.ctx, state, value);
 				if (!entry) throw new Error("此 MCP 不属于当前 Web profile，不能移除");
-				const outcome = await writePatch(state, updateManagedMcpPatch(state.content, [], { removeNames: [value] }));
-				// 再把运行中的条目停掉：fiber 销毁 → mcp-client 断开、stdio 子进程退出、工具从
-				// 注册表注销。只删 patch 行的话，条目与工具都还在，用户点完"移除"毫无变化
-				// （曾经正是如此，note 只能写"完全卸载以 DSH 热加载结果为准"）。
-				// 顺序与 add/update 一致（先写盘、再动活条目），于是回滚是同一个形状：
-				// 把 patch 写回原版本即可，不需要把已经停掉的条目再拉起来。
-				//
-				// ⚠️ 走 `entry.parent.remove(options.id)` 而不是 `ctx.loader.remove(entry.id)`：
-				// 后者（EntryTree.remove）先用完整 id `include:<id>` resolve 出条目，再把**同一个
-				// 完整 id** 传给 EntryGroup.remove，而 EntryGroup 按 `this.tree.store[id]` 查的是
-				// **局部 id** —— 子树条目因此查不到、`if (!entry) return` 静悄悄地什么都不做
-				// （真 loader 实测：remove 不抛错，条目与工具原样留着）。那正是本轮要修的那类
-				// "看起来成功了其实没生效"。
-				//
-				// ⚠️ 先置 `disabled` 再移除：`cordis-plugin-loader@1.0.6`（0.2.1 宿主）的 unload
-				// 处理器会**无条件** `fiber.entry.parent.tree.write()`——1.0.3 有一道
-				// `if (fiber.entry._disposing) return;` 早退守卫，1.0.6 把它删了。对 include 子树
-				// 条目那就是 `Include.write()`，写回 `root.data` = base 条目 + **其余 patch 行**，
-				// 于是"删一台服务器"会把兄弟服务器的 patch 行烙进 base 配置，下次启动 base 一份 +
-				// patch insert 一份 = 重复条目（正是底下那段注释当初要避开的东西，只是换了个入口）。
-				// 该处理器里唯一还能早退的判据是 `fiber.entry.disabled`；这一行本来就要删掉，
-				// 先置位不改变任何可见语义。
-				const wasDisabled = entry.options.disabled === true;
+				const entryId = entry.options.id;
 				// 同名的其他条目（别的配置层提供的）在删掉本行后仍然存在，而且大多是**挂载失败**态：
 				// mcp-client 按作用域判重，它们当初就是因为这条先占了名字才起不来。删完必须说出来，
 				// 否则"移除成功"之后用户仍然看到一堆失败日志，会以为移除没生效。
 				const remaining = entriesForName(this.ctx, value).filter((candidate) => candidate !== entry);
-				try {
-					entry.options.disabled = true;
-					await entry.parent.remove(entry.options.id);
-				} catch (error) {
-					entry.options.disabled = wasDisabled;
-					await rollbackLiveChange(state, outcome.version, "MCP 移除", error);
-				}
+				const next = updateManagedMcpPatch(state.content, [], { removeNames: [value] });
+				// 移除是一条**可断言**的事实：patch 里不再有这一行（expect.present=false），
+				// reconcile 之后运行中也必须没有它。判不准就回滚，不留"删了但还在跑"的状态。
+				const outcome = await commitPatch(this.ctx, state, next, {
+					label: "MCP 移除",
+					entryId,
+					expect: { present: false },
+					doomedIds: [entryId],
+					verifyLive: (entries) => {
+						if (entries.length > 0) throw new Error(`MCP 条目 ${entryId} 移除后仍在运行（${entries.length} 个 live owner）`);
+					},
+				});
 				if (remaining.length) {
-					return { note: `已移除并停止运行中的连接；另有 ${remaining.length} 条同名条目来自其他配置层（id: ${remaining.map((candidate) => candidate.options.id).join("、")}），未改动——它们要重启宿主后才会重新尝试连接` };
+					return { ...outcome, note: `已移除并停止运行中的连接；另有 ${remaining.length} 条同名条目来自其他配置层（id: ${remaining.map((candidate) => candidate.options.id).join("、")}），未改动——它们要重启宿主后才会重新尝试连接` };
 				}
-				return { note: "已移除并停止运行中的连接" };
+				if (outcome.live !== "applied") {
+					return { ...outcome, note: `已从 profile 配置移除；${outcome.liveReason ?? "本部署没有热应用入口"}，重启宿主后这条连接才会停` };
+				}
+				return { ...outcome, note: "已移除并停止运行中的连接" };
 			});
 		}
 		async reveal(payload) {
@@ -1677,7 +2060,7 @@ let McpManagerGateway = (() => {
 			const mountErrors = workspaceMountErrorsView(wsPath);
 			const mountErrorByName = new Map(mountErrors.map((m) => [m.serverName, m.error]));
 			const servers = config.servers.map((server) => summarizeWorkspaceRow(this.ctx, wsPath, server, mountErrorByName.get(server.name)));
-			const globalResult = await listMcpServers(this.ctx);
+			const globalResult = await listMcpServers(this.ctx, typeof this.deferStateOf === "function" ? (name) => this.deferStateOf(name) : undefined);
 			const global = globalResult.servers.map((server) => ({ ...server, excluded: config.exclude.includes(server.serverName) }));
 			const restrictError = workspaceRestrictErrorView(wsPath);
 			const scopeErrors = workspaceScopeErrorsView(wsPath);
@@ -1712,8 +2095,8 @@ let McpManagerGateway = (() => {
 				return { note: `已添加到项目配置：${normalized.name}` };
 			});
 			// 写盘即对齐：存活会话立刻拿到这条新连接，不需要等它重开（在写锁外做，见 alignWorkspaceConnections）。
-			await alignWorkspaceConnections(this.ctx, wsPath);
-			return result;
+			const diagnostics = await alignWorkspaceConnections(this.ctx, wsPath);
+			return mutationResult("applied", diagnostics.length ? "failed" : "applied", { ...result, diagnostics });
 		}
 		async updateWorkspaceServer(payload) {
 			const wsPath = canonicalWorkspacePath(String(payload?.wsPath || ""));
@@ -1735,8 +2118,8 @@ let McpManagerGateway = (() => {
 				return { note: `已更新项目配置：${normalized.name}` };
 			});
 			// 配置变更就地重载共享连接（工具名不变，会话历史安全）。
-			await alignWorkspaceConnections(this.ctx, wsPath);
-			return result;
+			const diagnostics = await alignWorkspaceConnections(this.ctx, wsPath);
+			return mutationResult("applied", diagnostics.length ? "failed" : "applied", { ...result, diagnostics });
 		}
 		async removeWorkspaceServer(payload) {
 			const wsPath = canonicalWorkspacePath(String(payload?.wsPath || ""));
@@ -1751,8 +2134,8 @@ let McpManagerGateway = (() => {
 				return { note: `已从项目配置移除：${name}` };
 			});
 			// 移除同样就地生效：连接立刻销毁，工具从存活会话里撤掉（不必重开会话）。
-			await alignWorkspaceConnections(this.ctx, wsPath);
-			return result;
+			const diagnostics = await alignWorkspaceConnections(this.ctx, wsPath);
+			return mutationResult("applied", diagnostics.length ? "failed" : "applied", { ...result, diagnostics });
 		}
 		// 面板的「重连」：拆掉并按当前配置重建这条项目连接，再对齐存活会话。
 		// 存在的理由：mcp-client 重连预算耗尽后会注销工具并停止，只能靠重载配置/重启宿主恢复
@@ -1763,7 +2146,9 @@ let McpManagerGateway = (() => {
 			if (!wsPath) throw new Error("缺少 workspace 路径");
 			if (!name) throw new Error("缺少 serverName");
 			const result = await reconnectWorkspaceServer(this.ctx, wsPath, name);
-			return { note: result.hadLiveConnection ? `已重连项目 MCP：${name}` : `该项目 MCP 原本没有活动连接，已按配置新建：${name}` };
+			return mutationResult("unchanged", "applied", {
+				note: result.hadLiveConnection ? `已重连项目 MCP：${name}` : `该项目 MCP 原本没有活动连接，已按配置新建：${name}`,
+			});
 		}
 		async setWorkspaceExclude(payload) {
 			const wsPath = canonicalWorkspacePath(String(payload?.wsPath ?? (payload?.path || "")));
@@ -1782,9 +2167,14 @@ let McpManagerGateway = (() => {
 			// 立刻写入运行中会话：工具清单是每步重新组装的，所以新的 deny 在下一轮请求就生效
 			//（不是"只对新会话生效"——那种说法把"请求 header 稳定"误当成了"模型看不见新工具"）。
 			// 与连接对齐同样放在锁外：写已经落盘，副作用不该按住写锁（restrict 也会动作用域层）。
+			let diagnostics = [];
 			try { await reconcileWorkspaceRestricts(this.ctx, wsPath); }
-			catch (error) { this.ctx.logger?.error?.(`mcp-manager: 屏蔽已写入，但对齐会话作用域失败（下次挂载会重试）: ${error?.message ?? error}`); }
-			return result;
+			catch (error) {
+				const message = `mcp-manager: 屏蔽已写入，但对齐会话作用域失败（下次挂载会重试）: ${error?.message ?? error}`;
+				this.ctx.logger?.error?.(message);
+				diagnostics = [{ code: "WORKSPACE_RESTRICT_FAILED", message }];
+			}
+			return mutationResult("applied", diagnostics.length ? "failed" : "applied", { ...result, diagnostics });
 		}
 		async installWorkspaceBuiltins(payload) {
 			const wsPath = canonicalWorkspacePath(String(payload?.wsPath || ""));
@@ -1812,8 +2202,9 @@ let McpManagerGateway = (() => {
 				return { note: `已追加：${added.map((server) => server.name).join(", ")}${skipped.length ? `；已存在并跳过：${skipped.join(", ")}` : ""}` };
 			});
 			// 没写盘就不用对齐（否则每次点"安装内置"都会白跑一遍挂载）。
-			if (!result.unchanged) await alignWorkspaceConnections(this.ctx, wsPath);
-			return { note: result.note };
+			if (result.unchanged) return mutationResult("unchanged", "unchanged", { note: result.note });
+			const diagnostics = await alignWorkspaceConnections(this.ctx, wsPath);
+			return mutationResult("applied", diagnostics.length ? "failed" : "applied", { note: result.note, diagnostics });
 		}
 		async previewWorkspaceImport(payload) {
 			const wsPath = canonicalWorkspacePath(String(payload?.wsPath || ""));
@@ -1844,8 +2235,15 @@ let McpManagerGateway = (() => {
 				if (current.changed) await writeWorkspaceConfigFile(current.to, current.servers, current.targetExclude);
 				return current;
 			});
-			if (plan.changed) await alignWorkspaceConnections(this.ctx, plan.to);
-			return { ...copyPreviewOf(plan), note: copyResultNote(plan.toName, plan.added, plan.updated, plan.skipped) };
+			if (!plan.changed) {
+				return mutationResult("unchanged", "unchanged", { ...copyPreviewOf(plan), note: copyResultNote(plan.toName, plan.added, plan.updated, plan.skipped) });
+			}
+			const diagnostics = await alignWorkspaceConnections(this.ctx, plan.to);
+			return mutationResult("applied", diagnostics.length ? "failed" : "applied", {
+				...copyPreviewOf(plan),
+				diagnostics,
+				note: copyResultNote(plan.toName, plan.added, plan.updated, plan.skipped),
+			});
 		}
 		// 只读预览：写入前先说清「目标已有哪几条同名、按当前选择会怎么处理」。与导入的
 		// previewImport 同一条纪律——先看清再写；这里不需要内容指纹，因为源与目标都是本机配置，
@@ -2086,14 +2484,16 @@ let SkillsManagerGateway = (() => {
 		}
 		async setEnabled(payload) {
 			const resolved = await resolveSkillReference(this.ctx, payload);
-			return await setSkillEnabled(resolved, payload?.enabled !== false);
+			const result = await setSkillEnabled(resolved, payload?.enabled !== false);
+			return mutationResult("applied", refreshSkillCatalog(this.ctx), result);
 		}
 		async setModelInvocable(payload) {
 			// 「允许模型自动调用」的开关：写技能文件的 disable-model-invocation。纪律与 setEnabled
 			// 完全一致——wire 只送引用、服务端核对自己算出来的目标、只读根拒绝；改写的形状规则在
 			// lib/skills-frontmatter.js，读不准时那个错误原样上抛给用户。
 			const resolved = await resolveSkillReference(this.ctx, payload);
-			return await setSkillModelInvocable(resolved, payload?.modelInvocable !== false);
+			const result = await setSkillModelInvocable(resolved, payload?.modelInvocable !== false);
+			return mutationResult("applied", refreshSkillCatalog(this.ctx), result);
 		}
 		async setUserInvocable(payload) {
 			// 「用户可调用」的开关：写技能文件的 user-invocable。
@@ -2103,11 +2503,13 @@ let SkillsManagerGateway = (() => {
 			// 那一档——只能去编辑文件。补上之后面板与文件是 1:1 的，`setEnabled` 退回快捷动作。
 			// 与 setModelInvocable 共用同一个实现（setSkillInvocationFace），差别只在写哪个字段。
 			const resolved = await resolveSkillReference(this.ctx, payload);
-			return await setSkillUserInvocable(resolved, payload?.userInvocable !== false);
+			const result = await setSkillUserInvocable(resolved, payload?.userInvocable !== false);
+			return mutationResult("applied", refreshSkillCatalog(this.ctx), result);
 		}
 		async removeSkill(payload) {
 			const resolved = await resolveSkillReference(this.ctx, payload);
-			return await removeSkill(resolved);
+			const result = await removeSkill(resolved);
+			return mutationResult("applied", refreshSkillCatalog(this.ctx), result);
 		}
 		async importSkill(payload) {
 			// 本机导入（file / directory / archive）：落点同样只认引用，只读根一律拒。
@@ -2117,12 +2519,13 @@ let SkillsManagerGateway = (() => {
 				projectPath: payload?.projectPath,
 			});
 			if (target.writable === false) throw new Error("该位置是只读的（bundled），不能写入");
-			return await importSkill({
+			const result = await importSkill({
 				root: target.root,
 				scope: target.scope,
 				writable: true,
 				source: { type: payload?.type, path: String(payload?.path ?? "") },
 			});
+			return mutationResult("applied", refreshSkillCatalog(this.ctx), result);
 		}
 		async skillTargets(payload) {
 			// 「可以装到哪里」——**能力**，与「实际发现了什么」（观察）是两件事：
@@ -2179,12 +2582,13 @@ let SkillsManagerGateway = (() => {
 			const staging = await mkdtemp(join(tmpdir(), "dsh-skillhub-"));
 			try {
 				const archive = await downloadHubArchive(slug, { version: payload?.version, dir: staging });
-				return await importSkill({
+				const result = await importSkill({
 					root: target.root,
 					scope: target.scope,
 					writable: true,
 					source: { type: "archive", path: archive.path },
 				});
+				return mutationResult("applied", refreshSkillCatalog(this.ctx), result);
 			} finally {
 				// 临时目录无论成败都要清掉（成功时技能已经复制进目标根）。
 				await rm(staging, { recursive: true, force: true });
@@ -2201,7 +2605,7 @@ let SkillsManagerGateway = (() => {
 			// 两者代价不对称，所以任何异常一律返回 null（= 无冲突，照常注册入口）。
 			try {
 				const entries = this.ctx?.loader?.entries?.();
-				if (!Array.isArray(entries)) return null;
+				if (typeof entries?.[Symbol.iterator] !== "function") return null;
 				const self = pluginName();
 				for (const entry of entries) {
 					const options = entry?.options;
@@ -2224,3 +2628,9 @@ let SkillsManagerGateway = (() => {
 })();
 
 export { checkForUpdate, McpManagerGateway, McpManagerGateway as default, SkillsManagerGateway, summarizeWorkspaceRow };
+
+
+
+
+
+

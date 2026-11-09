@@ -29,6 +29,8 @@ export declare class CodexVirtualHarness implements RemoteTypertGatewayTarget {
     private readonly imageAttachments;
     private modelDirectory?;
     private modelDirectoryPromise?;
+    private catalogPromise?;
+    private catalogLoadedAt;
     private lastProjectionSeq;
     private commandSeq;
     private selectedWorkspaceId?;

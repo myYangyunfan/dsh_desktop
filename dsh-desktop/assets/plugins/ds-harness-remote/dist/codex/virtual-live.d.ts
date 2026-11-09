@@ -27,7 +27,7 @@ export interface CodexLiveProjectionContext {
     readonly setPermissionSelection: (sessionId: string, preset: CodexPermissionPreset | undefined) => void;
     readonly emitRemoteEvent: (event: string, args: unknown[]) => void;
     readonly selectedModels: Map<string, CodexModelSelection>;
-    readonly refreshAndPublishWorkspaces: () => Promise<void>;
+    readonly refreshAndPublishWorkspaces: (force?: boolean) => Promise<void>;
     readonly pendingApprovals: Map<string, PendingApproval>;
     readonly emitApproval: (input: {
         eventId: string;

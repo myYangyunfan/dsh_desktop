@@ -16,6 +16,14 @@ export interface InstallStatus {
     activation?: Activation;
     restartReason?: HotRestartReason;
     detail?: string;
+    /** The command that retries this record by hand, in the form a reader can
+     * paste into a terminal (design 2026-11-02-market-borrowings §5): the line
+     * it ran on the CLI path, and on the plugin-manager path the CLI line for
+     * the same spec (2026-11-06 amendment). Present on a failure only: a
+     * success needs no repair. The operand is quoted because a `github:` spec
+     * carries `&` and `#`, which a shell would otherwise read as its own
+     * syntax. */
+    command?: string;
 }
 /** Bound one dsh command so a stalled install cannot hold the profile queue
  * forever. Tests can pass a shorter value; production stays generous. */
@@ -192,6 +200,28 @@ export declare function gateOperand(target: string | undefined): string;
  */
 export declare function shellSafeTarget(target: string, platform: NodeJS.Platform): string;
 /**
+ * The command that would retry this operation by hand, or undefined when no
+ * shell can carry it (design 2026-11-02-market-borrowings §5).
+ *
+ * POSIX: single-quoted. `&` is a control operator there too, so
+ * `github:owner/slug#sha&path:dir` unquoted would run `path:dir` as its own
+ * command; `gateOperand` refuses `'`, so the quoting cannot be broken out of.
+ *
+ * Windows: offered only for an operand with no `&`. The quotes a reader types
+ * are consumed by cmd and never reach dsh, which then joins argv UNQUOTED
+ * into its own shell (the defect `shellSafeTarget` exists for on our own
+ * spawn) — so a quoted `&path:` still splits, and the measured outcome is an
+ * install of the repository ROOT that exits 0. A line that installs
+ * something else is worse than no line, so that case reports none.
+ *
+ * The desktop profile: none on either platform. dsh's CLI refuses it in any
+ * letter case (`isDesktopProfile`), so the line would fail at once, and a
+ * desktop reader is never handed a `dsh plugin` command. The CLI path never
+ * runs there; the plugin-manager path asks for a line on every profile
+ * (2026-11-06), which is why the refusal lives in this one builder.
+ */
+export declare function retryCommand(platform: NodeJS.Platform, profile: string, verb: string | undefined, target: string): string | undefined;
+/**
  * Ask the pump to warm `spec` while an operation waits its turn, and say in
  * that operation's log why there is no download phase when there is none.
  * Shared by the CLI executor and the plugin manager runner.
@@ -227,7 +257,7 @@ export declare function startInstall(options: {
     /** A further post-exit check, run only once the bundle-activation confirm
      * has passed. Returning a detail fails the install with it. The package is
      * on disk by then, so this is for facts that are unreadable until it is —
-     * see `collidingEntryId`. */
+     * see `collidingEntryId` — and the failure carries no retry line. */
     alsoConfirm?: (home: string | undefined) => string | null;
     afterDone?: (home: string | undefined) => Promise<{
         activation: Activation;

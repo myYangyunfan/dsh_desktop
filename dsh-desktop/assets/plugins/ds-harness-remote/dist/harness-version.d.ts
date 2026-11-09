@@ -1,3 +1,15 @@
+/**
+ * Injectable process facts. Production callers use the real `process`, while
+ * tests supply a controlled working directory / executable / global roots so
+ * version discovery can be verified without depending on the host's npm setup.
+ */
+export interface HarnessVersionLookupContext {
+    cwd?: string;
+    execPath?: string;
+    /** Extra directory roots that may hold `node_modules/@deepseek-ai/dsh`. */
+    globalRoots?: string[];
+    env?: NodeJS.ProcessEnv;
+}
 export type HarnessSessionGeneration = 'legacy' | 'v3';
 export declare function normalizeHarnessVersion(value: unknown): string | undefined;
 /**
@@ -7,16 +19,18 @@ export declare function normalizeHarnessVersion(value: unknown): string | undefi
  */
 export declare function harnessSessionGeneration(version: string | undefined): HarnessSessionGeneration;
 /**
- * Compatibility fallback for Harness builds whose host.describe still returns
- * the historical 0.0.1 placeholder.
+ * Read the installed Harness CLI version from its package manifest.
  *
- * Both supported entrypoint layouts must be covered. A CLI/dsh-TUI entrypoint
- * sits below the @deepseek-ai/dsh package root, so only its ancestor chain is
- * worth walking. The 0.2.0 Desktop shell instead launches its own
- * `@deepseek-ai/dsh-desktop-host` entrypoint from inside `app.asar`, where the
- * ancestors carry only the desktop shell and runtime manifests while the
- * Harness CLI package is a sibling; resolve that package through the
- * entrypoint's module scope.
+ * A CLI entrypoint sits below the `@deepseek-ai/dsh` package root, so only its
+ * ancestor chain is worth walking; global bin symlinks are resolved first. The
+ * 0.2.0 Desktop shell launches its own `@deepseek-ai/dsh-desktop-host`
+ * entrypoint from inside `app.asar`, where the Harness CLI is a sibling and is
+ * reachable through the entrypoint's module scope instead.
+ *
+ * Electron desktop Hosts may launch with an empty or non-absolute
+ * `process.argv[1]`. In that case recover the version from the working
+ * directory, the running executable's ancestors, `createRequire(...)` module
+ * scope, and the usual global npm roots instead of returning `undefined`.
  */
-export declare function readHarnessDistributionVersion(entrypoint?: string | undefined): Promise<string | undefined>;
+export declare function readHarnessDistributionVersion(entrypoint?: string | undefined, context?: HarnessVersionLookupContext): Promise<string | undefined>;
 //# sourceMappingURL=harness-version.d.ts.map

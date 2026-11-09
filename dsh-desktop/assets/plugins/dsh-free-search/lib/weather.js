@@ -7,45 +7,82 @@
 const OPEN_METEO_GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search";
 const OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast";
 
-// WMO weather code → 描述（中文/英文）
+// WMO weather code → 描述（中文/英文/日文）。
+// 日文按日本气象厅「国際式の天気記号」的 ww 表（与 Open-Meteo 的 code 同一套编号）：
+// https://www.jma.go.jp/jma/kishou/know/kurashi/symbols.html
+// 「X，弱」→ 弱いX，「X，並」「X，並又は強」→ X，「X，強」→ 強いX，「激しい」→ 激しいX。
+// 0–3 在 ww 表里是「云的变化」而非云量，按气象厅预报用语（快晴 / 晴れ / 曇り）与天气预报画面的
+// 天気テロップ「晴時々曇 = PARTLY CLOUDY」对应。96/99 的强弱在 ww 表里指雷电而非冰雹。
 const WMO_CODES = {
-  0: ["晴", "Clear sky"],
-  1: ["大部晴朗", "Mainly clear"],
-  2: ["多云", "Partly cloudy"],
-  3: ["阴", "Overcast"],
-  45: ["雾", "Fog"],
-  48: ["雾凇", "Depositing rime fog"],
-  51: ["毛毛雨（弱）", "Light drizzle"],
-  53: ["毛毛雨", "Moderate drizzle"],
-  55: ["毛毛雨（强）", "Dense drizzle"],
-  56: ["冻毛毛雨（弱）", "Light freezing drizzle"],
-  57: ["冻毛毛雨（强）", "Dense freezing drizzle"],
-  61: ["小雨", "Slight rain"],
-  63: ["中雨", "Moderate rain"],
-  65: ["大雨", "Heavy rain"],
-  66: ["冻雨（弱）", "Light freezing rain"],
-  67: ["冻雨（强）", "Heavy freezing rain"],
-  71: ["小雪", "Slight snow"],
-  73: ["中雪", "Moderate snow"],
-  75: ["大雪", "Heavy snow"],
-  77: ["雪粒", "Snow grains"],
-  80: ["阵雨（弱）", "Slight rain showers"],
-  81: ["阵雨", "Moderate rain showers"],
-  82: ["阵雨（强）", "Violent rain showers"],
-  85: ["阵雪（弱）", "Slight snow showers"],
-  86: ["阵雪（强）", "Heavy snow showers"],
-  95: ["雷暴", "Thunderstorm"],
-  96: ["雷暴伴小冰雹", "Thunderstorm with slight hail"],
-  99: ["雷暴伴大冰雹", "Thunderstorm with heavy hail"],
+  0: ["晴", "Clear sky", "快晴"],
+  1: ["大部晴朗", "Mainly clear", "晴れ"],
+  2: ["多云", "Partly cloudy", "晴れ時々曇り"],
+  3: ["阴", "Overcast", "曇り"],
+  45: ["雾", "Fog", "霧"],
+  48: ["雾凇", "Depositing rime fog", "霧（霧氷を伴う）"],
+  51: ["毛毛雨（弱）", "Light drizzle", "弱い霧雨"],
+  53: ["毛毛雨", "Moderate drizzle", "霧雨"],
+  55: ["毛毛雨（强）", "Dense drizzle", "強い霧雨"],
+  56: ["冻毛毛雨（弱）", "Light freezing drizzle", "弱い着氷性の霧雨"],
+  57: ["冻毛毛雨（强）", "Dense freezing drizzle", "着氷性の霧雨"],
+  61: ["小雨", "Slight rain", "弱い雨"],
+  63: ["中雨", "Moderate rain", "雨"],
+  65: ["大雨", "Heavy rain", "強い雨"],
+  66: ["冻雨（弱）", "Light freezing rain", "弱い着氷性の雨"],
+  67: ["冻雨（强）", "Heavy freezing rain", "着氷性の雨"],
+  71: ["小雪", "Slight snow", "弱い雪"],
+  73: ["中雪", "Moderate snow", "雪"],
+  75: ["大雪", "Heavy snow", "強い雪"],
+  77: ["雪粒", "Snow grains", "霧雪"],
+  80: ["阵雨（弱）", "Slight rain showers", "弱いにわか雨"],
+  81: ["阵雨", "Moderate rain showers", "にわか雨"],
+  82: ["阵雨（强）", "Violent rain showers", "激しいにわか雨"],
+  85: ["阵雪（弱）", "Slight snow showers", "弱いにわか雪"],
+  86: ["阵雪（强）", "Heavy snow showers", "にわか雪"],
+  95: ["雷暴", "Thunderstorm", "雷雨"],
+  96: ["雷暴伴小冰雹", "Thunderstorm with slight hail", "雷雨（ひょうを伴う）"],
+  99: ["雷暴伴大冰雹", "Thunderstorm with heavy hail", "激しい雷雨（ひょうを伴う）"],
 };
-function wmoText(code, lang) {
-  const hit = WMO_CODES[code];
-  if (!hit) return lang === "en" ? "Unknown" : "未知";
-  return (lang === "en" ? hit[1] : hit[0]) + ` (WMO ${code})`;
+const TEXT_LANGUAGES = ["zh", "en", "ja"];
+const UNKNOWN_TEXT = { zh: "未知", en: "Unknown", ja: "不明" };
+
+/** 天气文案有 zh / en / ja 三套；其它语言（ru/de/…）走英文，避免整段中文（#92）。 */
+export function textLanguage(lang) {
+  const tag = String(lang ?? "").trim().toLowerCase();
+  return TEXT_LANGUAGES.includes(tag) ? tag : "en";
 }
 
-export async function geocodeLocation(name, signal) {
-  const params = new URLSearchParams({ name, count: "1", language: "zh", format: "json" });
+export function wmoText(code, lang) {
+  const textLang = textLanguage(lang);
+  const hit = WMO_CODES[code];
+  if (!hit) return UNKNOWN_TEXT[textLang];
+  return hit[TEXT_LANGUAGES.indexOf(textLang)] + ` (WMO ${code})`;
+}
+
+/** weather 工具的正文（render 用）。lang 同 textLanguage()，description 由 fetchWeather 按同一语言生成。 */
+export function formatWeather(value, lang) {
+  const textLang = textLanguage(lang);
+  const c = value.current ?? {};
+  const pp = (d, fmt) => (d.precipitationProbability !== undefined ? fmt(d.precipitationProbability) : "");
+  const lines = [];
+  if (textLang === "zh") {
+    lines.push(`${value.location} 天气：`);
+    lines.push(`当前：${c.temperature}°C（体感 ${c.apparent}°C），${c.text}，湿度 ${c.humidity}%，风速 ${c.wind} km/h`);
+    for (const d of value.daily ?? []) lines.push(`${d.date}：${d.min}~${d.max}°C，${d.text}${pp(d, (p) => `，降水概率 ${p}%`)}`);
+  } else if (textLang === "ja") {
+    lines.push(`${value.location} の天気：`);
+    lines.push(`現在：${c.temperature}°C（体感 ${c.apparent}°C）、${c.text}、湿度 ${c.humidity}%、風速 ${c.wind} km/h`);
+    for (const d of value.daily ?? []) lines.push(`${d.date}：${d.min}〜${d.max}°C、${d.text}${pp(d, (p) => `、降水確率 ${p}%`)}`);
+  } else {
+    lines.push(`Weather for ${value.location}:`);
+    lines.push(`Now: ${c.temperature}°C (feels ${c.apparent}°C), ${c.text}, humidity ${c.humidity}%, wind ${c.wind} km/h`);
+    for (const d of value.daily ?? []) lines.push(`${d.date}: ${d.min}~${d.max}°C, ${d.text}${pp(d, (p) => `, precip ${p}%`)}`);
+  }
+  return lines.join("\n");
+}
+
+export async function geocodeLocation(name, signal, language = "en") {
+  const params = new URLSearchParams({ name, count: "1", language: String(language ?? "en") || "en", format: "json" });
   const response = await fetch(`${OPEN_METEO_GEOCODING_URL}?${params}`, {
     method: "GET",
     redirect: "error",
@@ -66,7 +103,7 @@ export async function geocodeLocation(name, signal) {
 }
 
 export async function fetchWeather(location, days, lang, signal) {
-  const geo = await geocodeLocation(location, signal);
+  const geo = await geocodeLocation(location, signal, lang);
   if (!geo) throw new Error(`could not geocode location "${location}" — try a nearby larger city`);
   const params = new URLSearchParams({
     latitude: String(geo.latitude),

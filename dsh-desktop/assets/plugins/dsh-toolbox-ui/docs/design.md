@@ -156,38 +156,38 @@ mcpManager/projectConnections → { connections: [{ wsPath, serverName, state, r
 
 ## 兼容性与依赖细节
 
-DSH 宿主 API 通过 `peerDependencies` 以 `>=0.2.0-rc.1 <0.3.0` 声明（只支持 0.2.x）。
+DSH 宿主 API 通过 `peerDependencies` 与 `engines.dsh` 以 `>=0.2.1-rc.5 <0.3.0` 声明；当前发布准入从 0.2.1-rc.5 开始，0.2.2 的新版 executor/step toolSet 作为匹配宿主目标单独验证。
 
 **为什么只支持 0.2.x**：ToolSearch 的三条地基都是 0.2 的形态——
 
-1. **per-agent 呈现模式**（`ctx.tools.modeFor(agent)`）：同一个进程里可以有 native 与 ptc 两种会话。装配点只能读到**部署默认层**，所以判据必须下移到 per-agent——0.1.x 没有这个接口。
+1. **per-agent 呈现模式**（`ctx.tools.modeFor(agent)`）：同一个进程里可以有 native 与 ptc 两种会话。装配点只能读到**部署默认层**，所以判据必须下移到 per-agent——更早宿主没有这个接口。
 2. **PTC 手册段 `tools:sdk`**：PTC 下模型看的不是函数清单而是这份生成物，插件能改它（它在 `assembly.sections` 里）才有 PTC 下省字的可能。
 3. **会话投影 `ctx.sessionProjections`**：PTC 的搜索发生在程序内部，只留 `tool/ptc-dispatch` 事件（不是 surface 事件，`deriveMessages()` 看不到），投影是唯一能恢复发现集的正当路径。
 
-0.1.x 不再兼容，也不再为它保留降级分支。窗口从 `>=0.1.5-rc.1 <0.2.0` 上修的直接原因是：那条声明在 0.2.1 一发布就会被宿主判不兼容（`dsh --version` 是 0.2.x，而 peer 上限卡在 0.2.0）。
+0.1.x 与 0.2.0 不在当前发布准入范围内，也不再为它们保留降级分支。当前窗口是 `>=0.2.1-rc.5 <0.3.0`，并通过 `engines.dsh` 与 peer 同时声明。
 
 ### 版本范围怎么定（以及它管不到什么）
 
 三条取舍规则，改动范围前先读这里：
 
-1. **下限是硬要求，上限是宿主执行的硬闸门**。`0.2.0-rc.1` 之前没有上面那三条能力，装上必坏，所以下限不能松。上限 `0.3.0` 只在宿主确实会向后破坏时才有意义——DSH 自称「开发者预览…未来将出现破坏兼容性的变更」，而插件面对宿主升级必然慢一步，所以留一个**粗**上限：它的作用是把「你正跑在一个我们没验证过的大版本上」变成宿主明确的拒绝，而不是静默装上再出怪问题。
+1. **下限是硬要求，上限是宿主执行的硬闸门**。`0.2.1-rc.5` 之前的组合不在当前发布准入范围内，`0.3.0` 上限只在宿主确实会向后破坏时才有意义——DSH 自称「开发者预览…未来将出现破坏兼容性的变更」，而插件面对宿主升级必然慢一步，所以留一个**粗**上限：它的作用是把「你正跑在一个我们没验证过的大版本上」变成宿主明确的拒绝，而不是静默装上再出怪问题。
 
    **这道闸门由 DSH 自己执行，不是 pnpm/npm**——安装器的 peer 警告（如 pnpm 的 `[WARN] Issues with peer dependencies found`）既不是判定依据，也不与它一致。`dsh-app-boot` 的 `evaluatePluginCompatibility` 拿 `dsh --version` 的实际版本比对本插件的 `peerDependencies`：不兼容的 bundle 会被跳过并打印 `skipping profile bundle …`，插件根本不加载（走 profile 清单的 `preflight` 路径时则是 `disabling profile plugin …`）。用户不想升级时可以授予**精确版本**豁免继续用：`dsh plugin --profile <profile> allow-version <name>@<version> --dsh-version <exact> --accept-risk`（豁免按 `name@version` × 精确宿主版本记账，落在 profile 目录的 `compatibility.json`）。**下限不会挡住任何新版本，只有上限可能「限死」，所以上限宁粗不细。**
-2. **预发布不需要特殊照顾**。按 npm 的 semver 规则，`0.2.1-alpha.1` 会落在 `>=0.2.0-rc.1 <0.3.0` 之外（预发布只在同名 `major.minor.patch` 元组内被承认）。但**上面那道闸门不套用这条规则**：`evaluatePluginCompatibility` 调 `semver.satisfies` 时带的是 `{ includePrerelease: true }`，预发布因此按数值参与比较——`0.2.0`、`0.2.1-alpha.1`、`0.2.1-rc.2` 都落在范围内，只有 `0.3.0-rc.1` 这种更高元组的预发布才越界。所以这个范围不会挡住任何 0.2.x（含预发布）——不必为「覆盖未来预发布」去改范围。
+2. **预发布不需要特殊照顾**。宿主的兼容评估使用 `includePrerelease: true`，因此 `0.2.1-rc.5` 之后的同一 0.2.x 预发布按数值参与比较；`0.3.0-rc.1` 这类更高元组越过上限。发布窗口只承诺当前已验证支持面，不把未来 0.2.x 预发布当作已验证功能。
 
-   注意这条**只对宿主自己的闸门成立**：拿不带 `includePrerelease` 的严格 semver 去判，`0.2.1-alpha.1` 会被判为不满足 `>=0.2.0-rc.1 <0.3.0`（下限元组是 `0.2.0`，认不了 `0.2.1-rc.x`）。谁要复核这个范围，必须用宿主自己的 `evaluatePluginCompatibility`，而不是 `semver.satisfies(range)` 或 pnpm 的 peer 检查——那两者会给出相反的结论。`test/package-contract.test.mjs` 因此只钉窗口两端（`>=0.2.0-rc.1` / `<0.3.0`），不模拟 semver。
+   注意这条**只对宿主自己的闸门成立**：谁要复核这个范围，必须用宿主自己的 `evaluatePluginCompatibility`，而不是 `semver.satisfies(range)` 或 pnpm 的 peer 检查。`test/package-contract.test.mjs` 只钉 manifest 的窗口与 engines 同源，不模拟 semver。
 3. **范围回答不了「装上还对不对」，而 CI 也只能盖住一半**。`0.1.6-alpha.2` 把 typert strict codec 从 `schema:`（zod v4 实例）换成 `create()`（进程内 realm 的懒工厂，registry 用 `record.value ??= record.create()` 物化）就是这么一次：它落在当时的 `>=0.1.5-rc.1 <0.2.0` 之内，插件的兼容性声明天生拦不住，2026-09-21 的漂移任务因此变红（那一次 130 项里唯一失败的就是加载期契约那条）。真正的保护分两层：**(a) 运行时契约**由 [`.github/workflows/upstream-drift.yml`](../.github/workflows/upstream-drift.yml) 每周把宿主整套换到 `latest` / `next` / `alpha` 三个渠道跑契约用例（`test/*.test.mjs` 去掉 `package-contract`，因为那份断言的是 pin 本身）；**(b) 宿主侧的加载期契约**（`lib/typert.js` 的形状由宿主 loader 校验，不由我们校验）由 `test/typert-manifest.test.mjs` 覆盖：它直接调宿主自己的 `validateTypertManifest` 验这份产物，形状一变就红；同一文件里还有一条**不依赖 loader 版本**的形状断言，钉住「strict codec 同时带 `schema` 与 `create()`」（下一条理由）——本地 devDependency 的 loader 是开发基线，看不见 alpha 的要求，只靠前者要等一周才知道。这一层原本是缺口——既有用例只保证 `lib/typert.js` 与 `lib/client.js` 两份产物彼此一致（`client-lifecycle.test.mjs`），宿主改了要求也不会变红，而后果是用户升级 DSH 后面板整个不可用。它也是 `@deepseek-ai/dsh-typert-loader` 只进 `devDependencies`、不进 peer 的原因：校验发生在宿主进程里，插件运行时不 import 它。
 
-4. **支持面就是 0.2.0 与 0.2.1 两条线**（用户 2026-10-18 定的口径：更旧的版本不再考虑，也不为它们保留分支）。这两条线之间宿主换了两代 loader，而**换的这层不在 dsh-\* 的 API 面上**——`@deepseek-ai/dsh@0.2.1-rc.2` 只是把依赖声明改成了 `cordis ~4.0.5` / `cordis-plugin-loader ~1.0.6`（0.2.0 是 `~4.0.2` / `^1.0.3`），破坏性全都在 `cordis-plugin-loader` 1.0.3 → 1.0.6 的重构里。实测两处差异，都在插件侧做了显式适配，各有一条**不依赖宿主版本**的常驻用例（`test/loader-compat.test.mjs`）：
+4. **当前发布支持面从 0.2.1-rc.5 开始**。0.2.0 只作为历史 loader 回归保留，不是发布准入；当前两类宿主组合是 0.2.1-rc.5（Loader 1.0.6）与 0.2.2-rc.1（Loader 1.1.0），而**换的这层不在 dsh-\* 的 API 面上**——`@deepseek-ai/dsh@0.2.1-rc.2` 只是把依赖声明改成了 `cordis ~4.0.5` / `cordis-plugin-loader ~1.0.6`（0.2.0 是 `~4.0.2` / `^1.0.3`），破坏性全都在 `cordis-plugin-loader` 1.0.3 → 1.0.6 的重构里。实测两处差异，都在插件侧做了显式适配，各有一条**不依赖宿主版本**的常驻用例（`test/loader-compat.test.mjs`）：
 
    | # | 差异 | 1.0.3（0.2.0） | 1.0.6（0.2.1） | 插件的适配 |
    |---|---|---|---|---|
    | L1 | 启动失败会不会冒到调用方 | `Entry.update()` 里 `throw updateError("apply", …)`，`loader.create()` 自己 reject | 改成 `logger.error/warn`，`create()` **总是 resolve**，错误只挂在 fiber 上 | 创建后 `await entry.fiber.await()`（cordis 4.0.2 与 4.0.5 的实现逐字相同，都会重抛启动错误）。不这么做，`add()` 的回滚分支永远进不去，patch 里留下一条连不上的行 |
    | L2 | dispose 时会不会写盘 | unload 处理器有 `if (fiber.entry._disposing) return;` 早退 | **这行被删了**，`fiber.entry.parent.tree.write()` 真的执行；对 include 子树条目就是 `Include.write()`，写回 base + **其余 patch 行** | 移除条目前先置 `entry.options.disabled = true`——该处理器里唯一还能早退的判据就是它。不这么做，"删一台服务器"会把兄弟服务器的 patch 行烙进 `cordis.yml`，下次启动 base 一份 + patch insert 一份 = 重复条目 |
 
-   **L2 是宿主回归，不是我们的写法问题**：同一条路径在 0.2.0 上是干净的（`_disposing` 守卫挡住了）。上游若修回来，`disabled` 这一行仍然无害——它是一个即将被删除的条目，标记 disabled 不改变任何可见语义。真机端到端（0.2.1 `dsh web` 里逐条点穿）**仍未做**，见 `.tasks/mcp-tool-search/OPEN-ITEMS.md` 的"仍未做的"。
+   **L2 是历史宿主差异，不是我们的写法问题**：同一条路径在 0.2.0 上是干净的（`_disposing` 守卫挡住了）。上游若修回来，`disabled` 这一行仍然无害——它是一个即将被删除的条目，标记 disabled 不改变任何可见语义。当前支持的 Loader/Include 组合已由真 Loader、真 Include 和重启用例覆盖；GUI 的逐条人工点穿仍属于每次发布检查，不把当前工作树的浏览器快照冒充为版本矩阵证据。
 
-   验证方式就是本仓库自己的漂移方法：隔离副本 + `pnpm add` 把 11 个 peer 宿主包整套换到目标版本，**再**按该 dsh 自己声明的 `dependencies.@deepseek-ai/cordis` / `cordis-plugin-loader` 换掉这两代（`upstream-drift.yml` 现在两件事都做）。0.2.1-rc.2 + cordis 4.0.5 + loader 1.0.6 的稳态是 **748/748**（`node --test`，去掉按定义会红的 `package-contract`）；0.2.0-rc.2 基线是 **796/796**。
+   验证方式就是本仓库自己的漂移方法：隔离副本 + `pnpm add` 把 11 个 peer 宿主包整套换到目标版本，**再**按该 dsh 自己声明的 `dependencies.@deepseek-ai/cordis` / `cordis-plugin-loader` 换掉这两代（`upstream-drift.yml` 现在两件事都做）。0.2.1-rc.2 + cordis 4.0.5 + loader 1.0.6 的稳态是 **748/748**（`node --test`，去掉按定义会红的 `package-contract`）；0.2.1-rc.3 + 同一对 cordis/loader 在 2026-10-24 复跑是 **785/785**（仓库 1.8.3，套件已比上面那次长；首次跑的唯一一条红是环境问题——该用例读 `process.env.HOME`，而 PowerShell 只设 `USERPROFILE`，补上 `HOME` 即绿，同一份用例在 0.2.0-rc.2 基线上同样红）；0.2.1-rc.5 + 同一对 cordis/loader 在 2026-10-30 复跑是 **812/812**（仓库 1.9.0；同样只有那条 `HOME` 环境用例首跑红，补上 `HOME` 即绿）；0.2.0-rc.2 基线是 **796/796**。
 
    **为什么 strict codec 两个键都写，以及 0.2 之后还剩不剩意义**（`lib/typert.js` 与 `lib/client.js` 各一份，`client-lifecycle.test.mjs` 钉住两者一致）：宿主在两个渠道上查**不同的键**，且都忽略对方的键——`0.1.5-rc.x`（= 当时的 `latest` / `next`，也就是 `npx` 默认装到的那条）查 `codec.schema.parse` 必须是 zod v4 实例；`0.1.6-alpha.2` 起查 `typeof codec.create === 'function'`。少写 `schema` 会在最新 RC 上加载即拒，少写 `create` 会在 alpha 上加载即拒；`mode: 'src-json'` 不是出路（loader 强制 invocation 的 codec 必须是 strict）。拿三个版本的 loader 直接跑自己的产物：
 
@@ -198,7 +198,7 @@ DSH 宿主 API 通过 `peerDependencies` 以 `>=0.2.0-rc.1 <0.3.0` 声明（只�
 | **双写** | PASS | PASS | PASS |
 | `mode: 'src-json'` | 拒 | 拒 | 拒 |
 
-`0.2.0-rc.2`（当前开发基线）与 `0.2.1-rc.2`（0.2.1 宿主）的 loader 实测都与 `0.1.6-alpha.2` 同列：只有 `create()` 通过、只有 `schema` 被拒，也就是说**受支持的两条线都只查 `create()`**，`schema` 是唯一一处**只为 0.1.5 存在**的遗产形状。它保留的理由是成本/收益而不是支持承诺：两个键互不干扰、宿主都忽略对方的键，删掉它的收益只是少两个键，代价是要在 0.2.0 与 0.2.1 两套宿主上重验加载期契约（`typert-manifest` 形状断言 + `client-admission` 真网关准入）。按 2026-10-18 定的支持口径，**这是一次独立的清理，不随兼容修复捆绑**；`test/typert-manifest.test.mjs` 里那条不依赖 loader 版本的形状断言仍然钉住两键并存。
+历史验证记录：`0.2.0-rc.2` 与 `0.2.1-rc.2` 的 loader 都与 `0.1.6-alpha.2` 同列，只有 `create()` 通过、只有 `schema` 被拒。双写两个 codec 键仍保留，因为历史宿主可能检查不同键；这不是当前发布支持窗口的承诺。当前准入组合是 `0.2.1-rc.5`（Loader 1.0.6）与 `0.2.2-rc.1`（Loader 1.1.0），形状由 `test/typert-manifest.test.mjs` 与匹配宿主契约共同验证。
 
 浏览器半（`@deepseek-ai/dsh-typert-registry` 的 `lib/client.js`）做同一份校验，所以 `lib/client.js` 里的 codec 必须同步改——只改 host 那份会变成「面板能加载，一调用就炸」。
 
@@ -209,7 +209,7 @@ DSH 宿主 API 通过 `peerDependencies` 以 `>=0.2.0-rc.1 <0.3.0` 声明（只�
 
   这一条**不会**由漂移任务报出来：它的 `files` 是 `grep -v 'package-contract'`，pin 断言按定义就不参与漂移判定。所以「漂移任务绿」不等于 pin 没过期——2026-09-10 到 09-24 之间 pin 停在 `0.1.5-rc.2`，而 `latest` 已经是 `0.1.5-rc.3`、`next` 是 `0.1.7-rc.1`，两周无人发现，就是这条缺口。同步 pin 只有两个触发源：人注意到新 RC，或本地跑完整套件。
 
-  改的时候**别动 `COMPAT_WINDOW`**：它是 peer 窗口（`>=0.1.5-rc.1 <0.2.0`），下限是硬要求、上限是宿主的硬闸门；把它收窄到新版本会挡住仍在 `0.1.5-rc.x` 上的用户（宿主闸门带 `includePrerelease`，所以老版本确实装得上，见上文第 2 条）。要改的常量只有 `package-contract.test.mjs` 的 `DEV_BASELINE`，锁文件里那个具体版本从它推导（原来那里硬编码了一份，是两个真源）。
+  改基线时保持 `COMPAT_WINDOW`、`engines.dsh` 与 manifest 同源；当前发布窗口是 `>=0.2.1-rc.5 <0.3.0`。只更新 `package-contract.test.mjs` 的 `DEV_BASELINE`、锁文件和“已验证”文档，且必须重新跑匹配宿主契约。
 
 已实测（2026-09-24，漂移任务 [run 35943153431](https://github.com/Imzl-zl/dsh-mcp-manager-ui/actions/runs/35943153431)，三个渠道各 190 项全绿、0 跳过）：
 
@@ -231,8 +231,8 @@ DSH 宿主 API 通过 `peerDependencies` 以 `>=0.2.0-rc.1 <0.3.0` 声明（只�
 
 两个不在 `@deepseek-ai/dsh-*` 契约面里、但在真实安装中位于宿主模块层的依赖，值得点名：
 
-- `@deepseek-ai/cordis-plugin-loader`（版本线 `1.0.3`）：`reveal` 用它的 `interpolate` 求值 `!!js` 配置节点。它是 vendor 包，靠 profile 的模块回退解析得到（与 `@deepseek-ai/cordis` 同一条路径）。
-- `@deepseek-ai/cordis` 的私有字段：`LoggerService.exporter()` 的 disposer 删的是「当时的最大 ID」而不是注册时的 ID（`lib/index.js` 的 `return () => this.exporters.delete(this._snExporter)`），热重载会误删其他插件的 exporter。本插件因此直接读写 `logger.exporters` / `logger._snExporter` 这对私有字段，并把 peer 锁到 `~4.0.2`；字段形状一变就退回 `exporter()` 通道并明确告警。
+- `@deepseek-ai/cordis-plugin-loader`（当前 peer `>=1.0.6 <1.2.0`，已验证 1.0.6 / 1.1.0）：`reveal` 用它的 `interpolate` 求值 `!!js` 配置节点。它是 vendor 包，靠 profile 的模块回退解析得到（与 `@deepseek-ai/cordis` 同一条路径）。
+- `@deepseek-ai/cordis` 的私有字段：`LoggerService.exporter()` 的 disposer 删的是「当时的最大 ID」而不是注册时的 ID（`lib/index.js` 的 `return () => this.exporters.delete(this._snExporter)`），热重载会误删其他插件的 exporter。本插件因此直接读写 `logger.exporters` / `logger._snExporter` 这对私有字段，并把 peer 限定在已验证的 `>=4.0.5 <4.2.0`（4.0.5 / 4.1.0）；字段形状一变就退回 `exporter()` 通道并明确告警。
 
 peer 怎么被解析到也很关键：官方 profile 的 `pnpm-workspace.yaml` 带 `nodeLinker: hoisted` + **`autoInstallPeers: false`**（`initProfile` 写入，注释写明理由：让缺失的 peer 走 `profiles/node_modules` 安装回退层，「so every plugin shares the installation's single cordis instance instead of a duplicate」）。因此本插件的 9 个 peer **不会**被 pnpm 装进 profile 的 `node_modules`，而是与宿主共用同一份包实例——这一点对 `@deepseek-ai/dsh-scope` 是硬要求：作用域标签是模块内的 `Symbol`，两份实例会让工具投射静默失效（见「连接状态语义」的作用域故障）。如果面板报「作用域隔离失败」，先确认这个配置没被改掉。
 
@@ -457,6 +457,71 @@ DSH 已经有一个接 skillhub 的第三方插件（`@cocofhu/skillhub`），�
 把它显示成「连接 skillhub.cn 失败」是误报——上游一次都没被访问过。所以面板对这两种情况给的是
 不同的话：宿主进程是旧的 → 提示重启宿主；上游真挂了 → 在结果区给告警 + 重试。
 
+## 写盘与运行中：一条链路
+
+用户点一次「保存」，面板要说清两件事：**写进配置了吗**、**运行中的连接真按新配置起来了吗**。
+这两件事以前共用一句「已更新」，于是出现两类静默错误：
+
+- 宿主的更高层配置（home patch / CLI overlay）压着同一个条目：盘上写了、运行中没变，用户看到「成功」；
+- 插件自己拼的 loader 条目与 patch 里的行不是同一个事实源：面板读一处、运行时走另一处。
+
+现在只有一条路（`lib/profile-composition.js`）：
+
+1. **读**当前 profile 的完整有序组合（bundle → profile → home → CLI overlay → telemetry），
+   用官方 `readProfilePatches`；
+2. **改**profile patch 文件的对应行（原子写 + 版本校验，仍是唯一写盘函数）；
+3. **判**这一行在**最终有效配置**里算不算数——官方 `composeEntries`，被覆盖或被禁用就当场失败；
+4. **应用**整份组合——官方 `reconcileProfilePatches(root, patches, name, requiredIds)`，
+   条目由宿主自己挂起来/移除/重启，插件不再调用 `loader.create` / `entry.update` / `parent.remove`；
+5. **验**运行中的条目（live owner 数量；`setDisabled` 另验启用态），失败就把盘上内容写回上一份并再应用一次，
+   然后把"两份失败原因"一起报给调用方。
+
+结果是所有变更型 RPC 都返回同一组字段：`persisted`（`applied` / `unchanged` / `rolled-back`）、
+`live`（`applied` / `unchanged` / `skipped` / `failed`）、`diagnostics`。没有 profile 启动器的部署
+（拿不到 `profileContext` 或官方组合 API）如实报 `live: 'skipped'` + 原因，绝不假装热生效。
+
+### 两个必须知道的细节
+
+- **根 context**：官方组合 API 认的是启动器挂 include 时用的那个根 `ctx`（内部 `WeakMap<Context, Entry>`），
+  插件自己的派生 ctx 取不到；本层统一用 `ctx.root`。
+- **移除前先标 `disabled`**：`cordis-plugin-loader@1.0.6`（0.2.1 宿主）在插件卸载时会
+  `fiber.entry.parent.tree.write()`，对 include 子树条目就是 `Include.write()`——而它写的是
+  **已应用树**（base + patch 行），于是"删一台服务器"可能把兄弟服务器的行烙进 `cordis.yml`。
+  卸载钩子唯一的早退判据是 `fiber.entry.disabled`，所以行在 reconcile 之前先置位。
+  0.2.2 的 include 换成 journal（按 patch/文件归属回写），这个补丁在那里不需要，但无害。
+
+### 契约与产物：同一份定义
+
+RPC 的四张脸（宿主 `@Remote`、`lib/typert.js`、`lib/client.js` 的 descriptor、网关原型）
+只允许有一份定义：`lib/rpc-contract.js`。`scripts/rpc-contract.mjs` 从它**生成**中间两张、
+**校验**第一张的顺序，第四张由测试比对；CI 跑 `npm run contract:check`，手改生成物或加了方法
+没重生成都会当场失败。客户端按能力面拆成若干部件，`lib/client.js` 仍是单文件产物，
+由 `scripts/build-client.mjs` 生成并校验（`--check`）。
+
+## 工具搜索策略
+
+**只有一件事：逐个工具决定它能不能被搜索。**
+
+- 面板「工具搜索」列出 DSH 内置与其他插件的工具，每个可选 **常驻 / 可搜索**，默认常驻。
+  没有全局开关，也没有「推荐 / 全部常驻」这类模式——列表本身就是开关。
+- MCP 服务器不在这张表里重复控制：启停与「延迟 / 全量」仍在 MCP 列表上，一条服务器一个开关。
+- 被标成「可搜索」的工具不进模型上下文，模型要用 `tool_search` 搜到它、拿到 schema 后才能调用。
+  搜索入口与 PTC 的 `run_code` 永远不可被隐藏。
+
+配置落在 `toolLoading.tools`（工具名 → `resident` / `deferred`），项目级写项目自己的
+`.dsh/mcp.json`；没写的工具按常驻处理。
+
+为什么默认常驻：宿主没有公开的工具来源（provenance）接口，插件分不清内置与第三方，
+默认藏任何一个都可能藏掉用户的日常工具；所以默认一个都不动，要不要搜索由用户点名。
+
+**没有可搜的工具时，搜索入口不出现**：延迟集为空（一台延迟的服务器都没有，或全部已发现）时，
+`tool_search` 与目录段一起从模型可见的工具里消失——它虽然仍注册在宿主里，但"此刻搜什么都是空的"，
+发出去只会让模型白搜一轮（issue #9）。这一条与"搜索入口不可被用户策略隐藏"不冲突：前者是
+"没有东西可搜"，后者是"用户不能把它关掉"。
+
+服务器级仍然是三态：条目上 `defer: true` = 延迟、`defer: false` = 常驻（明确覆盖）、
+没写 = 跟随其它设置。这样列表里的「延迟 / 全量」芯片在任何配置下都说了算。
+
 ## 包结构
 
 - `package.json`：声明 `dsh.bundle` 和 Web `dsh.client`
@@ -475,8 +540,10 @@ DSH 已经有一个接 skillhub 的第三方插件（`@cocofhu/skillhub`），�
 - `lib/skills-file-ops.js`：技能文件动作（启停 = 写 frontmatter 两个调用面字段、删除、导入、旧机制残留的迁移读取），按 `(根, 磁盘条目)` 精确定位、找不到即报错不回退
 - `lib/skills-archive.js`：压缩包安全解包（防 zip slip、拒符号链接、按**实际解出字节**卡限额）
 - `lib/skills-frontmatter.js`：frontmatter 校验与逐条诊断（判定逐字照抄宿主，宿主只 warn+skip，用户看不到）
-- `lib/client.js`：响应式 Web UI、Remote 客户端和生命周期清理
-- `lib/typert.js`：Remote 契约描述
+- `lib/client.js`：响应式 Web UI、Remote 客户端和生命周期清理（由 `lib/client/` 若干部件拼成，见 `scripts/build-client.mjs`）
+- `lib/profile-composition.js`：写盘 + 应用的唯一入口（官方 profile 组合 API 的适配层，含回滚与结构化结果）
+- `lib/rpc-contract.js`：RPC 契约的唯一定义（其余三面由它生成或校验）
+- `lib/typert.js`：Remote 契约描述（生成物：`npm run contract:write`）
 - `scripts/theme-spec.mjs`：面板样式对 DSH 主题契约的判据（全圆角配对、圆角刻度、抬升表面、字面色值、等宽字体、别名宿主、别名令牌存在性），由 `test/theme-contract.test.mjs` 断言
 - `scripts/dsh-theme-tokens.mjs`：DSH 主题令牌清单（生成物），存在性判据的数据源
 - `scripts/sync-theme-tokens.mjs`：从宿主源码树重放上面那份清单

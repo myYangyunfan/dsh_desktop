@@ -28,11 +28,15 @@ export async function qrDataUrl(text, { width = 220, margin = 1 } = {}) {
 // 另含 CGNAT 100.64/10（RFC 6598，Tailscale/ZeroTier 默认网段，公网不可路由），保持一致（issue #79）。
 const PRIVATE_IPV4_RE = /^(?:10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|100\.(?:6[4-9]|[7-9]\d|1(?:0\d|1\d|2[0-7]))\.)/;
 
-/** 名称像真实物理网卡的接口（WLAN / Wi-Fi / Ethernet / 以太网 / 有线 / 无线 / en / eth）。 */
-const PHYSICAL_IFACE_RE = /^(?:wlan|wi-?fi|wireless|ethernet|eth\d|en\d|wlp\d|以太网|有线|无线|本地连接)/i;
+/** 名称像真实物理网卡的接口（WLAN / Wi-Fi / Ethernet / 以太网 / 有线 / 无线 / en / eth）。
+ *  注意：`本地连接` 用负前瞻 `(?!\*)` 排除 Windows 的「移动热点 / Internet 连接共享（ICS）」
+ *  虚拟适配器 `本地连接* N`（IP 固定 192.168.137.1，手机连真实 Wi-Fi 时与它不在同一网段，
+ *  扫码不可达）——issue #176。 */
+const PHYSICAL_IFACE_RE = /^(?:wlan|wi-?fi|wireless|ethernet|eth\d|en\d|wlp\d|以太网|有线|无线|本地连接(?!\*))/i;
 
-/** 常见的 VPN / 虚拟网卡名称：手机通常无法通过它们直连电脑。 */
-const VPN_IFACE_RE = /(?:radmin|tailscale|zerotier|easytier|et_|tun|tap|vpn|vethernet|virtual|vmware|virtualbox|wsl|docker|teredo|hamachi|bluetooth|bridge)/i;
+/** 常见的 VPN / 虚拟网卡名称：手机通常无法通过它们直连电脑。
+ *  含 Windows ICS / 移动热点（`本地连接*`）与承载网络 / Wi-Fi Direct 虚拟适配器——issue #176。 */
+const VPN_IFACE_RE = /(?:radmin|tailscale|zerotier|easytier|et_|tun|tap|vpn|vethernet|virtual|vmware|virtualbox|wsl|docker|teredo|hamachi|bluetooth|bridge|本地连接\*|hostednetwork|wifidirect)/i;
 
 /**
  * 从 networkInterfaces() 返回的接口表里选出手机最可能可达的 IPv4。
@@ -67,7 +71,12 @@ export function selectLanIPv4(interfaces) {
     }
   }
 
-  candidates.sort((a, b) => b.score - a.score || a.order - b.order);
+  // 兜底：同分时不选 ICS 保留段 192.168.137.x（移动热点 / 共享虚拟网卡），避免误指向不可达地址。
+  const isIcsSubnet = (ip) => ip.startsWith('192.168.137.');
+  candidates.sort((a, b) =>
+    b.score - a.score ||
+    (isIcsSubnet(a.ip) === isIcsSubnet(b.ip) ? a.order - b.order : isIcsSubnet(a.ip) ? 1 : -1),
+  );
   return candidates[0]?.ip ?? null;
 }
 

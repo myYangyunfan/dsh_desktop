@@ -7,8 +7,11 @@
 import { type Activation } from './activation.ts';
 import type { HotRestartReason } from './hot.ts';
 /** The operations the shop calls. `cancelInstall` is optional because only
- * the install deadline uses it. Answers stay `unknown` until `readChange`
- * reads them: a later harness may add or drop fields. */
+ * the install deadline uses it. `updateBundle` is optional because only dsh
+ * 0.2.2 and later offers it; through 0.2.1 the manager refuses an in-place
+ * update with `already-installed` and has no update operation at all.
+ * Answers stay `unknown` until `readChange`/`readUpdate` reads them: a later
+ * harness may add or drop fields. */
 export interface PluginManagerLike {
     installBundle(spec: string, options: {
         requestId: string;
@@ -18,6 +21,13 @@ export interface PluginManagerLike {
      * not the patch row id (dsh 0.1.7-rc.2 `setPluginEnabled`). */
     setPluginEnabled(id: string, enabled: boolean): Promise<unknown>;
     setBundleEnabled(name: string, enabled: boolean): Promise<unknown>;
+    /** Update an installed npm bundle the way dsh's own Plugins page does:
+     * check, remove, install, and restore the old version when the install
+     * fails (dsh-plugin-manager 0.2.2's `updateBundle`). */
+    updateBundle?(name: string, version: string, options: {
+        requestId: string;
+        registry?: string;
+    }): Promise<unknown>;
     cancelInstall?(requestId: string): Promise<unknown>;
 }
 /** The service, when `service` offers every required operation; else null.
@@ -57,6 +67,21 @@ export interface ManagerChange {
 /** Read one `ChangeResult`. Every field is optional: one a later harness
  * drops reads as absent, never as a crash. */
 export declare function readChange(raw: unknown): ManagerChange;
+/** One `updateBundle` answer, as far as the shop reads it (dsh-plugin-manager
+ * 0.2.2): the versions it moved between, the step that settled, the nested
+ * change `managerOutcome` reads, and the restore attempt dsh makes itself
+ * when the install fails after the removal. `result` stays raw so
+ * `managerOutcome` reads it exactly as it reads an `installBundle` answer;
+ * `restore` stays raw so `readChange` says whether the old version came
+ * back. Every field is optional, the same rule as `readChange`. */
+export interface ManagerUpdate {
+    from: string | null;
+    to: string | null;
+    step: string | null;
+    result: unknown;
+    restore: unknown | null;
+}
+export declare function readUpdate(raw: unknown): ManagerUpdate;
 /** `change`, with every clause naming a `dsh plugin` command removed from
  * `diagnostic` and `output`: dsh's CLI refuses every `plugin` subcommand for
  * the desktop profile, so a step dsh wrote assuming that command exists must
@@ -80,6 +105,15 @@ export interface ManagerOutcome {
     activation?: Activation;
     restartReason?: HotRestartReason;
     detail?: string;
+    /** False when the answer's own recovery is something other than the same
+     * command again, so the failure offers no CLI retry line (design
+     * 2026-11-02-market-borrowings §5, 2026-11-06 amendments). Set for
+     * `already-installed`, whose reason says to uninstall first and where the
+     * shop refuses rather than continues — a fresh install dsh holds as
+     * installed — on purpose; and for any failure whose profile changed, whose
+     * package is on disk (an enable stage that failed), where adding it again
+     * is not the way back. */
+    retry?: false;
 }
 export interface OutcomeContext {
     profile: string;

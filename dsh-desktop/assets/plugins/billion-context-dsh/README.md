@@ -3,7 +3,7 @@
 [中文](./README.md) | [English](./README.en.md)
 
 > **⚠️ 测试版声明——请勿用于生产环境**
-> 本项目（**v0.2.26**）仍处于开发中的测试版。[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 本身也处于**公开测试版**阶段。**请勿将两者用于工程化 / 生产环境**——预期会有破坏性变更与粗糙之处。
+> 本项目（**v0.2.27**）仍处于开发中的测试版。[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 本身也处于**公开测试版**阶段。**请勿将两者用于工程化 / 生产环境**——预期会有破坏性变更与粗糙之处。
 
 <p align="center">
 <strong>衷心感谢以下项目——请给它们一个 ⭐：</strong>
@@ -74,13 +74,12 @@ dsh plugin --profile web add billion-context-dsh
 > **与 DSH 版本的兼容性。** 包把五个运行期 seam 包（`dsh-compaction` /
 > `dsh-session` / `dsh-llm` / `dsh-tools` / `dsh-settings`）都声明为 peer
 > 依赖，共享同一个
-> 范围 `>=0.1.5-alpha.1 <0.1.6-0`——恰好是整条 `0.1.5` 线（所有预发布加最终
-> `0.1.5`）。从 `0.1.5` 线起，会话 replace 操作的协议字段由 `{ op, start, end }`
+> 范围 `>=0.1.5-alpha.1 <0.2.1-0`——覆盖所有已验证的版本线：`0.1.5` 下限加已验证的 `0.1.6` / `0.1.7` / `0.2.0` 线（各线全部预发布加最终版）。从 `0.1.5` 线起，会话 replace 操作的协议字段由 `{ op, start, end }`
 > 改名为 `{ op, startSeq, endSeq }`，且校验严格（只接受这三个字段）；本引擎只
 > 输出新形态，因此在更旧的 DSH（< 0.1.5）上每次 `compress` 都会被宿主在运行时
 > 拒绝（issue #136）——旧版本不再受支持，请先升级 DSH 再安装本发行版。范围
-> 写成显式区间而非 caret 是**有意为之**：caret 会悄悄放进未经验证的 0.1.6+
-> 线。把这五个 seam 包一并声明为 peer（而不只是 `dsh-compaction`），是为了让
+> 写成显式区间而非 caret 是**有意为之**：上界 `0.2.1-0` 挡住未经验证的下一版本线
+> （house rule；原上界 `0.1.6-0` 在 #190 逐线验证后放宽）。`0.2.0` 线还改了两处读取形状——工具结果事件的调用 id 提升到消息级、宿主新增 `developer/message` 工具注册表行——引擎对整条范围按线读取，单一构建即可服务全区间（issue #192）。把这五个 seam 包一并声明为 peer（而不只是 `dsh-compaction`），是为了让
 > 安装在 pnpm 的集成/封存布局下仍能把它们解析到**宿主自己的副本**，而不是
 > 某个与宿主不一致的陈旧嵌套副本。
 >
@@ -99,7 +98,7 @@ npm install billion-context-dsh
 **git 源安装（`github:` 规格，插件商店展示的形态）。** 预构建产物 `dist/` 已提交到仓库，从 git 源安装同样开箱即用——**无需任何构建步骤**，pnpm 11 默认拦截构建脚本（`allowBuilds`）的机制对这个包不构成障碍：
 
 ```bash
-dsh plugin --profile web add github:Tyan66666/billion-context-dsh#v0.2.26
+dsh plugin --profile web add github:Tyan66666/billion-context-dsh#v0.2.27
 ```
 
 建议带 `#<tag>` 安装，拿到与对应 npm 版本完全一致的产物；不带 ref 则装默认分支的最新构建。只有 clone 仓库自行从源码构建（`npm run build`）才需要放行构建。背景与方案取舍见 [docs/git-source-install-design.md](docs/git-source-install-design.md)（issue #92）。
@@ -164,7 +163,7 @@ compaction-acp:
 /acp-prune config reset all
 ```
 
-窗口相关键（`modelContextLimit` / `autoModelContextLimit`）改动会清空窗口探测缓存——下一次 pre-step 按新值重新探测（探测失败也会被缓存，正是靠这个机制在修复网关后重新探测）。无 settings provider 的纯 npm 安装组合下 `/acp-prune config` 降级为指引文案；DSH 0.1.7+ 宿主线（settings 服务已移除 `installSection`，在本插件声明的 peer 区间之外）同样干净降级：启动时记一条 warn，六个键改由组合行 `config:` 调整，引擎与工具不受影响（issue #173）；`settingsEnabled: false` 可整体关闭该集成（组合行专用，不进 settings 层——开关不能关掉自己）。设计细节见 [docs/settings-integration-design.md](docs/settings-integration-design.md)。
+窗口相关键（`modelContextLimit` / `autoModelContextLimit`）改动会清空窗口探测缓存——下一次 pre-step 按新值重新探测（探测失败也会被缓存，正是靠这个机制在修复网关后重新探测）。无 settings provider 的纯 npm 安装组合下 `/acp-prune config` 降级为指引文案；DSH ≥0.1.7 宿主线经更名后的 `SettingsForms` 服务完成写路径（按 profile entry id 寻址，六个键在引擎静态 Config schema 中标 `.volatile()`，提交值自下一次读取起生效、每步重解快照触发诊断）；两种 API 形状都不匹配的宿主干净降级：启动时记一条 warn，引擎与工具不受影响（issues #173/#193）；`settingsEnabled: false` 可整体关闭该集成（组合行专用，不进 settings 层——开关不能关掉自己）。设计细节见 [docs/settings-integration-design.md](docs/settings-integration-design.md)。
 
 **单模式生效（agent preset 的 `compaction` realm）**。先在该 realm 内*禁用（或删除）原有的 `dsh-compaction-basic` 行*，再插入本引擎——同一 realm 内两个后端不能并存：
 
@@ -198,7 +197,7 @@ DSH 的每个模型请求都派生自其 append-only 会话日志（*surface*）
 | 分层蒸馏（T2/T3） | 再次压缩某块的摘要节点 = 蒸馏该块（tier 2），蒸馏 tier-2 块得 tier 3；tier 与内核块 id 持久化进日志，重启后内核状态从日志再水合、可继续蒸馏 |
 | 压缩记账（影子价格） | `shadowedTokenCount`（宿主占用率据此扣减）**用宿主 token-meter 的固定启发价计价**（`ctx.tokenMeter.measure` 优先、按 `heuristicTokens ?? tokens` 读固定启发价基准，`src/host-tokens.ts` 精确镜像兜底）——绝不混用插件内部的 CJK 感知估算（那是展示货币，混用会把宿主账本扣成负数、卡死中文会话，issue #54），也不按路由重定价的 `node.tokens` 计价（0.1.2+ 图片路由计价下那是请求压力价，读它会让含图片区间的 claim 虚报视觉价、同样扣穿账本，issue #103） |
 | 图片/文件块可见性 | `image`/`file` 块没有字符，早先被投影层静默丢弃——于是它们在压缩范围表里没有 ref、不能当边界、不受内核"最近一条 user 消息"保护，还按 0 token 计价（截图会话里最后一条提问可能被整段压掉，issue #117）。现在 `extractText` 用附件的持久元数据生成一行确定性占位符（`[image image/png shot.png 800x600 4.2KB]`、`[file notes.txt 1.0KB]`，与宿主对文件的 handle 文本投影同源），媒体价格读宿主 token-meter 节点上 `tokens` 与 `heuristicTokens` 的差值（该节点只暴露这两个价格：`tokens` 是当前路由下的请求压力，媒体出现时带适配器声明的视觉价，`heuristicTokens` 是与路由无关的固定启发式——差值即路由多收的那部分），并在此之上**叠加宿主固定启发式对媒体引用的结构价**（`hostMediaStructuralPrice`，镜像宿主自己的 `estimateStructuralBlock`）：今天所有适配器都不声明视觉价，差值恒为 0，只读差值会让图片重新看起来"免费"，范围表行尾标注 `[+N images]`；无媒体的会话不做任何额外测量 |
-| 注入指令行卫生 | 宿主会把 AGENTS.md 等策略文件注入会话表面；压缩其**当前副本**会让宿主立刻重注入同一份文件——压缩→重注→压缩死循环（issue #71）。可压缩范围表把注入行当屏障：永不提供、永不计入段；手动压缩（模型的 compress 工具、人用的 /acp-prune compress 命令）若覆盖某文件的当前副本都会被**直接拒绝**（报错点名行号，并提示过期的旧副本可以压），因为压当前副本没有收益——宿主必重贴。按 `source.changes[].scope`（= 一个文件）分组，只有每组最新副本受保护——被更新取代的旧副本可以安全压缩 |
+| 注入指令行卫生 | 宿主会把 AGENTS.md 等策略文件注入会话表面；压缩其**当前副本**会让宿主立刻重注入同一份文件——压缩→重注→压缩死循环（issue #71）。可压缩范围表把注入行当屏障：永不提供、永不计入段；手动压缩（模型的 compress 工具、人用的 /acp-prune compress 命令）若覆盖某文件的当前副本都会被**直接拒绝**（报错点名行号，并提示过期的旧副本可以压），因为压当前副本没有收益——宿主必重贴。按 `source.changes[].scope`（= 一个文件）分组，只有每组最新副本受保护——被更新取代的旧副本可以安全压缩。skill 目录（`<available_skills>`，dsh-tool-skill 注入）也在同一保护集里，但原因不同：它的重发判定基于目录 digest，感知不到「可见副本已被折叠」——压掉后永不重发，模型永久丢失 skill 发现能力（issue #185）。最新可见目录同样硬拒绝（source 字段缺失时凭正文里的 `<available_skills>` 标记识别），被取代的旧目录可安全压缩自 issue #196 起，**最新一条真实用户回合**（活动提问）同样受硬拒绝保护：覆盖它的 span 会被拒绝并点名可重切的区间（理由单独说明「活动用户消息必须保持可见」），被更新回合取代的旧用户消息仍可正常压缩 |
 
 承载性的压缩指引（工具、哲学、摘要规则、tier 蒸馏/浓缩规则）注册为一次性系统提示段；每条 nudge 携带精简版（效率提示 + 哲学 + 上下文分解 + 压缩规则 + 范围表 + 批量提示）。刻意**不做自动摘要**：自动策略只 nudge 模型（`compactIfNeeded` 返回 null）。
 
@@ -220,6 +219,7 @@ DSH 的每个模型请求都派生自其 append-only 会话日志（*surface*）
 
 - **摘要标源（模型自写摘要的框架行）**：每条压缩摘要在写入时前置 `[Model-written summary — not user words; re-verify any obligations before relying on them]`——同时写进持久化摘要事件与其 checkpoint 节点（同一份文本），投影路径对旧块幂等补框。目的：阻止模型把摘要里的义务句当成用户原话直接执行。
 - **瘦身 nudge**：压缩哲学/规则段不再随每次 nudge 重复（它们已在系统提示里）；nudge 正文只保留触发框架 + 上下文分解 + 范围表。模板路径（`config.prompts.nudge`）同样摘除这些段落。设计背景：[docs/injection-governance-design.md](docs/injection-governance-design.md)。
+- **未移植的上游能力 — `acp_rule`（永久规则层）**：上游 billion-context-pi 还有第五个模型工具 `acp_rule`（opt-in：`"rules": true`），用于在对话中途登记**能穿越压缩**的原则级提醒。本移植版尚未包含它。**内核侧阻塞已解除**：本仓 pin 已升到 acp-kernel **0.0.101**，其入口已导出完整规则 API（`RULE_TOOL_NAME` / `addRule` / `removeRule` / `clearRules` / `formatRulesForPrompt` / `formatRulesList` / `resolveRuleLimits`，来自 `dist/rules.js`），以及 `RuleRecord` / `RulesConfig` 类型与 state 里的 `rules` / `nextRuleId` 字段——剩下的是移植工作本身（第五工具 + `config.rules` 接线），不再是「没有可接的内核接口」。移植计划见 [issue #189](https://github.com/Tyan66666/billion-context-dsh/issues/189)（文档兜底 → pin bump → 用内核 API 接第五工具）。过渡期变通：长期约定写入 AGENTS.md（注入行受屏障/pin 机制保护，天然穿越压缩），或经 `config.prompts.systemPrompt` 静态注入——两者都不支持会话中途登记/列举/撤销规则。
 
 ## 上游项目与致谢
 
@@ -272,8 +272,35 @@ DSH 的每个模型请求都派生自其 append-only 会话日志（*surface*）
 - **运行时热切换**：预设目前走组合配置（安装 / `cordis.patch.yml`）；待 #75 的 settings.yaml 热加载落地后，可在 `/acp-prune config` 里改。本 PR 先让它在组合层可用。
 - **反向窗口直接报错**：与显式阈值合并后若出现 `min > max`、`max > emergency` 或 `min > emergency`（例如 `preset: 'preserve'` 配 `nudgeMaxContextLimitPct: 0.5`），引擎在构造期抛错并列出三个值。内核对这种配置只打警告、不会拒绝，所以这道校验由引擎在 `resolveAcpConfig` 里补上。
 - **与宿主 80% 线赛跑的是 `max`**：反复触发的过限提醒（`OVER-LIMIT`）由 `max` 决定；`preserve` / `relaxed` 的 emergency（0.93 / 0.90）高于宿主 compaction-basic 的 80% 线，只是超过它之后的标签升级，宿主先压缩时不会到达。
-- **`min` 是首见提醒与 T2/T3 块数触发的地板**：内核 0.0.63 在运行时读它两处——① `firstSightMassReady`（从未提醒过、还没有基线、用量 ≥ `min` 且待压内容达到增长下限时立刻提醒一次，理由串带 `[first-sight mass]`）；② `tierCountUsageFloor`（T2/T3 的「块数达标」触发同样要求用量 ≥ `min`）。常规 T1 增长提醒不看 `min`（由 `max` 与 `growthRatio` 决定），所以五档之间的主要差异仍来自 `max` 与 `emergency`，但更低的 `min` 会让首见提醒来得更早。
+- **`min` 是首见提醒的地板**：内核（0.0.101）在运行时只读它一处——`firstSightMassReady`（从未提醒过、还没有基线、用量 ≥ `min` 且待压内容达到增长下限时立刻提醒一次，理由串带 `[first-sight mass]`）。T2/T3 的「块数达标」触发在 0.0.101 里**不再**要求用量 ≥ `min`（0.0.63 的 `tierCountUsageFloor` 已移除），常规 T1 增长提醒也从不看 `min`（由 `max` 与 `growthRatio` 决定），所以五档之间的主要差异来自 `max` 与 `emergency`，更低的 `min` 只让首见提醒来得更早。另外，T2/T3 的**块数触发阈值**在 0.0.101 里默认从 5/10 个块改为 **1000/2000** 个块（`tiers.tier2Trigger` / `tier3Trigger`，引擎不覆写 `tiers`），所以实践中 T2/T3 提醒由质量路径触发，块数路径基本不会命中。
 - **两个暂未纳入的旋钮**：原始需求里的 `growthRatio`（内核已有 `nudge.growthRatio`，可经 `coreOverrides` 调）和 `protectedLastMessages`（≈ 内核 `preserveRecentMessages`）目前不是本项目的一等旋钮；是否采纳为命名键 / UI 项由维护者决定，未擅自并入预设。
+
+## 已修复的问题
+
+> 下面这条是本项目自己撞出来的真实故障。已在内核 **acp-kernel 0.0.101** 修复，本仓 **v0.2.27** 起 pin 到该版本；老版本（≤ v0.2.26）仍会遇到。
+
+### 长会话撞上内核引用上限：`ref capacity exhausted: cannot allocate beyond m99999`（已修复）
+
+超长会话（约数万条消息级事件）跑完后，整轮可能直接失败，界面显示：
+
+```text
+本轮运行失败
+ref capacity exhausted: cannot allocate beyond m99999
+```
+
+这是上游 [acp-kernel](https://github.com/ranxianglei/acp-kernel) 的 5 位引用编号空间（`m00001`–`m99999`）被**累计**见过的消息数耗尽——引用编号在会话内只增不复用（#176 的槽复用因会让摘要里的旧 tag 静默指向另一条消息而被 #191 回退，#191 确立该不变量），与当前上下文大小无关。当时确认内核 0.0.29、本仓当时 pin 的 0.0.63、以及当时的 npm 最新版 0.0.98 全部同样命中（`refs.ts` 的 `MAX_INDEX = 99999`）。**已在 acp-kernel 0.0.101 修复**：两版 `dist/index.js` 的常量实测为 `99999` → `9999999`，本仓 v0.2.27 起 pin 到该版本——**升级到 v0.2.27 及以上即不再撞限，旧会话无需重建**。
+
+**压缩救不回，重启也救不回**：本插件每轮把**整条日志**（含已被摘要遮蔽的部分）交给内核（T2/T3 蒸馏需要完整日志而不只是可见面——见 src/messages.ts:315 `allLogMessages` 的注释），而内核流水线的第一个节点就是 `assign-refs`，先给日志里的所有消息编号、然后才谈任何压缩决策。所以：
+
+- **压缩救不回**：报错在任何压缩决策之前抛出，`compress` 工具自己也走同一条路径；
+- **重启 dsh 也救不回**：内核状态是纯内存态、不落盘，重启后第一轮就要为整条日志从头重新编号——日志已超过约 10 万条消息级事件时当场再次撞限。
+
+也就是说，在 0.0.101 之前的内核上，对本插件而言**「日志超过约 10 万条消息级事件 = 该会话在 ACP 下永久不可用」是硬墙**。正解是内核把引用位宽从 5 位放宽到 7 位：已在 [acp-kernel#483](https://github.com/ranxianglei/acp-kernel/issues/483) 提请并在 **0.0.101** 发布（追踪见 [docs/upstream-tracker.md](docs/upstream-tracker.md)，issue [#187](https://github.com/Tyan66666/billion-context-dsh/issues/187) 已 resolved）。
+
+**处置**：
+
+1. **升级到 v0.2.27 及以上**（pin 含 acp-kernel 0.0.101）——撞限不再发生，**旧会话继续可用**，不必新建会话。
+2. 暂时无法升级时：**换回规则式压缩**——profile 里禁用 `compaction-acp`、启用宿主自带的 `compaction-basic`，绕开这条代码路径（会话本身仍可继续）；或 **换新会话**——把需要的上下文手动带过去，新会话的引用从零开始计数，等它自己的日志接近约 10 万条时才会再撞这堵墙。
 
 ## 开发
 
@@ -286,6 +313,8 @@ npm run test:e2e   # 端到端宿主回归：真实 agent 循环 + 脚本化假 
 ```
 
 端到端回归（`scripts/e2e/`）在进程内组装真实 DSH 宿主（cordis + agent-loop + DeepSeek 适配器），指向脚本化假 LLM 服务，挂载本引擎作为压缩后端，然后断言持久化事件日志：compaction 起止配对、durable replace 节点、严格 tool-call/result 配对、nudge 注入节奏；以及假 LLM **实际收到的请求体**（wire 级 prompt-cache 字节稳定性：envelope、`tools` 数组、leading message，无 compaction 场景全程 append-only）。背景与取舍见 [docs/e2e-harness-design.md](docs/e2e-harness-design.md)（issue #120）。
+
+另有一层单元级 durable 行准入网（`tests/durable-admission.test.ts`，issue #183）：把引擎写出的每种持久化行形状过一遍真实发布版 JSONL 存储的完整往返（append→读回→逐行比对 + 负向对照），钉住「我们写的每一行都能被声明 peer 区间内的 writer 编码并读回」。
 
 `dist/index.js` 自包含，仅外链 `@deepseek-ai/*` 接缝包（由宿主部署提供）。
 

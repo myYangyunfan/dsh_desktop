@@ -41,13 +41,13 @@ Skills can be installed in several locations, and DSH searches them in priority 
 | 500 | `<AGENTS_HOME>/skills` | Global |
 | 600 | Bundled | **Read-only**, cannot be enabled/disabled or deleted |
 
-When a same-named skill appears in multiple scopes, the panel marks **which copy takes effect and which is shadowed** — the shadowed copy is not received by the model, but you really did install it. The effective copy is determined by the **lowest** priority number, regardless of its position in the list. ⚠️ Boundary: the Host reports only the **effective** copy by name, so a losing copy is visible only when **both invocation faces are off** (= disabled, and such entries do still appear in the Host's directory); when both copies are invocable, the losing copy is currently absent from the panel's data (reporting it would require scanning every root yourself, see the same-named copy scan next to TODO row 21).
+The Host reports **one winning entry per name within each catalog query**. The panel merges global and project queries, so a global winner and a project winner can both appear; lower-priority physical copies discarded within one query do not appear automatically. A skill with both invocation faces off can still win and remain in the catalog. Turning invocation off does not reveal a losing copy or make it take effect. Install targets describe allowed destinations, not installed skills or effective copies. Managing every losing copy requires a separate physical inventory capability.
 
 ### When the same directory is pointed to from two places
 
 The two locations in the priority table **may resolve to the same directory** — most commonly when `DSH_HOME` lives inside the workspace: set `DSH_HOME=D:\DSH\.dsh` with the workspace at `D:\DSH` (itself a git root), and the project-level `.dsh/skills` and the global `<DSH_HOME>/skills` are the same physical directory.
 
-The panel deduplicates by **physical location**: one file occupies one row, keeping the copy with the higher priority (that is, the one the model actually receives); in the install-target candidates the same directory likewise appears only once. Conversely, same-named skills in **different directories** always get a row each — that is genuine cross-scope shadowing, and merging it would hide the copy you really installed.
+The panel deduplicates **entries returned by the Host** by physical location: one file occupies one row, retaining the higher-priority source identity. An install directory likewise appears only once. Same-named files returned by different queries remain separate; this does not mean that every lower-priority copy in every directory has been enumerated.
 
 By the same token, when a skill directory is itself a **symlink** (pointing them at an external sync library is a common practice), the panel can still locate it: the mismatch between the display path the Host reports and the real path has already been handled, so it does not degrade into "location unknown".
 

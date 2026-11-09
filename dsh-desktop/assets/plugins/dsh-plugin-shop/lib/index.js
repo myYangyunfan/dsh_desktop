@@ -180,11 +180,20 @@ function httpOrigin(baseUrl, fetchImpl) {
 * Pure — bytes in, a path-to-bytes map out. It handles exactly what `npm
 * pack` emits and refuses everything else loudly, because the alternative to
 * a small strict reader is a fourth runtime dependency (design §4). */
-/** Bytes up to the first NUL, as ASCII. Tar pads its fixed-width text fields
-* with NULs, so a plain toString would carry them into the path. */
+/** Bytes up to the first NUL, one character for each byte. Tar pads its
+* fixed-width text fields with NULs, so a plain toString would carry them into
+* the path.
+*
+* `latin1`, not `ascii`: a name is bytes, and `ascii` drops the high bit of
+* every one, so a name written in UTF-8 came back as a different string (`é`,
+* C3 A9, as `C)`) that could be another file's name. One character for each
+* byte is lossless and is the same string for a name that is ASCII, which is
+* every name the npm transport reads. A caller that wants the characters of a
+* UTF-8 name decodes `Buffer.from(name, 'latin1')`, or looks a name up as
+* `Buffer.from(wanted, 'utf8').toString('latin1')`. */
 function cstring(field) {
 	const end = field.indexOf(0);
-	return field.subarray(0, end === -1 ? field.length : end).toString("ascii");
+	return field.subarray(0, end === -1 ? field.length : end).toString("latin1");
 }
 /** Tar sizes are octal text, NUL- or space-terminated. An unparseable size
 * would desynchronise every subsequent header, so it throws rather than
@@ -206,13 +215,20 @@ function assertContained(path) {
 /**
 * Parse an uncompressed tar archive into path → bytes.
 *
-* Directory entries and every non-regular type (symlinks, pax and GNU
-* extension headers) are skipped: npm packs regular files under `package/`,
-* and a catalog tarball that needs anything else is not one we published.
+* Directory entries and the type flags that carry no file are skipped: npm
+* packs regular files under `package/`, and a catalog tarball that needs
+* anything else is not one we published. A pax (`x`) or GNU (`L`) header is not
+* a file either, but it NAMES the next one: a path too long or too wide for a
+* ustar header arrives this way, and skipping the header without reading it
+* left its file under a truncated name, reported missing from an archive that
+* ships it ({@link pathFromPax}).
+* Each path is spelled by its bytes, one character each ({@link cstring}).
 */
 function readTar(buffer) {
 	const files = /* @__PURE__ */ new Map();
 	let offset = 0;
+	/** The name a pax or GNU header gives the header after it. */
+	let extendedPath = null;
 	while (offset + 512 <= buffer.length) {
 		const header = buffer.subarray(offset, offset + 512);
 		if (header.every((byte) => byte === 0)) break;
@@ -220,12 +236,48 @@ function readTar(buffer) {
 		const prefix = cstring(header.subarray(345, 500));
 		const size = parseOctal(header.subarray(124, 136));
 		const typeflag = String.fromCharCode(header[156] ?? 0);
-		const path = prefix === "" ? name : `${prefix}/${name}`;
-		offset += 512;
-		if (typeflag === "0" || typeflag === "\0") files.set(assertContained(path), buffer.subarray(offset, offset + size));
-		offset += Math.ceil(size / 512) * 512;
+		const data = buffer.subarray(offset + 512, offset + 512 + size);
+		offset += 512 + Math.ceil(size / 512) * 512;
+		if (typeflag === "x") {
+			extendedPath = pathFromPax(data) ?? extendedPath;
+			continue;
+		}
+		if (typeflag === "L") {
+			extendedPath = cstring(data);
+			continue;
+		}
+		const path = extendedPath ?? (prefix === "" ? name : `${prefix}/${name}`);
+		extendedPath = null;
+		if (typeflag === "0" || typeflag === "\0") files.set(assertContained(path), data);
 	}
 	return files;
+}
+/**
+* The `path` record of a pax extended header, in the reader's spelling, or null
+* where the header names none.
+*
+* A pax record is `<length> <key>=<value>\n`, where `<length>` counts the whole
+* record in bytes, its own digits included. The value is UTF-8 text, and the
+* reader spells a name one character for each byte.
+*/
+function pathFromPax(data) {
+	let at = 0;
+	while (at < data.length) {
+		const space = data.indexOf(32, at);
+		if (space === -1) return null;
+		const length = Number.parseInt(data.subarray(at, space).toString("latin1"), 10);
+		if (!Number.isSafeInteger(length) || length <= 0 || at + length > data.length) return null;
+		const record = data.subarray(at, at + length);
+		const equals = record.indexOf(61, space - at);
+		if (equals !== -1) {
+			if (record.subarray(space - at + 1, equals).toString("utf8") === "path") {
+				const end = record[record.length - 1] === 10 ? record.length - 1 : record.length;
+				return record.subarray(equals + 1, end).toString("latin1");
+			}
+		}
+		at += length;
+	}
+	return null;
 }
 //#endregion
 //#region src/host/npm-origin.ts
@@ -520,6 +572,45 @@ function holderLabel(spec, name) {
 	if (spec.trim() === "") return "\"\"";
 	return spec.length > HOLDER_SPEC_CAP ? `${spec.slice(0, 79)}…` : spec;
 }
+//#endregion
+//#region src/shared/npm-name.ts
+/**
+* The npm package-name grammar a catalogue row's `name` must satisfy.
+*
+* ONE definition, read in three places: the Host's entry schema
+* (`host/catalog.ts`), the registry's gate (`registry/scripts/src/gate.ts`)
+* and `emit`'s last-line invariant. The dependency can only point this way —
+* the package's tsconfig pins `rootDir: "src"`, so the registry reaches in
+* and nothing here can reach out (the same reason `shop-like.ts` lives here).
+*
+* Why it is narrower than npm's own rule: `validate-npm-package-name` accepts
+* a scope beginning with `_` or `.` — `@_iluxury/dsh-routerai-price-watcher`
+* is valid for a NEW publication — while this grammar requires the scope's
+* first character to be a letter or digit. That was a deliberate argv-safety
+* choice when the rule lived only in the client: the name becomes half of an
+* install spec, and everything this excludes is shell punctuation. It stopped
+* being merely a client rule the moment a catalogue shipped, because the
+* clients parse the WHOLE data file as one zod object: a single name outside
+* this grammar costs every listing, not one. On 2026-10-30
+* `@_iluxury/dsh-routerai-price-watcher` did exactly that — valid on npm, no
+* gate rule to catch it, and every 0.8.0+ shop answered 「暂时无法读取目录」
+* for a 21,493-row catalogue. The gate now admits only what this parses.
+*
+* The narrow side is therefore the WIRE CONTRACT, frozen by the installed
+* base: widening it in a client release also widens the gate, because this is
+* one constant, and the catalogue would then carry names every older client
+* still refuses. Do not widen it without a way to know which client versions
+* are installed; npm's per-version download counts cannot answer that (the
+* measurement is in `emit.ts`'s `peers` comment).
+*
+* @module shared/npm-name
+*/
+/**
+* An optional `@scope/`, then a name starting with a letter or digit and
+* continuing in lowercase letters, digits, `.`, `_` or `-`. No uppercase, no
+* leading dot or underscore on either segment, and no shell punctuation.
+*/
+const CATALOG_NPM_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
 /** A cached catalog younger than this is served without touching the network. */
 const FRESH_MS = 3e5;
 /** How long a probe may take before the race gives up on that origin. Long
@@ -550,9 +641,6 @@ async function withCommitBudget(id, what, start) {
 		clearTimeout(timer);
 	}
 }
-/** npm's package-name grammar. The value becomes half of an install spec, so
-* aliases and shell punctuation must not reach the CLI. */
-const NPM_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
 /** Canonical SemVer 2.0.0, including legal prerelease/build metadata. */
 const NPM_VERSION = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?(?:\+[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*)?$/;
 /** The repository binding used to build a GitHub install spec. */
@@ -650,13 +738,18 @@ const entrySchema = z.object({
 	}).optional(),
 	dshPeers: z.record(z.string(), z.string()).optional(),
 	manifestVersion: z.string().optional(),
+	engines: z.string().optional(),
+	dependencies: z.number().int().nonnegative().optional(),
+	bin: z.array(z.string()).optional(),
+	installScripts: z.boolean().optional(),
 	unpackedSize: z.number().int().nonnegative().optional(),
 	installSize: z.number().int().nonnegative().optional(),
 	archived: z.boolean().optional(),
-	forked: z.boolean().optional()
+	forked: z.boolean().optional(),
+	icon: z.string().regex(/^[0-9a-f]{64}$/).optional()
 }).superRefine((entry, ctx) => {
 	if (entry.source === "npm") {
-		if (!NPM_NAME.test(entry.name)) ctx.addIssue({
+		if (!CATALOG_NPM_NAME.test(entry.name)) ctx.addIssue({
 			code: "custom",
 			path: ["name"],
 			message: `npm entry name ${JSON.stringify(entry.name)} is outside npm package-name grammar`
@@ -734,6 +827,10 @@ const pointerSchema = z.object({
 	stars: z.object({
 		url: z.string(),
 		sha256: z.string()
+	}).optional(),
+	icons: z.object({
+		url: z.string(),
+		sha256: z.string()
 	}).optional()
 });
 const nodeFs$1 = {
@@ -752,6 +849,34 @@ function parseStarsText(text) {
 		if (typeof parsed.stars !== "object" || parsed.stars === null) return {};
 		const out = Object.create(null);
 		for (const [key, value] of Object.entries(parsed.stars)) if (typeof value === "number") out[key] = value;
+		return out;
+	} catch {
+		return {};
+	}
+}
+/** The longest a data URL holding MAX_CATALOG_ICON_BYTES can be: the base64
+* alphabet is 4 characters per 3 bytes, and the prefix is the longest of the
+* four media types' spellings. */
+const MAX_ICON_DATA_URL_LENGTH = 26 + Math.ceil(32768 / 3) * 4;
+/** The four types a catalogue icon can have (design §6.1); nothing else
+* reaches an `img.src`. */
+const ICON_DATA_URL = /^data:image\/(?:svg\+xml|png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
+/**
+* Read and verify an icons sidecar; ANY irregularity degrades to no icons —
+* icons are presentation, and they never cost the reader the catalog (§7).
+* The checks are the grammar the build writes: a 64-hex sha256 keying a
+* `data:` URL of the four types, each within the per-icon bound.
+*/
+function parseIconsText(text) {
+	try {
+		const parsed = JSON.parse(text);
+		if (typeof parsed.icons !== "object" || parsed.icons === null || Array.isArray(parsed.icons)) return {};
+		const out = Object.create(null);
+		for (const [key, value] of Object.entries(parsed.icons)) {
+			if (!/^[0-9a-f]{64}$/.test(key)) return {};
+			if (typeof value !== "string" || value.length > MAX_ICON_DATA_URL_LENGTH || !ICON_DATA_URL.test(value)) return {};
+			out[key] = value;
+		}
 		return out;
 	} catch {
 		return {};
@@ -806,13 +931,19 @@ async function loadCatalog(options) {
 			const starsText = fsImpl.read(cachePath(cacheDir, pointer.stars.url, "stars"));
 			if (createHash("sha256").update(starsText).digest("hex") === pointer.stars.sha256) stars = parseStarsText(starsText);
 		} catch {}
+		let icons = {};
+		if (pointer.icons !== void 0) try {
+			const iconsText = fsImpl.read(cachePath(cacheDir, pointer.icons.url, "icons"));
+			if (createHash("sha256").update(iconsText).digest("hex") === pointer.icons.sha256) icons = parseIconsText(iconsText);
+		} catch {}
 		return {
 			schemaVersion: pointer.schemaVersion,
 			builtAt: pointer.builtAt,
 			entries: data.plugins,
 			denied: data.denied,
 			notAShop: data.notAShop,
-			stars
+			stars,
+			icons
 		};
 	};
 	if (!refresh && fsImpl.exists(indexPath)) {
@@ -879,13 +1010,26 @@ async function loadCatalog(options) {
 			}
 		} catch {}
 	}
+	let icons = {};
+	if (pointer.icons !== void 0) {
+		const sidecar = pointer.icons;
+		try {
+			const iconsCachePath = cachePath(cacheDir, sidecar.url, "icons");
+			const iconsText = await withCommitBudget(handle.id, `serve ${sidecar.url}`, (signal) => handle.file(sidecar.url, signal));
+			if (createHash("sha256").update(iconsText).digest("hex") === sidecar.sha256) {
+				icons = parseIconsText(iconsText);
+				fsImpl.write(iconsCachePath, iconsText);
+			}
+		} catch {}
+	}
 	const snapshot = {
 		schemaVersion: pointer.schemaVersion,
 		builtAt: pointer.builtAt,
 		entries: data.plugins,
 		denied: data.denied,
 		notAShop: data.notAShop,
-		stars
+		stars,
+		icons
 	};
 	try {
 		fsImpl.write(dataCachePath, dataText);
@@ -1020,7 +1164,7 @@ function validateInstall(snapshot, args, installedSpec) {
 	if (denied !== void 0) return {
 		ok: false,
 		code: "denied",
-		detail: `dsh-plugin-shop: ${args.name} is denied: ${denied.detail}`
+		detail: `dsh-plugin-shop: installation of ${args.name} is blocked: ${denied.detail}`
 	};
 	let entry;
 	if (args.source === void 0) {
@@ -1028,7 +1172,7 @@ function validateInstall(snapshot, args, installedSpec) {
 		if (named.length > 1) return {
 			ok: false,
 			code: "ambiguous-identity",
-			detail: `dsh-plugin-shop: the catalog holds ${named.length} entries named ${args.name}, and this request does not say which one; refresh the shop and try again`
+			detail: `dsh-plugin-shop: the catalog has ${named.length} plugins named ${args.name}. Refresh the shop and select the one you want to install.`
 		};
 		entry = named[0];
 	} else {
@@ -1053,7 +1197,7 @@ function validateInstall(snapshot, args, installedSpec) {
 	if (entry.version !== args.version) return {
 		ok: false,
 		code: "version-mismatch",
-		detail: `dsh-plugin-shop: ${args.name}@${args.version} is not the cataloged version (${entry.version})`
+		detail: `dsh-plugin-shop: you requested ${args.name}@${args.version}, but the catalog lists ${entry.version}. Refresh the shop and try again.`
 	};
 	if (installedSpec !== void 0) {
 		const verdict = specVerdict(entry, installedSpec);
@@ -1062,19 +1206,182 @@ function validateInstall(snapshot, args, installedSpec) {
 			return {
 				ok: false,
 				code: "name-taken",
-				detail: `${verdict === "unknown" ? `dsh-plugin-shop: ${args.name} is already installed from ${holder}, which the shop cannot identify as any catalog entry.` : `dsh-plugin-shop: ${args.name} is already installed from ${holder}.`} A profile holds one dependency per name, so installing this one would overwrite it and the plugin you have would be gone. Uninstall it first if you mean to switch.`
+				detail: `${verdict === "unknown" ? `dsh-plugin-shop: ${args.name} is already installed from ${holder}. The shop could not match it to a catalog entry.` : `dsh-plugin-shop: ${args.name} is already installed from ${holder}.`} Installing this plugin would replace it, since a profile can hold only one plugin of each name. To switch, uninstall the existing plugin first.`
 			};
 		}
 	}
 	if (entry.tier !== "verified" && !args.acknowledged) return {
 		ok: false,
 		code: "needs-acknowledgement",
-		detail: entry.tier === "verified-stale" ? `dsh-plugin-shop: ${args.name} is verified-stale: a newer version than the review is current and has not been reviewed; acknowledgement is required` : `dsh-plugin-shop: ${args.name} is ${entry.tier}-tier and has not been reviewed; acknowledgement is required`
+		detail: entry.tier === "verified-stale" ? `dsh-plugin-shop: a different version of ${args.name} was reviewed. The current version has not been reviewed. Confirm the installation to continue.` : `dsh-plugin-shop: ${args.name} is a community plugin and has not been reviewed. Confirm the installation to continue.`
 	};
 	return {
 		ok: true,
 		entry
 	};
+}
+//#endregion
+//#region src/host/dsh-cli.ts
+/**
+* How to start the dsh CLI as a child process.
+*
+* On POSIX this is `spawn('dsh', …)` and there is nothing to decide. On
+* Windows there is no form of that call which can work: npm installs a CLI as
+* `dsh`, `dsh.cmd` and `dsh.ps1` shims with no `.exe`, libuv resolves a bare
+* name against `.com` and `.exe` only, and node has refused to spawn a `.cmd`
+* without a shell since the 2024 batfile argument-injection fix. Measured on
+* Windows 11 with dsh 0.1.1-rc.2 (2026-09-02): the bare name gives ENOENT,
+* the resolved `.cmd` shim throws EINVAL *synchronously* out of `spawn()`.
+*
+* `shell: true` — what the shim exists for, and what dsh's own pnpm spawn
+* uses — is not available to us. node hands cmd.exe a joined, UNQUOTED
+* command string, and our argv carries catalog data: a `github:` entry's spec
+* is `github:owner/slug#<sha>&path:<subdir>`, `&` is a cmd command separator,
+* and `subdir` comes from npm. That is a command-injection surface on
+* untrusted input, so the shop resolves the CLI's JS entry and runs it through
+* node instead — no shell, and node escapes the argv itself.
+*
+* Pure core, impure shell: `dshCommand` decides, `resolveDshScript` takes the
+* process snapshot and a filesystem seam as parameters (the same shape as
+* `detectSupervisor(env, proc)` and `RepoPinFs`).
+*/
+/** The npm package the dsh CLI is published as. */
+const DSH_PACKAGE = "@deepseek-ai/dsh";
+/** The bin name that package declares (`bin: { dsh: 'lib/bin.js' }`), which is
+* also the unscoped name its plain-string `bin` form would take. */
+const DSH_BIN_NAME = "dsh";
+/**
+* Whether dsh's CLI refuses this profile outright: `desktop`, in any letter
+* case, "is managed exclusively by the Electron application" — refused for a
+* launch and for `dsh plugin` alike (`rejectElectronProfile` in the CLI's
+* `lib/bin.js`, the same in 0.1.5-rc.3 and 0.1.7-rc.2). Every command the
+* shop spawns names a profile, so none of them can run for this one.
+*/
+function isDesktopProfile(profile) {
+	return profile.toLowerCase() === "desktop";
+}
+/**
+* A `dshBin` that names a JavaScript entry rather than a program.
+*
+* Such a file cannot be spawned anywhere: Windows needs a PE image, and POSIX
+* needs a shebang plus the exec bit that an entry shipped inside a package
+* does not reliably carry. The npm-installed CLI's real entry IS one of these
+* — `bin: { dsh: 'lib/bin.js' }` — so a caller pinning a specific dsh
+* installation has no other file to name, and {@link resolveDshScript} hands
+* back exactly this shape for the branch below to run through node.
+*
+* Platform-independent on purpose. The `dsh` branch is a Windows workaround
+* for PATH lookup; this is not a workaround at all but the only correct way
+* to start a JS entry, and gating it on Windows would leave a POSIX caller
+* with an ENOEXEC naming a file that is perfectly valid.
+*
+* The one thing it gives up is a `.js` entry whose shebang names some other
+* interpreter. `dshBin` names the dsh CLI, which is a node program, so the
+* trade is one hypothetical against a shape the CLI actually ships.
+*/
+const JS_ENTRY = /\.[cm]?js$/;
+/**
+* The command that starts `bin` through `execPath` when `bin` names a
+* JavaScript entry, or `null` when `bin` is a program to spawn as given.
+*
+* Extracted from {@link dshCommand} so `prefetch.ts` can reach the same
+* decision for pnpm without a second copy of {@link JS_ENTRY}: both need it
+* for the same two reasons — a packaged JS entry is what a caller pinning an
+* installation can name, and a `.mjs` test fixture is the only fake CLI that
+* can be spawned on Windows at all.
+*/
+function jsEntryCommand(bin, args, execPath) {
+	if (!JS_ENTRY.test(bin)) return null;
+	return {
+		command: execPath,
+		args: [bin, ...args]
+	};
+}
+/**
+* The command that starts the dsh CLI with `args`.
+*
+* For the bare name the node route replaces exactly one thing: looking `dsh`
+* up on PATH, which on Windows can never succeed. A `dshBin` naming a
+* specific file is the caller's explicit choice and is spawned as given —
+* honoring it and reporting the real failure beats silently running something
+* else — with one exception, {@link JS_ENTRY}, where "as given" is not a
+* runnable command on any platform and node is what the caller must have
+* meant.
+*/
+function dshCommand(options) {
+	const { dshBin, args, platform, execPath, script } = options;
+	if (dshBin === DSH_BIN_NAME) {
+		if (platform === "win32" && script !== null) return {
+			command: execPath,
+			args: [script, ...args]
+		};
+		return {
+			command: dshBin,
+			args: [...args]
+		};
+	}
+	return jsEntryCommand(dshBin, args, execPath) ?? {
+		command: dshBin,
+		args: [...args]
+	};
+}
+/** The dsh entry a package manifest declares, or null when this manifest is
+* not the dsh CLI. Everything read here is outside our control, so a manifest
+* that will not parse is simply not a match. */
+function declaredEntry(fs, manifestPath) {
+	let parsed;
+	try {
+		parsed = JSON.parse(fs.read(manifestPath));
+	} catch {
+		return null;
+	}
+	const { name, bin } = parsed;
+	if (name !== "@deepseek-ai/dsh") return null;
+	const declared = typeof bin === "string" ? bin : bin?.[DSH_BIN_NAME];
+	if (typeof declared !== "string") return null;
+	const entry = join(dirname(manifestPath), declared);
+	return fs.exists(entry) ? entry : null;
+}
+/** The dsh entry declared by the package that OWNS `script` — the nearest
+* `package.json` at or above it, and only that one. A script whose owner is
+* some other package is not dsh's, so the search stops rather than walking up
+* into an unrelated workspace root. */
+function owningEntry(fs, script) {
+	let dir = dirname(resolve(script));
+	for (;;) {
+		const manifestPath = join(dir, "package.json");
+		if (fs.exists(manifestPath)) return declaredEntry(fs, manifestPath);
+		const parent = dirname(dir);
+		if (parent === dir) return null;
+		dir = parent;
+	}
+}
+/**
+* Locate the dsh CLI's JS entry, or null when it cannot be found.
+*
+* `argv1` first: the shop is loaded BY dsh, so the running script is dsh's own
+* entry, and reusing it guarantees the child is the same dsh that is serving
+* the shop rather than whichever one PATH happens to name. The owner check is
+* what makes this safe to try — under a test runner `argv1` belongs to the
+* runner, and accepting it would spawn the wrong program.
+*
+* Then the shims on PATH: npm installs the package into `node_modules` beside
+* them, so the manifest is one join away. This is the branch a test harness
+* takes, which is why the real-installation test exercises it.
+*/
+function resolveDshScript(fs, options) {
+	if (options.argv1 !== void 0) {
+		const owned = owningEntry(fs, options.argv1);
+		if (owned !== null) return owned;
+	}
+	for (const dir of (options.path ?? "").split(delimiter)) {
+		if (dir === "") continue;
+		const manifestPath = join(dir, "node_modules", ...DSH_PACKAGE.split("/"), "package.json");
+		if (!fs.exists(manifestPath)) continue;
+		const entry = declaredEntry(fs, manifestPath);
+		if (entry !== null) return entry;
+	}
+	return null;
 }
 //#endregion
 //#region src/host/compatibility.ts
@@ -1306,24 +1613,30 @@ function peerVerdictsOf(entries, check, exemptions, profile) {
 }
 /**
 * The manifest dsh judges an entry's install by, as `peerVerdictsOf` hands it
-* to the rule, or null when none can be formed: the entry declares no
-* harness peers, or it is a github entry with no `manifestVersion`. An npm
-* entry's catalog `version` is its manifest's; a github entry's is a commit
-* or a tag, so its manifest's own version is the one recorded beside its
-* peers, and the key is read on github entries only.
+* to the rule, or null when none can be formed: the entry declares neither
+* harness peers nor an `engines.dsh` range, or it is a github entry with no
+* `manifestVersion`. An npm entry's catalog `version` is its manifest's; a
+* github entry's is a commit or a tag, so its manifest's own version is the one
+* recorded beside its declarations, and the key is read on github entries
+* only.
+*
+* Both declarations are handed over together, because dsh's own rule applies
+* its own precedence: `unmetRequirements` returns on `engines.dsh` and never
+* reads `peerDependencies` when it is present (design
+* 2026-11-02-market-borrowings §1). Judging the peers without it — what this
+* function did before the catalog carried `engines` — answered a question dsh
+* does not ask. An entry with engines and no peers still forms a manifest: the
+* empty peer map is what dsh would see in that manifest anyway.
 */
 function ownManifest(entry) {
-	if (entry.dshPeers === void 0) return null;
-	if (entry.source === "npm") return {
-		name: entry.name,
-		version: entry.version,
-		peerDependencies: entry.dshPeers
-	};
-	if (entry.manifestVersion === void 0) return null;
+	if (entry.dshPeers === void 0 && entry.engines === void 0) return null;
+	const version = entry.source === "npm" ? entry.version : entry.manifestVersion;
+	if (version === void 0) return null;
 	return {
 		name: entry.name,
-		version: entry.manifestVersion,
-		peerDependencies: entry.dshPeers
+		version,
+		peerDependencies: entry.dshPeers ?? {},
+		...entry.engines !== void 0 ? { engines: { dsh: entry.engines } } : {}
 	};
 }
 /** npm's package-name grammar as dsh's exemption records accept it, verbatim
@@ -1346,174 +1659,60 @@ function isExactVersion(value) {
 * it is pasted into.
 *
 * The profile is written as it is, as dsh prints it: it is the reader's own
-* choice of name, never catalog input.
+* choice of name, never catalog input. The desktop profile gets none: dsh's
+* CLI refuses it in any letter case, so the exemption could never be recorded
+* from a terminal, and since the desktop app's harness is identified (design
+* 2026-09-01-harness-compatibility, 2026-11-06 amendment) the card reaches
+* this verdict there.
 */
 function allowVersionCommand(profile, issue) {
+	if (isDesktopProfile(profile)) return null;
 	if (!EXEMPTION_PACKAGE_NAME.test(issue.name) || !isExactVersion(issue.version) || !isExactVersion(issue.runtimeVersion)) return null;
 	return `dsh plugin --profile ${profile} allow-version ${issue.name}@${issue.version} --dsh-version ${issue.runtimeVersion} --accept-risk`;
 }
 //#endregion
-//#region src/host/dsh-cli.ts
+//#region src/host/child-env.ts
 /**
-* How to start the dsh CLI as a child process.
+* The environment an install command is spawned with (design
+* 2026-11-04-borrowings-round-4 §1).
 *
-* On POSIX this is `spawn('dsh', …)` and there is nothing to decide. On
-* Windows there is no form of that call which can work: npm installs a CLI as
-* `dsh`, `dsh.cmd` and `dsh.ps1` shims with no `.exe`, libuv resolves a bare
-* name against `.com` and `.exe` only, and node has refused to spawn a `.cmd`
-* without a shell since the 2024 batfile argument-injection fix. Measured on
-* Windows 11 with dsh 0.1.1-rc.2 (2026-09-02): the bare name gives ENOENT,
-* the resolved `.cmd` shim throws EINVAL *synchronously* out of `spawn()`.
-*
-* `shell: true` — what the shim exists for, and what dsh's own pnpm spawn
-* uses — is not available to us. node hands cmd.exe a joined, UNQUOTED
-* command string, and our argv carries catalog data: a `github:` entry's spec
-* is `github:owner/slug#<sha>&path:<subdir>`, `&` is a cmd command separator,
-* and `subdir` comes from npm. That is a command-injection surface on
-* untrusted input, so the shop resolves the CLI's JS entry and runs it through
-* node instead — no shell, and node escapes the argv itself.
-*
-* Pure core, impure shell: `dshCommand` decides, `resolveDshScript` takes the
-* process snapshot and a filesystem seam as parameters (the same shape as
-* `detectSupervisor(env, proc)` and `RepoPinFs`).
+* One function so the two spawns that run package-manager work — the CLI
+* install in `executor.ts` and the download lane in `prefetch.ts` — cannot
+* drift: a setting that reaches one and not the other would fix a hang on one
+* path and leave it on the other.
 */
-/** The npm package the dsh CLI is published as. */
-const DSH_PACKAGE = "@deepseek-ai/dsh";
-/** The bin name that package declares (`bin: { dsh: 'lib/bin.js' }`), which is
-* also the unscoped name its plain-string `bin` form would take. */
-const DSH_BIN_NAME = "dsh";
 /**
-* Whether dsh's CLI refuses this profile outright: `desktop`, in any letter
-* case, "is managed exclusively by the Electron application" — refused for a
-* launch and for `dsh plugin` alike (`rejectElectronProfile` in the CLI's
-* `lib/bin.js`, the same in 0.1.5-rc.3 and 0.1.7-rc.2). Every command the
-* shop spawns names a profile, so none of them can run for this one.
+* `env` with the settings a headless spawn needs.
+*
+* - `GIT_TERMINAL_PROMPT=0`: a dependency fetched from a private git remote
+*   would otherwise stop at a username prompt. The child has no console to
+*   answer it, so the install hangs until `INSTALL_TIMEOUT_MS` and reports a
+*   timeout — the wrong cause, and fifteen minutes of a reader's time. dsh's
+*   own spawn does not set this; measured on the competitor's own bug (their
+*   #1094, a visible terminal window from a detached child), the class is
+*   real on Windows.
+* - `GCM_INTERACTIVE=never`: Git for Windows ships Git Credential Manager as
+*   the default helper, and it ignores `GIT_TERMINAL_PROMPT` — on a cache miss
+*   it opens its own GUI window and waits. `never` still resolves a stored
+*   credential and fails fast instead of prompting. An inherited `GIT_ASKPASS`
+*   is the same residual, rarer, and deliberately not overridden: a profile
+*   that sets one has asked its git to run that program.
+* - `CI=1` is deliberately NOT set here: pnpm's behaviour under `CI` differs
+*   (no prompts, a different reporter), and dsh's plugin manager already
+*   computes what it wants for its own children. This function adds only the
+*   variable that turns a hang into an error.
+*
+* An explicit `env` wins: a caller that narrowed the environment has said
+* what the child may see, and this only fills in what the spawn needs to
+* fail fast. Both variables are therefore overridden even when the caller
+* set them — a prompt cannot be answered on this path either way.
 */
-function isDesktopProfile(profile) {
-	return profile.toLowerCase() === "desktop";
-}
-/**
-* A `dshBin` that names a JavaScript entry rather than a program.
-*
-* Such a file cannot be spawned anywhere: Windows needs a PE image, and POSIX
-* needs a shebang plus the exec bit that an entry shipped inside a package
-* does not reliably carry. The npm-installed CLI's real entry IS one of these
-* — `bin: { dsh: 'lib/bin.js' }` — so a caller pinning a specific dsh
-* installation has no other file to name, and {@link resolveDshScript} hands
-* back exactly this shape for the branch below to run through node.
-*
-* Platform-independent on purpose. The `dsh` branch is a Windows workaround
-* for PATH lookup; this is not a workaround at all but the only correct way
-* to start a JS entry, and gating it on Windows would leave a POSIX caller
-* with an ENOEXEC naming a file that is perfectly valid.
-*
-* The one thing it gives up is a `.js` entry whose shebang names some other
-* interpreter. `dshBin` names the dsh CLI, which is a node program, so the
-* trade is one hypothetical against a shape the CLI actually ships.
-*/
-const JS_ENTRY = /\.[cm]?js$/;
-/**
-* The command that starts `bin` through `execPath` when `bin` names a
-* JavaScript entry, or `null` when `bin` is a program to spawn as given.
-*
-* Extracted from {@link dshCommand} so `prefetch.ts` can reach the same
-* decision for pnpm without a second copy of {@link JS_ENTRY}: both need it
-* for the same two reasons — a packaged JS entry is what a caller pinning an
-* installation can name, and a `.mjs` test fixture is the only fake CLI that
-* can be spawned on Windows at all.
-*/
-function jsEntryCommand(bin, args, execPath) {
-	if (!JS_ENTRY.test(bin)) return null;
+function installEnv(env) {
 	return {
-		command: execPath,
-		args: [bin, ...args]
+		...env ?? process.env,
+		GIT_TERMINAL_PROMPT: "0",
+		GCM_INTERACTIVE: "never"
 	};
-}
-/**
-* The command that starts the dsh CLI with `args`.
-*
-* For the bare name the node route replaces exactly one thing: looking `dsh`
-* up on PATH, which on Windows can never succeed. A `dshBin` naming a
-* specific file is the caller's explicit choice and is spawned as given —
-* honoring it and reporting the real failure beats silently running something
-* else — with one exception, {@link JS_ENTRY}, where "as given" is not a
-* runnable command on any platform and node is what the caller must have
-* meant.
-*/
-function dshCommand(options) {
-	const { dshBin, args, platform, execPath, script } = options;
-	if (dshBin === DSH_BIN_NAME) {
-		if (platform === "win32" && script !== null) return {
-			command: execPath,
-			args: [script, ...args]
-		};
-		return {
-			command: dshBin,
-			args: [...args]
-		};
-	}
-	return jsEntryCommand(dshBin, args, execPath) ?? {
-		command: dshBin,
-		args: [...args]
-	};
-}
-/** The dsh entry a package manifest declares, or null when this manifest is
-* not the dsh CLI. Everything read here is outside our control, so a manifest
-* that will not parse is simply not a match. */
-function declaredEntry(fs, manifestPath) {
-	let parsed;
-	try {
-		parsed = JSON.parse(fs.read(manifestPath));
-	} catch {
-		return null;
-	}
-	const { name, bin } = parsed;
-	if (name !== "@deepseek-ai/dsh") return null;
-	const declared = typeof bin === "string" ? bin : bin?.[DSH_BIN_NAME];
-	if (typeof declared !== "string") return null;
-	const entry = join(dirname(manifestPath), declared);
-	return fs.exists(entry) ? entry : null;
-}
-/** The dsh entry declared by the package that OWNS `script` — the nearest
-* `package.json` at or above it, and only that one. A script whose owner is
-* some other package is not dsh's, so the search stops rather than walking up
-* into an unrelated workspace root. */
-function owningEntry(fs, script) {
-	let dir = dirname(resolve(script));
-	for (;;) {
-		const manifestPath = join(dir, "package.json");
-		if (fs.exists(manifestPath)) return declaredEntry(fs, manifestPath);
-		const parent = dirname(dir);
-		if (parent === dir) return null;
-		dir = parent;
-	}
-}
-/**
-* Locate the dsh CLI's JS entry, or null when it cannot be found.
-*
-* `argv1` first: the shop is loaded BY dsh, so the running script is dsh's own
-* entry, and reusing it guarantees the child is the same dsh that is serving
-* the shop rather than whichever one PATH happens to name. The owner check is
-* what makes this safe to try — under a test runner `argv1` belongs to the
-* runner, and accepting it would spawn the wrong program.
-*
-* Then the shims on PATH: npm installs the package into `node_modules` beside
-* them, so the manifest is one join away. This is the branch a test harness
-* takes, which is why the real-installation test exercises it.
-*/
-function resolveDshScript(fs, options) {
-	if (options.argv1 !== void 0) {
-		const owned = owningEntry(fs, options.argv1);
-		if (owned !== null) return owned;
-	}
-	for (const dir of (options.path ?? "").split(delimiter)) {
-		if (dir === "") continue;
-		const manifestPath = join(dir, "node_modules", ...DSH_PACKAGE.split("/"), "package.json");
-		if (!fs.exists(manifestPath)) continue;
-		const entry = declaredEntry(fs, manifestPath);
-		if (entry !== null) return entry;
-	}
-	return null;
 }
 //#endregion
 //#region src/shared/install-state.ts
@@ -1632,11 +1831,11 @@ function createBoundedLog() {
 */
 function activationFailureDetail(args) {
 	const { expectedName, profile, before, after } = args;
-	if (Object.hasOwn(after, expectedName)) return `${expectedName} is a dependency of the profile but is not in dsh.profile.bundles, so dsh did not activate it as a profile layer and the shop has nothing to mount.`;
-	if (before === null) return `${expectedName} is in neither dsh.profile.bundles nor the profile's dependencies, and the profile manifest could not be read before the install, so what the install changed is unknown — compare the profile's package.json against what you expected before retrying.`;
+	if (Object.hasOwn(after, expectedName)) return `${expectedName} is installed as a profile dependency, but is not listed in dsh.profile.bundles. dsh has not enabled it as a plugin, so the shop cannot load it.`;
+	if (before === null) return `${expectedName} is missing from both dsh.profile.bundles and the profile dependencies. The shop could not read the profile before installation, so it cannot tell what changed. Check the profile's package.json before trying again.`;
 	const added = Object.keys(after).filter((name) => !Object.hasOwn(before, name)).sort();
-	if (added.length > 0) return `${expectedName} is not in the profile's dependencies — the install added ${added.join(", ")} instead. Remove it with: dsh plugin --profile ${profile} remove ${added[0]}`;
-	return `${expectedName} is in neither dsh.profile.bundles nor the profile's dependencies, and the install added nothing — if the entry is new the catalog may be behind; refresh it and retry.`;
+	if (added.length > 0) return `${expectedName} is not in the profile dependencies. The install added ${added.join(", ")} instead. To remove ${added[0]}, run: dsh plugin --profile ${profile} remove ${added[0]}`;
+	return `${expectedName} is missing from both dsh.profile.bundles and the profile dependencies. Nothing was added. If this plugin was recently published, the catalog may be out of date. Refresh it and try again.`;
 }
 /** The §7.2 step-6 confirm: after a zero exit, re-read the profile manifest and
 * verify the bundle actually landed in `dsh.profile.bundles`. Exit 0 alone is
@@ -1663,7 +1862,7 @@ function confirmBundleActivation(profile, home, expectedName, before) {
 			after
 		});
 	} catch {
-		return `installed but the profile manifest could not be read (${join(profileDir, "package.json")}) — the install's result is unknown; check that file.`;
+		return `Could not confirm the installation because the profile manifest could not be read (${join(profileDir, "package.json")}). Check that file before trying again.`;
 	}
 }
 /** The uninstall mirror of §7.2 step 6: after a zero exit, re-read the profile
@@ -1673,9 +1872,9 @@ function confirmBundleRemoval(profile, home, expectedName) {
 	const profileDir = resolveProfileDir(profile, home);
 	try {
 		if (!readProfileManifest("dsh-plugin-shop", profileDir).dsh?.profile?.bundles?.includes(expectedName)) return null;
-		return "removed but dsh.profile.bundles did not change — re-run the uninstall";
+		return "The uninstall command finished, but the plugin is still listed in dsh.profile.bundles. Try uninstalling it again.";
 	} catch {
-		return `removed but the profile manifest could not be read (${join(profileDir, "package.json")}) — re-run the uninstall`;
+		return `Could not confirm the uninstall because the profile manifest could not be read (${join(profileDir, "package.json")}). Check that file and try again.`;
 	}
 }
 /** Lines a failed install's log tends to END on, none of which tell the user
@@ -1783,7 +1982,7 @@ const NATIVE_ALLOCATION_ABORT = /^memory allocation of \d+ bytes failed$/;
 function nativeAllocationAbortDetail(usable) {
 	const abort = usable.find((line) => NATIVE_ALLOCATION_ABORT.test(line.trim()));
 	if (abort === void 0) return null;
-	return `pnpm crashed: its native binary ran out of memory (${abort.trim()}), which is not caused by this plugin. pnpm 12 before 12.7.0 has a known bug that exhausts memory when many packages share a missing peer, which every dsh profile has, because dsh keeps peers uninstalled (autoInstallPeers: false; pnpm/pnpm#15362). Upgrade pnpm to 12.7.0 or later, or use pnpm 11, then install again. If your pnpm is already 12.7.0 or later, report the line above to pnpm.`;
+	return `pnpm ran out of memory (${abort.trim()}). pnpm 12 versions before 12.7.0 have a known memory bug with shared missing peer dependencies (pnpm/pnpm#15362). Upgrade pnpm to 12.7.0 or later, or use pnpm 11, then install again. If your pnpm is already 12.7.0 or later, report the line above to pnpm.`;
 }
 /**
 * The one log line worth putting in front of the user, plus the recovery hint.
@@ -1825,13 +2024,13 @@ function installFailureDetail(profile, log, hint = `pnpm failed in the profile. 
 * 2026-09-02 as "Update failed / dsh not found on PATH" on a working install.
 */
 function spawnFailureDetail(code, message, dshBin, platform) {
-	if (platform === "win32" && (code === "ENOENT" || code === "EINVAL")) return `the shop could not locate the dsh CLI to run (${dshBin}): on Windows npm installs it as a .cmd shim, which cannot be spawned directly, so the shop runs the ${DSH_PACKAGE} package's own entry through node instead — and that entry was not found. Check that \`dsh --version\` works in a terminal, then reinstall the CLI if it does not.`;
-	if (code === "ENOENT") return "dsh not found on PATH — install the dsh CLI to manage profile plugins";
-	return `dsh spawn failed: ${message}`;
+	if (platform === "win32" && (code === "ENOENT" || code === "EINVAL")) return `The shop could not find the dsh CLI entry file (${DSH_PACKAGE}, command: ${dshBin}). On Windows, the shop needs this file because it cannot run the .cmd launcher directly. Check that \`dsh --version\` works in a terminal, then reinstall the CLI if it does not.`;
+	if (code === "ENOENT") return "dsh was not found on PATH. Install the dsh CLI or add it to PATH, then try again.";
+	return `Could not start dsh: ${message}`;
 }
 /** The failure detail for a command stopped by the shop's deadline. */
 function installTimeoutDetail(profile, timeoutMs) {
-	return `dsh-plugin-shop: the command did not finish within ${Math.max(1, Math.round(timeoutMs / 1e3))}s and was stopped. Run it yourself to see what it is waiting on: dsh plugin --profile ${profile} install`;
+	return `dsh-plugin-shop: the command did not finish within ${Math.max(1, Math.round(timeoutMs / 1e3))}s and was stopped. To check the error and retry, run: dsh plugin --profile ${profile} install`;
 }
 /** The real kill. Exported for the tests that inject a RECORDING `KillFns`:
 * a recorder that only records asserts that a kill was requested and leaves
@@ -1846,7 +2045,10 @@ const nodeKills = {
 			String(pid),
 			"/T",
 			"/F"
-		], { stdio: "ignore" });
+		], {
+			stdio: "ignore",
+			windowsHide: true
+		});
 	}
 };
 /** Kill a child and its descendants (process group on POSIX, taskkill tree on Windows). */
@@ -1961,6 +2163,38 @@ function shellSafeTarget(target, platform) {
 	if (platform !== "win32" || !target.includes("&")) return target;
 	return `"${target}"`;
 }
+/** A profile name safe to put in a line a person pastes: no whitespace, no
+* quote, no shell punctuation. A profile outside this gets no line at all —
+* it is the reader's own name, and refusing to guess beats publishing a
+* command that would split at the first space. */
+const SAFE_PROFILE = /^[A-Za-z0-9._:-]+$/;
+/**
+* The command that would retry this operation by hand, or undefined when no
+* shell can carry it (design 2026-11-02-market-borrowings §5).
+*
+* POSIX: single-quoted. `&` is a control operator there too, so
+* `github:owner/slug#sha&path:dir` unquoted would run `path:dir` as its own
+* command; `gateOperand` refuses `'`, so the quoting cannot be broken out of.
+*
+* Windows: offered only for an operand with no `&`. The quotes a reader types
+* are consumed by cmd and never reach dsh, which then joins argv UNQUOTED
+* into its own shell (the defect `shellSafeTarget` exists for on our own
+* spawn) — so a quoted `&path:` still splits, and the measured outcome is an
+* install of the repository ROOT that exits 0. A line that installs
+* something else is worse than no line, so that case reports none.
+*
+* The desktop profile: none on either platform. dsh's CLI refuses it in any
+* letter case (`isDesktopProfile`), so the line would fail at once, and a
+* desktop reader is never handed a `dsh plugin` command. The CLI path never
+* runs there; the plugin-manager path asks for a line on every profile
+* (2026-11-06), which is why the refusal lives in this one builder.
+*/
+function retryCommand(platform, profile, verb, target) {
+	if (verb === void 0 || !SAFE_PROFILE.test(profile) || isDesktopProfile(profile)) return void 0;
+	if (platform === "win32") return target.includes("&") ? void 0 : `dsh plugin --profile ${profile} ${verb} ${target}`;
+	if (target.includes("'")) return void 0;
+	return `dsh plugin --profile '${profile}' ${verb} '${target}'`;
+}
 const DOWNLOAD_PHASE_FAILED_PREFIX = "dsh-plugin-shop: the download phase could not start — ";
 const DOWNLOAD_PHASE_NO_PNPM = "dsh-plugin-shop: no download phase — pnpm not found on PATH";
 const DOWNLOAD_PHASE_UNSUPPORTED = "dsh-plugin-shop: no download phase for this spec form; the install fetches it directly";
@@ -2002,8 +2236,9 @@ function requestDownloadPhase(options) {
 * must settle before it. A throwing callback never fails the install — the
 * package IS installed; it reports `done` with the restart fallback. */
 function spawnPluginCli(options) {
-	const { profile, argv, dshBin, env, platform = process.platform, beforeSpawn, prefetcher, confirm, afterDone, onStatus, timeoutMs = INSTALL_TIMEOUT_MS } = options;
+	const { profile, argv, dshBin, env, platform = process.platform, beforeSpawn, prefetcher, confirm, confirmLanded, afterDone, onStatus, timeoutMs = INSTALL_TIMEOUT_MS } = options;
 	const target = gateOperand(argv[1]);
+	const command = retryCommand(platform, profile, argv[0], target);
 	const spawnArgv = [...argv];
 	spawnArgv[1] = shellSafeTarget(target, platform);
 	const installId = randomUUID();
@@ -2013,6 +2248,8 @@ function spawnPluginCli(options) {
 	let activationOnDone = "restart";
 	let restartReason;
 	let detail;
+	/** The record failed on `confirmLanded`: its package is on disk. */
+	let landedFailure = false;
 	const status = () => ({
 		state,
 		log: log.lines(),
@@ -2020,7 +2257,8 @@ function spawnPluginCli(options) {
 			activation: activationOnDone,
 			...restartReason !== void 0 ? { restartReason } : {}
 		} : {},
-		...detail !== void 0 ? { detail } : {}
+		...detail !== void 0 ? { detail } : {},
+		...state === "failed" && command !== void 0 && !landedFailure ? { command } : {}
 	});
 	const append = (line) => {
 		if (isTerminalInstallState(state)) return;
@@ -2066,8 +2304,9 @@ function spawnPluginCli(options) {
 					"pipe",
 					"pipe"
 				],
-				env: env ?? process.env,
-				detached: platform !== "win32"
+				env: installEnv(env),
+				detached: platform !== "win32",
+				windowsHide: true
 			});
 		} catch (error) {
 			resolve(failToStart(error));
@@ -2094,9 +2333,14 @@ function spawnPluginCli(options) {
 				detail = installTimeoutDetail(profile, timeoutMs);
 			} else if (exitCode === 0) {
 				const confirmDetail = confirm?.(env?.DSH_HOME);
+				const landedDetail = confirmDetail == null ? confirmLanded?.(env?.DSH_HOME) : null;
 				if (confirmDetail != null) {
 					state = "failed";
 					detail = confirmDetail;
+				} else if (landedDetail != null) {
+					state = "failed";
+					detail = landedDetail;
+					landedFailure = true;
 				} else if (afterDone !== void 0) {
 					try {
 						const outcome = await afterDone(env?.DSH_HOME);
@@ -2184,7 +2428,8 @@ function startInstall(options) {
 			before = readProfileDependencies(profile, home);
 		} : void 0,
 		prefetcher,
-		confirm: expectedName !== void 0 ? (home) => confirmBundleActivation(profile, home, expectedName, before) ?? alsoConfirm?.(home) ?? null : alsoConfirm,
+		confirm: expectedName !== void 0 ? (home) => confirmBundleActivation(profile, home, expectedName, before) : void 0,
+		confirmLanded: alsoConfirm,
 		afterDone,
 		onStatus,
 		timeoutMs
@@ -2575,6 +2820,225 @@ function cleanHotDir(profileDir) {
 		return;
 	}
 	for (const name of names) if (HOT_FILE_RE.test(name)) rmSync(join(dir, name), { force: true });
+}
+//#endregion
+//#region src/host/state.ts
+/**
+* The shop's own per-profile state: the plugins a reader starred, and the
+* version each installed plugin was updated from (design
+* 2026-11-02-market-borrowings §6–§7).
+*
+* One file, `<profile>/.dsh-shop/state.json`, beside the hot-mount inputs but
+* not among them: `cleanHotDir` wipes `hot-<n>.yml` only, so this survives a
+* boot. It is deliberately NOT part of the profile manifest: favorites are a
+* reading aid, and a `dsh plugin add` that rewrote `package.json` must never
+* be able to take them down.
+*
+* Every read is forgiving and every write is atomic. Losing this file costs a
+* reader their stars and one rollback offer; taking the page down over it
+* would be the worse bug, so a malformed file reads as empty state rather
+* than throwing. The next write replaces it with a valid one.
+*/
+/**
+* How many times a rename is retried when Windows refuses it, and how long
+* between tries.
+*
+* Measured 2026-11-02 on Windows 11: `renameSync` over a target another
+* handle holds open throws `EPERM`, and so does one over a read-only target —
+* an antivirus scan, a backup agent or a second dsh on the same profile is
+* enough. Five tries at 20 ms covers a scanner's open/close window without
+* making a click wait on a wedged file.
+*/
+const RENAME_TRIES = 5;
+const RENAME_RETRY_MS = 20;
+function nodeShopStateIo() {
+	return {
+		read: (path) => readFileSync(path, "utf8"),
+		mkdir: (path) => {
+			mkdirSync(path, { recursive: true });
+		},
+		writeFile: (path, data) => {
+			writeFileSync(path, data);
+		},
+		rename: (from, to) => {
+			renameSync(from, to);
+		},
+		remove: (path) => {
+			rmSync(path, { force: true });
+		},
+		wait: (ms) => {
+			const until = Date.now() + ms;
+			while (Date.now() < until);
+		},
+		processId: process.pid
+	};
+}
+/**
+* A writer over `io`, temp-then-rename.
+*
+* The temp name carries the process id and a per-write counter: a fixed
+* `.tmp` gave two dsh processes on one profile the same scratch file.
+*
+* `rename` is retried on `EPERM`/`EBUSY`, which is what Windows reports when
+* another handle (an antivirus scan, a backup agent, a second dsh) holds the
+* target; measured 2026-11-02, a read-only target throws it too. Any other
+* code, or the last try, removes the scratch file and rethrows.
+*/
+function shopStateFsFor(io) {
+	let counter = 0;
+	return {
+		read: io.read,
+		write: (path, data) => {
+			io.mkdir(dirname(path));
+			counter += 1;
+			const tmp = `${path}.${io.processId}.${counter}.tmp`;
+			io.writeFile(tmp, data);
+			for (let attempt = 1;; attempt += 1) try {
+				io.rename(tmp, path);
+				return;
+			} catch (error) {
+				const code = error.code;
+				if (!(code === "EPERM" || code === "EBUSY") || attempt >= RENAME_TRIES) {
+					try {
+						io.remove(tmp);
+					} catch {}
+					throw error;
+				}
+				io.wait(RENAME_RETRY_MS);
+			}
+		}
+	};
+}
+const nodeShopStateFs = shopStateFsFor(nodeShopStateIo());
+/**
+* A fresh empty state.
+*
+* A function, never a shared constant: both writers mutate what
+* `readShopState` returns, so handing every missing file the same object made
+* one profile's failed save visible to the next caller — and a test that
+* compared against the constant could not see it.
+*/
+function emptyShopState() {
+	return {
+		favorites: [],
+		previous: {}
+	};
+}
+/** A path walk cannot climb out of: identities and names are catalog or
+* manifest text, and the record is only ever used to build a spec. */
+const KEY_MAX_LENGTH = 300;
+/** The longest version this file keeps. An npm version is bounded by 256
+* everywhere else in this codebase; a commit is 40. */
+const VERSION_MAX_LENGTH = 256;
+const REPO_SHAPE = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
+/** Most favorites one file may hold. Far past any real shelf, and a bound
+* nonetheless: the file is the reader's, and a hand-edited one must not turn
+* every card render into a set lookup over a million rows. */
+const FAVORITES_MAX = 5e3;
+function statePath(profileDir) {
+	return join(profileDir, ".dsh-shop", "state.json");
+}
+/** One install identity this file will store. */
+function isKey(value) {
+	return typeof value === "string" && value.length > 0 && value.length <= KEY_MAX_LENGTH;
+}
+function isRollbackRecord(value) {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	const record = value;
+	if (record.source !== "npm" && record.source !== "github") return false;
+	if (typeof record.name !== "string" || record.name.length === 0 || record.name.length > KEY_MAX_LENGTH) return false;
+	if (typeof record.version !== "string" || record.version.length === 0 || record.version.length > VERSION_MAX_LENGTH) return false;
+	if (record.repo !== void 0 && (typeof record.repo !== "string" || !REPO_SHAPE.test(record.repo))) return false;
+	if (record.subdir !== void 0 && typeof record.subdir !== "string") return false;
+	if (record.source === "github" && record.repo === void 0) return false;
+	return true;
+}
+/**
+* The state file's contents, or empty state when it is missing, unreadable or
+* malformed.
+*
+* Each half is validated on its own, so a corrupt `previous` map never costs
+* the reader their favorites: the parts that parse are kept, the parts that
+* do not are dropped. That is the opposite of the catalog's rule — a catalog
+* this code did not write is a five-alarm fire, while this file is a reading
+* aid whose loss is measured in stars.
+*/
+function readShopState(fs, profileDir) {
+	let text;
+	try {
+		text = fs.read(statePath(profileDir));
+	} catch (error) {
+		if (error.code !== "ENOENT") throw error;
+		return emptyShopState();
+	}
+	let parsed;
+	try {
+		parsed = JSON.parse(text);
+	} catch {
+		return emptyShopState();
+	}
+	if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return emptyShopState();
+	const document = parsed;
+	const favorites = [];
+	if (Array.isArray(document.favorites)) {
+		const seen = /* @__PURE__ */ new Set();
+		for (const value of document.favorites) {
+			if (!isKey(value) || seen.has(value)) continue;
+			seen.add(value);
+			favorites.push(value);
+			if (favorites.length === 5e3) break;
+		}
+	}
+	const previous = {};
+	if (typeof document.previous === "object" && document.previous !== null && !Array.isArray(document.previous)) {
+		let kept = 0;
+		for (const [key, value] of Object.entries(document.previous)) {
+			if (kept === 2e3) break;
+			if (!isKey(key) || !isRollbackRecord(value)) continue;
+			previous[key] = value;
+			kept += 1;
+		}
+	}
+	return {
+		favorites,
+		previous
+	};
+}
+/** Write one state document, bounded and normalized. Throws on a write
+* failure: the caller decides what a lost favorite costs, and swallowing here
+* would report a save that did not happen. */
+function writeShopState(fs, profileDir, state) {
+	const favorites = state.favorites.filter(isKey).slice(0, FAVORITES_MAX);
+	const previous = {};
+	let kept = 0;
+	for (const [key, record] of Object.entries(state.previous)) {
+		if (kept === 2e3) break;
+		if (!isKey(key) || !isRollbackRecord(record)) continue;
+		previous[key] = record;
+		kept += 1;
+	}
+	fs.write(statePath(profileDir), `${JSON.stringify({
+		favorites,
+		previous
+	}, null, 2)}\n`);
+}
+/**
+* The spec a rollback re-installs, built from a record this host wrote.
+*
+* Never from client input: the RPC takes only the identity, and everything
+* here comes from the file above. `undefined` for a record whose version is
+* not the shape its channel can install — a hand-edited record, or one
+* written by a future rule — because a spec the shop cannot spell is not
+* offered as a button.
+*/
+function rollbackSpec(record) {
+	if (record.source === "npm") {
+		if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(record.version)) return void 0;
+		return `${record.name}@${record.version}`;
+	}
+	if (!/^[0-9a-f]{40}$/.test(record.version)) return void 0;
+	const subdir = record.subdir === void 0 ? "" : `&path:${record.subdir}`;
+	return `github:${record.repo}#${record.version}${subdir}`;
 }
 //#endregion
 //#region src/host/activation.ts
@@ -3392,9 +3856,10 @@ function createPrefetcher(options = {}) {
 		try {
 			child = spawn$1(routed?.command ?? pnpmBin, args, {
 				cwd: current.cwd,
-				env: current.env,
+				env: installEnv(current.env),
 				stdio: "ignore",
 				detached: platform !== "win32",
+				windowsHide: true,
 				shell
 			});
 		} catch (error) {
@@ -3978,10 +4443,31 @@ async function appBootFacts(dshDir) {
 	const entry = createRequire(import.meta.url).resolve(appBootDir);
 	const exported = await import(pathToFileURL(entry).href);
 	return {
-		templates: profileTemplatesOf(exported.PROFILE_TEMPLATES),
+		templates: profileTemplatesOf(await profileTemplatesExport(appBootDir, exported)),
 		patchLists: typeof exported.bundlePatchFiles === "function",
 		peerCheck: peerCheckOf(exported, appBootDir)
 	};
+}
+/**
+* The template table the running dsh composes profiles from, wherever this
+* dsh keeps it (measured 2026-11-06).
+*
+* Through 0.2.1-rc.5 `dsh-app-boot` exported `PROFILE_TEMPLATES` itself. From
+* 0.2.2-rc.1 it only imports it, from `@deepseek-ai/dsh-official-bundles`,
+* and exports nothing by that name — so reading app-boot alone left the table
+* empty and the shop's whole `dsh.compatibility.profiles` verdict silent: no
+* badge for a plugin declaring a profile this harness does not have, which is
+* the failure the 0.2.2-rc.1 e2e caught. The bundles package is resolved with
+* the same walk, from app-boot's own directory, so the copy dsh loads is the
+* one read; a dsh that has neither still answers undefined, which
+* `profileTemplatesOf` reads as "no table", never a wrong one.
+*/
+async function profileTemplatesExport(appBootDir, appBoot) {
+	if (appBoot.PROFILE_TEMPLATES !== void 0) return appBoot.PROFILE_TEMPLATES;
+	const bundlesDir = packageDirectory(appBootDir, "@deepseek-ai/dsh-official-bundles");
+	if (bundlesDir === null) return void 0;
+	const entry = createRequire(import.meta.url).resolve(bundlesDir);
+	return (await import(pathToFileURL(entry).href)).PROFILE_TEMPLATES;
 }
 /** `value` when it is a non-null object, else null. */
 const objectOrNull = (value) => typeof value === "object" && value !== null ? value : null;
@@ -4045,18 +4531,21 @@ function peerCheckOf(exported, appBootDir) {
 }
 /**
 * The harness this process runs, identified from `script` — the gateway's
-* `restartScript`, `process.argv[1]` in production — or nothing, never a
-* guess:
+* `restartScript`, `process.argv[1]` in production — or, when that names no
+* dsh, from the harness's own package lookup (`locate`, see
+* `HarnessLocator`). Never a guess:
 *
 * 1. `script` is resolved through symlinks, because `argv[1]` is the path the
 *    shell ran — `<prefix>/bin/dsh`, a link — and only its target lies inside
-*    the dsh package. No script, or one that does not resolve: nothing known.
+*    the dsh package. No script, or one that does not resolve: the next
+*    source decides.
 *    An empty path is no script either: `realpathSync('')` answers the
 *    working directory, which says where dsh was started, not what it is.
 * 2. The package that owns it (`owningPackage`) must be `@deepseek-ai/dsh`.
-*    Anything else — a test runner, another host embedding the shop — means
-*    nothing here can say which harness runs, and both halves of the verdict
-*    stay silent.
+*    A test runner, or another host embedding the shop, names no harness
+*    this way; the desktop app is that case, and there `locate` answers with
+*    the dsh package its own `pluginPackages` service serves. Without a
+*    locator, both halves of the verdict stay silent.
 * 3. `dshVersion` is that manifest's `version` when it is a non-empty string.
 * 4. `templates`, `patchLists` and `peerCheck` come from that dsh's own
 *    app-boot (`appBootFacts`). Any failure there costs all three and keeps
@@ -4065,29 +4554,67 @@ function peerCheckOf(exported, appBootDir) {
 * Never throws and never rejects: a harness nobody could identify forms no
 * verdict, and must never be the reason the catalog fails to load.
 */
-async function readRunningHarness(script) {
+async function readRunningHarness(script, locate) {
+	const owner = scriptOwner(script);
+	if (owner !== null) return harnessFactsOf(owner.dir, owner.manifest);
+	const located = locate === void 0 ? null : locatedHarness(locate);
+	if (located !== null) return harnessFactsOf(located.dir, located.manifest);
+	return noHarness();
+}
+/** The package that owns `script`, when that package is the running dsh.
+* Null — never a throw — for a missing script, one `realpathSync` cannot
+* resolve, or one owned by anything else. */
+function scriptOwner(script) {
+	if (script === void 0 || script === "") return null;
 	try {
-		if (script === void 0 || script === "") return noHarness();
 		const owner = owningPackage(dirname(realpathSync(script)));
-		if (owner === null || typeof owner.manifest !== "object" || owner.manifest === null) return noHarness();
-		const { name, version } = owner.manifest;
-		if (name !== "@deepseek-ai/dsh") return noHarness();
-		const dshVersion = typeof version === "string" && version.length > 0 ? version : null;
-		let facts;
-		try {
-			facts = await appBootFacts(owner.dir);
-		} catch {
-			facts = null;
-		}
-		return {
-			dshVersion,
-			templates: facts?.templates ?? profileTemplatesOf(void 0),
-			patchLists: facts?.patchLists ?? null,
-			peerCheck: facts?.peerCheck ?? null
-		};
+		return owner !== null && isHarnessManifest(owner.manifest) ? owner : null;
 	} catch {
-		return noHarness();
+		return null;
 	}
+}
+/** The dsh package `locate` resolves, with its manifest read from the path
+* the service answers. Null when the service resolves nothing, the answer
+* carries no manifest path, or that file cannot be read or parsed as a dsh
+* manifest — each of which forms no verdict rather than a wrong one. */
+function locatedHarness(locate) {
+	let manifestPath;
+	try {
+		manifestPath = locate.packages.packageOf(DSH_PACKAGE, locate.parentURL)?.manifestPath;
+	} catch {
+		return null;
+	}
+	if (typeof manifestPath !== "string") return null;
+	try {
+		const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+		return isHarnessManifest(manifest) ? {
+			dir: dirname(manifestPath),
+			manifest
+		} : null;
+	} catch {
+		return null;
+	}
+}
+/** Whether `manifest` is `@deepseek-ai/dsh`'s. */
+function isHarnessManifest(manifest) {
+	return typeof manifest === "object" && manifest !== null && manifest.name === "@deepseek-ai/dsh";
+}
+/** The verdict for one dsh package directory and its manifest. */
+async function harnessFactsOf(dir, manifest) {
+	const { version } = manifest;
+	const dshVersion = typeof version === "string" && version.length > 0 ? version : null;
+	let facts;
+	try {
+		facts = await appBootFacts(dir);
+	} catch {
+		facts = null;
+	}
+	return {
+		dshVersion,
+		templates: facts?.templates ?? profileTemplatesOf(void 0),
+		patchLists: facts?.patchLists ?? null,
+		peerCheck: facts?.peerCheck ?? null
+	};
 }
 //#endregion
 //#region src/host/plugin-manager.ts
@@ -4150,6 +4677,16 @@ function readChange(raw) {
 		failedAt: text(result.failedAt),
 		changed: typeof result.changed === "boolean" ? result.changed : null,
 		truncated: run.truncated === true
+	};
+}
+function readUpdate(raw) {
+	const answer = record(raw);
+	return {
+		from: text(answer.from),
+		to: text(answer.to),
+		step: text(answer.step),
+		result: answer.result ?? null,
+		restore: answer.restore ?? null
 	};
 }
 /** True when `sentence` names a `dsh plugin` command. */
@@ -4253,33 +4790,33 @@ function thrownTail(message, desktop) {
 /** What each management code means, in dsh 0.1.7-rc.2's own terms (the
 * implementation plan of 2026-09-27, Task 2, records where each is raised). */
 const CODE_SENTENCE = {
-	"unknown-plugin": "dsh lists no plugin entry by that id",
-	"invalid-spec": "dsh could not read the install spec",
-	"ambiguous-install": "dsh could not tell which package the install added",
+	"unknown-plugin": "dsh could not find a plugin with that ID",
+	"invalid-spec": "dsh could not read the package name or install source",
+	"ambiguous-install": "dsh could not identify the installed package",
 	"not-bundle": "the package is not a dsh bundle",
 	"not-removable": "dsh does not allow removing this bundle",
-	"stop-profile": "the bundle is running and this dsh cannot unload it live, so the profile has to be stopped first",
+	"stop-profile": "this bundle is still running; stop dsh for this profile before removing it",
 	"bundle-in-use": "the bundle was switched off, but some of its plugins are still running",
-	"stale-approval": "a build approval names a package pnpm no longer holds",
+	"stale-approval": "the build approval refers to a package that pnpm no longer lists",
 	"management-required": "the plugin belongs to dsh itself",
-	unaddressable: "the plugin is not a row of the profile's own patch, so dsh cannot address it",
-	"operation-error": "dsh hit an unexpected error",
-	"already-installed": "this dsh updates no installed package in place: uninstall it, then install it again"
+	unaddressable: "the plugin is not defined in this profile's configuration, so dsh cannot change it here",
+	"operation-error": "dsh encountered an unexpected error",
+	"already-installed": "this version of dsh cannot update an installed package directly; uninstall it, then install it again"
 };
 /** What each classified pnpm failure was, as dsh classifies it. */
 const KIND_SENTENCE = {
 	"pnpm-missing": "pnpm could not be started",
-	timeout: "pnpm did not finish within dsh's own time bound",
-	"not-found": "no such package was found",
-	"no-matching-version": "no version matching the requested one was found",
-	network: "the network failed",
+	timeout: "pnpm took too long to finish",
+	"not-found": "the package could not be found",
+	"no-matching-version": "the requested version could not be found",
+	network: "the network request failed",
 	"disk-full": "the disk is full",
 	permission: "permission was denied",
 	integrity: "the downloaded package failed its integrity check"
 };
 const WHERE = {
 	registry: " at the registry",
-	"spec-host": " at the host the package is fetched from"
+	"spec-host": " while connecting to the package source"
 };
 /** An own-property read of one of the three tables above. They are object
 * literals, so a bare index read answers for Object.prototype, and a code of
@@ -4306,10 +4843,10 @@ function restorationSentence(output) {
 * so its restoration line is passed on. Without one, an install or update
 * says what dsh's own pre-check says, and an uninstall says nothing of it. */
 function versionRefusalDetail(context, change) {
-	const refused = change.incompatible.map((issue) => `${issue.name}@${issue.version} declares ${Object.entries(issue.peers).map(([peer, range]) => `${peer} ${range}`).join(", ")}, which dsh ${issue.runtimeVersion} does not satisfy`);
+	const refused = change.incompatible.map((issue) => `${issue.name}@${issue.version} requires ${Object.entries(issue.peers).map(([peer, range]) => `${peer} ${range}`).join(", ")}, which dsh ${issue.runtimeVersion} does not satisfy`);
 	const restored = restorationSentence(change.output) ?? (context.operation === "uninstall" || change.truncated ? null : "Nothing was installed.");
 	const base = `dsh-plugin-shop: dsh refused the ${context.operation}: ${refused.join("; ")}.${restored === null ? "" : ` ${restored}`}`;
-	if (context.desktop) return `${base} dsh's CLI, which grants version exemptions, does not manage the desktop profile, and this shop grants none.`;
+	if (context.desktop) return `${base} Version exemptions are not available here: the dsh CLI cannot manage desktop profiles, and the shop cannot grant them.`;
 	const commands = change.incompatible.map((issue) => allowVersionCommand(context.profile, issue)).filter((command) => command !== null);
 	if (commands.length === 0) return base;
 	return `${base} To accept the risk of crashes or data loss for ${commands.length === 1 ? "this exact version" : "these exact versions"}, run: ${commands.join("; ")} - then ${context.operation} again.`;
@@ -4334,9 +4871,9 @@ function codeReason(change, code) {
 * Add plugin dialog refuses a name the profile already holds, so it cannot
 * rerun an update, and with no name listed it offers no such button. */
 function desktopBuildsDetail(context, change, held) {
-	const base = `dsh-plugin-shop: pnpm is holding the build scripts of ${held}, which it blocks by default, and this shop never allows them.`;
+	const base = `dsh-plugin-shop: pnpm blocked build scripts for ${held}. These scripts need approval, which the shop cannot grant.`;
 	if (context.operation !== "install" || change.pendingBuilds.length === 0) return base;
-	return `${base} dsh's Plugins page offers "Allow these scripts and retry" when an install it runs stops on them.`;
+	return `${base} Try installing from dsh's Plugins page. If these scripts block the install there, use "Allow these scripts and retry" to approve them.`;
 }
 /** What a `cancelled` answer means, for every reader: the shop's deadline
 * asked dsh to stop the operation, and dsh answers `cancelled` only once its
@@ -4349,7 +4886,7 @@ function desktopBuildsDetail(context, change, held) {
 * update. */
 function cancelledDetail(context) {
 	const seconds = Math.max(1, Math.round(context.timeoutMs / 1e3));
-	return `dsh-plugin-shop: the ${context.operation} did not finish within ${seconds}s, so the shop cancelled it. dsh stopped it, restored the profile's package.json and pnpm-lock.yaml, and installed nothing. Try the ${context.operation} again from the shop.`;
+	return `dsh-plugin-shop: the ${context.operation} did not finish within ${seconds}s, so the shop cancelled it. dsh restored the profile's package.json and pnpm-lock.yaml. Nothing was installed. Try the ${context.operation} again from the shop.`;
 }
 /** A `ChangeResult` as the shop's terminal install record: design
 * 2026-09-26-plugin-manager-delegation, section 5, read by the first rule
@@ -4371,6 +4908,10 @@ function managerOutcome(raw, context) {
 			detail: `${outcome.detail}${needsPeriod ? "." : ""} ${switchedOff}`
 		};
 	}
+	if (outcome.state === "failed" && change.changed === true) return {
+		...outcome,
+		retry: false
+	};
 	return outcome;
 }
 /** The section 5 rules, in order; the first that matches wins. */
@@ -4395,12 +4936,12 @@ function outcomeByRule(change, context) {
 			};
 			return {
 				state: "failed",
-				detail: `dsh-plugin-shop: pnpm is holding the build scripts of ${held}, which it blocks by default: run \`pnpm approve-builds\` in the profile directory to allow them, then ${context.operation} again.`
+				detail: `dsh-plugin-shop: pnpm blocked build scripts for ${held}. To review and allow them, run \`pnpm approve-builds\` in the profile directory, then ${context.operation} again.`
 			};
 		}
 		if (change.kind === "timeout" && change.failedAt === "spec-host") return {
 			state: "failed",
-			detail: `dsh-plugin-shop: the ${context.operation} failed at the host the package is fetched from: dsh checks that a GitHub repository is reachable before pnpm runs, and that check did not finish within its bound (5 s by default), so pnpm never ran.`
+			detail: `dsh-plugin-shop: the ${context.operation} stopped because the GitHub connection check timed out (5 s by default). pnpm has not run. Check your connection to GitHub and try again.`
 		};
 		const sentence = lookup(KIND_SENTENCE, change.kind);
 		if (sentence !== void 0) {
@@ -4418,7 +4959,8 @@ function outcomeByRule(change, context) {
 	}
 	if (change.errorCode !== null) return {
 		state: "failed",
-		detail: `dsh-plugin-shop: dsh ${change.errorCode === "operation-error" ? `could not ${context.operation} ${context.name}` : `refused the ${context.operation} of ${context.name}`} (${change.errorCode})${codeReason(change, change.errorCode)}`
+		detail: `dsh-plugin-shop: dsh ${change.errorCode === "operation-error" ? `could not ${context.operation} ${context.name}` : `refused the ${context.operation} of ${context.name}`} (${change.errorCode})${codeReason(change, change.errorCode)}`,
+		...change.errorCode === "already-installed" ? { retry: false } : {}
 	};
 	if (change.application === "cancelled") return {
 		state: "failed",
@@ -4433,7 +4975,7 @@ function outcomeByRule(change, context) {
 		activation: "restart"
 	};
 	if (change.application === "applied" || change.application === "overridden") {
-		const note = change.application === "overridden" ? { detail: "Saved, but a higher-priority layer (the home or invocation patch) decides whether it runs." } : {};
+		const note = change.application === "overridden" ? { detail: "Saved, but a home or startup configuration overrides this setting and controls whether the plugin runs." } : {};
 		if (context.operation !== "uninstall" && context.alreadyImported && !(change.application === "applied" && context.reconcilesRunningPlugins)) return {
 			state: "done",
 			activation: "restart",
@@ -4452,7 +4994,7 @@ function outcomeByRule(change, context) {
 	}
 	return {
 		state: "failed",
-		detail: `dsh-plugin-shop: dsh answered the ${context.operation} with "${change.application ?? "nothing"}", which this shop does not know how to read.`
+		detail: `dsh-plugin-shop: could not confirm the ${context.operation}. dsh returned an unrecognized status: "${change.application ?? "nothing"}".`
 	};
 }
 //#endregion
@@ -4501,7 +5043,7 @@ const messageOf = (error) => {
 	return UNREADABLE;
 };
 function startManagerOperation(options) {
-	const { profile, requestId, mechanism, logs, run, cancel, outcome, alsoConfirm, prefetcher, spec, env, desktop = false } = options;
+	const { profile, requestId, mechanism, logs, run, cancel, outcome, alsoConfirm, prefetcher, spec, env, desktop = false, command } = options;
 	const timeoutMs = options.timeoutMs ?? INSTALL_TIMEOUT_MS;
 	const mechanismLine = `${MECHANISM_PREFIX} ${mechanism}`;
 	const log = createBoundedLog();
@@ -4513,7 +5055,8 @@ function startManagerOperation(options) {
 		log: [mechanismLine, ...log.lines()],
 		...settled?.state === "done" && settled.activation !== void 0 ? { activation: settled.activation } : {},
 		...settled?.state === "done" && settled.restartReason !== void 0 ? { restartReason: settled.restartReason } : {},
-		...settled?.detail !== void 0 ? { detail: settled.detail } : {}
+		...settled?.detail !== void 0 ? { detail: settled.detail } : {},
+		...state === "failed" && command !== void 0 && settled?.retry !== false ? { command } : {}
 	});
 	const append = (line) => {
 		if (isTerminalInstallState(state)) return;
@@ -4565,7 +5108,7 @@ function startManagerOperation(options) {
 		} catch (error) {
 			settled = {
 				state: "failed",
-				detail: `dsh-plugin-shop: the shop could not read dsh's answer: ${messageOf(error)}`
+				detail: `dsh-plugin-shop: could not read the result from dsh: ${messageOf(error)}`
 			};
 			state = "failed";
 			return status();
@@ -4574,12 +5117,14 @@ function startManagerOperation(options) {
 			const objection = alsoConfirm();
 			if (objection !== null) result = {
 				state: "failed",
-				detail: objection
+				detail: objection,
+				retry: false
 			};
 		} catch (error) {
 			result = {
 				state: "failed",
-				detail: `dsh-plugin-shop: the shop could not check what dsh installed: ${messageOf(error)}`
+				detail: `dsh-plugin-shop: could not verify the installed plugin: ${messageOf(error)}`,
+				retry: false
 			};
 		}
 		settled = result;
@@ -4741,17 +5286,25 @@ var __esDecorate = function(ctor, descriptorIn, decorators, contextIn, initializ
 * service and to set an override that the platform check, being checked ahead
 * of the systemd one, could never reach. */
 const RESTART_BLOCKED_DETAIL = {
-	desktop: "dsh-plugin-shop: the desktop profile is managed by the DeepSeek Harness desktop app, and dsh refuses to restart it from here; restart the app to apply the change",
-	"from-default-profile": "dsh-plugin-shop: restart is not supported when dsh was launched with --from-default-profile; from dsh 0.2.1 a restart would recreate the profile from its template and delete every plugin installed in it, this shop included. Restart dsh manually without that flag to apply the change",
-	windows: "dsh-plugin-shop: restart is not supported on Windows yet; restart dsh manually to apply the change",
-	systemd: "dsh-plugin-shop: restart is disabled because this process is a systemd service — a restart would kill the takeover helper along with the unit, and the service would not come back. Set allowRestart: true in the shop row config to override.",
-	"port-zero": "dsh-plugin-shop: restart is not supported when dsh was launched with --port 0; restart dsh manually"
+	desktop: "dsh-plugin-shop: this profile is managed by the DeepSeek Harness desktop app. Restart the app to apply the change.",
+	"from-default-profile": "dsh-plugin-shop: dsh was started with --from-default-profile. In dsh 0.2.1 and later, restarting with this flag recreates the profile from its template and deletes all installed plugins, including the shop. Restart dsh manually without this flag.",
+	windows: "dsh-plugin-shop: restarting from the shop is not supported on Windows yet. Quit dsh and start it again to apply the change.",
+	systemd: "dsh-plugin-shop: dsh is managed by systemd. Restart the service manually; restarting from the shop could stop the service without bringing it back. To allow restarts from the shop, set allowRestart: true in the shop configuration.",
+	"port-zero": "dsh-plugin-shop: dsh was started with --port 0. Its port will change after a restart. Restart dsh manually and open the new address."
 };
 /** Why the shop changes nothing in the desktop profile, for every mutation
 * that spawns dsh's CLI: install, uninstall and self-update. dsh refuses
 * the profile before any of them would run (`isDesktopProfile`), and the
 * failure that surfaced instead read "pnpm failed in the profile". */
-const DESKTOP_PROFILE_DETAIL = "dsh-plugin-shop: the desktop profile is managed by the DeepSeek Harness desktop app, and dsh refuses to change it from the command line the shop runs; add and remove its plugins from the app instead";
+const DESKTOP_PROFILE_DETAIL = "dsh-plugin-shop: this profile is managed by the DeepSeek Harness desktop app. The shop cannot change it through the command line. Add or remove plugins from the app.";
+/** Why the shop's own update cannot run in the desktop profile, and where it
+* can (2026-11-06 amendment). dsh's plugin manager refuses an in-place
+* update of an installed package (`already-installed`), and the CLI
+* continuation every other profile takes cannot run here: dsh's launcher
+* refuses `--profile desktop` outright. dsh's own Plugins page has the
+* operation the shop lacks — check, remove, install, restore on failure —
+* so that page is the path, and the client's version row offers it there. */
+const DESKTOP_SELF_UPDATE_DETAIL = "dsh-plugin-shop: this profile is managed by the DeepSeek Harness desktop app, where the shop cannot replace itself while it is running. Update it from dsh's Plugins page (插件): select dsh-plugin-shop, then update it there; dsh removes and reinstalls it, restoring the old version if that fails.";
 /** Why a switch through dsh's `pluginManager` waits for an operation this
 * gateway started: dsh holds its profile lock for a whole install or removal
 * (`change()` wraps pnpm) and makes any other change wait for it up to its
@@ -4760,14 +5313,20 @@ const DESKTOP_PROFILE_DETAIL = "dsh-plugin-shop: the desktop profile is managed 
 * The shop's own row writer takes no dsh lock, so what it writes alone (the
 * CLI path's switch, and switching a deselected package off) is not
 * refused. */
-const switchWhileBusyDetail = (name) => `dsh-plugin-shop: an install, update or uninstall is still running in this profile, and dsh holds the profile until it ends; switch ${name} after it finishes.`;
+const switchWhileBusyDetail = (name) => `dsh-plugin-shop: an install, update or uninstall is still running in this profile. Wait for it to finish before changing the enabled state of ${name}.`;
 /** The line a record gains when dsh's plugin manager refuses an update in
 * place and the shop continues it through dsh's CLI (design
 * 2026-10-19-dsh-021-readiness §2): what dsh refused, and the command that
 * runs instead. It names a `dsh plugin` command, so it never reaches a
 * desktop reader: the continuation does not run in that profile. */
 function cliFallbackLine(profile, spec) {
-	return `dsh-plugin-shop: dsh's plugin manager updates no installed package in place (already-installed); running \`dsh plugin --profile ${profile} add ${spec}\` instead`;
+	return `dsh-plugin-shop: dsh's plugin manager cannot update this package directly (already-installed). Continuing with: \`dsh plugin --profile ${profile} add ${spec}\``;
+}
+/** Whether one install identity survives `state.ts`'s bounds (`KEY_MAX_LENGTH`
+* there). The RPC and the file must agree, or a star is answered saved and
+* then filtered away. */
+function isStorableKey(key) {
+	return key.length > 0 && key.length <= 300;
 }
 /** How many bytes a release tarball may be at the integrity check. The
 * registry already refuses to publish a tarball over 32 MiB, so 64 MiB is
@@ -4787,10 +5346,10 @@ async function verifyTarballSha256(fetchTarball, url, recordedSha256, maxBytes =
 	try {
 		response = await fetchTarball(url);
 	} catch (error) {
-		return `dsh-plugin-shop: the release tarball could not be fetched (network failure: ${error.message}); refusing to install`;
+		return `dsh-plugin-shop: could not download the release archive. Installation stopped. Network error: ${error.message}`;
 	}
-	if (!response.ok) return `dsh-plugin-shop: the release tarball could not be fetched (HTTP ${response.status}); refusing to install`;
-	if (response.body === null) return "dsh-plugin-shop: the release tarball has no readable body; refusing to install";
+	if (!response.ok) return `dsh-plugin-shop: could not download the release archive (HTTP ${response.status}). Installation stopped.`;
+	if (response.body === null) return "dsh-plugin-shop: the release archive response was empty or unreadable. Installation stopped.";
 	const hash = createHash("sha256");
 	let bytes = 0;
 	const reader = response.body.getReader();
@@ -4803,14 +5362,14 @@ async function verifyTarballSha256(fetchTarball, url, recordedSha256, maxBytes =
 				try {
 					await reader.cancel();
 				} catch {}
-				return `dsh-plugin-shop: the release tarball exceeds the size cap (${maxBytes} bytes); refusing to install`;
+				return `dsh-plugin-shop: the release archive exceeds the size limit (${maxBytes} bytes). Installation stopped.`;
 			}
 			hash.update(value);
 		}
 	} catch (error) {
-		return `dsh-plugin-shop: the release tarball download failed (${error.message}); refusing to install`;
+		return `dsh-plugin-shop: the release archive download failed. Installation stopped. Error: ${error.message}`;
 	}
-	if (hash.digest("hex") !== recordedSha256) return "dsh-plugin-shop: the release tarball failed sha256 verification against the catalog record; refusing to install";
+	if (hash.digest("hex") !== recordedSha256) return "dsh-plugin-shop: the release archive does not match the catalog checksum (SHA-256). Installation stopped.";
 	return null;
 }
 /** An own-property read of a dependency map parsed from the profile manifest.
@@ -4860,6 +5419,9 @@ let ShopGateway = (() => {
 	let _install_decorators;
 	let _installStatus_decorators;
 	let _installedSpecs_decorators;
+	let _shopState_decorators;
+	let _setFavorite_decorators;
+	let _rollbackStart_decorators;
 	let _installed_decorators;
 	let _uninstall_decorators;
 	let _restart_decorators;
@@ -4873,6 +5435,9 @@ let ShopGateway = (() => {
 			_install_decorators = [Remote("installStart")];
 			_installStatus_decorators = [Remote("installStatus")];
 			_installedSpecs_decorators = [Remote("installedSpecs")];
+			_shopState_decorators = [Remote("state")];
+			_setFavorite_decorators = [Remote("setFavorite")];
+			_rollbackStart_decorators = [Remote("rollbackStart")];
 			_installed_decorators = [Remote("installed")];
 			_uninstall_decorators = [Remote("uninstallStart")];
 			_restart_decorators = [Remote("restart")];
@@ -4930,6 +5495,39 @@ let ShopGateway = (() => {
 				access: {
 					has: (obj) => "installedSpecs" in obj,
 					get: (obj) => obj.installedSpecs
+				},
+				metadata: _metadata
+			}, null, _instanceExtraInitializers);
+			__esDecorate(this, null, _shopState_decorators, {
+				kind: "method",
+				name: "shopState",
+				static: false,
+				private: false,
+				access: {
+					has: (obj) => "shopState" in obj,
+					get: (obj) => obj.shopState
+				},
+				metadata: _metadata
+			}, null, _instanceExtraInitializers);
+			__esDecorate(this, null, _setFavorite_decorators, {
+				kind: "method",
+				name: "setFavorite",
+				static: false,
+				private: false,
+				access: {
+					has: (obj) => "setFavorite" in obj,
+					get: (obj) => obj.setFavorite
+				},
+				metadata: _metadata
+			}, null, _instanceExtraInitializers);
+			__esDecorate(this, null, _rollbackStart_decorators, {
+				kind: "method",
+				name: "rollbackStart",
+				static: false,
+				private: false,
+				access: {
+					has: (obj) => "rollbackStart" in obj,
+					get: (obj) => obj.rollbackStart
 				},
 				metadata: _metadata
 			}, null, _instanceExtraInitializers);
@@ -5033,10 +5631,14 @@ let ShopGateway = (() => {
 		committedRestart = null;
 		latestVersion;
 		pinFs;
+		/** Favorites and rollback records (`state.ts`), read and written through
+		* this seam so tests never touch the real profile. */
+		stateFs;
 		allowRestart;
 		env;
-		/** The platform the restart gate reads; production defaults to
-		* process.platform. The two-phase handoff is POSIX-only (restart.ts). */
+		/** The platform the restart gate reads, and the one the plugin-manager
+		* path quotes its retry line for; production defaults to process.platform.
+		* The two-phase handoff is POSIX-only (restart.ts). */
 		platform;
 		/** The parent pid `detectSupervisor` inspects; production defaults to
 		* process.ppid (a systemd unit's main process has ppid 1). */
@@ -5107,6 +5709,7 @@ let ShopGateway = (() => {
 				}
 			};
 			this.allowRestart = options.allowRestart;
+			this.stateFs = options.stateFs ?? nodeShopStateFs;
 			this.env = options.env ?? process.env;
 			this.platform = options.platform ?? process.platform;
 			this.ppid = options.ppid ?? process.ppid;
@@ -5236,9 +5839,28 @@ let ShopGateway = (() => {
 		}
 		/** The harness this process runs, read once (see `harnessRead`). */
 		runningHarness() {
-			const read = this.options.readHarness ?? readRunningHarness;
-			this.harnessRead ??= read(this.restartScript);
+			this.harnessRead ??= this.options.readHarness === void 0 ? readRunningHarness(this.restartScript, this.harnessLocator()) : this.options.readHarness(this.restartScript);
 			return this.harnessRead;
+		}
+		/** Where to ask for the running dsh when the script this process started
+		* with does not name it: the desktop app boots the profile through
+		* `@deepseek-ai/dsh-desktop-host`, whose entry owns no dsh, so
+		* `process.argv[1]` names the host rather than the harness. dsh serves its
+		* own packages through `pluginPackages` (0.1.7 on), and the profile's
+		* `cordis.yml` is the anchor the peer resolver already walks from, so the
+		* service answers with this installation's dsh (design
+		* 2026-09-01-harness-compatibility, 2026-11-06 amendment). Null when the
+		* harness offers no such service (0.1.5) or no profile was found — the
+		* script read alone then decides, as before. */
+		harnessLocator() {
+			const packages = this.harnessPackages();
+			if (packages === null) return void 0;
+			const profileDir = this.profileDirOrNone();
+			if (profileDir === null) return void 0;
+			return {
+				packages,
+				parentURL: this.profileAnchor(profileDir)
+			};
 		}
 		/** The inventory, through the wire remote: an envelope `{ ok, value }` or
 		* `{ ok: false, error }`. Each row is re-validated before trust (same
@@ -5381,7 +6003,7 @@ let ShopGateway = (() => {
 		async setEnabled(args) {
 			if (args.name === "dsh-plugin-shop" || args.name.startsWith("@deepseek-ai/")) return {
 				ok: false,
-				detail: `dsh-plugin-shop: ${args.name} is part of the harness chain and cannot be toggled from the shop`
+				detail: `dsh-plugin-shop: ${args.name} is part of dsh itself and cannot be enabled or disabled from the shop.`
 			};
 			const manager = this.pluginManager();
 			const profileDir = this.profileDirResolved();
@@ -5399,12 +6021,12 @@ let ShopGateway = (() => {
 			} catch (error) {
 				return {
 					ok: false,
-					detail: `dsh-plugin-shop: ${args.name} has a bundle patch that could not be read: ${String(error)}`
+					detail: `dsh-plugin-shop: could not read the plugin configuration for ${args.name}: ${String(error)}`
 				};
 			}
 			if (owned.length === 0) return {
 				ok: false,
-				detail: `dsh-plugin-shop: ${args.name} contributes no plugin entries, so there is nothing to enable or disable`
+				detail: `dsh-plugin-shop: ${args.name} has no plugin entries to enable or disable.`
 			};
 			const selected = this.runningProfileBundles(profileDir);
 			if (selected !== null && !selected.includes(args.name)) return this.setDeselectedEnabled(args.name, args.enabled, profileDir, owned, manager);
@@ -5412,7 +6034,7 @@ let ShopGateway = (() => {
 			const live = (await this.listInventory()).filter((entry) => ownsEntryId(ownedSet, entry.entryId));
 			if (live.length === 0) return {
 				ok: false,
-				detail: `dsh-plugin-shop: ${args.name} is installed but its entries are not in the running plugin tree; restart dsh to compose them`
+				detail: `dsh-plugin-shop: ${args.name} is installed but has not been loaded. Restart dsh to load it.`
 			};
 			if (manager !== null) {
 				if (this.hasRunningCommand()) return {
@@ -5508,7 +6130,7 @@ let ShopGateway = (() => {
 			}
 			if (manager === null) return {
 				ok: false,
-				detail: `dsh-plugin-shop: ${name} is installed but switched off at the bundle level: dsh.profile.bundles in ${join(profileDir, "package.json")} does not list it, so dsh composes none of it, and a restart will not change that. This dsh has no pluginManager service to select it again: add "${name}" back to that list and restart dsh, or uninstall it and install it again from the shop.`
+				detail: `dsh-plugin-shop: ${name} is installed but disabled. It is missing from dsh.profile.bundles in ${join(profileDir, "package.json")}, so restarting alone will not enable it. This version of dsh cannot enable the bundle from the shop. Add "${name}" back to that list and restart dsh, or uninstall it and install it again from the shop.`
 			};
 			if (this.hasRunningCommand()) return {
 				ok: false,
@@ -5520,7 +6142,7 @@ let ShopGateway = (() => {
 			} catch (error) {
 				return {
 					ok: false,
-					detail: `dsh-plugin-shop: dsh could not select ${name} again${thrownTail(messageOf(error), isDesktopProfile(this.profile))}`
+					detail: `dsh-plugin-shop: dsh could not enable ${name} again${thrownTail(messageOf(error), isDesktopProfile(this.profile))}`
 				};
 			}
 			const { change, failure } = this.readManagerAnswer(raw, {
@@ -5579,7 +6201,7 @@ let ShopGateway = (() => {
 			}
 			if (change.application === "overridden") return {
 				change,
-				failure: `dsh-plugin-shop: dsh saved ${words.request}, but a home or invocation patch, which outranks the profile's own, keeps it ${words.stays}.`
+				failure: `dsh-plugin-shop: dsh saved ${words.request}, but a home or startup configuration overrides it. The plugin remains ${words.stays}.`
 			};
 			if (change.application === "applied" || change.application === "restart-required") return {
 				change,
@@ -5587,7 +6209,7 @@ let ShopGateway = (() => {
 			};
 			return {
 				change,
-				failure: `dsh-plugin-shop: dsh answered ${words.request} with "${change.application ?? "nothing"}", which this shop does not know how to read.`
+				failure: `dsh-plugin-shop: could not confirm ${words.request}. dsh returned an unrecognized status: "${change.application ?? "nothing"}".`
 			};
 		}
 		rowConfig() {
@@ -5756,6 +6378,7 @@ let ShopGateway = (() => {
 				denied: snapshot.denied,
 				notAShop: snapshot.notAShop ?? [],
 				stars: snapshot.stars,
+				icons: snapshot.icons ?? {},
 				incompatible,
 				incompatibleHarness
 			};
@@ -5835,8 +6458,22 @@ let ShopGateway = (() => {
 			} else spec = `${args.name}@${args.version}`;
 			const isUpdate = installedSpec !== void 0;
 			const alreadyImported = isUpdate || this.imported.has(args.name);
+			const previous = isUpdate ? this.installedVersionOf(entry) : void 0;
+			const replaced = previous !== void 0 && previous !== entry.version ? previous : void 0;
 			const harness = await this.runningHarness();
 			if (manager !== null) {
+				const updateInPlace = isUpdate && entry.source === "npm" && isDesktopProfile(this.profile) ? manager.updateBundle?.bind(manager) : void 0;
+				if (updateInPlace !== void 0) {
+					const running = this.startManagerUpdate(updateInPlace, manager, entry.name, entry.version, `update ${spec}`, (raw) => this.updateOutcome(raw, this.outcomeContext(args.name, "update", alreadyImported, this.packageHasClientHalf(args.name))), () => this.postInstallHazard(args.name, harness, " It is on disk: uninstall it from the shop to undo this install."));
+					this.track(running);
+					this.recordGithubPin(entry);
+					this.rememberOnDone(running, entry, args.name, replaced);
+					return {
+						ok: true,
+						installId: running.installId,
+						state: running.status().state
+					};
+				}
 				const continues = isUpdate && !isDesktopProfile(this.profile);
 				let refusedInPlace = false;
 				const running = continueAfter(this.startManagerInstall(manager, spec, `install ${spec}`, (raw) => {
@@ -5847,6 +6484,7 @@ let ShopGateway = (() => {
 				}, () => this.postInstallHazard(args.name, harness, " It is on disk: uninstall it from the shop to undo this install.")), () => refusedInPlace, () => this.startCliInstall(args.name, spec, harness, true), cliFallbackLine(this.profile, spec));
 				this.track(running);
 				this.recordGithubPin(entry);
+				this.rememberOnDone(running, entry, args.name, replaced);
 				return {
 					ok: true,
 					installId: running.installId,
@@ -5856,6 +6494,7 @@ let ShopGateway = (() => {
 			const running = this.startCliInstall(args.name, spec, harness, alreadyImported);
 			this.recordGithubPin(entry);
 			this.track(running);
+			this.rememberOnDone(running, entry, args.name, replaced);
 			return {
 				ok: true,
 				installId: running.installId,
@@ -5915,14 +6554,14 @@ let ShopGateway = (() => {
 				packageName: name,
 				dependencies: Object.keys(this.profileDependenciesOrNone() ?? {})
 			});
-			if (clash !== null) return `dsh-plugin-shop: ${name} declares the loader entry id "${clash.id}", which ${clash.holder} already declares. dsh refuses to load a plugin tree holding a duplicate entry id, so the profile would not start.` + undo;
+			if (clash !== null) return `dsh-plugin-shop: ${name} and ${clash.holder} use the same plugin entry ID, "${clash.id}". dsh cannot start this profile while both plugins are installed.` + undo;
 			switch (patchDeclarationHazard(declaredBundlePatch({
 				profileDir: this.profileDirResolved(),
 				packageName: name
 			}), harness.patchLists)) {
 				case null: return null;
-				case "list-unsupported": return `dsh-plugin-shop: ${name} lists its bundle patch as several files, which dsh reads from 0.1.7 on; this dsh${harness.dshVersion === null ? "" : ` (${harness.dshVersion})`} reads one and would not start with it installed.` + undo;
-				case "malformed": return `dsh-plugin-shop: ${name} declares its bundle patch as neither a file path nor a list of them, which dsh refuses to load, so the profile would not start.` + undo;
+				case "list-unsupported": return `dsh-plugin-shop: ${name} uses multiple configuration files, which require dsh 0.1.7 or later. Your dsh${harness.dshVersion === null ? "" : ` (${harness.dshVersion})`} only supports one file and cannot start with this plugin installed.` + undo;
+				case "malformed": return `dsh-plugin-shop: ${name} has an invalid bundle patch declaration; it must be a file path or a list of paths. dsh cannot start this profile with the plugin installed.` + undo;
 			}
 		}
 		/** Remember a github entry's pinned commit: the manifest records only
@@ -5982,6 +6621,7 @@ let ShopGateway = (() => {
 		*/
 		startManagerInstall(manager, spec, mechanism, outcome, alsoConfirm) {
 			gateOperand(spec);
+			const command = retryCommand(this.platform, this.profile, "add", spec);
 			const cancel = manager.cancelInstall?.bind(manager);
 			return startManagerOperation({
 				profile: this.profile,
@@ -5994,8 +6634,63 @@ let ShopGateway = (() => {
 				...alsoConfirm !== void 0 ? { alsoConfirm } : {},
 				prefetcher: this.prefetcher,
 				spec,
+				desktop: isDesktopProfile(this.profile),
+				...command !== void 0 ? { command } : {}
+			});
+		}
+		/**
+		* One update through dsh's `updateBundle` (0.2.2 on): the operation dsh's
+		* own Plugins page runs, remove → install → restore. The desktop profile
+		* needs it because dsh's CLI cannot manage that profile, so the CLI
+		* continuation an update takes everywhere else is unavailable there; with
+		* neither, every desktop update ended on dsh's `already-installed`
+		* refusal (measured 2026-11-06, design 2026-11-06-desktop-updates).
+		*
+		* `spec` is the same `name@version` the install path builds, and only
+		* warms the download phase and spells the mechanism line; the service is
+		* handed the name and version `updateBundle` takes.
+		*/
+		startManagerUpdate(updateBundle, manager, name, version, mechanism, outcome, alsoConfirm) {
+			const spec = `${name}@${version}`;
+			gateOperand(spec);
+			const cancel = manager.cancelInstall?.bind(manager);
+			return startManagerOperation({
+				profile: this.profile,
+				requestId: randomUUID(),
+				mechanism,
+				logs: this.managerLogs,
+				run: (requestId) => updateBundle(name, version, { requestId }),
+				...cancel !== void 0 ? { cancel } : {},
+				outcome,
+				...alsoConfirm !== void 0 ? { alsoConfirm } : {},
+				prefetcher: this.prefetcher,
+				spec,
 				desktop: isDesktopProfile(this.profile)
 			});
+		}
+		/**
+		* What one `updateBundle` answer means to the reader: the nested change is
+		* fed to `managerOutcome` exactly as an `installBundle` answer is, and
+		* dsh's own restore attempt is named when the install failed after a
+		* removal. Saying nothing about it would leave a reader on the failure
+		* detail alone, unable to tell whether the old version is still there —
+		* dsh reinstalls it, and the answer records whether that worked.
+		*/
+		updateOutcome(raw, context) {
+			const update = readUpdate(raw);
+			const outcome = managerOutcome(update.result ?? raw, context);
+			if (outcome.state !== "failed" || update.restore === null) return outcome;
+			const restore = readChange(update.restore);
+			const sentence = restore.application !== "failed" && restore.application !== "cancelled" ? `The previously installed version${update.from === null ? "" : ` (${update.from})`} was restored.` : "Restoring the previously installed version also failed.";
+			if (outcome.detail === void 0) return {
+				...outcome,
+				detail: `dsh-plugin-shop: ${sentence}`
+			};
+			const needsPeriod = !/[.!?]$/.test(outcome.detail);
+			return {
+				...outcome,
+				detail: `${outcome.detail}${needsPeriod ? "." : ""} ${sentence}`
+			};
 		}
 		/** Keep a started record where `installStatus`, the restart gate and
 		* eviction find it, then bound the finished ones. */
@@ -6017,6 +6712,60 @@ let ShopGateway = (() => {
 			const excess = Math.max(0, finishedIds.length - ShopGateway.MAX_FINISHED_INSTALLS);
 			for (const id of finishedIds.slice(0, excess)) this.installs.delete(id);
 		}
+		/**
+		* Write the rollback record once `running` reports done.
+		*
+		* The version was captured before the spawn by the caller; this only
+		* decides WHEN it lands. A failed update therefore leaves the previous
+		* record alone — it used to replace it with the version still installed,
+		* silently losing the older rollback point (design
+		* 2026-11-02-market-borrowings §6.1 says "after the flow reports success").
+		*
+		* Every failure here is swallowed. A rollback point is a convenience; an
+		* install that would succeed must not fail because the profile directory
+		* could not take a bookmark.
+		*/
+		rememberOnDone(running, entry, name, version) {
+			if (version === void 0) return;
+			running.finished.then((status) => {
+				if (status.state !== "done") return;
+				try {
+					const state = readShopState(this.stateFs, this.profileDirResolved());
+					state.previous[identityKey(entry)] = {
+						source: entry.source,
+						name,
+						...entry.repo !== void 0 ? { repo: entry.repo } : {},
+						...entry.subdir !== void 0 ? { subdir: entry.subdir } : {},
+						version
+					};
+					writeShopState(this.stateFs, this.profileDirResolved(), state);
+				} catch {}
+			}).catch(() => {});
+		}
+		/**
+		* The version of `entry` currently on disk, or undefined when it cannot be
+		* read.
+		*
+		* npm reads the installed package's own manifest rather than the profile's
+		* dependency spec: a profile may hold a RANGE (`^1.2.3`), and recording
+		* that as "the previous version" would roll a reader forward to whatever
+		* the registry serves on the day they click. github reads the pin the shop
+		* wrote at install time, which is the commit that actually runs.
+		*/
+		installedVersionOf(entry) {
+			if (entry.source === "github") try {
+				const pins = readRepoPins(this.pinFs, this.pinsPath());
+				return pins[identityKey(entry)] ?? pins[entry.name];
+			} catch {
+				return;
+			}
+			try {
+				const manifest = JSON.parse(this.pinFs.read(join(this.profileDirResolved(), "node_modules", entry.name, "package.json")));
+				return typeof manifest.version === "string" && manifest.version.trim() !== "" ? manifest.version : void 0;
+			} catch {
+				return;
+			}
+		}
 		/** Whether any command this gateway started is still running — or still
 		* waiting its turn. */
 		hasRunningCommand() {
@@ -6030,7 +6779,7 @@ let ShopGateway = (() => {
 				found: false,
 				state: "failed",
 				log: [],
-				detail: `unknown installId: ${args.installId}`
+				detail: `The installation record (${args.installId}) is no longer available. Refresh the shop to check whether the plugin was installed.`
 			};
 			return {
 				found: true,
@@ -6056,6 +6805,154 @@ let ShopGateway = (() => {
 		*/
 		async installedSpecs() {
 			return this.profileDependenciesOrNone() ?? null;
+		}
+		/**
+		* What the shop remembers between visits: the reader's favorites and, per
+		* install identity, the version an update replaced (design
+		* 2026-11-02-market-borrowings §6–§7).
+		*
+		* `rollback` carries a VERSION rather than a spec: the client renders it as
+		* the offer ("roll back to 1.2.3"), and the spec that installs it is built
+		* by the host from the same record. A malformed or missing file reads as
+		* empty state — losing stars must never take the page down.
+		*/
+		async shopState() {
+			let state;
+			try {
+				state = readShopState(this.stateFs, this.profileDirResolved());
+			} catch {
+				return {
+					favorites: [],
+					rollback: {}
+				};
+			}
+			const rollback = {};
+			for (const [key, record] of isDesktopProfile(this.profile) ? [] : Object.entries(state.previous)) if (rollbackSpec(record) !== void 0) rollback[key] = record.version;
+			return {
+				favorites: state.favorites,
+				rollback
+			};
+		}
+		/**
+		* Star or unstar one install identity (§7).
+		*
+		* A write failure is reported rather than swallowed: the client flips its
+		* star optimistically and would otherwise show a favorite that is gone on
+		* the next visit. The key is stored verbatim — it is the identity the
+		* catalog itself uses, and an unknown one is harmless until it matches.
+		*/
+		async setFavorite(args) {
+			if (!isStorableKey(args.key)) return {
+				ok: false,
+				detail: "dsh-plugin-shop: that plugin cannot be starred in this profile."
+			};
+			let state;
+			try {
+				state = readShopState(this.stateFs, this.profileDirResolved());
+			} catch {
+				return {
+					ok: false,
+					detail: "dsh-plugin-shop: the favorites file could not be read, so nothing was saved."
+				};
+			}
+			const has = state.favorites.includes(args.key);
+			if (args.favorite && !has && state.favorites.length >= 5e3) return {
+				ok: false,
+				detail: "dsh-plugin-shop: this profile holds the maximum number of favorites."
+			};
+			if (args.favorite && !has) state.favorites.push(args.key);
+			if (!args.favorite && has) state.favorites = state.favorites.filter((key) => key !== args.key);
+			try {
+				writeShopState(this.stateFs, this.profileDirResolved(), state);
+				return { ok: true };
+			} catch (error) {
+				return {
+					ok: false,
+					detail: `The favorite could not be saved: ${error.message}`
+				};
+			}
+		}
+		/**
+		* Re-install the version an entry was updated from (§6).
+		*
+		* Takes only the install identity. The spec is built by `rollbackSpec` from
+		* this host's own record, so a client cannot name a version or a spec the
+		* shop never wrote — the same invariant `installStart` holds by building
+		* its spec from the snapshot. The install then runs through the ordinary
+		* CLI path, with the same records, activation verdict and notices an
+		* update gets.
+		*/
+		async rollbackStart(args) {
+			if (isDesktopProfile(this.profile)) return {
+				ok: false,
+				code: "desktop-profile",
+				detail: DESKTOP_PROFILE_DETAIL
+			};
+			let record;
+			try {
+				const state = readShopState(this.stateFs, this.profileDirResolved());
+				record = Object.hasOwn(state.previous, args.key) ? state.previous[args.key] : void 0;
+			} catch {
+				return {
+					ok: false,
+					code: "not-in-catalog",
+					detail: "dsh-plugin-shop: the profile's rollback records could not be read, so there is nothing to roll back to."
+				};
+			}
+			if (record === void 0) return {
+				ok: false,
+				code: "not-in-catalog",
+				detail: "dsh-plugin-shop: there is no earlier version recorded for this plugin."
+			};
+			const spec = rollbackSpec(record);
+			if (spec === void 0) return {
+				ok: false,
+				code: "version-mismatch",
+				detail: `dsh-plugin-shop: the recorded earlier version of ${record.name} cannot be installed.`
+			};
+			const current = (await this.snapshotNow()).entries.find((entry) => identityKey(entry) === args.key);
+			if (current === void 0) return {
+				ok: false,
+				code: "not-in-catalog",
+				detail: `dsh-plugin-shop: ${record.name} is no longer listed, so its earlier version cannot be restored.`
+			};
+			const holder = this.installedSpecOf(record.name);
+			if (holder !== void 0 && !installedSpecMatches(current, holder)) return {
+				ok: false,
+				code: "name-taken",
+				detail: `dsh-plugin-shop: ${record.name} is now installed from a different source, so rolling back would replace it.`
+			};
+			const harness = await this.runningHarness();
+			const running = this.startCliInstall(record.name, spec, harness, true);
+			this.track(running);
+			running.finished.then((status) => {
+				if (status.state !== "done") return;
+				try {
+					if (record.source === "github" && record.repo !== void 0) {
+						const pins = readRepoPins(this.pinFs, this.pinsPath());
+						const key = identityKey({
+							source: "github",
+							name: record.name,
+							repo: record.repo,
+							subdir: record.subdir
+						});
+						writeRepoPins(this.pinFs, this.pinsPath(), {
+							...pins,
+							[key]: record.version
+						});
+					}
+					const state = readShopState(this.stateFs, this.profileDirResolved());
+					if (Object.hasOwn(state.previous, args.key)) {
+						delete state.previous[args.key];
+						writeShopState(this.stateFs, this.profileDirResolved(), state);
+					}
+				} catch {}
+			}).catch(() => {});
+			return {
+				ok: true,
+				installId: running.installId,
+				state: running.status().state
+			};
 		}
 		/** Installed catalog plugins (§7.3): every entry of the snapshot the profile
 		* manifest declares as a dependency, with the Host's `outdated` verdict
@@ -6238,7 +7135,7 @@ let ShopGateway = (() => {
 			if (this.committedRestart !== null) return this.committedRestart;
 			if (this.hasRunningCommand()) return {
 				ok: false,
-				detail: "dsh-plugin-shop: an install is still running in this profile; a restart now would boot the new dsh against a half-written profile. Wait for it to finish and try again."
+				detail: "dsh-plugin-shop: an install is still running in this profile. Wait for it to finish before restarting so the configuration can be saved completely."
 			};
 			const blocked = this.staticRestartBlock();
 			if (blocked !== null) return {
@@ -6266,7 +7163,7 @@ let ShopGateway = (() => {
 			} catch (error) {
 				return {
 					ok: false,
-					detail: `dsh-plugin-shop: restart could not be started: ${error.message}`
+					detail: `dsh-plugin-shop: could not start the restart process: ${error.message}`
 				};
 			}
 			this.committedRestart = {
@@ -6291,7 +7188,8 @@ let ShopGateway = (() => {
 				outdated: latest !== null && lt(installed, latest),
 				restartBlocked: this.staticRestartBlock(),
 				pendingVersion: this.pendingVersion(installed),
-				bootId
+				bootId,
+				selfUpdate: isDesktopProfile(this.profile) ? "dsh-page" : null
 			};
 		}
 		/**
@@ -6330,12 +7228,16 @@ let ShopGateway = (() => {
 				ok: false,
 				detail: `dsh-plugin-shop: ${args.version} is not a valid version`
 			};
+			if (isDesktopProfile(this.profile)) return {
+				ok: false,
+				code: "desktop-manual",
+				detail: DESKTOP_SELF_UPDATE_DETAIL
+			};
 			const spec = `dsh-plugin-shop@${args.version}`;
 			if (manager !== null) {
-				const continues = !isDesktopProfile(this.profile);
 				let refusedInPlace = false;
 				const running = continueAfter(this.startManagerInstall(manager, spec, `update ${spec}`, (raw) => {
-					if (continues && readChange(raw).errorCode === "already-installed") refusedInPlace = true;
+					if (readChange(raw).errorCode === "already-installed") refusedInPlace = true;
 					return managerOutcome(raw, this.outcomeContext("dsh-plugin-shop", "update", true, true));
 				}), () => refusedInPlace, () => this.startCliSelfUpdate(spec), cliFallbackLine(this.profile, spec));
 				this.track(running);

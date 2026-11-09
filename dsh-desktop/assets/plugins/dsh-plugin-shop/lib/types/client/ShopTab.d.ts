@@ -5,7 +5,7 @@
  * §11.3.4): no render path here may ever use dangerouslySetInnerHTML. */
 import { type ReactNode } from 'react';
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
-import type { InstallArgs, ShopCatalogResult, ShopInstalledEntry, ShopInstallResult, ShopInstallStatusResult, ShopRestartResult, ShopSetEnabledResult, ShopUninstallResult, ShopUpdateResult, ShopVersionResult } from '../host/index.ts';
+import type { InstallArgs, ShopCatalogResult, ShopInstalledEntry, ShopInstallResult, ShopInstallStatusResult, ShopRestartResult, ShopSetEnabledResult, ShopStateResult, ShopUninstallResult, ShopUpdateResult, ShopVersionResult } from '../host/index.ts';
 import { type ShopPageStore } from './page-store.ts';
 /** The tab's Remote face: the Host result types, already unwrapped from the
  * wire envelope by `index.ts`; `catalog` throws on a wire error so the tab's
@@ -60,6 +60,27 @@ export interface ShopTabInjected {
     updateStart: (args: {
         version: string;
     }) => Promise<ShopUpdateResult>;
+    /** Favorites and rollback records (design 2026-11-02-market-borrowings
+     * §6–§7). Optional like `reload`: a stub written before these existed keeps
+     * working, and the tab then draws no stars and offers no rollback. */
+    state?: () => Promise<ShopStateResult>;
+    setFavorite?: (args: {
+        key: string;
+        favorite: boolean;
+    }) => Promise<{
+        ok: boolean;
+        detail?: string;
+    }>;
+    rollback?: (args: {
+        key: string;
+    }) => Promise<ShopInstallResult>;
+    /** Open the shop's own page inside dsh's plugin manager. There a
+     * self-update of the shop runs when the host reports `selfUpdate:
+     * 'dsh-page'` (the desktop profile): dsh's page has the remove → install →
+     * restore operation the shop cannot run on itself. Optional like the rest
+     * — a host or stub without the navigation service offers no move, and the
+     * button is disabled. */
+    openUpdatePage?: () => void;
     /** The §4 reload trigger, defaulted once at the tab root to a real page
      * reload. Injected so a test can observe it without touching jsdom's
      * non-writable `location.reload`. */

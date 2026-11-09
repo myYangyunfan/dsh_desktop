@@ -40,6 +40,12 @@ export interface ManagerOperationOptions {
     /** The desktop profile, whose readers can run no `dsh plugin` command: a
      * message the service call throws is scrubbed as dsh's answer is. */
     desktop?: boolean;
+    /** The CLI line that retries this operation by hand (design
+     * 2026-11-02-market-borrowings §5, 2026-11-06 amendment), or undefined
+     * where none can be offered. Attached to a failure only, as the CLI path's
+     * own line is: on a success or while running it would read as an
+     * instruction. An outcome marked `retry: false` withholds it too. */
+    command?: string;
 }
 /** What a thrown value says about itself, and total: describing an error is
  * never itself the reason a settle fails. An `Error` gives its `message`,

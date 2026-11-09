@@ -4,6 +4,7 @@ import type { SafeLogger } from './logging.js';
 import type { RpcRouter } from './rpc-router.js';
 import type { AuthenticatedPeerChannel } from './types.js';
 export interface PeerConnectionContext {
+    transportMode?: () => AuthenticatedPeerChannel['mode'];
     connectionId: string;
     peerDeviceId: string;
 }

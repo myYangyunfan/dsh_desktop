@@ -168,11 +168,11 @@ never auto-pushed to stable users by design. See the [release runbook](.github/R
 | `@deepseek-ai/dsh-workspace-anchor` | 0.1.1 | Anchor the current working directory into the stable system prompt to stop workspace drift (from kernel 0.2.1 the `{{cwd}}` prompt variable is no longer registered, so the plugin fills the real path itself) | In-house · MIT |
 | `@deepseek-ai/dsh-wsl-settings` | 0.1.0 | A "WSL backend" section in Settings: local/WSL switching, distro and install dir, liveness probe | In-house · MIT |
 | `ds-bot` | 0.2.0 | Bot team: a main bot plus long-lived bots and group chats, with @ handoffs and shared memory — a ready-to-use collaboration workspace (loader id `bot`) | [Fei2411/DeepSeek-Bot](https://github.com/Fei2411/DeepSeek-Bot) · Apache-2.0 |
-| `billion-context-dsh` | 0.2.26 | Active Context Pruning: model-driven context management, plus four model tools and the /acp-prune command | [Tyan66666/billion-context-dsh](https://github.com/Tyan66666/billion-context-dsh) · MIT |
-| `dsh-pocket` | 2.10.7 | Control the desktop web session from your phone by scanning a QR code (WebSocket passthrough + public tunnel) | [shaobeichen/dsh-pocket](https://github.com/shaobeichen/dsh-pocket) · GPL-2.0 |
+| `billion-context-dsh` | 0.2.27 | Active Context Pruning: model-driven context management, plus four model tools and the /acp-prune command | [Tyan66666/billion-context-dsh](https://github.com/Tyan66666/billion-context-dsh) · MIT |
+| `dsh-pocket` | 2.12.0 | Control the desktop web session from your phone by scanning a QR code (WebSocket passthrough + public tunnel) | [shaobeichen/dsh-pocket](https://github.com/shaobeichen/dsh-pocket) · GPL-2.0 |
 | `@deepseek-ai/dsh-openclaw-bridge` | 0.8.1 | Bridges WeChat / Feishu official channels into DSH agent sessions (chunked write-back, dedup, rate limit) | [hzhz314159/openclaw-dsh-bridge](https://github.com/hzhz314159/openclaw-dsh-bridge) · MIT |
 | `dsh-input-history` | 0.1.1 | Terminal-style ↑/↓ history of sent messages in the composer, scoped per session | In-house · MIT |
-| `dsh-easyrewrite` | 2.6.0 | Message recall and re-edit, a version pager, and its own settings centre | [Renzic-Stone/DSH-EasyRewrite](https://github.com/Renzic-Stone/DSH-EasyRewrite) · MIT |
+| `dsh-easyrewrite` | 3.0.1 | Message recall and re-edit, a version pager, and its own settings centre | [Renzic-Stone/DSH-EasyRewrite](https://github.com/Renzic-Stone/DSH-EasyRewrite) · MIT |
 | `dsh-change-review` | 0.1.2 | AI change review: the model re-checks its own just-made edits for correctness, safety and intent | In-house · MIT |
 | `dsh-offpeak` | 1.0.1 | Tidal-price guard: warns before sending at peak, and can defer work to off-peak windows | [christophersmith2737-commits/OffPeak](https://github.com/christophersmith2737-commits/OffPeak) · MIT |
 | `dsh-settings-nav-custom` | 0.1.1 | Show / hide and reorder the left-hand Settings nav items (persisted in localStorage) | Ported from EAC [DSH-EAC/EAC-Desktop](https://github.com/DSH-EAC/EAC-Desktop) · MIT |
@@ -184,13 +184,13 @@ never auto-pushed to stable users by design. See the [release runbook](.github/R
 | `dsh-prompt-optimizer` | 3.0.0 | One-click draft analysis and polishing next to the composer (SSE streaming; reuses the current session model in real time; template-based rewrite without context, intent-first polish with context; fidelity self-check and slash-command prefix protection; replace/undo/copy results; model, call-parameter and context settings in Settings) | [Y1X1n/dsh-prompt-optimizer](https://github.com/Y1X1n/dsh-prompt-optimizer) · MIT |
 | `dsh-builtin-manager` | 0.2.0 | Built-in plugin page under Settings → Plugins: search and state filters with a single-card list to view and toggle every bundled plugin (inline feedback; takes effect on next launch) | In-house · MIT |
 | `@deepseek-ai/dsh-goal-completion` | 0.1.0 | "Goal wrap-up" tab in the kernel right bar: the current session's goal state machine plus the `complete` verb the official GoalBar never exposes (two-click confirm) | In-house · MIT |
-| `dsh-free-search` | 0.9.11 | Free multi-engine web search: registers a `ctx.web` search provider that the built-in web_search picks up (loader id is `web-search-free`, not the package name) | [DDDMUC/dsh-free-search](https://github.com/DDDMUC/dsh-free-search) · MIT |
-| `dsh-plugin-shop` | 0.9.0 | Plugin shop: browse, install, enable/disable and update dsh plugins (loader id is `shop`; the client bundle id is the package name) | [LivXue/dsh-plugin-shop](https://github.com/LivXue/dsh-plugin-shop) · Apache-2.0 |
+| `dsh-free-search` | 0.9.39 | Free multi-engine web search: registers a `ctx.web` search provider that the built-in web_search picks up (loader id is `web-search-free`, not the package name) | [DDDMUC/dsh-free-search](https://github.com/DDDMUC/dsh-free-search) · MIT |
+| `dsh-plugin-shop` | 0.9.3 | Plugin shop: browse, install, enable/disable and update dsh plugins (loader id is `shop`; the client bundle id is the package name) | [LivXue/dsh-plugin-shop](https://github.com/LivXue/dsh-plugin-shop) · Apache-2.0 |
 | `@local/dsh-network-proxy` | 1.0.0 | HTTP proxy row under Settings → General: reads the system proxy and hot-swaps the fetch dispatcher (keeps the upstream `@local/*` name so GitHub updates still line up) | [baizhizzl/dsh-network-proxy](https://github.com/baizhizzl/dsh-network-proxy) · MIT |
-| `dsh-toolbox-ui` | 1.8.2 | MCP / skills toolbox: bottom-right floating panel with an MCP marketplace and skill management (loader id is `mcp-manager-ui`; its host half statically imports `smol-toml`) | [Imzl-zl/dsh-toolbox-ui](https://github.com/Imzl-zl/dsh-toolbox-ui) · MIT |
+| `dsh-toolbox-ui` | 1.10.1 | MCP / skills toolbox: bottom-right floating panel with an MCP marketplace and skill management (loader id is `mcp-manager-ui`; its host half statically imports `smol-toml`) | [Imzl-zl/dsh-toolbox-ui](https://github.com/Imzl-zl/dsh-toolbox-ui) · MIT |
 | `@bittersmilezzz/dsh-notify` | 0.4.5 | Desktop notifications: six renderer-side Web Notification events plus click-to-session, replacing the shell's "turn complete" toast from v1.0.7 | [bitterSmilezzz/dsh-notify](https://github.com/bitterSmilezzz/dsh-notify) · MIT |
-| `dsh-context` | 0.82.1 | Context insight: a right-pane context dashboard plus the `/context` command, breaking down what the current context is made of and how it evolves turn by turn | [bowenliang123/dsh-context](https://github.com/bowenliang123/dsh-context) · Apache-2.0 |
-| `ds-harness-remote` | 0.5.19 | End-to-end encrypted remote access: control this DSH from desktop / web / Android, with dsh-TUI Host support (inner dependency tree ships in the installer; WebRTC uses pure-JS werift) | [liguobao/ds-harness-remote](https://github.com/liguobao/ds-harness-remote) · MIT |
+| `dsh-context` | 0.83.0 | Context insight: a right-pane context dashboard plus the `/context` command, breaking down what the current context is made of and how it evolves turn by turn | [bowenliang123/dsh-context](https://github.com/bowenliang123/dsh-context) · Apache-2.0 |
+| `ds-harness-remote` | 0.6.4 | End-to-end encrypted remote access: control this DSH from desktop / web / Android, with dsh-TUI Host support (inner dependency tree ships in the installer; WebRTC uses pure-JS werift) | [liguobao/ds-harness-remote](https://github.com/liguobao/ds-harness-remote) · MIT |
 
 > Earlier removals, also outside the 33 registered plugins: `dsh-navbar` (navbar replacement,
 > dropped from the list and its sources deleted in `v0.6.3-beta.3`, commit `ff421ac2`),
@@ -207,7 +207,13 @@ never auto-pushed to stable users by design. See the [release runbook](.github/R
 > `scripts/lib/companion-plugins.js`.
 >
 > **2026-11-09: two plugins added at the user's request (31 → 33)** — `dsh-context`
-> (context insight, 0.82.1) and `ds-harness-remote` (end-to-end encrypted remote access, 0.5.19).
+> (context insight) and `ds-harness-remote` (end-to-end encrypted remote access).
+>
+> **Same day, one update round: eight plugins moved to npm latest** — `dsh-plugin-shop` 0.9.3,
+> `dsh-toolbox-ui` 1.10.1, `dsh-context` 0.83.0, `billion-context-dsh` 0.2.27, `dsh-free-search` 0.9.39,
+> `dsh-pocket` 2.12.0, `dsh-easyrewrite` 3.0.1, `ds-harness-remote` 0.6.4. Only "same identity and higher
+> upstream" qualifies; `better-sidebar` (locally rebuilt), `ds-bot` (vendored patch) and three name
+> collisions stay put — see `dsh-desktop/docs/builtin-plugins-inventory.md` §4.4.
 > Both are vendored upstream packages; the latter ships its own `node_modules` tree
 > (`shipsNodeModules`).
 

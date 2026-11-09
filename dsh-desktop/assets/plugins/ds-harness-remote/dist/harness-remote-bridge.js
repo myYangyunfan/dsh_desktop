@@ -1,5 +1,7 @@
 import { compactHistory } from './compact-history.js';
 import { randomUUID } from 'node:crypto';
+import { lstat, realpath, stat } from 'node:fs/promises';
+import { dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
 import { TerminalCarrierCompat, usesDuplexTerminal } from './terminal-carrier-compat.js';
 import { createEvent, encodeMessage, HARNESS_API_TRANSFER_CHUNK_BYTES, MAX_ACTIVE_TRANSFERS_PER_DIRECTION, MAX_ALPHA_STREAMS_PER_CONNECTION, MAX_HARNESS_API_TRANSFER_BYTES, MAX_SECURE_MESSAGE_BYTES, TRANSFER_IDLE_MS, } from '@dsh-remote/protocol';
 import { z } from 'zod';
@@ -77,6 +79,7 @@ export const HARNESS_REMOTE_ALLOWLIST = [
     'goals/resume',
     'job/list',
     'job/follow',
+    'job/kill',
     'llm/discoverModels',
     'llm/listConfigurableProviders',
     'llm/listProviders',
@@ -86,14 +89,22 @@ export const HARNESS_REMOTE_ALLOWLIST = [
     'pluginInventory/list',
     'pluginManager/listBundles',
     'pluginManager/listPlugins',
+    'pluginManager/listVersions',
+    'pluginManager/readBundleDetail',
     'pluginManager/setBundleEnabled',
     'pluginManager/setPluginEnabled',
+    'pluginManager/updateBundle',
     'permissionPresets/catalog',
     'schedule/list',
     'schedule/catalog',
     'schedule/history',
+    'schedule/create',
     'schedule/update',
     'schedule/delete',
+    'schedule/deleteInactive',
+    'schedule/deliveryLimits',
+    'schedule/edit',
+    'schedule/run',
     'session/attachment',
     'session/cancel',
     'session/canOpenWorkspacePath',
@@ -102,6 +113,7 @@ export const HARNESS_REMOTE_ALLOWLIST = [
     'session/follow',
     'session/fork',
     'session/list',
+    'session/events',
     'session/modelCatalog',
     'session/page',
     'session/prompt',
@@ -135,6 +147,7 @@ export const HARNESS_REMOTE_ALLOWLIST = [
     'workspaceFiles/changes',
     'officeToPdf/render',
     'officeToPdf/generation',
+    'toolResults/watch',
     'workspace/archiveSession',
     'workspace/create',
     'workspace/delete',
@@ -147,6 +160,55 @@ export const HARNESS_REMOTE_ALLOWLIST = [
     'workspace/pinSession',
     'workspace/unpinSession',
 ];
+export const WORKSPACE_FILE_READ_ENDPOINTS = new Set([
+    'workspaceFiles/read',
+    'workspaceFiles/readBytes',
+    'workspaceFiles/readAll',
+    'workspaceFiles/stat',
+]);
+const MAX_READ_BYTES = 4 * 1024 * 1024;
+/** Locale-independent "HH:mm" / "HH:mm:ss" / "HH:mm:ss.SSS". */
+const LOCAL_TIME = /^\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?$/u;
+const localTimeSchema = z.object({
+    time: z.string().regex(LOCAL_TIME, 'expected HH:mm or HH:mm:ss'),
+    time_zone: z.string().min(1).max(64),
+}).strict();
+const nonBlank = (max) => z.string().max(max).refine(value => value.trim().length > 0, 'must not be blank');
+const scheduleCreateArgsSchema = z.object({
+    sessionId: nonBlank(128),
+    title: nonBlank(120),
+    prompt: nonBlank(20_000),
+    after_seconds: z.number().int().positive().max(31_536_000).optional(),
+    at: z.union([
+        z.string().min(1).max(64),
+        z.object({ date: nonBlank(32), time: nonBlank(32), time_zone: nonBlank(64) }).strict(),
+    ]).optional(),
+    every_seconds: z.number().int().min(60).max(31_536_000).optional(),
+    daily: localTimeSchema.optional(),
+    weekly: z.object({
+        time: z.string().regex(LOCAL_TIME, 'expected HH:mm or HH:mm:ss'),
+        time_zone: z.string().min(1).max(64),
+        weekdays: z.array(z.number().int().min(1).max(7)).min(1).max(7)
+            .refine(days => new Set(days).size === days.length, 'weekdays must be unique'),
+    }).strict().optional(),
+    cron: z.object({ expression: nonBlank(128), time_zone: z.string().min(1).max(64) }).strict().optional(),
+}).strict();
+/**
+ * Refusals the reminder service publishes to clients. Anything else (fs errors,
+ * storage faults, arbitrary thrown values) is reported as a generic failure so
+ * internal detail never reaches the wire.
+ */
+const PUBLIC_SCHEDULE_ERRORS = {
+    invalid_prompt: 'The reminder prompt was rejected.',
+    invalid_selector: 'Exactly one reminder trigger is required.',
+    invalid_rule: 'The reminder rule was rejected.',
+    invalid_time_zone: 'The reminder time zone is not supported.',
+    subagent_session: 'The target session is controlled by a delegated child.',
+    session_not_found: 'The target session no longer exists.',
+    schedule_limit: 'This session already has the maximum number of reminders.',
+    schedule_ended: 'The reminder has already ended.',
+    schedule_conflict: 'The reminder changed on the Host. Reload and retry.',
+};
 const allowedEndpoints = new Set(HARNESS_REMOTE_ALLOWLIST);
 /** Host-side adapter from the encrypted peer channel to the official alpha Gateway carrier. */
 export class HarnessRemoteBridge {
@@ -156,18 +218,22 @@ export class HarnessRemoteBridge {
     harnessVersion;
     terminal;
     codexWorkspace;
+    resolveWorkspaceRoot;
+    schedule;
     compactHistoryEnabled = false;
     streams = new Map();
     incomingTransfers = new Map();
     outgoingTransfers = new Map();
     terminalCarrier;
-    constructor(gateway, publish, logger, harnessVersion, terminal = new TerminalPolicy(() => false, "", new Map()), codexWorkspace) {
+    constructor(gateway, publish, logger, harnessVersion, terminal = new TerminalPolicy(() => false, "", new Map()), codexWorkspace, resolveWorkspaceRoot, schedule) {
         this.gateway = gateway;
         this.publish = publish;
         this.logger = logger;
         this.harnessVersion = harnessVersion;
         this.terminal = terminal;
         this.codexWorkspace = codexWorkspace;
+        this.resolveWorkspaceRoot = resolveWorkspaceRoot;
+        this.schedule = schedule;
         this.terminalCarrier = usesDuplexTerminal(harnessVersion) ? new TerminalCarrierCompat(gateway) : undefined;
     }
     async call(input) {
@@ -198,6 +264,9 @@ export class HarnessRemoteBridge {
         }
         if (codexResult !== undefined)
             return reservation === undefined ? codexResult : this.terminal.result(params.endpoint, params.payload, codexResult, reservation);
+        if (params.endpoint === 'schedule/create') {
+            return this.createSchedule(params.payload);
+        }
         if (params.endpoint === 'session/canOpenWorkspacePath') {
             return { ok: true, value: true };
         }
@@ -209,7 +278,11 @@ export class HarnessRemoteBridge {
         const startedAt = performance.now();
         const signal = AbortSignal.timeout(60_000);
         try {
-            const nativePayload = normalizeWorkspaceRequestPayload(params.endpoint, params.payload, this.harnessVersion);
+            let nativePayload = normalizeWorkspaceRequestPayload(params.endpoint, params.payload, this.harnessVersion);
+            nativePayload = await normalizeSessionAttachmentPayload(params.endpoint, nativePayload, this.harnessVersion, this.gateway, signal);
+            if (this.resolveWorkspaceRoot !== undefined && WORKSPACE_FILE_READ_ENDPOINTS.has(params.endpoint)) {
+                nativePayload = await this.assertNativeWorkspaceFileCall(params.endpoint, nativePayload, signal);
+            }
             const nativeResult = params.endpoint === 'commands/execute'
                 ? await dispatchCommandForHost(this.gateway, params.payload, signal, this.harnessVersion)
                 : this.terminalCarrier !== undefined && (params.endpoint === 'terminal/write' || params.endpoint === 'terminal/resize')
@@ -227,8 +300,9 @@ export class HarnessRemoteBridge {
             // contract stable by converting only the two bounded preview responses
             // to canonical base64. (Codex/ACP workspace bridges already return the
             // wire shape and are left unchanged.)
-            const wireResult = normalizeWorkspaceBinaryResult(params.endpoint, this.compactHistoryEnabled && ['session/page', 'session/history', 'subagent/history'].includes(params.endpoint)
-                ? compactHistory(result) : result);
+            const filteredResult = filterSessionListProjections(params.endpoint, result);
+            const wireResult = normalizeWorkspaceBinaryResult(params.endpoint, this.compactHistoryEnabled && ['session/page', 'session/events', 'session/history', 'subagent/history'].includes(params.endpoint)
+                ? compactHistory(filteredResult) : filteredResult);
             return reservation === undefined ? wireResult : this.terminal.result(params.endpoint, params.payload, wireResult, reservation);
         }
         catch (error) {
@@ -249,6 +323,53 @@ export class HarnessRemoteBridge {
                 code: this.gateway.failure(error).code,
             });
             throw error;
+        }
+    }
+    /** Validate one untrusted create request, then delegate to the Host schedule service. */
+    async createSchedule(payload) {
+        if (this.schedule === undefined) {
+            return {
+                ok: false,
+                error: { code: 'FEATURE_NOT_SUPPORTED', message: 'This Host does not expose the schedule service.', details: {} },
+            };
+        }
+        const args = requestArgs(payload);
+        const selectors = ['after_seconds', 'at', 'every_seconds', 'daily', 'weekly', 'cron'].filter(key => args[key] !== undefined);
+        if (selectors.length !== 1) {
+            return {
+                ok: false,
+                error: { code: 'invalid_selector', message: 'Exactly one reminder selector is required.', details: {} },
+            };
+        }
+        const parsed = scheduleCreateArgsSchema.safeParse(args);
+        if (!parsed.success) {
+            const issue = parsed.error.issues[0];
+            return {
+                ok: false,
+                error: {
+                    code: 'invalid_rule',
+                    message: issue === undefined ? 'The reminder request is invalid.' : `${issue.path.join('.') || 'request'}: ${issue.message}`,
+                    details: {},
+                },
+            };
+        }
+        const { sessionId, ...request } = parsed.data;
+        try {
+            // The service is expected to honour the signal; the timeout bounds how long
+            // a stuck create can hold the bridge open, not the provider's own work.
+            const record = await this.schedule.create(sessionId, request, AbortSignal.timeout(60_000));
+            return { ok: true, value: record };
+        }
+        catch (error) {
+            const published = isRecord(error) && typeof error.code === 'string' ? PUBLIC_SCHEDULE_ERRORS[error.code] : undefined;
+            if (published === undefined) {
+                return {
+                    ok: false,
+                    error: { code: 'FAILED', message: 'The Host could not create the reminder.', details: {} },
+                };
+            }
+            const code = error.code;
+            return { ok: false, error: { code, message: published, details: {} } };
         }
     }
     async directoryList(payload, signal) {
@@ -415,6 +536,10 @@ export class HarnessRemoteBridge {
         await Promise.all([this.gateway.dispose?.(), this.codexWorkspace?.closeAll()]);
     }
     async checkPluginManagement(endpoint, payload) {
+        if (endpoint === 'pluginManager/updateBundle') {
+            await this.checkRemoteBundleUpdate(payload);
+            return;
+        }
         if (endpoint !== 'pluginManager/setPluginEnabled' && endpoint !== 'pluginManager/setBundleEnabled')
             return;
         const plugin = endpoint === 'pluginManager/setPluginEnabled';
@@ -434,12 +559,33 @@ export class HarnessRemoteBridge {
         const row = result.value.find(value => isRecord(value) && value[plugin ? 'entryId' : 'name'] === args[key]);
         if (!isRecord(row) || row.readOnlyReason !== undefined)
             throw new RpcError('PERMISSION_DENIED', 'The Host plugin cannot be changed remotely.');
-        const remoteModule = (value) => typeof value === 'string'
-            && /^(?:ds-harness-remote|dsh-remote)(?:\/|$)/.test(value);
-        if (remoteModule(plugin ? row.moduleName : row.name)
-            || (!plugin && (!Array.isArray(row.rows) || row.rows.some(value => !isRecord(value) || remoteModule(value.moduleName))
-                || (Array.isArray(row.overrides) && row.overrides.some(value => remoteModule(value) || value === 'ds-harness-remote-tui'))))) {
+        if (remoteOwnedBundleRow(row, plugin)) {
             throw new RpcError('PERMISSION_DENIED', 'The Remote plugin can only be enabled or disabled locally on the Host.');
+        }
+    }
+    /**
+     * 0.2.2 adds official third-party bundle updates. Keep the mutation available
+     * to trusted devices but never let a Remote user replace this plugin (or a
+     * bundle owning it) from over the encrypted channel.
+     */
+    async checkRemoteBundleUpdate(payload) {
+        const parsed = z.object({
+            args: z.object({
+                name: z.string().min(1).max(4096),
+                version: z.string().min(1).max(256),
+            }).strict(),
+        }).strict().safeParse(payload);
+        if (!parsed.success)
+            throw new RpcError('INVALID_MESSAGE', 'Invalid plugin update request.');
+        const result = await this.gateway.dispatch('pluginManager/listBundles', { args: {} }, AbortSignal.timeout(60_000));
+        if (!result.ok || !Array.isArray(result.value))
+            throw new RpcError('PERMISSION_DENIED', 'Cannot verify the Host plugin inventory.');
+        const row = result.value.find(value => isRecord(value) && value.name === parsed.data.args.name);
+        if (!isRecord(row) || row.readOnlyReason !== undefined || row.updatable !== true) {
+            throw new RpcError('PERMISSION_DENIED', 'The Host plugin cannot be updated remotely.');
+        }
+        if (remoteOwnedBundleRow(row, false)) {
+            throw new RpcError('PERMISSION_DENIED', 'The Remote plugin can only be updated locally on the Host.');
         }
     }
     assertAllowed(endpoint) {
@@ -536,6 +682,199 @@ export class HarnessRemoteBridge {
                 transfer.finish?.(new Error('Harness Remote stream transfer timed out'));
             }
     }
+    async assertNativeWorkspaceFileCall(endpoint, payload, signal) {
+        const rootPayload = isRecord(payload) ? payload : {};
+        const args = requestArgs(payload);
+        const sessionId = typeof args.workspaceFileScopeId === 'string'
+            ? args.workspaceFileScopeId
+            : typeof args.sessionId === 'string'
+                ? args.sessionId
+                : typeof args.agentId === 'string'
+                    ? args.agentId
+                    : undefined;
+        if (sessionId === undefined) {
+            throw new RpcError('WORKSPACE_UNAVAILABLE', 'The workspace identifier is missing.');
+        }
+        const sessionWorkspace = await this.resolveWorkspaceRootForSession(sessionId, signal);
+        if (!sessionWorkspace) {
+            throw new RpcError('WORKSPACE_UNAVAILABLE', 'The workspace is unavailable.');
+        }
+        const options = isRecord(args.options) ? args.options : undefined;
+        const rawBaseFile = endpoint === 'workspaceFiles/readBytes'
+            ? (typeof options?.baseFile === 'string' ? options.baseFile : (typeof args.baseFile === 'string' ? args.baseFile : undefined))
+            : undefined;
+        if (endpoint === 'workspaceFiles/readBytes') {
+            if (options !== undefined && 'baseFile' in options && options.baseFile !== undefined && typeof options.baseFile !== 'string') {
+                throw new RpcError('WORKSPACE_PATH_DENIED', 'The requested workspace path is outside the workspace.');
+            }
+            if ('baseFile' in args && args.baseFile !== undefined && typeof args.baseFile !== 'string') {
+                throw new RpcError('WORKSPACE_PATH_DENIED', 'The requested workspace path is outside the workspace.');
+            }
+        }
+        let safeRel;
+        if (rawBaseFile !== undefined) {
+            const path = typeof args.path === 'string' ? args.path : '';
+            const relative = path.replaceAll('\\', '/');
+            if (relative.length === 0 || relative.startsWith('/') || /^[a-z][a-z\d+.-]*:/iu.test(relative) || relative.includes('\x00')) {
+                throw new RpcError('WORKSPACE_PATH_DENIED', 'The requested workspace path is outside the workspace.');
+            }
+            const baseSegments = process.platform === 'win32' ? rawBaseFile.replaceAll('\\', '/').split('/') : rawBaseFile.split('/');
+            if (baseSegments.some(segment => segment === '..')) {
+                throw new RpcError('WORKSPACE_PATH_DENIED', 'The requested workspace path is outside the workspace.');
+            }
+            const safeBaseRel = await this.verifyWorkspacePathContainment(sessionWorkspace.root, sessionWorkspace.cwd, rawBaseFile, endpoint);
+            const baseCandidate = resolve(sessionWorkspace.root, safeBaseRel);
+            const baseDir = dirname(baseCandidate);
+            const targetCandidate = resolve(baseDir, path);
+            safeRel = await this.verifyWorkspacePathContainment(sessionWorkspace.root, sessionWorkspace.cwd, targetCandidate, endpoint);
+        }
+        else {
+            const path = typeof args.path === 'string' ? args.path : '.';
+            const pathSegments = process.platform === 'win32' ? path.replaceAll('\\', '/').split('/') : path.split('/');
+            if (pathSegments.some(segment => segment === '..')) {
+                throw new RpcError('WORKSPACE_PATH_DENIED', 'The requested workspace path is outside the workspace.');
+            }
+            safeRel = await this.verifyWorkspacePathContainment(sessionWorkspace.root, sessionWorkspace.cwd, path, endpoint);
+        }
+        let finalArgs = isRecord(rootPayload.args)
+            ? { ...rootPayload.args, path: safeRel }
+            : { ...rootPayload, path: safeRel };
+        if (isRecord(finalArgs.options)) {
+            const { baseFile: _baseFile, ...restOptions } = finalArgs.options;
+            finalArgs.options = restOptions;
+        }
+        delete finalArgs.baseFile;
+        if (endpoint === 'workspaceFiles/readBytes') {
+            const range = byteOrLineRange(finalArgs);
+            const offset = typeof range.offset === 'number' && Number.isInteger(range.offset) && range.offset >= 0 ? range.offset : 0;
+            const rawLength = typeof range.length === 'number' && Number.isInteger(range.length) && range.length > 0 ? range.length : MAX_READ_BYTES;
+            const boundedLength = Math.min(rawLength, MAX_READ_BYTES);
+            const normalizedRange = { offset, length: boundedLength };
+            if (requiresWorkspaceChangePath(this.harnessVersion)) {
+                finalArgs.options = { ...(isRecord(finalArgs.options) ? finalArgs.options : {}), range: normalizedRange };
+                delete finalArgs.range;
+            }
+            else {
+                finalArgs.range = normalizedRange;
+                if (isRecord(finalArgs.options)) {
+                    finalArgs.options = { ...finalArgs.options, range: normalizedRange };
+                }
+            }
+            if ('offset' in finalArgs || 'length' in finalArgs) {
+                finalArgs.offset = offset;
+                finalArgs.length = boundedLength;
+            }
+        }
+        return isRecord(rootPayload.args) ? { ...rootPayload, args: finalArgs } : finalArgs;
+    }
+    async resolveWorkspaceRootForSession(sessionId, signal) {
+        signal.throwIfAborted();
+        if (this.resolveWorkspaceRoot === undefined) {
+            return undefined;
+        }
+        const cwd = await this.resolveWorkspaceRoot(sessionId, signal);
+        if (!cwd) {
+            throw new RpcError('WORKSPACE_UNAVAILABLE', 'The workspace is unavailable.');
+        }
+        try {
+            const root = await realpath(cwd);
+            const info = await stat(root);
+            if (!info.isDirectory())
+                throw new Error();
+            return { root, cwd };
+        }
+        catch {
+            throw new RpcError('WORKSPACE_UNAVAILABLE', 'The workspace is unavailable.');
+        }
+    }
+    async verifyWorkspacePathContainment(root, cwd, path, endpoint) {
+        const candidate = isAbsolute(path) ? resolve(path) : resolve(cwd, path);
+        if (process.platform === 'win32') {
+            const rootDrive = parse(root).root.toLowerCase();
+            const candDrive = parse(candidate).root.toLowerCase();
+            if (rootDrive !== candDrive) {
+                throw new RpcError('WORKSPACE_PATH_DENIED', 'The requested workspace path is outside the workspace.');
+            }
+        }
+        const relCwd = relative(cwd, candidate);
+        const relRoot = relative(root, candidate);
+        if (isPathOutside(relCwd) && isPathOutside(relRoot)) {
+            throw new RpcError('WORKSPACE_PATH_DENIED', 'The requested workspace path is outside the workspace.');
+        }
+        try {
+            const rootLstat = await lstat(root);
+            if (rootLstat.isSymbolicLink() || !rootLstat.isDirectory()) {
+                throw new RpcError('WORKSPACE_PATH_DENIED', 'The workspace root is invalid or a symlink.');
+            }
+            const base = !isPathOutside(relCwd) ? cwd : root;
+            const rel = relative(base, candidate);
+            const parts = rel.split(sep).filter(p => p.length > 0 && p !== '.');
+            let currentPath = base;
+            for (let i = 0; i < parts.length - 1; i++) {
+                currentPath = join(currentPath, parts[i]);
+                const dirRel = relative(base, currentPath);
+                if (isPathOutside(dirRel)) {
+                    throw new RpcError('WORKSPACE_PATH_DENIED', 'The requested workspace path is outside the workspace.');
+                }
+                const dirLstat = await lstat(currentPath);
+                if (dirLstat.isSymbolicLink() || !dirLstat.isDirectory()) {
+                    throw new RpcError('WORKSPACE_PATH_DENIED', 'An ancestor directory is invalid or a symlink.');
+                }
+            }
+            const targetLstat = await lstat(candidate);
+            if (targetLstat.isSymbolicLink()) {
+                throw new RpcError('WORKSPACE_PATH_DENIED', 'The requested workspace path is not a regular file.');
+            }
+            const canonical = await realpath(candidate);
+            if (process.platform === 'win32') {
+                const rootDrive = parse(root).root.toLowerCase();
+                const canonicalDrive = parse(canonical).root.toLowerCase();
+                if (rootDrive !== canonicalDrive) {
+                    throw new RpcError('WORKSPACE_PATH_DENIED', 'The requested workspace path is outside the workspace.');
+                }
+            }
+            const canonicalRel = relative(root, canonical);
+            if (isPathOutside(canonicalRel)) {
+                throw new RpcError('WORKSPACE_PATH_DENIED', 'The requested workspace path is outside the workspace.');
+            }
+            const info = await stat(canonical);
+            if (endpoint !== 'workspaceFiles/stat' && !info.isFile()) {
+                throw new RpcError('WORKSPACE_PATH_DENIED', 'The requested workspace path is not a regular file.');
+            }
+            if (endpoint === 'workspaceFiles/readAll' && Number(info.size) > MAX_READ_BYTES) {
+                throw new RpcError('WORKSPACE_TOO_LARGE', 'The requested workspace file is too large.');
+            }
+            // On Windows normalize backslashes to slashes; on POSIX backslashes are valid filename characters and must not be mangled
+            const safeRel = canonicalRel === '' ? '.' : (process.platform === 'win32' ? canonicalRel.replaceAll('\\', '/') : canonicalRel);
+            // Validate the exact path passed to the gateway resolves within workspace
+            const dispatchedCandidate = resolve(root, safeRel);
+            const dispatchedCanonical = await realpath(dispatchedCandidate);
+            const dispatchedRel = relative(root, dispatchedCanonical);
+            if (isPathOutside(dispatchedRel)) {
+                throw new RpcError('WORKSPACE_PATH_DENIED', 'The requested workspace path is outside the workspace.');
+            }
+            return safeRel;
+        }
+        catch (error) {
+            if (error instanceof RpcError)
+                throw error;
+            throw new RpcError('WORKSPACE_PATH_DENIED', 'The requested workspace path is unavailable.');
+        }
+    }
+}
+function isPathOutside(rel) {
+    if (rel === '..' || isAbsolute(rel))
+        return true;
+    if (process.platform === 'win32') {
+        return rel.startsWith('..\\') || rel.startsWith('../');
+    }
+    return rel.startsWith('../');
+}
+function byteOrLineRange(args) {
+    const options = isRecord(args.options) ? args.options : undefined;
+    if (options !== undefined && isRecord(options.range))
+        return options.range;
+    return isRecord(args.range) ? args.range : args;
 }
 /**
  * DSH 0.1.7 changed workspaceFiles/changes from a Session-wide feed to a
@@ -574,6 +913,166 @@ function normalizeWorkspaceRequestPayload(endpoint, payload, harnessVersion) {
         return { ...payload, args: rest };
     }
     return payload;
+}
+/**
+ * 0.2.2 changed `session/attachment` from one durable id to the full
+ * `ImageAttachmentRef` (the Host now verifies media type, byte length and
+ * dimensions against the stored object). Older Hosts only understand the id,
+ * and their strict codec rejects an unexpected `attachment` field, so reduce a
+ * Remote client's reference to `{ sessionId, attachmentId }` before dispatch.
+ *
+ * On a 0.2.2+ Host, a legacy client that only persisted the durable id cannot
+ * supply the verified reference. Recover it from the session's persisted events
+ * (`session/events`, `session/page`, `session/history`) and fill
+ * `request.attachment` so the Host can still verify and return the image.
+ */
+async function normalizeSessionAttachmentPayload(endpoint, payload, harnessVersion, gateway, signal) {
+    if (endpoint !== 'session/attachment' || !isRecord(payload) || !isRecord(payload.args))
+        return payload;
+    const request = isRecord(payload.args.request) ? payload.args.request : undefined;
+    if (request === undefined)
+        return payload;
+    const attachment = isRecord(request.attachment) ? request.attachment : undefined;
+    const attachmentId = attachment !== undefined && typeof attachment.attachmentId === 'string'
+        ? attachment.attachmentId
+        : typeof request.attachmentId === 'string' ? request.attachmentId : undefined;
+    if (attachmentId === undefined)
+        return payload;
+    if (!isDshV022OrNewer(harnessVersion)) {
+        // Pre-0.2.2 strict codec only accepts the durable id.
+        const sessionId = request.sessionId;
+        return { ...payload, args: { ...payload.args, request: { sessionId, attachmentId } } };
+    }
+    // If the client already supplied a complete reference, keep it honest.
+    if (attachment !== undefined && isCompleteImageReference(attachment))
+        return payload;
+    const reference = await findSessionAttachmentReference(gateway, request.sessionId, attachmentId, signal);
+    if (reference === undefined)
+        return payload;
+    const mergedAttachment = attachment !== undefined ? { ...reference, ...attachment } : reference;
+    return { ...payload, args: { ...payload.args, request: { ...request, attachment: mergedAttachment } } };
+}
+/** Best-effort recovery of the full `ImageAttachmentRef` a 0.2.2 Host verifies. */
+async function findSessionAttachmentReference(gateway, sessionId, attachmentId, signal) {
+    if (typeof sessionId !== 'string' || sessionId.length === 0)
+        return undefined;
+    // 1. Try session/events first (complete live stream if available)
+    try {
+        const result = await gateway.dispatch('session/events', { args: { request: { address: { kind: 'session', sessionId } } } }, signal);
+        const reference = extractAttachmentReference(result, attachmentId);
+        if (reference !== undefined)
+            return reference;
+    }
+    catch {
+        // Fall back to paginated session/page
+    }
+    // 2. Try paginating through session/page
+    let beforeSeq = undefined;
+    for (let page = 0; page < 10; page += 1) {
+        try {
+            const pageRequest = {
+                address: { kind: 'session', sessionId },
+                maxMessages: 200,
+                ...(beforeSeq !== undefined ? { beforeSeq } : {}),
+            };
+            const result = await gateway.dispatch('session/page', { args: { request: pageRequest } }, signal);
+            const reference = extractAttachmentReference(result, attachmentId);
+            if (reference !== undefined)
+                return reference;
+            if (result.ok === true && isRecord(result.value)) {
+                if (result.value.hasMore === true && typeof result.value.beforeSeq === 'number') {
+                    beforeSeq = result.value.beforeSeq;
+                    continue;
+                }
+            }
+            break;
+        }
+        catch {
+            break;
+        }
+    }
+    // 3. Fallback to session/history for older 0.2.x shapes
+    try {
+        const result = await gateway.dispatch('session/history', { args: { request: { sessionId, maxMessages: 200 } } }, signal);
+        const reference = extractAttachmentReference(result, attachmentId);
+        if (reference !== undefined)
+            return reference;
+    }
+    catch { }
+    return undefined;
+}
+/** Locate a complete image reference inside an events/records response. */
+function extractAttachmentReference(result, attachmentId) {
+    if (result.ok !== true)
+        return undefined;
+    const value = result.value;
+    let records;
+    if (Array.isArray(value))
+        records = value;
+    else if (isRecord(value)) {
+        if (Array.isArray(value.records))
+            records = value.records;
+        else if (Array.isArray(value.events))
+            records = value.events;
+    }
+    if (records === undefined)
+        return undefined;
+    for (const record of records) {
+        const found = findImageReference(record, attachmentId, 0);
+        if (found !== undefined)
+            return found;
+    }
+    return undefined;
+}
+/** Recursively find an image block carrying a complete reference for `attachmentId`. */
+function findImageReference(value, attachmentId, depth) {
+    if (depth > 12 || value === null || typeof value !== 'object')
+        return undefined;
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            const found = findImageReference(item, attachmentId, depth + 1);
+            if (found !== undefined)
+                return found;
+        }
+        return undefined;
+    }
+    const block = value;
+    const candidate = isRecord(block.attachment) ? block.attachment : block;
+    const candidateId = typeof candidate.attachmentId === 'string' ? candidate.attachmentId : undefined;
+    if (candidateId === attachmentId && isCompleteImageReference(candidate)) {
+        return {
+            attachmentId,
+            mediaType: candidate.mediaType,
+            bytes: candidate.bytes,
+            width: candidate.width,
+            height: candidate.height,
+            ...(typeof candidate.name === 'string' ? { name: candidate.name } : {}),
+        };
+    }
+    for (const nested of Object.values(block)) {
+        if (nested === null || typeof nested !== 'object')
+            continue;
+        const found = findImageReference(nested, attachmentId, depth + 1);
+        if (found !== undefined)
+            return found;
+    }
+    return undefined;
+}
+function isCompleteImageReference(value) {
+    return typeof value.mediaType === 'string'
+        && typeof value.bytes === 'number'
+        && typeof value.width === 'number'
+        && typeof value.height === 'number';
+}
+/** Whether this Host reads the 0.2.2 attachment-reference request shape. */
+function isDshV022OrNewer(version) {
+    const match = /^(?:dsh-)?v?(\d+)\.(\d+)\.(\d+)(?:-|$)/u.exec(version?.trim() ?? '');
+    if (match === null)
+        return false;
+    const major = Number(match[1]);
+    const minor = Number(match[2]);
+    const patch = Number(match[3]);
+    return major > 0 || (major === 0 && (minor > 2 || (minor === 2 && patch >= 2)));
 }
 function isDshV02OrNewer(version) {
     const match = /^(?:dsh-)?v?(\d+)\.(\d+)\.(\d+)(?:-|$)/u.exec(version?.trim() ?? '');
@@ -670,7 +1169,144 @@ function needsDirectoryFallback(result) {
         || message.includes('brower capability')
         || message.includes('directory-picker-unavailable');
 }
-/** Hide this transport's own controls only in the remote inventory projection. */
+const SESSION_PROJECTION_WHITELIST = new Set([
+    'permissions',
+    'remoteStatusKnown',
+    'codexStatus',
+    'inbox',
+    'agentTeam',
+    'turnOutline',
+    'imageLimits',
+    'turn',
+    'turnState',
+    'model',
+    'status',
+    'activeTurnId',
+    'modelSelection',
+    'userQuestions',
+    'agentPreset',
+    'sessionListMetadata',
+    'title',
+    'sessionTitle',
+    'conversationTitle',
+    'label',
+    'name',
+    'summary',
+    'metadata',
+    'session',
+    'data',
+    'view',
+    'sessionStats',
+    'tokenUsage',
+]);
+const DANGEROUS_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+const MAX_WHITELIST_PROJECTION_BYTES = 64 * 1024;
+const MAX_UNKNOWN_PROJECTION_BYTES = 4096;
+function filterSessionProjections(session) {
+    if (!isRecord(session) || !isRecord(session.projections) || !isRecord(session.projections.values)) {
+        return session;
+    }
+    const originalValues = session.projections.values;
+    const filteredValues = {};
+    let changed = false;
+    for (const [key, value] of Object.entries(originalValues)) {
+        if (DANGEROUS_KEYS.has(key)) {
+            changed = true;
+            continue;
+        }
+        const isWhitelisted = SESSION_PROJECTION_WHITELIST.has(key);
+        const limitBytes = isWhitelisted ? MAX_WHITELIST_PROJECTION_BYTES : MAX_UNKNOWN_PROJECTION_BYTES;
+        try {
+            const serialized = JSON.stringify(value);
+            if (typeof serialized === 'string' && Buffer.byteLength(serialized, 'utf8') <= limitBytes) {
+                filteredValues[key] = value;
+            }
+            else {
+                changed = true;
+            }
+        }
+        catch {
+            changed = true;
+        }
+    }
+    if (!changed)
+        return session;
+    return {
+        ...session,
+        projections: {
+            ...session.projections,
+            values: filteredValues,
+        },
+    };
+}
+/**
+ * A session catalogue above the client row bound cannot be listed at all: every
+ * client validates the shared list against a fixed maximum (2 048 rows today)
+ * before it filters by workspace, so one large account blanks the whole Remote
+ * surface (measured 5 431 rows, 4 701 of them subagent Sessions). Degrade only
+ * when the bound is actually exceeded, and degrade by dropping the rows that no
+ * client lists as roots instead of failing the listing.
+ */
+const SESSION_LIST_ROW_BUDGET = 2_048;
+function trimSessionCatalogRows(endpoint, items) {
+    if (endpoint !== 'session/list' || items.length <= SESSION_LIST_ROW_BUDGET)
+        return items;
+    const roots = items.filter(isListableRemoteSession);
+    const kept = roots.length > 0 ? roots : items;
+    return kept.length <= SESSION_LIST_ROW_BUDGET
+        ? kept
+        : kept.slice().sort((left, right) => updatedAtOf(right) - updatedAtOf(left)).slice(0, SESSION_LIST_ROW_BUDGET);
+}
+function isListableRemoteSession(session) {
+    return isRecord(session) && session.parentSessionId === undefined && session.origin !== 'subagent';
+}
+function updatedAtOf(session) {
+    return isRecord(session) && typeof session.updatedAt === 'number' ? session.updatedAt : 0;
+}
+/**
+ * Harness 0.2.2 dropped the top-level `title` from SessionSummary rows; the
+ * durable title stays in the projection block, so Remote lists render blank
+ * names unless the Host lifts it back onto the row.
+ */
+function withSessionRowTitle(session) {
+    if (!isRecord(session) || (typeof session.title === 'string' && session.title !== ''))
+        return session;
+    const values = isRecord(session.projections) ? session.projections.values : undefined;
+    const title = isRecord(values) ? values.title : undefined;
+    return typeof title === 'string' && title !== '' ? { ...session, title } : session;
+}
+export function filterSessionListProjections(resultOrEndpoint, maybeResult) {
+    const endpoint = typeof resultOrEndpoint === 'string' ? resultOrEndpoint : undefined;
+    const result = endpoint === undefined ? resultOrEndpoint : maybeResult;
+    if (endpoint !== undefined && endpoint !== 'session/list' && endpoint !== 'session/search')
+        return result;
+    if (!result || !result.ok)
+        return result;
+    const filterList = (items) => trimSessionCatalogRows(endpoint, items)
+        .map(filterSessionProjections)
+        .map(withSessionRowTitle);
+    if (isRecord(result.value)) {
+        let changed = false;
+        const updated = { ...result.value };
+        if (Array.isArray(result.value.items)) {
+            updated.items = filterList(result.value.items);
+            changed = true;
+        }
+        if (Array.isArray(result.value.sessions)) {
+            updated.sessions = filterList(result.value.sessions);
+            changed = true;
+        }
+        if (changed)
+            return { ...result, value: updated };
+    }
+    if (Array.isArray(result.value)) {
+        return {
+            ...result,
+            value: filterList(result.value),
+        };
+    }
+    return result;
+}
 function filterRemotePluginInventory(endpoint, result) {
     if (!result.ok)
         return result;
@@ -704,5 +1340,16 @@ function isRecord(value) {
 }
 function isCompactSnapshot(value) {
     return value !== null && typeof value === 'object' && value.type === 'snapshot';
+}
+/** Whether one official plugin-manager row belongs to this Remote plugin or its bundle. */
+function remoteOwnedBundleRow(row, plugin) {
+    const remoteModule = (value) => typeof value === 'string'
+        && /^(?:ds-harness-remote|dsh-remote)(?:\/|$)/.test(value);
+    if (remoteModule(plugin ? row.moduleName : row.name))
+        return true;
+    return !plugin && (!Array.isArray(row.rows)
+        || row.rows.some(value => !isRecord(value) || remoteModule(value.moduleName))
+        || (Array.isArray(row.overrides)
+            && row.overrides.some(value => remoteModule(value))));
 }
 //# sourceMappingURL=harness-remote-bridge.js.map

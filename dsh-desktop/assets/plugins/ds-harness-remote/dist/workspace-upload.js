@@ -1,3 +1,4 @@
+import { workspaceUploadMaxBytes } from './workspace-transfer-limits.js';
 import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { link, lstat, open, realpath, stat, unlink } from 'node:fs/promises';
@@ -7,21 +8,23 @@ import { RpcError } from './safe-error.js';
 export const WORKSPACE_UPLOAD_BYTES = 20 * 1024 * 1024;
 export const WORKSPACE_UPLOAD_CHUNK = 64 * 1024;
 const scope = z.object({ sessionId: z.string().min(1).max(512), uploadId: z.string().uuid() }).strict();
-const openParams = scope.extend({ name: z.string().min(1), totalBytes: z.number().int().min(0).max(WORKSPACE_UPLOAD_BYTES) }).strict();
+const openParams = scope.extend({ name: z.string().min(1), totalBytes: z.number().int().min(0).max(workspaceUploadMaxBytes("LAN")) }).strict();
 const chunkParams = scope.extend({ offset: z.number().int().min(0), data: z.string().min(1).max(Math.ceil(WORKSPACE_UPLOAD_CHUNK / 3) * 4) }).strict();
 /** One authenticated peer owns this bounded, ephemeral upload service. */
 export class WorkspaceUploadHost {
     resolveRoot;
     ttlMs;
+    transportMode;
     uploads = new Map();
     completed = new Map();
     queue = Promise.resolve();
     lifetime = new AbortController();
     timer;
     closed = false;
-    constructor(resolveRoot, ttlMs = 120_000) {
+    constructor(resolveRoot, ttlMs = 120_000, transportMode = () => undefined) {
         this.resolveRoot = resolveRoot;
         this.ttlMs = ttlMs;
+        this.transportMode = transportMode;
         this.timer = setInterval(() => { void this.serialize(() => this.expire()).catch(() => undefined); }, Math.min(ttlMs, 30_000));
         this.timer.unref();
     }
@@ -76,6 +79,8 @@ export class WorkspaceUploadHost {
     }
     async begin(input) {
         const p = openParams.parse(input);
+        if (p.totalBytes > workspaceUploadMaxBytes(this.transportMode()))
+            throw failure('UPLOAD_LIMIT');
         if (!validName(p.name))
             throw failure('UPLOAD_INVALID_NAME');
         if (this.uploads.has(p.uploadId) || this.completed.has(p.uploadId))
@@ -187,6 +192,8 @@ export class WorkspaceUploadHost {
         }
     }
     async validateRoot(upload) {
+        if (upload.totalBytes > workspaceUploadMaxBytes(this.transportMode()))
+            throw failure('UPLOAD_LIMIT');
         const current = await this.sessionRoot(upload.sessionId);
         this.assertLive();
         if (current !== upload.sourceRoot || await realpath(current) !== upload.root || await realpath(upload.root) !== upload.root)

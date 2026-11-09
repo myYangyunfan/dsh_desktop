@@ -9,7 +9,7 @@
 
 import { createElement as h, useEffect, useRef, useState } from 'react';
 
-import { POCKET_RPC_CHANNEL, POCKET_ENDPOINTS, redactStatus, compareVersions } from './api.js';
+import { POCKET_RPC_CHANNEL, POCKET_ENDPOINTS, MOBILE_RIGHTBAR_ATTRIBUTE, MOBILE_RIGHTBAR_EVENT, redactStatus, compareVersions } from './api.js';
 import { mobileApply } from './mobile/mobile-apply.tsx';
 import { NS as POCKET_NS, zh as POCKET_ZH, en as POCKET_EN } from './pocket-locales.js';
 
@@ -44,6 +44,12 @@ const styles = {
   warn: { color: 'var(--dsw-alias-state-warn-primary,#b45309)', fontSize: 12, lineHeight: 1.5 },
 };
 
+function applyMobileRightbarSetting(enabled) {
+  const on = enabled !== false;
+  document.body?.setAttribute(MOBILE_RIGHTBAR_ATTRIBUTE, on ? 'on' : 'off');
+  window.dispatchEvent(new CustomEvent(MOBILE_RIGHTBAR_EVENT, { detail: { enabled: on } }));
+}
+
 function PocketSettingsTab({ rpcCall, t }) {
   const [status, setStatus] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -71,6 +77,7 @@ function PocketSettingsTab({ rpcCall, t }) {
     try {
       const s = await call(POCKET_ENDPOINTS.status, {});
       setStatus(s);
+      applyMobileRightbarSetting(s.mobileRightbarEnabled);
       setTunnelState(s.tunnelState ?? null);
       if (s.desktop) setIsDesktop(true);
       if (s.restartNotice) {
@@ -228,7 +235,9 @@ function PocketSettingsTab({ rpcCall, t }) {
     setBusy(true);
     setError(null);
     try {
-      setStatus(await call(POCKET_ENDPOINTS.pocketReset, { confirm: true }));
+      const next = await call(POCKET_ENDPOINTS.pocketReset, { confirm: true });
+      setStatus(next);
+      applyMobileRightbarSetting(next.mobileRightbarEnabled);
       setTunnelCfg(null);
       setCustomPin(null);
       setAdvOpen(false);
@@ -257,6 +266,17 @@ function PocketSettingsTab({ rpcCall, t }) {
     } catch { /* 忽略 */ }
   };
 
+  const setMobileRightbar = async (on) => {
+    try {
+      const r = await call(POCKET_ENDPOINTS.mobileRightbarSetEnabled, { on });
+      const enabled = r.mobileRightbarEnabled === true;
+      setStatus((s) => ({ ...s, mobileRightbarEnabled: enabled }));
+      applyMobileRightbarSetting(enabled);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   // 局域网访问总开关：关闭后局域网扫码/链接直接失效（公网不受影响）。
   // 切换前弹窗确认（弹窗提醒）；服务端用 setLanEnabled 持久化，代理按 Host 实时拦截。
   const [lanToggleOpen, setLanToggleOpen] = useState(null); // null | true | false（目标 on 状态）
@@ -282,7 +302,7 @@ function PocketSettingsTab({ rpcCall, t }) {
     }
   };
 
-  // 自定义访问密码（issue #33）：公网/局域网各自设固定 8 位密码（英文字母大小写或数字）；自定义后公网不再自动轮换。
+  // 自定义访问密码（issue #33）：公网/局域网各自设固定 8–64 位密码（英文字母大小写或数字）；自定义后公网不再自动轮换。
   // customPin: { which: 'public'|'lan', value, err } | null —— 正在输入自定义密码的区块
   const [customPin, setCustomPin] = useState(null);
   const saveCustomPin = async (which) => {
@@ -306,7 +326,8 @@ function PocketSettingsTab({ rpcCall, t }) {
     h('input', {
       style: { width: 130, margin: '0 6px', padding: '4px 8px', fontSize: 14, letterSpacing: 1, textAlign: 'center', border: '1px solid var(--dsw-alias-border-l2,#d1d5db)', borderRadius: 6, outline: 'none' },
       type: 'password',
-      maxLength: 8,
+      minLength: 8,
+      maxLength: 64,
       value: customPin?.value ?? '',
       autoFocus: true,
       onChange: (e) => setCustomPin((c) => ({ ...c, value: e.target.value.replace(/[^a-zA-Z0-9]/g, ''), err: null })),
@@ -355,9 +376,9 @@ function PocketSettingsTab({ rpcCall, t }) {
   // iOS 风格小开关（重排后统一用：局域网总开关 / 局域网密码开关）
   const Switch = (on, onClick) => h('button', {
     role: 'switch', 'aria-checked': !!on,
-    style: { flexShrink: 0, width: 40, height: 22, borderRadius: 11, border: 'none', padding: 0, position: 'relative', cursor: 'pointer', font: 'inherit', background: on ? 'var(--dsw-alias-button-primary-fill, var(--dsw-alias-brand-primary,#4f6ef7))' : 'var(--dsw-alias-border-l2,#d1d5db)' },
+    style: { boxSizing: 'border-box', flexShrink: 0, width: 36, height: 20, padding: 2, border: 0, borderRadius: 999, cornerShape: 'round', position: 'relative', cursor: 'pointer', font: 'inherit', background: on ? 'var(--dsw-alias-brand-primary, #e6e8eb)' : 'var(--dsw-alias-border-l3, #3a3f46)', transition: 'background 120ms ease' },
     onClick,
-  }, h('span', { style: { position: 'absolute', top: 2, left: on ? 20 : 2, width: 18, height: 18, borderRadius: '50%', background: '#fff' } }));
+  }, h('span', { style: { display: 'block', width: 16, height: 16, borderRadius: '50%', cornerShape: 'round', background: on ? 'var(--dsw-alias-label-primary-foreground, #0f1115)' : 'var(--dsw-alias-switch-thumb, #8b9198)', transition: 'transform 120ms ease', transform: on ? 'translateX(16px)' : 'translateX(0)' } }));
   // 卡片内主内容：二维码 + 地址 + 提示
   const qrArea = (src, url, hint) => h('div', { style: { background: 'var(--dsw-alias-bg-layer-2,#f3f4f6)', borderRadius: 10, padding: '10px 12px', textAlign: 'center', margin: '10px 0' } },
     h('img', { src, alt: 'QR', style: styles.qr }),
@@ -553,6 +574,14 @@ function PocketSettingsTab({ rpcCall, t }) {
             : null,
         )
         : null,
+    ),
+
+    h('div', { style: styles.block },
+      row(
+        t('mobileRightbar'),
+        Switch(status?.mobileRightbarEnabled !== false, () => setMobileRightbar(status?.mobileRightbarEnabled === false)),
+        h('div', { style: { ...styles.muted, marginTop: 6 } }, t('mobileRightbarHint')),
+      ),
     ),
 
     error ? h('div', { style: { color: 'var(--dsw-alias-state-error-primary,#dc2626)', fontSize: 12, marginTop: 8 } }, `❌ ${errText(error)}`) : null,

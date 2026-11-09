@@ -643,4 +643,120 @@ export const WHATS_NEW = [
       },
     ],
   },
+  {
+    version: '1.8.3',
+    items: [
+      {
+        text: {
+          zh: '**有项目 MCP 的工作区，新建会话不再卡顿**：项目工具要在每个会话自己的层里再登记一遍，而以前的实现把「工具表变了」当成「每次事件都重读全表」——207 个工具的服务器上一次重算要 27 ms，而且是每个事件、每个存活会话各算一遍，所以新建一个会话十几秒都回不来。现在按连接「换代」缓存：定义没换就一次读取都不付，实测 8 个会话下一次工具变化从 33–42 ms 降到 1 ms 以内',
+          en: '**New sessions no longer stall in workspaces with a project MCP**: project tools have to be re-registered in each session\'s own layer, and the old implementation treated every "tool table changed" event as "re-read the whole table" — 27 ms per recompute on a 207-tool server, once per event and once per live session, which is why creating a session could hang for many seconds. It is now cached per connection generation: nothing is read while the definitions are unchanged, and one tool change across 8 live sessions went from 33–42 ms to under 1 ms in our measurements',
+        },
+        where: { zh: '面板 MCP → 项目 → 装了项目级 MCP 的工作区里新建会话', en: 'The panel MCP tab → Projects → creating a session in a workspace that has project-level MCP servers' },
+      },
+      {
+        text: {
+          zh: '**重连 / 改完配置之后，会话里的工具不再是「死的」**：旧实现只按工具名字对账，连接换代后会话里留着的是指向**已经关掉的连接**的旧定义，调用直接失败、而且看不出哪里不对。现在按定义对象本身对账，连接换了就换成新的那一版',
+          en: '**Tools in a session are no longer dead after a reconnect or a config change**: the old implementation reconciled by tool name only, so after a connection was rebuilt the session kept definitions pointing at the closed connection — calls just failed, with nothing to point at. Reconciliation is now by the definition object itself, so a new connection means new definitions',
+        },
+        where: { zh: '面板 MCP → 项目 → 「重连」或改完配置之后', en: 'The panel MCP tab → Projects → after "Reconnect" or after editing the config' },
+      },
+      {
+        text: {
+          zh: '**工具不会再有「时灵时不灵」的整批消失**：读不到作用域工具视图时，以前会被当成「这台服务器现在一个工具都没有」，于是把会话里已装的工具全部卸掉，等下一次变化再装回来。现在读不到就保持原状，只在面板上记下原因',
+          en: '**Project tools no longer vanish in batches**: when the scoped tool view failed to read, it used to be treated as "this server now has zero tools", which unregistered everything the session had and put it back on the next change. A failed read now leaves the current tools alone and only records the reason in the panel',
+        },
+        where: { zh: '面板 MCP → 项目（作用域读取失败时的提示）', en: 'The panel MCP tab → Projects (the notice shown when the scoped read fails)' },
+      },
+    ],
+  },
+  {
+    version: '1.9.0',
+    items: [
+      {
+        text: {
+          zh: '**延迟工具目录默认不再自己设上限**：以前目录最多列固定长度的工具名，超出部分只留一句「另有 N 个」——工具特别多时，模型可能拿着一张半截地图就去回答「没有这个能力」。现在默认**全部列出**（目录只放工具名，本身很小），「延迟参数」里新增一个**默认关闭**的「限制目录大小」开关，真要压上下文时再自己给数',
+          en: '**The deferred tool catalog no longer caps itself by default**: it used to list a fixed amount of tool names and reduce the rest to "N more", so with very many tools the model could answer "that capability does not exist" from half a map. It now lists **every** tool (names only, so it stays small), and the deferral settings gain a "Limit catalog size" switch that is **off by default** for when you do want to trim context',
+        },
+        where: { zh: '面板 MCP → 顶部「延迟参数」', en: 'Panel → MCP → "Deferral settings" at the top' },
+      },
+      {
+        text: {
+          zh: '**搜索落空时不再指错方向**：`select:` 写了个不存在的名字时，以前会把「未命中」说成「schema 都齐了，直接调」，改口之后又说成「换个关键词」——两种都不对。现在按查询形态分开回执：名字不对就说名字不对，并讲明只能逐字复制、这个名字不在目录里；用点或空格把服务器和工具连起来写的（如 `browser.capture_network`），只要真能对上现有工具就直接认',
+          en: '**A failed search no longer points the wrong way**: when `select:` named a tool that does not exist, the reply used to claim "these schemas are complete, call it directly", and after that fix it told the model to rephrase keywords — both wrong. The reply now depends on the query form: a bad name is reported as a bad name, with the note that names are matched character for character and that this one is not in the catalog; a name written as server-dot-tool (or with a space) is resolved directly when it maps to an existing tool',
+        },
+        where: { zh: '`tool_search` 搜空时的回执', en: 'The reply when `tool_search` finds nothing' },
+      },
+    ],
+  },
+  {
+    version: '1.10.0',
+    items: [
+      {
+        text: {
+          zh: '**没有可搜的工具时，`tool_search` 不再出现**：以前即使把所有 MCP 都停用、或把工具全设成常驻，搜索入口照样发给模型——它看见就搜一次空目录，白花一轮。现在只有真有工具被延迟时它才出现，一旦全部常驻/停用就随之消失',
+          en: '**`tool_search` no longer appears when there is nothing to search**: previously the search entry was sent to the model even with every MCP disabled or every tool resident, so it would search an empty catalog and waste a round. It now appears only while at least one tool is actually deferred, and disappears as soon as everything is resident or disabled',
+        },
+        where: { zh: '面板 MCP / 「工具」页：全部常驻或全部停用时', en: 'Panel MCP / "Tools" page: with everything resident or disabled' },
+      },
+      {
+        text: {
+          zh: '**改配置不再"看着成功、其实没生效"**：保存一条 MCP 之后，面板现在会分开告诉你两件事——**写进配置了吗**、**运行中的连接真按新配置起来了吗**。以前这两件事共用一句「已更新」，于是宿主的更高层配置压着同一个条目时，你会看到保存成功的提示而行为没变',
+          en: '**Saving a config no longer "looks successful" while nothing changed**: after saving an MCP entry the panel now tells you two separate facts — **was it persisted** and **did the running connection actually restart with it**. The two used to share one "updated" message, so when a higher configuration layer overrode the same entry you got a success message with unchanged behavior',
+        },
+        where: { zh: '面板保存后的回执；行内延迟/启用开关同样适用', en: 'The reply after saving in the panel; the per-row deferral and enable switches behave the same' },
+      },
+      {
+        text: {
+          zh: '**写盘与应用走同一条路**：改动不再由插件自己拼一套 loader 条目，而是把整份 profile 组合交给宿主官方入口应用一次。代价是多了一次「最终有效配置」的判定，收益是不再出现"盘上写的是 A、运行中是 B"——这一轮面板里那种"看起来正常、策略是反的"问题就是这条链路上漂出来的',
+          en: '**One path from disk to runtime**: changes are no longer assembled into loader entries by the plugin; the whole profile composition is applied once through the host\'s official entry point. The cost is one extra "final effective configuration" check; the payoff is no more "disk says A, runtime does B" — the "looks fine, policy is inverted" class of bugs in the panel came from exactly that drift',
+        },
+      },
+      {
+        text: {
+          zh: '**两代宿主同一份包**：`0.2.1-rc.5`（旧 Include / Loader 1.0.6）与 `0.2.2-rc.1`（新 Include journal / Loader 1.1.0）都用这一版，工具延迟加载、MCP 管理、技能管理在三者上行为一致；文档里写的是实际跑过的组合，不是推测',
+          en: '**One package for two host generations**: `0.2.1-rc.5` (legacy Include / Loader 1.0.6) and `0.2.2-rc.1` (journaling Include / Loader 1.1.0) both run this release, with identical deferred-loading, MCP and skills behavior. The docs state combinations that were actually exercised, not guesses',
+        },
+      },
+    ],
+  },
+  {
+    version: '1.10.1',
+    items: [
+      {
+        text: {
+          zh: '**上层只改了 `env` 也会被发现**：保存 MCP 时的覆盖判定从"条目在不在、`disabled` 对不对"升级为整份 `config` 深比较。以前更高层只改了一个字段，条目仍在、开关也对，面板就判"算数"并提示保存成功，而你拿到的是被覆盖后的配置',
+          en: '**An override that only changes `env` is now caught**: the override check on save compares the whole `config` instead of just "is the entry there and is `disabled` right". Previously a higher layer changing a single field left the entry present and the switch correct, so the panel reported success while you got the overridden configuration',
+        },
+        where: { zh: '面板保存 MCP 之后；带表达式的行仍只验存在与开关', en: 'After saving an MCP in the panel; rows with expressions still verify only presence and the switch' },
+      },
+      {
+        text: {
+          zh: '**保存回执以宿主的话为准**：写盘成功、运行中没生效时，面板显示宿主给的原因，而不是一句固定的「已保存」；`live: failed` 按错误样式显示',
+          en: '**The save reply now uses the host own words**: when the write succeeded but did not take effect at runtime, the panel shows the reason the host gives instead of a fixed "saved", and `live: failed` is rendered as an error',
+        },
+        where: { zh: '面板保存后的回执；行内延迟/启用开关同样适用', en: 'The reply after saving in the panel; the per-row deferral and enable switches behave the same' },
+      },
+      {
+        text: {
+          zh: '**PTC 会话的搜索结果重新带上返回类型**：呈现模式改为装配时判定并按 agent 记录，执行时读回。此前现代宿主上恒判 native，模型在 `run_code` 里调用工具时拿不到返回类型签名，能力面却仍报 ready',
+          en: '**Search results in PTC sessions carry the return type again**: the presentation mode is decided once at assembly time, recorded per agent, and read back when executing. On modern hosts it used to fall back to native, so tools called from `run_code` had no return-type signature while the capability surface still reported ready',
+        },
+        where: { zh: 'PTC（`run_code`）会话里的 `tool_search` 结果', en: '`tool_search` results inside PTC (`run_code`) sessions' },
+      },
+      {
+        text: {
+          zh: '**「目录上限」输入框不再消失**：关闭限制时置灰保留，并显示建议起点 12,500。卸载会让表单跳一下，你也看不出这一项原本是什么',
+          en: '**The catalog-size input no longer disappears**: turning the limit off now greys it out instead of unmounting it, with the suggested 12,500 shown. Unmounting made the form jump and hid what the field used to be',
+        },
+        where: { zh: '面板「工具加载」页的搜索参数', en: 'The search parameters on the panel "Tool loading" page' },
+      },
+      {
+        text: {
+          zh: '**延迟芯片、切换方向与概览计数读同一个值**：三处统一读"统一策略下的实际状态"。以前芯片显示实际状态、切换方向读旧字段，点一颗写着「延迟」的芯片，方向却是"再打开一次延迟"——没反应却提示成功；`setDefer` 现在也会在策略压过服务器开关时如实报告',
+          en: '**The deferral chip, the toggle direction and the overview count read one value**: all three use the effective state under the unified policy. The chip used to show the effective state while the toggle read the older field, so clicking a chip labelled "deferred" asked to defer it again — no change, yet a success message. `setDefer` also reports honestly when policy overrides the per-server switch',
+        },
+        where: { zh: '面板 MCP 列表的延迟芯片与「全部延迟」', en: 'The deferral chips and "defer all" in the MCP list' },
+      },
+    ],
+  },
 ]

@@ -28,6 +28,21 @@ export declare class CodexRemoteDomain {
     private restartAttempt;
     private available;
     private closed;
+    /**
+     * Workspace authority is intentionally not cached after a request finishes:
+     * project roots can change outside this process and must stay fail-closed.
+     * Concurrent calls during one catalog/history refresh do share this promise,
+     * though, so they do not each page the same project list independently.
+     */
+    private workspaceAuthorityPromise?;
+    /**
+     * Authorization checks are intentionally not retained after they settle:
+     * workspace roots can change outside this process and every new request must
+     * still revalidate them.  Calls that overlap one another may share the same
+     * bounded thread/read, though, which avoids duplicate first-open checks when
+     * a session history and its first prompt arrive together.
+     */
+    private readonly knownThreadPromises;
     private state;
     private unavailableCode?;
     constructor(config: ResolvedCodexConfig, logger: SafeLogger, createAppServer?: AppServerFactory, restartDelaysMs?: readonly number[]);
@@ -66,6 +81,7 @@ export declare class CodexRemoteDomain {
     private publishPermission;
     private handleServerRequest;
     private readKnownThread;
+    private readKnownThreadUncached;
     private readThreadForHistory;
     private readThreadTurns;
     private readThreadItems;
@@ -81,6 +97,7 @@ export declare class CodexRemoteDomain {
     private requireAppServer;
     private callUpstream;
     private readWorkspaceAuthority;
+    private readWorkspaceAuthorityUncached;
     private findKnownThreadInList;
     private requireCodexWorkspacePath;
     private requireNewCodexProjectPath;

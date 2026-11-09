@@ -1,3 +1,4 @@
+import type { PairingCredentials } from './pairing-contract.js';
 import type { RtcIceServer } from '@dsh-remote/webrtc';
 import type { HostIdentity } from './identity-store.js';
 import { type ServerCredentialStore, type ServerCredentials } from './server-credentials.js';
@@ -13,6 +14,7 @@ export interface OAuthProviderInfo {
     displayName: string;
     startUrl: string;
     qrStartUrl?: string | null;
+    devicePairing?: true;
 }
 export type OAuthQrPollResult = {
     status: 'pending' | 'expired';
@@ -21,7 +23,7 @@ export type OAuthQrPollResult = {
     authorization: DeviceAuthorization;
 };
 export interface DeviceAuthorization {
-    method: 'account' | 'host_registration_code' | 'owned_device';
+    method: 'account' | 'host_registration_code' | 'owned_device' | 'device_pairing';
     account?: string;
     expiresAt?: number;
     isAdmin?: boolean;
@@ -46,6 +48,7 @@ export declare class HostServerApi {
     private readonly fetchImplementation;
     private readonly role;
     readonly baseUrl: string;
+    private hostOnly;
     private identity?;
     private credentials?;
     private credentialsPromise?;
@@ -56,6 +59,9 @@ export declare class HostServerApi {
     setHarnessVersion(version: string | undefined): void;
     /** End this runtime's HTTP requests, including authentication and response bodies. */
     close(): void;
+    pairingHostOnly(): boolean;
+    loadStoredPolicy(): Promise<void>;
+    adoptPairing(result: PairingCredentials): Promise<void>;
     currentAuthorization(): DeviceAuthorization | undefined;
     /** Check the persisted device credential without issuing or refreshing one. */
     hasStoredAuthorization(): Promise<boolean>;
@@ -71,10 +77,11 @@ export declare class HostServerApi {
     refreshCredentials(rejectedAccessToken?: string | undefined): Promise<ServerCredentials>;
     private withRefreshLock;
     private rotateCredentials;
-    listDevices(): Promise<ServerHostDevice[]>;
-    deviceFor(peerDeviceId: string): Promise<AuthorizedPeerDevice>;
+    listDevices(signal?: AbortSignal): Promise<ServerHostDevice[]>;
+    devicePages(signal?: AbortSignal): AsyncGenerator<ServerHostDevice[]>;
+    deviceFor(peerDeviceId: string, signal?: AbortSignal): Promise<AuthorizedPeerDevice>;
     turnCredentials(connectionId: string): Promise<RtcIceServer[]>;
-    presenceFor(deviceId: string): Promise<{
+    presenceFor(deviceId: string, signal?: AbortSignal): Promise<{
         online: boolean;
         lastSeenAt?: number;
     }>;
@@ -94,6 +101,7 @@ export declare class ServerApiError extends Error {
     readonly retryable: boolean;
     readonly status?: number | undefined;
     readonly phase?: "credential_refresh" | undefined;
-    constructor(code: string, message: string, retryable: boolean, status?: number | undefined, phase?: "credential_refresh" | undefined);
+    readonly reason?: "http_error" | "invalid_json" | "invalid_error_envelope" | "timeout" | "network_error" | undefined;
+    constructor(code: string, message: string, retryable: boolean, status?: number | undefined, phase?: "credential_refresh" | undefined, reason?: "http_error" | "invalid_json" | "invalid_error_envelope" | "timeout" | "network_error" | undefined);
 }
 //# sourceMappingURL=server-api.d.ts.map

@@ -28,6 +28,11 @@ export interface CatalogSnapshot {
     /** GitHub star counts by package name; {} when the pointer names no
      * sidecar or the sidecar could not be fetched/verified (spec §5). */
     stars: Record<string, number>;
+    /** sha256 → data URL for the catalogue's icons; {} when the pointer names no
+     * sidecar, or it could not be fetched, verified or parsed (design
+     * 2026-10-23-shop-plugin-icons §7). Optional like `notAShop`: `loadCatalog`
+     * always sets it, and a snapshot assembled by hand need not carry it. */
+    icons?: Record<string, string>;
 }
 export interface CatalogResult {
     snapshot: CatalogSnapshot;

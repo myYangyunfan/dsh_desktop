@@ -1,5 +1,6 @@
 import { acpImageLimits } from './image-content.js';
 import { piToolResult } from './pi-tool-result.js';
+import { acpBackendLabel } from './virtual-catalog.js';
 import { AsyncValueQueue, extractSessionId, extractText, isRecord, isSurfaceEvent, optionalPositiveInteger, piPromptOutcome, piStreamOutcome, record, string, summarizeQuestions, } from './virtual-contract.js';
 export class AcpLiveProjection {
     context;
@@ -40,9 +41,10 @@ export class AcpLiveProjection {
             projections: {
                 asOfSeq: history.cursor,
                 values: {
-                    title: session.title ?? (this.context.backend === "claude" ? "Claude" : this.context.backend === "pi" ? "Pi" : this.context.backend === "opencode" ? "OpenCode" : this.context.backend === "antigravity" ? "Antigravity" : "Cursor"),
+                    title: session.title ?? acpBackendLabel(this.context.backend),
                     sessionListMetadata: { blank: session.blank && session.events.length === 0, lastPromptAt: null },
                     modelSelection: this.context.modelSelectionProjection(sessionId),
+                    permissions: this.context.permissionsProjection(sessionId),
                     imageLimits: acpImageLimits(this.context.backend),
                 },
             },
@@ -257,6 +259,11 @@ export class AcpLiveProjection {
         const requestHandle = string(params.requestHandle);
         if (requestHandle === undefined)
             return;
+        const currentPermission = this.context.permissionSelection(follow.sessionId);
+        if (currentPermission === 'danger-full-access' && method === 'session/request_permission') {
+            void this.context.client.respond(requestHandle, 'allow-once').catch(() => undefined);
+            return;
+        }
         this.context.pendingApprovals.set(requestHandle, { requestHandle, sessionId: follow.sessionId });
         const toolName = method === 'cursor/create_plan'
             ? (string(params.name) ?? 'plan')

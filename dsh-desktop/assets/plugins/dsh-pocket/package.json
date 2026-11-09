@@ -22,7 +22,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build:client": "node scripts/build-client.mjs",
+    "build:client": "node client/build.mjs",
     "release": "semantic-release",
     "test": "node --test --test-timeout=30000 \"test/*.test.js\"",
     "test:local": "node --test --test-timeout=300000 \"test/local/*.test.js\""
@@ -64,11 +64,7 @@
         "@deepseek-ai/dsh-client-ui-slots",
         "@deepseek-ai/dsh-client-ui-layout",
         "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-session-log-export",
-        "@deepseek-ai/dsh-client-ui-primitives"
-      ],
-      "external": [
-        "@deepseek-ai/dsh-client-ui-primitives/client"
+        "@deepseek-ai/dsh-session-log-export"
       ],
       "platform": "web"
     }
@@ -85,5 +81,5 @@
     "access": "public",
     "registry": "https://registry.npmjs.org/"
   },
-  "version": "2.10.7"
+  "version": "2.12.0"
 }

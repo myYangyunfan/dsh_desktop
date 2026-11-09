@@ -6,7 +6,10 @@ const credentialSchema = z.object({
     schemaVersion: z.literal(1),
     serverUrl: z.string().url(),
     deviceId: z.string().min(1),
-    authorizationMethod: z.enum(['account', 'host_registration_code', 'owned_device']),
+    authorizationMethod: z.enum(['account', 'host_registration_code', 'owned_device', 'device_pairing']),
+    accountKind: z.enum(['standard', 'device_only']).optional(),
+    pairingRestricted: z.boolean().optional(),
+    inboundOnly: z.boolean().optional(),
     account: z.string().min(1).max(254).optional(),
     accessToken: z.string().min(16),
     accessTokenExpiresAt: z.number().int().positive(),
@@ -44,6 +47,16 @@ export class ServerCredentialStore {
             await rm(lock, { recursive: true });
         }
     }
+    async pairingHostOnly() {
+        const policy = await readPrivateJson(join(dirname(this.path), 'pairing-host-only.json'));
+        if (policy === undefined)
+            return false;
+        z.object({ hostOnly: z.literal(true) }).strict().parse(policy);
+        return true;
+    }
+    async restrictPairingHostOnly() {
+        await atomicWritePrivate(join(dirname(this.path), 'pairing-host-only.json'), '{"hostOnly":true}');
+    }
     async load(serverUrl, deviceId) {
         if (!(await exists(this.path)))
             return undefined;
@@ -59,7 +72,7 @@ export class ServerCredentialStore {
     }
     async save(credentials) {
         const record = credentialSchema.parse({ schemaVersion: 1, ...credentials });
-        await atomicWrite(this.path, `${JSON.stringify(record, null, 2)}\n`);
+        await atomicWritePrivate(this.path, `${JSON.stringify(record, null, 2)}\n`);
         return record;
     }
     async clear() {
@@ -75,7 +88,7 @@ export class ServerCredentialsBusyError extends Error {
         super('Credential refresh is locked. Stop other instances; after a crash, stop all instances before removing server-credentials.json.refresh-lock and authorizing again.');
     }
 }
-async function atomicWrite(path, contents) {
+export async function atomicWritePrivate(path, contents) {
     await mkdir(dirname(path), { recursive: true, mode: 0o700 });
     const temporary = `${path}.${process.pid}.${uuidV7()}.tmp`;
     await writeFile(temporary, contents, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
@@ -102,4 +115,10 @@ async function exists(path) {
     }
 }
 function safeMessage(error) { return error instanceof Error ? error.message : 'invalid credential data'; }
+export async function readPrivateJson(path) {
+    if (!await exists(path))
+        return undefined;
+    await assertPrivateMode(path);
+    return JSON.parse(await readFile(path, 'utf8'));
+}
 //# sourceMappingURL=server-credentials.js.map

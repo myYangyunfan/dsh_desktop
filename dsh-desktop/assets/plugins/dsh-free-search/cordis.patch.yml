@@ -4,7 +4,7 @@
 # The engine is chosen from the sidebar Plugins page -> Free Search row config
 # (plugins.row.config, DSH 0.1.7-rc.1+), from the /free-search-engine command,
 # or directly via this entry's config, e.g.:
-#   provider: bing        # engine id: ddg / bing / baidu / kimi / aliyun / doubao / openai / gemini / claude / auto / multi / ...
+#   provider: auto        # 留空 = 自动（中国出口用 bing，其它用 parallel）；engine id: ddg / bing / baidu / kimi / aliyun / doubao / openai / gemini / claude / auto / multi / ...
 #   (openai/gemini/claude are model-based and bill per search; they run only when selected explicitly)
 #   region: cn-zh         # DuckDuckGo region
 #   bingMarket: zh-CN     # Bing market
@@ -29,6 +29,5 @@
     - id: web-search-free
       name: dsh-free-search
       config:
-        provider: bing
         disabledEngines: []
         bingMarket: zh-CN

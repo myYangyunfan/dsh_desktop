@@ -5,6 +5,31 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### chore(companion)：内置件更新一轮，8 件升到 npm latest（2026-11-09）
+
+按用户「看看我们内置插件有没有可以更新的，更新一下」。扫描口径与 inventory §4.4 同源：33 条在册件逐条
+比对 npm 的 `version` + `repository`（slug 归一后与本地自述比），只有**身份 same 且远端更高**才动。
+
+- **升级 8 件**（取 npm tarball 整包，版本列已同步 §一 / §5.2 / README 两表 / `THIRD_PARTY_NOTICES` §4.1）：
+  `dsh-plugin-shop` 0.9.0→**0.9.3**、`dsh-toolbox-ui` 1.8.2→**1.10.1**、`dsh-context` 0.82.1→**0.83.0**、
+  `billion-context-dsh` 0.2.26→**0.2.27**、`dsh-free-search` 0.9.11→**0.9.39**、`dsh-pocket` 2.10.7→**2.12.0**
+  （由 d-pack 线切到 npm 线）、`dsh-easyrewrite` 2.6.0→**3.0.1**（主版本跳）、`ds-harness-remote` 0.5.19→**0.6.4**。
+- **两处本地 fork 的重放**（换版不能整包覆盖，否则抹掉本仓改动）：
+  `billion-context-dsh` 的 `package.json` peer 收口（5 条 dsh 族上界 `<0.3.0-0`，并去掉上游钉死
+  `0.2.0-rc.2` 的 6 条 peer——0.2.2-rc.1 下会被兼容性预检判失败）；`dsh-free-search` 的 `lib/cache.js`
+  缓存落点（`DSH_HOME` 优先，保留 `RESEARCH_CACHE_DIR` 覆盖口，11 行）。
+- **`ds-harness-remote` 依赖树收敛**：新 deps 不再含 `werift`（0.6.4 把它收进 dist），内层树重装为
+  47 顶层包 / 3413 文件 / 34.9MB；仍不装 optional 的 `@roamhq/wrtc`。上游 `package.json` 带 `workspace:*`，
+  与入库 0.5.19 时同一个坑：装之前剥掉该协议字段、装完还原原字节。
+- **「纯 vendored」是量出来的**：同版本 tarball 与本地目录逐文件比 sha256，`differ / onlyLocal / onlyRemote`
+  三零才算纯 vendored——本轮六件过判据（shop / toolbox-ui / context / easyrewrite / pocket / harness-remote）。
+- **未动的 5 类**（原因见 inventory §4.4）：`better-sidebar` 0.30.1（本地重建件，策略排除）、
+  `bot` 0.3.1（vendored patch 排除）、`synapse` 0.5.7（`unknown` 身份，且会覆盖深色适配桥）、
+  `offpeak` / `session-manager` / `input-history`（撞名 foreign / unverifiable）、
+  `prompt-optimizer`（裸名 foreign；真上游 `@y1x1n/...` 最新 0.5.0 低于我们的 0.6.1）。
+- **台账**：`docs/builtin-plugins-inventory.md` 新增 §4.4；§5.2 的「七个数」按 `plugin-module-table`
+  重放重算（`unit-hub-registry` 的 `verdictDiff` 逐条咬住）；清单里五处版本注释随迁。
+
 ### feat(companion)：按用户要求新增两件内置插件（31 → 33，2026-11-09）
 
 - **新增清单**（均按用户点名版本落盘，上游整包 vendored，不改字节）：

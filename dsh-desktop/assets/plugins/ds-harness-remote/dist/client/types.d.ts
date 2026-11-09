@@ -4,7 +4,9 @@ export interface ControlResult<T = unknown> {
     ok: boolean;
     value?: T;
     error?: {
+        code?: string;
         message?: string;
+        details?: Record<string, unknown>;
     };
 }
 export interface FileViewerClientServiceLike {
@@ -13,7 +15,7 @@ export interface FileViewerClientServiceLike {
 export type RemoteTransportPreference = 'lan' | 'p2p' | 'turn' | 'relay';
 export interface RemoteStatus {
     mode: 'local' | 'remote';
-    backend?: 'harness' | 'codex' | 'cursor' | 'antigravity' | 'pi' | 'opencode' | 'claude';
+    backend?: 'harness' | 'codex' | 'cursor' | 'antigravity' | 'pi' | 'opencode' | 'claude' | 'hermes';
     target?: {
         deviceId: string;
         name: string;
@@ -21,10 +23,16 @@ export interface RemoteStatus {
     workspaceSelection?: RemoteWorkspaceSelection;
     available: boolean;
     controlUnavailable?: boolean;
+    startupError?: {
+        code: string;
+        message: string;
+    };
     deviceName?: string;
     deviceId?: string;
     serverUrl?: string;
     connected?: boolean;
+    recoveryGeneration?: number;
+    clientAuthRequired?: boolean;
     connectedTargetDeviceId?: string;
     transport?: 'LAN' | 'P2P' | 'TURN' | 'Relay' | 'Disconnected';
     preferredTransports?: RemoteTransportPreference[];
@@ -44,6 +52,7 @@ export interface RemoteStatus {
         pi?: boolean;
         opencode?: boolean;
         claude?: boolean;
+        hermes?: boolean;
         workspaceTypes?: ReadonlyArray<{
             id: string;
             name: string;
@@ -52,12 +61,20 @@ export interface RemoteStatus {
         }>;
     };
     network?: RemoteNetworkDetails;
+    /** npm dist-tags lookup result; present after the plugin's first successful registry check. */
+    update?: {
+        currentVersion: string;
+        latestVersion: string;
+        checkedAt: number;
+    };
     hostAuthorizationAvailable: boolean;
     host?: {
         deviceId?: string;
+        pairingHostOnly?: boolean;
         configured: boolean;
         online: boolean;
         reconnecting: boolean;
+        recoveryExpiresAt?: number;
         lastActiveAt?: number;
         error?: string;
         account?: string;
@@ -74,6 +91,7 @@ export interface RemoteStatus {
 interface RemoteNetworkDetails {
     connectionId?: string;
     connectedAt?: number;
+    recoveryExpiresAt?: number;
     controlChannelUrl: string;
     controlChannelState: 'connecting' | 'open' | 'closing' | 'closed';
     preferredTransports: RemoteTransportPreference[];
@@ -148,7 +166,7 @@ export interface CursorWorkspaceView extends RemoteWorkspaceView {
 export interface RemoteWorkspaceSelection {
     targetDeviceId: string;
     workspaceId: string;
-    backend?: 'harness' | 'codex' | 'cursor' | 'antigravity' | 'pi' | 'opencode' | 'claude';
+    backend?: 'harness' | 'codex' | 'cursor' | 'antigravity' | 'pi' | 'opencode' | 'claude' | 'hermes';
     sessionId?: string;
 }
 export interface WorkspacesClientServiceLike {
@@ -201,6 +219,9 @@ interface PluginSettings {
     loopback?: {
         ports?: number[];
     };
+    remoteTools?: {
+        enabled?: boolean;
+    };
     forceRelay?: boolean;
     logLevel?: 'debug' | 'info' | 'warn' | 'error';
     reconnect?: boolean | {
@@ -227,7 +248,26 @@ interface PluginSettings {
             cwd?: string;
         }>;
     };
+    sidebar?: {
+        entry?: SidebarEntryStyle;
+    };
 }
+/**
+ * Where the Remote entry lives in the Desktop sidebar: among the footer actions
+ * (Standard) or as an icon at the end of the account row (Compact).
+ */
+export type SidebarEntryStyle = 'standard' | 'compact';
+/**
+ * The entry style shared between the settings page and the sidebar entry, so a
+ * toggle takes effect without a reload. Owned by the client entry point.
+ */
+export interface SidebarEntryPreference {
+    read: () => SidebarEntryStyle;
+    subscribe: (listener: () => void) => () => void;
+    publish: (style: SidebarEntryStyle) => void;
+}
+/** `ReactDOM.createPortal`, resolved once by the ModuleLoader factory. */
+export type PortalRenderer = (children: unknown, container: Element) => unknown;
 export interface PluginSettingsView {
     config: PluginSettings;
     deviceName: string;
@@ -236,10 +276,25 @@ export interface PluginSettingsView {
     association?: PluginAssociation;
     associations?: Partial<Record<'host' | 'client', PluginAssociation>>;
     acpAvailability?: Record<string, boolean>;
+    acpInstallResult?: {
+        backend: string;
+        action: 'configured' | 'installed' | 'download_required';
+        downloadUrl?: string;
+    };
+    startupError?: {
+        code: string;
+        message: string;
+    };
 }
 export interface PluginAssociation {
-    method: 'account' | 'host_registration_code' | 'owned_device';
+    method: 'account' | 'host_registration_code' | 'owned_device' | 'device_pairing';
     account?: string;
+}
+export interface PluginConfigureResult {
+    status: 'authorized';
+    role: 'host' | 'client';
+    account?: string;
+    settings: PluginSettingsView;
 }
 export interface RemoteConnectionProgress {
     label: LocaleKey;

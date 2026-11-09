@@ -3,7 +3,7 @@
 [English](./README.en.md) | [中文](./README.md)
 
 > **⚠️ Beta notice — not for production use**
-> This project (**v0.2.26**) is a work-in-progress beta. The [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) itself is also in **public beta**. **Do not use either in engineering / production environments** — expect breaking changes and rough edges.
+> This project (**v0.2.27**) is a work-in-progress beta. The [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) itself is also in **public beta**. **Do not use either in engineering / production environments** — expect breaking changes and rough edges.
 
 <p align="center">
 <strong>Built with gratitude on top of these projects</strong> — please give them a ⭐:
@@ -71,15 +71,13 @@ Restart `dsh` afterwards (bundle layers are composed at startup), open a new ses
 > **DSH version compatibility.** The package declares all five runtime seam
 > packages (`dsh-compaction` / `dsh-session` / `dsh-llm` / `dsh-tools` /
 > `dsh-settings`) as peer
-> dependencies, sharing the range `>=0.1.5-alpha.1 <0.1.6-0` — exactly the
-> `0.1.5` line (every prerelease plus the final `0.1.5`). From the `0.1.5` line
+> dependencies, sharing the range `>=0.1.5-alpha.1 <0.2.1-0` — every verified line: the `0.1.5` floor plus the verified `0.1.6` / `0.1.7` / `0.2.0` lines (every prerelease plus each line's final release). From the `0.1.5` line
 > on, the session's replace operation was renamed from `{ op, start, end }` to
 > `{ op, startSeq, endSeq }` and is validated strictly (exactly those three
 > keys), so the engine emits the new shape only: on older DSH hosts (< 0.1.5)
 > every `compress` call is rejected at runtime (issue #136), which is why the
 > old lines are out of contract — upgrade DSH before installing this release.
-> The explicit bounds (instead of a caret) are deliberate: a caret would
-> silently admit the unverified 0.1.6+ line. Declaring all five seam packages
+> The explicit bounds (instead of a caret) are deliberate: the `0.2.1-0` ceiling keeps the next unverified line rejected (house rule; the former `0.1.6-0` ceiling was widened after per-line verification in #190). The `0.2.0` line also changed two read-side shapes — a tool result's call id moved to the message level, and the host writes `developer/message` tool-registry rows — and the engine reads all of them, so one build serves the whole range (issue #192). Declaring all five seam packages
 > as peers (not just `dsh-compaction`) ensures that, even under pnpm's
 > hoisted/linked layout, installations resolve them to the **host's own** copy
 > rather than a stale nested copy inconsistent with the host.
@@ -100,7 +98,7 @@ This only installs the package into your project/global store; it does **not** t
 **Install from the git source (`github:` spec — the form the plugin store shows).** The prebuilt `dist/` artifacts are committed to this repository, so a git-source install also works out of the box — **no build step needed**, and pnpm 11's default build-script blocking (`allowBuilds`) never applies to this package:
 
 ```bash
-dsh plugin --profile web add github:Tyan66666/billion-context-dsh#v0.2.26
+dsh plugin --profile web add github:Tyan66666/billion-context-dsh#v0.2.27
 ```
 
 Prefer a `#<tag>` ref to get artifacts identical to that npm release; without a ref you get the latest default-branch build. Only building the repo yourself (`npm run build`) requires approving build scripts. Background and trade-offs: [docs/git-source-install-design.md](docs/git-source-install-design.md) (issue #92).
@@ -167,7 +165,7 @@ compaction-acp:
 /acp-prune config reset all
 ```
 
-Changing a window key (`modelContextLimit` / `autoModelContextLimit`) clears the window-probe cache — the next pre-step re-probes under the new values (probe failures are cached too, so this is also how a fixed gateway gets re-probed). In provider-less plain-npm compositions `/acp-prune config` degrades to advice text; on DSH lines ≥0.1.7, where the host settings service no longer provides `installSection` (outside this plugin's declared peer range), the engine degrades cleanly too — one startup warning, the six keys stay adjustable through the composition-row `config:`, engine and tools unaffected (issue #173); `settingsEnabled: false` disables the integration entirely (composition-row-only — the switch is deliberately NOT part of the settings layer: it cannot turn itself off). Design details: [docs/settings-integration-design.md](docs/settings-integration-design.md).
+Changing a window key (`modelContextLimit` / `autoModelContextLimit`) clears the window-probe cache — the next pre-step re-probes under the new values (probe failures are cached too, so this is also how a fixed gateway gets re-probed). In provider-less plain-npm compositions `/acp-prune config` degrades to advice text; on DSH lines ≥0.1.7 the write path runs against the renamed `SettingsForms` service (addressed by profile entry id, the six keys marked `.volatile()` in the engine's static Config schema, committed values take effect from the next read plus per-step snapshot resync for diagnostics); hosts whose service matches neither API shape degrade cleanly — one startup warning, engine and tools unaffected (issues #173/#193); `settingsEnabled: false` disables the integration entirely (composition-row-only — the switch is deliberately NOT part of the settings layer: it cannot turn itself off). Design details: [docs/settings-integration-design.md](docs/settings-integration-design.md).
 
 **Per-mode — an agent preset's `compaction` realm.** First *disable (or delete) the realm's existing `dsh-compaction-basic` row*, then mount this engine — two backends cannot coexist in the same realm:
 
@@ -201,7 +199,7 @@ DSH derives every model request from its append-only session log (the *surface*)
 | tiered distillation (T2/T3) | re-compressing a block's summary node distills that block (tier 2); distilling a tier-2 block yields tier 3. Tier + kernel block ids are persisted to the log, so kernel state rehydrates from the log after a restart and stays distillable |
 | compression accounting (shadow price) | `shadowedTokenCount` (what the host occupancy display deducts) is priced with the **host token-meter's fixed-heuristic price** (`ctx.tokenMeter.measure` preferred, reading the `heuristicTokens ?? tokens` fixed-heuristic basis; exact mirror in `src/host-tokens.ts` as fallback) — never the plugin's internal CJK-aware estimate (that is display currency; mixing it into the host ledger can drive `messageTokens` negative and brick a CJK-heavy session, issue #54), and never the route-repriced `node.tokens` either (under 0.1.2+ image route pricing that is request-pressure currency; summing it overstates an image range's claim and folds the same ledger negative, issue #103) |
 | image/file block visibility | `image`/`file` blocks carry no characters, and the projection used to drop them silently — so they had no ref in the compressible-range table, could not act as a boundary, were invisible to the kernel's "last user message" protection, and were priced at 0 tokens (on a screenshot session the last question could be compressed away entirely; issue #117). `extractText` now renders a deterministic one-line placeholder from durable attachment metadata (`[image image/png shot.png 800x600 4.2KB]`, `[file notes.txt 1.0KB]` — the same idea as the host's own handle-text projection for files), the media price is the difference between the host token-meter node's two prices (`tokens` − `heuristicTokens`: the second is the route-independent fixed heuristic, the first carries the adapter's declared visual price for a media occurrence, so the difference is exactly what the route charged on top) **plus** the fixed structural price the host heuristic charges for a media reference (`hostMediaStructuralPrice`, a mirror of the host's own `estimateStructuralBlock`) — no adapter declares a visual price today, so the difference alone would leave pictures looking free again, and range rows carry `[+N images]`; a session with no media pays nothing extra |
-| injected-instruction hygiene | the host injects policy files (AGENTS.md etc.) onto the session surface; compressing the **current copy** of one makes the host re-inject the same file immediately — a compress → re-inject → compress loop (issue #71). The compressible-range table treats injected rows as barriers: never offered, never part of a span; a manual compress — the model's compress tool AND the human /acp-prune compress command alike — that covers a file's current copy is **rejected outright** (the error names the seq(s) and points out that stale copies are fine to compress) — compressing a current copy reclaims nothing because the host always re-pastes it. Rows are grouped by `source.changes[].scope` (= one file) and only each group's newest copy is protected — older copies superseded by an update stay safely compressible |
+| injected-instruction hygiene | the host injects policy files (AGENTS.md etc.) onto the session surface; compressing the **current copy** of one makes the host re-inject the same file immediately — a compress → re-inject → compress loop (issue #71). The compressible-range table treats injected rows as barriers: never offered, never part of a span; a manual compress — the model's compress tool AND the human /acp-prune compress command alike — that covers a file's current copy is **rejected outright** (the error names the seq(s) and points out that stale copies are fine to compress) — compressing a current copy reclaims nothing because the host always re-pastes it. Rows are grouped by `source.changes[].scope` (= one file) and only each group's newest copy is protected — older copies superseded by an update stay safely compressible. The skill catalog (`<available_skills>`, injected by dsh-tool-skill) is in the same protection set for a different reason: its resend gate is the catalog DIGEST, so it cannot see that its visible copy was folded away — once compressed it is never re-sent, and the model loses skill discovery permanently (issue #185). The newest visible catalog is hard-rejected alike (recognized by direct kind, legacy plugin wrapper, V4 producer kind, or — when the source field is missing entirely — the `<available_skills>` marker in the text), and a superseded older catalog stays safely compressiblecompressible. Since issue #196 the **newest real user turn** (the active question) is likewise hard-rejected: a span covering it is refused with the compressible slices named (the reason explains that the active user message must stay live, separately from the re-injection story), while older user turns superseded by a newer one stay compressible |
 
 The load-bearing compression guidance (tools, philosophy, summary rules, tier rules) is registered as a one-time system-prompt section; each nudge carries a condensed version (efficiency note + philosophy + context breakdown + HOW_TO_COMPRESS_RULES + range table + batch tip). There is deliberately **no automatic summarization**: automatic policy only nudges the model (`compactIfNeeded` returns null).
 
@@ -223,6 +221,7 @@ A walkthrough of the ACP philosophy this project inherits — how active context
 
 - **Summary source framing**: every compaction summary is prefixed at write time with `[Model-written summary — not user words; re-verify any obligations before relying on them]` — written into BOTH the durable summary event and its checkpoint node (one identical text), with an idempotent projection-time safety net for legacy blocks. Purpose: stop the model from executing obligation-like sentences inside a summary as if they were the user's own words.
 - **Slim nudges**: the compression philosophy/rules sections are no longer repeated in every nudge body (they already live in the system prompt); a nudge carries only the trigger frame + context breakdown + range table. The template path (`config.prompts.nudge`) strips the same sections. Design background: [docs/injection-governance-design.md](docs/injection-governance-design.md).
+- **Not ported yet — `acp_rule` (persistent rules layer)**: upstream billion-context-pi ships a fifth model tool, `acp_rule` (opt-in via `"rules": true`), for recording short principle-level reminders mid-conversation that **survive compaction**. This port does not include it yet. **The kernel-side blocker is gone**: this repo's pin is now acp-kernel **0.0.101**, whose entry point exports the full rules API (`RULE_TOOL_NAME` / `addRule` / `removeRule` / `clearRules` / `formatRulesForPrompt` / `formatRulesList` / `resolveRuleLimits` from `dist/rules.js`), plus the `RuleRecord` / `RulesConfig` types and the `rules` / `nextRuleId` state fields — what remains is the porting work itself (fifth tool + `config.rules` wiring), not a missing kernel surface. Porting plan: [issue #189](https://github.com/Tyan66666/billion-context-dsh/issues/189) (docs fallback → pin bump → fifth tool wired through the kernel API). Workarounds until then: put standing agreements in AGENTS.md (injected instruction rows are barrier-protected and survive compression), or inject them statically via `config.prompts.systemPrompt` — neither supports registering, listing, or revoking rules mid-conversation.
 
 ## Upstream & credits
 
@@ -276,7 +275,33 @@ If you do not want to tune three percentages by hand, pick the nudge aggressiven
 - **Two knobs deliberately left out**: the original request also named `growthRatio` (exists in acp-kernel as `nudge.growthRatio`, reachable via `coreOverrides`) and `protectedLastMessages` (≈ kernel `preserveRecentMessages`). Neither is a first-class engine knob here; adopting them as named keys / UI items is an owner decision, so they are not baked into the presets.
 - **An inverted window is rejected**: if merging with explicit thresholds produces `min > max`, `max > emergency` or `min > emergency` (e.g. `preset: 'preserve'` with `nudgeMaxContextLimitPct: 0.5`), the engine throws at construction and lists the three values. The kernel only warns about such a config, so this check is added by the engine in `resolveAcpConfig`.
 - **`max` is the value that races the host's 80% line**: each tier's onset is decided by `max`; the `preserve` / `relaxed` emergency values (0.93 / 0.90) sit above the host compaction-basic 80% line and act only as a label upgrade past it, so they are never reached when the host compacts first.
-- **`min` has no runtime effect yet**: the pinned kernel reads it only in `validateConfig` (as the `nudgeMinContextLimitPct` option says), so tiers differ in practice by `max` and `emergency`.
+- **`min` is the floor for first-sight nudges**: the kernel (0.0.101) reads it in exactly one place at runtime — `firstSightMassReady` (never nudged yet, no baseline yet, usage ≥ `min`, and pending content reaches the growth floor → one immediate nudge, reason string carries `[first-sight mass]`). The T2/T3 "block count met" trigger no longer requires usage ≥ `min` in 0.0.101 (0.0.63's `tierCountUsageFloor` is gone), and regular T1 growth nudges never consult it (decided by `max` and `growthRatio`), so the practical difference between tiers comes from `max` and `emergency`, and a lower `min` only makes the first-sight nudge arrive earlier. Separately, the T2/T3 **block-count triggers** default to **1000/2000** blocks in 0.0.101 (up from 5/10 — `tiers.tier2Trigger` / `tier3Trigger`; the engine never overrides `tiers`), so in practice T2/T3 nudges come from the quality path only.
+
+## Fixed issues
+
+> The item below is a real failure this project ran into. It is fixed in kernel **acp-kernel 0.0.101**, and this repo pins that version from **v0.2.27** on; older releases (≤ v0.2.26) still hit it.
+
+### Long sessions hitting the kernel's ref cap: `ref capacity exhausted: cannot allocate beyond m99999` (fixed)
+
+After an extremely long session (tens of thousands of message-level events), a whole turn can fail outright:
+
+```text
+ref capacity exhausted: cannot allocate beyond m99999
+```
+
+This is the upstream [acp-kernel](https://github.com/ranxianglei/acp-kernel) 5-digit ref space (`m00001`–`m99999`) being exhausted by the CUMULATIVE number of messages ever seen — ref numbers are never reused within a session (#176's slot recycling was reverted by #191 because reused refs let stale tags in summary text silently point at another message; #191 established the invariant), so it is unrelated to current context size. Back then it was confirmed on kernel 0.0.29, on the version pinned here at the time (0.0.63) and on the then-latest npm release (0.0.98) — every line carried `const MAX_INDEX = 99999`. **Fixed in acp-kernel 0.0.101**: the constant measured `99999` → `9999999` across the two `dist/index.js` builds, and this repo pins it from v0.2.27 on — **upgrade to v0.2.27 or later and the cap is gone; existing sessions keep working**.
+
+**Neither compression nor a restart recovers it**: this plugin feeds the FULL LOG (including everything shadowed by summaries) to the kernel on every turn (T2/T3 distillation requires the complete log, not just the visible surface — see the comment on `allLogMessages` at src/messages.ts:315), and the FIRST node of the kernel pipeline is `assign-refs`, which numbers every message in that log before any compression decision. So:
+
+- **compression cannot help**: the throw happens before any compression decision, and the `compress` tool itself goes through the same path;
+- **restarting dsh cannot help either**: kernel state is pure in-memory and never persisted, so after a restart the very first turn must renumber the ENTIRE log from scratch — if the log already holds more than ~100k message-level events, it hits the cap again immediately.
+
+On kernels before 0.0.101, **"a log above ~100k message-level events = the session is permanently unusable under ACP" was a hard wall** for this plugin. The proper fix is widening the ref space from 5 to 7 digits: requested in [acp-kernel#483](https://github.com/ranxianglei/acp-kernel/issues/483) and released in **0.0.101** (tracked in [docs/upstream-tracker.md](docs/upstream-tracker.md); issue [#187](https://github.com/Tyan66666/billion-context-dsh/issues/187) is now resolved).
+
+**What to do**:
+
+1. **Upgrade to v0.2.27 or later** (its pin carries acp-kernel 0.0.101) — the cap no longer triggers and the **existing session stays usable**, no need to start over.
+2. If you cannot upgrade yet: **fall back to rule-based compaction** — disable `compaction-acp` and enable the host's built-in `compaction-basic` in your profile, which bypasses the code path (the session itself stays usable); or **start a fresh session** — carry over what you need manually; the new session's ref count starts from zero and the wall only returns when its own log approaches ~100k events.
 
 ## Development
 
@@ -289,6 +314,8 @@ npm run test:e2e   # end-to-end host regression: real agent loop + scripted fake
 ```
 
 The end-to-end regression suite (`scripts/e2e/`) assembles the real DSH host in-process (cordis + agent-loop + the DeepSeek adapter), points it at a scripted fake LLM server, mounts this engine as the compaction backend, and asserts the persisted event log: compaction start/end pairing, the durable replace node, strict tool-call/result pairing, and the nudge injection rhythm — plus the request bodies the fake LLM **actually received** (wire-level prompt-cache byte-stability: envelope, `tools` array, leading message, and append-only turns for scenarios without compaction). Background and trade-offs: [docs/e2e-harness-design.md](docs/e2e-harness-design.md) (issue #120).
+
+A unit-level durable-row admission net (`tests/durable-admission.test.ts`, issue #183) additionally round-trips every persisted row shape the engine writes through the real released JSONL storage (append → read back → row-by-row comparison, plus negative controls), pinning that every row we write encodes and reads back under the writers our declared peer range ships.
 
 `dist/index.js` is self-contained except for the `@deepseek-ai/*` seam packages, which the hosting deployment provides.
 

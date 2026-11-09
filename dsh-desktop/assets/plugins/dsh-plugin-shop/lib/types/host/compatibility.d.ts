@@ -218,6 +218,7 @@ export declare function peerVerdictsOf(entries: readonly (EntryIdentity & {
     version: string;
     dshPeers?: Record<string, string>;
     manifestVersion?: string;
+    engines?: string;
 })[], check: PeerCheck, exemptions: Record<string, string[]>, profile: string): Record<string, PeerVerdict>;
 /**
  * The command that records dsh's exact-version exemption for one refused
@@ -230,7 +231,11 @@ export declare function peerVerdictsOf(entries: readonly (EntryIdentity & {
  * it is pasted into.
  *
  * The profile is written as it is, as dsh prints it: it is the reader's own
- * choice of name, never catalog input.
+ * choice of name, never catalog input. The desktop profile gets none: dsh's
+ * CLI refuses it in any letter case, so the exemption could never be recorded
+ * from a terminal, and since the desktop app's harness is identified (design
+ * 2026-09-01-harness-compatibility, 2026-11-06 amendment) the card reaches
+ * this verdict there.
  */
 export declare function allowVersionCommand(profile: string, issue: {
     name: string;

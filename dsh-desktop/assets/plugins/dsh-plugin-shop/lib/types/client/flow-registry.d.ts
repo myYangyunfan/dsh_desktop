@@ -80,8 +80,10 @@ export declare function beginUninstall(uninstall: (args: {
 }) => Promise<ShopUninstallResult>): (args: {
     name: string;
 }) => Promise<InstallView>;
-/** The shop's own update's start. Its refusal: a version that is not plain
- * semver. */
+/** The shop's own update's start. Its refusals: a version that is not plain
+ * semver, and the desktop profile, whose update belongs to dsh's Plugins
+ * page. The flow shows the host's own detail for either and never needs
+ * `code`: the version row does not offer this start on that profile. */
 export declare function beginUpdate(updateStart: (args: {
     version: string;
 }) => Promise<ShopUpdateResult>): (args: {

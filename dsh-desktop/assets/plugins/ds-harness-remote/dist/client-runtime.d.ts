@@ -8,6 +8,7 @@ import type { ResolvedConfig } from './config.js';
 import type { HostWebServerLike } from './control-route.js';
 import type { IdentityStore } from './identity-store.js';
 import type { SafeLogger } from './logging.js';
+import { type SessionToolOperation } from './remote-session-tools.js';
 import type { OAuthProvider } from './server-api.js';
 import { ClientServerApi } from './server-api.js';
 import type { TypertGatewayLike } from './typert-gateway-contract.js';
@@ -40,6 +41,15 @@ export declare class ClientModeRuntime {
     private connectionProgressRun;
     private closed;
     private remoteLifetime;
+    private selectionLifetime;
+    private readonly reconnect;
+    private readonly featureProbePromises;
+    private recoverable?;
+    private recoveryGeneration;
+    private clientAuthRequired;
+    private noteClientAuthFailure;
+    private readonly sessionTools;
+    runSessionTool(operation: SessionToolOperation, args: unknown, signal: AbortSignal): Promise<unknown>;
     constructor(config: ResolvedConfig, identities: IdentityStore, server: ClientServerApi, typertGateway: TypertGatewayLike, logger: SafeLogger, host?: HostAuthorizationControl | undefined, rtcFactoryProvider?: (options?: WeriftFactoryOptions) => Promise<RtcPeerConnectionFactory | undefined>);
     start(): Promise<void>;
     authorizeHostByDefault(): Promise<void>;
@@ -47,7 +57,7 @@ export declare class ClientModeRuntime {
     status(): Record<string, unknown>;
     private closePreview;
     private detailedStatus;
-    devices(): Promise<RemoteDeviceView[]>;
+    devices(signal?: AbortSignal): Promise<RemoteDeviceView[]>;
     /**
      * Device discovery is exposed through the local app control route. When this
      * installation also runs a Host, keep that route closed after the Host's
@@ -65,13 +75,24 @@ export declare class ClientModeRuntime {
     setMode(mode: HarnessMode, targetDeviceId?: string, signal?: AbortSignal): Promise<Record<string, unknown>>;
     listRemoteDirectory(targetDeviceId: string, path?: string, signal?: AbortSignal): Promise<RemoteDirectoryListing>;
     listRemoteWorkspaces(targetDeviceId: string, signal?: AbortSignal): Promise<RemoteWorkspaceView[]>;
+    /** Read-only Agent discovery owns a temporary carrier, never the UI selection. */
+    discoverToolWorkspaces(targetDeviceId: string, signal: AbortSignal): Promise<{
+        workspaces: Array<RemoteWorkspaceView & {
+            backend: string;
+        }>;
+        unavailable: Array<{
+            backend: string;
+            code: string;
+        }>;
+    }>;
+    private withToolRemote;
     openRemoteWorkspace(targetDeviceId: string, path: string, signal?: AbortSignal): Promise<Record<string, unknown>>;
     listCodexWorkspaces(targetDeviceId: string, signal?: AbortSignal): Promise<CodexVirtualWorkspaceView[]>;
     openCodexWorkspace(targetDeviceId: string, workspaceId: string, signal?: AbortSignal): Promise<Record<string, unknown>>;
     createCodexWorkspace(targetDeviceId: string, path: string, signal?: AbortSignal): Promise<Record<string, unknown>>;
-    listCursorWorkspaces(targetDeviceId: string, signal?: AbortSignal, backend?: 'cursor' | 'antigravity' | 'pi' | 'opencode' | 'claude'): Promise<AcpVirtualWorkspaceView[]>;
-    openCursorWorkspace(targetDeviceId: string, workspaceId: string, signal?: AbortSignal, backend?: 'cursor' | 'antigravity' | 'pi' | 'opencode' | 'claude'): Promise<Record<string, unknown>>;
-    createCursorWorkspace(targetDeviceId: string, path: string, signal?: AbortSignal, backend?: 'cursor' | 'antigravity' | 'pi' | 'opencode' | 'claude'): Promise<Record<string, unknown>>;
+    listCursorWorkspaces(targetDeviceId: string, signal?: AbortSignal, backend?: 'cursor' | 'antigravity' | 'pi' | 'opencode' | 'claude' | 'hermes'): Promise<AcpVirtualWorkspaceView[]>;
+    openCursorWorkspace(targetDeviceId: string, workspaceId: string, signal?: AbortSignal, backend?: 'cursor' | 'antigravity' | 'pi' | 'opencode' | 'claude' | 'hermes'): Promise<Record<string, unknown>>;
+    createCursorWorkspace(targetDeviceId: string, path: string, signal?: AbortSignal, backend?: 'cursor' | 'antigravity' | 'pi' | 'opencode' | 'claude' | 'hermes'): Promise<Record<string, unknown>>;
     private consumeWorkspaceSelection;
     close(): Promise<void>;
     private leaveRemote;
@@ -86,9 +107,12 @@ export declare class ClientModeRuntime {
     private selectCursorTarget;
     private assertRemoteCompatible;
     private assertLocalHarnessCarrierAvailable;
+    private refreshRemoteFeatures;
     private ensureConnected;
     private assertRemoteCurrent;
     private requireIdentity;
+    private beginSelection;
+    private handleRemoteClose;
 }
 export { probeRemoteHostFeatures, remoteHostFeatures } from './client-capabilities.js';
 export { ClientModeError } from './client-runtime-contract.js';

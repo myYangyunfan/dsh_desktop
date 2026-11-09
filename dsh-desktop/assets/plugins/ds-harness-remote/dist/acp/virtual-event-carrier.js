@@ -87,7 +87,17 @@ export class AcpEventCarrier {
     }
     publishProjection(sessionId, key, value, seq = this.context.nextProjectionSeq()) {
         for (const queue of this.context.controlStreams) {
-            queue.push({ type: 'projection', sessionId, key, value, asOfSeq: seq, seq });
+            // 0.2.2 sends per-event `changes`; keep the legacy key/value fields so
+            // older official clients keep applying the same frame.
+            queue.push({
+                type: 'projection',
+                sessionId,
+                seq,
+                key,
+                value,
+                asOfSeq: seq,
+                changes: [{ key, val: value }],
+            });
         }
     }
 }

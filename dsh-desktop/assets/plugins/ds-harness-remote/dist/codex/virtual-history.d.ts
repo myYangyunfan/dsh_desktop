@@ -24,6 +24,8 @@ export interface CodexNativeHistory {
         id: string;
         createdAt: number;
         cwd?: string;
+        model?: string;
+        reasoningEffort?: string;
         isSeeded?: boolean;
     };
     entries: Array<{

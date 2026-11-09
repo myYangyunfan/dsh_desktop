@@ -6,8 +6,13 @@
 /**
  * Parse an uncompressed tar archive into path → bytes.
  *
- * Directory entries and every non-regular type (symlinks, pax and GNU
- * extension headers) are skipped: npm packs regular files under `package/`,
- * and a catalog tarball that needs anything else is not one we published.
+ * Directory entries and the type flags that carry no file are skipped: npm
+ * packs regular files under `package/`, and a catalog tarball that needs
+ * anything else is not one we published. A pax (`x`) or GNU (`L`) header is not
+ * a file either, but it NAMES the next one: a path too long or too wide for a
+ * ustar header arrives this way, and skipping the header without reading it
+ * left its file under a truncated name, reported missing from an archive that
+ * ships it ({@link pathFromPax}).
+ * Each path is spelled by its bytes, one character each ({@link cstring}).
  */
 export declare function readTar(buffer: Buffer): Map<string, Buffer>;

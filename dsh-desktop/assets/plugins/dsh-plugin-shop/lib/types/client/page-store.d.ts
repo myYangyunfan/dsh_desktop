@@ -32,6 +32,10 @@ export interface ShelfView {
      * first open. Independent of `category`, because it subtracts from
      * whatever the categories selected rather than competing with them. */
     readonly hideIncompatible: boolean;
+    /** Off by default, for the same reason. Subtracts every card the reader has
+     * not starred (design 2026-11-02-market-borrowings §7); a modifier, like
+     * `hideIncompatible`, never a category. */
+    readonly favoritesOnly: boolean;
     /** How far the shelf has grown, in §A1's batches. */
     readonly visibleCount: number;
 }

@@ -27,6 +27,7 @@
  * says its version, and the app-boot it imports says its templates.
  */
 import { type ProfileTemplates } from './compatibility.ts';
+import { type HarnessPackageLookup } from './peers.ts';
 /** One package's harness peers as the running dsh judges them: app-boot's
  * `evaluatePluginCompatibility` result, in the shape 0.1.7 returns, whichever
  * name the running dsh gives its list (`peerCheckOf`). */
@@ -58,11 +59,20 @@ export interface PeerCheck {
      * default re-reads the file on every call, which measured 75 ms against
      * 12 ms for 2,000 manifests on 0.1.7-rc.2. The incompatible harness peers
      * of one manifest, or undefined when there are none. Throws for a manifest
-     * it cannot judge. */
+     * it cannot judge.
+     *
+     * `engines` is passed through to the rule, which reads it in place of
+     * `peerDependencies` when present (design 2026-11-02-market-borrowings §1).
+     * It is optional here so a caller with no catalog `engines` — every client
+     * older than that field, and every entry whose author declares none —
+     * behaves exactly as before. */
     evaluate(manifest: {
         name: string;
         version: string;
         peerDependencies: Record<string, string>;
+        engines?: {
+            dsh: string;
+        };
     }, exemptions: Record<string, string[]>): PeerIssue | undefined;
     /** `readProfileVersionExemptions(profileDir)`: exact `name@version` keys
      * mapped to the dsh versions each is exempted on. */
@@ -91,6 +101,26 @@ export interface RunningHarness {
     peerCheck: PeerCheck | null;
 }
 /**
+ * Where to ask for the running dsh when the script this process started with
+ * does not name it (design 2026-09-01-harness-compatibility §9.9, 2026-11-06
+ * amendment).
+ *
+ * The desktop app boots the profile through `@deepseek-ai/dsh-desktop-host`,
+ * so `process.argv[1]` owns no dsh and the script read found nothing — and
+ * on that profile nothing could be found from it, which left the peer check
+ * and the profile verdict silent while the shelf offered installs dsh was
+ * going to refuse. The harness serves its own packages through
+ * `pluginPackages` (`ctx.get('pluginPackages')`, 0.1.7 on), and the dsh
+ * package is one of them: `parentURL` is the profile's `cordis.yml`, the
+ * same anchor the peer resolver walks from, so the answer describes this
+ * installation. Only the script-less case asks, deliberately: a script that
+ * owns a dsh is that dsh, and a service cannot disagree with it.
+ */
+export interface HarnessLocator {
+    packages: HarnessPackageLookup;
+    parentURL: string;
+}
+/**
  * The list a refusal names, read off one answer of dsh's compatibility check
  * or of its plugin manager, under whichever name the dsh that gave the answer
  * uses: `requirements` from 0.2.1, `peers` from 0.1.7 to 0.2.0. app-boot's
@@ -110,18 +140,21 @@ export interface RunningHarness {
 export declare function refusedRequirements(answer: Readonly<Record<string, unknown>>): Record<string, string>;
 /**
  * The harness this process runs, identified from `script` — the gateway's
- * `restartScript`, `process.argv[1]` in production — or nothing, never a
- * guess:
+ * `restartScript`, `process.argv[1]` in production — or, when that names no
+ * dsh, from the harness's own package lookup (`locate`, see
+ * `HarnessLocator`). Never a guess:
  *
  * 1. `script` is resolved through symlinks, because `argv[1]` is the path the
  *    shell ran — `<prefix>/bin/dsh`, a link — and only its target lies inside
- *    the dsh package. No script, or one that does not resolve: nothing known.
+ *    the dsh package. No script, or one that does not resolve: the next
+ *    source decides.
  *    An empty path is no script either: `realpathSync('')` answers the
  *    working directory, which says where dsh was started, not what it is.
  * 2. The package that owns it (`owningPackage`) must be `@deepseek-ai/dsh`.
- *    Anything else — a test runner, another host embedding the shop — means
- *    nothing here can say which harness runs, and both halves of the verdict
- *    stay silent.
+ *    A test runner, or another host embedding the shop, names no harness
+ *    this way; the desktop app is that case, and there `locate` answers with
+ *    the dsh package its own `pluginPackages` service serves. Without a
+ *    locator, both halves of the verdict stay silent.
  * 3. `dshVersion` is that manifest's `version` when it is a non-empty string.
  * 4. `templates`, `patchLists` and `peerCheck` come from that dsh's own
  *    app-boot (`appBootFacts`). Any failure there costs all three and keeps
@@ -130,4 +163,4 @@ export declare function refusedRequirements(answer: Readonly<Record<string, unkn
  * Never throws and never rejects: a harness nobody could identify forms no
  * verdict, and must never be the reason the catalog fails to load.
  */
-export declare function readRunningHarness(script: string | undefined): Promise<RunningHarness>;
+export declare function readRunningHarness(script: string | undefined, locate?: HarnessLocator): Promise<RunningHarness>;

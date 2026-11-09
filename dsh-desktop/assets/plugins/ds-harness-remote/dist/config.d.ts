@@ -9,6 +9,13 @@ export interface Config {
     terminal?: {
         enabled?: boolean;
     };
+    remoteTools?: {
+        enabled?: boolean;
+    };
+    /** Where the Desktop client shows the Remote entry: beside Settings or in the account row. */
+    sidebar?: {
+        entry?: 'standard' | 'compact';
+    };
     hostControl?: {
         enabled?: boolean;
     };
@@ -16,6 +23,13 @@ export interface Config {
         ports?: number[];
     };
     forceRelay?: boolean;
+    /**
+     * When a known peer device presents a NEW identity key after re-authorizing with the
+     * same account membership (e.g. the peer reinstalled the Harness), rotate the pinned
+     * key instead of rejecting the connection. The new key is validated against the
+     * account directory before this policy applies. Default: false (pin strictly).
+     */
+    rotatePinnedPeerKey?: boolean;
     logLevel?: 'debug' | 'info' | 'warn' | 'error';
     reconnect?: boolean | {
         initialDelayMs?: number;
@@ -72,6 +86,7 @@ export interface ResolvedConfig {
     serverUrl?: string;
     deviceName: string;
     forceRelay: boolean;
+    rotatePinnedPeerKey: boolean;
     logLevel: 'debug' | 'info' | 'warn' | 'error';
     reconnect: {
         enabled: boolean;
@@ -81,6 +96,12 @@ export interface ResolvedConfig {
     };
     terminal: {
         enabled: boolean;
+    };
+    remoteTools?: {
+        enabled: boolean;
+    };
+    sidebar: {
+        entry: 'standard' | 'compact';
     };
     hostControl?: {
         enabled: boolean;
@@ -96,6 +117,189 @@ export interface ResolvedConfig {
 export type EntryConfig = Volatile<Config>;
 /** Config accepted by {@link resolveConfig}: the composition seed or a live snapshot. */
 export type ConfigInput = Config | VolatileSnapshot<Config>;
+/**
+ * Schemastery schema for the plugin entry. On DSH 0.1.7-rc.1 and newer the
+ * whole section is `.volatile()` (DSH-0.1.7-RC1-04): the Loader hands `apply`
+ * a single live reference whose `.get()` always returns the latest committed
+ * value, and the settings service persists edits in the active profile's
+ * `cordis.patch.yml` under this entry id. On older hosts the helper above keeps
+ * the plain schema required by the namespace-registration API.
+ */
+export declare const entryConfigSchema: s<Schemastery.ObjectS<NoInfer<{
+    enabled: s<boolean, boolean, "plain">;
+    role: s<"host" | "client" | "both", "host" | "client" | "both", "plain">;
+    serverUrl: s<string, string, "plain">;
+    deviceName: s<string, string, "plain">;
+    terminal: s<Schemastery.ObjectS<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+    }>>, "plain">;
+    remoteTools: s<Schemastery.ObjectS<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+    }>>, "plain">;
+    sidebar: s<Schemastery.ObjectS<NoInfer<{
+        entry: s<"standard" | "compact", "standard" | "compact", "plain">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        entry: s<"standard" | "compact", "standard" | "compact", "plain">;
+    }>>, "plain">;
+    hostControl: s<Schemastery.ObjectS<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+    }>>, "plain">;
+    loopback: s<Schemastery.ObjectS<NoInfer<{
+        ports: s<number[], number[], "plain">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        ports: s<number[], number[], "plain">;
+    }>>, "plain">;
+    forceRelay: s<boolean, boolean, "plain">;
+    rotatePinnedPeerKey: s<boolean, boolean, "plain">;
+    logLevel: s<"error" | "debug" | "info" | "warn", "error" | "debug" | "info" | "warn", "plain">;
+    reconnect: s<boolean | ({
+        initialDelayMs?: number | null | undefined;
+        maxDelayMs?: number | null | undefined;
+        jitter?: number | null | undefined;
+    } & import("@deepseek-ai/cosmokit").Dict), boolean | Schemastery.ObjectT<NoInfer<{
+        initialDelayMs: s<number, number, "plain">;
+        maxDelayMs: s<number, number, "plain">;
+        jitter: s<number, number, "plain">;
+    }>>, "plain">;
+    codex: s<Schemastery.ObjectS<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+        binary: s<string, string, "plain">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+        binary: s<string, string, "plain">;
+    }>>, "plain">;
+    cursor: s<Schemastery.ObjectS<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+        binary: s<string, string, "plain">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+        binary: s<string, string, "plain">;
+    }>>, "plain">;
+    acp: s<Schemastery.ObjectS<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+        backends: s<({
+            id?: string | null | undefined;
+            enabled?: boolean | null | undefined;
+            command?: string | null | undefined;
+            args?: string[] | null | undefined;
+            cwd?: string | null | undefined;
+        } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+            id: s<string, string, "plain">;
+            enabled: s<boolean, boolean, "plain">;
+            command: s<string, string, "plain">;
+            args: s<string[], string[], "plain">;
+            cwd: s<string, string, "plain">;
+        }>>[], "plain">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+        backends: s<({
+            id?: string | null | undefined;
+            enabled?: boolean | null | undefined;
+            command?: string | null | undefined;
+            args?: string[] | null | undefined;
+            cwd?: string | null | undefined;
+        } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+            id: s<string, string, "plain">;
+            enabled: s<boolean, boolean, "plain">;
+            command: s<string, string, "plain">;
+            args: s<string[], string[], "plain">;
+            cwd: s<string, string, "plain">;
+        }>>[], "plain">;
+    }>>, "plain">;
+}>>, Schemastery.ObjectT<NoInfer<{
+    enabled: s<boolean, boolean, "plain">;
+    role: s<"host" | "client" | "both", "host" | "client" | "both", "plain">;
+    serverUrl: s<string, string, "plain">;
+    deviceName: s<string, string, "plain">;
+    terminal: s<Schemastery.ObjectS<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+    }>>, "plain">;
+    remoteTools: s<Schemastery.ObjectS<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+    }>>, "plain">;
+    sidebar: s<Schemastery.ObjectS<NoInfer<{
+        entry: s<"standard" | "compact", "standard" | "compact", "plain">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        entry: s<"standard" | "compact", "standard" | "compact", "plain">;
+    }>>, "plain">;
+    hostControl: s<Schemastery.ObjectS<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+    }>>, "plain">;
+    loopback: s<Schemastery.ObjectS<NoInfer<{
+        ports: s<number[], number[], "plain">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        ports: s<number[], number[], "plain">;
+    }>>, "plain">;
+    forceRelay: s<boolean, boolean, "plain">;
+    rotatePinnedPeerKey: s<boolean, boolean, "plain">;
+    logLevel: s<"error" | "debug" | "info" | "warn", "error" | "debug" | "info" | "warn", "plain">;
+    reconnect: s<boolean | ({
+        initialDelayMs?: number | null | undefined;
+        maxDelayMs?: number | null | undefined;
+        jitter?: number | null | undefined;
+    } & import("@deepseek-ai/cosmokit").Dict), boolean | Schemastery.ObjectT<NoInfer<{
+        initialDelayMs: s<number, number, "plain">;
+        maxDelayMs: s<number, number, "plain">;
+        jitter: s<number, number, "plain">;
+    }>>, "plain">;
+    codex: s<Schemastery.ObjectS<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+        binary: s<string, string, "plain">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+        binary: s<string, string, "plain">;
+    }>>, "plain">;
+    cursor: s<Schemastery.ObjectS<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+        binary: s<string, string, "plain">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+        binary: s<string, string, "plain">;
+    }>>, "plain">;
+    acp: s<Schemastery.ObjectS<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+        backends: s<({
+            id?: string | null | undefined;
+            enabled?: boolean | null | undefined;
+            command?: string | null | undefined;
+            args?: string[] | null | undefined;
+            cwd?: string | null | undefined;
+        } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+            id: s<string, string, "plain">;
+            enabled: s<boolean, boolean, "plain">;
+            command: s<string, string, "plain">;
+            args: s<string[], string[], "plain">;
+            cwd: s<string, string, "plain">;
+        }>>[], "plain">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: s<boolean, boolean, "plain">;
+        backends: s<({
+            id?: string | null | undefined;
+            enabled?: boolean | null | undefined;
+            command?: string | null | undefined;
+            args?: string[] | null | undefined;
+            cwd?: string | null | undefined;
+        } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+            id: s<string, string, "plain">;
+            enabled: s<boolean, boolean, "plain">;
+            command: s<string, string, "plain">;
+            args: s<string[], string[], "plain">;
+            cwd: s<string, string, "plain">;
+        }>>[], "plain">;
+    }>>, "plain">;
+}>>, "plain">;
 /**
  * Mark the entry as live-editable when the host Schemastery supports the
  * 0.1.7 volatile schema mode. Older DSH releases ship an earlier Schemastery

@@ -26,10 +26,10 @@ const PLUGINS = path.join(DSH, 'assets', 'plugins');
 const PLUGIN_MODULE_TABLE = require('../lib/plugin-module-table');
 
 const FIVE = [
-  ['web-search-free', 'dsh-free-search', '0.9.11', 'MIT'],
-  ['shop', 'dsh-plugin-shop', '0.9.0', 'Apache-2.0'],
+  ['web-search-free', 'dsh-free-search', '0.9.39', 'MIT'],
+  ['shop', 'dsh-plugin-shop', '0.9.3', 'Apache-2.0'],
   ['network-proxy', '@local/dsh-network-proxy', '1.0.0', 'MIT'],
-  ['mcp-manager-ui', 'dsh-toolbox-ui', '1.8.2', 'MIT'],
+  ['mcp-manager-ui', 'dsh-toolbox-ui', '1.10.1', 'MIT'],
   ['dsh-notify', '@bittersmilezzz/dsh-notify', '0.4.5', 'MIT'],
 ];
 

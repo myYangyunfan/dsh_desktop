@@ -70,7 +70,7 @@ export function acpImageContent(image, attachmentId) {
     return { type: 'image', attachment: { attachmentId, mediaType: image.mimeType, bytes: imageByteLength(image.data), ...dimensions }, mediaType: image.mimeType, data: image.data };
 }
 export function acpImageLimits(backend) {
-    return backend === 'antigravity' ? { maxImageBytes: AGY_MAX_IMAGE_BYTES, maxImagesPerMessage: AGY_MAX_IMAGES, maxMessageImageBytes: AGY_MAX_MESSAGE_IMAGE_BYTES, maxImagePixels: 40_000_000, maxImageDimension: 8192, mediaTypes: [...AGY_IMAGE_MEDIA_TYPES] }
+    return backend === 'antigravity' || backend === 'hermes' ? { maxImageBytes: AGY_MAX_IMAGE_BYTES, maxImagesPerMessage: AGY_MAX_IMAGES, maxMessageImageBytes: AGY_MAX_MESSAGE_IMAGE_BYTES, maxImagePixels: 40_000_000, maxImageDimension: 8192, mediaTypes: [...AGY_IMAGE_MEDIA_TYPES] }
         : { maxImageBytes: 0, maxImagesPerMessage: 0, mediaTypes: [] };
 }
 //# sourceMappingURL=image-content.js.map

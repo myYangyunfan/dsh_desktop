@@ -20,12 +20,11 @@ export class AcpGateway {
 import { spawn } from 'node:child_process';
 export const DEFAULT_ACP_IDES = [
     { id: 'pi', command: 'pi-acp', args: [] },
-    { id: 'codex', command: 'codex', args: ['acp'] },
     { id: 'cursor', command: 'agent', args: ['acp'] },
     { id: 'kimi', command: 'kimi', args: ['acp'] },
     { id: 'antigravity', command: 'agy', args: ['--input-format', 'stream-json', '--output-format', 'stream-json'] },
 ];
-/** JSON-RPC stdio bridge for ACP agents (Cursor/Kimi/CodeX). */
+/** JSON-RPC stdio bridge for ACP agents (Cursor/Kimi/Antigravity). Codex is not an ACP backend; it uses the codex.app.* App Server protocol. */
 export class StdioAcpAdapter {
     config;
     backend;

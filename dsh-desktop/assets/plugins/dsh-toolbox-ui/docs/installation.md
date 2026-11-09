@@ -7,13 +7,13 @@
 
 ## 环境要求
 
-- DeepSeek Harness `0.2.0-rc.1` 及以上（`0.2.0-rc.2` 与 `0.2.1-rc.2` 都跑过全量；0.2.1 宿主自带的 cordis 4.0.5 / loader 1.0.6 也在覆盖内）
+- DeepSeek Harness `0.2.1-rc.5` 及以上；已验证 `0.2.1-rc.5`（Cordis 4.0.5 / Loader 1.0.6）与 `0.2.2-rc.1`（Cordis 4.1.0 / Loader 1.1.0）。
 - 已初始化的 `web` profile
 - Node.js 和 pnpm 可由 DSH 的插件命令正常调用
 
-插件把 DSH 宿主 API 声明为 `>=0.2.0-rc.1 <0.3.0` 的 peer 依赖。只支持 0.2.x，因为 ToolSearch 用的是 0.2 的接口：per-agent 呈现模式（`ctx.tools.modeFor(agent)`，决定"这个会话走函数清单还是 `tools:sdk` 手册"）、PTC 手册段 `tools:sdk`、以及会话投影服务 `ctx.sessionProjections`（发现集恢复唯一的正当路径）。0.1.x 上这三样都不存在，所以不为它保留任何降级分支。
+插件把 DSH 宿主 API 声明为 `>=0.2.1-rc.5 <0.3.0` 的 peer，并通过 `engines.dsh` 声明同一准入窗口。当前发布支持从 0.2.1-rc.5 起；旧 loader 只保留历史回归，0.2.2 的新版 ToolSearch executor 与匹配的 Loader/Include 作为独立目标验证。
 
-**支持面就是 0.2.0 与 0.2.1 两条线。** 两者之间宿主换了两代 loader（`cordis-plugin-loader` 1.0.3 → 1.0.6），插件对两处差异做了显式适配，各有常驻用例（`test/loader-compat.test.mjs`）：
+历史 Loader 回归说明（不代表 0.2.0 是当前发布准入）：
 
 - **启动错误传播**：1.0.3 在 `Entry.update()` 里对 apply 失败直接 throw，所以 `loader.create()` 自己就 reject；1.0.6 改成只记日志，`create()` 总是 resolve，错误只挂在 fiber 上。插件以 `fiber.await()` 为准，否则"添加一个连不上的服务器"不会回滚 patch。
 - **dispose 时的写盘**：1.0.3 的 unload 处理器有一道 `_disposing` 早退守卫，1.0.6 删掉了它，于是 `fiber.entry.parent.tree.write()` 会真的执行——对 include 子树条目就是 `Include.write()`，会把 base 配置连同**其余 patch 行**一起写回。插件在移除条目前先置 `disabled`（该处理器里唯一还能早退的判据），否则"删一台服务器"会把兄弟服务器的 patch 行烙进 `cordis.yml`。
@@ -25,14 +25,14 @@
 推荐用 npm 安装：包里的 `^1.x` 范围让后续 `dsh plugin update` 能自动升级小版本。
 
 ```sh
-dsh plugin --profile web add dsh-toolbox-ui@^1.8.2
+dsh plugin --profile web add dsh-toolbox-ui@^1.10.1
 ```
 
 也可以固定 GitHub release tag（适合需要锁定某个具体版本时）：
 
 ```sh
 # 固定 release tag
-dsh plugin --profile web add github:Imzl-zl/dsh-toolbox-ui#v1.8.2
+dsh plugin --profile web add github:Imzl-zl/dsh-toolbox-ui#v1.10.1
 
 # 或固定某个 commit
 dsh plugin --profile web add github:Imzl-zl/dsh-toolbox-ui#<commit>
@@ -83,7 +83,7 @@ dsh plugin --profile web update dsh-toolbox-ui
 
 | 安装规格 | `update` 的效果 | 怎么跨版本 |
 |---|---|---|
-| `dsh-toolbox-ui@^1.8.2`（npm，推荐） | 在 `^1.x` 内自动升到最新小版本，不会跨到 2.0.0 | 已是自动；跨大版本显式安装 `@^2` |
+| `dsh-toolbox-ui@^1.10.1`（npm，推荐） | 在 `^1.x` 内自动升到最新小版本，不会跨到 2.0.0 | 已是自动；跨大版本显式安装 `@^2` |
 | `github:...#v1.4.0`（tag） | 重新解析同一个 tag，**不会动** | 换成新 tag 重新 `add`：`... #<新 tag>` |
 | `github:...#<commit>` | 同上，固定在 commit | 用新 commit/tag 重新 `add` |
 | `github:...#main`（分支） | 拉取最新 main | 已是自动；但不推荐生产（无 release 门槛） |
@@ -123,7 +123,7 @@ dsh web    # 打开面板点一遍
 # 3) 提交并推 tag（CI 会校验 tag 与 version 一致，不一致就拒绝发布）
 git add -A && git commit -m "..."
 git push origin main
-git tag -a v1.8.2 -m "dsh-toolbox-ui 1.8.2" && git push origin v1.8.2
+git tag -a v1.10.1 -m "dsh-toolbox-ui 1.10.1" && git push origin v1.10.1
 ```
 
 推 tag 后 CI 依次做：校验版本 → `pnpm install --frozen-lockfile` → `npm test` → `npm publish`（trusted publishing，无需 token）→ `gh release create`。
@@ -142,7 +142,7 @@ git tag -a v1.8.2 -m "dsh-toolbox-ui 1.8.2" && git push origin v1.8.2
 
 ```sh
 npm publish          # 会弹 2FA 挑战；若用 bypass-2FA 的 granular token 则非交互
-gh release create v1.8.2 --title "dsh-toolbox-ui v1.8.2" --notes-file <notes>
+gh release create v1.10.1 --title "dsh-toolbox-ui v1.10.1" --notes-file <notes>
 ```
 
 `npm login` 的会话 token 只有 2 小时，超时需要重新登录；classic token 已被 npm 永久吊销，能非交互发布的只剩勾了 **Bypass 2FA** 的 granular access token——但它正在被 npm 收窄（已不能做账号/包管理类操作，且 2027-01 起将失去直接发布能力），所以长期方案是上面的 trusted publishing。

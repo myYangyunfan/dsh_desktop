@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "DS Harness Remote",
+    "description": "P2P とエンドツーエンド暗号化で、ブラウザーやモバイル端末から DeepSeek Harness、CodeX、Claude Code、Pi などのワークスペースにリモート接続します。",
+    "detail": "locale/README.ja.md"
+  }
+}

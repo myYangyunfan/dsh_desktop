@@ -1,13 +1,23 @@
 {
   "name": "dsh-easyrewrite",
-  "version": "2.6.0",
-  "description": "DSH Web内目前最无感的消息撤回、重编辑插件，原版体验，兼容性强，功能简单可开关，设置丰富，现代化轻量ui框架。The most seamless message recall & re-edit plugin for DSH Web — native experience, strong compatibility, simple toggles, rich settings, modern lightweight UI. DSH Web で最もシームレスなメッセージ撤回・再編集プラグイン——ネイティブ体験、高い互換性、シンプルなトグル、充実した設定、モダンで軽量な UI。",
+  "version": "3.0.1",
+  "description": "The most seamless message recall & re-edit plugin for DSH Web — native experience, strong compatibility, simple toggles, rich settings, modern lightweight UI.",
+  "icon": "./assets/icon.png",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
+    "./bubble": "./lib/row.js",
+    "./recall": "./lib/row.js",
+    "./history": "./lib/row.js",
+    "./other": "./lib/row.js",
     "./client": "./lib/client.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*": "./locales/bundle/*",
+    "./bubble/locale/*": "./locales/bubble/*",
+    "./recall/locale/*": "./locales/recall/*",
+    "./history/locale/*": "./locales/history/*",
+    "./other/locale/*": "./locales/other/*"
   },
   "dsh": {
     "bundle": {
@@ -17,13 +27,19 @@
       "inject": [
         "slots",
         "sessions",
-        "workspaces"
+        "workspaces",
+        "conversation",
+        "uiConversation",
+        "locale",
+        "modelDirectories"
       ],
       "platform": "web"
     }
   },
   "files": [
     "lib",
+    "locales",
+    "assets",
     "cordis.patch.yml",
     "README.md",
     "README.en.md",
@@ -58,10 +74,14 @@
   ],
   "license": "MIT",
   "scripts": {
-    "test": "node tests/smoke-host.mjs && node tests/test-log-memory.mjs && node tests/test-issue9-anti-double-submit.mjs && node tests/test-issue11-bubble-compatibility.mjs && node tests/test-dsh-0.1.7-pager.mjs",
+    "test": "node tests/check-scope-vars.mjs && node tests/smoke-host.mjs && node tests/test-log-memory.mjs && node tests/test-issue9-anti-double-submit.mjs && node tests/test-issue11-bubble-compatibility.mjs && node tests/test-dsh-0.1.7-pager.mjs && node tests/test-dsh-0.1.7-image-drafts.mjs && node tests/test-recall-cross-session-images.mjs && node tests/test-v3-components-render.mjs && node tests/test-vault-storage.mjs && node tests/test-community-improvements.mjs",
     "build": "node build.mjs",
     "prepare": "node build.mjs",
     "prepack": "node build.mjs"
+  },
+  "devDependencies": {
+    "acorn": "^8.18.0",
+    "esbuild": "^0.25.12"
   },
   "repository": {
     "type": "git",

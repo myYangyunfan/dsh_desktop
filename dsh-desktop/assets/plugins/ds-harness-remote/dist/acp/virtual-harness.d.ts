@@ -1,6 +1,6 @@
 import { AgentAcpClient } from '@dsh-remote/client-core';
 import type { RemoteTypertGatewayTarget, TypertGatewayRequest, TypertRpcResult } from '../typert-gateway-contract.js';
-import type { AcpVirtualWorkspaceView } from './virtual-catalog.js';
+import type { AcpCatalogBackend, AcpVirtualWorkspaceView } from './virtual-catalog.js';
 import type { AcpClientLike } from './virtual-contract.js';
 /**
  * Browser-safe, in-memory Harness projection for the independent Agent ACP domain. Projects
@@ -10,7 +10,7 @@ import type { AcpClientLike } from './virtual-contract.js';
 export declare class AcpVirtualHarness implements RemoteTypertGatewayTarget {
     private readonly client;
     private readonly host;
-    readonly backend: "cursor" | "antigravity" | "pi" | "opencode" | "claude";
+    readonly backend: AcpCatalogBackend;
     /**
      * Host gateway used for endpoints this virtual Harness does not project
      * (settings, plugins, models, credentials, …). A real Harness workspace
@@ -31,6 +31,8 @@ export declare class AcpVirtualHarness implements RemoteTypertGatewayTarget {
     private readonly pendingHistory;
     private selectedWorkspaceId?;
     private readonly selectedModels;
+    private readonly selectedPermissions;
+    private commandSeq;
     private lastProjectionSeq;
     private readonly imageAttachments;
     private closed;
@@ -39,7 +41,7 @@ export declare class AcpVirtualHarness implements RemoteTypertGatewayTarget {
     constructor(client: AcpClientLike, host: {
         deviceId: string;
         name: string;
-    }, backend?: "cursor" | "antigravity" | "pi" | "opencode" | "claude", 
+    }, backend?: AcpCatalogBackend, 
     /**
      * Host gateway used for endpoints this virtual Harness does not project
      * (settings, plugins, models, credentials, …). A real Harness workspace
@@ -50,7 +52,7 @@ export declare class AcpVirtualHarness implements RemoteTypertGatewayTarget {
     static remote(core: ConstructorParameters<typeof AgentAcpClient>[0], host: {
         deviceId: string;
         name: string;
-    }, backend?: "cursor" | "antigravity" | "pi" | "opencode" | "claude", capabilities?: readonly string[], hostCarrier?: RemoteTypertGatewayTarget): AcpVirtualHarness;
+    }, backend?: AcpCatalogBackend, capabilities?: readonly string[], hostCarrier?: RemoteTypertGatewayTarget): AcpVirtualHarness;
     workspaces(): Promise<AcpVirtualWorkspaceView[]>;
     private backendLabel;
     selectWorkspace(workspaceId: string): Promise<AcpVirtualWorkspaceView>;
@@ -92,12 +94,18 @@ export declare class AcpVirtualHarness implements RemoteTypertGatewayTarget {
     private resolveSessionId;
     private modelSelection;
     private modelSelectionProjection;
+    private permissionSelection;
+    private permissionsProjection;
+    private setPermissionSelection;
+    private commandList;
+    private executeCommand;
     private hostSessionModels;
     private selectModel;
     private publishWorkspaceBaseline;
     private nextProjectionSeq;
 }
 export { acpCwdWorkspaceId, createAcpWorkspaceView, discoverAcpVirtualWorkspaces, modelCatalog } from './virtual-catalog.js';
+export { acpPermissionsProjection, isAcpPermissionPreset } from './virtual-contract.js';
 export type { AcpModelSelection, AcpModelView, AcpVirtualWorkspaceView } from './virtual-catalog.js';
-export type { AcpClientLike } from './virtual-contract.js';
+export type { AcpClientLike, AcpPermissionPreset } from './virtual-contract.js';
 //# sourceMappingURL=virtual-harness.d.ts.map

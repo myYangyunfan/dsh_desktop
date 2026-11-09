@@ -1,4 +1,4 @@
-import { projectCodexThread } from '@dsh-remote/client-core';
+import { projectCodexModel, projectCodexThread } from '@dsh-remote/client-core';
 import { contentBlocks, toolOutputImageBlocks } from './codex-image-codec.js';
 import { modelSelection } from './virtual-catalog.js';
 import { array, CODEX_SESSION_PREFIX, hashString, integer, normalizeTime, record, string } from './virtual-values.js';
@@ -9,6 +9,14 @@ export function projectCodexNativeHistory(thread, sessionId, sessionGeneration =
     let seq = 0;
     let turnNumber = 0;
     const active = activeTurnId(thread.turns);
+    const threadModel = projectCodexModel(thread);
+    const fallbackSelection = threadModel.model === undefined
+        ? modelSelection()
+        : {
+            provider: 'codex',
+            model: threadModel.model,
+            ...(threadModel.reasoningEffort === undefined ? {} : { reasoningEffort: threadModel.reasoningEffort }),
+        };
     const append = (type, data, time = Date.now(), view, sourceEventSeqs) => {
         const eventSeq = seq++;
         entries.push({
@@ -42,7 +50,15 @@ export function projectCodexNativeHistory(thread, sessionId, sessionGeneration =
         for (let itemIndex = 0; itemIndex < turnItems.length; itemIndex += 1) {
             const item = turnItems[itemIndex];
             let toolCallSeq;
-            for (const event of itemEvents(item, turnNumber, 1, undefined, modelSelection(), sessionId, itemIndex === imageOwner ? toolImages : [])) {
+            const turnModel = projectCodexModel(turn);
+            const selection = turnModel.model === undefined
+                ? fallbackSelection
+                : {
+                    provider: 'codex',
+                    model: turnModel.model,
+                    ...(turnModel.reasoningEffort === undefined ? {} : { reasoningEffort: turnModel.reasoningEffort }),
+                };
+            for (const event of itemEvents(item, turnNumber, 1, undefined, selection, sessionId, itemIndex === imageOwner ? toolImages : [])) {
                 const eventSeq = append(event.type, event.data, normalizeTime(item.createdAt) || time, event.view, event.type === 'tool/result' && toolCallSeq !== undefined ? [toolCallSeq] : undefined);
                 if (event.type === 'tool/call')
                     toolCallSeq = eventSeq;
@@ -53,9 +69,7 @@ export function projectCodexNativeHistory(thread, sessionId, sessionGeneration =
         append('step/end', { turn: turnNumber, step: 1 }, normalizeTime(turn.updatedAt) || normalizeTime(turn.completedAt) || time);
         append('turn/end', {
             turn: turnNumber,
-            reason: turn.status === 'failed' || turn.error !== undefined && turn.error !== null
-                ? { kind: 'error', error: { message: 'CodeX turn failed.', code: 'codex-turn-failed' } }
-                : { kind: 'completed' },
+            reason: turnEndReason(turn),
         }, normalizeTime(turn.updatedAt) || normalizeTime(turn.completedAt) || time);
     }
     const projected = projectCodexThread(thread);
@@ -65,6 +79,8 @@ export function projectCodexNativeHistory(thread, sessionId, sessionGeneration =
             id: sessionId,
             createdAt: projected?.createdAt ?? Date.now(),
             ...(projected?.cwd === undefined ? {} : { cwd: projected.cwd }),
+            ...(projected?.model === undefined ? {} : { model: projected.model }),
+            ...(projected?.reasoningEffort === undefined ? {} : { reasoningEffort: projected.reasoningEffort }),
             ...(sessionGeneration === 'v3' ? { isSeeded: false } : {}),
         },
         entries,
@@ -72,6 +88,15 @@ export function projectCodexNativeHistory(thread, sessionId, sessionGeneration =
         nextTurn: turnNumber,
         ...(active === undefined ? {} : { activeTurnId: active }),
     };
+}
+function turnEndReason(turn) {
+    if (turn.status === 'failed' || turn.error !== undefined && turn.error !== null) {
+        return { kind: 'error', error: { message: 'CodeX turn failed.', code: 'codex-turn-failed' } };
+    }
+    if (turn.status === 'interrupted' || turn.status === 'cancelled' || turn.status === 'canceled' || turn.status === 'aborted') {
+        return { kind: 'interrupted' };
+    }
+    return { kind: 'completed' };
 }
 export function paginateCodexNativeHistory(history, request) {
     const throughSeq = Math.min(request.throughSeq ?? history.lastSeq, history.lastSeq);
@@ -151,6 +176,14 @@ export function itemEvents(item, turn, step, requestId, selection = modelSelecti
     const type = string(item.type);
     const id = string(item.id) ?? `${turn}:${step}:${hashString(JSON.stringify(item))}`;
     const text = itemText(item);
+    const itemModel = projectCodexModel(item);
+    const effectiveSelection = itemModel.model === undefined
+        ? selection
+        : {
+            provider: selection.provider,
+            model: itemModel.model,
+            ...(itemModel.reasoningEffort === undefined ? {} : { reasoningEffort: itemModel.reasoningEffort }),
+        };
     if (type === 'userMessage')
         return [{
                 type: 'user/message',
@@ -171,7 +204,7 @@ export function itemEvents(item, turn, step, requestId, selection = modelSelecti
                         id,
                         role: 'assistant',
                         content: messageContent(item, `${sessionId}:${id}`, type === 'reasoning' ? 'reasoning' : 'text', text, type === 'agentMessage' ? supplementalImages : []),
-                        source: { kind: 'model', provider: selection.provider, model: selection.model },
+                        source: { kind: 'model', provider: effectiveSelection.provider, model: effectiveSelection.model },
                     },
                 },
             }];
@@ -197,7 +230,7 @@ export function itemEvents(item, turn, step, requestId, selection = modelSelecti
                         id,
                         role: 'assistant',
                         content: [{ type: 'text', text: text ?? 'CodeX reported an error.' }],
-                        source: { kind: 'model', provider: selection.provider, model: selection.model },
+                        source: { kind: 'model', provider: effectiveSelection.provider, model: effectiveSelection.model },
                     },
                 },
             }];

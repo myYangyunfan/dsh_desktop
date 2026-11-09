@@ -1,6 +1,6 @@
 import type { AgentAcpFrameData } from '@dsh-remote/protocol';
-import type { AcpModelSelection } from './virtual-catalog.js';
-import type { AcpClientLike, AcpSessionState, FollowState, JsonRecord, NativeEvent, PendingApproval, PiTurnOutcome } from './virtual-contract.js';
+import type { AcpCatalogBackend, AcpModelSelection } from './virtual-catalog.js';
+import type { AcpClientLike, AcpPermissionPreset, AcpSessionState, FollowState, JsonRecord, NativeEvent, PendingApproval, PiTurnOutcome } from './virtual-contract.js';
 /** Collaborates with one AcpVirtualHarness; never creates a second session or connection state. */
 export interface AcpLiveProjectionContext {
     readonly ensureSessionRegistered: (sessionId: string) => AcpSessionState | undefined;
@@ -31,7 +31,7 @@ export interface AcpLiveProjectionContext {
         hasMore: boolean;
     };
     readonly follows: Set<FollowState>;
-    readonly backend: "cursor" | "antigravity" | "pi" | "opencode" | "claude";
+    readonly backend: AcpCatalogBackend;
     readonly modelSelectionProjection: (sessionId: string) => {
         lastUsed: AcpModelSelection;
         next: AcpModelSelection;
@@ -51,6 +51,8 @@ export interface AcpLiveProjectionContext {
         request: JsonRecord;
     }) => void;
     readonly modelSelection: (sessionId: string) => AcpModelSelection;
+    readonly permissionsProjection: (sessionId: string) => unknown;
+    readonly permissionSelection: (sessionId: string) => AcpPermissionPreset | undefined;
 }
 export declare class AcpLiveProjection {
     private readonly context;

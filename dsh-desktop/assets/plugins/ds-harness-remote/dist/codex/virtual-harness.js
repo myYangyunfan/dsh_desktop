@@ -5,7 +5,11 @@ import { business, carrierArgs, CODEX_DEFAULT_PERMISSION, CODEX_IMAGE_ATTACHMENT
 import { CodexEventCarrier } from './virtual-event-carrier.js';
 import { adaptCodexHistoryPage, isCodexNativeHistoryPage, paginateCodexNativeHistory, projectCodexNativeHistory, } from './virtual-history.js';
 import { CodexLiveProjection } from './virtual-live.js';
-import { array, errorCode, nativeThreadId, optionalInteger, optionalNonNegativeInteger, optionalPositiveInteger, record, requiredString, string, } from './virtual-values.js';
+import { array, boundedCodexHistoryPageSize, errorCode, nativeThreadId, optionalInteger, optionalNonNegativeInteger, optionalPositiveInteger, record, requiredString, string, } from './virtual-values.js';
+// Workspace/session catalog reads are shared by several native controllers
+// during Web startup. Keep the short-lived snapshot so opening a Workspace and
+// its Session does not issue the same project/thread pages back-to-back.
+const CODEX_CATALOG_CACHE_MS = 2_000;
 /**
  * A plugin-owned virtual Harness target. It projects CodeX Thread/Turn data at
  * the existing Typert carrier boundary, so every UI layer above the
@@ -32,6 +36,8 @@ export class CodexVirtualHarness {
     imageAttachments = new Map();
     modelDirectory;
     modelDirectoryPromise;
+    catalogPromise;
+    catalogLoadedAt = 0;
     lastProjectionSeq = 0;
     commandSeq = 0;
     selectedWorkspaceId;
@@ -86,7 +92,7 @@ export class CodexVirtualHarness {
         return (await this.refreshCatalog(signal)).workspaces;
     }
     async selectWorkspace(workspaceId, signal) {
-        const catalog = await loadCatalog(this.client, signal);
+        const catalog = await this.refreshCatalog(signal);
         const workspace = catalog.workspaces.find(item => item.workspaceId === workspaceId);
         if (workspace === undefined)
             throw new Error('The selected CodeX workspace is no longer available.');
@@ -172,6 +178,7 @@ export class CodexVirtualHarness {
                 case 'session/create': return business(await this.createSession(requestArg(args), signal));
                 case 'session/fork': return business(await this.forkSession(requestArg(args), signal));
                 case 'session/history': return business(await this.sessionHistory(requestArg(args), signal));
+                case 'session/events':
                 case 'session/page': return business(await this.sessionPage(requestArg(args), signal));
                 case 'session/prompt': return business(await this.prompt(requestArg(args), signal));
                 case 'session/cancel': return business(await this.cancel(requestArg(args), signal));
@@ -197,6 +204,7 @@ export class CodexVirtualHarness {
                 case 'host/listDirectory': return business(await this.listDirectory(requestArg(args), signal));
                 case 'directoryPicker/list': return business(await this.listDirectory(requestArg(args), signal));
                 case 'skills/list': return business(success({ items: [] }));
+                case 'job/kill': return this.hostCarrier === undefined ? business(success({ outcome: 'already-finished' })) : await this.hostCarrier.dispatch(endpoint, payload, signal);
                 case 'commands/list': return ok(this.commandList(args));
                 case 'commands/execute': return ok(await this.executeCommand(args, signal));
                 default: return this.hostCarrier === undefined
@@ -265,17 +273,46 @@ export class CodexVirtualHarness {
         this.selectedPermissions.clear();
         this.imageAttachments.clear();
     }
-    async refreshCatalog(signal) {
-        const catalog = await loadCatalog(this.client, signal, this.pendingThreads);
-        if (this.selectedWorkspaceId !== undefined
-            && !catalog.workspaces.some(workspace => workspace.workspaceId === this.selectedWorkspaceId)) {
-            this.selectedWorkspaceId = undefined;
+    async refreshCatalog(signal, force = false) {
+        signal?.throwIfAborted();
+        const fresh = this.catalog !== undefined && Date.now() - this.catalogLoadedAt < CODEX_CATALOG_CACHE_MS;
+        if (!force && fresh)
+            return this.catalog;
+        // A forced refresh follows an in-flight read (for example a mutation that
+        // completed while the initial catalog was loading), then starts a fresh
+        // read so the mutation is reflected in the snapshot.
+        if (force && this.catalogPromise !== undefined) {
+            try {
+                await awaitWithAbort(this.catalogPromise, signal);
+            }
+            catch {
+                signal?.throwIfAborted();
+                // The pending read may have failed because the transport was
+                // transiently unavailable. A forced mutation refresh still gets one
+                // fresh attempt instead of inheriting that failure.
+            }
         }
-        this.catalog = catalog;
-        return catalog;
+        const pending = this.catalogPromise;
+        if (!force && pending !== undefined)
+            return awaitWithAbort(pending, signal);
+        const current = loadCatalog(this.client, undefined, this.pendingThreads).then(catalog => {
+            if (this.selectedWorkspaceId !== undefined
+                && !catalog.workspaces.some(workspace => workspace.workspaceId === this.selectedWorkspaceId)) {
+                this.selectedWorkspaceId = undefined;
+            }
+            this.catalog = catalog;
+            this.catalogLoadedAt = Date.now();
+            return catalog;
+        });
+        this.catalogPromise = current;
+        void current.finally(() => {
+            if (this.catalogPromise === current)
+                this.catalogPromise = undefined;
+        }).catch(() => undefined);
+        return awaitWithAbort(current, signal);
     }
     async currentCatalog(signal) {
-        return this.catalog ?? this.refreshCatalog(signal);
+        return this.refreshCatalog(signal);
     }
     models(signal) {
         if (this.modelDirectory !== undefined)
@@ -289,7 +326,18 @@ export class CodexVirtualHarness {
         return this.modelDirectoryPromise;
     }
     modelSelection(sessionId, directory) {
-        return this.selectedModels.get(sessionId) ?? directory?.default ?? modelSelection();
+        const selected = this.selectedModels.get(sessionId);
+        if (selected !== undefined)
+            return selected;
+        const session = this.catalog?.sessions.find(item => item.id === sessionId);
+        if (session?.model !== undefined) {
+            return {
+                provider: CODEX_PROVIDER,
+                model: session.model,
+                ...(session.reasoningEffort === undefined ? {} : { reasoningEffort: session.reasoningEffort }),
+            };
+        }
+        return directory?.default ?? modelSelection();
     }
     permissionSelection(sessionId) {
         return this.selectedPermissions.get(sessionId);
@@ -518,7 +566,7 @@ export class CodexVirtualHarness {
     async archiveSession(request, signal) {
         const sessionId = requiredString(request.sessionId, 'sessionId');
         await this.client.request('thread/archive', { threadId: nativeThreadId(sessionId) }, signal);
-        const catalog = await this.refreshCatalog(signal);
+        const catalog = await this.refreshCatalog(signal, true);
         this.publishWorkspaceBaseline(catalog);
         return success({ archivedSessionIds: [sessionId] });
     }
@@ -550,7 +598,12 @@ export class CodexVirtualHarness {
         this.blankThreads.add(projected.nativeId);
         this.selectedModels.set(projected.id, selection);
         this.selectedPermissions.set(projected.id, permissionPreset);
-        await this.refreshAndPublishWorkspaces();
+        // A new Thread is not materialized in the upstream index until its first
+        // user message. Do not make the create response wait for a full
+        // project/thread rescan that cannot observe the new Thread yet. The
+        // pending thread is retained locally and the baseline catches up in the
+        // background while the composer can send the first prompt immediately.
+        void this.refreshAndPublishWorkspaces(true).catch(() => undefined);
         const seq = this.nextProjectionSeq();
         this.events.emitRemoteEvent('api-session/added', [this.sessionSummary(projected, {
                 blank: true,
@@ -572,7 +625,7 @@ export class CodexVirtualHarness {
             return failure('internal', 'CodeX returned an invalid forked Thread.');
         this.selectedModels.set(projected.id, this.modelSelection(sessionId, await this.models(signal)));
         this.setPermissionSelection(projected.id, permissionPreset);
-        await this.refreshAndPublishWorkspaces();
+        await this.refreshAndPublishWorkspaces(true);
         const seq = this.nextProjectionSeq();
         this.events.publishProjection(projected.id, 'title', displayTitle(projected), seq);
         return success({ sessionId: projected.id });
@@ -584,7 +637,20 @@ export class CodexVirtualHarness {
         if (input === undefined)
             return failure('attachment-error', 'CodeX virtual Sessions accept text and pasted PNG, JPEG, WebP, or GIF images only.');
         const threadId = nativeThreadId(sessionId);
-        const selection = this.modelSelection(sessionId, await this.models(signal));
+        // Session follow/history normally hydrates this selection before the
+        // composer can send. Reuse that state (and the selection captured by
+        // session/create) instead of cold-loading the whole model catalog on the
+        // first prompt. Only an entirely cold prompt needs model/list.
+        const knownSelection = this.selectedModels.get(sessionId)
+            ?? (() => {
+                const session = this.catalog?.sessions.find(item => item.id === sessionId);
+                return session?.model === undefined ? undefined : {
+                    provider: CODEX_PROVIDER,
+                    model: session.model,
+                    ...(session.reasoningEffort === undefined ? {} : { reasoningEffort: session.reasoningEffort }),
+                };
+            })();
+        const selection = knownSelection ?? this.modelSelection(sessionId, await this.models(signal));
         const isFreshBlankThread = this.blankThreads.has(threadId) || this.pendingThreads.has(threadId);
         if (!isFreshBlankThread) {
             const resumeResult = await this.client.request('thread/resume', {
@@ -616,7 +682,11 @@ export class CodexVirtualHarness {
     }
     async attachment(request, signal) {
         const sessionId = requiredString(request.sessionId, 'sessionId');
-        const attachmentId = requiredString(request.attachmentId, 'attachmentId');
+        // 0.2.2 sends the full ImageAttachmentRef; older clients send only its id.
+        const attachmentId = string(request.attachmentId) ?? string(record(request.attachment).attachmentId);
+        if (attachmentId === undefined) {
+            return failure('attachment-error', 'The CodeX image is not available in this virtual Session.', { reason: 'invalid' });
+        }
         if (!attachmentId.startsWith(CODEX_IMAGE_ATTACHMENT_PREFIX)) {
             return failure('attachment-error', 'The CodeX image is not available in this virtual Session.', { reason: 'not-referenced' });
         }
@@ -653,7 +723,7 @@ export class CodexVirtualHarness {
         const seq = this.nextProjectionSeq();
         this.updateThreadName(nativeThreadId(sessionId), title);
         this.events.publishProjection(sessionId, 'title', title, seq);
-        await this.refreshAndPublishWorkspaces();
+        await this.refreshAndPublishWorkspaces(true);
         return success({ title, seq });
     }
     async sessionProjections(request, signal) {
@@ -678,7 +748,7 @@ export class CodexVirtualHarness {
             throughSeq: optionalInteger(request.throughSeq),
             maxMessages: optionalPositiveInteger(request.maxMessages),
         }, signal);
-        return success({ records: page.records, hasMore: page.hasMore });
+        return success({ records: page.records, hasMore: page.hasMore, cursor: page.cursor });
     }
     activeTurnId(threadId) {
         for (const follow of this.follows)
@@ -687,13 +757,17 @@ export class CodexVirtualHarness {
         return undefined;
     }
     async readHistoryPage(threadId, page, signal) {
+        const boundedPage = {
+            ...page,
+            maxMessages: boundedCodexHistoryPageSize(page.maxMessages),
+        };
         let value;
         try {
             value = record(await this.client.request('dsh/sessionHistory', {
                 threadId,
-                ...(page.beforeSeq === undefined ? {} : { beforeSeq: page.beforeSeq }),
-                ...(page.throughSeq === undefined ? {} : { throughSeq: page.throughSeq }),
-                ...(page.maxMessages === undefined ? {} : { maxMessages: page.maxMessages }),
+                ...(boundedPage.beforeSeq === undefined ? {} : { beforeSeq: boundedPage.beforeSeq }),
+                ...(boundedPage.throughSeq === undefined ? {} : { throughSeq: boundedPage.throughSeq }),
+                ...(boundedPage.maxMessages === undefined ? {} : { maxMessages: boundedPage.maxMessages }),
             }, signal));
         }
         catch (error) {
@@ -719,12 +793,20 @@ export class CodexVirtualHarness {
             value = paginateCodexNativeHistory(projectCodexNativeHistory(thread, `codex:${threadId}`, this.sessionGeneration), {
                 beforeSeq: page.beforeSeq,
                 throughSeq: page.throughSeq,
-                maxMessages: page.maxMessages,
+                maxMessages: boundedPage.maxMessages,
             });
         }
         value = adaptCodexHistoryPage(value, this.sessionGeneration);
         if (!isCodexNativeHistoryPage(value, `codex:${threadId}`)) {
             throw new Error('CodeX Remote returned an invalid paginated History.');
+        }
+        const historyModel = string(value.header.model);
+        if (historyModel !== undefined) {
+            this.selectedModels.set(`codex:${threadId}`, {
+                provider: CODEX_PROVIDER,
+                model: historyModel,
+                ...(string(value.header.reasoningEffort) === undefined ? {} : { reasoningEffort: string(value.header.reasoningEffort) }),
+            });
         }
         if (Object.hasOwn(value, 'permissionPreset')) {
             const preset = value.permissionPreset;
@@ -773,8 +855,8 @@ export class CodexVirtualHarness {
             }),
         });
     }
-    async refreshAndPublishWorkspaces() {
-        const catalog = await this.refreshCatalog().catch(() => undefined);
+    async refreshAndPublishWorkspaces(force = false) {
+        const catalog = await this.refreshCatalog(undefined, force).catch(() => undefined);
         if (catalog !== undefined)
             this.publishWorkspaceBaseline(catalog);
     }
@@ -786,6 +868,16 @@ export class CodexVirtualHarness {
             queue.push({ type: 'archived', archivedSessionIds: catalog.sessions.filter(item => item.archived).map(item => item.id) });
         }
     }
+}
+function awaitWithAbort(promise, signal) {
+    if (signal === undefined)
+        return promise;
+    signal.throwIfAborted();
+    return new Promise((resolve, reject) => {
+        const onAbort = () => reject(signal.reason);
+        signal.addEventListener('abort', onAbort, { once: true });
+        promise.then(value => { signal.removeEventListener('abort', onAbort); resolve(value); }, error => { signal.removeEventListener('abort', onAbort); reject(error); });
+    });
 }
 // Keep existing Host and Client imports stable.
 export { codexProjectWorkspaceId, discoverCodexVirtualWorkspaces } from './virtual-catalog.js';

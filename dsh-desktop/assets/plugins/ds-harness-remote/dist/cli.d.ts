@@ -24,10 +24,8 @@ export interface RemoteCliDependencies {
     createIdentityStore?: (options: IdentityStoreOptions) => IdentityStore;
     createHostApi?: (serverUrl: string, store: ServerCredentialStore) => CliHostApi;
 }
-/** TUI-friendly account bootstrap. Configuration remains owned by the DSH profile. */
+/** Headless account bootstrap. Configuration remains owned by the DSH profile. */
 export declare function runCli(args?: readonly string[], dependencies?: RemoteCliDependencies): Promise<number>;
 export declare function renderTerminalQr(url: string): Promise<string>;
-/** Square terminal modules at half the row count for fullscreen TUI scenes. */
-export declare function renderCompactTerminalQr(url: string): Promise<string>;
 export {};
 //# sourceMappingURL=cli.d.ts.map

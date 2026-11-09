@@ -13,26 +13,14 @@ export async function discoverCodexVirtualWorkspaces(client, signal) {
     return (await loadCatalog(client, signal)).workspaces;
 }
 export async function loadCatalog(client, signal, pendingThreads) {
-    let projects = await loadCodexProjects(client, signal);
-    const threads = [];
-    let cursor;
-    for (let page = 0; page < MAX_CODEX_PAGES; page += 1) {
-        const result = record(await client.request('thread/list', {
-            limit: CODEX_PAGE_LIMIT,
-            sortKey: 'updated_at',
-            sortDirection: 'desc',
-            archived: false,
-            ...(cursor === undefined ? {} : { cursor }),
-        }, signal));
-        for (const value of array(result.data)) {
-            const thread = record(value);
-            if (string(thread.id) !== undefined)
-                threads.push(thread);
-        }
-        cursor = typeof result.nextCursor === 'string' && result.nextCursor.length > 0 ? result.nextCursor : undefined;
-        if (cursor === undefined)
-            break;
-    }
+    // Project and Thread catalogs are independent App Server reads. Fetch them
+    // together so a slow project index does not add its latency to the thread
+    // index (project/list remains optional for older Hosts).
+    const [projectsResult, threads] = await Promise.all([
+        loadCodexProjects(client, signal),
+        loadCodexThreads(client, signal),
+    ]);
+    let projects = projectsResult;
     if (pendingThreads !== undefined) {
         const listedIds = new Set(threads.map(thread => string(thread.id)).filter((id) => id !== undefined));
         for (const [threadId, thread] of pendingThreads) {
@@ -77,6 +65,28 @@ export async function loadCatalog(client, signal, pendingThreads) {
         projects,
         workspaces: projectWorkspaces,
     };
+}
+async function loadCodexThreads(client, signal) {
+    const threads = [];
+    let cursor;
+    for (let page = 0; page < MAX_CODEX_PAGES; page += 1) {
+        const result = record(await client.request('thread/list', {
+            limit: CODEX_PAGE_LIMIT,
+            sortKey: 'updated_at',
+            sortDirection: 'desc',
+            archived: false,
+            ...(cursor === undefined ? {} : { cursor }),
+        }, signal));
+        for (const value of array(result.data)) {
+            const thread = record(value);
+            if (string(thread.id) !== undefined)
+                threads.push(thread);
+        }
+        cursor = typeof result.nextCursor === 'string' && result.nextCursor.length > 0 ? result.nextCursor : undefined;
+        if (cursor === undefined)
+            break;
+    }
+    return threads;
 }
 async function loadCodexProjects(client, signal) {
     const projects = [];

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { accessSync, constants, existsSync, readFileSync } from 'node:fs';
+import { accessSync, constants, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { readdir, realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
@@ -40,6 +40,21 @@ export class CodexRemoteDomain {
     restartAttempt = 0;
     available = false;
     closed = false;
+    /**
+     * Workspace authority is intentionally not cached after a request finishes:
+     * project roots can change outside this process and must stay fail-closed.
+     * Concurrent calls during one catalog/history refresh do share this promise,
+     * though, so they do not each page the same project list independently.
+     */
+    workspaceAuthorityPromise;
+    /**
+     * Authorization checks are intentionally not retained after they settle:
+     * workspace roots can change outside this process and every new request must
+     * still revalidate them.  Calls that overlap one another may share the same
+     * bounded thread/read, though, which avoids duplicate first-open checks when
+     * a session history and its first prompt arrive together.
+     */
+    knownThreadPromises = new Map();
     state = 'disabled';
     unavailableCode;
     constructor(config, logger, createAppServer = (binary, targetLogger) => new CodexAppServerClient(binary, targetLogger), restartDelaysMs = DEFAULT_RESTART_DELAYS_MS) {
@@ -337,6 +352,7 @@ export class CodexRemoteDomain {
         await Promise.all([...this.peers.values()].map(peer => peer.failStreams('failed')));
         this.turnOwners.clear();
         this.permissionPresets.clear();
+        this.knownThreadPromises.clear();
         this.approvals.clear();
         if (this.approvalExpiryTimer !== undefined)
             clearTimeout(this.approvalExpiryTimer);
@@ -500,6 +516,21 @@ export class CodexRemoteDomain {
             this.permissionPresets.delete(threadId);
         if (message.method === 'turn/completed' && threadId !== undefined)
             this.turnOwners.delete(threadId);
+        if (message.method === 'thread/status/changed' && threadId !== undefined
+            && isTerminalThreadStatus(message.params)) {
+            // Some App Server failure/interruption paths publish only the terminal
+            // Thread status and omit turn/completed. Release the Host-side writer
+            // lease as soon as the authoritative status is no longer active, or a
+            // later Prompt can be rejected as owned by a dead connection.
+            this.turnOwners.delete(threadId);
+            for (const [handle, approval] of this.approvals) {
+                if (approval.threadId !== threadId)
+                    continue;
+                this.approvals.delete(handle);
+                void this.appServer?.respond(approval.upstreamId, { decision: 'decline' }).catch(() => undefined);
+            }
+            this.scheduleApprovalExpiry();
+        }
         if (message.method === 'turn/started' && threadId !== undefined) {
             const owner = this.turnOwners.get(threadId);
             const turnId = extractTurnId(message.params);
@@ -619,7 +650,19 @@ export class CodexRemoteDomain {
             throw error;
         }
     }
-    async readKnownThread(threadId) {
+    readKnownThread(threadId) {
+        const pending = this.knownThreadPromises.get(threadId);
+        if (pending !== undefined)
+            return pending;
+        const current = this.readKnownThreadUncached(threadId);
+        this.knownThreadPromises.set(threadId, current);
+        void current.finally(() => {
+            if (this.knownThreadPromises.get(threadId) === current)
+                this.knownThreadPromises.delete(threadId);
+        }).catch(() => undefined);
+        return current;
+    }
+    async readKnownThreadUncached(threadId) {
         const authority = await this.readWorkspaceAuthority();
         let result;
         try {
@@ -713,7 +756,10 @@ export class CodexRemoteDomain {
                 throw new RpcError('CODEX_INVALID_RESPONSE', 'Codex App Server returned an invalid Turn page.');
             }
             const pageResult = result;
-            for (const rawTurn of result.data) {
+            // Turn item pages are independent once the turn page is available. Fetch
+            // them together to avoid making a long history wait for every prior turn;
+            // Promise.all preserves the upstream turn order in the resulting array.
+            const pageTurns = await Promise.all(result.data.map(async (rawTurn) => {
                 if (!isRecord(rawTurn) || typeof rawTurn.id !== 'string' || rawTurn.id.length === 0
                     || rawTurn.itemsView === 'full' && !Array.isArray(rawTurn.items)) {
                     throw new RpcError('CODEX_INVALID_RESPONSE', 'Codex App Server returned an invalid history Turn.');
@@ -724,8 +770,9 @@ export class CodexRemoteDomain {
                 if (items.some(item => !isRecord(item))) {
                     throw new RpcError('CODEX_INVALID_RESPONSE', 'Codex App Server returned an invalid history Item.');
                 }
-                turns.push({ ...rawTurn, items });
-            }
+                return { ...rawTurn, items };
+            }));
+            turns.push(...pageTurns);
             cursor = historyNextCursor(pageResult.nextCursor);
             if (cursor === undefined)
                 return turns;
@@ -879,7 +926,18 @@ export class CodexRemoteDomain {
             throw mapAppServerError(error);
         }
     }
-    async readWorkspaceAuthority(listedThreads) {
+    readWorkspaceAuthority(listedThreads) {
+        const pending = this.workspaceAuthorityPromise;
+        if (pending !== undefined)
+            return pending;
+        const current = this.readWorkspaceAuthorityUncached(listedThreads);
+        this.workspaceAuthorityPromise = current;
+        current.then(() => { if (this.workspaceAuthorityPromise === current)
+            this.workspaceAuthorityPromise = undefined; }, () => { if (this.workspaceAuthorityPromise === current)
+            this.workspaceAuthorityPromise = undefined; });
+        return current;
+    }
+    async readWorkspaceAuthorityUncached(listedThreads) {
         const projectIds = new Set();
         const roots = [];
         let cursor;
@@ -1108,8 +1166,20 @@ function findImageBlock(value, attachmentId) {
  * rewritten or supplemented.
  */
 export function codexBinaryCandidates(configured, hostPlatform = process.platform, userHome = homedir()) {
-    if (configured !== 'codex' || hostPlatform !== 'darwin')
+    if (configured !== 'codex')
         return [configured];
+    if (hostPlatform === 'darwin')
+        return macOSCodexBinaryCandidates(userHome);
+    // The Codex desktop app on Windows ships its own codex CLI under
+    // %LOCALAPPDATA%\OpenAI\Codex\bin\<build-hash>\codex.exe. Prefer the newest
+    // build so the app's current version is used; fall back to the configured
+    // `codex` when the app is absent or unreadable.
+    if (hostPlatform === 'win32') {
+        return [...new Set([...windowsBundledCodexCandidates(userHome), configured])];
+    }
+    return [configured];
+}
+function macOSCodexBinaryCandidates(userHome) {
     const bundledCandidates = [
         '/Applications/ChatGPT.app',
         join(userHome, 'Applications', 'ChatGPT.app'),
@@ -1134,8 +1204,36 @@ export function codexBinaryCandidates(configured, hostPlatform = process.platfor
             ...bundledCandidates,
             '/Applications/ChatGPT.app/Contents/Resources/codex',
             join(userHome, 'Applications', 'ChatGPT.app', 'Contents', 'Resources', 'codex'),
-            configured,
+            'codex',
         ])];
+}
+/**
+ * Codex desktop (ChatGPT/Codex for Windows) bundled CLI candidates, newest
+ * build first. Reads `%LOCALAPPDATA%\OpenAI\Codex\bin`; returns an empty list
+ * when the app is not installed. Never throws.
+ */
+function windowsBundledCodexCandidates(userHome) {
+    const localAppData = process.env.LOCALAPPDATA ?? join(userHome, 'AppData', 'Local');
+    const binRoot = join(localAppData, 'OpenAI', 'Codex', 'bin');
+    try {
+        return readdirSync(binRoot, { withFileTypes: true })
+            .filter(entry => entry.isDirectory())
+            .map(entry => join(binRoot, entry.name, 'codex.exe'))
+            .filter(candidate => existsSync(candidate))
+            .map(candidate => {
+            try {
+                return { candidate, mtime: statSync(candidate).mtimeMs };
+            }
+            catch {
+                return { candidate, mtime: 0 };
+            }
+        })
+            .sort((left, right) => right.mtime - left.mtime)
+            .map(entry => entry.candidate);
+    }
+    catch {
+        return [];
+    }
 }
 function parseCallEnvelope(input) {
     if (!isRecord(input) || typeof input.method !== 'string' || !('params' in input)
@@ -1301,6 +1399,11 @@ function extractThreadId(params) {
     if (isRecord(params.turn) && typeof params.turn.threadId === 'string')
         return params.turn.threadId;
     return undefined;
+}
+function isTerminalThreadStatus(params) {
+    if (!isRecord(params) || !isRecord(params.status) || typeof params.status.type !== 'string')
+        return false;
+    return params.status.type !== 'active';
 }
 function optionalInteger(value) {
     return typeof value === 'number' && Number.isSafeInteger(value) ? value : undefined;

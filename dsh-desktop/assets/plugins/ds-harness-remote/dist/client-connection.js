@@ -8,27 +8,31 @@ export class ClientConnection {
     constructor(context) {
         this.context = context;
     }
-    async connect(targetDeviceId, signal) {
+    async connect(targetDeviceId, signal, options = {}) {
         signal?.throwIfAborted();
-        const progressRunId = this.context.connectionProgressRun + 1;
-        this.context.connectionProgressRun = progressRunId;
-        this.context.connectionProgress = { runId: progressRunId, targetDeviceId, phase: 'checking-host' };
+        const progressRunId = options.background ? -1 : this.context.connectionProgressRun + 1;
+        if (!options.background) {
+            this.context.connectionProgressRun = progressRunId;
+            this.context.connectionProgress = { runId: progressRunId, targetDeviceId, phase: 'checking-host' };
+        }
         const identity = this.context.requireIdentity();
         let client;
+        let closed = false;
+        let closeError;
         // Keep cancellation attached through capability discovery as well as the
         // handshake: the candidate is not yet owned by context.connected there.
         const onAbort = () => { void client?.close().catch(() => undefined); };
         signal?.addEventListener('abort', onAbort, { once: true });
         try {
-            const serverDevice = (await this.context.server.listDevices()).find(device => device.deviceId === targetDeviceId);
+            const serverDevice = (await this.context.server.listDevices(signal)).find(device => device.deviceId === targetDeviceId);
             signal?.throwIfAborted();
             if (serverDevice === undefined) {
                 throw new ClientModeError('MEMBERSHIP_REQUIRED', 'The selected Host is not authorized for this account.');
             }
             this.updateConnectionProgress(progressRunId, 'authorizing-peer');
-            const target = await this.authorizeHostPeer(serverDevice);
+            const target = await this.authorizeHostPeer(serverDevice, signal);
             signal?.throwIfAborted();
-            const presence = await this.context.server.presenceFor(targetDeviceId);
+            const presence = await this.context.server.presenceFor(targetDeviceId, signal);
             signal?.throwIfAborted();
             if (!presence.online)
                 throw new ClientModeError('HOST_OFFLINE', 'The selected Host is offline.', true);
@@ -47,6 +51,7 @@ export class ClientConnection {
                 role: 'client',
                 deviceId: identity.deviceId,
                 accessToken: credentials.accessToken,
+                refreshAccessToken: async () => (await this.context.server.authenticate(identity)).accessToken,
                 targetDeviceId,
                 forceRelay: this.context.config.forceRelay || attempt === 'relay',
                 preferredTransports: preferredTransportsForAttempt(attempt),
@@ -77,10 +82,13 @@ export class ClientConnection {
             let transport;
             for (const attempt of attempts) {
                 webRtcFallback = false;
-                const stopProgressTimer = this.beginAttemptProgress(progressRunId, attempt);
+                const stopProgressTimer = options.background ? () => undefined : this.beginAttemptProgress(progressRunId, attempt);
                 try {
                     transport = createTransport(attempt);
                     client = new RemoteClientCore(new ClientSecureTransport(transport, identity, target), 60_000);
+                    closed = false;
+                    closeError = undefined;
+                    client.onClose(error => { closed = true; closeError = error; });
                     const attemptClient = client;
                     signal?.throwIfAborted();
                     await attemptClient.connect();
@@ -107,21 +115,6 @@ export class ClientConnection {
             const connectedTransport = transport;
             const connectedPreference = transportPreferenceForMode(connectedClient.getStats().mode);
             this.updateConnectionProgress(progressRunId, 'connected', connectedPreference === undefined ? undefined : [connectedPreference]);
-            connectedClient.onClose(() => {
-                if (this.context.connected?.client !== connectedClient)
-                    return;
-                void this.context.closePreview();
-                this.context.connected = undefined;
-                this.context.connectionProgress = undefined;
-                this.context.pendingWorkspaceSelection = undefined;
-                void this.context.closeCodexVirtual();
-                void this.context.closeCursorVirtual();
-                this.context.gatewaySwitch.disconnectRemote();
-                void connectedClient.close().catch(() => undefined);
-                this.context.logger.warn('remote Harness transport closed; keeping Remote authority disconnected', {
-                    targetDeviceId: shortId(target.deviceId),
-                });
-            });
             const connectionDetails = await connectedTransport.connectionDetails().catch(() => undefined);
             this.context.logger.info('remote Harness transport ready', {
                 targetDeviceId: shortId(target.deviceId),
@@ -140,6 +133,8 @@ export class ClientConnection {
             }
             const features = await probeRemoteHostFeatures(connectedClient, serverDevice.clientVersion);
             signal?.throwIfAborted();
+            if (closed)
+                throw closeError ?? new ClientModeError('TRANSPORT_CLOSED', 'The Remote connection closed during discovery.', true);
             return {
                 client: connectedClient,
                 target,
@@ -152,8 +147,9 @@ export class ClientConnection {
         }
         catch (error) {
             this.clearConnectionProgress(progressRunId);
+            const failure = closed && closeError !== undefined ? closeError : error;
             await client?.close().catch(() => undefined);
-            throw error;
+            throw failure;
         }
         finally {
             signal?.removeEventListener('abort', onAbort);
@@ -189,8 +185,9 @@ export class ClientConnection {
         if (this.context.connectionProgress?.runId === runId)
             this.context.connectionProgress = undefined;
     }
-    async authorizeHostPeer(serverDevice) {
-        const descriptor = await this.context.server.deviceFor(serverDevice.deviceId);
+    async authorizeHostPeer(serverDevice, signal) {
+        const descriptor = await this.context.server.deviceFor(serverDevice.deviceId, signal);
+        signal?.throwIfAborted();
         assertAuthorizedHost(serverDevice, descriptor);
         const existing = this.context.identities.trustedPeer(descriptor.deviceId);
         if (existing !== undefined && existing.publicKey !== descriptor.identityKey) {

@@ -144,10 +144,10 @@ const COMPANION_PLUGINS = [
   // 追加在清单末尾：前 18 条的顺序被 unit-patch-engine 的漂移防线钉住。
   { id: 'goal-completion', name: '@deepseek-ai/dsh-goal-completion' },
   // —— 2026-10-22 用户点名的五个上游插件（随安装包内置） ——
-  // 免费多引擎搜索（DDDMUC/dsh-free-search，MIT，0.9.11）：注册 ctx.web 搜索
+  // 免费多引擎搜索（DDDMUC/dsh-free-search，MIT，0.9.39）：注册 ctx.web 搜索
   // provider，内置 web_search 自动选用；loader id 是 `web-search-free`（不是包名）。
   { id: 'web-search-free', name: 'dsh-free-search' },
-  // 插件商店（LivXue/dsh-plugin-shop，Apache-2.0，0.9.0）：浏览/安装/启停/更新
+  // 插件商店（LivXue/dsh-plugin-shop，Apache-2.0，0.9.3）：浏览/安装/启停/更新
   // dsh 插件；loader id 是 `shop`，客户端 bundle id 才是包名。随包条目本身不
   // 参与「内置件更新」的 better-sidebar 排除策略（见 sidecar UPDATE_SOURCES）。
   { id: 'shop', name: 'dsh-plugin-shop' },
@@ -155,7 +155,7 @@ const COMPANION_PLUGINS = [
   // HTTP 代理行，读系统代理并热切换 fetch dispatcher。包名保留上游的
   // `@local/dsh-network-proxy`——改名会让 GitHub 更新回来的包名/loader 行对不上。
   { id: 'network-proxy', name: '@local/dsh-network-proxy' },
-  // MCP / 技能工具箱（Imzl-zl/dsh-toolbox-ui，MIT，1.8.2）：右下悬浮面板，
+  // MCP / 技能工具箱（Imzl-zl/dsh-toolbox-ui，MIT，1.10.1）：右下悬浮面板，
   // MCP 市场与技能管理；loader id 是 `mcp-manager-ui`。它静态导入 smol-toml
   // （BSD-3-Clause）——该包不在内核闭包内，改由 dsh-desktop/package.json 显式
   // 依赖 + VENDOR_DEPS 同步，避免用 shipsNodeModules 再开一条依赖分发面。
@@ -165,18 +165,18 @@ const COMPANION_PLUGINS = [
   // 的 active_turns 与 ACP/崩溃通知）。
   { id: 'dsh-notify', name: '@bittersmilezzz/dsh-notify' },
   // —— 2026-11-09 用户点名的两件（随安装包内置，在册 31 → 33） ——
-  // 上下文透视（bowenliang123/dsh-context，Apache-2.0，0.82.1）：右栏上下文看板 +
+  // 上下文透视（bowenliang123/dsh-context，Apache-2.0，0.83.0）：右栏上下文看板 +
   // `/context` 命令，拆解当前上下文由什么构成、如何随轮次演变。loader id 是
   // bundle 层 cordis.patch.yml 的 `dsh-context`（与包名同形）。宿主半边只依赖
   // zod / @deepseek-ai/dsh-session / @deepseek-ai/schemastery——前两者由宿主闭包
   // 与 VENDOR_DEPS 提供，自身无内层依赖树（不设 shipsNodeModules）。
   { id: 'dsh-context', name: 'dsh-context' },
-  // 端到端加密远程访问（liguobao/ds-harness-remote，MIT，0.5.19）：桌面 / Web / 安卓
+  // 端到端加密远程访问（liguobao/ds-harness-remote，MIT，0.6.4）：桌面 / Web / 安卓
   // 远控本机 DSH，含 dsh-TUI Host 支持。它的 dist 是 esbuild 产物，运行时真依赖
-  // werift / ws / qrcode / zod@3 / @xterm/*（宿主闭包与 VENDOR_DEPS 都不提供），
-  // 故内层 node_modules 随包正件分发（shipsNodeModules）。
-  // 与上游整包的唯一差别：不装 optionalDependencies 的 @roamhq/wrtc（14.9MB 的
-  // 单平台原生 .node），WebRTC 走纯 JS 的 werift 兜底路径。
+  // ws / qrcode / zod@3 / @xterm/* 等（宿主闭包与 VENDOR_DEPS 都不提供），故内层
+  // node_modules 随包正件分发（shipsNodeModules）。
+  // 与上游整包的唯一差别：不装 optionalDependencies 的 @roamhq/wrtc（单平台原生
+  // .node）；0.6.4 起上游把 werift 收进 dist，依赖树不再需要它。
   // bundle 层 cordis.patch.yml 有两条 insert 行（`ds-harness-remote` 桌面行 +
   // `ds-harness-remote-tui` TUI 行），本清单登记的是桌面行的 id；TUI 行靠自己的
   // `!!js` 条件在无 dsh-tui 时禁用。

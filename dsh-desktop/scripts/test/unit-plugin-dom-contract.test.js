@@ -720,6 +720,9 @@ const INERT_CLASS_TOKENS = new Map([
 	['suggestion', '当前内核已无「欢迎页建议条目」UI（实测 suggestion/example/starter/recommend '
 		+ '在 dsh-client-ui-conversation 全 0 命中），dsh-quest-ui 的三条规则（suggestion 与 '
 		+ 'Suggestion 两种拼法）今日惰性，带 dsh-compat:welcome-suggestions-inert 说明保留。'],
+	['gskjmw', 'dsh-easyrewrite 3.0.1 的文件卡拖拽 / 选中 CSS 里还留着旧内核 CSS Module 的哈希类'
+		+ '（gSkjMW_card）；同一条选择器链上已有 [data-dsh-easyrewrite-file-card] / [class*=\'_card\'][class*=\'FileCard\']'
+		+ ' 等自有锚，这条前缀今日惰性，按“上游字节不动”的纪律登记而非改写 GPL 之外的第三方产物。'],
 	['usg_', 'dsh-pocket 引用的使用统计行前缀（usg_statsRow/usg_stat 等），rc.2 已重构该区域；'
 		+ '第三方 GPL 插件的 CSS 不宜频繁改动，规则惰性保留。'],
 ]);

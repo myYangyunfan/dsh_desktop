@@ -144,7 +144,11 @@ export function observedConnectionProgress(status, targetDeviceId, preferredTran
     };
 }
 export function connectionErrorMessage(code, t) {
-    if (code === 'ACCOUNT_AUTH_REQUIRED' || code === 'AUTH_INVALID' || code === 'TOKEN_EXPIRED') {
+    if (code === 'ACCOUNT_AUTH_REQUIRED')
+        return t('hostSignInHint');
+    if (code === 'AUTH_REQUIRED')
+        return t('hostSignInHint');
+    if (code === 'AUTH_INVALID' || code === 'TOKEN_EXPIRED') {
         return t('connectionAuthorizationExpired');
     }
     if (code === 'CONNECTION_REPLACED')
@@ -161,7 +165,9 @@ export function connectionErrorMessage(code, t) {
         return t('connectionVersionMismatch');
     if (code === 'INVALID_MESSAGE')
         return t('connectionInvalidResponse');
-    if (code === 'CONNECTION_FAILED' || code === 'SERVER_NOT_CONFIGURED')
+    if (code === 'CONNECTION_FAILED')
+        return t('serverUnavailableError');
+    if (code === 'SERVER_NOT_CONFIGURED')
         return t('connectionReachability');
     return t('connectionUnexpected');
 }
@@ -170,9 +176,11 @@ export function connectionStatusLabel(status, t) {
         return t('checkingConnection');
     if (status.online)
         return t('online');
+    if (status.error !== undefined)
+        return connectionErrorMessage(status.error, t);
     if (!status.reconnecting)
         return t('offline');
-    return t(status.lastActiveAt === undefined && status.error === undefined ? 'connecting' : 'reconnecting');
+    return t(status.lastActiveAt === undefined ? 'connecting' : 'serverUnavailableShort');
 }
 export function connectionStatusClass(status) {
     if (status?.online)
@@ -181,7 +189,36 @@ export function connectionStatusClass(status) {
         return ' isReconnecting';
     return status === undefined ? '' : ' isOffline';
 }
-export function messageOf(reason) { return reason instanceof Error ? reason.message : String(reason); }
+export function startupErrorMessage(error, t) {
+    if (error.code === 'IDENTITY_INVALID')
+        return t('identityCorrupted');
+    if (error.code === 'SERVER_CREDENTIALS_INVALID')
+        return t('credentialsCorrupted');
+    if (error.code === 'IDENTITY_LOCKED')
+        return t('identityLocked');
+    if (error.code === 'STORAGE_CONFLICT')
+        return t('storageConflict');
+    if (error.code === 'SERVER_CREDENTIALS_BUSY')
+        return t('connectionCredentialsBusy');
+    return error.message || t('remoteStartupFailed');
+}
+export function messageOf(reason, t) {
+    if (typeof reason === 'object' && reason !== null && 'code' in reason && typeof reason.code === 'string') {
+        if (reason.code === 'CONNECTION_FAILED')
+            return t('serverUnavailableError');
+        if (reason.code === 'IDENTITY_INVALID')
+            return t('identityCorrupted');
+        if (reason.code === 'SERVER_CREDENTIALS_INVALID')
+            return t('credentialsCorrupted');
+        if (reason.code === 'IDENTITY_LOCKED')
+            return t('identityLocked');
+        if (reason.code === 'STORAGE_CONFLICT')
+            return t('storageConflict');
+        if (reason.code === 'SERVER_CREDENTIALS_BUSY')
+            return t('connectionCredentialsBusy');
+    }
+    return reason instanceof Error ? reason.message : String(reason);
+}
 export function formatPlatform(value) {
     const normalized = value.toLowerCase();
     if (normalized === 'darwin' || normalized === 'macos')
@@ -204,5 +241,9 @@ export function connectedClientModeLabel(mode, t) {
     if (mode === 'Relay')
         return t('remoteNetworkRelay');
     return t('connected');
+}
+/** Normalize legacy internal account labels without changing credential identity. */
+export function displayRemoteAccount(account) {
+    return account.replace(/^device:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i, 'dsh-device:$1');
 }
 //# sourceMappingURL=presentation.js.map

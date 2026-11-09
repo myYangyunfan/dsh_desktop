@@ -40,50 +40,106 @@ async function readHarnessManifestVersion(manifestPath) {
         return undefined;
     }
 }
+/** Roots where a globally installed Harness CLI is commonly found. */
+function globalNpmRoots(context, execPath, cwd) {
+    const roots = [];
+    const add = (value) => {
+        if (typeof value === 'string' && value.length > 0)
+            roots.push(value);
+    };
+    const env = context.env ?? process.env;
+    if (isAbsolute(execPath)) {
+        add(dirname(execPath));
+        add(join(dirname(execPath), '..', 'lib'));
+    }
+    const prefix = env.npm_config_prefix;
+    if (prefix !== undefined && prefix.length > 0) {
+        add(prefix);
+        add(join(prefix, 'lib'));
+    }
+    const appData = env.APPDATA;
+    if (appData !== undefined && appData.length > 0)
+        add(join(appData, 'npm'));
+    for (const base of ['/usr/local/lib', '/usr/lib', '/opt/homebrew/lib'])
+        add(base);
+    return roots;
+}
 /**
- * Compatibility fallback for Harness builds whose host.describe still returns
- * the historical 0.0.1 placeholder.
+ * Read the installed Harness CLI version from its package manifest.
  *
- * Both supported entrypoint layouts must be covered. A CLI/dsh-TUI entrypoint
- * sits below the @deepseek-ai/dsh package root, so only its ancestor chain is
- * worth walking. The 0.2.0 Desktop shell instead launches its own
- * `@deepseek-ai/dsh-desktop-host` entrypoint from inside `app.asar`, where the
- * ancestors carry only the desktop shell and runtime manifests while the
- * Harness CLI package is a sibling; resolve that package through the
- * entrypoint's module scope.
+ * A CLI entrypoint sits below the `@deepseek-ai/dsh` package root, so only its
+ * ancestor chain is worth walking; global bin symlinks are resolved first. The
+ * 0.2.0 Desktop shell launches its own `@deepseek-ai/dsh-desktop-host`
+ * entrypoint from inside `app.asar`, where the Harness CLI is a sibling and is
+ * reachable through the entrypoint's module scope instead.
+ *
+ * Electron desktop Hosts may launch with an empty or non-absolute
+ * `process.argv[1]`. In that case recover the version from the working
+ * directory, the running executable's ancestors, `createRequire(...)` module
+ * scope, and the usual global npm roots instead of returning `undefined`.
  */
-export async function readHarnessDistributionVersion(entrypoint = process.argv[1]) {
-    if (entrypoint === undefined || !isAbsolute(entrypoint))
-        return undefined;
-    // Global npm installs expose the CLI through a bin symlink. Resolve it before
-    // walking ancestors; otherwise `.../bin/dsh` never reaches the
-    // `@deepseek-ai/dsh` package manifest and the CLI Host reports no version.
-    let resolvedEntrypoint = entrypoint;
-    try {
-        resolvedEntrypoint = await realpathEntrypoint(entrypoint);
+export async function readHarnessDistributionVersion(entrypoint = process.argv[1], context = {}) {
+    const cwd = context.cwd ?? process.cwd();
+    const execPath = context.execPath ?? (typeof process.execPath === 'string' ? process.execPath : '');
+    const globalRoots = context.globalRoots ?? globalNpmRoots(context, execPath, cwd);
+    const manifests = [];
+    const seen = new Set();
+    const addManifest = (value) => {
+        if (typeof value !== 'string' || value.length === 0 || seen.has(value))
+            return;
+        seen.add(value);
+        manifests.push(value);
+    };
+    const addAncestors = (start) => {
+        let directory = start;
+        for (let depth = 0; depth < 8; depth += 1) {
+            addManifest(join(directory, 'package.json'));
+            const parent = dirname(directory);
+            if (parent === directory)
+                break;
+            directory = parent;
+        }
+    };
+    const addResolved = (base) => {
+        try {
+            addManifest(createRequire(base).resolve(`${HARNESS_PACKAGE_NAME}/package.json`));
+        }
+        catch {
+            // This base cannot reach the Harness CLI package (or the package does not
+            // export ./package.json); every other candidate still applies.
+        }
+    };
+    // Primary: an absolute CLI entrypoint. Resolve bin symlinks before walking
+    // ancestors so a globally installed `.../bin/dsh` reaches the package root.
+    if (typeof entrypoint === 'string' && entrypoint.length > 0 && isAbsolute(entrypoint)) {
+        let resolvedEntrypoint = entrypoint;
+        try {
+            resolvedEntrypoint = await realpathEntrypoint(entrypoint);
+        }
+        catch {
+            // Keep the original path for Desktop/app.asar and other virtual entries.
+        }
+        if (isAbsolute(resolvedEntrypoint)) {
+            addAncestors(dirname(resolvedEntrypoint));
+            addResolved(resolvedEntrypoint);
+        }
     }
-    catch {
-        // Keep the original path for Desktop/app.asar and other virtual entries
-        // where the filesystem cannot resolve a real path.
+    // Fallbacks for Electron/desktop Hosts without an absolute argv[1].
+    // Running executable and global roots take priority over cwd.
+    if (isAbsolute(execPath)) {
+        addAncestors(dirname(execPath));
+        addResolved(execPath);
     }
-    if (!isAbsolute(resolvedEntrypoint))
-        return undefined;
-    let directory = dirname(resolvedEntrypoint);
-    for (let depth = 0; depth < 8; depth += 1) {
-        const version = await readHarnessManifestVersion(join(directory, 'package.json'));
+    for (const root of globalRoots)
+        addManifest(join(root, 'node_modules', HARNESS_PACKAGE_NAME, 'package.json'));
+    addManifest(join(cwd, 'node_modules', HARNESS_PACKAGE_NAME, 'package.json'));
+    addResolved(join(cwd, 'package.json'));
+    addResolved(cwd);
+    for (const manifest of manifests) {
+        const version = await readHarnessManifestVersion(manifest);
         if (version !== undefined)
             return version;
-        const parent = dirname(directory);
-        if (parent === directory)
-            break;
-        directory = parent;
     }
-    try {
-        return await readHarnessManifestVersion(createRequire(resolvedEntrypoint).resolve(`${HARNESS_PACKAGE_NAME}/package.json`));
-    }
-    catch {
-        // The entrypoint may not be a module path that can reach the Harness CLI package.
-        return undefined;
-    }
+    return undefined;
 }
 //# sourceMappingURL=harness-version.js.map

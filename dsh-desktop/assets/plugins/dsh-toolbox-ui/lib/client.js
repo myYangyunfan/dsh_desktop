@@ -58,7 +58,7 @@ const { useState, useEffect, useCallback, useMemo, useRef } = React2;
      引用目标，用上它等于永远命中 fallback，等宽字形跟宿主代码块对不上。 */
 const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(--dsw-alias-state-success-primary);--mcp-err:var(--dsw-alias-state-error-primary);--mcp-warn:var(--dsw-alias-state-warn-primary);--mcp-info:var(--dsw-alias-state-business-primary);--mcp-mut:var(--dsw-alias-label-secondary);--mcp-bg-1:var(--dsw-alias-bg-layer-1);--mcp-bg-2:var(--dsw-alias-bg-layer-2);--mcp-bg-3:var(--dsw-alias-bg-layer-3);--mcp-line:var(--dsw-alias-border-l2);--mcp-mono:var(--ds-font-family-code,ui-monospace,SFMono-Regular,Menlo,monospace);--mcp-r-xs:var(--dsw-radius-xs);--mcp-r-sm:var(--dsw-radius-sm);--mcp-r-md:var(--dsw-radius-md);--mcp-r-lg:var(--dsw-radius-lg);--mcp-r-xl:var(--dsw-radius-xl);--mcp-r-panel:var(--dsw-radius-panel)}
 .dsh-mcp-wrap,.dsh-mcp-panel-overlay,.dsh-mcp-overlay,.dsh-mcp-fab,.dsh-mcp-footer-action,.dsh-mcp-toast{color:var(--dsw-alias-label-primary);font-family:var(--dsw-font-family,inherit)}
-.dsh-mcp-wrap{box-sizing:border-box;display:flex;flex-direction:column;height:100%;min-height:0;gap:14px;padding:4px 2px;font-size:13px;-webkit-font-smoothing:antialiased}
+.dsh-mcp-wrap{box-sizing:border-box;display:flex;flex-direction:column;height:100%;min-height:0;gap:16px;padding:0;font-size:12.5px;-webkit-font-smoothing:antialiased}
 .dsh-mcp-wrap ::-webkit-scrollbar{width:8px;height:8px}
 .dsh-mcp-wrap ::-webkit-scrollbar-thumb{background:var(--dsw-alias-scrollbar-bg-l2);border-radius:999px;corner-shape:round;border:2px solid transparent;background-clip:padding-box}
 .dsh-mcp-wrap ::-webkit-scrollbar-thumb:hover{background:var(--dsw-alias-scrollbar-hover-l2);border:2px solid transparent;background-clip:padding-box}
@@ -71,11 +71,13 @@ const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(-
      · 能力层与按钮组塞进同一列且左对齐：整排按钮挤在标题旁边，中间空一大块，
        与原型明显不同（用户第二次指出：「顶部这个你不还是在左边」）。
    现在四列各自锚定：切面只让第三列的内容变化，关闭永远在第四列。 */
-.dsh-mcp-head{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;align-items:center;gap:10px}
-.dsh-mcp-title{flex:none;white-space:nowrap;font-size:15px;font-weight:650;letter-spacing:.2px;display:flex;align-items:center;gap:8px}
-.dsh-mcp-title::before{content:"";width:4px;height:16px;border-radius:2px;background:var(--mcp-accent)}
+.dsh-mcp-head{flex:none;display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;align-items:center;gap:12px}
+.dsh-mcp-title{flex:none;white-space:nowrap;font-size:15px;font-weight:600;line-height:1.35;letter-spacing:.1px;display:flex;align-items:center;gap:8px}
+.dsh-mcp-title::before{content:"";width:3px;height:14px;border-radius:1.5px;background:var(--mcp-accent)}
 .dsh-mcp-head-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;min-width:0}
-.dsh-mcp-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--mcp-line);border-radius:var(--mcp-r-sm);padding:6px 12px;background:var(--dsw-alias-button-elevated-fill);color:var(--dsw-alias-label-primary);font-size:12px;font-weight:500;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s}
+/* 按钮高度统一：32px 主按钮、28px 次按钮/图标按钮。原 30px 图标按钮与 7/13px 主按钮
+   混排，同一行里永远对不齐——这是「不优雅」最显眼的来源。 */
+.dsh-mcp-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--mcp-line);border-radius:var(--mcp-r-sm);padding:0 12px;height:32px;background:var(--dsw-alias-button-elevated-fill);color:var(--dsw-alias-label-primary);font-size:12.5px;font-weight:500;white-space:nowrap;cursor:pointer;transition:background .1s,border-color .1s}
 .dsh-mcp-btn:hover{background:var(--dsw-alias-interactive-bg-hover);border-color:var(--dsw-alias-border-l3)}
 .dsh-mcp-btn:active{background:var(--dsw-alias-interactive-bg-active)}
 .dsh-mcp-btn:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
@@ -85,8 +87,8 @@ const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(-
 .dsh-mcp-btn.danger:hover{background:var(--dsw-alias-interactive-bg-hover-danger);border-color:var(--dsw-alias-state-error-primary)}
 /* 尺寸/形态修饰。放在 .dsh-mcp-btn 之后、且都是 (0,2,0)：与基础规则冲突的那些属性
    （padding / border-color / background）在这里一次性定死，别在别处再补一条同名的。 */
-.dsh-mcp-btn.icon{width:30px;height:30px;padding:0}
-.dsh-mcp-btn.sm{padding:3px 8px;font-size:11px}
+.dsh-mcp-btn.icon{width:28px;height:28px;padding:0}
+.dsh-mcp-btn.sm{padding:0 8px;height:28px;font-size:11px}
 .dsh-mcp-btn.ghost{border-color:transparent;background:transparent}
 .dsh-mcp-btn.ghost:hover{background:var(--dsw-alias-interactive-bg-hover);border-color:transparent}
 .dsh-mcp-btn.sel{background:var(--dsw-alias-interactive-bg-hover-accent);border-color:var(--mcp-accent);color:var(--dsw-alias-label-primary)}
@@ -94,18 +96,20 @@ const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(-
 /* 分段控件：浅槽 + 选中项填实。能力层与模式层共用同一个控件、同一套尺寸——
    「切换管哪个能力」和「切换看到哪一面」是同一类决定，长得一样才不用重新学。
    它压过 .dsh-mcp-btn 的边框/内边距，特异性 (0,2,0)，位置在此之后。 */
-.dsh-mcp-seg{display:inline-flex;gap:2px;padding:2px;flex:none;border-radius:var(--mcp-r-md);background:var(--mcp-bg-3)}
-.dsh-mcp-seg .dsh-mcp-btn{border-color:transparent;background:transparent;padding:5px 12px;font-size:12.5px}
+/* 分段控件：32px 高，与主按钮同高，同一行里不再一高一矮。 */
+.dsh-mcp-seg{display:inline-flex;gap:2px;padding:2px;flex:none;border-radius:var(--mcp-r-md);background:var(--mcp-bg-2)}
+.dsh-mcp-seg .dsh-mcp-btn{border-color:transparent;background:transparent;padding:0 12px;height:28px;font-size:12.5px;border-radius:var(--mcp-r-sm)}
 .dsh-mcp-seg .dsh-mcp-btn:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dsh-mcp-seg .dsh-mcp-btn.sel{background:var(--dsw-alias-button-primary-fill);color:var(--dsw-alias-label-primary-inverted);font-weight:600}
-.dsh-mcp-seg-count{font-size:10px;font-weight:500;padding:0 5px;border-radius:999px;corner-shape:round;background:var(--dsw-alias-interactive-bg-hover);color:var(--mcp-mut);line-height:15px}
+.dsh-mcp-seg-count{font-size:10px;font-weight:500;padding:0 4px;border-radius:999px;corner-shape:round;background:var(--dsw-alias-interactive-bg-hover);color:var(--mcp-mut);line-height:14px}
 .dsh-mcp-seg .dsh-mcp-btn.sel .dsh-mcp-seg-count{background:var(--dsw-alias-interactive-bg-hover-accent);color:var(--dsw-alias-label-primary-inverted)}
 
 /* ── 第二行：模式分段 | 作用域药丸 | 连接状态 ─────────────────────────────
    两个能力面共用这一条、共用这个三列节奏（与标题栏同款 grid）。
    三列钉死还有一个理由：右侧那句状态的长短会变（「宿主已连接」↔「skills 服务未就绪」），
    不钉死它就会推着中间的药丸左右晃——这正是标题栏关闭按钮当初漂移的同一个成因。 */
-.dsh-mcp-sub{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;flex:none}
+/* 第二行统一 32px 高：模式分段、作用域药丸、连接状态在同一水平线上。 */
+.dsh-mcp-sub{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;flex:none;height:32px}
 .dsh-mcp-sub-scope{min-width:0;display:flex;align-items:center}
 /* ⚠️ 作用域条必须**吃掉中间那一列的剩余宽度**。
    .dsh-mcp-tabs-wrap 自己是 flex:none（它原来是 .dsh-mcp-wrap 这个**列**容器的直接子元素，
@@ -143,30 +147,35 @@ const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(-
 /* 底栏的排序按钮在最左，弹层右对齐会跑出卡片外。 */
 .dsh-mcp-foot-dd .dsh-mcp-btn.icon{width:24px;height:24px;border-color:transparent;background:transparent;color:var(--dsw-alias-label-tertiary)}
 .dsh-mcp-foot-dd .dsh-mcp-btn.icon:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dsh-mcp-foot-dd .dsh-mcp-dd-pop{right:auto;left:0}
+.dsh-mcp-foot-dd .dsh-mcp-dd-pop{top:auto;bottom:calc(100% + 8px);right:0;left:auto}
 /* 详情操作栏的「⋯」：靠右，与主/次行为同高。 */
 .dsh-mcp-d-more{flex:none}
-.dsh-mcp-body{display:flex;gap:12px;flex:1;min-height:0}
-.dsh-mcp-side{width:288px;min-width:248px;min-height:0;display:flex;flex-direction:column;gap:8px;border:1px solid var(--mcp-line);border-radius:var(--mcp-r-lg);background:var(--mcp-bg-2);padding:10px;overflow:hidden}
+.dsh-mcp-body{display:flex;gap:14px;flex:1;min-height:0}
+.dsh-mcp-side{width:292px;min-width:248px;min-height:0;display:flex;flex-direction:column;gap:12px;border:1px solid var(--mcp-line);border-radius:var(--mcp-r-lg);background:var(--mcp-bg-2);padding:12px;overflow:hidden}
 .dsh-mcp-side.embedded{width:auto;min-width:0;flex:1 1 auto;border:0;border-radius:0;background:transparent;padding:0;overflow:visible}
-.dsh-mcp-search{position:relative}
+.dsh-mcp-search{position:relative;flex:none;min-width:0}
 .dsh-mcp-search svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);opacity:.5}
-.dsh-mcp-search input{width:100%;box-sizing:border-box;padding:8px 10px 8px 30px;border-radius:var(--mcp-r-md);border:1px solid var(--mcp-line);background:var(--mcp-bg-1);color:var(--dsw-alias-label-primary);font-size:12px;outline:none;transition:border-color .15s,box-shadow .15s}
+.dsh-mcp-search input{width:100%;box-sizing:border-box;padding:0 10px 0 30px;height:32px;border-radius:var(--mcp-r-md);border:1px solid var(--mcp-line);background:var(--mcp-bg-1);color:var(--dsw-alias-label-primary);font-size:12px;outline:none;transition:border-color .1s,box-shadow .1s}
 .dsh-mcp-search input::placeholder{color:var(--mcp-mut)}
 .dsh-mcp-search input:focus{border-color:var(--mcp-accent);box-shadow:none}
-.dsh-mcp-list{flex:1 1 auto;min-height:52px;overflow-y:auto;display:flex;flex-direction:column;gap:3px;margin:0 -4px;padding:0 4px}
-.dsh-mcp-item{position:relative;display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:var(--mcp-r-md);cursor:pointer;border:1px solid transparent;transition:background .13s,border-color .13s}
+.dsh-mcp-list{flex:1 1 auto;min-height:52px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;margin:0 -4px;padding:0 4px}
+.dsh-mcp-item{position:relative;flex:none;display:flex;align-items:center;gap:10px;padding:12px;border-radius:var(--mcp-r-md);cursor:pointer;border:1px solid transparent;transition:background .1s,border-color .1s}
 .dsh-mcp-item:hover{background:var(--dsw-alias-interactive-bg-hover);border-color:var(--dsw-alias-border-l2)}
-.dsh-mcp-item.sel{background:var(--dsw-alias-interactive-bg-hover-accent);border-color:var(--mcp-accent)}
-.dsh-mcp-item.sel::before{content:"";position:absolute;left:-1px;top:20%;bottom:20%;width:3px;border-radius:3px;background:var(--mcp-accent)}
+.dsh-mcp-item.sel{background:var(--dsw-alias-interactive-bg-hover-accent);border-color:transparent}
+.dsh-mcp-item.sel::before{content:"";position:absolute;left:-1px;top:20%;bottom:20%;width:2px;border-radius:1px;background:var(--mcp-accent)}
 .dsh-mcp-dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--mcp-mut);box-shadow:none;corner-shape:round}
 .dsh-mcp-dot.connected{background:var(--mcp-ok);box-shadow:0 0 4px color-mix(in srgb,var(--mcp-ok) 55%,transparent)}
 .dsh-mcp-dot.failed{background:var(--mcp-err);box-shadow:0 0 6px color-mix(in srgb,var(--mcp-err) 55%,transparent)}
 .dsh-mcp-dot.loading{background:var(--mcp-warn);animation:mcpBlink 1.1s infinite}
 @keyframes mcpBlink{50%{opacity:.35}}
 .dsh-mcp-item-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-.dsh-mcp-item-name{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.1px}
-.dsh-mcp-item-sub{font-size:10.5px;color:var(--mcp-mut);display:flex;gap:6px;align-items:center;min-width:0;overflow:hidden;white-space:nowrap}
+.dsh-mcp-item-name-row{display:flex;align-items:center;gap:7px;min-width:0}
+.dsh-mcp-item-name{font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.1px}
+/* 状态文本是这一行里唯一会变长的东西：让它自己省略，别去挤芯片。 */
+.dsh-mcp-item-meta{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsh-mcp-item-sub{font-size:10.5px;color:var(--mcp-mut);display:flex;gap:6px;align-items:center;min-width:0;overflow:hidden;white-space:nowrap;flex-wrap:wrap;row-gap:4px}
+/* 状态芯片**不收缩**：窄面板下让它自己换行，而不是把 "HTTP" 挤成半截、被后一个芯片盖住。 */
+.dsh-mcp-item-sub>.dsh-mcp-chip{flex:none}
 /* ⚠️ 子行必须有 min-width:0 + overflow:hidden：它在 flex 列里（.dsh-mcp-item-main 是
    flex:1;min-width:0），只要里面放进任何**不收缩**的长文本（真机踩过：一整条根路径），
    它就会撑破 185px 的单元格并**没有省略号地**硬裁——显示成半截字，看起来像渲染坏了。
@@ -193,7 +202,7 @@ const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(-
 .dsh-mcp-chip.ro:hover{background:var(--mcp-bg-1);border-color:var(--mcp-line)}
 .dsh-mcp-chip.ro.sel:hover{background:var(--dsw-alias-interactive-bg-hover-accent);border-color:var(--mcp-accent)}
 .dsh-mcp-chip:focus-visible{outline:1px solid var(--mcp-accent);outline-offset:1px}
-.dsh-mcp-detail{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;gap:10px;border:1px solid var(--mcp-line);border-radius:var(--mcp-r-lg);background:var(--mcp-bg-2);padding:16px;overflow:hidden}
+.dsh-mcp-detail{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;gap:12px;border:1px solid var(--mcp-line);border-radius:var(--mcp-r-lg);background:var(--mcp-bg-2);padding:16px;overflow:hidden}
 /* 只有正文滚：头与 Tab 行 flex:none，操作栏不再随内容滑走。
    之前 .dsh-mcp-detail 自己 overflow-y:auto，头、操作按钮、Tab 与正文一起滚，
    卡片一多就「滚动一下按钮就没了」。 */
@@ -205,29 +214,35 @@ const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(-
    computed display 是 flex，而类名明明挂着。
    这里用 (0,2,0) 压过任何单类规则，位置就不必再依赖先后。 */
 .dsh-mcp-detail .dsh-mcp-pane-off{display:none}
+.dsh-mcp-d-body>.dsh-mcp-card{flex:none}
+.dsh-mcp-item-sub>.dsh-mcp-badge{border-color:transparent;background:transparent;padding-inline:0;color:var(--mcp-mut)}
 .dsh-mcp-d-diag{display:flex;flex-direction:column;gap:8px}
 .dsh-mcp-d-note{font-size:12px;line-height:18px;color:var(--mcp-mut)}
 /* 空状态：图标方块 + 标题 + 一句说明，居中成块（原先是单行灰字，看不出「这里没有东西」
    和「这里加载失败」的区别）。 */
 .dsh-mcp-d-empty{display:flex;flex:1;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--mcp-mut);font-size:13px;gap:4px;padding:24px 16px}
+.dsh-mcp-d-empty>.dsh-mcp-d-actions{margin-top:14px;justify-content:center}
 .dsh-mcp-d-empty b{font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary)}
 .dsh-mcp-d-empty span{font-size:11.5px;line-height:18px;color:var(--mcp-mut);max-width:320px}
-.dsh-mcp-d-empty::before{content:"";width:34px;height:34px;border-radius:var(--mcp-r-md);background:var(--dsw-alias-interactive-bg-hover-accent);border:1px solid var(--mcp-accent)}
+.dsh-mcp-d-empty::before{content:"";width:26px;height:26px;border-radius:var(--mcp-r-md);background:var(--dsw-alias-interactive-bg-hover)}
 .dsh-mcp-d-head{flex:none;display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
 /* 详情里的 Tab 行复用作用域那套 .dsh-mcp-tab 原语，但**必须换行而不是横滚**。
    作用域条用「横滚 + ⋯ 弹层」是因为它的条目数不可控；详情页签固定三项、且窄屏下
    横滚条的滚动条是隐藏的——实测 390px 视口下 scrollWidth 431 > clientWidth 309，
    「诊断」会静默跑到屏幕外且没有任何提示。换行则三项永远都在。 */
-.dsh-mcp-detail>.dsh-mcp-tabs{flex:none;flex-wrap:wrap;overflow:visible}
-.dsh-mcp-d-name{font-size:17px;font-weight:700;letter-spacing:.2px;display:flex;align-items:center;gap:8px;min-width:0;overflow-wrap:anywhere}
+.dsh-mcp-detail>.dsh-mcp-tabs{flex:none;gap:20px;flex-wrap:wrap;overflow:visible;border-bottom:1px solid var(--mcp-line);padding:0}
+.dsh-mcp-detail>.dsh-mcp-tabs>.dsh-mcp-tab{border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;padding:8px 0 10px}
+.dsh-mcp-detail>.dsh-mcp-tabs>.dsh-mcp-tab.sel{border-bottom-color:var(--mcp-accent);background:transparent}
+.dsh-mcp-d-name{font-size:17px;font-weight:600;line-height:1.3;letter-spacing:.1px;display:flex;align-items:center;gap:8px;min-width:0;overflow-wrap:anywhere}
 .dsh-mcp-d-meta{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap}
 .dsh-mcp-d-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .dsh-mcp-d-scope-hint{font-size:11.5px;color:var(--mcp-mut)}
-.dsh-mcp-d-desc{margin:6px 0 0;font-size:12px;line-height:18px;color:var(--mcp-mut)}
+.dsh-mcp-d-desc{margin:6px 0 0;font-size:12px;line-height:1.6;color:var(--mcp-mut);max-width:72ch;max-height:3.2em;overflow:hidden}
+.dsh-mcp-d-description{font-size:12px;line-height:1.65;color:var(--mcp-mut);white-space:pre-wrap;overflow-wrap:anywhere}
 /* 头部左侧标题列：占满 d-head 减掉操作列之后的宽度，长名字换行而不是把按钮挤下去。 */
 .dsh-mcp-d-title{flex:1;min-width:0}
-.dsh-mcp-card{border:1px solid var(--mcp-line);border-radius:var(--mcp-r-lg);padding:12px 14px;background:var(--mcp-bg-1)}
-.dsh-mcp-card h4{margin:0 0 9px;font-size:10.5px;font-weight:650;color:var(--mcp-mut);text-transform:uppercase;letter-spacing:.8px;display:flex;align-items:center;gap:6px}
+.dsh-mcp-card{border:1px solid var(--mcp-line);border-radius:var(--mcp-r-lg);padding:16px;background:var(--mcp-bg-1)}
+.dsh-mcp-card h4{margin:0 0 10px;font-size:11px;font-weight:600;color:var(--mcp-mut);letter-spacing:.2px;display:flex;align-items:center;gap:6px}
 .dsh-mcp-card h4::after{content:"";flex:1;height:1px;background:var(--mcp-line);margin-left:2px}
 .dsh-mcp-kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:5px 14px;font-size:12px;word-break:break-all}
 .dsh-mcp-kv>*{min-width:0}
@@ -237,9 +252,9 @@ const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(-
 .dsh-mcp-tool:hover{border-color:var(--mcp-line);background:var(--dsw-alias-interactive-bg-hover)}
 .dsh-mcp-tool-name{font-family:var(--mcp-mono);font-size:11.5px;color:var(--dsw-alias-brand-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46%}
 .dsh-mcp-tool-desc{font-size:11.5px;color:var(--mcp-mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dsh-mcp-empty-list{padding:20px;text-align:center;color:var(--mcp-mut);font-size:12px}
-.dsh-mcp-overlay{position:fixed;inset:0;background:var(--dsw-alias-bg-overlay);display:flex;align-items:center;justify-content:center;z-index:200;padding:12px;animation:mcpFade .14s ease-out}
-.dsh-mcp-whatsnew{box-sizing:border-box;width:min(460px,92vw);background:var(--mcp-bg-2);border:0;border-radius:var(--mcp-r-panel);padding:18px;box-shadow:var(--dsw-elevation-prominent);animation:mcpPop .18s cubic-bezier(.2,.9,.3,1.15)}
+.dsh-mcp-empty-list{display:flex;align-items:center;justify-content:center;min-height:120px;padding:24px 16px;text-align:center;color:var(--mcp-mut);font-size:11.5px;line-height:1.65}
+.dsh-mcp-overlay{position:fixed;inset:0;background:var(--dsw-alias-bg-overlay);display:flex;align-items:center;justify-content:center;z-index:200;padding:12px;animation:mcpFade .15s ease-out}
+.dsh-mcp-whatsnew{box-sizing:border-box;width:min(460px,92vw);background:var(--mcp-bg-2);border:0;border-radius:var(--mcp-r-panel);padding:20px;box-shadow:var(--dsw-elevation-prominent);animation:mcpPop .2s cubic-bezier(.2,0,0,1)}
 .dsh-mcp-whatsnew-head{display:flex;flex-direction:column;gap:2px;margin-bottom:12px}
 .dsh-mcp-whatsnew-head b{font-size:15px;font-weight:650}
 .dsh-mcp-whatsnew-head span{font-size:12px;color:var(--mcp-mut)}
@@ -250,18 +265,123 @@ const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(-
 .dsh-mcp-whatsnew-dot{flex:none;color:var(--mcp-accent)}
 .dsh-mcp-whatsnew-where{display:block;margin-top:3px;width:fit-content;padding:0 6px;border-radius:999px;background:var(--mcp-line);color:var(--mcp-mut);font-size:11px;line-height:17px;white-space:nowrap;corner-shape:round}
 .dsh-mcp-whatsnew-foot{display:flex;justify-content:flex-end;margin-top:14px}
-.dsh-mcp-modal{box-sizing:border-box;width:560px;max-width:92vw;max-height:84vh;overflow-y:auto;background:var(--mcp-bg-2);border:0;border-radius:var(--mcp-r-panel);padding:20px;box-shadow:var(--dsw-elevation-prominent);animation:mcpPop .16s ease-out}
-.dsh-mcp-modal h3{margin:0 0 16px;font-size:15px;font-weight:650;display:flex;align-items:center;gap:8px}
-.dsh-mcp-modal h3::before{content:"";width:4px;height:14px;border-radius:2px;background:var(--mcp-accent)}
+.dsh-mcp-modal{box-sizing:border-box;display:flex;flex-direction:column;width:560px;max-width:92vw;max-height:88dvh;overflow:hidden;background:var(--mcp-bg-2);border:0;border-radius:var(--mcp-r-panel);padding:0;box-shadow:var(--dsw-elevation-prominent);animation:mcpPop .2s cubic-bezier(.2,0,0,1)}
+.dsh-mcp-modal-head{display:flex;align-items:flex-start;gap:12px;flex:none;padding:20px 20px 16px}
+.dsh-mcp-modal h3{flex:1;min-width:0;margin:0;font-size:15px;line-height:1.5;font-weight:600;overflow-wrap:anywhere}
+.dsh-mcp-modal-body{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 20px 20px}
 .dsh-mcp-field{margin-bottom:14px}
 .dsh-mcp-field>label{display:block;font-size:11.5px;color:var(--mcp-mut);margin-bottom:6px;font-weight:500}
+/* Note: 布局与滚动边界见 .agents/notes/implemented/2026-11-05-extension-center-workbench.md；控制边界见 2026-11-04-compact-tool-preview.md
+   -- 工具加载工作区 -----------------------------------------------------------
+   这是一个工作台，不是设置卡片堆：顶部给上下文，正文给决策，底部给提交。
+   颜色、几何和层级全部从 DSH 主题令牌来；平面分隔用发丝线，抬升表面才用阴影。 */
+.dsh-mcp-tool-loading-page{display:flex;flex:1;min-height:0;flex-direction:column;overflow:hidden}
+.dsh-mcp-tool-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 2px 2px 0}
+/* 固定区域：参数、概览、工具条不滚；只有工具列表滚。 */
+.dsh-mcp-tool-fixed{flex:none}
+.dsh-mcp-tool-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:0 0 10px}
+.dsh-mcp-tool-hero-copy{min-width:0}
+.dsh-mcp-tool-title{margin:0;font-size:16px;font-weight:650;line-height:1.3;letter-spacing:0}
+/* 概览条：一张卡、四个统计格。数字是这张页面上唯一变长的东西，给它 tabular-nums
+   并钉住一格的宽度节奏，保存中数字增减时不推挤邻居。 */
+.dsh-mcp-tool-overview{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:10px 0 2px;border:1px solid var(--mcp-line);border-radius:var(--mcp-r-lg);background:var(--mcp-bg-2)}
+.dsh-mcp-tool-stat{display:flex;align-items:center;gap:9px;min-width:0;padding:10px 14px}
+.dsh-mcp-tool-stat+.dsh-mcp-tool-stat{border-left:.5px solid var(--mcp-line)}
+.dsh-mcp-tool-stat-mark{width:8px;height:8px;flex:none;border-radius:50%;corner-shape:round;background:var(--mcp-mut)}
+.dsh-mcp-tool-stat-mark.resident{background:var(--mcp-ok)}
+.dsh-mcp-tool-stat-mark.deferred{background:var(--mcp-accent)}
+.dsh-mcp-tool-stat-mark.protected{background:var(--mcp-warn)}
+.dsh-mcp-tool-stat-value{font-size:17px;font-weight:680;line-height:1.1;font-variant-numeric:tabular-nums}
+.dsh-mcp-tool-stat-copy{min-width:0;display:flex;flex-direction:column;gap:1px}
+.dsh-mcp-tool-stat-label{color:var(--dsw-alias-label-primary);font-size:11.5px;font-weight:600;line-height:1.3}
+.dsh-mcp-tool-stat-note{overflow:hidden;color:var(--mcp-mut);font-size:10.5px;line-height:1.35;text-overflow:ellipsis;white-space:nowrap}
+/* 搜索参数：与工具列表同级的第二区块，不再是底部折叠的「高级设置」。
+    标题与三列字段先于工具统计，说明留给字段旁的提示。 */
+.dsh-mcp-tool-params{padding:0 0 14px;border-bottom:.5px solid var(--mcp-line)}
+.dsh-mcp-tool-params-head{margin-bottom:12px}
+.dsh-mcp-tool-params-title{margin:0;font-size:13px;font-weight:600;line-height:1.35}
+.dsh-mcp-tool-params-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.dsh-mcp-tool-param{display:flex;flex-direction:column;gap:6px;min-width:0}
+.dsh-mcp-tool-param-label{display:flex;align-items:center;gap:5px;color:var(--dsw-alias-label-primary);font-size:11.5px;font-weight:600;line-height:1.35}
+.dsh-mcp-tool-param-inline{display:flex;align-items:center;gap:8px}
+.dsh-mcp-tool-param-inline input{flex:1;min-width:0}
+.dsh-mcp-tool-param input[type='number']{width:100%;box-sizing:border-box;padding:0 10px;height:32px;border:0.5px solid var(--mcp-line);border-radius:var(--mcp-r-md);background:var(--mcp-bg-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:1.35;outline:none}
+.dsh-mcp-tool-param input[type='number']:focus{border-color:var(--mcp-accent);box-shadow:0 0 0 2px var(--dsw-alias-interactive-bg-hover-accent)}
+.dsh-mcp-tool-param input:disabled{opacity:.55;cursor:not-allowed}
+.dsh-mcp-tool-param-saved{margin:8px 0 0;color:var(--mcp-ok);font-size:11px;line-height:1.4}
+/* 工具条：搜索 + 分段筛选。筛选用与顶栏能力层同一形态的浅槽分段控件——
+   「看到哪一面」在面板里已经长这样，工具页不再发明第二种筛选长相。 */
+.dsh-mcp-tool-toolbar{display:flex;align-items:center;gap:10px;padding:8px 0 10px}
+.dsh-mcp-tool-toolbar .dsh-mcp-search{flex:1;min-width:180px}
+.dsh-mcp-tool-filter{display:inline-flex;gap:2px;flex:none;padding:3px;border-radius:var(--mcp-r-lg);background:var(--mcp-bg-2)}
+.dsh-mcp-tool-filter button{display:inline-flex;align-items:center;gap:5px;border:0;border-radius:var(--mcp-r-md);background:transparent;color:var(--mcp-mut);font:inherit;font-size:11.5px;line-height:1.3;padding:5px 11px;cursor:pointer;white-space:nowrap}
+.dsh-mcp-tool-filter button[aria-pressed='true']{background:var(--dsw-alias-button-primary-fill);color:var(--dsw-alias-label-primary-inverted);font-weight:650}
+/* 卡片网格：每张卡自带边框与底色，行间不再用发丝线分隔——线上排名字曾是
+   「密密麻麻一整片」观感的来源；卡片之间的 10px 空隙就是分组。 */
+.dsh-mcp-tool-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+/* 行 = 卡片：第 1 行 名称+中文短名+ⓘ | 常驻/按需分段；第 2 行 说明（截断，全文在 title）。
+   说明截断是有意的：这页的决定是「加载方式」，说明只是辨认工具用的线索，
+   整段铺开会让 34 张卡高低不一、网格错位。 */
+.dsh-mcp-tool-row{position:relative;display:flex;flex-direction:column;gap:5px;margin:0;padding:10px 12px;border:.5px solid var(--mcp-line);border-radius:var(--mcp-r-md);background:var(--mcp-bg-1);transition:border-color .12s,background .12s}
+.dsh-mcp-tool-row.is-changed{border-color:var(--mcp-accent);background:var(--dsw-alias-interactive-bg-hover-accent)}
+.dsh-mcp-tool-info{display:flex;align-items:center;gap:6px;min-width:0}
+.dsh-mcp-tool-row .dsh-mcp-tool-name{flex:0 1 auto;max-width:100%;min-width:0;overflow:hidden;color:var(--dsw-alias-label-primary);font-family:var(--mcp-mono);font-size:12px;font-weight:650;line-height:1.4;text-overflow:ellipsis;white-space:nowrap}
+.dsh-mcp-tool-alias{min-width:0;overflow:hidden;color:var(--mcp-mut);font-size:11px;line-height:1.4;text-overflow:ellipsis;white-space:nowrap}
+.dsh-mcp-tool-desc{display:-webkit-box;overflow:hidden;color:var(--mcp-mut);font-size:10.5px;line-height:1.45;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+/* 常驻/按需：行内的选择控件与工具条的筛选分段同形同尺寸，差别只在选中色——
+   常驻读语义绿、按需读 accent，与概览条的两个圆点一一对应。 */
+.dsh-mcp-tool-pick{display:inline-flex;gap:2px;flex:none;padding:2px;border-radius:var(--mcp-r-md);background:var(--mcp-bg-2)}
+.dsh-mcp-tool-pick button{border:0;border-radius:var(--mcp-r-sm);background:transparent;color:var(--mcp-mut);font:inherit;font-size:11px;line-height:1.3;padding:4px 10px;cursor:pointer;white-space:nowrap}
+.dsh-mcp-tool-pick button:disabled{opacity:.55;cursor:not-allowed}
+.dsh-mcp-tool-pick button[aria-pressed='true']{font-weight:650}
+.dsh-mcp-tool-pick button[aria-pressed='true'].is-resident{background:var(--dsw-alias-state-success-tertiary);color:var(--dsw-alias-state-success-primary)}
+.dsh-mcp-tool-pick button[aria-pressed='true'].is-deferred{background:var(--dsw-alias-interactive-bg-hover-accent);color:var(--mcp-accent)}
+.dsh-mcp-tool-pick button:focus-visible{outline:1px solid var(--mcp-accent);outline-offset:1px}
+/* 保存栏常驻底栏：左边一句话说清「改了几个/改完何时生效」，右边放弃+保存。
+   改动徽标与脏行卡片同色同圆点——底部 promised 的改动数与列表里高亮的卡互相对得上。 */
+.dsh-mcp-tool-save{display:flex;align-items:center;gap:10px;flex:none;margin-top:2px;padding:10px 12px;border:.5px solid var(--mcp-line);border-radius:var(--mcp-r-md);background:var(--mcp-bg-2)}
+.dsh-mcp-tool-save-hint{display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;font-size:11px;line-height:1.4;color:var(--mcp-mut)}
+.dsh-mcp-tool-save-dirty{display:inline-flex;align-items:center;gap:5px;flex:none;padding:1.5px 8px;border-radius:999px;corner-shape:round;background:var(--dsw-alias-interactive-bg-hover-accent);color:var(--mcp-accent);font-size:10.5px;font-weight:650;line-height:16px;font-variant-numeric:tabular-nums}
+.dsh-mcp-tool-save-spacer{flex:1}
+.dsh-mcp-tool-save-actions{display:flex;align-items:center;gap:8px;flex:none}
+.dsh-mcp-tool-loading-page .dsh-mcp-d-err{margin:12px 0 0}
+@media (hover:hover){
+  .dsh-mcp-tool-filter button:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+  .dsh-mcp-tool-row:hover{border-color:var(--dsw-alias-border-l3)}
+  .dsh-mcp-tool-row.is-changed:hover{border-color:var(--mcp-accent)}
+  .dsh-mcp-tool-pick button:not([aria-pressed='true']):hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+}
+@media (max-width:760px){
+  .dsh-mcp-tool-hero{display:block;padding-bottom:8px}
+  .dsh-mcp-tool-overview{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dsh-mcp-tool-stat{padding:9px 10px}
+  .dsh-mcp-tool-stat+.dsh-mcp-tool-stat{border-left:0}
+  .dsh-mcp-tool-stat:nth-child(even){border-left:.5px solid var(--mcp-line)}
+  .dsh-mcp-tool-stat:nth-child(n+3){border-top:.5px solid var(--mcp-line)}
+  .dsh-mcp-tool-stat-value{font-size:16px}
+  .dsh-mcp-tool-stat-note{display:none}
+  .dsh-mcp-tool-params-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .dsh-mcp-tool-param:last-child{grid-column:1 / -1}
+  .dsh-mcp-tool-param-label{font-size:10.5px}
+  .dsh-mcp-tool-toolbar{align-items:stretch;flex-direction:column}
+  .dsh-mcp-tool-toolbar .dsh-mcp-search{width:100%}
+  .dsh-mcp-tool-filter{width:100%;justify-content:space-between}
+  .dsh-mcp-tool-filter button{flex:1;padding-inline:6px}
+  .dsh-mcp-tool-list{grid-template-columns:minmax(0,1fr)}
+  .dsh-mcp-tool-save{align-items:stretch;flex-direction:column;gap:8px}
+  .dsh-mcp-tool-save-spacer{display:none}
+  .dsh-mcp-tool-save-actions{justify-content:flex-end}
+}
 /* 参数说明标记（C2）：label 是 block，标记用 inline-flex 挂在文字后面，不进流布局。 */
 .dsh-mcp-hint{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;margin-left:6px;color:var(--mcp-mut);vertical-align:middle;cursor:help;border-radius:50%;corner-shape:round}
 .dsh-mcp-hint:hover,.dsh-mcp-hint:focus-visible{color:var(--mcp-accent)}
 .dsh-mcp-hint:focus-visible{outline:1px solid var(--mcp-accent);outline-offset:1px}
-.dsh-mcp-field input,.dsh-mcp-field select,.dsh-mcp-field textarea{width:100%;box-sizing:border-box;padding:8px 11px;border-radius:var(--mcp-r-md);border:1px solid var(--mcp-line);background:var(--mcp-bg-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12.5px;outline:none;transition:border-color .15s,box-shadow .15s}
+/* 开关关掉时输入框置灰（disabled）：可见、不可改、不生效——不卸载，避免表单跳动。 */
+.dsh-mcp-field input:disabled{opacity:.45;cursor:not-allowed}
+.dsh-mcp-field input,.dsh-mcp-field select,.dsh-mcp-field textarea{width:100%;box-sizing:border-box;padding:0 11px;height:32px;border-radius:var(--mcp-r-md);border:1px solid var(--mcp-line);background:var(--mcp-bg-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12.5px;outline:none;transition:border-color .1s,box-shadow .1s}
+.dsh-mcp-field textarea{padding:8px 11px;height:auto;min-height:72px}
 .dsh-mcp-field input::placeholder{color:var(--mcp-mut)}
-.dsh-mcp-field input:focus,.dsh-mcp-field select:focus,.dsh-mcp-field textarea:focus{border-color:var(--mcp-accent);box-shadow:none}
+.dsh-mcp-field input:focus,.dsh-mcp-field select:focus,.dsh-mcp-field textarea:focus{border-color:var(--mcp-accent);box-shadow:0 0 0 2px var(--dsw-alias-interactive-bg-hover-accent)}
 .dsh-mcp-radio-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .dsh-mcp-radio-row label{display:flex;align-items:center;gap:8px;margin:0;border:1px solid var(--mcp-line);border-radius:var(--mcp-r-md);padding:9px 12px;background:var(--mcp-bg-1);color:var(--dsw-alias-label-primary);cursor:pointer;font-size:12.5px;transition:border-color .12s,background .12s}
 .dsh-mcp-radio-row label:hover{border-color:var(--dsw-alias-border-l3);background:var(--dsw-alias-interactive-bg-hover)}
@@ -277,7 +397,7 @@ const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(-
 .dsh-mcp-kv-add{display:flex;justify-content:flex-end;margin-top:2px}
 .dsh-mcp-kv-del{border:1px solid var(--mcp-line);background:var(--dsw-alias-button-elevated-fill);color:var(--mcp-mut);cursor:pointer;font-size:14px;padding:3px 9px;border-radius:var(--mcp-r-sm);line-height:18px;transition:color .12s,background .12s,border-color .12s}
 .dsh-mcp-kv-del:hover{color:var(--mcp-err);background:var(--dsw-alias-interactive-bg-hover-danger);border-color:var(--dsw-alias-state-error-primary)}
-.dsh-mcp-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;flex-wrap:wrap}
+.dsh-mcp-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin:0;padding:14px 20px;flex:none;border-top:1px solid var(--mcp-line);background:var(--mcp-bg-2);flex-wrap:wrap}
 .dsh-mcp-advanced{margin-top:14px}.dsh-mcp-check{display:flex!important;align-items:center;gap:8px;margin:9px 0!important;color:var(--dsw-alias-label-primary)!important}.dsh-mcp-check input{width:auto!important}.dsh-mcp-number-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.dsh-mcp-number-grid .dsh-mcp-field{margin-bottom:0}.dsh-mcp-import-preview{font-size:12px;line-height:1.6;color:var(--mcp-mut);white-space:pre-wrap}.dsh-mcp-import-json{min-height:220px;resize:vertical;font-family:var(--mcp-mono)!important}
 .dsh-mcp-check-list{display:flex;flex-direction:column;gap:3px;max-height:180px;overflow-y:auto;padding:3px;border:1px solid var(--mcp-line);border-radius:var(--mcp-r-md);background:var(--mcp-bg-1)}
 .dsh-mcp-check-row{display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:var(--mcp-r-sm);font-size:12px;color:var(--dsw-alias-label-primary);cursor:pointer}
@@ -287,7 +407,6 @@ const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(-
 .dsh-mcp-check-meta{margin-left:auto;flex:none;font-size:11px;color:var(--mcp-mut)}
 .dsh-mcp-check-toolbar{display:flex;align-items:center;gap:8px;margin:0 0 6px;font-size:11px;color:var(--mcp-mut)}
 .dsh-mcp-copy-target{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--mcp-line);border-radius:var(--mcp-r-md);background:var(--mcp-bg-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12.5px}
-.dsh-mcp-builtin-modal{box-sizing:border-box;width:700px;height:min(760px,84vh);display:flex;flex-direction:column;overflow:hidden}.dsh-mcp-builtin-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px;flex:none}.dsh-mcp-builtin-toolbar .dsh-mcp-check{margin:0!important;font-size:12px}.dsh-mcp-builtin-count{font-size:11.5px;color:var(--mcp-mut)}.dsh-mcp-builtin-list{display:flex;flex-direction:column;gap:8px;min-height:0;overflow-y:auto;padding-right:2px}.dsh-mcp-builtin-modal>.dsh-mcp-modal-actions{flex:none}.dsh-mcp-builtin-row{display:grid;grid-template-columns:18px minmax(0,1fr) minmax(74px,auto);gap:11px;align-items:start;padding:11px 12px;border:1px solid var(--mcp-line);border-radius:var(--mcp-r-md);background:var(--mcp-bg-1);cursor:pointer;transition:border-color .12s,background .12s;flex:none}.dsh-mcp-builtin-row:hover{border-color:var(--dsw-alias-border-l3);background:var(--dsw-alias-interactive-bg-hover)}.dsh-mcp-builtin-row.installed{cursor:default;background:var(--mcp-bg-2)}.dsh-mcp-builtin-row.installed:hover{border-color:var(--mcp-line);background:var(--mcp-bg-2)}.dsh-mcp-builtin-select{box-sizing:border-box;width:16px!important;height:16px!important;margin:2px 0 0!important;accent-color:var(--mcp-accent);cursor:pointer}.dsh-mcp-builtin-select:disabled{cursor:default}.dsh-mcp-builtin-main{min-width:0;display:flex;flex-direction:column;gap:5px}.dsh-mcp-builtin-name{font-size:13px;font-weight:650;overflow-wrap:anywhere}.dsh-mcp-builtin-summary{font-size:11.5px;color:var(--mcp-mut);line-height:1.45}.dsh-mcp-builtin-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.dsh-mcp-builtin-access{font-size:10.5px;color:var(--mcp-mut)}.dsh-mcp-builtin-config{font-family:var(--mcp-mono);font-size:10.5px;line-height:1.45;color:var(--dsw-alias-brand-text);overflow-wrap:anywhere;white-space:normal}.dsh-mcp-builtin-status{min-width:0;text-align:right;font-size:11px;color:var(--mcp-mut);line-height:1.45;overflow-wrap:anywhere}.dsh-mcp-builtin-status.ready{color:var(--dsw-alias-state-success-primary)}.dsh-mcp-builtin-loading{padding:30px 12px;text-align:center;color:var(--mcp-mut);font-size:12px}
 .dsh-mcp-source-box{margin:0 0 14px;flex:none}.dsh-mcp-source-list{display:flex;flex-direction:column;gap:6px;max-height:186px;overflow-y:auto;margin-top:7px}.dsh-mcp-source-row{box-sizing:border-box;display:flex;flex-direction:column;gap:3px;width:100%;padding:8px 10px;border:1px solid var(--mcp-line);border-radius:var(--mcp-r-md);background:var(--mcp-bg-1);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:1.45;text-align:left;cursor:pointer;transition:border-color .12s,background .12s}.dsh-mcp-source-row:hover:not(:disabled){border-color:var(--dsw-alias-border-l3);background:var(--dsw-alias-interactive-bg-hover)}.dsh-mcp-source-row.sel{border-color:var(--mcp-accent);background:var(--mcp-bg-2)}.dsh-mcp-source-row:disabled{cursor:default;opacity:.7}.dsh-mcp-source-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.dsh-mcp-source-name{font-weight:600}.dsh-mcp-source-path{font-family:var(--mcp-mono);font-size:10.5px;color:var(--dsw-alias-brand-text);overflow-wrap:anywhere}.dsh-mcp-source-detail{font-size:11px;color:var(--mcp-mut);overflow-wrap:anywhere}.dsh-mcp-source-note{font-size:10.5px;color:var(--mcp-mut)}.dsh-mcp-source-warn{font-size:10.5px;color:var(--mcp-warn)}
 .dsh-mcp-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--dsw-alias-toast-bg);backdrop-filter:blur(10px);border:0;color:var(--dsw-alias-label-primary);padding:10px 18px;border-radius:var(--mcp-r-lg);font-size:12.5px;z-index:300;box-shadow:var(--dsw-shadow-lv3);max-width:70vw;animation:mcpPop .16s ease-out}
 .dsh-mcp-toast.err{border:1px solid var(--dsw-alias-state-error-primary)}
@@ -302,23 +421,28 @@ const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(-
    client.js 的 clampFabPos/defaultFabPos）。border-box 让这个等式不受边框影响——
    之前是 1px 边框 + content-box，渲染出 52px 而 JS 按 50px 夹取，右/下边缘会差 2px；
    现在去掉边框（抬升表面改成 elevation 阴影）+ border-box，两边一致且不会再漂。 */
-.dsh-mcp-fab{position:fixed;right:22px;bottom:22px;box-sizing:border-box;width:50px;height:50px;border-radius:50%;border:0;background:var(--dsw-alias-button-primary-fill);color:var(--dsw-alias-label-primary-inverted);cursor:grab;user-select:none;display:flex;align-items:center;justify-content:center;box-shadow:var(--dsw-elevation-panel);z-index:190;touch-action:none;transition:transform .16s,background .16s;pointer-events:auto;corner-shape:round}
-.dsh-mcp-fab:hover{transform:scale(1.05);background:var(--dsw-alias-button-primary-hover)}
-.dsh-mcp-fab:active{transform:scale(.97)}
-.dsh-mcp-fab svg{width:22px;height:22px}
+/* 浮动按钮：48px 圆角矩形，圆角跟随主题，hover 用 translateY(-2px) + elevation 加深，
+   不再 scale(1.05)。原 50px 正圆 + scale 放大像「游戏按钮」，与面板气质不符。 */
+.dsh-mcp-fab{position:fixed;right:22px;bottom:22px;box-sizing:border-box;width:48px;height:48px;border-radius:var(--mcp-r-lg);border:0;background:var(--dsw-alias-button-primary-fill);color:var(--dsw-alias-label-primary-inverted);cursor:grab;user-select:none;display:flex;align-items:center;justify-content:center;box-shadow:var(--dsw-elevation-panel);z-index:190;touch-action:none;transition:transform .15s cubic-bezier(.2,0,0,1),background .15s,box-shadow .15s;pointer-events:auto}
+.dsh-mcp-fab:hover{transform:translateY(-2px);background:var(--dsw-alias-button-primary-hover);box-shadow:var(--dsw-elevation-prominent)}
+.dsh-mcp-fab:active{transform:translateY(0)}
+.dsh-mcp-fab svg{width:20px;height:20px}
 .dsh-mcp-panel-overlay{position:fixed;inset:0;background:var(--dsw-alias-bg-overlay);display:flex;align-items:center;justify-content:center;z-index:180;padding:26px;pointer-events:auto;animation:mcpFade .14s ease-out}
-.dsh-mcp-panel{box-sizing:border-box;width:1000px;max-width:95vw;height:88vh;background:var(--mcp-bg-2);border:0;border-radius:var(--mcp-r-panel);box-shadow:var(--dsw-elevation-prominent);display:flex;flex-direction:column;overflow:hidden;animation:mcpPop .18s cubic-bezier(.2,.9,.3,1.15)}
-.dsh-mcp-panel .dsh-mcp-wrap{height:100%;min-height:0;padding:18px}
-.dsh-mcp-filters{display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:center}
+.dsh-mcp-panel{box-sizing:border-box;width:min(1180px,95vw);height:min(920px,90vh);background:var(--mcp-bg-1);border:0;border-radius:var(--mcp-r-panel);box-shadow:var(--dsw-elevation-prominent);display:flex;flex-direction:column;overflow:hidden;animation:mcpPop .2s cubic-bezier(.2,0,0,1)}
+.dsh-mcp-panel:focus{outline:none}
+.dsh-mcp-modal:focus{outline:none}
+.dsh-mcp-panel .dsh-mcp-wrap{height:100%;min-height:0;padding:20px}
+.dsh-mcp-filters{flex:none;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px;align-items:center}
 /* 控件收起、只剩一键动作时（项目作用域条目 ≤6）：单列 + 靠右，与有 select 时按钮的位置一致。 */
 .dsh-mcp-filters.bare{grid-template-columns:auto;justify-content:end}
 /* 「全部延迟」主按钮：放在过滤器行右侧（原本大片空白），必须是列表第一屏就可见的——
    曾经它在底栏，服务器一多就滚出视野，用户根本找不到这个功能。 */
-.dsh-mcp-defer-all{display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:var(--mcp-r-sm);border:1px solid var(--mcp-accent);background:var(--mcp-accent);color:var(--dsw-alias-label-primary-inverted);font:inherit;font-size:11.5px;font-weight:600;white-space:nowrap;cursor:pointer;transition:filter .15s,opacity .15s}
+.dsh-mcp-filters>.dsh-mcp-defer-all{grid-column:1 / -1;justify-self:end}
+.dsh-mcp-defer-all{display:inline-flex;align-items:center;gap:5px;padding:0 11px;height:32px;border-radius:var(--mcp-r-sm);border:1px solid var(--mcp-accent);background:var(--mcp-accent);color:var(--dsw-alias-label-primary-inverted);font:inherit;font-size:11.5px;font-weight:600;white-space:nowrap;cursor:pointer;transition:filter .1s,opacity .1s}
 .dsh-mcp-defer-all:hover:not(:disabled){filter:brightness(1.12)}
 .dsh-mcp-defer-all:disabled{opacity:.45;cursor:not-allowed}
 .dsh-mcp-defer-all svg{width:12px;height:12px;flex:none}
-.dsh-mcp-filters select{width:100%;box-sizing:border-box;padding:6px 24px 6px 8px;border-radius:var(--mcp-r-sm);border:1px solid var(--mcp-line);background:var(--mcp-bg-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:11.5px;outline:none;transition:border-color .15s;appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--mcp-mut) 50%),linear-gradient(135deg,var(--mcp-mut) 50%,transparent 50%);background-position:calc(100% - 13px) 50%,calc(100% - 9px) 50%;background-size:4px 4px,4px 4px;background-repeat:no-repeat}
+.dsh-mcp-filters select{width:100%;box-sizing:border-box;padding:0 24px 0 8px;height:32px;border-radius:var(--mcp-r-sm);border:1px solid var(--mcp-line);background:var(--mcp-bg-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:11.5px;outline:none;transition:border-color .1s;appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--mcp-mut) 50%),linear-gradient(135deg,var(--mcp-mut) 50%,transparent 50%);background-position:calc(100% - 13px) 50%,calc(100% - 9px) 50%;background-size:4px 4px,4px 4px;background-repeat:no-repeat}
 .dsh-mcp-filters select:focus{border-color:var(--mcp-accent)}
 .dsh-mcp-tool{flex-direction:column;padding:0;gap:0}
 .dsh-mcp-tool-head{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:var(--mcp-r-sm)}
@@ -353,18 +477,18 @@ const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(-
    分类药丸是 .dsh-mcp-market-head 的兄弟节点，只钉 head 的话药丸仍会从下面滑过去；
    ② 必须给不透明背景，否则卡片会从工具栏下面透出来；③ top:0 相对滚动容器的 padding 盒，
    本容器的 padding 只有右侧 2px，所以 0 就对。 */
-.dsh-mcp-market-toolbar{position:sticky;top:0;z-index:1;flex:none;display:flex;flex-direction:column;gap:12px;background:var(--mcp-bg-2)}
+.dsh-mcp-market-toolbar{position:sticky;top:0;z-index:1;flex:none;display:flex;flex-direction:column;gap:10px;padding-bottom:10px;border-bottom:1px solid var(--mcp-line);background:var(--mcp-bg-1)}
 .dsh-mcp-market-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:none}
 /* 右侧一组：搜索 + 「安装到」。原型是同一条横排（药丸 | 搜索 | 安装到），这里靠
    flex-wrap 实现——分类药丸会先占满一行，工具组整块换到下一行，窄屏也不会把选择器压扁。 */
-.dsh-mcp-market-tools{display:flex;align-items:center;gap:8px;flex:1 1 260px;min-width:0}
+.dsh-mcp-market-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;flex:1 1 260px;min-width:0}
 .dsh-mcp-market-tools .dsh-mcp-search{flex:1 1 auto;min-width:160px}
 /* 「安装到」：市场模式下唯一的作用域入口。刻意做成带文字的标签 + 原生 select
    （而不是又一个图标按钮）——「装到哪」是**有后果**的选择，不能只用一个图标暗示。 */
 .dsh-mcp-market-scope{display:inline-flex;align-items:center;gap:6px;flex:none;white-space:nowrap;font-size:11.5px;color:var(--dsw-alias-label-tertiary)}
 .dsh-mcp-market-scope select{max-width:220px;box-sizing:border-box;padding:6px 24px 6px 9px;border-radius:var(--mcp-r-sm);border:1px solid var(--mcp-line);background:var(--mcp-bg-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;outline:none;appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--mcp-mut) 50%),linear-gradient(135deg,var(--mcp-mut) 50%,transparent 50%);background-position:calc(100% - 13px) 50%,calc(100% - 9px) 50%;background-size:4px 4px,4px 4px;background-repeat:no-repeat;cursor:pointer}
 .dsh-mcp-market-scope select:focus{border-color:var(--mcp-accent)}
-.dsh-mcp-market-head .dsh-mcp-search{flex:1;min-width:180px}
+.dsh-mcp-market-head .dsh-mcp-search{flex:1 1 180px;min-width:0}
 .dsh-mcp-market-section{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;flex:none}
 .dsh-mcp-market-section b{font-size:13px;font-weight:650}
 .dsh-mcp-market-section span{font-size:11.5px;color:var(--dsw-alias-label-tertiary)}
@@ -392,8 +516,8 @@ const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(-
 .dsh-mcp-market-filters input[type='checkbox']{width:14px;height:14px;margin:0;accent-color:var(--mcp-accent);cursor:pointer}
 /* grid-auto-rows:1fr 让所有隐式行等高，否则行高 = 该行最高那张卡，跨行看就是「大小不一」。
    必须与 .dsh-mcp-mcard-desc 的截断一起用：不截断时最矮的卡会留出大片空白。 */
-.dsh-mcp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:10px;align-content:start;grid-auto-rows:1fr}
-.dsh-mcp-mcard{box-sizing:border-box;display:flex;flex-direction:column;gap:9px;padding:13px 14px;border:1px solid var(--mcp-line);border-radius:var(--mcp-r-lg);background:var(--mcp-bg-1);transition:border-color .13s,background .13s}
+.dsh-mcp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(268px,100%),1fr));gap:10px;align-content:start;grid-auto-rows:1fr}
+.dsh-mcp-mcard{min-width:0;flex:none;box-sizing:border-box;display:flex;flex-direction:column;gap:9px;padding:13px 14px;border:1px solid var(--mcp-line);border-radius:var(--mcp-r-lg);background:var(--mcp-bg-1);transition:border-color .13s,background .13s}
 .dsh-mcp-mcard:hover{border-color:var(--dsw-alias-border-l3);background:var(--dsw-alias-interactive-bg-hover)}
 .dsh-mcp-mcard.installed{border-color:var(--dsw-alias-state-success-primary)}
 .dsh-mcp-mcard-top{display:flex;align-items:flex-start;gap:9px}
@@ -420,7 +544,7 @@ const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(-
 .dsh-mcp-mcard-stat.err{color:var(--mcp-err)}
 .dsh-mcp-mcard-actions{display:flex;gap:7px;align-items:center;flex:none}
 .dsh-mcp-market-empty{grid-column:1 / -1;padding:40px 20px;text-align:center;color:var(--mcp-mut);font-size:13px}
-@keyframes mcpPop{from{opacity:0;transform:scale(.965) translateY(6px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes mcpPop{from{opacity:0;transform:scale(.98) translateY(4px)}to{opacity:1;transform:scale(1) translateY(0)}}
 @keyframes mcpFade{from{opacity:0}to{opacity:1}}
 .dsh-mcp-tabs-wrap{position:relative;flex:none;min-width:0}.dsh-mcp-tabs{display:flex;gap:6px;align-items:center;overflow-x:auto;scrollbar-width:none;padding:2px 0}.dsh-mcp-tabs::-webkit-scrollbar{display:none}.dsh-mcp-tab{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;corner-shape:round;border:1px solid var(--mcp-line);background:var(--mcp-bg-1);color:var(--mcp-mut);font-size:12px;cursor:pointer;flex:none;white-space:nowrap;transition:background .13s,border-color .13s,color .13s;line-height:1.4}.dsh-mcp-tab:hover{background:var(--dsw-alias-interactive-bg-hover);border-color:var(--dsw-alias-border-l3)}.dsh-mcp-tab.sel{color:var(--dsw-alias-label-primary);border-color:var(--mcp-accent);background:var(--dsw-alias-interactive-bg-hover-accent);font-weight:600}.dsh-mcp-tab-count{font-size:10px;font-weight:500;padding:0 6px;border-radius:999px;background:var(--mcp-line);color:var(--mcp-mut);line-height:15px;corner-shape:round}.dsh-mcp-tab.more.open{color:var(--dsw-alias-label-primary);border-color:var(--mcp-accent);background:var(--dsw-alias-interactive-bg-hover-accent)}.dsh-mcp-tab-pop{position:absolute;top:calc(100% + 5px);right:0;z-index:60;background:var(--mcp-bg-2);border:0;border-radius:var(--mcp-r-lg);box-shadow:var(--dsw-elevation-panel);padding:6px;display:flex;flex-direction:column;gap:2px;min-width:170px}
 /* 弹层里的行复用 .dsh-mcp-tab，但它自带 padding+border 且是 content-box：width:100%
@@ -430,26 +554,24 @@ const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(-
    会把内边距和边框再加一遍，整行比弹层宽出一圈而溢出。行自己的盒模型必须 border-box。 */
 .dsh-mcp-entry-item{box-sizing:border-box;display:flex;align-items:center;width:100%;padding:7px 10px;border:1px solid transparent;border-radius:var(--mcp-r-sm);background:transparent;color:var(--mcp-mut);font-family:inherit;font-size:12px;line-height:1.4;text-align:left;white-space:nowrap;cursor:pointer;transition:background .13s,border-color .13s,color .13s}
 .dsh-mcp-entry-item:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dsh-mcp-entry-item.sel{border-color:var(--mcp-accent);background:var(--dsw-alias-interactive-bg-hover-accent);color:var(--dsw-alias-label-primary);font-weight:600}.dsh-mcp-ws-body{width:288px;min-width:248px;min-height:0;display:flex;flex-direction:column;gap:10px;overflow-y:auto;overflow-x:hidden}.dsh-mcp-section{display:flex;flex-direction:column;gap:8px;min-height:0;border:1px solid var(--mcp-line);border-radius:var(--mcp-r-lg);background:var(--mcp-bg-2);padding:10px;overflow:hidden}.dsh-mcp-section.local{flex:0 1 auto;min-height:124px;max-height:62%;border-color:var(--mcp-accent)}.dsh-mcp-section.global{flex:1 1 0;min-height:124px}.dsh-mcp-section-title{font-size:10.5px;font-weight:650;color:var(--mcp-mut);text-transform:uppercase;letter-spacing:.6px;display:flex;align-items:center;gap:6px;flex:none}.dsh-mcp-section.local .dsh-mcp-section-title{color:var(--dsw-alias-label-primary)}.dsh-mcp-section-fill{flex:1;height:1px;background:var(--mcp-line)}.dsh-mcp-section-actions{display:flex;gap:4px;flex:none}.dsh-mcp-mini-btn{display:inline-flex;align-items:center;gap:4px;flex:none;padding:2px 8px;border:1px solid var(--mcp-line);border-radius:999px;corner-shape:round;background:var(--dsw-alias-button-elevated-fill);color:var(--mcp-mut);font:inherit;font-size:10.5px;font-weight:600;line-height:1.6;white-space:nowrap;cursor:pointer;transition:background .13s,border-color .13s,color .13s}.dsh-mcp-mini-btn:hover:not(:disabled){color:var(--dsw-alias-label-primary);border-color:var(--mcp-accent)}.dsh-mcp-mini-btn:disabled{cursor:default;opacity:.55}.dsh-mcp-section-count{flex:none;font-size:10px;font-weight:600;letter-spacing:0;padding:0 6px;border-radius:999px;background:var(--mcp-line);color:var(--mcp-mut);line-height:15px;corner-shape:round}.dsh-mcp-section.local .dsh-mcp-section-count{background:var(--dsw-alias-interactive-bg-hover-accent);color:var(--mcp-accent)}.dsh-mcp-global-list{display:flex;flex-direction:column;gap:3px;overflow-y:auto;min-height:52px;margin:0 -4px;padding:0 4px}
+.dsh-mcp-entry-item.sel{border-color:var(--mcp-accent);background:var(--dsw-alias-interactive-bg-hover-accent);color:var(--dsw-alias-label-primary);font-weight:600}.dsh-mcp-ws-body{width:288px;min-width:248px;min-height:0;display:flex;flex-direction:column;gap:12px;overflow:hidden}.dsh-mcp-section{display:flex;flex-direction:column;gap:8px;min-height:0;border:1px solid var(--mcp-line);border-radius:var(--mcp-r-lg);background:var(--mcp-bg-2);padding:12px;overflow:hidden}.dsh-mcp-section.local{flex:1 1 auto;min-height:124px;max-height:none;border-color:var(--mcp-line)}.dsh-mcp-section-actions{display:flex;justify-content:flex-end;gap:4px;flex:none}.dsh-mcp-global-list{flex:1;display:flex;flex-direction:column;gap:3px;overflow-y:auto;min-height:52px;margin:0 -4px;padding:0 4px}
 .dsh-mcp-item.muted{opacity:.52}
 .dsh-mcp-item.muted:hover{opacity:.85}
 .dsh-mcp-global-search{position:relative;flex:none}
 .dsh-mcp-global-search svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);opacity:.5}
 .dsh-mcp-global-search input{width:100%;box-sizing:border-box;padding:7px 10px 7px 30px;border-radius:var(--mcp-r-sm);border:1px solid var(--mcp-line);background:var(--mcp-bg-1);color:var(--dsw-alias-label-primary);font-size:11.5px;outline:none;transition:border-color .15s}
 .dsh-mcp-global-search input::placeholder{color:var(--mcp-mut)}
-.dsh-mcp-section.global.collapsed{flex:none;min-height:0;border-color:transparent;background:transparent;padding:0;overflow:visible}
-.dsh-mcp-section-toggle{box-sizing:border-box;display:flex;align-items:center;gap:8px;width:100%;flex:none;padding:7px 9px;border:1px solid transparent;border-radius:var(--mcp-r-sm);background:transparent;color:var(--mcp-mut);font:inherit;font-size:10.5px;font-weight:650;text-transform:uppercase;letter-spacing:.6px;text-align:left;cursor:pointer;transition:background .13s,color .13s,border-color .13s}
-.dsh-mcp-section-toggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dsh-mcp-section-toggle:focus{outline:none}
-.dsh-mcp-section-toggle:focus-visible{outline:1px solid var(--mcp-accent);outline-offset:-1px}
-.dsh-mcp-section.collapsed .dsh-mcp-section-toggle{border-color:var(--mcp-line);background:var(--mcp-bg-2)}
+/* 项目 / 全局共享是来源导航，和右侧概览 / 工具页签使用同一条下划线语言。 */
+.dsh-mcp-source-tabs{display:flex;gap:14px;flex:none;border-bottom:1px solid var(--mcp-line)}
+.dsh-mcp-source-tabs button{display:flex;align-items:center;gap:6px;flex:1;justify-content:center;padding:6px 0 10px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--mcp-mut);font:inherit;font-size:12px;cursor:pointer}
+.dsh-mcp-source-tabs button[aria-selected='true']{color:var(--dsw-alias-label-primary);font-weight:600;border-bottom-color:var(--mcp-accent)}
+.dsh-mcp-source-tabs button span{font-size:10.5px;color:var(--mcp-mut);font-variant-numeric:tabular-nums}
+.dsh-mcp-source-tabs button:focus-visible{outline:1px solid var(--mcp-accent);outline-offset:-2px}
 /* 折叠指示器：一个图标、一个方向。
    曾经三处各写一套（列表里的三角字符、组头的常驻三角 + CSS 旋转、诊断组头的感叹号），
    同一个「可展开」长得不一样不好认。收起态统一转 -90°。 */
 .dsh-mcp-caret{display:inline-flex;align-items:center;justify-content:center;flex:none;width:14px;color:var(--mcp-mut);transition:transform .12s}
 .dsh-mcp-caret.closed{transform:rotate(-90deg)}
-.dsh-mcp-section-toggle-label{flex:none}
-.dsh-mcp-section-summary{margin-left:auto;flex:none;font-size:10.5px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--mcp-mut)}
 .dsh-mcp-eye{box-sizing:border-box;width:30px;height:26px;flex:none;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--mcp-line);border-radius:var(--mcp-r-sm);background:var(--dsw-alias-button-elevated-fill);color:var(--mcp-mut);cursor:pointer;transition:color .12s,border-color .12s,background .12s}
 .dsh-mcp-eye:hover{color:var(--dsw-alias-label-primary);border-color:var(--mcp-accent)}
 .dsh-mcp-eye.off{color:var(--mcp-err);border-color:var(--mcp-err);background:var(--dsw-alias-interactive-bg-hover-danger)}
@@ -481,11 +603,12 @@ const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(-
 .dsh-mcp-footer-action.rail{justify-content:center;gap:0;width:36px;height:36px;margin:0;padding:0;border-radius:50%;corner-shape:round}
 .dsh-mcp-footer-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 响应式覆盖必须位于全部基础规则之后：同特异性下后出现者胜出。 */
-@media (max-width:760px){.dsh-mcp-panel-overlay{padding:10px}.dsh-mcp-panel{max-width:none;width:100%;height:calc(100dvh - 20px);border-radius:var(--mcp-r-panel)}.dsh-mcp-panel .dsh-mcp-wrap{padding:12px}.dsh-mcp-head{align-items:flex-start}.dsh-mcp-body{flex-direction:column;overflow-y:auto;overflow-x:hidden}.dsh-mcp-side,.dsh-mcp-ws-body{width:auto;min-width:0;max-height:none;flex:none}.dsh-mcp-side:not(.embedded) .dsh-mcp-list{max-height:38vh}.dsh-mcp-section.local,.dsh-mcp-section.global{flex:none;min-height:0;max-height:none}.dsh-mcp-section.local .dsh-mcp-list{max-height:30vh}.dsh-mcp-global-list{max-height:30vh}.dsh-mcp-detail{padding:12px;flex:none;overflow:visible}.dsh-mcp-d-body{overflow:visible}.dsh-mcp-d-title{flex:none}.dsh-mcp-d-head{flex-direction:column}.dsh-mcp-kv-edit{grid-template-columns:minmax(90px,35%) minmax(0,1fr) auto}}
+@media (max-width:760px){.dsh-mcp-panel-overlay{padding:10px}.dsh-mcp-panel{max-width:none;width:100%;height:calc(100dvh - 20px);border-radius:var(--mcp-r-panel)}.dsh-mcp-panel .dsh-mcp-wrap{padding:12px}.dsh-mcp-head{align-items:flex-start}.dsh-mcp-body{flex-direction:column;overflow-y:auto;overflow-x:hidden}.dsh-mcp-side,.dsh-mcp-ws-body{width:auto;min-width:0;max-height:none;flex:none}.dsh-mcp-side:not(.embedded) .dsh-mcp-list{max-height:38vh}.dsh-mcp-section.local{flex:none;min-height:0;max-height:none}.dsh-mcp-section.local .dsh-mcp-list{max-height:30vh}.dsh-mcp-global-list{max-height:30vh}.dsh-mcp-detail{padding:12px;flex:none;overflow:visible}.dsh-mcp-d-body{overflow:visible}.dsh-mcp-d-title{flex:none}.dsh-mcp-d-head{flex-direction:column}.dsh-mcp-kv-edit{grid-template-columns:minmax(90px,35%) minmax(0,1fr) auto}}
 /* 窄屏：标题与关闭留在第一行，能力层与操作区各占一整行。
    ⚠️ 必须显式钉每一样东西的行列。四列 grid 退成两列后，自动排布会把「关闭」挤到第二行
    （子元素顺序是 标题→能力层→操作区→关闭），而「关闭」在任何宽度下都该在右上角。 */
-@media (max-width:480px){.dsh-mcp-head{grid-template-columns:minmax(0,1fr) auto}.dsh-mcp-title{grid-row:1;grid-column:1}.dsh-mcp-head>.dsh-mcp-btn{grid-row:1;grid-column:2}.dsh-mcp-head>.dsh-mcp-seg{grid-row:2;grid-column:1 / -1}.dsh-mcp-head-actions{grid-row:3;grid-column:1 / -1;width:100%;justify-content:flex-start}.dsh-mcp-btn{padding:7px 9px}.dsh-mcp-radio-row,.dsh-mcp-number-grid{grid-template-columns:1fr}.dsh-mcp-modal{max-width:none;width:100%;padding:14px}.dsh-mcp-kv{grid-template-columns:1fr;gap:4px}.dsh-mcp-kv>b{margin-top:4px}.dsh-mcp-secret-row{grid-template-columns:1fr;gap:4px}.dsh-mcp-secret{width:100%}.dsh-mcp-kv-edit{grid-template-columns:1fr auto}.dsh-mcp-kv-edit input:first-child{grid-column:1 / -1}.dsh-mcp-tool{flex-direction:column}.dsh-mcp-tool-name{max-width:100%}.dsh-mcp-tool-desc{white-space:normal}}
+@media (max-width:900px){.dsh-mcp-head{grid-template-columns:minmax(0,1fr) auto}.dsh-mcp-title{grid-row:1;grid-column:1}.dsh-mcp-head>.dsh-mcp-btn{grid-row:1;grid-column:2}.dsh-mcp-head>.dsh-mcp-seg{grid-row:2;grid-column:1}.dsh-mcp-head-actions{grid-row:3;grid-column:1 / -1;justify-content:flex-start}.dsh-mcp-sub{height:auto;min-height:32px;grid-template-columns:minmax(0,1fr)}.dsh-mcp-sub-scope{grid-row:2}.dsh-mcp-runtime{grid-row:3}.dsh-mcp-market-scope{max-width:100%}.dsh-mcp-market-scope select{min-width:0;max-width:100%;flex:1}.dsh-mcp-market-tools .dsh-mcp-search{min-width:0}}
+@media (max-width:480px){.dsh-mcp-head{grid-template-columns:minmax(0,1fr) auto}.dsh-mcp-title{grid-row:1;grid-column:1}.dsh-mcp-head>.dsh-mcp-btn{grid-row:1;grid-column:2}.dsh-mcp-head>.dsh-mcp-seg{grid-row:2;grid-column:1 / -1}.dsh-mcp-head-actions{grid-row:3;grid-column:1 / -1;width:100%;justify-content:flex-start}.dsh-mcp-btn{padding:7px 9px}.dsh-mcp-radio-row,.dsh-mcp-number-grid{grid-template-columns:1fr}.dsh-mcp-modal{max-width:none;width:100%;padding:0}.dsh-mcp-modal-head{padding:16px}.dsh-mcp-modal-body{padding:0 16px 16px}.dsh-mcp-modal-actions{padding:12px 16px}.dsh-mcp-kv{grid-template-columns:1fr;gap:4px}.dsh-mcp-kv>b{margin-top:4px}.dsh-mcp-secret-row{grid-template-columns:1fr;gap:4px}.dsh-mcp-secret{width:100%}.dsh-mcp-kv-edit{grid-template-columns:1fr auto}.dsh-mcp-kv-edit input:first-child{grid-column:1 / -1}.dsh-mcp-tool{flex-direction:column}.dsh-mcp-tool-name{max-width:100%}.dsh-mcp-tool-desc{white-space:normal}.dsh-mcp-tool-head{grid-template-columns:minmax(0,1fr) auto}.dsh-mcp-tool-head select{grid-column:1 / -1;width:100%}}
 /* 动效约定：宿主官方客户端包普遍在 prefers-reduced-motion 下关掉过渡与弹入动画
    （ui-* 包 46 处 @media，另有若干 JS 侧 matchMedia 判定）。这里关掉缩放弹入与过渡；
    .dsh-mcp-dot.loading 的呼吸只改透明度、且是「正在连接」的状态线索，故保留。
@@ -510,10 +633,10 @@ const SKILLS_CSS = `.dsh-skills-root{display:flex;flex-direction:column;min-heig
 .dsh-skills-meta{display:grid;grid-template-columns:96px minmax(0,1fr);gap:4px 10px;font-size:12px;line-height:18px}
 .dsh-skills-meta dt{color:var(--mcp-mut);margin:0}
 .dsh-skills-meta dd{margin:0;color:var(--dsw-alias-label-primary);word-break:break-all}
-.dsh-skills-pre{margin:0;padding:10px;border-radius:var(--mcp-r-sm);background:var(--mcp-bg-1);border:.5px solid var(--mcp-line);font-family:var(--mcp-mono);font-size:12px;line-height:18px;color:var(--dsw-alias-label-primary);overflow:auto;max-height:320px;white-space:pre-wrap;word-break:break-word}
+.dsh-skills-pre{flex:none;margin:0;padding:14px;border-radius:var(--mcp-r-sm);background:var(--mcp-bg-1);border:.5px solid var(--mcp-line);font-family:var(--mcp-mono);font-size:12px;line-height:18px;color:var(--dsw-alias-label-primary);overflow:visible;white-space:pre-wrap;word-break:break-word}
 /* 作用域组头：占满列表整行，所以路径放得下（这正是它取代筛选下拉的理由）。
    超长走 ellipsis，完整根路径在 title 里兜底。 */
-.dsh-skills-group{display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;margin:6px 0 2px;padding:4px 6px;border:0;border-radius:var(--mcp-r-sm);background:transparent;color:var(--mcp-mut);font-family:inherit;font-size:10.5px;font-weight:650;letter-spacing:.4px;text-align:left;cursor:pointer}
+.dsh-skills-group{display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;margin:8px 0 3px;padding:5px 6px;border:0;border-radius:var(--mcp-r-sm);background:transparent;color:var(--mcp-mut);font-family:inherit;font-size:11px;font-weight:600;letter-spacing:.1px;text-align:left;cursor:pointer}
 .dsh-skills-group:first-child{margin-top:0}
 .dsh-skills-group:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dsh-skills-group.static{cursor:default}
@@ -617,7 +740,6 @@ const EN_DICT = {
   '复制失败，请手动全选复制': 'Copy failed — select all and copy manually',
   '下载文件': 'Download file',
   '排序': 'Sort',
-  '默认': 'Default',
   '默认顺序': 'Default order',
   '按名称': 'By name',
   '名称': 'Name',
@@ -629,7 +751,6 @@ const EN_DICT = {
   '文档': 'Docs',
   '页面': 'Page',
   '概览': 'Overview',
-  '工具': 'Tools',
   '诊断': 'Diagnostics',
   '技能正文': 'Skill body',
   '详情分区': 'Detail sections',
@@ -676,11 +797,8 @@ const EN_DICT = {
   '{count} 个工具': '{count} tool(s)',
   '{count} 个会话共用': 'shared by {count} session(s)',
   '（宿主没有给出原因）': '(the Host gave no reason)',
-  '宿主已连接': 'Host connected',
   '宿主 MCP 读取失败': 'Could not read MCP from the Host',
   'skills 服务未就绪': 'skills service not ready',
-  'skills 服务已就绪': 'skills service ready',
-  '正在探测 skills 服务…': 'Probing the skills service…',
   '宿主 skills 服务未就绪，技能面已降级': 'The Host skills service is not ready; the skills pane is degraded',
   '未取到 remote.skillsManager（{reason}）。技能面不可用，MCP 面不受影响。':
     'remote.skillsManager is unavailable ({reason}). The skills pane is unusable; the MCP pane is unaffected.',
@@ -694,8 +812,6 @@ const EN_DICT = {
   '全局（当前 profile）': 'Global (current profile)',
   '全局配置': 'Global configuration',
   '项目配置': 'Project configuration',
-  '此项目的 MCP': "This project's MCP",
-  '全局 MCP': 'Global MCP',
   '选择左侧的一个 MCP': 'Select an MCP on the left',
   '这里会显示它的连接配置、已注册的工具，以及连接失败时的诊断。':
     'Its connection settings, registered tools, and connection-failure diagnostics appear here.',
@@ -867,21 +983,43 @@ const EN_DICT = {
   '把该项目的所有 MCP 切到延迟加载（{count} 个）：模型经 tool_search 按需搜索，命中后才进工具列表': "Switch all {count} MCP servers in this project to deferred loading: the model searches on demand via tool_search, and tools enter the list only after a hit",
   '把该项目的所有 MCP 切回全量常驻（{count} 个）': "Switch all {count} MCP servers in this project back to fully resident",
   // —— C2：延迟加载参数表单 ——
-  '延迟参数': "Deferral settings",
-  '延迟加载参数': "Deferred loading settings",
-  '延迟加载参数：tool_search 一次返回多少、目录最多列多少行、已发现集能多大': "Deferred loading settings: how many tools tool_search returns, how many catalog lines are listed, and how large the discovered set may grow",
-  '这三个上限决定 tool_search 一次返回多少、目录最多列多少行、已发现集能多大。保存会写进 profile patch 的 config.toolSearch，并在当前进程里立即生效。': "These three limits set how many tools tool_search returns, how many lines the catalog lists, and how large the discovered set may grow. Saving writes them into config.toolSearch of the profile patch and takes effect in the running process immediately.",
-  '一次搜索最多返回': "Max tools per search",
-  '模型搜一次工具，最多拿回几个结果。调小：可能漏掉真正要用的那个，它得再搜一次；调大：每次多占一点上下文。默认 10——实测一台 28 个工具的服务器，返回 5 条会漏掉三分之一的核心工具，10 条能全找到。': "How many results a single search may return. Smaller: it may miss the tool it actually needed and have to search again; larger: every search occupies a little more context. Default 10 — on a real 28-tool server, returning 5 missed a third of its core tools while 10 found them all.",
-  '目录最多列多少行': "Max catalog lines",
-  '提示词里那份「延迟工具目录」最多列多少个名字。列得少不等于找不到：目录只是让模型知道有哪些工具，搜索能搜到全部，超出部分还会告诉它「还有 N 个」。调大：每次请求多占一点上下文。默认 300。': "How many names the deferred-tool catalog in the prompt may list. Listing fewer does not hide tools: the catalog only tells the model what exists, search covers everything, and the truncated part reports how many are left. Larger: every request occupies a little more context. Default 300.",
-  '已发现工具的上限': "Max discovered tools",
-  '模型已经「掀开」的工具最多同时保留几个。它们会和常驻工具一起出现在工具列表里，太多会让模型挑错。超过上限时先淘汰最久没用过的——被淘汰的工具会回到目录里，需要时还能再搜到。默认 20。': "How many already-uncovered tools stay loaded at once. They sit in the tool list alongside resident tools, and too many make the model pick wrong. Past the limit the least recently used ones are evicted first — they go back into the catalog and can be found again. Default 20.",
-  '恢复默认': "Reset to defaults",
-  '读取参数失败': "Failed to read the settings",
-  '保存失败': "Failed to save",
-  '正在读取当前参数…': "Loading current settings…",
-  '已保存延迟加载参数': "Deferred loading settings saved",
+  // —— 统一工具加载策略（表驱动文案走 localized()，这里只收 t() 的调用点）——
+  '工具': "Tools",
+  '加载方式': "Loading mode",
+
+  '放弃修改': "Discard changes",
+  '保存已完成，但重新读取失败：{error}': "Saved, but reloading failed: {error}",
+  '已保存工具加载策略': "Tool loading policy saved",
+  '搜索参数': "Search settings",
+  '一次最多返回几个': "Results per search",
+  '搜一次最多拿回几条。调小可能漏掉要用的那个，调大每次多占一点上下文。默认 10。': "How many results one search returns. Smaller may miss the tool; larger costs a little context. Default 10.",
+  '同时记住几个已发现的工具': "Remembered tools",
+  '模型搜索出来的工具同时保留几个，超了先淘汰最久没用过的。默认 20。': "How many searched tools stay loaded at once; the least recently used are dropped first. Default 20.",
+  '限制目录大小': "Limit catalog size",
+  '目录上限需要一个正整数': "The catalog limit needs a positive whole number.",
+  // —— 工具加载页（第三个能力面）——
+  '工具加载': "Tool loading",
+
+  '可设置': "Configurable",
+  '常驻': "Resident",
+  '按需': "On demand",
+  '内置与插件工具': "Built-in & plugin tools",
+  '每轮都在上下文里': "In context every turn",
+  '搜索命中后加载': "Loaded after a search hit",
+  '受保护': "Protected",
+  '已改 {count} 项': "{count} changed",
+  '已改 {count} 项 + 参数': "{count} changed + settings",
+  '参数已修改': "Settings changed",
+  '未保存，保存后下一次请求生效': "Unsaved; applies to the next request after saving",
+
+  '目录默认全部列出，只有工具特别多时才需要设上限。': "The catalog lists all tools by default; cap it only when there are very many.",
+  '参数已保存': "Settings saved",
+  '最多字符数': "Maximum characters",
+  '按名称或用途搜索': "Search by name or purpose",
+  '按加载策略筛选': "Filter by loading policy",
+  '没有匹配的工具。': "No matching tools.",
+  '正在读取…': "Loading…",
+  '默认': "Default",
   '断开后自动重连': "Auto-reconnect after disconnect",
   '首次延迟 ms': "Initial delay ms",
   '最大延迟 ms': "Max delay ms",
@@ -1030,9 +1168,16 @@ const EN_DICT = {
   '本版本内不再提示': "Don't show again in this version",
   '写入当前 Web profile 的 MCP 配置，所有项目共享': "Write MCP config to the current Web profile, shared by all projects",
   '{path}（.dsh/mcp.json，只对该项目的会话生效）': "{path} (.dsh/mcp.json, effective only for this project's sessions)",
-  '此项目还没有 MCP。用右上角「添加项目 MCP」，或在第二行切到「发现市场」写入 .dsh/mcp.json': "This project has no MCP yet. Use \"Add project MCP\" in the top right, or switch to \"Discover marketplace\" on the second row to write to .dsh/mcp.json",
-  '{visible}/{total} 对本项目可见': "{visible}/{total} visible to this project",
-  '　·　改动即刻生效': " · Changes take effect immediately",
+  '还没有项目 MCP。点上方「添加项目 MCP」，或去「发现市场」安装。': "No project MCP yet. Use \"Add project MCP\" above, or install one from \"Discover marketplace\".",
+  '共享的全局 MCP': "Shared global MCP",
+  '项目 MCP': "Project MCP",
+  '此项目还没有 MCP': "This project has no MCP yet",
+  'MCP 来源': "MCP source",
+  '全局共享': "Shared global",
+  '搜索参数需要正整数': "Search settings must be positive whole numbers",
+  '已显示 {shown} / 共 {total} 条': "Showing {shown} of {total}",
+  '正在连接 skills 服务…': "Connecting to the skills service…",
+  '{visible}/{total} 可见': "{visible}/{total} visible",
   '新版本与当前 DSH 不兼容，未升级。': "The new version is incompatible with the current DSH; not upgraded.",
   '该包没有声明组合包，不能作为插件安装。': "This package does not declare a bundle package, so it cannot be installed as a plugin.",
   '版本号不合法，未升级。': "Invalid version number; not upgraded.",
@@ -1084,7 +1229,6 @@ const EN_DICT = {
   '用户不可调用': "Not user-invocable",
   '这是旧版启停机制（改名成 .disabled）留下的条目；恢复后请用新的停用方式': "This entry was left behind by the old enable/disable mechanism (renaming to .disabled); after restoring it, use the new way to disable it",
   '旧机制残留': "Legacy mechanism leftover",
-  '（无说明）': "(No description)",
   '删除技能': "Delete skill",
   '技能属性': "Skill properties",
   '（未报告）': "(Not reported)",
@@ -1148,8 +1292,6 @@ const EN_DICT = {
   '整个目录（含 scripts/references）': "The entire directory (including scripts/references)",
   '该文件': "That file",
   '技能面板': "Skills panel",
-  '需要注意': "Needs attention",
-  '重新启用': "Re-enable",
   '技能发现市场': "Skill discovery marketplace",
   'skillhub.cn（外部源）': "skillhub.cn (external source)",
   '正在搜索…': "Searching…",
@@ -1744,6 +1886,8 @@ const ICONS = {
   refresh: 'M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3',
   trash: 'M3 4h10M6.5 4V2.8a.8.8 0 0 1 .8-.8h1.4a.8.8 0 0 1 .8.8V4M4.5 4l.6 9a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.6-9M6.7 7v4.5M9.3 7v4.5',
   plug: 'M6 2v4M10 2v4M4.5 6h7V8a3.5 3.5 0 0 1-7 0zM8 11.5V14',
+  // 面板图标：四格网格，比插头更贴近「管理面板」语义。
+  panel: 'M2.5 2.5h4.3v4.3H2.5zM9.2 2.5h4.3v4.3H9.2zM2.5 9.2h4.3v4.3H2.5zM9.2 9.2h4.3v4.3H9.2z',
   x: 'M4 4l8 8M12 4l-8 8',
   edit: 'M11.6 2.4l2 2L6 12l-2.6.6L4 10zM10.2 3.8l2 2',
   eye: 'M1.2 8S3.6 4.2 8 4.2 14.8 8 14.8 8 12.4 11.8 8 11.8 1.2 8 1.2 8zM8 6.2a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6z',
@@ -2047,7 +2191,7 @@ const DropMenu = ({ label, icon, iconOnly, title, items, disabled, cls }) => {
 const ListFooter = ({ text, sortKey, onSort, onRefresh, refreshing, sortTitle }) => h('div', { className: 'dsh-mcp-side-foot' },
   h('span', { className: 'dsh-mcp-foot-text' }, text),
   h('span', { className: 'dsh-mcp-foot-spacer' }),
-  h(DropMenu, {
+  onSort ? h(DropMenu, {
     icon: 'sort',
     iconOnly: true,
     cls: 'dsh-mcp-foot-dd',
@@ -2058,7 +2202,7 @@ const ListFooter = ({ text, sortKey, onSort, onRefresh, refreshing, sortTitle })
       on: (sortKey || 'default') === key,
       onSelect: () => onSort(key),
     })),
-  }),
+  }) : null,
   h('button', {
     type: 'button',
     className: 'dsh-mcp-foot-btn',
@@ -2096,11 +2240,32 @@ const actionBar = ({ primary, secondary, more }) => h('div', { className: 'dsh-m
 // onClose 传 null 表示这一刻不可关闭（例如市场正在安装），Escape 不生效——与旧行为一致。
 const Dialog = ({ label, cls, onClose, children }) => {
   const dialogRef = useRef(null);
-  useEffect(() => { dialogRef.current?.focus(); }, []);
+  useEffect(() => {
+    const previous = document.activeElement;
+    dialogRef.current?.focus();
+    return () => { if (previous?.isConnected) previous.focus(); };
+  }, []);
+  const nodes = (Array.isArray(children) ? children.flat(Infinity) : [children]).filter((node) => node != null && node !== false);
+  const heading = nodes[0]?.type === 'h3' ? nodes.shift() : h('h3', null, label);
+  const actions = nodes.at(-1)?.props?.className === 'dsh-mcp-modal-actions' ? nodes.pop() : null;
   return h('div', {
     ref: dialogRef, className: 'dsh-mcp-modal' + (cls ? ' ' + cls : ''), role: 'dialog', 'aria-modal': true, 'aria-label': label, tabIndex: -1,
-    onKeyDown: (e) => { if (e.key === 'Escape' && onClose) { e.stopPropagation(); onClose(); } },
-  }, children);
+    onKeyDown: (e) => {
+      if (e.key === 'Escape' && onClose) { e.stopPropagation(); onClose(); return; }
+      if (e.key !== 'Tab') return;
+      const items = Array.from(dialogRef.current?.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]') || [])
+        .filter((node) => node.getClientRects().length > 0);
+      if (!items.length) { e.preventDefault(); return; }
+      const first = items[0], last = items.at(-1);
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    },
+  },
+    h('div', { className: 'dsh-mcp-modal-head' }, heading,
+      h(Btn, { cls: 'icon ghost', title: t('关闭'), onClick: onClose }, h(Icon, { d: ICONS.x }))),
+    h('div', { className: 'dsh-mcp-modal-body' }, ...nodes),
+    actions,
+  );
 };
 
 // 服务器列表。embedded=true 时作为项目 tab 的分区内容渲染：去掉自身卡片外框，
@@ -2217,7 +2382,9 @@ const skillStatsText = (rows) => {
  */
 const deferAllState = (rows, { includeWorkspace = false } = {}) => {
   const list = (Array.isArray(rows) ? rows : []).filter((s) => s && s.managed === true && (includeWorkspace || s.scope !== 'workspace'));
-  const deferred = countRows(list, (s) => s.defer === true);
+  // 与行内芯片读**同一个字段**：芯片显示的是"统一策略下的实际状态"（`deferEffective`），
+  // 概览若还数旧的 `defer`，就会出现"概览说 0 台延迟、每行芯片都写着延迟"。
+  const deferred = countRows(list, (s) => (s.deferEffective ?? s.defer) === true);
   return { total: list.length, deferred, all: list.length > 0 && deferred === list.length };
 };
 
@@ -2307,16 +2474,18 @@ const ServerList = ({ servers, total, selected, query, onQuery, onSelect, onTogg
         ? h('div', { className: 'dsh-mcp-empty-list' }, count === 0 && emptyHint ? emptyHint : t('没有匹配的 MCP'))
         : servers.map((s) =>
             h('div', { key: s.serverName, role: 'button', tabIndex: 0, 'aria-selected': selected === s.serverName, className: 'dsh-mcp-item' + (selected === s.serverName ? ' sel' : ''), onClick: () => onSelect(s.serverName), onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(s.serverName); } } },
-              h(Dot, { phase: dotPhase(s) }),
               h('div', { className: 'dsh-mcp-item-main' },
-                h('div', { className: 'dsh-mcp-item-name' }, s.serverName),
+                h('div', { className: 'dsh-mcp-item-name-row' },
+                  h(Dot, { phase: dotPhase(s) }),
+                  h('div', { className: 'dsh-mcp-item-name' }, s.serverName),
+                ),
                 h('div', { className: 'dsh-mcp-item-sub' },
                   h(Badge, { cls: s.transport === 'http' ? 't-http' : 't-stdio' }, s.transport === 'http' ? 'HTTP' : 'stdio'),
-                  h('span', null, s.scope === 'workspace' ? wsSub(s) : t('{count} 工具', { count: s.toolCount })),
+                  h('span', { className: 'dsh-mcp-item-meta' }, s.scope === 'workspace' ? wsSub(s) : t('{count} 工具', { count: s.toolCount })),
                   // 延迟开关：**两种状态都渲染**，点一下就地切换（不必进「编辑」框）。
                   // 不带 token 数：我们不知道用户装了什么 MCP，schema 大小差一个量级，任何
                   // 估算都给不出可用的数，而给了数用户就拿它做决定（主动误导）。
-                  h(DeferChip, { on: s.defer === true, interactive: s.managed === true && !busy, onClick: () => onToggleDefer(s) }),
+                  h(DeferChip, { on: (s.deferEffective ?? s.defer) === true, interactive: s.managed === true && !busy, onClick: () => onToggleDefer(s) }),
                   mountFailed(s) ? h(Badge, { cls: 's-err' }, t('挂载失败')) : null,
                   scopeFailed(s) ? h(Badge, { cls: 's-err' }, t('作用域故障')) : null,
                 ),
@@ -2405,12 +2574,14 @@ const GlobalServerList = ({ servers, exclude, onToggleExclude, onSelect, selecte
                 onClick: () => onSelect(s.serverName),
                 onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(s.serverName); } },
               },
-                h(Dot, { phase: s.status || s.phase }),
                 h('div', { className: 'dsh-mcp-item-main' },
-                  h('div', { className: 'dsh-mcp-item-name' }, s.serverName),
+                  h('div', { className: 'dsh-mcp-item-name-row' },
+                    h(Dot, { phase: s.status || s.phase }),
+                    h('div', { className: 'dsh-mcp-item-name' }, s.serverName),
+                  ),
                   h('div', { className: 'dsh-mcp-item-sub' },
                     h(Badge, { cls: s.transport === 'http' ? 't-http' : 't-stdio' }, s.transport === 'http' ? 'HTTP' : 'stdio'),
-                    h('span', null, t('{count} 工具', { count: s.toolCount })),
+                    h('span', { className: 'dsh-mcp-item-meta' }, t('{count} 工具', { count: s.toolCount })),
                     isHidden ? h(Badge, { cls: 's-off' }, t('已屏蔽')) : null,
                   ),
                 ),
@@ -2441,11 +2612,12 @@ const detailTab = (tab, onTab, id, label, count) => h('button', {
 /** 非当前页签的卡片不参与布局——只渲染当前页会让别处的文本断言失去意义，所以是隐藏而非卸载。 */
 const detailPaneOff = (tab, id) => (tab === id ? '' : ' dsh-mcp-pane-off');
 
-const ServerDetail = ({ server, tools, onToggle, onReconnect, onEdit, onRemove, busy, onReveal, revealed, onCopy, excluded, onToggleExclude, tab = 'overview', onTab }) => {
+const ServerDetail = ({ server, tools, onToggle, onReconnect, onEdit, onRemove, busy, onReveal, revealed, onCopy, excluded, onToggleExclude, emptyTitle, emptyActions, tab = 'overview', onTab }) => {
   if (!server)
     return h('div', { className: 'dsh-mcp-detail' }, h('div', { className: 'dsh-mcp-d-empty' },
-      h('b', null, t('选择左侧的一个 MCP')),
-      h('span', null, t('这里会显示它的连接配置、已注册的工具，以及连接失败时的诊断。'))));
+      h('b', null, emptyTitle || t('选择左侧的一个 MCP')),
+      emptyTitle ? null : h('span', null, t('这里会显示它的连接配置、已注册的工具，以及连接失败时的诊断。')),
+      emptyActions ? h('div', { className: 'dsh-mcp-d-actions' }, ...emptyActions) : null));
   const env = server.env || {};
   const headers = server.headers || {};
   const envKeys = Object.keys(env);
@@ -2602,7 +2774,7 @@ const ServerDetail = ({ server, tools, onToggle, onReconnect, onEdit, onRemove, 
             : isForeign ? t('全局配置（在「全局」标签页可编辑）') : isWorkspace ? t('项目配置 .dsh/mcp.json（可编辑，本项目会话共享一份连接）') : server.managed ? t('当前 Web profile（可编辑）') : t('其他 bundle / Agent（只读）')),
         server.toolCallTimeoutMs ? h('b', null, t('调用超时')) : null, server.toolCallTimeoutMs ? h('span', null, server.toolCallTimeoutMs + ' ms') : null,
         h('b', null, t('启动失败策略')), h('span', null, server.failOnStartupError ? t('阻止插件启动') : t('记录错误并继续')),
-        h('b', null, t('工具延迟加载')), h('span', null, server.defer
+        h('b', null, t('工具延迟加载')), h('span', null, (server.deferEffective ?? server.defer)
           ? t('已开启（{count} 工具经 tool_search 按需加载）', { count: server.toolCount })
           : t('关闭（工具全量常驻上下文）')),
         server.reconnect ? h('b', null, t('自动重连')) : null, server.reconnect ? h('span', null, server.reconnect.enabled === false ? t('关闭') : t('{min}–{max} ms，最多 {attempts} 次', { min: server.reconnect.initialDelayMs || 500, max: server.reconnect.maxDelayMs || 30000, attempts: server.reconnect.maxAttempts || 10 })) : null,
@@ -3575,45 +3747,179 @@ const HintMarker = ({ text }) => h('span', {
   tabIndex: 0,
 }, h(Icon, { d: ICONS.info, size: 12 }));
 
-const TOOL_SEARCH_SETTING_FIELDS = [
-  {
-    key: 'maxResults',
-    label: '一次搜索最多返回',
-    about: '模型搜一次工具，最多拿回几个结果。调小：可能漏掉真正要用的那个，它得再搜一次；调大：每次多占一点上下文。默认 10——实测一台 28 个工具的服务器，返回 5 条会漏掉三分之一的核心工具，10 条能全找到。',
-  },
-  {
-    key: 'maxCatalogLines',
-    label: '目录最多列多少行',
-    about: '提示词里那份「延迟工具目录」最多列多少个名字。列得少不等于找不到：目录只是让模型知道有哪些工具，搜索能搜到全部，超出部分还会告诉它「还有 N 个」。调大：每次请求多占一点上下文。默认 300。',
-  },
-  {
-    key: 'maxDiscovered',
-    label: '已发现工具的上限',
-    about: '模型已经「掀开」的工具最多同时保留几个。它们会和常驻工具一起出现在工具列表里，太多会让模型挑错。超过上限时先淘汰最久没用过的——被淘汰的工具会回到目录里，需要时还能再搜到。默认 20。',
-  },
+// 说明一律一句话——那块地方小，`title` 该回答"这个数字管什么"，不是放一篇论文。
+// ── 工具搜索（ToolSearch）：一个入口，两件事 ─────────────────────────────
+//
+// ① 工具：内置与其他插件的工具逐个选「常驻 / 按需」，默认常驻。
+//    MCP 的启停与「延迟 / 全量」在左侧列表里，这里不重复。
+// ② 搜索参数：一次返回几条、目录上限、已发现上限（原先单独的「延迟参数」并到了这里）。
+/**
+ * 目录上限开关打开时的**建议起点**，不是默认值：默认完全不限制（服务端
+ * `DEFAULTS.maxCatalogChars = undefined`）。12,500 有实测依据——456 个延迟工具只列名字约
+ * 11,690 字符，等于"花今天的钱"。它同时是输入框的 placeholder，两者必须是同一个数。
+ */
+const CATALOG_CHARS_SUGGESTION = 12500
+
+const TOOL_SEARCH_CHOICES = [
+  { id: 'resident', label: '常驻' },
+  { id: 'deferred', label: '按需' },
 ]
 
-const ToolSearchSettingsModal = ({ open, onClose, call, onSaved }) => {
+/** 已知宿主内置工具的中文短名。未知工具只显示名字，不硬造翻译。 */
+const BUILTIN_LABELS = {
+  tool_search: '工具搜索入口',
+  working_directory: '切换工作目录',
+  read: '读取文件',
+  write: '写入文件',
+  edit: '编辑文件',
+  glob: '查找文件',
+  grep: '搜索文件内容',
+  bash: '运行命令',
+  pwsh: '运行命令',
+  run_code: '运行代码',
+  read_image: '查看图片',
+  ask_user_question: '向用户提问',
+  task: '任务列表',
+  todo_write: '待办清单',
+  web_search: '网页搜索',
+  web_fetch: '抓取网页',
+  list_mcp_resources: '列出 MCP 资源',
+  list_mcp_resource_templates: '列出资源模板',
+  read_mcp_resource: '读取 MCP 资源',
+  skill: '加载技能',
+  present: '交付文件',
+  job_list: '列出后台任务',
+  job_output: '读取任务输出',
+  job_kill: '停止后台任务',
+  send_message: '给 Agent 发消息',
+  subagent: '委派子任务',
+  subagent_fork: '带上下文委派',
+  list_agents: '列出子 Agent',
+  interrupt_agent: '中断子 Agent',
+  workflow: '编排多 Agent',
+  get_goal: '查看当前目标',
+  create_goal: '创建持续目标',
+  update_goal: '更新目标',
+  exit_plan_mode: '退出计划模式',
+  schedule_create: '创建定时提醒',
+  schedule_list: '列出定时提醒',
+  schedule_delete: '删除定时提醒',
+  schedule_update: '修改定时提醒',
+  list_pages: '列出浏览器页面',
+  navigate_page: '打开网页',
+  take_screenshot: '网页截图',
+  take_snapshot: '读取页面结构',
+  click: '点击页面元素',
+  fill: '填写页面输入',
+  hover: '悬停页面元素',
+  press_key: '按下按键',
+  evaluate_script: '在页面执行脚本',
+  new_page: '新建浏览器页面',
+  close_page: '关闭浏览器页面',
+  resize_page: '调整页面尺寸',
+  select_page: '切换浏览器页面',
+  wait_for: '等待页面条件',
+  list_console_messages: '读取控制台消息',
+  list_network_requests: '读取网络请求',
+  get_network_request: '查看单个网络请求',
+  performance_start_trace: '开始性能录制',
+  performance_stop_trace: '结束性能录制',
+}
+
+const toolLabel = (row) => (row.kind === 'builtin' && BUILTIN_LABELS[row.name]) || row.name
+
+/**
+ * 一个工具 = 一行：**宿主原名**（等宽，正常显示）+ 中文短名标记 + 策略下拉。
+ *
+ * 名字必须用宿主原名：`working_directory`、`job_output` 是可搜索、可与日志/文档对上号的
+ * 唯一标识；把它换成中文标题后，用户在别处看到英文名就找不到对应行了。
+ * 中文短名是**标记**（说明这行大概是什么工具），不是标题；未知工具没有标记，
+ * 退回到宿主的 description 标记（ⓘ），不硬造翻译。
+ */
+/**
+ * 一个工具 = 一行：宿主原名（等宽）+ 中文短名标记 + 常驻/按需。
+ *
+ * 这里没有第三态：工具页只管全局。内置与插件工具在所有项目里是同一批宿主工具，
+ * 按项目再分一层只会让「换个项目就变回去」看起来像丢配置。MCP 服务器粒度的
+ * 开关在 MCP 页面，不在这里重复。
+ */
+const toolLoadingRow = (row, draft, onChange, { saving = false } = {}) => {
+  const alias = row.kind === 'builtin' ? BUILTIN_LABELS[row.name] : ''
+  const policy = draft[row.name] || row.policy || 'resident'
+  // 改动高亮：草稿值与已保存值不同 = 这张卡要进「保存」的承诺里。用户改完往下滚之前
+  // 能在原地看到「这张卡不一样了」，而不是滚到底栏才发现改了几张。
+  const changed = (row.policy || 'resident') !== policy
+  return h('div', { className: 'dsh-mcp-tool-row' + (changed ? ' is-changed' : ''), key: row.name },
+    h('div', { className: 'dsh-mcp-tool-info' },
+      h('span', { className: 'dsh-mcp-tool-name', title: row.name }, row.name),
+      alias ? h('span', { className: 'dsh-mcp-tool-alias' }, alias) : null,
+      row.description ? h(HintMarker, { text: row.description }) : null,
+    ),
+    h('span', { className: 'dsh-mcp-tool-pick', role: 'group', 'aria-label': (alias || row.name) + ' · ' + t('加载方式') },
+      ...TOOL_SEARCH_CHOICES.map((choice) => h('button', {
+        key: choice.id,
+        type: 'button',
+        className: choice.id === 'resident' ? 'is-resident' : 'is-deferred',
+        'aria-pressed': policy === choice.id,
+        disabled: saving,
+        onClick: () => onChange(row.name, choice.id),
+      }, t(choice.label))),
+    ),
+    // 说明只作辨认线索：一行截断、全文留在 title。决定「加载方式」不需要读整段 schema 描述，
+    // 铺开只会让 34 张卡高低不一（density 用例钉着双列网格，不齐整的双列比单列更乱）。
+    row.description ? h('div', { className: 'dsh-mcp-tool-desc', title: row.description }, row.description) : null,
+  )
+}
+
+/** 搜索参数三项：与原来的「延迟参数」同一套字段与校验，只是搬进同一个弹窗。 */
+const SEARCH_PARAM_FIELDS = [
+  { key: 'maxResults', label: '一次最多返回几个', about: '搜一次最多拿回几条。调小可能漏掉要用的那个，调大每次多占一点上下文。默认 10。' },
+  { key: 'maxDiscovered', label: '同时记住几个已发现的工具', about: '模型搜索出来的工具同时保留几个，超了先淘汰最久没用过的。默认 20。' },
+]
+
+const ToolLoadingModal = ({ open, onClose, call, onSaved, inline = false }) => {
   const [loaded, setLoaded] = useState(null)
-  const [draft, setDraft] = useState({})
+  const [toolDraft, setToolDraft] = useState({})
+  const [params, setParams] = useState({})
+  const [savedParams, setSavedParams] = useState({})
+  const [limitOn, setLimitOn] = useState(false)
   const [error, setError] = useState('')
+  const [searchError, setSearchError] = useState('')
+  const [searchLoaded, setSearchLoaded] = useState(false)
+  const [searchSaved, setSearchSaved] = useState(false)
+  // 保存后显示**宿主原话**（`note`）：它区分"已写入并立即生效"与"已写入，重启后生效"。
+  // 写死一句"参数已保存"就把这个区别盖掉了，而那正是 persisted/live 契约要说的事。
+  const [savedNotice, setSavedNotice] = useState('')
   const [saving, setSaving] = useState(false)
-  // 每次打开都重新读：参数可能在另一个标签页里改过（那也是一次重装），面板不能拿旧值回写。
+  const [toolQuery, setToolQuery] = useState('')
+  const [toolFilter, setToolFilter] = useState('all')
+  const readPolicy = () => call('toolLoadingSettings')
   useEffect(() => {
     if (!open) return undefined
     let cancelled = false
     setLoaded(null)
     setError('')
+    setSearchError('')
+    setSearchLoaded(false)
+    setSearchSaved(false)
+    setParams({})
+    setLimitOn(false)
+    setSavedParams({})
     ;(async () => {
       try {
-        const res = await call('toolSearchSettings')
+        const [res, search] = await Promise.all([readPolicy(), call('toolSearchSettings')])
         if (cancelled) return
-        // `call()` **从不抛错**：失败时返回 { ok: false, error }。不查 ok 就会进表单，而那时
-        // `res.defaults` 是 undefined —— `loaded.defaults[field.key]` 当场 TypeError，整个面板
-        // 跟着挂（真机验证时发现的两个同类缺陷之一）。
-        if (!res?.ok) throw new Error(res?.error || t('读取参数失败'))
-        setLoaded({ settings: res.settings, defaults: res.defaults })
-        setDraft({ ...res.settings })
+        if (!res?.ok) throw new Error(res?.error || t('读取失败'))
+        setToolDraft({ ...(res.policy?.tools || {}) })
+        setLoaded(res)
+        if (search?.ok && search.settings) {
+          setSearchLoaded(true)
+          setParams({ ...search.settings })
+          setSavedParams({ ...search.settings })
+          setLimitOn(search.settings.maxCatalogChars !== undefined)
+        } else {
+          setSearchError(search?.error || t('读取失败'))
+        }
       } catch (e) {
         if (!cancelled) setError(String(e?.message || e))
       }
@@ -3621,58 +3927,196 @@ const ToolSearchSettingsModal = ({ open, onClose, call, onSaved }) => {
     return () => { cancelled = true }
   }, [open, call])
   if (!open) return null
-  const submit = async () => {
-    if (saving || loaded === null) return
-    const settings = {}
-    for (const field of TOOL_SEARCH_SETTING_FIELDS) {
-      const raw = String(draft[field.key] ?? '').trim()
-      // 空输入 = 跟随默认（宿主会把与默认相同的值当"不写"）。空串不能当 0 送过去：
-      // 那会被校验拒掉，而用户的意思是"用默认"。
-      if (raw !== '') settings[field.key] = Number(raw)
-    }
-    setSaving(true)
+  const entriesKey = (tools) => JSON.stringify(Object.entries(tools || {}).sort(([a], [b]) => a.localeCompare(b)))
+  const dirty = loaded !== null && entriesKey(toolDraft) !== entriesKey(loaded.policy?.tools)
+  const paramKey = (value, limited) => JSON.stringify([
+    ...SEARCH_PARAM_FIELDS.map((field) => String(value[field.key] ?? '')),
+    limited ? String(value.maxCatalogChars ?? '') : null,
+  ])
+  const paramsChanged = searchLoaded && paramKey(params, limitOn) !== paramKey(savedParams, savedParams.maxCatalogChars !== undefined)
+  const setTool = (name, value) => setToolDraft((prev) => {
+    const next = { ...prev }
+    const original = loaded?.tools?.find((row) => row.name === name)
+    if (value === original?.policy && !Object.hasOwn(loaded.policy?.tools || {}, name)) delete next[name]
+    else next[name] = value
+    return next
+  })
+  const discard = () => {
+    setToolDraft({ ...(loaded.policy?.tools || {}) })
+    setParams({ ...savedParams })
+    setLimitOn(savedParams.maxCatalogChars !== undefined)
     setError('')
+    setSearchSaved(false)
+  }
+  const submit = async () => {
+    if (saving || loaded === null || (inline && !dirty && !paramsChanged)) return
+    setSaving(true)
+    // 本次保存要显示的那句话（宿主原话优先）。同一个值既给面板内联提示，也给上层 flash，
+    // 两处显示同一句话——否则面板说"重启后生效"、外面弹"已保存"，等于自己拆自己的台。
+    let notice = ''
+    setError('')
+    setSearchError('')
     try {
-      const res = await call('updateToolSearchSettings', { settings })
-      // 同上：失败是 `{ ok:false, error }`，不是异常。曾经漏查这一条，于是**写盘失败**被当成
-      // 成功处理——真机实测：文件一个字没写，界面却弹了"已保存"。
-      if (!res?.ok) throw new Error(res?.error || t('保存失败'))
-      setLoaded({ settings: res.settings, defaults: res.defaults })
-      setDraft({ ...res.settings })
-      onSaved(res)
+      // 全部输入先校验，避免无效参数使工具策略先落盘。
+      const settings = {}
+      if (paramsChanged) {
+        for (const field of SEARCH_PARAM_FIELDS) {
+          const raw = String(params[field.key] ?? '').trim()
+          if (raw === '') continue
+          const value = Number(raw)
+          if (!Number.isSafeInteger(value) || value < 1) throw new Error(t('搜索参数需要正整数'))
+          settings[field.key] = value
+        }
+        if (limitOn) {
+          const value = Number(String(params.maxCatalogChars ?? '').trim())
+          if (!Number.isSafeInteger(value) || value < 1) throw new Error(t('目录上限需要一个正整数'))
+          settings.maxCatalogChars = value
+        }
+      }
+      // 两个配置使用各自 RPC。每项成功后立即确认该项的基线，后项失败仍保留已保存事实。
+      if (dirty) {
+        const policy = { ...loaded.policy, groups: { ...(loaded.policy?.groups || {}) }, tools: { ...toolDraft } }
+        if (policy.mode === 'legacy') delete policy.mode
+        const res = await call('updateToolLoadingSettings', { policy })
+        if (!res?.ok) throw new Error(res?.error || t('保存失败'))
+        notice = res.note || ''
+        setSavedNotice(notice)
+        const savedPolicy = res.policy || policy
+        setLoaded({ ...loaded, policy: savedPolicy,
+          tools: (loaded.tools || []).map((row) => ({ ...row, policy: savedPolicy.tools?.[row.name] || row.policy })) })
+        setToolDraft({ ...(savedPolicy.tools || {}) })
+      }
+      if (paramsChanged) {
+        const res = await call('updateToolSearchSettings', { settings })
+        if (!res?.ok) throw new Error(res?.error || t('保存失败'))
+        const saved = { ...(res.settings || settings) }
+        setParams(saved)
+        setSavedParams(saved)
+        setLimitOn(saved.maxCatalogChars !== undefined)
+        setSearchSaved(true)
+        if (res.note) { notice = res.note; setSavedNotice(res.note) }
+      }
+      // ③ 回读策略（参数保存后服务端可能规范化）
+      const fresh = await readPolicy()
+      if (!fresh?.ok) throw new Error(t('保存已完成，但重新读取失败：{error}', { error: fresh?.error || t('读取失败') }))
+      setToolDraft({ ...(fresh.policy?.tools || {}) })
+      setLoaded(fresh)
+      onSaved?.(fresh, notice || undefined)
     } catch (e) {
       setError(String(e?.message || e))
     } finally {
       setSaving(false)
     }
   }
-  return h('div', { className: 'dsh-mcp-overlay', onClick: (e) => e.target === e.currentTarget && onClose() },
-    h(Dialog, { label: t('延迟加载参数'), onClose },
-      h('h3', null, t('延迟加载参数')),
-      h('div', { className: 'dsh-mcp-source-detail' }, t('这三个上限决定 tool_search 一次返回多少、目录最多列多少行、已发现集能多大。保存会写进 profile patch 的 config.toolSearch，并在当前进程里立即生效。')),
-      error ? h('div', { className: 'dsh-mcp-d-err' }, error) : null,
-      loaded === null
-        ? (error ? null : h('div', { className: 'dsh-mcp-source-detail' }, t('正在读取当前参数…')))
-        : h('div', { className: 'dsh-mcp-number-grid' },
-          ...TOOL_SEARCH_SETTING_FIELDS.map((field) => h('div', { className: 'dsh-mcp-field', key: field.key },
-            h('label', null, t(field.label), h(HintMarker, { text: t(field.about) })),
-            h('input', {
-              type: 'number',
-              min: 1,
-              step: 1,
-              value: draft[field.key] ?? '',
-              placeholder: String(loaded.defaults[field.key]),
-              onChange: (e) => setDraft((prev) => ({ ...prev, [field.key]: e.target.value })),
-            }),
-            h('div', { className: 'dsh-mcp-source-detail' }, t('默认值：{value}', { value: loaded.defaults[field.key] })),
-          )),
+  const setParam = (key, value) => {
+    if (!searchLoaded) return
+    setParams((prev) => ({ ...prev, [key]: value }))
+    setSearchSaved(false)
+  }
+  // 单一数据源：这一页只认 `toolLoadingSettings().tools` 这一份行数据。
+  // 曾经这里把 `kind === 'mcp'` 的行整类排除（"MCP 去 MCP 页管"），可是 MCP 页那个开关读的是
+  // 旧的服务器级 `defer`，统一策略下的组级/单工具设置在那儿看不见——于是被延迟的 MCP 工具
+  // 在工具页被丢掉、在 MCP 页显示"全量"，两边都说没事。现在 MCP 行照样进这张表，
+  // 计数也从同一份 rows 派生，不再"概览数一套、列表数另一套"。
+  const manageable = (loaded?.tools || []).filter((row) => row.protected !== true)
+  const policyOf = (row) => toolDraft[row.name] || row.policy || 'resident'
+  const residentCount = manageable.filter((row) => policyOf(row) === 'resident').length
+  const deferredCount = manageable.length - residentCount
+  const changedCount = manageable.filter((row) => (row.policy || 'resident') !== policyOf(row)).length
+  const protectedTools = (loaded?.tools || []).filter((row) => row.protected === true)
+  const needle = toolQuery.trim().toLowerCase()
+  const visibleTools = manageable.filter((row) => (toolFilter === 'all' || policyOf(row) === toolFilter)
+    && (!needle || [row.name, toolLabel(row), row.description || ''].join(' ').toLowerCase().includes(needle)))
+  // 搜索参数提到顶部：它们是「工具怎么加载」的另一半，不是高级选项。
+  // 一个保存动作，只调用实际发生改动的配置接口。
+  const parameters = h('section', { className: 'dsh-mcp-tool-params' },
+    h('div', { className: 'dsh-mcp-tool-params-head' },
+      h('h4', { className: 'dsh-mcp-tool-params-title' }, t('搜索参数')),
+    ),
+    h('div', { className: 'dsh-mcp-tool-params-grid' },
+      ...SEARCH_PARAM_FIELDS.map((field) => h('label', { className: 'dsh-mcp-tool-param', key: field.key },
+        h('span', { className: 'dsh-mcp-tool-param-label' }, t(field.label), h(HintMarker, { text: t(field.about) })),
+        h('input', { type: 'number', min: 1, step: 1, disabled: !searchLoaded || saving,
+          value: params[field.key] ?? '', onChange: (e) => setParam(field.key, e.target.value) }),
+      )),
+      h('div', { className: 'dsh-mcp-tool-param' },
+        h('span', { className: 'dsh-mcp-tool-param-label' }, t('限制目录大小'), h(HintMarker, { text: t('目录默认全部列出，只有工具特别多时才需要设上限。') })),
+        h('div', { className: 'dsh-mcp-tool-param-inline' },
+          h(Toggle, { on: limitOn, disabled: !searchLoaded || saving, label: t('限制目录大小'), onChange: (next) => {
+            if (!searchLoaded) return
+            setLimitOn(next)
+            // 打开时只在**空**的情况下预填建议起点：别覆盖用户已经填过的数。
+            if (next && String(params.maxCatalogChars ?? '').trim() === '') setParam('maxCatalogChars', String(CATALOG_CHARS_SUGGESTION))
+            setSearchSaved(false)
+          } }),
+          // 关掉时**置灰保留**，不卸载：主流语义是"可见、不可改、不生效"。卸载会让表单跳一下，
+          // 用户也看不出这一项原本是什么。`disabled` 表达"不生效"，保存时仍**不发**这个键。
+          h('input', { type: 'number', min: 1, step: 1, disabled: !limitOn || !searchLoaded || saving,
+            value: params.maxCatalogChars ?? '', placeholder: String(CATALOG_CHARS_SUGGESTION),
+            'aria-label': t('最多字符数'), onChange: (e) => setParam('maxCatalogChars', e.target.value) }),
         ),
-      h('div', { className: 'dsh-mcp-modal-actions' },
-        h(Btn, { onClick: onClose, children: t('关闭') }),
-        loaded ? h(Btn, { onClick: () => setDraft({ ...loaded.defaults }), children: t('恢复默认') }) : null,
-        loaded ? h(Btn, { cls: 'primary', onClick: submit, disabled: saving, children: saving ? t('保存中…') : t('保存') }) : null,
       ),
     ),
+    searchError ? h('div', { className: 'dsh-mcp-d-err' }, searchError) : null,
+    searchSaved ? h('p', { role: 'status', className: 'dsh-mcp-tool-param-saved' }, savedNotice || t('参数已保存')) : null,
+  )
+  // 概览条的一格：圆点与数字给「现在是什么局面」一个 3 秒答案。数值全来自与列表
+  // 同源的那份数据（other / protectedTools / changedCount），不另问宿主——两个来源
+  // 各数各的，迟早出现「概览说 34、列表数出 33」这种自己对不上自己的笑话。
+  const stat = (mark, value, label, note) => h('div', { className: 'dsh-mcp-tool-stat' },
+    h('span', { className: 'dsh-mcp-tool-stat-mark' + (mark ? ' ' + mark : '') }),
+    h('span', { className: 'dsh-mcp-tool-stat-value' }, String(value)),
+    h('span', { className: 'dsh-mcp-tool-stat-copy' },
+      h('span', { className: 'dsh-mcp-tool-stat-label' }, label),
+      note ? h('span', { className: 'dsh-mcp-tool-stat-note' }, note) : null,
+    ),
+  )
+  const hero = h('div', { className: 'dsh-mcp-tool-hero' }, h('div', { className: 'dsh-mcp-tool-hero-copy' },
+    h('h3', { className: 'dsh-mcp-tool-title' }, t('工具加载')),
+  ))
+  const overview = loaded === null ? null : h('div', { className: 'dsh-mcp-tool-overview' },
+    stat('', manageable.length, t('可设置'), t('内置与插件工具')),
+    stat('resident', residentCount, t('常驻'), t('每轮都在上下文里')),
+    stat('deferred', deferredCount, t('按需'), t('搜索命中后加载')),
+    stat('protected', protectedTools.length, t('受保护'), protectedTools.map((row) => row.name).join(' / ')),
+  )
+  const toolbar = h('div', { className: 'dsh-mcp-tool-toolbar' },
+    h('div', { className: 'dsh-mcp-search' }, h(Icon, { d: ICONS.search }), h('input', { value: toolQuery,
+      placeholder: t('按名称或用途搜索'), 'aria-label': t('按名称或用途搜索'), onChange: (e) => setToolQuery(e.target.value) })),
+    h('div', { className: 'dsh-mcp-tool-filter', role: 'group', 'aria-label': t('按加载策略筛选') },
+      ...[{ id: 'all', label: '全部' }, ...TOOL_SEARCH_CHOICES].map((choice) => h('button', {
+        key: choice.id, type: 'button', 'aria-pressed': toolFilter === choice.id, onClick: () => setToolFilter(choice.id),
+      }, t(choice.label))),
+    ),
+  )
+  const list = loaded === null ? null : visibleTools.length ? h('div', { className: 'dsh-mcp-tool-list' }, ...visibleTools.map((row) => toolLoadingRow(row, toolDraft, setTool, { saving })))
+    : h('div', { className: 'dsh-mcp-source-detail' }, t('没有匹配的工具。'))
+  const fixed = [
+    inline ? null : hero,
+    error ? h('div', { className: 'dsh-mcp-d-err', role: 'alert' }, error) : null,
+    loaded === null ? (error ? null : h('div', { className: 'dsh-mcp-source-detail' }, t('正在读取…')))
+      : h(React2.Fragment, null, parameters, overview, toolbar),
+  ]
+  const content = [...fixed, list]
+  if (inline) return h('div', { className: 'dsh-mcp-tool-loading-page' },
+    h('div', { className: 'dsh-mcp-tool-fixed' }, ...fixed),
+    h('div', { className: 'dsh-mcp-tool-scroll' }, list),
+    h('div', { className: 'dsh-mcp-tool-save' },
+      h('span', { className: 'dsh-mcp-tool-save-hint' },
+        (dirty || paramsChanged) ? h('span', { className: 'dsh-mcp-tool-save-dirty' },
+          dirty && paramsChanged ? t('已改 {count} 项 + 参数', { count: changedCount })
+            : dirty ? t('已改 {count} 项', { count: changedCount })
+            : t('参数已修改')) : null,
+        (dirty || paramsChanged) ? t('未保存，保存后下一次请求生效') : null),
+      h('span', { className: 'dsh-mcp-tool-save-spacer' }),
+      h('span', { className: 'dsh-mcp-tool-save-actions' },
+        (dirty || paramsChanged) ? h(Btn, { onClick: discard, disabled: saving, children: t('放弃修改') }) : null,
+        loaded ? h(Btn, { cls: 'primary', onClick: submit, disabled: saving || (!dirty && !paramsChanged), children: saving ? t('保存中…') : t('保存') }) : null,
+      ),
+    ),
+  )
+  return h('div', { className: 'dsh-mcp-overlay', onClick: (e) => e.target === e.currentTarget && onClose?.() },
+    h(Dialog, { label: t('工具加载'), onClose }, ...content),
   )
 }
 
@@ -3760,7 +4204,7 @@ const WorkspaceCopyModal = ({ open, onClose, call, busy, setBusy, onCopied, from
       targets.length ? h('div', { className: 'dsh-mcp-field' },
         h('label', null, t('要复制的 MCP（{selected}/{total}）', { selected: Math.min(names.length, list.length), total: list.length })),
         h('div', { className: 'dsh-mcp-check-toolbar' },
-          h('button', { type: 'button', className: 'dsh-mcp-mini-btn', onClick: () => setNames(allSelected ? [] : list.map((server) => server.serverName)) }, allSelected ? t('全不选') : t('全选')),
+          h('button', { type: 'button', className: 'dsh-mcp-btn sm ghost', onClick: () => setNames(allSelected ? [] : list.map((server) => server.serverName)) }, allSelected ? t('全不选') : t('全选')),
           h('span', null, t('目标已有同名条目时按下方选择处理')),
         ),
         h('div', { className: 'dsh-mcp-check-list' }, list.map((server) => h('label', { key: server.serverName, className: 'dsh-mcp-check-row' },
@@ -3817,7 +4261,8 @@ const McpTab = (props) => {
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   // C2：延迟加载参数的表单。与 add/import 同一层：它也是"改宿主配置"的一次性动作。
-  const [toolSearchOpen, setToolSearchOpen] = useState(false);
+  // 统一工具加载策略（内置 + MCP 同一套规则、可整体切换）。与「延迟参数」分开：
+  // 一个是**有哪些工具该常驻**，一个是**搜索机制自己的预算**，混在一起会让人以为是同一件事。
   const [editTarget, setEditTarget] = useState(null);
   const [toast, setToast] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -3860,10 +4305,12 @@ const McpTab = (props) => {
 
   const load = useCallback(async (notify = false) => {
     const seq = ++loadSeq.current;
+    // switchScope 在切换那一刻递增同一个序列号；过期响应不能写回新作用域。
+    const requestScope = scope;
+    const isWorkspace = requestScope !== 'global';
     if (notify) { manualRefreshSeq.current = seq; setRefreshing(true); }
     try {
-      const isWorkspace = scope !== 'global';
-      const viewPromise = isWorkspace ? call('getWorkspaceView', { wsPath: scope }) : call('list');
+      const viewPromise = isWorkspace ? call('getWorkspaceView', { wsPath: requestScope }) : call('list');
       const [res, wsRes] = await Promise.all([viewPromise, call('listWorkspaces')]);
       if (seq !== loadSeq.current) return;
       if (wsRes && wsRes.ok) setWorkspaces(wsRes.workspaces || []);
@@ -3950,14 +4397,19 @@ const McpTab = (props) => {
 
   // 选中项可能来自项目列表或（项目 tab 下的）全局列表；后者标记为 foreign，详情区据此只读。
   const selectedServer = useMemo(() => {
-    const local = servers.find((s) => s.serverName === selected);
-    // 挂载失败与连接失败已由 Host 在行上标好（mountFailed / status），这里不再二次合并，
-    // 避免同一事实在两处各算一遍。
-    if (local) return local;
-    if (scope === 'global') return null;
-    const global = globalServers.find((s) => s.serverName === selected);
-    return global ? { ...global, managed: false, foreign: 'global' } : null;
-  }, [servers, globalServers, selected, scope]);
+    if (scope === 'global' || !globalOpen) return servers.find((row) => row.serverName === selected) || null;
+    const shared = globalServers.find((row) => row.serverName === selected);
+    return shared ? { ...shared, managed: false, foreign: 'global' } : null;
+  }, [servers, globalServers, selected, scope, globalOpen]);
+
+  // 默认选中第一个服务器：右侧详情是这一页的主体，空着等于把大半版面浪费掉，
+  // 用户还得先猜「要不要点左边」。只在**当前没有选中项**时补选，绝不覆盖用户的选择；
+  // 选中项被删掉后 selected 仍留着旧名（详情区自然变空态），此时也会补选到剩下的第一个。
+  useEffect(() => {
+    const rows = scope !== 'global' && globalOpen ? globalServers : servers;
+    if (rows.some((row) => row.serverName === selected)) return;
+    setSelected(rows[0]?.serverName || '');
+  }, [servers, globalServers, globalOpen, scope, selected]);
 
   useEffect(() => {
     let cancelled = false;
@@ -3978,13 +4430,19 @@ const McpTab = (props) => {
     return () => { cancelled = true; };
   }, [selected, selectedServer?.scope, selectedServer?.toolRevision, scope, call]);
 
+  /** 结果展示的**唯一**判据：宿主说了什么就说什么（`note`），没说才退回调用方文案。
+   *  以前这里写死 `successMsg || res.note`，于是"写盘成功、运行中没生效"（`live: 'skipped'`）
+   *  被报成"已保存"，正好把这条契约想告诉用户的那件事盖掉了。 */
+  const resultMessage = (res, fallback) => res?.note || res?.liveReason || fallback
+  /** `live: 'failed'` 是"盘上变了、运行中没跟上"，必须按错误显示，不能用普通成功色。 */
+  const resultTone = (res) => (res?.live === 'failed' ? 'err' : undefined)
   const act = useCallback(
     async (method, args, successMsg) => {
       setBusy(true);
       try {
         const res = await call(method, args);
         if (res && res.ok) {
-          flash(successMsg || (res.note || t('{method} 成功', { method })));
+          flash(resultMessage(res, successMsg || t('{method} 成功', { method })), resultTone(res));
         } else {
           flash((res && res.error) || t('{method} 失败', { method }), 'err');
         }
@@ -4000,10 +4458,13 @@ const McpTab = (props) => {
 
   const toggleDeferOne = (s) => {
     if (busy || s.managed !== true) return;
-    const next = s.defer !== true;
+    // 方向必须从**芯片显示的那个值**推出：芯片读 `deferEffective`（统一策略下的实际状态），
+    // 若这里改读旧的 `defer`，用户点一颗写着"延迟"的芯片、方向却是"再打开一次延迟"，
+    // 结果就是点了没反应却提示成功。
+    const next = (s.deferEffective ?? s.defer) !== true;
     // 乐观更新只动被点的那一行（不是整个作用域），再由 act 完成后的 load 校准。
     revisionRef.current = '';
-    setServers((prev) => prev.map((row) => (row.serverName === s.serverName && row.scope === s.scope ? { ...row, defer: next } : row)));
+    setServers((prev) => prev.map((row) => (row.serverName === s.serverName && row.scope === s.scope ? { ...row, defer: next, deferEffective: next } : row)));
     return act(
       'setDefer',
       s.scope === 'workspace' ? { name: s.serverName, wsPath: scope, defer: next } : { name: s.serverName, defer: next },
@@ -4104,8 +4565,9 @@ const McpTab = (props) => {
             : await call('addWorkspaceServer', { wsPath: scope, spec }))
         : (editTarget ? await call('update', spec) : await call('add', spec));
       if (res && res.ok) {
+        // 同 act()：宿主说"已写入，重启后生效"时不能盖成"已保存"。
         clearRevealed();
-        flash(editTarget ? t('已保存 {name}', { name: spec.name }) : t('已添加 {name}', { name: spec.name }));
+        flash(resultMessage(res, editTarget ? t('已保存 {name}', { name: spec.name }) : t('已添加 {name}', { name: spec.name })), resultTone(res));
         setAddOpen(false);
         setEditTarget(null);
         timer.timeout(load, 1500);
@@ -4213,7 +4675,18 @@ const McpTab = (props) => {
   const scopeName = scope === 'global' ? t('全局') : (workspaces.find((ws) => ws.path === scope)?.name || scope);
   const switchScope = useCallback((next) => {
     if (next === scope) return;
+    // 先让旧请求失效，再清掉旧作用域的视图数据。否则新 scope 已渲染、
+    // 旧 servers 仍在树里，用户就会先看到「项目里有全局 MCP」，下一次刷新又消失。
+    loadSeq.current += 1;
     setScope(next);
+    setServers([]);
+    setGlobalServers([]);
+    setTools([]);
+    setExclude([]);
+    setMountErrors([]);
+    setScopeErrors([]);
+    setRestrictError(null);
+    setLiveAgents(0);
     setSelected('');
     setQuery('');
     // 状态过滤在两种作用域下语义不同（项目 MCP 无连接态），切换时归零避免「空列表且控件已隐藏」。
@@ -4228,6 +4701,7 @@ const McpTab = (props) => {
     setError('');
     revisionRef.current = '';
     clearRevealed();
+    // 新作用域只由 [load, timer] effect 拉取；这里的 load 仍捕获旧 scope。
   }, [scope, clearRevealed]);
 
   // 工作区路径列表：宿主 skillsManager.list 要的是字符串数组，而 workspaces 状态里是
@@ -4335,24 +4809,30 @@ const McpTab = (props) => {
   // 作用域只在**已安装**模式出现：市场是随宿主一起发下来的目录，没有作用域语义，
   // 留着它只会让人以为「筛选了市场」（原型同款处理：市场模式下这段 display:none、不留空档）。
   const skillsScopeTabs = skillsService.scopeTabs || [];
-  const runtime = ability === 'skills'
-    ? (skillsService.state === 'down'
-      ? { cls: ' err', icon: 'warn', text: t('skills 服务未就绪') }
-      : skillsService.state === 'ready'
-        ? { cls: '', icon: 'check', text: t('skills 服务已就绪') }
-        : { cls: '', icon: 'info', text: t('正在探测 skills 服务…') })
-    : (error ? { cls: ' err', icon: 'warn', text: t('宿主 MCP 读取失败') } : { cls: '', icon: 'check', text: t('宿主已连接') });
+  const runtime = ability === 'tool-loading'
+    ? null
+    : ability === 'skills'
+      ? (skillsService.state === 'down'
+        ? { cls: ' err', icon: 'warn', text: t('skills 服务未就绪') }
+        : skillsService.state === 'unknown'
+          ? { cls: '', icon: 'info', text: t('正在连接 skills 服务…') }
+          : null)
+      : (error ? { cls: ' err', icon: 'warn', text: t('宿主 MCP 读取失败') } : null);
 
+  // 工具页没有作用域：它管的是宿主全局注册的工具，与当前选中哪个项目无关。
+  // 所以这一行在工具页只留右侧那句状态，模式与作用域两列都不渲染。
   const subRow = h('div', { className: 'dsh-mcp-sub' },
-    seg(SKILL_MODES, mode, setMode, t('模式')),
+    ability === 'tool-loading' ? null : seg(SKILL_MODES, mode, setMode, t('模式')),
     h('div', { className: 'dsh-mcp-sub-scope' },
-      mode === 'manage'
-        ? (ability === 'skills'
-          ? (skillsScopeTabs.length > 1 ? h(ScopeTabs, { tabs: skillsScopeTabs, active: scopeFilter, onSelect: setScopeFilter }) : null)
-          : h(ScopeTabs, { tabs: scopeTabs, active: scope, onSelect: switchScope }))
-        : null,
+      ability === 'tool-loading'
+        ? null
+        : mode === 'manage'
+          ? (ability === 'skills'
+            ? (skillsScopeTabs.length > 1 ? h(ScopeTabs, { tabs: skillsScopeTabs, active: scopeFilter, onSelect: setScopeFilter }) : null)
+            : h(ScopeTabs, { tabs: scopeTabs, active: scope, onSelect: switchScope }))
+          : null,
     ),
-    h('div', { className: 'dsh-mcp-runtime' + runtime.cls, title: runtime.text }, h(Icon, { d: ICONS[runtime.icon], size: 13 }), runtime.text),
+    runtime ? h('div', { className: 'dsh-mcp-runtime' + runtime.cls, title: runtime.text }, h(Icon, { d: ICONS[runtime.icon], size: 13 }), runtime.text) : null,
   );
 
   // ── 通知条 ──────────────────────────────────────────────────────────────
@@ -4462,11 +4942,6 @@ const McpTab = (props) => {
     h('div', { className: 'dsh-mcp-head-actions' },
       ability === 'mcp' && mode === 'manage'
         ? h(Btn, { icon: 'refresh', onClick: () => load(true), disabled: refreshing, children: refreshing ? t('刷新中…') : t('刷新') })
-        : null,
-      // C2：延迟加载参数。放在这里而不是第三行过滤器里：它跟「全部延迟」不是同一类动作
-      // （那个改每台服务器的开关，这个改机制本身的上限），混在一行会让人以为是同一件事。
-      ability === 'mcp' && mode === 'manage'
-        ? h(Btn, { onClick: () => setToolSearchOpen(true), title: t('延迟加载参数：tool_search 一次返回多少、目录最多列多少行、已发现集能多大'), children: t('延迟参数') })
         : null,
       ability === 'mcp' ? h(Btn, { onClick: () => setImportOpen(true), title: t('导入 MCP（{scope}）', { scope: scopeName }), children: t('导入 MCP') }) : null,
       ability === 'mcp'
@@ -4581,32 +5056,30 @@ const McpTab = (props) => {
       : h(
         'div',
         { className: 'dsh-mcp-body' },
-        h('div', { className: 'dsh-mcp-ws-body', 'data-ws-path': scope },
+        // 两份来源共用左栏，切换只换列表，右侧详情始终保留。
+        h('div', { className: 'dsh-mcp-ws-body', key: scope, 'data-ws-path': scope },
           h('div', { className: 'dsh-mcp-section local' },
-            h('div', { className: 'dsh-mcp-section-title' },
-              t('此项目的 MCP'),
-              h('span', { className: 'dsh-mcp-section-count' }, servers.length),
-              h('span', { className: 'dsh-mcp-section-fill' }),
-              // 两个入口放在区段标题而不是顶部工具栏：工具栏在项目标签下已经六个按钮，
-              // 再挤两个就会换行；而这两件事都只对「这个项目的 MCP」成立，挨着标题更准。
-              h('div', { className: 'dsh-mcp-section-actions' },
-                h('button', {
-                  type: 'button',
-                  className: 'dsh-mcp-mini-btn',
-                  disabled: busy || servers.length === 0,
-                  title: t('导出本项目的 MCP 配置（JSON，可备份、跨机器迁移或分享）'),
-                  onClick: () => setExportOpen(true),
-                }, t('导出')),
-                h('button', {
-                  type: 'button',
-                  className: 'dsh-mcp-mini-btn',
-                  disabled: busy || servers.length === 0,
-                  title: t('把本项目的 MCP 复制到另一个已注册的工作区'),
-                  onClick: () => setCopyOpen(true),
-                }, t('复制到…')),
-              ),
+            h('div', { className: 'dsh-mcp-source-tabs', role: 'tablist', 'aria-label': t('MCP 来源') },
+              h('button', { type: 'button', role: 'tab', 'aria-selected': !globalOpen,
+                onClick: () => { setGlobalOpen(false); setSelected(''); } },
+                t('项目 MCP'), h('span', null, servers.length)),
+              h('button', { type: 'button', role: 'tab', 'aria-selected': globalOpen,
+                title: t('共享的全局 MCP'), onClick: () => { setGlobalOpen(true); setSelected(''); } },
+                t('全局共享'), h('span', null, globalServers.length)),
             ),
-            h(ServerList, {
+            !globalOpen && servers.length > 0 ? h('div', { className: 'dsh-mcp-section-actions' },
+              h(Btn, { cls: 'sm ghost', disabled: busy,
+                title: t('导出本项目的 MCP 配置（JSON，可备份、跨机器迁移或分享）'),
+                onClick: () => setExportOpen(true), children: t('导出') }),
+              h(Btn, { cls: 'sm ghost', disabled: busy,
+                title: t('把本项目的 MCP 复制到另一个已注册的工作区'),
+                onClick: () => setCopyOpen(true), children: t('复制到…') }),
+            ) : null,
+            globalOpen ? h(React2.Fragment, null,
+              h(GlobalServerList, { servers: globalServers, exclude, onToggleExclude, onSelect: setSelected, selected, busy }),
+              h(ListFooter, { text: t('{visible}/{total} 可见', { visible: visibleGlobalCount, total: globalServers.length }),
+                onRefresh: () => load(true), refreshing }),
+            ) : h(ServerList, {
               servers: sortServers(filtered, mcpSort),
               total: servers.length,
               selected,
@@ -4622,30 +5095,10 @@ const McpTab = (props) => {
               onStatusFilter: setStatusFilter,
               embedded: true,
               workspace: true,
-              emptyHint: t('此项目还没有 MCP。用右上角「添加项目 MCP」，或在第二行切到「发现市场」写入 .dsh/mcp.json'),
+              emptyHint: t('还没有项目 MCP。点上方「添加项目 MCP」，或去「发现市场」安装。'),
               footer: mcpListFooter,
               toolbarAction: deferAllAction,
             }),
-          ),
-          h('div', { className: 'dsh-mcp-section global' + (globalOpen ? '' : ' collapsed') },
-            // 全局可见性是低频操作，默认收成一行摘要，把高度让给本 tab 的主角——项目 MCP。
-            h('button', {
-              type: 'button',
-              className: 'dsh-mcp-section-toggle',
-              'aria-expanded': globalOpen,
-              onClick: () => setGlobalOpen((value) => !value),
-            },
-              h(Caret, { open: globalOpen }),
-              h('span', { className: 'dsh-mcp-section-toggle-label' }, t('全局 MCP')),
-              h('span', { className: 'dsh-mcp-section-summary' },
-                globalServers.length === 0
-                  ? t('无')
-                  : t('{visible}/{total} 对本项目可见', { visible: visibleGlobalCount, total: globalServers.length })
-                    // 工具清单是**每一步**重新组装的，所以改动（新增/删除/改配置/屏蔽）对运行中的
-                    // 会话在下一轮请求就生效；只有手工改 .dsh/mcp.json 才要等下一次会话挂载。
-                    + t('　·　改动即刻生效')),
-            ),
-            globalOpen ? h(GlobalServerList, { servers: globalServers, exclude, onToggleExclude, onSelect: setSelected, selected, busy }) : null,
           ),
         ),
         h(ServerDetailPane, {
@@ -4661,6 +5114,11 @@ const McpTab = (props) => {
           onCopy,
           excluded: exclude.includes(selected),
           onToggleExclude,
+          emptyTitle: !globalOpen && servers.length === 0 ? t('此项目还没有 MCP') : undefined,
+          emptyActions: !globalOpen && servers.length === 0 ? [
+            h(Btn, { key: 'add', cls: 'primary', icon: 'plus', onClick: openAdd, children: t('添加项目 MCP') }),
+            h(Btn, { key: 'market', onClick: () => setMode('market'), children: t('发现市场') }),
+          ] : undefined,
         }),
       ));
 
@@ -4687,20 +5145,22 @@ const McpTab = (props) => {
     { className: 'dsh-mcp-wrap' },
     head,
     ...notices,
-    subRow,
-    ability === 'skills' ? skillsBody : mcpBody,
+    ability === 'tool-loading' ? null : subRow,
+    ability === 'skills'
+      ? skillsBody
+      : ability === 'tool-loading'
+        ? h(ToolLoadingModal, {
+          open: true,
+          inline: true,
+          onClose: () => {},
+          call,
+          onSaved: (_fresh, note) => flash(note || t('已保存工具加载策略')),
+        })
+        : mcpBody,
     h(AddEditModal, { open: addOpen, onClose: () => { setAddOpen(false); setEditTarget(null); }, onSubmit, busy, initial: editTarget, onRevealValue: revealValue, revealEpoch: revealGeneration.current, scope, scopeName }),
     h(JsonImportModal, { open: importOpen, onClose: () => setImportOpen(false), call, busy, setBusy, onImported, scope, scopeName }),
     // 更新提示也挂在面板的弹层列表里：面板一开它就挂载，向宿主问一次「这次变了什么」。
     h(WhatsNewModal, { call }),
-    h(ToolSearchSettingsModal, {
-      open: toolSearchOpen,
-      onClose: () => setToolSearchOpen(false),
-      call,
-      // 保存成功就收起表单并照常 flash 宿主的原话（note 写明"当前会话立即生效"）。
-      // 失败**不**关：错误提示要留在用户眼前的字段旁边，而不是闪一下就没了。
-      onSaved: (res) => { setToolSearchOpen(false); flash(res?.note || t('已保存延迟加载参数')) },
-    }),
     h(WorkspaceExportModal, { open: exportOpen && scope !== 'global', onClose: () => setExportOpen(false), call, scope, scopeName }),
     h(WorkspaceCopyModal, {
       open: copyOpen && scope !== 'global',
@@ -4735,7 +5195,7 @@ const McpTab = (props) => {
 //   本按钮是 position:fixed 的 50px 圆钮，脱离文档流，left/top 重绘成本可忽略，
 //   故保留 left/top 定位以复用现有 :hover/:active 的 transform 缩放反馈。
 const FAB_POS_KEY = 'dsh-mcp-manager-ui/fab-pos';
-const FAB_SIZE = 50;
+const FAB_SIZE = 48;
 const FAB_EDGE = 22;
 const DRAG_THRESHOLD = 5;
 
@@ -5226,6 +5686,7 @@ const WhatsNewModal = ({ call }) => {
 const ABILITY_TABS = [
   { id: 'mcp', label: 'MCP' },
   { id: 'skills', label: '技能' },
+  { id: 'tool-loading', label: '工具' },
 ];
 
 /**
@@ -5406,7 +5867,7 @@ const SkillDetail = ({ row, shadowedBy, body, busy, onRetry, onToggle, onRemove,
           invocationKnown && !row.userInvocable ? h(Badge, { cls: 's-off' }, t('用户不可调用')) : null,
           row.migrated ? h(Badge, { cls: 's-warn', title: t('这是旧版启停机制（改名成 .disabled）留下的条目；恢复后请用新的停用方式') }, t('旧机制残留')) : null,
         ),
-        h('p', { className: 'dsh-mcp-d-desc' }, row.description || t('（无说明）')),
+
       ),
       // 与 MCP 面同一套槽位：[主行为] + [次要行为] + [⋯ 更多]。
       // 与列表行那个开关同一动作、同一双向语义：已停用的技能在这里也能启用回来。
@@ -5433,6 +5894,7 @@ const SkillDetail = ({ row, shadowedBy, body, busy, onRetry, onToggle, onRemove,
     ),
     h('div', { className: 'dsh-mcp-d-body' },
       h('div', { className: 'dsh-mcp-card' + paneOff('overview') },
+        row.description ? h('p', { className: 'dsh-mcp-d-description' }, row.description) : null,
         h('h4', null, t('技能属性')),
         h('div', { className: 'dsh-mcp-kv' },
           // 作用域与根目录合成一行：分组之后「哪一级」已由组头说过，这里只补完整路径。
@@ -5891,15 +6353,25 @@ const SkillsPanel = ({ call, workspaces, mode = 'manage', scopeFilter = 'all', o
   useEffect(() => { void searchHub(); }, [searchHub]);
 
   const scopeOptions = skillTargetOptions(targets, skillScopeOptions(rows));
-  // 详情渲染的行：从当前 rows 派生（见 selectedSkillRow 的注释：存对象会渲染上一次取数的旧值）。
-  const selected = useMemo(() => selectedSkillRow(rows, selectedKey), [rows, selectedKey]);
   // 安装目标 = 候选里**可写**的那些。内置目录（bundled）只读，既不该进候选、
   // 更不该像第一版那样因为排在前面而成为默认目标（真机实测：默认就指向内置目录，
   // 而 importSkill 不传 writable 时宿主按可写处理 → 会直接写进内置目录）。
   const installTargets = scopeOptions.filter((option) => option.writable !== false);
+  // 摘要、弹窗默认选项与最终写入共用这一个目标；scope 是身份，作用域语义来自 option.scope。
+  const installTarget = installTargets.find((option) => option.id === scope) || installTargets[0];
   const shadowed = shadowedSkills(rows);
-  // 诊断只从**行**推导（停用是两个调用面字段的派生态，见 lib/skills-registry.js 的 toView）。
-  const diagnostics = skillDiagnostics(rows);
+
+  // 列表与详情共用筛选结果，不能继续操作已被作用域、状态或查询排除的行。
+  const visibleRows = useMemo(() => sortSkills(rows.filter((row) => {
+    if (scopeFilter !== 'all' && skillGroupKey(row) !== scopeFilter) return false;
+    if (statusFilter === 'disabled' && row.enabled !== false) return false;
+    if (statusFilter === 'enabled' && row.enabled === false) return false;
+    const needle = query.trim().toLowerCase();
+    if (needle === '') return true;
+    return [row.name, row.description, skillScopeLabel(row), row.cwd]
+      .some((value) => String(value || '').toLowerCase().includes(needle));
+  }), sortKey), [rows, scopeFilter, statusFilter, query, sortKey, localeV]);
+  const selected = selectedSkillRow(visibleRows, selectedKey);
 
   // 加载某一行的正文。三态必须都落到 UI 上：失败没有终态，就会长得像「一直在加载」。
   const loadBody = useCallback(async (row) => {
@@ -5916,6 +6388,13 @@ const SkillsPanel = ({ call, workspaces, mode = 'manage', scopeFilter = 'all', o
     setSelectedKey(row?.key ?? '');
     void loadBody(row);
   }, [loadBody]);
+
+  // 保留仍可见的选择；筛选排除它时补选第一行，无匹配时清空详情。
+  useEffect(() => {
+    if (selected) return;
+    if (visibleRows.length) selectRow(visibleRows[0]);
+    else if (selectedKey) { setSelectedKey(''); setBody({ status: 'idle' }); }
+  }, [selected, visibleRows, selectedKey, selectRow]);
 
   // 行动作的统一出口——与 MCP 面的 act 同一条纪律：**失败必须说出来**。宿主拒绝时给的是具体
   // 原因（「这个字段的值跨了多行，请手工修改这一行」这类），吞掉它就只剩「点了没反应」；而技能面
@@ -5969,7 +6448,7 @@ const SkillsPanel = ({ call, workspaces, mode = 'manage', scopeFilter = 'all', o
   const confirmInstall = useCallback(async (target) => {
     // 落点按**安装目标的唯一身份**（source + root）解析：两个工作区会有同一个 source，
     // 按 source `find` 会静默装进第一个（用户以为选了项目 B，实际写进项目 A）。
-    const option = installTargets.find((item) => item.id === scope) || installTargets[0] || {};
+    const option = installTarget || {};
     // writable 是显式声明：宿主默认按可写处理，所以这里的 true 必须与
     // 「只列可写目标」这个前提一致，不能靠默认值蒙。
     //
@@ -5986,19 +6465,8 @@ const SkillsPanel = ({ call, workspaces, mode = 'manage', scopeFilter = 'all', o
     });
     // 装失败时弹窗留在原地（用户要能看到失败原因、能重试），只有成功才收起来。
     if (ok) { setEntry(null); setHubDetail(null); }
-  }, [act, installTargets, scope]);
+  }, [act, installTarget]);
 
-  // 列表过滤：作用域（第二行的药丸）→ 状态 → 搜索词 → 排序。
-  // 顺序有讲究：先按作用域收窄，才知道「这个作用域里有几个已停用」。
-  const visibleRows = sortSkills(rows.filter((row) => {
-    if (scopeFilter !== 'all' && skillGroupKey(row) !== scopeFilter) return false;
-    if (statusFilter === 'disabled' && row.enabled !== false) return false;
-    if (statusFilter === 'enabled' && row.enabled === false) return false;
-    const needle = query.trim().toLowerCase();
-    if (needle === '') return true;
-    return [row.name, row.description, skillScopeLabel(row), row.cwd]
-      .some((value) => String(value || '').toLowerCase().includes(needle));
-  }), sortKey);
   // 选中的作用域在数据刷新后可能整个消失（工作区被移除），留着它会让列表永远空着、
   // 而药丸上已经找不到那个高亮项——用户没有任何办法退回去。
   useEffect(() => {
@@ -6038,7 +6506,7 @@ const SkillsPanel = ({ call, workspaces, mode = 'manage', scopeFilter = 'all', o
             ),
           ),
           h('div', { className: 'dsh-mcp-list' },
-            visibleRows.length === 0 && diagnostics.length === 0
+            visibleRows.length === 0
               ? h('div', { className: 'dsh-mcp-empty-list' }, rows.length === 0 ? t('没有发现技能。检查宿主是否挂载了 dsh-skill 内置插件。') : t('没有匹配的技能'))
               : null,
             // 按作用域分组：组头整行放得下路径，行内不再重复一份被裁断的标签。
@@ -6057,31 +6525,6 @@ const SkillsPanel = ({ call, workspaces, mode = 'manage', scopeFilter = 'all', o
                   twins: twinCounts.get(row.key),
                 })),
               ]),
-            // 诊断条目单独一组：不挂组头的话，它们会看起来像**属于最后一个作用域组**。
-            ...diagnostics.length === 0 ? [] : [
-              h('div', { key: 'diag-head', className: 'dsh-skills-group static' },
-                h('span', { className: 'dsh-skills-group-caret', 'aria-hidden': true }, h(Icon, { d: ICONS.warn, size: 12 })),
-                h('span', { className: 'dsh-skills-group-label' }, t('需要注意')),
-                h('span', { className: 'dsh-skills-group-count' }, String(diagnostics.length)),
-              ),
-              ...diagnostics.map((row) => h('div', { key: 'diag-' + skillIdentity(row), className: 'dsh-mcp-item muted' },
-                h(Dot, { phase: 'stopped' }),
-                h('div', { className: 'dsh-mcp-item-main' },
-                  h('div', { className: 'dsh-mcp-item-name' }, row.name),
-                  h('div', { className: 'dsh-mcp-item-sub' },
-                    // ⚠️ 这里以前还塞了一整条**根路径**（`row.root`）。真机实测：那串路径在
-                    // 侧栏 185px 的单元格里溢出（scrollWidth 237 > clientWidth 185），
-                    // 而且 `overflow:hidden` **没有省略号**，于是那行显示成「已」后面什么都没有
-                    // ——用户看到的是半截字，还以为是渲染坏了。
-                    // 路径本来就在**组头**的 title 里（组的身份就是 source + cwd），
-                    // 行内再放一遍既冗余又撑破布局。这里只说状态。
-                    h(Badge, { cls: 's-off' }, row.migrated ? t('旧机制停用') : t('已停用')),
-                  ),
-                ),
-                // 已停用条目也要能一键恢复：原先它们只能看不能动。
-                h(Btn, { onClick: () => toggleRow(row, true), disabled: busy || row.writable === false, title: t('重新启用') }, t('启用')),
-              )),
-            ],
           ),
           // 底栏：统计 + 排序/刷新，与 MCP 面同一副（ListFooter）。
           // 统计同样只数**看得见的行**（visibleRows）：作用域药丸筛出 12 行时，
@@ -6155,7 +6598,9 @@ const SkillsPanel = ({ call, workspaces, mode = 'manage', scopeFilter = 'all', o
           h('b', null, t('skillhub.cn（外部源）')),
           // 计数说清「已显示 / 共」：只写总数就是 19 万条结果旁边只摆一页卡片——
           // 数字是真的，用户在面板里却到不了其余条目，看着就像没有。
-          h('span', null, hub.loading ? t('正在搜索…') : t('已显示 {shown} / 共 {total} 条 · 装入{scope}', { shown: hub.items.length, total: hub.total, scope: scope === 'global' ? t('全局') : t('项目') })),
+          h('span', null, hub.loading ? t('正在搜索…') : installTarget
+            ? t('已显示 {shown} / 共 {total} 条 · 装入{scope}', { shown: hub.items.length, total: hub.total, scope: installTarget.scope === 'global' ? t('全局') : installTarget.label })
+            : t('已显示 {shown} / 共 {total} 条', { shown: hub.items.length, total: hub.total })),
         ),
         // 两种失败**分开说**：宿主没这个接口 ≠ 上游挂了。混成一句会让用户去查网络，
         // 而真正要做的是重启宿主加载新版插件。
@@ -6182,7 +6627,7 @@ const SkillsPanel = ({ call, workspaces, mode = 'manage', scopeFilter = 'all', o
                 installed: rows.some((row) => row.name === item.name || row.name === item.slug),
                 onInstall: (target) => {
                   setEntry(target);
-                  setScope(installTargets[0]?.id || '');
+                  setScope(installTarget?.id || '');
                   setHubDetail(null);
                   // 装之前拉一次详情：披露块要的是发布方认证与安全扫描，列表里没有。
                   void (async () => {
@@ -6326,7 +6771,7 @@ const McpOverlay = ({ call, callSkills, timer, pluginManager }) => {
         onPointerUp: handlePointerEnd,
         onPointerCancel: handlePointerEnd,
       },
-      h(Icon, { d: ICONS.plug, size: 22 }),
+      h(Icon, { d: ICONS.panel, size: 20 }),
     ) : null,
   );
 };
@@ -6395,13 +6840,12 @@ function sk(method, parameters, resultSym) {
 const MCP_CONTRIBUTION = {
   package: 'dsh-toolbox-ui',
   descriptors: [
+    // <rpc-contract:begin> 由 scripts/rpc-contract.mjs 生成，勿手改
     { id: 'dsh-toolbox-ui#mcpManager/list', service: 'mcpManager', namespace: 'mcpManager', method: 'list', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('ListResult') },
     { id: 'dsh-toolbox-ui#mcpManager/status', service: 'mcpManager', namespace: 'mcpManager', method: 'status', invocation: { kind: 'direct' }, parameters: [mcpParam('name', 'String')], result: mcpCodec('StatusResult') },
     { id: 'dsh-toolbox-ui#mcpManager/enable', service: 'mcpManager', namespace: 'mcpManager', method: 'enable', invocation: { kind: 'direct' }, parameters: [mcpParam('name', 'String')], result: mcpCodec('NoteResult') },
     { id: 'dsh-toolbox-ui#mcpManager/disable', service: 'mcpManager', namespace: 'mcpManager', method: 'disable', invocation: { kind: 'direct' }, parameters: [mcpParam('name', 'String')], result: mcpCodec('NoteResult') },
     { id: 'dsh-toolbox-ui#mcpManager/reconnect', service: 'mcpManager', namespace: 'mcpManager', method: 'reconnect', invocation: { kind: 'direct' }, parameters: [mcpParam('name', 'String')], result: mcpCodec('NoteResult') },
-    // tools 收 payload 而不是裸 name：项目 MCP 必须带 wsPath 才能精确定位（两个项目可能同名）。
-    // 声明成标量 name 时，网关会把传入对象当成 args 映射展开并报 unexpected "wsPath"。
     { id: 'dsh-toolbox-ui#mcpManager/tools', service: 'mcpManager', namespace: 'mcpManager', method: 'tools', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('ToolsResult') },
     { id: 'dsh-toolbox-ui#mcpManager/builtins', service: 'mcpManager', namespace: 'mcpManager', method: 'builtins', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('BuiltinCatalogResult') },
     { id: 'dsh-toolbox-ui#mcpManager/installBuiltins', service: 'mcpManager', namespace: 'mcpManager', method: 'installBuiltins', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'BuiltinInstallPayload')], result: mcpCodec('BuiltinInstallResult') },
@@ -6412,6 +6856,10 @@ const MCP_CONTRIBUTION = {
     { id: 'dsh-toolbox-ui#mcpManager/setDefer', service: 'mcpManager', namespace: 'mcpManager', method: 'setDefer', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'DeferPayload')], result: mcpCodec('NoteResult') },
     { id: 'dsh-toolbox-ui#mcpManager/toolSearchSettings', service: 'mcpManager', namespace: 'mcpManager', method: 'toolSearchSettings', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('ToolSearchSettings') },
     { id: 'dsh-toolbox-ui#mcpManager/updateToolSearchSettings', service: 'mcpManager', namespace: 'mcpManager', method: 'updateToolSearchSettings', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ToolSearchSettingsPayload')], result: mcpCodec('ToolSearchSettings') },
+    { id: 'dsh-toolbox-ui#mcpManager/toolLoadingSettings', service: 'mcpManager', namespace: 'mcpManager', method: 'toolLoadingSettings', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('ToolLoadingSettings') },
+    { id: 'dsh-toolbox-ui#mcpManager/updateToolLoadingSettings', service: 'mcpManager', namespace: 'mcpManager', method: 'updateToolLoadingSettings', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ToolLoadingPayload')], result: mcpCodec('ToolLoadingSettings') },
+    { id: 'dsh-toolbox-ui#mcpManager/workspaceToolLoading', service: 'mcpManager', namespace: 'mcpManager', method: 'workspaceToolLoading', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ToolLoadingPayload')], result: mcpCodec('ToolLoadingSettings') },
+    { id: 'dsh-toolbox-ui#mcpManager/setWorkspaceToolLoading', service: 'mcpManager', namespace: 'mcpManager', method: 'setWorkspaceToolLoading', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ToolLoadingPayload')], result: mcpCodec('ToolLoadingSettings') },
     { id: 'dsh-toolbox-ui#mcpManager/reveal', service: 'mcpManager', namespace: 'mcpManager', method: 'reveal', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('RevealResult') },
     { id: 'dsh-toolbox-ui#mcpManager/previewImport', service: 'mcpManager', namespace: 'mcpManager', method: 'previewImport', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('ImportPreview') },
     { id: 'dsh-toolbox-ui#mcpManager/importJson', service: 'mcpManager', namespace: 'mcpManager', method: 'importJson', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('ImportResult') },
@@ -6431,19 +6879,10 @@ const MCP_CONTRIBUTION = {
     { id: 'dsh-toolbox-ui#mcpManager/previewWorkspaceCopy', service: 'mcpManager', namespace: 'mcpManager', method: 'previewWorkspaceCopy', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('WorkspaceCopyPreview') },
     { id: 'dsh-toolbox-ui#mcpManager/exportWorkspaceJson', service: 'mcpManager', namespace: 'mcpManager', method: 'exportWorkspaceJson', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('WorkspaceExportResult') },
     { id: 'dsh-toolbox-ui#mcpManager/revealWorkspaceServer', service: 'mcpManager', namespace: 'mcpManager', method: 'revealWorkspaceServer', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('RevealResult') },
-    // 只读排障接口：面板暂未接线，契约先声明齐（Host 有、契约没有 = 客户端永远调不到）。
     { id: 'dsh-toolbox-ui#mcpManager/projectConnections', service: 'mcpManager', namespace: 'mcpManager', method: 'projectConnections', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('ProjectConnectionsResult') },
     { id: 'dsh-toolbox-ui#mcpManager/reconnectWorkspaceServer', service: 'mcpManager', namespace: 'mcpManager', method: 'reconnectWorkspaceServer', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('NoteResult') },
     { id: 'dsh-toolbox-ui#mcpManager/updateHint', service: 'mcpManager', namespace: 'mcpManager', method: 'updateHint', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('UpdateHintResult') },
-    // 「这次更新了什么」：数据在 lib/whats-new.js，宿主只转发，判定“该不该弹”在客户端。
     { id: 'dsh-toolbox-ui#mcpManager/whatsNew', service: 'mcpManager', namespace: 'mcpManager', method: 'whatsNew', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('WhatsNewResult') },
-    // ---- skillsManager（技能能力面）----
-    // ⚠️ 这些 descriptor 必须留在**同一个** MCP_CONTRIBUTION 里，不得新建第二个 contribution：
-    // $mount → mountContribution → typert.remotes.register()，而 register 按
-    // `contribution.package` 去重（dsh-typert-registry 抛 `Remote package "…" is already registered`）。
-    // 两侧 package 都是 'dsh-toolbox-ui'，所以**第二次 $mount 会让插件在 mount 阶段激活失败、
-    // 面板整体消失**。descriptor 校验只按 endpoint（namespace/method）与 id 去重，
-    // 一个 contribution 天然支持多 namespace——这正是把 skills 并进来的理由。
     sk('list', [skParam('payload', 'SkillPayload')], 'SkillListResult'),
     sk('detail', [skParam('payload', 'SkillPayload')], 'SkillDetailResult'),
     sk('setEnabled', [skParam('payload', 'SkillPayload')], 'SkillMutationResult'),
@@ -6454,13 +6893,10 @@ const MCP_CONTRIBUTION = {
     sk('skillTargets', [skParam('payload', 'SkillPayload')], 'SkillTargetsResult'),
     sk('skillHubSearch', [skParam('payload', 'SkillPayload')], 'SkillHubSearchResult'),
     sk('skillHubDetail', [skParam('payload', 'SkillPayload')], 'SkillHubDetailResult'),
-    // 分类标签要按语言挑 nameEn：宿主实现是 `skillHubCategories(payload)`、读 `payload.locale`，
-    // 所以这里必须声明 payload 参数。声明成 0 参时客户端代理按描述符判实参个数，
-    // `call('skillHubCategories', { locale })` 在**发出去之前**就抛 "expected 0 argument(s), got 1"，
-    // 被调用处的 try/catch 吞掉 → 英文界面下分类名永远是中文（且无任何报错线索）。
     sk('skillHubCategories', [skParam('payload', 'SkillPayload')], 'SkillHubCategoriesResult'),
     sk('skillHubInstall', [skParam('payload', 'SkillPayload')], 'SkillMutationResult'),
     sk('conflictingManager', [], 'SkillConflictResult'),
+    // <rpc-contract:end>
   ].map((descriptor) => ({ ...descriptor, sourceLocation: { file: 'dsh-toolbox-ui/lib/typert.js', line: 7, column: 1 } }))
 };
 /** apply 时没探到 locale 服务时留下的 ctx，供面板首次挂载时重探（桌面壳的异步 provide）。 */
@@ -6635,3 +7071,5 @@ exports.inject = inject;
 		return module.exports;
 	}
 });
+
+

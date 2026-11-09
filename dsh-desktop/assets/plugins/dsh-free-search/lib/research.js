@@ -6,6 +6,7 @@
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { getFresh, put as cachePut, search as cacheSearch } from "./cache.js";
 import { rerank, embed, cosineMatrix, decide, judgeQueryIntent } from "./rerank.js";
+import { promptLanguageOf, toolDescription, toolParam, localizedEffect } from "./prompt_i18n.js";
 import { httpsJson, htmlToText, callExa, callFirecrawl, callCrawl4ai } from "./fetch_upstream.js";
 import { isDomainBlocked } from "./domain_filter.js";
 
@@ -811,16 +812,20 @@ function enginesFromNote(content) {
   return m && m[1].trim() ? m[1].split(/,\s*/).filter(Boolean) : [];
 }
 
-export function registerResearchTool(ctx, { provider, resolveApiKey, wrapUntrustedBlock, escalationEngines } = {}) {  ctx.inject(["tools"], (sctx) => {
-    sctx.effect(() => {
-      const dispose = sctx.tools.register(
+export function registerResearchTool(ctx, { provider, resolveApiKey, wrapUntrustedBlock, escalationEngines, getConfig = () => ({}), ns, isToolDisabled = () => false } = {}) {  ctx.inject(["tools"], (sctx) => {
+    localizedEffect(sctx, {
+      label: "free-search: research tool",
+      ns,
+      getLang: () => promptLanguageOf(getConfig()),
+      getEnabled: () => !(isToolDisabled("research") && isToolDisabled("cache_search")),
+      register: (lang) => {
+      const dispose = isToolDisabled("research") ? undefined : sctx.tools.register(
         defineTool({
           name: "research",
-          description:
-            "One-call research: search via smart engine routing, fetch the top pages in full, and return a Markdown brief with dated sources, per-document text and a token estimate. Prefer this over web_search + web_fetch chains when a question needs verified, multi-source answers.",
+          description: toolDescription(lang, "research"),
           parameters: {
-            question: { type: "string", description: "The research question (plain language works)." },
-            depth: { type: "number", description: "How many top sources to fetch in full, 1-5 (default 3)." },
+            question: { type: "string", description: toolParam(lang, "research", "question") },
+            depth: { type: "number", description: toolParam(lang, "research", "depth") },
           },
           output: {
             schema: {
@@ -1346,14 +1351,13 @@ export function registerResearchTool(ctx, { provider, resolveApiKey, wrapUntrust
           },
         })
       );
-      const disposeCache = sctx.tools.register(
+      const disposeCache = isToolDisabled("cache_search") ? undefined : sctx.tools.register(
         defineTool({
           name: "cache_search",
-          description:
-            "Full-text search over pages previously fetched by the research tool (persistent local cache, entries up to 7 days old). Use to re-find earlier research material without re-fetching.",
+          description: toolDescription(lang, "cache_search"),
           parameters: {
-            query: { type: "string", description: "Text to look for in cached page titles and bodies." },
-            limit: { type: "number", description: "Max entries to return (default 8)." },
+            query: { type: "string", description: toolParam(lang, "cache_search", "query") },
+            limit: { type: "number", description: toolParam(lang, "cache_search", "limit") },
           },
           output: {
             schema: {
@@ -1382,7 +1386,7 @@ export function registerResearchTool(ctx, { provider, resolveApiKey, wrapUntrust
           },
         })
       );
-      return () => { dispose(); disposeCache(); };
-    }, "free-search: research tool");
+      return () => { if (typeof dispose === "function") dispose(); if (typeof disposeCache === "function") disposeCache(); };
+    } });
   });
 }

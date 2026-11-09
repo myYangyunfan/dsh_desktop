@@ -1,6 +1,14 @@
 const CURSOR_SESSION_PREFIX = 'cursor:';
 const ACP_SESSION_PREFIX = 'acp:';
 const OPENCODE_SESSION_PREFIX = 'opencode:';
+const SESSION_PREFIXES = {
+    cursor: CURSOR_SESSION_PREFIX,
+    antigravity: ACP_SESSION_PREFIX,
+    pi: 'pi:',
+    opencode: OPENCODE_SESSION_PREFIX,
+    claude: 'claude:',
+    hermes: 'hermes:',
+};
 export function piStreamOutcome(reason) {
     if (reason === 'completed')
         return { kind: 'completed' };
@@ -69,7 +77,7 @@ export function extractSessionId(request) {
     throw new Error('The sessionId is required.');
 }
 export function sessionPrefix(backend) {
-    return backend === 'claude' ? 'claude:' : backend === 'pi' ? 'pi:' : backend === 'opencode' ? OPENCODE_SESSION_PREFIX : backend === 'antigravity' ? ACP_SESSION_PREFIX : CURSOR_SESSION_PREFIX;
+    return SESSION_PREFIXES[backend] ?? CURSOR_SESSION_PREFIX;
 }
 export function nativeAcpId(sessionId, backend) {
     const prefix = sessionPrefix(backend);
@@ -207,5 +215,25 @@ export class AsyncValueQueue {
             yield next.value;
         }
     }
+}
+export function isAcpPermissionPreset(value) {
+    return value === 'workspace-write' || value === 'danger-full-access';
+}
+export function acpPermissionsProjection(preset) {
+    return {
+        options: [
+            {
+                value: 'workspace-write',
+                name: 'workspace-write',
+                description: 'Interactive one-time approval for tool executions and commands.',
+            },
+            {
+                value: 'danger-full-access',
+                name: 'danger-full-access',
+                description: 'Auto-approve tool requests for subsequent turns in this session.',
+            },
+        ],
+        currentValue: preset ?? 'Host settings (not reported)',
+    };
 }
 //# sourceMappingURL=virtual-contract.js.map

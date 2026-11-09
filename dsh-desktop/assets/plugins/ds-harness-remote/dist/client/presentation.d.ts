@@ -11,7 +11,13 @@ export declare function observedConnectionProgress(status: RemoteStatus, targetD
 export declare function connectionErrorMessage(code: string, t: Translate): string;
 export declare function connectionStatusLabel(status: RemoteStatus['host'] | undefined, t: Translate): string;
 export declare function connectionStatusClass(status: RemoteStatus['host'] | undefined): string;
-export declare function messageOf(reason: unknown): string;
+export declare function startupErrorMessage(error: {
+    code: string;
+    message: string;
+}, t: Translate): string;
+export declare function messageOf(reason: unknown, t: Translate): string;
 export declare function formatPlatform(value: string): string;
 export declare function connectedClientModeLabel(mode: 'LAN' | 'P2P' | 'TURN' | 'Relay' | undefined, t: Translate): string;
+/** Normalize legacy internal account labels without changing credential identity. */
+export declare function displayRemoteAccount(account: string): string;
 //# sourceMappingURL=presentation.d.ts.map

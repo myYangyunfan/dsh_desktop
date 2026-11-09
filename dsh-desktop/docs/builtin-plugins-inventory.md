@@ -80,11 +80,11 @@
 | 8 | `workspace-anchor` | `@deepseek-ai/dsh-workspace-anchor` | 0.1.1 | 把当前工作目录写进稳定系统提示的锚点块，防 agent 目录漂移（不碰权限）。0.2.1-rc.1 起内核不再注册 `{{cwd}}` 变量，锚点改由插件自填实路径 + `interpolate: false`，并自己把 `cwd` 变量按 rc.2 原形状补回去 | 自研 |
 | 9 | `wsl-settings` | `@deepseek-ai/dsh-wsl-settings` | 0.1.0 | 设置页「WSL 后端」栏：local↔wsl 切换、发行版与安装目录、状态探活 | 自研 |
 | 10 | `bot` | `ds-bot` | 0.2.0 | Bot 团队：主 Bot + 长期 Bot + 群聊，Bot 间 @ 转交、群共享记忆、能力库与用量页（loader id `bot`；vendored patch 不接管 web.searchProvider，搜索仍走 dsh-free-search） | Fei2411/DeepSeek-Bot，**Apache-2.0**（上游 README 标 DSH 0.2.1-rc.2；npm 0.2.0） |
-| 11 | `compaction-acp` | `billion-context-dsh` | 0.2.26 | Active Context Pruning，作为 CompactionEngine 后端的模型驱动上下文管理，**并注册 `compress` / `decompress` / `search_context` / `acp_status` 四个模型工具 + `/acp-prune` 斜杠命令**（`dist/index.js:6338` 的 `tools.register` 循环与 `:6352` 的 `ctx.get("commands")` 实测；先前本格只记了引擎半边） | `Tyan66666/billion-context-dsh`，MIT（0.2.26 = npm latest，高于 d-pack 0.2.2；内层 `node_modules` 随本版下线；peer 上界放宽与 dist 入口纳入判据见 §五 5.2 #12） |
-| 12 | `dsh-pocket` | `dsh-pocket` `nm` | 2.10.7 | 手机扫码实时同屏操控桌面 web（WebSocket 透传 + cloudflared 公网隧道 + 二维码配对） | shaobeichen/dsh-pocket，**GPL-2.0**（2.10.7 取自 d-pack，npm latest 仍是 2.10.6） |
+| 11 | `compaction-acp` | `billion-context-dsh` | 0.2.27 | Active Context Pruning，作为 CompactionEngine 后端的模型驱动上下文管理，**并注册 `compress` / `decompress` / `search_context` / `acp_status` 四个模型工具 + `/acp-prune` 斜杠命令**（`dist/index.js:6338` 的 `tools.register` 循环与 `:6352` 的 `ctx.get("commands")` 实测；先前本格只记了引擎半边） | `Tyan66666/billion-context-dsh`，MIT（0.2.27 = npm latest，高于 d-pack 0.2.2；内层 `node_modules` 随本版下线；peer 上界放宽与 dist 入口纳入判据见 §五 5.2 #12） |
+| 12 | `dsh-pocket` | `dsh-pocket` `nm` | 2.12.0 | 手机扫码实时同屏操控桌面 web（WebSocket 透传 + cloudflared 公网隧道 + 二维码配对） | shaobeichen/dsh-pocket，**GPL-2.0**（2.12.0 = npm latest；2026-11-09 由 d-pack 线 2.10.7 切到 npm 线） |
 | 13 | `openclaw-bridge` | `@deepseek-ai/dsh-openclaw-bridge` | 0.8.1 | 微信 / 飞书官方频道桥接入 DSH agent 会话（分片回写、去重限流） | `hzhz314159/openclaw-dsh-bridge`，MIT（0.8.1 起设置面换成 codegen `settings-host` 垫片，`ctx.settings.register` 形态作废，锚点见 `scripts/test/unit-openclaw-settings-inject.test.js`） |
 | 14 | `input-history` | `dsh-input-history` | 0.1.1 | 输入框 ↑/↓ 终端式已发送消息回溯（空草稿才触发、编辑即复位、按会话隔离） | 自研 |
-| 15 | `dsh-easyrewrite` | `dsh-easyrewrite` | 2.6.0 | 消息撤回 / 重编辑 + 版本翻页器 `< X >`（撤回/重发产生的版本家族切换）+ 自带设置中心与草稿自动备份（0.6.4 起取代自研 dsh-message-rewind；后三项是 2.6.0 的自带面，`lib/client.js:2577/4324` 与 `lib/index.js:319` 的 `ctx.settings.register` 实测，先前本格只记了撤回半边） | Renzic-Stone/DSH-EasyRewrite，MIT（2.6.0 = 上游 main 与 npm latest 同版；本版起 `data-time-hover-root` 由它自写自收窄，不再是宿主锚） |
+| 15 | `dsh-easyrewrite` | `dsh-easyrewrite` | 3.0.1 | 消息撤回 / 重编辑 + 版本翻页器 `< X >`（撤回/重发产生的版本家族切换）+ 自带设置中心与草稿自动备份（0.6.4 起取代自研 dsh-message-rewind；后三项是 2.6.0 的自带面，`lib/client.js:2577/4324` 与 `lib/index.js:319` 的 `ctx.settings.register` 实测，先前本格只记了撤回半边） | Renzic-Stone/DSH-EasyRewrite，MIT（3.0.1 = npm latest，2026-11-09 由 2.6.0 升级；2.6.0 起 `data-time-hover-root` 由它自写自收窄，不再是宿主锚） |
 | 16 | `change-review` | `dsh-change-review` | 0.1.2 | AI 变更审核：让模型复查自己刚做的改动（正确性 / 安全性 / 目标一致性） | 自研 |
 | 17 | `offpeak` | `dsh-offpeak` | 1.0.1 | 峰谷价格卫士：高峰时段拦截发送提醒，可定时到低价时段自动执行 | `christophersmith2737-commits/OffPeak`，MIT（vendored，非自研；上游 main 仍 1.0.0，1.0.1 取自 d-pack） |
 | 18 | `settings-nav-custom` | `dsh-settings-nav-custom` | 0.1.1 | 设置页左侧导航项显示 / 隐藏与排序（localStorage 持久化） | **EAC 移植**（`DSH-EAC/EAC-Desktop`，`LICENSE` 署 Deepseek Harness EAC contributors，MIT） |
@@ -96,13 +96,13 @@
 | 24 | `prompt-optimizer` | `dsh-prompt-optimizer` | 3.0.0 | 输入框旁一键分析并优化草稿（SSE 流式上屏；默认实时复用当前会话模型；无上下文走结构模板、有上下文提炼目的顺势润色；保真自检、斜杠命令前缀保护；结果可替换/撤回/复制；设置页可配模型、调用参数与上下文） | `Y1X1n/dsh-prompt-optimizer`，MIT（**2026-10-19 起为 vendored 上游 0.6.1**，本地版本线 3.0.0——沿用包名与 loader id 以便老 profile 原地覆盖。上游 npm 包名是 `@y1x1n/dsh-prompt-optimizer`；**勿按 npm 裸名 `dsh-prompt-optimizer` 更新**，那是 `winditer` 的另一实现。旧 2.4.0 自研升级线已整体退役，历史见 §5.2 #26） |
 | 25 | `dsh-builtin-manager` | `dsh-builtin-manager` | 0.2.0 | 「设置 → 插件」里的内置插件页：搜索 / 状态筛选 + 单列表逐条查看随包内置件并启停（行内反馈与「已改动」标记；启停下次启动生效，写入走桌面壳 `dsh:plugin-set-enabled`） | 自研（**0.2.0 = 交互与视觉重做**：工具栏搜索 + 全部/已启用/已停用筛选（计数与列表同源）+ 单列表行内反馈，全套内核设计系统原语；宿主与写入链零改动） |
 | 26 | `goal-completion` | `@deepseek-ai/dsh-goal-completion` | 0.1.0 | 内核右栏「目标收尾」标签页：当前会话目标的状态机（phase 四态 + activation + 轮次/修订 + 受阻原因），并补上官方 GoalBar 没有的 `complete` 动词（两次点击确认，CAS 由内核判） | 自研（2026-10-16 新增；界面走 sanctioned 面——`ctx.locale.register/bind` 字典命名空间 + 槽位 `locale: NS` 由 renderer 注 `t`，控件用内核原语 `Tag`（八档语义色）/ `Button`（四档 variant），不覆盖原品配色） |
-| 27 | `web-search-free` | `dsh-free-search` | 0.9.11 | 免费多引擎搜索：注册 `ctx.web` 搜索 provider，内置 `web_search` 自动选用（loader id 是 `web-search-free`，不是包名） | `DDDMUC/dsh-free-search`，MIT |
-| 28 | `shop` | `dsh-plugin-shop` | 0.9.0 | 插件商店：浏览 / 安装 / 启停 / 更新 dsh 插件（loader id 是 `shop`，客户端 bundle id 才是包名） | `LivXue/dsh-plugin-shop`，**Apache-2.0** |
+| 27 | `web-search-free` | `dsh-free-search` | 0.9.39 | 免费多引擎搜索：注册 `ctx.web` 搜索 provider，内置 `web_search` 自动选用（loader id 是 `web-search-free`，不是包名） | `DDDMUC/dsh-free-search`，MIT |
+| 28 | `shop` | `dsh-plugin-shop` | 0.9.3 | 插件商店：浏览 / 安装 / 启停 / 更新 dsh 插件（loader id 是 `shop`，客户端 bundle id 才是包名） | `LivXue/dsh-plugin-shop`，**Apache-2.0** |
 | 29 | `network-proxy` | `@local/dsh-network-proxy` | 1.0.0 | 运行时代理：设置「通用」里的 HTTP 代理行，读系统代理并热切换 fetch dispatcher；包名保留上游 `@local/*`（改名会让 GitHub 更新回来的行对不上） | `baizhizzl/dsh-network-proxy`，MIT |
-| 30 | `mcp-manager-ui` | `dsh-toolbox-ui` | 1.8.2 | MCP / 技能工具箱：右下悬浮面板，MCP 市场与技能管理；宿主半边静态导入 `smol-toml`（BSD-3-Clause，见 `THIRD_PARTY_NOTICES.md` §1.1） | `Imzl-zl/dsh-toolbox-ui`，MIT |
+| 30 | `mcp-manager-ui` | `dsh-toolbox-ui` | 1.10.1 | MCP / 技能工具箱：右下悬浮面板，MCP 市场与技能管理；宿主半边静态导入 `smol-toml`（BSD-3-Clause，见 `THIRD_PARTY_NOTICES.md` §1.1） | `Imzl-zl/dsh-toolbox-ui`，MIT |
 | 31 | `dsh-notify` | `@bittersmilezzz/dsh-notify` | 0.4.5 | 桌面通知：渲染进程 Web Notification 六类事件 + 点击回会话，v1.0.6 起取代壳层「回合完成」通知 | `bitterSmilezzz/dsh-notify`，MIT |
-| 32 | `dsh-context` | `dsh-context` | 0.82.1 | 上下文透视：右栏上下文看板 + `/context` 命令，拆解当前上下文由什么构成、如何随轮次演变（bundle 层 loader id 与包名同形；宿主半边只依赖 zod / `dsh-session` / schemastery，无内层依赖树） | `bowenliang123/dsh-context`，**Apache-2.0** |
-| 33 | `ds-harness-remote` | `ds-harness-remote` `nm` | 0.5.19 | 端到端加密远程访问：桌面 / Web / 安卓远控本机 DSH，含 dsh-TUI Host 支持；内层 `node_modules` 随包正件分发（`shipsNodeModules`），WebRTC 走纯 JS `werift`（不装 optional 的 `@roamhq/wrtc`） | `liguobao/ds-harness-remote`，MIT |
+| 32 | `dsh-context` | `dsh-context` | 0.83.0 | 上下文透视：右栏上下文看板 + `/context` 命令，拆解当前上下文由什么构成、如何随轮次演变（bundle 层 loader id 与包名同形；宿主半边只依赖 zod / `dsh-session` / schemastery，无内层依赖树） | `bowenliang123/dsh-context`，**Apache-2.0** |
+| 33 | `ds-harness-remote` | `ds-harness-remote` `nm` | 0.6.4 | 端到端加密远程访问：桌面 / Web / 安卓远控本机 DSH，含 dsh-TUI Host 支持；内层 `node_modules` 随包正件分发（`shipsNodeModules`），WebRTC 走纯 JS `werift`（不装 optional 的 `@roamhq/wrtc`） | `liguobao/ds-harness-remote`，MIT |
 
 ### 已退役（源目录已删除；`RETIRED_COMPANIONS` 只留「名字」给 profile 回收用）
 
@@ -421,6 +421,46 @@ dsh-pack 的 `packages/` 实存 **34 个**目录，扣掉 `host-capabilities` �
   所以「npm 未发布 20 条」里含全部作用域条目；不要因为它们 404 就推断官方 registry 被墙，
   同一批请求里 9 条裸名件是通的。
 
+### 4.4 2026-11-09 更新轮次：8 件已落盘（按用户「有没有可以更新的，更新一下」）
+
+扫描口径：33 条在册件逐条 `npm view <包名> version repository.url maintainers`，与本地
+`package.json` 的 `repository` 归一后比 slug（`identityVerdict` 同源判据）。结果：
+**16 条有 npm 发布面 / 8 条「身份 same 且远端更高」/ 8 条 `unverifiable` 或 `foreign`（撞名自研件）/
+1 条等版（`@bittersmilezzz/dsh-notify` 0.4.5）/ 9 条 npm 无此件**。
+
+落盘 8 件（全部取 npm tarball 整包，版本列已同步 §一 / §5.2 / README 两表 / `THIRD_PARTY_NOTICES` §4.1）：
+
+| 包名 | 旧 → 新 | 本地形态 | 本轮的额外动作 |
+| --- | --- | --- | --- |
+| `dsh-plugin-shop` | 0.9.0 → **0.9.3** | 纯 vendored（同版本 tarball 逐字节相同） | — |
+| `dsh-toolbox-ui` | 1.8.2 → **1.10.1** | 纯 vendored | 新增 `lib/tool-search-*.js` 一族（工具搜索接入） |
+| `dsh-context` | 0.82.1 → **0.83.0** | 纯 vendored | 新增 `locale/de.json` / `locale/ru.json` |
+| `billion-context-dsh` | 0.2.26 → **0.2.27** | **fork（仅 package.json）** | 重放 peer 收口：5 条 dsh 族上界 `<0.3.0-0` + 去掉上游钉死 `0.2.0-rc.2` 的 6 条 peer |
+| `dsh-free-search` | 0.9.11 → **0.9.39** | **fork（`lib/cache.js`）** | 重放 `DSH_HOME` 优先的缓存落点（11 行，`RESEARCH_CACHE_DIR` 覆盖口保留）；新增 `lib/engines/*` 42 个文件 |
+| `dsh-pocket` | 2.10.7 → **2.12.0** | 纯 vendored（旧 2.10.7 来自 d-pack，本轮切到 npm 线） | deps 未变（`qrcode` / `qrcode-terminal`），内层 `node_modules` 沿用 |
+| `dsh-easyrewrite` | 2.6.0 → **3.0.1** | 纯 vendored | 主版本跳：新增 `assets/*.png` 与 `locales/{bubble,bundle}` 多语言面 |
+| `ds-harness-remote` | 0.5.19 → **0.6.4** | 纯 vendored（内层树自装） | `node_modules` 按新 deps 重装（47 顶层包 / 3413 文件 / 34.9MB）：**`werift` 不再进依赖树**（0.6.4 把它收进 dist），仍不装 optional 的 `@roamhq/wrtc` |
+
+「纯 vendored」的判据不是猜的：把**同版本**的 npm tarball 拉下来与 `assets/plugins/<dir>` 逐文件比
+sha256——`differ=0 & onlyLocal=0 & onlyRemote=0` 才叫纯 vendored；`billion`（只差 `package.json`）、
+`free-search`（差 `lib/cache.js`）、`ds-bot`（差 `client.js` + `cordis.patch.yml`）、
+`better-sidebar`（0.24.2 未在 npm 发布）都是 fork 形态，换版必须重放。
+
+**未动的 5 类及原因**（下次别重复研究）：
+
+- `better-sidebar` 0.24.2 → npm 0.30.1（身份 same）：**策略排除**（`UPDATE_EXCLUSIONS`）——它是本地
+  重建件，npm 版没有本仓对资源管理器栏头折叠 / 「在本地打开」的修复，升级只能走 `.tmp-bs-build`
+  沙箱重建 + `unit-better-sidebar-*` 对账，不能整包覆盖。
+- `bot`（`ds-bot` 0.2.0 → npm 0.3.1）：**策略排除**——本地 vendored patch 只挂 Bot 本体、不接管
+  `web.searchProvider`，npm 版会整包覆盖 `cordis.patch.yml` 与 client 的 dsh-compat 标记。
+- `synapse` 0.3.1 → npm 0.5.7（`unknown`）：npm 侧仍不自报 `repository`，无法证明同源；且 0.4.2+
+  会覆盖我们的深色适配桥（`client.js` 的 `dsw-` 桥）与 `perf(synapse)` 水位线 / 存储上限增量
+  （差量见 §5.5），仍只登记差量、不吸纳。
+- `offpeak`（npm 3.3.11，`foreign`）／`dsh-session-manager`（0.7.5，`unverifiable`）／
+  `dsh-input-history`（1.1.3，`unverifiable`）：**同名不同项目 / 撞名第三方**，按名更新会把别人的
+  实现装进来；`prompt-optimizer` 的裸名同样 `foreign`（`winditer` 的另一实现），真上游
+  `@y1x1n/dsh-prompt-optimizer` npm 最新 **0.5.0 < 我们的 vendored 0.6.1**，本来也无事可做。
+
 ## 五、舰队更新与兼容 sweep（2026-10-08 立项 · 目标宿主 `0.2.0-rc.2`；**2026-10-17 六条静态扫按 `0.2.1-rc.1` 全量复算**；**2026-10-18 按 `0.2.1-rc.2` 复核，判据值逐项不变、全绿**；**2026-10-27 按 `0.2.2-rc.1` 复核自动化面，判据值逐项不变、全绿**）
 
 > **2026-10-27 换代复核口径（rc.2 → rc.4）**：这一代上游只增不破，复核走机器判据而非逐件手测——
@@ -541,11 +581,11 @@ npm 列额外带 `身份 <same|foreign|unverifiable|unknown>／维护者`——*
 |  8 | `workspace-anchor` | `dsh-workspace-anchor` | 0.1.1 | 0 peer | 0.1.0（我们更高｜0.1.1 为本仓库兼容修复线） | 未发布 | 0 别名 / 0 成员 / 0 裸名 → 缺失 0 · 表外 0 · 声明 0 · 移除引用 0 | **0.2.1-rc.1 真机坏（隔离内核发消息实测抓到）**：内核 `dsh-agent-loop` 撤掉了 rc.2 的 `systemPrompt.variable("cwd", …)`（新版只剩 provider / model），带 `{{cwd}}` 的节在装配期直接抛 `unknown prompt variable` → **每一条消息都「处理失败 UNKNOWN」**。修法：锚点文本由插件自己填成 `agent.session.header.cwd` 实路径并标 `interpolate: false`（不再依赖内核变量表），同时按 rc.2 原形状把 `cwd` 变量补注册回去，让别的节与用户自写文本里的 `{{cwd}}` 继续可解析。实机复验：人轮正常落盘、错误退到预期的 `MISSING_CREDENTIAL`（隔离 home 无密钥），变量报错零命中  |
 |  9 | `wsl-settings` | `dsh-wsl-settings` | 0.1.0 | 2 peer `*` | 无此件 | 未发布 | 1 别名 / 0 成员 / 3 裸名 → 缺失 0 · 表外 0 · 声明 1 · 移除引用 0 | 维持  |
 | 10 | `bot` | `ds-bot` | 0.2.0 | 4 peer `*` | 0.2.0（等版） | 未发布 | 49 别名 / 7 成员 / 3 裸名 → 缺失 0 · 表外 0 · 声明 0 · 移除引用 0 | 维持；Bot 团队本体；vendored patch 不接管 `web.searchProvider`（搜索仍由 dsh-free-search 运行时接管） |
-| 11 | `compaction-acp` | `billion-context-dsh` | 0.2.26 | 5 peer `>=0.1.5-alpha.1 <0.3.0-0` | 0.2.2（我们更高） | 0.2.26（等版｜身份 unknown／tyanyin） | 0 别名 / 0 成员 / 0 裸名 → 缺失 0 · 表外 0 · 声明 0 · 移除引用 0 | **本轮一处兼容改动**：5 条 dsh 族 peer 上界 `<0.1.6-0` → `<0.3.0-0`（`dsh-compaction`/`dsh-session`/`dsh-llm`/`dsh-tools`/`dsh-settings`；`@deepseek-ai/cordis`、`schemastery` 两键不参与判定，未动）  |
-| 12 | `dsh-pocket` | `dsh-pocket` | 2.10.7 | 0 peer | 2.10.7（等版） | 2.10.6（我们更高｜身份 same／leachzhou） | 12 别名 / 5 成员 / 2 裸名 → 缺失 0 · 表外 0 · 声明 7 · 移除引用 0 | 维持；GPL-2.0 分发面见 §3.1 #13  |
+| 11 | `compaction-acp` | `billion-context-dsh` | 0.2.27 | 7 peer `>=0.1.5-alpha.1 <0.3.0-0` | 0.2.2（我们更高） | 0.2.27（等版｜身份 unknown／tyanyin） | 0 别名 / 0 成员 / 0 裸名 → 缺失 0 · 表外 0 · 声明 0 · 移除引用 0 | **随包改动**：5 条 dsh 族 peer 上界放宽到 `<0.3.0-0`（`dsh-compaction`/`dsh-session`/`dsh-llm`/`dsh-tools`/`dsh-settings`），并去掉上游钉死 `0.2.0-rc.2` 的 brand / session-format* / timeout / typert-protocol / util-* 六条 peer（0.2.2-rc.1 下会被兼容性预检判失败）；`cordis`、`schemastery` 两键保留  |
+| 12 | `dsh-pocket` | `dsh-pocket` | 2.12.0 | 0 peer | 2.12.0（等版） | 2.12.0（等版｜身份 same／leachzhou） | 8 别名 / 0 成员 / 2 裸名 → 缺失 0 · 表外 0 · 声明 5 · 移除引用 0 | **随包改动 1 处（2.12.0）**：hero 输入卡的两条 `:has(textarea)` 补并代锚 `[data-composer-input]`——Lexical 代没有 textarea，不改就是恒不命中的死规则；GPL-2.0 分发面见 §3.1 #13  |
 | 13 | `openclaw-bridge` | `dsh-openclaw-bridge` | 0.8.1 | 6 peer `>=0.1.0-rc.6 <2` | 0.8.1（等版） | 未发布 | 3 别名 / 2 成员 / 4 裸名 → 缺失 0 · 表外 0 · 声明 4 · 移除引用 0 | 维持；设置面已是 codegen `settings-host` 垫片形态  |
 | 14 | `input-history` | `dsh-input-history` | 0.1.1 | 1 peer `>=0.1.0-rc.6 <2` | 0.1.1（等版） | 0.3.2（他们更高｜身份 unverifiable／sunshaobei） | 0 别名 / 0 成员 / 1 裸名 → 缺失 0 · 表外 0 · 声明 1 · 移除引用 0 | 维持；**禁止按名更新**（同 #4 型撞名：npm 那条是 `sunshaobei/dsh-input-history`）  |
-| 15 | `dsh-easyrewrite` | `dsh-easyrewrite` | 2.6.0 | 0 peer | 2.5.3（我们更高） | 2.6.0（等版｜身份 same／renzic-stone） | 2 别名 / 8 成员 / 2 裸名 → 缺失 0 · 表外 0 · 声明 3 · 移除引用 0 | 维持；它的 `pickIcon(旧名, 新名)` 就是本轮图标守卫认下来的正当回落形态来源  |
+| 15 | `dsh-easyrewrite` | `dsh-easyrewrite` | 3.0.1 | 0 peer | 2.5.3（我们更高） | 3.0.1（等版｜身份 same／renzic-stone） | 0 别名 / 0 成员 / 2 裸名 → 缺失 0 · 表外 0 · 声明 7 · 移除引用 0 | 维持；它的 `pickIcon(旧名, 新名)` 就是本轮图标守卫认下来的正当回落形态来源。3.0.1 的文件卡 CSS 仍留旧哈希类 `gSkjMW_card`，已在 `unit-plugin-dom-contract` 的 G9 惰性名单登记（同一选择器链上另有自有锚）  |
 | 16 | `change-review` | `dsh-change-review` | 0.1.2 | 0 peer | 0.1.2（等版） | 未发布 | 1 别名 / 0 成员 / 1 裸名 → 缺失 0 · 表外 0 · 声明 2 · 移除引用 0 | 维持  |
 | 17 | `offpeak` | `dsh-offpeak` | 1.0.1 | 0 peer | 1.0.1（等版） | 未发布 | 0 别名 / 0 成员 / 0 裸名 → 缺失 0 · 表外 0 · 声明 0 · 移除引用 0 | 维持  |
 | 18 | `settings-nav-custom` | `dsh-settings-nav-custom` | 0.1.1 | 0 peer | 0.1.1（等版） | 未发布 | 0 别名 / 0 成员 / 0 裸名 → 缺失 0 · 表外 0 · 声明 1 · 移除引用 0 | 维持（EAC 移植件走 EAC 账本通道，非 npm）  |
@@ -557,13 +597,13 @@ npm 列额外带 `身份 <same|foreign|unverifiable|unknown>／维护者`——*
 | 24 | `prompt-optimizer` | `dsh-prompt-optimizer` | 3.0.0 | 0 peer | 2.0.4（我们更高） | 2.0.3（我们更高｜身份 foreign／npm 裸名 winditer；真上游 @y1x1n/dsh-prompt-optimizer 0.6.1） | 9 别名 / 0 成员 / 2 裸名 → 缺失 0 · 表外 0 · 声明 4 · 移除引用 0 | **2026-10-19 换为 vendored 上游 `Y1X1n/dsh-prompt-optimizer` 0.6.1**（本地版本线 3.0.0，包名与 loader id 不变以便老 profile 原地覆盖）：host 半边 `inject=['llm']`，注册 `POST /dsh-prompt-optimizer/optimize`（SSE 流式）与 `POST /dsh-prompt-optimizer/test-model`（连通性探活）；client 半边注册输入框右侧按钮、`conversation.input.dock` 结果面板与 `settings.plugins.tab` 插件页标签（设置读写走内核 `configForms`；设置卡含「优化用模型 / 回退模型」下拉、`session/modelCatalog` 目录拉取与连通性测试，上游 0.1.x 的 `settingsScope` / `settings.plugin.item` 兼容面已摘除）；产物为 `lib/{index,client,prompt,controller}.js`，由随包 `scripts/build.mjs` 重建，`src/` 与上游 `test/` 同源保留；依赖仅 `@deepseek-ai/schemastery`。旧 2.4.0 自研升级线（`dist/client.js` 入口、项目目标/上下文/意图/撤销等）已整体退役，其 `.gitignore` 例外与四个专属测试同批移除，历史见 CHANGELOG 2.1–2.4 段。 |
 | 25 | `dsh-builtin-manager` | `dsh-builtin-manager` | 0.2.0 | 2 peer `>=0.1.0-rc.6 <2` | 0.1.0（我们更高｜0.2.0 为本地升级线） | 未发布 | 1 别名 / 0 成员 / 3 裸名 → 缺失 0 · 表外 0 · 声明 0 · 移除引用 0 | 维持（本仓库自研新增，2026-10-11；**本地升级线 0.2.0（交互与视觉重做）**：宿主与写入链零改动，只重写 client——工具栏（搜索 + 重新读取）+ 状态筛选（全部/已启用/已停用，计数与列表同源）+ 单列表行内反馈（在途门控，成功与失败落在本行）+ 「已改动 · 下次启动生效」徽标 + 全套内核原语（Button/Switch/SegmentedControl/Input/Tag）；回归套件 client 10→**12 例**（含反证 4 条）。裸名 2→3 即新增的内核原语包引入（`@deepseek-ai/dsh-client-ui-primitives`，在内核模块表内、表外 0））  |
 | 26 | `goal-completion` | `dsh-goal-completion` | 0.1.0 | 2 peer `>=0.1.0-rc.6 <2` | 无此件 | 未发布 | 2 别名 / 0 成员 / 3 裸名 → 缺失 0 · 表外 0 · 声明 0 · 移除引用 0 | **新增（本仓库自研，2026-10-16）**：只做官方 GoalBar 没暴露的那一个动词 `remote.goals.complete` + 状态机可见性（`phase` 四态里官方字典连 `complete` 档都没有，`blocked` 的 code/message 也不显眼）。宿主面全部实测在位：`sidebarRightTabs.register` + `sidebar.right.pane.tab`（0.1.6 起的公开标签 API，同款接线见 `docs/better-sidebar-kernel-integration.md`）、`ctx.locale.register/bind`（renderer 按槽位 `locale: NS` 注 `t`，切语言整体重渲染）、原语 `Tag`/`Button`（rc.2 导出面逐一核过）。裸名 3 = `react` / `react/jsx-runtime` / `@deepseek-ai/dsh-client-ui-primitives`（在模块表内、表外 0）；成员 0 是解构式引入（无命名空间取用，判据无从判——与 #29 同形）。**两条只有真内核才能撞出来的宿主契约（2026-10-16 隔离安装布局 + 页面探针实测）**：① `ctx.remote.goals.get(sessionId)` 回的是**信封** `{ok:true, value:view}`，不是裸 view——按裸 view 解析时 `view.id` 恒 undefined，界面把有目标的会话显示成「还没有目标」，而同一时刻官方 GoalBar 正常显示；② 投影快照是 `{goal:{id,revision,objective,phase,maxGoalRounds}, roundsStarted, createdAt, updatedAt}`，**`activation` 不在投影里**（只在远端那份 value 里），官方 GoalBar 也是「goal 取投影、activation 另走观测线」的两条线组合，所以本插件按 id+revision 对齐后合并，两者都缺才落空态。回归锁 `unit-goal-completion-client` 27 例（含 5 条反证），夹具的 `get` 默认回信封形状 |
-| 27 | `web-search-free` | `dsh-free-search` | 0.9.11 | 8 peer `^0.1.7-rc.1 / ^0.2.0-rc.1` | 无此件 | 0.9.11（等版｜身份 same｜DDDMUC） | 3 别名 / 0 成员 / 3 裸名 → 缺失 0 · 表外 0 · 声明 3 · 移除引用 0 | **新增（2026-10-22 用户点名内置，MIT）**：注册 `ctx.web` 搜索 provider（id `ddg` / `fs-quality-fetch`），首启在 provider 未显式选中时接管；宿主 8 条 `/api/dsh-free-search-settings/*` 路由 + settings + systemPrompt 节 + 6 个工具，0.2.1-rc.2 兼容 oracle 实测 0 拒挂。**随包改动 1 处**：`lib/cache.js` 的 research 缓存落点由写死 `~/.cache` 改为 `DSH_HOME` 优先（保留 `RESEARCH_CACHE_DIR` 覆盖口，隔离测试不再写真实用户缓存）。更新源 `web-search-free` → npm `dsh-free-search`。 |
-| 28 | `shop` | `dsh-plugin-shop` | 0.9.0 | 5 peer `>=0.1.1-rc.2 <0.3.0-0` | 无此件 | 0.9.0（等版｜身份 same｜LivXue） | 2 别名 / 0 成员 / 2 裸名 → 缺失 0 · 表外 0 · 声明 0 · 移除引用 0 | **新增（2026-10-22 用户点名内置，Apache-2.0）**：插件商店（浏览/安装/启停/更新第三方插件）；`exports["./client"]` + `lib/typert.host.js` 是加载期硬依赖，故取 npm tarball 全量产物随包。**Desktop 限制**：安装/更新最终都走 pnpm，而 payload 只带 npm → 统一 `pnpm-missing`（浏览、详情、启停可用）；内置件的查看/更新由 `dsh-builtin-manager` 承担（B 案）。更新源 `shop` → npm `dsh-plugin-shop`。 |
+| 27 | `web-search-free` | `dsh-free-search` | 0.9.39 | 5 peer `^0.1.7-rc.1 或 ^0.2.0-rc.1` | 无此件 | 0.9.39（等版｜身份 same｜DDDMUC） | 3 别名 / 0 成员 / 3 裸名 → 缺失 0 · 表外 0 · 声明 3 · 移除引用 0 | **新增（2026-10-22 用户点名内置，MIT）**：注册 `ctx.web` 搜索 provider（id `ddg` / `fs-quality-fetch`），首启在 provider 未显式选中时接管；宿主 8 条 `/api/dsh-free-search-settings/*` 路由 + settings + systemPrompt 节 + 6 个工具，0.2.1-rc.2 兼容 oracle 实测 0 拒挂。**随包改动 1 处**：`lib/cache.js` 的 research 缓存落点由写死 `~/.cache` 改为 `DSH_HOME` 优先（保留 `RESEARCH_CACHE_DIR` 覆盖口，隔离测试不再写真实用户缓存）。更新源 `web-search-free` → npm `dsh-free-search`。 |
+| 28 | `shop` | `dsh-plugin-shop` | 0.9.3 | 3 peer `>=0.1.1-rc.2 <0.3.0-0` | 无此件 | 0.9.3（等版｜身份 same｜LivXue） | 2 别名 / 0 成员 / 2 裸名 → 缺失 0 · 表外 0 · 声明 0 · 移除引用 0 | **新增（2026-10-22 用户点名内置，Apache-2.0）**：插件商店（浏览/安装/启停/更新第三方插件）；`exports["./client"]` + `lib/typert.host.js` 是加载期硬依赖，故取 npm tarball 全量产物随包。**Desktop 限制**：安装/更新最终都走 pnpm，而 payload 只带 npm → 统一 `pnpm-missing`（浏览、详情、启停可用）；内置件的查看/更新由 `dsh-builtin-manager` 承担（B 案）。更新源 `shop` → npm `dsh-plugin-shop`。 |
 | 29 | `network-proxy` | `dsh-network-proxy` | 1.0.0 | 0 peer | 无此件 | 未发布（`@local` 私有 scope） | 1 别名 / 0 成员 / 1 裸名 → 缺失 0 · 表外 0 · 声明 2 · 移除引用 0 | **新增（2026-10-22 用户点名内置，MIT）**：设置-通用「HTTP 代理」行（直连/跟随系统/自定义），`ctx.connection.fetch.register` 挂 `/api/network-proxy`（未认证 401、owner principal 403）；Windows 读 WinINET、macOS `scutil`，WSL/Linux 降级为 system-unreadable。**随包改动 2 处**：凭据文件 `network-proxy.json` 写 0600（POSIX）；客户端 locale 快照改读 `snapshot.active`（rc.2 幽灵字段）。更新源 `network-proxy` → GitHub release 无资产时取 zipball（无 digest 明示跳过校验）。 |
-| 30 | `mcp-manager-ui` | `dsh-toolbox-ui` | 1.8.2 | 10 peer `>=0.2.0-rc.1 <0.3.0` | 无此件 | 1.8.2（等版｜身份 same｜Imzl-zl） | 1 别名 / 0 成员 / 1 裸名 → 缺失 0 · 表外 0 · 声明 1 · 移除引用 0 | **新增（2026-10-22 用户点名内置，MIT）**：右下悬浮「工具箱」+ 侧栏底部入口（MCP 市场 / 技能管理，typert 37 个 Remote）；`mcp-import-sources` 静态导入 `smol-toml`（BSD-3-Clause），已加入 `dsh-desktop/package.json` 依赖与 `VENDOR_DEPS`。更新源 `mcp-manager-ui` → npm `dsh-toolbox-ui`。 |
+| 30 | `mcp-manager-ui` | `dsh-toolbox-ui` | 1.10.1 | 9 peer `>=0.2.1-rc.5 <0.3.0` | 无此件 | 1.10.1（等版｜身份 same｜Imzl-zl） | 1 别名 / 0 成员 / 1 裸名 → 缺失 0 · 表外 0 · 声明 1 · 移除引用 0 | **新增（2026-10-22 用户点名内置，MIT）**：右下悬浮「工具箱」+ 侧栏底部入口（MCP 市场 / 技能管理，typert 37 个 Remote）；`mcp-import-sources` 静态导入 `smol-toml`（BSD-3-Clause），已加入 `dsh-desktop/package.json` 依赖与 `VENDOR_DEPS`。更新源 `mcp-manager-ui` → npm `dsh-toolbox-ui`。 |
 | 31 | `dsh-notify` | `dsh-notify` | 0.4.5 | 12 peer `^0.2.1-rc.2` | 无此件 | 0.4.5（等版｜身份 same｜bitterSmilezzz） | 3 别名 / 3 成员 / 3 裸名 → 缺失 0 · 表外 0 · 声明 7 · 移除引用 0 | **新增（2026-10-22 用户点名内置，MIT）**：渲染进程 Web Notification 六类事件（审批/提问/轮次/会话结束/出错/子代理）+ 点击回会话；宿主半边是空 apply + volatile Config，零副作用。**接入后壳层「回合完成」通知下线**（保留 session watcher 的 `active_turns` 假死判定与 ACP/崩溃通知）。更新源 `dsh-notify` → npm `@bittersmilezzz/dsh-notify`。 |
-| 32 | `dsh-context` | `dsh-context` | 0.82.1 | 2 peer `>=0.2.0-rc.2 或 >=0.2.1-rc.2 或 >=0.2.2-rc.1` | 无此件 | 0.83.0（他们更高｜身份 same／bowenliang123） | 0 别名 / 0 成员 / 0 裸名 → 缺失 0 · 表外 0 · 声明 6 · 移除引用 0 | **2026-11-09 新增（上游整包 vendored 0.82.1）**：右栏上下文看板 + `/context` 命令；宿主半边只用宿主闭包的 `dsh-session`/`schemastery` 与 VENDOR_DEPS 的 `zod`，自身不带依赖树。npm 0.83.0 未取（本轮按用户点名的 0.82.1 落盘） |
-| 33 | `ds-harness-remote` | `ds-harness-remote` | 0.5.19 | 11 peer `>=0.2.0-rc.1 <0.3.0-0 或 >=0.2.1-0 <0.2.2-0 或 >=0.2.2-0 <0.2.3-0` | 无此件 | 0.6.4（他们更高｜身份 same／liguobao） | 4 别名 / 0 成员 / 0 裸名 → 缺失 0 · 表外 0 · 声明 9 · 移除引用 0 | **2026-11-09 新增（上游整包 vendored 0.5.19）**：内层 `node_modules` 随包正件分发（28.4MB / 3413 文件，缺 optional 的 `@roamhq/wrtc` 原生件，WebRTC 走纯 JS `werift`）；bundle patch 有桌面 / TUI 两条 insert 行，桌面行 id 即清单 id |
+| 32 | `dsh-context` | `dsh-context` | 0.83.0 | 2 peer `>=0.2.0-rc.2 或 >=0.2.1-rc.2 或 >=0.2.2-rc.1` | 无此件 | 0.83.0（等版｜身份 same／bowenliang123） | 0 别名 / 0 成员 / 0 裸名 → 缺失 0 · 表外 0 · 声明 6 · 移除引用 0 | **2026-11-09 新增（上游整包 vendored 0.82.1）**：右栏上下文看板 + `/context` 命令；宿主半边只用宿主闭包的 `dsh-session`/`schemastery` 与 VENDOR_DEPS 的 `zod`，自身不带依赖树。0.83.0 于 2026-11-09 由 0.82.1 升级（先前按用户点名落的是 0.82.1） |
+| 33 | `ds-harness-remote` | `ds-harness-remote` | 0.6.4 | 11 peer `>=0.2.0-rc.1 <0.3.0-0 或 >=0.2.1-0 <0.2.2-0 或 >=0.2.2-0 <0.2.3-0` | 无此件 | 0.6.4（等版｜身份 same／liguobao） | 4 别名 / 0 成员 / 0 裸名 → 缺失 0 · 表外 0 · 声明 9 · 移除引用 0 | **2026-11-09 新增（上游整包 vendored，当日 0.5.19 → 0.6.4）**：内层 `node_modules` 随包正件分发（34.9MB / 3413 文件，缺 optional 的 `@roamhq/wrtc` 原生件；0.6.4 起 `werift` 不再进依赖树，WebRTC 走 dist 内联的纯 JS 回退）；bundle patch 有桌面 / TUI 两条 insert 行，桌面行 id 即清单 id |
 
 计数对账（**2026-10-17 按 `scan-plugin-channels.mjs --npm` 现跑输出重述**，当时在册 34 条——2026-11-08 退役 3 件后在册 31 条，本节数字为快照口径；
 §5.2 表内的 d-pack / npm 两列是 2026-10-08 那轮抄录、`unit-hub-registry` 不锁网络通道，**以本段为准**）：

@@ -12,11 +12,12 @@ export declare class ClientSecureTransport implements RemoteTransport {
     private closed;
     private lifetime?;
     private readonly sends;
+    private closeError?;
     constructor(inner: SecureHandshakeTransport, identity: HostIdentity, host: TrustedPeer);
     connect(): Promise<void>;
     send(data: Uint8Array): Promise<void>;
     onMessage(handler: (data: Uint8Array) => void): () => void;
-    onClose(handler: () => void): () => void;
+    onClose(handler: (error?: Error) => void): () => void;
     close(): Promise<void>;
     getStats(): import("@dsh-remote/protocol").TransportStats;
     private requireNoise;

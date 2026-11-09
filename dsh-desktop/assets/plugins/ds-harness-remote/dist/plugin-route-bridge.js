@@ -5,11 +5,17 @@ import { RpcError } from './safe-error.js';
 export const PLUGIN_ROUTE_ALLOWLIST = ['api/bot'];
 /** Reviewed DS Bot operations; new upstream operations stay local by default. */
 export const BOT_REMOTE_OPERATIONS = [
-    'state', 'models', 'efforts', 'exchange', 'earlier', 'usage', 'room-progress', 'schedules',
-    'create-bot', 'duplicate-bot', 'update-bot', 'delete-bot', 'set-main', 'set-flags',
-    'create-room', 'update-room', 'delete-room',
+    'state', 'models', 'efforts', 'providers', 'local-agents',
+    'exchange', 'exchange-text', 'file-text', 'earlier', 'chat', 'run-stats', 'thinking', 'usage', 'room-progress',
+    'schedules', 'schedule-create', 'schedule-delete',
+    'memory-view', 'memory-history', 'memory-ask', 'memory-forget', 'memory-restore',
+    'folders', 'folder-list', 'team-workspace', 'set-prefs',
+    'browser-takeover', 'browser-give-back', 'browser-stop',
+    'create-bot', 'duplicate-bot', 'update-bot', 'delete-bot', 'set-main', 'set-flags', 'resume', 'bot-new-part', 'bot-open-part',
+    'create-room', 'update-room', 'delete-room', 'stop-room-work', 'goal-draft', 'goal-control',
     'add-agent', 'agent-session', 'agent-adopt', 'agent-archive', 'agent-rename', 'remove-agent',
-    'send', 'btw', 'btw-cancel', 'room-continue', 'answer-question', 'dismiss-question', 'view-reply', 'approval-answer', 'stop-member-work',
+    'send', 'btw', 'btw-cancel', 'btw-delete', 'side-new', 'side-ask', 'side-cancel', 'side-close',
+    'room-continue', 'answer-question', 'dismiss-question', 'dismiss-view', 'view-reply', 'approval-answer', 'stop-member-work',
 ];
 export function isAllowedPluginRoute(route) {
     return PLUGIN_ROUTE_ALLOWLIST.some(allowed => allowed === route);

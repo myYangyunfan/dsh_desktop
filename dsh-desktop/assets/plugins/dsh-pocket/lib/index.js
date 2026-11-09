@@ -21,7 +21,7 @@ import { createPocketService } from './service.mjs';
 import { installPocketRpc } from './web-rpc.js';
 import { restartHost } from './restart.js';
 import { advancedNoticeScript, DEFAULT_INJECT, classifyHost } from './proxy.mjs';
-import { lanEnabled, setLanEnabled, lanAuthEnabled, setLanAuthEnabled, lanIpOverride, setLanIpOverride, pinCustom, setPinCustom, tunnelMode, setTunnelMode, tunnelToken, setTunnelToken, tunnelHostname, setTunnelHostname, resetSettings, proxyPort, cloudflaredPath } from './settings.mjs';
+import { lanEnabled, setLanEnabled, lanAuthEnabled, setLanAuthEnabled, mobileRightbarEnabled, setMobileRightbarEnabled, lanIpOverride, setLanIpOverride, pinCustom, setPinCustom, tunnelMode, setTunnelMode, tunnelToken, setTunnelToken, tunnelHostname, setTunnelHostname, resetSettings, proxyPort, cloudflaredPath } from './settings.mjs';
 
 const name = 'dsh-pocket';
 const inject = ['connection', 'webServer'];
@@ -49,8 +49,8 @@ const loadedVersion = currentVersion();
 // 局域网密码（token-lan）：默认手动刷新（设置页按钮）；自定义后刷新会换回随机值。
 // 会话保持（issue #33）：登录 cookie 绑定进程级 sessionKey（见 apply）——
 // dsh web 重启/更新后 sessionKey 变化 → 手机需重新输入。
-// 密码规则：8 位英文字母（大小写）或数字（自动生成的为 8 位数字，自定义可为字母+数字）。
-const PIN_RE = /^[a-zA-Z0-9]{8}$/;
+// 默认 PIN 为 8 位数字；自定义 PIN 可使用 8–64 位英文字母（大小写）或数字。
+const PIN_RE = /^[a-zA-Z0-9]{8,64}$/;
 function writePinToFile(p, fresh) {
   try {
     mkdirSync(dirname(p), { recursive: true });
@@ -115,6 +115,15 @@ export function tokenForHost(host) {
   if (isLanOverrideHost(host)) return getLanToken();
   return classifyHost(host) === 'public' ? getAccessToken() : getLanToken();
 }
+
+/**
+ * 登录页凭据语义：长期有效的 PIN 允许密码管理器保存；Quick Tunnel 自动生成的
+ * 公网 PIN 每次隧道开启都会轮换，不应作为长期密码保存。
+ */
+export function credentialKindForHost(host) {
+  if (isLanOverrideHost(host) || classifyHost(host) !== 'public') return 'persistent';
+  return pinCustom('public') || tunnelMode() === 'named' ? 'persistent' : 'ephemeral';
+}
 /** 去掉 Host 的端口（与 classifyHost 一致），用于和手动设置的局域网地址比较。 */
 function hostNameOnly(host) {
   let name = String(host ?? '').trim().toLowerCase();
@@ -136,13 +145,18 @@ export function isLanOverrideHost(host) {
   return override.length > 0 && hostNameOnly(host) === override;
 }
 /**
- * 用户自定义访问密码（issue #33）：公网/局域网各自设一个固定的 8 位密码（英文字母大小写或数字）。
+ * 用户自定义访问密码（issue #33）：公网/局域网各自设置固定的 8–64 位密码（英文字母大小写或数字）。
  * 自定义后公网开启时不再自动轮换（rotateAccessToken 见上）。
- * 非法输入（非 8 位、含字母数字以外字符）抛错，由 RPC 层转成错误响应。
+ * 非法输入（少于 8 位、超过 64 位或含字母数字以外字符）抛错，由 RPC 层转成错误响应。
  */
 export function setCustomPin(which, value) {
   const v = String(value ?? '').trim();
-  if (!PIN_RE.test(v)) throw new Error('密码必须是 8 位英文字母或数字 | PIN must be exactly 8 characters (letters and digits only)');
+  if (v === '') {
+    setPinCustom(which, false);
+    if (which === 'public') return writePinToFile(tokenPath(), newPin());
+    if (which === 'lan') return writePinToFile(lanTokenPath(), newPin());
+  }
+  if (!PIN_RE.test(v)) throw new Error('密码必须是 8–64 位英文字母或数字 | PIN must be 8–64 characters (letters and digits only)');
   if (which === 'public') {
     writePinToFile(tokenPath(), v);
     setPinCustom('public', true);
@@ -241,32 +255,6 @@ function performUpdate(profile, { timeoutMs = 180_000 } = {}) {
   });
 }
 
-/**
- * 受监督宿主判定（纯函数，便于单测）。
- *
- * 规则：认出桌面宿主 ⇒ 关；**什么都没认出来 ⇒ 也关**（安全侧）。
- * 只有显式 allowHostControl: true 才允许插件自行更新/重启宿主。
- * 判反方向的代价完全不对称：误判为「受监督」只是少一个应用内更新按钮；
- * 误判为「独立进程」则让插件在官方客户端强制更新期间 detached 重启它的宿主。
- * @returns {{supervised: boolean, reason: 'override-desktop'|'override-standalone'|'detected'|'host-control-allowed'|'unconfirmed'}}
- */
-export function supervisionDecision({
-  override,
-  allowHostControl,
-  detected,
-} = {}) {
-  // 只有真正的布尔量才算「显式指定」。null / 0 / "" 一律视为未指定，
-  // 否则一个缺失值会被当成 override=false，直接解锁插件重启宿主 —— 那正是本函数要防的方向。
-  if (override === true || override === false) {
-    return override
-      ? { supervised: true, reason: 'override-desktop' }
-      : { supervised: false, reason: 'override-standalone' };
-  }
-  if (detected) return { supervised: true, reason: 'detected' };
-  if (allowHostControl === true) return { supervised: false, reason: 'host-control-allowed' };
-  return { supervised: true, reason: 'unconfirmed' };
-}
-
 export function apply(ctx, config = {}, internals = {}) {
   const logger = ctx.logger?.(name) ?? console;
   const dshPort = internals.dshPort ?? ctx.webServer?.port;
@@ -285,37 +273,19 @@ export function apply(ctx, config = {}, internals = {}) {
   }
 
   // 桌面端环境识别（官方兼容模式，见 desktop 的 plugin-development.md）：
-  // 「是不是跑在受监督的桌面宿主里」——决定要不要关掉 pocket 自己的更新/重启。
-  //
-  // 判据换过一版，原因是一个真实的静默回归：旧写法靠 `desktopProfiles` / `desktopPnpm`
-  // 这两个 cordis 服务是否存在来判断，而那两个服务由我们自己写的
-  // dsh-market-desktop-bridge 提供。该桥已随「退役自制壳」删掉，于是这个表达式在
-  // **官方桌面客户端里恒为 false** ⇒ 更新/重启不再被关闭 ⇒ pocket 会 detached
-  // 重新拉起宿主进程。官方客户端有强制更新准入锁（锁定期把 connection/request 打成
-  // 503），插件去重启它的宿主正好是最坏时机的破坏动作。
-  //
-  // 现在语义从「是不是 DSH Desktop」放宽为「是不是受监督宿主（官方客户端 + 认不出的环境）」，
-  // 因为认不出时也必须关掉才安全；下游 desktopAdvanced / injectHtml 继续用同一个布尔量。
-  // 真正独立跑 `dsh web` 的人用 config.allowHostControl: true 显式打开。
-  // 开关必须走 config 而不是 internals —— internals 是 apply 的第三个位置参数，
-  // cordis 加载器只会传 (ctx, config)，所以它只是测试缝隙，用户改不到。
-  const looksLikeDesktopHost =
-    process.env.ELECTRON_RUN_AS_NODE === '1' ||
-    typeof process.env.DSH_DESKTOP_NODE_EXECUTABLE === 'string' ||
-    !!process.versions?.electron ||
-    ctx.get?.('desktopProfiles') !== undefined ||
-    ctx.get?.('desktopPnpm') !== undefined;
-  const { supervised: isDesktop, reason } = supervisionDecision({
-    override: internals.isDesktop,
-    allowHostControl: config.allowHostControl,
-    detected: looksLikeDesktopHost,
-  });
+  // 旧判定只认 desktopProfiles / desktopPnpm 两个 ctx 服务，但 dsh-desktop-host
+  // 0.2.0-rc.2 起不再提供（改名/移除），导致桌面版被误判为非桌面 → 重启/更新拦截失效
+  // （issue #177 / #167：pocketRestart 杀宿主、拉孤儿进程抢端口 EADDRINUSE）。
+  // 现改为优先用 Electron 运行时特征（process.versions.electron / ELECTRON_RUN_AS_NODE），
+  // 再回退到旧的 ctx 服务名；宿主仍可用 internals.isDesktop 显式下发。
+  const isDesktop = internals.isDesktop !== undefined
+    ? internals.isDesktop === true
+    : Boolean(process.versions.electron)
+      || process.env.ELECTRON_RUN_AS_NODE !== undefined
+      || ctx.get?.('desktopProfiles') !== undefined
+      || ctx.get?.('desktopPnpm') !== undefined;
   if (isDesktop) {
-    logger.info(
-      reason === 'detected'
-        ? 'dsh-pocket: 检测到桌面宿主，更新/重启已关闭 | desktop host detected — update/restart disabled'
-        : `dsh-pocket: 宿主未确认（${reason}），出于安全关闭更新/重启；独立跑 dsh web 时可设 config.allowHostControl: true | host not proven standalone — update/restart disabled`
-    );
+    logger.info('dsh-pocket: DSH Desktop detected — update/restart disabled here | 检测到桌面端环境，更新/重启已关闭');
   }
 
   // 桌面端 advanced 模式检测（issue #19）：dsh-plugin-desktop 的 mode 配置存在
@@ -336,7 +306,7 @@ export function apply(ctx, config = {}, internals = {}) {
     // 端口（issue #70）：插件模式优先级 settings.proxyPort > cordis patch config.port > 3081。
     // 3081 被占时 createPocketService 内部 EADDRINUSE 抛错，按 DSH 插件启动失败处理（用户改端口重启即可）。
     port: internals.port ?? config.port ?? (proxyPort() || 3081),
-    home: internals.home,
+    home: internals.home ?? process.env.DSH_HOME ?? join(homedir(), '.dsh'),
     internals,
     getLanIpOverride: () => lanIpOverride(),
     getLanEnabled: () => lanEnabled(),
@@ -362,6 +332,7 @@ export function apply(ctx, config = {}, internals = {}) {
       // dsh web 重启/更新后 sessionKey 变化 → 手机需重新输入
       sessionKey: randomBytes(16).toString('hex'),
       getToken: (host) => tokenForHost(host),
+      getCredentialKind: (host) => credentialKindForHost(host),
       isProtected: (host) => {
         if (isLanOverrideHost(host)) return lanAuthEnabled();
         return classifyHost(host) === 'public' ? true : lanAuthEnabled();
@@ -406,6 +377,8 @@ export function apply(ctx, config = {}, internals = {}) {
     setLanAuthEnabled: (on) => setLanAuthEnabled(on),
     getLanEnabled: () => lanEnabled(),
     setLanEnabled: (on) => setLanEnabled(on),
+    getMobileRightbarEnabled: () => mobileRightbarEnabled(),
+    setMobileRightbarEnabled: (on) => setMobileRightbarEnabled(on),
     getLanIpOverride: () => lanIpOverride(),
     setLanIpOverride: (ip) => setLanIpOverride(ip),
     getPinCustom: (which) => pinCustom(which),

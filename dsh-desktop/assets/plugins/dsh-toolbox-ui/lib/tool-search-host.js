@@ -55,7 +55,7 @@ export function warnOnce(ctx, key, message) {
  * - `agents`（公开服务）→ 面板显示真实生效状态（C2，本轮不做）。缺失不告警。
  *
  * @param {object} ctx - 宿主 Context。
- * @returns {{modeFor: boolean, sdkSchemas: boolean, projections: boolean, agents: boolean}}
+ * @returns {{modeFor: boolean, sdkSchemas: boolean, definitions: boolean, projections: boolean, agents: boolean}}
  */
 export function probeHost(ctx) {
   const tools = ctx?.tools
@@ -65,6 +65,7 @@ export function probeHost(ctx) {
   const caps = {
     modeFor: typeof tools?.modeFor === 'function',
     sdkSchemas: typeof tools?.sdkSchemas === 'function',
+    definitions: typeof tools?.definitions === 'function' && typeof tools?.resolve === 'function',
     projections: typeof projections?.register === 'function' && typeof projections?.stateOf === 'function',
     agents: typeof agents?.list === 'function',
   }

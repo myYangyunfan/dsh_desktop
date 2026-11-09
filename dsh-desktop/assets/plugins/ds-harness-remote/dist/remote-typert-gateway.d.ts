@@ -6,8 +6,9 @@ export declare class RemoteTypertGateway implements RemoteTypertGatewayTarget {
     private readonly client;
     private readonly compatibility?;
     private readonly harnessVersion?;
+    private readonly deferStreamDisconnect;
     private frameTransfers?;
-    constructor(client: RemoteClientCore, compatibility?: SessionFormatCompatibility | undefined, harnessVersion?: string | undefined);
+    constructor(client: RemoteClientCore, compatibility?: SessionFormatCompatibility | undefined, harnessVersion?: string | undefined, deferStreamDisconnect?: boolean);
     invoke(request: TypertGatewayRequest): Promise<unknown>;
     dispatch(endpoint: string, payload: unknown, signal: AbortSignal): Promise<TypertRpcResult>;
     private legacyWelcomeAcknowledged;
@@ -16,6 +17,7 @@ export declare class RemoteTypertGateway implements RemoteTypertGatewayTarget {
     private normalizeLegacyWelcomeSettings;
     open(endpoint: string, payload: unknown, signal: AbortSignal): Promise<AsyncIterable<unknown>>;
     private iterate;
+    private deferDisconnect;
     private callTransferred;
     private readTransferred;
 }

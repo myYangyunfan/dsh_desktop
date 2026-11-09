@@ -1,7 +1,7 @@
 // 宿主侧 skills 读取层：把 ctx.skills 的目录投影成面板要的形状。
 //
 // 为什么需要这一层：宿主 SkillRegistry 返回的是「已生效的胜出条目」，而面板要的是
-// 「可分别操作的行」——同名跨作用域各占一行、带作用域归属、能被界面直接渲染。
+// 「可分别操作的行」——合并各查询的胜出条目、带作用域归属、能被界面直接渲染。
 // 投影逻辑集中在这里，宿主契约的细节就不会漏进 UI。
 //
 // 本层只读：不写盘、不做启停（那些在 lib/skills-file-ops.js）。
@@ -9,6 +9,8 @@
 import { access, readdir, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
+// 宿主 loader 的表达式求值器（peer 依赖，两代都导出）：复用同一套语义，不自己实现 !!js。
+import { interpolate } from '@deepseek-ai/cordis-plugin-loader'
 import { readSkillDocument, resolveSkillTarget, SkillNotFoundError } from './skills-file-ops.js'
 
 // 宿主的 source 标签（见 dsh-skill-filesystem 的 roots()）：project-* 属项目级，
@@ -336,7 +338,7 @@ async function toView(summary, { cwd }) {
 }
 
 /**
- * 查询一个技能作用域下的全部技能。
+ * 查询一个作用域下宿主按名裁决后的技能胜出项（不是全部物理副本）。
  * @param {object} skills - 宿主 ctx.skills（或等价替身）。
  * @param {{ cwd?: string, scope?: object, signal?: AbortSignal }} options
  * @returns {Promise<object[]>}
@@ -371,8 +373,9 @@ async function queryScope(skills, options) {
  * 安装下拉里同一个目录也以两个身份各出现一次。
  *
  * 所以去重判据必须是**物理位置**，不是字符串也不只是 source：同一个文件只留一行，
- * 留 rank 更前的那份（= 模型真正会收到的那份）。反过来，**不同文件**的同名技能必须保留
- * 两行——那是真实的跨作用域遮蔽，压掉它等于把用户装的东西藏起来（看 docs/skills.md 的作用域表）。
+ * 留 rank 更前的那份。不同查询已经返回的同名物理文件分别保留；同一次查询中被宿主裁掉的
+ * 低优先级副本不会出现在这里。调用权限不参与同名裁决，skillTargetsView 也只描述可安装位置，
+ * 不能拿它补成「已发现技能」或推断落选副本已经生效。
  *
  * @param {object} ctx - 宿主上下文（或 { get } 替身）。
  * @param {{ workspaces?: string[], signal?: AbortSignal }} options
@@ -538,13 +541,28 @@ async function isDirectory(path) {
   }
 }
 
-/** 从 loader 树里取 filesystem provider 的 config；找不到就返回空对象（只剩环境变量与默认值）。 */
+/** 从 loader 树里取 filesystem provider 的生效 config；找不到就只剩环境变量与默认值。 */
 function providerConfig(ctx) {
   const entries = ctx?.loader?.entries?.()
-  if (!Array.isArray(entries)) return {}
+  // 正式 loader 返回 Generator；Array 替身也走同一个 Iterable 契约。
+  if (typeof entries?.[Symbol.iterator] !== 'function') return {}
   for (const entry of entries) {
+    if (entry?.disabled === true || entry?.options?.disabled === true) continue
     const name = entry?.options?.name
-    if (typeof name === 'string' && name.includes(PROVIDER_PACKAGE)) return entry.options.config ?? {}
+    if (typeof name !== 'string' || !name.includes(PROVIDER_PACKAGE)) continue
+    // options.config 保留 `!!js` 原值；provider 实际收到的是**求值后**的配置。
+    // 0.2.2 的 loader 把求值放在 `internal/config` 事件里，`fiber.config` 不保证已经是求值结果，
+    // 于是面板会拿 `{ __jsExpr: ... }` 当路径拼成 `[object Object]`。这里用宿主自己的
+    // interpolate（同一个包、同一套语义，不自己实现表达式）把残余表达式求值一次。
+    const raw = entry.fiber?.config ?? entry.options.config ?? {}
+    const scope = entry.fiber?.ctx ?? entry.ctx ?? ctx
+    try {
+      const evaluated = interpolate(scope, raw)
+      return evaluated !== null && typeof evaluated === 'object' ? evaluated : {}
+    } catch {
+      // 表达式依赖的符号在读取侧不可见时保持原值（不猜、不崩）；调用方按"读不到生效配置"展示。
+      return raw
+    }
   }
   return {}
 }

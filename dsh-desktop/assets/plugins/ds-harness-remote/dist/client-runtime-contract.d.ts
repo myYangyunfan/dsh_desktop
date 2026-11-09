@@ -27,6 +27,7 @@ export interface RemoteHostFeatures {
     pi?: boolean;
     opencode: boolean;
     claude?: boolean;
+    hermes?: boolean;
     acpModelLoadsSession?: boolean;
     workspaceTypes?: readonly RemoteWorkspaceTypeDescription[];
     pluginRoute: boolean;
@@ -77,7 +78,7 @@ export interface RemoteWorkspaceView {
 export interface RemoteWorkspaceSelection {
     targetDeviceId: string;
     workspaceId: string;
-    backend?: 'harness' | 'codex' | 'cursor' | 'antigravity' | 'pi' | 'opencode' | 'claude';
+    backend?: 'harness' | 'codex' | 'cursor' | 'antigravity' | 'pi' | 'opencode' | 'claude' | 'hermes';
     sessionId?: string;
 }
 export interface RemoteDeviceView {
@@ -105,16 +106,22 @@ export interface HostAuthorizationControl {
     setAgentBackends?(config: ResolvedConfig): Promise<void>;
     setTerminalEnabled?(enabled: boolean): void;
     setLoopbackPorts?(ports: readonly number[]): void;
+    pairingControl?(action: 'start' | 'status' | 'confirm' | 'cancel', input: {
+        sessionId?: string;
+        verificationCode?: string;
+    }): Promise<import('./pairing-contract.js').HostPairingView | undefined>;
     hostStatus(): {
         deviceId?: string;
         configured: boolean;
         online: boolean;
         reconnecting: boolean;
+        recoveryExpiresAt?: number;
         lastActiveAt?: number;
         error?: string;
         account?: string;
         authorized: boolean;
         accountRequired: boolean;
+        pairingHostOnly?: boolean;
         connectedClients?: Array<{
             deviceId: string;
             name: string;

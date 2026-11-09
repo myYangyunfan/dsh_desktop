@@ -14,17 +14,51 @@
 import * as dshTools from '@deepseek-ai/dsh-tools'
 import { RUN_CODE_TOOL } from './tool-search-host.js'
 
-/** 宿主 PTC 传输工具的规范名（`dsh-tools` 的 `RUN_CODE_NAME`；测试钉住两者相等）。 */
+/** 宿主 PTC 传输工具的规范名（`dsh-tools` 的 `RUN_CODE_NAME`；测试钉住它没写错）。 */
 const RUN_CODE = RUN_CODE_TOOL
+const renderersByHost = new WeakMap()
+
+function rendererModuleFor(host, loader) {
+  if (typeof host?.definitions === 'function') {
+    let pending = renderersByHost.get(host)
+    if (pending === undefined) {
+      pending = Promise.resolve().then(() => loader())
+      renderersByHost.set(host, pending)
+      pending.catch(() => renderersByHost.delete(host))
+    }
+    return pending
+  }
+  return Promise.resolve(dshTools)
+}
 
 /**
- * 按运行时语言选渲染器。宿主也只认这两个键（`SDK_RENDERERS`）。
- * 未知语言回 TS：`requirePtcRuntime` 在宿主侧已经先拒了未知语言，这里只是不制造第二份判断。
- * @param {string|undefined} language - `ptcRuntime.language`。
- * @returns {Function}
+ * 从当前宿主 Loader 取 renderer 模块。新旧解析树不能跨用：即使版本相同，Cordis identity
+ * 仍由宿主 loader 包的模块实例决定。新版入口只在 `definitions()` 契约存在时才加载。
+ * @param {{host?: object, loadNewRenderer?: () => Promise<object>}} [options]
+ * @returns {Promise<object>}
  */
-export function rendererFor(language) {
-  return language === 'python' ? dshTools.renderToolsSdkPy : dshTools.renderToolsSdk
+export function loadRenderers(options = {}) {
+  return rendererModuleFor(options.host, options.loadNewRenderer ?? (() => import('@deepseek-ai/dsh-tool-executor-ptc')))
+}
+
+/**
+ * 同步选择一个已加载模块的 renderer。旧宿主继续使用同一份 dsh-tools 出口。
+ * @param {string|undefined} language
+ * @param {object} [module]
+ * @returns {Function|undefined}
+ */
+export function rendererFor(language, module = dshTools) {
+  return language === 'python' ? module.renderToolsSdkPy : module.renderToolsSdk
+}
+
+/**
+ * 同步选择语言对应的 schema->type renderer。
+ * @param {string|undefined} language
+ * @param {object} [module]
+ * @returns {Function|undefined}
+ */
+export function schemaTypeRendererFor(language, module = dshTools) {
+  return language === 'python' ? module.jsonSchemaToPy : module.jsonSchemaToTs
 }
 
 /**
@@ -45,7 +79,30 @@ export function rendererFor(language) {
  * @param {{sdkSchemas?: boolean}} caps - 探测结果。
  * @returns {{schemas: object[]|undefined, via: 'sdkSchemas'|'public'|'incomplete'|'none'}}
  */
-export function readSdkSchemas(tools, scope, caps) {
+export function readSdkSchemas(tools, scope, caps, toolSet) {
+  if (caps?.definitions === true && typeof tools?.definitions === 'function' && toolSet !== undefined) {
+    try {
+      const definitions = tools.definitions(scope, toolSet)
+      if (!Array.isArray(definitions)) return { schemas: undefined, via: 'incomplete' }
+      const admitted = typeof toolSet.view === 'function' ? toolSet.view(scope) : undefined
+      const schemas = []
+      for (const definition of definitions) {
+        if (admitted !== undefined && !admitted.has(definition?.name)) continue
+        if (definition?.name === RUN_CODE) continue
+        const output = definition?.output?.schema
+        if (output === undefined) return { schemas: undefined, via: 'incomplete' }
+        schemas.push({
+          name: definition.name,
+          description: definition.description,
+          parameters: definition.parameters,
+          output,
+        })
+      }
+      return { schemas, via: 'definitions' }
+    } catch {
+      return { schemas: undefined, via: 'incomplete' }
+    }
+  }
   if (caps?.sdkSchemas === true && typeof tools?.sdkSchemas === 'function') {
     const fast = tools.sdkSchemas(scope)
     if (Array.isArray(fast)) {

@@ -98,6 +98,25 @@ export interface CatalogEntry {
      * 2026-09-28-bundle-components-and-github-peers, section 7.3). Absent when
      * the catalog predates the field. */
     manifestVersion?: string;
+    /** The manifest's own `engines.dsh` range (registry `Entry.engines`; design
+     * 2026-11-02-market-borrowings §1). dsh 0.2.1 lets it decide a compatibility
+     * verdict ALONE, so `ownManifest` hands it to the running dsh's rule beside
+     * {@link dshPeers} rather than instead of it. Absent when the package
+     * declares none, or when its catalog predates the field — and on a github
+     * entry until its repository is re-read under `DECLARATIONS_RULE` 4. */
+    engines?: string;
+    /** The count of the manifest's runtime `dependencies` (registry
+     * `Entry.dependencies`; design 2026-11-02-market-borrowings §2). A
+     * prepurchase fact for the detail row, absent when none. */
+    dependencies?: number;
+    /** The command names the manifest's `bin` declares (registry `Entry.bin`;
+     * same design): a fact about the install surface, never a claim about what
+     * any command does. Absent when none. */
+    bin?: string[];
+    /** The manifest declares a `preinstall`, `install` or `postinstall` script
+     * (registry `Entry.installScripts`; design 2026-11-04-borrowings-round-4
+     * §2): a fact about the install, never a verdict on what the script does. */
+    installScripts?: boolean;
     /** Wire-compatibility key, not a field to read — see {@link installSize},
      * which the catalog parse fills from this one. It names npm's OWN quantity
      * (`dist.unpackedSize`), so it is npm-only and the parse REFUSES one on a
@@ -132,6 +151,13 @@ export interface CatalogEntry {
      * nothing reads it here yet — it is telemetry the catalog publishes, not a
      * gate, a badge, or an install decision. */
     forked?: boolean;
+    /** The sha256 that keys this entry's icon in the catalog's icons sidecar
+     * (registry `Entry.icon`; design 2026-10-23-shop-plugin-icons §6.1). Present
+     * exactly when the build published an icon for the entry. The bytes are not
+     * on the entry but in the sidecar, which holds each distinct icon once, so
+     * this is only the key. Additive and optional, so it rides every
+     * schemaVersion. */
+    icon?: string;
 }
 export interface DeniedEntry {
     name: string;

@@ -2,12 +2,12 @@ import { stat } from 'node:fs/promises';
 import { hostname } from 'node:os';
 import { join } from 'node:path';
 import { DEFAULT_REMOTE_SERVER_URL, normalizeServerUrl } from './config.js';
-import { IdentityStore, serverStorageDirectory, } from './identity-store.js';
+import { IdentityInvalidError, IdentityStore, prepareDefaultIdentityDirectory, resetDefaultIdentityRoles, serverStorageDirectory, } from './identity-store.js';
 import { HostServerApi, ServerApiError, } from './server-api.js';
-import { ServerCredentialStore } from './server-credentials.js';
+import { ServerCredentialStore, ServerCredentialsInvalidError, } from './server-credentials.js';
 const QR_POLL_INTERVAL_MS = 2_000;
 const TERMINAL_QR_MARGIN = 4;
-/** TUI-friendly account bootstrap. Configuration remains owned by the DSH profile. */
+/** Headless account bootstrap. Configuration remains owned by the DSH profile. */
 export async function runCli(args = process.argv.slice(2), dependencies = {}) {
     const runtime = resolveDependencies(dependencies);
     const [command, ...rest] = args;
@@ -20,6 +20,8 @@ export async function runCli(args = process.argv.slice(2), dependencies = {}) {
             return await status(rest, runtime);
         if (command === 'logout')
             return await logout(rest, runtime);
+        if (command === 'reset-identity')
+            return await resetIdentity(rest, runtime);
         if (command === 'help' || command === '--help' || command === '-h' || command === undefined) {
             write(runtime.stdout, helpText());
             return 0;
@@ -39,7 +41,7 @@ async function register(args, runtime) {
     }
     const context = await hostContext(runtime);
     await context.api.authorizeHostWithCode(context.identity, args[0]);
-    write(runtime.stdout, 'Remote Host registration complete. Restart dsh-tui to bring the Remote Host online.\n');
+    write(runtime.stdout, 'Remote Host registration complete. Restart the Harness instance to bring the Remote Host online.\n');
     return 0;
 }
 async function login(args, runtime) {
@@ -81,7 +83,7 @@ async function login(args, runtime) {
             continue;
         }
         if (result.status === 'complete') {
-            write(runtime.stdout, `${authorizedMessage(result.authorization)} Restart dsh-tui to bring the Remote Host online.\n`);
+            write(runtime.stdout, `${authorizedMessage(result.authorization)} Restart the Harness instance to bring the Remote Host online.\n`);
             return 0;
         }
         if (result.status === 'expired')
@@ -95,19 +97,19 @@ async function status(args, runtime) {
     if (args.length !== 0)
         throw new CliUsageError('Usage: ds-harness-remote status');
     const serverUrl = selectedServer();
-    const root = new IdentityStore({ env: runtime.env }).directory;
+    const root = await prepareDefaultIdentityDirectory({ env: runtime.env });
     const directory = serverStorageDirectory(root, serverUrl, 'host');
     const lines = [
         'Remote Host status',
         `Server: ${serverUrl}`,
-        'Host control: enabled (dsh-TUI default)',
+        'Host control: enabled',
     ];
     if (!await exists(join(directory, 'device.json'))) {
         lines.push('Device: not initialized', 'Authorization: logged out', 'Credential: unavailable');
-        write(runtime.stdout, `${lines.join('\n')}\n\nRun "ds-harness-remote login" or use "/remote login" in dsh-TUI.\n`);
+        write(runtime.stdout, `${lines.join('\n')}\n\nRun "ds-harness-remote login" to authorize this Host.\n`);
         return 0;
     }
-    const identities = runtime.createIdentityStore({ directory, env: runtime.env });
+    const identities = runtime.createIdentityStore({ directory, env: runtime.env, role: 'host' });
     const deviceName = runtime.env.DSH_REMOTE_DEVICE_NAME ?? hostname();
     const identity = await identities.loadOrCreate(deviceName);
     const store = new ServerCredentialStore(directory);
@@ -115,7 +117,7 @@ async function status(args, runtime) {
     lines.push(`Device: ${identity.name} (${identity.deviceId})`);
     if (stored === undefined) {
         lines.push('Authorization: logged out', 'Credential: unavailable');
-        write(runtime.stdout, `${lines.join('\n')}\n\nRun "ds-harness-remote login" or use "/remote login" in dsh-TUI.\n`);
+        write(runtime.stdout, `${lines.join('\n')}\n\nRun "ds-harness-remote login" to authorize this Host.\n`);
         return 0;
     }
     lines.push(`Authorization: logged in (${authorizationLabel(stored.authorizationMethod)})`);
@@ -126,7 +128,7 @@ async function status(args, runtime) {
     try {
         await api.authenticate(identity);
         lines.push('Credential: ready');
-        lines.push('Presence: published while dsh-tui is running');
+        lines.push('Presence: published while the Harness process is running');
         write(runtime.stdout, `${lines.join('\n')}\n`);
         return 0;
     }
@@ -140,38 +142,81 @@ async function logout(args, runtime) {
     if (args.length !== 0)
         throw new CliUsageError('Usage: ds-harness-remote logout');
     const serverUrl = selectedServer();
-    const root = new IdentityStore({ env: runtime.env }).directory;
+    const deviceName = runtime.env.DSH_REMOTE_DEVICE_NAME ?? hostname();
+    let root;
+    try {
+        root = await prepareDefaultIdentityDirectory({ env: runtime.env });
+    }
+    catch (error) {
+        if (error instanceof IdentityInvalidError && error.code === 'IDENTITY_INVALID') {
+            await resetDefaultIdentityRoles(['host'], serverUrl, deviceName, {
+                env: runtime.env,
+                createIdentityStore: runtime.createIdentityStore,
+            });
+            write(runtime.stdout, 'Remote Host logged out and its local device identity was rotated. Restart the Harness instance.\n');
+            return 0;
+        }
+        throw error;
+    }
     const directory = serverStorageDirectory(root, serverUrl, 'host');
-    if (!await exists(join(directory, 'device.json'))) {
+    const [hasDevice, hasKey, hasCredentials] = await Promise.all([
+        exists(join(directory, 'device.json')),
+        exists(join(directory, 'device.key')),
+        exists(join(directory, 'server-credentials.json')),
+    ]);
+    if (!hasDevice && !hasKey && !hasCredentials) {
         await new ServerCredentialStore(directory).clear();
         write(runtime.stdout, 'This Host is already logged out.\n');
         return 0;
     }
-    const deviceName = runtime.env.DSH_REMOTE_DEVICE_NAME ?? hostname();
-    const identities = runtime.createIdentityStore({ directory, env: runtime.env });
-    const identity = await identities.loadOrCreate(deviceName);
-    const api = runtime.createHostApi(serverUrl, new ServerCredentialStore(directory));
-    api.bindIdentity(identity);
+    const identities = runtime.createIdentityStore({ directory, env: runtime.env, role: 'host' });
     let revokeFailure;
     try {
+        const identity = await identities.loadOrCreate(deviceName);
+        const api = runtime.createHostApi(serverUrl, new ServerCredentialStore(directory));
+        api.bindIdentity(identity);
         await api.revokeCurrentDevice();
     }
     catch (error) {
         revokeFailure = error;
     }
     await identities.reset(deviceName);
-    if (revokeFailure !== undefined) {
+    await new ServerCredentialStore(directory).clear();
+    if (revokeFailure !== undefined
+        && !(revokeFailure instanceof IdentityInvalidError)
+        && !(revokeFailure instanceof ServerCredentialsInvalidError)) {
         throw new Error(`Local Host credentials were cleared, but Server revocation failed: ${cliErrorMessage(revokeFailure)}`);
     }
-    write(runtime.stdout, 'Remote Host logged out and its local device identity was rotated. Restart dsh-tui.\n');
+    write(runtime.stdout, 'Remote Host logged out and its local device identity was rotated. Restart the Harness instance.\n');
+    return 0;
+}
+async function resetIdentity(args, runtime) {
+    if (args.length > 1) {
+        throw new CliUsageError('Usage: ds-harness-remote reset-identity [host|client|all]');
+    }
+    const roleArg = args[0];
+    if (roleArg !== undefined && roleArg !== 'host' && roleArg !== 'client' && roleArg !== 'all') {
+        throw new CliUsageError('Usage: ds-harness-remote reset-identity [host|client|all]');
+    }
+    const serverUrl = selectedServer();
+    const deviceName = runtime.env.DSH_REMOTE_DEVICE_NAME ?? hostname();
+    const roles = roleArg === 'client' ? ['client'] : roleArg === 'host' ? ['host'] : ['host', 'client'];
+    await resetDefaultIdentityRoles(roles, serverUrl, deviceName, {
+        env: runtime.env,
+        createIdentityStore: runtime.createIdentityStore,
+    });
+    for (const role of roles) {
+        write(runtime.stdout, `Remote ${role} identity was reset and a new key pair was created.\n`);
+    }
+    write(runtime.stdout, 'Restart the Harness instance to use the fresh identity.\n');
     return 0;
 }
 async function hostContext(runtime) {
     const serverUrl = selectedServer();
-    const root = new IdentityStore({ env: runtime.env }).directory;
+    const root = await prepareDefaultIdentityDirectory({ env: runtime.env });
     const directory = serverStorageDirectory(root, serverUrl, 'host');
     const deviceName = runtime.env.DSH_REMOTE_DEVICE_NAME ?? hostname();
-    const identities = runtime.createIdentityStore({ directory, env: runtime.env });
+    const identities = runtime.createIdentityStore({ directory, env: runtime.env, role: 'host' });
     const identity = await identities.loadOrCreate(deviceName);
     const api = runtime.createHostApi(serverUrl, new ServerCredentialStore(directory));
     return { api, identities, identity, deviceName };
@@ -192,11 +237,9 @@ function resolveDependencies(input) {
     };
 }
 export async function renderTerminalQr(url) {
-    // Keep the terminal-only renderer off the Host plugin startup path. The
-    // built-in compact renderer has only a one-module quiet zone and relies on
-    // half-height glyphs, which is difficult for phone cameras to recognize in
-    // some terminal profiles. Render square modules with an explicit standard
-    // four-module quiet zone instead.
+    // Keep the terminal-only renderer off the Host plugin startup path. Render
+    // square modules with an explicit standard four-module quiet zone so phone
+    // cameras recognize the code in narrow terminal profiles.
     const { default: QRCode } = await import('qrcode');
     const modules = QRCode.create(url, { errorCorrectionLevel: 'M' }).modules;
     const width = modules.size + TERMINAL_QR_MARGIN * 2;
@@ -211,30 +254,6 @@ export async function renderTerminalQr(url) {
         lines.push(line);
     }
     lines.push(...Array.from({ length: TERMINAL_QR_MARGIN }, () => quietLine));
-    return lines.join('\n');
-}
-/** Square terminal modules at half the row count for fullscreen TUI scenes. */
-export async function renderCompactTerminalQr(url) {
-    const { default: QRCode } = await import('qrcode');
-    const modules = QRCode.create(url, { errorCorrectionLevel: 'M' }).modules;
-    const size = modules.size + TERMINAL_QR_MARGIN * 2;
-    const lines = [];
-    const isBlack = (row, column) => {
-        const qrRow = row - TERMINAL_QR_MARGIN;
-        const qrColumn = column - TERMINAL_QR_MARGIN;
-        return qrRow >= 0 && qrRow < modules.size
-            && qrColumn >= 0 && qrColumn < modules.size
-            && modules.get(qrRow, qrColumn) === 1;
-    };
-    for (let row = 0; row < size; row += 2) {
-        let line = '\u001B[30;47m';
-        for (let column = 0; column < size; column += 1) {
-            const top = isBlack(row, column);
-            const bottom = isBlack(row + 1, column);
-            line += top ? bottom ? '█' : '▀' : bottom ? '▄' : ' ';
-        }
-        lines.push(`${line}\u001B[0m`);
-    }
     return lines.join('\n');
 }
 function authorizedMessage(authorization) {
@@ -266,11 +285,11 @@ function helpText() {
         '  ds-harness-remote register <server-token>',
         '  ds-harness-remote status',
         '  ds-harness-remote logout',
+        '  ds-harness-remote reset-identity [host|client|all]',
         '',
-        'Inside dsh-TUI, use /remote login, /remote status, or /remote logout.',
         'login uses an available QR provider (preferring Zhihu). Use login list to see available providers.',
         `The Server is ${DEFAULT_REMOTE_SERVER_URL}.`,
-        'Host configuration is not exposed by this CLI yet. Restart dsh-tui after login or logout.',
+        'Host configuration is not exposed by this CLI yet. Restart the Harness instance after login or logout.',
         '',
     ].join('\n');
 }

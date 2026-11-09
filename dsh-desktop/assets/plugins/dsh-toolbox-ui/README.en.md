@@ -11,7 +11,7 @@
   <a href="https://www.npmjs.com/package/dsh-toolbox-ui"><img src="https://img.shields.io/npm/dm/dsh-toolbox-ui" alt="downloads"></a>
   <a href="https://github.com/Imzl-zl/dsh-toolbox-ui/actions/workflows/ci.yml"><img src="https://github.com/Imzl-zl/dsh-toolbox-ui/actions/workflows/ci.yml/badge.svg" alt="ci"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/npm/l/dsh-toolbox-ui" alt="license"></a>
-  <img src="https://img.shields.io/badge/DSH-%E2%89%A50.2.0--rc.1-blue" alt="DSH >= 0.2.0-rc.1">
+  <img src="https://img.shields.io/badge/DSH-%E2%89%A50.2.1--rc.5-blue" alt="DSH >= 0.2.1-rc.5">
 </p>
 
 <p align="center"><a href="README.md">中文</a> | <b>English</b></p>
@@ -45,6 +45,8 @@ See every installed skill's **real scope** and cross-scope shadowing, enable/dis
 - **Move servers between workspaces**: copy this project's MCP servers into another registered workspace (done inside the Host, so credentials never pass through the browser), or export the whole project config as JSON
 - **Deferred tool loading (ToolSearch)**: a server's tools no longer have to stay resident in context every turn — the model first sees a **name-only** catalog and, once `tool_search` finds a tool (by keyword or `select:<exact name>`), its full parameter schema enters the tool list and becomes directly callable. Off by default: click the "Deferred / Resident" chip on a row to flip it (or use "Defer all" above the list); set `DSH_MCP_TOOL_SEARCH=off` to fall back to full injection everywhere. Its three limits (tools per search, catalog lines, discovered-set size) are adjustable under "Deferral settings" and stored as `config.toolSearch` in the profile patch
 
+- **Unified tool loading**: "Tool search" in the panel header offers three modes — **Follow existing behaviour** (default; upgrading changes nothing), **Recommended** (MCP on demand), **Everything resident** (troubleshooting and compatibility; per-tool settings are kept). **DSH built-in and third-party tools are not managed by default** (left to the host); flip the switch to manage them and they appear as their own group. MCP servers are grouped and expandable with per-tool overrides, and the search box is an **optional** filter — no need to remember tool names. "Setting" and "effective state + reason" are separate columns, and the search entry point plus PTC's `run_code` cannot be hidden by policy — and the search entry point itself only appears while at least one tool is actually deferred, so the model never searches an empty catalog
+
 **Skills**
 
 - Real scope and cross-scope shadowing: the same name in different scopes is a legal configuration; the panel lists each copy and marks which one wins
@@ -63,10 +65,10 @@ See every installed skill's **real scope** and cross-scope shadowing, enable/dis
 
 ```sh
 # Recommended: from npm — `dsh plugin update` then upgrades within ^1.x
-dsh plugin --profile web add dsh-toolbox-ui@^1.8.2
+dsh plugin --profile web add dsh-toolbox-ui@^1.10.1
 
 # Or pin a GitHub release tag (no automatic upgrades; re-add with a new tag)
-dsh plugin --profile web add github:Imzl-zl/dsh-toolbox-ui#v1.8.2
+dsh plugin --profile web add github:Imzl-zl/dsh-toolbox-ui#v1.10.1
 ```
 
 Then **restart `dsh web`**. To uninstall (your existing MCP entries stay):
@@ -129,7 +131,7 @@ When a newer version exists the panel shows a dismissible banner; pressing Upgra
 
 **How do I defer a single server?** Every row carries a chip: "Resident" means that server's tools stay in context, "Deferred" means they load on demand. **Click it to toggle** — no need to open the edit form (global entries shown inside a project tab must be changed on the "Global" tab); "Defer all" at the top flips everything in the current scope at once. Servers with few tools still take effect when ticked; the panel just says the savings will be small.
 
-**Where do I tune the three limits?** Panel → MCP → "Deferral settings" at the top: `maxResults` (tools returned per search, default 10), `maxCatalogLines` (catalog lines, default 300) and `maxDiscovered` (discovered-set size, default 20). Saving writes them into `config.toolSearch` of the profile patch and takes effect **in the current session immediately** (no restart); values equal to the defaults are not written, so a future default change reaches you. You can also edit that config block by hand — then it applies after restarting `dsh web`. ⚠️ A misspelled key makes the plugin **fail to load and reports the exact path** (it is not silently ignored); fix it and restart.
+**Where do I tune the two limits?** Panel → MCP → "Deferral settings" at the top: `maxResults` (tools returned per search, default 10) and `maxDiscovered` (discovered-set size, default 20). There is also a "Limit catalog size" switch (`maxCatalogChars`) that is **off by default** — off lists every tool in the catalog; turn it on only with very many tools and a need to trim context (it prefills 12500, a suggested starting point only). Saving writes them into `config.toolSearch` of the profile patch and takes effect **in the current session immediately** (no restart); values equal to the defaults are not written, so a future default change reaches you. You can also edit that config block by hand — then it applies after restarting `dsh web`. ⚠️ A misspelled key makes the plugin **fail to load and reports the exact path** (it is not silently ignored); fix it and restart.
 
 **How do I tell "mount failed", "connection failed" and "scope isolation failed" apart?** Three different things: **mount failed** = it never attached during session mount; **connection failed** = `mcp-client` cannot connect or ran out of retries; **scope isolation failed** = the connection is fine but its tools are not in the shared scope layer. The detail pane gives the specific reason; see [Design & limits](docs/design.md#连接状态语义).
 
@@ -139,12 +141,11 @@ When a newer version exists the panel shows a dismissible banner; pressing Upgra
 
 | Item | Verified |
 |---|---|
-| DeepSeek Harness | `0.2.0-rc.1` and above (`0.2.0-rc.2` and `0.2.1-rc.2` both run the full suite; the cordis 4.0.5 / loader 1.0.6 pair that ships with 0.2.1 is covered too) |
+| DeepSeek Harness | Admission support starts at `0.2.1-rc.5`; verified `0.2.1-rc.5` (Cordis 4.0.5 / Loader 1.0.6) and `0.2.2-rc.1` (Cordis 4.1.0 / Loader 1.1.0). Older hosts remain historical regression targets, not part of the current release support surface. |
 | Node.js | the runtime DSH ships with / supports |
 | Platform | Windows; Linux and macOS use the same DSH Web contract |
 
-Requires 0.2.x or newer: ToolSearch depends on the per-agent presentation mode (`ctx.tools.modeFor(agent)`) and the `tools:sdk` manual section, and neither exists on 0.1.x. No downgrade branches are kept for older hosts.
-The supported surface is **the 0.2.0 and 0.2.1 lines**: between them the host swapped loader generations (1.0.3 → 1.0.6), which changed startup-error propagation and what a dispose writes to disk. The plugin adapts to both explicitly, each with a standing test.
+Current release admission starts at **0.2.1-rc.5**: the 0.2.1 compatibility adapter and the 0.2.2 step-owned toolSet / standalone executor path are covered. Older hosts remain historical loader regression targets, not release admission targets; newer Loader/Include lifecycle behavior is validated as a matched host set.
 
 ## Development
 

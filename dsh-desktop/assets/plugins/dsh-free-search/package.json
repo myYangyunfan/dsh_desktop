@@ -1,7 +1,7 @@
 {
   "name": "dsh-free-search",
-  "version": "0.9.11",
-  "description": "Free web search for DeepSeek Harness: 27 engines (Bing/DuckDuckGo/AnySearch/SearXNG/Exa/Tavily/Keenable/Firecrawl/Parallel keyless; Zhihu global/site via MCP and Perplexity/SerpBase/DeepSeek (official + native tools/search)/You.com/Baidu/Kimi/Aliyun/Doubao with key; OpenAI/Gemini/Claude model built-in search, explicit-only) + auto smart routing + global engine enable/disable & fallback priority + editable zh/en language pools + multi mode (parallel full language-pool merge) + multi_search cross-source tool + failure-aware fallback (quota/auth cooldown, transient retry, fallbackOn) + time filtering + platform search + domain blocklist (blockedDomains) + web_fetch, with web settings UI.",
+  "version": "0.9.39",
+  "description": "Free web search for DeepSeek Harness: 27 engines (Bing/DuckDuckGo/AnySearch/SearXNG/Exa/Tavily/Keenable/Firecrawl/Parallel/You.com keyless; Zhihu global/site via MCP and Perplexity/SerpBase/DeepSeek (official + native tools/search)/Baidu/Kimi/Aliyun/Doubao with key; OpenAI/Gemini/Claude model built-in search, explicit-only) + auto smart routing + global engine enable/disable & fallback priority + editable zh/en language pools + multi mode (parallel full language-pool merge) + multi_search cross-source tool + failure-aware fallback (quota/auth cooldown, transient retry, fallbackOn) + time filtering + platform search + domain blocklist (blockedDomains) + web_fetch, with web settings UI.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -10,21 +10,12 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "lib/index.js",
-    "lib/client.js",
-    "lib/mcp_adapter.js",
-    "lib/research.js",
-    "lib/rerank.js",
-    "lib/cache.js",
-    "lib/vertical.js",
-    "lib/fetch_provider.js",
-    "lib/fetch_upstream.js",
-    "lib/weather.js",
-    "lib/domain_filter.js",
-    "lib/url_norm.js",
-    "lib/multi_policy.js",
+    "lib/",
     "cordis.patch.yml"
   ],
+  "scripts": {
+    "prepack": "node tools/assert-package-files.mjs"
+  },
   "keywords": [
     "deepseek-harness",
     "dsh",
@@ -40,6 +31,7 @@
     "perplexity",
     "serpbase",
     "serply",
+    "outcrawl",
     "search",
     "free",
     "baidu",
@@ -65,9 +57,6 @@
   "engines": {
     "node": ">=20"
   },
-  "dependencies": {
-    "@deepseek-ai/schemastery": "^3.18.4"
-  },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-client-ui-commands": "^0.1.7-rc.1 || ^0.2.0-rc.1",
@@ -75,7 +64,7 @@
     "@deepseek-ai/dsh-client-ui-renderer": "^0.1.7-rc.1 || ^0.2.0-rc.1",
     "@deepseek-ai/dsh-settings": "^0.1.7-rc.1 || ^0.2.0-rc.1",
     "@deepseek-ai/dsh-tools": "^0.1.7-rc.1 || ^0.2.0-rc.1",
-    "@deepseek-ai/schemastery": "^3.18.4",
+    "@deepseek-ai/schemastery": ">=3.18.4 <4",
     "react": "^18.2.0"
   },
   "peerDependenciesMeta": {
@@ -106,7 +95,8 @@
   },
   "devDependencies": {
     "@deepseek-ai/dsh-settings": "^0.1.7-rc.1",
-    "@deepseek-ai/dsh-tools": "^0.1.7-rc.1"
+    "@deepseek-ai/dsh-tools": "^0.1.7-rc.1",
+    "@deepseek-ai/schemastery": ">=3.18.4 <4"
   },
   "dsh": {
     "bundle": {
@@ -121,11 +111,13 @@
       "platform": "web"
     },
     "engines": {
-      "dsh": ">=0.1.7-rc.1"
+      "dsh": ">=0.2.1-rc.2 <0.4.0-0"
     },
     "compatibility": {
       "dshReleases": {
-        "0.1.7-rc.1": "compatible"
+        "0.2.1-rc.2": "compatible",
+        "0.2.1-rc.5": "compatible",
+        "0.2.2-rc.1": "compatible"
       }
     }
   }

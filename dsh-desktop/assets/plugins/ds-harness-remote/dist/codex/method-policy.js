@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { RpcError } from '../safe-error.js';
+import { CODEX_HISTORY_PAGE_MAX_MESSAGES } from './virtual-values.js';
 const id = z.string().min(1).max(256);
 const cursor = z.string().min(1).max(4096).nullable().optional();
 const textInput = z.object({
@@ -57,7 +58,7 @@ const schemas = {
         threadId: id,
         beforeSeq: z.number().int().nonnegative().optional(),
         throughSeq: z.number().int().min(-1).optional(),
-        maxMessages: z.number().int().min(1).max(200).optional(),
+        maxMessages: z.number().int().min(1).max(CODEX_HISTORY_PAGE_MAX_MESSAGES).optional(),
     }).strict(),
     'dsh/sessionAttachment': z.object({
         threadId: id,

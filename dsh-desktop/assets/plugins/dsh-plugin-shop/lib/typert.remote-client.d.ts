@@ -3,7 +3,7 @@ import type {
   RemoteResult,
   TypertRemoteContribution,
 } from '@deepseek-ai/dsh-typert-protocol'
-import type { InstallArgs, ShopCatalogResult, ShopInstalledEntry, ShopInstallResult, ShopInstallStatusResult, ShopRestartResult, ShopSetEnabledResult, ShopUninstallResult, ShopUpdateResult, ShopVersionResult } from 'dsh-plugin-shop/types'
+import type { InstallArgs, ShopCatalogResult, ShopInstalledEntry, ShopInstallResult, ShopInstallStatusResult, ShopRestartResult, ShopSetEnabledResult, ShopStateResult, ShopUninstallResult, ShopUpdateResult, ShopVersionResult } from 'dsh-plugin-shop/types'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertRemoteNamespace$73686f70 {
@@ -13,7 +13,10 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     installStart: (args: InstallArgs) => Promise<RemoteResult<ShopInstallResult>>
     installStatus: (args: { installId: string; }) => Promise<RemoteResult<ShopInstallStatusResult>>
     restart: () => Promise<RemoteResult<ShopRestartResult>>
+    rollbackStart: (args: { key: string; }) => Promise<RemoteResult<ShopInstallResult>>
     setEnabled: (args: { name: string; enabled: boolean; }) => Promise<RemoteResult<ShopSetEnabledResult>>
+    setFavorite: (args: { key: string; favorite: boolean; }) => Promise<RemoteResult<{ ok: boolean; detail?: string; }>>
+    state: () => Promise<RemoteResult<ShopStateResult>>
     uninstallStart: (args: { name: string; }) => Promise<RemoteResult<ShopUninstallResult>>
     updateStart: (args: { version: string; }) => Promise<RemoteResult<ShopUpdateResult>>
     version: () => Promise<RemoteResult<ShopVersionResult>>
@@ -25,7 +28,10 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'shop/installStart': (args: InstallArgs) => Promise<RemoteResult<ShopInstallResult>>
     'shop/installStatus': (args: { installId: string; }) => Promise<RemoteResult<ShopInstallStatusResult>>
     'shop/restart': () => Promise<RemoteResult<ShopRestartResult>>
+    'shop/rollbackStart': (args: { key: string; }) => Promise<RemoteResult<ShopInstallResult>>
     'shop/setEnabled': (args: { name: string; enabled: boolean; }) => Promise<RemoteResult<ShopSetEnabledResult>>
+    'shop/setFavorite': (args: { key: string; favorite: boolean; }) => Promise<RemoteResult<{ ok: boolean; detail?: string; }>>
+    'shop/state': () => Promise<RemoteResult<ShopStateResult>>
     'shop/uninstallStart': (args: { name: string; }) => Promise<RemoteResult<ShopUninstallResult>>
     'shop/updateStart': (args: { version: string; }) => Promise<RemoteResult<ShopUpdateResult>>
     'shop/version': () => Promise<RemoteResult<ShopVersionResult>>

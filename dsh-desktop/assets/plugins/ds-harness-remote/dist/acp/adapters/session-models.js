@@ -4,7 +4,7 @@ export class AcpSessionModelState {
     constructor(backend) {
         this.backend = backend;
     }
-    get label() { return { cursor: 'Cursor', claude: 'Claude', opencode: 'OpenCode' }[this.backend]; }
+    get label() { return { cursor: 'Cursor', claude: 'Claude', opencode: 'OpenCode', hermes: 'Hermes' }[this.backend]; }
     model;
     effort;
     legacy = false;

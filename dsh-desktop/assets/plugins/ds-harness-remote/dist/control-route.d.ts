@@ -11,7 +11,7 @@ interface HostConnectionHandleLike {
         headers: IncomingHttpHeaders;
     }): number | undefined;
     rpc: {
-        handle(channel: string, handler: ControlRouteHandler, options: {
+        handle?(channel: string, handler: ControlRouteHandler, options: {
             authority: 'loopback' | 'trusted-host';
         }): () => Promise<void>;
     };

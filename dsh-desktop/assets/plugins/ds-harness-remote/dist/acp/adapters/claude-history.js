@@ -1,6 +1,6 @@
 // ACP replay has no reliable timestamps. Deterministic projection IDs and epoch time
 // avoid presenting the history read time as the conversation time.
-export function claudeHistoryEvents(messages, sessionId) {
+export function claudeHistoryEvents(messages, sessionId, provider = 'claude') {
     const events = [];
     const tools = new Map();
     let turn = 0;
@@ -10,7 +10,7 @@ export function claudeHistoryEvents(messages, sessionId) {
     const push = (type, data, surface = false) => events.push({ type: 'event', event: {
             type, seq: events.length, time: 0, data, ...(surface ? { surfaceOp: 'append' } : {}),
         } });
-    const id = () => `claude-history:${sessionId}:${events.length}`;
+    const id = () => `${provider}-history:${sessionId}:${events.length}`;
     const flushMessage = () => {
         if (!pending)
             return;
@@ -18,7 +18,7 @@ export function claudeHistoryEvents(messages, sessionId) {
         if (pending.role === 'user')
             push('user/message', { ...message, source: { kind: 'user' } }, true);
         else
-            push('assistant/message', { turn, step, message: { ...message, source: { kind: 'model', provider: 'claude', model: '' } }, stream: [] }, true);
+            push('assistant/message', { turn, step, message: { ...message, source: { kind: 'model', provider, model: '' } }, stream: [] }, true);
         pending = undefined;
     };
     const result = (tool) => {

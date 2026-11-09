@@ -11,6 +11,7 @@
  * @module billion-context-dsh/region
  */
 import type { Session, SessionEvent, SessionEventMap } from '@deepseek-ai/dsh-session';
+import { CompactionId } from '@deepseek-ai/dsh-compaction';
 import { type ContentBlock } from '@deepseek-ai/dsh-llm';
 import { type AcpBlockLedgerPayload } from './block-ledger.ts';
 /** One durable ACP block as rebuilt from the session log. */
@@ -102,6 +103,17 @@ export interface ResolvedSurfaceRange {
 export declare function resolveSurfaceRange(session: Session, start: number, end: number): ResolvedSurfaceRange;
 /** The surface seqs shadowed by the inclusive positional span. */
 export declare function shadowedSeqsOf(session: Session, start: number, end: number): number[];
+/**
+ * True iff `declared` equals the CURRENT surface slice between `start` and
+ * `end` positionally — both edges on the surface, in order, element-wise equal.
+ * This mirrors exactly the invariant the released readers enforce at load time
+ * on every `compaction/summary` / `compaction/prune` event (`shadowedSeqs` must
+ * name an exact current surface span); writing an event that violates it makes
+ * the whole session log unloadable forever (issue #201). Unlike
+ * {@link shadowedSeqsOf} (which silently degrades for read-only probes), this
+ * is the strict gate for WRITES.
+ */
+export declare function isExactSurfaceSpan(session: Session, start: number, end: number, declared: readonly number[]): boolean;
 export interface CompactionTransactionInput {
     readonly start: number;
     readonly end: number;
@@ -148,6 +160,41 @@ export declare function verifiedReadingsOf(event: SessionEvent): string[];
  */
 export declare function prefixSummaryBlocks(blocks: readonly ContentBlock[]): ContentBlock[];
 /**
+ * Checkpoint source for the durable summary node, normalized for V4 writers.
+ *
+ * The copy of @deepseek-ai/dsh-compaction this engine resolves to may predate
+ * the host persisting the session: the plugin's peer range floors at the
+ * 0.1.5 line, whose compactCheckpointSource() still emits the retired V3
+ * wrapper shape { kind: 'plugin', plugin: 'compact' }. A DSH ≥0.1.7 v4
+ * persistence writer rejects that shape in producer-kind admission ("format
+ * v4 message requires a producer-owned source kind") and the WHOLE write batch
+ * wedges in memory — every later event piles behind the poison row until
+ * restart (issue #181; #165 fixed our own writers but not this host-supplied
+ * one). Normalize exactly that legacy shape when the session is persisted at
+ * format v4 — header.version decides which writer encodes the row, not which
+ * package resolved — and pass everything else through verbatim: older hosts
+ * still speak the wrapper, and newer dsh-compaction copies already emit the
+ * producer kind.
+ *
+ * Removal gate: delete once the peer floor moves past the last
+ * wrapper-emitting dsh-compaction line (or upstream retires the shape there).
+ *
+ * Reachability is line-dependent, and so is its coverage: each dsh-compaction
+ * line derives its `CompactionCheckpointSource` type from its OWN marker
+ * constant, so the wrapper variant is present in the 0.1.5-line types (whose
+ * `compactCheckpointSource()` really does emit it) and absent from the 0.2.0-line
+ * ones (marker `{ kind: 'compact-checkpoint' }`). On the 0.2.0 baseline the
+ * rewrite below is therefore unreachable — and untypeable if written as a plain
+ * `source.kind === 'plugin'` comparison (TS2367 against a literal kind) — which is
+ * why the two identifying fields are read through a structural view and the
+ * normalized object is rebuilt from the fields both lines share.
+ */
+export declare function checkpointSourceFor(session: Pick<Session, 'header'>, compactionId: CompactionId): Readonly<{
+    kind: 'compact-checkpoint';
+    compactionId: CompactionId;
+    sourceCommandId?: import("@deepseek-ai/dsh-commands").CommandId | undefined;
+}>;
+/**
  * Run one durable compression transaction. Throws on invalid state; on success
  * the four events are in the log and the surface has one summary node.
  */
@@ -186,9 +233,11 @@ export type MediaPriceOf = (seq: number) => number;
  * every hidden span becomes a user message. Callers with meaningful text pass
  * it (compress call/result hiding keeps the tool outcome visible to the
  * model); callers without get the fixed prune note. The originals remain in
- * the append-only log.
+ * the append-only log. Exported for the issue #201 regression tests — not part
+ * of the public API (index.ts re-exports only).
  */
 export declare const PRUNE_NOTE = "(removed by context management)";
+export declare function hideSurfaceSeqs(session: Session, seqs: readonly number[], text?: string, priceEvent?: (event: SessionEvent) => number): void;
 /**
  * Hide one successful `compress` tool's call/result pair after its tool/result
  * has been logged. The durable compaction summary is inserted BEFORE the
@@ -253,20 +302,40 @@ export declare function deferCompressPairHide(session: Session, callId: string, 
  */
 export declare function newestInstructionSeqsOf(session: Session): Set<number>;
 /**
+ * Newest skill-catalog row (issue #185). ONE group: every catalog row is the
+ * full current list, so each new one supersedes all earlier ones (unlike
+ * agent-instructions, which group per file scope). The guard matters because
+ * the host does NOT re-inject a folded catalog — dsh-tool-skill's resend gate
+ * is the catalog DIGEST, and shadowing the visible row changes nothing about
+ * it, so the model loses skill discovery until the catalog actually changes.
+ * Tail-scan the log like newestInstructionSeqsOf; null when the session never
+ * carried a catalog.
+ */
+export declare function newestSkillCatalogSeqOf(session: Session): number | null;
+/**
  * Surface seqs NO caller may compress: the CURRENT (newest) injected
- * agent-instructions row of every scope, restricted to rows still visible on
- * the surface (one definition of "current" — `newestInstructionSeqsOf`).
- * `buildCompressibleSeqRanges` never OFFERS them, and both compress entry
- * points (`handleCompress` in src/tools.ts, `/acp-prune compress` in
- * src/commands.ts) probe the RESOLVED span against this set and HARD-REJECT a
- * covering range before the kernel applies it, so nothing durable lands and no
- * phantom block can exist. This supersedes the earlier F7 draft (warn only):
- * folding a current copy reclaims nothing — the host re-injects it — so there
- * is no legitimate outcome to warn about. Deliberately NARROW (issue #71
- * review F4): only CURRENT agent-instructions rows — the audited loop driver.
- * Engine-authored metadata rows (nudge echo, compress-pair stub) stay
- * foldable like main, and STALE copies of the same file stay compressible —
- * removing them while the newest copy stays visible is the real cleanup.
+ * agent-instructions row of every scope (restricted to rows still visible on
+ * the surface — one definition of "current" — `newestInstructionSeqsOf`) PLUS
+ * the newest visible REAL user turn (`isRealUserTurn` reverse scan over
+ * `session.surface.nodes`, issue #196): a wide or miscalculated model span
+ * must never shadow the active question, while OLDER user turns stay
+ * compressible once superseded by a newer one. `buildCompressibleSeqRanges`
+ * never OFFERS them, and both compress entry points (`handleCompress` in
+ * src/tools.ts, `/acp-prune compress` in src/commands.ts) probe the RESOLVED
+ * span against this set and HARD-REJECT a covering range before the kernel
+ * applies it, so nothing durable lands and no phantom block can exist. This
+ * supersedes the earlier F7 draft (warn only): folding a current copy reclaims
+ * nothing — the host re-injects it — and folding the active user turn loses the
+ * conversation intent, so neither has a legitimate outcome to warn about.
+ * Deliberately NARROW (issue #71 review F4): for instruction rows, only CURRENT
+ * ones — the audited loop driver; for skill catalogs (issue #185) it is the ONE
+ * visible copy, because unlike AGENTS.md the host does NOT re-send a folded
+ * catalog (resend is keyed on the digest, which a fold cannot change), so
+ * folding it loses skill discovery until the catalog actually changes.
+ * Engine-authored metadata rows (nudge echo, compress-pair stub) stay foldable
+ * like main, and STALE copies (older AGENTS.md scopes, superseded catalog rows)
+ * stay compressible — removing them while the newest copy stays visible is the
+ * real cleanup.
  */
 export declare function guardedSurfaceSeqsOf(session: Session): Set<number>;
 /**
@@ -351,6 +420,27 @@ export interface AcpBlockRegistryEntry {
  * until a later block lists it as a parent.
  */
 export declare function blockRegistry(session: Session): AcpBlockRegistryEntry[];
+/**
+ * Checkpoint carriers of STILL-ACTIVE blocks inside a set of surface seqs.
+ *
+ * A plain message-ref range does not supersede a live block: the kernel keeps
+ * such a carrier visible and reports the exclusion in its warning list
+ * (upstream #335 — our projection marks carriers with
+ * `CoreMessage.summaryOfBlockId`). But our durable transaction replaces the
+ * whole span in ONE `surfaceOp`, so the carrier would leave the visible surface
+ * anyway — the block's summary would vanish while the kernel still counts the
+ * block as active, and the nudge's tier line would name a checkpoint seq that no
+ * longer exists. The compress path therefore rejects such a span (see
+ * `liveCarrierRejectionNote` in src/tools.ts).
+ *
+ * The offered range table never produces one — `compressibleSegmentsOf` flushes
+ * on every checkpoint, exactly like the instruction-row barriers — so only a
+ * hand-crafted call can reach this probe.
+ */
+export declare function liveCheckpointCarriersInSpan(session: Session, seqs: readonly number[]): {
+    seq: number;
+    kernelBlockId: string;
+}[];
 /**
  * The kernel block ref (`bN`) for a surface seq, when that seq is the
  * checkpoint summary node of a block — the edge the model must use to

@@ -13,6 +13,7 @@ export class ClientSecureTransport {
     closed = false;
     lifetime;
     sends = new SerialSend();
+    closeError;
     constructor(inner, identity, host) {
         this.inner = inner;
         this.identity = identity;
@@ -22,6 +23,7 @@ export class ClientSecureTransport {
         const lifetime = new AbortController();
         this.lifetime = lifetime;
         this.closed = false;
+        this.closeError = undefined;
         this.incoming.reset();
         this.outgoing.reset();
         await this.inner.connect();
@@ -29,7 +31,7 @@ export class ClientSecureTransport {
         const info = this.inner.connectionInfo();
         if (info.localDeviceId !== this.identity.deviceId || info.remoteDeviceId !== this.host.deviceId) {
             await this.inner.close();
-            throw new Error('The relay connection is bound to an unexpected device.');
+            throw Object.assign(new Error('The relay connection is bound to an unexpected device.'), { code: 'PEER_IDENTITY_MISMATCH' });
         }
         const noise = new NoiseIkSession({
             role: 'initiator',
@@ -41,6 +43,7 @@ export class ClientSecureTransport {
         this.noise = noise;
         try {
             await waitForResponder(this.inner, noise, lifetime.signal);
+            this.inner.markSecureReady?.();
         }
         catch (error) {
             noise.destroy();
@@ -80,6 +83,7 @@ export class ClientSecureTransport {
                     handler(message);
             }
             catch {
+                this.closeError = Object.assign(new Error('The authenticated Remote channel rejected a frame.'), { code: 'SECURE_CHANNEL_FAILED' });
                 void this.close();
             }
         });
@@ -89,7 +93,7 @@ export class ClientSecureTransport {
         };
     }
     onClose(handler) {
-        return this.inner.onClose?.(handler) ?? (() => undefined);
+        return this.inner.onClose?.(error => handler(this.closeError ?? error)) ?? (() => undefined);
     }
     async close() {
         if (this.closed)
@@ -145,10 +149,10 @@ async function waitForResponder(inner, noise, signal) {
                 finish();
             }
             catch (error) {
-                finish(error instanceof Error ? error : new Error('Noise IK handshake failed.'));
+                finish(Object.assign(error instanceof Error ? error : new Error('Noise IK handshake failed.'), { code: 'SECURE_CHANNEL_FAILED' }));
             }
         });
-        unsubscribeClose = inner.onClose?.(() => finish(new Error('Control channel closed during Noise IK handshake.'))) ?? (() => { });
+        unsubscribeClose = inner.onClose?.(error => finish(error ?? new Error('Control channel closed during Noise IK handshake.'))) ?? (() => { });
         signal.addEventListener('abort', onAbort, { once: true });
         if (signal.aborted) {
             onAbort();

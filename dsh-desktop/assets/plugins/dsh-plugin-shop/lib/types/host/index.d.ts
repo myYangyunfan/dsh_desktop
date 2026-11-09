@@ -6,6 +6,7 @@ import type { CatalogEntry, DeniedEntry } from './types.ts';
 import { type InstallArgs, type InstallRejectionCode } from './install.ts';
 import { type InstallStatus } from './executor.ts';
 import { hotMount, hotUnmount, type HotFs } from './hot.ts';
+import { type ShopStateFs } from './state.ts';
 import { type Activation } from './activation.ts';
 import { type RestartOutcome } from './restart.ts';
 import { type RepoPinFs } from './repo-pins.ts';
@@ -82,10 +83,12 @@ export interface ShopGatewayOptions {
      * harness for the `dsh.compatibility` verdict: the package that owns this
      * script, through symlinks, is the dsh actually running, and its own
      * app-boot supplies the profile templates (`harness.ts`). A script owned by
-     * anything else — a test runner, another host — leaves both halves of that
-     * verdict silent. The tests about where the running version comes from pass
-     * a fixture install here, which is the production path; the rest inject
-     * `readHarness`. */
+     * anything else — a test runner, the desktop app's host entry — falls back
+     * to the harness's `pluginPackages` service, which names the dsh this
+     * process runs (2026-11-06 amendment); without that service both halves of
+     * the verdict stay silent. The tests about where the running version comes
+     * from pass a fixture install here, which is the production path; the rest
+     * inject `readHarness`. */
     restartScript?: string;
     /** Test-only injection: how the running harness is read from
      * `restartScript`; production uses `readRunningHarness`. It exists because
@@ -115,6 +118,10 @@ export interface ShopGatewayOptions {
     restartExitDelayMs?: number;
     /** Test-only injection: the pins file's filesystem; production uses node:fs. */
     pinFs?: RepoPinFs;
+    /** Test-only injection: the profile state file's filesystem (favorites and
+     * rollback records, `state.ts`); production uses node:fs with a
+     * write-then-rename. */
+    stateFs?: ShopStateFs;
     /** Test-only injection: the explicit `allowRestart` override; production
      * reads the loader row's `config.allowRestart`. */
     allowRestart?: boolean;
@@ -248,15 +255,26 @@ export interface ShopVersionResult {
      * field, and the client judges nothing by it.
      */
     bootId?: string;
+    /**
+     * Where this profile's self-update can run, when it cannot run here:
+     * `'dsh-page'` on the desktop profile, whose app updates the shop by
+     * removing and reinstalling it (dsh's `updateBundle`, the operation this
+     * shop cannot call on itself while it runs). Null on every profile the
+     * shop's own update button serves, and absent from a host older than the
+     * field — the client reads both as "update here".
+     */
+    selfUpdate?: 'dsh-page' | null;
 }
 /** `shop/updateStart` result (§7.3): the self-update spawn, or a typed
- * refusal (a version that is not plain semver). */
+ * refusal (a version that is not plain semver, or the desktop profile, whose
+ * update belongs to dsh's own Plugins page). */
 export type ShopUpdateResult = {
     ok: true;
     installId: string;
     state: InstallState;
 } | {
     ok: false;
+    code?: 'desktop-manual';
     detail: string;
 };
 /** `shop/installed` entry (§7.3): one installed catalog plugin. The identity
@@ -280,6 +298,13 @@ export interface ShopInstalledEntry {
     outdated: boolean;
     enabled: boolean;
     shadowed?: true;
+}
+/** What `shop/state` answers (design 2026-11-02-market-borrowings §6–§7):
+ * starred install identities, and per identity the version an update
+ * replaced — the version a rollback would restore. */
+export interface ShopStateResult {
+    favorites: string[];
+    rollback: Record<string, string>;
 }
 /** How many bytes a release tarball may be at the integrity check. The
  * registry already refuses to publish a tarball over 32 MiB, so 64 MiB is
@@ -308,6 +333,9 @@ export interface ShopCatalogResult {
     /** GitHub star counts by package name; {} when the pointer names no sidecar
      * or the sidecar could not be fetched/verified (§5). */
     stars: Record<string, number>;
+    /** sha256 → data URL for the catalogue's icons; {} when the pointer names
+     * none or it could not be read (design 2026-10-23-shop-plugin-icons §7). */
+    icons: Record<string, string>;
     /** Install identity (`npm:<name>` / `github:<repo>#<subdir>`) → the declared
      * peers node resolution cannot find from the profile. This is the HOST half
      * of the verdict only: a module the browser's module table serves — a
@@ -373,10 +401,14 @@ export declare class ShopGateway extends TypertRemoteService {
     private committedRestart;
     private readonly latestVersion;
     private readonly pinFs;
+    /** Favorites and rollback records (`state.ts`), read and written through
+     * this seam so tests never touch the real profile. */
+    private readonly stateFs;
     private readonly allowRestart?;
     private readonly env;
-    /** The platform the restart gate reads; production defaults to
-     * process.platform. The two-phase handoff is POSIX-only (restart.ts). */
+    /** The platform the restart gate reads, and the one the plugin-manager
+     * path quotes its retry line for; production defaults to process.platform.
+     * The two-phase handoff is POSIX-only (restart.ts). */
     private readonly platform;
     /** The parent pid `detectSupervisor` inspects; production defaults to
      * process.ppid (a systemd unit's main process has ppid 1). */
@@ -484,6 +516,17 @@ export declare class ShopGateway extends TypertRemoteService {
     private profileDirOrNone;
     /** The harness this process runs, read once (see `harnessRead`). */
     private runningHarness;
+    /** Where to ask for the running dsh when the script this process started
+     * with does not name it: the desktop app boots the profile through
+     * `@deepseek-ai/dsh-desktop-host`, whose entry owns no dsh, so
+     * `process.argv[1]` names the host rather than the harness. dsh serves its
+     * own packages through `pluginPackages` (0.1.7 on), and the profile's
+     * `cordis.yml` is the anchor the peer resolver already walks from, so the
+     * service answers with this installation's dsh (design
+     * 2026-09-01-harness-compatibility, 2026-11-06 amendment). Null when the
+     * harness offers no such service (0.1.5) or no profile was found — the
+     * script read alone then decides, as before. */
+    private harnessLocator;
     /** The inventory, through the wire remote: an envelope `{ ok, value }` or
      * `{ ok: false, error }`. Each row is re-validated before trust (same
      * discipline as the rowConfig cast). */
@@ -741,6 +784,28 @@ export declare class ShopGateway extends TypertRemoteService {
      * mechanism line and in how they read the answer.
      */
     private startManagerInstall;
+    /**
+     * One update through dsh's `updateBundle` (0.2.2 on): the operation dsh's
+     * own Plugins page runs, remove → install → restore. The desktop profile
+     * needs it because dsh's CLI cannot manage that profile, so the CLI
+     * continuation an update takes everywhere else is unavailable there; with
+     * neither, every desktop update ended on dsh's `already-installed`
+     * refusal (measured 2026-11-06, design 2026-11-06-desktop-updates).
+     *
+     * `spec` is the same `name@version` the install path builds, and only
+     * warms the download phase and spells the mechanism line; the service is
+     * handed the name and version `updateBundle` takes.
+     */
+    private startManagerUpdate;
+    /**
+     * What one `updateBundle` answer means to the reader: the nested change is
+     * fed to `managerOutcome` exactly as an `installBundle` answer is, and
+     * dsh's own restore attempt is named when the install failed after a
+     * removal. Saying nothing about it would leave a reader on the failure
+     * detail alone, unable to tell whether the old version is still there —
+     * dsh reinstalls it, and the answer records whether that worked.
+     */
+    private updateOutcome;
     /** Keep a started record where `installStatus`, the restart gate and
      * eviction find it, then bound the finished ones. */
     private track;
@@ -749,6 +814,31 @@ export declare class ShopGateway extends TypertRemoteService {
      * running AND queued — are never evicted; an id absent from the map reports
      * `found: false`. */
     private evictFinishedInstalls;
+    /**
+     * Write the rollback record once `running` reports done.
+     *
+     * The version was captured before the spawn by the caller; this only
+     * decides WHEN it lands. A failed update therefore leaves the previous
+     * record alone — it used to replace it with the version still installed,
+     * silently losing the older rollback point (design
+     * 2026-11-02-market-borrowings §6.1 says "after the flow reports success").
+     *
+     * Every failure here is swallowed. A rollback point is a convenience; an
+     * install that would succeed must not fail because the profile directory
+     * could not take a bookmark.
+     */
+    private rememberOnDone;
+    /**
+     * The version of `entry` currently on disk, or undefined when it cannot be
+     * read.
+     *
+     * npm reads the installed package's own manifest rather than the profile's
+     * dependency spec: a profile may hold a RANGE (`^1.2.3`), and recording
+     * that as "the previous version" would roll a reader forward to whatever
+     * the registry serves on the day they click. github reads the pin the shop
+     * wrote at install time, which is the commit that actually runs.
+     */
+    private installedVersionOf;
     /** Whether any command this gateway started is still running — or still
      * waiting its turn. */
     private hasRunningCommand;
@@ -774,6 +864,45 @@ export declare class ShopGateway extends TypertRemoteService {
      * failed read as a clean bill of health.
      */
     installedSpecs(): Promise<Record<string, string> | null>;
+    /**
+     * What the shop remembers between visits: the reader's favorites and, per
+     * install identity, the version an update replaced (design
+     * 2026-11-02-market-borrowings §6–§7).
+     *
+     * `rollback` carries a VERSION rather than a spec: the client renders it as
+     * the offer ("roll back to 1.2.3"), and the spec that installs it is built
+     * by the host from the same record. A malformed or missing file reads as
+     * empty state — losing stars must never take the page down.
+     */
+    shopState(): Promise<ShopStateResult>;
+    /**
+     * Star or unstar one install identity (§7).
+     *
+     * A write failure is reported rather than swallowed: the client flips its
+     * star optimistically and would otherwise show a favorite that is gone on
+     * the next visit. The key is stored verbatim — it is the identity the
+     * catalog itself uses, and an unknown one is harmless until it matches.
+     */
+    setFavorite(args: {
+        key: string;
+        favorite: boolean;
+    }): Promise<{
+        ok: boolean;
+        detail?: string;
+    }>;
+    /**
+     * Re-install the version an entry was updated from (§6).
+     *
+     * Takes only the install identity. The spec is built by `rollbackSpec` from
+     * this host's own record, so a client cannot name a version or a spec the
+     * shop never wrote — the same invariant `installStart` holds by building
+     * its spec from the snapshot. The install then runs through the ordinary
+     * CLI path, with the same records, activation verdict and notices an
+     * update gets.
+     */
+    rollbackStart(args: {
+        key: string;
+    }): Promise<ShopInstallResult>;
     /** Installed catalog plugins (§7.3): every entry of the snapshot the profile
      * manifest declares as a dependency, with the Host's `outdated` verdict
      * attached. The tab's shelf cards and its Updatable section both derive

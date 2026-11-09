@@ -1,5 +1,5 @@
-/** `mobileNav` namespace dictionaries: drawer controls. */
-export const NS = 'mobileNav'
+/** `pocketMobileNav` namespace dictionaries: drawer controls. */
+export const NS = 'pocketMobileNav'
 
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
@@ -19,5 +19,5 @@ export const en: Record<MobileNavKey, string> = {
   'files': 'Files',
 }
 
-/** Key domain of the `mobileNav` namespace (zh is the source of truth). */
+/** Key domain of the `pocketMobileNav` namespace (zh is the source of truth). */
 export type MobileNavKey = keyof typeof zh

@@ -25,10 +25,12 @@ export declare class AcpRemoteGateway {
     private readonly peers;
     private readonly sessionOwners;
     private readonly sessionBackends;
+    private readonly sessionPermissions;
     private readonly approvals;
     private approvalExpiryTimer?;
-    private restartTimer?;
-    private restartAttempt;
+    private readonly restartAttempts;
+    private readonly restartTimers;
+    private readonly launching;
     private available;
     private closed;
     private state;
@@ -70,6 +72,7 @@ export declare class AcpRemoteGateway {
     private captureCallScope;
     private callInternal;
     private runPromptInBackground;
+    private failSessionStreams;
     respond(connectionId: string, input: unknown): Promise<{
         resolved: true;
     }>;
@@ -80,6 +83,10 @@ export declare class AcpRemoteGateway {
     openToolStream(connectionId: string, sessionId: string, backend: string, endpoint: string, args: Record<string, unknown>, signal: AbortSignal): Promise<AsyncIterable<unknown>>;
     /** Used by peer stream open to prove this connection may observe the session. */
     assertStreamable(connectionId: string, sessionId: string): void;
+    /** Whether the session still has a turn whose terminal event has not arrived. */
+    hasTurnInFlight(sessionId: string): boolean;
+    /** Whether the adapter that owns this session can still produce frames. */
+    isSessionBackendReady(sessionId: string): boolean;
     /**
      * After a Client reconnect, session ownership may have been cleared with the
      * old peer. Reclaim the in-memory ACP session for the new connection so
@@ -91,6 +98,13 @@ export declare class AcpRemoteGateway {
     reconfigure(config: ResolvedAcpConfig): Promise<void>;
     close(): Promise<void>;
     private launchAcp;
+    /**
+     * Launch one backend at most once at a time. A retry and a `start()` (from a
+     * reconfigure or a later failure) can target the same missing backend; without
+     * this both would capture the same previous instance and leak a replacement.
+     */
+    private launchSerialized;
+    private launchCandidateBinaries;
     private backendCurrent;
     private launchBackendCandidate;
     private handleInbound;
@@ -99,7 +113,9 @@ export declare class AcpRemoteGateway {
     private bufferFrame;
     private pruneFrameBuffer;
     private handleUnavailable;
-    private scheduleRestart;
+    private scheduleBackendRestart;
+    private restartBackend;
+    private clearBackendRestarts;
     private scheduleApprovalExpiry;
     private requireAcp;
     private initializeResult;

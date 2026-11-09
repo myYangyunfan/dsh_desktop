@@ -6,6 +6,7 @@ import type { SafeLogger } from './logging.js';
 import type { HostServerApi } from './server-api.js';
 interface WebSocketLike {
     readonly readyState: number;
+    binaryType?: string;
     onopen: ((event: unknown) => void) | null;
     onmessage: ((event: {
         data: unknown;
@@ -31,6 +32,7 @@ export declare class HostServerConnection {
     private readonly hostCapabilities;
     private readonly harnessVersion?;
     private socket?;
+    private forceCloseSocket?;
     private running?;
     private stopped;
     private online;
@@ -44,12 +46,14 @@ export declare class HostServerConnection {
     private rtcFactory?;
     private negotiatedCapabilities;
     private controlFrameLimits;
+    private heartbeatIntervalMs;
     private webRtcNegotiateTimeoutMs;
     constructor(config: ResolvedConfig, identity: HostIdentity, identities: IdentityStore, api: HostServerApi, connections: ConnectionController, logger: SafeLogger, createWebSocket?: WebSocketFactory, rtcFactoryProvider?: (() => Promise<RtcPeerConnectionFactory | undefined>) | undefined, hostCapabilities?: () => readonly string[], harnessVersion?: string | undefined);
     start(): void;
     resume(): void;
     stop(): Promise<void>;
     isOnline(): boolean;
+    recoveryExpiresAt(): number | undefined;
     lastError(): string | undefined;
     lastActivity(): number | undefined;
     isReconnecting(): boolean;
@@ -71,7 +75,10 @@ export declare class HostServerConnection {
     private handleRtcFailed;
     private sendTransportSelected;
     private sendRelay;
+    private openDataSocket;
+    private handleDataSocketFrame;
     private sendControl;
+    private notifyTunnelClosed;
     private dropTunnels;
     private dropTunnel;
     private waitBeforeRetry;

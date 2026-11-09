@@ -12,10 +12,11 @@ export class SafeLogger {
     warn(message, fields) { this.write('warn', message, fields); }
     error(message, fields) { this.write('error', message, fields); }
     write(level, message, fields) {
-        if (levels.indexOf(level) < levels.indexOf(this.threshold))
+        const threshold = typeof this.threshold === 'function' ? this.threshold() : this.threshold;
+        if (levels.indexOf(level) < levels.indexOf(threshold))
             return;
         const safeFields = fields === undefined ? '' : ` ${JSON.stringify(redact(fields))}`;
-        this.sink[level](`[dsh-remote] ${message}${safeFields}`);
+        this.sink[level](`[ds-harness-remote] ${message}${safeFields}`);
     }
 }
 function redact(value, key = '') {

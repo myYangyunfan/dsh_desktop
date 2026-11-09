@@ -87,6 +87,12 @@ function helperCode(launch, logOut, logErr, port) {
 export function restartHost({ handoffMs = 1500, internals = {} } = {}) {
   const spawnFn = internals.spawn ?? spawn;
   const killFn = internals.kill ?? ((pid) => process.kill(pid, 'SIGTERM'));
+  // Electron 桌面宿主里 pocket 跑在 Electron 的 node 上下文：杀 process.pid 会杀掉宿主，
+  // 并由 detached 孤儿进程抢宿主端口（19387）→ EADDRINUSE 崩溃循环（issue #177 / #167）。
+  // 桌面端应由 DSH Desktop 自己管理重启，这里直接拒绝，交还控制权。
+  if (Boolean(process.versions.electron) && internals.spawn === undefined) {
+    return { helperPid: null, logOut: '', logErr: '', error: 'desktop-host-restart-not-supported' };
+  }
   const launch = restartLaunch();
   const port = dshPortFromArgs(launch.args);
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);

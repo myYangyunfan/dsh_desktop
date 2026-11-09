@@ -352,11 +352,15 @@ export const MOBILE_CSS = `
   }
 
   /* --- Composer bottom row on mobile ---
-     Keep add, permission, model, reasoning and send controls on one line at
-     the Honor 50's 360px CSS viewport. DSH's stable data-composer-card hook
-     survives the editor's textarea -> contenteditable migration. */
+     Let the row wrap instead of locking it to one line (issue #170): any
+     plugin can register extra non-shrinking controls here, and a hard
+     "nowrap" plus ":last-child { flex:1 1 0 }" squeezed the model pill (long
+     text, max-width:220px upstream) down to 0 width at 360px. Allowing
+     wrap keeps every control visible; the row simply spans two lines on
+     narrow screens. DSH's stable data-composer-card hook survives the
+     editor's textarea -> contenteditable migration. */
   [data-phase] [data-composer-card="true"] > [class$="_row"] {
-    flex-wrap: nowrap !important;
+    flex-wrap: wrap !important;
     gap: 6px !important;
   }
   [data-phase] [data-composer-card="true"] > [class$="_row"] > :first-child {
@@ -366,11 +370,6 @@ export const MOBILE_CSS = `
   [data-phase] [data-composer-card="true"] > [class$="_row"] > :first-child > :nth-child(2) {
     flex: 0 1 auto !important;
     min-width: 0 !important;
-  }
-  [data-phase] [data-composer-card="true"] > [class$="_row"] > :last-child {
-    flex: 1 1 0 !important;
-    min-width: 0 !important;
-    gap: 6px !important;
   }
 
   /* --- Composer popups as bottom sheets on mobile ---
@@ -407,12 +406,8 @@ export const MOBILE_CSS = `
   }
 
   /* --- Session header on mobile ---
-     Layout goal: [toggle] [session title] [mode badge] in a row, with the
-     Session log capsule removed from the header (relocated to the drawer
-     footer). Stable structural hooks only:
-       [data-phase] header                     the session header element
-       header > :first-child                   titleRow (titleCluster + utilities)
-       header > :first-child > :last-child     headerUtilities (Session log seat) */
+     Layout goal: [toggle] [session title] [mode badge] in a row. The optional
+     rightbar entry uses the shell's stable header-corner hook. */
   [data-phase] header {
     padding: 8px 12px 0 !important;
   }
@@ -449,10 +444,13 @@ export const MOBILE_CSS = `
     top: 12px !important;
     z-index: 2 !important;
   }
-  /* Session log download: gone from the header row on mobile (the utilities
-     seat holds only the session-log-export capsule). */
-  [data-phase] header > :first-child > :last-child {
+  /* The native rightbar entry is visible by default. Users who prefer the
+     compact header can turn it off in Pocket settings. */
+  body[data-dsh-pocket-mobile-rightbar="off"] [data-conversation-header-corner] {
     display: none !important;
+  }
+  body:not([data-dsh-pocket-mobile-rightbar="off"]) [data-mobile-nav="files"] {
+    right: 44px !important;
   }
 
   /* --- Settings dialog on mobile ---
@@ -845,9 +843,25 @@ export const MOBILE_CSS = `
      targeted). Layout: ONE fixed-height (28px) flex strip that scrolls
      horizontally — the full metrics stream stays reachable by swiping,
      the row never grows vertically, no ellipsis or fade, 12px gaps
-     between metric groups, a 2px scrollbar as the swipe affordance. */
+     between metric groups, a 2px scrollbar as the swipe affordance.
 
-  [data-mobile-nav="stats"] {
+     Opt-out: the strip is scoped under body:not([data-pocket-stats="off"])
+     so a skin/operator plugin can legally reclaim this 28px band by
+     setting document.body.dataset.pocketStats = 'off' (avoids the
+     !important weight war that let two footers print on top of each
+     other — issue #165). Default behavior is unchanged.
+
+     Opt-out is two halves, not one. The rules above only stand pocket's
+     styling down; the row itself is the CORE's (conversation StatsPills
+     dock), so it keeps occupying the band with the core's own styling and
+     still collides with whoever took the band over (issue #172).
+     [data-mobile-nav="stats"] is a mark pocket writes itself
+     (mobile-apply.tsx), so opting out hides that element too — together with
+     the core readouts it carries (turns / steps / LLM time / TTFT / cache) and
+     the TPS figure pocket folds into it. That is what reclaiming the band
+     costs: whoever takes it over renders their own footer. */
+
+  body:not([data-pocket-stats="off"]) [data-mobile-nav="stats"] {
     display: flex !important;
     flex-flow: row nowrap !important;
     align-items: center !important;
@@ -869,17 +883,17 @@ export const MOBILE_CSS = `
     line-height: 20px !important;
     font-size: 12px !important;
   }
-  [data-mobile-nav="stats"]::-webkit-scrollbar {
+  body:not([data-pocket-stats="off"]) [data-mobile-nav="stats"]::-webkit-scrollbar {
     height: 2px !important;
   }
-  [data-mobile-nav="stats"]::-webkit-scrollbar-thumb {
+  body:not([data-pocket-stats="off"]) [data-mobile-nav="stats"]::-webkit-scrollbar-thumb {
     background: var(--dsw-alias-label-tertiary, rgba(0, 0, 0, .3)) !important;
     border-radius: 2px !important;
   }
-  [data-mobile-nav="stats"]::-webkit-scrollbar-track {
+  body:not([data-pocket-stats="off"]) [data-mobile-nav="stats"]::-webkit-scrollbar-track {
     background: transparent !important;
   }
-  [data-mobile-nav="stats"] > * {
+  body:not([data-pocket-stats="off"]) [data-mobile-nav="stats"] > * {
     display: flex !important;
     flex: 0 0 auto !important;
     flex-flow: row nowrap !important;
@@ -891,11 +905,23 @@ export const MOBILE_CSS = `
     margin-right: 12px !important;
     padding: 0 !important;
   }
-  [data-mobile-nav="stats"] > *:last-child {
+  body:not([data-pocket-stats="off"]) [data-mobile-nav="stats"] > *:last-child {
     margin-right: 0 !important;
   }
-  [data-mobile-nav="stats"] * {
+  body:not([data-pocket-stats="off"]) [data-mobile-nav="stats"] * {
     white-space: nowrap !important;
+  }
+
+  /* The other half of that opt-out: standing pocket's styling down leaves
+     the core's own row in the band, so a skin that took the band over still
+     prints underneath it (issue #172). [data-mobile-nav="stats"] is a mark
+     pocket writes itself (mobile-apply.tsx) — opting out hides it with the
+     mark, and with it the core readouts that row carries. The default path
+     never matches this rule.
+     (A skin that wants the band *and* the row can take it back with an equally
+     specific rule plus !important — this rule carries no extra specificity.) */
+  body[data-pocket-stats="off"] [data-mobile-nav="stats"] {
+    display: none !important;
   }
 
   /* ---------- hero composer on mobile ----------

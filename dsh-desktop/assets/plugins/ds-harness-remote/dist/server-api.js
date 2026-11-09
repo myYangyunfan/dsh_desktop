@@ -10,6 +10,7 @@ export class HostServerApi {
     fetchImplementation;
     role;
     baseUrl;
+    hostOnly = false;
     identity;
     credentials;
     credentialsPromise;
@@ -26,6 +27,31 @@ export class HostServerApi {
     /** End this runtime's HTTP requests, including authentication and response bodies. */
     close() {
         this.lifetime.abort(new ServerApiError('CONNECTION_CLOSED', 'The Server API has been closed.', false));
+    }
+    pairingHostOnly() { return this.hostOnly; }
+    async loadStoredPolicy() {
+        this.hostOnly = this.role === 'host' && (await this.store.pairingHostOnly() || (await this.store.load(this.baseUrl, this.requireIdentity().deviceId))?.pairingRestricted === true);
+    }
+    async adoptPairing(result) {
+        const identity = this.requireIdentity();
+        if (this.role !== 'host' || result.device.role !== 'host' || result.device.deviceId !== identity.deviceId || result.device.identityKey !== identity.publicKey)
+            throw new ServerApiError('PAIRING_IDENTITY_INVALID', 'Pairing identity mismatch.', false);
+        if (result.pairingRestricted) {
+            if (!result.inboundOnly)
+                throw new ServerApiError('DEVICE_SCOPE_REQUIRED', 'Paired Host must remain inbound only.', false);
+            this.hostOnly = true;
+            await this.store.restrictPairingHostOnly();
+        }
+        this.credentials = await this.withRefreshLock(async () => {
+            const existing = await this.store.load(this.baseUrl, identity.deviceId);
+            if (existing?.account !== undefined && existing.account !== result.account)
+                throw new ServerApiError('PAIRING_ACCOUNT_CONFLICT', 'Pairing cannot replace the current account.', false);
+            if (existing !== undefined && existing.refreshTokenExpiresAt > Date.now() + 30_000)
+                return existing;
+            return this.store.save({ serverUrl: this.baseUrl, deviceId: identity.deviceId,
+                authorizationMethod: 'device_pairing', account: result.account, accountKind: result.accountKind,
+                pairingRestricted: result.pairingRestricted, inboundOnly: result.inboundOnly, ...validateTokens(result.tokens) });
+        });
     }
     currentAuthorization() {
         if (this.credentials === undefined)
@@ -127,7 +153,7 @@ export class HostServerApi {
         if (!Array.isArray(value.items))
             throw invalidOAuthProviders();
         const ids = new Set();
-        return value.items.map(item => {
+        const providers = value.items.map(item => {
             const provider = requireRecord(item, 'OAuth provider');
             if (typeof provider.id !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/.test(provider.id)
                 || ids.has(provider.id)
@@ -140,6 +166,12 @@ export class HostServerApi {
             return { id: provider.id, displayName: provider.displayName, startUrl: provider.startUrl,
                 ...(typeof provider.qrStartUrl === 'string' ? { qrStartUrl: provider.qrStartUrl } : {}) };
         });
+        const capabilities = value.capabilities;
+        if (typeof capabilities === 'object' && capabilities !== null
+            && capabilities.devicePairing === 'dsh-pairing-v1') {
+            providers.push({ id: 'dsh-go-pairing-v1', displayName: 'DSH-Go', startUrl: '/api/v1/device-pairing', devicePairing: true });
+        }
+        return providers;
     }
     async startOAuthQrLogin(provider = 'zhihu') {
         const entry = (await this.oauthProviders()).find(item => item.id === provider);
@@ -239,8 +271,12 @@ export class HostServerApi {
         this.credentials = await this.withRefreshLock(async () => {
             // Another process may have rotated the token while we waited for the lock.
             const stored = await this.store.load(this.baseUrl, identity.deviceId);
-            if (stored === undefined || stored.refreshTokenExpiresAt <= Date.now())
+            if (stored === undefined || stored.refreshTokenExpiresAt <= Date.now()) {
+                // A rejected Client read must not implicitly register a signed-out device.
+                if (this.role === 'client')
+                    throw new ServerApiError('ACCOUNT_AUTH_REQUIRED', 'Client sign-in is required.', false);
                 return this.register(identity);
+            }
             if (stored.accessToken !== rejectedAccessToken && stored.accessTokenExpiresAt > Date.now() + 30_000) {
                 return stored;
             }
@@ -269,26 +305,61 @@ export class HostServerApi {
         }
         catch (error) {
             if (error instanceof ServerApiError) {
-                throw new ServerApiError(error.code, error.message, error.retryable, error.status, 'credential_refresh');
+                // A delayed rejection must not discard credentials another writer saved.
+                if (error.code === 'AUTH_INVALID') {
+                    const latest = await this.store.load(this.baseUrl, identity.deviceId);
+                    if (latest !== undefined && latest.refreshToken !== stored.refreshToken &&
+                        latest.refreshTokenExpiresAt > Date.now() && latest.accessTokenExpiresAt > Date.now() + 30_000) {
+                        return latest;
+                    }
+                }
+                throw new ServerApiError(error.code, error.message, error.retryable, error.status, 'credential_refresh', error.reason);
             }
             throw error;
         }
         return this.store.save({
-            serverUrl: this.baseUrl,
-            deviceId: identity.deviceId,
-            authorizationMethod: stored.authorizationMethod,
-            ...(stored.account === undefined ? {} : { account: stored.account }),
+            ...stored,
             ...validateTokens(tokens),
         });
     }
-    async listDevices() {
-        const result = await this.request('/api/v1/devices');
-        if (!Array.isArray(result.items))
-            throw new ServerApiError('INVALID_MESSAGE', 'The Server returned an invalid device list.', false);
-        return result.items.map(parseHostDevice);
+    async listDevices(signal) {
+        const devices = [];
+        for await (const page of this.devicePages(signal))
+            devices.push(...page);
+        return devices;
     }
-    async deviceFor(peerDeviceId) {
-        const result = await this.request(`/api/v1/devices/${encodeURIComponent(peerDeviceId)}`);
+    async *devicePages(signal) {
+        let cursor;
+        const cursors = new Set();
+        const ids = new Set();
+        do {
+            signal?.throwIfAborted();
+            const query = new URLSearchParams({ limit: '50' });
+            if (cursor !== undefined)
+                query.set('cursor', cursor);
+            const result = await this.request(`/api/v1/devices?${query}`, { signal });
+            if (!Array.isArray(result.items))
+                throw new ServerApiError('INVALID_MESSAGE', 'The Server returned an invalid device list.', false);
+            const page = result.items.map(parseHostDevice);
+            const next = result.nextCursor;
+            if (next !== undefined && next !== null
+                && (typeof next !== 'string' || next.length === 0 || next.length > 512 || cursors.has(next) || page.length === 0)) {
+                throw new ServerApiError('INVALID_MESSAGE', 'The Server returned an invalid device list cursor.', false);
+            }
+            for (const device of page) {
+                if (ids.has(device.deviceId))
+                    throw new ServerApiError('INVALID_MESSAGE', 'The Server returned a duplicate device.', false);
+                ids.add(device.deviceId);
+            }
+            cursor = typeof next === 'string' ? next : undefined;
+            if (cursor !== undefined)
+                cursors.add(cursor);
+            // Older Servers may ignore limit and return all devices with no cursor.
+            yield page;
+        } while (cursor !== undefined);
+    }
+    async deviceFor(peerDeviceId, signal) {
+        const result = await this.request(`/api/v1/devices/${encodeURIComponent(peerDeviceId)}`, { signal });
         return parseAuthorizedPeer(result);
     }
     async turnCredentials(connectionId) {
@@ -297,8 +368,8 @@ export class HostServerApi {
             return [];
         return result.iceServers.map(parseIceServer);
     }
-    async presenceFor(deviceId) {
-        const result = await this.request(`/api/v1/devices/${encodeURIComponent(deviceId)}/presence`);
+    async presenceFor(deviceId, signal) {
+        const result = await this.request(`/api/v1/devices/${encodeURIComponent(deviceId)}/presence`, { signal });
         if (typeof result.online !== 'boolean'
             || (result.lastSeenAt !== null && result.lastSeenAt !== undefined && !Number.isSafeInteger(result.lastSeenAt))) {
             throw new ServerApiError('INVALID_MESSAGE', 'The Server returned invalid device presence.', false);
@@ -352,7 +423,22 @@ export class HostServerApi {
     }
     async request(path, init = {}) {
         const credentials = await this.authenticate();
-        return this.publicRequest(path, init, credentials.accessToken);
+        try {
+            return await this.publicRequest(path, init, credentials.accessToken);
+        }
+        catch (error) {
+            // The Server may reject a bearer before its locally cached expiry.
+            // Only retry an explicitly rejected, read-only Client request, once.
+            if (this.role !== 'client' || this.identity?.deviceId !== credentials.deviceId || (init.method ?? 'GET') !== 'GET'
+                || !(error instanceof ServerApiError) || error.status !== 401
+                || (error.code !== 'AUTH_INVALID' && error.code !== 'TOKEN_EXPIRED'))
+                throw error;
+            init.signal?.throwIfAborted();
+            const next = await this.refreshCredentials(credentials.accessToken);
+            if (next.account !== credentials.account || this.identity?.deviceId !== credentials.deviceId)
+                throw error;
+            return this.publicRequest(path, init, next.accessToken);
+        }
     }
     async publicRequest(path, init, accessToken) {
         const controller = new AbortController();
@@ -377,8 +463,13 @@ export class HostServerApi {
             const body = await parseBody(response);
             signal.throwIfAborted();
             if (!response.ok) {
-                const envelope = (body ?? {});
-                throw new ServerApiError(typeof envelope.error?.code === 'string' ? envelope.error.code : mapStatus(response.status), typeof envelope.error?.message === 'string' ? envelope.error.message : 'The Server rejected the request.', envelope.error?.retryable === true || response.status >= 500, response.status);
+                const envelope = isErrorEnvelope(body) ? body : undefined;
+                // A gateway can challenge requests during startup. Only a protocol
+                // error envelope establishes that the device credentials were rejected.
+                if ((response.status === 401 || response.status === 403) && envelope === undefined) {
+                    throw new ServerApiError('CONNECTION_FAILED', 'The Server returned an invalid authorization response.', true, response.status, undefined, 'invalid_error_envelope');
+                }
+                throw new ServerApiError(responseErrorCode(response.status, envelope?.error.code), envelope?.error.message ?? 'The Server rejected the request.', envelope?.error.retryable === true || response.status >= 500 || response.status === 429, response.status, undefined, 'http_error');
             }
             return body;
         }
@@ -387,7 +478,7 @@ export class HostServerApi {
                 throw this.lifetime.signal.reason;
             if (error instanceof ServerApiError)
                 throw error;
-            throw new ServerApiError('CONNECTION_FAILED', error instanceof Error ? error.message : 'Server request failed.', true);
+            throw new ServerApiError('CONNECTION_FAILED', 'Server request failed.', true, undefined, undefined, controller.signal.aborted ? 'timeout' : 'network_error');
         }
         finally {
             clearTimeout(timer);
@@ -428,12 +519,14 @@ export class ServerApiError extends Error {
     retryable;
     status;
     phase;
-    constructor(code, message, retryable, status, phase) {
+    reason;
+    constructor(code, message, retryable, status, phase, reason) {
         super(message);
         this.code = code;
         this.retryable = retryable;
         this.status = status;
         this.phase = phase;
+        this.reason = reason;
     }
 }
 function validateTokens(value) {
@@ -459,6 +552,16 @@ function validateWebLogin(value) {
         isAdmin: item.isAdmin,
     };
 }
+function isErrorEnvelope(value) {
+    if (typeof value !== 'object' || value === null || Array.isArray(value))
+        return false;
+    const error = value.error;
+    if (typeof error !== 'object' || error === null || Array.isArray(error))
+        return false;
+    const fields = error;
+    return typeof fields.code === 'string' && fields.code.length > 0
+        && typeof fields.message === 'string' && typeof fields.retryable === 'boolean';
+}
 async function parseBody(response) {
     const text = await response.text();
     if (text.length === 0)
@@ -467,20 +570,35 @@ async function parseBody(response) {
         return JSON.parse(text);
     }
     catch {
-        throw new ServerApiError('INVALID_MESSAGE', 'The Server returned invalid JSON.', false, response.status);
+        const unstructuredAuth = response.status === 401 || response.status === 403;
+        throw new ServerApiError(unstructuredAuth ? 'CONNECTION_FAILED' : response.ok ? 'INVALID_MESSAGE' : responseErrorCode(response.status, undefined), 'The Server returned invalid JSON.', unstructuredAuth || response.ok || response.status >= 500 || response.status === 429, response.status, undefined, 'invalid_json');
     }
 }
-function mapStatus(status) {
-    if (status === 401)
-        return 'AUTH_INVALID';
-    if (status === 403)
-        return 'AUTH_REQUIRED';
-    if (status === 404)
-        return 'DEVICE_NOT_FOUND';
+function responseErrorCode(status, serverCode) {
+    // Only a specific authorization response may change the local login state.
+    // A proxy error or an unclassified rejection must preserve stored credentials.
+    if (status >= 500)
+        return 'CONNECTION_FAILED';
     if (status === 429)
         return 'RATE_LIMITED';
-    return status >= 500 ? 'CONNECTION_FAILED' : 'INVALID_MESSAGE';
+    if ((status === 401 || status === 403) && typeof serverCode === 'string')
+        return serverCode;
+    if (status === 401 || status === 403)
+        return 'REQUEST_REJECTED';
+    if (typeof serverCode === 'string' && !AUTHORIZATION_ERROR_CODES.has(serverCode))
+        return serverCode;
+    if (status === 404)
+        return 'DEVICE_NOT_FOUND';
+    return 'INVALID_MESSAGE';
 }
+const AUTHORIZATION_ERROR_CODES = new Set([
+    'ACCOUNT_AUTH_REQUIRED',
+    'AUTH_INVALID',
+    'AUTH_REQUIRED',
+    'TOKEN_EXPIRED',
+    'DEVICE_REVOKED',
+    'DEVICE_OWNERSHIP_REQUIRED',
+]);
 function parseHostDevice(value) {
     const item = requireRecord(value, 'host device');
     if (item.role !== 'host' || typeof item.deviceId !== 'string' || typeof item.name !== 'string'

@@ -16,7 +16,7 @@ Node 逻辑仍是活代码（Tauri sidecar 直接复用，零重写）。主平�
 | 目录 | 说明 |
 | --- | --- |
 | `dsh-tauri/` | 桌面壳主线：`contracts/`（六份契约）、`src-tauri/`（Rust 工作区）、`sidecar/`（Node 薄封装）、`ui/`（frontendDist 占位页）、`dlls/`（D3DCOMPILER_47.dll）、`package-payload/`（打包暂存，gitignored）、`ta13-soak/`（Rust soak 压测）、`scripts/`（stage-payload / stage-plugin-gate / smoke-installed）、`docs/` |
-| `dsh-desktop/` | 内核侧 Node 逻辑：构建期补丁、自愈（根级 boot 链脚本 `watchdog.js` / `*-heal.js` 等）、插件同步、余额链、`docs/`、`assets/plugins/`（**随安装包分发**——v1.0.0 内置线，2026-10-08 裁定；内置伴随插件在册 **33** 个（v1.0.0 由 39 精简、2026-10-07 移除 11 个，2026-10-11 增自研 `dsh-builtin-manager` 内置插件管理页，2026-10-16 增自研 `dsh-goal-completion` 目标收尾标签页，2026-10-17 随内核 0.2.1 换代退役 `dsh-reasoning-effort`，2026-11-08 按用户要求退役 `dsh-quest-ui` / `dsh-auto-compact` / `dsh-zcode-migrate` 三件，2026-11-09 按用户要求新增 `dsh-context` 0.82.1 与 `ds-harness-remote` 0.5.19 两件）；随包 agent 预设子系统已整体拆除）、`vendor/`（node/npm 运行时 + `dsh-kernel/` pin 的离线内核 tgz，后者**必须入库**） |
+| `dsh-desktop/` | 内核侧 Node 逻辑：构建期补丁、自愈（根级 boot 链脚本 `watchdog.js` / `*-heal.js` 等）、插件同步、余额链、`docs/`、`assets/plugins/`（**随安装包分发**——v1.0.0 内置线，2026-10-08 裁定；内置伴随插件在册 **33** 个（v1.0.0 由 39 精简、2026-10-07 移除 11 个，2026-10-11 增自研 `dsh-builtin-manager` 内置插件管理页，2026-10-16 增自研 `dsh-goal-completion` 目标收尾标签页，2026-10-17 随内核 0.2.1 换代退役 `dsh-reasoning-effort`，2026-11-08 按用户要求退役 `dsh-quest-ui` / `dsh-auto-compact` / `dsh-zcode-migrate` 三件，2026-11-09 按用户要求新增 `dsh-context` 与 `ds-harness-remote` 两件，同日按用户要求把 8 件内置件升到 npm latest：shop 0.9.3 / toolbox-ui 1.10.1 / context 0.83.0 / billion-context-dsh 0.2.27 / free-search 0.9.39 / pocket 2.12.0 / easyrewrite 3.0.1 / harness-remote 0.6.4）；随包 agent 预设子系统已整体拆除）、`vendor/`（node/npm 运行时 + `dsh-kernel/` pin 的离线内核 tgz，后者**必须入库**） |
 | `dsh-desktop/scripts/test/` | 全部 Node 测试（200 个 `*.test.js/.mjs`，另有 `fixtures/`、`ta16-snapshots/`、mock server），单测唯一去处 |
 | `.github/workflows/` | `ci.yml`（PR 门禁）、`tauri-release.yml`（tag 发版，唯一发布入口）、`release.yml`（退役 Electron 线，全部 `if: false`） |
 
@@ -341,16 +341,16 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   src↔产物同源由 `unit-better-sidebar-diff-surface` 按 `//#region <源路径>` 标记咬住。
 - **vendored 插件的入口在 `dist/`、真依赖在自己的 `node_modules/` 时，两条通用 gitignore 规则会把它吞成空包（2026-11-09 实测）**：
   `dsh-desktop/.gitignore` 的 `dist/` 与 `node_modules/` 对所有层级生效，`ds-harness-remote` 的入口
-  `dist/index.js` 与运行时依赖（werift / ws / qrcode / zod@3 / @xterm/*）因此既不入库也进不了 payload →
+  `dist/index.js` 与运行时依赖（ws / qrcode / zod@3 / @xterm/* 等）因此既不入库也进不了 payload →
   新 clone / 解压装出空目录。判据是 `unit-plugin-module-table` 的「manifest 入口被 gitignore 遮蔽」用例
   （走 `git check-ignore`，不是「文件在不在」——本机文件全在时它也照样红）。修法三件一起做：
   ① 按既有 `billion-context-dsh` 的形加 `!assets/plugins/<dir>/dist/**` 与 `!…/node_modules/**` 例外；
   ② 清单条目写 `shipsNodeModules: true`（交付面 `payload-plugin-deps` 与运行期 sync 共用这一份声明决定剥不剥内层树，
   `unit-payload-plugin-deps` 的「正件集合」是硬断言，加第二件必须同改）；
   ③ `optionalDependencies` 里的原生件可以不装（`@roamhq/wrtc` 是 8.5MB 单平台 `.node`，插件自带纯 JS
-  `werift` 兜底）——装没装都要在 inventory §5.2 记账，别让台账与实际字节分叉。
+  `werift` 兜底；0.6.4 起上游把 werift 收进 dist，内层树不再需要它）——装没装都要在 inventory §5.2 记账，别让台账与实际字节分叉。
   交付面两条路径墙本机可复算：按 `payload-plugin-deps` 的 `INSTALL_PREFIX_DEFAULT` / `nsisSourcePrefixFrom(...)`
-  量全树（本轮 5248 文件实测安装态最长 **177** / 构建期 **211**，上限 240 / 258，都还有余量）。
+  量全树（2026-11-09 更新后 3006 文件实测安装态最长 **152** / 构建期 **195**，上限 240 / 258，都还有余量）。
   同批修了一处判据假红：G10 的 ownerProps 提取器原先只认「行首标识符 + 冒号」，内核 TS 口的
   `readonly view: 'summary' | 'page'` 整片漏读 → 读 `props.view` 的 vendored 件被判「读了下发面没有的 props」，
   正则补 `(?:readonly\s+)?` 后复绿（控制组与反证都在同套件里）。

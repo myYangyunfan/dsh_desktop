@@ -1,8 +1,8 @@
 import { AgentAcpClient } from '@dsh-remote/client-core';
 import { ACP_TOOL_CALL_ENDPOINTS, ACP_TOOL_STREAM_ENDPOINTS } from '@dsh-remote/protocol';
 import { acpImageContent, acpImageLimits, parseAcpImage } from './image-content.js';
-import { createAcpWorkspaceView, modelCatalog, nativeWorkspace, recreateWorkspaceFromId } from './virtual-catalog.js';
-import { array, AsyncValueQueue, business, carrierArgs, extractPromptText, extractSessionId, fail, failFrom, failure, isRecord, nativeAcpId, optionalInteger, optionalPositiveInteger, record, requestArg, requiredString, sessionPrefix, string, success, } from './virtual-contract.js';
+import { acpBackendLabel, createAcpWorkspaceView, modelCatalog, nativeWorkspace, recreateWorkspaceFromId } from './virtual-catalog.js';
+import { acpPermissionsProjection, array, AsyncValueQueue, business, carrierArgs, extractPromptText, extractSessionId, fail, failFrom, failure, isAcpPermissionPreset, isRecord, nativeAcpId, optionalInteger, optionalPositiveInteger, record, requestArg, requiredString, sessionPrefix, string, success, } from './virtual-contract.js';
 import { AcpEventCarrier } from './virtual-event-carrier.js';
 import { AcpLiveProjection } from './virtual-live.js';
 import { AcpSessionTitles } from './virtual-titles.js';
@@ -29,6 +29,8 @@ export class AcpVirtualHarness {
     pendingHistory = new Map();
     selectedWorkspaceId;
     selectedModels = new Map();
+    selectedPermissions = new Map();
+    commandSeq = 0;
     lastProjectionSeq = 0;
     imageAttachments = new Map();
     closed = false;
@@ -66,6 +68,8 @@ export class AcpVirtualHarness {
             get pendingApprovals() { return owner.pendingApprovals; },
             emitApproval: (...args) => owner.events.emitApproval(...args),
             modelSelection: (...args) => owner.modelSelection(...args),
+            permissionsProjection: (...args) => owner.permissionsProjection(...args),
+            permissionSelection: (...args) => owner.permissionSelection(...args),
         });
         this.events = new AcpEventCarrier({
             get archivedSessionIds() { return owner.archivedSessionIds; },
@@ -97,7 +101,7 @@ export class AcpVirtualHarness {
         return [...this.workspaceById.values()];
     }
     backendLabel() {
-        return this.backend === "claude" ? "Claude" : this.backend === "pi" ? "Pi" : this.backend === "opencode" ? "OpenCode" : this.backend === "antigravity" ? "Antigravity" : "Cursor";
+        return acpBackendLabel(this.backend);
     }
     async selectWorkspace(workspaceId) {
         const workspace = this.workspaceById.get(workspaceId) ?? recreateWorkspaceFromId(workspaceId, this.backend);
@@ -164,7 +168,7 @@ export class AcpVirtualHarness {
         try {
             const args = carrierArgs(payload);
             if (ACP_TOOL_CALL_ENDPOINTS.some(item => item === endpoint)) {
-                if (this.backend === 'claude' || !this.client.workspaceToolCall)
+                if (!this.client.workspaceToolCall)
                     return business(failure('method-not-found', 'The Host does not support ACP workspace tools.'));
                 const sessionId = requiredString(args.workspaceFileScopeId ?? args.agentId ?? args.sessionId, 'sessionId');
                 return business(await this.client.workspaceToolCall(nativeAcpId(sessionId, this.backend), this.backend, endpoint, args, signal));
@@ -190,6 +194,7 @@ export class AcpVirtualHarness {
                 case 'session/create': return business(await this.createSession(requestArg(args), signal));
                 case 'session/fork': return business(failure('bad-request', `${this.backendLabel()} Remote does not support session fork yet.`));
                 case 'session/history': return business(await this.sessionHistory(requestArg(args)));
+                case 'session/events':
                 case 'session/page': return business(await this.sessionPage(requestArg(args)));
                 case 'session/prompt': return business(await this.prompt(requestArg(args), signal));
                 case 'session/cancel': return business(await this.cancel(requestArg(args), signal));
@@ -214,6 +219,15 @@ export class AcpVirtualHarness {
                     }
                 }
                 case 'session/selectModel': return business(await this.selectModel(requestArg(args)));
+                case 'session/selectPermission': {
+                    const rawId = extractSessionId(requestArg(args));
+                    const sessionId = this.resolveSessionId(rawId);
+                    const preset = requiredString(requestArg(args).preset, 'preset');
+                    if (!isAcpPermissionPreset(preset))
+                        return business(failure('invalid-preset', `unknown preset "${preset}"`));
+                    this.setPermissionSelection(sessionId, preset);
+                    return business(success({ preset }));
+                }
                 case 'session/initializeDefaultModel': return business(success(undefined));
                 case 'session/canOpenWorkspacePath': return business(this.selectedWorkspaceId !== undefined);
                 case 'session/openWorkspacePath': return business(failure('bad-request', `Opening Host paths is unavailable in ${this.backendLabel()} mode.`));
@@ -221,8 +235,9 @@ export class AcpVirtualHarness {
                 case 'host/listDirectory':
                 case 'directoryPicker/list': return business(await this.listDirectory(requestArg(args), signal));
                 case 'skills/list': return business(success({ items: [] }));
-                case 'commands/list': return business([]);
-                case 'commands/execute': return business(undefined);
+                case 'job/kill': return this.hostCarrier === undefined ? business(success({ outcome: 'already-finished' })) : await this.hostCarrier.dispatch(endpoint, payload, signal);
+                case 'commands/list': return business(this.commandList(requestArg(args)));
+                case 'commands/execute': return business(await this.executeCommand(requestArg(args)));
                 default:
                     return this.hostCarrier === undefined
                         ? fail('method-not-found', `${this.backendLabel()} virtual Harness does not implement ${endpoint}.`)
@@ -236,8 +251,6 @@ export class AcpVirtualHarness {
     async open(endpoint, payload, signal) {
         const args = carrierArgs(payload);
         if (ACP_TOOL_STREAM_ENDPOINTS.some(item => item === endpoint)) {
-            if (this.backend === 'claude')
-                throw new Error('Claude workspace tools are not available.');
             const sessionId = requiredString(args.workspaceFileScopeId ?? args.agentId ?? args.sessionId, 'sessionId');
             const queue = new AsyncValueQueue(signal);
             const stream = await this.client.openStream(nativeAcpId(sessionId, this.backend), frame => {
@@ -415,7 +428,7 @@ export class AcpVirtualHarness {
         let images;
         try {
             images = array(request.content).filter(part => record(part).type === 'image').map(parseAcpImage);
-            if (images.length > 4 || (images.length > 0 && this.backend !== 'antigravity') || array(request.content).some(part => !['text', 'image'].includes(String(record(part).type))))
+            if (images.length > 4 || (images.length > 0 && this.backend !== 'antigravity' && this.backend !== 'hermes') || array(request.content).some(part => !['text', 'image'].includes(String(record(part).type))))
                 throw new Error('Unsupported ACP content.');
         }
         catch {
@@ -491,13 +504,15 @@ export class AcpVirtualHarness {
     }
     async attachment(request) {
         const sessionId = extractSessionId(request);
-        const attachmentId = string(request.attachmentId);
+        // 0.2.2 sends the full ImageAttachmentRef; older clients send only its id.
+        const attachmentId = string(request.attachmentId)
+            ?? string(record(request.attachment).attachmentId);
         const session = this.ensureSessionRegistered(sessionId);
-        if (this.backend !== 'antigravity' || session === undefined || !attachmentId?.startsWith('agy-image:'))
-            return failure('attachment-error', 'The image is not referenced by this AGY Session.');
+        if ((this.backend !== 'antigravity' && this.backend !== 'hermes') || session === undefined || !attachmentId?.startsWith('agy-image:'))
+            return failure('attachment-error', 'The image is not referenced by this Session.');
         await this.hydrateSession(session);
         const cached = this.imageAttachments.get(attachmentId);
-        return cached?.sessionId === sessionId ? success({ attachment: cached.attachment, data: cached.data }) : failure('attachment-error', 'The AGY image is unavailable or expired.');
+        return cached?.sessionId === sessionId ? success({ attachment: cached.attachment, data: cached.data }) : failure('attachment-error', 'The image attachment is unavailable or expired.');
     }
     async hydrateSession(session) {
         if (this.backend === 'cursor' || session.blank || session.events.length > 0)
@@ -526,7 +541,7 @@ export class AcpVirtualHarness {
             catch (error) {
                 // A failed history read is not a successful empty baseline; do not continue
                 // a restored conversation until its authoritative history is available.
-                if (this.backend === 'pi' || this.backend === 'claude' || this.backend === 'opencode')
+                if (this.backend === 'pi' || this.backend === 'claude' || this.backend === 'opencode' || this.backend === 'hermes')
                     throw error;
                 // Preserve legacy AGY history availability behavior.
             }
@@ -556,9 +571,10 @@ export class AcpVirtualHarness {
             projections: {
                 asOfSeq: page.cursor,
                 values: {
-                    title: session.title ?? (this.backend === "claude" ? "Claude" : this.backend === "pi" ? "Pi" : this.backend === "opencode" ? "OpenCode" : this.backend === "antigravity" ? "Antigravity" : "Cursor"),
+                    title: session.title ?? acpBackendLabel(this.backend),
                     sessionListMetadata: { blank: session.blank && session.events.length === 0, lastPromptAt: null },
                     modelSelection: this.modelSelectionProjection(sessionId),
+                    permissions: this.permissionsProjection(sessionId),
                     imageLimits: acpImageLimits(this.backend),
                 },
             },
@@ -583,7 +599,7 @@ export class AcpVirtualHarness {
             throughSeq: optionalInteger(request.throughSeq),
             limit: optionalPositiveInteger(request.limit) ?? optionalPositiveInteger(request.maxMessages) ?? 50,
         });
-        return success({ records: page.records, hasMore: page.hasMore });
+        return success({ records: page.records, hasMore: page.hasMore, cursor: page.cursor });
     }
     historyPage(session, options = {}) {
         const lastSessionSeq = session.events.at(-1)?.event.seq ?? -1;
@@ -660,7 +676,7 @@ export class AcpVirtualHarness {
                     discovered = await this.client.listSessions(workspace.path, this.backend, 30);
                 }
                 catch (error) {
-                    if (this.backend === 'pi' || this.backend === 'claude')
+                    if (this.backend === 'pi' || this.backend === 'claude' || this.backend === 'hermes')
                         throw error;
                     // Preserve legacy AGY catalog availability behavior.
                 }
@@ -688,7 +704,7 @@ export class AcpVirtualHarness {
             workspace.updatedAt = new Date().toISOString();
         }
         catch (error) {
-            if (this.backend === 'pi' || this.backend === 'claude')
+            if (this.backend === 'pi' || this.backend === 'claude' || this.backend === 'hermes')
                 throw error;
             // Preserve legacy AGY catalog availability behavior.
         }
@@ -755,9 +771,10 @@ export class AcpVirtualHarness {
                 kind: 'sequenced',
                 asOfSeq,
                 values: {
-                    title: session.title ?? (this.backend === "claude" ? "Claude" : this.backend === "pi" ? "Pi" : this.backend === "opencode" ? "OpenCode" : this.backend === "antigravity" ? "Antigravity" : "Cursor"),
+                    title: session.title ?? acpBackendLabel(this.backend),
                     sessionListMetadata: { blank: session.blank, lastPromptAt: null },
                     modelSelection: this.modelSelectionProjection(session.sessionId),
+                    permissions: this.permissionsProjection(session.sessionId),
                     imageLimits: acpImageLimits(this.backend),
                 },
             },
@@ -780,6 +797,66 @@ export class AcpVirtualHarness {
     modelSelectionProjection(sessionId) {
         const selection = this.modelSelection(sessionId);
         return { lastUsed: selection, next: selection };
+    }
+    permissionSelection(sessionId) {
+        const resolved = this.resolveSessionId(sessionId);
+        return this.selectedPermissions.get(resolved) ?? this.selectedPermissions.get(sessionId);
+    }
+    permissionsProjection(sessionId) {
+        return acpPermissionsProjection(this.permissionSelection(sessionId));
+    }
+    setPermissionSelection(sessionId, preset) {
+        const resolved = this.resolveSessionId(sessionId);
+        if (preset === undefined) {
+            this.selectedPermissions.delete(resolved);
+            this.selectedPermissions.delete(sessionId);
+        }
+        else {
+            this.selectedPermissions.set(resolved, preset);
+            this.selectedPermissions.set(sessionId, preset);
+        }
+        const seq = this.nextProjectionSeq();
+        this.events.publishProjection(resolved, 'permissions', this.permissionsProjection(resolved), seq);
+        if (resolved !== sessionId) {
+            this.events.publishProjection(sessionId, 'permissions', this.permissionsProjection(resolved), seq);
+        }
+        if (this.client.selectPermission) {
+            void this.client.selectPermission(nativeAcpId(resolved, this.backend), this.backend, preset ?? 'workspace-write').catch(() => undefined);
+        }
+    }
+    commandList(args) {
+        const rawId = extractSessionId(args);
+        if (rawId)
+            this.resolveSessionId(rawId);
+        return [{
+                name: 'permission',
+                description: `Switch the ${this.backendLabel()} Remote sandbox mode and approval policy`,
+                input: { hint: '<preset>' },
+            }];
+    }
+    async executeCommand(args) {
+        const rawId = requiredString(args.agentId ?? args.sessionId, 'agentId');
+        const sessionId = this.resolveSessionId(rawId);
+        const line = requiredString(args.line, 'command line').trim();
+        const match = /^\/permission(?:\s+([\s\S]*))?$/u.exec(line);
+        if (match === null)
+            return undefined;
+        const commandId = `acp-permission:${++this.commandSeq}`;
+        const requested = (match[1] ?? '').trim();
+        if (requested === '') {
+            return {
+                commandId,
+                result: { kind: 'success', text: `current preset ${this.permissionSelection(sessionId) ?? 'Host settings (not reported)'}` },
+            };
+        }
+        if (!isAcpPermissionPreset(requested)) {
+            return {
+                commandId,
+                result: { kind: 'error', text: `unknown preset "${requested}" (available: workspace-write, danger-full-access)` },
+            };
+        }
+        this.setPermissionSelection(sessionId, requested);
+        return { commandId, result: { kind: 'success', text: `preset ${requested}` } };
     }
     async hostSessionModels(sessionId) {
         const resolvedId = this.resolveSessionId(sessionId);
@@ -849,4 +926,5 @@ export class AcpVirtualHarness {
     }
 }
 export { acpCwdWorkspaceId, createAcpWorkspaceView, discoverAcpVirtualWorkspaces, modelCatalog } from './virtual-catalog.js';
+export { acpPermissionsProjection, isAcpPermissionPreset } from './virtual-contract.js';
 //# sourceMappingURL=virtual-harness.js.map

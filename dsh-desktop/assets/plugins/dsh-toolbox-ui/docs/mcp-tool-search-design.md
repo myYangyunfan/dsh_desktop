@@ -130,7 +130,37 @@ DSH 内置了一套完整的工具延迟加载**传输层**（0.2.0-rc.2，四�
 
 **照抄之外必须自己补的两件事**（早前遗漏，审查后补上）：
 - **MCP server instructions 也要遮**。`dsh-mcp-client` 给每个服务器注册一个 `mcp:<server>` prompt section（order 3100，`interpolate:false`，默认上限 `maxInstructionBytes` 32768 字节），只遮 tool schema 不遮它，延迟收益会被这八分之一上下文吃掉。参考实现用 `deferToolGuidance` 处理同类问题；我们对"还有未发现工具的服务器"清空该段，全部发现后恢复。（项目族不受影响：项目连接的 section 注册在兄弟作用域，本来就不进 agent 的 prompt——已实测。）
-- **目录必须有体积上界。** 目录**只列工具名**（2026-10-18 起）：实测 27 个真实工具的名字均长 33.3 字符，每行 `- <name>` 约 35 字符，于是 300 行 ≈ 10.6k 字符 ≈ 2.6k tokens。超出 `maxCatalogLines` 的部分**不列出**并提示"另有 N 个，用关键词或 `select:` 查询"。旧形态（名字 + 110 字符用途）同样 27 工具实测 3401 字符，是现在的 **3.6 倍**，而且 56% 的描述会被切——**体积不是删它的理由，切掉区分性信息才是**。
+- **目录必须有体积上界。** 目录**只列工具名**（2026-10-18 起）：实测 27 个真实工具的名字均长 33.3 字符，每行 `- <name>` 约 35 字符，于是 300 行 ≈ 10.6k 字符 ≈ 2.6k tokens。旧形态（名字 + 110 字符用途）同样 27 工具实测 3401 字符，是现在的 **3.6 倍**，而且 56% 的描述会被切——**体积不是删它的理由，切掉区分性信息才是**。
+  > ⚠️ **2026-10-26 更正（§12.11）**：上界保留，但**单位与形态都变了**。① 预算是**字符**不是行数
+  > （`maxCatalogChars`，只算名字行）——一行可能 7 字符也可能 38 字符，行数表达不了成本；
+  > ② 目录改成**按服务器分组 + 裸名**，因为全名每行都重复 `mcp__<server>__`。同构夹具（7 台真实服务器名 /
+  > 456 工具）实测：旧口径 300 行全名 = 12,896 字符且隐藏 142 个，新口径 12,500 字符**列出全部 456 个**
+  > （名字行 10,976 / 整段 11,690）。`maxCatalogLines` 已删除，写进配置会显式报错并给换算。
+  >
+  > ⚠️ **2026-10-26 二次更正**：**默认值取消** —— `maxCatalogChars` 缺省 = **不截断**（全部列出），
+  > 只有用户显式写正整数才启用。理由不是"目录很便宜"，而是**与"没有这个功能"的基线比**——
+  > 这是本条唯一该用的参照点，拿它和旧的上限比会得出相反的结论（2026-10-26 审查时我自己犯过这个错）。
+  >
+  > 口径（两个都是实测，不是一个外推）：完整定义 **442.04 字符/工具**（v1.8.0 发布说明记录的一台
+  > 360 工具真实服务器 = 159,136 字符）；目录 **25.64 字符/工具**（本节 456 工具实测 11,690 字符）。
+  > 两者比例**恒为 17.2×**，与工具数无关：
+  >
+  > | 工具数 | 常驻 schema 全量 | 只列名字的目录 |
+  > |---|---|---|
+  > | 360 | 159,136 字符（≈40k token） | 9,229 字符（≈2k token） |
+  > | 456 | 201,572（≈50k） | 11,690（≈3k） |
+  > | 1,200 | 530,453（≈133k） | 30,763（≈8k） |
+  > | 3,000 | 1,326,133（≈332k） | 76,908（≈19k） |
+  >
+  > 128k 窗口在约 **1,158 个工具**处就被常驻 schema 吃光，而那时目录只占 ≈7k token——也就是说这类
+  > 用户**只有靠本功能才跑得起来**。所以"不截断"最坏也只是"那个本来跑不起来的会话的 1/17"：
+  > 上限在这条曲线上没有保护作用，只有省钱的边际作用，而省的是一个已经付得起的人的钱。
+  > 截断的代价仍是**静默的**（模型拿到半张地图，可能据此对用户说"没有这个能力"），机制
+  > （注水分配 / I6 / 截断日志）因此保留给想自己压上下文的人，默认关闭。
+  >
+  > **API 边界变化（记下来，别当内部细节）**：导出的 `catalogSectionText` / `flatCatalogText` 对"配置里没有
+  > 这个键"的语义从**预算 0（一个都不列）** 变成**全部列出**。仓库内调用点都传 `resolveRuntimeConfig` 的结果，
+  > 所以没有实际影响；但如果将来有人拿原始配置直接调这两个函数，"漏传键"会从"列不出东西"变成"列全部"。
 
 **策略决策（B：差异化，不做全自研）**：引擎层“稳”不求新——查询语法照抄 Claude Code 三形态、BM25/CJK 参数对照 lordqyxz 实测调、resume 用其 presentation meta 方案（消除本文“resume 从零”边界）；集成层“精”——per-server defer 开关进服务器列表 UI（生态零 UI）、项目族支持（生态空白，见决策 8①）、与 exclude 合并、加载状态与节省量面板可见。明确不做：重新发明搜索算法、自造 dispatcher、发明新查询语法。前提：三样“更多”（UI、项目级、管理器联动）做得出来，否则诚实放弃而非造平庸复制品。
 
@@ -207,11 +237,11 @@ DSH 内置了一套完整的工具延迟加载**传输层**（0.2.0-rc.2，四�
 | `tools.restrict({ deny })` | per-agent 作用域遮罩，返回 disposer；**只管全局工具**：未知名与 scope-local 名都会抛错；scoped 注册不受影响、restrictions 相交。**本实现不用它**（决策 8①：遮不到项目族） | `dsh-tools/lib/index.js:2888-2910` |
 | `tools.register(definition)` | 全局层注册，返回 disposer；定义**必填 `output { schema, render }`**（`render` 须为函数，缺了直接 TypeError）；`defineTool({ name, description, parameters, execute, output, timeoutMs? })`，完整签名实现时按 schema.d.ts 钉死 | `dsh-tools/lib/index.js:2878-2887`、`schema.d.ts:248` |
 | `tools.schemas(scope)` | 模型可见 schema；被 restrict 的工具"reads as absent"——**会话视图只含可见工具，被 restrict 遮掉的工具不在内**。本实现不 restrict，所以 `schemas(agent)` 就是全量索引源（见决策 8④）；§4 架构图里"会话视图不能当索引源"那句是 restrict 时代的残留，已作废 | `dsh-tools/lib/index.js:3023`、`view()` 2959-2985 |
-| `readScopedToolSchemas(ctx, entry)`（插件自有） | 项目族工具的唯一枚举通路（工具在共享作用域层，全局视图看不到），含失败语义（抛错记账、空集≠无工具） | `lib/workspace-runtime.js:710-744` |
+| `readConnectionTools(ctx, entry)`（插件自有） | 项目族工具的唯一枚举通路（工具在共享作用域层，全局视图看不到）：只用宿主公开读面 —— `schemas(scopeKey)` 一次拿名字（全量深拷贝，只在**换代**时付）、`get(name, scopeKey)` 逐个拿定义；稳态靠**代次哨兵**（缓存一个定义对象的身份，mcp-client 每次 tools/list 同步都整批重建定义，哨兵换人即换代）短路成一次 `get()`。`view()`/`schemaOf()` 是宿主 private 方法（TS `private`，运行期可达但非契约），不碰。同时按**定义身份**对账，重连/就地重载后把旧定义换掉（只按名字会把死工具留在会话里）。返回值只有 `{definitions, error, failed}`；`readScopedToolSchemas()` 只给面板（5s 轮询）用 | `lib/workspace-runtime.js:763-845` |
 | 每步重建工具清单 | assembly 每步重算（agent-loop preStep）→ 新遮罩对运行中会话**下一轮请求即生效** | `dsh-agent-loop/lib/index.js:907` |
-| `agent/created` / `tools/change` / `agent/disposed` | **本功能一个都不订阅**（见 §4）。列在这里只为说明"为什么不需要"：视图按 revision 自愈，预热与脏标记都是冗余门，标志是要人记得置的 | `lib/workspace-runtime.js:1258-1271` |
+| `agent/created` / `tools/change` / `agent/disposed` | **本功能一个都不订阅**（见 §4）。列在这里只为说明"为什么不需要"：视图按 revision 自愈，预热与脏标记都是冗余门，标志是要人记得置的 | `lib/workspace-runtime.js:1408`（MCP 运行时自己的订阅） |
 | agent-loop 自动记账 | 工具集相对基线变化时自动追加 `developer/message`（tool-addition/removal）——掀罩后的历史位置一致性由宿主保证，插件无需自理 | `dsh-agent-loop/lib/index.js:1233` 附近、`dsh-llm` `projectToolUpdates` |
-| `ctx.effect(() => () => cleanup, label)` | 生命周期归属 | `lib/workspace-runtime.js:1239` |
+| `ctx.effect(() => () => cleanup, label)` | 生命周期归属 | `lib/workspace-runtime.js:1390` |
 | `exec.agent` | 调用所属 agent，`agent.ctx` 即作用域上下文 | `dsh-tools/lib/types/index.d.ts:228-229` |
 
 实现时待钉（不影响设计）：`defineTool` 的完整选项签名（已知 `output { schema, render }` 必填，其余字段实现时按 `schema.d.ts` 钉死）；`exec.agent` 为 undefined 的 agent-less 执行路径可达性（可达则显式失败并说明，不静默降级）。搜索索引按会话构建（`schemas(agent)`，含本会话投射的项目工具），不用全局视图。
@@ -230,7 +260,7 @@ DSH 内置了一套完整的工具延迟加载**传输层**（0.2.0-rc.2，四�
 - **静默全量不可观测**：视图算不出来时 fail-open 退回全量可见（§4），此时必须记账到日志——否则"没挂上"发生时用户无感知。当前记 `ctx.logger.error`；与 exclude 一样进面板错误账是后续可做项。
 - **`tool_search` 常驻的固定成本**：它全局注册、每个会话都在（无 defer 服务器的会话也付这份描述 token，约 350）。Claude Code 按阈值条件注入；DSH 无对应通道（工具描述静态），接受这笔固定税，描述保持精简，无延迟服务器时返回明示文案。
 - **complete-section 吞掉目录**：宿主 assemble 的规则是"存在 effective complete section 时，它成为唯一 prompt section"（`dsh-system-prompt:356-361`，**读码确认**：`completeSection === void 0 ? transformed.sections : [completeSection]`；全 test/ 没有覆盖这条的用例，早前写的"已实测"没有支撑）——若某部署/preset 注册了 complete section，我们的目录 section 会被静默丢弃，但**遮罩仍然生效**（`{...transformed, sections:[completeSection]}` 保留过滤后的 tools）。兜底：工具描述里的静态引导仍在，模型至少还能主动查。
-- **section 每组装渲染的成本**：已按 revision 缓存——工具可见面内容或任一影响划分的配置变了才重建视图与目录正文，否则两次组装产出**字节一致**的目录（实测 735 工具：revision 3.08ms / 重建 52.8ms）。目录行序用 **code-unit 比较**而不用 `localeCompare`：后者依赖 ICU 与区域，混合大小写会给出不同序，"库存不变则字节稳定"就不成立（宿主 `compareToolNames` 用同一理由避开它）。超大规模服务器按 `maxCatalogLines` 截断为"前 N 个 + 计数"，`select:` 真名不足时用查询形态补。
+- **section 每组装渲染的成本**：已按 revision 缓存——工具可见面内容或任一影响划分的配置变了才重建视图与目录正文，否则两次组装产出**字节一致**的目录（实测 735 工具：revision 3.08ms / 重建 52.8ms）。目录行序用 **code-unit 比较**而不用 `localeCompare`：后者依赖 ICU 与区域，混合大小写会给出不同序，"库存不变则字节稳定"就不成立（宿主 `compareToolNames` 用同一理由避开它）。超大规模仍在预算外截断（§12.11 起按**字符**预算、**整行原子**、按服务器**注水**分配，任何服务器都不会整台消失），`select:` 真名不足时用查询形态补。
 - **第三方文本绝不能进插值**：目录正文嵌 MCP 工具描述，必须 `interpolate:false`——否则描述里一个 `{{var}}` 就让每步 `renderPrompt` 抛 `unknown prompt variable`，agent loop 每步失败。宿主给 `mcp:<server>` 指令段和 `tools:sdk` 设的就是这个（mcp-client:739、dsh-tools:2749），我们照做。
 - **MCP server instructions 是另一笔上下文**：`dsh-mcp-client` 给每个全局服务器注册 `mcp:<server>` section（order 3100，默认上限 32768 字节）。只遮 tool schema 不遮它，延迟收益会被吃掉。当前实现：对"还有未发现工具的服务器"清空该段，全部发现后恢复。项目族不受影响（项目连接的 section 注册在兄弟作用域，本来就不进 agent 的 prompt——已实测）。
 
@@ -258,7 +288,7 @@ DSH 内置了一套完整的工具延迟加载**传输层**（0.2.0-rc.2，四�
 > 在补上之前，这几条只能算**一次性的手工测量**，`maxResults: 10` 与 `stem: true` 的默认值就建立在它之上。
 
 - `tool-search-index`（纯函数）：三种查询语法解析（含 `+` 约束对含 `-`/`_` 服务器名）、BM25 排序 fixture、max_results、空查询/无命中、CJK 分词、平手 code-unit 序
-- `tool-search-runtime`（mock tools service）：`uniqueOwner` 歧义、`partitionSchemas`、`filterManagedTools` 黑名单语义、`guardDecision`、`clampDiscovered`、`discoveredFromMessages`（含非本工具/错误结果/非 JSON）、`viewRevision` 纯度、`buildToolSearchView`、`activeMaskedServers`、`catalogSectionText`（**只列名字**、code-unit 序、行数上限、描述一个字都不进目录）、`maskInstructionSections`（不 mutate）、装配层（只订阅 assemble、目录 interpolate:false、指令段清空、fail-open、agent-less 显式失败、活配置、revision 缓存）
+- `tool-search-runtime`（mock tools service）：`uniqueOwner` 歧义、`partitionSchemas`、`filterManagedTools` 黑名单语义、`guardDecision`、`clampDiscovered`、`discoveredFromMessages`（含非本工具/错误结果/非 JSON）、`viewRevision` 纯度、`buildToolSearchView`、`activeMaskedServers`、`catalogSectionText`（**只列名字**、code-unit 序、**字符预算 + 整行原子（I6）**、**分组裸名**、描述一个字都不进目录）、`maskInstructionSections`（不 mutate）、装配层（只订阅 assemble、目录 interpolate:false、指令段清空、fail-open、agent-less 显式失败、活配置、revision 缓存）
 - 挂载边界：宿主视图抛错时零干预（fail-open），不炸会话
 - **项目级 defer 端到端**：`projectMcpServers` + `serverDeferTable` 把项目族并进同一张表（`workspace-runtime` 用例）
 - **PTC 模式不装配**（`tool-search-wiring` 用例）
@@ -289,7 +319,7 @@ DSH 内置了一套完整的工具延迟加载**传输层**（0.2.0-rc.2，四�
 | 6 | MCP server instructions（每服默认上限 32KB）完全没遮 | `dsh-mcp-client:736-743` 注册 `mcp:<server>` section（order 3100）。参考实现用 `deferToolGuidance` 处理同类问题，我们漏了 | 视图带 `managedByServer`，assemble 时对"还有未发现工具的服务器"清空该段（返回新对象，不 mutate），全部发现后恢复 |
 | 7 | 阈值语义 UI 与运行时不一致；决策 2 承诺的 per-server 豁免**没实现** | 运行时是聚合 `managed.size >= 15`，UI 行级用 `toolCount < 15` | 两条规则都实现且分工明确：per-server `> minServerTools(10)` 才可延迟（行级文案只说这条），聚合 `>= threshold(15)` 才启用机制（会话级，行级不说） |
 | 8 | 用了宿主标注"new calls are prohibited"的 `snapshotEvents()` | dsh-session:1358/1370 双处 `@deprecated` | 改走受支持的 `deriveMessages()`，扫 protocol JSON。真 Session 验证两条路径等价，且净减代码（去掉配对与 ptc-dispatch 特例） |
-| 9 | 目录无体积上界、每次组装全量重渲染 | 实测 735 工具：`catalogSectionText` 11.1ms/次、正文 100,914 字符 | 加 `maxCatalogLines`（默认 300）+ "另有 N 个" 提示；视图按 revision 缓存（实测 revision 3.08ms vs 重建 52.8ms）。**2026-10-18 重算口径**：100,914 / 735 = **每行 137 字符**，证明那次的"100,914 字符"是**含用途**的旧形态（名字 33 + 分隔 + 110 用途）；names-only 同规模约 26k 字符（每行 35.3，见 TUNING-DECISIONS F9）。`maxCatalogLines` 维持 300 不变——外推不足以改数 |
+| 9 | 目录无体积上界、每次组装全量重渲染 | 实测 735 工具：`catalogSectionText` 11.1ms/次、正文 100,914 字符 | 加 `maxCatalogLines`（默认 300）+ "另有 N 个" 提示；视图按 revision 缓存（实测 revision 3.08ms vs 重建 52.8ms）。**2026-10-18 重算口径**：100,914 / 735 = **每行 137 字符**，证明那次的"100,914 字符"是**含用途**的旧形态（名字 33 + 分隔 + 110 用途）；names-only 同规模约 26k 字符（每行 35.3，见 TUNING-DECISIONS F9）。`maxCatalogLines` 维持 300 不变——外推不足以改数。**⚠️ 2026-10-26 已被 §12.11 取代**：真因不是"默认值偏小"，而是**单位选错了**；预算换成字符（`maxCatalogChars`，只算名字行）、形态改分组裸名，同一预算从"列 314 个"变成"全部列出"；**随后默认值也取消**——缺省不截断，只有显式正整数才启用 |
 | 10 | `estimateSchemaTokens` 的 chars/4 对中文低估 2.7–4× | 算术推断（本机无 DeepSeek tokenizer），但方向确定 | 改 CJK 感知：CJK 字符按 1、其余按 `charactersPerToken`；纯 ASCII 走快路径，数值与旧版一致。**⚠️ 这条已被 §12.3 #23 推翻并作废**：估算器整套撤除， chars/4 与 CJK 粗估都不再存在。留下的判断材料是真实数据（工具数）与 per-server 规则 |
 | 11 | PTC 模式下遮罩与 guard **双失效**，设计只承认前者 | `tools:sdk` 是独立投影路径（dsh-tools `sdkSection`→`sdkSchemas`）；且 `collapses` 直接拒 model-direct 调用，guard 根本不跑 | PTC 部署下**整体不装配**并在日志明说。要支持需先补 `shapeSdkSection`，那是另一个改动。**⚠️ 第十轮已推翻本条的后半**：guard **没有**失效——`run_code` 的嵌套派发（`dsh-tools:1306` 的 `parent: exec.token`）绕过 `collapses` 但走完整管线含 `guardReason`，真 token 实测四向对照通过；"整体不装配"也被取代（改为 per-agent 判据 + 裁 `tools:sdk`）。见 §12.7 与 `.tasks/mcp-tool-search/DECISIONS.md` |
 | 12 | 决策 8③/11 引的"UNKNOWN_TOOL 先于 guard"是错的 | `prepareExecution` 的 `guardReason`（dsh-tools:3241）在 `dispatchToolBody` 抛 `ToolNotFoundError`（:3308；早前写的 :3307 是 `resolveExecution` 那一行，复核时按安装包逐行核对）之前；`createExecution` 对不可见工具返回 `kind:"ready"`（:3188） | 改文档论据。结论不变（assembly 过滤仍是对的），但真实优势只剩 ①②④⑤ |
@@ -337,9 +367,7 @@ DSH 内置了一套完整的工具延迟加载**传输层**（0.2.0-rc.2，四�
 | 25 | **`update()` 改 env 时，重连后的进程拿到的是 `!!js` 字面量而不是环境变量的值**（审查清单外，本轮实测发现） | 真 loader 探针：patch 里的 `MARKER: !!js process.env.HOME ?? ""` 经 include 子树物化后子进程拿到 HOME 的真值；同一条配置经 `manager.update()` 改 env 后重连，子进程拿到的是字符串 `!!js (process.env.HOME ?? "")` | loader 的 `interpolate` 只求值 `{ __jsExpr }` 对象、**raw 字符串原样透传**。`entryConfigOf()` 因此先把内部 `!!js <expr>` 转成 `{ __jsExpr: <expr> }`（递归进对象与数组），`add`/`installBuiltins`/`update` 三条路共用。`entry.options.config` 于是与生产条目同形（盘上 `!!js`、内存 `__jsExpr`），`reveal()` 的 `resolveLiveConfigValue` 本就是为这个形状存在的 |
 | 26 | **`ctx.loader.remove(id)` 对 include 子树条目是静默 no-op**（审查清单外，本轮实测发现） | `EntryTree.remove()` 先用完整 id `include:<id>` resolve 出条目，再把**同一个完整 id** 传给 `EntryGroup.remove()`，而后者按 `this.tree.store[id]` 查的是**局部 id** → 查不到 → `if (!entry) return`。真 loader 实测：remove 不抛错，条目与工具原样留着、子进程不退 | `removeServer()` 改用 `entry.parent.remove(entry.options.id)`（loader 自己"停掉并移除一个条目"的原语，局部 id）。**第六轮已终验**（`test/real-host-include.test.mjs`，真 `cordis-plugin-include@1.0.10` + 真重启）：那条路还有第二个后果——`EntryTree.remove()` 结尾的 `tree.write()` = `Include.write()` 把整个 `root.data`（含 patch 插入的 mcp 条目）写回 base 配置。正向用例全绿（add 后 cordis.yml 一字节不动、重启后无重复、remove 后无残留），反向对照证明走 `ctx.loader.remove()` 会"既没删掉、又把配置写脏" |
 
-**O1 的终验（第六轮补上，曾经是唯一未决项）**：装 `@deepseek-ai/cordis-plugin-include@1.0.10` 为 **devDependency**（运行时不 import，与 `dsh-typert-loader` 同一待遇），夹具换成真 Include，跑"创建 → dispose 整个 ctx → 用同一对 cordis.yml / cordis.patch.yml 重新起宿主"的真重启。结果：`add()` 根部创建后 cordis.yml 一个字节都没动，重启后两条各恰好一条；`removeServer()` 后二次重启只剩一条、无残留。peer 版本宽于实际装版本（include 要 cordis ~4.0.5 / loader ~1.0.6，基线是 4.0.2 / 1.0.3）不是新问题——所有 `dsh-*@0.2.0-rc.2` 都要 ~4.0.4，仓库一直在那个状态下全绿。
-
-**O1 仍未终验的一项**：`entry.parent.remove()` 不走 `tree.write()`，所以"移除 patch 条目会不会把剩余条目烙进 base 配置"这个风险在本轮被**绕开**而不是被验证；要终验需要真 `cordis-plugin-include` 夹具 + 重启一轮。已记入 `.tasks/mcp-tool-search/OPEN-ITEMS.md`。
+**O1 的终验**：`test/real-host-include.test.mjs` 使用真 `@deepseek-ai/cordis-plugin-include` 与匹配宿主组合，执行“创建 → dispose 整个 ctx → 用同一对 cordis.yml / cordis.patch.yml 重启”。结果：`add()` 根部创建后 base 配置字节不变，重启后无重复；`removeServer()` 后二次重启无残留。旧记录中的版本号属于历史基线，不代表当前发布支持窗口。
 
 **本轮新增的两条测试纪律**（都是"撤掉改动看红"实证过的）：① 手写 loader 桩必须补 `create`/`remove`/`entry.parent.remove`——否则三条 RPC 在桩上以 "is not a function" 炸掉，而那不是产品缺陷、是夹具不忠实（与 `entry.update` 同一理由）；② 凡是输出进宿主管线或调宿主入口的路径必须有一条真宿主用例——`test/real-host-loader.test.mjs`（第五轮）与 `test/real-host-include.test.mjs`（第六轮，真 Include + 真重启）就是为此新建的，F1/F2/O1 的三个盲区全是它们或第四边断言抓到的。
 
@@ -392,13 +420,16 @@ not only on disk`（夹具 = 临时技能根 × 真 `SkillRegistry` × 真 `dsh-
 | 34 | **同名条目的 defer 是"后写覆盖"而不是注释承诺的 OR，结论取决于 `loader.entries()` 顺序** | 探针（照 `tool-search-config` 的夹具形状）：同名两条 `[defer:false, defer:true]` → `[["dup",true]]`；`[defer:true, defer:false]` → `[["dup",false]]` —— 用户的同一份配置，`entries()` 顺序一变结论翻面，而顺序是 loader 树的遍历产物，用户改不了也看不见 | 全局族改用 OR，与项目族同一条合并规则（`serverDeferTable`）。新增用例钉"顺序无关"（`[false,true]` 与 `[true,false]` 同一个结论），变异回"后写覆盖"立刻红。注：同名**不会**让 `uniqueOwner` 判定歧义——`serverDeferTable` 是 Map，`serverNamesOf` 天然去重（已实测） |
 | 35 | **`test/tool-search-real-host.test.mjs` 顶部 `const DEFER_CONFIG = …` 声明后从未使用** | 全文件只有声明那一处命中（`Select-String`） | 删除，并把 `globalTools(server, count = 16)` 参数化以支撑 #32 的 30 工具夹具 |
 
-**变异复验补强（同轮）**：四处核心逻辑改坏后全量曾仍绿，逐条补了"能区分"的夹具——`NAME_BONUS 12→0`（旧用例的查询词恰好等于裸工具名，走 `isExactName` 的 `Infinity` 分支把加分支路；新用例让两个文档命中同一个词、只有名字命中侧拿 bonus）、去掉平手 tie-break（旧 fixture 输入序**恰好就是**期望序，V8 稳定排序本身就给出同样结果；新 fixture 把输入序反过来）、`deferring: managed.size >= threshold` 改成 `>`（旧用例只有 16 与 14，两者在两种写法下同结果——边界这个数用 `DEFAULTS.threshold` 现取，不再写字面量）、`viewRevision` 里删 `servers`（`serverNames` 是活输入：项目 MCP 晚连会多出名字；新增单独变 `serverNames` 的断言）。`descriptionChars` / `maxCatalogLines` / `threshold` 仍不进测试：它们是**安装期固定值**，会话内不可能变，删了没有 stale 风险（读码结论，非实测）。
+**变异复验补强（同轮）**：四处核心逻辑改坏后全量曾仍绿，逐条补了"能区分"的夹具——`NAME_BONUS 12→0`（旧用例的查询词恰好等于裸工具名，走 `isExactName` 的 `Infinity` 分支把加分支路；新用例让两个文档命中同一个词、只有名字命中侧拿 bonus）、去掉平手 tie-break（旧 fixture 输入序**恰好就是**期望序，V8 稳定排序本身就给出同样结果；新 fixture 把输入序反过来）、`deferring: managed.size >= threshold` 改成 `>`（旧用例只有 16 与 14，两者在两种写法下同结果——边界这个数用 `DEFAULTS.threshold` 现取，不再写字面量）、`viewRevision` 里删 `servers`（`serverNames` 是活输入：项目 MCP 晚连会多出名字；新增单独变 `serverNames` 的断言）。`descriptionChars` / `maxCatalogLines` / `threshold` 仍不进测试：它们是**安装期固定值**，会话内不可能变，删了没有 stale 风险（读码结论，非实测）。**（2026-10-26：`maxCatalogLines` 已删除，由 `maxCatalogChars` 取代；新键进了 `viewRevision` 并有独立用例——它决定目录文本，改参数必须让缓存失效。）**
 
-> ⚠️ **2026-10-18 更正**：上面这句仍然成立的部分只剩 `maxCatalogLines`（和已删除的 `threshold`）。
-> `descriptionChars` 当天已从代码里删除——目录改 names-only 之后它没有意义，写进配置会**显式报错**
-> （有单测钉住）。顺带更正一个当时的误判：把 `maxCatalogLines` 归为"不进测试"是对的，
-> 但 `descriptionChars` 的问题从来不是"没 stale 风险"，而是**这个数字本身没有依据**——
-> 详见 `.tasks/mcp-tool-search/TUNING-DECISIONS.md` F5/Q1。
+> ⚠️ **2026-10-18 更正**：`descriptionChars` 当天已从代码里删除——目录改 names-only 之后它没有
+> 意义，写进配置会**显式报错**（有单测钉住）。顺带更正一个当时的误判：把 `maxCatalogLines` 归为
+> "不进测试"是对的，但 `descriptionChars` 的问题从来不是"没 stale 风险"，而是**这个数字本身没有
+> 依据**——详见 `.tasks/mcp-tool-search/TUNING-DECISIONS.md` F5/Q1。
+>
+> ⚠️ **2026-10-26 再更正（§12.11）**：`threshold` 与 `maxCatalogLines` **都已从代码里删除**，
+> 这条批注里"仍然成立的部分"现在一个都不剩。`maxCatalogLines` 是被 `maxCatalogChars` 取代的
+> （字符、只算名字行、**缺省不设 = 不截断**），旧键写进配置会显式报错并给换算。
 
 **仍未实测、也不许当成已验证的两项**：
 - **PTC 组合（已实测，缺陷确认）**：部署默认 `native` 时插件照装（装配判据读的是 `ctx.tools.modeFor()`，**不传 scope = 部署默认层**），而 `dsh-agent-tool-presentation` 会给某个 agent preset 的 scope 调 `presentAs('ptc')`。真宿主探针（`ctx.provide('ptcRuntime', { language: 'typescript' })` 最小 stub + 真 `presentAs('ptc')`）：该 agent 的 `tools:sdk` 段里 **30/30 个 mcp 工具 schema 全在**（含 `tool_search` 自己），而 `assembly.tools` 里 0 个——**遮罩对它是 no-op**；直调 `tool_search` → `isError:true`「only `run_code` is callable directly」；对照同进程 native agent → `isError:false`。即"半失效比不装更坏"这条判断在**跨 scope 组合**下真实发生。修法方向：装配判据改成按 agent 判 `agent.ctx.tools.modeFor(agent)`（装配时读一次全局默认做不到），但 `installToolSearchRuntime` 目前是全局装配、`assemble`/`guard` 里才拿得到 agent，要动装配结构——**本轮只取证、未改**。
@@ -530,7 +561,7 @@ not only on disk`（夹具 = 临时技能根 × 真 `SkillRegistry` × 真 `dsh-
 `static Config = ToolSearchConfigSchema`），cordis 用标准 schema 在加载时校验
 （`resolveConfig` → `runtime.Config['~standard'].validate`）。
 
-**只开三个**（证据见 `TUNING-DECISIONS`）：`maxResults`（Q2/F4）、`maxCatalogLines`（Q4）、
+**只开三个**（证据见 `TUNING-DECISIONS`）：`maxResults`（Q2/F4）、`maxCatalogChars`（Q4 + §12.11，2026-10-26 由 `maxCatalogLines` 换成字符口径；同日改为**默认关闭的开关**，缺省不截断）、
 `maxDiscovered`（Q2）。**不开** `requireDiscovery`（Q6：关掉 = 让模型凭记忆直调未加载工具），
 也不开 `toolName` / `stem`（前者是换名逃生门；后者只有两组真实工具集的零误伤证据）。
 `descriptionChars` / `threshold` / `minServerTools` 已删除，schema 的 strict 让它们**写进来就报错**。
@@ -599,9 +630,13 @@ not only on disk`（夹具 = 临时技能根 × 真 `SkillRegistry` × 真 `dsh-
   属宿主/`dsh-mcp-client` 侧行为；已记入 `OPEN-ITEMS.md` O5。
 
 
-**仍欠**：`maxCatalogLines` 的默认值该不该从 300 抬起。量已经补上了（Q4：360 个真实工具、
-每行 32.66 字符、上限 300 会漏 60 个名字），但"改默认值 = 改所有用户的每请求 prompt 体积"
-属于产品决定，本轮不替用户拍板；C2 让用户自己能改，所以它不再是锁死的。
+**仍欠**（⚠️ **2026-10-26 已结清，见 §12.11**）：`maxCatalogLines` 的默认值该不该从 300 抬起。
+量已经补上了（Q4：360 个真实工具、每行 32.66 字符、上限 300 会漏 60 个名字），但"改默认值 =
+改所有用户的每请求 prompt 体积"属于产品决定，本轮不替用户拍板；C2 让用户自己能改，所以它不再是
+锁死的。→ 真因不是"默认值偏小"，而是**单位选错了**：行不是成本、字符才是。§12.11 把预算换成
+字符并把形态改成"分组 + 裸名"，同一预算从"列 314 个、隐藏 142 个"变成"全部列出"。`maxCatalogLines`
+这个键已删除（写进配置会显式报错并给换算）。**同日再进一步**：默认值也取消了——`maxCatalogChars`
+缺省不截断，只有显式写正整数才启用（§12.11 二次更正），所以"该不该抬高默认值"这个问题随默认值一起消失。
 
 ## 12.10 行内单台延迟开关（1.8.1）
 
@@ -626,5 +661,132 @@ not only on disk`（夹具 = 临时技能根 × 真 `SkillRegistry` × 真 `dsh-
 读回、内存活条目同步、名字不存在时报错）；客户端侧用例覆盖芯片两态、只读态、`aria-pressed`、
 点它不顺带选中行、两个作用域的列表都接上线；i18n 双语同步。
 
+## 12.11 目录改「分组 + 裸名」，预算从「行」换成「字符」（1.9.0）
 
+**起因**：用户问"分类之后还用截断吗"，顺着查下去发现两件事——① 目录每行都重复
+`mcp__<server>__`，同服务器连续 360 行就重复 360 次；② 预算是**行数**，而行数表达不了成本
+（一行可能是 `- click` 7 字符，也可能 38 字符）。
 
+**同构夹具实测**（7 台真实服务器名 / 456 个工具，不是某台机器独有）
+
+| 口径 | 列出 | 名字行字符 | 整段字符 | 未列出 |
+|---|---|---|---|---|
+| 旧：300 行全名 | 314 | 11,872 | 12,896 | **142** |
+| 新：12,500 字符裸名 | **456** | **10,976** | **11,690（-9.4%）** | **0** |
+
+⇒ 两个轴同时改善：多列 142 个名字，整段反而短 1,206 字符。
+
+**形态**：每台服务器一个组头，下面只写裸名。
+
+```
+### browser-tools · 40 tools · Browser automation server: take screenshots, click…
+- click
+- take_screenshot
+```
+
+去掉前缀之后，组头不再是冗余，而是**服务器身份的载体**——§3.3 里"分组头只是把排序重复一遍"
+那条结论的**前提（名字自带前缀）已消失**，故该结论作废（见决策 9 的批注）。
+
+**归属与切分不做任何字符串解析**（这是本轮最关键的一条）：
+
+- `owner` 来自 `view.ownerOf`，它是 `uniqueOwner` 对**已知服务器名**做前缀**唯一命中**的结果；
+- 切分点是 `'mcp__' + owner + '__'` 的**长度**，且先 `startsWith` 验证 ⇒ 不变量 I2
+  `prefix + bare === name` 恒成立；
+- 归不上（无前缀 / 前缀不符 / 裸名为空 / 两台服务器前缀互相包含）一律**保留全名**、不分组；
+- 禁止 `split('__')`：`serverName` 允许含 `_`（`mcp__a__b__x` 会切散）；
+- `serverName` 受 `/^[A-Za-z0-9_-]{1,32}$/` 约束 ⇒ 前缀最长 39 字符 < 截断保留区 51
+  ⇒ **64 字符截断永远切不坏前缀**（早前"serverName 超长会切坏前缀"的担心不成立）。
+
+**预算**：`maxCatalogChars`（**缺省不设 = 不截断**；设了才只算名字行。标题/intro/组头是"地图骨架"
+另付，≈700 字符且随服务器数线性——把它算进预算会让"预算小于骨架"无解：要么砍组头使地图缺块，
+要么超支）。面板上是一个**默认关闭的开关**，打开时预填 12,500 —— 那是旧口径 300 行全名的实测成本
+（12,435 → 取整 12,500），是建议起点，不是默认值。
+
+**分配**：按服务器**注水**（短的组先满足，剩下额度在还饿着的组之间继续平分），保证任何服务器
+都不会整台消失；溢出数写在各自组头（`· N not listed`）。
+
+**绝不切名字（不变量 I6）**：分配粒度是**整行**，一行装不下就少一行。半个名字等于给模型一个
+错的调用名，比少列几个更糟。用例用"预算逐格下压约 100 个采样点"扫，每次断言出现过的每一行都
+是完整名字、且名字行用量 ≤ 预算。
+
+**`select:` 支持裸名**：目录显示裸名，模型会照着它写 `select:`，不吃裸名等于把这条主路径废掉。
+唯一命中直返**全名**，多命中全返（不猜），缺失仍 `found:false`。
+
+**明确不做**（留档防后人再加）：
+
+| 被排除 | 理由 |
+|---|---|
+| 组内 **LCP** 自动发现并剥公共前缀 | 会剥语义前缀（`find_`、`analysis_`）；字节不稳定（加一个工具就可能让整组前缀变化，破 prompt 缓存）；真实数据上 chrome-devtools / jshook 的整组 LCP 都是空 |
+| 剥 `serverName + '_'` 重复段 | 真实数据里确有重复（`firecrawl_scrape`；`mcp-deepwiki` 的工具是 `deepwiki_fetch`，属**变体**），但精确匹配抓不住变体、要抓就得做归一化猜测；即便全剥也只省约 240 字符（<3%），且不影响正确性 |
+
+**验证**（三道，均为真组件）
+
+1. `node --test` **845/845**（`real-host-loader` 的 HOME 用例需设 `HOME`，历史上同样红）；
+2. 隔离进程真宿主（真 cordis / SystemPrompt / ToolRuntime）：遮罩后模型只见 `tool_search`；
+   摘要自动跳过宿主拼的 `### MCP server: <name>` 行；预算压到 600 时小服务器全列、大的标注
+   `· 6 not listed`；不变量三条（不超预算 / 无半截名字 / 不重复标题）全过；
+3. 真模型（DeepSeek）：中英文提问都正确调 `tool_search`，中文提问**自动转英文查询**
+   ——旁证"中文不必手写词表，模型自己会翻"（对应 §12.6 里那条待定项）。
+
+**提示词与代码的分工**（2026-10-26 定；用户口径："相辅相成互补或者增强"）
+
+一条判据管这类问题：**能用代码算出来的答案，就不要写成提示让模型判断。**
+
+| 层 | 管什么 | 为什么 |
+|---|---|---|
+| 代码 | 确定的复原与判定：裸名 / 全名 / 用点或空格拼坏的名字能反拼回现有工具；真不存在就是 `found:false` | 有确定性，不受模型是否听话影响 |
+| 提示词 | 降低**犯错频率** + 代码无法确定的判断：抄名字、换英文关键词、工具真不存在时该改哪条路 | 只能靠模型，没有百分之百 |
+
+两条配套纪律：
+
+1. **两边不许互相拆台。** 代码开始接受点 / 空格之后，提示词里那句 "(server.tool, server tool,
+   server_tool do not exist)" 立刻成了假话，必须同批改掉——提示词里只要有一句不成立，模型学到的
+   就是一条错规则。
+2. **反拼的合法性判据**：分隔符必须是**合法名字里不可能出现的字符**。宿主把模型可见的工具名归一化成
+   `[A-Za-z0-9_-]`（`mcp-client/src/tools.ts:51,83`，非法字符替换成 `_`），所以只有 `.` 与空格能反拼；
+   单个 `_` 是合法名字字符（`repo_read_file` 可能真是某张工具的名字），**不认**——认了就是策略不是事实。
+   用例钉死：`select:jshook_tool_1` 必须报不存在，哪怕 `mcp__jshook__tool_1` 就在目录里。
+
+**成本判断（据此加过一句提示词）**：常驻提示词多几个字符，只要能少一次模型犯错就是划算的——一次失败
+往返（发查询 → 落空 → 重读回执 → 换个写法重试）本身就比多写的十几二十个字符贵。所以 `select:` 的参数
+描述里明确写出"可逐字复制的是哪两种形态"（裸名 / 结果里的全名），不再让模型自己从组头 + 列表项去推。
+
+## 12.12 1.10.0：写盘与应用合成一条链路（reconcile 是唯一的 live 主体）
+
+§12.3 #24 记录的"writePatch 之后自己 `ctx.loader.create` 根部创建 / `entry.update()` 重连"
+**已经不是当前实现**。1.10.0 起，MCP 行的生命周期（新增 / 编辑 / 启停 / 移除 / 导入 / 内置安装）
+只经由官方 profile 组合：读完整有序组合 → 写 profile patch → `composeEntries` 判定这一行是否
+真的算数 → `reconcileProfilePatches` 应用整份组合 → 校验运行中的条目；失败则写回上一份并重新应用。
+
+为什么换掉（两条都在真机上出过事）：
+
+1. **两套事实**：插件自己拼的 loader 条目与 patch 里的行不是同一个来源。面板读一处、运行时走另一处，
+   于是会出现"盘上写的是 A、运行中是 B"——本轮面板里"看起来正常、策略却是反的"就是这条链路上漂出来的。
+2. **rc.5 的卸载钩子**：`cordis-plugin-loader@1.0.6` 卸载插件时会
+   `fiber.entry.parent.tree.write()`，而 include 子树的写是把**已应用树**（base + patch 行）写回
+   `cordis.yml`。`removeServer` 一度会把兄弟服务器的行烙进 base 配置。
+
+延迟（`defer`）是**纯视图遮罩**，不走 reconcile：它不改变连接参数，也就不该让 serena 那种冷启动
+1–1.5 分钟的服务器重连。遮罩在内存里改 `entry.options.config.defer`，由下一次组装直接读到。
+
+所有变更型 RPC 现在返回同一组字段（`persisted` / `live` / `diagnostics`），"写盘成功但运行中没生效"
+如实报 `live: 'skipped'` + 原因，而不是一句「已更新」。契约单源与客户端产物见
+[`docs/design.md`](design.md) 的「写盘与运行中：一条链路」与「契约与产物：同一份定义」两节。
+
+## 12.13 没有可搜的工具时不再发搜索入口（issue #9，1.10.0）
+
+**现象**（用户报的）：把所有 MCP 停用、或把工具全设成常驻之后，模型仍然看得见 `tool_search`，
+于是它先搜一次——而此刻目录是空的，这一轮白花。
+
+**原因**：搜索入口是"稳定项"（不能被自己延迟掉，也不能被用户策略藏掉），旧实现把它当成
+"永远发给模型"。这是两件事被写成了一件：**不可被用户隐藏** ≠ **永远应该出现**。
+
+**现在的判据**（`lib/tool-search-presentation.js` 的 `presentAssembly`）：延迟集
+`D = M − 已发现` 为空时，搜索入口与目录段、引导段一起从模型可见的工具里摘掉；它本身仍注册在
+宿主里（`ctx.tools.schemas()` 依旧能看到），所以一旦有工具被延迟，下一次组建立刻又有它。
+PTC 的手册同理：把搜索入口放进"要摘掉"的集合交给渲染器重画（`trimSdkText` 的 `drop`）。
+
+**覆盖**：`test/tool-search-presentation.test.mjs`（3 个方向的纯层用例）、
+`test/tool-search-real-host.test.mjs`（真 rc.5 宿主：提示词里既无引导段也无目录段、
+声明里没有搜索入口、但宿主里仍注册着）、`test/tool-search-rc22-host.test.mjs`
+（真 rc.1 宿主，同一判据）。

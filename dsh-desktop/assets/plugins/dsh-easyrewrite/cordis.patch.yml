@@ -2,3 +2,11 @@
 - insert:
     - id: dsh-easyrewrite
       name: dsh-easyrewrite
+    - id: bubble
+      name: dsh-easyrewrite/bubble
+    - id: recall
+      name: dsh-easyrewrite/recall
+    - id: history
+      name: dsh-easyrewrite/history
+    - id: other
+      name: dsh-easyrewrite/other

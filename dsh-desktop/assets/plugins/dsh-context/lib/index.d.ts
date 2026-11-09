@@ -1,15 +1,15 @@
 /**
- * dsh-context v0.82.1
+ * dsh-context v0.83.0
  * A DeepSeek Harness plugin for context insight and management, with context dashboard and context command, for understanding how the context is made of, and how it evolves.
  * @author bowenliang123
  * @license Apache-2.0
  * @homepage https://github.com/bowenliang123/dsh-context
- * @built 2026-11-06T09:28:50+00:00
- * @commit b53e60444cd0
- * @commit-date 2026-11-06T17:25:54+08:00
+ * @built 2026-11-08T17:44:57+00:00
+ * @commit 4a71bd53ad3b
+ * @commit-date 2026-11-09T01:40:06+08:00
  */
 
-import { z } from "zod";
+import "zod";
 import "@deepseek-ai/dsh-session";
 import z$1 from "@deepseek-ai/schemastery";
 import { Context } from "@deepseek-ai/cordis";
@@ -64,6 +64,7 @@ interface TimelineState {
   maxOutputTokens?: number;
   requests: SlimRequestRecord[];
   turnRuns?: number;
+  totals?: CumulativeTotals;
   events: ContextEventRecord[];
   archived: SurfaceNode[];
   cost?: SessionCostUsage;
@@ -102,8 +103,21 @@ interface TimelineState {
   commands: CommandStateRecord[];
   commandsFloor?: number;
   commandStats?: CommandStats;
+  toolTally?: Record<string, number>;
+  programTally?: Record<string, number>;
+  commandCalls?: string[];
+  commandCallsOverflow?: boolean;
   pendingCodeCmds?: Record<string, CommandStateRecord[]>;
   pendingCodeOps?: Record<string, FileOpRecord[]>;
+}
+interface CumulativeTotals {
+  turns: number;
+  steps: number;
+  injects: number;
+  compactions: number;
+  prunes: number;
+  skills: Record<string, true>;
+  lastTurn?: number;
 }
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
@@ -216,6 +230,8 @@ interface Snapshot {
   generatedAnswerTokens?: number;
   generatedCallTokens?: number;
   toolCalls?: number;
+  toolTally?: Record<string, number>;
+  programTally?: Record<string, number>;
   humanInputs?: number;
   answers?: number;
   lastUser?: string;
@@ -238,6 +254,34 @@ interface Snapshot {
   commandsFloor?: number;
   commandStats?: CommandStats;
   spans?: TimingSpan[];
+  costRead?: SessionCostRead;
+}
+interface CostPriceRate {
+  hit: number;
+  miss: number;
+  write: number;
+  out: number;
+}
+type CostConfidence = 'high' | 'medium' | 'low';
+interface CostPriceFace {
+  provider: string;
+  model: string;
+  rate: CostPriceRate;
+  via: string;
+  confidence: CostConfidence;
+  canonical?: string;
+}
+interface CostPriceMiss {
+  provider: string;
+  model: string;
+  reason: string;
+  candidates?: number;
+}
+interface SessionCostRead {
+  usd: number | null;
+  ready: boolean;
+  faces?: CostPriceFace[];
+  misses?: CostPriceMiss[];
 }
 interface ContextTimelineDetail {
   rev: number;

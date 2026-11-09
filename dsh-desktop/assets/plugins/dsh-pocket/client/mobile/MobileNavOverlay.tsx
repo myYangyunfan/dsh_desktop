@@ -1,13 +1,18 @@
 import { useEffect, useLayoutEffect, useState } from 'react'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { IconPanelLeftOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { NS } from './locales.ts'
+import { MobileIcon } from './MobileIcon.tsx'
+import { resolveMobileIcons } from './icon-compat.mjs'
 import {
   DRAWER_SELECTOR,
   TOGGLE_SELECTOR,
   isOverlayTap,
   navTargetFor,
 } from './nav-targets.mjs'
+
+/** 宿主图标在加载时解析一次：不同 DSH 版本的导出名不同（见 icon-compat.mjs）。 */
+const icons = resolveMobileIcons(primitives)
 
 /** Full props for the shell overlay entry. */
 export interface MobileNavOverlayProps extends PropsRuntime<'shell.overlay'>, PropsLocale<typeof NS> {
@@ -282,7 +287,7 @@ export function MobileNavOverlay({ toggleSidebar, t }: MobileNavOverlayProps) {
           title={t('open')}
           onClick={() => toggleSidebar()}
         >
-          <IconPanelLeftOutline16 size={18} />
+          <MobileIcon icon={icons.panelLeft} name="panelLeft" size={18} />
         </button>
       )}
     </>

@@ -78,8 +78,11 @@ export class CodexEventCarrier {
         return undefined;
     }
     publishProjection(sessionId, key, value, seq) {
-        for (const queue of this.context.controlStreams)
-            queue.push({ type: 'projection', sessionId, key, value, seq });
+        // 0.2.2 sends per-event `changes`; keep the legacy key/value fields so
+        // older official clients keep applying the same frame.
+        for (const queue of this.context.controlStreams) {
+            queue.push({ type: 'projection', sessionId, seq, key, value, changes: [{ key, val: value }] });
+        }
     }
 }
 //# sourceMappingURL=virtual-event-carrier.js.map

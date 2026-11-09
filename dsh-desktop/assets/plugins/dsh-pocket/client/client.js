@@ -10,9 +10,11 @@ window.__ModuleLoader__.load({
     // the bundle must bind React itself - otherwise every mobile component
     // crashes at render time with "ReferenceError: React is not defined".
     var React = require("react");
+var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __export = (target, all) => {
   for (var name2 in all)
@@ -26,6 +28,14 @@ var __copyProps = (to, from, except, desc) => {
   }
   return to;
 };
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // client/index.jsx
@@ -41,6 +51,8 @@ var import_react2 = require("react");
 
 // client/api.js
 var POCKET_RPC_CHANNEL = "/dsh-pocket";
+var MOBILE_RIGHTBAR_ATTRIBUTE = "data-dsh-pocket-mobile-rightbar";
+var MOBILE_RIGHTBAR_EVENT = "dsh-pocket:mobile-rightbar";
 var POCKET_ENDPOINTS = Object.freeze({
   status: "pocket.status",
   tunnelStart: "tunnel.start",
@@ -53,6 +65,7 @@ var POCKET_ENDPOINTS = Object.freeze({
   lanAuthSetEnabled: "lanAuth.setEnabled",
   lanSetOverride: "lan.setOverride",
   lanSetEnabled: "lan.setEnabled",
+  mobileRightbarSetEnabled: "mobile.rightbar.setEnabled",
   pinSetCustom: "pin.setCustom",
   pocketReset: "pocket.reset",
   // 移动端「复制文件内容」（issue #17）：手机经此 RPC 让主机读取文件正文，
@@ -106,7 +119,66 @@ function redactStatus(s) {
 }
 
 // client/mobile/MobileNavToggle.tsx
-var import_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
+var primitives = __toESM(require("@deepseek-ai/dsh-client-ui-primitives"), 1);
+
+// client/mobile/icon-compat.mjs
+var MOBILE_ICON_CANDIDATES = {
+  panelLeft: [
+    "IconPanelLeftOutlineRegular",
+    "IconPanelLeftOutlineMedium",
+    "IconPanelLeftOutline16",
+    "IconPanelLeftOutline"
+  ],
+  download: [
+    "IconDownloadOutlineRegular",
+    "IconDownloadOutlineMedium",
+    "IconDownloadOutline16",
+    "IconDownloadOutline"
+  ],
+  folderOpen: [
+    "IconFolderOpenOutlineRegular",
+    "IconFolderOpenOutlineMedium",
+    "IconFolderOpenOutline16",
+    "IconFolderOpenOutline",
+    "IconFolderOpen"
+  ]
+};
+var MOBILE_ICON_FALLBACK = {
+  panelLeft: "\u2630",
+  download: "\u2913",
+  folderOpen: "\u25A4"
+};
+function isRenderableIcon(value) {
+  if (typeof value === "function") return true;
+  return typeof value === "object" && value !== null;
+}
+function pickIcon(registry, names) {
+  if (registry === null || typeof registry !== "object") return null;
+  for (const name2 of names) {
+    const candidate = registry[name2];
+    if (isRenderableIcon(candidate)) return candidate;
+  }
+  return null;
+}
+function resolveMobileIcons(registry) {
+  const resolved = {};
+  for (const [key, names] of Object.entries(MOBILE_ICON_CANDIDATES)) {
+    resolved[key] = pickIcon(registry, names);
+  }
+  return resolved;
+}
+
+// client/mobile/MobileIcon.tsx
+function MobileIcon({ icon, name: name2, size }) {
+  if (!isRenderableIcon(icon)) {
+    return /* @__PURE__ */ React.createElement("span", { "data-mobile-nav": "icon-fallback", "aria-hidden": "true", style: { fontSize: size, lineHeight: 1 } }, MOBILE_ICON_FALLBACK[name2]);
+  }
+  const Icon = icon;
+  return /* @__PURE__ */ React.createElement(Icon, { size });
+}
+
+// client/mobile/MobileNavToggle.tsx
+var icons = resolveMobileIcons(primitives);
 function MobileNavToggle({ toggleSidebar, t }) {
   const toggleExplorer = () => {
     const frame = document.querySelector('[data-mobile-nav="frame"]');
@@ -126,7 +198,7 @@ function MobileNavToggle({ toggleSidebar, t }) {
       title: t("open"),
       onClick: () => toggleSidebar()
     },
-    /* @__PURE__ */ React.createElement(import_dsh_client_ui_primitives.IconPanelLeftOutlineRegular, { size: 16 })
+    /* @__PURE__ */ React.createElement(MobileIcon, { icon: icons.panelLeft, name: "panelLeft", size: 16 })
   ), /* @__PURE__ */ React.createElement(
     "button",
     {
@@ -136,13 +208,13 @@ function MobileNavToggle({ toggleSidebar, t }) {
       title: t("files"),
       onClick: toggleExplorer
     },
-    /* @__PURE__ */ React.createElement(import_dsh_client_ui_primitives.IconFolderOpenOutlineRegular, { size: 16 })
+    /* @__PURE__ */ React.createElement(MobileIcon, { icon: icons.folderOpen, name: "folderOpen", size: 16 })
   ));
 }
 
 // client/mobile/MobileNavOverlay.tsx
 var import_react = require("react");
-var import_dsh_client_ui_primitives2 = require("@deepseek-ai/dsh-client-ui-primitives");
+var primitives2 = __toESM(require("@deepseek-ai/dsh-client-ui-primitives"), 1);
 
 // client/mobile/nav-targets.mjs
 var DRAWER_SELECTOR = '[data-mobile-nav="frame"] > :first-child';
@@ -178,6 +250,7 @@ function isOverlayTap(target) {
 }
 
 // client/mobile/MobileNavOverlay.tsx
+var icons2 = resolveMobileIcons(primitives2);
 var MOBILE_QUERY = "(max-width: 1023px)";
 function useMobile() {
   const [mobile, setMobile] = (0, import_react.useState)(() => window.matchMedia(MOBILE_QUERY).matches);
@@ -364,12 +437,13 @@ function MobileNavOverlay({ toggleSidebar, t }) {
       title: t("open"),
       onClick: () => toggleSidebar()
     },
-    /* @__PURE__ */ React.createElement(import_dsh_client_ui_primitives2.IconPanelLeftOutlineRegular, { size: 18 })
+    /* @__PURE__ */ React.createElement(MobileIcon, { icon: icons2.panelLeft, name: "panelLeft", size: 18 })
   ));
 }
 
 // client/mobile/MobileDrawerFooter.tsx
-var import_dsh_client_ui_primitives3 = require("@deepseek-ai/dsh-client-ui-primitives");
+var primitives3 = __toESM(require("@deepseek-ai/dsh-client-ui-primitives"), 1);
+var icons3 = resolveMobileIcons(primitives3);
 function MobileDrawerFooter({ useSessions, downloadSessionLog, toggleSidebar, t }) {
   const sessionId = useSessions((state) => state.current);
   const openExplorer = () => {
@@ -385,7 +459,7 @@ function MobileDrawerFooter({ useSessions, downloadSessionLog, toggleSidebar, t 
       title: t("files"),
       onClick: openExplorer
     },
-    /* @__PURE__ */ React.createElement(import_dsh_client_ui_primitives3.IconPanelLeftOutlineRegular, { size: 14 }),
+    /* @__PURE__ */ React.createElement(MobileIcon, { icon: icons3.panelLeft, name: "panelLeft", size: 14 }),
     /* @__PURE__ */ React.createElement("span", null, t("files"))
   ), /* @__PURE__ */ React.createElement(
     "button",
@@ -399,7 +473,7 @@ function MobileDrawerFooter({ useSessions, downloadSessionLog, toggleSidebar, t 
         if (sessionId !== void 0) downloadSessionLog(sessionId);
       }
     },
-    /* @__PURE__ */ React.createElement(import_dsh_client_ui_primitives3.IconDownloadOutlineRegular, { size: 14 }),
+    /* @__PURE__ */ React.createElement(MobileIcon, { icon: icons3.download, name: "download", size: 14 }),
     /* @__PURE__ */ React.createElement("span", null, t("sessionLog"))
   ));
 }
@@ -907,11 +981,15 @@ var MOBILE_CSS = `
   }
 
   /* --- Composer bottom row on mobile ---
-     Keep add, permission, model, reasoning and send controls on one line at
-     the Honor 50's 360px CSS viewport. DSH's stable data-composer-card hook
-     survives the editor's textarea -> contenteditable migration. */
+     Let the row wrap instead of locking it to one line (issue #170): any
+     plugin can register extra non-shrinking controls here, and a hard
+     "nowrap" plus ":last-child { flex:1 1 0 }" squeezed the model pill (long
+     text, max-width:220px upstream) down to 0 width at 360px. Allowing
+     wrap keeps every control visible; the row simply spans two lines on
+     narrow screens. DSH's stable data-composer-card hook survives the
+     editor's textarea -> contenteditable migration. */
   [data-phase] [data-composer-card="true"] > [class$="_row"] {
-    flex-wrap: nowrap !important;
+    flex-wrap: wrap !important;
     gap: 6px !important;
   }
   [data-phase] [data-composer-card="true"] > [class$="_row"] > :first-child {
@@ -921,11 +999,6 @@ var MOBILE_CSS = `
   [data-phase] [data-composer-card="true"] > [class$="_row"] > :first-child > :nth-child(2) {
     flex: 0 1 auto !important;
     min-width: 0 !important;
-  }
-  [data-phase] [data-composer-card="true"] > [class$="_row"] > :last-child {
-    flex: 1 1 0 !important;
-    min-width: 0 !important;
-    gap: 6px !important;
   }
 
   /* --- Composer popups as bottom sheets on mobile ---
@@ -962,12 +1035,8 @@ var MOBILE_CSS = `
   }
 
   /* --- Session header on mobile ---
-     Layout goal: [toggle] [session title] [mode badge] in a row, with the
-     Session log capsule removed from the header (relocated to the drawer
-     footer). Stable structural hooks only:
-       [data-phase] header                     the session header element
-       header > :first-child                   titleRow (titleCluster + utilities)
-       header > :first-child > :last-child     headerUtilities (Session log seat) */
+     Layout goal: [toggle] [session title] [mode badge] in a row. The optional
+     rightbar entry uses the shell's stable header-corner hook. */
   [data-phase] header {
     padding: 8px 12px 0 !important;
   }
@@ -1004,10 +1073,13 @@ var MOBILE_CSS = `
     top: 12px !important;
     z-index: 2 !important;
   }
-  /* Session log download: gone from the header row on mobile (the utilities
-     seat holds only the session-log-export capsule). */
-  [data-phase] header > :first-child > :last-child {
+  /* The native rightbar entry is visible by default. Users who prefer the
+     compact header can turn it off in Pocket settings. */
+  body[data-dsh-pocket-mobile-rightbar="off"] [data-conversation-header-corner] {
     display: none !important;
+  }
+  body:not([data-dsh-pocket-mobile-rightbar="off"]) [data-mobile-nav="files"] {
+    right: 44px !important;
   }
 
   /* --- Settings dialog on mobile ---
@@ -1400,9 +1472,25 @@ var MOBILE_CSS = `
      targeted). Layout: ONE fixed-height (28px) flex strip that scrolls
      horizontally \u2014 the full metrics stream stays reachable by swiping,
      the row never grows vertically, no ellipsis or fade, 12px gaps
-     between metric groups, a 2px scrollbar as the swipe affordance. */
+     between metric groups, a 2px scrollbar as the swipe affordance.
 
-  [data-mobile-nav="stats"] {
+     Opt-out: the strip is scoped under body:not([data-pocket-stats="off"])
+     so a skin/operator plugin can legally reclaim this 28px band by
+     setting document.body.dataset.pocketStats = 'off' (avoids the
+     !important weight war that let two footers print on top of each
+     other \u2014 issue #165). Default behavior is unchanged.
+
+     Opt-out is two halves, not one. The rules above only stand pocket's
+     styling down; the row itself is the CORE's (conversation StatsPills
+     dock), so it keeps occupying the band with the core's own styling and
+     still collides with whoever took the band over (issue #172).
+     [data-mobile-nav="stats"] is a mark pocket writes itself
+     (mobile-apply.tsx), so opting out hides that element too \u2014 together with
+     the core readouts it carries (turns / steps / LLM time / TTFT / cache) and
+     the TPS figure pocket folds into it. That is what reclaiming the band
+     costs: whoever takes it over renders their own footer. */
+
+  body:not([data-pocket-stats="off"]) [data-mobile-nav="stats"] {
     display: flex !important;
     flex-flow: row nowrap !important;
     align-items: center !important;
@@ -1424,17 +1512,17 @@ var MOBILE_CSS = `
     line-height: 20px !important;
     font-size: 12px !important;
   }
-  [data-mobile-nav="stats"]::-webkit-scrollbar {
+  body:not([data-pocket-stats="off"]) [data-mobile-nav="stats"]::-webkit-scrollbar {
     height: 2px !important;
   }
-  [data-mobile-nav="stats"]::-webkit-scrollbar-thumb {
+  body:not([data-pocket-stats="off"]) [data-mobile-nav="stats"]::-webkit-scrollbar-thumb {
     background: var(--dsw-alias-label-tertiary, rgba(0, 0, 0, .3)) !important;
     border-radius: 2px !important;
   }
-  [data-mobile-nav="stats"]::-webkit-scrollbar-track {
+  body:not([data-pocket-stats="off"]) [data-mobile-nav="stats"]::-webkit-scrollbar-track {
     background: transparent !important;
   }
-  [data-mobile-nav="stats"] > * {
+  body:not([data-pocket-stats="off"]) [data-mobile-nav="stats"] > * {
     display: flex !important;
     flex: 0 0 auto !important;
     flex-flow: row nowrap !important;
@@ -1446,11 +1534,23 @@ var MOBILE_CSS = `
     margin-right: 12px !important;
     padding: 0 !important;
   }
-  [data-mobile-nav="stats"] > *:last-child {
+  body:not([data-pocket-stats="off"]) [data-mobile-nav="stats"] > *:last-child {
     margin-right: 0 !important;
   }
-  [data-mobile-nav="stats"] * {
+  body:not([data-pocket-stats="off"]) [data-mobile-nav="stats"] * {
     white-space: nowrap !important;
+  }
+
+  /* The other half of that opt-out: standing pocket's styling down leaves
+     the core's own row in the band, so a skin that took the band over still
+     prints underneath it (issue #172). [data-mobile-nav="stats"] is a mark
+     pocket writes itself (mobile-apply.tsx) \u2014 opting out hides it with the
+     mark, and with it the core readouts that row carries. The default path
+     never matches this rule.
+     (A skin that wants the band *and* the row can take it back with an equally
+     specific rule plus !important \u2014 this rule carries no extra specificity.) */
+  body[data-pocket-stats="off"] [data-mobile-nav="stats"] {
+    display: none !important;
   }
 
   /* ---------- hero composer on mobile ----------
@@ -1560,7 +1660,7 @@ var MOBILE_CSS = `
 `;
 
 // client/mobile/locales.ts
-var NS = "mobileNav";
+var NS = "pocketMobileNav";
 var zh = {
   "open": "\u6253\u5F00\u76EE\u5F55",
   "close": "\u6536\u8D77\u76EE\u5F55",
@@ -1615,6 +1715,30 @@ function mobileApply(ctx) {
     } };
   }
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), "dsh-mobile-nav: dictionaries");
+  ctx.effect(() => {
+    let active = true;
+    const applyEnabled = (enabled) => {
+      document.body?.setAttribute(MOBILE_RIGHTBAR_ATTRIBUTE, enabled ? "on" : "off");
+    };
+    const onChange = (event) => {
+      applyEnabled(event.detail?.enabled === true);
+    };
+    const load = async () => {
+      try {
+        const result = await ctx.connection.rpc.call(POCKET_RPC_CHANNEL, POCKET_ENDPOINTS.status, {});
+        if (active) applyEnabled(result?.ok === true ? result.value?.mobileRightbarEnabled !== false : true);
+      } catch {
+        if (active) applyEnabled(true);
+      }
+    };
+    window.addEventListener(MOBILE_RIGHTBAR_EVENT, onChange);
+    void load();
+    return () => {
+      active = false;
+      window.removeEventListener(MOBILE_RIGHTBAR_EVENT, onChange);
+      document.body?.removeAttribute(MOBILE_RIGHTBAR_ATTRIBUTE);
+    };
+  }, "dsh-mobile-nav: optional right sidebar");
   ctx.effect(() => {
     const tag = document.createElement("style");
     tag.dataset.plugin = "@dsh-external/dsh-mobile-nav";
@@ -1799,8 +1923,8 @@ function mobileApply(ctx) {
   ctx.effect(() => {
     if (!narrow.matches) return () => {
     };
-    const PHRASES = ["加载提供方目录失败", "Settings are unavailable in this browser"];
-    const NOTICE = "手机上不支持模型设置，请去电脑端修改设置";
+    const PHRASES = ["\u52A0\u8F7D\u63D0\u4F9B\u65B9\u76EE\u5F55\u5931\u8D25", "Settings are unavailable in this browser"];
+    const NOTICE = "\u624B\u673A\u4E0A\u4E0D\u652F\u6301\u6A21\u578B\u8BBE\u7F6E\uFF0C\u8BF7\u53BB\u7535\u8111\u7AEF\u4FEE\u6539\u8BBE\u7F6E";
     const findDeepest = (el) => {
       let deepest = el;
       for (const child of el.querySelectorAll("*")) {
@@ -1821,9 +1945,7 @@ function mobileApply(ctx) {
     const observer = new MutationObserver(patch);
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
     patch();
-    return () => {
-      observer.disconnect();
-    };
+    return () => observer.disconnect();
   }, "dsh-mobile-nav: replace model-settings load error with mobile hint");
   ctx.slots.inject("conversation.session.header.actions", () => ctx.slots.register({
     name: "conversation.session.header.actions",
@@ -1891,7 +2013,7 @@ var zh2 = {
   "resetGo": "\u6062\u590D",
   "resetIntro": "\u8BBE\u7F6E\u641E\u51FA\u95EE\u9898\u65F6\u7684\u4E34\u65F6\u515C\u5E95\uFF1A\u6E05\u7A7A\u672C\u673A\u914D\u7F6E\u5E76\u91CD\u8BBE\u968F\u673A\u5BC6\u7801\uFF08DSH \u7684\u4F1A\u8BDD\u3001\u6A21\u578B\u3001\u63D2\u4EF6\u914D\u7F6E\u4E0D\u53D7\u5F71\u54CD\uFF09",
   "resetTitle": "\u26A0\uFE0F \u786E\u8BA4\u6062\u590D\u51FA\u5382\u8BBE\u7F6E\uFF1F",
-  "resetBody": "\u5C06\u6E05\u7A7A\u5E76\u6062\u590D\u9ED8\u8BA4\uFF1A\n\u2460 \u5F00\u5173\uFF1A\u5C40\u57DF\u7F51\u8BBF\u95EE=\u5F00\u3001\u8BBF\u95EE\u5BC6\u7801=\u5F00\u3001\u5C40\u57DF\u7F51\u5730\u5740=\u81EA\u52A8\n\u2461 \u516C\u7F51\uFF1A\u6A21\u5F0F\u56DE\u5230\u968F\u673A\u57DF\u540D\uFF0C\u6E05\u7A7A Tunnel Token \u4E0E\u56FA\u5B9A\u57DF\u540D\uFF0C\u5E76\u5173\u95ED\u6B63\u5728\u8FD0\u884C\u7684\u516C\u7F51\n\u2462 \u5BC6\u7801\uFF1A\u516C\u7F51\u548C\u5C40\u57DF\u7F51\u90FD\u6362\u6210\u65B0\u7684\u968F\u673A 8 \u4F4D\u5BC6\u7801\uFF08\u65E7\u5BC6\u7801\u7ACB\u5373\u4F5C\u5E9F\uFF0C\u624B\u673A\u9700\u91CD\u65B0\u8F93\u5165\uFF09\n\nDSH \u81EA\u8EAB\u7684\u4F1A\u8BDD\u3001\u6A21\u578B\u3001\u63D2\u4EF6\u914D\u7F6E\u4E0D\u53D7\u5F71\u54CD\uFF1B\u6B64\u64CD\u4F5C\u4E0D\u53EF\u64A4\u9500\u3002",
+  "resetBody": "\u5C06\u6E05\u7A7A\u5E76\u6062\u590D\u9ED8\u8BA4\uFF1A\n\u2460 \u5F00\u5173\uFF1A\u5C40\u57DF\u7F51\u8BBF\u95EE=\u5F00\u3001\u8BBF\u95EE\u5BC6\u7801=\u5F00\u3001\u624B\u673A\u7AEF\u53F3\u8FB9\u680F=\u5F00\u3001\u5C40\u57DF\u7F51\u5730\u5740=\u81EA\u52A8\n\u2461 \u516C\u7F51\uFF1A\u6A21\u5F0F\u56DE\u5230\u968F\u673A\u57DF\u540D\uFF0C\u6E05\u7A7A Tunnel Token \u4E0E\u56FA\u5B9A\u57DF\u540D\uFF0C\u5E76\u5173\u95ED\u6B63\u5728\u8FD0\u884C\u7684\u516C\u7F51\n\u2462 \u5BC6\u7801\uFF1A\u516C\u7F51\u548C\u5C40\u57DF\u7F51\u90FD\u6362\u6210\u65B0\u7684\u968F\u673A 8 \u4F4D\u5BC6\u7801\uFF08\u65E7\u5BC6\u7801\u7ACB\u5373\u4F5C\u5E9F\uFF0C\u624B\u673A\u9700\u91CD\u65B0\u8F93\u5165\uFF09\n\nDSH \u81EA\u8EAB\u7684\u4F1A\u8BDD\u3001\u6A21\u578B\u3001\u63D2\u4EF6\u914D\u7F6E\u4E0D\u53D7\u5F71\u54CD\uFF1B\u6B64\u64CD\u4F5C\u4E0D\u53EF\u64A4\u9500\u3002",
   "resetConfirm": "\u786E\u8BA4\u6062\u590D",
   "resetDone": "\u2705 \u5DF2\u6062\u590D\u51FA\u5382\u8BBE\u7F6E\uFF1A\u8BBE\u7F6E\u5DF2\u6E05\u7A7A\uFF0C\u5BC6\u7801\u5DF2\u6362\u65B0\uFF08\u624B\u673A\u9700\u91CD\u65B0\u8F93\u5165\uFF09",
   "resetFailed": "\u274C \u6062\u590D\u5931\u8D25\uFF0C\u8BF7\u91CD\u8BD5",
@@ -1913,13 +2035,15 @@ var zh2 = {
   "lanPinCustomValue": "\u{1F510} \u8BBF\u95EE\u5BC6\u7801\uFF1A{pin}\uFF08\u81EA\u5B9A\u4E49\uFF1B\u624B\u673A\u6253\u5F00\u9700\u8F93\u5165\uFF09",
   "refresh": "\u5237\u65B0",
   "customize": "\u81EA\u5B9A\u4E49",
-  "customizing": "\u65B0\u5BC6\u7801\uFF088 \u4F4D\uFF0C\u82F1\u6587\u5B57\u6BCD\u6216\u6570\u5B57\uFF09\uFF1A",
+  "customizing": "\u65B0\u5BC6\u7801\uFF088\u201364 \u4F4D\uFF0C\u82F1\u6587\u5B57\u6BCD\u6216\u6570\u5B57\uFF09\uFF1A",
   "save": "\u4FDD\u5B58",
   "cancel": "\u53D6\u6D88",
-  "pinInvalid": "\u5BC6\u7801\u5FC5\u987B\u662F 8 \u4F4D\u82F1\u6587\u5B57\u6BCD\u6216\u6570\u5B57",
+  "pinInvalid": "\u5BC6\u7801\u5FC5\u987B\u662F 8\u201364 \u4F4D\u82F1\u6587\u5B57\u6BCD\u6216\u6570\u5B57",
   "pinCustomHint": "\u81EA\u5B9A\u4E49\u540E\u5F00\u542F\u516C\u7F51\u4E0D\u518D\u81EA\u52A8\u6362\u65B0",
   "lanPinOff": "\u{1F513} \u5BC6\u7801\u5DF2\u5173\u95ED\uFF1A\u626B\u7801\u76F4\u8FDE\uFF0C\u65E0\u9700\u5BC6\u7801\uFF08\u4EC5\u540C\u4E00\u5C40\u57DF\u7F51\u8BBE\u5907\u53EF\u8BBF\u95EE\uFF1B\u516C\u7F51\u4ECD\u8981\u5BC6\u7801\uFF09",
   "lanStarting": "\u4EE3\u7406\u672A\u5C31\u7EEA\u2026",
+  "mobileRightbar": "\u624B\u673A\u7AEF\u53F3\u8FB9\u680F",
+  "mobileRightbarHint": "\u663E\u793A\u539F\u751F\u53F3\u8FB9\u680F\u5165\u53E3\uFF1B\u666E\u901A\u624B\u673A\u53EF\u6309\u9700\u5173\u95ED\uFF0C\u6298\u53E0\u5C4F\u5C55\u5F00\u540E\u4F7F\u7528\u66F4\u65B9\u4FBF",
   "wanTitle": "\u{1F310} \u516C\u7F51\uFF08\u4EBA\u5728\u5916\u9762\uFF09",
   "wanHint": "\u4EFB\u4F55\u7F51\u7EDC\u626B\u7801\u5373\u7528\uFF08URL \u6BCF\u6B21\u91CD\u542F\u81EA\u52A8\u6362\u65B0\uFF09",
   "wanPin": "\u{1F510} \u8BBF\u95EE\u5BC6\u7801\uFF1A{pin}\uFF08\u6BCF\u6B21\u5F00\u542F\u516C\u7F51\u53D8\u65B0\uFF1B\u624B\u673A\u6253\u5F00\u94FE\u63A5\u9700\u8F93\u5165\u6B64\u5BC6\u7801\uFF09",
@@ -1987,7 +2111,7 @@ var en2 = {
   "resetGo": "Reset",
   "resetIntro": "Temporary fallback when settings break: clear local config and re-roll random PINs (DSH sessions, models and plugin config are untouched)",
   "resetTitle": "\u26A0\uFE0F Confirm factory reset?",
-  "resetBody": "This clears and restores defaults:\n\u2460 Switches: LAN access on, access PIN on, LAN address auto\n\u2461 Public: mode back to random URL, Tunnel Token and fixed domain cleared, and any running tunnel is stopped\n\u2462 PINs: both public and LAN become new random 8-character PINs (old ones stop working; the phone must re-enter)\n\nYour DSH sessions, models and plugin config are untouched. This cannot be undone.",
+  "resetBody": "This clears and restores defaults:\n\u2460 Switches: LAN access on, access PIN on, mobile right sidebar on, LAN address auto\n\u2461 Public: mode back to random URL, Tunnel Token and fixed domain cleared, and any running tunnel is stopped\n\u2462 PINs: both public and LAN become new random 8-character PINs (old ones stop working; the phone must re-enter)\n\nYour DSH sessions, models and plugin config are untouched. This cannot be undone.",
   "resetConfirm": "Reset",
   "resetDone": "\u2705 Factory reset done: settings cleared and PINs re-rolled (re-enter the PIN on your phone)",
   "resetFailed": "\u274C Reset failed \u2014 please retry",
@@ -2009,13 +2133,15 @@ var en2 = {
   "lanPinCustomValue": "\u{1F510} PIN: {pin} (custom; required on the phone)",
   "refresh": "Refresh",
   "customize": "Customize",
-  "customizing": "New PIN (8 chars, letters/digits): ",
+  "customizing": "New PIN (8\u201364 chars, letters/digits): ",
   "save": "Save",
   "cancel": "Cancel",
-  "pinInvalid": "PIN must be exactly 8 characters (letters and digits only)",
+  "pinInvalid": "PIN must be 8\u201364 characters (letters and digits only)",
   "pinCustomHint": "custom PINs are not rotated on tunnel start",
   "lanPinOff": "\u{1F513} PIN off \u2014 scan & go, no PIN (LAN devices only; public still requires PIN)",
   "lanStarting": "Proxy starting\u2026",
+  "mobileRightbar": "Mobile right sidebar",
+  "mobileRightbarHint": "Show the native right-sidebar entry; disable it for a compact phone header or keep it on for an unfolded display",
   "wanTitle": "\u{1F310} Anywhere (public)",
   "wanHint": "Scan from any network (the URL changes on every restart)",
   "wanPin": "\u{1F510} PIN: {pin} (changes each time the tunnel is enabled; required on the phone)",
@@ -2074,6 +2200,11 @@ var styles = {
   qr: { width: 220, height: 220, borderRadius: 10, border: "1px solid var(--dsw-alias-border-l2,#e5e7eb)", margin: "8px 0" },
   warn: { color: "var(--dsw-alias-state-warn-primary,#b45309)", fontSize: 12, lineHeight: 1.5 }
 };
+function applyMobileRightbarSetting(enabled) {
+  const on = enabled !== false;
+  document.body?.setAttribute(MOBILE_RIGHTBAR_ATTRIBUTE, on ? "on" : "off");
+  window.dispatchEvent(new CustomEvent(MOBILE_RIGHTBAR_EVENT, { detail: { enabled: on } }));
+}
 function PocketSettingsTab({ rpcCall, t }) {
   const [status, setStatus] = (0, import_react2.useState)(null);
   const [busy, setBusy] = (0, import_react2.useState)(false);
@@ -2097,6 +2228,7 @@ function PocketSettingsTab({ rpcCall, t }) {
     try {
       const s = await call(POCKET_ENDPOINTS.status, {});
       setStatus(s);
+      applyMobileRightbarSetting(s.mobileRightbarEnabled);
       setTunnelState(s.tunnelState ?? null);
       if (s.desktop) setIsDesktop(true);
       if (s.restartNotice) {
@@ -2243,7 +2375,9 @@ function PocketSettingsTab({ rpcCall, t }) {
     setBusy(true);
     setError(null);
     try {
-      setStatus(await call(POCKET_ENDPOINTS.pocketReset, { confirm: true }));
+      const next = await call(POCKET_ENDPOINTS.pocketReset, { confirm: true });
+      setStatus(next);
+      applyMobileRightbarSetting(next.mobileRightbarEnabled);
       setTunnelCfg(null);
       setCustomPin(null);
       setAdvOpen(false);
@@ -2267,6 +2401,16 @@ function PocketSettingsTab({ rpcCall, t }) {
       const r = await call(POCKET_ENDPOINTS.lanAuthSetEnabled, { on });
       setStatus((s) => ({ ...s, lanAuthEnabled: r.lanAuthEnabled }));
     } catch {
+    }
+  };
+  const setMobileRightbar = async (on) => {
+    try {
+      const r = await call(POCKET_ENDPOINTS.mobileRightbarSetEnabled, { on });
+      const enabled = r.mobileRightbarEnabled === true;
+      setStatus((s) => ({ ...s, mobileRightbarEnabled: enabled }));
+      applyMobileRightbarSetting(enabled);
+    } catch (err) {
+      setError(err.message);
     }
   };
   const [lanToggleOpen, setLanToggleOpen] = (0, import_react2.useState)(null);
@@ -2312,7 +2456,8 @@ function PocketSettingsTab({ rpcCall, t }) {
     (0, import_react2.createElement)("input", {
       style: { width: 130, margin: "0 6px", padding: "4px 8px", fontSize: 14, letterSpacing: 1, textAlign: "center", border: "1px solid var(--dsw-alias-border-l2,#d1d5db)", borderRadius: 6, outline: "none" },
       type: "password",
-      maxLength: 8,
+      minLength: 8,
+      maxLength: 64,
       value: customPin?.value ?? "",
       autoFocus: true,
       onChange: (e) => setCustomPin((c) => ({ ...c, value: e.target.value.replace(/[^a-zA-Z0-9]/g, ""), err: null })),
@@ -2361,9 +2506,9 @@ function PocketSettingsTab({ rpcCall, t }) {
   const Switch = (on, onClick) => (0, import_react2.createElement)("button", {
     role: "switch",
     "aria-checked": !!on,
-    style: { flexShrink: 0, width: 40, height: 22, borderRadius: 11, border: "none", padding: 0, position: "relative", cursor: "pointer", font: "inherit", background: on ? "var(--dsw-alias-button-primary-fill, var(--dsw-alias-brand-primary,#4f6ef7))" : "var(--dsw-alias-border-l2,#d1d5db)" },
+    style: { boxSizing: "border-box", flexShrink: 0, width: 36, height: 20, padding: 2, border: 0, borderRadius: 999, cornerShape: "round", position: "relative", cursor: "pointer", font: "inherit", background: on ? "var(--dsw-alias-brand-primary, #e6e8eb)" : "var(--dsw-alias-border-l3, #3a3f46)", transition: "background 120ms ease" },
     onClick
-  }, (0, import_react2.createElement)("span", { style: { position: "absolute", top: 2, left: on ? 20 : 2, width: 18, height: 18, borderRadius: "50%", background: "#fff" } }));
+  }, (0, import_react2.createElement)("span", { style: { display: "block", width: 16, height: 16, borderRadius: "50%", cornerShape: "round", background: on ? "var(--dsw-alias-label-primary-foreground, #0f1115)" : "var(--dsw-alias-switch-thumb, #8b9198)", transition: "transform 120ms ease", transform: on ? "translateX(16px)" : "translateX(0)" } }));
   const qrArea = (src, url, hint) => (0, import_react2.createElement)(
     "div",
     { style: { background: "var(--dsw-alias-bg-layer-2,#f3f4f6)", borderRadius: 10, padding: "10px 12px", textAlign: "center", margin: "10px 0" } },
@@ -2612,6 +2757,15 @@ function PocketSettingsTab({ rpcCall, t }) {
         ) : null
       ) : null
     ),
+    (0, import_react2.createElement)(
+      "div",
+      { style: styles.block },
+      row(
+        t("mobileRightbar"),
+        Switch(status?.mobileRightbarEnabled !== false, () => setMobileRightbar(status?.mobileRightbarEnabled === false)),
+        (0, import_react2.createElement)("div", { style: { ...styles.muted, marginTop: 6 } }, t("mobileRightbarHint"))
+      )
+    ),
     error ? (0, import_react2.createElement)("div", { style: { color: "var(--dsw-alias-state-error-primary,#dc2626)", fontSize: 12, marginTop: 8 } }, `\u274C ${errText(error)}`) : null,
     // 恢复出厂设置：设置出问题时的临时兜底（最底部，避免误触）
     (0, import_react2.createElement)(
@@ -2703,103 +2857,6 @@ function PocketSettingsTab({ rpcCall, t }) {
     )
   );
 }
-var POCKET_FOOTER_STYLES = {
-  button: {
-    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-    width: 32, height: 32, border: "none", borderRadius: 8,
-    background: "transparent", color: "var(--dsw-alias-label-secondary,#6b7280)", cursor: "pointer"
-  },
-  backdrop: {
-    position: "fixed", top: 0, right: 0, bottom: 0, left: 0, zIndex: 4000,
-    display: "flex", alignItems: "center", justifyContent: "center",
-    background: "rgba(0,0,0,0.45)", padding: 24
-  },
-  card: {
-    position: "relative", width: "min(760px, calc(100vw - 48px))", maxHeight: "82vh",
-    overflowY: "auto", borderRadius: 14, padding: 20,
-    background: "var(--dsw-alias-container-bg,#ffffff)",
-    color: "var(--dsw-alias-label-primary,#111827)",
-    boxShadow: "0 20px 60px rgba(0,0,0,0.3)"
-  },
-  close: {
-    position: "absolute", top: 10, right: 12, width: 28, height: 28,
-    border: "none", borderRadius: 6, background: "transparent", fontSize: 16,
-    lineHeight: 1, cursor: "pointer", color: "var(--dsw-alias-label-secondary,#6b7280)"
-  }
-};
-var DESKTOP_FOOTER_CSS = "@media (min-width: 1024px){"
-  + "[class*=\"footerActions\"]{flex-direction:column!important;flex-wrap:nowrap!important;align-items:stretch!important;}"
-  + "[class*=\"footerActions\"]>*{width:100%!important;max-width:100%!important;flex:0 0 auto!important;}"
-  + "}"
-  /* 「手机访问」入口与宿主自带 footer 项（插件市场/知识中心/设置）逐像素对齐：
-     复用 dsh-side-session 的 .dss-footer-icon / .dss-footer-label 同款行样式
-     （宽态整行 34px 高 + 图标 16 + 8px 间距 + 圆角 12；rail 态 36px 圆钮），
-     否则本按钮此前是自绘的 32x32 小方块，与左右邻居行高/内边距都不一致（用户实报
-     「图标和文字都和其他按钮对齐」）。放 media query 之外：rail 态同样需要生效。 */
-  + ".dss-footer-icon{box-sizing:border-box;cursor:pointer;width:calc(100% + 8px);height:34px;"
-  + "color:var(--dsw-alias-label-primary,#0f1115);background:0 0;border:none;border-radius:12px;"
-  + "flex:none;align-items:center;gap:8px;margin:4px -4px;padding:6px 2px 6px 10px;"
-  + "font-family:inherit;font-size:14px;line-height:22px;display:flex;overflow:hidden;"
-  + "transition:background .12s,color .12s;outline:none}"
-  + ".dss-footer-icon:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}"
-  + ".dss-footer-icon[data-on='1']{color:var(--dsw-alias-state-business-primary,#4176e6)}"
-  + ".dss-footer-icon[data-rail='1']{border-radius:50%;justify-content:center;gap:0;width:36px;height:36px;"
-  + "margin:8px 0 10px;padding:0}"
-  + ".dss-footer-icon[data-rail='1']:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}"
-  + ".dss-footer-icon svg{flex:none}"
-  + ".dss-footer-label{white-space:nowrap;overflow:hidden}";
-function PocketRemoteFooter(props) {
-  const [open, setOpen] = (0, import_react2.useState)(false);
-  const { rpcCall, t } = props;
-  // 侧栏宽态才显示文字（槽位下发 wide）；rail 态收成圆钮，与宿主 footer 项一致。
-  const wide = !!(props && props.wide);
-  const label = "\u624B\u673A\u8BBF\u95EE";
-  (0, import_react2.useEffect)(() => {
-    if (!open) return;
-    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
-  return (0, import_react2.createElement)(import_react2.Fragment, null,
-    (0, import_react2.createElement)("button", {
-      type: "button",
-      className: "dss-footer-icon",
-      "data-rail": wide ? "0" : "1",
-      title: label,
-      "aria-label": label,
-      "aria-haspopup": "dialog",
-      onClick: () => setOpen(true)
-    },
-      (0, import_react2.createElement)(
-        "svg",
-        {
-          width: wide ? "16" : "18", height: wide ? "16" : "18", viewBox: "0 0 24 24", fill: "none",
-          stroke: "currentColor", "stroke-width": "2",
-          "stroke-linecap": "round", "stroke-linejoin": "round",
-          "aria-hidden": "true"
-        },
-        (0, import_react2.createElement)("rect", { x: "5", y: "2", width: "14", height: "20", rx: "2", ry: "2" }),
-        (0, import_react2.createElement)("path", { d: "M12 18h.01" })
-      ),
-      wide ? (0, import_react2.createElement)("span", { className: "dss-footer-label" }, label) : null
-    ),
-    open && (0, import_react2.createElement)("div", {
-      style: POCKET_FOOTER_STYLES.backdrop,
-      onClick: (e) => { if (e.target === e.currentTarget) setOpen(false); }
-    },
-      (0, import_react2.createElement)("div", {
-        role: "dialog", "aria-label": label, style: POCKET_FOOTER_STYLES.card
-      },
-        (0, import_react2.createElement)("button", {
-          type: "button", "aria-label": "close",
-          style: POCKET_FOOTER_STYLES.close,
-          onClick: () => setOpen(false)
-        }, "\u2715"),
-        (0, import_react2.createElement)(PocketSettingsTab, { rpcCall, t })
-      )
-    )
-  );
-}
 function apply(ctx) {
   if (ctx?.connection) {
     try {
@@ -2812,16 +2869,6 @@ function apply(ctx) {
     }
   }
   mobileApply(ctx);
-  ctx.effect(() => {
-    const tag = document.createElement("style");
-    tag.dataset.plugin = "dsh-pocket";
-    tag.dataset.pluginCss = "dsh-pocket/desktop-footer.css";
-    tag.textContent = DESKTOP_FOOTER_CSS;
-    document.head.appendChild(tag);
-    return () => {
-      tag.remove();
-    };
-  }, "dsh-pocket: desktop footer layout");
   const rpcCall = (endpoint, payload, signal) => ctx.connection.rpc.call(POCKET_RPC_CHANNEL, endpoint, payload, signal);
   const translate = ctx.locale.bind(NS2);
   ctx.effect(() => ctx.locale.register(NS2, { zh: zh2, en: en2 }), "dsh-pocket: pocket locale dictionaries");
@@ -2836,19 +2883,6 @@ function apply(ctx) {
         inject: () => ({ rpcCall, t: translate })
       },
       PocketSettingsTab
-    )
-  );
-  ctx.slots.inject(
-    "sidebar.footer.action",
-    () => ctx.slots.register(
-      {
-        name: "sidebar.footer.action",
-        id: "pocket-remote",
-        order: 210,
-        locale: NS2,
-        inject: () => ({ rpcCall, t: translate })
-      },
-      PocketRemoteFooter
     )
   );
 }

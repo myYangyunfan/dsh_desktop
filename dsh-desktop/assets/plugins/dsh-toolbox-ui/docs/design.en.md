@@ -156,9 +156,9 @@ It is a **blocking** modal (the overlay covers the panel), and that is intention
 
 ## Compatibility and dependency details
 
-The DSH host API is declared through `peerDependencies` as `>=0.1.5-rc.1 <0.2.0`.
+The DSH host API is declared through `peerDependencies` and `engines.dsh` as `>=0.2.1-rc.5 <0.3.0`. Current release admission starts at 0.2.1-rc.5; older hosts remain historical regression targets, not current release support.
 
-**Why only 0.1.5 and later is supported**: the plugin depends on two official capabilities that only exist from 0.1.5 —
+**Why the current floor is 0.2.1-rc.5**: the plugin depends on the ToolSearch and lifecycle contracts verified on that host, while the 0.2.2 executor path is tested as a matched host set —
 
 1. **`mcp-client` determines `serverName` uniqueness by registration scope** (`scopeOf(ctx) ?? ctx.root`; earlier versions hung the registry on `ctx.root`, process-wide unique). Project-level MCP's "same name across projects / between global and project" rests on this.
 2. **`setup` passes the agent to the plugin as a second argument** (`setup?.(prepared.agent.ctx, prepared.agent)`; earlier versions passed only ctx). Mounting project MCP needs the agent's `session.header.cwd`; reading agent off ctx is rejected by cordis's service guard (`cannot get property "agent" without inject`), and a throwing setup would make the session's creation and resume fail outright.
@@ -169,12 +169,12 @@ Older versions are no longer compatible, and no degraded branch is kept for them
 
 Three tradeoff rules; read them before changing the range:
 
-1. **The lower bound is a hard requirement; the upper bound is a hard gate enforced by the host**. Before `0.1.5` those two capabilities did not exist, so installing is guaranteed to break, and the lower bound cannot be loosened. The upper bound `0.2.0` only means anything if the host really does break backwards — DSH calls itself a "developer preview … breaking compatibility changes will appear in the future", and a plugin is inevitably one step behind a host upgrade, so a **coarse** upper bound is kept: its job is to turn "you are running on a major version we have not validated" into an explicit rejection by the host, rather than a silent install followed by strange problems.
+1. **The lower bound is a hard requirement; the upper bound is a hard gate enforced by the host**. The current release floor is `0.2.1-rc.5`; `0.2.0` remains a historical regression target rather than release admission. The upper bound `0.3.0` only means anything if the host really does break backwards — DSH calls itself a "developer preview … breaking compatibility changes will appear in the future", and a plugin is inevitably one step behind a host upgrade, so a **coarse** upper bound is kept: its job is to turn "you are running on a major version we have not validated" into an explicit rejection by the host, rather than a silent install followed by strange problems.
 
    **This gate is enforced by DSH itself, not by pnpm/npm** — the installer's peer warnings (such as pnpm's `[WARN] Issues with peer dependencies found`) are neither the basis for the determination nor consistent with it. `dsh-app-boot`'s `evaluatePluginCompatibility` compares the actual version from `dsh --version` against this plugin's `peerDependencies`: an incompatible bundle is skipped and prints `skipping profile bundle …`, and the plugin simply does not load (on the `preflight` path through the profile manifest it is `disabling profile plugin …`). Users who do not want to upgrade can grant an **exact version** exemption and keep using it: `dsh plugin --profile <profile> allow-version <name>@<version> --dsh-version <exact> --accept-risk` (exemptions are accounted per `name@version` × exact host version, in the profile directory's `compatibility.json`). **The lower bound never blocks any new version; only the upper bound can "lock you out", so a coarse upper bound is better than a fine one.**
-2. **Prereleases need no special treatment**. Per npm's semver rules, `0.1.6-alpha.1` falls outside `>=0.1.5-rc.1 <0.2.0` (prereleases are only recognized within the same `major.minor.patch` tuple). But **the gate above does not apply that rule**: `evaluatePluginCompatibility` calls `semver.satisfies` with `{ includePrerelease: true }`, so prereleases participate in comparison by numeric value — `0.1.6-alpha.1`, `0.1.7-rc.2`, and even `0.2.0-rc.1` all fall inside the range; only `0.2.0` and later stable releases (plus prereleases of a higher tuple such as `0.3.0-rc.1`) fall outside. So this range blocks neither 0.1.x prereleases nor 0.1.x stable releases — there is no need to change the range "to cover future prereleases".
+2. **Prereleases need no special treatment**. The host compatibility check uses `includePrerelease: true`, so releases after the verified floor within the 0.2.x line participate in comparison; `0.3.0-rc.1` crosses the upper bound. The current window is an admission boundary, not a promise that every future 0.2.x prerelease has been behaviorally verified.
 
-   Note that this **only holds for the host's own gate**: judging with strict semver without `includePrerelease` would rule `0.1.7-rc.2` as not satisfying `>=0.1.5-rc.1 <0.2.0` (the lower-bound tuple is `0.1.5`, which cannot recognize `0.1.7-rc.x`). Anyone re-checking this range must use the host's own `evaluatePluginCompatibility`, not `semver.satisfies(range)` or pnpm's peer check — those two give the opposite conclusion. Measured (running this plugin's real `package.json` through the function exported by the host): `0.1.5-rc.1` / `0.1.5-rc.3` / `0.1.6` / `0.1.7-rc.1` / `0.1.7-rc.2` / `0.1.7` / `0.1.8-rc.1` / `0.1.8` / `0.2.0-rc.1` all report no issue, and only `0.2.0` and `0.3.0-rc.1` are rejected.
+   Note that this **only holds for the host's own gate**: anyone re-checking the current range must use the host's `evaluatePluginCompatibility`, not `semver.satisfies(range)` or pnpm's peer check. The package contract pins the manifest and `engines.dsh` to the current admission window; it does not simulate semver.
 3. **The range cannot answer "is it still correct once installed", and CI can only cover half of it**. `0.1.6-alpha.2` switching the typert strict codec from `schema:` (a zod v4 instance) to `create()` (a lazy factory in the in-process realm, with the registry materializing via `record.value ??= record.create()`) is exactly such a case: it falls inside `>=0.1.5-rc.1 <0.2.0`, the plugin's compatibility declaration cannot catch it by nature, and the drift job on 2026-09-21 therefore went red (the only failure among 130 items that time was the load-time contract one). The real protection has two layers: **(a) the runtime contract** is exercised by [`.github/workflows/upstream-drift.yml`](../.github/workflows/upstream-drift.yml), which swaps the whole host to the `latest` / `next` / `alpha` channels every week and runs the contract cases (`test/*.test.mjs` minus `package-contract`, because that one asserts the pin itself); **(b) the host-side load-time contract** (the shape of `lib/typert.js` is validated by the host loader, not by us) is covered by `test/typert-manifest.test.mjs`: it calls the host's own `validateTypertManifest` to validate this artifact and goes red the moment the shape changes; the same file also has a shape assertion **independent of the loader version**, pinning "the strict codec carries both `schema` and `create()`" (the next reason) — the local devDependency loader is the development baseline and cannot see the alpha's requirements, so relying only on the former would take a week to find out. This layer was originally a gap — the existing cases only guaranteed that the two artifacts `lib/typert.js` and `lib/client.js` were consistent with each other (`client-lifecycle.test.mjs`), and would not go red if the host changed its requirements, with the consequence that the whole panel becomes unusable after users upgrade DSH. It is also why `@deepseek-ai/dsh-typert-loader` goes only into `devDependencies` and not into peer: validation happens inside the host process, and the plugin does not import it at runtime.
 
 **Why both keys are written for the strict codec** (one copy in `lib/typert.js` and one in `lib/client.js`, with `client-lifecycle.test.mjs` pinning the two consistent): the host checks **different keys** on the two channels, and each ignores the other's key — `0.1.5-rc.x` (= the `latest` / `next` of that time, i.e. what `npx` installs by default) checks that `codec.schema.parse` must be a zod v4 instance; from `0.1.6-alpha.2` onward it checks `typeof codec.create === 'function'`. Omitting `schema` means rejection on load on the newest RC; omitting `create` means rejection on load on the alpha; `mode: 'src-json'` is not a way out (the loader forces the invocation's codec to be strict). Running our own artifact through three versions of the loader:
@@ -186,7 +186,7 @@ Three tradeoff rules; read them before changing the range:
 | **both** | PASS | PASS | PASS |
 | `mode: 'src-json'` | reject | reject | reject |
 
-The loader of `0.2.0-rc.2` (the current development baseline) measures the same as the `0.1.6-alpha.2` column: only `create()` passes, and only `schema` is rejected. That is, **the baseline has already landed on the "only checks `create()`" side**, while `0.1.5-rc.x`, which checks only `schema`, is an earlier channel — `latest`/`next` both advanced to `0.1.7-rc.2` on 2026-09-24 and again to `0.2.0-rc.2` on 2026-09-29, so it is no longer "the version npx installs by default", but there are still users parked on that batch (the peer range `>=0.1.5-rc.1 <0.2.0` permits it; for why `COMPAT_WINDOW` is left alone, see the previous item). Neither key can be deleted, and the local tests can no longer see the `schema` half (pinned by the shape assertion in `test/typert-manifest.test.mjs` that does not depend on the loader version).
+Historical evidence: the loader of `0.2.0-rc.2` measures the same as the `0.1.6-alpha.2` column: only `create()` passes, and only `schema` is rejected. Both codec keys remain because historical hosts checked different keys; this is not a current release-support promise. Current admission is tested as the matched `0.2.1-rc.5` (Loader 1.0.6) and `0.2.2-rc.1` (Loader 1.1.0) combinations, with the shape pinned by `test/typert-manifest.test.mjs` and host contract tests.
 
 The browser half (`@deepseek-ai/dsh-typert-registry`'s `lib/client.js`) performs the same validation, so the codec in `lib/client.js` must be changed in step — changing only the host copy produces "the panel loads, and blows up on the first call".
 
@@ -197,7 +197,7 @@ How to read a red drift job:
 
   This one is **not** reported by the drift job: its `files` is `grep -v 'package-contract'`, so the pin assertions by definition do not participate in drift determination. So "the drift job is green" does not mean the pin is current — between 2026-09-10 and 09-24 the pin sat at `0.1.5-rc.2` while `latest` was already `0.1.5-rc.3` and `next` was `0.1.7-rc.1`, unnoticed for two weeks; that is this gap. Syncing the pin has only two triggers: a human notices a new RC, or someone runs the full suite locally.
 
-  When changing it, **do not touch `COMPAT_WINDOW`**: it is the peer window (`>=0.1.5-rc.1 <0.2.0`), whose lower bound is a hard requirement and whose upper bound is the host's hard gate; narrowing it to a newer version would block users still on `0.1.5-rc.x` (the host gate carries `includePrerelease`, so old versions genuinely do install, see item 2 above). The only constant to change is `DEV_BASELINE` in `package-contract.test.mjs`, from which the specific version in the lockfile is derived (it used to be hard-coded there as well, which was two sources of truth).
+  When updating the baseline, keep `COMPAT_WINDOW`, `engines.dsh`, and the manifest aligned; the current release window is `>=0.2.1-rc.5 <0.3.0`. Update only `DEV_BASELINE` in `package-contract.test.mjs`, the lockfile, and the verified-version documentation, then rerun the matched host contracts.
 
 Measured (2026-09-24, drift job [run 35943153431](https://github.com/Imzl-zl/dsh-mcp-manager-ui/actions/runs/35943153431), 190 items per channel all green, 0 skipped):
 
@@ -211,6 +211,8 @@ On 2026-09-29 the baseline was advanced to `0.2.0-rc.2` (run locally, 234 items)
 
 Earlier: contract cases were all green on `0.1.6-alpha.1`; on `0.1.6-alpha.2` the only pre-fix failure was the `typert-manifest` one, and after writing both keys it was 137/137 green per the drift job's file list (to reproduce: swap the whole host to alpha.2 and run that list).
 
+On 2026-10-24 the same method was re-run against `0.2.1-rc.3` with its own `cordis 4.0.5` / `cordis-plugin-loader 1.0.6`: **785/785** green (repo 1.8.3, so the suite has grown since the runs above). The one red in the first pass was environmental rather than a host difference: `real-host-loader`'s env-expression case reads `process.env.HOME`, and a PowerShell session only defines `USERPROFILE`; the same case fails identically on the `0.2.0-rc.2` baseline when `HOME` is absent. On 2026-10-30 the method was re-run against `0.2.1-rc.5` with the same `cordis 4.0.5` / `cordis-plugin-loader 1.0.6` pair: **812/812** green (repo 1.9.0), with that same `HOME` case as the only first-pass red.
+
 **All green on alpha does not mean it entered "verified"**: it was green this time because our changes happened to be purely additive (writing both codec keys + structurally probing cordis private fields), not because it is stable. So the compatibility table lists only `0.2.0-rc.2` — that is a promise; alpha is left to the weekly drift job to probe, and is not promised. This is the same tradeoff as item 2 above (prereleases need no special treatment).
 
 **What this evidence does not cover**: the client side is stand-in testing (the component cannot render in node), so the table above proves that the **slot registration contract** holds, not that the slots **render** correctly on a 0.2.0-rc.2 host. And the release notes for `0.1.6-alpha.2` mention "client Session support for multiple coexisting instances, with related APIs and slots changed". The symptom of that class of failure is a blank panel, which does not turn any test case red, so it belongs to the manual pre-release check (its trigger condition is "Every release" in [Installation and Upgrade](installation.en.md#every-release)) and does not go into CI. On this occasion of advancing the baseline to `0.2.0-rc.2`, the real-hardware re-check was done per that checklist: the panel opens, 7 scope tabs and 16 global MCP entries render correctly.
@@ -219,8 +221,8 @@ The development baseline (`devDependencies`) follows the newest verified RC and,
 
 Two dependencies that are not in the `@deepseek-ai/dsh-*` contract surface but sit in the host's module layer in a real installation deserve to be named:
 
-- `@deepseek-ai/cordis-plugin-loader` (version line `1.0.3`): `reveal` uses its `interpolate` to evaluate `!!js` config nodes. It is a vendor package, obtained through the profile's module fallback resolution (the same path as `@deepseek-ai/cordis`).
-- `@deepseek-ai/cordis`'s private fields: the disposer returned by `LoggerService.exporter()` deletes "the largest ID at that moment" rather than the ID at registration time (`lib/index.js`'s `return () => this.exporters.delete(this._snExporter)`), so a hot reload erroneously deletes other plugins' exporters. This plugin therefore reads and writes the private field pair `logger.exporters` / `logger._snExporter` directly, and locks the peer to `~4.0.2`; if the field shape changes it falls back to the `exporter()` channel and warns explicitly.
+- `@deepseek-ai/cordis-plugin-loader` (current peer `>=1.0.6 <1.2.0`, verified on 1.0.6 / 1.1.0): `reveal` uses its `interpolate` to evaluate `!!js` config nodes. It is a vendor package, obtained through the profile's module fallback resolution (the same path as `@deepseek-ai/cordis`).
+- `@deepseek-ai/cordis`'s private fields: the disposer returned by `LoggerService.exporter()` deletes "the largest ID at that moment" rather than the ID at registration time (`lib/index.js`'s `return () => this.exporters.delete(this._snExporter)`), so a hot reload erroneously deletes other plugins' exporters. This plugin therefore reads and writes the private field pair `logger.exporters` / `logger._snExporter` directly, and restricts the peer to the verified `>=4.0.5 <4.2.0` (4.0.5 / 4.1.0); if the field shape changes it falls back to the `exporter()` channel and warns explicitly.
 
 How peers are resolved also matters: the official profile's `pnpm-workspace.yaml` carries `nodeLinker: hoisted` + **`autoInstallPeers: false`** (written by `initProfile`, with a comment stating the reason: let missing peers go through the `profiles/node_modules` install fallback layer, "so every plugin shares the installation's single cordis instance instead of a duplicate"). Consequently this plugin's 9 peers are **not** installed by pnpm into the profile's `node_modules`, but share the same package instances as the host — this is a hard requirement for `@deepseek-ai/dsh-scope`: the scope label is a module-internal `Symbol`, and two instances would make tool projection silently fail (see the scope failure in "Connection state semantics"). If the panel reports "scope isolation failed", first confirm this configuration has not been changed.
 
@@ -408,6 +410,78 @@ Upstream entries **have no license field**, so external sources only get disclos
 
 An easy mistake: when a new panel runs on an **old host process**, the `skillHubSearch` endpoint simply does not exist (wire 404). Displaying that as "failed to connect to skillhub.cn" is a false report — the upstream was never accessed even once. So the panel says different things for the two cases: the host process is old → prompt to restart the host; the upstream is really down → show a warning and retry in the result area.
 
+## Persisted and running: one path
+
+When the user clicks "save", the panel has to state two things: **was it written to the configuration**
+and **did the running connection actually start from it**. Both used to share one "updated" message,
+which produced two classes of silent errors:
+
+- a higher configuration layer (home patch / CLI overlay) overrides the same entry: disk changed,
+  runtime did not, and the user is told "success";
+- the loader entries the plugin assembled itself were not the same source of truth as the rows in the
+  patch: the panel read one place, the runtime walked another.
+
+There is now exactly one path (`lib/profile-composition.js`):
+
+1. **read** the complete ordered composition of the current profile (bundle → profile → home → CLI
+   overlay → telemetry) through the official `readProfilePatches`;
+2. **edit** the matching row in the profile patch file (atomic write plus version check; still the only
+   writer);
+3. **judge** whether that row counts in the **final effective configuration** via the official
+   `composeEntries` — being overridden or disabled fails right here;
+4. **apply** the whole composition through the official
+   `reconcileProfilePatches(root, patches, name, requiredIds)`; the host mounts, removes and restarts
+   the entries itself and the plugin no longer calls `loader.create` / `entry.update` / `parent.remove`;
+5. **verify** the running entries (count, enabled state, target tool present); on failure the previous
+   file content is written back and applied again, and both failure reasons are reported together.
+
+Every mutating RPC therefore returns the same shape: `persisted` (`applied` / `unchanged` /
+`rolled-back`), `live` (`applied` / `unchanged` / `skipped` / `failed`) and `diagnostics`. A deployment
+without a profile launcher (no `profileContext` or no official composition API) honestly reports
+`live: 'skipped'` with the reason instead of pretending the change is live.
+
+### Two details you must know
+
+- **The root context**: the official composition API only recognizes the root `ctx` the launcher used
+  to mount the include (an internal `WeakMap<Context, Entry>`); a plugin's derived ctx cannot reach it.
+  This layer always uses `ctx.root`.
+- **Mark rows `disabled` before removing them**: `cordis-plugin-loader@1.0.6` (the 0.2.1 host) calls
+  `fiber.entry.parent.tree.write()` when a plugin unloads, which for an include-subtree entry is
+  `Include.write()` — and that writes the **applied tree** (base plus patch rows), so "remove one
+  server" can bake the sibling rows into `cordis.yml`. The unload hook's only early-exit test is
+  `fiber.entry.disabled`, so the row is flagged before reconcile. The 0.2.2 include uses a journal
+  (routing changes back to their owning layer), where this is unnecessary but harmless.
+
+### Contract and artifacts: one definition
+
+The four RPC faces (host `@Remote`, `lib/typert.js`, the client descriptors in `lib/client.js`, and the
+gateway prototype) may only have one definition: `lib/rpc-contract.js`. `scripts/rpc-contract.mjs`
+**generates** the middle two, **checks** the order of the first, and the fourth is compared by tests; CI
+runs `npm run contract:check`, so hand-editing a generated file or adding a method without regenerating
+fails immediately. The client is split into parts by capability, and `lib/client.js` stays a single-file
+artifact produced and verified by `scripts/build-client.mjs` (`--check`).
+
+## Tool search policy
+
+**One job only: decide, per tool, whether it can be searched.**
+
+- "Tool search" lists DSH built-in and third-party tools; each is **Resident** or **Searchable**,
+  resident by default. There is no global switch and no "recommended / everything resident" mode —
+  the list itself is the switch.
+- MCP servers are not controlled twice: enable/disable and Deferred/Resident stay on the MCP list,
+  one switch per server.
+- A searchable tool stays out of the model's context; the model must find it via `tool_search`
+  and only then can call it. The search entry and PTC's `run_code` can never be hidden.
+
+Configuration lives in `toolLoading.tools` (tool name → `resident` / `deferred`); a project
+writes it into its own `.dsh/mcp.json`. Anything not listed is resident.
+
+Why resident by default: the host exposes no tool provenance API, so the plugin cannot tell
+built-in from third-party; hiding anything by default could hide a user's everyday tool.
+**No search entry point when there is nothing to search**: with an empty deferred set (no deferred MCP at all, or everything already discovered), `tool_search` disappears from the model-visible tools together with the catalog section. It stays registered in the host, but "searching would find nothing right now" only invites a wasted round (issue #9). This does not conflict with "the search entry point cannot be hidden by user policy": the former is "there is nothing to search", the latter is "the user cannot turn it off".
+Server-level stays tri-state: `defer: true` = deferred, `defer: false` = explicitly resident,
+absent = follow the rest — so the Deferred/Resident chip always decides.
+
 ## Package structure
 
 - `package.json`: declares `dsh.bundle` and the Web `dsh.client`
@@ -426,8 +500,10 @@ An easy mistake: when a new panel runs on an **old host process**, the `skillHub
 - `lib/skills-file-ops.js`: skill file actions (enable/disable = writing the two invocation-surface frontmatter fields, deletion, import, migration read of leftovers from the old mechanism), precisely located by `(root, on-disk entry)`, erroring out rather than falling back when not found
 - `lib/skills-archive.js`: safe extraction of archives (zip slip protection, symlink rejection, limits enforced by **actually extracted bytes**)
 - `lib/skills-frontmatter.js`: frontmatter validation and per-entry diagnostics (the criteria are copied verbatim from the host, which only warns+skips, invisible to the user)
-- `lib/client.js`: reactive Web UI, Remote client, and lifecycle cleanup
-- `lib/typert.js`: Remote contract description
+- `lib/client.js`: reactive Web UI, Remote client, and lifecycle cleanup (assembled from the parts under `lib/client/`, see `scripts/build-client.mjs`)
+- `lib/profile-composition.js`: the only entry point for "write and apply" (adapter over the official profile composition API, including rollback and structured results)
+- `lib/rpc-contract.js`: the single definition of the RPC contract (the other three faces are generated from it or checked against it)
+- `lib/typert.js`: Remote contract description (generated: `npm run contract:write`)
 - `scripts/theme-spec.mjs`: the panel styling criteria against the DSH theme contract (full-round pairing, radius scale, raised surfaces, literal color values, monospace fonts, alias host, alias token existence), asserted by `test/theme-contract.test.mjs`
 - `scripts/dsh-theme-tokens.mjs`: the DSH theme token list (generated artifact), the data source for the existence criteria
 - `scripts/sync-theme-tokens.mjs`: replays that list from the host source tree

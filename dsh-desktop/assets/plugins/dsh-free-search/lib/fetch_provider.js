@@ -12,6 +12,8 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { callExa, callFirecrawl, callCrawl4ai } from "./fetch_upstream.js";
+import { stripLoneSurrogates } from "./safe_text.js";
+import { assertPublicUrl, safeLookup } from "./ssrf.js";
 
 const T1_MIN_CHARS = 300;
 const TEXTUAL = /text\/|json|xml|javascript|application\/json/i;
@@ -150,7 +152,7 @@ function decodeBody(buffer, contentType) {
 }
 
 /** GET 跟随重定向（≤5 跳），返回最终 URL / 状态 / 正文 / 内容类型；支持 gzip/br/deflate 解压。 */
-export function httpsGetFollow(url, { headers = {}, timeoutMs = 20000, signal } = {}, transport = https) {
+export function httpsGetFollow(url, { headers = {}, timeoutMs = 20000, signal, lookup } = {}, transport = https) {
   return new Promise((resolve, reject) => {
     let settled = false;
     let activeReq = null;
@@ -206,6 +208,7 @@ export function httpsGetFollow(url, { headers = {}, timeoutMs = 20000, signal } 
           method: "GET",
           headers,
           timeout: timeoutMs,
+          ...(lookup ? { lookup } : {}),
         },
         (res) => {
           activeRes = res;
@@ -274,11 +277,11 @@ export function httpsGetFollow(url, { headers = {}, timeoutMs = 20000, signal } 
 }
 
 // 完整浏览器请求头（Chrome 128 形态）：部分反爬站（如百度系）对精简头直接 403，完整头可通过。
+// Accept-Language 不在这里：它跟随 lang（#92），由调用方逐次传入，否则日语环境抓到的仍是中文版页面。
 // 注意：声明了 Accept-Encoding 就必须解压（httpsGetFollow 已支持 gzip/br/deflate）。
 const BROWSERISH = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
   Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-  "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
   "Accept-Encoding": "gzip, deflate, br",
   "sec-ch-ua": '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
   "sec-ch-ua-mobile": "?0",
@@ -290,7 +293,18 @@ const BROWSERISH = {
   "Upgrade-Insecure-Requests": "1",
 };
 
-export function createFetchProvider({ resolveApiKey, logger }) {
+/** 请求头：Accept-Language 跟随调用方（#92），其余固定为浏览器形态。 */
+export function browserishHeaders(acceptLanguage = "en-US,en;q=0.9") {
+  return { ...BROWSERISH, "Accept-Language": String(acceptLanguage ?? "").trim() || "en-US,en;q=0.9" };
+}
+export function createFetchProvider({
+  resolveApiKey,
+  logger,
+  acceptLanguage = () => "en-US,en;q=0.9",
+  browserEnabled = () => true,
+  prefer = () => "exa",
+  validateUrl = assertPublicUrl,
+}) {
   return {
     id: "fs-quality-fetch",
     /** 廉价本地可用性检查（seam 契约要求，禁止网络调用）。 */
@@ -298,25 +312,28 @@ export function createFetchProvider({ resolveApiKey, logger }) {
     async fetch(request, signal) {
       const url = String(request?.url || "");
       if (!/^https:\/\//i.test(url)) throw new Error(`fs-quality-fetch: only https URLs are supported (got "${url.slice(0, 60)}")`);
+      // SSRF guard: never fetch loopback / private / metadata addresses, and use a
+      // lookup that re-checks every redirect hop.
+      await validateUrl(url);
       const errors = [];
 
       // T1：直连（文本类内容；二进制交给后层——exa 取正文，PDF 等仍由 firecrawl 处理）
       try {
-        const r = await httpsGetFollow(url, { headers: BROWSERISH, signal });
+        const r = await httpsGetFollow(url, { headers: browserishHeaders(acceptLanguage()), signal, lookup: safeLookup });
         if (r.status < 400 && TEXTUAL.test(r.contentType) && r.text.length >= T1_MIN_CHARS) {
-          return { url: r.url, statusCode: r.status, body: { kind: "html", content: r.text }, truncated: false };
+          return { url: r.url, statusCode: r.status, body: { kind: "html", content: stripLoneSurrogates(r.text) }, truncated: false };
         }
         if (r.status >= 400) errors.push(`direct HTTP ${r.status}`);
         else errors.push(`direct: ${r.contentType || "unknown type"} ${r.text.length}B`);
       } catch (e) { errors.push(`direct: ${e.message}`); }
 
-      // T1.5：系统浏览器无头渲染（执行 JS 过挑战，抓直连拿不到的页面；无浏览器自动跳过）
+      // T1.5：系统浏览器无头渲染（执行 JS 过挑战，抓直连拿不到的页面；无浏览器或设置里关掉时跳过）
       const browserPath = findSystemBrowser();
-      if (browserPath) {
+      if (browserEnabled() && browserPath) {
         try {
           const html = await browserDumpDom(browserPath, url, { signal });
           if (html && html.length >= T1_MIN_CHARS && !/403 Forbidden|\bcaptcha\b/i.test(html.slice(0, 3000))) {
-            return { url, statusCode: 200, body: { kind: "html", content: html }, truncated: false };
+            return { url, statusCode: 200, body: { kind: "html", content: stripLoneSurrogates(html) }, truncated: false };
           }
           errors.push(html ? `browser: short or challenge page (${html.length}B)` : "browser: no output (timeout or launch failure)");
         } catch (e) {
@@ -324,30 +341,38 @@ export function createFetchProvider({ resolveApiKey, logger }) {
         }
       }
 
-      // T2：exa contents（$1/1000 页）——直连失败（反爬/JS/过短）时承接；firecrawl 额度保护：仅在本层失败后才走 T3
-      const exaKey = await resolveApiKey("EXA_API_KEY", "exaApiKey").catch(() => undefined);
-      if (exaKey) {
+      // T2/T3：exa 与 firecrawl 的先后顺序可在设置页切换；crawl4ai 固定最后。
+      const exaTier = async () => {
+        const exaKey = await resolveApiKey("EXA_API_KEY", "exaApiKey").catch(() => undefined);
+        if (!exaKey) return null;
         try {
           const text = await callExa(url, exaKey, signal);
-          if (text.trim().length >= T1_MIN_CHARS) return { url, statusCode: 200, body: { kind: "text", content: text }, truncated: false };
+          if (text.trim().length >= T1_MIN_CHARS) return { url, statusCode: 200, body: { kind: "text", content: stripLoneSurrogates(text) }, truncated: false };
           errors.push("exa: short content");
         } catch (e) { errors.push(`exa: ${e.message}`); }
-      }
-
-      const firecrawlKey = await resolveApiKey("FIRECRAWL_API_KEY", "firecrawlApiKey").catch(() => undefined);
-      if (firecrawlKey) {
+        return null;
+      };
+      const firecrawlTier = async () => {
+        const firecrawlKey = await resolveApiKey("FIRECRAWL_API_KEY", "firecrawlApiKey").catch(() => undefined);
+        if (!firecrawlKey) return null;
         try {
           const md = await callFirecrawl(url, firecrawlKey, signal);
-          if (md.trim().length >= T1_MIN_CHARS) return { url, statusCode: 200, body: { kind: "text", content: md }, truncated: false };
+          if (md.trim().length >= T1_MIN_CHARS) return { url, statusCode: 200, body: { kind: "text", content: stripLoneSurrogates(md) }, truncated: false };
           errors.push("firecrawl: short content");
         } catch (e) { errors.push(`firecrawl: ${e.message}`); }
+        return null;
+      };
+      const order = prefer() === "firecrawl" ? [firecrawlTier, exaTier] : [exaTier, firecrawlTier];
+      for (const tier of order) {
+        const hit = await tier();
+        if (hit) return hit;
       }
 
       const crawl4aiKey = await resolveApiKey("CRAWL4AI_API_KEY", undefined).catch(() => undefined);
       if (crawl4aiKey) {
         try {
           const text = await callCrawl4ai(url, crawl4aiKey, signal);
-          if (text.trim().length >= T1_MIN_CHARS) return { url, statusCode: 200, body: { kind: "text", content: text }, truncated: false };
+          if (text.trim().length >= T1_MIN_CHARS) return { url, statusCode: 200, body: { kind: "text", content: stripLoneSurrogates(text) }, truncated: false };
           errors.push("crawl4ai: short content");
         } catch (e) { errors.push(`crawl4ai: ${e.message}`); }
       }

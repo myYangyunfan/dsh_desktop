@@ -1,4 +1,6 @@
 export const CODEX_SESSION_PREFIX = 'codex:';
+/** The strict Remote history schema accepts at most 200 messages per page. */
+export const CODEX_HISTORY_PAGE_MAX_MESSAGES = 200;
 export function nativeThreadId(sessionId) {
     if (!sessionId.startsWith(CODEX_SESSION_PREFIX) || sessionId.length === CODEX_SESSION_PREFIX.length) {
         throw new Error('The selected Session does not belong to CodeX.');
@@ -42,6 +44,10 @@ export function optionalPositiveInteger(value) {
     if (parsed !== undefined && parsed <= 0)
         throw new Error('The CodeX History page size is invalid.');
     return parsed;
+}
+/** Cap native DSH's larger history window requests at the Remote page limit. */
+export function boundedCodexHistoryPageSize(value) {
+    return value === undefined ? undefined : Math.min(value, CODEX_HISTORY_PAGE_MAX_MESSAGES);
 }
 export function requiredString(value, field) {
     if (typeof value !== 'string' || value.length === 0)

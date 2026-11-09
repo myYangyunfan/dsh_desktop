@@ -1,6 +1,7 @@
 {
   "meta": {
-    "title": "DeepSeek Remote",
-    "description": "End-to-end encrypted remote access to DeepSeek Harness and Codex workspaces from desktop, web, and Android."
+    "title": "DS Harness Remote",
+    "description": "P2P-based, end-to-end encrypted remote access to DeepSeek Harness, CodeX, Claude Code, Pi, and other workspaces from web and mobile clients.",
+    "detail": "locale/README.en.md"
   }
 }

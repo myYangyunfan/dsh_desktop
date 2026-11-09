@@ -21,15 +21,17 @@ const imageBlock = z.object({ type: z.literal('image'), mimeType: z.enum(['image
 });
 const promptBlock = z.union([textBlock, imageBlock]);
 export const acpToolStreamSchema = z.object({
-    backend: z.enum(['cursor', 'antigravity', 'pi', 'opencode']), endpoint: z.enum(ACP_TOOL_STREAM_ENDPOINTS), args: z.record(z.unknown()),
+    backend: z.enum(['cursor', 'claude', 'antigravity', 'pi', 'opencode', 'hermes']), endpoint: z.enum(ACP_TOOL_STREAM_ENDPOINTS), args: z.record(z.string(), z.unknown()),
 }).strict();
 const schemas = {
     'dsh/sessionArchive': z.object({ sessionId: id.regex(/^[A-Za-z0-9_-]+$/), backend: z.literal('opencode') }).strict(),
-    'dsh/toolCall': z.object({ sessionId: id, backend: z.enum(['cursor', 'antigravity', 'pi', 'opencode']),
-        endpoint: z.enum(ACP_TOOL_CALL_ENDPOINTS), args: z.record(z.unknown()) }).strict(),
-    'dsh/sessionModels': z.object({ sessionId: id, backend: z.enum(['cursor', 'claude', 'antigravity', 'pi', 'opencode']) }).strict(),
-    'dsh/selectModel': z.object({ sessionId: id, backend: z.enum(['cursor', 'claude', 'antigravity', 'pi', 'opencode']),
+    'dsh/toolCall': z.object({ sessionId: id, backend: z.enum(['cursor', 'claude', 'antigravity', 'pi', 'opencode', 'hermes']),
+        endpoint: z.enum(ACP_TOOL_CALL_ENDPOINTS), args: z.record(z.string(), z.unknown()) }).strict(),
+    'dsh/sessionModels': z.object({ sessionId: id, backend: z.enum(['cursor', 'claude', 'antigravity', 'pi', 'opencode', 'hermes']) }).strict(),
+    'dsh/selectModel': z.object({ sessionId: id, backend: z.enum(['cursor', 'claude', 'antigravity', 'pi', 'opencode', 'hermes']),
         model: id, reasoningEffort: id.optional() }).strict(),
+    'dsh/selectPermission': z.object({ sessionId: id, backend: z.enum(['cursor', 'claude', 'antigravity', 'pi', 'opencode', 'hermes']).optional(),
+        preset: z.enum(['workspace-write', 'danger-full-access']) }).strict(),
     'initialize': z.object({
         protocolVersion: z.number().int().positive().optional(),
         backend: z.string().min(1).max(64).optional(),
@@ -50,7 +52,7 @@ const schemas = {
     }).strict(),
     'session/prompt': z.object({
         sessionId: id,
-        backend: z.enum(['cursor', 'antigravity', 'pi', 'claude', 'opencode']).optional(),
+        backend: z.enum(['cursor', 'antigravity', 'pi', 'claude', 'opencode', 'hermes']).optional(),
         prompt: z.array(promptBlock).min(1).max(16).refine(parts => parts.filter(part => part.type === 'image').length <= 4),
     }).strict(),
     'session/cancel': z.object({
@@ -98,6 +100,6 @@ export function sessionIdFromParams(method, params) {
     return undefined;
 }
 export function isSessionMutation(method) {
-    return method === 'session/prompt' || method === 'session/cancel' || method === 'dsh/selectModel' || method === 'dsh/toolCall';
+    return method === 'session/prompt' || method === 'session/cancel' || method === 'dsh/selectModel' || method === 'dsh/selectPermission' || method === 'dsh/toolCall';
 }
 //# sourceMappingURL=method-policy.js.map

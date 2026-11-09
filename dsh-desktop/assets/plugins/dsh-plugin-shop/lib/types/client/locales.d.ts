@@ -34,6 +34,10 @@ export declare const zh: {
     /** The shelf's order control, and the date each card carries under the two
      * date orders (design 2026-10-12-shelf-orders §4). */
     sortLabel: string;
+    /** The wide layout's rail headings (design 2026-11-02-shop-widescreen-layout
+     * §4): the category group above, the hide-incompatible modifier below. */
+    categoriesHeading: string;
+    filterHeading: string;
     sortStars: string;
     sortAdded: string;
     sortUpdated: string;
@@ -60,6 +64,11 @@ export declare const zh: {
     install: string;
     cancel: string;
     dismiss: string;
+    /** The copy button beside a failed install's command line (design
+     * 2026-11-02-market-borrowings §5). `copied` replaces it only after the
+     * clipboard write resolved, so it is never claimed early. */
+    copyCommand: string;
+    copied: string;
     /** The fold toggle under a card's collapsed red block. `aria-expanded` plus:
      * open shows the whole block; closed shows two lines of it. This toggle is
      * independent of the card's own header-expand. */
@@ -118,6 +127,11 @@ export declare const zh: {
     /** The incompatible filter's label. FIXED — the switch beside it carries the
      * state, so the words name what the switch does and never flip with it. */
     hideIncompatible: string;
+    /** The favorites switch (design 2026-11-02-market-borrowings §7), fixed for
+     * the same reason `hideIncompatible` is: the switch carries the state. */
+    favoritesFilter: string;
+    favoritesFilterTitle: string;
+    emptyFavoritesFiltered: string;
     /** What the filter takes away is every card whose badge reads 不兼容 —
      * missing components OR an author's declaration this dsh does not meet —
      * so these three name the badge, not one of its reasons. */
@@ -126,6 +140,25 @@ export declare const zh: {
     emptyIncompatibleFiltered: string;
     license: string;
     customLicense: string;
+    /** The prepurchase facts' detail rows (design 2026-11-02-market-borrowings
+     * §1–§2). `requiresDsh` names the field as dsh's own refusal names it — a
+     * manifest path, not a package — and the row prints the range the author
+     * wrote, verbatim. */
+    requiresDsh: string;
+    dependencies: string;
+    commands: string;
+    /** The install-scripts row (design 2026-11-04-borrowings-round-4 §2). The
+     * second line states what pnpm does with it, so the fact is not read as a
+     * verdict on the script. */
+    installScripts: string;
+    /** The failure report's prefilled issue (design 2026-11-05-failure-report.md). */
+    reportProblem: string;
+    installScriptsDeclared: string;
+    /** The size label's tooltip for an install that lands more than 50 MB on
+     * disk. The figure is already large on screen; this phrase says why it is
+     * tinted, without inventing a threshold nobody measured — 50 MB is the
+     * figure the competitor's own users proposed. */
+    sizeLabelLarge: string;
     reviewedVersionLine: string;
     reviewedPinLine: string;
     deniedCode: string;
@@ -160,7 +193,25 @@ export declare const zh: {
      * carries the `v` an npm version takes and no other kind does. */
     installedVersion: string;
     latestVersion: string;
+    /** The rollback offer on an installed card (design
+     * 2026-11-02-market-borrowings §6). `{version}` is the version the record
+     * names, formatted by `versionLabel` before it gets here. */
+    /** The star's accessible name and tooltip (design 2026-11-02-market-borrowings
+     * §7). A fixed pair: the visible glyph is the same in both states, so the
+     * label names the action, and `aria-pressed` carries the state. */
+    favorite: string;
+    unfavorite: string;
+    rollbackTo: string;
+    rollingBack: string;
+    rollbackFailed: string;
+    /** The update row's link to what the new version changed (design
+     * 2026-11-02-market-borrowings §4): the npm page of the target version, the
+     * GitHub compare view, or the repository's releases. */
+    whatChanged: string;
     update: string;
+    /** The Updatable section's one batch action (design
+     * 2026-11-04-borrowings-round-4 §3). `{count}` is the rows it will start. */
+    updateAll: string;
     installed: string;
     uninstall: string;
     uninstalling: string;
@@ -194,6 +245,8 @@ export declare const zh: {
     updateTransportFailed: string;
     checkUpdate: string;
     checkUpdateTitle: string;
+    updateInDshPage: string;
+    updateInDshPageTitle: string;
     upToDate: string;
     github: string;
     enabledSwitch: string;
@@ -225,6 +278,10 @@ export declare const en: {
     /** The shelf's order control, and the date each card carries under the two
      * date orders (design 2026-10-12-shelf-orders §4). */
     sortLabel: string;
+    /** The wide layout's rail headings (design 2026-11-02-shop-widescreen-layout
+     * §4): the category group above, the hide-incompatible modifier below. */
+    categoriesHeading: string;
+    filterHeading: string;
     sortStars: string;
     sortAdded: string;
     sortUpdated: string;
@@ -251,6 +308,8 @@ export declare const en: {
     install: string;
     cancel: string;
     dismiss: string;
+    copyCommand: string;
+    copied: string;
     moreRedLines: string;
     lessRedLines: string;
     installing: string;
@@ -284,11 +343,21 @@ export declare const en: {
     authorLine: string;
     sizeLabel: string;
     hideIncompatible: string;
+    favoritesFilter: string;
+    favoritesFilterTitle: string;
+    emptyFavoritesFiltered: string;
     incompatibleFilterTitle: string;
     showIncompatibleTitle: string;
     emptyIncompatibleFiltered: string;
     license: string;
     customLicense: string;
+    requiresDsh: string;
+    dependencies: string;
+    commands: string;
+    installScripts: string;
+    reportProblem: string;
+    installScriptsDeclared: string;
+    sizeLabelLarge: string;
     reviewedVersionLine: string;
     reviewedPinLine: string;
     deniedCode: string;
@@ -311,7 +380,14 @@ export declare const en: {
     updatableSection: string;
     installedVersion: string;
     latestVersion: string;
+    favorite: string;
+    unfavorite: string;
+    rollbackTo: string;
+    rollingBack: string;
+    rollbackFailed: string;
+    whatChanged: string;
     update: string;
+    updateAll: string;
     installed: string;
     uninstall: string;
     uninstalling: string;
@@ -340,6 +416,8 @@ export declare const en: {
     updateTransportFailed: string;
     checkUpdate: string;
     checkUpdateTitle: string;
+    updateInDshPage: string;
+    updateInDshPageTitle: string;
     upToDate: string;
     github: string;
     enabledSwitch: string;

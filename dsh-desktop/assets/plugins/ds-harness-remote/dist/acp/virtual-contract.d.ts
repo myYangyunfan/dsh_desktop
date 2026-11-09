@@ -2,7 +2,7 @@ import type { AcpSessionModels, AgentAcpFrameData, AgentAcpStreamClosedData, Age
 import { ACP_TOOL_CALL_ENDPOINTS } from '@dsh-remote/protocol';
 import type { TypertRpcResult } from '../typert-gateway-contract.js';
 import type { AcpImage } from './image-content.js';
-import type { AcpModelSelection } from './virtual-catalog.js';
+import type { AcpCatalogBackend, AcpModelSelection } from './virtual-catalog.js';
 export type JsonRecord = Record<string, unknown>;
 export type PiTurnOutcome = {
     kind: 'completed';
@@ -98,14 +98,15 @@ export interface AcpClientLike {
         sessionId: string;
         archived: true;
     }) => void): () => void;
-    sessionModels?(sessionId: string, backend: "cursor" | "claude" | "antigravity" | "pi" | "opencode", signal?: AbortSignal): Promise<AcpSessionModels>;
-    selectModel?(sessionId: string, backend: "cursor" | "claude" | "antigravity" | "pi" | "opencode", selection: AcpModelSelection, signal?: AbortSignal): Promise<AcpModelSelection>;
-    workspaceToolCall?(sessionId: string, backend: "cursor" | "antigravity" | "pi" | "opencode", endpoint: typeof ACP_TOOL_CALL_ENDPOINTS[number], args: JsonRecord, signal?: AbortSignal): Promise<unknown>;
-    createSession(cwd: string, mode?: "agent" | "plan" | "ask", backend?: "cursor" | "antigravity" | "pi" | "opencode" | "claude", signal?: AbortSignal): Promise<{
+    sessionModels?(sessionId: string, backend: AcpCatalogBackend, signal?: AbortSignal): Promise<AcpSessionModels>;
+    selectModel?(sessionId: string, backend: AcpCatalogBackend, selection: AcpModelSelection, signal?: AbortSignal): Promise<AcpModelSelection>;
+    selectPermission?(sessionId: string, backend: AcpCatalogBackend, preset: string, signal?: AbortSignal): Promise<unknown>;
+    workspaceToolCall?(sessionId: string, backend: AcpCatalogBackend, endpoint: typeof ACP_TOOL_CALL_ENDPOINTS[number], args: JsonRecord, signal?: AbortSignal): Promise<unknown>;
+    createSession(cwd: string, mode?: "agent" | "plan" | "ask", backend?: AcpCatalogBackend, signal?: AbortSignal): Promise<{
         sessionId: string;
         cwd?: string;
     }>;
-    prompt(sessionId: string, text: string, signal?: AbortSignal, images?: AcpImage[], backend?: "cursor" | "antigravity" | "pi" | "opencode" | "claude"): Promise<unknown>;
+    prompt(sessionId: string, text: string, signal?: AbortSignal, images?: AcpImage[], backend?: AcpCatalogBackend): Promise<unknown>;
     cancel(sessionId: string, signal?: AbortSignal): Promise<unknown>;
     listDirectory(path: string, signal?: AbortSignal): Promise<unknown>;
     listWorkspaces?(backend?: string, signal?: AbortSignal): Promise<Array<{
@@ -129,8 +130,8 @@ export declare function extractPromptText(content: unknown[]): string | undefine
 export declare function extractText(update: JsonRecord): string | undefined;
 export declare function summarizeQuestions(params: JsonRecord): string | undefined;
 export declare function extractSessionId(request: JsonRecord): string;
-export declare function sessionPrefix(backend: 'cursor' | 'antigravity' | 'pi' | 'opencode' | 'claude'): string;
-export declare function nativeAcpId(sessionId: string, backend: 'cursor' | 'antigravity' | 'pi' | 'opencode' | 'claude'): string;
+export declare function sessionPrefix(backend: AcpCatalogBackend): string;
+export declare function nativeAcpId(sessionId: string, backend: AcpCatalogBackend): string;
 export declare function isSurfaceEvent(type: string): boolean;
 export declare function carrierArgs(payload: unknown): JsonRecord;
 export declare function requestArg(args: JsonRecord): JsonRecord;
@@ -168,5 +169,8 @@ export declare class AsyncValueQueue implements AsyncIterable<unknown> {
     iterate(dispose: () => void): AsyncIterable<unknown>;
     [Symbol.asyncIterator](): AsyncIterator<unknown>;
 }
+export type AcpPermissionPreset = 'workspace-write' | 'danger-full-access';
+export declare function isAcpPermissionPreset(value: string): value is AcpPermissionPreset;
+export declare function acpPermissionsProjection(preset: AcpPermissionPreset | undefined): unknown;
 export {};
 //# sourceMappingURL=virtual-contract.d.ts.map

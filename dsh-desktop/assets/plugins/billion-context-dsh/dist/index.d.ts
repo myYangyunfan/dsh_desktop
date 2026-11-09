@@ -46,7 +46,7 @@ export { buildNudge, resolveTokenCount, EMERGENCY_NUDGE_MAX_PER_TURN, type Nudge
 export { DEFAULT_CONTEXT_WINDOW, detectContextWindow, projectedContextWindow, windowSourceLabel, type AcpWindow, } from './window.ts';
 export { AlreadyCompressedRangeError, rebuildBlockLedger, resolveSurfaceRange, runCompactionTransaction, shadowedSeqsOf, findOpenTurn, assertNoActiveCompaction, blockRegistry, blockRefForSummarySeq, compactionIdsOfKernelBlocks, summarySeqOfKernelBlock, expandShadowedSeqs, hideCompressToolPair, stripOrphanedSurfaceToolMessages, type AcpBlockLedgerEntry, type CompactionTransactionInput, type ResolvedSurfaceRange, } from './region.ts';
 export { eventsToCoreMessages, projectEvent, surfaceEventsOf, extractEventText } from './messages.ts';
-export { ACP_SETTINGS_NAMESPACE, AcpSettingsSchema, describeSettingsChange, filterSettingsEntry, makeSettingsCommandSurface, parseSettingValue, resolveAcpSettings, SETTINGS_KEYS, SETTING_DEFAULTS, type AcpSettings, type AcpSettingsInput, type SettingsChangeEffect, type SettingsCommandSurface, type SettingsKey, } from './settings.ts';
+export { ACP_SETTINGS_NAMESPACE, AcpPluginConfigSchema, AcpSettingsSchema, describeSettingsChange, filterSettingsEntry, isVolatileRef, liveSettingsFromRefs, makeSettingsCommandSurface, parseSettingValue, resolveAcpSettings, SETTINGS_KEYS, SETTING_DEFAULTS, unwrapVolatile, VOLATILE_WRITE, type AcpSettings, type AcpSettingsDescriptor, type AcpSettingsInput, type AcpSettingsService, type LegacySettingsService, type SettingsChangeEffect, type SettingsCommandSurface, type SettingsKey, } from './settings.ts';
 export interface AcpConfig {
     /**
      * The context window used for pressure decisions, in tokens. When omitted,
@@ -141,6 +141,31 @@ export declare function resolveAcpConfig(config?: Partial<AcpConfig>): AcpConfig
  * model-driven block compression without touching the agent loop.
  */
 export declare class AcpCompactionEngine extends CompactionEngine {
+    /**
+     * Static plugin config schema — cordis reads `plugin.Config` off the raw
+     * plugin value at fiber start and validates the composition row against it
+     * (`resolveConfig`). Class-shaped mounts carry this (the bundle/composition
+     * row path); function-shaped mounts skip validation and receive plain
+     * values. On dsh-settings ≥ 0.1.7 hosts this SAME schema is what SettingsForms
+     * builds its form from — the volatile fields are exactly what `/acp-prune
+     * config` exposes (see AcpPluginConfigSchema for why fields are volatile and
+     * default-free).
+     */
+    static readonly Config: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+        modelContextLimit: import("@deepseek-ai/schemastery").default<number, number, "plain">;
+        autoModelContextLimit: import("@deepseek-ai/schemastery").default<boolean, boolean, "plain">;
+        nudgeMinContextLimitPct: import("@deepseek-ai/schemastery").default<number, number, "plain">;
+        nudgeMaxContextLimitPct: import("@deepseek-ai/schemastery").default<number, number, "plain">;
+        nudgeEmergencyThresholdPct: import("@deepseek-ai/schemastery").default<number, number, "plain">;
+        autoNudge: import("@deepseek-ai/schemastery").default<boolean, boolean, "plain">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        modelContextLimit: import("@deepseek-ai/schemastery").default<number, number, "plain">;
+        autoModelContextLimit: import("@deepseek-ai/schemastery").default<boolean, boolean, "plain">;
+        nudgeMinContextLimitPct: import("@deepseek-ai/schemastery").default<number, number, "plain">;
+        nudgeMaxContextLimitPct: import("@deepseek-ai/schemastery").default<number, number, "plain">;
+        nudgeEmergencyThresholdPct: import("@deepseek-ai/schemastery").default<number, number, "plain">;
+        autoNudge: import("@deepseek-ai/schemastery").default<boolean, boolean, "plain">;
+    }>>, "plain">;
     /** The framework-agnostic ACP compression core, reused verbatim. */
     readonly kernel: CompressionCore;
     /** Per-session kernel state. */
@@ -164,9 +189,11 @@ export declare class AcpCompactionEngine extends CompactionEngine {
     private readonly compressCallIdsToHide;
     /** Per provider/model route the resolved window (probe failures cached too). */
     private readonly windowCache;
-    /** Live settings snapshot thunk (composition → user settings layer); swapped when the settings provider attaches (SettingsProvider.installSection). */
+    /** Live settings snapshot thunk (composition → user settings layer); swapped when the settings provider attaches (installSection on ≤0.1.6 lines, volatile-ref re-read on the ≥0.1.7 forms line). */
     private readSettingsSource;
-    /** The settings service, captured lazily for /acp-prune config (undefined in provider-less processes). */
+    /** Hot-apply driver: re-reads the live source and runs the change diff; called once per agent step, a no-op unless something changed. */
+    private resyncSettings;
+    /** The settings service, captured lazily for /acp-prune config (undefined in provider-less processes). Structurally typed — both host lines' real services satisfy it. */
     private settingsService;
     /** /acp-prune config read/write surface. */
     readonly settingsCommand: SettingsCommandSurface;
