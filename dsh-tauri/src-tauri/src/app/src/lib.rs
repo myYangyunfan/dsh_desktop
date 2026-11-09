@@ -497,7 +497,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         Err(()) => {
             // 已有实例在跑：请求唤起其主窗 → 静默退出。绝不向上抛 Err——
             // setup-Err 会被 Tauri 当启动失败 panic（v0.6.2 实爆：三次二次
-            // 启动全在 panics.log 留「Failed to setup app: DSH Desktop 已在
+            // 启动全在 panics.log 留「Failed to setup app: DSH Pack 已在
             // 运行」，用户双击无任何可见反馈）。插件管道（正常路径）之外
             // 的窗口期由 focus-request 文件兜底。
             if let Err(e) = shell_core::write_focus_request(&paths.app_data) {
@@ -828,7 +828,7 @@ fn route_one_event(app: &tauri::AppHandle, ev: SupervisorEvent) {
                     });
                 }
                 let _ = app.notification().builder()
-                    .title("DSH Desktop")
+                    .title("DSH Pack")
                     .body("内核服务反复异常退出，已进入恢复模式")
                     .show();
             }
@@ -974,7 +974,7 @@ fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> 
         .build()?;
     let tray = tauri::tray::TrayIconBuilder::with_id("main-tray")
         .icon(app.default_window_icon().cloned().ok_or("无应用图标")?)
-        .tooltip("DSH Desktop")
+        .tooltip("DSH Pack")
         .menu(&menu)
         // 平台惯例：mac 托盘左键=弹菜单（macOS 惯例，保持现状）；Win/Linux
         // 左键=直接唤起主窗、右键才弹菜单——桌面右下角主流习惯（用户反馈）。
@@ -1012,7 +1012,7 @@ fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> 
                             format!("ACP 自检失败：{e}")
                         }
                     };
-                    let _ = app2.notification().builder().title("DSH Desktop ACP").body(body).show();
+                    let _ = app2.notification().builder().title("DSH Pack ACP").body(body).show();
                 });
             }
             "acp-config" => {
@@ -1031,12 +1031,12 @@ fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> 
                         let dir = shell_core::DshPaths::resolve().logs;
                         let _ = std::fs::create_dir_all(&dir);
                         let _ = commands::open_in_explorer(&dir);
-                        let _ = app.notification().builder().title("DSH Desktop ACP")
+                        let _ = app.notification().builder().title("DSH Pack ACP")
                             .body(format!("配置片段已写入：{}（已打开目录，合并进 Zed 设置）", path.display())).show();
                     }
                     Err(e) => {
                         route_log(format!("[acp] 配置导出失败：{e}"));
-                        let _ = app.notification().builder().title("DSH Desktop ACP")
+                        let _ = app.notification().builder().title("DSH Pack ACP")
                             .body(format!("ACP 配置导出失败：{e}")).show();
                     }
                 }

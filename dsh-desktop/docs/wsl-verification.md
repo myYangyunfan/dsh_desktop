@@ -38,7 +38,7 @@
 ### 2.1 local 模式回归（默认路径不能坏）
 
 - [ ] 不配置任何东西直接启动：窗口加载内置 dsh 的 Web UI（旧行为）；
-- [ ] 「关于 DSH Desktop」显示 agent 版本 + 来源「内置」；
+- [ ] 「关于 DSH Pack」显示 agent 版本 + 来源「内置」；
 - [ ] ⋯菜单「检查客户端更新」「会话完成通知」「关闭时最小化到托盘」全部可用；
 - [ ] 退出应用后任务管理器无残留 node/dsh 进程（`taskkill /T` 路径）。
 
@@ -114,7 +114,7 @@ node dsh-desktop/scripts/sync-companion-plugins.js ~/.dsh --with-patches
 | 更新失败 | 自动保留旧版；`update.log` 与 WSL 内 `~/.dsh-desktop/agent-staging` 残留会被清理 |
 | 「文件」视图还原按钮无效 | 预期：WSL 会话的还原/打开被安全栅栏拒绝，仅 diff 查看可用 |
 | 旧配置里残留 `remoteUrl`/`backend: "remote"` | remote 模式已移除：`backend=remote` 回落 local 并记日志，`remoteUrl` 被忽略 |
-| 设置页该栏显示「仅在 DSH Desktop 客户端中可用」 | 正常：纯浏览器打开 Web UI 时无壳桥；用 DSH Desktop 窗口打开即可 |
+| 设置页该栏显示「仅在 DSH Pack 客户端中可用」 | 正常：纯浏览器打开 Web UI 时无壳桥；用 DSH Pack 窗口打开即可 |
 | `wslInstallDir` 想共享你自己的 dsh 会话 | 显式设为 `~/.dsh`（风险自负：两个 dsh 版本会互相改写 profile） |
 
 ## 5. 快速回归清单（发版前过一遍）

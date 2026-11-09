@@ -38,7 +38,7 @@
 electron-builder NSIS）写的是另一套键——于是 0.4.x → 0.5.0 升级时目录页
 默认落到 `%LOCALAPPDATA%\DSH Desktop`，老用户装出**双安装/数据割裂**
 （本机实测取证：Electron 装在 `D:\app\dsh\DSH Desktop`，v0.5.0 却装到
-`D:\app\DSH Desktop`）。
+`D:\app\DSH Pack`）。
 
 **Electron 线注册表事实**（由 `dsh-desktop/electron-builder.yml` +
 `uninstaller/DSH_Desktop_Uninstaller.cs` 推导，本机 `Log.log` 卸载记录实证。
@@ -104,7 +104,7 @@ electron-builder NSIS）写的是另一套键——于是 0.4.x → 0.5.0 升级
 - **v0.5.0 双安装受害者**（目录识别修复前升级）：0.5.0 装在了新目录、旧
   Electron 目录还在。数据不受影响（`~/.dsh` 与 `%APPDATA%\dsh-desktop`
   全程共用），但请手动卸载其中一个目录的多余一份（控制面板/设置里的
-  「DSH Desktop」条目对应 0.5.x，旧目录的 `Uninstall_DSH_Desktop.exe`
+  「DSH Pack」条目对应 0.5.x，旧目录的 `Uninstall_DSH_Desktop.exe`
   对应 Electron 版）——两个卸载器互不认识对方，任卸其一只清自身；
 - 极旧版本（0.4.0 及更早）卸载器无 `/KEEP_APP_DATA` 参数识别：建议先用
   Electron 版内置更新到 0.4.1+ 再升 Tauri；

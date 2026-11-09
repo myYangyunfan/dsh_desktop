@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8" />
-<title>DSH Desktop</title>
+<title>DSH Pack</title>
 <style>
   :root { color-scheme: dark; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -91,7 +91,7 @@
       bridge.getState().then(function (info) {
         if (!info) return;
         var lines = [];
-        if (info.appVersion) lines.push('DSH Desktop v' + esc(info.appVersion));
+        if (info.appVersion) lines.push('DSH Pack v' + esc(info.appVersion));
         var st = info.state;
         if (st && st.lastFailure) {
           var f = st.lastFailure;

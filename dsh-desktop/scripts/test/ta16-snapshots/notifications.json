@@ -11,40 +11,40 @@
   "shimShellNotifyTemplates": [
     [
       "plugin:notification|notify",
-      "DSH Desktop",
+      "DSH Pack",
       ""
     ],
     [
-      "DSH Desktop",
+      "DSH Pack",
       "已下载 v",
       "?",
-      "，请将 DSH Desktop 拖入 Applications 完成更新"
+      "，请将 DSH Pack 拖入 Applications 完成更新"
     ],
     [
-      "DSH Desktop",
+      "DSH Pack",
       "已更新到 v",
       "?",
       "，重启应用后生效"
     ],
     [
-      "DSH Desktop",
+      "DSH Pack",
       "发现新版本 v",
       "，点击右上角 ⋯ 菜单查看并安装"
     ],
     [
-      "DSH Desktop",
+      "DSH Pack",
       "自定义图标已生效"
     ],
     [
-      "DSH Desktop",
+      "DSH Pack",
       "自定义图标设置失败："
     ],
     [
-      "DSH Desktop",
+      "DSH Pack",
       "已恢复默认图标"
     ],
     [
-      "DSH Desktop",
+      "DSH Pack",
       "恢复默认图标失败："
     ]
   ],

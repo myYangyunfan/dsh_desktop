@@ -49,7 +49,7 @@
     },
     {
       "act": "about",
-      "label": "关于 DSH Desktop"
+      "label": "关于 DSH Pack"
     },
     {
       "act": "quit",
@@ -95,7 +95,7 @@
     "<button class=\"dch-install dch-confirm-go\" data-act=\"install-client-update\">继续安装</button>",
     "<button class=\"dch-install dch-confirm-cancel\" data-act=\"cancel-install-confirm\">取消</button>",
     "<button class=\"dch-install\" data-act=\"install-client-update\">下载并安装</button>",
-    "，请将 DSH Desktop 拖入 Applications 完成更新",
+    "，请将 DSH Pack 拖入 Applications 完成更新",
     "未知错误",
     "发现新版本 v",
     "，点击右上角 ⋯ 菜单查看并安装",
@@ -113,7 +113,7 @@
     "在浏览器中打开",
     "打开日志目录",
     "☕ 请作者喝咖啡",
-    "关于 DSH Desktop",
+    "关于 DSH Pack",
     "退出",
     "检查中…",
     "返回形态异常",

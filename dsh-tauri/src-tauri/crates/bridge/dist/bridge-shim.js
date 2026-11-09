@@ -1,7 +1,7 @@
 /* eslint-disable */
 'use strict';
 /**
- * DSH Desktop（Tauri 版）—— window.dshDesktop 桥垫片
+ * DSH Pack（Tauri 版）—— window.dshDesktop 桥垫片
  * ==================================================
  *
  * contracts/bridge-api.md 的页面侧实现。经 Tauri `initialization_script` 注入
@@ -403,7 +403,7 @@
   function shellNotify(title, body) {
     try {
       if (INVOKE) INVOKE('plugin:notification|notify', {
-        options: { title: String(title || 'DSH Desktop'), body: String(body || '') }
+        options: { title: String(title || 'DSH Pack'), body: String(body || '') }
       }).catch(function () { /* 权限拒绝/无宿主：静默 */ });
     } catch (e) { /* 同上 */ }
   }
@@ -500,8 +500,8 @@
       if (r && r.version) cur.next = String(r.version);
       menuState.clientUpdate = cur;
       renderMenu();
-      if (cur.done === 'manual') shellNotify('DSH Desktop', '已下载 v' + (cur.next || '?') + '，请将 DSH Desktop 拖入 Applications 完成更新');
-      if (cur.done === 'replaced') shellNotify('DSH Desktop', '已更新到 v' + (cur.next || '?') + '，重启应用后生效');
+      if (cur.done === 'manual') shellNotify('DSH Pack', '已下载 v' + (cur.next || '?') + '，请将 DSH Pack 拖入 Applications 完成更新');
+      if (cur.done === 'replaced') shellNotify('DSH Pack', '已更新到 v' + (cur.next || '?') + '，重启应用后生效');
     }).catch(function (e) {
       var cur = menuState.clientUpdate || {};
       cur.downloading = false;
@@ -532,7 +532,7 @@
     markUpdateDot(true);
     if (notifiedUpdateVersion !== next) {
       notifiedUpdateVersion = next;
-      shellNotify('DSH Desktop', '发现新版本 v' + next + '，点击右上角 ⋯ 菜单查看并安装');
+      shellNotify('DSH Pack', '发现新版本 v' + next + '，点击右上角 ⋯ 菜单查看并安装');
     }
     if (menuState.autoInstallUpdates === true && !currentSessionId) {
       startClientUpdateInstall(true);
@@ -589,7 +589,7 @@
     var check = '<span class="dch-check">✓</span>';
     menuPanel.innerHTML =
       '<div class="dch-mh">' +
-        '<div class="dch-mh-title">DSH Desktop <span class="dch-mh-ver">v' + escHtml(s.appVersion || '?') + '</span></div>' +
+        '<div class="dch-mh-title">DSH Pack <span class="dch-mh-ver">v' + escHtml(s.appVersion || '?') + '</span></div>' +
         '<div class="dch-mh-sub"><span>agent v' + escHtml(s.agentVersion || '未知') + '</span><span>' + escHtml(s.agentSource || 'bundled') + '</span></div>' +
       '</div>' +
       updRowHtml() +
@@ -613,7 +613,7 @@
       '<div class="dch-sep"></div>' +
       menuItemHtml('sponsor', '☕ 请作者喝咖啡', '') +
       '<div class="dch-sep"></div>' +
-      menuItemHtml('about', '关于 DSH Desktop', '') +
+      menuItemHtml('about', '关于 DSH Pack', '') +
       menuItemHtml('quit', '退出', '', true);
     var items = menuPanel.querySelectorAll('button[data-act]');
     for (var i = 0; i < items.length; i++) {
@@ -748,17 +748,17 @@
     pickCustomIconFile().then(function (dataUrl) {
       if (!dataUrl) return; // 用户取消
       return dshDesktop.menu.action('set-custom-icon', { dataUrl: dataUrl }).then(function (r) {
-        if (r && r.ok) shellNotify('DSH Desktop', '自定义图标已生效');
+        if (r && r.ok) shellNotify('DSH Pack', '自定义图标已生效');
       });
     }).catch(function (e) {
-      shellNotify('DSH Desktop', '自定义图标设置失败：' + iconActionError(e));
+      shellNotify('DSH Pack', '自定义图标设置失败：' + iconActionError(e));
     });
   }
   function applyCustomIconReset() {
     dshDesktop.menu.action('reset-custom-icon').then(function (r) {
-      if (r && r.ok) shellNotify('DSH Desktop', '已恢复默认图标');
+      if (r && r.ok) shellNotify('DSH Pack', '已恢复默认图标');
     }).catch(function (e) {
-      shellNotify('DSH Desktop', '恢复默认图标失败：' + iconActionError(e));
+      shellNotify('DSH Pack', '恢复默认图标失败：' + iconActionError(e));
     });
   }
   function openMenu() {
@@ -1015,7 +1015,7 @@
       whale.setAttribute('class', 'dch-whale');
       whale.appendChild(svgEl('path', { d: WHALE_D }));
       var title = dragEl(document.createElement('span'));
-      title.className = 'dch-title'; title.textContent = 'DSH Desktop';
+      title.className = 'dch-title'; title.textContent = 'DSH Pack';
       var badge = dragEl(document.createElement('span'));
       badge.className = 'dch-badge'; badge.style.display = 'none';
       left.appendChild(whale); left.appendChild(title); left.appendChild(badge);

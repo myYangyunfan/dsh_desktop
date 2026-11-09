@@ -1,6 +1,21 @@
-# Changelog — DSH Desktop（Tauri 版，主线架构 v0.5.0 起）
+# Changelog — DSH Pack（Tauri 版，主线架构 v0.5.0 起）
 
 ## [Unreleased]
+
+### chore(brand)：用户可见名 DSH Desktop → DSH Pack（2026-11-10）
+
+- 只改**显示面**：窗口标题、托盘 tooltip、系统通知标题（含 ACP 通知）、托盘菜单与「关于」、
+  更新窗与更新提示文案、启动页 / 恢复页 / PoC 页、日志指引 txt 正文、README 与 docs 里的产品名。
+- **路径面一律不动**（稳定性优先）：`tauri.conf.json` 的 `productName`（决定 `DSH Desktop.exe`、
+  安装目录 `C:\Program Files\DSH Desktop`、桌面与开始菜单快捷方式、NSIS 卸载项、更新资产名）、
+  `identifier` `com.deepseek.dsh.desktop`、`%APPDATA%\DSH Desktop`、`%LOCALAPPDATA%\DSH Desktop\bin`、
+  `Software\DSH Desktop` 注册表键、快捷方式常量 `SHORTCUT_NAME`、目录名 `dsh-desktop/`、包名、
+  profile patch 文件头、`companion-profile.js` 的「description 含 DSH Desktop」清理判据、
+  vendored 插件产物、CHANGELOG 历史条目。
+- 所以安装身份仍是 DSH Desktop：改 `productName` 等于换产品（老用户数据不认、更新链断、双目录并存）。
+- 回归：`ta16-golden` 四个金样按源码重写（`UPDATE_SNAPSHOTS=1`），差异全为 `DSH Desktop → DSH Pack`；
+  `npm test` 2208 例 / pass 2199 / skip 9 / fail 0；`cargo check -p dsh-tauri-app --tests` 通过，
+  `cargo test -p dsh-tauri-app --lib` 235 passed / 0 failed / 1 ignored。
 
 ### test(supervisor)：伴随插件自愈用例的受害样本换件（2026-11-08）
 

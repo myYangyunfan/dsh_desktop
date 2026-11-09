@@ -1,4 +1,4 @@
-# DSH Desktop 排障手册（v0.3.4）
+# DSH Pack 排障手册（v0.3.4）
 
 > 面向客户与技术支持。所有路径以实际机器为准：安装版数据目录为
 > `%APPDATA%\DSH Desktop\`，日志位于 `%APPDATA%\DSH Desktop\logs\`。
@@ -31,8 +31,8 @@ Get-NetTCPConnection -LocalPort <端口> -State Listen
 curl.exe -sS -o NUL -w "HTTP=%{http_code}`n" --max-time 5 http://127.0.0.1:<端口>/
 
 # 2. 启动日志尾部（贴给技术支持）
-Get-Content -LiteralPath "$env:APPDATA\DSH Desktop\logs\dsh-web.log" -Tail 80
-Get-Content -LiteralPath "$env:APPDATA\DSH Desktop\logs\desktop.log" -Tail 80
+Get-Content -LiteralPath "$env:APPDATA\DSH Pack\logs\dsh-web.log" -Tail 80
+Get-Content -LiteralPath "$env:APPDATA\DSH Pack\logs\desktop.log" -Tail 80
 ```
 
 ## v0.3.4 新增的自愈文件（不要手动删除，除非技术支持确认）
@@ -52,7 +52,7 @@ Get-Content -LiteralPath "$env:APPDATA\DSH Desktop\logs\desktop.log" -Tail 80
 ### 第 0 步：分型判定（在终端执行，看输出）
 
 ```bash
-codesign --verify --deep --strict "/Applications/DSH Desktop.app" && echo OK
+codesign --verify --deep --strict "/Applications/DSH Pack.app" && echo OK
 ```
 
 - 输出 `OK` → **A 型（隔离属性型）**：签名密封完好，只是被 Gatekeeper 拦；
@@ -64,7 +64,7 @@ codesign --verify --deep --strict "/Applications/DSH Desktop.app" && echo OK
 
 - **移除隔离属性**：
    ```bash
-   sudo xattr -cr "/Applications/DSH Desktop.app"
+   sudo xattr -cr "/Applications/DSH Pack.app"
    ```
    （把 app 拖到 `/Applications` 后再执行；若装在其他位置换成实际路径。
    注意：直接双击挂载 dmg 后在 dmg 里右键打开是**只读卷，xattr 会失败**，
@@ -83,8 +83,8 @@ codesign --verify --deep --strict "/Applications/DSH Desktop.app" && echo OK
 
 - **重新做 ad-hoc 签名，再清隔离属性**：
    ```bash
-   sudo codesign --force --deep --sign - "/Applications/DSH Desktop.app"
-   sudo xattr -cr "/Applications/DSH Desktop.app"
+   sudo codesign --force --deep --sign - "/Applications/DSH Pack.app"
+   sudo xattr -cr "/Applications/DSH Pack.app"
    ```
    （`--sign -` 中的 `-` 就是 ad-hoc 身份，不需要任何证书。）
 
@@ -93,10 +93,10 @@ codesign --verify --deep --strict "/Applications/DSH Desktop.app" && echo OK
 - 仍不行 → 在终端直接启动看真实报错（绕过 Gatekeeper 弹窗）：
 
    ```bash
-   "/Applications/DSH Desktop.app/Contents/MacOS/DSH Desktop"
+   "/Applications/DSH Pack.app/Contents/MacOS/DSH Pack"
    ```
 
-   把终端输出连同 `~/Library/Application Support/DSH Desktop/logs/dsh-web.log`
+   把终端输出连同 `~/Library/Application Support/DSH Pack/logs/dsh-web.log`
    尾部 80 行一起发给技术支持。
 
 ### 说明与长期方案

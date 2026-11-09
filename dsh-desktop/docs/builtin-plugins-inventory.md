@@ -112,7 +112,7 @@
 > 与 `removeRetiredCompanionPatchRows`（`cordis.patch.yml` 登记行 + 历史「随包默认禁用」行），boot 与 CLI 双入口都已接线；
 > 判据与反证用例见 `scripts/test/unit-companion-bulk-retire.test.js`。
 > **两条铁律**：撤账必做（摘出清单就失去「源缺失 → missingNames → 通用撤账」那条路）；删目录要有镜像证据
-> （`private:true` 或描述含「DSH Desktop」——npm 拒发 private 包，所以它是本地副本的强证据）。
+> （`private:true` 或描述含「DSH Pack」——npm 拒发 private 包，所以它是本地副本的强证据）。
 > `graph-memory` / `harness-pet` / `dsh-cardian` 的上游 `package.json` 与我们的镜像逐字段相同、**无法区分**，
 > 所以**回收机器在用户 profile 里对这三类既不删目录也不撤账**（登记一并保留——撤了等于改用户意图；未注册的
 > 目录是惰性的，不会被 loader 挂载），用户数据一个字节都不动（反证用例：`unit-companion-bulk-retire.test.js`
@@ -245,7 +245,7 @@ npm 侧统一走 `registry.npmmirror.com`。表里 `root=` 是仓库页状态码
 > 原 20 条里的 5 条（`dsh-client-file-changes`、`dsh-terminal-tab`、`dsh-market-desktop-bridge`、
 > `dsh-image-paste`、`dsh-cardian`）已随 v1.0.0 批量退役，见 §一末「已退役」表。
 
-判据：`package.json` 无 `repository`/`homepage`/`author`，`LICENSE` 若存在则署 `DSH Desktop contributors`，
+判据：`package.json` 无 `repository`/`homepage`/`author`，`LICENSE` 若存在则署 `DSH Pack contributors`，
 且 EAC 账本对这些包记的正是 `origin=upstream / upstream.repository=myYangyunfan/dsh_desktop`
 （语义是「从我们的 monorepo 拿走」，本次实测 `SOURCES.json` 里 `dsh-settings-groups` 与已退役的
 `dsh-image-paste` 两条正是这个形态）。唯一历史例外是已退役的 `dsh-cardian`——它的 repository 是
@@ -278,7 +278,7 @@ npm 侧统一走 `registry.npmmirror.com`。表里 `root=` 是仓库页状态码
    （与 §一 顶部 `@deepseek-ai/*` 撞内核闭包作用域那条禁令同源）。
 4. **包名撞社区已发布包，按名安装会装到别人**：
    #4 `dsh-session-manager` —— npm 已发布 `dsh-session-manager@0.6.2`（发布者 `lesterq`，repository 写
-   `hkkz9522/dsh-session-manager`，root 200 / MIT），而我们的是 `0.1.0` 独立小实现（入口 `lib/index.mjs`，`LICENSE` 署 DSH Desktop contributors），
+   `hkkz9522/dsh-session-manager`，root 200 / MIT），而我们的是 `0.1.0` 独立小实现（入口 `lib/index.mjs`，`LICENSE` 署 DSH Pack contributors），
    **不是它的衍生**，但同名；机器判定已把它钉下来——我们的 `package.json` 不声明 `repository` 而远端声明了，
    §4.2 的 `identityVerdict` 因此落在 **`unverifiable`**（「无法证明同源」），「它版本更高」就永远不构成更新理由；
    #14 `dsh-input-history` 同形（npm 0.3.2 发布者 `sunshaobei` / repository `sunshaobei/dsh-input-history`，

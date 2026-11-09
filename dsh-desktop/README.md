@@ -1,4 +1,4 @@
-# DSH Desktop
+# DSH Pack
 
 把 [@deepseek-ai/dsh](https://www.npmjs.com/package/@deepseek-ai/dsh)（DeepSeek Harness）封装成开箱即用的 Windows 桌面客户端。
 
@@ -11,7 +11,7 @@
 - ✅ **便携版**：`portable` 版数据（日志、配置）跟随 exe 所在目录，拷到 U 盘就能用
 - ✅ **与 CLI 共享配置**：默认沿用 dsh 自身的 `DSH_HOME`（通常是 `~\.dsh`），已有会话/API Key 直接生效
 - ✅ **跟随官方更新**：官方 @deepseek-ai/dsh 发新版时弹窗提醒，经用户同意后自动下载安装，重启生效，失败自动保留旧版
-- ✅ **客户端自更新**：自动检查上游仓库（GitHub→Gitee 双源，Gitee 分片自动合并）发布的 DSH Desktop 新版本，经用户同意后下载、替换、重启；便携版/安装版各自适配
+- ✅ **客户端自更新**：自动检查上游仓库（GitHub→Gitee 双源，Gitee 分片自动合并）发布的 DSH Pack 新版本，经用户同意后下载、替换、重启；便携版/安装版各自适配
 - ✅ **快捷方式自动维护**：便携版首次运行自动创建开始菜单 + 桌面快捷方式；exe 移动后自动重建（修复"快捷方式指向的文件消失"）；从临时目录运行时给出提示
 - ✅ **DeepSeek 余额小部件**：对话底部统计栏内联显示「本轮 ¥X.XX · 余额 ¥Y.YY」（自动注入配套 dsh 客户端插件，点击跳转充值）
 - ✅ **文件更改追踪 + 一键还原**：详情面板新增「文件」标签页，聚合本会话 agent 修改过的全部文件（新建/修改/删除、行级 diff、逐文件或全部还原）；数据只读复用会话日志已持久化的 `tool/result.meta.diffs`，还原由桌面壳做内容精确匹配后替换，失败安全提示
@@ -35,7 +35,7 @@
 > 若想强制指定 DSH 配置目录，启动前设置环境变量 `DSH_HOME` 即可（与 dsh CLI 行为一致）。
 
 > **macOS 用户**：当前构建未做 Apple 公证，首次打开若提示“已损坏，无法打开”，
-> 请先执行 `codesign --verify --deep --strict "/Applications/DSH Desktop.app"` 分型：
+> 请先执行 `codesign --verify --deep --strict "/Applications/DSH Pack.app"` 分型：
 > v0.5.0 属签名缺失型（`xattr` 无效，需 `codesign --force --deep --sign -` 重签），
 > 修复版本起属隔离属性型（`sudo xattr -cr` 即可）。
 > 详见 [docs/troubleshooting.md](docs/troubleshooting.md) 的 macOS 专章。
@@ -55,7 +55,7 @@
 - 发现新版本时弹窗询问：**立即更新 / 跳过此版本 / 稍后**；同意后带进度条下载安装包（便携版选 `*-win-portable-x64.exe`，安装版选 `*-win-setup-x64.exe`；Gitee 因单文件 100MB 限制拆分的 `.part1/.part2` 分片会自动按序下载并合并），下载到 `<数据目录>\updates\`。
 - 确认重启后：**便携版**用 detached 脚本等待旧 exe 解锁 → 备份 → 原地替换 → 自动启动新版本（只读目录自动退化为直接启动新 exe）；**安装版**等待进程退出后以向导方式启动新安装包，安装完成后如果新版没有自动运行，脚本会从卸载注册表定位并显式启动新版本。启动更新脚本时会清除待安装标记，更新失败不会在下次启动反复弹同一个更新框。
 - 菜单入口：chrome 栏 ⋯ 菜单 →「检查客户端更新…」；托盘菜单同样可用。跳过版本记录在 `settings.json`（`skipClientVersion`）。
-- **更新源可见可复制**：⋯ 菜单内「更新源」区块与「关于 DSH Desktop」对话框展示两个项目仓库地址（GitHub / Gitee），一键复制到剪贴板。
+- **更新源可见可复制**：⋯ 菜单内「更新源」区块与「关于 DSH Pack」对话框展示两个项目仓库地址（GitHub / Gitee），一键复制到剪贴板。
 - 链路自检：`node scripts/check-client-latest.js [--download]`（可设 `DSH_DESKTOP_RELEASE_API` / `PORTABLE_EXECUTABLE_DIR`）。
 
 ## DeepSeek 余额小部件
@@ -301,7 +301,7 @@ node dsh-desktop/scripts/sync-companion-plugins.js ~/.dsh --with-patches
 
 不想借用已有 dsh、又想要 Windows 原生窗口 + 自动更新？选 `backend: "wsl"`：壳经 `wsl.exe` 在 WSL 里**安装、同步插件、启动、更新**自己的一套 dsh，与 local 模式体验一致。
 
-- **设置页入口（推荐）**：设置 → 「WSL 后端」栏——切换 local/wsl 模式、填发行版与安装目录、查看当前 WSL 状态（发行版/node/npm/agent 版本与检测错误）、「重新检测」按钮；保存后重启应用生效（切换前会预检一次 WSL 连通性，错误直接显示在页面上）。纯浏览器打开时该栏显示「仅在 DSH Desktop 客户端中可用」。
+- **设置页入口（推荐）**：设置 → 「WSL 后端」栏——切换 local/wsl 模式、填发行版与安装目录、查看当前 WSL 状态（发行版/node/npm/agent 版本与检测错误）、「重新检测」按钮；保存后重启应用生效（切换前会预检一次 WSL 连通性，错误直接显示在页面上）。纯浏览器打开时该栏显示「仅在 DSH Pack 客户端中可用」。
 - 配置（`settings.json` / 环境变量，均可手填；设置页写的也是 `settings.json`）：
   - `wslDistro`（`DSH_DESKTOP_WSL_DISTRO`）：发行版名，默认 `wsl -l -q` 第一个；
   - `wslInstallDir`（`DSH_DESKTOP_WSL_DIR`）：WSL 内安装目录（Linux 绝对路径，**不含空白**），默认 `~/.dsh-desktop`——刻意不默认 `~/.dsh`，避免与你自己的 dsh 共用 DSH_HOME 互相改写 profile；想共享会话就显式设成 `~/.dsh`；
@@ -327,7 +327,7 @@ node dsh-desktop/scripts/sync-companion-plugins.js ~/.dsh --with-patches
 - **Windows 提示"已保护你的电脑"（SmartScreen）**：成品未做代码签名。点「更多信息 → 仍要运行」，或在 PowerShell 里 `Unblock-File`。
 - **首次启动慢**：dsh 首次引导 profile 需要数秒到数十秒，属正常现象。
 - **更新下载慢**：设置环境变量 `NPM_CONFIG_REGISTRY=https://registry.npmmirror.com` 后重启应用。
-- **收不到通知**：确认菜单「会话完成通知」已勾选；便携版确认开始菜单里存在「DSH Desktop」快捷方式（首次运行自动创建，勿删除）；检查 Windows「通知与操作」设置里应用通知未被禁用。
+- **收不到通知**：确认菜单「会话完成通知」已勾选；便携版确认开始菜单里存在「DSH Pack」快捷方式（首次运行自动创建，勿删除）；检查 Windows「通知与操作」设置里应用通知未被禁用。
 - **历史会话打不开（`SessionFormatUnsupportedError: ... unknown to this harness and not marked ignorable`）**：dsh-agent-teams / dsh-message-edit / dsh-web-search-exa 等插件写入的自定义会话事件不在内置核心的事件词汇表内导致。v0.3.3 起打包时已自动修补内置 `@deepseek-ai/dsh-session`；旧版本无需重装，一条命令修复：`npx dsh-session-history-fix`（幂等，可重复运行；改完重启应用即可）。
 - **无法打开文件夹（`directory picker failed: ... win32 folder dialog worker exited...`）**：v0.3.4 已根治（koffi@3.1.5 + 启动预检自动降级 browse 选择器）。旧版本请升级到 0.3.4。
 - **启动失败（`dsh web 启动失败（退出码 1）`）**：v0.3.4 会自动进入安全模式或自愈并重试，弹窗内直接显示最近日志。日志出现 `plugin tree failed to load` = 插件配置不兼容（自动禁用问题插件）；出现 `EPERM ... symlink` = 目录联接被拒（自动备份重建）；日志戛然而止且退出码 `3221225477`（0xC0000005）= koffi 原生崩溃（0.3.4 已换修复版）。

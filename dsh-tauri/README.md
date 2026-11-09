@@ -1,4 +1,4 @@
-# DSH Desktop — Tauri 版（主线架构，v0.5.0 起）
+# DSH Pack — Tauri 版（主线架构，v0.5.0 起）
 
 > 当前发布线：**v1.0.9**（2026-11-07；随包 34 个精选插件，含 DeepSeek-Bot 团队、Better Sidebar、
 > Free Search、插件商店与桌面通知）。历史架构说明从 v0.5.0 起保留在下方。
@@ -22,7 +22,7 @@ DeepSeek Harness 桌面客户端的 Tauri 2 重构。**v0.5.0 起为仓库主线
 > 下载后首次打开可能提示「已损坏，无法打开」或「无法验证开发者」。这是 Gatekeeper
 > 对未公证应用的拦截，**不是安装包真的损坏**。任选其一即可打开：
 > 1. 访达中**右键 app → 打开 → 再点「打开」**；
-> 2. 终端执行 `sudo xattr -cr "/Applications/DSH Desktop.app"`（移除隔离属性）；
+> 2. 终端执行 `sudo xattr -cr "/Applications/DSH Pack.app"`（移除隔离属性）；
 > 3. **系统设置 → 隐私与安全性 → 页面底部「仍要打开」**。
 > 每次重新下载覆盖安装后需重做一次；长期方案为 Apple Developer ID 签名 + 公证。
 

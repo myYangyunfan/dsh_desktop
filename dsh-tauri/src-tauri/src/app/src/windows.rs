@@ -98,7 +98,7 @@ pub fn create_main_window(
                 .map_err(tauri::Error::InvalidUrl)?,
         ),
     )
-    .title("DSH Desktop")
+    .title("DSH Pack")
     .min_inner_size(980.0, 600.0)
     // 平台门：Linux（WebKitGTK undecorated 白屏）与 macOS（用户只认原生
     // 红绿灯，自绘控制条是 Windows 专属视觉）退回原生标题栏；仅 Windows
@@ -755,7 +755,7 @@ pub fn update_progress_inject_script(version: &str) -> String {
     }} else if (phase === 'closed') {{
       closeWin();
     }} else {{
-      titleEl.textContent = '正在下载 DSH Desktop v' + VERSION + '…';
+      titleEl.textContent = '正在下载 DSH Pack v' + VERSION + '…';
       fillEl.className = 'upd-fill';
       var p = pct | 0; if (p < 0) p = 0; else if (p > 100) p = 100;
       fillEl.style.width = p + '%';
@@ -1188,7 +1188,7 @@ mod tests {
         assert!(s.contains("upd-fill"), "进度条填充缺失: {s}");
         assert!(s.contains("upd-pct"), "百分比元素缺失: {s}");
         // 阶段文案。
-        assert!(s.contains("正在下载 DSH Desktop v"), "下载中文案缺失: {s}");
+        assert!(s.contains("正在下载 DSH Pack v"), "下载中文案缺失: {s}");
         assert!(s.contains("下载完成，正在安装…"), "安装中文案缺失: {s}");
         assert!(s.contains("下载失败"), "失败文案缺失: {s}");
         // 事件订阅 + 信封解包。

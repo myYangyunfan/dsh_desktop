@@ -1,4 +1,4 @@
-![DSH Desktop](https://cdn.jsdelivr.net/gh/myYangyunfan/dsh_desktop@5c673d6/docs/banner.svg)
+![DSH Pack](https://cdn.jsdelivr.net/gh/myYangyunfan/dsh_desktop@5c673d6/docs/banner.svg)
 
 **把 DSH 里最好用的一批插件，做成一个开箱即用的桌面客户端**
 
@@ -24,7 +24,7 @@
 ## ✨ 为什么是「插件整合包」
 
 DSH 的插件生态很好，但「好」和「装好就能用」之间隔着选型、兼容、版本、配置四道墙。
-DSH Desktop 把这件事做完：**精选，整合，随包交付。**
+DSH Pack 把这件事做完：**精选，整合，随包交付。**
 
 ### 精选，而不是堆积
 
@@ -66,11 +66,11 @@ DSH Desktop 把这件事做完：**精选，整合，随包交付。**
 
 ## 📸 界面一览
 
-![DSH Desktop 界面](https://cdn.jsdelivr.net/gh/myYangyunfan/dsh_desktop@5c673d6/docs/showcase.png)
+![DSH Pack 界面](https://cdn.jsdelivr.net/gh/myYangyunfan/dsh_desktop@5c673d6/docs/showcase.png)
 
-**开箱即用**（原生 dsh web）vs **DSH Desktop**：
+**开箱即用**（原生 dsh web）vs **DSH Pack**：
 
-| 能力 | 原生 `dsh web` | DSH Desktop |
+| 能力 | 原生 `dsh web` | DSH Pack |
 | --- | --- | --- |
 | 启动 | 手动安装 Node.js、敲命令 | 双击即用，内置独立运行时 |
 | 界面 | 浏览器标签页 | 桌面原生窗口 · 深色玻璃无边框 |
@@ -99,7 +99,7 @@ DSH Desktop 把这件事做完：**精选，整合，随包交付。**
 - **首次启动**：从安装包内的 `assets/plugins` 同步 33 个精选插件到 profile；之后可在
   「设置 → 插件 → 内置插件」里查看、启停和检查更新。
 - **数据位置**：Windows 安装版在 `%APPDATA%\DSH Desktop\`，便携版在 exe 旁 `data\`；
-  macOS 在 `~/Library/Application Support/DSH Desktop/`。设置 `DSH_HOME` 可强制指定 dsh 配置目录。
+  macOS 在 `~/Library/Application Support/DSH Pack/`。设置 `DSH_HOME` 可强制指定 dsh 配置目录。
 
 > v1.0.0 起不再同步 Gitee 代码与 Release 资产；Gitee 上的历史版本仅作存档。
 
@@ -271,4 +271,4 @@ MIT。基于 [@deepseek-ai/dsh](https://www.npmjs.com/package/@deepseek-ai/dsh)�
 
 ---
 
-⭐ 如果 DSH Desktop 帮到了你，欢迎 [点个 Star](https://github.com/myYangyunfan/dsh_desktop) 支持我们；使用中遇到任何问题，请到 [Issues](https://github.com/myYangyunfan/dsh_desktop/issues) 反馈。
+⭐ 如果 DSH Pack 帮到了你，欢迎 [点个 Star](https://github.com/myYangyunfan/dsh_desktop) 支持我们；使用中遇到任何问题，请到 [Issues](https://github.com/myYangyunfan/dsh_desktop/issues) 反馈。

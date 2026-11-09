@@ -272,7 +272,7 @@ pub fn install_early_panic_hook() {
 pub fn write_log_pointer_files() {
     let logs = logs_dir();
     let content = format!(
-        "DSH Desktop 日志位置指引（此文件由 DSH Desktop 自动生成，可删除）\n\
+        "DSH Pack 日志位置指引（此文件由 DSH Pack 自动生成，可删除）\n\
          \n\
          桌面壳（Tauri 版）的日志与设置在本目录之外的姊妹目录：\n\
          \n\

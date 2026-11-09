@@ -1,4 +1,4 @@
-# AGENTS.md — DSH Desktop 工作区指引
+# AGENTS.md — DSH Pack 工作区指引
 
 > 本文件给 ZCode agent 用。逐字段接口规范以 `dsh-tauri/contracts/` 六份契约为准
 > （五份核心 + `wsl-backend.md`），开发流程的完整版见 `dsh-tauri/docs/development.md`
@@ -6,7 +6,7 @@
 
 ## 仓库是什么
 
-DSH Desktop —— 基于 `@deepseek-ai/dsh`（DeepSeek Harness）的桌面客户端。
+DSH Pack —— 基于 `@deepseek-ai/dsh`（DeepSeek Harness）的桌面客户端。
 **v0.5.0 起主线是 Tauri 2（Rust）**；Electron 壳已退役，但 `dsh-desktop/` 的内核侧
 Node 逻辑仍是活代码（Tauri sidecar 直接复用，零重写）。主平台 Windows，
 **v1.0.0 起不再向 Gitee 同步**：代码不推 `gitee` 远端，release 资产也不镜像

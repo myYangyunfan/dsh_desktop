@@ -7,10 +7,10 @@
     ]
   },
   "LOADING_HTML": {
-    "titleTag": "DSH Desktop — 启动中",
+    "titleTag": "DSH Pack — 启动中",
     "staticVisibleLines": [
-      "DSH Desktop — 启动中",
-      "DSH Desktop",
+      "DSH Pack — 启动中",
+      "DSH Pack",
       "正在启动 DSH 内核…",
       "重试启动内核",
       "完全重新加载"
@@ -37,10 +37,10 @@
     ]
   },
   "RECOVERY_HTML": {
-    "titleTag": "DSH Desktop — 恢复",
+    "titleTag": "DSH Pack — 恢复",
     "staticVisibleLines": [
-      "DSH Desktop — 恢复",
-      "DSH Desktop",
+      "DSH Pack — 恢复",
+      "DSH Pack",
       "内核服务出现问题",
       "正在读取状态…",
       "重启内核",

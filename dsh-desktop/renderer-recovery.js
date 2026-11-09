@@ -1,7 +1,7 @@
 'use strict';
 
 // ============================================================================
-// DSH Desktop — 渲染进程崩溃/挂起自恢复状态机（Issue #9 根治修复核心模块）
+// DSH Pack — 渲染进程崩溃/挂起自恢复状态机（Issue #9 根治修复核心模块）
 //
 // 背景：renderer 以 0xC0000005（ACCESS_VIOLATION）等异常退出后，旧实现只在
 // 三处 render-process-gone 处理器里记录日志、没有任何恢复动作，窗口永久
@@ -556,7 +556,7 @@ class RendererRecovery {
       try { this.opts.onGaveUp && this.opts.onGaveUp(s.lastFailure); } catch {}
       try {
         this.opts.notify && this.opts.notify(
-          'DSH Desktop 界面多次异常退出',
+          'DSH Pack 界面多次异常退出',
           '已暂停自动恢复并显示恢复页面。你的数据与后台任务不受影响，仍在继续运行。'
         );
       } catch {}

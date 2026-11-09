@@ -1,9 +1,17 @@
-# Changelog — DSH Desktop
+# Changelog — DSH Pack
 
 DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行时与 dsh CLI，
 一键启动 Web UI。
 
 ## [Unreleased]
+
+### chore(brand)：随包页面文案 DSH Desktop → DSH Pack（2026-11-10）
+
+- `assets/loading.html` / `assets/recovery.html` / `renderer-recovery.js` 的标题与提示文案跟随改名，
+  与壳侧窗口标题一致。
+- 只改显示文案；`package.json` 的 `productName` / `author`、`patch-surgery.js` 的 `PATCH_HEADER` 与
+  synapse 停用 marker、`companion-profile.js` 的 description 判据一字未动——它们是路径、持久标记或
+  清理判据的输入，改了会让既有 profile 的块识别与遮蔽清理失效。
 
 ### fix(builtin-manager)：接管类内置件行内直说「/compact 消失是接管生效」+ 接管面回归锁（2026-11-09）
 

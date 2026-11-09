@@ -6,7 +6,7 @@
       "dsh-tauri/src-tauri/src/app/src/lib.rs"
     ]
   },
-  "tooltip": "DSH Desktop",
+  "tooltip": "DSH Pack",
   "menuItems": [
     {
       "id": "show",

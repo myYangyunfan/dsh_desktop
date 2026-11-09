@@ -1,4 +1,4 @@
-![DSH Desktop](https://cdn.jsdelivr.net/gh/myYangyunfan/dsh_desktop@5c673d6/docs/banner.en.svg)
+![DSH Pack](https://cdn.jsdelivr.net/gh/myYangyunfan/dsh_desktop@5c673d6/docs/banner.en.svg)
 
 **The best of the DSH plugin ecosystem, packaged into one ready-to-use desktop client.**
 
@@ -24,7 +24,7 @@ Install and go — no Node.js setup, no plugin hunting, no version-conflict arch
 ## ✨ Why a curated plugin bundle
 
 DSH has a great plugin ecosystem, but "great" and "ready to use" are separated by four walls: selection, compatibility, versions and configuration.
-DSH Desktop does that work for you: **curated, integrated, shipped in the box.**
+DSH Pack does that work for you: **curated, integrated, shipped in the box.**
 
 ### Curated, not collected
 
@@ -56,11 +56,11 @@ DSH Desktop does that work for you: **curated, integrated, shipped in the box.**
 
 ## 📸 App Preview
 
-![DSH Desktop UI](https://cdn.jsdelivr.net/gh/myYangyunfan/dsh_desktop@5c673d6/docs/showcase.png)
+![DSH Pack UI](https://cdn.jsdelivr.net/gh/myYangyunfan/dsh_desktop@5c673d6/docs/showcase.png)
 
-**Vanilla `dsh web`** vs **DSH Desktop**:
+**Vanilla `dsh web`** vs **DSH Pack**:
 
-| Capability | Vanilla `dsh web` | DSH Desktop |
+| Capability | Vanilla `dsh web` | DSH Pack |
 | --- | --- | --- |
 | Startup | Manual Node.js install & CLI | Double-click, bundled runtime |
 | Surface | Browser tab | Native window · frameless dark glass |
@@ -265,4 +265,4 @@ MIT. Based on [@deepseek-ai/dsh](https://www.npmjs.com/package/@deepseek-ai/dsh)
 
 ---
 
-⭐ If DSH Desktop is helpful to you, consider [starring the repo](https://github.com/myYangyunfan/dsh_desktop); for any issues or feedback, please [open an issue](https://github.com/myYangyunfan/dsh_desktop/issues).
+⭐ If DSH Pack is helpful to you, consider [starring the repo](https://github.com/myYangyunfan/dsh_desktop); for any issues or feedback, please [open an issue](https://github.com/myYangyunfan/dsh_desktop/issues).
