@@ -199,8 +199,9 @@ test('真数据：§4.2 身份列与本地 package.json 的 repository 自述面
     'dsh-easyrewrite': 'renzic-stone/dsh-easyrewrite',
     'dsh-pocket': 'shaobeichen/dsh-pocket',
     'dsh-prompt-optimizer': 'y1x1n/dsh-prompt-optimizer',
+    'billion-context': 'ranxianglei/billion-context',
   };
-  const silent = ['billion-context-dsh', 'dsh-session-manager', 'dsh-input-history', 'dsh-synapse'];
+  const silent = ['dsh-session-manager', 'dsh-input-history', 'dsh-synapse'];
   const read = (dir) => JSON.parse(fs.readFileSync(path.join(PLUGINS, dir, 'package.json'), 'utf8'));
   for (const [dir, slug] of Object.entries(declares)) {
     assert.equal(ch.parseRepoSlug(read(dir).repository), slug,

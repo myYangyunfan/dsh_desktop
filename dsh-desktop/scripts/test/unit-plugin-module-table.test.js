@@ -367,8 +367,8 @@ test('判据源反证：通用 dist/ 规则确实会遮蔽入口，插件级例�
   // 合成路径走同一条 gitignore 引擎：证明「被 ignore」不是恒 false 的摆设。
   assert.equal(lib.gitIgnored('dsh-desktop/assets/plugins/some-plugin/dist/client.js'), true,
     '通用 dist/ 规则没咬住合成入口，判据源已失效');
-  assert.equal(lib.gitIgnored('dsh-desktop/assets/plugins/billion-context-dsh/dist/index.js'), false,
-    'billion-context-dsh 的 dist 入口仍在忽略范围内（例外规则没生效）');
+  assert.equal(lib.gitIgnored('dsh-desktop/assets/plugins/billion-context/dist/agent/dsh-native.js'), false,
+    'billion-context 的 dist 入口仍在忽略范围内（例外规则没生效）');
   assert.equal(lib.gitIgnored('dsh-desktop/scripts/lib/plugin-module-table.js'), false,
     '普通源文件被判成忽略，判据过宽');
 });

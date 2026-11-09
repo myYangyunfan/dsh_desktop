@@ -177,7 +177,7 @@ bash dsh-tauri/scripts/smoke-installed.sh
 | `@deepseek-ai/dsh-workspace-anchor` | 0.1.1 | 把当前工作目录写进稳定系统提示的锚点块，防 agent 工作目录漂移（0.2.1 起内核不再注册 `{{cwd}}` 变量，锚点由插件自己填实路径） | 自研 · MIT |
 | `@deepseek-ai/dsh-wsl-settings` | 0.1.0 | 设置页「WSL 后端」栏：local↔wsl 切换、发行版与安装目录、状态探活 | 自研 · MIT |
 | `ds-bot` | 0.2.0 | Bot 团队：主 Bot + 长期 Bot + 群聊，Bot 间 @ 转交与共享记忆，开箱即用的协作工作台（loader id `bot`） | [Fei2411/DeepSeek-Bot](https://github.com/Fei2411/DeepSeek-Bot) · Apache-2.0 |
-| `billion-context-dsh` | 0.2.27 | Active Context Pruning：模型驱动上下文管理，另注册 4 个模型工具与 /acp-prune 命令 | [Tyan66666/billion-context-dsh](https://github.com/Tyan66666/billion-context-dsh) · MIT |
+| `billion-context` | 0.1.213 | 上下文压缩（上游统一版）：模型驱动压缩 + 4 个模型工具与 /acp-prune 命令，另带 preset 级 compaction gate | [ranxianglei/billion-context](https://github.com/ranxianglei/billion-context) · MIT |
 | `dsh-pocket` | 2.12.0 | 手机扫码实时同屏操控桌面 web（WebSocket 透传 + 公网隧道 + 二维码配对） | [shaobeichen/dsh-pocket](https://github.com/shaobeichen/dsh-pocket) · GPL-2.0 |
 | `@deepseek-ai/dsh-openclaw-bridge` | 0.8.1 | 微信 / 飞书官方频道桥接入 DSH agent 会话（分片回写、去重限流） | [hzhz314159/openclaw-dsh-bridge](https://github.com/hzhz314159/openclaw-dsh-bridge) · MIT |
 | `dsh-input-history` | 0.1.1 | 输入框 ↑/↓ 终端式已发送消息回溯（按会话隔离） | 自研 · MIT |
@@ -220,6 +220,12 @@ bash dsh-tauri/scripts/smoke-installed.sh
 > `dsh-pocket` 2.12.0、`dsh-easyrewrite` 3.0.1、`ds-harness-remote` 0.6.4。判据只认「身份 same 且远端更高」；
 > `better-sidebar`（本地重建件）、`ds-bot`（vendored patch）与三条撞名件按策略不动，清单见
 > `dsh-desktop/docs/builtin-plugins-inventory.md` §4.4。
+>
+> **2026-11-09 上下文压缩插件整体换代（33 条不变）**：`billion-context-dsh` 0.2.27（上游已停止维护）
+> 换成上游统一版 `billion-context` 0.1.213。旧件只会「宿主面插引擎 + 关掉宿主面 compaction-basic」，
+> 而 0.2.x 把压缩后端搬进了 agent 预设并 `isolate: compaction` —— 开了它只多出四个模型工具，自动压缩
+> 仍走预设自己的 basic。新件自带 `bili-compaction-gate` + 四条 `preset-*` 注入，才真接管；交付面按 DSH
+> 半边剪裁到 13 文件 / 8.99MB（上游整包 45 文件 / 48MB）。细节与已知上游未修项见 inventory §4.6。
 
 ## 🧠 Agent 预设
 

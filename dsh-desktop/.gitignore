@@ -14,12 +14,12 @@ build/*
 # 内置 bundle 插件的 dist 产物必须入库：否则全新环境（clone/解压）下入口文件
 # 缺失，服务重启必失败、Web UI 不可用（issue #65）。随包分发的可装配 bundle
 # 例外于通用的 dist/ 忽略规则（graph-memory 的 dist 例外已随该插件退役移除，2026-10-07）。
-!assets/plugins/billion-context-dsh/dist/
-# billion-context-dsh 离线依赖 acp-kernel 必须随包携带：profile 装配只拷贝
-# 目录不跑 npm install，依赖不入库会导致启动崩溃（ERR_MODULE_NOT_FOUND，
-# issue #93）。
-!assets/plugins/billion-context-dsh/node_modules/
-!assets/plugins/billion-context-dsh/node_modules/**
+# billion-context（2026-11-09 取代 billion-context-dsh）：入口同样在 dist/（DSH 半边
+# 是 dist/agent/dsh-native.js 与 dsh-compaction-gate.js），通用 dist/ 规则会把它吞掉，
+# 新 clone 装出来就是空目录。它不随包 node_modules：上游 dist 是 esbuild 全内联，
+# package.json 里的 mysql2 / zod 只有未随包的 bili CLI 入口用到（import 实测不解析外部包）。
+!assets/plugins/billion-context/dist/
+!assets/plugins/billion-context/dist/**
 # ds-harness-remote（2026-11-09 新增内置件）同时踩两条通用忽略规则：它的入口在
 # `dist/`（上一条 `dist/` 会连入口一起吞掉 → 新 clone 装出空目录），运行时真依赖
 # （ws / qrcode / zod@3 / @xterm/* 等）在 `node_modules/` 里且宿主闭包不提供，

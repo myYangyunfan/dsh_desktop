@@ -32,11 +32,11 @@ const { resolveGithubRelease } = require('../plugin-manager-update.js');
 
 // ── 1. 表内容 ───────────────────────────────────────────────────────────────
 
-test('更新源表：8 条（2 既有 + 6 新增），id/包名逐条精确', () => {
+test('更新源表：8 条（2 既有 + 6 新增；2026-11-09 把 compaction-acp 换成 bili-native），id/包名逐条精确', () => {
   assert.deepEqual(Object.keys(UPDATE_SOURCES).sort(), [
     'better-sidebar',
+    'bili-native',
     'bot',
-    'compaction-acp',
     'dsh-notify',
     'mcp-manager-ui',
     'network-proxy',
@@ -45,7 +45,8 @@ test('更新源表：8 条（2 既有 + 6 新增），id/包名逐条精确', ()
   ]);
 
   // 既有两条不得回归（历史语义：#80/#90）；side-session 已随「临时对话」退役。
-  assert.deepEqual(UPDATE_SOURCES['compaction-acp'], { kind: 'npm', pkg: 'billion-context-dsh' });
+  assert.deepEqual(UPDATE_SOURCES['bili-native'], { kind: 'npm', pkg: 'billion-context' });
+  assert.equal(UPDATE_SOURCES['compaction-acp'], undefined, '旧件已退役，更新源不得残留');
   assert.deepEqual(UPDATE_SOURCES['better-sidebar'], { kind: 'npm', pkg: 'dsh-better-sidebar' });
 
   // 新增六条：id 是 loader id，pkg/repo 是真正取数的坐标。
@@ -79,7 +80,7 @@ test('排除机制：better-sidebar / bot 被排除且原因可读，其余条�
   assert.equal(isUpdateExcluded(null), false);
   assert.equal(getUpdateSource('no-such-id'), null);
   assert.equal(getUpdateSource(undefined), null);
-  assert.equal(getUpdateSource('compaction-acp'), UPDATE_SOURCES['compaction-acp']);
+  assert.equal(getUpdateSource('bili-native'), UPDATE_SOURCES['bili-native']);
 });
 
 // ── 3. 与交付清单的一致性 ────────────────────────────────────────────────────
@@ -96,7 +97,7 @@ test('每个更新源 id 都存在于 COMPANION_PLUGINS（不写孤儿 id）', (
 
 test('selectUpdateCandidates: 过滤无源 / 已卸载 / 被排除 / 非法行，顺序稳定', () => {
   const rows = [
-    { id: 'compaction-acp' },
+    { id: 'bili-native' },
     { id: 'better-sidebar' },
     { id: 'web-search-free' },
     { id: 'dsh-pocket' },          // 无更新源
@@ -107,7 +108,7 @@ test('selectUpdateCandidates: 过滤无源 / 已卸载 / 被排除 / 非法行�
     { name: 'no-id' },
   ];
   assert.deepEqual(selectUpdateCandidates(rows).map((r) => r.id),
-    ['compaction-acp', 'web-search-free']);
+    ['bili-native', 'web-search-free']);
 
   // 注入自定义源表：过滤只认传进来的表。
   assert.deepEqual(

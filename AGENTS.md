@@ -16,7 +16,7 @@ Node 逻辑仍是活代码（Tauri sidecar 直接复用，零重写）。主平�
 | 目录 | 说明 |
 | --- | --- |
 | `dsh-tauri/` | 桌面壳主线：`contracts/`（六份契约）、`src-tauri/`（Rust 工作区）、`sidecar/`（Node 薄封装）、`ui/`（frontendDist 占位页）、`dlls/`（D3DCOMPILER_47.dll）、`package-payload/`（打包暂存，gitignored）、`ta13-soak/`（Rust soak 压测）、`scripts/`（stage-payload / stage-plugin-gate / smoke-installed）、`docs/` |
-| `dsh-desktop/` | 内核侧 Node 逻辑：构建期补丁、自愈（根级 boot 链脚本 `watchdog.js` / `*-heal.js` 等）、插件同步、余额链、`docs/`、`assets/plugins/`（**随安装包分发**——v1.0.0 内置线，2026-10-08 裁定；内置伴随插件在册 **33** 个（v1.0.0 由 39 精简、2026-10-07 移除 11 个，2026-10-11 增自研 `dsh-builtin-manager` 内置插件管理页，2026-10-16 增自研 `dsh-goal-completion` 目标收尾标签页，2026-10-17 随内核 0.2.1 换代退役 `dsh-reasoning-effort`，2026-11-08 按用户要求退役 `dsh-quest-ui` / `dsh-auto-compact` / `dsh-zcode-migrate` 三件，2026-11-09 按用户要求新增 `dsh-context` 与 `ds-harness-remote` 两件，同日按用户要求把 8 件内置件升到 npm latest：shop 0.9.3 / toolbox-ui 1.10.1 / context 0.83.0 / billion-context-dsh 0.2.27 / free-search 0.9.39 / pocket 2.12.0 / easyrewrite 3.0.1 / harness-remote 0.6.4）；随包 agent 预设子系统已整体拆除）、`vendor/`（node/npm 运行时 + `dsh-kernel/` pin 的离线内核 tgz，后者**必须入库**） |
+| `dsh-desktop/` | 内核侧 Node 逻辑：构建期补丁、自愈（根级 boot 链脚本 `watchdog.js` / `*-heal.js` 等）、插件同步、余额链、`docs/`、`assets/plugins/`（**随安装包分发**——v1.0.0 内置线，2026-10-08 裁定；内置伴随插件在册 **33** 个（v1.0.0 由 39 精简、2026-10-07 移除 11 个，2026-10-11 增自研 `dsh-builtin-manager` 内置插件管理页，2026-10-16 增自研 `dsh-goal-completion` 目标收尾标签页，2026-10-17 随内核 0.2.1 换代退役 `dsh-reasoning-effort`，2026-11-08 按用户要求退役 `dsh-quest-ui` / `dsh-auto-compact` / `dsh-zcode-migrate` 三件，2026-11-09 按用户要求新增 `dsh-context` 与 `ds-harness-remote` 两件，同日按用户要求把 8 件内置件升到 npm latest：shop 0.9.3 / toolbox-ui 1.10.1 / context 0.83.0 / billion-context-dsh 0.2.27 / free-search 0.9.39 / pocket 2.12.0 / easyrewrite 3.0.1 / harness-remote 0.6.4；同日再按用户要求把上下文压缩件整体换成上游统一版 `billion-context` 0.1.213——旧 `billion-context-dsh` 0.2.27 退役，理由见「已知坑」里 preset 隔离那条）；随包 agent 预设子系统已整体拆除）、`vendor/`（node/npm 运行时 + `dsh-kernel/` pin 的离线内核 tgz，后者**必须入库**） |
 | `dsh-desktop/scripts/test/` | 全部 Node 测试（200 个 `*.test.js/.mjs`，另有 `fixtures/`、`ta16-snapshots/`、mock server），单测唯一去处 |
 | `.github/workflows/` | `ci.yml`（PR 门禁）、`tauri-release.yml`（tag 发版，唯一发布入口）、`release.yml`（退役 Electron 线，全部 `if: false`） |
 
@@ -168,6 +168,20 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   且 stderr 零 `pending (waiting for`。另记（2026-10-17，所指旧自研版已于 2026-10-19 退役）：
   `dsh-prompt-optimizer` 宿主半边的注释「桌面宿主运行时没有 connection 服务」在 0.2.1 下不成立
   （当轮实测 `connection` 开机即在位），碰同类注释前先按判据复核，别据注释回退。
+- **压缩后端在 0.2.x 是「预设私有」的：宿主面插一个 CompactionEngine 不等于接管——静态扫与 boot 全绿也看不出来（2026-11-09 实测换代）**：
+  `@deepseek-ai/dsh-web-app` 的四个出厂预设各自写 `- id: compaction / name: cordis:group / isolate: { compaction: true }`
+  并把自己那份 `compaction-basic` 挂在组里（`presets/{standard,minimal,ptc,cordis}.patch.yml`），而宿主面那条
+  `compaction-basic` 早在 `dsh-web-app/cordis.patch.yml:546` 就被 `disabled: true`。于是**任何只在宿主面 insert 引擎、
+  再关宿主面 basic 的压缩插件（旧 `billion-context-dsh` 0.2.27 即此形）在预设会话里都看不见**：引擎挂在 root realm，
+  会话用的是预设 realm 的 basic，用户观感是「装了没效果，只多出几个工具」。判定提示：ACP 的 `compactIfNeeded`/`compactNow`
+  本来就 `return null`、`compactRegion` 抛 `ManualCompactionError`（model-driven），所以「自动压缩仍是 basic」连报错都没有。
+  正确姿势是上游新线 `billion-context` 0.1.213 的 `bili-compaction-gate`：一个 always-on 的 gate 条目 + 四条
+  `preset-*` 的 `inject: [biliBasicCompactionPolicy]`（0.2.2-rc.1 预设行本身不带 inject，替换是纯追加），
+  严禁把 gate 条目一起禁掉——它承载预设等待的服务，关掉就是会话创建永久 pending。
+  换 vendored 压缩件还有一条运行时判据：它会把 proxy 作为**子进程**拉起来（`nativeProxyScriptPath()` =
+  `dist/index.js`），只抄 `exports["."]` 会让子进程 `Cannot find module .../dist/index.js`，而父进程只说
+  `bili: proxy child exited before becoming healthy (code 1)`；真因在 `%TEMP%\bili-proxy-<port>.log`。
+  已知上游仍未修（0.1.213）：`ranxianglei/billion-context` #5911 / #5984 / #6010 的 ref 账本分叉与幻影引用、#5596 的 4096 钳制。
 - **内核撤掉「公开提示词变量」这类隐式契约时，坏的是发消息本身，而静态扫与 boot 全绿——换代必须真发一条消息（2026-10-17 实测）**：
   rc.2 的 `dsh-agent-loop` 注册 `provider / model / cwd` 三个 `systemPrompt.variable`，0.2.1-rc.1 只剩前两个；
   内置插件 `dsh-workspace-anchor` 的锚点节带 `{{cwd}}`，于是**每一条 prompt 的装配期**抛

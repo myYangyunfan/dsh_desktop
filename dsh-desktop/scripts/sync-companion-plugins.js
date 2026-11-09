@@ -303,25 +303,20 @@ function syncPlugins(home, dryRun, dshPkgDir) {
     log('已从 cordis.patch.yml 撤回批量退役配套件登记: ' + retiredBulk.removed.join(', '));
   }
 
-  // billion-context-dsh（compaction-acp，模型驱动的 ACP 压缩后端）默认关闭：
-  // 用户反馈其在上下文占用未及 1/4 时仍频繁压缩。改为随包默认禁用（顶层
-  // disabled 块一票否决 bundle 自身 insert），需要时在设置 → 插件 →
-  // 管理 一键开启。同时撤销历史自动写入的 compaction-basic 禁用块、恢复内核
-  // 默认压缩（billion-context-dsh 不再默认接管，两后端互斥的前提随之消失）。
-  if (bundleNames.has('billion-context-dsh')) {
+  // billion-context（bili-native）取代已停止维护的 billion-context-dsh（compaction-acp）：
+  // 2026-11-09 按用户要求换成上游统一版 0.1.213，**默认启用**——旧件因「上下文占用未到 1/4
+  // 仍频繁压缩」被我们默认关闭过，新版是模型驱动（compactIfNeeded/compactNow 返回 null，压缩
+  // 由模型调 compress 工具）加 preset 级 compaction gate，宿主自动压缩回到预设自己的
+  // compaction-basic 管线，不再需要默认关闭。迁移面两步：① 旧 compaction-acp 的默认禁用行与
+  // insert 行由 RETIRED_COMPANIONS 的 removeRetiredCompanionPatchRows 撤账（上面那一段已覆盖）；
+  // ② 旧件时代为互斥写过的 compaction-basic 禁用块必须撤掉，否则预设拿不到 stock 压缩。
+  if (bundleNames.has('billion-context')) {
     const heal = removeAcpBasicDisableBlock(patch);
     if (heal.changed) {
       patch = heal.patch;
       changed = true;
       if (dryRun) log(`dry-run: 将撤销 ${patchFile} 中的 compaction-basic 禁用块`);
-      else log('已撤销 compaction-basic 禁用块（恢复内核默认压缩）');
-    }
-    const acp = ensureDisabledPatchEntry(patch, new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*compaction-acp(?![A-Za-z0-9_.-])'), ACP_SELF_DISABLE_BLOCK);
-    if (acp.changed) {
-      patch = acp.patch;
-      changed = true;
-      if (dryRun) log(`dry-run: 将向 ${patchFile} 写入 compaction-acp 默认禁用条目`);
-      else log('已写入 compaction-acp 禁用条目（billion-context-dsh 默认关闭）');
+      else log('已撤销 compaction-basic 禁用块（billion-context 不再接管宿主面压缩入口）');
     }
   }
 

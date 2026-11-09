@@ -65,11 +65,17 @@ const COMPANION_PLUGINS = [
   // 随包内置件与 dsh-free-search 的运行时接管冲突，故 vendored patch 只保留 bot
   // 本体（见 assets/plugins/ds-bot/cordis.patch.yml 顶部注释）。
   { id: 'bot', name: 'ds-bot' },
-  // 0.2.26 起上游 tsup 把 acp-kernel 内联进 dist/index.js（不再有 `from "acp-kernel"`），
-  // 内层 node_modules 与 shipsNodeModules 标记同批下线；它改用宿主闭包的 dsh-session/
-  // dsh-settings/dsh-llm/dsh-tools/dsh-compaction/schemastery，具名导入由
-  // unit-plugin-esm-link 离线核对。
-  { id: 'compaction-acp', name: 'billion-context-dsh' },
+  // 上下文压缩（ranxianglei/billion-context，MIT，5422★）：2026-11-09 按用户要求从已停止
+  // 维护的 billion-context-dsh 0.2.27 整体换成上游统一版 0.1.213。两处与上游发行包的差异写在
+  // inventory §5.2 #11：① 只留 DSH 半边（dist/agent/dsh-native.js + dsh-compaction-gate.js +
+  // dsh-native-client.js + dist/index.js），其它 harness 适配器与 paper/website 不入包，
+  // 因此 package.json 的 mysql2 / zod 依赖（只有 bili CLI 用）一并摘掉，交付 3.3MB 而非 48MB；
+  // ② 上游把 bundle 层命名为 dsh.bundle.patch.yml，这里改名 cordis.patch.yml 以符合本仓
+  // 「每条在册件自带 cordis.patch.yml」的挂载判据（unit-hub-registry 的 auditMountPatch）。
+  // 主机半边自带 preset 级 compaction gate（bili-compaction-gate），这是 0.2.x 预设各自
+  // isolate compaction 之后唯一能真正接管自动压缩的姿势——旧 0.2.27 只能在宿主面插入
+  // compaction-acp，预设里的 compaction-basic 根本看不见它。
+  { id: 'bili-native', name: 'billion-context' },
   // 手机同屏（shaobeichen/dsh-pocket，GPL-2.0）：手机扫码实时同屏操控桌面 web
   // （WebSocket 全透传 + cloudflared 公网隧道内置 + 二维码配对）。
   // 0.6.4 摘除 dsh-mini 改用本插件：dsh-mini 自建移动 UI 的 CSS Module 哈希锚
@@ -281,6 +287,11 @@ const RETIRED_COMPANIONS = [
   { id: 'quest-ui', name: '@deepseek-ai/dsh-quest-ui' },
   { id: 'auto-compact', name: 'dsh-auto-compact' },
   { id: 'zcode-migrate', name: 'dsh-zcode-migrate' },
+  // 2026-11-09 由上游统一版 billion-context（bili-native）整体取代：旧的 compaction-acp
+  // 是宿主面 ACP 引擎，在 0.2.x 预设各自 isolate compaction 之后看不见预设里的
+  // compaction-basic，等于「开了只多四个工具、自动压缩还是 basic」。撤账同时清掉 profile 里
+  // 由旧件默认禁用逻辑写入的 compaction-acp 禁用行。
+  { id: 'compaction-acp', name: 'billion-context-dsh' },
 ];
 
 /** 退役登记表 → assets/plugins 目录名（去 scope 前缀），供过期清理认领。 */

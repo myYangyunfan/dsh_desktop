@@ -100,11 +100,11 @@ test('sync CLI: 空 DSH_HOME 首次同步落盘正确（包/条目/禁用块）'
   }
   // harness-pet 的默认禁用块（PET_DISABLE_BLOCK）随该伴随件 v1.0.0 退役一并从
   // sync CLI 与 patch-surgery 拆除，故此处不再断言其写入。
-  // billion-context-dsh 默认关闭：bundle 可装配 → 写 compaction-acp 自身禁用块，
-  // 且不再自动禁用 compaction-basic（内核默认压缩保留）；缺 dist → 两者都不写。
-  const acpOk = fs.existsSync(path.join(repoRoot, 'assets', 'plugins', 'billion-context-dsh', 'dist', 'index.js'));
-  assert.strictEqual(patch.includes('- id: compaction-acp\n  disabled: true'), acpOk, 'compaction-acp 默认禁用块只应在 bundle 可装配时写入');
-  assert.ok(!patch.includes('- id: compaction-basic\n  disabled: true'), '不应再自动禁用 compaction-basic（内核默认压缩需保留）');
+  // billion-context（2026-11-09 取代 billion-context-dsh）默认启用，同步器不再写任何禁用行：
+  // 它的接管走插件自带 cordis.patch.yml 的 preset 级 gate，宿主面的旧 compaction-acp 禁用行
+  // 由 RETIRED_COMPANIONS 撤账，compaction-basic 一律留给内核预设。
+  assert.ok(!patch.includes('- id: compaction-acp'), '旧 compaction-acp 禁用行必须已被撤账');
+  assert.ok(!patch.includes('- id: bili-native\n  disabled: true'), 'billion-context 默认启用，同步器不得写禁用行');
 });
 
 test('sync CLI: 二次同步零写入；dry-run 零落盘', (t) => {

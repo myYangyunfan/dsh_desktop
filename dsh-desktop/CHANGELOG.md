@@ -5,6 +5,32 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### feat(companion)：上下文压缩插件整体换成上游统一版 billion-context 0.1.213（2026-11-09）
+
+按用户「有人说上下文压缩插件有问题，你看看」查证后换代。旧件 `billion-context-dsh` 0.2.27 的接管姿势
+在宿主 0.2.x 上是失效的：它只在宿主面插 `compaction-acp` 并关掉宿主面的 `compaction-basic`，而 0.2.x 把
+压缩后端搬进 agent 预设，四个出厂预设各自 `isolate: { compaction: true }` 挂自己的 `compaction-basic`
+（`node_modules/@deepseek-ai/dsh-web-app/presets/*.patch.yml`），profile 层 patch 改不到嵌套行 id ——
+开了它只多出 `compress`/`decompress`/`search_context`/`acp_status` 四个工具与 nudge，自动压缩仍旧走
+`basic`。上游新线为此加了 always-on 的 `bili-compaction-gate` 条目与四条 `preset-*` 的
+`inject: [biliBasicCompactionPolicy]`，才真接管。
+
+- 清单：`{ id: "compaction-acp", name: "billion-context-dsh" }` → `{ id: "bili-native", name: "billion-context" }`
+  （#11 位不变，在册 33 条）；旧件进 `RETIRED_COMPANIONS`（18 条）并 `git rm` 源目录。
+- 交付面：DSH-only 剪裁 —— 13 文件 / 8.99MB（`dist/agent/{dsh-native,dsh-native-client,dsh-compaction-gate}.js`
+  + `dist/index.js` proxy 入口 + `build-info.json` + 文档 + LICENSE）；bundle 层改名 `cordis.patch.yml`；
+  `package.json` 摘掉 `mysql2`/`zod`、`bin`/`pi`/`scripts` 与未随包的 `exports["./server"]`。
+- 默认开关：由「默认关闭」改为**默认启用**（旧件当年因频繁压缩被关）；同步器不再写禁用行，只保留
+  「撤掉旧 `compaction-basic` 禁用块」的愈合。
+- 同步面：`companion-plugins.js` / `sync-companion-plugins.js` / `plugin-update-sources.js` / `.gitignore`、
+  README 中英两张表与说明块、`THIRD_PARTY_NOTICES.md` §4.1、inventory §一/§3.1/§5.2 与新增 §4.6、AGENTS.md。
+- 测试随迁：`unit-sync-cli`（不再写 compaction-acp 禁用行）、`unit-plugin-update-sources`（键改 `bili-native`）、
+  `unit-plugin-module-table`（入口路径改 `billion-context/dist/agent/dsh-native.js`）、
+  `unit-companion-bulk-retire`（退役 17 → 18）。
+- 实测：`npm test` 全绿；隔离内核 boot 五步全过 + `dsh web --no-open` 就绪后 0 `failed to load` /
+  0 `pending (waiting for` / 0 `[loader-diagnostic]`，proxy 子进程起在 18787。
+
+
 ### chore(companion)：network-proxy 随上游升到 1.0.4（GitHub 通道，2026-11-09）
 
 按用户「看看 github 方面有没有需要更新的插件」扫描 18 个有 GitHub 仓库的内置件（repo 取自各自

@@ -408,7 +408,7 @@ test('companion-plugins: 既有前缀顺序与 workspace-anchor 位置唯一（�
     [
       'balance', 'file-changes', 'better-sidebar', 'dsh-session-manager',
       'conversation-tweaks', 'dsh-super-injector', 'prompt-custom',
-      'workspace-anchor', 'wsl-settings', 'bot', 'compaction-acp',
+      'workspace-anchor', 'wsl-settings', 'bot', 'bili-native',
       'dsh-pocket', 'openclaw-bridge', 'input-history', 'dsh-easyrewrite',
       'change-review', 'offpeak', 'settings-nav-custom',
     ],

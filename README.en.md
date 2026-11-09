@@ -168,7 +168,7 @@ never auto-pushed to stable users by design. See the [release runbook](.github/R
 | `@deepseek-ai/dsh-workspace-anchor` | 0.1.1 | Anchor the current working directory into the stable system prompt to stop workspace drift (from kernel 0.2.1 the `{{cwd}}` prompt variable is no longer registered, so the plugin fills the real path itself) | In-house · MIT |
 | `@deepseek-ai/dsh-wsl-settings` | 0.1.0 | A "WSL backend" section in Settings: local/WSL switching, distro and install dir, liveness probe | In-house · MIT |
 | `ds-bot` | 0.2.0 | Bot team: a main bot plus long-lived bots and group chats, with @ handoffs and shared memory — a ready-to-use collaboration workspace (loader id `bot`) | [Fei2411/DeepSeek-Bot](https://github.com/Fei2411/DeepSeek-Bot) · Apache-2.0 |
-| `billion-context-dsh` | 0.2.27 | Active Context Pruning: model-driven context management, plus four model tools and the /acp-prune command | [Tyan66666/billion-context-dsh](https://github.com/Tyan66666/billion-context-dsh) · MIT |
+| `billion-context` | 0.1.213 | Context compression (unified upstream): model-driven compaction, four model tools and /acp-prune, plus a preset-level compaction gate | [ranxianglei/billion-context](https://github.com/ranxianglei/billion-context) · MIT |
 | `dsh-pocket` | 2.12.0 | Control the desktop web session from your phone by scanning a QR code (WebSocket passthrough + public tunnel) | [shaobeichen/dsh-pocket](https://github.com/shaobeichen/dsh-pocket) · GPL-2.0 |
 | `@deepseek-ai/dsh-openclaw-bridge` | 0.8.1 | Bridges WeChat / Feishu official channels into DSH agent sessions (chunked write-back, dedup, rate limit) | [hzhz314159/openclaw-dsh-bridge](https://github.com/hzhz314159/openclaw-dsh-bridge) · MIT |
 | `dsh-input-history` | 0.1.1 | Terminal-style ↑/↓ history of sent messages in the composer, scoped per session | In-house · MIT |
@@ -214,6 +214,15 @@ never auto-pushed to stable users by design. See the [release runbook](.github/R
 > `dsh-pocket` 2.12.0, `dsh-easyrewrite` 3.0.1, `ds-harness-remote` 0.6.4. Only "same identity and higher
 > upstream" qualifies; `better-sidebar` (locally rebuilt), `ds-bot` (vendored patch) and three name
 > collisions stay put — see `dsh-desktop/docs/builtin-plugins-inventory.md` §4.4.
+>
+> **2026-11-09: the context-compression plugin was replaced wholesale** (still 33 entries) —
+> `billion-context-dsh` 0.2.27 (upstream stopped maintaining it) gives way to the unified upstream
+> `billion-context` 0.1.213. The old one only mounted its engine on the host plane and disabled the
+> host-plane `compaction-basic`; on 0.2.x the backend lives inside agent presets behind
+> `isolate: compaction`, so enabling it added four model tools while automatic compaction kept using
+> the preset-local `basic`. The new one ships a `bili-compaction-gate` plus four `preset-*` injects,
+> which is what actually takes over. Trimmed to the DSH half: 13 files / 8.99MB (upstream tarball is
+> 45 files / 48MB). See inventory §4.6.
 > Both are vendored upstream packages; the latter ships its own `node_modules` tree
 > (`shipsNodeModules`).
 

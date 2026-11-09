@@ -770,7 +770,7 @@ CI 五个架构的 staging 同口径），装机后首次开机由 boot 的插�
 | @deepseek-ai/dsh-wsl-settings | 0.1.0 | MIT |
 | @dsh-external/dsh-subagent-lens | 0.1.1 | MIT |
 | @dsh-external/dsh-super-injector | 0.3.1 | BSD-3-Clause |
-| billion-context-dsh | 0.2.27 | MIT |
+| billion-context | 0.1.213 | MIT |
 | ds-bot | 0.2.0 | Apache-2.0 |
 | dsh-basics-panel | 0.4.2 | MIT |
 | dsh-better-sidebar | 0.24.2 | MIT |

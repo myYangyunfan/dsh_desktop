@@ -146,7 +146,7 @@ test('反向捕获力：把在册插件的真实 peer 收回旧上界，舰队�
   const runtime = boot.getDshRuntimeVersion();
   const byName = fleetIndex();
   const cases = [
-    ['billion-context-dsh', '@deepseek-ai/dsh-compaction', '>=0.1.5-alpha.1 <0.1.6-0'],
+    ['ds-harness-remote', '@deepseek-ai/dsh-api-gateway', '>=0.0.0 <0.1.0-0'],
     ['dsh-better-sidebar', '@deepseek-ai/dsh-client-ui-primitives', '^0.1.0-rc.8'],
   ];
   for (const [pkg, key, oldRange] of cases) {

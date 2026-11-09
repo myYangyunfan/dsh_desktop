@@ -317,7 +317,7 @@ test('清单：批量退役 11 条已摘出、进名单，且活动清单与退�
     'community-market', 'market-desktop-bridge', 'dsh-hub', 'file-drop', 'image-paste', 'cardian'];
   const retiredIds = new Set(RETIRED_COMPANIONS.map((p) => p.id));
   for (const id of bulk) assert.ok(retiredIds.has(id), '应进 RETIRED_COMPANIONS: ' + id);
-  assert.strictEqual(RETIRED_COMPANIONS.length, 17,
+  assert.strictEqual(RETIRED_COMPANIONS.length, 18,
     '11 条批量退役 + plugin-manager（dirsOnly）+ reasoning-effort + 2026-10-22 移除的 side-session + 2026-11-08 退役的 quest-ui / auto-compact / zcode-migrate');
   const listed = new Set(COMPANION_PLUGINS.map((p) => p.id));
   for (const id of retiredIds) assert.ok(!listed.has(id), '退役条目不得留在清单: ' + id);

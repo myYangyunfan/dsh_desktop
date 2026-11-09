@@ -127,7 +127,7 @@ test('center: 组装根暴露架构文档 §3 的完整 API 表面', (t) => {
   assert.equal(typeof api.updates.update, 'function');
   // 更新源与唯一表（scripts/lib/plugin-update-sources.js）一致。
   assert.deepEqual(Object.keys(api.updates.sources).sort(),
-    ['better-sidebar', 'bot', 'compaction-acp', 'dsh-notify', 'mcp-manager-ui',
+    ['better-sidebar', 'bili-native', 'bot', 'dsh-notify', 'mcp-manager-ui',
       'network-proxy', 'shop', 'web-search-free']);
 
   assert.equal(typeof api.quarantine.apply, 'function');

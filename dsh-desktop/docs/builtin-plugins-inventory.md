@@ -80,7 +80,7 @@
 | 8 | `workspace-anchor` | `@deepseek-ai/dsh-workspace-anchor` | 0.1.1 | 把当前工作目录写进稳定系统提示的锚点块，防 agent 目录漂移（不碰权限）。0.2.1-rc.1 起内核不再注册 `{{cwd}}` 变量，锚点改由插件自填实路径 + `interpolate: false`，并自己把 `cwd` 变量按 rc.2 原形状补回去 | 自研 |
 | 9 | `wsl-settings` | `@deepseek-ai/dsh-wsl-settings` | 0.1.0 | 设置页「WSL 后端」栏：local↔wsl 切换、发行版与安装目录、状态探活 | 自研 |
 | 10 | `bot` | `ds-bot` | 0.2.0 | Bot 团队：主 Bot + 长期 Bot + 群聊，Bot 间 @ 转交、群共享记忆、能力库与用量页（loader id `bot`；vendored patch 不接管 web.searchProvider，搜索仍走 dsh-free-search） | Fei2411/DeepSeek-Bot，**Apache-2.0**（上游 README 标 DSH 0.2.1-rc.2；npm 0.2.0） |
-| 11 | `compaction-acp` | `billion-context-dsh` | 0.2.27 | Active Context Pruning，作为 CompactionEngine 后端的模型驱动上下文管理，**并注册 `compress` / `decompress` / `search_context` / `acp_status` 四个模型工具 + `/acp-prune` 斜杠命令**（`dist/index.js:6338` 的 `tools.register` 循环与 `:6352` 的 `ctx.get("commands")` 实测；先前本格只记了引擎半边） | `Tyan66666/billion-context-dsh`，MIT（0.2.27 = npm latest，高于 d-pack 0.2.2；内层 `node_modules` 随本版下线；peer 上界放宽与 dist 入口纳入判据见 §五 5.2 #12） |
+| 11 | `bili-native` | `billion-context` | 0.1.213 | 上下文压缩（ACP 血统的**上游统一版**，取代已停维护的 `billion-context-dsh` 0.2.27）：模型驱动压缩 + `compress` / `decompress` / `search_context` / `acp_status` 四个模型工具与 `/acp-prune` 命令；另带 `bili-compaction-gate` 条目，把预设里的 `compaction-basic` 接到本插件策略上——0.2.x 预设各自 `isolate: compaction` 之后，这是唯一能真正接管自动压缩的姿势（旧件只在宿主面插 `compaction-acp`，预设里根本看不见它） | `ranxianglei/billion-context`，**MIT**（npm 0.1.213）；本目录是 DSH-only 剪裁版，差异清单见 §5.2 #11 |
 | 12 | `dsh-pocket` | `dsh-pocket` `nm` | 2.12.0 | 手机扫码实时同屏操控桌面 web（WebSocket 透传 + cloudflared 公网隧道 + 二维码配对） | shaobeichen/dsh-pocket，**GPL-2.0**（2.12.0 = npm latest；2026-11-09 由 d-pack 线 2.10.7 切到 npm 线） |
 | 13 | `openclaw-bridge` | `@deepseek-ai/dsh-openclaw-bridge` | 0.8.1 | 微信 / 飞书官方频道桥接入 DSH agent 会话（分片回写、去重限流） | `hzhz314159/openclaw-dsh-bridge`，MIT（0.8.1 起设置面换成 codegen `settings-host` 垫片，`ctx.settings.register` 形态作废，锚点见 `scripts/test/unit-openclaw-settings-inject.test.js`） |
 | 14 | `input-history` | `dsh-input-history` | 0.1.1 | 输入框 ↑/↓ 终端式已发送消息回溯（空草稿才触发、编辑即复位、按会话隔离） | 自研 |
@@ -201,7 +201,7 @@ npm 侧统一走 `registry.npmmirror.com`。表里 `root=` 是仓库页状态码
 | 3 | `better-sidebar` | `dsh-better-sidebar` | `omdsh-dev/DSH-better-sidebar` | root 200 / LICENSE main 200 | `package.json#repository` 明确声明；npm latest 0.24.1（= 我们 0.24.2 的上游基线，0.24.2 是本地跨代修复版：宿主半边 `inject` 由已下线的 `webRuntime` 改 `connection`，见 §五 5.2 #3）；社区目录条目 `awesome-dsh-plugin/awesome-dsh-plugin@44ae0afa:data/plugins/omdsh-dev__DSH-better-sidebar.yml` 200 |
 | 6 | `dsh-super-injector` | `@dsh-external/dsh-super-injector` | **未判定**（见 3.5 风险 2） | `dsh-external/dsh-super-injector` root **404** / LICENSE 无 | 包体无 `repository`/`homepage`/`author`；npm 两个候选名均 404；同名仓 5 个（`gongyijie85`/`lanbaolu`/`lileikeji`/`wendou-chen`/`yjh051108` 的 `dsh-super-injector`）无一可判为原创 |
 | 10 | `bot` | `ds-bot` | `Fei2411/DeepSeek-Bot` | root 200 / LICENSE 200（Apache-2.0） | `package.json#repository` 明确声明并带 `directory: ds-bot`；npm 0.2.0 与上游 README 的 v0.2 预览线同版，上游明标兼容 DSH 0.2.1-rc.2（与本仓 pin 相同）。本仓 vendored patch 只保留 `bot` 注册，不复制上游的 `web-search-auto` / `web.searchProvider: auto` 覆盖（避免与 dsh-free-search 抢 provider） |
-| 11 | `compaction-acp` | `billion-context-dsh` | `Tyan66666/billion-context-dsh`（谱系上游 `ranxianglei/billion-context-pi`） | 两者 root 200 / LICENSE 200（前者 main、后者 master） | `README` 同时链到两个仓；上游 `main` 与 npm latest 同为 0.2.26，**与我们逐版相同**（本轮由外部上游通道更新；d-pack 只有 0.2.2）。0.2.26 起 dist 内联 `acp-kernel`，内层 `node_modules` 与 `shipsNodeModules` 同批下线 |
+| 11 | `bili-native` | `billion-context` | `ranxianglei/billion-context` | root 200 / LICENSE 200；`package.json#repository` 同值（身份可判 same） | 上游 `master` 与 npm latest 同为 **0.1.213**。本轮按用户要求整包替换旧件：旧 0.2.x 线（`Tyan66666/billion-context-dsh`）2026-10-24 自标停止维护并指向上游统一版。它的 `dsh.bundle.patch.yml` 顶部注释就是「预设里的嵌套行任何 patch 层都改不到 → 用 gate 条目兜」的原话（`#1772/#2474/#3354`） |
 | 12 | `dsh-pocket` | `dsh-pocket` | `shaobeichen/dsh-pocket` | root 200 / LICENSE main 200 | `repository` + `homepage`；npm latest 2.10.6，**我们 2.10.7 取自 d-pack 发布面**（高于 npm）；`LICENSE` 是标准 GPL-2.0 文本（FSF 版权头） |
 | 13 | `openclaw-bridge` | `@deepseek-ai/dsh-openclaw-bridge` | `hzhz314159/openclaw-dsh-bridge` | root 200 / LICENSE main 200 | `package.json#name` 与我们的完全一致，上游 `main`/`master` 实测 `@deepseek-ai/dsh-openclaw-bridge@0.8.0`/MIT —— 同名同仓，最强判据；**我们 0.8.1 取自 d-pack 发布面**（高于上游）。我们侧出处在 `companion-plugins.js:68-71` 注释 |
 | 15 | `dsh-easyrewrite` | `dsh-easyrewrite` | `Renzic-Stone/DSH-EasyRewrite` | root 200 / LICENSE main 200 | `repository` + `LICENSE` 版权行 `2026 Renzic-Stone`；上游 `main` 与 npm latest 同为 2.6.0，**与我们逐版相同**（本轮由外部上游通道更新；d-pack 只有 2.5.3） |
@@ -288,9 +288,9 @@ npm 侧统一走 `registry.npmmirror.com`。表里 `root=` 是仓库页状态码
 5. **两处「同名仓」的原创判定已由机器给出，不再靠人比版本**：`dsh-reasoning-effort`（原 #24，2026-10-17 随内核 0.2.1 换代退役，判定与机器锁都留着备查）两边**都**声明
    repository 且不同（我们 `HanaAyane/dsh-reasoning-effort` / npm latest 0.2.8 `Mu-scorpio/dsh-reasoning-effort`）
    → `identityVerdict` = **`foreign`**（同名不同项目，npm 那条就是 §三 说的旧线）；
-   #11 `compaction-acp` 的包名是 `billion-context-dsh`，两边都没声明 repository → **`unknown`**，
-   此时仍只能靠 §三 的 git-over-https 人证（`Tyan66666/billion-context-dsh` 与谱系仓
-   `ranxianglei/billion-context-pi` 都在、均 200，前者才是直接上游）。
+    #11 在 2026-11-09 换代后是 `billion-context` 0.1.213，`package.json#repository` 自述
+    `ranxianglei/billion-context`，与 npm 那条同值 → **`same`**（旧件 `billion-context-dsh` 当年两边都不自述
+    repository、只能靠 §三 的 git-over-https 人证判 `unknown`，那段判定随件退役留档）。
    #20 `dsh-synapse` 同样是 `unknown`（npm 0.4.2 不自报 repository）——这正是它两条通道都「版本更高」
    却只出差量报告、不吸纳的机器依据。
 
@@ -493,6 +493,39 @@ sha256——`differ=0 & onlyLocal=0 & onlyRemote=0` 才叫纯 vendored；`billio
 40KB→61KB、`client.js` 28KB→32KB。`unit-vendored-upstream-plugins` 的版本表同步 1.0.4，两条 fork 反证
 （`mode: 0o600` 凭据落盘、`snapshot.active` locale 读法）在 1.0.4 上仍然成立、继续咬住。
 
+﻿### 4.6 2026-11-09 上下文压缩插件整体换代（按用户「有人说上下文压缩插件有问题，你看看」）
+
+结论先行：**问题是真的，但落在旧件的架构假设上**。`billion-context-dsh` 0.2.27 的接管方式是
+「在宿主面插一个 `compaction-acp`，再把宿主面的 `compaction-basic` 关掉」；而宿主 0.2.x 把压缩后端
+搬进了 agent 预设，四个出厂预设各自用 `cordis:group` + `isolate: { compaction: true }` 挂自己的
+`compaction-basic`（`node_modules/@deepseek-ai/dsh-web-app/presets/{standard,minimal,ptc,cordis}.patch.yml`
+第 69–80 行一带），**profile 层 patch 改不到嵌套行的 id**。于是开了旧件只多出四个模型工具与 nudge，
+自动压缩仍走预设自己的 basic——用户观感就是「装了没反应」。旧件还是 model-driven 的：
+`compactIfNeeded` / `compactNow` 直接 `return null`，`compactRegion` 抛 `ManualCompactionError`
+（要你改用 `compress` 工具）。
+
+上游新线（`ranxianglei/billion-context` 0.1.213）为此加了独立 always-on 的 `bili-compaction-gate` 条目 +
+四条 `preset-*` 的 `inject: [biliBasicCompactionPolicy]`：预设等 gate 就绪，再由 gate 把 basic 的策略接到
+本插件。这既是换代的正当理由，也是唯一能让「接管」成立的姿势。
+
+本轮落盘与验证：
+
+| 项 | 结果 |
+| --- | --- |
+| 在册条目 | `{ id: "compaction-acp", name: "billion-context-dsh" }` → `{ id: "bili-native", name: "billion-context" }`（仍在 #11 位，33 条不变） |
+| 旧件去向 | 目录 `git rm`，条目进 `RETIRED_COMPANIONS`（第 18 条）：撤 profile 里的 `compaction-acp` insert 与默认禁用行、清模块镜像 |
+| 默认开关 | 旧件因「上下文占用未到 1/4 仍频繁压缩」被我们默认关闭；新件**默认启用**，`sync-companion-plugins.js` 不再写任何禁用行（只保留「撤掉旧 `compaction-basic` 禁用块」的愈合） |
+| 交付面 | 13 文件 / 8.99MB（DSH-only 剪裁，见 §5.2 #11）；路径墙复算仍在限内 |
+| 隔离实机 | boot 五步全过；`dsh web --no-open` 就绪后 **0 `failed to load` / 0 `pending (waiting for` / 0 `[loader-diagnostic]`**；proxy 子进程起在 18787，独立日志无报错 |
+| 已知上游未修（换代不解决） | `ranxianglei/billion-context` #5911（压缩会造「不存在的用户原话」与跨世代 ref）、#5984（rebase 后 `acp_status` 的 ref 与 `compress` 校验用的账本不一致 → 提示区间必然 unknown → 三次熔断）、#6010（第三方切段插件让两套 ref 账本分叉）、#5596（4096 token 钳制）——都在 0.1.21x 上仍 open，与本仓改动无关 |
+
+另记两条判据教训：① 「插件装了没生效」要先问「它把服务挂在了哪个 realm」——本次是 `isolate:` 把服务
+劈成两个世界，静态扫（inject 服务名、模块表、boot 五步）全绿也看不出来；② 换 vendored 件时**必须先
+按 `nativeProxyScriptPath()` 这类运行时路径解析反推需要哪些产物**：只抄 `exports["."]` 的入口会让
+子进程 `Cannot find module .../dist/index.js`，而父进程日志只说「proxy child exited before becoming
+healthy (code 1)」，真因在 `%TEMP%\bili-proxy-<port>.log` 里。
+
+
 ## 五、舰队更新与兼容 sweep（2026-10-08 立项 · 目标宿主 `0.2.0-rc.2`；**2026-10-17 六条静态扫按 `0.2.1-rc.1` 全量复算**；**2026-10-18 按 `0.2.1-rc.2` 复核，判据值逐项不变、全绿**；**2026-10-27 按 `0.2.2-rc.1` 复核自动化面，判据值逐项不变、全绿**）
 
 > **2026-10-27 换代复核口径（rc.2 → rc.4）**：这一代上游只增不破，复核走机器判据而非逐件手测——
@@ -571,7 +604,7 @@ sha256——`differ=0 & onlyLocal=0 & onlyRemote=0` 才叫纯 vendored；`billio
 
 每条守卫都带**反向捕获力**用例，不是「扫一遍求全绿」：
 `unit-plugin-peer-floor` 用内存合成 manifest 证明收紧区间必判拒（`^0.1.0`、`>=0.1.5-alpha.1 <0.1.6-0`），
-再把 `billion-context-dsh` / `dsh-better-sidebar` 的**真实 peer** 收回旧上界，断言判据转红；
+ 再把 `ds-harness-remote` / `dsh-better-sidebar` 的**真实 peer** 收回旧上界，断言判据转红；
 `unit-plugin-module-table` 除合成夹具（未守卫必须报、5 种守卫形态必须不报、表外 spec 必须报、
 扩表指向不存在的包必须记 unresolved）外，另有一条**真产物变异反证**（2026-10-08 随换代改形）：拿
 `better-sidebar/lib/client.js`（522 KB 实产物）做宿主，往尾部接一段 `require("@deepseek-ai/dsh-client-ui-primitives")`
@@ -613,7 +646,7 @@ npm 列额外带 `身份 <same|foreign|unverifiable|unknown>／维护者`——*
 |  8 | `workspace-anchor` | `dsh-workspace-anchor` | 0.1.1 | 0 peer | 0.1.0（我们更高｜0.1.1 为本仓库兼容修复线） | 未发布 | 0 别名 / 0 成员 / 0 裸名 → 缺失 0 · 表外 0 · 声明 0 · 移除引用 0 | **0.2.1-rc.1 真机坏（隔离内核发消息实测抓到）**：内核 `dsh-agent-loop` 撤掉了 rc.2 的 `systemPrompt.variable("cwd", …)`（新版只剩 provider / model），带 `{{cwd}}` 的节在装配期直接抛 `unknown prompt variable` → **每一条消息都「处理失败 UNKNOWN」**。修法：锚点文本由插件自己填成 `agent.session.header.cwd` 实路径并标 `interpolate: false`（不再依赖内核变量表），同时按 rc.2 原形状把 `cwd` 变量补注册回去，让别的节与用户自写文本里的 `{{cwd}}` 继续可解析。实机复验：人轮正常落盘、错误退到预期的 `MISSING_CREDENTIAL`（隔离 home 无密钥），变量报错零命中  |
 |  9 | `wsl-settings` | `dsh-wsl-settings` | 0.1.0 | 2 peer `*` | 无此件 | 未发布 | 1 别名 / 0 成员 / 3 裸名 → 缺失 0 · 表外 0 · 声明 1 · 移除引用 0 | 维持  |
 | 10 | `bot` | `ds-bot` | 0.2.0 | 4 peer `*` | 0.2.0（等版） | 未发布 | 49 别名 / 7 成员 / 3 裸名 → 缺失 0 · 表外 0 · 声明 0 · 移除引用 0 | 维持；Bot 团队本体；vendored patch 不接管 `web.searchProvider`（搜索仍由 dsh-free-search 运行时接管） |
-| 11 | `compaction-acp` | `billion-context-dsh` | 0.2.27 | 7 peer `>=0.1.5-alpha.1 <0.3.0-0` | 0.2.2（我们更高） | 0.2.27（等版｜身份 unknown／tyanyin） | 0 别名 / 0 成员 / 0 裸名 → 缺失 0 · 表外 0 · 声明 0 · 移除引用 0 | **随包改动**：5 条 dsh 族 peer 上界放宽到 `<0.3.0-0`（`dsh-compaction`/`dsh-session`/`dsh-llm`/`dsh-tools`/`dsh-settings`），并去掉上游钉死 `0.2.0-rc.2` 的 brand / session-format* / timeout / typert-protocol / util-* 六条 peer（0.2.2-rc.1 下会被兼容性预检判失败）；`cordis`、`schemastery` 两键保留  |
+| 11 | `bili-native` | `billion-context` | 0.1.213 | 0 peer（上游 0.1.213 不带 `peerDependencies`） | 无此件（旧 0.2.27 的 d-pack 0.2.2 随件退役） | 0.1.213（等版｜身份 same／repository 同值） | 2 别名 / 0 成员 / 1 裸名 → 缺失 0 · 表外 0 · 声明 0 · 移除引用 0 | **随包改动 3 处**：① 只交付 DSH 半边——`dist/agent/{dsh-native,dsh-native-client,dsh-compaction-gate}.js` + `dist/index.js`（proxy 子进程入口，`nativeProxyScriptPath` 解析到它）+ `dist/build-info.json` + 4 份文档 + LICENSE，多 harness 适配器（claude / codex / kimi / zcode / pi / omp / opencode）与 `paper/`、`website/` 未入包 → **13 文件 8.99MB**（上游整包 45 文件 48MB）；② bundle 层 `dsh.bundle.patch.yml` 改名 **`cordis.patch.yml`**（本仓 `auditMountPatch` 判据），`dsh.bundle.patch` 同步指过去；③ `package.json` 摘掉 `mysql2`/`zod` 依赖、`bin`/`pi`/`scripts` 与未随包的 `exports["./server"]`——实测 DSH 入口与 proxy 入口都不解析任何外部包。保留上游 patch 的全部行为面：两条 insert、`compaction-basic auto:false`、四个 `preset-*` 的 `inject: [biliBasicCompactionPolicy]`（0.2.2-rc.1 预设行本身不带 inject，替换是纯追加）、`llm-deepseek`/`llm-deepseek-account` 的 `retryPolicy` 行（补 `MALFORMED_RESPONSE` 重试；隔离 boot 实测通过） |
 | 12 | `dsh-pocket` | `dsh-pocket` | 2.12.0 | 0 peer | 2.12.0（等版） | 2.12.0（等版｜身份 same／leachzhou） | 8 别名 / 0 成员 / 2 裸名 → 缺失 0 · 表外 0 · 声明 5 · 移除引用 0 | **随包改动 1 处（2.12.0）**：hero 输入卡的两条 `:has(textarea)` 补并代锚 `[data-composer-input]`——Lexical 代没有 textarea，不改就是恒不命中的死规则；GPL-2.0 分发面见 §3.1 #13  |
 | 13 | `openclaw-bridge` | `dsh-openclaw-bridge` | 0.8.1 | 6 peer `>=0.1.0-rc.6 <2` | 0.8.1（等版） | 未发布 | 3 别名 / 2 成员 / 4 裸名 → 缺失 0 · 表外 0 · 声明 4 · 移除引用 0 | 维持；设置面已是 codegen `settings-host` 垫片形态  |
 | 14 | `input-history` | `dsh-input-history` | 0.1.1 | 1 peer `>=0.1.0-rc.6 <2` | 0.1.1（等版） | 0.3.2（他们更高｜身份 unverifiable／sunshaobei） | 0 别名 / 0 成员 / 1 裸名 → 缺失 0 · 表外 0 · 声明 1 · 移除引用 0 | 维持；**禁止按名更新**（同 #4 型撞名：npm 那条是 `sunshaobei/dsh-input-history`）  |
@@ -660,7 +693,7 @@ A/B 83 处别名 + 437 处成员取用 0 缺失 0 表外、C 31 个图文件 61 
 **第三条通道（外部上游 main）的取证值不重放**，它来自 §三 的逐条仓库核验（`api.github.com` 在本机被封，
 走 git-over-https 拿 `package.json`），仍改变或支撑判定的 7 条（**编号按 2026-11-08 重编号后的 §一 序号**；
 `dsh-reasoning-effort` 那条随该件 2026-10-17 退役撤账，判定留档在 §3.5 风险 5）：
-`billion-context-dsh`(#11) main **0.2.26**（与 npm 等版，已在最高通道）、
+`billion-context`(#11) main **0.1.213**（与 npm 等版，已在最高通道；2026-11-09 由旧 `billion-context-dsh` 0.2.26 换代而来）、
 `dsh-pocket`(#12) main 2.10.6（**我们 2.10.7 更高**，2.10.7 取自 d-pack）、
 `dsh-easyrewrite`(#15) main **2.6.0**（等版）、
 `dsh-offpeak`(#17) main 1.0.0（我们 1.0.1 更高）、
@@ -776,7 +809,7 @@ node -e "const l=require('./scripts/lib/plugin-module-table'),p=require('path'),
   同一次修复里还抓到自己写的 bug：白名单按字符串前缀比对，传**相对**插件根时整条静默失效
   （计数退回 70），现已改为绝对路径比对，并在用例 2 里加了「相对根与绝对根扫描结果必须逐字段相等」的不变量。
   2026-10-19 `dsh-prompt-optimizer` 整体换为上游 vendored 版（入口 `lib/client.js`），这条 dist 形状
-  现在只剩 `billion-context-dsh/dist/index.js` 一例。
+  现在只剩 `billion-context/dist/index.js`（proxy 子进程入口）一例。
 - **历史上曾有两条插件的运行入口只在本机存在、不在库里**（2026-10-17 记录，现已无残留）：
   `dsh-prompt-optimizer/dist/client.js`（§5.2 #24）与 `dsh-reasoning-effort/lib/client/`（原 §5.2 #24）。
   前者随 2026-10-19 换为 `lib/` 入口而消失（`.gitignore` 的 dist 例外同批撤除，入口可见性现为

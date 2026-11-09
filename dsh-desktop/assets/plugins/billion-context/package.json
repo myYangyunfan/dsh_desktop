@@ -1,0 +1,94 @@
+{
+  "name": "billion-context",
+  "version": "0.1.213",
+  "description": "A context-compression plugin — small context windows (a 100K context is enough), 5x fewer tokens, month-long single sessions (billions of tokens), and compression quality — for all agents: pi, OpenCode, Codex, Claude Code, and more. billion-context is all you need.",
+  "type": "module",
+  "main": "dist/index.js",
+  "exports": {
+    ".": "./dist/agent/dsh-native.js",
+    "./dsh": "./dist/agent/dsh-native.js",
+    "./dsh-compaction-gate": "./dist/agent/dsh-compaction-gate.js",
+    "./package.json": "./package.json",
+    "./dsh/package.json": "./package.json",
+    "./client": "./dist/agent/dsh-native-client.js"
+  },
+  "keywords": [
+    "context",
+    "compression",
+    "proxy",
+    "acp",
+    "ai",
+    "agent",
+    "claude-code",
+    "cursor",
+    "codex",
+    "aider",
+    "anthropic",
+    "openai",
+    "pi-package"
+  ],
+  "license": "MIT",
+  "author": "ranxianglei",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ranxianglei/billion-context.git"
+  },
+  "homepage": "https://github.com/ranxianglei/billion-context#readme",
+  "bugs": {
+    "url": "https://github.com/ranxianglei/billion-context/issues"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.83.0",
+    "@earendil-works/pi-tui": "0.83.0",
+    "@types/node": "^22.0.0",
+    "@types/node-forge": "^1.3.14",
+    "@types/semver": "^7.7.1",
+    "@types/ws": "8.18.2",
+    "acp-kernel": "file:./kernel",
+    "billion-context-pi-subagents": "file:./pi-subagents",
+    "esbuild": "^0.27.0",
+    "fzstd": "0.1.1",
+    "jsonc-parser": "^3.3.1",
+    "node-forge": "^1.4.0",
+    "prettier": "^3.3.0",
+    "semver": "7.8.5",
+    "tar": "^7.5.22",
+    "tsup": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typebox": "^1.3.34",
+    "typescript": "^5.5.0",
+    "undici": "^7.29.0",
+    "verdaccio": "^6.10.4",
+    "ws": "8.22.0",
+    "z3-solver": "^5.3.1"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "README.zh-CN.md",
+    "CONFIGURATION.md",
+    "CONFIGURATION.zh-CN.md",
+    "dist",
+    "cordis.patch.yml"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "build": "npm --prefix kernel run build && npm --prefix pi-subagents run build && tsup && node scripts/write-build-info.mjs",
+    "typecheck": "tsc --noEmit --project tsconfig.json",
+    "test": "node scripts/test-suite-lock.mjs run"
+  }
+}

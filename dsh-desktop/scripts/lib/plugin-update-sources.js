@@ -23,7 +23,7 @@
 
 const UPDATE_SOURCES = Object.freeze({
   // ── 既有两条（side-session 已随「临时对话」退役移出内置清单） ──
-  'compaction-acp': { kind: 'npm', pkg: 'billion-context-dsh' },
+  'bili-native': { kind: 'npm', pkg: 'billion-context' },
   // better-sidebar 条目保留但被排除，原因见 UPDATE_EXCLUSIONS。
   'better-sidebar': { kind: 'npm', pkg: 'dsh-better-sidebar' },
 
