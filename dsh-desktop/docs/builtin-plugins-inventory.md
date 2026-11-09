@@ -525,6 +525,49 @@ sha256——`differ=0 & onlyLocal=0 & onlyRemote=0` 才叫纯 vendored；`billio
 子进程 `Cannot find module .../dist/index.js`，而父进程日志只说「proxy child exited before becoming
 healthy (code 1)」，真因在 `%TEMP%\bili-proxy-<port>.log` 里。
 
+### 4.7 2026-11-09 循环压缩（用户报的「压缩插件有问题」）· 等 0.1.214 的升级判据
+
+用户澄清「有问题」指**循环压缩 / 反复压缩**，与本轮换代的接管面不是同一件事（4.6 解决的是「装了没反应」）。
+真身在上游：issue **#5960**（2026-11-09T00:57:17Z closed），修复 PR **#5961** 同刻合入，kernel `0.0.188→0.0.189`。
+现场（维护者自己抓的长会话 01a1b6b3）：4 分钟内模型连发 5 次 `compress`（2 成 3 拒，拒了再发），
+对话里还抱怨「用户在反复发同一条消息」「已经被催压缩 10/11/12/13/14 次」，而用户实际只发一次。
+
+三层咬合（缺一层都不成循环）：
+
+| 层 | 机制 | 在我们默认配置下的暴露面 |
+| --- | --- | --- |
+| ① 指针回声 | `compressAtFoldPoint` v2 把历史里已完成的 compress 调用参数改写成一句「压缩已完成、摘要已前移」指针；模型照最近一条 compress 调用抄格式 → 抄到指针 → 必 `content-not-array` → 拒了再抄（4 次失败参数逐字相同） | **不成立**：`compress.compressAtFoldPoint` 默认 `false`（产物 `dist/index.js` @1,140,804 `resolveCompressAtFoldPoint` 末尾 `return typeof fileValue==="boolean"?fileValue:false`），我们的 `cordis.patch.yml` 没开，`CONFIGURATION.md` 标 EXPERIMENTAL default off |
+| ② 失败回执堆满 | 每次失败完整重发约 200 词教程 + 范围清单 + 「这是你第 N 次发同样调用」计数器；第 2 条起纯增负担，计数器还被模型读成「用户又问了 N 次」 | 随 ① 一起：没有失败就不会有回执 |
+| ③ 折叠后压力表虚高 | 连续压缩回合不经上游结算 → 判定锚点过期 → #5135「压缩信用」豁免失效 → 计量回落到「客户端重发完整原始历史」上界：刚省 5 万 token 却显示 `238112/212992 = 112%` → 继续催压缩。**这条是让循环停不下来的主要力量** | **默认就在**，与开关无关 |
+
+修复 #5961 四个方向：解析层新增 kind `already-folded-echo`（一行 ack、不进失败计数、仍走 #2146 熔断）；
+`stringifiedEntryFromContent` 抢救「content 字符串编码单个 entry」；相同格式失败第 2 次起回执塌缩成一行
+（首条保留完整教程、计数器只说一次；preflight 车道 `loopTracking:false` 不塌缩）；`effectiveTokenCount`
+的 #5135 信用分支去掉 `!anchorStale`（credit>0 时 netted usage 锚点压过 staleness，credit==0 保持 #4383 原规则）。
+
+**我们这份是修复前的构建**（证据）：`billion-context@0.1.213` 发布于 2026-11-07T23:32:24Z，比修复合入早约 25 小时，
+且仍是 npm `dist-tags.latest`；`dist/build-info.json` = `{"commit":"133f3525c"}`；本地两份产物里
+`already-folded-echo` / `RELOCATED_POINTER_MARKER` / `relocated` / `pointer-echo` **各 0 命中**，
+而 #5872 收尾语 `not at its minimum` 在位 **1 处**（`dist/index.js` offset 3,765,418）。
+
+**决定（用户选 A）**：不把 #5961 回移进 6MB 混淆产物，等上游 0.1.214 发版后整包换——换法同 §5.2 #11 的
+13 文件剪裁清单，不需要新事实。截至 2026-11-09T21:25+08:00 实测 `latest` 仍是 0.1.213（未发版）。
+
+**升级判据（版本号 ≠ 修复在位，必须逐条复算）**：在 `dsh-desktop/` 下跑
+
+```bash
+node -e "const fs=require('fs');for(const f of ['index.js','agent/dsh-native.js']){const s=fs.readFileSync('assets/plugins/billion-context/dist/'+f,'utf8');console.log(f,'already-folded-echo=',(s.match(/already-folded-echo/g)||[]).length,'not-at-minimum=',(s.match(/not at its minimum/g)||[]).length)}"
+```
+
+- **必须**：`already-folded-echo` 在两份产物中的命中数 **> 0**（#5961 的正向指纹）；若不 > 0，说明拿到的新版
+  仍不含该修复，**别因为版本号变了就宣布修好**。
+- **指纹参照**（0.1.213）：`already-folded-echo = 0`、`not-at-minimum = 1`；`dist/build-info.json` 的
+  `commit` 不应再是 `133f3525c`。
+- 附带说明：npm 上另有 3 个 `0.0.86xx-pr.5961.*` 预览包（最晚 `0.0.8688-pr.5961.75ec665`，2026-11-08T17:14:57Z），
+  是合并前的 PR head、走 0.0.88xx-pr 实验通道，**不作升级来源**（不是我们要的 0.1.x 线，且缺末次 head 的改动）。
+- 未验证项（如实记账）：**不开 v2 时单靠根因 ③ 能否自滚成循环**——本机无 API key，长会话真机复现做不了。
+  所以「0.1.213 在默认配置下会不会循环」目前只能给出「① 不成立、③ 在场」这两条事实，不给结论。
+
 
 ## 五、舰队更新与兼容 sweep（2026-10-08 立项 · 目标宿主 `0.2.0-rc.2`；**2026-10-17 六条静态扫按 `0.2.1-rc.1` 全量复算**；**2026-10-18 按 `0.2.1-rc.2` 复核，判据值逐项不变、全绿**；**2026-10-27 按 `0.2.2-rc.1` 复核自动化面，判据值逐项不变、全绿**）
 
