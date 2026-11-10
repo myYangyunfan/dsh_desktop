@@ -49,6 +49,10 @@ pub struct AppState {
     /// is_visible 恒真，只有页面（Chromium 原生遮挡跟踪）知道自己在 hidden。
     pub hb_page_hidden: std::sync::atomic::AtomicBool,
     pub page_errors: AtomicU32,
+    /// 客户端插件装配失败已触发过换页（1.0.9 保底进入通道）：`page_error` 收到
+    /// `[client-boot] FAILED` 前缀时置位并转恢复页。置位后不再重复换页——否则
+    /// 客户端若在恢复页之后又被导航回内核 URL，会反复把用户刷回恢复页。
+    pub client_boot_failed: std::sync::atomic::AtomicBool,
     pub current_session: Mutex<Option<String>>,
     pub last_port: AtomicU32,
     pub paths: shell_core::DshPaths,
@@ -68,6 +72,7 @@ impl AppState {
             hb_main: AtomicU32::new(0),
             hb_page_hidden: std::sync::atomic::AtomicBool::new(false),
             page_errors: AtomicU32::new(0),
+            client_boot_failed: std::sync::atomic::AtomicBool::new(false),
             current_session: Mutex::new(None),
             last_port: AtomicU32::new(0),
             paths: shell_core::DshPaths::resolve(),
@@ -353,6 +358,7 @@ pub fn run() {
             commands::recovery_reload,
             commands::recovery_restart,
             commands::recovery_open_logs,
+            commands::recovery_safe_mode,
             commands::sponsor_window,
             commands::float_window,
             commands::float_close,

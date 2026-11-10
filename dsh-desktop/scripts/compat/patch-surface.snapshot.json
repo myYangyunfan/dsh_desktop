@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-11-07T07:32:00.188Z",
+  "generatedAt": "2026-11-10T04:46:49.795Z",
   "kernelRoot": "@deepseek-ai",
-  "markerCount": 85,
+  "markerCount": 86,
   "surface": [
     {
       "file": "cordis-plugin-loader/lib/index.js",
@@ -218,6 +218,13 @@
         "open project dir",
         "session manage",
         "workspace pin"
+      ]
+    },
+    {
+      "file": "dsh-client-web/lib/index.js",
+      "sha256": "881f71348500a9fc",
+      "markers": [
+        "client boot failures reach the shell ([client-boot])"
       ]
     },
     {

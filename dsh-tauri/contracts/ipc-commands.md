@@ -32,6 +32,7 @@
 | `chrome:recovery-reload` (2911) | `recovery_reload` | app commands/recovery |
 | `chrome:recovery-restart` (2925) | `recovery_restart` | app commands/recovery |
 | `chrome:recovery-open-logs` (2937) | `recovery_open_logs` | app commands/recovery |
+| `chrome:recovery-safe-mode` (2941) | `recovery_safe_mode` | app commands/recovery（写 `<DSH_HOME>/safe-mode.flag` 后按「重启内核」同路径重启 boot 链：boot 同步把伴随插件全禁、只留内置插件管理页与 billion-context gate，并消费标记；1.0.9 保底进入通道） |
 | `chrome:window` (2942) | `window_control` | app commands/window |
 | `chrome:menu` (2953) | `menu_action` | app commands/menu |
 | `chrome:restart-service` (2986) | `restart_service` | app commands/lifecycle（supervisor 执行重启；spawn/杀树域在 kernel-process crate） |

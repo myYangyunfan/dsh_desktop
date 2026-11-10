@@ -250,255 +250,255 @@
   ],
   "libRs": [
     {
-      "line": 102,
+      "line": 107,
       "text": "[boot] 退出闸门置位：{reason}"
     },
     {
-      "line": 115,
+      "line": 120,
       "text": "[route] 退出中，跳过触窗动作：{label}"
     },
     {
-      "line": 121,
+      "line": 126,
       "text": "[route] 触窗动作 panic（已隔离）：{label}"
     },
     {
-      "line": 225,
+      "line": 230,
       "text": "事件循环 panic：{payload}"
     },
     {
-      "line": 226,
+      "line": 231,
       "text": "[boot] 事件循环 panic 逃逸，执行应急收尾：{payload}"
     },
     {
-      "line": 227,
+      "line": 232,
       "text": "[boot] 事件循环 panic 逃逸，执行应急收尾：{payload}"
     },
     {
-      "line": 240,
+      "line": 245,
       "text": "[boot] 应急收尾自身 panic（已放弃剩余步骤，直接退出）"
     },
     {
-      "line": 267,
+      "line": 272,
       "text": "[upgrade] 便携版运行：userData → {}"
     },
     {
-      "line": 295,
+      "line": 300,
       "text": "[boot] Linux：注入 WEBKIT_DISABLE_DMABUF_RENDERER=1（WebKitGTK 白屏根治，tauri#9394）"
     },
     {
-      "line": 308,
+      "line": 313,
       "text": "[boot] 壳进程 run() 入口"
     },
     {
-      "line": 386,
+      "line": 392,
       "text": "tauri 构建"
     },
     {
-      "line": 481,
+      "line": 487,
       "text": "[pages] preview-server 启动失败（降级 data: 内嵌页）: {e}"
     },
     {
-      "line": 483,
+      "line": 489,
       "text": "<!doctype html><meta charset=\\\"utf-8\\\"><body style=\\\"font:14px system-ui;background:#0b1220;color:#d7dde4;display:flex;align-items:center;justify-content:center;height:100vh\\\"><div style=\\\"max-width:520px\\\">静态页服务启动失败，请查看日志目录：<br>{}<br>重启应用可重试。</div></body>"
     },
     {
-      "line": 504,
+      "line": 510,
       "text": "[boot] 单实例二次启动：写唤起请求失败（不影响退出）: {e}"
     },
     {
-      "line": 506,
+      "line": 512,
       "text": "[boot] 单实例二次启动：已请求唤起运行中实例的主窗，第二实例静默退出"
     },
     {
-      "line": 516,
+      "line": 522,
       "text": "[boot] 上次会话退出标记：{prev_session}"
     },
     {
-      "line": 557,
+      "line": 563,
       "text": "[boot] 内核装配失败（主窗转恢复页，不退出）: {e}"
     },
     {
-      "line": 571,
+      "line": 577,
       "text": "[tray] 初始化失败（不影响主窗）: {e}"
     },
     {
-      "line": 600,
+      "line": 606,
       "text": "[update] 检测到客户端新版本 {} → {}（{}，{}）"
     },
     {
-      "line": 609,
+      "line": 615,
       "text": "[update] 更新检查失败（静默忽略）：{e}"
     },
     {
-      "line": 651,
+      "line": 657,
       "text": "[route] 事件路由 panic（已隔离，继续处理后续事件）"
     },
     {
-      "line": 700,
+      "line": 706,
       "text": "[route] 退出中，跳过 kernel-ready 换页（{url}）"
     },
     {
-      "line": 713,
+      "line": 719,
       "text": "[route] 内核 URL 变更（端口漂移），跳过渲染抑制直接换页（{url}）"
     },
     {
-      "line": 718,
+      "line": 724,
       "text": "kernel-ready 整页换页"
     },
     {
-      "line": 735,
+      "line": 741,
       "text": "重启抑制探针 eval"
     },
     {
-      "line": 743,
+      "line": 749,
       "text": "[route] 重启风暴渲染抑制：距上次换页 <{KERNEL_NAV_SUPPRESS_WINDOW_MS}ms 且页面存活，跳过整页换页（{url}）"
     },
     {
-      "line": 745,
+      "line": 751,
       "text": "[route] 重启风暴渲染抑制：页面探针无响应，执行整页换页（{url}）"
     },
     {
-      "line": 752,
+      "line": 758,
       "text": "重启抑制探针整页换页"
     },
     {
-      "line": 765,
+      "line": 771,
       "text": "[route] 退出中，丢弃在飞 supervisor 事件（触窗动作已跳过）"
     },
     {
-      "line": 773,
+      "line": 779,
       "text": "[route] boot 步骤 {name} OK（{ms}ms）"
     },
     {
-      "line": 775,
+      "line": 781,
       "text": "[route] boot 步骤 {name} FAIL（{ms}ms）: {}"
     },
     {
-      "line": 775,
+      "line": 781,
       "text": "未知失败"
     },
     {
-      "line": 789,
+      "line": 795,
       "text": "kernel-ready 诊断 eval"
     },
     {
-      "line": 798,
+      "line": 804,
       "text": "kernel-ready 显示/聚焦主窗"
     },
     {
-      "line": 818,
+      "line": 824,
       "text": "[route] 内核退出 code={code:?}"
     },
     {
-      "line": 822,
+      "line": 828,
       "text": "[route] 崩溃环触发（累计 {crashes} 次），主窗转恢复页"
     },
     {
-      "line": 823,
+      "line": 829,
       "text": "内核反复异常退出"
     },
     {
-      "line": 826,
+      "line": 832,
       "text": "崩溃环恢复页换页"
     },
     {
-      "line": 832,
+      "line": 838,
       "text": "内核服务反复异常退出，已进入恢复模式"
     },
     {
-      "line": 836,
+      "line": 842,
       "text": "[route] 探活失败 ×{consecutive}"
     },
     {
-      "line": 840,
+      "line": 846,
       "text": "[route] 内核假死可疑 ×{consecutive}（端口通、HTTP 无响应）"
     },
     {
-      "line": 886,
+      "line": 892,
       "text": "DSH_TAURI_REPO_ROOT={root} 不含 dsh-desktop/vendor/node"
     },
     {
-      "line": 904,
+      "line": 910,
       "text": "未找到内核目录 dsh-desktop（开发检出与安装产物布局均未命中；可设 DSH_TAURI_REPO_ROOT 指定）"
     },
     {
-      "line": 943,
+      "line": 949,
       "text": "[boot] 单实例唤起主窗 panic（已隔离，watcher 继续在岗）"
     },
     {
-      "line": 945,
+      "line": 951,
       "text": "[boot] 单实例：已唤起主窗（第二实例请求）"
     },
     {
-      "line": 967,
+      "line": 973,
       "text": "显示主窗口"
     },
     {
-      "line": 968,
+      "line": 974,
       "text": "打开日志"
     },
     {
-      "line": 969,
+      "line": 975,
       "text": "ACP 自检"
     },
     {
-      "line": 970,
+      "line": 976,
       "text": "ACP 配置（Zed）"
     },
     {
-      "line": 972,
+      "line": 978,
       "text": "一键重启"
     },
     {
-      "line": 973,
+      "line": 979,
       "text": "退出"
     },
     {
-      "line": 976,
+      "line": 982,
       "text": "无应用图标"
     },
     {
-      "line": 1001,
+      "line": 1007,
       "text": "[acp] supervisor 未就绪，自检取消"
     },
     {
-      "line": 1004,
+      "line": 1010,
       "text": "[acp] 自检开始：spawn --profile acp 做 initialize 握手"
     },
     {
-      "line": 1007,
+      "line": 1013,
       "text": "[acp] 自检通过：{summary}"
     },
     {
-      "line": 1008,
+      "line": 1014,
       "text": "ACP 服务就绪：{summary}"
     },
     {
-      "line": 1011,
+      "line": 1017,
       "text": "[acp] 自检失败：{e}"
     },
     {
-      "line": 1012,
+      "line": 1018,
       "text": "ACP 自检失败：{e}"
     },
     {
-      "line": 1025,
+      "line": 1031,
       "text": "[acp] supervisor 未就绪，导出取消"
     },
     {
-      "line": 1030,
+      "line": 1036,
       "text": "[acp] Zed 配置片段已导出：{}"
     },
     {
-      "line": 1035,
+      "line": 1041,
       "text": "配置片段已写入：{}（已打开目录，合并进 Zed 设置）"
     },
     {
-      "line": 1038,
+      "line": 1044,
       "text": "[acp] 配置导出失败：{e}"
     },
     {
-      "line": 1040,
+      "line": 1046,
       "text": "ACP 配置导出失败：{e}"
     }
   ],

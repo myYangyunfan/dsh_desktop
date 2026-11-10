@@ -244,7 +244,10 @@
       getState: function () { return call('recovery_state'); },
       reload: function () { return call('recovery_reload'); },
       restart: function () { return call('recovery_restart'); },
-      openLogs: function () { return call('recovery_open_logs'); }
+      openLogs: function () { return call('recovery_open_logs'); },
+      // 保底进入通道（1.0.9）：禁用全部伴随插件后重进，只保留内置插件管理页
+      // 与 billion-context 的 gate。标记由壳写入 DSH_HOME，boot 同步消费。
+      safeMode: function () { return call('recovery_safe_mode'); }
     }
   };
 

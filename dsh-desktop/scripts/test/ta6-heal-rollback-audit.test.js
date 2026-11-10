@@ -147,8 +147,8 @@ const EXPECTED_NON_VENDORED = [
 // 47 = 45 ＋ onboarding-step-progress-timeout ＋ onboarding-guard-report
 // （2026-10-14 首启引导两条）：靶 dsh-client-ui-settings-account/lib/client.js
 // 同样在离线闭包内，两条都带 FROM/TO 常量对，回滚 = npm ci 即 pristine。
-test('审计 1：分类覆盖全部 48 个 file transform（无回滚盲区）', () => {
-  assert.equal(fileSpecs.length, 48);
+test('审计 1：分类覆盖全部 49 个 file transform（无回滚盲区）', () => {
+  assert.equal(fileSpecs.length, 49);
   const report = [];
   for (const spec of fileSpecs) {
     const pair = INVERSE_PAIR_HINTS[spec.id];

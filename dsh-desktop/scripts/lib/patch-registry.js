@@ -99,6 +99,7 @@ const {
   TERMINAL_BASH_REL,
   ATTACH_LOCAL_REL,
   APP_BOOT_PKG_REL,
+  CLIENT_WEB_PKG_REL,
   LOADER_PKG_REL,
   UI_SETTINGS_ACCOUNT_PKG_REL,
   AGENT_PRESET_FALLBACK_PKG_RELS,
@@ -200,6 +201,7 @@ const {
   FAIL_LOUD_ISOLATION_MARKER,
   LOADER_IMPORT_REPORT_MARKER,
   PROMPT_ADMISSION_REASON_MARKER,
+  CLIENT_BOOT_FAILURE_MARKER,
   CODEX_LOCAL_BIN_MARKER,
   CLAUDE_LOCAL_BIN_MARKER,
   PI_AI_4XX_DUMP_MARKER,
@@ -224,6 +226,7 @@ const {
   transformFailLoudIsolation,
   transformLoaderImportFailureReport,
   transformPromptAdmissionReasonReport,
+  transformClientBootFailureReport,
 } = require('./loader-isolation');
 
 const {
@@ -600,6 +603,25 @@ const PATCH_SPECS = [
       prefix: 'loader 导入失败原文',
       doneLog: (file) => '已注入导入失败诊断到 ' + file,
       failLog: (file, err) => 'loader 导入失败原文注入失败: ' + err.message,
+    },
+  },
+  {
+    id: 'client-boot-failure-report',
+    group: 'guard',
+    order: 151,
+    kind: 'file',
+    layout: 'guard',
+    wslLayout: 'guard',
+    pkgRel: CLIENT_WEB_PKG_REL,
+    transform: transformClientBootFailureReport,
+    marker: CLIENT_BOOT_FAILURE_MARKER,
+    requires: [],
+    failPolicy: 'warn',
+    cli: false,
+    logs: {
+      prefix: '客户端 boot 失败上报',
+      doneLog: (file) => '已注入客户端 boot 失败上报到 ' + file,
+      failLog: (file, err) => '客户端 boot 失败上报注入失败: ' + err.message,
     },
   },
   {

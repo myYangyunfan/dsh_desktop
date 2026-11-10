@@ -98,6 +98,35 @@ pub fn recovery_restart(app: AppHandle) -> Result<serde_json::Value, BridgeError
     navigate_main(&app, &loading).map(|_| serde_json::Value::Null)
 }
 
+/// 恢复页「以安全模式重启」——**保底进入通道**（1.0.9 用户反馈根治）。
+///
+/// 背景：壳侧原本只有两条路进恢复页（内核装配失败、内核崩溃环）。「内核健康、
+/// WebView 正常、客户端插件装配失败」这一类落在两条之外——`dsh-client-web` 的
+/// `BootController.run` 只把失败条目画成 `Failed to load plugins` 面板，不抛错、
+/// 不进 `desktop.log`，重载还是同一结果，用户除了手删 profile 无路可走。
+///
+/// 本命令只写 `<DSH_HOME>/safe-mode.flag` 再走与「重启内核」**完全相同**的路径
+/// 重启 boot 链（复用 `recovery_restart`：`supervisor_tx` 事件路由不断链、端口
+/// 优先复用）。boot 同步读标记后把伴随插件在补丁层全部写成 `disabled`——只留
+/// 内置插件管理页（唯一自救界面）与 billion-context 的 gate（禁掉会让四个出厂
+/// 预设的 `inject` 永久 pending），并消费标记：一次性熔断，之后由用户在
+/// 设置 → 插件 → 内置插件 里逐个开回来。
+#[tauri::command]
+pub fn recovery_safe_mode(app: AppHandle) -> Result<serde_json::Value, BridgeError> {
+    let flag = shell_core::DshPaths::resolve()
+        .dsh_home
+        .join("safe-mode.flag");
+    if let Some(parent) = flag.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| BridgeError::internal(format!("创建 DSH_HOME 失败: {e}")))?;
+    }
+    std::fs::write(&flag, b"1\n")
+        .map_err(|e| BridgeError::internal(format!("写入安全模式标记失败: {e}")))?;
+    // 标记必须在重启之前落盘：顺序反了则 boot 同步读不到标记，用户点一次什么都
+    // 不会发生（且日志里只有一次「已重启内核」，无从分辨）。
+    recovery_restart(app)
+}
+
 #[tauri::command]
 pub fn recovery_open_logs(_app: AppHandle) -> Result<serde_json::Value, BridgeError> {
     let dir = shell_core::DshPaths::resolve().logs;
@@ -122,6 +151,25 @@ mod tests {
         assert!(seg.contains("supervisor_tx"), "必须复用装配通道 supervisor_tx: {seg}");
         assert!(seg.contains("recovery_restart_with_port"), "必须走带优先端口的重启入口");
         assert!(seg.contains("last_port"), "优先复用上次内核端口（origin 稳定）");
+    }
+
+    /// 「以安全模式重启」必须先把标记写进 DSH_HOME 再复用重启路径（1.0.9 保底
+    /// 进入通道回归锚点）：顺序反了 boot 同步读不到标记，用户点一次毫无反应，
+    /// 而日志里只有一次「已重启内核」，无从分辨。
+    #[test]
+    fn recovery_safe_mode_writes_flag_then_restarts_shape() {
+        let src = include_str!("recovery.rs").replace("\r\n", "\n");
+        let seg = src
+            .split("pub fn recovery_safe_mode")
+            .nth(1)
+            .and_then(|s| s.split("pub fn recovery_open_logs").next())
+            .expect("recovery_safe_mode 段");
+        assert!(seg.contains("safe-mode.flag"), "必须写 safe-mode.flag");
+        assert!(seg.contains("dsh_home"), "标记必须落在 DSH_HOME（与 boot 同步读的同一处）");
+        assert!(seg.contains("recovery_restart(app)"), "必须复用重启路径（事件路由不断链）");
+        let write_at = seg.find("std::fs::write").expect("必须写标记");
+        let restart_at = seg.find("recovery_restart(app)").expect("必须重启");
+        assert!(write_at < restart_at, "标记必须先落盘再重启");
     }
 
     /// 恢复页「重新加载」在崩溃环态（无内核 URL）必须走与「重启内核」同

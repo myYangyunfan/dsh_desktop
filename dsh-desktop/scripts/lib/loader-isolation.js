@@ -383,6 +383,106 @@ function transformPromptAdmissionReasonReport(src, file) {
   return { status: 'changed', src: crlf ? out.replace(/\n/g, '\r\n') : out };
 }
 
+// ── dsh-client-web：客户端 boot 失败上报到壳（1.0.9 保底进入通道）─────────────
+//
+// 背景：`BootController.run` 对失败条目只把 boot 卡片换成「Failed to load
+// plugins」面板——不抛错、不进任何日志，而壳侧三条既有判据（内核装配失败 /
+// 崩溃环 / 渲染心跳）全绿，于是「插件装崩之后客户端进不去、且没有任何出路」
+// （1.0.9 用户反馈）。本补丁把失败经既有 `page_error` 桥命令报上来：只有 Tauri
+// 才有 `__TAURI_INTERNALS__`，其它宿主检测不到就静默不发；上报全程 try 包裹，
+// 绝不反噬宿主。分三档，避免「少一个 UI 插件但能用」也被踢去恢复页：
+//   - `catch` 分支 → `[client-boot] FAILED …`：boot 流程明确中断，壳转恢复页；
+//   - 条目 failed → `[client-boot] NOTE …`：只记日志（应用仍可能正常挂载）；
+//   - mount 超时 15s → `FAILED`：`ctx.inject(['uiRenderer'])` 永不就绪是「真的
+//     进不去」的另一种形态（无异常、无失败条目，只是永远卡住），必须有界。
+const CLIENT_BOOT_FAILURE_MARKER = 'dsh-desktop isolation: client boot failures reach the shell ([client-boot])';
+
+const CLIENT_BOOT_HELPERS_OLD = [
+  '\tasync run(onFailure) {',
+  '\t\ttry {',
+].join('\n');
+
+const CLIENT_BOOT_HELPERS_NEW = [
+  '\tasync run(onFailure) {',
+  '\t\t// ' + CLIENT_BOOT_FAILURE_MARKER,
+  '\t\tconst __dshBootReport = (failed, detail) => {',
+  '\t\t\ttry {',
+  '\t\t\t\tconst _inv = globalThis.__TAURI_INTERNALS__ && globalThis.__TAURI_INTERNALS__.invoke;',
+  '\t\t\t\tif (typeof _inv !== "function") return;',
+  '\t\t\t\tconst _p = _inv("page_error", { message: "[client-boot] " + (failed ? "FAILED " : "NOTE ") + String(detail).slice(0, 2000) });',
+  '\t\t\t\tif (_p && typeof _p.catch === "function") _p.catch(() => {});',
+  '\t\t\t} catch {}',
+  '\t\t};',
+  '\t\ttry {',
+].join('\n');
+
+const CLIENT_BOOT_CATCH_OLD = [
+  '\t\t} catch (reason) {',
+  '\t\t\tconsole.error(reason);',
+].join('\n');
+
+const CLIENT_BOOT_CATCH_NEW = [
+  '\t\t} catch (reason) {',
+  '\t\t\t__dshBootReport(true, reason instanceof Error ? reason.message : String(reason));',
+  '\t\t\tconsole.error(reason);',
+].join('\n');
+
+const CLIENT_BOOT_ENTRY_OLD = [
+  '\t\t\t\tonEntryState: (name, state) => {',
+  '\t\t\t\t\tif (onFailure === void 0 || state !== "failed") this.page.setState(name, state);',
+].join('\n');
+
+const CLIENT_BOOT_ENTRY_NEW = [
+  '\t\t\t\tonEntryState: (name, state) => {',
+  '\t\t\t\t\tif (onFailure === void 0 || state !== "failed") this.page.setState(name, state);',
+  '\t\t\t\t\tif (state === "failed") __dshBootReport(false, "plugin " + name + " failed to load");',
+].join('\n');
+
+const CLIENT_BOOT_MOUNT_OLD = '\t\t\tawait mountClient(ctx, this.container);';
+
+const CLIENT_BOOT_MOUNT_NEW = [
+  '\t\t\tawait Promise.race([',
+  '\t\t\t\tmountClient(ctx, this.container),',
+  '\t\t\t\tnew Promise((resolve) => setTimeout(() => {',
+  '\t\t\t\t\t__dshBootReport(true, "client mount did not complete within 15000ms");',
+  '\t\t\t\t\tresolve();',
+  '\t\t\t\t}, 15000)),',
+  '\t\t\t]);',
+].join('\n');
+
+/**
+ * `@deepseek-ai/dsh-client-web/lib/index.js` 变换：客户端 boot 失败上报到壳。
+ *
+ * 四处锚点全部命中才改（版本漂移时整体跳过并留 anchor-missing，不留半截注入）；
+ * 幂等靠注入指纹（marker 注释 + `__dshBootReport(true, reason` 调用）。四个
+ * 锚点互不重叠，替换顺序无关。
+ * @returns {{status:'already'|'anchor-missing'|'changed', src?: string, detail?: string}}
+ */
+function transformClientBootFailureReport(src, file) {
+  const crlf = src.includes('\r\n');
+  const text = crlf ? src.replace(/\r\n/g, '\n') : src;
+  if (text.includes(CLIENT_BOOT_FAILURE_MARKER) && text.includes('__dshBootReport(true, reason')) {
+    return { status: 'already' };
+  }
+  const anchors = [
+    [CLIENT_BOOT_HELPERS_OLD, 'run 入口'],
+    [CLIENT_BOOT_CATCH_OLD, 'catch 分支'],
+    [CLIENT_BOOT_ENTRY_OLD, 'onEntryState'],
+    [CLIENT_BOOT_MOUNT_OLD, 'mountClient 调用'],
+  ];
+  for (const [segment, label] of anchors) {
+    if (!text.includes(segment)) {
+      return { status: 'anchor-missing', detail: `未找到 ${label} 锚点（内核版本可能已变更），跳过 ` + file };
+    }
+  }
+  const out = text
+    .replace(CLIENT_BOOT_HELPERS_OLD, CLIENT_BOOT_HELPERS_NEW)
+    .replace(CLIENT_BOOT_CATCH_OLD, CLIENT_BOOT_CATCH_NEW)
+    .replace(CLIENT_BOOT_ENTRY_OLD, CLIENT_BOOT_ENTRY_NEW)
+    .replace(CLIENT_BOOT_MOUNT_OLD, CLIENT_BOOT_MOUNT_NEW);
+  return { status: 'changed', src: crlf ? out.replace(/\n/g, '\r\n') : out };
+}
+
 module.exports = {
   LOADER_TREE_ISOLATION_MARKER,
   LOADER_ACTIVATION_ISOLATION_MARKER,
@@ -395,10 +495,12 @@ module.exports = {
     FAIL_LOUD_ISOLATION_MARKER,
     LOADER_IMPORT_REPORT_MARKER,
     PROMPT_ADMISSION_REASON_MARKER,
+    CLIENT_BOOT_FAILURE_MARKER,
   },
   transformLoaderTreeIsolation,
   transformLoaderActivationIsolation,
   transformFailLoudIsolation,
   transformLoaderImportFailureReport,
   transformPromptAdmissionReasonReport,
+  transformClientBootFailureReport,
 };

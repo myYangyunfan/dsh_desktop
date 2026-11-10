@@ -128,7 +128,11 @@ pub fn open_external(url: String) -> Result<serde_json::Value, BridgeError> {
 }
 
 #[tauri::command]
-pub fn page_error(state: State<AppState>, message: String) -> Result<serde_json::Value, BridgeError> {
+pub fn page_error(
+    app: tauri::AppHandle,
+    state: State<AppState>,
+    message: String,
+) -> Result<serde_json::Value, BridgeError> {
     let n = state.page_errors.fetch_add(1, Ordering::Relaxed) + 1;
     eprintln!("[page-error #{n}] {message}");
     // 落盘 desktop.log（2026-08-31 删除对话排障实证盲区）：release 壳是
@@ -137,6 +141,28 @@ pub fn page_error(state: State<AppState>, message: String) -> Result<serde_json:
     // 异常/插件 RPC 失败（如 alert「操作失败: …」）在生产日志里彻底蒸发。
     // 与 route_log 同走 file_log（写者锁串行化，防双写者行撕裂）。
     crate::supervisor::file_log(&format!("[page-error #{n}] {message}"));
+    // ---- 保底进入通道：客户端插件装配失败 → 恢复页（1.0.9 用户反馈根治）----
+    // `dsh-client-web` 的 BootController 对失败条目只画 boot 卡片、不抛错，壳原本
+    // 完全看不见这一类失败（内核健康 + WebView 正常 = 三条既有判据全绿），用户
+    // 停在「Failed to load plugins」上除了手删 profile 无路可走。补丁
+    // `client-boot-failure-report` 把失败以 `[client-boot] FAILED …` 前缀报上来。
+    //
+    // 只认这个前缀（`[client-boot]` 的其它消息仍只记日志）；一次性：`swap` 保证
+    // 重复上报不重复换页，否则用户被踢到恢复页后只要客户端又被导航回内核 URL，
+    // 就会反复刷回恢复页而永远点不到按钮。
+    if message.starts_with("[client-boot] FAILED")
+        && !state.client_boot_failed.swap(true, Ordering::SeqCst)
+    {
+        crate::supervisor::file_log(
+            "[client-boot] 客户端插件装配失败：主窗转恢复页（点「以安全模式重启」可绕过坏插件重进）",
+        );
+        let recovery = state
+            .recovery_url
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone();
+        let _ = crate::commands::common::navigate_main(&app, &recovery);
+    }
     Ok(serde_json::Value::Null)
 }
 

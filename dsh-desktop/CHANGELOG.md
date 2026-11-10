@@ -5,6 +5,18 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### feat(patch)：客户端 boot 失败上报 + 安全模式一次性熔断（2026-11-10）
+
+- 新增补丁 `client-boot-failure-report`（`scripts/lib/loader-isolation.js` 的
+  `transformClientBootFailureReport`）：改 `@deepseek-ai/dsh-client-web/lib/index.js` 的
+  `BootController.run`，把客户端插件装配失败经既有 `page_error` 桥命令报给壳（`[client-boot]` 前缀，
+  FAILED 换页 / NOTE 只记日志 / mount 15s 超时算 FAILED）。补丁层净数 60→61。
+- 新增 `scripts/lib/safe-mode.js`：安全模式的纯函数与标记文件生命周期（`safe-mode.flag`）。
+  boot 同步（`sync-companion-plugins.js`）在**写盘之前**应用、**写盘之后**消费标记——顺序反了
+  遇写盘失败就丢掉唯一一次自救机会（回归锁 `unit-safe-mode` 的接线顺序用例咬住）。
+  保留 `dsh-builtin-manager`（自救界面）与 `bili-compaction-gate`（否则出厂预设永久 pending）。
+- `patch-surface.snapshot.json` 已重取（91 个被干预文件 / 86 个标记家族），`verify` 复绿。
+
 ### chore(brand)：随包页面文案 DSH Desktop → DSH Pack（2026-11-10）
 
 - `assets/loading.html` / `assets/recovery.html` / `renderer-recovery.js` 的标题与提示文案跟随改名，

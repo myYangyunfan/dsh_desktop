@@ -473,7 +473,7 @@ test('marker 单一数据源: patch-adapters.markers 与 loader-isolation.marker
   const { markers: adapterMarkers } = require('../lib/patch-adapters');
   // 5 = 三条在役隔离 + 两条「原文上身」诊断（loader-import-failure-report /
   // prompt-admission-reason-report，2026-10-10；含已退役的 tree-isolation 常量）。
-  assert.equal(Object.keys(loaderMarkers).length, 5);
+  assert.equal(Object.keys(loaderMarkers).length, 6);
   assert.equal(adapterMarkers.LOADER_TREE_ISOLATION_MARKER, loaderMarkers.LOADER_TREE_ISOLATION_MARKER);
   assert.equal(adapterMarkers.LOADER_ACTIVATION_ISOLATION_MARKER, loaderMarkers.LOADER_ACTIVATION_ISOLATION_MARKER);
   assert.equal(adapterMarkers.FAIL_LOUD_ISOLATION_MARKER, loaderMarkers.FAIL_LOUD_ISOLATION_MARKER);

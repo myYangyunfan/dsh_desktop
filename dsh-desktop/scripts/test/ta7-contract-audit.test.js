@@ -269,9 +269,10 @@ function parseRegisteredCommands() {
 
 test('TA7-3a ipc-commands.md §2 → generate_handler：契约命令全注册', () => {
   const md = parseMdCommands();
-  // 38 = crates/bridge/src/commands.rs CHANNELS 的 invoke+send 总数
-  // （2026-10 拆 Electron 余额遗留线移出 balance_refresh）。
-  assert.strictEqual(md.size, 38, `契约命令计数: ${md.size}`);
+  // 39 = crates/bridge/src/commands.rs CHANNELS 的 invoke+send 总数
+  // （2026-10 拆 Electron 余额遗留线移出 balance_refresh；2026-11-10 增
+  // recovery_safe_mode = 1.0.9 保底进入通道）。
+  assert.strictEqual(md.size, 39, `契约命令计数: ${md.size}`);
   const reg = parseRegisteredCommands();
   const missing = [...md].filter((c) => !reg.has(c));
   assert.deepStrictEqual(missing, [], '契约有而未注册的 command');
@@ -437,10 +438,11 @@ function parseShimSurfaces() {
   return surfaces;
 }
 
-test('TA7-7a bridge-api.md 方法表（46）→ 垫片挂载：差集为空', () => {
+test('TA7-7a bridge-api.md 方法表（47）→ 垫片挂载：差集为空', () => {
   const md = parseMdMethodSurfaces();
-  // 46 = shim.rs REQUIRED_SURFACES.len()（2026-10 拆余额遗留线移出 refreshBalance）。
-  assert.strictEqual(md.size, 46, `契约方法计数: ${md.size}`);
+  // 47 = shim.rs REQUIRED_SURFACES.len()（2026-10 拆余额遗留线移出 refreshBalance；
+  // 2026-11-10 增 recovery.safeMode = 1.0.9 保底进入通道）。
+  assert.strictEqual(md.size, 47, `契约方法计数: ${md.size}`);
   const missing = diff(md, parseShimSurfaces());
   assert.deepStrictEqual(missing, [], '契约有而垫片缺的方法/字段');
 });

@@ -61,6 +61,9 @@ const REQUIRED_SURFACES: &[&str] = &[
     "recovery.reload",
     "recovery.restart",
     "recovery.openLogs",
+        // 1.0.9 保底进入通道：禁用全部伴随插件后重进（保留内置插件管理页与
+        // billion-context gate），壳写 DSH_HOME/safe-mode.flag 后重启 boot 链。
+        "recovery.safeMode",
 ];
 
 /// 垫片源码是否包含某方法名的定义（形如 `name: function` / `name,`）。
@@ -91,7 +94,7 @@ mod tests {
     fn all_surfaces_present() {
         let missing: Vec<&str> = REQUIRED_SURFACES.iter().copied().filter(|s| !defines(s)).collect();
         assert!(missing.is_empty(), "垫片缺失契约方法: {missing:?}");
-        assert_eq!(REQUIRED_SURFACES.len(), 46, "契约方法计数（42 + guard 4 面）");
+        assert_eq!(REQUIRED_SURFACES.len(), 47, "契约方法计数（42 + guard 4 面 + 1.0.9 安全模式）");
     }
 
     /// check-agent-update 退役锚点（v0.5.3）：npm 内核更新链整体退役
@@ -370,7 +373,7 @@ mod window_chrome_tests {
             "☕ 请作者喝咖啡",
             "sponsorWindow()",                         // sponsor 走赞助窗通道
             "menuItemHtml('about'",
-            "关于 DSH Desktop",
+            "关于 DSH Pack",
             "menuItemHtml('quit'",
             "' data-act=\"' + act",                    // 菜单项统一带 data-act（事件路由键）
             "menu_action",                             // 动作统一经 menu_action 桥

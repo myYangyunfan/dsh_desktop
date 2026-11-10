@@ -87,7 +87,8 @@ const LOADER_PKG_REL = path.join('cordis-plugin-loader', 'lib', 'index.js');
 // 首启引导补丁目标（@deepseek-ai/dsh-client-ui-settings-account 的浏览器半边）：
 // 「开始设置」卡死与 guard 静默拒绝都落在这份 client bundle 里。
 const UI_SETTINGS_ACCOUNT_PKG_REL = path.join('dsh-client-ui-settings-account', 'lib', 'client.js');
-const APP_BOOT_PKG_REL = path.join('dsh-app-boot', 'lib', 'index.js');
+const APP_BOOT_PKG_REL = path.join('dsh-app-boot', 'lib', 'index.js');const CLIENT_WEB_PKG_REL = path.join('dsh-client-web', 'lib', 'index.js'); // 客户端 boot 失败上报（1.0.9 保底进入通道）。
+
 // agent-preset 未知 id 回落补丁目标。0.2.0-rc.2：dsh-agent-presets 已拆成
 // dsh-agent-preset（声明）+ dsh-agent-preset-registry（注册表，resolve/retain 的
 // not-found 硬抛在这里）。lib/index.js 是运行时经 exports "." 实际加载的入口。
@@ -340,6 +341,7 @@ module.exports = {
   LOADER_PKG_REL,
   UI_SETTINGS_ACCOUNT_PKG_REL,
   APP_BOOT_PKG_REL,
+  CLIENT_WEB_PKG_REL,
   AGENT_PRESET_FALLBACK_PKG_RELS,
   PROMPT_CONTEXT_LITERAL_PKG_RELS,
   API_GATEWAY_ABSENT_PKG_REL,

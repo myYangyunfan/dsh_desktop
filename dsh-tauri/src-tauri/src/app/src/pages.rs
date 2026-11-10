@@ -232,6 +232,7 @@ pub const RECOVERY_HTML: &str = r#"<!doctype html>
     <button class="primary" onclick="doRestart()">重启内核</button>
     <button onclick="doReload()">重新加载</button>
     <button onclick="doLogs()">打开日志</button>
+            <button onclick="doSafeMode()" title="禁用全部伴随插件后重进（保留内置插件管理页），用于插件装崩后进不去客户端">以安全模式重启</button>
   </div>
 </main>
 <script>
@@ -251,6 +252,9 @@ pub const RECOVERY_HTML: &str = r#"<!doctype html>
   window.doRestart = function(){ B && B.recovery.restart().then(refresh, refresh); };
   window.doReload  = function(){ B && B.recovery.reload(); };
   window.doLogs    = function(){ B && B.recovery.openLogs(); };
+        // 安全模式：壳先写 DSH_HOME/safe-mode.flag 再重启 boot 链；成功会换到
+        // loading 页（本页随之销毁），失败留在本页并刷新状态。
+        window.doSafeMode = function(){ B && B.recovery.safeMode().then(function(){}, refresh); };
   refresh();
 })();
 </script>
@@ -278,7 +282,7 @@ mod tests {
     #[test]
     fn recovery_page_contract_markers() {
         assert!(RECOVERY_HTML.contains("data-tauri-drag-region"));
-        for (btn, fn_name) in [("doRestart", "restart"), ("doReload", "reload"), ("doLogs", "openLogs")] {
+        for (btn, fn_name) in [("doRestart", "restart"), ("doReload", "reload"), ("doLogs", "openLogs"), ("doSafeMode", "safeMode")] {
             assert!(RECOVERY_HTML.contains(btn), "缺按钮 {btn}");
             assert!(RECOVERY_HTML.contains(&format!("recovery.{fn_name}")), "缺 recovery.{fn_name} 契约调用");
         }

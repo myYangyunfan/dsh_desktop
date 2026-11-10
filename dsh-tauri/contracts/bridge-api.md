@@ -113,7 +113,7 @@
 | 38 | `analyzeOrder(): Promise<any>` | bundle 顺序检测 | `dsh:diag-order` → `diag_order` |
 | 39 | `applyOrder(order): Promise<any>` | bundle 顺序应用 | `dsh:diag-order-apply` → `diag_order_apply` |
 
-### 2.8 `recovery`（恢复页，4 项）
+### 2.8 `recovery`（恢复页，5 项）
 
 | # | 签名 | 语义 | 通道 |
 |---|------|------|------|
@@ -121,6 +121,7 @@
 | 47 | `reload(): Promise<any>` | 重载主窗 | `chrome:recovery-reload` → `recovery_reload` |
 | 48 | `restart(): Promise<any>` | 重启应用 | `chrome:recovery-restart` → `recovery_restart` |
 | 49 | `openLogs(): Promise<any>` | 打开日志目录 | `chrome:recovery-open-logs` → `recovery_open_logs` |
+| 50 | `safeMode(): Promise<any>` | 以安全模式重启：禁用全部伴随插件（保留内置插件管理页与 billion-context gate）后重进，1.0.9 保底进入通道 | `chrome:recovery-safe-mode` → `recovery_safe_mode` |
 
 ### 2.9 `guard`（插件保护中心交互面，4 项；只读面 + 轻量解）
 

@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+### feat(stability)：客户端插件装配失败不再「静默 + 无出路」——恢复页 + 安全模式（2026-11-10）
+
+1.0.9 用户反馈「插件加载失败后直接进入不了客户端，没有官方版的保底进入机制」。取证结论：
+壳侧原本只有两条路进恢复页（`lib.rs:556` 内核装配失败、`lib.rs:820` 崩溃环），而
+「内核健康、WebView 正常、心跳照跳」下的客户端插件装配失败**正好落在两条之外**——
+`dsh-client-web` 的 `BootController.run` 只把失败条目画成 `Failed to load plugins` 卡片，
+不抛错，于是 `page_error` 通道一条也收不到、`desktop.log` 连一行都没有，重载还是同一结果。
+
+三层修复：
+
+- **可见**：新补丁 `client-boot-failure-report` 在 `run` 里注入 `__dshBootReport`，三档分级——
+  `catch` 报 `[client-boot] FAILED`；条目 failed 报 `NOTE`（只记日志，**不换页**：少一个 UI
+  插件但能用，不该把用户踢到恢复页）；`await mountClient` 包成 15s `Promise.race` 超时报
+  `FAILED`（`inject(['uiRenderer'])` 永不就绪是「真的进不去」的另一形态，无异常也无失败条目）。
+  非 Tauri 宿主检测不到 `__TAURI_INTERNALS__` 就静默不发，全程 try 包裹，绝不反噬宿主。
+- **可自救**：壳侧 `page_error` 认 `[client-boot] FAILED` 前缀转恢复页，`AppState.client_boot_failed`
+  用 `swap` 做一次性（否则页面再被导航回内核 URL 会反复刷回恢复页、永远点不到按钮）。
+- **保底进入**：恢复页新增「以安全模式重启」→ `recovery_safe_mode` 写 `<DSH_HOME>/safe-mode.flag`
+  后复用 `recovery_restart`（事件路由不断链、端口复用）；boot 同步读标记把伴随插件在补丁层
+  全部写成 `disabled` 并**消费标记**（一次性熔断，之后由用户在管理页逐个开回来）。
+
+安全模式两条**不可省**的保留项：`dsh-builtin-manager`（管理页本身就是自救界面，全禁等于把死锁
+从 boot 搬到设置页）与 `bili-compaction-gate`（禁掉后四个出厂预设的 `inject: [biliBasicCompactionPolicy]`
+永久 pending，会话创建直接死）。
+
+回归：`unit-safe-mode`（13 例）、`recovery_safe_mode_writes_flag_then_restarts_shape`、
+`unit-patch-output-parsable`（注入体可编译）、`ta7-contract-audit` 18/18（新桥方法同入
+`bridge-api.md` §2.8 与 `shim.rs` `REQUIRED_SURFACES`，46→47）、`ta6-registry-invariants` 20/20
+（补丁 60→61）。契约：`ipc-commands.md` 增 `chrome:recovery-safe-mode` (2941)。
+
 ### chore(brand)：用户可见名 DSH Desktop → DSH Pack（2026-11-10）
 
 - 只改**显示面**：窗口标题、托盘 tooltip、系统通知标题（含 ACP 通知）、托盘菜单与「关于」、

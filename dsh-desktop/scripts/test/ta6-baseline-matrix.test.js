@@ -58,7 +58,7 @@ const FORM = kernel.packageVersion;
 // → 60 = 62 − agent-loop-scheduler-guard − menu-viewport（0.2.2-rc.1 换代退役两条，
 // 均为「上游自己做到了」，见 ta6-registry-invariants 的 E 与下方 60 基线说明）。
 // 逐项理由见 ta6-registry-invariants.test.js 的 E。
-const SPEC_COUNT = 60;
+const SPEC_COUNT = 61;
 
 /** 与 kernel-pin 同版的 pristine 闭包根；不在场返回 null（调用侧响亮失败）。 */
 function formRoot() {
@@ -212,6 +212,7 @@ const BASELINE = {
     'session-unknown-event-tolerance': 'changed',
     'released-v0-history-recovery': 'changed',
     'appboot-bootstrap-singleton': 'changed',
+    'client-boot-failure-report': 'changed',
   },
 };
 

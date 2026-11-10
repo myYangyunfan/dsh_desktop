@@ -17,7 +17,7 @@ Node 逻辑仍是活代码（Tauri sidecar 直接复用，零重写）。主平�
 | --- | --- |
 | `dsh-tauri/` | 桌面壳主线：`contracts/`（六份契约）、`src-tauri/`（Rust 工作区）、`sidecar/`（Node 薄封装）、`ui/`（frontendDist 占位页）、`dlls/`（D3DCOMPILER_47.dll）、`package-payload/`（打包暂存，gitignored）、`ta13-soak/`（Rust soak 压测）、`scripts/`（stage-payload / stage-plugin-gate / smoke-installed）、`docs/` |
 | `dsh-desktop/` | 内核侧 Node 逻辑：构建期补丁、自愈（根级 boot 链脚本 `watchdog.js` / `*-heal.js` 等）、插件同步、余额链、`docs/`、`assets/plugins/`（**随安装包分发**——v1.0.0 内置线，2026-10-08 裁定；内置伴随插件在册 **33** 个（v1.0.0 由 39 精简、2026-10-07 移除 11 个，2026-10-11 增自研 `dsh-builtin-manager` 内置插件管理页，2026-10-16 增自研 `dsh-goal-completion` 目标收尾标签页，2026-10-17 随内核 0.2.1 换代退役 `dsh-reasoning-effort`，2026-11-08 按用户要求退役 `dsh-quest-ui` / `dsh-auto-compact` / `dsh-zcode-migrate` 三件，2026-11-09 按用户要求新增 `dsh-context` 与 `ds-harness-remote` 两件，同日按用户要求把 8 件内置件升到 npm latest：shop 0.9.3 / toolbox-ui 1.10.1 / context 0.83.0 / billion-context-dsh 0.2.27 / free-search 0.9.39 / pocket 2.12.0 / easyrewrite 3.0.1 / harness-remote 0.6.4；同日再按用户要求把上下文压缩件整体换成上游统一版 `billion-context` 0.1.213——旧 `billion-context-dsh` 0.2.27 退役，理由见「已知坑」里 preset 隔离那条）；随包 agent 预设子系统已整体拆除）、`vendor/`（node/npm 运行时 + `dsh-kernel/` pin 的离线内核 tgz，后者**必须入库**） |
-| `dsh-desktop/scripts/test/` | 全部 Node 测试（201 个 `*.test.js/.mjs`，另有 `fixtures/`、`ta16-snapshots/`、mock server），单测唯一去处 |
+| `dsh-desktop/scripts/test/` | 全部 Node 测试（202 个 `*.test.js/.mjs`，另有 `fixtures/`、`ta16-snapshots/`、mock server），单测唯一去处 |
 | `.github/workflows/` | `ci.yml`（PR 门禁）、`tauri-release.yml`（tag 发版，唯一发布入口）、`release.yml`（退役 Electron 线，全部 `if: false`） |
 
 ## 常用命令
@@ -189,6 +189,21 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   `internal/config`，断言两行变 disabled、`tool-result-pruner` 不动、`{global:true}` 与 provide 在位、verdict
   未置位时原样返回（反证），并核对 **pin 内核四个预设的 compaction 组仍只挂 gate 硬编码的那两个包名**——
   上游改名 / 增行 / 拿掉 `group: true` 时这里先红，而不是用户那头静默失效。
+- **客户端插件装配失败是「静默 + 无出路」的第四类失败——内核健康、WebView 正常、心跳照跳（1.0.9 用户反馈根治）**：
+  `dsh-client-web` 的 `BootController.run`（`lib/index.js`）对失败条目只把 boot 卡片换成 `Failed to load plugins`（`:169`），
+  **不抛错** → `page_error` 一条收不到、`desktop.log` 零行、重载同一结果，用户只能手删 profile；壳侧两条既有入口
+  （`lib.rs:556` 装配失败 / `:820` 崩溃环）**都盖不到**。另一形态：提供 `uiRenderer` 的插件失败 → `mountClient` 的
+  `await ctx.inject(['uiRenderer'], …)`（`:192-195`）永不就绪，应用永不挂载（无异常、无失败条目）。
+  2026-11-10 三层：① 补丁 `client-boot-failure-report`（`loader-isolation.js` 的 `transformClientBootFailureReport`）注入
+  `__dshBootReport` 分三档——`catch` 报 `[client-boot] FAILED`、条目 failed 报 `NOTE`（**只记日志**：少一个插件但能用不该踢人）、
+  mount 包成 15s `Promise.race` 超时报 `FAILED`；非 Tauri 宿主无 `__TAURI_INTERNALS__` 即静默不发。② 壳侧 `page_error` 认
+  `[client-boot] FAILED` 转恢复页，`AppState.client_boot_failed` 用 `swap` 一次性（否则页面再被导航回内核 URL 会反复刷回）。
+  ③ 恢复页「以安全模式重启」→ `recovery_safe_mode` 写 `<DSH_HOME>/safe-mode.flag` 后复用 `recovery_restart`；boot 同步把
+  伴随插件全禁并**消费标记**（一次性熔断）。两条**不可省**的保留项：`dsh-builtin-manager`（管理页＝自救界面）、
+  `bili-compaction-gate`（禁掉后四个出厂预设的 `inject: [biliBasicCompactionPolicy]` 永久 pending，会话创建直接死）。
+  回归锁 `unit-safe-mode`（13 例，含「写盘→消费标记」顺序断言）、`recovery_safe_mode_writes_flag_then_restarts_shape`、
+  `unit-patch-output-parsable`、`ta7-contract-audit`（新桥方法须同入 `bridge-api.md` §2.8 与 `shim.rs` 的 `REQUIRED_SURFACES`）。
+  改这条链路必须真机验一次：塞坏客户端插件 → 日志出现 `[client-boot]` → 转恢复页 → 安全模式能进 → 管理页仍在。
 - **内核撤掉「公开提示词变量」这类隐式契约时，坏的是发消息本身，而静态扫与 boot 全绿——换代必须真发一条消息（2026-10-17 实测）**：
   rc.2 的 `dsh-agent-loop` 注册 `provider / model / cwd` 三个 `systemPrompt.variable`，0.2.1-rc.1 只剩前两个；
   内置插件 `dsh-workspace-anchor` 的锚点节带 `{{cwd}}`，于是**每一条 prompt 的装配期**抛
@@ -301,10 +316,10 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   ② 兼容性不报错，意外以日志收场（`panics.log`）不以崩溃收场；③ 用户数据不动。
 - 文档里的测试基线数字常滞后。**现值（2026-11-07 实测，随包内核 0.2.2-rc.1；基线含
   与 GitHub 侧 v1.0.3 合流 + Windows 路径门禁 + 两件插件提交闸门 + `dsh-prompt-optimizer`
-  换为 vendored 上游 0.6.1 + better-sidebar「资源管理器栏头折叠 / 在本地打开」两条根治；补丁层净数 **60** = rc.4 的 62 退役两条（`menu-viewport` 上游已自实现、`agent-loop-scheduler-guard` 的
+  换为 vendored 上游 0.6.1 + better-sidebar「资源管理器栏头折叠 / 在本地打开」两条根治；补丁层净数 **61** = rc.4 的 62 退役两条（`menu-viewport` 上游已自实现、`agent-loop-scheduler-guard` 的
   `TOOL_RUNTIME_SCHEDULER` 符号面被整体删除）；0.2.2-rc.1 换代 13 处锚点失配全部按真字节重靶，
   判定矩阵 43 changed / 12 root / 5 target-absent）**：
-  `scripts/test/` **201 个测试文件**（`*.test.js` 200 + `*.test.mjs` 1；`dsh-prompt-optimizer`
+  `scripts/test/` **202 个测试文件**（`*.test.js` 201 + `*.test.mjs` 1；`dsh-prompt-optimizer`
   自研线的四个套件 `unit-prompt-optimizer-{context-intent,lexical-write,project-goal,upgrade}`
   随目录替换 `git rm`，新增 vendored 机器锁 `unit-prompt-optimizer-vendored`；更早
   `unit-patch-pi-ai-opencode-go-models` 随该补丁退役一并 `git rm`，另有新增
@@ -316,6 +331,9 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   `npm test` = 2193 例 / **0 fail / 0 cancelled**；pass 与 skip 的分界随本机材料
   与网络浮动（2026-11-09 全量实测（含新增 `dsh-context` / `ds-harness-remote` 两件）pass 2184 / skip 9；
   同日「接管期说明 + 接管面回归锁」批实测 **2208 例 / pass 2199 / skip 9 / fail 0**；
+  同日「客户端失败可见 + 安全模式保底进入」批实测 **2222 例 / pass 2212 / skip 9 / fail 1**（那 1 条是并行抖动：
+  两次全量分别炸在 `ta4-synapse-lock-stale` 与 `ta13-soak-boot-chain`，**单跑各自全绿**——判据是「单跑绿 + 失败用例每次不同」）；
+  Rust 同批：`dsh-tauri-app --lib` **236 passed / 0 failed / 1 ignored**、`bridge` **30 passed / 0 failed**；
   退役三件前的参照值是 2222 例 / pass 2213），
   skip 逐条都是环境缺料而非缺陷（pristine 夹具缺 `@openai/codex` / `@earendil-works/pi-ai`、
   openclaw 双轨的兄弟目录 `../openclaw-dsh-bridge/` 不在盘、本机无 `D:\workspace\dsh-pack` 克隆、

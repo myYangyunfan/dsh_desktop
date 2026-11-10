@@ -31,6 +31,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { COMPANION_PLUGINS } = require('./lib/companion-plugins');
+const { safeModeRequested, disableCompanionsForSafeMode, clearSafeModeFlag } = require('./lib/safe-mode');
 const { CORE_BUNDLE_NAMES } = require('../profile-manifest');
 const { writeFileAtomic } = require('./lib/patch-io');
 const { applyAll } = require('./integration/patch-runner');
@@ -341,6 +342,27 @@ function syncPlugins(home, dryRun, dshPkgDir) {
   // 致命启动又会把补丁层改名抹掉）。存量禁用行与登记行的撤回见上方
   // removeRetiredCompanionPatchRows。
 
+  // ---- 安全模式（恢复页「以安全模式重启」的一次性熔断）----
+  // 1.0.9 用户反馈「插件加载失败后直接进不了客户端，没有官方版的保底进入机制」：
+  // boot 同步是唯一同时掌握「伴随插件清单」与「补丁层文本」的地方，所以保底落
+  // 在这里——把全部伴随插件写成 disabled，只留两件非留不可的（理由见
+  // scripts/lib/safe-mode.js 文件头：管理页是唯一自救界面；billion-context 的
+  // gate 被禁会让四个出厂预设的 inject 永久 pending）。
+  // 标记一次性：本函数落盘后由下方 clearSafeModeFlag 消费，之后由用户在
+  // 设置 → 插件 → 内置插件 里逐个开回来，本段不再覆盖用户的选择。
+  const safeMode = safeModeRequested(home);
+  if (safeMode.enabled) {
+    const applied = disableCompanionsForSafeMode(patch, COMPANION_PLUGINS);
+    if (applied.patch !== patch) {
+      patch = applied.patch;
+      changed = true;
+    }
+    log(
+      `安全模式：已停用 ${applied.disabled.length} 个伴随插件` +
+        `（保留 ${applied.kept.join('、') || '无'}${applied.unchanged.length ? `，${applied.unchanged.length} 个本已停用` : ''}）`,
+    );
+  }
+
   if (changed) {
     if (dryRun) log(`dry-run: 将写入 ${patchFile}`);
     else {
@@ -349,6 +371,16 @@ function syncPlugins(home, dryRun, dshPkgDir) {
     }
   } else {
     log('补丁层无变化（全部条目已存在）');
+  }
+
+  // 安全模式标记的消费必须在补丁层**落盘之后**：顺序反了（先删标记再写盘）遇到
+  // 写盘失败就丢掉了唯一一次自救机会，用户只能手删 profile。
+  if (safeMode.enabled) {
+    if (dryRun) {
+      log(`dry-run: 将删除安全模式标记 ${path.join(home, 'safe-mode.flag')}`);
+    } else if (clearSafeModeFlag(home)) {
+      log('安全模式标记已消费（一次性熔断；插件可在 设置 → 插件 → 内置插件 逐个恢复）');
+    }
   }
 
   // hotplug-hub 识别（与 main.js 运行时同步共用 scripts/lib/hub-registry.js

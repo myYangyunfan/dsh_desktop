@@ -30,6 +30,7 @@ pub const CHANNELS: &[ChannelMapping] = &[
     m("chrome:recovery-reload", "recovery_reload", false, false),
     m("chrome:recovery-restart", "recovery_restart", false, false),
     m("chrome:recovery-open-logs", "recovery_open_logs", false, false),
+    m("chrome:recovery-safe-mode", "recovery_safe_mode", false, false),
     m("chrome:window", "window_control", false, false),
     m("chrome:menu", "menu_action", false, false),
     m("chrome:restart-service", "restart_service", false, false),
@@ -100,7 +101,7 @@ mod tests {
     /// 伴随插件裁撤移出，`dsh:balance-refresh` 同月随 Electron 余额线退役移出。
     #[test]
     fn channel_count_matches_contract() {
-        assert_eq!(CHANNELS.len(), 38, "通道总数必须与契约文档一致");
+        assert_eq!(CHANNELS.len(), 39, "通道总数必须与契约文档一致");
         assert_eq!(CHANNELS.iter().filter(|c| c.cut).count(), 0, "无裁撤通道（guard:action 已迁移）");
         assert_eq!(
             CHANNELS.iter().filter(|c| c.fire_and_forget).count(),
