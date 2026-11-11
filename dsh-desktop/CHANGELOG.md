@@ -5,6 +5,30 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### fix(boot)：安全模式熔断接进运行时同步器 —— 上一版又修在没人跑的文件上（2026-11-11）
+
+真机跑了一遍「塞坏伴随插件 → 恢复页 → 以安全模式重启」，**后半段是空的**：`recovery_safe_mode` 把
+`<DSH_HOME>/safe-mode.flag` 写得好好的，重启也执行了，但伴随插件一个都没停，用户仍停在同一个失败页。
+原因是首版把熔断只接在 `scripts/sync-companion-plugins.js` 这条 **CLI 专用脚本**上，而 Tauri 的 boot 步走的是
+`sidecar/cli.js` → `integration.syncPlugins()` → `integration/plugin-sync.js` 的 `sync()`——那条链里从来没有
+「读标记」这一步。这已经是同一类「注入成功 / 接线成功 ≠ 运行时执行」的**第二个实例**（第一个是
+`client-boot-failure-report` 注入构建期源码）。
+
+- `scripts/integration/plugin-sync.js` 的 `sync()` 在配套件登记落盘之后接入安全模式：读
+  `safeModeRequested(home)` → `disableCompanionsForSafeMode(patch, COMPANION_PLUGINS)` → `writeFileAtomic`
+  → `clearSafeModeFlag(home)`。顺序不可调换（先删标记再写盘，遇写盘失败就丢掉唯一一次自救机会）；
+  写盘抛错时**保留标记**并记日志「下次启动重试」。
+- `unit-safe-mode` 增 3 例把「我们扫的文件 = 壳真会执行的文件」钉死：`integration/plugin-sync.js` 必须接线
+  safe-mode、消费顺序必须是补丁→写盘→删标记、且 `sidecar/cli.js` 的 `step('sync', () => integration.syncPlugins())`
+  → `const syncPlugins = () => pluginSync.sync()` 这条可达链不许断。变异验证：把 `sync()` 里的
+  `safeModeRequested(home)` 换成常量 → 两例当场红。
+- 真机复验（debug 构建 + 隔离 `DSH_HOME`）：坏 `dsh-basics-panel` → 日志
+  `[page-error #4] [client-boot] FAILED 客户端插件装配失败：dsh-basics-panel | web boot: 1 entry did not activate …`
+  → 主窗转恢复页；UIA 点「以安全模式重启」→ 日志「安全模式：已停用 **31** 个伴随插件（保留 dsh-builtin-manager）」+
+  「安全模式标记已消费」→ 客户端正常进得去，设置 → 插件 → 内置插件配置仍在。
+  再启一次 boot：32 条 `disabled: true` 原样保留（一次性熔断，不会被下次 sync 开回来）。
+- `npm test` 2237 例 / pass 2228 / skip 9 / fail 0；`patch-surface verify` 92 文件绿。
+
 ### fix(patch)：客户端兜底改注入 index.html —— 上一版的生产者根本不在运行时路径上（2026-11-11）
 
 上一批（11-10）把「客户端插件装配失败要能被壳看见 + 能安全模式进得去」三件套做齐了，但**生产者打偏了**：

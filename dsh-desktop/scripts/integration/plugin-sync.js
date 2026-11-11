@@ -21,6 +21,7 @@ const crypto = require('node:crypto');
 const { writeFileAtomic } = require('../lib/patch-io');
 const { readFileRetry } = require('../lib/patch-io');
 const { COMPANION_PLUGINS } = require('../lib/companion-plugins');
+const { safeModeRequested, disableCompanionsForSafeMode, clearSafeModeFlag } = require('../lib/safe-mode');
 const { syncHubRecognition } = require('../lib/hub-registry');
 const { CORE_BUNDLE_NAMES } = require('../../profile-manifest');
 const { isPatchListValid, verifyBundleDir } = require('../../profile-bundle-heal');
@@ -499,6 +500,40 @@ function createPluginSync(ctx) {
       if (registration.changed) {
         writeFileAtomic(patchFile, registration.patch);
         log('已同步配套插件到 web profile: ' + COMPANION_PLUGINS.map((p) => p.id).join(', '));
+      }
+
+      // ---- 安全模式（恢复页「以安全模式重启」的一次性熔断）----
+      // 1.0.9 用户反馈「插件加载失败后直接进不了客户端，没有官方版的保底进入
+      // 机制」：壳侧 `recovery_safe_mode` 只负责写 `<DSH_HOME>/safe-mode.flag`，
+      // 真正的熔断必须发生在**本函数**——它是运行时 boot 链唯一同时掌握「伴随
+      // 插件清单」与「补丁层落盘」的地方。
+      // 2026-11-11 真机取证（这次是打偏的第二例）：首版把这段只接在
+      // `scripts/sync-companion-plugins.js` 那条 CLI 专用脚本上，而 Tauri 的
+      // boot 步走的是 sidecar → integration.syncPlugins → 本函数，于是标记文件
+      // 写了没人消费：点「以安全模式重启」只是重启了一次内核，伴随插件一个都
+      // 没停，用户仍停在同一个失败页。判据见 `unit-safe-mode.test.js` 的
+      // 「运行时路径」组——源码扫描对象必须是本文件，不是 CLI。
+      // 标记一次性：补丁层落盘之后立刻消费，之后由用户在 设置 → 插件 → 内置
+      // 插件 里逐个开回来。顺序反了（先删标记再写盘）遇到写盘失败就丢掉了唯一
+      // 一次自救机会。
+      const safeMode = safeModeRequested(home);
+      if (safeMode.enabled) {
+        try {
+          let before = '';
+          try { before = fs.readFileSync(patchFile, 'utf8'); } catch { /* 全新 profile */ }
+          const applied = disableCompanionsForSafeMode(before, COMPANION_PLUGINS);
+          if (applied.patch !== before) writeFileAtomic(patchFile, applied.patch);
+          log(
+            '安全模式：已停用 ' + applied.disabled.length + ' 个伴随插件' +
+              '（保留 ' + (applied.kept.join('、') || '无') +
+              (applied.unchanged.length ? '，' + applied.unchanged.length + ' 个本已停用' : '') + '）',
+          );
+          if (clearSafeModeFlag(home)) {
+            log('安全模式标记已消费（一次性熔断；插件可在 设置 → 插件 → 内置插件 逐个恢复）');
+          }
+        } catch (err) {
+          log('安全模式熔断失败（标记保留，下次启动重试）: ' + err.message);
+        }
       }
 
       // 第八步：hotplug-hub 识别（issue #156 止血后口径）。hub lib/CLI 的

@@ -177,6 +177,61 @@ test('dry-run 不落盘、不消费标记', () => {
   assert.ok(dryAt > 0 && dryAt < clearAt, 'dry-run 必须挡在 clearSafeModeFlag 之前');
 });
 
+// ---- 运行时路径组（1.0.9 第二例「修在没人执行的文件上」的回归锁）----
+// 2026-11-11 真机取证：壳侧 `recovery_safe_mode` 把 `<DSH_HOME>/safe-mode.flag`
+// 写得好好的，但 Tauri 的 boot 步一次都没消费它——首版把熔断只接在本文件上面那条
+// `scripts/sync-companion-plugins.js`（CLI 专用脚本，运行时不跑）里，而壳走的是
+// `sidecar/cli.js` boot 步 → `integration.syncPlugins()` →
+// `integration/plugin-sync.js` 的 `sync()`。于是点「以安全模式重启」只重启了一次
+// 内核，伴随插件一个都没停，用户仍停在同一个失败页。
+// 下面三条把「我们扫的文件 = 壳真会执行的文件」钉死：扫描对象必须是
+// integration/plugin-sync.js，并且它必须真的挂在 boot 步的调用链上。
+const runtimeSyncSrc = fs
+  .readFileSync(path.join(__dirname, '..', 'integration', 'plugin-sync.js'), 'utf8')
+  .replace(/\r\n/g, '\n');
+const integrationSrc = fs
+  .readFileSync(path.join(__dirname, '..', 'integration', 'index.js'), 'utf8')
+  .replace(/\r\n/g, '\n');
+const sidecarSrc = fs
+  .readFileSync(path.join(tauriRoot, '..', 'dsh-tauri', 'sidecar', 'cli.js'), 'utf8')
+  .replace(/\r\n/g, '\n');
+
+test('运行时消费标记：integration/plugin-sync.js 必须接线 safe-mode', () => {
+  assert.ok(runtimeSyncSrc.includes("require('../lib/safe-mode')"), '运行时同步器必须接线 safe-mode');
+  assert.ok(runtimeSyncSrc.includes('safeModeRequested(home)'), '必须读标记（home = DSH_HOME）');
+  assert.ok(runtimeSyncSrc.includes('disableCompanionsForSafeMode('), '必须把伴随插件写成 disabled');
+  assert.ok(runtimeSyncSrc.includes('clearSafeModeFlag(home)'), '必须消费标记（一次性熔断）');
+});
+
+test('运行时消费顺序：补丁 → 写盘 → 删标记', () => {
+  const seg = runtimeSyncSrc.slice(runtimeSyncSrc.indexOf('const safeMode = safeModeRequested(home);'));
+  assert.ok(seg.length > 0, '必须存在安全模式段');
+  const applyAt = seg.indexOf('disableCompanionsForSafeMode(');
+  const writeAt = seg.indexOf('writeFileAtomic(patchFile, applied.patch)');
+  const clearAt = seg.indexOf('clearSafeModeFlag(home)');
+  assert.ok(applyAt > 0, '必须调用 disableCompanionsForSafeMode');
+  assert.ok(writeAt > applyAt, '补丁层必须先落盘');
+  assert.ok(clearAt > writeAt, '标记消费必须晚于写盘（写盘失败时保留标记）');
+});
+
+test('运行时可达：sidecar boot 的 sync 步 → integration.syncPlugins → pluginSync.sync()', () => {
+  assert.match(
+    sidecarSrc,
+    /step\('sync',\s*\(\)\s*=>\s*integration\.syncPlugins\(\)\)/,
+    'sidecar boot 的 sync 步必须直接调 integration.syncPlugins（换了入口这条链就断了）',
+  );
+  assert.match(
+    integrationSrc,
+    /const \{ createPluginSync \} = require\('\.\/plugin-sync'\)/,
+    'integration 必须装配 plugin-sync',
+  );
+  assert.match(
+    integrationSrc,
+    /const syncPlugins = \(\) => pluginSync\.sync\(\)/,
+    'syncPlugins 必须直接落到 pluginSync.sync()（安全模式熔断就在这里）',
+  );
+});
+
 test('测试自身不碰真实 home（隔离哨兵）', () => {
   // 所有落盘操作都走 tmpHome()（mkdtemp 在系统临时目录）；这里断言本文件没有
   // 直接拼用户 home，防止后续改动把夹具指向真实 ~/.dsh。

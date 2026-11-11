@@ -203,16 +203,18 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   （超时≠确证失败，不踢可能还在启动的页面）+ 就地覆盖层给「重新加载 / 以安全模式重启」。
   壳侧：`page_error` 认 `[client-boot] FAILED` 转恢复页，`AppState.client_boot_failed` 用 `swap` 一次性；「以安全模式重启」
   → `recovery_safe_mode`（**必须同时在 `permissions/bridge.toml` 放行，否则远程页被 ACL 拒、按钮静默失效**）写
-  `<DSH_HOME>/safe-mode.flag` 后复用 `recovery_restart`，boot 全禁伴随插件并**消费标记**。两条**不可省**保留项：
+  `<DSH_HOME>/safe-mode.flag` 后复用 `recovery_restart`；标记由 **`integration/plugin-sync.js` 的 `sync()`** 消费
+  （CLI 脚本 `sync-companion-plugins.js` 不在运行时链上，2026-11-11 真机第二例）。两条**不可省**保留项：
   `dsh-builtin-manager`（管理页＝自救界面）、`bili-compaction-gate`（禁掉后四个出厂预设的 `inject: [biliBasicCompactionPolicy]`
   永久 pending，会话创建直接死）。
-  回归锁：`unit-kernel-web-boot-watchdog`（10 例，vm 实跑注入体，含「只闪一轮不许误踢」与「class 漂移退回文本判定」反证）、
-  `unit-client-boot-runtime-surface`（源码补丁不在服务链上 + **看门狗用的每个 DOM 事实都必须在被服务 chunk 里找到出处**：
-  `dataset.dshBoot` / `_failed_<hash>` / `_failedItem_<hash>` / `Failed to load plugins` / `dshDesktopBoot` 分叉；
-  **夹具不许发明宿主契约**）、`unit-bridge-acl-coverage`（页面侧 command ⊆ ACL）、
-  `unit-safe-mode`、`recovery_safe_mode_writes_flag_then_restarts_shape`。看门狗 transform 已做**版本自愈**（同 marker 不同字节
-  就地替换），否则 dev 树停旧字节、快照与产物互证假绿。真机验一次：塞坏客户端插件 → 日志 `[client-boot]` → 恢复页 →
-  安全模式能进 → 管理页仍在。
+  回归锁：`unit-kernel-web-boot-watchdog`（10 例，vm 实跑，含「只闪一轮不许误踢」「class 漂移退回文本判定」反证）、
+  `unit-client-boot-runtime-surface`（服务链 + **看门狗用的每个 DOM 事实都须能在被服务 chunk 找到出处**：
+  `dataset.dshBoot` / `_failed_<hash>` / `Failed to load plugins` / `dshDesktopBoot` 分叉；**夹具不许发明宿主契约**）、
+  `unit-bridge-acl-coverage`（页面侧 command ⊆ ACL）、`unit-safe-mode`（含
+  「sidecar boot 的 sync 步 → integration.syncPlugins → pluginSync.sync()」可达性哨兵）、
+  `recovery_safe_mode_writes_flag_then_restarts_shape`。看门狗 transform 已做**版本自愈**（同 marker 不同字节
+  就地替换），否则 dev 树停旧字节、快照与产物互证假绿。真机已验（2026-11-11）：塞坏伴随插件 → `[client-boot] FAILED` →
+  恢复页 → 点「以安全模式重启」→ 31 件停用、管理页在、客户端进得去。
 - **内核撤掉「公开提示词变量」这类隐式契约时，坏的是发消息本身，而静态扫与 boot 全绿——换代必须真发一条消息（2026-10-17 实测）**：
   rc.2 的 `dsh-agent-loop` 注册 `provider / model / cwd` 三个 `systemPrompt.variable`，0.2.1-rc.1 只剩前两个；
   内置插件 `dsh-workspace-anchor` 的锚点节带 `{{cwd}}`，于是**每一条 prompt 的装配期**抛
@@ -336,9 +338,7 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   `unit-better-sidebar-explorer-open`；2026-11-08 退役三件内置插件时 `git rm` 了
   `unit-quest-ui` / `unit-zcode-migrate-registration` / `unit-auto-compact-gate`，
   其中最后一件的 change-review 半边保留并改名 `unit-change-review-gate`），
-  `npm test` = 2193 例 / **0 fail / 0 cancelled**；pass/skip 分界随本机材料与网络浮动（2026-11-09 pass 2184 / skip 9；
-  接管期说明批 2208 例 / pass 2199 / skip 9；11-10「客户端失败可见」批 2222 例 / pass 2212 / skip 9 / fail 1（并行抖动，单跑全绿）；
-  11-11「兜底改注入 index.html + ACL 守门」批 **2234 例 / pass 2225 / skip 9 / fail 0**（连跑两遍同结果）；
+  `npm test` = 2193 例 / **0 fail / 0 cancelled**；pass/skip 分界随本机材料与网络浮动（11-11「兜底改注入 index.html + ACL 守门」批 **2234 例 / pass 2225 / skip 9 / fail 0**；11-12「安全模式接运行时链」批 **2237 例 / pass 2228 / skip 9 / fail 0**；
   Rust 同批：`dsh-tauri-app --lib` **236 passed / 0 failed / 1 ignored**、`bridge` **30 passed / 0 failed**），
   skip 都是环境缺料（pristine 缺 codex/pi-ai、openclaw 兄弟目录不在盘、本机无 dsh-pack 克隆、真实网络、
   `.tmp-kernel` 不可用、无特权建符号链接）——一律以现跑输出为准，**pass 与 fail 才是判据**。
