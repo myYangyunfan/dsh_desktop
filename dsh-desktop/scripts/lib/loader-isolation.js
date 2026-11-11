@@ -385,6 +385,14 @@ function transformPromptAdmissionReasonReport(src, file) {
 
 // ── dsh-client-web：客户端 boot 失败上报到壳（1.0.9 保底进入通道）─────────────
 //
+// ⚠ 2026-11-11 实测降级：本补丁注入的 `dsh-client-web/lib/index.js` 是**构建期源码**，
+// 不在运行时路径上——服务端 `dsh-web-app` 发的是 `dsh-web-frontend/dist/index.html`
+// 加一个自包含 assets chunk，整包 grep `dsh-client-web` / 本 marker 均 0 命中。所以
+// 下面这些 `__dshBootReport` 调用**永不执行**。真正在跑的生产者是补丁
+// `kernel-web-boot-watchdog`（patch-adapters.js，注入被服务的 index.html），边界由
+// `unit-client-boot-runtime-surface` 咬住。本段只作前向兼容保留（上游若改成运行时
+// 加载源码包即刻生效），改客户端失败可见性请改那边，别改这里然后以为修好了。
+//
 // 背景：`BootController.run` 对失败条目只把 boot 卡片换成「Failed to load
 // plugins」面板——不抛错、不进任何日志，而壳侧三条既有判据（内核装配失败 /
 // 崩溃环 / 渲染心跳）全绿，于是「插件装崩之后客户端进不去、且没有任何出路」

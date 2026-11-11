@@ -89,7 +89,10 @@ function buildSurface(kernelRoot, markers) {
     for (const e of entries) {
       const full = path.join(d, e.name);
       if (e.isDirectory()) walk(full);
-      else if (/\.js$/.test(e.name)) files.push(full);
+      // 内核树里的 .html 也进干预面：`kernel-web-boot-watchdog` 注入的是
+      // dsh-web-frontend/dist/index.html（**被服务的那个页面**），只认 .js 时它
+      // 整份不在快照里——1.0.9「客户端兜底生产者打偏」正是这样一路绿过去的。
+      else if (/\.(js|html)$/.test(e.name)) files.push(full);
     }
   })(kernelRoot);
   files.sort();

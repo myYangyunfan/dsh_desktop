@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### fix(stability)：安全模式按钮的 ACL 放行 + 生产者改回运行时路径（2026-11-11）
+
+11-10 那批的三层修复有两处让整条链「静态全绿、真机照旧」：
+
+- **`recovery_safe_mode` 没进 ACL**：命令在 `crates/bridge/src/commands.rs` 注册、垫片面也暴露了
+  `recovery.safeMode`，但 `src/app/permissions/bridge.toml` 的 `bridge-phase1` 放行清单里没有它——
+  远程 origin（`http://127.0.0.1` 内核页）调用会被 Tauri 直接拒，「以安全模式重启」按钮等于点了没反应。
+  已补放行，并新增 Node 哨兵 `unit-bridge-acl-coverage`（页面侧出现的每个 command 名必须在 CHANNELS
+  登记且在 ACL 放行；另有「已知缺口一旦补上必须从例外清单删掉」的反向用例）。
+- **生产者不在运行时路径上**：`[client-boot]` 的注入点在 `dsh-client-web` 构建期源码里，服务端发的却是
+  自包含的 `dsh-web-frontend/dist/assets/index-*.js`（整包 0 命中）。真正的生产者改为
+  `kernel-web-boot-watchdog` 注入被服务的 `dist/index.html`：`[data-dsh-boot]` 卡片仍在 = 应用没挂载，
+  卡片里出现 `_failed_` 连看两轮即经既有 `page_error` 通道上报 `[client-boot] FAILED`（壳侧 `page_error`
+  认这个前缀转恢复页，逻辑未动），45s 只发 `NOTE` 不换页。判据由 `unit-client-boot-runtime-surface` 咬住。
+
+Rust 源码未改（只改了权限清单），`bridge.toml` 变更不影响任何编解码或契约面。
+
 ### feat(stability)：客户端插件装配失败不再「静默 + 无出路」——恢复页 + 安全模式（2026-11-10）
 
 1.0.9 用户反馈「插件加载失败后直接进入不了客户端，没有官方版的保底进入机制」。取证结论：

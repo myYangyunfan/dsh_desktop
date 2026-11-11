@@ -605,6 +605,14 @@ const PATCH_SPECS = [
       failLog: (file, err) => 'loader 导入失败原文注入失败: ' + err.message,
     },
   },
+  // 前向兼容保留（2026-11-11 实测降级，**不在运行时路径上**）：
+  // 这一段注入的是 `dsh-client-web/lib/index.js`——构建期源码。服务端 `dsh-web-app`
+  // 发的是 `dsh-web-frontend/dist/index.html` + 一个自包含 assets chunk，运行时与它
+  // 毫无关系（整包 grep `dsh-client-web` / 本 marker 均 0 命中）。所以这里注入的
+  // `__dshBootReport` 永不被调用：它骗得过 patch-surface verify，骗不过用户。
+  // 真正的生产者是补丁 `kernel-web-boot-watchdog`（注入被服务的 index.html），
+  // 边界由 `unit-client-boot-runtime-surface` 咬住。留着本补丁只为上游哪天改成
+  // 运行时加载源码包时能立刻生效——别拿它当「客户端失败可见性」的凭据。
   {
     id: 'client-boot-failure-report',
     group: 'guard',

@@ -942,18 +942,34 @@ function transformApiGatewayAbsent(src, file) {
 }
 
 // ---------------------------------------------------------------------------
-// 内核 web UI boot 看门狗（#154 第三根因）：client module system 不可达时
-// 前端无限转圈。
-//   · 形态：内核进程活着、HTTP 正常，但启动数据（__DSH_BOOT__ / client
-//     module system / 插件 boot）一直不落定——前端 boot 页 spinner 无限转，
-//     壳侧恢复页不会出现（内核进程没死，探活恒过）。
-//   · 触发面：boot manifest 取回挂起、module bundle 加载失败、插件 fiber 永
-//     不 settle（loader await 永不返回）。既有 fail-loud 只覆盖「内核自己
-//     抓到错误」的分支；此处兜「什么都没发生」的静默挂起。
-//   · 修法：在 dsh-web-frontend/dist/index.html 注入独立看门狗脚本（幂等），
-//     45s 有界等待后若 boot 页仍停在 spinner（或模块 bundle 根本没加载），
-//     用覆盖层给出明确错误 + 「重新加载」出口 + 完全退出重启指引——不再
-//     无限转圈。boot 成功（卡片被真 UI 替换）或 fail-loud 已展示时不打扰。
+// 内核 web UI boot 看门狗（#154 第三根因 + 1.0.9「插件装崩就进不去客户端」）：
+// 前端 boot 页静默卡死 / 装配失败时的有界兜底；也是本仓**唯一**在运行时真实执行的
+// 客户端侧判据（原因见下）。
+//   · 形态一（静默挂起）：内核进程活着、HTTP 正常，但启动数据（__DSH_BOOT__ /
+//     client module system / 插件 boot）一直不落定——boot 页 spinner 无限转，
+//     壳侧恢复页不会出现（内核没死，探活恒过）。
+//   · 形态二（装配失败，1.0.9 用户反馈）：客户端插件 failed，boot 卡片换成
+//     `Failed to load plugins`——内核不抛错、页面不冒泡、desktop.log 零行，用户
+//     看到的只是一个进不去的界面，重载同一结果，只能手删 profile 自救。
+//   · 为什么不在 dsh-client-web 里做：`dsh-client-web/lib/index.js` 是构建期源码，
+//     服务端发的 `dsh-web-frontend/dist/index.html` 只加载一个自包含 assets chunk，
+//     与之无关（整包 grep `dsh-client-web` / `dshBootReport` 均 0 命中）。在那里
+//     注入的生产者永不被调用，却能骗过 `patch-surface verify`——只有本文件注入的
+//     index.html 才是运行时路径。
+//   · 判定依据（按被服务 chunk 的真字节核过，不是猜的）：页面入口 AppWebEntry
+//     `new JZ(container)` 把 boot UI 根节点 append 进 #root，并给它
+//     `dataset.dshBoot = ""`；失败时 `page.fail()` 渲染 `_failed_<hash>` 容器，条目
+//     是 `_failedItem_<hash>`（CSS modules 名，chunk 内实测
+//     `_failed_u7vgf_72` / `_failedItem_u7vgf_86`）。挂载成功时 React 接管容器、
+//     boot 根节点被移除。另记：失败只有在 `globalThis.dshDesktopBoot === undefined`
+//     时才走 `page.fail`（有它则走宿主回调，卡片不出现）——本仓壳从不定义它
+//     （全仓只有一条注释提到），所以用户看到的就是这张卡片。
+//   · 判据：`#root` 里 `[data-dsh-boot]` 仍在 = 应用没挂载；卡片里出现失败容器
+//     → 连看两轮（≈2s，避瞬时重渲染误判）即判致命，经既有 page_error 通道上报
+//     `[client-boot] FAILED …`，由壳侧转恢复页（那里有「以安全模式重启」）。
+//     45s 仍停在卡片则就地给覆盖层（重新加载 / 以安全模式重启两条出口），只记
+//     `[client-boot] NOTE` **不换页**——超时不等于确证失败，不得把一个可能还在
+//     启动的页面踢走。
 //     纯 DOM 实现（零 React 依赖），页面/内核版本差异只影响锚点失配跳过。
 // ---------------------------------------------------------------------------
 const KERNEL_BOOT_WATCHDOG_MARKER = 'dsh-desktop compat: kernel web boot watchdog';
@@ -963,51 +979,114 @@ const KERNEL_BOOT_WATCHDOG_ANCHOR = '    <div id="root"></div>';
 // 看门狗脚本（ES5；运行期文本中的换行经 \n 转义，构造为行数组保持可读）。
 const KERNEL_BOOT_WATCHDOG_SCRIPT = [
   '  <script>',
-  '  /* ' + KERNEL_BOOT_WATCHDOG_MARKER + '（#154）：boot 页有界等待，超时给出错误与恢复出口 */',
+  '  /* ' + KERNEL_BOOT_WATCHDOG_MARKER + '（#154 + 1.0.9）：boot 页有界等待；装配失败即刻上报壳侧并给出恢复出口 */',
   '  (function () {',
   "    'use strict';",
   '    var START = Date.now();',
   '    var LIMIT_MS = 45000;',
   '    var POLL_MS = 2000;',
-  '    function isStuck() {',
-  "      var root = document.getElementById('root');",
-  '      if (!root) return false;',
-  "      var card = root.querySelector('[data-dsh-boot]');",
-  '      if (card) {',
-  '        // boot 页仍在：spinner = 卡死；fail-loud（_failed_ 节点）已展示 → 不打扰',
-  "        return card.querySelector('[class*=\"_failed_\"]') === null;",
-  '      }',
-  '      // 卡片已被真 UI 替换或模块系统已就绪 → 完成；两者皆无 = 模块 bundle 根本没加载',
-  '      return root.children.length === 0 && !window.__DSH_MODULES__;',
+  '    var failStreak = 0;',
+  '    var reported = false;',
+  '    function rootEl() { return document.getElementById("root"); }',
+  '    // boot 卡片还在 = React 尚未接管容器（挂载成功时容器被清空、卡片必消失）。',
+  '    function bootCard() {',
+  '      var root = rootEl();',
+  '      if (!root) return null;',
+  "      return root.querySelector('[data-dsh-boot]');",
   '    }',
-  '    function showRecovery() {',
-  "      if (document.getElementById('dsh-boot-watchdog')) return;",
-  "      var root = document.getElementById('root');",
-  '      if (!root) return;',
+  '    // 失败面：容器 class 形如 `_failed_<hash>`，条目 `_failedItem_<hash>`。',
+  '    // 取条目原文（插件 id / 错误文案）；class 名漂移时退回整卡文本判定。',
+  '    function failedInfo(card) {',
+  '      var out = [];',
+  '      var box = null;',
+  '      try { box = card.querySelector(\'[class*="_failed_"]\'); } catch (e) { box = null; }',
+  '      var nodes = [];',
+  '      try { nodes = box ? box.querySelectorAll(\'[class*="_failedItem_"]\') : []; } catch (e) { nodes = []; }',
+  '      for (var i = 0; i < nodes.length && out.length < 6; i++) {',
+  "        var t = (nodes[i].textContent || '').replace(/\\s+/g, ' ').trim();",
+  '        if (t && out.indexOf(t) === -1) out.push(t.length > 120 ? t.slice(0, 120) : t);',
+  '      }',
+  '      if (out.length) return out;',
+  "      var all = (box || card).textContent || '';",
+  "      if (all.indexOf('Failed to load plugins') !== -1) out.push('Failed to load plugins');",
+  '      return out;',
+  '    }',
+  '    // 挂载判定：容器被 React 接管（有子节点且 boot 卡片已消失）；卡片还在但容器',
+  '    // 里另有真 UI 时同样算已挂载，避免把能用的界面误判成致命。',
+  '    function isMounted() {',
+  '      var root = rootEl();',
+  '      if (!root) return false;',
+  '      var card = bootCard();',
+  '      if (!card) return root.children.length > 0;',
+  '      return root.children.length > 1;',
+  '    }',
+  '    // 页面侧唯一既有通道：壳侧 page_error 命令（不新建桥命令）。',
+  '    function invoke(cmd, args) {',
+  '      try {',
+  '        var inv = window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke;',
+  "        if (typeof inv !== 'function') return null;",
+  '        return inv(cmd, args);',
+  '      } catch (e) { return null; }',
+  '    }',
+  '    function report(message) {',
+  '      if (reported) return;',
+  '      reported = true;',
+  "      invoke('page_error', { message: message });",
+  '    }',
+  '    function mkButton(label, primary, onClick) {',
+  '      var b = document.createElement("button");',
+  '      b.textContent = label;',
+  "      b.style.cssText = primary ? 'padding:9px 22px;border-radius:8px;border:1px solid #4a7cb5;background:#2d5b8f;color:#fff;cursor:pointer;font-size:14px;' : 'padding:9px 22px;border-radius:8px;border:1px solid #32405280;background:#1a222c;color:#d7dde4;cursor:pointer;font-size:14px;';",
+  "      b.addEventListener('click', onClick);",
+  '      return b;',
+  '    }',
+  '    function showRecovery(titleText, msgText) {',
+  '      var root = rootEl();',
+  "      if (!root || document.getElementById('dsh-boot-watchdog')) return;",
   '      var panel = document.createElement("div");',
   "      panel.id = 'dsh-boot-watchdog';",
   "      panel.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:#0b1220;color:#d7dde4;font:14px/1.7 \"Segoe UI\",\"Microsoft YaHei\",sans-serif;text-align:center;padding:24px;';",
   '      var box = document.createElement("div");',
   '      var title = document.createElement("div");',
   "      title.style.cssText = 'font-size:18px;font-weight:600;margin-bottom:12px;';",
-  "      title.textContent = '内核服务异常';",
+  '      title.textContent = titleText;',
   '      var msg = document.createElement("div");',
-  "      msg.style.cssText = 'max-width:520px;margin:0 auto 16px;color:#9fb0c0;white-space:pre-wrap;';",
-  "      msg.textContent = '启动数据（client module system）长时间不可达，页面已停止等待。\\n可点击下方「重新加载」重试；若反复出现，请完全退出并重启 DSH Desktop（启动链会自动修复）。';",
+  "      msg.style.cssText = 'max-width:560px;margin:0 auto 16px;color:#9fb0c0;white-space:pre-wrap;';",
+  '      msg.textContent = msgText;',
   '      var btns = document.createElement("div");',
   "      btns.style.cssText = 'display:flex;gap:12px;justify-content:center;';",
-  '      var reload = document.createElement("button");',
-  "      reload.textContent = '重新加载';",
-  "      reload.style.cssText = 'padding:9px 22px;border-radius:8px;border:1px solid #32405280;background:#1a222c;color:#d7dde4;cursor:pointer;font-size:14px;';",
-  "      reload.addEventListener('click', function () { location.reload(); });",
-  '      btns.appendChild(reload);',
+  "      btns.appendChild(mkButton('重新加载', false, function () { location.reload(); }));",
+  "      btns.appendChild(mkButton('以安全模式重启', true, function () {",
+  "        var p = invoke('recovery_safe_mode');",
+  "        if (p && typeof p.then === 'function') p.then(function () {}, function () { location.reload(); });",
+  '        else location.reload();',
+  '      }));',
   '      box.appendChild(title); box.appendChild(msg); box.appendChild(btns);',
   '      panel.appendChild(box);',
   '      root.appendChild(panel);',
   '    }',
   '    function tick() {',
-  '      if (!isStuck()) return;',
-  '      if (Date.now() - START >= LIMIT_MS) { showRecovery(); return; }',
+  '      if (isMounted()) return;',
+  '      var card = bootCard();',
+  '      var bad = card ? failedInfo(card) : [];',
+  '      if (bad.length) {',
+  '        // 连看两轮才算数：避开一次瞬时重渲染把「能用的界面」判成致命。',
+  '        failStreak += 1;',
+  '        if (failStreak >= 2) {',
+  "          var detail = bad.join(' | ');",
+  "          report('[client-boot] FAILED 客户端插件装配失败：' + detail);",
+  "          showRecovery('客户端插件装配失败', '有插件未能装载，客户端因此没有启动。\\n可点「以安全模式重启」禁用全部伴随插件后重进（保留内置插件管理页），再逐个启用排查。\\n\\n失败项：' + detail);",
+  '          return;',
+  '        }',
+  '        setTimeout(tick, POLL_MS);',
+  '        return;',
+  '      }',
+  '      failStreak = 0;',
+  '      if (Date.now() - START >= LIMIT_MS) {',
+  "        report('[client-boot] NOTE 客户端 ' + Math.round(LIMIT_MS / 1000) + 's 内未挂载，已就地给出恢复面板');",
+  "        showRecovery('内核服务异常', '启动数据（客户端模块）长时间不可达，页面已停止等待。\\n可点「重新加载」重试；若反复出现，请点「以安全模式重启」禁用全部伴随插件后重进，或完全退出并重启 DSH Pack。');",
+  '        return;',
+  '      }',
   '      setTimeout(tick, POLL_MS);',
   '    }',
   "    if (document.readyState === 'complete' || document.readyState === 'interactive') {",
@@ -1020,22 +1099,30 @@ const KERNEL_BOOT_WATCHDOG_SCRIPT = [
 ].join('\n');
 
 /**
- * 内核 web UI boot 看门狗（#154 第三根因）：index.html 注入有界等待看门狗。
- * 幂等（marker + 注入体双重判定）；锚点失配（版本差异）跳过不阻断。
+ * 内核 web UI boot 看门狗（#154 第三根因 + 1.0.9 客户端装配失败兜底）：
+ * index.html 注入有界等待 + 失败上报看门狗。
+ * 幂等，并且**版本自愈**：注入体本身变了（同 marker、不同字节）就地替换旧块——
+ * 否则 dev 树会一直停在旧字节上（marker 命中即 already），快照与产物互证假绿。
+ * 锚点失配（内核版本差异）跳过不阻断。
  */
 function transformKernelBootWatchdog(src, file) {
   const crlf = src.includes('\r\n');
   const text = crlf ? src.replace(/\r\n/g, '\n') : src;
-  if (text.includes(KERNEL_BOOT_WATCHDOG_MARKER) && text.includes("dsh-boot-watchdog")) {
-    return { status: 'already' };
+  const INJECTED = KERNEL_BOOT_WATCHDOG_ANCHOR + '\n' + KERNEL_BOOT_WATCHDOG_SCRIPT;
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (text.includes(KERNEL_BOOT_WATCHDOG_MARKER)) {
+    const re = new RegExp(esc(KERNEL_BOOT_WATCHDOG_ANCHOR) + '\\n  <script>\\n  /\\* '
+      + esc(KERNEL_BOOT_WATCHDOG_MARKER) + '[\\s\\S]*?\\n  </script>');
+    const hit = text.match(re);
+    if (!hit) return { status: 'already' }; // marker 在但块形状不可识别：不重复注入
+    if (hit[0] === INJECTED) return { status: 'already' };
+    const out = text.replace(re, () => INJECTED);
+    return { status: 'changed', detail: '看门狗注入体已更新（就地替换旧块）', src: crlf ? out.replace(/\n/g, '\r\n') : out };
   }
   if (!text.includes(KERNEL_BOOT_WATCHDOG_ANCHOR)) {
     return { status: 'anchor-missing', detail: '未找到内核 web UI index.html mount 点锚点（版本可能已变更），跳过 ' + file };
   }
-  const out = text.replace(
-    KERNEL_BOOT_WATCHDOG_ANCHOR,
-    KERNEL_BOOT_WATCHDOG_ANCHOR + '\n' + KERNEL_BOOT_WATCHDOG_SCRIPT,
-  );
+  const out = text.replace(KERNEL_BOOT_WATCHDOG_ANCHOR, () => INJECTED);
   return { status: 'changed', src: crlf ? out.replace(/\n/g, '\r\n') : out };
 }
 

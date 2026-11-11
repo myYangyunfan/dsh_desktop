@@ -5,6 +5,33 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### fix(patch)：客户端兜底改注入 index.html —— 上一版的生产者根本不在运行时路径上（2026-11-11）
+
+上一批（11-10）把「客户端插件装配失败要能被壳看见 + 能安全模式进得去」三件套做齐了，但**生产者打偏了**：
+`client-boot-failure-report` 注入的是 `@deepseek-ai/dsh-client-web/lib/index.js`，而服务端 `dsh-web-app`
+的 `resolveDistIndex()` 发的是 `@deepseek-ai/dsh-web-frontend/dist/index.html` 加一个自包含的
+`dist/assets/index-*.js` chunk（整包 grep `dsh-client-web` / 注入标记 **0 命中**）。于是那段 `__dshBootReport`
+**运行时永不被调用**，`patch-surface verify` 却照样绿——注入成功 ≠ 运行时执行。同一批的用户观感与 1.0.9 无差。
+
+- **生产者迁到 `kernel-web-boot-watchdog`**（`scripts/lib/patch-adapters.js`，注入被服务的 `index.html`）：
+  判据是 `document.querySelector('[data-dsh-boot]')` 仍在 = React 没接管容器（挂载成功必清空卡片），
+  一箭双雕覆盖「失败卡片」与「`uiRenderer` 缺失导致永久转圈」两形。卡片里出现 `_failed_` 节点（内核自己
+  报了装配失败）**连看两轮（≈2s，避瞬时重渲染误判）** 即 `invoke('page_error', { message: '[client-boot] FAILED …' })`，
+  带失败项原文，走壳侧既有转恢复页路径；45s 仍停在卡片只发 `[client-boot] NOTE` **不换页**——超时不等于
+  确证失败，不许把一个可能还在启动的页面踢走——并就地给覆盖层。
+- 覆盖层从只有「重新加载」变成**两条出口**：`重新加载` + `以安全模式重启`（`invoke('recovery_safe_mode')`）。
+- 看门狗 transform 加**版本自愈**：同 marker 但注入体字节不同时就地替换旧块（否则 dev 树一直停在旧字节，
+  与旧快照互证假绿）。
+- `permissions/bridge.toml` 补放行 `recovery_safe_mode`——注册了命令但没进 ACL，远程页调用会被 Tauri 拒，
+  按钮就是「点了没反应」（`recovery_safe_mode` 在 11-10 批漏过这一条）。
+- `client-boot-failure-report` 保留为**前向兼容**（`patch-registry.js` 与 `loader-isolation.js` 均注明
+  它不在运行时路径上、别拿它当客户端失败可见性的凭据）。
+- 新增判据三条：`unit-client-boot-runtime-surface`（把「源码补丁不在服务链上」钉成事实，上游哪天改成
+  运行时加载源码包时这里先红）、`unit-bridge-acl-coverage`（页面侧 command ⊆ ACL，三条已知缺口登记在册
+  且一旦补上就必须删掉例外）、`unit-kernel-web-boot-watchdog` 重写（9 例，vm 实跑注入体，含「失败只闪一轮
+  不许误踢」反证与「非 Tauri 宿主不抛错」反证）。
+- `patch-surface.snapshot.json` 已重取（91 个被干预文件 / 86 个标记家族），`verify` 复绿。
+
 ### feat(patch)：客户端 boot 失败上报 + 安全模式一次性熔断（2026-11-10）
 
 - 新增补丁 `client-boot-failure-report`（`scripts/lib/loader-isolation.js` 的

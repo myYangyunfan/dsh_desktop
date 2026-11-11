@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-10T04:46:49.795Z",
+  "generatedAt": "2026-11-11T08:18:22.413Z",
   "kernelRoot": "@deepseek-ai",
   "markerCount": 86,
   "surface": [
@@ -633,6 +633,13 @@
       "sha256": "29309d3ca41fbd5e",
       "markers": [
         "synthesize empty tool-call ids"
+      ]
+    },
+    {
+      "file": "dsh-web-frontend/dist/index.html",
+      "sha256": "27745ecef9b03be2",
+      "markers": [
+        "kernel web boot watchdog"
       ]
     },
     {

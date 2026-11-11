@@ -23,6 +23,7 @@ commands.allow = [
   "recovery_reload",
   "recovery_restart",
   "recovery_open_logs",
+  "recovery_safe_mode",
   "sponsor_window",
   "float_window",
   "float_close",

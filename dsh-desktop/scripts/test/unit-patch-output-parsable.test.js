@@ -55,6 +55,26 @@ function collectTargets() {
  */
 function parseError(file) {
   const src = fs.readFileSync(file, 'utf8');
+  // `.html` 产物（`kernel-web-boot-watchdog` 注入的被服务页面）：判的是页内所有
+  // 内联 <script> 的**函数体**，不是整份 HTML。别把 html 从判据面里摘掉——
+  // 它是唯一「注入体在运行时真的会执行」的落点（见 AGENTS.md 那条静默坑）。
+  if (/\.html?$/i.test(file)) {
+    const bad = [];
+    const re = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
+    let m;
+    let i = 0;
+    while ((m = re.exec(src)) !== null) {
+      i += 1;
+      const body = m[1];
+      if (!body.trim()) continue; // 只有 src 的外链脚本，没有内联体
+      try {
+        vm.compileFunction(body, [], { filename: `${file}#script${i}` });
+      } catch (e) {
+        bad.push(`${file}: 内联 script#${i}「${e.message}」`);
+      }
+    }
+    return bad.length ? bad.join('\n') : null;
+  }
   let first = null;
   try {
     new vm.Script(src, { filename: file });
@@ -86,8 +106,9 @@ function collectCleanups() { return _cleanups; }
 test('补丁产物逐个可解析（装机树 marker 面，零 SyntaxError）', () => {
   const files = collectTargets();
   // 覆盖哨兵：判据面必须真采到补丁产物，否则「零失败」是空转的绿。
-  // 现值 2026-10-17：109 个带干预标记的产物（@deepseek-ai 单根快照是 85，跨根的
-  // pi-ai / codex / anthropic-sdk 另 24）；阈值取约六成，防「采集脱靶」把这条判据变成摆设。
+  // 现值 2026-11-11：110 个带干预标记的产物（109 个 JS + `dsh-web-frontend/dist/index.html`
+  // 里那段看门狗注入体——判据面自 `patch-surface` 起收 .html，见 parseError 的 html 分支）；
+  // 阈值取约六成，防「采集脱靶」把这条判据变成摆设。
   assert.ok(files.length >= 60, `只采到 ${files.length} 个补丁产物，采集已脱靶（判据将空转）`);
   const bad = [];
   for (const f of files) {
