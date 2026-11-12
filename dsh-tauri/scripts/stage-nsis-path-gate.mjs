@@ -28,6 +28,7 @@ const {
   NSIS_SOURCE_PREFIX_DEFAULT,
   NSIS_SOURCE_LIMIT,
   NSIS_SOURCE_PRUNES,
+  NSIS_SOURCE_PRUNE_DIR,
   INSTALL_PREFIX_DEFAULT,
   PATH_LIMIT_DEFAULT,
   nsisSourcePrefixFrom,
@@ -98,6 +99,24 @@ for (const rel of NSIS_SOURCE_PRUNES) {
 }
 if (absent.length) {
   console.log(`[nsis-gate] 清单里 ${absent.length} 条在本次 payload 中不存在（内核换代后文件名变了——按实测重新收敛清单）`);
+}
+
+// ---- ②b 目录级剪除（2026-11-12，0.2.2-rc.2 实测）----
+// 同一个 descriptions 目录里，rc.2 一口气新增了大量长名 DevTools 议题说明文本，
+// 逐个列名已不可维护（一次就有 91 个越线）。这些 .md 运行时按 URL 懒取、删掉不影响装载，
+// 所以这里做一条**有名有姓的目录级决定**：该目录下的 .md 整批不进包。
+const pruneDirAbs = path.join(payloadRoot, ...NSIS_SOURCE_PRUNE_DIR.split("/"));
+if (fs.existsSync(pruneDirAbs)) {
+  let dirPruned = 0;
+  for (const name of fs.readdirSync(pruneDirAbs)) {
+    if (!name.endsWith(".md")) continue;
+    const abs = path.join(pruneDirAbs, name);
+    if (!fs.statSync(abs).isFile()) continue;
+    fs.rmSync(abs, { force: true });
+    dirPruned += 1;
+  }
+  pruned += dirPruned;
+  console.log(`[nsis-gate] 目录级剪除 ${dirPruned} 个文件：${NSIS_SOURCE_PRUNE_DIR} 下全部 .md（DevTools 议题说明，运行时懒取）`);
 }
 
 // ---- ③ 全 payload 走盘：构建期源路径 + 安装态两条墙一起量 ----
