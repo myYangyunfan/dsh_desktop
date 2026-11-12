@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-11-12T11:21:54.954Z",
+  "generatedAt": "2026-11-12T12:05:17.078Z",
   "kernelRoot": "@deepseek-ai",
-  "markerCount": 86,
+  "markerCount": 87,
   "surface": [
     {
       "file": "cordis-plugin-loader/lib/index.js",
@@ -188,7 +188,7 @@
     },
     {
       "file": "dsh-client-ui-settings-plugins/lib/client.js",
-      "sha256": "8c44b6e57976c032",
+      "sha256": "9b786321640abebe",
       "markers": [
         "hide inventory tab"
       ]
@@ -220,7 +220,7 @@
     },
     {
       "file": "dsh-cordis-client-runner/lib/client.js",
-      "sha256": "7dfc291cfe6e487e",
+      "sha256": "d029eebe7a2dc5cb",
       "markers": [
         "derive keyed slot key for unkeyed registrations"
       ]
