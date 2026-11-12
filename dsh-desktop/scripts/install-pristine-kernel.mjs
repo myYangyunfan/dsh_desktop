@@ -15,7 +15,7 @@
  *   <repo>/.tmp-kernel/.consumer-<kernel.packageVersion>/node_modules/@deepseek-ai/<pkg>
  *
  * 全程离线、确定性：不跑 npm、不联网、不碰 dsh-desktop/node_modules，也不碰
- * dsh-tauri/package-payload（二者都是 postinstall / 运行时 boot 链打过补丁的树）。
+ * dsh-tauri/pp（二者都是 postinstall / 运行时 boot 链打过补丁的树）。
  *
  * 故意不写 .tmp-rc2-stage
  * -----------------------

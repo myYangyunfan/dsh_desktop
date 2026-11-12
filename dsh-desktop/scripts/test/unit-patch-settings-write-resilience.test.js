@@ -32,7 +32,7 @@ const { kernel } = require('../compat/kernel-pin.json');
 
 // pristine 源取 vendored tarball 解包字节（随 kernel-pin 换版自动跟随）。
 // 0.1.2-alpha.2 重靶期把它从 payload 换成 tarball（payload 树停留在 alpha.1，锚点
-// 已换代）—— 当时指向 payload 等于把 dsh-tauri/package-payload 变成单测的硬前置：
+// 已换代）—— 当时指向 payload 等于把 dsh-tauri/pp 变成单测的硬前置：
 // payload 不暂存即 ENOENT 全红，而 payload 又是打包链就地打补丁的目录（不是真
 // pristine）。2026-10-05 收口。
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');

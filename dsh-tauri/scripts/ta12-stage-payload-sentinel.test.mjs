@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // ta12-stage-payload-sentinel.test.mjs —— stage-payload.sh 静态哨兵测试（node --test）。
 //
-// stage-payload.sh 本体约 8 分钟且写 package-payload 镜像，不宜在测试里真跑。
+// stage-payload.sh 本体约 8 分钟且写 pp 镜像，不宜在测试里真跑。
 // 本测试静态解析脚本源码中引用的「运行时必需件 / 镜像源 / 尾部工具」清单，
 // 与磁盘在位情况对照——任何一件缺失即 fail-fast（哨兵：装出来的包必然起不来
 // 的那批文件，脚本自身的 for 循环会拦；这里提前在 CI 无需打包就发现问题，

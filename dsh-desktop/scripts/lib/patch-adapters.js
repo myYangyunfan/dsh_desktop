@@ -2393,7 +2393,7 @@ function transformWorkspaceChipLabelHold(src, file) {
 // pristine 还原（版本漂移哨兵单测专用）。
 //
 // 为什么需要：漂移哨兵要一份「未打补丁」的靶字节来跑 changed 分支与注入行为。
-// 早前它们直接抓 .tmp-rc2-stage / package-payload 副本当 pristine，但这两处都会
+// 早前它们直接抓 .tmp-rc2-stage / pp 副本当 pristine，但这两处都会
 // 被打包链就地打补丁（stage-payload 之后必是补丁态），于是 changed 断言退化成
 // already 假红 —— 更糟的是真漂移发生时它也只报 already，哨兵失去报警能力。
 //

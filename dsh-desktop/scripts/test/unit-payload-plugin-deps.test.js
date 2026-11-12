@@ -29,7 +29,7 @@ const {
   NSIS_SOURCE_CONFIG_DIR,
   NSIS_SOURCE_LIMIT,
   NSIS_SOURCE_PRUNE_DIR,
-  NSIS_SOURCE_PRUNES,
+  NSIS_SOURCE_PRUNE_TREES,
   nsisSourcePrefixFrom,
   nsisGateApplies,
   overlongSourceFiles,
@@ -128,7 +128,8 @@ test('CI 源路径前缀与 tauri.conf.json 现场对账：挪 staging 名/位�
     + fromKey.split('/').filter(Boolean).join('\\') + '\\';
   assert.equal(composed, NSIS_SOURCE_PREFIX_DEFAULT,
     '前缀 = CI workspace + 配置目录 + resources from 串的未归一化字面量；对不上就等于门禁在量一条不存在的路');
-  assert.equal(NSIS_SOURCE_PREFIX_DEFAULT.length, 94, 'CI 前缀实测 94 字符（本机 55，差 39）');
+  assert.equal(NSIS_SOURCE_PREFIX_DEFAULT.length, 69,
+    'CI 前缀实测 69 字符（本机 30，差 39）——2026-11-12 staging 挪到 dsh-tauri/pp/ 后从 94 缩下来');
   // v1.0.5 首跑事故：门禁用 path.sep 拼前缀，Linux/macOS runner 拼出正斜杠 → 与常量误判不符。
   assert.equal(nsisSourcePrefixFrom(fromKey), composed,
     '门禁必须走 nsisSourcePrefixFrom：前缀是 Windows 字面口径，不许随宿主分隔符分叉');
@@ -144,16 +145,18 @@ test('平台门控：makensis 只在 Windows 构建上存在，非 Windows 宿�
   assert.equal(nsisGateApplies('linux'), false);
 });
 
-test('剪除清单：每条都真的越线，且都只在 DevTools 议题文本那一个目录', () => {
-  assert.ok(NSIS_SOURCE_PRUNES.length > 0, '清单为空则本用例恒绿——按实测它应有条目');
-  assert.equal(new Set(NSIS_SOURCE_PRUNES).size, NSIS_SOURCE_PRUNES.length, '清单不许重复');
-  for (const rel of NSIS_SOURCE_PRUNES) {
-    assert.ok(rel.startsWith(NSIS_SOURCE_PRUNE_DIR), `清单条目跑出该目录了：${rel}`);
-    assert.match(rel, /\.md$/, `只允许剪懒取的说明文本：${rel}`);
-    const len = sourcePathLength(rel);
-    assert.ok(len > NSIS_SOURCE_LIMIT,
-      `这条已经不过线（${len} ≤ ${NSIS_SOURCE_LIMIT}），别再无谓丢文件：${rel}`);
+test('剪除面：整树只剪构建期输入，DevTools 议题文本按目录级整批剪', () => {
+  assert.ok(NSIS_SOURCE_PRUNE_TREES.length > 0, '整树清单为空则本用例恒绿——按实测它应有条目');
+  assert.equal(new Set(NSIS_SOURCE_PRUNE_TREES).size, NSIS_SOURCE_PRUNE_TREES.length, '清单不许重复');
+  for (const rel of NSIS_SOURCE_PRUNE_TREES) {
+    assert.match(rel, /libreoffice-kit-[^/]+\/sources$/, `整树剪除只允许构建期输入目录：${rel}`);
+    assert.ok(!/\/(program|share)\//.test(rel), `运行时资源不许整树剪：${rel}`);
   }
+  assert.match(NSIS_SOURCE_PRUNE_DIR, /issues_manager\/descriptions\/$/,
+    '目录级剪除的对象必须是 DevTools 议题说明文本目录');
+  // 前缀 94 → 69 之后，这批长名文本已不再越线——剪除是**体积**决定，不再是越线决定。
+  assert.ok(sourcePathLength(NSIS_SOURCE_PRUNE_DIR + 'x.md') < NSIS_SOURCE_LIMIT,
+    '缩前缀后该目录已不越线；若这里红了说明壁障换了位置，别照着旧结论剪文件');
 });
 
 test('构建期断点按实测收口：258 放行、259 判红（260 实测中断，259 无实证故从严）', () => {
@@ -166,17 +169,22 @@ test('构建期断点按实测收口：258 放行、259 判红（260 实测中�
   assert.equal(hits[0].len, NSIS_SOURCE_LIMIT + 1);
 });
 
-test('反证：同一条越线文件在本机前缀下全绿——判据不带 CI 前缀等于没判', () => {
-  const LOCAL_PREFIX = 'D:\\workspace\\dsh\\dsh-tauri\\package-payload\\dsh-desktop\\';
-  assert.equal(LOCAL_PREFIX.length, 55, '本机 staging 前缀实测 55 字符');
-  assert.deepEqual(
-    overlongFiles(NSIS_SOURCE_PRUNES, { prefix: LOCAL_PREFIX, limit: NSIS_SOURCE_LIMIT }),
-    [], '夹具前提：换成本机前缀这些文件一条都不越线（这就是「本机出包全绿」的成因）');
-  assert.equal(overlongSourceFiles(NSIS_SOURCE_PRUNES).length, NSIS_SOURCE_PRUNES.length,
-    '同一批输入在 CI 前缀下必须逐条判红，否则前缀参数是空转的');
+test('反证：同一条越线文件换成本机前缀就全绿——判据不带 CI 前缀等于没判', () => {
+  const LOCAL_PREFIX = 'D:\\workspace\\dsh\\dsh-tauri\\pp\\';
+  assert.equal(LOCAL_PREFIX.length, 30, '本机 staging 前缀实测 30 字符');
+  const OLD_CI_PREFIX = 'D:\\a\\dsh_desktop\\dsh_desktop\\dsh-tauri\\src-tauri\\src\\app\\'
+    + '..\\..\\..\\package-payload\\dsh-desktop\\';
+  assert.equal(OLD_CI_PREFIX.length, 94, '旧 CI 前缀实测 94 字符（v1.0.4 事故那一代）');
+  const rel = 'a'.repeat(162) + '.md';   // 165 字符：旧前缀 94 + 165 = 259 > 258
+  assert.equal(overlongFiles([rel], { prefix: OLD_CI_PREFIX, limit: NSIS_SOURCE_LIMIT }).length, 1,
+    '旧前缀下必须判红，否则夹具前提不成立（这条就是「本机打包全绿、CI 炸」的形状）');
+  assert.deepEqual(overlongFiles([rel], { prefix: LOCAL_PREFIX, limit: NSIS_SOURCE_LIMIT }), [],
+    '本机前缀下同一条全绿——所以本机永远量不到 CI 那道墙');
+  assert.deepEqual(overlongSourceFiles([rel]), [],
+    '新 CI 前缀（69）下同一条也绿了：结构性修法腾出的 25 字符就是这些文件的活路');
 });
 
-test('实测哨兵：pin 内核闭包里 inspector 包的越线集合恰好等于剪除清单', () => {
+test('实测哨兵：pin 内核闭包里 inspector 包已无越线文件（结构性修法的验收面）', () => {
   const pkg = path.join(REPO, 'dsh-desktop', 'node_modules', '@deepseek-ai', 'dsh-experimental-inspector');
   assert.ok(fs.existsSync(pkg),
     'pristine/收敛闭包缺 @deepseek-ai/dsh-experimental-inspector——先 cd dsh-desktop && npm ci 再跑本用例');
@@ -190,13 +198,12 @@ test('实测哨兵：pin 内核闭包里 inspector 包的越线集合恰好等�
     }
   })(pkg);
   assert.ok(rels.length > 100, `走盘结果异常（${rels.length} 个文件）——本用例判据会空转`);
-  const over = overlongSourceFiles(rels).map((r) => r.rel).sort();
-  const listed = NSIS_SOURCE_PRUNES.filter((r) => r.includes('dsh-experimental-inspector')).sort();
-  assert.deepEqual(over, listed,
-    over.length > listed.length
-      ? '内核换代新增了越线文件：要么把它加进 NSIS_SOURCE_PRUNES（有名有姓地丢），'
-        + '要么走结构性修法（缩短 staging 路径腾出前缀余量）——CI staging 第四道此刻已经在拦'
-      : '清单里有文件名不匹配的条目——内核换代后按实测重新收敛清单');
+  const over = overlongSourceFiles(rels);
+  assert.deepEqual(over.map((r) => r.rel), [],
+    over.length
+      ? `该包仍有 ${over.length} 条越线（最长 ${over[0].len}）：前缀 69 之下还越线，说明上游又压长了目录层级；`
+        + '要么加目录级剪除（有名有姓地丢），要么再次缩短 staging 前缀——CI staging 第四道此刻已经在拦'
+      : '');
 });
 
 /** staging 接线判据：第二道门禁必须跑在 node_modules 镜像**之后**，且五个架构一处不落。 */

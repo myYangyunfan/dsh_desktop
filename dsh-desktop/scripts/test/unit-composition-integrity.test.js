@@ -305,9 +305,9 @@ test('cliMain：退出码非 0 当且仅当关键服务缺席；JSON 可解析',
 });
 
 test('真实 vendored 组合源冒烟（若 payload 在位）：全部关键服务 present', { skip: false }, (t) => {
-  // 只读冒烟：对仓库内已装配 payload（dsh-tauri/package-payload/dsh-desktop）
+  // 只读冒烟：对仓库内已装配 payload（dsh-tauri/pp）
   // 跑生产清单探测。payload 缺失（未装配）时跳过，不算失败。
-  const payload = path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'package-payload', 'dsh-desktop');
+  const payload = path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'pp');
   if (!fs.existsSync(path.join(payload, 'node_modules', '@deepseek-ai', 'dsh-base', 'cordis.patch.yml'))) {
     t.skip('payload 未装配，跳过真实冒烟');
     return;
@@ -320,7 +320,7 @@ test('preflight 挂钩：组合源在位且关键缺席 → 告警 + report.comp
   const { preflight } = require('../integration/fault-isolation');
   // 场景 A：真实 payload 在位时，preflight 内部组合探测生效（健康 → 无额外
   // 输出、返回形状无 composition 键）。用真实 payload 的 appDir + 空 home。
-  const payload = path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'package-payload', 'dsh-desktop');
+  const payload = path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'pp');
   const payloadReady = fs.existsSync(path.join(payload, 'node_modules', '@deepseek-ai', 'dsh-base', 'cordis.patch.yml'));
   if (payloadReady) {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-pf-empty-'));

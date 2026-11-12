@@ -284,7 +284,7 @@ test('纯逻辑：move 上下移与边界，未知 id 不动', () => {
 // ───────────────────────── 2. 静态锚点契约 ─────────────────────────
 const KERNEL_CANDIDATES = [
   path.join(__dirname, '..', '..', '..', '..', 'node_modules', '@deepseek-ai', 'dsh-client-ui-settings-general', 'lib', 'client.js'),
-  path.join(__dirname, '..', '..', '..', '..', '..', 'dsh-tauri', 'package-payload', 'dsh-desktop', 'node_modules', '@deepseek-ai', 'dsh-client-ui-settings-general', 'lib', 'client.js'),
+  path.join(__dirname, '..', '..', '..', '..', '..', 'dsh-tauri', 'pp', 'node_modules', '@deepseek-ai', 'dsh-client-ui-settings-general', 'lib', 'client.js'),
 ].filter((p) => fs.existsSync(p));
 
 test('插件侧：结构上攀与按钮定位形态在源内', () => {

@@ -39,7 +39,7 @@ const PATH_LIMIT_DEFAULT = 240;
 //      `bundle.resources` 的 from 串**未归一化**的字面量（`…\src\app\..\..\..\package-payload\…`），
 //      `..\..\..\` 一个字符都没被吃掉——同一次 CI 里 258 字符的邻居文件正常打进了包，
 //      260 字符的中断，259 无实证（字母序在 260 那条之后，永远没走到）。
-//   ② 本机前缀只有 55 字符（`D:\workspace\dsh\…`），CI 是 94
+//   ② 本机前缀只有 30 字符（`D:\workspace\dsh\dsh-tauri\pp\`），CI 是 69
 //      （`D:\a\dsh_desktop\dsh_desktop\…`）——**差 39 个字符，本机永远量不到**。
 //   ③ 越线的 5 个文件全在 `@deepseek-ai/dsh-experimental-inspector/lib/devtools/
 //      models/issues_manager/descriptions/*.md`（Chrome DevTools 前端按 URL 懒取的议题说明文本，
@@ -53,9 +53,17 @@ const PATH_LIMIT_DEFAULT = 240;
 const NSIS_SOURCE_WORKSPACE = 'D:\\a\\dsh_desktop\\dsh_desktop';
 const NSIS_SOURCE_CONFIG_DIR = 'dsh-tauri\\src-tauri\\src\\app';
 
+/**
+ * staging 相对配置目录的位置（= `tauri.conf.json` `bundle.resources` 的 from 串）。
+ * 2026-11-12 结构性修法：原为 `../../../package-payload/dsh-desktop/`（36 字符），
+ * 现为 `../../../pp/`（11 字符）——载荷直接铺在 `dsh-tauri/pp/` 下，安装态布局不变
+ * （`resources/dsh-desktop/` 由 resources 的 to 半边映射）。一次腾出 25 字符。
+ */
+const NSIS_SOURCE_FROM_KEY = '../../../pp/';
+
 /** CI（windows-latest）staging 的字面源路径前缀，含结尾分隔符；长度由单测咬住。 */
 const NSIS_SOURCE_PREFIX_DEFAULT =
-  NSIS_SOURCE_WORKSPACE + '\\' + NSIS_SOURCE_CONFIG_DIR + '\\..\\..\\..\\package-payload\\dsh-desktop\\';
+  NSIS_SOURCE_WORKSPACE + '\\' + NSIS_SOURCE_CONFIG_DIR + '\\..\\..\\..\\pp\\';
 
 /**
  * 按 Windows 反斜杠拼出 makensis 口径的源路径前缀（与宿主平台无关）。
@@ -84,17 +92,19 @@ const NSIS_SOURCE_PRUNE_DIR =
   'node_modules/@deepseek-ai/dsh-experimental-inspector/lib/devtools/models/issues_manager/descriptions/';
 
 /**
- * 随包剪除清单：payload 里按 NSIS_SOURCE_PREFIX_DEFAULT 计算会越过 makensis 断点的内核文件。
- * 只列名字（不写「凡超长即删」）是刻意的——丢出去的每个文件都必须是有名有姓的决定，
- * 清单外再冒出一条越线时由门禁 FATAL 逼一次显式裁定（加长前缀的结构性修法见 CHANGELOG）。
+ * 随包剪除：**目录级**，不是逐名清单。
+ *
+ * 历史上这里是一份 5 条的命名清单（v1.0.4 那批越线文件）。0.2.2-rc.2 换代时该目录一口气
+ * 新增了大量长名议题说明文本，逐名列名已不可维护（一次 91 个越线）；配合 2026-11-12 的
+ * staging 前缀结构性缩短（94 → 69 字符），这批文件本身已不再越线，但剪除决定保留：
+ * 它们是 Chrome DevTools 前端按 URL 懒取的说明文本，运行时删掉不影响装载，少几 MB 更划算。
+ * 门禁按「该目录下全部 .md 不进包」执行，代码见 stage-nsis-path-gate.mjs ②b。
  */
-const NSIS_SOURCE_PRUNES = [
-  'selectElementAccessibilityInteractiveContentAttributesSelectDescendant.md',
-  'genericFormInputAssignedAutocompleteValueToIdOrNameAttributeError.md',
-  'federatedAuthUserInfoRequestNoReturningUserFromFetchedAccounts.md',
-  'summaryElementAccessibilityInteractiveContentSummaryDescendant.md',
-  'genericFormInputHasWrongButWellIntendedAutocompleteValueError.md',
-].map((n) => NSIS_SOURCE_PRUNE_DIR + n);
+const NSIS_SOURCE_PRUNE_TREES = [
+  // LibreOffice 的构建期输入（引擎源码 + *.patch），运行时用不到；program/ 才是运行时资源。
+  'node_modules/@deepseek-ai/dsh-office-kit/node_modules/@deepseek-ai/libreoffice-kit-wasm/sources',
+  'node_modules/@deepseek-ai/dsh-office-kit/node_modules/@deepseek-ai/libreoffice-kit-win32-x64/sources',
+];
 
 /**
  * 交付面应当剪除的插件内层 node_modules（相对 `assets/plugins` 的路径）。
@@ -157,9 +167,10 @@ module.exports = {
   NSIS_SOURCE_PREFIX_DEFAULT,
   NSIS_SOURCE_WORKSPACE,
   NSIS_SOURCE_CONFIG_DIR,
+  NSIS_SOURCE_FROM_KEY,
   NSIS_SOURCE_LIMIT,
   NSIS_SOURCE_PRUNE_DIR,
-  NSIS_SOURCE_PRUNES,
+  NSIS_SOURCE_PRUNE_TREES,
   nsisSourcePrefixFrom,
   nsisGateApplies,
   residueNodeModules,

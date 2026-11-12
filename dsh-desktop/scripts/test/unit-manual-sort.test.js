@@ -34,7 +34,7 @@ const MANUAL_SORT_DRAG_MARKER = markers.MANUAL_SORT_DRAG_MARKER;
 function resolveWorkspaceSource() {
   const candidates = [
     path.join(__dirname, '..', '..', 'node_modules', '@deepseek-ai', WORKSPACE_PKG_REL),
-    path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'package-payload', 'dsh-desktop',
+    path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'pp',
       'node_modules', '@deepseek-ai', WORKSPACE_PKG_REL),
   ];
   for (const c of candidates) {

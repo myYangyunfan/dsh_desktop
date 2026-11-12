@@ -3,7 +3,7 @@
 // unit-drift-sentinel-capture.test.js — 漂移哨兵的捕获力守卫（哨兵的哨兵）。
 //
 // 背景（本轮踩到的坑）：三个补丁的漂移哨兵单测原先直接抓 .tmp-rc2-stage /
-// package-payload 副本当 pristine 基准，而那些目录都会被打包链就地打补丁。
+// pp 副本当 pristine 基准，而那些目录都会被打包链就地打补丁。
 // 基准一脏，"必须 changed" 就退化成 already 假红；更糟的是**真锚点漂移发生时
 // 它同样只报 already** —— 哨兵看起来在跑，实际上已经不报警了。
 //
@@ -49,7 +49,7 @@ const SENTINELS = [
     file: 'index.js',
     candidates: [
       path.join(__dirname, '..', '..', 'node_modules', '@deepseek-ai', DS_LLM_DEEPSEEK_PKG_REL),
-      path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'package-payload', 'dsh-desktop',
+      path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'pp',
         'node_modules', '@deepseek-ai', DS_LLM_DEEPSEEK_PKG_REL),
     ],
   },
@@ -59,7 +59,7 @@ const SENTINELS = [
     file: 'index.html',
     candidates: [
       path.join(__dirname, '..', '..', 'node_modules', '@deepseek-ai', KERNEL_WEB_INDEX_REL),
-      path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'package-payload', 'dsh-desktop',
+      path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'pp',
         'node_modules', '@deepseek-ai', KERNEL_WEB_INDEX_REL),
     ],
   },
@@ -69,7 +69,7 @@ const SENTINELS = [
     file: 'client.js',
     candidates: [
       path.join(__dirname, '..', '..', 'node_modules', '@deepseek-ai', WORKSPACE_PKG_REL),
-      path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'package-payload', 'dsh-desktop',
+      path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'pp',
         'node_modules', '@deepseek-ai', WORKSPACE_PKG_REL),
     ],
   },
@@ -79,7 +79,7 @@ const SENTINELS = [
     file: 'index.js',
     candidates: [
       path.join(__dirname, '..', '..', 'node_modules', '@deepseek-ai', PROMPT_CONTEXT_LITERAL_PKG_RELS[0]),
-      path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'package-payload', 'dsh-desktop',
+      path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'pp',
         'node_modules', '@deepseek-ai', PROMPT_CONTEXT_LITERAL_PKG_RELS[0]),
     ],
   },
@@ -89,7 +89,7 @@ const SENTINELS = [
     file: 'index.js',
     candidates: [
       path.join(__dirname, '..', '..', 'node_modules', '@deepseek-ai', CREDENTIALS_LOCAL_REL),
-      path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'package-payload', 'dsh-desktop',
+      path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'pp',
         'node_modules', '@deepseek-ai', CREDENTIALS_LOCAL_REL),
     ],
   },
@@ -135,7 +135,7 @@ const SENTINELS = [
 function persistenceTargets() {
   return [
     path.join(__dirname, '..', '..', 'node_modules', '@deepseek-ai', PERSISTENCE_PKG_REL),
-    path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'package-payload', 'dsh-desktop',
+    path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'pp',
       'node_modules', '@deepseek-ai', PERSISTENCE_PKG_REL),
   ];
 }

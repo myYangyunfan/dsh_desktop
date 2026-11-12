@@ -4,7 +4,7 @@
 > 本文件声明本项目使用、引用或分发的第三方开源组件及其许可证。各组件的完整许可证文本以其各自源仓库为准。
 
 **口径（v1.0.0 内置线）**：本清单按**实际进安装包的载荷**现场重算——
-`dsh-tauri/package-payload/dsh-desktop` 的 `node_modules` 全树（768 个唯一 `包名@版本`，其中 DeepSeek 官方 330 个）、
+`dsh-tauri/pp` 的 `node_modules` 全树（768 个唯一 `包名@版本`，其中 DeepSeek 官方 330 个）、
 随包内置插件树（`assets/plugins`，33 个插件 + 其自带依赖树，见第 4 节）、
 内置运行时（Node v24.15.0 + npm 11.12.1）与 Tauri/Rust 壳层（`src-tauri/Cargo.lock`，531 个 crate）。
 

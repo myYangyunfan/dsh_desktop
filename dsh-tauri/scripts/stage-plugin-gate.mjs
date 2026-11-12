@@ -24,7 +24,7 @@ const { residueNodeModules, overlongFiles, longestInstallPath, INSTALL_PREFIX_DE
 
 const payloadRoot = process.argv[2]
   ? path.resolve(process.argv[2])
-  : path.join(REPO, 'dsh-tauri', 'package-payload', 'dsh-desktop');
+  : path.join(REPO, 'dsh-tauri', 'pp');
 const pluginsRoot = path.join(payloadRoot, 'assets', 'plugins');
 
 function die(msg, hint) {

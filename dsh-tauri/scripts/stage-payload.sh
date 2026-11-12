@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# stage-payload.sh —— 打包前置：暂存运行时 payload 到 package-payload/dsh-desktop/
+# stage-payload.sh —— 打包前置：暂存运行时 payload 到 dsh-tauri/pp/
 # ==========================================================================
 # Tauri 安装包的内核资源（supervisor 的 app_dir）。从 dsh-desktop/ 源头按
 # 「Electron extraResources + 生产依赖」口径组装，排除三类大件/杂质：
@@ -23,7 +23,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SRC="$REPO_ROOT/dsh-desktop"
-DST="$REPO_ROOT/dsh-tauri/package-payload/dsh-desktop"
+DST="$REPO_ROOT/dsh-tauri/pp"
 
 # 跨平台目录镜像：Windows 用 robocopy（原子/mtime 保真），Linux/macOS
 # 用 rm -rf + cp -a（CI 环境；robocopy 不存在时自动回退）。
@@ -276,9 +276,10 @@ if ! node "$REPO_ROOT/dsh-desktop/scripts/verify-payload-patches.js" "$DST"; the
 fi
 
 # ---- 构建期路径门禁（2026-10-17 v1.0.4 实错拦截，必须最后跑）----
-# makensis 拿到的是 tauri.conf.json resources from 串的**未归一化**字面量，CI 前缀 94 字符、
-# 本机 55 字符——同一条 payload 本机出包全绿、CI 两个 Windows job 同点炸在 installer.nsi:33251
-# （File: failed opening file，258 字符的邻居进得去、260 的进不去）。判据与剪除清单都在
+# makensis 拿到的是 tauri.conf.json resources from 串的**未归一化**字面量，CI 前缀 69 字符
+# （2026-11-12 由 94 缩短）、本机 30 字符——同一条 payload 本机出包全绿、CI 两个 Windows job
+# 同点炸在 installer.nsi:33251（File: failed opening file，258 字符的邻居进得去、260 的进不去）。
+# 判据与剪除清单都在
 # dsh-desktop/scripts/lib/payload-plugin-deps.js 的 NSIS_SOURCE_*，单测 unit-payload-plugin-deps。
 # 位置硬要求：node_modules 镜像 + compat 注入之后（这里量的是最终进包的那棵树）。
 node "$REPO_ROOT/dsh-tauri/scripts/stage-nsis-path-gate.mjs" "$DST" || {
@@ -287,4 +288,5 @@ node "$REPO_ROOT/dsh-tauri/scripts/stage-nsis-path-gate.mjs" "$DST" || {
 }
 
 echo "[stage] 完成。体积统计："
-du -sm "$DST" "$DST/node_modules" "$DST/vendor" "$DST/assets" 2>/dev/null
+# du 只是报数，Git Bash 下对大树的退出码不稳——别让它把整套门禁的结论染成 exit 1。
+du -sm "$DST" "$DST/node_modules" "$DST/vendor" "$DST/assets" 2>/dev/null || true

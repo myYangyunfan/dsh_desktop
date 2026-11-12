@@ -38,7 +38,7 @@ const CRED_REL = (PATCH_SPECS.find((s) => s.id === 'credentials-initial-retry') 
 assert.ok(typeof CRED_REL === 'string' && CRED_REL, '注册表里找不到 credentials-initial-retry 的 pkgRel');
 const CRED_TARGETS = [
   path.join(repoRoot, 'node_modules', '@deepseek-ai', CRED_REL),
-  path.join(repoRoot, '..', 'dsh-tauri', 'package-payload', 'dsh-desktop',
+  path.join(repoRoot, '..', 'dsh-tauri', 'pp',
     'node_modules', '@deepseek-ai', CRED_REL),
 ];
 const credFile = CRED_TARGETS.find((f) => fs.existsSync(f)) || null;

@@ -33,7 +33,7 @@ const DEVICE_AUTH_MARKER_TEXT = markers.DEVICE_AUTH_GUIDANCE_MARKER;
 // 字节的确定逆运算。
 const TARGET_CANDIDATES = [
   path.join(__dirname, '..', '..', 'node_modules', '@deepseek-ai', DS_LLM_DEEPSEEK_PKG_REL),
-  path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'package-payload', 'dsh-desktop',
+  path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'pp',
     'node_modules', '@deepseek-ai', DS_LLM_DEEPSEEK_PKG_REL),
 ];
 

@@ -21,7 +21,7 @@
 //      dsh-desktop/node_modules 已安装版本有上游演进差异（锚点漂移会表现为
 //      anchor-missing，这是真实信号，不是这里要掩盖的东西）。
 //
-// 明确不算 pristine 的：dsh-desktop/node_modules 与 dsh-tauri/package-payload
+// 明确不算 pristine 的：dsh-desktop/node_modules 与 dsh-tauri/pp
 // （两者都被 postinstall / patch-deps / 运行时 boot 链打过补丁）。
 
 const fs = require('node:fs');

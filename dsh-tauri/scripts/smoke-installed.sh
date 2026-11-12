@@ -7,7 +7,7 @@
 #
 #   $SMOKE/
 #     dsh-tauri-app.exe           ← release 产物（bin 名；exe-walk 不看名）
-#     resources/dsh-desktop/      ← package-payload（内核）
+#     resources/dsh-desktop/      ← dsh-tauri/pp（内核）
 #     resources/sidecar/  ui/     ← 同 resources 映射
 #
 # ⚠ 与真安装器有一处**故意保留**的差异：NSIS 的 resources 用
@@ -52,7 +52,7 @@ cp -f "$EXE" "$SMOKE/"
 # 此依赖）。只复制 exe 会让冒烟壳启动即死——且 MSYS 报错会把缺失文件名误报成
 # 一个无关的 api-ms-* 系统 DLL，排查时先查这里。
 cp -f "$TARGET_DIR"/*.dll "$SMOKE/" 2>/dev/null || true
-for pair in "package-payload/dsh-desktop:dsh-desktop" "sidecar:sidecar" "ui:ui"; do
+for pair in "pp:dsh-desktop" "sidecar:sidecar" "ui:ui"; do
   src="${pair%%:*}"; dst="${pair##*:}"
   robocopy "$REPO_ROOT/dsh-tauri/$src" "$SMOKE/resources/$dst" //MIR //R:1 //W:1 > /dev/null
   rc=$?; [ $rc -lt 8 ] || { echo "[smoke] robocopy 失败($rc): $src"; exit 1; }

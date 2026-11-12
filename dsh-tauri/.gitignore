@@ -2,3 +2,5 @@ src-tauri/target/
 gen/
 *.log
 package-payload/
+# 打包暂存（原 package-payload/dsh-desktop；2026-11-12 为缩 makensis 源路径前缀挪到此处并改名 pp）
+pp/

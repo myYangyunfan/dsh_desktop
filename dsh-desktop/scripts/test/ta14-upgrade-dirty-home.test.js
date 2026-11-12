@@ -50,7 +50,7 @@ const REPO_ROOT = path.resolve(appDir, '..');
 
 // 安装树仿真源：vendored kernel-pin tarball 解包（手法同
 // unit-agent-preset-fallback.test.js）。此前这里指向
-// `dsh-tauri/package-payload/dsh-desktop/node_modules/@deepseek-ai/dsh-agent-presets`，
+// `dsh-tauri/pp/node_modules/@deepseek-ai/dsh-agent-presets`，
 // 而 payload 既不在 git 里、又被打包链就地打补丁（不是 pristine 源），
 // 一旦未暂存就 ENOENT、暂存了又只能验到「上一代已打补丁的字节」。
 // 0.2.0-rc.2：dsh-agent-presets 已拆成 dsh-agent-preset（声明）+

@@ -298,7 +298,7 @@ test('纯逻辑：parseConfig 容忍脏数据，serialize 往返', () => {
 // 内核 rc.8 渲染源位置（存在的都断言；都不存在则跳过——比如纯源码检出）。
 const KERNEL_CANDIDATES = [
   path.join(__dirname, '..', '..', '..', '..', 'node_modules', '@deepseek-ai', 'dsh-client-ui-settings-general', 'lib', 'client.js'),
-  path.join(__dirname, '..', '..', '..', '..', '..', 'dsh-tauri', 'package-payload', 'dsh-desktop', 'node_modules', '@deepseek-ai', 'dsh-client-ui-settings-general', 'lib', 'client.js'),
+  path.join(__dirname, '..', '..', '..', '..', '..', 'dsh-tauri', 'pp', 'node_modules', '@deepseek-ai', 'dsh-client-ui-settings-general', 'lib', 'client.js'),
 ].filter((p) => fs.existsSync(p));
 
 test('插件侧：锚点选择器形态在源内（防重构漂移）', () => {

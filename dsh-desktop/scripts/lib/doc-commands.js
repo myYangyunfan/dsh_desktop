@@ -21,9 +21,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-/** 不纳入扫描的目录（工具缓存 / 历史 spec / 第三方 README / 构建产物）。 */
+/** 不纳入扫描的目录（工具缓存 / 历史 spec / 第三方 README / 构建产物）。
+ *  `pp` 与 `package-payload` 是同一件东西的两代落点（打包暂存，2026-11-12 搬迁缩前缀）。 */
 const SKIP_DIRS = new Set([
-  'node_modules', '.git', 'dist', 'build', 'target', 'package-payload', 'vendor', 'vendor-next',
+  'node_modules', '.git', 'dist', 'build', 'target', 'package-payload', 'pp', 'vendor', 'vendor-next',
   '.qoder', '.trae', '.zcode', 'research',
 ]);
 

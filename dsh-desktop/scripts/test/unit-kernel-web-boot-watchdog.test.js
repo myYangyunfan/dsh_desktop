@@ -41,7 +41,7 @@ const MARKER = markers.KERNEL_BOOT_WATCHDOG_MARKER;
 // 替换），所以这里既接受补丁态也接受 pristine，不依赖目录是否被碰过。
 const TARGET_CANDIDATES = [
   path.join(__dirname, '..', '..', 'node_modules', '@deepseek-ai', KERNEL_WEB_INDEX_REL),
-  path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'package-payload', 'dsh-desktop',
+  path.join(__dirname, '..', '..', '..', 'dsh-tauri', 'pp',
     'node_modules', '@deepseek-ai', KERNEL_WEB_INDEX_REL),
 ];
 

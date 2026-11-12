@@ -186,7 +186,7 @@ jobs:
       - name: Stage payload (CI simplified)
         run: |
           set -e
-          DEST="dsh-tauri/package-payload/dsh-desktop"
+          DEST="dsh-tauri/pp"
           mkdir -p "$DEST"
           cp dsh-desktop/*.js "$DEST/" 2>/dev/null || true
           cp dsh-desktop/package.json "$DEST/"
@@ -290,7 +290,7 @@ jobs:
           ls -la src-tauri/src/app/icons/icon.ico
           ls -la src-tauri/src/app/nsis/installerHooks.nsh
           ls -la ui/index.html
-          ls package-payload/dsh-desktop/package.json
+          ls pp/package.json
           echo "=== Building ==="
           # 不加 --verbose：rustc 全量 verbose 日志极大，失败时下方兜底分支会
           # 单独重跑 cargo build 取尾部错误，诊断信息不丢。
@@ -484,7 +484,7 @@ jobs:
       - name: Stage payload (CI simplified)
         run: |
           set -e
-          DEST="dsh-tauri/package-payload/dsh-desktop"
+          DEST="dsh-tauri/pp"
           mkdir -p "$DEST"
           cp dsh-desktop/*.js "$DEST/" 2>/dev/null || true
           cp dsh-desktop/package.json "$DEST/"
@@ -707,7 +707,7 @@ jobs:
       - name: Stage payload (CI simplified)
         run: |
           set -e
-          DEST="dsh-tauri/package-payload/dsh-desktop"
+          DEST="dsh-tauri/pp"
           mkdir -p "$DEST"
           cp dsh-desktop/*.js "$DEST/" 2>/dev/null || true
           cp dsh-desktop/package.json "$DEST/"
@@ -781,7 +781,7 @@ jobs:
           cp exe-artifact/dsh-tauri-app.exe "$ROOT/DSH Desktop.exe"
           printf 'DSH Desktop portable marker\n%s\n' "存在此文件时 DSH Desktop 以便携模式运行：用户数据保存在本目录 data/ 下。删除此文件则恢复常规安装版数据路径。" > "$ROOT/portable.marker"
           # robocopy 成功码 0-7，≥8 才失败（Git Bash 下 flag 用 // 形式）
-          rc=0; robocopy "dsh-tauri/package-payload/dsh-desktop" "$ROOT/resources/dsh-desktop" //MIR //R:2 //W:1 > /dev/null || rc=$?
+          rc=0; robocopy "dsh-tauri/pp" "$ROOT/resources/dsh-desktop" //MIR //R:2 //W:1 > /dev/null || rc=$?
           [ "$rc" -lt 8 ] || { echo "robocopy dsh-desktop failed: $rc"; exit 1; }
           # Windows 包不带 unix node 二进制（stage-payload 口径；防本机历史残留混入）
           rm -f "$ROOT/resources/dsh-desktop/vendor/node/node"
@@ -978,7 +978,7 @@ jobs:
       - name: Stage payload (CI simplified)
         run: |
           set -e
-          DEST="dsh-tauri/package-payload/dsh-desktop"
+          DEST="dsh-tauri/pp"
           mkdir -p "$DEST"
           cp dsh-desktop/*.js "$DEST/" 2>/dev/null || true
           cp dsh-desktop/package.json "$DEST/"
@@ -1183,7 +1183,7 @@ jobs:
       - name: Stage payload (CI simplified)
         run: |
           set -e
-          DEST="dsh-tauri/package-payload/dsh-desktop"
+          DEST="dsh-tauri/pp"
           mkdir -p "$DEST"
           cp dsh-desktop/*.js "$DEST/" 2>/dev/null || true
           cp dsh-desktop/package.json "$DEST/"

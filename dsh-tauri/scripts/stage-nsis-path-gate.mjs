@@ -27,7 +27,7 @@ const require = createRequire(import.meta.url);
 const {
   NSIS_SOURCE_PREFIX_DEFAULT,
   NSIS_SOURCE_LIMIT,
-  NSIS_SOURCE_PRUNES,
+  NSIS_SOURCE_PRUNE_TREES,
   NSIS_SOURCE_PRUNE_DIR,
   INSTALL_PREFIX_DEFAULT,
   PATH_LIMIT_DEFAULT,
@@ -44,7 +44,7 @@ const CONFIG_DIR_SEGS = ['dsh-tauri', 'src-tauri', 'src', 'app'];
 
 const payloadRoot = process.argv[2]
   ? path.resolve(process.argv[2])
-  : path.join(REPO, 'dsh-tauri', 'package-payload', 'dsh-desktop');
+  : path.join(REPO, 'dsh-tauri', 'pp');
 
 function die(msg, ...hints) {
   console.error('[nsis-gate] FATAL: ' + msg);
@@ -74,7 +74,7 @@ if (expectedPrefix !== NSIS_SOURCE_PREFIX_DEFAULT) {
     `实拼：${expectedPrefix}`,
     `常量：${NSIS_SOURCE_PREFIX_DEFAULT}`,
     '要么 staging 目录/位置或 resources from 变了——按新前缀更新 payload-plugin-deps.js 的常量，',
-    '要么走结构性修法（把 package-payload 挪近配置目录并缩短目录名，一次腾出 16+ 字符余量）。');
+    '要么继续走结构性修法（把 staging 再挪近配置目录并缩短目录名，一次腾出 20+ 字符余量）。');
 }
 
 // ---- ② 命名清单剪除（越线才剪，清单外越线一律 FATAL）----
@@ -89,17 +89,8 @@ if (!nsisGateApplies(process.platform)) {
   process.exit(0);
 }
 let pruned = 0;
-const absent = [];
-for (const rel of NSIS_SOURCE_PRUNES) {
-  const abs = path.join(payloadRoot, ...rel.split('/'));
-  if (!fs.existsSync(abs)) { absent.push(rel); continue; }
-  fs.rmSync(abs, { force: true });
-  pruned += 1;
-  console.log(`[nsis-gate] 剪除 ${sourcePathLength(rel)} 字符的内核文件（makensis 断点 ${NSIS_SOURCE_LIMIT}）：${rel}`);
-}
-if (absent.length) {
-  console.log(`[nsis-gate] 清单里 ${absent.length} 条在本次 payload 中不存在（内核换代后文件名变了——按实测重新收敛清单）`);
-}
+
+// ---- ② 目录级 / 整树剪除（剪除面由 payload-plugin-deps.js 集中声明）----
 
 // ---- ②b 目录级剪除（2026-11-12，0.2.2-rc.2 实测）----
 // 同一个 descriptions 目录里，rc.2 一口气新增了大量长名 DevTools 议题说明文本，
@@ -110,10 +101,7 @@ if (absent.length) {
 // rc.2 新增的 @deepseek-ai/dsh-office-kit 把 LibreOffice 整套打进来，其中 `sources/` 是
 // 构建期输入（引擎源码 + *.patch），运行时用不到；它贡献了 27 个越线路径。program/ 下的
 // 才是运行时资源，不在本清单里。
-const NSIS_SOURCE_PRUNE_TREES_RUNTIME = [
-  "node_modules/@deepseek-ai/dsh-office-kit/node_modules/@deepseek-ai/libreoffice-kit-wasm/sources",
-  "node_modules/@deepseek-ai/dsh-office-kit/node_modules/@deepseek-ai/libreoffice-kit-win32-x64/sources",
-];
+const NSIS_SOURCE_PRUNE_TREES_RUNTIME = NSIS_SOURCE_PRUNE_TREES;
 for (const tree of NSIS_SOURCE_PRUNE_TREES_RUNTIME) {
   const abs = path.join(payloadRoot, ...tree.split("/"));
   if (!fs.existsSync(abs)) continue;
@@ -154,7 +142,8 @@ if (overSrc.length) {
     + `（前缀 ${NSIS_SOURCE_PREFIX_DEFAULT.length} 字符；实测 258 通过 / 260 中断）：`);
   for (const r of overSrc.slice(0, 8)) console.error(`[nsis-gate]   ${r.len}  ${r.rel}`);
   console.error('[nsis-gate]        三条出路，按代价排：① 加进 NSIS_SOURCE_PRUNES（有名有姓地丢文件，只适合懒取的文本文档）；',
-    '\n                   ② 缩短 staging 路径（package-payload 挪近配置目录并改名，一次腾 16+ 字符，保住全部文件）；',
+    '\n                   ② 缩短 staging 路径（载荷目录已缩到 `dsh-tauri/pp/`，再腾就得挪进 src-tauri、'
+    + '或压短上游文件的目录层级，代价明显更高）；',
     '\n                   ③ 上游把该文件的目录层级/文件名压短。绝不放行一个「跑到一半炸」的发包——'
     + 'v1.0.4 就是这么让 Windows 资产缺了一次发布。');
   process.exit(1);

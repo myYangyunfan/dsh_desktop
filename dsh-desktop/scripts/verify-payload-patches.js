@@ -25,7 +25,7 @@ const REPO = path.resolve(DESKTOP, '..');
 const arg = process.argv[2];
 const payloadDir = arg
   ? path.resolve(arg)
-  : path.join(REPO, 'dsh-tauri', 'package-payload', 'dsh-desktop');
+  : path.join(REPO, 'dsh-tauri', 'pp');
 
 // 允许传 .../dsh-desktop 或直接传 .../dsh-desktop/node_modules。
 const appDir = path.basename(payloadDir) === 'node_modules' ? path.dirname(payloadDir) : payloadDir;

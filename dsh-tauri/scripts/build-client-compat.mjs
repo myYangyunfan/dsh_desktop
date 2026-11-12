@@ -28,7 +28,7 @@ import { fileURLToPath } from 'node:url';
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const RC7 = path.join(REPO, 'dsh-desktop', 'dist', 'win-unpacked', 'resources', 'app', 'node_modules');
 const FE_DIST = path.join(
-  REPO, 'dsh-tauri', 'package-payload', 'dsh-desktop',
+  REPO, 'dsh-tauri', 'pp',
   'node_modules', '@deepseek-ai', 'dsh-web-frontend', 'dist',
 );
 

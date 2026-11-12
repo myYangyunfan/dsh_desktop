@@ -43,8 +43,10 @@ cargo tauri signer generate -w dsh-updater.key
    ```bash
    bash dsh-tauri/scripts/stage-payload.sh
    # 从 dsh-desktop/ 按「Electron extraResources + 生产依赖」口径组装到
-   # dsh-tauri/package-payload/dsh-desktop/（排除 dist/、devDeps electron 三件、
+   # dsh-tauri/pp/（排除 dist/、devDeps electron 三件、
    # unix node 二进制；约 500MB）。缺内核必需件时 fail-fast。
+   # 目录名 pp 是 2026-11-12 为缩 makensis 源路径前缀而定（原 package-payload/dsh-desktop，
+   # 前缀 94 → 69 字符），安装态布局不变，仍映射到 <安装根>/resources/dsh-desktop/。
    ```
 
 1. tag → build：

@@ -31,7 +31,7 @@
     "resources": {
       "../../../sidecar/": "sidecar/",
       "../../../ui/": "ui/",
-      "../../../package-payload/dsh-desktop/": "dsh-desktop/",
+      "../../../pp/": "dsh-desktop/",
       "../../../dlls/D3DCOMPILER_47.dll": "D3DCOMPILER_47.dll"
     },
     "externalBin": [],

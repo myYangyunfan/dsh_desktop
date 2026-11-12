@@ -92,8 +92,7 @@ fn ta1_payload_byteflip_mutation_200_rounds() {
     let surgery = root.join("dsh-desktop").join("scripts").join("plugin-core").join("lib").join("patch-surgery.js");
     let surgery_fallback = root
         .join("dsh-tauri")
-        .join("package-payload")
-        .join("dsh-desktop")
+        .join("pp")
         .join("scripts")
         .join("plugin-core")
         .join("lib")
