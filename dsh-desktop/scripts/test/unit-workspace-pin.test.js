@@ -54,22 +54,25 @@ test('夹具应用：changed=1、marker 落盘、菜单/排序/翻译注入齐',
     // 图标键直接复用上游的 workspace.pin / workspace.unpin（上游图标表里本来就有
     // 这两个键，故不能拿裸的 `"workspace.pin"` 当判据——那份字节原生就在，删掉注入体
     // 仍然绿；判据必须落在本补丁独有的 id / 翻译文案上）。
+    // 0.2.2-rc.2：客户端产物整体压缩（单行、双引号转模板字面量、无空格），
+    // 判据按压缩形重录。仍咬「id + target + order」三件同时到位：裸的 `order: 200`
+    // 在 pristine 上本来就有别处的同名项，单独当判据等于空转。
     assert.ok(
-      out.includes('\t\t\t\tid: "workspace.pinToggle",\n\t\t\t\ttarget: "workspace",\n\t\t\t\torder: 200,'),
+      out.includes('ctx.contextMenus.register({id:`workspace.pinToggle`,target:`workspace`,order:200,'),
       '置顶项应注册为 workspace 目标 order 200 的 contextMenus 数据项'
     );
     assert.ok(
-      out.includes('icon: { key: dshWorkspacePinState(workspaceId) ? "workspace.unpin" : "workspace.pin" }'),
+      out.includes('icon:{key:dshWorkspacePinState(workspaceId)?`workspace.unpin`:`workspace.pin`}'),
       '图标应复用上游 workspace.pin / workspace.unpin 键'
     );
     assert.ok(
-      out.includes('label: ctx.locale.bind(NS)(dshWorkspacePinState(workspaceId) ? "workspace.unpin" : "workspace.pin")'),
+      out.includes('label:ctx.locale.bind(NS)(dshWorkspacePinState(workspaceId)?`workspace.unpin`:`workspace.pin`)'),
       '标签应随置顶态切换上游 workspace.pin / workspace.unpin 词条'
     );
-    assert.ok(out.includes('"workspace.pin": "置顶到列表顶部"'), 'zh「置顶」翻译应注入');
-    assert.ok(out.includes('"workspace.unpin": "取消置顶"'), 'zh「取消置顶」翻译应注入');
-    assert.ok(out.includes('"workspace.pin": "Pin to top"'), 'en「Pin to top」翻译应注入');
-    assert.ok(out.includes('"workspace.unpin": "Unpin"'), 'en「Unpin」翻译应注入');
+    assert.ok(out.includes('"workspace.pin":`置顶到列表顶部`'), 'zh「置顶」翻译应注入');
+    assert.ok(out.includes('"workspace.unpin":`取消置顶`'), 'zh「取消置顶」翻译应注入');
+    assert.ok(out.includes('"workspace.pin":`Pin to top`'), 'en「Pin to top」翻译应注入');
+    assert.ok(out.includes('"workspace.unpin":`Unpin`'), 'en「Unpin」翻译应注入');
     assert.ok(out.includes('dshWsPinVersion'), 'SessionTree 版本号应进作用域与 deps');
     // 注：夹具是锚点拼接（未闭合的字面量，open-project-dir 同款设计），不作
     // 语法检查——语法验证由下一测在真实 vendored 副本上做。
@@ -110,11 +113,16 @@ test('幂等：二遍 changed=0（marker 命中即跳过）', () => {
 test('锚点缺失：整文件跳过、绝不落盘半截', () => {
   const sb = makeSandbox();
   try {
-    // 抽掉一个锚（排序锚的 "Keep navigation presentation" 尾注释，0.1.6 重锚
-    // 后的后文标记），applyReplacements 应在该锚前回滚（前面锚点的替换只发生
-    // 在内存 src，未落盘）。
+    // 抽掉一个锚（排序锚的收尾 `return groups;` 已随 rc.2 压成
+    // `return groups}function sessionMemberIds(`，改抽这条尾界的前半
+    // `function sessionMemberIds(`），applyReplacements 应在该锚前回滚（前面锚点的
+    // 替换只发生在内存 src，未落盘）。
     let fixture = buildUiFixture().replace(/\r\n/g, '\n');
-    fixture = fixture.replace('* Keep navigation presentation independent', '* GONE');
+    const mutated = fixture.replace('function sessionMemberIds(', 'function sessionMemberIdsGone(');
+    // 反证替换必须真的生效：压缩/重录后若这条子串不再命中，replace 会静默空转，
+    // 用例就退化成「未变异体上判绿」——本仓栽过这一跤（AGENTS.md 行尾那条）。
+    assert.notStrictEqual(mutated, fixture, '反证用的锚子串必须仍在夹具里');
+    fixture = mutated;
     fs.writeFileSync(sb.file, fixture, 'utf8');
     const stats = { anchorMissing: 0 };
     const n = patchWorkspacePin(sb.dir, () => {}, stats);
@@ -161,13 +169,14 @@ test('锚点唯一性：夹具中每个锚恰好命中一次', () => {
 
 // 链式安全：insert 默认原样保留自己的锚，这样共享同一原生锚的补丁（open-project-dir
 // 共用 `menu.unarchiveSession` 翻译锚）无论谁先跑都能命中；确实改写原生字节的须显式登记。
-// 0.2.2-rc.1 重录（旧表的 `const workspaceMenuItems = [{` 是内联数组时代的锚点首行，
-// 新版内核里 0 命中——豁免项僵留会让「豁免」二字变成空话，故下面另有一条用例咬它）。
+// 0.2.2-rc.2 重录（客户端产物压缩：换行缩进被剥、双引号转模板字面量、对象字面量
+// 去空格）——旧表的可读字节（`className: clsx(...)` 带空格、`return groups;`）在
+// 新产物里 0 命中，豁免项僵留会让「豁免」二字变成空话，故下面另有一条用例咬它。
 const MUTATES = [
-  'className: clsx(Rows_module_css_default.slot',  // folder 图标着色（span 里插 style 行）
-  'className: Rows_module_css_default.projectText', // 标题 span：jsx→jsxs 并插置顶小圆点
-  'return groups;',                                // 分组产出改走置顶重排
-  'statuses,',                                     // deps 尾项追加版本号
+  '{className:clsx(Rows_module_css_default.slot',   // folder 图标着色（span 里插 style 行）
+  '{className:Rows_module_css_default.projectText', // 标题 span：jsx→jsxs 并插置顶小圆点
+  'return groups}function sessionMemberIds(',       // 分组产出改走置顶重排（函数声明成了新的尾界）
+  'statuses,',                                      // deps 尾项追加版本号
 ];
 test('链式安全：insert 保留锚，改写原生字节的须进 MUTATES 豁免表', () => {
   UI_REPLACEMENTS.forEach((r, i) => {

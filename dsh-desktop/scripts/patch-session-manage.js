@@ -207,13 +207,16 @@ const TYPERT_HOST_INVOKE_INSERT = [
 // ---------------------------------------------------------------------------
 // 5a. ClientWorkspaceModel：原生 unarchiveSession（带 requestSeq 竞态守卫）之后、
 // replaceBaseline 之前插入 deleteSession（unarchive 0.1.6 已原生）。
-const CLIENT_MODEL_ANCHOR = "\t\t\tasync unarchiveSession(sessionId) {\n\t\t\t\tconst requestSeq = ++this.archiveRequestSeq;\n\t\t\t\tconst result = await this.remote.unarchiveSession({ sessionId });\n\t\t\t\tif (result.ok && requestSeq === this.archiveRequestSeq) this.installArchived(result.value.archivedSessionIds);\n\t\t\t\treturn result;\n\t\t\t}";
-const CLIENT_MODEL_INSERT = "\t\t\tasync unarchiveSession(sessionId) {\n\t\t\t\tconst requestSeq = ++this.archiveRequestSeq;\n\t\t\t\tconst result = await this.remote.unarchiveSession({ sessionId });\n\t\t\t\tif (result.ok && requestSeq === this.archiveRequestSeq) this.installArchived(result.value.archivedSessionIds);\n\t\t\t\treturn result;\n\t\t\t}\n\t\t\t/**\n\t\t\t* dsh-desktop patch (session manage): 删除一个会话。\n\t\t\t* @param sessionId - Session to delete.\n\t\t\t* @returns generated Remote result.\n\t\t\t*/\n\t\t\tasync deleteSession(sessionId) {\n\t\t\t\treturn await this.remote.deleteSession({ sessionId });\n\t\t\t}";
+// 0.2.2-rc.2 重锚：`lib/client.js` 起改成**压缩产物**（整包 3 行、方法之间无换行、
+// 模板字符串替掉双引号、无尾随分号），于是旧的「多行 + 制表符」锚点整体失效。
+// 新锚取方法原文单行字节（全文件唯一），不依赖任何缩进/换行——换代只剩字节漂移一种风险。
+const CLIENT_MODEL_ANCHOR = 'async unarchiveSession(sessionId){const requestSeq=++this.archiveRequestSeq;const result=await this.remote.unarchiveSession({sessionId});if(result.ok&&requestSeq===this.archiveRequestSeq)this.installArchived(result.value.archivedSessionIds);return result}';
+const CLIENT_MODEL_INSERT = CLIENT_MODEL_ANCHOR + '\n// dsh-desktop patch (session manage): 删除一个会话（日志与附件一并移除，不可恢复）。\nasync deleteSession(sessionId){return await this.remote.deleteSession({sessionId})}';
 
 // 5b. WorkspaceController（客户端服务）：原生 unarchiveSession 之后、
 // insertSessionBefore 之前插入 deleteSession。
-const CLIENT_CTRL_ANCHOR = "\t\t\tasync unarchiveSession(sessionId) {\n\t\t\t\tconst result = await this.model.unarchiveSession(sessionId);\n\t\t\t\tif (!result.ok) throw commandError(\"session unarchive\", result.error);\n\t\t\t}";
-const CLIENT_CTRL_INSERT = "\t\t\tasync unarchiveSession(sessionId) {\n\t\t\t\tconst result = await this.model.unarchiveSession(sessionId);\n\t\t\t\tif (!result.ok) throw commandError(\"session unarchive\", result.error);\n\t\t\t}\n\t\t\tasync deleteSession(sessionId) {\n\t\t\t\tconst result = await this.model.deleteSession(sessionId);\n\t\t\t\tif (!result.ok) throw commandError(\"session delete\", result.error);\n\t\t\t}";
+const CLIENT_CTRL_ANCHOR = 'async unarchiveSession(sessionId){const result=await this.model.unarchiveSession(sessionId);if(!result.ok)throw commandError(`session unarchive`,result.error)}';
+const CLIENT_CTRL_INSERT = CLIENT_CTRL_ANCHOR + '\n// dsh-desktop patch (session manage): 删除一个会话（后端见 ClientWorkspaceModel.deleteSession）。\nasync deleteSession(sessionId){const result=await this.model.deleteSession(sessionId);if(!result.ok)throw commandError(`session delete`,result.error)}';
 
 // ---------------------------------------------------------------------------
 // 6. dsh-api-remotes/lib/client.js：客户端 remote 注册表 bundle
@@ -221,90 +224,54 @@ const CLIENT_CTRL_INSERT = "\t\t\tasync unarchiveSession(sessionId) {\n\t\t\t\tc
 // 0.2.1-rc.1 重锚：与 4 节同型漂移——descriptors 改键控对象、参数补 strictCodec +
 // jsonSchema、载荷 schema 去 intersection；另有两点 bundle 侧差异：zod 走 `zod.z.`
 // 命名空间前缀，且每条 schema 语句以分号收尾、缩进为制表符。
-/** 客户端 bundle 的宽松对象 schema 常量行（单行 + 分号）。 */
+// 0.2.2-rc.2 重锚：remotes 的客户端 bundle 同样是**压缩产物**——`let`/`const` 两条
+// 语句挤在同一行、`??=` 与对象字面量无空格、属性键仍是双引号、整体无缩进。锚与注入
+// 体都按压缩形生成（换行只当语句分隔，合法且不依赖缩进）。
+/** 客户端 bundle 的宽松对象 schema 常量两条语句（压缩形）。 */
 const remotesLooseSchema = (name, body) =>
-  `\t\tlet ${TW}${name}$schema$value;\n\t\tconst ${TW}${name}$schema = () => ${TW}${name}$schema$value ??= zod.z.object({ ${body} });`;
-/** 客户端 bundle 的 strictObject 参数 schema 常量行。 */
+  `let ${TW}${name}$schema$value;const ${TW}${name}$schema=()=>${TW}${name}$schema$value??=zod.z.object({${body}});`;
+/** 客户端 bundle 的 strictObject 参数 schema 常量两条语句（压缩形）。 */
 const remotesStrictSchema = (name, body) =>
-  `\t\tlet ${TW}${name}_strict$schema$value;\n\t\tconst ${TW}${name}_strict$schema = () => ${TW}${name}_strict$schema$value ??= zod.z.strictObject({ ${body} });`;
+  `let ${TW}${name}_strict$schema$value;const ${TW}${name}_strict$schema=()=>${TW}${name}_strict$schema$value??=zod.z.strictObject({${body}});`;
 
 // 6a. 宽松段 + strict 段（各锚「unarchive 自己的块」，注入体=锚点原文+追加，
 // 与 4 节同理由：insert 必须原样保留 anchor）。
 const REMOTES_SCHEMA_ANCHOR =
-  remotesLooseSchema('unarchiveSession_result', '"archivedSessionIds": zod.z.array(zod.z.string()).readonly()');
+  remotesLooseSchema('unarchiveSession_result', '"archivedSessionIds":zod.z.array(zod.z.string()).readonly()');
 const REMOTES_SCHEMA_INSERT = [
   REMOTES_SCHEMA_ANCHOR,
-  remotesLooseSchema('deleteSession_parameter_0', '"sessionId": zod.z.string().readonly()'),
-  remotesLooseSchema('deleteSession_result', '"deleted": zod.z.boolean().readonly()'),
+  remotesLooseSchema('deleteSession_parameter_0', '"sessionId":zod.z.string().readonly()'),
+  remotesLooseSchema('deleteSession_result', '"deleted":zod.z.boolean().readonly()'),
 ].join('\n');
 const REMOTES_STRICT_ANCHOR =
-  remotesStrictSchema('unarchiveSession_parameter_0', '"sessionId": zod.z.string().readonly()');
+  remotesStrictSchema('unarchiveSession_parameter_0', '"sessionId":zod.z.string().readonly()');
 const REMOTES_STRICT_INSERT = [
   REMOTES_STRICT_ANCHOR,
-  remotesStrictSchema('deleteSession_parameter_0', '"sessionId": zod.z.string().readonly()'),
+  remotesStrictSchema('deleteSession_parameter_0', '"sessionId":zod.z.string().readonly()'),
 ].join('\n');
 
-// 6b. descriptor 条目（原生 "workspace/unarchiveSession" 的 sourceLocation(line 170)
-// 收尾之后插 deleteSession 条目；该收尾实测全文件唯一）。
-const REMOTES_INVOKE_ANCHOR = [
-  '\t\t\t\t\tsourceLocation: {',
-  '\t\t\t\t\t\t"file": "packages/api/workspace-controller/src/index.ts",',
-  '\t\t\t\t\t\t"line": 170,',
-  '\t\t\t\t\t\t"column": 3',
-  '\t\t\t\t\t}',
-  '\t\t\t\t},',
-].join('\n');
+// 6b. descriptor 条目（插在原生 "workspace/unpinSession" descriptor 之前——它在
+// 字节序上紧随 unarchiveSession 的 descriptor）。锚取 unpin 条目的开头（全文件唯一），
+// insert 原样保留锚：链式安全契约要求「insert 必须包含自己的锚」，否则与共享同一
+// 原生锚的补丁会互相挤掉。
+// 0.2.2-rc.2 压缩形：descriptor 里字符串值是模板字面量、键名不带引号、无空行缩进。
+const REMOTES_INVOKE_ANCHOR = '"workspace/unpinSession":{service:`workspaceController`,';
+const REMOTES_DELETE_DESC = [
+  '"workspace/deleteSession":{',
+  'service:`workspaceController`,',
+  'description:`Permanently delete one Session (log and attachments included).`,',
+  'invocation:{kind:`direct`},',
+  'parameters:[{name:`request`,description:`Session identity to delete.`,source:`json`,',
+  'codec:{mode:`strict`,typeSymbol:`@deepseek-ai/dsh-api-workspace-controller/types#WorkspaceDeleteSessionRequest`,create:' + TW + 'deleteSession_parameter_0$schema,jsonSchema:{"type":`object`,"properties":{"sessionId":{"type":`string`}},"required":[`sessionId`],"additionalProperties":true}},',
+  'strictCodec:{mode:`strict`,typeSymbol:`@deepseek-ai/dsh-api-workspace-controller/types#WorkspaceDeleteSessionRequest`,create:' + TW + 'deleteSession_parameter_0_strict$schema,jsonSchema:{"type":`object`,"properties":{"sessionId":{"type":`string`}},"required":[`sessionId`],"additionalProperties":false}}}],',
+  'result:{mode:`strict`,typeSymbol:`@deepseek-ai/dsh-api-workspace-controller/types#WorkspaceDeleteSessionValue`,create:' + TW + 'deleteSession_result$schema,description:`deletion confirmation.`,jsonSchema:{"type":`object`,"properties":{"deleted":{"type":`boolean`}},"required":[`deleted`],"additionalProperties":true}},',
+  'sourceLocation:{"file":`packages/api/workspace-controller/src/index.ts`,"line":999,"column":3}},',
+].join('');
+// 注：注入体按「数组 join('\n')」形态保留（换行在压缩 bundle 里只是语句分隔），
+// unit-patch-output-parsable 的反证会按这个形态核对「锚点之后不得紧跟无头尾巴」。
 const REMOTES_INVOKE_INSERT = [
+  REMOTES_DELETE_DESC,
   REMOTES_INVOKE_ANCHOR,
-  '\t\t\t\t"workspace/deleteSession": {',
-  '\t\t\t\t\tservice: "workspaceController",',
-  '\t\t\t\t\tdescription: "Permanently delete one Session (log and attachments included).",',
-  '\t\t\t\t\tinvocation: { kind: "direct" },',
-  '\t\t\t\t\tparameters: [{',
-  '\t\t\t\t\t\tname: "request",',
-  '\t\t\t\t\t\tdescription: "Session identity to delete.",',
-  '\t\t\t\t\t\tsource: "json",',
-  '\t\t\t\t\t\tcodec: {',
-  '\t\t\t\t\t\t\tmode: "strict",',
-  '\t\t\t\t\t\t\ttypeSymbol: "@deepseek-ai/dsh-api-workspace-controller/types#WorkspaceDeleteSessionRequest",',
-  `\t\t\t\t\t\t\tcreate: ${TW}deleteSession_parameter_0$schema,`,
-  '\t\t\t\t\t\t\tjsonSchema: {',
-  '\t\t\t\t\t\t\t\t"type": "object",',
-  '\t\t\t\t\t\t\t\t"properties": { "sessionId": { "type": "string" } },',
-  '\t\t\t\t\t\t\t\t"required": ["sessionId"],',
-  '\t\t\t\t\t\t\t\t"additionalProperties": true',
-  '\t\t\t\t\t\t\t}',
-  '\t\t\t\t\t\t},',
-  '\t\t\t\t\t\tstrictCodec: {',
-  '\t\t\t\t\t\t\tmode: "strict",',
-  '\t\t\t\t\t\t\ttypeSymbol: "@deepseek-ai/dsh-api-workspace-controller/types#WorkspaceDeleteSessionRequest",',
-  `\t\t\t\t\t\t\tcreate: ${TW}deleteSession_parameter_0_strict$schema,`,
-  '\t\t\t\t\t\t\tjsonSchema: {',
-  '\t\t\t\t\t\t\t\t"type": "object",',
-  '\t\t\t\t\t\t\t\t"properties": { "sessionId": { "type": "string" } },',
-  '\t\t\t\t\t\t\t\t"required": ["sessionId"],',
-  '\t\t\t\t\t\t\t\t"additionalProperties": false',
-  '\t\t\t\t\t\t\t}',
-  '\t\t\t\t\t\t}',
-  '\t\t\t\t\t}],',
-  '\t\t\t\t\tresult: {',
-  '\t\t\t\t\t\tmode: "strict",',
-  '\t\t\t\t\t\ttypeSymbol: "@deepseek-ai/dsh-api-workspace-controller/types#WorkspaceDeleteSessionValue",',
-  `\t\t\t\t\t\tcreate: ${TW}deleteSession_result$schema,`,
-  '\t\t\t\t\t\tdescription: "deletion confirmation.",',
-  '\t\t\t\t\t\tjsonSchema: {',
-  '\t\t\t\t\t\t\t"type": "object",',
-  '\t\t\t\t\t\t\t"properties": { "deleted": { "type": "boolean" } },',
-  '\t\t\t\t\t\t\t"required": ["deleted"],',
-  '\t\t\t\t\t\t\t"additionalProperties": true',
-  '\t\t\t\t\t\t}',
-  '\t\t\t\t\t},',
-  '\t\t\t\t\tsourceLocation: {',
-  '\t\t\t\t\t\t"file": "packages/api/workspace-controller/src/index.ts",',
-  '\t\t\t\t\t\t"line": 999,',
-  '\t\t\t\t\t\t"column": 3',
-  '\t\t\t\t\t}',
-  '\t\t\t\t},',
 ].join('\n');
 
 // ---------------------------------------------------------------------------
@@ -322,35 +289,27 @@ const REMOTES_INVOKE_INSERT = [
 //     （archive 600 之后，视觉仍紧贴归档项）。
 // 锚点取原生 archive 项的 run 收尾 + 该 register 调用收尾三行（全文件唯一，
 // 16 个候选锚点里实测 1 命中）。insert 原样保留锚点字节（链式安全）。
-const UI_MENU_ANCHOR = [
-	'\t\t\t\t\t(restoring ? actions.unarchiveSession : actions.archiveSession)(target.sessionId);',
-	'\t\t\t\t\t}',
-	'\t\t\t\t}];',
-	'\t\t\t});',
-].join('\n');
+// 0.2.2-rc.2 重锚（第四次结构变化：改成压缩产物）：`registerSessionMenus` 仍是
+// 「一串 register(id, order, observe, resolve) 数据项注册」，但整段被压到一行——
+// 三元式无空格、`run:()=>{…}` 与数组收尾之间也不再有换行/制表符。锚取 archive 项的
+// run 收尾到 register 调用收尾（`}}]})`），不碰闭合外层函数的那个 `}`，全文件唯一。
+const UI_MENU_ANCHOR = '(restoring?actions.unarchiveSession:actions.archiveSession)(target.sessionId)}}]})';
 const UI_MENU_INSERT = [
-	UI_MENU_ANCHOR,
-	'\t\t\t// dsh-desktop patch (session manage): 归档下方增加「删除对话」（order 650）。',
-	'\t\t\t// 桥缺失（未装 dsh-session-manager）时 resolve 返回空数组 = 整行不渲染——',
-	'\t\t\t// 显式降级，不是点了没反应。',
-	'\t\t\tregister("delete", 650, [], (target) => {',
-	'\t\t\t\tif (!(' + DELETE_SESSION_MENU_GUARD + ')) return [];',
-	'\t\t\t\treturn [{',
-	'\t\t\t\t\tid: "delete",',
-	'\t\t\t\t\tlabel: t("menu.deleteSession"),',
-	'\t\t\t\t\tdanger: true,',
-	'\t\t\t\t\tseparatorBefore: true,',
-	'\t\t\t\t\trun: () => {',
-	'\t\t\t\t\t\twindow.__dshSessionManager?.deleteSession(target.sessionId);',
-	'\t\t\t\t\t}',
-	'\t\t\t\t}];',
-	'\t\t\t});',
+	UI_MENU_ANCHOR + ';',
+	'// dsh-desktop patch (session manage): 归档下方增加「删除对话」（order 650）。',
+	'// 桥缺失（未装 dsh-session-manager）时 resolve 返回空数组 = 整行不渲染——',
+	'// 显式降级，不是点了没反应。',
+	'register(`delete`,650,[],target=>{',
+	'if(!(' + DELETE_SESSION_MENU_GUARD + '))return[];',
+	'return[{id:`delete`,label:t(`menu.deleteSession`),danger:true,separatorBefore:true,run:()=>{window.__dshSessionManager?.deleteSession(target.sessionId)}}]',
+	'});',
 ].join('\n');
 
-const UI_ZH_ANCHOR = "\t\t\t\"menu.archiveSession\": \"归档会话\",";
-const UI_ZH_INSERT = "\t\t\t\"menu.archiveSession\": \"归档会话\",\n\t\t\t\"menu.deleteSession\": \"删除对话\",";
-const UI_EN_ANCHOR = "\t\t\t\"menu.archiveSession\": \"Archive session\",";
-const UI_EN_INSERT = "\t\t\t\"menu.archiveSession\": \"Archive session\",\n\t\t\t\"menu.deleteSession\": \"Delete conversation\",";
+// 0.2.2-rc.2：locales 字典同样压缩（键双引号、值模板字面量、逗号后无空格）。
+const UI_ZH_ANCHOR = '"menu.archiveSession":`归档会话`,';
+const UI_ZH_INSERT = '"menu.archiveSession":`归档会话`,"menu.deleteSession":`删除对话`,';
+const UI_EN_ANCHOR = '"menu.archiveSession":`Archive session`,';
+const UI_EN_INSERT = '"menu.archiveSession":`Archive session`,"menu.deleteSession":`Delete conversation`,';
 
 // ---------------------------------------------------------------------------
 // 工具：在文件中做「锚点必须存在 + 增量幂等」的替换
@@ -481,8 +440,8 @@ const TARGETS = [
       // 'deleteInjected' has already been declared），工作区侧栏整块坏掉。注入体内的
       // 注释行不会被别的补丁触碰，故一律用它。
       { anchor: UI_MENU_ANCHOR, insert: UI_MENU_INSERT, done: 'dsh-desktop patch (session manage): 归档下方增加「删除对话」' },
-      { anchor: UI_ZH_ANCHOR, insert: UI_ZH_INSERT, done: '"menu.deleteSession": "删除对话"' },
-      { anchor: UI_EN_ANCHOR, insert: UI_EN_INSERT, done: '"menu.deleteSession": "Delete conversation"' },
+      { anchor: UI_ZH_ANCHOR, insert: UI_ZH_INSERT, done: '"menu.deleteSession":`删除对话`' },
+      { anchor: UI_EN_ANCHOR, insert: UI_EN_INSERT, done: '"menu.deleteSession":`Delete conversation`' },
     ],
   },
 ];

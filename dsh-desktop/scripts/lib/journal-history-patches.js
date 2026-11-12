@@ -40,6 +40,18 @@ const JOURNAL_PREPEND_RE = new RegExp(
   'gm',
 );
 
+// minify 形态（0.2.2-rc.2 的 browser 半边：整行压平、无空格、无缩进）。同一条守卫语义，
+// 只是真字节不同：`if(tail!==void 0&&before!==void 0&&!this.options.follows(...)){`。
+// 与格式化形态并存（node 半边仍是 2 tab 多行），两者都按「唯一命中」判定。
+const JOURNAL_PREPEND_GUARD_MIN =
+  'if(tail!==void 0&&before!==void 0&&!this.options.follows(this.options.last(tail),before)){';
+const JOURNAL_PREPEND_NARROWED_MIN =
+  'if(tail!==void 0&&before!==void 0&&!this.options.follows(this.options.last(tail),before)&&this.options.compare(this.options.last(tail),before)>=0){';
+const JOURNAL_PREPEND_MIN_RE = new RegExp(
+  JOURNAL_PREPEND_GUARD_MIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+  'g',
+);
+
 // 说明注释 + 收窄后的守卫条件（仅对 overlap/straddle 触发 fail-soft），逐行套命中处的缩进。
 function journalPrependReplacement(indent) {
   return [
@@ -55,22 +67,24 @@ function journalPrependReplacement(indent) {
 function transformJournalPrependContinuity(src, file) {
   if (src.includes(JOURNAL_PREPEND_MARKER)) return { status: 'already' };
   const hits = src.match(JOURNAL_PREPEND_RE);
-  // 只接受唯一命中；0 处=版本漂移，>1 处=锚点被复制，宁可 anchor-missing 也不误改。
-  if (!hits || hits.length !== 1) {
-    return {
-      status: 'anchor-missing',
-      detail: '未找到 journal-stream 断头锚点（版本可能已变更），跳过 ' + file,
-    };
+  if (hits && hits.length === 1) {
+    const indent = hits[0].slice(0, hits[0].indexOf('if ('));
+    const patched = src.replace(JOURNAL_PREPEND_RE, () => journalPrependReplacement(indent));
+    if (patched !== src) return { status: 'changed', src: patched };
   }
-  const indent = hits[0].slice(0, hits[0].indexOf('if ('));
-  const patched = src.replace(JOURNAL_PREPEND_RE, () => journalPrependReplacement(indent));
-  if (patched === src) {
-    return {
-      status: 'anchor-missing',
-      detail: '未找到 journal-stream 断头锚点（版本可能已变更），跳过 ' + file,
-    };
+  // minify 形态（browser 半边）：整行内联，无缩进可捕获，注入体也压成单行。
+  const minHits = src.match(JOURNAL_PREPEND_MIN_RE);
+  if (minHits && minHits.length === 1) {
+    const patched = src.replace(
+      JOURNAL_PREPEND_MIN_RE,
+      () => '/* ' + JOURNAL_PREPEND_MARKER + ': only overlap/straddle pages lock+throw; a pure seq gap prepends. */' + JOURNAL_PREPEND_NARROWED_MIN,
+    );
+    if (patched !== src) return { status: 'changed', src: patched };
   }
-  return { status: 'changed', src: patched };
+  return {
+    status: 'anchor-missing',
+    detail: '未找到 journal-stream 断头锚点（版本可能已变更），跳过 ' + file,
+  };
 }
 
 module.exports = {

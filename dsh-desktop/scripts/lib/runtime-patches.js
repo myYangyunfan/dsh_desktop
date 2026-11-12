@@ -35,9 +35,13 @@ const {
   slotCompatPatchTargets,
 } = require('./patch-target-resolver');
 
-/** dsh-client-runtime 会话列表刷新闪跳修复（mergeOrderedBaseline 保留本地新会话）。 */
-const FLASH_OLD = '(value) => baselineByKey.get(keyOf(value))).filter((value) => value !== void 0);';
-const FLASH_NEW = '(value) => baselineByKey.get(keyOf(value)) ?? value).filter((value) => value !== void 0);';
+/** dsh-client-runtime 会话列表刷新闪跳修复（mergeOrderedBaseline 保留本地新会话）。
+ *  0.2.2-rc.2 重锚：靶包 vendor 成压缩产物（dsh-api-session-controller/lib/client.js
+ *  94KB / 5 行），旧锚点带 1-tab 缩进 + 空格，蒸发了。新字节逐字为
+ *  `const merged=current.map(value=>baselineByKey.get(keyOf(value))).filter(value=>value!==void 0);`
+ *  （`function mergeOrderedBaseline(current,baseline,keyOf)` 内、全文件唯一）。 */
+const FLASH_OLD = 'const merged=current.map(value=>baselineByKey.get(keyOf(value))).filter(value=>value!==void 0);';
+const FLASH_NEW = 'const merged=current.map(value=>baselineByKey.get(keyOf(value))??value).filter(value=>value!==void 0);';
 
 /** 设置暴露白名单（dsh-prompt / 第三方思考 / 会话调整）。
  *  'dsh-vision' 已随识图插件（2026-10 内置伴随插件批量退役）摘除：白名单里留着
@@ -65,7 +69,12 @@ const SLOT_KEY_COMPAT_NEW = [
   '\t\tconst priority = options.priority ?? 0;',
 ].join('\n');
 const SLOT_UNKEYED_COMPAT_MARKER = 'dsh-desktop compat: derive keyed slot key for unkeyed registrations';
-const SLOT_UNKEYED_COMPAT_OLD = '\t\t\t\t\tconst spec = slots.spec(slot);\n\t\t\t\t\tlet priority = options.priority;';
+// 0.2.2-rc.2 重锚：cordis-client-runner 的 slots.register 包装体在 rc.2 里改写并
+// 压缩成无明显空白的形态（`const spec=slots.spec(slot);let priority=options.priority;`
+// —— 前面紧邻 `const options={...rawOptions}` 与 tool.view.cordis 的 key 绑定分支，
+// 整行唯一）。锚点取这两句本身，不写死 tab 数；注入体写成单行，避免在压缩产物里
+// 引入可读性更差的摆动。
+const SLOT_UNKEYED_COMPAT_OLD = 'const spec=slots.spec(slot);let priority=options.priority;';
 const SLOT_UNKEYED_COMPAT_NEW = [
   '\t\t\t\t\tconst spec = slots.spec(slot);',
   '\t\t\t\t\tif (spec !== void 0 && spec.kind === "keyed" && options.key === void 0) {',
@@ -521,6 +530,11 @@ function transformSlotErrorIsolation(src, file) {
 
 const SHELL_DESC_MARKER = "dsh-desktop compat: optional shell description";
 const SHELL_DESC_VALIDATE_OLD = "\tif (args.description.trim().length === 0) throw new Error(\"invalid description: expected a non-empty string\");";
+// 0.2.2-rc.2：bash/pwsh 的 validate 抛错改成 `new ToolArgsError([...])`（结构化错误码时代），
+// 上一代的 `new Error("...")` 形态因此只中 schema 半边、不中 validate 半边——那会产出「required 被删了
+// 但没写缺省补齐」的半补丁，`args.description` 为 undefined 时下面 `args.description.trim()` 直接 TypeError，
+// 比不补更坏。两形态都要认。
+const SHELL_DESC_VALIDATE_OLD_RC2 = "\tif (args.description.trim().length === 0) throw new ToolArgsError([\"invalid description: expected a non-empty string\"]);";
 const SHELL_DESC_VALIDATE_NEW = "\tif (typeof args.description !== \"string\" || args.description.trim().length === 0) {\n\t\t// " + SHELL_DESC_MARKER + ": description is only for UI/log; derive one when the model omits it.\n\t\targs.description = args.command.trim().split(/\\r?\\n/)[0].slice(0, 80) || \"Run shell command\";\n\t}";
 // 0.2.0-rc.2 起 shell 工具的 parameters 块整体下沉一级（defineTool 被包进工厂函数），
 // 于是 pwsh/bash 的 schema 从 3/4/4/4 tab 变成 4/5/5/4；validate 那行仍是 1 tab。
@@ -564,8 +578,11 @@ function transformShellDescriptionOptional(src, file) {
   if (out.includes(RUNCODE_VALIDATE_OLD)) { out = out.replace(RUNCODE_VALIDATE_OLD, RUNCODE_VALIDATE_NEW); notes.push("run_code: validate 兜底"); }
   // === shell (pwsh/bash) 家族 ===
   if (out.includes(SHELL_DESC_SCHEMA_NEW)) { out = out.replace(SHELL_DESC_SCHEMA_NEW, SHELL_DESC_SCHEMA_OPTIONAL); notes.push("shell: 清理历史 required:false"); }
-  if (out.includes(SHELL_DESC_SCHEMA_OLD)) { out = out.replace(SHELL_DESC_SCHEMA_OLD, SHELL_DESC_SCHEMA_OPTIONAL); notes.push("shell: description 改为可选"); }
+  let shellSchemaReplaced = false;
+if (out.includes(SHELL_DESC_SCHEMA_OLD)) { out = out.replace(SHELL_DESC_SCHEMA_OLD, SHELL_DESC_SCHEMA_OPTIONAL); notes.push("shell: description 改为可选"); shellSchemaReplaced = true; }
   if (out.includes(SHELL_DESC_VALIDATE_OLD)) { out = out.replace(SHELL_DESC_VALIDATE_OLD, SHELL_DESC_VALIDATE_NEW); notes.push("shell: validate 兜底"); }
+else if (out.includes(SHELL_DESC_VALIDATE_OLD_RC2)) { out = out.replace(SHELL_DESC_VALIDATE_OLD_RC2, SHELL_DESC_VALIDATE_NEW); notes.push("shell: validate 兜底（rc.2 ToolArgsError 形态）"); }
+else if (shellSchemaReplaced) { notes.push("shell: ⚠ validate 锚点未命中（schema 与 validate 必须成对，否则是半补丁）"); }
   if (notes.length > 0) return { status: "changed", src: out, note: notes.join("; ") };
   const done = out.includes(SHELL_DESC_MARKER) || out.includes(SHELL_DESC_SCHEMA_OPTIONAL)
     || out.includes(RUNCODE_DESC_MARKER) || out.includes(RUNCODE_SCHEMA_OPTIONAL)
@@ -702,6 +719,7 @@ module.exports = {
   slotCompatPatchTargets,
   SHELL_DESC_MARKER,
   SHELL_DESC_VALIDATE_OLD,
+  SHELL_DESC_VALIDATE_OLD_RC2,
   SHELL_DESC_VALIDATE_NEW,
   SHELL_DESC_SCHEMA_OLD,
   SHELL_DESC_SCHEMA_OPTIONAL,

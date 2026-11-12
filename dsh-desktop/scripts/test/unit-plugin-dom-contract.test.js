@@ -810,7 +810,9 @@ let slotContractCache = null;
 function slotContract() {
 	if (slotContractCache) return slotContractCache;
 	const src = fs.readFileSync(RUNNER_BUNDLE, 'utf8');
-	const d = /const CLIENT_SLOT_API = \[/.exec(src);
+	// 0.2.2-rc.2 起 runner 的 client bundle 是压缩产物（`const CLIENT_SLOT_API=[`），
+	// 等号两侧不再有空格，所以这里必须放宽空白匹配。
+	const d = /const CLIENT_SLOT_API\s*=\s*\[/.exec(src);
 	assert.ok(d, 'runner 里找不到 CLIENT_SLOT_API，权威源已漂移，本条判据须回炉');
 	const api = vm.runInNewContext('(' + sliceBalanced(src, src.indexOf('[', d.index)) + ')',
 		Object.create(null), { timeout: 3000 });

@@ -58,7 +58,7 @@ const FORM = kernel.packageVersion;
 // → 60 = 62 − agent-loop-scheduler-guard − menu-viewport（0.2.2-rc.1 换代退役两条，
 // 均为「上游自己做到了」，见 ta6-registry-invariants 的 E 与下方 60 基线说明）。
 // 逐项理由见 ta6-registry-invariants.test.js 的 E。
-const SPEC_COUNT = 61;
+const SPEC_COUNT = 60;
 
 /** 与 kernel-pin 同版的 pristine 闭包根；不在场返回 null（调用侧响亮失败）。 */
 function formRoot() {
@@ -151,7 +151,7 @@ function integrityProblems(ids, baseline) {
 // 逐项理由见 ta6-registry-invariants.test.js 的 E。
 // ===========================================================================
 const BASELINE = {
-  '0.2.2-rc.1': {
+  '0.2.2-rc.2': {
     'slot-legacy-key': 'changed',
     'slot-unkeyed-compat': 'changed',
     'slot-error-isolation': 'changed',
@@ -166,28 +166,28 @@ const BASELINE = {
     'loader-activation-isolation': 'changed',
     'fail-loud-isolation': 'changed',
     'loader-import-failure-report': 'changed',
-    'manual-sort-drag-fix': 'changed',
     'prompt-admission-reason-report': 'changed',
+    'onboarding-step-progress-timeout': 'changed',
+    'onboarding-guard-report': 'changed',
+    'manual-sort-drag-fix': 'changed',
     'credentials-initial-retry': 'changed',
     'credentials-absent-guidance': 'changed',
     'device-auth-guidance': 'changed',
     'kernel-web-boot-watchdog': 'changed',
     'plugin-inventory-tab-merge': 'changed',
-    'onboarding-step-progress-timeout': 'changed',
-    'onboarding-guard-report': 'changed',
     'web-search-baseurl': 'root',
     'session-manage': 'root',
     'open-project-dir': 'root',
-    'session-persistence': 'root',
     'workspace-pin': 'root',
+    'session-persistence': 'root',
     'tool-source-compat': 'root',
     'pi-ai-credits': 'root',
     'pi-ai-overflow-message': 'root',
-    'agent-preset-fallback': 'changed',
     'settings-models-resilience': 'root',
     'pi-ai-reasoning-defaults': 'root',
     'bundle-arrival-retry': 'root',
     'empty-tool-name-guidance': 'root',
+    'agent-preset-fallback': 'changed',
     'prompt-context-literal': 'changed',
     'wsl-picker-browse': 'changed',
     'adapter-prepare-call-guard': 'changed',
@@ -196,13 +196,13 @@ const BASELINE = {
     'session-load-graceful': 'changed',
     'codex-local-bin-fallback': 'target-absent',
     'claude-local-bin-fallback': 'changed',
-    'skill-dirs-compat': 'changed',
-    'pi-ai-4xx-dump': 'target-absent',
+    'ds-tool-schema-sanitize': 'changed',
     'pi-ai-tool-schema-sanitize': 'target-absent',
     'pi-ai-responses-tool-name-sanitize': 'target-absent',
     'pi-ai-tool-name-wire': 'changed',
     'pi-ai-quota-not-retryable': 'target-absent',
-    'ds-tool-schema-sanitize': 'changed',
+    'pi-ai-4xx-dump': 'target-absent',
+    'skill-dirs-compat': 'changed',
     'workspace-chip-label-hold': 'changed',
     'history-page-size': 'changed',
     'journal-prepend-continuity': 'changed',
@@ -212,7 +212,6 @@ const BASELINE = {
     'session-unknown-event-tolerance': 'changed',
     'released-v0-history-recovery': 'changed',
     'appboot-bootstrap-singleton': 'changed',
-    'client-boot-failure-report': 'changed',
   },
 };
 

@@ -97,10 +97,16 @@ function collectProvidedServices(rootDirs) {
  * @returns {string[]} 服务名（按声明序，去重）
  */
 function extractHostInjectNames(text) {
+  // 2026-11-12（0.2.2-rc.2 换代实测）：先抹掉模板字符串正文，再做行锚匹配。
+  // 反例：`dsh-super-injector/lib/index.js` 是个「生成器」插件——它写给用户的脚手架
+  // 模板里带着 `export const inject = ['slots']` 这一行，且顶格出现，于是被判据当成
+  // 它自己的宿主 inject；rc.1 内核恰好提供 slots 所以一直假绿，rc.2 不再提供才暴露。
+  // 抹模板时保留换行，行锚语义不变；真声明在模板之外，不受影响。
+  const code = blankTemplateLiterals(text);
   const names = [];
   HOST_INJECT.lastIndex = 0;
   let m;
-  while ((m = HOST_INJECT.exec(text))) {
+  while ((m = HOST_INJECT.exec(code))) {
     STRING_ITEM.lastIndex = 0;
     let item;
     while ((item = STRING_ITEM.exec(m[1]))) {
@@ -108,6 +114,39 @@ function extractHostInjectNames(text) {
     }
   }
   return names;
+}
+
+/** 把模板字符串正文替换成空格（保留换行），用于消除「模板里顶格的假声明」。 */
+function blankTemplateLiterals(text) {
+  let out = '';
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch !== '`') {
+      out += ch;
+      i += 1;
+      continue;
+    }
+    // 进入模板：抹到未转义的收尾反引号为止（不处理 ${} 嵌套——本判据只需要行锚位）。
+    out += '`';
+    i += 1;
+    while (i < text.length) {
+      const c = text[i];
+      if (c === '\\') {
+        out += text[i + 1] === '\n' ? '\n' : ' ';
+        i += 2;
+        continue;
+      }
+      if (c === '`') {
+        out += '`';
+        i += 1;
+        break;
+      }
+      out += c === '\n' ? '\n' : ' ';
+      i += 1;
+    }
+  }
+  return out;
 }
 
 /**

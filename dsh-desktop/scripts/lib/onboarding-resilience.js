@@ -43,14 +43,11 @@ const ONBOARDING_STEP_TIMEOUT_MARKER = 'dsh-desktop guard: onboarding step advan
 const ONBOARDING_GUARD_REPORT_MARKER = 'dsh-desktop guard: onboarding silent update/complete guards report which guard fired';
 
 // ── ① 步骤推进的有界回落 ────────────────────────────────────────────────────
-const STEP_GATE_OLD = [
-  '\t\t\t\tanimation.finished.then(() => {',
-  '\t\t\t\t\tsetStep(targetStep);',
-  '\t\t\t\t}, (_error) => {});',
-  '\t\t\t\treturn () => {',
-  '\t\t\t\t\tanimation.cancel();',
-  '\t\t\t\t};',
-].join('\n');
+// 0.2.2-rc.2 重锚：客户端的 lib/client.js 整包改成**压缩产物**（本包 178KB / 3 行），
+// 上一代按 4-tab 缩进写的多行锚点在新字节里 0 命中。锚点因此改为压缩态的
+// 「缩进无关、单行、逐字节」子串；注入体也写成单行（源文件本身已是单行，插换行
+// 只会让后续核对更难读）。语义与上一代逐字等价。
+const STEP_GATE_OLD = 'animation.finished.then(()=>{setStep(targetStep)},_error=>{});return()=>{animation.cancel()}';
 
 const STEP_GATE_NEW = [
   '\t\t\t\tconst __dshOnbAdvanced = { done: false };',
@@ -93,39 +90,38 @@ function transformOnboardingStepProgressTimeout(src, file) {
 }
 
 // ── ② 静默 guard 的成因上报 ─────────────────────────────────────────────────
-const GUARD_HELPER_ANCHOR = '\t\t\t\tctx.effect(() => () => {\n\t\t\t\t\tcontroller.dispose();';
+// 0.2.2-rc.2 重锚：锚点取自压缩态单行文本——`...controller.dispose()},"account:
+// desktop onboarding lifetime")` 这个 effect 标签在包内唯一，且它正是原先多行锚点
+// `ctx.effect(() => () => { controller.dispose();` 的同一位置。
+const GUARD_HELPER_ANCHOR = 'ctx.effect(()=>()=>{controller.dispose()},`account: desktop onboarding lifetime`)';
 
 const GUARD_HELPER_NEW = [
-  '\t\t\t\tconst __dshOnbGuardReport = (kind, ok) => {',
-  '\t\t\t\t\tif (ok !== false) return;',
-  '\t\t\t\t\tconst __dshOnbView = controller.account.getSnapshot().view;',
-  '\t\t\t\t\tconst __dshOnbSaved = controller.readProgress();',
-  '\t\t\t\t\tconst __dshOnbWhy = controller.disposed ? "disposed"',
-  '\t\t\t\t\t\t: controller.completing ? "completing"',
-  '\t\t\t\t\t\t: controller.saving && controller.draft === void 0 ? "saving-in-flight"',
-  '\t\t\t\t\t\t: __dshOnbView?.status !== "credential-stored" ? "account=" + (__dshOnbView?.status ?? "none")',
-  '\t\t\t\t\t\t: __dshOnbSaved === void 0 ? "progress=undefined"',
-  '\t\t\t\t\t\t: __dshOnbSaved.step === "done" ? "progress=done"',
-  '\t\t\t\t\t\t: "unknown";',
-  '\t\t\t\t\tconst __dshOnbLine = "[onboarding-guard] " + kind + " 被 guard 静默拒绝(" + __dshOnbWhy + ") step=" + (__dshOnbSaved?.step ?? "none");',
-  '\t\t\t\t\ttry {',
-  '\t\t\t\t\t\tif (globalThis.__TAURI_INTERNALS__ && globalThis.__TAURI_INTERNALS__.invoke) globalThis.__TAURI_INTERNALS__.invoke("page_error", { message: __dshOnbLine });',
-  '\t\t\t\t\t\telse if (globalThis.console) console.warn(__dshOnbLine);',
-  '\t\t\t\t\t} catch {}',
-  '\t\t\t\t};',
-  '\t\t\t\tctx.effect(() => () => {',
-  '\t\t\t\t\tcontroller.dispose();',
-].join('\n');
+  'const __dshOnbGuardReport=(kind,ok)=>{',
+  'if(ok!==false)return;',
+  'const __dshOnbView=controller.account.getSnapshot().view;',
+  'const __dshOnbSaved=controller.readProgress();',
+  'const __dshOnbWhy=controller.disposed?"disposed"',
+  ':controller.completing?"completing"',
+  ':controller.saving&&controller.draft===void 0?"saving-in-flight"',
+  ':__dshOnbView?.status!=="credential-stored"?"account="+(__dshOnbView?.status??"none")',
+  ':__dshOnbSaved===void 0?"progress=undefined"',
+  ':__dshOnbSaved.step==="done"?"progress=done"',
+  ':"unknown";',
+  'const __dshOnbLine="[onboarding-guard] "+kind+" 被 guard 静默拒绝("+__dshOnbWhy+") step="+(__dshOnbSaved?.step??"none");',
+  'try{',
+  'if(globalThis.__TAURI_INTERNALS__&&globalThis.__TAURI_INTERNALS__.invoke)globalThis.__TAURI_INTERNALS__.invoke("page_error",{message:__dshOnbLine});',
+  'else if(globalThis.console)console.warn(__dshOnbLine);',
+  '}catch{}',
+  '};',
+  GUARD_HELPER_ANCHOR,
+].join('');
 
-const GUARD_CALLS_OLD = [
-  '\t\t\t\t\t\tupdate: (change) => controller.update(change),',
-  '\t\t\t\t\t\tcomplete: (reason) => controller.complete(reason),',
-].join('\n');
+const GUARD_CALLS_OLD = 'update:change=>controller.update(change),complete:reason=>controller.complete(reason),';
 
 const GUARD_CALLS_NEW = [
-  '\t\t\t\t\t\tupdate: (change) => controller.update(change).then((__dshOnbOk) => (__dshOnbGuardReport("update", __dshOnbOk), __dshOnbOk)),',
-  '\t\t\t\t\t\tcomplete: (reason) => controller.complete(reason).then((__dshOnbOk) => (__dshOnbGuardReport("complete", __dshOnbOk), __dshOnbOk)),',
-].join('\n');
+  'update:change=>controller.update(change).then(__dshOnbOk=>(__dshOnbGuardReport("update", __dshOnbOk), __dshOnbOk)),',
+  'complete:reason=>controller.complete(reason).then(__dshOnbOk=>(__dshOnbGuardReport("complete", __dshOnbOk), __dshOnbOk)),',
+].join('');
 
 /**
  * client.js 变换：update/complete 的返回值被调用点丢弃、guard 命中零日志——补一条成因上报，

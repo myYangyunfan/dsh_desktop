@@ -67,14 +67,21 @@ const PROVIDER_NEW_THROW_LINES = [
 // 设置页文案补丁（@deepseek-ai/dsh-client-ui-settings-web-search/lib/client.js）
 // ---------------------------------------------------------------------------
 
+// 0.2.2-rc.2 重锚：该页同样变成压缩产物（41KB / 3 行），且上游第三次重写了这两句
+// 文案——不再出现 `/messages` 字面量与「含 API 前缀的地址」旧句式，改为
+// `Include the API prefix. Leave blank to use the official address. The provider appends {path}.`
+// / `填写含 API 前缀的地址；留空时使用官方地址；程序追加 {path}`。上游用 `{path}`
+// 抽象了追加路径（不再写死 Messages），但**协议契约仍然没写出来**——用户照旧可以
+// 把 Exa 之类的地址贴进来。本补丁的价值点（说清这里是 Anthropic 兼容 Messages API、
+// 其它协议要各自的提供方插件）因此保留，只按新字节重录锚点。
 const CLIENT_PAIRS = [
   [
-    'baseUrlHint: "Include the API prefix, such as https://api.deepseek.com/anthropic/v1. The provider appends /messages. Leave blank to restore the default.",',
-    'baseUrlHint: "Include the API prefix of the Anthropic-compatible Messages API, such as https://api.deepseek.com/anthropic/v1. The provider appends /messages; search services on other protocols (e.g. Exa) need their own provider plugin. Leave blank to restore the default.",',
+    'baseUrlHint:`Include the API prefix. Leave blank to use the official address. The provider appends {path}.`',
+    'baseUrlHint:`Include the API prefix of the Anthropic-compatible Messages API. Leave blank to use the official address. The provider appends {path}; search services on other protocols (e.g. Exa) need their own provider plugin.`',
   ],
   [
-    'baseUrlHint: "填写含 API 前缀的地址，例如 https://api.deepseek.com/anthropic/v1；程序追加 /messages，留空恢复默认。",',
-    'baseUrlHint: "填写 Anthropic 兼容 Messages API 的基址（含 API 前缀），例如 https://api.deepseek.com/anthropic/v1；程序追加 /messages。其它协议的搜索服务（如 Exa）需要对应的提供方插件；留空恢复默认。",',
+    'baseUrlHint:`填写含 API 前缀的地址；留空时使用官方地址；程序追加 {path}`',
+    'baseUrlHint:`填写 Anthropic 兼容 Messages API 的基址（含 API 前缀）；留空时使用官方地址；程序追加 {path}。其它协议的搜索服务（如 Exa）需要对应的提供方插件。`',
   ],
 ];
 

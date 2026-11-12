@@ -5,6 +5,44 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### chore(kernel)：随包内核换代 0.2.2-rc.1 → 0.2.2-rc.2（2026-11-12）
+
+上游 `dsh-v0.2.2-rc.2`（2026-11-11 发布，npm `next` tag）换代收口。**61 条补丁里 21 项锚点失配，
+全部按真字节重靶；退役 1 条，补丁净数 61 → 60。**
+
+- **vendor**：`vendor/dsh-kernel/` 换成 **374 个 dsh tarball + 13 个框架件 = 387 份**（56.03MB，
+  旧集 28.45MB）。逐个校验内嵌 `name`/`version` 与 sha512 全过、零混版。家族变动：退役 9
+  （`experimental-*agent-team` 三件、`office-to-pdf`、`web-search-exa`/`web-search-perplexity`、
+  `api-account-controller`、`deepseek-account-platform` 等），新增 19（`agent-team` 线改名接替、
+  `office-kit`/`tool-office`、`cua` 全套、`mcp-manager`、`error`、`util-ripgrep` 等）。
+  **枚举口径**：npm 的 `/-/v1/search` 对新发布包滞后，只按「现有文件名 ∪ 搜索」会漏 10 个已被
+  其他包 `dependencies` 引用的新包（漏了就是 install 期 `ERR_MODULE_NOT_FOUND`）；权威枚举是
+  `replicate.npmjs.com/registry/_all_docs` 前缀扫描（409 个 `@deepseek-ai/dsh*`）。
+- **rc.2 把客户端产物整体压缩了**：85/88 个 `lib/client.js` 变单行（`dsh-api-remotes` 3 行/1.16MB、
+  `dsh-client-ui-workspace` 5 行/197KB）。上一代按 tab 缩进写的多行锚点**整批 0 命中**——不是代码
+  搬家，是格式变了。锚点一律改成压缩态逐字节子串；且**单行文件里注入体不能用 `//` 注释**
+  （会吃掉后半份产物），要么块注释、要么注入体末尾补 `\n`。服务端 `lib/index.js` 仍是可读形态。
+- **`ToolArgsError` 形态**：bash/pwsh 的 validate 抛错从 `new Error("…")` 改成
+  `new ToolArgsError(["…"])`，只中 schema 半边就成了**半补丁**（`required` 删了却没写缺省补齐，
+  `args.description` 为 undefined 时 `.trim()` 直接 TypeError，比不补更坏）。已加 rc.2 锚点变体，
+  并只在「本轮真的换了 schema」时才告警 validate 失配（否则幂等/ptc/无锚点三种正常形态会被误判）。
+- **K25 手动排序拖拽（真 bug，实锤）**：重靶时我先写成了 `setData(\`text/plain\`,row.key)`，
+  命中的是**工作区分组行 ProjectRow**，而真正带 `if(!drag.active)return` 守卫、需要 `flushSync`
+  的是**会话行 SessionNodeItem**（`node.id`）——「修了不需要修的那一行，该修的仍裸奔」。
+  已改回 `node.id`、从 vendored tarball 还原产物重打，实测被包裹处恰 1 处。
+- **退役**：`client-boot-failure-report`。靶面 `dsh-client-web/lib/index.js` 是构建期源码（运行时
+  发的是 `dsh-web-frontend/dist/index.html` + 自包含 chunk），注入体永不被调用；且 rc.2 的
+  `bootClient()` 末尾自带 `await assertEntriesActive(ctx, options.modules)`，必需条目失活会真抛进
+  `run` 的 catch——上游已在源头修掉那条静默失败。
+- **测试面随迁**：`PRISTINE_INJECTIONS` 增加 RegExp 逆运算对（V4 锚点带缩进捕获）；
+  `unit-plugin-inject-services` 修掉一处长期假绿（生成器类插件的模板正文里顶格写着
+  `export const inject = ['slots']`，被误当成它自己的宿主 inject；rc.1 恰好提供 slots 所以一直绿）；
+  `unit-patch-output-parsable`、`ta6-baseline-matrix`（rc.2 行）、`ta6-transform-contract` 等随迁。
+- **验收**：`npm test` **2229 例 / pass 2220 / skip 9 / fail 0**；`patch-deps` 汇总
+  「写入 4 处 / 失配 0 / 失败 0 / 共 60 项」；`patch-surface verify` 94 文件 / 86 标记家族无漂移；
+  pristine 闭包已重出 `0.2.2-rc.2`（387 包）；隔离实机 boot 五步全 OK（sync 6.3s），
+  内核 web 起在 47833、无 `pending (waiting for`、无 `failed to load`。
+
 ### fix(boot)：安全模式熔断接进运行时同步器 —— 上一版又修在没人跑的文件上（2026-11-11）
 
 真机跑了一遍「塞坏伴随插件 → 恢复页 → 以安全模式重启」，**后半段是空的**：`recovery_safe_mode` 把

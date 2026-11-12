@@ -38,7 +38,9 @@ test('transformProfilePatchGuard：匹配 / 已应用 / 失配三态', () => {
 // 注册调用点）在 rc.2 全内核 0 命中，插入点不存在 ⇒ 无实现可测，用例随之撤除。
 
 const TAB_MARKER = 'dsh-desktop fix: hide inventory tab';
-const TAB_OLD = 'tabs = ctx.slots.entries("settings.plugins.tab").map((entry) => ({';
+// 0.2.2-rc.2：settings-plugins 的 lib/client.js 变成压缩产物（8KB / 3 行），
+// tabs 派生退化成单行语句——锚点必须按压缩态真字节认，写死上一代的空格/缩进形态恒 0 命中。
+const TAB_OLD = 'tabs=ctx.slots.entries(`settings.plugins.tab`).map(entry=>({';
 
 test('transformPluginInventoryTabMergeFix：匹配 / 已应用 / 失配三态', () => {
   const changed = transformPluginInventoryTabMergeFix(TAB_OLD, 't.js');
@@ -51,8 +53,13 @@ test('transformPluginInventoryTabMergeFix：匹配 / 已应用 / 失配三态', 
 
 test('runtime transform re-export 可用', () => {
   // 仅验证 re-export 链路通：flash 变换的已应用判定。
-  const src = '(value) => baselineByKey.get(keyOf(value)) ?? value).filter((value) => value !== void 0);';
+  // 夹具按 rc.2 压缩产物的真字节写（上游 `const merged=…` 单行语句），
+  // 已应用态即含 `??value` 的那份字节。
+  const src = 'const merged=current.map(value=>baselineByKey.get(keyOf(value))??value).filter(value=>value!==void 0);';
   assert.equal(transformFlashFix(src, 't.js').status, 'already');
+  // 反证：未经闪跳修复的旧字节必须被判成 changed 而不是 already。
+  const old = 'const merged=current.map(value=>baselineByKey.get(keyOf(value))).filter(value=>value!==void 0);';
+  assert.equal(transformFlashFix(old, 't.js').status, 'changed');
 });
 
 test('transformPersistenceAll re-export 可用（损坏会话容错收口，勿回退旧名）', () => {

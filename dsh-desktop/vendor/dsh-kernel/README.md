@@ -1,12 +1,12 @@
-# Vendored dsh kernel tarballs (ACTIVE — 0.2.2-rc.1)
+# Vendored dsh kernel tarballs (ACTIVE — 0.2.2-rc.2)
 
 This directory holds the packed, npm-installable tarballs for the
-`@deepseek-ai/dsh` **0.2.2-rc.1** kernel (the full `@deepseek-ai/dsh-*`
-family — 364 packages (including the `@deepseek-ai/dsh` root), plus 13 framework-line tarballs whose version line is
+`@deepseek-ai/dsh` **0.2.2-rc.2** kernel (the full `@deepseek-ai/dsh-*`
+family — 374 packages (including the `@deepseek-ai/dsh` root), plus 13 framework-line tarballs whose version line is
 its own: cordis / cordis-plugin-* / cosmokit / schemastery / node-addon-system
 + its four platform subpackages / libreoffice-kit). The kernel is downloaded
 from the **npm registry**
-(`registry.npmjs.org/@deepseek-ai/dsh-*` at the exact `0.2.2-rc.1` dist-tag
+(`registry.npmjs.org/@deepseek-ai/dsh-*` at the exact `0.2.2-rc.2` dist-tag
 version) and is **NOT** re-published here under any other version. This is the
 **active** vendored set: `dsh-desktop/package.json` / `package-lock.json`
 resolve every `@deepseek-ai/dsh*` package against these `file:` tarballs, so a
@@ -18,15 +18,13 @@ The single source of truth for the pinned kernel version is
 `kernel.vendorDir`). Everything here — the tarball file names, the manifests, and the
 comments in the surrounding scripts — must agree with that pin.
 
-Contents: 340 `deepseek-ai-dsh-<pkg>-0.2.2-rc.1.tgz` tarballs + 13 framework tarballs
-(353 total). The authoritative list is whatever is present in this directory — verify with
-`Get-ChildItem dsh-desktop/vendor/dsh-kernel` rather than trusting any enumerated
-diff. (Relative to the 0.2.1-rc.2 set of 339 tarballs, 0.2.2-rc.1 adds exactly one dsh
-package — `dsh-client-ui-entry-customization`（左栏 / 会话视图 / 右栏的「更多」菜单，
-浏览与创建插件；rc.3 引入）— drops none, and keeps the framework line unchanged:
-cordis 4.0.5 / cosmokit 1.8.6 / schemastery 3.18.5 / cordis-plugin-* 各同档.
-2026-10-27 换代实测：340 个候选名在 registry 上**全部**有 rc.4 版本（零上游撤包），
-所以这一代只需「旧版 tarball 全部移出 + 新版全量入 + 补上 1 个新包」。)
+Contents: 374 `deepseek-ai-dsh-<pkg>-0.2.2-rc.2.tgz` tarballs + 13 framework tarballs
+(387 total, 56,380,471 bytes). The authoritative list is whatever is present in this
+directory — verify with `Get-ChildItem dsh-desktop/vendor/dsh-kernel` rather than
+trusting any enumerated diff. (相对 0.2.2-rc.1 的 364 个 dsh tarball：保留 355、退役 9、
+新增 19 → 374；框架件版本线一字未动。目录里**没有任何** `*-0.2.2-rc.1.tgz` 残留。
+2026-11-12 换代实测：权威枚举面 409 个 `@deepseek-ai/dsh*` 包名，其中 374 个有
+`0.2.2-rc.2` 版本、35 个没有，registry 上不存在 404 的候选名。)
 
 **框架件的平台子包只收 node-addon-system 的四件**：`@deepseek-ai/libreoffice-kit`
 的平台子包（darwin-x64 / win32-arm64 / wasm 等）历史上就不进 vendor，registry 上
@@ -34,15 +32,15 @@ cordis 4.0.5 / cosmokit 1.8.6 / schemastery 3.18.5 / cordis-plugin-* 各同档.
 
 ## Where they came from
 
-- Downloaded from the public npm registry at version `0.2.2-rc.1` (the registry
-  uses `-rc.4`, not `-rc4`). For each package in the dsh family, the
+- Downloaded from the public npm registry at version `0.2.2-rc.2` (the registry
+  uses `-rc.2`, not `-rc2`). For each package in the dsh family, the
   `dist.tarball` URL was fetched and the payload verified: the embedded
   `package.json` must report `name` equal to the requested package and `version`
-  equal to `0.2.2-rc.1`, and the sha512 must match the registry `dist.integrity`,
+  equal to `0.2.2-rc.2`, and the sha512 must match the registry `dist.integrity`,
   before the file is accepted into this directory.
 - Tarball file naming follows the vendoring convention
   `deepseek-ai-dsh-<name>-<version>.tgz` (i.e. `@deepseek-ai/dsh-acp` →
-  `deepseek-ai-dsh-acp-0.2.2-rc.1.tgz`, dropping `@`, replacing `/` with `-`).
+  `deepseek-ai-dsh-acp-0.2.2-rc.2.tgz`, dropping `@`, replacing `/` with `-`).
   `scripts/generate-kernel-lock.mjs` reverses this convention to build the
   `file:vendor/dsh-kernel/*.tgz` dependency map.
 - Framework packages (`@deepseek-ai/cordis*`, cosmokit, schemastery,
@@ -85,3 +83,34 @@ pin / manifests; after install, verify the kernel reports the pinned version.
   libreoffice-kit 0.1.5 与 node-addon-system 0.1.2（含 4 个平台变体）不变。
 - 判定方式：包在不在家族里，按「目标版本是否在 registry 发布过」判，**不要**用根包依赖链——
   依赖链只看得到 320 个，会把 44 个只挂在 bundle/profile 上的包误判成退役。
+
+## 0.2.2-rc.1 → 0.2.2-rc.2 家族变动（2026-11-12）
+
+- **规模**：364 → **374** 个 dsh tarball（含 `@deepseek-ai/dsh` 根包）；保留 355、退役 9、新增 19。
+  框架件 13 个**一字未动**（cordis 4.1.0 / cordis-plugin-{group,include,loader} 1.1.0 / cordis-plugin-timer 1.2.0 /
+  cosmokit 1.9.0 / schemastery 3.19.0 / node-addon-system 0.1.2 + 4 个平台变体 / libreoffice-kit 0.1.5）。
+- **退役 9 个**（registry 上最高版本停在 `0.2.2-rc.1`，当前线上 latest 仍是 0.1.x alpha）：
+  `dsh-api-account-controller`、`dsh-deepseek-account-platform`、`dsh-experimental-agent-team`、
+  `dsh-experimental-agent-team-profile`、`dsh-experimental-client-ui-agent-team`、`dsh-experimental-tool-agent-team`、
+  `dsh-office-to-pdf`、`dsh-web-search-exa`、`dsh-web-search-perplexity`。
+- **新增 19 个**：`dsh-agent-team`、`dsh-client-ui-account-notifications`、`dsh-client-ui-agent-team`、`dsh-cua`、
+  `dsh-cua-bundle`、`dsh-error`、`dsh-experimental-claude-code-mods`、`dsh-experimental-client-ui-claude-code-mods`、
+  `dsh-experimental-cua-macos`、`dsh-experimental-subagent-oar`、`dsh-experimental-tool-subagent-oar`、
+  `dsh-mcp-manager`、`dsh-office-kit`、`dsh-terminal-panel`、`dsh-tool-agent-team`、`dsh-tool-office`、
+  `dsh-tool-testkit`、`dsh-util-file-drag`、`dsh-util-ripgrep`。
+  其中 4 个是 agent-team / office 线的**改名接替**（`experimental-*agent-team` → `dsh-agent-team` /
+  `dsh-client-ui-agent-team` / `dsh-tool-agent-team`，`dsh-office-to-pdf` → `dsh-office-kit` + `dsh-tool-office`）。
+- **判定方式**：候选名不靠根包依赖链（那样只看得到约 350 个、还会把 bundle/profile 包误判成退役），
+  而是先做权威穷尽枚举——npm 复制库 `https://replicate.npmjs.com/registry/_all_docs` 按
+  `startkey="@deepseek-ai/dsh"` 前缀扫描得 **409** 个包名，再与 `/-/v1/search` 多路查询
+  （`text=@deepseek-ai/dsh` / `scope:deepseek-ai` / `@deepseek-ai/dsh-`）取并集（搜索结果 ⊆ 409，无新增）；
+  对 409 个逐个查 `registry.npmjs.org/@deepseek-ai/<pkg>` 的 `versions["0.2.2-rc.2"]` 是否存在。
+  实测 `present=374 / 无 rc.2 = 35 / registry 404 = 0`。
+  **注意**：`/-/v1/search` 索引对新发布包有滞后，仅靠「基线文件名 ∪ 搜索」会漏 10 个
+  （`dsh-agent-team`、`dsh-client-ui-account-notifications`、`dsh-client-ui-agent-team`、`dsh-error`、
+  `dsh-mcp-manager`、`dsh-office-kit`、`dsh-terminal-panel`、`dsh-tool-agent-team`、`dsh-tool-office`、
+  `dsh-util-ripgrep`），它们是被已 vendor 包的 `dependencies` 直接引用的；本代用 replicate `_all_docs`
+  前缀扫描 + 依赖闭包复核才补齐，换代时照此办理。
+- 校验：374 个全部通过「内嵌 `package.json` 的 name/version == 请求包名/`0.2.2-rc.2`」+「sha512 == registry
+  `dist.integrity`」；0 个失败（无 404、无 integrity 不符、无 version 不符）。新集全部到位并核对字节后才删旧版，
+  目录内无混版残留。

@@ -201,7 +201,6 @@ const {
   FAIL_LOUD_ISOLATION_MARKER,
   LOADER_IMPORT_REPORT_MARKER,
   PROMPT_ADMISSION_REASON_MARKER,
-  CLIENT_BOOT_FAILURE_MARKER,
   CODEX_LOCAL_BIN_MARKER,
   CLAUDE_LOCAL_BIN_MARKER,
   PI_AI_4XX_DUMP_MARKER,
@@ -226,7 +225,6 @@ const {
   transformFailLoudIsolation,
   transformLoaderImportFailureReport,
   transformPromptAdmissionReasonReport,
-  transformClientBootFailureReport,
 } = require('./loader-isolation');
 
 const {
@@ -605,33 +603,16 @@ const PATCH_SPECS = [
       failLog: (file, err) => 'loader 导入失败原文注入失败: ' + err.message,
     },
   },
-  // 前向兼容保留（2026-11-11 实测降级，**不在运行时路径上**）：
-  // 这一段注入的是 `dsh-client-web/lib/index.js`——构建期源码。服务端 `dsh-web-app`
-  // 发的是 `dsh-web-frontend/dist/index.html` + 一个自包含 assets chunk，运行时与它
-  // 毫无关系（整包 grep `dsh-client-web` / 本 marker 均 0 命中）。所以这里注入的
-  // `__dshBootReport` 永不被调用：它骗得过 patch-surface verify，骗不过用户。
-  // 真正的生产者是补丁 `kernel-web-boot-watchdog`（注入被服务的 index.html），
-  // 边界由 `unit-client-boot-runtime-surface` 咬住。留着本补丁只为上游哪天改成
-  // 运行时加载源码包时能立刻生效——别拿它当「客户端失败可见性」的凭据。
-  {
-    id: 'client-boot-failure-report',
-    group: 'guard',
-    order: 151,
-    kind: 'file',
-    layout: 'guard',
-    wslLayout: 'guard',
-    pkgRel: CLIENT_WEB_PKG_REL,
-    transform: transformClientBootFailureReport,
-    marker: CLIENT_BOOT_FAILURE_MARKER,
-    requires: [],
-    failPolicy: 'warn',
-    cli: false,
-    logs: {
-      prefix: '客户端 boot 失败上报',
-      doneLog: (file) => '已注入客户端 boot 失败上报到 ' + file,
-      failLog: (file, err) => '客户端 boot 失败上报注入失败: ' + err.message,
-    },
-  },
+  // 2026-11-12 退役 `client-boot-failure-report`（补丁净数 61 → 60）：
+  // ① 靶面 `dsh-client-web/lib/index.js` 是构建期源码，运行时发的是 dsh-web-frontend 的
+  //    dist/index.html + 自包含 chunk，注入体永不被调用——留着只会让 patch-surface 假绿；
+  // ② 0.2.2-rc.2 把 `BootController.run` 重构为 `bootClient()`，末尾自带
+  //    `await assertEntriesActive(ctx, options.modules)`：必需条目失活会真抛进 run 的 catch，
+  //    上游已在源头修掉这条静默失败（rc.2 release notes：「修复可选插件加载失败导致整个
+  //    Web 页面无法启动的问题」）。真正的客户端失败可见性由 `kernel-web-boot-watchdog`
+  //    （注入被服务的 index.html）承担，边界锁在 `unit-client-boot-runtime-surface`。
+  // 变换体 `transformClientBootFailureReport` 保留为历史实现：已无注册项、不再被任何调用方引用，
+  // 别再把它接回 registry——它的靶面永远是构建期源码。
   {
     id: 'prompt-admission-reason-report',
     group: 'guard',

@@ -79,11 +79,13 @@ test('全链一次应用：6 个目标文件写入且关键产物齐备', (t) =>
   assert.ok(typertHost.includes('_deepseek_ai_dsh_api_workspace_controller_workspace_deleteSession_parameter_0$schema'), 'typert.host 应含入参 schema');
   // 4. 客户端模型/门面。
   assert.ok(ctrlClient.includes('async deleteSession(sessionId)'), 'controller client 应注入模型方法');
-  assert.ok(ctrlClient.includes('commandError("session delete"'), 'controller client 应注入门面错误串');
+  // 0.2.2-rc.2：客户端产物压缩——双引号转模板字面量、逗号两侧去空格。
+  assert.ok(ctrlClient.includes('commandError(`session delete`,result.error)'), 'controller client 应注入门面错误串');
   // 5. api-remotes：remote.workspace.deleteSession 的 schema + descriptor。
   // 0.2.1 起描述符从「数组 + id 字段」改成「'<namespace>/<method>' 键控对象」，
   // 断言随之改按键名取。
-  assert.ok(remotes.includes('"workspace/deleteSession": {'), 'remotes 应注册 deleteSession 描述符');
+  // 0.2.2-rc.2：remotes 产物也随压缩去掉冒号后的空格。
+  assert.ok(remotes.includes('"workspace/deleteSession":{'), 'remotes 应注册 deleteSession 描述符');
   assert.ok(remotes.includes('WorkspaceDeleteSessionRequest'), 'remotes 应含请求类型符号');
   assert.ok(remotes.includes('_deepseek_ai_dsh_api_workspace_controller_workspace_deleteSession_parameter_0_strict$schema'),
     'remotes 应含 strict 入参 schema（strictCodec.create 的引用目标，缺一个就是半个注入）');
@@ -93,11 +95,11 @@ test('全链一次应用：6 个目标文件写入且关键产物齐备', (t) =>
   //    条目 = { id, label, icon?, danger?, separatorBefore?, run }。判据因此从
   //    「组件在场」改成「那一行 register(...) 调用在场」——裸的 id/danger/
   //    separatorBefore 在 pristine 上本来就有别处的同名项，单独当判据必然空转。
-  assert.ok(ui.includes('register("delete", 650, [], (target) => {'), '页内应注册 order 650 的删除行');
+  // 0.2.2-rc.2：整条注册行压成单行（`register(\`delete\`,650,[],target=>{`），
+  // 数据项里的 danger / separatorBefore 也挤在一行，故两段判据分开咬。
+  assert.ok(ui.includes('register(`delete`,650,[],target=>{'), '页内应注册 order 650 的删除行');
   assert.ok(
-    ui.includes(
-      '\t\t\t\t\tid: "delete",\n\t\t\t\t\tlabel: t("menu.deleteSession"),\n\t\t\t\t\tdanger: true,\n\t\t\t\t\tseparatorBefore: true,'
-    ),
+    ui.includes('return[{id:`delete`,label:t(`menu.deleteSession`),danger:true,separatorBefore:true,'),
     '删除项应为「危险 + 分隔线前置」的数据项'
   );
   assert.ok(ui.includes('window.__dshSessionManager?.deleteSession(target.sessionId)'), '点击应走 dsh-session-manager 桥');
@@ -105,19 +107,24 @@ test('全链一次应用：6 个目标文件写入且关键产物齐备', (t) =>
   // host-capabilities 的 DELETE_SESSION_MENU_GUARD，与 patch-session-manage 注入体
   // 逐字同源，并由 unit-host-capabilities 做跨文件核对）——这里原先手抄的是旧形态
   // `?.deleteSession === void 0`，手抄漂移只会让断言钉不住真实字节。
+  // 0.2.2-rc.2 压缩形：`if(!(<guard>))return[];`（括号与空格全被剥）。判定式仍按
+  // 引用取契约常量，只把两侧的空白形态按压缩形重录。
   assert.ok(
-    ui.includes('if (!(' + DELETE_SESSION_MENU_GUARD + ')) return [];'),
+    ui.includes('if(!(' + DELETE_SESSION_MENU_GUARD + '))return[];'),
     '桥缺失时 resolve 应返回空数组（整行不渲染）'
   );
   // 下面两条是「向后不许回退」的护栏，不是「删掉注入体必红」的判据（注入体被删时
-  // 它们仍绿）：它们锁的是组件时代的旧形态不得回流。
+  // 它们仍绿）：它们锁的是组件时代的旧形态不得回流。比对前整体去空白，
+  // 读法形（`if (!(g)) return null;`）与压缩形（`if(!(g))return null;`）任一回流都抓到。
+  const squeeze = (s) => s.replace(/\s+/g, '');
+  const squeezed = squeeze(ui);
   assert.ok(
-    !ui.includes('if (!(' + DELETE_SESSION_MENU_GUARD + ')) return null;'),
+    !squeezed.includes('if(!(' + squeeze(DELETE_SESSION_MENU_GUARD) + '))returnnull'),
     '不得退回组件时代「返回 null」的整行不渲染形态'
   );
-  assert.ok(!ui.includes('?.deleteSession === void 0'), '不得退回旧的可选链判空形态');
-  assert.ok(ui.includes('"menu.deleteSession": "删除对话"'), '应写入中文翻译');
-  assert.ok(ui.includes('"menu.deleteSession": "Delete conversation"'), '应写入英文翻译');
+  assert.ok(!squeezed.includes('?.deleteSession===void0'), '不得退回旧的可选链判空形态');
+  assert.ok(ui.includes('"menu.deleteSession":`删除对话`'), '应写入中文翻译');
+  assert.ok(ui.includes('"menu.deleteSession":`Delete conversation`'), '应写入英文翻译');
 });
 
 test('逐项幂等：二遍零写入且字节不变', (t) => {
@@ -231,16 +238,16 @@ function readSrc(file) {
 
 /**
  * 三个注入体各出现几次（>1 即重复注入，0 即被邻家吞掉）。
- * 键面按 0.2.2-rc.1 的数据项注册行取：裸的 id / order / danger 在 pristine 上
- * 本来就有同名项（`id: "delete"`、`order: 200`、`danger: true` 各 ≥1 命中），
- * 拿它们当判据等于空转，必须咬住整条 register(...) 调用。
+ * 键面按 0.2.2-rc.2 的压缩产物取（单行、模板字面量、无空格）：裸的 id / order /
+ * danger 在 pristine 上本来就有同名项（`id:\`delete\``、`order:200`、`danger:true`
+ * 各 ≥1 命中），拿它们当判据等于空转，必须咬住整条 register(...) 调用。
  */
 function injectionCounts(src) {
   return {
-    deleteRow: src.split('register("delete", 650').length - 1,
-    openDirRow: src.split('register("openDir", 500').length - 1,
-    openDirIcon: src.split('"workspace.openDir": _deepseek_ai_dsh_client_ui_primitives.IconFolderOpenRegular').length - 1,
-    pinToggle: src.split('id: "workspace.pinToggle"').length - 1,
+    deleteRow: src.split('register(`delete`,650').length - 1,
+    openDirRow: src.split('register(`openDir`,500').length - 1,
+    openDirIcon: src.split('"workspace.openDir":_deepseek_ai_dsh_client_ui_primitives.IconFolderOpenRegular').length - 1,
+    pinToggle: src.split('id:`workspace.pinToggle`').length - 1,
   };
 }
 
@@ -296,8 +303,8 @@ test('反证：三个补丁同落一份文件，删除行 / 打开目录行 / �
   // wp 的 pinToggle 锚在 workspace.rename 的收尾。任一处区间把邻家那行吞掉（或被
   // 邻家重写抹平），这里的计数就变 0 → 本用例红，不是空跑。
   assert.deepEqual(injectionCounts(src), EXPECT_ONE_EACH, 'sm / opd / wp 三个注入体必须各存活一份');
-  assert.equal(src.split('register("delete", 650').length - 1, 1, '删除行应恰好 1 条');
-  assert.equal(src.split('register("openDir", 500').length - 1, 1, '打开目录行应恰好 1 条');
+  assert.equal(src.split('register(`delete`,650').length - 1, 1, '删除行应恰好 1 条');
+  assert.equal(src.split('register(`openDir`,500').length - 1, 1, '打开目录行应恰好 1 条');
   assert.equal(syntaxErrorOf(root, src), null, '三补丁共存后必须仍可解析');
 });
 

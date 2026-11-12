@@ -25,6 +25,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { transformKernelBootWatchdog, markers } = require('../lib/patch-adapters');
+const { PATCH_SPECS } = require('../lib/patch-registry');
 const { KERNEL_WEB_INDEX_REL } = require('../lib/patch-target-resolver');
 
 const NM = path.join(__dirname, '..', '..', 'node_modules', '@deepseek-ai');
@@ -54,24 +55,31 @@ test('index.html 只加载自包含 chunk，chunk 里没有 dsh-client-web（源
 
   assert.ok(chunk.includes('Failed to load plugins'),
     '用户看到的失败界面必须在这个 chunk 里（链路核对）');
-  for (const needle of ['dsh-client-web', 'dsh-client-modules', markers.CLIENT_BOOT_FAILURE_MARKER]) {
-    assert.equal(chunk.includes(needle), false,
-      `chunk 里出现 ${needle} 说明运行时开始加载源码包了——本仓的「客户端补丁」边界需要重估`);
-  }
+  // 0.2.2-rc.2 起 chunk 会**引用** `dsh-client-modules` 这个包名（它作为插件 bundle 由内核
+  // 在运行时下发，不是被内联进 chunk），所以「包名 0 命中」不再是有效判据。改判真正的边界：
+  // 我们的任何注入标记都不得出现在被服务的 chunk 里。
+  assert.equal(chunk.includes('dsh-client-web'), false,
+    'chunk 里出现 dsh-client-web 说明运行时开始内联源码包了——本仓的「客户端补丁」边界需要重估');
+  assert.equal(/dsh-desktop/.test(chunk), false,
+    'chunk 里出现我们的注入标记说明补丁被内联进运行时产物——边界需要重估');
 });
 
-test('反证：源码补丁确实注入了 dsh-client-web，但它不在被服务的 chunk 里', { skip: skipIfMissing() }, () => {
-  assert.ok(fs.existsSync(CLIENT_WEB_ENTRY), 'dsh-client-web 构建期源码必须在位（补丁靶面）');
+test('退役哨兵：client-boot-failure-report 不在注册表，源码与被服务产物都不带它的标记'
+, { skip: skipIfMissing() }, () => {
+  const ids = PATCH_SPECS.map((spec) => spec.id);
+  assert.equal(ids.includes('client-boot-failure-report'), false,
+    '该补丁已于 2026-11-12 退役（靶面是构建期源码；rc.2 的 bootClient 自带 assertEntriesActive），不得回到注册表');
+  assert.ok(fs.existsSync(CLIENT_WEB_ENTRY), 'dsh-client-web 构建期源码仍在位（只是不再打补丁）');
   const clientSrc = fs.readFileSync(CLIENT_WEB_ENTRY, 'utf8');
-  assert.ok(clientSrc.includes(markers.CLIENT_BOOT_FAILURE_MARKER),
-    '源码补丁必须仍注入（前向兼容：上游改成运行时加载时它就是有效生产者）');
+  assert.equal(clientSrc.includes(markers.CLIENT_BOOT_FAILURE_MARKER), false,
+    '已退役的注入标记不得再出现在源码里');
 
   // 整个 dist 里都不该出现该标记：注入成功 ≠ 运行时执行。
   const chunkName = fs.readFileSync(INDEX_HTML, 'utf8')
     .match(/<script[^>]*src="\.\/(assets\/[^"]+\.js)"/)[1];
   const served = fs.readFileSync(path.join(WEB_FRONTEND_DIR, chunkName), 'utf8');
   assert.equal(served.includes(markers.CLIENT_BOOT_FAILURE_MARKER), false,
-    '源码补丁的注入标记不得出现在被服务的 chunk 里（否则说明它真的在跑）');
+    '已退役补丁的标记不得出现在被服务的 chunk 里');
 });
 
 test('看门狗判据用的是被服务 chunk 的真 DOM 契约（不是夹具发明的）', { skip: skipIfMissing() }, () => {

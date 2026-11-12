@@ -142,6 +142,12 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   `node scripts/install-pristine-kernel.mjs` 重出 pristine 闭包 → `npm ci` 重收敛 → 快照重取 →
   `ta6-baseline-matrix` 按真跑新增该版本行 → 计数哨兵（`ta6-registry-invariants` /
   `ta6-heal-rollback-audit` / `ta3-boot-chain`）随迁。
+  **0.2.2-rc.2 新增三条（2026-11-12 实测，21 项锚点失配）**：① 客户端产物整体压缩——85/88 个
+  `lib/client.js` 变单行，多行+缩进锚点整批 0 命中，锚点必须按压缩字节逐字录，且单行文件里注入体
+  不能用 `//` 注释（会吃掉后半份产物）；② `ToolArgsError([...])` 取代 `new Error("...")`，只中
+  schema 半边就是半补丁（required 删了却没写缺省补齐 → `args.description` 为 undefined 时
+  `.trim()` 直接 TypeError，比不补更坏）；③ 枚举新包别用 npm 搜索接口（对新发布包滞后，会漏掉
+  被其他包 dependencies 引用的包），用 `replicate.npmjs.com/registry/_all_docs` 前缀扫描。
 - **插件 `inject` 里写了一个内核不再提供的服务名，坏的是它注册的每一条 HTTP 路由——而静态扫与 boot 全绿（2026-10-17 真机）**：
   0.2.1-rc.1 把 rc.2 的 `webRuntime` 服务整块删掉（全闭包 grep 该服务名 0 命中，信任清单迁到
   `dsh-client-connection` 的 `connection` 服务：`HostConnectionService.trustedHosts` + `isTrusted()`，rc.2/0.2.1 双代都在位），
@@ -326,28 +332,23 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
 - **稳定性三原则（评审默认立场）**：① 客户端必须能打开，装配失败终态恢复页而非退出；
   ② 兼容性不报错，意外以日志收场（`panics.log`）不以崩溃收场；③ 用户数据不动。
 - 文档里的测试基线数字常滞后。**现值（2026-11-07 实测，随包内核 0.2.2-rc.1；
-  `dsh-prompt-optimizer` 换为 vendored 上游 0.6.1 + better-sidebar 两条根治；补丁层净数 **61** = rc.4 的 62 退役两条
-  （`menu-viewport` 上游已自实现、`agent-loop-scheduler-guard` 的 `TOOL_RUNTIME_SCHEDULER` 被删）；0.2.2-rc.1 换代 13 处锚点失配全部按真字节重靶，
-  判定矩阵 43 changed / 12 root / 5 target-absent）**：
+补丁层净数 **60**（0.2.2-rc.2 换代退役 `client-boot-failure-report`）**：
   `scripts/test/` **204 个测试文件**（`*.test.js` 203 + `*.test.mjs` 1；`dsh-prompt-optimizer`
   自研线的四个套件 `unit-prompt-optimizer-{context-intent,lexical-write,project-goal,upgrade}`
   随目录替换 `git rm`，新增 vendored 机器锁 `unit-prompt-optimizer-vendored`；更早
   `unit-patch-pi-ai-opencode-go-models` 随该补丁退役一并 `git rm`，另有新增
   `unit-patch-output-parsable`、`unit-workspace-anchor-cwd`、`unit-plugin-inject-services`、
   mac 设置写入根治的 `unit-appboot-singleton-patch`、右上角「文件资源管理器」双坏的
-  `unit-better-sidebar-explorer-open`；2026-11-08 退役三件内置插件时 `git rm` 了
-  `unit-quest-ui` / `unit-zcode-migrate-registration` / `unit-auto-compact-gate`，
-  其中最后一件的 change-review 半边保留并改名 `unit-change-review-gate`），
-  `npm test` = 2193 例 / **0 fail / 0 cancelled**；pass/skip 分界随本机材料与网络浮动（11-11「兜底改注入 index.html + ACL 守门」批 **2234 例 / pass 2225 / skip 9 / fail 0**；11-12「安全模式接运行时链」批 **2237 例 / pass 2228 / skip 9 / fail 0**；
+  `unit-better-sidebar-explorer-open`），
+  `npm test` = 2193 例 / **0 fail / 0 cancelled**；pass/skip 分界随本机材料与网络浮动（11-12「内核 0.2.2-rc.2 换代」批 **2229 例 / pass 2220 / skip 9 / fail 0**；
   Rust 同批：`dsh-tauri-app --lib` **236 passed / 0 failed / 1 ignored**、`bridge` **30 passed / 0 failed**），
   skip 都是环境缺料（pristine 缺 codex/pi-ai、openclaw 兄弟目录不在盘、本机无 dsh-pack 克隆、真实网络、
   `.tmp-kernel` 不可用、无特权建符号链接）——一律以现跑输出为准，**pass 与 fail 才是判据**。
   Rust 侧现值（2026-11-07 本批实跑，分段绕过被安全软件挡住的 exe）**500 passed / 0 failed / 3 ignored / 19 个 target**：
   其余 crate 71 + `dsh-tauri-app --lib` 235 + app 集成 194 ＝ 500。缺口两类，都是本机环境而非代码红
   （见下条坑位）：`update_progress_window`（2 例）与 `kernel-process` 的集成测试 exe（`ta1_crash_loop_property` 等 4 例）
-  **被安全软件拒绝执行**（`os error 5`）。参照值：rc.4 时代的 551/0/3/30 与 2026-10-22 的 607/4/33。
-  另注：`wsl_stub_boot_to_kernel_ready_e2e` 的就绪预算已从 300s 放宽到 900s——新内核 364 个包，真机 WSL 走 UNC
-  实测 repair 54.7s + sync 182.5s，300s 会把它顶成假红。`crates/session-watcher`
+  **被安全软件拒绝执行**（`os error 5`）。
+  `crates/session-watcher`
   因 `Cargo.toml` 成员行被 GBK 注释行粘连而不在 workspace 内，是零消费者储备件，不计入。
   **跑 Rust 全量前先清掉终端里的 `DSH_HOME` / `DSH_TAURI_USERDATA`**：`shell-core` 的
   `windows_layout_matches_electron` / `unix_layout_home_fallback_not_relative` 会优先读生产覆盖通道，

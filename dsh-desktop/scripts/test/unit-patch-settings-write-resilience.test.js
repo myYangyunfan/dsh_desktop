@@ -159,8 +159,12 @@ function extractNamespaceHealSnippet() {
   const src = readOrSkip(SM_FILE);
   assert.ok(src !== null);
   const patched = src.includes(NAMESPACE_HEAL_MARKER) ? src : transformSettingsModelsResilience(src, 'sm').src;
+  // 注入体是注入方自己的多行形态，而 rc.2 的产物本体是压缩态：
+  // 起始句取自注入体，结束边界必须按产物真字节认（`}const rows=providers.map(entry=>{`），
+  // 不能写死上一代的可读空格形态——否则 indexOf 恒 -1，片段抽不出来。
   const start = patched.indexOf('let namespaces = new Map(views.map((view) => [view.ns, view]));');
-  const end = patched.indexOf('const rows = providers.map((entry) => {', start);
+  const tail = start === -1 ? null : /const rows\s*=\s*providers\.map\(/.exec(patched.slice(start));
+  const end = tail ? start + tail.index : -1;
   assert.ok(start !== -1 && end !== -1, '产物中应能定位命名空间自愈片段');
   return patched.slice(start, end);
 }
@@ -169,8 +173,12 @@ test('namespace-heal: 目录与视图偏差时强制重读并重建', async () =
   const snippet = extractNamespaceHealSnippet();
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
   const make = new AsyncFunction('providers', 'views', 'describeFace', snippet + '\nreturn namespaces;');
+  let ensures = 0;
   let loads = 0;
+  // rc.2 的 describe 面重读入口是 ensure()（0.2.1 及以前叫 load()）；两个都给，
+  // 并分别计数——既证明重读发生了，也锁死用的是 rc.2 那个方法名。
   const describeFace = {
+    async ensure() { ensures += 1; },
     async load() { loads += 1; },
     getSnapshot() {
       return {
@@ -186,7 +194,8 @@ test('namespace-heal: 目录与视图偏差时强制重读并重建', async () =
   const providers = [{ provider: 'deepseek-official', settingsNs: 'llm-deepseek' }, { provider: 'anthropic', settingsNs: 'llm-pi-ai' }];
   const views = [{ ns: 'llm-deepseek' }]; // 镜像陈旧：缺 llm-pi-ai
   const ns = await make.call({ describeFace }, providers, views, describeFace);
-  assert.equal(loads, 1, '偏差时应重读一次');
+  assert.equal(ensures, 1, '偏差时应经 ensure() 重读一次');
+  assert.equal(loads, 0, '不得再调上一代的 load()');
   assert.equal(ns.has('llm-pi-ai'), true, '重建后应含 llm-pi-ai');
 });
 
@@ -194,14 +203,17 @@ test('namespace-heal: 无偏差时不重读', async () => {
   const snippet = extractNamespaceHealSnippet();
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
   const make = new AsyncFunction('providers', 'views', 'describeFace', snippet + '\nreturn namespaces;');
+  let ensures = 0;
   let loads = 0;
   const describeFace = {
+    async ensure() { ensures += 1; },
     async load() { loads += 1; },
     getSnapshot() { return { view: { namespaces: [{ ns: 'llm-deepseek' }] } }; },
   };
   const providers = [{ provider: 'deepseek-official', settingsNs: 'llm-deepseek' }];
   const views = [{ ns: 'llm-deepseek' }];
   await make.call({ describeFace }, providers, views, describeFace);
+  assert.equal(ensures, 0, '无偏差时不得重读（ensure 也不得调用）');
   assert.equal(loads, 0, '无偏差时不得重读');
 });
 
@@ -221,9 +233,12 @@ function extractConflictRetrySnippet() {
   const markerAt = patched.indexOf(CONFLICT_RETRY_MARKER);
   assert.ok(markerAt !== -1, '产物中应有冲突重试 marker');
   const start = patched.lastIndexOf('if (written.kind !== "written") {', markerAt);
-  // 结束边界 = 注入块之后上游原句 setCommitted(true);（5 缩进）所在行首：
-  // 注入块自带的更深缩进 setCommitted 不以「\n+5tab」开头，不会误匹配。
-  const end = patched.indexOf('\n\t\t\t\t\tsetCommitted(true);', start);
+  // 结束边界 = 注入块之后上游原句 setCommitted(true)。rc.2 产物是压缩态，
+  // 这一句退化成 `<注入块闭括号>setCommitted(true)}if(storesKey){`——没有换行也没有 5 tab 缩进，
+  // 所以按「紧贴在 setCommitted(true) 前的那个闭括号」认边界，不写死上一代的缩进形状。
+  // 注入块内部自带的 setCommitted(true); 后面跟的是 `;` 与换行，不会误匹配到这里。
+  const tail = start === -1 ? null : /\}setCommitted\(true\)/.exec(patched.slice(start));
+  const end = tail ? start + tail.index + 1 : -1;
   assert.ok(start !== -1 && end !== -1, '产物中应能定位冲突重试片段');
   return patched.slice(start, end);
 }

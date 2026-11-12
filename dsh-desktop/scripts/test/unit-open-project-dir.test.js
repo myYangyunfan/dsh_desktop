@@ -3,7 +3,8 @@
 // issue #85 补丁脚本单元测试（node --test）。
 //
 // 覆盖五层：
-//   1. 一次应用 → 产物为 0.2.2-rc.1 的 contextMenus 数据项形态：图标键
+//   1. 一次应用 → 产物为 0.2.2-rc.2 的 contextMenus 数据项形态（rc.2 起客户端产物
+//      整体压缩，断言按单行/模板字面量形重录）：图标键
 //      workspace.openDir 进 contextMenu.icon 槽 + 项目行（target workspace,
 //      order 200）与会话行（register("openDir", 500, [], resolve)）两个数据项 +
 //      zh/en 翻译；右键菜单本身是上游原生能力，本补丁不再自造锚点矩形；
@@ -53,7 +54,7 @@ function fixture() {
   return buildUiFixture().replace(/\r\n/g, '\n');
 }
 
-test('补丁脚本：一次应用产出 0.2.2-rc.1 的 contextMenus 数据项形态', (t) => {
+test('补丁脚本：一次应用产出 0.2.2-rc.2 的 contextMenus 数据项形态', (t) => {
   const tree = tmpTree(t);
   const n = patchOpenProjectDir(tree.root);
   assert.strictEqual(n, 1, '应补丁 1 个文件');
@@ -61,57 +62,63 @@ test('补丁脚本：一次应用产出 0.2.2-rc.1 的 contextMenus 数据项形
   const patched = raw.replace(/\r\n/g, '\n');
   assert.ok(patched.includes(MARKER), '应写入幂等标记');
 
+  // 0.2.2-rc.2：客户端产物整体压缩——换行缩进全被剥、双引号多数转模板字面量、
+  // 对象字面量/三元式两侧无空格。下面按压缩形重录，但咬的东西不变：仍是
+  // 「图标键 + 数据项的 id/target/order + 宿主桥探测 + 降级空数组 + 双语文案」。
+
   // ① 图标表：contextMenu.icon 槽尾（原生 workspace.copy）追加 workspace.openDir 键。
   assert.ok(
-    patched.includes('"workspace.openDir": _deepseek_ai_dsh_client_ui_primitives.IconFolderOpenRegular'),
+    patched.includes('"workspace.openDir":_deepseek_ai_dsh_client_ui_primitives.IconFolderOpenRegular'),
     '图标表应追加 workspace.openDir 键'
   );
 
-  // ② 项目行：target "workspace"、order 200 的数据项；path 由上游 trigger 目标直给
+  // ② 项目行：target `workspace`、order 200 的数据项；path 由上游 trigger 目标直给
   //    （openWorkspaceMenu 第 2 个实参就是 row.cwd），故不再自己反查 cwd。
+  //    整条注册行连 resolve 一起咬：id/target/order 单拆出来在 pristine 上都能
+  //    在别处命中（空转），必须钉住「注册 + 目标 + 宿主桥探测」这一整段。
   assert.ok(
-    patched.includes('\t\t\t\tid: "workspace.openDir",\n\t\t\t\ttarget: "workspace",\n\t\t\t\torder: 200,'),
-    '项目行应注册 workspace 目标 order 200 的 contextMenus 数据项'
+    patched.includes(
+      'ctx.contextMenus.register({id:`workspace.openDir`,target:`workspace`,order:200,' +
+        'resolve:({path})=>typeof window.dshDesktop?.openPath==="function"&&typeof path==="string"&&path!==""?' +
+        '[{id:`open-folder`,label:ctx.locale.bind(NS)(`menu.openProjectDir`),icon:{key:`workspace.openDir`},' +
+        'run:()=>{window.dshDesktop?.openPath?.(path)}}]:[]})'
+    ),
+    '项目行应注册 workspace 目标 order 200 的 contextMenus 数据项（含宿主桥探测与 fallback）'
   );
-  assert.ok(
-    patched.includes('resolve: ({ path }) => typeof window.dshDesktop?.openPath === "function"'),
-    '项目行 resolve 应直接从 trigger 目标取 path 并探测宿主桥'
-  );
-  assert.ok(patched.includes('id: "open-folder",'), '项目行菜单项 id 应为 open-folder');
+  assert.ok(patched.includes('id:`open-folder`'), '项目行菜单项 id 应为 open-folder');
   assert.ok(patched.includes('window.dshDesktop?.openPath?.(path)'), '项目行 open-folder 应直接引用宿主 openPath');
 
   // ③ 会话行：registerSessionMenus 里的第 6 个数据项（register(id, order, [], resolve)），
   //    order 500 排在归档(600) 之前的 session-id(450) 之后。
+  assert.ok(patched.includes('register(`openDir`,500,[],target=>{'), '会话行应注册 order 500 的 openDir 数据项');
   assert.ok(
-    patched.includes('\t\t\tregister("openDir", 500, [], (target) => {'),
-    '会话行应注册 order 500 的 openDir 数据项'
-  );
-  assert.ok(
-    patched.includes('const dshSessionCwd = ctx.sessions.list.getSnapshot().byId[target.sessionId]?.cwd;'),
+    patched.includes('const dshSessionCwd=ctx.sessions.list.getSnapshot().byId[target.sessionId]?.cwd;'),
     '会话行 cwd 应从 sessions 快照反查'
   );
   // 降级：解析不到 cwd 或宿主桥缺失时 resolve 返回空数组 = 整行不渲染，
   // 而不是留下点了没反应的死行。
   assert.ok(
     patched.includes(
-      'if (typeof window.dshDesktop?.openPath !== "function" || typeof dshSessionCwd !== "string" || dshSessionCwd === "") return [];'
+      'if(typeof window.dshDesktop?.openPath!=="function"||typeof dshSessionCwd!=="string"||dshSessionCwd==="")return[];'
     ),
     '不可用时 resolve 应返回空数组（整行不渲染）'
   );
   assert.ok(patched.includes('window.dshDesktop?.openPath?.(dshSessionCwd)'), '会话行执行体应引用反查到的 cwd');
 
   // ④ 翻译 zh/en。
-  assert.ok(patched.includes('"menu.openProjectDir": "打开项目目录"'), '应写入中文翻译');
-  assert.ok(patched.includes('"menu.openProjectDir": "Open project directory"'), '应写入英文翻译');
+  assert.ok(patched.includes('"menu.openProjectDir":`打开项目目录`'), '应写入中文翻译');
+  assert.ok(patched.includes('"menu.openProjectDir":`Open project directory`'), '应写入英文翻译');
 
   // ⑤ 退役面：右键菜单已是上游原生能力（0.2.2-rc.1 的 ctx.contextMenus +
   //    getTriggerProps 同时接右键与 ⋯ 按钮），本补丁自造的 onContextMenu /
   //    menuRect / getAnchorRect 三件套整体退役，不得回流去抢上游的活。
   //    （pristine 上 menuRect / onContextMenu 各 0 命中，所以这三条是「向后不许
   //    回退」的护栏，不是「删掉注入体必红」的判据——它们在注入体被删时仍绿。）
+  //    rc.2 起判据刻意不写空白：`getAnchorRect: () =>` 与压缩形
+  //    `getAnchorRect:()=>` 都不能回流。
   assert.ok(!patched.includes('menuRect'), '不得回流自造 menuRect 锚点矩形');
   assert.ok(!patched.includes('onContextMenu'), '不得回流自造 onContextMenu');
-  assert.ok(!patched.includes('getAnchorRect: () =>'), '不得回流自造 getAnchorRect');
+  assert.ok(!patched.includes('getAnchorRect'), '不得回流自造 getAnchorRect');
 
   // 幂等：二遍零写入且字节不变。
   const n2 = patchOpenProjectDir(tree.root);

@@ -128,17 +128,17 @@ test('K25 transform：会话行 onDragStart 注入 flushSync，工作区行不�
   const src = r.src;
 
   assert.ok(src.includes(MANUAL_SORT_DRAG_MARKER), '应含 marker');
-  assert.ok(src.includes('let react_dom = require("react-dom");'), '应注入 react-dom require');
-  assert.ok(src.includes('react_dom.flushSync(() => {'), '应注入 flushSync');
-  assert.equal(src.split('react_dom.flushSync(() => {').length - 1, 1, 'flushSync 应仅注入会话行拖拽起点（1 处）');
+  assert.ok(src.includes('let react_dom=require("react-dom");'), '应注入 react-dom require');
+  assert.ok(src.includes('react_dom.flushSync(()=>{'), '应注入 flushSync');
+  assert.equal(src.split('react_dom.flushSync(()=>{').length - 1, 1, 'flushSync 应仅注入会话行拖拽起点（1 处）');
 
   // 会话行（node.id）被包裹。
-  const nodeIdx = src.indexOf('e.dataTransfer.setData("text/plain", node.id);');
+  const nodeIdx = src.indexOf('e.dataTransfer.setData(`text/plain`,node.id);');
   assert.ok(nodeIdx > 0, '应命中会话行 setData(node.id)');
-  assert.ok(src.slice(nodeIdx, nodeIdx + 160).includes('react_dom.flushSync(() => {'), '会话行 drag.start 应被 flushSync 包裹');
+  assert.ok(src.slice(nodeIdx, nodeIdx + 160).includes('react_dom.flushSync(()=>{'), '会话行 drag.start 应被 flushSync 包裹');
 
   // 工作区行（row.key）保持原样（不引入无关变更）。
-  const rowIdx = src.indexOf('e.dataTransfer.setData("text/plain", row.key);');
+  const rowIdx = src.indexOf('e.dataTransfer.setData(`text/plain`,row.key);');
   assert.ok(rowIdx > 0, '应命中工作区行 setData(row.key)');
   assert.ok(!src.slice(rowIdx, rowIdx + 120).includes('flushSync'), '工作区行不应被 flushSync 包裹');
 

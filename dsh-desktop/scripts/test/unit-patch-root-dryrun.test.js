@@ -40,23 +40,10 @@ const {
 // 夹具（最小 pristine 源，仅含 transform 判定的锚点原文；与实现同源）
 // ---------------------------------------------------------------------------
 
-const LOADER_PRISTINE = [
-  '\t\t/** Default bundle-load hook: same-origin external classic script. */',
-  '\t\tconst defaultLoadBundle = (url) => new Promise((resolve, reject) => {',
-  '\t\t\tconst el = document.createElement("script");',
-  '\t\t\tel.async = true;',
-  '\t\t\tel.src = url;',
-  '\t\t\tel.addEventListener("load", () => {',
-  '\t\t\t\tel.remove();',
-  '\t\t\t\tresolve();',
-  '\t\t\t}, { once: true });',
-  '\t\t\tel.addEventListener("error", () => {',
-  '\t\t\t\tel.remove();',
-  '\t\t\t\treject(/* @__PURE__ */ new Error(`client-modules: bundle script ${url} failed to load`));',
-  '\t\t\t}, { once: true });',
-  '\t\t\tdocument.head.append(el);',
-  '\t\t});',
-].join('\n');
+// 0.2.2-rc.2 的 dsh-client-modules/lib/client.js 是压缩产物：defaultLoadBundle 压成单行、
+// 不再有空格式与 `/* @__PURE__ */`，字符串改模板字面量。夹具逐字节照真字节录（下面这行就是
+// pristine 里那一整条语句）。
+const LOADER_PRISTINE = "const defaultLoadBundle=url=>new Promise((resolve,reject)=>{const el=document.createElement(`script`);el.async=true;el.src=url;el.addEventListener(`load`,()=>{el.remove();resolve()},{once:true});el.addEventListener(`error`,()=>{el.remove();reject(new Error(`client-modules: bundle script ${url} failed to load`))},{once:true});document.head.append(el)});";
 
 // ⚠ 夹具逐字节即生产锚点：0.2.0-rc.2 把 callId 的镜像位从 content[0] 块
 // （block["toolCallId"]）上移到消息记录自身（messageRecord["toolCallId"]），此前这里没随迁，

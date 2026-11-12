@@ -12,7 +12,7 @@
 // pi-ai-responses-tool-name-sanitize、内核↔pi-ai 唯一交界的中央收口
 // pi-ai-tool-name-wire 与配额耗尽不重试 pi-ai-quota-not-retryable）+ 只读预检 +
 // 关键服务修复探测，断言：
-//   1. 一遍：61 补丁全部执行、changed > 0、零 errors；
+//   1. 一遍：60 补丁全部执行、changed > 0、零 errors；
 //   2. composition 字段（sources/services/criticalMissing/parseIssues）与
 //      CLI 退出码契约（关键服务全在位 → 0）；
 //   3. fault-isolation preflight：打补丁后 unpatched 为空；
@@ -79,11 +79,12 @@ async function buildTempRoots(t) {
   return { root, appDir, home, ctx, logs };
 }
 
-test('boot 链一条龙：applyAll(61) → composition-integrity → preflight → 二遍幂等', { skip: !hasPristine() && SKIP_NO_PRISTINE }, async (t) => {
+test('boot 链一条龙：applyAll(60) → composition-integrity → preflight → 二遍幂等', { skip: !hasPristine() && SKIP_NO_PRISTINE }, async (t) => {
   const { appDir, home, ctx } = await buildTempRoots(t);
 
   // ---- 1. 一遍 applyAll：61 补丁全执行、有落盘、零 errors ----
-  // 61 = 60 ＋ client-boot-failure-report（2026-11-10 客户端 boot 失败上报）。
+  // 60 = 61 − client-boot-failure-report（2026-11-12 退役：靶面是构建期源码永不执行，
+// 且 0.2.2-rc.2 的 bootClient 自带 assertEntriesActive，上游已在源头修掉这条静默失败）。
   // 60 = 62（上一基线）− agent-loop-scheduler-guard − menu-viewport（0.2.2-rc.1 换代退役
   // 两条，均为「上游自己做到了」：TOOL_RUNTIME_SCHEDULER 符号面整体删除 → 工具批改走
   // this.loopCtx.tools.execute；菜单视口由 useAnchoredPosition + --dsh-anchored-max-height
@@ -91,8 +92,8 @@ test('boot 链一条龙：applyAll(61) → composition-integrity → preflight �
   // + 2 项首启引导 + 1 项取代新增（profile-patch-layer-guard）− pi-ai-opencode-go-models。
   // 逐项理由见 ta6-registry-invariants 的 E，逐补丁在 pristine 闭包上的判定见 ta6-baseline-matrix。
   const r1 = applyAll(ctx);
-  assert.equal(r1.total, 61, `注册表应有 61 个补丁（实际 ${r1.total}）`);
-  assert.equal(PATCH_SPECS.length, 61, 'PATCH_SPECS 与编排 total 一致');
+  assert.equal(r1.total, 60, `注册表应有 60 个补丁（实际 ${r1.total}）`);
+  assert.equal(PATCH_SPECS.length, 60, 'PATCH_SPECS 与编排 total 一致');
   assert.ok(r1.changed > 0, `pristine 源一遍必须有写入（实际 changed=${r1.changed}）`);
   assert.deepEqual(r1.errors, [], `一遍不得有 errors：${JSON.stringify(r1.errors)}`);
   // degrade/fatal 档补丁的 anchor-missing 分流进 degraded（设计语义：降级告警
@@ -141,7 +142,7 @@ test('boot 链一条龙：applyAll(61) → composition-integrity → preflight �
   const r2 = applyAll(ctx);
   // total = 处理的 spec 数（含 target-absent，applyAll 内每 spec 无条件 +1），
   // 与一遍同源必相等，均等于 PATCH_SPECS.length；二遍只是 changed 归零。
-  assert.equal(r2.total, 61, `二遍 total 应与一遍一致（实际 ${r2.total}）`);
+  assert.equal(r2.total, 60, `二遍 total 应与一遍一致（实际 ${r2.total}）`);
   assert.deepEqual(r2.errors, [], `二遍不得有 errors：${JSON.stringify(r2.errors)}`);
   assert.equal(r2.changed, 0, `二遍应幂等（一遍 changed=${changedFirst}，二遍 changed=${r2.changed}）`);
 

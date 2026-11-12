@@ -34,8 +34,11 @@ const PRISTINE = [
   '}',
 ].join('\n');
 
-const PKG_DIR = path.resolve(__dirname, '..');
-const REPO_ROOT = path.resolve(PKG_DIR, '..', '..');
+// dsh-desktop 包根（本文件在 scripts/test/ 下，上一级是 scripts/，再上一级才是包根）。
+// 2026-11-12 修正：原先只上溯一级指到 scripts/，拼出的 scripts/node_modules/... 恒不存在，
+// 下面「dev node_modules」那条断言长期空转（静默 return），换代后才发现。
+const PKG_DIR = path.resolve(__dirname, '..', '..');
+const REPO_ROOT = path.resolve(PKG_DIR, '..');
 
 test('transform: pristine 命中 → 余额判定前置', () => {
   const r = transformPiAiCredits(PRISTINE, 'x.js');
@@ -112,6 +115,7 @@ test('dev node_modules: 补丁后目标文件含 marker 且判定序正确', () 
   const src = fs.readFileSync(file, 'utf8');
   assert.ok(src.includes(PATCH_MARKER), 'dev node_modules 应含余额判定 marker（本断言前已幂等应用）');
   const quotaAt = src.indexOf('if (isQuotaExceededError(message))');
-  const authAt = src.indexOf('if (/\\b(?:401|403)\\b/.test(message))');
+  // rc.2 起上游把「行首 HTTP 状态码」抽成 statusSource，AUTH 行判定读的是它（不再读 message）。
+  const authAt = src.search(/if \(\/\\b\(\?:401\|403\)\\b\/\.test\((?:statusSource|message)\)\)/);
   assert.ok(quotaAt >= 0 && authAt > quotaAt, '余额判定必须先于 401/403（实际改动数 ' + n + '）');
 });

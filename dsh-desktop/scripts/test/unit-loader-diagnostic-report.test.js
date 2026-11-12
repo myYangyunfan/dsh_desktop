@@ -125,10 +125,20 @@ function runAdmissionCatch(src, error) {
   }
   class AttachmentError extends Error {}
   const bodyText = 'try { throw error; } ' + seg;
-  const fn = new Function('RemoteError', 'AttachmentError', 'remoteErrorOf', 'error', bodyText);
+  // 0.2.2-rc.2 起准入 catch 块开头多了一句 `this.hasPromptRequest(agent.session, request.requestId)`，
+  // 所以探针要把 agent / request / this 三样都喂进去，否则 ReferenceError 会盖掉真正的断言。
+  const fn = new Function('RemoteError', 'AttachmentError', 'remoteErrorOf', 'error', 'agent', 'request', bodyText);
   let caught = null;
   try {
-    fn(RemoteError, AttachmentError, () => void 0, error);
+    fn.call(
+      { hasPromptRequest: () => false },
+      RemoteError,
+      AttachmentError,
+      () => void 0,
+      error,
+      { session: {} },
+      { requestId: 'probe' },
+    );
   } catch (e) {
     caught = e;
   }

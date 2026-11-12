@@ -42,6 +42,19 @@ const NEW_BLOCK = [
   '\tif (/\\b(?:401|403)\\b/.test(message)) return "AUTH";',
 ].join('\n');
 
+// 0.2.2-rc.2 换代：classifyPiAiError 先把「行首 HTTP 状态码」抽成 statusSource
+// （`const statusSource = LEADING_HTTP_STATUS.exec(message)?.[0] ?? message;`），两条判定
+// 改读 statusSource——判定顺序仍是有 bug 的那个（401-AUTH 在余额之前），所以补丁照旧，
+// 只把锚点与注入体换成 statusSource 形态。别改回 message：那会把消息正文里的 401 也算成
+// AUTH（上游引入 statusSource 正是为了只认行首状态码）。
+const OLD_RE_STATUS =
+  /\tif \(\/\\b\(\?:401\|403\)\\b\/\.test\(statusSource\)\) return "AUTH";\r?\n\tif \(isQuotaExceededError\(message\)\) return QUOTA_EXCEEDED_CODE;/;
+const NEW_BLOCK_STATUS = [
+  '\t/* ' + PATCH_MARKER + ' — 第三方 provider 余额不足(CreditsError)会返回 401，须先于 AUTH 判定，否则误显示 API key is invalid */',
+  '\tif (isQuotaExceededError(message)) return QUOTA_EXCEEDED_CODE;',
+  '\tif (/\\b(?:401|403)\\b/.test(statusSource)) return "AUTH";',
+].join('\n');
+
 /**
  * 变换：classifyPiAiError 余额判定前置（幂等、锚点失配不改写）。
  * @param {string} src
@@ -50,13 +63,12 @@ const NEW_BLOCK = [
  */
 function transformPiAiCredits(src, file) {
   if (src.includes(PATCH_MARKER)) return { status: 'already' };
-  if (!OLD_RE.test(src)) {
-    return {
-      status: 'anchor-missing',
-      detail: '未匹配到 classifyPiAiError 401/余额判定两行（版本可能已更新），跳过 ' + file,
-    };
-  }
-  return { status: 'changed', src: src.replace(OLD_RE, NEW_BLOCK) };
+  if (OLD_RE.test(src)) return { status: 'changed', src: src.replace(OLD_RE, NEW_BLOCK) };
+  if (OLD_RE_STATUS.test(src)) return { status: 'changed', src: src.replace(OLD_RE_STATUS, NEW_BLOCK_STATUS) };
+  return {
+    status: 'anchor-missing',
+    detail: '未匹配到 classifyPiAiError 401/余额判定两行（版本可能已更新），跳过 ' + file,
+  };
 }
 
 /**

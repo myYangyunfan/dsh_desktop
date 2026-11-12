@@ -403,6 +403,20 @@ function transformPromptAdmissionReasonReport(src, file) {
 //   - 条目 failed → `[client-boot] NOTE …`：只记日志（应用仍可能正常挂载）；
 //   - mount 超时 15s → `FAILED`：`ctx.inject(['uiRenderer'])` 永不就绪是「真的
 //     进不去」的另一种形态（无异常、无失败条目，只是永远卡住），必须有界。
+//
+// 0.2.2-rc.2 复核（2026-11-12）：建议**退役**本补丁，不重靶。三条依据：
+//   ① 靶面仍不在运行时路径上（上一段已证），重靶只会让 patch-surface 继续假绿；
+//   ② rc.2 把 `BootController.run` 重构成 `bootClient(options)`，`onEntryState` 回调
+//      变成 `(name, state) => { if (state !== "failed") this.page.setState(name, state); }`
+//      （`onFailure` 参数已消失），第四处锚点 `if (onFailure === void 0 || …)` 随之消失；
+//   ③ 更要紧的是上游把「静默卡死」在源头修了：`bootClient` 末尾 `await
+//      assertEntriesActive(ctx, options.modules)` —— 「resolves after the audit accepts
+//      the tree, including after optional-entry warnings; rejects with the audit report
+//      when a required entry is inactive」。即必需条目失活 → `run` 的 catch 会真抛，
+//      可选条目失活 → 只告警不炸页（正是 rc.2 release notes 点名修的那条）。
+//   真要做客户端失败可见性，改 `kernel-web-boot-watchdog`（patch-adapters.js）。
+//   退役动作要摘 patch-registry 的 `client-boot-failure-report` 条目 + 计数哨兵，
+//   不在本模块的权限面内，故此处只留结论与依据。
 const CLIENT_BOOT_FAILURE_MARKER = 'dsh-desktop isolation: client boot failures reach the shell ([client-boot])';
 
 const CLIENT_BOOT_HELPERS_OLD = [
@@ -466,6 +480,13 @@ const CLIENT_BOOT_MOUNT_NEW = [
  * 锚点互不重叠，替换顺序无关。
  * @returns {{status:'already'|'anchor-missing'|'changed', src?: string, detail?: string}}
  */
+// ⚠️ 已退役（2026-11-12，0.2.2-rc.2 换代）：本变换**没有任何注册项**，不再被执行。
+// 退役理由：靶面 `dsh-client-web/lib/index.js` 是构建期源码（运行时发的是
+// dsh-web-frontend 的 dist/index.html + 自包含 chunk），注入体永不被调用；且 rc.2 的
+// `bootClient()` 末尾自带 `await assertEntriesActive(ctx, options.modules)`，必需条目
+// 失活会真抛进 run 的 catch——上游已在源头修掉这条静默失败。
+// 客户端失败可见性现在只由 `kernel-web-boot-watchdog`（注入 index.html）负责。
+// 保留代码仅为历史取证；**不要**重新接回 patch-registry。
 function transformClientBootFailureReport(src, file) {
   const crlf = src.includes('\r\n');
   const text = crlf ? src.replace(/\r\n/g, '\n') : src;

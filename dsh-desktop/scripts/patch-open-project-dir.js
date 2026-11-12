@@ -60,71 +60,44 @@ const MARKER = 'dsh-desktop patch (open project dir)';
 // ---------------------------------------------------------------------------
 
 // 1a. 图标：把「打开项目目录」的文件夹图标注册进 contextMenu.icon 槽。
-//     锚点在原生图标表最后一条（workspace.copy，无尾逗号），insert 补逗号后追加。
-const UI_ICON_ANCHOR = '\t\t\t\t\t"workspace.copy": _deepseek_ai_dsh_client_ui_primitives.IconCopyOutlineRegular';
+//     0.2.2-rc.2 重锚：`lib/client.js` 已是压缩产物（整包 5 行、对象字面量无空格、
+//     键仍是双引号），旧的多行 + 制表符锚点失效。现锚原生图标表最后一条
+//     `"workspace.copy":…IconCopyOutlineRegular`（全文件唯一，值与 `}))` 紧邻）。
+const UI_ICON_ANCHOR = '"workspace.copy":_deepseek_ai_dsh_client_ui_primitives.IconCopyOutlineRegular';
 const UI_ICON_INSERT = [
-	'\t\t\t\t\t"workspace.copy": _deepseek_ai_dsh_client_ui_primitives.IconCopyOutlineRegular,',
-	'\t\t\t\t\t// dsh-desktop patch (open project dir): 「打开项目目录」的文件夹图标。',
-	'\t\t\t\t\t"workspace.openDir": _deepseek_ai_dsh_client_ui_primitives.IconFolderOpenRegular',
+	'"workspace.copy":_deepseek_ai_dsh_client_ui_primitives.IconCopyOutlineRegular,',
+	'// dsh-desktop patch (open project dir): 「打开项目目录」的文件夹图标。',
+	'"workspace.openDir":_deepseek_ai_dsh_client_ui_primitives.IconFolderOpenRegular',
 ].join('\n');
 
 // 1b. 项目行菜单：工作区目标（workspace）的数据项，排在 rename(100) 之后、
 //     delete(300) 之前。path 由上游 trigger 已放进 target.value（openWorkspaceMenu
 //     的第 2 个实参就是 row.cwd），故不再需要自己反查 cwd。
-const UI_PROJECT_MENU_ANCHOR = '\t\t\t}), "workspace: delete menu action");';
+//     0.2.2-rc.2 压缩形：`register({…}),\`workspace: delete menu action\`);` 单行。
+const UI_PROJECT_MENU_ANCHOR = '}),`workspace: delete menu action`);';
 const UI_PROJECT_MENU_INSERT = [
 	UI_PROJECT_MENU_ANCHOR,
-	'\t\t\t// dsh-desktop patch (open project dir): 工作区分组行「打开项目目录」。',
-	'\t\t\tctx.effect(() => ctx.contextMenus.register({',
-	'\t\t\t\tid: "workspace.openDir",',
-	'\t\t\t\ttarget: "workspace",',
-	'\t\t\t\torder: 200,',
-	'\t\t\t\tresolve: ({ path }) => typeof window.dshDesktop?.openPath === "function" && typeof path === "string" && path !== "" ? [{',
-	'\t\t\t\t\tid: "open-folder",',
-	'\t\t\t\t\tlabel: ctx.locale.bind(NS)("menu.openProjectDir"),',
-	'\t\t\t\t\ticon: { key: "workspace.openDir" },',
-	'\t\t\t\t\trun: () => {',
-	'\t\t\t\t\t\twindow.dshDesktop?.openPath?.(path);',
-	'\t\t\t\t\t}',
-	'\t\t\t\t}] : []',
-	'\t\t\t}), "workspace: open project directory");',
+	'// dsh-desktop patch (open project dir): 工作区分组行「打开项目目录」。',
+	'ctx.effect(()=>ctx.contextMenus.register({id:`workspace.openDir`,target:`workspace`,order:200,resolve:({path})=>typeof window.dshDesktop?.openPath==="function"&&typeof path==="string"&&path!==""?[{id:`open-folder`,label:ctx.locale.bind(NS)(`menu.openProjectDir`),icon:{key:`workspace.openDir`},run:()=>{window.dshDesktop?.openPath?.(path)}}]:[]}),`workspace: open project directory`);',
 ].join('\n');
 
 // 1c. 会话行菜单：会话目标（session）的数据项，order 500。cwd 由 sessions 快照
 //     反查（summary.cwd）；孤儿 / 未分组会话查不到、或宿主桥缺失（纯浏览器）时
 //     resolve 返回空数组 = 整行不渲染。
-const UI_SESSION_MENU_ANCHOR = [
-	'\t\t\tregister("id", 450, [], (target) => [{',
-	'\t\t\t\tid: "copy",',
-	'\t\t\t\tlabel: t("menu.sessionId"),',
-	'\t\t\t\ticon: { key: "workspace.copy" },',
-	'\t\t\t\tseparatorBefore: true,',
-	'\t\t\t\trun: () => actions.copySessionId(target.sessionId)',
-	'\t\t\t}]);',
-].join('\n');
+const UI_SESSION_MENU_ANCHOR = 'register(`id`,450,[],target=>[{id:`copy`,label:t(`menu.sessionId`),icon:{key:`workspace.copy`},separatorBefore:true,run:()=>actions.copySessionId(target.sessionId)}]);';
 const UI_SESSION_MENU_INSERT = [
 	UI_SESSION_MENU_ANCHOR,
-	'\t\t\t// dsh-desktop patch (open project dir): 会话行菜单「打开项目目录」（order 500）。',
-	'\t\t\tregister("openDir", 500, [], (target) => {',
-	'\t\t\t\tconst dshSessionCwd = ctx.sessions.list.getSnapshot().byId[target.sessionId]?.cwd;',
-	'\t\t\t\tif (typeof window.dshDesktop?.openPath !== "function" || typeof dshSessionCwd !== "string" || dshSessionCwd === "") return [];',
-	'\t\t\t\treturn [{',
-	'\t\t\t\t\tid: "open-folder",',
-	'\t\t\t\t\tlabel: t("menu.openProjectDir"),',
-	'\t\t\t\t\ticon: { key: "workspace.openDir" },',
-	'\t\t\t\t\trun: () => {',
-	'\t\t\t\t\t\twindow.dshDesktop?.openPath?.(dshSessionCwd);',
-	'\t\t\t\t\t}',
-	'\t\t\t\t}];',
-	'\t\t\t});',
+	'// dsh-desktop patch (open project dir): 会话行菜单「打开项目目录」（order 500）。',
+	'register(`openDir`,500,[],target=>{const dshSessionCwd=ctx.sessions.list.getSnapshot().byId[target.sessionId]?.cwd;if(typeof window.dshDesktop?.openPath!=="function"||typeof dshSessionCwd!=="string"||dshSessionCwd==="")return[];return[{id:`open-folder`,label:t(`menu.openProjectDir`),icon:{key:`workspace.openDir`},run:()=>{window.dshDesktop?.openPath?.(dshSessionCwd)}}];});',
 ].join('\n');
 
 // 2. 翻译：zh / en（锚原生 menu.unarchiveSession 行，插入其前，不与其它补丁
 //    链式依赖——本补丁插前、workspace-pin 插后，两者顺序无关）。
-const UI_ZH_ANCHOR = "\t\t\t\"menu.unarchiveSession\": \"取消归档\",";
-const UI_ZH_INSERT = "\t\t\t\"menu.openProjectDir\": \"打开项目目录\",\n\t\t\t\"menu.unarchiveSession\": \"取消归档\",";
-const UI_EN_ANCHOR = "\t\t\t\"menu.unarchiveSession\": \"Unarchive session\",";
-const UI_EN_INSERT = "\t\t\t\"menu.openProjectDir\": \"Open project directory\",\n\t\t\t\"menu.unarchiveSession\": \"Unarchive session\",";
+//    0.2.2-rc.2：字典值改模板字面量、键仍双引号、逗号后无空格。
+const UI_ZH_ANCHOR = '"menu.unarchiveSession":`取消归档`,';
+const UI_ZH_INSERT = '"menu.openProjectDir":`打开项目目录`,"menu.unarchiveSession":`取消归档`,';
+const UI_EN_ANCHOR = '"menu.unarchiveSession":`Unarchive session`,';
+const UI_EN_INSERT = '"menu.openProjectDir":`Open project directory`,"menu.unarchiveSession":`Unarchive session`,';
 
 const UI_REPLACEMENTS = [
   { anchor: UI_ICON_ANCHOR, insert: UI_ICON_INSERT },

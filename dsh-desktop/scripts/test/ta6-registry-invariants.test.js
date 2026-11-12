@@ -97,7 +97,10 @@ test('A. file spec transform 均为函数且来自收口导出（无内联孤儿
   // （2026-10-10 两条「静默失败原文上身」诊断补丁，见 E 的 60 基线说明）。
   // 43 = 44（rc.2 重靶后的 file 型规格数）− image-send-fix（2026-10 随识图插件
   // 整体退役；64 项总盘中 root 15 + file 43 = 58，另见 E）。
-  assert.equal(fileSpecs.length, 49, `file spec 应有 49 个，得 ${fileSpecs.length}`);
+  // 48 = 49 − client-boot-failure-report（2026-11-12 退役：靶面 dsh-client-web/lib/index.js
+  // 是构建期源码、运行时永不执行；0.2.2-rc.2 的 bootClient 又自带 assertEntriesActive，
+  // 上游已在源头修掉这条静默失败。客户端失败可见性只剩 kernel-web-boot-watchdog）。
+  assert.equal(fileSpecs.length, 48, `file spec 应有 48 个，得 ${fileSpecs.length}`);
   for (const spec of fileSpecs) {
     assert.equal(typeof spec.transform, 'function', `${spec.id} 缺 transform`);
     assert.ok(
@@ -173,6 +176,10 @@ test('C. marker 单一数据源 + marker 出现在 transform 实现源码文本�
       'SESSION_LOAD_GRACEFUL_MARKER',
       'SESSION_LOAD_GRACEFUL_MARKER_V2',
       'LOADER_TREE_ISOLATION_MARKER',
+      // CLIENT_BOOT_FAILURE_MARKER：`client-boot-failure-report` 已于 2026-11-12 退役
+      //（靶面是构建期源码、运行时永不执行；rc.2 的 bootClient 自带 assertEntriesActive）。
+      // transform 与 marker 留在 loader-isolation 导出面作历史取证，故无 spec 引用是预期形态。
+      'CLIENT_BOOT_FAILURE_MARKER',
     ]);
     if (!used) assert.ok(knownUnused.has(name), `marker ${name} 无任何 spec 引用`);
   }
@@ -253,7 +260,7 @@ test('E. order 全局唯一、组内升序、补丁间依赖序成立', () => {
   // failed to load 与发送文件恒报 prompt rejected 两轮发布查不下去的直接原因——
   // rc.2 导入失败只进 cordis 内存环形缓冲、非核心条目不再抛 StartupError，真因
   // 三重静默）。均 cli:false，故 cli:true 计数不变。
-  assert.equal(PATCH_SPECS.length, 61, 'spec 总数应为 61');
+  assert.equal(PATCH_SPECS.length, 60, 'spec 总数应为 60');
   const orders = PATCH_SPECS.map((s) => s.order);
   assert.equal(new Set(orders).size, orders.length, 'order 必须全局唯一');
   const byId = Object.fromEntries(PATCH_SPECS.map((s) => [s.id, s]));

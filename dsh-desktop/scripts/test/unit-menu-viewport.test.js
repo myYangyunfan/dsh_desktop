@@ -168,7 +168,7 @@ const PRIMITIVES_TARBALL = path.join(
   `deepseek-ai-dsh-client-ui-primitives-${kernel.packageVersion}.tgz`,
 );
 
-test(`退役哨兵：vendored ${kernel.packageVersion} 的菜单由上游 useAnchoredPosition 实现（#36 锚应整段失配）`, (t) => {
+test(`退役哨兵：vendored ${kernel.packageVersion} 的菜单由上游 useAnchoredMaxHeight 实现（#36 锚应整段失配）`, (t) => {
   assert.ok(fs.existsSync(PRIMITIVES_TARBALL), '缺 vendored primitives tarball: ' + PRIMITIVES_TARBALL);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-menu-real-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -184,8 +184,8 @@ test(`退役哨兵：vendored ${kernel.packageVersion} 的菜单由上游 useAnc
   // —— 退役正证：上游自己的实现必须在位，我们的注入体必须不在位 ——
   assert.equal(pristine.split(MARKER).length - 1, 0, 'pristine 不得带我们的 marker');
   assert.ok(!pristine.includes('#182'), '旧实现的 #182 残留不应再存在');
-  assert.ok(pristine.includes('useAnchoredPosition'), '上游应以 useAnchoredPosition 定位菜单');
-  assert.ok(pristine.includes('--dsh-anchored-max-height'), '上游应以 --dsh-anchored-max-height 封顶菜单高度');
+  assert.ok(pristine.includes('useAnchoredMaxHeight'), '上游应以 useAnchoredMaxHeight 定位菜单（0.2.2-rc.2 起改名）');
+  assert.ok(pristine.includes('//#region lib/types/useAnchoredMaxHeight.js'), '上游实现必须落在该 region 内（改名前叫 useAnchoredPosition）');
   const menuCss = fs.readFileSync(path.join(dir, 'package', 'lib', 'Menu.module.css'), 'utf8');
   assert.ok(menuCss.includes('.scrollable'), 'Menu.module.css 应含 .scrollable 滚动容器');
 

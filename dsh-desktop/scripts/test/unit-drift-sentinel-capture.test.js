@@ -162,6 +162,17 @@ test('登记表完整性：PRISTINE_INJECTIONS 与哨兵表一一对应', () => 
  * 里），必须先在族 pristine 上重放「起在它之前」的补丁，才得到该补丁真正的输入
  * 形态；pristine 单独返回，供往返对账。
  */
+// 含「正则逆运算对」的键（逆运算的 from 描述的是注入后整块字节，反推不出 pristine 侧锚点），
+// 必须在这里单列漂移探针：把 pristine 里的锚点字节改坏，transform 必须报 anchor-missing。
+// 缺登记则上面的断言当场红——不许因为「测不动」就把多形态键的漂移检测静默跳过。
+const DRIFT_PROBES = {
+  'device-auth-guidance': [
+    [
+      'const message = files.errorMessage(response.status, failure.message, detail);',
+      'const message = files.errorMessage(response.status, failure.message);',
+    ],
+  ],
+};
 function sentinelBase(s, raw) {
   if (!s.family) {
     const pristine = toPristineSource(s.key, raw);
@@ -199,11 +210,26 @@ for (const s of SENTINELS) {
     const target = pickTarget(s);
     assert.ok(target, `找不到靶文件（候选均缺失）：${s.candidates[0]}`);
     const { base } = sentinelBase(s, fs.readFileSync(target, 'utf8'));
-    // 把每条锚点都改写（device-auth 有 V2/V1 双形态，只破坏一条会命中另一条）。
+    // 把每条锚点都改写（device-auth 有 V4/V3/V2/V1 多形态，只破坏一条会命中另一条）。
+    // 首元是 RegExp 的对是**逆运算专用**（from 描述的是「注入后」的整块字节，用于把补丁态
+    // 剥回 pristine），它反推不出 pristine 侧锚点文本；那类键的漂移探针在 DRIFT_PROBES 单列
+    // 登记，缺登记当场红——不许因为「测不动」就把多形态键的漂移检测静默跳过。
     let drift = base;
     let broke = 0;
-    for (const [anchor] of PRISTINE_INJECTIONS[s.key]) {
+    const pairs = PRISTINE_INJECTIONS[s.key];
+    const regexPairs = pairs.filter(([from]) => from instanceof RegExp);
+    if (regexPairs.length > 0) {
+      assert.ok(Array.isArray(DRIFT_PROBES[s.key]) && DRIFT_PROBES[s.key].length > 0,
+        s.key + ' 含正则逆运算对（' + regexPairs.length + ' 条），却没在 DRIFT_PROBES 登记 pristine 侧漂移探针');
+    }
+    for (const [anchor] of pairs) {
+      if (typeof anchor !== 'string') continue;
       if (drift.includes(anchor)) { drift = drift.replace(anchor, () => anchor.slice(0, 8) + '§drift§' + anchor.slice(8)); broke += 1; }
+    }
+    for (const [probe, broken] of DRIFT_PROBES[s.key] || []) {
+      assert.ok(drift.includes(probe), s.key + ' 的漂移探针在 pristine 里就不在位：' + probe.slice(0, 120));
+      drift = drift.replace(probe, () => broken);
+      broke += 1;
     }
     assert.ok(broke > 0, '一条锚点都没命中，本用例无法验证漂移检测');
     const r = s.transform(drift, s.file);

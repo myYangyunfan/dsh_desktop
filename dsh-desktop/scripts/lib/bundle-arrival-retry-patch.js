@@ -100,12 +100,46 @@ const LOADER_NEW = [
   '\t\tconst defaultLoadBundle = ' + RETRYING_LOADER_BODY + ';',
 ].join('\n');
 
+// --- minify 形态（0.2.2-rc.2 的 dsh-client-modules/lib/client.js）---
+// 真字节（逐字，含反引号模板串与紧贴的箭头函数）：
+//   const defaultLoadBundle=url=>new Promise((resolve,reject)=>{const el=document.createElement(`script`);…document.head.append(el)});
+const LOADER_MIN_OLD = [
+  'const defaultLoadBundle=url=>new Promise((resolve,reject)=>{',
+  'const el=document.createElement(`script`);el.async=true;el.src=url;',
+  'el.addEventListener(`load`,()=>{el.remove();resolve()},{once:true});',
+  'el.addEventListener(`error`,()=>{el.remove();reject(new Error(`client-modules: bundle script ${url} failed to load`))},{once:true});',
+  'document.head.append(el)});',
+].join('');
+
+// minify 形态的重试版（同一语义、同一退避序列；retry 击穿参数用字符串拼接，
+// 避免在单行注入体里嵌套模板串）。
+const LOADER_MIN_NEW = [
+  'const defaultLoadBundle=url=>new Promise((resolve,reject)=>{',
+  '/* ' + LOADER_RETRY_MARKER + ': bounded backoff so one AV-scan lock / concurrent',
+  '   plugin-dir replacement / kernel-restart window does not kill the entry until a',
+  '   full page reload (arrive() treats a single transport failure as terminal). */',
+  'const MAX_ATTEMPTS=4;const RETRY_DELAYS_MS=[300,900,2700];',
+  'const loadOnce=(attempt)=>{const el=document.createElement(`script`);el.async=true;',
+  'el.src=attempt===0?url:url+(url.includes("?")?"&":"?")+"retry="+attempt;',
+  'el.addEventListener(`load`,()=>{el.remove();resolve()},{once:true});',
+  'el.addEventListener(`error`,()=>{el.remove();',
+  'if(attempt+1<MAX_ATTEMPTS){setTimeout(()=>loadOnce(attempt+1),RETRY_DELAYS_MS[Math.min(attempt,RETRY_DELAYS_MS.length-1)]);return;}',
+  'reject(new Error(`client-modules: bundle script ${url} failed to load`))},{once:true});',
+  'document.head.append(el)};loadOnce(0)});',
+].join('');
+
 function transformLoaderRetry(src, file) {
   if (src.includes(LOADER_RETRY_MARKER)) return { status: 'already' };
-  if (!src.includes(LOADER_OLD)) {
-    return { status: 'anchor-missing', detail: '未找到 defaultLoadBundle 锚点（版本可能已变更），跳过 ' + file };
+  if (src.includes(LOADER_OLD)) {
+    return { status: 'changed', src: src.replace(LOADER_OLD, LOADER_NEW) };
   }
-  return { status: 'changed', src: src.replace(LOADER_OLD, LOADER_NEW) };
+  // 0.2.2-rc.2：整包 minify，defaultLoadBundle 压成单行（无注释、无反引号外的空格、
+  // 无 `/* @__PURE__ */`）。语义不变（同样 document.head.append + 单次 error reject），
+  // 只是真字节不同；注入体也压成 minify 形态，避免把格式化代码塞进压平产物。
+  if (src.includes(LOADER_MIN_OLD)) {
+    return { status: 'changed', src: src.replace(LOADER_MIN_OLD, LOADER_MIN_NEW) };
+  }
+  return { status: 'anchor-missing', detail: '未找到 defaultLoadBundle 锚点（版本可能已变更），跳过 ' + file };
 }
 
 // ---------------------------------------------------------------------------

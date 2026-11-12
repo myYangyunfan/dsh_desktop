@@ -97,8 +97,39 @@ const INJECT_JSX_V2 = ANCHOR_JSX_V2 + '\n' + [
   '\t\t\t\t\t\t\t\t\t(0, react_jsx_runtime.jsx)("div", { ref: olderSentinelRef, "aria-hidden": true, style: { height: 1 } }),',
 ].join('\n');
 
-// 世代表顺序即优先级：先 0.2.1（现行 pin），再 rc.2，最后回落到 v1 形态。
+// --- 世代 D：0.2.2-rc.2（现行 pin，整包 minify 后的产物）---
+// rc.2 的 dsh-client-ui-chat/lib/client.js 是压成单行的 bundle：缩进/换行/空格全没了，
+// `"div"` 变反引号模板串、`jsxs)(...)` 紧贴 `return`、对象字面量无空格。语义与世代 C 一致
+// （useChatScroll + scroll.loadEarlier + data-chat-motion 都在），所以注入体照旧，只把锚点
+// 换成 minify 后的真字节——按「同世代成对命中」另立一代，不与格式化世代混用。
+const ANCHOR_HOOKS_MIN = 'return(0,react_jsx_runtime.jsxs)(`div`,{className:ChatView_module_css_default.frame,children:[';
+const INJECT_HOOKS_MIN = [
+  '/* ' + CHAT_AUTOLOAD_MARKER + ' (BUG1): a top sentinel observed with',
+  '   IntersectionObserver auto-invokes the existing anchored pager when it scrolls',
+  '   into view, instead of requiring a manual "Load earlier" click. It deliberately',
+  '   avoids the hot onScroll sampling path. */',
+  'const olderSentinelRef=(0,react.useRef)(null);',
+  '(0,react.useEffect)(()=>{',
+  '\tconst node=olderSentinelRef.current;',
+  '\tconst list=scroll.listRef.current;',
+  '\tif(node===null||list===null)return;',
+  '\tif(openState!=="open"||!hasMore||loadingOlder)return;',
+  '\tconst observer=new IntersectionObserver((records)=>{',
+  '\t\tif(records.some((record)=>record.isIntersecting))scroll.loadEarlier();',
+  '\t},{root:list.closest("[data-conversation-scroll]")??list,rootMargin:"300px"});',
+  '\tobserver.observe(node);',
+  '\treturn()=>{observer.disconnect();};',
+  '},[hasMore,loadingOlder,openState]);',
+  ANCHOR_HOOKS_MIN,
+].join('\n');
+const ANCHOR_JSX_MIN = '"data-chat-flow":``,"data-chat-motion":deferCompletedTurns&&scroll.initialized&&(running||motionTail||pendingInputs.length>0)?``:void 0,children:[';
+const INJECT_JSX_MIN = ANCHOR_JSX_MIN + '\n' + [
+  '(0,react_jsx_runtime.jsx)("div",{ref:olderSentinelRef,"aria-hidden":true,style:{height:1}}),',
+].join('\n');
+
+// 世代表顺序即优先级：先 minify 后的 0.2.2（现行 pin），再 0.2.1 / rc.2 / v1 格式化形态。
 const CHAT_AUTOLOAD_GENERATIONS = [
+  { id: '0.2.2', hooks: ANCHOR_HOOKS_MIN, hooksInjection: INJECT_HOOKS_MIN, jsx: ANCHOR_JSX_MIN, jsxInjection: INJECT_JSX_MIN },
   { id: '0.2.1', hooks: ANCHOR_HOOKS_RC2, hooksInjection: INJECT_HOOKS_RC2, jsx: ANCHOR_JSX_V2, jsxInjection: INJECT_JSX_V2 },
   { id: 'rc.2', hooks: ANCHOR_HOOKS_RC2, hooksInjection: INJECT_HOOKS_RC2, jsx: ANCHOR_JSX_RC2, jsxInjection: INJECT_JSX_RC2 },
   { id: '0.1.6', hooks: ANCHOR_HOOKS_V1, hooksInjection: INJECT_HOOKS_V1, jsx: ANCHOR_JSX_V1, jsxInjection: INJECT_JSX_V1 },

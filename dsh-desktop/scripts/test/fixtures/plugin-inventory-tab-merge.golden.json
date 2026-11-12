@@ -1,10 +1,10 @@
 {
   "id": "plugin-inventory-tab-merge",
-  "description": "插件页标签合并补丁三态 golden：匹配（changed）/ 已应用（already）/ 失配（anchor-missing）。",
+  "description": "插件页标签合并补丁三态 golden：匹配（changed）/ 已应用（already）/ 失配（anchor-missing）。匹配夹具按 0.2.2-rc.2 压缩产物真字节写。",
   "marker": "dsh-desktop fix: hide inventory tab",
   "cases": {
     "match": {
-      "input": "tabs = ctx.slots.entries(\"settings.plugins.tab\").map((entry) => ({",
+      "input": "tabs=ctx.slots.entries(`settings.plugins.tab`).map(entry=>({",
       "status": "changed",
       "expectContains": [
         ".filter((entry) => (entry.options.id ?? \"\") !== \"all\")",

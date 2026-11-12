@@ -295,28 +295,50 @@ function transformWorkspaceSearchRailFix(src, file) {
 // ---------------------------------------------------------------------------
 const MANUAL_SORT_DRAG_MARKER = 'dsh-desktop fix: manual sort drag sync';
 
+// 0.2.2-rc.1 的可读多行形态：保留，供历史产物与既有夹具复算。
 const MANUAL_SORT_DRAG_REQUIRE_ANCHOR = 'let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");';
 const MANUAL_SORT_DRAG_REQUIRE_INSERT = MANUAL_SORT_DRAG_REQUIRE_ANCHOR + '\n\t\tlet react_dom = require("react-dom"); // ' + MANUAL_SORT_DRAG_MARKER;
 
 const MANUAL_SORT_DRAG_START_ANCHOR = 'e.dataTransfer.setData("text/plain", node.id);\n\t\t\t\t\t\tdrag.start();';
 const MANUAL_SORT_DRAG_START_FIX = 'e.dataTransfer.setData("text/plain", node.id);\n\t\t\t\t\t\treact_dom.flushSync(() => {\n\t\t\t\t\t\t\tdrag.start();\n\t\t\t\t\t\t});';
 
+// 0.2.2-rc.2 起重锚：client bundle 整体压缩——require 行没有空格、拖拽起点压成
+// `e.dataTransfer.setData(`text/plain`,node.id);drag.start();`（注意是 row.key，不是 node.id）。
+// 压缩产物是单行文件：插入体若用 `//` 注释会吃掉后半份文件，所以这里用块注释并显式补换行。
+const MANUAL_SORT_DRAG_REQUIRE_ANCHOR_MIN = 'let _deepseek_ai_dsh_client_ui_primitives=require("@deepseek-ai/dsh-client-ui-primitives");';
+const MANUAL_SORT_DRAG_REQUIRE_INSERT_MIN = MANUAL_SORT_DRAG_REQUIRE_ANCHOR_MIN + '\nlet react_dom=require("react-dom"); /* ' + MANUAL_SORT_DRAG_MARKER + ' */\n';
+
+const MANUAL_SORT_DRAG_START_ANCHOR_MIN = 'e.dataTransfer.setData(`text/plain`,node.id);drag.start();';
+const MANUAL_SORT_DRAG_START_FIX_MIN = 'e.dataTransfer.setData(`text/plain`,node.id);react_dom.flushSync(()=>{drag.start()});';
+
 function transformManualSortFix(src, file) {
   if (src.includes(MANUAL_SORT_DRAG_MARKER)) return { status: 'already' };
-  if (!src.includes(MANUAL_SORT_DRAG_REQUIRE_ANCHOR) || !src.includes(MANUAL_SORT_DRAG_START_ANCHOR)) {
+  const hasMin = src.includes(MANUAL_SORT_DRAG_REQUIRE_ANCHOR_MIN) && src.includes(MANUAL_SORT_DRAG_START_ANCHOR_MIN);
+  const hasLegacy = src.includes(MANUAL_SORT_DRAG_REQUIRE_ANCHOR) && src.includes(MANUAL_SORT_DRAG_START_ANCHOR);
+  if (!hasMin && !hasLegacy) {
     return { status: 'anchor-missing', detail: '锚点未匹配（dsh 版本可能已变化），跳过 ' + file };
   }
-  let out = src.replace(MANUAL_SORT_DRAG_REQUIRE_ANCHOR, MANUAL_SORT_DRAG_REQUIRE_INSERT);
-  out = out.replace(MANUAL_SORT_DRAG_START_ANCHOR, MANUAL_SORT_DRAG_START_FIX);
+  const [reqAnchor, reqInsert, startAnchor, startFix] = hasMin
+    ? [MANUAL_SORT_DRAG_REQUIRE_ANCHOR_MIN, MANUAL_SORT_DRAG_REQUIRE_INSERT_MIN, MANUAL_SORT_DRAG_START_ANCHOR_MIN, MANUAL_SORT_DRAG_START_FIX_MIN]
+    : [MANUAL_SORT_DRAG_REQUIRE_ANCHOR, MANUAL_SORT_DRAG_REQUIRE_INSERT, MANUAL_SORT_DRAG_START_ANCHOR, MANUAL_SORT_DRAG_START_FIX];
+  let out = src.replace(reqAnchor, reqInsert);
+  out = out.replace(startAnchor, startFix);
   return { status: 'changed', src: out };
 }
+
 
 // ---------------------------------------------------------------------------
 // 插件页标签合并补丁（原 applyPluginInventoryTabMergeFix）。
 // ---------------------------------------------------------------------------
 const PLUGIN_INVENTORY_TAB_MARKER = 'dsh-desktop fix: hide inventory tab';
-const PLUGIN_INVENTORY_TAB_OLD = 'tabs = ctx.slots.entries("settings.plugins.tab").map((entry) => ({';
-const PLUGIN_INVENTORY_TAB_NEW = 'tabs = ctx.slots.entries("settings.plugins.tab").filter((entry) => (entry.options.id ?? "") !== "all").map((entry) => ({ // ' + PLUGIN_INVENTORY_TAB_MARKER;
+// 0.2.2-rc.2 重锚：settings-plugins 的 lib/client.js 变成压缩产物（8KB / 3 行），
+// 上一代按 2-tab 缩进写的多行锚点 0 命中。压缩态里 tabs 派生是单行语句
+// `tabs=ctx.slots.entries(`settings.plugins.tab`).map(entry=>({...`
+// ——整行唯一，且 filter 插在 entries(...) 与 map(...) 之间，不改变后续逐字内容。
+// 注意注入体末尾必须补一个换行：该文件是一整行，`// marker` 后面若直接接原有
+// 后续字节（`id:entry.options.id??...`），整行余下产物会被注释掉。
+const PLUGIN_INVENTORY_TAB_OLD = 'tabs=ctx.slots.entries(`settings.plugins.tab`).map(entry=>({';
+const PLUGIN_INVENTORY_TAB_NEW = 'tabs = ctx.slots.entries("settings.plugins.tab").filter((entry) => (entry.options.id ?? "") !== "all").map((entry) => ({ // ' + PLUGIN_INVENTORY_TAB_MARKER + '\n';
 
 function transformPluginInventoryTabMergeFix(src, file) {
   if (src.includes(PLUGIN_INVENTORY_TAB_MARKER)) return { status: 'already' };
@@ -786,6 +808,27 @@ const DEVICE_AUTH_THROW_REPLACEMENT_V3 = [
   '\t\t\t\t\tconst __dshDeviceAuthHint = (response.status === 401 || response.status === 403) && /not authorized|\\u8bbe\\u5907\\u672a\\u6388\\u6743|contact the administrator|device.{0,24}(unauthorized|not allowed)/i.test(`${failure.message ?? ""} ${detail ?? ""}`) ? " ——【凭据被 DeepSeek 服务端拒绝（令牌失效或账号设备风控）】请到 chat.deepseek.com 重新登录获取新令牌，在 设置 → 模型 页重新填入 API 密钥后重试；重装客户端或反复点「重试」无效。" : "";',
   '\t\t\t\t\tthrow new LlmError(files.errorMessage(response.status, failure.message, detail) + __dshDeviceAuthHint, failure.code, {',
 ].join('\n');
+// 0.2.2-rc.2 第四形态（V4）：rc.2 把非 2xx 分支收口到 `LlmError.fromFailure(...)`，
+// 不再有 `throw new LlmError(..., {` 尾巴，三代「吃 failure + throw 两行」的锚点全部
+// 失配。新字节（逐字）为：
+//   const failure = providerError(raw, response.status, response.headers);
+//   const message = files.errorMessage(response.status, failure.message, detail);
+//   throw LlmError.fromFailure({ ...failure.failure, message }, { cause: new Error(text) });
+// 修法不变：把指引拼在 errorMessage(...) 的返回值尾部（它就是用户看到的那句）。
+// 锚点按缩进捕获整行（不写死 tab 数），且只吃这两行，不碰 fromFailure 尾巴。
+const DEVICE_AUTH_THROW_ANCHOR_V4 = /([ \t]*)const failure = providerError\(raw, response\.status, response\.headers\);\r?\n[ \t]*const message = files\.errorMessage\(response\.status, failure\.message, detail\);/;
+const DEVICE_AUTH_THROW_REPLACEMENT_V4 = (match, indent) => [
+  indent + 'const failure = providerError(raw, response.status, response.headers);',
+  indent + '// ' + DEVICE_AUTH_GUIDANCE_MARKER + ': a provider-side device/risk-control',
+  indent + '// rejection (e.g. "This device is not authorized. Please contact the',
+  indent + '// administrator or try again later.") is a credential problem the client',
+  indent + '// cannot retry or reinstall its way out of — append the actionable remedy',
+  indent + '// so the user is not left with an English riddle.',
+  // 判定读 failure.message + 响应原文（text）：providerErrorDetail(raw) 是对象，
+  // 直接插值只会得到 "[object Object]"，与上一代读 detail 的写法不同。
+  indent + 'const __dshDeviceAuthHint = (response.status === 401 || response.status === 403) && /not authorized|\\u8bbe\\u5907\\u672a\\u6388\\u6743|contact the administrator|device.{0,24}(unauthorized|not allowed)/i.test(`${failure.message ?? ""} ${text ?? ""}`) ? " ——【凭据被 DeepSeek 服务端拒绝（令牌失效或账号设备风控）】请到 chat.deepseek.com 重新登录获取新令牌，在 设置 → 模型 页重新填入 API 密钥后重试；重装客户端或反复点「重试」无效。" : "";',
+  indent + 'const message = files.errorMessage(response.status, failure.message, detail) + __dshDeviceAuthHint;',
+].join('\n');
 /** 指引注入体（indent = 抛错块 if 体的缩进层级；注释/if/message 行随层）。 */
 function deviceAuthGuidanceBlock(indent) {
   const inner = indent + '\t';
@@ -803,6 +846,11 @@ function deviceAuthGuidanceBlock(indent) {
 
 function transformDeviceAuthGuidance(src, file) {
   if (src.includes(DEVICE_AUTH_GUIDANCE_MARKER)) return { status: 'already' };
+  // 0.2.2-rc.2 形态（providerError + errorMessage 两行，LlmError.fromFailure 尾巴）。
+  const v4 = DEVICE_AUTH_THROW_ANCHOR_V4.test(src);
+  if (v4) {
+    return { status: 'changed', src: src.replace(DEVICE_AUTH_THROW_ANCHOR_V4, DEVICE_AUTH_THROW_REPLACEMENT_V4) };
+  }
   // 0.2.0-rc.2 形态（failure + throw 两行，指引拼在抛出文案尾部）。
   if (src.includes(DEVICE_AUTH_THROW_ANCHOR_V3)) {
     return { status: 'changed', src: src.replace(DEVICE_AUTH_THROW_ANCHOR_V3, () => DEVICE_AUTH_THROW_REPLACEMENT_V3) };
@@ -815,7 +863,7 @@ function transformDeviceAuthGuidance(src, file) {
   if (src.includes(DEVICE_AUTH_THROW_ANCHOR)) {
     return { status: 'changed', src: src.replace(DEVICE_AUTH_THROW_ANCHOR, () => DEVICE_AUTH_THROW_ANCHOR + '\n' + deviceAuthGuidanceBlock('\t\t\t')) };
   }
-  return { status: 'anchor-missing', detail: '未找到 dsh-llm-deepseek 非 2xx 抛错锚点（双形态 V2/V1 均未命中，版本可能已变更），跳过 ' + file };
+  return { status: 'anchor-missing', detail: '未找到 dsh-llm-deepseek 非 2xx 抛错锚点（V4/V3/V2/V1 均未命中，版本可能已变更），跳过 ' + file };
 }
 
 // ---------------------------------------------------------------------------
@@ -2298,6 +2346,16 @@ const WORKSPACE_CHIP_LABEL_NEW = '\t\t\tconst chipTitle = pendingWorkspace?.titl
 // 原样保留 → 缺陷仍然成立。两代锚点各配一对，任一命中即打补丁。
 const WORKSPACE_CHIP_LABEL_ANCHOR_V2 = '\t\t\tconst storedChipTitle = pendingWorkspace?.title ?? (sessionId === void 0 ? void 0 : sessionWorkspace?.title ?? (workspaces.phase === "ready" || cwd === void 0 || cwd === "" ? void 0 : workspaceLabel(cwd)));';
 const WORKSPACE_CHIP_LABEL_NEW_V2 = '\t\t\tconst storedChipTitle = pendingWorkspace?.title ?? (sessionId === void 0 ? void 0 : sessionWorkspace?.title ?? (cwd === void 0 || cwd === "" ? void 0 : workspaceLabel(cwd)));';
+// 0.2.2-rc.2 第三形态（V3）：conversation 的 lib/client.js 变成压缩产物
+// （685KB / 27 行），前两代按 tab 缩进写的多行锚点 0 命中。压缩态里同一表达式是
+// 单行、无空白变体（本包内唯一命中）：
+//   const storedChipTitle=pendingWorkspace?.title??(sessionId===void 0?void 0:
+//     sessionWorkspace?.title??(workspaces.phase===`ready`||cwd===void 0||cwd===``
+//     ?void 0:workspaceLabel(cwd)));
+// 缺陷不变：`workspaces.phase === "ready"` 这个门槛仍在，值仍会塌成 undefined。
+// 注入体用块注释（整包是单行，`//` 会注释掉余下产物）；修法只挖掉 gate 这一项。
+const WORKSPACE_CHIP_LABEL_ANCHOR_V3 = 'const storedChipTitle=pendingWorkspace?.title??(sessionId===void 0?void 0:sessionWorkspace?.title??(workspaces.phase===`ready`||cwd===void 0||cwd===``?void 0:workspaceLabel(cwd)));';
+const WORKSPACE_CHIP_LABEL_NEW_V3 = 'const storedChipTitle=/* ' + WORKSPACE_CHIP_LABEL_MARKER + ': 选目录早一帧落到 sessions.byId[id].cwd，而 workspaces.phase 尚未 ready —— 旧 gate 让 chip 塌成「选择工作区」占位并让输入框变 inert；去掉 gate 后仍保留 cwd 空值折叠。 */pendingWorkspace?.title??(sessionId===void 0?void 0:sessionWorkspace?.title??(cwd===void 0||cwd===``?void 0:workspaceLabel(cwd)));';
 // 机械可逆（inverse-replace）：NEW → ANCHOR 即回滚，注释块按 marker 定位挖除。
 const WORKSPACE_CHIP_LABEL_COMMENTS = [
   '// ' + WORKSPACE_CHIP_LABEL_MARKER,
@@ -2316,14 +2374,19 @@ const WORKSPACE_CHIP_LABEL_INJECTION_FOR = (patchedLine) => WORKSPACE_CHIP_LABEL
 function transformWorkspaceChipLabelHold(src, file) {
   if (src.includes(WORKSPACE_CHIP_LABEL_MARKER)) return { status: 'already' };
   for (const [anchor, patched] of [
+    [WORKSPACE_CHIP_LABEL_ANCHOR_V3, WORKSPACE_CHIP_LABEL_NEW_V3],
     [WORKSPACE_CHIP_LABEL_ANCHOR, WORKSPACE_CHIP_LABEL_NEW],
     [WORKSPACE_CHIP_LABEL_ANCHOR_V2, WORKSPACE_CHIP_LABEL_NEW_V2],
   ]) {
     if (src.includes(anchor)) {
+      // V3 的 patched 自带 marker 块注释，不再前置 tab 缩进的注释块（整包是单行）。
+      if (anchor === WORKSPACE_CHIP_LABEL_ANCHOR_V3) {
+        return { status: 'changed', src: src.replace(anchor, () => patched) };
+      }
       return { status: 'changed', src: src.replace(anchor, () => WORKSPACE_CHIP_LABEL_INJECTION_FOR(patched)) };
     }
   }
-  return { status: 'anchor-missing', detail: '未找到 chipTitle 的 workspaces.phase gate 锚点（V1/V2 双形态均未命中，版本可能已变化），跳过 ' + file };
+  return { status: 'anchor-missing', detail: '未找到 chipTitle 的 workspaces.phase gate 锚点（V3/V1/V2 三形态均未命中，版本可能已变化），跳过 ' + file };
 }
 
 // ---------------------------------------------------------------------------
@@ -2341,11 +2404,28 @@ function transformWorkspaceChipLabelHold(src, file) {
 //
 // 新增哨兵时只需在此登记该补丁的正向替换对。
 // ---------------------------------------------------------------------------
+// 设备未授权指引 V4（0.2.2-rc.2）：靶行是 `const failure = providerError(...)` + `const message =
+// files.errorMessage(...)`，注入体插在两者之间（5 行 marker 注释 + hint 行）并把 message 行
+// 追加 `+ __dshDeviceAuthHint`。缩进用反向引用绑定，注释行数写死——剥不掉就让哨兵红。
+const RE_DEVICE_AUTH_V4_INJECTED =
+  /([ \t]*)const failure = providerError\(raw, response\.status, response\.headers\);\r?\n\1\/\/ dsh-desktop compat: device-auth guidance:[^\n]*\r?\n(?:\1\/\/ [^\n]*\r?\n){4}\1const __dshDeviceAuthHint = [^\n]*\r?\n\1const message = files\.errorMessage\(response\.status, failure\.message, detail\) \+ __dshDeviceAuthHint;/;
 const PRISTINE_INJECTIONS = {
   // device-auth 指引：V3（0.2.0-rc.2+，providerError/errorMessage 形态）、
   // V2（rc.1+，3-tab if 体 → 4-tab 指引）与 V1（rc.8 及更早）三形态都登记，
   // revert 时按存在者命中。
   'device-auth-guidance': [
+
+    // 0.2.2-rc.2 V4 形态（见 RE_DEVICE_AUTH_V4_INJECTED 头部说明）
+    [
+      RE_DEVICE_AUTH_V4_INJECTED,
+      (match, indent) => {
+        const nl = match.includes('\r\n') ? '\r\n' : '\n';
+        return [
+          indent + 'const failure = providerError(raw, response.status, response.headers);',
+          indent + 'const message = files.errorMessage(response.status, failure.message, detail);',
+        ].join(nl);
+      },
+    ],
     [DEVICE_AUTH_THROW_ANCHOR_V3, DEVICE_AUTH_THROW_REPLACEMENT_V3],
     [DEVICE_AUTH_THROW_ANCHOR_V2, DEVICE_AUTH_THROW_ANCHOR_V2 + '\n' + deviceAuthGuidanceBlock('\t\t\t\t')],
     [DEVICE_AUTH_THROW_ANCHOR, DEVICE_AUTH_THROW_ANCHOR + '\n' + deviceAuthGuidanceBlock('\t\t\t')],
@@ -2355,9 +2435,14 @@ const PRISTINE_INJECTIONS = {
   ],
   // 键名必须等于 patch-registry 里的 spec id（曾写作 manual-sort-fix，与 spec
   // id manual-sort-drag-fix 脱钩，按 id 反查靶点的工具会静默跳过这个键）。
+  // 0.2.2-rc.2 起靶文件是整包 minify 的单行产物：require 行没有空格、拖拽起点紧贴、
+  // 注入体用块注释（单行文件里 `//` 会吃掉后半份产物）。两种形态都必须登记——
+  // 只登记可读态时，补丁态副本剥不回 pristine，哨兵对补丁态恒报 already（判据空转）。
   'manual-sort-drag-fix': [
     [MANUAL_SORT_DRAG_REQUIRE_ANCHOR, MANUAL_SORT_DRAG_REQUIRE_INSERT],
     [MANUAL_SORT_DRAG_START_ANCHOR, MANUAL_SORT_DRAG_START_FIX],
+    [MANUAL_SORT_DRAG_REQUIRE_ANCHOR_MIN, MANUAL_SORT_DRAG_REQUIRE_INSERT_MIN],
+    [MANUAL_SORT_DRAG_START_ANCHOR_MIN, MANUAL_SORT_DRAG_START_FIX_MIN],
   ],
   // credentials 首读重试（2026-09-05 补登记）。此前该族没有逆运算，它的单测只能「磁盘
   // 是什么态就断言什么态」：补丁态下走 already 分支，锚点真漂移时同样走 already，
@@ -2435,6 +2520,13 @@ function revertPristineMember(key, src) {
   if (!pairs) throw new Error(`pristine 还原键未登记：${key}（需在 PRISTINE_INJECTIONS 补一条）`);
   let out = src;
   for (const [from, to] of pairs) {
+    // RegExp 对：0.2.2-rc.2 起部分锚点带缩进捕获（缩进数不固定），字符串对表达不了，
+    // 由反向正则抹掉注入体，`to` 可以是函数（拿捕获组）。
+    if (from instanceof RegExp) {
+      if (!from.test(out)) continue;
+      out = out.replace(from, to);
+      continue;
+    }
     // 磁盘副本可能是 CRLF（打包链/编辑器会转），而常量是 LF；两种形态都尝试，
     // 并按命中的那种风格写回 from，避免在一个 CRLF 文件里插进一片 LF。
     for (const variant of [to, toCrlf(to)]) {

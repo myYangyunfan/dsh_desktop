@@ -114,7 +114,15 @@ test('回落上限 400ms：不是把动画整个删掉', () => {
 
 // ── ③ guard 静默拒绝的成因上报 ─────────────────────────────────────────────
 
-const HELPER_SRC = onb.GUARD_HELPER_NEW.split('\n').slice(0, -2).join('\n');
+// 注入体是「上报 helper + 生命周期锚点」两段拼接，rc.2 起 helper 为单行压缩形态，
+// 按行切片会连函数声明一起切掉（helper 变成空串 → 引用 __dshOnbGuardReport 当场 ReferenceError）。
+// 按锚点切，且切不出东西就当场判红，避免这条判据静默空转。
+const HELPER_SRC = (() => {
+  const cut = onb.GUARD_HELPER_NEW.indexOf(onb.GUARD_HELPER_ANCHOR);
+  assert.ok(cut > 0, 'GUARD_HELPER_NEW 必须由「上报 helper + 生命周期锚点」两段组成');
+  return onb.GUARD_HELPER_NEW.slice(0, cut).replace(/;\s*$/, '');
+})();
+assert.match(HELPER_SRC, /__dshOnbGuardReport/, 'helper 片段必须真的声明上报函数');
 
 function guardCase(controllerOverrides) {
   const state = {
@@ -220,7 +228,12 @@ test('锚点命中 pristine 真字节，二次应用判 already（marker 与 alr
   assert.equal(onb.transformOnboardingGuardReport(b.src, file).status, 'already', '重复应用必须幂等');
 
   // 版本漂移时必须老实报 anchor-missing，而不是把 bundle 改坏。
-  const drift = src.replace('animation.finished.then(() => {', 'animation.finished.then(() => { /* 上游改了 */ }');
+  // 变异要打在 pristine 的真字节上（rc.2 客户端产物是压缩态，没有空格形态），
+  // 先确认变异串在位——否则 replace 静默空转，未变异的原件照样渲染通过，反证就成了假绿。
+  const DRIFT_FROM = 'animation.finished.then(()=>{setStep(targetStep)}';
+  assert.ok(src.includes(DRIFT_FROM), '变异串必须逐字命中 pristine 真字节（否则反证空转）：' + DRIFT_FROM);
+  const drift = src.replace(DRIFT_FROM, 'animation.finished.then(()=>{setStep(targetStep ),_error=>{}');
+  assert.notEqual(drift, src, '变异必须真的改动字节');
   assert.equal(onb.transformOnboardingStepProgressTimeout(drift, file).status, 'anchor-missing');
 });
 

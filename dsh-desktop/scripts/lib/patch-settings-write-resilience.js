@@ -144,8 +144,14 @@ function transformOrphanLock(src, file) {
 // ---------------------------------------------------------------------------
 
 /** load() 内 namespaces 构建行锚点（全文件唯一）。0.1.2-alpha.2：load() 体
- *  缩进整体 +1（4-tab），锚点与注入体同步改用 4-tab。 */
-const SM_NS_ANCHOR = '\t\t\t\tconst namespaces = new Map(views.map((view) => [view.ns, view]));';
+ *  缩进整体 +1（4-tab），锚点与注入体同步改用 4-tab。
+ *  0.2.2-rc.2 重锚：settings-models 的 client.js 变成压缩产物（229KB / 19 行），
+ *  该行压缩为 `const namespaces=new Map(views.map(view=>[view.ns,view]));`
+ *  （在 `ModelsSettingsStore.read()` 内，前面紧邻 `const views=mirrored.view.namespaces;`）。
+ *  另一处同代变化：describe 面的重读方法由 `.load()` 改为 `.ensure()`
+ *  （read() 里 `this.describeFace.ensure()` 逐字在位），注入体随之改用 ensure()。
+ *  注意注入体用块注释：产物是单行，`//` 会注释掉余下整份文件。 */
+const SM_NS_ANCHOR = 'const namespaces=new Map(views.map(view=>[view.ns,view]));';
 
 const SM_NS_NEW = [
   '\t\t\t\tlet namespaces = new Map(views.map((view) => [view.ns, view]));',
@@ -153,9 +159,10 @@ const SM_NS_NEW = [
   '\t\t\t\t// 某 settingsNs 而镜像视图（describe 只在 idle 首载、register 不发事件）',
   '\t\t\t\t// 缺席时，强制重读一次 describe 并重建——否则「添加自定义供应商」按钮',
   '\t\t\t\t// 因 protocols=[] 恒灰、「添加」因 addNamespace 缺席点击无反应。',
-  '\t\t\t\tif (providers.some((entry) => entry.settingsNs !== "" && !namespaces.has(entry.settingsNs)) && typeof this.describeFace.load === "function") {',
+  '\t\t\t\t// 0.2.2-rc.2：describe 面的重读方法由 load() 改名 ensure()（read() 里逐字在位）。',
+  '\t\t\t\tif (providers.some((entry) => entry.settingsNs !== "" && !namespaces.has(entry.settingsNs)) && typeof this.describeFace.ensure === "function") {',
   '\t\t\t\t\ttry {',
-  '\t\t\t\t\t\tawait this.describeFace.load();',
+  '\t\t\t\t\t\tawait this.describeFace.ensure();',
   '\t\t\t\t\t\tconst healed = this.describeFace.getSnapshot().view;',
   '\t\t\t\t\t\tif (healed !== void 0) namespaces = new Map(healed.namespaces.map((view) => [view.ns, view]));',
   '\t\t\t\t\t} catch {}',
@@ -166,14 +173,15 @@ const SM_NS_NEW = [
  *  mutate 改为 `api.settings.mutate(ns, ops, expectedRevision)`、响应改为 `{ok,error,value}`，
  *  describe 改为无参 `api.settings.describe()` 返回 `{ok,value}`——锚点与注入体同步改用新签名。
  *  0.1.2-alpha.2：卡片改经 `operations.writeSettings` 包装（返回 `{kind:'written'|'conflict'|'refused',
- *  message?}`，pristine client.js 实证），冲突重试锚点与注入体同步改用新形态。 */
-const SM_CONFLICT_ANCHOR = [
-  '\t\t\t\t\t}], openedAt);',
-  '\t\t\t\t\tif (written.kind !== "written") return written.kind === "conflict" ? t("conflict") : written.message;',
-].join('\n');
+ *  message?}`，pristine client.js 实证），冲突重试锚点与注入体同步改用新形态。
+ *  0.2.2-rc.2 重锚：压缩产物里该尾句压成一行、只在 createOnce 内出现一次：
+ *  `const written=await operations.writeSettings(NS$1,[{op:`set`,path:[`providers`,route],value:profile}],openedAt);if(written.kind!==`written`)return written.kind===`conflict`?t(`conflict`):written.message;`
+ *  ——锚点只吃后半句（`],openedAt);if(written.kind` … `written.message;`），前面 ops 数组字面量
+ *  不属于本补丁的关注面。 */
+const SM_CONFLICT_ANCHOR = '],openedAt);if(written.kind!==`written`)return written.kind===`conflict`?t(`conflict`):written.message;';
 
 const SM_CONFLICT_NEW = [
-  '\t\t\t\t\t}], openedAt);',
+  '], openedAt);',
   '\t\t\t\t\tif (written.kind !== "written") {',
   '\t\t\t\t\t\t// ' + CONFLICT_RETRY_MARKER + ': 卡片打开后命名空间被任何面写过一次，',
   '\t\t\t\t\t\t// openedAt 即陈旧——重读一次 revision 静默重试（ops 是 providers.<route>',
@@ -200,8 +208,11 @@ const SM_CONFLICT_NEW = [
 
 /** createModelsOperations 对象头锚点（全文件唯一）。0.1.2-alpha.2 起卡片组件拿不到
  *  ctx/api（只收 operations 回调面，pristine client.js 实证），冲突重试的重读走
- *  本补丁注入的 describeSettings 回调——与 SM_CONFLICT_NEW 成对注入。 */
-const SM_OPS_ANCHOR = 'function createModelsOperations(ctx) {\n\t\t\treturn {\n\t\t\t\tdescribeCredential: async (ref) => {';
+ *  本补丁注入的 describeSettings 回调——与 SM_CONFLICT_NEW 成对注入。
+ *  0.2.2-rc.2 重锚：压缩产物里对象首成员是 `storeCredential:async(ref,value)=>`
+ *  （旧锚点写的 describeCredential 已不在首位），锚点改吃
+ *  `function createModelsOperations(ctx){return{storeCredential:async(`。 */
+const SM_OPS_ANCHOR = 'function createModelsOperations(ctx){return{storeCredential:async(';
 const SM_OPS_NEW = [
   'function createModelsOperations(ctx) {',
   '\t\t\treturn {',
@@ -211,7 +222,7 @@ const SM_OPS_NEW = [
   '\t\t\t\t\tconst response = await ctx.remote.settings.describe();',
   '\t\t\t\t\treturn response.ok ? response.value : void 0;',
   '\t\t\t\t},',
-  '\t\t\t\tdescribeCredential: async (ref) => {',
+  '\t\t\t\tstoreCredential:async(',
 ].join('\n');
 
 /**

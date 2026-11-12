@@ -118,88 +118,65 @@ const CORE = [
 // 模块作用域（锚分派器行即可），行内注入（1b/1e/1f）挂在 ProjectRow 本体上，
 // **分组行与未分组行共用同一处注入**——两半都由这一处覆盖，未分组半边由
 // row.workspaceId === void 0 的既有判据排除（上游同样不给它工作区菜单）。
-const UI_CORE_ANCHOR = '\t\tfunction ProjectRowItem(props) {';
+// 1a 的 0.2.2-rc.2 重锚：`lib/client.js` 起改成压缩产物（整包 5 行、函数间无换行、
+// 三元式/对象字面量无空格），旧的「多行 + 制表符」锚点整体失效。现锚取函数声明本身
+// 的单行字节（全文件唯一），不依赖任何缩进/换行。
+const UI_CORE_ANCHOR = 'function ProjectRowItem(props){';
 const UI_CORE_INSERT = CORE + '\n' + UI_CORE_ANCHOR;
 
 // 1b. 行内 hooks 区：订阅版本号 + 读取置顶态（无条件 hook，Rules of Hooks 安全）。
-// 0.2.2-rc.1：该 label 行仍在 ProjectRow 体内（分组行与未分组行共用），全文件
-// 唯一整行命中，且紧随 `const row = group;` —— row 已声明。
+// 0.2.2-rc.2：该 label 行仍在 ProjectRow 体内（分组行与未分组行共用），压缩后单行，
+// 全文件唯一命中，且紧随 `const row=group;` —— row 已声明。
 const UI_HOOKS_ANCHOR = [
-	'			const label = row.workspaceId === void 0 ? t("group.ungrouped") : row.label;',
+	'const label=row.workspaceId===void 0?t(`group.ungrouped`):row.label;',
 ].join('\n');
 const UI_HOOKS_INSERT = [
-	'			const label = row.workspaceId === void 0 ? t("group.ungrouped") : row.label;',
-	'			// dsh-desktop patch (workspace pin): 订阅版本号驱动重渲染 + 读取置顶态。',
-	'			dshUseWorkspacePinVersion();',
-	'			const dshPinned = dshWorkspacePinState(row.workspaceId);',
+	'const label=row.workspaceId===void 0?t(`group.ungrouped`):row.label;',
+	'// dsh-desktop patch (workspace pin): 订阅版本号驱动重渲染 + 读取置顶态。',
+	'dshUseWorkspacePinVersion();',
+	'const dshPinned=dshWorkspacePinState(row.workspaceId);',
 ].join('\n');
 
 // 1c. 菜单项：工作区行 ⋯ 菜单加「置顶/取消置顶」数据项。
-// 0.2.2-rc.1 重锚：上游把项目行菜单从内联 workspaceMenuItems 数组改成
-// ctx.contextMenus 数据项（register({ id, target: "workspace", order, resolve })），
-// 旧的 UI_ITEMS（数组首项）与 UI_SELECT（onSelect 的 id guard 前插分支）两个锚点
-// 因此整体消失。现锚在原生 workspace.rename 注册的收尾行（全文件唯一），
-// order 200 排在 rename(100) 与 delete(300) 之间；未分组桶没有 workspaceId，
-// 上游也不为它开工作区菜单，故不显示置顶项（与旧语义一致）。
-const UI_MENU_ANCHOR = '\t\t\t}), "workspace: rename menu action");';
+// 0.2.2-rc.2 重锚：项目行菜单仍是 ctx.contextMenus 数据项，但整段压缩成一行，
+// 注册收尾的 tag 改模板字面量（`}),\`workspace: rename menu action\`);`）。order 200
+// 排在 rename(100) 与 delete(300) 之间；未分组桶没有 workspaceId，上游也不为它开
+// 工作区菜单，故不显示置顶项（与旧语义一致）。
+const UI_MENU_ANCHOR = '}),`workspace: rename menu action`);';
 const UI_MENU_INSERT = [
 	UI_MENU_ANCHOR,
-	'\t\t\t// dsh-desktop patch (workspace pin): 置顶/取消置顶（仅工作区分组行）。',
-	'\t\t\tctx.effect(() => ctx.contextMenus.register({',
-	'\t\t\t\tid: "workspace.pinToggle",',
-	'\t\t\t\ttarget: "workspace",',
-	'\t\t\t\torder: 200,',
-	'\t\t\t\tresolve: ({ workspaceId }) => [{',
-	'\t\t\t\t\tid: dshWorkspacePinState(workspaceId) ? "unpin" : "pin",',
-	'\t\t\t\t\tlabel: ctx.locale.bind(NS)(dshWorkspacePinState(workspaceId) ? "workspace.unpin" : "workspace.pin"),',
-	'\t\t\t\t\ticon: { key: dshWorkspacePinState(workspaceId) ? "workspace.unpin" : "workspace.pin" },',
-	'\t\t\t\t\trun: () => {',
-	'\t\t\t\t\t\tdshToggleWorkspacePin(workspaceId);',
-	'\t\t\t\t\t}',
-	'\t\t\t\t}],',
-	'\t\t\t}), "workspace: pin menu action");',
+	'// dsh-desktop patch (workspace pin): 置顶/取消置顶（仅工作区分组行）。',
+	'ctx.effect(()=>ctx.contextMenus.register({id:`workspace.pinToggle`,target:`workspace`,order:200,resolve:({workspaceId})=>[{id:dshWorkspacePinState(workspaceId)?`unpin`:`pin`,label:ctx.locale.bind(NS)(dshWorkspacePinState(workspaceId)?`workspace.unpin`:`workspace.pin`),icon:{key:dshWorkspacePinState(workspaceId)?`workspace.unpin`:`workspace.pin`},run:()=>{dshToggleWorkspacePin(workspaceId)}}]}),`workspace: pin menu action`);',
 ].join('\n');
 
 // 1e. folder 图标：置顶时着主题色（与 folderActive 同色系；active 另有行背景）。
-const UI_FOLDER_ANCHOR = "\t\t\t\t\t(0, react_jsx_runtime.jsx)(\"span\", {\n\t\t\t\t\t\tclassName: clsx(Rows_module_css_default.slot, Rows_module_css_default.folder, active && Rows_module_css_default.folderActive),\n\t\t\t\t\t\tchildren: row.expanded ? (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderOpenRegular, {}) : (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderCloseRegular, {})";
-const UI_FOLDER_INSERT = "\t\t\t\t\t(0, react_jsx_runtime.jsx)(\"span\", {\n\t\t\t\t\t\tclassName: clsx(Rows_module_css_default.slot, Rows_module_css_default.folder, active && Rows_module_css_default.folderActive),\n\t\t\t\t\t\tstyle: dshPinned ? { color: \"var(--dsw-alias-state-business-primary)\" } : void 0,\n\t\t\t\t\t\tchildren: row.expanded ? (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderOpenRegular, {}) : (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderCloseRegular, {})";
+// 0.2.2-rc.2 压缩形：jsx 调用的 props 对象压成一行、`children:` 紧跟其后，
+// 故锚只取 `className`+`children` 两段（到 CloseRegular 收尾为止），全文件唯一。
+const UI_FOLDER_ANCHOR = "{className:clsx(Rows_module_css_default.slot,Rows_module_css_default.folder,active&&Rows_module_css_default.folderActive),children:row.expanded?(0,react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderOpenRegular,{}):(0,react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderCloseRegular,{})}";
+const UI_FOLDER_INSERT = "{className:clsx(Rows_module_css_default.slot,Rows_module_css_default.folder,active&&Rows_module_css_default.folderActive),style:dshPinned?{color:\"var(--dsw-alias-state-business-primary)\"}:void 0,children:row.expanded?(0,react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderOpenRegular,{}):(0,react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderCloseRegular,{})}";
 
 // 1f. 标题前置顶小圆点（inline style，零 CSS 注入；title 是 ellipsis 行内容器）。
+// 0.2.2-rc.2 压缩形：项目标题 span 从 jsx 换成 jsxs 以便 children 变数组。
 const UI_TITLE_ANCHOR = [
-	'					(0, react_jsx_runtime.jsx)("span", {',
-	'						className: Rows_module_css_default.projectText,',
-	'						children: (0, react_jsx_runtime.jsx)("span", {',
-	'							className: Rows_module_css_default.title,',
-	'							children: label',
-	'						})',
-	'					}),',
+	'{className:Rows_module_css_default.projectText,children:(0,react_jsx_runtime.jsx)(`span`,{className:Rows_module_css_default.title,children:label})}',
 ].join('\n');
 const UI_TITLE_INSERT = [
-	'					(0, react_jsx_runtime.jsxs)("span", {',
-	'						className: Rows_module_css_default.projectText,',
-	'						children: [(0, react_jsx_runtime.jsxs)("span", {',
-	'							className: Rows_module_css_default.title,',
-	'							children: [dshPinned && (0, react_jsx_runtime.jsx)("span", {',
-	'								// dsh-desktop patch (workspace pin): 置顶标记（主题色小圆点）。',
-	'								style: { flex: "none", display: "inline-block", width: "5px", height: "5px", borderRadius: "50%", background: "var(--dsw-alias-state-business-primary)", margin: "0 4px 0 0", verticalAlign: "middle" },',
-	'								"aria-hidden": true',
-	'							}), label]',
-	'						})]',
-	'					}),',
+	'{className:Rows_module_css_default.projectText,children:(0,react_jsx_runtime.jsxs)(`span`,{className:Rows_module_css_default.title,children:[dshPinned&&(0,react_jsx_runtime.jsx)(`span`,{',
+	'// dsh-desktop patch (workspace pin): 置顶标记（主题色小圆点）。',
+	'style:{flex:\"none\",display:\"inline-block\",width:\"5px\",height:\"5px\",borderRadius:\"50%\",background:\"var(--dsw-alias-state-business-primary)\",margin:\"0 4px 0 0\",verticalAlign:\"middle\"},',
+	'\"aria-hidden\":true}),label]})}',
 ].join('\n');
 
-// 2a. deriveGroups 尾：分组产出经置顶重排。0.1.6 重锚：尾部注释改为
-// "Keep navigation presentation..."（原 "Derive the flat session list" 已被上游删除）。
+// 2a. deriveGroups 尾：分组产出经置顶重排。
+// 0.2.2-rc.2 重锚：注释在压缩产物里被剥掉，`return groups}` 在 bundle 里出现两次
+// （groupByWorkspace 与 deriveGroups），故锚连同紧随其后的下一个函数声明一起取，
+// 保证只命中 deriveGroups（SessionTree 的 groups 数据源）。
 const UI_SORT_ANCHOR = [
-	'			return groups;',
-	'		}',
-	'		/** Keep navigation presentation independent from domain-owned interaction objects. */',
+	'return groups}function sessionMemberIds(',
 ].join('\n');
 const UI_SORT_INSERT = [
-	'			// dsh-desktop patch (workspace pin): 置顶分组压顶（pinMillis 降序），其余保原序。',
-	'			return dshApplyWorkspacePins(groups);',
-	'		}',
-	'		/** Keep navigation presentation independent from domain-owned interaction objects. */',
+	'// dsh-desktop patch (workspace pin): 置顶分组压顶（pinMillis 降序），其余保原序。',
+	'return dshApplyWorkspacePins(groups)}function sessionMemberIds(',
 ].join('\n');
 
 // 2b. SessionTree：版本号进作用域。
@@ -213,33 +190,35 @@ const UI_SORT_INSERT = [
 // ——SessionTree 引用了未声明的 dshWsPinVersion，首渲染即
 // `ReferenceError: dshWsPinVersion is not defined` → sidebar.workspaces 槽位
 // 条目崩溃退位 → 左侧会话栏整体空白（用户实报「左边对话栏不显示」）。
-// 现锚在 SessionTree 自身的 expandedGroups useMemo（rc.2 里它按 parents/
-// workspaces 求祖先键，整块在全文件唯一命中），且紧邻 groups useMemo ——声明先于使用。
-// rc.2 再重锚：该 memo 已从单行三元式变成多行 useMemo，锚必须整块匹配。
-const UI_TREE_ANCHOR = "\t\t\tconst expandedGroups = (0, react.useMemo)(() => {\n\t\t\t\tconst ancestorKeys = new Set(parents.values());\n\t\t\t\treturn [...workspaces.map((workspace) => workspace.workspaceId), \"\"].filter((key) => groupExpansion[key] ?? ancestorKeys.has(key));\n\t\t\t}, [\n\t\t\t\tgroupExpansion,\n\t\t\t\tparents,\n\t\t\t\tworkspaces\n\t\t\t]);";
-const UI_TREE_INSERT = "\t\t\tconst expandedGroups = (0, react.useMemo)(() => {\n\t\t\t\tconst ancestorKeys = new Set(parents.values());\n\t\t\t\treturn [...workspaces.map((workspace) => workspace.workspaceId), \"\"].filter((key) => groupExpansion[key] ?? ancestorKeys.has(key));\n\t\t\t}, [\n\t\t\t\tgroupExpansion,\n\t\t\t\tparents,\n\t\t\t\tworkspaces\n\t\t\t]);\n\t\t\t// dsh-desktop patch (workspace pin): 版本号进 groups useMemo deps，切置顶即时重排。\n\t\t\tconst dshWsPinVersion = dshUseWorkspacePinVersion();";
+// 现锚在 SessionTree 自身的 expandedGroups useMemo，且紧邻 groups useMemo ——
+// 声明先于使用。0.2.2-rc.2：整块压缩成一行，锚按压缩字节重录（含尾随 deps 数组）。
+const UI_TREE_ANCHOR = "const expandedGroups=(0,react.useMemo)(()=>{const ancestorKeys=new Set(parents.values());return[...workspaces.map(workspace=>workspace.workspaceId),``].filter(key=>groupExpansion[key]??ancestorKeys.has(key))},[groupExpansion,parents,workspaces]);";
+const UI_TREE_INSERT = [
+	UI_TREE_ANCHOR,
+	'// dsh-desktop patch (workspace pin): 版本号进 groups useMemo deps，切置顶即时重排。',
+	'const dshWsPinVersion = dshUseWorkspacePinVersion();',
+].join('\n');
 
 // 2c. groups useMemo deps：追加版本号（唯一锚；否则置顶切换被 memo 缓存吞掉）。
-// 0.1.6 重锚：deps 集合变为 list/workspaces/archivedSessionIds/pendingInteractions/
-// expandedGroups/ungroupedSessionIds（deriveGroups 抽为独立函数，view 入参化）。
-const UI_DEPS_ANCHOR = "\t\t\t\tstatuses,\n\t\t\t\texpandedGroups,\n\t\t\t\tungroupedSessionIds\n\t\t\t]);";
-const UI_DEPS_INSERT = "\t\t\t\tstatuses,\n\t\t\t\texpandedGroups,\n\t\t\t\tungroupedSessionIds,\n\t\t\t\tdshWsPinVersion\n\t\t\t]);";
-
+// 0.2.2-rc.2：压缩后 deps 数组无空格结束（`statuses,expandedGroups,ungroupedSessionIds]);`），
+// 带 `]);` 收尾才与 deriveGroups 的入参对象区分开（全文件唯一）。
+const UI_DEPS_ANCHOR = "statuses,expandedGroups,ungroupedSessionIds]);";
+const UI_DEPS_INSERT = "statuses,expandedGroups,ungroupedSessionIds,\n\t\t\t\tdshWsPinVersion\n\t\t\t]);";
 // 3. 翻译：zh / en。rc.2 重锚：旧锚 `menu.openProjectDir` 是 open-project-dir
 //    补丁自己的产物（原生 0 命中），属于跨补丁链式依赖；现锚在原生
 //    "menu.unarchiveSession" 行，insert 保留锚（本补丁追加其后、open-project-dir
 //    插入其前），两补丁任意先后都能命中。
-const UI_ZH_ANCHOR = '			"menu.unarchiveSession": "取消归档",';
+const UI_ZH_ANCHOR = '"menu.unarchiveSession":`取消归档`,';
 const UI_ZH_INSERT = [
-	'			"menu.unarchiveSession": "取消归档",',
-	'			"workspace.pin": "置顶到列表顶部",',
-	'			"workspace.unpin": "取消置顶",',
+	'"menu.unarchiveSession":`取消归档`,',
+	'"workspace.pin":`置顶到列表顶部`,',
+	'"workspace.unpin":`取消置顶`,',
 ].join('\n');
-const UI_EN_ANCHOR = '			"menu.unarchiveSession": "Unarchive session",';
+const UI_EN_ANCHOR = '"menu.unarchiveSession":`Unarchive session`,';
 const UI_EN_INSERT = [
-	'			"menu.unarchiveSession": "Unarchive session",',
-	'			"workspace.pin": "Pin to top",',
-	'			"workspace.unpin": "Unpin",',
+	'"menu.unarchiveSession":`Unarchive session`,',
+	'"workspace.pin":`Pin to top`,',
+	'"workspace.unpin":`Unpin`,',
 ].join('\n');
 
 const UI_REPLACEMENTS = [
@@ -265,11 +244,14 @@ const UI_REPLACEMENTS = [
 // 崩溃退位 → 左侧会话栏空白。锚点漂移不再靠肉眼发现：这里在落盘前机器校验。
 // ---------------------------------------------------------------------------
 
-/** 取 index 处所在的最内层 `function NAME(` 的 NAME（bundle 里为两 tab 缩进的模块内函数）。 */
+/** 取 index 处所在的最内层 `function NAME(` 的 NAME。
+ *  0.2.2-rc.2：bundle 已压缩成整行，函数声明不再行首——旧版 `^[\t ]*` 行锚在这里
+ *  恒 0 命中（enclosingFunctionAt 返回 null → verifyVersionScope 判「无法定位所在函数」
+ *  → 整份补丁静默放弃），故去掉行锚（锚点/声明注入都自带换行，函数头语义不变）。 */
 function enclosingFunctionAt(src, index) {
 	if (index < 0) return null;
 	const before = src.slice(0, index);
-	const fns = [...before.matchAll(/^[\t ]*function ([A-Za-z0-9_$]+)\(/gm)];
+	const fns = [...before.matchAll(/function ([A-Za-z0-9_$]+)\(/g)];
 	return fns.length ? fns[fns.length - 1][1] : null;
 }
 

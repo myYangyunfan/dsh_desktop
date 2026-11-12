@@ -27,6 +27,7 @@ const {
   transformFlashFix,
   SHELL_DESC_MARKER, SHELL_DESC_SCHEMA_OLD, SHELL_DESC_SCHEMA_NEW,
   SHELL_DESC_SCHEMA_OPTIONAL, PW_REL, BASH_REL, transformShellDescriptionOptional,
+  SHELL_DESC_VALIDATE_OLD, SHELL_DESC_VALIDATE_OLD_RC2,
   RUNCODE_DESC_MARKER, RUNCODE_SCHEMA_OLD, RUNCODE_SCHEMA_OPTIONAL,
   RUNCODE_SCHEMA_OLD_NESTED, RUNCODE_SCHEMA_OPTIONAL_NESTED,
   ATTACH_MIME_MARKER, ATTACH_MIME_OLD, ATTACH_MIME_NEW, ATTACH_LOCAL_REL, transformAttachmentMimeTrust,
@@ -256,6 +257,27 @@ test('tool-compat: shell description 兜底变换（真 pristine 文件 + 幂等
   }
 });
 
+test('tool-compat: validate 两代错误形态都要认（rc.1 Error / rc.2 ToolArgsError）', () => {
+  // 0.2.2-rc.2 把 shell 的 validate 抛错由 `new Error("invalid description: …")` 换成
+  // `ToolArgsError(["invalid description: …"])`。只认一代就是「只中 schema 半边」的半补丁：
+  // required 被删了却没有缺省补齐，`args.description` 为 undefined 时 `.trim()` 直接 TypeError。
+  // 两形态都不许退场——新形态是当前内核，旧形态是本仓历史产物与相邻版本的地基。
+  const wrap = (validateLine) => 'function validatePwshArgs(args) {\n' + validateLine + '\n}\n';
+  for (const [label, line, noteRe] of [
+    ['rc.1 Error 形态', SHELL_DESC_VALIDATE_OLD, /validate 兜底/],
+    ['rc.2 ToolArgsError 形态', SHELL_DESC_VALIDATE_OLD_RC2, /validate 兜底/],
+  ]) {
+    const out = transformShellDescriptionOptional(wrap(line), 't.js');
+    assert.strictEqual(out.status, 'changed', label + ' 必须命中 validate 半边');
+    assert.match(out.note, noteRe, label);
+    assert.ok(out.src.includes('args.description = args.command.trim().split'), label + ' 必须写入缺省补齐');
+    assert.ok(!out.src.includes(line), label + ' 原抛错行必须被替换掉');
+    assert.deepStrictEqual(transformShellDescriptionOptional(out.src, 't.js'), { status: 'already' }, label + ' 二次应用应幂等');
+  }
+  // 反证：两形态都不在场的输入必须老实报 anchor-missing，而不是拿一条警告当 changed 交差。
+  assert.strictEqual(transformShellDescriptionOptional('export const x = 1;', 't.js').status, 'anchor-missing');
+});
+
 test('tool-compat: run_code（dsh-tool-executor-ptc）扁平+nested 两处 schema 与 validate 齐上且幂等', () => {
   // 0.2.2-rc.1 起 run_code 从 dsh-tools/lib/index.js 搬到独立包 dsh-tool-executor-ptc，
   // 且同一文件里有两处同名 description schema：3-tab 扁平块 + 4-tab nested 块
@@ -363,13 +385,16 @@ test('runtime-patches: keyed slot 兼容补丁产物可被 node --check 解析',
     { rel: SLOT_UNKEYED_COMPAT_PKG_REL, oldText: SLOT_UNKEYED_COMPAT_OLD, newText: SLOT_UNKEYED_COMPAT_NEW, transform: transformSlotUnkeyedCompat },
   ];
   for (const c of cases) {
-    const file = path.join(repoRoot, 'node_modules', '@deepseek-ai', c.rel);
-    // rc.8 起 dsh-client-ui-slots 并入前端 dist 产物（node_modules 不再落盘），
-    // 该文件缺失属正常布局：本用例依赖真实文件做语法回归，缺失时跳过该条
-    // （rc.8 布局下此补丁无目标，注册链路由 runner 侧 unkeyed 补丁覆盖）。
-    if (!fs.existsSync(file)) { t.skip(c.rel + ' 不存在（dsh rc.8+ 布局）'); continue; }
-    const src0 = fs.readFileSync(file, 'utf8');
-    const src = src0.includes(c.newText) ? src0.replace(c.newText, c.oldText) : src0;
+    // 0.2.2-rc.2 起这里的输入必须取 pristine 闭包真字节：dev node_modules 是「已打补丁树」，
+    // 而注入体的形态会随补丁实现演进（rc.2 这两条都从多行可读态改成了紧凑态/单行态），
+    // 原先的「把 NEW 逆还原成 OLD」在旧形态产物上恒不命中，src 原样带着 marker 进去，
+    // 于是 transform 正确返回 already、用例却断言 changed —— 红的是探针而不是判据。
+    // 起点用 pristine：既锁定「锚点命中 rc.2 真字节」，也让 node --check 验的是真产物。
+    const file = findPristineFile(c.rel);
+    if (!file) { t.skip('缺 pristine 闭包（先跑 node scripts/install-pristine-kernel.mjs）：' + c.rel); continue; }
+    const src = fs.readFileSync(file, 'utf8');
+    assert.ok(src.includes(c.oldText), c.rel + ' 锚点必须逐字命中 pristine 真字节');
+    assert.ok(!src.includes(c.newText), c.rel + ' pristine 不应已含注入体（否则下一条断言空转）');
     const out = c.transform(src, file);
     assert.strictEqual(out.status, 'changed', c.rel + ' 应可补丁');
     const checkFile = path.join(tmpdir(t), path.basename(file));
