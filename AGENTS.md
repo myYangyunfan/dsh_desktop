@@ -275,7 +275,7 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   ① **安装态**墙——`stage-plugin-gate.mjs` 按 `C:\Program Files\DSH Desktop\resources\dsh-desktop\`
   前缀 + 240 上限量 `assets/plugins`；② **构建期**墙——`makensis` 拿到的是 `tauri.conf.json`
   `bundle.resources` 的 from 串**未归一化**的字面量（`D:\a\dsh_desktop\dsh_desktop\dsh-tauri\src-tauri\src\app\..\..\..\pp\`
-  = 69 字符，2026-11-12 由 94 缩短），Windows MAX_PATH 260 直接生效，而**本机前缀只有 30 字符**（`D:\workspace\dsh\…`），
+  = 69 字符，2026-11-12 由 94 缩短；实测 CI 最长 246、余量 12），Windows MAX_PATH 260 直接生效，而**本机前缀只有 30 字符**（`D:\workspace\dsh\…`），
   短 39 个字符——同一条 payload 本机 `tauri build` 出包全绿、CI 的 Windows x64 与 ARM64 两个 job
   同点炸在 `installer.nsi:33251` `File: failed opening file`（实测 258 字符的邻居进得去、260 的进不去），
   而 `Publish Release` 不看构建结论照样成功 → **发出去的版本只有 Linux/macOS 资产**。
@@ -340,7 +340,7 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   `unit-patch-output-parsable`、`unit-workspace-anchor-cwd`、`unit-plugin-inject-services`、
   mac 设置写入根治的 `unit-appboot-singleton-patch`、右上角「文件资源管理器」双坏的
   `unit-better-sidebar-explorer-open`），
-  `npm test` = 2193 例 / **0 fail / 0 cancelled**；pass/skip 分界随本机材料与网络浮动（11-12「内核 0.2.2-rc.2 换代」批 **2229 例 / pass 2220 / skip 9 / fail 0**；
+  `npm test` = 2193 例 / **0 fail / 0 cancelled**；pass/skip 分界随本机材料与网络浮动（11-12「内核 0.2.2-rc.2 换代」批 **2238 例 / pass 2229 / skip 9 / fail 0**；
   Rust 同批：`dsh-tauri-app --lib` **236 passed / 0 failed / 1 ignored**、`bridge` **30 passed / 0 failed**），
   skip 都是环境缺料（pristine 缺 codex/pi-ai、openclaw 兄弟目录不在盘、本机无 dsh-pack 克隆、真实网络、
   `.tmp-kernel` 不可用、无特权建符号链接）——一律以现跑输出为准，**pass 与 fail 才是判据**。
