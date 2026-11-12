@@ -105,6 +105,22 @@ if (absent.length) {
 // 同一个 descriptions 目录里，rc.2 一口气新增了大量长名 DevTools 议题说明文本，
 // 逐个列名已不可维护（一次就有 91 个越线）。这些 .md 运行时按 URL 懒取、删掉不影响装载，
 // 所以这里做一条**有名有姓的目录级决定**：该目录下的 .md 整批不进包。
+
+// ---- ②c 整树剪除（2026-11-12，0.2.2-rc.2 新增 office-kit 触发）----
+// rc.2 新增的 @deepseek-ai/dsh-office-kit 把 LibreOffice 整套打进来，其中 `sources/` 是
+// 构建期输入（引擎源码 + *.patch），运行时用不到；它贡献了 27 个越线路径。program/ 下的
+// 才是运行时资源，不在本清单里。
+const NSIS_SOURCE_PRUNE_TREES_RUNTIME = [
+  "node_modules/@deepseek-ai/dsh-office-kit/node_modules/@deepseek-ai/libreoffice-kit-wasm/sources",
+  "node_modules/@deepseek-ai/dsh-office-kit/node_modules/@deepseek-ai/libreoffice-kit-win32-x64/sources",
+];
+for (const tree of NSIS_SOURCE_PRUNE_TREES_RUNTIME) {
+  const abs = path.join(payloadRoot, ...tree.split("/"));
+  if (!fs.existsSync(abs)) continue;
+  fs.rmSync(abs, { recursive: true, force: true });
+  pruned += 1;
+  console.log(`[nsis-gate] 整树剪除（构建期输入，运行时不用）：${tree}`);
+}
 const pruneDirAbs = path.join(payloadRoot, ...NSIS_SOURCE_PRUNE_DIR.split("/"));
 if (fs.existsSync(pruneDirAbs)) {
   let dirPruned = 0;
