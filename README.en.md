@@ -15,7 +15,7 @@ Install and go — no Node.js setup, no plugin hunting, no version-conflict arch
 > so installers stay small, startup is fast, and **a broken plugin or config never leaves you with a blank window**.
 > Full changelog: [release notes](https://github.com/myYangyunfan/dsh_desktop/releases/tag/v1.0.10).
 
-**Contents**: [Why](#-why-a-curated-plugin-bundle) · [Preview](#-app-preview) · [Get started](#-get-started) · [Bundled plugins](#-bundled-plugin-ecosystem) · [FAQ](#-faq) · [Community](#-community) · [Bounties](#-bounties) · [Sponsor](#-sponsor--support) · [Build](#-build-from-source) · [Releases](#-releases--maintenance)
+**Contents**: [Why](#-why-a-curated-plugin-bundle) · [Preview](#-app-preview) · [Get started](#-get-started) · [Bundled plugins](#-bundled-plugin-ecosystem) · [FAQ](#-faq) · [Community](#-community) · [Sponsor](#-sponsor--support) · [Build](#-build-from-source) · [Releases](#-releases--maintenance)
 
 ---
 
@@ -173,20 +173,6 @@ Since v1.0.0 the project no longer mirrors code or release assets to Gitee. Olde
 Questions, feedback, or just want to chat with other users? Join our QQ group (**926561802**):
 
 ![QQ Group](https://cdn.jsdelivr.net/gh/myYangyunfan/dsh_desktop@5c673d6/docs/qq-group-qr.png)
-
-## 🏆 Bounties
-
-**Sponsorship is "you feel like giving"; a bounty is "I'm buying your time"** — opposite directions, so they get their own sections.
-
-The project puts bounties on work that has **a clear boundary and can be verified on the spot**. Four rules, full version in [BOUNTIES.md](BOUNTIES.md):
-
-1. **One bounty = one issue.** Amount, scope, acceptance criteria and payment method live in that issue. No amount is promised anywhere else (including this README).
-2. **Claim before you code.** Reply "I'll take it" in the issue and say how you plan to do it, so two people don't collide.
-3. **Acceptance looks at three things**: tests that pass, behaviour reproducible on a real machine, and consistency with the repo's existing gates (this repo does not accept "it works on my machine"). Docs / translation work is judged on accuracy and readability.
-4. **Merge = payment, payment closes the issue.** Paid by the method in the issue once the PR lands on main. Not merged means not done; half-finished work is not paid, and the price is not renegotiated afterwards.
-
-See what's on offer: **[issues labelled `bounty` →](https://github.com/myYangyunfan/dsh_desktop/issues?q=is%3Aissue+label%3Abounty)**
-(an empty list means no bounty is open right now — start from [`good first issue`](https://github.com/myYangyunfan/dsh_desktop/issues?q=is%3Aissue+label%3A%22good+first+issue%22) instead).
 
 ## ☕ Sponsor & Support
 
