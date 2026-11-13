@@ -16,6 +16,8 @@
 
 [Gitee 镜像](https://gitee.com/my-yang-yunfan/dsh_desktop) · [![English](https://img.shields.io/badge/English-4D6BFE?style=for-the-badge&logo=translate)](README.en.md)
 
+> ☕ **赞助支持：[通过此专属链接注册 Infistar](https://www.infistar.cc/register?aff=JWJMT5RE&ref_source=link)** —— 通过该链接注册可支持本项目。这是**赞助/推广链接，不构成技术推荐**，是否使用请自行判断。
+
 > [!TIP]
 > 🧩 **推介：[dsh-hotplug-hub](https://github.com/ARFCON/dsh-hotplug-hub)** —— 我们推介的 dsh 启动管理器。
 
