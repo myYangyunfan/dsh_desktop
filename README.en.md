@@ -5,19 +5,17 @@
 Not just another DSH shell: we pick the plugins, fix compatibility, integrate them, and ship them in one installer.
 Install and go — no Node.js setup, no plugin hunting, no version-conflict archaeology.
 
-> [!IMPORTANT]
-> **v1.0.9 — the bundled kernel moves to 0.2.2-rc.1.** The official dsh runtime ships with **33 selected companion plugins**:
-> **DeepSeek-Bot** (main bot + long-lived bots + group chats), the Better Sidebar file workbench, Free Search,
-> the plugin shop, Prompt Optimizer, the conversation map, desktop notifications, the MCP toolbox, and more —
-> all working out of the box, with one place to inspect, toggle and update them under **Settings → Plugins → Built-in plugins**.
-> The shell is still Tauri 2 + a bundled Node runtime: smaller installers, faster startup, and **no blank screen even with broken plugins or configs**.
+[![Release](https://img.shields.io/github/v/release/myYangyunfan/dsh_desktop?color=4D6BFE&label=Release)](https://github.com/myYangyunfan/dsh_desktop/releases) [![Downloads](https://img.shields.io/github/downloads/myYangyunfan/dsh_desktop/total?color=4D6BFE)](https://github.com/myYangyunfan/dsh_desktop/releases) [![Stars](https://img.shields.io/github/stars/myYangyunfan/dsh_desktop?style=social)](https://github.com/myYangyunfan/dsh_desktop) [![Issues](https://img.shields.io/github/issues/myYangyunfan/dsh_desktop?color=4D6BFE)](https://github.com/myYangyunfan/dsh_desktop/issues) [![License](https://img.shields.io/badge/license-MIT-4D6BFE)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20%C2%B7%20macOS%2012%2B%20%C2%B7%20Linux-4D6BFE) [![Release CI](https://img.shields.io/github/actions/workflow/status/myYangyunfan/dsh_desktop/tauri-release.yml?color=4D6BFE&label=Release%20CI)](https://github.com/myYangyunfan/dsh_desktop/actions)
 
-[![Release](https://img.shields.io/github/v/release/myYangyunfan/dsh_desktop?color=4D6BFE&label=Release)](https://github.com/myYangyunfan/dsh_desktop/releases) [![Stars](https://img.shields.io/github/stars/myYangyunfan/dsh_desktop?style=social)](https://github.com/myYangyunfan/dsh_desktop) [![Forks](https://img.shields.io/github/forks/myYangyunfan/dsh_desktop?style=social)](https://github.com/myYangyunfan/dsh_desktop/fork) [![Downloads](https://img.shields.io/github/downloads/myYangyunfan/dsh_desktop/total?color=4D6BFE)](https://github.com/myYangyunfan/dsh_desktop/releases) [![Issues](https://img.shields.io/github/issues/myYangyunfan/dsh_desktop?color=4D6BFE)](https://github.com/myYangyunfan/dsh_desktop/issues) ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20%C2%B7%20macOS%2012%2B-4D6BFE) ![License](https://img.shields.io/badge/license-MIT-4D6BFE) [![Release CI](https://img.shields.io/github/actions/workflow/status/myYangyunfan/dsh_desktop/release.yml?color=4D6BFE&label=Release%20CI)](https://github.com/myYangyunfan/dsh_desktop/actions) [![Gitee Stars](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgitee.com%2Fapi%2Fv5%2Frepos%2Fmy-yang-yunfan%2Fdsh_desktop&query=%24.stargazers_count&label=Gitee%20Stars&color=4D6BFE)](https://gitee.com/my-yang-yunfan/dsh_desktop)
+[中文](README.md) · Latest **[v1.0.10](https://github.com/myYangyunfan/dsh_desktop/releases/latest)** (2026-11-12)
 
-[Gitee mirror](https://gitee.com/my-yang-yunfan/dsh_desktop) · [![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-4D6BFE?style=for-the-badge&logo=translate)](README.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
+> [!NOTE]
+> **v1.0.10 only swaps the bundled kernel**: `0.2.2-rc.1` → `0.2.2-rc.2`. No Rust shell or UI changes; the roster is still 33 plugins.
+> The installer ships the complete dsh runtime plus 33 curated companion plugins; the shell is Tauri 2 + a bundled Node runtime,
+> so installers stay small, startup is fast, and **a broken plugin or config never leaves you with a blank window**.
+> Full changelog: [release notes](https://github.com/myYangyunfan/dsh_desktop/releases/tag/v1.0.10).
 
-> [!TIP]
-> 🧩 **Recommended: [dsh-hotplug-hub](https://github.com/ARFCON/dsh-hotplug-hub)** — our recommended dsh launcher manager.
+**Contents**: [Why](#-why-a-curated-plugin-bundle) · [Preview](#-app-preview) · [Get started](#-get-started) · [Bundled plugins](#-bundled-plugin-ecosystem) · [FAQ](#-faq) · [Community](#-community) · [Bounties](#-bounties) · [Sponsor](#-sponsor--support) · [Build](#-build-from-source) · [Releases](#-releases--maintenance)
 
 ---
 
@@ -30,7 +28,6 @@ DSH Pack does that work for you: **curated, integrated, shipped in the box.**
 
 - **33 companion plugins, each one chosen** — we optimise for quality, not count. Every bundled plugin gets a host-compatibility check, a licence review and a real boot test; the roster and evidence live in [the inventory](dsh-desktop/docs/builtin-plugins-inventory.md).
 - **One installer, one complete experience** — Bot team and group chats (DeepSeek-Bot), the Better Sidebar file workbench, free multi-engine search (Free Search), the plugin shop, prompt optimisation, the conversation map, desktop notifications, the MCP / skills toolbox, balance and cost, session archiving, peak/off-peak price guard — all there after install.
-- **One place to manage them** — **Settings → Plugins → Built-in plugins** lists every bundled plugin with its version, an on/off switch and an update check. Update sources and exclusions come from one table, so the same plugin cannot show different states in different entry points.
 - **Traceable upstreams** — every bundled plugin records its source repository, version and licence. Third-party licences are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); compatibility verdicts and test evidence are in §5 of the inventory.
 
 ### Ready out of the box
@@ -38,21 +35,20 @@ DSH Pack does that work for you: **curated, integrated, shipped in the box.**
 - **Zero environment setup** — a standalone Node runtime and npm CLI are bundled; the target machine needs no Node.js or pnpm.
 - **Complete dsh, offline** — ships the official `@deepseek-ai/dsh` package and the full official plugin set; it starts without a network.
 - **Double-click to run** — reuses the last port, then loads a native window once the kernel is ready; installer and portable builds are both available.
-- **Client-level updates** — check and install from the ⋯ menu, with GitHub / Gitee failover and sha256 fail-closed verification; the kernel ships with the client, so there is no second update chain.
+- **Client-level updates** — check and install from the ⋯ menu, with GitHub / Gitee dual-source failover and sha256 fail-closed verification; the kernel ships with the client, so there is no second update chain.
 
 ### Desktop experience
 
 - **Tauri 2 native shell** — frameless dark glass, custom title bar, Win11 rounded corners; closing hides to the tray by default.
 - **File workbench** — Better Sidebar brings the explorer, editor, diff view and "open locally" into the right pane, with desktop-native collapse/expand and shortcuts.
-- **Bot team** — DeepSeek-Bot puts a main bot, long-lived bots and group chats in the same client: @ handoffs, shared group memory, a capability library and usage pages. It turns DSH into a long-running collaboration workspace.
+- **Bot team** — DeepSeek-Bot puts a main bot, long-lived bots and group chats in the same client: @ handoffs, shared group memory, a capability library and usage pages.
 - **Notifications and balance** — dsh-notify handles turn-complete / approval / error notifications and click-to-session; the composer footer shows real-time "this turn cost · balance".
 
 ### Engineering resilience
 
-- **Guardian waterfall** — the kernel boot chain self-heals level by level: broken plugins auto-repair, corrupt configs rebuild, crash loops restart in place. No incompatible state ever exits the app.
+- **Guardian waterfall** — the kernel boot chain self-heals level by level: broken plugins auto-repair, corrupt configs rebuild, crash loops restart in place.
 - **Crash self-healing** — renderer freezes are detected by heartbeat and reloaded; the supervisor probes the kernel and relaunches with backoff.
-- **History compatibility** — the session event vocabulary is patched automatically, so third-party plugin events never break history.
-- **Your data stays** — over-the-top upgrades keep the profile and sessions; plugin toggles only edit the patch, never user data.
+- **Your data stays** — over-the-top upgrades keep the profile and sessions; plugin toggles only edit the patch layer, never user data.
 
 ## 📸 App Preview
 
@@ -64,7 +60,7 @@ DSH Pack does that work for you: **curated, integrated, shipped in the box.**
 | --- | --- | --- |
 | Startup | Manual Node.js install & CLI | Double-click, bundled runtime |
 | Surface | Browser tab | Native window · frameless dark glass |
-| Plugins | Find, install and reconcile each one yourself | **34 curated plugins in the box**, with one place to inspect / toggle / update |
+| Plugins | Find, install and reconcile each one yourself | **33 curated plugins in the box**, with one place to inspect / toggle / update |
 | Sessions | Archive only | Archive / restore / delete + conversation map |
 | Balance | None | Live "this turn cost · balance" + OpenCode Go |
 | Desktop | None | Tray / native notifications / file workbench / Bot group chats |
@@ -72,89 +68,47 @@ DSH Pack does that work for you: **curated, integrated, shipped in the box.**
 
 ## 🚀 Get Started
 
-**Requirements**: Windows 10 / 11 (x64); macOS 12+ (Apple Silicon / Intel). No Node.js needed.
+**Requirements**: Windows 10 / 11, macOS 12+ (Apple Silicon), Linux x64.
+The installer and the portable **Full** build both ship a Node runtime — no Node.js needed on the target machine.
 
-### Download and install
+Grab the latest build from [GitHub Releases](https://github.com/myYangyunfan/dsh_desktop/releases/latest) (`<version>` below is the release number, currently `1.0.10`):
 
-Get the latest **1.0.9** build from [GitHub Releases](https://github.com/myYangyunfan/dsh_desktop/releases/latest):
-
-| Platform | Installer |
-| --- | --- |
-| 💻 Windows x64 | `DSH-Desktop-Setup-1.0.9-win-x64.exe` (NSIS, ~187 MB, per-user install, WebView2 bootstrapper included) |
-| 🍎 macOS 12+ | `1.0.9-macos-arm64.dmg` (see the Releases page) |
-| 🐧 Linux x64 | `1.0.9-linux-x64.AppImage` / `dsh-desktop_1.0.9_amd64.deb` (see the Releases page) |
-
-- **Upgrade in place**: the installer finds the old directory, keeps your data and reinstalls to the same location; profiles, sessions and plugin settings are preserved.
-- **Portable build**: Windows also ships `DSH-Desktop-Portable-1.0.9-win-x64.zip`; unzip and run, with data stored in a `data\` folder next to the executable.
-- **First launch**: the 34 curated plugins are synced from the bundled `assets/plugins` into the profile. Afterwards, inspect, toggle and update them under **Settings → Plugins → Built-in plugins**.
-- **Data locations**: Windows installer `%APPDATA%\DSH Desktop\`, portable build `data\` next to the executable; macOS `~/Library/Application Support/DSH Desktop/`. Set `DSH_HOME` to override the dsh config directory.
-
-> Since v1.0.0 the project no longer mirrors code or release assets to Gitee; older Gitee releases remain as an archive only.
-
-## 💬 Community
-
-Questions, feedback, or just want to chat with other users? Join our QQ group (**926561802**):
-
-![QQ Group](https://cdn.jsdelivr.net/gh/myYangyunfan/dsh_desktop@5c673d6/docs/qq-group-qr.png)
-
-## 🛠 Build from Source
-
-Prerequisites: [Rust toolchain](https://rustup.rs/) and `npm install` in `dsh-desktop/` (the kernel payload source).
-
-```bash
-# Tests (current baseline: Rust 607 / sidecar 21 / Node 2253)
-cd dsh-tauri
-cargo test --workspace
-node --test sidecar/cli.test.js
-cd ../dsh-desktop && npm test
-
-# Dev run
-cd dsh-tauri/src-tauri/src/app && cargo run
-
-# Package the win-x64 NSIS installer + installed-layout smoke test
-bash dsh-tauri/scripts/stage-payload.sh
-cd dsh-tauri && npx --yes @tauri-apps/cli build \
-  --config src-tauri/src/app/tauri.conf.json --target x86_64-pc-windows-msvc
-bash dsh-tauri/scripts/smoke-installed.sh
-```
-
-The full flow (including `DSH_TAURI_DIAG` / `DSH_TAURI_DEVTOOLS`) is in the [development guide](dsh-tauri/docs/development.md).
-
-## 🤖 Releases
-
-The only release entry point is pushing a `v*` tag → [`tauri-release.yml`](.github/workflows/tauri-release.yml):
-three-platform builds (Windows NSIS / portable, Linux AppImage / deb, macOS dmg) → version / test / path gates →
-seven verified assets → GitHub Release. The version is kept in sync in three places
-(`dsh-desktop/package.json`, `Cargo.toml` workspace.package.version, `tauri.conf.json`); a mismatch fails fast.
-
-Prereleases do **not** enter GitHub `releases/latest`, which is what the shell updater polls — so prereleases are
-never auto-pushed to stable users by design. See the [release runbook](.github/RELEASE_RUNBOOK.md) for promotion and rollback.
-
-### 📦 Installer formats
-
-| Platform | Artifact | Status |
+| Platform | Artifact | Notes |
 | --- | --- | --- |
-| Windows x64 | **NSIS installer** `DSH-Desktop-Setup-<version>-win-x64.exe` (LZMA, ~187 MB measured on 1.0.7; per-user install, no admin; WebView2 bootstrapper embedded for offline machines) | ✅ Primary platform; 1.0.7 built and passed the installed-layout smoke test |
-| Windows x64 portable | `DSH-Desktop-Portable-<version>-win-x64.zip` (unzip and run; data lives in `data\` next to the executable) | ✅ Built by CI |
-| Windows arm64 | NSIS installer (experimental) | 🧪 Experimental CI lane |
-| Linux x64 | `.AppImage` / `.deb` | ✅ Built by CI |
-| macOS (Apple Silicon) | `.dmg` disk image | ✅ Built by CI (unsigned; first launch needs right-click → Open) |
+| 💻 **Windows x64** | `DSH-Desktop-Setup-<version>-win-x64.exe` | **Recommended.** NSIS, per-user install with no admin rights, WebView2 bootstrapper embedded for offline machines · ~306 MB |
+| 🎒 Windows x64 portable | `DSH-Desktop-Portable-<version>-win-x64.zip` | Unzip and run, data in `data\` next to the executable, Node included · ~571 MB |
+| 🪶 Windows x64 portable Lite | `DSH-Desktop-Portable-<version>-win-x64-lite.zip` | Same, but **without** the bundled Node — needs Node ≥ 22 on the machine; ~33 MB smaller |
+| 🍎 **macOS 12+** | `DSH-Desktop-<version>-macos-arm64.dmg` | Ad-hoc signed, not notarised; first launch needs right-click → Open (see [FAQ](#-faq)) · ~542 MB |
+| 🐧 Linux x64 | `DSH-Desktop-<version>-linux-x64.AppImage` / `dsh-desktop_<version>_amd64.deb` | · ~416 / 462 MB |
+| 🧪 Windows arm64 | `DSH-Desktop-Setup-<version>-win-arm64.exe` | Experimental lane; works, but not guaranteed |
+
+Every artifact has a matching `.sha256` sidecar file — verify it before running if you care about tampering.
+
+### Installer or portable?
+
+- **Installer** (`Setup`) — recommended. Installs into `%LOCALAPPDATA%`, adds Start-menu and uninstall entries, and reinstalls to the same directory on upgrade.
+- **Portable** (`Portable`) — unzip and run, no registry writes; good for USB sticks and temporary machines.
+- **Lite** only drops the bundled Node; everything else is identical. Pick it if the machine already has Node ≥ 22, otherwise you get "no usable Node.js found".
+
+### First launch
+
+1. The shell runs the boot chain: repair → sync bundled plugins → apply patches → kernel preflight → spawn kernel.
+2. Once the kernel is ready the client loads; the 33 curated plugins are mirrored from the bundled `assets/plugins` into the profile.
+3. Afterwards inspect versions, toggle and check for updates under **Settings → Plugins → Built-in plugins**.
+
+### Data locations
+
+| Build | Location |
+| --- | --- |
+| Windows installer | `%APPDATA%\DSH Desktop\` |
+| Windows portable | `data\` next to the executable |
+| macOS | `~/Library/Application Support/DSH Pack/` |
+
+Set `DSH_HOME` to override the dsh config directory. **Upgrades and over-the-top installs never touch this data.**
 
 ## 🧩 Bundled Plugin Ecosystem
 
-**33 companion plugins are registered in total.** Under the v1.0.0 bundled line (user decision, 2026-10-08) their sources ship **inside the installer**: the delivery gate mirrors `assets/plugins` as a whole, and the first boot syncs it into the profile, so everything below works out of the box (on 2026-10-22 the side session `side-session` was removed and DeepSeek-Bot (`bot`) was added; on 2026-11-08 `quest-ui` / `auto-compact` / `zcode-migrate` were removed and on 2026-11-09 `dsh-context` / `ds-harness-remote` were added, bringing the roster to 33; see §4 of [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the delivery gates and the full third-party list). The table below follows the registration order of `scripts/lib/companion-plugins.js`; package names and versions are read from each plugin's `package.json`. The "Source / license" column only reports what each package says about itself — per-plugin upstream reachability and licence text are audited in [the inventory](dsh-desktop/docs/builtin-plugins-inventory.md) §3, and the `0.2.2-rc.1` host compatibility verdicts in §5.
-
-> [!NOTE]
-> **Trimmed in v1.0.0: bundled plugins went from 39 down to 28** (the 11 were named for removal by a user on 2026-10-07).
-> No longer bundled: the visual plugin marketplace (`dsh-community-market`) and its desktop service bridge
-> (`dsh-market-desktop-bridge`), the plugin hub (`dsh-hub`), knowledge-graph memory (`graph-memory`), the knowledge
-> centre (`dsh-cardian`), the desktop pet (`harness-pet`), built-in image understanding via a VLM restatement
-> (`dsh-vision`), drag-in files (`dsh-file-drop`), paste-image-to-send (`dsh-image-paste`), the in-session terminal
-> tab (`@deepseek-ai/dsh-terminal-tab`) and one-click file-change revert (`@deepseek-ai/dsh-client-file-changes`).
-> The last two overlap the kernel's own official packages of the same/similar name, and their mirrored copies under
-> `profiles/web/node_modules` shadow the official ones — hence the recall.
-> Similar capabilities still ship: phone mirroring = `dsh-pocket`, file-change tracking = `dsh-file-changes`
-> (only its revert half depended on the shell-side `file_revert`, which is also gone).
+**33 companion plugins are registered in total.** Under the v1.0.0 bundled line (user decision, 2026-10-08) their sources ship **inside the installer**: the delivery gate mirrors `assets/plugins` as a whole, and the first boot syncs it into the profile, so everything below works out of the box. The table follows the registration order of `scripts/lib/companion-plugins.js`; package names and versions are read from each plugin's `package.json`. The "Source / license" column only reports what each package says about itself — per-plugin upstream reachability and licence text are audited in [the inventory](dsh-desktop/docs/builtin-plugins-inventory.md) §3, and the `0.2.2-rc.2` host compatibility verdicts in §5.
 
 | Plugin (package) | Version | Description | Source / license |
 | --- | --- | --- | --- |
@@ -192,43 +146,113 @@ never auto-pushed to stable users by design. See the [release runbook](.github/R
 | `dsh-context` | 0.83.0 | Context insight: a right-pane context dashboard plus the `/context` command, breaking down what the current context is made of and how it evolves turn by turn | [bowenliang123/dsh-context](https://github.com/bowenliang123/dsh-context) · Apache-2.0 |
 | `ds-harness-remote` | 0.6.4 | End-to-end encrypted remote access: control this DSH from desktop / web / Android, with dsh-TUI Host support (inner dependency tree ships in the installer; WebRTC uses pure-JS werift) | [liguobao/ds-harness-remote](https://github.com/liguobao/ds-harness-remote) · MIT |
 
-> Earlier removals, also outside the 33 registered plugins: `dsh-navbar` (navbar replacement,
-> dropped from the list and its sources deleted in `v0.6.3-beta.3`, commit `ff421ac2`),
-> `zat-dsh-engine` (the previous built-in marketplace, retired even earlier) and
-> `dsh-reasoning-effort` (reasoning-effort selector, retired 2026-10-17 with the 0.2.1 kernel
-> generation — the official Settings page can now declare a custom model's effort levels itself).
->
-> **2026-11-08: three plugins removed at the user's request (34 → 31)** —
-> `@deepseek-ai/dsh-quest-ui` (Quest-mode UI), `dsh-auto-compact` (auto-sends `/compact` once
-> contextPressure crosses a threshold) and `dsh-zcode-migrate` (zcode history → native dsh session
-> logs, which also contributed the `zcode_inspect` / `zcode_migrate` / `zcode_verify` tools and the
-> `/zcode` command). Their sources are gone from `assets/plugins/`; existing installs get their
-> cordis.patch rows and profile mirrors reclaimed on next launch via `RETIRED_COMPANIONS` in
-> `scripts/lib/companion-plugins.js`.
->
-> **2026-11-09: two plugins added at the user's request (31 → 33)** — `dsh-context`
-> (context insight) and `ds-harness-remote` (end-to-end encrypted remote access).
->
-> **Same day, one update round: eight plugins moved to npm latest** — `dsh-plugin-shop` 0.9.3,
-> `dsh-toolbox-ui` 1.10.1, `dsh-context` 0.83.0, `billion-context-dsh` 0.2.27, `dsh-free-search` 0.9.39,
-> `dsh-pocket` 2.12.0, `dsh-easyrewrite` 3.0.1, `ds-harness-remote` 0.6.4. Only "same identity and higher
-> upstream" qualifies; `better-sidebar` (locally rebuilt), `ds-bot` (vendored patch) and three name
-> collisions stay put — see `dsh-desktop/docs/builtin-plugins-inventory.md` §4.4.
->
-> **2026-11-09: the context-compression plugin was replaced wholesale** (still 33 entries) —
-> `billion-context-dsh` 0.2.27 (upstream stopped maintaining it) gives way to the unified upstream
-> `billion-context` 0.1.213. The old one only mounted its engine on the host plane and disabled the
-> host-plane `compaction-basic`; on 0.2.x the backend lives inside agent presets behind
-> `isolate: compaction`, so enabling it added four model tools while automatic compaction kept using
-> the preset-local `basic`. The new one ships a `bili-compaction-gate` plus four `preset-*` injects,
-> which is what actually takes over. Trimmed to the DSH half: 13 files / 8.99MB (upstream tarball is
-> 45 files / 48MB). See inventory §4.6.
-> Both are vendored upstream packages; the latter ships its own `node_modules` tree
-> (`shipsNodeModules`).
+**Roster history** (per-plugin reasons for every add / removal, upstream reachability and licence text) lives in [the inventory](dsh-desktop/docs/builtin-plugins-inventory.md). One-line summary: 39 → 28 in v1.0.0; three removed on 2026-11-08 (`quest-ui` / `auto-compact` / `zcode-migrate`); two added on 2026-11-09 (`dsh-context` / `ds-harness-remote`) along with eight version bumps; and the context-compression plugin was replaced the same day by the unified upstream `billion-context`. Removed plugins have their sources deleted from `assets/plugins/`; existing installs get their patch rows and profile mirrors reclaimed by `RETIRED_COMPANIONS` on next launch.
 
-## 🏗 Architecture
+## ❓ FAQ
 
-**From v0.5.0 the app runs on the Tauri 2 (Rust) architecture** — the Electron shell has been retired; its full set of responsibilities (windows / IPC / updates / packaging) is re-implemented crate by crate on the Rust side, contract-first (`dsh-tauri/contracts/` — five hard contracts are the single source of truth for interfaces):
+**App won't start, or stuck on the loading page?**
+The shell has a recovery page: "Restart in safe mode" disables every bundled plugin (except `dsh-builtin-manager` and the compression gate) and boots again — re-enable them one by one to find the culprit. Logs are in `%APPDATA%\DSH Desktop\logs\desktop.log` (the matching data directory on macOS).
+
+**macOS says "is damaged and can't be opened"?**
+That is Gatekeeper blocking an unnotarised build, not a corrupt download. Either right-click the app → Open → Open, or run `sudo xattr -cr "/Applications/DSH Pack.app"`, or use System Settings → Privacy & Security → "Open Anyway". Repeat after every over-the-top install.
+
+**Do I need Node.js installed?**
+No for the installer and the portable **Full** build (a standalone Node runtime and npm CLI are bundled). Only the portable **Lite** build needs Node ≥ 22 on the machine.
+
+**Will an over-the-top install lose my data?**
+No. The installer finds the old directory, reinstalls in place and keeps the profile, sessions and plugin settings.
+
+**Why is there no update prompt?**
+The updater polls `releases/latest`, and only stable releases land there. Prereleases deliberately never reach stable users; switch to the dev channel under Settings → Update channel to try them.
+
+**Is Gitee out of date?**
+Since v1.0.0 the project no longer mirrors code or release assets to Gitee. Older Gitee releases are an archive only — GitHub Releases is the source of truth.
+
+## 💬 Community
+
+Questions, feedback, or just want to chat with other users? Join our QQ group (**926561802**):
+
+![QQ Group](https://cdn.jsdelivr.net/gh/myYangyunfan/dsh_desktop@5c673d6/docs/qq-group-qr.png)
+
+## 🏆 Bounties
+
+**Sponsorship is "you feel like giving"; a bounty is "I'm buying your time"** — opposite directions, so they get their own sections.
+
+The project puts bounties on work that has **a clear boundary and can be verified on the spot**. Four rules, full version in [BOUNTIES.md](BOUNTIES.md):
+
+1. **One bounty = one issue.** Amount, scope, acceptance criteria and payment method live in that issue. No amount is promised anywhere else (including this README).
+2. **Claim before you code.** Reply "I'll take it" in the issue and say how you plan to do it, so two people don't collide.
+3. **Acceptance looks at three things**: tests that pass, behaviour reproducible on a real machine, and consistency with the repo's existing gates (this repo does not accept "it works on my machine"). Docs / translation work is judged on accuracy and readability.
+4. **Merge = payment, payment closes the issue.** Paid by the method in the issue once the PR lands on main. Not merged means not done; half-finished work is not paid, and the price is not renegotiated afterwards.
+
+See what's on offer: **[issues labelled `bounty` →](https://github.com/myYangyunfan/dsh_desktop/issues?q=is%3Aissue+label%3Abounty)**
+(an empty list means no bounty is open right now — start from [`good first issue`](https://github.com/myYangyunfan/dsh_desktop/issues?q=is%3Aissue+label%3A%22good+first+issue%22) instead).
+
+## ☕ Sponsor & Support
+
+<p align="center">
+  <a href="https://www.infistar.cc/register?aff=JWJMT5RE&ref_source=link">
+    <img alt="Sponsor · Infistar referral link" src="https://img.shields.io/static/v1?label=SPONSOR&message=Infistar&color=4D6BFE&style=for-the-badge&labelColor=1F2430" />
+  </a>
+</p>
+
+DSH Pack is free, MIT-licensed and has no feature walls. There are four ways to support it — the first one costs money
+(and is the only one that brings the project any income), the other three cost nothing at all.
+
+| Way | How | Notes |
+| :--: | :--: | --- |
+| ☕ **Referral link** | **[Sign up for Infistar →](https://www.infistar.cc/register?aff=JWJMT5RE&ref_source=link)** (referral link, same price) | I get a small commission · **not a technical recommendation** |
+| ⭐ **Star** | [Star the repo](https://github.com/myYangyunfan/dsh_desktop) | Free and the most useful — it also gets the project seen |
+| 🐛 **Feedback** | [Open an issue](https://github.com/myYangyunfan/dsh_desktop/issues) | Bug reports, feature requests, UX notes — all read |
+| 🔁 **Share** | Tell someone who needs it | More effective than any promotion |
+
+> [!IMPORTANT]
+> **About that link**: it is a **sponsorship / referral link**. The project makes **no technical recommendation, compatibility claim
+> or endorsement of Infistar**, and the repository has no technical dependency on that service. Whether you use it changes nothing about
+> DSH Pack's features, update priority or support — using it, or signing up directly on the vendor's site, is treated exactly the same here.
+> Account and payment terms are governed by the provider. It will never appear behind GitHub's Sponsor button either:
+> GitHub does not allow funding links to be used for promotion or advertising.
+
+## 🛠 Build from Source
+
+Prerequisites: [Rust toolchain](https://rustup.rs/) and `npm ci` in `dsh-desktop/` (the kernel payload source; postinstall installs the kernel and applies patches).
+
+```bash
+# Tests (current baseline: Rust 607 / sidecar 21 / Node 2253)
+cd dsh-desktop && npm test
+cd ../dsh-tauri && cargo test --workspace && node --test sidecar/cli.test.js
+
+# Dev run
+cd dsh-tauri/src-tauri/src/app && cargo run
+
+# Package the win-x64 NSIS installer + installed-layout smoke test
+bash dsh-tauri/scripts/stage-payload.sh
+cd dsh-tauri && npx --yes @tauri-apps/cli build \
+  --config src-tauri/src/app/tauri.conf.json --target x86_64-pc-windows-msvc
+bash dsh-tauri/scripts/smoke-installed.sh
+```
+
+The full flow, debug switches and the patch system are in the [development guide](dsh-tauri/docs/development.md);
+read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing. Code, docs and commit messages are in Chinese.
+
+## 📦 Releases & Maintenance
+
+> This section is for maintainers; regular users can skip it.
+
+### Release
+
+The only release entry point is pushing a `v*` tag → [`tauri-release.yml`](.github/workflows/tauri-release.yml):
+three-platform builds (Windows NSIS / portable, Linux AppImage / deb, macOS dmg) → version / test / path gates →
+seven verified assets → GitHub Release. The version is kept in sync in three places
+(`dsh-desktop/package.json`, `Cargo.toml` workspace.package.version, `tauri.conf.json`); a mismatch fails fast.
+Release notes come from `.github/release-notes/v<version>.md` — write that file before tagging.
+
+Prereleases do **not** enter GitHub `releases/latest`, which is what the shell updater polls — so prereleases are
+never auto-pushed to stable users by design. See the [release runbook](.github/RELEASE_RUNBOOK.md) for promotion and rollback.
+
+### Architecture
+
+**From v0.5.0 the app runs on the Tauri 2 (Rust) architecture** — the Electron shell has been retired; its full set of responsibilities (windows / IPC / updates / packaging) is re-implemented crate by crate on the Rust side, contract-first (`dsh-tauri/contracts/` — six hard contracts are the single source of truth for interfaces):
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -240,7 +264,7 @@ never auto-pushed to stable users by design. See the [release runbook](.github/R
 │                     single instance                      │
 │  · kernel-process    spawn spec / ready line / Job       │
 │                     Object tree-kill                     │
-│  · bridge            Electron IPC 43 channels → Tauri    │
+│  · bridge            Electron IPC 38 channels → Tauri    │
 │                     commands, full mapping + shim JS     │
 │                     (window.dshDesktop)                  │
 │  · fence / preview-server / session-watcher /            │
@@ -257,7 +281,13 @@ never auto-pushed to stable users by design. See the [release runbook](.github/R
             Native window loads Web UI (localhost only)
 ```
 
-Layering rules: crates never depend on the tauri runtime and are independently unit-tested (177 Rust tests green; plus 16 sidecar Node tests across 71 shared-script unit files); the assembly root only wires things up; kernel-side Node logic lives in `dsh-desktop/scripts/`. See the [development manual](dsh-tauri/docs/development.md).
+Layering rules: crates never depend on the tauri runtime and are independently unit-tested; the assembly root only wires things up; kernel-side Node logic lives in `dsh-desktop/scripts/`. See the [development manual](dsh-tauri/docs/development.md).
+
+### Agent presets
+
+**The v1.0.0 clean line ships no agent presets** — matching the official desktop client: the mode list only shows the kernel's factory set (`standard` / `ptc` / `minimal` / `cordis`), no custom persona is injected, and the client writes no preset files.
+
+To use your own, drop it into `<DSH_HOME>/.agent-presets/<id>/` and the kernel will pick it up (`agent.cordis.yml` + `preset.yml`); historical copies in existing user directories are left alone. Community/in-house presets that once shipped with the app came from third-party authors and have been removed wholesale — provenance and credits remain in git history (`git log --diff-filter=D -- dsh-desktop/assets/agent-presets`).
 
 ## 📄 License
 
@@ -265,4 +295,5 @@ MIT. Based on [@deepseek-ai/dsh](https://www.npmjs.com/package/@deepseek-ai/dsh)
 
 ---
 
-⭐ If DSH Pack is helpful to you, consider [starring the repo](https://github.com/myYangyunfan/dsh_desktop); for any issues or feedback, please [open an issue](https://github.com/myYangyunfan/dsh_desktop/issues).
+⭐ If DSH Pack is helpful to you, [starring the repo](https://github.com/myYangyunfan/dsh_desktop) is the most concrete support;
+for any issues or feedback, please [open an issue](https://github.com/myYangyunfan/dsh_desktop/issues).
