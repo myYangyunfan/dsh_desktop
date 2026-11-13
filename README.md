@@ -16,8 +16,6 @@
 
 [Gitee 镜像](https://gitee.com/my-yang-yunfan/dsh_desktop) · [![English](https://img.shields.io/badge/English-4D6BFE?style=for-the-badge&logo=translate)](README.en.md)
 
-> ☕ **赞助支持：[通过此专属链接注册 Infistar](https://www.infistar.cc/register?aff=JWJMT5RE&ref_source=link)** —— 通过该链接注册可支持本项目。这是**赞助/推广链接，不构成技术推荐**，是否使用请自行判断。
-
 > [!TIP]
 > 🧩 **推介：[dsh-hotplug-hub](https://github.com/ARFCON/dsh-hotplug-hub)** —— 我们推介的 dsh 启动管理器。
 
@@ -110,6 +108,28 @@ DSH Pack 把这件事做完：**精选，整合，随包交付。**
 遇到问题、想反馈建议或与其他用户交流？欢迎加入 QQ 交流群（群号 **926561802**）：
 
 ![QQ 交流群](https://cdn.jsdelivr.net/gh/myYangyunfan/dsh_desktop@5c673d6/docs/qq-group-qr.png)
+
+## ☕ 赞助支持
+
+<p align="center">
+  <a href="https://www.infistar.cc/register?aff=JWJMT5RE&ref_source=link">
+    <img alt="赞助支持 · Infistar 专属注册链接" src="https://img.shields.io/static/v1?label=%E8%B5%9E%E5%8A%A9%E6%94%AF%E6%8C%81&message=Infistar&color=4D6BFE&style=for-the-badge&labelColor=1F2430" />
+  </a>
+</p>
+
+DSH Pack 免费、MIT、没有功能墙。想顺手支持一下这个项目，下面四个入口都有效——第一个会顺带给我一点推广返佣，后三个一分钱不用花。
+
+| 方式 | 入口 | 说明 |
+| :--: | --- | --- |
+| ☕ **专属注册链接** | **[注册 Infistar →](https://www.infistar.cc/register?aff=JWJMT5RE&ref_source=link)** | 项目专属推广链接。通过它注册，我这边会得到一点返佣；你的花费不因此增加（注册与定价以服务方条款为准）。**不构成技术推荐** |
+| ⭐ **Star** | [给仓库点个 Star](https://github.com/myYangyunfan/dsh_desktop) | 零成本、最有用，也最容易被别人看见 |
+| 🐛 **反馈** | [提 Issue](https://github.com/myYangyunfan/dsh_desktop/issues) | 报 bug、要功能、讲体验，都会看 |
+| 🔁 **转发** | 转给确实需要它的人 | 比任何推广都有效 |
+
+> [!IMPORTANT]
+> **关于那条链接**：它是**赞助 / 推广链接**，本项目**不构成对 Infistar 的技术推荐、兼容性验证或背书**，仓库与该服务之间也没有任何技术依赖。
+> 用不用它，都不影响 DSH Pack 的功能、更新优先级和支持力度——不用它、或者直接去官网注册，本项目的态度完全一样。
+> 涉及账号与支付时，请以服务方条款为准。
 
 ## 🛠 从源码构建
 
