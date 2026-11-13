@@ -7,12 +7,14 @@
 
 [![Release](https://img.shields.io/github/v/release/myYangyunfan/dsh_desktop?color=4D6BFE&label=Release)](https://github.com/myYangyunfan/dsh_desktop/releases) [![Downloads](https://img.shields.io/github/downloads/myYangyunfan/dsh_desktop/total?color=4D6BFE)](https://github.com/myYangyunfan/dsh_desktop/releases) [![Stars](https://img.shields.io/github/stars/myYangyunfan/dsh_desktop?style=social)](https://github.com/myYangyunfan/dsh_desktop) [![Issues](https://img.shields.io/github/issues/myYangyunfan/dsh_desktop?color=4D6BFE)](https://github.com/myYangyunfan/dsh_desktop/issues) [![License](https://img.shields.io/badge/license-MIT-4D6BFE)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20%C2%B7%20macOS%2012%2B%20%C2%B7%20Linux-4D6BFE) [![Release CI](https://img.shields.io/github/actions/workflow/status/myYangyunfan/dsh_desktop/tauri-release.yml?color=4D6BFE&label=Release%20CI)](https://github.com/myYangyunfan/dsh_desktop/actions)
 
-[English](README.en.md) · 最新版 **[v1.0.10](https://github.com/myYangyunfan/dsh_desktop/releases/latest)**（2026-11-12）
+[English](README.en.md) · 最新版 **[v1.1.0](https://github.com/myYangyunfan/dsh_desktop/releases/latest)**（2026-11-13）
 
 > [!NOTE]
-> **v1.0.10 只换随包内核**：`0.2.2-rc.1` → `0.2.2-rc.2`，Rust 壳与界面零改动，在册插件仍是 33 条。
+> **v1.1.0 = 内核换代 `0.2.2-rc.2` → `0.2.2-rc.3` + 便携版补全内置 Node**：Rust 壳与界面零功能改动，
+> 在册插件仍是 33 条。顺带修掉 v1.0.10 的一个缺口——两个便携包当时逐字节相同（内置 `node.exe` 没进包），
+> 现在 **Full 自带 Node、Lite 真的更小**。
 > 随包交付完整 dsh 运行时 + 33 个精选伴随插件，架构是 Tauri 2 + 内置 Node：包更小、启动更快，
-> 坏插件 / 坏配置也**永不白屏打不开**。完整改动见 [Release 说明](https://github.com/myYangyunfan/dsh_desktop/releases/tag/v1.0.10)。
+> 坏插件 / 坏配置也**永不白屏打不开**。完整改动见 [Release 说明](https://github.com/myYangyunfan/dsh_desktop/releases/tag/v1.1.0)。
 
 **目录**：[为什么是它](#-为什么是插件整合包) · [界面](#-界面一览) · [快速开始](#-快速开始) · [内置插件](#-内置插件生态) · [常见问题](#-常见问题) · [社区](#-社区交流) · [赞助](#-赞助支持) · [开发与构建](#-开发与构建) · [发布与架构](#-发布与维护)
 

@@ -149,9 +149,15 @@ function integrityProblems(ids, baseline) {
 // → 61（− pi-ai-opencode-go-models）→ 62（＋ appboot-bootstrap-singleton）
 // → 60（− agent-loop-scheduler-guard − menu-viewport，本批）。
 // 逐项理由见 ta6-registry-invariants.test.js 的 E。
+//
+// 0.2.2-rc.2 → 0.2.2-rc.3（2026-11-13）：判定矩阵**逐项零变化**——60/60 判定与 rc.2 完全相同
+// （43 changed / 12 root / 5 target-absent），本行只换版本键。理由是 rc.3 是补丁级发布：
+// 干预面 94 个文件里 84 个逐字节未变、7 个上游自改字节但 marker 全在位、0 个锚点失配
+// （patch-deps 实跑「写入 72 处 / 失配 0 项 / 失败 0 项 / 降级 0 项 / 共 60 项」）。
+// rc.3 的家族变动只有「+1 新增（dsh-deepseek-chat-import）/ −8 退役」，退役件都不在干预面上。
 // ===========================================================================
 const BASELINE = {
-  '0.2.2-rc.2': {
+  '0.2.2-rc.3': {
     'slot-legacy-key': 'changed',
     'slot-unkeyed-compat': 'changed',
     'slot-error-isolation': 'changed',

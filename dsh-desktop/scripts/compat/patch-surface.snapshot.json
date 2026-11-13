@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-12T12:05:17.078Z",
+  "generatedAt": "2026-11-13T13:05:18.459Z",
   "kernelRoot": "@deepseek-ai",
   "markerCount": 87,
   "surface": [
@@ -165,14 +165,14 @@
     },
     {
       "file": "dsh-client-ui-plugin-manager/lib/client.js",
-      "sha256": "9d994c53926f088f",
+      "sha256": "ec1e18683032730b",
       "markers": [
         "the profile"
       ]
     },
     {
       "file": "dsh-client-ui-settings-account/lib/client.js",
-      "sha256": "266f0ef5a10f3082",
+      "sha256": "327eac6f6dee209d",
       "markers": [
         "onboarding silent update/complete guards report which guard fired",
         "onboarding step advance must not depend on a rendering frame"
@@ -210,7 +210,7 @@
     },
     {
       "file": "dsh-client-ui-workspace/lib/client.js",
-      "sha256": "b4d436adb98735b4",
+      "sha256": "2444fd40330c12bb",
       "markers": [
         "manual sort drag sync",
         "open project dir",
@@ -220,7 +220,7 @@
     },
     {
       "file": "dsh-cordis-client-runner/lib/client.js",
-      "sha256": "d029eebe7a2dc5cb",
+      "sha256": "9a0e2cb0143c803c",
       "markers": [
         "derive keyed slot key for unkeyed registrations"
       ]
@@ -385,7 +385,7 @@
     },
     {
       "file": "dsh-official-bundles/lib/index.js",
-      "sha256": "da136c3c9ef09dea",
+      "sha256": "8ab7b656752709ea",
       "markers": [
         "the profile"
       ]
@@ -606,7 +606,7 @@
     },
     {
       "file": "dsh-tool-cordis/lib/types/api-catalog.js",
-      "sha256": "8414fad2e2d9b0d0",
+      "sha256": "e2687aea6400bbc7",
       "markers": [
         "the profile"
       ]
@@ -649,7 +649,7 @@
     },
     {
       "file": "dsh-web-frontend/dist/index.html",
-      "sha256": "ba4da8d954edee19",
+      "sha256": "5253ba0282290b83",
       "markers": [
         "kernel web boot watchdog"
       ]

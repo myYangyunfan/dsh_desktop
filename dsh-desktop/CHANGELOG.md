@@ -5,6 +5,39 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### chore(kernel)：随包内核换代 0.2.2-rc.2 → 0.2.2-rc.3 并发 1.1.0（2026-11-13）
+
+上游 `dsh-v0.2.2-rc.3`（2026-11-13 08:05Z 发布，npm `next` tag；`latest` 仍停在 rc.1）换代收口。
+**这次是补丁级发布：60 条补丁零失配、判定矩阵 60/60 逐项不变，只换版本键。**
+
+- **vendor**：`vendor/dsh-kernel/` 换成 **375 个 dsh tarball + 13 个框架件 = 388 份**（56,530,217 字节；
+  上一版 387 份 / 56,380,471 字节）。**保留 374、退役 0、新增 1**（`dsh-deepseek-chat-import`，
+  DeepSeek 官网会话导出导入的可选 bundle）；框架件版本线一字未动。目录内无 `*-0.2.2-rc.2.tgz` 残留。
+- **取件口径的坑（这次踩到了，已记进 `vendor/dsh-kernel/README.md` 与 AGENTS.md）**：
+  用「根包 `dependencies` BFS」当家族清单只得 **367** 个——BFS 只跟「范围 == 精确版本」的边，
+  而另有 8 个包（`dsh-error`、`dsh-tool-testkit`、`dsh-util-file-drag`、
+  `dsh-experimental-{claude-code-mods,client-ui-claude-code-mods,cua-macos,subagent-oar,tool-subagent-oar}`）
+  只挂在 bundle/profile 上。照闭包裁会把它们判成「rc.3 已退役」，后果是 `package-lock.json` 里
+  `dsh-error` 与 `dsh-experimental-cua-macos` 退化成 **registry 解析**（rc.2 时代两者都是 `file:`），
+  **离线可复现性当场破功**。正确姿势仍是权威穷尽枚举：replicate `_all_docs` 前缀扫得 **410** 个候选名，
+  逐个查 `registry.npmjs.org/@deepseek-ai/<pkg>` 的 `versions["0.2.2-rc.3"]`——
+  实测 `present=375 / 无 rc.3 = 35 / 404 = 0`。补全后锁文件 **388 条 `@deepseek-ai/*` 全部 `file:`**。
+- **干预面**：94 个被干预文件里 84 个逐字节未变、7 个上游自改字节（`dsh-client-ui-plugin-manager`、
+  `dsh-client-ui-settings-account`、`dsh-client-ui-workspace`、`dsh-cordis-client-runner`、
+  `dsh-official-bundles`、`dsh-tool-cordis/lib/types/api-catalog.js`、`dsh-web-frontend/dist/index.html`）
+  但 **marker 全在位**、0 个靶文件被删。`patch-deps` 实跑「写入 72 处 / 失配 0 / 失败 0 / 降级 0 / 告警 0 / 共 60 项」，
+  7 个文件的字节差是上游自己的改动，按规矩重取 `patch-surface` 快照后 `verify` 复绿（94 文件 / 87 标记家族）。
+- **组合面无变化**：`dsh-web-app/cordis.patch.yml` 与四个出厂预设（standard/minimal/ptc/cordis）
+  的 sha256 与 rc.2 **完全一致**，所以不存在「保险丝/预设挂接点被上游搬走」这一类隐性失效。
+- **测试面随迁**：`ta6-baseline-matrix` 的基线行键换成 `0.2.2-rc.3`（判定值逐项不变，已按真跑重录）；
+  `ta7-contract-audit` TA7-4 的「双 README 版本号一致」正则从 `v1\.0\.(\d+)` 放宽到 `v(\d+)\.(\d+)\.(\d+)`
+  ——1.1.0 起不再是 1.0.x 线，旧正则会让两份 README 都「无 1.0.x 版本号」而红。
+- **验收**：`npm test` **2252 例 / pass 2243 / skip 9 / fail 0**；`validate-pin` 通过；
+  pristine 闭包重出 `0.2.2-rc.3`（388 包）；隔离实机（临时 `DSH_HOME`）boot 五步全 OK（13.8s，sync 13.2s），
+  内核 web 正常 listen，零 `failed to load`、零 `pending (waiting for`。
+  唯一告警是 `mcp-manager` 的重复挂载被 `loader-isolation` 隔离——**rc.2 上同样存在**（该包的 yml 与 rc.2 逐字节相同），
+  服务本身由先注册的那一份持有，不是本版新增。
+
 ### chore(kernel)：随包内核换代 0.2.2-rc.1 → 0.2.2-rc.2（2026-11-12）
 
 上游 `dsh-v0.2.2-rc.2`（2026-11-11 发布，npm `next` tag）换代收口。**61 条补丁里 21 项锚点失配，

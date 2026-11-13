@@ -303,11 +303,13 @@ test('TA7-4 根 README 与 dsh-tauri/README：版本号一致 + 双源/sha256 �
     assert.ok(!md.includes('check-agent-update'), `${name} 不得再出现 check-agent-update（npm 内核链已退役）`);
     assert.ok(!/agent 更新链|检查 dsh 更新/.test(md), `${name} 不得残留 agent 更新链旧词`);
   }
-  // 最新版本号两库一致（取各自最高 v1.0.x）。
+  // 最新版本号两库一致（取各自最高 vX.Y.Z；v1.1.0 起不再是 1.0.x 线，正则随之放宽）。
   const latest = (md) => {
-    const vs = [...md.matchAll(/v1\.0\.(\d+)/g)].map((m) => Number(m[1]));
-    assert.ok(vs.length, '无 1.0.x 版本号');
-    return `v1.0.${Math.max(...vs)}`;
+    const vs = [...md.matchAll(/v(\d+)\.(\d+)\.(\d+)/g)].map((m) => [Number(m[1]), Number(m[2]), Number(m[3])]);
+    assert.ok(vs.length, '无 vX.Y.Z 版本号');
+    vs.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
+    const [a, b, c] = vs[vs.length - 1];
+    return `v${a}.${b}.${c}`;
   };
   assert.strictEqual(latest(rootReadme), latest(tauriReadme), '双 README 最新版本号不一致');
 });

@@ -1,12 +1,12 @@
-# Vendored dsh kernel tarballs (ACTIVE — 0.2.2-rc.2)
+# Vendored dsh kernel tarballs (ACTIVE — 0.2.2-rc.3)
 
 This directory holds the packed, npm-installable tarballs for the
-`@deepseek-ai/dsh` **0.2.2-rc.2** kernel (the full `@deepseek-ai/dsh-*`
-family — 374 packages (including the `@deepseek-ai/dsh` root), plus 13 framework-line tarballs whose version line is
+`@deepseek-ai/dsh` **0.2.2-rc.3** kernel (the full `@deepseek-ai/dsh-*`
+family — 375 packages (including the `@deepseek-ai/dsh` root), plus 13 framework-line tarballs whose version line is
 its own: cordis / cordis-plugin-* / cosmokit / schemastery / node-addon-system
 + its four platform subpackages / libreoffice-kit). The kernel is downloaded
 from the **npm registry**
-(`registry.npmjs.org/@deepseek-ai/dsh-*` at the exact `0.2.2-rc.2` dist-tag
+(`registry.npmjs.org/@deepseek-ai/dsh-*` at the exact `0.2.2-rc.3` dist-tag
 version) and is **NOT** re-published here under any other version. This is the
 **active** vendored set: `dsh-desktop/package.json` / `package-lock.json`
 resolve every `@deepseek-ai/dsh*` package against these `file:` tarballs, so a
@@ -18,13 +18,15 @@ The single source of truth for the pinned kernel version is
 `kernel.vendorDir`). Everything here — the tarball file names, the manifests, and the
 comments in the surrounding scripts — must agree with that pin.
 
-Contents: 374 `deepseek-ai-dsh-<pkg>-0.2.2-rc.2.tgz` tarballs + 13 framework tarballs
-(387 total, 56,380,471 bytes). The authoritative list is whatever is present in this
+Contents: 375 `deepseek-ai-dsh-<pkg>-0.2.2-rc.3.tgz` tarballs + 13 framework tarballs
+(388 total, 56,530,217 bytes). The authoritative list is whatever is present in this
 directory — verify with `Get-ChildItem dsh-desktop/vendor/dsh-kernel` rather than
-trusting any enumerated diff. (相对 0.2.2-rc.1 的 364 个 dsh tarball：保留 355、退役 9、
-新增 19 → 374；框架件版本线一字未动。目录里**没有任何** `*-0.2.2-rc.1.tgz` 残留。
-2026-11-12 换代实测：权威枚举面 409 个 `@deepseek-ai/dsh*` 包名，其中 374 个有
-`0.2.2-rc.2` 版本、35 个没有，registry 上不存在 404 的候选名。)
+trusting any enumerated diff. (相对 0.2.2-rc.2 的 374 个 dsh tarball：保留 374、退役 0、新增 1 → 375；框架件版本线一字未动。
+目录里**没有任何** `*-0.2.2-rc.2.tgz` 残留。2026-11-13 换代实测：权威枚举面 410 个
+`@deepseek-ai/dsh*` 包名，其中 375 个有 `0.2.2-rc.3` 版本、35 个没有，registry 上不存在 404
+的候选名。)**退役 0 这件事要记住**：8 个包（`dsh-error` / `dsh-tool-testkit` / `dsh-util-file-drag` /
+`dsh-experimental-{claude-code-mods,client-ui-claude-code-mods,cua-macos,subagent-oar,tool-subagent-oar}`）
+不在根包依赖链上，只靠依赖闭包会被误判成「rc.3 已退役」——它们 live 在 registry 与 bundle/profile 上。)
 
 **框架件的平台子包只收 node-addon-system 的四件**：`@deepseek-ai/libreoffice-kit`
 的平台子包（darwin-x64 / win32-arm64 / wasm 等）历史上就不进 vendor，registry 上
@@ -32,15 +34,15 @@ trusting any enumerated diff. (相对 0.2.2-rc.1 的 364 个 dsh tarball：保�
 
 ## Where they came from
 
-- Downloaded from the public npm registry at version `0.2.2-rc.2` (the registry
-  uses `-rc.2`, not `-rc2`). For each package in the dsh family, the
+- Downloaded from the public npm registry at version `0.2.2-rc.3` (the registry
+  uses `-rc.3`, not `-rc3`). For each package in the dsh family, the
   `dist.tarball` URL was fetched and the payload verified: the embedded
   `package.json` must report `name` equal to the requested package and `version`
-  equal to `0.2.2-rc.2`, and the sha512 must match the registry `dist.integrity`,
+  equal to `0.2.2-rc.3`, and the sha512 must match the registry `dist.integrity`,
   before the file is accepted into this directory.
 - Tarball file naming follows the vendoring convention
   `deepseek-ai-dsh-<name>-<version>.tgz` (i.e. `@deepseek-ai/dsh-acp` →
-  `deepseek-ai-dsh-acp-0.2.2-rc.2.tgz`, dropping `@`, replacing `/` with `-`).
+  `deepseek-ai-dsh-acp-0.2.2-rc.3.tgz`, dropping `@`, replacing `/` with `-`).
   `scripts/generate-kernel-lock.mjs` reverses this convention to build the
   `file:vendor/dsh-kernel/*.tgz` dependency map.
 - Framework packages (`@deepseek-ai/cordis*`, cosmokit, schemastery,
@@ -114,3 +116,20 @@ pin / manifests; after install, verify the kernel reports the pinned version.
 - 校验：374 个全部通过「内嵌 `package.json` 的 name/version == 请求包名/`0.2.2-rc.2`」+「sha512 == registry
   `dist.integrity`」；0 个失败（无 404、无 integrity 不符、无 version 不符）。新集全部到位并核对字节后才删旧版，
   目录内无混版残留。
+
+## 0.2.2-rc.2 → 0.2.2-rc.3 家族变动（2026-11-13）
+
+- **规模**：374 → **375** 个 dsh tarball（含 `@deepseek-ai/dsh` 根包）；**保留 374、退役 0、新增 1**。
+  框架件 13 个**一字未动**（cordis 4.1.0 / cordis-plugin-{group,include,loader} 1.1.0 / cordis-plugin-timer 1.2.0 /
+  cosmokit 1.9.0 / schemastery 3.19.0 / node-addon-system 0.1.2 + 4 个平台变体 / libreoffice-kit 0.1.5）。
+- **新增 1 个**：`dsh-deepseek-chat-import`（根包 `dependencies` 直接新增，是 rc.3 唯一真正的家族变化）。
+- **判定方式（照 rc.2 的姿势，这次又踩了一次）**：`dsh` 根的依赖闭包只走得到 **367** 个（因为部分包用
+  `^`/`~` 范围声明、且有 8 个只挂在 bundle/profile 上），若拿闭包当家族清单，会得出「退役 8 个」的
+  **错误结论**。正确姿势仍是权威穷尽枚举：replicate `_all_docs` 前缀扫 `@deepseek-ai/dsh` 得 **410** 个
+  包名，再逐个查 `registry.npmjs.org/@deepseek-ai/<pkg>` 的 `versions["0.2.2-rc.3"]` 是否存在。
+  实测 `present=375 / 无 rc.3 = 35 / registry 404 = 0`。
+- **一致性判据（比对上代更硬）**：这 8 个若真按闭包删掉，`package-lock.json` 会把
+  `dsh-error` 与 `dsh-experimental-cua-macos` 记成 **registry 解析**（rc.2 时代两者都是 `file:`），
+  离线可复现性当场破——所以换代后必须复查 `lock` 里每个 `@deepseek-ai/*` 的 `resolved` 是否都是
+  `file:vendor/dsh-kernel/`。判据是 `unit-vendor-node-gate` 之外的这条一次性核查：
+  `node -e` 遍历 `lock.packages` 里 `@deepseek-ai/` 前缀，`resolved` 不以 `file:` 开头即判红。

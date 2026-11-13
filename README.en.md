@@ -7,13 +7,15 @@ Install and go — no Node.js setup, no plugin hunting, no version-conflict arch
 
 [![Release](https://img.shields.io/github/v/release/myYangyunfan/dsh_desktop?color=4D6BFE&label=Release)](https://github.com/myYangyunfan/dsh_desktop/releases) [![Downloads](https://img.shields.io/github/downloads/myYangyunfan/dsh_desktop/total?color=4D6BFE)](https://github.com/myYangyunfan/dsh_desktop/releases) [![Stars](https://img.shields.io/github/stars/myYangyunfan/dsh_desktop?style=social)](https://github.com/myYangyunfan/dsh_desktop) [![Issues](https://img.shields.io/github/issues/myYangyunfan/dsh_desktop?color=4D6BFE)](https://github.com/myYangyunfan/dsh_desktop/issues) [![License](https://img.shields.io/badge/license-MIT-4D6BFE)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20%C2%B7%20macOS%2012%2B%20%C2%B7%20Linux-4D6BFE) [![Release CI](https://img.shields.io/github/actions/workflow/status/myYangyunfan/dsh_desktop/tauri-release.yml?color=4D6BFE&label=Release%20CI)](https://github.com/myYangyunfan/dsh_desktop/actions)
 
-[中文](README.md) · Latest **[v1.0.10](https://github.com/myYangyunfan/dsh_desktop/releases/latest)** (2026-11-12)
+[中文](README.md) · Latest **[v1.1.0](https://github.com/myYangyunfan/dsh_desktop/releases/latest)** (2026-11-13)
 
 > [!NOTE]
-> **v1.0.10 only swaps the bundled kernel**: `0.2.2-rc.1` → `0.2.2-rc.2`. No Rust shell or UI changes; the roster is still 33 plugins.
+> **v1.1.0 = kernel bump `0.2.2-rc.2` → `0.2.2-rc.3` + bundled Node fixed in the portable builds**. No Rust shell or UI
+> changes; the roster is still 33 plugins. It also closes a v1.0.10 gap: the two portable zips were byte-identical
+> (the bundled `node.exe` never made it into the payload). Now **Full ships Node, Lite is genuinely smaller**.
 > The installer ships the complete dsh runtime plus 33 curated companion plugins; the shell is Tauri 2 + a bundled Node runtime,
 > so installers stay small, startup is fast, and **a broken plugin or config never leaves you with a blank window**.
-> Full changelog: [release notes](https://github.com/myYangyunfan/dsh_desktop/releases/tag/v1.0.10).
+> Full changelog: [release notes](https://github.com/myYangyunfan/dsh_desktop/releases/tag/v1.1.0).
 
 **Contents**: [Why](#-why-a-curated-plugin-bundle) · [Preview](#-app-preview) · [Get started](#-get-started) · [Bundled plugins](#-bundled-plugin-ecosystem) · [FAQ](#-faq) · [Community](#-community) · [Sponsor](#-sponsor--support) · [Build](#-build-from-source) · [Releases](#-releases--maintenance)
 
