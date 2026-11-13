@@ -178,28 +178,7 @@ Questions, feedback, or just want to chat with other users? Join our QQ group (*
 
 ## ☕ Sponsor & Support
 
-<p align="center">
-  <a href="https://www.infistar.cc/register?aff=JWJMT5RE&ref_source=link">
-    <img alt="Sponsor · Infistar referral link" src="https://img.shields.io/static/v1?label=SPONSOR&message=Infistar&color=4D6BFE&style=for-the-badge&labelColor=1F2430" />
-  </a>
-</p>
-
-DSH Pack is free, MIT-licensed and has no feature walls. There are four ways to support it — the first one costs money
-(and is the only one that brings the project any income), the other three cost nothing at all.
-
-| Way | How | Notes |
-| :--: | :--: | --- |
-| ☕ **Referral link** | **[Sign up for Infistar →](https://www.infistar.cc/register?aff=JWJMT5RE&ref_source=link)** (referral link, same price) | I get a small commission · **not a technical recommendation** |
-| ⭐ **Star** | [Star the repo](https://github.com/myYangyunfan/dsh_desktop) | Free and the most useful — it also gets the project seen |
-| 🐛 **Feedback** | [Open an issue](https://github.com/myYangyunfan/dsh_desktop/issues) | Bug reports, feature requests, UX notes — all read |
-| 🔁 **Share** | Tell someone who needs it | More effective than any promotion |
-
-> [!IMPORTANT]
-> **About that link**: it is a **sponsorship / referral link**. The project makes **no technical recommendation, compatibility claim
-> or endorsement of Infistar**, and the repository has no technical dependency on that service. Whether you use it changes nothing about
-> DSH Pack's features, update priority or support — using it, or signing up directly on the vendor's site, is treated exactly the same here.
-> Account and payment terms are governed by the provider. It will never appear behind GitHub's Sponsor button either:
-> GitHub does not allow funding links to be used for promotion or advertising.
+Sponsor: [Infistar](https://www.infistar.cc/register?aff=JWJMT5RE&ref_source=link), a multi-model API service. Not a technical recommendation.
 
 ## 🛠 Build from Source
 

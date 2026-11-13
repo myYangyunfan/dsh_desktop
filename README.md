@@ -192,27 +192,7 @@ v1.0.0 起不再向 Gitee 同步代码与发布资产，Gitee 上的历史版本
 
 ## ☕ 赞助支持
 
-<p align="center">
-  <a href="https://www.infistar.cc/register?aff=JWJMT5RE&ref_source=link">
-    <img alt="赞助支持 · Infistar 专属注册链接" src="https://img.shields.io/static/v1?label=%E8%B5%9E%E5%8A%A9%E6%94%AF%E6%8C%81&message=Infistar&color=4D6BFE&style=for-the-badge&labelColor=1F2430" />
-  </a>
-</p>
-
-DSH Pack 是免费、MIT、没有功能墙的项目。如果你愿意支持它，下面四种方式都有效——
-第一种要花钱（也是唯一会给项目带来收入的），后三种一分钱不用花。
-
-| 方式 | 怎么做 | 说明 |
-| :--: | :--: | --- |
-| ☕ **专属链接** | **[注册 Infistar →](https://www.infistar.cc/register?aff=JWJMT5RE&ref_source=link)**（返佣链接，价格不变） | 我会拿到一点返佣 · **不构成技术推荐** |
-| ⭐ **Star** | [点个 Star](https://github.com/myYangyunfan/dsh_desktop) | 零成本、最有用，也最容易被别人看见 |
-| 🐛 **反馈** | [提 Issue](https://github.com/myYangyunfan/dsh_desktop/issues) | 报 bug、要功能、讲体验，都会看 |
-| 🔁 **转发** | 转给需要它的人 | 比任何推广都有效 |
-
-> [!IMPORTANT]
-> **关于那条推广链接**：它是**赞助 / 推广链接**，本项目**不构成对 Infistar 的技术推荐、兼容性验证或背书**，
-> 仓库与该服务之间也没有任何技术依赖。用不用它，都不影响 DSH Pack 的功能、更新优先级和支持力度——
-> 不用它、或者直接去官网注册，本项目的态度完全一样。涉及账号与支付时，请以服务方条款为准。
-> 它也不会出现在 GitHub 的 Sponsor 按钮里：GitHub 明确不允许把 funding 链接用于推广或广告用途。
+赞助支持：[Infistar](https://www.infistar.cc/register?aff=JWJMT5RE&ref_source=link)，多模型 API 服务，不构成技术推荐。
 
 ## 🛠 开发与构建
 
