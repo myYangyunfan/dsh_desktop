@@ -30,6 +30,27 @@ jobs:
           cache-dependency-path: dsh-desktop/package-lock.json
       - name: 安装依赖
         run: npm ci
+      - name: 探针 vendor node 下载是否落盘（临时诊断 v1.0.x 内置 node 缺口）
+        # 与 tauri-release.yml 的「Download vendor node」逐步同形，用来回答一个用日志
+        # 定不了的问题：release 的该步报 success，但 payload 里 vendor/node 是空目录。
+        working-directory: .
+        shell: pwsh
+        run: |
+          Write-Host "cwd=$((Get-Location).Path)"
+          Write-Host "workspace=$env:GITHUB_WORKSPACE"
+          if (Test-Path 'dsh-desktop\vendor\node') {
+            Write-Host 'BEFORE:'
+            Get-ChildItem 'dsh-desktop\vendor\node' -Force | ForEach-Object { Write-Host ("  " + $_.Name + " " + $_.Length) }
+          } else { Write-Host 'BEFORE: (dir missing)' }
+          mkdir -Force dsh-desktop\vendor\node | Out-Null
+          Invoke-WebRequest -Uri 'https://nodejs.org/dist/v24.15.0/win-x64/node.exe' -OutFile dsh-desktop\vendor\node\node.exe
+          Write-Host 'AFTER:'
+          Get-ChildItem 'dsh-desktop\vendor\node' -Force | ForEach-Object { Write-Host ("  " + $_.Name + " " + $_.Length) }
+          Write-Host ("TestPath=" + (Test-Path 'dsh-desktop\vendor\node\node.exe'))
+          Write-Host ("nested(dsh-desktop\dsh-desktop=)" + (Test-Path 'dsh-desktop\dsh-desktop\vendor\node\node.exe'))
+          Write-Host ("git-ignored=" + (& git check-ignore -v dsh-desktop/vendor/node/node.exe))
+          Write-Host ("nested-staging=" + (Test-Path 'dsh-tauri\pp\vendor\node\node.exe'))
+          exit 0
       - name: kernel-pin 一致性校验（fail-closed，离线 tarball 与 pin 不得混版）
         run: node scripts/compat/validate-pin.js
       - name: 补丁干预面漂移校验（npm ci 后 dev 树应与快照收敛态一致）

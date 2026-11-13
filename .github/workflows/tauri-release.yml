@@ -135,6 +135,9 @@ jobs:
         run: |
           mkdir -Force dsh-desktop\vendor\node | Out-Null
           Invoke-WebRequest -Uri 'https://nodejs.org/dist/v24.15.0/win-x64/node.exe' -OutFile dsh-desktop\vendor\node\node.exe
+          $nf = (Get-Item 'dsh-desktop\vendor\node\node.exe').Length
+          Write-Host "vendor node.exe: $nf bytes"
+          if ($nf -lt 20000000) { Write-Host "::error::vendor node.exe 体积异常（$nf 字节，<20MB）——下载未落盘或被截断"; exit 1 }
         shell: pwsh
 
       - name: Download vendor npm
@@ -209,6 +212,10 @@ jobs:
           echo "OK: payload 带 $n_dst 个内置插件源（与仓库源同数）"
           mkdir -p "$DEST/vendor"
           cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
+          # 交付面门禁④：内置 node 必须是真件——空源目录的 cp -r 会静默复制出空目录，
+          # 而 v1.0.0~v1.0.10 就这么把「内置 Node」做丢了一整年（安装包/便携包同源 staging）。
+          # 判据见 dsh-tauri/scripts/stage-vendor-node-gate.mjs；五处 staging 同改。
+          node dsh-tauri/scripts/stage-vendor-node-gate.mjs "$DEST" node.exe
           cp -r dsh-desktop/vendor/npm "$DEST/vendor/npm" 2>/dev/null || true
           # vendored 内核 tarball（随仓库提交）：0.5.7 起 boot 链 compat-pin 步骤
           # fail-closed 校验 vendor/dsh-kernel 与 kernel-pin 一致，缺目录即拒绝启动
@@ -433,6 +440,9 @@ jobs:
         run: |
           mkdir -Force dsh-desktop\vendor\node | Out-Null
           Invoke-WebRequest -Uri 'https://nodejs.org/dist/v24.15.0/win-arm64/node.exe' -OutFile dsh-desktop\vendor\node\node.exe
+          $nf = (Get-Item 'dsh-desktop\vendor\node\node.exe').Length
+          Write-Host "vendor node.exe: $nf bytes"
+          if ($nf -lt 20000000) { Write-Host "::error::vendor node.exe 体积异常（$nf 字节，<20MB）——下载未落盘或被截断"; exit 1 }
         shell: pwsh
 
       - name: Download vendor npm
@@ -507,6 +517,10 @@ jobs:
           echo "OK: payload 带 $n_dst 个内置插件源（与仓库源同数）"
           mkdir -p "$DEST/vendor"
           cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
+          # 交付面门禁④：内置 node 必须是真件——空源目录的 cp -r 会静默复制出空目录，
+          # 而 v1.0.0~v1.0.10 就这么把「内置 Node」做丢了一整年（安装包/便携包同源 staging）。
+          # 判据见 dsh-tauri/scripts/stage-vendor-node-gate.mjs；五处 staging 同改。
+          node dsh-tauri/scripts/stage-vendor-node-gate.mjs "$DEST" node.exe
           cp -r dsh-desktop/vendor/npm "$DEST/vendor/npm" 2>/dev/null || true
           # vendored 内核 tarball（随仓库提交）：0.5.7 起 boot 链 compat-pin 步骤
           # fail-closed 校验 vendor/dsh-kernel 与 kernel-pin 一致，缺目录即拒绝启动
@@ -656,6 +670,9 @@ jobs:
         run: |
           mkdir -Force dsh-desktop\vendor\node | Out-Null
           Invoke-WebRequest -Uri 'https://nodejs.org/dist/v24.15.0/win-x64/node.exe' -OutFile dsh-desktop\vendor\node\node.exe
+          $nf = (Get-Item 'dsh-desktop\vendor\node\node.exe').Length
+          Write-Host "vendor node.exe: $nf bytes"
+          if ($nf -lt 20000000) { Write-Host "::error::vendor node.exe 体积异常（$nf 字节，<20MB）——下载未落盘或被截断"; exit 1 }
         shell: pwsh
 
       - name: Download vendor npm
@@ -730,6 +747,10 @@ jobs:
           echo "OK: payload 带 $n_dst 个内置插件源（与仓库源同数）"
           mkdir -p "$DEST/vendor"
           cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
+          # 交付面门禁④：内置 node 必须是真件——空源目录的 cp -r 会静默复制出空目录，
+          # 而 v1.0.0~v1.0.10 就这么把「内置 Node」做丢了一整年（安装包/便携包同源 staging）。
+          # 判据见 dsh-tauri/scripts/stage-vendor-node-gate.mjs；五处 staging 同改。
+          node dsh-tauri/scripts/stage-vendor-node-gate.mjs "$DEST" node.exe
           cp -r dsh-desktop/vendor/npm "$DEST/vendor/npm" 2>/dev/null || true
           # vendored 内核 tarball（随仓库提交）：0.5.7 起 boot 链 compat-pin 步骤
           # fail-closed 校验 vendor/dsh-kernel 与 kernel-pin 一致，缺目录即拒绝启动
@@ -785,17 +806,18 @@ jobs:
           [ "$rc" -lt 8 ] || { echo "robocopy dsh-desktop failed: $rc"; exit 1; }
           # Windows 包不带 unix node 二进制（stage-payload 口径；防本机历史残留混入）
           rm -f "$ROOT/resources/dsh-desktop/vendor/node/node"
-          # N1 门禁（v0.5.4 便携版修复）：win node.exe 应在位——三级解析链
-          # （系统 ≥22 → 内置 vendor → 清晰报错）的保底层。缺件会让无本地
+          # N1 门禁（v0.5.4 便携版修复）：win node.exe 必须位——三级解析链
+          # （内置 vendor → 系统 ≥22 → 清晰报错）的保底层。缺件会让无本地
           # node 的便携版用户只剩报错路径（历史版本实测「打不开」主因之一）。
-          # 降级为告警（非 exit 1）：下载/staging 步骤已成功、node.exe 通常
-          # 在位，robocopy 后路径偶有平台差异致误判——三级链系统 node 兜底，
-          # 不阻断发布。
+          # **2026-11-13 起 fail-closed（原先降级为告警）**：告警口径把这件事故吞了
+          # 一整年——v1.0.0~v1.0.10 两个便携包体积逐字节相同、中央目录 118556 条里
+          # 0 条 node.exe，而每次发版都只留一行黄色告警。现在缺件即拒绝打包。
           if [ -f "$ROOT/resources/dsh-desktop/vendor/node/node.exe" ]; then
             echo "OK: 内置 node.exe 在位 ($(stat -c%s "$ROOT/resources/dsh-desktop/vendor/node/node.exe") bytes)"
           else
-            echo "::warning::便携版缺内置 node.exe（vendor/node/node.exe）——三级解析链将回落系统 node；无本地 node 的便携版用户会走到清晰报错路径"
+            echo "::error::便携版缺内置 node.exe（vendor/node/node.exe）——拒绝打包"
             ls -la "$ROOT/resources/dsh-desktop/vendor/node" 2>&1 | head -5 || true
+            exit 1
           fi
           rc=0; robocopy "dsh-tauri/sidecar" "$ROOT/resources/sidecar" //MIR //R:2 //W:1 > /dev/null || rc=$?
           [ "$rc" -lt 8 ] || { echo "robocopy sidecar failed: $rc"; exit 1; }
@@ -852,7 +874,16 @@ jobs:
           New-Item -ItemType Directory -Force -Path "portable-lite" | Out-Null
           Copy-Item "portable/DSH Desktop" "portable-lite/DSH Desktop" -Recurse -Force
           $nodeExe = "portable-lite/DSH Desktop/resources/dsh-desktop/vendor/node/node.exe"
-          if (Test-Path $nodeExe) { Remove-Item $nodeExe -Force }
+          # fail-closed：摘不到 node.exe 说明 full 里也没有——两个 zip 会变成同一份包
+          # （v1.0.0~v1.0.10 的实际情形：598,615,580B 逐字节相同）。缺件即拒绝。
+          if (-not (Test-Path $nodeExe)) {
+            Write-Host "::error::lite 变体找不到 vendor/node/node.exe——full/lite 将退化成同一份包，拒绝打包"
+            exit 1
+          }
+          $fullNodeBytes = (Get-Item $nodeExe).Length
+          Remove-Item $nodeExe -Force
+          if (Test-Path $nodeExe) { Write-Host "::error::lite 变体摘除 node.exe 失败"; exit 1 }
+          Write-Host "OK: lite 变体已摘除内置 node.exe ($fullNodeBytes bytes)"
           Compress-Archive -Path "portable-lite/DSH Desktop" -DestinationPath "DSH-Desktop-Portable-$VERSION-win-x64-lite.zip" -Force
           $mb = [math]::Round((Get-Item "DSH-Desktop-Portable-$VERSION-win-x64-lite.zip").Length / 1MB, 1)
           Write-Host "portable lite zip: DSH-Desktop-Portable-$VERSION-win-x64-lite.zip ($mb MB)"
@@ -870,6 +901,29 @@ jobs:
             exit 1
           fi
           echo "OK: $f ($size bytes)"
+
+      - name: 便携版 full/lite 必须真有差别（防「摘不到 node.exe 就糊过去」）
+        # 历史缺口复核（v1.0.0~v1.0.10）：两个便携包体积逐字节相同，因为 full 里本来
+        # 就没有 vendor/node/node.exe，`Remove-Item` 无可删。上面两步已各自 fail-closed，
+        # 这里再咬一道「结果面」：lite 必须明显小于 full（内置 node.exe ~92MB，
+        # deflate 后仍在 20MB 量级），否则说明前缀动作又空转了。
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=${{ steps.ver.outputs.version }}
+          full="DSH-Desktop-Portable-${VERSION}-win-x64.zip"
+          lite="DSH-Desktop-Portable-${VERSION}-win-x64-lite.zip"
+          fs=$(stat -c%s "$full"); ls=$(stat -c%s "$lite")
+          echo "full=$fs lite=$ls delta=$((fs - ls))"
+          if [ "$fs" -eq "$ls" ]; then
+            echo "::error::full 与 lite 便携包体积逐字节相同——lite 的「不带内置 node」是空转"
+            exit 1
+          fi
+          if [ $((fs - ls)) -lt 10485760 ]; then
+            echo "::error::lite 仅比 full 小 $((fs - ls)) 字节（<10MB）——内置 node.exe 疑似缺失或未被摘除"
+            exit 1
+          fi
+          echo "OK: lite 比 full 小 $((fs - ls)) 字节（内置 node.exe 已摘除）"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -956,6 +1010,9 @@ jobs:
           tar -xzf node-v24.15.0-linux-x64.tar.gz
           cp node-v24.15.0-linux-x64/bin/node dsh-desktop/vendor/node/node
           chmod +x dsh-desktop/vendor/node/node
+          nf=$(stat -c%s dsh-desktop/vendor/node/node)
+          echo "vendor node: $nf bytes"
+          [ "$nf" -ge 20000000 ] || { echo "::error::vendor node 体积异常（$nf 字节，<20MB）——下载未落盘或被截断"; exit 1; }
 
       - name: Download rc7 client packages
         run: |
@@ -1001,6 +1058,10 @@ jobs:
           echo "OK: payload 带 $n_dst 个内置插件源（与仓库源同数）"
           mkdir -p "$DEST/vendor"
           cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
+          # 交付面门禁④：内置 node 必须是真件——空源目录的 cp -r 会静默复制出空目录，
+          # 而 v1.0.0~v1.0.10 就这么把「内置 Node」做丢了一整年（安装包/便携包同源 staging）。
+          # 判据见 dsh-tauri/scripts/stage-vendor-node-gate.mjs；五处 staging 同改。
+          node dsh-tauri/scripts/stage-vendor-node-gate.mjs "$DEST" node
           cp -r dsh-desktop/vendor/npm "$DEST/vendor/npm" 2>/dev/null || true
           # vendored 内核 tarball（随仓库提交）：0.5.7 起 boot 链 compat-pin 步骤
           # fail-closed 校验 vendor/dsh-kernel 与 kernel-pin 一致，缺目录即拒绝启动
@@ -1161,6 +1222,9 @@ jobs:
           tar -xzf node-v24.15.0-darwin-arm64.tar.gz
           cp node-v24.15.0-darwin-arm64/bin/node dsh-desktop/vendor/node/node
           chmod +x dsh-desktop/vendor/node/node
+          nf=$(stat -c%s dsh-desktop/vendor/node/node)
+          echo "vendor node: $nf bytes"
+          [ "$nf" -ge 20000000 ] || { echo "::error::vendor node 体积异常（$nf 字节，<20MB）——下载未落盘或被截断"; exit 1; }
 
       - name: Download rc7 client packages
         run: |
@@ -1206,6 +1270,10 @@ jobs:
           echo "OK: payload 带 $n_dst 个内置插件源（与仓库源同数）"
           mkdir -p "$DEST/vendor"
           cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
+          # 交付面门禁④：内置 node 必须是真件——空源目录的 cp -r 会静默复制出空目录，
+          # 而 v1.0.0~v1.0.10 就这么把「内置 Node」做丢了一整年（安装包/便携包同源 staging）。
+          # 判据见 dsh-tauri/scripts/stage-vendor-node-gate.mjs；五处 staging 同改。
+          node dsh-tauri/scripts/stage-vendor-node-gate.mjs "$DEST" node
           cp -r dsh-desktop/vendor/npm "$DEST/vendor/npm" 2>/dev/null || true
           # vendored 内核 tarball（随仓库提交）：0.5.7 起 boot 链 compat-pin 步骤
           # fail-closed 校验 vendor/dsh-kernel 与 kernel-pin 一致，缺目录即拒绝启动
