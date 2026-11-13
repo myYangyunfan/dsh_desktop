@@ -189,3 +189,33 @@ test('反证：把 N1 改回 ::warning:: 并摘掉 exit 1，判据变红', () =>
   assert.doesNotMatch(mutated, /::error::便携版缺内置 node\.exe/, '变异应把 ::error:: 降级为 ::warning::');
   assert.equal(n1IsFailClosed(mutated), false, '降级为告警后判据必须判红');
 });
+
+// ---------------------------------------------------------------------------
+// unix 分支读体积的可移植性（2026-11-13 v1.1.0 发版实错）
+// `stat -c%s` 是 GNU 专有；macOS runner 的 BSD stat 没有 -c，直接
+// `stat: illegal option -- c` + exit 1，macOS dmg 整条 job 在「Download vendor node」
+// 就挂了——而这个判据本意只是「量一下下载到没到盘」。Linux/macOS 共用同一段脚本，
+// 所以两处都必须用 `wc -c`（BSD 与 GNU 都认）。
+// ---------------------------------------------------------------------------
+const PORTABLE_SIZE_READ = /nf=\$\(wc -c < dsh-desktop\/vendor\/node\/node \| tr -d ' '\)/g;
+const GNU_ONLY_SIZE_READ = /nf=\$\(stat -c%s dsh-desktop\/vendor\/node\/node\)/;
+
+function portableSizeReads(src) {
+  return (src.match(PORTABLE_SIZE_READ) ?? []).length;
+}
+
+test('unix 分支读 vendor node 体积必须全平台可移植（两处都用 wc -c，禁用 GNU 专有 stat -c）', () => {
+  assert.equal(portableSizeReads(YAML), 2, 'Linux 与 macOS 两处都必须用 wc -c 读体积');
+  assert.doesNotMatch(YAML, GNU_ONLY_SIZE_READ, 'stat -c%s 是 GNU 专有——macOS runner 会直接 exit 1');
+  assert.match(YAML, /BSD stat（macOS）无 -c/, '必须留一句「为什么不用 stat -c」的注释，否则下次又会写回去');
+});
+
+test('反证：把任一处改回 stat -c%s，可移植判据必须变红', () => {
+  const mutated = YAML.replace(
+    /nf=\$\(wc -c < dsh-desktop\/vendor\/node\/node \| tr -d ' '\)/,
+    'nf=$(stat -c%s dsh-desktop/vendor/node/node)',
+  );
+  assert.notEqual(mutated, YAML, '反证夹具无效：变异未改变源码');
+  assert.equal(portableSizeReads(mutated), 1, '变异后应只剩 1 处可移植读法 → 判据红');
+  assert.match(mutated, GNU_ONLY_SIZE_READ, '变异应引入 GNU 专有读法');
+});

@@ -32,7 +32,7 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 - **测试面随迁**：`ta6-baseline-matrix` 的基线行键换成 `0.2.2-rc.3`（判定值逐项不变，已按真跑重录）；
   `ta7-contract-audit` TA7-4 的「双 README 版本号一致」正则从 `v1\.0\.(\d+)` 放宽到 `v(\d+)\.(\d+)\.(\d+)`
   ——1.1.0 起不再是 1.0.x 线，旧正则会让两份 README 都「无 1.0.x 版本号」而红。
-- **验收**：`npm test` **2252 例 / pass 2243 / skip 9 / fail 0**；`validate-pin` 通过；
+- **验收**：`npm test` **2254 例 / pass 2245 / skip 9 / fail 0**；`validate-pin` 通过；
   pristine 闭包重出 `0.2.2-rc.3`（388 包）；隔离实机（临时 `DSH_HOME`）boot 五步全 OK（13.8s，sync 13.2s），
   内核 web 正常 listen，零 `failed to load`、零 `pending (waiting for`。
   唯一告警是 `mcp-manager` 的重复挂载被 `loader-isolation` 隔离——**rc.2 上同样存在**（该包的 yml 与 rc.2 逐字节相同），

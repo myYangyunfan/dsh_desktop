@@ -339,7 +339,7 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   ② 兼容性不报错，意外以日志收场（`panics.log`）不以崩溃收场；③ 用户数据不动。
 - 文档里的测试基线数字常滞后。**现值（2026-11-13 实测，随包内核 0.2.2-rc.3；补丁层净数 **60****：
   `scripts/test/` **204 个测试文件**（`*.test.js` 203 + `*.test.mjs` 1），
-  `npm test` = **2252 例 / pass 2243 / skip 9 / fail 0**（11-13「内核 0.2.2-rc.3 换代 + 1.1.0」批实跑）；
+  `npm test` = **2254 例 / pass 2245 / skip 9 / fail 0**（11-13「内核 0.2.2-rc.3 换代 + 1.1.0」批实跑）；
   pass/skip 分界随本机材料与网络浮动（11-12「rc.2 换代」批为 2238 / pass 2229 / skip 9 / fail 0；
   Rust 同批：`dsh-tauri-app --lib` **236 passed / 0 failed / 1 ignored**、`bridge` **30 passed / 0 failed**），
   skip 都是环境缺料（pristine 缺 codex/pi-ai、openclaw 兄弟目录不在盘、本机无 dsh-pack 克隆、真实网络、

@@ -1025,7 +1025,8 @@ jobs:
           tar -xzf node-v24.15.0-linux-x64.tar.gz
           cp node-v24.15.0-linux-x64/bin/node dsh-desktop/vendor/node/node
           chmod +x dsh-desktop/vendor/node/node
-          nf=$(stat -c%s dsh-desktop/vendor/node/node)
+          # BSD stat（macOS）无 -c——wc -c 全平台可移植（2026-11-13 macOS 构建实错）
+          nf=$(wc -c < dsh-desktop/vendor/node/node | tr -d ' ')
           echo "vendor node: $nf bytes"
           [ "$nf" -ge 20000000 ] || { echo "::error::vendor node 体积异常（$nf 字节，<20MB）——下载未落盘或被截断"; exit 1; }
 
@@ -1240,7 +1241,8 @@ jobs:
           tar -xzf node-v24.15.0-darwin-arm64.tar.gz
           cp node-v24.15.0-darwin-arm64/bin/node dsh-desktop/vendor/node/node
           chmod +x dsh-desktop/vendor/node/node
-          nf=$(stat -c%s dsh-desktop/vendor/node/node)
+          # BSD stat（macOS）无 -c——wc -c 全平台可移植（2026-11-13 macOS 构建实错）
+          nf=$(wc -c < dsh-desktop/vendor/node/node | tr -d ' ')
           echo "vendor node: $nf bytes"
           [ "$nf" -ge 20000000 ] || { echo "::error::vendor node 体积异常（$nf 字节，<20MB）——下载未落盘或被截断"; exit 1; }
 
