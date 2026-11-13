@@ -1660,8 +1660,8 @@ jobs:
           | 平台 | 格式 |
           |------|------|
           | Windows x64 | 安装包 DSH-Desktop-Setup-${VERSION}-win-x64.exe |
-          | Windows x64 | 便携版 DSH-Desktop-Portable-${VERSION}-win-x64.zip（解压即用，数据存 exe 旁 data/ 目录；需本机已有 Node ≥22） |
-          | Windows x64 | 轻量便携版 DSH-Desktop-Portable-${VERSION}-win-x64-lite.zip（当前与上一行同一份内容，同样需本机 Node ≥22） |
+          | Windows x64 | 便携版 DSH-Desktop-Portable-${VERSION}-win-x64.zip（解压即用，数据存 exe 旁 data/ 目录；**自带内置 Node，目标机无需预装**） |
+          | Windows x64 | 轻量便携版 DSH-Desktop-Portable-${VERSION}-win-x64-lite.zip（同上但**不含内置 Node**，需本机已有 Node ≥22；比 Full 小约 33MB） |
           | Windows ARM64 | 实验性安装包 DSH-Desktop-Setup-${VERSION}-win-arm64.exe（continue-on-error，原生模块靠模拟兜底） |
           | Linux x64 | AppImage DSH-Desktop-${VERSION}-linux-x64.AppImage / deb dsh-desktop_${VERSION}_amd64.deb |
           | macOS ARM64 | DSH-Desktop-${VERSION}-macos-arm64.dmg |
