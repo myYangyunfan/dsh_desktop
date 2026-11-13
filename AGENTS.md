@@ -298,16 +298,13 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   对所有进程都是空的（过滤永远不命中，等于没清理），回归锁在 `ta14-upgrade-dirty-home`。
   手动验证这两个宏：`makensis -INPUTCHARSET UTF8` 编译一个 `!include` 真钩子文件的独立
   脚本，用 `/D=<临时目录>` 跑 `/S`，别在真安装目录上试。
-- **Windows「完整/Lite 双便携版」实为同一份 payload——CI 便携包里没有内置 node.exe**：v1.0.0 实测两个
-  便携 zip 体积逐字节相同（261,149,074B）、中央目录条目数同为 39,097，包内
-  `resources/dsh-desktop/vendor/node/` 只剩一条空目录条目（同层 `vendor/npm/`、`vendor/dsh-kernel/*.tgz`
-  都在位），所以 `build-portable` 的 lite 分支（`Remove-Item node.exe`）根本无可删。同一形状自 v0.5.7 起
-  每个版本都在（0.6.5 两包同为 179,115,706B），是 N1 门禁注释里自写的「降级为告警（非 exit 1）」长期吞掉
-  的缺口，不是某次回归；本机 PS 5.1 拿真 91MB `node.exe` 复现过 `Compress-Archive`，条目在位，吞文件者
-  不是压缩步骤。**核对发布产物别只看体积**：`api.github.com` 502 且 `releases/expanded_assets/<tag>` 也
-  返 500 时，资产名按 `tauri-release.yml` 头部命名表逐个拼 URL，用 `curl -sIL -r 0-0` 读
-  `Content-Range: bytes 0-0/<size>` 核在位与体积，条目名用 Range 取末尾 64B 解 EOCD 得 `cd_off/cd_size`
-  再取中央目录解析（几 MB，无需拖整包）；`.sha256` 边车直接 GET 即可读内容。
+- **便携版「完整/Lite 双包同体积」＝内置 node 静默缺口（v1.0.0~v1.0.10 实错；2026-11-13 已修）**：
+  五处 staging 原用 `cp -r dsh-desktop/vendor/node …`——空源目录会被静默复制成空目录，而便携版 N1
+  只 `::warning::`，于是 v1.0.10 两个便携 zip 逐字节相同（598,615,580B，中央目录 118,556 条里
+  `node.exe` 0 命中），lite 的「不带内置 node」空转，没装 Node 的用户撞「未找到可用的 Node.js」。
+  现形态：staging 改 `cp -f` 单文件 + `stage-vendor-node-gate.mjs`（≥20MB、unix 查 +x）、组装期
+  显式补位、N1 与 lite fail-closed、「full 与 lite 必须差 ≥10MB」结果面门禁；锁 `unit-vendor-node-gate`。
+  核产物别只看体积：`curl -sIL -r 0-0` 读 `Content-Range`，zip 条目名取末尾 20MB 解 EOCD 扫中央目录。
 - **插件「替用户提交」必须先过草稿与空闲两道闸门——`setDraft` 是整篇替换且没有恢复通道（2026-10-18 用户报障）**：
   内置件 `dsh-auto-compact` / `dsh-change-review` 都用 `inputActions.setDraft(text) + submit()` 以用户身份发命令
   （`dsh-auto-compact` 已于 2026-11-08 退役，现役只剩 `dsh-change-review`；本条教训对任何「替用户提交」的插件继续成立），
