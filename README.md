@@ -120,11 +120,11 @@ DSH Pack 把这件事做完：**精选，整合，随包交付。**
 DSH Pack 免费、MIT、没有功能墙。想顺手支持一下这个项目，下面四个入口都有效——第一个会顺带给我一点推广返佣，后三个一分钱不用花。
 
 | 方式 | 入口 | 说明 |
-| :--: | --- | --- |
-| ☕ **专属注册链接** | **[注册 Infistar →](https://www.infistar.cc/register?aff=JWJMT5RE&ref_source=link)** | 项目专属推广链接。通过它注册，我这边会得到一点返佣；你的花费不因此增加（注册与定价以服务方条款为准）。**不构成技术推荐** |
-| ⭐ **Star** | [给仓库点个 Star](https://github.com/myYangyunfan/dsh_desktop) | 零成本、最有用，也最容易被别人看见 |
+| :--: | :--: | --- |
+| ☕ **专属链接** | **[注册 Infistar →](https://www.infistar.cc/register?aff=JWJMT5RE&ref_source=link)** | 项目专属推广链接 · **不构成技术推荐** |
+| ⭐ **Star** | [点个 Star](https://github.com/myYangyunfan/dsh_desktop) | 零成本、最有用，也最容易被别人看见 |
 | 🐛 **反馈** | [提 Issue](https://github.com/myYangyunfan/dsh_desktop/issues) | 报 bug、要功能、讲体验，都会看 |
-| 🔁 **转发** | 转给确实需要它的人 | 比任何推广都有效 |
+| 🔁 **转发** | 转给需要它的人 | 比任何推广都有效 |
 
 > [!IMPORTANT]
 > **关于那条链接**：它是**赞助 / 推广链接**，本项目**不构成对 Infistar 的技术推荐、兼容性验证或背书**，仓库与该服务之间也没有任何技术依赖。
