@@ -211,7 +211,10 @@ jobs:
           fi
           echo "OK: payload 带 $n_dst 个内置插件源（与仓库源同数）"
           mkdir -p "$DEST/vendor"
-          cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
+          # 内置 node 按「文件」显式拷贝并双端断言：空源目录的 cp -r 会静默产出空目录，
+          # 那正是 v1.0.0~v1.0.10 把「内置 Node」做丢却没任何一步报错的机制（见下方门禁）。
+          mkdir -p "$DEST/vendor/node"
+          cp -f "dsh-desktop/vendor/node/node.exe" "$DEST/vendor/node/node.exe"
           # 交付面门禁④：内置 node 必须是真件——空源目录的 cp -r 会静默复制出空目录，
           # 而 v1.0.0~v1.0.10 就这么把「内置 Node」做丢了一整年（安装包/便携包同源 staging）。
           # 判据见 dsh-tauri/scripts/stage-vendor-node-gate.mjs；五处 staging 同改。
@@ -516,7 +519,10 @@ jobs:
           fi
           echo "OK: payload 带 $n_dst 个内置插件源（与仓库源同数）"
           mkdir -p "$DEST/vendor"
-          cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
+          # 内置 node 按「文件」显式拷贝并双端断言：空源目录的 cp -r 会静默产出空目录，
+          # 那正是 v1.0.0~v1.0.10 把「内置 Node」做丢却没任何一步报错的机制（见下方门禁）。
+          mkdir -p "$DEST/vendor/node"
+          cp -f "dsh-desktop/vendor/node/node.exe" "$DEST/vendor/node/node.exe"
           # 交付面门禁④：内置 node 必须是真件——空源目录的 cp -r 会静默复制出空目录，
           # 而 v1.0.0~v1.0.10 就这么把「内置 Node」做丢了一整年（安装包/便携包同源 staging）。
           # 判据见 dsh-tauri/scripts/stage-vendor-node-gate.mjs；五处 staging 同改。
@@ -746,7 +752,10 @@ jobs:
           fi
           echo "OK: payload 带 $n_dst 个内置插件源（与仓库源同数）"
           mkdir -p "$DEST/vendor"
-          cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
+          # 内置 node 按「文件」显式拷贝并双端断言：空源目录的 cp -r 会静默产出空目录，
+          # 那正是 v1.0.0~v1.0.10 把「内置 Node」做丢却没任何一步报错的机制（见下方门禁）。
+          mkdir -p "$DEST/vendor/node"
+          cp -f "dsh-desktop/vendor/node/node.exe" "$DEST/vendor/node/node.exe"
           # 交付面门禁④：内置 node 必须是真件——空源目录的 cp -r 会静默复制出空目录，
           # 而 v1.0.0~v1.0.10 就这么把「内置 Node」做丢了一整年（安装包/便携包同源 staging）。
           # 判据见 dsh-tauri/scripts/stage-vendor-node-gate.mjs；五处 staging 同改。
@@ -806,6 +815,12 @@ jobs:
           [ "$rc" -lt 8 ] || { echo "robocopy dsh-desktop failed: $rc"; exit 1; }
           # Windows 包不带 unix node 二进制（stage-payload 口径；防本机历史残留混入）
           rm -f "$ROOT/resources/dsh-desktop/vendor/node/node"
+          # 内置 node.exe 显式补位，不依赖 robocopy 是否把它带走：v1.0.0~v1.0.10 的产物里
+          # `vendor/node/` 就是个空目录，而 robocopy 那一行每次都是绿的（rc<8 判成功）。
+          # 源缺件即失败（bash -e），不写 `|| true`。
+          mkdir -p "$ROOT/resources/dsh-desktop/vendor/node"
+          cp -f "dsh-tauri/pp/vendor/node/node.exe" "$ROOT/resources/dsh-desktop/vendor/node/node.exe"
+          echo "OK: 内置 node.exe 已补位 ($(stat -c%s "$ROOT/resources/dsh-desktop/vendor/node/node.exe") bytes)"
           # N1 门禁（v0.5.4 便携版修复）：win node.exe 必须位——三级解析链
           # （内置 vendor → 系统 ≥22 → 清晰报错）的保底层。缺件会让无本地
           # node 的便携版用户只剩报错路径（历史版本实测「打不开」主因之一）。
@@ -1057,7 +1072,10 @@ jobs:
           fi
           echo "OK: payload 带 $n_dst 个内置插件源（与仓库源同数）"
           mkdir -p "$DEST/vendor"
-          cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
+          # 内置 node 按「文件」显式拷贝并双端断言：空源目录的 cp -r 会静默产出空目录，
+          # 那正是 v1.0.0~v1.0.10 把「内置 Node」做丢却没任何一步报错的机制（见下方门禁）。
+          mkdir -p "$DEST/vendor/node"
+          cp -f "dsh-desktop/vendor/node/node" "$DEST/vendor/node/node"
           # 交付面门禁④：内置 node 必须是真件——空源目录的 cp -r 会静默复制出空目录，
           # 而 v1.0.0~v1.0.10 就这么把「内置 Node」做丢了一整年（安装包/便携包同源 staging）。
           # 判据见 dsh-tauri/scripts/stage-vendor-node-gate.mjs；五处 staging 同改。
@@ -1269,7 +1287,10 @@ jobs:
           fi
           echo "OK: payload 带 $n_dst 个内置插件源（与仓库源同数）"
           mkdir -p "$DEST/vendor"
-          cp -r dsh-desktop/vendor/node "$DEST/vendor/node"
+          # 内置 node 按「文件」显式拷贝并双端断言：空源目录的 cp -r 会静默产出空目录，
+          # 那正是 v1.0.0~v1.0.10 把「内置 Node」做丢却没任何一步报错的机制（见下方门禁）。
+          mkdir -p "$DEST/vendor/node"
+          cp -f "dsh-desktop/vendor/node/node" "$DEST/vendor/node/node"
           # 交付面门禁④：内置 node 必须是真件——空源目录的 cp -r 会静默复制出空目录，
           # 而 v1.0.0~v1.0.10 就这么把「内置 Node」做丢了一整年（安装包/便携包同源 staging）。
           # 判据见 dsh-tauri/scripts/stage-vendor-node-gate.mjs；五处 staging 同改。

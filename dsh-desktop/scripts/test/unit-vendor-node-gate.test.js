@@ -113,6 +113,30 @@ test('接线：五处 staging 都调用了内置 node 门禁（3 win + 2 unix）
   assert.equal(calls.filter((b) => b === 'node').length, 2, 'Linux / macOS 两处应各一处');
 });
 
+test('接线：内置 node 一律「按文件」显式拷贝，不再 cp -r 整目录', () => {
+  const fileCopies = [...YAML.matchAll(/cp -f "dsh-desktop\/vendor\/node\/(node\.exe|node)" "\$DEST\/vendor\/node\/\1"/g)]
+    .map((m) => m[1]);
+  assert.equal(fileCopies.filter((b) => b === 'node.exe').length, 3, 'win 三处应显式拷 node.exe');
+  assert.equal(fileCopies.filter((b) => b === 'node').length, 2, 'unix 两处应显式拷 node');
+  assert.ok(
+    !/cp -r dsh-desktop\/vendor\/node /.test(YAML) && !/cp -r dsh-desktop\/vendor\/node\n/.test(YAML),
+    '目录级 cp -r 的空源目录会静默产出空目录，这条形态不许复活',
+  );
+});
+
+test('接线：便携版组装后显式补位 node.exe（不依赖 robocopy 是否带走）', () => {
+  assert.match(
+    YAML,
+    /cp -f "dsh-tauri\/pp\/vendor\/node\/node\.exe" "\$ROOT\/resources\/dsh-desktop\/vendor\/node\/node\.exe"/,
+    '缺组装期显式补位',
+  );
+  assert.doesNotMatch(
+    YAML,
+    /cp -f "dsh-tauri\/pp\/vendor\/node\/node\.exe"[\s\S]{0,80}\|\| true/,
+    '补位不许用 `|| true` 吞掉失败（那样又回到静默）',
+  );
+});
+
 test('反证：拆掉任意一处接线，判据必须变红', () => {
   const one = YAML.replace(/^\s*node dsh-tauri\/scripts\/stage-vendor-node-gate\.mjs "\$DEST" node\.exe\r?\n/m, '');
   assert.notEqual(one, YAML, '反证夹具无效：未拆掉任何调用');
