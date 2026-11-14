@@ -1,7 +1,7 @@
 # DSH Pack 排障手册（v0.3.4）
 
-> 面向客户与技术支持。所有路径以实际机器为准：安装版数据目录为
-> `%APPDATA%\DSH Desktop\`，日志位于 `%APPDATA%\DSH Desktop\logs\`。
+> 面向客户与技术支持。所有路径以实际机器为准：安装版的壳数据目录为
+> `%APPDATA%\dsh-desktop\`，日志位于 `%APPDATA%\dsh-desktop\logs\`；会话与凭据在 `<DSH_HOME>`（默认 `~/.dsh`）。
 
 ## 报障时先取三件套
 
@@ -37,8 +37,8 @@ Get-Content -LiteralPath "$env:APPDATA\DSH Pack\logs\desktop.log" -Tail 80
 
 ## v0.3.4 新增的自愈文件（不要手动删除，除非技术支持确认）
 
-- `%APPDATA%\DSH Desktop\safe-boot.overlay.yml` —— 自动禁用的启动失败插件；修复插件后可删除恢复。
-- `%APPDATA%\DSH Desktop\picker-browse.overlay.yml` —— koffi 预检失败时自动启用浏览器内目录选择器；预检恢复后自动移除。
+- `%APPDATA%\dsh-desktop\safe-boot.overlay.yml` —— 自动禁用的启动失败插件；修复插件后可删除恢复。
+- `%APPDATA%\dsh-desktop\picker-browse.overlay.yml` —— koffi 预检失败时自动启用浏览器内目录选择器；预检恢复后自动移除。
 - `<DSH_HOME>\profiles\node_modules.backup-*` —— EPERM 自愈时自动备份的半成品依赖缓存，可用于回滚。
 
 ## macOS 专章：提示“已损坏，无法打开”或“无法验证开发者”
@@ -96,7 +96,7 @@ codesign --verify --deep --strict "/Applications/DSH Pack.app" && echo OK
    "/Applications/DSH Pack.app/Contents/MacOS/DSH Pack"
    ```
 
-   把终端输出连同 `~/Library/Application Support/DSH Pack/logs/dsh-web.log`
+   把终端输出连同 `~/Library/Application Support/dsh-desktop/logs/dsh-web.log`
    尾部 80 行一起发给技术支持。
 
 ### 说明与长期方案

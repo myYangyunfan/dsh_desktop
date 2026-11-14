@@ -58,7 +58,7 @@
 
 测试守则：
 
-- 全部测试必须落在**隔离临时目录**（DSH_HOME / userData），绝不触碰真实 `~/.dsh` 与 `%APPDATA%\DSH Desktop`
+- 全部测试必须落在**隔离临时目录**（DSH_HOME / userData），绝不触碰真实 `~/.dsh` 与 `%APPDATA%\dsh-desktop`
 - 提交前必须本地全量跑通：
 
   ```powershell

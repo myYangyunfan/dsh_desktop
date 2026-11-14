@@ -31,7 +31,8 @@
 2. 首次运行会显示启动动画，随后进入 DeepSeek Harness Web UI。
 3. 如尚未配置 API Key，在界面内完成配置即可开始使用（与命令行 dsh 完全一致）。
 
-> 便携版的数据目录是 exe 旁的 `data\`；安装版在 `%APPDATA%\DSH Desktop\`。
+> 壳的设置与日志：便携版在 exe 旁的 `data\`，安装版在 `%APPDATA%\dsh-desktop\`；会话、附件与凭据在
+> `<DSH_HOME>`（默认 `~/.dsh`，三种形态同一套）。
 > 若想强制指定 DSH 配置目录，启动前设置环境变量 `DSH_HOME` 即可（与 dsh CLI 行为一致）。
 
 > **macOS 用户**：当前构建未做 Apple 公证，首次打开若提示“已损坏，无法打开”，
@@ -319,7 +320,7 @@ node dsh-desktop/scripts/sync-companion-plugins.js ~/.dsh --with-patches
 - `dsh-web.log`：dsh web 的完整 stdout/stderr
 - `update.log`：官方更新的 npm 安装日志
 
-位置：便携版 `data\logs\`；安装版 `%APPDATA%\DSH Desktop\logs\`。
+位置：便携版 `data\logs\`；安装版 `%APPDATA%\dsh-desktop\logs\`。
 菜单「视图 → 打开日志目录」可直接打开。
 
 常见问题：
@@ -333,7 +334,7 @@ node dsh-desktop/scripts/sync-companion-plugins.js ~/.dsh --with-patches
 - **启动失败（`dsh web 启动失败（退出码 1）`）**：v0.3.4 会自动进入安全模式或自愈并重试，弹窗内直接显示最近日志。日志出现 `plugin tree failed to load` = 插件配置不兼容（自动禁用问题插件）；出现 `EPERM ... symlink` = 目录联接被拒（自动备份重建）；日志戛然而止且退出码 `3221225477`（0xC0000005）= koffi 原生崩溃（0.3.4 已换修复版）。
 - **安装后启动即弹「应用初始化失败：home is not defined」**：v0.3.8 已修复（启动路径上的 settings 注册防护函数 `applySettingsSectionGuard` 缺少 `home` 变量声明，启动必现崩溃）。请升级到 v0.3.8，或从 GitHub / Gitee release 下载最新安装包。
 - **设置页看不到插件设置（自定义提示词 / 思考强度）**：v0.3.4 已修复 agent 更新后白名单丢失的问题；仍不可见时重启应用一次，必要时查看 `desktop.log` 中「提示词暴露补丁」记录。（此前同一条还覆盖识图插件与插件市场，两者已于 v1.0.0 退役。）
-- **客户端更新点了「立即重启」后仍提示有待安装的更新**：v0.3.4 起会识别「客户端更新未完成」并提供重试安装 / 打开更新日志；若反复出现，把 `%APPDATA%\DSH Desktop\updates\apply-update.log` 发给技术支持。
+- **客户端更新点了「立即重启」后仍提示有待安装的更新**：v0.3.4 起会识别「客户端更新未完成」并提供重试安装 / 打开更新日志；若反复出现，把 `%APPDATA%\dsh-desktop\updates\apply-update.log` 发给技术支持。
 - **如何手动安装第三方插件**：内置可视化插件市场已于 v1.0.0 退役（`dsh-community-market` 及其桌面服务桥 `dsh-market-desktop-bridge` 不再随包），改用命令行：本机装了 dsh CLI 时执行 `dsh plugin --profile web add <包名或 github 源>`（支持 npm 包名与 `github:owner/repo#分支`），装完按提示重启 `dsh web` 生效。
 - **端口被占**：应用会复用上次保存的端口；若该端口被其他程序占用，会自动选新端口并保存，无需手动处理。注意：端口变化会导致该次启动的界面本地偏好（如会话分组）重新初始化，正常重启不会发生。
 

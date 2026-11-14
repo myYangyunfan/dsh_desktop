@@ -31,7 +31,7 @@
    产物在 `dsh-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/DSH Desktop_<ver>_x64-setup.exe`。
    WSL 回落的人工复现：`DSH_TAURI_WSL_EXE=<桩路径>` 可把 `wsl.exe` 换成桩，用来确定性复现
    「解析失败 → 回落 local」（同一开关由 Rust `wsl-backend` 与 sidecar `wsl-mode.js` 共用）。
-3. 日志位置：便携版 `data\logs\`，安装版 `%APPDATA%\DSH Desktop\logs\`；菜单「打开日志目录」可直达。关键文件：`desktop.log`（`[wsl]` 前缀行 = WSL 后端动作）、`dsh-web.log`、`update.log`。
+3. 日志位置：便携版 `data\logs\`，安装版 `%APPDATA%\dsh-desktop\logs\`；菜单「打开日志目录」可直达。关键文件：`desktop.log`（`[wsl]` 前缀行 = WSL 后端动作）、`dsh-web.log`、`update.log`。
 
 ## 2. 分步验证
 

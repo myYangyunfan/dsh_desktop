@@ -85,7 +85,7 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   bug 回归用例头部注明 issue 号。桌面崩溃/自恢复场景进 `ta3-boot-chain.test.js` 或
   `ta13-soak-*.test.js`。
 - **测试必须隔离**：一律用临时目录重定向 `DSH_HOME` / `DSH_TAURI_USERDATA`，
-  **绝不触碰真实 `~/.dsh` 与 `%APPDATA%\DSH Desktop`**。
+  **绝不触碰真实 `~/.dsh` 与 `%APPDATA%\dsh-desktop`**。
 - 可单测纯函数收敛到 `scripts/lib/`，网络与文件编排留在调用方。
 - **内核版本 pin 在 `scripts/compat/kernel-pin.json`（exact，禁止浮动）**，
   `vendor/dsh-kernel/*.tgz` 随库提交；换版 = 显式改 pin + 重跑适配器判定 + 全量测试。
