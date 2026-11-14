@@ -108,13 +108,13 @@ DSH Pack 把这件事做完：**精选，整合，随包交付。**
 
 ### 数据在哪
 
-| 形态 | 位置 |
+| 数据 | 位置 |
 | --- | --- |
-| Windows 安装版 | `%APPDATA%\DSH Desktop\` |
-| Windows 便携版 | exe 旁的 `data\` |
-| macOS | `~/Library/Application Support/DSH Pack/` |
+| 客户端设置、窗口状态、日志 | Windows 安装版 `%APPDATA%\dsh-desktop\` · 便携版 exe 旁 `data\` · macOS `~/Library/Application Support/dsh-desktop/` |
+| 会话、附件、插件 profile、API 凭据 | `<DSH_HOME>`，默认 `~/.dsh`，可用环境变量 `DSH_HOME` 改（三种形态同一套） |
 
-设置环境变量 `DSH_HOME` 可强制指定 dsh 配置目录。**升级与覆盖安装不会动这些数据。**
+设置环境变量 `DSH_HOME` 可强制指定 dsh 配置目录——便携版想让「数据随 exe 走」，把它指到 `data\` 下即可。
+**升级与覆盖安装不会动这些数据。** 完整的数据实践（收集什么、什么时候联网）见[隐私政策](PRIVACY.md)。
 
 ## 🧩 内置插件生态
 
@@ -164,7 +164,7 @@ v1.0.0 由 39 精简到 28；2026-11-08 移除 `quest-ui` / `auto-compact` / `zc
 
 **装完打不开、或者卡在加载页？**
 壳有恢复页兜底：点「以安全模式重启」会停用全部内置插件（`dsh-builtin-manager` 与压缩件除外）再启动，
-进去后逐个开回来即可定位是哪一个。日志在 `%APPDATA%\DSH Desktop\logs\desktop.log`（macOS 在对应数据目录下）。
+进去后逐个开回来即可定位是哪一个。日志在 `%APPDATA%\dsh-desktop\logs\desktop.log`（macOS 在对应数据目录下）。
 
 **macOS 提示「已损坏，无法打开」？**
 不是包坏了，是未公证的 Gatekeeper 拦截。任选其一：右键 app → 打开 → 再点「打开」；

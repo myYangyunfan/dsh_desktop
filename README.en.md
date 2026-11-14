@@ -100,13 +100,14 @@ Every artifact has a matching `.sha256` sidecar file — verify it before runnin
 
 ### Data locations
 
-| Build | Location |
+| Data | Location |
 | --- | --- |
-| Windows installer | `%APPDATA%\DSH Desktop\` |
-| Windows portable | `data\` next to the executable |
-| macOS | `~/Library/Application Support/DSH Pack/` |
+| Client settings, window state, logs | Windows installer `%APPDATA%\dsh-desktop\` · portable `data\` next to the executable · macOS `~/Library/Application Support/dsh-desktop/` |
+| Conversations, attachments, plugin profiles, API credentials | `<DSH_HOME>`, default `~/.dsh` — override with the `DSH_HOME` environment variable (same for every build) |
 
-Set `DSH_HOME` to override the dsh config directory. **Upgrades and over-the-top installs never touch this data.**
+Set `DSH_HOME` to override the dsh config directory — for the portable build, point it into `data\` to keep everything beside
+the executable. **Upgrades and over-the-top installs never touch this data.** What the app stores and when it uses the
+network is documented in the [privacy policy](PRIVACY.md).
 
 ## 🧩 Bundled Plugin Ecosystem
 
@@ -153,7 +154,7 @@ Set `DSH_HOME` to override the dsh config directory. **Upgrades and over-the-top
 ## ❓ FAQ
 
 **App won't start, or stuck on the loading page?**
-The shell has a recovery page: "Restart in safe mode" disables every bundled plugin (except `dsh-builtin-manager` and the compression gate) and boots again — re-enable them one by one to find the culprit. Logs are in `%APPDATA%\DSH Desktop\logs\desktop.log` (the matching data directory on macOS).
+The shell has a recovery page: "Restart in safe mode" disables every bundled plugin (except `dsh-builtin-manager` and the compression gate) and boots again — re-enable them one by one to find the culprit. Logs are in `%APPDATA%\dsh-desktop\logs\desktop.log` (the matching data directory on macOS).
 
 **macOS says "is damaged and can't be opened"?**
 That is Gatekeeper blocking an unnotarised build, not a corrupt download. Either right-click the app → Open → Open, or run `sudo xattr -cr "/Applications/DSH Pack.app"`, or use System Settings → Privacy & Security → "Open Anyway". Repeat after every over-the-top install.
