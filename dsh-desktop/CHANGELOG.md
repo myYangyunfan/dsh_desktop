@@ -22,6 +22,15 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
   自身按包名排除、半名/空名/非迭代物一律 fail-open，外加「判据只许有一处」的源码哨兵。
 - 这是对 vendored 上游包（`Imzl-zl/dsh-toolbox-ui` 1.10.1）的**本地改动**：下次升版要重放本补丁并跑上面那条锁，
   否则升级会把修复静默冲掉。
+- **同类扫描（同日）**：把全部内置件的宿主半边按「拿名字当判据」过了一遍，只有两处 name 子串匹配，都是良性的——
+  `dsh-super-injector` 用 `includes('dsh-super-injector')` 认自己的幽灵条目（唯一名，误伤面≈0）；
+  `dsh-basics-panel` 的 `/dsh-agent-preset/.test(name)` 是**按内核真实声明方式**认预设行（出厂预设本来就以
+  `@deepseek-ai/dsh-agent-preset` 条目 + `config.id/plugins` 挂载），不是误判。
+- **同批修掉一处真同族缺陷**：`dsh-super-injector` 的脚手架模板给新建插件生成的 `dsh.client.inject` 里写着
+  `@deepseek-ai/dsh-client-runtime`——该包 0.2.2-rc.2 起已被上游删除，注入 id 解析不到 → 新建插件的客户端半边
+  永久 pending、面板永不出现，而构建/boot 全绿。已从 `CLIENT_EXTERNALS` 与生成模板里移除，只留
+  `@deepseek-ai/dsh-client-ui-slots`；新增全仓哨兵 `unit-plugin-client-inject-resolvable`（2 例：已发布
+  `package.json` 的 scoped 注入 id + 源码里 `client: { inject: [...] }` 模板数组，逐条核对能否在 pin 闭包解析）。
 
 ### chore(kernel)：随包内核换代 0.2.2-rc.2 → 0.2.2-rc.3 并发 1.1.0（2026-11-13）
 

@@ -389,7 +389,6 @@ const CLIENT_EXTERNALS = [
   'react', 'react/jsx-runtime', 'react-dom', 'react-dom/client',
   'cordis',
   '@deepseek-ai/dsh-client-ui-slots',
-  '@deepseek-ai/dsh-client-runtime/client',
 ]
 
 const clientBundle: UserConfig = {
@@ -460,7 +459,7 @@ function scaffoldPackageJson(pkgName, description, form) {
             './package.json': './package.json',
         };
         pkg.dsh = {
-            client: { inject: ['@deepseek-ai/dsh-client-runtime', '@deepseek-ai/dsh-client-ui-slots'], platform: 'web' },
+            client: { inject: ['@deepseek-ai/dsh-client-ui-slots'], platform: 'web' },
         };
     }
     return JSON.stringify(pkg, null, 2) + '\n';
