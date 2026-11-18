@@ -508,6 +508,10 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   `sidebarRightTabs.register` + `sidebar.right.pane.tab` 是公开两段式标签 API（内核自己的
   文件/文档预览/终端也用它）。本仓库的 better-sidebar 已经用它把工作台接成右栏里的一个标签，
   设计与踩坑见 `dsh-desktop/docs/better-sidebar-kernel-integration.md`。
+- **`dsh-toolbox-ui` 的「让位检测」曾把内核运行时包 `@deepseek-ai/dsh-mcp-manager` 误判成竞争面板（2026-11-18）**：
+  判据只有「名含 mcp+manager」，而它纯运行时、无 `./client`（内核 78 个 `dsh-client-ui-*` 无 mcp 项），面板停用后
+  **无替代界面**。修法：`findConflictingManager(entries, self)` 加 `@deepseek-ai/*` scope 排除，锁 `unit-toolbox-yield-detector`；
+  vendored 包（`Imzl-zl/dsh-toolbox-ui` 1.10.1）的本地改动，换版要重放。
 - **插件自带测试的夹具必须按宿主「真形状」造，否则用例在为已下线的契约作证**：2026-10-08 实测案例是
   `assets/plugins/dsh-synapse` 的 `test/replay-watermark.test.js` 用 `makeSession()` 造 `{ id, header, events }`，
   而 pin 的 rc.2 上 `Session.prototype` 已经没有 `events`（只有 `snapshotEvents`/`ownEvents`；0.2.1-rc.1 复核仍如此）——10 个测试文件

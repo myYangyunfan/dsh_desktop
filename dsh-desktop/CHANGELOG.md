@@ -5,6 +5,24 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### fix(plugin)：MCP 面板不再把内核运行时包误判成「另一个管理面板」（2026-11-18）
+
+内置件 `dsh-toolbox-ui` 的让位检测（`lib/index.js` 的 `conflictingManager`）原先只要 loader 条目名同时含
+`mcp` 与 `manager` 就判为竞争面板，于是随包内核那条 `dsh-web-app/cordis.patch.yml:153-154`
+（`- id: mcp-manager / name: '@deepseek-ai/dsh-mcp-manager'`）被当成「另一个 MCP 管理插件」：面板当场停用、
+只剩一句「已让位给另一个 MCP 管理插件」，而**内核没有任何 MCP 界面**（pin 内核 78 个 `dsh-client-ui-*` 里
+没有 mcp 项，全包 client 产物对 `mcpServers` 零命中，`dsh-mcp-manager` 的 `package.json` 无 `./client` 导出）
+——用户等于彻底失去 MCP 面板，且提示里的包名是自己看不懂的内核包。
+
+- 判据拆成纯函数 `findConflictingManager(entries, self)`，并加一条 scope 排除：`@deepseek-ai/*` 是运行时
+  提供方，永不视为竞争面板。老线第三方 UI 包 `dsh-mcp-manager-ui`（未加 scope）照旧判成冲突，真检测没被关掉。
+- 现场证据（2026-11-18）：`~/.dsh/profiles/{web,desktop}` 的 json/yml 里 `mcp-manager` 只命中本插件自己的
+  `cordis.patch.yml`，**没有旧 UI 包残留**——「工具箱那套 UI 没删干净」的猜测不成立，误判源就是内核条目名。
+- 回归锁 `scripts/test/unit-toolbox-yield-detector.test.js`（7 例）：事故原形、scope 反例（旧包仍判冲突）、
+  自身按包名排除、半名/空名/非迭代物一律 fail-open，外加「判据只许有一处」的源码哨兵。
+- 这是对 vendored 上游包（`Imzl-zl/dsh-toolbox-ui` 1.10.1）的**本地改动**：下次升版要重放本补丁并跑上面那条锁，
+  否则升级会把修复静默冲掉。
+
 ### chore(kernel)：随包内核换代 0.2.2-rc.2 → 0.2.2-rc.3 并发 1.1.0（2026-11-13）
 
 上游 `dsh-v0.2.2-rc.3`（2026-11-13 08:05Z 发布，npm `next` tag；`latest` 仍停在 rc.1）换代收口。

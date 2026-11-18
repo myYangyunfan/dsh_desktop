@@ -504,6 +504,48 @@ function isMcpManagerPluginName(name) {
 	return lower.includes("mcp") && lower.includes("manager");
 }
 
+/**
+ * 该 loader 条目是否属于**内核第一方包**（`@deepseek-ai/*`）。
+ *
+ * 这类条目一律不是「另一个管理面板」：内核把 MCP 管理做成了**纯运行时**服务
+ * （`@deepseek-ai/dsh-mcp-manager`，settings 驱动的 mcp-client 机群，无 client 半边、
+ * 无 `./client` 导出），本项目面板正是它的界面。而 `dsh-web-app/cordis.patch.yml:153-154`
+ * 里那条 `- id: mcp-manager / name: '@deepseek-ai/dsh-mcp-manager'` 的条目名同时含
+ * mcp 与 manager，于是被 `isMcpManagerPluginName` 判成「另一个面板」——面板当场停用，
+ * 而**没有任何替代品**：pin 内核 78 个 `dsh-client-ui-*` 里没有 mcp 一项，全包 client
+ * 产物对 `mcpServers` 零命中（2026-11-18 实测 0.2.2-rc.3），用户看到的就是那句
+ * 「已让位给另一个 MCP 管理插件」而 MCP 面板消失。
+ *
+ * 反例（必须继续判成冲突）：老线 UI 包 `dsh-mcp-manager-ui` 是**未加 scope**的第三方包，
+ * 不受本函数影响。 */
+function isKernelFirstPartyPluginName(name) {
+	return String(name).startsWith("@deepseek-ai/");
+}
+
+/**
+ * 从 loader 条目表里挑出「另一个 MCP 管理插件」；没有就返回 `null`。
+ *
+ * 纯函数（条目表进、结论出），自身判据只有一处 = 调用方传入的本包名。抽出来是为了
+ * 能脱离 cordis 实例单测——真机事故（内核运行时包被误判成竞争面板）必须有一条例锁，
+ * 而 `conflictingManager()` 依赖 `this.ctx`，在单测里造不出来。
+ */
+function findConflictingManager(entries, self) {
+	if (typeof entries?.[Symbol.iterator] !== "function") return null;
+	for (const entry of entries) {
+		const options = entry?.options;
+		if (options === undefined || options === null) continue;
+		const name = options.name;
+		if (typeof name !== "string" || name === "") continue;
+		// 自身：loader name 恒等于本包名。用 id 判定会误伤共用一个 id 的旧包。
+		if (self !== "" && name === self) continue;
+		// 内核第一方包是运行时提供方，不是竞争面板（见上方长注释的实测证据）。
+		if (isKernelFirstPartyPluginName(name)) continue;
+		if (!isMcpManagerPluginName(name)) continue;
+		return { id: options.id ?? null, name };
+	}
+	return null;
+}
+
 const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const UPDATE_CHECK_TIMEOUT_MS = 5000;
 const UPDATE_CHECK_DISABLED_ENV = "DSH_MCP_MANAGER_DISABLE_UPDATE_CHECK";
@@ -2605,19 +2647,7 @@ let SkillsManagerGateway = (() => {
 			// 两者代价不对称，所以任何异常一律返回 null（= 无冲突，照常注册入口）。
 			try {
 				const entries = this.ctx?.loader?.entries?.();
-				if (typeof entries?.[Symbol.iterator] !== "function") return null;
-				const self = pluginName();
-				for (const entry of entries) {
-					const options = entry?.options;
-					if (options === undefined || options === null) continue;
-					const name = options.name;
-					if (typeof name !== 'string' || name === '') continue;
-					// 自身：loader name 恒等于本包名。用 id 判定会误伤共用一个 id 的旧包。
-					if (self !== '' && name === self) continue;
-					if (!isMcpManagerPluginName(name)) continue;
-					return { id: options.id ?? null, name };
-				}
-				return null;
+				return findConflictingManager(entries, pluginName());
 			} catch {
 				// 刻意吞掉：检测失败必须 fail-open（见上）。面板打不开时用户也看不到日志，
 				// 而「两个入口并存」本身是可自愈的轻微症状。
@@ -2627,7 +2657,7 @@ let SkillsManagerGateway = (() => {
 	};
 })();
 
-export { checkForUpdate, McpManagerGateway, McpManagerGateway as default, SkillsManagerGateway, summarizeWorkspaceRow };
+export { checkForUpdate, findConflictingManager, isKernelFirstPartyPluginName, isMcpManagerPluginName, McpManagerGateway, McpManagerGateway as default, SkillsManagerGateway, summarizeWorkspaceRow };
 
 
 
