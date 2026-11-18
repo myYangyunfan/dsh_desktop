@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-13T13:05:18.459Z",
+  "generatedAt": "2026-11-18T16:46:45.223Z",
   "kernelRoot": "@deepseek-ai",
   "markerCount": 87,
   "surface": [
@@ -41,7 +41,7 @@
     },
     {
       "file": "dsh-api-remotes/lib/client.js",
-      "sha256": "2b43e541cefd9851",
+      "sha256": "735059e07c747433",
       "markers": [
         "session manage",
         "the profile"
@@ -172,7 +172,7 @@
     },
     {
       "file": "dsh-client-ui-settings-account/lib/client.js",
-      "sha256": "327eac6f6dee209d",
+      "sha256": "fc565819bd382211",
       "markers": [
         "onboarding silent update/complete guards report which guard fired",
         "onboarding step advance must not depend on a rendering frame"
@@ -195,7 +195,7 @@
     },
     {
       "file": "dsh-client-ui-settings-web-search/lib/client.js",
-      "sha256": "c71f41326b4e5633",
+      "sha256": "155197a3dd5b93ed",
       "markers": [
         "issue #20"
       ]
@@ -325,7 +325,7 @@
     },
     {
       "file": "dsh-llm-deepseek/lib/index.js",
-      "sha256": "46f0db21e974d21e",
+      "sha256": "bfe9bf9e1e7b134a",
       "markers": [
         "device-auth guidance",
         "ds tool schema sanitize"
@@ -342,7 +342,7 @@
     },
     {
       "file": "dsh-llm/lib/index.js",
-      "sha256": "f4b306c95e63da1e",
+      "sha256": "27aadd5e39ca8db4",
       "markers": [
         "adapter prepareCall guard",
         "contentHasImage non-array guard"
@@ -606,7 +606,7 @@
     },
     {
       "file": "dsh-tool-cordis/lib/types/api-catalog.js",
-      "sha256": "e2687aea6400bbc7",
+      "sha256": "9ea9ab1244ab4c2b",
       "markers": [
         "the profile"
       ]
@@ -656,7 +656,7 @@
     },
     {
       "file": "dsh-web-search-deepseek/lib/index.js",
-      "sha256": "289c3d2b51e3e074",
+      "sha256": "a97546a66d3f406e",
       "markers": [
         "issue #20"
       ]

@@ -157,6 +157,10 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   两条判据：① 家族清单只认权威枚举（replicate `_all_docs` 前缀扫 → 逐个查 `versions["<新版本>"]`，
   rc.3 实测 `present=375 / 缺 35 / 404=0`）；② 改完锁必须复核**每个 `@deepseek-ai/*` 的 `resolved` 都从
   `file:` 开头**，一条落到 registry 就红。
+  **0.2.2-rc.5（2026-11-19）同样是补丁级**：家族名逐名相同（375，退役/新增 0）、60/60 矩阵不变、7 个文件上游自改
+  字节（marker 全在位，重取快照即绿）。**取件口径再记一条**：逐个查 `<pkg>/<ver>` 版本端点会偶发非 200，
+  `dsh-host-directory-picker-auto` 就这样被误判成退役、pristine 少包 → `wsl-picker-browse` 判成 target-absent
+  （哨兵立功）；**非 200 必须重试 3 次 + `dist-tags` 复核**才许下退役结论。
 - **插件 `inject` 里写了一个内核不再提供的服务名，坏的是它注册的每一条 HTTP 路由——而静态扫与 boot 全绿（2026-10-17 真机）**：
   0.2.1-rc.1 把 rc.2 的 `webRuntime` 服务整块删掉（全闭包 grep 该服务名 0 命中，信任清单迁到
   `dsh-client-connection` 的 `connection` 服务：`HostConnectionService.trustedHosts` + `isTrusted()`，rc.2/0.2.1 双代都在位），
@@ -337,9 +341,9 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   `.gitattributes`（见「CI 全量单测有三类本机假绿环境差」第 ③ 条）。
 - **稳定性三原则（评审默认立场）**：① 客户端必须能打开，装配失败终态恢复页而非退出；
   ② 兼容性不报错，意外以日志收场（`panics.log`）不以崩溃收场；③ 用户数据不动。
-- 文档里的测试基线数字常滞后。**现值（2026-11-13 实测，随包内核 0.2.2-rc.3；补丁层净数 **60****：
-  `scripts/test/` **204 个测试文件**（`*.test.js` 203 + `*.test.mjs` 1），
-  `npm test` = **2254 例 / pass 2245 / skip 9 / fail 0**（11-13「内核 0.2.2-rc.3 换代 + 1.1.0」批实跑）；
+- 文档里的测试基线数字常滞后。**现值（2026-11-19 实测，随包内核 0.2.2-rc.5；补丁层净数 **60****：
+  `scripts/test/` **206 个测试文件**（`*.test.js` 205 + `*.test.mjs` 1），
+  `npm test` = **2263 例 / pass 2254 / skip 9 / fail 0**（11-19「内核 0.2.2-rc.5 换代」批实跑）；
   pass/skip 分界随本机材料与网络浮动（11-12「rc.2 换代」批为 2238 / pass 2229 / skip 9 / fail 0；
   Rust 同批：`dsh-tauri-app --lib` **236 passed / 0 failed / 1 ignored**、`bridge` **30 passed / 0 failed**），
   skip 都是环境缺料（pristine 缺 codex/pi-ai、openclaw 兄弟目录不在盘、本机无 dsh-pack 克隆、真实网络、

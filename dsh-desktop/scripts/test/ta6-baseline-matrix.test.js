@@ -155,9 +155,17 @@ function integrityProblems(ids, baseline) {
 // 干预面 94 个文件里 84 个逐字节未变、7 个上游自改字节但 marker 全在位、0 个锚点失配
 // （patch-deps 实跑「写入 72 处 / 失配 0 项 / 失败 0 项 / 降级 0 项 / 共 60 项」）。
 // rc.3 的家族变动只有「+1 新增（dsh-deepseek-chat-import）/ −8 退役」，退役件都不在干预面上。
+// 0.2.2-rc.3 → 0.2.2-rc.5（2026-11-19）：判定矩阵**逐项零变化**——60/60 判定与 rc.3 完全相同
+// （43 changed / 12 root / 5 target-absent），本行只换版本键。rc.4/rc.5 同样是补丁级发布：
+// patch-deps 实跑「写入 72 处 / 失配 0 项 / 失败 0 项 / 降级 0 项 / 共 60 项」，
+// patch-surface 只有 7 个文件因上游自改字节而漂移、marker 全在位（重取快照即复绿）。
+// 家族名清单与 rc.3 逐名相同（375 个，退役 0 / 新增 0）。
+// ⚠️ 取件踩坑：`dsh-host-directory-picker-auto` 曾被版本端点偶发非 200 误判成「已退役」，
+// 结果 pristine 少一个包 → 本矩阵把 wsl-picker-browse 判成 target-absent。**非 200 必须重试**
+// （详见 vendor/dsh-kernel/README.md）。
 // ===========================================================================
 const BASELINE = {
-  '0.2.2-rc.3': {
+  '0.2.2-rc.5': {
     'slot-legacy-key': 'changed',
     'slot-unkeyed-compat': 'changed',
     'slot-error-isolation': 'changed',

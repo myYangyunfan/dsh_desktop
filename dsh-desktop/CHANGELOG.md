@@ -5,6 +5,30 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### chore(kernel)：随包内核换代 0.2.2-rc.3 → 0.2.2-rc.5（2026-11-19）
+
+上游 `next` 已到 **0.2.2-rc.5**（`latest` 仍停在 rc.1；rc.4 与 rc.5 两天内连发）。本次换代对我们是
+**补丁级**：家族名清单逐名相同、60 条补丁零失配、判定矩阵 60/60 逐项不变。
+
+- **vendor**：`vendor/dsh-kernel/` = **375 个 dsh tarball + 13 框架件 = 388 份**（56,540,180 字节）。
+  相对 rc.3 **退役 0 / 新增 0**；目录内无 `*-0.2.2-rc.3.tgz` 残留。375 份全部按 registry `dist.integrity`
+  复核 sha512（批量 374 + 单独补回的 `dsh-host-directory-picker-auto` 1 件，全部一致）。
+- **补丁层零重锚**：`patch-deps` 实跑「写入 72 处 / 失配 0 项 / 失败 0 项 / 降级 0 项 / 告警 0 项 / 共 60 项」；
+  `patch-surface` 只有 **7 个文件**因上游自改字节而漂移、marker 全在位（`dsh-api-remotes/lib/client.js`、
+  `dsh-client-ui-settings-account/lib/client.js`、`dsh-client-ui-settings-web-search/lib/client.js`、
+  `dsh-llm-deepseek/lib/index.js`、`dsh-llm/lib/index.js`、`dsh-tool-cordis/lib/types/api-catalog.js`、
+  `dsh-web-search-deepseek/lib/index.js`）→ 重取快照（**94 文件 / 87 家族**）后 verify 复绿。
+- **判定矩阵**：60/60 与 rc.3 逐项相同（43 changed / 12 root / 5 target-absent），`ta6-baseline-matrix`
+  的 BASELINE 只换版本键。
+- **锁**：`generate-kernel-lock` 重出 **388 条 `file:`**（总 1128 packages）；顶层 `@deepseek-ai/*` 条目除
+  5 个 `libreoffice-kit-*` 平台可选件外全部 `file:` 解析。
+- **取件口径的新坑（这次踩到了）**：逐个查 `<pkg>/0.2.2-rc.5` 版本端点会偶发非 200，`dsh-host-directory-picker-auto`
+  因此被判成「已退役」并从 package.json 摘掉——pristine 闭包少一个包，矩阵立刻把 `wsl-picker-browse`
+  判成 `target-absent`（正是这道哨兵把一个静默缺件变成了红）。**非 200 一律重试 3 次再用 `dist-tags` 复核**
+  后才允许下「退役」结论；补回后 pristine 388 包、矩阵复绿。已记进 `vendor/dsh-kernel/README.md` 与 BASELINE 注释。
+- **测试**：`npm test` **2263 例 / pass 2254 / skip 9 / fail 0**（较 1.1.0 批多 9 例，是今天新增的两条插件哨兵）。
+  上游 rc.4/rc.5 的发版说明**未能取到**（本机到 `api.github.com` 不可达），所以上面全部结论以本地实测为准。
+
 ### fix(plugin)：MCP 面板不再把内核运行时包误判成「另一个管理面板」（2026-11-18）
 
 内置件 `dsh-toolbox-ui` 的让位检测（`lib/index.js` 的 `conflictingManager`）原先只要 loader 条目名同时含

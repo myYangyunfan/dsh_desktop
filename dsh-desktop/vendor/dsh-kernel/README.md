@@ -1,12 +1,12 @@
-# Vendored dsh kernel tarballs (ACTIVE — 0.2.2-rc.3)
+# Vendored dsh kernel tarballs (ACTIVE — 0.2.2-rc.5)
 
 This directory holds the packed, npm-installable tarballs for the
-`@deepseek-ai/dsh` **0.2.2-rc.3** kernel (the full `@deepseek-ai/dsh-*`
+`@deepseek-ai/dsh` **0.2.2-rc.5** kernel (the full `@deepseek-ai/dsh-*`
 family — 375 packages (including the `@deepseek-ai/dsh` root), plus 13 framework-line tarballs whose version line is
 its own: cordis / cordis-plugin-* / cosmokit / schemastery / node-addon-system
 + its four platform subpackages / libreoffice-kit). The kernel is downloaded
 from the **npm registry**
-(`registry.npmjs.org/@deepseek-ai/dsh-*` at the exact `0.2.2-rc.3` dist-tag
+(`registry.npmjs.org/@deepseek-ai/dsh-*` at the exact `0.2.2-rc.5` dist-tag
 version) and is **NOT** re-published here under any other version. This is the
 **active** vendored set: `dsh-desktop/package.json` / `package-lock.json`
 resolve every `@deepseek-ai/dsh*` package against these `file:` tarballs, so a
@@ -18,15 +18,18 @@ The single source of truth for the pinned kernel version is
 `kernel.vendorDir`). Everything here — the tarball file names, the manifests, and the
 comments in the surrounding scripts — must agree with that pin.
 
-Contents: 375 `deepseek-ai-dsh-<pkg>-0.2.2-rc.3.tgz` tarballs + 13 framework tarballs
-(388 total, 56,530,217 bytes). The authoritative list is whatever is present in this
+Contents: 375 `deepseek-ai-dsh-<pkg>-0.2.2-rc.5.tgz` tarballs + 13 framework tarballs
+(388 total, 56,540,180 bytes). The authoritative list is whatever is present in this
 directory — verify with `Get-ChildItem dsh-desktop/vendor/dsh-kernel` rather than
-trusting any enumerated diff. (相对 0.2.2-rc.2 的 374 个 dsh tarball：保留 374、退役 0、新增 1 → 375；框架件版本线一字未动。
-目录里**没有任何** `*-0.2.2-rc.2.tgz` 残留。2026-11-13 换代实测：权威枚举面 410 个
-`@deepseek-ai/dsh*` 包名，其中 375 个有 `0.2.2-rc.3` 版本、35 个没有，registry 上不存在 404
-的候选名。)**退役 0 这件事要记住**：8 个包（`dsh-error` / `dsh-tool-testkit` / `dsh-util-file-drag` /
+trusting any enumerated diff. (相对 0.2.2-rc.3 的 375 个 dsh tarball：**保留 375、退役 0、新增 0**——家族名清单逐名相同；
+框架件版本线一字未动。目录里**没有任何** `*-0.2.2-rc.3.tgz` 残留。2026-11-19 换代实测：候选面 = replicate
+`_all_docs` 前缀扫 410 个 ∪ 锁文件 393 个 = 428 个名字，其中 **375 个有 `0.2.2-rc.5` 版本**。
+**取件口径的新坑（这次踩到了）**：逐个查 `<pkg>/0.2.2-rc.5` 版本端点时会偶发非 200——`@deepseek-ai/dsh-host-directory-picker-auto`
+就这样被判成「已退役」，而它的 `/-/package/<pkg>/dist-tags` 明确写着 `next=0.2.2-rc.5`，`dsh-web-app` 也仍依赖它。
+判据：**非 200 一律重试 3 次再下结论**，且任何「退役」结论都要用 dist-tags 复核一次。)
+**退役 0 这件事要记住**：8 个包（`dsh-error` / `dsh-tool-testkit` / `dsh-util-file-drag` /
 `dsh-experimental-{claude-code-mods,client-ui-claude-code-mods,cua-macos,subagent-oar,tool-subagent-oar}`）
-不在根包依赖链上，只靠依赖闭包会被误判成「rc.3 已退役」——它们 live 在 registry 与 bundle/profile 上。)
+不在根包依赖链上，只靠依赖闭包会被误判成「已退役」——它们 live 在 registry 与 bundle/profile 上。)
 
 **框架件的平台子包只收 node-addon-system 的四件**：`@deepseek-ai/libreoffice-kit`
 的平台子包（darwin-x64 / win32-arm64 / wasm 等）历史上就不进 vendor，registry 上
@@ -34,15 +37,15 @@ trusting any enumerated diff. (相对 0.2.2-rc.2 的 374 个 dsh tarball：保�
 
 ## Where they came from
 
-- Downloaded from the public npm registry at version `0.2.2-rc.3` (the registry
-  uses `-rc.3`, not `-rc3`). For each package in the dsh family, the
+- Downloaded from the public npm registry at version `0.2.2-rc.5` (the registry
+  uses `-rc.5`, not `-rc5`). For each package in the dsh family, the
   `dist.tarball` URL was fetched and the payload verified: the embedded
   `package.json` must report `name` equal to the requested package and `version`
-  equal to `0.2.2-rc.3`, and the sha512 must match the registry `dist.integrity`,
+  equal to `0.2.2-rc.5`, and the sha512 must match the registry `dist.integrity`,
   before the file is accepted into this directory.
 - Tarball file naming follows the vendoring convention
   `deepseek-ai-dsh-<name>-<version>.tgz` (i.e. `@deepseek-ai/dsh-acp` →
-  `deepseek-ai-dsh-acp-0.2.2-rc.3.tgz`, dropping `@`, replacing `/` with `-`).
+  `deepseek-ai-dsh-acp-0.2.2-rc.5.tgz`, dropping `@`, replacing `/` with `-`).
   `scripts/generate-kernel-lock.mjs` reverses this convention to build the
   `file:vendor/dsh-kernel/*.tgz` dependency map.
 - Framework packages (`@deepseek-ai/cordis*`, cosmokit, schemastery,
