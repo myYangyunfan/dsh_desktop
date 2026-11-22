@@ -36,6 +36,22 @@ const UPDATE_SOURCES = Object.freeze({
   'network-proxy': { kind: 'github', repo: 'baizhizzl/dsh-network-proxy' },
   'mcp-manager-ui': { kind: 'npm', pkg: 'dsh-toolbox-ui' },
   'dsh-notify': { kind: 'npm', pkg: '@bittersmilezzz/dsh-notify' },
+
+  // ── 2026-11-22 补齐四条：这四件此前在表外，用户在管理页看不到它们的更新 ──
+  // 判据是「有发行坐标且身份 same」，不是「随包不带 fork」：
+  //   · dsh-pocket：npm 同名包，本仓 fork 只有 business 之外的两条 CSS 选择器
+  //     （client/client.js 的 :has(textarea) → :has(textarea, [data-composer-input])，
+  //     见 §5.2 #12）。应用内更新会把发行包整目录换成 npm tarball，这两条就没了，
+  //     后果是英雄卡行内样式不再命中（纯视觉），不会崩；下次随包换版时按
+  //     .tmp-plugin-audit/replay-pocket.mjs 重放即可。
+  //   · ds-harness-remote：shipsNodeModules: true，运行期依赖在它自己的
+  //     node_modules/ 里，而应用内更新只解 npm tarball、不装依赖 —— 依赖靠
+  //     companion-profile 的「更新版缺依赖自愈」（issue #125）从安装包补齐。
+  //   · dsh-easyrewrite / dsh-context：无 fork，纯 npm 件。
+  'dsh-pocket': { kind: 'npm', pkg: 'dsh-pocket' },
+  'dsh-easyrewrite': { kind: 'npm', pkg: 'dsh-easyrewrite' },
+  'dsh-context': { kind: 'npm', pkg: 'dsh-context' },
+  'ds-harness-remote': { kind: 'npm', pkg: 'ds-harness-remote' },
 });
 
 /**

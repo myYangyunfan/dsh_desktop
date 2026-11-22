@@ -5,6 +5,25 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### fix(companion)：应用内「检查更新」补齐四件内置件（2026-11-22）
+
+内置件管理页的「检查更新」一直查不到 `dsh-pocket` / `dsh-easyrewrite` / `dsh-context` / `ds-harness-remote`
+四件的更新——它们有新版、发行坐标与在册包身份 same，只是更新源唯一表漏登记。
+`scripts/lib/plugin-update-sources.js` 的 `UPDATE_SOURCES` 由 **8 条补到 12 条**（扣 `UPDATE_EXCLUSIONS` 2 条后生效 10 条），
+四条坐标逐个按 npm `latest` 复核（2026-11-22 实测 2.13.2 / 3.1.0 / 0.87.0 / 0.6.7，与本机在册版本一致，故当下无「有新版」误报）。
+
+两条形态差异写进源码注释，不作为排除理由：
+
+- `dsh-pocket` 是 fork 件（`client/client.js` 两条 `:has(textarea)` → `:has(textarea, [data-composer-input])`）。
+  应用内更新会把目录换成 npm tarball，这两条就此丢失——后果是英雄卡行内样式不再命中（纯视觉，不崩），
+  随包换版时按 `.tmp-plugin-audit/replay-pocket.mjs` 重放即可。
+- `ds-harness-remote` 是 `shipsNodeModules: true`，而应用内更新只解 tarball、不装依赖；运行期依赖靠
+  `companion-profile` 的「更新版缺依赖自愈」（issue #125）从安装包内层树补齐。
+- 不纳入更好：把它排除只会把「查不到更新」这个 bug 换个说法，用户要的就是能看见、能更新。
+
+测试随迁：`unit-plugin-update-sources`（12 条键表 + 四条坐标精确 + 过滤用例改认 `dsh-pocket` 有源）、
+`unit-plugin-center`（装配根读同一张表的键表）。文档同步 `docs/builtin-plugins-inventory.md` §4.4 的缺口段。
+
 ### fix(companion)：侧栏「子代理 / 编队」页崩溃修复 + 5 件内置件再升一轮（2026-11-22）
 
 用户报障：打开侧栏的「子代理 / 编队」页，面板里出现一条错误条而不是编队板。根因在宿主契约漂移：

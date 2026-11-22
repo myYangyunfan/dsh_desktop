@@ -620,10 +620,14 @@ actionable(9): better-sidebar, bili-native, dsh-pocket, dsh-easyrewrite,
 `offpeak` / `dsh-session-manager` / `input-history`（撞名 `foreign` / `unverifiable`）、`synapse`（`unknown`，
 会覆盖 `dsw-` 深色适配桥）、`prompt-optimizer`（裸名 `foreign` 且我们更高）。
 
-**顺带发现的缺口（已告知用户，未改）**：应用内「检查更新」源表 `scripts/lib/plugin-update-sources.js` 的
-`UPDATE_SOURCES` 只有 8 条（扣 `UPDATE_EXCLUSIONS` 2 条后生效 6 条），恰好漏掉 `dsh-pocket` /
-`dsh-easyrewrite` / `dsh-context` / `ds-harness-remote` 这 4 个**真有新版且身份 same** 的件——
-用户在内置插件管理页看不到它们的更新。
+**顺带发现并已补齐的缺口（2026-11-22，用户要求「补」）**：应用内「检查更新」源表
+`scripts/lib/plugin-update-sources.js` 的 `UPDATE_SOURCES` 原先只有 8 条（扣 `UPDATE_EXCLUSIONS` 2 条后生效 6 条），
+恰好漏掉 `dsh-pocket` / `dsh-easyrewrite` / `dsh-context` / `ds-harness-remote` 这 4 个**真有新版且身份 same** 的件——
+用户在内置插件管理页看不到它们的更新。现表 **12 条**（生效 10 条），四条坐标逐个复核为 npm 同名包
+（2026-11-22 实测 registry `latest` 分别 2.13.2 / 3.1.0 / 0.87.0 / 0.6.7，与本机在册版本一致）。
+两条形态差异已记入源码注释：`dsh-pocket` 应用内更新会丢掉本仓那两条 CSS 选择器 fork（纯视觉，按
+`.tmp-plugin-audit/replay-pocket.mjs` 重放）；`ds-harness-remote` 只解 tarball 不装依赖，运行期依赖靠
+`companion-profile` 的「更新版缺依赖自愈」（issue #125）从安装包补齐。
 
 ## 五、舰队更新与兼容 sweep（2026-10-08 立项 · 目标宿主 `0.2.0-rc.2`；**2026-10-17 六条静态扫按 `0.2.1-rc.1` 全量复算**；**2026-10-18 按 `0.2.1-rc.2` 复核，判据值逐项不变、全绿**；**2026-10-27 按 `0.2.2-rc.1` 复核自动化面，判据值逐项不变、全绿**）
 

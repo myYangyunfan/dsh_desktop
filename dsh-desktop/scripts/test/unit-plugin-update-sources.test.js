@@ -4,7 +4,8 @@
 // 内置插件更新源唯一表单测（issue：更新链扩展 5 条随包插件 + 排除 better-sidebar）。
 //
 // 锁住三件事：
-//   1. 表内容：3 条既有源不回归 + 5 条新源的 id/包名精确（写错包名=静默查错项目）；
+//   1. 表内容：3 条既有源不回归 + 5 条 2026-10-22 源 + 4 条 2026-11-22 补齐源的 id/包名精确
+//      （写错包名=静默查错项目）；
 //   2. 排除机制：better-sidebar（本地重建件）不参与检查更新、update 直连被拒；
 //   3. 表与交付清单的一致性：每个 source id 必须存在于 COMPANION_PLUGINS ——
 //      防止表里写孤儿 id（loader id 与包名各错一位都表现为「检查更新永远查不到」）。
@@ -32,12 +33,16 @@ const { resolveGithubRelease } = require('../plugin-manager-update.js');
 
 // ── 1. 表内容 ───────────────────────────────────────────────────────────────
 
-test('更新源表：8 条（2 既有 + 6 新增；2026-11-09 把 compaction-acp 换成 bili-native），id/包名逐条精确', () => {
+test('更新源表：12 条（2 既有 + 6 条 2026-10-22 + 4 条 2026-11-22 补齐），id/包名逐条精确', () => {
   assert.deepEqual(Object.keys(UPDATE_SOURCES).sort(), [
     'better-sidebar',
     'bili-native',
     'bot',
+    'ds-harness-remote',
+    'dsh-context',
+    'dsh-easyrewrite',
     'dsh-notify',
+    'dsh-pocket',
     'mcp-manager-ui',
     'network-proxy',
     'shop',
@@ -56,6 +61,13 @@ test('更新源表：8 条（2 既有 + 6 新增；2026-11-09 把 compaction-acp
   assert.deepEqual(UPDATE_SOURCES['network-proxy'], { kind: 'github', repo: 'baizhizzl/dsh-network-proxy' });
   assert.deepEqual(UPDATE_SOURCES['mcp-manager-ui'], { kind: 'npm', pkg: 'dsh-toolbox-ui' });
   assert.deepEqual(UPDATE_SOURCES['dsh-notify'], { kind: 'npm', pkg: '@bittersmilezzz/dsh-notify' });
+
+  // 2026-11-22 补齐四条：这四件此前在表外，用户在内置件管理页看不到它们的更新。
+  // 写错包名 = 静默查错项目，故逐条精确；四件均已在 COMPANION_PLUGINS 里（下面第 3 段咬住）。
+  assert.deepEqual(UPDATE_SOURCES['dsh-pocket'], { kind: 'npm', pkg: 'dsh-pocket' });
+  assert.deepEqual(UPDATE_SOURCES['dsh-easyrewrite'], { kind: 'npm', pkg: 'dsh-easyrewrite' });
+  assert.deepEqual(UPDATE_SOURCES['dsh-context'], { kind: 'npm', pkg: 'dsh-context' });
+  assert.deepEqual(UPDATE_SOURCES['ds-harness-remote'], { kind: 'npm', pkg: 'ds-harness-remote' });
 
   assert.ok(Object.isFrozen(UPDATE_SOURCES), '表必须是只读的（禁止运行期改写造成漂移）');
 });
@@ -100,7 +112,8 @@ test('selectUpdateCandidates: 过滤无源 / 已卸载 / 被排除 / 非法行�
     { id: 'bili-native' },
     { id: 'better-sidebar' },
     { id: 'web-search-free' },
-    { id: 'dsh-pocket' },          // 无更新源
+    { id: 'dsh-pocket' },          // 2026-11-22 起有源
+    { id: 'input-history' },       // 无更新源
     { id: 'shop', removed: true }, // 已卸载
     { id: 'bot' },
     null,
@@ -108,7 +121,7 @@ test('selectUpdateCandidates: 过滤无源 / 已卸载 / 被排除 / 非法行�
     { name: 'no-id' },
   ];
   assert.deepEqual(selectUpdateCandidates(rows).map((r) => r.id),
-    ['bili-native', 'web-search-free']);
+    ['bili-native', 'web-search-free', 'dsh-pocket']);
 
   // 注入自定义源表：过滤只认传进来的表。
   assert.deepEqual(
@@ -180,7 +193,7 @@ test('plugin-core：updates.sources 与唯一表同源，排除项在 update 直
 
   const center = createPluginCenter({ getHome: () => home, getProfile: () => 'web' });
   assert.equal(center.updates.sources, UPDATE_SOURCES, '装配根不得再复制一份表');
-  assert.equal(Object.keys(center.updates.sources).length, 8);
+  assert.equal(Object.keys(center.updates.sources).length, 12);
 
   await assert.rejects(center.updates.update('better-sidebar'), (err) => {
     assert.equal(err.code, 'PLUGIN_NOT_FOUND');
