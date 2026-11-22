@@ -30,6 +30,8 @@
  * @typedef {object} PresentationHandlers
  * @property {(snapshot: PresentationSnapshot, deferred: Set<string>, sections: object[]) => string} catalogText
  *   目录段正文。缓存与预算都在实现侧（runtime），这里只要求它只用 snapshot。
+ * @property {(snapshot: PresentationSnapshot, deferred: Set<string>, sections: object[]) => string} [capabilityText]
+ *   能力元数据线索，与目录共享同一快照，不加载或承诺工具。
  * @property {(snapshot: PresentationSnapshot, deferred: Set<string>, sections: object[]) => Promise<object[]>} [trimSdk]
  *   按快照裁 `tools:sdk` 段。失败时**必须**返回原 sections（不许丢手册）。
  */
@@ -86,11 +88,11 @@ export function maskSection(sections, name) {
  * @param {object} assembly - 宿主组装结果（含 tools / sections）。
  * @param {PresentationSnapshot} snapshot - 同次组装的策略/发现快照。
  * @param {PresentationHandlers} handlers - 目录正文与 SDK 裁剪。
- * @param {{guidanceSection: string, catalogSection: string, onDiagnostic?: (event: object) => void}} options
+ * @param {{guidanceSection: string, catalogSection: string, capabilitySection?: string, onDiagnostic?: (event: object) => void}} options
  * @returns {Promise<object>} 投影后的 assembly（无条件修改时是同一个引用）。
  */
 export async function presentAssembly(assembly, snapshot, handlers, options) {
-  const { guidanceSection, catalogSection, onDiagnostic } = options
+  const { guidanceSection, catalogSection, capabilitySection, onDiagnostic } = options
   if (snapshot.mode === 'both') return assembly
   if (!Array.isArray(assembly?.tools)) {
     // 契约破了：没有 tools 就没有"声明"可裁。此时**只**追加目录会让模型看到一份说
@@ -111,10 +113,17 @@ export async function presentAssembly(assembly, snapshot, handlers, options) {
     ? assembly.tools.filter((tool) => tool?.name !== searchName)
     : visibleTools(assembly.tools, managed, snapshot.state.discovered)
   const toolsChanged = tools.length !== assembly.tools.length
-  let sections = nothingToSearch ? maskSection(assembly.sections, guidanceSection) : [
-    ...(assembly.sections ?? []),
-    { name: catalogSection, text: handlers.catalogText(snapshot, deferred, assembly.sections), interpolate: false },
-  ]
+  let sections = nothingToSearch ? maskSection(assembly.sections, guidanceSection) : assembly.sections
+  if (!nothingToSearch) {
+    const capability = capabilitySection !== undefined && typeof handlers.capabilityText === 'function'
+      ? handlers.capabilityText(snapshot, deferred, assembly.sections)
+      : ''
+    sections = [
+      ...(assembly.sections ?? []),
+      ...(capability === '' ? [] : [{ name: capabilitySection, text: capability, interpolate: false }]),
+      { name: catalogSection, text: handlers.catalogText(snapshot, deferred, assembly.sections), interpolate: false },
+    ]
+  }
   // 手册只在 ptc 下裁：native 没有可裁的段（`sdkSection` 对 native 返回 ''）。
   if (snapshot.mode === 'ptc' && typeof handlers.trimSdk === 'function') {
     // 没有东西可搜时把搜索入口也放进"要摘掉"的集合：手册里留着它，模型照样会去搜。

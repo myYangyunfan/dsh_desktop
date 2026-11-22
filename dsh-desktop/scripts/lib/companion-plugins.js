@@ -161,7 +161,7 @@ const COMPANION_PLUGINS = [
   // HTTP 代理行，读系统代理并热切换 fetch dispatcher。包名保留上游的
   // `@local/dsh-network-proxy`——改名会让 GitHub 更新回来的包名/loader 行对不上。
   { id: 'network-proxy', name: '@local/dsh-network-proxy' },
-  // MCP / 技能工具箱（Imzl-zl/dsh-toolbox-ui，MIT，1.13.2）：右下悬浮面板，
+  // MCP / 技能工具箱（Imzl-zl/dsh-toolbox-ui，MIT，1.14.0）：右下悬浮面板，
   // MCP 市场与技能管理；loader id 是 `mcp-manager-ui`。它静态导入 smol-toml
   // （BSD-3-Clause）——该包不在内核闭包内，改由 dsh-desktop/package.json 显式
   // 依赖 + VENDOR_DEPS 同步，避免用 shipsNodeModules 再开一条依赖分发面。

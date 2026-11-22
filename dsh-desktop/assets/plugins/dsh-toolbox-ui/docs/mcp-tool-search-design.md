@@ -7,6 +7,19 @@
 > `add` / `removeServer` / `installBuiltins` 的运行中生效已在第五轮修好（§12.3 #24）、
 > 第六轮用真 Include + 真重启终验（§12.3 #26 与 OPEN-ITEMS 的 O1R）。
 
+## 当前契约（v1.14.0）
+
+本文保留历次设计与实测的历史论据；当前行为以下列契约及生产代码/回归测试为准，不能把旧实验数字用于当前通用版。
+
+- 完整 schema 继续按需搜索加载。除名字目录外，增加**非穷尽、最多 800 个 UTF-16 字符**的用途提示（包含标题、名称和 JSON 转义）；仅整条选择/省略，不裁切文字。
+- 用途统一引用当前 agent / step 允许且仍 deferred 的实际元数据：首个非空段在 160 字符内整段引用；否则只取首个 ICU 分句候选，在有终句标记且不超过 240 字符时整句引用。没有工具名单、身份/描述哈希门控、人工用途表、已知工具优先或 embeddings。
+- MCP 当前实际 instructions 非空时，不再重复提示；否则每 owner 至多一条例子，全局至多三条，仍受总字符预算约束。这只按说明存在性去重，不判断说明质量。
+- 有限提示可以省略工具；完整目录、全文描述索引与原 schema 均保留。元数据不是调用契约或授权，源首句及 ICU 文本边界也不是语义概括的保证。**尚未验证通用版的模型质量或总 token 收益。**
+- 名字与用途来自同一 PresentationSnapshot；缓存按实际 MCP 说明内容失效，命中也发布当前组装统计。`chars` / `budget` 仍仅表示名字目录，新增 `capabilityChars` / `capabilityCount` / `discoveryChars` 也不是完整请求或计费 token。
+- 混合搜索批次的淘汰保护按**本批返回总数**计算；查询算法、默认值、作用域/加载守卫、native/PTC 绑定和恢复协议不变。
+
+实现见 [用途提示](../lib/tool-discovery-cues.js)、[运行时](../lib/tool-search-runtime.js)与[呈现投影](../lib/tool-search-presentation.js)；独立回归见[通用元数据测试](../test/tool-discovery-generic-hints.test.mjs)与[真实宿主测试](../test/tool-search-capability-cues.test.mjs)。取舍见[通用用途提示决定](../.agents/notes/implemented/2026-11-22-toolsearch-generic-purpose-hints.md)。
+
 ## 1. 目标与非目标
 
 **目标**：MCP 服务器的工具定义不再无条件全量注入每个会话的模型上下文，改为默认延迟、按需搜索加载——复刻 Claude Code ToolSearch 机制，**插件层实现，不等 harness 原生支持**。

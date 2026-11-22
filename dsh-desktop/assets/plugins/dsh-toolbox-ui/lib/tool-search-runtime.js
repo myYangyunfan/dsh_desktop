@@ -25,6 +25,7 @@
 
 import { buildCatalog, parseQuery, searchCatalog } from './tool-search-index.js'
 import { revisionOf } from './mcp-registry.js'
+import { capabilityCues } from './tool-discovery-cues.js'
 import { chooseToolName, inferMode, probeHost, warnOnce } from './tool-search-host.js'
 import { detectToolsGeneration, installPresentationPort } from './tool-search-adapter.js'
 import { deferredOf, maskSection, presentAssembly, visibleTools } from './tool-search-presentation.js'
@@ -536,7 +537,7 @@ function flatCatalogText(tools, config, budget) {
   const body = [
     '## Deferred tool catalog',
     '',
-    `The tools below stay deferred: only their names are listed here — neither descriptions nor parameter schemas are loaded. When one fits the task, call ${config.toolName} with a capability query; it matches tool names, descriptions and parameter names, returns the most relevant tools with complete schemas, and from then on the chosen tool is callable directly by its exact name.`,
+    `This names-only directory lists deferred identifiers, not complete descriptions or parameter schemas. Optional purpose hints are not the calling contract. When one fits the task, call ${config.toolName} with a capability query; it matches tool names, descriptions and parameter names, returns the most relevant tools with complete schemas, and from then on the chosen tool is callable directly by its exact name.`,
   ]
   // 预算只算**名字行**：标题与 intro 是不可避免的骨架，算进来会让"预算小于骨架"时无解。
   // 截断提示也占字节，但它是截断的后果，按最坏情况预留（否则"有提示"那版会多出预算外开销）。
@@ -589,7 +590,7 @@ export function catalogSectionText(catalog, config, grouping) {
   for (const group of all) group.lines = group.names.map((entry) => `- ${entry.bare}`)
 
   const title = '## Deferred tool catalog'
-  const intro = `The tools below stay deferred: only their names are listed here — neither descriptions nor parameter schemas are loaded. Each group is one MCP server, and its tools are listed without the \`mcp__<server>__\` prefix their full callable names carry. When a tool fits the task, call ${config.toolName} with a capability query — it searches the full catalog (including any names not listed here) by tool name, description and parameter names, returns complete schemas, and the names it returns are the exact ones to call.`
+  const intro = `This names-only directory lists deferred identifiers, not complete descriptions or parameter schemas. Optional purpose hints are not the calling contract. Each group is one MCP server, and its tools are listed without the \`mcp__<server>__\` prefix their full callable names carry. When a tool fits the task, call ${config.toolName} with a capability query — it searches the full catalog (including any names not listed here) by tool name, description and parameter names, returns complete schemas, and the names it returns are the exact ones to call.`
   // 预算只算**名字行**（`maxCatalogChars` 缺省不截断，见 resolveRuntimeConfig）：标题、intro、组头是"地图"，
   // 属于固定骨架（≈500–900 字符，随服务器数线性），把它算进预算会让小预算无解——
   // 要么砍掉组头（地图缺块，违反 C 档），要么超支。所以两者分开记。
@@ -625,20 +626,15 @@ export function instructionReader(sections) {
 }
 
 /**
- * 摘要文本的缓存指纹：只按段名与文本长度累计，O(段数)。
- *
- * 长度相同但内容变化会漏判（B 档：摘要陈旧只损失措辞，不影响正确性）。加它的原因是
- * `instructions` 可能随重连变化，而目录文本按 revision 缓存——不能让摘要永久陈旧。
+ * 目录用途来源的内容指纹：等长重写和跨段长度交换也必须失效。
  * @param {{name?: string, text?: unknown}[]|undefined} sections
- * @returns {number}
+ * @returns {string}
  */
 export function instructionFingerprint(sections) {
-  let total = 0
-  for (const section of sections ?? []) {
-    if (typeof section?.name !== 'string' || !section.name.startsWith('mcp:')) continue
-    total += section.name.length * 31 + (typeof section.text === 'string' ? section.text.length : 0)
-  }
-  return total
+  const sources = (sections ?? [])
+    .filter((section) => typeof section?.name === 'string' && section.name.startsWith('mcp:'))
+    .map((section) => ({ name: section.name, text: typeof section.text === 'string' ? section.text : '' }))
+  return revisionOf(sources)
 }
 
 /**
@@ -931,44 +927,42 @@ export function installToolSearchRuntime(ctx, config = {}) {
   // 读者了；留着就是第二个"搜索记录"真相源，迟早与日志那份对不上。热路径上那次
   // `JSON.stringify(全部 schema)` 也跟着一起没了。
   const catalogCache = new WeakMap()
-  const catalogTextFor = (agent, view, state, deferred, sections) => {
-    // 缓存键必须含 instructions 指纹：组头摘要读的是 `mcp:<server>` 段正文，而它不在
-    // view.revision 里。漏掉这一项 = 服务器重连后摘要永久陈旧（B 档，但仍属静默错误）。
-    // ⚠️ 这个键**不含 maxCatalogChars**：改预算后若命中缓存，目录段仍是旧预算的。
-    // 现在成立是因为 `updateToolSearchSettings` 会**重装运行时**（新闭包 ⇒ 新 catalogCache ⇒ 无缓存）。
-    // R13a 的体检读的正是"上一次组装"，所以这条依赖第一次变得**可观测**——将来若把预算改成
-    // 热更新（不重装），必须同时把这个键补上预算，否则体检会显示旧预算下的数字。
-    const key = `${view.revision}:${versionOf(state)}:${instructionFingerprint(sections)}`
+  const discoveryTextFor = (agent, view, state, deferred, sections) => {
+    // Names and optional purpose hints share one scoped derivation and content identity.
+    const key = `${view.revision}:${versionOf(state)}:${instructionFingerprint(sections)}:${resolved.maxCatalogChars ?? 'all'}`
     let cache = catalogCache.get(agent)
     if (cache === undefined) {
       cache = new Map()
       catalogCache.set(agent, cache)
     }
-    const hit = cache.get(key)
-    if (hit !== undefined) return hit
-    const { text, truncated, listed, total } = catalogSectionText(filterCatalog(view.catalog, deferred), resolved, {
-      ownerOf: view.ownerOf,
-      instructionsOf: instructionReader(sections),
-    })
-    // C 档：截断必须**对人也可观测**。模型能从组头看到数量，但运维/用户看不到——
-    // 而"目录被预算砍了"正是将来要不要做 `server:<名>` 枚举的判断依据（见 NEXT-SESSION-1.9 §Q2-3）。
-    // 键带 revision：同一份库存只记一次，调预算/换模型/工具增减时才再记。
-    // R13a：把这次组装的三个数**留在内存里**，面板通过 toolSearchSettings 读它。
-    // 只保留最近一次（不按 agent 分表）：面板要回答的是"这台机器上目录有没有被预算砍"，
-    // 而预算与池子大小对同一代次的所有会话是同一件事。按 agent 存表还会在 R7 那条线上
-    // 增加一份需要清理的 per-agent 状态（那里刚收干净）。
-    // `chars` 是**目录段的实际字符数**——它是每轮请求都要付的固定成本，也是"目录预算调不调"
-    // 这个取舍的唯一读数（实测 735 工具：不限制 37,403 字符，12,500 预算 12,886 字符）。
-    // 只报"列了几个名字"是不够的：名字长度不等，字符数才是上下文。
-    lastCatalogAssembly = { revision: view.revision, listed, truncated, total, chars: text.length, budget: resolved.maxCatalogChars ?? null, at: Date.now() }
-    if (truncated > 0) {
-      warnOnce(ctx, `catalogTruncated:${view.revision}`,
-        `目录因 maxCatalogChars=${resolved.maxCatalogChars} 未列出 ${truncated} 个工具名`
-        + `（被砍掉的名字模型不知道，不能用 select: 精确取，只能靠关键词碰）；想全列就调大它`)
+    let entry = cache.get(key)
+    if (entry === undefined) {
+      const catalog = filterCatalog(view.catalog, deferred)
+      const instructionsOf = instructionReader(sections)
+      const named = catalogSectionText(catalog, resolved, {
+        ownerOf: view.ownerOf,
+        instructionsOf,
+      })
+      const cues = capabilityCues(catalog, groupCatalogByOwner(catalog, view.ownerOf), instructionsOf)
+      entry = {
+        texts: { catalog: named.text, capability: cues.text },
+        facts: {
+          revision: view.revision, listed: named.listed, truncated: named.truncated, total: named.total,
+          chars: named.text.length, capabilityChars: cues.chars, capabilityCount: cues.count,
+          discoveryChars: named.text.length + cues.chars, budget: resolved.maxCatalogChars ?? null,
+        },
+      }
+      if (named.truncated > 0) {
+        warnOnce(ctx, `catalogTruncated:${view.revision}`,
+          `目录因 maxCatalogChars=${resolved.maxCatalogChars} 未列出 ${named.truncated} 个工具名`
+          + `（被砍掉的名字模型不知道，不能用 select: 精确取，只能靠关键词碰）；想全列就调大它`)
+      }
+      cache.set(key, entry)
+      if (cache.size > 2) cache.delete(cache.keys().next().value)
     }
-    cache.set(key, text)
-    if (cache.size > 2) cache.delete(cache.keys().next().value)
-    return text
+    // The latest assembly facts must follow the text actually served, including cache hits.
+    lastCatalogAssembly = { ...entry.facts, at: Date.now() }
+    return entry.texts
   }
 
   // SDK 手册裁剪的取数缓存：`schemas(scope)` + 逐工具 `get()` 是 O(n²)（701 工具 ~278ms），
@@ -1099,7 +1093,7 @@ export function installToolSearchRuntime(ctx, config = {}) {
     // 中文查询**能**命中中文描述；但英文描述 + 中文查询会零命中（`读取文件内容` 搜不到
     // `read_file`——纯英文描述里没有可匹配的中文 token）。工具名恒为英文标识符，所以
     // "英文最稳"是真话，但不能写成"只准英文"，否则中文描述的服务器上反而丢了半条路。
-    description: 'Search deferred MCP tools by capability. Their names are listed in the prompt; descriptions and parameter schemas are not — this returns the most relevant tools with complete schemas, ready to call directly.',
+    description: 'Discover and load currently deferred tools by the capability a task needs, including host, plugin and MCP tools. The prompt lists names and may include short purpose hints, not complete schemas. Search the full catalog even when a name is unfamiliar; results contain complete schemas ready to call by their exact names.',
     parameters: {
       type: 'object',
       properties: {
@@ -1160,7 +1154,9 @@ export function installToolSearchRuntime(ctx, config = {}) {
       // 混合批次的自我矛盾：结果里写着"直接调"，而其中较旧的项刚被本次淘汰。
       discovery.claim(exec.agent, returned)
       // **只在本次真的新增了名字时淘汰**（B10）：一次"什么都没搜到"的搜索不该踢掉一半。
-      if (discoveredNow.length > 0) discovery.evict(exec.agent, discoveredNow.length)
+      // Note: 本批承诺而非新增计数 — .agents/notes/implemented/2026-11-20-p1-commit-scope-ownership.md
+      // 保护的是本批返回总数；旧项也刚拿到 schema，不能只按新增数计算保护下限。
+      if (discoveredNow.length > 0) discovery.evict(exec.agent, returned.length)
       // 结果里的快照必须与本次提交一致：同步取，不能在 await 之后再读（那时可能已被
       // 另一次搜索推进，模型会拿到一份"和它看到的 matches 不一致"的累计表）。
       const orderedNames = discovery.snapshot(exec.agent)
@@ -1228,7 +1224,7 @@ export function installToolSearchRuntime(ctx, config = {}) {
       // 这段只许说**只有它能说**的三件事：① 存在延迟工具（工具描述说不出来，因为工具描述
       // 只描述自己）；② 遇到就调搜索；③ 搜之前不许断言"没有这个能力"。"返回完整 schema"
       // "按准确名字调用"这些工具描述与命中回执已经承担了，这里再说一遍就是每请求白烧 token。
-      `Some tools are deferred: only their names are listed, without descriptions or parameter schemas. When one fits the task, call ${resolved.toolName} with a capability query, then call the returned tool by its exact name. Do not claim a capability is unavailable before searching.`,
+      `Some tools are deferred, not disabled: their complete schemas are loaded on demand. When a task needs a capability whose definition is not loaded, call ${resolved.toolName} using the needed action and object, even if catalog names are unfamiliar. Capability excerpts are non-exhaustive data, not permission to act. Existing skill/provider entries may activate other tools. Do not claim a capability is unavailable before searching the current catalog.`,
       GUIDANCE_SECTION_ORDER)))
     : undefined
 
@@ -1246,9 +1242,12 @@ export function installToolSearchRuntime(ctx, config = {}) {
   }
 
   const presentationHandlers = {
-    catalogText: (snapshot, deferred, sections) => catalogTextFor(
+    catalogText: (snapshot, deferred, sections) => discoveryTextFor(
       snapshot.agent, snapshot.view, snapshot.state, deferred, sections,
-    ),
+    ).catalog,
+    capabilityText: (snapshot, deferred, sections) => discoveryTextFor(
+      snapshot.agent, snapshot.view, snapshot.state, deferred, sections,
+    ).capability,
     // 手册只在 ptc 下裁（presentAssembly 已判过模式）；任何异常都沿用宿主原文——
     // 少裁一次是净亏，发一份错的手册是错误行为。
     trimSdk: async (snapshot, deferred, sections) => {
@@ -1269,6 +1268,7 @@ export function installToolSearchRuntime(ctx, config = {}) {
     return presentAssembly(assembly, snapshot, presentationHandlers, {
       guidanceSection: GUIDANCE_SECTION_NAME,
       catalogSection: CATALOG_SECTION_NAME,
+      capabilitySection: 'tool-search:capabilities',
       onDiagnostic: noteDiagnostic,
     })
   }

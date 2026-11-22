@@ -5813,14 +5813,37 @@ const ContextFace = ({ call }) => {
   const [targetId, setTargetId] = useState(null)
   const [box, setBox] = useState({ w: 0, h: 288 })
   const boxRef = useRef(null)
+  // Note: 完成顺序与 loading 归属必须分开 — .agents/notes/implemented/2026-11-20-p1-commit-scope-ownership.md
+  // epoch 隔离选择/生命周期；同一 epoch 的结果按已完成序号单调提交。
+  // 新轮询尚在途时，前一份可用结果仍要展示，不能因 RPC 慢于 3s 而一直空白。
+  const requestState = useRef({ epoch: 0, issued: 0, committed: 0 })
+  const invalidateRequests = useCallback(() => { requestState.current.epoch += 1 }, [])
+  const selectTarget = useCallback((target) => {
+    invalidateRequests()
+    setTargetId(target)
+  }, [invalidateRequests])
 
-  const load = useCallback(async (target) => {
+  // 来源固定目标/RPC/选择 epoch；token 只由它自己的 effect setup/cleanup 持有。
+  // 旧回调只能带回旧来源，不能在执行时认领当前选择；旧 cleanup 也不会使新来源失效。
+  const source = useMemo(() => ({ epoch: requestState.current.epoch, target: targetId, call, token: null }), [call, targetId])
+  const load = useCallback(async (origin) => {
+    const state = requestState.current
+    const token = origin.token
+    if (token === null || origin.epoch !== state.epoch) return
+    const sequence = ++state.issued
+    const inScope = () => origin.token === token && origin.epoch === state.epoch
+    const commitResult = () => {
+      if (!inScope() || sequence < state.committed) return false
+      state.committed = sequence
+      return true
+    }
     setLoading(true)
     // 唯一的来源是"用户在总览里点选了哪个会话"。不再猜测"界面上正在看哪个"：
     // 这个面板是全局的，猜错只会让人以为数字错了。
-    const wanted = target ?? targetId
+    const wanted = origin.target
     try {
-      const result = await call('contextReport', wanted ? { sessionId: wanted } : {})
+      const result = await origin.call('contextReport', wanted ? { sessionId: wanted } : {})
+      if (!commitResult()) return
       if (!result || result.ok === false) {
         setError((result && result.error) || t('上下文读取失败'))
         return
@@ -5830,22 +5853,24 @@ const ContextFace = ({ call }) => {
       // 宿主给回来的**不是用户点的那个**：说明它已经不在了（会话结束 / 工作区关闭）。
       // 静默换成别的会话是最坏的一种：标题说 A、数字是 B，而用户没有理由怀疑。
       // 退回总览，让"现在有哪些会话"自己说话，不需要额外一句解释。
-      if (wanted && result.session && result.session.id !== wanted) setTargetId(null)
+      if (wanted && result.session && result.session.id !== wanted) selectTarget(null)
     } catch (error) {
       // RPC 层拒绝（宿主重启、连接断开）不是 `{ok:false}`，会抛。不接住就是两件事：
       // 转圈永远停不下 + 一个没人处理的 rejection。
-      setError((error && error.message) || t('上下文读取失败'))
+      if (commitResult()) setError((error && error.message) || t('上下文读取失败'))
     } finally {
-      setLoading(false)
+      // 结果可推进并不代表后续请求已结束；loading 只归最近发出的那一次。
+      if (inScope() && sequence === state.issued) setLoading(false)
     }
-  }, [call, targetId])
+  }, [selectTarget])
 
   useEffect(() => {
     let alive = true
-    load(targetId)
-    const interval = setInterval(() => { if (alive) load(targetId) }, 3000)
-    return () => { alive = false; clearInterval(interval) }
-  }, [load, targetId])
+    source.token = {}
+    load(source)
+    const interval = setInterval(() => { if (alive) load(source) }, 3000)
+    return () => { alive = false; source.token = null; clearInterval(interval) }
+  }, [load, source])
 
   // 宽度量容器（treemap / 网格都按真实像素排布），量不到就按面板宽度估。
   useEffect(() => {
@@ -5865,7 +5890,7 @@ const ContextFace = ({ call }) => {
   if (error && report === null) {
     return h('div', { className: 'dsh-mcp-ctx' },
       h('div', { className: 'dsh-mcp-d-err', role: 'alert' }, error),
-      h('button', { type: 'button', className: 'dsh-mcp-btn sm', onClick: () => load(targetId) }, t('重试')),
+      h('button', { type: 'button', className: 'dsh-mcp-btn sm', onClick: () => load(source) }, t('重试')),
     )
   }
   if (report === null) {
@@ -5907,7 +5932,7 @@ const ContextFace = ({ call }) => {
             type: 'button',
             className: 'dsh-mcp-ctx-allrow' + (entry.running ? ' running' : ''),
             title: entry.cwd || entry.id,
-            onClick: () => setTargetId(entry.id),
+            onClick: () => selectTarget(entry.id),
           },
             h('div', { className: 'dsh-mcp-ctx-allrow-top' },
               entry.workspace ? h('span', { className: 'dsh-mcp-ctx-session-ws' }, entry.workspace) : null,
@@ -6403,7 +6428,7 @@ const ContextFace = ({ call }) => {
   )
   const sessionBar = sessions.length > 1
     ? h('div', { className: 'dsh-mcp-ctx-sessions' },
-      h('button', { type: 'button', className: 'dsh-mcp-ctx-back', onClick: () => setTargetId(null) }, t('← 全部会话')),
+      h('button', { type: 'button', className: 'dsh-mcp-ctx-back', onClick: () => selectTarget(null) }, t('← 全部会话')),
       sessionChip,
     )
     : h('div', { className: 'dsh-mcp-ctx-sessions' },

@@ -25,14 +25,14 @@ The development baseline tracks the latest verified RC and mirrors every peer de
 Installing via npm is recommended: the `^1.x` range in the package lets a later `dsh plugin update` upgrade minor versions automatically.
 
 ```sh
-dsh plugin --profile web add dsh-toolbox-ui@^1.13.2
+dsh plugin --profile web add dsh-toolbox-ui@^1.14.0
 ```
 
 You can also pin a GitHub release tag (useful when you need to lock a specific version):
 
 ```sh
 # 固定 release tag
-dsh plugin --profile web add github:Imzl-zl/dsh-toolbox-ui#v1.13.2
+dsh plugin --profile web add github:Imzl-zl/dsh-toolbox-ui#v1.14.0
 
 # 或固定某个 commit
 dsh plugin --profile web add github:Imzl-zl/dsh-toolbox-ui#<commit>
@@ -83,7 +83,7 @@ The behavior differs depending on the spec used at install time:
 
 | Install spec | Effect of `update` | How to cross versions |
 |---|---|---|
-| `dsh-toolbox-ui@^1.13.2` (npm, recommended) | Automatically upgrades to the latest minor version within `^1.x`, never crossing into 2.0.0 | Already automatic; for a major version, explicitly install `@^2` |
+| `dsh-toolbox-ui@^1.14.0` (npm, recommended) | Automatically upgrades to the latest minor version within `^1.x`, never crossing into 2.0.0 | Already automatic; for a major version, explicitly install `@^2` |
 | `github:...#v1.4.0` (tag) | Re-resolves the same tag, **does not move** | Switch to a new tag and `add` again: `... #<new tag>` |
 | `github:...#<commit>` | Same as above, pinned to the commit | `add` again with a new commit/tag |
 | `github:...#main` (branch) | Pulls the latest main | Already automatic; but not recommended for production (no release gate) |
@@ -123,7 +123,7 @@ dsh web    # 打开面板点一遍
 # 3) 提交并推 tag（CI 会校验 tag 与 version 一致，不一致就拒绝发布）
 git add -A && git commit -m "..."
 git push origin main
-git tag -a v1.13.2 -m "dsh-toolbox-ui 1.13.2" && git push origin v1.13.2
+git tag -a v1.14.0 -m "dsh-toolbox-ui 1.14.0" && git push origin v1.14.0
 ```
 
 After the tag is pushed, CI does the following in order: verify the version → `pnpm install --frozen-lockfile` → `npm test` → `npm publish` (trusted publishing, no token needed) → `gh release create`.
@@ -142,7 +142,7 @@ Why this cannot be delegated to CI: the symptom of this class of failure is a **
 
 ```sh
 npm publish          # 会弹 2FA 挑战；若用 bypass-2FA 的 granular token 则非交互
-gh release create v1.13.2 --title "dsh-toolbox-ui v1.13.2" --notes-file <notes>
+gh release create v1.14.0 --title "dsh-toolbox-ui v1.14.0" --notes-file <notes>
 ```
 
 The session token from `npm login` lasts only 2 hours; once it expires you must log in again. Classic tokens have been permanently revoked by npm, so the only remaining way to publish non-interactively is a granular access token with **Bypass 2FA** checked — but npm is narrowing that (it can no longer perform account/package management operations, and from 2027-01 it will lose the ability to publish directly), so the long-term solution is trusted publishing as described above.

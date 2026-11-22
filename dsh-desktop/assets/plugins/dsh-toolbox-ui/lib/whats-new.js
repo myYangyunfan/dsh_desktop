@@ -950,4 +950,36 @@ export const WHATS_NEW = [
       },
     ],
   },
+  {
+    version: '1.14.0',
+    items: [
+      {
+        text: {
+          zh: '**ToolSearch 增加有限用途提示**：按统一规则引用当前工具描述中的短首段或完整首句，不依赖某套 MCP 名单；完整工具定义仍按需搜索加载，未显示提示的工具仍可搜索',
+          en: '**ToolSearch adds bounded purpose hints**: uniform rules quote a short first paragraph or complete first sentence from current tool metadata, without a fixed MCP inventory; full definitions still load on demand, and tools without a hint remain searchable',
+        },
+        where: { zh: '启用按需加载的会话（面板「工具」页配置）', en: 'Sessions with on-demand loading enabled (configured on the panel\'s "Tools" tab)' },
+      },
+      {
+        text: {
+          zh: '**修复混合搜索批次的加载承诺**：一次搜索返回的旧工具与新工具都受到保护，不再刚拿到完整定义就被同批淘汰',
+          en: '**Mixed search batches keep their loading promise**: previously loaded and newly found tools returned together are protected from immediate eviction by that same batch',
+        },
+      },
+      {
+        text: {
+          zh: '**同名 MCP 工具详情按项目隔离**：明确选择项目时，不再被全局同名服务抢答；无效工作区路径会明确报错',
+          en: '**Same-named MCP tool details respect project scope**: selecting a project no longer returns a global server with the same name; invalid workspace paths fail explicitly',
+        },
+        where: { zh: '项目 MCP → 工具详情', en: 'Project MCP → tool details' },
+      },
+      {
+        text: {
+          zh: '**上下文页不再被旧请求覆盖**：切换会话、重装连接或关闭面板后的旧响应失效；慢于轮询间隔的有效报告仍能持续显示',
+          en: '**Stale requests no longer overwrite the Context tab**: responses from an old selection, replaced RPC connection or closed panel are ignored, while valid reports still advance when requests take longer than the polling interval',
+        },
+        where: { zh: '面板「上下文」页', en: 'Panel "Context" tab' },
+      },
+    ],
+  },
 ]

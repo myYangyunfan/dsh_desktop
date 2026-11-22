@@ -620,18 +620,20 @@ let McpManagerGateway = (() => {
 			return mutationResult("unchanged", "applied", { note: "restart requested" });
 		}
 		async tools(payload) {
-			// 契约声明的是一个 payload 对象：全局 MCP 只需 name，项目 MCP 还要 wsPath。跳作用域
-			// 同名是合法配置（官方按注册作用域隔离），所以光按名字扫描会把 A 项目的工具列到
-			// B 项目的详情里；有 wsPath 时必须按 (wsPath, serverName) 精确定位。
+			// Note: 请求作用域优先于全局同名查询 — .agents/notes/implemented/2026-11-20-p1-commit-scope-ownership.md
+			// 全局只需 name；提供 wsPath 就明确选择项目，必须先校验路径并按
+			// (wsPath, serverName) 查找，不能让同名全局条目（包括空工具集）抢先返回。
 			const value = String(payload?.name ?? "");
+			const rawPath = payload?.wsPath;
+			if (rawPath !== undefined) {
+				const wsPath = canonicalWorkspacePath(rawPath);
+				return { tools: workspaceToolSchemas(this.ctx, value, wsPath).map(projectToolSchema), ambiguous: false };
+			}
 			const inventory = toolInventoryOf(this.ctx);
 			const global = inventory.schemas.get(value);
 			if (global !== undefined) return { tools: global.map(projectToolSchema), ambiguous: inventory.ambiguous.has(value) };
-			// 项目 MCP 不是 loader 条目，它的工具注册在共享作用域层里，toolInventory 走的全局视图
-			// 根本看不到（这是之前面板列表报“N 工具”、详情却永远空白的原因）。按 scopeKey 枚举。
-			const rawPath = payload?.wsPath;
-			const wsPath = typeof rawPath === "string" && rawPath ? canonicalWorkspacePath(rawPath) : undefined;
-			return { tools: workspaceToolSchemas(this.ctx, value, wsPath).map(projectToolSchema), ambiguous: false };
+			// 保留未传路径、且没有全局条目时的既有项目查找兼容行为。
+			return { tools: workspaceToolSchemas(this.ctx, value).map(projectToolSchema), ambiguous: false };
 		}
 		async builtins() {
 			const state = await managedState(this.ctx);

@@ -96,10 +96,10 @@ Tool definitions drop from **89.9K** to **9.4K** — **80.5K less (-89.5%)**, ab
 
 ```sh
 # Recommended: from npm — `dsh plugin update` then upgrades within ^1.x
-dsh plugin --profile web add dsh-toolbox-ui@^1.13.2
+dsh plugin --profile web add dsh-toolbox-ui@^1.14.0
 
 # Or pin a GitHub release tag (no automatic upgrades; re-add with a new tag)
-dsh plugin --profile web add github:Imzl-zl/dsh-toolbox-ui#v1.13.2
+dsh plugin --profile web add github:Imzl-zl/dsh-toolbox-ui#v1.14.0
 ```
 
 Then **restart `dsh web`**. To uninstall (your existing MCP entries stay):
