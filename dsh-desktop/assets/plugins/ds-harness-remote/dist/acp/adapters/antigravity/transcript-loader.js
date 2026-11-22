@@ -7,6 +7,32 @@ import { homedir } from 'node:os';
 import { createRequire } from 'node:module';
 // Load prefix-only Node builtins natively, including under older Vite runners.
 const nodeRequire = createRequire(import.meta.url);
+const FIRST_LINE_CHUNK_BYTES = 4096;
+const MAX_FIRST_LINE_BYTES = 256 * 1024;
+async function readFirstLine(handle) {
+    const chunks = [];
+    let totalBytes = 0;
+    while (totalBytes <= MAX_FIRST_LINE_BYTES) {
+        const chunk = Buffer.allocUnsafe(FIRST_LINE_CHUNK_BYTES);
+        const { bytesRead } = await handle.read(chunk, 0, chunk.length, totalBytes);
+        if (bytesRead === 0)
+            break;
+        const slice = chunk.subarray(0, bytesRead);
+        const newlineIndex = slice.indexOf(0x0a);
+        if (newlineIndex !== -1) {
+            const lineBytes = totalBytes + newlineIndex;
+            if (lineBytes > MAX_FIRST_LINE_BYTES)
+                return undefined;
+            chunks.push(slice.subarray(0, newlineIndex));
+            return Buffer.concat(chunks, lineBytes).toString('utf-8');
+        }
+        totalBytes += bytesRead;
+        if (totalBytes > MAX_FIRST_LINE_BYTES)
+            return undefined;
+        chunks.push(slice);
+    }
+    return totalBytes > 0 ? Buffer.concat(chunks, totalBytes).toString('utf-8') : undefined;
+}
 export function cleanUserPrompt(raw) {
     if (!raw)
         return '';
@@ -154,7 +180,7 @@ async function querySqliteJson(dbPath, sql, params = []) {
             const val = typeof p === 'number' ? String(p) : `'${String(p).replace(/'/g, "''")}'`;
             formattedSql = formattedSql.replace('?', val);
         }
-        const { stdout } = await execFileAsync('sqlite3', [dbPath, '-json', formattedSql]);
+        const { stdout } = await execFileAsync('sqlite3', [dbPath, '-json', formattedSql], { windowsHide: true });
         return JSON.parse(stdout || '[]');
     }
     catch {
@@ -221,9 +247,7 @@ async function readTranscriptSummary(baseDir, conversationId) {
         const stat = await fs.stat(path);
         const handle = await fs.open(path, 'r');
         try {
-            const buffer = Buffer.alloc(4096);
-            const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-            const firstLine = buffer.subarray(0, bytesRead).toString('utf-8').split('\n')[0];
+            const firstLine = await readFirstLine(handle);
             if (!firstLine)
                 return undefined;
             const record = JSON.parse(firstLine);
@@ -294,9 +318,7 @@ export async function discoverAntigravitySessions(workspacePath, limit = 30, bas
             const s = await fs.stat(path);
             const handle = await fs.open(path, 'r');
             try {
-                const buf = Buffer.alloc(4096);
-                const { bytesRead } = await handle.read(buf, 0, 4096, 0);
-                const firstLine = buf.subarray(0, bytesRead).toString('utf-8').split('\n')[0];
+                const firstLine = await readFirstLine(handle);
                 if (firstLine) {
                     const parsed = JSON.parse(firstLine);
                     const rawPrompt = cleanUserPrompt(parsed.content);

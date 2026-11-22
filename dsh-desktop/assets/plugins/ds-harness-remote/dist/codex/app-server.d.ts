@@ -1,4 +1,4 @@
-import { type ChildProcessWithoutNullStreams } from 'node:child_process';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { SafeLogger } from '../logging.js';
 export interface CodexAppServerNotification {
     kind: 'notification';
@@ -43,12 +43,17 @@ export declare class CodexAppServerClient implements CodexAppServerLike {
     private readonly pending;
     private readonly inboundHandlers;
     private readonly unavailableHandlers;
-    private stdoutBuffer;
+    private stdoutChunks;
+    private stdoutBytes;
     private stderrBytes;
     private ready;
     private closed;
     private failureNotified;
     private startPromise?;
+    private readonly exitedChildren;
+    private readonly childExitPromises;
+    private readonly terminatingChildren;
+    private pendingTermination?;
     constructor(binary: string, logger?: SafeLogger | undefined, spawnAppServer?: SpawnCodexAppServer);
     start(): Promise<void>;
     isReady(): boolean;
@@ -64,6 +69,9 @@ export declare class CodexAppServerClient implements CodexAppServerLike {
     private consumeStdout;
     private handleLine;
     private handleProcessFailure;
+    private terminateChild;
+    private hasChildExited;
+    private resetStdoutBuffer;
     private notifyUnavailable;
     private takePending;
     private failPending;

@@ -6,11 +6,14 @@ import { z } from 'zod';
 import { RemoteTypertGateway } from './remote-typert-gateway.js';
 import { uuidV7 } from './ids.js';
 const id = z.string().min(1).max(256);
+const presetId = z.string().min(1).max(128).refine(value => value.trim().length > 0 && !/[\u0000-\u001f\u007f]/u.test(value));
 const MAX_REMOTE_WORKSPACES = 512;
 const MAX_REMOTE_SESSIONS = 2048;
 const MAX_SESSIONS_PER_WORKSPACE = 2048;
+const MAX_REMOTE_PRESETS = 256;
 const sequence = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
-const workspace = z.object({ hostId: id, backend: z.literal('harness'), workspaceId: id }).strict();
+const hostTarget = z.object({ hostId: id, backend: z.literal('harness') }).strict();
+const workspace = hostTarget.extend({ workspaceId: id });
 const session = workspace.extend({ sessionId: id });
 const operationId = z.string().regex(/^[A-Za-z0-9_-]{16,128}$/);
 const cursor = z.object({ throughSeq: sequence, beforeSeq: sequence }).strict().refine(value => value.beforeSeq <= value.throughSeq);
@@ -18,9 +21,11 @@ export const sessionToolInputs = {
     remote_upload_file: session.extend({ operationId, localPath: z.string().min(1).max(4096).refine(value => isAbsolute(value) && !value.includes('\0')),
         name: z.string().min(1).refine(value => Buffer.byteLength(value, 'utf8') <= 220 && value !== '.' && value !== '..' && !/[\\/:\x00-\x1f\x7f]/u.test(value)).optional() }),
     remote_download_file: session.extend({ path: z.string().min(1).max(4096).refine(value => !value.includes("\0") && !value.startsWith("/") && !value.includes("\\") && !value.includes(":") && value.split("/").every(part => part !== ".." && part !== "")) }),
+    remote_list_presets: hostTarget.extend({ workspaceId: id.optional() }),
     remote_list_sessions: workspace.extend({ offset: sequence.max(100_000).default(0), limit: z.number().int().min(1).max(100).default(30) }),
     remote_read_session: session.extend({ cursor: cursor.optional(), maxMessages: z.number().int().min(1).max(50).default(20) }),
-    remote_create_session: workspace.extend({ operationId }),
+    remote_create_session: workspace.extend({ operationId, preset: presetId.optional() }),
+    remote_select_preset: session.extend({ operationId, preset: presetId }),
     remote_send_message: session.extend({ operationId, message: z.string().min(1).max(64 * 1024).refine(value => value.trim().length > 0) }),
     remote_interrupt_session: session.extend({ operationId }),
     remote_wait_sessions: z.object({ targets: z.array(session).min(1).max(8), timeoutMs: z.number().int().min(0).max(60_000).default(30_000) }).strict(),
@@ -28,13 +33,18 @@ export const sessionToolInputs = {
 };
 const rowSchema = z.object({
     sessionId: id, title: z.string().optional(), running: z.boolean(), blank: z.boolean(), updatedAt: z.number(),
-    parentSessionId: z.string().optional(), origin: z.string().optional(), projections: z.unknown().optional(),
+    parentSessionId: z.string().optional(), origin: z.string().optional(), agentPreset: z.union([z.string(), z.null()]).optional(), projections: z.unknown().optional(),
 });
 const workspaceRow = z.object({ workspaceId: id, path: z.string(), title: z.string(), sessionIds: z.array(id).max(MAX_SESSIONS_PER_WORKSPACE) });
 const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value) ? value : {};
 export class RemoteSessionToolError extends Error {
+    explicit;
+    constructor(message, explicit = false) {
+        super(message);
+        this.explicit = explicit;
+    }
 }
-const fail = (code) => { throw new RemoteSessionToolError(code); };
+const fail = (code, explicit = false) => { throw new RemoteSessionToolError(code, explicit); };
 /** Fixed native operations over the existing carrier. No alternate Harness wire API. */
 export class RemoteSessionTools {
     connect;
@@ -107,6 +117,21 @@ export class RemoteSessionTools {
                 return this.ledger.get(args.operationId)?.receipt ?? { operationId: args.operationId, status: 'not_found',
                     warning: 'No receipt in this runtime. This does not prove the operation was not executed. Inspect the remote session before sending again.' };
             }
+            case 'remote_list_presets': {
+                const args = sessionToolInputs[operation].parse(input);
+                return this.onHost(args, signal, async (gateway, active) => {
+                    if (args.workspaceId !== undefined) {
+                        await this.requireWorkspace(gateway, { hostId: args.hostId, backend: args.backend, workspaceId: args.workspaceId }, active);
+                    }
+                    const presets = await this.listPresets(gateway, active);
+                    return {
+                        hostId: args.hostId,
+                        backend: 'harness',
+                        ...(args.workspaceId === undefined ? {} : { workspaceId: args.workspaceId }),
+                        presets,
+                    };
+                });
+            }
             case 'remote_list_sessions': {
                 const args = sessionToolInputs[operation].parse(input);
                 return this.onHost(args, signal, async (gateway, active) => {
@@ -135,12 +160,16 @@ export class RemoteSessionTools {
                     const state = new ObservedState(row);
                     if (args.cursor === undefined)
                         state.snapshot(page);
-                    return { ...target(args), sessionId: args.sessionId, status: state.status,
+                    const agentPreset = args.cursor === undefined ? extractAgentPreset(page, row) : extractAgentPreset(row);
+                    return { ...target(args), sessionId: args.sessionId,
+                        ...(agentPreset === undefined ? {} : { agentPreset }),
+                        status: state.status,
                         ...boundedHistory(records, page.hasMore === true, throughSeq) };
                 });
             }
             case 'remote_wait_sessions': return this.wait(sessionToolInputs[operation].parse(input), signal);
             case 'remote_create_session': return this.mutate(operation, sessionToolInputs[operation].parse(input), signal);
+            case 'remote_select_preset': return this.mutate(operation, sessionToolInputs[operation].parse(input), signal);
             case 'remote_send_message': return this.mutate(operation, sessionToolInputs[operation].parse(input), signal);
             case 'remote_interrupt_session': return this.mutate(operation, sessionToolInputs[operation].parse(input), signal);
         }
@@ -151,6 +180,43 @@ export class RemoteSessionTools {
                 fail('HARNESS_SESSIONS_UNAVAILABLE');
             return query(new RemoteTypertGateway(remote.client), active);
         });
+    }
+    async listPresets(gateway, signal) {
+        const result = await gateway.dispatch('agentPresets/list', { args: {} }, signal);
+        if (!result.ok)
+            throw new RemoteSessionToolError('AGENT_PRESETS_UNAVAILABLE: This Host does not expose agent presets.', true);
+        const rows = record(result.value).presets;
+        if (!Array.isArray(rows))
+            throw new RemoteSessionToolError('INVALID_AGENT_PRESET_LIST');
+        return rows.slice(0, MAX_REMOTE_PRESETS).flatMap(item => {
+            const row = record(item);
+            if (typeof row.id !== 'string' || row.id.trim().length === 0)
+                return [];
+            return [{
+                    id: row.id.slice(0, 128),
+                    isDefault: row.isDefault === true,
+                    ...(typeof row.name === 'string' && row.name.length > 0 ? { name: row.name.slice(0, 200) } : {}),
+                    ...(typeof row.description === 'string' && row.description.length > 0 ? { description: row.description.slice(0, 500) } : {}),
+                    ...(typeof row.broken === 'string' && row.broken.length > 0 ? { broken: row.broken.slice(0, 500) } : {}),
+                }];
+        });
+    }
+    async requirePresetAvailable(gateway, preset, signal) {
+        const roster = await this.listPresets(gateway, signal);
+        const found = roster.find(item => item.id === preset);
+        if (!found)
+            fail('PRESET_NOT_FOUND: Requested agent preset does not exist on the Host. Use remote_list_presets to list available preset IDs.', true);
+        if (found.broken !== undefined)
+            fail('PRESET_BROKEN: Requested agent preset failed activation on the Host and cannot be used.', true);
+        return found;
+    }
+    async selectPresetOnCreatedSession(gateway, receipt, sessionId, preset, signal) {
+        const selected = await gateway.dispatch('agentPresets/select', { args: { agentId: sessionId, agentPreset: preset } }, signal);
+        if (!selected.ok) {
+            return { ...receipt, sessionId, status: 'rejected', reason: mapPresetFailureReason(selected.error?.code) };
+        }
+        const committed = typeof selected.value === 'string' && selected.value.length > 0 ? selected.value : preset;
+        return { ...receipt, sessionId, agentPreset: committed, status: 'accepted' };
     }
     async requireWorkspace(gateway, args, signal) {
         const baseline = await first(gateway, 'workspace/follow', {}, signal);
@@ -184,7 +250,7 @@ export class RemoteSessionTools {
     }
     async mutate(operation, args, signal) {
         const fingerprint = createHash('sha256').update(JSON.stringify([operation, args.hostId, args.backend,
-            args.workspaceId, args.sessionId ?? null, args.message ?? null])).digest('hex');
+            args.workspaceId, args.sessionId ?? null, args.message ?? null, args.preset ?? null])).digest('hex');
         const old = this.ledger.get(args.operationId);
         if (old) {
             if (old.fingerprint !== fingerprint)
@@ -202,17 +268,81 @@ export class RemoteSessionTools {
         entry.pending = Promise.resolve().then(async () => {
             try {
                 await this.onHost(args, signal, async (gateway, active) => {
-                    if (operation === 'remote_create_session')
+                    if (operation === 'remote_create_session') {
                         await this.requireWorkspace(gateway, args, active);
-                    else
-                        await this.requireSession(gateway, args, active);
+                        if (args.preset !== undefined)
+                            await this.requirePresetAvailable(gateway, args.preset, active);
+                    }
+                    else {
+                        const row = await this.requireSession(gateway, args, active);
+                        if (operation === 'remote_select_preset') {
+                            if (!row.blank)
+                                fail('PRESET_LOCKED: Preset can only be selected before the session starts its first turn.', true);
+                            await this.requirePresetAvailable(gateway, args.preset, active);
+                        }
+                    }
                     active.throwIfAborted();
-                    const endpoint = operation === 'remote_create_session' ? 'session/create'
-                        : operation === 'remote_send_message' ? 'session/prompt' : 'session/cancel';
-                    const request = operation === 'remote_create_session' ? { workspaceId: args.workspaceId }
-                        : operation === 'remote_send_message' ? { sessionId: args.sessionId, requestId: receipt.requestId,
-                            mode: 'queue', content: [{ type: 'text', text: args.message }] }
-                            : { sessionId: args.sessionId };
+                    if (operation === 'remote_create_session') {
+                        dispatched = true;
+                        const createRequest = args.preset === undefined
+                            ? { workspaceId: args.workspaceId }
+                            : { workspaceId: args.workspaceId, agentPreset: args.preset };
+                        const result = await gateway.dispatch('session/create', { args: { request: createRequest } }, active);
+                        if (!result.ok) {
+                            if (args.preset !== undefined && result.error?.code === 'gateway/arguments-invalid') {
+                                // Older Host strictCodec rejects agentPreset on session/create; no session was created yet.
+                                const fallback = await gateway.dispatch('session/create', { args: { request: { workspaceId: args.workspaceId } } }, active);
+                                if (!fallback.ok) {
+                                    entry.receipt = { ...receipt, status: 'rejected' };
+                                    return;
+                                }
+                                const sessionId = id.parse(record(fallback.value).sessionId);
+                                receipt.sessionId = sessionId;
+                                entry.receipt = await this.selectPresetOnCreatedSession(gateway, receipt, sessionId, args.preset, active);
+                                return;
+                            }
+                            entry.receipt = {
+                                ...receipt,
+                                status: 'rejected',
+                                ...(args.preset === undefined ? {} : { reason: mapPresetFailureReason(result.error?.code) }),
+                            };
+                            return;
+                        }
+                        const value = record(result.value);
+                        const sessionId = id.parse(value.sessionId);
+                        receipt.sessionId = sessionId;
+                        const createdPreset = extractAgentPreset(value);
+                        if (args.preset === undefined) {
+                            entry.receipt = { ...receipt, sessionId, ...(createdPreset === undefined ? {} : { agentPreset: createdPreset }), status: 'accepted' };
+                            return;
+                        }
+                        if (createdPreset === args.preset) {
+                            entry.receipt = { ...receipt, sessionId, agentPreset: createdPreset, status: 'accepted' };
+                            return;
+                        }
+                        if (createdPreset !== undefined) {
+                            entry.receipt = { ...receipt, sessionId, agentPreset: createdPreset, status: 'rejected', reason: 'PRESET_MISMATCH' };
+                            return;
+                        }
+                        // Older session/create decoders drop unknown fields silently and omit agentPreset.
+                        entry.receipt = await this.selectPresetOnCreatedSession(gateway, receipt, sessionId, args.preset, active);
+                        return;
+                    }
+                    if (operation === 'remote_select_preset') {
+                        dispatched = true;
+                        const result = await gateway.dispatch('agentPresets/select', { args: { agentId: args.sessionId, agentPreset: args.preset } }, active);
+                        if (!result.ok) {
+                            entry.receipt = { ...receipt, status: 'rejected', reason: mapPresetFailureReason(result.error?.code) };
+                            return;
+                        }
+                        const committed = typeof result.value === 'string' && result.value.length > 0 ? result.value : args.preset;
+                        entry.receipt = { ...receipt, agentPreset: committed, status: 'accepted' };
+                        return;
+                    }
+                    const endpoint = operation === 'remote_send_message' ? 'session/prompt' : 'session/cancel';
+                    const request = operation === 'remote_send_message'
+                        ? { sessionId: args.sessionId, requestId: receipt.requestId, mode: 'queue', content: [{ type: 'text', text: args.message }] }
+                        : { sessionId: args.sessionId };
                     dispatched = true;
                     const result = await gateway.dispatch(endpoint, { args: { request } }, active);
                     if (!result.ok) {
@@ -220,22 +350,20 @@ export class RemoteSessionTools {
                         return;
                     }
                     const value = record(result.value);
-                    if (operation === 'remote_create_session') {
-                        const sessionId = id.parse(value.sessionId);
-                        entry.receipt = { ...receipt, sessionId, status: 'accepted' };
-                    }
-                    else if (operation === 'remote_interrupt_session' && value.accepted !== true) {
+                    if (operation === 'remote_interrupt_session' && value.accepted !== true) {
                         entry.receipt = { ...receipt, status: 'unknown' };
                     }
                     else
                         entry.receipt = { ...receipt, status: 'accepted' };
                 });
             }
-            catch {
+            catch (error) {
                 if (!dispatched) {
                     // Safe to retry only when no mutation reached the carrier.
                     if (this.ledger.get(args.operationId) === entry)
                         this.ledger.delete(args.operationId);
+                    if (error instanceof RemoteSessionToolError && error.explicit)
+                        throw error;
                     fail('REMOTE_PREFLIGHT_FAILED: No mutation was dispatched. Check login and target identifiers.');
                 }
                 // Preserve a confirmed reply even if carrier cleanup fails afterwards.
@@ -317,8 +445,49 @@ function target(args) {
     return { hostId: args.hostId, backend: 'harness', workspaceId: args.workspaceId };
 }
 function address(sessionId) { return { kind: 'session', sessionId }; }
+function extractAgentPreset(...sources) {
+    for (const source of sources) {
+        const obj = record(source);
+        const values = record(record(obj.projections).values);
+        if (Object.hasOwn(values, 'agentPreset')) {
+            const value = values.agentPreset;
+            if (value === null)
+                return null;
+            if (typeof value === 'string' && value.length > 0)
+                return value.slice(0, 128);
+        }
+        const header = record(obj.header);
+        const direct = Object.hasOwn(obj, 'agentPreset') ? obj.agentPreset
+            : Object.hasOwn(header, 'agentPreset') ? header.agentPreset : undefined;
+        if (direct === null)
+            return null;
+        if (typeof direct === 'string' && direct.length > 0)
+            return direct.slice(0, 128);
+    }
+    return undefined;
+}
+function mapPresetFailureReason(code) {
+    switch (code) {
+        case 'agent-preset/not-found': return 'PRESET_NOT_FOUND';
+        case 'agent-preset/invalid': return 'PRESET_BROKEN';
+        case 'agent-preset/locked': return 'PRESET_LOCKED';
+        case 'agent-preset/conflict':
+        case 'gateway/method-not-found': return 'AGENT_PRESETS_UNAVAILABLE';
+        case 'gateway/lookup-not-found':
+        case 'session/not-found': return 'SESSION_NOT_FOUND';
+        default: return 'PRESET_SELECT_FAILED';
+    }
+}
 function summary(row) {
-    return { sessionId: row.sessionId, title: (row.title ?? '').slice(0, 500), running: row.running, blank: row.blank, updatedAt: row.updatedAt };
+    const agentPreset = extractAgentPreset(row);
+    return {
+        sessionId: row.sessionId,
+        title: (row.title ?? '').slice(0, 500),
+        ...(agentPreset === undefined ? {} : { agentPreset }),
+        running: row.running,
+        blank: row.blank,
+        updatedAt: row.updatedAt,
+    };
 }
 async function first(gateway, endpoint, args, signal) {
     const stop = new AbortController();

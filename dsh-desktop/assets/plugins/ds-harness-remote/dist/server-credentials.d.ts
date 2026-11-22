@@ -47,6 +47,10 @@ export declare class ServerCredentialsLockUnsupportedError extends Error {
     readonly code = "SERVER_CREDENTIALS_LOCK_UNSUPPORTED";
     constructor();
 }
+export declare class ServerCredentialsLockDirectoryError extends Error {
+    readonly code = "SERVER_CREDENTIALS_LOCK_DIRECTORY";
+    constructor();
+}
 export declare const SERVER_CREDENTIALS_QUEUE_MARKER = "DSH_REFRESH_LOCK_V2\n";
 export declare function atomicWritePrivate(path: string, contents: string): Promise<void>;
 export declare function readPrivateJson(path: string): Promise<unknown | undefined>;

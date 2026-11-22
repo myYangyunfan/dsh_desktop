@@ -123,7 +123,7 @@ Ein sechsfarbiger gestapelter Balken gegen das volle Fenster des Modells (die be
 Ein gestapelter Balken pro Modellanfrage — feiner als pro Nachricht —, sodass du das Fenster Runde für Runde wachsen siehst:
 
 - **✨ Schritt-Kurzfassung** — drei Zeilen in Alltagssprache unter dem Diagramm: **Benutzer** erinnert an die Nachricht, die die Runde eröffnet hat, **Eingang** listet, was neu hineinkam (meist die vorherigen Tool-Ergebnisse), **Antwort** zeigt die Antwort und/oder aufgerufene Tools. Klicke auf eine Zeile, um genau diese Nachricht im Kontextbrowser zu öffnen.
-- **✂ markiert die Ereignisse** — Komprimierungen und Bereinigungen sind am jeweiligen Balken markiert, sodass sich die Einbrüche selbst erklären.
+- **Ereignis-Flaggen** — Komprimierung, Bereinigung, Skill-Injektion, Subagent-Erstellung, Agent-Interaktion und Modellwechsel, Ziel- und Teamaufgaben-Erstellung/-Abschluss, Aufgaben-Hinzufügen/-Erledigen, Nutzerfragen sowie der längste Schritt und der größte Kontextsprung tragen jeweils ihr eigenes Symbol am zugehörigen Schritt; ein gestrichelter Mast reicht bis zur Grundlinie, Hover zeigt die Werte, Klick öffnet den Schritt. Die Übersicht fasst nahe Ereignisse zu einer Sammelflagge zusammen, die direkt zu ihrem Schritt zurückspringt.
 - **Lies es auf deine Weise** — Granularität **Schritt / Runde**, **Gesamt** (kumulative Zusammensetzung) oder **Delta** (die vorzeichenbehaftete Änderung jeder Anfrage) und seitliches Scrollen durch die ganze Sitzung. Im Delta-Modus stapelt sich Wachstum über der Basislinie, und eine Komprimierung taucht darunter:
 
 ![Kontexttrend im Delta-Modus](https://raw.githubusercontent.com/bowenliang123/dsh-context/main/docs/history-delta.png)
@@ -160,7 +160,7 @@ Wähle **Live** oder einen beliebigen aufbewahrten Schritt und durchstöbere, wo
 
 ![Kontextereignisse mit einer Komprimierung](https://raw.githubusercontent.com/bowenliang123/dsh-context/main/docs/context-events.png)
 
-Jede Injektion, Komprimierung, Bereinigung, jeder Modellwechsel und jede Planmodus-Umschaltung — beschriftet mit ihrem Erzeuger (Anweisungsdatei, Plugin-ID, Skill-Name), ihrem Netto-Token-Delta (Komprimierungen zeigen, was sie zurückgewonnen haben), Runde/Schritt und Zeit. Die Chips **Injektion / Komprimieren / Bereinigen / Wechsel / Modus** filtern das Protokoll nach Art, jeder mit der Ereigniszahl der ganzen Sitzung.
+Jede Injektion, Komprimierung, Bereinigung, jeder Modellwechsel und jede Planmodus-Umschaltung — beschriftet mit ihrem Erzeuger (Anweisungsdatei, Plugin-ID, Skill-Name), ihrem Netto-Token-Delta (Komprimierungen zeigen, was sie zurückgewonnen haben), Runde/Schritt und Zeit. Die Chips **Alle / Injektion / Komprimieren / Bereinigen / Modellwechsel** filtern das Protokoll jeweils auf eine Art und tragen die Ereigniszahl der ganzen Sitzung.
 
 ### 📁 Dateiaktivität — was der Agent mit deinen Dateien gemacht hat
 
@@ -229,7 +229,7 @@ Die Voreinstellungs-Schaltflächen von Kontext-Einblicke schreiben die Auswahl a
 
 ## Gut zu wissen
 
-- **Cache-Fußabdruck** — das Plugin speichert nur eine kompakte Zusammenfassung pro Sitzung (Zusammensetzung, Zählungen, Kosten/Zeit, Modellinfo) im Projektions-Cache von dsh; die schweren Details pro Ereignis (Oberflächentext, Anfrageaufschlüsselungen, Dateivorgänge, Befehlprogramme, Spannen) werden bei Bedarf aus dem dauerhaften Protokoll neu gefaltet, sodass der Cache auch bei langen Sitzungen klein bleibt. Detailansichten sind begrenzt (Schritte 1500 · Runden 300 · Ereignisse 400 · Oberflächenknoten 2000 · Archiv 400 · Dateivorgänge 400 · Befehle 400).
+- **Cache-Fußabdruck** — das Plugin speichert nur eine kompakte Zusammenfassung pro Sitzung (Zusammensetzung, Zählungen, Kosten/Zeit, Modellinfo) im Projektions-Cache von dsh; die schweren Details pro Ereignis (Oberflächentext, Anfrageaufschlüsselungen, Dateivorgänge, Befehlprogramme, Spannen) werden bei Bedarf aus dem dauerhaften Protokoll neu gefaltet, sodass der Cache auch bei langen Sitzungen klein bleibt. Detailansichten laden die vollständige Anfrage-, Runden-, Ereignis-, Oberflächenknoten-, Archiv-, Dateivorgangs-, Befehls- und Spannenhistorie seitenweise aus dem dauerhaften Protokoll und laden jede Sammlung beim Öffnen ihrer Karte.
 - **Schätzungen vs. Ist-Werte** — Kategoriezahlen verwenden die eigene Heuristik fester Dichte von dsh (dieselbe wie sein integrierter Token-Meter); die fixierten Trenddetails zeigen die vom Anbieter gemeldeten Ist-Werte daneben, und die Token-Karte paart ihre ≈-geschätzten Zusammensetzungsanteile mit der anbieter-exakten abgerechneten Summe.
 - **Kompatibilität** — funktioniert mit `@deepseek-ai/dsh` ab **0.2.0-rc.2** (die Linien `0.2.0` und `0.2.1` verifiziert auf ihren rc.2-Releases, die Linie `0.2.2` auf ihren rc.1- und rc.3-Releases), der V4-Sitzungsprotokoll-Generation, aus einem einzigen formgesteuerten Codepfad. Die Matrix pro Release und wie sie verifiziert wird: [docs/compatibility.md](docs/compatibility.md).
 - **I18n** — UI in 简体中文, English, 日本語, Español, Français, Deutsch, Русский und Português (Sprachwechsel erfordert dsh 0.2.2+; frühere unterstützte Linien bieten nur Chinesisch und Englisch).

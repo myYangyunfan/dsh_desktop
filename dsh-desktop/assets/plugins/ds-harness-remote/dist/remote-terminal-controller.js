@@ -76,6 +76,7 @@ class OwnedTerminal {
     cols;
     rows;
     removed;
+    rosterChanged;
     allocation = new AbortController();
     screen;
     serializer = new serialize.SerializeAddon();
@@ -98,13 +99,14 @@ class OwnedTerminal {
     timer;
     idle;
     activityEpoch = 0;
-    constructor(sessionId, id, cwd, cols, rows, removed) {
+    constructor(sessionId, id, cwd, cols, rows, removed, rosterChanged) {
         this.sessionId = sessionId;
         this.id = id;
         this.cwd = cwd;
         this.cols = cols;
         this.rows = rows;
         this.removed = removed;
+        this.rosterChanged = rosterChanged;
         this.screen = new headless.Terminal({ cols, rows, scrollback: SCROLLBACK, allowProposedApi: true });
         this.screen.loadAddon(this.serializer);
     }
@@ -119,8 +121,12 @@ class OwnedTerminal {
         this.operations = result.then(() => undefined, () => undefined);
         return result;
     }
-    emit(value) { for (const follower of this.followers)
-        follower.push(value); }
+    emit(value) {
+        for (const follower of this.followers)
+            follower.push(value);
+        if (value.type === 'state')
+            this.rosterChanged();
+    }
     invalidate() { this.activityEpoch++; this.idle = undefined; }
     async pump() {
         const process = this.process;
@@ -265,9 +271,14 @@ class OwnedTerminal {
 export class RemoteTerminalState {
     onRemoved;
     terminals = new Map();
+    rosters = new Map();
     revision = 0;
     constructor(onRemoved = () => { }) {
         this.onRemoved = onRemoved;
+    }
+    notifyRoster(sessionId) {
+        for (const listener of this.rosters.get(sessionId) ?? [])
+            listener();
     }
     async dispose(matches = () => true) {
         this.revision++;
@@ -283,6 +294,7 @@ export class RemoteTerminalController {
     enabled;
     scopeError;
     subscriptions = new Set();
+    rosterLifetime = new AbortController();
     constructor(shared, spawn, enabled, scopeError) {
         this.shared = shared;
         this.spawn = spawn;
@@ -296,7 +308,7 @@ export class RemoteTerminalController {
         if (endpoint === 'terminal/shells')
             return { ok: true, value: await this.shells(signal) };
         if (endpoint === 'terminal/list')
-            return { ok: true, value: [...this.shared.terminals.values()].filter(item => item.sessionId === sessionId && item.shell && item.process).map(item => item.info()) };
+            return { ok: true, value: this.roster(sessionId) };
         if (endpoint === 'terminal/create')
             return { ok: true, value: await this.create(sessionId, cwd, args, signal) };
         const id = identifier(args.id);
@@ -340,6 +352,8 @@ export class RemoteTerminalController {
     }
     async open(endpoint, sessionId, args, signal) {
         this.check(signal);
+        if (endpoint === 'terminal/watch')
+            return this.watch(sessionId, AbortSignal.any([signal, this.rosterLifetime.signal]));
         const terminal = this.requireTerminal(sessionId, identifier(args.id));
         let follower;
         const abort = () => follower.close();
@@ -399,8 +413,42 @@ export class RemoteTerminalController {
         }
     }
     /** A connection only disposes its subscriptions; the Host still owns the shells. */
-    closeAll() { for (const subscription of [...this.subscriptions])
-        subscription.close(); }
+    closeAll() {
+        this.rosterLifetime.abort();
+        for (const subscription of [...this.subscriptions])
+            subscription.close();
+    }
+    roster(sessionId) {
+        return [...this.shared.terminals.values()].filter(item => item.sessionId === sessionId && item.shell && item.process).map(item => item.info());
+    }
+    async *watch(sessionId, signal) {
+        const listeners = this.shared.rosters.get(sessionId) ?? new Set();
+        let dirty = true;
+        let wake;
+        const notify = () => { dirty = true; wake?.(); };
+        listeners.add(notify);
+        this.shared.rosters.set(sessionId, listeners);
+        signal.addEventListener('abort', notify, { once: true });
+        try {
+            while (!signal.aborted) {
+                this.check(signal);
+                if (dirty) {
+                    dirty = false;
+                    yield this.roster(sessionId);
+                }
+                else {
+                    await new Promise(resolve => { wake = resolve; });
+                    wake = undefined;
+                }
+            }
+        }
+        finally {
+            signal.removeEventListener('abort', notify);
+            listeners.delete(notify);
+            if (listeners.size === 0)
+                this.shared.rosters.delete(sessionId);
+        }
+    }
     async shells(signal) {
         try {
             const result = await (this.spawn.shells?.(signal) ?? discoverTerminalShells(undefined, signal));
@@ -436,8 +484,9 @@ export class RemoteTerminalController {
             if (this.shared.terminals.get(key) === terminal) {
                 this.shared.terminals.delete(key);
                 this.shared.onRemoved(key);
+                this.shared.notifyRoster(sessionId);
             }
-        });
+        }, () => this.shared.notifyRoster(sessionId));
         this.shared.terminals.set(key, terminal);
         const allocationSignal = AbortSignal.any([signal, terminal.allocation.signal]);
         terminal.pending = (async () => {
@@ -450,6 +499,7 @@ export class RemoteTerminalController {
             terminal.process = await this.spawn({ argv: [shell.path, ...shell.args], cwd,
                 cols: terminal.cols, rows: terminal.rows, terminalType: 'xterm-256color', env: { DSH_SESSION_ID: sessionId }, signal: allocationSignal });
             this.check(allocationSignal);
+            this.shared.notifyRoster(sessionId);
             void terminal.pump();
             terminal.monitor();
         })();

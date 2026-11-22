@@ -4,6 +4,7 @@ import type { PeerConnectionContext } from '../connection-controller.js';
 import type { SafeLogger } from '../logging.js';
 import { type CodexAppServerLike } from './app-server.js';
 import { CodexPeerBridge, type PublishCodexFrame } from './peer-bridge.js';
+export declare const MAX_BUFFERED_CODEX_FRAMES = 200;
 type AppServerFactory = (binary: string, logger: SafeLogger) => CodexAppServerLike;
 /**
  * Optional Codex business domain inside the existing Remote Plugin. It shares
@@ -16,18 +17,27 @@ export declare class CodexRemoteDomain {
     private readonly createAppServer;
     private readonly restartDelaysMs;
     private readonly turnSilenceTimeoutMs;
+    private readonly onDemandCooldownMs;
     private appServer?;
     private unsubscribeInbound?;
     private unsubscribeUnavailable?;
     private readonly peers;
+    private readonly peerThreads;
+    private readonly threadGoals;
+    private readonly threadLifecycle;
     private readonly peerDeviceIds;
     private readonly turnOwners;
     private readonly turnWatchdogs;
     private readonly approvals;
     private readonly permissionPresets;
+    private readonly recentFrames;
+    private nextBufferSeq;
+    private readonly inboundChains;
+    private readonly pendingRequestThreads;
     private approvalExpiryTimer?;
     private restartTimer?;
     private restartAttempt;
+    private lastOnDemandRecoveryAt;
     private available;
     private closed;
     /**
@@ -47,9 +57,12 @@ export declare class CodexRemoteDomain {
     private readonly knownThreadPromises;
     private state;
     private unavailableCode?;
-    constructor(config: ResolvedCodexConfig, logger: SafeLogger, createAppServer?: AppServerFactory, restartDelaysMs?: readonly number[], turnSilenceTimeoutMs?: number);
+    private lifecycleGeneration;
+    private reconfigureDepth;
+    constructor(config: ResolvedCodexConfig, logger: SafeLogger, createAppServer?: AppServerFactory, restartDelaysMs?: readonly number[], turnSilenceTimeoutMs?: number, onDemandCooldownMs?: number);
     private startPromise?;
     start(): Promise<void>;
+    tryRecoverOnDemand(): void;
     private startOnce;
     isAvailable(): boolean;
     status(): {
@@ -63,6 +76,10 @@ export declare class CodexRemoteDomain {
     resolveThreadWorkspace(connectionId: string, threadId: string): Promise<string | undefined>;
     createPeer(context: PeerConnectionContext, publish: PublishCodexFrame): CodexPeerBridge | undefined;
     call(connectionId: string, input: unknown): Promise<unknown>;
+    useThread<T>(threadId: string, action: () => Promise<T>): Promise<T>;
+    releaseThread(threadId: string): Promise<void>;
+    private refreshThreadGoal;
+    private rememberThread;
     private captureCallScope;
     private callInternal;
     respond(connectionId: string, input: unknown): Promise<{
@@ -78,6 +95,21 @@ export declare class CodexRemoteDomain {
     private restartAfterFailure;
     private disposeAppServer;
     private handleInbound;
+    /** Replay buffered real-time frames missed while no stream was subscribed. */
+    replayBufferedFrames(connectionId: string, streamId: string, threadId: string): Promise<{
+        count: number;
+        truncated: boolean;
+    }>;
+    rebufferOpeningFrames(threadId: string, frames: ReadonlyArray<{
+        method: string;
+        params: unknown;
+    }>, truncated: boolean): void;
+    private publishToThread;
+    private bufferFrame;
+    private restoreBufferedFrames;
+    private pruneFrameBuffer;
+    private pruneBufferedFramesAgainstHistory;
+    private evictExcessBufferedThreads;
     private rememberPermission;
     private changeThreadPermission;
     private publishPermission;
@@ -93,6 +125,9 @@ export declare class CodexRemoteDomain {
     private claimTurn;
     private rememberTurnId;
     private hasSubscriber;
+    private enqueueInbound;
+    private findInboundThreadForResolved;
+    private findMatchingApprovals;
     private resolveUpstreamApproval;
     private expireApprovals;
     private scheduleApprovalExpiry;

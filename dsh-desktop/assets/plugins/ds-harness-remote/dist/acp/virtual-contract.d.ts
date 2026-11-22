@@ -1,4 +1,4 @@
-import type { AcpSessionModels, AgentAcpFrameData, AgentAcpStreamClosedData, AgentAcpStreamOpenParams } from '@dsh-remote/protocol';
+import type { AcpAvailableCommand, AcpContextUsage, AcpSessionModels, AcpSessionModes, AgentAcpFrameData, AgentAcpStreamClosedData, AgentAcpStreamOpenParams } from '@dsh-remote/protocol';
 import { ACP_TOOL_CALL_ENDPOINTS } from '@dsh-remote/protocol';
 import type { TypertRpcResult } from '../typert-gateway-contract.js';
 import type { AcpImage } from './image-content.js';
@@ -22,6 +22,11 @@ export type PiTurnOutcome = {
 };
 export declare function piStreamOutcome(reason: AgentAcpStreamClosedData['reason']): PiTurnOutcome;
 export declare function piPromptOutcome(kind: string, update: JsonRecord): PiTurnOutcome;
+export interface AcpTodoItem {
+    content: string;
+    status: 'pending' | 'in_progress' | 'completed';
+    priority?: string;
+}
 export interface AcpSessionState {
     sessionId: string;
     acpSessionId: string;
@@ -33,8 +38,14 @@ export interface AcpSessionState {
     staleHistory?: boolean;
     blank: boolean;
     running: boolean;
+    projectionSeq?: number;
     createdAt: number;
     updatedAt: number;
+    agentPreset?: string;
+    modes?: AcpSessionModes;
+    availableCommands?: AcpAvailableCommand[];
+    todos?: AcpTodoItem[];
+    contextUsage?: AcpContextUsage;
     events: Array<{
         type: 'event';
         event: NativeEvent;
@@ -65,6 +76,8 @@ export interface FollowState {
     sessionId: string;
     acpSessionId: string;
     queue: AsyncValueQueue;
+    hasConsumer: boolean;
+    closed?: boolean;
     nextSeq: number;
     turn: number;
     stepOpen: boolean;
@@ -74,6 +87,7 @@ export interface FollowState {
     assistantStreamRevision: number;
     assistantAttempt?: AssistantStreamAttempt;
     accumulatedText: string;
+    accumulatedReasoning?: string;
     activeToolCalls: Set<string>;
     piToolOutputs: Map<string, {
         text: string;
@@ -102,6 +116,26 @@ export interface AcpClientLike {
     }) => void): () => void;
     sessionModels?(sessionId: string, backend: AcpCatalogBackend, signal?: AbortSignal): Promise<AcpSessionModels>;
     selectModel?(sessionId: string, backend: AcpCatalogBackend, selection: AcpModelSelection, signal?: AbortSignal): Promise<AcpModelSelection>;
+    sessionModes?(sessionId: string, backend: AcpCatalogBackend, signal?: AbortSignal): Promise<AcpSessionModes>;
+    setMode?(sessionId: string, backend: AcpCatalogBackend, modeId: string, signal?: AbortSignal): Promise<{
+        currentModeId?: string;
+    }>;
+    sessionCommands?(sessionId: string, backend: AcpCatalogBackend, signal?: AbortSignal): Promise<AcpAvailableCommand[]>;
+    forkSession?(sessionId: string, backend: AcpCatalogBackend, signal?: AbortSignal): Promise<{
+        sessionId: string;
+    }>;
+    createWorkspace?(path: string, backend: AcpCatalogBackend, title?: string, signal?: AbortSignal): Promise<{
+        path: string;
+        title?: string;
+    }>;
+    renameWorkspace?(path: string, backend: AcpCatalogBackend, title: string, signal?: AbortSignal): Promise<{
+        path: string;
+        title?: string;
+    }>;
+    deleteWorkspace?(path: string, backend: AcpCatalogBackend, signal?: AbortSignal): Promise<void>;
+    reorderWorkspaces?(backend: AcpCatalogBackend, paths: string[], signal?: AbortSignal): Promise<string[]>;
+    pinSession?(sessionId: string, backend: AcpCatalogBackend, signal?: AbortSignal): Promise<string[]>;
+    unpinSession?(sessionId: string, backend: AcpCatalogBackend, signal?: AbortSignal): Promise<string[]>;
     selectPermission?(sessionId: string, backend: AcpCatalogBackend, preset: string, signal?: AbortSignal): Promise<unknown>;
     workspaceToolCall?(sessionId: string, backend: AcpCatalogBackend, endpoint: typeof ACP_TOOL_CALL_ENDPOINTS[number], args: JsonRecord, signal?: AbortSignal): Promise<unknown>;
     createSession(cwd: string, mode?: "agent" | "plan" | "ask", backend?: AcpCatalogBackend, signal?: AbortSignal): Promise<{
@@ -121,8 +155,15 @@ export interface AcpClientLike {
         title: string;
         createdAt: number;
         updatedAt: number;
+        pinned?: boolean;
     }>>;
     loadSessionHistory?(sessionId: string, backend?: string, signal?: AbortSignal): Promise<unknown[]>;
+    loadSessionDetails?(sessionId: string, backend?: string, signal?: AbortSignal): Promise<{
+        events: unknown[];
+        modes?: AcpSessionModes;
+        availableCommands?: AcpAvailableCommand[];
+        permissionPreset?: string;
+    }>;
     openStream(sessionId: string, onFrame: (frame: AgentAcpFrameData) => void, onClosed?: (closed: AgentAcpStreamClosedData) => void, signal?: AbortSignal, tool?: AgentAcpStreamOpenParams['tool']): Promise<{
         close(): Promise<void>;
     }>;

@@ -1,4 +1,5 @@
 import { stunOnlyIceServers } from '@dsh-remote/webrtc';
+import { AccountTwoFactorRequired } from './account-two-factor-required.js';
 export const DIRECT_WEBRTC_NEGOTIATE_TIMEOUT_MS = 12_000;
 export const DIRECT_LAN_PROGRESS_DISPLAY_MS = 1_400;
 export const HOST_AUTHORIZATION_ERRORS = new Set([
@@ -53,6 +54,16 @@ export function record(value) {
 export function isRecord(value) {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+export function readAccountVerification(value) {
+    if (value === undefined)
+        return undefined;
+    if (!isRecord(value) || typeof value.challenge !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(value.challenge)
+        || typeof value.code !== 'string' || value.code.trim().length === 0 || value.code.trim().length > 64
+        || typeof value.serverUrl !== 'string') {
+        throw new ClientModeError('INVALID_MESSAGE', 'Invalid two-factor verification input.');
+    }
+    return { challenge: value.challenge, code: value.code.trim(), serverUrl: value.serverUrl };
+}
 export function ok(value) { return { ok: true, value }; }
 export function fail(error) {
     const source = error instanceof Error ? error : undefined;
@@ -67,7 +78,10 @@ export function fail(error) {
         error: {
             code: 'internal',
             message: source?.message ?? 'The remote-mode operation failed.',
-            details: remoteCode === undefined ? {} : { remoteCode, retryable },
+            details: {
+                ...(remoteCode === undefined ? {} : { remoteCode, retryable }),
+                ...(source instanceof AccountTwoFactorRequired ? { challenge: source.challenge, serverUrl: source.serverUrl } : {}),
+            },
         },
     };
 }

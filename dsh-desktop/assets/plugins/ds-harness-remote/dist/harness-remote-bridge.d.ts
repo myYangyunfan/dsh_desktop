@@ -3,10 +3,11 @@ import { z } from 'zod';
 import { TerminalPolicy } from './terminal-policy.js';
 import type { SafeLogger } from './logging.js';
 import type { LocalTypertGateway, TypertRpcResult } from './typert-gateway-contract.js';
+import { type MessageFileAttachment } from './message-file-attachment.js';
 import { CodexWorkspaceBridge } from './codex-workspace-bridge.js';
 type PublishRemoteFrame = (event: 'harness.remote.frame' | 'harness.remote.stream.closed', data: HarnessRemoteFrameData | HarnessRemoteStreamClosedData) => Promise<void>;
-/** Fixed v0.1.2 Typert Remote subset exposed to authenticated peers. */
-export declare const HARNESS_REMOTE_ALLOWLIST: readonly ["$events", "$events/result", "agentPresets/list", "agentPresets/read", "agentPresets/select", "commands/execute", "commands/list", "credentials/describe", "credentials/set", "credentials/unset", "directoryPicker/list", "fileReferences/list", "goals/clear", "goals/complete", "goals/create", "goals/edit", "goals/pause", "goals/resume", "job/list", "job/follow", "job/kill", "llm/discoverModels", "llm/listConfigurableProviders", "llm/listProviders", "messageFeedback/delete", "messageFeedback/list", "messageFeedback/put", "pluginInventory/list", "pluginManager/listBundles", "pluginManager/listPlugins", "pluginManager/listVersions", "pluginManager/readBundleDetail", "pluginManager/setBundleEnabled", "pluginManager/setPluginEnabled", "pluginManager/updateBundle", "permissionPresets/catalog", "schedule/list", "schedule/catalog", "schedule/history", "schedule/create", "schedule/update", "schedule/delete", "schedule/deleteInactive", "schedule/deliveryLimits", "schedule/edit", "schedule/run", "fileUploads/upload", "session/attachment", "session/cancel", "session/canOpenWorkspacePath", "session/control", "session/create", "session/follow", "session/fork", "session/list", "session/events", "session/modelCatalog", "session/page", "session/prompt", "remoteAccess/follow", "session/projections", "session/initializeDefaultModel", "session/workspacePathApplications", "session/rename", "session/search", "session/selectModel", "session/updateQueue", "sessionReferenceResolver/candidates", "settings/describe", "settings/mutate", "settings/replace", "settings/update", "skills/list", "subagents/interruptByParent", "subagents/list", "subagents/prompt", "userQuestions/answer", "userQuestions/attachWait", "claudeCodeMods/watchBand", "claudeCodeMods/pressBand", "workspaceFiles/list", "workspaceFiles/stat", "workspaceFiles/read", "workspaceFiles/readBytes", "workspaceFiles/readAll", "workspaceFiles/readRelated", "workspaceFiles/changes", "officeToPdf/render", "officeToPdf/generation", "toolResults/watch", "workspace/archiveSession", "workspace/create", "workspace/delete", "workspace/follow", "workspace/insertBefore", "workspace/insertSessionBefore", "workspace/rename", "workspace/unarchiveSession", "workspace/initializeDefault", "workspace/pinSession", "workspace/unpinSession"];
+/** Fixed Typert Remote subset exposed to authenticated peers. */
+export declare const HARNESS_REMOTE_ALLOWLIST: readonly ["$events", "$events/result", "agentPresets/list", "agentPresets/read", "agentPresets/select", "commands/execute", "commands/list", "cotTranslation/limits", "cotTranslation/translate", "credentials/describe", "credentials/set", "credentials/unset", "directoryPicker/list", "fileReferences/list", "goals/clear", "goals/complete", "goals/create", "goals/edit", "goals/pause", "goals/resume", "job/list", "job/follow", "job/kill", "llm/discoverModels", "llm/listConfigurableProviders", "llm/listProviders", "messageFeedback/delete", "messageFeedback/list", "messageFeedback/put", "pluginInventory/list", "pluginManager/listBundles", "pluginManager/listPlugins", "pluginManager/listVersions", "pluginManager/readBundleDetail", "pluginManager/setBundleEnabled", "pluginManager/setPluginEnabled", "pluginManager/updateBundle", "permissionPresets/catalog", "schedule/list", "schedule/catalog", "schedule/history", "schedule/create", "schedule/update", "schedule/delete", "schedule/deleteInactive", "schedule/deliveryLimits", "schedule/edit", "schedule/run", "fileUploads/upload", "session/attachment", "session/cancel", "session/canOpenWorkspacePath", "session/control", "session/create", "session/follow", "session/fork", "session/list", "session/events", "session/modelCatalog", "session/page", "session/prompt", "remoteAccess/follow", "session/projections", "session/initializeDefaultModel", "session/workspacePathApplications", "session/rename", "session/search", "session/selectModel", "session/updateQueue", "sessionReferenceResolver/candidates", "settings/describe", "settings/mutate", "settings/replace", "settings/update", "skills/list", "subagents/interruptByParent", "subagents/list", "subagents/prompt", "userQuestions/answer", "userQuestions/attachWait", "claudeCodeMods/watchBand", "claudeCodeMods/pressBand", "speech/catalog", "speech/transcribe", "workspaceFiles/list", "workspaceFiles/stat", "workspaceFiles/read", "workspaceFiles/readBytes", "workspaceFiles/readAll", "workspaceFiles/readRelated", "workspaceFiles/search", "workspaceFiles/changes", "officeToPdf/render", "officeToPdf/generation", "toolResults/watch", "workspace/archiveSession", "workspace/create", "workspace/delete", "workspace/follow", "workspace/insertBefore", "workspace/insertSessionBefore", "workspace/rename", "workspace/unarchiveSession", "workspace/initializeDefault", "workspace/pinSession", "workspace/unpinSession"];
 export type NativeWorkspaceResolver = (sessionId: string, signal: AbortSignal) => Promise<string | undefined>;
 export declare const WORKSPACE_FILE_READ_ENDPOINTS: Set<string>;
 /**
@@ -55,13 +56,15 @@ export declare class HarnessRemoteBridge {
     private readonly resolveWorkspaceRoot?;
     private readonly schedule?;
     private readonly uploadAttachment?;
+    private readonly attachmentHostPath?;
     compactHistoryEnabled: boolean;
     private readonly streams;
     private readonly incomingTransfers;
     private readonly outgoingTransfers;
+    private readonly messageFiles;
     private warnedMissingRemoteEvents;
     private readonly terminalCarrier;
-    constructor(gateway: LocalTypertGateway, publish: PublishRemoteFrame, logger?: SafeLogger | undefined, harnessVersion?: string | undefined, terminal?: TerminalPolicy, codexWorkspace?: CodexWorkspaceBridge | undefined, resolveWorkspaceRoot?: NativeWorkspaceResolver | undefined, schedule?: ScheduleCreateService | undefined, uploadAttachment?: ((body: unknown) => Promise<unknown>) | undefined);
+    constructor(gateway: LocalTypertGateway, publish: PublishRemoteFrame, logger?: SafeLogger | undefined, harnessVersion?: string | undefined, terminal?: TerminalPolicy, codexWorkspace?: CodexWorkspaceBridge | undefined, resolveWorkspaceRoot?: NativeWorkspaceResolver | undefined, schedule?: ScheduleCreateService | undefined, uploadAttachment?: ((body: unknown) => Promise<unknown>) | undefined, attachmentHostPath?: ((ref: MessageFileAttachment) => string | undefined) | undefined);
     call(input: unknown): Promise<TypertRpcResult>;
     /** Validate one untrusted create request, then delegate to the Host schedule service. */
     private createSchedule;
@@ -105,6 +108,7 @@ export declare class HarnessRemoteBridge {
     /** Keep the source paused until the Client reads and releases this exact item. */
     private transferStreamFrame;
     private pruneTransfers;
+    private resolveMessageFilePayload;
     private assertNativeWorkspaceFileCall;
     private resolveWorkspaceRootForSession;
     /**

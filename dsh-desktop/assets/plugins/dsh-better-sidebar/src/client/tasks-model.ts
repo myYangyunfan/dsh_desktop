@@ -267,15 +267,13 @@ function foldNode(
 }
 
 /**
- * Map a team member's derived status onto the node display state. The status
- * already folds in the durable phase (./team-projection.ts), so this is a
- * vocabulary translation and nothing more.
+ * Map a team member's derived status onto the node display state. 名册改由
+ * catalog 提供后（0.2.2 起 `agentTeam` 投影不再带 members，见
+ * ./team-projection.ts），状态只剩 running / idle 两档：能进名册的成员都已上线。
  */
 function teamState(status: TeamMemberRow['status']): TasksNodeState {
   switch (status) {
     case 'running': return 'running'
-    case 'provisioning': return 'running'
-    case 'failed': return 'error'
     case 'idle': return 'idle'
   }
 }

@@ -1,4 +1,6 @@
-import { type ChildProcessWithoutNullStreams } from 'node:child_process';
+import type { AcpAuthDiagnostic, AcpAuthMethod } from '@dsh-remote/protocol';
+import { type AcpInitializeMetadata } from './auth-diagnostics.js';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { SafeLogger } from '../../logging.js';
 import type { CursorAcpInbound, CursorAcpLike } from './cursor-process.js';
 export type OpencodeAcpNotification = CursorAcpNotification;
@@ -49,11 +51,17 @@ export declare class OpencodeAcpClient implements CursorAcpLike {
     private nativeApi?;
     private readonly archivedSessions;
     private readonly archivingSessions;
+    private readonly sessionCommands;
+    private initMetadata?;
+    private lastAuthDiagnostic?;
     constructor(binary?: string, logger?: SafeLogger | undefined, spawnAcp?: SpawnOpencodeAcp | undefined, options?: {
         args?: string[];
         cwd?: string;
         historyReader?: boolean;
     });
+    diagnostics(): AcpAuthDiagnostic;
+    capabilities(): AcpInitializeMetadata['agentCapabilities'];
+    authMethods(): AcpAuthMethod[];
     start(): Promise<void>;
     isReady(): boolean;
     isSessionArchived(sessionId: string, cwd: string): Promise<boolean>;

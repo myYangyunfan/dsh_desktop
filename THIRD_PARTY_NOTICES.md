@@ -780,19 +780,19 @@ CI 五个架构的 staging 同口径），装机后首次开机由 boot 的插�
 | dsh-input-fold | 0.1.1 | MIT |
 | dsh-input-history | 0.1.1 | MIT |
 | dsh-offpeak | 1.0.1 | MIT |
-| dsh-pocket | 2.13.1 | GPL-2.0 |
+| dsh-pocket | 2.13.2 | GPL-2.0 |
 | dsh-prompt-optimizer | 3.0.0 | MIT |
 | dsh-session-manager | 0.1.0 | MIT |
 | dsh-settings-groups | 0.1.1 | MIT |
 | dsh-settings-nav-custom | 0.1.1 | MIT |
 | dsh-synapse | 0.3.1 | MIT |
-| dsh-free-search | 0.9.70 | MIT |
+| dsh-free-search | 0.9.80 | MIT |
 | dsh-plugin-shop | 0.9.4 | Apache-2.0 |
 | @local/dsh-network-proxy | 1.0.4 | MIT |
-| dsh-toolbox-ui | 1.13.0 | MIT |
+| dsh-toolbox-ui | 1.13.2 | MIT |
 | @bittersmilezzz/dsh-notify | 0.4.5 | MIT |
-| dsh-context | 0.86.0 | Apache-2.0 |
-| ds-harness-remote | 0.6.5 | MIT |
+| dsh-context | 0.87.0 | Apache-2.0 |
+| ds-harness-remote | 0.6.7 | MIT |
 
 > **2026-11-09 新增 2 个（31→33，按用户要求）**：`dsh-context`（[bowenliang123/dsh-context](https://github.com/bowenliang123/dsh-context)，Apache-2.0）、
 > `ds-harness-remote`（[liguobao/ds-harness-remote](https://github.com/liguobao/ds-harness-remote)，MIT，内层依赖树随包分发）。

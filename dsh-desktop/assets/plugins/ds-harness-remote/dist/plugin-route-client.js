@@ -112,6 +112,8 @@ export function createPluginRouteFetch(original, baseUrl, options = {}) {
         const lifetime = signal ?? AbortSignal.timeout(45_000);
         try {
             lifetime.throwIfAborted();
+            if (options.isLanWeb && await options.isLanWeb(lifetime))
+                return original(input, init);
             // The 10s probe deadline is ours, not the caller's: while the outer
             // lifetime is still live, a probe timeout means the local control
             // channel is wedged, which needs a distinct reload-the-plugin signal.
@@ -318,6 +320,8 @@ function botSessionIds(endpoint, value) {
         case 'remove-agent':
         case 'goal-draft':
         case 'goal-control':
+        case 'task-note':
+        case 'task-cancel':
             roster();
             break;
         case 'create-bot':

@@ -22,6 +22,7 @@ import { searchAnysearch } from "./engines/anysearch.js";
 import { searchSearxng } from "./engines/searxng.js";
 import { searchPerplexity } from "./engines/perplexity.js";
 import { searchSerpbase } from "./engines/serpbase.js";
+import { searchSerper } from "./engines/serper.js";
 import { searchSerply } from "./engines/serply.js";
 import { searchOutcrawl } from "./engines/outcrawl.js";
 import { searchTinyfish } from "./engines/tinyfish.js";
@@ -64,6 +65,7 @@ export const MCP_ENGINE_IDS = [
   "zhipu",
   "perplexity",
   "serpbase",
+  "serper",
   "serply",
   "outcrawl",
   "tinyfish",
@@ -89,7 +91,7 @@ export const MCP_FREE_ENGINES = ["bing", "ddg", "ddg-lite"];
 export const MCP_KEYLESS_ENGINES = ["anysearch", "searxng", "exa", "tavily", "keenable", "firecrawl", "parallel", "you"];
 export const MCP_KEYED_ENGINES = [
   "google", "baidu", "brave", "metaso", "yandex", "yuanbao", "deepseek-tools", "zhipu",
-  "perplexity", "serpbase", "serply", "outcrawl", "tinyfish", "jina", "kimi", "aliyun", "doubao",
+  "perplexity", "serpbase", "serper", "serply", "outcrawl", "tinyfish", "jina", "kimi", "aliyun", "doubao",
   "zhihu_global", "zhihu_site", "specstream", "deepseek-official",
   "openai", "gemini", "claude",
 ];
@@ -175,7 +177,10 @@ export async function runMcpEngine(id, query, options = {}) {
       };
     }
     case "tavily":
-      return { engine, ...(await searchTavily(query, maxResults, env("TAVILY_API_KEY"), timeRange, signal)) };
+      return {
+        engine,
+        ...(await searchTavily(query, maxResults, env("TAVILY_API_KEY"), timeRange, signal, env("MCP_TAVILY_URL"))),
+      };
     case "keenable":
       return { engine, ...(await searchKeenable(query, maxResults, env("KEENABLE_API_KEY"), timeRange, signal)) };
     case "firecrawl":
@@ -255,6 +260,17 @@ export async function runMcpEngine(id, query, options = {}) {
       return {
         engine,
         ...(await searchSerpbase(query, maxResults, requireEnv("SERPBASE_API_KEY", "SerpBase"), { lang }, signal)),
+      };
+    case "serper":
+      return {
+        engine,
+        ...(await searchSerper(
+          query,
+          maxResults,
+          requireEnv("SERPER_API_KEY", "Serper"),
+          { lang, timeRange },
+          signal
+        )),
       };
     case "serply":
       return {

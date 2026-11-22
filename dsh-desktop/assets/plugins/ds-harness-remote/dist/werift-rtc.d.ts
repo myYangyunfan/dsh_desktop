@@ -12,6 +12,7 @@ interface WeriftModule {
     RTCPeerConnection: new (config?: WeriftConfig) => WeriftPeerConnection;
 }
 interface WeriftConfig {
+    iceTransportPolicy?: 'all' | 'relay';
     iceServers?: Array<{
         urls: string | string[];
         username?: string;
@@ -110,12 +111,19 @@ export declare function buildWeriftFactory(werift: WeriftModule, options?: Werif
  * On macOS a host exposes many interfaces (WiFi `en0`, Thunderbolt `en1-4`,
  * `bridge*`, Apple Wireless Direct Link `awdl0`/`llw0`, and several VPN `utun*`
  * tunnels whose small MTUs drop large SCTP packets). Let werift/ICE compare
- * real physical interfaces, but filter virtual and link-local Host candidates
- * before they can become nominated paths.
+ * physical interfaces and recognized Tailscale paths while filtering other
+ * virtual and link-local Host candidates.
  */
 export declare function detectHostIpv4Candidates(interfaces: NodeJS.Dict<NetworkInterfaceInfo[] | undefined>, preferredHostIpv4Candidates?: readonly string[]): string[];
 export declare function detectRouteHostIpv4Candidates(targets: readonly string[], timeoutMs?: number): Promise<string[]>;
-export declare function shouldAdvertiseCandidate(candidate: RtcIceCandidateInit, allowedHostIpv4: ReadonlySet<string>): boolean;
+export declare function shouldAdvertiseCandidate(candidate: RtcIceCandidateInit, allowedHostAddresses: ReadonlySet<string>): boolean;
+/**
+ * Wrap any RtcPeerConnectionFactory with a backend-agnostic local ICE candidate
+ * filter covering both SDP `a=candidate:` lines and trickle `onicecandidate`.
+ */
+export declare function wrapLocalCandidateFilterFactory(factory: RtcPeerConnectionFactory, options?: Pick<WeriftFactoryOptions, 'interfaces'>): RtcPeerConnectionFactory;
+export declare function detectBlockedHostAddresses(interfaces: NodeJS.Dict<NetworkInterfaceInfo[] | undefined>): Set<string>;
+export declare function shouldAdvertiseFilteredLocalCandidate(candidate: RtcIceCandidateInit, blockedHostAddresses: ReadonlySet<string>): boolean;
 export declare function orderIceServersForWerift(iceServers: readonly RtcIceServer[]): RtcIceServer[];
 export {};
 //# sourceMappingURL=werift-rtc.d.ts.map

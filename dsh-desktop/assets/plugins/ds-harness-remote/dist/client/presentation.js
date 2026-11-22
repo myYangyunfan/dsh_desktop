@@ -155,6 +155,8 @@ export function connectionErrorMessage(code, t) {
         return t('connectionReplaced');
     if (code === 'SERVER_CREDENTIALS_BUSY')
         return t('connectionCredentialsBusy');
+    if (code === 'SERVER_CREDENTIALS_LOCK_DIRECTORY')
+        return t('connectionCredentialsLockDirectory');
     if (code === 'DEVICE_REVOKED')
         return t('connectionDeviceRevoked');
     if (code === 'DEVICE_OWNERSHIP_REQUIRED')
@@ -200,6 +202,8 @@ export function startupErrorMessage(error, t) {
         return storageConflictMessage(error.message, t);
     if (error.code === 'SERVER_CREDENTIALS_BUSY')
         return t('connectionCredentialsBusy');
+    if (error.code === 'SERVER_CREDENTIALS_LOCK_DIRECTORY')
+        return t('connectionCredentialsLockDirectory');
     return error.message || t('remoteStartupFailed');
 }
 function storageConflictMessage(message, t) {
@@ -222,6 +226,8 @@ export function messageOf(reason, t) {
         }
         if (reason.code === 'SERVER_CREDENTIALS_BUSY')
             return t('connectionCredentialsBusy');
+        if (reason.code === 'SERVER_CREDENTIALS_LOCK_DIRECTORY')
+            return t('connectionCredentialsLockDirectory');
     }
     return reason instanceof Error ? reason.message : String(reason);
 }

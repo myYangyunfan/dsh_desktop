@@ -30,18 +30,18 @@ const BACKEND_PROVIDERS = {
     hermes: 'hermes',
 };
 export function acpWorkspacePrefix(backend) {
-    return WORKSPACE_PREFIXES[backend];
+    return WORKSPACE_PREFIXES[backend] ?? `${backend}:cwd:`;
 }
 export function acpBackendLabel(backend) {
-    return BACKEND_LABELS[backend];
+    return BACKEND_LABELS[backend] ?? backend;
 }
 export function acpBackendProvider(backend) {
-    return BACKEND_PROVIDERS[backend];
+    return BACKEND_PROVIDERS[backend] ?? backend;
 }
 export const ACP_CATALOG_BACKENDS = ['cursor', 'antigravity', 'pi', 'opencode', 'claude', 'hermes'];
 /** Build a backend-scoped virtual Workspace id for an absolute Host cwd. */
 export function acpCwdWorkspaceId(path, backend) {
-    if (!(backend in WORKSPACE_PREFIXES))
+    if (!backend || typeof backend !== 'string')
         throw new Error("An explicit ACP workspace backend is required.");
     return `${acpWorkspacePrefix(backend)}${encodeURIComponent(path)}`;
 }

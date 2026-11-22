@@ -5,6 +5,9 @@ export declare class TranscriptWatcher extends EventEmitter {
     readonly baseDir: string;
     private offset;
     private lineRemainder;
+    private decoder;
+    private readTail;
+    private readQueued;
     private pollTimer?;
     private closed;
     private readonly transcriptPath;
@@ -17,6 +20,11 @@ export declare class TranscriptWatcher extends EventEmitter {
      */
     start(intervalMs?: number): void;
     stop(): void;
+    /**
+     * 重置读取偏移与解码器状态
+     */
+    reset(): void;
+    private resetDecoder;
     /**
      * 立即触发一次读取（同步/主动检查）
      */

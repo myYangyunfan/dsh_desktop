@@ -32,8 +32,8 @@ export function createRemoteUploadFetch(original, baseUrl) {
             return original(input, init);
         if (status.mode !== 'remote' || !status.connected)
             throw new Error('Remote Host is disconnected. Reconnect before uploading a file.');
-        if (status.backend !== undefined && status.backend !== 'harness')
-            throw new Error('Remote attachment receipts require a Harness session.');
+        if (status.backend !== undefined && status.backend !== 'harness' && status.backend !== 'codex')
+            throw new Error('Remote attachment receipts require a Harness or CodeX session.');
         const sessionId = url.searchParams.get('sessionId');
         const mediaType = url.searchParams.get('mediaType');
         if (!sessionId || (mediaType !== null && !['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(mediaType))) {

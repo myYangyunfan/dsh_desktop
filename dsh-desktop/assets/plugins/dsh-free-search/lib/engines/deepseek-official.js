@@ -17,15 +17,16 @@ export async function searchDeepSeekOfficial(query, maxResults, apiKey, signal) 
       "user-agent": "deepseek-harness/free-search",
     },
     body: JSON.stringify({
-      model: "deepseek-v4-flash",
+      model: "deepseek-flash",
       max_tokens: 4096,
+      thinking: { type: "disabled" },
       messages: [
         {
           role: "user",
           content: [{ type: "text", text: `Perform a web search for the query: ${query}` }],
         },
       ],
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 1 }],
+      tools: [{ type: "deepseek_web_search", name: "deepseek_web_search" }],
     }),
     signal: AbortSignal.any([...(signal !== undefined ? [signal] : []), AbortSignal.timeout(20000)]),
   });
@@ -54,7 +55,12 @@ export async function searchDeepSeekOfficial(query, maxResults, apiKey, signal) 
       sources.push({
         url: item.url,
         ...(item.title ? { title: item.title } : {}),
-        ...(snippets.get(item.url) ? { snippet: snippets.get(item.url) } : {}),
+        ...(typeof item.snippet === "string" && item.snippet.trim()
+          ? { snippet: item.snippet.trim() }
+          : snippets.get(item.url)
+            ? { snippet: snippets.get(item.url) }
+            : {}),
+        ...(typeof item.site_name === "string" && item.site_name.trim() ? { site: item.site_name.trim() } : {}),
         ...(item.page_age ? { publishedAt: item.page_age } : {}),
       });
     }

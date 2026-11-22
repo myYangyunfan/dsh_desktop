@@ -1,3 +1,5 @@
+import { type DshWebRuntime } from './dsh-web-host.js';
+import { type TransferServices } from './session-transfer.js';
 import type { HostPairingView } from './pairing-contract.js';
 import { type RemoteWorkspaceTypeDescription } from '@dsh-remote/protocol';
 import { ConnectionController } from './connection-controller.js';
@@ -5,7 +7,8 @@ import type { ResolvedConfig } from './config.js';
 import type { HostIdentity, IdentityStore } from './identity-store.js';
 import type { SafeLogger } from './logging.js';
 import { type FileViewerHostServiceLike } from './file-viewer-bridge.js';
-import { type DeviceAuthorization, type OAuthProvider, type OAuthProviderInfo, type OAuthQrPollResult, type OAuthQrSession } from './server-api.js';
+import { type AccountVerification, type DeviceAuthorization, type OAuthProvider, type OAuthProviderInfo, type OAuthQrPollResult, type OAuthQrSession } from './server-api.js';
+import type { MessageFileAttachment } from './message-file-attachment.js';
 import { type ScheduleCreateService } from './harness-remote-bridge.js';
 import type { PluginRouteDispatcher } from './plugin-route-bridge.js';
 import type { LocalTypertGateway } from './typert-gateway-contract.js';
@@ -46,8 +49,10 @@ export declare class HostPluginRuntime {
     private readonly pluginRoutes?;
     /** Host `schedule` service; absent on Hosts whose composition omits reminders. */
     private readonly schedule?;
+    private readonly codexStartupGraceMs;
     readonly connections: ConnectionController;
     private readonly terminalOwners;
+    private readonly uploadBudget;
     private readonly loopbackHosts;
     private terminalEnabled;
     private loopbackPorts;
@@ -74,7 +79,7 @@ export declare class HostPluginRuntime {
     /** PTY-backed terminal provider from the Host `subprocess` service, when present. */
     terminalSpawner?: RemoteTerminalSpawner | undefined, pluginRoutes?: ((peer?: unknown) => PluginRouteDispatcher | undefined) | undefined, 
     /** Host `schedule` service; absent on Hosts whose composition omits reminders. */
-    schedule?: ScheduleCreateService | undefined);
+    schedule?: ScheduleCreateService | undefined, transferServices?: () => TransferServices, resolveDshWeb?: () => DshWebRuntime | undefined, codexStartupGraceMs?: number, attachmentHostPath?: (ref: MessageFileAttachment) => string | undefined);
     setTerminalEnabled(enabled: boolean): void;
     setLoopbackPorts(ports: readonly number[]): void;
     private backendUpdate;
@@ -98,7 +103,7 @@ export declare class HostPluginRuntime {
     pollHostOAuthQrLogin(qrId: string): Promise<OAuthQrPollResult>;
     clearHostAuthorization(): Promise<void>;
     authorizeHostAsOwned(accessToken: string, account?: string): Promise<DeviceAuthorization>;
-    authorizeHostWithAccount(email: string, password: string): Promise<DeviceAuthorization>;
+    authorizeHostWithAccount(email: string, password: string, verification?: AccountVerification): Promise<DeviceAuthorization>;
     authorizeHostWithCode(code: string): Promise<DeviceAuthorization>;
     revokePeer(deviceId: string): Promise<boolean>;
     codexStatus(): ReturnType<CodexRemoteDomain['status']>;
@@ -109,6 +114,7 @@ export declare class HostPluginRuntime {
     codexOpenStream(input: unknown, publish: PublishCodexFrame): Promise<unknown>;
     codexCloseStream(input: unknown): Promise<unknown>;
     acpStatus(): ReturnType<AcpRemoteGateway['status']>;
+    acpDiagnostics(): ReturnType<AcpRemoteGateway['diagnostics']>;
     acpCall(input: unknown): Promise<unknown>;
     acpRespond(input: unknown): Promise<{
         resolved: true;
@@ -145,6 +151,12 @@ export declare class HostPluginRuntime {
             error?: string;
             availableBackends?: string[];
         };
+        acpDiagnostics: Record<string, {
+            state: "disabled" | "ready" | "unavailable";
+            errorCode?: string;
+            auth: import("@dsh-remote/protocol").AcpAuthDiagnostic;
+            capabilities: Record<string, unknown>;
+        }>;
     };
     private createServerConnection;
     private readHarnessVersion;

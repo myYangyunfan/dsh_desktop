@@ -3,6 +3,7 @@ import { type ClientModeRuntime, type HostConnectionHandle, type HostAuthorizati
 import { type HostWebServerLike } from './control-route.js';
 import type { PluginUpdateSnapshot } from './update-check.js';
 import type { PluginSelfUpdateResult } from './plugin-self-update.js';
+import type { AcpAuthDiagnostic } from '@dsh-remote/protocol';
 import type { HostLogSnapshot, HostLogStore } from './host-log-store.js';
 export interface PluginSettingsView {
     config: Config;
@@ -12,6 +13,12 @@ export interface PluginSettingsView {
     association?: PluginAssociation;
     associations: Partial<Record<'host' | 'client', PluginAssociation>>;
     acpAvailability?: Record<string, boolean>;
+    acpDiagnostics?: Record<string, {
+        state: 'ready' | 'unavailable' | 'disabled';
+        errorCode?: string;
+        auth: AcpAuthDiagnostic;
+        capabilities: Record<string, unknown>;
+    }>;
     acpInstallResult?: {
         backend: string;
         action: 'configured' | 'installed' | 'download_required';

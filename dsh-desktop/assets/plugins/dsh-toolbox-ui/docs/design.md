@@ -178,7 +178,7 @@ DSH 宿主 API 通过 `peerDependencies` 与 `engines.dsh` 以 `>=0.2.1-rc.5 <0.
    注意这条**只对宿主自己的闸门成立**：谁要复核这个范围，必须用宿主自己的 `evaluatePluginCompatibility`，而不是 `semver.satisfies(range)` 或 pnpm 的 peer 检查。`test/package-contract.test.mjs` 只钉 manifest 的窗口与 engines 同源，不模拟 semver。
 3. **范围回答不了「装上还对不对」，而 CI 也只能盖住一半**。`0.1.6-alpha.2` 把 typert strict codec 从 `schema:`（zod v4 实例）换成 `create()`（进程内 realm 的懒工厂，registry 用 `record.value ??= record.create()` 物化）就是这么一次：它落在当时的 `>=0.1.5-rc.1 <0.2.0` 之内，插件的兼容性声明天生拦不住，2026-09-21 的漂移任务因此变红（那一次 130 项里唯一失败的就是加载期契约那条）。真正的保护分两层：**(a) 运行时契约**由 [`.github/workflows/upstream-drift.yml`](../.github/workflows/upstream-drift.yml) 每周把宿主整套换到 `latest` / `next` / `alpha` 三个渠道跑契约用例（`test/*.test.mjs` 去掉 `package-contract`，因为那份断言的是 pin 本身）；**(b) 宿主侧的加载期契约**（`lib/typert.js` 的形状由宿主 loader 校验，不由我们校验）由 `test/typert-manifest.test.mjs` 覆盖：它直接调宿主自己的 `validateTypertManifest` 验这份产物，形状一变就红；同一文件里还有一条**不依赖 loader 版本**的形状断言，钉住「strict codec 同时带 `schema` 与 `create()`」（下一条理由）——本地 devDependency 的 loader 是开发基线，看不见 alpha 的要求，只靠前者要等一周才知道。这一层原本是缺口——既有用例只保证 `lib/typert.js` 与 `lib/client.js` 两份产物彼此一致（`client-lifecycle.test.mjs`），宿主改了要求也不会变红，而后果是用户升级 DSH 后面板整个不可用。它也是 `@deepseek-ai/dsh-typert-loader` 只进 `devDependencies`、不进 peer 的原因：校验发生在宿主进程里，插件运行时不 import 它。
 
-4. **当前发布支持面从 0.2.1-rc.5 开始**。0.2.0 只作为历史 loader 回归保留，不是发布准入；当前两类宿主组合是 0.2.1-rc.5（Loader 1.0.6）与 0.2.2-rc.3（Loader 1.1.0），而**换的这层不在 dsh-\* 的 API 面上**——`@deepseek-ai/dsh@0.2.1-rc.2` 只是把依赖声明改成了 `cordis ~4.0.5` / `cordis-plugin-loader ~1.0.6`（0.2.0 是 `~4.0.2` / `^1.0.3`），破坏性全都在 `cordis-plugin-loader` 1.0.3 → 1.0.6 的重构里。实测两处差异，都在插件侧做了显式适配，各有一条**不依赖宿主版本**的常驻用例（`test/loader-compat.test.mjs`）：
+4. **当前发布支持面从 0.2.1-rc.5 开始**。0.2.0 只作为历史 loader 回归保留，不是发布准入；当前三类宿主组合是 0.2.1-rc.5（Loader 1.0.6）、0.2.2-rc.3 与 0.2.2-rc.5（后两者同为 Loader 1.1.0），而**换的这层不在 dsh-\* 的 API 面上**——`@deepseek-ai/dsh@0.2.1-rc.2` 只是把依赖声明改成了 `cordis ~4.0.5` / `cordis-plugin-loader ~1.0.6`（0.2.0 是 `~4.0.2` / `^1.0.3`），破坏性全都在 `cordis-plugin-loader` 1.0.3 → 1.0.6 的重构里。实测两处差异，都在插件侧做了显式适配，各有一条**不依赖宿主版本**的常驻用例（`test/loader-compat.test.mjs`）：
 
    | # | 差异 | 1.0.3（0.2.0） | 1.0.6（0.2.1） | 插件的适配 |
    |---|---|---|---|---|
@@ -187,7 +187,7 @@ DSH 宿主 API 通过 `peerDependencies` 与 `engines.dsh` 以 `>=0.2.1-rc.5 <0.
 
    **L2 是历史宿主差异，不是我们的写法问题**：同一条路径在 0.2.0 上是干净的（`_disposing` 守卫挡住了）。上游若修回来，`disabled` 这一行仍然无害——它是一个即将被删除的条目，标记 disabled 不改变任何可见语义。当前支持的 Loader/Include 组合已由真 Loader、真 Include 和重启用例覆盖；GUI 的逐条人工点穿仍属于每次发布检查，不把当前工作树的浏览器快照冒充为版本矩阵证据。
 
-   验证方式就是本仓库自己的漂移方法：隔离副本 + `pnpm add` 把 11 个 peer 宿主包整套换到目标版本，**再**按该 dsh 自己声明的 `dependencies.@deepseek-ai/cordis` / `cordis-plugin-loader` 换掉这两代（`upstream-drift.yml` 现在两件事都做）。0.2.1-rc.2 + cordis 4.0.5 + loader 1.0.6 的稳态是 **748/748**（`node --test`，去掉按定义会红的 `package-contract`）；0.2.1-rc.3 + 同一对 cordis/loader 在 2026-10-24 复跑是 **785/785**（仓库 1.8.3，套件已比上面那次长；首次跑的唯一一条红是环境问题——该用例读 `process.env.HOME`，而 PowerShell 只设 `USERPROFILE`，补上 `HOME` 即绿，同一份用例在 0.2.0-rc.2 基线上同样红）；0.2.1-rc.5 + 同一对 cordis/loader 在 2026-10-30 复跑是 **812/812**（仓库 1.9.0；同样只有那条 `HOME` 环境用例首跑红，补上 `HOME` 即绿）；0.2.0-rc.2 基线是 **796/796**。
+   验证方式就是本仓库自己的漂移方法：隔离副本 + `pnpm add` 把 11 个 peer 宿主包整套换到目标版本，**再**按该 dsh 自己声明的 `dependencies.@deepseek-ai/cordis` / `cordis-plugin-loader` 换掉这两代（`upstream-drift.yml` 现在两件事都做）。0.2.1-rc.2 + cordis 4.0.5 + loader 1.0.6 的稳态是 **748/748**（`node --test`，去掉按定义会红的 `package-contract`）；0.2.1-rc.3 + 同一对 cordis/loader 在 2026-10-24 复跑是 **785/785**（仓库 1.8.3，套件已比上面那次长；首次跑的唯一一条红是环境问题——该用例读 `process.env.HOME`，而 PowerShell 只设 `USERPROFILE`，补上 `HOME` 即绿，同一份用例在 0.2.0-rc.2 基线上同样红）；0.2.1-rc.5 + 同一对 cordis/loader 在 2026-10-30 复跑是 **812/812**（仓库 1.9.0；同样只有那条 `HOME` 环境用例首跑红，补上 `HOME` 即绿）；0.2.0-rc.2 基线是 **796/796**。0.2.2 的两条腿在 2026-11-19（仓库 1.13.0，`scripts/host-matrix.mjs`）复跑：`0.2.2-rc.3` 与 `0.2.2-rc.5` 各 **1130 项 / 1097 通过 / 33 跳过 / 0 失败**；同一轮的 `0.2.1-rc.5` 是 **1130 项 / 1123 通过 / 7 跳过 / 0 失败**（跳过集合按代次能力各不相同：0.2.1 腿少跳 26 条，多跑的是它自己那代才有的用例）。
 
    **为什么 strict codec 两个键都写，以及 0.2 之后还剩不剩意义**（`lib/typert.js` 与 `lib/client.js` 各一份，`client-lifecycle.test.mjs` 钉住两者一致）：宿主在两个渠道上查**不同的键**，且都忽略对方的键——`0.1.5-rc.x`（= 当时的 `latest` / `next`，也就是 `npx` 默认装到的那条）查 `codec.schema.parse` 必须是 zod v4 实例；`0.1.6-alpha.2` 起查 `typeof codec.create === 'function'`。少写 `schema` 会在最新 RC 上加载即拒，少写 `create` 会在 alpha 上加载即拒；`mode: 'src-json'` 不是出路（loader 强制 invocation 的 codec 必须是 strict）。拿三个版本的 loader 直接跑自己的产物：
 
@@ -198,14 +198,14 @@ DSH 宿主 API 通过 `peerDependencies` 与 `engines.dsh` 以 `>=0.2.1-rc.5 <0.
 | **双写** | PASS | PASS | PASS |
 | `mode: 'src-json'` | 拒 | 拒 | 拒 |
 
-历史验证记录：`0.2.0-rc.2` 与 `0.2.1-rc.2` 的 loader 都与 `0.1.6-alpha.2` 同列，只有 `create()` 通过、只有 `schema` 被拒。双写两个 codec 键仍保留，因为历史宿主可能检查不同键；这不是当前发布支持窗口的承诺。当前准入组合是 `0.2.1-rc.5`（Loader 1.0.6）与 `0.2.2-rc.3`（Loader 1.1.0），形状由 `test/typert-manifest.test.mjs` 与匹配宿主契约共同验证。
+历史验证记录：`0.2.0-rc.2` 与 `0.2.1-rc.2` 的 loader 都与 `0.1.6-alpha.2` 同列，只有 `create()` 通过、只有 `schema` 被拒。双写两个 codec 键仍保留，因为历史宿主可能检查不同键；这不是当前发布支持窗口的承诺。当前准入组合是 `0.2.1-rc.5`（Loader 1.0.6）、`0.2.2-rc.3` 与 `0.2.2-rc.5`（后两者 Loader 1.1.0），形状由 `test/typert-manifest.test.mjs` 与匹配宿主契约共同验证。
 
 浏览器半（`@deepseek-ai/dsh-typert-registry` 的 `lib/client.js`）做同一份校验，所以 `lib/client.js` 里的 codec 必须同步改——只改 host 那份会变成「面板能加载，一调用就炸」。
 
 漂移任务红了怎么读：
 
 - **契约用例（含真机集成）失败** → 上游契约真的变了，按失败点修插件并发补丁（2026-09-21 那次就是这样红的）。
-- **本地 `npm test` 里 `package-contract.test.mjs` 的 pin / lockfile 断言失败** → 宿主可用，去同步 pin：`package.json` 的 devDeps、`DEV_BASELINE`、README / README.en / installation 的「已验证至」，然后 `pnpm install && npm test` 确认全绿。
+- **本地 `npm test` 里 `package-contract.test.mjs` 的 pin / lockfile 断言失败** → 宿主可用，去同步 pin：`package.json` 的 devDeps、`DEV_BASELINE`、README / README.en / installation 的「已验证至」，然后 `pnpm install && npm test` 确认全绿。若这个新宿主也要留在支持面上（不是只当基线），再在 `scripts/host-presets.mjs` 加一条腿、`.github/workflows/ci.yml` 的 matrix 加一行——腿清单只有前者一份，后者只写宿主版本，`package-contract.test.mjs` 会拦住"只改一处"。
 
   这一条**不会**由漂移任务报出来：它的 `files` 是 `grep -v 'package-contract'`，pin 断言按定义就不参与漂移判定。所以「漂移任务绿」不等于 pin 没过期——2026-09-10 到 09-24 之间 pin 停在 `0.1.5-rc.2`，而 `latest` 已经是 `0.1.5-rc.3`、`next` 是 `0.1.7-rc.1`，两周无人发现，就是这条缺口。同步 pin 只有两个触发源：人注意到新 RC，或本地跑完整套件。
 
@@ -590,6 +590,21 @@ RPC 的四张脸（宿主 `@Remote`、`lib/typert.js`、`lib/client.js` 的 desc
 **长会话要封顶**：条目按轮增长（真机 400+ 轮）。明细一次最多 20 行、块图每列最多 6 块，被折叠的
 条数写成"其余 N 项"——封顶可以，"悄悄少画"不行。顺序仍由宿主给（分类固定顺序，分类内按大小
 降序），客户端不重排：重排就是第二个排序真相源。
+
+**工具定义的价格只有一个来源，而且它是两层的**：工具 schema 不在 surface 上（它不是消息），所以
+`measure()` 的节点价格里没有它；唯一的口径是宿主的 `contextBreakdown` 投影，由 tokenMeter 用同一套
+估算器算出。这个投影的 **state 是外层**：`{ systems, surfaceTokens, claim?, breakdown: { systemTokens,
+toolsTokens, messageTokens } }`，要读的 `toolsTokens` 在里层。装配处（`lib/index.js`）负责只在这一处
+拆开它——2026-11-19 的 1.13.1 就是漏了这一步：把整个 state 传给了纯函数，于是工具卡的「占上下文」
+一直是「—」，而纯函数用例喂的是内层对象，两边各自都绿。回归用例在
+`test/context-report-host.test.mjs`，喂的是**宿主真实形状**，钉的就是这条接缝。
+
+顺带记一条风险：宿主把这个投影的读取方式标成了 deprecated——`ctx.sessionProjections.stateOf(session,
+key)` 仍在（0.2.1-rc.5 / 0.2.2-rc.3 / rc.5 三代形状一致，且每个 key 只 warn 一次），但官方推荐的是
+「awaited registration 的 handle」。宿主侧没有别的公开读法（`tokenMeter` 只暴露 `measure` /
+`contextPressure` / `estimateMessage`），所以这里继续用两参形式；哪天宿主把它删掉，表现会是「占上下文」
+又回到「—」（`try` 里接住错误、只打一条 warn），不会让面板崩——所以每次升基线时，工具卡那一格要人眼
+过一遍。
 
 **构成与总量的分工**：`measure()` 的节点价格是**估算构成**（宿主固定"每 4 字符 1 token +
 结构开销"），`contextPressure()` 的 `pressureTokens` 是**真实总量**（提供方报告）。两者本来就不

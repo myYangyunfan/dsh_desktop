@@ -1,7 +1,7 @@
 import type { CodexAppFrameData, CodexAppStreamClosedData, CodexAppTransferCommitResult, CodexAppTransferReadResult } from '@dsh-remote/protocol';
 import type { PeerConnectionContext } from '../connection-controller.js';
 import type { SafeLogger } from '../logging.js';
-import type { CodexRemoteDomain } from './domain.js';
+import { type CodexRemoteDomain } from './domain.js';
 export type PublishCodexFrame = (event: 'codex.app.frame' | 'codex.app.stream.closed', data: CodexAppFrameData | CodexAppStreamClosedData) => Promise<void>;
 /** Per-authenticated-connection state for the Codex Remote domain. */
 export declare class CodexPeerBridge {
@@ -11,6 +11,8 @@ export declare class CodexPeerBridge {
     private readonly logger?;
     compactHistoryEnabled: boolean;
     private readonly streams;
+    private readonly openingStreams;
+    private readonly pendingOpens;
     private readonly incomingTransfers;
     private readonly outgoingTransfers;
     private closed;
@@ -24,11 +26,12 @@ export declare class CodexPeerBridge {
         opened: true;
         streamId: string;
         threadId: string;
+        replayTruncated?: true;
     }>;
-    closeStream(input: unknown): {
+    closeStream(input: unknown): Promise<{
         closed: true;
         streamId: string;
-    };
+    }>;
     openTransfer(input: unknown): {
         opened: true;
         transferId: string;
@@ -46,10 +49,15 @@ export declare class CodexPeerBridge {
     };
     hasThreadSubscription(threadId: string): boolean;
     removeThreadSubscriptions(threadId: string): void;
+    publishReplayFrame(streamId: string, frame: {
+        method: string;
+        params: unknown;
+    }): Promise<void>;
     publishInbound(threadId: string, frame: {
         method: string;
         params: unknown;
     }): Promise<void>;
+    private clearStreamState;
     failStreams(reason?: CodexAppStreamClosedData['reason']): Promise<void>;
     closeAll(): Promise<void>;
     private pruneTransfers;

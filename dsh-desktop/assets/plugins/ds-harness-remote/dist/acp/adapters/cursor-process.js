@@ -1,5 +1,6 @@
+import { buildAuthDiagnosticFromMetadata, detectUpstreamAuthFailure, parseAvailableCommands, parseInitializeMetadata, } from './auth-diagnostics.js';
 import { AcpSessionModelState } from './session-models.js';
-import { spawn } from 'node:child_process';
+import { spawnCommand } from '../windows-spawn.js';
 import { Buffer } from 'node:buffer';
 import { PLUGIN_VERSION } from '../../version.js';
 const ACP_REQUEST_TIMEOUT_MS = 60_000;
@@ -8,13 +9,22 @@ const ACP_PROMPT_TIMEOUT_MS = 10 * 60_000;
 const ACP_START_TIMEOUT_MS = 20_000;
 const MAX_ACP_LINE_BYTES = 288 * 1024 * 1024;
 const MAX_STDERR_CAPTURE_BYTES = 4 * 1024;
+const ADAPTER_LABELS = Object.freeze({
+    cursor: 'Cursor',
+    pi: 'Pi',
+    claude: 'Claude',
+    hermes: 'Hermes',
+    antigravity: 'Antigravity',
+});
 export class CursorAcpError extends Error {
     code;
     constructor(code, message, options) {
         super(message, options);
         this.code = code;
         this.name = 'CursorAcpError';
+        this.authDiagnostic = options?.authDiagnostic;
     }
+    authDiagnostic;
 }
 /**
  * Host-local stdio client for one Cursor CLI ACP process (`agent acp`).
@@ -38,7 +48,23 @@ export class CursorAcpClient {
     startPromise;
     modelStates = new Map();
     modelBusy = new Set();
-    constructor(binary, logger, spawnAcp = binary => spawn(binary, options.args ?? ['acp'], {
+    sessionCommands = new Map();
+    initMetadata;
+    lastAuthDiagnostic;
+    /** Backend that owns this process: failure codes and log lines must name it. */
+    get backend() { return this.options.backend ?? 'cursor'; }
+    get adapterLabel() { return ADAPTER_LABELS[this.backend] ?? this.backend; }
+    code(suffix) { return `${this.backend.toUpperCase()}_${suffix}`; }
+    diagnostics() {
+        return buildAuthDiagnosticFromMetadata(this.backend, this.initMetadata, this.lastAuthDiagnostic, this.ready);
+    }
+    capabilities() {
+        return this.initMetadata?.agentCapabilities ?? {};
+    }
+    authMethods() {
+        return this.initMetadata?.authMethods ?? [];
+    }
+    constructor(binary, logger, spawnAcp = binary => spawnCommand(binary, options.args ?? ['acp'], {
         cwd: options.cwd,
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
@@ -51,7 +77,7 @@ export class CursorAcpClient {
     }
     start() {
         if (this.closed)
-            return Promise.reject(new CursorAcpError('CURSOR_CLOSED', 'The Cursor domain is closed.'));
+            return Promise.reject(new CursorAcpError(this.code('CLOSED'), `The ${this.adapterLabel} domain is closed.`));
         if (this.ready)
             return Promise.resolve();
         this.startPromise ??= this.startOnce().finally(() => { this.startPromise = undefined; });
@@ -60,9 +86,12 @@ export class CursorAcpClient {
     isReady() { return this.ready; }
     async call(method, params, timeoutMs) {
         if (!this.ready)
-            throw new CursorAcpError('CURSOR_UNAVAILABLE', 'Cursor ACP is not ready.');
-        const backend = this.options.modelBackend ?? (this.options.authenticationMethod === null ? undefined : 'cursor');
+            throw new CursorAcpError(this.code('UNAVAILABLE'), `${this.adapterLabel} ACP is not ready.`);
+        const backend = this.options.modelBackend ?? this.backend;
         const id = isRecord(params) && typeof params.sessionId === 'string' ? params.sessionId : undefined;
+        if (method === 'dsh/sessionCommands') {
+            return { commands: id ? [...(this.sessionCommands.get(id) ?? [])] : [] };
+        }
         if (backend && (method === 'dsh/sessionModels' || method === 'dsh/selectModel')) {
             const state = id ? this.modelStates.get(id) : undefined;
             if (!state || !id)
@@ -84,6 +113,30 @@ export class CursorAcpClient {
                 this.modelBusy.delete(id);
             }
         }
+        if (backend && (method === 'dsh/sessionModes' || method === 'session/set_mode')) {
+            const state = id ? this.modelStates.get(id) : undefined;
+            if (!state || !id)
+                throw new CursorAcpError('ACP_SESSION_NOT_LOADED', 'Load the ACP session before changing its mode.');
+            if (method === 'dsh/sessionModes')
+                return state.modesCatalog();
+            if (this.modelBusy.has(id))
+                throw new CursorAcpError('PROMPT_IN_PROGRESS', 'Stop the reply before changing its mode.');
+            const modeId = isRecord(params) ? params.modeId : undefined;
+            this.modelBusy.add(id);
+            try {
+                const result = await state.setMode(id, modeId, (method, params) => this.request(method, params, timeoutMs ?? ACP_REQUEST_TIMEOUT_MS));
+                for (const handler of this.inboundHandlers)
+                    handler({
+                        kind: 'notification',
+                        method: 'session/update',
+                        params: { sessionId: id, update: { sessionUpdate: 'current_mode_update', currentModeId: result.currentModeId } },
+                    });
+                return result;
+            }
+            finally {
+                this.modelBusy.delete(id);
+            }
+        }
         if (backend && method === 'session/prompt' && id) {
             if (this.modelBusy.has(id))
                 throw new CursorAcpError('PROMPT_IN_PROGRESS', 'The ACP session is busy.');
@@ -95,19 +148,34 @@ export class CursorAcpClient {
                 this.modelBusy.delete(id);
             }
         }
-        if (method === 'session/cancel' && this.options.authenticationMethod === null) {
+        if (method === 'session/cancel') {
             this.write({ jsonrpc: '2.0', method, params });
             return {};
         }
         const budget = timeoutMs
             ?? (method === 'session/prompt' ? ACP_PROMPT_TIMEOUT_MS : ACP_REQUEST_TIMEOUT_MS);
-        const result = await this.request(method, params, budget);
-        if (backend && (method === 'session/new' || method === 'session/load')) {
+        const provisionalLoad = Boolean(backend && method === 'session/load' && id && !this.modelStates.has(id));
+        if (provisionalLoad && backend && id) {
+            this.modelStates.set(id, new AcpSessionModelState(backend));
+        }
+        let result;
+        try {
+            result = await this.request(method, params, budget);
+        }
+        catch (error) {
+            if (provisionalLoad && id)
+                this.modelStates.delete(id);
+            throw error;
+        }
+        if (backend && (method === 'session/new' || method === 'session/load' || method === 'session/fork')) {
             const returnedId = isRecord(result) && typeof result.sessionId === 'string' ? result.sessionId : undefined;
             const sessionId = method === 'session/load' ? id : returnedId;
-            if (!this.ready || !sessionId || (returnedId && returnedId !== sessionId))
+            if (!this.ready || !sessionId || (returnedId && returnedId !== sessionId)) {
+                if (provisionalLoad && id)
+                    this.modelStates.delete(id);
                 throw new CursorAcpError('ACP_INVALID_SESSION', 'ACP returned an invalid session.');
-            const state = new AcpSessionModelState(backend);
+            }
+            const state = (method === 'session/load' ? this.modelStates.get(sessionId) : undefined) ?? new AcpSessionModelState(backend);
             state.update(result);
             this.modelStates.set(sessionId, state);
         }
@@ -133,7 +201,7 @@ export class CursorAcpClient {
         this.closed = true;
         this.ready = false;
         this.modelStates.clear();
-        this.failPending(new CursorAcpError('CURSOR_CLOSED', 'Cursor ACP was closed.'));
+        this.failPending(new CursorAcpError(this.code('CLOSED'), `${this.adapterLabel} ACP was closed.`));
         const child = this.process;
         this.process = undefined;
         if (child === undefined || child.exitCode !== null || child.killed)
@@ -153,11 +221,19 @@ export class CursorAcpClient {
     }
     async startOnce() {
         if (this.process !== undefined) {
-            throw new CursorAcpError('CURSOR_STARTING', 'Cursor ACP is already starting.');
+            throw new CursorAcpError(this.code('STARTING'), `${this.adapterLabel} ACP is already starting.`);
         }
-        const child = this.spawnAcp(this.binary);
-        this.process = child;
         this.failureNotified = false;
+        let child;
+        try {
+            child = this.spawnAcp(this.binary);
+        }
+        catch (error) {
+            const cause = error instanceof Error ? error : new Error(String(error));
+            this.handleProcessFailure(this.code('BINARY_UNAVAILABLE'), cause);
+            throw new CursorAcpError(this.code('BINARY_UNAVAILABLE'), `${this.adapterLabel} ACP communication failed.`, { cause });
+        }
+        this.process = child;
         this.stdoutBuffer = Buffer.alloc(0);
         this.stderrBytes = 0;
         child.stdout.on('data', chunk => {
@@ -171,7 +247,7 @@ export class CursorAcpClient {
         });
         child.on('error', error => {
             if (this.process === child)
-                this.handleProcessFailure('CURSOR_BINARY_UNAVAILABLE', error);
+                this.handleProcessFailure(this.code('BINARY_UNAVAILABLE'), error);
         });
         child.on('exit', (code, signal) => {
             if (this.process !== child)
@@ -179,18 +255,18 @@ export class CursorAcpClient {
             this.process = undefined;
             this.ready = false;
             this.modelStates.clear();
-            this.failPending(new CursorAcpError('CURSOR_ACP_EXITED', 'Cursor ACP exited unexpectedly.'));
+            this.failPending(new CursorAcpError(this.code('ACP_EXITED'), `${this.adapterLabel} ACP exited unexpectedly.`));
             if (!this.closed) {
-                this.logger?.warn('Cursor ACP exited', {
+                this.logger?.warn(`${this.adapterLabel} ACP exited`, {
                     code: code ?? 'none',
                     signal: signal ?? 'none',
                     stderrBytes: this.stderrBytes,
                 });
-                this.notifyUnavailable('CURSOR_ACP_EXITED');
+                this.notifyUnavailable(this.code('ACP_EXITED'));
             }
         });
         try {
-            await this.request('initialize', {
+            const initResult = await this.request('initialize', {
                 protocolVersion: 1,
                 clientCapabilities: {
                     fs: { readTextFile: false, writeTextFile: false },
@@ -201,13 +277,15 @@ export class CursorAcpClient {
                     version: PLUGIN_VERSION,
                 },
             }, ACP_START_TIMEOUT_MS);
+            this.initMetadata = parseInitializeMetadata(initResult);
             this.assertStarting(child);
             if (this.options.authenticationMethod !== null) {
                 await this.request('authenticate', { methodId: this.options.authenticationMethod ?? 'cursor_login' }, ACP_START_TIMEOUT_MS);
             }
             this.assertStarting(child);
+            this.lastAuthDiagnostic = undefined;
             this.ready = true;
-            this.logger?.info('Cursor ACP ready');
+            this.logger?.info(`${this.adapterLabel} ACP ready`);
         }
         catch (error) {
             this.ready = false;
@@ -217,14 +295,14 @@ export class CursorAcpClient {
             child.kill('SIGTERM');
             if (error instanceof CursorAcpError)
                 throw error;
-            throw new CursorAcpError('CURSOR_INITIALIZE_FAILED', 'Cursor ACP initialization failed.', { cause: error });
+            throw new CursorAcpError(this.code('INITIALIZE_FAILED'), `${this.adapterLabel} ACP initialization failed.`, { cause: error });
         }
     }
     assertStarting(child) {
         if (this.closed)
-            throw new CursorAcpError('CURSOR_CLOSED', 'Cursor ACP was closed.');
+            throw new CursorAcpError(this.code('CLOSED'), `${this.adapterLabel} ACP was closed.`);
         if (this.process !== child || child.exitCode !== null || child.killed) {
-            throw new CursorAcpError('CURSOR_UNAVAILABLE', 'Cursor ACP is not available.');
+            throw new CursorAcpError(this.code('UNAVAILABLE'), `${this.adapterLabel} ACP is not available.`);
         }
     }
     request(method, params, timeoutMs) {
@@ -232,7 +310,7 @@ export class CursorAcpClient {
         const result = new Promise((resolve, reject) => {
             const timer = setTimeout(() => {
                 this.pending.delete(id);
-                reject(new CursorAcpError('CURSOR_REQUEST_TIMEOUT', 'Cursor ACP request timed out.'));
+                reject(new CursorAcpError(this.code('REQUEST_TIMEOUT'), `${this.adapterLabel} ACP request timed out.`));
             }, timeoutMs);
             timer.unref?.();
             this.pending.set(id, { resolve, reject, timer });
@@ -249,14 +327,14 @@ export class CursorAcpClient {
     write(message) {
         const child = this.process;
         if (child === undefined || child.stdin.destroyed || !child.stdin.writable) {
-            throw new CursorAcpError('CURSOR_UNAVAILABLE', 'Cursor ACP is not available.');
+            throw new CursorAcpError(this.code('UNAVAILABLE'), `${this.adapterLabel} ACP is not available.`);
         }
         child.stdin.write(`${JSON.stringify(message)}\n`);
     }
     consumeStdout(chunk) {
         this.stdoutBuffer = this.stdoutBuffer.length === 0 ? chunk : Buffer.concat([this.stdoutBuffer, chunk]);
         if (this.stdoutBuffer.length > MAX_ACP_LINE_BYTES) {
-            this.handleProcessFailure('CURSOR_RESPONSE_TOO_LARGE', new Error('Cursor ACP emitted an oversized JSONL message.'));
+            this.handleProcessFailure(this.code('RESPONSE_TOO_LARGE'), new Error(`${this.adapterLabel} ACP emitted an oversized JSONL message.`));
             return;
         }
         let newline = this.stdoutBuffer.indexOf(0x0a);
@@ -274,11 +352,11 @@ export class CursorAcpClient {
             value = JSON.parse(line.toString('utf8'));
         }
         catch {
-            this.handleProcessFailure('CURSOR_INVALID_RESPONSE', new Error('Cursor ACP emitted invalid JSON.'));
+            this.handleProcessFailure(this.code('INVALID_RESPONSE'), new Error(`${this.adapterLabel} ACP emitted invalid JSON.`));
             return;
         }
         if (!isRecord(value)) {
-            this.handleProcessFailure('CURSOR_INVALID_RESPONSE', new Error('Cursor ACP emitted an invalid message.'));
+            this.handleProcessFailure(this.code('INVALID_RESPONSE'), new Error(`${this.adapterLabel} ACP emitted an invalid message.`));
             return;
         }
         if ((typeof value.id === 'number' || typeof value.id === 'string') && ('result' in value || 'error' in value)) {
@@ -286,7 +364,10 @@ export class CursorAcpClient {
             if (pending === undefined)
                 return;
             if ('error' in value && value.error !== undefined) {
-                pending.reject(new CursorAcpError('CURSOR_UPSTREAM_ERROR', safeUpstreamError(value.error)));
+                const authDiagnostic = detectUpstreamAuthFailure(this.backend, value.error, this.initMetadata?.authMethods);
+                if (authDiagnostic)
+                    this.lastAuthDiagnostic = authDiagnostic;
+                pending.reject(new CursorAcpError(this.code('UPSTREAM_ERROR'), authDiagnostic?.guidance ?? safeUpstreamError(value.error, this.adapterLabel), authDiagnostic ? { authDiagnostic } : undefined));
             }
             else {
                 pending.resolve(value.result);
@@ -303,6 +384,9 @@ export class CursorAcpClient {
             : { kind: 'notification', method: value.method, params };
         if (inbound.kind === 'notification' && inbound.method === 'session/update' && isRecord(params) && typeof params.sessionId === 'string') {
             this.modelStates.get(params.sessionId)?.update(params.update);
+            if (isRecord(params.update) && params.update.sessionUpdate === 'available_commands_update') {
+                this.sessionCommands.set(params.sessionId, parseAvailableCommands(params.update));
+            }
         }
         for (const handler of this.inboundHandlers)
             handler(inbound);
@@ -310,11 +394,11 @@ export class CursorAcpClient {
     handleProcessFailure(code, cause) {
         this.ready = false;
         this.modelStates.clear();
-        this.failPending(new CursorAcpError(code, 'Cursor ACP communication failed.', { cause }));
+        this.failPending(new CursorAcpError(code, `${this.adapterLabel} ACP communication failed.`, { cause }));
         const child = this.process;
         this.process = undefined;
         child?.kill('SIGTERM');
-        this.logger?.warn('Cursor ACP communication failed', { code });
+        this.logger?.warn(`${this.adapterLabel} ACP communication failed`, { code });
         if (!this.closed)
             this.notifyUnavailable(code);
     }
@@ -338,16 +422,16 @@ export class CursorAcpClient {
             this.takePending(id)?.reject(error);
     }
 }
-function safeUpstreamError(value) {
+function safeUpstreamError(value, label = 'Cursor') {
     if (!isRecord(value) || typeof value.message !== 'string')
-        return 'Cursor ACP rejected the request.';
+        return `${label} ACP rejected the request.`;
     const message = value.message.toLowerCase();
     if (message.includes('auth') || message.includes('login') || message.includes('api key')) {
-        return 'Cursor ACP authentication failed.';
+        return `${label} ACP authentication failed.`;
     }
     if (message.includes('not initialized'))
-        return 'Cursor ACP is not initialized.';
-    return 'Cursor ACP rejected the request.';
+        return `${label} ACP is not initialized.`;
+    return `${label} ACP rejected the request.`;
 }
 function isRecord(value) {
     return typeof value === 'object' && value !== null && !Array.isArray(value);

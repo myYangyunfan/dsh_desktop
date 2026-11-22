@@ -1,15 +1,19 @@
-import type { AgentAcpFrameData } from '@dsh-remote/protocol';
+import type { AcpContextUsage, AgentAcpFrameData } from '@dsh-remote/protocol';
+import { type VirtualHistoryTurnWindow } from '../virtual-history-pagination.js';
 import type { AcpCatalogBackend, AcpModelSelection } from './virtual-catalog.js';
-import type { AcpClientLike, AcpPermissionPreset, AcpSessionState, FollowState, JsonRecord, NativeEvent, PendingApproval, PiTurnOutcome } from './virtual-contract.js';
+import type { AcpClientLike, AcpPermissionPreset, AcpSessionState, AcpTodoItem, FollowState, JsonRecord, NativeEvent, PendingApproval, PiTurnOutcome } from './virtual-contract.js';
 /** Collaborates with one AcpVirtualHarness; never creates a second session or connection state. */
 export interface AcpLiveProjectionContext {
-    readonly ensureSessionRegistered: (sessionId: string) => AcpSessionState | undefined;
+    readonly lookupSession: (sessionId: string) => AcpSessionState | undefined;
     readonly sessions: Map<string, AcpSessionState>;
     readonly hydrateSession: (session: AcpSessionState) => Promise<void>;
     readonly historyPage: (session: AcpSessionState, options?: {
         beforeSeq?: number;
         throughSeq?: number;
         limit?: number;
+        turnWindow?: VirtualHistoryTurnWindow;
+        hardMaxBytes?: number;
+        extraEnvelopeBytes?: number;
     }) => {
         assistantStream: {
             revision: number;
@@ -40,7 +44,7 @@ export interface AcpLiveProjectionContext {
     readonly emitRemoteEvent: (event: string, args: unknown[]) => void;
     readonly selectedModels: Map<string, AcpModelSelection>;
     readonly publishProjection: (sessionId: string, key: string, value: unknown, seq?: number) => void;
-    readonly nextProjectionSeq: () => number;
+    readonly nextProjectionSeq: (sessionId?: string) => number;
     readonly refreshSessionTitle: (session: AcpSessionState) => Promise<void>;
     readonly applySessionTitle: (session: AcpSessionState, title: string) => void;
     readonly publishWorkspaceBaseline: () => void;
@@ -59,6 +63,10 @@ export interface AcpLiveProjectionContext {
 export declare class AcpLiveProjection {
     private readonly context;
     constructor(context: AcpLiveProjectionContext);
+    private findFollow;
+    private createFollowState;
+    private snapshotFrame;
+    private handleRemoteStreamClosed;
     sessionFollow(request: JsonRecord, signal: AbortSignal): Promise<AsyncIterable<unknown>>;
     ensureFollow(session: AcpSessionState): Promise<void>;
     acceptAcpFrame(follow: FollowState, frame: AgentAcpFrameData): void;
@@ -76,8 +84,19 @@ export declare class AcpLiveProjection {
     appendReasoningDelta(follow: FollowState, delta: string): void;
     /** Pi model steps settle before tools; a tool round does not end the turn. */
     ensurePiStep(follow: FollowState, advanceAfterTools: boolean): void;
-    finishPiAssistant(follow: FollowState, outcome?: PiTurnOutcome): void;
-    closeFollowAfterRemoteStreamClosed(follow: FollowState, outcome?: PiTurnOutcome): void;
+    private finishReason;
+    finishPiAssistant(follow: FollowState, outcome?: PiTurnOutcome, usage?: AcpMessageUsage): void;
+    closeFollowAfterRemoteStreamClosed(follow: FollowState, outcome?: PiTurnOutcome, remoteClosed?: boolean, usage?: AcpMessageUsage): void;
     pushEvent(follow: FollowState, type: string, data: unknown): number;
 }
+export interface AcpMessageUsage {
+    totalTokens?: number;
+    inputTokens?: number;
+    outputTokens?: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
+    reasoningTokens?: number;
+}
+export declare function contextPressureProjection(usage: AcpContextUsage): JsonRecord;
+export declare function normalizeAcpTodos(value: unknown): AcpTodoItem[] | undefined;
 //# sourceMappingURL=virtual-live.d.ts.map

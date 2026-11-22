@@ -397,13 +397,18 @@ export interface SidebarTeamMemberProjection {
     error?: string;
 }
 /**
- * The Lead Session's published team state: durable roster identities and
- * phases, member errors, the non-deleted task views (0.1.6's `TeamView` shape,
- * enriched per task exactly like the service's own views), and the first
- * rejected Team record when the board had to stop at its last valid state.
+ * The Lead Session's published team state: the durable mode selection, the
+ * non-deleted task views, and the first rejected Team record when the board
+ * had to stop at its last valid state.
+ *
+ * 0.2.2 起**不再携带成员列表**（upstream upgrade-guide v0.2.1-rc.2
+ * 「agentTeam.members is removed」；Team 包迁移 `122dc3af42`）。名册的唯一来源是
+ * `subagentCatalog` 里挂在 Lead 名下的直接子项——见 ./client/team-projection.ts。
+ * 读旧字段 `members` 恒 undefined，是「不报错、不炸、只在渲染期崩」的形状。
  */
 export interface SidebarTeamProjection {
-    members: readonly SidebarTeamMemberProjection[];
+    /** 持久模式选择：false = 这个会话没有团队（内核仍会发这条投影）。 */
+    enabled: boolean;
     tasks: readonly SidebarTeamTaskView[];
     failure?: string;
 }

@@ -6,7 +6,7 @@ import { basename, dirname, join } from 'node:path';
 import { fromBase64Url, generateKeyPair } from '@dsh-remote/crypto';
 import { z } from 'zod';
 import { uuidV7 } from './ids.js';
-import { SERVER_CREDENTIALS_QUEUE_MARKER, ServerCredentialStore, ServerCredentialsBusyError, assertRefreshQueueIdle, withDefaultCredentialMigrationGate } from './server-credentials.js';
+import { SERVER_CREDENTIALS_QUEUE_MARKER, ServerCredentialStore, ServerCredentialsBusyError, ServerCredentialsLockDirectoryError, assertRefreshQueueIdle, withDefaultCredentialMigrationGate } from './server-credentials.js';
 const identitySchema = z.object({
     schemaVersion: z.literal(1),
     deviceId: z.string().uuid(),
@@ -180,7 +180,7 @@ export class IdentityStore {
      * file lives outside `removeIdentityRecords`, so resetting cannot delete a
      * lock another process holds — and cannot leave itself unprotected either.
      */
-    async reset(deviceName) {
+    async reset(deviceName, options = {}) {
         if (this.defaultOptions !== undefined)
             this.storageDirectory = await prepareDefaultIdentityDirectory(this.defaultOptions);
         await ensureDirectory(this.directory);
@@ -189,7 +189,10 @@ export class IdentityStore {
             this.identity = undefined;
             this.peers.clear();
             await removeIdentityRecords(this.directory);
-            return this.loadOrCreateLocked(deviceName);
+            const identity = await this.loadOrCreateLocked(deviceName);
+            if (options.clearPairingPolicy)
+                await rm(join(this.directory, 'pairing-host-only.json'), { force: true });
+            return identity;
         });
     }
     listTrustedPeers() {
@@ -415,6 +418,9 @@ export async function assertOwnedRemoteStorage(root) {
         const canAutoHeal = role === 'client' || (directory === root && verifiedScopedIdentities > 0);
         const entries = (await readStorageEntries(directory)).filter(entry => !(directory === root && entry.name === 'servers' && entry.isDirectory()));
         for (const entry of entries) {
+            if (entry.name === 'server-credentials.json.refresh-lock' && entry.isDirectory()) {
+                throw new ServerCredentialsLockDirectoryError();
+            }
             if (entry.name.includes('.refresh-lock')
                 && entry.name !== 'server-credentials.json.refresh-lock'
                 && !isRefreshQueueArtifact(entry.name)) {

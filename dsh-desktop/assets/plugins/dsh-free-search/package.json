@@ -1,6 +1,6 @@
 {
   "name": "dsh-free-search",
-  "version": "0.9.70",
+  "version": "0.9.80",
   "description": "Free web search for DeepSeek Harness: 42 engines (Bing/DuckDuckGo/AnySearch/SearXNG/Exa/Tavily/Keenable/Firecrawl/Parallel/Brave/Zhipu/You.com keyless; Zhihu global/site via MCP and Perplexity/SerpBase/DeepSeek (official + native tools/search)/Baidu/Kimi/Aliyun/Doubao/Google CSE/Metaso/Yandex/Yuanbao/SpecStream with key; OpenAI/Gemini/Claude model built-in search, explicit-only) + auto smart routing + global engine enable/disable & fallback priority + editable zh/en language pools + multi mode (parallel full language-pool merge) + multi_search cross-source tool + failure-aware fallback (quota/auth cooldown, transient retry, fallbackOn) + time filtering + platform search + domain blocklist (blockedDomains) + web_fetch, with web settings UI, plus a standalone stdio MCP server.",
   "type": "module",
   "main": "lib/index.js",
@@ -107,7 +107,9 @@
   "devDependencies": {
     "@deepseek-ai/dsh-settings": "^0.1.7-rc.1",
     "@deepseek-ai/dsh-tools": "^0.1.7-rc.1",
-    "@deepseek-ai/schemastery": ">=3.18.4 <4"
+    "@deepseek-ai/schemastery": ">=3.18.4 <4",
+    "react": "18.3.1",
+    "react-test-renderer": "18.3.1"
   },
   "dsh": {
     "bundle": {

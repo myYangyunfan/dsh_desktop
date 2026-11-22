@@ -1,3 +1,4 @@
+import type { AcpAuthDiagnostic, AcpAuthMethod } from '@dsh-remote/protocol';
 import { type CursorAcpLike, type CursorAcpInboundHandler, type CursorAcpUnavailableHandler } from './cursor-process.js';
 import type { SafeLogger } from '../../logging.js';
 /** One process per session: Cursor shares model settings within a process; Pi also needs isolated wrappers. */
@@ -28,6 +29,25 @@ export declare class IsolatedAcpClient implements CursorAcpLike {
     private get label();
     start(): Promise<void>;
     isReady(): boolean;
+    diagnostics(): AcpAuthDiagnostic;
+    capabilities(): {
+        loadSession?: boolean;
+        promptCapabilities?: {
+            image?: boolean;
+            audio?: boolean;
+            embeddedContext?: boolean;
+        };
+        sessionCapabilities?: {
+            list?: boolean;
+            fork?: boolean;
+            delete?: boolean;
+            resume?: boolean;
+            close?: boolean;
+            additionalDirectories?: boolean;
+        };
+        steering?: boolean;
+    };
+    authMethods(): AcpAuthMethod[];
     private create;
     call(method: string, params: unknown, timeoutMs?: number): Promise<unknown>;
     private callOnce;

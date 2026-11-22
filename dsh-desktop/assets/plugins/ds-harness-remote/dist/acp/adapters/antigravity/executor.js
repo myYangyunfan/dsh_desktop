@@ -23,6 +23,7 @@ export class AntigravityExecutor {
             cwd: options.cwd ?? process.cwd(),
             env: { ...process.env, ...options.env },
             stdio: ['ignore', 'pipe', 'pipe'],
+            windowsHide: true,
         });
         this.activeProcess = child;
         let stdout = '';
@@ -87,6 +88,7 @@ export class AntigravityExecutor {
             cwd: options.cwd ?? process.cwd(),
             env: { ...process.env, ...options.env },
             stdio: ['pipe', 'pipe', 'pipe'],
+            windowsHide: true,
         });
     }
     kill() {

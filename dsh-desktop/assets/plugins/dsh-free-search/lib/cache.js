@@ -10,10 +10,8 @@ let db = null;
 try {
   const req = createRequire(import.meta.url);
   const { DatabaseSync } = req("node:sqlite");
-  // 缓存位置可配置：RESEARCH_CACHE_DIR 优先（放哪、是否随备份走由用户决定）。
-  // DSH Desktop：默认落点跟随 DSH_HOME（桌面壳的隔离/便携语义），不再写死
-  // ~/.cache；无 DSH_HOME 时仍回落到上游的 ~/.cache/dsh-free-search。
-  // 删掉该目录即清空缓存，无后台任务残留。
+  // 缓存位置可配置：RESEARCH_CACHE_DIR 优先（放哪、是否随备份走由用户决定），
+  // 默认 ~/.cache/dsh-free-search/research.db；删掉该目录即清空缓存，无后台任务残留。
   const dir = process.env.RESEARCH_CACHE_DIR
     || (process.env.DSH_HOME
       ? join(process.env.DSH_HOME, "cache", "dsh-free-search")

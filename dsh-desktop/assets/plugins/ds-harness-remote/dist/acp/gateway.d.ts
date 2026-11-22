@@ -1,9 +1,11 @@
+import { type AcpAuthDiagnostic } from '@dsh-remote/protocol';
 import { type RemoteTerminalSpawner } from '../workspace-bridge.js';
 import type { ResolvedAcpConfig, ResolvedAcpBackendConfig } from '../config.js';
 import type { PeerConnectionContext } from '../connection-controller.js';
 import type { SafeLogger } from '../logging.js';
 import { type CursorAcpLike } from './adapters/cursor-process.js';
 import { AcpPeerBridge, type PublishAcpFrame } from './peer-bridge.js';
+import { AcpWorkspaceStore } from './workspace-store.js';
 type AcpFactory = (binary: string, logger: SafeLogger, backend: ResolvedAcpBackendConfig) => CursorAcpLike;
 /**
  * Host-side Agent ACP gateway (#65). Reuses the authenticated Remote channel and
@@ -13,10 +15,10 @@ type AcpFactory = (binary: string, logger: SafeLogger, backend: ResolvedAcpBacke
 export declare class AcpRemoteGateway {
     config: ResolvedAcpConfig;
     private readonly logger;
-    private readonly createAcp;
     private readonly restartDelaysMs;
     private readonly terminalEnabled;
     private readonly terminalSpawner?;
+    private readonly workspaceStore;
     private readonly backendInstances;
     private readonly sessionCwds;
     private readonly workspaceState;
@@ -56,9 +58,19 @@ export declare class AcpRemoteGateway {
     private readonly historyInvalidatedAt;
     private readonly pendingHistoryReads;
     private readonly backendHistoryChains;
-    constructor(config: ResolvedAcpConfig, logger: SafeLogger, createAcp?: AcpFactory, restartDelaysMs?: readonly number[], terminalEnabled?: () => boolean, terminalSpawner?: RemoteTerminalSpawner | undefined);
-    /** Only implemented adapters are advertised; registry entries never select an adapter by executable name. */
+    private readonly backendDiagnostics;
+    private readonly backendErrors;
+    private readonly customCreateAcp;
+    constructor(config: ResolvedAcpConfig, logger: SafeLogger, createAcp?: AcpFactory, restartDelaysMs?: readonly number[], terminalEnabled?: () => boolean, terminalSpawner?: RemoteTerminalSpawner | undefined, workspaceStore?: AcpWorkspaceStore);
+    private readonly createAcp;
+    /** Allow all valid enabled ACP adapters, including custom `settings.acp.add` backends. */
     enabledBackends(): string[];
+    diagnostics(): Record<string, {
+        state: 'disabled' | 'ready' | 'unavailable';
+        errorCode?: string;
+        auth: AcpAuthDiagnostic;
+        capabilities: Record<string, unknown>;
+    }>;
     start(): Promise<void>;
     private startOnce;
     isAvailable(): boolean;
@@ -74,6 +86,7 @@ export declare class AcpRemoteGateway {
     };
     createPeer(context: PeerConnectionContext, publish: PublishAcpFrame): AcpPeerBridge | undefined;
     call(connectionId: string, input: unknown): Promise<unknown>;
+    private resolveHistoryTarget;
     private captureCallScope;
     private callInternal;
     private runPromptInBackground;
@@ -117,15 +130,22 @@ export declare class AcpRemoteGateway {
     private launchBackendCandidate;
     private handleInbound;
     private publishToSession;
+    private buildTerminalPromptFrame;
     private recordTurnCatchUp;
     private bufferFrame;
     private pruneFrameBuffer;
     private handleUnavailable;
     private scheduleBackendRestart;
+    private syncIdleUnavailableState;
     private restartBackend;
     private clearBackendRestarts;
     private scheduleApprovalExpiry;
     private requireAcp;
+    private isNativeCatalogBackend;
+    private requiresCatalogCwd;
+    private isPerSessionIsolatedBackend;
+    private requiresPrePromptLoad;
+    private syncPermissionModeIfCompatible;
     private initializeResult;
     private callUpstream;
     private requireSessionAccess;

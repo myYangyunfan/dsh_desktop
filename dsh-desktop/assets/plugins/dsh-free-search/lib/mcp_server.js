@@ -232,6 +232,110 @@ function numberEnv(name, fallback, min, max) {
   return Math.min(Math.max(Number.isFinite(value) ? value : fallback, min), max);
 }
 
+// #147：单条 stdio 响应是一行 JSON-RPC，不能分块；只能在出口截断。
+// 默认 48000 字符，给 64KB 的客户端行缓冲留出 JSON 包装和中文多字节的余量。
+export function responseCapChars() {
+  const raw = Number(env("MCP_MAX_RESPONSE_CHARS", "48000"));
+  if (!Number.isFinite(raw) || raw < 0) return 48000;
+  return Math.floor(raw);
+}
+
+// #147：字符数挡不住中文/emoji——40k 个汉字在 UTF-8 里约 120KB，仍会超过 64KB
+// 的客户端行缓冲。所以同时限制 UTF-8 字节数，默认 56KB，给 JSON 包装留余量。
+export function responseCapBytes() {
+  const raw = Number(env("MCP_MAX_RESPONSE_BYTES", String(56 * 1024)));
+  if (!Number.isFinite(raw) || raw < 0) return 56 * 1024;
+  return Math.floor(raw);
+}
+
+// #147（补充）：正文字节预算管不住真正发出去的那一行。stdout 上发的是一行 JSON，
+// 正文里的 `"` 会变成 `\"`、换行变成 `\n`、反斜杠变成 `\\`，字节数最多接近翻倍，
+// 48 KB 引号密集的正文序列化后能到 72 KB。所以再加一道「整行」上限。
+export function responseCapLine() {
+  const raw = Number(env("MCP_MAX_RESPONSE_LINE_BYTES", String(64 * 1024)));
+  if (!Number.isFinite(raw) || raw < 0) return 64 * 1024;
+  return Math.floor(raw);
+}
+
+const truncationNote = (cap, bytes) =>
+  `\n\n[truncated${cap > 0 ? ` to ${cap} characters` : ""}${cap > 0 && bytes > 0 ? " / " : ""}${bytes > 0 ? `${bytes} bytes` : ""}; raise MCP_MAX_RESPONSE_CHARS / MCP_MAX_RESPONSE_BYTES to allow more]`;
+
+const existingNote = /\n\n\[truncated[^\]]*\]\s*$/;
+
+const lineNote = (cap) =>
+  `\n\n[truncated to fit the ${cap}-byte MCP stdio line; raise MCP_MAX_RESPONSE_LINE_BYTES to allow more]`;
+
+// 把已经按字符/字节截过的正文，再收口到「信封 + JSON 转义后的正文」不越过整行上限。
+// 用二分法找最长可行前缀，序列化次数是 log2(长度)，对 48 KB 正文也就十几次。
+export function fitResponseLine(text, envelope) {
+  const capped = clipResponse(text);
+  const cap = responseCapLine();
+  if (cap === 0) return capped;
+  const lineBytes = (body) => Buffer.byteLength(JSON.stringify(envelope(body)), "utf8");
+  if (lineBytes(capped) <= cap) return capped;
+
+  const note = lineNote(cap);
+  if (lineBytes(note) > cap) {
+    // 上限小到连提示语都放不下：只保留提示，并且绝不越界。
+    return note.slice(0, Math.max(0, cap - 2));
+  }
+  // 先剥掉上一轮截断留下的提示语，避免两条提示叠在一起。
+  const body = capped.replace(existingNote, "");
+  let low = 0;
+  let high = body.length;
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    if (lineBytes(body.slice(0, mid) + note) <= cap) low = mid;
+    else high = mid - 1;
+  }
+  // 不要切在代理对中间，否则会留下孤立的高位代理（JSON 里会变成乱码）。
+  const lastCode = low > 0 ? body.charCodeAt(low - 1) : 0;
+  if (lastCode >= 0xd800 && lastCode <= 0xdbff) low -= 1;
+  return body.slice(0, low) + note;
+}
+
+// research 的文档预算：把剩余字符额度平均分给 n 篇文档，留出标题/分隔符余量。
+// 上限仍是原来的 8000 字符/篇；cap=0 时保持原行为。
+export function perDocumentBudget(count) {
+  const cap = responseCapChars();
+  if (cap === 0) return 8000;
+  const documents = Math.max(1, Math.floor(count));
+  // 标题、URL、状态行与空行按每篇 240 字符估算。
+  const available = Math.max(0, cap - documents * 240);
+  return Math.max(400, Math.min(8000, Math.floor(available / documents)));
+}
+
+export function clipResponse(text) {
+  const value = String(text ?? "");
+  const cap = responseCapChars();
+  const bytes = responseCapBytes();
+  if (cap === 0 && bytes === 0) return value;
+  const tooLong = (candidate) =>
+    (cap > 0 && candidate.length > cap) || (bytes > 0 && Buffer.byteLength(candidate, "utf8") > bytes);
+  if (!tooLong(value)) return value;
+  const note = truncationNote(cap, bytes);
+  // 极端小的上限下，提示语本身就可能超限：只保留提示，绝不越过上限。
+  if (cap > 0 && note.length >= cap) return note.slice(0, cap);
+  if (bytes > 0 && Buffer.byteLength(note, "utf8") >= bytes) {
+    return note.slice(0, Math.max(0, bytes));
+  }
+  const room = cap > 0 ? Math.max(0, cap - note.length) : value.length;
+  let clipped = value.slice(0, room);
+  if (bytes > 0) {
+    const budget = bytes - Buffer.byteLength(note, "utf8");
+    let used = 0;
+    let cut = 0;
+    for (const char of clipped) {
+      const size = Buffer.byteLength(char, "utf8");
+      if (used + size > budget) break;
+      used += size;
+      cut += char.length;
+    }
+    clipped = clipped.slice(0, cut);
+  }
+  return clipped + note;
+}
+
 function allowedCidrs() {
   return env("MCP_ALLOW_FAKE_IP_CIDRS")
     .split(/[\s,]+/)
@@ -460,7 +564,8 @@ export async function researchWeb(args = {}) {
   const notes = [...search.errors];
   const maxDocuments = Math.min(8, 1 + depth);
   const candidates = search.sources.slice(0, maxDocuments);
-  const perDocumentChars = Math.min(8000, 900 + depth * 1200);
+  // #147：每篇文档的额度按出口上限折算，避免 8 篇 × 8000 字符拼出 64KB 以上。
+  const perDocumentChars = Math.min(8000, 900 + depth * 1200, perDocumentBudget(maxDocuments));
   const settled = await Promise.allSettled(
     candidates.map(async (source) => ({ source, ...(await fetchDocument(source.url, perDocumentChars, source.title || "")) }))
   );
@@ -619,6 +724,11 @@ function getFetchProvider() {
       acceptLanguage: () => (env("MCP_LANG", "zh") === "zh" ? "zh-CN,zh;q=0.9,en;q=0.8" : "en-US,en;q=0.9"),
       browserEnabled: () => env("MCP_BROWSER_FETCH", "true").toLowerCase() !== "false",
       allowedCidrs,
+      // #124：MCP 侧用同一套自定义抓取端点。
+      deepseekFetch: () => ({
+        baseUrl: env("MCP_DEEPSEEK_FETCH_URL"),
+        apiKey: env("DEEPSEEK_FETCH_API_KEY") || env("DEEPSEEK_TOOLS_API_KEY") || env("DEEPSEEK_API_KEY"),
+      }),
     });
   }
   return fetchProvider;
@@ -627,7 +737,10 @@ function getFetchProvider() {
 export async function fetchWeb(args = {}) {
   const url = String(args.url ?? "").trim();
   if (!url) throw new Error("url is required");
-  const maxChars = Math.min(Math.max(Number(args.max_chars) || 20000, 500), 100000);
+  const cap = responseCapChars();
+  const requested = Math.min(Math.max(Number(args.max_chars) || 20000, 500), 100000);
+  // #147：先按出口上限收缩，避免先拼出 100KB 再截断。
+  const maxChars = cap === 0 ? requested : Math.min(requested, cap);
   const result = await getFetchProvider().fetch({ url }, undefined);
   const text = String(result?.body?.content ?? "").slice(0, maxChars);
   const note = text.length < String(result?.body?.content ?? "").length ? `\n\n[truncated to ${maxChars} characters]` : "";
@@ -714,15 +827,14 @@ export function createMcpHandler({
     if (method === "tools/list") return { jsonrpc: "2.0", id, result: { tools: TOOLS } };
     if (method === "tools/call") {
       const name = String(params?.name ?? "");
+      // 信封里除了正文什么都不带，其余字段固定，序列化成本可忽略。
+      const envelope = (text) => ({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text }], isError: false } });
+      const errorEnvelope = (text) => ({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text }], isError: true } });
       try {
         const text = await handleTool(name, params?.arguments ?? {});
-        return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text }], isError: false } };
+        return envelope(fitResponseLine(text, envelope));
       } catch (error) {
-        return {
-          jsonrpc: "2.0",
-          id,
-          result: { content: [{ type: "text", text: error?.message ?? String(error) }], isError: true },
-        };
+        return errorEnvelope(fitResponseLine(error?.message ?? String(error), errorEnvelope));
       }
     }
     if (method.startsWith("notifications/")) return undefined;

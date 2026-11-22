@@ -264,6 +264,13 @@ function useMobile() {
 function findFrame() {
   return document.querySelector("[data-shell-overlay]")?.parentElement ?? null;
 }
+function hasModalOutsideDrawer() {
+  const modals = document.querySelectorAll('[aria-modal="true"]');
+  for (const modal of modals) {
+    if (modal.closest('[class*="_sidebarCol"]') === null) return true;
+  }
+  return false;
+}
 function MobileNavOverlay({ toggleSidebar, t }) {
   const mobile = useMobile();
   const [open, setOpen] = (0, import_react.useState)(false);
@@ -304,7 +311,7 @@ function MobileNavOverlay({ toggleSidebar, t }) {
   (0, import_react.useEffect)(() => {
     if (!mobile || !open) return;
     const onKeyDown = (event) => {
-      if (event.key === "Escape" && document.querySelector('[aria-modal="true"]') === null) toggleSidebar();
+      if (event.key === "Escape" && !hasModalOutsideDrawer()) toggleSidebar();
     };
     document.addEventListener("keydown", onKeyDown, true);
     return () => document.removeEventListener("keydown", onKeyDown, true);
@@ -357,7 +364,7 @@ function MobileNavOverlay({ toggleSidebar, t }) {
       navTimer = window.setTimeout(disarmNav, 2e3);
     };
     const navigationTarget = (target) => {
-      if (document.querySelector('[aria-modal="true"]') !== null) return null;
+      if (hasModalOutsideDrawer()) return null;
       const frame = document.querySelector('[data-mobile-nav="frame"]');
       if (frame === null || frame.hasAttribute("data-sidebar-collapsed")) return null;
       if (!(target instanceof Element)) return null;
@@ -412,7 +419,7 @@ function MobileNavOverlay({ toggleSidebar, t }) {
   (0, import_react.useEffect)(() => {
     if (!mobile || !open) return;
     const onOutsideClick = (event) => {
-      if (document.querySelector('[aria-modal="true"]') !== null) return;
+      if (hasModalOutsideDrawer()) return;
       const target = event.target;
       if (target === null) return;
       if (target.closest(TOGGLE_SELECTOR) !== null) return;
@@ -991,14 +998,20 @@ var MOBILE_CSS = `
   /* --- Session header on mobile ---
      Layout goal: [toggle] [session title] [mode badge] in a row. The optional
      rightbar entry uses the shell's stable header-corner hook. */
+  /* Keep DSH's 10px top inset and 30px title row: the native opener's 28px
+     button at y=11 shares their vertical center, including at the drawer breakpoint. */
   [data-phase] header {
-    padding: 8px 12px 0 !important;
+    padding: 10px 12px 0 !important;
   }
   /* The directory and Files controls are absolutely positioned, so reserve
      their lanes and let the title use the remaining width without squeezing. */
-  [data-phase] header > :first-child {
-    min-height: 36px !important;
+  [data-phase] header [class$="_titleRow"] {
+    min-height: 30px !important;
     padding: 0 32px !important;
+  }
+  /* Align tab text with the 16px icon inside the native 28px opener at x=12. */
+  [data-phase] header [class$="_tabs"] {
+    padding-left: 6px !important;
   }
   [data-phase] header [class$="_titleCluster"],
   [data-phase] header [class$="_crumbs"] {
@@ -1029,7 +1042,7 @@ var MOBILE_CSS = `
   [data-phase] header [class$="_titleRow"] [class$="_titleCluster"] > * {
     flex: 0 0 auto !important;
   }
-  /* 3px thumb: a 36px header has no room for a full-size scrollbar. Styling
+  /* 3px thumb: a compact header has no room for a full-size scrollbar. Styling
      ::-webkit-scrollbar also opts the phone out of overlay scrollbars, so the
      hint that the row scrolls stays visible instead of only appearing mid-swipe. */
   [data-phase] header [class$="_titleRow"] [class$="_titleCluster"]::-webkit-scrollbar {
@@ -1039,12 +1052,12 @@ var MOBILE_CSS = `
     border-radius: 2px;
     background: var(--dsw-alias-scrollbar-bg-l2, rgba(255, 255, 255, 0.28));
   }
-  /* The directory toggle sits at the far left of the header (the header
-     is position:relative; the data-slot wrappers are display:contents). */
+  /* The directory toggle sits at the far left of the relative conversation
+     root; the data-slot wrappers are display:contents. */
   [data-mobile-nav="toggle"] {
     position: absolute !important;
-    left: 8px !important;
-    top: 12px !important;
+    left: 12px !important;
+    top: 11px !important;
     z-index: 2 !important;
   }
   /* DSH 0.2.2 ships its own narrow-screen drawer opener in the frame's leading
@@ -1067,7 +1080,7 @@ var MOBILE_CSS = `
     position: absolute !important;
     left: auto !important;
     right: 8px !important;
-    top: 12px !important;
+    top: 11px !important;
     z-index: 2 !important;
   }
   /* The native rightbar entry is visible by default. Users who prefer the
@@ -1595,6 +1608,17 @@ var MOBILE_CSS = `
   }
 }
 
+/* The native drawer opener only exists below 768px. In the remaining mobile
+ * range, Pocket's absolute header buttons sit outside the title cluster;
+ * DSH's gradient mask hides them there even though they still receive clicks.
+ * Keep the cluster's horizontal scroll, but remove its paint mask. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  [data-phase] header [class$="_titleRow"] [class$="_titleCluster"] {
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
+  }
+}
+
 /* ---------- mobile: stop iOS Safari forced zoom on input focus ----------
  * Inputs are rendered with inline fontSize 13-14px, below the 16px threshold
  * that makes iOS Safari zoom the whole page on focus (and never recover).
@@ -1653,7 +1677,8 @@ function resolveLayout({ urlValue, stored, narrowMatch }) {
   const url = String(urlValue ?? "").trim();
   if (url === "desktop") return "desktop";
   if (url === "mobile") return "mobile";
-  if (stored === "desktop" || stored === "mobile") return stored;
+  if (stored === "desktop") return "desktop";
+  if (stored === "mobile" && narrowMatch) return "mobile";
   return narrowMatch ? "mobile" : "desktop";
 }
 function persistLayoutFromUrl(urlValue) {
@@ -2746,7 +2771,7 @@ function PocketSettingsTab({ rpcCall, t }) {
         )
       ) : (0, import_react2.createElement)("div", { style: styles.muted }, t("lanStarting"))
     ),
-    // 公网：标题行自带 开启/关闭 → 开启后：二维码+地址、地址模式行、访问密码行
+    // 公网：地址模式在状态加载后可编辑；二维码和访问密码只在隧道开启后显示。
     (0, import_react2.createElement)(
       "div",
       { style: styles.block },
@@ -2773,12 +2798,12 @@ function PocketSettingsTab({ rpcCall, t }) {
         { style: { marginTop: 8, fontSize: 12, color: "var(--dsw-alias-state-error-primary,#dc2626)" } },
         fmt(t, "error", { detail: errText(tunnelStateDetail) || t("unknownError") })
       ) : !tunnelUrl && !isDesktop ? (0, import_react2.createElement)("div", { style: { ...styles.muted, marginTop: 8 } }, t("wanOffHint")) : null,
-      tunnelUrl ? (0, import_react2.createElement)(
+      status ? (0, import_react2.createElement)(
         "div",
         null,
-        qrArea(status.tunnelQr, tunnelUrl, namedMode ? t("namedRunningHint") : t("wanHint"), t("qrFailed")),
+        tunnelUrl ? qrArea(status.tunnelQr, tunnelUrl, namedMode ? t("namedRunningHint") : t("wanHint"), t("qrFailed")) : null,
         // 防钓鱼 / 别收藏（issue #82）：公网链接仅本次有效、勿收藏提示
-        (0, import_react2.createElement)("div", { style: { marginTop: 8, fontSize: 12, lineHeight: 1.5, borderLeft: "4px solid var(--dsw-alias-state-warn-primary,#b45309)", background: "var(--dsw-alias-bg-layer-2,#f3f4f6)", borderRadius: 8, padding: "8px 10px" } }, t("wanEphemeralWarn")),
+        tunnelUrl ? (0, import_react2.createElement)("div", { style: { marginTop: 8, fontSize: 12, lineHeight: 1.5, borderLeft: "4px solid var(--dsw-alias-state-warn-primary,#b45309)", background: "var(--dsw-alias-bg-layer-2,#f3f4f6)", borderRadius: 8, padding: "8px 10px" } }, t("wanEphemeralWarn")) : null,
         // 地址模式行（随机/固定；固定域名选中或编辑时高亮）
         row(
           t("modeLabel"),
@@ -2850,7 +2875,7 @@ function PocketSettingsTab({ rpcCall, t }) {
           )
         ),
         // 访问密码行：值 + 自定义（自定义输入态整体替换）
-        status.accessToken ? row(
+        tunnelUrl && status.accessToken ? row(
           t("pinLabel"),
           customPin?.which === "public" ? null : (0, import_react2.createElement)(
             "span",

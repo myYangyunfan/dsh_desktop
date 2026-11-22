@@ -58,17 +58,24 @@ export class ClientCodexStreams {
                 stream.wake();
             }
         });
+        let openResult;
         try {
             // Subscribe before opening the Host stream so the first App Server
             // notification cannot race past the loopback listener.
-            await remote.client.rpc('codex.app.stream.open', { streamId: value.streamId, threadId: value.threadId }, signal);
+            openResult = await remote.client.rpc('codex.app.stream.open', { streamId: value.streamId, threadId: value.threadId }, signal);
         }
         catch (error) {
             stream.unsubscribe();
             throw error;
         }
         this.context.codexStreams.set(value.streamId, stream);
-        return { opened: true, streamId: value.streamId, threadId: value.threadId };
+        const replayTruncated = isRecord(openResult) && openResult.replayTruncated === true;
+        return {
+            opened: true,
+            streamId: value.streamId,
+            threadId: value.threadId,
+            ...(replayTruncated ? { replayTruncated: true } : {}),
+        };
     }
     publishLocalCodexFrame = async (event, data) => {
         const streamId = data.streamId;

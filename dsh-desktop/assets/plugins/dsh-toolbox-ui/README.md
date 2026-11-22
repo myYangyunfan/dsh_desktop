@@ -96,10 +96,10 @@
 
 ```sh
 # 推荐：npm 安装 —— 之后 `dsh plugin update` 在 ^1.x 内自动升小版本
-dsh plugin --profile web add dsh-toolbox-ui@^1.13.0
+dsh plugin --profile web add dsh-toolbox-ui@^1.13.2
 
 # 或固定 GitHub release tag（不自动跨版本，升级要换 tag 重新 add）
-dsh plugin --profile web add github:Imzl-zl/dsh-toolbox-ui#v1.13.0
+dsh plugin --profile web add github:Imzl-zl/dsh-toolbox-ui#v1.13.2
 ```
 
 装完**重启 `dsh web`**。卸载（不会删除 profile 里已有的 MCP 条目）：
@@ -172,11 +172,11 @@ dsh plugin --profile web update dsh-toolbox-ui
 
 | 项目 | 已验证 |
 |---|---|
-| DeepSeek Harness | 支持准入从 `0.2.1-rc.5` 起；已验证 `0.2.1-rc.5`（Cordis 4.0.5 / Loader 1.0.6）与 `0.2.2-rc.3`（Cordis 4.1.0 / Loader 1.1.0）。旧宿主仅保留历史回归，不属于当前发布支持面。 |
+| DeepSeek Harness | 支持准入从 `0.2.1-rc.5` 起；已验证 `0.2.1-rc.5`（Cordis 4.0.5 / Loader 1.0.6）、`0.2.2-rc.3` 与 `0.2.2-rc.5`（两者同为 Cordis 4.1.0 / Loader 1.1.0）。旧宿主仅保留历史回归，不属于当前发布支持面。 |
 | Node.js | DSH 自带/支持的运行时 |
 | 平台 | Windows；Linux/macOS 使用同一 DSH Web 契约 |
 
-当前发布支持从 **0.2.1-rc.5** 起：ToolSearch 的 0.2.1 兼容适配与 0.2.2 的 step-owned toolSet / 独立 executor 路径均已覆盖。更早宿主只保留历史 loader 回归，不再作为发布准入；新版 Loader/Include 生命周期按目标宿主整套验证。
+当前发布支持从 **0.2.1-rc.5** 起：ToolSearch 的 0.2.1 兼容适配与 0.2.2 的 step-owned toolSet / 独立 executor 路径均已覆盖。更早宿主只保留历史 loader 回归，不再作为发布准入；新版 Loader/Include 生命周期按目标宿主整套验证。0.2.2 的每个候选版本（rc.3、rc.5）各按该版宿主自己声明的 Cordis/Loader 组合在独立安装树上跑一腿全量，任一腿红都不发版。
 
 ## 开发
 

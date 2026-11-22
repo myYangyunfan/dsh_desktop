@@ -5,5 +5,6 @@ export function createAntigravityAcpAdapter(binary = 'agy', logger, createProces
     return adaptCursorProcess(createProcess(binary, logger), 'antigravity');
 }
 export { AntigravityAcpClient, AntigravityAcpError } from './antigravity-process.js';
+export { AntigravityNativeAcpClient, isLegacyAntigravityStreamJsonArgs, supportsAntigravityNativeAcp } from './antigravity-acp.js';
 export * from './antigravity/index.js';
 //# sourceMappingURL=antigravity.js.map

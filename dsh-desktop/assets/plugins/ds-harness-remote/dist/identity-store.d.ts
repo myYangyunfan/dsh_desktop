@@ -56,7 +56,9 @@ export declare class IdentityStore {
      * file lives outside `removeIdentityRecords`, so resetting cannot delete a
      * lock another process holds — and cannot leave itself unprotected either.
      */
-    reset(deviceName: string): Promise<HostIdentity>;
+    reset(deviceName: string, options?: {
+        clearPairingPolicy?: boolean;
+    }): Promise<HostIdentity>;
     listTrustedPeers(): TrustedPeer[];
     trustedPeer(deviceId: string): TrustedPeer | undefined;
     isTrusted(deviceId: string, publicKey: string): boolean;

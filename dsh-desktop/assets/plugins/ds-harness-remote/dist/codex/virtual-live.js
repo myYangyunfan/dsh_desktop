@@ -1,11 +1,12 @@
 import { projectCodexModel } from '@dsh-remote/client-core';
+import { normalizeVirtualHistoryTurnWindow, VirtualHistoryResponseTooLargeError, } from '../virtual-history-pagination.js';
 import { collectImageBlocks, toolOutputImageBlocks } from './codex-image-codec.js';
 import { codexPermissionPresetFromResponse } from './permissions.js';
 import { CODEX_PROVIDER, modelSelectionProjection } from './virtual-catalog.js';
 import { AsyncValueQueue, CODEX_IMAGE_ATTACHMENT_PREFIX, codexImageLimitsProjection, codexPermissionsProjection, sessionIdFromAddress, } from './virtual-contract.js';
 import { adaptEventData, appendBoundedText, commandText, fileChangeSummary, isSurfaceEvent, isToolItemType, itemEvents, itemText, sanitizedFileChanges, toolResultContentReplacement, toolResultEvent, } from './virtual-history.js';
 import { turnEndReason } from './turn-end-reason.js';
-import { array, integer, nativeThreadId, optionalPositiveInteger, record, string } from './virtual-values.js';
+import { array, errorCode, integer, isRecord, nativeThreadId, optionalPositiveInteger, record, string } from './virtual-values.js';
 export class CodexLiveProjection {
     context;
     constructor(context) {
@@ -18,8 +19,27 @@ export class CodexLiveProjection {
         // is refreshed after the stream is ready so a slow project/thread index
         // cannot delay the first session snapshot.
         const historyPromise = this.context.readHistoryPage(threadId, {
-            maxMessages: optionalPositiveInteger(request.maxMessages),
-        }, signal);
+            maxMessages: optionalPositiveInteger(request.maxMessages) ?? optionalPositiveInteger(request.limit),
+            turnWindow: normalizeVirtualHistoryTurnWindow(request.turnWindow),
+        }, signal).catch(error => {
+            if (error instanceof VirtualHistoryResponseTooLargeError) {
+                throw Object.assign(new Error(error.message), {
+                    isDSHRemoteError: true,
+                    code: 'response-too-large',
+                    retryable: false,
+                    details: { actualBytes: error.actualBytes, maxBytes: error.maxBytes },
+                });
+            }
+            if (error instanceof Error && errorCode(error) === 'RESPONSE_TOO_LARGE') {
+                throw Object.assign(new Error(error.message), {
+                    isDSHRemoteError: true,
+                    code: 'response-too-large',
+                    retryable: false,
+                    details: 'details' in error && isRecord(error.details) ? error.details : {},
+                });
+            }
+            throw error;
+        });
         const directoryPromise = this.context.models(signal).catch(() => undefined);
         const [history, directory] = await Promise.all([historyPromise, directoryPromise]);
         const queue = new AsyncValueQueue(signal);
@@ -62,12 +82,16 @@ export class CodexLiveProjection {
             },
             ...(this.context.sessionGeneration === 'v3' ? { assistantStream: { revision: 0 } } : {}),
         });
+        let streamClosedBeforeReady = false;
         try {
-            const stream = await this.context.client.subscribe(threadId, frame => this.acceptCodexFrame(follow, frame), signal, () => this.closeFollowAfterRemoteStreamClosed(follow));
-            if (this.context.closed || signal.aborted) {
+            const stream = await this.context.client.subscribe(threadId, frame => this.acceptCodexFrame(follow, frame), signal, () => {
+                streamClosedBeforeReady = true;
+                this.closeFollowAfterRemoteStreamClosed(follow);
+            });
+            if (this.context.closed || signal.aborted || streamClosedBeforeReady) {
                 await stream.close().catch(() => undefined);
                 signal.throwIfAborted();
-                throw new Error('The CodeX virtual Harness is closed.');
+                throw new Error(streamClosedBeforeReady ? 'The CodeX remote stream closed before ready.' : 'The CodeX virtual Harness is closed.');
             }
             follow.close = () => stream.close();
             void this.context.refreshAndPublishWorkspaces().catch(() => undefined);
@@ -216,8 +240,14 @@ export class CodexLiveProjection {
         }
         if (frame.method === 'thread/status/changed') {
             const status = record(params.status);
-            const running = status.type === 'active';
-            this.context.emitRemoteEvent('api-session/status', [follow.sessionId, running]);
+            if (status.type === 'idle' || status.type === 'systemError') {
+                if (follow.activeTurnId !== undefined) {
+                    void this.recoverTerminalTurn(follow, follow.activeTurnId);
+                }
+                else {
+                    this.context.emitRemoteEvent('api-session/status', [follow.sessionId, false]);
+                }
+            }
             return;
         }
         if (frame.method === 'model/rerouted') {
@@ -236,32 +266,7 @@ export class CodexLiveProjection {
             return;
         }
         if (frame.method === 'turn/completed') {
-            const turn = record(params.turn);
-            for (const item of array(turn.items))
-                this.acceptCompletedItem(follow, record(item), true);
-            if (follow.stepOpen) {
-                this.closeAllStreamBlocks(follow);
-                if (follow.streamActive)
-                    this.finishStream(follow);
-                this.endAssistantAttempt(follow, { kind: 'abandoned' });
-                this.pushEvent(follow, 'step/end', { turn: follow.turn, step: 1 });
-                follow.stepOpen = false;
-            }
-            this.pushEvent(follow, 'turn/end', {
-                turn: follow.turn,
-                reason: turnEndReason(turn),
-            });
-            this.context.emitRemoteEvent('api-session/status', [follow.sessionId, false]);
-            this.context.emitRemoteEvent('api-session/activity', [follow.sessionId, Date.now()]);
-            follow.activeTurnId = undefined;
-            this.context.pendingRequestIds.delete(follow.sessionId);
-            // A burst of completed turns should publish from one short-lived
-            // catalog snapshot instead of starting a full project/thread scan for
-            // every follow at once.
-            // Completion must observe a fresh upstream catalog. Reusing the short
-            // catalog cache here can publish the pre-completion `running` snapshot
-            // after the authoritative turn/end event and make clients look stuck.
-            void this.context.refreshAndPublishWorkspaces(true);
+            this.finishTurn(follow, record(params.turn));
             return;
         }
         if (frame.method === 'item/commandExecution/requestApproval'
@@ -281,6 +286,56 @@ export class CodexLiveProjection {
             });
         }
     }
+    async recoverTerminalTurn(follow, activeTurnId) {
+        if (follow.recoveringTurnId === activeTurnId)
+            return;
+        follow.recoveringTurnId = activeTurnId;
+        try {
+            const response = record(await this.context.client.request('thread/read', {
+                threadId: follow.threadId, includeTurns: true,
+            }, AbortSignal.timeout(5_000)));
+            const thread = record(response.thread);
+            if (thread.id !== follow.threadId || !this.context.follows.has(follow) || follow.activeTurnId !== activeTurnId)
+                return;
+            const turn = array(thread.turns).map(record).find(item => item.id === activeTurnId);
+            if (turn && ['completed', 'failed', 'interrupted', 'cancelled', 'canceled', 'aborted'].includes(string(turn.status) ?? '')) {
+                this.finishTurn(follow, turn);
+            }
+        }
+        catch {
+            // Idle alone cannot distinguish completion from failure or interruption.
+        }
+        finally {
+            if (follow.recoveringTurnId === activeTurnId)
+                delete follow.recoveringTurnId;
+            if (follow.activeTurnId === activeTurnId && this.context.follows.has(follow)) {
+                this.context.emitRemoteEvent('api-session/status', [follow.sessionId, false]);
+            }
+        }
+    }
+    finishTurn(follow, turn) {
+        const id = string(turn.id);
+        if (id !== undefined && (id === follow.completedTurnId
+            || (follow.activeTurnId !== undefined && id !== follow.activeTurnId)))
+            return;
+        for (const item of array(turn.items))
+            this.acceptCompletedItem(follow, record(item), true);
+        if (follow.stepOpen) {
+            this.closeAllStreamBlocks(follow);
+            if (follow.streamActive)
+                this.finishStream(follow);
+            this.endAssistantAttempt(follow, { kind: 'abandoned' });
+            this.pushEvent(follow, 'step/end', { turn: follow.turn, step: 1 });
+            follow.stepOpen = false;
+        }
+        this.pushEvent(follow, 'turn/end', { turn: follow.turn, reason: turnEndReason(turn) });
+        this.context.emitRemoteEvent('api-session/status', [follow.sessionId, false]);
+        this.context.emitRemoteEvent('api-session/activity', [follow.sessionId, Date.now()]);
+        follow.completedTurnId = id ?? follow.activeTurnId;
+        follow.activeTurnId = undefined;
+        this.context.pendingRequestIds.delete(follow.sessionId);
+        void this.context.refreshAndPublishWorkspaces(true);
+    }
     acceptCompletedItem(follow, item, settleAssistant) {
         const itemId = string(item.id) ?? `item:${follow.nextSeq}`;
         if (follow.completedItems.has(itemId))
@@ -294,7 +349,7 @@ export class CodexLiveProjection {
             this.finishStream(follow);
         const supplementalImages = type === 'agentMessage' ? follow.pendingToolImages : [];
         let assistantMessageSeq;
-        for (const event of itemEvents(item, follow.turn, 1, follow.requestId, this.context.modelSelection(follow.sessionId), follow.sessionId, supplementalImages)) {
+        for (const event of itemEvents(item, follow.turn, 1, follow.requestId, this.context.modelSelection(follow.sessionId), follow.sessionId, supplementalImages, images => this.cacheImageBlocks(follow.sessionId, images))) {
             if (event.type === 'tool/call' && follow.startedItems.has(itemId))
                 continue;
             if (event.type === 'tool/result')

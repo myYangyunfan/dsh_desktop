@@ -9,7 +9,7 @@ import type { HostWebServerLike } from './control-route.js';
 import type { IdentityStore } from './identity-store.js';
 import type { SafeLogger } from './logging.js';
 import { type SessionToolOperation } from './remote-session-tools.js';
-import type { OAuthProvider } from './server-api.js';
+import type { AccountVerification, OAuthProvider } from './server-api.js';
 import { ClientServerApi } from './server-api.js';
 import type { TypertGatewayLike } from './typert-gateway-contract.js';
 import type { WeriftFactoryOptions } from './werift-rtc.js';
@@ -72,7 +72,7 @@ export declare class ClientModeRuntime {
      * from a Host that the user has already been told to re-authorize.
      */
     private assertHostAuthorizationForDeviceDiscovery;
-    authorizeClientWithAccount(email: string, password: string): Promise<unknown>;
+    authorizeClientWithAccount(email: string, password: string, verification?: AccountVerification): Promise<unknown>;
     startClientOAuthQrLogin(provider: OAuthProvider): Promise<unknown>;
     pollClientOAuthQrLogin(qrId: string): Promise<unknown>;
     clearClientAuthorization(): Promise<void>;
@@ -95,9 +95,9 @@ export declare class ClientModeRuntime {
     listCodexWorkspaces(targetDeviceId: string, signal?: AbortSignal): Promise<CodexVirtualWorkspaceView[]>;
     openCodexWorkspace(targetDeviceId: string, workspaceId: string, signal?: AbortSignal): Promise<Record<string, unknown>>;
     createCodexWorkspace(targetDeviceId: string, path: string, signal?: AbortSignal): Promise<Record<string, unknown>>;
-    listCursorWorkspaces(targetDeviceId: string, signal?: AbortSignal, backend?: 'cursor' | 'antigravity' | 'pi' | 'opencode' | 'claude' | 'hermes'): Promise<AcpVirtualWorkspaceView[]>;
-    openCursorWorkspace(targetDeviceId: string, workspaceId: string, signal?: AbortSignal, backend?: 'cursor' | 'antigravity' | 'pi' | 'opencode' | 'claude' | 'hermes'): Promise<Record<string, unknown>>;
-    createCursorWorkspace(targetDeviceId: string, path: string, signal?: AbortSignal, backend?: 'cursor' | 'antigravity' | 'pi' | 'opencode' | 'claude' | 'hermes'): Promise<Record<string, unknown>>;
+    listCursorWorkspaces(targetDeviceId: string, signal?: AbortSignal, backend?: string): Promise<AcpVirtualWorkspaceView[]>;
+    openCursorWorkspace(targetDeviceId: string, workspaceId: string, signal?: AbortSignal, backend?: string): Promise<Record<string, unknown>>;
+    createCursorWorkspace(targetDeviceId: string, path: string, signal?: AbortSignal, backend?: string): Promise<Record<string, unknown>>;
     private consumeWorkspaceSelection;
     close(): Promise<void>;
     private leaveRemote;

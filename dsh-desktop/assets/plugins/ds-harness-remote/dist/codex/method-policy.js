@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isCanonicalBase64 } from './codex-image-codec.js';
 import { RpcError } from '../safe-error.js';
 import { CODEX_HISTORY_PAGE_MAX_MESSAGES } from './virtual-values.js';
 const id = z.string().min(1).max(256);
@@ -11,7 +12,7 @@ const imageMediaType = z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/g
 const canonicalBase64 = z.string()
     .min(4)
     .max(288 * 1024 * 1024)
-    .refine(value => value.length % 4 === 0 && /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(value), {
+    .refine(isCanonicalBase64, {
     message: 'Image data must use canonical base64.',
 });
 const imageInput = z.object({
@@ -24,6 +25,13 @@ const permissionPreset = z.enum(['workspace-write', 'danger-full-access']);
 const projectRoot = z.object({
     path: z.string().min(1).max(4096),
 }).strict();
+const turnWindow = z.union([
+    z.number().int().min(1).max(CODEX_HISTORY_PAGE_MAX_MESSAGES),
+    z.object({
+        minMessages: z.number().int().min(1).max(CODEX_HISTORY_PAGE_MAX_MESSAGES).optional(),
+        minTurns: z.number().int().min(1).max(CODEX_HISTORY_PAGE_MAX_MESSAGES).optional(),
+    }).strict().refine(value => value.minMessages !== undefined || value.minTurns !== undefined, { message: 'turnWindow requires minMessages or minTurns.' }),
+]);
 const schemas = {
     'account/read': z.object({ refreshToken: z.literal(false).optional() }).strict(),
     'model/list': z.object({
@@ -59,6 +67,7 @@ const schemas = {
         beforeSeq: z.number().int().nonnegative().optional(),
         throughSeq: z.number().int().min(-1).optional(),
         maxMessages: z.number().int().min(1).max(CODEX_HISTORY_PAGE_MAX_MESSAGES).optional(),
+        turnWindow: turnWindow.optional(),
     }).strict(),
     'dsh/sessionAttachment': z.object({
         threadId: id,

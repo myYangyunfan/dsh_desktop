@@ -4,10 +4,11 @@ import { uuidV7 } from './ids.js';
 const identity = z.string().regex(/^[A-Za-z0-9_:-]{1,256}$/);
 const attachmentArgs = z.object({ agentId: identity, id: identity, attachmentId: identity }).strict();
 const dimensions = { cols: z.number().int().min(1).max(1000), rows: z.number().int().min(1).max(1000) };
-const input = z.discriminatedUnion('type', [
-    z.object({ type: z.literal('write'), sequence: z.number().int().positive().safe(), data: z.string().max(64 * 1024) }).strict(),
-    z.object({ type: z.literal('resize'), sequence: z.number().int().positive().safe(), ...dimensions }).strict(),
-]);
+const writeInput = z.object({ type: z.literal('write'), sequence: z.number().int().positive().safe(), data: z.string().max(64 * 1024) }).strict();
+const resizeInput = z.object({ type: z.literal('resize'), sequence: z.number().int().positive().safe(), ...dimensions }).strict();
+const input = z.discriminatedUnion('type', [writeInput, resizeInput]);
+// Desktop can mark keyboard input; the encrypted terminal/write RPC carries only data.
+const desktopInput = z.discriminatedUnion('type', [writeInput.extend({ typed: z.boolean().optional() }), resizeInput]);
 /** Fixed terminal API changed in 0.2.1-alpha.3; other streams remain read-only. */
 export function usesDuplexTerminal(version) {
     const match = /^(?:dsh-)?v?0\.(\d+)\.(\d+)(?:-([^+]+))?(?:\+.*)?$/.exec(version ?? '');
@@ -222,7 +223,7 @@ export async function openRemoteTerminal(target, payload, signal, uplink) {
                 const next = await iterator.next();
                 if (next.done || lifetime.aborted)
                     break;
-                const value = input.parse(next.value);
+                const value = desktopInput.parse(next.value);
                 if (value.sequence !== ++sequence)
                     throw new RpcError('INVALID_MESSAGE', 'Terminal input sequence is invalid.');
                 if (!writable) {

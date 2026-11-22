@@ -15,14 +15,14 @@ export interface CandidateScanOptions {
     npmPrefix?: string;
     checkExecutable?: (path: string) => boolean;
 }
-/** Check that a path exists, is a regular file, and has execute permissions on POSIX. */
+/** Check that a path exists, is a regular file, and is executable (Windows extension or POSIX +x). */
 export declare function defaultCheckExecutable(candidate: string, platform?: NodeJS.Platform): boolean;
 /** Safely discover the global npm prefix once without shell, using node + npm-cli.js. */
 export declare function discoverSystemNpmPrefix(platform?: NodeJS.Platform): string | undefined;
 /** Resolves candidate paths for an ACP backend on Windows / macOS / Linux. */
 export declare function candidateBinaryPaths(id: string, options?: CandidateScanOptions): string[];
 /** Check PATH using where (Win) or which (Unix) with timeout and return full path if found. */
-export declare function lookupSystemPath(command: string, platform?: NodeJS.Platform): string | undefined;
+export declare function lookupSystemPath(command: string, platform?: NodeJS.Platform, checkExecutable?: (candidate: string) => boolean): string | undefined;
 /** Scan for an existing executable binary on the system. */
 export declare function findExistingBinary(id: string, options?: CandidateScanOptions): string | undefined;
 /** Find the Node-bundled npm-cli.js to execute npm directly with Node without invoking any shell. */
@@ -35,6 +35,7 @@ export interface InstallAcpOptions extends CandidateScanOptions {
         encoding?: string;
         stdio?: unknown;
         env?: NodeJS.ProcessEnv;
+        windowsHide?: boolean;
     }) => Promise<{
         stdout: string;
         stderr: string;

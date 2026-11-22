@@ -22,6 +22,8 @@ export declare class TerminalPolicy {
         created?: boolean;
         claim?: object;
     }): TypertRpcResult;
+    watch(payload: unknown, source: AsyncIterable<unknown>): AsyncIterable<unknown[]>;
+    private ownedRoster;
     private deny;
 }
 //# sourceMappingURL=terminal-policy.d.ts.map

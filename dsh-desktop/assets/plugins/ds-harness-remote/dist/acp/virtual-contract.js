@@ -77,7 +77,7 @@ export function extractSessionId(request) {
     throw new Error('The sessionId is required.');
 }
 export function sessionPrefix(backend) {
-    return SESSION_PREFIXES[backend] ?? CURSOR_SESSION_PREFIX;
+    return SESSION_PREFIXES[backend] ?? `${backend}:`;
 }
 export function nativeAcpId(sessionId, backend) {
     const prefix = sessionPrefix(backend);

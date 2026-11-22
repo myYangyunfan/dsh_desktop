@@ -62,6 +62,8 @@ export class WorkspaceBridge {
                 throw this.scopeError('SESSION_INVALID', 'The CodeX session identifier is invalid.');
             return undefined;
         }
+        if (endpoint === 'workspaceFiles/search')
+            throw new RpcError('FEATURE_NOT_SUPPORTED', 'Workspace search requires a native Harness session.');
         if (endpoint.startsWith('workspaceFiles/'))
             return this.fileCall(endpoint, session.sessionId, args, signal);
         if (endpoint.startsWith('terminal/')) {
@@ -86,7 +88,7 @@ export class WorkspaceBridge {
         }
         if (endpoint === 'workspaceFiles/changes')
             return this.watchChanges(session.sessionId, args, signal);
-        if (endpoint === 'terminal/retain' || endpoint === 'terminal/follow') {
+        if (endpoint === 'terminal/retain' || endpoint === 'terminal/follow' || endpoint === 'terminal/watch') {
             if (!this.terminalEnabled())
                 throw new RpcError('TERMINAL_DISABLED', 'Remote terminal is disabled on this Host.');
             await this.rootFor(session.sessionId, signal);
@@ -185,7 +187,7 @@ export class WorkspaceBridge {
         const queue = new AsyncQueue();
         signal.throwIfAborted();
         const watcher = watch(target, { recursive: false });
-        const abort = () => { watcher.return?.(); queue.end(); };
+        const abort = () => { void watcher.return?.().catch(() => undefined); queue.end(); };
         signal.addEventListener('abort', abort, { once: true });
         void (async () => {
             try {

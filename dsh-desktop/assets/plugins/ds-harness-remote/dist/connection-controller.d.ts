@@ -5,7 +5,10 @@ import type { RpcRouter } from './rpc-router.js';
 import type { AuthenticatedPeerChannel } from './types.js';
 export interface PeerConnectionContext {
     peerIdentityKey?: string;
+    sameLinkIpv6Endpoints?: AuthenticatedPeerChannel['sameLinkIpv6Endpoints'];
+    lanWebAddress?: AuthenticatedPeerChannel['lanWebAddress'];
     transportMode?: () => AuthenticatedPeerChannel['mode'];
+    createTransportUpgradeHost?: AuthenticatedPeerChannel['createTransportUpgradeHost'];
     connectionId: string;
     peerDeviceId: string;
 }

@@ -929,7 +929,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	//#endregion
 	//#region node_modules/khroma/dist/color/rgb.js
 	var RGB;
-	var init_rgb$1 = __esmMin((() => {
+	var init_rgb = __esmMin((() => {
 		init_utils();
 		init_reusable();
 		RGB = {
@@ -957,11 +957,11 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	//#endregion
 	//#region node_modules/khroma/dist/color/index.js
 	var Color$2;
-	var init_color$2 = __esmMin((() => {
+	var init_color = __esmMin((() => {
 		init_hex();
 		init_hsl();
 		init_keyword();
-		init_rgb$1();
+		init_rgb();
 		init_constants();
 		Color$2 = {
 			format: {
@@ -991,7 +991,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	var change;
 	var init_change = __esmMin((() => {
 		init_utils();
-		init_color$2();
+		init_color();
 		change = (color, channels) => {
 			const ch = Color$2.parse(color);
 			for (const c in channels) ch[c] = Utils$1.channel.clamp[c](channels[c]);
@@ -1004,7 +1004,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	var init_rgba = __esmMin((() => {
 		init_utils();
 		init_reusable();
-		init_color$2();
+		init_color();
 		init_change();
 		rgba$2 = (r, g, b = 0, a = 1) => {
 			if (typeof r !== "number") return change(r, { a: g });
@@ -1022,7 +1022,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	var channel;
 	var init_channel = __esmMin((() => {
 		init_utils();
-		init_color$2();
+		init_color();
 		channel = (color, channel) => {
 			return Utils$1.lang.round(Color$2.parse(color)[channel]);
 		};
@@ -1032,7 +1032,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	var luminance;
 	var init_luminance = __esmMin((() => {
 		init_utils();
-		init_color$2();
+		init_color();
 		luminance = (color) => {
 			const { r, g, b } = Color$2.parse(color);
 			const luminance = .2126 * Utils$1.channel.toLinear(r) + .7152 * Utils$1.channel.toLinear(g) + .0722 * Utils$1.channel.toLinear(b);
@@ -1062,7 +1062,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	var adjustChannel;
 	var init_adjust_channel = __esmMin((() => {
 		init_utils();
-		init_color$2();
+		init_color();
 		adjustChannel = (color, channel, amount) => {
 			const channels = Color$2.parse(color);
 			const amountCurrent = channels[channel];
@@ -1102,7 +1102,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	//#region node_modules/khroma/dist/methods/adjust.js
 	var adjust$1;
 	var init_adjust = __esmMin((() => {
-		init_color$2();
+		init_color();
 		init_change();
 		adjust$1 = (color, channels) => {
 			const ch = Color$2.parse(color);
@@ -1118,7 +1118,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	//#region node_modules/khroma/dist/methods/mix.js
 	var mix;
 	var init_mix = __esmMin((() => {
-		init_color$2();
+		init_color();
 		init_rgba();
 		mix = (color1, color2, weight = 50) => {
 			const { r: r1, g: g1, b: b1, a: a1 } = Color$2.parse(color1);
@@ -1139,7 +1139,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	//#region node_modules/khroma/dist/methods/invert.js
 	var invert;
 	var init_invert = __esmMin((() => {
-		init_color$2();
+		init_color();
 		init_mix();
 		invert = (color, weight = 100) => {
 			const inverse = Color$2.parse(color);
@@ -1168,7 +1168,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}));
 	//#endregion
 	//#region node_modules/dompurify/dist/purify.es.mjs
-	/*! @license DOMPurify 3.4.16 | (c) Cure53 and other contributors | Released under the Apache license 2.0 and Mozilla Public License 2.0 | github.com/cure53/DOMPurify/blob/3.4.16/LICENSE */
+	/*! @license DOMPurify 3.4.18 | (c) Cure53 and other contributors | Released under the Apache license 2.0 and Mozilla Public License 2.0 | github.com/cure53/DOMPurify/blob/3.4.18/LICENSE */
 	function _OverloadYield(e, d) {
 		this.v = e, this.k = d;
 	}
@@ -1261,7 +1261,6 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	*/
 	function unapply(func) {
 		return function(thisArg) {
-			if (thisArg instanceof RegExp) thisArg.lastIndex = 0;
 			for (var _len3 = arguments.length, args = new Array(_len3 > 1 ? _len3 - 1 : 0), _key3 = 1; _key3 < _len3; _key3++) args[_key3 - 1] = arguments[_key3];
 			return apply$2(func, thisArg, args);
 		};
@@ -1320,7 +1319,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	* @param object - The object to be cloned.
 	* @returns A new object that copies the original.
 	*/
-	function clone$5(object) {
+	function clone$4(object) {
 		const newObject = create$2(null);
 		for (const _ref2 of entries(object)) {
 			var _ref3 = _slicedToArray$1(_ref2, 2);
@@ -1328,11 +1327,24 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			const value = _ref3[1];
 			if (objectHasOwnProperty(object, property)) {
 				if (arrayIsArray(value)) newObject[property] = cleanArray(value);
-				else if (value && typeof value === "object" && value.constructor === Object) newObject[property] = clone$5(value);
+				else if (value && typeof value === "object" && value.constructor === Object) newObject[property] = clone$4(value);
 				else newObject[property] = value;
 			}
 		}
 		return newObject;
+	}
+	/**
+	* Copy a flat lookup table
+	*
+	* @param set - The set to copy.
+	* @returns A new prototype-free set with the same entries.
+	*/
+	function cloneSet(set) {
+		const newSet = create$2(null);
+		const keys = objectKeys(set);
+		let l = keys.length;
+		while (l--) newSet[keys[l]] = set[keys[l]];
+		return newSet;
 	}
 	/**
 	* Convert non-node values into strings without depending on direct property access.
@@ -1383,7 +1395,27 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		}
 		return fallbackValue;
 	}
+	/**
+	* Like lookupGetter, but for accessor properties only, and returns null
+	* instead of a null-returning fallback when no getter exists on the chain.
+	* Lets a caller fall back to a direct property read in environments that
+	* lack the getter, where a fallback returning null would be indistinguishable
+	* from a legitimate null value (e.g. namespaceURI of a no-namespace element).
+	*
+	* @param object - The object (usually a prototype) to start the lookup at.
+	* @param prop - The accessor property name.
+	* @returns The unapplied getter, or null if none was found.
+	*/
+	function lookupAccessor(object, prop) {
+		while (object !== null) {
+			const desc = getOwnPropertyDescriptor(object, prop);
+			if (desc) return desc.get ? unapply(desc.get) : null;
+			object = getPrototypeOf(object);
+		}
+		return null;
+	}
 	function isRegex(value) {
+		if (!value) return false;
 		try {
 			regExpTest(value, "");
 			return true;
@@ -1394,7 +1426,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	function createDOMPurify() {
 		let window = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : getGlobal();
 		const DOMPurify = (root) => createDOMPurify(root);
-		DOMPurify.version = "3.4.16";
+		DOMPurify.version = "3.4.18";
 		DOMPurify.removed = [];
 		if (!window || !window.document || window.document.nodeType !== NODE_TYPE.document || !window.Element) {
 			DOMPurify.isSupported = false;
@@ -1403,11 +1435,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		let document = window.document;
 		const originalDocument = document;
 		const currentScript = originalDocument.currentScript;
-		window.DocumentFragment;
-		const HTMLTemplateElement = window.HTMLTemplateElement, Node = window.Node, Element = window.Element, NodeFilter = window.NodeFilter;
-		window.NamedNodeMap === void 0 && (window.NamedNodeMap || window.MozNamedAttrMap);
-		window.HTMLFormElement;
-		const DOMParser = window.DOMParser, trustedTypes = window.trustedTypes;
+		const HTMLTemplateElement = window.HTMLTemplateElement, Node = window.Node, Element = window.Element, NodeFilter = window.NodeFilter, DOMParser = window.DOMParser, trustedTypes = window.trustedTypes;
 		const ElementPrototype = Element.prototype;
 		const cloneNode = lookupGetter(ElementPrototype, "cloneNode");
 		const remove = lookupGetter(ElementPrototype, "remove");
@@ -1425,6 +1453,10 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 		const _readNodeName = function _readNodeName(node) {
 			return getNodeName ? getNodeName(node) : node.nodeName;
+		};
+		const getNamespaceURI = lookupAccessor(ElementPrototype, "namespaceURI");
+		const _readNamespaceURI = function _readNamespaceURI(element) {
+			return getNamespaceURI ? getNamespaceURI(element) : element.namespaceURI;
 		};
 		if (typeof HTMLTemplateElement === "function") {
 			const template = document.createElement("template");
@@ -1446,6 +1478,9 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			} finally {
 				IN_TRUSTED_TYPES_POLICY--;
 			}
+		};
+		const _signOutput = function _signOutput(html) {
+			return trustedTypesPolicy && RETURN_TRUSTED_TYPE ? _createTrustedHTML(html) : html;
 		};
 		const _createTrustedScriptURL = function _createTrustedScriptURL(scriptUrl) {
 			_assertNotInTrustedTypesPolicy();
@@ -1491,26 +1526,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			...mathMl,
 			...xml
 		]);
-		let CUSTOM_ELEMENT_HANDLING = Object.seal(create$2(null, {
-			tagNameCheck: {
-				writable: true,
-				configurable: false,
-				enumerable: true,
-				value: null
-			},
-			attributeNameCheck: {
-				writable: true,
-				configurable: false,
-				enumerable: true,
-				value: null
-			},
-			allowCustomizedBuiltInElements: {
-				writable: true,
-				configurable: false,
-				enumerable: true,
-				value: false
-			}
-		}));
+		let CUSTOM_ELEMENT_HANDLING = null;
 		let FORBID_TAGS = null;
 		let FORBID_ATTR = null;
 		const EXTRA_ELEMENT_HANDLING = Object.seal(create$2(null, {
@@ -1546,7 +1562,8 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		const SANITIZE_NAMED_PROPS_PREFIX = "user-content-";
 		let KEEP_CONTENT = true;
 		let IN_PLACE = false;
-		let USE_PROFILES = {};
+		let IN_PLACE_VISITED = null;
+		let USE_PROFILES = false;
 		let FORBID_CONTENTS = null;
 		const DEFAULT_FORBID_CONTENTS = addToSet({}, [
 			"annotation-xml",
@@ -1613,16 +1630,17 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			SVG_NAMESPACE,
 			HTML_NAMESPACE
 		], stringToString);
-		const DEFAULT_MATHML_TEXT_INTEGRATION_POINTS = freeze([
+		const DEFAULT_MATHML_TEXT_INTEGRATION_POINTS = freeze(addToSet({}, [
 			"mi",
 			"mo",
 			"mn",
 			"ms",
 			"mtext"
-		]);
-		let MATHML_TEXT_INTEGRATION_POINTS = addToSet({}, DEFAULT_MATHML_TEXT_INTEGRATION_POINTS);
-		const DEFAULT_HTML_INTEGRATION_POINTS = freeze(["annotation-xml"]);
-		let HTML_INTEGRATION_POINTS = addToSet({}, DEFAULT_HTML_INTEGRATION_POINTS);
+		]));
+		let MATHML_TEXT_INTEGRATION_POINTS = null;
+		const DEFAULT_HTML_INTEGRATION_POINTS = freeze(addToSet({}, ["annotation-xml"]));
+		let HTML_INTEGRATION_POINTS = null;
+		const DEFAULT_CUSTOM_ELEMENT_HANDLING = freeze(create$2(null));
 		const COMMON_SVG_AND_HTML_ELEMENTS = addToSet({}, [
 			"title",
 			"style",
@@ -1646,9 +1664,8 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		*/
 		const _parseConfig = function _parseConfig() {
 			let cfg = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : {};
-			if (CONFIG && CONFIG === cfg) return;
 			if (!cfg || typeof cfg !== "object") cfg = {};
-			cfg = clone$5(cfg);
+			cfg = clone$4(cfg);
 			PARSER_MEDIA_TYPE = SUPPORTED_PARSER_MEDIA_TYPES.indexOf(cfg.PARSER_MEDIA_TYPE) === -1 ? DEFAULT_PARSER_MEDIA_TYPE : cfg.PARSER_MEDIA_TYPE;
 			transformCaseFunc = PARSER_MEDIA_TYPE === "application/xhtml+xml" ? stringToString : stringToLowerCase;
 			ALLOWED_TAGS = _resolveSetOption(cfg, "ALLOWED_TAGS", DEFAULT_ALLOWED_TAGS, { transform: transformCaseFunc });
@@ -1663,9 +1680,9 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				base: DEFAULT_DATA_URI_TAGS
 			});
 			FORBID_CONTENTS = _resolveSetOption(cfg, "FORBID_CONTENTS", DEFAULT_FORBID_CONTENTS, { transform: transformCaseFunc });
-			FORBID_TAGS = _resolveSetOption(cfg, "FORBID_TAGS", clone$5({}), { transform: transformCaseFunc });
-			FORBID_ATTR = _resolveSetOption(cfg, "FORBID_ATTR", clone$5({}), { transform: transformCaseFunc });
-			USE_PROFILES = objectHasOwnProperty(cfg, "USE_PROFILES") ? cfg.USE_PROFILES && typeof cfg.USE_PROFILES === "object" ? clone$5(cfg.USE_PROFILES) : cfg.USE_PROFILES : false;
+			FORBID_TAGS = _resolveSetOption(cfg, "FORBID_TAGS", create$2(null), { transform: transformCaseFunc });
+			FORBID_ATTR = _resolveSetOption(cfg, "FORBID_ATTR", create$2(null), { transform: transformCaseFunc });
+			USE_PROFILES = objectHasOwnProperty(cfg, "USE_PROFILES") ? cfg.USE_PROFILES && typeof cfg.USE_PROFILES === "object" ? clone$4(cfg.USE_PROFILES) : cfg.USE_PROFILES : false;
 			ALLOW_ARIA_ATTR = cfg.ALLOW_ARIA_ATTR !== false;
 			ALLOW_DATA_ATTR = cfg.ALLOW_DATA_ATTR !== false;
 			ALLOW_UNKNOWN_PROTOCOLS = cfg.ALLOW_UNKNOWN_PROTOCOLS || false;
@@ -1683,9 +1700,9 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			IN_PLACE = cfg.IN_PLACE || false;
 			IS_ALLOWED_URI$1 = isRegex(cfg.ALLOWED_URI_REGEXP) ? cfg.ALLOWED_URI_REGEXP : IS_ALLOWED_URI;
 			NAMESPACE = typeof cfg.NAMESPACE === "string" ? cfg.NAMESPACE : HTML_NAMESPACE;
-			MATHML_TEXT_INTEGRATION_POINTS = _resolveObjectOption(cfg, "MATHML_TEXT_INTEGRATION_POINTS", () => addToSet({}, DEFAULT_MATHML_TEXT_INTEGRATION_POINTS));
-			HTML_INTEGRATION_POINTS = _resolveObjectOption(cfg, "HTML_INTEGRATION_POINTS", () => addToSet({}, DEFAULT_HTML_INTEGRATION_POINTS));
-			const customElementHandling = _resolveObjectOption(cfg, "CUSTOM_ELEMENT_HANDLING", () => create$2(null));
+			MATHML_TEXT_INTEGRATION_POINTS = _resolveObjectOption(cfg, "MATHML_TEXT_INTEGRATION_POINTS", DEFAULT_MATHML_TEXT_INTEGRATION_POINTS);
+			HTML_INTEGRATION_POINTS = _resolveObjectOption(cfg, "HTML_INTEGRATION_POINTS", DEFAULT_HTML_INTEGRATION_POINTS);
+			const customElementHandling = _resolveObjectOption(cfg, "CUSTOM_ELEMENT_HANDLING", DEFAULT_CUSTOM_ELEMENT_HANDLING);
 			CUSTOM_ELEMENT_HANDLING = create$2(null);
 			if (objectHasOwnProperty(customElementHandling, "tagNameCheck") && isRegexOrFunction(customElementHandling.tagNameCheck)) CUSTOM_ELEMENT_HANDLING.tagNameCheck = customElementHandling.tagNameCheck;
 			if (objectHasOwnProperty(customElementHandling, "attributeNameCheck") && isRegexOrFunction(customElementHandling.attributeNameCheck)) CUSTOM_ELEMENT_HANDLING.attributeNameCheck = customElementHandling.attributeNameCheck;
@@ -1694,6 +1711,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			if (SAFE_FOR_TEMPLATES) ALLOW_DATA_ATTR = false;
 			if (RETURN_DOM_FRAGMENT) RETURN_DOM = true;
 			if (USE_PROFILES) {
+				if ((objectHasOwnProperty(cfg, "ALLOWED_TAGS") || objectHasOwnProperty(cfg, "ALLOWED_ATTR")) && typeof console !== "undefined" && typeof console.warn === "function") console.warn("DOMPurify: USE_PROFILES overrides ALLOWED_TAGS and ALLOWED_ATTR. Do not use these options together.");
 				ALLOWED_TAGS = addToSet({}, text$1);
 				ALLOWED_ATTR = create$2(null);
 				if (USE_PROFILES.html === true) {
@@ -1721,19 +1739,19 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			if (objectHasOwnProperty(cfg, "ADD_TAGS")) {
 				if (typeof cfg.ADD_TAGS === "function") EXTRA_ELEMENT_HANDLING.tagCheck = cfg.ADD_TAGS;
 				else if (arrayIsArray(cfg.ADD_TAGS)) {
-					if (ALLOWED_TAGS === DEFAULT_ALLOWED_TAGS) ALLOWED_TAGS = clone$5(ALLOWED_TAGS);
+					if (ALLOWED_TAGS === DEFAULT_ALLOWED_TAGS) ALLOWED_TAGS = cloneSet(ALLOWED_TAGS);
 					addToSet(ALLOWED_TAGS, cfg.ADD_TAGS, transformCaseFunc);
 				}
 			}
 			if (objectHasOwnProperty(cfg, "ADD_ATTR")) {
 				if (typeof cfg.ADD_ATTR === "function") EXTRA_ELEMENT_HANDLING.attributeCheck = cfg.ADD_ATTR;
 				else if (arrayIsArray(cfg.ADD_ATTR)) {
-					if (ALLOWED_ATTR === DEFAULT_ALLOWED_ATTR) ALLOWED_ATTR = clone$5(ALLOWED_ATTR);
+					if (ALLOWED_ATTR === DEFAULT_ALLOWED_ATTR) ALLOWED_ATTR = cloneSet(ALLOWED_ATTR);
 					addToSet(ALLOWED_ATTR, cfg.ADD_ATTR, transformCaseFunc);
 				}
 			}
 			if (objectHasOwnProperty(cfg, "ADD_FORBID_CONTENTS") && arrayIsArray(cfg.ADD_FORBID_CONTENTS)) {
-				if (FORBID_CONTENTS === DEFAULT_FORBID_CONTENTS) FORBID_CONTENTS = clone$5(FORBID_CONTENTS);
+				if (FORBID_CONTENTS === DEFAULT_FORBID_CONTENTS) FORBID_CONTENTS = cloneSet(FORBID_CONTENTS);
 				addToSet(FORBID_CONTENTS, cfg.ADD_FORBID_CONTENTS, transformCaseFunc);
 			}
 			if (KEEP_CONTENT) ALLOWED_TAGS["#text"] = true;
@@ -1743,7 +1761,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				"body"
 			]);
 			if (ALLOWED_TAGS.table) {
-				addToSet(ALLOWED_TAGS, ["tbody"]);
+				ALLOWED_TAGS.tbody = true;
 				delete FORBID_TAGS.tbody;
 			}
 			if (cfg.TRUSTED_TYPES_POLICY) {
@@ -1764,8 +1782,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				if (trustedTypesPolicy === void 0) trustedTypesPolicy = _getDefaultTrustedTypesPolicy();
 				if (trustedTypesPolicy && typeof emptyHTML === "string") emptyHTML = _createTrustedHTML("");
 			}
-			if (freeze) freeze(cfg);
-			CONFIG = cfg;
+			CONFIG = freeze(cfg);
 		};
 		const ALL_SVG_TAGS = addToSet({}, [
 			...svg$1,
@@ -1777,39 +1794,39 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		* Namespace rules for an element in the SVG namespace.
 		*
 		* @param tagName the element's lowercase tag name
-		* @param parent the (possibly simulated) parent node
+		* @param parentNamespace the (possibly simulated) parent's namespace
 		* @param parentTagName the parent's lowercase tag name
 		* @returns true if a spec-compliant parser could produce this element
 		*/
-		const _checkSvgNamespace = function _checkSvgNamespace(tagName, parent, parentTagName) {
-			if (parent.namespaceURI === HTML_NAMESPACE) return tagName === "svg";
-			if (parent.namespaceURI === MATHML_NAMESPACE) return tagName === "svg" && (parentTagName === "annotation-xml" || MATHML_TEXT_INTEGRATION_POINTS[parentTagName]);
+		const _checkSvgNamespace = function _checkSvgNamespace(tagName, parentNamespace, parentTagName) {
+			if (parentNamespace === HTML_NAMESPACE) return tagName === "svg";
+			if (parentNamespace === MATHML_NAMESPACE) return tagName === "svg" && (parentTagName === "annotation-xml" || MATHML_TEXT_INTEGRATION_POINTS[parentTagName]);
 			return Boolean(ALL_SVG_TAGS[tagName]);
 		};
 		/**
 		* Namespace rules for an element in the MathML namespace.
 		*
 		* @param tagName the element's lowercase tag name
-		* @param parent the (possibly simulated) parent node
+		* @param parentNamespace the (possibly simulated) parent's namespace
 		* @param parentTagName the parent's lowercase tag name
 		* @returns true if a spec-compliant parser could produce this element
 		*/
-		const _checkMathMlNamespace = function _checkMathMlNamespace(tagName, parent, parentTagName) {
-			if (parent.namespaceURI === HTML_NAMESPACE) return tagName === "math";
-			if (parent.namespaceURI === SVG_NAMESPACE) return tagName === "math" && HTML_INTEGRATION_POINTS[parentTagName];
+		const _checkMathMlNamespace = function _checkMathMlNamespace(tagName, parentNamespace, parentTagName) {
+			if (parentNamespace === HTML_NAMESPACE) return tagName === "math";
+			if (parentNamespace === SVG_NAMESPACE) return tagName === "math" && HTML_INTEGRATION_POINTS[parentTagName];
 			return Boolean(ALL_MATHML_TAGS[tagName]);
 		};
 		/**
 		* Namespace rules for an element in the HTML namespace.
 		*
 		* @param tagName the element's lowercase tag name
-		* @param parent the (possibly simulated) parent node
+		* @param parentNamespace the (possibly simulated) parent's namespace
 		* @param parentTagName the parent's lowercase tag name
 		* @returns true if a spec-compliant parser could produce this element
 		*/
-		const _checkHtmlNamespace = function _checkHtmlNamespace(tagName, parent, parentTagName) {
-			if (parent.namespaceURI === SVG_NAMESPACE && !HTML_INTEGRATION_POINTS[parentTagName]) return false;
-			if (parent.namespaceURI === MATHML_NAMESPACE && !MATHML_TEXT_INTEGRATION_POINTS[parentTagName]) return false;
+		const _checkHtmlNamespace = function _checkHtmlNamespace(tagName, parentNamespace, parentTagName) {
+			if (parentNamespace === SVG_NAMESPACE && !HTML_INTEGRATION_POINTS[parentTagName]) return false;
+			if (parentNamespace === MATHML_NAMESPACE && !MATHML_TEXT_INTEGRATION_POINTS[parentTagName]) return false;
 			return !ALL_MATHML_TAGS[tagName] && (COMMON_SVG_AND_HTML_ELEMENTS[tagName] || !ALL_SVG_TAGS[tagName]);
 		};
 		/**
@@ -1819,19 +1836,20 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		*  return. Return true otherwise.
 		*/
 		const _checkValidNamespace = function _checkValidNamespace(element) {
-			let parent = getParentNode(element);
-			if (!parent || !parent.tagName) parent = {
-				namespaceURI: NAMESPACE,
-				tagName: "template"
-			};
-			const tagName = stringToLowerCase(element.tagName);
-			const parentTagName = stringToLowerCase(parent.tagName);
-			if (!ALLOWED_NAMESPACES[element.namespaceURI]) return false;
-			if (element.namespaceURI === SVG_NAMESPACE) return _checkSvgNamespace(tagName, parent, parentTagName);
-			if (element.namespaceURI === MATHML_NAMESPACE) return _checkMathMlNamespace(tagName, parent, parentTagName);
-			if (element.namespaceURI === HTML_NAMESPACE) return _checkHtmlNamespace(tagName, parent, parentTagName);
-			if (PARSER_MEDIA_TYPE === "application/xhtml+xml" && ALLOWED_NAMESPACES[element.namespaceURI]) return true;
-			return false;
+			const elementNamespace = _readNamespaceURI(element);
+			const tagName = stringToLowerCase(_readNodeName(element));
+			const parentNode = getParentNode(element);
+			let parentNamespace = NAMESPACE;
+			let parentTagName = "template";
+			if (parentNode && _readNodeType(parentNode) === NODE_TYPE.element) {
+				parentNamespace = _readNamespaceURI(parentNode);
+				parentTagName = stringToLowerCase(_readNodeName(parentNode));
+			}
+			if (!ALLOWED_NAMESPACES[elementNamespace]) return false;
+			if (elementNamespace === SVG_NAMESPACE) return _checkSvgNamespace(tagName, parentNamespace, parentTagName);
+			if (elementNamespace === MATHML_NAMESPACE) return _checkMathMlNamespace(tagName, parentNamespace, parentTagName);
+			if (elementNamespace === HTML_NAMESPACE) return _checkHtmlNamespace(tagName, parentNamespace, parentTagName);
+			return PARSER_MEDIA_TYPE === "application/xhtml+xml";
 		};
 		/**
 		* _forceRemove
@@ -1848,17 +1866,10 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			}
 		};
 		/**
-		* _stripAttributeNode
-		*
-		* Remove a single Attr node case/namespace-exactly on an attribute-teardown
-		* path. Name-based removeAttribute() ASCII-lowercases its lookup key for an
-		* HTML element in an HTML document and so silently misses a case-preserved
-		* handler (e.g. `ONERROR` off an XML/XHTML import) - the same defect
-		* _removeAttribute() was fixed for, which a name-based call would reintroduce
-		* on these IN_PLACE teardown paths. Unlike _removeAttribute this does not
-		* record into DOMPurify.removed: the neutralize passes intentionally do not
-		* book-keep. A clobbered/detached node falls back to best-effort name-based
-		* removal.
+		* Removes an Attr node as that exact node, without book-keeping. Name-based
+		* removal lowercases the name in HTML documents and would miss a
+		* case-preserved one such as `ONERROR`, so it is only the fallback for
+		* clobbered or detached nodes.
 		*
 		* @param element the element to strip the attribute from
 		* @param attribute the Attr node to remove
@@ -1874,55 +1885,26 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			}
 		};
 		/**
-		* _neutralizeRoot
-		*
-		* Fail-closed teardown of an in-place root after the sanitize walk aborts
-		* (campaign-3 F2). An internal throw mid-walk — e.g. a page-registered
-		* custom element's reaction detaches a node so `_forceRemove`'s deliberate
-		* parentless guard throws, or any other re-entrant engine mutation — would
-		* otherwise leave the caller's *live* tree half-sanitized, with everything
-		* after the abort point still carrying its handlers. There is no safe way
-		* to resume the walk (the tree mutated under us), so we strip the root bare:
-		* remove every child and every attribute, then let the caller's catch see
-		* the original error. Clobber-safe (cached `remove`/`childNodes`/`attributes`
-		* getters; the root was already clobber-pre-flighted at the IN_PLACE entry).
+		* Fail-closed teardown of an in-place root: strip every disallowed attribute
+		* in the subtree first, so nothing armed is left behind, then remove all
+		* children and the root's own attributes.
 		*
 		* @param root the in-place root to empty
 		*/
 		const _neutralizeRoot = function _neutralizeRoot(root) {
 			_neutralizeSubtree(root);
 			const childNodes = getChildNodes(root);
-			if (childNodes) {
-				const snapshot = [];
-				arrayForEach(childNodes, (child) => {
-					arrayPush$2(snapshot, child);
-				});
-				arrayForEach(snapshot, (child) => {
-					try {
-						remove(child);
-					} catch (_) {}
-				});
-			}
-			const attributes = getAttributes(root);
-			if (attributes) for (let i = attributes.length - 1; i >= 0; --i) {
-				const attribute = attributes[i];
-				const name = attribute && attribute.name;
-				if (typeof name === "string") _stripAttributeNode(root, attribute, name);
-			}
+			if (childNodes) arrayForEach(arraySlice(childNodes), (child) => {
+				try {
+					remove(child);
+				} catch (_) {}
+			});
+			if (_readNodeType(root) === NODE_TYPE.element) _stripAttributes(root, false);
 		};
 		/**
-		* _removeAttribute
-		*
-		* Name-based getAttributeNode()/removeAttribute() ASCII-lowercase their
-		* lookup key for HTML elements in an HTML document, so they silently miss an
-		* attribute whose stored qualified name still contains uppercase ASCII
-		* letters. That happens when the node came from a case-preserving source
-		* (an XML/XHTML document imported via importNode(), or createAttributeNS()),
-		* where e.g. `ONERROR` survives the walk: the policy check lowercases to
-		* `onerror` and rejects it, but `removeAttribute('ONERROR')` looks up
-		* `onerror` and finds nothing. Remove the exact Attr node instead, which is
-		* case- and namespace-exact, and fall back to name-based removal only when
-		* the caller could not supply the node.
+		* Removes an attribute, preferably as its exact Attr node: name-based
+		* removal lowercases the name in HTML documents and misses case-preserved
+		* names, e.g. from imported XHTML.
 		*
 		* @param name an Attribute name
 		* @param element a DOM node
@@ -1938,14 +1920,10 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				attribute: attr || null,
 				from: element
 			});
-			try {
-				if (attr) removeAttributeNode(element, attr);
-				else element.removeAttribute(name);
-			} catch (_) {
-				try {
-					element.removeAttribute(name);
-				} catch (_) {}
-			}
+			if (attr) _stripAttributeNode(element, attr, name);
+			else try {
+				element.removeAttribute(name);
+			} catch (_) {}
 			if (name === "is") {
 				if (RETURN_DOM || RETURN_DOM_FRAGMENT) try {
 					_forceRemove(element);
@@ -1956,97 +1934,172 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			}
 		};
 		/**
-		* _stripDisallowedAttributes
-		*
-		* Removes every attribute the active configuration does not allow from a
-		* single element, using the same allowlist as the main attribute pass (so
-		* `on*` handlers go, but no `/^on/` blocklist is introduced). Used only to
-		* neutralise nodes that are being discarded from an in-place tree.
+		* Removes an element's attributes without book-keeping. Used to neutralize
+		* nodes discarded from an in-place tree.
 		*
 		* @param element the element to strip
+		* @param keepAllowed whether attributes on the allowlist stay
 		*/
-		const _stripDisallowedAttributes = function _stripDisallowedAttributes(element) {
+		const _stripAttributes = function _stripAttributes(element, keepAllowed) {
 			const attributes = getAttributes(element);
 			if (!attributes) return;
 			for (let i = attributes.length - 1; i >= 0; --i) {
 				const attribute = attributes[i];
 				const name = attribute && attribute.name;
-				if (typeof name !== "string" || ALLOWED_ATTR[transformCaseFunc(name)]) continue;
-				_stripAttributeNode(element, attribute, name);
+				if (typeof name === "string" && !(keepAllowed && ALLOWED_ATTR[transformCaseFunc(name)])) _stripAttributeNode(element, attribute, name);
 			}
 		};
 		/**
-		* _neutralizeSubtree
+		* Iterative depth-first walk, so deep trees cannot overflow the call stack,
+		* reading through the cached getters, so clobbering cannot hide children.
+		* When `visit` returns false, the node's children are skipped. With
+		* `intoShadow`, open shadow roots are walked after their host's children.
 		*
-		* Completes the audit-5 F1 fix across every removal path. The KEEP_CONTENT
-		* move-hoist neutralises only disallowed-tag removals; clobber, mXSS-canary,
-		* namespace, comment, processing-instruction and KEEP_CONTENT:false removals
-		* all drop their subtree wholesale via `_forceRemove`. On the IN_PLACE path
-		* those dropped nodes are detached from the caller's LIVE tree but a
-		* handler-bearing original among them (an `<img onerror>`/`<video>` that was
-		* loading) keeps its queued resource event, which fires in page scope after
-		* sanitize returns. This walks a removed subtree and strips every attribute
-		* the active configuration does not allow — so `on*` handlers are cancelled
-		* through the SAME allowlist that governs kept nodes, not a separate `/^on/`
-		* blocklist. Run synchronously before sanitize returns, i.e. before any
-		* queued event can fire. Hook-free by design: these nodes leave the output,
-		* so firing attribute hooks for them would be surprising. Clobber-safe reads;
-		* a doomed clobbered node may shadow `removeAttribute` (its own attributes are
-		* irrelevant — it is discarded — while its non-clobbered descendants, e.g.
-		* the `<img>`, are reached and scrubbed).
-		*
-		* @param root the root of a removed subtree to neutralise
+		* @param root where to start
+		* @param visit called for every node
+		* @param intoShadow whether to enter open shadow roots
 		*/
-		const _neutralizeSubtree = function _neutralizeSubtree(root) {
+		const _walkTree = function _walkTree(root, visit) {
+			let intoShadow = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : false;
 			const stack = [root];
 			while (stack.length > 0) {
 				const node = stack.pop();
-				if (_readNodeType(node) === NODE_TYPE.element) _stripDisallowedAttributes(node);
+				if (visit(node) === false) continue;
+				if (intoShadow && _readNodeType(node) === NODE_TYPE.element) {
+					const shadowRoot = getShadowRoot(node);
+					if (_isDocumentFragment(shadowRoot)) stack.push(shadowRoot);
+				}
 				const childNodes = getChildNodes(node);
 				if (childNodes) for (let i = childNodes.length - 1; i >= 0; --i) stack.push(childNodes[i]);
 			}
 		};
 		/**
-		* _neutralizePatchLinkage
+		* Strips disallowed attributes from every element of a discarded subtree,
+		* so a handler that is already queued (a loading image) cannot fire.
 		*
-		* IN_PLACE entry pre-pass (declarative-partial-updates / streaming
-		* hardening, https://github.com/WICG/declarative-partial-updates).
-		*
-		* The main walk strips patch linkage (`for`/`patchsrc`) and removes range
-		* markers (PIs / markup comments) node-by-node, in document order, AS it
-		* reaches each node. On a live in-place root that leaves a window: from the
-		* moment the root is connected until the walk arrives at a given node, that
-		* node's linkage is live. A patch applied on connection/stream can fire as
-		* a microtask during the walk and inject or teleport an unsanitized DOM
-		* range into a region the iterator has already passed and will not revisit,
-		* so the post-return "tree is sanitized" contract is violated. Sweep the
-		* whole tree once up front and sever every linkage before the walk begins,
-		* closing that window.
-		*
-		* This CANNOT undo a patch that already fired before sanitize ran — that is
-		* the irreducible "do not IN_PLACE a live-connected attacker tree" caveat —
-		* but it closes everything from sanitize-start onward. Gated on SAFE_FOR_XML
-		* to group with the rest of the declarative-partial-updates handling and
-		* stay overridable, consistent with the codebase.
-		*
-		* Clobber-safe traversal (cached childNodes getter); per-node try/catch so a
-		* clobbered root cannot defeat the sweep of its non-clobbered descendants.
-		*
-		* NOTE (pending real-Chrome confirmation, see test/declarative-patch-probe
-		* .html Q1): this mirrors the existing policy of keeping `for` on
-		* <label>/<output>. If the shipping feature can drive a patch through a
-		* surviving `for`-on-label/output + `id` pair, this pre-pass and the
-		* attribute check at _isBasicCustomElement's caller must additionally drop
-		* that pair on the IN_PLACE path. Left as-is until the taxonomy is verified.
-		*
-		* @param root the in-place root to sweep
+		* @param root the root of a removed subtree
 		*/
+		const _neutralizeSubtree = function _neutralizeSubtree(root) {
+			_walkTree(root, (node) => {
+				if (_readNodeType(node) === NODE_TYPE.element) _stripAttributes(node, true);
+			});
+		};
 		/**
-		* Central policy for declarative-partial-updates patch-linkage attributes,
-		* shared by the _neutralizePatchLinkage pre-pass and _isValidAttribute so
-		* the two sites cannot drift: `patchsrc` always links, `for` links
-		* everywhere except on <label>/<output>, and the whole policy is gated on
-		* SAFE_FOR_XML (see the rationale block in _isValidAttribute).
+		* All nodes under `root`, root first, including open shadow roots. Template
+		* content is not entered, it is inert.
+		*
+		* @param root the in-place root
+		* @return the nodes
+		*/
+		const _collectLiveNodes = function _collectLiveNodes(root) {
+			const nodes = [];
+			_walkTree(root, (node) => {
+				nodes.push(node);
+			}, true);
+			return nodes;
+		};
+		/**
+		* Strips disallowed attributes from every element that was under the
+		* in-place root when the call started and no longer is, whatever removed
+		* or moved it.
+		*
+		* @param root the in-place root
+		* @param before the root's nodes, collected before the walk
+		*/
+		const _neutralizeEscapedElements = function _neutralizeEscapedElements(root, before) {
+			const reachable = setCreate();
+			arrayForEach(_collectLiveNodes(root), (node) => {
+				if (_readNodeType(node) === NODE_TYPE.element) setAdd(reachable, node);
+			});
+			arrayForEach(before, (node) => {
+				if (_readNodeType(node) === NODE_TYPE.element && !setHas(reachable, node)) _stripAttributes(node, true);
+			});
+		};
+		/**
+		* Neutralizes everything that left the in-place tree during the call: what
+		* DOMPurify removed, and what hooks or custom elements removed or moved out.
+		*
+		* @param root the in-place root
+		* @param before the root's nodes, collected before the walk
+		* @return true if the root itself was removed
+		*/
+		const _neutralizeDiscarded = function _neutralizeDiscarded(root, before) {
+			let rootRemoved = false;
+			arrayForEach(DOMPurify.removed, (entry) => {
+				if (entry.element) {
+					rootRemoved = rootRemoved || entry.element === root;
+					_neutralizeSubtree(entry.element);
+				}
+			});
+			_neutralizeEscapedElements(root, before);
+			return rootRemoved;
+		};
+		const MAX_UNVISITED_ROUNDS = 8;
+		/**
+		* The walk only moves forward, so a node moved to a position it already
+		* passed is never visited. Give every original node that is still in the
+		* tree but unvisited the normal treatment, hooks included. Nodes created
+		* during the call are left alone. Fails closed if the tree keeps changing.
+		*
+		* @param root the in-place root
+		* @param before the root's nodes, collected before the walk
+		*/
+		const _sanitizeUnvisitedNodes = function _sanitizeUnvisitedNodes(root, before) {
+			const visited = IN_PLACE_VISITED;
+			let original = null;
+			const getOriginal = () => {
+				if (!original) {
+					original = setCreate();
+					arrayForEach(before, (beforeNode) => {
+						setAdd(original, beforeNode);
+					});
+				}
+				return original;
+			};
+			for (let round = 0;; round++) {
+				const live = _collectLiveNodes(root);
+				const containers = [root];
+				let pending = false;
+				arrayForEach(live, (node) => {
+					if (_readNodeType(node) === NODE_TYPE.documentFragment) arrayPush$2(containers, node);
+					else if (!pending && !setHas(visited, node)) pending = setHas(getOriginal(), node);
+				});
+				if (!pending) return;
+				if (round >= MAX_UNVISITED_ROUNDS) throw typeErrorCreate("the tree kept changing during in-place sanitization; refusing to return it");
+				arrayForEach(containers, (container, index) => {
+					_sanitizeUnvisitedIn(container, index > 0, root, getOriginal());
+				});
+			}
+		};
+		/**
+		* One _sanitizeUnvisitedNodes pass over the root or an open shadow root.
+		*
+		* @param container the root or an open shadow root
+		* @param inShadow whether container is a shadow root
+		* @param root the in-place root
+		* @param original the root's nodes collected before the walk, as a set
+		*/
+		const _sanitizeUnvisitedIn = function _sanitizeUnvisitedIn(container, inShadow, root, original) {
+			const iterator = _createNodeIterator(container);
+			let node;
+			while (node = iterator.nextNode()) {
+				if (!setHas(original, node) || setHas(IN_PLACE_VISITED, node)) continue;
+				if (inShadow) _executeHooks(hooks.uponSanitizeShadowNode, node, null);
+				_sanitizeNode(node, root);
+			}
+		};
+		/**
+		* Records that _sanitizeElements processed `node`. No-op outside IN_PLACE.
+		*
+		* @param node the node being processed
+		*/
+		const _markVisited = function _markVisited(node) {
+			if (IN_PLACE_VISITED) setAdd(IN_PLACE_VISITED, node);
+		};
+		/**
+		* Patch-linkage attributes (declarative partial updates): `patchsrc`
+		* always, `for` everywhere except on <label> and <output>. Gated on
+		* SAFE_FOR_XML. Shared by the IN_PLACE pre-pass and _isValidAttribute.
 		*
 		* @param lcName the transformCaseFunc'd attribute name
 		* @param lcTag the transformCaseFunc'd tag name of the carrying element
@@ -2057,17 +2110,26 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			if (lcName === "patchsrc") return true;
 			return lcName === "for" && lcTag !== "label" && lcTag !== "output";
 		};
+		/**
+		* IN_PLACE pre-pass: sever all patch linkage before the walk, so no patch
+		* can fire mid-walk into a part of the tree the walker already passed.
+		* Removes range markers (processing instructions, comments with markup)
+		* and strips linkage attributes. It cannot undo a patch that already fired.
+		*
+		* TODO: if the shipped feature can patch through `for` on <label>/<output>,
+		* drop that pair here too.
+		*
+		* @param root the in-place root to sweep
+		*/
 		const _neutralizePatchLinkage = function _neutralizePatchLinkage(root) {
 			if (!SAFE_FOR_XML) return;
-			const stack = [root];
-			while (stack.length > 0) {
-				const node = stack.pop();
+			_walkTree(root, (node) => {
 				const nodeType = _readNodeType(node);
 				if (nodeType === NODE_TYPE.processingInstruction || nodeType === NODE_TYPE.comment && regExpTest(COMMENT_MARKUP_PROBE, node.data)) {
 					try {
 						remove(node);
 					} catch (_) {}
-					continue;
+					return false;
 				}
 				if (nodeType === NODE_TYPE.element) {
 					const element = node;
@@ -2077,9 +2139,8 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 						if (element.hasAttribute && element.hasAttribute("for") && _isPatchLinkageAttribute("for", lcTag)) element.removeAttribute("for");
 					} catch (_) {}
 				}
-				const childNodes = getChildNodes(node);
-				if (childNodes) for (let i = childNodes.length - 1; i >= 0; --i) stack.push(childNodes[i]);
-			}
+				return true;
+			});
 		};
 		/**
 		* _initDocument
@@ -2092,7 +2153,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			let leadingWhitespace = null;
 			if (FORCE_BODY) dirty = "<remove></remove>" + dirty;
 			else {
-				const matches = stringMatch(dirty, /^[\r\n\t ]+/);
+				const matches = stringMatch(dirty, LEADING_WHITESPACE);
 				leadingWhitespace = matches && matches[0];
 			}
 			if (PARSER_MEDIA_TYPE === "application/xhtml+xml" && NAMESPACE === HTML_NAMESPACE) dirty = "<html xmlns=\"http://www.w3.org/1999/xhtml\"><head></head><body>" + dirty + "</body></html>";
@@ -2112,14 +2173,18 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return WHOLE_DOCUMENT ? doc.documentElement : body;
 		};
 		/**
-		* Creates a NodeIterator object that you can use to traverse filtered lists of nodes or elements in a document.
+		* Creates a NodeIterator over `root`. ownerDocument is read through the
+		* cached getter: a form child named "ownerDocument" shadows the direct
+		* read and would make createNodeIterator throw.
 		*
-		* @param root The root element or node to start traversing on.
+		* @param root The node to start traversing on.
+		* @param characterDataOnly whether to skip elements
 		* @return The created NodeIterator
 		*/
 		const _createNodeIterator = function _createNodeIterator(root) {
+			let characterDataOnly = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : false;
 			const doc = getOwnerDocument ? getOwnerDocument(root) : root.ownerDocument;
-			return createNodeIterator.call(doc || root, root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_COMMENT | NodeFilter.SHOW_TEXT | NodeFilter.SHOW_PROCESSING_INSTRUCTION | NodeFilter.SHOW_CDATA_SECTION, null);
+			return createNodeIterator.call(doc || root, root, (characterDataOnly ? 0 : NodeFilter.SHOW_ELEMENT) | NodeFilter.SHOW_COMMENT | NodeFilter.SHOW_TEXT | NodeFilter.SHOW_PROCESSING_INSTRUCTION | NodeFilter.SHOW_CDATA_SECTION, null);
 		};
 		/**
 		* Replace template expression syntax (mustache, ERB, template
@@ -2136,47 +2201,42 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return value;
 		};
 		/**
-		* Strip template-engine expressions ({{...}}, ${...}, <%...%>) from the
-		* character data of an element subtree. Used as the final safety net for
-		* SAFE_FOR_TEMPLATES on every DOM-returning code path so that expressions
-		* which only form after text-node normalization (e.g. fragments split across
-		* stripped elements) cannot survive into a template-evaluating framework.
-		*
-		* Walks text/comment/CDATA/processing-instruction nodes and mutates `.data`
-		* in place rather than round-tripping through innerHTML. This preserves
-		* descendant node references (important for IN_PLACE callers), avoids a
-		* serialize/reparse cycle, and reads literal character data — which means
-		* `<%...%>` in text content matches the ERB regex against its real bytes
-		* instead of the HTML-entity-escaped form innerHTML would produce.
-		*
-		* Attribute values are not visited here; SAFE_FOR_TEMPLATES handling for
-		* attributes is performed during the per-node `_sanitizeAttributes` pass.
+		* Strips template expressions from the character data under `node`,
+		* template contents included. Runs after the walk, since an expression can
+		* also form when a removed element leaves two text nodes adjacent. Works on
+		* the nodes rather than on markup, which keeps node references intact and
+		* sees `<%` unescaped. Attribute values are handled in _sanitizeAttributes.
 		*
 		* @param node The root element whose character data should be scrubbed.
 		*/
 		const _scrubTemplateExpressions2 = function _scrubTemplateExpressions(node) {
 			var _node$querySelectorAl;
-			node.normalize();
-			const doc = getOwnerDocument ? getOwnerDocument(node) : node.ownerDocument;
-			const walker = createNodeIterator.call(doc || node, node, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT | NodeFilter.SHOW_CDATA_SECTION | NodeFilter.SHOW_PROCESSING_INSTRUCTION, null);
-			let currentNode = walker.nextNode();
-			while (currentNode) {
-				currentNode.data = _stripTemplateExpressions(currentNode.data);
-				currentNode = walker.nextNode();
-			}
+			_scrubOwnCharacterData(node);
 			const templates = (_node$querySelectorAl = node.querySelectorAll) === null || _node$querySelectorAl === void 0 ? void 0 : _node$querySelectorAl.call(node, "template");
 			if (templates) arrayForEach(templates, (tmpl) => {
 				if (_isDocumentFragment(tmpl.content)) _scrubTemplateExpressions2(tmpl.content);
 			});
 		};
 		/**
-		* _isClobbered
+		* Normalizes `node` and strips template expressions from its own character
+		* data. Template contents and shadow roots are not entered, their own
+		* _sanitizeShadowDOM call scrubs them.
 		*
-		* Detect DOM-clobbering on HTMLFormElement nodes. Form is the only HTML
-		* interface with [LegacyOverrideBuiltIns]; a descendant element with a
-		* `name` attribute matching a prototype property shadows that property
-		* on direct reads. We use this check at the IN_PLACE entry-point and
-		* during attribute sanitization to refuse clobbered forms.
+		* @param node The root whose own character data should be scrubbed.
+		*/
+		const _scrubOwnCharacterData = function _scrubOwnCharacterData(node) {
+			node.normalize();
+			const walker = _createNodeIterator(node, true);
+			let currentNode = walker.nextNode();
+			while (currentNode) {
+				currentNode.data = _stripTemplateExpressions(currentNode.data);
+				currentNode = walker.nextNode();
+			}
+		};
+		/**
+		* Detects DOM clobbering on a form, the only element whose named children
+		* shadow its own properties. Each probe compares a direct read with what
+		* the property has to be.
 		*
 		* @param element element to check for clobbering attacks
 		* @return true if clobbered, false if safe
@@ -2188,42 +2248,26 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return typeof element.nodeName !== "string" || typeof element.textContent !== "string" || typeof element.removeChild !== "function" || element.attributes !== getAttributes(element) || typeof element.removeAttribute !== "function" || typeof element.removeAttributeNode !== "function" || typeof element.getAttributeNode !== "function" || typeof element.setAttribute !== "function" || typeof element.namespaceURI !== "string" || typeof element.insertBefore !== "function" || typeof element.hasChildNodes !== "function" || element.nodeType !== getNodeType(element) || element.childNodes !== getChildNodes(element);
 		};
 		/**
-		* Checks whether the given value is a DocumentFragment from any realm.
+		* Reads nodeType through the cached getter, so the result holds for nodes
+		* from any realm (GHSA-4w3q-35jp-p934) and cannot be clobbered.
 		*
-		* The realm-independent replacement reads `nodeType` through the cached
-		* Node.prototype getter and compares to the DOCUMENT_FRAGMENT_NODE
-		* constant (11). nodeType is a numeric value resolved from the node's
-		* internal slot, identical across realms for the same kind of node.
-		*
-		* @param value object to check
-		* @return true if value is a DocumentFragment-shaped node from any realm
+		* @param value anything
+		* @return the node type, or null if value is not a DOM node
 		*/
-		const _isDocumentFragment = function _isDocumentFragment(value) {
-			if (!getNodeType || typeof value !== "object" || value === null) return false;
+		const _nodeTypeOf = function _nodeTypeOf(value) {
+			if (!getNodeType || typeof value !== "object" || value === null) return null;
 			try {
-				return getNodeType(value) === NODE_TYPE.documentFragment;
+				const nodeType = getNodeType(value);
+				return typeof nodeType === "number" ? nodeType : null;
 			} catch (_) {
-				return false;
+				return null;
 			}
 		};
-		/**
-		* Checks whether the given object is a DOM node, including nodes that
-		* originate from a different window/realm (e.g. an iframe's
-		* contentDocument). The previous `value instanceof Node` check was
-		* realm-bound: nodes from a different window failed it, causing
-		* sanitize() to silently stringify them and reset IN_PLACE to false,
-		* returning the original node unsanitized. See GHSA-4w3q-35jp-p934.
-		*
-		* @param value object to check whether it's a DOM node
-		* @return true if value is a DOM node from any realm
-		*/
+		const _isDocumentFragment = function _isDocumentFragment(value) {
+			return _nodeTypeOf(value) === NODE_TYPE.documentFragment;
+		};
 		const _isNode = function _isNode(value) {
-			if (!getNodeType || typeof value !== "object" || value === null) return false;
-			try {
-				return typeof getNodeType(value) === "number";
-			} catch (_) {
-				return false;
-			}
+			return _nodeTypeOf(value) !== null;
 		};
 		function _executeHooks(hooks, currentNode, data) {
 			if (hooks.length === 0) return;
@@ -2239,13 +2283,14 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		*
 		* @param currentNode the node to inspect
 		* @param tagName the node's transformCaseFunc'd tag name
+		* @param nodeType the node's type, read through the cached getter
 		* @return true if the node must be removed
 		*/
-		const _isUnsafeNode = function _isUnsafeNode(currentNode, tagName) {
-			if (SAFE_FOR_XML && currentNode.hasChildNodes() && !_isNode(currentNode.firstElementChild) && regExpTest(ELEMENT_MARKUP_PROBE, currentNode.textContent) && regExpTest(ELEMENT_MARKUP_PROBE, currentNode.innerHTML)) return true;
-			if (SAFE_FOR_XML && currentNode.namespaceURI === HTML_NAMESPACE && LITERAL_TEXT_ELEMENTS[tagName] && (_isNode(currentNode.firstElementChild) || typeof currentNode.textContent === "string" && regExpTest(LITERAL_TEXT_CLOSE[tagName], currentNode.textContent))) return true;
-			if (currentNode.nodeType === NODE_TYPE.processingInstruction) return true;
-			if (SAFE_FOR_XML && currentNode.nodeType === NODE_TYPE.comment && regExpTest(COMMENT_MARKUP_PROBE, currentNode.data)) return true;
+		const _isUnsafeNode = function _isUnsafeNode(currentNode, tagName, nodeType) {
+			if (SAFE_FOR_XML && nodeType === NODE_TYPE.element && currentNode.hasChildNodes() && !_isNode(currentNode.firstElementChild) && regExpTest(ELEMENT_MARKUP_PROBE, currentNode.textContent) && regExpTest(ELEMENT_MARKUP_PROBE, currentNode.innerHTML)) return true;
+			if (SAFE_FOR_XML && LITERAL_TEXT_ELEMENTS[tagName] && nodeType === NODE_TYPE.element && _readNamespaceURI(currentNode) === HTML_NAMESPACE && (_isNode(currentNode.firstElementChild) || typeof currentNode.textContent === "string" && regExpTest(ELEMENT_MARKUP_PROBE, currentNode.textContent))) return true;
+			if (nodeType === NODE_TYPE.processingInstruction) return true;
+			if (SAFE_FOR_XML && nodeType === NODE_TYPE.comment && regExpTest(COMMENT_MARKUP_PROBE, currentNode.data)) return true;
 			return false;
 		};
 		/**
@@ -2269,17 +2314,9 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return false;
 		};
 		/**
-		* Handle a node whose tag is forbidden or not allowlisted: keep
-		* allowed custom elements (false return exits _sanitizeElements
-		* early - the namespace and fallback-tag removal checks are
-		* intentionally skipped for kept custom elements), else hoist
-		* content per KEEP_CONTENT and remove.
-		*
-		* A kept custom element is the ONLY case in which this function
-		* returns false, so the caller uses that return value to run the
-		* afterSanitizeElements hook on the kept element and keep the
-		* element-hook lifecycle consistent with normal allowlisted
-		* elements (GHSA-c2j3-45gr-mqc4).
+		* Handles a node whose tag is forbidden or not allowlisted: hoists its
+		* content per KEEP_CONTENT and removes it. The one exception is a custom
+		* element allowed via CUSTOM_ELEMENT_HANDLING, which is kept.
 		*
 		* @param currentNode the disallowed node
 		* @param tagName the node's transformCaseFunc'd tag name
@@ -2287,7 +2324,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		*/
 		const _sanitizeDisallowedNode = function _sanitizeDisallowedNode(currentNode, tagName, root) {
 			if (!FORBID_TAGS[tagName] && _isBasicCustomElement(tagName) && _matchesNameCheck(CUSTOM_ELEMENT_HANDLING.tagNameCheck, tagName)) return false;
-			if (KEEP_CONTENT && !FORBID_CONTENTS[tagName]) {
+			if (KEEP_CONTENT && !FORBID_CONTENTS[tagName] && !FORBID_CONTENTS[stringToLowerCase(tagName)]) {
 				const parentNode = getParentNode(currentNode);
 				const childNodes = getChildNodes(currentNode);
 				if (childNodes && parentNode) {
@@ -2302,11 +2339,9 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return true;
 		};
 		/**
-		* Fork a hook-mutable allowlist off its shared binding the first time a
-		* (possibly lazily-installed) uponSanitize* hook is about to see it, so the
-		* hook cannot widen the per-instance default or the setConfig binding by
-		* reference and leak past the call. Returns the set unchanged once it is
-		* already call-local, so repeated calls across elements are idempotent.
+		* Forks an allowlist off its shared binding (the instance default or the
+		* setConfig() capture) before a hook sees it, so a hook's widening stays
+		* within the call. A set that is already call-local is returned as is.
 		*
 		* @param hookList the uponSanitize* hook array for this event
 		* @param set the current ALLOWED_TAGS / ALLOWED_ATTR binding
@@ -2317,38 +2352,16 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		*/
 		const _forkSharedAllowlist = function _forkSharedAllowlist(hookList, set, defaultSet, setConfigSet) {
 			if (hookList.length === 0) return set;
-			return set === defaultSet || set === setConfigSet ? clone$5(set) : set;
+			return set === defaultSet || set === setConfigSet ? cloneSet(set) : set;
 		};
 		/**
-		* Shared guard for a node that a hook has detached from the walk tree,
-		* used after each element-hook site in _sanitizeElements. Detaching is a
-		* long-standing user pattern (issue #469; draw.io-style foreignObject
-		* filtering). Per the cached, unclobberable parentNode getter the node is
-		* genuinely out of the tree, so it can reach neither the serialized
-		* output nor an IN_PLACE live tree; treat it as removed and stop
-		* processing it. Without this guard, the unsafe-node / namespace checks
-		* would call _forceRemove on a parentless node and hit the REPORT-3
-		* fail-closed throw — which exists for nodes DOMPurify wants gone but
-		* *cannot* detach (clobbered / parentless roots), the opposite of a node
-		* that is already safely gone. The walk root is exempt: a detached
-		* IN_PLACE root is legitimate input and must still be fully sanitized,
-		* and a kill-decision on it must keep hitting the REPORT-3 throw.
-		*
-		* Nodes detached by hooks stay the hook's responsibility for placement:
-		* they are not recorded in DOMPurify.removed, so the post-walk IN_PLACE
-		* pass (which iterates DOMPurify.removed) does not reach them. But a
-		* hook-detached subtree can still hold a queued resource-event handler -
-		* e.g. an <img onload> that began loading when the caller built the live
-		* tree - which fires in page scope after sanitize returns even though the
-		* handler never reached the returned tree. That is the audit-5 F1 hazard,
-		* and the documented node.remove() hook pattern walks straight into it.
-		* So on the IN_PLACE path we neutralize the detached subtree inline,
-		* stripping its non-allow-listed attributes before returning, exactly as
-		* the post-walk pass does for _forceRemove'd subtrees.
+		* A hook may have detached the node it was called for. If so, treat it as
+		* removed and stop processing it; the walk root is exempt. On the IN_PLACE
+		* path the detached subtree is neutralized right away.
 		*
 		* @param currentNode the node a hook may have detached
 		* @param root the current walk root
-		* @return true if the node is detached and now handled, false otherwise
+		* @return true if the node was detached
 		*/
 		const _handleHookDetachedNode = function _handleHookDetachedNode(currentNode, root) {
 			if (currentNode === root || getParentNode(currentNode) !== null) return false;
@@ -2365,6 +2378,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		* @return true if node was killed, false if left alive
 		*/
 		const _sanitizeElements = function _sanitizeElements(currentNode, root) {
+			_markVisited(currentNode);
 			_executeHooks(hooks.beforeSanitizeElements, currentNode, null);
 			if (_handleHookDetachedNode(currentNode, root)) return true;
 			if (_isClobbered(currentNode)) {
@@ -2372,13 +2386,14 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				return true;
 			}
 			const tagName = transformCaseFunc(_readNodeName(currentNode));
+			const nodeType = _readNodeType(currentNode);
 			ALLOWED_TAGS = _forkSharedAllowlist(hooks.uponSanitizeElement, ALLOWED_TAGS, DEFAULT_ALLOWED_TAGS, SET_CONFIG_ALLOWED_TAGS);
 			_executeHooks(hooks.uponSanitizeElement, currentNode, {
 				tagName,
 				allowedTags: ALLOWED_TAGS
 			});
 			if (_handleHookDetachedNode(currentNode, root)) return true;
-			if (_isUnsafeNode(currentNode, tagName)) {
+			if (_isUnsafeNode(currentNode, tagName, nodeType)) {
 				_forceRemove(currentNode);
 				return true;
 			}
@@ -2390,7 +2405,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				}
 				return removed;
 			}
-			if (_readNodeType(currentNode) === NODE_TYPE.element && !_checkValidNamespace(currentNode)) {
+			if (nodeType === NODE_TYPE.element && !_checkValidNamespace(currentNode)) {
 				_forceRemove(currentNode);
 				return true;
 			}
@@ -2398,9 +2413,10 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				_forceRemove(currentNode);
 				return true;
 			}
-			if (SAFE_FOR_TEMPLATES && currentNode.nodeType === NODE_TYPE.text) {
-				const content = _stripTemplateExpressions(currentNode.textContent);
-				if (currentNode.textContent !== content) {
+			if (SAFE_FOR_TEMPLATES && nodeType === NODE_TYPE.text) {
+				const text = currentNode.textContent;
+				const content = _stripTemplateExpressions(text);
+				if (text !== content) {
 					arrayPush$2(DOMPurify.removed, { element: currentNode.cloneNode() });
 					currentNode.textContent = content;
 				}
@@ -2425,9 +2441,10 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			if (ALLOW_ARIA_ATTR && regExpTest(ARIA_ATTR$1, lcName)) return true;
 			if (!nameIsPermitted) return _isBasicCustomElement(lcTag) && _matchesNameCheck(CUSTOM_ELEMENT_HANDLING.tagNameCheck, lcTag) && _matchesNameCheck(CUSTOM_ELEMENT_HANDLING.attributeNameCheck, lcName, lcTag) || lcName === "is" && CUSTOM_ELEMENT_HANDLING.allowCustomizedBuiltInElements && _matchesNameCheck(CUSTOM_ELEMENT_HANDLING.tagNameCheck, value);
 			if (URI_SAFE_ATTRIBUTES[lcName]) return true;
-			if (regExpTest(IS_ALLOWED_URI$1, stringReplace(value, ATTR_WHITESPACE$1, ""))) return true;
+			const compactValue = stringReplace(value, ATTR_WHITESPACE$1, "");
+			if (regExpTest(IS_ALLOWED_URI$1, compactValue)) return true;
 			if ((lcName === "src" || lcName === "xlink:href" || lcName === "href") && lcTag !== "script" && stringIndexOf(value, "data:") === 0 && DATA_URI_TAGS[lcTag]) return true;
-			if (ALLOW_UNKNOWN_PROTOCOLS && !regExpTest(IS_SCRIPT_OR_DATA$1, stringReplace(value, ATTR_WHITESPACE$1, ""))) return true;
+			if (ALLOW_UNKNOWN_PROTOCOLS && !regExpTest(IS_SCRIPT_OR_DATA$1, compactValue)) return true;
 			return !value;
 		};
 		const RESERVED_CUSTOM_ELEMENT_NAMES = addToSet({}, [
@@ -2471,21 +2488,8 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return value;
 		};
 		/**
-		* Write a modified attribute value back onto the element. On
-		* success, re-probe for clobbering introduced by the new value and
-		* remove the element when found; otherwise, when this writeback is the
-		* recreate half of the SANITIZE_NAMED_PROPS remove-and-recreate, pop the
-		* removal entry that path recorded so it does not show as removed. On
-		* failure, remove the attribute instead.
-		*
-		* Returns true only on a clean write (the value was set and the new value
-		* introduced no clobbering). The caller uses that, together with its own
-		* knowledge of whether this attribute pushed a DOMPurify.removed record, to
-		* decide whether to pop that record. The pop must happen ONLY for the
-		* named-prop remove-and-recreate; popping on any other value change (trim,
-		* template scrubbing, Trusted Types) would consume an unrelated _forceRemove
-		* subtree-cleanup record and let that detached subtree keep a live event
-		* handler through the IN_PLACE neutralization pass (SO-001).
+		* Writes a changed attribute value back. If the new value clobbers, the
+		* element is removed; if the write fails, the attribute is.
 		*
 		* @param currentNode the element carrying the attribute
 		* @param name the attribute name as present on the element
@@ -2506,6 +2510,19 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				_removeAttribute(name, currentNode);
 				return false;
 			}
+		};
+		/**
+		* Value checks that apply before a hook can force-keep an attribute. Also
+		* used by isValidAttribute(), so it never approves a value that sanitize()
+		* would strip.
+		*
+		* @param name the attribute name as found on the node (case preserved)
+		* @param value the attribute value
+		* @returns true if the attribute must be removed because of its value
+		*/
+		const _isUnsafeAttributeValue = function _isUnsafeAttributeValue(name, value) {
+			if (SAFE_FOR_XML && regExpTest(ATTR_VALUE_BREAKOUT, value)) return true;
+			return stringToLowerCase(name) === "attributename" && stringIndexOf(value, "href") !== -1;
 		};
 		/**
 		* _sanitizeAttributes
@@ -2532,7 +2549,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				forceKeepAttr: void 0
 			};
 			let l = attributes.length;
-			const lcTag = transformCaseFunc(currentNode.nodeName);
+			const lcTag = transformCaseFunc(_readNodeName(currentNode));
 			while (l--) {
 				const attr = attributes[l];
 				const name = attr.name, namespaceURI = attr.namespaceURI, attrValue = attr.value;
@@ -2551,11 +2568,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 					value = SANITIZE_NAMED_PROPS_PREFIX + value;
 					recreatedNamedProp = true;
 				}
-				if (SAFE_FOR_XML && regExpTest(/((--!?|])>)|<\/(style|script|title|xmp|textarea|noscript|iframe|noembed|noframes)/i, value)) {
-					_removeAttribute(name, currentNode, attr);
-					continue;
-				}
-				if (lcName === "attributename" && stringMatch(value, "href")) {
+				if (_isUnsafeAttributeValue(name, value)) {
 					_removeAttribute(name, currentNode, attr);
 					continue;
 				}
@@ -2582,6 +2595,18 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			_handleHookDetachedNode(currentNode, root);
 		};
 		/**
+		* Sanitizes one node: the node itself, its attributes and, for a
+		* template, its content.
+		*
+		* @param node the node to sanitize
+		* @param root the current walk root
+		*/
+		const _sanitizeNode = function _sanitizeNode(node, root) {
+			_sanitizeElements(node, root);
+			_sanitizeAttributes(node, root);
+			if (_isDocumentFragment(node.content)) _sanitizeShadowDOM2(node.content);
+		};
+		/**
 		* _sanitizeShadowDOM
 		*
 		* @param fragment to iterate over recursively
@@ -2592,9 +2617,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			_executeHooks(hooks.beforeSanitizeShadowDOM, fragment, null);
 			while (shadowNode = shadowIterator.nextNode()) {
 				_executeHooks(hooks.uponSanitizeShadowNode, shadowNode, null);
-				_sanitizeElements(shadowNode, fragment);
-				_sanitizeAttributes(shadowNode, fragment);
-				if (_isDocumentFragment(shadowNode.content)) _sanitizeShadowDOM2(shadowNode.content);
+				_sanitizeNode(shadowNode, fragment);
 				if (_readNodeType(shadowNode) === NODE_TYPE.element) {
 					const innerSr = getShadowRoot(shadowNode);
 					if (_isDocumentFragment(innerSr)) {
@@ -2603,24 +2626,13 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 					}
 				}
 			}
+			if (SAFE_FOR_TEMPLATES) _scrubOwnCharacterData(fragment);
 			_executeHooks(hooks.afterSanitizeShadowDOM, fragment, null);
 		};
 		/**
-		* _sanitizeAttachedShadowRoots
-		*
-		* Walks `root` and feeds every attached shadow root we encounter into
-		* the existing _sanitizeShadowDOM pipeline. The default node iterator
-		* does not descend into shadow trees, so nodes inside an attached
-		* shadow root would otherwise be skipped entirely.
-		*
-		* Two real input paths put attached shadow roots in front of us:
-		*   1. IN_PLACE on a DOM node that already has shadow roots attached.
-		*   2. DOM-node input where importNode(dirty, true) deep-clones the
-		*      shadow root because it was created with `clonable: true`.
-		*
-		* This pass runs once, up front, so the main iteration loop (and the
-		* existing _sanitizeShadowDOM template-content recursion) stay
-		* untouched — string-input paths are not affected.
+		* Sanitizes every attached shadow root under `root`, since the node
+		* iterator does not enter shadow trees. Needed for IN_PLACE input and for
+		* DOM input whose clonable shadow roots were copied by importNode().
 		*
 		* @param root the subtree root to walk for attached shadow roots
 		*/
@@ -2681,10 +2693,10 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				ALLOWED_TAGS = SET_CONFIG_ALLOWED_TAGS;
 				ALLOWED_ATTR = SET_CONFIG_ALLOWED_ATTR;
 			} else _parseConfig(cfg);
-			if (hooks.uponSanitizeElement.length > 0 || hooks.uponSanitizeAttribute.length > 0) ALLOWED_TAGS = clone$5(ALLOWED_TAGS);
-			if (hooks.uponSanitizeAttribute.length > 0) ALLOWED_ATTR = clone$5(ALLOWED_ATTR);
 			DOMPurify.removed = [];
 			const inPlace = IN_PLACE && typeof dirty !== "string" && _isNode(dirty);
+			let inPlaceNodes = [];
+			const outerVisited = IN_PLACE_VISITED;
 			if (inPlace) {
 				_neutralizePatchLinkage(dirty);
 				const nn = _readNodeName(dirty);
@@ -2699,12 +2711,8 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 					_neutralizeRoot(dirty);
 					throw typeErrorCreate("root node is clobbered and cannot be sanitized in-place");
 				}
-				try {
-					_sanitizeAttachedShadowRoots(dirty);
-				} catch (error) {
-					_neutralizeRoot(dirty);
-					throw error;
-				}
+				inPlaceNodes = _collectLiveNodes(dirty);
+				IN_PLACE_VISITED = setCreate();
 			} else if (_isNode(dirty)) {
 				body = _initDocument("<!---->");
 				importedNode = body.ownerDocument.importNode(dirty, true);
@@ -2713,37 +2721,28 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				else body.appendChild(importedNode);
 				_sanitizeAttachedShadowRoots(body);
 			} else {
-				if (!RETURN_DOM && !SAFE_FOR_TEMPLATES && !WHOLE_DOCUMENT && dirty.indexOf("<") === -1) return trustedTypesPolicy && RETURN_TRUSTED_TYPE ? _createTrustedHTML(dirty) : dirty;
+				if (!RETURN_DOM && !SAFE_FOR_TEMPLATES && !WHOLE_DOCUMENT && dirty.indexOf("<") === -1) return _signOutput(dirty);
 				body = _initDocument(dirty);
 				if (!body) return RETURN_DOM ? null : RETURN_TRUSTED_TYPE ? emptyHTML : "";
 			}
 			if (body && FORCE_BODY) _forceRemove(body.firstChild);
 			const walkRoot = inPlace ? dirty : body;
 			try {
+				if (inPlace) _sanitizeAttachedShadowRoots(dirty);
 				const nodeIterator = _createNodeIterator(walkRoot);
-				while (currentNode = nodeIterator.nextNode()) {
-					_sanitizeElements(currentNode, walkRoot);
-					_sanitizeAttributes(currentNode, walkRoot);
-					if (_isDocumentFragment(currentNode.content)) _sanitizeShadowDOM2(currentNode.content);
-				}
+				while (currentNode = nodeIterator.nextNode()) _sanitizeNode(currentNode, walkRoot);
+				if (inPlace) _sanitizeUnvisitedNodes(dirty, inPlaceNodes);
 			} catch (error) {
 				if (inPlace) {
 					_neutralizeRoot(dirty);
-					arrayForEach(DOMPurify.removed, (entry) => {
-						if (entry.element) _neutralizeSubtree(entry.element);
-					});
+					_neutralizeDiscarded(dirty, inPlaceNodes);
 				}
 				throw error;
+			} finally {
+				IN_PLACE_VISITED = outerVisited;
 			}
 			if (inPlace) {
-				let rootWasRemoved = false;
-				arrayForEach(DOMPurify.removed, (entry) => {
-					if (entry.element) {
-						if (entry.element === dirty) rootWasRemoved = true;
-						_neutralizeSubtree(entry.element);
-					}
-				});
-				if (rootWasRemoved) throw typeErrorCreate("a node selected for removal could not be safely returned; refusing to sanitize in place");
+				if (_neutralizeDiscarded(dirty, inPlaceNodes)) throw typeErrorCreate("a node selected for removal could not be safely returned; refusing to sanitize in place");
 				if (SAFE_FOR_TEMPLATES) _scrubTemplateExpressions2(dirty);
 				return dirty;
 			}
@@ -2756,10 +2755,14 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				if (ALLOWED_ATTR.shadowroot || ALLOWED_ATTR.shadowrootmode) returnNode = importNode.call(originalDocument, returnNode, true);
 				return returnNode;
 			}
-			let serializedHTML = WHOLE_DOCUMENT ? body.outerHTML : body.innerHTML;
+			const serialize = () => WHOLE_DOCUMENT ? body.outerHTML : body.innerHTML;
+			let serializedHTML = serialize();
+			if (SAFE_FOR_TEMPLATES && regExpTest(TMPL_MARKER_SERIALIZED, serializedHTML)) {
+				_scrubOwnCharacterData(body);
+				serializedHTML = serialize();
+			}
 			if (WHOLE_DOCUMENT && ALLOWED_TAGS["!doctype"] && body.ownerDocument && body.ownerDocument.doctype && body.ownerDocument.doctype.name && regExpTest(DOCTYPE_NAME, body.ownerDocument.doctype.name)) serializedHTML = "<!DOCTYPE " + body.ownerDocument.doctype.name + ">\n" + serializedHTML;
-			if (SAFE_FOR_TEMPLATES) serializedHTML = _stripTemplateExpressions(serializedHTML);
-			return trustedTypesPolicy && RETURN_TRUSTED_TYPE ? _createTrustedHTML(serializedHTML) : serializedHTML;
+			return _signOutput(serializedHTML);
 		};
 		DOMPurify.setConfig = function() {
 			let cfg = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : {};
@@ -2780,6 +2783,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			if (!CONFIG) _parseConfig({});
 			const lcTag = transformCaseFunc(tag);
 			const lcName = transformCaseFunc(attr);
+			if (typeof value === "string" && (_isUnsafeAttributeValue(attr, value) || !ALLOW_SELF_CLOSE_IN_ATTR && regExpTest(SELF_CLOSING_TAG, value))) return false;
 			return _isValidAttribute(lcTag, lcName, value);
 		};
 		DOMPurify.addHook = function(entryPoint, hookFunction) {
@@ -2804,7 +2808,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 		return DOMPurify;
 	}
-	var entries, setPrototypeOf, isFrozen, getPrototypeOf, getOwnPropertyDescriptor, freeze, seal, create$2, _ref, apply$2, construct, arrayForEach, arrayLastIndexOf, arrayPop, arrayPush$2, arraySplice, arrayIsArray, stringToLowerCase, stringToString, stringMatch, stringReplace, stringIndexOf, stringTrim, numberToString, booleanToString, bigintToString, symbolToString$2, objectHasOwnProperty, objectToString$2, regExpTest, typeErrorCreate, html$1, svg$1, svgFilters, svgDisallowed, mathMl$1, mathMlDisallowed, text$1, html, svg, mathMl, xml, MUSTACHE_EXPR, ERB_EXPR, TMPLIT_EXPR, DATA_ATTR, ARIA_ATTR, IS_ALLOWED_URI, IS_SCRIPT_OR_DATA, ATTR_WHITESPACE, DOCTYPE_NAME, CUSTOM_ELEMENT, ELEMENT_MARKUP_PROBE, COMMENT_MARKUP_PROBE, FALLBACK_TAG_CLOSE, SELF_CLOSING_TAG, NODE_TYPE, LITERAL_TEXT_ELEMENT_NAMES, LITERAL_TEXT_ELEMENTS, LITERAL_TEXT_CLOSE, getGlobal, _createTrustedTypesPolicy, _createHooksMap, _resolveSetOption, _resolveObjectOption, purify_default;
+	var entries, objectKeys, setPrototypeOf, isFrozen, getPrototypeOf, getOwnPropertyDescriptor, freeze, seal, create$2, _ref, apply$2, construct, arrayForEach, arrayLastIndexOf, arrayPop, arrayPush$2, arraySlice, arraySplice, arrayIsArray, setCreate, setAdd, setHas, stringToLowerCase, stringToString, stringMatch, stringReplace, stringIndexOf, stringTrim, numberToString, booleanToString, bigintToString, symbolToString$2, objectHasOwnProperty, objectToString$2, regExpTestRaw, regExpTest, typeErrorCreate, html$1, svg$1, svgFilters, svgDisallowed, mathMl$1, mathMlDisallowed, text$1, html, svg, mathMl, xml, MUSTACHE_EXPR, ERB_EXPR, TMPLIT_EXPR, TMPL_MARKER_SERIALIZED, DATA_ATTR, ARIA_ATTR, IS_ALLOWED_URI, IS_SCRIPT_OR_DATA, ATTR_WHITESPACE, DOCTYPE_NAME, CUSTOM_ELEMENT, ELEMENT_MARKUP_PROBE, COMMENT_MARKUP_PROBE, FALLBACK_TAG_CLOSE, SELF_CLOSING_TAG, ATTR_VALUE_BREAKOUT, LEADING_WHITESPACE, NODE_TYPE, LITERAL_TEXT_ELEMENTS, getGlobal, _createTrustedTypesPolicy, _createHooksMap, _resolveSetOption, _resolveObjectOption, purify_default;
 	var init_purify_es = __esmMin((() => {
 		AsyncGenerator.prototype["function" == typeof Symbol && Symbol.asyncIterator || "@@asyncIterator"] = function() {
 			return this;
@@ -2816,6 +2820,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return this._invoke("return", e);
 		};
 		entries = Object.entries;
+		objectKeys = Object.keys;
 		setPrototypeOf = Object.setPrototypeOf;
 		isFrozen = Object.isFrozen;
 		getPrototypeOf = Object.getPrototypeOf;
@@ -2841,13 +2846,15 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return new Func(...args);
 		};
 		arrayForEach = unapply(Array.prototype.forEach);
-		Array.prototype.indexOf;
 		arrayLastIndexOf = unapply(Array.prototype.lastIndexOf);
 		arrayPop = unapply(Array.prototype.pop);
 		arrayPush$2 = unapply(Array.prototype.push);
-		Array.prototype.slice;
+		arraySlice = unapply(Array.prototype.slice);
 		arraySplice = unapply(Array.prototype.splice);
 		arrayIsArray = Array.isArray;
+		setCreate = unconstruct(Set);
+		setAdd = unapply(Set.prototype.add);
+		setHas = unapply(Set.prototype.has);
 		stringToLowerCase = unapply(String.prototype.toLowerCase);
 		stringToString = unapply(String.prototype.toString);
 		stringMatch = unapply(String.prototype.match);
@@ -2860,7 +2867,11 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		symbolToString$2 = typeof Symbol === "undefined" ? null : unapply(Symbol.prototype.toString);
 		objectHasOwnProperty = unapply(Object.prototype.hasOwnProperty);
 		objectToString$2 = unapply(Object.prototype.toString);
-		regExpTest = unapply(RegExp.prototype.test);
+		regExpTestRaw = RegExp.prototype.test;
+		regExpTest = function regExpTest(regExp, value) {
+			if (regExp instanceof RegExp) regExp.lastIndex = 0;
+			return apply$2(regExpTestRaw, regExp, [value]);
+		};
 		typeErrorCreate = unconstruct(TypeError);
 		html$1 = freeze([
 			"a",
@@ -2997,8 +3008,6 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			"defs",
 			"desc",
 			"ellipse",
-			"enterkeyhint",
-			"exportparts",
 			"filter",
 			"font",
 			"g",
@@ -3006,14 +3015,12 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			"glyphref",
 			"hkern",
 			"image",
-			"inputmode",
 			"line",
 			"lineargradient",
 			"marker",
 			"mask",
 			"metadata",
 			"mpath",
-			"part",
 			"path",
 			"pattern",
 			"polygon",
@@ -3513,6 +3520,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		MUSTACHE_EXPR = seal(/{{[\w\W]*|^[\w\W]*}}/g);
 		ERB_EXPR = seal(/<%[\w\W]*|^[\w\W]*%>/g);
 		TMPLIT_EXPR = seal(/\${[\w\W]*/g);
+		TMPL_MARKER_SERIALIZED = seal(/{{|}}|\${|<%|%>|&lt;%|%&gt;/);
 		DATA_ATTR = seal(/^data-[\-\w.\u00B7-\uFFFF]+$/);
 		ARIA_ATTR = seal(/^aria-[\-\w]+$/);
 		IS_ALLOWED_URI = seal(/^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|matrix):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i);
@@ -3524,21 +3532,17 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		COMMENT_MARKUP_PROBE = seal(/<[/\w]/g);
 		FALLBACK_TAG_CLOSE = seal(/<\/no(script|embed|frames)/i);
 		SELF_CLOSING_TAG = seal(/\/>/i);
+		ATTR_VALUE_BREAKOUT = seal(/((--!?|])>)|<\/(style|script|title|xmp|textarea|noscript|iframe|noembed|noframes)/i);
+		LEADING_WHITESPACE = seal(/^[\r\n\t ]+/);
 		NODE_TYPE = {
 			element: 1,
-			attribute: 2,
 			text: 3,
-			cdataSection: 4,
-			entityReference: 5,
-			entityNode: 6,
 			processingInstruction: 7,
 			comment: 8,
 			document: 9,
-			documentType: 10,
-			documentFragment: 11,
-			notation: 12
+			documentFragment: 11
 		};
-		LITERAL_TEXT_ELEMENT_NAMES = [
+		LITERAL_TEXT_ELEMENTS = freeze(addToSet({}, [
 			"style",
 			"script",
 			"xmp",
@@ -3547,15 +3551,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			"noframes",
 			"plaintext",
 			"noscript"
-		];
-		LITERAL_TEXT_ELEMENTS = freeze(addToSet({}, LITERAL_TEXT_ELEMENT_NAMES));
-		LITERAL_TEXT_CLOSE = function() {
-			const map = {};
-			arrayForEach(LITERAL_TEXT_ELEMENT_NAMES, (name) => {
-				map[name] = seal(new RegExp("</" + name + "(?=[\\t\\n\\f\\r />])", "i"));
-			});
-			return freeze(map);
-		}();
+		]));
 		getGlobal = function getGlobal() {
 			return typeof window === "undefined" ? null : window;
 		};
@@ -3593,11 +3589,11 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			};
 		};
 		_resolveSetOption = function _resolveSetOption(cfg, key, fallback, options) {
-			return objectHasOwnProperty(cfg, key) && arrayIsArray(cfg[key]) ? addToSet(options.base ? clone$5(options.base) : {}, cfg[key], options.transform) : fallback;
+			return objectHasOwnProperty(cfg, key) && arrayIsArray(cfg[key]) ? addToSet(options.base ? cloneSet(options.base) : {}, cfg[key], options.transform) : fallback;
 		};
-		_resolveObjectOption = function _resolveObjectOption(cfg, key, makeFallback) {
+		_resolveObjectOption = function _resolveObjectOption(cfg, key, fallback) {
 			const value = objectHasOwnProperty(cfg, key) ? cfg[key] : void 0;
-			return value && typeof value === "object" ? clone$5(value) : makeFallback();
+			return value && typeof value === "object" ? clone$4(value) : fallback;
 		};
 		purify_default = createDOMPurify();
 	}));
@@ -35978,19 +35974,13 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/d3-array/src/ascending.js
+	//#region node_modules/d3-array/dist/d3-array.mjs
 	function ascending$2(a, b) {
 		return a == null || b == null ? NaN : a < b ? -1 : a > b ? 1 : a >= b ? 0 : NaN;
 	}
-	var init_ascending = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-array/src/descending.js
-	function descending$1(a, b) {
+	function descending$2(a, b) {
 		return a == null || b == null ? NaN : b < a ? -1 : b > a ? 1 : b >= a ? 0 : NaN;
 	}
-	var init_descending$1 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-array/src/bisector.js
 	function bisector(f) {
 		let compare1, compare2, delta;
 		if (f.length !== 2) {
@@ -35998,7 +35988,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			compare2 = (d, x) => ascending$2(f(d), x);
 			delta = (d, x) => f(d) - x;
 		} else {
-			compare1 = f === ascending$2 || f === descending$1 ? f : zero$1;
+			compare1 = f === ascending$2 || f === descending$2 ? f : zero$1;
 			compare2 = f;
 			delta = f;
 		}
@@ -36037,27 +36027,9 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	function zero$1() {
 		return 0;
 	}
-	var init_bisector = __esmMin((() => {
-		init_ascending();
-		init_descending$1();
-	}));
-	//#endregion
-	//#region node_modules/d3-array/src/number.js
 	function number$5(x) {
 		return x === null ? NaN : +x;
 	}
-	var init_number$2 = __esmMin((() => {})), ascendingBisect, bisectRight;
-	var init_bisect = __esmMin((() => {
-		init_ascending();
-		init_bisector();
-		init_number$2();
-		ascendingBisect = bisector(ascending$2);
-		bisectRight = ascendingBisect.right;
-		ascendingBisect.left;
-		bisector(number$5).center;
-	}));
-	//#endregion
-	//#region node_modules/internmap/src/index.js
 	function intern_get({ _intern, _key }, value) {
 		const key = _key(value);
 		return _intern.has(key) ? _intern.get(key) : value;
@@ -36079,33 +36051,6 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	function keyof(value) {
 		return value !== null && typeof value === "object" ? value.valueOf() : value;
 	}
-	var InternMap;
-	var init_src$31 = __esmMin((() => {
-		InternMap = class extends Map {
-			constructor(entries, key = keyof) {
-				super();
-				Object.defineProperties(this, {
-					_intern: { value: /* @__PURE__ */ new Map() },
-					_key: { value: key }
-				});
-				if (entries != null) for (const [key, value] of entries) this.set(key, value);
-			}
-			get(key) {
-				return super.get(intern_get(this, key));
-			}
-			has(key) {
-				return super.has(intern_get(this, key));
-			}
-			set(key, value) {
-				return super.set(intern_set(this, key), value);
-			}
-			delete(key) {
-				return super.delete(intern_delete(this, key));
-			}
-		};
-	}));
-	//#endregion
-	//#region node_modules/d3-array/src/ticks.js
 	function tickSpec(start, stop, count) {
 		const step = (stop - start) / Math.max(0, count), power = Math.floor(Math.log10(step)), error = step / Math.pow(10, power), factor = error >= e10 ? 10 : error >= e5 ? 5 : error >= e2 ? 2 : 1;
 		let i1, i2, inc;
@@ -36153,14 +36098,6 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		const reverse = stop < start, inc = reverse ? tickIncrement(stop, start, count) : tickIncrement(start, stop, count);
 		return (reverse ? -1 : 1) * (inc < 0 ? 1 / -inc : inc);
 	}
-	var e10, e5, e2;
-	var init_ticks$1 = __esmMin((() => {
-		e10 = Math.sqrt(50);
-		e5 = Math.sqrt(10);
-		e2 = Math.sqrt(2);
-	}));
-	//#endregion
-	//#region node_modules/d3-array/src/max.js
 	function max$4(values, valueof) {
 		let max;
 		if (valueof === void 0) {
@@ -36171,9 +36108,6 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		}
 		return max;
 	}
-	var init_max$1 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-array/src/min.js
 	function min$5(values, valueof) {
 		let min;
 		if (valueof === void 0) {
@@ -36184,38 +36118,50 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		}
 		return min;
 	}
-	var init_min$1 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-array/src/range.js
 	function range$1(start, stop, step) {
 		start = +start, stop = +stop, step = (n = arguments.length) < 2 ? (stop = start, start = 0, 1) : n < 3 ? 1 : +step;
 		var i = -1, n = Math.max(0, Math.ceil((stop - start) / step)) | 0, range = new Array(n);
 		while (++i < n) range[i] = start + i * step;
 		return range;
 	}
-	var init_range$1 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-array/src/index.js
-	var init_src$30 = __esmMin((() => {
-		init_bisect();
-		init_ascending();
-		init_bisector();
-		init_descending$1();
-		init_src$31();
-		init_ticks$1();
-		init_max$1();
-		init_min$1();
-		init_number$2();
-		init_range$1();
+	var ascendingBisect, bisectRight, InternMap, e10, e5, e2;
+	var init_d3_array = __esmMin((() => {
+		ascendingBisect = bisector(ascending$2);
+		bisectRight = ascendingBisect.right;
+		ascendingBisect.left;
+		bisector(number$5).center;
+		InternMap = class extends Map {
+			constructor(entries, key = keyof) {
+				super();
+				Object.defineProperties(this, {
+					_intern: { value: /* @__PURE__ */ new Map() },
+					_key: { value: key }
+				});
+				if (entries != null) for (const [key, value] of entries) this.set(key, value);
+			}
+			get(key) {
+				return super.get(intern_get(this, key));
+			}
+			has(key) {
+				return super.has(intern_get(this, key));
+			}
+			set(key, value) {
+				return super.set(intern_set(this, key), value);
+			}
+			delete(key) {
+				return super.delete(intern_delete(this, key));
+			}
+		};
+		Array.prototype.slice;
+		e10 = Math.sqrt(50);
+		e5 = Math.sqrt(10);
+		e2 = Math.sqrt(2);
 	}));
 	//#endregion
-	//#region node_modules/d3-axis/src/identity.js
-	function identity_default$3(x) {
+	//#region node_modules/d3-axis/dist/d3-axis.mjs
+	function identity$8(x) {
 		return x;
 	}
-	var init_identity$3 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-axis/src/axis.js
 	function translateX(x) {
 		return "translate(" + x + ",0)";
 	}
@@ -36236,7 +36182,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	function axis(orient, scale) {
 		var tickArguments = [], tickValues = null, tickFormat = null, tickSizeInner = 6, tickSizeOuter = 6, tickPadding = 3, offset = typeof window !== "undefined" && window.devicePixelRatio > 1 ? 0 : .5, k = orient === top || orient === left ? -1 : 1, x = orient === left || orient === right ? "x" : "y", transform = orient === top || orient === bottom ? translateX : translateY;
 		function axis(context) {
-			var values = tickValues == null ? scale.ticks ? scale.ticks.apply(scale, tickArguments) : scale.domain() : tickValues, format = tickFormat == null ? scale.tickFormat ? scale.tickFormat.apply(scale, tickArguments) : identity_default$3 : tickFormat, spacing = Math.max(tickSizeInner, 0) + tickPadding, range = scale.range(), range0 = +range[0] + offset, range1 = +range[range.length - 1] + offset, position = (scale.bandwidth ? center : number$4)(scale.copy(), offset), selection = context.selection ? context.selection() : context, path = selection.selectAll(".domain").data([null]), tick = selection.selectAll(".tick").data(values, scale).order(), tickExit = tick.exit(), tickEnter = tick.enter().append("g").attr("class", "tick"), line = tick.select("line"), text = tick.select("text");
+			var values = tickValues == null ? scale.ticks ? scale.ticks.apply(scale, tickArguments) : scale.domain() : tickValues, format = tickFormat == null ? scale.tickFormat ? scale.tickFormat.apply(scale, tickArguments) : identity$8 : tickFormat, spacing = Math.max(tickSizeInner, 0) + tickPadding, range = scale.range(), range0 = +range[0] + offset, range1 = +range[range.length - 1] + offset, position = (scale.bandwidth ? center : number$4)(scale.copy(), offset), selection = context.selection ? context.selection() : context, path = selection.selectAll(".domain").data([null]), tick = selection.selectAll(".tick").data(values, scale).order(), tickExit = tick.exit(), tickEnter = tick.enter().append("g").attr("class", "tick"), line = tick.select("line"), text = tick.select("text");
 			path = path.merge(path.enter().insert("path", ".tick").attr("class", "domain").attr("stroke", "currentColor"));
 			tick = tick.merge(tickEnter);
 			line = line.merge(tickEnter.append("line").attr("stroke", "currentColor").attr(x + "2", k * tickSizeInner));
@@ -36305,8 +36251,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		return axis(bottom, scale);
 	}
 	var top, right, bottom, left, epsilon$3;
-	var init_axis = __esmMin((() => {
-		init_identity$3();
+	var init_d3_axis = __esmMin((() => {
 		top = 1;
 		right = 2;
 		bottom = 3;
@@ -36314,12 +36259,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		epsilon$3 = 1e-6;
 	}));
 	//#endregion
-	//#region node_modules/d3-axis/src/index.js
-	var init_src$29 = __esmMin((() => {
-		init_axis();
-	}));
-	//#endregion
-	//#region node_modules/d3-dispatch/src/dispatch.js
+	//#region node_modules/d3-dispatch/dist/d3-dispatch.mjs
 	function dispatch$1() {
 		for (var i = 0, n = arguments.length, _ = {}, t; i < n; ++i) {
 			if (!(t = arguments[i] + "") || t in _ || /[\s.]/.test(t)) throw new Error("illegal type: " + t);
@@ -36346,7 +36286,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	function set$3(type, name, callback) {
 		for (var i = 0, n = type.length; i < n; ++i) if (type[i].name === name) {
-			type[i] = noop$5, type = type.slice(0, i).concat(type.slice(i + 1));
+			type[i] = noop$6, type = type.slice(0, i).concat(type.slice(i + 1));
 			break;
 		}
 		if (callback != null) type.push({
@@ -36355,9 +36295,9 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		});
 		return type;
 	}
-	var noop$5;
-	var init_dispatch$1 = __esmMin((() => {
-		noop$5 = { value: () => {} };
+	var noop$6;
+	var init_d3_dispatch = __esmMin((() => {
+		noop$6 = { value: () => {} };
 		Dispatch.prototype = dispatch$1.prototype = {
 			constructor: Dispatch,
 			on: function(typename, callback) {
@@ -36388,42 +36328,19 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/d3-dispatch/src/index.js
-	var init_src$28 = __esmMin((() => {
-		init_dispatch$1();
-	}));
-	//#endregion
-	//#region node_modules/d3-selection/src/namespaces.js
-	var xhtml, namespaces_default;
-	var init_namespaces = __esmMin((() => {
-		xhtml = "http://www.w3.org/1999/xhtml";
-		namespaces_default = {
-			svg: "http://www.w3.org/2000/svg",
-			xhtml,
-			xlink: "http://www.w3.org/1999/xlink",
-			xml: "http://www.w3.org/XML/1998/namespace",
-			xmlns: "http://www.w3.org/2000/xmlns/"
-		};
-	}));
-	//#endregion
-	//#region node_modules/d3-selection/src/namespace.js
-	function namespace_default(name) {
+	//#region node_modules/d3-selection/dist/d3-selection.mjs
+	function namespace(name) {
 		var prefix = name += "", i = prefix.indexOf(":");
 		if (i >= 0 && (prefix = name.slice(0, i)) !== "xmlns") name = name.slice(i + 1);
-		return namespaces_default.hasOwnProperty(prefix) ? {
-			space: namespaces_default[prefix],
+		return namespaces.hasOwnProperty(prefix) ? {
+			space: namespaces[prefix],
 			local: name
 		} : name;
 	}
-	var init_namespace = __esmMin((() => {
-		init_namespaces();
-	}));
-	//#endregion
-	//#region node_modules/d3-selection/src/creator.js
 	function creatorInherit(name) {
 		return function() {
 			var document = this.ownerDocument, uri = this.namespaceURI;
-			return uri === "http://www.w3.org/1999/xhtml" && document.documentElement.namespaceURI === "http://www.w3.org/1999/xhtml" ? document.createElement(name) : document.createElementNS(uri, name);
+			return uri === xhtml && document.documentElement.namespaceURI === xhtml ? document.createElement(name) : document.createElementNS(uri, name);
 		};
 	}
 	function creatorFixed(fullname) {
@@ -36431,78 +36348,50 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return this.ownerDocument.createElementNS(fullname.space, fullname.local);
 		};
 	}
-	function creator_default(name) {
-		var fullname = namespace_default(name);
+	function creator(name) {
+		var fullname = namespace(name);
 		return (fullname.local ? creatorFixed : creatorInherit)(fullname);
 	}
-	var init_creator = __esmMin((() => {
-		init_namespace();
-		init_namespaces();
-	}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selector.js
 	function none() {}
-	function selector_default(selector) {
+	function selector(selector) {
 		return selector == null ? none : function() {
 			return this.querySelector(selector);
 		};
 	}
-	var init_selector = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/select.js
-	function select_default$2(select) {
-		if (typeof select !== "function") select = selector_default(select);
+	function selection_select(select) {
+		if (typeof select !== "function") select = selector(select);
 		for (var groups = this._groups, m = groups.length, subgroups = new Array(m), j = 0; j < m; ++j) for (var group = groups[j], n = group.length, subgroup = subgroups[j] = new Array(n), node, subnode, i = 0; i < n; ++i) if ((node = group[i]) && (subnode = select.call(node, node.__data__, i, group))) {
 			if ("__data__" in node) subnode.__data__ = node.__data__;
 			subgroup[i] = subnode;
 		}
 		return new Selection$1(subgroups, this._parents);
 	}
-	var init_select$2 = __esmMin((() => {
-		init_selection$2();
-		init_selector();
-	}));
-	//#endregion
-	//#region node_modules/d3-selection/src/array.js
-	function array$1(x) {
+	function array$2(x) {
 		return x == null ? [] : Array.isArray(x) ? x : Array.from(x);
 	}
-	var init_array$2 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selectorAll.js
 	function empty() {
 		return [];
 	}
-	function selectorAll_default(selector) {
+	function selectorAll(selector) {
 		return selector == null ? empty : function() {
 			return this.querySelectorAll(selector);
 		};
 	}
-	var init_selectorAll = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/selectAll.js
 	function arrayAll(select) {
 		return function() {
-			return array$1(select.apply(this, arguments));
+			return array$2(select.apply(this, arguments));
 		};
 	}
-	function selectAll_default$1(select) {
+	function selection_selectAll(select) {
 		if (typeof select === "function") select = arrayAll(select);
-		else select = selectorAll_default(select);
+		else select = selectorAll(select);
 		for (var groups = this._groups, m = groups.length, subgroups = [], parents = [], j = 0; j < m; ++j) for (var group = groups[j], n = group.length, node, i = 0; i < n; ++i) if (node = group[i]) {
 			subgroups.push(select.call(node, node.__data__, i, group));
 			parents.push(node);
 		}
 		return new Selection$1(subgroups, parents);
 	}
-	var init_selectAll$1 = __esmMin((() => {
-		init_selection$2();
-		init_array$2();
-		init_selectorAll();
-	}));
-	//#endregion
-	//#region node_modules/d3-selection/src/matcher.js
-	function matcher_default(selector) {
+	function matcher(selector) {
 		return function() {
 			return this.matches(selector);
 		};
@@ -36512,9 +36401,6 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return node.matches(selector);
 		};
 	}
-	var init_matcher = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/selectChild.js
 	function childFind(match) {
 		return function() {
 			return find$1.call(this.children, match);
@@ -36523,16 +36409,9 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	function childFirst() {
 		return this.firstElementChild;
 	}
-	function selectChild_default(match) {
+	function selection_selectChild(match) {
 		return this.select(match == null ? childFirst : childFind(typeof match === "function" ? match : childMatcher(match)));
 	}
-	var find$1;
-	var init_selectChild = __esmMin((() => {
-		init_matcher();
-		find$1 = Array.prototype.find;
-	}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/selectChildren.js
 	function children() {
 		return Array.from(this.children);
 	}
@@ -36541,35 +36420,19 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return filter$2.call(this.children, match);
 		};
 	}
-	function selectChildren_default(match) {
+	function selection_selectChildren(match) {
 		return this.selectAll(match == null ? children : childrenFilter(typeof match === "function" ? match : childMatcher(match)));
 	}
-	var filter$2;
-	var init_selectChildren = __esmMin((() => {
-		init_matcher();
-		filter$2 = Array.prototype.filter;
-	}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/filter.js
-	function filter_default$2(match) {
-		if (typeof match !== "function") match = matcher_default(match);
+	function selection_filter(match) {
+		if (typeof match !== "function") match = matcher(match);
 		for (var groups = this._groups, m = groups.length, subgroups = new Array(m), j = 0; j < m; ++j) for (var group = groups[j], n = group.length, subgroup = subgroups[j] = [], node, i = 0; i < n; ++i) if ((node = group[i]) && match.call(node, node.__data__, i, group)) subgroup.push(node);
 		return new Selection$1(subgroups, this._parents);
 	}
-	var init_filter$2 = __esmMin((() => {
-		init_selection$2();
-		init_matcher();
-	}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/sparse.js
-	function sparse_default(update) {
+	function sparse(update) {
 		return new Array(update.length);
 	}
-	var init_sparse = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/enter.js
-	function enter_default() {
-		return new Selection$1(this._enter || this._groups.map(sparse_default), this._parents);
+	function selection_enter() {
+		return new Selection$1(this._enter || this._groups.map(sparse), this._parents);
 	}
 	function EnterNode(parent, datum) {
 		this.ownerDocument = parent.ownerDocument;
@@ -36578,35 +36441,11 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		this._parent = parent;
 		this.__data__ = datum;
 	}
-	var init_enter = __esmMin((() => {
-		init_sparse();
-		init_selection$2();
-		EnterNode.prototype = {
-			constructor: EnterNode,
-			appendChild: function(child) {
-				return this._parent.insertBefore(child, this._next);
-			},
-			insertBefore: function(child, next) {
-				return this._parent.insertBefore(child, next);
-			},
-			querySelector: function(selector) {
-				return this._parent.querySelector(selector);
-			},
-			querySelectorAll: function(selector) {
-				return this._parent.querySelectorAll(selector);
-			}
-		};
-	}));
-	//#endregion
-	//#region node_modules/d3-selection/src/constant.js
-	function constant_default$4(x) {
+	function constant$5(x) {
 		return function() {
 			return x;
 		};
 	}
-	var init_constant$5 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/data.js
 	function bindIndex(parent, group, enter, update, exit, data) {
 		var i = 0, node, groupLength = group.length, dataLength = data.length;
 		for (; i < dataLength; ++i) if (node = group[i]) {
@@ -36635,10 +36474,10 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	function datum(node) {
 		return node.__data__;
 	}
-	function data_default(value, key) {
+	function selection_data(value, key) {
 		if (!arguments.length) return Array.from(this, datum);
 		var bind = key ? bindKey : bindIndex, parents = this._parents, groups = this._groups;
-		if (typeof value !== "function") value = constant_default$4(value);
+		if (typeof value !== "function") value = constant$5(value);
 		for (var m = groups.length, update = new Array(m), enter = new Array(m), exit = new Array(m), j = 0; j < m; ++j) {
 			var parent = parents[j], group = groups[j], groupLength = group.length, data = arraylike(value.call(parent, parent && parent.__data__, j, parents)), dataLength = data.length, enterGroup = enter[j] = new Array(dataLength), updateGroup = update[j] = new Array(dataLength);
 			bind(parent, group, enterGroup, updateGroup, exit[j] = new Array(groupLength), data, key);
@@ -36656,23 +36495,10 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	function arraylike(data) {
 		return typeof data === "object" && "length" in data ? data : Array.from(data);
 	}
-	var init_data = __esmMin((() => {
-		init_selection$2();
-		init_enter();
-		init_constant$5();
-	}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/exit.js
-	function exit_default() {
-		return new Selection$1(this._exit || this._groups.map(sparse_default), this._parents);
+	function selection_exit() {
+		return new Selection$1(this._exit || this._groups.map(sparse), this._parents);
 	}
-	var init_exit = __esmMin((() => {
-		init_sparse();
-		init_selection$2();
-	}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/join.js
-	function join_default(onenter, onupdate, onexit) {
+	function selection_join(onenter, onupdate, onexit) {
 		var enter = this.enter(), update = this, exit = this.exit();
 		if (typeof onenter === "function") {
 			enter = onenter(enter);
@@ -36686,31 +36512,20 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		else onexit(exit);
 		return enter && update ? enter.merge(update).order() : update;
 	}
-	var init_join = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/merge.js
-	function merge_default$1(context) {
+	function selection_merge(context) {
 		var selection = context.selection ? context.selection() : context;
 		for (var groups0 = this._groups, groups1 = selection._groups, m0 = groups0.length, m1 = groups1.length, m = Math.min(m0, m1), merges = new Array(m0), j = 0; j < m; ++j) for (var group0 = groups0[j], group1 = groups1[j], n = group0.length, merge = merges[j] = new Array(n), node, i = 0; i < n; ++i) if (node = group0[i] || group1[i]) merge[i] = node;
 		for (; j < m0; ++j) merges[j] = groups0[j];
 		return new Selection$1(merges, this._parents);
 	}
-	var init_merge$4 = __esmMin((() => {
-		init_selection$2();
-	}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/order.js
-	function order_default() {
+	function selection_order() {
 		for (var groups = this._groups, j = -1, m = groups.length; ++j < m;) for (var group = groups[j], i = group.length - 1, next = group[i], node; --i >= 0;) if (node = group[i]) {
 			if (next && node.compareDocumentPosition(next) ^ 4) next.parentNode.insertBefore(node, next);
 			next = node;
 		}
 		return this;
 	}
-	var init_order$1 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/sort.js
-	function sort_default$1(compare) {
+	function selection_sort(compare) {
 		if (!compare) compare = ascending$1;
 		function compareNode(a, b) {
 			return a && b ? compare(a.__data__, b.__data__) : !a - !b;
@@ -36724,57 +36539,34 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	function ascending$1(a, b) {
 		return a < b ? -1 : a > b ? 1 : a >= b ? 0 : NaN;
 	}
-	var init_sort$2 = __esmMin((() => {
-		init_selection$2();
-	}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/call.js
-	function call_default() {
+	function selection_call() {
 		var callback = arguments[0];
 		arguments[0] = this;
 		callback.apply(null, arguments);
 		return this;
 	}
-	var init_call = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/nodes.js
-	function nodes_default() {
+	function selection_nodes() {
 		return Array.from(this);
 	}
-	var init_nodes = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/node.js
-	function node_default() {
+	function selection_node() {
 		for (var groups = this._groups, j = 0, m = groups.length; j < m; ++j) for (var group = groups[j], i = 0, n = group.length; i < n; ++i) {
 			var node = group[i];
 			if (node) return node;
 		}
 		return null;
 	}
-	var init_node = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/size.js
-	function size_default() {
+	function selection_size() {
 		let size = 0;
 		for (const node of this) ++size;
 		return size;
 	}
-	var init_size$2 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/empty.js
-	function empty_default() {
+	function selection_empty() {
 		return !this.node();
 	}
-	var init_empty = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/each.js
-	function each_default$1(callback) {
+	function selection_each(callback) {
 		for (var groups = this._groups, j = 0, m = groups.length; j < m; ++j) for (var group = groups[j], i = 0, n = group.length, node; i < n; ++i) if (node = group[i]) callback.call(node, node.__data__, i, group);
 		return this;
 	}
-	var init_each$2 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/attr.js
 	function attrRemove$1(name) {
 		return function() {
 			this.removeAttribute(name);
@@ -36809,25 +36601,17 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			else this.setAttributeNS(fullname.space, fullname.local, v);
 		};
 	}
-	function attr_default$1(name, value) {
-		var fullname = namespace_default(name);
+	function selection_attr(name, value) {
+		var fullname = namespace(name);
 		if (arguments.length < 2) {
 			var node = this.node();
 			return fullname.local ? node.getAttributeNS(fullname.space, fullname.local) : node.getAttribute(fullname);
 		}
 		return this.each((value == null ? fullname.local ? attrRemoveNS$1 : attrRemove$1 : typeof value === "function" ? fullname.local ? attrFunctionNS$1 : attrFunction$1 : fullname.local ? attrConstantNS$1 : attrConstant$1)(fullname, value));
 	}
-	var init_attr$1 = __esmMin((() => {
-		init_namespace();
-	}));
-	//#endregion
-	//#region node_modules/d3-selection/src/window.js
-	function window_default(node) {
+	function defaultView(node) {
 		return node.ownerDocument && node.ownerDocument.defaultView || node.document && node || node.defaultView;
 	}
-	var init_window = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/style.js
 	function styleRemove$1(name) {
 		return function() {
 			this.style.removeProperty(name);
@@ -36845,17 +36629,12 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			else this.style.setProperty(name, v, priority);
 		};
 	}
-	function style_default$1(name, value, priority) {
+	function selection_style(name, value, priority) {
 		return arguments.length > 1 ? this.each((value == null ? styleRemove$1 : typeof value === "function" ? styleFunction$1 : styleConstant$1)(name, value, priority == null ? "" : priority)) : styleValue(this.node(), name);
 	}
 	function styleValue(node, name) {
-		return node.style.getPropertyValue(name) || window_default(node).getComputedStyle(node, null).getPropertyValue(name);
+		return node.style.getPropertyValue(name) || defaultView(node).getComputedStyle(node, null).getPropertyValue(name);
 	}
-	var init_style$1 = __esmMin((() => {
-		init_window();
-	}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/property.js
 	function propertyRemove(name) {
 		return function() {
 			delete this[name];
@@ -36873,12 +36652,9 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			else this[name] = v;
 		};
 	}
-	function property_default$1(name, value) {
+	function selection_property(name, value) {
 		return arguments.length > 1 ? this.each((value == null ? propertyRemove : typeof value === "function" ? propertyFunction : propertyConstant)(name, value)) : this.node()[name];
 	}
-	var init_property$1 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/classed.js
 	function classArray(string) {
 		return string.trim().split(/^|\s+/);
 	}
@@ -36912,7 +36688,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			(value.apply(this, arguments) ? classedAdd : classedRemove)(this, names);
 		};
 	}
-	function classed_default(name, value) {
+	function selection_classed(name, value) {
 		var names = classArray(name + "");
 		if (arguments.length < 2) {
 			var list = classList(this.node()), i = -1, n = names.length;
@@ -36921,28 +36697,6 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		}
 		return this.each((typeof value === "function" ? classedFunction : value ? classedTrue : classedFalse)(names, value));
 	}
-	var init_classed = __esmMin((() => {
-		ClassList.prototype = {
-			add: function(name) {
-				if (this._names.indexOf(name) < 0) {
-					this._names.push(name);
-					this._node.setAttribute("class", this._names.join(" "));
-				}
-			},
-			remove: function(name) {
-				var i = this._names.indexOf(name);
-				if (i >= 0) {
-					this._names.splice(i, 1);
-					this._node.setAttribute("class", this._names.join(" "));
-				}
-			},
-			contains: function(name) {
-				return this._names.indexOf(name) >= 0;
-			}
-		};
-	}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/text.js
 	function textRemove() {
 		this.textContent = "";
 	}
@@ -36957,12 +36711,9 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			this.textContent = v == null ? "" : v;
 		};
 	}
-	function text_default$1(value) {
+	function selection_text(value) {
 		return arguments.length ? this.each(value == null ? textRemove : (typeof value === "function" ? textFunction$1 : textConstant$1)(value)) : this.node().textContent;
 	}
-	var init_text$1 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/html.js
 	function htmlRemove() {
 		this.innerHTML = "";
 	}
@@ -36977,66 +36728,43 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			this.innerHTML = v == null ? "" : v;
 		};
 	}
-	function html_default(value) {
+	function selection_html(value) {
 		return arguments.length ? this.each(value == null ? htmlRemove : (typeof value === "function" ? htmlFunction : htmlConstant)(value)) : this.node().innerHTML;
 	}
-	var init_html$1 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/raise.js
 	function raise() {
 		if (this.nextSibling) this.parentNode.appendChild(this);
 	}
-	function raise_default() {
+	function selection_raise() {
 		return this.each(raise);
 	}
-	var init_raise = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/lower.js
 	function lower() {
 		if (this.previousSibling) this.parentNode.insertBefore(this, this.parentNode.firstChild);
 	}
-	function lower_default() {
+	function selection_lower() {
 		return this.each(lower);
 	}
-	var init_lower = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/append.js
-	function append_default(name) {
-		var create = typeof name === "function" ? name : creator_default(name);
+	function selection_append(name) {
+		var create = typeof name === "function" ? name : creator(name);
 		return this.select(function() {
 			return this.appendChild(create.apply(this, arguments));
 		});
 	}
-	var init_append = __esmMin((() => {
-		init_creator();
-	}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/insert.js
 	function constantNull() {
 		return null;
 	}
-	function insert_default(name, before) {
-		var create = typeof name === "function" ? name : creator_default(name), select = before == null ? constantNull : typeof before === "function" ? before : selector_default(before);
+	function selection_insert(name, before) {
+		var create = typeof name === "function" ? name : creator(name), select = before == null ? constantNull : typeof before === "function" ? before : selector(before);
 		return this.select(function() {
 			return this.insertBefore(create.apply(this, arguments), select.apply(this, arguments) || null);
 		});
 	}
-	var init_insert = __esmMin((() => {
-		init_creator();
-		init_selector();
-	}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/remove.js
 	function remove() {
 		var parent = this.parentNode;
 		if (parent) parent.removeChild(this);
 	}
-	function remove_default$1() {
+	function selection_remove() {
 		return this.each(remove);
 	}
-	var init_remove$1 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/clone.js
 	function selection_cloneShallow() {
 		var clone = this.cloneNode(false), parent = this.parentNode;
 		return parent ? parent.insertBefore(clone, this.nextSibling) : clone;
@@ -37045,18 +36773,12 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		var clone = this.cloneNode(true), parent = this.parentNode;
 		return parent ? parent.insertBefore(clone, this.nextSibling) : clone;
 	}
-	function clone_default$1(deep) {
+	function selection_clone(deep) {
 		return this.select(deep ? selection_cloneDeep : selection_cloneShallow);
 	}
-	var init_clone$2 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/datum.js
-	function datum_default(value) {
+	function selection_datum(value) {
 		return arguments.length ? this.property("__data__", value) : this.node().__data__;
 	}
-	var init_datum = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/on.js
 	function contextListener(listener) {
 		return function(event) {
 			listener.call(this, event, this.__data__);
@@ -37105,7 +36827,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			else on.push(o);
 		};
 	}
-	function on_default$1(typename, value, options) {
+	function selection_on(typename, value, options) {
 		var typenames = parseTypenames(typename + ""), i, n = typenames.length, t;
 		if (arguments.length < 2) {
 			var on = this.node().__on;
@@ -37118,11 +36840,8 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		for (i = 0; i < n; ++i) this.each(on(typenames[i], value, options));
 		return this;
 	}
-	var init_on$1 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/dispatch.js
 	function dispatchEvent(node, type, params) {
-		var window = window_default(node), event = window.CustomEvent;
+		var window = defaultView(node), event = window.CustomEvent;
 		if (typeof event === "function") event = new event(type, params);
 		else {
 			event = window.document.createEvent("Event");
@@ -37141,20 +36860,12 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return dispatchEvent(this, type, params.apply(this, arguments));
 		};
 	}
-	function dispatch_default(type, params) {
+	function selection_dispatch(type, params) {
 		return this.each((typeof params === "function" ? dispatchFunction : dispatchConstant)(type, params));
 	}
-	var init_dispatch = __esmMin((() => {
-		init_window();
-	}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/iterator.js
-	function* iterator_default$1() {
+	function* selection_iterator() {
 		for (var groups = this._groups, j = 0, m = groups.length; j < m; ++j) for (var group = groups[j], i = 0, n = group.length, node; i < n; ++i) if (node = group[i]) yield node;
 	}
-	var init_iterator$1 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-selection/src/selection/index.js
 	function Selection$1(groups, parents) {
 		this._groups = groups;
 		this._parents = parents;
@@ -37165,114 +36876,124 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	function selection_selection() {
 		return this;
 	}
-	var root$1;
-	var init_selection$2 = __esmMin((() => {
-		init_select$2();
-		init_selectAll$1();
-		init_selectChild();
-		init_selectChildren();
-		init_filter$2();
-		init_data();
-		init_enter();
-		init_exit();
-		init_join();
-		init_merge$4();
-		init_order$1();
-		init_sort$2();
-		init_call();
-		init_nodes();
-		init_node();
-		init_size$2();
-		init_empty();
-		init_each$2();
-		init_attr$1();
-		init_style$1();
-		init_property$1();
-		init_classed();
-		init_text$1();
-		init_html$1();
-		init_raise();
-		init_lower();
-		init_append();
-		init_insert();
-		init_remove$1();
-		init_clone$2();
-		init_datum();
-		init_on$1();
-		init_dispatch();
-		init_iterator$1();
+	function select(selector) {
+		return typeof selector === "string" ? new Selection$1([[document.querySelector(selector)]], [document.documentElement]) : new Selection$1([[selector]], root$1);
+	}
+	function local() {
+		return new Local();
+	}
+	function Local() {
+		this._ = "@" + (++nextId).toString(36);
+	}
+	var xhtml, namespaces, find$1, filter$2, root$1, nextId;
+	var init_d3_selection = __esmMin((() => {
+		xhtml = "http://www.w3.org/1999/xhtml";
+		namespaces = {
+			svg: "http://www.w3.org/2000/svg",
+			xhtml,
+			xlink: "http://www.w3.org/1999/xlink",
+			xml: "http://www.w3.org/XML/1998/namespace",
+			xmlns: "http://www.w3.org/2000/xmlns/"
+		};
+		find$1 = Array.prototype.find;
+		filter$2 = Array.prototype.filter;
+		EnterNode.prototype = {
+			constructor: EnterNode,
+			appendChild: function(child) {
+				return this._parent.insertBefore(child, this._next);
+			},
+			insertBefore: function(child, next) {
+				return this._parent.insertBefore(child, next);
+			},
+			querySelector: function(selector) {
+				return this._parent.querySelector(selector);
+			},
+			querySelectorAll: function(selector) {
+				return this._parent.querySelectorAll(selector);
+			}
+		};
+		ClassList.prototype = {
+			add: function(name) {
+				if (this._names.indexOf(name) < 0) {
+					this._names.push(name);
+					this._node.setAttribute("class", this._names.join(" "));
+				}
+			},
+			remove: function(name) {
+				var i = this._names.indexOf(name);
+				if (i >= 0) {
+					this._names.splice(i, 1);
+					this._node.setAttribute("class", this._names.join(" "));
+				}
+			},
+			contains: function(name) {
+				return this._names.indexOf(name) >= 0;
+			}
+		};
 		root$1 = [null];
 		Selection$1.prototype = selection.prototype = {
 			constructor: Selection$1,
-			select: select_default$2,
-			selectAll: selectAll_default$1,
-			selectChild: selectChild_default,
-			selectChildren: selectChildren_default,
-			filter: filter_default$2,
-			data: data_default,
-			enter: enter_default,
-			exit: exit_default,
-			join: join_default,
-			merge: merge_default$1,
+			select: selection_select,
+			selectAll: selection_selectAll,
+			selectChild: selection_selectChild,
+			selectChildren: selection_selectChildren,
+			filter: selection_filter,
+			data: selection_data,
+			enter: selection_enter,
+			exit: selection_exit,
+			join: selection_join,
+			merge: selection_merge,
 			selection: selection_selection,
-			order: order_default,
-			sort: sort_default$1,
-			call: call_default,
-			nodes: nodes_default,
-			node: node_default,
-			size: size_default,
-			empty: empty_default,
-			each: each_default$1,
-			attr: attr_default$1,
-			style: style_default$1,
-			property: property_default$1,
-			classed: classed_default,
-			text: text_default$1,
-			html: html_default,
-			raise: raise_default,
-			lower: lower_default,
-			append: append_default,
-			insert: insert_default,
-			remove: remove_default$1,
-			clone: clone_default$1,
-			datum: datum_default,
-			on: on_default$1,
-			dispatch: dispatch_default,
-			[Symbol.iterator]: iterator_default$1
+			order: selection_order,
+			sort: selection_sort,
+			call: selection_call,
+			nodes: selection_nodes,
+			node: selection_node,
+			size: selection_size,
+			empty: selection_empty,
+			each: selection_each,
+			attr: selection_attr,
+			style: selection_style,
+			property: selection_property,
+			classed: selection_classed,
+			text: selection_text,
+			html: selection_html,
+			raise: selection_raise,
+			lower: selection_lower,
+			append: selection_append,
+			insert: selection_insert,
+			remove: selection_remove,
+			clone: selection_clone,
+			datum: selection_datum,
+			on: selection_on,
+			dispatch: selection_dispatch,
+			[Symbol.iterator]: selection_iterator
+		};
+		nextId = 0;
+		Local.prototype = local.prototype = {
+			constructor: Local,
+			get: function(node) {
+				var id = this._;
+				while (!(id in node)) if (!(node = node.parentNode)) return;
+				return node[id];
+			},
+			set: function(node, value) {
+				return node[this._] = value;
+			},
+			remove: function(node) {
+				return this._ in node && delete node[this._];
+			},
+			toString: function() {
+				return this._;
+			}
 		};
 	}));
 	//#endregion
-	//#region node_modules/d3-selection/src/select.js
-	function select_default$1(selector) {
-		return typeof selector === "string" ? new Selection$1([[document.querySelector(selector)]], [document.documentElement]) : new Selection$1([[selector]], root$1);
-	}
-	var init_select$1 = __esmMin((() => {
-		init_selection$2();
-	}));
+	//#region node_modules/d3-drag/dist/d3-drag.mjs
+	var init_d3_drag = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/d3-selection/src/index.js
-	var init_src$27 = __esmMin((() => {
-		init_creator();
-		init_select$1();
-		init_matcher();
-		init_namespace();
-		init_namespaces();
-		init_array$2();
-		init_selection$2();
-		init_selector();
-		init_selectorAll();
-		init_style$1();
-		init_window();
-	}));
-	//#endregion
-	//#region node_modules/d3-drag/src/index.js
-	var init_src$26 = __esmMin((() => {
-		init_src$28();
-		init_src$27();
-	}));
-	//#endregion
-	//#region node_modules/d3-color/src/define.js
-	function define_default(constructor, factory, prototype) {
+	//#region node_modules/d3-color/dist/d3-color.mjs
+	function define$5(constructor, factory, prototype) {
 		constructor.prototype = factory.prototype = prototype;
 		prototype.constructor = constructor;
 	}
@@ -37281,9 +37002,6 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		for (var key in definition) prototype[key] = definition[key];
 		return prototype;
 	}
-	var init_define = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-color/src/color.js
 	function Color$1() {}
 	function color_formatHex() {
 		return this.rgb().formatHex();
@@ -37315,7 +37033,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		o = o.rgb();
 		return new Rgb(o.r, o.g, o.b, o.opacity);
 	}
-	function rgb(r, g, b, opacity) {
+	function rgb$1(r, g, b, opacity) {
 		return arguments.length === 1 ? rgbConvert(r) : new Rgb(r, g, b, opacity == null ? 1 : opacity);
 	}
 	function Rgb(r, g, b, opacity) {
@@ -37366,7 +37084,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		} else s = l > 0 && l < 1 ? 0 : h;
 		return new Hsl(h, s, l, o.opacity);
 	}
-	function hsl(h, s, l, opacity) {
+	function hsl$1(h, s, l, opacity) {
 		return arguments.length === 1 ? hslConvert(h) : new Hsl(h, s, l, opacity == null ? 1 : opacity);
 	}
 	function Hsl(h, s, l, opacity) {
@@ -37385,9 +37103,77 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	function hsl2rgb(h, m1, m2) {
 		return (h < 60 ? m1 + (m2 - m1) * h / 60 : h < 180 ? m2 : h < 240 ? m1 + (m2 - m1) * (240 - h) / 60 : m1) * 255;
 	}
-	var darker, brighter, reI, reN, reP, reHex, reRgbInteger, reRgbPercent, reRgbaInteger, reRgbaPercent, reHslPercent, reHslaPercent, named;
-	var init_color$1 = __esmMin((() => {
-		init_define();
+	function labConvert(o) {
+		if (o instanceof Lab) return new Lab(o.l, o.a, o.b, o.opacity);
+		if (o instanceof Hcl) return hcl2lab(o);
+		if (!(o instanceof Rgb)) o = rgbConvert(o);
+		var r = rgb2lrgb(o.r), g = rgb2lrgb(o.g), b = rgb2lrgb(o.b), y = xyz2lab((.2225045 * r + .7168786 * g + .0606169 * b) / Yn), x, z;
+		if (r === g && g === b) x = z = y;
+		else {
+			x = xyz2lab((.4360747 * r + .3850649 * g + .1430804 * b) / Xn);
+			z = xyz2lab((.0139322 * r + .0971045 * g + .7141733 * b) / Zn);
+		}
+		return new Lab(116 * y - 16, 500 * (x - y), 200 * (y - z), o.opacity);
+	}
+	function lab(l, a, b, opacity) {
+		return arguments.length === 1 ? labConvert(l) : new Lab(l, a, b, opacity == null ? 1 : opacity);
+	}
+	function Lab(l, a, b, opacity) {
+		this.l = +l;
+		this.a = +a;
+		this.b = +b;
+		this.opacity = +opacity;
+	}
+	function xyz2lab(t) {
+		return t > t3 ? Math.pow(t, 1 / 3) : t / t2 + t0$1;
+	}
+	function lab2xyz(t) {
+		return t > t1$1 ? t * t * t : t2 * (t - t0$1);
+	}
+	function lrgb2rgb(x) {
+		return 255 * (x <= .0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - .055);
+	}
+	function rgb2lrgb(x) {
+		return (x /= 255) <= .04045 ? x / 12.92 : Math.pow((x + .055) / 1.055, 2.4);
+	}
+	function hclConvert(o) {
+		if (o instanceof Hcl) return new Hcl(o.h, o.c, o.l, o.opacity);
+		if (!(o instanceof Lab)) o = labConvert(o);
+		if (o.a === 0 && o.b === 0) return new Hcl(NaN, 0 < o.l && o.l < 100 ? 0 : NaN, o.l, o.opacity);
+		var h = Math.atan2(o.b, o.a) * degrees$1;
+		return new Hcl(h < 0 ? h + 360 : h, Math.sqrt(o.a * o.a + o.b * o.b), o.l, o.opacity);
+	}
+	function hcl$1(h, c, l, opacity) {
+		return arguments.length === 1 ? hclConvert(h) : new Hcl(h, c, l, opacity == null ? 1 : opacity);
+	}
+	function Hcl(h, c, l, opacity) {
+		this.h = +h;
+		this.c = +c;
+		this.l = +l;
+		this.opacity = +opacity;
+	}
+	function hcl2lab(o) {
+		if (isNaN(o.h)) return new Lab(o.l, 0, 0, o.opacity);
+		var h = o.h * radians;
+		return new Lab(o.l, Math.cos(h) * o.c, Math.sin(h) * o.c, o.opacity);
+	}
+	function cubehelixConvert(o) {
+		if (o instanceof Cubehelix) return new Cubehelix(o.h, o.s, o.l, o.opacity);
+		if (!(o instanceof Rgb)) o = rgbConvert(o);
+		var r = o.r / 255, g = o.g / 255, b = o.b / 255, l = (BC_DA * b + ED * r - EB * g) / (BC_DA + ED - EB), bl = b - l, k = (E$1 * (g - l) - C$1 * bl) / D$1, s = Math.sqrt(k * k + bl * bl) / (E$1 * l * (1 - l)), h = s ? Math.atan2(k, bl) * degrees$1 - 120 : NaN;
+		return new Cubehelix(h < 0 ? h + 360 : h, s, l, o.opacity);
+	}
+	function cubehelix$2(h, s, l, opacity) {
+		return arguments.length === 1 ? cubehelixConvert(h) : new Cubehelix(h, s, l, opacity == null ? 1 : opacity);
+	}
+	function Cubehelix(h, s, l, opacity) {
+		this.h = +h;
+		this.s = +s;
+		this.l = +l;
+		this.opacity = +opacity;
+	}
+	var darker, brighter, reI, reN, reP, reHex, reRgbInteger, reRgbPercent, reRgbaInteger, reRgbaPercent, reHslPercent, reHslaPercent, named, radians, degrees$1, K$2, Xn, Yn, Zn, t0$1, t1$1, t2, t3, A, B$1, C$1, D$1, E$1, ED, EB, BC_DA;
+	var init_d3_color = __esmMin((() => {
 		darker = .7;
 		brighter = 1 / darker;
 		reI = "\\s*([+-]?\\d+)\\s*";
@@ -37550,7 +37336,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			yellow: 16776960,
 			yellowgreen: 10145074
 		};
-		define_default(Color$1, color, {
+		define$5(Color$1, color, {
 			copy(channels) {
 				return Object.assign(new this.constructor(), this, channels);
 			},
@@ -37564,7 +37350,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			formatRgb: color_formatRgb,
 			toString: color_formatRgb
 		});
-		define_default(Rgb, rgb, extend$1(Color$1, {
+		define$5(Rgb, rgb$1, extend$1(Color$1, {
 			brighter(k) {
 				k = k == null ? brighter : Math.pow(brighter, k);
 				return new Rgb(this.r * k, this.g * k, this.b * k, this.opacity);
@@ -37588,7 +37374,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			formatRgb: rgb_formatRgb,
 			toString: rgb_formatRgb
 		}));
-		define_default(Hsl, hsl, extend$1(Color$1, {
+		define$5(Hsl, hsl$1, extend$1(Color$1, {
 			brighter(k) {
 				k = k == null ? brighter : Math.pow(brighter, k);
 				return new Hsl(this.h, this.s, this.l * k, this.opacity);
@@ -37612,75 +37398,8 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				return `${a === 1 ? "hsl(" : "hsla("}${clamph(this.h)}, ${clampt(this.s) * 100}%, ${clampt(this.l) * 100}%${a === 1 ? ")" : `, ${a})`}`;
 			}
 		}));
-	}));
-	//#endregion
-	//#region node_modules/d3-color/src/math.js
-	var radians, degrees$1;
-	var init_math$1 = __esmMin((() => {
 		radians = Math.PI / 180;
 		degrees$1 = 180 / Math.PI;
-	}));
-	//#endregion
-	//#region node_modules/d3-color/src/lab.js
-	function labConvert(o) {
-		if (o instanceof Lab) return new Lab(o.l, o.a, o.b, o.opacity);
-		if (o instanceof Hcl) return hcl2lab(o);
-		if (!(o instanceof Rgb)) o = rgbConvert(o);
-		var r = rgb2lrgb(o.r), g = rgb2lrgb(o.g), b = rgb2lrgb(o.b), y = xyz2lab((.2225045 * r + .7168786 * g + .0606169 * b) / Yn), x, z;
-		if (r === g && g === b) x = z = y;
-		else {
-			x = xyz2lab((.4360747 * r + .3850649 * g + .1430804 * b) / Xn);
-			z = xyz2lab((.0139322 * r + .0971045 * g + .7141733 * b) / Zn);
-		}
-		return new Lab(116 * y - 16, 500 * (x - y), 200 * (y - z), o.opacity);
-	}
-	function lab(l, a, b, opacity) {
-		return arguments.length === 1 ? labConvert(l) : new Lab(l, a, b, opacity == null ? 1 : opacity);
-	}
-	function Lab(l, a, b, opacity) {
-		this.l = +l;
-		this.a = +a;
-		this.b = +b;
-		this.opacity = +opacity;
-	}
-	function xyz2lab(t) {
-		return t > t3 ? Math.pow(t, 1 / 3) : t / t2 + t0$1;
-	}
-	function lab2xyz(t) {
-		return t > t1$1 ? t * t * t : t2 * (t - t0$1);
-	}
-	function lrgb2rgb(x) {
-		return 255 * (x <= .0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - .055);
-	}
-	function rgb2lrgb(x) {
-		return (x /= 255) <= .04045 ? x / 12.92 : Math.pow((x + .055) / 1.055, 2.4);
-	}
-	function hclConvert(o) {
-		if (o instanceof Hcl) return new Hcl(o.h, o.c, o.l, o.opacity);
-		if (!(o instanceof Lab)) o = labConvert(o);
-		if (o.a === 0 && o.b === 0) return new Hcl(NaN, 0 < o.l && o.l < 100 ? 0 : NaN, o.l, o.opacity);
-		var h = Math.atan2(o.b, o.a) * degrees$1;
-		return new Hcl(h < 0 ? h + 360 : h, Math.sqrt(o.a * o.a + o.b * o.b), o.l, o.opacity);
-	}
-	function hcl$1(h, c, l, opacity) {
-		return arguments.length === 1 ? hclConvert(h) : new Hcl(h, c, l, opacity == null ? 1 : opacity);
-	}
-	function Hcl(h, c, l, opacity) {
-		this.h = +h;
-		this.c = +c;
-		this.l = +l;
-		this.opacity = +opacity;
-	}
-	function hcl2lab(o) {
-		if (isNaN(o.h)) return new Lab(o.l, 0, 0, o.opacity);
-		var h = o.h * radians;
-		return new Lab(o.l, Math.cos(h) * o.c, Math.sin(h) * o.c, o.opacity);
-	}
-	var K$2, Xn, Yn, Zn, t0$1, t1$1, t2, t3;
-	var init_lab = __esmMin((() => {
-		init_define();
-		init_color$1();
-		init_math$1();
 		K$2 = 18;
 		Xn = .96422;
 		Yn = 1;
@@ -37689,7 +37408,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		t1$1 = 6 / 29;
 		t2 = 3 * t1$1 * t1$1;
 		t3 = t1$1 * t1$1 * t1$1;
-		define_default(Lab, lab, extend$1(Color$1, {
+		define$5(Lab, lab, extend$1(Color$1, {
 			brighter(k) {
 				return new Lab(this.l + K$2 * (k == null ? 1 : k), this.a, this.b, this.opacity);
 			},
@@ -37704,7 +37423,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				return new Rgb(lrgb2rgb(3.1338561 * x - 1.6168667 * y - .4906146 * z), lrgb2rgb(-.9787684 * x + 1.9161415 * y + .033454 * z), lrgb2rgb(.0719453 * x - .2289914 * y + 1.4052427 * z), this.opacity);
 			}
 		}));
-		define_default(Hcl, hcl$1, extend$1(Color$1, {
+		define$5(Hcl, hcl$1, extend$1(Color$1, {
 			brighter(k) {
 				return new Hcl(this.h, this.c, this.l + K$2 * (k == null ? 1 : k), this.opacity);
 			},
@@ -37715,27 +37434,42 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				return hcl2lab(this).rgb();
 			}
 		}));
+		A = -.14861;
+		B$1 = 1.78277;
+		C$1 = -.29227;
+		D$1 = -.90649;
+		E$1 = 1.97294;
+		ED = E$1 * D$1;
+		EB = E$1 * B$1;
+		BC_DA = B$1 * C$1 - D$1 * A;
+		define$5(Cubehelix, cubehelix$2, extend$1(Color$1, {
+			brighter(k) {
+				k = k == null ? brighter : Math.pow(brighter, k);
+				return new Cubehelix(this.h, this.s, this.l * k, this.opacity);
+			},
+			darker(k) {
+				k = k == null ? darker : Math.pow(darker, k);
+				return new Cubehelix(this.h, this.s, this.l * k, this.opacity);
+			},
+			rgb() {
+				var h = isNaN(this.h) ? 0 : (this.h + 120) * radians, l = +this.l, a = isNaN(this.s) ? 0 : this.s * l * (1 - l), cosh = Math.cos(h), sinh = Math.sin(h);
+				return new Rgb(255 * (l + a * (A * cosh + B$1 * sinh)), 255 * (l + a * (C$1 * cosh + D$1 * sinh)), 255 * (l + a * (E$1 * cosh)), this.opacity);
+			}
+		}));
 	}));
 	//#endregion
-	//#region node_modules/d3-color/src/index.js
-	var init_src$25 = __esmMin((() => {
-		init_color$1();
-		init_lab();
-		init_define();
-		init_math$1();
-	}));
-	var init_basis$1 = __esmMin((() => {}));
-	var init_basisClosed$1 = __esmMin((() => {
-		init_basis$1();
-	}));
-	//#endregion
-	//#region node_modules/d3-interpolate/src/constant.js
-	var constant_default$3;
-	var init_constant$4 = __esmMin((() => {
-		constant_default$3 = (x) => () => x;
-	}));
-	//#endregion
-	//#region node_modules/d3-interpolate/src/color.js
+	//#region node_modules/d3-interpolate/dist/d3-interpolate.mjs
+	function basis$1(t1, v0, v1, v2, v3) {
+		var t2 = t1 * t1, t3 = t2 * t1;
+		return ((1 - 3 * t1 + 3 * t2 - t3) * v0 + (4 - 6 * t2 + 3 * t3) * v1 + (1 + 3 * t1 + 3 * t2 - 3 * t3) * v2 + t3 * v3) / 6;
+	}
+	function basis$1$1(values) {
+		var n = values.length - 1;
+		return function(t) {
+			var i = t <= 0 ? t = 0 : t >= 1 ? (t = 1, n - 1) : Math.floor(t * n), v1 = values[i], v2 = values[i + 1], v0 = i > 0 ? values[i - 1] : 2 * v1 - v2, v3 = i < n - 1 ? values[i + 2] : 2 * v2 - v1;
+			return basis$1((t - i / n) * n, v0, v1, v2, v3);
+		};
+	}
 	function linear$1(a, d) {
 		return function(t) {
 			return a + t * d;
@@ -37746,46 +37480,41 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return Math.pow(a + t * b, y);
 		};
 	}
-	function hue(a, b) {
+	function hue$1(a, b) {
 		var d = b - a;
-		return d ? linear$1(a, d > 180 || d < -180 ? d - 360 * Math.round(d / 360) : d) : constant_default$3(isNaN(a) ? b : a);
+		return d ? linear$1(a, d > 180 || d < -180 ? d - 360 * Math.round(d / 360) : d) : constant$4(isNaN(a) ? b : a);
 	}
 	function gamma(y) {
 		return (y = +y) === 1 ? nogamma : function(a, b) {
-			return b - a ? exponential(a, b, y) : constant_default$3(isNaN(a) ? b : a);
+			return b - a ? exponential(a, b, y) : constant$4(isNaN(a) ? b : a);
 		};
 	}
 	function nogamma(a, b) {
 		var d = b - a;
-		return d ? linear$1(a, d) : constant_default$3(isNaN(a) ? b : a);
+		return d ? linear$1(a, d) : constant$4(isNaN(a) ? b : a);
 	}
-	var init_color = __esmMin((() => {
-		init_constant$4();
-	})), rgb_default;
-	var init_rgb = __esmMin((() => {
-		init_src$25();
-		init_basis$1();
-		init_basisClosed$1();
-		init_color();
-		rgb_default = (function rgbGamma(y) {
-			var color = gamma(y);
-			function rgb$1(start, end) {
-				var r = color((start = rgb(start)).r, (end = rgb(end)).r), g = color(start.g, end.g), b = color(start.b, end.b), opacity = nogamma(start.opacity, end.opacity);
-				return function(t) {
-					start.r = r(t);
-					start.g = g(t);
-					start.b = b(t);
-					start.opacity = opacity(t);
-					return start + "";
-				};
+	function rgbSpline(spline) {
+		return function(colors) {
+			var n = colors.length, r = new Array(n), g = new Array(n), b = new Array(n), i = 0, color;
+			for (; i < n; ++i) {
+				color = rgb$1(colors[i]);
+				r[i] = color.r || 0;
+				g[i] = color.g || 0;
+				b[i] = color.b || 0;
 			}
-			rgb$1.gamma = rgbGamma;
-			return rgb$1;
-		})(1);
-	}));
-	//#endregion
-	//#region node_modules/d3-interpolate/src/numberArray.js
-	function numberArray_default(a, b) {
+			r = spline(r);
+			g = spline(g);
+			b = spline(b);
+			color.opacity = 1;
+			return function(t) {
+				color.r = r(t);
+				color.g = g(t);
+				color.b = b(t);
+				return color + "";
+			};
+		};
+	}
+	function numberArray(a, b) {
 		if (!b) b = [];
 		var n = a ? Math.min(b.length, a.length) : 0, c = b.slice(), i;
 		return function(t) {
@@ -37796,56 +37525,37 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	function isNumberArray(x) {
 		return ArrayBuffer.isView(x) && !(x instanceof DataView);
 	}
-	var init_numberArray = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-interpolate/src/array.js
 	function genericArray(a, b) {
 		var nb = b ? b.length : 0, na = a ? Math.min(nb, a.length) : 0, x = new Array(na), c = new Array(nb), i = 0;
-		for (; i < na; ++i) x[i] = value_default(a[i], b[i]);
+		for (; i < na; ++i) x[i] = value(a[i], b[i]);
 		for (; i < nb; ++i) c[i] = b[i];
 		return function(t) {
 			for (i = 0; i < na; ++i) c[i] = x[i](t);
 			return c;
 		};
 	}
-	var init_array$1 = __esmMin((() => {
-		init_value();
-	}));
-	//#endregion
-	//#region node_modules/d3-interpolate/src/date.js
-	function date_default(a, b) {
+	function date$1(a, b) {
 		var d = /* @__PURE__ */ new Date();
 		return a = +a, b = +b, function(t) {
 			return d.setTime(a * (1 - t) + b * t), d;
 		};
 	}
-	var init_date = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-interpolate/src/number.js
-	function number_default(a, b) {
+	function number$3(a, b) {
 		return a = +a, b = +b, function(t) {
 			return a * (1 - t) + b * t;
 		};
 	}
-	var init_number$1 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-interpolate/src/object.js
-	function object_default(a, b) {
+	function object$1(a, b) {
 		var i = {}, c = {}, k;
 		if (a === null || typeof a !== "object") a = {};
 		if (b === null || typeof b !== "object") b = {};
-		for (k in b) if (k in a) i[k] = value_default(a[k], b[k]);
+		for (k in b) if (k in a) i[k] = value(a[k], b[k]);
 		else c[k] = b[k];
 		return function(t) {
 			for (k in i) c[k] = i[k](t);
 			return c;
 		};
 	}
-	var init_object = __esmMin((() => {
-		init_value();
-	}));
-	//#endregion
-	//#region node_modules/d3-interpolate/src/string.js
 	function zero(b) {
 		return function() {
 			return b;
@@ -37856,7 +37566,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return b(t) + "";
 		};
 	}
-	function string_default(a, b) {
+	function string$1(a, b) {
 		var bi = reA.lastIndex = reB.lastIndex = 0, am, bm, bs, i = -1, s = [], q = [];
 		a = a + "", b = b + "";
 		while ((am = reA.exec(a)) && (bm = reB.exec(b))) {
@@ -37872,7 +37582,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				s[++i] = null;
 				q.push({
 					i,
-					x: number_default(am, bm)
+					x: number$3(am, bm)
 				});
 			}
 			bi = reB.lastIndex;
@@ -37887,40 +37597,16 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return s.join("");
 		});
 	}
-	var reA, reB;
-	var init_string = __esmMin((() => {
-		init_number$1();
-		reA = /[-+]?(?:\d+\.?\d*|\.?\d+)(?:[eE][-+]?\d+)?/g;
-		reB = new RegExp(reA.source, "g");
-	}));
-	//#endregion
-	//#region node_modules/d3-interpolate/src/value.js
-	function value_default(a, b) {
+	function value(a, b) {
 		var t = typeof b, c;
-		return b == null || t === "boolean" ? constant_default$3(b) : (t === "number" ? number_default : t === "string" ? (c = color(b)) ? (b = c, rgb_default) : string_default : b instanceof color ? rgb_default : b instanceof Date ? date_default : isNumberArray(b) ? numberArray_default : Array.isArray(b) ? genericArray : typeof b.valueOf !== "function" && typeof b.toString !== "function" || isNaN(b) ? object_default : number_default)(a, b);
+		return b == null || t === "boolean" ? constant$4(b) : (t === "number" ? number$3 : t === "string" ? (c = color(b)) ? (b = c, rgb) : string$1 : b instanceof color ? rgb : b instanceof Date ? date$1 : isNumberArray(b) ? numberArray : Array.isArray(b) ? genericArray : typeof b.valueOf !== "function" && typeof b.toString !== "function" || isNaN(b) ? object$1 : number$3)(a, b);
 	}
-	var init_value = __esmMin((() => {
-		init_src$25();
-		init_rgb();
-		init_array$1();
-		init_date();
-		init_number$1();
-		init_object();
-		init_string();
-		init_constant$4();
-		init_numberArray();
-	}));
-	//#endregion
-	//#region node_modules/d3-interpolate/src/round.js
-	function round_default$1(a, b) {
+	function round(a, b) {
 		return a = +a, b = +b, function(t) {
 			return Math.round(a * (1 - t) + b * t);
 		};
 	}
-	var init_round$1 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-interpolate/src/transform/decompose.js
-	function decompose_default(a, b, c, d, e, f) {
+	function decompose(a, b, c, d, e, f) {
 		var scaleX, scaleY, skewX;
 		if (scaleX = Math.sqrt(a * a + b * b)) a /= scaleX, b /= scaleX;
 		if (skewX = a * c + b * d) c -= a * skewX, d -= b * skewX;
@@ -37935,23 +37621,9 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			scaleY
 		};
 	}
-	var degrees, identity$6;
-	var init_decompose = __esmMin((() => {
-		degrees = 180 / Math.PI;
-		identity$6 = {
-			translateX: 0,
-			translateY: 0,
-			rotate: 0,
-			skewX: 0,
-			scaleX: 1,
-			scaleY: 1
-		};
-	}));
-	//#endregion
-	//#region node_modules/d3-interpolate/src/transform/parse.js
 	function parseCss(value) {
 		const m = new (typeof DOMMatrix === "function" ? DOMMatrix : WebKitCSSMatrix)(value + "");
-		return m.isIdentity ? identity$6 : decompose_default(m.a, m.b, m.c, m.d, m.e, m.f);
+		return m.isIdentity ? identity$6 : decompose(m.a, m.b, m.c, m.d, m.e, m.f);
 	}
 	function parseSvg(value) {
 		if (value == null) return identity$6;
@@ -37959,14 +37631,8 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		svgNode.setAttribute("transform", value);
 		if (!(value = svgNode.transform.baseVal.consolidate())) return identity$6;
 		value = value.matrix;
-		return decompose_default(value.a, value.b, value.c, value.d, value.e, value.f);
+		return decompose(value.a, value.b, value.c, value.d, value.e, value.f);
 	}
-	var svgNode;
-	var init_parse = __esmMin((() => {
-		init_decompose();
-	}));
-	//#endregion
-	//#region node_modules/d3-interpolate/src/transform/index.js
 	function interpolateTransform(parse, pxComma, pxParen, degParen) {
 		function pop(s) {
 			return s.length ? s.pop() + " " : "";
@@ -37976,10 +37642,10 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				var i = s.push("translate(", null, pxComma, null, pxParen);
 				q.push({
 					i: i - 4,
-					x: number_default(xa, xb)
+					x: number$3(xa, xb)
 				}, {
 					i: i - 2,
-					x: number_default(ya, yb)
+					x: number$3(ya, yb)
 				});
 			} else if (xb || yb) s.push("translate(" + xb + pxComma + yb + pxParen);
 		}
@@ -37989,14 +37655,14 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				else if (b - a > 180) a += 360;
 				q.push({
 					i: s.push(pop(s) + "rotate(", null, degParen) - 2,
-					x: number_default(a, b)
+					x: number$3(a, b)
 				});
 			} else if (b) s.push(pop(s) + "rotate(" + b + degParen);
 		}
 		function skewX(a, b, s, q) {
 			if (a !== b) q.push({
 				i: s.push(pop(s) + "skewX(", null, degParen) - 2,
-				x: number_default(a, b)
+				x: number$3(a, b)
 			});
 			else if (b) s.push(pop(s) + "skewX(" + b + degParen);
 		}
@@ -38005,10 +37671,10 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				var i = s.push(pop(s) + "scale(", null, ",", null, ")");
 				q.push({
 					i: i - 4,
-					x: number_default(xa, xb)
+					x: number$3(xa, xb)
 				}, {
 					i: i - 2,
-					x: number_default(ya, yb)
+					x: number$3(ya, yb)
 				});
 			} else if (xb !== 1 || yb !== 1) s.push(pop(s) + "scale(" + xb + "," + yb + ")");
 		}
@@ -38027,15 +37693,15 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			};
 		};
 	}
-	var interpolateTransformCss, interpolateTransformSvg;
-	var init_transform$1 = __esmMin((() => {
-		init_number$1();
-		init_parse();
-		interpolateTransformCss = interpolateTransform(parseCss, "px, ", "px)", "deg)");
-		interpolateTransformSvg = interpolateTransform(parseSvg, ", ", ")", ")");
-	}));
-	//#endregion
-	//#region node_modules/d3-interpolate/src/hcl.js
+	function cosh(x) {
+		return ((x = Math.exp(x)) + 1 / x) / 2;
+	}
+	function sinh(x) {
+		return ((x = Math.exp(x)) - 1 / x) / 2;
+	}
+	function tanh(x) {
+		return ((x = Math.exp(2 * x)) - 1) / (x + 1);
+	}
 	function hcl(hue) {
 		return function(start, end) {
 			var h = hue((start = hcl$1(start)).h, (end = hcl$1(end)).h), c = nogamma(start.c, end.c), l = nogamma(start.l, end.l), opacity = nogamma(start.opacity, end.opacity);
@@ -38048,33 +37714,96 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			};
 		};
 	}
-	var hcl_default;
-	var init_hcl = __esmMin((() => {
-		init_src$25();
-		init_color();
-		hcl_default = hcl(hue);
+	function cubehelix$1(hue) {
+		return (function cubehelixGamma(y) {
+			y = +y;
+			function cubehelix(start, end) {
+				var h = hue((start = cubehelix$2(start)).h, (end = cubehelix$2(end)).h), s = nogamma(start.s, end.s), l = nogamma(start.l, end.l), opacity = nogamma(start.opacity, end.opacity);
+				return function(t) {
+					start.h = h(t);
+					start.s = s(t);
+					start.l = l(Math.pow(t, y));
+					start.opacity = opacity(t);
+					return start + "";
+				};
+			}
+			cubehelix.gamma = cubehelixGamma;
+			return cubehelix;
+		})(1);
+	}
+	var constant$4, rgb, rgbBasis, reA, reB, degrees, identity$6, svgNode, interpolateTransformCss, interpolateTransformSvg, epsilon2, hcl_default, cubehelixLong;
+	var init_d3_interpolate = __esmMin((() => {
+		init_d3_color();
+		constant$4 = (x) => () => x;
+		rgb = (function rgbGamma(y) {
+			var color = gamma(y);
+			function rgb(start, end) {
+				var r = color((start = rgb$1(start)).r, (end = rgb$1(end)).r), g = color(start.g, end.g), b = color(start.b, end.b), opacity = nogamma(start.opacity, end.opacity);
+				return function(t) {
+					start.r = r(t);
+					start.g = g(t);
+					start.b = b(t);
+					start.opacity = opacity(t);
+					return start + "";
+				};
+			}
+			rgb.gamma = rgbGamma;
+			return rgb;
+		})(1);
+		rgbBasis = rgbSpline(basis$1$1);
+		reA = /[-+]?(?:\d+\.?\d*|\.?\d+)(?:[eE][-+]?\d+)?/g;
+		reB = new RegExp(reA.source, "g");
+		degrees = 180 / Math.PI;
+		identity$6 = {
+			translateX: 0,
+			translateY: 0,
+			rotate: 0,
+			skewX: 0,
+			scaleX: 1,
+			scaleY: 1
+		};
+		interpolateTransformCss = interpolateTransform(parseCss, "px, ", "px)", "deg)");
+		interpolateTransformSvg = interpolateTransform(parseSvg, ", ", ")", ")");
+		epsilon2 = 1e-12;
+		(function zoomRho(rho, rho2, rho4) {
+			function zoom(p0, p1) {
+				var ux0 = p0[0], uy0 = p0[1], w0 = p0[2], ux1 = p1[0], uy1 = p1[1], w1 = p1[2], dx = ux1 - ux0, dy = uy1 - uy0, d2 = dx * dx + dy * dy, i, S;
+				if (d2 < epsilon2) {
+					S = Math.log(w1 / w0) / rho;
+					i = function(t) {
+						return [
+							ux0 + t * dx,
+							uy0 + t * dy,
+							w0 * Math.exp(rho * t * S)
+						];
+					};
+				} else {
+					var d1 = Math.sqrt(d2), b0 = (w1 * w1 - w0 * w0 + rho4 * d2) / (2 * w0 * rho2 * d1), b1 = (w1 * w1 - w0 * w0 - rho4 * d2) / (2 * w1 * rho2 * d1), r0 = Math.log(Math.sqrt(b0 * b0 + 1) - b0);
+					S = (Math.log(Math.sqrt(b1 * b1 + 1) - b1) - r0) / rho;
+					i = function(t) {
+						var s = t * S, coshr0 = cosh(r0), u = w0 / (rho2 * d1) * (coshr0 * tanh(rho * s + r0) - sinh(r0));
+						return [
+							ux0 + u * dx,
+							uy0 + u * dy,
+							w0 * coshr0 / cosh(rho * s + r0)
+						];
+					};
+				}
+				i.duration = Math.abs(S) * 1e3 * rho / Math.SQRT2;
+				return i;
+			}
+			zoom.rho = function(_) {
+				var _1 = Math.max(.001, +_), _2 = _1 * _1;
+				return zoomRho(_1, _2, _2 * _2);
+			};
+			return zoom;
+		})(Math.SQRT2, 2, 4);
+		hcl_default = hcl(hue$1);
+		cubehelix$1(hue$1);
+		cubehelixLong = cubehelix$1(nogamma);
 	}));
 	//#endregion
-	//#region node_modules/d3-interpolate/src/index.js
-	var init_src$24 = __esmMin((() => {
-		init_value();
-		init_array$1();
-		init_basis$1();
-		init_basisClosed$1();
-		init_date();
-		init_color();
-		init_number$1();
-		init_numberArray();
-		init_object();
-		init_round$1();
-		init_string();
-		init_transform$1();
-		init_rgb();
-		init_src$25();
-		init_hcl();
-	}));
-	//#endregion
-	//#region node_modules/d3-timer/src/timer.js
+	//#region node_modules/d3-timer/dist/d3-timer.mjs
 	function now$2() {
 		return clockNow || (setFrame(clearNow), clockNow = clock.now() + clockSkew);
 	}
@@ -38101,7 +37830,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	function wake() {
 		clockNow = (clockLast = clock.now()) + clockSkew;
-		frame = timeout = 0;
+		frame = timeout$1 = 0;
 		try {
 			timerFlush();
 		} finally {
@@ -38128,20 +37857,29 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	function sleep(time) {
 		if (frame) return;
-		if (timeout) timeout = clearTimeout(timeout);
+		if (timeout$1) timeout$1 = clearTimeout(timeout$1);
 		if (time - clockNow > 24) {
-			if (time < Infinity) timeout = setTimeout(wake, time - clock.now() - clockSkew);
-			if (interval) interval = clearInterval(interval);
+			if (time < Infinity) timeout$1 = setTimeout(wake, Math.ceil(time - clock.now() - clockSkew) + 1);
+			if (interval$1) interval$1 = clearInterval(interval$1);
 		} else {
-			if (!interval) clockLast = clock.now(), interval = setInterval(poke, pokeDelay);
+			if (!interval$1) clockLast = clock.now(), interval$1 = setInterval(poke, pokeDelay);
 			frame = 1, setFrame(wake);
 		}
 	}
-	var frame, timeout, interval, pokeDelay, taskHead, taskTail, clockLast, clockNow, clockSkew, clock, setFrame;
-	var init_timer = __esmMin((() => {
+	function timeout(callback, delay, time) {
+		var t = new Timer();
+		delay = delay == null ? 0 : +delay;
+		t.restart((elapsed) => {
+			t.stop();
+			callback(elapsed + delay);
+		}, delay, time);
+		return t;
+	}
+	var frame, timeout$1, interval$1, pokeDelay, taskHead, taskTail, clockLast, clockNow, clockSkew, clock, setFrame;
+	var init_d3_timer = __esmMin((() => {
 		frame = 0;
-		timeout = 0;
-		interval = 0;
+		timeout$1 = 0;
+		interval$1 = 0;
 		pokeDelay = 1e3;
 		clockLast = 0;
 		clockNow = 0;
@@ -38174,28 +37912,115 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/d3-timer/src/timeout.js
-	function timeout_default(callback, delay, time) {
-		var t = new Timer();
-		delay = delay == null ? 0 : +delay;
-		t.restart((elapsed) => {
-			t.stop();
-			callback(elapsed + delay);
-		}, delay, time);
-		return t;
+	//#region node_modules/d3-ease/dist/d3-ease.mjs
+	function cubicInOut(t) {
+		return ((t *= 2) <= 1 ? t * t * t : (t -= 2) * t * t + 2) / 2;
 	}
-	var init_timeout = __esmMin((() => {
-		init_timer();
+	function tpmt(x) {
+		return (Math.pow(2, -10 * x) - .0009765625) * 1.0009775171065494;
+	}
+	var exponent$1, pi$2, b1, overshoot, tau$2, amplitude, period;
+	var init_d3_ease = __esmMin((() => {
+		exponent$1 = 3;
+		(function custom(e) {
+			e = +e;
+			function polyIn(t) {
+				return Math.pow(t, e);
+			}
+			polyIn.exponent = custom;
+			return polyIn;
+		})(exponent$1);
+		(function custom(e) {
+			e = +e;
+			function polyOut(t) {
+				return 1 - Math.pow(1 - t, e);
+			}
+			polyOut.exponent = custom;
+			return polyOut;
+		})(exponent$1);
+		(function custom(e) {
+			e = +e;
+			function polyInOut(t) {
+				return ((t *= 2) <= 1 ? Math.pow(t, e) : 2 - Math.pow(2 - t, e)) / 2;
+			}
+			polyInOut.exponent = custom;
+			return polyInOut;
+		})(exponent$1);
+		pi$2 = Math.PI;
+		pi$2 / 2;
+		b1 = 4 / 11;
+		1 / b1 / b1;
+		overshoot = 1.70158;
+		(function custom(s) {
+			s = +s;
+			function backIn(t) {
+				return (t = +t) * t * (s * (t - 1) + t);
+			}
+			backIn.overshoot = custom;
+			return backIn;
+		})(overshoot);
+		(function custom(s) {
+			s = +s;
+			function backOut(t) {
+				return --t * t * ((t + 1) * s + t) + 1;
+			}
+			backOut.overshoot = custom;
+			return backOut;
+		})(overshoot);
+		(function custom(s) {
+			s = +s;
+			function backInOut(t) {
+				return ((t *= 2) < 1 ? t * t * ((s + 1) * t - s) : (t -= 2) * t * ((s + 1) * t + s) + 2) / 2;
+			}
+			backInOut.overshoot = custom;
+			return backInOut;
+		})(overshoot);
+		tau$2 = 2 * Math.PI;
+		amplitude = 1;
+		period = .3;
+		(function custom(a, p) {
+			var s = Math.asin(1 / (a = Math.max(1, a))) * (p /= tau$2);
+			function elasticIn(t) {
+				return a * tpmt(- --t) * Math.sin((s - t) / p);
+			}
+			elasticIn.amplitude = function(a) {
+				return custom(a, p * tau$2);
+			};
+			elasticIn.period = function(p) {
+				return custom(a, p);
+			};
+			return elasticIn;
+		})(amplitude, period);
+		(function custom(a, p) {
+			var s = Math.asin(1 / (a = Math.max(1, a))) * (p /= tau$2);
+			function elasticOut(t) {
+				return 1 - a * tpmt(t = +t) * Math.sin((t + s) / p);
+			}
+			elasticOut.amplitude = function(a) {
+				return custom(a, p * tau$2);
+			};
+			elasticOut.period = function(p) {
+				return custom(a, p);
+			};
+			return elasticOut;
+		})(amplitude, period);
+		(function custom(a, p) {
+			var s = Math.asin(1 / (a = Math.max(1, a))) * (p /= tau$2);
+			function elasticInOut(t) {
+				return ((t = t * 2 - 1) < 0 ? a * tpmt(-t) * Math.sin((s - t) / p) : 2 - a * tpmt(t) * Math.sin((s + t) / p)) / 2;
+			}
+			elasticInOut.amplitude = function(a) {
+				return custom(a, p * tau$2);
+			};
+			elasticInOut.period = function(p) {
+				return custom(a, p);
+			};
+			return elasticInOut;
+		})(amplitude, period);
 	}));
 	//#endregion
-	//#region node_modules/d3-timer/src/index.js
-	var init_src$23 = __esmMin((() => {
-		init_timer();
-		init_timeout();
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/transition/schedule.js
-	function schedule_default(node, name, id, index, group, timing) {
+	//#region node_modules/d3-transition/dist/d3-transition.mjs
+	function schedule(node, name, id, index, group, timing) {
 		var schedules = node.__transition;
 		if (!schedules) node.__transition = {};
 		else if (id in schedules) return;
@@ -38210,17 +38035,17 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			duration: timing.duration,
 			ease: timing.ease,
 			timer: null,
-			state: 0
+			state: CREATED
 		});
 	}
 	function init$1(node, id) {
 		var schedule = get$3(node, id);
-		if (schedule.state > 0) throw new Error("too late; already scheduled");
+		if (schedule.state > CREATED) throw new Error("too late; already scheduled");
 		return schedule;
 	}
 	function set$2(node, id) {
 		var schedule = get$3(node, id);
-		if (schedule.state > 3) throw new Error("too late; already running");
+		if (schedule.state > STARTED) throw new Error("too late; already running");
 		return schedule;
 	}
 	function get$3(node, id) {
@@ -38233,70 +38058,61 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		schedules[id] = self;
 		self.timer = timer$1(schedule, 0, self.time);
 		function schedule(elapsed) {
-			self.state = 1;
+			self.state = SCHEDULED;
 			self.timer.restart(start, self.delay, self.time);
 			if (self.delay <= elapsed) start(elapsed - self.delay);
 		}
 		function start(elapsed) {
 			var i, j, n, o;
-			if (self.state !== 1) return stop();
+			if (self.state !== SCHEDULED) return stop();
 			for (i in schedules) {
 				o = schedules[i];
 				if (o.name !== self.name) continue;
-				if (o.state === 3) return timeout_default(start);
-				if (o.state === 4) {
-					o.state = 6;
+				if (o.state === STARTED) return timeout(start);
+				if (o.state === RUNNING) {
+					o.state = ENDED;
 					o.timer.stop();
 					o.on.call("interrupt", node, node.__data__, o.index, o.group);
 					delete schedules[i];
 				} else if (+i < id) {
-					o.state = 6;
+					o.state = ENDED;
 					o.timer.stop();
 					o.on.call("cancel", node, node.__data__, o.index, o.group);
 					delete schedules[i];
 				}
 			}
-			timeout_default(function() {
-				if (self.state === 3) {
-					self.state = 4;
+			timeout(function() {
+				if (self.state === STARTED) {
+					self.state = RUNNING;
 					self.timer.restart(tick, self.delay, self.time);
 					tick(elapsed);
 				}
 			});
-			self.state = 2;
+			self.state = STARTING;
 			self.on.call("start", node, node.__data__, self.index, self.group);
-			if (self.state !== 2) return;
-			self.state = 3;
+			if (self.state !== STARTING) return;
+			self.state = STARTED;
 			tween = new Array(n = self.tween.length);
 			for (i = 0, j = -1; i < n; ++i) if (o = self.tween[i].value.call(node, node.__data__, self.index, self.group)) tween[++j] = o;
 			tween.length = j + 1;
 		}
 		function tick(elapsed) {
-			var t = elapsed < self.duration ? self.ease.call(null, elapsed / self.duration) : (self.timer.restart(stop), self.state = 5, 1), i = -1, n = tween.length;
+			var t = elapsed < self.duration ? self.ease.call(null, elapsed / self.duration) : (self.timer.restart(stop), self.state = ENDING, 1), i = -1, n = tween.length;
 			while (++i < n) tween[i].call(node, t);
-			if (self.state === 5) {
+			if (self.state === ENDING) {
 				self.on.call("end", node, node.__data__, self.index, self.group);
 				stop();
 			}
 		}
 		function stop() {
-			self.state = 6;
+			self.state = ENDED;
 			self.timer.stop();
 			delete schedules[id];
 			for (var i in schedules) return;
 			delete node.__transition;
 		}
 	}
-	var emptyOn, emptyTween;
-	var init_schedule = __esmMin((() => {
-		init_src$28();
-		init_src$23();
-		emptyOn = dispatch$1("start", "end", "cancel", "interrupt");
-		emptyTween = [];
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/interrupt.js
-	function interrupt_default$1(node, name) {
+	function interrupt(node, name) {
 		var schedules = node.__transition, schedule, active, empty = true, i;
 		if (!schedules) return;
 		name = name == null ? null : name + "";
@@ -38305,29 +38121,19 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				empty = false;
 				continue;
 			}
-			active = schedule.state > 2 && schedule.state < 5;
-			schedule.state = 6;
+			active = schedule.state > STARTING && schedule.state < ENDING;
+			schedule.state = ENDED;
 			schedule.timer.stop();
 			schedule.on.call(active ? "interrupt" : "cancel", node, node.__data__, schedule.index, schedule.group);
 			delete schedules[i];
 		}
 		if (empty) delete node.__transition;
 	}
-	var init_interrupt$1 = __esmMin((() => {
-		init_schedule();
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/selection/interrupt.js
-	function interrupt_default(name) {
+	function selection_interrupt(name) {
 		return this.each(function() {
-			interrupt_default$1(this, name);
+			interrupt(this, name);
 		});
 	}
-	var init_interrupt = __esmMin((() => {
-		init_interrupt$1();
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/transition/tween.js
 	function tweenRemove(id, name) {
 		var tween0, tween1;
 		return function() {
@@ -38362,7 +38168,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			schedule.tween = tween1;
 		};
 	}
-	function tween_default(name, value) {
+	function transition_tween(name, value) {
 		var id = this._id;
 		name += "";
 		if (arguments.length < 2) {
@@ -38382,21 +38188,10 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return get$3(node, id).value[name];
 		};
 	}
-	var init_tween = __esmMin((() => {
-		init_schedule();
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/transition/interpolate.js
-	function interpolate_default(a, b) {
+	function interpolate(a, b) {
 		var c;
-		return (typeof b === "number" ? number_default : b instanceof color ? rgb_default : (c = color(b)) ? (b = c, rgb_default) : string_default)(a, b);
+		return (typeof b === "number" ? number$3 : b instanceof color ? rgb : (c = color(b)) ? (b = c, rgb) : string$1)(a, b);
 	}
-	var init_interpolate = __esmMin((() => {
-		init_src$25();
-		init_src$24();
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/transition/attr.js
 	function attrRemove(name) {
 		return function() {
 			this.removeAttribute(name);
@@ -38441,18 +38236,10 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return string0 === string1 ? null : string0 === string00 && string1 === string10 ? interpolate0 : (string10 = string1, interpolate0 = interpolate(string00 = string0, value1));
 		};
 	}
-	function attr_default(name, value) {
-		var fullname = namespace_default(name), i = fullname === "transform" ? interpolateTransformSvg : interpolate_default;
+	function transition_attr(name, value) {
+		var fullname = namespace(name), i = fullname === "transform" ? interpolateTransformSvg : interpolate;
 		return this.attrTween(name, typeof value === "function" ? (fullname.local ? attrFunctionNS : attrFunction)(fullname, i, tweenValue(this, "attr." + name, value)) : value == null ? (fullname.local ? attrRemoveNS : attrRemove)(fullname) : (fullname.local ? attrConstantNS : attrConstant)(fullname, i, value));
 	}
-	var init_attr = __esmMin((() => {
-		init_src$24();
-		init_src$27();
-		init_tween();
-		init_interpolate();
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/transition/attrTween.js
 	function attrInterpolate(name, i) {
 		return function(t) {
 			this.setAttribute(name, i.call(this, t));
@@ -38483,19 +38270,14 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		tween._value = value;
 		return tween;
 	}
-	function attrTween_default(name, value) {
+	function transition_attrTween(name, value) {
 		var key = "attr." + name;
 		if (arguments.length < 2) return (key = this.tween(key)) && key._value;
 		if (value == null) return this.tween(key, null);
 		if (typeof value !== "function") throw new Error();
-		var fullname = namespace_default(name);
+		var fullname = namespace(name);
 		return this.tween(key, (fullname.local ? attrTweenNS : attrTween)(fullname, value));
 	}
-	var init_attrTween = __esmMin((() => {
-		init_src$27();
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/transition/delay.js
 	function delayFunction(id, value) {
 		return function() {
 			init$1(this, id).delay = +value.apply(this, arguments);
@@ -38506,15 +38288,10 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			init$1(this, id).delay = value;
 		};
 	}
-	function delay_default(value) {
+	function transition_delay(value) {
 		var id = this._id;
 		return arguments.length ? this.each((typeof value === "function" ? delayFunction : delayConstant)(id, value)) : get$3(this.node(), id).delay;
 	}
-	var init_delay = __esmMin((() => {
-		init_schedule();
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/transition/duration.js
 	function durationFunction(id, value) {
 		return function() {
 			set$2(this, id).duration = +value.apply(this, arguments);
@@ -38525,30 +38302,20 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			set$2(this, id).duration = value;
 		};
 	}
-	function duration_default(value) {
+	function transition_duration(value) {
 		var id = this._id;
 		return arguments.length ? this.each((typeof value === "function" ? durationFunction : durationConstant)(id, value)) : get$3(this.node(), id).duration;
 	}
-	var init_duration$1 = __esmMin((() => {
-		init_schedule();
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/transition/ease.js
 	function easeConstant(id, value) {
 		if (typeof value !== "function") throw new Error();
 		return function() {
 			set$2(this, id).ease = value;
 		};
 	}
-	function ease_default(value) {
+	function transition_ease(value) {
 		var id = this._id;
 		return arguments.length ? this.each(easeConstant(id, value)) : get$3(this.node(), id).ease;
 	}
-	var init_ease = __esmMin((() => {
-		init_schedule();
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/transition/easeVarying.js
 	function easeVarying(id, value) {
 		return function() {
 			var v = value.apply(this, arguments);
@@ -38556,37 +38323,21 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			set$2(this, id).ease = v;
 		};
 	}
-	function easeVarying_default(value) {
+	function transition_easeVarying(value) {
 		if (typeof value !== "function") throw new Error();
 		return this.each(easeVarying(this._id, value));
 	}
-	var init_easeVarying = __esmMin((() => {
-		init_schedule();
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/transition/filter.js
-	function filter_default$1(match) {
-		if (typeof match !== "function") match = matcher_default(match);
+	function transition_filter(match) {
+		if (typeof match !== "function") match = matcher(match);
 		for (var groups = this._groups, m = groups.length, subgroups = new Array(m), j = 0; j < m; ++j) for (var group = groups[j], n = group.length, subgroup = subgroups[j] = [], node, i = 0; i < n; ++i) if ((node = group[i]) && match.call(node, node.__data__, i, group)) subgroup.push(node);
 		return new Transition$1(subgroups, this._parents, this._name, this._id);
 	}
-	var init_filter$1 = __esmMin((() => {
-		init_src$27();
-		init_transition$1();
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/transition/merge.js
-	function merge_default(transition) {
+	function transition_merge(transition) {
 		if (transition._id !== this._id) throw new Error();
 		for (var groups0 = this._groups, groups1 = transition._groups, m0 = groups0.length, m1 = groups1.length, m = Math.min(m0, m1), merges = new Array(m0), j = 0; j < m; ++j) for (var group0 = groups0[j], group1 = groups1[j], n = group0.length, merge = merges[j] = new Array(n), node, i = 0; i < n; ++i) if (node = group0[i] || group1[i]) merge[i] = node;
 		for (; j < m0; ++j) merges[j] = groups0[j];
 		return new Transition$1(merges, this._parents, this._name, this._id);
 	}
-	var init_merge$3 = __esmMin((() => {
-		init_transition$1();
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/transition/on.js
 	function start(name) {
 		return (name + "").trim().split(/^|\s+/).every(function(t) {
 			var i = t.indexOf(".");
@@ -38602,15 +38353,10 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			schedule.on = on1;
 		};
 	}
-	function on_default(name, listener) {
+	function transition_on(name, listener) {
 		var id = this._id;
 		return arguments.length < 2 ? get$3(this.node(), id).on.on(name) : this.each(onFunction(id, name, listener));
 	}
-	var init_on = __esmMin((() => {
-		init_schedule();
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/transition/remove.js
 	function removeFunction(id) {
 		return function() {
 			var parent = this.parentNode;
@@ -38618,56 +38364,32 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			if (parent) parent.removeChild(this);
 		};
 	}
-	function remove_default() {
+	function transition_remove() {
 		return this.on("end.remove", removeFunction(this._id));
 	}
-	var init_remove = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-transition/src/transition/select.js
-	function select_default(select) {
+	function transition_select(select) {
 		var name = this._name, id = this._id;
-		if (typeof select !== "function") select = selector_default(select);
+		if (typeof select !== "function") select = selector(select);
 		for (var groups = this._groups, m = groups.length, subgroups = new Array(m), j = 0; j < m; ++j) for (var group = groups[j], n = group.length, subgroup = subgroups[j] = new Array(n), node, subnode, i = 0; i < n; ++i) if ((node = group[i]) && (subnode = select.call(node, node.__data__, i, group))) {
 			if ("__data__" in node) subnode.__data__ = node.__data__;
 			subgroup[i] = subnode;
-			schedule_default(subgroup[i], name, id, i, subgroup, get$3(node, id));
+			schedule(subgroup[i], name, id, i, subgroup, get$3(node, id));
 		}
 		return new Transition$1(subgroups, this._parents, name, id);
 	}
-	var init_select = __esmMin((() => {
-		init_src$27();
-		init_transition$1();
-		init_schedule();
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/transition/selectAll.js
-	function selectAll_default(select) {
+	function transition_selectAll(select) {
 		var name = this._name, id = this._id;
-		if (typeof select !== "function") select = selectorAll_default(select);
+		if (typeof select !== "function") select = selectorAll(select);
 		for (var groups = this._groups, m = groups.length, subgroups = [], parents = [], j = 0; j < m; ++j) for (var group = groups[j], n = group.length, node, i = 0; i < n; ++i) if (node = group[i]) {
-			for (var children = select.call(node, node.__data__, i, group), child, inherit = get$3(node, id), k = 0, l = children.length; k < l; ++k) if (child = children[k]) schedule_default(child, name, id, k, children, inherit);
+			for (var children = select.call(node, node.__data__, i, group), child, inherit = get$3(node, id), k = 0, l = children.length; k < l; ++k) if (child = children[k]) schedule(child, name, id, k, children, inherit);
 			subgroups.push(children);
 			parents.push(node);
 		}
 		return new Transition$1(subgroups, parents, name, id);
 	}
-	var init_selectAll = __esmMin((() => {
-		init_src$27();
-		init_transition$1();
-		init_schedule();
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/transition/selection.js
-	function selection_default() {
+	function transition_selection() {
 		return new Selection(this._groups, this._parents);
 	}
-	var Selection;
-	var init_selection$1 = __esmMin((() => {
-		init_src$27();
-		Selection = selection.prototype.constructor;
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/transition/style.js
 	function styleNull(name, interpolate) {
 		var string00, string10, interpolate0;
 		return function() {
@@ -38703,19 +38425,10 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			schedule.on = on1;
 		};
 	}
-	function style_default(name, value, priority) {
-		var i = (name += "") === "transform" ? interpolateTransformCss : interpolate_default;
+	function transition_style(name, value, priority) {
+		var i = (name += "") === "transform" ? interpolateTransformCss : interpolate;
 		return value == null ? this.styleTween(name, styleNull(name, i)).on("end.style." + name, styleRemove(name)) : typeof value === "function" ? this.styleTween(name, styleFunction(name, i, tweenValue(this, "style." + name, value))).each(styleMaybeRemove(this._id, name)) : this.styleTween(name, styleConstant(name, i, value), priority).on("end.style." + name, null);
 	}
-	var init_style = __esmMin((() => {
-		init_src$24();
-		init_src$27();
-		init_schedule();
-		init_tween();
-		init_interpolate();
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/transition/styleTween.js
 	function styleInterpolate(name, i, priority) {
 		return function(t) {
 			this.style.setProperty(name, i.call(this, t), priority);
@@ -38731,16 +38444,13 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		tween._value = value;
 		return tween;
 	}
-	function styleTween_default(name, value, priority) {
+	function transition_styleTween(name, value, priority) {
 		var key = "style." + (name += "");
 		if (arguments.length < 2) return (key = this.tween(key)) && key._value;
 		if (value == null) return this.tween(key, null);
 		if (typeof value !== "function") throw new Error();
 		return this.tween(key, styleTween(name, value, priority == null ? "" : priority));
 	}
-	var init_styleTween = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-transition/src/transition/text.js
 	function textConstant(value) {
 		return function() {
 			this.textContent = value;
@@ -38752,14 +38462,9 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			this.textContent = value1 == null ? "" : value1;
 		};
 	}
-	function text_default(value) {
+	function transition_text(value) {
 		return this.tween("text", typeof value === "function" ? textFunction(tweenValue(this, "text", value)) : textConstant(value == null ? "" : value + ""));
 	}
-	var init_text = __esmMin((() => {
-		init_tween();
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/transition/textTween.js
 	function textInterpolate(i) {
 		return function(t) {
 			this.textContent = i.call(this, t);
@@ -38775,21 +38480,18 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		tween._value = value;
 		return tween;
 	}
-	function textTween_default(value) {
+	function transition_textTween(value) {
 		var key = "text";
 		if (arguments.length < 1) return (key = this.tween(key)) && key._value;
 		if (value == null) return this.tween(key, null);
 		if (typeof value !== "function") throw new Error();
 		return this.tween(key, textTween(value));
 	}
-	var init_textTween = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-transition/src/transition/transition.js
-	function transition_default$1() {
+	function transition_transition() {
 		var name = this._name, id0 = this._id, id1 = newId();
 		for (var groups = this._groups, m = groups.length, j = 0; j < m; ++j) for (var group = groups[j], n = group.length, node, i = 0; i < n; ++i) if (node = group[i]) {
 			var inherit = get$3(node, id0);
-			schedule_default(node, name, id1, i, group, {
+			schedule(node, name, id1, i, group, {
 				time: inherit.time + inherit.delay + inherit.duration,
 				delay: 0,
 				duration: inherit.duration,
@@ -38798,13 +38500,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		}
 		return new Transition$1(groups, this._parents, name, id1);
 	}
-	var init_transition$2 = __esmMin((() => {
-		init_transition$1();
-		init_schedule();
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/transition/end.js
-	function end_default() {
+	function transition_end() {
 		var on0, on1, that = this, id = that._id, size = that.size();
 		return new Promise(function(resolve, reject) {
 			var cancel = { value: reject }, end = { value: function() {
@@ -38823,11 +38519,6 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			if (size === 0) resolve();
 		});
 	}
-	var init_end = __esmMin((() => {
-		init_schedule();
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/transition/index.js
 	function Transition$1(groups, parents, name, id) {
 		this._groups = groups;
 		this._parents = parents;
@@ -38840,125 +38531,85 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	function newId() {
 		return ++id$1;
 	}
-	var id$1, selection_prototype;
-	var init_transition$1 = __esmMin((() => {
-		init_src$27();
-		init_attr();
-		init_attrTween();
-		init_delay();
-		init_duration$1();
-		init_ease();
-		init_easeVarying();
-		init_filter$1();
-		init_merge$3();
-		init_on();
-		init_remove();
-		init_select();
-		init_selectAll();
-		init_selection$1();
-		init_style();
-		init_styleTween();
-		init_text();
-		init_textTween();
-		init_transition$2();
-		init_tween();
-		init_end();
+	function inherit(node, id) {
+		var timing;
+		while (!(timing = node.__transition) || !(timing = timing[id])) if (!(node = node.parentNode)) throw new Error(`transition ${id} not found`);
+		return timing;
+	}
+	function selection_transition(name) {
+		var id, timing;
+		if (name instanceof Transition$1) id = name._id, name = name._name;
+		else id = newId(), (timing = defaultTiming).time = now$2(), name = name == null ? null : name + "";
+		for (var groups = this._groups, m = groups.length, j = 0; j < m; ++j) for (var group = groups[j], n = group.length, node, i = 0; i < n; ++i) if (node = group[i]) schedule(node, name, id, i, group, timing || inherit(node, id));
+		return new Transition$1(groups, this._parents, name, id);
+	}
+	var emptyOn, emptyTween, CREATED, SCHEDULED, STARTING, STARTED, RUNNING, ENDING, ENDED, Selection, id$1, selection_prototype, defaultTiming;
+	var init_d3_transition = __esmMin((() => {
+		init_d3_selection();
+		init_d3_dispatch();
+		init_d3_timer();
+		init_d3_interpolate();
+		init_d3_color();
+		init_d3_ease();
+		emptyOn = dispatch$1("start", "end", "cancel", "interrupt");
+		emptyTween = [];
+		CREATED = 0;
+		SCHEDULED = 1;
+		STARTING = 2;
+		STARTED = 3;
+		RUNNING = 4;
+		ENDING = 5;
+		ENDED = 6;
+		Selection = selection.prototype.constructor;
 		id$1 = 0;
 		selection_prototype = selection.prototype;
 		Transition$1.prototype = transition.prototype = {
 			constructor: Transition$1,
-			select: select_default,
-			selectAll: selectAll_default,
+			select: transition_select,
+			selectAll: transition_selectAll,
 			selectChild: selection_prototype.selectChild,
 			selectChildren: selection_prototype.selectChildren,
-			filter: filter_default$1,
-			merge: merge_default,
-			selection: selection_default,
-			transition: transition_default$1,
+			filter: transition_filter,
+			merge: transition_merge,
+			selection: transition_selection,
+			transition: transition_transition,
 			call: selection_prototype.call,
 			nodes: selection_prototype.nodes,
 			node: selection_prototype.node,
 			size: selection_prototype.size,
 			empty: selection_prototype.empty,
 			each: selection_prototype.each,
-			on: on_default,
-			attr: attr_default,
-			attrTween: attrTween_default,
-			style: style_default,
-			styleTween: styleTween_default,
-			text: text_default,
-			textTween: textTween_default,
-			remove: remove_default,
-			tween: tween_default,
-			delay: delay_default,
-			duration: duration_default,
-			ease: ease_default,
-			easeVarying: easeVarying_default,
-			end: end_default,
+			on: transition_on,
+			attr: transition_attr,
+			attrTween: transition_attrTween,
+			style: transition_style,
+			styleTween: transition_styleTween,
+			text: transition_text,
+			textTween: transition_textTween,
+			remove: transition_remove,
+			tween: transition_tween,
+			delay: transition_delay,
+			duration: transition_duration,
+			ease: transition_ease,
+			easeVarying: transition_easeVarying,
+			end: transition_end,
 			[Symbol.iterator]: selection_prototype[Symbol.iterator]
 		};
-	}));
-	//#endregion
-	//#region node_modules/d3-ease/src/cubic.js
-	function cubicInOut(t) {
-		return ((t *= 2) <= 1 ? t * t * t : (t -= 2) * t * t + 2) / 2;
-	}
-	var init_cubic = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-ease/src/index.js
-	var init_src$22 = __esmMin((() => {
-		init_cubic();
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/selection/transition.js
-	function inherit(node, id) {
-		var timing;
-		while (!(timing = node.__transition) || !(timing = timing[id])) if (!(node = node.parentNode)) throw new Error(`transition ${id} not found`);
-		return timing;
-	}
-	function transition_default(name) {
-		var id, timing;
-		if (name instanceof Transition$1) id = name._id, name = name._name;
-		else id = newId(), (timing = defaultTiming).time = now$2(), name = name == null ? null : name + "";
-		for (var groups = this._groups, m = groups.length, j = 0; j < m; ++j) for (var group = groups[j], n = group.length, node, i = 0; i < n; ++i) if (node = group[i]) schedule_default(node, name, id, i, group, timing || inherit(node, id));
-		return new Transition$1(groups, this._parents, name, id);
-	}
-	var defaultTiming;
-	var init_transition = __esmMin((() => {
-		init_transition$1();
-		init_schedule();
-		init_src$22();
-		init_src$23();
 		defaultTiming = {
 			time: null,
 			delay: 0,
 			duration: 250,
 			ease: cubicInOut
 		};
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/selection/index.js
-	var init_selection = __esmMin((() => {
-		init_src$27();
-		init_interrupt();
-		init_transition();
-		selection.prototype.interrupt = interrupt_default;
-		selection.prototype.transition = transition_default;
-	}));
-	//#endregion
-	//#region node_modules/d3-transition/src/index.js
-	var init_src$21 = __esmMin((() => {
-		init_selection();
-		init_transition$1();
-		init_schedule();
-		init_interrupt$1();
+		selection.prototype.interrupt = selection_interrupt;
+		selection.prototype.transition = selection_transition;
 	}));
 	function type$1(t) {
 		return { type: t };
 	}
 	var abs$2, max$3, min$4;
-	var init_brush = __esmMin((() => {
-		init_src$21();
+	var init_d3_brush = __esmMin((() => {
+		init_d3_transition();
 		({abs: abs$2, max: max$3, min: min$4} = Math);
 		["w", "e"].map(type$1);
 		["n", "s"].map(type$1);
@@ -38974,12 +38625,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		].map(type$1);
 	}));
 	//#endregion
-	//#region node_modules/d3-brush/src/index.js
-	var init_src$20 = __esmMin((() => {
-		init_brush();
-	}));
-	//#endregion
-	//#region node_modules/d3-path/src/path.js
+	//#region node_modules/d3-path/dist/d3-path.mjs
 	function append$1(strings) {
 		this._ += strings[0];
 		for (let i = 1, n = strings.length; i < n; ++i) this._ += arguments[i] + strings[i];
@@ -38994,11 +38640,25 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			for (let i = 1, n = strings.length; i < n; ++i) this._ += Math.round(arguments[i] * k) / k + strings[i];
 		};
 	}
+	function equal(x0, y0, x1, y1) {
+		return x0 === x1 && y0 === y1;
+	}
+	function equalRound(digits) {
+		const d = Math.floor(digits);
+		if (!(d <= 15)) return equal;
+		const k = 10 ** d;
+		const r = function(value) {
+			return Math.round(value * k);
+		};
+		return function(x0, y0, x1, y1) {
+			return r(x0) === r(x1) && r(y0) === r(y1);
+		};
+	}
 	function path() {
 		return new Path();
 	}
 	var pi$1, tau$1, epsilon$2, tauEpsilon, Path;
-	var init_path$2 = __esmMin((() => {
+	var init_d3_path = __esmMin((() => {
 		pi$1 = Math.PI;
 		tau$1 = 2 * pi$1;
 		epsilon$2 = 1e-6;
@@ -39008,6 +38668,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				this._x0 = this._y0 = this._x1 = this._y1 = null;
 				this._ = "";
 				this._append = digits == null ? append$1 : appendRound(digits);
+				this._equal = digits == null ? equal : equalRound(digits);
 			}
 			moveTo(x, y) {
 				this._append`M${this._x0 = this._x1 = +x},${this._y0 = this._y1 = +y}`;
@@ -39049,7 +38710,16 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				if (!r) return;
 				if (da < 0) da = da % tau$1 + tau$1;
 				if (da > tauEpsilon) this._append`A${r},${r},0,1,${cw},${x - dx},${y - dy}A${r},${r},0,1,${cw},${this._x1 = x0},${this._y1 = y0}`;
-				else if (da > epsilon$2) this._append`A${r},${r},0,${+(da >= pi$1)},${cw},${this._x1 = x + r * Math.cos(a1)},${this._y1 = y + r * Math.sin(a1)}`;
+				else if (da > epsilon$2) {
+					const x1 = x + r * Math.cos(a1);
+					const y1 = y + r * Math.sin(a1);
+					if (da >= pi$1 && this._equal(x0, y0, x1, y1)) {
+						da /= 2;
+						let a00 = a0 + da;
+						this._append`A${r},${r},0,${+(da >= pi$1)},${cw},${x + r * Math.cos(a00)},${y + r * Math.sin(a00)}`;
+					}
+					this._append`A${r},${r},0,${+(da >= pi$1)},${cw},${this._x1 = x1},${this._y1 = y1}`;
+				}
 			}
 			rect(x, y, w, h) {
 				this._append`M${this._x0 = this._x1 = +x},${this._y0 = this._y1 = +y}h${w = +w}v${+h}h${-w}Z`;
@@ -39060,45 +38730,30 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 		path.prototype = Path.prototype;
 	}));
-	//#endregion
-	//#region node_modules/d3-path/src/index.js
-	var init_src$19 = __esmMin((() => {
-		init_path$2();
+	var init_d3_chord = __esmMin((() => {
+		Array.prototype.slice;
+	}));
+	var init_d3_contour = __esmMin((() => {
+		Array.prototype.slice;
 	}));
 	//#endregion
-	//#region node_modules/d3-chord/src/index.js
-	var init_src$18 = __esmMin((() => {
-		init_src$19();
+	//#region node_modules/d3-delaunay/dist/d3-delaunay.mjs
+	var init_d3_delaunay = __esmMin((() => {}));
+	var init_d3_dsv = __esmMin((() => {
+		(/* @__PURE__ */ new Date("2019-01-01T00:00")).getHours() || (/* @__PURE__ */ new Date("2019-07-01T00:00")).getHours();
 	}));
 	//#endregion
-	//#region node_modules/d3-contour/src/index.js
-	var init_src$17 = __esmMin((() => {
-		init_src$30();
+	//#region node_modules/d3-fetch/dist/d3-fetch.mjs
+	var init_d3_fetch = __esmMin((() => {}));
+	//#endregion
+	//#region node_modules/d3-quadtree/dist/d3-quadtree.mjs
+	var init_d3_quadtree = __esmMin((() => {}));
+	var init_d3_force = __esmMin((() => {
+		Math.PI * (3 - Math.sqrt(5));
 	}));
 	//#endregion
-	//#region node_modules/d3-delaunay/src/index.js
-	var init_src$16 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-dsv/src/index.js
-	var init_src$15 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-fetch/src/index.js
-	var init_src$14 = __esmMin((() => {
-		init_src$15();
-	}));
-	//#endregion
-	//#region node_modules/d3-quadtree/src/index.js
-	var init_src$13 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-force/src/index.js
-	var init_src$12 = __esmMin((() => {
-		init_src$13();
-		init_src$28();
-		init_src$23();
-	}));
-	//#endregion
-	//#region node_modules/d3-format/src/formatDecimal.js
-	function formatDecimal_default(x) {
+	//#region node_modules/d3-format/dist/d3-format.mjs
+	function formatDecimal(x) {
 		return Math.abs(x = Math.round(x)) >= 1e21 ? x.toLocaleString("en").replace(/,/g, "") : x.toString(10);
 	}
 	function formatDecimalParts(x, p) {
@@ -39106,18 +38761,10 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		var i = (x = p ? x.toExponential(p - 1) : x.toExponential()).indexOf("e"), coefficient = x.slice(0, i);
 		return [coefficient.length > 1 ? coefficient[0] + coefficient.slice(2) : coefficient, +x.slice(i + 1)];
 	}
-	var init_formatDecimal = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-format/src/exponent.js
-	function exponent_default(x) {
+	function exponent(x) {
 		return x = formatDecimalParts(Math.abs(x)), x ? x[1] : NaN;
 	}
-	var init_exponent = __esmMin((() => {
-		init_formatDecimal();
-	}));
-	//#endregion
-	//#region node_modules/d3-format/src/formatGroup.js
-	function formatGroup_default(grouping, thousands) {
+	function formatGroup(grouping, thousands) {
 		return function(value, width) {
 			var i = value.length, t = [], j = 0, g = grouping[0], length = 0;
 			while (i > 0 && g > 0) {
@@ -39129,19 +38776,13 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return t.reverse().join(thousands);
 		};
 	}
-	var init_formatGroup = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-format/src/formatNumerals.js
-	function formatNumerals_default(numerals) {
+	function formatNumerals(numerals) {
 		return function(value) {
 			return value.replace(/[0-9]/g, function(i) {
 				return numerals[+i];
 			});
 		};
 	}
-	var init_formatNumerals = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-format/src/formatSpecifier.js
 	function formatSpecifier(specifier) {
 		if (!(match = re$1.exec(specifier))) throw new Error("invalid format: " + specifier);
 		var match;
@@ -39170,17 +38811,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		this.trim = !!specifier.trim;
 		this.type = specifier.type === void 0 ? "" : specifier.type + "";
 	}
-	var re$1;
-	var init_formatSpecifier = __esmMin((() => {
-		re$1 = /^(?:(.)?([<>=^]))?([+\-( ])?([$#])?(0)?(\d+)?(,)?(\.\d+)?(~)?([a-z%])?$/i;
-		formatSpecifier.prototype = FormatSpecifier.prototype;
-		FormatSpecifier.prototype.toString = function() {
-			return this.fill + this.align + this.sign + this.symbol + (this.zero ? "0" : "") + (this.width === void 0 ? "" : Math.max(1, this.width | 0)) + (this.comma ? "," : "") + (this.precision === void 0 ? "" : "." + Math.max(0, this.precision | 0)) + (this.trim ? "~" : "") + this.type;
-		};
-	}));
-	//#endregion
-	//#region node_modules/d3-format/src/formatTrim.js
-	function formatTrim_default(s) {
+	function formatTrim(s) {
 		out: for (var n = s.length, i = 1, i0 = -1, i1; i < n; ++i) switch (s[i]) {
 			case ".":
 				i0 = i1 = i;
@@ -39195,71 +38826,31 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		}
 		return i0 > 0 ? s.slice(0, i0) + s.slice(i1 + 1) : s;
 	}
-	var init_formatTrim = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-format/src/formatPrefixAuto.js
-	function formatPrefixAuto_default(x, p) {
+	function formatPrefixAuto(x, p) {
 		var d = formatDecimalParts(x, p);
 		if (!d) return prefixExponent = void 0, x.toPrecision(p);
 		var coefficient = d[0], exponent = d[1], i = exponent - (prefixExponent = Math.max(-8, Math.min(8, Math.floor(exponent / 3))) * 3) + 1, n = coefficient.length;
 		return i === n ? coefficient : i > n ? coefficient + new Array(i - n + 1).join("0") : i > 0 ? coefficient.slice(0, i) + "." + coefficient.slice(i) : "0." + new Array(1 - i).join("0") + formatDecimalParts(x, Math.max(0, p + i - 1))[0];
 	}
-	var prefixExponent;
-	var init_formatPrefixAuto = __esmMin((() => {
-		init_formatDecimal();
-	}));
-	//#endregion
-	//#region node_modules/d3-format/src/formatRounded.js
-	function formatRounded_default(x, p) {
+	function formatRounded(x, p) {
 		var d = formatDecimalParts(x, p);
 		if (!d) return x + "";
 		var coefficient = d[0], exponent = d[1];
 		return exponent < 0 ? "0." + new Array(-exponent).join("0") + coefficient : coefficient.length > exponent + 1 ? coefficient.slice(0, exponent + 1) + "." + coefficient.slice(exponent + 1) : coefficient + new Array(exponent - coefficient.length + 2).join("0");
 	}
-	var init_formatRounded = __esmMin((() => {
-		init_formatDecimal();
-	}));
-	//#endregion
-	//#region node_modules/d3-format/src/formatTypes.js
-	var formatTypes_default;
-	var init_formatTypes = __esmMin((() => {
-		init_formatDecimal();
-		init_formatPrefixAuto();
-		init_formatRounded();
-		formatTypes_default = {
-			"%": (x, p) => (x * 100).toFixed(p),
-			"b": (x) => Math.round(x).toString(2),
-			"c": (x) => x + "",
-			"d": formatDecimal_default,
-			"e": (x, p) => x.toExponential(p),
-			"f": (x, p) => x.toFixed(p),
-			"g": (x, p) => x.toPrecision(p),
-			"o": (x) => Math.round(x).toString(8),
-			"p": (x, p) => formatRounded_default(x * 100, p),
-			"r": formatRounded_default,
-			"s": formatPrefixAuto_default,
-			"X": (x) => Math.round(x).toString(16).toUpperCase(),
-			"x": (x) => Math.round(x).toString(16)
-		};
-	}));
-	//#endregion
-	//#region node_modules/d3-format/src/identity.js
-	function identity_default$2(x) {
+	function identity$7(x) {
 		return x;
 	}
-	var init_identity$2 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-format/src/locale.js
-	function locale_default(locale) {
-		var group = locale.grouping === void 0 || locale.thousands === void 0 ? identity_default$2 : formatGroup_default(map$3.call(locale.grouping, Number), locale.thousands + ""), currencyPrefix = locale.currency === void 0 ? "" : locale.currency[0] + "", currencySuffix = locale.currency === void 0 ? "" : locale.currency[1] + "", decimal = locale.decimal === void 0 ? "." : locale.decimal + "", numerals = locale.numerals === void 0 ? identity_default$2 : formatNumerals_default(map$3.call(locale.numerals, String)), percent = locale.percent === void 0 ? "%" : locale.percent + "", minus = locale.minus === void 0 ? "−" : locale.minus + "", nan = locale.nan === void 0 ? "NaN" : locale.nan + "";
+	function formatLocale$1(locale) {
+		var group = locale.grouping === void 0 || locale.thousands === void 0 ? identity$7 : formatGroup(map$3.call(locale.grouping, Number), locale.thousands + ""), currencyPrefix = locale.currency === void 0 ? "" : locale.currency[0] + "", currencySuffix = locale.currency === void 0 ? "" : locale.currency[1] + "", decimal = locale.decimal === void 0 ? "." : locale.decimal + "", numerals = locale.numerals === void 0 ? identity$7 : formatNumerals(map$3.call(locale.numerals, String)), percent = locale.percent === void 0 ? "%" : locale.percent + "", minus = locale.minus === void 0 ? "−" : locale.minus + "", nan = locale.nan === void 0 ? "NaN" : locale.nan + "";
 		function newFormat(specifier, options) {
 			specifier = formatSpecifier(specifier);
 			var fill = specifier.fill, align = specifier.align, sign = specifier.sign, symbol = specifier.symbol, zero = specifier.zero, width = specifier.width, comma = specifier.comma, precision = specifier.precision, trim = specifier.trim, type = specifier.type;
 			if (type === "n") comma = true, type = "g";
-			else if (!formatTypes_default[type]) precision === void 0 && (precision = 12), trim = true, type = "g";
+			else if (!formatTypes[type]) precision === void 0 && (precision = 12), trim = true, type = "g";
 			if (zero || fill === "0" && align === "=") zero = true, fill = "0", align = "=";
 			var prefix = (options && options.prefix !== void 0 ? options.prefix : "") + (symbol === "$" ? currencyPrefix : symbol === "#" && /[boxX]/.test(type) ? "0" + type.toLowerCase() : ""), suffix = (symbol === "$" ? currencySuffix : /[%p]/.test(type) ? percent : "") + (options && options.suffix !== void 0 ? options.suffix : "");
-			var formatType = formatTypes_default[type], maybeSuffix = /[defgprs%]/.test(type);
+			var formatType = formatTypes[type], maybeSuffix = /[defgprs%]/.test(type);
 			precision = precision === void 0 ? 6 : /[gprs]/.test(type) ? Math.max(1, Math.min(21, precision)) : Math.max(0, Math.min(20, precision));
 			function format(value) {
 				var valuePrefix = prefix, valueSuffix = suffix, i, n, c;
@@ -39270,7 +38861,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 					value = +value;
 					var valueNegative = value < 0 || 1 / value < 0;
 					value = isNaN(value) ? nan : formatType(Math.abs(value), precision);
-					if (trim) value = formatTrim_default(value);
+					if (trim) value = formatTrim(value);
 					if (valueNegative && +value === 0 && sign !== "+") valueNegative = false;
 					valuePrefix = (valueNegative ? sign === "(" ? sign : minus : sign === "-" || sign === "(" ? "" : sign) + valuePrefix;
 					valueSuffix = (type === "s" && !isNaN(value) && prefixExponent !== void 0 ? prefixes[8 + prefixExponent / 3] : "") + valueSuffix + (valueNegative && sign === "(" ? ")" : "");
@@ -39306,7 +38897,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return format;
 		}
 		function formatPrefix(specifier, value) {
-			var e = Math.max(-8, Math.min(8, Math.floor(exponent_default(value) / 3))) * 3, k = Math.pow(10, -e), f = newFormat((specifier = formatSpecifier(specifier), specifier.type = "f", specifier), { suffix: prefixes[8 + e / 3] });
+			var e = Math.max(-8, Math.min(8, Math.floor(exponent(value) / 3))) * 3, k = Math.pow(10, -e), f = newFormat((specifier = formatSpecifier(specifier), specifier.type = "f", specifier), { suffix: prefixes[8 + e / 3] });
 			return function(value) {
 				return f(k * value);
 			};
@@ -39316,16 +38907,44 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			formatPrefix
 		};
 	}
-	var map$3, prefixes;
-	var init_locale$1 = __esmMin((() => {
-		init_exponent();
-		init_formatGroup();
-		init_formatNumerals();
-		init_formatSpecifier();
-		init_formatTrim();
-		init_formatTypes();
-		init_formatPrefixAuto();
-		init_identity$2();
+	function defaultLocale$1(definition) {
+		locale$1 = formatLocale$1(definition);
+		format = locale$1.format;
+		formatPrefix = locale$1.formatPrefix;
+		return locale$1;
+	}
+	function precisionFixed(step) {
+		return Math.max(0, -exponent(Math.abs(step)));
+	}
+	function precisionPrefix(step, value) {
+		return Math.max(0, Math.max(-8, Math.min(8, Math.floor(exponent(value) / 3))) * 3 - exponent(Math.abs(step)));
+	}
+	function precisionRound(step, max) {
+		step = Math.abs(step), max = Math.abs(max) - step;
+		return Math.max(0, exponent(max) - exponent(step)) + 1;
+	}
+	var re$1, prefixExponent, formatTypes, map$3, prefixes, locale$1, format, formatPrefix;
+	var init_d3_format = __esmMin((() => {
+		re$1 = /^(?:(.)?([<>=^]))?([+\-( ])?([$#])?(0)?(\d+)?(,)?(\.\d+)?(~)?([a-z%])?$/i;
+		formatSpecifier.prototype = FormatSpecifier.prototype;
+		FormatSpecifier.prototype.toString = function() {
+			return this.fill + this.align + this.sign + this.symbol + (this.zero ? "0" : "") + (this.width === void 0 ? "" : Math.max(1, this.width | 0)) + (this.comma ? "," : "") + (this.precision === void 0 ? "" : "." + Math.max(0, this.precision | 0)) + (this.trim ? "~" : "") + this.type;
+		};
+		formatTypes = {
+			"%": (x, p) => (x * 100).toFixed(p),
+			"b": (x) => Math.round(x).toString(2),
+			"c": (x) => x + "",
+			"d": formatDecimal,
+			"e": (x, p) => x.toExponential(p),
+			"f": (x, p) => x.toFixed(p),
+			"g": (x, p) => x.toPrecision(p),
+			"o": (x) => Math.round(x).toString(8),
+			"p": (x, p) => formatRounded(x * 100, p),
+			"r": formatRounded,
+			"s": formatPrefixAuto,
+			"X": (x) => Math.round(x).toString(16).toUpperCase(),
+			"x": (x) => Math.round(x).toString(16)
+		};
 		map$3 = Array.prototype.map;
 		prefixes = [
 			"y",
@@ -39346,18 +38965,6 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			"Z",
 			"Y"
 		];
-	}));
-	//#endregion
-	//#region node_modules/d3-format/src/defaultLocale.js
-	function defaultLocale$1(definition) {
-		locale$1 = locale_default(definition);
-		format = locale$1.format;
-		formatPrefix = locale$1.formatPrefix;
-		return locale$1;
-	}
-	var locale$1, format, formatPrefix;
-	var init_defaultLocale$1 = __esmMin((() => {
-		init_locale$1();
 		defaultLocale$1({
 			thousands: ",",
 			grouping: [3],
@@ -39365,68 +38972,25 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		});
 	}));
 	//#endregion
-	//#region node_modules/d3-format/src/precisionFixed.js
-	function precisionFixed_default(step) {
-		return Math.max(0, -exponent_default(Math.abs(step)));
-	}
-	var init_precisionFixed = __esmMin((() => {
-		init_exponent();
-	}));
+	//#region node_modules/d3-geo/dist/d3-geo.mjs
+	var init_d3_geo = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/d3-format/src/precisionPrefix.js
-	function precisionPrefix_default(step, value) {
-		return Math.max(0, Math.max(-8, Math.min(8, Math.floor(exponent_default(value) / 3))) * 3 - exponent_default(Math.abs(step)));
-	}
-	var init_precisionPrefix = __esmMin((() => {
-		init_exponent();
-	}));
-	//#endregion
-	//#region node_modules/d3-format/src/precisionRound.js
-	function precisionRound_default(step, max) {
-		step = Math.abs(step), max = Math.abs(max) - step;
-		return Math.max(0, exponent_default(max) - exponent_default(step)) + 1;
-	}
-	var init_precisionRound = __esmMin((() => {
-		init_exponent();
-	}));
-	//#endregion
-	//#region node_modules/d3-format/src/index.js
-	var init_src$11 = __esmMin((() => {
-		init_defaultLocale$1();
-		init_locale$1();
-		init_formatSpecifier();
-		init_precisionFixed();
-		init_precisionPrefix();
-		init_precisionRound();
-	}));
-	//#endregion
-	//#region node_modules/d3-geo/src/index.js
-	var init_src$10 = __esmMin((() => {
-		init_src$30();
-	}));
-	//#endregion
-	//#region node_modules/d3-hierarchy/src/hierarchy/count.js
+	//#region node_modules/d3-hierarchy/dist/d3-hierarchy.mjs
 	function count(node) {
 		var sum = 0, children = node.children, i = children && children.length;
 		if (!i) sum = 1;
 		else while (--i >= 0) sum += children[i].value;
 		node.value = sum;
 	}
-	function count_default() {
+	function node_count() {
 		return this.eachAfter(count);
 	}
-	var init_count = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-hierarchy/src/hierarchy/each.js
-	function each_default(callback, that) {
+	function node_each(callback, that) {
 		let index = -1;
 		for (const node of this) callback.call(that, node, ++index, this);
 		return this;
 	}
-	var init_each$1 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-hierarchy/src/hierarchy/eachBefore.js
-	function eachBefore_default(callback, that) {
+	function node_eachBefore(callback, that) {
 		var node = this, nodes = [node], children, i, index = -1;
 		while (node = nodes.pop()) {
 			callback.call(that, node, ++index, this);
@@ -39434,10 +38998,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		}
 		return this;
 	}
-	var init_eachBefore = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-hierarchy/src/hierarchy/eachAfter.js
-	function eachAfter_default(callback, that) {
+	function node_eachAfter(callback, that) {
 		var node = this, nodes = [node], next = [], children, i, n, index = -1;
 		while (node = nodes.pop()) {
 			next.push(node);
@@ -39446,35 +39007,23 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		while (node = next.pop()) callback.call(that, node, ++index, this);
 		return this;
 	}
-	var init_eachAfter = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-hierarchy/src/hierarchy/find.js
-	function find_default$1(callback, that) {
+	function node_find(callback, that) {
 		let index = -1;
 		for (const node of this) if (callback.call(that, node, ++index, this)) return node;
 	}
-	var init_find$1 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-hierarchy/src/hierarchy/sum.js
-	function sum_default(value) {
+	function node_sum(value) {
 		return this.eachAfter(function(node) {
 			var sum = +value(node.data) || 0, children = node.children, i = children && children.length;
 			while (--i >= 0) sum += children[i].value;
 			node.value = sum;
 		});
 	}
-	var init_sum = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-hierarchy/src/hierarchy/sort.js
-	function sort_default(compare) {
+	function node_sort(compare) {
 		return this.eachBefore(function(node) {
 			if (node.children) node.children.sort(compare);
 		});
 	}
-	var init_sort$1 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-hierarchy/src/hierarchy/path.js
-	function path_default(end) {
+	function node_path(end) {
 		var start = this, ancestor = leastCommonAncestor(start, end), nodes = [start];
 		while (start !== ancestor) {
 			start = start.parent;
@@ -39499,34 +39048,22 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		}
 		return c;
 	}
-	var init_path$1 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-hierarchy/src/hierarchy/ancestors.js
-	function ancestors_default() {
+	function node_ancestors() {
 		var node = this, nodes = [node];
 		while (node = node.parent) nodes.push(node);
 		return nodes;
 	}
-	var init_ancestors = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-hierarchy/src/hierarchy/descendants.js
-	function descendants_default() {
+	function node_descendants() {
 		return Array.from(this);
 	}
-	var init_descendants = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-hierarchy/src/hierarchy/leaves.js
-	function leaves_default() {
+	function node_leaves() {
 		var leaves = [];
 		this.eachBefore(function(node) {
 			if (!node.children) leaves.push(node);
 		});
 		return leaves;
 	}
-	var init_leaves = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-hierarchy/src/hierarchy/links.js
-	function links_default() {
+	function node_links() {
 		var root = this, links = [];
 		root.each(function(node) {
 			if (node !== root) links.push({
@@ -39536,10 +39073,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		});
 		return links;
 	}
-	var init_links = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-hierarchy/src/hierarchy/iterator.js
-	function* iterator_default() {
+	function* node_iterator() {
 		var node = this, current, next = [node], children, i, n;
 		do {
 			current = next.reverse(), next = [];
@@ -39549,19 +39083,16 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			}
 		} while (next.length);
 	}
-	var init_iterator = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-hierarchy/src/hierarchy/index.js
 	function hierarchy(data, children) {
 		if (data instanceof Map) {
 			data = [void 0, data];
 			if (children === void 0) children = mapChildren;
 		} else if (children === void 0) children = objectChildren;
-		var root = new Node(data), node, nodes = [root], child, childs, i, n;
+		var root = new Node$1(data), node, nodes = [root], child, childs, i, n;
 		while (node = nodes.pop()) if ((childs = children(node.data)) && (n = (childs = Array.from(childs)).length)) {
 			node.children = childs;
 			for (i = n - 1; i >= 0; --i) {
-				nodes.push(child = childs[i] = new Node(childs[i]));
+				nodes.push(child = childs[i] = new Node$1(childs[i]));
 				child.parent = node;
 				child.depth = node.depth + 1;
 			}
@@ -39587,92 +39118,56 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			node.height = height;
 		while ((node = node.parent) && node.height < ++height);
 	}
-	function Node(data) {
+	function Node$1(data) {
 		this.data = data;
 		this.depth = this.height = 0;
 		this.parent = null;
 	}
-	var init_hierarchy = __esmMin((() => {
-		init_count();
-		init_each$1();
-		init_eachBefore();
-		init_eachAfter();
-		init_find$1();
-		init_sum();
-		init_sort$1();
-		init_path$1();
-		init_ancestors();
-		init_descendants();
-		init_leaves();
-		init_links();
-		init_iterator();
-		Node.prototype = hierarchy.prototype = {
-			constructor: Node,
-			count: count_default,
-			each: each_default,
-			eachAfter: eachAfter_default,
-			eachBefore: eachBefore_default,
-			find: find_default$1,
-			sum: sum_default,
-			sort: sort_default,
-			path: path_default,
-			ancestors: ancestors_default,
-			descendants: descendants_default,
-			leaves: leaves_default,
-			links: links_default,
-			copy: node_copy,
-			[Symbol.iterator]: iterator_default
-		};
-	}));
-	//#endregion
-	//#region node_modules/d3-hierarchy/src/accessors.js
 	function required(f) {
 		if (typeof f !== "function") throw new Error();
 		return f;
 	}
-	var init_accessors = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-hierarchy/src/constant.js
 	function constantZero() {
 		return 0;
 	}
-	function constant_default$2(x) {
+	function constant$3(x) {
 		return function() {
 			return x;
 		};
 	}
-	var init_constant$3 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-hierarchy/src/treemap/round.js
-	function round_default(node) {
+	function roundNode(node) {
 		node.x0 = Math.round(node.x0);
 		node.y0 = Math.round(node.y0);
 		node.x1 = Math.round(node.x1);
 		node.y1 = Math.round(node.y1);
 	}
-	var init_round = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-hierarchy/src/treemap/dice.js
-	function dice_default(parent, x0, y0, x1, y1) {
+	function treemapDice(parent, x0, y0, x1, y1) {
 		var nodes = parent.children, node, i = -1, n = nodes.length, k = parent.value && (x1 - x0) / parent.value;
 		while (++i < n) {
 			node = nodes[i], node.y0 = y0, node.y1 = y1;
 			node.x0 = x0, node.x1 = x0 += node.value * k;
 		}
 	}
-	var init_dice = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-hierarchy/src/treemap/slice.js
-	function slice_default(parent, x0, y0, x1, y1) {
+	function TreeNode$1(node, i) {
+		this._ = node;
+		this.parent = null;
+		this.children = null;
+		this.A = null;
+		this.a = this;
+		this.z = 0;
+		this.m = 0;
+		this.c = 0;
+		this.s = 0;
+		this.t = null;
+		this.i = i;
+	}
+	function treemapSlice(parent, x0, y0, x1, y1) {
 		var nodes = parent.children, node, i = -1, n = nodes.length, k = parent.value && (y1 - y0) / parent.value;
 		while (++i < n) {
 			node = nodes[i], node.x0 = x0, node.x1 = x1;
 			node.y0 = y0, node.y1 = y0 += node.value * k;
 		}
 	}
-	var init_slice = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-hierarchy/src/treemap/squarify.js
 	function squarifyRatio(ratio, parent, x0, y0, x1, y1) {
 		var rows = [], nodes = parent.children, row, nodeValue, i0 = 0, i1 = 0, n = nodes.length, dx, dy, value = parent.value, sumValue, minValue, maxValue, newRatio, minRatio, alpha, beta;
 		while (i0 < n) {
@@ -39701,38 +39196,21 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				dice: dx < dy,
 				children: nodes.slice(i0, i1)
 			});
-			if (row.dice) dice_default(row, x0, y0, x1, value ? y0 += dy * sumValue / value : y1);
-			else slice_default(row, x0, y0, value ? x0 += dx * sumValue / value : x1, y1);
+			if (row.dice) treemapDice(row, x0, y0, x1, value ? y0 += dy * sumValue / value : y1);
+			else treemapSlice(row, x0, y0, value ? x0 += dx * sumValue / value : x1, y1);
 			value -= sumValue, i0 = i1;
 		}
 		return rows;
 	}
-	var phi, squarify_default;
-	var init_squarify = __esmMin((() => {
-		init_dice();
-		init_slice();
-		phi = (1 + Math.sqrt(5)) / 2;
-		squarify_default = (function custom(ratio) {
-			function squarify(parent, x0, y0, x1, y1) {
-				squarifyRatio(ratio, parent, x0, y0, x1, y1);
-			}
-			squarify.ratio = function(x) {
-				return custom((x = +x) > 1 ? x : 1);
-			};
-			return squarify;
-		})(phi);
-	}));
-	//#endregion
-	//#region node_modules/d3-hierarchy/src/treemap/index.js
-	function treemap_default() {
-		var tile = squarify_default, round = false, dx = 1, dy = 1, paddingStack = [0], paddingInner = constantZero, paddingTop = constantZero, paddingRight = constantZero, paddingBottom = constantZero, paddingLeft = constantZero;
+	function index() {
+		var tile = squarify, round = false, dx = 1, dy = 1, paddingStack = [0], paddingInner = constantZero, paddingTop = constantZero, paddingRight = constantZero, paddingBottom = constantZero, paddingLeft = constantZero;
 		function treemap(root) {
 			root.x0 = root.y0 = 0;
 			root.x1 = dx;
 			root.y1 = dy;
 			root.eachBefore(positionNode);
 			paddingStack = [0];
-			if (round) root.eachBefore(round_default);
+			if (round) root.eachBefore(roundNode);
 			return root;
 		}
 		function positionNode(node) {
@@ -39767,364 +39245,85 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return arguments.length ? treemap.paddingInner(x).paddingOuter(x) : treemap.paddingInner();
 		};
 		treemap.paddingInner = function(x) {
-			return arguments.length ? (paddingInner = typeof x === "function" ? x : constant_default$2(+x), treemap) : paddingInner;
+			return arguments.length ? (paddingInner = typeof x === "function" ? x : constant$3(+x), treemap) : paddingInner;
 		};
 		treemap.paddingOuter = function(x) {
 			return arguments.length ? treemap.paddingTop(x).paddingRight(x).paddingBottom(x).paddingLeft(x) : treemap.paddingTop();
 		};
 		treemap.paddingTop = function(x) {
-			return arguments.length ? (paddingTop = typeof x === "function" ? x : constant_default$2(+x), treemap) : paddingTop;
+			return arguments.length ? (paddingTop = typeof x === "function" ? x : constant$3(+x), treemap) : paddingTop;
 		};
 		treemap.paddingRight = function(x) {
-			return arguments.length ? (paddingRight = typeof x === "function" ? x : constant_default$2(+x), treemap) : paddingRight;
+			return arguments.length ? (paddingRight = typeof x === "function" ? x : constant$3(+x), treemap) : paddingRight;
 		};
 		treemap.paddingBottom = function(x) {
-			return arguments.length ? (paddingBottom = typeof x === "function" ? x : constant_default$2(+x), treemap) : paddingBottom;
+			return arguments.length ? (paddingBottom = typeof x === "function" ? x : constant$3(+x), treemap) : paddingBottom;
 		};
 		treemap.paddingLeft = function(x) {
-			return arguments.length ? (paddingLeft = typeof x === "function" ? x : constant_default$2(+x), treemap) : paddingLeft;
+			return arguments.length ? (paddingLeft = typeof x === "function" ? x : constant$3(+x), treemap) : paddingLeft;
 		};
 		return treemap;
 	}
-	var init_treemap = __esmMin((() => {
-		init_round();
-		init_squarify();
-		init_accessors();
-		init_constant$3();
-	}));
-	//#endregion
-	//#region node_modules/d3-hierarchy/src/index.js
-	var init_src$9 = __esmMin((() => {
-		init_hierarchy();
-		init_constant$3();
-		init_round();
-		init_dice();
-		init_treemap();
-		init_slice();
-		init_squarify();
-	}));
-	//#endregion
-	//#region node_modules/d3-polygon/src/index.js
-	var init_src$8 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-random/src/index.js
-	var init_src$7 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-scale/src/init.js
-	function initRange(domain, range) {
-		switch (arguments.length) {
-			case 0: break;
-			case 1:
-				this.range(domain);
-				break;
-			default: this.range(range).domain(domain);
-		}
-		return this;
-	}
-	var init_init = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-scale/src/ordinal.js
-	function ordinal() {
-		var index = new InternMap(), domain = [], range = [], unknown = implicit;
-		function scale(d) {
-			let i = index.get(d);
-			if (i === void 0) {
-				if (unknown !== implicit) return unknown;
-				index.set(d, i = domain.push(d) - 1);
+	var phi, squarify;
+	var init_d3_hierarchy = __esmMin((() => {
+		Node$1.prototype = hierarchy.prototype = {
+			constructor: Node$1,
+			count: node_count,
+			each: node_each,
+			eachAfter: node_eachAfter,
+			eachBefore: node_eachBefore,
+			find: node_find,
+			sum: node_sum,
+			sort: node_sort,
+			path: node_path,
+			ancestors: node_ancestors,
+			descendants: node_descendants,
+			leaves: node_leaves,
+			links: node_links,
+			copy: node_copy,
+			[Symbol.iterator]: node_iterator
+		};
+		TreeNode$1.prototype = Object.create(Node$1.prototype);
+		phi = (1 + Math.sqrt(5)) / 2;
+		squarify = (function custom(ratio) {
+			function squarify(parent, x0, y0, x1, y1) {
+				squarifyRatio(ratio, parent, x0, y0, x1, y1);
 			}
-			return range[i % range.length];
-		}
-		scale.domain = function(_) {
-			if (!arguments.length) return domain.slice();
-			domain = [], index = new InternMap();
-			for (const value of _) {
-				if (index.has(value)) continue;
-				index.set(value, domain.push(value) - 1);
+			squarify.ratio = function(x) {
+				return custom((x = +x) > 1 ? x : 1);
+			};
+			return squarify;
+		})(phi);
+		(function custom(ratio) {
+			function resquarify(parent, x0, y0, x1, y1) {
+				if ((rows = parent._squarify) && rows.ratio === ratio) {
+					var rows, row, nodes, i, j = -1, n, m = rows.length, value = parent.value;
+					while (++j < m) {
+						row = rows[j], nodes = row.children;
+						for (i = row.value = 0, n = nodes.length; i < n; ++i) row.value += nodes[i].value;
+						if (row.dice) treemapDice(row, x0, y0, x1, value ? y0 += (y1 - y0) * row.value / value : y1);
+						else treemapSlice(row, x0, y0, value ? x0 += (x1 - x0) * row.value / value : x1, y1);
+						value -= row.value;
+					}
+				} else {
+					parent._squarify = rows = squarifyRatio(ratio, parent, x0, y0, x1, y1);
+					rows.ratio = ratio;
+				}
 			}
-			return scale;
-		};
-		scale.range = function(_) {
-			return arguments.length ? (range = Array.from(_), scale) : range.slice();
-		};
-		scale.unknown = function(_) {
-			return arguments.length ? (unknown = _, scale) : unknown;
-		};
-		scale.copy = function() {
-			return ordinal(domain, range).unknown(unknown);
-		};
-		initRange.apply(scale, arguments);
-		return scale;
-	}
-	var implicit;
-	var init_ordinal = __esmMin((() => {
-		init_src$30();
-		init_init();
-		implicit = Symbol("implicit");
+			resquarify.ratio = function(x) {
+				return custom((x = +x) > 1 ? x : 1);
+			};
+			return resquarify;
+		})(phi);
 	}));
 	//#endregion
-	//#region node_modules/d3-scale/src/band.js
-	function band() {
-		var scale = ordinal().unknown(void 0), domain = scale.domain, ordinalRange = scale.range, r0 = 0, r1 = 1, step, bandwidth, round = false, paddingInner = 0, paddingOuter = 0, align = .5;
-		delete scale.unknown;
-		function rescale() {
-			var n = domain().length, reverse = r1 < r0, start = reverse ? r1 : r0, stop = reverse ? r0 : r1;
-			step = (stop - start) / Math.max(1, n - paddingInner + paddingOuter * 2);
-			if (round) step = Math.floor(step);
-			start += (stop - start - step * (n - paddingInner)) * align;
-			bandwidth = step * (1 - paddingInner);
-			if (round) start = Math.round(start), bandwidth = Math.round(bandwidth);
-			var values = range$1(n).map(function(i) {
-				return start + step * i;
-			});
-			return ordinalRange(reverse ? values.reverse() : values);
-		}
-		scale.domain = function(_) {
-			return arguments.length ? (domain(_), rescale()) : domain();
-		};
-		scale.range = function(_) {
-			return arguments.length ? ([r0, r1] = _, r0 = +r0, r1 = +r1, rescale()) : [r0, r1];
-		};
-		scale.rangeRound = function(_) {
-			return [r0, r1] = _, r0 = +r0, r1 = +r1, round = true, rescale();
-		};
-		scale.bandwidth = function() {
-			return bandwidth;
-		};
-		scale.step = function() {
-			return step;
-		};
-		scale.round = function(_) {
-			return arguments.length ? (round = !!_, rescale()) : round;
-		};
-		scale.padding = function(_) {
-			return arguments.length ? (paddingInner = Math.min(1, paddingOuter = +_), rescale()) : paddingInner;
-		};
-		scale.paddingInner = function(_) {
-			return arguments.length ? (paddingInner = Math.min(1, _), rescale()) : paddingInner;
-		};
-		scale.paddingOuter = function(_) {
-			return arguments.length ? (paddingOuter = +_, rescale()) : paddingOuter;
-		};
-		scale.align = function(_) {
-			return arguments.length ? (align = Math.max(0, Math.min(1, _)), rescale()) : align;
-		};
-		scale.copy = function() {
-			return band(domain(), [r0, r1]).round(round).paddingInner(paddingInner).paddingOuter(paddingOuter).align(align);
-		};
-		return initRange.apply(rescale(), arguments);
-	}
-	var init_band = __esmMin((() => {
-		init_src$30();
-		init_init();
-		init_ordinal();
-	}));
+	//#region node_modules/d3-polygon/dist/d3-polygon.mjs
+	var init_d3_polygon = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/d3-scale/src/constant.js
-	function constants(x) {
-		return function() {
-			return x;
-		};
-	}
-	var init_constant$2 = __esmMin((() => {}));
+	//#region node_modules/d3-random/dist/d3-random.mjs
+	var init_d3_random = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/d3-scale/src/number.js
-	function number$3(x) {
-		return +x;
-	}
-	var init_number = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-scale/src/continuous.js
-	function identity$5(x) {
-		return x;
-	}
-	function normalize$1(a, b) {
-		return (b -= a = +a) ? function(x) {
-			return (x - a) / b;
-		} : constants(isNaN(b) ? NaN : .5);
-	}
-	function clamper(a, b) {
-		var t;
-		if (a > b) t = a, a = b, b = t;
-		return function(x) {
-			return Math.max(a, Math.min(b, x));
-		};
-	}
-	function bimap(domain, range, interpolate) {
-		var d0 = domain[0], d1 = domain[1], r0 = range[0], r1 = range[1];
-		if (d1 < d0) d0 = normalize$1(d1, d0), r0 = interpolate(r1, r0);
-		else d0 = normalize$1(d0, d1), r0 = interpolate(r0, r1);
-		return function(x) {
-			return r0(d0(x));
-		};
-	}
-	function polymap(domain, range, interpolate) {
-		var j = Math.min(domain.length, range.length) - 1, d = new Array(j), r = new Array(j), i = -1;
-		if (domain[j] < domain[0]) {
-			domain = domain.slice().reverse();
-			range = range.slice().reverse();
-		}
-		while (++i < j) {
-			d[i] = normalize$1(domain[i], domain[i + 1]);
-			r[i] = interpolate(range[i], range[i + 1]);
-		}
-		return function(x) {
-			var i = bisectRight(domain, x, 1, j) - 1;
-			return r[i](d[i](x));
-		};
-	}
-	function copy$2(source, target) {
-		return target.domain(source.domain()).range(source.range()).interpolate(source.interpolate()).clamp(source.clamp()).unknown(source.unknown());
-	}
-	function transformer() {
-		var domain = unit, range = unit, interpolate = value_default, transform, untransform, unknown, clamp = identity$5, piecewise, output, input;
-		function rescale() {
-			var n = Math.min(domain.length, range.length);
-			if (clamp !== identity$5) clamp = clamper(domain[0], domain[n - 1]);
-			piecewise = n > 2 ? polymap : bimap;
-			output = input = null;
-			return scale;
-		}
-		function scale(x) {
-			return x == null || isNaN(x = +x) ? unknown : (output || (output = piecewise(domain.map(transform), range, interpolate)))(transform(clamp(x)));
-		}
-		scale.invert = function(y) {
-			return clamp(untransform((input || (input = piecewise(range, domain.map(transform), number_default)))(y)));
-		};
-		scale.domain = function(_) {
-			return arguments.length ? (domain = Array.from(_, number$3), rescale()) : domain.slice();
-		};
-		scale.range = function(_) {
-			return arguments.length ? (range = Array.from(_), rescale()) : range.slice();
-		};
-		scale.rangeRound = function(_) {
-			return range = Array.from(_), interpolate = round_default$1, rescale();
-		};
-		scale.clamp = function(_) {
-			return arguments.length ? (clamp = _ ? true : identity$5, rescale()) : clamp !== identity$5;
-		};
-		scale.interpolate = function(_) {
-			return arguments.length ? (interpolate = _, rescale()) : interpolate;
-		};
-		scale.unknown = function(_) {
-			return arguments.length ? (unknown = _, scale) : unknown;
-		};
-		return function(t, u) {
-			transform = t, untransform = u;
-			return rescale();
-		};
-	}
-	function continuous() {
-		return transformer()(identity$5, identity$5);
-	}
-	var unit;
-	var init_continuous = __esmMin((() => {
-		init_src$30();
-		init_src$24();
-		init_constant$2();
-		init_number();
-		unit = [0, 1];
-	}));
-	//#endregion
-	//#region node_modules/d3-scale/src/tickFormat.js
-	function tickFormat(start, stop, count, specifier) {
-		var step = tickStep(start, stop, count), precision;
-		specifier = formatSpecifier(specifier == null ? ",f" : specifier);
-		switch (specifier.type) {
-			case "s":
-				var value = Math.max(Math.abs(start), Math.abs(stop));
-				if (specifier.precision == null && !isNaN(precision = precisionPrefix_default(step, value))) specifier.precision = precision;
-				return formatPrefix(specifier, value);
-			case "":
-			case "e":
-			case "g":
-			case "p":
-			case "r":
-				if (specifier.precision == null && !isNaN(precision = precisionRound_default(step, Math.max(Math.abs(start), Math.abs(stop))))) specifier.precision = precision - (specifier.type === "e");
-				break;
-			case "f":
-			case "%": if (specifier.precision == null && !isNaN(precision = precisionFixed_default(step))) specifier.precision = precision - (specifier.type === "%") * 2;
-		}
-		return format(specifier);
-	}
-	var init_tickFormat = __esmMin((() => {
-		init_src$30();
-		init_src$11();
-	}));
-	//#endregion
-	//#region node_modules/d3-scale/src/linear.js
-	function linearish(scale) {
-		var domain = scale.domain;
-		scale.ticks = function(count) {
-			var d = domain();
-			return ticks(d[0], d[d.length - 1], count == null ? 10 : count);
-		};
-		scale.tickFormat = function(count, specifier) {
-			var d = domain();
-			return tickFormat(d[0], d[d.length - 1], count == null ? 10 : count, specifier);
-		};
-		scale.nice = function(count) {
-			if (count == null) count = 10;
-			var d = domain();
-			var i0 = 0;
-			var i1 = d.length - 1;
-			var start = d[i0];
-			var stop = d[i1];
-			var prestep;
-			var step;
-			var maxIter = 10;
-			if (stop < start) {
-				step = start, start = stop, stop = step;
-				step = i0, i0 = i1, i1 = step;
-			}
-			while (maxIter-- > 0) {
-				step = tickIncrement(start, stop, count);
-				if (step === prestep) {
-					d[i0] = start;
-					d[i1] = stop;
-					return domain(d);
-				} else if (step > 0) {
-					start = Math.floor(start / step) * step;
-					stop = Math.ceil(stop / step) * step;
-				} else if (step < 0) {
-					start = Math.ceil(start * step) / step;
-					stop = Math.floor(stop * step) / step;
-				} else break;
-				prestep = step;
-			}
-			return scale;
-		};
-		return scale;
-	}
-	function linear() {
-		var scale = continuous();
-		scale.copy = function() {
-			return copy$2(scale, linear());
-		};
-		initRange.apply(scale, arguments);
-		return linearish(scale);
-	}
-	var init_linear$1 = __esmMin((() => {
-		init_src$30();
-		init_continuous();
-		init_init();
-		init_tickFormat();
-	}));
-	//#endregion
-	//#region node_modules/d3-scale/src/nice.js
-	function nice(domain, interval) {
-		domain = domain.slice();
-		var i0 = 0, i1 = domain.length - 1, x0 = domain[i0], x1 = domain[i1], t;
-		if (x1 < x0) {
-			t = i0, i0 = i1, i1 = t;
-			t = x0, x0 = x1, x1 = t;
-		}
-		domain[i0] = interval.floor(x0);
-		domain[i1] = interval.ceil(x1);
-		return domain;
-	}
-	var init_nice = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-time/src/interval.js
+	//#region node_modules/d3-time/dist/d3-time.mjs
 	function timeInterval(floori, offseti, count, field) {
 		function interval(date) {
 			return floori(date = arguments.length === 0 ? /* @__PURE__ */ new Date() : /* @__PURE__ */ new Date(+date)), date;
@@ -40176,134 +39375,6 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		}
 		return interval;
 	}
-	var t0, t1;
-	var init_interval = __esmMin((() => {
-		t0 = /* @__PURE__ */ new Date();
-		t1 = /* @__PURE__ */ new Date();
-	})), millisecond;
-	var init_millisecond = __esmMin((() => {
-		init_interval();
-		millisecond = timeInterval(() => {}, (date, step) => {
-			date.setTime(+date + step);
-		}, (start, end) => {
-			return end - start;
-		});
-		millisecond.every = (k) => {
-			k = Math.floor(k);
-			if (!isFinite(k) || !(k > 0)) return null;
-			if (!(k > 1)) return millisecond;
-			return timeInterval((date) => {
-				date.setTime(Math.floor(date / k) * k);
-			}, (date, step) => {
-				date.setTime(+date + step * k);
-			}, (start, end) => {
-				return (end - start) / k;
-			});
-		};
-		millisecond.range;
-	}));
-	//#endregion
-	//#region node_modules/d3-time/src/duration.js
-	var durationSecond, durationMinute, durationHour, durationDay, durationWeek, durationMonth, durationYear;
-	var init_duration = __esmMin((() => {
-		durationSecond = 1e3;
-		durationMinute = durationSecond * 60;
-		durationHour = durationMinute * 60;
-		durationDay = durationHour * 24;
-		durationWeek = durationDay * 7;
-		durationMonth = durationDay * 30;
-		durationYear = durationDay * 365;
-	})), second;
-	var init_second = __esmMin((() => {
-		init_interval();
-		init_duration();
-		second = timeInterval((date) => {
-			date.setTime(date - date.getMilliseconds());
-		}, (date, step) => {
-			date.setTime(+date + step * durationSecond);
-		}, (start, end) => {
-			return (end - start) / durationSecond;
-		}, (date) => {
-			return date.getUTCSeconds();
-		});
-		second.range;
-	})), timeMinute, utcMinute;
-	var init_minute = __esmMin((() => {
-		init_interval();
-		init_duration();
-		timeMinute = timeInterval((date) => {
-			date.setTime(date - date.getMilliseconds() - date.getSeconds() * durationSecond);
-		}, (date, step) => {
-			date.setTime(+date + step * durationMinute);
-		}, (start, end) => {
-			return (end - start) / durationMinute;
-		}, (date) => {
-			return date.getMinutes();
-		});
-		timeMinute.range;
-		utcMinute = timeInterval((date) => {
-			date.setUTCSeconds(0, 0);
-		}, (date, step) => {
-			date.setTime(+date + step * durationMinute);
-		}, (start, end) => {
-			return (end - start) / durationMinute;
-		}, (date) => {
-			return date.getUTCMinutes();
-		});
-		utcMinute.range;
-	})), timeHour, utcHour;
-	var init_hour = __esmMin((() => {
-		init_interval();
-		init_duration();
-		timeHour = timeInterval((date) => {
-			date.setTime(date - date.getMilliseconds() - date.getSeconds() * durationSecond - date.getMinutes() * durationMinute);
-		}, (date, step) => {
-			date.setTime(+date + step * durationHour);
-		}, (start, end) => {
-			return (end - start) / durationHour;
-		}, (date) => {
-			return date.getHours();
-		});
-		timeHour.range;
-		utcHour = timeInterval((date) => {
-			date.setUTCMinutes(0, 0, 0);
-		}, (date, step) => {
-			date.setTime(+date + step * durationHour);
-		}, (start, end) => {
-			return (end - start) / durationHour;
-		}, (date) => {
-			return date.getUTCHours();
-		});
-		utcHour.range;
-	})), timeDay, utcDay, unixDay;
-	var init_day = __esmMin((() => {
-		init_interval();
-		init_duration();
-		timeDay = timeInterval((date) => date.setHours(0, 0, 0, 0), (date, step) => date.setDate(date.getDate() + step), (start, end) => (end - start - (end.getTimezoneOffset() - start.getTimezoneOffset()) * durationMinute) / durationDay, (date) => date.getDate() - 1);
-		timeDay.range;
-		utcDay = timeInterval((date) => {
-			date.setUTCHours(0, 0, 0, 0);
-		}, (date, step) => {
-			date.setUTCDate(date.getUTCDate() + step);
-		}, (start, end) => {
-			return (end - start) / durationDay;
-		}, (date) => {
-			return date.getUTCDate() - 1;
-		});
-		utcDay.range;
-		unixDay = timeInterval((date) => {
-			date.setUTCHours(0, 0, 0, 0);
-		}, (date, step) => {
-			date.setUTCDate(date.getUTCDate() + step);
-		}, (start, end) => {
-			return (end - start) / durationDay;
-		}, (date) => {
-			return Math.floor(date / durationDay);
-		});
-		unixDay.range;
-	}));
-	//#endregion
-	//#region node_modules/d3-time/src/week.js
 	function timeWeekday(i) {
 		return timeInterval((date) => {
 			date.setDate(date.getDate() - (date.getDay() + 7 - i) % 7);
@@ -40324,109 +39395,6 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return (end - start) / durationWeek;
 		});
 	}
-	var timeSunday, timeMonday, timeTuesday, timeWednesday, timeThursday, timeFriday, timeSaturday, utcSunday, utcMonday, utcTuesday, utcWednesday, utcThursday, utcFriday, utcSaturday;
-	var init_week = __esmMin((() => {
-		init_interval();
-		init_duration();
-		timeSunday = timeWeekday(0);
-		timeMonday = timeWeekday(1);
-		timeTuesday = timeWeekday(2);
-		timeWednesday = timeWeekday(3);
-		timeThursday = timeWeekday(4);
-		timeFriday = timeWeekday(5);
-		timeSaturday = timeWeekday(6);
-		timeSunday.range;
-		timeMonday.range;
-		timeTuesday.range;
-		timeWednesday.range;
-		timeThursday.range;
-		timeFriday.range;
-		timeSaturday.range;
-		utcSunday = utcWeekday(0);
-		utcMonday = utcWeekday(1);
-		utcTuesday = utcWeekday(2);
-		utcWednesday = utcWeekday(3);
-		utcThursday = utcWeekday(4);
-		utcFriday = utcWeekday(5);
-		utcSaturday = utcWeekday(6);
-		utcSunday.range;
-		utcMonday.range;
-		utcTuesday.range;
-		utcWednesday.range;
-		utcThursday.range;
-		utcFriday.range;
-		utcSaturday.range;
-	})), timeMonth, utcMonth;
-	var init_month = __esmMin((() => {
-		init_interval();
-		timeMonth = timeInterval((date) => {
-			date.setDate(1);
-			date.setHours(0, 0, 0, 0);
-		}, (date, step) => {
-			date.setMonth(date.getMonth() + step);
-		}, (start, end) => {
-			return end.getMonth() - start.getMonth() + (end.getFullYear() - start.getFullYear()) * 12;
-		}, (date) => {
-			return date.getMonth();
-		});
-		timeMonth.range;
-		utcMonth = timeInterval((date) => {
-			date.setUTCDate(1);
-			date.setUTCHours(0, 0, 0, 0);
-		}, (date, step) => {
-			date.setUTCMonth(date.getUTCMonth() + step);
-		}, (start, end) => {
-			return end.getUTCMonth() - start.getUTCMonth() + (end.getUTCFullYear() - start.getUTCFullYear()) * 12;
-		}, (date) => {
-			return date.getUTCMonth();
-		});
-		utcMonth.range;
-	})), timeYear, utcYear;
-	var init_year = __esmMin((() => {
-		init_interval();
-		timeYear = timeInterval((date) => {
-			date.setMonth(0, 1);
-			date.setHours(0, 0, 0, 0);
-		}, (date, step) => {
-			date.setFullYear(date.getFullYear() + step);
-		}, (start, end) => {
-			return end.getFullYear() - start.getFullYear();
-		}, (date) => {
-			return date.getFullYear();
-		});
-		timeYear.every = (k) => {
-			return !isFinite(k = Math.floor(k)) || !(k > 0) ? null : timeInterval((date) => {
-				date.setFullYear(Math.floor(date.getFullYear() / k) * k);
-				date.setMonth(0, 1);
-				date.setHours(0, 0, 0, 0);
-			}, (date, step) => {
-				date.setFullYear(date.getFullYear() + step * k);
-			});
-		};
-		timeYear.range;
-		utcYear = timeInterval((date) => {
-			date.setUTCMonth(0, 1);
-			date.setUTCHours(0, 0, 0, 0);
-		}, (date, step) => {
-			date.setUTCFullYear(date.getUTCFullYear() + step);
-		}, (start, end) => {
-			return end.getUTCFullYear() - start.getUTCFullYear();
-		}, (date) => {
-			return date.getUTCFullYear();
-		});
-		utcYear.every = (k) => {
-			return !isFinite(k = Math.floor(k)) || !(k > 0) ? null : timeInterval((date) => {
-				date.setUTCFullYear(Math.floor(date.getUTCFullYear() / k) * k);
-				date.setUTCMonth(0, 1);
-				date.setUTCHours(0, 0, 0, 0);
-			}, (date, step) => {
-				date.setUTCFullYear(date.getUTCFullYear() + step * k);
-			});
-		};
-		utcYear.range;
-	}));
-	//#endregion
-	//#region node_modules/d3-time/src/ticks.js
 	function ticker(year, month, week, day, hour, minute) {
 		const tickIntervals = [
 			[
@@ -40537,37 +39505,203 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		}
 		return [ticks, tickInterval];
 	}
-	var utcTicks, utcTickInterval, timeTicks, timeTickInterval;
-	var init_ticks = __esmMin((() => {
-		init_src$30();
-		init_duration();
-		init_millisecond();
-		init_second();
-		init_minute();
-		init_hour();
-		init_day();
-		init_week();
-		init_month();
-		init_year();
+	var t0, t1, millisecond, durationSecond, durationMinute, durationHour, durationDay, durationWeek, durationMonth, durationYear, second, timeMinute, utcMinute, timeHour, utcHour, timeDay, utcDay, unixDay, timeSunday, timeMonday, timeTuesday, timeWednesday, timeThursday, timeFriday, timeSaturday, utcSunday, utcMonday, utcTuesday, utcWednesday, utcThursday, utcFriday, utcSaturday, timeMonth, utcMonth, timeYear, utcYear, utcTicks, utcTickInterval, timeTicks, timeTickInterval;
+	var init_d3_time = __esmMin((() => {
+		init_d3_array();
+		t0 = /* @__PURE__ */ new Date();
+		t1 = /* @__PURE__ */ new Date();
+		millisecond = timeInterval(() => {}, (date, step) => {
+			date.setTime(+date + step);
+		}, (start, end) => {
+			return end - start;
+		});
+		millisecond.every = (k) => {
+			k = Math.floor(k);
+			if (!isFinite(k) || !(k > 0)) return null;
+			if (!(k > 1)) return millisecond;
+			return timeInterval((date) => {
+				date.setTime(Math.floor(date / k) * k);
+			}, (date, step) => {
+				date.setTime(+date + step * k);
+			}, (start, end) => {
+				return (end - start) / k;
+			});
+		};
+		millisecond.range;
+		durationSecond = 1e3;
+		durationMinute = durationSecond * 60;
+		durationHour = durationMinute * 60;
+		durationDay = durationHour * 24;
+		durationWeek = durationDay * 7;
+		durationMonth = durationDay * 30;
+		durationYear = durationDay * 365;
+		second = timeInterval((date) => {
+			date.setTime(date - date.getMilliseconds());
+		}, (date, step) => {
+			date.setTime(+date + step * durationSecond);
+		}, (start, end) => {
+			return (end - start) / durationSecond;
+		}, (date) => {
+			return date.getUTCSeconds();
+		});
+		second.range;
+		timeMinute = timeInterval((date) => {
+			date.setTime(date - date.getMilliseconds() - date.getSeconds() * durationSecond);
+		}, (date, step) => {
+			date.setTime(+date + step * durationMinute);
+		}, (start, end) => {
+			return (end - start) / durationMinute;
+		}, (date) => {
+			return date.getMinutes();
+		});
+		timeMinute.range;
+		utcMinute = timeInterval((date) => {
+			date.setUTCSeconds(0, 0);
+		}, (date, step) => {
+			date.setTime(+date + step * durationMinute);
+		}, (start, end) => {
+			return (end - start) / durationMinute;
+		}, (date) => {
+			return date.getUTCMinutes();
+		});
+		utcMinute.range;
+		timeHour = timeInterval((date) => {
+			date.setTime(date - date.getMilliseconds() - date.getSeconds() * durationSecond - date.getMinutes() * durationMinute);
+		}, (date, step) => {
+			date.setTime(+date + step * durationHour);
+		}, (start, end) => {
+			return (end - start) / durationHour;
+		}, (date) => {
+			return date.getHours();
+		});
+		timeHour.range;
+		utcHour = timeInterval((date) => {
+			date.setUTCMinutes(0, 0, 0);
+		}, (date, step) => {
+			date.setTime(+date + step * durationHour);
+		}, (start, end) => {
+			return (end - start) / durationHour;
+		}, (date) => {
+			return date.getUTCHours();
+		});
+		utcHour.range;
+		timeDay = timeInterval((date) => date.setHours(0, 0, 0, 0), (date, step) => date.setDate(date.getDate() + step), (start, end) => (end - start - (end.getTimezoneOffset() - start.getTimezoneOffset()) * durationMinute) / durationDay, (date) => date.getDate() - 1);
+		timeDay.range;
+		utcDay = timeInterval((date) => {
+			date.setUTCHours(0, 0, 0, 0);
+		}, (date, step) => {
+			date.setUTCDate(date.getUTCDate() + step);
+		}, (start, end) => {
+			return (end - start) / durationDay;
+		}, (date) => {
+			return date.getUTCDate() - 1;
+		});
+		utcDay.range;
+		unixDay = timeInterval((date) => {
+			date.setUTCHours(0, 0, 0, 0);
+		}, (date, step) => {
+			date.setUTCDate(date.getUTCDate() + step);
+		}, (start, end) => {
+			return (end - start) / durationDay;
+		}, (date) => {
+			return Math.floor(date / durationDay);
+		});
+		unixDay.range;
+		timeSunday = timeWeekday(0);
+		timeMonday = timeWeekday(1);
+		timeTuesday = timeWeekday(2);
+		timeWednesday = timeWeekday(3);
+		timeThursday = timeWeekday(4);
+		timeFriday = timeWeekday(5);
+		timeSaturday = timeWeekday(6);
+		timeSunday.range;
+		timeMonday.range;
+		timeTuesday.range;
+		timeWednesday.range;
+		timeThursday.range;
+		timeFriday.range;
+		timeSaturday.range;
+		utcSunday = utcWeekday(0);
+		utcMonday = utcWeekday(1);
+		utcTuesday = utcWeekday(2);
+		utcWednesday = utcWeekday(3);
+		utcThursday = utcWeekday(4);
+		utcFriday = utcWeekday(5);
+		utcSaturday = utcWeekday(6);
+		utcSunday.range;
+		utcMonday.range;
+		utcTuesday.range;
+		utcWednesday.range;
+		utcThursday.range;
+		utcFriday.range;
+		utcSaturday.range;
+		timeMonth = timeInterval((date) => {
+			date.setDate(1);
+			date.setHours(0, 0, 0, 0);
+		}, (date, step) => {
+			date.setMonth(date.getMonth() + step);
+		}, (start, end) => {
+			return end.getMonth() - start.getMonth() + (end.getFullYear() - start.getFullYear()) * 12;
+		}, (date) => {
+			return date.getMonth();
+		});
+		timeMonth.range;
+		utcMonth = timeInterval((date) => {
+			date.setUTCDate(1);
+			date.setUTCHours(0, 0, 0, 0);
+		}, (date, step) => {
+			date.setUTCMonth(date.getUTCMonth() + step);
+		}, (start, end) => {
+			return end.getUTCMonth() - start.getUTCMonth() + (end.getUTCFullYear() - start.getUTCFullYear()) * 12;
+		}, (date) => {
+			return date.getUTCMonth();
+		});
+		utcMonth.range;
+		timeYear = timeInterval((date) => {
+			date.setMonth(0, 1);
+			date.setHours(0, 0, 0, 0);
+		}, (date, step) => {
+			date.setFullYear(date.getFullYear() + step);
+		}, (start, end) => {
+			return end.getFullYear() - start.getFullYear();
+		}, (date) => {
+			return date.getFullYear();
+		});
+		timeYear.every = (k) => {
+			return !isFinite(k = Math.floor(k)) || !(k > 0) ? null : timeInterval((date) => {
+				date.setFullYear(Math.floor(date.getFullYear() / k) * k);
+				date.setMonth(0, 1);
+				date.setHours(0, 0, 0, 0);
+			}, (date, step) => {
+				date.setFullYear(date.getFullYear() + step * k);
+			});
+		};
+		timeYear.range;
+		utcYear = timeInterval((date) => {
+			date.setUTCMonth(0, 1);
+			date.setUTCHours(0, 0, 0, 0);
+		}, (date, step) => {
+			date.setUTCFullYear(date.getUTCFullYear() + step);
+		}, (start, end) => {
+			return end.getUTCFullYear() - start.getUTCFullYear();
+		}, (date) => {
+			return date.getUTCFullYear();
+		});
+		utcYear.every = (k) => {
+			return !isFinite(k = Math.floor(k)) || !(k > 0) ? null : timeInterval((date) => {
+				date.setUTCFullYear(Math.floor(date.getUTCFullYear() / k) * k);
+				date.setUTCMonth(0, 1);
+				date.setUTCHours(0, 0, 0, 0);
+			}, (date, step) => {
+				date.setUTCFullYear(date.getUTCFullYear() + step * k);
+			});
+		};
+		utcYear.range;
 		[utcTicks, utcTickInterval] = ticker(utcYear, utcMonth, utcSunday, unixDay, utcHour, utcMinute);
 		[timeTicks, timeTickInterval] = ticker(timeYear, timeMonth, timeSunday, timeDay, timeHour, timeMinute);
 	}));
 	//#endregion
-	//#region node_modules/d3-time/src/index.js
-	var init_src$6 = __esmMin((() => {
-		init_interval();
-		init_millisecond();
-		init_second();
-		init_minute();
-		init_hour();
-		init_day();
-		init_week();
-		init_month();
-		init_year();
-		init_ticks();
-	}));
-	//#endregion
-	//#region node_modules/d3-time-format/src/locale.js
+	//#region node_modules/d3-time-format/dist/d3-time-format.mjs
 	function localDate(d) {
 		if (0 <= d.y && d.y < 100) {
 			var date = new Date(-1, d.m, d.d, d.H, d.M, d.S, d.L);
@@ -41107,20 +40241,6 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	function formatUnixTimestampSeconds(d) {
 		return Math.floor(+d / 1e3);
 	}
-	var pads, numberRe, percentRe, requoteRe;
-	var init_locale = __esmMin((() => {
-		init_src$6();
-		pads = {
-			"-": "",
-			"_": " ",
-			"0": "0"
-		};
-		numberRe = /^\s*\d+/;
-		percentRe = /^%/;
-		requoteRe = /[\\^$*+?|[\]().{}]/g;
-	}));
-	//#endregion
-	//#region node_modules/d3-time-format/src/defaultLocale.js
 	function defaultLocale(definition) {
 		locale = formatLocale(definition);
 		timeFormat = locale.format;
@@ -41129,9 +40249,17 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		utcParse = locale.utcParse;
 		return locale;
 	}
-	var locale, timeFormat, timeParse, utcFormat, utcParse;
-	var init_defaultLocale = __esmMin((() => {
-		init_locale();
+	var pads, numberRe, percentRe, requoteRe, locale, timeFormat, timeParse, utcFormat, utcParse, isoSpecifier;
+	var init_d3_time_format = __esmMin((() => {
+		init_d3_time();
+		pads = {
+			"-": "",
+			"_": " ",
+			"0": "0"
+		};
+		numberRe = /^\s*\d+/;
+		percentRe = /^%/;
+		requoteRe = /[\\^$*+?|[\]().{}]/g;
 		defaultLocale({
 			dateTime: "%x, %X",
 			date: "%-m/%-d/%Y",
@@ -41184,20 +40312,280 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				"Dec"
 			]
 		});
+		isoSpecifier = "%Y-%m-%dT%H:%M:%S.%LZ";
+		Date.prototype.toISOString || utcFormat(isoSpecifier);
+		+/* @__PURE__ */ new Date("2000-01-01T00:00:00.000Z") || utcParse(isoSpecifier);
 	}));
 	//#endregion
-	//#region node_modules/d3-time-format/src/index.js
-	var init_src$5 = __esmMin((() => {
-		init_defaultLocale();
-		init_locale();
-	}));
-	//#endregion
-	//#region node_modules/d3-scale/src/time.js
+	//#region node_modules/d3-scale/dist/d3-scale.mjs
+	function initRange(domain, range) {
+		switch (arguments.length) {
+			case 0: break;
+			case 1:
+				this.range(domain);
+				break;
+			default: this.range(range).domain(domain);
+		}
+		return this;
+	}
+	function ordinal() {
+		var index = new InternMap(), domain = [], range = [], unknown = implicit;
+		function scale(d) {
+			let i = index.get(d);
+			if (i === void 0) {
+				if (unknown !== implicit) return unknown;
+				index.set(d, i = domain.push(d) - 1);
+			}
+			return range[i % range.length];
+		}
+		scale.domain = function(_) {
+			if (!arguments.length) return domain.slice();
+			domain = [], index = new InternMap();
+			for (const value of _) {
+				if (index.has(value)) continue;
+				index.set(value, domain.push(value) - 1);
+			}
+			return scale;
+		};
+		scale.range = function(_) {
+			return arguments.length ? (range = Array.from(_), scale) : range.slice();
+		};
+		scale.unknown = function(_) {
+			return arguments.length ? (unknown = _, scale) : unknown;
+		};
+		scale.copy = function() {
+			return ordinal(domain, range).unknown(unknown);
+		};
+		initRange.apply(scale, arguments);
+		return scale;
+	}
+	function band() {
+		var scale = ordinal().unknown(void 0), domain = scale.domain, ordinalRange = scale.range, r0 = 0, r1 = 1, step, bandwidth, round = false, paddingInner = 0, paddingOuter = 0, align = .5;
+		delete scale.unknown;
+		function rescale() {
+			var n = domain().length, reverse = r1 < r0, start = reverse ? r1 : r0, stop = reverse ? r0 : r1;
+			step = (stop - start) / Math.max(1, n - paddingInner + paddingOuter * 2);
+			if (round) step = Math.floor(step);
+			start += (stop - start - step * (n - paddingInner)) * align;
+			bandwidth = step * (1 - paddingInner);
+			if (round) start = Math.round(start), bandwidth = Math.round(bandwidth);
+			var values = range$1(n).map(function(i) {
+				return start + step * i;
+			});
+			return ordinalRange(reverse ? values.reverse() : values);
+		}
+		scale.domain = function(_) {
+			return arguments.length ? (domain(_), rescale()) : domain();
+		};
+		scale.range = function(_) {
+			return arguments.length ? ([r0, r1] = _, r0 = +r0, r1 = +r1, rescale()) : [r0, r1];
+		};
+		scale.rangeRound = function(_) {
+			return [r0, r1] = _, r0 = +r0, r1 = +r1, round = true, rescale();
+		};
+		scale.bandwidth = function() {
+			return bandwidth;
+		};
+		scale.step = function() {
+			return step;
+		};
+		scale.round = function(_) {
+			return arguments.length ? (round = !!_, rescale()) : round;
+		};
+		scale.padding = function(_) {
+			return arguments.length ? (paddingInner = Math.min(1, paddingOuter = +_), rescale()) : paddingInner;
+		};
+		scale.paddingInner = function(_) {
+			return arguments.length ? (paddingInner = Math.min(1, _), rescale()) : paddingInner;
+		};
+		scale.paddingOuter = function(_) {
+			return arguments.length ? (paddingOuter = +_, rescale()) : paddingOuter;
+		};
+		scale.align = function(_) {
+			return arguments.length ? (align = Math.max(0, Math.min(1, _)), rescale()) : align;
+		};
+		scale.copy = function() {
+			return band(domain(), [r0, r1]).round(round).paddingInner(paddingInner).paddingOuter(paddingOuter).align(align);
+		};
+		return initRange.apply(rescale(), arguments);
+	}
+	function constants(x) {
+		return function() {
+			return x;
+		};
+	}
+	function number$1$1(x) {
+		return +x;
+	}
+	function identity$1$6(x) {
+		return x;
+	}
+	function normalize$1(a, b) {
+		return (b -= a = +a) ? function(x) {
+			return (x - a) / b;
+		} : constants(isNaN(b) ? NaN : .5);
+	}
+	function clamper(a, b) {
+		var t;
+		if (a > b) t = a, a = b, b = t;
+		return function(x) {
+			return Math.max(a, Math.min(b, x));
+		};
+	}
+	function bimap(domain, range, interpolate) {
+		var d0 = domain[0], d1 = domain[1], r0 = range[0], r1 = range[1];
+		if (d1 < d0) d0 = normalize$1(d1, d0), r0 = interpolate(r1, r0);
+		else d0 = normalize$1(d0, d1), r0 = interpolate(r0, r1);
+		return function(x) {
+			return r0(d0(x));
+		};
+	}
+	function polymap(domain, range, interpolate) {
+		var j = Math.min(domain.length, range.length) - 1, d = new Array(j), r = new Array(j), i = -1;
+		if (domain[j] < domain[0]) {
+			domain = domain.slice().reverse();
+			range = range.slice().reverse();
+		}
+		while (++i < j) {
+			d[i] = normalize$1(domain[i], domain[i + 1]);
+			r[i] = interpolate(range[i], range[i + 1]);
+		}
+		return function(x) {
+			var i = bisectRight(domain, x, 1, j) - 1;
+			return r[i](d[i](x));
+		};
+	}
+	function copy$1$1(source, target) {
+		return target.domain(source.domain()).range(source.range()).interpolate(source.interpolate()).clamp(source.clamp()).unknown(source.unknown());
+	}
+	function transformer$2() {
+		var domain = unit, range = unit, interpolate$1 = value, transform, untransform, unknown, clamp = identity$1$6, piecewise, output, input;
+		function rescale() {
+			var n = Math.min(domain.length, range.length);
+			if (clamp !== identity$1$6) clamp = clamper(domain[0], domain[n - 1]);
+			piecewise = n > 2 ? polymap : bimap;
+			output = input = null;
+			return scale;
+		}
+		function scale(x) {
+			return x == null || isNaN(x = +x) ? unknown : (output || (output = piecewise(domain.map(transform), range, interpolate$1)))(transform(clamp(x)));
+		}
+		scale.invert = function(y) {
+			return clamp(untransform((input || (input = piecewise(range, domain.map(transform), number$3)))(y)));
+		};
+		scale.domain = function(_) {
+			return arguments.length ? (domain = Array.from(_, number$1$1), rescale()) : domain.slice();
+		};
+		scale.range = function(_) {
+			return arguments.length ? (range = Array.from(_), rescale()) : range.slice();
+		};
+		scale.rangeRound = function(_) {
+			return range = Array.from(_), interpolate$1 = round, rescale();
+		};
+		scale.clamp = function(_) {
+			return arguments.length ? (clamp = _ ? true : identity$1$6, rescale()) : clamp !== identity$1$6;
+		};
+		scale.interpolate = function(_) {
+			return arguments.length ? (interpolate$1 = _, rescale()) : interpolate$1;
+		};
+		scale.unknown = function(_) {
+			return arguments.length ? (unknown = _, scale) : unknown;
+		};
+		return function(t, u) {
+			transform = t, untransform = u;
+			return rescale();
+		};
+	}
+	function continuous() {
+		return transformer$2()(identity$1$6, identity$1$6);
+	}
+	function tickFormat(start, stop, count, specifier) {
+		var step = tickStep(start, stop, count), precision;
+		specifier = formatSpecifier(specifier == null ? ",f" : specifier);
+		switch (specifier.type) {
+			case "s":
+				var value = Math.max(Math.abs(start), Math.abs(stop));
+				if (specifier.precision == null && !isNaN(precision = precisionPrefix(step, value))) specifier.precision = precision;
+				return formatPrefix(specifier, value);
+			case "":
+			case "e":
+			case "g":
+			case "p":
+			case "r":
+				if (specifier.precision == null && !isNaN(precision = precisionRound(step, Math.max(Math.abs(start), Math.abs(stop))))) specifier.precision = precision - (specifier.type === "e");
+				break;
+			case "f":
+			case "%": if (specifier.precision == null && !isNaN(precision = precisionFixed(step))) specifier.precision = precision - (specifier.type === "%") * 2;
+		}
+		return format(specifier);
+	}
+	function linearish(scale) {
+		var domain = scale.domain;
+		scale.ticks = function(count) {
+			var d = domain();
+			return ticks(d[0], d[d.length - 1], count == null ? 10 : count);
+		};
+		scale.tickFormat = function(count, specifier) {
+			var d = domain();
+			return tickFormat(d[0], d[d.length - 1], count == null ? 10 : count, specifier);
+		};
+		scale.nice = function(count) {
+			if (count == null) count = 10;
+			var d = domain();
+			var i0 = 0;
+			var i1 = d.length - 1;
+			var start = d[i0];
+			var stop = d[i1];
+			var prestep;
+			var step;
+			var maxIter = 10;
+			if (stop < start) {
+				step = start, start = stop, stop = step;
+				step = i0, i0 = i1, i1 = step;
+			}
+			while (maxIter-- > 0) {
+				step = tickIncrement(start, stop, count);
+				if (step === prestep) {
+					d[i0] = start;
+					d[i1] = stop;
+					return domain(d);
+				} else if (step > 0) {
+					start = Math.floor(start / step) * step;
+					stop = Math.ceil(stop / step) * step;
+				} else if (step < 0) {
+					start = Math.ceil(start * step) / step;
+					stop = Math.floor(stop * step) / step;
+				} else break;
+				prestep = step;
+			}
+			return scale;
+		};
+		return scale;
+	}
+	function linear() {
+		var scale = continuous();
+		scale.copy = function() {
+			return copy$1$1(scale, linear());
+		};
+		initRange.apply(scale, arguments);
+		return linearish(scale);
+	}
+	function nice(domain, interval) {
+		domain = domain.slice();
+		var i0 = 0, i1 = domain.length - 1, x0 = domain[i0], x1 = domain[i1], t;
+		if (x1 < x0) {
+			t = i0, i0 = i1, i1 = t;
+			t = x0, x0 = x1, x1 = t;
+		}
+		domain[i0] = interval.floor(x0);
+		domain[i1] = interval.ceil(x1);
+		return domain;
+	}
 	function date(t) {
 		return new Date(t);
 	}
 	function number$2(t) {
-		return t instanceof Date ? +t : +/* @__PURE__ */ new Date(+t);
+		return t instanceof Date ? +t : Math.round(t);
 	}
 	function calendar(ticks, tickInterval, year, month, week, day, hour, minute, second, format) {
 		var scale = continuous(), invert = scale.invert, domain = scale.domain;
@@ -41206,7 +40594,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return (second(date) < date ? formatMillisecond : minute(date) < date ? formatSecond : hour(date) < date ? formatMinute : day(date) < date ? formatHour : month(date) < date ? week(date) < date ? formatDay : formatWeek : year(date) < date ? formatMonth : formatYear)(date);
 		}
 		scale.invert = function(y) {
-			return new Date(invert(y));
+			return new Date(Math.round(invert(y)));
 		};
 		scale.domain = function(_) {
 			return arguments.length ? domain(Array.from(_, number$2)) : domain().map(date);
@@ -41224,91 +40612,129 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return interval ? domain(nice(d, interval)) : scale;
 		};
 		scale.copy = function() {
-			return copy$2(scale, calendar(ticks, tickInterval, year, month, week, day, hour, minute, second, format));
+			return copy$1$1(scale, calendar(ticks, tickInterval, year, month, week, day, hour, minute, second, format));
 		};
 		return scale;
 	}
 	function time$1() {
 		return initRange.apply(calendar(timeTicks, timeTickInterval, timeYear, timeMonth, timeSunday, timeDay, timeHour, timeMinute, second, timeFormat).domain([new Date(2e3, 0, 1), new Date(2e3, 0, 2)]), arguments);
 	}
-	var init_time = __esmMin((() => {
-		init_src$6();
-		init_src$5();
-		init_continuous();
-		init_init();
-		init_nice();
+	var implicit, unit;
+	var init_d3_scale = __esmMin((() => {
+		init_d3_array();
+		init_d3_interpolate();
+		init_d3_format();
+		init_d3_time();
+		init_d3_time_format();
+		implicit = Symbol("implicit");
+		unit = [0, 1];
 	}));
 	//#endregion
-	//#region node_modules/d3-scale/src/index.js
-	var init_src$4 = __esmMin((() => {
-		init_band();
-		init_linear$1();
-		init_number();
-		init_src$30();
-		init_src$11();
-		init_nice();
-		init_continuous();
-		init_ordinal();
-		init_time();
-		init_src$6();
-		init_src$5();
-		init_src$24();
-		init_tickFormat();
-	}));
-	//#endregion
-	//#region node_modules/d3-scale-chromatic/src/colors.js
-	function colors_default(specifier) {
+	//#region node_modules/d3-scale-chromatic/dist/d3-scale-chromatic.mjs
+	function colors$1(specifier) {
 		var n = specifier.length / 6 | 0, colors = new Array(n), i = 0;
 		while (i < n) colors[i] = "#" + specifier.slice(i * 6, ++i * 6);
 		return colors;
 	}
-	var init_colors = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-scale-chromatic/src/categorical/Tableau10.js
-	var Tableau10_default;
-	var init_Tableau10 = __esmMin((() => {
-		init_colors();
-		Tableau10_default = colors_default("4e79a7f28e2ce1575976b7b259a14fedc949af7aa1ff9da79c755fbab0ab");
+	function ramp(range) {
+		var n = range.length;
+		return function(t) {
+			return range[Math.max(0, Math.min(n - 1, Math.floor(t * n)))];
+		};
+	}
+	var Tableau10, ramp$1, scheme$q, scheme$p, scheme$o, scheme$n, scheme$m, scheme$l, scheme$k, scheme$j, scheme$i, scheme$h, scheme$g, scheme$f, scheme$e, scheme$d, scheme$c, scheme$b, scheme$a, scheme$9, scheme$8, scheme$7, scheme$6, scheme$5, scheme$4, scheme$3, scheme$2, scheme$1, scheme;
+	var init_d3_scale_chromatic = __esmMin((() => {
+		init_d3_interpolate();
+		init_d3_color();
+		colors$1("1f77b4ff7f0e2ca02cd627289467bd8c564be377c27f7f7fbcbd2217becf");
+		colors$1("7fc97fbeaed4fdc086ffff99386cb0f0027fbf5b17666666");
+		colors$1("1b9e77d95f027570b3e7298a66a61ee6ab02a6761d666666");
+		colors$1("4269d0efb118ff725c6cc5b03ca951ff8ab7a463f297bbf59c6b4e9498a0");
+		colors$1("a6cee31f78b4b2df8a33a02cfb9a99e31a1cfdbf6fff7f00cab2d66a3d9affff99b15928");
+		colors$1("fbb4aeb3cde3ccebc5decbe4fed9a6ffffcce5d8bdfddaecf2f2f2");
+		colors$1("b3e2cdfdcdaccbd5e8f4cae4e6f5c9fff2aef1e2cccccccc");
+		colors$1("e41a1c377eb84daf4a984ea3ff7f00ffff33a65628f781bf999999");
+		colors$1("66c2a5fc8d628da0cbe78ac3a6d854ffd92fe5c494b3b3b3");
+		colors$1("8dd3c7ffffb3bebadafb807280b1d3fdb462b3de69fccde5d9d9d9bc80bdccebc5ffed6f");
+		Tableau10 = colors$1("4e79a7f28e2ce1575976b7b259a14fedc949af7aa1ff9da79c755fbab0ab");
+		ramp$1 = (scheme) => rgbBasis(scheme[scheme.length - 1]);
+		scheme$q = new Array(3).concat("d8b365f5f5f55ab4ac", "a6611adfc27d80cdc1018571", "a6611adfc27df5f5f580cdc1018571", "8c510ad8b365f6e8c3c7eae55ab4ac01665e", "8c510ad8b365f6e8c3f5f5f5c7eae55ab4ac01665e", "8c510abf812ddfc27df6e8c3c7eae580cdc135978f01665e", "8c510abf812ddfc27df6e8c3f5f5f5c7eae580cdc135978f01665e", "5430058c510abf812ddfc27df6e8c3c7eae580cdc135978f01665e003c30", "5430058c510abf812ddfc27df6e8c3f5f5f5c7eae580cdc135978f01665e003c30").map(colors$1);
+		ramp$1(scheme$q);
+		scheme$p = new Array(3).concat("af8dc3f7f7f77fbf7b", "7b3294c2a5cfa6dba0008837", "7b3294c2a5cff7f7f7a6dba0008837", "762a83af8dc3e7d4e8d9f0d37fbf7b1b7837", "762a83af8dc3e7d4e8f7f7f7d9f0d37fbf7b1b7837", "762a839970abc2a5cfe7d4e8d9f0d3a6dba05aae611b7837", "762a839970abc2a5cfe7d4e8f7f7f7d9f0d3a6dba05aae611b7837", "40004b762a839970abc2a5cfe7d4e8d9f0d3a6dba05aae611b783700441b", "40004b762a839970abc2a5cfe7d4e8f7f7f7d9f0d3a6dba05aae611b783700441b").map(colors$1);
+		ramp$1(scheme$p);
+		scheme$o = new Array(3).concat("e9a3c9f7f7f7a1d76a", "d01c8bf1b6dab8e1864dac26", "d01c8bf1b6daf7f7f7b8e1864dac26", "c51b7de9a3c9fde0efe6f5d0a1d76a4d9221", "c51b7de9a3c9fde0eff7f7f7e6f5d0a1d76a4d9221", "c51b7dde77aef1b6dafde0efe6f5d0b8e1867fbc414d9221", "c51b7dde77aef1b6dafde0eff7f7f7e6f5d0b8e1867fbc414d9221", "8e0152c51b7dde77aef1b6dafde0efe6f5d0b8e1867fbc414d9221276419", "8e0152c51b7dde77aef1b6dafde0eff7f7f7e6f5d0b8e1867fbc414d9221276419").map(colors$1);
+		ramp$1(scheme$o);
+		scheme$n = new Array(3).concat("998ec3f7f7f7f1a340", "5e3c99b2abd2fdb863e66101", "5e3c99b2abd2f7f7f7fdb863e66101", "542788998ec3d8daebfee0b6f1a340b35806", "542788998ec3d8daebf7f7f7fee0b6f1a340b35806", "5427888073acb2abd2d8daebfee0b6fdb863e08214b35806", "5427888073acb2abd2d8daebf7f7f7fee0b6fdb863e08214b35806", "2d004b5427888073acb2abd2d8daebfee0b6fdb863e08214b358067f3b08", "2d004b5427888073acb2abd2d8daebf7f7f7fee0b6fdb863e08214b358067f3b08").map(colors$1);
+		ramp$1(scheme$n);
+		scheme$m = new Array(3).concat("ef8a62f7f7f767a9cf", "ca0020f4a58292c5de0571b0", "ca0020f4a582f7f7f792c5de0571b0", "b2182bef8a62fddbc7d1e5f067a9cf2166ac", "b2182bef8a62fddbc7f7f7f7d1e5f067a9cf2166ac", "b2182bd6604df4a582fddbc7d1e5f092c5de4393c32166ac", "b2182bd6604df4a582fddbc7f7f7f7d1e5f092c5de4393c32166ac", "67001fb2182bd6604df4a582fddbc7d1e5f092c5de4393c32166ac053061", "67001fb2182bd6604df4a582fddbc7f7f7f7d1e5f092c5de4393c32166ac053061").map(colors$1);
+		ramp$1(scheme$m);
+		scheme$l = new Array(3).concat("ef8a62ffffff999999", "ca0020f4a582bababa404040", "ca0020f4a582ffffffbababa404040", "b2182bef8a62fddbc7e0e0e09999994d4d4d", "b2182bef8a62fddbc7ffffffe0e0e09999994d4d4d", "b2182bd6604df4a582fddbc7e0e0e0bababa8787874d4d4d", "b2182bd6604df4a582fddbc7ffffffe0e0e0bababa8787874d4d4d", "67001fb2182bd6604df4a582fddbc7e0e0e0bababa8787874d4d4d1a1a1a", "67001fb2182bd6604df4a582fddbc7ffffffe0e0e0bababa8787874d4d4d1a1a1a").map(colors$1);
+		ramp$1(scheme$l);
+		scheme$k = new Array(3).concat("fc8d59ffffbf91bfdb", "d7191cfdae61abd9e92c7bb6", "d7191cfdae61ffffbfabd9e92c7bb6", "d73027fc8d59fee090e0f3f891bfdb4575b4", "d73027fc8d59fee090ffffbfe0f3f891bfdb4575b4", "d73027f46d43fdae61fee090e0f3f8abd9e974add14575b4", "d73027f46d43fdae61fee090ffffbfe0f3f8abd9e974add14575b4", "a50026d73027f46d43fdae61fee090e0f3f8abd9e974add14575b4313695", "a50026d73027f46d43fdae61fee090ffffbfe0f3f8abd9e974add14575b4313695").map(colors$1);
+		ramp$1(scheme$k);
+		scheme$j = new Array(3).concat("fc8d59ffffbf91cf60", "d7191cfdae61a6d96a1a9641", "d7191cfdae61ffffbfa6d96a1a9641", "d73027fc8d59fee08bd9ef8b91cf601a9850", "d73027fc8d59fee08bffffbfd9ef8b91cf601a9850", "d73027f46d43fdae61fee08bd9ef8ba6d96a66bd631a9850", "d73027f46d43fdae61fee08bffffbfd9ef8ba6d96a66bd631a9850", "a50026d73027f46d43fdae61fee08bd9ef8ba6d96a66bd631a9850006837", "a50026d73027f46d43fdae61fee08bffffbfd9ef8ba6d96a66bd631a9850006837").map(colors$1);
+		ramp$1(scheme$j);
+		scheme$i = new Array(3).concat("fc8d59ffffbf99d594", "d7191cfdae61abdda42b83ba", "d7191cfdae61ffffbfabdda42b83ba", "d53e4ffc8d59fee08be6f59899d5943288bd", "d53e4ffc8d59fee08bffffbfe6f59899d5943288bd", "d53e4ff46d43fdae61fee08be6f598abdda466c2a53288bd", "d53e4ff46d43fdae61fee08bffffbfe6f598abdda466c2a53288bd", "9e0142d53e4ff46d43fdae61fee08be6f598abdda466c2a53288bd5e4fa2", "9e0142d53e4ff46d43fdae61fee08bffffbfe6f598abdda466c2a53288bd5e4fa2").map(colors$1);
+		ramp$1(scheme$i);
+		scheme$h = new Array(3).concat("e5f5f999d8c92ca25f", "edf8fbb2e2e266c2a4238b45", "edf8fbb2e2e266c2a42ca25f006d2c", "edf8fbccece699d8c966c2a42ca25f006d2c", "edf8fbccece699d8c966c2a441ae76238b45005824", "f7fcfde5f5f9ccece699d8c966c2a441ae76238b45005824", "f7fcfde5f5f9ccece699d8c966c2a441ae76238b45006d2c00441b").map(colors$1);
+		ramp$1(scheme$h);
+		scheme$g = new Array(3).concat("e0ecf49ebcda8856a7", "edf8fbb3cde38c96c688419d", "edf8fbb3cde38c96c68856a7810f7c", "edf8fbbfd3e69ebcda8c96c68856a7810f7c", "edf8fbbfd3e69ebcda8c96c68c6bb188419d6e016b", "f7fcfde0ecf4bfd3e69ebcda8c96c68c6bb188419d6e016b", "f7fcfde0ecf4bfd3e69ebcda8c96c68c6bb188419d810f7c4d004b").map(colors$1);
+		ramp$1(scheme$g);
+		scheme$f = new Array(3).concat("e0f3dba8ddb543a2ca", "f0f9e8bae4bc7bccc42b8cbe", "f0f9e8bae4bc7bccc443a2ca0868ac", "f0f9e8ccebc5a8ddb57bccc443a2ca0868ac", "f0f9e8ccebc5a8ddb57bccc44eb3d32b8cbe08589e", "f7fcf0e0f3dbccebc5a8ddb57bccc44eb3d32b8cbe08589e", "f7fcf0e0f3dbccebc5a8ddb57bccc44eb3d32b8cbe0868ac084081").map(colors$1);
+		ramp$1(scheme$f);
+		scheme$e = new Array(3).concat("fee8c8fdbb84e34a33", "fef0d9fdcc8afc8d59d7301f", "fef0d9fdcc8afc8d59e34a33b30000", "fef0d9fdd49efdbb84fc8d59e34a33b30000", "fef0d9fdd49efdbb84fc8d59ef6548d7301f990000", "fff7ecfee8c8fdd49efdbb84fc8d59ef6548d7301f990000", "fff7ecfee8c8fdd49efdbb84fc8d59ef6548d7301fb300007f0000").map(colors$1);
+		ramp$1(scheme$e);
+		scheme$d = new Array(3).concat("ece2f0a6bddb1c9099", "f6eff7bdc9e167a9cf02818a", "f6eff7bdc9e167a9cf1c9099016c59", "f6eff7d0d1e6a6bddb67a9cf1c9099016c59", "f6eff7d0d1e6a6bddb67a9cf3690c002818a016450", "fff7fbece2f0d0d1e6a6bddb67a9cf3690c002818a016450", "fff7fbece2f0d0d1e6a6bddb67a9cf3690c002818a016c59014636").map(colors$1);
+		ramp$1(scheme$d);
+		scheme$c = new Array(3).concat("ece7f2a6bddb2b8cbe", "f1eef6bdc9e174a9cf0570b0", "f1eef6bdc9e174a9cf2b8cbe045a8d", "f1eef6d0d1e6a6bddb74a9cf2b8cbe045a8d", "f1eef6d0d1e6a6bddb74a9cf3690c00570b0034e7b", "fff7fbece7f2d0d1e6a6bddb74a9cf3690c00570b0034e7b", "fff7fbece7f2d0d1e6a6bddb74a9cf3690c00570b0045a8d023858").map(colors$1);
+		ramp$1(scheme$c);
+		scheme$b = new Array(3).concat("e7e1efc994c7dd1c77", "f1eef6d7b5d8df65b0ce1256", "f1eef6d7b5d8df65b0dd1c77980043", "f1eef6d4b9dac994c7df65b0dd1c77980043", "f1eef6d4b9dac994c7df65b0e7298ace125691003f", "f7f4f9e7e1efd4b9dac994c7df65b0e7298ace125691003f", "f7f4f9e7e1efd4b9dac994c7df65b0e7298ace125698004367001f").map(colors$1);
+		ramp$1(scheme$b);
+		scheme$a = new Array(3).concat("fde0ddfa9fb5c51b8a", "feebe2fbb4b9f768a1ae017e", "feebe2fbb4b9f768a1c51b8a7a0177", "feebe2fcc5c0fa9fb5f768a1c51b8a7a0177", "feebe2fcc5c0fa9fb5f768a1dd3497ae017e7a0177", "fff7f3fde0ddfcc5c0fa9fb5f768a1dd3497ae017e7a0177", "fff7f3fde0ddfcc5c0fa9fb5f768a1dd3497ae017e7a017749006a").map(colors$1);
+		ramp$1(scheme$a);
+		scheme$9 = new Array(3).concat("edf8b17fcdbb2c7fb8", "ffffcca1dab441b6c4225ea8", "ffffcca1dab441b6c42c7fb8253494", "ffffccc7e9b47fcdbb41b6c42c7fb8253494", "ffffccc7e9b47fcdbb41b6c41d91c0225ea80c2c84", "ffffd9edf8b1c7e9b47fcdbb41b6c41d91c0225ea80c2c84", "ffffd9edf8b1c7e9b47fcdbb41b6c41d91c0225ea8253494081d58").map(colors$1);
+		ramp$1(scheme$9);
+		scheme$8 = new Array(3).concat("f7fcb9addd8e31a354", "ffffccc2e69978c679238443", "ffffccc2e69978c67931a354006837", "ffffccd9f0a3addd8e78c67931a354006837", "ffffccd9f0a3addd8e78c67941ab5d238443005a32", "ffffe5f7fcb9d9f0a3addd8e78c67941ab5d238443005a32", "ffffe5f7fcb9d9f0a3addd8e78c67941ab5d238443006837004529").map(colors$1);
+		ramp$1(scheme$8);
+		scheme$7 = new Array(3).concat("fff7bcfec44fd95f0e", "ffffd4fed98efe9929cc4c02", "ffffd4fed98efe9929d95f0e993404", "ffffd4fee391fec44ffe9929d95f0e993404", "ffffd4fee391fec44ffe9929ec7014cc4c028c2d04", "ffffe5fff7bcfee391fec44ffe9929ec7014cc4c028c2d04", "ffffe5fff7bcfee391fec44ffe9929ec7014cc4c02993404662506").map(colors$1);
+		ramp$1(scheme$7);
+		scheme$6 = new Array(3).concat("ffeda0feb24cf03b20", "ffffb2fecc5cfd8d3ce31a1c", "ffffb2fecc5cfd8d3cf03b20bd0026", "ffffb2fed976feb24cfd8d3cf03b20bd0026", "ffffb2fed976feb24cfd8d3cfc4e2ae31a1cb10026", "ffffccffeda0fed976feb24cfd8d3cfc4e2ae31a1cb10026", "ffffccffeda0fed976feb24cfd8d3cfc4e2ae31a1cbd0026800026").map(colors$1);
+		ramp$1(scheme$6);
+		scheme$5 = new Array(3).concat("deebf79ecae13182bd", "eff3ffbdd7e76baed62171b5", "eff3ffbdd7e76baed63182bd08519c", "eff3ffc6dbef9ecae16baed63182bd08519c", "eff3ffc6dbef9ecae16baed64292c62171b5084594", "f7fbffdeebf7c6dbef9ecae16baed64292c62171b5084594", "f7fbffdeebf7c6dbef9ecae16baed64292c62171b508519c08306b").map(colors$1);
+		ramp$1(scheme$5);
+		scheme$4 = new Array(3).concat("e5f5e0a1d99b31a354", "edf8e9bae4b374c476238b45", "edf8e9bae4b374c47631a354006d2c", "edf8e9c7e9c0a1d99b74c47631a354006d2c", "edf8e9c7e9c0a1d99b74c47641ab5d238b45005a32", "f7fcf5e5f5e0c7e9c0a1d99b74c47641ab5d238b45005a32", "f7fcf5e5f5e0c7e9c0a1d99b74c47641ab5d238b45006d2c00441b").map(colors$1);
+		ramp$1(scheme$4);
+		scheme$3 = new Array(3).concat("f0f0f0bdbdbd636363", "f7f7f7cccccc969696525252", "f7f7f7cccccc969696636363252525", "f7f7f7d9d9d9bdbdbd969696636363252525", "f7f7f7d9d9d9bdbdbd969696737373525252252525", "fffffff0f0f0d9d9d9bdbdbd969696737373525252252525", "fffffff0f0f0d9d9d9bdbdbd969696737373525252252525000000").map(colors$1);
+		ramp$1(scheme$3);
+		scheme$2 = new Array(3).concat("efedf5bcbddc756bb1", "f2f0f7cbc9e29e9ac86a51a3", "f2f0f7cbc9e29e9ac8756bb154278f", "f2f0f7dadaebbcbddc9e9ac8756bb154278f", "f2f0f7dadaebbcbddc9e9ac8807dba6a51a34a1486", "fcfbfdefedf5dadaebbcbddc9e9ac8807dba6a51a34a1486", "fcfbfdefedf5dadaebbcbddc9e9ac8807dba6a51a354278f3f007d").map(colors$1);
+		ramp$1(scheme$2);
+		scheme$1 = new Array(3).concat("fee0d2fc9272de2d26", "fee5d9fcae91fb6a4acb181d", "fee5d9fcae91fb6a4ade2d26a50f15", "fee5d9fcbba1fc9272fb6a4ade2d26a50f15", "fee5d9fcbba1fc9272fb6a4aef3b2ccb181d99000d", "fff5f0fee0d2fcbba1fc9272fb6a4aef3b2ccb181d99000d", "fff5f0fee0d2fcbba1fc9272fb6a4aef3b2ccb181da50f1567000d").map(colors$1);
+		ramp$1(scheme$1);
+		scheme = new Array(3).concat("fee6cefdae6be6550d", "feeddefdbe85fd8d3cd94701", "feeddefdbe85fd8d3ce6550da63603", "feeddefdd0a2fdae6bfd8d3ce6550da63603", "feeddefdd0a2fdae6bfd8d3cf16913d948018c2d04", "fff5ebfee6cefdd0a2fdae6bfd8d3cf16913d948018c2d04", "fff5ebfee6cefdd0a2fdae6bfd8d3cf16913d94801a636037f2704").map(colors$1);
+		ramp$1(scheme);
+		cubehelixLong(cubehelix$2(300, .5, 0), cubehelix$2(-240, .5, 1));
+		cubehelixLong(cubehelix$2(-100, .75, .35), cubehelix$2(80, 1.5, .8));
+		cubehelixLong(cubehelix$2(260, .75, .35), cubehelix$2(80, 1.5, .8));
+		cubehelix$2();
+		rgb$1();
+		ramp(colors$1("44015444025645045745055946075a46085c460a5d460b5e470d60470e6147106347116447136548146748166848176948186a481a6c481b6d481c6e481d6f481f70482071482173482374482475482576482677482878482979472a7a472c7a472d7b472e7c472f7d46307e46327e46337f463480453581453781453882443983443a83443b84433d84433e85423f854240864241864142874144874045884046883f47883f48893e49893e4a893e4c8a3d4d8a3d4e8a3c4f8a3c508b3b518b3b528b3a538b3a548c39558c39568c38588c38598c375a8c375b8d365c8d365d8d355e8d355f8d34608d34618d33628d33638d32648e32658e31668e31678e31688e30698e306a8e2f6b8e2f6c8e2e6d8e2e6e8e2e6f8e2d708e2d718e2c718e2c728e2c738e2b748e2b758e2a768e2a778e2a788e29798e297a8e297b8e287c8e287d8e277e8e277f8e27808e26818e26828e26828e25838e25848e25858e24868e24878e23888e23898e238a8d228b8d228c8d228d8d218e8d218f8d21908d21918c20928c20928c20938c1f948c1f958b1f968b1f978b1f988b1f998a1f9a8a1e9b8a1e9c891e9d891f9e891f9f881fa0881fa1881fa1871fa28720a38620a48621a58521a68522a78522a88423a98324aa8325ab8225ac8226ad8127ad8128ae8029af7f2ab07f2cb17e2db27d2eb37c2fb47c31b57b32b67a34b67935b77937b87838b9773aba763bbb753dbc743fbc7340bd7242be7144bf7046c06f48c16e4ac16d4cc26c4ec36b50c46a52c56954c56856c66758c7655ac8645cc8635ec96260ca6063cb5f65cb5e67cc5c69cd5b6ccd5a6ece5870cf5773d05675d05477d1537ad1517cd2507fd34e81d34d84d44b86d54989d5488bd6468ed64590d74393d74195d84098d83e9bd93c9dd93ba0da39a2da37a5db36a8db34aadc32addc30b0dd2fb2dd2db5de2bb8de29bade28bddf26c0df25c2df23c5e021c8e020cae11fcde11dd0e11cd2e21bd5e21ad8e219dae319dde318dfe318e2e418e5e419e7e419eae51aece51befe51cf1e51df4e61ef6e620f8e621fbe723fde725"));
+		ramp(colors$1("00000401000501010601010802010902020b02020d03030f03031204041405041606051806051a07061c08071e0907200a08220b09240c09260d0a290e0b2b100b2d110c2f120d31130d34140e36150e38160f3b180f3d19103f1a10421c10441d11471e114920114b21114e22115024125325125527125829115a2a115c2c115f2d11612f116331116533106734106936106b38106c390f6e3b0f703d0f713f0f72400f74420f75440f764510774710784910784a10794c117a4e117b4f127b51127c52137c54137d56147d57157e59157e5a167e5c167f5d177f5f187f601880621980641a80651a80671b80681c816a1c816b1d816d1d816e1e81701f81721f817320817521817621817822817922827b23827c23827e24828025828125818326818426818627818827818928818b29818c29818e2a81902a81912b81932b80942c80962c80982d80992d809b2e7f9c2e7f9e2f7fa02f7fa1307ea3307ea5317ea6317da8327daa337dab337cad347cae347bb0357bb2357bb3367ab5367ab73779b83779ba3878bc3978bd3977bf3a77c03a76c23b75c43c75c53c74c73d73c83e73ca3e72cc3f71cd4071cf4070d0416fd2426fd3436ed5446dd6456cd8456cd9466bdb476adc4869de4968df4a68e04c67e24d66e34e65e44f64e55064e75263e85362e95462ea5661eb5760ec5860ed5a5fee5b5eef5d5ef05f5ef1605df2625df2645cf3655cf4675cf4695cf56b5cf66c5cf66e5cf7705cf7725cf8745cf8765cf9785df9795df97b5dfa7d5efa7f5efa815ffb835ffb8560fb8761fc8961fc8a62fc8c63fc8e64fc9065fd9266fd9467fd9668fd9869fd9a6afd9b6bfe9d6cfe9f6dfea16efea36ffea571fea772fea973feaa74feac76feae77feb078feb27afeb47bfeb67cfeb77efeb97ffebb81febd82febf84fec185fec287fec488fec68afec88cfeca8dfecc8ffecd90fecf92fed194fed395fed597fed799fed89afdda9cfddc9efddea0fde0a1fde2a3fde3a5fde5a7fde7a9fde9aafdebacfcecaefceeb0fcf0b2fcf2b4fcf4b6fcf6b8fcf7b9fcf9bbfcfbbdfcfdbf"));
+		ramp(colors$1("00000401000501010601010802010a02020c02020e03021004031204031405041706041907051b08051d09061f0a07220b07240c08260d08290e092b10092d110a30120a32140b34150b37160b39180c3c190c3e1b0c411c0c431e0c451f0c48210c4a230c4c240c4f260c51280b53290b552b0b572d0b592f0a5b310a5c320a5e340a5f3609613809623909633b09643d09653e0966400a67420a68440a68450a69470b6a490b6a4a0c6b4c0c6b4d0d6c4f0d6c510e6c520e6d540f6d550f6d57106e59106e5a116e5c126e5d126e5f136e61136e62146e64156e65156e67166e69166e6a176e6c186e6d186e6f196e71196e721a6e741a6e751b6e771c6d781c6d7a1d6d7c1d6d7d1e6d7f1e6c801f6c82206c84206b85216b87216b88226a8a226a8c23698d23698f24699025689225689326679526679727669827669a28659b29649d29649f2a63a02a63a22b62a32c61a52c60a62d60a82e5fa92e5eab2f5ead305dae305cb0315bb1325ab3325ab43359b63458b73557b93556ba3655bc3754bd3853bf3952c03a51c13a50c33b4fc43c4ec63d4dc73e4cc83f4bca404acb4149cc4248ce4347cf4446d04545d24644d34743d44842d54a41d74b3fd84c3ed94d3dda4e3cdb503bdd513ade5238df5337e05536e15635e25734e35933e45a31e55c30e65d2fe75e2ee8602de9612bea632aeb6429eb6628ec6726ed6925ee6a24ef6c23ef6e21f06f20f1711ff1731df2741cf3761bf37819f47918f57b17f57d15f67e14f68013f78212f78410f8850ff8870ef8890cf98b0bf98c0af98e09fa9008fa9207fa9407fb9606fb9706fb9906fb9b06fb9d07fc9f07fca108fca309fca50afca60cfca80dfcaa0ffcac11fcae12fcb014fcb216fcb418fbb61afbb81dfbba1ffbbc21fbbe23fac026fac228fac42afac62df9c72ff9c932f9cb35f8cd37f8cf3af7d13df7d340f6d543f6d746f5d949f5db4cf4dd4ff4df53f4e156f3e35af3e55df2e661f2e865f2ea69f1ec6df1ed71f1ef75f1f179f2f27df2f482f3f586f3f68af4f88ef5f992f6fa96f8fb9af9fc9dfafda1fcffa4"));
+		ramp(colors$1("0d088710078813078916078a19068c1b068d1d068e20068f2206902406912605912805922a05932c05942e05952f059631059733059735049837049938049a3a049a3c049b3e049c3f049c41049d43039e44039e46039f48039f4903a04b03a14c02a14e02a25002a25102a35302a35502a45601a45801a45901a55b01a55c01a65e01a66001a66100a76300a76400a76600a76700a86900a86a00a86c00a86e00a86f00a87100a87201a87401a87501a87701a87801a87a02a87b02a87d03a87e03a88004a88104a78305a78405a78606a68707a68808a68a09a58b0aa58d0ba58e0ca48f0da4910ea3920fa39410a29511a19613a19814a099159f9a169f9c179e9d189d9e199da01a9ca11b9ba21d9aa31e9aa51f99a62098a72197a82296aa2395ab2494ac2694ad2793ae2892b02991b12a90b22b8fb32c8eb42e8db52f8cb6308bb7318ab83289ba3388bb3488bc3587bd3786be3885bf3984c03a83c13b82c23c81c33d80c43e7fc5407ec6417dc7427cc8437bc9447aca457acb4679cc4778cc4977cd4a76ce4b75cf4c74d04d73d14e72d24f71d35171d45270d5536fd5546ed6556dd7566cd8576bd9586ada5a6ada5b69db5c68dc5d67dd5e66de5f65de6164df6263e06363e16462e26561e26660e3685fe4695ee56a5de56b5de66c5ce76e5be76f5ae87059e97158e97257ea7457eb7556eb7655ec7754ed7953ed7a52ee7b51ef7c51ef7e50f07f4ff0804ef1814df1834cf2844bf3854bf3874af48849f48948f58b47f58c46f68d45f68f44f79044f79143f79342f89441f89540f9973ff9983ef99a3efa9b3dfa9c3cfa9e3bfb9f3afba139fba238fca338fca537fca636fca835fca934fdab33fdac33fdae32fdaf31fdb130fdb22ffdb42ffdb52efeb72dfeb82cfeba2cfebb2bfebd2afebe2afec029fdc229fdc328fdc527fdc627fdc827fdca26fdcb26fccd25fcce25fcd025fcd225fbd324fbd524fbd724fad824fada24f9dc24f9dd25f8df25f8e125f7e225f7e425f6e626f6e826f5e926f5eb27f4ed27f3ee27f3f027f2f227f1f426f1f525f0f724f0f921"));
 	}));
 	//#endregion
-	//#region node_modules/d3-scale-chromatic/src/index.js
-	var init_src$3 = __esmMin((() => {
-		init_colors();
-		init_Tableau10();
-		init_src$24();
-		init_src$25();
-	}));
-	//#endregion
-	//#region node_modules/d3-shape/src/constant.js
-	function constant_default$1(x) {
+	//#region node_modules/d3-shape/dist/d3-shape.mjs
+	function constant$2(x) {
 		return function constant() {
 			return x;
 		};
 	}
-	var init_constant$1 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-shape/src/math.js
 	function acos(x) {
 		return x > 1 ? 0 : x < -1 ? pi : Math.acos(x);
 	}
 	function asin(x) {
 		return x >= 1 ? halfPi : x <= -1 ? -halfPi : Math.asin(x);
 	}
-	var abs$1, atan2, cos$1, max$2, min$3, sin$1, sqrt$1, pi, halfPi, tau;
-	var init_math = __esmMin((() => {
-		abs$1 = Math.abs;
-		atan2 = Math.atan2;
-		cos$1 = Math.cos;
-		max$2 = Math.max;
-		min$3 = Math.min;
-		sin$1 = Math.sin;
-		sqrt$1 = Math.sqrt;
-		pi = Math.PI;
-		halfPi = pi / 2;
-		tau = 2 * pi;
-	}));
-	//#endregion
-	//#region node_modules/d3-shape/src/path.js
 	function withPath(shape) {
 		let digits = 3;
 		shape.digits = function(_) {
@@ -41323,11 +40749,6 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 		return () => new Path(digits);
 	}
-	var init_path = __esmMin((() => {
-		init_src$19();
-	}));
-	//#endregion
-	//#region node_modules/d3-shape/src/arc.js
 	function arcInnerRadius(d) {
 		return d.innerRadius;
 	}
@@ -41345,7 +40766,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	function intersect(x0, y0, x1, y1, x2, y2, x3, y3) {
 		var x10 = x1 - x0, y10 = y1 - y0, x32 = x3 - x2, y32 = y3 - y2, t = y32 * x10 - x32 * y10;
-		if (t * t < 1e-12) return;
+		if (t * t < epsilon$1) return;
 		t = (x32 * (y0 - y2) - y32 * (x0 - x2)) / t;
 		return [x0 + t * x10, y0 + t * y10];
 	}
@@ -41361,31 +40782,31 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			y11: cy0 * (r1 / r - 1)
 		};
 	}
-	function arc_default() {
-		var innerRadius = arcInnerRadius, outerRadius = arcOuterRadius, cornerRadius = constant_default$1(0), padRadius = null, startAngle = arcStartAngle, endAngle = arcEndAngle, padAngle = arcPadAngle, context = null, path = withPath(arc);
+	function arc() {
+		var innerRadius = arcInnerRadius, outerRadius = arcOuterRadius, cornerRadius = constant$2(0), padRadius = null, startAngle = arcStartAngle, endAngle = arcEndAngle, padAngle = arcPadAngle, context = null, path = withPath(arc);
 		function arc() {
 			var buffer, r, r0 = +innerRadius.apply(this, arguments), r1 = +outerRadius.apply(this, arguments), a0 = startAngle.apply(this, arguments) - halfPi, a1 = endAngle.apply(this, arguments) - halfPi, da = abs$1(a1 - a0), cw = a1 > a0;
 			if (!context) context = buffer = path();
 			if (r1 < r0) r = r1, r1 = r0, r0 = r;
-			if (!(r1 > 1e-12)) context.moveTo(0, 0);
-			else if (da > tau - 1e-12) {
+			if (!(r1 > epsilon$1)) context.moveTo(0, 0);
+			else if (da > tau - epsilon$1) {
 				context.moveTo(r1 * cos$1(a0), r1 * sin$1(a0));
 				context.arc(0, 0, r1, a0, a1, !cw);
-				if (r0 > 1e-12) {
+				if (r0 > epsilon$1) {
 					context.moveTo(r0 * cos$1(a1), r0 * sin$1(a1));
 					context.arc(0, 0, r0, a1, a0, cw);
 				}
 			} else {
-				var a01 = a0, a11 = a1, a00 = a0, a10 = a1, da0 = da, da1 = da, ap = padAngle.apply(this, arguments) / 2, rp = ap > 1e-12 && (padRadius ? +padRadius.apply(this, arguments) : sqrt$1(r0 * r0 + r1 * r1)), rc = min$3(abs$1(r1 - r0) / 2, +cornerRadius.apply(this, arguments)), rc0 = rc, rc1 = rc, t0, t1;
-				if (rp > 1e-12) {
+				var a01 = a0, a11 = a1, a00 = a0, a10 = a1, da0 = da, da1 = da, ap = padAngle.apply(this, arguments) / 2, rp = ap > epsilon$1 && (padRadius ? +padRadius.apply(this, arguments) : sqrt$1(r0 * r0 + r1 * r1)), rc = min$3(abs$1(r1 - r0) / 2, +cornerRadius.apply(this, arguments)), rc0 = rc, rc1 = rc, t0, t1;
+				if (rp > epsilon$1) {
 					var p0 = asin(rp / r0 * sin$1(ap)), p1 = asin(rp / r1 * sin$1(ap));
-					if ((da0 -= p0 * 2) > 1e-12) p0 *= cw ? 1 : -1, a00 += p0, a10 -= p0;
+					if ((da0 -= p0 * 2) > epsilon$1) p0 *= cw ? 1 : -1, a00 += p0, a10 -= p0;
 					else da0 = 0, a00 = a10 = (a0 + a1) / 2;
-					if ((da1 -= p1 * 2) > 1e-12) p1 *= cw ? 1 : -1, a01 += p1, a11 -= p1;
+					if ((da1 -= p1 * 2) > epsilon$1) p1 *= cw ? 1 : -1, a01 += p1, a11 -= p1;
 					else da1 = 0, a01 = a11 = (a0 + a1) / 2;
 				}
 				var x01 = r1 * cos$1(a01), y01 = r1 * sin$1(a01), x10 = r0 * cos$1(a10), y10 = r0 * sin$1(a10);
-				if (rc > 1e-12) {
+				if (rc > epsilon$1) {
 					var x11 = r1 * cos$1(a11), y11 = r1 * sin$1(a11), x00 = r0 * cos$1(a00), y00 = r0 * sin$1(a00), oc;
 					if (da < pi) {
 						if (oc = intersect(x01, y01, x00, y00, x11, y11, x10, y10)) {
@@ -41395,8 +40816,8 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 						} else rc0 = rc1 = 0;
 					}
 				}
-				if (!(da1 > 1e-12)) context.moveTo(x01, y01);
-				else if (rc1 > 1e-12) {
+				if (!(da1 > epsilon$1)) context.moveTo(x01, y01);
+				else if (rc1 > epsilon$1) {
 					t0 = cornerTangents(x00, y00, x01, y01, r1, rc1, cw);
 					t1 = cornerTangents(x11, y11, x10, y10, r1, rc1, cw);
 					context.moveTo(t0.cx + t0.x01, t0.cy + t0.y01);
@@ -41407,8 +40828,8 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 						context.arc(t1.cx, t1.cy, rc1, atan2(t1.y11, t1.x11), atan2(t1.y01, t1.x01), !cw);
 					}
 				} else context.moveTo(x01, y01), context.arc(0, 0, r1, a01, a11, !cw);
-				if (!(r0 > 1e-12) || !(da0 > 1e-12)) context.lineTo(x10, y10);
-				else if (rc0 > 1e-12) {
+				if (!(r0 > epsilon$1) || !(da0 > epsilon$1)) context.lineTo(x10, y10);
+				else if (rc0 > epsilon$1) {
 					t0 = cornerTangents(x10, y10, x11, y11, r0, -rc0, cw);
 					t1 = cornerTangents(x01, y01, x00, y00, r0, -rc0, cw);
 					context.lineTo(t0.cx + t0.x01, t0.cy + t0.y01);
@@ -41428,53 +40849,291 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			return [cos$1(a) * r, sin$1(a) * r];
 		};
 		arc.innerRadius = function(_) {
-			return arguments.length ? (innerRadius = typeof _ === "function" ? _ : constant_default$1(+_), arc) : innerRadius;
+			return arguments.length ? (innerRadius = typeof _ === "function" ? _ : constant$2(+_), arc) : innerRadius;
 		};
 		arc.outerRadius = function(_) {
-			return arguments.length ? (outerRadius = typeof _ === "function" ? _ : constant_default$1(+_), arc) : outerRadius;
+			return arguments.length ? (outerRadius = typeof _ === "function" ? _ : constant$2(+_), arc) : outerRadius;
 		};
 		arc.cornerRadius = function(_) {
-			return arguments.length ? (cornerRadius = typeof _ === "function" ? _ : constant_default$1(+_), arc) : cornerRadius;
+			return arguments.length ? (cornerRadius = typeof _ === "function" ? _ : constant$2(+_), arc) : cornerRadius;
 		};
 		arc.padRadius = function(_) {
-			return arguments.length ? (padRadius = _ == null ? null : typeof _ === "function" ? _ : constant_default$1(+_), arc) : padRadius;
+			return arguments.length ? (padRadius = _ == null ? null : typeof _ === "function" ? _ : constant$2(+_), arc) : padRadius;
 		};
 		arc.startAngle = function(_) {
-			return arguments.length ? (startAngle = typeof _ === "function" ? _ : constant_default$1(+_), arc) : startAngle;
+			return arguments.length ? (startAngle = typeof _ === "function" ? _ : constant$2(+_), arc) : startAngle;
 		};
 		arc.endAngle = function(_) {
-			return arguments.length ? (endAngle = typeof _ === "function" ? _ : constant_default$1(+_), arc) : endAngle;
+			return arguments.length ? (endAngle = typeof _ === "function" ? _ : constant$2(+_), arc) : endAngle;
 		};
 		arc.padAngle = function(_) {
-			return arguments.length ? (padAngle = typeof _ === "function" ? _ : constant_default$1(+_), arc) : padAngle;
+			return arguments.length ? (padAngle = typeof _ === "function" ? _ : constant$2(+_), arc) : padAngle;
 		};
 		arc.context = function(_) {
 			return arguments.length ? (context = _ == null ? null : _, arc) : context;
 		};
 		return arc;
 	}
-	var init_arc = __esmMin((() => {
-		init_constant$1();
-		init_math();
-		init_path();
-	}));
-	//#endregion
-	//#region node_modules/d3-shape/src/array.js
-	function array_default(x) {
+	function array$1(x) {
 		return typeof x === "object" && "length" in x ? x : Array.from(x);
 	}
-	var init_array = __esmMin((() => {
-		Array.prototype.slice;
-	}));
-	//#endregion
-	//#region node_modules/d3-shape/src/curve/linear.js
 	function Linear(context) {
 		this._context = context;
 	}
-	function linear_default(context) {
+	function curveLinear(context) {
 		return new Linear(context);
 	}
-	var init_linear = __esmMin((() => {
+	function x$2(p) {
+		return p[0];
+	}
+	function y$2(p) {
+		return p[1];
+	}
+	function line$1(x$1, y$1) {
+		var defined = constant$2(true), context = null, curve = curveLinear, output = null, path = withPath(line);
+		x$1 = typeof x$1 === "function" ? x$1 : x$1 === void 0 ? x$2 : constant$2(x$1);
+		y$1 = typeof y$1 === "function" ? y$1 : y$1 === void 0 ? y$2 : constant$2(y$1);
+		function line(data) {
+			var i, n = (data = array$1(data)).length, d, defined0 = false, buffer;
+			if (context == null) output = curve(buffer = path());
+			for (i = 0; i <= n; ++i) {
+				if (!(i < n && defined(d = data[i], i, data)) === defined0) {
+					if (defined0 = !defined0) output.lineStart();
+					else output.lineEnd();
+				}
+				if (defined0) output.point(+x$1(d, i, data), +y$1(d, i, data));
+			}
+			if (buffer) return output = null, buffer + "" || null;
+		}
+		line.x = function(_) {
+			return arguments.length ? (x$1 = typeof _ === "function" ? _ : constant$2(+_), line) : x$1;
+		};
+		line.y = function(_) {
+			return arguments.length ? (y$1 = typeof _ === "function" ? _ : constant$2(+_), line) : y$1;
+		};
+		line.defined = function(_) {
+			return arguments.length ? (defined = typeof _ === "function" ? _ : constant$2(!!_), line) : defined;
+		};
+		line.curve = function(_) {
+			return arguments.length ? (curve = _, context != null && (output = curve(context)), line) : curve;
+		};
+		line.context = function(_) {
+			return arguments.length ? (_ == null ? context = output = null : output = curve(context = _), line) : context;
+		};
+		return line;
+	}
+	function descending$1(a, b) {
+		return b < a ? -1 : b > a ? 1 : b >= a ? 0 : NaN;
+	}
+	function identity$5(d) {
+		return d;
+	}
+	function pie$1() {
+		var value = identity$5, sortValues = descending$1, sort = null, startAngle = constant$2(0), endAngle = constant$2(tau), padAngle = constant$2(0);
+		function pie(data) {
+			var i, n = (data = array$1(data)).length, j, k, sum = 0, index = new Array(n), arcs = new Array(n), a0 = +startAngle.apply(this, arguments), da = Math.min(tau, Math.max(-tau, endAngle.apply(this, arguments) - a0)), a1, p = Math.min(Math.abs(da) / n, padAngle.apply(this, arguments)), pa = p * (da < 0 ? -1 : 1), v;
+			for (i = 0; i < n; ++i) if ((v = arcs[index[i] = i] = +value(data[i], i, data)) > 0) sum += v;
+			if (sortValues != null) index.sort(function(i, j) {
+				return sortValues(arcs[i], arcs[j]);
+			});
+			else if (sort != null) index.sort(function(i, j) {
+				return sort(data[i], data[j]);
+			});
+			for (i = 0, k = sum ? (da - n * pa) / sum : 0; i < n; ++i, a0 = a1) j = index[i], v = arcs[j], a1 = a0 + (v > 0 ? v * k : 0) + pa, arcs[j] = {
+				data: data[j],
+				index: i,
+				value: v,
+				startAngle: a0,
+				endAngle: a1,
+				padAngle: p
+			};
+			return arcs;
+		}
+		pie.value = function(_) {
+			return arguments.length ? (value = typeof _ === "function" ? _ : constant$2(+_), pie) : value;
+		};
+		pie.sortValues = function(_) {
+			return arguments.length ? (sortValues = _, sort = null, pie) : sortValues;
+		};
+		pie.sort = function(_) {
+			return arguments.length ? (sort = _, sortValues = null, pie) : sort;
+		};
+		pie.startAngle = function(_) {
+			return arguments.length ? (startAngle = typeof _ === "function" ? _ : constant$2(+_), pie) : startAngle;
+		};
+		pie.endAngle = function(_) {
+			return arguments.length ? (endAngle = typeof _ === "function" ? _ : constant$2(+_), pie) : endAngle;
+		};
+		pie.padAngle = function(_) {
+			return arguments.length ? (padAngle = typeof _ === "function" ? _ : constant$2(+_), pie) : padAngle;
+		};
+		return pie;
+	}
+	function Radial(curve) {
+		this._curve = curve;
+	}
+	function curveRadial(curve) {
+		function radial(context) {
+			return new Radial(curve(context));
+		}
+		radial._curve = curve;
+		return radial;
+	}
+	function bumpX(context) {
+		return new Bump(context, true);
+	}
+	function bumpY(context) {
+		return new Bump(context, false);
+	}
+	function noop$5() {}
+	function point$3(that, x, y) {
+		that._context.bezierCurveTo((2 * that._x0 + that._x1) / 3, (2 * that._y0 + that._y1) / 3, (that._x0 + 2 * that._x1) / 3, (that._y0 + 2 * that._y1) / 3, (that._x0 + 4 * that._x1 + x) / 6, (that._y0 + 4 * that._y1 + y) / 6);
+	}
+	function Basis(context) {
+		this._context = context;
+	}
+	function basis(context) {
+		return new Basis(context);
+	}
+	function BasisClosed(context) {
+		this._context = context;
+	}
+	function basisClosed(context) {
+		return new BasisClosed(context);
+	}
+	function BasisOpen(context) {
+		this._context = context;
+	}
+	function basisOpen(context) {
+		return new BasisOpen(context);
+	}
+	function Bundle(context, beta) {
+		this._basis = new Basis(context);
+		this._beta = beta;
+	}
+	function point$2(that, x, y) {
+		that._context.bezierCurveTo(that._x1 + that._k * (that._x2 - that._x0), that._y1 + that._k * (that._y2 - that._y0), that._x2 + that._k * (that._x1 - x), that._y2 + that._k * (that._y1 - y), that._x2, that._y2);
+	}
+	function Cardinal(context, tension) {
+		this._context = context;
+		this._k = (1 - tension) / 6;
+	}
+	function CardinalClosed(context, tension) {
+		this._context = context;
+		this._k = (1 - tension) / 6;
+	}
+	function CardinalOpen(context, tension) {
+		this._context = context;
+		this._k = (1 - tension) / 6;
+	}
+	function point$1(that, x, y) {
+		var x1 = that._x1, y1 = that._y1, x2 = that._x2, y2 = that._y2;
+		if (that._l01_a > epsilon$1) {
+			var a = 2 * that._l01_2a + 3 * that._l01_a * that._l12_a + that._l12_2a, n = 3 * that._l01_a * (that._l01_a + that._l12_a);
+			x1 = (x1 * a - that._x0 * that._l12_2a + that._x2 * that._l01_2a) / n;
+			y1 = (y1 * a - that._y0 * that._l12_2a + that._y2 * that._l01_2a) / n;
+		}
+		if (that._l23_a > epsilon$1) {
+			var b = 2 * that._l23_2a + 3 * that._l23_a * that._l12_a + that._l12_2a, m = 3 * that._l23_a * (that._l23_a + that._l12_a);
+			x2 = (x2 * b + that._x1 * that._l23_2a - x * that._l12_2a) / m;
+			y2 = (y2 * b + that._y1 * that._l23_2a - y * that._l12_2a) / m;
+		}
+		that._context.bezierCurveTo(x1, y1, x2, y2, that._x2, that._y2);
+	}
+	function CatmullRom(context, alpha) {
+		this._context = context;
+		this._alpha = alpha;
+	}
+	function CatmullRomClosed(context, alpha) {
+		this._context = context;
+		this._alpha = alpha;
+	}
+	function CatmullRomOpen(context, alpha) {
+		this._context = context;
+		this._alpha = alpha;
+	}
+	function LinearClosed(context) {
+		this._context = context;
+	}
+	function linearClosed(context) {
+		return new LinearClosed(context);
+	}
+	function sign(x) {
+		return x < 0 ? -1 : 1;
+	}
+	function slope3(that, x2, y2) {
+		var h0 = that._x1 - that._x0, h1 = x2 - that._x1, s0 = (that._y1 - that._y0) / (h0 || h1 < 0 && -0), s1 = (y2 - that._y1) / (h1 || h0 < 0 && -0), p = (s0 * h1 + s1 * h0) / (h0 + h1);
+		return (sign(s0) + sign(s1)) * Math.min(Math.abs(s0), Math.abs(s1), .5 * Math.abs(p)) || 0;
+	}
+	function slope2(that, t) {
+		var h = that._x1 - that._x0;
+		return h ? (3 * (that._y1 - that._y0) / h - t) / 2 : t;
+	}
+	function point(that, t0, t1) {
+		var x0 = that._x0, y0 = that._y0, x1 = that._x1, y1 = that._y1, dx = (x1 - x0) / 3;
+		that._context.bezierCurveTo(x0 + dx, y0 + dx * t0, x1 - dx, y1 - dx * t1, x1, y1);
+	}
+	function MonotoneX(context) {
+		this._context = context;
+	}
+	function MonotoneY(context) {
+		this._context = new ReflectContext(context);
+	}
+	function ReflectContext(context) {
+		this._context = context;
+	}
+	function monotoneX(context) {
+		return new MonotoneX(context);
+	}
+	function monotoneY(context) {
+		return new MonotoneY(context);
+	}
+	function Natural(context) {
+		this._context = context;
+	}
+	function controlPoints(x) {
+		var i, n = x.length - 1, m, a = new Array(n), b = new Array(n), r = new Array(n);
+		a[0] = 0, b[0] = 2, r[0] = x[0] + 2 * x[1];
+		for (i = 1; i < n - 1; ++i) a[i] = 1, b[i] = 4, r[i] = 4 * x[i] + 2 * x[i + 1];
+		a[n - 1] = 2, b[n - 1] = 7, r[n - 1] = 8 * x[n - 1] + x[n];
+		for (i = 1; i < n; ++i) m = a[i] / b[i - 1], b[i] -= m, r[i] -= m * r[i - 1];
+		a[n - 1] = r[n - 1] / b[n - 1];
+		for (i = n - 2; i >= 0; --i) a[i] = (r[i] - a[i + 1]) / b[i];
+		b[n - 1] = (x[n] + a[n - 1]) / 2;
+		for (i = 0; i < n - 1; ++i) b[i] = 2 * x[i + 1] - a[i + 1];
+		return [a, b];
+	}
+	function natural(context) {
+		return new Natural(context);
+	}
+	function Step(context, t) {
+		this._context = context;
+		this._t = t;
+	}
+	function step$2(context) {
+		return new Step(context, .5);
+	}
+	function stepBefore(context) {
+		return new Step(context, 0);
+	}
+	function stepAfter(context) {
+		return new Step(context, 1);
+	}
+	var abs$1, atan2, cos$1, max$2, min$3, sin$1, sqrt$1, epsilon$1, pi, halfPi, tau, Bump, tan30, kr, k$1, bundle, cardinal, cardinalClosed, cardinalOpen, catmullRom, catmullRomClosed, catmullRomOpen;
+	var init_d3_shape = __esmMin((() => {
+		init_d3_path();
+		abs$1 = Math.abs;
+		atan2 = Math.atan2;
+		cos$1 = Math.cos;
+		max$2 = Math.max;
+		min$3 = Math.min;
+		sin$1 = Math.sin;
+		sqrt$1 = Math.sqrt;
+		epsilon$1 = 1e-12;
+		pi = Math.PI;
+		halfPi = pi / 2;
+		tau = 2 * pi;
+		Array.prototype.slice;
 		Linear.prototype = {
 			areaStart: function() {
 				this._line = 0;
@@ -41501,130 +41160,24 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				}
 			}
 		};
-	}));
-	//#endregion
-	//#region node_modules/d3-shape/src/point.js
-	function x$2(p) {
-		return p[0];
-	}
-	function y$2(p) {
-		return p[1];
-	}
-	var init_point = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-shape/src/line.js
-	function line_default(x, y) {
-		var defined = constant_default$1(true), context = null, curve = linear_default, output = null, path = withPath(line);
-		x = typeof x === "function" ? x : x === void 0 ? x$2 : constant_default$1(x);
-		y = typeof y === "function" ? y : y === void 0 ? y$2 : constant_default$1(y);
-		function line(data) {
-			var i, n = (data = array_default(data)).length, d, defined0 = false, buffer;
-			if (context == null) output = curve(buffer = path());
-			for (i = 0; i <= n; ++i) {
-				if (!(i < n && defined(d = data[i], i, data)) === defined0) {
-					if (defined0 = !defined0) output.lineStart();
-					else output.lineEnd();
-				}
-				if (defined0) output.point(+x(d, i, data), +y(d, i, data));
+		curveRadial(curveLinear);
+		Radial.prototype = {
+			areaStart: function() {
+				this._curve.areaStart();
+			},
+			areaEnd: function() {
+				this._curve.areaEnd();
+			},
+			lineStart: function() {
+				this._curve.lineStart();
+			},
+			lineEnd: function() {
+				this._curve.lineEnd();
+			},
+			point: function(a, r) {
+				this._curve.point(r * Math.sin(a), r * -Math.cos(a));
 			}
-			if (buffer) return output = null, buffer + "" || null;
-		}
-		line.x = function(_) {
-			return arguments.length ? (x = typeof _ === "function" ? _ : constant_default$1(+_), line) : x;
 		};
-		line.y = function(_) {
-			return arguments.length ? (y = typeof _ === "function" ? _ : constant_default$1(+_), line) : y;
-		};
-		line.defined = function(_) {
-			return arguments.length ? (defined = typeof _ === "function" ? _ : constant_default$1(!!_), line) : defined;
-		};
-		line.curve = function(_) {
-			return arguments.length ? (curve = _, context != null && (output = curve(context)), line) : curve;
-		};
-		line.context = function(_) {
-			return arguments.length ? (_ == null ? context = output = null : output = curve(context = _), line) : context;
-		};
-		return line;
-	}
-	var init_line = __esmMin((() => {
-		init_array();
-		init_constant$1();
-		init_linear();
-		init_path();
-		init_point();
-	}));
-	//#endregion
-	//#region node_modules/d3-shape/src/descending.js
-	function descending_default(a, b) {
-		return b < a ? -1 : b > a ? 1 : b >= a ? 0 : NaN;
-	}
-	var init_descending = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-shape/src/identity.js
-	function identity_default$1(d) {
-		return d;
-	}
-	var init_identity$1 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-shape/src/pie.js
-	function pie_default() {
-		var value = identity_default$1, sortValues = descending_default, sort = null, startAngle = constant_default$1(0), endAngle = constant_default$1(tau), padAngle = constant_default$1(0);
-		function pie(data) {
-			var i, n = (data = array_default(data)).length, j, k, sum = 0, index = new Array(n), arcs = new Array(n), a0 = +startAngle.apply(this, arguments), da = Math.min(tau, Math.max(-tau, endAngle.apply(this, arguments) - a0)), a1, p = Math.min(Math.abs(da) / n, padAngle.apply(this, arguments)), pa = p * (da < 0 ? -1 : 1), v;
-			for (i = 0; i < n; ++i) if ((v = arcs[index[i] = i] = +value(data[i], i, data)) > 0) sum += v;
-			if (sortValues != null) index.sort(function(i, j) {
-				return sortValues(arcs[i], arcs[j]);
-			});
-			else if (sort != null) index.sort(function(i, j) {
-				return sort(data[i], data[j]);
-			});
-			for (i = 0, k = sum ? (da - n * pa) / sum : 0; i < n; ++i, a0 = a1) j = index[i], v = arcs[j], a1 = a0 + (v > 0 ? v * k : 0) + pa, arcs[j] = {
-				data: data[j],
-				index: i,
-				value: v,
-				startAngle: a0,
-				endAngle: a1,
-				padAngle: p
-			};
-			return arcs;
-		}
-		pie.value = function(_) {
-			return arguments.length ? (value = typeof _ === "function" ? _ : constant_default$1(+_), pie) : value;
-		};
-		pie.sortValues = function(_) {
-			return arguments.length ? (sortValues = _, sort = null, pie) : sortValues;
-		};
-		pie.sort = function(_) {
-			return arguments.length ? (sort = _, sortValues = null, pie) : sort;
-		};
-		pie.startAngle = function(_) {
-			return arguments.length ? (startAngle = typeof _ === "function" ? _ : constant_default$1(+_), pie) : startAngle;
-		};
-		pie.endAngle = function(_) {
-			return arguments.length ? (endAngle = typeof _ === "function" ? _ : constant_default$1(+_), pie) : endAngle;
-		};
-		pie.padAngle = function(_) {
-			return arguments.length ? (padAngle = typeof _ === "function" ? _ : constant_default$1(+_), pie) : padAngle;
-		};
-		return pie;
-	}
-	var init_pie = __esmMin((() => {
-		init_array();
-		init_constant$1();
-		init_descending();
-		init_identity$1();
-		init_math();
-	}));
-	//#endregion
-	//#region node_modules/d3-shape/src/curve/bump.js
-	function bumpX(context) {
-		return new Bump(context, true);
-	}
-	function bumpY(context) {
-		return new Bump(context, false);
-	}
-	var Bump;
-	var init_bump = __esmMin((() => {
 		Bump = class {
 			constructor(context, x) {
 				this._context = context;
@@ -41658,23 +41211,17 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				this._x0 = x, this._y0 = y;
 			}
 		};
-	}));
-	//#endregion
-	//#region node_modules/d3-shape/src/noop.js
-	function noop_default$1() {}
-	var init_noop$2 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/d3-shape/src/curve/basis.js
-	function point$3(that, x, y) {
-		that._context.bezierCurveTo((2 * that._x0 + that._x1) / 3, (2 * that._y0 + that._y1) / 3, (that._x0 + 2 * that._x1) / 3, (that._y0 + 2 * that._y1) / 3, (that._x0 + 4 * that._x1 + x) / 6, (that._y0 + 4 * that._y1 + y) / 6);
-	}
-	function Basis(context) {
-		this._context = context;
-	}
-	function basis_default(context) {
-		return new Basis(context);
-	}
-	var init_basis = __esmMin((() => {
+		sqrt$1(3);
+		tan30 = sqrt$1(1 / 3);
+		tan30 * 2;
+		kr = sin$1(pi / 10) / sin$1(7 * pi / 10);
+		sin$1(tau / 10) * kr;
+		-cos$1(tau / 10) * kr;
+		sqrt$1(3);
+		sqrt$1(3);
+		sqrt$1(3) / 2;
+		k$1 = 1 / sqrt$1(12);
+		(k$1 / 2 + 1) * 3;
 		Basis.prototype = {
 			areaStart: function() {
 				this._line = 0;
@@ -41713,21 +41260,9 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				this._y0 = this._y1, this._y1 = y;
 			}
 		};
-	}));
-	//#endregion
-	//#region node_modules/d3-shape/src/curve/basisClosed.js
-	function BasisClosed(context) {
-		this._context = context;
-	}
-	function basisClosed_default(context) {
-		return new BasisClosed(context);
-	}
-	var init_basisClosed = __esmMin((() => {
-		init_noop$2();
-		init_basis();
 		BasisClosed.prototype = {
-			areaStart: noop_default$1,
-			areaEnd: noop_default$1,
+			areaStart: noop$5,
+			areaEnd: noop$5,
 			lineStart: function() {
 				this._x0 = this._x1 = this._x2 = this._x3 = this._x4 = this._y0 = this._y1 = this._y2 = this._y3 = this._y4 = NaN;
 				this._point = 0;
@@ -41771,17 +41306,6 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				this._y0 = this._y1, this._y1 = y;
 			}
 		};
-	}));
-	//#endregion
-	//#region node_modules/d3-shape/src/curve/basisOpen.js
-	function BasisOpen(context) {
-		this._context = context;
-	}
-	function basisOpen_default(context) {
-		return new BasisOpen(context);
-	}
-	var init_basisOpen = __esmMin((() => {
-		init_basis();
 		BasisOpen.prototype = {
 			areaStart: function() {
 				this._line = 0;
@@ -41818,16 +41342,6 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				this._y0 = this._y1, this._y1 = y;
 			}
 		};
-	}));
-	//#endregion
-	//#region node_modules/d3-shape/src/curve/bundle.js
-	function Bundle(context, beta) {
-		this._basis = new Basis(context);
-		this._beta = beta;
-	}
-	var bundle_default;
-	var init_bundle = __esmMin((() => {
-		init_basis();
 		Bundle.prototype = {
 			lineStart: function() {
 				this._x = [];
@@ -41851,7 +41365,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				this._y.push(+y);
 			}
 		};
-		bundle_default = (function custom(beta) {
+		bundle = (function custom(beta) {
 			function bundle(context) {
 				return beta === 1 ? new Basis(context) : new Bundle(context, beta);
 			}
@@ -41860,18 +41374,6 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			};
 			return bundle;
 		})(.85);
-	}));
-	//#endregion
-	//#region node_modules/d3-shape/src/curve/cardinal.js
-	function point$2(that, x, y) {
-		that._context.bezierCurveTo(that._x1 + that._k * (that._x2 - that._x0), that._y1 + that._k * (that._y2 - that._y0), that._x2 + that._k * (that._x1 - x), that._y2 + that._k * (that._y1 - y), that._x2, that._y2);
-	}
-	function Cardinal(context, tension) {
-		this._context = context;
-		this._k = (1 - tension) / 6;
-	}
-	var cardinal_default;
-	var init_cardinal = __esmMin((() => {
 		Cardinal.prototype = {
 			areaStart: function() {
 				this._line = 0;
@@ -41911,7 +41413,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				this._y0 = this._y1, this._y1 = this._y2, this._y2 = y;
 			}
 		};
-		cardinal_default = (function custom(tension) {
+		cardinal = (function custom(tension) {
 			function cardinal(context) {
 				return new Cardinal(context, tension);
 			}
@@ -41920,20 +41422,9 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			};
 			return cardinal;
 		})(0);
-	}));
-	//#endregion
-	//#region node_modules/d3-shape/src/curve/cardinalClosed.js
-	function CardinalClosed(context, tension) {
-		this._context = context;
-		this._k = (1 - tension) / 6;
-	}
-	var cardinalClosed_default;
-	var init_cardinalClosed = __esmMin((() => {
-		init_noop$2();
-		init_cardinal();
 		CardinalClosed.prototype = {
-			areaStart: noop_default$1,
-			areaEnd: noop_default$1,
+			areaStart: noop$5,
+			areaEnd: noop$5,
 			lineStart: function() {
 				this._x0 = this._x1 = this._x2 = this._x3 = this._x4 = this._x5 = this._y0 = this._y1 = this._y2 = this._y3 = this._y4 = this._y5 = NaN;
 				this._point = 0;
@@ -41975,7 +41466,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				this._y0 = this._y1, this._y1 = this._y2, this._y2 = y;
 			}
 		};
-		cardinalClosed_default = (function custom(tension) {
+		cardinalClosed = (function custom(tension) {
 			function cardinal(context) {
 				return new CardinalClosed(context, tension);
 			}
@@ -41984,16 +41475,6 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			};
 			return cardinal;
 		})(0);
-	}));
-	//#endregion
-	//#region node_modules/d3-shape/src/curve/cardinalOpen.js
-	function CardinalOpen(context, tension) {
-		this._context = context;
-		this._k = (1 - tension) / 6;
-	}
-	var cardinalOpen_default;
-	var init_cardinalOpen = __esmMin((() => {
-		init_cardinal();
 		CardinalOpen.prototype = {
 			areaStart: function() {
 				this._line = 0;
@@ -42029,7 +41510,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				this._y0 = this._y1, this._y1 = this._y2, this._y2 = y;
 			}
 		};
-		cardinalOpen_default = (function custom(tension) {
+		cardinalOpen = (function custom(tension) {
 			function cardinal(context) {
 				return new CardinalOpen(context, tension);
 			}
@@ -42038,31 +41519,6 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			};
 			return cardinal;
 		})(0);
-	}));
-	//#endregion
-	//#region node_modules/d3-shape/src/curve/catmullRom.js
-	function point$1(that, x, y) {
-		var x1 = that._x1, y1 = that._y1, x2 = that._x2, y2 = that._y2;
-		if (that._l01_a > 1e-12) {
-			var a = 2 * that._l01_2a + 3 * that._l01_a * that._l12_a + that._l12_2a, n = 3 * that._l01_a * (that._l01_a + that._l12_a);
-			x1 = (x1 * a - that._x0 * that._l12_2a + that._x2 * that._l01_2a) / n;
-			y1 = (y1 * a - that._y0 * that._l12_2a + that._y2 * that._l01_2a) / n;
-		}
-		if (that._l23_a > 1e-12) {
-			var b = 2 * that._l23_2a + 3 * that._l23_a * that._l12_a + that._l12_2a, m = 3 * that._l23_a * (that._l23_a + that._l12_a);
-			x2 = (x2 * b + that._x1 * that._l23_2a - x * that._l12_2a) / m;
-			y2 = (y2 * b + that._y1 * that._l23_2a - y * that._l12_2a) / m;
-		}
-		that._context.bezierCurveTo(x1, y1, x2, y2, that._x2, that._y2);
-	}
-	function CatmullRom(context, alpha) {
-		this._context = context;
-		this._alpha = alpha;
-	}
-	var catmullRom_default;
-	var init_catmullRom = __esmMin((() => {
-		init_math();
-		init_cardinal();
 		CatmullRom.prototype = {
 			areaStart: function() {
 				this._line = 0;
@@ -42107,7 +41563,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				this._y0 = this._y1, this._y1 = this._y2, this._y2 = y;
 			}
 		};
-		catmullRom_default = (function custom(alpha) {
+		catmullRom = (function custom(alpha) {
 			function catmullRom(context) {
 				return alpha ? new CatmullRom(context, alpha) : new Cardinal(context, 0);
 			}
@@ -42116,21 +41572,9 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			};
 			return catmullRom;
 		})(.5);
-	}));
-	//#endregion
-	//#region node_modules/d3-shape/src/curve/catmullRomClosed.js
-	function CatmullRomClosed(context, alpha) {
-		this._context = context;
-		this._alpha = alpha;
-	}
-	var catmullRomClosed_default;
-	var init_catmullRomClosed = __esmMin((() => {
-		init_cardinalClosed();
-		init_noop$2();
-		init_catmullRom();
 		CatmullRomClosed.prototype = {
-			areaStart: noop_default$1,
-			areaEnd: noop_default$1,
+			areaStart: noop$5,
+			areaEnd: noop$5,
 			lineStart: function() {
 				this._x0 = this._x1 = this._x2 = this._x3 = this._x4 = this._x5 = this._y0 = this._y1 = this._y2 = this._y3 = this._y4 = this._y5 = NaN;
 				this._l01_a = this._l12_a = this._l23_a = this._l01_2a = this._l12_2a = this._l23_2a = this._point = 0;
@@ -42178,7 +41622,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				this._y0 = this._y1, this._y1 = this._y2, this._y2 = y;
 			}
 		};
-		catmullRomClosed_default = (function custom(alpha) {
+		catmullRomClosed = (function custom(alpha) {
 			function catmullRom(context) {
 				return alpha ? new CatmullRomClosed(context, alpha) : new CardinalClosed(context, 0);
 			}
@@ -42187,17 +41631,6 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			};
 			return catmullRom;
 		})(.5);
-	}));
-	//#endregion
-	//#region node_modules/d3-shape/src/curve/catmullRomOpen.js
-	function CatmullRomOpen(context, alpha) {
-		this._context = context;
-		this._alpha = alpha;
-	}
-	var catmullRomOpen_default;
-	var init_catmullRomOpen = __esmMin((() => {
-		init_cardinalOpen();
-		init_catmullRom();
 		CatmullRomOpen.prototype = {
 			areaStart: function() {
 				this._line = 0;
@@ -42239,7 +41672,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				this._y0 = this._y1, this._y1 = this._y2, this._y2 = y;
 			}
 		};
-		catmullRomOpen_default = (function custom(alpha) {
+		catmullRomOpen = (function custom(alpha) {
 			function catmullRom(context) {
 				return alpha ? new CatmullRomOpen(context, alpha) : new CardinalOpen(context, 0);
 			}
@@ -42248,20 +41681,9 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			};
 			return catmullRom;
 		})(.5);
-	}));
-	//#endregion
-	//#region node_modules/d3-shape/src/curve/linearClosed.js
-	function LinearClosed(context) {
-		this._context = context;
-	}
-	function linearClosed_default(context) {
-		return new LinearClosed(context);
-	}
-	var init_linearClosed = __esmMin((() => {
-		init_noop$2();
 		LinearClosed.prototype = {
-			areaStart: noop_default$1,
-			areaEnd: noop_default$1,
+			areaStart: noop$5,
+			areaEnd: noop$5,
 			lineStart: function() {
 				this._point = 0;
 			},
@@ -42274,40 +41696,6 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				else this._point = 1, this._context.moveTo(x, y);
 			}
 		};
-	}));
-	//#endregion
-	//#region node_modules/d3-shape/src/curve/monotone.js
-	function sign(x) {
-		return x < 0 ? -1 : 1;
-	}
-	function slope3(that, x2, y2) {
-		var h0 = that._x1 - that._x0, h1 = x2 - that._x1, s0 = (that._y1 - that._y0) / (h0 || h1 < 0 && -0), s1 = (y2 - that._y1) / (h1 || h0 < 0 && -0), p = (s0 * h1 + s1 * h0) / (h0 + h1);
-		return (sign(s0) + sign(s1)) * Math.min(Math.abs(s0), Math.abs(s1), .5 * Math.abs(p)) || 0;
-	}
-	function slope2(that, t) {
-		var h = that._x1 - that._x0;
-		return h ? (3 * (that._y1 - that._y0) / h - t) / 2 : t;
-	}
-	function point(that, t0, t1) {
-		var x0 = that._x0, y0 = that._y0, x1 = that._x1, y1 = that._y1, dx = (x1 - x0) / 3;
-		that._context.bezierCurveTo(x0 + dx, y0 + dx * t0, x1 - dx, y1 - dx * t1, x1, y1);
-	}
-	function MonotoneX(context) {
-		this._context = context;
-	}
-	function MonotoneY(context) {
-		this._context = new ReflectContext(context);
-	}
-	function ReflectContext(context) {
-		this._context = context;
-	}
-	function monotoneX(context) {
-		return new MonotoneX(context);
-	}
-	function monotoneY(context) {
-		return new MonotoneY(context);
-	}
-	var init_monotone = __esmMin((() => {
 		MonotoneX.prototype = {
 			areaStart: function() {
 				this._line = 0;
@@ -42369,28 +41757,6 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				this._context.bezierCurveTo(y1, x1, y2, x2, y, x);
 			}
 		};
-	}));
-	//#endregion
-	//#region node_modules/d3-shape/src/curve/natural.js
-	function Natural(context) {
-		this._context = context;
-	}
-	function controlPoints(x) {
-		var i, n = x.length - 1, m, a = new Array(n), b = new Array(n), r = new Array(n);
-		a[0] = 0, b[0] = 2, r[0] = x[0] + 2 * x[1];
-		for (i = 1; i < n - 1; ++i) a[i] = 1, b[i] = 4, r[i] = 4 * x[i] + 2 * x[i + 1];
-		a[n - 1] = 2, b[n - 1] = 7, r[n - 1] = 8 * x[n - 1] + x[n];
-		for (i = 1; i < n; ++i) m = a[i] / b[i - 1], b[i] -= m, r[i] -= m * r[i - 1];
-		a[n - 1] = r[n - 1] / b[n - 1];
-		for (i = n - 2; i >= 0; --i) a[i] = (r[i] - a[i + 1]) / b[i];
-		b[n - 1] = (x[n] + a[n - 1]) / 2;
-		for (i = 0; i < n - 1; ++i) b[i] = 2 * x[i + 1] - a[i + 1];
-		return [a, b];
-	}
-	function natural_default(context) {
-		return new Natural(context);
-	}
-	var init_natural = __esmMin((() => {
 		Natural.prototype = {
 			areaStart: function() {
 				this._line = 0;
@@ -42421,23 +41787,6 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 				this._y.push(+y);
 			}
 		};
-	}));
-	//#endregion
-	//#region node_modules/d3-shape/src/curve/step.js
-	function Step(context, t) {
-		this._context = context;
-		this._t = t;
-	}
-	function step_default(context) {
-		return new Step(context, .5);
-	}
-	function stepBefore(context) {
-		return new Step(context, 0);
-	}
-	function stepAfter(context) {
-		return new Step(context, 1);
-	}
-	var init_step = __esmMin((() => {
 		Step.prototype = {
 			areaStart: function() {
 				this._line = 0;
@@ -42476,34 +41825,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		};
 	}));
 	//#endregion
-	//#region node_modules/d3-shape/src/index.js
-	var init_src$2 = __esmMin((() => {
-		init_arc();
-		init_array();
-		init_constant$1();
-		init_linear();
-		init_line();
-		init_path();
-		init_pie();
-		init_bump();
-		init_math();
-		init_basisClosed();
-		init_basisOpen();
-		init_basis();
-		init_bundle();
-		init_cardinalClosed();
-		init_cardinalOpen();
-		init_cardinal();
-		init_catmullRomClosed();
-		init_catmullRomOpen();
-		init_catmullRom();
-		init_linearClosed();
-		init_monotone();
-		init_natural();
-		init_step();
-	}));
-	//#endregion
-	//#region node_modules/d3-zoom/src/transform.js
+	//#region node_modules/d3-zoom/dist/d3-zoom.mjs
 	function Transform(k, x, y) {
 		this.k = k;
 		this.x = x;
@@ -42514,7 +41836,8 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		return node.__zoom;
 	}
 	var identity$4;
-	var init_transform = __esmMin((() => {
+	var init_d3_zoom = __esmMin((() => {
+		init_d3_transition();
 		Transform.prototype = {
 			constructor: Transform,
 			scale: function(k) {
@@ -42555,50 +41878,38 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		transform.prototype = Transform.prototype;
 	}));
 	//#endregion
-	//#region node_modules/d3-zoom/src/zoom.js
-	var init_zoom = __esmMin((() => {
-		init_src$21();
-		init_transform();
-	}));
-	//#endregion
-	//#region node_modules/d3-zoom/src/index.js
-	var init_src$1 = __esmMin((() => {
-		init_zoom();
-		init_transform();
-	}));
-	//#endregion
-	//#region node_modules/d3/src/index.js
-	var init_src = __esmMin((() => {
-		init_src$30();
-		init_src$29();
-		init_src$20();
-		init_src$18();
-		init_src$25();
-		init_src$17();
-		init_src$16();
-		init_src$28();
-		init_src$26();
-		init_src$15();
-		init_src$22();
-		init_src$14();
-		init_src$12();
-		init_src$11();
-		init_src$10();
-		init_src$9();
-		init_src$24();
-		init_src$19();
-		init_src$8();
-		init_src$13();
-		init_src$7();
-		init_src$4();
-		init_src$3();
-		init_src$27();
-		init_src$2();
-		init_src$6();
-		init_src$5();
-		init_src$23();
-		init_src$21();
-		init_src$1();
+	//#region node_modules/d3/dist/d3.mjs
+	var init_d3 = __esmMin((() => {
+		init_d3_array();
+		init_d3_axis();
+		init_d3_brush();
+		init_d3_chord();
+		init_d3_color();
+		init_d3_contour();
+		init_d3_delaunay();
+		init_d3_dispatch();
+		init_d3_drag();
+		init_d3_dsv();
+		init_d3_ease();
+		init_d3_fetch();
+		init_d3_force();
+		init_d3_format();
+		init_d3_geo();
+		init_d3_hierarchy();
+		init_d3_interpolate();
+		init_d3_path();
+		init_d3_polygon();
+		init_d3_quadtree();
+		init_d3_random();
+		init_d3_scale();
+		init_d3_scale_chromatic();
+		init_d3_selection();
+		init_d3_shape();
+		init_d3_time();
+		init_d3_time_format();
+		init_d3_timer();
+		init_d3_transition();
+		init_d3_zoom();
 	}));
 	//#endregion
 	//#region node_modules/mermaid/dist/chunks/mermaid.core/chunk-CLGD4ZFX.mjs
@@ -42606,11 +41917,11 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	var init_chunk_CLGD4ZFX = __esmMin((() => {
 		init_chunk_DU6HZSFF();
 		init_chunk_Y2CYZVJY();
-		init_src();
+		init_d3();
 		selectSvgElement = /* @__PURE__ */ __name$1((id) => {
 			const { securityLevel } = getConfig2$2();
-			let root = select_default$1("body");
-			if (securityLevel === "sandbox") root = select_default$1((select_default$1(`#i${id}`).node()?.contentDocument ?? document).body);
+			let root = select("body");
+			if (securityLevel === "sandbox") root = select((select(`#i${id}`).node()?.contentDocument ?? document).body);
 			return root.select(`#${id}`);
 		}, "selectSvgElement");
 	}));
@@ -43305,9 +42616,10 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		if (object == null) return false;
 		if (Object.getPrototypeOf(object) === null) return true;
 		if (Object.prototype.toString.call(object) !== "[object Object]") {
+			var _Object$getOwnPropert;
 			const tag = object[Symbol.toStringTag];
 			if (tag == null) return false;
-			if (!Object.getOwnPropertyDescriptor(object, Symbol.toStringTag)?.writable) return false;
+			if (!((_Object$getOwnPropert = Object.getOwnPropertyDescriptor(object, Symbol.toStringTag)) === null || _Object$getOwnPropert === void 0 ? void 0 : _Object$getOwnPropert.writable)) return false;
 			return object.toString() === `[object ${tag}]`;
 		}
 		let proto = object;
@@ -43316,24 +42628,116 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_isPlainObject$1 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/es-toolkit/dist/function/noop.mjs
+	//#region node_modules/es-toolkit/dist/predicate/isLength.mjs
 	/**
-	* A no-operation function that does nothing.
-	* This can be used as a placeholder or default function.
+	* Checks if a given value is a valid length.
+	*
+	* A valid length is of type `number`, is a non-negative integer, and is less than or equal to
+	* JavaScript's maximum safe integer (`Number.MAX_SAFE_INTEGER`).
+	* It returns `true` if the value is a valid length, and `false` otherwise.
+	*
+	* This function can also serve as a type predicate in TypeScript, narrowing the type of the
+	* argument to a valid length (`number`).
+	*
+	* @param value The value to check.
+	* @returns Returns `true` if `value` is a valid length, else `false`.
 	*
 	* @example
-	* noop(); // Does nothing
-	*
-	* @returns This function does not return anything.
+	* isLength(0); // true
+	* isLength(42); // true
+	* isLength(-1); // false
+	* isLength(1.5); // false
+	* isLength(Number.MAX_SAFE_INTEGER); // true
+	* isLength(Number.MAX_SAFE_INTEGER + 1); // false
 	*/
-	function noop$4() {}
-	var init_noop$1 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/es-toolkit/dist/compat/_internal/getSymbols.mjs
-	function getSymbols$1(object) {
-		return Object.getOwnPropertySymbols(object).filter((symbol) => Object.prototype.propertyIsEnumerable.call(object, symbol));
+	function isLength$2(value) {
+		return Number.isSafeInteger(value) && value >= 0;
 	}
-	var init_getSymbols = __esmMin((() => {}));
+	var init_isLength$1 = __esmMin((() => {}));
+	//#endregion
+	//#region node_modules/es-toolkit/dist/compat/predicate/isArrayLike.mjs
+	/**
+	* Checks if `value` is array-like.
+	*
+	* @param value The value to check.
+	* @returns Returns `true` if `value` is array-like, else `false`.
+	*
+	* @example
+	* isArrayLike([1, 2, 3]); // true
+	* isArrayLike('abc'); // true
+	* isArrayLike({ 0: 'a', length: 1 }); // true
+	* isArrayLike({}); // false
+	* isArrayLike(null); // false
+	* isArrayLike(undefined); // false
+	*/
+	function isArrayLike$2(value) {
+		return value != null && typeof value !== "function" && isLength$2(value.length);
+	}
+	var init_isArrayLike$1 = __esmMin((() => {
+		init_isLength$1();
+	}));
+	//#endregion
+	//#region node_modules/es-toolkit/dist/_internal/isUnsafeProperty.mjs
+	/**
+	* Checks if a property key is unsafe to access or copy directly.
+	*
+	* This function is used in functions like `get` and `merge` to prevent
+	* prototype pollution attacks by identifying `__proto__`, which modifies the object's
+	* prototype chain. `constructor` and `prototype` stay accessible here because lodash
+	* keeps reads of them unrestricted; write paths use `isUnsafeToWriteProperty` instead,
+	* which also blocks those keys.
+	*
+	* @param key - The property key to check
+	* @returns `true` if the property is unsafe to access directly, `false` otherwise
+	* @internal
+	*/
+	function isUnsafeProperty(key) {
+		return key === "__proto__";
+	}
+	var init_isUnsafeProperty = __esmMin((() => {}));
+	//#endregion
+	//#region node_modules/es-toolkit/dist/compat/_internal/hasOwn.mjs
+	/**
+	* Checks if `key` is an own property of `object`, like `Object.hasOwn`, which is not available on ES2015 engines.
+	*
+	* @param object - The object to inspect.
+	* @param key - The key to check.
+	* @returns `true` if `key` is an own property of `object`, otherwise `false`.
+	*/
+	function hasOwn(object, key) {
+		return hasOwnProperty$17.call(object, key);
+	}
+	var hasOwnProperty$17;
+	var init_hasOwn = __esmMin((() => {
+		hasOwnProperty$17 = Object.prototype.hasOwnProperty;
+	}));
+	//#endregion
+	//#region node_modules/es-toolkit/dist/predicate/isPrimitive.mjs
+	/**
+	* Checks whether a value is a JavaScript primitive.
+	* JavaScript primitives include null, undefined, strings, numbers, booleans, symbols, and bigints.
+	*
+	* @param value The value to check.
+	* @returns Returns true if `value` is a primitive, false otherwise.
+	*
+	* @example
+	* isPrimitive(null); // true
+	* isPrimitive(undefined); // true
+	* isPrimitive('123'); // true
+	* isPrimitive(false); // true
+	* isPrimitive(true); // true
+	* isPrimitive(Symbol('a')); // true
+	* isPrimitive(123n); // true
+	* isPrimitive({}); // false
+	* isPrimitive(new Date()); // false
+	* isPrimitive(new Map()); // false
+	* isPrimitive(new Set()); // false
+	* isPrimitive([1, 2, 3]); // false
+	*/
+	function isPrimitive(value) {
+		return value == null || typeof value !== "object" && typeof value !== "function";
+	}
+	var init_isPrimitive = __esmMin((() => {}));
 	//#endregion
 	//#region node_modules/es-toolkit/dist/compat/_internal/getTag.mjs
 	/**
@@ -43403,107 +42807,38 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	* const notBuffer = "not a buffer";
 	* console.log(isBuffer(notBuffer)); // false
 	*/
-	function isBuffer$1(x) {
+	function isBuffer$2(x) {
 		return typeof globalThis_.Buffer !== "undefined" && globalThis_.Buffer.isBuffer(x);
 	}
-	var init_isBuffer$1 = __esmMin((() => {
+	var init_isBuffer$2 = __esmMin((() => {
 		init_globalThis();
 	}));
 	//#endregion
-	//#region node_modules/es-toolkit/dist/predicate/isLength.mjs
+	//#region node_modules/es-toolkit/dist/compat/predicate/isBuffer.mjs
 	/**
-	* Checks if a given value is a valid length.
+	* Checks if the given value is a Buffer instance.
 	*
-	* A valid length is of type `number`, is a non-negative integer, and is less than or equal to
-	* JavaScript's maximum safe integer (`Number.MAX_SAFE_INTEGER`).
-	* It returns `true` if the value is a valid length, and `false` otherwise.
+	* This function tests whether the provided value is an instance of Buffer.
+	* It returns `true` if the value is a Buffer, and `false` otherwise.
 	*
-	* This function can also serve as a type predicate in TypeScript, narrowing the type of the
-	* argument to a valid length (`number`).
+	* This function can also serve as a type predicate in TypeScript, narrowing the type of the argument to `Buffer`.
 	*
-	* @param value The value to check.
-	* @returns Returns `true` if `value` is a valid length, else `false`.
+	* @param x - The value to check if it is a Buffer.
+	* @returns Returns `true` if `x` is a Buffer, else `false`.
 	*
 	* @example
-	* isLength(0); // true
-	* isLength(42); // true
-	* isLength(-1); // false
-	* isLength(1.5); // false
-	* isLength(Number.MAX_SAFE_INTEGER); // true
-	* isLength(Number.MAX_SAFE_INTEGER + 1); // false
-	*/
-	function isLength$2(value) {
-		return Number.isSafeInteger(value) && value >= 0;
-	}
-	var init_isLength$1 = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/es-toolkit/dist/compat/predicate/isArrayLike.mjs
-	/**
-	* Checks if `value` is array-like.
+	* const buffer = Buffer.from("test");
+	* console.log(isBuffer(buffer)); // true
 	*
-	* @param value The value to check.
-	* @returns Returns `true` if `value` is array-like, else `false`.
-	*
-	* @example
-	* isArrayLike([1, 2, 3]); // true
-	* isArrayLike('abc'); // true
-	* isArrayLike({ 0: 'a', length: 1 }); // true
-	* isArrayLike({}); // false
-	* isArrayLike(null); // false
-	* isArrayLike(undefined); // false
+	* const notBuffer = "not a buffer";
+	* console.log(isBuffer(notBuffer)); // false
 	*/
-	function isArrayLike$2(value) {
-		return value != null && typeof value !== "function" && isLength$2(value.length);
+	function isBuffer$1(x) {
+		return isBuffer$2(x);
 	}
-	var init_isArrayLike$1 = __esmMin((() => {
-		init_isLength$1();
+	var init_isBuffer$1 = __esmMin((() => {
+		init_isBuffer$2();
 	}));
-	//#endregion
-	//#region node_modules/es-toolkit/dist/_internal/isUnsafeProperty.mjs
-	/**
-	* Checks if a property key is unsafe to access or copy directly.
-	*
-	* This function is used in functions like `get`, `unset`, and `merge` to prevent
-	* prototype pollution attacks by identifying `__proto__`, which modifies the object's
-	* prototype chain. `constructor` and `prototype` stay accessible here because lodash
-	* keeps reads of them unrestricted; write paths use `isUnsafeToWriteProperty` instead,
-	* which also blocks those keys.
-	*
-	* @param key - The property key to check
-	* @returns `true` if the property is unsafe to access directly, `false` otherwise
-	* @internal
-	*/
-	function isUnsafeProperty(key) {
-		return key === "__proto__";
-	}
-	var init_isUnsafeProperty = __esmMin((() => {}));
-	//#endregion
-	//#region node_modules/es-toolkit/dist/predicate/isPrimitive.mjs
-	/**
-	* Checks whether a value is a JavaScript primitive.
-	* JavaScript primitives include null, undefined, strings, numbers, booleans, symbols, and bigints.
-	*
-	* @param value The value to check.
-	* @returns Returns true if `value` is a primitive, false otherwise.
-	*
-	* @example
-	* isPrimitive(null); // true
-	* isPrimitive(undefined); // true
-	* isPrimitive('123'); // true
-	* isPrimitive(false); // true
-	* isPrimitive(true); // true
-	* isPrimitive(Symbol('a')); // true
-	* isPrimitive(123n); // true
-	* isPrimitive({}); // false
-	* isPrimitive(new Date()); // false
-	* isPrimitive(new Map()); // false
-	* isPrimitive(new Set()); // false
-	* isPrimitive([1, 2, 3]); // false
-	*/
-	function isPrimitive(value) {
-		return value == null || typeof value !== "object" && typeof value !== "function";
-	}
-	var init_isPrimitive = __esmMin((() => {}));
 	//#endregion
 	//#region node_modules/es-toolkit/dist/predicate/isTypedArray.mjs
 	/**
@@ -43526,189 +42861,34 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_isTypedArray$2 = __esmMin((() => {}));
 	//#endregion
-	//#region node_modules/es-toolkit/dist/object/cloneDeepWith.mjs
+	//#region node_modules/es-toolkit/dist/compat/predicate/isTypedArray.mjs
 	/**
-	* Deeply clones the given object.
-	*
-	* You can customize the deep cloning process using the `cloneValue` function.
-	* The function takes the current value `value`, the property name `key`, and the entire object `obj` as arguments.
-	* If the function returns a value, that value is used;
-	* if it returns `undefined`, the default cloning method is used.
-	*
-	* @template T - The type of the object.
-	* @param obj - The object to clone.
-	* @param [cloneValue] - A function to customize the cloning process.
-	* @returns A deep clone of the given object.
+	* Checks if a value is a TypedArray.
+	* @param x The value to check.
+	* @returns Returns true if `x` is a TypedArray, false otherwise.
 	*
 	* @example
-	* // Clone a primitive value
-	* const num = 29;
-	* const clonedNum = cloneDeepWith(num);
-	* console.log(clonedNum); // 29
-	* console.log(clonedNum === num); // true
+	* const arr = new Uint8Array([1, 2, 3]);
+	* isTypedArray(arr); // true
 	*
-	* @example
-	* // Clone an object with a customizer
-	* const obj = { a: 1, b: 2 };
-	* const clonedObj = cloneDeepWith(obj, (value) => {
-	*   if (typeof value === 'number') {
-	*     return value * 2; // Double the number
-	*   }
-	* });
-	* console.log(clonedObj); // { a: 2, b: 4 }
-	* console.log(clonedObj === obj); // false
+	* const regularArray = [1, 2, 3];
+	* isTypedArray(regularArray); // false
 	*
-	* @example
-	* // Clone an array with a customizer
-	* const arr = [1, 2, 3];
-	* const clonedArr = cloneDeepWith(arr, (value) => {
-	*   if (typeof value === 'number') {
-	*     return value + 1; // Increment each number
-	*   }
-	* });
-	* console.log(clonedArr); // [2, 3, 4]
-	* console.log(clonedArr === arr); // false
+	* const buffer = new ArrayBuffer(16);
+	* isTypedArray(buffer); // false
 	*/
-	function cloneDeepWith$1(obj, cloneValue) {
-		return cloneDeepWithImpl(obj, void 0, obj, /* @__PURE__ */ new Map(), cloneValue);
+	function isTypedArray$1(x) {
+		return isTypedArray$2(x);
 	}
-	function cloneDeepWithImpl(valueToClone, keyToClone, objectToClone, stack = /* @__PURE__ */ new Map(), cloneValue = void 0) {
-		const cloned = cloneValue?.(valueToClone, keyToClone, objectToClone, stack);
-		if (cloned !== void 0) return cloned;
-		if (isPrimitive(valueToClone)) return valueToClone;
-		if (stack.has(valueToClone)) return stack.get(valueToClone);
-		if (Array.isArray(valueToClone)) {
-			const result = new Array(valueToClone.length);
-			stack.set(valueToClone, result);
-			for (let i = 0; i < valueToClone.length; i++) result[i] = cloneDeepWithImpl(valueToClone[i], i, objectToClone, stack, cloneValue);
-			if (Object.hasOwn(valueToClone, "index")) result.index = valueToClone.index;
-			if (Object.hasOwn(valueToClone, "input")) result.input = valueToClone.input;
-			return result;
-		}
-		if (valueToClone instanceof Date) return new Date(valueToClone.getTime());
-		if (valueToClone instanceof RegExp) {
-			const result = new RegExp(valueToClone.source, valueToClone.flags);
-			result.lastIndex = valueToClone.lastIndex;
-			return result;
-		}
-		if (valueToClone instanceof Map) {
-			const result = /* @__PURE__ */ new Map();
-			stack.set(valueToClone, result);
-			for (const [key, value] of valueToClone) result.set(key, cloneDeepWithImpl(value, key, objectToClone, stack, cloneValue));
-			return result;
-		}
-		if (valueToClone instanceof Set) {
-			const result = /* @__PURE__ */ new Set();
-			stack.set(valueToClone, result);
-			for (const value of valueToClone) result.add(cloneDeepWithImpl(value, void 0, objectToClone, stack, cloneValue));
-			return result;
-		}
-		if (isBuffer$1(valueToClone)) return valueToClone.subarray();
-		if (isTypedArray$2(valueToClone)) {
-			const result = new (Object.getPrototypeOf(valueToClone)).constructor(valueToClone.length);
-			stack.set(valueToClone, result);
-			for (let i = 0; i < valueToClone.length; i++) result[i] = cloneDeepWithImpl(valueToClone[i], i, objectToClone, stack, cloneValue);
-			return result;
-		}
-		if (valueToClone instanceof ArrayBuffer || typeof SharedArrayBuffer !== "undefined" && valueToClone instanceof SharedArrayBuffer) return valueToClone.slice(0);
-		if (valueToClone instanceof DataView) {
-			const result = new DataView(valueToClone.buffer.slice(0), valueToClone.byteOffset, valueToClone.byteLength);
-			stack.set(valueToClone, result);
-			copyProperties(result, valueToClone, objectToClone, stack, cloneValue);
-			return result;
-		}
-		if (typeof File !== "undefined" && valueToClone instanceof File) {
-			const result = new File([valueToClone], valueToClone.name, { type: valueToClone.type });
-			stack.set(valueToClone, result);
-			copyProperties(result, valueToClone, objectToClone, stack, cloneValue);
-			return result;
-		}
-		if (typeof Blob !== "undefined" && valueToClone instanceof Blob) {
-			const result = new Blob([valueToClone], { type: valueToClone.type });
-			stack.set(valueToClone, result);
-			copyProperties(result, valueToClone, objectToClone, stack, cloneValue);
-			return result;
-		}
-		if (valueToClone instanceof Error) {
-			const result = structuredClone(valueToClone);
-			stack.set(valueToClone, result);
-			result.message = valueToClone.message;
-			result.name = valueToClone.name;
-			result.stack = valueToClone.stack;
-			result.cause = valueToClone.cause;
-			result.constructor = valueToClone.constructor;
-			copyProperties(result, valueToClone, objectToClone, stack, cloneValue);
-			return result;
-		}
-		if (valueToClone instanceof Boolean) {
-			const result = new Boolean(valueToClone.valueOf());
-			stack.set(valueToClone, result);
-			copyProperties(result, valueToClone, objectToClone, stack, cloneValue);
-			return result;
-		}
-		if (valueToClone instanceof Number) {
-			const result = new Number(valueToClone.valueOf());
-			stack.set(valueToClone, result);
-			copyProperties(result, valueToClone, objectToClone, stack, cloneValue);
-			return result;
-		}
-		if (valueToClone instanceof String) {
-			const result = new String(valueToClone.valueOf());
-			stack.set(valueToClone, result);
-			copyProperties(result, valueToClone, objectToClone, stack, cloneValue);
-			return result;
-		}
-		if (typeof valueToClone === "object" && isCloneableObject$1(valueToClone)) {
-			const result = Object.create(Object.getPrototypeOf(valueToClone));
-			stack.set(valueToClone, result);
-			copyProperties(result, valueToClone, objectToClone, stack, cloneValue);
-			return result;
-		}
-		return valueToClone;
-	}
-	function copyProperties(target, source, objectToClone = target, stack, cloneValue) {
-		const keys = [...Object.keys(source), ...getSymbols$1(source)];
-		for (let i = 0; i < keys.length; i++) {
-			const key = keys[i];
-			const descriptor = Object.getOwnPropertyDescriptor(target, key);
-			if (descriptor == null || descriptor.writable) target[key] = cloneDeepWithImpl(source[key], key, objectToClone, stack, cloneValue);
-		}
-	}
-	function isCloneableObject$1(object) {
-		switch (getTag$2(object)) {
-			case argumentsTag:
-			case arrayTag$4:
-			case arrayBufferTag$5:
-			case dataViewTag$6:
-			case booleanTag:
-			case dateTag$5:
-			case float32ArrayTag:
-			case float64ArrayTag:
-			case int8ArrayTag:
-			case int16ArrayTag:
-			case int32ArrayTag:
-			case mapTag$9:
-			case numberTag$5:
-			case objectTag$6:
-			case regexpTag$5:
-			case setTag$9:
-			case stringTag$6:
-			case symbolTag$5:
-			case uint8ArrayTag:
-			case uint8ClampedArrayTag:
-			case uint16ArrayTag:
-			case uint32ArrayTag: return true;
-			default: return false;
-		}
-	}
-	var init_cloneDeepWith$1 = __esmMin((() => {
-		init_isPrimitive();
+	var init_isTypedArray$1 = __esmMin((() => {
 		init_isTypedArray$2();
-		init_getSymbols();
-		init_getTag();
-		init_tags();
-		init_isBuffer$1();
 	}));
+	//#endregion
+	//#region node_modules/es-toolkit/dist/compat/_internal/getSymbols.mjs
+	function getSymbols$1(object) {
+		return Object.getOwnPropertySymbols(object).filter((symbol) => Object.prototype.propertyIsEnumerable.call(object, symbol));
+	}
+	var init_getSymbols = __esmMin((() => {}));
 	//#endregion
 	//#region node_modules/es-toolkit/dist/compat/object/cloneDeepWith.mjs
 	/**
@@ -43749,39 +42929,145 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	* console.log(clonedArr === arr); // false
 	*/
 	function cloneDeepWith(obj, customizer) {
-		return cloneDeepWith$1(obj, (value, key, object, stack) => {
-			const cloned = customizer?.(value, key, object, stack);
+		return cloneDeepWithImpl(obj, void 0, obj, /* @__PURE__ */ new Map(), customizer);
+	}
+	function cloneDeepWithImpl(valueToClone, keyToClone, objectToClone, stack, customizer) {
+		if (customizer != null) {
+			const cloned = customizer(valueToClone, keyToClone, objectToClone, stack);
 			if (cloned !== void 0) return cloned;
-			if (typeof obj !== "object") return;
-			if (getTag$2(obj) === "[object Object]" && typeof obj.constructor !== "function") {
-				const result = {};
-				stack.set(obj, result);
-				copyProperties(result, obj, object, stack);
+		}
+		if (isPrimitive(valueToClone)) return valueToClone;
+		if (stack.has(valueToClone)) return stack.get(valueToClone);
+		if (Array.isArray(valueToClone)) {
+			const result = new Array(valueToClone.length);
+			stack.set(valueToClone, result);
+			for (let i = 0; i < valueToClone.length; i++) result[i] = cloneDeepWithImpl(valueToClone[i], i, objectToClone, stack, customizer);
+			if (hasOwn(valueToClone, "index")) result.index = valueToClone.index;
+			if (hasOwn(valueToClone, "input")) result.input = valueToClone.input;
+			return result;
+		}
+		if (valueToClone instanceof Date) return new Date(valueToClone.getTime());
+		if (valueToClone instanceof RegExp) {
+			const result = new RegExp(valueToClone.source, valueToClone.flags);
+			result.lastIndex = valueToClone.lastIndex;
+			return result;
+		}
+		if (valueToClone instanceof Map) {
+			const result = /* @__PURE__ */ new Map();
+			stack.set(valueToClone, result);
+			valueToClone.forEach((value, key) => {
+				result.set(key, cloneDeepWithImpl(value, key, objectToClone, stack, customizer));
+			});
+			return result;
+		}
+		if (valueToClone instanceof Set) {
+			const result = /* @__PURE__ */ new Set();
+			stack.set(valueToClone, result);
+			valueToClone.forEach((value) => {
+				result.add(cloneDeepWithImpl(value, void 0, objectToClone, stack, customizer));
+			});
+			return result;
+		}
+		if (isBuffer$1(valueToClone)) return valueToClone.subarray();
+		if (isTypedArray$1(valueToClone)) {
+			const result = new (Object.getPrototypeOf(valueToClone)).constructor(valueToClone.length);
+			stack.set(valueToClone, result);
+			for (let i = 0; i < valueToClone.length; i++) result[i] = cloneDeepWithImpl(valueToClone[i], i, objectToClone, stack, customizer);
+			return result;
+		}
+		if (valueToClone instanceof ArrayBuffer || typeof SharedArrayBuffer !== "undefined" && valueToClone instanceof SharedArrayBuffer) return valueToClone.slice(0);
+		if (valueToClone instanceof DataView) {
+			const result = new DataView(valueToClone.buffer.slice(0), valueToClone.byteOffset, valueToClone.byteLength);
+			stack.set(valueToClone, result);
+			copyProperties(result, valueToClone, objectToClone, stack, customizer);
+			return result;
+		}
+		if (typeof File !== "undefined" && valueToClone instanceof File) {
+			const result = new File([valueToClone], valueToClone.name, { type: valueToClone.type });
+			stack.set(valueToClone, result);
+			copyProperties(result, valueToClone, objectToClone, stack, customizer);
+			return result;
+		}
+		if (typeof Blob !== "undefined" && valueToClone instanceof Blob) {
+			const result = new Blob([valueToClone], { type: valueToClone.type });
+			stack.set(valueToClone, result);
+			copyProperties(result, valueToClone, objectToClone, stack, customizer);
+			return result;
+		}
+		const tag = getTag$2(valueToClone);
+		if (tag === "[object Error]") {
+			if (valueToClone === objectToClone) return {};
+			return valueToClone;
+		}
+		switch (tag) {
+			case numberTag$5:
+			case stringTag$6:
+			case booleanTag: {
+				const result = new valueToClone.constructor(valueToClone.valueOf());
+				stack.set(valueToClone, result);
+				copyProperties(result, valueToClone, objectToClone, stack, customizer);
 				return result;
 			}
-			switch (Object.prototype.toString.call(obj)) {
-				case numberTag$5:
-				case stringTag$6:
-				case booleanTag: {
-					const result = new obj.constructor(obj?.valueOf());
-					copyProperties(result, obj);
-					return result;
-				}
-				case argumentsTag: {
-					const result = {};
-					copyProperties(result, obj);
-					result.length = obj.length;
-					result[Symbol.iterator] = obj[Symbol.iterator];
-					return result;
-				}
-				default: return;
+			case argumentsTag: {
+				const result = {};
+				stack.set(valueToClone, result);
+				copyProperties(result, valueToClone, objectToClone, stack, customizer);
+				result.length = valueToClone.length;
+				result[Symbol.iterator] = valueToClone[Symbol.iterator];
+				return result;
 			}
-		});
+		}
+		if (typeof valueToClone === "object" && isCloneableObject$1(tag)) {
+			const result = tag === "[object Object]" && typeof valueToClone.constructor !== "function" ? {} : Object.create(Object.getPrototypeOf(valueToClone));
+			stack.set(valueToClone, result);
+			copyProperties(result, valueToClone, objectToClone, stack, customizer);
+			return result;
+		}
+		return valueToClone;
+	}
+	function copyProperties(target, source, objectToClone, stack, customizer) {
+		const keys = [...Object.keys(source), ...getSymbols$1(source)];
+		for (let i = 0; i < keys.length; i++) {
+			const key = keys[i];
+			const descriptor = Object.getOwnPropertyDescriptor(target, key);
+			if (descriptor == null || descriptor.writable) target[key] = cloneDeepWithImpl(source[key], key, objectToClone, stack, customizer);
+		}
+	}
+	function isCloneableObject$1(tag) {
+		switch (tag) {
+			case argumentsTag:
+			case arrayTag$4:
+			case arrayBufferTag$5:
+			case dataViewTag$6:
+			case booleanTag:
+			case dateTag$5:
+			case float32ArrayTag:
+			case float64ArrayTag:
+			case int8ArrayTag:
+			case int16ArrayTag:
+			case int32ArrayTag:
+			case mapTag$9:
+			case numberTag$5:
+			case objectTag$6:
+			case regexpTag$5:
+			case setTag$9:
+			case stringTag$6:
+			case symbolTag$5:
+			case uint8ArrayTag:
+			case uint8ClampedArrayTag:
+			case uint16ArrayTag:
+			case uint32ArrayTag: return true;
+			default: return false;
+		}
 	}
 	var init_cloneDeepWith = __esmMin((() => {
+		init_isPrimitive();
+		init_getSymbols();
 		init_getTag();
 		init_tags();
-		init_cloneDeepWith$1();
+		init_hasOwn();
+		init_isBuffer$1();
+		init_isTypedArray$1();
 	}));
 	//#endregion
 	//#region node_modules/es-toolkit/dist/compat/object/cloneDeep.mjs
@@ -43916,32 +43202,9 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_isObjectLike$1();
 	}));
 	//#endregion
-	//#region node_modules/es-toolkit/dist/compat/predicate/isTypedArray.mjs
-	/**
-	* Checks if a value is a TypedArray.
-	* @param x The value to check.
-	* @returns Returns true if `x` is a TypedArray, false otherwise.
-	*
-	* @example
-	* const arr = new Uint8Array([1, 2, 3]);
-	* isTypedArray(arr); // true
-	*
-	* const regularArray = [1, 2, 3];
-	* isTypedArray(regularArray); // false
-	*
-	* const buffer = new ArrayBuffer(16);
-	* isTypedArray(buffer); // false
-	*/
-	function isTypedArray$1(x) {
-		return isTypedArray$2(x);
-	}
-	var init_isTypedArray$1 = __esmMin((() => {
-		init_isTypedArray$2();
-	}));
-	//#endregion
 	//#region node_modules/es-toolkit/dist/compat/_internal/isPrototype.mjs
 	function isPrototype$2(value) {
-		const constructor = value?.constructor;
+		const constructor = value === null || value === void 0 ? void 0 : value.constructor;
 		return value === (typeof constructor === "function" ? constructor.prototype : Object.prototype);
 	}
 	var init_isPrototype = __esmMin((() => {}));
@@ -43957,6 +43220,27 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	* @param func The function to have its output memoized.
 	* @param [resolver] The function to resolve the cache key.
 	* @return {MemoizedFunction<T>} Returns the new memoizing function.
+	*
+	* @example
+	* const object = { a: 1, b: 2 };
+	* const other = { c: 3, d: 4 };
+	*
+	* const keys = memoize(Object.keys);
+	* keys(object); // => ['a', 'b']
+	* keys(other); // => ['c', 'd']
+	*
+	* object.e = 5;
+	* keys(object); // => ['a', 'b']
+	*
+	* // Modify the result cache.
+	* keys.cache.set(object, ['x']);
+	* keys(object); // => ['x']
+	*
+	* // memoize.Cache is the constructor used for the cache. It defaults to Map.
+	* const cache = new memoize.Cache();
+	* cache.set('a', 1);
+	* cache.get('a'); // => 1
+	* cache.has('b'); // => false
 	*/
 	function memoize$3(func, resolver) {
 		if (typeof func !== "function" || resolver != null && typeof resolver !== "function") throw new TypeError("Expected a function");
@@ -44004,13 +43288,13 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	* console.log(clonedObj); // { a: 1, b: 'es-toolkit', c: [1, 2, 3] }
 	* console.log(clonedObj === obj); // false
 	*/
-	function clone$4(obj) {
+	function clone$3(obj) {
 		if (isPrimitive(obj)) return obj;
 		const tag = getTag$2(obj);
 		if (!isCloneableObject(obj)) return {};
 		if (isArray$1(obj)) {
 			const result = Array.from(obj);
-			if (obj.length > 0 && typeof obj[0] === "string" && Object.hasOwn(obj, "index")) {
+			if (obj.length > 0 && typeof obj[0] === "string" && hasOwn(obj, "index")) {
 				result.index = obj.index;
 				result.input = obj.input;
 			}
@@ -44105,7 +43389,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		}
 	}
 	function copyOwnProperties(target, source) {
-		for (const key in source) if (Object.hasOwn(source, key)) target[key] = source[key];
+		for (const key in source) if (hasOwn(source, key)) target[key] = source[key];
 	}
 	function copySymbolProperties(target, source) {
 		const symbols = Object.getOwnPropertySymbols(source);
@@ -44116,7 +43400,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	function cloneStringObjectProperties(target, source) {
 		const stringLength = source.valueOf().length;
-		for (const key in source) if (Object.hasOwn(source, key) && (Number.isNaN(Number(key)) || Number(key) >= stringLength)) target[key] = source[key];
+		for (const key in source) if (hasOwn(source, key) && (Number.isNaN(Number(key)) || Number(key) >= stringLength)) target[key] = source[key];
 	}
 	function copyPrototype(target, source) {
 		const proto = Object.getPrototypeOf(source);
@@ -44124,44 +43408,26 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			if (typeof source.constructor === "function") Object.setPrototypeOf(target, proto);
 		}
 	}
-	var init_clone$1 = __esmMin((() => {
+	var init_clone = __esmMin((() => {
 		init_isPrimitive();
 		init_getTag();
 		init_tags();
 		init_isArray$1();
+		init_hasOwn();
 		init_isTypedArray$1();
 	}));
 	//#endregion
-	//#region node_modules/es-toolkit/dist/object/clone.mjs
+	//#region node_modules/es-toolkit/dist/compat/_internal/baseClone.mjs
 	/**
-	* Creates a shallow clone of the given object.
+	* A copy of `clone` from `es-toolkit/object` that does not rely on `AggregateError`,
+	* which is not available on ES2015 engines, so that `es-toolkit/compat` runs on Node.js 6
+	* without changing the main library.
 	*
-	* @template T - The type of the object.
-	* @param obj - The object to clone.
-	* @returns A shallow clone of the given object.
-	*
-	* @example
-	* // Clone a primitive value
-	* const num = 29;
-	* const clonedNum = clone(num);
-	* console.log(clonedNum); // 29
-	* console.log(clonedNum === num); // true
-	*
-	* @example
-	* // Clone an array
-	* const arr = [1, 2, 3];
-	* const clonedArr = clone(arr);
-	* console.log(clonedArr); // [1, 2, 3]
-	* console.log(clonedArr === arr); // false
-	*
-	* @example
-	* // Clone an object
-	* const obj = { a: 1, b: 'es-toolkit', c: [1, 2, 3] };
-	* const clonedObj = clone(obj);
-	* console.log(clonedObj); // { a: 1, b: 'es-toolkit', c: [1, 2, 3] }
-	* console.log(clonedObj === obj); // false
+	* @template T - The type of the value.
+	* @param obj - The value to clone.
+	* @returns A shallow clone of the given value.
 	*/
-	function clone$3(obj) {
+	function baseClone$2(obj) {
 		if (isPrimitive(obj)) return obj;
 		if (Array.isArray(obj) || isTypedArray$2(obj) || obj instanceof ArrayBuffer || typeof SharedArrayBuffer !== "undefined" && obj instanceof SharedArrayBuffer) return obj.slice(0);
 		const prototype = Object.getPrototypeOf(obj);
@@ -44176,7 +43442,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		if (obj instanceof DataView) return new Constructor(obj.buffer.slice(0));
 		if (obj instanceof Error) {
 			let newError;
-			if (obj instanceof AggregateError) newError = new Constructor(obj.errors, obj.message, { cause: obj.cause });
+			if (typeof AggregateError !== "undefined" && obj instanceof AggregateError) newError = new Constructor(obj.errors, obj.message, { cause: obj.cause });
 			else newError = new Constructor(obj.message, { cause: obj.cause });
 			newError.stack = obj.stack;
 			Object.assign(newError, obj);
@@ -44186,10 +43452,13 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			type: obj.type,
 			lastModified: obj.lastModified
 		});
-		if (typeof obj === "object") return Object.assign(Object.create(prototype), obj);
+		if (typeof obj === "object") {
+			const newObject = Object.create(prototype);
+			return Object.assign(newObject, obj);
+		}
 		return obj;
 	}
-	var init_clone = __esmMin((() => {
+	var init_baseClone = __esmMin((() => {
 		init_isPrimitive();
 		init_isTypedArray$2();
 	}));
@@ -44254,7 +43523,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	function mergeWithDeep(target, source, merge, stack) {
 		if (isPrimitive(target)) target = Object(target);
 		if (source == null || typeof source !== "object") return target;
-		if (stack.has(source)) return clone$3(stack.get(source));
+		if (stack.has(source)) return baseClone$2(stack.get(source));
 		stack.set(source, target);
 		if (Array.isArray(source)) {
 			source = source.slice();
@@ -44266,22 +43535,24 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			if (isUnsafeProperty(key)) continue;
 			let sourceValue = source[key];
 			let targetValue = target[key];
-			if (isArguments$1(sourceValue)) sourceValue = { ...sourceValue };
-			if (isArguments$1(targetValue)) targetValue = { ...targetValue };
-			if (isBuffer$1(sourceValue)) sourceValue = cloneDeep$1(sourceValue);
-			if (Array.isArray(sourceValue)) if (Array.isArray(targetValue)) {
-				const cloned = [];
-				const targetKeys = Reflect.ownKeys(targetValue);
-				for (let i = 0; i < targetKeys.length; i++) {
-					const targetKey = targetKeys[i];
-					cloned[targetKey] = targetValue[targetKey];
-				}
-				targetValue = cloned;
-			} else if (isArrayLikeObject$2(targetValue)) {
-				const cloned = [];
-				for (let i = 0; i < targetValue.length; i++) cloned[i] = targetValue[i];
-				targetValue = cloned;
-			} else targetValue = [];
+			if (isArguments$1(sourceValue)) sourceValue = Object.assign({}, sourceValue);
+			if (isArguments$1(targetValue)) targetValue = Object.assign({}, targetValue);
+			if (isBuffer$2(sourceValue)) sourceValue = cloneDeep$1(sourceValue);
+			if (Array.isArray(sourceValue)) {
+				if (Array.isArray(targetValue)) {
+					const cloned = [];
+					const targetKeys = Reflect.ownKeys(targetValue);
+					for (let i = 0; i < targetKeys.length; i++) {
+						const targetKey = targetKeys[i];
+						cloned[targetKey] = targetValue[targetKey];
+					}
+					targetValue = cloned;
+				} else if (isArrayLikeObject$2(targetValue)) {
+					const cloned = [];
+					for (let i = 0; i < targetValue.length; i++) cloned[i] = targetValue[i];
+					targetValue = cloned;
+				} else targetValue = [];
+			}
 			const merged = merge(targetValue, sourceValue, key, target, source, stack);
 			if (merged !== void 0) target[key] = merged;
 			else if (Array.isArray(sourceValue)) target[key] = mergeWithDeep(targetValue, sourceValue, merge, stack);
@@ -44294,17 +43565,30 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	}
 	var init_mergeWith = __esmMin((() => {
 		init_isPrimitive();
-		init_clone();
 		init_getSymbols();
-		init_isBuffer$1();
+		init_isBuffer$2();
 		init_isUnsafeProperty();
 		init_isPlainObject$1();
+		init_isTypedArray$1();
 		init_cloneDeep$1();
 		init_isArguments$1();
 		init_isObjectLike$1();
 		init_isArrayLikeObject$1();
-		init_isTypedArray$1();
+		init_baseClone();
 	}));
+	//#endregion
+	//#region node_modules/es-toolkit/dist/function/noop.mjs
+	/**
+	* A no-operation function that does nothing.
+	* This can be used as a placeholder or default function.
+	*
+	* @example
+	* noop(); // Does nothing
+	*
+	* @returns This function does not return anything.
+	*/
+	function noop$4() {}
+	var init_noop$1 = __esmMin((() => {}));
 	//#endregion
 	//#region node_modules/es-toolkit/dist/compat/object/merge.mjs
 	/**
@@ -44382,7 +43666,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 	function isEmpty$2(value) {
 		if (value == null) return true;
 		if (isArrayLike$2(value)) {
-			if (typeof value.splice !== "function" && typeof value !== "string" && !isBuffer$1(value) && !isTypedArray$1(value) && !isArguments$1(value)) return false;
+			if (typeof value.splice !== "function" && typeof value !== "string" && !isBuffer$2(value) && !isTypedArray$1(value) && !isArguments$1(value)) return false;
 			return value.length === 0;
 		}
 		if (typeof value === "object" || typeof value === "function") {
@@ -44394,17 +43678,17 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		return true;
 	}
 	var init_isEmpty$1 = __esmMin((() => {
-		init_isBuffer$1();
+		init_isBuffer$2();
 		init_isArrayLike$1();
+		init_isTypedArray$1();
 		init_isArguments$1();
 		init_isPrototype();
-		init_isTypedArray$1();
 	}));
 	//#endregion
 	//#region node_modules/es-toolkit/dist/compat/index.mjs
 	var init_compat = __esmMin((() => {
 		init_memoize$1();
-		init_clone$1();
+		init_clone();
 		init_merge$1();
 		init_isEmpty$1();
 	}));
@@ -44509,27 +43793,27 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 		init_chunk_X3CZISLH();
 		init_chunk_Y2CYZVJY();
 		import_dist$3 = require_dist();
-		init_src();
+		init_d3();
 		init_compat();
 		d3CurveTypes = {
-			curveBasis: basis_default,
-			curveBasisClosed: basisClosed_default,
-			curveBasisOpen: basisOpen_default,
+			curveBasis: basis,
+			curveBasisClosed: basisClosed,
+			curveBasisOpen: basisOpen,
 			curveBumpX: bumpX,
 			curveBumpY: bumpY,
-			curveBundle: bundle_default,
-			curveCardinalClosed: cardinalClosed_default,
-			curveCardinalOpen: cardinalOpen_default,
-			curveCardinal: cardinal_default,
-			curveCatmullRomClosed: catmullRomClosed_default,
-			curveCatmullRomOpen: catmullRomOpen_default,
-			curveCatmullRom: catmullRom_default,
-			curveLinear: linear_default,
-			curveLinearClosed: linearClosed_default,
+			curveBundle: bundle,
+			curveCardinalClosed: cardinalClosed,
+			curveCardinalOpen: cardinalOpen,
+			curveCardinal: cardinal,
+			curveCatmullRomClosed: catmullRomClosed,
+			curveCatmullRomOpen: catmullRomOpen,
+			curveCatmullRom: catmullRom,
+			curveLinear,
+			curveLinearClosed: linearClosed,
 			curveMonotoneX: monotoneX,
 			curveMonotoneY: monotoneY,
-			curveNatural: natural_default,
-			curveStep: step_default,
+			curveNatural: natural,
+			curveStep: step$2,
 			curveStepAfter: stepAfter,
 			curveStepBefore: stepBefore
 		};
@@ -44762,7 +44046,7 @@ globalThis.__dshChunks__["mermaid"] = (require) => {
 			const fontFamilies = ["sans-serif", fontFamily];
 			const lines = text.split(common_default.lineBreakRegex);
 			const dims = [];
-			const body = select_default$1("body");
+			const body = select("body");
 			if (!body.remove) return {
 				width: 0,
 				height: 0,
@@ -46983,7 +46267,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
 		init_chunk_Y2CYZVJY();
 		import_fastdom = /* @__PURE__ */ __toESM$1(require_fastdom(), 1);
 		import_fastdom_promised = /* @__PURE__ */ __toESM$1(require_fastdom_promised(), 1);
-		init_src();
+		init_d3();
 		init_marked_esm();
 		init_esm();
 		hasPerformance = typeof performance !== "undefined" && typeof performance.now === "function";
@@ -47230,15 +46514,15 @@ raf(cb) {
 				if (isNode) {
 					if (/stroke:/.exec(style)) style = style.replace("stroke:", "lineColor:");
 					const nodeLabelTextStyle = style.replace(/stroke:[^;]+;?/g, "").replace(/stroke-width:[^;]+;?/g, "").replace(/fill:[^;]+;?/g, "").replace(/color:/g, "fill:");
-					select_default$1(svgLabel).attr("style", nodeLabelTextStyle);
+					select(svgLabel).attr("style", nodeLabelTextStyle);
 				} else {
 					const edgeLabelRectStyle = style.replace(/stroke:[^;]+;?/g, "").replace(/stroke-width:[^;]+;?/g, "").replace(/fill:[^;]+;?/g, "").replace(/background:/g, "fill:");
-					select_default$1(svgLabel).select("rect").attr("style", edgeLabelRectStyle.replace(/background:/g, "fill:"));
+					select(svgLabel).select("rect").attr("style", edgeLabelRectStyle.replace(/background:/g, "fill:"));
 					const edgeLabelTextStyle = style.replace(/stroke:[^;]+;?/g, "").replace(/stroke-width:[^;]+;?/g, "").replace(/fill:[^;]+;?/g, "").replace(/color:/g, "fill:");
-					select_default$1(svgLabel).select("text").attr("style", edgeLabelTextStyle);
+					select(svgLabel).select("text").attr("style", edgeLabelTextStyle);
 				}
-				if (isTitle) select_default$1(svgLabel).selectAll("tspan.text-outer-tspan").classed("title-row", true);
-				else select_default$1(svgLabel).selectAll("tspan.text-outer-tspan").classed("row", true);
+				if (isTitle) select(svgLabel).selectAll("tspan.text-outer-tspan").classed("title-row", true);
+				else select(svgLabel).selectAll("tspan.text-outer-tspan").classed("row", true);
 				return svgLabel;
 			}
 		}, "createText");
@@ -51607,7 +50891,7 @@ raf(cb) {
 		};
 		if (getEffectiveHtmlLabels(getConfig2$2())) {
 			const div2 = text2.children[0];
-			const dv2 = select_default$1(text2);
+			const dv2 = select(text2);
 			bbox = div2.getBoundingClientRect();
 			dv2.attr("width", bbox.width);
 			dv2.attr("height", bbox.height);
@@ -51617,13 +50901,13 @@ raf(cb) {
 		const titleBox = text2.getBBox();
 		const descr = await createLabel_default(label, Array.isArray(textRows) ? textRows.join("<br/>") : textRows, node.labelStyle, true, true);
 		const div = descr.children[0];
-		const dv = select_default$1(descr);
+		const dv = select(descr);
 		bbox = div.getBoundingClientRect();
 		dv.attr("width", bbox.width);
 		dv.attr("height", bbox.height);
 		const halfPadding = (node.padding || 0) / 2;
-		select_default$1(descr).attr("transform", "translate( " + (bbox.width > titleBox.width ? 0 : (titleBox.width - bbox.width) / 2) + ", " + (titleBox.height + halfPadding + 5) + ")");
-		select_default$1(text2).attr("transform", "translate( " + (bbox.width < titleBox.width ? 0 : -(titleBox.width - bbox.width) / 2) + ", 0)");
+		select(descr).attr("transform", "translate( " + (bbox.width > titleBox.width ? 0 : (titleBox.width - bbox.width) / 2) + ", " + (titleBox.height + halfPadding + 5) + ")");
+		select(text2).attr("transform", "translate( " + (bbox.width < titleBox.width ? 0 : -(titleBox.width - bbox.width) / 2) + ", 0)");
 		bbox = label.node().getBBox();
 		label.attr("transform", "translate(" + -bbox.width / 2 + ", " + (-bbox.height / 2 - halfPadding + 3) + ")");
 		const totalWidth = bbox.width + (node.padding || 0);
@@ -52653,7 +51937,7 @@ raf(cb) {
 		const x = -w / 2;
 		const y = -h / 2;
 		shapeSvg.selectAll("g:not(:first-child)").each((_, i, nodes) => {
-			const text2 = select_default$1(nodes[i]);
+			const text2 = select(nodes[i]);
 			const transform = text2.attr("transform");
 			let translateX = 0;
 			let translateY = 0;
@@ -52750,7 +52034,7 @@ raf(cb) {
 		if (evaluate(config.htmlLabels)) {
 			const div = text2.children[0];
 			div.style.textAlign = "start";
-			const dv = select_default$1(text2);
+			const dv = select(text2);
 			bbox = div.getBoundingClientRect();
 			dv.attr("width", bbox.width);
 			dv.attr("height", bbox.height);
@@ -52862,7 +52146,7 @@ raf(cb) {
 		let bbox;
 		let numberOfLines = 1;
 		if (!useHtmlLabels) {
-			if (styles.includes("font-weight: bolder")) select_default$1(text2).selectAll("tspan").attr("font-weight", "");
+			if (styles.includes("font-weight: bolder")) select(text2).selectAll("tspan").attr("font-weight", "");
 			numberOfLines = text2.children.length;
 			const textChild = text2.children[0];
 			if (text2.textContent === "" || text2.textContent.includes("&gt")) {
@@ -52873,7 +52157,7 @@ raf(cb) {
 			bbox = text2.getBBox();
 		} else {
 			const div = text2.children[0];
-			const dv = select_default$1(text2);
+			const dv = select(text2);
 			numberOfLines = div.innerHTML.split("<br>").length;
 			if (div.innerHTML.includes("</math>")) numberOfLines += div.innerHTML.split("<mrow>").length - 1;
 			await configureLabelImages(div);
@@ -52926,7 +52210,7 @@ raf(cb) {
 		const membersGroupHeight = shapeSvg.select(".members-group").node().getBBox().height - (renderExtraBox ? PADDING / 2 : 0) || 0;
 		const methodsAreaPlacement = (annotationGroupHeight + labelGroupHeight + y + PADDING - (y - PADDING - (renderExtraBox ? PADDING : classNode.members.length === 0 && classNode.methods.length === 0 ? -PADDING / 2 : 0))) / 2;
 		shapeSvg.selectAll(".text").each((_, i, nodes) => {
-			const text2 = select_default$1(nodes[i]);
+			const text2 = select(nodes[i]);
 			const transform = text2.attr("transform");
 			let translateY = 0;
 			if (transform) {
@@ -53039,7 +52323,7 @@ raf(cb) {
 			shapeSvg.attr("data-color-id", `color-${colorIndex % borderColorArray.length}`);
 		}
 		shapeSvg.selectAll(".label").each((_, i, nodes) => {
-			const text2 = select_default$1(nodes[i]);
+			const text2 = select(nodes[i]);
 			const transform = text2.attr("transform");
 			let translateX = 0;
 			let translateY = 0;
@@ -53100,8 +52384,8 @@ raf(cb) {
 			bbox.height += 6;
 		} else {
 			const div = text2.children[0];
-			const dv = select_default$1(text2);
-			if (alignment === "start") select_default$1(div).style("text-align", "left");
+			const dv = select(text2);
+			if (alignment === "start") select(div).style("text-align", "left");
 			bbox = div.getBoundingClientRect();
 			dv.attr("width", bbox.width);
 			dv.attr("height", bbox.height);
@@ -53325,7 +52609,7 @@ raf(cb) {
 		init_chunk_DU6HZSFF();
 		init_chunk_X3CZISLH();
 		init_chunk_Y2CYZVJY();
-		init_src();
+		init_d3();
 		import_rough_cjs$4 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
 		ELEMENT_NODE = 1;
 		TEXT_NODE = 3;
@@ -53362,8 +52646,8 @@ raf(cb) {
 					width,
 					style: node.labelStyle
 				}, config);
-				select_default$1(textEl).selectAll("tspan.text-outer-tspan").attr("text-anchor", "middle");
-				select_default$1(textEl).selectAll("tspan.text-inner-tspan").attr("font-weight", null).attr("font-style", null);
+				select(textEl).selectAll("tspan.text-outer-tspan").attr("text-anchor", "middle");
+				select(textEl).selectAll("tspan.text-inner-tspan").attr("font-weight", null).attr("font-style", null);
 				return {
 					el: sectionEl,
 					box: sectionEl.node().getBBox()
@@ -53410,7 +52694,7 @@ raf(cb) {
 			let bbox;
 			if (useHtmlLabels) {
 				const div = text2.children[0];
-				const dv = select_default$1(text2);
+				const dv = select(text2);
 				await configureLabelImages(div);
 				bbox = await fastdom_default.measure(() => div.getBoundingClientRect());
 				dv.attr("width", bbox.width);
@@ -53440,7 +52724,7 @@ raf(cb) {
 			let bbox;
 			if (getEffectiveHtmlLabels(getConfig2$2())) {
 				const div = text2.children[0];
-				const dv = select_default$1(text2);
+				const dv = select(text2);
 				bbox = await fastdom_default.measure(() => div.getBoundingClientRect());
 				dv.attr("width", bbox.width);
 				dv.attr("height", bbox.height);
@@ -54817,7 +54101,7 @@ raf(cb) {
 		init_chunk_DU6HZSFF();
 		init_chunk_X3CZISLH();
 		init_chunk_Y2CYZVJY();
-		init_src();
+		init_d3();
 		import_rough_cjs$3 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
 		swimlane = /* @__PURE__ */ __name$1(async (parent, node) => {
 			const siteConfig = getConfig2$2();
@@ -54838,7 +54122,7 @@ raf(cb) {
 			let bbox = text.getBBox();
 			if (useHtmlLabels) {
 				const div = text.children[0];
-				const dv = select_default$1(text);
+				const dv = select(text);
 				bbox = div.getBoundingClientRect();
 				dv.attr("width", bbox.width);
 				dv.attr("height", bbox.height);
@@ -54964,7 +54248,7 @@ raf(cb) {
 			let bbox = text.getBBox();
 			if (getEffectiveHtmlLabels(siteConfig)) {
 				const div = text.children[0];
-				const dv = select_default$1(text);
+				const dv = select(text);
 				bbox = div.getBoundingClientRect();
 				dv.attr("width", bbox.width);
 				dv.attr("height", bbox.height);
@@ -55031,7 +54315,7 @@ raf(cb) {
 				let bbox = text.getBBox();
 				if (getEffectiveHtmlLabels(siteConfig)) {
 					const div = text.children[0];
-					const dv = select_default$1(text);
+					const dv = select(text);
 					bbox = div.getBoundingClientRect();
 					dv.attr("width", bbox.width);
 					dv.attr("height", bbox.height);
@@ -55163,7 +54447,7 @@ raf(cb) {
 				let bbox = text.getBBox();
 				if (getEffectiveHtmlLabels(siteConfig)) {
 					const div = text.children[0];
-					const dv = select_default$1(text);
+					const dv = select(text);
 					bbox = div.getBoundingClientRect();
 					dv.attr("width", bbox.width);
 					dv.attr("height", bbox.height);
@@ -55365,7 +54649,7 @@ raf(cb) {
 		init_chunk_DU6HZSFF();
 		init_chunk_X3CZISLH();
 		init_chunk_Y2CYZVJY();
-		init_src();
+		init_d3();
 		import_rough_cjs$2 = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
 		computeLabelTransform = /* @__PURE__ */ __name$1((bbox, useHtmlLabels) => {
 			if (useHtmlLabels) return "translate(" + -bbox.width / 2 + ", " + -bbox.height / 2 + ")";
@@ -55602,13 +54886,13 @@ raf(cb) {
 			let transformBbox;
 			if (useHtmlLabels) {
 				const div = labelElement.children[0];
-				const dv = select_default$1(labelElement);
+				const dv = select(labelElement);
 				bbox = await fastdom_default.measure(() => div.getBoundingClientRect());
 				transformBbox = bbox;
 				dv.attr("width", bbox.width);
 				dv.attr("height", bbox.height);
 			} else {
-				const textEl = select_default$1(labelElement).select("text").node();
+				const textEl = select(labelElement).select("text").node();
 				await fastdom_default.measure(() => {
 					bbox = labelElement.getBBox();
 					if (textEl && typeof textEl.getBBox === "function") transformBbox = textEl.getBBox();
@@ -55628,7 +54912,7 @@ raf(cb) {
 				let slBox = startLabelElement.getBBox();
 				if (useHtmlLabels) {
 					const div = startLabelElement.children[0];
-					const dv = select_default$1(startLabelElement);
+					const dv = select(startLabelElement);
 					slBox = div.getBoundingClientRect();
 					dv.attr("width", slBox.width);
 					dv.attr("height", slBox.height);
@@ -55646,7 +54930,7 @@ raf(cb) {
 				let slBox = startLabelElement.getBBox();
 				if (useHtmlLabels) {
 					const div = startLabelElement.children[0];
-					const dv = select_default$1(startLabelElement);
+					const dv = select(startLabelElement);
 					slBox = div.getBoundingClientRect();
 					dv.attr("width", slBox.width);
 					dv.attr("height", slBox.height);
@@ -55664,7 +54948,7 @@ raf(cb) {
 				let slBox = endLabelElement.getBBox();
 				if (useHtmlLabels) {
 					const div = endLabelElement.children[0];
-					const dv = select_default$1(endLabelElement);
+					const dv = select(endLabelElement);
 					slBox = div.getBoundingClientRect();
 					dv.attr("width", slBox.width);
 					dv.attr("height", slBox.height);
@@ -55682,7 +54966,7 @@ raf(cb) {
 				let slBox = endLabelElement.getBBox();
 				if (useHtmlLabels) {
 					const div = endLabelElement.children[0];
-					const dv = select_default$1(endLabelElement);
+					const dv = select(endLabelElement);
 					slBox = div.getBoundingClientRect();
 					dv.attr("width", slBox.width);
 					dv.attr("height", slBox.height);
@@ -55972,16 +55256,16 @@ raf(cb) {
 			let lineData = points.filter((p) => !Number.isNaN(p.y));
 			const edgeCurveType = resolveEdgeCurveType(edge.curve);
 			if (edgeCurveType !== "rounded") lineData = fixCorners(lineData);
-			let curve = linear_default;
+			let curve = curveLinear;
 			switch (edgeCurveType) {
 				case "linear":
-					curve = linear_default;
+					curve = curveLinear;
 					break;
 				case "basis":
-					curve = basis_default;
+					curve = basis;
 					break;
 				case "cardinal":
-					curve = cardinal_default;
+					curve = cardinal;
 					break;
 				case "bumpX":
 					curve = bumpX;
@@ -55990,7 +55274,7 @@ raf(cb) {
 					curve = bumpY;
 					break;
 				case "catmullRom":
-					curve = catmullRom_default;
+					curve = catmullRom;
 					break;
 				case "monotoneX":
 					curve = monotoneX;
@@ -55999,10 +55283,10 @@ raf(cb) {
 					curve = monotoneY;
 					break;
 				case "natural":
-					curve = natural_default;
+					curve = natural;
 					break;
 				case "step":
-					curve = step_default;
+					curve = step$2;
 					break;
 				case "stepAfter":
 					curve = stepAfter;
@@ -56011,12 +55295,12 @@ raf(cb) {
 					curve = stepBefore;
 					break;
 				case "rounded":
-					curve = linear_default;
+					curve = curveLinear;
 					break;
-				default: curve = basis_default;
+				default: curve = basis;
 			}
 			const { x, y } = getLineFunctionsWithOffset(edge);
-			const lineFunction = line_default().x(x).y(y).curve(curve);
+			const lineFunction = line$1().x(x).y(y).curve(curve);
 			let strokeClasses;
 			switch (edge.thickness) {
 				case "normal":
@@ -56058,7 +55342,7 @@ raf(cb) {
 					seed: handDrawnSeed
 				});
 				strokeClasses += " transition";
-				svgPath = select_default$1(svgPathNode).select("path").attr("id", `${diagramId}-${edge.id}`).attr("class", " " + strokeClasses + (edge.classes ? " " + edge.classes : "") + (animationClass ? " " + animationClass : "")).attr("style", edgeStyles ? edgeStyles.reduce((acc, style) => acc + ";" + style, "") : "");
+				svgPath = select(svgPathNode).select("path").attr("id", `${diagramId}-${edge.id}`).attr("class", " " + strokeClasses + (edge.classes ? " " + edge.classes : "") + (animationClass ? " " + animationClass : "")).attr("style", edgeStyles ? edgeStyles.reduce((acc, style) => acc + ";" + style, "") : "");
 				let d = svgPath.attr("d");
 				svgPath.attr("d", d);
 				elem.node().appendChild(svgPath.node());
@@ -76641,6 +75925,30 @@ EPSILON: 1e-6 };
 		}
 		return true;
 	}
+	function doLinesIntersect(p1, p2, q1, q2) {
+		function ccw(a, b, c) {
+			return (c.y - a.y) * (b.x - a.x) > (b.y - a.y) * (c.x - a.x);
+		}
+		return ccw(p1, q1, q2) !== ccw(p2, q1, q2) && ccw(p1, p2, q1) !== ccw(p1, p2, q2);
+	}
+	function pointInPolygon(point, polygon) {
+		var inside = false;
+		for (var i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+			var pi = polygon[i];
+			var pj = polygon[j];
+			if (pi.y > point.y !== pj.y > point.y && point.x < (pj.x - pi.x) * (point.y - pi.y) / (pj.y - pi.y) + pi.x) inside = !inside;
+		}
+		return inside;
+	}
+	function segmentIntersectsPolygon(p1, p2, polygon) {
+		if (pointInPolygon(p1, polygon)) return true;
+		for (var i = 0; i < polygon.length; i++) {
+			var q1 = polygon[i];
+			var q2 = polygon[(i + 1) % polygon.length];
+			if (doLinesIntersect(p1, p2, q1, q2)) return true;
+		}
+		return false;
+	}
 	function clusteringDistance(method, length, getP, getQ, nodeP, nodeQ) {
 		var impl;
 		if (fn$6(method)) impl = method;
@@ -78019,73 +77327,33 @@ EPSILON: 1e-6 };
 			return this.spawn(elements, true).filter(selector);
 		};
 	}
-	/*! Bezier curve function generator. Copyright Gaetan Renaudeau. MIT License: http://en.wikipedia.org/wiki/MIT_License */
+	/*! Bezier curve function generator. Copyright 2014-2026 Gaetan Renaudeau. MIT License: http://en.wikipedia.org/wiki/MIT_License
+	* https://github.com/gre/bezier-easing */
+	function solveTForX(x, a, b, c) {
+		var j = 1 / Math.max(c, Math.sqrt(x)), k = x * j, l = k * j, s = c * j, q = b * l, m = s * s + q, h = -s * (s * s + 1.5 * q) - a * k * l, D = h * h - m * m * m, v;
+		if (m === 0 || D > 1e-12 * h * h) {
+			var U = -cbrt(h < 0 ? h - Math.sqrt(D) : h + Math.sqrt(D));
+			v = U + m / U || 0;
+		} else {
+			var r = Math.sqrt(m);
+			v = 2 * r * Math.cos(Math.acos(Math.max(-1, Math.min(1, -h / (m * r)))) / 3);
+		}
+		return Math.min(1, k / (v + s));
+	}
 	function generateCubicBezier(mX1, mY1, mX2, mY2) {
-		var NEWTON_ITERATIONS = 4, NEWTON_MIN_SLOPE = .001, SUBDIVISION_PRECISION = 1e-7, SUBDIVISION_MAX_ITERATIONS = 10, kSplineTableSize = 11, kSampleStepSize = 1 / (kSplineTableSize - 1), float32ArraySupported = typeof Float32Array !== "undefined";
 		if (arguments.length !== 4) return false;
 		for (var i = 0; i < 4; ++i) if (typeof arguments[i] !== "number" || isNaN(arguments[i]) || !isFinite(arguments[i])) return false;
 		mX1 = Math.min(mX1, 1);
 		mX2 = Math.min(mX2, 1);
 		mX1 = Math.max(mX1, 0);
 		mX2 = Math.max(mX2, 0);
-		var mSampleValues = float32ArraySupported ? new Float32Array(kSplineTableSize) : new Array(kSplineTableSize);
-		function A(aA1, aA2) {
-			return 1 - 3 * aA2 + 3 * aA1;
-		}
-		function B(aA1, aA2) {
-			return 3 * aA2 - 6 * aA1;
-		}
-		function C(aA1) {
-			return 3 * aA1;
-		}
-		function calcBezier(aT, aA1, aA2) {
-			return ((A(aA1, aA2) * aT + B(aA1, aA2)) * aT + C(aA1)) * aT;
-		}
-		function getSlope(aT, aA1, aA2) {
-			return 3 * A(aA1, aA2) * aT * aT + 2 * B(aA1, aA2) * aT + C(aA1);
-		}
-		function newtonRaphsonIterate(aX, aGuessT) {
-			for (var _i = 0; _i < NEWTON_ITERATIONS; ++_i) {
-				var currentSlope = getSlope(aGuessT, mX1, mX2);
-				if (currentSlope === 0) return aGuessT;
-				var currentX = calcBezier(aGuessT, mX1, mX2) - aX;
-				aGuessT -= currentX / currentSlope;
-			}
-			return aGuessT;
-		}
-		function calcSampleValues() {
-			for (var _i2 = 0; _i2 < kSplineTableSize; ++_i2) mSampleValues[_i2] = calcBezier(_i2 * kSampleStepSize, mX1, mX2);
-		}
-		function binarySubdivide(aX, aA, aB) {
-			var currentX, currentT, i = 0;
-			do {
-				currentT = aA + (aB - aA) / 2;
-				currentX = calcBezier(currentT, mX1, mX2) - aX;
-				if (currentX > 0) aB = currentT;
-				else aA = currentT;
-			} while (Math.abs(currentX) > SUBDIVISION_PRECISION && ++i < SUBDIVISION_MAX_ITERATIONS);
-			return currentT;
-		}
-		function getTForX(aX) {
-			var intervalStart = 0, currentSample = 1, lastSample = kSplineTableSize - 1;
-			for (; currentSample !== lastSample && mSampleValues[currentSample] <= aX; ++currentSample) intervalStart += kSampleStepSize;
-			--currentSample;
-			var dist = (aX - mSampleValues[currentSample]) / (mSampleValues[currentSample + 1] - mSampleValues[currentSample]), guessForT = intervalStart + dist * kSampleStepSize, initialSlope = getSlope(guessForT, mX1, mX2);
-			if (initialSlope >= NEWTON_MIN_SLOPE) return newtonRaphsonIterate(aX, guessForT);
-			else if (initialSlope === 0) return guessForT;
-			else return binarySubdivide(aX, intervalStart, intervalStart + kSampleStepSize);
-		}
-		var _precomputed = false;
-		function precompute() {
-			_precomputed = true;
-			if (mX1 !== mY1 || mX2 !== mY2) calcSampleValues();
-		}
+		var isLinear = mX1 === mY1 && mX2 === mY2, a = (3 * mX1 - 3 * mX2 + 1) / 2, b = mX2 - 2 * mX1, c = mX1, ay = 3 * mY1 - 3 * mY2 + 1, by = 3 * (mY2 - 2 * mY1), cy = 3 * mY1;
 		var f = function f(aX) {
-			if (!_precomputed) precompute();
-			if (mX1 === mY1 && mX2 === mY2) return aX;
-			if (aX === 0) return 0;
-			if (aX === 1) return 1;
-			return calcBezier(getTForX(aX), mY1, mY2);
+			if (isLinear) return aX;
+			if (aX <= 0) return 0;
+			if (aX >= 1) return 1;
+			var t = solveTForX(aX, a, b, c);
+			return ((ay * t + by) * t + cy) * t;
 		};
 		f.getControlPoints = function() {
 			return [{
@@ -78317,12 +77585,8 @@ EPSILON: 1e-6 };
 		var notEdges = this.options.eles.edges().filter(function(e) {
 			var sourceId = e.source().data("id");
 			var targetId = e.target().data("id");
-			var hasSource = nodes.some(function(n) {
-				return n.data("id") === sourceId;
-			});
-			var hasTarget = nodes.some(function(n) {
-				return n.data("id") === targetId;
-			});
+			var hasSource = nodes.hasElementWithId(sourceId);
+			var hasTarget = nodes.hasElementWithId(targetId);
 			return !hasSource || !hasTarget;
 		});
 		this.options.eles = this.options.eles.not(notEdges);
@@ -78579,7 +77843,7 @@ EPSILON: 1e-6 };
 		var r = color[0] / 255;
 		var g = color[1] / 255;
 		var b = color[2] / 255;
-		var a = opacity;
+		var a = (color[3] == null ? 1 : color[3]) * opacity;
 		var arr = outArray || new Array(4);
 		arr[0] = r * a;
 		arr[1] = g * a;
@@ -79132,7 +78396,11 @@ EPSILON: 1e-6 };
 		}
 	}
 	/**
-	* Render one frame.
+	* Render one frame to the screen or to an offscreen picking framebuffer.
+	*
+	* @param {object} r The renderer instance.
+	* @param {object} [options] Render options.
+	* @param {object} renderTarget The render target (RENDER_TARGET.SCREEN or RENDER_TARGET.PICKING).
 	*/
 	function renderWebgl(r, options, renderTarget) {
 		var start;
@@ -79164,8 +78432,10 @@ EPSILON: 1e-6 };
 				drawAxes$1(r);
 				drawAtlases(r);
 			}
-			r.data.canvasNeedsRedraw[r.NODE] = false;
-			r.data.canvasNeedsRedraw[r.DRAG] = false;
+			if (renderTarget.screen) {
+				r.data.canvasNeedsRedraw[r.NODE] = false;
+				r.data.canvasNeedsRedraw[r.DRAG] = false;
+			}
 		}
 		if (r.webglDebug) {
 			var end = performance.now();
@@ -79654,7 +78924,7 @@ EPSILON: 1e-6 };
 			]
 		});
 	}
-	var _window, navigator$1, typeofstr, typeofobj, typeoffn, typeofhtmlele, instanceStr, string, fn$6, array, plainObject, object, number$1, integer$1, htmlElement, elementOrCollection, element, collection, core, stylesheet, event, emptyString, domElement, boundingBox, promise, ms, memoize$1, camel2dash, dash2camel, prependCamel, capitalize, endsWith, number, rgba, rgbaNoBackRefs, hsla, hslaNoBackRefs, hex3, hex6, ascending, descending, extend, hex2tuple, hsl2tuple, rgb2tuple, colorname2tuple, color2tuple, colors, setMap, getMap, commonjsGlobal, isObject_1, hasRequiredIsObject, _freeGlobal, hasRequired_freeGlobal, _root, hasRequired_root, now_1, hasRequiredNow, _trimmedEndIndex, hasRequired_trimmedEndIndex, _baseTrim, hasRequired_baseTrim, _Symbol, hasRequired_Symbol, _getRawTag, hasRequired_getRawTag, _objectToString, hasRequired_objectToString, _baseGetTag, hasRequired_baseGetTag, isObjectLike_1, hasRequiredIsObjectLike, isSymbol_1, hasRequiredIsSymbol, toNumber_1, hasRequiredToNumber, debounce_1, hasRequiredDebounce, debounce, performance$1, pnow, raf, requestAnimationFrame$1, performanceNow, DEFAULT_HASH_SEED, K, DEFAULT_HASH_SEED_ALT, hashIterableInts, hashInt, hashIntAlt, combineHashes, combineHashesArray, hashArrays, hashIntsArray, hashString$1, hashStrings, hashStringsArray, movePointByBoxAspect, warningsEnabled, warnSupported, traceSupported, MAX_INT$1, trueify, falsify, zeroify, noop$1, error, warnings, warn, clone$2, copy, copyArray$1, uuid, _staticEmptyObject, staticEmptyObject, defaults$g, removeFromArray, clearArray, push, getPrefixedProperty, setPrefixedProperty, Map$1, undef, ObjectSet, Set$1, Element, defineSearch, elesfn$v, heap$2, heap$1, hasRequiredHeap$1, heap, hasRequiredHeap, Heap, dijkstraDefaults, elesfn$u, elesfn$t, aStarDefaults, elesfn$s, floydWarshallDefaults, elesfn$r, bellmanFordDefaults, elesfn$q, sqrt2, collapse, contractUntil, elesfn$p, _Math$hypot, copyPosition, modelToRenderedPosition$1, renderedToModelPosition, array2point, min$1, max, mean, median, _gcd, gcdMultipleZeroIfNonInt, deg2rad, getAngleFromDisp, log2, signum, dist, sqdist, inPlaceSumNormalize, qbezierAt, qbezierPtAt, lineAt, bound, makeBoundingBox, copyBoundingBox, clearBoundingBox, updateBoundingBox, expandBoundingBoxByPoint, expandBoundingBox, expandBoundingBoxSides, assignBoundingBox, boundingBoxesIntersect, inBoundingBox, pointInBoundingBox, boundingBoxInBoundingBox, hypot, roundRectangleIntersectLine, inLineVicinity, inBezierVicinity, solveQuadratic, solveCubic, sqdistToQuadraticBezier, sqdistToFiniteLine, pointInsidePolygonPoints, pointInsidePolygon, pointInsideRoundPolygon, joinLines, expandPolygon, intersectLineEllipse, checkInEllipse, intersectLineCircle, midOfThree, finiteLinesIntersect, transformPoints, polygonIntersectLine, roundPolygonIntersectLine, shortenIntersection, generateUnitNgonPointsFitToSquare, fitPolygonToSquare, generateUnitNgonPoints, getRoundRectangleRadius, getRoundPolygonRadius, getCutRectangleCornerLength, bezierPtsToQuadCoeff, getBarrelCurveConstants, pageRankDefaults, elesfn$o, defaults$f, elesfn$n, defaults$e, elesfn$m, defaults$d, elesfn$l, defaults$c, setOptions$3, getSimilarity$1, addLoops, normalize, mmult, expand, inflate, hasConverged, assign$2, isDuplicate, removeDuplicates, markovClustering, markovClustering$1, identity$1, absDiff, addAbsDiff, addSquaredDiff, sqrt, maxAbsDiff, getDistance, distances, defaults$b, setOptions$2, getDist, randomCentroids, classify, buildCluster, haveValuesConverged, haveMatricesConverged, seenBefore, randomMedoids, findCost, kMeans, kMedoids, updateCentroids, updateMembership, assign$1, fuzzyCMeans, kClustering, defaults$a, linkageAliases, setOptions$1$1, mergeClosest, _getAllChildren, _buildDendrogram, _buildClustersFromTree, hierarchicalClustering, hierarchicalClustering$1, defaults$9, setOptions$4, getSimilarity, getPreference, findExemplars, assignClusters, assign, affinityPropagation, affinityPropagation$1, hierholzerDefaults, elesfn$k, hopcroftTarjanBiconnected, hopcroftTarjanBiconnected$1, tarjanStronglyConnected, tarjanStronglyConnected$1, elesfn$j, STATE_PENDING, STATE_FULFILLED, STATE_REJECTED, _api, deliver, execute, execute_handlers, resolver, _resolve$1, Promise$1, Animation, anifn, define$3, isArray_1, hasRequiredIsArray, _isKey, hasRequired_isKey, isFunction_1, hasRequiredIsFunction, _coreJsData, hasRequired_coreJsData, _isMasked, hasRequired_isMasked, _toSource, hasRequired_toSource, _baseIsNative, hasRequired_baseIsNative, _getValue, hasRequired_getValue, _getNative, hasRequired_getNative, _nativeCreate, hasRequired_nativeCreate, _hashClear, hasRequired_hashClear, _hashDelete, hasRequired_hashDelete, _hashGet, hasRequired_hashGet, _hashHas, hasRequired_hashHas, _hashSet, hasRequired_hashSet, _Hash, hasRequired_Hash, _listCacheClear, hasRequired_listCacheClear, eq_1, hasRequiredEq, _assocIndexOf, hasRequired_assocIndexOf, _listCacheDelete, hasRequired_listCacheDelete, _listCacheGet, hasRequired_listCacheGet, _listCacheHas, hasRequired_listCacheHas, _listCacheSet, hasRequired_listCacheSet, _ListCache, hasRequired_ListCache, _Map, hasRequired_Map, _mapCacheClear, hasRequired_mapCacheClear, _isKeyable, hasRequired_isKeyable, _getMapData, hasRequired_getMapData, _mapCacheDelete, hasRequired_mapCacheDelete, _mapCacheGet, hasRequired_mapCacheGet, _mapCacheHas, hasRequired_mapCacheHas, _mapCacheSet, hasRequired_mapCacheSet, _MapCache, hasRequired_MapCache, memoize_1, hasRequiredMemoize, _memoizeCapped, hasRequired_memoizeCapped, _stringToPath, hasRequired_stringToPath, _arrayMap, hasRequired_arrayMap, _baseToString, hasRequired_baseToString, toString_1, hasRequiredToString, _castPath, hasRequired_castPath, _toKey, hasRequired_toKey, _baseGet, hasRequired_baseGet, get_1, hasRequiredGet, get$1, _defineProperty, hasRequired_defineProperty, _baseAssignValue, hasRequired_baseAssignValue, _assignValue, hasRequired_assignValue, _isIndex, hasRequired_isIndex, _baseSet, hasRequired_baseSet, set_1, hasRequiredSet, set, _copyArray, hasRequired_copyArray, toPath_1, hasRequiredToPath, toPath, define$2, define$1, define$4, elesfn$i, elesfn$h, tokens, newQuery, Type$1, stateSelectors, lookup, stateSelectorMatches, stateSelectorRegex, cleanMetaChars, replaceLastQuery, exprs, consumeExpr, consumeWhitespace, parse$1$1, valCmp, boolCmp, existCmp, data$1$1, meta, match, matches$1, matching, Selector, selfn, elesfn$g, cache, elesfn$f, fn$5, elesfn$e, data$2, elesfn$d, fn$4, elesfn$c, beforePositionSet, positionDef, position$1, labelHalign, labelValign, labelJustification, fn$3, elesfn$b, noninf, updateBounds, updateBoundsFromBox, prefixedProperty, updateBoundsFromArrow, updateBoundsFromLabel, updateBoundsFromOutline, updateBoundsFromMiter, updateBoundsFromMiterBorder, boundingBoxImpl, getKey, getBoundingBoxPosKey, cachedBoundingBoxImpl, defBbOpts, defBbOptsKey, filledBbOpts, bounds$2, fn$2, elesfn$a, defineDimFns, widthHeight, ifEdge, ifEdgeRenderedPosition, ifEdgeRenderedPositions, pts, renderedName, dimensions, Event, eventRegex, universalNamespace, defaults$8, defaultsKeys, emptyOpts, p, forEachEvent, makeEventObj, forEachEventObj, emitterOptions$1, argSelector$1, elesfn$9, elesfn$8, fn$1, elesfn$7, zIndexSort, elesfn$6, getLayoutDimensionOptions, elesfn$5, elesfn$4, eleTakesUpSpace, elesfn$3, elesfn$2, defineDagExtremity, defineDagOneHop, defineDagAllHops, Collection, elesfn$1, corefn$9, generateSpringRK4, cubicBezier, easings, corefn$8, emitterOptions, argSelector, elesfn, corefn$7, corefn$6, corefn$5, rendererDefaults, corefn$4, corefn$3, styfn$8, TRUE, FALSE, styfn$7, styfn$6, styfn$5, styfn$4, styfn$3, styfn$2, styfn$1, _Style, styfn, corefn$2, defaultSelectionType, corefn$1, fn, Core, corefn, defaults$7, deprecatedOptionDefaults, getInfo, setInfo, defaults$6, defaults$5, DEBUG, defaults$4, createLayoutInfo, findLCA, _findLCA_aux, printLayoutInfo, randomizePositions, getScaleInBoundsFn, refreshPositions, step, calculateNodeForces, randomDistance, nodeRepulsion, nodesOverlap, findClippingPoint, calculateEdgeForces, calculateGravityForces, propagateForces, updatePositions, limitForce, _updateAncestryBoundaries, separateComponents, defaults$3, defaults$2, defaults$1, defaults, layout$2, noop$2, throwImgErr, BRp$f, BRp$e, BRp$d, x, y, v1, v2, sinA, sinA90, radDirection, drawDirection, angle, halfAngle, cRadius, lenOut, radius, limit, startX, startY, stopX, stopY, lastPoint, asVec, invertVec, calcCornerArc, AVOID_IMPOSSIBLE_BEZIER_CONSTANT, AVOID_IMPOSSIBLE_BEZIER_CONSTANT_L, BRp$c, BRp$b, BRp$a, BRp$9, lineAngleFromDelta, lineAngle, bezierAngle, BRp$8, TOO_SMALL_CUT_RECT, warnedCutRect, BRp$7, BRp$6, BRp$5, BRp$4, setGrabState, setGrabbed, setFreed, BRp$3, BRp$2, BRp$1, beforeRenderCallbacks, BR, BRp, fullFpsTime, defs, ElementTextureCacheLookup, minTxrH, txrStepH, minLvl$1, maxLvl$1, maxZoom$1, eleTxrSpacing, defTxrWidth, maxTxrW, maxTxrH, minUtility, maxFullness, maxFullnessChecks, deqCost$1, deqAvgCost$1, deqNoDrawCost$1, deqFastCost$1, deqRedrawThreshold$1, maxDeqSize$1, getTxrReasons, initDefaults, ElementTextureCache, ETCp, defNumLayers, minLvl, maxLvl, maxZoom, deqRedrawThreshold, refineEleDebounceTime, deqCost, deqAvgCost, deqNoDrawCost, deqFastCost, maxDeqSize, invalidThreshold, maxLayerArea, maxLayerDim, useHighQualityEleTxrReqs, LayeredTextureCache, LTCp, layerIdPool, MAX_INT, CRp$b, impl, CRp$a, getZeroRotation, getLabelRotation, getSourceLabelRotation, getTargetLabelRotation, getOpacity, getTextOpacity, CRp$9, drawEdgeOverlayUnderlay, CRp$8, CRp$7, CRp$6, drawNodeOverlayUnderlay, CRp$5, motionBlurDelay, fpsHeight, ARRAY_TYPE, Atlas, AtlasCollection, AtlasManager, AtlasBatchManager, circleSD, rectangleSD, roundRectangleSD, ellipseSD, RENDER_TARGET, TEX_PICKING_MODE, TEXTURE, EDGE_STRAIGHT, EDGE_CURVE_SEGMENT, EDGE_ARROW, RECTANGLE, ROUND_RECTANGLE, BOTTOM_ROUND_RECTANGLE, ELLIPSE, ElementDrawingWebGL, CRp$4, getStyleKeysForLabel, getBoundingBoxForLabel, CRp$3, sin0, cos0, sin, cos, ellipseStepSize, i, CRp$2, CRp$1, CR, CRp, pathsImpld, incExts, extensions, modules, extension, _Stylesheet, sheetfn, version, cytoscape$1;
+	var _window, navigator$1, typeofstr, typeofobj, typeoffn, typeofhtmlele, instanceStr, string, fn$6, array, plainObject, object, number$1, integer$1, htmlElement, elementOrCollection, element, collection, core, stylesheet, event, emptyString, domElement, boundingBox, promise, ms, memoize$1, camel2dash, dash2camel, prependCamel, capitalize, endsWith, number, rgba, rgbaNoBackRefs, hsla, hslaNoBackRefs, hex3, hex6, ascending, descending, extend, hex2tuple, hsl2tuple, rgb2tuple, colorname2tuple, color2tuple, colors, setMap, getMap, commonjsGlobal, isObject_1, hasRequiredIsObject, _freeGlobal, hasRequired_freeGlobal, _root, hasRequired_root, now_1, hasRequiredNow, _trimmedEndIndex, hasRequired_trimmedEndIndex, _baseTrim, hasRequired_baseTrim, _Symbol, hasRequired_Symbol, _getRawTag, hasRequired_getRawTag, _objectToString, hasRequired_objectToString, _baseGetTag, hasRequired_baseGetTag, isObjectLike_1, hasRequiredIsObjectLike, isSymbol_1, hasRequiredIsSymbol, toNumber_1, hasRequiredToNumber, debounce_1, hasRequiredDebounce, debounce, performance$1, pnow, raf, requestAnimationFrame$1, performanceNow, DEFAULT_HASH_SEED, K, DEFAULT_HASH_SEED_ALT, hashIterableInts, hashInt, hashIntAlt, combineHashes, combineHashesArray, hashArrays, hashIntsArray, hashString$1, hashStrings, hashStringsArray, movePointByBoxAspect, warningsEnabled, warnSupported, traceSupported, MAX_INT$1, trueify, falsify, zeroify, noop$1, error, warnings, warn, clone$2, copy, copyArray$1, uuid, _staticEmptyObject, staticEmptyObject, defaults$g, removeFromArray, clearArray, push, getPrefixedProperty, setPrefixedProperty, Map$1, undef, ObjectSet, Set$1, Element, defineSearch, elesfn$v, heap$2, heap$1, hasRequiredHeap$1, heap, hasRequiredHeap, Heap, dijkstraDefaults, elesfn$u, elesfn$t, aStarDefaults, elesfn$s, floydWarshallDefaults, elesfn$r, bellmanFordDefaults, elesfn$q, sqrt2, collapse, contractUntil, elesfn$p, _Math$hypot, copyPosition, modelToRenderedPosition$1, renderedToModelPosition, array2point, min$1, max, mean, median, _gcd, gcdMultipleZeroIfNonInt, isIntegerMultiple, deg2rad, getAngleFromDisp, log2, signum, dist, sqdist, inPlaceSumNormalize, qbezierAt, qbezierPtAt, lineAt, bound, makeBoundingBox, copyBoundingBox, clearBoundingBox, updateBoundingBox, expandBoundingBoxByPoint, expandBoundingBox, expandBoundingBoxSides, assignBoundingBox, boundingBoxesIntersect, inBoundingBox, pointInBoundingBox, boundingBoxInBoundingBox, hypot, roundRectangleIntersectLine, inLineVicinity, inBezierVicinity, solveQuadratic, solveCubic, sqdistToQuadraticBezier, sqdistToFiniteLine, pointInsidePolygonPoints, pointInsidePolygon, pointInsideRoundPolygon, joinLines, expandPolygon, intersectLineEllipse, checkInEllipse, intersectLineCircle, midOfThree, finiteLinesIntersect, transformPoints, polygonIntersectLine, roundPolygonIntersectLine, shortenIntersection, generateUnitNgonPointsFitToSquare, fitPolygonToSquare, generateUnitNgonPoints, getRoundRectangleRadius, getRoundPolygonRadius, getCutRectangleCornerLength, bezierPtsToQuadCoeff, getBarrelCurveConstants, getRotatedLabelBox$1, pageRankDefaults, elesfn$o, defaults$f, elesfn$n, defaults$e, elesfn$m, defaults$d, elesfn$l, defaults$c, setOptions$3, getSimilarity$1, addLoops, normalize, mmult, expand, inflate, hasConverged, assign$2, isDuplicate, removeDuplicates, markovClustering, markovClustering$1, identity$1, absDiff, addAbsDiff, addSquaredDiff, sqrt, maxAbsDiff, getDistance, distances, defaults$b, setOptions$2, getDist, randomCentroids, classify, buildCluster, haveValuesConverged, haveMatricesConverged, seenBefore, randomMedoids, findCost, kMeans, kMedoids, updateCentroids, updateMembership, assign$1, fuzzyCMeans, kClustering, defaults$a, linkageAliases, setOptions$1$1, mergeClosest, _getAllChildren, _buildDendrogram, _buildClustersFromTree, hierarchicalClustering, hierarchicalClustering$1, defaults$9, setOptions$4, getSimilarity, getPreference, findExemplars, assignClusters, assign, affinityPropagation, affinityPropagation$1, hierholzerDefaults, elesfn$k, hopcroftTarjanBiconnected, hopcroftTarjanBiconnected$1, tarjanStronglyConnected, tarjanStronglyConnected$1, elesfn$j, STATE_PENDING, STATE_FULFILLED, STATE_REJECTED, _api, deliver, execute, execute_handlers, resolver, _resolve$1, Promise$1, Animation, anifn, define$3, isArray_1, hasRequiredIsArray, _isKey, hasRequired_isKey, isFunction_1, hasRequiredIsFunction, _coreJsData, hasRequired_coreJsData, _isMasked, hasRequired_isMasked, _toSource, hasRequired_toSource, _baseIsNative, hasRequired_baseIsNative, _getValue, hasRequired_getValue, _getNative, hasRequired_getNative, _nativeCreate, hasRequired_nativeCreate, _hashClear, hasRequired_hashClear, _hashDelete, hasRequired_hashDelete, _hashGet, hasRequired_hashGet, _hashHas, hasRequired_hashHas, _hashSet, hasRequired_hashSet, _Hash, hasRequired_Hash, _listCacheClear, hasRequired_listCacheClear, eq_1, hasRequiredEq, _assocIndexOf, hasRequired_assocIndexOf, _listCacheDelete, hasRequired_listCacheDelete, _listCacheGet, hasRequired_listCacheGet, _listCacheHas, hasRequired_listCacheHas, _listCacheSet, hasRequired_listCacheSet, _ListCache, hasRequired_ListCache, _Map, hasRequired_Map, _mapCacheClear, hasRequired_mapCacheClear, _isKeyable, hasRequired_isKeyable, _getMapData, hasRequired_getMapData, _mapCacheDelete, hasRequired_mapCacheDelete, _mapCacheGet, hasRequired_mapCacheGet, _mapCacheHas, hasRequired_mapCacheHas, _mapCacheSet, hasRequired_mapCacheSet, _MapCache, hasRequired_MapCache, memoize_1, hasRequiredMemoize, _memoizeCapped, hasRequired_memoizeCapped, _stringToPath, hasRequired_stringToPath, _arrayMap, hasRequired_arrayMap, _baseToString, hasRequired_baseToString, toString_1, hasRequiredToString, _castPath, hasRequired_castPath, _toKey, hasRequired_toKey, _baseGet, hasRequired_baseGet, get_1, hasRequiredGet, get$1, _defineProperty, hasRequired_defineProperty, _baseAssignValue, hasRequired_baseAssignValue, _assignValue, hasRequired_assignValue, _isIndex, hasRequired_isIndex, _baseSet, hasRequired_baseSet, set_1, hasRequiredSet, set, _copyArray, hasRequired_copyArray, toPath_1, hasRequiredToPath, toPath, define$2, define$1, define$4, elesfn$i, elesfn$h, tokens, newQuery, Type$1, stateSelectors, lookup, stateSelectorMatches, stateSelectorRegex, cleanMetaChars, replaceLastQuery, exprs, consumeExpr, consumeWhitespace, parse$1$1, valCmp, boolCmp, existCmp, data$1$1, meta, match, matches$1, matching, Selector, selfn, elesfn$g, cache, elesfn$f, fn$5, elesfn$e, data$2, elesfn$d, fn$4, elesfn$c, beforePositionSet, positionDef, position$1, labelHalign, labelValign, labelJustification, fn$3, elesfn$b, getLabelPolygon, noninf, updateBounds, updateBoundsFromBox, prefixedProperty, getRotatedLabelBox, updateBoundsFromArrow, updateBoundsFromLabel, updateBoundsFromOutline, updateBoundsFromMiter, updateBoundsFromMiterBorder, boundingBoxImpl, getKey, getBoundingBoxPosKey, cachedBoundingBoxImpl, getLabelPolygonPosKey, defBbOpts, defBbOptsKey, filledBbOpts, bounds$2, fn$2, elesfn$a, defineDimFns, widthHeight, ifEdge, ifEdgeRenderedPosition, ifEdgeRenderedPositions, pts, renderedName, dimensions, Event, eventRegex, universalNamespace, defaults$8, defaultsKeys, emptyOpts, p, forEachEvent, makeEventObj, forEachEventObj, emitterOptions$1, argSelector$1, elesfn$9, elesfn$8, fn$1, elesfn$7, zIndexSort, elesfn$6, getLayoutDimensionOptions, elesfn$5, elesfn$4, eleTakesUpSpace, elesfn$3, elesfn$2, defineDagExtremity, defineDagOneHop, defineDagAllHops, Collection, elesfn$1, corefn$9, cbrt, generateSpringRK4, cubicBezier, easings, corefn$8, emitterOptions, argSelector, elesfn, corefn$7, corefn$6, corefn$5, rendererDefaults, corefn$4, corefn$3, styfn$8, TRUE, FALSE, styfn$7, styfn$6, styfn$5, styfn$4, styfn$3, arrowPrefixes, getArrowScale, styfn$2, styfn$1, _Style, styfn, corefn$2, defaultSelectionType, corefn$1, fn, Core, corefn, defaults$7, deprecatedOptionDefaults, getInfo, setInfo, defaults$6, defaults$5, DEBUG, defaults$4, createLayoutInfo, findLCA, _findLCA_aux, printLayoutInfo, randomizePositions, getScaleInBoundsFn, refreshPositions, step, calculateNodeForces, randomDistance, nodeRepulsion, nodesOverlap, findClippingPoint, calculateEdgeForces, calculateGravityForces, propagateForces, updatePositions, limitForce, _updateAncestryBoundaries, separateComponents, defaults$3, defaults$2, defaults$1, defaults, layout$2, noop$2, throwImgErr, BRp$f, BRp$e, BRp$d, x, y, v1, v2, sinA, sinA90, radDirection, drawDirection, angle, halfAngle, cRadius, lenOut, radius, limit, startX, startY, stopX, stopY, lastPoint, asVec, invertVec, calcCornerArc, AVOID_IMPOSSIBLE_BEZIER_CONSTANT, AVOID_IMPOSSIBLE_BEZIER_CONSTANT_L, BRp$c, BRp$b, BRp$a, BRp$9, lineAngleFromDelta, lineAngle, bezierAngle, BRp$8, TOO_SMALL_CUT_RECT, warnedCutRect, BRp$7, BRp$6, BRp$5, BRp$4, setGrabState, setGrabbed, setFreed, BRp$3, BRp$2, BRp$1, beforeRenderCallbacks, BR, BRp, fullFpsTime, defs, ElementTextureCacheLookup, minTxrH, txrStepH, minLvl$1, maxLvl$1, maxZoom$1, eleTxrSpacing, defTxrWidth, maxTxrW, maxTxrH, minUtility, maxFullness, maxFullnessChecks, deqCost$1, deqAvgCost$1, deqNoDrawCost$1, deqFastCost$1, deqRedrawThreshold$1, maxDeqSize$1, getTxrReasons, initDefaults, ElementTextureCache, ETCp, defNumLayers, minLvl, maxLvl, maxZoom, deqRedrawThreshold, refineEleDebounceTime, deqCost, deqAvgCost, deqNoDrawCost, deqFastCost, maxDeqSize, invalidThreshold, maxLayerArea, maxLayerDim, useHighQualityEleTxrReqs, LayeredTextureCache, LTCp, layerIdPool, MAX_INT, CRp$b, impl, CRp$a, getZeroRotation, getLabelRotation, getSourceLabelRotation, getTargetLabelRotation, getOpacity, getTextOpacity, CRp$9, drawEdgeOverlayUnderlay, CRp$8, CRp$7, CRp$6, drawNodeOverlayUnderlay, CRp$5, motionBlurDelay, colorAlpha, effectiveAlpha, fpsHeight, ARRAY_TYPE, Atlas, AtlasCollection, AtlasManager, AtlasBatchManager, circleSD, rectangleSD, roundRectangleSD, ellipseSD, RENDER_TARGET, TEX_PICKING_MODE, TEXTURE, EDGE_STRAIGHT, EDGE_CURVE_SEGMENT, EDGE_ARROW, RECTANGLE, ROUND_RECTANGLE, BOTTOM_ROUND_RECTANGLE, ELLIPSE, ElementDrawingWebGL, CRp$4, getStyleKeysForLabel, getBoundingBoxForLabel, CRp$3, sin0, cos0, sin, cos, ellipseStepSize, i, CRp$2, CRp$1, CR, CRp, pathsImpld, incExts, extensions, modules, extension, _Stylesheet, sheetfn, version, cytoscape$1;
 	var init_cytoscape_esm = __esmMin((() => {
 		_window = typeof window === "undefined" ? null : window;
 		navigator$1 = _window ? _window.navigator : null;
@@ -81847,6 +81117,11 @@ EPSILON: 1e-6 };
 			else if (i > 0) out = _gcd(out, arr[i]);
 			return out;
 		};
+		isIntegerMultiple = function isIntegerMultiple(a, b) {
+			var ratio = a / b;
+			var nearest = Math.round(ratio);
+			return nearest >= 1 && Math.abs(ratio - nearest) < 1e-6;
+		};
 		deg2rad = function deg2rad(deg) {
 			return Math.PI * deg / 180;
 		};
@@ -82519,6 +81794,47 @@ EPSILON: 1e-6 };
 				ctrlPtOffsetPct: .05
 			};
 		};
+		getRotatedLabelBox$1 = function getRotatedLabelBox(bb, lx, ly, theta, ox, oy, th) {
+			var lx1 = bb.x1 - th - ox;
+			var lx2 = bb.x2 + th - ox;
+			var ly1 = bb.y1 - th - oy;
+			var ly2 = bb.y2 + th - oy;
+			if (theta) {
+				var cos = Math.cos(theta);
+				var sin = Math.sin(theta);
+				var rotate = function rotate(x, y) {
+					x = x - lx;
+					y = y - ly;
+					return {
+						x: x * cos - y * sin + lx + ox,
+						y: x * sin + y * cos + ly + oy
+					};
+				};
+				return [
+					rotate(lx1, ly1),
+					rotate(lx2, ly1),
+					rotate(lx2, ly2),
+					rotate(lx1, ly2)
+				];
+			} else return [
+				{
+					x: lx1 + ox,
+					y: ly1 + oy
+				},
+				{
+					x: lx2 + ox,
+					y: ly1 + oy
+				},
+				{
+					x: lx2 + ox,
+					y: ly2 + oy
+				},
+				{
+					x: lx1 + ox,
+					y: ly2 + oy
+				}
+			];
+		};
 		pageRankDefaults = defaults$g({
 			dampingFactor: .8,
 			precision: 1e-6,
@@ -82556,14 +81872,14 @@ EPSILON: 1e-6 };
 				matrix[_n] += w;
 				columnSum[s] += w;
 			}
-			var p = 1 / numNodes + additionalProb;
+			var p = dampingFactor / numNodes + additionalProb;
 			for (var _j = 0; _j < numNodes; _j++) if (columnSum[_j] === 0) for (var _i2 = 0; _i2 < numNodes; _i2++) {
 				var _n2 = _i2 * numNodes + _j;
 				matrix[_n2] = p;
 			}
 			else for (var _i3 = 0; _i3 < numNodes; _i3++) {
 				var _n3 = _i3 * numNodes + _j;
-				matrix[_n3] = matrix[_n3] / columnSum[_j] + additionalProb;
+				matrix[_n3] = dampingFactor * matrix[_n3] / columnSum[_j] + additionalProb;
 			}
 			var eigenvector = new Array(numNodes);
 			var temp = new Array(numNodes);
@@ -83145,6 +82461,7 @@ EPSILON: 1e-6 };
 			var nodes = this.nodes();
 			var node = null;
 			var opts = setOptions$2(options);
+			if (opts.k > nodes.length) error("kMedoids: k (".concat(opts.k, ") cannot exceed the number of nodes (").concat(nodes.length, ")."));
 			var clusters = new Array(opts.k);
 			var medoids;
 			var assignment = {};
@@ -83317,11 +82634,13 @@ EPSILON: 1e-6 };
 			if (opts.mode === "dendrogram") merged = {
 				left: c1,
 				right: c2,
-				key: c1.key
+				key: c1.key,
+				size: c1.size + c2.size
 			};
 			else merged = {
 				value: c1.value.concat(c2.value),
-				key: c1.key
+				key: c1.key,
+				size: c1.size + c2.size
 			};
 			clusters[c1.index] = merged;
 			clusters.splice(c2.index, 1);
@@ -83414,6 +82733,7 @@ EPSILON: 1e-6 };
 		hierarchicalClustering = function hierarchicalClustering(options) {
 			var cy = this.cy();
 			var nodes = this.nodes();
+			if (nodes.length === 0) return [];
 			var opts = setOptions$1$1(options);
 			var attrs = opts.attributes;
 			var getDist = function getDist(n1, n2) {
@@ -83431,7 +82751,8 @@ EPSILON: 1e-6 };
 				var cluster = {
 					value: opts.mode === "dendrogram" ? nodes[n] : [nodes[n]],
 					key: n,
-					index: n
+					index: n,
+					size: 1
 				};
 				clusters[n] = cluster;
 				index[n] = cluster;
@@ -83666,11 +82987,16 @@ EPSILON: 1e-6 };
 			if (root) startVertex = string(root) ? this.filter(root)[0].id() : root[0].id();
 			var nodes = {};
 			var edges = {};
+			var subgraphEdges = eles.edges().filter(function(e) {
+				return eles.has(e.source()) && eles.has(e.target());
+			});
 			if (directed) eles.forEach(function(ele) {
 				var id = ele.id();
 				if (ele.isNode()) {
-					var ind = ele.indegree(true);
-					var outd = ele.outdegree(true);
+					var incoming = ele.incomers().edges().intersection(subgraphEdges);
+					var outgoing = ele.outgoers().edges().intersection(subgraphEdges);
+					var ind = incoming.length;
+					var outd = outgoing.length;
 					var d1 = ind - outd;
 					var d2 = outd - ind;
 					if (d1 == 1) {
@@ -83681,21 +83007,24 @@ EPSILON: 1e-6 };
 						else oddOut = id;
 					} else if (d2 > 1 || d1 > 1) dflag = true;
 					nodes[id] = [];
-					ele.outgoers().forEach(function(e) {
-						if (e.isEdge()) nodes[id].push(e.id());
+					outgoing.forEach(function(e) {
+						return nodes[id].push(e.id());
 					});
 				} else edges[id] = [void 0, ele.target().id()];
 			});
 			else eles.forEach(function(ele) {
 				var id = ele.id();
 				if (ele.isNode()) {
-					if (ele.degree(true) % 2) {
+					var connected = ele.connectedEdges().intersection(subgraphEdges);
+					if ((connected.length + connected.filter(function(e) {
+						return e.isLoop();
+					}).length) % 2) {
 						if (!oddIn) oddIn = id;
 						else if (!oddOut) oddOut = id;
 						else dflag = true;
 					}
 					nodes[id] = [];
-					ele.connectedEdges().forEach(function(e) {
+					connected.forEach(function(e) {
 						return nodes[id].push(e.id());
 					});
 				} else edges[id] = [ele.source().id(), ele.target().id()];
@@ -85339,7 +84668,7 @@ EPSILON: 1e-6 };
 				operator = operator.replace("@", "");
 				caseInsensitive = true;
 			}
-			if (isFieldStr || isValStr || caseInsensitive) {
+			if (isFieldStr || isValStr || caseInsensitive || operator === "*=" || operator === "^=" || operator === "$=") {
 				fieldStr = !isFieldStr && !isFieldNum ? "" : "" + fieldVal;
 				valStr = "" + value;
 			}
@@ -85854,6 +85183,7 @@ EPSILON: 1e-6 };
 					};
 					if (ele.isParent() && !(delta.x === 0 && delta.y === 0)) ele.children().shift(delta, silent);
 					ele.dirtyBoundingBoxCache();
+					if (ele.isNode()) ele.connectedEdges().dirtyBoundingBoxCache();
 				}
 			}
 		};
@@ -86071,6 +85401,24 @@ EPSILON: 1e-6 };
 				h: y2 - y1
 			};
 		};
+		getLabelPolygon = function getLabelPolygon(ele) {
+			var label = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : "main";
+			if (!ele || !ele.cy().styleEnabled()) return null;
+			var prefix = label === "main" ? void 0 : label;
+			var _p = ele._private;
+			var cache = _p.labelPolygonCache;
+			var posKey = getLabelPolygonPosKey(ele);
+			if (!(cache == null || cache[label] == null || _p.styleDirty || _p.labelPolygonPosKey !== posKey)) return cache[label];
+			ele.recalculateRenderedStyle();
+			posKey = getLabelPolygonPosKey(ele);
+			if (_p.labelPolygonCache == null || _p.labelPolygonPosKey !== posKey) {
+				_p.labelPolygonCache = {};
+				_p.labelPolygonPosKey = posKey;
+			}
+			var polygon = getRotatedLabelBox(ele, prefix);
+			_p.labelPolygonCache[label] = polygon;
+			return polygon;
+		};
 		elesfn$b.dirtyCompoundBoundsCache = function() {
 			var silent = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : false;
 			var cy = this.cy();
@@ -86199,11 +85547,27 @@ EPSILON: 1e-6 };
 		prefixedProperty = function prefixedProperty(obj, field, prefix) {
 			return getPrefixedProperty(obj, field, prefix);
 		};
+		getRotatedLabelBox = function getRotatedLabelBox(ele, prefix) {
+			if (ele.cy().headless()) return;
+			var _p = ele._private;
+			var prefixDash = prefix ? prefix + "-" : "";
+			if (!ele.pstyle(prefixDash + "label").strValue) return null;
+			ele.boundingBox({ includeLabels: true });
+			var bbPrefix = prefix || "main";
+			var bb = _p.labelBounds[bbPrefix];
+			if (!bb) return null;
+			var lx = prefixedProperty(_p.rscratch, "labelX", prefix);
+			var ly = prefixedProperty(_p.rscratch, "labelY", prefix);
+			var theta = prefixedProperty(_p.rscratch, "labelAngle", prefix);
+			var ox = ele.pstyle(prefixDash + "text-margin-x").pfValue;
+			var oy = ele.pstyle(prefixDash + "text-margin-y").pfValue;
+			return getRotatedLabelBox$1(bb, lx, ly, theta, ox, oy, 0);
+		};
 		updateBoundsFromArrow = function updateBoundsFromArrow(bounds, ele, prefix) {
 			if (ele.cy().headless()) return;
 			var _p = ele._private;
 			var rstyle = _p.rstyle;
-			var halfArW = rstyle.arrowWidth / 2;
+			var halfArW = (rstyle.arrowWidths != null && rstyle.arrowWidths[prefix] != null ? rstyle.arrowWidths[prefix] : rstyle.arrowWidth) / 2;
 			var arrowType = ele.pstyle(prefix + "-arrow-shape").value;
 			var x;
 			var y;
@@ -86635,6 +85999,27 @@ EPSILON: 1e-6 };
 			}
 			return bb;
 		};
+		getLabelPolygonPosKey = function getLabelPolygonPosKey(ele) {
+			var angle = ele.pstyle("text-rotation").pfValue || 0;
+			if (ele.isEdge()) {
+				var p1 = ele.source().position();
+				var p2 = ele.target().position();
+				return hashIntsArray([
+					Math.round(p1.x),
+					Math.round(p1.y),
+					Math.round(p2.x),
+					Math.round(p2.y),
+					Math.round(angle * 1e3)
+				]);
+			} else {
+				var pos = ele.position();
+				return hashIntsArray([
+					Math.round(pos.x),
+					Math.round(pos.y),
+					Math.round(angle * 1e3)
+				]);
+			}
+		};
 		defBbOpts = {
 			includeNodes: true,
 			includeEdges: true,
@@ -86704,6 +86089,8 @@ EPSILON: 1e-6 };
 				_p.arrowBounds.target = null;
 				_p.arrowBounds["mid-source"] = null;
 				_p.arrowBounds["mid-target"] = null;
+				_p.labelPolygonCache = {};
+				_p.labelPolygonPosKey = null;
 			}
 			this.emitAndNotify("bounds");
 			return this;
@@ -87425,6 +86812,113 @@ EPSILON: 1e-6 };
 					value: min,
 					ele: minEle
 				};
+			},
+			withinBox: function withinBox(box) {
+				var cy = this.cy();
+				var r = cy.renderer();
+				if (cy.styleEnabled()) this.recalculateRenderedStyle();
+				var x2 = box.x2 != null ? box.x2 : box.x1 + box.w;
+				var y2 = box.y2 != null ? box.y2 : box.y1 + box.h;
+				var bb = makeBoundingBox({
+					x1: Math.min(box.x1, x2),
+					x2: Math.max(box.x1, x2),
+					y1: Math.min(box.y1, y2),
+					y2: Math.max(box.y1, y2)
+				});
+				var allInBox = r.getAllInBox(bb.x1, bb.y1, bb.x2, bb.y2);
+				var col = this;
+				return this.spawn(allInBox.filter(function(ele) {
+					return col.has(ele);
+				}));
+			},
+			hit: function hit(pos, options) {
+				var cy = this.cy();
+				var r = cy.renderer();
+				if (cy.styleEnabled()) this.recalculateRenderedStyle();
+				return this.spawn(r.hitTestAt(pos.x, pos.y, this, options));
+			},
+			polygonIntersection: function polygonIntersection(polygon) {
+				var eles = this;
+				if (eles.cy().styleEnabled()) this.recalculateRenderedStyle();
+				var matches = [];
+				for (var i = 0; i < eles.length; i++) {
+					var ele = eles[i];
+					ele.boundingBox();
+					if (ele.isEdge()) {
+						var rs = ele._private.rscratch;
+						var rstyle = ele._private.rstyle;
+						var pts = rstyle.bezierPts || rstyle.linePts || rstyle.haystackPts;
+						if (rstyle.bezierPts && rs.allpts && rs.allpts.length >= 6) {
+							var spans = (rs.allpts.length - 2) / 4;
+							var samplesPerSpan = rstyle.bezierPts.length / spans;
+							pts = [{
+								x: rs.allpts[0],
+								y: rs.allpts[1]
+							}];
+							for (var k = 0; k < spans; k++) {
+								for (var j = 0; j < samplesPerSpan; j++) pts.push(rstyle.bezierPts[k * samplesPerSpan + j]);
+								pts.push({
+									x: rs.allpts[k * 4 + 4],
+									y: rs.allpts[k * 4 + 5]
+								});
+							}
+						}
+						if ((!pts || pts.length < 2) && rs.startX != null && rs.startY != null && rs.endX != null && rs.endY != null) pts = [{
+							x: rs.startX,
+							y: rs.startY
+						}, {
+							x: rs.endX,
+							y: rs.endY
+						}];
+						if (pts && pts.length > 1) {
+							var bodyMatched = false;
+							for (var _k = 0; _k < pts.length - 1 && !bodyMatched; _k++) if (segmentIntersectsPolygon(pts[_k], pts[_k + 1], polygon)) {
+								matches.push(ele);
+								bodyMatched = true;
+							}
+							if (bodyMatched) continue;
+						}
+					} else {
+						var bb = ele._private.bodyBounds;
+						if (bb) {
+							if (satPolygonIntersection([
+								{
+									x: bb.x1,
+									y: bb.y1
+								},
+								{
+									x: bb.x2,
+									y: bb.y1
+								},
+								{
+									x: bb.x2,
+									y: bb.y2
+								},
+								{
+									x: bb.x1,
+									y: bb.y2
+								}
+							], polygon)) {
+								matches.push(ele);
+								continue;
+							}
+						}
+					}
+					var labels = ele.isEdge() ? [
+						"main",
+						"source",
+						"target"
+					] : ["main"];
+					var labelMatched = false;
+					for (var _j = 0; _j < labels.length && !labelMatched; _j++) {
+						var labelPoly = getLabelPolygon(ele, labels[_j]);
+						if (labelPoly && labelPoly.length && satPolygonIntersection(labelPoly, polygon)) {
+							matches.push(ele);
+							labelMatched = true;
+						}
+					}
+				}
+				return this.spawn(matches);
 			}
 		};
 		fn$1 = elesfn$8;
@@ -88520,7 +88014,7 @@ EPSILON: 1e-6 };
 			var removeFromPool = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : true;
 			var self = this;
 			var elesToRemove = [];
-			var elesToRemoveIds = {};
+			var elesToRemoveIds = new Set$1();
 			var cy = self._private.cy;
 			function addConnectedEdges(node) {
 				var edges = node._private.edges;
@@ -88531,9 +88025,9 @@ EPSILON: 1e-6 };
 				for (var i = 0; i < children.length; i++) add(children[i]);
 			}
 			function add(ele) {
-				var alreadyAdded = elesToRemoveIds[ele.id()];
+				var alreadyAdded = elesToRemoveIds.has(ele.id());
 				if (removeFromPool && ele.removed() || alreadyAdded) return;
-				else elesToRemoveIds[ele.id()] = true;
+				else elesToRemoveIds.add(ele.id());
 				if (ele.isNode()) {
 					elesToRemove.push(ele);
 					addConnectedEdges(ele);
@@ -88553,7 +88047,7 @@ EPSILON: 1e-6 };
 				pllEdge.clearTraversalCache();
 			}
 			var alteredParents = [];
-			alteredParents.ids = {};
+			alteredParents.ids = new Set$1();
 			function removeChildRef(parent, ele) {
 				ele = ele[0];
 				parent = parent[0];
@@ -88561,8 +88055,8 @@ EPSILON: 1e-6 };
 				var pid = parent.id();
 				removeFromArray(children, ele);
 				ele._private.parent = null;
-				if (!alteredParents.ids[pid]) {
-					alteredParents.ids[pid] = true;
+				if (!alteredParents.ids.has(pid)) {
+					alteredParents.ids.add(pid);
 					alteredParents.push(parent);
 				}
 			}
@@ -88712,6 +88206,9 @@ EPSILON: 1e-6 };
 				}
 				return collection.remove();
 			}
+		};
+		cbrt = Math.cbrt || function(x) {
+			return x < 0 ? -Math.pow(-x, 1 / 3) : Math.pow(x, 1 / 3);
 		};
 		generateSpringRK4 = function() {
 			function springAccelerationForState(state) {
@@ -89452,13 +88949,13 @@ EPSILON: 1e-6 };
 							Math.round(r1 + (r2 - r1) * percent),
 							Math.round(g1 + (g2 - g1) * percent),
 							Math.round(b1 + (b2 - b1) * percent),
-							Math.round(a1 + (a2 - a1) * percent)
+							a1 + (a2 - a1) * percent
 						];
 						flatProp = {
 							bypass: prop.bypass,
 							name: prop.name,
 							value: clr,
-							strValue: "rgb(" + clr[0] + ", " + clr[1] + ", " + clr[2] + ")"
+							strValue: "rgba(" + clr[0] + ", " + clr[1] + ", " + clr[2] + ", " + clr[3] + ")"
 						};
 					} else if (type.number) {
 						var calcValue = prop.valueMin + (prop.valueMax - prop.valueMin) * percent;
@@ -89705,7 +89202,7 @@ EPSILON: 1e-6 };
 				else {
 					prop.value = value;
 					if (prop.pfValue != null) prop.pfValue = value;
-					if (isColor) prop.strValue = "rgb(" + value.join(",") + ")";
+					if (isColor) prop.strValue = value[3] == null ? "rgb(" + value[0] + "," + value[1] + "," + value[2] + ")" : "rgba(" + value[0] + "," + value[1] + "," + value[2] + "," + value[3] + ")";
 					else if (isMulti) prop.strValue = value.join(" ");
 					else prop.strValue = "" + value;
 					this.updateStyleHints(ele);
@@ -89984,6 +89481,19 @@ EPSILON: 1e-6 };
 			style.appendFromString(string);
 			return style;
 		};
+		arrowPrefixes = [
+			"source",
+			"mid-source",
+			"target",
+			"mid-target"
+		];
+		getArrowScale = function getArrowScale(edge, prefix) {
+			if (prefix != null) {
+				var prefixed = edge.pstyle(prefix + "-arrow-scale");
+				if (prefixed != null && prefixed.value !== "inherit") return prefixed.value;
+			}
+			return edge.pstyle("arrow-scale").value;
+		};
 		styfn$2 = {};
 		(function() {
 			var number$1 = number;
@@ -90075,6 +89585,13 @@ EPSILON: 1e-6 };
 					unitless: true,
 					min: 0,
 					strictMin: true
+				},
+				arrowScale: {
+					number: true,
+					unitless: true,
+					min: 0,
+					strictMin: true,
+					enums: ["inherit"]
 				},
 				size: {
 					number: true,
@@ -90808,6 +90325,22 @@ EPSILON: 1e-6 };
 					type: t.color
 				},
 				{
+					name: "overlay-fill",
+					type: t.fill
+				},
+				{
+					name: "overlay-gradient-stop-colors",
+					type: t.colors
+				},
+				{
+					name: "overlay-gradient-stop-positions",
+					type: t.percentages
+				},
+				{
+					name: "overlay-gradient-direction",
+					type: t.gradientDirection
+				},
+				{
 					name: "overlay-opacity",
 					type: t.zeroOneNumber,
 					triggersBounds: diff.zeroNonZero
@@ -90831,6 +90364,22 @@ EPSILON: 1e-6 };
 				{
 					name: "underlay-color",
 					type: t.color
+				},
+				{
+					name: "underlay-fill",
+					type: t.fill
+				},
+				{
+					name: "underlay-gradient-stop-colors",
+					type: t.colors
+				},
+				{
+					name: "underlay-gradient-stop-positions",
+					type: t.percentages
+				},
+				{
+					name: "underlay-gradient-direction",
+					type: t.gradientDirection
 				},
 				{
 					name: "underlay-opacity",
@@ -91378,12 +90927,7 @@ EPSILON: 1e-6 };
 				});
 			}
 			var edgeArrow = [];
-			var arrowPrefixes = styfn$2.arrowPrefixes = [
-				"source",
-				"mid-source",
-				"target",
-				"mid-target"
-			];
+			styfn$2.arrowPrefixes = arrowPrefixes;
 			[
 				{
 					name: "arrow-shape",
@@ -91401,6 +90945,11 @@ EPSILON: 1e-6 };
 				{
 					name: "arrow-width",
 					type: t.arrowWidth
+				},
+				{
+					name: "arrow-scale",
+					type: t.arrowScale,
+					triggersBounds: diff.any
 				}
 			].forEach(function(prop) {
 				arrowPrefixes.forEach(function(prefix) {
@@ -91579,11 +91128,19 @@ EPSILON: 1e-6 };
 				"target-text-margin-y": 0,
 				"overlay-opacity": 0,
 				"overlay-color": "#000",
+				"overlay-fill": "solid",
+				"overlay-gradient-stop-colors": "#999",
+				"overlay-gradient-stop-positions": "0%",
+				"overlay-gradient-direction": "to-bottom",
 				"overlay-padding": 10,
 				"overlay-shape": "round-rectangle",
 				"overlay-corner-radius": "auto",
 				"underlay-opacity": 0,
 				"underlay-color": "#000",
+				"underlay-fill": "solid",
+				"underlay-gradient-stop-colors": "#999",
+				"underlay-gradient-stop-positions": "0%",
+				"underlay-gradient-direction": "to-bottom",
 				"underlay-padding": 10,
 				"underlay-shape": "round-rectangle",
 				"underlay-corner-radius": "auto",
@@ -91743,6 +91300,10 @@ EPSILON: 1e-6 };
 				{
 					name: "arrow-width",
 					value: 1
+				},
+				{
+					name: "arrow-scale",
+					value: "inherit"
 				}
 			].reduce(function(css, prop) {
 				styfn$2.arrowPrefixes.forEach(function(prefix) {
@@ -91994,7 +91555,7 @@ EPSILON: 1e-6 };
 					name,
 					value: tuple,
 					pfValue: tuple,
-					strValue: "rgb(" + tuple[0] + "," + tuple[1] + "," + tuple[2] + ")",
+					strValue: tuple[3] == null ? "rgb(" + tuple[0] + "," + tuple[1] + "," + tuple[2] + ")" : "rgba(" + tuple[0] + "," + tuple[1] + "," + tuple[2] + "," + tuple[3] + ")",
 					bypass: propIsBypass
 				};
 			} else if (type.regex || type.regexes) {
@@ -94325,6 +93886,12 @@ EPSILON: 1e-6 };
 			isHeadless: function isHeadless() {
 				return true;
 			},
+			getAllInBox: function getAllInBox() {
+				return [];
+			},
+			hitTestAt: function hitTestAt() {
+				return [];
+			},
 			png: throwImgErr,
 			jpg: throwImgErr
 		};
@@ -94367,8 +93934,8 @@ EPSILON: 1e-6 };
 				}
 				return ret;
 			};
-			var standardGap = function standardGap(edge) {
-				return edge.pstyle("width").pfValue * edge.pstyle("arrow-scale").pfValue * 2;
+			var standardGap = function standardGap(edge, prefix) {
+				return edge.pstyle("width").pfValue * getArrowScale(edge, prefix) * 2;
 			};
 			var defineArrowShape = function defineArrowShape(name, defn) {
 				if (string(defn)) defn = arrowShapes[defn];
@@ -94392,7 +93959,7 @@ EPSILON: 1e-6 };
 						var points = transformPoints(this.points, size, angle, translation);
 						renderer.arrowShapeImpl("polygon")(context, points);
 					},
-					spacing: function spacing(edge) {
+					spacing: function spacing(edge, prefix) {
 						return 0;
 					},
 					gap: standardGap
@@ -94424,8 +93991,8 @@ EPSILON: 1e-6 };
 					var ctrlPtTrans = transform(ctrlPt[0], ctrlPt[1], size, angle, translation);
 					renderer.arrowShapeImpl(this.name)(context, ptsTrans, ctrlPtTrans);
 				},
-				gap: function gap(edge) {
-					return standardGap(edge) * .8;
+				gap: function gap(edge, prefix) {
+					return standardGap(edge, prefix) * .8;
 				}
 			});
 			defineArrowShape("triangle-tee", {
@@ -94481,8 +94048,8 @@ EPSILON: 1e-6 };
 					var triPts = transformPoints(this.pointsTr, size, angle, translation);
 					renderer.arrowShapeImpl(this.name)(context, triPts, translation.x, translation.y, this.radius * size);
 				},
-				spacing: function spacing(edge) {
-					return renderer.getArrowWidth(edge.pstyle("width").pfValue, edge.pstyle("arrow-scale").value) * this.radius;
+				spacing: function spacing(edge, prefix) {
+					return renderer.getArrowWidth(edge.pstyle("width").pfValue, getArrowScale(edge, prefix)) * this.radius;
 				}
 			});
 			defineArrowShape("triangle-cross", {
@@ -94537,8 +94104,8 @@ EPSILON: 1e-6 };
 					0,
 					-.15
 				],
-				gap: function gap(edge) {
-					return standardGap(edge) * .525;
+				gap: function gap(edge, prefix) {
+					return standardGap(edge, prefix) * .525;
 				}
 			});
 			defineArrowShape("circle", {
@@ -94550,8 +94117,8 @@ EPSILON: 1e-6 };
 				draw: function draw(context, size, angle, translation, edgeWidth) {
 					renderer.arrowShapeImpl(this.name)(context, translation.x, translation.y, this.radius * size);
 				},
-				spacing: function spacing(edge) {
-					return renderer.getArrowWidth(edge.pstyle("width").pfValue, edge.pstyle("arrow-scale").value) * this.radius;
+				spacing: function spacing(edge, prefix) {
+					return renderer.getArrowWidth(edge.pstyle("width").pfValue, getArrowScale(edge, prefix)) * this.radius;
 				}
 			});
 			defineArrowShape("tee", {
@@ -94565,10 +94132,10 @@ EPSILON: 1e-6 };
 					.15,
 					0
 				],
-				spacing: function spacing(edge) {
+				spacing: function spacing(edge, prefix) {
 					return 1;
 				},
-				gap: function gap(edge) {
+				gap: function gap(edge, prefix) {
 					return 1;
 				}
 			});
@@ -94593,8 +94160,8 @@ EPSILON: 1e-6 };
 					0,
 					0
 				],
-				gap: function gap(edge) {
-					return edge.pstyle("width").pfValue * edge.pstyle("arrow-scale").value;
+				gap: function gap(edge, prefix) {
+					return edge.pstyle("width").pfValue * getArrowScale(edge, prefix);
 				}
 			});
 			defineArrowShape("chevron", {
@@ -94612,8 +94179,8 @@ EPSILON: 1e-6 };
 					.15,
 					-.15
 				],
-				gap: function gap(edge) {
-					return .95 * edge.pstyle("width").pfValue * edge.pstyle("arrow-scale").value;
+				gap: function gap(edge, prefix) {
+					return .95 * edge.pstyle("width").pfValue * getArrowScale(edge, prefix);
 				}
 			});
 		};
@@ -94669,6 +94236,129 @@ EPSILON: 1e-6 };
 		BRp$e.invalidateContainerClientCoordsCache = function() {
 			this.containerBB = null;
 		};
+		BRp$e.getLabelHitPolygon = function(ele, prefix, th) {
+			var _p = ele._private;
+			var prefixDash = prefix ? prefix + "-" : "";
+			ele.boundingBox();
+			var bb = _p.labelBounds[prefix || "main"];
+			if (!bb) return null;
+			var lx = getPrefixedProperty(_p.rscratch, "labelX", prefix);
+			var ly = getPrefixedProperty(_p.rscratch, "labelY", prefix);
+			var theta = getPrefixedProperty(_p.rscratch, "labelAngle", prefix);
+			var ox = ele.pstyle(prefixDash + "text-margin-x").pfValue;
+			var oy = ele.pstyle(prefixDash + "text-margin-y").pfValue;
+			return getRotatedLabelBox$1(bb, lx, ly, theta, ox, oy, th);
+		};
+		BRp$e.checkLabelHitAt = function(ele, x, y, prefix, th) {
+			var prefixDash = prefix ? prefix + "-" : "";
+			var text = ele.pstyle(prefixDash + "label").value;
+			if (!(ele.pstyle("text-events").strValue === "yes") || !text) return false;
+			var polygon = this.getLabelHitPolygon(ele, prefix, th);
+			if (!polygon) return false;
+			var points = [];
+			for (var i = 0; i < polygon.length; i++) points.push(polygon[i].x, polygon[i].y);
+			return pointInsidePolygonPoints(x, y, points);
+		};
+		BRp$e.checkNodeHitAt = function(node, x, y, threshold) {
+			var r = this;
+			var width = node.outerWidth() + 2 * threshold;
+			var height = node.outerHeight() + 2 * threshold;
+			var pos = node.position();
+			if (pos.x - width / 2 <= x && x <= pos.x + width / 2 && pos.y - height / 2 <= y && y <= pos.y + height / 2) {
+				var cornerRadius = node.pstyle("corner-radius").value === "auto" ? "auto" : node.pstyle("corner-radius").pfValue;
+				return r.nodeShapes[r.getNodeShape(node)].checkPoint(x, y, 0, width, height, pos.x, pos.y, cornerRadius, node._private.rscratch);
+			}
+			return false;
+		};
+		BRp$e.checkEdgeHitAt = function(edge, x, y, threshold) {
+			var r = this;
+			var rs = edge._private.rscratch;
+			var styleWidth = edge.pstyle("width").pfValue;
+			var width = styleWidth / 2 + threshold;
+			var widthSq = width * width;
+			var width2 = width * 2;
+			var sqDist;
+			if (rs.edgeType === "segments" || rs.edgeType === "straight" || rs.edgeType === "haystack") {
+				var linePts = rs.allpts;
+				for (var i = 0; i + 3 < linePts.length; i += 2) if (inLineVicinity(x, y, linePts[i], linePts[i + 1], linePts[i + 2], linePts[i + 3], width2) && widthSq > (sqDist = sqdistToFiniteLine(x, y, linePts[i], linePts[i + 1], linePts[i + 2], linePts[i + 3]))) return { sqDist };
+			} else if (rs.edgeType === "bezier" || rs.edgeType === "multibezier" || rs.edgeType === "self" || rs.edgeType === "compound") {
+				var bezierPts = rs.allpts;
+				for (var k = 0; k + 5 < bezierPts.length; k += 4) if (inBezierVicinity(x, y, bezierPts[k], bezierPts[k + 1], bezierPts[k + 2], bezierPts[k + 3], bezierPts[k + 4], bezierPts[k + 5], width2) && widthSq > (sqDist = sqdistToQuadraticBezier(x, y, bezierPts[k], bezierPts[k + 1], bezierPts[k + 2], bezierPts[k + 3], bezierPts[k + 4], bezierPts[k + 5]))) return { sqDist };
+			}
+			var arrows = [
+				{
+					name: "source",
+					x: rs.arrowStartX,
+					y: rs.arrowStartY,
+					angle: rs.srcArrowAngle
+				},
+				{
+					name: "target",
+					x: rs.arrowEndX,
+					y: rs.arrowEndY,
+					angle: rs.tgtArrowAngle
+				},
+				{
+					name: "mid-source",
+					x: rs.midX,
+					y: rs.midY,
+					angle: rs.midsrcArrowAngle
+				},
+				{
+					name: "mid-target",
+					x: rs.midX,
+					y: rs.midY,
+					angle: rs.midtgtArrowAngle
+				}
+			];
+			for (var j = 0; j < arrows.length; j++) {
+				var ar = arrows[j];
+				var shape = r.arrowShapes[edge.pstyle(ar.name + "-arrow-shape").value];
+				var edgeWidth = styleWidth;
+				var arSize = r.getArrowWidth(styleWidth, getArrowScale(edge, ar.name));
+				if (shape.roughCollide(x, y, arSize, ar.angle, {
+					x: ar.x,
+					y: ar.y
+				}, edgeWidth, threshold) && shape.collide(x, y, arSize, ar.angle, {
+					x: ar.x,
+					y: ar.y
+				}, edgeWidth, threshold)) return { sqDist: null };
+			}
+			return null;
+		};
+		BRp$e.hitTestAt = function(x, y, eles, options) {
+			var r = this;
+			var zoom = r.cy.zoom();
+			var opts = options || {};
+			var isTouch = opts.isTouch;
+			var includeBody = opts.includeBody !== false;
+			var includeMainLabels = opts.includeMainLabels !== false;
+			var includeSourceLabels = opts.includeSourceLabels !== false;
+			var includeTargetLabels = opts.includeTargetLabels !== false;
+			var nodeThreshold = (isTouch ? 8 : 2) / zoom;
+			var labelThreshold = (isTouch ? 8 : 2) / zoom;
+			var edgeThreshold = (isTouch ? 24 : 8) / zoom;
+			var eleIds = /* @__PURE__ */ new Set();
+			for (var i = 0; i < eles.length; i++) eleIds.add(eles[i]._private.data.id);
+			var zSorted = r.getCachedZSortedEles().interactive;
+			var matches = [];
+			for (var j = zSorted.length - 1; j >= 0; j--) {
+				var ele = zSorted[j];
+				if (!eleIds.has(ele._private.data.id)) continue;
+				var hit = false;
+				if (ele.isNode()) {
+					if (includeBody) hit = r.checkNodeHitAt(ele, x, y, nodeThreshold);
+					if (!hit && includeMainLabels) hit = r.checkLabelHitAt(ele, x, y, null, labelThreshold);
+				} else {
+					if (includeBody) hit = r.checkEdgeHitAt(ele, x, y, edgeThreshold) != null;
+					if (!hit && includeMainLabels) hit = r.checkLabelHitAt(ele, x, y, null, labelThreshold);
+					if (!hit && includeSourceLabels) hit = r.checkLabelHitAt(ele, x, y, "source", labelThreshold);
+					if (!hit && includeTargetLabels) hit = r.checkLabelHitAt(ele, x, y, "target", labelThreshold);
+				}
+				if (hit) matches.push(ele);
+			}
+			return matches;
+		};
 		BRp$e.findNearestElement = function(x, y, interactiveElementsOnly, isTouch) {
 			return this.findNearestElements(x, y, interactiveElementsOnly, isTouch)[0];
 		};
@@ -94712,25 +94402,15 @@ EPSILON: 1e-6 };
 				}
 			}
 			function checkNode(node) {
-				var width = node.outerWidth() + 2 * nodeThreshold;
-				var height = node.outerHeight() + 2 * nodeThreshold;
-				var hw = width / 2;
-				var hh = height / 2;
-				var pos = node.position();
-				var cornerRadius = node.pstyle("corner-radius").value === "auto" ? "auto" : node.pstyle("corner-radius").pfValue;
-				var rs = node._private.rscratch;
-				if (pos.x - hw <= x && x <= pos.x + hw && pos.y - hh <= y && y <= pos.y + hh) {
-					if (r.nodeShapes[self.getNodeShape(node)].checkPoint(x, y, 0, width, height, pos.x, pos.y, cornerRadius, rs)) {
-						addEle(node, 0);
-						return true;
-					}
+				if (r.checkNodeHitAt(node, x, y, nodeThreshold)) {
+					addEle(node, 0);
+					return true;
 				}
 			}
 			function checkEdge(edge) {
 				var _p = edge._private;
 				var rs = _p.rscratch;
 				var styleWidth = edge.pstyle("width").pfValue;
-				var scale = edge.pstyle("arrow-scale").value;
 				var width = styleWidth / 2 + edgeThreshold;
 				var widthSq = width * width;
 				var width2 = width * 2;
@@ -94752,7 +94432,6 @@ EPSILON: 1e-6 };
 				}
 				var src = src || _p.source;
 				var tgt = tgt || _p.target;
-				var arSize = self.getArrowWidth(styleWidth, scale);
 				var arrows = [
 					{
 						name: "source",
@@ -94783,6 +94462,7 @@ EPSILON: 1e-6 };
 					var ar = arrows[i];
 					var shape = r.arrowShapes[edge.pstyle(ar.name + "-arrow-shape").value];
 					var edgeWidth = edge.pstyle("width").pfValue;
+					var arSize = self.getArrowWidth(styleWidth, getArrowScale(edge, ar.name));
 					if (shape.roughCollide(x, y, arSize, ar.angle, {
 						x: ar.x,
 						y: ar.y
@@ -94799,57 +94479,8 @@ EPSILON: 1e-6 };
 					checkNode(tgt);
 				}
 			}
-			function preprop(obj, name, pre) {
-				return getPrefixedProperty(obj, name, pre);
-			}
 			function checkLabel(ele, prefix) {
-				var _p = ele._private;
-				var th = labelThreshold;
-				var prefixDash;
-				if (prefix) prefixDash = prefix + "-";
-				else prefixDash = "";
-				ele.boundingBox();
-				var bb = _p.labelBounds[prefix || "main"];
-				var text = ele.pstyle(prefixDash + "label").value;
-				if (!(ele.pstyle("text-events").strValue === "yes") || !text) return;
-				var lx = preprop(_p.rscratch, "labelX", prefix);
-				var ly = preprop(_p.rscratch, "labelY", prefix);
-				var theta = preprop(_p.rscratch, "labelAngle", prefix);
-				var ox = ele.pstyle(prefixDash + "text-margin-x").pfValue;
-				var oy = ele.pstyle(prefixDash + "text-margin-y").pfValue;
-				var lx1 = bb.x1 - th - ox;
-				var lx2 = bb.x2 + th - ox;
-				var ly1 = bb.y1 - th - oy;
-				var ly2 = bb.y2 + th - oy;
-				if (theta) {
-					var cos = Math.cos(theta);
-					var sin = Math.sin(theta);
-					var rotate = function rotate(x, y) {
-						x = x - lx;
-						y = y - ly;
-						return {
-							x: x * cos - y * sin + lx,
-							y: x * sin + y * cos + ly
-						};
-					};
-					var px1y1 = rotate(lx1, ly1);
-					var px1y2 = rotate(lx1, ly2);
-					var px2y1 = rotate(lx2, ly1);
-					var px2y2 = rotate(lx2, ly2);
-					if (pointInsidePolygonPoints(x, y, [
-						px1y1.x + ox,
-						px1y1.y + oy,
-						px2y1.x + ox,
-						px2y1.y + oy,
-						px2y2.x + ox,
-						px2y2.y + oy,
-						px1y2.x + ox,
-						px1y2.y + oy
-					])) {
-						addEle(ele);
-						return true;
-					}
-				} else if (inBoundingBox(bb, x, y)) {
+				if (self.checkLabelHitAt(ele, x, y, prefix, labelThreshold)) {
 					addEle(ele);
 					return true;
 				}
@@ -94862,6 +94493,7 @@ EPSILON: 1e-6 };
 			return near;
 		};
 		BRp$e.getAllInBox = function(x1, y1, x2, y2) {
+			var r = this;
 			var eles = this.getCachedZSortedEles().interactive;
 			var labelThreshold = 2 / this.cy.zoom();
 			var box = [];
@@ -94903,60 +94535,8 @@ EPSILON: 1e-6 };
 				[selectionBox[2], selectionBox[3]],
 				[selectionBox[3], selectionBox[0]]
 			];
-			function preprop(obj, name, pre) {
-				return getPrefixedProperty(obj, name, pre);
-			}
 			function getRotatedLabelBox(ele, prefix) {
-				var _p = ele._private;
-				var th = labelThreshold;
-				var prefixDash = "";
-				ele.boundingBox();
-				var bb = _p.labelBounds["main"];
-				if (!bb) return null;
-				var lx = preprop(_p.rscratch, "labelX", prefix);
-				var ly = preprop(_p.rscratch, "labelY", prefix);
-				var theta = preprop(_p.rscratch, "labelAngle", prefix);
-				var ox = ele.pstyle(prefixDash + "text-margin-x").pfValue;
-				var oy = ele.pstyle(prefixDash + "text-margin-y").pfValue;
-				var lx1 = bb.x1 - th - ox;
-				var lx2 = bb.x2 + th - ox;
-				var ly1 = bb.y1 - th - oy;
-				var ly2 = bb.y2 + th - oy;
-				if (theta) {
-					var cos = Math.cos(theta);
-					var sin = Math.sin(theta);
-					var rotate = function rotate(x, y) {
-						x = x - lx;
-						y = y - ly;
-						return {
-							x: x * cos - y * sin + lx,
-							y: x * sin + y * cos + ly
-						};
-					};
-					return [
-						rotate(lx1, ly1),
-						rotate(lx2, ly1),
-						rotate(lx2, ly2),
-						rotate(lx1, ly2)
-					];
-				} else return [
-					{
-						x: lx1,
-						y: ly1
-					},
-					{
-						x: lx2,
-						y: ly1
-					},
-					{
-						x: lx2,
-						y: ly2
-					},
-					{
-						x: lx1,
-						y: ly2
-					}
-				];
+				return r.getLabelHitPolygon(ele, prefix, labelThreshold);
 			}
 			function doLinesIntersect(p1, p2, q1, q2) {
 				function ccw(a, b, c) {
@@ -95518,6 +95098,13 @@ EPSILON: 1e-6 };
 			};
 			var dx = subDWH(pdx, dw);
 			var dy = subDWH(pdy, dh);
+			var midBetween = function midBetween(c1, c2, size1, size2) {
+				if (!dIncludesNodeBody) return (c1 + c2) / 2;
+				var sgn = signum(c2 - c1);
+				var side1 = c1 + sgn * size1 / 2;
+				var side2 = c2 - sgn * size2 / 2;
+				return sgn * (side2 - side1) >= 0 ? (side1 + side2) / 2 : (c1 + c2) / 2;
+			};
 			var isExplicitDir = false;
 			if (rawTaxiDir === AUTO) taxiDir = Math.abs(dx) > Math.abs(dy) ? HORIZONTAL : VERTICAL;
 			else if (rawTaxiDir === UPWARD || rawTaxiDir === DOWNWARD) {
@@ -95550,7 +95137,7 @@ EPSILON: 1e-6 };
 					var lShapeInsideSrc = Math.abs(pl) <= srcH / 2;
 					var lShapeInsideTgt = Math.abs(pdx) <= tgtW / 2;
 					if (lShapeInsideSrc) {
-						var x = (posPts.x1 + posPts.x2) / 2;
+						var x = midBetween(posPts.x1, posPts.x2, srcW, tgtW);
 						rs.segpts = [
 							x,
 							posPts.y1,
@@ -95558,7 +95145,7 @@ EPSILON: 1e-6 };
 							posPts.y2
 						];
 					} else if (lShapeInsideTgt) {
-						var y = (posPts.y1 + posPts.y2) / 2;
+						var y = midBetween(posPts.y1, posPts.y2, srcH, tgtH);
 						rs.segpts = [
 							posPts.x1,
 							y,
@@ -95570,7 +95157,7 @@ EPSILON: 1e-6 };
 					var _lShapeInsideSrc = Math.abs(pl) <= srcW / 2;
 					var _lShapeInsideTgt = Math.abs(pdy) <= tgtH / 2;
 					if (_lShapeInsideSrc) {
-						var _y = (posPts.y1 + posPts.y2) / 2;
+						var _y = midBetween(posPts.y1, posPts.y2, srcH, tgtH);
 						rs.segpts = [
 							posPts.x1,
 							_y,
@@ -95578,7 +95165,7 @@ EPSILON: 1e-6 };
 							_y
 						];
 					} else if (_lShapeInsideTgt) {
-						var _x3 = (posPts.x1 + posPts.x2) / 2;
+						var _x3 = midBetween(posPts.x1, posPts.x2, srcW, tgtW);
 						rs.segpts = [
 							_x3,
 							posPts.y1,
@@ -95619,7 +95206,10 @@ EPSILON: 1e-6 };
 				var badAStart = !number$1(rs.arrowStartX) || !number$1(rs.arrowStartY);
 				var badEnd = !number$1(rs.endX) || !number$1(rs.endY);
 				var badAEnd = !number$1(rs.arrowEndX) || !number$1(rs.arrowEndY);
-				var minCpADist = 3 * (this.getArrowWidth(edge.pstyle("width").pfValue, edge.pstyle("arrow-scale").value) * this.arrowShapeWidth);
+				var minCpADistFactor = 3;
+				var edgeWidth = edge.pstyle("width").pfValue;
+				var minCpASrcDist = minCpADistFactor * this.getArrowWidth(edgeWidth, getArrowScale(edge, "source")) * this.arrowShapeWidth;
+				var minCpATgtDist = minCpADistFactor * this.getArrowWidth(edgeWidth, getArrowScale(edge, "target")) * this.arrowShapeWidth;
 				var startACpDist = dist({
 					x: rs.ctrlpts[0],
 					y: rs.ctrlpts[1]
@@ -95627,15 +95217,7 @@ EPSILON: 1e-6 };
 					x: rs.startX,
 					y: rs.startY
 				});
-				var closeStartACp = startACpDist < minCpADist;
-				var endACpDist = dist({
-					x: rs.ctrlpts[0],
-					y: rs.ctrlpts[1]
-				}, {
-					x: rs.endX,
-					y: rs.endY
-				});
-				var closeEndACp = endACpDist < minCpADist;
+				var closeStartACp = startACpDist < minCpASrcDist;
 				var overlapping = false;
 				if (badStart || badAStart || closeStartACp) {
 					overlapping = true;
@@ -95655,13 +95237,21 @@ EPSILON: 1e-6 };
 					};
 					var srcCtrlPtIntn = srcShape.intersectLine(srcPos.x, srcPos.y, srcW, srcH, cpProj.x, cpProj.y, 0, srcCornerRadius, srcRs);
 					if (closeStartACp) {
-						rs.ctrlpts[0] = rs.ctrlpts[0] + cpM.x * (minCpADist - startACpDist);
-						rs.ctrlpts[1] = rs.ctrlpts[1] + cpM.y * (minCpADist - startACpDist);
+						rs.ctrlpts[0] = rs.ctrlpts[0] + cpM.x * (minCpASrcDist - startACpDist);
+						rs.ctrlpts[1] = rs.ctrlpts[1] + cpM.y * (minCpASrcDist - startACpDist);
 					} else {
-						rs.ctrlpts[0] = srcCtrlPtIntn[0] + cpM.x * minCpADist;
-						rs.ctrlpts[1] = srcCtrlPtIntn[1] + cpM.y * minCpADist;
+						rs.ctrlpts[0] = srcCtrlPtIntn[0] + cpM.x * minCpASrcDist;
+						rs.ctrlpts[1] = srcCtrlPtIntn[1] + cpM.y * minCpASrcDist;
 					}
 				}
+				var endACpDist = dist({
+					x: rs.ctrlpts[0],
+					y: rs.ctrlpts[1]
+				}, {
+					x: rs.endX,
+					y: rs.endY
+				});
+				var closeEndACp = endACpDist < minCpATgtDist;
 				if (badEnd || badAEnd || closeEndACp) {
 					overlapping = true;
 					var _cpD = {
@@ -95680,11 +95270,11 @@ EPSILON: 1e-6 };
 					};
 					var tgtCtrlPtIntn = tgtShape.intersectLine(tgtPos.x, tgtPos.y, tgtW, tgtH, _cpProj.x, _cpProj.y, 0, tgtCornerRadius, tgtRs);
 					if (closeEndACp) {
-						rs.ctrlpts[0] = rs.ctrlpts[0] + _cpM.x * (minCpADist - endACpDist);
-						rs.ctrlpts[1] = rs.ctrlpts[1] + _cpM.y * (minCpADist - endACpDist);
+						rs.ctrlpts[0] = rs.ctrlpts[0] + _cpM.x * (minCpATgtDist - endACpDist);
+						rs.ctrlpts[1] = rs.ctrlpts[1] + _cpM.y * (minCpATgtDist - endACpDist);
 					} else {
-						rs.ctrlpts[0] = tgtCtrlPtIntn[0] + _cpM.x * minCpADist;
-						rs.ctrlpts[1] = tgtCtrlPtIntn[1] + _cpM.y * minCpADist;
+						rs.ctrlpts[0] = tgtCtrlPtIntn[0] + _cpM.x * minCpATgtDist;
+						rs.ctrlpts[1] = tgtCtrlPtIntn[1] + _cpM.y * minCpATgtDist;
 					}
 				}
 				if (overlapping) this.findEndpoints(edge);
@@ -96127,8 +95717,8 @@ EPSILON: 1e-6 };
 					}
 				}
 			}
-			var arrowEnd = shortenIntersection(intersect, p1, r.arrowShapes[tgtArShape].spacing(edge) + tgtDist);
-			var edgeEnd = shortenIntersection(intersect, p1, r.arrowShapes[tgtArShape].gap(edge) + tgtDist);
+			var arrowEnd = shortenIntersection(intersect, p1, r.arrowShapes[tgtArShape].spacing(edge, "target") + tgtDist);
+			var edgeEnd = shortenIntersection(intersect, p1, r.arrowShapes[tgtArShape].gap(edge, "target") + tgtDist);
 			rs.endX = edgeEnd[0];
 			rs.endY = edgeEnd[1];
 			rs.arrowEndX = arrowEnd[0];
@@ -96184,8 +95774,8 @@ EPSILON: 1e-6 };
 					}
 				}
 			}
-			var arrowStart = shortenIntersection(intersect, p2, r.arrowShapes[srcArShape].spacing(edge) + srcDist);
-			var edgeStart = shortenIntersection(intersect, p2, r.arrowShapes[srcArShape].gap(edge) + srcDist);
+			var arrowStart = shortenIntersection(intersect, p2, r.arrowShapes[srcArShape].spacing(edge, "source") + srcDist);
+			var edgeStart = shortenIntersection(intersect, p2, r.arrowShapes[srcArShape].gap(edge, "source") + srcDist);
 			rs.startX = edgeStart[0];
 			rs.startY = edgeStart[1];
 			rs.arrowStartX = arrowStart[0];
@@ -96250,7 +95840,16 @@ EPSILON: 1e-6 };
 					y: hpts[3]
 				}];
 			}
-			_p.rstyle.arrowWidth = this.getArrowWidth(edge.pstyle("width").pfValue, edge.pstyle("arrow-scale").value) * this.arrowShapeWidth;
+			var edgeWidth = edge.pstyle("width").pfValue;
+			var arrowWidths = _p.rstyle.arrowWidths = _p.rstyle.arrowWidths || {};
+			var maxScale = 0;
+			for (var _i = 0; _i < arrowPrefixes.length; _i++) {
+				var prefix = arrowPrefixes[_i];
+				var scale = getArrowScale(edge, prefix);
+				arrowWidths[prefix] = this.getArrowWidth(edgeWidth, scale) * this.arrowShapeWidth;
+				if (scale > maxScale) maxScale = scale;
+			}
+			_p.rstyle.arrowWidth = this.getArrowWidth(edgeWidth, maxScale) * this.arrowShapeWidth;
 		};
 		BRp$a.recalculateEdgeProjections = function(edges) {
 			this.findEdgeControlPoints(edges);
@@ -97549,6 +97148,11 @@ EPSILON: 1e-6 };
 			var wheelDeltaN = 4;
 			var inaccurateScrollDevice;
 			var inaccurateScrollFactor = 1e5;
+			var sampledScrollFactor;
+			var wheelFactorMaxReduction = 4;
+			var wheelNotchMaxReduction = 8;
+			var wheelSmallDeltaMax = 15;
+			var unconfirmedMagnitude = null;
 			var allAreSameMagnitude = function allAreSameMagnitude(list) {
 				var firstMag = Math.abs(list[0]);
 				for (var i = 1; i < list.length; i++) if (Math.abs(list[i]) !== firstMag) return false;
@@ -97573,13 +97177,34 @@ EPSILON: 1e-6 };
 							if (factor > 1) {
 								inaccurateScrollDevice = true;
 								inaccurateScrollFactor = factor;
+								sampledScrollFactor = factor;
 							}
 						}
 					} else {
 						wheelDeltas.push(Math.abs(delta));
 						clamp = true;
 					}
-				} else if (inaccurateScrollDevice) inaccurateScrollFactor = Math.min(Math.abs(delta), inaccurateScrollFactor);
+				}
+				var isWheelNotch = false;
+				if (inaccurateScrollDevice) {
+					var magnitude = Math.abs(delta);
+					isWheelNotch = isIntegerMultiple(magnitude, inaccurateScrollFactor);
+					if (isWheelNotch);
+					else if (magnitude < Math.min(sampledScrollFactor / wheelNotchMaxReduction, wheelSmallDeltaMax)) unconfirmedMagnitude = null;
+					else if (!integer$1(magnitude) && isIntegerMultiple(inaccurateScrollFactor, magnitude)) {
+						inaccurateScrollFactor = magnitude;
+						unconfirmedMagnitude = null;
+						isWheelNotch = true;
+					} else if (magnitude === unconfirmedMagnitude) {
+						var commonFactor = gcdMultipleZeroIfNonInt([inaccurateScrollFactor, magnitude]);
+						inaccurateScrollFactor = commonFactor * wheelFactorMaxReduction >= sampledScrollFactor ? commonFactor : magnitude;
+						unconfirmedMagnitude = null;
+						isWheelNotch = true;
+					} else {
+						unconfirmedMagnitude = magnitude;
+						clamp = integer$1(magnitude) || magnitude > inaccurateScrollFactor;
+					}
+				}
 				if (r.scrollingPage) return;
 				var cy = r.cy;
 				var zoom = cy.zoom();
@@ -97602,7 +97227,7 @@ EPSILON: 1e-6 };
 					var diff;
 					if (clamp && Math.abs(delta) > 5) delta = signum(delta) * 5;
 					diff = delta / -250;
-					if (inaccurateScrollDevice) {
+					if (isWheelNotch) {
 						diff /= inaccurateScrollFactor;
 						diff *= 3;
 					}
@@ -98859,6 +98484,7 @@ EPSILON: 1e-6 };
 				if (r.destroyed) return;
 				if (cy.batching());
 				else if (r.requestedFrame && !r.skipFrame) {
+					r.requestedFrame = false;
 					beforeRenderCallbacks(r, true, requestTime);
 					var startTime = performanceNow();
 					r.render(r.renderOptions);
@@ -98871,7 +98497,6 @@ EPSILON: 1e-6 };
 					r.redrawTotalTime += duration;
 					r.lastRedrawTime = duration;
 					r.averageRedrawTime = r.averageRedrawTime / 2 + duration / 2;
-					r.requestedFrame = false;
 				} else beforeRenderCallbacks(r, false, requestTime);
 				r.skipFrame = false;
 				requestAnimationFrame$1(_renderFn);
@@ -100140,7 +99765,7 @@ EPSILON: 1e-6 };
 				var strokeOpacity = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : effectiveLineOpacity;
 				context.lineWidth = edgeWidth + lineOutlineWidth;
 				context.lineCap = lineCap;
-				if (lineOutlineWidth > 0) r.colorStrokeStyle(context, lineOutlineColor[0], lineOutlineColor[1], lineOutlineColor[2], strokeOpacity);
+				if (lineOutlineWidth > 0) r.colorStrokeStyle(context, lineOutlineColor, strokeOpacity);
 				else {
 					context.lineCap = "butt";
 					return;
@@ -100186,18 +99811,28 @@ EPSILON: 1e-6 };
 		drawEdgeOverlayUnderlay = function drawEdgeOverlayUnderlay(overlayOrUnderlay) {
 			if (!["overlay", "underlay"].includes(overlayOrUnderlay)) throw new Error("Invalid state");
 			return function(context, edge) {
+				var _edge$pstyle;
 				if (!edge.visible()) return;
 				var opacity = edge.pstyle("".concat(overlayOrUnderlay, "-opacity")).value;
 				if (opacity === 0) return;
 				var r = this;
 				var usePaths = r.usePaths();
 				var rs = edge._private.rscratch;
-				var width = 2 * edge.pstyle("".concat(overlayOrUnderlay, "-padding")).pfValue;
-				var color = edge.pstyle("".concat(overlayOrUnderlay, "-color")).value;
-				context.lineWidth = width;
+				context.lineWidth = 2 * edge.pstyle("".concat(overlayOrUnderlay, "-padding")).pfValue;
 				if (rs.edgeType === "self" && !usePaths) context.lineCap = "butt";
 				else context.lineCap = "round";
-				r.colorStrokeStyle(context, color[0], color[1], color[2], opacity);
+				var fillStyle = (_edge$pstyle = edge.pstyle("".concat(overlayOrUnderlay, "-fill"))) === null || _edge$pstyle === void 0 ? void 0 : _edge$pstyle.value;
+				if (fillStyle === "linear-gradient" || fillStyle === "radial-gradient") {
+					var gradient = r.createGradientStyleFor(context, overlayOrUnderlay, edge, fillStyle, opacity);
+					if (gradient) context.strokeStyle = gradient;
+					else {
+						var color = edge.pstyle("".concat(overlayOrUnderlay, "-color")).value;
+						r.colorStrokeStyle(context, color, opacity);
+					}
+				} else {
+					var _color = edge.pstyle("".concat(overlayOrUnderlay, "-color")).value;
+					r.colorStrokeStyle(context, _color, opacity);
+				}
 				r.drawEdgePath(edge, context, rs.allpts, "solid");
 			};
 		};
@@ -100307,17 +99942,25 @@ EPSILON: 1e-6 };
 			var gco = context.globalCompositeOperation;
 			if (opacity !== 1 || arrowFill === "hollow") {
 				context.globalCompositeOperation = "destination-out";
-				self.colorFillStyle(context, 255, 255, 255, 1);
-				self.colorStrokeStyle(context, 255, 255, 255, 1);
-				self.drawArrowShape(edge, context, arrowClearFill, edgeWidth, arrowShape, arrowWidth, x, y, angle);
+				self.colorFillStyle(context, [
+					255,
+					255,
+					255
+				], 1);
+				self.colorStrokeStyle(context, [
+					255,
+					255,
+					255
+				], 1);
+				self.drawArrowShape(edge, context, arrowClearFill, edgeWidth, arrowShape, arrowWidth, x, y, angle, prefix);
 				context.globalCompositeOperation = gco;
 			}
 			var color = edge.pstyle(prefix + "-arrow-color").value;
-			self.colorFillStyle(context, color[0], color[1], color[2], opacity);
-			self.colorStrokeStyle(context, color[0], color[1], color[2], opacity);
-			self.drawArrowShape(edge, context, arrowFill, edgeWidth, arrowShape, arrowWidth, x, y, angle);
+			self.colorFillStyle(context, color, opacity);
+			self.colorStrokeStyle(context, color, opacity);
+			self.drawArrowShape(edge, context, arrowFill, edgeWidth, arrowShape, arrowWidth, x, y, angle, prefix);
 		};
-		CRp$9.drawArrowShape = function(edge, context, fill, edgeWidth, shape, shapeWidth, x, y, angle) {
+		CRp$9.drawArrowShape = function(edge, context, fill, edgeWidth, shape, shapeWidth, x, y, angle, prefix) {
 			var r = this;
 			var usePaths = this.usePaths() && shape !== "triangle-cross";
 			var pathCacheHit = false;
@@ -100327,9 +99970,9 @@ EPSILON: 1e-6 };
 				x,
 				y
 			};
-			var scale = edge.pstyle("arrow-scale").value;
-			var size = this.getArrowWidth(edgeWidth, scale);
 			var shapeImpl = r.arrowShapes[shape];
+			var scale = getArrowScale(edge, prefix);
+			var size = this.getArrowWidth(edgeWidth, scale);
 			if (usePaths) {
 				var cache = r.arrowPathCache = r.arrowPathCache || [];
 				var key = hashString$1(shape);
@@ -100557,8 +100200,8 @@ EPSILON: 1e-6 };
 			var outlineColor = ele.pstyle("text-outline-color").value;
 			context.font = labelStyle + " " + labelWeight + " " + labelSize + " " + labelFamily;
 			context.lineJoin = "round";
-			this.colorFillStyle(context, color[0], color[1], color[2], opacity);
-			this.colorStrokeStyle(context, outlineColor[0], outlineColor[1], outlineColor[2], outlineOpacity);
+			this.colorFillStyle(context, color, opacity);
+			this.colorStrokeStyle(context, outlineColor, outlineOpacity);
 		};
 		CRp$7.getTextAngle = function(ele, prefix) {
 			var theta;
@@ -100647,9 +100290,9 @@ EPSILON: 1e-6 };
 					var bgY = textY - textH - backgroundPadding;
 					var bgW = textW + 2 * backgroundPadding;
 					var bgH = textH + 2 * backgroundPadding;
-					if (doFill) context.fillStyle = "rgba(".concat(textBackgroundColor[0], ",").concat(textBackgroundColor[1], ",").concat(textBackgroundColor[2], ",").concat(backgroundOpacity * parentOpacity, ")");
+					if (doFill) this.colorFillStyle(context, textBackgroundColor, backgroundOpacity * parentOpacity);
 					if (doStroke) {
-						context.strokeStyle = "rgba(".concat(textBorderColor[0], ",").concat(textBorderColor[1], ",").concat(textBorderColor[2], ",").concat(borderOpacity * parentOpacity, ")");
+						this.colorStrokeStyle(context, textBorderColor, borderOpacity * parentOpacity);
 						context.lineWidth = textBorderWidth;
 						if (context.setLineDash) switch (textBorderStyle) {
 							case "dotted":
@@ -100793,11 +100436,11 @@ EPSILON: 1e-6 };
 			};
 			var setupBorderColor = function setupBorderColor() {
 				var bdrOpy = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : borderOpacity;
-				r.colorStrokeStyle(context, borderColor[0], borderColor[1], borderColor[2], bdrOpy);
+				r.colorStrokeStyle(context, borderColor, bdrOpy);
 			};
 			var setupOutlineColor = function setupOutlineColor() {
 				var otlnOpy = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : outlineOpacity;
-				r.colorStrokeStyle(context, outlineColor[0], outlineColor[1], outlineColor[2], otlnOpy);
+				r.colorStrokeStyle(context, outlineColor, otlnOpy);
 			};
 			var getPath = function getPath(width, height, shape, points) {
 				var pathCache = r.nodePathCache = r.nodePathCache || [];
@@ -100844,6 +100487,7 @@ EPSILON: 1e-6 };
 				var prevBging = _p.backgrounding;
 				var totalCompleted = 0;
 				for (var _i = 0; _i < image.length; _i++) {
+					if (!urlDefined[_i]) continue;
 					var bgContainment = node.cy().style().getIndexedStyle(node, "background-image-containment", "value", _i);
 					if (inside && bgContainment === "over" || !inside && bgContainment === "inside") {
 						totalCompleted++;
@@ -100889,7 +100533,11 @@ EPSILON: 1e-6 };
 				var opacity = (darkness > 0 ? darkness : -darkness) * darkenOpacity;
 				var c = darkness > 0 ? 0 : 255;
 				if (darkness !== 0) {
-					r.colorFillStyle(context, c, c, c, opacity);
+					r.colorFillStyle(context, [
+						c,
+						c,
+						c
+					], opacity);
 					if (usePaths) context.fill(path);
 					else context.fill();
 				}
@@ -101113,17 +100761,28 @@ EPSILON: 1e-6 };
 				if (!node.visible()) return;
 				var padding = node.pstyle("".concat(overlayOrUnderlay, "-padding")).pfValue;
 				var opacity = node.pstyle("".concat(overlayOrUnderlay, "-opacity")).value;
-				var color = node.pstyle("".concat(overlayOrUnderlay, "-color")).value;
 				var shape = node.pstyle("".concat(overlayOrUnderlay, "-shape")).value;
 				var radius = node.pstyle("".concat(overlayOrUnderlay, "-corner-radius")).value;
 				if (opacity > 0) {
+					var _node$pstyle;
 					pos = pos || node.position();
 					if (nodeWidth == null || nodeHeight == null) {
 						var _padding = node.padding();
 						nodeWidth = node.width() + 2 * _padding;
 						nodeHeight = node.height() + 2 * _padding;
 					}
-					r.colorFillStyle(context, color[0], color[1], color[2], opacity);
+					var fillStyle = (_node$pstyle = node.pstyle("".concat(overlayOrUnderlay, "-fill"))) === null || _node$pstyle === void 0 ? void 0 : _node$pstyle.value;
+					if (fillStyle === "linear-gradient" || fillStyle === "radial-gradient") {
+						var gradient = r.createGradientStyleFor(context, overlayOrUnderlay, node, fillStyle, opacity);
+						if (gradient) context.fillStyle = gradient;
+						else {
+							var color = node.pstyle("".concat(overlayOrUnderlay, "-color")).value;
+							r.colorFillStyle(context, color, opacity);
+						}
+					} else {
+						var _color = node.pstyle("".concat(overlayOrUnderlay, "-color")).value;
+						r.colorFillStyle(context, _color, opacity);
+					}
 					r.nodeShapes[shape].draw(context, pos.x, pos.y, nodeWidth + padding * 2, nodeHeight + padding * 2, radius);
 					context.fill();
 				}
@@ -101184,7 +100843,7 @@ EPSILON: 1e-6 };
 					context.arc(x, y, holeRadius, angleEnd, angleStart, true);
 					context.closePath();
 				}
-				this.colorFillStyle(context, color[0], color[1], color[2], opacity);
+				this.colorFillStyle(context, color, opacity);
 				context.fill();
 				lastPercent += percent;
 			}
@@ -101231,7 +100890,7 @@ EPSILON: 1e-6 };
 				context.beginPath();
 				context.rect(x, y + stripeH * lastPercent, stripeW, stripeH * percent);
 				context.closePath();
-				this.colorFillStyle(context, color[0], color[1], color[2], opacity);
+				this.colorFillStyle(context, color, opacity);
 				context.fill();
 				lastPercent += percent;
 			}
@@ -101239,6 +100898,12 @@ EPSILON: 1e-6 };
 		};
 		CRp$5 = {};
 		motionBlurDelay = 100;
+		colorAlpha = function colorAlpha(color) {
+			return color[3] == null ? 1 : color[3];
+		};
+		effectiveAlpha = function effectiveAlpha(color, opacity) {
+			return colorAlpha(color) * opacity;
+		};
 		CRp$5.getPixelRatio = function() {
 			var context = this.data.contexts[0];
 			if (this.forcedPixelRatio != null) return this.forcedPixelRatio;
@@ -101274,7 +100939,7 @@ EPSILON: 1e-6 };
 					var d2 = dist(end, mid);
 					gradientStyle = context.createRadialGradient(mid.x, mid.y, 0, mid.x, mid.y, Math.max(d1, d2));
 				} else {
-					var pos = usePaths ? {
+					var pos = usePaths && shapeStyleName === "background" ? {
 						x: 0,
 						y: 0
 					} : ele.position(), width = ele.paddedWidth(), height = ele.paddedHeight();
@@ -101284,11 +100949,11 @@ EPSILON: 1e-6 };
 				var _start = ele.sourceEndpoint(), _end = ele.targetEndpoint();
 				gradientStyle = context.createLinearGradient(_start.x, _start.y, _end.x, _end.y);
 			} else {
-				var _pos = usePaths ? {
+				var _pos = usePaths && shapeStyleName === "background" ? {
 					x: 0,
 					y: 0
 				} : ele.position(), _width = ele.paddedWidth(), _height = ele.paddedHeight(), halfWidth = _width / 2, halfHeight = _height / 2;
-				switch (ele.pstyle("background-gradient-direction").value) {
+				switch (ele.pstyle(shapeStyleName + "-gradient-direction").value) {
 					case "to-bottom":
 						gradientStyle = context.createLinearGradient(_pos.x, _pos.y - halfHeight, _pos.x, _pos.y + halfHeight);
 						break;
@@ -101320,7 +100985,10 @@ EPSILON: 1e-6 };
 			if (!gradientStyle) return null;
 			var hasPositions = positions.length === colors.length;
 			var length = colors.length;
-			for (var i = 0; i < length; i++) gradientStyle.addColorStop(hasPositions ? positions[i] : i / (length - 1), "rgba(" + colors[i][0] + "," + colors[i][1] + "," + colors[i][2] + "," + opacity + ")");
+			for (var i = 0; i < length; i++) {
+				var stopAlpha = effectiveAlpha(colors[i], opacity);
+				gradientStyle.addColorStop(hasPositions ? positions[i] : i / (length - 1), "rgba(" + colors[i][0] + "," + colors[i][1] + "," + colors[i][2] + "," + stopAlpha + ")");
+			}
 			return gradientStyle;
 		};
 		CRp$5.gradientFillStyle = function(context, ele, fill, opacity) {
@@ -101328,15 +100996,15 @@ EPSILON: 1e-6 };
 			if (!gradientStyle) return null;
 			context.fillStyle = gradientStyle;
 		};
-		CRp$5.colorFillStyle = function(context, r, g, b, a) {
-			context.fillStyle = "rgba(" + r + "," + g + "," + b + "," + a + ")";
+		CRp$5.colorFillStyle = function(context, color, opacity) {
+			context.fillStyle = "rgba(" + color[0] + "," + color[1] + "," + color[2] + "," + effectiveAlpha(color, opacity) + ")";
 		};
 		CRp$5.eleFillStyle = function(context, ele, opacity) {
 			var backgroundFill = ele.pstyle("background-fill").value;
 			if (backgroundFill === "linear-gradient" || backgroundFill === "radial-gradient") this.gradientFillStyle(context, ele, backgroundFill, opacity);
 			else {
 				var backgroundColor = ele.pstyle("background-color").value;
-				this.colorFillStyle(context, backgroundColor[0], backgroundColor[1], backgroundColor[2], opacity);
+				this.colorFillStyle(context, backgroundColor, opacity);
 			}
 		};
 		CRp$5.gradientStrokeStyle = function(context, ele, fill, opacity) {
@@ -101344,15 +101012,15 @@ EPSILON: 1e-6 };
 			if (!gradientStyle) return null;
 			context.strokeStyle = gradientStyle;
 		};
-		CRp$5.colorStrokeStyle = function(context, r, g, b, a) {
-			context.strokeStyle = "rgba(" + r + "," + g + "," + b + "," + a + ")";
+		CRp$5.colorStrokeStyle = function(context, color, opacity) {
+			context.strokeStyle = "rgba(" + color[0] + "," + color[1] + "," + color[2] + "," + effectiveAlpha(color, opacity) + ")";
 		};
 		CRp$5.eleStrokeStyle = function(context, ele, opacity) {
 			var lineFill = ele.pstyle("line-fill").value;
 			if (lineFill === "linear-gradient" || lineFill === "radial-gradient") this.gradientStrokeStyle(context, ele, lineFill, opacity);
 			else {
 				var lineColor = ele.pstyle("line-color").value;
-				this.colorStrokeStyle(context, lineColor[0], lineColor[1], lineColor[2], opacity);
+				this.colorStrokeStyle(context, lineColor, opacity);
 			}
 		};
 		CRp$5.matchCanvasSize = function(container) {
@@ -101481,7 +101149,11 @@ EPSILON: 1e-6 };
 			function mbclear(context, x, y, w, h) {
 				var gco = context.globalCompositeOperation;
 				context.globalCompositeOperation = "destination-out";
-				r.colorFillStyle(context, 255, 255, 255, r.motionBlurTransparency);
+				r.colorFillStyle(context, [
+					255,
+					255,
+					255
+				], r.motionBlurTransparency);
 				context.fillRect(x, y, w, h);
 				context.globalCompositeOperation = gco;
 			}
@@ -101547,7 +101219,7 @@ EPSILON: 1e-6 };
 				else context.clearRect(0, 0, vp.width, vp.height);
 				var outsideBgColor = style.core("outside-texture-bg-color").value;
 				var outsideBgOpacity = style.core("outside-texture-bg-opacity").value;
-				r.colorFillStyle(context, outsideBgColor[0], outsideBgColor[1], outsideBgColor[2], outsideBgOpacity);
+				r.colorFillStyle(context, outsideBgColor, outsideBgOpacity);
 				context.fillRect(0, 0, vp.width, vp.height);
 				var zoom = cy.zoom();
 				setContextTransform(context, false);
@@ -102787,7 +102459,7 @@ EPSILON: 1e-6 };
 						var color = edge.pstyle(prefix + "-arrow-color").value;
 						var opacity = edge.pstyle("opacity").value * edge.pstyle("line-opacity").value;
 						var lineWidth = edge.pstyle("width").pfValue;
-						var scale$1 = edge.pstyle("arrow-scale").value;
+						var scale$1 = getArrowScale(edge, prefix);
 						var size = this.r.getArrowWidth(lineWidth, scale$1);
 						var instance = this.instanceCount;
 						var transform = this.transformBuffer.getMatrixView(instance);
@@ -103307,8 +102979,6 @@ EPSILON: 1e-6 };
 					buffCxt.translate(-bb.x1 * scale, -bb.y1 * scale);
 					buffCxt.scale(scale, scale);
 					this.drawElements(buffCxt, zsortedEles);
-					buffCxt.scale(1 / scale, 1 / scale);
-					buffCxt.translate(bb.x1 * scale, bb.y1 * scale);
 				} else {
 					var pan = cy.pan();
 					var translation = {
@@ -103319,14 +102989,12 @@ EPSILON: 1e-6 };
 					buffCxt.translate(translation.x, translation.y);
 					buffCxt.scale(scale, scale);
 					this.drawElements(buffCxt, zsortedEles);
-					buffCxt.scale(1 / scale, 1 / scale);
-					buffCxt.translate(-translation.x, -translation.y);
 				}
+				buffCxt.setTransform(1, 0, 0, 1, 0, 0);
 				if (options.bg) {
 					buffCxt.globalCompositeOperation = "destination-over";
 					buffCxt.fillStyle = options.bg;
-					buffCxt.rect(0, 0, width, height);
-					buffCxt.fill();
+					buffCxt.fillRect(0, 0, width, height);
 				}
 			}
 			return buffCanvas;
@@ -103523,7 +103191,7 @@ EPSILON: 1e-6 };
 			}
 			return style;
 		};
-		version = "3.34.3";
+		version = "3.35.0";
 		cytoscape$1 = function cytoscape(options) {
 			if (options === void 0) options = {};
 			if (plainObject(options)) return new Core(options);
@@ -107621,7 +107289,7 @@ EPSILON: 1e-6 };
 	}
 	function createCytoscapeInstance(data) {
 		return new Promise((resolve) => {
-			const renderEl = select_default$1("body").append("div").attr("id", "cy").attr("style", "display:none");
+			const renderEl = select("body").append("div").attr("id", "cy").attr("style", "display:none");
 			const cy = cytoscape$1({
 				container: document.getElementById("cy"),
 				style: [{
@@ -107724,7 +107392,7 @@ EPSILON: 1e-6 };
 		init_chunk_Y2CYZVJY();
 		init_cytoscape_esm();
 		import_cytoscape_cose_bilkent = /* @__PURE__ */ __toESM$1(require_cytoscape_cose_bilkent(), 1);
-		init_src();
+		init_d3();
 		cytoscape$1.use(import_cytoscape_cose_bilkent.default);
 		__name$1(addNodes, "addNodes");
 		__name$1(addEdges$1, "addEdges");
@@ -108388,7 +108056,7 @@ EPSILON: 1e-6 };
 		init_chunk_DU6HZSFF();
 		init_chunk_Y2CYZVJY();
 		import_dist$2 = require_dist();
-		init_src();
+		init_d3();
 		drawRect$1 = /* @__PURE__ */ __name$1((element, rectData) => {
 			const rectElement = element.append("rect");
 			rectElement.attr("x", rectData.x);
@@ -108470,8 +108138,8 @@ EPSILON: 1e-6 };
 			};
 		}, "getTextObj");
 		createTooltip = /* @__PURE__ */ __name$1(() => {
-			let tooltipElem = select_default$1(".mermaidTooltip");
-			if (tooltipElem.empty()) tooltipElem = select_default$1("body").append("div").attr("class", "mermaidTooltip").style("opacity", 0).style("position", "absolute").style("text-align", "center").style("max-width", "200px").style("padding", "2px").style("font-size", "12px").style("background", "#ffffde").style("border", "1px solid #333").style("border-radius", "2px").style("pointer-events", "none").style("z-index", "100");
+			let tooltipElem = select(".mermaidTooltip");
+			if (tooltipElem.empty()) tooltipElem = select("body").append("div").attr("class", "mermaidTooltip").style("opacity", 0).style("position", "absolute").style("text-align", "center").style("max-width", "200px").style("padding", "2px").style("font-size", "12px").style("background", "#ffffde").style("border", "1px solid #333").style("border-radius", "2px").style("pointer-events", "none").style("z-index", "100");
 			return tooltipElem;
 		}, "createTooltip");
 	}));
@@ -108572,7 +108240,7 @@ EPSILON: 1e-6 };
 		init_chunk_DU6HZSFF();
 		init_chunk_X3CZISLH();
 		init_chunk_Y2CYZVJY();
-		init_src();
+		init_d3();
 		parser$28 = (function() {
 			var o = /* @__PURE__ */ __name$1(function(k, v, o2, l) {
 				for (o2 = o2 || {}, l = k.length; l--; o2[k[l]] = v);
@@ -111731,15 +111399,15 @@ EPSILON: 1e-6 };
 		};
 		getDiagramRoot = /* @__PURE__ */ __name$1((id, securityLevel) => {
 			if (securityLevel === "sandbox") {
-				const doc = select_default$1("#i" + id).node()?.contentDocument;
+				const doc = select("#i" + id).node()?.contentDocument;
 				if (!doc) throw new Error(`Sandbox iframe #i${id} is missing its content document`);
 				return {
-					root: select_default$1(doc.body),
+					root: select(doc.body),
 					doc
 				};
 			}
 			return {
-				root: select_default$1("body"),
+				root: select("body"),
 				doc: document
 			};
 		}, "getDiagramRoot");
@@ -112184,11 +111852,11 @@ ${elementFontStyles()}
 	var getDiagramElement;
 	var init_chunk_XXDRQBXY = __esmMin((() => {
 		init_chunk_Y2CYZVJY();
-		init_src();
+		init_d3();
 		getDiagramElement = /* @__PURE__ */ __name$1((id, securityLevel) => {
 			let sandboxElement;
-			if (securityLevel === "sandbox") sandboxElement = select_default$1("#i" + id);
-			return (securityLevel === "sandbox" ? select_default$1(sandboxElement.nodes()[0].contentDocument.body) : select_default$1("body")).select(`[id="${id}"]`);
+			if (securityLevel === "sandbox") sandboxElement = select("#i" + id);
+			return (securityLevel === "sandbox" ? select(sandboxElement.nodes()[0].contentDocument.body) : select("body")).select(`[id="${id}"]`);
 		}, "getDiagramElement");
 	}));
 	//#endregion
@@ -112239,7 +111907,7 @@ ${elementFontStyles()}
 		init_chunk_DU6HZSFF();
 		init_chunk_X3CZISLH();
 		init_chunk_Y2CYZVJY();
-		init_src();
+		init_d3();
 		init_purify_es();
 		init_dist$1();
 		MERMAID_DOM_ID_PREFIX$1 = "flowchart-";
@@ -112629,8 +112297,8 @@ You have to call mermaid.initialize.`);
 			}
 			setupToolTips(element) {
 				const tooltipElem = createTooltip();
-				select_default$1(element).select("svg").selectAll("g.node").on("mouseover", (e) => {
-					const el = select_default$1(e.currentTarget);
+				select(element).select("svg").selectAll("g.node").on("mouseover", (e) => {
+					const el = select(e.currentTarget);
 					const title = el.attr("title");
 					if (title === null) return;
 					const rect = e.currentTarget?.getBoundingClientRect();
@@ -112640,7 +112308,7 @@ You have to call mermaid.initialize.`);
 					el.classed("hover", true);
 				}).on("mouseout", (e) => {
 					tooltipElem.transition().duration(500).style("opacity", 0);
-					select_default$1(e.currentTarget).classed("hover", false);
+					select(e.currentTarget).classed("hover", false);
 				});
 			}
 			/**
@@ -117048,7 +116716,6 @@ You have to call mermaid.initialize.`);
 	});
 	var init_flowDiagram_HODETNUW = __esmMin((() => {
 		init_chunk_SHT3W25Y();
-		init_chunk_XXDRQBXY();
 		init_chunk_POPQ4Y6H();
 		init_chunk_LNGE3PJU();
 		init_chunk_TLUHSLCS();
@@ -117070,7 +116737,6 @@ You have to call mermaid.initialize.`);
 	var diagram$33;
 	var init_swimlanesDiagram_VR7AAH4N = __esmMin((() => {
 		init_chunk_SHT3W25Y();
-		init_chunk_XXDRQBXY();
 		init_chunk_POPQ4Y6H();
 		init_chunk_LNGE3PJU();
 		init_chunk_TLUHSLCS();
@@ -117117,7 +116783,7 @@ You have to call mermaid.initialize.`);
 		init_chunk_DU6HZSFF();
 		init_chunk_X3CZISLH();
 		init_chunk_Y2CYZVJY();
-		init_src();
+		init_d3();
 		init_dist$1();
 		parser$26 = (function() {
 			var o = /* @__PURE__ */ __name$1(function(k, v, o2, l) {
@@ -119262,7 +118928,7 @@ You have to call mermaid.initialize.`);
 			if (data4Layout.layoutAlgorithm === "elk") svg.select(".edges").lower();
 			const backgroundNodes = svg.selectAll("[id*=\"-background\"]");
 			if (Array.from(backgroundNodes).length > 0) backgroundNodes.each(function() {
-				const backgroundNode = select_default$1(this);
+				const backgroundNode = select(this);
 				const nonBackgroundId = backgroundNode.attr("id").replace("-background", "");
 				const nonBackgroundNode = svg.select(`#${CSS.escape(nonBackgroundId)}`);
 				if (!nonBackgroundNode.empty()) {
@@ -147532,7 +147198,7 @@ ${content}`;
 		init_chunk_X3CZISLH();
 		init_chunk_Y2CYZVJY();
 		init_mermaid_parser_core();
-		init_src();
+		init_d3();
 		commitType = {
 			NORMAL: 0,
 			REVERSE: 1,
@@ -148447,7 +148113,7 @@ ${content}`;
 			allCommitsDict = db2.getCommits();
 			const branches = db2.getBranchesAsObjArray();
 			dir = db2.getDirection();
-			const diagram2 = select_default$1(`[id="${id}"]`);
+			const diagram2 = select(`[id="${id}"]`);
 			const { look, theme, themeVariables } = getConfig2$2();
 			const { useGradient, gradientStart, gradientStop, filterColor } = themeVariables;
 			if (useGradient) {
@@ -149062,7 +148728,7 @@ ${content}`;
 		import_customParseFormat = /* @__PURE__ */ __toESM$1(require_customParseFormat(), 1);
 		import_advancedFormat = /* @__PURE__ */ __toESM$1(require_advancedFormat(), 1);
 		import_duration = /* @__PURE__ */ __toESM$1(require_duration(), 1);
-		init_src();
+		init_d3();
 		parser$24 = (function() {
 			var o = /* @__PURE__ */ __name$1(function(k, v, o2, l) {
 				for (o2 = o2 || {}, l = k.length; l--; o2[k[l]] = v);
@@ -150601,8 +150267,8 @@ ${content}`;
 					diagObj.db.setDiagramId(id);
 					const securityLevel = getConfig2$2().securityLevel;
 					let sandboxElement;
-					if (securityLevel === "sandbox") sandboxElement = select_default$1("#i" + id);
-					const root = securityLevel === "sandbox" ? select_default$1(sandboxElement.nodes()[0].contentDocument.body) : select_default$1("body");
+					if (securityLevel === "sandbox") sandboxElement = select("#i" + id);
+					const root = securityLevel === "sandbox" ? select(sandboxElement.nodes()[0].contentDocument.body) : select("body");
 					const doc = securityLevel === "sandbox" ? sandboxElement.nodes()[0].contentDocument : document;
 					const elem = doc.getElementById(id);
 					w = elem.parentElement.offsetWidth;
@@ -150766,7 +150432,7 @@ ${content}`;
 						});
 						if (getConfig2$2().securityLevel === "sandbox") {
 							let sandboxElement2;
-							sandboxElement2 = select_default$1("#i" + id);
+							sandboxElement2 = select("#i" + id);
 							const doc2 = sandboxElement2.nodes()[0].contentDocument;
 							rectangles.filter(function(d) {
 								return links2.has(d.id);
@@ -151287,7 +150953,7 @@ ${content}`;
 		init_chunk_X3CZISLH();
 		init_chunk_Y2CYZVJY();
 		init_mermaid_parser_core();
-		init_src();
+		init_d3();
 		DEFAULT_PIE_CONFIG = defaultConfig_default.pie;
 		DEFAULT_PIE_DB = {
 			sections: /* @__PURE__ */ new Map(),
@@ -151377,7 +151043,7 @@ ${content}`;
 				label,
 				value
 			})).filter((d) => d.value / sum * 100 >= 1);
-			return pie_default().value((d) => d.value).sort(null)(pieData);
+			return pie$1().value((d) => d.value).sort(null)(pieData);
 		}, "createPieArcs");
 		diagram$28 = {
 			parser: parser$22,
@@ -151402,8 +151068,8 @@ ${content}`;
 				const textPosition = pieConfig.textPosition;
 				const innerHole = pieConfig.donutHole > 0 && pieConfig.donutHole <= .9 ? pieConfig.donutHole : 0;
 				const radius = Math.min(pieWidth, height) / 2 - MARGIN;
-				const arcGenerator = arc_default().innerRadius(innerHole * radius).outerRadius(radius);
-				const labelArcGenerator = arc_default().innerRadius(radius * textPosition).outerRadius(radius * textPosition);
+				const arcGenerator = arc().innerRadius(innerHole * radius).outerRadius(radius);
+				const labelArcGenerator = arc().innerRadius(radius * textPosition).outerRadius(radius * textPosition);
 				const pie = group.append("g");
 				pie.append("circle").attr("cx", 0).attr("cy", 0).attr("r", radius + outerStrokeWidth / 2).attr("class", "pieOuterCircle");
 				const sections2 = db2.getSections();
@@ -151619,7 +151285,7 @@ ${content}`;
 		init_chunk_DU6HZSFF();
 		init_chunk_X3CZISLH();
 		init_chunk_Y2CYZVJY();
-		init_src();
+		init_d3();
 		parser$21 = (function() {
 			var o = /* @__PURE__ */ __name$1(function(k, v, o2, l) {
 				for (o2 = o2 || {}, l = k.length; l--; o2[k[l]] = v);
@@ -153719,8 +153385,8 @@ ${content}`;
 				log.debug("Rendering quadrant chart\n" + txt);
 				const securityLevel = conf.securityLevel;
 				let sandboxElement;
-				if (securityLevel === "sandbox") sandboxElement = select_default$1("#i" + id);
-				const svg = (securityLevel === "sandbox" ? select_default$1(sandboxElement.nodes()[0].contentDocument.body) : select_default$1("body")).select(`[id="${id}"]`);
+				if (securityLevel === "sandbox") sandboxElement = select("#i" + id);
+				const svg = (securityLevel === "sandbox" ? select(sandboxElement.nodes()[0].contentDocument.body) : select("body")).select(`[id="${id}"]`);
 				const group = svg.append("g").attr("class", "main");
 				const width = conf.quadrantChart?.chartWidth ?? 500;
 				const height = conf.quadrantChart?.chartHeight ?? 500;
@@ -153935,7 +153601,7 @@ ${content}`;
 		init_chunk_DU6HZSFF();
 		init_chunk_X3CZISLH();
 		init_chunk_Y2CYZVJY();
-		init_src();
+		init_d3();
 		parser$20 = (function() {
 			var o = /* @__PURE__ */ __name$1(function(k, v, o2, l) {
 				for (o2 = o2 || {}, l = k.length; l--; o2[k[l]] = v);
@@ -155867,8 +155533,8 @@ ${content}`;
 			getDrawableElement() {
 				const finalData = this.plotData.data.map((d) => [this.xAxis.getScaleValue(d[0]), this.yAxis.getScaleValue(d[1])]);
 				let path;
-				if (this.orientation === "horizontal") path = line_default().y((d) => d[0]).x((d) => d[1])(finalData);
-				else path = line_default().x((d) => d[0]).y((d) => d[1])(finalData);
+				if (this.orientation === "horizontal") path = line$1().y((d) => d[0]).x((d) => d[1])(finalData);
+				else path = line$1().x((d) => d[0]).y((d) => d[1])(finalData);
 				if (!path) return [];
 				const elements = [{
 					groupTexts: ["plot", `line-plot-${this.plotIndex}`],
@@ -159022,7 +158688,7 @@ ${content}`;
 		init_chunk_DU6HZSFF();
 		init_chunk_X3CZISLH();
 		init_chunk_Y2CYZVJY();
-		init_src();
+		init_d3();
 		import_dist = require_dist();
 		parser$18 = (function() {
 			var o = /* @__PURE__ */ __name$1(function(k, v, o2, l) {
@@ -163754,12 +163420,12 @@ ${content}`;
 			const { securityLevel, sequence, look, themeVariables } = getConfig2$2();
 			conf$2 = sequence;
 			let sandboxElement;
-			if (securityLevel === "sandbox") sandboxElement = select_default$1("#i" + id);
-			const root = securityLevel === "sandbox" ? select_default$1(sandboxElement.nodes()[0].contentDocument.body) : select_default$1("body");
+			if (securityLevel === "sandbox") sandboxElement = select("#i" + id);
+			const root = securityLevel === "sandbox" ? select(sandboxElement.nodes()[0].contentDocument.body) : select("body");
 			const doc = securityLevel === "sandbox" ? sandboxElement.nodes()[0].contentDocument : document;
 			bounds$1.init();
 			log.debug(diagObj.db);
-			const diagram2 = securityLevel === "sandbox" ? root.select(`[id="${id}"]`) : select_default$1(`[id="${id}"]`);
+			const diagram2 = securityLevel === "sandbox" ? root.select(`[id="${id}"]`) : select(`[id="${id}"]`);
 			const actors = diagObj.db.getActors();
 			const createdActors = diagObj.db.getCreatedActors();
 			const destroyedActors = diagObj.db.getDestroyedActors();
@@ -164307,7 +163973,7 @@ ${content}`;
 		init_chunk_DU6HZSFF();
 		init_chunk_X3CZISLH();
 		init_chunk_Y2CYZVJY();
-		init_src();
+		init_d3();
 		init_purify_es();
 		parser$17 = (function() {
 			var o = /* @__PURE__ */ __name$1(function(k, v, o2, l) {
@@ -167240,10 +166906,10 @@ ${content}`;
 				};
 				this.setupToolTips = /* @__PURE__ */ __name$1((element) => {
 					const tooltipElem = createTooltip();
-					select_default$1(element).select("svg").selectAll("g").filter(function() {
-						return select_default$1(this).attr("title") !== null;
+					select(element).select("svg").selectAll("g").filter(function() {
+						return select(this).attr("title") !== null;
 					}).on("mouseover", (event) => {
-						const el = select_default$1(event.currentTarget);
+						const el = select(event.currentTarget);
 						const title = el.attr("title");
 						if (!title) return;
 						const rect = event.currentTarget.getBoundingClientRect();
@@ -167252,7 +166918,7 @@ ${content}`;
 						el.classed("hover", true);
 					}).on("mouseout", (event) => {
 						tooltipElem.transition().duration(500).style("opacity", 0);
-						select_default$1(event.currentTarget).classed("hover", false);
+						select(event.currentTarget).classed("hover", false);
 					});
 				}, "setupToolTips");
 				this.direction = "TB";
@@ -168102,7 +167768,6 @@ g.classGroup line {
 	var diagram$23;
 	var init_classDiagram_ZZMXUADV = __esmMin((() => {
 		init_chunk_TICWLB2K();
-		init_chunk_XXDRQBXY();
 		init_chunk_POPQ4Y6H();
 		init_chunk_TLUHSLCS();
 		init_chunk_F27PBJKO();
@@ -168136,7 +167801,6 @@ g.classGroup line {
 	var diagram$22;
 	var init_classDiagram_v2_VYDZK3BY = __esmMin((() => {
 		init_chunk_TICWLB2K();
-		init_chunk_XXDRQBXY();
 		init_chunk_POPQ4Y6H();
 		init_chunk_TLUHSLCS();
 		init_chunk_F27PBJKO();
@@ -168198,7 +167862,7 @@ g.classGroup line {
 		init_chunk_DU6HZSFF();
 		init_chunk_X3CZISLH();
 		init_chunk_Y2CYZVJY();
-		init_src();
+		init_d3();
 		init_purify_es();
 		parser$16 = (function() {
 			var o = /* @__PURE__ */ __name$1(function(k, v, o2, l) {
@@ -170441,8 +170105,8 @@ g.classGroup line {
 			}
 			setupToolTips(element) {
 				const tooltipElem = createTooltip();
-				select_default$1(element).select("svg").selectAll("g.node, g.rough-node").on("mouseover", (e) => {
-					const el = select_default$1(e.currentTarget);
+				select(element).select("svg").selectAll("g.node, g.rough-node").on("mouseover", (e) => {
+					const el = select(e.currentTarget);
 					const title = el.attr("title");
 					if (title === null) return;
 					const rect = e.currentTarget?.getBoundingClientRect();
@@ -170452,7 +170116,7 @@ g.classGroup line {
 					el.classed("hover", true);
 				}).on("mouseout", (e) => {
 					tooltipElem.transition().duration(500).style("opacity", 0);
-					select_default$1(e.currentTarget).classed("hover", false);
+					select(e.currentTarget).classed("hover", false);
 				});
 			}
 			/**
@@ -170769,7 +170433,6 @@ g.stateGroup line {
 	var drawStartState, drawDivider, drawSimpleState, drawDescrState, addTitleAndBox, drawEndState, drawForkJoinState, _drawLongText, drawNote, drawState, edgeCount$1, drawEdge, conf$1, transformationLog, setConf$1, insertMarkers, draw$6, getLabelWidth, renderDoc, diagram$21;
 	var init_stateDiagram_D77RDMKH = __esmMin((() => {
 		init_chunk_IMKFNOWR();
-		init_chunk_XXDRQBXY();
 		init_chunk_POPQ4Y6H();
 		init_chunk_TLUHSLCS();
 		init_chunk_F27PBJKO();
@@ -170784,7 +170447,7 @@ g.stateGroup line {
 		init_chunk_DU6HZSFF();
 		init_chunk_X3CZISLH();
 		init_chunk_Y2CYZVJY();
-		init_src();
+		init_d3();
 		init_dagre();
 		init_graphlib();
 		drawStartState = /* @__PURE__ */ __name$1((g) => g.append("circle").attr("class", "start-state").attr("r", getConfig2$2().state.sizeUnit).attr("cx", getConfig2$2().state.padding + getConfig2$2().state.sizeUnit).attr("cy", getConfig2$2().state.padding + getConfig2$2().state.sizeUnit), "drawStartState");
@@ -170926,11 +170589,11 @@ g.stateGroup line {
 			}, "getRelationType");
 			path.points = path.points.filter((p) => !Number.isNaN(p.y));
 			const lineData = path.points;
-			const lineFunction = line_default().x(function(d) {
+			const lineFunction = line$1().x(function(d) {
 				return d.x;
 			}).y(function(d) {
 				return d.y;
-			}).curve(basis_default);
+			}).curve(basis);
 			const svgPath = elem.append("path").attr("d", lineFunction(lineData)).attr("id", "edge" + edgeCount$1).attr("class", "transition");
 			let url = "";
 			if (getConfig2$2().state.arrowMarkerAbsolute) url = getUrl(true);
@@ -170976,8 +170639,8 @@ g.stateGroup line {
 			conf$1 = getConfig2$2().state;
 			const securityLevel = getConfig2$2().securityLevel;
 			let sandboxElement;
-			if (securityLevel === "sandbox") sandboxElement = select_default$1("#i" + id);
-			const root = securityLevel === "sandbox" ? select_default$1(sandboxElement.nodes()[0].contentDocument.body) : select_default$1("body");
+			if (securityLevel === "sandbox") sandboxElement = select("#i" + id);
+			const root = securityLevel === "sandbox" ? select(sandboxElement.nodes()[0].contentDocument.body) : select("body");
 			const doc = securityLevel === "sandbox" ? sandboxElement.nodes()[0].contentDocument : document;
 			log.debug("Rendering diagram " + text);
 			const diagram2 = root.select(`[id='${id}']`);
@@ -171137,7 +170800,6 @@ g.stateGroup line {
 	var diagram$20;
 	var init_stateDiagram_v2_MP3YSRHH = __esmMin((() => {
 		init_chunk_IMKFNOWR();
-		init_chunk_XXDRQBXY();
 		init_chunk_POPQ4Y6H();
 		init_chunk_TLUHSLCS();
 		init_chunk_F27PBJKO();
@@ -171238,7 +170900,7 @@ g.stateGroup line {
 		init_chunk_DU6HZSFF();
 		init_chunk_X3CZISLH();
 		init_chunk_Y2CYZVJY();
-		init_src();
+		init_d3();
 		parser$15 = (function() {
 			var o = /* @__PURE__ */ __name$1(function(k, v, o2, l) {
 				for (o2 = o2 || {}, l = k.length; l--; o2[k[l]] = v);
@@ -172066,13 +171728,13 @@ g.stateGroup line {
 			face.append("circle").attr("cx", faceData.cx - radius / 3).attr("cy", faceData.cy - radius / 3).attr("r", 1.5).attr("stroke-width", 2).attr("fill", "#666").attr("stroke", "#666");
 			face.append("circle").attr("cx", faceData.cx + radius / 3).attr("cy", faceData.cy - radius / 3).attr("r", 1.5).attr("stroke-width", 2).attr("fill", "#666").attr("stroke", "#666");
 			function smile(face2) {
-				const arc = arc_default().startAngle(Math.PI / 2).endAngle(3 * (Math.PI / 2)).innerRadius(radius / 2).outerRadius(radius / 2.2);
-				face2.append("path").attr("class", "mouth").attr("d", arc).attr("transform", "translate(" + faceData.cx + "," + (faceData.cy + 2) + ")");
+				const arc$3 = arc().startAngle(Math.PI / 2).endAngle(3 * (Math.PI / 2)).innerRadius(radius / 2).outerRadius(radius / 2.2);
+				face2.append("path").attr("class", "mouth").attr("d", arc$3).attr("transform", "translate(" + faceData.cx + "," + (faceData.cy + 2) + ")");
 			}
 			__name$1(smile, "smile");
 			function sad(face2) {
-				const arc = arc_default().startAngle(3 * Math.PI / 2).endAngle(5 * (Math.PI / 2)).innerRadius(radius / 2).outerRadius(radius / 2.2);
-				face2.append("path").attr("class", "mouth").attr("d", arc).attr("transform", "translate(" + faceData.cx + "," + (faceData.cy + 7) + ")");
+				const arc$4 = arc().startAngle(3 * Math.PI / 2).endAngle(5 * (Math.PI / 2)).innerRadius(radius / 2).outerRadius(radius / 2.2);
+				face2.append("path").attr("class", "mouth").attr("d", arc$4).attr("transform", "translate(" + faceData.cx + "," + (faceData.cy + 7) + ")");
 			}
 			__name$1(sad, "sad");
 			function ambivalent(face2) {
@@ -172229,8 +171891,8 @@ g.stateGroup line {
 			const titleFontFamily = configObject.journey.titleFontFamily;
 			const securityLevel = configObject.securityLevel;
 			let sandboxElement;
-			if (securityLevel === "sandbox") sandboxElement = select_default$1("#i" + id);
-			const root = securityLevel === "sandbox" ? select_default$1(sandboxElement.nodes()[0].contentDocument.body) : select_default$1("body");
+			if (securityLevel === "sandbox") sandboxElement = select("#i" + id);
+			const root = securityLevel === "sandbox" ? select(sandboxElement.nodes()[0].contentDocument.body) : select("body");
 			bounds.init();
 			const diagram2 = root.select("#" + id);
 			svgDraw_default$1.initGraphics(diagram2, id);
@@ -172397,7 +172059,7 @@ g.stateGroup line {
 	var timeline_definition_24CTP7MA_exports = /* @__PURE__ */ __exportAll({ diagram: () => diagram$18 });
 	function wrap(text, width) {
 		text.each(function() {
-			var text2 = select_default$1(this), words = text2.text().split(/(\s+|<br>)/).reverse(), word, line = [], lineHeight = 1.1, y = text2.attr("y"), dy = parseFloat(text2.attr("dy")), tspan = text2.text(null).append("tspan").attr("x", 0).attr("y", y).attr("dy", dy + "em");
+			var text2 = select(this), words = text2.text().split(/(\s+|<br>)/).reverse(), word, line = [], lineHeight = 1.1, y = text2.attr("y"), dy = parseFloat(text2.attr("dy")), tspan = text2.text(null).append("tspan").attr("x", 0).attr("y", y).attr("dy", dy + "em");
 			for (let j = 0; j < words.length; j++) {
 				word = words[words.length - 1 - j];
 				line.push(word);
@@ -172419,7 +172081,7 @@ g.stateGroup line {
 		init_chunk_DU6HZSFF();
 		init_chunk_X3CZISLH();
 		init_chunk_Y2CYZVJY();
-		init_src();
+		init_d3();
 		init_dist$1();
 		parser$14 = (function() {
 			var o = /* @__PURE__ */ __name$1(function(k, v, o2, l) {
@@ -173170,13 +172832,13 @@ g.stateGroup line {
 			face.append("circle").attr("cx", faceData.cx - radius / 3).attr("cy", faceData.cy - radius / 3).attr("r", 1.5).attr("stroke-width", 2).attr("fill", "#666").attr("stroke", "#666");
 			face.append("circle").attr("cx", faceData.cx + radius / 3).attr("cy", faceData.cy - radius / 3).attr("r", 1.5).attr("stroke-width", 2).attr("fill", "#666").attr("stroke", "#666");
 			function smile(face2) {
-				const arc = arc_default().startAngle(Math.PI / 2).endAngle(3 * (Math.PI / 2)).innerRadius(radius / 2).outerRadius(radius / 2.2);
-				face2.append("path").attr("class", "mouth").attr("d", arc).attr("transform", "translate(" + faceData.cx + "," + (faceData.cy + 2) + ")");
+				const arc$1 = arc().startAngle(Math.PI / 2).endAngle(3 * (Math.PI / 2)).innerRadius(radius / 2).outerRadius(radius / 2.2);
+				face2.append("path").attr("class", "mouth").attr("d", arc$1).attr("transform", "translate(" + faceData.cx + "," + (faceData.cy + 2) + ")");
 			}
 			__name$1(smile, "smile");
 			function sad(face2) {
-				const arc = arc_default().startAngle(3 * Math.PI / 2).endAngle(5 * (Math.PI / 2)).innerRadius(radius / 2).outerRadius(radius / 2.2);
-				face2.append("path").attr("class", "mouth").attr("d", arc).attr("transform", "translate(" + faceData.cx + "," + (faceData.cy + 7) + ")");
+				const arc$2 = arc().startAngle(3 * Math.PI / 2).endAngle(5 * (Math.PI / 2)).innerRadius(radius / 2).outerRadius(radius / 2.2);
+				face2.append("path").attr("class", "mouth").attr("d", arc$2).attr("transform", "translate(" + faceData.cx + "," + (faceData.cy + 7) + ")");
 			}
 			__name$1(sad, "sad");
 			function ambivalent(face2) {
@@ -173356,7 +173018,7 @@ g.stateGroup line {
 				nodeElem.attr("data-look", `neo`);
 				if (isReduxTheme) {
 					const isDark2 = theme.includes("dark");
-					const rootSvg = select_default$1(elem.node()?.ownerSVGElement ?? elem.node());
+					const rootSvg = select(elem.node()?.ownerSVGElement ?? elem.node());
 					const svgId = rootSvg.attr("id") ?? "";
 					const dropShadowId = svgId ? `${svgId}-drop-shadow` : "drop-shadow";
 					if (rootSvg.select(`#${dropShadowId}`).empty()) {
@@ -173404,8 +173066,8 @@ g.stateGroup line {
 			log.debug("timeline", diagObj.db);
 			const securityLevel = conf.securityLevel;
 			let sandboxElement;
-			if (securityLevel === "sandbox") sandboxElement = select_default$1("#i" + id);
-			const svg = (securityLevel === "sandbox" ? select_default$1(sandboxElement.nodes()[0].contentDocument.body) : select_default$1("body")).select("#" + id);
+			if (securityLevel === "sandbox") sandboxElement = select("#i" + id);
+			const svg = (securityLevel === "sandbox" ? select(sandboxElement.nodes()[0].contentDocument.body) : select("body")).select("#" + id);
 			svg.append("g");
 			const tasks2 = diagObj.db.getTasks();
 			const title = diagObj.db.getCommonDb().getDiagramTitle();
@@ -179225,7 +178887,7 @@ g.stateGroup line {
 		init_chunk_DU6HZSFF();
 		init_chunk_X3CZISLH();
 		init_chunk_Y2CYZVJY();
-		init_src();
+		init_d3();
 		import_d3_sankey = require_d3_sankey();
 		parser$11 = (function() {
 			var o = /* @__PURE__ */ __name$1(function(k, v, o2, l) {
@@ -179879,9 +179541,9 @@ g.stateGroup line {
 			const { securityLevel, sankey: conf } = getConfig2$2();
 			const defaultSankeyConfig = defaultConfig2.sankey;
 			let sandboxElement;
-			if (securityLevel === "sandbox") sandboxElement = select_default$1("#i" + id);
-			const root = securityLevel === "sandbox" ? select_default$1(sandboxElement.nodes()[0].contentDocument.body) : select_default$1("body");
-			const svg = securityLevel === "sandbox" ? root.select(`[id="${id}"]`) : select_default$1(`[id="${id}"]`);
+			if (securityLevel === "sandbox") sandboxElement = select("#i" + id);
+			const root = securityLevel === "sandbox" ? select(sandboxElement.nodes()[0].contentDocument.body) : select("body");
+			const svg = securityLevel === "sandbox" ? root.select(`[id="${id}"]`) : select(`[id="${id}"]`);
 			const width = conf?.width ?? defaultSankeyConfig.width;
 			const height = conf?.height ?? defaultSankeyConfig.width;
 			const useMaxWidth = conf?.useMaxWidth ?? defaultSankeyConfig.useMaxWidth;
@@ -179897,7 +179559,7 @@ g.stateGroup line {
 			const nodeAlign = alignmentsMap[nodeAlignment];
 			(0, import_d3_sankey.sankey)().nodeId((d) => d.id).nodeWidth(nodeWidth).nodePadding(nodePadding + (showValues ? 15 : 0)).nodeAlign(nodeAlign).extent([[0, 0], [width, height]])(graph);
 			const centralNodeLayer = findCentralNodeLayer(graph.nodes);
-			const colorScheme = ordinal(Tableau10_default);
+			const colorScheme = ordinal(Tableau10);
 			const getNodeColor = /* @__PURE__ */ __name$1((nodeId) => {
 				return nodeColors[nodeId] ?? colorScheme(nodeId);
 			}, "getNodeColor");
@@ -180956,7 +180618,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		init_chunk_Y2CYZVJY();
 		init_compat();
 		init_dist$1();
-		init_src();
+		init_d3();
 		init_graphlib();
 		parser$8 = (function() {
 			var o = /* @__PURE__ */ __name$1(function(k, v, o2, l) {
@@ -182557,7 +182219,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 					if (block.type === "space") {
 						const w = block.width ?? 1;
 						for (let j = 0; j < w; j++) {
-							const newBlock = clone$4(block);
+							const newBlock = clone$3(block);
 							newBlock.id = newBlock.id + "-" + j;
 							blockDatabase.set(newBlock.id, newBlock);
 							children.push(newBlock);
@@ -182819,9 +182481,9 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 					const db2 = diagObj.db;
 					db2.setDiagramId(id);
 					let sandboxElement;
-					if (securityLevel === "sandbox") sandboxElement = select_default$1("#i" + id);
-					const root = securityLevel === "sandbox" ? select_default$1(sandboxElement.nodes()[0].contentDocument.body) : select_default$1("body");
-					const svg = securityLevel === "sandbox" ? root.select(`[id="${id}"]`) : select_default$1(`[id="${id}"]`);
+					if (securityLevel === "sandbox") sandboxElement = select("#i" + id);
+					const root = securityLevel === "sandbox" ? select(sandboxElement.nodes()[0].contentDocument.body) : select("body");
+					const svg = securityLevel === "sandbox" ? root.select(`[id="${id}"]`) : select(`[id="${id}"]`);
 					markers_default(svg, [
 						"point",
 						"circle",
@@ -189989,7 +189651,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 	}
 	function layoutArchitecture(services, junctions, groups, edges, db, { spatialMaps, groupAlignments }) {
 		return new Promise((resolve) => {
-			const renderEl = select_default$1("body").append("div").attr("id", "cy").attr("style", "display:none");
+			const renderEl = select("body").append("div").attr("id", "cy").attr("style", "display:none");
 			const cy = cytoscape$1({
 				container: document.getElementById("cy"),
 				style: [
@@ -190168,7 +189830,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		init_mermaid_parser_core();
 		init_cytoscape_esm();
 		import_cytoscape_fcose = /* @__PURE__ */ __toESM$1(require_cytoscape_fcose(), 1);
-		init_src();
+		init_d3();
 		ArchitectureDirectionName = {
 			L: "left",
 			R: "right",
@@ -191189,7 +190851,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		init_chunk_X3CZISLH();
 		init_chunk_Y2CYZVJY();
 		init_mermaid_parser_core();
-		init_src();
+		init_d3();
 		PositionFrameKind = "position frame";
 		FramePositionedKind = "frame positioned";
 		PositionRelationKind = "position relation";
@@ -191309,7 +190971,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 				if (!DEFAULT_EVENTMODELING_CONFIG2) throw new Error("EventModeling config not found");
 				const db2 = diagObj.db;
 				const { themeVariables, eventmodeling: config } = getConfig2$2();
-				const diagram2 = select_default$1(`[id="${id}"]`);
+				const diagram2 = select(`[id="${id}"]`);
 				const diagramProps2 = db2.getDiagramProps();
 				const state = db2.getState();
 				const arrowheadId = `em-arrowhead-${id}`;
@@ -193950,7 +193612,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		init_chunk_DU6HZSFF();
 		init_chunk_X3CZISLH();
 		init_chunk_Y2CYZVJY();
-		init_src();
+		init_d3();
 		init_dist$1();
 		init_venn_esm();
 		import_rough_cjs = /* @__PURE__ */ __toESM$1(require_rough_cjs(), 1);
@@ -194999,7 +194661,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 			const svg = selectSvgElement(id);
 			svg.attr("viewBox", `0 0 ${svgWidth} ${svgHeight}`);
 			if (title) svg.append("text").text(title).attr("class", "venn-title").attr("font-size", `${32 * scale}px`).attr("text-anchor", "middle").attr("dominant-baseline", "middle").attr("x", "50%").attr("y", 32 * scale).style("fill", themeVariables.vennTitleTextColor || themeVariables.titleColor);
-			const dummyD3root = select_default$1(document.createElement("div"));
+			const dummyD3root = select(document.createElement("div"));
 			const vennDiagram = VennDiagram().width(svgWidth).height(svgHeight - titleHeight);
 			dummyD3root.datum(renderSets).call(vennDiagram);
 			const roughSvg = isHandDrawn ? import_rough_cjs.default.svg(dummyD3root.select("svg").node()) : void 0;
@@ -195016,7 +194678,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 			if (textNodes2.length > 0) renderTextNodes(config, layoutByKey, dummyD3root, textNodes2, scale, styleByKey);
 			const themeDark = isDark(themeVariables.background || "#f4f4f4");
 			dummyD3root.selectAll(".venn-circle").each(function(d, i) {
-				const group = select_default$1(this);
+				const group = select(this);
 				const setsKey = stableSetsKey([...d.sets].sort());
 				const customStyle = styleByKey.get(setsKey);
 				const baseColor = customStyle?.fill || themeColors[i % themeColors.length] || themeVariables.primaryColor;
@@ -195047,7 +194709,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 				group.select("text").style("font-size", `${48 * scale}px`).style("fill", textColor);
 			});
 			if (isHandDrawn && roughSvg) dummyD3root.selectAll(".venn-intersection").each(function(d) {
-				const group = select_default$1(this);
+				const group = select(this);
 				const setsKey = stableSetsKey([...d.sets].sort());
 				const customStyle = styleByKey.get(setsKey);
 				const customFill = customStyle?.fill;
@@ -195140,7 +194802,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		init_chunk_X3CZISLH();
 		init_chunk_Y2CYZVJY();
 		init_mermaid_parser_core();
-		init_src();
+		init_d3();
 		TreeMapDB = class {
 			constructor() {
 				this.nodes = [];
@@ -195346,7 +195008,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 				if (title) svg.append("text").attr("x", svgWidth / 2).attr("y", titleHeight / 2).attr("class", "treemapTitle").attr("text-anchor", "middle").attr("dominant-baseline", "middle").text(title);
 				const g = svg.append("g").attr("transform", `translate(0, ${titleHeight})`).attr("class", "treemapContainer");
 				const hierarchyRoot = hierarchy(root).sum((d) => d.value ?? 0).sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
-				const treemapData = treemap_default().size([width, height]).paddingTop((d) => d.children && d.children.length > 0 ? SECTION_HEADER_HEIGHT + SECTION_INNER_PADDING : 0).paddingInner(treemapInnerPadding).paddingLeft((d) => d.children && d.children.length > 0 ? SECTION_INNER_PADDING : 0).paddingRight((d) => d.children && d.children.length > 0 ? SECTION_INNER_PADDING : 0).paddingBottom((d) => d.children && d.children.length > 0 ? SECTION_INNER_PADDING : 0).round(true)(hierarchyRoot);
+				const treemapData = index().size([width, height]).paddingTop((d) => d.children && d.children.length > 0 ? SECTION_HEADER_HEIGHT + SECTION_INNER_PADDING : 0).paddingInner(treemapInnerPadding).paddingLeft((d) => d.children && d.children.length > 0 ? SECTION_INNER_PADDING : 0).paddingRight((d) => d.children && d.children.length > 0 ? SECTION_INNER_PADDING : 0).paddingBottom((d) => d.children && d.children.length > 0 ? SECTION_INNER_PADDING : 0).round(true)(hierarchyRoot);
 				const branchNodes = treemapData.descendants().filter((d) => d.children && d.children.length > 0);
 				const sections = g.selectAll(".treemapSection").data(branchNodes).enter().append("g").attr("class", "treemapSection").attr("transform", (d) => `translate(${d.x0},${d.y0})`);
 				sections.append("rect").attr("width", (d) => d.x1 - d.x0).attr("height", SECTION_HEADER_HEIGHT).attr("class", "treemapSectionHeader").attr("fill", "none").attr("fill-opacity", .6).attr("stroke-width", .6).attr("style", (d) => {
@@ -195366,7 +195028,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 					return "dominant-baseline: middle; font-size: 12px; fill:" + colorScaleLabel(d.data.name) + "; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" + styles2String({ cssCompiledStyles: d.data.cssCompiledStyles }).labelStyles.replace("color:", "fill:");
 				}).each(function(d) {
 					if (d.depth === 0) return;
-					const self = select_default$1(this);
+					const self = select(this);
 					const originalText = d.data.name;
 					self.text(originalText);
 					const totalHeaderWidth = d.x1 - d.x0;
@@ -195418,7 +195080,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 				cell.append("text").attr("class", "treemapLabel").attr("x", (d) => (d.x1 - d.x0) / 2).attr("y", (d) => (d.y1 - d.y0) / 2).attr("style", (d) => {
 					return `text-anchor: middle; dominant-baseline: middle; font-size: ${baseLabelFontSize}px;fill:` + colorScaleLabel(d.data.name) + ";" + styles2String({ cssCompiledStyles: d.data.cssCompiledStyles }).labelStyles.replace("color:", "fill:");
 				}).attr("clip-path", (_d, i) => `url(#clip-${id}-${i})`).text((d) => d.data.name).each(function(d) {
-					const self = select_default$1(this);
+					const self = select(this);
 					const nodeWidth = d.x1 - d.x0;
 					const nodeHeight = d.y1 - d.y0;
 					const textNode = self.node();
@@ -195454,13 +195116,13 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 				}).attr("style", (d) => {
 					return `text-anchor: middle; dominant-baseline: hanging; font-size: ${baseValueFontSize}px;fill:` + colorScaleLabel(d.data.name) + ";" + styles2String({ cssCompiledStyles: d.data.cssCompiledStyles }).labelStyles.replace("color:", "fill:");
 				}).attr("clip-path", (_d, i) => `url(#clip-${id}-${i})`).text((d) => d.value ? valueFormat(d.value) : "").each(function(d) {
-					const valueTextElement = select_default$1(this);
+					const valueTextElement = select(this);
 					const parentCellNode = this.parentNode;
 					if (!parentCellNode) {
 						valueTextElement.style("display", "none");
 						return;
 					}
-					const labelElement = select_default$1(parentCellNode).select(".treemapLabel");
+					const labelElement = select(parentCellNode).select(".treemapLabel");
 					if (labelElement.empty() || labelElement.style("display") === "none") {
 						valueTextElement.style("display", "none");
 						return;
@@ -198035,7 +197697,7 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 	init_chunk_X3CZISLH();
 	init_chunk_Y2CYZVJY();
 	init_esm();
-	init_src();
+	init_d3();
 	init_purify_es();
 	init_compat();
 	var id = "c4";
@@ -198934,26 +198596,26 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		const enclosingDivID = "d" + id39;
 		const enclosingDivID_selector = "#" + enclosingDivID;
 		const removeTempElements = /* @__PURE__ */ __name$1(() => {
-			const node = select_default$1(isSandboxed ? iFrameID_selector : enclosingDivID_selector).node();
+			const node = select(isSandboxed ? iFrameID_selector : enclosingDivID_selector).node();
 			if (node && "remove" in node) node.remove();
 		}, "removeTempElements");
-		let root = select_default$1(document.body);
+		let root = select(document.body);
 		const isSandboxed = config.securityLevel === SECURITY_LVL_SANDBOX;
 		const isLooseSecurityLevel = config.securityLevel === SECURITY_LVL_LOOSE;
 		const fontFamily = config.fontFamily;
 		if (svgContainingElement !== void 0) {
 			if (svgContainingElement) svgContainingElement.innerHTML = "";
 			if (isSandboxed) {
-				root = select_default$1(sandboxedIframe(select_default$1(svgContainingElement), iFrameID).nodes()[0].contentDocument.body);
+				root = select(sandboxedIframe(select(svgContainingElement), iFrameID).nodes()[0].contentDocument.body);
 				root.node().style.margin = "0";
-			} else root = select_default$1(svgContainingElement);
+			} else root = select(svgContainingElement);
 			appendDivSvgG(root, id39, enclosingDivID, `font-family: ${fontFamily}`, XMLNS_XLINK_STD);
 		} else {
 			removeExistingElements(document, id39, enclosingDivID, iFrameID);
 			if (isSandboxed) {
-				root = select_default$1(sandboxedIframe(select_default$1(document.body), iFrameID).nodes()[0].contentDocument.body);
+				root = select(sandboxedIframe(select(document.body), iFrameID).nodes()[0].contentDocument.body);
 				root.node().style.margin = "0";
-			} else root = select_default$1("body");
+			} else root = select("body");
 			appendDivSvgG(root, id39, enclosingDivID);
 		}
 		let diag;
@@ -200523,192 +200185,192 @@ ${prefix}${Math.round(value * 100) / 100}${suffix}`;
 		document.head.appendChild(tag);
 	}
 	var sidebar_module_css_default = {
-		"bottomPanelHidden": "NQFaeG_bottomPanelHidden",
-		"explorerActionErrorText": "NQFaeG_explorerActionErrorText",
-		"split": "NQFaeG_split",
-		"dsh-row-in": "NQFaeG_dsh-row-in",
-		"sandboxStatusOn": "NQFaeG_sandboxStatusOn",
-		"nativeTabHost": "NQFaeG_nativeTabHost",
-		"tabBoundaryError": "NQFaeG_tabBoundaryError",
-		"tabBar": "NQFaeG_tabBar",
-		"mermaidInfo": "NQFaeG_mermaidInfo",
-		"openWithPinActive": "NQFaeG_openWithPinActive",
-		"mermaidCopy": "NQFaeG_mermaidCopy",
-		"explorerRowSelected": "NQFaeG_explorerRowSelected",
-		"editorSearchInput": "NQFaeG_editorSearchInput",
-		"uploadDropHero": "NQFaeG_uploadDropHero",
-		"editorTreePanel": "NQFaeG_editorTreePanel",
-		"editorPptxButton": "NQFaeG_editorPptxButton",
-		"explorerDirChanged": "NQFaeG_explorerDirChanged",
-		"panel": "NQFaeG_panel",
-		"explorerSelectionText": "NQFaeG_explorerSelectionText",
-		"gitEmpty": "NQFaeG_gitEmpty",
-		"browserFrame": "NQFaeG_browserFrame",
-		"uploadDropZone": "NQFaeG_uploadDropZone",
-		"uploadOverlayProgress": "NQFaeG_uploadOverlayProgress",
-		"paneCard": "NQFaeG_paneCard",
-		"sandboxStatusText": "NQFaeG_sandboxStatusText",
-		"editorStatusError": "NQFaeG_editorStatusError",
-		"mermaidWrap": "NQFaeG_mermaidWrap",
-		"browserInput": "NQFaeG_browserInput",
-		"editorCm": "NQFaeG_editorCm",
-		"editorMain": "NQFaeG_editorMain",
-		"browserBlockedDesc": "NQFaeG_browserBlockedDesc",
-		"explorerBroken": "NQFaeG_explorerBroken",
-		"editorPdfFrame": "NQFaeG_editorPdfFrame",
-		"toggleButton": "NQFaeG_toggleButton",
-		"editorPdfDragShieldActive": "NQFaeG_editorPdfDragShieldActive",
-		"dropCenter": "NQFaeG_dropCenter",
-		"explorerDir": "NQFaeG_explorerDir",
+		"editorBanner": "NQFaeG_editorBanner",
 		"explorerRenaming": "NQFaeG_explorerRenaming",
-		"explorerRailHeader": "NQFaeG_explorerRailHeader",
-		"tabBadge": "NQFaeG_tabBadge",
-		"uploadDropZonePill": "NQFaeG_uploadDropZonePill",
-		"editorSearchResult": "NQFaeG_editorSearchResult",
-		"editor": "NQFaeG_editor",
-		"browserBlockedButton": "NQFaeG_browserBlockedButton",
-		"mermaidBody": "NQFaeG_mermaidBody",
-		"editorStatus": "NQFaeG_editorStatus",
-		"gitDiffTabHeader": "NQFaeG_gitDiffTabHeader",
-		"paneContent": "NQFaeG_paneContent",
-		"tabActive": "NQFaeG_tabActive",
-		"uploadOverlayCard": "NQFaeG_uploadOverlayCard",
-		"editorBody": "NQFaeG_editorBody",
-		"explorerRailCollapsed": "NQFaeG_explorerRailCollapsed",
-		"editorTreeSearch": "NQFaeG_editorTreeSearch",
-		"editorModeButton": "NQFaeG_editorModeButton",
-		"explorerRailResize": "NQFaeG_explorerRailResize",
-		"explorerHiddenPane": "NQFaeG_explorerHiddenPane",
-		"uploadOverlayStatus": "NQFaeG_uploadOverlayStatus",
-		"browserStart": "NQFaeG_browserStart",
-		"uploadOverlayTitle": "NQFaeG_uploadOverlayTitle",
-		"editorModeToggle": "NQFaeG_editorModeToggle",
-		"uploadDropArtPrimary": "NQFaeG_uploadDropArtPrimary",
-		"editorPdfStage": "NQFaeG_editorPdfStage",
-		"openWithLabel": "NQFaeG_openWithLabel",
-		"explorerSymlink": "NQFaeG_explorerSymlink",
-		"editorPlaceholder": "NQFaeG_editorPlaceholder",
-		"tocButton": "NQFaeG_tocButton",
-		"paneDrop": "NQFaeG_paneDrop",
-		"tocBar": "NQFaeG_tocBar",
-		"browser": "NQFaeG_browser",
-		"uploadDropZoneText": "NQFaeG_uploadDropZoneText",
-		"explorerRailTitle": "NQFaeG_explorerRailTitle",
-		"explorerHeader": "NQFaeG_explorerHeader",
-		"tocItem": "NQFaeG_tocItem",
-		"panelBody": "NQFaeG_panelBody",
-		"dropOverlay": "NQFaeG_dropOverlay",
-		"uploadOverlayProgressFill": "NQFaeG_uploadOverlayProgressFill",
-		"boundaryError": "NQFaeG_boundaryError",
-		"explorerRoot": "NQFaeG_explorerRoot",
-		"explorerName": "NQFaeG_explorerName",
-		"pane": "NQFaeG_pane",
-		"explorerRef": "NQFaeG_explorerRef",
-		"explorerBody": "NQFaeG_explorerBody",
-		"uploadDropChatCard": "NQFaeG_uploadDropChatCard",
+		"bottomClose": "NQFaeG_bottomClose",
+		"terminalRetry": "NQFaeG_terminalRetry",
+		"explorerError": "NQFaeG_explorerError",
 		"sandboxAction": "NQFaeG_sandboxAction",
-		"mermaidModalToolbar": "NQFaeG_mermaidModalToolbar",
+		"sandboxStatusText": "NQFaeG_sandboxStatusText",
+		"explorerActionErrorText": "NQFaeG_explorerActionErrorText",
 		"splitChild": "NQFaeG_splitChild",
-		"dividerRow": "NQFaeG_dividerRow",
-		"orphanedType": "NQFaeG_orphanedType",
-		"uploadDropChatHint": "NQFaeG_uploadDropChatHint",
 		"editorDownloadLink": "NQFaeG_editorDownloadLink",
-		"sandboxStatusOff": "NQFaeG_sandboxStatusOff",
-		"editorError": "NQFaeG_editorError",
-		"editorTitle": "NQFaeG_editorTitle",
-		"uploadDropArtAccent": "NQFaeG_uploadDropArtAccent",
-		"bottomResizeActive": "NQFaeG_bottomResizeActive",
-		"gitError": "NQFaeG_gitError",
-		"explorerSelectionBar": "NQFaeG_explorerSelectionBar",
-		"tab": "NQFaeG_tab",
 		"browserMessage": "NQFaeG_browserMessage",
-		"editorPdfDragShield": "NQFaeG_editorPdfDragShield",
-		"mermaidCode": "NQFaeG_mermaidCode",
-		"mermaidMarkdown": "NQFaeG_mermaidMarkdown",
-		"explorerGitName": "NQFaeG_explorerGitName",
-		"tocItemLevel": "NQFaeG_tocItemLevel",
-		"browserBar": "NQFaeG_browserBar",
-		"explorerSelectionActions": "NQFaeG_explorerSelectionActions",
-		"explorerHidden": "NQFaeG_explorerHidden",
-		"workbench": "NQFaeG_workbench",
-		"tabBarPlus": "NQFaeG_tabBarPlus",
-		"paneTab": "NQFaeG_paneTab",
-		"dropLeft": "NQFaeG_dropLeft",
-		"editorHtml": "NQFaeG_editorHtml",
-		"uploadDropMask": "NQFaeG_uploadDropMask",
-		"splitRow": "NQFaeG_splitRow",
-		"explorerRail": "NQFaeG_explorerRail",
-		"chipIcon": "NQFaeG_chipIcon",
-		"mermaidHeader": "NQFaeG_mermaidHeader",
-		"explorerActionError": "NQFaeG_explorerActionError",
+		"explorerRef": "NQFaeG_explorerRef",
 		"explorerRow": "NQFaeG_explorerRow",
+		"editor": "NQFaeG_editor",
+		"editorPlaceholder": "NQFaeG_editorPlaceholder",
+		"editorModeButton": "NQFaeG_editorModeButton",
+		"editorSearchInput": "NQFaeG_editorSearchInput",
+		"explorerActionError": "NQFaeG_explorerActionError",
+		"editorTreePanel": "NQFaeG_editorTreePanel",
+		"editorPdf": "NQFaeG_editorPdf",
+		"tabBoundaryError": "NQFaeG_tabBoundaryError",
+		"explorer": "NQFaeG_explorer",
+		"openWithPinActive": "NQFaeG_openWithPinActive",
+		"dividerRow": "NQFaeG_dividerRow",
+		"uploadDropZone": "NQFaeG_uploadDropZone",
+		"explorerRailCollapsed": "NQFaeG_explorerRailCollapsed",
 		"explorerRenameInput": "NQFaeG_explorerRenameInput",
-		"editorTreePanelFull": "NQFaeG_editorTreePanelFull",
-		"editorMd": "NQFaeG_editorMd",
+		"mermaidCopy": "NQFaeG_mermaidCopy",
+		"editorPdfToolbar": "NQFaeG_editorPdfToolbar",
+		"explorerGitName": "NQFaeG_explorerGitName",
+		"dropLeft": "NQFaeG_dropLeft",
+		"paneEmptyCards": "NQFaeG_paneEmptyCards",
+		"editorMain": "NQFaeG_editorMain",
+		"editorHtml": "NQFaeG_editorHtml",
+		"editorHtmlBlock": "NQFaeG_editorHtmlBlock",
+		"uploadOverlay": "NQFaeG_uploadOverlay",
+		"tocItem": "NQFaeG_tocItem",
+		"explorerDir": "NQFaeG_explorerDir",
+		"explorerRailHeader": "NQFaeG_explorerRailHeader",
+		"editorError": "NQFaeG_editorError",
 		"mermaidError": "NQFaeG_mermaidError",
 		"mermaidModal": "NQFaeG_mermaidModal",
-		"mermaidModalHint": "NQFaeG_mermaidModalHint",
-		"selectionPopup": "NQFaeG_selectionPopup",
-		"editorPdfFrameBlocked": "NQFaeG_editorPdfFrameBlocked",
-		"explorer": "NQFaeG_explorer",
-		"openWithChevron": "NQFaeG_openWithChevron",
-		"dividerCol": "NQFaeG_dividerCol",
-		"dropUp": "NQFaeG_dropUp",
-		"uploadDropArtCut": "NQFaeG_uploadDropArtCut",
-		"dsh-toc-flash": "NQFaeG_dsh-toc-flash",
-		"paneEmptyCards": "NQFaeG_paneEmptyCards",
-		"explorerAppIcon": "NQFaeG_explorerAppIcon",
-		"sandboxDot": "NQFaeG_sandboxDot",
-		"terminalRetry": "NQFaeG_terminalRetry",
-		"gitPlaceholder": "NQFaeG_gitPlaceholder",
-		"editorCmHidden": "NQFaeG_editorCmHidden",
-		"mermaidModalButton": "NQFaeG_mermaidModalButton",
-		"explorerError": "NQFaeG_explorerError",
-		"editorModeActive": "NQFaeG_editorModeActive",
-		"explorerCopied": "NQFaeG_explorerCopied",
-		"dividerActive": "NQFaeG_dividerActive",
-		"editorPdfToolbar": "NQFaeG_editorPdfToolbar",
-		"bottomClose": "NQFaeG_bottomClose",
-		"openWithPin": "NQFaeG_openWithPin",
-		"editorPathInput": "NQFaeG_editorPathInput",
-		"editorBinaryNotice": "NQFaeG_editorBinaryNotice",
-		"openLocallyGroup": "NQFaeG_openLocallyGroup",
-		"browserBlockedActions": "NQFaeG_browserBlockedActions",
-		"uploadOverlay": "NQFaeG_uploadOverlay",
-		"mermaidModalStage": "NQFaeG_mermaidModalStage",
-		"editorPdf": "NQFaeG_editorPdf",
-		"gitDiffTab": "NQFaeG_gitDiffTab",
-		"editorBinary": "NQFaeG_editorBinary",
-		"dropDown": "NQFaeG_dropDown",
-		"tabClose": "NQFaeG_tabClose",
-		"editorHeader": "NQFaeG_editorHeader",
-		"dropRight": "NQFaeG_dropRight",
-		"paneTabHidden": "NQFaeG_paneTabHidden",
-		"explorerEmpty": "NQFaeG_explorerEmpty",
-		"dirtyDot": "NQFaeG_dirtyDot",
-		"gitDiffTabTitle": "NQFaeG_gitDiffTabTitle",
-		"splitCol": "NQFaeG_splitCol",
-		"bottomPanel": "NQFaeG_bottomPanel",
-		"iconButton": "NQFaeG_iconButton",
+		"editorTreePanelFull": "NQFaeG_editorTreePanelFull",
+		"uploadOverlayTitle": "NQFaeG_uploadOverlayTitle",
+		"explorerHeader": "NQFaeG_explorerHeader",
+		"mermaidBody": "NQFaeG_mermaidBody",
 		"explorerRowDropTarget": "NQFaeG_explorerRowDropTarget",
-		"uploadOverlayCancel": "NQFaeG_uploadOverlayCancel",
-		"editorBanner": "NQFaeG_editorBanner",
-		"sandboxStatus": "NQFaeG_sandboxStatus",
-		"tabTitle": "NQFaeG_tabTitle",
-		"browserBlocked": "NQFaeG_browserBlocked",
-		"browserBlockedTitle": "NQFaeG_browserBlockedTitle",
-		"editorDocxZoomRange": "NQFaeG_editorDocxZoomRange",
+		"editorPdfDragShield": "NQFaeG_editorPdfDragShield",
+		"explorerSymlink": "NQFaeG_explorerSymlink",
+		"tabList": "NQFaeG_tabList",
+		"gitEmpty": "NQFaeG_gitEmpty",
+		"explorerEmpty": "NQFaeG_explorerEmpty",
+		"mermaidHeader": "NQFaeG_mermaidHeader",
+		"bottomResizeActive": "NQFaeG_bottomResizeActive",
+		"workbench": "NQFaeG_workbench",
+		"uploadOverlayProgressFill": "NQFaeG_uploadOverlayProgressFill",
+		"tocItemLevel": "NQFaeG_tocItemLevel",
+		"dropRight": "NQFaeG_dropRight",
+		"sandboxStatusOn": "NQFaeG_sandboxStatusOn",
+		"orphanedType": "NQFaeG_orphanedType",
+		"editorTitle": "NQFaeG_editorTitle",
+		"editorPdfFrameBlocked": "NQFaeG_editorPdfFrameBlocked",
+		"tabClose": "NQFaeG_tabClose",
+		"uploadDropArtAccent": "NQFaeG_uploadDropArtAccent",
+		"tab": "NQFaeG_tab",
+		"explorerBroken": "NQFaeG_explorerBroken",
+		"explorerSelectionBar": "NQFaeG_explorerSelectionBar",
+		"editorCm": "NQFaeG_editorCm",
+		"openWithLabel": "NQFaeG_openWithLabel",
+		"editorTreeSearch": "NQFaeG_editorTreeSearch",
+		"tocButton": "NQFaeG_tocButton",
 		"tocPanel": "NQFaeG_tocPanel",
+		"sandboxStatus": "NQFaeG_sandboxStatus",
+		"editorPptxButton": "NQFaeG_editorPptxButton",
+		"gitDiffTabTitle": "NQFaeG_gitDiffTabTitle",
+		"toggleButton": "NQFaeG_toggleButton",
+		"mermaidCode": "NQFaeG_mermaidCode",
+		"tocBar": "NQFaeG_tocBar",
+		"dirtyDot": "NQFaeG_dirtyDot",
+		"mermaidInfo": "NQFaeG_mermaidInfo",
+		"editorStatusError": "NQFaeG_editorStatusError",
+		"explorerHidden": "NQFaeG_explorerHidden",
+		"editorBinary": "NQFaeG_editorBinary",
+		"paneTab": "NQFaeG_paneTab",
+		"sandboxStatusOff": "NQFaeG_sandboxStatusOff",
+		"browserBlockedTitle": "NQFaeG_browserBlockedTitle",
+		"dsh-row-in": "NQFaeG_dsh-row-in",
+		"uploadDropHero": "NQFaeG_uploadDropHero",
+		"uploadOverlayStatus": "NQFaeG_uploadOverlayStatus",
+		"explorerDirChanged": "NQFaeG_explorerDirChanged",
+		"explorerRowSelected": "NQFaeG_explorerRowSelected",
+		"editorHeader": "NQFaeG_editorHeader",
+		"editorBody": "NQFaeG_editorBody",
+		"explorerName": "NQFaeG_explorerName",
+		"explorerRailTitle": "NQFaeG_explorerRailTitle",
 		"explorerRowRevealed": "NQFaeG_explorerRowRevealed",
-		"editorSearchHint": "NQFaeG_editorSearchHint",
-		"tabBarDrop": "NQFaeG_tabBarDrop",
-		"openWithName": "NQFaeG_openWithName",
-		"editorHtmlBlock": "NQFaeG_editorHtmlBlock",
+		"editorCmHidden": "NQFaeG_editorCmHidden",
+		"editorModeActive": "NQFaeG_editorModeActive",
+		"mermaidMarkdown": "NQFaeG_mermaidMarkdown",
+		"editorPdfStage": "NQFaeG_editorPdfStage",
+		"editorPdfFrame": "NQFaeG_editorPdfFrame",
+		"browserBlockedActions": "NQFaeG_browserBlockedActions",
+		"bottomPanel": "NQFaeG_bottomPanel",
+		"paneContent": "NQFaeG_paneContent",
+		"chipIcon": "NQFaeG_chipIcon",
+		"split": "NQFaeG_split",
+		"tabBadge": "NQFaeG_tabBadge",
 		"divider": "NQFaeG_divider",
+		"uploadOverlayProgress": "NQFaeG_uploadOverlayProgress",
+		"editorPathInput": "NQFaeG_editorPathInput",
+		"mermaidWrap": "NQFaeG_mermaidWrap",
+		"uploadDropArtPrimary": "NQFaeG_uploadDropArtPrimary",
+		"tabBarDrop": "NQFaeG_tabBarDrop",
+		"openWithPin": "NQFaeG_openWithPin",
+		"explorerSelectionText": "NQFaeG_explorerSelectionText",
+		"uploadOverlayCard": "NQFaeG_uploadOverlayCard",
+		"editorMd": "NQFaeG_editorMd",
+		"dropOverlay": "NQFaeG_dropOverlay",
+		"splitRow": "NQFaeG_splitRow",
+		"uploadDropArtCut": "NQFaeG_uploadDropArtCut",
+		"openLocallyGroup": "NQFaeG_openLocallyGroup",
+		"paneCard": "NQFaeG_paneCard",
+		"editorSearchResult": "NQFaeG_editorSearchResult",
+		"sandboxDot": "NQFaeG_sandboxDot",
+		"editorDocxZoomRange": "NQFaeG_editorDocxZoomRange",
+		"dividerActive": "NQFaeG_dividerActive",
 		"bottomResize": "NQFaeG_bottomResize",
+		"explorerBody": "NQFaeG_explorerBody",
+		"tabTitle": "NQFaeG_tabTitle",
+		"iconButton": "NQFaeG_iconButton",
+		"dropUp": "NQFaeG_dropUp",
+		"panelBody": "NQFaeG_panelBody",
+		"panel": "NQFaeG_panel",
+		"editorSearchHint": "NQFaeG_editorSearchHint",
+		"gitDiffTab": "NQFaeG_gitDiffTab",
+		"uploadDropMask": "NQFaeG_uploadDropMask",
+		"explorerAppIcon": "NQFaeG_explorerAppIcon",
+		"editorModeToggle": "NQFaeG_editorModeToggle",
+		"tabBarPlus": "NQFaeG_tabBarPlus",
+		"uploadDropZonePill": "NQFaeG_uploadDropZonePill",
+		"pane": "NQFaeG_pane",
+		"browserBlockedButton": "NQFaeG_browserBlockedButton",
+		"mermaidModalHint": "NQFaeG_mermaidModalHint",
+		"editorPdfDragShieldActive": "NQFaeG_editorPdfDragShieldActive",
+		"uploadDropChatCard": "NQFaeG_uploadDropChatCard",
+		"browserInput": "NQFaeG_browserInput",
+		"boundaryError": "NQFaeG_boundaryError",
+		"explorerRoot": "NQFaeG_explorerRoot",
+		"dividerCol": "NQFaeG_dividerCol",
+		"uploadDropZoneText": "NQFaeG_uploadDropZoneText",
+		"uploadOverlayCancel": "NQFaeG_uploadOverlayCancel",
+		"browserBlockedDesc": "NQFaeG_browserBlockedDesc",
+		"mermaidModalStage": "NQFaeG_mermaidModalStage",
+		"gitDiffTabHeader": "NQFaeG_gitDiffTabHeader",
+		"editorBinaryNotice": "NQFaeG_editorBinaryNotice",
+		"browserStart": "NQFaeG_browserStart",
+		"browserBar": "NQFaeG_browserBar",
+		"dropDown": "NQFaeG_dropDown",
+		"openWithName": "NQFaeG_openWithName",
+		"tabBar": "NQFaeG_tabBar",
 		"tocItemText": "NQFaeG_tocItemText",
+		"browserFrame": "NQFaeG_browserFrame",
+		"gitError": "NQFaeG_gitError",
+		"dropCenter": "NQFaeG_dropCenter",
+		"dsh-toc-flash": "NQFaeG_dsh-toc-flash",
 		"tocFlash": "NQFaeG_tocFlash",
-		"tabList": "NQFaeG_tabList"
+		"explorerSelectionActions": "NQFaeG_explorerSelectionActions",
+		"explorerCopied": "NQFaeG_explorerCopied",
+		"bottomPanelHidden": "NQFaeG_bottomPanelHidden",
+		"tabActive": "NQFaeG_tabActive",
+		"selectionPopup": "NQFaeG_selectionPopup",
+		"explorerRail": "NQFaeG_explorerRail",
+		"gitPlaceholder": "NQFaeG_gitPlaceholder",
+		"openWithChevron": "NQFaeG_openWithChevron",
+		"paneDrop": "NQFaeG_paneDrop",
+		"nativeTabHost": "NQFaeG_nativeTabHost",
+		"browserBlocked": "NQFaeG_browserBlocked",
+		"mermaidModalToolbar": "NQFaeG_mermaidModalToolbar",
+		"splitCol": "NQFaeG_splitCol",
+		"explorerHiddenPane": "NQFaeG_explorerHiddenPane",
+		"uploadDropChatHint": "NQFaeG_uploadDropChatHint",
+		"explorerRailResize": "NQFaeG_explorerRailResize",
+		"browser": "NQFaeG_browser",
+		"paneTabHidden": "NQFaeG_paneTabHidden",
+		"mermaidModalButton": "NQFaeG_mermaidModalButton",
+		"editorStatus": "NQFaeG_editorStatus"
 	};
 	//#endregion
 	//#region src/client/mermaid.tsx

@@ -41,6 +41,8 @@ export declare class AcpVirtualHarness implements RemoteTypertGatewayTarget {
     private readonly imageAttachments;
     private closed;
     private readonly archivedSessionIds;
+    private readonly pinnedSessionIds;
+    private readonly workspaceOrder;
     private readonly unsubscribeArchived?;
     constructor(client: AcpClientLike, host: {
         deviceId: string;
@@ -62,21 +64,31 @@ export declare class AcpVirtualHarness implements RemoteTypertGatewayTarget {
     private rememberOpenedSession;
     workspaces(): Promise<AcpVirtualWorkspaceView[]>;
     private backendLabel;
+    private rememberWorkspace;
     selectWorkspace(workspaceId: string): Promise<AcpVirtualWorkspaceView>;
-    selectOrCreateWorkspace(path: string): Promise<AcpVirtualWorkspaceView>;
+    selectOrCreateWorkspace(path: string, title?: string): Promise<AcpVirtualWorkspaceView>;
     preferredSessionId(preferredSessionId?: string | undefined): Promise<string | undefined>;
     invoke(request: TypertGatewayRequest): Promise<unknown>;
     dispatch(endpoint: string, payload: unknown, signal: AbortSignal): Promise<TypertRpcResult>;
     open(endpoint: string, payload: unknown, signal: AbortSignal): Promise<AsyncIterable<unknown>>;
     close(): Promise<void>;
+    private hasExplicitWorkspaceOrder;
     private visibleWorkspaces;
     private createWorkspace;
     private renameWorkspace;
+    private deleteWorkspace;
+    private reorderWorkspaces;
+    private pinSession;
+    private unpinSession;
+    private searchSessions;
+    private forkSession;
+    private agentPresetsList;
+    private agentPresetSelect;
     private workspaceForSession;
     private archiveSession;
     private applyArchived;
     private createSession;
-    private ensureSessionRegistered;
+    private lookupSession;
     private prompt;
     private cancel;
     private renameSession;
@@ -111,6 +123,7 @@ export declare class AcpVirtualHarness implements RemoteTypertGatewayTarget {
     private hostSessionModels;
     private selectModel;
     private publishWorkspaceBaseline;
+    private publishProjection;
     private nextProjectionSeq;
 }
 export { acpCwdWorkspaceId, createAcpWorkspaceView, discoverAcpVirtualWorkspaces, modelCatalog } from './virtual-catalog.js';

@@ -186,14 +186,14 @@ Three tradeoff rules; read them before changing the range:
 | **both** | PASS | PASS | PASS |
 | `mode: 'src-json'` | reject | reject | reject |
 
-Historical evidence: the loader of `0.2.0-rc.2` measures the same as the `0.1.6-alpha.2` column: only `create()` passes, and only `schema` is rejected. Both codec keys remain because historical hosts checked different keys; this is not a current release-support promise. Current admission is tested as the matched `0.2.1-rc.5` (Loader 1.0.6) and `0.2.2-rc.3` (Loader 1.1.0) combinations, with the shape pinned by `test/typert-manifest.test.mjs` and host contract tests.
+Historical evidence: the loader of `0.2.0-rc.2` measures the same as the `0.1.6-alpha.2` column: only `create()` passes, and only `schema` is rejected. Both codec keys remain because historical hosts checked different keys; this is not a current release-support promise. Current admission is tested as the matched `0.2.1-rc.5` (Loader 1.0.6), `0.2.2-rc.3` and `0.2.2-rc.5` (the latter two Loader 1.1.0) combinations, with the shape pinned by `test/typert-manifest.test.mjs` and host contract tests.
 
 The browser half (`@deepseek-ai/dsh-typert-registry`'s `lib/client.js`) performs the same validation, so the codec in `lib/client.js` must be changed in step — changing only the host copy produces "the panel loads, and blows up on the first call".
 
 How to read a red drift job:
 
 - **A contract case (including real-hardware integration) fails** → the upstream contract really changed; fix the plugin at the failure point and ship a patch (that is how the 2026-09-21 run went red).
-- **The pin / lockfile assertions of `package-contract.test.mjs` fail in a local `npm test`** → the host is usable, go sync the pin: devDeps in `package.json`, `DEV_BASELINE`, and the "verified up to" in README / README.en / installation, then `pnpm install && npm test` to confirm everything is green.
+- **The pin / lockfile assertions of `package-contract.test.mjs` fail in a local `npm test`** → the host is usable, go sync the pin: devDeps in `package.json`, `DEV_BASELINE`, and the "verified up to" in README / README.en / installation, then `pnpm install && npm test` to confirm everything is green. If that new host should also stay on the supported surface (not just be the baseline), add a leg to `scripts/host-presets.mjs` and a row to the `ci.yml` matrix — the leg table lives only in the former, the matrix only names host versions, and `package-contract.test.mjs` fails when you change just one of them.
 
   This one is **not** reported by the drift job: its `files` is `grep -v 'package-contract'`, so the pin assertions by definition do not participate in drift determination. So "the drift job is green" does not mean the pin is current — between 2026-09-10 and 09-24 the pin sat at `0.1.5-rc.2` while `latest` was already `0.1.5-rc.3` and `next` was `0.1.7-rc.1`, unnoticed for two weeks; that is this gap. Syncing the pin has only two triggers: a human notices a new RC, or someone runs the full suite locally.
 
@@ -211,7 +211,7 @@ On 2026-09-29 the baseline was advanced to `0.2.0-rc.2` (run locally, 234 items)
 
 Earlier: contract cases were all green on `0.1.6-alpha.1`; on `0.1.6-alpha.2` the only pre-fix failure was the `typert-manifest` one, and after writing both keys it was 137/137 green per the drift job's file list (to reproduce: swap the whole host to alpha.2 and run that list).
 
-On 2026-10-24 the same method was re-run against `0.2.1-rc.3` with its own `cordis 4.0.5` / `cordis-plugin-loader 1.0.6`: **785/785** green (repo 1.8.3, so the suite has grown since the runs above). The one red in the first pass was environmental rather than a host difference: `real-host-loader`'s env-expression case reads `process.env.HOME`, and a PowerShell session only defines `USERPROFILE`; the same case fails identically on the `0.2.0-rc.2` baseline when `HOME` is absent. On 2026-10-30 the method was re-run against `0.2.1-rc.5` with the same `cordis 4.0.5` / `cordis-plugin-loader 1.0.6` pair: **812/812** green (repo 1.9.0), with that same `HOME` case as the only first-pass red.
+On 2026-10-24 the same method was re-run against `0.2.1-rc.3` with its own `cordis 4.0.5` / `cordis-plugin-loader 1.0.6`: **785/785** green (repo 1.8.3, so the suite has grown since the runs above). The one red in the first pass was environmental rather than a host difference: `real-host-loader`'s env-expression case reads `process.env.HOME`, and a PowerShell session only defines `USERPROFILE`; the same case fails identically on the `0.2.0-rc.2` baseline when `HOME` is absent. On 2026-10-30 the method was re-run against `0.2.1-rc.5` with the same `cordis 4.0.5` / `cordis-plugin-loader 1.0.6` pair: **812/812** green (repo 1.9.0), with that same `HOME` case as the only first-pass red. On 2026-11-19 the two 0.2.2 legs (`scripts/host-matrix.mjs`, repo 1.13.0) were **1130 items / 1097 passed / 33 skipped / 0 failed** each for `0.2.2-rc.3` and `0.2.2-rc.5`, and `0.2.1-rc.5` was **1130 / 1123 / 7 / 0** in the same round (the skipped sets differ per generation: the 0.2.1 leg skips 26 fewer cases and instead runs the ones only its own generation has).
 
 **All green on alpha does not mean it entered "verified"**: it was green this time because our changes happened to be purely additive (writing both codec keys + structurally probing cordis private fields), not because it is stable. So the compatibility table lists only `0.2.0-rc.2` — that is a promise; alpha is left to the weekly drift job to probe, and is not promised. This is the same tradeoff as item 2 above (prereleases need no special treatment).
 
@@ -586,6 +586,23 @@ shows at most 20 rows and each treemap column at most 6 blocks, with the folded 
 "{count} more" — capping is fine, silently drawing less is not. Order still comes from the Host (fixed
 category order, size-descending inside a category); the client never re-sorts, because a second sort order
 is a second source of truth.
+
+**The tool-definition price has exactly one source, and it is two levels deep**: the tool schemas are not on
+the surface (they are not messages), so `measure()` carries no node price for them; the only figure is the
+Host's `contextBreakdown` projection, computed by tokenMeter with the same estimator. That projection's
+**state is the outer object**: `{ systems, surfaceTokens, claim?, breakdown: { systemTokens, toolsTokens,
+messageTokens } }`, and the value to read, `toolsTokens`, sits inside. The assembly point (`lib/index.js`)
+unwraps it in exactly one place — 1.13.1 shipped without that step, so the tool card's "share of context"
+read `—` forever while the pure-function tests fed the inner object and stayed green on both sides. The
+regression case is `test/context-report-host.test.mjs`, and it feeds the **real host shape** to pin the seam.
+
+One risk worth recording: the Host marks this projection's accessor deprecated — `ctx.sessionProjections.
+stateOf(session, key)` still exists (the shape is identical on 0.2.1-rc.5 / 0.2.2-rc.3 / rc.5, and each key
+warns once), but the recommended path is an awaited registration's handle. There is no other public read on
+the Host side (`tokenMeter` exposes only `measure` / `contextPressure` / `estimateMessage`), so the two-arg
+form stays. If the Host ever removes it, the symptom is that "share of context" goes back to `—` (the error
+is caught inside a `try`, one warn only) rather than a broken panel — so that one cell needs a human look at
+every baseline bump.
 
 **Composition and total are separate accounts**. `measure()` node prices are the **estimated composition**
 (the Host's fixed "four characters per token plus structural overhead"); `contextPressure()`'s

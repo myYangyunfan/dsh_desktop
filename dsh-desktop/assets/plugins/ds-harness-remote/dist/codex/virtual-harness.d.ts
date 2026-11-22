@@ -3,7 +3,7 @@ import type { HarnessSessionGeneration } from '../harness-version.js';
 import { CodexSessionHistoryCache } from '../session-history-cache.js';
 import type { RemoteTypertGatewayTarget, TypertGatewayRequest, TypertRpcResult } from '../typert-gateway-contract.js';
 import type { CodexVirtualWorkspaceView } from './virtual-catalog.js';
-import type { CodexClientLike } from './virtual-values.js';
+import type { CodexClientLike, JsonRecord } from './virtual-values.js';
 /**
  * A plugin-owned virtual Harness target. It projects CodeX Thread/Turn data at
  * the existing Typert carrier boundary, so every UI layer above the
@@ -53,6 +53,9 @@ export declare class CodexVirtualHarness implements RemoteTypertGatewayTarget {
     get openedSessions(): ReadonlyMap<string, string>;
     private rememberOpenedSession;
     preferredSessionId(signal?: AbortSignal, preferredSessionId?: string | undefined): Promise<string | undefined>;
+    private readonly desktopFileReceipts;
+    assertDesktopUploadSession(sessionId: string, signal: AbortSignal): Promise<void>;
+    registerDesktopUpload(sessionId: string, receiptId: string, part: JsonRecord): void;
     invoke(request: TypertGatewayRequest): Promise<unknown>;
     dispatch(endpoint: string, payload: unknown, signal: AbortSignal): Promise<TypertRpcResult>;
     open(endpoint: string, payload: unknown, signal: AbortSignal): Promise<AsyncIterable<unknown>>;

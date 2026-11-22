@@ -154,8 +154,7 @@ export function resolveConfig(input = {}, env = process.env) {
                             : id === 'opencode' ? true : id === 'hermes' ? false : parsed.acp !== undefined),
                     command: configured?.command ?? legacy?.command ?? cursorCommand ?? defaults[id] ?? id,
                     args: id === 'codex' ? ['app-server'] : configured?.args ?? legacy?.args
-                        ?? (id === 'pi' || id === 'claude' ? [] : id === 'hermes' ? ['acp']
-                            : id === 'antigravity' ? ['--input-format', 'stream-json', '--output-format', 'stream-json'] : ['acp']),
+                        ?? (id === 'pi' || id === 'claude' ? [] : ['acp']),
                     ...(cwd === undefined ? {} : { cwd }),
                 };
             }),

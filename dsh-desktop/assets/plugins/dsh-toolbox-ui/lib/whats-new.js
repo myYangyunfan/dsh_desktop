@@ -919,4 +919,35 @@ export const WHATS_NEW = [
       },
     ],
   },
+  {
+    version: '1.13.1',
+    items: [
+      {
+        text: {
+          zh: '**内置工具清单补到两代宿主**：工具页现在认识 0.2.2-rc.5 与下一版宿主新增或改名的第一方工具（`cordis_inspect`、`enter_worktree` / `exit_worktree`、`list_session` / `list_workspace`），并补齐一直没登记的那些（office kit、终端面板、浏览器自动化、按别名委派等）的中文短名与用途分类。老宿主上的名字一个都没删——改名不在这里做，否则老宿主上的工具会掉进「其他插件与未识别」',
+          en: '**The built-in tool list now spans two host generations**: the Tools page recognises first-party tools added or renamed in 0.2.2-rc.5 and the next host release (`cordis_inspect`, `enter_worktree` / `exit_worktree`, `list_session` / `list_workspace`), and fills in the ones that were never registered (office kit, terminal panel, browser automation, delegate-by-alias, and more) with Chinese short names and purpose categories. Nothing was removed for older hosts: renaming belongs to a later window, otherwise those tools fall into "other plugins and unrecognised" there',
+        },
+        where: { zh: '面板「工具」页 → 内置工具分组', en: 'Panel "Tools" tab → built-in tool groups' },
+      },
+      {
+        text: {
+          zh: '**兼容 DSH 0.2.2-rc.5**：rc.3 与 rc.5 各按自己声明的 Cordis/Loader 组合在独立安装树上整腿跑一遍全量，开发基线随之升到 rc.5（cordis 4.1 / loader 1.1）；`0.2.2-rc.3` 仍在支持面上，0.2.1-rc.5 仍是下限',
+          en: '**DSH 0.2.2-rc.5 compatibility**: rc.3 and rc.5 each run the full suite on their own declared Cordis/Loader set in an isolated install tree, and the development baseline moved to rc.5 (cordis 4.1 / loader 1.1); `0.2.2-rc.3` stays on the supported surface and 0.2.1-rc.5 is still the floor',
+        },
+        where: { zh: '安装要求（README / 安装文档）', en: 'Requirements (README / installation guide)' },
+      },
+    ],
+  },
+  {
+    version: '1.13.2',
+    items: [
+      {
+        text: {
+          zh: '**工具卡现在会显示工具定义占了多少上下文**：这一格之前一直是「—」。原因是宿主那份构成数据的**外层还包着一层**（`{ systems, surfaceTokens, breakdown: { toolsTokens } }`），插件直接把外层当成了内层去读，于是永远读不到那个数——而单测喂的是内层对象，两边各自都绿。现在按宿主真实形状读，工具数 / 占上下文 / 搜索次数三格都有数',
+          en: '**The tool card now shows how much context the tool definitions take**: that cell used to read "—" permanently. The Host\'s composition data is **wrapped in one more layer** (`{ systems, surfaceTokens, breakdown: { toolsTokens } }`) and the plugin read the outer object as if it were the inner one, so the number was never there — while the unit tests fed the inner object and stayed green on both sides. It now reads the real Host shape, so all three cells (tool count / share of context / search count) carry numbers',
+        },
+        where: { zh: '面板「上下文」页 → 工具卡', en: 'Panel "Context" tab → tool card' },
+      },
+    ],
+  },
 ]

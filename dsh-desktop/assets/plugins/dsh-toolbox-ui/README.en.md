@@ -96,10 +96,10 @@ Tool definitions drop from **89.9K** to **9.4K** — **80.5K less (-89.5%)**, ab
 
 ```sh
 # Recommended: from npm — `dsh plugin update` then upgrades within ^1.x
-dsh plugin --profile web add dsh-toolbox-ui@^1.13.0
+dsh plugin --profile web add dsh-toolbox-ui@^1.13.2
 
 # Or pin a GitHub release tag (no automatic upgrades; re-add with a new tag)
-dsh plugin --profile web add github:Imzl-zl/dsh-toolbox-ui#v1.13.0
+dsh plugin --profile web add github:Imzl-zl/dsh-toolbox-ui#v1.13.2
 ```
 
 Then **restart `dsh web`**. To uninstall (your existing MCP entries stay):
@@ -172,7 +172,7 @@ When a newer version exists the panel shows a dismissible banner; pressing Upgra
 
 | Item | Verified |
 |---|---|
-| DeepSeek Harness | Admission support starts at `0.2.1-rc.5`; verified `0.2.1-rc.5` (Cordis 4.0.5 / Loader 1.0.6) and `0.2.2-rc.3` (Cordis 4.1.0 / Loader 1.1.0). Older hosts remain historical regression targets, not part of the current release support surface. |
+| DeepSeek Harness | Admission support starts at `0.2.1-rc.5`; verified `0.2.1-rc.5` (Cordis 4.0.5 / Loader 1.0.6), `0.2.2-rc.3` and `0.2.2-rc.5` (the latter two both Cordis 4.1.0 / Loader 1.1.0). Older hosts remain historical regression targets, not part of the current release support surface. |
 | Node.js | the runtime DSH ships with / supports |
 | Platform | Windows; Linux and macOS use the same DSH Web contract |
 

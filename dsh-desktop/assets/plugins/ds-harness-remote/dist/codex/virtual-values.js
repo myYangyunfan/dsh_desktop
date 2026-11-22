@@ -1,6 +1,7 @@
+import { VIRTUAL_HISTORY_MAX_MESSAGES } from '../virtual-history-pagination.js';
 export const CODEX_SESSION_PREFIX = 'codex:';
 /** The strict Remote history schema accepts at most 200 messages per page. */
-export const CODEX_HISTORY_PAGE_MAX_MESSAGES = 200;
+export const CODEX_HISTORY_PAGE_MAX_MESSAGES = VIRTUAL_HISTORY_MAX_MESSAGES;
 export function nativeThreadId(sessionId) {
     if (!sessionId.startsWith(CODEX_SESSION_PREFIX) || sessionId.length === CODEX_SESSION_PREFIX.length) {
         throw new Error('The selected Session does not belong to CodeX.');

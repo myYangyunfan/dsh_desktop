@@ -124,7 +124,7 @@ A six-color stacked bar against the model's full window (the two hatched masks a
 One stacked bar per model request — finer than per-message — so you watch the window grow turn by turn:
 
 - **✨ Step brief** — three plain-language rows under the chart: **User** recalls the message that opened the turn, **In** lists what newly entered (usually the previous tool results), **Response** shows the reply and/or tools called. Click a row to open that exact message in the Context browser.
-- **✂ marks the events** — compactions and prunes are pinned to the bar where they happened, so the drops explain themselves.
+- **Event flags** — compaction, pruning, skill injection, subagent creation, agent interaction and model switches, goal and team-task create/complete, todo add/done, user questions, plus the longest step and the biggest context jump, each get their own icon flag on the step they belong to; a dashed pole reaches the baseline, hover for the reading, click to open the step. Overview folds nearby events into one aggregate flag that jumps straight back to its step.
 - **Read it your way** — **Step / Turn** granularity, **Total** (cumulative makeup) or **Delta** (each request's signed change), and sideways scrolling through the whole session. In Delta mode, growth piles up above the baseline and a compaction dives below it:
 
 ![Context Trend in Delta mode](https://raw.githubusercontent.com/bowenliang123/dsh-context/main/docs/history-delta.png)
@@ -161,7 +161,7 @@ Pick **Live** or any retained step, and browse what that request was assembled f
 
 ![Context Events with a compaction](https://raw.githubusercontent.com/bowenliang123/dsh-context/main/docs/context-events.png)
 
-Every injection, compaction, prune, model switch, and plan-mode toggle — labeled with its producer (instruction file, plugin id, skill name), its net token delta (compactions show what they reclaimed), turn/step, and time. The **Inject / Compact / Prune / Switch / Mode** chips filter the log by kind, each carrying its whole-session event tally.
+Every injection, compaction, prune, model switch, and plan-mode toggle — labeled with its producer (instruction file, plugin id, skill name), its net token delta (compactions show what they reclaimed), turn/step, and time. The **All / Inject / Compact / Prune / Model Switching** chips narrow the log to one kind at a time, each carrying its whole-session event tally.
 
 ### 📁 File Activity — what the agent did to your files
 
@@ -230,7 +230,7 @@ The Context Insights preset buttons write the pick back as the stored default; e
 
 ## Good to know
 
-- **Cache footprint** — the plugin checkpoints only a compact per-session summary (composition, counts, cost/timing, model info) into dsh's projection cache; the heavy per-event details (surface text, request breakdowns, file ops, command programs, spans) are refolded from the durable log when a panel needs them, so the cache stays small even on long sessions. Detail views are bounded (steps 1500 · turns 300 · events 400 · surface nodes 2000 · archive 400 · file ops 400 · commands 400).
+- **Cache footprint** — the plugin checkpoints only a compact per-session summary (composition, counts, cost/timing, model info) into dsh's projection cache; the heavy per-event details (surface text, request breakdowns, file ops, command programs, spans) are refolded from the durable log when a panel needs them, so the cache stays small even on long sessions. Detail views page the complete request, turn, event, surface-node, archive, file-op, command and span history from the durable log, loading each collection on demand when its card opens.
 - **Estimates vs actuals** — category figures use dsh's own fixed-density heuristic (the same one as its built-in token meter); the pinned trend details show provider-reported actuals next to them, and the Token card pairs its ≈-estimated composition shares with the provider-exact billed total.
 - **Compatibility** — works on `@deepseek-ai/dsh` from **0.2.0-rc.2** (the `0.2.0` and `0.2.1` lines verified on their rc.2 releases, and the `0.2.2` line on its rc.1 and rc.3 releases), the V4 session-log generation, from one shape-driven code path. The per-release matrix and how it is verified: [docs/compatibility.md](docs/compatibility.md).
 - **I18n** — UI in 简体中文, English, 日本語, Español, Français, Deutsch, Русский, and Português (switching languages needs dsh 0.2.2+; earlier supported lines offer Chinese and English only).

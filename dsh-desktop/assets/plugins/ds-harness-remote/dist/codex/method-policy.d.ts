@@ -54,6 +54,10 @@ declare const schemas: {
         beforeSeq: z.ZodOptional<z.ZodNumber>;
         throughSeq: z.ZodOptional<z.ZodNumber>;
         maxMessages: z.ZodOptional<z.ZodNumber>;
+        turnWindow: z.ZodOptional<z.ZodUnion<readonly [z.ZodNumber, z.ZodObject<{
+            minMessages: z.ZodOptional<z.ZodNumber>;
+            minTurns: z.ZodOptional<z.ZodNumber>;
+        }, z.core.$strict>]>>;
     }, z.core.$strict>;
     readonly 'dsh/sessionAttachment': z.ZodObject<{
         threadId: z.ZodString;
@@ -161,7 +165,7 @@ declare const schemas: {
     }, z.core.$strict>;
 };
 export type AllowedCodexAppMethod = keyof typeof schemas;
-export declare const CODEX_APP_ALLOWLIST: readonly ("thread/list" | "project/list" | "model/list" | "turn/start" | "thread/resume" | "dsh/directoryList" | "thread/archive" | "thread/start" | "thread/fork" | "turn/steer" | "thread/read" | "turn/interrupt" | "thread/name/set" | "dsh/sessionHistory" | "project/create" | "account/read" | "dsh/sessionAttachment" | "thread/unarchive" | "thread/unsubscribe")[];
+export declare const CODEX_APP_ALLOWLIST: readonly ("turn/start" | "thread/list" | "project/list" | "model/list" | "thread/read" | "thread/resume" | "dsh/directoryList" | "thread/archive" | "thread/start" | "thread/fork" | "turn/steer" | "turn/interrupt" | "thread/name/set" | "dsh/sessionHistory" | "project/create" | "account/read" | "dsh/sessionAttachment" | "thread/unarchive" | "thread/unsubscribe")[];
 export declare function parseCodexCall(method: string, params: unknown): {
     method: AllowedCodexAppMethod;
     params: Record<string, unknown>;

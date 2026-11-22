@@ -1,6 +1,6 @@
 import { CodexRemoteClient } from '@dsh-remote/client-core';
 import { probeRemoteHostFeatures } from './client-capabilities.js';
-import { ClientModeError, fail, isRecord, ok, record } from './client-runtime-contract.js';
+import { ClientModeError, fail, isRecord, ok, readAccountVerification, record } from './client-runtime-contract.js';
 import { LoopbackPreview } from './loopback-preview.js';
 import { isAllowedPluginRoute } from './plugin-route-bridge.js';
 export class ClientControl {
@@ -24,7 +24,7 @@ export class ClientControl {
                 if (typeof value.email !== 'string' || typeof value.password !== 'string') {
                     throw new ClientModeError('INVALID_MESSAGE', 'Email and password are required.');
                 }
-                return ok(await this.context.authorizeClientWithAccount(value.email, value.password));
+                return ok(await this.context.authorizeClientWithAccount(value.email, value.password, readAccountVerification(value.verification)));
             }
             if (endpoint === 'client.account.qr.start') {
                 const value = record(payload);
@@ -207,6 +207,50 @@ export class ClientControl {
                 }
                 return ok(await this.context.createCursorWorkspace(value.targetDeviceId, value.path, signal, 'hermes'));
             }
+            if (endpoint === 'acp.workspaces.list') {
+                const value = record(payload);
+                if (typeof value.targetDeviceId !== 'string' || typeof value.backend !== 'string' || value.backend.trim() === '') {
+                    throw new ClientModeError('INVALID_MESSAGE', 'A Host and ACP backend are required.');
+                }
+                return ok(await this.context.listCursorWorkspaces(value.targetDeviceId, signal, value.backend.trim()));
+            }
+            if (endpoint === 'acp.workspace.open') {
+                const value = record(payload);
+                if (typeof value.targetDeviceId !== 'string' || typeof value.workspaceId !== 'string' || typeof value.backend !== 'string' || value.backend.trim() === '') {
+                    throw new ClientModeError('INVALID_MESSAGE', 'A Host, ACP backend, and Workspace are required.');
+                }
+                return ok(await this.context.openCursorWorkspace(value.targetDeviceId, value.workspaceId, signal, value.backend.trim()));
+            }
+            if (endpoint === 'acp.workspace.create') {
+                const value = record(payload);
+                if (typeof value.targetDeviceId !== 'string' || typeof value.path !== 'string' || typeof value.backend !== 'string' || value.backend.trim() === '') {
+                    throw new ClientModeError('INVALID_MESSAGE', 'A Host, ACP backend, and project directory are required.');
+                }
+                return ok(await this.context.createCursorWorkspace(value.targetDeviceId, value.path, signal, value.backend.trim()));
+            }
+            const dynamicListMatch = /^([a-z0-9][a-z0-9_-]{0,31})\.workspaces\.list$/.exec(endpoint);
+            if (dynamicListMatch !== null) {
+                const value = record(payload);
+                if (typeof value.targetDeviceId !== 'string')
+                    throw new ClientModeError('INVALID_MESSAGE', 'A Host is required.');
+                return ok(await this.context.listCursorWorkspaces(value.targetDeviceId, signal, dynamicListMatch[1]));
+            }
+            const dynamicOpenMatch = /^([a-z0-9][a-z0-9_-]{0,31})\.workspace\.open$/.exec(endpoint);
+            if (dynamicOpenMatch !== null) {
+                const value = record(payload);
+                if (typeof value.targetDeviceId !== 'string' || typeof value.workspaceId !== 'string') {
+                    throw new ClientModeError('INVALID_MESSAGE', `A Host and ${dynamicOpenMatch[1]} Workspace are required.`);
+                }
+                return ok(await this.context.openCursorWorkspace(value.targetDeviceId, value.workspaceId, signal, dynamicOpenMatch[1]));
+            }
+            const dynamicCreateMatch = /^([a-z0-9][a-z0-9_-]{0,31})\.workspace\.create$/.exec(endpoint);
+            if (dynamicCreateMatch !== null) {
+                const value = record(payload);
+                if (typeof value.targetDeviceId !== 'string' || typeof value.path !== 'string') {
+                    throw new ClientModeError('INVALID_MESSAGE', `A Host and ${dynamicCreateMatch[1]} project directory are required.`);
+                }
+                return ok(await this.context.createCursorWorkspace(value.targetDeviceId, value.path, signal, dynamicCreateMatch[1]));
+            }
             if (endpoint === 'workspace.selection.consume') {
                 const value = record(payload);
                 if (typeof value.targetDeviceId !== 'string' || typeof value.workspaceId !== 'string') {
@@ -286,7 +330,7 @@ export class ClientControl {
                 if (typeof value.email !== 'string' || typeof value.password !== 'string') {
                     throw new ClientModeError('INVALID_MESSAGE', 'Email and password are required.');
                 }
-                return ok(await this.context.host.authorizeHostWithAccount(value.email, value.password));
+                return ok(await this.context.host.authorizeHostWithAccount(value.email, value.password, readAccountVerification(value.verification)));
             }
             if (endpoint === 'host.authorization.set') {
                 const value = record(payload);

@@ -124,7 +124,7 @@ Uma barra empilhada de seis cores comparada à janela completa do modelo (as dua
 Uma barra empilhada por requisição ao modelo — mais detalhada que por mensagem — para acompanhar o crescimento da janela turno a turno:
 
 - **✨ Resumo da etapa** — três linhas em linguagem simples sob o gráfico: **Usuário** recupera a mensagem que abriu o turno, **Entrada** lista o que acabou de entrar (normalmente os resultados anteriores das ferramentas), **Resposta** mostra a resposta e/ou as ferramentas chamadas. Clique em uma linha para abrir exatamente essa mensagem no Navegador de contexto.
-- **✂ marca os eventos** — compactações e podas são fixadas na barra em que aconteceram, para que as quedas se expliquem por si.
+- **Bandeiras de eventos** — compactação, poda, injeção de habilidade, criação de subagente, interação entre agentes e troca de modelo, criação/conclusão de objetivo e tarefa de equipe, adição/conclusão de tarefa, perguntas ao usuário, além do passo mais longo e do maior salto de contexto, exibem seu próprio ícone no passo correspondente; um mastro tracejado desce até a linha de base, passe o cursor para ler e clique para abrir o passo. Na visão geral, eventos próximos se agrupam em uma bandeira agregada que volta direto ao seu passo.
 - **Leia do seu jeito** — granularidade **Etapa / Turno**, **Total** (composição cumulativa) ou **Delta** (mudança com sinal de cada requisição), e rolagem lateral por toda a sessão. No modo Delta, o crescimento se acumula acima da linha de base e uma compactação mergulha abaixo dela:
 
 ![Tendência de contexto no modo Delta](https://raw.githubusercontent.com/bowenliang123/dsh-context/main/docs/history-delta.png)
@@ -161,7 +161,7 @@ Escolha **Ao vivo** ou qualquer etapa retida e explore com o que essa requisiç�
 
 ![Eventos de contexto com uma compactação](https://raw.githubusercontent.com/bowenliang123/dsh-context/main/docs/context-events.png)
 
-Cada injeção, compactação, poda, troca de modelo e alternância do modo de plano — identificada com seu produtor (arquivo de instruções, id do plugin, nome da skill), seu delta líquido de tokens (compactações mostram o que recuperaram), turno/etapa e horário. Os chips **Injetar / Compactar / Podar / Trocar / Modo** filtram o log por tipo, cada um com sua contagem de eventos de toda a sessão.
+Cada injeção, compactação, poda, troca de modelo e alternância do modo de plano — identificada com seu produtor (arquivo de instruções, id do plugin, nome da skill), seu delta líquido de tokens (compactações mostram o que recuperaram), turno/etapa e horário. Os chips **Todos / Injetar / Compactar / Podar / Troca de modelo** filtram o log para um único tipo por vez e cada um mostra sua contagem de eventos de toda a sessão.
 
 ### 📁 Atividade de arquivos — o que o agente fez com seus arquivos
 
@@ -230,7 +230,7 @@ Os botões de predefinição dos Insights de contexto gravam a escolha como padr
 
 ## Informações úteis
 
-- **Pegada do cache** — o plugin salva checkpoints apenas de um resumo compacto por sessão (composição, contagens, custo/tempo, informações do modelo) no cache de projeção do dsh; os detalhes pesados por evento (texto das superfícies, detalhamentos de requisições, operações de arquivos, programas de comandos, intervalos) são reconstituídos a partir do log durável quando um painel precisa deles, para que o cache permaneça pequeno mesmo em sessões longas. As visualizações de detalhes são limitadas (etapas 1500 · turnos 300 · eventos 400 · nós de superfície 2000 · arquivo 400 · operações de arquivos 400 · comandos 400).
+- **Pegada do cache** — o plugin salva checkpoints apenas de um resumo compacto por sessão (composição, contagens, custo/tempo, informações do modelo) no cache de projeção do dsh; os detalhes pesados por evento (texto das superfícies, detalhamentos de requisições, operações de arquivos, programas de comandos, intervalos) são reconstituídos a partir do log durável quando um painel precisa deles, para que o cache permaneça pequeno mesmo em sessões longas. As visualizações de detalhes carregam por páginas o histórico completo de requisições, turnos, eventos, nós de superfície, arquivo, operações de arquivos, comandos e intervalos do log durável, carregando cada coleção quando seu cartão é aberto.
 - **Estimativas versus valores reais** — os valores por categoria usam a própria heurística de densidade fixa do dsh (a mesma do seu medidor de tokens integrado); os detalhes fixados da tendência mostram os valores reais informados pelo provedor ao lado deles, e o cartão Tokens combina suas participações de composição estimadas com ≈ ao total faturado exato do provedor.
 - **Compatibilidade** — funciona com `@deepseek-ai/dsh` a partir de **0.2.0-rc.2** (as linhas `0.2.0` e `0.2.1` verificadas em suas versões rc.2, e a linha `0.2.2` em suas versões rc.1 e rc.3), a geração de log de sessão V4, por um único caminho de código orientado pela estrutura. A matriz por versão e como ela é verificada: [docs/compatibility.md](docs/compatibility.md).
 - **I18n** — interface em 简体中文, English, 日本語, Español, Français, Deutsch, Русский e Português (trocar de idioma exige dsh 0.2.2+; as linhas suportadas anteriores oferecem apenas chinês e inglês).

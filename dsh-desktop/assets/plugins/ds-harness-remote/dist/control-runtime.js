@@ -5,12 +5,15 @@ import { ClientModeError, } from './client-runtime.js';
 import { IdentityInvalidError, IdentityStore, resetDefaultIdentityRoles, serverStorageDirectory, } from './identity-store.js';
 import { safeStartupError } from './safe-error.js';
 import { ClientServerApi, HostServerApi } from './server-api.js';
+import { readAccountVerification } from './client-runtime-contract.js';
+import { AccountTwoFactorRequired } from './account-two-factor-required.js';
 import { ServerCredentialStore, ServerCredentialsInvalidError } from './server-credentials.js';
 import { registerControlRoute } from './control-route.js';
 import { ControlStatusStream } from './control-stream.js';
 import { codexBinaryCandidates } from './codex/domain.js';
 import { cursorBinaryCandidates } from './acp/gateway.js';
-import { defaultCheckExecutable, installOrConfigureBackend, isBuiltinAcpBackend } from './acp/backend-installer.js';
+import { isValidAcpBackendId } from './acp/method-policy.js';
+import { defaultCheckExecutable, installOrConfigureBackend, isBuiltinAcpBackend, lookupSystemPath } from './acp/backend-installer.js';
 /** Loopback-only control plane shared by Local/Remote switching and plugin setup. */
 export class PluginControlRuntime {
     config;
@@ -182,7 +185,7 @@ export class PluginControlRuntime {
                 if (typeof value.email !== 'string' || typeof value.password !== 'string') {
                     throw new ClientModeError('INVALID_MESSAGE', 'Email and password are required.');
                 }
-                return ok(await this.host.authorizeHostWithAccount(value.email, value.password));
+                return ok(await this.host.authorizeHostWithAccount(value.email, value.password, readAccountVerification(value.verification)));
             }
             if (endpoint === 'host.registration-code.submit') {
                 if (this.host === undefined)
@@ -242,7 +245,7 @@ export class PluginControlRuntime {
             authorization = await api.authorizeWithAccount(identity, value.email, value.password, async () => {
                 identity = await identities.reset(hostname());
                 return identity;
-            });
+            }, readAccountVerification(value.verification));
         }
         if (value.role === 'client' && resolveConfig(this.settings.get()).hostControl?.enabled !== false) {
             await this.client?.authorizeHostByDefault();
@@ -530,13 +533,21 @@ export class PluginControlRuntime {
         if (typeof value.id !== 'string' || typeof value.command !== 'string' || !Array.isArray(value.args) || !value.args.every(item => typeof item === 'string')) {
             throw new ClientModeError('INVALID_MESSAGE', 'ACP name, command, and arguments are required.');
         }
-        const current = resolveConfig(this.settings.get());
-        if (value.id === 'kimi')
+        const id = value.id.trim().toLowerCase();
+        const command = value.command.trim();
+        if (!command)
+            throw new ClientModeError('INVALID_MESSAGE', 'ACP command is required.');
+        if (id === 'kimi')
             throw new ClientModeError('INVALID_MESSAGE', 'Kimi is not implemented.');
-        if (current.acp?.backends.some(item => item.id === value.id))
+        if (!isValidAcpBackendId(id)) {
+            throw new ClientModeError('INVALID_MESSAGE', 'ACP backend id must match ^[a-z0-9][a-z0-9_-]{0,31}$ and cannot use reserved names.');
+        }
+        const current = resolveConfig(this.settings.get());
+        if (current.acp?.backends.some(item => item.id === id))
             throw new ClientModeError('INVALID_MESSAGE', 'ACP backend already exists.');
-        const backends = [...(current.acp?.backends ?? []), { id: value.id, command: value.command, args: value.args, enabled: false }];
-        const next = resolveConfig({ ...editableConfig(current), acp: { enabled: current.acp?.enabled ?? true, backends } });
+        const enabled = value.enabled === true;
+        const backends = [...(current.acp?.backends ?? []), { id, command, args: value.args, enabled }];
+        const next = resolveConfig({ ...editableConfig(current), acp: { enabled: enabled || (current.acp?.enabled ?? true), backends } });
         await this.settings.replace(editableConfig(next));
         await this.host?.setAgentBackends?.(resolveConfig(this.settings.get()));
         return { ...await this.settingsView(), applies: 'live' };
@@ -580,7 +591,7 @@ export class PluginControlRuntime {
         const defaultArgsMap = {
             codex: ['app-server'],
             cursor: ['acp'],
-            antigravity: ['--input-format', 'stream-json', '--output-format', 'stream-json'],
+            antigravity: ['acp'],
             hermes: ['acp'],
             opencode: ['acp'],
             pi: [],
@@ -673,6 +684,7 @@ export class PluginControlRuntime {
         const associations = await this.associations(config);
         const role = config.role === 'client' ? 'client' : 'host';
         const association = associations[role];
+        const acpDiagnostics = this.host?.acpDiagnostics?.();
         return {
             config,
             deviceName: hostname(),
@@ -680,6 +692,7 @@ export class PluginControlRuntime {
             applies: 'restart',
             associations,
             acpAvailability: Object.fromEntries((config.acp?.backends ?? []).map(item => [item.id, backendCommandAvailable(item.id, item.command ?? '')])),
+            ...(acpDiagnostics === undefined || Object.keys(acpDiagnostics).length === 0 ? {} : { acpDiagnostics }),
             ...(association === undefined ? {} : { association }),
             ...(this.startupFailure === undefined ? {} : {
                 startupError: safeStartupError(this.startupFailure),
@@ -762,13 +775,20 @@ function backendCommandAvailable(backend, command) {
         return true;
     const candidates = backend === 'codex' ? codexBinaryCandidates(trimmed)
         : backend === 'cursor' || backend === 'antigravity' || backend === 'opencode' ? cursorBinaryCandidates(trimmed) : [trimmed];
-    return candidates.some(candidate => defaultCheckExecutable(candidate) || commandAvailable(candidate));
+    return candidates.some(candidate => defaultCheckExecutable(candidate) || (!hasPathSeparator(candidate) && commandAvailable(candidate)));
+}
+function hasPathSeparator(command) {
+    return command.includes('/') || command.includes('\\');
 }
 function commandAvailable(command) {
+    if (process.platform === 'win32') {
+        return lookupSystemPath(command, 'win32') !== undefined;
+    }
     try {
-        execFileSync(process.platform === 'win32' ? 'where' : 'which', [command], {
+        execFileSync('which', [command], {
             stdio: 'ignore',
             timeout: 5000,
+            windowsHide: true,
         });
         return true;
     }
@@ -832,7 +852,10 @@ function fail(error) {
         error: {
             code: 'internal',
             message: source?.message ?? 'The plugin control operation failed.',
-            details: remoteCode === undefined ? {} : { remoteCode },
+            details: {
+                ...(remoteCode === undefined ? {} : { remoteCode }),
+                ...(source instanceof AccountTwoFactorRequired ? { challenge: source.challenge, serverUrl: source.serverUrl } : {}),
+            },
         },
     };
 }

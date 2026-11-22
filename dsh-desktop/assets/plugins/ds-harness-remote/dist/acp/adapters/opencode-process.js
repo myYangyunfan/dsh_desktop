@@ -1,4 +1,5 @@
-import { spawn } from 'node:child_process';
+import { buildAuthDiagnosticFromMetadata, detectUpstreamAuthFailure, parseAvailableCommands, parseInitializeMetadata, } from './auth-diagnostics.js';
+import { spawnCommand } from '../windows-spawn.js';
 import { Buffer } from 'node:buffer';
 import { realpath } from 'node:fs/promises';
 import { PLUGIN_VERSION } from '../../version.js';
@@ -11,6 +12,7 @@ const ACP_PROMPT_TIMEOUT_MS = 10 * 60_000;
 const ACP_START_TIMEOUT_MS = 20_000;
 const MAX_ACP_LINE_BYTES = 288 * 1024 * 1024;
 const MAX_STDERR_CAPTURE_BYTES = 4 * 1024;
+const MAX_OPENCODE_SESSION_LIST = 1000;
 export class OpencodeAcpError extends Error {
     code;
     constructor(code, message, options) {
@@ -45,11 +47,23 @@ export class OpencodeAcpClient {
     nativeApi;
     archivedSessions = new Set();
     archivingSessions = new Set();
+    sessionCommands = new Map();
+    initMetadata;
+    lastAuthDiagnostic;
     constructor(binary = 'opencode', logger, spawnAcp, options = {}) {
         this.binary = binary;
         this.logger = logger;
         this.spawnAcp = spawnAcp;
         this.options = options;
+    }
+    diagnostics() {
+        return buildAuthDiagnosticFromMetadata('opencode', this.initMetadata, this.lastAuthDiagnostic, this.ready);
+    }
+    capabilities() {
+        return this.initMetadata?.agentCapabilities ?? {};
+    }
+    authMethods() {
+        return this.initMetadata?.authMethods ?? [];
     }
     start() {
         if (this.closed)
@@ -178,8 +192,11 @@ export class OpencodeAcpClient {
                 this.loads.delete(id);
             }
         }
-        if (method === 'session/new')
+        if (method === 'session/new' || method === 'session/fork')
             return this.loadSession(method, params, budget);
+        if (method === 'dsh/sessionCommands') {
+            return { commands: id ? [...(this.sessionCommands.get(id) ?? [])] : [] };
+        }
         if (method === 'dsh/sessionModels' || method === 'dsh/selectModel') {
             const models = id ? this.models.get(id) : undefined;
             if (!models)
@@ -193,6 +210,27 @@ export class OpencodeAcpClient {
                 const result = await models.select(id, p.model, p.reasoningEffort, (method, params) => this.request(method, params, budget));
                 this.publish({ kind: 'notification', method: 'session/update', params: { sessionId: id,
                         update: { sessionUpdate: 'model_selection', selected: result.selected } } });
+                return result;
+            }
+            finally {
+                this.busy.delete(id);
+            }
+        }
+        if (method === 'dsh/sessionModes' || method === 'session/set_mode') {
+            const models = id ? this.models.get(id) : undefined;
+            if (!models)
+                throw new OpencodeAcpError('ACP_SESSION_NOT_LOADED', 'Load the OpenCode session before changing its mode.');
+            if (method === 'dsh/sessionModes')
+                return models.modesCatalog();
+            if (this.busy.has(id))
+                throw new OpencodeAcpError('PROMPT_IN_PROGRESS', 'Stop the OpenCode reply before changing its mode.');
+            this.busy.add(id);
+            try {
+                const result = await models.setMode(id, p.modeId, (method, params) => this.request(method, params, budget));
+                this.publish({ kind: 'notification', method: 'session/update', params: {
+                        sessionId: id,
+                        update: { sessionUpdate: 'current_mode_update', currentModeId: result.currentModeId },
+                    } });
                 return result;
             }
             finally {
@@ -221,9 +259,25 @@ export class OpencodeAcpClient {
         if (method === 'session/list' && nativeApi && isRecord(result) && Array.isArray(result.sessions)) {
             // ACP list may return archived native records, including after a restart.
             // Recheck every item against OpenCode; process-local caches are insufficient.
-            if (result.sessions.length > 1000)
-                throw new OpencodeAcpError('INVALID_MESSAGE', 'The OpenCode catalog page is too large.');
-            const items = result.sessions;
+            const rawItems = result.sessions;
+            const items = rawItems.length > MAX_OPENCODE_SESSION_LIST
+                ? [...rawItems]
+                    .sort((a, b) => {
+                    const ta = isRecord(a) && typeof a.updatedAt === 'string' ? Date.parse(a.updatedAt) || 0 : 0;
+                    const tb = isRecord(b) && typeof b.updatedAt === 'string' ? Date.parse(b.updatedAt) || 0 : 0;
+                    return tb - ta;
+                })
+                    .slice(0, MAX_OPENCODE_SESSION_LIST)
+                : rawItems;
+            const realpathCache = new Map();
+            const resolveCwd = (rawCwd) => {
+                let cached = realpathCache.get(rawCwd);
+                if (!cached) {
+                    cached = realpath(rawCwd).catch(() => undefined);
+                    realpathCache.set(rawCwd, cached);
+                }
+                return cached;
+            };
             const archivedItems = new Map();
             let next = 0;
             await Promise.all(Array.from({ length: Math.min(4, items.length) }, async () => {
@@ -234,10 +288,22 @@ export class OpencodeAcpClient {
                     const item = items[index];
                     if (!isRecord(item) || typeof item.sessionId !== 'string' || typeof item.cwd !== 'string')
                         continue;
-                    const cwd = await realpath(item.cwd).catch(() => undefined);
+                    let cwd;
+                    try {
+                        cwd = await resolveCwd(item.cwd);
+                    }
+                    catch {
+                        continue;
+                    }
                     if (!cwd)
                         continue;
-                    const archived = await nativeApi.isArchived(item.sessionId, cwd);
+                    let archived;
+                    try {
+                        archived = await nativeApi.isArchived(item.sessionId, cwd);
+                    }
+                    catch {
+                        continue;
+                    }
                     if (archived)
                         this.archivedSessions.add(item.sessionId);
                     else
@@ -316,9 +382,18 @@ export class OpencodeAcpClient {
         if (this.process !== undefined) {
             throw new OpencodeAcpError('OPENCODE_STARTING', 'OpenCode ACP is already starting.');
         }
+        this.failureNotified = false;
         let child;
-        if (this.spawnAcp)
-            child = this.spawnAcp(this.binary);
+        if (this.spawnAcp) {
+            try {
+                child = this.spawnAcp(this.binary);
+            }
+            catch (error) {
+                const cause = error instanceof Error ? error : new Error(String(error));
+                this.handleProcessFailure('OPENCODE_BINARY_UNAVAILABLE', cause);
+                throw new OpencodeAcpError('OPENCODE_BINARY_UNAVAILABLE', 'OpenCode ACP communication failed.', { cause });
+            }
+        }
         else {
             const args = this.options.args ?? ['acp'];
             const nativeApiSupported = await opencodeHasNativeApi(this.binary, args, this.options.cwd, this.startupAbort.signal);
@@ -327,13 +402,19 @@ export class OpencodeAcpClient {
                 throw new OpencodeAcpError('OPENCODE_CLOSED', 'OpenCode ACP was closed.');
             if (port !== undefined)
                 this.nativeApi = new OpencodeNativeApi(`http://127.0.0.1:${port}`);
-            child = spawn(this.binary, opencodePrivateArgs(args, port), {
-                cwd: this.options.cwd, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true,
-                env: { ...process.env, ...(this.nativeApi ? { OPENCODE_SERVER_USERNAME: 'opencode', OPENCODE_SERVER_PASSWORD: this.nativeApi.password } : {}) },
-            });
+            try {
+                child = spawnCommand(this.binary, opencodePrivateArgs(args, port), {
+                    cwd: this.options.cwd, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true,
+                    env: { ...process.env, ...(this.nativeApi ? { OPENCODE_SERVER_USERNAME: 'opencode', OPENCODE_SERVER_PASSWORD: this.nativeApi.password } : {}) },
+                });
+            }
+            catch (error) {
+                const cause = error instanceof Error ? error : new Error(String(error));
+                this.handleProcessFailure('OPENCODE_BINARY_UNAVAILABLE', cause);
+                throw new OpencodeAcpError('OPENCODE_BINARY_UNAVAILABLE', 'OpenCode ACP communication failed.', { cause });
+            }
         }
         this.process = child;
-        this.failureNotified = false;
         this.stdoutBuffer = Buffer.alloc(0);
         this.stderrBytes = 0;
         child.stdout.on('data', chunk => {
@@ -369,7 +450,7 @@ export class OpencodeAcpClient {
             }
         });
         try {
-            await this.request('initialize', {
+            const initResult = await this.request('initialize', {
                 protocolVersion: 1,
                 clientCapabilities: {
                     fs: { readTextFile: false, writeTextFile: false },
@@ -380,6 +461,8 @@ export class OpencodeAcpClient {
                     version: PLUGIN_VERSION,
                 },
             }, ACP_START_TIMEOUT_MS);
+            this.initMetadata = parseInitializeMetadata(initResult);
+            this.lastAuthDiagnostic = undefined;
             if (this.closed || this.process !== child)
                 throw new OpencodeAcpError('OPENCODE_CLOSED', 'OpenCode ACP was closed.');
             this.ready = true;
@@ -451,7 +534,10 @@ export class OpencodeAcpClient {
             if (pending === undefined)
                 return;
             if ('error' in value && value.error !== undefined) {
-                pending.reject(new OpencodeAcpError('OPENCODE_UPSTREAM_ERROR', safeUpstreamError(value.error)));
+                const authDiagnostic = detectUpstreamAuthFailure('opencode', value.error, this.initMetadata?.authMethods);
+                if (authDiagnostic)
+                    this.lastAuthDiagnostic = authDiagnostic;
+                pending.reject(new OpencodeAcpError('OPENCODE_UPSTREAM_ERROR', authDiagnostic?.guidance ?? safeUpstreamError(value.error)));
             }
             else {
                 pending.resolve(value.result);
@@ -472,6 +558,9 @@ export class OpencodeAcpClient {
         }
         if (inbound.kind === 'notification' && inbound.method === 'session/update' && isRecord(params) && typeof params.sessionId === 'string') {
             this.models.get(params.sessionId)?.update(params.update);
+            if (isRecord(params.update) && params.update.sessionUpdate === 'available_commands_update') {
+                this.sessionCommands.set(params.sessionId, parseAvailableCommands(params.update));
+            }
             // session/load replays belong to the separate history reader, not live UI.
             if (this.loads.has(params.sessionId) && !this.options.historyReader)
                 return;

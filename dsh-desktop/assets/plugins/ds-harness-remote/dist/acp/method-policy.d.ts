@@ -1,14 +1,7 @@
 export { ACP_TOOL_CALL_ENDPOINTS, ACP_TOOL_STREAM_ENDPOINTS } from '@dsh-remote/protocol';
 import { z } from 'zod';
 export declare const acpToolStreamSchema: z.ZodObject<{
-    backend: z.ZodEnum<{
-        cursor: "cursor";
-        claude: "claude";
-        opencode: "opencode";
-        pi: "pi";
-        hermes: "hermes";
-        antigravity: "antigravity";
-    }>;
+    backend: z.ZodString;
     endpoint: z.ZodEnum<{
         "workspaceFiles/changes": "workspaceFiles/changes";
         "terminal/follow": "terminal/follow";
@@ -23,14 +16,7 @@ declare const schemas: {
     }, z.core.$strict>;
     readonly 'dsh/toolCall': z.ZodObject<{
         sessionId: z.ZodString;
-        backend: z.ZodEnum<{
-            cursor: "cursor";
-            claude: "claude";
-            opencode: "opencode";
-            pi: "pi";
-            hermes: "hermes";
-            antigravity: "antigravity";
-        }>;
+        backend: z.ZodString;
         endpoint: z.ZodEnum<{
             "workspaceFiles/list": "workspaceFiles/list";
             "workspaceFiles/stat": "workspaceFiles/stat";
@@ -50,42 +36,55 @@ declare const schemas: {
     }, z.core.$strict>;
     readonly 'dsh/sessionModels': z.ZodObject<{
         sessionId: z.ZodString;
-        backend: z.ZodEnum<{
-            cursor: "cursor";
-            claude: "claude";
-            opencode: "opencode";
-            pi: "pi";
-            hermes: "hermes";
-            antigravity: "antigravity";
-        }>;
+        backend: z.ZodString;
     }, z.core.$strict>;
     readonly 'dsh/selectModel': z.ZodObject<{
         sessionId: z.ZodString;
-        backend: z.ZodEnum<{
-            cursor: "cursor";
-            claude: "claude";
-            opencode: "opencode";
-            pi: "pi";
-            hermes: "hermes";
-            antigravity: "antigravity";
-        }>;
+        backend: z.ZodString;
         model: z.ZodString;
         reasoningEffort: z.ZodOptional<z.ZodString>;
     }, z.core.$strict>;
+    readonly 'dsh/sessionModes': z.ZodObject<{
+        sessionId: z.ZodString;
+        backend: z.ZodString;
+    }, z.core.$strict>;
+    readonly 'dsh/sessionCommands': z.ZodObject<{
+        sessionId: z.ZodString;
+        backend: z.ZodString;
+    }, z.core.$strict>;
     readonly 'dsh/selectPermission': z.ZodObject<{
         sessionId: z.ZodString;
-        backend: z.ZodOptional<z.ZodEnum<{
-            cursor: "cursor";
-            claude: "claude";
-            opencode: "opencode";
-            pi: "pi";
-            hermes: "hermes";
-            antigravity: "antigravity";
-        }>>;
+        backend: z.ZodOptional<z.ZodString>;
         preset: z.ZodEnum<{
             "workspace-write": "workspace-write";
             "danger-full-access": "danger-full-access";
         }>;
+    }, z.core.$strict>;
+    readonly 'dsh/workspaceCreate': z.ZodObject<{
+        backend: z.ZodString;
+        path: z.ZodString;
+        title: z.ZodOptional<z.ZodString>;
+    }, z.core.$strict>;
+    readonly 'dsh/workspaceRename': z.ZodObject<{
+        backend: z.ZodString;
+        path: z.ZodString;
+        title: z.ZodString;
+    }, z.core.$strict>;
+    readonly 'dsh/workspaceDelete': z.ZodObject<{
+        backend: z.ZodString;
+        path: z.ZodString;
+    }, z.core.$strict>;
+    readonly 'dsh/workspaceReorder': z.ZodObject<{
+        backend: z.ZodString;
+        paths: z.ZodArray<z.ZodString>;
+    }, z.core.$strict>;
+    readonly 'dsh/sessionPin': z.ZodObject<{
+        backend: z.ZodString;
+        sessionId: z.ZodString;
+    }, z.core.$strict>;
+    readonly 'dsh/sessionUnpin': z.ZodObject<{
+        backend: z.ZodString;
+        sessionId: z.ZodString;
     }, z.core.$strict>;
     readonly initialize: z.ZodObject<{
         protocolVersion: z.ZodOptional<z.ZodNumber>;
@@ -109,16 +108,18 @@ declare const schemas: {
         sessionId: z.ZodString;
         backend: z.ZodOptional<z.ZodString>;
     }, z.core.$strict>;
+    readonly 'session/fork': z.ZodObject<{
+        sessionId: z.ZodString;
+        backend: z.ZodOptional<z.ZodString>;
+    }, z.core.$strict>;
+    readonly 'session/set_mode': z.ZodObject<{
+        sessionId: z.ZodString;
+        backend: z.ZodOptional<z.ZodString>;
+        modeId: z.ZodString;
+    }, z.core.$strict>;
     readonly 'session/prompt': z.ZodObject<{
         sessionId: z.ZodString;
-        backend: z.ZodOptional<z.ZodEnum<{
-            cursor: "cursor";
-            claude: "claude";
-            opencode: "opencode";
-            pi: "pi";
-            hermes: "hermes";
-            antigravity: "antigravity";
-        }>>;
+        backend: z.ZodOptional<z.ZodString>;
         prompt: z.ZodArray<z.ZodUnion<readonly [z.ZodObject<{
             type: z.ZodLiteral<"text">;
             text: z.ZodString;
@@ -154,7 +155,8 @@ declare const schemas: {
     }, z.core.$strict>;
 };
 export type AllowedAcpMethod = keyof typeof schemas;
-export declare const ACP_METHOD_ALLOWLIST: readonly ("initialize" | "session/new" | "session/load" | "session/prompt" | "session/cancel" | "dsh/directoryList" | "dsh/sessionHistory" | "dsh/workspaceList" | "dsh/sessionArchive" | "dsh/toolCall" | "dsh/sessionModels" | "dsh/selectModel" | "dsh/selectPermission" | "dsh/sessionList")[];
+export declare const ACP_METHOD_ALLOWLIST: readonly ("initialize" | "session/new" | "session/load" | "session/prompt" | "session/cancel" | "session/set_mode" | "session/fork" | "dsh/directoryList" | "dsh/sessionHistory" | "dsh/workspaceList" | "dsh/sessionArchive" | "dsh/toolCall" | "dsh/sessionModels" | "dsh/selectModel" | "dsh/sessionModes" | "dsh/sessionCommands" | "dsh/selectPermission" | "dsh/workspaceCreate" | "dsh/workspaceRename" | "dsh/workspaceDelete" | "dsh/workspaceReorder" | "dsh/sessionPin" | "dsh/sessionUnpin" | "dsh/sessionList")[];
+export declare function isValidAcpBackendId(value: unknown): value is string;
 export declare function parseAcpCall(method: string, params: unknown): {
     method: AllowedAcpMethod;
     params: Record<string, unknown>;

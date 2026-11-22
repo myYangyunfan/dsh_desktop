@@ -1,5 +1,5 @@
 import { nativeWorkspace } from './virtual-catalog.js';
-import { AsyncValueQueue, record, string } from './virtual-contract.js';
+import { AsyncValueQueue, isRecord, record, string } from './virtual-contract.js';
 export class AcpEventCarrier {
     context;
     constructor(context) {
@@ -13,7 +13,7 @@ export class AcpEventCarrier {
             value: {
                 items: this.context.visibleWorkspaces().map(nativeWorkspace),
                 archivedSessionIds: [...this.context.archivedSessionIds],
-                pinnedSessionIds: [],
+                pinnedSessionIds: [...this.context.pinnedSessionIds],
             },
         });
         return queue.iterate(() => this.context.workspaceStreams.delete(queue));
@@ -77,12 +77,15 @@ export class AcpEventCarrier {
         if (pending === undefined)
             return undefined;
         this.context.pendingApprovals.delete(eventId);
-        const decision = outcome.kind === 'result' && outcome.value === 'allowed-once'
+        const decision = outcome.kind === 'result' && (outcome.value === 'allowed-once' || outcome.value === 'answered' || isRecord(outcome.value))
             ? 'allow-once'
             : outcome.kind === 'result' && outcome.value === 'cancelled'
                 ? 'cancel'
                 : 'reject-once';
-        await this.context.client.respond(pending.requestHandle, decision, undefined, signal);
+        const result = outcome.kind === 'result' && isRecord(outcome.value)
+            ? { outcome: { outcome: 'answered', ...outcome.value } }
+            : undefined;
+        await this.context.client.respond(pending.requestHandle, decision, result, signal);
         return undefined;
     }
     publishProjection(sessionId, key, value, seq = this.context.nextProjectionSeq()) {

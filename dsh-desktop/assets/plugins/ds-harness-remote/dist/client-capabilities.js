@@ -49,7 +49,9 @@ export async function probeRemoteHostFeatures(client, clientVersion) {
     }
     const sessionFormat = remoteV3 ? 3 : undefined;
     const remoteGateway = remoteV3 || remoteV1;
-    if (!remoteGateway && !codex && !cursor && !antigravity && !pi && !opencode && !claude && !hermes) {
+    const anyCustomAcp = workspaceTypes?.some(type => type.available && type.id !== 'codex' && type.id !== 'harness')
+        || value.capabilities.some(cap => cap.startsWith('agent.acp.') && cap.endsWith('.v1') && cap !== 'agent.acp.v1' && cap !== 'agent.acp.transfer.v1' && cap !== 'agent.acp.workspace-files.v1' && cap !== 'agent.acp.terminal.v1');
+    if (!remoteGateway && !codex && !cursor && !antigravity && !pi && !opencode && !claude && !hermes && !anyCustomAcp) {
         throw new ClientModeError('FEATURE_NOT_SUPPORTED', 'The remote Host exposes no supported Harness transport.');
     }
     return {
@@ -66,6 +68,7 @@ export async function probeRemoteHostFeatures(client, clientVersion) {
         claude,
         ...(hermes ? { hermes: true } : {}),
         ...(capabilities.has('agent.acp.antigravity.model-load.v1') ? { acpModelLoadsSession: true } : {}),
+        ...(capabilities.has('agent.acp.opencode.archive.v1') ? { acpOpencodeArchive: true } : {}),
         ...(workspaceTypes === undefined ? {} : { workspaceTypes }),
         pluginRoute: capabilities.has('plugin.route.v1'),
     };

@@ -27,6 +27,7 @@ declare class OwnedTerminal {
     cols: number;
     rows: number;
     private readonly removed;
+    private readonly rosterChanged;
     readonly allocation: AbortController;
     readonly screen: Terminal;
     private readonly serializer;
@@ -49,7 +50,7 @@ declare class OwnedTerminal {
     private timer?;
     private idle?;
     private activityEpoch;
-    constructor(sessionId: string, id: string, cwd: string, cols: number, rows: number, removed: () => void);
+    constructor(sessionId: string, id: string, cwd: string, cols: number, rows: number, removed: () => void, rosterChanged: () => void);
     info(): Frame;
     enqueue<T>(operation: () => T | Promise<T>): Promise<T>;
     emit(value: Frame): void;
@@ -65,8 +66,10 @@ declare class OwnedTerminal {
 export declare class RemoteTerminalState {
     readonly onRemoved: (key: string) => void;
     readonly terminals: Map<string, OwnedTerminal>;
+    readonly rosters: Map<string, Set<() => void>>;
     revision: number;
     constructor(onRemoved?: (key: string) => void);
+    notifyRoster(sessionId: string): void;
     dispose(matches?: (sessionId: string) => boolean): Promise<void>;
 }
 /** Official terminal shapes over backend-owned IDs, without creating Harness Agents. */
@@ -76,11 +79,14 @@ export declare class RemoteTerminalController {
     private readonly enabled;
     private readonly scopeError;
     private readonly subscriptions;
+    private readonly rosterLifetime;
     constructor(shared: RemoteTerminalState, spawn: RemoteTerminalSpawner, enabled: () => boolean, scopeError: ScopeError);
     call(endpoint: string, sessionId: string, cwd: string, args: Record<string, unknown>, signal: AbortSignal): Promise<TypertRpcResult>;
-    open(endpoint: string, sessionId: string, args: Record<string, unknown>, signal: AbortSignal): Promise<AsyncIterable<Frame>>;
+    open(endpoint: string, sessionId: string, args: Record<string, unknown>, signal: AbortSignal): Promise<AsyncIterable<Frame | Frame[]>>;
     /** A connection only disposes its subscriptions; the Host still owns the shells. */
     closeAll(): void;
+    private roster;
+    private watch;
     private shells;
     private create;
     private check;

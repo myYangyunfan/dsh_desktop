@@ -2,6 +2,7 @@ type Fetch = typeof globalThis.fetch;
 export interface PluginRouteClientOptions {
     /** Publish a remote roster only after the official Session catalog has caught up. */
     beforeResponse?(status: Record<string, unknown>, body: Record<string, unknown>, json: unknown, signal: AbortSignal): Promise<void>;
+    isLanWeb?(signal: AbortSignal): Promise<boolean>;
 }
 /** Route authority is read before each plugin request, including the first page load. */
 export declare function createPluginRouteFetch(original: Fetch, baseUrl: string, options?: PluginRouteClientOptions): Fetch;

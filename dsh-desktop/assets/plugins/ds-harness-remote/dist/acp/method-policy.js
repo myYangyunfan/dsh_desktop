@@ -6,11 +6,28 @@ import { RpcError } from '../safe-error.js';
 const id = z.string().min(1).max(256);
 const cwd = z.string().min(1).max(4096);
 const mode = z.enum(['agent', 'plan', 'ask']);
+const RESERVED_ACP_BACKENDS = new Set([
+    'codex',
+    'harness',
+    'kimi',
+    'acp',
+    'constructor',
+    'tostring',
+    'valueof',
+    'hasownproperty',
+    '__proto__',
+    'prototype',
+]);
+const backendId = z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/i).refine(value => !RESERVED_ACP_BACKENDS.has(value.toLowerCase()));
 const textBlock = z.object({
     type: z.literal('text'),
     text: z.string().min(1).max(256 * 1024),
 }).strict();
-const imageBlock = z.object({ type: z.literal('image'), mimeType: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif']), data: z.string().min(4).max(Math.ceil(8 * 1024 * 1024 / 3) * 4) }).strict().refine(value => {
+const imageBlock = z.object({
+    type: z.literal('image'),
+    mimeType: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
+    data: z.string().min(4).max(Math.ceil(8 * 1024 * 1024 / 3) * 4),
+}).strict().refine(value => {
     try {
         parseAcpImage(value);
         return true;
@@ -21,20 +38,61 @@ const imageBlock = z.object({ type: z.literal('image'), mimeType: z.enum(['image
 });
 const promptBlock = z.union([textBlock, imageBlock]);
 export const acpToolStreamSchema = z.object({
-    backend: z.enum(['cursor', 'claude', 'antigravity', 'pi', 'opencode', 'hermes']), endpoint: z.enum(ACP_TOOL_STREAM_ENDPOINTS), args: z.record(z.string(), z.unknown()),
+    backend: backendId,
+    endpoint: z.enum(ACP_TOOL_STREAM_ENDPOINTS),
+    args: z.record(z.string(), z.unknown()),
 }).strict();
 const schemas = {
     'dsh/sessionArchive': z.object({ sessionId: id.regex(/^[A-Za-z0-9_-]+$/), backend: z.literal('opencode') }).strict(),
-    'dsh/toolCall': z.object({ sessionId: id, backend: z.enum(['cursor', 'claude', 'antigravity', 'pi', 'opencode', 'hermes']),
-        endpoint: z.enum(ACP_TOOL_CALL_ENDPOINTS), args: z.record(z.string(), z.unknown()) }).strict(),
-    'dsh/sessionModels': z.object({ sessionId: id, backend: z.enum(['cursor', 'claude', 'antigravity', 'pi', 'opencode', 'hermes']) }).strict(),
-    'dsh/selectModel': z.object({ sessionId: id, backend: z.enum(['cursor', 'claude', 'antigravity', 'pi', 'opencode', 'hermes']),
-        model: id, reasoningEffort: id.optional() }).strict(),
-    'dsh/selectPermission': z.object({ sessionId: id, backend: z.enum(['cursor', 'claude', 'antigravity', 'pi', 'opencode', 'hermes']).optional(),
-        preset: z.enum(['workspace-write', 'danger-full-access']) }).strict(),
+    'dsh/toolCall': z.object({
+        sessionId: id,
+        backend: backendId,
+        endpoint: z.enum(ACP_TOOL_CALL_ENDPOINTS),
+        args: z.record(z.string(), z.unknown()),
+    }).strict(),
+    'dsh/sessionModels': z.object({ sessionId: id, backend: backendId }).strict(),
+    'dsh/selectModel': z.object({
+        sessionId: id,
+        backend: backendId,
+        model: id,
+        reasoningEffort: id.optional(),
+    }).strict(),
+    'dsh/sessionModes': z.object({ sessionId: id, backend: backendId }).strict(),
+    'dsh/sessionCommands': z.object({ sessionId: id, backend: backendId }).strict(),
+    'dsh/selectPermission': z.object({
+        sessionId: id,
+        backend: backendId.optional(),
+        preset: z.enum(['workspace-write', 'danger-full-access']),
+    }).strict(),
+    'dsh/workspaceCreate': z.object({
+        backend: backendId,
+        path: cwd,
+        title: z.string().trim().min(1).max(256).optional(),
+    }).strict(),
+    'dsh/workspaceRename': z.object({
+        backend: backendId,
+        path: cwd,
+        title: z.string().trim().min(1).max(256),
+    }).strict(),
+    'dsh/workspaceDelete': z.object({
+        backend: backendId,
+        path: cwd,
+    }).strict(),
+    'dsh/workspaceReorder': z.object({
+        backend: backendId,
+        paths: z.array(cwd).max(200),
+    }).strict(),
+    'dsh/sessionPin': z.object({
+        backend: backendId,
+        sessionId: id,
+    }).strict(),
+    'dsh/sessionUnpin': z.object({
+        backend: backendId,
+        sessionId: id,
+    }).strict(),
     'initialize': z.object({
         protocolVersion: z.number().int().positive().optional(),
-        backend: z.string().min(1).max(64).optional(),
+        backend: backendId.optional(),
         clientInfo: z.object({
             name: z.string().min(1).max(128).optional(),
             version: z.string().min(1).max(128).optional(),
@@ -42,17 +100,26 @@ const schemas = {
     }).strict(),
     'session/new': z.object({
         cwd,
-        backend: z.string().min(1).max(64).optional(),
+        backend: backendId.optional(),
         mcpServers: z.array(z.unknown()).max(0).optional(),
         mode: mode.optional(),
     }).strict(),
     'session/load': z.object({
         sessionId: id,
-        backend: z.string().min(1).max(64).optional(),
+        backend: backendId.optional(),
+    }).strict(),
+    'session/fork': z.object({
+        sessionId: id,
+        backend: backendId.optional(),
+    }).strict(),
+    'session/set_mode': z.object({
+        sessionId: id,
+        backend: backendId.optional(),
+        modeId: id,
     }).strict(),
     'session/prompt': z.object({
         sessionId: id,
-        backend: z.enum(['cursor', 'antigravity', 'pi', 'claude', 'opencode', 'hermes']).optional(),
+        backend: backendId.optional(),
         prompt: z.array(promptBlock).min(1).max(16).refine(parts => parts.filter(part => part.type === 'image').length <= 4),
     }).strict(),
     'session/cancel': z.object({
@@ -62,20 +129,23 @@ const schemas = {
         path: z.string().min(1).max(4096),
     }).strict(),
     'dsh/workspaceList': z.object({
-        backend: z.string().min(1).max(64).optional(),
+        backend: backendId.optional(),
     }).strict().optional(),
     'dsh/sessionList': z.object({
         path: z.string().min(1).max(4096).or(z.literal('')),
-        backend: z.string().min(1).max(64).optional(),
+        backend: backendId.optional(),
         limit: z.number().int().positive().max(100).optional(),
         prewarm: z.boolean().optional(),
     }).strict(),
     'dsh/sessionHistory': z.object({
         sessionId: id,
-        backend: z.string().min(1).max(64).optional(),
+        backend: backendId.optional(),
     }).strict(),
 };
 export const ACP_METHOD_ALLOWLIST = Object.freeze(Object.keys(schemas));
+export function isValidAcpBackendId(value) {
+    return backendId.safeParse(value).success;
+}
 export function parseAcpCall(method, params) {
     if (!Object.prototype.hasOwnProperty.call(schemas, method)) {
         throw new RpcError('METHOD_NOT_ALLOWED', 'The ACP method is not allowlisted for Remote.');
@@ -92,6 +162,12 @@ export function sessionIdFromParams(method, params) {
         || method === 'session/new'
         || method === 'dsh/directoryList'
         || method === 'dsh/workspaceList'
+        || method === 'dsh/workspaceCreate'
+        || method === 'dsh/workspaceRename'
+        || method === 'dsh/workspaceDelete'
+        || method === 'dsh/workspaceReorder'
+        || method === 'dsh/sessionPin'
+        || method === 'dsh/sessionUnpin'
         || method === 'dsh/sessionList'
         || method === 'dsh/sessionHistory')
         return undefined;
@@ -100,6 +176,12 @@ export function sessionIdFromParams(method, params) {
     return undefined;
 }
 export function isSessionMutation(method) {
-    return method === 'session/prompt' || method === 'session/cancel' || method === 'dsh/selectModel' || method === 'dsh/selectPermission' || method === 'dsh/toolCall';
+    return (method === 'session/prompt'
+        || method === 'session/cancel'
+        || method === 'session/fork'
+        || method === 'session/set_mode'
+        || method === 'dsh/selectModel'
+        || method === 'dsh/selectPermission'
+        || method === 'dsh/toolCall');
 }
 //# sourceMappingURL=method-policy.js.map

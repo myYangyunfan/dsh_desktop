@@ -1,7 +1,8 @@
+import { AccountTwoFactorRequired } from './account-two-factor-required.js';
 import { platform } from 'node:os';
 import { fromBase64Url, toBase64Url } from '@dsh-remote/crypto';
 import { deviceTokenPairSchema } from '@dsh-remote/protocol';
-import { ServerCredentialsBusyError, ServerCredentialsLockUnsupportedError } from './server-credentials.js';
+import { ServerCredentialsBusyError, ServerCredentialsLockDirectoryError, ServerCredentialsLockUnsupportedError } from './server-credentials.js';
 import { normalizeServerUrl } from './config.js';
 import { PLUGIN_VERSION } from './version.js';
 const TERMINAL_CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/u;
@@ -84,16 +85,28 @@ export class HostServerApi {
             await this.clearAuthorization();
         }
     }
-    async authorizeWithAccount(identity, email, password, recoverIdentity) {
+    async authorizeWithAccount(identity, email, password, recoverIdentity, verification) {
         this.bindIdentity(identity);
         const account = email.trim();
-        if (account.length === 0 || password.length === 0) {
+        if (verification === undefined && (account.length === 0 || password.length === 0)) {
             throw new ServerApiError('INVALID_MESSAGE', 'Email and password are required.', false);
         }
-        const login = validateWebLogin(await this.publicRequest('/api/v1/auth/login', {
+        if (verification !== undefined && verification.serverUrl !== this.baseUrl) {
+            throw new ServerApiError('TWO_FACTOR_EXPIRED', 'The Server changed. Sign in again.', false);
+        }
+        const response = await this.publicRequest(verification === undefined ? '/api/v1/auth/login' : '/api/v1/auth/2fa/verify', {
             method: 'POST',
-            body: JSON.stringify({ email: account, password }),
-        }));
+            body: JSON.stringify(verification === undefined
+                ? { email: account, password }
+                : { challenge: verification.challenge, code: verification.code }),
+        });
+        if (verification === undefined && isAccountRecord(response) && response.twoFactorRequired === true) {
+            if (typeof response.challenge !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(response.challenge)) {
+                throw new ServerApiError('INVALID_MESSAGE', 'The Server returned an invalid two-factor challenge.', false);
+            }
+            throw new AccountTwoFactorRequired(response.challenge, this.baseUrl);
+        }
+        const login = validateWebLogin(response);
         const authorization = {
             accountToken: login.token,
             account: login.account,
@@ -292,7 +305,7 @@ export class HostServerApi {
             if (error instanceof ServerCredentialsBusyError) {
                 throw new ServerApiError(error.code, error.message, true);
             }
-            if (error instanceof ServerCredentialsLockUnsupportedError) {
+            if (error instanceof ServerCredentialsLockUnsupportedError || error instanceof ServerCredentialsLockDirectoryError) {
                 throw new ServerApiError(error.code, error.message, false);
             }
             throw error;
@@ -393,6 +406,16 @@ export class HostServerApi {
             throw new ServerApiError('INVALID_MESSAGE', 'The Server returned invalid device presence.', false);
         }
         return { online: result.online, ...(typeof result.lastSeenAt === 'number' ? { lastSeenAt: result.lastSeenAt } : {}) };
+    }
+    async dshWebRequest(action, input, signal, sessionId) {
+        const path = this.dshWebPath() + (action === 'allocate' ? '' : `/${action}`);
+        return this.request(path, { method: 'POST', body: JSON.stringify({ ...input, sessionId }), signal });
+    }
+    async closeDshWeb(sessionId) {
+        await this.request(this.dshWebPath() + '/' + encodeURIComponent(sessionId), { method: 'DELETE', signal: AbortSignal.timeout(3_000) });
+    }
+    dshWebPath() {
+        return `/api/v1/hosts/${encodeURIComponent(this.requireIdentity().deviceId)}/dsh-web/sessions`;
     }
     async loadOrIssue(identity) {
         return this.withRefreshLock(async () => {
@@ -676,8 +699,11 @@ function isIdentityKey(value) {
         return false;
     }
 }
+function isAccountRecord(value) {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 function requireRecord(value, name) {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    if (!isAccountRecord(value)) {
         throw new ServerApiError('INVALID_MESSAGE', `The Server returned invalid ${name} data.`, false);
     }
     return value;

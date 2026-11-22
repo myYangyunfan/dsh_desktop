@@ -14,6 +14,7 @@ export declare const WORKSPACE_FILE_FAILURE_REASONS: readonly ["scope-missing", 
 export type WorkspaceFileFailureReason = typeof WORKSPACE_FILE_FAILURE_REASONS[number];
 export declare function workspaceFileFailureReason(error: unknown): WorkspaceFileFailureReason | undefined;
 export declare function workspaceFileFailure(code: 'WORKSPACE_UNAVAILABLE' | 'WORKSPACE_PATH_DENIED' | 'WORKSPACE_TOO_LARGE', message: string, reason: WorkspaceFileFailureReason): RpcError;
+export declare const CREDENTIALS_LOCK_DIRECTORY_MESSAGE = "The credential refresh lock is a directory. Stop all Harness instances, then move the old lock directory aside and restart.";
 export declare function safeStartupError(error: unknown): {
     code: string;
     message: string;

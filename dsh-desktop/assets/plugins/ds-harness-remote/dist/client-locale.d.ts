@@ -4,12 +4,13 @@ export declare const en: {
     readonly saveServerBeforeLogin: "Save the Server address before continuing sign-in or pairing.";
     readonly pairingLoginTab: "DSH Go";
     readonly pairingTitle: "Pair with DSH Go";
-    readonly pairingHint: "Scan in DSH Go and confirm on your phone.\nThen enter the phone code on this computer and confirm binding.";
+    readonly pairingHint: "Click below to generate a pairing QR code, then scan it in DSH Go.\nThis Host accepts connections only; use another sign-in method to control other devices.";
     readonly pairingHostOnly: "New Hosts accept connections only. Pairing does not enable control of other devices.";
+    readonly pairingHostOnlyDetail: "DSH Go QR pairing supports one device at a time and accepts connections only. To switch devices or control other Hosts, sign out below and pair again or use account sign-in.";
     readonly pairingSaveServer: "Save the Server address before pairing.";
-    readonly pairingScan: "Scan this QR code in DSH Go and confirm on your phone.";
+    readonly pairingScan: "Scan this QR code in DSH Go and confirm on your phone.\nThis Host accepts connections only; use another sign-in method to control other devices.";
     readonly pairingEnter: "Check the requesting phone, then enter its code.";
-    readonly pairingComplete: "Paired. DSH Go can now connect to this Host.";
+    readonly pairingComplete: "Paired. DSH Go can now connect to this Host.\nDSH Go QR pairing supports one device at a time. To switch devices or control other Hosts, sign out and pair again or use account sign-in.";
     readonly pairingPending: "Recover the original submission without changing the code.";
     readonly pairingClosed: "Pairing ended. Generate a new QR code to start again.";
     readonly pairingQr: "One-time DSH Go pairing QR code";
@@ -21,6 +22,7 @@ export declare const en: {
     readonly pairingRetry: "Recover original submission";
     readonly pairingCancel: "Cancel pairing";
     readonly pairingStart: "Generate pairing QR code";
+    readonly pairingDone: "Done";
     readonly pairingBusy: "Please wait…";
     readonly pairingUnsupported: "This Server does not support device pairing.";
     readonly pairingError: "Could not finish pairing. Check the connection.\nIf a code was sent, recover the original submission without changing it.";
@@ -108,6 +110,8 @@ export declare const en: {
     readonly registrationCodeHint: "Generate it after signing in on the Server website. Use it once to connect this device.";
     readonly accountHint: "The account must belong to the selected Server.";
     readonly password: "Password";
+    readonly twoFactorCode: "Verification or recovery code";
+    readonly twoFactorRestart: "Enter password again";
     readonly passwordHint: "Only DSH Remote Web or self-hosted service accounts; not DeepSeek Harness official.";
     readonly modeSavedNeedsAuthorization: "Mode saved. Authorize {role} before connecting. Existing registrations were kept.";
     readonly modeSavedReused: "Mode saved. Existing registration reused. Restart Harness to apply.";
@@ -159,6 +163,7 @@ export declare const en: {
     readonly connectionAuthorizationExpired: "Authorization expired. Sign out and authorize this Host again.";
     readonly connectionReplaced: "Another instance is using this Host identity. Stop it or use a separate DSH_HOME before reconnecting.";
     readonly connectionCredentialsBusy: "Credential refresh is busy. The Host will retry. Remove a legacy refresh lock only after every instance stops.";
+    readonly connectionCredentialsLockDirectory: "The credential refresh lock is a directory. Stop all Harness instances, then move the old lock directory aside and restart.";
     readonly connectionDeviceRevoked: "This Host was revoked on the Server. Sign out and authorize it again.";
     readonly connectionOwnershipRequired: "The Server no longer recognizes this Host as an owned device.";
     readonly connectionRateLimited: "The Server is receiving too many requests. Automatic retry will continue.";
@@ -332,7 +337,7 @@ export declare const en: {
     readonly acpAvailable: "ACP available";
     readonly acpUnavailable: "ACP unavailable";
     readonly agentBackends: "More Coding Agents";
-    readonly acpDocumentation: "Read the documentation.";
+    readonly acpDocumentation: "Read the documentation";
     readonly acpHint: "Connect through ACP. ";
     readonly acpCheckPassed: "Check passed";
     readonly acpCheckFailed: "Check failed";
@@ -344,6 +349,14 @@ export declare const en: {
     readonly acpInstalledNotice: "ACP backend installed and enabled.";
     readonly acpDownloadRequired: "Please download and install {backend} first: {url}";
     readonly addAcp: "Add ACP";
+    readonly addCustomAcp: "Add custom ACP agent";
+    readonly acpAddedNotice: "Custom ACP backend added.";
+    readonly acpIdHint: "ID (e.g. my-agent)";
+    readonly acpAuthRequired: "Authentication required on Host";
+    readonly acpLoginCommand: "Login command: {command}";
+    readonly customAcpWorkspaces: "{name} virtual workspace";
+    readonly addCustomAcpWorkspace: "Add {name} workspace";
+    readonly noCustomAcpWorkspaces: "No {name} workspaces yet";
     readonly acpName: "Service name";
     readonly acpCommand: "Command";
     readonly acpArguments: "Arguments";
@@ -352,6 +365,9 @@ export declare const en: {
     readonly noConnectedClients: "No devices are currently connected to this Host.";
     readonly unknownDevice: "Unknown device";
     readonly exitRemoteAccount: "Sign out";
+    readonly membershipPlans: "Membership plans";
+    readonly membershipPlansIntro: "Want more speed and power? Explore ";
+    readonly membershipPlansOutro: ".";
     readonly githubLogin: "Github";
     readonly providerLogin: "{provider}";
     readonly scanWithProvider: "Scan to continue with {provider}";

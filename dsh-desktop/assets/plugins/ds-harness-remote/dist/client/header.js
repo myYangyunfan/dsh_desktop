@@ -110,7 +110,7 @@ export function createRemoteSessionHeaderAction(React, portal) {
                         ? t('candidateRelay')
                         : detailValue(value);
         const fact = (label, value, mono = false) => React.createElement('div', null, React.createElement('dt', null, label), React.createElement('dd', { className: mono ? 'isMono' : undefined, title: mono ? value : undefined }, value));
-        return React.createElement('div', { className: 'dshRemoteSessionHeader', role: 'status' }, React.createElement('svg', {
+        return React.createElement('div', { className: `dshRemoteSessionHeader${props.inline ? ' dshRemoteHeaderSeat' : ''}`, role: 'status' }, React.createElement('svg', {
             viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7,
             strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true,
         }, React.createElement('rect', { x: 3, y: 4, width: 18, height: 13, rx: 2 }), React.createElement('path', { d: 'M8 21h8M12 17v4' })), React.createElement('span', { className: 'dshRemoteSessionTarget' }, t('remoteModeLabel', { name: status.target?.name ?? t('host') })), status.clientAuthRequired ? React.createElement('button', {

@@ -1,5 +1,6 @@
 import type { CodexPermissionSnapshot } from '@dsh-remote/protocol';
 import type { HarnessSessionGeneration } from '../harness-version.js';
+import { type VirtualHistoryTurnWindow } from '../virtual-history-pagination.js';
 import type { CodexModelSelection } from './virtual-catalog.js';
 import type { JsonRecord } from './virtual-values.js';
 export interface NativeEvent {
@@ -54,16 +55,25 @@ export interface ProjectedNativeEvent {
     data: unknown;
     view?: ToolEventView;
 }
-export declare function projectCodexNativeHistory(thread: JsonRecord, sessionId: string, sessionGeneration?: HarnessSessionGeneration): CodexNativeHistory;
+export declare function projectCodexNativeHistory(thread: JsonRecord, sessionId: string, sessionGeneration?: HarnessSessionGeneration, cacheToolImages?: (images: JsonRecord[]) => void): CodexNativeHistory;
 export declare function paginateCodexNativeHistory(history: CodexNativeHistory, request: {
     beforeSeq?: number;
     throughSeq?: number;
     maxMessages?: number;
+    turnWindow?: VirtualHistoryTurnWindow;
+    maxBytes?: number;
+    hardMaxBytes?: number;
+}): CodexNativeHistoryPage;
+export declare function enforceCodexHistoryPageBudget(page: CodexNativeHistoryPage, options?: {
+    maxMessages?: number;
+    turnWindow?: VirtualHistoryTurnWindow;
+    maxBytes?: number;
+    hardMaxBytes?: number;
 }): CodexNativeHistoryPage;
 export declare function adaptEventData(type: string, data: unknown, sessionGeneration: HarnessSessionGeneration): unknown;
 export declare function adaptCodexHistoryPage(value: unknown, sessionGeneration: HarnessSessionGeneration): unknown;
-export declare function itemEvents(item: JsonRecord, turn: number, step: number, requestId?: string, selection?: CodexModelSelection, sessionId?: string, supplementalImages?: JsonRecord[]): ProjectedNativeEvent[];
-export declare function toolResultEvent(item: JsonRecord, turn: number, step: number, id: string, resultText: string): ProjectedNativeEvent;
+export declare function itemEvents(item: JsonRecord, turn: number, step: number, requestId?: string, selection?: CodexModelSelection, sessionId?: string, supplementalImages?: JsonRecord[], cacheToolImages?: (images: JsonRecord[]) => void): ProjectedNativeEvent[];
+export declare function toolResultEvent(item: JsonRecord, turn: number, step: number, id: string, resultText: string, sessionId?: string, cacheToolImages?: (images: JsonRecord[]) => void): ProjectedNativeEvent;
 export declare function toolResultContentReplacement(event: ProjectedNativeEvent): ProjectedNativeEvent;
 export declare function isToolItemType(type: string | undefined): boolean;
 export declare function isSurfaceEvent(type: string): boolean;

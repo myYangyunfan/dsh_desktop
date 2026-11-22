@@ -8,5 +8,5 @@
  * If they diverge, `npm scripts` checks in `scripts/verify-version-sync.mjs`
  * will fail fast during build/check/test.
  */
-export declare const PLUGIN_VERSION = "0.6.5";
+export declare const PLUGIN_VERSION = "0.6.7";
 //# sourceMappingURL=version.d.ts.map

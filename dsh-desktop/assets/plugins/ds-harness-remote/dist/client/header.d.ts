@@ -4,6 +4,7 @@ import type { ClientReact, PortalRenderer, RemoteStatus } from './types.js';
 export declare function createRemoteSessionHeaderAction(React: ClientReact, portal?: PortalRenderer): (props: {
     control: <T>(endpoint: string, payload?: unknown) => Promise<T>;
     statusFeed: StatusFeed<RemoteStatus>;
+    inline?: boolean;
     onSignIn: () => void;
     t: Translate;
 }) => unknown;

@@ -1,6 +1,6 @@
 import type { AcpClientLike } from './virtual-contract.js';
 /** Every ACP backend the Host can project into the Client's virtual Harness. */
-export type AcpCatalogBackend = 'cursor' | 'antigravity' | 'pi' | 'opencode' | 'claude' | 'hermes';
+export type AcpCatalogBackend = 'cursor' | 'antigravity' | 'pi' | 'opencode' | 'claude' | 'hermes' | (string & {});
 export declare function acpWorkspacePrefix(backend: AcpCatalogBackend): string;
 export declare function acpBackendLabel(backend: AcpCatalogBackend): string;
 export declare function acpBackendProvider(backend: AcpCatalogBackend): string;

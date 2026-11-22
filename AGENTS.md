@@ -372,20 +372,43 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
 - 调试开关（随产物保留）：`DSH_TAURI_DIAG=1` 页面探针、`DSH_TAURI_DEVTOOLS=1`、
   `DSH_TAURI_REPO_ROOT=<dir>` 显式内核目录、`DSH_HOME` / `DSH_TAURI_USERDATA` 数据目录重定向。
 - **`assets/plugins/dsh-better-sidebar` 是重建出来的 vendored 上游包，改行为只改 `src/`**：
-  v1.0.0 起它是上游 0.24.2 整包（`docs/builtin-plugins-inventory.md` §5.2 #3），本机的构建链已实测跑通
-  （沙箱是工作树内 gitignore 目录 `dsh-desktop/.tmp-bs-build/`：`npm ci --legacy-peer-deps` 装依赖后
+  版本仍是上游 **0.24.2** 整包 + 本仓的「常驻左栏」等自研补充（`docs/builtin-plugins-inventory.md` §5.2 #3），
+  本机的构建链已实测跑通（沙箱是工作树内 gitignore 目录 `dsh-desktop/.tmp-bs-build/`：装依赖后
   跑沙箱包的 `build` 脚本 = `rmSync lib && tsc -p tsconfig.build.json && tsdown`，
   `tsc` 是类型门禁——它非零退出时 `&&` 链会挡住 `tsdown`，别只看产物生成与否），
   所以改姿势是：改 `src/` → 沙箱里重跑 `build` → 用 `unit-better-sidebar-*` 测试核对产物。
+  **沙箱两条硬要求（2026-11-22 实测）**：① 沙箱 `devDependencies` 是给 `tsc` 看的宿主类型面，
+  必须钉到 `kernel-pin.json` 的精确版本（`.tmp-plugin-audit/pin-sandbox.mjs`：范围 + `overrides` 一起钉，
+  否则 npm 报 `EOVERRIDE … conflicts with direct dependency`）；② **`rolldown` 必须钉 1.2.13**——
+  1.2.16 起不再输出 `//#region <源路径>` 区段标记，而 `scripts/test/fixtures/better-sidebar-region.js`
+  正是靠它从发行字节切片，标记一没，chunk-retry / diff-surface / editor-features 一整批判据集体空转
+  （实测 5 个套件 ~40 例同时红，看着像功能坏了，实为工具链：`npm i -D rolldown@1.2.13` 即复现）。
   产物面是 **7 个文件、两类**：`lib/index.js` + `lib/invariant.js` 是 Node 半边；
   `lib/client.js`（官方频道，注册 id = 包名）与 `lib/client-registry.js`（插件注册表频道，
   注册 id = `dsh-external/dsh-better-sidebar`）由**同一份 `src/client/index.tsx` 编两遍**，只差注册 id
   与文件名，不会漂移；`lib/client-{editor,locale,mermaid}.js` 是 lazy chunk
   （`src/client/chunks/<name>.tsx`，两频道共用，走插件自己的 `/sidebar/bundle` 路由而非模块加载器）。
   **不要只手改产物中的一处**——`tsconfig.build.json` 是 `emitDeclarationOnly`，不再有逐文件 `lib/*.js` 镜像。
-  历史上「`lib/` 领先 `src/`」的那批手改进产物（`splitLines`/`diffRows`/`DiffTurnsPanel` 一套）已随换代消失——
-  上游 0.24.2 自带 `src/client/DiffTab.tsx` 与 `src/client/diff/`，我们那份不再回吸，旧表述作废；
-  src↔产物同源由 `unit-better-sidebar-diff-surface` 按 `//#region <源路径>` 标记咬住。
+  src↔产物同源由 `unit-better-sidebar-diff-surface` 按 `//#region <源路径>` 标记咬住（依赖上条的 rolldown 钉版）。
+- **`dsh-better-sidebar` 整包升上游 0.32.1 是「产品重建」不是「升依赖」——2026-11-22 试过并回退**：
+  0.32.1 重构掉了 0.24.2 的骨架（EditorHost 587→1029 行、merged/split 双模、`FileTree.tsx` 2532 行把
+  「在本地打开」做成原生行菜单、新增 `terminal` chunk、删 `src/invariant.ts`、**没有**我们的常驻左栏）。
+  整包换上后全量 **~80 例红 / 15 套件**：一是上面的 rolldown 区段标记；二是六个自研子系统全挂在被重构的结构上
+  （`editor-features` 括号/折叠/查找、`diff` 栈、chunk 退避重试环、`connection` 改造、右栏两段式注册、
+  编辑器错误兜底 `#171`）。换 0.32.1 = 把这六块重移植一遍（数天），快照留在 `.tmp-bs-0321-snapshot/`。
+- **`agentTeam` 投影在 0.2.2 起不再带 `members`，旧读法让「子代理 / 编队」页必崩（2026-11-22 用户报障）**：
+  内核 `@deepseek-ai/dsh-agent-team/lib/types/types.d.ts` 的 `TeamProjection` 只剩
+  `{ enabled, tasks, failure? }`（upstream upgrade-guide v0.2.1-rc.2「agentTeam.members is removed」，
+  Team 包迁移 `122dc3af42`），而 `lib/types/projection.js` 的 `teamProjectionDefinition.init` 让
+  **每个会话都发这条投影**——所以 `team === undefined` 那道守卫永远不生效，`team.members.map(…)` 直接抛
+  `Cannot read properties of undefined (reading 'map')`。有 `RenderBoundary`（per-tab）兜着，症状是
+  该 pane 里一条错误条 + 重试按钮，不是白屏，所以很容易被当成「偶发」。修法照上游口径：
+  `teamProjectionOf` 把 `enabled === false` 读成没有团队；名册改成「Lead 行 + `subagentCatalog` 直接子项」
+  （`teamMembersOf(team, rootId, entries, live, byId)`），任务板照旧读 `team.tasks`；per-member 的
+  `phase` / `error` 新版确实没有，`phase` 由「它在 catalog 里」推出 `active`，`error` 不再伪造
+  （看板级 `failure` 另说）。回归锁 `unit-better-sidebar-team-projection`（5 例，vm 里真调发行产物里的
+  两个纯函数 + 一条摘掉 `enabled` 判定的反证）。
+  **别只加 `?? []`**——那只把崩溃换成恒空编队板，且要连带重定义 `context-types.ts` 的两张投影类型。
 - **vendored 插件的入口在 `dist/`、真依赖在自己的 `node_modules/` 时，两条通用 gitignore 规则会把它吞成空包（2026-11-09 实测）**：
   `dsh-desktop/.gitignore` 的 `dist/` 与 `node_modules/` 对所有层级生效，`ds-harness-remote` 的入口
   `dist/index.js` 与运行时依赖（ws / qrcode / zod@3 / @xterm/* 等）因此既不入库也进不了 payload →

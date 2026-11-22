@@ -3,6 +3,7 @@ import { existsSync, constants, accessSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, posix, win32 } from 'node:path';
 import { promisify } from 'node:util';
+import { isWindowsExecutablePath, selectWindowsExecutable } from './windows-spawn.js';
 const execFileAsync = promisify(execFile);
 export const BUILTIN_ACP_SPECS = Object.freeze({
     codex: Object.freeze({
@@ -35,8 +36,8 @@ export const BUILTIN_ACP_SPECS = Object.freeze({
         id: 'claude',
         name: 'Claude',
         kind: 'npm_package',
-        npmPackage: '@anthropic-ai/claude-agent-acp',
-        downloadUrl: 'https://www.npmjs.com/package/@anthropic-ai/claude-agent-acp',
+        npmPackage: '@agentclientprotocol/claude-agent-acp',
+        downloadUrl: 'https://www.npmjs.com/package/@agentclientprotocol/claude-agent-acp',
     }),
     opencode: Object.freeze({
         id: 'opencode',
@@ -55,7 +56,7 @@ export const BUILTIN_ACP_SPECS = Object.freeze({
 export function isBuiltinAcpBackend(id) {
     return Object.prototype.hasOwnProperty.call(BUILTIN_ACP_SPECS, id);
 }
-/** Check that a path exists, is a regular file, and has execute permissions on POSIX. */
+/** Check that a path exists, is a regular file, and is executable (Windows extension or POSIX +x). */
 export function defaultCheckExecutable(candidate, platform = process.platform) {
     try {
         if (!existsSync(candidate))
@@ -64,7 +65,7 @@ export function defaultCheckExecutable(candidate, platform = process.platform) {
         if (!stat.isFile())
             return false;
         if (platform === 'win32')
-            return true;
+            return isWindowsExecutablePath(candidate);
         accessSync(candidate, constants.X_OK);
         return true;
     }
@@ -87,6 +88,7 @@ export function discoverSystemNpmPrefix(platform = process.platform) {
             stdio: ['ignore', 'pipe', 'ignore'],
             encoding: 'utf8',
             timeout: 3000,
+            windowsHide: true,
             env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
         });
         const trimmed = out.trim();
@@ -134,30 +136,30 @@ export function candidateBinaryPaths(id, options = {}) {
                 candidates.push('D:\\Hermes\\bin\\hermes.exe', 'C:\\Hermes\\bin\\hermes.exe', pJoin(localAppData, 'Hermes', 'bin', 'hermes.exe'), pJoin(home, '.hermes', 'bin', 'hermes.exe'), pJoin(home, 'hermes-agent', '.hermes', 'bin', 'hermes.exe'));
                 break;
             case 'cursor':
-                candidates.push(pJoin(localAppData, 'Programs', 'cursor', 'resources', 'app', 'bin', 'agent.cmd'), pJoin(localAppData, 'Programs', 'Cursor', 'resources', 'app', 'bin', 'agent.cmd'), pJoin(programFiles, 'Cursor', 'resources', 'app', 'bin', 'agent.cmd'), pJoin(programFilesX86, 'Cursor', 'resources', 'app', 'bin', 'agent.cmd'), 'D:\\Program Files\\Cursor\\resources\\app\\bin\\agent.cmd', 'D:\\Cursor\\resources\\app\\bin\\agent.cmd', pJoin(home, '.local', 'bin', 'agent.cmd'), pJoin(home, '.local', 'bin', 'agent.exe'));
+                candidates.push(pJoin(localAppData, 'Programs', 'cursor', 'resources', 'app', 'bin', 'agent.cmd'), pJoin(localAppData, 'Programs', 'Cursor', 'resources', 'app', 'bin', 'agent.cmd'), pJoin(programFiles, 'Cursor', 'resources', 'app', 'bin', 'agent.cmd'), pJoin(programFilesX86, 'Cursor', 'resources', 'app', 'bin', 'agent.cmd'), 'D:\\Program Files\\Cursor\\resources\\app\\bin\\agent.cmd', 'D:\\Cursor\\resources\\app\\bin\\agent.cmd', pJoin(home, '.local', 'bin', 'agent.exe'), pJoin(home, '.local', 'bin', 'agent.cmd'));
                 break;
             case 'antigravity':
                 candidates.push(pJoin(localAppData, 'Programs', 'Antigravity', 'agy.exe'), pJoin(localAppData, 'antigravity', 'bin', 'agy.exe'), pJoin(programFiles, 'Antigravity', 'agy.exe'), pJoin(home, '.local', 'bin', 'agy.exe'));
                 break;
             case 'codex':
                 for (const dir of npmBinDirs) {
-                    candidates.push(pJoin(dir, 'codex.cmd'), pJoin(dir, 'codex.exe'));
+                    candidates.push(pJoin(dir, 'codex.exe'), pJoin(dir, 'codex.cmd'));
                 }
                 break;
             case 'claude':
                 for (const dir of npmBinDirs) {
-                    candidates.push(pJoin(dir, 'claude-agent-acp.cmd'), pJoin(dir, 'claude-agent-acp.exe'));
+                    candidates.push(pJoin(dir, 'claude-agent-acp.exe'), pJoin(dir, 'claude-agent-acp.cmd'));
                 }
                 break;
             case 'pi':
                 for (const dir of npmBinDirs) {
-                    candidates.push(pJoin(dir, 'pi-acp.cmd'), pJoin(dir, 'pi-acp.exe'));
+                    candidates.push(pJoin(dir, 'pi-acp.exe'), pJoin(dir, 'pi-acp.cmd'));
                 }
                 break;
             case 'opencode':
                 candidates.push(pJoin(home, '.opencode', 'bin', 'opencode.exe'), pJoin(localAppData, 'opencode', 'bin', 'opencode.exe'));
                 for (const dir of npmBinDirs) {
-                    candidates.push(pJoin(dir, 'opencode.cmd'), pJoin(dir, 'opencode.exe'));
+                    candidates.push(pJoin(dir, 'opencode.exe'), pJoin(dir, 'opencode.cmd'));
                 }
                 break;
         }
@@ -202,17 +204,22 @@ export function candidateBinaryPaths(id, options = {}) {
     return [...new Set(candidates.filter(p => typeof p === 'string' && p.trim().length > 0))];
 }
 /** Check PATH using where (Win) or which (Unix) with timeout and return full path if found. */
-export function lookupSystemPath(command, platform = process.platform) {
+export function lookupSystemPath(command, platform = process.platform, checkExecutable = candidate => defaultCheckExecutable(candidate, platform)) {
     try {
         const probe = platform === 'win32' ? 'where' : 'which';
         const output = execFileSync(probe, [command], {
             stdio: ['ignore', 'pipe', 'ignore'],
             encoding: 'utf8',
             timeout: 5000,
+            windowsHide: true,
         });
-        const firstLine = output.split(/\r?\n/).find(line => line.trim().length > 0);
-        if (firstLine && defaultCheckExecutable(firstLine.trim(), platform)) {
-            return platform === 'win32' ? win32.resolve(firstLine.trim()) : posix.resolve(firstLine.trim());
+        const lines = output.split(/\r?\n/);
+        if (platform === 'win32') {
+            return selectWindowsExecutable(lines, checkExecutable);
+        }
+        const firstLine = lines.find(line => line.trim().length > 0);
+        if (firstLine && checkExecutable(firstLine.trim())) {
+            return posix.resolve(firstLine.trim());
         }
         return undefined;
     }
@@ -241,7 +248,7 @@ export function findExistingBinary(id, options = {}) {
         hermes: 'hermes',
     };
     const defaultCmd = defaultCommands[id] ?? id;
-    const fromPath = lookupSystemPath(defaultCmd, platform);
+    const fromPath = lookupSystemPath(defaultCmd, platform, check);
     if (fromPath && check(fromPath)) {
         return fromPath;
     }
@@ -308,6 +315,7 @@ export async function installOrConfigureBackend(backendId, options = {}) {
         await runner(fileToExec, argsToExec, {
             timeout: timeoutMs,
             encoding: 'utf8',
+            windowsHide: true,
             env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
         });
     }

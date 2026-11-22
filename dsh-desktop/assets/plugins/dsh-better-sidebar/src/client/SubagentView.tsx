@@ -217,9 +217,16 @@ export function SubagentView(props: {
     () => teamProjectionOf(list.projectionsBySession, rootId),
     [list.projectionsBySession, rootId],
   )
+  // 名册来源是 Lead 的直接子项目录（0.2.2 起投影不再带 members，见 team-projection.ts）。
   const teamMembers = useMemo(
-    () => teamMembersOf(team, live, byId),
-    [team, live, byId],
+    () => teamMembersOf(
+      team,
+      rootId,
+      rootId === undefined ? [] : (catalogs[rootId]?.entries ?? []),
+      live,
+      byId,
+    ),
+    [team, rootId, catalogs, live, byId],
   )
 
   // The default view mode comes from the side card prefs (settings select);

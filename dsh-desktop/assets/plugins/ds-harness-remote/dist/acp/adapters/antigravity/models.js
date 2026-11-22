@@ -40,7 +40,7 @@ export function parseAgyModels(output) {
 }
 export async function readAgyModels(binary) {
     try {
-        const result = await exec(binary, ['models'], { timeout: 30_000, maxBuffer: 1024 * 1024, encoding: 'utf8' });
+        const result = await exec(binary, ['models'], { timeout: 30_000, maxBuffer: 1024 * 1024, encoding: 'utf8', windowsHide: true });
         return parseAgyModels(result.stdout);
     }
     catch {

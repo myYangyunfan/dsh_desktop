@@ -1,15 +1,14 @@
 import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:net';
 import { realpath } from 'node:fs/promises';
-import { execFile } from 'node:child_process';
-import { promisify, stripVTControlCharacters } from 'node:util';
+import { stripVTControlCharacters } from 'node:util';
 import { RpcError } from '../../safe-error.js';
+import { execFileCommand } from '../windows-spawn.js';
 const MAX_RESPONSE_BYTES = 64 * 1024;
-const execFileAsync = promisify(execFile);
 /** Probe the installed CLI, since ACP builds do not all expose a native HTTP listener. */
 export async function opencodeHasNativeApi(binary, args, cwd, signal) {
     try {
-        const { stdout, stderr } = await execFileAsync(binary, [...opencodePrivateArgs(args), '--help'], {
+        const { stdout, stderr } = await execFileCommand(binary, [...opencodePrivateArgs(args), '--help'], {
             cwd, signal, timeout: 20_000, maxBuffer: MAX_RESPONSE_BYTES, windowsHide: true, killSignal: 'SIGKILL',
         });
         const help = stripVTControlCharacters(`${stdout}\n${stderr}`);

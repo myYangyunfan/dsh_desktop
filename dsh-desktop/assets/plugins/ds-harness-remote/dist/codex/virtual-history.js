@@ -1,11 +1,12 @@
 import { projectCodexModel, projectCodexThread } from '@dsh-remote/client-core';
+import { selectVirtualHistorySlice, utf8JsonByteLength, VIRTUAL_HISTORY_MAX_BYTES, VIRTUAL_HISTORY_MAX_MESSAGES, } from '../virtual-history-pagination.js';
 import { contentBlocks, toolOutputImageBlocks } from './codex-image-codec.js';
 import { modelSelection } from './virtual-catalog.js';
 import { turnEndReason } from './turn-end-reason.js';
 import { array, CODEX_SESSION_PREFIX, hashString, integer, normalizeTime, record, string } from './virtual-values.js';
 const MAX_LIVE_TOOL_OUTPUT = 128 * 1024;
-const DEFAULT_HISTORY_MESSAGES = 50;
-export function projectCodexNativeHistory(thread, sessionId, sessionGeneration = 'legacy') {
+const CODEX_PAGE_ENVELOPE_HEADROOM_BYTES = 2048;
+export function projectCodexNativeHistory(thread, sessionId, sessionGeneration = 'legacy', cacheToolImages) {
     const entries = [];
     let seq = 0;
     let turnNumber = 0;
@@ -59,7 +60,7 @@ export function projectCodexNativeHistory(thread, sessionId, sessionGeneration =
                     model: turnModel.model,
                     ...(turnModel.reasoningEffort === undefined ? {} : { reasoningEffort: turnModel.reasoningEffort }),
                 };
-            for (const event of itemEvents(item, turnNumber, 1, undefined, selection, sessionId, itemIndex === imageOwner ? toolImages : [])) {
+            for (const event of itemEvents(item, turnNumber, 1, undefined, selection, sessionId, itemIndex === imageOwner ? toolImages : [], cacheToolImages)) {
                 const eventSeq = append(event.type, event.data, normalizeTime(item.createdAt) || time, event.view, event.type === 'tool/result' && toolCallSeq !== undefined ? [toolCallSeq] : undefined);
                 if (event.type === 'tool/call')
                     toolCallSeq = eventSeq;
@@ -94,26 +95,58 @@ export function paginateCodexNativeHistory(history, request) {
     const throughSeq = Math.min(request.throughSeq ?? history.lastSeq, history.lastSeq);
     const endSeq = Math.min(throughSeq, request.beforeSeq === undefined ? throughSeq : request.beforeSeq - 1);
     const window = endSeq < 0 ? [] : history.entries.filter(entry => entry.event.seq <= endSeq);
-    const maxMessages = request.maxMessages ?? DEFAULT_HISTORY_MESSAGES;
-    let messages = 0;
-    let cut = 0;
-    for (let index = window.length - 1; index >= 0; index -= 1) {
-        const event = window[index].event;
-        if (!isSurfaceEvent(event.type) || event.surfaceOp !== 'append')
-            continue;
-        messages += 1;
-        if (messages >= maxMessages) {
-            cut = Math.min(event.seq, ...(event.sourceEventSeqs ?? []));
-            break;
-        }
-    }
+    const maxBytes = request.maxBytes ?? VIRTUAL_HISTORY_MAX_BYTES;
+    const headroom = Math.min(CODEX_PAGE_ENVELOPE_HEADROOM_BYTES, Math.floor(maxBytes / 8));
+    const envelopeBytes = utf8JsonByteLength({
+        header: history.header,
+        cursor: history.lastSeq,
+        nextTurn: history.nextTurn,
+        records: [],
+        hasMore: true,
+        ...(history.activeTurnId === undefined ? {} : { activeTurnId: history.activeTurnId }),
+    }) + headroom;
+    const slice = selectVirtualHistorySlice(window, {
+        maxMessages: request.maxMessages,
+        turnWindow: request.turnWindow,
+        countSurfaceMessages: true,
+        maxBytes,
+        hardMaxBytes: request.hardMaxBytes,
+        envelopeBytes,
+    });
     return {
         header: history.header,
         cursor: history.lastSeq,
         nextTurn: history.nextTurn,
-        records: window.filter(entry => entry.event.seq >= cut),
-        hasMore: window.some(entry => entry.event.seq < cut),
+        records: slice.records,
+        hasMore: slice.hasMore,
         ...(history.activeTurnId === undefined ? {} : { activeTurnId: history.activeTurnId }),
+    };
+}
+export function enforceCodexHistoryPageBudget(page, options = {}) {
+    const maxBytes = options.maxBytes ?? VIRTUAL_HISTORY_MAX_BYTES;
+    const headroom = Math.min(CODEX_PAGE_ENVELOPE_HEADROOM_BYTES, Math.floor(maxBytes / 8));
+    const envelopeBytes = utf8JsonByteLength({
+        ...page,
+        records: [],
+        hasMore: true,
+    }) + headroom;
+    const slice = selectVirtualHistorySlice(page.records, {
+        maxMessages: options.maxMessages ?? VIRTUAL_HISTORY_MAX_MESSAGES,
+        turnWindow: options.turnWindow,
+        countSurfaceMessages: true,
+        hasLeadingHistory: page.hasMore,
+        maxBytes,
+        hardMaxBytes: options.hardMaxBytes,
+        envelopeBytes,
+    });
+    const unchanged = slice.records.length === page.records.length
+        && slice.records.every((entry, index) => entry === page.records[index]);
+    if (unchanged)
+        return page;
+    return {
+        ...page,
+        records: slice.records,
+        hasMore: page.hasMore || slice.hasMore,
     };
 }
 export function adaptEventData(type, data, sessionGeneration) {
@@ -164,7 +197,7 @@ export function adaptCodexHistoryPage(value, sessionGeneration) {
         records,
     };
 }
-export function itemEvents(item, turn, step, requestId, selection = modelSelection(), sessionId = CODEX_SESSION_PREFIX, supplementalImages = []) {
+export function itemEvents(item, turn, step, requestId, selection = modelSelection(), sessionId = CODEX_SESSION_PREFIX, supplementalImages = [], cacheToolImages) {
     const type = string(item.type);
     const id = string(item.id) ?? `${turn}:${step}:${hashString(JSON.stringify(item))}`;
     const text = itemText(item);
@@ -182,7 +215,7 @@ export function itemEvents(item, turn, step, requestId, selection = modelSelecti
                 data: {
                     id,
                     role: 'user',
-                    content: messageContent(item, `${sessionId}:${id}`, 'text', text),
+                    content: messageContent(item, `${sessionId}:${id}`, text),
                     source: requestId === undefined || requestId === '' ? { kind: 'user' } : { kind: 'user', rpcId: requestId },
                 },
             }];
@@ -195,7 +228,9 @@ export function itemEvents(item, turn, step, requestId, selection = modelSelecti
                     message: {
                         id,
                         role: 'assistant',
-                        content: messageContent(item, `${sessionId}:${id}`, type === 'reasoning' ? 'reasoning' : 'text', text, type === 'agentMessage' ? supplementalImages : []),
+                        content: type === 'reasoning'
+                            ? [{ type: 'reasoning', text: itemText({ content: item.summary }) || text || '' }]
+                            : messageContent(item, `${sessionId}:${id}`, text, type === 'agentMessage' ? supplementalImages : []),
                         source: { kind: 'model', provider: effectiveSelection.provider, model: effectiveSelection.model },
                     },
                 },
@@ -209,7 +244,7 @@ export function itemEvents(item, turn, step, requestId, selection = modelSelecti
                 data: { turn, step, callId: id, name, arguments: JSON.stringify(args) },
                 view: { for: 'call', view: toolCallView(item, type, args) },
             },
-            toolResultEvent(item, turn, step, id, toolResultText(item, type, text)),
+            toolResultEvent(item, turn, step, id, toolResultText(item, type, text), sessionId, cacheToolImages),
         ];
     }
     if (type === 'error')
@@ -228,16 +263,20 @@ export function itemEvents(item, turn, step, requestId, selection = modelSelecti
             }];
     return [];
 }
-function messageContent(item, attachmentSeed, fallbackType, fallbackText, supplementalImages = []) {
+function messageContent(item, attachmentSeed, fallbackText, supplementalImages = []) {
     const source = item.content ?? item.input;
     const blocks = contentBlocks(source, attachmentSeed);
     const images = contentBlocks(supplementalImages, `${attachmentSeed}:tool-output`);
     if (blocks.length > 0 || images.length > 0) {
-        return [...(blocks.length > 0 ? blocks : [{ type: fallbackType, text: fallbackText ?? '' }]), ...images];
+        return [...(blocks.length > 0 ? blocks : [{ type: 'text', text: fallbackText ?? '' }]), ...images];
     }
-    return [{ type: fallbackType, text: fallbackText ?? '' }];
+    return [{ type: 'text', text: fallbackText ?? '' }];
 }
-export function toolResultEvent(item, turn, step, id, resultText) {
+export function toolResultEvent(item, turn, step, id, resultText, sessionId, cacheToolImages) {
+    const images = sessionId === undefined ? [] : contentBlocks(toolOutputImageBlocks(item), `${sessionId}:${id}:result`);
+    if (images.length > 0)
+        cacheToolImages?.(images);
+    const imageReferences = images.map(image => ({ type: 'image', attachment: image.attachment }));
     const type = string(item.type) ?? 'unknown';
     return {
         type: 'tool/result',
@@ -250,7 +289,7 @@ export function toolResultEvent(item, turn, step, id, resultText) {
                 content: [{
                         type: 'tool-result',
                         toolCallId: id,
-                        content: [{ type: 'text', text: resultText }],
+                        content: [{ type: 'text', text: resultText }, ...imageReferences],
                         ...(item.status === 'failed' || item.success === false ? { isError: true } : {}),
                     }],
                 source: { kind: 'tool', callId: id },

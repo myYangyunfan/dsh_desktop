@@ -31,6 +31,8 @@ export type RemoteCompactionConfirmation = {
     error?: string;
 } | {
     kind: 'not-yet';
+    started?: boolean;
+    commandRecorded?: boolean;
 } | {
     kind: 'unknown';
 };
@@ -43,6 +45,11 @@ export interface RemoteCompactionOperationsOptions {
     confirm?: RemoteCompactionConfirmer;
     logger?: SafeLogger;
     now?: () => number;
+    /**
+     * Maximum time an abort-interrupted operation may remain `cancelling` after
+     * the command call settles without `session/events` confirming completion.
+     */
+    cancellingGraceMs?: number;
 }
 export declare class RemoteCompactionOperations {
     private readonly runner;
@@ -51,6 +58,7 @@ export declare class RemoteCompactionOperations {
     private readonly confirm?;
     private readonly logger?;
     private readonly now;
+    private readonly cancellingGraceMs;
     private closed;
     constructor(runner: RemoteCompactionRunner, options?: RemoteCompactionOperationsOptions);
     submit(params: RemoteCompactionSubmitParams, owner: RemoteCompactionOwner): RemoteCompactionSubmitResult;
@@ -67,6 +75,12 @@ export declare class RemoteCompactionOperations {
      * longer observable after the abort.
      */
     private reconcile;
+    private reconcileOnce;
+    private cancellingDeadlineOf;
+    private scheduleCancellingGrace;
+    private expireCancellingOperations;
+    private cancellingGraceExpiredMessage;
+    private unconfirmedFailureMessage;
     private commandFailureMessage;
     private settle;
     private find;

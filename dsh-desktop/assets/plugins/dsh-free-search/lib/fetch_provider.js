@@ -12,7 +12,7 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { callExa, callFirecrawl, callCrawl4ai } from "./fetch_upstream.js";
+import { callDeepSeekFetch, callExa, callFirecrawl, callCrawl4ai } from "./fetch_upstream.js";
 import { stripLoneSurrogates } from "./safe_text.js";
 import { assertPublicUrl, makeSafeLookup } from "./ssrf.js";
 import { agentForUrl, proxyForTarget, readProxyEnv } from "./proxy.js";
@@ -358,6 +358,7 @@ export function createFetchProvider({
   prefer = () => "exa",
   allowedCidrs = () => [],
   validateUrl = assertPublicUrl,
+  deepseekFetch = () => ({ baseUrl: "", apiKey: "" }),
 }) {
   // 每个 provider 实例按 proxy URL 复用同一条隧道 agent。
   const proxyAgents = new Map();
@@ -376,6 +377,27 @@ export function createFetchProvider({
       const allowed = allowedCidrs();
       await validateUrl(url, { allowedCidrs: allowed });
       const errors = [];
+
+      // T0：#124 自定义 DeepSeek 兼容抓取端点（自建网关的干净正文）。
+      // 只在用户显式配置 base 时出现；失败会记进 errors 并继续原有链。
+      let customFetch = {};
+      try {
+        customFetch = (await deepseekFetch()) ?? {};
+      } catch (e) {
+        errors.push(`deepseek fetch: ${e?.message ?? String(e)}`);
+      }
+      const customBase = String(customFetch.baseUrl ?? "").trim();
+      if (customBase) {
+        try {
+          const text = await callDeepSeekFetch(url, String(customFetch.apiKey ?? "").trim(), signal, customBase);
+          if (text.trim().length >= T1_MIN_CHARS) {
+            return { url, statusCode: 200, body: { kind: "text", content: stripLoneSurrogates(text) }, truncated: false };
+          }
+          errors.push(`deepseek fetch: short content`);
+        } catch (e) {
+          errors.push(`deepseek fetch: ${e.message}`);
+        }
+      }
 
       // T1：直连（文本类内容；二进制交给后层——exa 取正文，PDF 等仍由 firecrawl 处理）
       try {

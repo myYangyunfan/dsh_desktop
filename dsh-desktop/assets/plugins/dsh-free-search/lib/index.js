@@ -16,6 +16,7 @@ import { setActiveBlockedDomains, getActiveBlockedDomains, isDomainBlocked, appl
 import { stripTrackingParams, normalizeUrlForDedupe } from "./url_norm.js";
 import { selectEngines, planTopUp, resolveMinSources, describeTarget, credentialRequirement, partitionByCredentials, rankMergedResults, domainOf } from "./multi_policy.js";
 import { promptLanguageOf, systemCopy, toolDescription, toolParam, localizedEffect, effectivePromptText, normalizePromptPages, PROMPT_SEGMENTS } from "./prompt_i18n.js";
+export { PROMPT_SEGMENTS } from "./prompt_i18n.js";
 import { SERP_FAMILY, searchSerpEngine } from "./serp_engines.js";
 import { ALL_ENGINES, FREE_ENGINES, TIME_ENGINES, EXPLICIT_ONLY_ENGINES, DEFAULT_FALLBACK_ORDER } from "./engine_meta.js";
 import { createCooldownStore, cooldownDelayFor, isRegionLocked, keyCooldownId, DEFAULT_QUOTA_COOLDOWN_MS, SESSION, SHORT_COOLDOWN_MS } from "./cooldown.js";
@@ -41,6 +42,7 @@ import { searchPerplexity } from "./engines/perplexity.js";
 import { searchDeepSeekOfficial } from "./engines/deepseek-official.js";
 import { searchDeepSeekTools } from "./engines/deepseek-tools.js";
 import { searchSerpbase } from "./engines/serpbase.js";
+import { searchSerper } from "./engines/serper.js";
 import { searchSerply } from "./engines/serply.js";
 import { searchOutcrawl } from "./engines/outcrawl.js";
 import { searchGoogle } from "./engines/google.js";
@@ -346,37 +348,54 @@ function normalizeAllowedEngines(value) {
 
 // #106：白名单。非空时实际禁用集合 = disabledEngines ∪ (ALL_ENGINES - allowedEngines)。
 // 下游（提示词、路由、回退链、multi、engine 测试）只认禁用集合，白名单不必被它们理解。
-function effectiveDisabledEngines(config) {
-  const disabled = normalizeDisabledEngines(config?.disabledEngines);
+// #106 / allowlist-only: allowedEngines is the single enabled set. Legacy
+// configs created before 0.9.71 have an empty allowedEngines and a
+// disabledEngines blacklist; derive the whitelist once from that blacklist so
+// upgrading does not change which engines are usable. After the next save the
+// client writes a concrete allowedEngines list.
+function effectiveAllowedEngines(config) {
   const allowed = normalizeAllowedEngines(config?.allowedEngines);
-  if (allowed.length === 0) return disabled;
-  const allowedSet = new Set(allowed);
-  return [...new Set([...disabled, ...ALL_ENGINES.filter((engine) => !allowedSet.has(engine))])];
+  if (allowed.length > 0) return allowed;
+  const disabled = new Set(normalizeDisabledEngines(config?.disabledEngines));
+  return ALL_ENGINES.filter((engine) => !disabled.has(engine));
+}
+
+function effectiveDisabledEngines(config) {
+  const allowed = new Set(effectiveAllowedEngines(config));
+  return ALL_ENGINES.filter((engine) => !allowed.has(engine));
 }
 
 function normalizeFallbackOrder(value) {
   const configured = Array.isArray(value)
     ? value.filter((engine) => ALL_ENGINES.includes(engine))
     : [];
-  // HTML SERP 家族（SERP_FAMILY）不进自动回退链尾部：抓取型引擎只在用户
-  // 显式点名时（fallbackOrder / 语言池 / engine 参数）才参与。
-  return [...new Set([...configured, ...DEFAULT_FALLBACK_ORDER, ...ALL_ENGINES.filter((engine) => !EXPLICIT_ONLY_ENGINES.includes(engine) && !SERP_FAMILY.has(engine))])].filter((engine) => !EXPLICIT_ONLY_ENGINES.includes(engine));
+  const unique = [...new Set(configured)];
+  // 空白 = 还没配置过：用默认链（不含按次计费引擎，HTML 家族也不在默认链里）。
+  if (unique.length === 0) return DEFAULT_FALLBACK_ORDER.slice();
+  // 已保存的顺序就是权威链：用户删掉的引擎不再从默认链自动补回。
+  return unique;
 }
 
 function hasCustomFallbackOrder(value) {
   if (!Array.isArray(value) || value.length === 0) return false;
   const normalized = normalizeFallbackOrder(value);
-  return normalized.length !== DEFAULT_FALLBACK_ORDER.length
-    || normalized.some((engine, index) => engine !== DEFAULT_FALLBACK_ORDER[index]);
+  const baseline = DEFAULT_FALLBACK_ORDER;
+  return normalized.length !== baseline.length
+    || normalized.some((engine, index) => engine !== baseline[index]);
 }
 
 function enabledEngines(disabledEngines, fallbackOrder = [], allowedEngines = []) {
   const disabled = new Set(normalizeDisabledEngines(disabledEngines));
   const allowed = normalizeAllowedEngines(allowedEngines);
   const order = normalizeFallbackOrder(fallbackOrder);
-  // 白名单里显式允许的引擎即使不在默认回退链里（HTML 家族、按次计费引擎）也要生效。
-  const candidates = allowed.length > 0 ? [...new Set([...order, ...allowed])] : order;
-  return candidates.filter((engine) => !disabled.has(engine));
+  // 自定义顺序是显式链：只有链上的引擎参与（白名单只做许可，不再往链尾追加）。
+  // 默认顺序才允许白名单把 HTML 家族、按次计费引擎等链外引擎加进来。
+  const candidates = hasCustomFallbackOrder(fallbackOrder)
+    ? order
+    : allowed.length > 0
+      ? [...new Set([...order, ...allowed])]
+      : order;
+  return candidates.filter((engine) => !disabled.has(engine) && (allowed.length === 0 || allowed.includes(engine)));
 }
 
 // 智能路由（provider=auto 时启用）：语言/时间规则决定分组；配置了 fallbackOrder 后，分组内按全局优先级排序。
@@ -386,20 +405,37 @@ const DEFAULT_ZH_POOL = ["bing", "baidu", "aliyun", "anysearch"];
 const DEFAULT_EN_POOL = ["bing", "exa", "tavily"];
 const isCjkQuery = (query) => /[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/.test(String(query ?? ""));
 
-function normalizeLanguagePool(value, fallback) {
-  // 显式-only 引擎（openai/gemini/claude，按次计费）永不入池：全池并发会绕过
-  // 「只在显式选中时运行」的约定，把这三个的账单变成自动触发（评审意见）。
-  const configured = [...new Set((Array.isArray(value) ? value : []).filter((engine) => ALL_ENGINES.includes(engine) && !EXPLICIT_ONLY_ENGINES.includes(engine)))];
+// #152：按次计费引擎（EXPLICIT_ONLY_ENGINES，共 7 个）默认永不入池——全池并发会绕过
+// 「只在显式选中时运行」的约定，把账单变成自动触发。用户显式开启后可以放行：
+//   off   = 现状，任何池都不接受它们
+//   auto  = 只对 Auto 路由生效（一次只挑一个引擎，最省钱）
+//   multi = Auto + Multi 并发池都接受（每次搜索会产生多份费用）
+const POOL_POLICIES = ["off", "auto", "multi"];
+
+function normalizePoolPolicy(value) {
+  const id = String(value ?? "").trim().toLowerCase();
+  return POOL_POLICIES.includes(id) ? id : "off";
+}
+
+function normalizeLanguagePool(value, fallback, poolPolicy = "off") {
+  const allowBilled = normalizePoolPolicy(poolPolicy) !== "off";
+  const configured = [
+    ...new Set(
+      (Array.isArray(value) ? value : []).filter(
+        (engine) => ALL_ENGINES.includes(engine) && (allowBilled || !EXPLICIT_ONLY_ENGINES.includes(engine))
+      )
+    ),
+  ];
   return configured.length > 0 ? configured : [...fallback];
 }
 
-function languagePool(query, { zhPool, enPool } = {}) {
+function languagePool(query, { zhPool, enPool, poolPolicy } = {}) {
   return isCjkQuery(query)
-    ? normalizeLanguagePool(zhPool, DEFAULT_ZH_POOL)
-    : normalizeLanguagePool(enPool, DEFAULT_EN_POOL);
+    ? normalizeLanguagePool(zhPool, DEFAULT_ZH_POOL, poolPolicy)
+    : normalizeLanguagePool(enPool, DEFAULT_EN_POOL, poolPolicy);
 }
 
-function routeEngines(query, { timeRange, disabledEngines = [], fallbackOrder = [], allowedEngines = [], zhPool, enPool } = {}) {
+function routeEngines(query, { timeRange, disabledEngines = [], fallbackOrder = [], allowedEngines = [], zhPool, enPool, poolPolicy } = {}) {
   const disabled = new Set(normalizeDisabledEngines(disabledEngines));
   const allowed = normalizeAllowedEngines(allowedEngines);
   const allowedSet = new Set(allowed);
@@ -414,7 +450,7 @@ function routeEngines(query, { timeRange, disabledEngines = [], fallbackOrder = 
     ? enabledEngines(disabledEngines, fallbackOrder, allowed)
     : ALL_ENGINES.filter((engine) => !disabled.has(engine) && (!SERP_FAMILY.has(engine) || serpExplicit.has(engine)));
   const enabledSet = new Set(enabled);
-  const routeHead = languagePool(query, { zhPool, enPool });
+  const routeHead = languagePool(query, { zhPool, enPool, poolPolicy });
   const head = hasCustomOrder
     ? enabled.filter((engine) => routeHead.includes(engine))
     : routeHead.filter((engine) => enabledSet.has(engine));
@@ -431,7 +467,9 @@ function routeEngines(query, { timeRange, disabledEngines = [], fallbackOrder = 
   }
 
   // 白名单是显式意图：被它单独允许的按次计费引擎也可以进入 auto 的兜底位置。
-  const remaining = enabled.filter((engine) => !ordered.includes(engine) && (!EXPLICIT_ONLY_ENGINES.includes(engine) || allowedSet.has(engine)));
+  const remaining = enabled.filter(
+    (engine) => !ordered.includes(engine) && (hasCustomOrder || !EXPLICIT_ONLY_ENGINES.includes(engine) || allowedSet.has(engine))
+  );
   return [...ordered, ...remaining];
 }
 
@@ -504,7 +542,7 @@ const SEARCH_BUDGET_MS = 30000;
 // fallback 条目（实际引擎 ≠ 首选引擎时）TTL = 配置 TTL 的 1/5（默认 5 分钟 → 60s）：
 // 首选引擎恢复后最多 1 分钟即可拿到新结果，避免回退结果被完整 TTL 钉死；首选成功条目仍用完整 TTL。
 
-function buildCacheKey(query, maxResults, timeRangeLabel, preferred, disabledEngines = [], fallbackOrder = [], blockedDomains = [], multiMaxEngines = 0, multiMinSources = 1, zhPool = [], enPool = []) {
+function buildCacheKey(query, maxResults, timeRangeLabel, preferred, disabledEngines = [], fallbackOrder = [], blockedDomains = [], multiMaxEngines = 0, multiMinSources = 1, zhPool = [], enPool = [], poolPolicy = "off") {
   const disabledKey = normalizeDisabledEngines(disabledEngines).slice().sort().join(",");
   const orderKey = normalizeFallbackOrder(fallbackOrder).join(",");
   // #72：黑名单参与 key——改了 blockedDomains 后旧缓存自然失效，不会 5 分钟内仍命中旧结果。
@@ -513,7 +551,9 @@ function buildCacheKey(query, maxResults, timeRangeLabel, preferred, disabledEng
   // （reporter 验收标准明确列了这一条：缓存 key 要考虑任何改变结果语义的新设置。
   const multiKey = [Number(multiMaxEngines) || 0, Number(multiMinSources) || 1].join(":");
   // #133：Auto/Multi 的首发引擎来自语言池，池顺序变化必须让旧缓存失效。
-  const poolKey = `${normalizeLanguagePool(zhPool, DEFAULT_ZH_POOL).join(",")}|${normalizeLanguagePool(enPool, DEFAULT_EN_POOL).join(",")}`;
+  // #152：池策略决定按次计费引擎是否入池，进而改变实际跑哪些引擎。
+  const policy = normalizePoolPolicy(poolPolicy);
+  const poolKey = `${policy}|${normalizeLanguagePool(zhPool, DEFAULT_ZH_POOL, policy).join(",")}|${normalizeLanguagePool(enPool, DEFAULT_EN_POOL, policy).join(",")}`;
   return [query ?? "", maxResults ?? 5, timeRangeLabel ?? "", preferred, disabledKey, orderKey, blockedKey, multiKey, poolKey].join("\u0000");
 }
 //#endregion
@@ -1069,6 +1109,7 @@ export function composeInjectedPrompt(cfg) {
     effectivePromptText({ builtins: blocks.state, pages: cfg.promptStatePages, index: cfg.promptStateIndex }),
     blocks.tools[toolsLang],
     effectivePromptText({ builtins: blocks.constraints, pages: cfg.promptConstraintsPages, index: cfg.promptConstraintsIndex }),
+    effectivePromptText({ builtins: blocks.display, pages: cfg.promptDisplayPages, index: cfg.promptDisplayIndex }),
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -1087,8 +1128,10 @@ function buildBlocksForLang(cfg, lang) {
 
   const state = [copy.mode({ mode: preferred, engines: enabled.join(", ") || "none" })];
   if (preferred === "multi") {
-    const zhPoolEngines = normalizeLanguagePool(cfg.zhPool, DEFAULT_ZH_POOL).filter((engine) => !disabledSet.has(engine));
-    const enPoolEngines = normalizeLanguagePool(cfg.enPool, DEFAULT_EN_POOL).filter((engine) => !disabledSet.has(engine));
+    // #152：Auto 档只放行 Auto，Multi 的并发池照旧过滤；multi 档才一起放行。
+    const multiPolicy = normalizePoolPolicy(cfg.poolPolicy) === "multi" ? "multi" : "off";
+    const zhPoolEngines = normalizeLanguagePool(cfg.zhPool, DEFAULT_ZH_POOL, multiPolicy).filter((engine) => !disabledSet.has(engine));
+    const enPoolEngines = normalizeLanguagePool(cfg.enPool, DEFAULT_EN_POOL, multiPolicy).filter((engine) => !disabledSet.has(engine));
     state.push(
     copy.multi({
       zh: zhPoolEngines.join(", ") || "none",
@@ -1099,7 +1142,12 @@ function buildBlocksForLang(cfg, lang) {
   } else if (preferred === "auto") state.push(copy.auto({ custom: customOrder }));
   else if (disabledSet.has(preferred)) state.push(copy.preferredDisabled({ chain: enabled.join(" -> ") || "none" }));
   else { const fallback = enabled.filter((engine) => engine !== preferred); state.push(copy.preferredFailed({ chain: fallback.join(" -> ") || "none" })); }
-  if (explicitOnlyEnabled.length > 0) state.push(copy.explicitOnly({ engines: explicitOnlyEnabled.join(", ") }));
+  // #152：开了放行策略后，这些引擎不再「只在显式选择时」运行，旧句子必须收回。
+  if (explicitOnlyEnabled.length > 0 && normalizePoolPolicy(cfg.poolPolicy) === "off") {
+    state.push(copy.explicitOnly({ engines: explicitOnlyEnabled.join(", ") }));
+  } else if (explicitOnlyEnabled.length > 0) {
+    state.push(copy.explicitOnlyAllowed({ engines: explicitOnlyEnabled.join(", "), scope: normalizePoolPolicy(cfg.poolPolicy) }));
+  }
   if (enabled.some((engine) => engine === "bing" || engine === "ddg" || engine === "ddg-lite")) state.push(copy.safeSearch({ value: cfg.safeSearch ?? "off" }));
   if (enabled.includes("bing")) {
     const market = String(cfg.bingMarket ?? "").trim();
@@ -1117,6 +1165,7 @@ function buildBlocksForLang(cfg, lang) {
     state: state.join("\n"),
     tools: tools.join("\n"),
     constraints: constraints.join("\n"),
+    display: copy.display,
   };
 }
 
@@ -1128,6 +1177,7 @@ export function buildBuiltinPromptBlocks(cfg) {
     state: { en: en.state, zh: zh.state },
     tools: { en: en.tools, zh: zh.tools },
     constraints: { en: en.constraints, zh: zh.constraints },
+    display: { en: en.display, zh: zh.display },
   };
 }
 
@@ -1149,6 +1199,7 @@ const KEY_REF_MAP = {
   zhipuApiKey: "ZHIPU_API_KEY",
   perplexityApiKey: "PERPLEXITY_API_KEY",
   serpbaseApiKey: "SERPBASE_API_KEY",
+  serperApiKey: "SERPER_API_KEY",
   serplyApiKey: "SERPLY_API_KEY",
   outcrawlApiKey: "OUTCRAWL_API_KEY",
   googleCseApiKey: "GOOGLE_CSE_API_KEY",
@@ -1158,6 +1209,7 @@ const KEY_REF_MAP = {
   specstreamApiKey: "SPECSTREAM_API_KEY",
   deepseekApiKey: "DEEPSEEK_API_KEY",
   deepseekToolsApiKey: "DEEPSEEK_TOOLS_API_KEY",
+  deepseekFetchApiKey: "DEEPSEEK_FETCH_API_KEY",
   // 设置页写入的凭据槽位保持旧名，已保存的 key 不受影响；读取时 YDC_API_KEY 优先（见 resolveYoucomApiKey）
   youcomApiKey: "YOUCOM_API_KEY",
   baiduApiKey: "BAIDU_API_KEY",
@@ -1204,7 +1256,7 @@ const Config = z.object({
   multiMaxResults: z.number().default(20).volatile(),
   keyStorage: z.string().default("credentials").volatile(), // key 存储位置：credentials（凭据中心）| settings（设置页）
   lang: z.string().default("zh").volatile(),
-  // UI 语言（zh/en）；为空表示跟随 lang。lang 同时影响 Bing 本地化，所以两者分开（#83）。
+  // UI 语言（zh/en）；为空或 auto 时跟随 DSH 界面语言，与搜索 lang 和提示词语言独立。
   uiLang: z.string().default("").volatile(),
   // 注入给模型的提示词/工具描述语言（en/zh）。默认 en；与 uiLang、搜索结果语言互相独立。
   promptLanguage: z.string().default("en").volatile(),
@@ -1215,6 +1267,9 @@ const Config = z.object({
   promptToolsLang: z.string().default("").volatile(),
   promptConstraintsPages: z.array(z.string()).default([]).volatile(),
   promptConstraintsIndex: z.number().default(0).volatile(),
+  // #148：第四段「结果展示」。第 1 页内置英文、第 2 页内置中文、第 3 页起用户自己写。
+  promptDisplayPages: z.array(z.string()).default([]).volatile(),
+  promptDisplayIndex: z.number().default(0).volatile(),
   // #102：按工具开关，关掉就不注册（工具 schema 一并从上下文消失）。
   disabledTools: z.array(z.string()).default([]).volatile(),
   region: z.string().volatile(),
@@ -1251,6 +1306,8 @@ const Config = z.object({
   anysearchApiKey: z.string().role("secret").volatile(),
   exaApiKey: z.string().role("secret").volatile(),
   tavilyApiKey: z.string().role("secret").volatile(),
+  // #153：Tavily 兼容端点（留空 = 官方 https://api.tavily.com/search）。
+  tavilyBaseUrl: z.string().default("").volatile(),
   keenableApiKey: z.string().role("secret").volatile(),
   firecrawlApiKey: z.string().role("secret").volatile(),
   parallelApiKey: z.string().role("secret").volatile(),
@@ -1259,6 +1316,7 @@ const Config = z.object({
   zhipuSearchEngine: z.string().default("search_std").volatile(),
   perplexityApiKey: z.string().role("secret").volatile(),
   serpbaseApiKey: z.string().role("secret").volatile(),
+  serperApiKey: z.string().role("secret").volatile(),
   serplyApiKey: z.string().role("secret").volatile(),
   outcrawlApiKey: z.string().role("secret").volatile(),
   specstreamApiKey: z.string().role("secret").volatile(),
@@ -1266,6 +1324,9 @@ const Config = z.object({
   deepseekApiKey: z.string().role("secret").volatile(),
   deepseekToolsApiKey: z.string().role("secret").volatile(),
   deepseekToolsBaseUrl: z.string().default("").volatile(),
+  // #124：自定义 DeepSeek 兼容抓取端点（可选）。留空 = 不启用该层。
+  deepseekFetchApiKey: z.string().role("secret").volatile(),
+  deepseekFetchBaseUrl: z.string().default("").volatile(),
   // deepseek-tools 单条摘要上限（0 = 不截断）与总预算（0 = 关闭）。
   snippetMaxChars: z.number().default(600).volatile(),
   snippetBudgetChars: z.number().default(0).volatile(),
@@ -1280,6 +1341,9 @@ const Config = z.object({
   // 语言分池（评审意见 B）：auto 的 routeHead 与 multi 的并发池按查询语言二选一；未配置用默认两组
   zhPool: z.array(z.string()).volatile(),
   enPool: z.array(z.string()).volatile(),
+  // #152：按次计费引擎入池策略。off = 现状（永不入池）；auto = 只允许 Auto 路由使用；
+  // multi = Auto 与 Multi 并发池都允许（Multi 会并发整池，每次搜索产生多份费用）。
+  poolPolicy: z.string().default("off").volatile(),
   // 质量升级池：research 证据闸门判 insufficient 的补搜轮引擎；未配置用默认池（#59 自带）
   escalationEngines: z.array(z.string()).volatile(),
   // 模型内置搜索：key + 模型名 + Base URL（后两者留空用默认，便于走兼容网关）
@@ -1322,6 +1386,7 @@ const LEGACY_MIGRATABLE_KEYS = [
   "anysearchApiKey",
   "exaApiKey",
   "tavilyApiKey",
+  "tavilyBaseUrl",
   "keenableApiKey",
   "firecrawlApiKey",
   "parallelApiKey",
@@ -1330,10 +1395,13 @@ const LEGACY_MIGRATABLE_KEYS = [
   "zhipuSearchEngine",
   "perplexityApiKey",
   "serpbaseApiKey",
+  "serperApiKey",
   "serplyApiKey",
   "outcrawlApiKey",
   "specstreamApiKey",
   "deepseekApiKey",
+  "deepseekToolsBaseUrl",
+  "deepseekFetchBaseUrl",
   "snippetMaxChars",
   "snippetBudgetChars",
   "youcomApiKey",
@@ -1773,7 +1841,14 @@ function apply(ctx, config) {
         : searchExaMCP(query, maxResults, signal);
     },
     tavily: async ({ query, maxResults, timeRange, signal }) =>
-      searchTavily(query, maxResults, await resolveApiKey("TAVILY_API_KEY", "tavilyApiKey"), timeRange, signal),
+      searchTavily(
+        query,
+        maxResults,
+        await resolveApiKey("TAVILY_API_KEY", "tavilyApiKey"),
+        timeRange,
+        signal,
+        current().tavilyBaseUrl
+      ),
     keenable: async ({ query, maxResults, timeRange, signal }) =>
       searchKeenable(query, maxResults, await resolveApiKey("KEENABLE_API_KEY", "keenableApiKey"), timeRange, signal),
     firecrawl: async ({ query, maxResults, timeRange, signal }) => {
@@ -1807,6 +1882,14 @@ function apply(ctx, config) {
     },
     serpbase: async ({ query, maxResults, cfg, signal }) =>
       searchSerpbase(query, maxResults, await requireEngineKey("SERPBASE_API_KEY", "serpbaseApiKey", "SerpBase"), cfg, signal),
+    serper: async ({ query, maxResults, cfg, signal }) =>
+      searchSerper(
+        query,
+        maxResults,
+        await requireEngineKey("SERPER_API_KEY", "serperApiKey", "Serper", " (get one at serper.dev)"),
+        { ...cfg, timeRange: cfg?.timeRange },
+        signal
+      ),
     serply: async ({ query, maxResults, cfg, signal }) =>
       searchSerply(query, maxResults, await requireEngineKey("SERPLY_API_KEY", "serplyApiKey", "Serply", " (get one at serply.io)"), cfg, signal),
     outcrawl: async ({ query, maxResults, signal }) =>
@@ -2009,7 +2092,7 @@ function apply(ctx, config) {
       const cacheTtlMs = (Math.min(Math.max(Number(cfg.cacheTtl) ?? 5, 0), 5)) * 60 * 1000;
       const cacheEnabled = cfg.cache !== false && cacheTtlMs > 0;
       const cacheKey = cacheEnabled
-        ? buildCacheKey(request.query, request.maxResults, timeRangeLabel, preferred, disabledEngines, fallbackOrder, cfg.blockedDomains, cfg.multiMaxEngines, cfg.multiMinSources, cfg.zhPool, cfg.enPool)
+        ? buildCacheKey(request.query, request.maxResults, timeRangeLabel, preferred, disabledEngines, fallbackOrder, cfg.blockedDomains, cfg.multiMaxEngines, cfg.multiMinSources, cfg.zhPool, cfg.enPool, cfg.poolPolicy)
         : null;
       if (cacheKey !== null) {
         const hit = searchCache.get(cacheKey);
@@ -2055,6 +2138,7 @@ function apply(ctx, config) {
           allowedEngines: cfg.allowedEngines,
           fallbackOrder: customFallbackOrder ? fallbackOrder : [],
           zhPool: Array.isArray(cfg.zhPool) ? cfg.zhPool : undefined,
+          poolPolicy: cfg.poolPolicy,
           enPool: Array.isArray(cfg.enPool) ? cfg.enPool : undefined,
         });
       } else {
@@ -2069,7 +2153,9 @@ function apply(ctx, config) {
           if (!disabledSet.has(preferred) && !TIME_ENGINES.includes(preferred)) preferredSkippedReason = "time-filter";
         } else {
           const preferredFirst = disabledSet.has(preferred) ? [] : [preferred];
-          const others = enabledOrder.filter((engine) => engine !== preferred && !EXPLICIT_ONLY_ENGINES.includes(engine));
+          const others = enabledOrder.filter(
+            (engine) => engine !== preferred && (customFallbackOrder || !EXPLICIT_ONLY_ENGINES.includes(engine))
+          );
           chain = [...preferredFirst, ...others];
         }
       }
@@ -2445,6 +2531,14 @@ function apply(ctx, config) {
     browserEnabled: () => current().browserFetch !== false,
     prefer: () => (current().fetchPrefer === "firecrawl" ? "firecrawl" : "exa"),
     allowedCidrs: () => current().allowFakeIpCidrs ?? [],
+    // #124：自定义 DeepSeek 兼容抓取端点；key 留空时依次复用工具 key、搜索 key。
+    deepseekFetch: async () => ({
+      baseUrl: current().deepseekFetchBaseUrl ?? "",
+      apiKey:
+        (await resolveApiKey("DEEPSEEK_FETCH_API_KEY", "deepseekFetchApiKey")) ||
+        (await resolveApiKey("DEEPSEEK_TOOLS_API_KEY", "deepseekToolsApiKey")) ||
+        (await resolveApiKey("DEEPSEEK_API_KEY", "deepseekApiKey")),
+    }),
   });
   registerOnce(() => ctx.web.registerFetchProvider(fetchProvider), fetchProvider, "fetch provider");
 
@@ -2569,7 +2663,7 @@ function apply(ctx, config) {
         }
         case "tavily": {
           const key = await resolveApiKey("TAVILY_API_KEY", "tavilyApiKey");
-          return await searchTavily(q, n, key, tr);
+          return await searchTavily(q, n, key, tr, undefined, cfg.tavilyBaseUrl);
         }
         case "keenable": {
           const key = await resolveApiKey("KEENABLE_API_KEY", "keenableApiKey");
@@ -2613,6 +2707,11 @@ function apply(ctx, config) {
             (await resolveApiKey("DEEPSEEK_API_KEY", "deepseekApiKey"));
           if (!key) return { ok: false, error: "DEEPSEEK_TOOLS_API_KEY / DEEPSEEK_API_KEY not configured" };
           return await searchDeepSeekTools(q, n, key, tr, undefined, cfg.deepseekToolsBaseUrl, cfg.snippetMaxChars, cfg.snippetBudgetChars);
+        }
+        case "serper": {
+          const key = await resolveApiKey("SERPER_API_KEY", "serperApiKey");
+          if (!key) return { ok: false, error: "SERPER_API_KEY not configured" };
+          return await searchSerper(q, n, key, { lang: cfg.lang, timeRange: tr }, undefined);
         }
         case "serpbase": {
           const key = await resolveApiKey("SERPBASE_API_KEY", "serpbaseApiKey");
@@ -2796,8 +2895,12 @@ function apply(ctx, config) {
           // 语言分池（评审意见 B）：并发对应语言池的全部引擎（不再截前 3）；
           // 禁用/冷却/无 key（zhihu 预探测；其余引擎在 runEngineTest 层以 "not configured" 优雅跳过）自动跳过，剩余照跑
           const cfgNow = current();
+          // #152：Multi 会并发整池，只有 "multi" 档才放行按次计费引擎；
+          // "auto" 档严格限定在 Auto 路由，不让 Multi 顺带产生多份费用。
+          const multiPoolPolicy = normalizePoolPolicy(cfgNow.poolPolicy) === "multi" ? "multi" : "off";
           const pool = languagePool(q, {
             zhPool: Array.isArray(cfgNow.zhPool) ? cfgNow.zhPool : undefined,
+            poolPolicy: multiPoolPolicy,
             enPool: Array.isArray(cfgNow.enPool) ? cfgNow.enPool : undefined,
           });
           const zhihuUsable = pool.some((engine) => engine.startsWith("zhihu"))
@@ -2912,6 +3015,7 @@ function apply(ctx, config) {
         timeRange: Boolean(parsedTimeRange),
         disabledEngines: cfgMulti.disabledEngines,
         fallbackOrder: cfgMulti.fallbackOrder,
+        poolPolicy: normalizePoolPolicy(cfgMulti.poolPolicy) === "multi" ? "multi" : "off",
         zhPool: Array.isArray(cfgMulti.zhPool) ? cfgMulti.zhPool : undefined,
         enPool: Array.isArray(cfgMulti.enPool) ? cfgMulti.enPool : undefined,
       }).filter((engine) => !poolSet.has(engine) && !disabled.has(engine) && !isCoolingDown(engine));
@@ -3102,7 +3206,9 @@ function apply(ctx, config) {
             const explicit = Array.isArray(args.engines) && args.engines.length > 0;
             const engines = explicit
               ? args.engines.filter((engine) => ALL_ENGINES.includes(engine) || SEARCH_MODES.includes(engine))
-              : enabledEngines(effectiveDisabledEngines(current()), current().fallbackOrder, current().allowedEngines).filter((engine) => !EXPLICIT_ONLY_ENGINES.includes(engine));
+: enabledEngines(effectiveDisabledEngines(current()), current().fallbackOrder, current().allowedEngines).filter(
+                  (engine) => hasCustomFallbackOrder(current().fallbackOrder) || !EXPLICIT_ONLY_ENGINES.includes(engine)
+                );
             const results = [];
             for (const engine of engines) {
               if (disabled.has(engine)) {
@@ -3684,6 +3790,9 @@ export {
   hasCustomFallbackOrder,
   normalizeDisabledEngines,
   normalizeAllowedEngines,
+  normalizeLanguagePool,
+  normalizePoolPolicy,
+  POOL_POLICIES,
   normalizeMultiMaxResults,
   multiResultLimit,
   MULTI_RESULTS_MAX,

@@ -15,6 +15,7 @@ export interface AcpEventCarrierContext {
     readonly sessions: Map<string, AcpSessionState>;
     readonly nextProjectionSeq: () => number;
     readonly archivedSessionIds: ReadonlySet<string>;
+    readonly pinnedSessionIds: ReadonlySet<string>;
 }
 export declare class AcpEventCarrier {
     private readonly context;

@@ -6,14 +6,13 @@ import type { ConnectedRemote, HostAuthorizationControl, RemoteDeviceView, Remot
 import type { CodexVirtualWorkspaceView } from './codex/virtual-harness.js';
 import type { RemoteFileViewerEndpoint } from './file-viewer-contract.js';
 import { LoopbackPreview } from './loopback-preview.js';
-import type { OAuthProvider } from './server-api.js';
-import { ClientServerApi } from './server-api.js';
+import type { AccountVerification, ClientServerApi, OAuthProvider } from './server-api.js';
 /** Collaborates with one ClientModeRuntime; never creates a second session or connection state. */
 export interface ClientControlContext {
     readonly detailedStatus: () => Promise<Record<string, unknown>>;
     readonly devices: () => Promise<RemoteDeviceView[]>;
     readonly server: ClientServerApi;
-    readonly authorizeClientWithAccount: (email: string, password: string) => Promise<unknown>;
+    readonly authorizeClientWithAccount: (email: string, password: string, verification?: AccountVerification) => Promise<unknown>;
     readonly startClientOAuthQrLogin: (provider: OAuthProvider) => Promise<unknown>;
     readonly pollClientOAuthQrLogin: (qrId: string) => Promise<unknown>;
     readonly activeRemote: () => ConnectedRemote | undefined;
@@ -24,9 +23,9 @@ export interface ClientControlContext {
     readonly openRemoteWorkspace: (targetDeviceId: string, path: string, signal?: AbortSignal) => Promise<Record<string, unknown>>;
     readonly openCodexWorkspace: (targetDeviceId: string, workspaceId: string, signal?: AbortSignal) => Promise<Record<string, unknown>>;
     readonly createCodexWorkspace: (targetDeviceId: string, path: string, signal?: AbortSignal) => Promise<Record<string, unknown>>;
-    readonly listCursorWorkspaces: (targetDeviceId: string, signal?: AbortSignal, backend?: "cursor" | "antigravity" | "pi" | "opencode" | "claude" | "hermes") => Promise<AcpVirtualWorkspaceView[]>;
-    readonly openCursorWorkspace: (targetDeviceId: string, workspaceId: string, signal?: AbortSignal, backend?: "cursor" | "antigravity" | "pi" | "opencode" | "claude" | "hermes") => Promise<Record<string, unknown>>;
-    readonly createCursorWorkspace: (targetDeviceId: string, path: string, signal?: AbortSignal, backend?: "cursor" | "antigravity" | "pi" | "opencode" | "claude" | "hermes") => Promise<Record<string, unknown>>;
+    readonly listCursorWorkspaces: (targetDeviceId: string, signal?: AbortSignal, backend?: string) => Promise<AcpVirtualWorkspaceView[]>;
+    readonly openCursorWorkspace: (targetDeviceId: string, workspaceId: string, signal?: AbortSignal, backend?: string) => Promise<Record<string, unknown>>;
+    readonly createCursorWorkspace: (targetDeviceId: string, path: string, signal?: AbortSignal, backend?: string) => Promise<Record<string, unknown>>;
     readonly consumeWorkspaceSelection: (selection: RemoteWorkspaceSelection) => Record<string, unknown>;
     readonly callRemoteFileViewer: (endpoint: RemoteFileViewerEndpoint, payload: unknown, signal?: AbortSignal) => Promise<unknown>;
     readonly activeCodexRemote: () => ConnectedRemote | undefined;

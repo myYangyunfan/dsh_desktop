@@ -1,5 +1,5 @@
 import { type AgyCatalog } from './antigravity/models.js';
-import { type ChildProcessWithoutNullStreams } from 'node:child_process';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { SafeLogger } from '../../logging.js';
 import type { CursorAcpInboundHandler, CursorAcpLike, CursorAcpUnavailableHandler } from './cursor-process.js';
 export type SpawnAntigravityAcp = (binary: string, args: string[], cwd?: string) => ChildProcessWithoutNullStreams;
@@ -35,6 +35,7 @@ export declare class AntigravityAcpClient implements CursorAcpLike {
     private ready;
     private closed;
     private startPromise?;
+    private stopPending?;
     private activeConversationId?;
     private readonly skipPermissions;
     private readonly sessionWorker;
@@ -62,6 +63,7 @@ export declare class AntigravityAcpClient implements CursorAcpLike {
     onInbound(handler: CursorAcpInboundHandler): () => void;
     onUnavailable(handler: CursorAcpUnavailableHandler): () => void;
     cancelTurn(): Promise<void>;
+    private stopChildProcess;
     close(): Promise<void>;
     private startOnce;
     private sendPrompt;

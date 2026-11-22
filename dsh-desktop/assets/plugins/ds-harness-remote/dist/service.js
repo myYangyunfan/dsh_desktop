@@ -1,6 +1,10 @@
+import { DshWebLanPeer } from './dsh-web-lan.js';
+import { DshWebPeer } from './dsh-web-host.js';
+import { SessionTransferHost } from './session-transfer.js';
 import { LanUploadHost } from './lan-upload.js';
 import { HostPairing } from './host-pairing.js';
 import { WorkspaceUploadHost } from './workspace-upload.js';
+import { WorkspaceUploadBudget } from './workspace-upload-budget.js';
 import { workspaceUploadRootResolver } from './workspace-upload-authority.js';
 import { LoopbackHost } from './loopback-host.js';
 import { TerminalPolicy } from './terminal-policy.js';
@@ -20,8 +24,10 @@ import { CodexRemoteDomain } from './codex/domain.js';
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { AcpRemoteGateway } from './acp/gateway.js';
+import { AcpWorkspaceStore } from './acp/workspace-store.js';
 import { RpcError } from './safe-error.js';
 import { CodexWorkspaceBridge, CodexWorkspaceState } from './codex-workspace-bridge.js';
+const CODEX_STARTUP_GRACE_MS = 1_500;
 export class HostPluginRuntime {
     config;
     identities;
@@ -31,8 +37,10 @@ export class HostPluginRuntime {
     terminalSpawner;
     pluginRoutes;
     schedule;
+    codexStartupGraceMs;
     connections;
     terminalOwners = new Map();
+    uploadBudget = new WorkspaceUploadBudget();
     loopbackHosts = new Set();
     terminalEnabled;
     loopbackPorts;
@@ -59,7 +67,7 @@ export class HostPluginRuntime {
     /** PTY-backed terminal provider from the Host `subprocess` service, when present. */
     terminalSpawner, pluginRoutes, 
     /** Host `schedule` service; absent on Hosts whose composition omits reminders. */
-    schedule) {
+    schedule, transferServices, resolveDshWeb, codexStartupGraceMs = CODEX_STARTUP_GRACE_MS, attachmentHostPath) {
         this.config = config;
         this.identities = identities;
         this.logger = logger;
@@ -68,10 +76,11 @@ export class HostPluginRuntime {
         this.terminalSpawner = terminalSpawner;
         this.pluginRoutes = pluginRoutes;
         this.schedule = schedule;
+        this.codexStartupGraceMs = codexStartupGraceMs;
         this.terminalEnabled = config.terminal.enabled;
         this.loopbackPorts = [...config.loopback.ports];
         this.codex = new CodexRemoteDomain(config.codex, logger);
-        this.acp = new AcpRemoteGateway(config.acp ?? { enabled: false, backends: [] }, logger, undefined, undefined, () => this.terminalEnabled, this.terminalSpawner);
+        this.acp = new AcpRemoteGateway(config.acp ?? { enabled: false, backends: [] }, logger, undefined, undefined, () => this.terminalEnabled, this.terminalSpawner, AcpWorkspaceStore.inDirectory(identities?.directory));
         // Each operation runs on its own owner Peer minted from the Host gateway,
         // so its lifetime is independent of the client connection that submitted it.
         this.compactionOperations = new RemoteCompactionOperations(async (sessionId, signal) => {
@@ -106,12 +115,13 @@ export class HostPluginRuntime {
                 }
             },
         });
+        const sessionTransfer = transferServices && new SessionTransferHost(transferServices);
         this.connections = new ConnectionController(this.identities, (context, send) => {
             const peerGateway = this.localGateway?.createPeer?.() ?? this.localGateway;
             const uploadDispatcher = this.pluginRoutes?.(peerGateway?.peer);
             const uploadBridge = uploadDispatcher === undefined ? undefined : new PluginRouteBridge(uploadDispatcher, this.logger);
             const harnessRemote = peerGateway?.supportsCarrier === true
-                ? new HarnessRemoteBridge(peerGateway, (event, data) => send(createEvent(event, data)), this.logger, this.harnessVersion, new TerminalPolicy(() => this.terminalEnabled, context.peerDeviceId, this.terminalOwners), new CodexWorkspaceBridge((threadId, signal) => this.codex.resolveThreadWorkspace(context.connectionId, threadId), () => this.terminalEnabled, this.codexWorkspaceState, this.terminalSpawner), workspaceUploadRootResolver(peerGateway, () => harnessSessionGeneration(this.harnessVersion) === 'v3', threadId => this.codex.resolveThreadWorkspace(context.connectionId, threadId), sessionId => this.acp.resolveUploadWorkspace(context.connectionId, sessionId)), this.schedule, uploadBridge === undefined ? undefined : body => uploadBridge.call({ route: 'api/session/uploadFileBinary', body }, true))
+                ? new HarnessRemoteBridge(peerGateway, (event, data) => send(createEvent(event, data)), this.logger, this.harnessVersion, new TerminalPolicy(() => this.terminalEnabled, context.peerDeviceId, this.terminalOwners), new CodexWorkspaceBridge((threadId, signal) => this.codex.resolveThreadWorkspace(context.connectionId, threadId), () => this.terminalEnabled, this.codexWorkspaceState, this.terminalSpawner), workspaceUploadRootResolver(peerGateway, () => harnessSessionGeneration(this.harnessVersion) === 'v3', threadId => this.codex.resolveThreadWorkspace(context.connectionId, threadId), sessionId => this.acp.resolveUploadWorkspace(context.connectionId, sessionId)), this.schedule, uploadBridge === undefined ? undefined : body => uploadBridge.call({ route: 'api/session/uploadFileBinary', body }, true), attachmentHostPath)
                 : undefined;
             const fileViewer = new RemoteFileViewerBridge(() => this.fileViewerHost?.(), this.logger);
             const codex = this.codex.createPeer(context, (event, data) => send(createEvent(event, data)));
@@ -121,7 +131,7 @@ export class HostPluginRuntime {
             // plugin is activated.
             const dispatcher = this.pluginRoutes?.(peerGateway?.peer);
             const pluginRoute = dispatcher === undefined ? undefined : new PluginRouteBridge(dispatcher, this.logger);
-            const workspaceUpload = new WorkspaceUploadHost(workspaceUploadRootResolver(peerGateway, () => harnessSessionGeneration(this.harnessVersion) === 'v3', threadId => this.codex.resolveThreadWorkspace(context.connectionId, threadId), sessionId => this.acp.resolveUploadWorkspace(context.connectionId, sessionId)), undefined, context.transportMode);
+            const workspaceUpload = new WorkspaceUploadHost(workspaceUploadRootResolver(peerGateway, () => harnessSessionGeneration(this.harnessVersion) === 'v3', threadId => this.codex.resolveThreadWorkspace(context.connectionId, threadId), sessionId => this.acp.resolveUploadWorkspace(context.connectionId, sessionId)), undefined, context.transportMode, Date.now, this.uploadBudget);
             const lanUpload = context.peerIdentityKey && context.transportMode ? new LanUploadHost(workspaceUpload, {
                 connectionId: context.connectionId, peerIdentityKey: context.peerIdentityKey,
                 identity: () => this.currentIdentity(), mode: context.transportMode,
@@ -131,7 +141,11 @@ export class HostPluginRuntime {
             this.createLoopbackHost(), () => this.hostWorkspaceTypes(), pluginRoute, workspaceUpload, {
                 operations: this.compactionOperations,
                 owner: { deviceId: context.peerDeviceId, connectionId: context.connectionId },
-            }, lanUpload);
+            }, lanUpload, context.createTransportUpgradeHost?.(send), sessionTransfer?.peer(context.peerDeviceId), this.serverApi && resolveDshWeb ? new DshWebPeer(this.serverApi, {
+                clientDeviceId: context.peerDeviceId,
+                connectionId: context.connectionId,
+            }, resolveDshWeb) : undefined, resolveDshWeb && context.transportMode && context.lanWebAddress
+                ? new DshWebLanPeer(resolveDshWeb, context.transportMode, context.lanWebAddress) : undefined, context.sameLinkIpv6Endpoints);
         }, this.logger);
         if (config.serverUrl !== undefined) {
             this.serverApi = new HostServerApi(config.serverUrl, new ServerCredentialStore(identities.directory), fetch, 'host', config.httpServerAllowlist);
@@ -174,7 +188,10 @@ export class HostPluginRuntime {
             fingerprint: this.identity.fingerprint,
             server: this.config.serverUrl ?? 'not configured',
         });
-        await this.codex.start();
+        const timedOut = await waitForStartupGrace(this.codex.start(), this.codexStartupGraceMs);
+        if (timedOut) {
+            this.logger.info('Codex initialization continuing in background after startup grace');
+        }
         void this.acp.start().catch(() => {
             this.logger.warn('ACP background initialization failed', { code: 'ACP_START_FAILED' });
         });
@@ -196,6 +213,7 @@ export class HostPluginRuntime {
     }
     acceptAuthenticatedPeer(channel) {
         this.currentIdentity();
+        this.codex.tryRecoverOnDemand();
         return this.connections.accept(channel);
     }
     hostStatus() {
@@ -265,6 +283,7 @@ export class HostPluginRuntime {
         if (this.serverConnection === undefined) {
             throw new ServerApiError('SERVER_NOT_CONFIGURED', 'Configure serverUrl before reconnecting.', false);
         }
+        this.codex.tryRecoverOnDemand();
         this.serverConnection.reconnect();
     }
     async hostOAuthProviders() {
@@ -310,10 +329,12 @@ export class HostPluginRuntime {
         catch (error) {
             revokeFailure = error;
         }
-        this.identity = await this.identities.reset(this.config.deviceName);
+        this.identity = await this.identities.reset(this.config.deviceName, { clearPairingPolicy: true });
         this.serverApi?.bindIdentity(this.identity);
-        if (this.serverApi !== undefined)
+        if (this.serverApi !== undefined) {
+            await this.serverApi.loadStoredPolicy();
             this.serverConnection = this.createServerConnection(this.identity);
+        }
         this.initializePairing();
         this.logger.info('Host authorization cleared');
         if (revokeFailure !== undefined)
@@ -344,7 +365,7 @@ export class HostPluginRuntime {
         this.logger.info('Host authorized as an owned device');
         return result;
     }
-    async authorizeHostWithAccount(email, password) {
+    async authorizeHostWithAccount(email, password, verification) {
         if (this.serverApi === undefined) {
             throw new ServerApiError('SERVER_NOT_CONFIGURED', 'Configure serverUrl before signing in.', false);
         }
@@ -358,7 +379,7 @@ export class HostPluginRuntime {
             this.initializePairing();
             this.logger.info('Rotated revoked Host identity before account authorization');
             return this.identity;
-        });
+        }, verification);
         this.serverConnection?.resume();
         this.logger.info('Host account authorized');
         return result;
@@ -403,6 +424,9 @@ export class HostPluginRuntime {
     acpStatus() {
         return this.acp.status();
     }
+    acpDiagnostics() {
+        return this.acp.diagnostics();
+    }
     acpCall(input) {
         return this.requireLocalAcpPeer().call(input);
     }
@@ -427,10 +451,10 @@ export class HostPluginRuntime {
             return;
         this.closed = true;
         this.pairing?.close();
-        this.serverApi?.close();
         await this.serverConnection?.stop();
         this.compactionOperations.closeAll();
         await this.connections.close();
+        this.serverApi?.close();
         await this.localCodexPeer?.closeAll();
         this.localCodexPeer = undefined;
         await this.localAcpPeer?.closeAll();
@@ -457,6 +481,7 @@ export class HostPluginRuntime {
             workspaceTypes: this.hostWorkspaceTypes(),
             codex: this.codex.status(),
             acp: this.acp.status(),
+            acpDiagnostics: this.acp.diagnostics(),
         };
     }
     createServerConnection(identity) {
@@ -506,16 +531,22 @@ export class HostPluginRuntime {
             return capabilities;
         let result;
         try {
-            result = await gateway.dispatch('session/list', { args: { _request: {} } }, AbortSignal.timeout(5_000));
+            // The Gateway resolves the endpoint before rejecting unknown arguments, and
+            // rejects them before invoking the Session handler. Never enumerate persisted
+            // sessions during capability discovery: cold history can take minutes to read.
+            result = await gateway.dispatch('session/list', { args: { __remoteCapabilityProbe: true } }, AbortSignal.timeout(5_000));
         }
         catch {
             throw new RpcError('CONNECTION_FAILED', 'Cannot verify the Host Session API.', undefined, true);
         }
-        if (result.ok) {
+        if (!result.ok && result.error.code === 'gateway/arguments-invalid') {
             if (isLiveSessionEventsHarnessVersion(this.harnessVersion) && await this.probeLiveSessionEvents(gateway)) {
                 capabilities.push(REMOTE_SESSION_EVENTS_CAPABILITY);
             }
             return capabilities;
+        }
+        if (result.ok) {
+            throw new RpcError('CONNECTION_FAILED', 'The Host Gateway did not reject the Session API probe.', undefined, true);
         }
         if (result.error.code === 'gateway/service-unavailable') {
             throw new RpcError('CONNECTION_FAILED', 'The Host Session API is not ready.', undefined, true);
@@ -582,7 +613,7 @@ export class HostPluginRuntime {
             catch { }
         }
         try {
-            execFileSync(process.platform === 'win32' ? 'where' : 'which', [command], { stdio: 'ignore' });
+            execFileSync(process.platform === 'win32' ? 'where' : 'which', [command], { stdio: 'ignore', windowsHide: true });
             return true;
         }
         catch {
@@ -627,5 +658,34 @@ export class HostPluginRuntime {
 function shortId(value) { return value.length <= 12 ? value : `${value.slice(0, 8)}…${value.slice(-4)}`; }
 function isPlainRecord(value) {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+async function waitForStartupGrace(promise, graceMs) {
+    if (graceMs <= 0) {
+        void promise.catch(() => undefined);
+        return true;
+    }
+    let settledByTimer = false;
+    let timer;
+    const guarded = promise.then(() => false, error => {
+        if (settledByTimer)
+            return true;
+        throw error;
+    });
+    try {
+        return await Promise.race([
+            guarded,
+            new Promise(resolve => {
+                timer = setTimeout(() => {
+                    settledByTimer = true;
+                    resolve(true);
+                }, graceMs);
+                timer.unref?.();
+            }),
+        ]);
+    }
+    finally {
+        if (timer !== undefined)
+            clearTimeout(timer);
+    }
 }
 //# sourceMappingURL=service.js.map

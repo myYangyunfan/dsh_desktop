@@ -1,4 +1,6 @@
-import { type ChildProcessWithoutNullStreams } from 'node:child_process';
+import type { AcpAuthDiagnostic, AcpAuthMethod } from '@dsh-remote/protocol';
+import { type AcpInitializeMetadata } from './auth-diagnostics.js';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { SafeLogger } from '../../logging.js';
 export interface CursorAcpNotification {
     kind: 'notification';
@@ -15,8 +17,15 @@ export type CursorAcpInbound = CursorAcpNotification | CursorAcpRequest;
 export type CursorAcpInboundHandler = (message: CursorAcpInbound) => void;
 export type CursorAcpUnavailableHandler = (code: string) => void;
 export type SpawnCursorAcp = (binary: string) => ChildProcessWithoutNullStreams;
+/** Backends that reuse this stdio client and must keep their own failure vocabulary. */
+export type AcpAdapterBackend = string;
 export interface CursorAcpOptions {
-    modelBackend?: 'cursor' | 'claude' | 'hermes';
+    modelBackend?: string;
+    /**
+     * Backend that owns this process. Pi, Claude, Hermes, and custom backends reuse
+     * this client, so codes and log lines must name the backend that actually failed.
+     */
+    backend?: AcpAdapterBackend;
     args?: string[];
     cwd?: string;
     /** null uses Host-local pre-authentication; undefined preserves Cursor login. */
@@ -27,6 +36,9 @@ export interface CursorAcpLike {
     isReady(): boolean;
     /** Optional Host-local preparation; never a Cursor ACP wire method. */
     prewarmSession?(cwd: string): void;
+    diagnostics?(): AcpAuthDiagnostic;
+    capabilities?(): AcpInitializeMetadata['agentCapabilities'];
+    authMethods?(): AcpAuthMethod[];
     call(method: string, params: unknown, timeoutMs?: number): Promise<unknown>;
     respond(id: string | number, result: unknown): Promise<void>;
     respondError(id: string | number, code: number, message: string): Promise<void>;
@@ -36,7 +48,10 @@ export interface CursorAcpLike {
 }
 export declare class CursorAcpError extends Error {
     readonly code: string;
-    constructor(code: string, message: string, options?: ErrorOptions);
+    constructor(code: string, message: string, options?: ErrorOptions & {
+        authDiagnostic?: AcpAuthDiagnostic;
+    });
+    readonly authDiagnostic?: AcpAuthDiagnostic;
 }
 /**
  * Host-local stdio client for one Cursor CLI ACP process (`agent acp`).
@@ -60,6 +75,16 @@ export declare class CursorAcpClient implements CursorAcpLike {
     private startPromise?;
     private readonly modelStates;
     private readonly modelBusy;
+    private readonly sessionCommands;
+    private initMetadata?;
+    private lastAuthDiagnostic?;
+    /** Backend that owns this process: failure codes and log lines must name it. */
+    private get backend();
+    private get adapterLabel();
+    private code;
+    diagnostics(): AcpAuthDiagnostic;
+    capabilities(): AcpInitializeMetadata['agentCapabilities'];
+    authMethods(): AcpAuthMethod[];
     constructor(binary: string, logger?: SafeLogger | undefined, spawnAcp?: SpawnCursorAcp, options?: CursorAcpOptions);
     start(): Promise<void>;
     isReady(): boolean;

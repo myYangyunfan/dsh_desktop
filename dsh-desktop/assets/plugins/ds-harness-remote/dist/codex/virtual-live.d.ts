@@ -1,5 +1,6 @@
 import type { CodexPermissionPreset } from '@dsh-remote/protocol';
 import type { HarnessSessionGeneration } from '../harness-version.js';
+import { type VirtualHistoryTurnWindow } from '../virtual-history-pagination.js';
 import type { CodexModelDirectory, CodexModelSelection } from './virtual-catalog.js';
 import type { CodexImageAttachmentEntry, FollowState, PendingApproval, StreamedBlock } from './virtual-contract.js';
 import type { CodexNativeHistoryPage, ProjectedNativeEvent, ToolEventView } from './virtual-history.js';
@@ -10,6 +11,7 @@ export interface CodexLiveProjectionContext {
         beforeSeq?: number;
         throughSeq?: number;
         maxMessages?: number;
+        turnWindow?: VirtualHistoryTurnWindow;
     }, signal?: AbortSignal) => Promise<CodexNativeHistoryPage>;
     readonly models: (signal?: AbortSignal) => Promise<CodexModelDirectory>;
     readonly pendingRequestIds: Map<string, string>;
@@ -45,6 +47,8 @@ export declare class CodexLiveProjection {
         method: string;
         params: unknown;
     }): void;
+    private recoverTerminalTurn;
+    private finishTurn;
     acceptCompletedItem(follow: FollowState, item: JsonRecord, settleAssistant: boolean): void;
     pushEvent(follow: FollowState, type: string, data: unknown, view?: ToolEventView, placement?: {
         replaceSeq: number;

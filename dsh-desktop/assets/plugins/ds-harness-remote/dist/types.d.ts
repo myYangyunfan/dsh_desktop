@@ -1,4 +1,4 @@
-import type { RemoteMessage } from '@dsh-remote/protocol';
+import type { RemoteMessage, SameLinkIpv6Pair } from '@dsh-remote/protocol';
 export interface AuthenticatedPeerChannel {
     /**
      * Attestation supplied by the Noise/control-plane integration. Implementors
@@ -12,7 +12,10 @@ export interface AuthenticatedPeerChannel {
     };
     readonly peerDeviceId: string;
     readonly peerIdentityKey: string;
+    readonly sameLinkIpv6Endpoints?: (pair?: SameLinkIpv6Pair) => Promise<string[]>;
+    readonly lanWebAddress?: (pair?: SameLinkIpv6Pair) => Promise<string | undefined>;
     readonly mode?: 'LAN' | 'P2P' | 'TURN' | 'Relay';
+    readonly createTransportUpgradeHost?: (publishEvent: (message: RemoteMessage) => Promise<void>) => import('./transport-upgrade.js').TransportUpgradeHost | undefined;
     send(message: RemoteMessage): Promise<void>;
     onMessage(handler: (message: RemoteMessage) => void): () => void;
     close(code?: string): Promise<void>;

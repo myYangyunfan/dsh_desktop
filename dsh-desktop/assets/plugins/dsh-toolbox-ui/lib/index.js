@@ -390,10 +390,17 @@ async function contextReportFor(ctx, payload) {
 		}
 	}
 	// 工具定义不在 surface 上，它的价格只存在于 contextBreakdown 投影里（宿主同一套估算器）。
+	//
+	// ⚠️ **投影的 state 是两层的**：
+	//      `{ systems, surfaceTokens, claim?, breakdown: { systemTokens, toolsTokens, messageTokens } }`
+	// 而 `buildContextReport` 要的是里面那个 `breakdown`。此前这里把整个 state 传了下去，
+	// 于是 `breakdown?.toolsTokens` 永远是 undefined，面板工具卡的「占上下文」一直显示「—」
+	// （2026-11-19 真机现象：37 工具数 / — 占上下文），而纯函数那组用例喂的是内层对象，
+	// 两边各自都绿。宿主状态形状**只在这里解释一次**：换宿主版本若要改读法，改这一行。
 	const projections = serviceOf(ctx, 'sessionProjections');
 	if (typeof projections?.stateOf === 'function') {
 		try {
-			breakdown = projections.stateOf(session, 'contextBreakdown');
+			breakdown = projections.stateOf(session, 'contextBreakdown')?.breakdown ?? null;
 		} catch (error) {
 			ctx.logger?.warn?.(`dsh-toolbox-ui: 工具定义占用读取失败：${error?.message ?? error}`);
 		}

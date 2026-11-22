@@ -4546,6 +4546,18 @@ const followSourceOf = (row, groupName, groups) => {
  * （`navigate_page` / `take_screenshot` …）和宿主里不存在的 `task`、`schedule_update`，
  * 后果是名字相同的第三方工具会被贴上“内置”标签、分进内置分类——比不分类更糟。
  *
+ * **覆盖范围是整个支持窗口，不是最新一代宿主**（`peerDependencies` 的 `>=0.2.1-rc.5 <0.3.0`）：
+ * 同一个名字在不同代宿主上可能"有→没有→改叫别的"（例：`cordis_inspect_list` / `cordis_inspect_query`
+ * 在 0.2.2-rc.5 仍是两个工具，rc.5 之后的宿主才并成一个 `cordis_inspect`），而本插件同时服务
+ * 0.2.1 与 0.2.2 两代、三条已验证腿。所以这里**只增不删**：老名字留着（老宿主上仍是真工具），
+ * 新名字加上，直到窗口下限抬过"该名字存在的最后一版"再删。反向做（换名字）会让老宿主上的
+ * 工具掉进「其他插件与未识别」。
+ *
+ * 证据来源是宿主仓库的 `docs/tool-catalog.md`——它由 `pnpm run gen-tool-catalog` 真启动每个
+ * 工具包、读 `ctx.tools.schemas()` 生成，是本仓库能拿到的最接近"宿主到底注册了哪些名字"的东西
+ * （插件运行时拿不到 provenance，见下）。核对方法：取该版本的 `### \`<name>\`` 标题集合，
+ * 与本表的键做双向差集。
+ *
  * 名单外的非 MCP 工具一律进「其他插件与未识别工具」：宿主没有 provenance 接口，
  * 猜错会改掉别人的工具身份，所以不猜。
  */
@@ -4560,6 +4572,10 @@ const BUILTIN_LABELS = {
   str_replace_editor: '结构化编辑',
   glob: '查找文件',
   grep: '搜索文件内容',
+  // 文件：office kit（只在装了 dsh-tool-office 的部署里出现）
+  office_convert: '转换文档',
+  office_recalculate: '重算表格',
+  office_render: '渲染文档',
   // 命令
   bash: '运行命令',
   pwsh: '运行命令',
@@ -4569,9 +4585,19 @@ const BUILTIN_LABELS = {
   terminal_signal: '发送终端信号',
   terminal_close: '关闭终端',
   terminal_list: '列出终端',
+  // 命令：终端面板（dsh-terminal-panel，另一组名字）
+  user_terminal_list: '列出用户终端',
+  user_terminal_read: '读取用户终端',
   // 网络
   web_search: '网页搜索',
   web_fetch: '抓取网页',
+  // 网络：浏览器自动化（dsh-experimental-browser-use-stagehand-native）
+  stagehand_act: '浏览器操作',
+  stagehand_extract: '提取网页数据',
+  stagehand_navigate: '打开网页',
+  stagehand_observe: '观察页面',
+  stagehand_screenshot: '网页截图',
+  stagehand_tabs: '管理标签页',
   // MCP 资源
   list_mcp_resources: '列出 MCP 资源',
   list_mcp_resource_templates: '列出资源模板',
@@ -4598,10 +4624,13 @@ const BUILTIN_LABELS = {
   team_task_get: '查看团队任务',
   team_task_list: '列出团队任务',
   team_task_update: '更新团队任务',
+  // 子代理：按别名委派（dsh-experimental-tool-subagent-oar）
+  subagent_oar: '按别名委派',
   // 技能与交互
   skill: '加载技能',
   ask_user_question: '向用户提问',
   present: '交付文件',
+  propose_action: '提议操作',
   // 定时
   schedule_create: '创建定时任务',
   schedule_list: '列出定时任务',
@@ -4610,14 +4639,19 @@ const BUILTIN_LABELS = {
   // 代码与工作区
   lsp: '代码导航',
   create_worktree: '创建工作树',
+  enter_worktree: '进入工作树',
+  exit_worktree: '退出工作树',
   load_workspace_dependencies: '加载工作区依赖',
+  list_workspace: '列出工作区',
   // 宿主与插件
   plugin_manager: '管理插件',
   plugin_market: '插件市场',
   cordis_inspect_list: '列出 Cordis 条目',
   cordis_inspect_query: '查询 Cordis 条目',
+  cordis_inspect: '检查 Cordis 接口',
   // 其他
   run_code: '运行代码',
+  list_session: '列出会话',
   session_search: '搜索会话',
   session_trace: '追踪会话',
   session_event_read: '读取会话事件',
@@ -4636,22 +4670,22 @@ const toolLabel = (row) => (row.kind === 'builtin' && BUILTIN_LABELS[row.name]) 
  * 名单外的名字不进任何内置分类。
  */
 const BUILTIN_CATEGORY_GROUPS = [
-  { id: 'files', label: '文件', names: ['working_directory', 'read', 'write', 'edit', 'read_image', 'apply_patch', 'str_replace_editor', 'glob', 'grep'] },
-  { id: 'shell', label: '命令与终端', names: ['bash', 'pwsh', 'terminal_open', 'terminal_send', 'terminal_read', 'terminal_signal', 'terminal_close', 'terminal_list'] },
-  { id: 'web', label: '网络', names: ['web_search', 'web_fetch'] },
+  { id: 'files', label: '文件', names: ['working_directory', 'read', 'write', 'edit', 'read_image', 'apply_patch', 'str_replace_editor', 'glob', 'grep', 'office_convert', 'office_recalculate', 'office_render'] },
+  { id: 'shell', label: '命令与终端', names: ['bash', 'pwsh', 'terminal_open', 'terminal_send', 'terminal_read', 'terminal_signal', 'terminal_close', 'terminal_list', 'user_terminal_list', 'user_terminal_read'] },
+  { id: 'web', label: '网络', names: ['web_search', 'web_fetch', 'stagehand_act', 'stagehand_extract', 'stagehand_navigate', 'stagehand_observe', 'stagehand_screenshot', 'stagehand_tabs'] },
   { id: 'mcp-resources', label: 'MCP 资源', names: ['list_mcp_resources', 'list_mcp_resource_templates', 'read_mcp_resource'] },
   { id: 'tasks', label: '任务与后台', names: ['todo_write', 'get_goal', 'create_goal', 'update_goal', 'exit_plan_mode', 'job_list', 'job_output', 'job_kill'] },
   {
     id: 'agents',
     label: '子代理与团队',
     names: ['subagent', 'subagent_fork', 'list_subagent_models', 'send_message', 'list_agents', 'interrupt_agent',
-      'wait_agent', 'workflow', 'team_task_create', 'team_task_get', 'team_task_list', 'team_task_update'],
+      'wait_agent', 'workflow', 'team_task_create', 'team_task_get', 'team_task_list', 'team_task_update', 'subagent_oar'],
   },
-  { id: 'interaction', label: '技能与交互', names: ['skill', 'ask_user_question', 'present'] },
+  { id: 'interaction', label: '技能与交互', names: ['skill', 'ask_user_question', 'present', 'propose_action'] },
   { id: 'schedule', label: '定时', names: ['schedule_create', 'schedule_list', 'schedule_view', 'schedule_edit'] },
-  { id: 'code', label: '代码与工作区', names: ['lsp', 'create_worktree', 'load_workspace_dependencies'] },
-  { id: 'host', label: '宿主与插件', names: ['plugin_manager', 'plugin_market', 'cordis_inspect_list', 'cordis_inspect_query'] },
-  { id: 'misc', label: '其他内置', names: ['run_code', 'session_search', 'session_trace', 'session_event_read', 'session_event_search', 'session_event_trace', 'ralph'] },
+  { id: 'code', label: '代码与工作区', names: ['lsp', 'create_worktree', 'enter_worktree', 'exit_worktree', 'load_workspace_dependencies', 'list_workspace'] },
+  { id: 'host', label: '宿主与插件', names: ['plugin_manager', 'plugin_market', 'cordis_inspect_list', 'cordis_inspect_query', 'cordis_inspect'] },
+  { id: 'misc', label: '其他内置', names: ['run_code', 'list_session', 'session_search', 'session_trace', 'session_event_read', 'session_event_search', 'session_event_trace', 'ralph'] },
 ]
 const BUILTIN_CATEGORY = Object.fromEntries(
   BUILTIN_CATEGORY_GROUPS.flatMap((group) => group.names.map((name) => [name, group.id])),

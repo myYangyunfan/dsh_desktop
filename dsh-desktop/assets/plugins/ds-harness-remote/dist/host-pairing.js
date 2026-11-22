@@ -96,7 +96,7 @@ export class HostPairing {
         const s = savedPairingSchema.parse(value);
         if (s.serverUrl !== this.serverUrl || s.deviceId !== this.identity.deviceId)
             throw new ServerApiError('PAIRING_IDENTITY_INVALID', 'Pairing belongs to another identity.', false);
-        if (s.session.expiresAt + 300000 <= Date.now()) {
+        if (s.session.expiresAt + 300000 <= Date.now() || s.state === 'completed' && s.localSaved) {
             await rm(this.path, { force: true });
             return undefined;
         }
@@ -110,6 +110,8 @@ export class HostPairing {
     }
     save(s) { return atomicWritePrivate(this.path, JSON.stringify(s)); }
     async poll(s) {
+        if (!active.has(s.state) && (s.state !== 'completed' || s.localSaved))
+            return this.view(s);
         try {
             return await this.accept(s, await this.send(s, 'host/status', '{}'));
         }
@@ -152,6 +154,10 @@ export class HostPairing {
         s.state = r.state;
         if (!active.has(s.state))
             delete s.submission;
+        if (s.state === 'completed' && s.localSaved) {
+            await rm(this.path, { force: true });
+            return this.view(s, r.failureReason);
+        }
         await this.save(s);
         return this.view(s, r.failureReason);
     }

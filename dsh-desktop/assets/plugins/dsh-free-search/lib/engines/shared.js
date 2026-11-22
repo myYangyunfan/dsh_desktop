@@ -60,6 +60,7 @@ export const KEENABLE_URL = "https://api.keenable.ai/v1/search";
 export const KEENABLE_MCP_URL = "https://api.keenable.ai/mcp";
 export const SERPBASE_URL = "https://api.serpbase.dev/google/search";
 export const SERPLY_URL = "https://api.serply.io/v1/search";
+export const SERPER_URL = "https://google.serper.dev/search";
 export const OUTCRAWL_URL = "https://api.outcrawl.ai/v1/search";
 export const YOUCOM_URL = "https://ydc-index.io/v1/search";
 // You.com 免 key 档：同样的 query / count 参数与 results.web[] 响应，每天 100 次免费搜索
@@ -371,6 +372,16 @@ export function stripZhihuTracking(url) {
 }
 
 export const SERPBASE_LOCALE = {
+  zh: { hl: "zh-CN", gl: "cn" },
+  en: { hl: "en", gl: "us" },
+  ru: { hl: "ru", gl: "ru" },
+  ja: { hl: "ja", gl: "jp" },
+  de: { hl: "de", gl: "de" },
+  fr: { hl: "fr", gl: "fr" },
+  es: { hl: "es", gl: "es" },
+  ko: { hl: "ko", gl: "kr" },
+};
+export const SERPER_LOCALE = {
   zh: { hl: "zh-CN", gl: "cn" },
   en: { hl: "en", gl: "us" },
   ru: { hl: "ru", gl: "ru" },

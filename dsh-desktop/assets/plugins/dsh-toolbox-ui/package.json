@@ -1,6 +1,6 @@
 {
   "name": "dsh-toolbox-ui",
-  "version": "1.13.0",
+  "version": "1.13.2",
   "description": "Responsive MCP management UI and skills manager for DeepSeek Harness Web — floating panel, JSON import, profile-backed Host Remote management, and a skill market with a hard license gate.",
   "repository": {
     "type": "git",
@@ -56,20 +56,20 @@
     "@deepseek-ai/cordis": "~4.1.0",
     "@deepseek-ai/cordis-plugin-include": "~1.1.0",
     "@deepseek-ai/cordis-plugin-loader": "~1.1.0",
-    "@deepseek-ai/dsh-agent": "0.2.2-rc.3",
-    "@deepseek-ai/dsh-agent-loop": "0.2.2-rc.3",
-    "@deepseek-ai/dsh-api-gateway": "0.2.2-rc.3",
-    "@deepseek-ai/dsh-app-boot": "0.2.2-rc.3",
-    "@deepseek-ai/dsh-atomic-write": "0.2.2-rc.3",
-    "@deepseek-ai/dsh-mcp-client": "0.2.2-rc.3",
-    "@deepseek-ai/dsh-scope": "0.2.2-rc.3",
-    "@deepseek-ai/dsh-skill": "0.2.2-rc.3",
-    "@deepseek-ai/dsh-skill-filesystem": "0.2.2-rc.3",
-    "@deepseek-ai/dsh-tool-executor-native": "0.2.2-rc.3",
-    "@deepseek-ai/dsh-tool-executor-ptc": "0.2.2-rc.3",
-    "@deepseek-ai/dsh-tools": "0.2.2-rc.3",
-    "@deepseek-ai/dsh-typert-loader": "0.2.2-rc.3",
-    "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.3"
+    "@deepseek-ai/dsh-agent": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-agent-loop": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-api-gateway": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-app-boot": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-atomic-write": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-mcp-client": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-scope": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-skill": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-skill-filesystem": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-tool-executor-native": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-tool-executor-ptc": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-typert-loader": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.5"
   },
   "dsh": {
     "bundle": {

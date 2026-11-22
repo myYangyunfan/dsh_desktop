@@ -19,7 +19,7 @@ export class IsolatedAcpClient {
     busy = new Set();
     loading = new Map();
     historyBusy = false;
-    constructor(binary, logger, options = {}, factory = () => new CursorAcpClient(binary, logger, undefined, { ...options, args: options.args ?? (options.backend === 'cursor' ? ['acp'] : []), authenticationMethod: options.backend === 'cursor' ? 'cursor_login' : null })) {
+    constructor(binary, logger, options = {}, factory = () => new CursorAcpClient(binary, logger, undefined, { ...options, backend: options.backend ?? 'pi', args: options.args ?? (options.backend === 'cursor' ? ['acp'] : []), authenticationMethod: options.backend === 'cursor' ? 'cursor_login' : null })) {
         this.binary = binary;
         this.logger = logger;
         this.options = options;
@@ -33,6 +33,15 @@ export class IsolatedAcpClient {
             handler(code); });
     }
     isReady() { return !this.closed && this.catalog?.isReady() === true; }
+    diagnostics() {
+        return this.catalog?.diagnostics?.() ?? { authStatus: this.isReady() ? 'authenticated' : 'unknown' };
+    }
+    capabilities() {
+        return this.catalog?.capabilities?.() ?? {};
+    }
+    authMethods() {
+        return this.catalog?.authMethods?.() ?? [];
+    }
     async create(history = false) {
         if (this.closed)
             throw new CursorAcpError('ACP_CLOSED', `${this.label} ACP is closed.`);
@@ -131,12 +140,18 @@ export class IsolatedAcpClient {
                     throw new CursorAcpError('ACP_INVALID_SESSION', `${this.label} returned an invalid session.`);
                 this.clients.set(id, client);
                 const config = { ...result };
+                if (config.modes && Array.isArray(config.modes.availableModes) && !config.sessionModes) {
+                    config.sessionModes = { ...config.modes };
+                }
                 this.updateConfiguration(id, { kind: 'notification', method: 'session/update', params: {
                         update: { sessionUpdate: 'config_option_update', configOptions: config.configOptions },
                     } }, config);
-                for (const key of ['models', 'modes']) {
+                for (const key of ['models', 'modes', 'sessionModes']) {
                     if (replayConfiguration[key])
                         config[key] = { ...config[key], ...replayConfiguration[key] };
+                }
+                if (typeof replayConfiguration.sessionModeConfigId === 'string') {
+                    config.sessionModeConfigId = replayConfiguration.sessionModeConfigId;
                 }
                 this.configurations.set(id, config);
                 boundId = id;
@@ -154,6 +169,42 @@ export class IsolatedAcpClient {
         if (!client)
             throw new CursorAcpError('ACP_SESSION_NOT_LOADED', `Load the ${this.label} session before using it.`);
         const id = String(p.sessionId);
+        if (method === 'dsh/sessionCommands')
+            return client.call(method, params, timeoutMs);
+        if (method === 'dsh/sessionModes' || method === 'session/set_mode') {
+            if (this.backend === 'cursor')
+                return client.call(method, params, timeoutMs);
+            const config = this.configurations.get(id);
+            const sessionModes = config?.sessionModes;
+            if (method === 'dsh/sessionModes') {
+                return sessionModes ?? { availableModes: [] };
+            }
+            if (this.busy.has(id))
+                throw new CursorAcpError('PROMPT_IN_PROGRESS', `Stop the ${this.label} reply before changing its mode.`);
+            const modeId = typeof p.modeId === 'string' ? p.modeId : undefined;
+            if (!modeId || !sessionModes?.availableModes?.some(item => item.id === modeId)) {
+                throw new CursorAcpError('INVALID_MESSAGE', `The selected ${this.label} mode is unavailable.`);
+            }
+            this.busy.add(id);
+            try {
+                if (typeof config?.sessionModeConfigId === 'string') {
+                    await client.call('session/set_config_option', {
+                        sessionId: id,
+                        configId: config.sessionModeConfigId,
+                        value: modeId,
+                    }, timeoutMs);
+                }
+                else {
+                    await client.call('session/set_mode', { sessionId: id, modeId }, timeoutMs);
+                }
+                if (config?.sessionModes)
+                    config.sessionModes.currentModeId = modeId;
+                return { currentModeId: modeId };
+            }
+            finally {
+                this.busy.delete(id);
+            }
+        }
         if (this.backend === 'cursor' && (method === 'dsh/sessionModels' || method === 'dsh/selectModel'))
             return client.call(method, params, timeoutMs);
         if (method === 'dsh/sessionModels')
@@ -162,16 +213,17 @@ export class IsolatedAcpClient {
             if (this.busy.has(id))
                 throw new CursorAcpError('PROMPT_IN_PROGRESS', `Stop the ${this.label} reply before changing its model.`);
             const config = this.configurations.get(id);
-            if (!config?.models?.availableModels?.some((item) => item.modelId === p.model)
-                || (p.reasoningEffort !== undefined && !config?.modes?.availableModes?.some((item) => item.id === p.reasoningEffort))) {
-                throw new CursorAcpError('INVALID_MESSAGE', `The ${this.label} model or thinking level is not available.`);
+            if (!config?.models?.availableModels?.some((item) => item.modelId === p.model)) {
+                throw new CursorAcpError('INVALID_MESSAGE', `The ${this.label} model is not available.`);
             }
             this.busy.add(id);
             try {
-                const modelResult = await client.call('session/set_config_option', { sessionId: id, configId: 'model', value: p.model });
-                this.updateConfiguration(id, { kind: 'notification', method: 'session/update', params: { update: { sessionUpdate: 'config_option_update', configOptions: modelResult.configOptions } } });
-                if (this.configurations.get(id)?.models?.currentModelId !== p.model)
-                    throw new CursorAcpError('ACP_MODEL_NOT_CONFIRMED', `${this.label} did not confirm the model change.`);
+                if (config.models.currentModelId !== p.model) {
+                    const modelResult = await client.call('session/set_config_option', { sessionId: id, configId: 'model', value: p.model });
+                    this.updateConfiguration(id, { kind: 'notification', method: 'session/update', params: { update: { sessionUpdate: 'config_option_update', configOptions: modelResult.configOptions } } });
+                    if (this.configurations.get(id)?.models?.currentModelId !== p.model)
+                        throw new CursorAcpError('ACP_MODEL_NOT_CONFIRMED', `${this.label} did not confirm the model change.`);
+                }
                 if (p.reasoningEffort !== undefined) {
                     if (!this.configurations.get(id)?.modes?.availableModes?.some((item) => item.id === p.reasoningEffort))
                         throw new CursorAcpError('INVALID_MESSAGE', 'The selected model does not support this thinking level.');
@@ -206,8 +258,11 @@ export class IsolatedAcpClient {
         const config = initial ?? this.configurations.get(id);
         if (!update || !config)
             return;
-        if (update.sessionUpdate === 'current_mode_update' && typeof update.currentModeId === 'string')
+        if (update.sessionUpdate === 'current_mode_update' && typeof update.currentModeId === 'string') {
             config.modes = { ...config.modes, currentModeId: update.currentModeId };
+            if (config.sessionModes)
+                config.sessionModes.currentModeId = update.currentModeId;
+        }
         if (update.sessionUpdate === 'config_option_update' && Array.isArray(update.configOptions)) {
             for (const option of update.configOptions) {
                 if (option?.type !== 'select' || !Array.isArray(option.options))
@@ -220,6 +275,17 @@ export class IsolatedAcpClient {
                 if (option.id === 'thought_level')
                     config.modes = { currentModeId: option.currentValue,
                         availableModes: options.map((item) => ({ id: item.value, name: item.name })) };
+                if (option.id === 'mode' || option.category === 'mode') {
+                    config.sessionModeConfigId = option.id;
+                    config.sessionModes = {
+                        currentModeId: option.currentValue,
+                        availableModes: options.map((item) => ({
+                            id: item.value,
+                            name: item.name,
+                            ...(typeof item.description === 'string' ? { description: item.description } : {}),
+                        })),
+                    };
+                }
             }
         }
     }

@@ -1,12 +1,12 @@
 /**
- * dsh-context v0.86.0
+ * dsh-context v0.87.0
  * A DeepSeek Harness plugin for context insight and management, with context dashboard and context command, for understanding how the context is made of, and how it evolves.
  * @author bowenliang123
  * @license Apache-2.0
  * @homepage https://github.com/bowenliang123/dsh-context
- * @built 2026-11-18T17:18:01+00:00
- * @commit f37ff3d02712
- * @commit-date 2026-11-19T01:15:18+08:00
+ * @built 2026-11-21T06:02:41+00:00
+ * @commit d6aff61857ae
+ * @commit-date 2026-11-21T13:59:53+08:00
  */
 
 import "zod";
@@ -54,6 +54,8 @@ interface AgentAlias {
   memberName?: string;
   catalogLabel?: string;
 }
+type WorkflowTodoStatus = 'pending' | 'in_progress' | 'completed';
+type WorkflowTeamTaskStatus = WorkflowTodoStatus | 'deleted';
 interface TimelineState {
   surface: SurfaceNode[];
   sums: Record<Category, number>;
@@ -116,6 +118,8 @@ interface TimelineState {
   commandCalls?: string[];
   commandCallsOverflow?: boolean;
   agents?: Record<string, AgentAlias>;
+  todoItems?: Record<string, WorkflowTodoStatus>;
+  teamTasks?: Record<string, WorkflowTeamTaskStatus>;
   pendingCodeCmds?: Record<string, CommandStateRecord[]>;
   pendingCodeOps?: Record<string, FileOpRecord[]>;
   pendingCodeStarts?: Record<string, number>;
@@ -123,9 +127,11 @@ interface TimelineState {
 interface CumulativeTotals {
   turns: number;
   steps: number;
+  events: number;
   injects: number;
   compactions: number;
   prunes: number;
+  modelSwitches: number;
   skills: Record<string, true>;
   lastTurn?: number;
 }
@@ -154,6 +160,8 @@ interface TimelineCounts {
   compactions: number;
   prunes: number;
   skills?: number;
+  events?: number;
+  modelSwitches?: number;
 }
 interface TimelineLast {
   seq: number;
@@ -456,8 +464,9 @@ interface RequestRecord extends SlimRequestRecord {
 }
 interface ContextEventRecord {
   seq: number;
+  ord?: number;
   time: number;
-  kind: 'compaction' | 'prune' | 'inject' | 'model' | 'mode';
+  kind: 'compaction' | 'prune' | 'inject' | 'model' | 'mode' | 'agent' | 'goal-create' | 'goal-complete' | 'todo-add' | 'todo-done' | 'ask' | 'team-task-create' | 'team-task-complete';
   form?: string;
   tokens?: number;
   grossTokens?: number;
@@ -466,6 +475,7 @@ interface ContextEventRecord {
   name?: string;
   agent?: string;
   detail?: string;
+  items?: string[];
   from?: string;
   to?: string;
   fromTurn?: number;
@@ -505,6 +515,7 @@ declare const DEFAULT_BOUNDS: {
   maxArchiveNodes: number;
   maxFileOps: number;
   maxCommands: number;
+  maxSpans: number;
   maxCommandChars: number;
 };
 type FoldBounds = typeof DEFAULT_BOUNDS & {
@@ -519,6 +530,7 @@ export declare const Config: z$1<Schemastery.ObjectS<NoInfer<{
   maxArchiveNodes: z$1<number, number, "defined">;
   maxFileOps: z$1<number, number, "defined">;
   maxCommands: z$1<number, number, "defined">;
+  maxSpans: z$1<number, number, "defined">;
   maxCommandChars: z$1<number, number, "defined">;
   defaultPlacement: z$1<"all" | "hide" | "sidebar" | "tab", "all" | "hide" | "sidebar" | "tab", "defined">;
   defaultGranularity: z$1<"step" | "turn", "step" | "turn", "defined">;
@@ -541,6 +553,7 @@ export declare const Config: z$1<Schemastery.ObjectS<NoInfer<{
   maxArchiveNodes: z$1<number, number, "defined">;
   maxFileOps: z$1<number, number, "defined">;
   maxCommands: z$1<number, number, "defined">;
+  maxSpans: z$1<number, number, "defined">;
   maxCommandChars: z$1<number, number, "defined">;
   defaultPlacement: z$1<"all" | "hide" | "sidebar" | "tab", "all" | "hide" | "sidebar" | "tab", "defined">;
   defaultGranularity: z$1<"step" | "turn", "step" | "turn", "defined">;

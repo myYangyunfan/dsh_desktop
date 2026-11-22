@@ -1,7 +1,8 @@
-import { chmod, link, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, link, lstat, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, sep } from 'node:path';
 import { z } from 'zod';
 import { uuidV7 } from './ids.js';
+import { CREDENTIALS_LOCK_DIRECTORY_MESSAGE } from './safe-error.js';
 const credentialSchema = z.object({
     schemaVersion: z.literal(1),
     serverUrl: z.string().url(),
@@ -136,6 +137,10 @@ export class ServerCredentialsLockUnsupportedError extends Error {
         super('Credential lock cannot create a hard link in DSH_HOME. Use a writable local ext4 or XFS file system.');
     }
 }
+export class ServerCredentialsLockDirectoryError extends Error {
+    code = 'SERVER_CREDENTIALS_LOCK_DIRECTORY';
+    constructor() { super(CREDENTIALS_LOCK_DIRECTORY_MESSAGE); }
+}
 export const SERVER_CREDENTIALS_QUEUE_MARKER = 'DSH_REFRESH_LOCK_V2\n';
 async function ensureQueueMarker(lock, deadline) {
     // Old versions use this path as their lock. Keep them outside the new queue.
@@ -145,6 +150,11 @@ async function ensureQueueMarker(lock, deadline) {
             return;
         }
         catch (error) {
+            if (error instanceof ServerCredentialsLockUnsupportedError) {
+                // On Windows a hard link to an occupied directory can fail with EPERM.
+                await assertLockIsNotDirectory(lock);
+                throw error;
+            }
             if (!(await isLockContention(error, lock)))
                 throw error;
             if (await readQueueMarker(lock) === SERVER_CREDENTIALS_QUEUE_MARKER)
@@ -226,14 +236,24 @@ async function readLockRecord(path) {
     }
 }
 async function readQueueMarker(lock) {
+    await assertLockIsNotDirectory(lock);
     try {
         return await readLockRecord(lock);
     }
     catch (error) {
         if (error instanceof Error && 'code' in error && error.code === 'EISDIR')
-            return undefined;
+            throw new ServerCredentialsLockDirectoryError();
         throw error;
     }
+}
+async function assertLockIsNotDirectory(lock) {
+    const metadata = await lstat(lock).catch(error => {
+        if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
+            return undefined;
+        throw error;
+    });
+    if (metadata?.isDirectory())
+        throw new ServerCredentialsLockDirectoryError();
 }
 async function ownerExited(pid) {
     if (pid < 1 || pid > 2147483647 || pid === process.pid)

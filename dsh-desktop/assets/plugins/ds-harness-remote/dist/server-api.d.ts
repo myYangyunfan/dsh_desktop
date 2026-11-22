@@ -43,6 +43,12 @@ export interface AuthorizedPeerDevice extends ServerHostDevice {
     role: 'host' | 'client';
     identityKey: string;
 }
+export interface DshWebRequest {
+    clientDeviceId: string;
+    connectionId: string;
+    requestId: string;
+    leaseExpiresAt: number;
+}
 export declare class HostServerApi {
     private readonly store;
     private readonly fetchImplementation;
@@ -67,7 +73,7 @@ export declare class HostServerApi {
     hasStoredAuthorization(): Promise<boolean>;
     clearAuthorization(): Promise<void>;
     revokeCurrentDevice(): Promise<void>;
-    authorizeWithAccount(identity: HostIdentity, email: string, password: string, recoverIdentity?: () => Promise<HostIdentity>): Promise<DeviceAuthorization>;
+    authorizeWithAccount(identity: HostIdentity, email: string, password: string, recoverIdentity?: () => Promise<HostIdentity>, verification?: AccountVerification): Promise<DeviceAuthorization>;
     oauthProviders(): Promise<OAuthProviderInfo[]>;
     startOAuthQrLogin(provider?: OAuthProvider): Promise<OAuthQrSession>;
     pollOAuthQrLogin(identity: HostIdentity, qrId: string, recoverIdentity?: () => Promise<HostIdentity>): Promise<OAuthQrPollResult>;
@@ -85,6 +91,11 @@ export declare class HostServerApi {
         online: boolean;
         lastSeenAt?: number;
     }>;
+    dshWebRequest(action: 'allocate' | 'grant' | 'check', input: DshWebRequest & {
+        useServerLease?: true;
+    }, signal: AbortSignal, sessionId?: string): Promise<unknown>;
+    closeDshWeb(sessionId: string): Promise<void>;
+    private dshWebPath;
     private loadOrIssue;
     private register;
     private deviceDescriptor;
@@ -103,5 +114,10 @@ export declare class ServerApiError extends Error {
     readonly phase?: "credential_refresh" | undefined;
     readonly reason?: "http_error" | "invalid_json" | "invalid_error_envelope" | "timeout" | "network_error" | undefined;
     constructor(code: string, message: string, retryable: boolean, status?: number | undefined, phase?: "credential_refresh" | undefined, reason?: "http_error" | "invalid_json" | "invalid_error_envelope" | "timeout" | "network_error" | undefined);
+}
+export interface AccountVerification {
+    challenge: string;
+    code: string;
+    serverUrl: string;
 }
 //# sourceMappingURL=server-api.d.ts.map

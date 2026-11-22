@@ -5,6 +5,6 @@ export declare function createHostPairingPanel(React: ClientReact): (props: {
     serverUrl: string;
     disabled: boolean;
     t: Translate;
-    onComplete(): void;
+    onComplete(): void | Promise<void>;
 }) => unknown;
 //# sourceMappingURL=pairing.d.ts.map

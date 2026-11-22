@@ -2,6 +2,7 @@ import type { AcpModelSelection } from './acp/virtual-catalog.js';
 import type { AcpPermissionPreset, NativeEvent as AcpNativeEvent } from './acp/virtual-contract.js';
 import type { CodexNativeHistoryPage } from './codex/virtual-history.js';
 import type { HarnessSessionGeneration } from './harness-version.js';
+import type { VirtualHistoryTurnWindow } from './virtual-history-pagination.js';
 type JsonRecord = Record<string, unknown>;
 export declare function extractSessionIdFromGatewayPayload(payload: unknown): string | undefined;
 export declare function isSessionMutationEndpoint(endpoint: string): boolean;
@@ -50,6 +51,7 @@ export declare class CodexSessionHistoryCache {
         beforeSeq?: number;
         throughSeq?: number;
         maxMessages?: number;
+        turnWindow?: VirtualHistoryTurnWindow;
     }): string;
     beginReadEpoch(): number;
     isReadEpochValid(threadId: string, readEpoch: number): boolean;
@@ -57,22 +59,26 @@ export declare class CodexSessionHistoryCache {
         beforeSeq?: number;
         throughSeq?: number;
         maxMessages?: number;
+        turnWindow?: VirtualHistoryTurnWindow;
     }, knownUpdatedAt?: number): CodexNativeHistoryPage | undefined;
     getFreshTailCursor(threadId: string, generation: HarnessSessionGeneration, knownUpdatedAt?: number): number | undefined;
     getStalePage(threadId: string, generation: HarnessSessionGeneration, page: {
         beforeSeq?: number;
         throughSeq?: number;
         maxMessages?: number;
+        turnWindow?: VirtualHistoryTurnWindow;
     }): CodexNativeHistoryPage | undefined;
     setPage(threadId: string, generation: HarnessSessionGeneration, page: {
         beforeSeq?: number;
         throughSeq?: number;
         maxMessages?: number;
+        turnWindow?: VirtualHistoryTurnWindow;
     }, value: CodexNativeHistoryPage, knownUpdatedAt?: number, readEpoch?: number): void;
     runSingleFlightPage(threadId: string, generation: HarnessSessionGeneration, page: {
         beforeSeq?: number;
         throughSeq?: number;
         maxMessages?: number;
+        turnWindow?: VirtualHistoryTurnWindow;
     }, signal: AbortSignal | undefined, factory: (sharedSignal: AbortSignal) => Promise<CodexNativeHistoryPage>): Promise<CodexNativeHistoryPage>;
     invalidateThread(threadId: string): void;
     removeThread(threadId: string): void;

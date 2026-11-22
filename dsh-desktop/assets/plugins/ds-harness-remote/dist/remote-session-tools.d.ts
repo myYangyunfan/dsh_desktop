@@ -23,6 +23,11 @@ export declare const sessionToolInputs: {
         sessionId: z.ZodString;
         path: z.ZodString;
     }, z.core.$strict>;
+    remote_list_presets: z.ZodObject<{
+        hostId: z.ZodString;
+        backend: z.ZodLiteral<"harness">;
+        workspaceId: z.ZodOptional<z.ZodString>;
+    }, z.core.$strict>;
     remote_list_sessions: z.ZodObject<{
         hostId: z.ZodString;
         backend: z.ZodLiteral<"harness">;
@@ -46,6 +51,15 @@ export declare const sessionToolInputs: {
         backend: z.ZodLiteral<"harness">;
         workspaceId: z.ZodString;
         operationId: z.ZodString;
+        preset: z.ZodOptional<z.ZodString>;
+    }, z.core.$strict>;
+    remote_select_preset: z.ZodObject<{
+        hostId: z.ZodString;
+        backend: z.ZodLiteral<"harness">;
+        workspaceId: z.ZodString;
+        sessionId: z.ZodString;
+        operationId: z.ZodString;
+        preset: z.ZodString;
     }, z.core.$strict>;
     remote_send_message: z.ZodObject<{
         hostId: z.ZodString;
@@ -79,6 +93,8 @@ export type SessionToolOperation = keyof typeof sessionToolInputs;
 export type SessionTarget = z.infer<typeof session>;
 export type RemoteToolConnection = <T>(hostId: string, signal: AbortSignal, query: (remote: ConnectedRemote, signal: AbortSignal) => Promise<T>) => Promise<T>;
 export declare class RemoteSessionToolError extends Error {
+    readonly explicit: boolean;
+    constructor(message: string, explicit?: boolean);
 }
 /** Fixed native operations over the existing carrier. No alternate Harness wire API. */
 export declare class RemoteSessionTools {
@@ -90,6 +106,9 @@ export declare class RemoteSessionTools {
     run(operation: SessionToolOperation, input: unknown, signal: AbortSignal): Promise<unknown>;
     private execute;
     private onHost;
+    private listPresets;
+    private requirePresetAvailable;
+    private selectPresetOnCreatedSession;
     private requireWorkspace;
     private catalog;
     private requireSession;

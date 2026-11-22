@@ -5,6 +5,45 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### fix(companion)：侧栏「子代理 / 编队」页崩溃修复 + 5 件内置件再升一轮（2026-11-22）
+
+用户报障：打开侧栏的「子代理 / 编队」页，面板里出现一条错误条而不是编队板。根因在宿主契约漂移：
+内核 0.2.2 起 `agentTeam` 投影不再携带成员列表（`TeamProjection` 只剩 `{ enabled, tasks, failure? }`，
+upstream upgrade-guide v0.2.1-rc.2「agentTeam.members is removed」），而侧栏仍按 0.1.7 形状读
+`team.members.map(…)`；且内核 `teamProjectionDefinition.init` 让**每个会话都发这条投影**，
+所以 `team === undefined` 那道守卫从未生效 → 渲染期 `Cannot read properties of undefined (reading 'map')`。
+有 per-tab `RenderBoundary` 兜着，表现为该 pane 一条错误条 + 重试按钮（不是白屏），因此容易被当成偶发。
+
+修法照上游口径（不整包换代，见下）：
+
+- `teamProjectionOf` 把 `enabled === false` 读成「这个会话没有团队」；仍发旧形状的宿主按启用处理。
+- 名册来源改为「Lead 行 + `subagentCatalog` 直接子项」（`teamMembersOf(team, rootId, entries, live, byId)`）——
+  一个团队成员就是 Lead 的一个直接 subagent，不再有第二份名单可以互相矛盾。
+- 任务板继续消费新版返回的 `team.tasks`（用户所说的「保留新版返回的任务数据」）。
+- per-member 的 `phase` / `error` 新版确实没有：`phase` 由「它已出现在 catalog 里」推出 `active`，
+  `error` 不再伪造（看板级 `failure` 另说）。`context-types.ts` 的 `SidebarTeamProjection` 同步改形状。
+- 回归锁 `unit-better-sidebar-team-projection`（5 例）：在 vm 里真调发行产物中的两个纯函数，
+  含 `enabled=false` / 旧形状 / live 兜底 / 名字回落四条判据，并带一条「摘掉 `enabled` 判定必红」的反证。
+
+**为什么不整包升到上游 0.32.1**：试过并回退了。0.32.1 重构掉了 0.24.2 的骨架（EditorHost 587→1029 行、
+merged/split 双模、`FileTree.tsx` 把「在本地打开」做成原生行菜单、新增 `terminal` chunk、删 `src/invariant.ts`、
+**没有**我们的常驻左栏），整包换上后全量测试 ~80 例红 / 15 个套件——本仓六个自研子系统
+（编辑区括号/折叠/查找、diff 栈、chunk 退避重试环、`connection` 改造、右栏两段式注册、编辑器错误兜底）
+全挂在被重构掉的结构上。换 0.32.1 = 把这六块重移植一遍，属独立议题；移植快照留在 `.tmp-bs-0321-snapshot/`。
+
+同轮按用户「开始」再升 5 件（判据同样是当轮重扫的 `scan-plugin-channels.mjs --npm --json`）：
+
+- `dsh-pocket` 2.13.1 → **2.13.2**（重放 hero 输入卡两条 `:has(textarea)` 并代锚，上游仍未吸收）
+- `dsh-free-search` 0.9.70 → **0.9.80**（重放 `lib/cache.js` 的 `DSH_HOME` 落点：上游该文件 `DSH_HOME` 命中 0）
+- `dsh-toolbox-ui` 1.13.0 → **1.13.2**（五道让位闸一字未变，`entryIsActive` 从 `workspace-config.js`
+  挪到 `workspace-runtime.js`；仍无本地 fork，8 例哨兵照旧咬上游形态）
+- `dsh-context` 0.86.0 → **0.87.0**、`ds-harness-remote` 0.6.5 → **0.6.7**（内层依赖树沿用，deps 未变）
+- `billion-context` 维持 0.1.213（0.1.216 仍不含 #5961 修复）
+
+同时修一处构建链判据空转：沙箱 `rolldown` 必须钉 1.2.13——1.2.16 起不再输出 `//#region <源路径>` 区段标记，
+而 `scripts/test/fixtures/better-sidebar-region.js` 靠它从发行字节切片，标记一没，chunk-retry /
+diff-surface / editor-features 一整套判据集体变空转（实测 5 个套件 ~40 例同时红）。
+
 ### chore(companion)：内置件更新一轮，7 件升到 npm latest（2026-11-22）
 
 按用户「开始更新」。判据仍是「身份 same 且远端更高」（`scan-plugin-channels.mjs --npm --json` 的

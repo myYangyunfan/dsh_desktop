@@ -27,6 +27,8 @@ const SYSTEM = {
     preferredFailed: ({ chain }) => `If the preferred engine fails, fallback uses: ${chain}.`,
     explicitOnly: ({ engines }) =>
       `Model-based search engines (${engines}) run only when explicitly selected - they bill per search, so the automatic fallback chain and Auto routing never pick them.`,
+    explicitOnlyAllowed: ({ engines, scope }) =>
+      `Billed engines (${engines}) are allowed into the language pools by the user's setting, so Auto routing may pick them${scope === "multi" ? " and Multi may run them concurrently, producing one charge per engine per search" : " (at most one per search, one charge)"}. The automatic fallback chain still never picks them.`,
     safeSearch: ({ value }) => `Safe search: ${value} (applies only to enabled Bing/DuckDuckGo engines).`,
     bingMarket: ({ market }) =>
       market ? `Bing market: ${market}.` : "Bing market: automatic (no mkt parameter is sent; Bing infers from the request).",
@@ -49,6 +51,8 @@ const SYSTEM = {
     engineControlSettings: "The user controls the preferred engine in the plugin settings; do not change it autonomously.",
     searchVsFetch:
       "Search and fetch are separate steps: every search tool here returns candidates only (url / title / snippet / date) and never downloads page bodies. Call web_fetch on the specific URLs you picked when you need the actual content, and call research when you need a multi-source evidence pack. Do not expect results to arrive pre-fetched, and do not fetch every result just because the search returned many.",
+    display:
+      "When presenting search results: cite each source with a link right where it is used, and keep link text to the site or page name; mention one source once and do not repeat its link for every sentence; never paste whole result blocks back to the user, and do not repeat content the tools already showed; order by relevance to the question instead of padding, and keep links inside tables too; when results are thin or contradictory, say so plainly instead of covering it up.",
   },
   zh: {
     heading: "## 网页搜索（free-search）",
@@ -62,6 +66,8 @@ const SYSTEM = {
     preferredFailed: ({ chain }) => `首选引擎失败则按以下顺序兜底：${chain}。`,
     explicitOnly: ({ engines }) =>
       `基于模型的搜索引擎（${engines}）按次计费，因此自动兜底链与 Auto 路由不会选中它们，仅在显式指定时调用。`,
+    explicitOnlyAllowed: ({ engines, scope }) =>
+      `按次计费的引擎（${engines}）已被用户设置放行进语言池，Auto 路由可能会选中它们${scope === "multi" ? "；Multi 还会并发运行，每次搜索每个引擎各产生一次费用" : "（每次搜索最多一个，计费一次）"}。自动兜底链仍然不会选中它们。`,
     safeSearch: ({ value }) => `安全搜索：${value}（仅对已启用的 Bing/DuckDuckGo 引擎生效）。`,
     bingMarket: ({ market }) =>
       market ? `Bing 市场：${market}。` : "Bing 市场：自动（不发送 mkt 参数，由 Bing 根据请求推断）。",
@@ -84,6 +90,8 @@ const SYSTEM = {
     engineControlSettings: "首选引擎由用户在插件设置页控制；不要自行更改。",
     searchVsFetch:
       "搜索与抓取是两个步骤：本插件的搜索工具只返回候选（url / title / snippet / date），不下载网页正文。需要正文时，对你选中的具体 URL 调用 web_fetch；需要多来源证据包时调用 research。别指望结果已预先抓取，也不要仅因为结果很多就逐条抓取。",
+    display:
+      "展示搜索结果时：正文里直接给带链接的来源，标题或链接文字用站点名即可；同一来源只出现一次，重复提及不要重复列链接；不要整段复读搜索结果或工具已显示过的内容；按与问题的相关性排序，不要为了凑数而列；表格里也必须带链接；结果明显不足或互相矛盾时直接说明，不要掩饰。",
   },
 };
 
@@ -303,7 +311,7 @@ export function toolParam(lang, name, param, vars = {}) {
 // The built-in pages are generated from the live config and are never stored, so they
 // follow plugin updates. The page the user is on is what gets injected, and an empty
 // page means nothing is injected for that segment.
-export const PROMPT_SEGMENTS = ["state", "tools", "constraints"];
+export const PROMPT_SEGMENTS = ["state", "tools", "constraints", "display"];
 export const PROMPT_BUILTIN_LANGS = ["en", "zh"];
 
 export function normalizePromptPages(value) {

@@ -420,6 +420,7 @@ export class CodexSessionHistoryCache {
             page.beforeSeq ?? null,
             page.throughSeq ?? null,
             page.maxMessages ?? null,
+            page.turnWindow ?? null,
         ]);
     }
     beginReadEpoch() {
