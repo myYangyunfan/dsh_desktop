@@ -1,5 +1,5 @@
 // DuckDuckGo HTML engine.
-import { uniqueSources, fetchHtmlWithRetry, stripTags, decodeEntities, approximateTimeRange, SEARXNG_INSTANCES, SEARXNG_TIME, ANYSEARCH_URL, EXA_MCP_URL, extractDdgUrl, MARKET_TO_LANG, LANG_PROFILES, BING_URL, DDG_HTML_URL, DDG_LITE_URL, activeAcceptLanguage, USER_AGENT, searchLanguage, configLanguage, activeOutputLanguage } from "./shared.js";
+import { uniqueSources, fetchHtmlWithRetry, stripTags, decodeEntities, approximateTimeRange, SEARXNG_INSTANCES, SEARXNG_TIME, ANYSEARCH_URL, EXA_MCP_URL, extractDdgUrl, MARKET_TO_LANG, LANG_PROFILES, BING_URL, DDG_HTML_URL, DDG_LITE_URL, activeAcceptLanguage, USER_AGENT, searchLanguage, configLanguage, activeOutputLanguage, looksRelevant } from "./shared.js";
 
 export async function searchDdgHtml(query, maxResults, options, signal) {
   const params = new URLSearchParams({ q: query });
@@ -29,5 +29,6 @@ export async function searchDdgHtml(query, maxResults, options, signal) {
       ...(dateMatch ? { publishedAt: dateMatch[1] } : {}),
     });
   }
-  return { sources: uniqueSources(sources, maxResults ?? 10), truncated: false };
+  const unique = uniqueSources(sources, maxResults ?? 10);
+  return { sources: looksRelevant(query, unique) ? unique : [], truncated: false };
 }

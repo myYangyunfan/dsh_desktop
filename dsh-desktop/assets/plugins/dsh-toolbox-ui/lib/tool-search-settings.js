@@ -22,16 +22,19 @@
 //   ③ 落盘是**稀疏**的：与默认相同的值不写。否则将来默认值有了实测依据需要调整时，老用户会被
 //      一个当年抄下来的数字钉住，而面板照样显示"默认"。
 import { readFileSync } from 'node:fs'
-import { parseDocument, YAMLMap, isMap, isSeq } from 'yaml'
+import { parseDocument, YAMLMap, YAMLSeq, isMap, isSeq } from 'yaml'
 import { z } from 'zod'
 import { DEFAULTS, resolveRuntimeConfig } from './tool-search-runtime.js'
 import { normalizePolicyConfig, validatePolicyConfig } from './tool-loading-policy.js'
+import { normalizeCustomGroups, validateCustomGroups } from './tool-grouping.js'
 import { getNode, getValue } from './yaml-node.js'
 
 /** 插件配置里的键名。面板文案与文档都引用它，所以是常量而不是散落的字面量。 */
 export const TOOL_SEARCH_CONFIG_KEY = 'toolSearch'
 /** 统一加载策略的键名（profile 的 `config.toolLoading`）。 */
 export const TOOL_LOADING_CONFIG_KEY = 'toolLoading'
+/** 自定义工具分组的键名（与 `toolLoading` 平级；只属于全局层）。 */
+export const CUSTOM_GROUPS_CONFIG_KEY = 'customGroups'
 
 /**
  * 开放给用户的三项。**顺序即面板顺序**（面板按这份清单渲染字段，不另抄一遍）。
@@ -65,6 +68,12 @@ export const ToolSearchConfigSchema = z.object({
     groups: z.record(z.string(), z.enum(['resident', 'deferred'])).optional(),
     tools: z.record(z.string(), z.enum(['resident', 'deferred'])).optional(),
   }).strict().optional(),
+  // 自定义分组：与 toolLoading 平级而不是嵌进去。理由见 DESIGN §3.1——
+  // 它不参与 `writablePolicy()` 的整体重写，MCP 芯片那条写路径不可能碰到它。
+  [CUSTOM_GROUPS_CONFIG_KEY]: z.record(z.string(), z.object({
+    policy: z.enum(['resident', 'deferred']).optional(),
+    tools: z.array(z.string()),
+  }).strict()).optional(),
 }).strict().default({})
 
 /**
@@ -242,6 +251,40 @@ export function setToolLoadingPolicyInPatch(content, policy, identity = {}) {
   return writeConfigKey(content, TOOL_LOADING_CONFIG_KEY, map, identity)
 }
 
+/** 从插件 config 读自定义分组（读侧宽容：坏值按"没配"处理）。 */
+export function readCustomGroups(config) {
+  return normalizeCustomGroups(config?.[CUSTOM_GROUPS_CONFIG_KEY]).groups
+}
+
+/** 从 patch 内容读自定义分组（写入的逆运算）。 */
+export function readCustomGroupsFromPatch(content, identity = {}) {
+  const doc = parsePatch(content)
+  const found = findSettingsEntry(doc, identity)
+  if (found === null) return {}
+  return normalizeCustomGroups(getValue(getNode(found.entry, 'config'), CUSTOM_GROUPS_CONFIG_KEY)).groups
+}
+
+/**
+ * 把自定义分组写进 `config.customGroups`。
+ *
+ * 空表用**删掉这个键**表达（与 `toolLoading` 同一条约定：同一件事只有一种写法）。
+ * 分组与策略是两个兄弟键，所以写这里不会碰到 `toolLoading`，反之亦然。
+ */
+export function setCustomGroupsInPatch(content, groups, identity = {}) {
+  const validated = groups === null || groups === undefined ? {} : validateCustomGroups(groups)
+  if (Object.keys(validated).length === 0) return writeConfigKey(content, CUSTOM_GROUPS_CONFIG_KEY, null, identity)
+  const root = new YAMLMap()
+  for (const [name, entry] of Object.entries(validated)) {
+    const node = new YAMLMap()
+    if (entry.policy !== undefined) node.set('policy', entry.policy)
+    const seq = new YAMLSeq()
+    for (const tool of entry.tools) seq.items.push(tool)
+    node.set('tools', seq)
+    root.set(name, node)
+  }
+  return writeConfigKey(content, CUSTOM_GROUPS_CONFIG_KEY, root, identity)
+}
+
 /**
  * 插件自己那条配置里某个键的写入原语（`toolSearch` / `toolLoading` 共用）。
  *
@@ -269,7 +312,7 @@ function writeConfigKey(content, configKey, valueNode, identity) {
     config.set(configKey, valueNode)
     entry.set('config', config)
     doc.contents.items.push(entry)
-    return String(doc)
+    return doc.toString({ flowCollectionPadding: false })
   }
 
   const entry = found.entry
@@ -298,7 +341,7 @@ function writeConfigKey(content, configKey, valueNode, identity) {
   } else if (!isMap(existingConfig)) {
     entry.set('config', config)
   }
-  return String(doc)
+  return doc.toString({ flowCollectionPadding: false })
 }
 
 /**

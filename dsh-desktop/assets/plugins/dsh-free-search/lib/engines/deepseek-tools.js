@@ -4,6 +4,28 @@ import { parseMcpResponseText } from "../mcp_adapter.js";
 
 const DEEPSEEK_TOOLS_SEARCH_URL = "https://api.deepseek.com/v1/tools/search";
 
+export function deepseekToolsEndpoint(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return DEEPSEEK_TOOLS_SEARCH_URL;
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error("DeepSeek tools URL is invalid");
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new Error("DeepSeek tools URL must be http(s)");
+  }
+  if (url.pathname === "" || url.pathname === "/") {
+    url.pathname = "/v1/tools/search";
+  } else if (url.pathname === "/v1" || url.pathname === "/v1/") {
+    url.pathname = "/v1/tools/search";
+  } else if (url.pathname.endsWith("/")) {
+    url.pathname = url.pathname.slice(0, -1);
+  }
+  return url.toString().replace(/\/$/, "");
+}
+
 // 原生搜索接口没有独立的时间字段，时间过滤写在 query 语法里（after:/before:）。
 // 支持 `after:2025`、`after:2025-01-01`；这里把统一的 timeRange 映射成 after:。
 
@@ -18,13 +40,44 @@ function deepseekToolsQuery(query, timeRange) {
   return query;
 }
 
-export async function searchDeepSeekTools(query, maxResults, apiKey, timeRange, signal) {
+export function applySnippetLimits(sources, maxChars = 600, budgetChars = 0) {
+  const maxRaw = Number(maxChars);
+  const budgetRaw = Number(budgetChars);
+  const cap = Number.isFinite(maxRaw) && maxRaw >= 0 ? Math.floor(maxRaw) : 600;
+  const budget = Number.isFinite(budgetRaw) && budgetRaw > 0 ? Math.floor(budgetRaw) : 0;
+  const capped = sources.map((source) => {
+    if (typeof source.snippet !== "string") return source;
+    const limit = cap === 0 ? source.snippet.length : Math.min(source.snippet.length, cap);
+    return limit < source.snippet.length ? { ...source, snippet: source.snippet.slice(0, limit) } : source;
+  });
+  if (budget === 0) return capped;
+  const lengths = capped.map((source) => source.snippet?.length ?? 0);
+  const shares = lengths.map((length) => Math.min(length, Math.floor(budget / Math.max(1, lengths.length))));
+  let remaining = budget - shares.reduce((sum, share) => sum + share, 0);
+  while (remaining > 0) {
+    let progressed = false;
+    for (let index = 0; index < lengths.length && remaining > 0; index += 1) {
+      if (shares[index] >= lengths[index]) continue;
+      shares[index] += 1;
+      remaining -= 1;
+      progressed = true;
+    }
+    if (!progressed) break;
+  }
+  return capped.map((source, index) =>
+    typeof source.snippet === "string" && shares[index] < source.snippet.length
+      ? { ...source, snippet: source.snippet.slice(0, shares[index]) }
+      : source
+  );
+}
+
+export async function searchDeepSeekTools(query, maxResults, apiKey, timeRange, signal, baseUrl = "", snippetMaxChars = 600, snippetBudgetChars = 0) {
   if (!apiKey) throw new Error("DeepSeek search requires DEEPSEEK_API_KEY");
   const limit = Math.min(Math.max(maxResults ?? 5, 1), 50);
   // 超额取数：按请求计费，且缺 url 的行会被丢弃，多取一些补位成本为零
   const count = Math.min(50, Math.max(limit, Math.ceil(limit * 1.5)));
 
-  const response = await fetch(DEEPSEEK_TOOLS_SEARCH_URL, {
+  const response = await fetch(deepseekToolsEndpoint(baseUrl), {
     method: "POST",
     redirect: "error",
     headers: {
@@ -53,18 +106,21 @@ export async function searchDeepSeekTools(query, maxResults, apiKey, timeRange, 
   const sources = rows
     .filter((r) => r && typeof r.url === "string" && r.url.length > 0)
     .map((r) => {
-      // summary（600~800 字，面向模型）优先于 snippet（100~200 字，面向渲染）
-      const raw = typeof r.summary === "string" && r.summary.trim() ? r.summary : r.snippet;
-      const snippet = typeof raw === "string" ? raw.trim() : "";
+      // summary（600~800 字，面向模型）与 snippet（100~200 字，面向渲染）同时存在时拼接，
+      // 不再二选一；site 是网关的来源标签，保留为独立字段。
+      const summary = typeof r.summary === "string" ? r.summary.trim() : "";
+      const snippet = typeof r.snippet === "string" ? r.snippet.trim() : "";
+      const text = summary && snippet && summary !== snippet ? `${summary}\n${snippet}` : summary || snippet;
       return {
         url: r.url,
         ...(r.title ? { title: String(r.title) } : {}),
-        ...(snippet ? { snippet: snippet.slice(0, 600) } : {}),
+        ...(text ? { snippet: text } : {}),
+        ...(r.site ? { site: String(r.site) } : {}),
         // date 是 UTC RFC3339，只保留日期部分与其它引擎的 publishedAt 对齐
         ...(r.date ? { publishedAt: String(r.date).slice(0, 10) } : {}),
       };
     });
-  return { sources: uniqueSources(sources, maxResults ?? 10), truncated: false };
+  return { sources: uniqueSources(applySnippetLimits(sources, snippetMaxChars, snippetBudgetChars), maxResults ?? 10), truncated: false };
 }
 
 // SerpBase: 必须配置 SERPBASE_API_KEY（无 key 跳过，同 perplexity）

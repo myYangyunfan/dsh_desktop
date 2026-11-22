@@ -184,11 +184,18 @@ export const MOBILE_CSS = `
     padding-top: env(safe-area-inset-top, 0px) !important;
   }
 
-  /* 主内容列（第 2 个网格子元素）在官方样式里有显式 grid-column: 2——
+  /* 主内容列在官方样式里有显式 grid-column: 2——
      网格被压缩成 [1fr, 0, 0] 后它会落在 0px 的第 2 轨，整个主界面被挤出
      视口（只剩背景图）。必须显式把它拉回第 1 轨（issue #5）。
-     第 3 列（details）保持 0 轨即可，无需处理。 */
-  [data-mobile-nav="frame"] > :nth-child(2) {
+     第 3 列（details）保持 0 轨即可，无需处理。
+
+     DSH 0.2.2 起这一行不能再按「第几个子元素」定位：官方 AppFrame 在窄屏
+     开启了自带的抽屉（.frame[data-sidebar-drawer]），并插入了一个
+     div[data-sidebar-mask] 作为 frame 的第一个子元素，于是
+     > :nth-child(2) 从主内容列变成了侧边栏列，主内容列留在 0px 的第 2 轨
+     —— 手机上整个会话界面消失（只剩背景）。改用官方类名后缀定位，与元素
+     顺序解耦（类名形如 gURaQa_centerCol，哈希前缀每次构建都会变）。 */
+  [data-mobile-nav="frame"] > [class*="_centerCol"] {
     grid-column: 1 !important;
     grid-row: 1 !important;
     min-width: 0 !important;
@@ -216,8 +223,13 @@ export const MOBILE_CSS = `
      details pane 1000 and its full-screen frame ::after mask 1050 (issue
      #67: that mask sat on top of the 600 drawer and ate every tap). Still
      far under the fixed-position banners/toasts (z 9999) that float at the
-     viewport level. */
-  [data-mobile-nav="frame"] > :first-child {
+     viewport level.
+     Also positional-free since DSH 0.2.2: the first child is the native
+     div[data-sidebar-mask] in drawer mode, not the sidebar column, so the
+     drawer styling used to land on the mask (an opaque 92vw sheet) while the
+     real sidebar column stayed in the grid. Target the official class suffix
+     instead (gURaQa_sidebarCol; the hash prefix changes every build). */
+  [data-mobile-nav="frame"] > [class*="_sidebarCol"] {
     position: absolute !important;
     inset: 0 auto 0 0 !important;
     width: max-content !important;
@@ -238,6 +250,50 @@ export const MOBILE_CSS = `
     border-right: none !important;
   }
 
+  /* Portaled popovers must paint ABOVE the drawer.
+     DSH's popover primitives render into <body> on one fixed layer:
+       Menu.tsx:572   createPortal(list, document.body)      -> role="menu", z 1100
+       Tooltip.tsx:270 createPortal(content, document.body)  -> role="tooltip" [data-portal], z 1100
+       Toast.tsx:75   createPortal(<div role="alert">)        -> role="alert", z 1100
+     (packages/client/ui-primitives/src/Menu.module.css:45 .portal, and
+     Tooltip.module.css:28 .bubble[data-portal], both z-index: 1100).
+     The drawer above is 1200, so every menu opened from a drawer control is
+     painted UNDER it:
+       - the panel list's 「更多」 (SidebarRoot PanelMoreMenu, align=start /
+         side=bottom) opens downward inside the 280px drawer and is fully
+         covered — the button looks dead;
+       - a session row's kebab (ui-workspace rows/Rows.tsx:760, align=end) opens
+         at the row's right edge, so only the sliver spilling past the drawer
+         edge shows — the menu looks cut off.
+     Lift the body-level popover layer above the drawer: 1220 clears every DSH
+     portal layer (menu/tooltip/toast 1100) and still sits far below the
+     viewport-level banners/toasts (z 9999). */
+  body > [role="menu"],
+  body > [role="listbox"],
+  body > [role="tooltip"],
+  body > [data-portal],
+  body > [role="alert"] {
+    z-index: 1220 !important;
+  }
+
+  /* Full-screen modal surfaces outrank the drawer as well.
+     SettingsRoot portals its overlay beside #root (SettingsRoot.tsx:70 ->
+     document.body) at z-index 1000 (SettingsRoot.module.css:63 .overlay), and
+     the Modal primitive's root is 1000 too (Modal.module.css:10) — both under
+     the 1200 drawer. Opening 设置 while the drawer is out therefore leaves the
+     drawer painted over the sheet: its title, its close button and the whole
+     left column disappear behind the 280px rail.
+     Matched by shape rather than a CSS-modules hash (those rotate on every
+     build): a body-level presentation root holding a modal dialog, plus the
+     dialog roots that are portaled on their own (PlatformOverlay.tsx:69 is
+     <div role="dialog" aria-modal="true"> itself, at z-index 1001). Popovers
+     opened from inside such a sheet stay one step higher (1220) so a dropdown
+     still clears the sheet that owns it. */
+  body > [role="presentation"]:has([aria-modal="true"]),
+  body > [role="dialog"][aria-modal="true"] {
+    z-index: 1210 !important;
+  }
+
   /* Expanded state (frame without data-sidebar-collapsed) slides the drawer in.
      The open state must be transform:none — NOT translateX(0): an identity
      transform still makes the drawer the containing block for fixed-position
@@ -247,8 +303,17 @@ export const MOBILE_CSS = `
      overflow:hidden drawer to scrollLeft=102, and every static child (plus the
      fixed overlay) shifts 102px off-screen. With transform:none the overlay is
      viewport-anchored: it dims the full screen and the sheet sits at left:8. */
-  [data-mobile-nav="frame"]:not([data-sidebar-collapsed]) > :first-child {
+  [data-mobile-nav="frame"]:not([data-sidebar-collapsed]) > [class*="_sidebarCol"] {
     transform: none !important;
+  }
+
+  /* DSH 0.2.2's native drawer ships its own backdrop, and it is not a
+     passive layer: it calls toggleSidebar() on tap. We render our own
+     backdrop and close on outside taps in JS, so a tap on theirs toggles the
+     drawer twice (close then reopen) — the drawer looks stuck open. Drop it
+     and keep ours, exactly like the dsh-web-ui-all mask below (issue #67). */
+  [data-mobile-nav="frame"] > [data-sidebar-mask] {
+    display: none !important;
   }
 
   /* Kill a competing full-screen mask (issue #67).
@@ -318,7 +383,7 @@ export const MOBILE_CSS = `
     white-space: nowrap !important;
   }
 
-  [data-phase] [class$="_scroll"]:has(p) {
+  [data-phase] [class$="_scroll"]:has(p):not([data-input-scroll]) {
     padding-left: 20px !important;
     padding-right: 20px !important;
     font-size: 15px !important;
@@ -327,9 +392,9 @@ export const MOBILE_CSS = `
      list items, so the container's inherited 15px is not enough. User
      messages render their text in a div whose class carries _text_
      (16px too) — cover it as well. */
-  [data-phase] [class$="_scroll"]:has(p) p,
-  [data-phase] [class$="_scroll"]:has(p) li,
-  [data-phase] [class$="_scroll"]:has(p) [class*="_text_"] {
+  [data-phase] [class$="_scroll"]:has(p):not([data-input-scroll]) p,
+  [data-phase] [class$="_scroll"]:has(p):not([data-input-scroll]) li,
+  [data-phase] [class$="_scroll"]:has(p):not([data-input-scroll]) [class*="_text_"] {
     font-size: 15px !important;
   }
 
@@ -362,6 +427,13 @@ export const MOBILE_CSS = `
   [data-phase] [data-composer-card="true"] > [class$="_row"] {
     flex-wrap: wrap !important;
     gap: 6px !important;
+    /* issue #181：宿主/皮肤把控制行高度钉在 28px，只让 flex-wrap 换行会把
+       第二行内容裁掉（实测 scrollHeight 58 / clientHeight 28）。换行必须配上
+       自适应高度，才既保住 #170「模型药丸不被压成 0 宽」，又不吞掉控件。 */
+    height: auto !important;
+    min-height: 28px !important;
+    max-height: none !important;
+    overflow: visible !important;
   }
   [data-phase] [data-composer-card="true"] > [class$="_row"] > :first-child {
     gap: 8px !important;
@@ -370,6 +442,25 @@ export const MOBILE_CSS = `
   [data-phase] [data-composer-card="true"] > [class$="_row"] > :first-child > :nth-child(2) {
     flex: 0 1 auto !important;
     min-width: 0 !important;
+  }
+
+  /* --- 抽屉里的工作区不能被上下固定区块挤没（issue #196）---
+     窄屏抽屉高度固定 100%，上部插件入口区与底部 footer 都是 flex:none，
+     中间的 regionArea 是 flex:1; min-height:0，在矮屏（如 iPhone SE）会被压到
+     0 高，会话列表完全点不到。给工作区一个保底高度，并让它所在的侧栏列可滚动。
+     用 :has(> ...) 定位列根：sidebarCol 与真正的侧栏根之间隔着一层
+     display:contents 的插槽包装，用子元素序号会选错。 */
+  [data-mobile-nav="frame"] :has(> [class$="_regionArea"]) {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    scrollbar-width: none !important;
+  }
+  [data-mobile-nav="frame"] :has(> [class$="_regionArea"])::-webkit-scrollbar {
+    display: none !important;
+  }
+  [data-mobile-nav="frame"] [class$="_regionArea"] {
+    min-height: min(55vh, 420px) !important;
   }
 
   /* --- Composer popups as bottom sheets on mobile ---
@@ -426,6 +517,36 @@ export const MOBILE_CSS = `
     padding-left: 0 !important;
     padding-right: 0 !important;
   }
+  /* The header's leading cluster must SCROLL on a phone instead of painting over
+     its neighbours. DSH's title row is a flex row whose every cluster is
+     flex: none (ui-conversation ConversationRoot.module.css: titleRow /
+     titleCluster / headerUtilities / headerCorner), and it never clips: when the
+     crumbs plus the slot chips do not fit, the overflowing cluster simply draws
+     on top of the next one — on a phone 「N 个子智能体」 ends up printed over
+     「N 个后台任务运行中」, and the trailing corner control is covered as well.
+     Giving the flexible cluster overflow-x: auto clips its own content at its
+     own edge and makes the chips reachable by swiping, while the utilities and
+     the corner seat stay pinned and always tappable. */
+  [data-phase] header [class$="_titleRow"] [class$="_titleCluster"] {
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+  /* Children keep their intrinsic width; shrinking is what produced the pile-up. */
+  [data-phase] header [class$="_titleRow"] [class$="_titleCluster"] > * {
+    flex: 0 0 auto !important;
+  }
+  /* 3px thumb: a 36px header has no room for a full-size scrollbar. Styling
+     ::-webkit-scrollbar also opts the phone out of overlay scrollbars, so the
+     hint that the row scrolls stays visible instead of only appearing mid-swipe. */
+  [data-phase] header [class$="_titleRow"] [class$="_titleCluster"]::-webkit-scrollbar {
+    height: 3px;
+  }
+  [data-phase] header [class$="_titleRow"] [class$="_titleCluster"]::-webkit-scrollbar-thumb {
+    border-radius: 2px;
+    background: var(--dsw-alias-scrollbar-bg-l2, rgba(255, 255, 255, 0.28));
+  }
   /* The directory toggle sits at the far left of the header (the header
      is position:relative; the data-slot wrappers are display:contents). */
   [data-mobile-nav="toggle"] {
@@ -433,6 +554,19 @@ export const MOBILE_CSS = `
     left: 8px !important;
     top: 12px !important;
     z-index: 2 !important;
+  }
+  /* DSH 0.2.2 ships its own narrow-screen drawer opener in the frame's leading
+     seat (button[data-sidebar-opener], ui-sidebar HeaderLeadingControls.tsx:36)
+     and mounts it for every phase whenever the frame is in drawer mode. It sits
+     in the very same top-left corner and calls the very same toggleSidebar(),
+     so keeping ours would stack two identical buttons in one spot plus a third
+     floating one under them. The host control wins; ours step aside.
+     Gated on :has() so a host WITHOUT an opener (pre-0.2.2) still gets both
+     fallbacks — the floating button is also the only opener on the hero page
+     there, since no session header exists to host the header toggle. */
+  [data-mobile-nav="frame"]:has([data-sidebar-opener]) [data-mobile-nav="toggle"],
+  [data-mobile-nav="frame"]:has([data-sidebar-opener]) [data-mobile-nav="fab"] {
+    display: none !important;
   }
   /* The Files action sits at the FAR RIGHT of the header so it reads as a
      distinct control from the directory toggle on the left (which opens
@@ -484,14 +618,13 @@ export const MOBILE_CSS = `
     border-radius: 14px !important;
     animation: dsh-mobile-nav-sheet-in .22s var(--ds-ease-out, ease-in-out);
   }
-  /* The settings sheet's dimmed mask fades in with the panel (the mask is
-     the first child of the overlay that directly contains the sheet). */
-  :has(> [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"]))) > :first-child {
-    animation: dsh-mobile-nav-fade .18s var(--ds-ease-out, ease-in-out);
-  }
+  /* 遮罩淡入原本写在 :has() 里再嵌一层 :has() —— CSS 规范不允许嵌套 :has()，
+     整条选择器无效、从未生效；更糟的是它和下面的 reduced-motion 规则同处一个
+     逗号组，invalid selector 会让整组规则一起被丢弃。这里删掉死规则，让
+     reduced-motion 真正生效。真要恢复遮罩动画，请用宿主暴露的稳定 data 钩子，
+     不要再赌嵌套选择器。 */
   @media (prefers-reduced-motion: reduce) {
-    [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])),
-    :has(> [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"]))) > :first-child {
+    [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])) {
       animation: none !important;
     }
   }
@@ -960,44 +1093,13 @@ export const MOBILE_CSS = `
 
   /* ---------- 隐藏「添加工作区」入口（手机上配工作区无意义，issue #17 修正） ----------
      图标按钮的 aria-label 随语言变化（zh「添加工作区」/ en「Add workspace」），
-     两种都覆盖；下拉菜单里的「添加工作区…」项由 fileGuard.ts 的 MutationObserver
+     两种都覆盖；下拉菜单里的「添加工作区…」项由 add-workspace.ts 的 MutationObserver
      按文案兜底隐藏（CSS 选不到纯文本节点）。只在窄屏生效——桌面端照常保留。 */
   button[aria-label="添加工作区"],
   button[aria-label="添加工作区…"],
   button[aria-label="Add workspace"],
   button[aria-label="Add workspace…"] {
     display: none !important;
-  }
-
-  /* ---------- 文件链接旁的「复制」按钮（issue #17：复制文件内容） ----------
-     挂在对话里的文件链接（<button>/<a>，文案即路径）紧邻位置，由 fileGuard.ts
-     注入。只屏内可见：桌面端不注入、不显示；这里再兜底一层，避免任何遗漏。
-     文件链接多为 inline，按钮用 inline-flex 紧跟其后即可。 */
-  [data-mobile-nav="copy-file"] {
-    display: inline-flex !important;
-    align-items: center;
-    justify-content: center;
-    margin-left: 6px !important;
-    vertical-align: baseline !important;
-    height: 22px !important;
-    padding: 0 8px !important;
-    border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, .14)) !important;
-    border-radius: 6px !important;
-    background: var(--dsw-alias-bg-layer-1, #fff) !important;
-    color: var(--dsw-alias-label-primary, inherit) !important;
-    font-family: inherit !important;
-    font-size: 11px !important;
-    line-height: 1 !important;
-    cursor: pointer !important;
-    -webkit-tap-highlight-color: transparent !important;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, .12) !important;
-  }
-  [data-mobile-nav="copy-file"]:active {
-    background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, .06)) !important;
-  }
-  [data-mobile-nav="copy-file"][disabled] {
-    opacity: .55 !important;
-    cursor: default !important;
   }
 }
 

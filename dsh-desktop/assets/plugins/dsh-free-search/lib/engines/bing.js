@@ -1,26 +1,7 @@
 // Bing HTML engine; one fetch, no retry loop (see assert-engines).
-import { uniqueSources, fetchHtmlWithRetry, stripTags, decodeEntities, approximateTimeRange, SEARXNG_INSTANCES, SEARXNG_TIME, ANYSEARCH_URL, EXA_MCP_URL, extractDdgUrl, MARKET_TO_LANG, LANG_PROFILES, BING_URL, DDG_HTML_URL, DDG_LITE_URL, activeAcceptLanguage, USER_AGENT, searchLanguage, configLanguage, activeOutputLanguage } from "./shared.js";
+import { uniqueSources, fetchHtmlWithRetry, stripTags, decodeEntities, approximateTimeRange, SEARXNG_INSTANCES, SEARXNG_TIME, ANYSEARCH_URL, EXA_MCP_URL, extractDdgUrl, MARKET_TO_LANG, LANG_PROFILES, BING_URL, DDG_HTML_URL, DDG_LITE_URL, activeAcceptLanguage, USER_AGENT, searchLanguage, configLanguage, activeOutputLanguage, queryOverlapTokens, looksRelevant } from "./shared.js";
 
-function queryOverlapTokens(query) {
-  const tokens = new Set();
-  for (const run of String(query).match(/[\u4e00-\u9fff]+/g) ?? []) {
-    if (run.length <= 2) tokens.add(run);
-    for (let i = 0; i + 1 < run.length; i++) tokens.add(run.slice(i, i + 2));
-  }
-  for (const word of String(query).toLowerCase().split(/[^a-z0-9]+/)) {
-    if (word.length >= 2) tokens.add(word);
-  }
-  return [...tokens];
-}
-
-function looksRelevant(query, sources) {
-  const tokens = queryOverlapTokens(query);
-  if (tokens.length === 0) return true; // 纯符号查询无法判定，不拦截
-  return sources.some((s) => {
-    const hay = `${s.title ?? ""} ${s.snippet ?? ""} ${s.url ?? ""}`.toLowerCase();
-    return tokens.some((t) => hay.includes(t.toLowerCase()));
-  });
-}
+export { queryOverlapTokens, looksRelevant };
 
 // Bing 会把结果 URL 包成 bing.com/ck/a 跳转链接：真实地址在 u 参数（base64url，a1 前缀）
 

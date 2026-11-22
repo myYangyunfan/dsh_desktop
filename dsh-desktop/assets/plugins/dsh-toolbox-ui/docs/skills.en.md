@@ -3,7 +3,7 @@
 [中文](skills.md) | **English**
 
 
-This plugin has two ability panes at once: **MCP** and **Skills**. The ability-layer enumeration at the top of the panel switches between them, and both share the same floating window and sidebar entry.
+This plugin has **three ability panes**: **MCP**, **Skills** and **Tools**. The ability-layer enumeration at the top of the panel switches between them, and all three share the same floating window and sidebar entry; the tools pane is served by the MCP manager service (which owns the loading policy).
 
 The skills ability pane addresses the things DSH's built-in skill directory **cannot** show you:
 

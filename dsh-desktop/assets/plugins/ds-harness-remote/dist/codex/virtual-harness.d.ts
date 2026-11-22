@@ -1,5 +1,6 @@
 import { CodexRemoteClient } from '@dsh-remote/client-core';
 import type { HarnessSessionGeneration } from '../harness-version.js';
+import { CodexSessionHistoryCache } from '../session-history-cache.js';
 import type { RemoteTypertGatewayTarget, TypertGatewayRequest, TypertRpcResult } from '../typert-gateway-contract.js';
 import type { CodexVirtualWorkspaceView } from './virtual-catalog.js';
 import type { CodexClientLike } from './virtual-values.js';
@@ -13,6 +14,7 @@ export declare class CodexVirtualHarness implements RemoteTypertGatewayTarget {
     private readonly host;
     private readonly sessionGeneration;
     private readonly hostCarrier?;
+    private readonly historyCache;
     private readonly live;
     private readonly events;
     private catalog?;
@@ -40,11 +42,11 @@ export declare class CodexVirtualHarness implements RemoteTypertGatewayTarget {
     constructor(client: CodexClientLike, host: {
         deviceId: string;
         name: string;
-    }, sessionGeneration?: HarnessSessionGeneration, hostCarrier?: RemoteTypertGatewayTarget | undefined);
+    }, sessionGeneration?: HarnessSessionGeneration, hostCarrier?: RemoteTypertGatewayTarget | undefined, historyCache?: CodexSessionHistoryCache);
     static remote(core: ConstructorParameters<typeof CodexRemoteClient>[0], host: {
         deviceId: string;
         name: string;
-    }, sessionGeneration?: HarnessSessionGeneration, hostCarrier?: RemoteTypertGatewayTarget): CodexVirtualHarness;
+    }, sessionGeneration?: HarnessSessionGeneration, hostCarrier?: RemoteTypertGatewayTarget, historyCache?: CodexSessionHistoryCache): CodexVirtualHarness;
     workspaces(signal?: AbortSignal): Promise<CodexVirtualWorkspaceView[]>;
     selectWorkspace(workspaceId: string, signal?: AbortSignal): Promise<CodexVirtualWorkspaceView>;
     get openedSessionId(): string | undefined;
@@ -88,6 +90,7 @@ export declare class CodexVirtualHarness implements RemoteTypertGatewayTarget {
     private sessionPage;
     private activeTurnId;
     private readHistoryPage;
+    private applyHistoryMetadata;
     private cacheHistoryImages;
     private sessionHistory;
     private refreshAndPublishWorkspaces;

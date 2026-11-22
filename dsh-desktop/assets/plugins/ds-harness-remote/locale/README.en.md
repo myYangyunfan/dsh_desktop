@@ -15,7 +15,9 @@ Use **direct P2P connections** to continue using DeepSeek Harness on your work c
 ## Get started
 
 1. Install and enable the plugin on your work computer, then open **Remote** in the sidebar and sign in.
-2. Sign in to the same account through Remote on another computer, the [browser client](https://dsh.r2049.cn/app), or the [Android app](https://github.com/liguobao/ds-harness-remote/releases/latest).
+2. Sign in to the same account through Remote on another computer, the [browser client](https://dsh.r2049.cn/app), the [iOS app (beta)](https://github.com/liguobao/ds-harness-remote/issues/20), the [Android app](https://github.com/liguobao/ds-harness-remote/releases/latest), or [DSH Go](https://github.com/ccch1mneyyy/dsh-go).
 3. Select an online host and workspace to continue. Keep your work computer running and connected to the internet.
+
+[DSH Go](https://github.com/ccch1mneyyy/dsh-go) is a third-party DeepSeek Harness Android client. It can run DSH locally on your phone or connect to DSH on your computer through this plugin.
 
 [Full guide](https://github.com/liguobao/ds-harness-remote/blob/main/README.md) · [Self-hosting](https://github.com/liguobao/ds-harness-remote/blob/main/apps/server/README.md) · [Report an issue](https://github.com/liguobao/ds-harness-remote/issues)

@@ -1,5 +1,5 @@
-import { chmod, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { chmod, link, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { basename, dirname, join, sep } from 'node:path';
 import { z } from 'zod';
 import { uuidV7 } from './ids.js';
 const credentialSchema = z.object({
@@ -19,33 +19,11 @@ const credentialSchema = z.object({
 export class ServerCredentialStore {
     path;
     constructor(directory) { this.path = join(directory, 'server-credentials.json'); }
-    /** Serialize the complete read/refresh/write transaction across processes.
-     * Never steal an old lock: a suspended owner may still consume a one-use token.
-     * After a crash, stop all instances before removing the orphaned lock.
-     */
+    /** Each process owns one queue record. A dead process cannot hold the queue. */
     async withRefreshLock(operation) {
-        const lock = `${this.path}.refresh-lock`;
-        await mkdir(dirname(this.path), { recursive: true, mode: 0o700 });
-        const deadline = Date.now() + 15_000;
-        for (;;) {
-            try {
-                await mkdir(lock, { mode: 0o700 });
-                break;
-            }
-            catch (error) {
-                if (!(error instanceof Error) || !('code' in error) || error.code !== 'EEXIST')
-                    throw error;
-                if (Date.now() >= deadline)
-                    throw new ServerCredentialsBusyError();
-                await new Promise(resolve => setTimeout(resolve, 50));
-            }
-        }
-        try {
-            return await operation();
-        }
-        finally {
-            await rm(lock, { recursive: true });
-        }
+        const gate = defaultMigrationGate(dirname(this.path));
+        const run = () => withQueueLock(`${this.path}.refresh-lock`, operation);
+        return gate === undefined ? run() : withQueueLock(gate, run);
     }
     async pairingHostOnly() {
         const policy = await readPrivateJson(join(dirname(this.path), 'pairing-host-only.json'));
@@ -79,13 +57,193 @@ export class ServerCredentialStore {
         await rm(this.path, { force: true });
     }
 }
+function defaultMigrationGate(directory) {
+    const parts = directory.split(sep);
+    let rootIndex = -1;
+    for (let index = parts.length - 1; index >= 0; index--) {
+        if ((parts[index] === 'remote' || parts[index] === 'ds-harness-remote')
+            && (index === parts.length - 1 || parts[index + 1] === 'servers')) {
+            rootIndex = index;
+            break;
+        }
+    }
+    if (rootIndex < 1)
+        return undefined;
+    const suffix = parts.slice(rootIndex + 1);
+    if (suffix.length !== 0 && (suffix.length !== 3 || suffix[0] !== 'servers'
+        || !/^[a-f0-9]{24}$/.test(suffix[1]) || !['host', 'client'].includes(suffix[2])))
+        return undefined;
+    return join(parts.slice(0, rootIndex).join(sep) || sep, '.ds-harness-remote-migration', 'credential-refresh-gate');
+}
+export function withDefaultCredentialMigrationGate(home, operation) {
+    return withQueueLock(join(home, '.ds-harness-remote-migration', 'credential-refresh-gate'), operation);
+}
+export async function assertRefreshQueueIdle(directory) {
+    const lock = join(directory, 'server-credentials.json.refresh-lock');
+    const marker = await readQueueMarker(lock);
+    if (marker === undefined) {
+        if ((await readdir(directory)).some(name => name.startsWith(`${basename(lock)}.holder-`) && !name.endsWith('.tmp'))) {
+            throw new ServerCredentialsBusyError();
+        }
+        return;
+    }
+    if (marker !== SERVER_CREDENTIALS_QUEUE_MARKER)
+        throw new ServerCredentialsBusyError();
+    if ((await participants(lock)).length > 0)
+        throw new ServerCredentialsBusyError();
+}
+async function withQueueLock(lock, operation) {
+    await mkdir(dirname(lock), { recursive: true, mode: 0o700 });
+    const deadline = Date.now() + 15_000;
+    await ensureQueueMarker(lock, deadline);
+    const id = `${process.pid}-${uuidV7()}`;
+    const holder = `${lock}.holder-${id}`;
+    // Publish intent first. A later contender must see this record before it chooses a ticket.
+    await publishExclusive(holder, `${id} choosing\n`);
+    try {
+        const ticket = 1 + (await participants(lock)).reduce((max, entry) => Math.max(max, entry.ticket ?? 0), 0);
+        if (!Number.isSafeInteger(ticket))
+            throw new ServerCredentialsBusyError();
+        await atomicWritePrivate(holder, `${id} ${ticket}\n`);
+        for (;;) {
+            const entries = await participants(lock);
+            const preceding = entries.some(entry => entry.id !== id && (entry.ticket === undefined
+                || entry.ticket < ticket || (entry.ticket === ticket && entry.id < id)));
+            if (!preceding)
+                break;
+            if (Date.now() >= deadline)
+                throw new ServerCredentialsBusyError();
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        return await operation();
+    }
+    finally {
+        await rm(holder, { force: true });
+    }
+}
 export class ServerCredentialsInvalidError extends Error {
     code = 'SERVER_CREDENTIALS_INVALID';
 }
 export class ServerCredentialsBusyError extends Error {
     code = 'SERVER_CREDENTIALS_BUSY';
     constructor() {
-        super('Credential refresh is locked. Stop other instances; after a crash, stop all instances before removing server-credentials.json.refresh-lock and authorizing again.');
+        super('Credential refresh is busy. Stop other instances. Remove a legacy refresh lock only after every instance stops.');
+    }
+}
+export class ServerCredentialsLockUnsupportedError extends Error {
+    code = 'SERVER_CREDENTIALS_LOCK_UNSUPPORTED';
+    constructor() {
+        super('Credential lock cannot create a hard link in DSH_HOME. Use a writable local ext4 or XFS file system.');
+    }
+}
+export const SERVER_CREDENTIALS_QUEUE_MARKER = 'DSH_REFRESH_LOCK_V2\n';
+async function ensureQueueMarker(lock, deadline) {
+    // Old versions use this path as their lock. Keep them outside the new queue.
+    for (;;) {
+        try {
+            await publishExclusive(lock, SERVER_CREDENTIALS_QUEUE_MARKER);
+            return;
+        }
+        catch (error) {
+            if (!(await isLockContention(error, lock)))
+                throw error;
+            if (await readQueueMarker(lock) === SERVER_CREDENTIALS_QUEUE_MARKER)
+                return;
+            if (Date.now() >= deadline)
+                throw new ServerCredentialsBusyError();
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+    }
+}
+async function participants(lock) {
+    const prefix = `${basename(lock)}.holder-`;
+    const entries = await readdir(dirname(lock));
+    const result = [];
+    for (const name of entries) {
+        if (!name.startsWith(prefix))
+            continue;
+        if (name.endsWith('.tmp'))
+            continue;
+        const id = name.slice(prefix.length);
+        if (!/^\d+-[0-9a-f-]{36}$/.test(id))
+            throw new ServerCredentialsBusyError();
+        const path = join(dirname(lock), name);
+        const record = await readLockRecord(path);
+        if (record === undefined)
+            continue;
+        const match = new RegExp(`^${id} (choosing|[1-9]\\d*)\\n$`).exec(record);
+        if (match === null)
+            throw new ServerCredentialsBusyError();
+        const pid = Number(id.slice(0, id.indexOf('-')));
+        // A unique path cannot become a new owner's record. Dead records can leave the queue.
+        if (await ownerExited(pid)) {
+            await rm(path, { force: true });
+            continue;
+        }
+        const ticket = match[1] === 'choosing' ? undefined : Number(match[1]);
+        if (ticket !== undefined && !Number.isSafeInteger(ticket))
+            throw new ServerCredentialsBusyError();
+        result.push({ id, ...(ticket === undefined ? {} : { ticket }) });
+    }
+    return result;
+}
+async function publishExclusive(path, record) {
+    const temporary = `${path}.${process.pid}.${uuidV7()}.tmp`;
+    await writeFile(temporary, record, { mode: 0o600, flag: 'wx' });
+    try {
+        try {
+            await link(temporary, path);
+        }
+        catch (error) {
+            if (error instanceof Error && 'code' in error
+                && ['EXDEV', 'EOPNOTSUPP', 'ENOTSUP', 'ENOSYS', 'EPERM', 'EACCES'].includes(String(error.code))) {
+                throw new ServerCredentialsLockUnsupportedError();
+            }
+            throw error;
+        }
+    }
+    finally {
+        await rm(temporary, { force: true });
+    }
+}
+async function isLockContention(error, path) {
+    if (!(error instanceof Error) || !('code' in error))
+        return false;
+    if (error.code === 'EEXIST')
+        return true;
+    if (process.platform !== 'win32' || error.code !== 'EPERM')
+        return false;
+    return exists(path);
+}
+async function readLockRecord(path) {
+    try {
+        return await readFile(path, 'utf8');
+    }
+    catch (error) {
+        if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
+            return undefined;
+        throw error;
+    }
+}
+async function readQueueMarker(lock) {
+    try {
+        return await readLockRecord(lock);
+    }
+    catch (error) {
+        if (error instanceof Error && 'code' in error && error.code === 'EISDIR')
+            return undefined;
+        throw error;
+    }
+}
+async function ownerExited(pid) {
+    if (pid < 1 || pid > 2147483647 || pid === process.pid)
+        return false;
+    try {
+        process.kill(pid, 0);
+        return false;
+    }
+    catch (error) {
+        return error instanceof Error && 'code' in error && error.code === 'ESRCH';
     }
 }
 export async function atomicWritePrivate(path, contents) {

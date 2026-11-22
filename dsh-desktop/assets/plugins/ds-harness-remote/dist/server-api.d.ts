@@ -54,7 +54,7 @@ export declare class HostServerApi {
     private credentialsPromise?;
     private harnessVersion?;
     private readonly lifetime;
-    constructor(serverUrl: string, store: ServerCredentialStore, fetchImplementation?: FetchImplementation, role?: 'host' | 'client');
+    constructor(serverUrl: string, store: ServerCredentialStore, fetchImplementation?: FetchImplementation, role?: 'host' | 'client', httpServerAllowlist?: readonly string[]);
     bindIdentity(identity: HostIdentity): void;
     setHarnessVersion(version: string | undefined): void;
     /** End this runtime's HTTP requests, including authentication and response bodies. */
@@ -94,7 +94,7 @@ export declare class HostServerApi {
     private requireIdentity;
 }
 export declare class ClientServerApi extends HostServerApi {
-    constructor(serverUrl: string, store: ServerCredentialStore, fetchImplementation?: FetchImplementation);
+    constructor(serverUrl: string, store: ServerCredentialStore, fetchImplementation?: FetchImplementation, httpServerAllowlist?: readonly string[]);
 }
 export declare class ServerApiError extends Error {
     readonly code: string;

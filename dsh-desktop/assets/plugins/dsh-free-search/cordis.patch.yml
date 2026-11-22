@@ -14,17 +14,17 @@
 #
 # NOTE (2026-10, issue #51): this bundle does NOT touch `web.searchProvider`.
 # The plugin takes the search provider over at runtime instead — when the field
-# is unset or still the shipped default (`deepseek-official`) it points it at its
-# own provider id (`ddg`); when another provider was chosen explicitly it leaves
-# it alone and only warns.
+# is unset or still the shipped default (`deepseek-search-api` since 0.2.2-rc.2,
+# `deepseek-official` on older hosts) it points it at its own provider id (`ddg`);
+# when another provider was chosen explicitly it leaves it alone and only warns.
 #
 # A static `- id: web  config: searchProvider: ddg` used to live here. It was
 # removed because it created a dangling reference: a patch replaces the whole
 # row config, so rows that came from a *disabled* or skipped plugin left
 # `searchProvider: ddg` behind while nothing registered `ddg` — every web search
 # then failed with `configured web provider "ddg" is not registered`. Leaving the
-# base default (`deepseek-official`) in place means a disabled plugin degrades to
-# the official provider instead of breaking search outright.
+# base default in place means a disabled plugin degrades to the official provider
+# instead of breaking search outright.
 - insert:
     - id: web-search-free
       name: dsh-free-search

@@ -21,6 +21,7 @@ export class PluginControlRuntime {
     switchServer;
     updates;
     useDefaultStorage;
+    logStore;
     logoutFlight;
     serverSwitchFlight;
     startupFailure;
@@ -42,8 +43,11 @@ export class PluginControlRuntime {
         this.storageAvailable = true;
     }
     constructor(config, identityDirectory, settings, client, host, switchServer, 
-    /** Update-check snapshots merged into every `status` result; absent when the plugin is disabled. */
-    updates, useDefaultStorage = false) {
+    /**
+     * Update-check snapshots merged into every `status` result, and the local
+     * online upgrade. Absent when the plugin is disabled.
+     */
+    updates, useDefaultStorage = false, logStore) {
         this.config = config;
         this.identityDirectory = identityDirectory;
         this.settings = settings;
@@ -52,6 +56,7 @@ export class PluginControlRuntime {
         this.switchServer = switchServer;
         this.updates = updates;
         this.useDefaultStorage = useDefaultStorage;
+        this.logStore = logStore;
     }
     register(connection, webServer) {
         const statusStream = new ControlStatusStream(() => this.streamStatus());
@@ -71,7 +76,8 @@ export class PluginControlRuntime {
     async handle(endpoint, payload, signal) {
         try {
             // A request arriving during replacement must use the new Server runtime.
-            if (endpoint !== 'settings.server.set' && endpoint !== 'settings.identity.reset')
+            if (endpoint !== 'settings.server.set' && endpoint !== 'settings.identity.reset'
+                && endpoint !== 'settings.startup.retry')
                 await this.serverSwitchFlight;
             if (endpoint.startsWith('host.pairing.')) {
                 if (this.host?.pairingControl === undefined)
@@ -101,6 +107,8 @@ export class PluginControlRuntime {
                 return ok(await this.configure(payload));
             if (endpoint === 'settings.server.set')
                 return ok(await this.setServer(payload));
+            if (endpoint === 'settings.startup.retry')
+                return ok(await this.retryStartup());
             if (endpoint === 'settings.role.set')
                 return ok(await this.setRole(payload));
             if (endpoint === 'settings.codex.set')
@@ -119,6 +127,10 @@ export class PluginControlRuntime {
                 return ok(await this.logout());
             if (endpoint === 'settings.identity.reset')
                 return ok(await this.resetIdentity(payload));
+            if (endpoint === 'settings.logs.get')
+                return ok(await this.getLogs(payload));
+            if (endpoint === 'settings.logs.clear')
+                return ok(await this.clearLogs());
             if (endpoint === 'host.authorization.set' && this.client !== undefined) {
                 const value = record(payload);
                 if (typeof value.enabled !== 'boolean')
@@ -136,6 +148,8 @@ export class PluginControlRuntime {
                 this.host.reconnectHost();
                 return withUpdate(ok(this.hostOnlyStatus()), this.updates?.snapshot());
             }
+            if (endpoint === 'plugin.update')
+                return ok(await this.updatePlugin(payload));
             if (endpoint === 'status') {
                 if (this.startupFailure !== undefined) {
                     const startupError = safeStartupError(this.startupFailure);
@@ -215,8 +229,8 @@ export class PluginControlRuntime {
         });
         let identity = await identities.loadOrCreate(hostname());
         const api = value.role === 'host'
-            ? new HostServerApi(next.serverUrl, new ServerCredentialStore(identities.directory))
-            : new ClientServerApi(next.serverUrl, new ServerCredentialStore(identities.directory));
+            ? new HostServerApi(next.serverUrl, new ServerCredentialStore(identities.directory), fetch, 'host', next.httpServerAllowlist)
+            : new ClientServerApi(next.serverUrl, new ServerCredentialStore(identities.directory), fetch, next.httpServerAllowlist);
         let authorization;
         if (value.role === 'host' && typeof value.registrationCode === 'string' && value.registrationCode.trim() !== '') {
             authorization = await api.authorizeHostWithCode(identity, value.registrationCode);
@@ -246,6 +260,39 @@ export class PluginControlRuntime {
             throw new ClientModeError('SERVER_SWITCH_BUSY', 'A Server switch is already in progress.');
         }
         const flight = this.applyServer(payload);
+        this.serverSwitchFlight = flight;
+        try {
+            return await flight;
+        }
+        finally {
+            if (this.serverSwitchFlight === flight)
+                this.serverSwitchFlight = undefined;
+        }
+    }
+    async retryStartup() {
+        if (this.serverSwitchFlight !== undefined) {
+            throw new ClientModeError('SERVER_SWITCH_BUSY', 'A Server switch is already in progress.');
+        }
+        if (this.startupFailure === undefined)
+            return this.settingsView();
+        const switchServer = this.switchServer;
+        if (switchServer === undefined) {
+            throw new ClientModeError('SETTINGS_UNAVAILABLE', 'Remote startup retry is unavailable in this profile.');
+        }
+        const flight = (async () => {
+            await this.logoutFlight;
+            try {
+                const runtimes = await switchServer(this.config);
+                this.client = runtimes.client;
+                this.host = runtimes.host;
+                this.clearStartupFailure();
+            }
+            catch (error) {
+                this.setStartupFailure(error);
+                throw error;
+            }
+            return this.settingsView();
+        })();
         this.serverSwitchFlight = flight;
         try {
             return await flight;
@@ -346,6 +393,45 @@ export class PluginControlRuntime {
         }
         await this.settings.replace({ ...current, role });
         return this.settingsView();
+    }
+    currentLogLevel() {
+        if (this.settings === undefined)
+            return this.config.logLevel;
+        try {
+            const raw = this.settings.get()?.logLevel;
+            if (raw === 'debug' || raw === 'info' || raw === 'warn' || raw === 'error')
+                return raw;
+        }
+        catch { /* Fall back to cached config level when raw settings cannot be read. */ }
+        return this.config.logLevel;
+    }
+    async getLogs(payload) {
+        const value = payload === undefined ? {} : record(payload);
+        const filter = value.filter;
+        if (filter !== undefined && filter !== 'all' && filter !== 'warn') {
+            throw new ClientModeError('INVALID_MESSAGE', 'The log filter must be all or warn.');
+        }
+        const limit = value.limit;
+        if (limit !== undefined && (typeof limit !== 'number' || !Number.isInteger(limit) || limit < 1 || limit > 1000)) {
+            throw new ClientModeError('INVALID_MESSAGE', 'The log limit must be an integer between 1 and 1000.');
+        }
+        const logLevel = this.currentLogLevel();
+        if (this.logStore === undefined) {
+            return { logLevel, entries: [], totalBuffered: 0 };
+        }
+        const snapshot = await this.logStore.snapshot({ filter: filter, limit });
+        return { logLevel, ...snapshot };
+    }
+    async clearLogs() {
+        if (this.settings === undefined) {
+            throw new ClientModeError('SETTINGS_UNAVAILABLE', 'DSH user settings are unavailable in this profile.');
+        }
+        const logLevel = this.currentLogLevel();
+        if (this.logStore === undefined) {
+            return { logLevel, entries: [], totalBuffered: 0 };
+        }
+        const snapshot = await this.logStore.clear();
+        return { logLevel, ...snapshot };
     }
     async setDevelopment(payload) {
         if (this.settings === undefined)
@@ -528,14 +614,15 @@ export class PluginControlRuntime {
         if (!this.storageAvailable && this.startupFailure instanceof Error) {
             throw this.startupFailure;
         }
+        const current = resolveConfig(this.settings?.get() ?? {});
         const sourceDirectory = serverStorageDirectory(this.identityDirectory, serverUrl, sourceRole);
         const sourceIdentity = await new IdentityStore({ directory: sourceDirectory, role: sourceRole }).loadOrCreate(hostname());
         const sourceStore = new ServerCredentialStore(sourceDirectory);
         if (await sourceStore.load(serverUrl, sourceIdentity.deviceId) === undefined)
             return;
         const sourceApi = sourceRole === 'host'
-            ? new HostServerApi(serverUrl, sourceStore)
-            : new ClientServerApi(serverUrl, sourceStore);
+            ? new HostServerApi(serverUrl, sourceStore, fetch, 'host', current.httpServerAllowlist)
+            : new ClientServerApi(serverUrl, sourceStore, fetch, current.httpServerAllowlist);
         sourceApi.bindIdentity(sourceIdentity);
         await sourceApi.loadStoredPolicy();
         if (sourceApi.pairingHostOnly())
@@ -544,8 +631,8 @@ export class PluginControlRuntime {
         const targetDirectory = serverStorageDirectory(this.identityDirectory, serverUrl, targetRole);
         const targetIdentity = await new IdentityStore({ directory: targetDirectory, role: targetRole }).loadOrCreate(hostname());
         const targetApi = targetRole === 'host'
-            ? new HostServerApi(serverUrl, new ServerCredentialStore(targetDirectory))
-            : new ClientServerApi(serverUrl, new ServerCredentialStore(targetDirectory));
+            ? new HostServerApi(serverUrl, new ServerCredentialStore(targetDirectory), fetch, 'host', current.httpServerAllowlist)
+            : new ClientServerApi(serverUrl, new ServerCredentialStore(targetDirectory), fetch, current.httpServerAllowlist);
         await targetApi.authorizeOwnedRole(targetIdentity, sourceCredentials.accessToken, sourceCredentials.account);
     }
     logout() {
@@ -637,6 +724,26 @@ export class PluginControlRuntime {
             throw error;
         }
     }
+    /**
+     * Replace this Desktop install through the official plugin manager.
+     * A version the registry check did not publish is refused. Installs the
+     * manager cannot update stay on the manual releases path.
+     */
+    async updatePlugin(payload) {
+        const version = record(payload).version;
+        if (typeof version !== 'string' || version.trim() === '') {
+            throw new ClientModeError('INVALID_MESSAGE', 'A plugin version is required.');
+        }
+        if (this.updates?.start === undefined)
+            return { status: 'manual' };
+        const outcome = await this.updates.start(version);
+        if (outcome.status === 'rejected') {
+            throw new ClientModeError('INVALID_MESSAGE', 'That version is not the published update.');
+        }
+        if (outcome.status === 'failed')
+            return { status: 'failed', message: outcome.message };
+        return { status: outcome.status };
+    }
     hostOnlyStatus() {
         return {
             mode: 'local',
@@ -674,6 +781,7 @@ function editableConfig(config) {
         enabled: config.enabled,
         role: config.role,
         ...(config.serverUrl === undefined ? {} : { serverUrl: config.serverUrl }),
+        httpServerAllowlist: config.httpServerAllowlist,
         terminal: config.terminal,
         remoteTools: config.remoteTools,
         sidebar: config.sidebar,

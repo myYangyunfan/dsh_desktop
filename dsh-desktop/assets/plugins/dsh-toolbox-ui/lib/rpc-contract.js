@@ -1,15 +1,17 @@
 // RPC 契约的**唯一**定义。
 //
 // 同一批方法有四张脸：
-//   1. 宿主实现（`lib/index.js` 的 `@Remote("…")` 装饰器，顺序即契约顺序）；
+//   1. 宿主实现（`lib/index.js` 的两个 gateway 类，装饰器由 `applyRemoteMethods` 按这份表装配，
+//      lib/remote-wiring.js）；
 //   2. 宿主契约（`lib/typert.js`）；
 //   3. 客户端 descriptor（`lib/client.js` 里的 `MCP_CONTRIBUTION.descriptors`）；
 //   4. 网关原型（`McpManagerGateway.prototype` 的方法集合——`test/package-contract.test.mjs`
 //      的"第四面"）。
 //
-// 第 2、3 张由这份表**生成**（`node scripts/rpc-contract.mjs --write`，CI 里 `--check`），
-// 第 1 张由生成器校验顺序与名字（装饰器必须贴在方法上，没法整段生成），第 4 张由测试兜底。
-// 于是"加了 @Remote 忘了写契约""删了实现留着契约"这类**片间漂移**在结构上不可能静默通过。
+// 第 2、3 张由这份表**生成**（`node scripts/rpc-contract.mjs --write`，CI 里 `--check`）。
+// 第 1 张由这份表**装配**（R6.1 之前它是 55 条手写 `Remote("…")`，与表逐字重复；现在名字与顺序
+// 只有这一处，`--check` 校验的是"宿主确实走的是这张表"），第 4 张由测试兜底。于是"加了方法忘了写
+// 契约""删了实现留着契约""表里写错一个名字"这类**片间漂移**在结构上不可能静默通过。
 //
 // 字段说明：
 //   method  —— wire 上的方法名（= 网关上的方法名）。
@@ -60,11 +62,23 @@ export const MCP_METHODS = [
   { method: 'copyWorkspaceServers', params: ['payload:ImportPayload'], result: 'WorkspaceCopyResult', mutating: true },
   { method: 'previewWorkspaceCopy', params: ['payload:ImportPayload'], result: 'WorkspaceCopyPreview' },
   { method: 'exportWorkspaceJson', params: ['payload:ImportPayload'], result: 'WorkspaceExportResult' },
+  // 全局层的导出。与 exportWorkspaceJson 同形状（只差"有没有项目路径"），但**数据源不同**：
+  // 前者读 <工作区>/.dsh/mcp.json，这个读 profile patch 里的 managed 条目。
+  // 无参数：全局层不属于任何项目，没有可传的定位参数。
+  { method: 'exportGlobalJson', params: [], result: 'WorkspaceExportResult' },
   { method: 'revealWorkspaceServer', params: ['payload:ImportPayload'], result: 'RevealResult' },
   { method: 'projectConnections', params: [], result: 'ProjectConnectionsResult' },
   { method: 'reconnectWorkspaceServer', params: ['payload:ImportPayload'], result: 'NoteResult', mutating: true },
   { method: 'updateHint', params: [], result: 'UpdateHintResult' },
   { method: 'whatsNew', params: [], result: 'WhatsNewResult' },
+  // 上下文观测面。**故意挂在这个命名空间上**而不是另起一个服务：它读的是宿主已有的
+  // `agents` / `sessionProjections` / `tokenMeter`，没有任何自己的依赖可以声明，另起服务
+  // 只会多一个"服务没连上"的失败面。命名空间叫 toolboxMcp 是历史（见 MCP_SERVICE 的注释），
+  // 这张表早就不只装 MCP——updateHint / whatsNew / projectConnections 同样如此。
+  //
+  // `sessionId` 是**可选**的：面板是多会话共用的入口，宿主默认挑最近活跃的那个会话，
+  // 选中项由返回里的 `sessions[].active` 表达（不在客户端维护"当前会话"这个第二真相源）。
+  { method: 'contextReport', params: ['payload:ContextPayload'], result: 'ContextReport' },
 ]
 
 /** 技能能力面（`skillsManager` 命名空间）。顺序 = `SkillsManagerGateway` 的 @Remote 顺序。 */
@@ -92,9 +106,21 @@ export const SKILL_METHODS = [
   { method: 'conflictingManager', params: [], result: 'SkillConflictResult' },
 ]
 
+/**
+ * 本插件的 MCP 服务在 host（`ctx.provide`）与 wire（`/api/<namespace>/…`）上的名字。
+ *
+ * ⚠️ **不能叫 `mcpManager`**：0.2.2-rc.2 起宿主的 web-app bundle 自带
+ * `@deepseek-ai/dsh-mcp-manager`，它 `super(ctx, "mcpManager")` 注册的正是这个名字。
+ * 两边撞上时后注册的那个直接抛错（`service "mcpManager" has been registered at <McpManagerGateway>`），
+ * 也就是真机上看到的“官方 MCP 管理器启动失败”（issue #11）。它只提供
+ * `watch/restart/probe`（只读 + 重启，不写配置），与我们的面板职责不重叠，所以做法是**让开名字**
+ * 而不是让位。
+ */
+export const MCP_SERVICE = 'toolboxMcp'
+
 /** 两个命名空间合起来的清单（按上面的拼接顺序）。 */
 export const NAMESPACES = [
-  { service: 'mcpManager', methods: MCP_METHODS },
+  { service: MCP_SERVICE, methods: MCP_METHODS },
   { service: 'skillsManager', methods: SKILL_METHODS },
 ]
 
@@ -103,6 +129,7 @@ export const INTERNAL_ONLY = [
   ['setDisabled', 'enable/disable 的共用实现，面板不直接调它'],
   ['loadingPolicy', '目录/搜索/守卫共用的一次性决策函数，面板走 toolLoadingSettings'],
   ['collectAvailableTools', '面板与策略共用的可见工具枚举；两种视图都从它派生，不单独上 wire'],
+  ['catalogFacts', '目录状态的唯一组装点；面板走 contextReport 读它（配置归 toolSearchSettings），不单独上 wire'],
   ['deferStateOf', '服务器级芯片的判定，经 listMcpServers 行内下发，客户端不直接调'],
 ]
 

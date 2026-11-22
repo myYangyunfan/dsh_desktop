@@ -400,7 +400,12 @@ function isMcpEntry(entry) {
 function makeEntry(doc, spec, id = `mcp-${spec.name}`) {
   const entry = new YAMLMap()
   entry.set('id', id)
-  entry.set('name', MCP_PLUGIN_NAME)
+  // 与用户文件里的写法保持一致（`'@deepseek-ai/dsh-mcp-client'`）：不指定引号风格时
+  // yaml 会选双引号，新增一行就多一种风格，diff 里看着像改了两处。
+  // ⚠️ 这个 yaml 版本的 Scalar 构造函数只接 value，`{ type }` 会被忽略；必须构造后赋 type。
+  const name = new Scalar(MCP_PLUGIN_NAME)
+  name.type = Scalar.QUOTE_SINGLE
+  entry.set('name', name)
   if (spec.disabled) entry.set('disabled', true)
   const config = new YAMLMap()
   config.set('serverName', spec.name)
@@ -424,6 +429,24 @@ function parsePatch(content) {
 function findInsertSeq(item) {
   const insert = getNode(item, 'insert')
   return isSeq(insert) ? insert : null
+}
+
+/**
+ * 新增条目要落进哪个 insert 序列。
+ *
+ * 以前新增永远 `items.push(一个新块)`，于是用户在面板里加一台服务器，文件末尾就多一个
+ * 顶层 `- insert:`：MCP 段被撕成两段、新条目落在 llm/theme 这些 id 覆盖项之后。功能上
+ * loader 认多块，所以它从没表现为故障，只是每次都要人肉把两段拼回去。
+ *
+ * 规则：**并入第一个已经装着 MCP 条目的 insert 块**；没有这样的块才新建一个。
+ * 不去碰「第一个 insert」——那可能是别的插件的块，把 MCP 条目塞进去只是换一种错位。
+ */
+function findMcpInsertSeq(doc) {
+  for (const item of doc.contents.items) {
+    const insert = findInsertSeq(item)
+    if (insert && insert.items.some((entry) => isMcpEntry(entry))) return insert
+  }
+  return null
 }
 
 export function readManagedMcpServers(content) {
@@ -477,7 +500,7 @@ export function setManagedMcpDisabled(content, name, disabled) {
       if (spec?.name !== name) continue
       if (disabled) entry.set('disabled', true)
       else entry.delete('disabled')
-      return String(doc)
+      return doc.toString({ flowCollectionPadding: false })
     }
   }
   throw new Error(`当前 profile 中没有可管理的 MCP：${name}`)
@@ -526,13 +549,19 @@ export function updateManagedMcpPatch(content, specs, { replace = false, removeN
   const additions = specs.filter((spec) => !updated.has(spec.name))
   if (additions.length) {
     const ids = collectIds(doc.contents, new Set(reservedIds))
-    const patch = new YAMLMap()
-    const insert = new YAMLSeq()
-    for (const spec of additions) insert.items.push(makeEntry(doc, spec, nextEntryId(spec.name, ids)))
-    patch.set('insert', insert)
-    doc.contents.items.push(patch)
+    // 有既有的 MCP 块就并进去（见 findMcpInsertSeq），没有才新建。
+    const existing = findMcpInsertSeq(doc)
+    if (existing) {
+      for (const spec of additions) existing.items.push(makeEntry(doc, spec, nextEntryId(spec.name, ids)))
+    } else {
+      const patch = new YAMLMap()
+      const insert = new YAMLSeq()
+      for (const spec of additions) insert.items.push(makeEntry(doc, spec, nextEntryId(spec.name, ids)))
+      patch.set('insert', insert)
+      doc.contents.items.push(patch)
+    }
   }
-  return String(doc)
+  return doc.toString({ flowCollectionPadding: false })
 }
 
 function packageTokenMatches(value, packageName) {

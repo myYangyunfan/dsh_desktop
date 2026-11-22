@@ -1,6 +1,77 @@
 // Baidu Qianfan AI Search engine.
-import { TINYFISH_URL, JINA_URL, DOUBAO_SEARCH_URL, snippetCap, stripTags, uniqueSources } from "./shared.js";
-import { TIME_ENGINES } from "../engine_meta.js";
+// web_search has its own 50/day free quota; when it is exhausted, the
+// chat/completions endpoint has a separate 100/day quota and accepts the same
+// body plus stream:false, returning the same references shape.
+import { uniqueSources } from "./shared.js";
+
+const BAIDU_WEB_URL = "https://qianfan.baidubce.com/v2/ai_search/web_search";
+const BAIDU_CHAT_URL = "https://qianfan.baidubce.com/v2/ai_search/chat/completions";
+
+function baiduError(message, { status, code } = {}) {
+  const error = new Error(message);
+  if (status !== undefined) error.status = status;
+  if (code !== undefined) error.baiduCode = code;
+  return error;
+}
+
+function shouldFallback(error) {
+  if (!(error instanceof Error)) return false;
+  return error.status === 403 || error.status === 429 || error.baiduCode !== undefined;
+}
+
+async function postBaidu(url, body, apiKey, signal) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  const onAbort = () => controller.abort();
+  signal?.addEventListener("abort", onAbort);
+  try {
+    return await fetch(url, {
+      method: "POST",
+      redirect: "error",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`,
+        "X-Appbuilder-From": "openclaw",
+        "user-agent": "deepseek-harness/free-search",
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    throw new Error(`Baidu search request failed: ${error?.message ?? String(error)}`);
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", onAbort);
+  }
+}
+
+async function parseBaiduResponse(response, maxResults) {
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    if (response.status === 401 || response.status === 403) {
+      throw baiduError(`Baidu API key is invalid (HTTP ${response.status}) - update it in Settings > Plugins > Free Search`, {
+        status: response.status,
+      });
+    }
+    throw baiduError(`Baidu API error (HTTP ${response.status}): ${detail.slice(0, 200)}`, { status: response.status });
+  }
+
+  const results = await response.json();
+  if (results.code) {
+    throw baiduError(`Baidu API error: ${results.message ?? JSON.stringify(results)}`, { code: results.code });
+  }
+
+  const sources = (results.references ?? [])
+    .filter((r) => r.url)
+    .map((r) => ({
+      url: r.url,
+      ...(r.title ? { title: String(r.title) } : {}),
+      ...(r.content ? { snippet: String(r.content).slice(0, 300) } : {}),
+      ...(r.date ? { publishedAt: String(r.date) } : {}),
+    }));
+  return { sources: uniqueSources(sources, maxResults ?? 10), truncated: false };
+}
 
 export async function searchBaidu(query, maxResults, apiKey, timeRange, signal) {
   if (!apiKey) throw new Error("Baidu search requires BAIDU_API_KEY");
@@ -27,55 +98,19 @@ export async function searchBaidu(query, maxResults, apiKey, timeRange, signal) 
     search_filter: searchFilter,
   };
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15000);
-  const onAbort = () => controller.abort();
-  signal?.addEventListener("abort", onAbort);
-  let response;
+  let primaryError;
   try {
-    response = await fetch("https://qianfan.baidubce.com/v2/ai_search/web_search", {
-      method: "POST",
-      redirect: "error",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${apiKey}`,
-        "X-Appbuilder-From": "openclaw",
-        "user-agent": "deepseek-harness/free-search",
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
+    const response = await postBaidu(BAIDU_WEB_URL, body, apiKey, signal);
+    return await parseBaiduResponse(response, maxResults);
   } catch (error) {
-    if (signal?.aborted) throw error;
-    throw new Error(`Baidu search request failed: ${error?.message ?? String(error)}`);
-  } finally {
-    clearTimeout(timer);
-    signal?.removeEventListener("abort", onAbort);
+    if (!shouldFallback(error)) throw error;
+    primaryError = error;
   }
 
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    if (response.status === 401 || response.status === 403) {
-      throw new Error(`Baidu API key is invalid (HTTP ${response.status}) - update it in Settings > Plugins > Free Search`);
-    }
-    throw new Error(`Baidu API error (HTTP ${response.status}): ${detail.slice(0, 200)}`);
+  try {
+    const response = await postBaidu(BAIDU_CHAT_URL, { ...body, stream: false }, apiKey, signal);
+    return await parseBaiduResponse(response, maxResults);
+  } catch (error) {
+    throw new Error(`${primaryError.message}; chat fallback: ${error?.message ?? String(error)}`);
   }
-
-  const results = await response.json();
-  if (results.code) {
-    throw new Error(`Baidu API error: ${results.message ?? JSON.stringify(results)}`);
-  }
-
-  const sources = (results.references ?? [])
-    .filter((r) => r.url)
-    .map((r) => ({
-      url: r.url,
-      ...(r.title ? { title: String(r.title) } : {}),
-      ...(r.content ? { snippet: String(r.content).slice(0, 300) } : {}),
-      ...(r.date ? { publishedAt: String(r.date) } : {}),
-    }));
-  return { sources: uniqueSources(sources, maxResults ?? 10), truncated: false };
 }
-
-// Kimi (Moonshot) 开放平台联网搜索 basic (/v1/tools/search)
-// key = MOONSHOT_API_KEY

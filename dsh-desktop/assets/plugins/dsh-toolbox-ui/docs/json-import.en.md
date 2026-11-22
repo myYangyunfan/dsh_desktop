@@ -84,12 +84,12 @@ Sources larger than 8 MB are skipped (`~/.claude.json` mixes in a great deal of 
 
 ## Export and cross-workspace copy
 
-Both of these live in the **Project tab**, to the right of the "MCP for this project" heading (the Global scope does not offer them: the global configuration is the profile file itself, and backing it up by hand is more direct).
+These two entries are **not** in the same place, because they are not the same kind of thing: **Export** is a snapshot of a whole layer and the inverse of import, so it lives in the **title bar** (right next to "Import MCP"; the current scope decides which layer it exports — the profile patch for Global, this project for a project). **Copy to another workspace** only makes sense for a project, so it lives in the project card's action row.
 
 | Entry point | What it does | Credentials |
 |---|---|---|
 | Copy to… | writes the MCP entries checked in this project into another **registered** workspace | does not go through the browser: the source configuration is read out inside the Host and written straight to the target |
-| Export | exports this project's configuration as JSON (copyable / downloadable as a file) | does go through the browser — credentials written literally appear in the export result as-is |
+| Export | exports the current scope's configuration as JSON (copyable / downloadable as a file). Both layers use the `{ mcpServers }` shape (the same `specToMcpEntry`); the difference is credentials: the project layer keeps `${VAR}` references, while entries added through the panel in the global layer already hold **resolved values** | does go through the browser — credentials written literally (and values resolved in the global layer) appear in the export result as-is |
 
 **Copy** handles name collisions **differently** from import, and this is deliberate:
 

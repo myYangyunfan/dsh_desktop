@@ -1,4 +1,5 @@
 import { CodexRemoteClient, projectCodexThread } from '@dsh-remote/client-core';
+import { CodexSessionHistoryCache } from '../session-history-cache.js';
 import { codexPermissionPresetFromResponse } from './permissions.js';
 import { CODEX_PROVIDER, codexModelParams, containsPath, displayTitle, isCodexDirectoryListing, loadCatalog, loadModelDirectory, modelCatalog, modelSelection, modelSelectionProjection, nativeVisibleWorkspaces, nativeWorkspace, } from './virtual-catalog.js';
 import { business, carrierArgs, CODEX_DEFAULT_PERMISSION, CODEX_IMAGE_ATTACHMENT_PREFIX, codexImageLimitsProjection, codexPermissionsProjection, codexPromptInput, fail, failFrom, failure, isCodexPermissionPreset, isHostWorkspaceEndpoint, isHostWorkspaceStreamEndpoint, isLegacySessionHistoryUnsupported, ok, requestArg, SESSION_SEARCH_RESULT_LIMIT, SESSION_SEARCH_SNIPPET_CODE_POINTS, sessionIdFromAddress, success, truncateCodePoints, } from './virtual-contract.js';
@@ -20,6 +21,7 @@ export class CodexVirtualHarness {
     host;
     sessionGeneration;
     hostCarrier;
+    historyCache;
     live;
     events;
     catalog;
@@ -44,11 +46,12 @@ export class CodexVirtualHarness {
     lastOpenedSessionId;
     openedWorkspaceSessions = new Map();
     closed = false;
-    constructor(client, host, sessionGeneration = 'legacy', hostCarrier) {
+    constructor(client, host, sessionGeneration = 'legacy', hostCarrier, historyCache = new CodexSessionHistoryCache()) {
         this.client = client;
         this.host = host;
         this.sessionGeneration = sessionGeneration;
         this.hostCarrier = hostCarrier;
+        this.historyCache = historyCache;
         const owner = this;
         this.live = new CodexLiveProjection({
             readHistoryPage: (...args) => owner.readHistoryPage(...args),
@@ -72,6 +75,7 @@ export class CodexVirtualHarness {
             get pendingApprovals() { return owner.pendingApprovals; },
             emitApproval: (...args) => owner.events.emitApproval(...args),
             get imageAttachments() { return owner.imageAttachments; },
+            invalidateThreadHistory: threadId => owner.historyCache.invalidateThread(threadId),
         });
         this.events = new CodexEventCarrier({
             get workspaceStreams() { return owner.workspaceStreams; },
@@ -85,8 +89,8 @@ export class CodexVirtualHarness {
             get client() { return owner.client; },
         });
     }
-    static remote(core, host, sessionGeneration = 'legacy', hostCarrier) {
-        return new CodexVirtualHarness(new CodexRemoteClient(core), host, sessionGeneration, hostCarrier);
+    static remote(core, host, sessionGeneration = 'legacy', hostCarrier, historyCache) {
+        return new CodexVirtualHarness(new CodexRemoteClient(core), host, sessionGeneration, hostCarrier, historyCache);
     }
     async workspaces(signal) {
         return (await this.refreshCatalog(signal)).workspaces;
@@ -565,7 +569,9 @@ export class CodexVirtualHarness {
     }
     async archiveSession(request, signal) {
         const sessionId = requiredString(request.sessionId, 'sessionId');
-        await this.client.request('thread/archive', { threadId: nativeThreadId(sessionId) }, signal);
+        const threadId = nativeThreadId(sessionId);
+        await this.client.request('thread/archive', { threadId }, signal);
+        this.historyCache.removeThread(threadId);
         const catalog = await this.refreshCatalog(signal, true);
         this.publishWorkspaceBaseline(catalog);
         return success({ archivedSessionIds: [sessionId] });
@@ -678,6 +684,7 @@ export class CodexVirtualHarness {
             }, signal);
         }
         this.blankThreads.delete(threadId);
+        this.historyCache.invalidateThread(threadId);
         return success({ accepted: true });
     }
     async attachment(request, signal) {
@@ -714,6 +721,7 @@ export class CodexVirtualHarness {
         const turnId = this.activeTurnId(threadId);
         if (turnId !== undefined)
             await this.client.request('turn/interrupt', { threadId, turnId }, signal);
+        this.historyCache.invalidateThread(threadId);
         return success({ accepted: true });
     }
     async renameSession(request, signal) {
@@ -732,13 +740,15 @@ export class CodexVirtualHarness {
         const session = catalog.sessions.find(item => item.id === sessionId);
         if (session === undefined)
             return success(null);
-        const history = await this.readHistoryPage(nativeThreadId(sessionId), { maxMessages: 1 }, signal);
+        const threadId = nativeThreadId(sessionId);
+        const cachedCursor = this.historyCache.getFreshTailCursor(threadId, this.sessionGeneration, session.updatedAt);
+        const cursor = cachedCursor ?? (await this.readHistoryPage(threadId, { maxMessages: 1 }, signal)).cursor;
         const directory = await this.models(signal).catch(() => undefined);
         return success(record(this.sessionSummary(session, {
-            blank: history.cursor < 0,
+            blank: cursor < 0,
             modelSelection: this.modelSelection(sessionId, directory),
             lastPromptAt: session.updatedAt || null,
-            asOfSeq: history.cursor,
+            asOfSeq: cursor,
         })).projections);
     }
     async sessionPage(request, signal) {
@@ -761,45 +771,76 @@ export class CodexVirtualHarness {
             ...page,
             maxMessages: boundedCodexHistoryPageSize(page.maxMessages),
         };
-        let value;
-        try {
-            value = record(await this.client.request('dsh/sessionHistory', {
-                threadId,
-                ...(boundedPage.beforeSeq === undefined ? {} : { beforeSeq: boundedPage.beforeSeq }),
-                ...(boundedPage.throughSeq === undefined ? {} : { throughSeq: boundedPage.throughSeq }),
-                ...(boundedPage.maxMessages === undefined ? {} : { maxMessages: boundedPage.maxMessages }),
-            }, signal));
+        const knownUpdatedAt = this.catalog?.sessions.find(item => item.id === `codex:${threadId}`)?.updatedAt;
+        if (!this.blankThreads.has(threadId)) {
+            const cached = this.historyCache.getFreshPage(threadId, this.sessionGeneration, boundedPage, knownUpdatedAt);
+            if (cached !== undefined) {
+                this.applyHistoryMetadata(threadId, cached);
+                return cached;
+            }
         }
-        catch (error) {
-            if (!isLegacySessionHistoryUnsupported(error))
-                throw error;
-            let thread;
+        const resolved = await this.historyCache.runSingleFlightPage(threadId, this.sessionGeneration, boundedPage, signal, async (sharedSignal) => {
+            const readEpoch = this.historyCache.beginReadEpoch();
+            let value;
             try {
-                const result = record(await this.client.request('thread/read', { threadId, includeTurns: true }, signal));
-                thread = record(result.thread);
+                value = record(await this.client.request('dsh/sessionHistory', {
+                    threadId,
+                    ...(boundedPage.beforeSeq === undefined ? {} : { beforeSeq: boundedPage.beforeSeq }),
+                    ...(boundedPage.throughSeq === undefined ? {} : { throughSeq: boundedPage.throughSeq }),
+                    ...(boundedPage.maxMessages === undefined ? {} : { maxMessages: boundedPage.maxMessages }),
+                }, sharedSignal));
             }
-            catch (historyError) {
-                // A Host old enough to lack paginated history cannot read a Thread that
-                // current Codex has not materialized yet. Only a Thread this client just
-                // created is known blank, and only an upstream rejection (not a timeout
-                // or disconnect) may be projected as its empty baseline.
-                const code = historyError instanceof Error ? errorCode(historyError) : undefined;
-                if (!this.blankThreads.has(threadId) || code !== 'CODEX_UPSTREAM_ERROR')
-                    throw historyError;
-                thread = { id: threadId, turns: [] };
+            catch (error) {
+                if (!isLegacySessionHistoryUnsupported(error)) {
+                    if (!sharedSignal.aborted) {
+                        const stale = this.historyCache.getStalePage(threadId, this.sessionGeneration, boundedPage);
+                        if (stale !== undefined)
+                            return stale;
+                    }
+                    throw error;
+                }
+                let thread;
+                try {
+                    const result = record(await this.client.request('thread/read', { threadId, includeTurns: true }, sharedSignal));
+                    thread = record(result.thread);
+                }
+                catch (historyError) {
+                    // A Host old enough to lack paginated history cannot read a Thread that
+                    // current Codex has not materialized yet. Only a Thread this client just
+                    // created is known blank, and only an upstream rejection (not a timeout
+                    // or disconnect) may be projected as its empty baseline.
+                    const code = historyError instanceof Error ? errorCode(historyError) : undefined;
+                    if (!this.blankThreads.has(threadId) || code !== 'CODEX_UPSTREAM_ERROR') {
+                        if (!sharedSignal.aborted) {
+                            const stale = this.historyCache.getStalePage(threadId, this.sessionGeneration, boundedPage);
+                            if (stale !== undefined)
+                                return stale;
+                        }
+                        throw historyError;
+                    }
+                    thread = { id: threadId, turns: [] };
+                }
+                if (string(thread.id) !== threadId)
+                    throw new Error('CodeX returned an invalid Thread history.');
+                value = paginateCodexNativeHistory(projectCodexNativeHistory(thread, `codex:${threadId}`, this.sessionGeneration), {
+                    beforeSeq: page.beforeSeq,
+                    throughSeq: page.throughSeq,
+                    maxMessages: boundedPage.maxMessages,
+                });
             }
-            if (string(thread.id) !== threadId)
-                throw new Error('CodeX returned an invalid Thread history.');
-            value = paginateCodexNativeHistory(projectCodexNativeHistory(thread, `codex:${threadId}`, this.sessionGeneration), {
-                beforeSeq: page.beforeSeq,
-                throughSeq: page.throughSeq,
-                maxMessages: boundedPage.maxMessages,
-            });
-        }
-        value = adaptCodexHistoryPage(value, this.sessionGeneration);
-        if (!isCodexNativeHistoryPage(value, `codex:${threadId}`)) {
-            throw new Error('CodeX Remote returned an invalid paginated History.');
-        }
+            value = adaptCodexHistoryPage(value, this.sessionGeneration);
+            if (!isCodexNativeHistoryPage(value, `codex:${threadId}`)) {
+                throw new Error('CodeX Remote returned an invalid paginated History.');
+            }
+            if (!this.blankThreads.has(threadId)) {
+                this.historyCache.setPage(threadId, this.sessionGeneration, boundedPage, value, knownUpdatedAt, readEpoch);
+            }
+            return value;
+        });
+        this.applyHistoryMetadata(threadId, resolved);
+        return resolved;
+    }
+    applyHistoryMetadata(threadId, value) {
         const historyModel = string(value.header.model);
         if (historyModel !== undefined) {
             this.selectedModels.set(`codex:${threadId}`, {
@@ -813,7 +854,6 @@ export class CodexVirtualHarness {
             this.setPermissionSelection(`codex:${threadId}`, preset === 'workspace-write' || preset === 'danger-full-access' ? preset : undefined);
         }
         this.cacheHistoryImages(value);
-        return value;
     }
     cacheHistoryImages(history) {
         const sessionId = history.header.id;

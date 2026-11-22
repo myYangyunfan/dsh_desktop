@@ -12,9 +12,9 @@
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { randomBytes } from 'node:crypto'
 import { tmpdir } from 'node:os'
-import { join, relative } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
-import { MAX_ARCHIVE_BYTES, extractArchive } from './skills-archive.js'
+import { MAX_ARCHIVE_BYTES, MAX_FILE_BYTES, extractArchive } from './skills-archive.js'
 import { INVOCATION_FIELDS, diagnoseSkill, setFrontmatterBoolean } from './skills-frontmatter.js'
 
 // 与宿主同一套名字语法（dsh-skill 的 SKILL_NAME）。**导入**时用它校验 frontmatter 的 name
@@ -409,6 +409,61 @@ export async function setSkillUserInvocable(target, userInvocable) {
  *
  * @param {object} target - resolveSkillTarget 的结果。
  */
+// ── 外部源技能的来源记录（R14）──
+//
+// 为什么跟着技能文件走，而不是建一个 <root>/.hub/ 目录：
+//   · bundle 的 .hub.json 在目录里 ⇒ **删除技能时连带删掉**，不需要额外清理代码；
+//   · flat 用 <name>.md.hub.json（挂在技能文件后面）⇒ **不会被当成技能条目**：
+//     宿主与本模块只认 *.md 与 <dir>/SKILL.md，这个后缀两者都不匹配。
+//   · 换成"多一个目录"的方案就要操心那个目录会不会被扫描当成技能、删技能时要不要清空——
+//     那是白送的风险。
+const HUB_SOURCE_SUFFIX = '.hub.json'
+
+/** 某个已落盘技能对应的来源记录路径。result 是 importSkill 的返回（含 kind/path）。 */
+export function hubSourcePath(result) {
+  if (result?.kind === 'bundle') return join(dirname(result.path), HUB_SOURCE_SUFFIX)
+  if (typeof result?.path === 'string' && result.path !== '') return result.path + HUB_SOURCE_SUFFIX
+  throw new Error('无法定位来源记录：缺少 kind/path')
+}
+
+/**
+ * 写下外部源技能的来源（slug / version / pageUrl / installedAt）。
+ *
+ * 失败**不吞**：来源是用户判断"这技能从哪来、能不能更新"的唯一依据，写不进去要让人知道。
+ * 调用方（skillHubInstall）会把"技能已经落盘"与"来源没记住"分开报。
+ */
+export async function writeHubSource(result, source) {
+  const record = {
+    slug: String(source?.slug ?? ''),
+    version: source?.version === undefined || source?.version === null ? '' : String(source.version),
+    pageUrl: String(source?.pageUrl ?? ''),
+    installedAt: new Date().toISOString(),
+  }
+  if (record.slug === '') throw new Error('外部源技能缺少 slug，无法记录来源')
+  await writeFile(hubSourcePath(result), JSON.stringify(record, null, 2) + '\n', 'utf8')
+  return record
+}
+
+/** 读来源记录；没有就返回 null（本机导入的技能没有来源，那不是错误）。 */
+export async function readHubSource(result) {
+  try {
+    const text = await readFile(hubSourcePath(result), 'utf8')
+    const parsed = JSON.parse(text)
+    if (!parsed || typeof parsed !== 'object') return null
+    return {
+      slug: String(parsed.slug ?? ''),
+      version: String(parsed.version ?? ''),
+      pageUrl: String(parsed.pageUrl ?? ''),
+      installedAt: String(parsed.installedAt ?? ''),
+    }
+  } catch (error) {
+    // 文件不存在 = 本机导入的技能，返回 null；JSON 坏掉则**明确报错**——静默当成"没有来源"
+    // 会让用户以为这个技能是手工装的，从而永远不去更新它。
+    if (error?.code === 'ENOENT') return null
+    throw new Error('来源记录损坏：' + String(error?.message ?? error))
+  }
+}
+
 export async function removeSkill(target) {
   if (target.writable === false) {
     throw new Error('该技能来自只读根（bundled），不可删除')
@@ -426,6 +481,8 @@ export async function removeSkill(target) {
     await rm(item, { force: true })
     // 扁平技能的旧态残骸（同一个条目的 .disabled 变体）。
     await rm(`${item}${DISABLED_SUFFIX}`, { force: true })
+    // 来源记录也一起清（R14）：留着它会指向一个已经不存在的技能。
+    await rm(`${item}${HUB_SOURCE_SUFFIX}`, { force: true })
     return { changed: true, removed: item }
   })
 }
@@ -553,7 +610,11 @@ async function assertSkillVacant(root, name) {
  * 「先全部校验、再落盘」：任何一步失败都不应该在用户的技能根里留下残骸。
  *
  * @param {{ root: string, scope: 'global'|'project', writable?: boolean,
- *   source: { type: 'file'|'directory'|'archive', path: string } }} input
+ *   source: { type: 'file'|'directory'|'archive', path: string }
+ *     | { type: 'file', content: string }
+ *     | { type: 'archive', archiveBase64: string } }} input
+ *   `content` / `archiveBase64` 是**浏览器上传**用的形式：浏览器拿不到宿主机路径，只能给内容。
+ *   两者会在入口处落到 system tmp 再走**同一条**导入路径（zip-slip、符号链接、锁、原子提交全部复用）。
  * @returns {Promise<{ name: string, kind: 'flat'|'bundle', scope: string, root: string, path: string }>}
  */
 export async function importSkill(input) {
@@ -561,6 +622,42 @@ export async function importSkill(input) {
   if (typeof root !== 'string' || root === '') throw new Error('非法技能根目录')
   if (writable === false) throw new Error('该技能来自只读根（bundled），不可导入')
   if (source === null || typeof source !== 'object') throw new Error('缺少导入源')
+  // ── 浏览器上传：内容 → 暂存文件，再重入本函数走既有路径 ────────────────────
+  // 为什么不在下面各分支里加 if：那会变成两套导入实现（一套读盘、一套读内存），
+  // 而 zip-slip / 符号链接 / 锁 / 原子提交这四道关卡都在**读盘那条**上。
+  // 归一化一次，之后仍只有一条路径。
+  if (source.content !== undefined || source.archiveBase64 !== undefined) {
+    const isArchive = source.archiveBase64 !== undefined
+    const staging = await mkdtemp(join(tmpdir(), 'dsh-skill-upload-'))
+    try {
+      let bytes
+      if (isArchive) {
+        if (typeof source.archiveBase64 !== 'string') throw new Error('压缩包内容必须是 base64 字符串')
+        // 先卡 base64 长度再解码：解码 32MB 上限的 base64 会一次性占两份内存，
+        // 而一个恶意的大字符串可以在解码前就被拒。
+        const maxBase64 = Math.ceil(MAX_ARCHIVE_BYTES / 3) * 4
+        if (source.archiveBase64.length > maxBase64) throw new Error(`压缩包过大（上限 ${MAX_ARCHIVE_BYTES} 字节）`)
+        bytes = Buffer.from(source.archiveBase64, 'base64')
+        // Buffer.from 对非法 base64 是**宽容**的（静默丢掉非法字符），所以必须回验：
+        // 不校验的话，一个损坏的上传会被当成"能解码但解压失败"，错误信息会指向解压而不是输入。
+        if (bytes.toString('base64').replace(/=+$/, '') !== source.archiveBase64.replace(/=+$/, '')) {
+          throw new Error('压缩包内容不是合法的 base64')
+        }
+      } else {
+        if (typeof source.content !== 'string') throw new Error('技能文件内容必须是字符串')
+        bytes = Buffer.from(source.content, 'utf8')
+        // 文本没有"输入路径"可查大小，所以在这里卡：超限内容连暂存文件都不该写出来。
+        if (bytes.byteLength > MAX_FILE_BYTES) throw new Error(`技能文件过大（${bytes.byteLength} 字节，上限 ${MAX_FILE_BYTES} 字节）`)
+      }
+      const staged = join(staging, isArchive ? 'upload.zip' : 'upload.md')
+      await writeFile(staged, bytes)
+      // 重入：source 已经只有 path，不会再进这个分支。
+      return await importSkill({ root, scope, writable, source: { type: isArchive ? 'archive' : 'file', path: staged } })
+    } finally {
+      // 暂存目录里是用户技能的原文，不管成败都必须删。
+      await rm(staging, { recursive: true, force: true })
+    }
+  }
   const { type, path: sourcePath } = source
   if (typeof sourcePath !== 'string' || sourcePath === '') throw new Error('缺少导入源路径')
   if (!(await exists(sourcePath))) throw new Error(`导入源不存在：${sourcePath}`)

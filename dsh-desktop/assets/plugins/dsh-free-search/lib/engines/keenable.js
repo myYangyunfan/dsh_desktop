@@ -1,5 +1,5 @@
 // Keenable engine: REST with a key, keyless MCP otherwise.
-import { TAVILY_URL, FIRECRAWL_URL, isFirecrawlKeylessRefusal, markFirecrawlKeylessBlocked, PARALLEL_URL, PARALLEL_MCP_URL, PARALLEL_USER_AGENT, KEENABLE_URL, KEENABLE_MCP_URL, SERPBASE_URL, SERPLY_URL, OUTCRAWL_URL, YOUCOM_URL, YOUCOM_FREE_URL, YOUCOM_KEYS_LINK, isoDaysAgo, parseTimeRange, approximateTimeRange, uniqueSources } from "./shared.js";
+import { TAVILY_URL, FIRECRAWL_URL, isFirecrawlKeylessRefusal, markFirecrawlKeylessBlocked, PARALLEL_URL, PARALLEL_MCP_URL, PARALLEL_USER_AGENT, KEENABLE_URL, KEENABLE_MCP_URL, SERPBASE_URL, SERPLY_URL, OUTCRAWL_URL, YOUCOM_URL, YOUCOM_FREE_URL, YOUCOM_KEYS_LINK, isoDaysAgo, parseTimeRange, approximateTimeRange, uniqueSources, looksRelevant } from "./shared.js";
 import { parseMcpResponseText } from "../mcp_adapter.js";
 
 export function formatKeenableRelative(days) {
@@ -74,7 +74,8 @@ export async function searchKeenableREST(query, maxResults, apiKey, timeRange, s
       ...(r.snippet ?? r.description ? { snippet: String(r.snippet ?? r.description).slice(0, 300) } : {}),
       ...(r.published_at ? { publishedAt: String(r.published_at) } : {}),
     }));
-  return { sources: uniqueSources(sources, maxResults ?? 10), truncated: false };
+  const unique = uniqueSources(sources, maxResults ?? 10);
+  return { sources: looksRelevant(query, unique) ? unique : [], truncated: false };
 }
 
 export async function searchKeenableMCP(query, maxResults, timeRange, signal) {
@@ -115,7 +116,8 @@ export async function searchKeenableMCP(query, maxResults, timeRange, signal) {
   // isError=true 时 content 里是错误文本
   const text = content.filter((b) => b.type === "text").map((b) => b.text).join("\n");
   if (data.result?.isError) throw new Error(`Keenable MCP error: ${text.slice(0, 200)}`);
-  return { sources: extractKeenableSources(text, maxResults ?? 10), truncated: false };
+  const sources = extractKeenableSources(text, maxResults ?? 10);
+  return { sources: looksRelevant(query, sources) ? sources : [], truncated: false };
 }
 
 export async function searchKeenable(query, maxResults, apiKey, timeRange, signal) {

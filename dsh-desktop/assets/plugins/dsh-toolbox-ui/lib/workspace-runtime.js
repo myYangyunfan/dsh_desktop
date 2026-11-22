@@ -1,9 +1,10 @@
 import { mkdir, readFile, stat } from "node:fs/promises";
 import { realpathSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { writeFileAtomic } from "@deepseek-ai/dsh-atomic-write";
-import { allMcpEntries, entriesForName, MCP_NAME } from "./mcp-registry.js";
+import { allMcpEntries, entriesForName, MCP_NAME, toolInventory } from "./mcp-registry.js";
 import { readWorkspaceConfig, toMcpClientConfig, writeWorkspaceConfig, WORKSPACE_CONFIG_REL } from "./workspace-config.js";
+import { HostState } from "./host-state.js";
 
 // ---------- workspace 项目层运行时 ----------
 // 项目配置的读写状态，以及 agent setup 时把项目 MCP 挂到 agent scope 的装饰器。
@@ -18,20 +19,37 @@ function appRoot(ctx) {
 	if (!root || typeof root !== "object") throw new TypeError("mcp-manager: 需要一个 cordis context 才能定位 app root");
 	return root;
 }
-function bucketOf(store, ctx) {
-	const root = appRoot(ctx);
-	let bucket = store.get(root);
-	if (!bucket) { bucket = new Map(); store.set(root, bucket); }
-	return bucket;
+// 本实例的可变状态与它的唯一清理点（R7）。键约定见上；owner 只有一个：登记它的那次安装。
+// 两张表刻意**不**进 HostState，理由写在各自定义处（它们的事实属于项目/agent，不属于某个 app）。
+const hostStates = new WeakMap(); // appRoot -> HostState
+function hostStateOfRoot(root) {
+	let state = hostStates.get(root);
+	if (!state) {
+		state = new HostState(root, {
+			ownStores: [
+				{ release: (key) => { workspaceMountErrors.delete(key); } },
+				{ release: (key) => { workspaceScopeErrors.delete(key); } },
+				{ release: (key) => { workspaceRestrictErrors.delete(key); } },
+			],
+		});
+		hostStates.set(root, state);
+	}
+	return state;
 }
+function hostStateOf(ctx) { return hostStateOfRoot(appRoot(ctx)); }
+/** 测试接缝：本实例的状态计数（只报数，不泄露内容）。与 checkForUpdate 同一惯例。 */
+function hostStateFacts(ctx) { return hostStateOf(ctx).facts(); }
 
 // 配置缓存按 app root 隔离（多 app 同进程时互不串读），每 app 内按插入序有上限。
-const workspaceConfigCache = new WeakMap(); // appRoot -> Map<canonicalWsPath, { stamp, mtimeMs, size, config }>
-const WORKSPACE_CACHE_LIMIT = 64;
+// 配置缓存住在 HostState 里（per app root，条数上限见 HostState.cacheLimit）。
 // 某个项目目录的写序：既要串行化 read→modify→write（与全局 withPatchWrite 对称，防止并发写
 // 丢更新），又要给配置缓存一个「写入代号」——写盘后自增，缓存条目记下读取时的代号，失效因此
 // 不需要枚举所有 app 的缓存桶（WeakMap 不可枚举），也顺带盖住「同一 mtime 粒度内改回同样
 // 字节数」这种骗过 stat 的情况。两者是同一个不变量的两面，放一张表，不各存一份。
+// ⚠️ 这张表**不进** HostState，而且卸载时**不删**：它是"同一份文件的读-改-写串行化"，
+// 本质是文件锁 —— 两个 app 实例同时写同一个 .dsh/mcp.json 时必须排在一条队列上，
+// 删掉条目会让两条队列并存，于是并发丢更新（比"多留一条空闲队列"严重得多）。
+// 它的键是文件路径，不属于任何 app；空闲条目只是一次 Promise，没有实例引用。
 const workspaceWriteState = new Map(); // canonicalWsPath -> { queue: Promise, stamp: number }
 function workspaceWriteEntry(wsPath) {
 	let state = workspaceWriteState.get(wsPath);
@@ -42,14 +60,22 @@ function workspaceWriteStamp(wsPath) { return workspaceWriteState.get(wsPath)?.s
 // 会话记录：本模块对该会话的项目层记账（属于哪个项目、restrict 当前展开成什么）。
 // 它**不是**任何存活性凭据：会话是否还活着由 cordis 的 agentCtx.effect() 判定，
 // 本代挂载器是否还在管事由 installAgentRuntime 的 generation 令牌判定。
+// ⚠️ 也**不**进 HostState：它的键是 agent（不是 app root），而 agent → root 的映射并不存在，
+// 所以它只能是一张全进程可查的表（`liveAgents()` 必须能枚举 —— WeakMap 做不到）。
+// 它的 owner 机制已经存在且是两层的：会话销毁走 agentCtx.effect 的 disposer 删自己那条，
+// 插件卸载由 cleanup() 按 state.root 过滤后逐条删。它是本模块里唯一"记录者与清除者都对"
+// 的旧表，搬进 HostState 只会把一个正确的机制拆成两半。
 const agentWorkspaceStates = new Map(); // agent -> { root, wsPath, restrictKey, restrictDisposer }；随 agent scope 清理
 // 当前活着的挂载器代次（按 app root）：reconcile 与挂载用同一个令牌，于是「插件已卸载」在
 // 两处是同一个事实，而不是各写一套判定。
-const activeGenerationByRoot = new WeakMap(); // appRoot -> generation
 // 项目 MCP 挂载失败（serverName 冲突/启动/连接失败）的可观测记录：Host 无法直接看到 agent 层
 // 注册，因此把 setup 阶段的失败显式呈现给用户，避免“静默缺失”。
 // 这两张表按 wsPath 而不按 app root 分桶：诊断对象是「某项目的某个 server」，而项目路径本身
 // 就全进程唯一；即使两个 app 同时读同一项目，结论也应该是同一份。
+// ⚠️ 三张诊断表**不进** HostState：键是项目路径，事实属于"这个项目的那台服务器"，
+// 不属于某个 app 实例。但它们的**写入**必须登记给 HostState（`hostStateOf(ctx).own(wsPath)`），
+// 于是"我写过哪些键"与"卸载时删哪些"由同一份登记驱动 —— 这正是 R7 要补的那一半：
+// 在 R7 之前 cleanup() 不碰它们，HMR 重装后面板会继续点名一个已不属于任何实例的失败。
 const workspaceMountErrors = new Map(); // wsPath -> Map<serverName, errorMessage>
 const workspaceRestrictErrors = new Map(); // wsPath -> { deny, error, ts }
 // 作用域身份失效的可观测记录：宿主工具视图读失败，或工具落到了全局层而不是共享作用域层。
@@ -57,16 +83,32 @@ const workspaceRestrictErrors = new Map(); // wsPath -> { deny, error, ts }
 const workspaceScopeErrors = new Map(); // wsPath -> Map<serverName, message>
 // 诊断日志按「内容变化」打一次：面板每 5s 轮询会重复走到同一条路径，按次打会把日志刷爆，
 // 而一次次都不打就等于把故障留在暗处。
-const warnedDiagnostics = new Map(); // key -> message
-const WARN_DIAGNOSTIC_LIMIT = 64;
-function warnDiagnosticOnce(logger, key, message) {
-	if (warnedDiagnostics.get(key) === message) return;
-	if (warnedDiagnostics.size >= WARN_DIAGNOSTIC_LIMIT && !warnedDiagnostics.has(key)) warnedDiagnostics.clear();
-	warnedDiagnostics.set(key, message);
-	logger?.warn?.(message);
+// 诊断日志去重：按「内容变化」打一次（面板每 5s 轮询会重复走到同一条路径），住在 HostState 里
+// —— 它是"这个实例已经告过什么"，卸载后应当回到空白，否则重装的新代再也告不出同一条故障。
+function warnDiagnosticOnce(ctx, key, message) {
+	const warned = hostStateOf(ctx).warned;
+	if (warned.get(key) === message) return;
+	if (warned.size >= HostState.warnLimit && !warned.has(key)) warned.clear();
+	warned.set(key, message);
+	ctx?.logger?.warn?.(message);
 }
 // cordis FiberState.ACTIVE 的代号：建连完成前读空集是正常中间态，不是故障信号。
 const FIBER_ACTIVE = 2;
+
+/**
+ * 一个 loader 条目**真的在跑**吗（不是“配置里存在”）。
+ *
+ * 为什么这个区别不能省：`disabled: true`、import 失败（没有 fiber）、apply 失败（state=FAILED）
+ * 三种情形下条目都在 `loader.entries()` 里，但一行代码都没执行——拿“存在”当“在跑”会
+ * 把死条目当成活的对手（真机教训：0.2.2-rc.2 的 `@deepseek-ai/dsh-web-app` 内置了
+ * `@deepseek-ai/dsh-mcp-manager` 且启动失败，让位检测据此把入口完全让掉）。
+ *
+ * @param {{fiber?: {state?: number}}} entry loader 条目
+ * @returns {boolean} 已激活（ACTIVE）才算在跑
+ */
+export function entryIsActive(entry) {
+	return entry?.fiber?.state === FIBER_ACTIVE;
+}
 
 // ---------- 项目 MCP 共享连接（每 (wsPath, serverName) 一份实例）----------
 // 官方 mcp-client 的 serverName 在 ctx.root（=整个 app）内唯一，而且它同时是模型可见工具名
@@ -85,7 +127,6 @@ const FIBER_ACTIVE = 2;
 //       子进程更早归还；这里等整条 teardown 比必要更保守，换取不依赖官方内部的释放顺序。）
 // 共享单连接对合规服务端无语义损失（依据见 README 的「共享连接模型」一节）；这里要解决的
 // 是纯插件层的命名/生命周期串行化问题。
-const sharedConnections = new WeakMap(); // appRoot -> Map<connKey, ConnCell>
 // ConnCell 状态机（互斥）：
 //   { entry }        —— 就绪：refs 计数在 entry 上，acquire 直接复用
 //   { pending }      —— 建连中：所有并发 acquire 等待同一 promise，只建一条连接
@@ -104,12 +145,10 @@ const sharedConnections = new WeakMap(); // appRoot -> Map<connKey, ConnCell>
 //     销毁不早于 MCP 连接关闭完成。
 // 下面这张索引表因此**不是所有权凭据**，只是两个遍历需求的视图：tools/change 时要找到所有
 // 存活 slot 补投射；HMR 卸载时要撤回所有投射。摘除与否都不影响引用是否归还。
-const agentProjectSlotsByRoot = new WeakMap(); // appRoot -> Map<agent, Map<connKey, ProjectSlot>>
 // ProjectSlot: { key, entry, ctx, agentCtx, agent, projected: Map<name, { definition, dispose }>, release, disposed }
-const scopeModulePromises = new WeakMap(); // appRoot -> Promise<dsh-scope 模块>（按 app 隔离，避免跨 app/HMR 串用）
 
 function connKeyOf(wsPath, serverName) { return `${wsPath}\u0000${serverName}`; }
-function sharedConnBucket(ctx) { return bucketOf(sharedConnections, ctx); }
+function sharedConnBucket(ctx) { return hostStateOf(ctx).connections; }
 function toolsServiceOf(ctx) {
 	const get = typeof ctx.get === "function" ? ctx.get.bind(ctx) : null;
 	return (get && get("tools")) || ctx.tools || null;
@@ -118,12 +157,12 @@ async function loadScopeModule(ctx) {
 	// 通过宿主 loader 解析 dsh-scope：与宿主 dsh-tools 用同一份模块（Node ESM 按解析路径缓存），
 	// createScope 造出的作用域才会被宿主的 ToolRuntime 认得。
 	const root = appRoot(ctx);
-	let pending = scopeModulePromises.get(root);
+	let pending = hostStateOfRoot(root).scopeModule;
 	if (!pending) {
 		pending = ctx.loader.import("@deepseek-ai/dsh-scope");
-		scopeModulePromises.set(root, pending);
+		hostStateOfRoot(root).scopeModule = pending;
 		// 解析失败不缓存失败态，下次重试。
-		pending.catch(() => scopeModulePromises.delete(root));
+		pending.catch(() => { hostStateOfRoot(root).scopeModule = undefined; });
 	}
 	return pending;
 }
@@ -202,7 +241,7 @@ export function projectMcpServers(ctx) {
 // 避免把"刚建连、还在握手"误判成终态。
 const DEAD_CONNECTION_AGE_MS = 5_000;
 function isDeadConnection(ctx, entry) {
-	if (entry.fiber?.state !== FIBER_ACTIVE) return false;
+	if (!entryIsActive(entry)) return false;
 	if (entry.hadTools !== true) return false;
 	if (Date.now() - (entry.createdAt ?? 0) < DEAD_CONNECTION_AGE_MS) return false;
 	// 只数名字：这里要回答的是「还有没有工具」。稳态是一次哨兵 `get()`；哨兵读不到（工具已被
@@ -383,7 +422,7 @@ async function retireStaleConnection(ctx, wsPath, server) {
 // 连接已从配置里移除：把指向它的会话投射整批撤掉（撤工具 + 摘索引 + 归还引用）。
 // 与 repoint 的分工：repoint 处理「换了新连接」，这里处理「没有新连接可换」。
 function dropConnectionSlots(ctx, entry) {
-	const slotsByAgent = agentProjectSlotsByRoot.get(appRoot(ctx));
+	const slotsByAgent = hostStateOf(ctx).projectSlots;
 	if (!slotsByAgent) return 0;
 	let dropped = 0;
 	for (const slots of [...slotsByAgent.values()]) {
@@ -415,7 +454,7 @@ function moveSlotToConnection(ctx, slot, entry) {
 // 只改「正在提交的那个会话」是不够的：旧连接的 scope 一销毁，其余会话的投射就会读到空集，
 // 随后 tools/change 的幂等重算会把它们的工具全部撤掉 —— 看起来就是「改个配置，别的会话反而没工具了」。
 function repointConnectionSlots(ctx, previous, entry) {
-	const slotsByAgent = agentProjectSlotsByRoot.get(appRoot(ctx));
+	const slotsByAgent = hostStateOf(ctx).projectSlots;
 	if (!slotsByAgent) return 0;
 	let repointed = 0;
 	// 遍历用快照：虽然当前 moveSlotToConnection 不动这张索引，但一边遍历一边被回调改索引
@@ -432,7 +471,7 @@ function repointConnectionSlots(ctx, previous, entry) {
 //   2. 对每个存活会话重跑一次挂载（幂等）：缺的连上、换掉的重新投射、已有的当场归还多余引用。
 // 会话不需要重开，也不需要等它结束 —— 这正是它与旧实现（写盘只落文件、等下一次 setup）的区别。
 async function reconcileWorkspaceConnections(ctx, wsPath) {
-	const generation = activeGenerationByRoot.get(appRoot(ctx));
+	const generation = hostStateOf(ctx).generation;
 	if (!generation?.active) return { retired: [], remounted: 0 };
 	const config = await readWorkspaceConfigCached(ctx, wsPath);
 	if (config.error) {
@@ -470,7 +509,7 @@ async function reconcileWorkspaceConnections(ctx, wsPath) {
 	return { retired, remounted };
 }
 function agentSlotIndex(ctx, agent) {
-	const slotsByAgent = bucketOf(agentProjectSlotsByRoot, ctx);
+	const slotsByAgent = hostStateOf(ctx).projectSlots;
 	let slots = slotsByAgent.get(agent);
 	if (!slots) { slots = new Map(); slotsByAgent.set(agent, slots); }
 	return slots;
@@ -525,7 +564,7 @@ function disposeProjectSlot(slot) {
 	slot.disposed = true;
 	for (const { dispose } of slot.projected.values()) { try { dispose(); } catch { /* noop */ } }
 	slot.projected.clear();
-	const slotsByAgent = agentProjectSlotsByRoot.get(appRoot(slot.ctx));
+	const slotsByAgent = hostStateOf(slot.ctx).projectSlots;
 	const slots = slotsByAgent?.get(slot.agent);
 	if (slots?.get(slot.key) === slot) {
 		slots.delete(slot.key);
@@ -588,7 +627,7 @@ function syncSessionProjectTools(ctx, slot) {
 // 不撤的话，运行中会话的工具定义仍指向已被销毁的共享连接（僵尸工具）。
 // 走每个 slot 自己的 cordis disposer（官方幂等），于是会话之后正常销毁时不会重复释放。
 function disposeAllProjectSlots(ctx) {
-	const slotsByAgent = agentProjectSlotsByRoot.get(appRoot(ctx));
+	const slotsByAgent = hostStateOf(ctx).projectSlots;
 	const pending = [];
 	if (slotsByAgent) {
 		for (const slots of [...slotsByAgent.values()]) {
@@ -631,7 +670,7 @@ function disposeAllProjectSlots(ctx) {
 // phase 直接取 cordis fiber 的状态代号，交给 mcp-observability 的 deriveMcpPhase 判定——
 // 项目行因此和全局行走同一套规则、同一个真相源，而不是再写一套日志启发式。
 function workspaceConnectionStatus(ctx, wsPath, server) {
-	const entry = sharedConnections.get(appRoot(ctx))?.get(connKeyOf(wsPath, server.name))?.entry;
+	const entry = hostStateOf(ctx).connections?.get(connKeyOf(wsPath, server.name))?.entry;
 	const duplicateOwners = duplicateServerNameOwners(ctx, wsPath, server.name);
 	if (!entry) return { mounted: false, schemas: [], refs: 0, configStale: false, fiberState: undefined, duplicateOwners, scopeError: workspaceScopeErrorOf(wsPath, server.name) };
 	const read = readScopedToolSchemas(ctx, entry);
@@ -656,7 +695,7 @@ function workspaceScopeErrorOf(wsPath, serverName) {
 // refs 与 sessions 分开给而不合成一个「健康」布尔：健康时两者相等；refs > sessions 就是漏了
 // 引用（会话已销毁但引用没归还 → 连接永不释放，配置也永远刷不新），判定留给读的人。
 async function projectConnectionsView(ctx) {
-	const bucket = sharedConnections.get(appRoot(ctx));
+	const bucket = hostStateOf(ctx).connections;
 	if (!bucket) return [];
 	const rows = [];
 	for (const [key, cell] of [...bucket]) {
@@ -699,7 +738,7 @@ async function projectConnectionsView(ctx) {
 }
 // 某 connKey 当前被多少个存活会话持有（遍历索引即事实来源：每个 slot 就是一个会话的投射）。
 function sessionSlotCount(ctx, key) {
-	const slotsByAgent = agentProjectSlotsByRoot.get(appRoot(ctx));
+	const slotsByAgent = hostStateOf(ctx).projectSlots;
 	if (!slotsByAgent) return 0;
 	let count = 0;
 	for (const slots of slotsByAgent.values()) if (slots.has(key)) count += 1;
@@ -718,7 +757,7 @@ async function currentServerSpec(ctx, wsPath, serverName) {
 // 判重，跨作用域同名合法），所以它是一条诊断事实而不是拦截条件；更早的宿主按全进程唯一
 // 判定，同名才会真的启动失败——那时「和谁同名」就是根因，值得摆到面板上。
 function duplicateServerNameOwners(ctx, wsPath, serverName) {
-	const bucket = sharedConnections.get(appRoot(ctx));
+	const bucket = hostStateOf(ctx).connections;
 	if (!bucket) return [];
 	const owners = [];
 	for (const cell of bucket.values()) {
@@ -769,7 +808,7 @@ function readConnectionTools(ctx, entry) {
 	if (!tools) return { definitions: cache.definitions, error: "", failed: false };
 	// 空连接躲开哨兵：没有工具就没有哨兵可读，而 `schemas(scope)` 会把**全局层**整个深拷贝一遍。
 	// 一轮合并事件里每条连接只探一次就够（同一轮里没有第二次变更）；下一轮会重新探。
-	if (cache.sentinel === undefined && cache.checkedEpoch === toolsEpoch) return cachedConnectionTools(ctx, entry, cache);
+	if (cache.sentinel === undefined && cache.checkedEpoch === hostStateOf(ctx).epoch) return cachedConnectionTools(ctx, entry, cache);
 	// 代次哨兵：一次 `get()`（公开 API，本身就是一次整表重建，但只有它这一次）。
 	if (cache.sentinel !== undefined) {
 		let current;
@@ -793,7 +832,7 @@ function readConnectionTools(ctx, entry) {
 		cache.definitions = definitions;
 		// 哨兵 = 第一个工具的定义身份；空集则没有哨兵（退到上面那条 checkedEpoch 的判定）。
 		cache.sentinel = definitions.keys().next().value;
-		cache.checkedEpoch = toolsEpoch;
+		cache.checkedEpoch = hostStateOf(ctx).epoch;
 		return { definitions, error: settleScopeRead(ctx, entry, definitions.size), failed: false };
 	} catch (error) {
 		return scopeReadFailed(ctx, entry, cache, error);
@@ -852,7 +891,7 @@ function readScopedToolSchemas(ctx, entry) {
 function scopeVerdict(ctx, entry) {
 	if (entry.scopeVerdict !== undefined) return entry.scopeVerdict;
 	// 建连没结束之前定不了：工具还没注册完，此时全局视图里本来就不应该有它们。
-	if (entry.fiber?.state !== FIBER_ACTIVE) return undefined;
+	if (!entryIsActive(entry)) return undefined;
 	const leaked = leakedGlobalToolNames(ctx, entry);
 	entry.scopeVerdict = leaked.length
 		? `这批工具对所有项目的会话都可见（它们出现在了全局层：${leaked.slice(0, 3).join("、")}${leaked.length > 3 ? " 等" : ""}）：这台机器的 DSH 安装里 @deepseek-ai/dsh-scope 有多份模块实例，作用域标签互不相认，项目之间因此无法隔离。把安装树收成一份即可（重装该 profile，或清掉多余的 dsh-scope 副本）`
@@ -879,7 +918,7 @@ function projectToolSchemasOf(ctx, entry) {
 // 的全 app 唯一性只在保存路径被校验，手工编辑 `.dsh/mcp.json` 能造出两个项目同名，按名字扫描
 // 就会把另一个项目的工具显示到这里。wsPath 缺省时退回按名字取首个匹配（全局条目的调用方没有 wsPath）。
 function workspaceToolSchemas(ctx, serverName, wsPath) {
-	const bucket = sharedConnections.get(appRoot(ctx));
+	const bucket = hostStateOf(ctx).connections;
 	if (!bucket) return [];
 	if (wsPath) {
 		const entry = bucket.get(connKeyOf(wsPath, serverName))?.entry;
@@ -891,14 +930,14 @@ function workspaceToolSchemas(ctx, serverName, wsPath) {
 	return [];
 }
 
-function workspaceCacheGet(ctx, wsPath) { return workspaceConfigCache.get(appRoot(ctx))?.get(wsPath); }
+function workspaceCacheGet(ctx, wsPath) { return hostStateOf(ctx).configCache.get(wsPath); }
 function workspaceCacheSet(ctx, wsPath, entry) {
-	const bucket = bucketOf(workspaceConfigCache, ctx);
-	if (bucket.size >= WORKSPACE_CACHE_LIMIT && !bucket.has(wsPath)) bucket.delete(bucket.keys().next().value);
+	const bucket = hostStateOf(ctx).configCache;
+	if (bucket.size >= HostState.cacheLimit && !bucket.has(wsPath)) bucket.delete(bucket.keys().next().value);
 	bucket.set(wsPath, entry);
 }
 function workspaceCacheDelete(ctx, wsPath) {
-	workspaceConfigCache.get(appRoot(ctx))?.delete(wsPath);
+	hostStateOf(ctx).configCache.delete(wsPath);
 }
 function withWorkspaceWrite(wsPath, operation) {
 	const state = workspaceWriteEntry(wsPath);
@@ -931,7 +970,7 @@ function recordWorkspaceMountError(ctx, wsPath, serverName, error) {
 	const message = error?.message ?? String(error);
 	const owners = SERVER_NAME_IN_USE.test(message) ? nameOwnersOf(ctx, wsPath, serverName) : [];
 	let byServer = workspaceMountErrors.get(wsPath);
-	if (!byServer) { byServer = new Map(); workspaceMountErrors.set(wsPath, byServer); }
+	if (!byServer) { byServer = new Map(); workspaceMountErrors.set(hostStateOf(ctx).own(wsPath), byServer); }
 	byServer.set(serverName, owners.length
 		? `${message}（同名条目：${owners.join("、")}）—— ${SERVER_NAME_IN_USE_ROOT_CAUSE}`
 		: message);
@@ -951,9 +990,9 @@ function workspaceMountErrorsView(wsPath) {
 // 「挂上了但工具不在共享作用域层」——两者的处置完全不同（看 DSH 依赖树 vs 看 MCP 配置）。
 function recordWorkspaceScopeError(ctx, wsPath, serverName, message) {
 	let byServer = workspaceScopeErrors.get(wsPath);
-	if (!byServer) { byServer = new Map(); workspaceScopeErrors.set(wsPath, byServer); }
+	if (!byServer) { byServer = new Map(); workspaceScopeErrors.set(hostStateOf(ctx).own(wsPath), byServer); }
 	byServer.set(serverName, message);
-	warnDiagnosticOnce(ctx?.logger, `scope:${wsPath}\u0000${serverName}`, `mcp-manager: 项目 MCP ${serverName} 的作用域工具视图不可用：${message}`);
+	warnDiagnosticOnce(ctx, `scope:${wsPath}\u0000${serverName}`, `mcp-manager: 项目 MCP ${serverName} 的作用域工具视图不可用：${message}`);
 }
 function clearWorkspaceScopeError(wsPath, serverName) {
 	const byServer = workspaceScopeErrors.get(wsPath);
@@ -968,8 +1007,8 @@ function workspaceScopeErrorsView(wsPath) {
 }
 // restrict 失败此前只写进一个读不到的 logger，等于静默失败：用户点了屏蔽却毫无反馈，
 // 也无从判断是没生效还是宿主拒绝。与挂载失败同样记为可观测状态。
-function recordWorkspaceRestrictError(wsPath, deny, error) {
-	workspaceRestrictErrors.set(wsPath, { deny, error: error?.message ?? String(error), ts: Date.now() });
+function recordWorkspaceRestrictError(ctx, wsPath, deny, error) {
+	workspaceRestrictErrors.set(hostStateOf(ctx).own(wsPath), { deny, error: error?.message ?? String(error), ts: Date.now() });
 }
 function clearWorkspaceRestrictError(wsPath) {
 	workspaceRestrictErrors.delete(wsPath);
@@ -986,7 +1025,18 @@ function liveWorkspaceAgentCount(wsPath) {
 	return count;
 }
 
+// wsPath 的**唯一**合法化出口。拒绝规则在这里表达一次：
+//   - 非字符串 / 空 / 纯空白 → 「缺少 workspace 路径」。校验必须在 realpath 之前：
+//     Windows 上 `realpathSync("")` 返回宿主进程 cwd 而不抛错（`lib/index.js` 的 setDeferAll
+//     曾为此单独写过判空），于是“没传参”会静默变成“对当前目录操作”。
+//   - 相对路径 → 拒绝。相对路径按宿主进程 cwd 解析，等于对用户没指定的目录读写。
+// 各 RPC 不再各写一遍 `if (!wsPath) throw …`：两套口径必然漏入口
+//（previewWorkspaceImport / importWorkspaceJson / revealWorkspaceServer 当年就是这样漏掉的）。
+// 注：`"没传 wsPath"` 在 setDeferAll / setDefer / tools 里是合法的“全局族”语义，那三处
+// 必须先自己判空、只在真给了路径时才调用这里——不是重复校验。
 function canonicalWorkspacePath(path) {
+	if (typeof path !== "string" || path.trim() === "") throw new Error("缺少 workspace 路径");
+	if (!isAbsolute(path)) throw new Error(`workspace 路径必须是绝对路径：${path}`);
 	try { return realpathSync(path); } catch { return path; }
 }
 function workspaceRegistryOf(ctx) {
@@ -999,7 +1049,7 @@ async function listWorkspaceRecords(ctx) {
 	if (!registry) return [];
 	try { return registry.list() || []; }
 	catch (error) {
-		warnDiagnosticOnce(ctx?.logger, "workspaceRegistry.list()", `mcp-manager: 读取工作区注册表失败，项目标签页会显示为空：${error?.message ?? error}`);
+		warnDiagnosticOnce(ctx, "workspaceRegistry.list()", `mcp-manager: 读取工作区注册表失败，项目标签页会显示为空：${error?.message ?? error}`);
 		return [];
 	}
 }
@@ -1071,17 +1121,52 @@ async function writeWorkspaceConfigFile(wsPath, servers, exclude, toolLoading) {
 // 公开面拿不到「只要名字」的读法（`schemas()` 会对每个工具深拷贝 parameters），所以缓存：
 // 空 exclude 直接短路；一次事件合并后只重算一次，而不是每个存活会话各算一次（issue #8 的另一半放大）。
 // 键是 (工具代次, 全局 serverName 集合, exclude)。deny 还依赖全局工具**内容**，那一半由代次近似：
-// toolsEpoch 每轮 flush 自增，而 flush 正是由每一次 register/dispose 派发的 tools/change 排出来的，
-// 所以任何一次工具集变化都会换 key。前提是没有任何事件被过滤掉 —— 本模块现在不做那种过滤。
-let toolsEpoch = 0;
-const denyCacheByRoot = new WeakMap(); // appRoot -> Map<key, string[]>
+// 每一次 register/dispose/restrict 都会同步派发 tools/change，而这个代次就在派发那一刻前进
+// （见 noteToolsChanged），所以任何一次工具集变化都会换 key。前提是没有任何事件被过滤掉 ——
+// 本模块现在不做那种过滤。
+// 「工具代次」对**外部**消费者（ToolSearch 的 revision 缓存）的可信度，取决于有没有人在听
+// tools/change：自增只发生在 noteToolsChanged 里，而它由 installAgentRuntime 订阅的监听器调用。
+// 没有那层订阅时（单测只装 ToolSearch 运行时、或宿主没装 MCP 运行时）代次会永久停在 0，
+// 拿它当"没变化"就是静默失配。所以这里返回 **undefined = 不可信，请按内容自己判**。
+function toolsGenerationOf(ctx) {
+	const current = hostStateOf(ctx).generation;
+	if (current === undefined || !current.active) return undefined;
+	return hostStateOf(ctx).epoch;
+}
+// 全局工具清单的缓存。一次未缓存的 toolInventory 要付三笔钱：
+//   ① `ctx.tools.schemas()` 把每个工具的 parameters 深拷贝一遍（宿主 schemaOf(detach=true)）；
+//   ② 逐台 server 做 JSON.stringify + SHA-256（每行的 toolRevision）；
+//   ③ 「工具名 → serverName」的前缀归属扫描（每台 server 一遍 startsWith）。
+// 本机实测（736 工具 / 1.6–2MB schema）：合计 ~150–220ms/次，而面板每 5s 轮询一次；项目页还要加一份。
+// 键是 (appRoot, 代次)。缓存整份（含 schemas）而不只是计数：tools 详情 RPC 要的就是那些
+// parameters，而它们已经在手里；代价是稳态多持有一次深拷贝，比每 5s 重算一次便宜。
+// ⚠️ 缓存里的 schema 对象是**共享**的：读方不得就地修改（要改先复制）。
+// 全局可见工具的快照（`ctx.tools.schemas()` 的返回）。面板的可见集与工具清单是**同一份事实**：
+// 一次枚举各自算一遍等于把宿主的深拷贝付两次，而 735 工具时那是 ~90–140ms/次。
+// 代次与工具清单共用（`tools/change` 派发时前进），所以两者永远同代。
+// ⚠️ 返回的数组与 schema 对象是**共享**的：读方不得就地修改。
+function globalToolSchemas(ctx) {
+	const state = hostStateOf(ctx);
+	const hit = state.schemasCache;
+	if (hit !== undefined && hit.epoch === state.epoch) return hit.schemas;
+	const schemas = ctx.tools.schemas();
+	state.schemasCache = { epoch: state.epoch, schemas };
+	return schemas;
+}
+function toolInventoryOf(ctx) {
+	const state = hostStateOf(ctx);
+	const hit = state.inventoryCache;
+	if (hit !== undefined && hit.epoch === state.epoch) return hit.inventory;
+	const inventory = toolInventory(ctx, globalToolSchemas(ctx));
+	state.inventoryCache = { epoch: state.epoch, inventory };
+	return inventory;
+}
 function denyForExclude(ctx, exclude) {
 	if (!exclude.length) return [];
 	const globalNames = allMcpEntries(ctx).map((entry) => entry.options.config.serverName);
-	const root = appRoot(ctx);
-	const cacheKey = `${toolsEpoch}\u0000${globalNames.join("\u0000")}\u0000${exclude.join("\u0000")}`;
-	let bucket = denyCacheByRoot.get(root);
-	if (bucket === undefined) { bucket = new Map(); denyCacheByRoot.set(root, bucket); }
+	const state = hostStateOf(ctx);
+	const cacheKey = `${state.epoch}\u0000${globalNames.join("\u0000")}\u0000${exclude.join("\u0000")}`;
+	const bucket = state.denyCache;
 	const hit = bucket.get(cacheKey);
 	if (hit !== undefined) return hit;
 	const excluded = new Set(exclude);
@@ -1091,7 +1176,7 @@ function denyForExclude(ctx, exclude) {
 		if (owners.length === 1 && excluded.has(owners[0])) deny.push(schema.name);
 	}
 	deny.sort();
-	if (bucket.size > 32) bucket.clear();
+	if (bucket.size > HostState.denyLimit) bucket.clear();
 	bucket.set(cacheKey, deny);
 	return deny;
 }
@@ -1112,7 +1197,7 @@ function applyWorkspaceRestrict(ctx, agentCtx, agent, exclude) {
 		clearWorkspaceRestrictError(state.wsPath);
 	} catch (error) {
 		state.restrictKey = undefined;
-		recordWorkspaceRestrictError(state.wsPath, deny, error);
+		recordWorkspaceRestrictError(ctx, state.wsPath, deny, error);
 		ctx.logger?.warn?.(`mcp-manager: restrict(${deny.join(", ")}) 失败: ${error?.message ?? error}`);
 	}
 }
@@ -1153,10 +1238,10 @@ async function reconcileWorkspaceRestricts(ctx, wsPath) {
 // 才注册，所以 setup 当场投射到的往往是空集，全靠这里补。
 // 投射自身也会派发 tools/change（register() → ScopedLayers.onChange，同步 emit）。这里**不**抑制它：
 // emit 是同步派发，别的监听器同样会在这一次派发里注册工具，按「是我自己发的」去吞事件会把别人的
-// 变更一起吞掉，而 tools/change 没有载荷，这种过滤只能靠猜。多出来的那一轮由 scheduleToolsChange
+// 变更一起吞掉，而 tools/change 没有载荷，这种过滤只能靠猜。多出来的那一轮由 noteToolsChanged
 // 合并吸收，且重算是幂等的（哨兵没换就不注册），所以只多排一轮空转，不会自激。
 function reconcileSessionProjectTools(ctx) {
-	const slotsByAgent = agentProjectSlotsByRoot.get(appRoot(ctx));
+	const slotsByAgent = hostStateOf(ctx).projectSlots;
 	if (!slotsByAgent) return;
 	for (const slots of [...slotsByAgent.values()]) {
 		for (const slot of [...slots.values()]) {
@@ -1166,19 +1251,25 @@ function reconcileSessionProjectTools(ctx) {
 }
 // `tools/change` 没有载荷，而一次 207 个工具的注册会派发 200+ 次。把同一轮微任务里的事件合并成一次
 // 重算：重算读的是「当前」状态，合并不会丢变化；返回同一个 promise，`await handler()` 的语义不变。
-// 每次合并后自增 toolsEpoch —— deny 展开的结果只在这一轮内复用，不会跨轮变陈旧。
-const toolsChangeFlushByRoot = new WeakMap(); // appRoot -> Promise
-function scheduleToolsChange(ctx) {
-	const root = appRoot(ctx);
-	const pending = toolsChangeFlushByRoot.get(root);
+//
+// 这是「工具集可能变了」的**唯一**入口：生产上由 tools/change 监听器调用（宿主每次
+// register/dispose/restrict 都在同一 tick 里同步派发），夹具没有事件总线时直接调它，
+// 等价于派发了那次事件——所以它导出，而不是藏在模块里。
+function noteToolsChanged(ctx) {
+	const state = hostStateOf(ctx);
+	const pending = state.toolsChangeFlush;
 	if (pending !== undefined) return pending;
+	// 代次在**事件发生时**前进，而不是等微任务 flush：工具集在 emit 那一刻就已经变了
+	// （宿主每个 register/dispose/restrict 都在同一 tick 里同步 emit），任何紧接着的同步读
+	// 都必须看到新代次——否则它会枚举到新清单、却按旧代次缓存下来。
+	// 合并批次仍然只前进一次（上面那条 pending 短路），与旧语义「每轮合并一次」相同。
+	state.epoch += 1;
 	const flush = Promise.resolve().then(() => {
-		toolsChangeFlushByRoot.delete(root);
-		toolsEpoch += 1;
+		state.toolsChangeFlush = undefined;
 		reconcileSessionProjectTools(ctx);
 		return reconcileWorkspaceRestricts(ctx);
 	});
-	toolsChangeFlushByRoot.set(root, flush);
+	state.toolsChangeFlush = flush;
 	return flush;
 }
 // 挂载时把「等就绪」做成**有预算**的等待：预算内就绪 → 工具赶在首轮组装之前进声明
@@ -1396,30 +1487,40 @@ function installAgentRuntime(ctx) {
 		// 才跑，而那时旧模块已经不在了）。teardown promise 交回 cordis 等待。
 		const root = appRoot(ctx);
 		// 本 app root 的共享状态（连接、会话记录、投射）**归当前代次所有**，这三件销毁动作
-		// 必须共用同一条归属判定，否则就是自相矛盾：`activeGenerationByRoot` 若真会新旧重叠
+		// 必须共用同一条归属判定，否则就是自相矛盾：挂载器令牌若真会新旧重叠
 		// （令牌只删自己那一份就是为了防它），那么被取代的旧代在这里无条件抹掉会话记录与投射，
 		// 就把**存活代**的工具连带撕掉了 —— 会话还在跑，却再也读不到项目工具，而且新的那一代
 		// 找不到会话记录、reconcile 从此不再对齐（remounted=0）。
 		// 所以：令牌已易主且新代仍活着 ⇒ 旧代只收回自己的订阅，不碰共享状态；
 		// 新代自己卸载时会走同一段代码把它们收干净（同 app root 的连接也被它继承，不会漏）。
-		const current = activeGenerationByRoot.get(root);
+		const current = hostStateOfRoot(root).generation;
 		if (current !== undefined && current !== generation && current.active) {
 			return undefined;
 		}
 		// 只删自己那一份：每个 app root 只有一个令牌槽位，若新旧两代短暂重叠（HMR 先装后卸），
 		// 旧代无条件删除会把新代的令牌清掉 —— 症状是配置对齐静默失效（reconcile 找不到代次就早退）。
-		if (activeGenerationByRoot.get(root) === generation) activeGenerationByRoot.delete(root);
+		if (hostStateOfRoot(root).generation === generation) hostStateOfRoot(root).generation = undefined;
 		for (const [agent, state] of agentWorkspaceStates) {
 			if (state.root !== root) continue;
 			if (state.restrictDisposer) { try { state.restrictDisposer(); } catch { /* noop */ } }
 			agentWorkspaceStates.delete(agent);
 		}
-		return disposeAllProjectSlots(ctx);
+		// 本实例的全部可变状态一处清（R7）：per-root 的容器、代次、以及"我在进程级表里写过
+		// 哪些键"的登记。
+		//
+		// ⚠️ 顺序是硬的：**先**拆连接（它要从 connections/projectSlots 里取出要拆的条目），
+		// **再**清状态。反过来的话 disposeAllProjectSlots 遍历到空表，一条连接都不拆，
+		// 而"卸载后把连接留到空闲超时"正是本功能最不能发生的形态（僵尸工具 + 永不回收的 fiber）。
+		// 拆连接是异步的（返回 promise 交回 cordis 等待），但它的**同步阶段**已经把条目全部取出，
+		// 所以紧接着清容器是安全的；状态清理本身仍然是同步完成的。
+		const teardown = disposeAllProjectSlots(ctx);
+		hostStateOf(ctx).dispose();
+		return teardown;
 	};
 	// 生命周期归属先建立、再订阅事件：反过来的话，effect() 抛出（fiber 已 inactive）就会留下一个
 	// 被死插件永久持有的监听器，而且再也没有重新安装的机会。
 	const owner = ctx.effect(() => () => cleanup(), "mcp-manager.agentRuntime");
-	activeGenerationByRoot.set(appRoot(ctx), generation);
+	hostStateOf(ctx).generation = generation;
 	try {
 		disposeAgentCreated = ctx.on("agent/created", async (payload) => {
 			// 边界（显式且必须）：宿主把本监听器的抛错当作「否决这次会话创建」。一个连不上的 MCP
@@ -1436,7 +1537,7 @@ function installAgentRuntime(ctx) {
 		});
 		// 自己投射出来的那一批事件也走这里：合并把它们和真正的外部变更吸收成同一轮，不必也不该按
 		// 「是谁发的」过滤（`tools/change` 没有载荷，过滤只能靠猜，而且会连别人的变更一起吞掉）。
-		disposeToolsChange = ctx.on("tools/change", () => scheduleToolsChange(ctx));
+		disposeToolsChange = ctx.on("tools/change", () => noteToolsChanged(ctx));
 	} catch (error) {
 		// 订阅中途失败：先把已经建立的订阅收回去（cleanup 自身置 generation.active = false，
 		// 也是幂等的），再让错误浮出去，不静默半装配状态。
@@ -1459,7 +1560,12 @@ export {
 	reconcileWorkspaceConnections,
 	reconcileWorkspaceRestricts,
 	reconnectWorkspaceServer,
+	globalToolSchemas,
+	hostStateFacts,
+	noteToolsChanged,
 	setAgentToolLoadingPolicy,
+	toolInventoryOf,
+	toolsGenerationOf,
 	withRegisteredWorkspaceWrite,
 	workspaceConnectionStatus,
 	workspaceMountErrorsView,

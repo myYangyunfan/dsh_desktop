@@ -34,7 +34,7 @@ export function truncateText(text, max) {
 export function sanitizeSource(source) {
   if (source === null || typeof source !== "object") return source;
   const out = { ...source };
-  for (const key of ["title", "url", "snippet", "content"]) {
+  for (const key of ["title", "url", "snippet", "site", "content"]) {
     if (typeof out[key] === "string") out[key] = stripLoneSurrogates(out[key]);
   }
   return out;

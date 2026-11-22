@@ -15,12 +15,14 @@ export declare class CodexRemoteDomain {
     private readonly logger;
     private readonly createAppServer;
     private readonly restartDelaysMs;
+    private readonly turnSilenceTimeoutMs;
     private appServer?;
     private unsubscribeInbound?;
     private unsubscribeUnavailable?;
     private readonly peers;
     private readonly peerDeviceIds;
     private readonly turnOwners;
+    private readonly turnWatchdogs;
     private readonly approvals;
     private readonly permissionPresets;
     private approvalExpiryTimer?;
@@ -45,7 +47,7 @@ export declare class CodexRemoteDomain {
     private readonly knownThreadPromises;
     private state;
     private unavailableCode?;
-    constructor(config: ResolvedCodexConfig, logger: SafeLogger, createAppServer?: AppServerFactory, restartDelaysMs?: readonly number[]);
+    constructor(config: ResolvedCodexConfig, logger: SafeLogger, createAppServer?: AppServerFactory, restartDelaysMs?: readonly number[], turnSilenceTimeoutMs?: number);
     private startPromise?;
     start(): Promise<void>;
     private startOnce;
@@ -94,6 +96,15 @@ export declare class CodexRemoteDomain {
     private resolveUpstreamApproval;
     private expireApprovals;
     private scheduleApprovalExpiry;
+    private armTurnWatchdog;
+    private clearTurnWatchdog;
+    private clearAllTurnWatchdogs;
+    /**
+     * App Server can drop a turn without `turn/completed` (observed on HTTP 503).
+     * Release the writer lease and project a failed turn/end so Remote clients
+     * leave the forever-"thinking" state.
+     */
+    private failSilentTurn;
     private requireAppServer;
     private callUpstream;
     private readWorkspaceAuthority;

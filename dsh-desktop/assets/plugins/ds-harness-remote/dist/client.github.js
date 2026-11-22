@@ -1619,6 +1619,72 @@ Minimum version required to store current data is: ` + bestVersion + `.
     }
   });
 
+  // packages/plugin/src/control-route.ts
+  var CONTROL_RPC_PREFIX = "/ds-harness-remote", STATUS_STREAM_ENDPOINT = "status.events", STATUS_STREAM_PATH = `${CONTROL_RPC_PREFIX}/${STATUS_STREAM_ENDPOINT}`;
+
+  // packages/plugin/src/remote-upload-client.ts
+  var REMOTE_UPLOAD_MAX_BYTES = 192 * 1024 * 1024;
+  function createRemoteUploadFetch(original, baseUrl) {
+    let sequence = 0, control = async (method, payload, signal) => {
+      let rpcId = `remote-upload-${++sequence}`, response = await original(new URL(`${CONTROL_RPC_PREFIX.slice(1)}/${method}`, baseUrl), {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ type: "client-request", rpcId, method, payload }),
+        signal
+      });
+      if (!response.ok) throw new Error(`Remote upload control failed (HTTP ${response.status}).`);
+      let envelope = await response.json();
+      if (envelope.type !== "server-response" || envelope.rpcId !== rpcId || envelope.result?.ok !== !0)
+        throw new Error(envelope.result?.error?.message ?? "Remote upload requires an updated Host plugin.");
+      return envelope.result.value;
+    };
+    return async (input, init) => {
+      let url = new URL(input instanceof Request ? input.url : String(input), baseUrl), target = new URL("api/session/uploadFileBinary", baseUrl);
+      if (url.origin !== target.origin || url.pathname !== target.pathname) return original(input, init);
+      let request = new Request(url, input instanceof Request ? new Request(input, init) : init);
+      if (request.method !== "POST") return original(input, init);
+      let signal = AbortSignal.any([request.signal, AbortSignal.timeout(6e4)]), status = await control("status", {}, signal);
+      if (status.mode === "local") return original(input, init);
+      if (status.mode !== "remote" || !status.connected) throw new Error("Remote Host is disconnected. Reconnect before uploading a file.");
+      if (status.backend !== void 0 && status.backend !== "harness") throw new Error("Remote attachment receipts require a Harness session.");
+      let sessionId = url.searchParams.get("sessionId"), mediaType = url.searchParams.get("mediaType");
+      if (!sessionId || mediaType !== null && !["image/png", "image/jpeg", "image/webp", "image/gif"].includes(mediaType))
+        throw new Error("A Session and a supported image media type, when provided, are required.");
+      let reader = request.body?.getReader(), abortRead = () => {
+        reader?.cancel(signal.reason).catch(() => {
+        });
+      };
+      signal.addEventListener("abort", abortRead, { once: !0 });
+      let chunks = [], size = 0;
+      try {
+        for (; reader !== void 0; ) {
+          signal.throwIfAborted();
+          let next = await reader.read();
+          if (next.done) break;
+          if (size += next.value.byteLength, size > REMOTE_UPLOAD_MAX_BYTES) throw new Error("Remote upload exceeds the Remote transfer safety limit.");
+          chunks.push(next.value);
+        }
+      } finally {
+        signal.removeEventListener("abort", abortRead), await reader?.cancel().catch(() => {
+        }), reader?.releaseLock();
+      }
+      signal.throwIfAborted();
+      let binary = "";
+      for (let chunk of chunks) for (let i = 0; i < chunk.length; i += 32768) binary += String.fromCharCode(...chunk.subarray(i, i + 32768));
+      let result = await control("plugin.route", { route: "api/session/uploadFileBinary", targetDeviceId: status.target?.deviceId, body: {
+        endpoint: mediaType === null ? "file" : "image",
+        payload: {
+          sessionId,
+          ...mediaType === null ? {} : { mediaType },
+          data: btoa(binary),
+          ...url.searchParams.has("name") ? { name: url.searchParams.get("name") } : {}
+        }
+      } }, signal);
+      return new Response(JSON.stringify(result.json), { status: result.status, headers: { "content-type": "application/json" } });
+    };
+  }
+
   // packages/plugin/src/client/portal.ts
   function renderBodyPortal(portal, children) {
     if (typeof portal != "function" || typeof document > "u" || document === null) return children;
@@ -1635,7 +1701,7 @@ Minimum version required to store current data is: ` + bestVersion + `.
   var localeNamespace = "ds-harness-remote", en = {
     serverSavedLive: "Server address saved and applied.",
     saveServerBeforeLogin: "Save the Server address before continuing sign-in or pairing.",
-    pairingLoginTab: "DSH Go pairing",
+    pairingLoginTab: "DSH Go",
     pairingTitle: "Pair with DSH Go",
     pairingHint: `Scan in DSH Go and confirm on your phone.
 Then enter the phone code on this computer and confirm binding.`,
@@ -1663,19 +1729,41 @@ If a code was sent, recover the original submission without changing it.`,
     remoteToolsHint: "Expose remote_* tools in sessions. On by default; turn it off when you do not need them. Changes apply after restarting the Host.",
     remoteToolsSaved: "Remote Tools setting saved.",
     debugLogging: "Debug logging",
-    debugLoggingHint: "Write detailed connection diagnostics to the Host log. Applies immediately; turn off after troubleshooting.",
+    debugLoggingHint: "Record detailed connection diagnostics in the Host log (Info and above are recorded by default). Applies immediately; turn off after troubleshooting.",
+    debugLoggingLevelDebug: "Debug",
+    debugLoggingLevelInfo: "Info",
+    debugLogsToggleOpen: "View logs",
+    debugLogsToggleClose: "Hide logs",
+    debugLogsFilterAll: "All",
+    debugLogsFilterWarn: "Warnings & Errors",
+    debugLogsRefresh: "Refresh",
+    debugLogsRefreshing: "Refreshing\u2026",
+    debugLogsCopy: "Copy",
+    debugLogsCopied: "Copied",
+    debugLogsCopyFailed: "Copy failed",
+    debugLogsExport: "Export",
+    debugLogsClear: "Clear",
+    debugLogsLoading: "Loading logs\u2026",
+    debugLogsEmpty: "No matching log entries yet.",
+    debugLogsFileLabel: "Log file:",
+    debugLogsFileFallback: "Memory only ({error})",
+    debugLogsCount: "{count} entries",
     terminalRemote: "Remote terminal",
     terminalRemoteHint: "Allow trusted Remote devices to run an interactive shell as this Host user. On by default; independent of Agent approvals. Toggling saves and applies immediately.",
     terminalRemoteUnavailable: "Remote terminal is unavailable. Enable Remote terminal in the Host Remote settings; the switch applies immediately.",
     terminalSaved: "Remote terminal setting saved. Applies immediately.",
     sidebarEntry: "Sidebar entry",
-    sidebarEntryHint: "Standard keeps the Remote button in the sidebar footer. Compact moves it to the account row as an icon. Toggling applies immediately.",
+    sidebarEntryHint: "Standard keeps the Remote button in the sidebar footer. Compact moves it to the account row: an icon locally, or the Host name and Exit when remote. Toggling applies immediately.",
     sidebarEntryStandard: "Standard",
     sidebarEntryCompact: "Compact",
     sidebarEntrySaved: "Sidebar entry style saved.",
     previewOpen: "Preview service",
     previewPort: "Host port",
     previewLocalOnly: "Preview requires Desktop or a browser connected to Harness on this computer.",
+    hostReferenceName: "Name",
+    hostReferenceSystem: "System",
+    hostReferenceDeviceId: "Device ID",
+    hostReferenceInvocation: "Invocation",
     settings: "Settings",
     pluginTitle: "DeepSeek Remote",
     pluginDescription: "P2P-based, end-to-end encrypted remote access to DeepSeek Harness, CodeX, Claude Code, Pi, and other workspaces from web and mobile clients.",
@@ -1735,6 +1823,9 @@ If a code was sent, recover the original submission without changing it.`,
     credentialsCorrupted: "Local Remote credentials are corrupted. Sign out or reset the identity in Settings to recover.",
     identityLocked: "Local Remote identity is locked by another process. Stop other DSH instances and retry.",
     storageConflict: "Conflicting or unverified legacy Remote storage found. Stop all DSH instances and inspect it manually.",
+    storageConflictEntry: 'Conflicting or unverified legacy Remote storage found. Unexpected entry "{name}" was found. Stop all DSH instances and inspect it manually.',
+    retryStartup: "Retry Remote startup",
+    retryStartupSuccess: "Remote startup completed.",
     resetIdentity: "Reset Remote Identity",
     resetIdentityHint: "Recreate local device key pairs if they are corrupted. You will need to sign in again.",
     resetIdentityConfirm: "Are you sure you want to reset the local Remote identity? You will need to sign in again.",
@@ -1768,7 +1859,7 @@ If a code was sent, recover the original submission without changing it.`,
     reconnectStarted: "Reconnect requested.",
     connectionAuthorizationExpired: "Authorization expired. Sign out and authorize this Host again.",
     connectionReplaced: "Another instance is using this Host identity. Stop it or use a separate DSH_HOME before reconnecting.",
-    connectionCredentialsBusy: "Credential refresh is locked. Stop other instances. After a crash, stop all instances before removing server-credentials.json.refresh-lock and authorizing again.",
+    connectionCredentialsBusy: "Credential refresh is busy. The Host will retry. Remove a legacy refresh lock only after every instance stops.",
     connectionDeviceRevoked: "This Host was revoked on the Server. Sign out and authorize it again.",
     connectionOwnershipRequired: "The Server no longer recognizes this Host as an owned device.",
     connectionRateLimited: "The Server is receiving too many requests. Automatic retry will continue.",
@@ -1783,6 +1874,9 @@ If a code was sent, recover the original submission without changing it.`,
     serverAccountPassword: "Server account password",
     signInRegisterHost: "Sign in and register Host",
     signingIn: "Signing in\u2026",
+    loginWaitingAuthorization: "Waiting for authorization",
+    loginLoadingDevices: "Signed in. Loading devices",
+    loginLoadingSettings: "Signed in. Loading settings",
     useRegistrationCode: "Use connection code",
     registering: "Registering\u2026",
     remoteEntry: "Remote",
@@ -1790,6 +1884,7 @@ If a code was sent, recover the original submission without changing it.`,
     remoteDescription: "Choose one of your Hosts, then select a working directory. The Harness interface stays on this device.",
     starProject: "Open source project, stars welcome~",
     chooseHost: "Host",
+    manageHosts: "Manage Hosts",
     chooseDirectory: "Working directory",
     selectHostHint: "Select an online Host to browse its directories.",
     emptyDirectory: "This directory has no visible subdirectories.",
@@ -1826,6 +1921,11 @@ If a code was sent, recover the original submission without changing it.`,
     updateAvailable: "\u2B06 Remote {latest} is available (current {current})",
     updateShort: "\u2B06 {version}",
     updateAvailableShort: "{version} available",
+    pluginUpdating: "Updating\u2026",
+    pluginUpdateReload: "Updating, Remote will reload",
+    pluginUpdateFailed: "Update failed",
+    pluginUpdateUnknown: "Update status unknown, click to retry",
+    pluginUpdateManual: "Releases",
     updateBadge: "Update available",
     updateAvailableTag: "\u2B06 Update available",
     existingWorkspaces: "DSH workspaces",
@@ -1953,14 +2053,14 @@ If a code was sent, recover the original submission without changing it.`,
     noConnectedClients: "No devices are currently connected to this Host.",
     unknownDevice: "Unknown device",
     exitRemoteAccount: "Sign out",
-    githubLogin: "GitHub QR",
-    providerLogin: "{provider} QR",
+    githubLogin: "Github",
+    providerLogin: "{provider}",
     scanWithProvider: "Scan to continue with {provider}",
     loadingLoginProviders: "Loading sign-in methods\u2026",
     retryLoginProviders: "Retry loading sign-in methods",
     serverApplied: "Server address applied.",
     noLoginProviders: "QR sign-in is unavailable. Use email and password.",
-    zhihuLogin: "Zhihu QR",
+    zhihuLogin: "Zhihu",
     scanWithGitHub: "Scan to continue with GitHub",
     scanWithZhihu: "Scan to continue with Zhihu",
     openInBrowser: "Continue in browser",
@@ -1983,7 +2083,7 @@ If a code was sent, recover the original submission without changing it.`,
   }, zh = {
     serverSavedLive: "\u670D\u52A1\u5668\u5730\u5740\u5DF2\u4FDD\u5B58\u5E76\u751F\u6548\u3002",
     saveServerBeforeLogin: "\u8BF7\u5148\u4FDD\u5B58\u670D\u52A1\u5668\u5730\u5740\uFF0C\u518D\u7EE7\u7EED\u767B\u5F55\u6216\u914D\u5BF9\u3002",
-    pairingLoginTab: "DSH Go \u626B\u7801",
+    pairingLoginTab: "DSH Go",
     pairingTitle: "\u4E0E DSH Go \u914D\u5BF9",
     pairingHint: `\u8BF7\u4F7F\u7528 DSH Go \u626B\u7801\u5E76\u5728\u624B\u673A\u4E0A\u786E\u8BA4\u3002
 \u5F53\u524D\u4E3B\u673A\u4EC5\u88AB\u63A7\uFF0C\u5982\u9700\u8981\u4E3B\u63A7\u8BF7\u4F7F\u7528\u5176\u4ED6\u767B\u5F55\u65B9\u5F0F\u3002`,
@@ -2012,19 +2112,41 @@ If a code was sent, recover the original submission without changing it.`,
     remoteToolsHint: "\u5728\u4F1A\u8BDD\u4E2D\u6CE8\u5165 remote_* \u5DE5\u5177\u3002\u9ED8\u8BA4\u5F00\u542F\uFF1B\u4E0D\u9700\u8981\u65F6\u53EF\u5173\u95ED\uFF0C\u91CD\u542F Host \u540E\u751F\u6548\u3002",
     remoteToolsSaved: "Remote Tools \u8BBE\u7F6E\u5DF2\u4FDD\u5B58\u3002",
     debugLogging: "Debug \u65E5\u5FD7",
-    debugLoggingHint: "\u5728 Host \u65E5\u5FD7\u4E2D\u8BB0\u5F55\u8BE6\u7EC6\u8FDE\u63A5\u8BCA\u65AD\uFF0C\u7ACB\u5373\u751F\u6548\uFF1B\u6392\u67E5\u5B8C\u6210\u540E\u53EF\u5173\u95ED\u3002",
+    debugLoggingHint: "\u5F00\u542F\u540E\u8BB0\u5F55\u8BE6\u7EC6\u8FDE\u63A5\u8BCA\u65AD\uFF08\u9ED8\u8BA4\u4E5F\u4F1A\u8BB0\u5F55 Info \u53CA\u4EE5\u4E0A\u65E5\u5FD7\uFF09\uFF0C\u7ACB\u5373\u751F\u6548\uFF1B\u6392\u67E5\u5B8C\u6210\u540E\u53EF\u5173\u95ED\u3002",
+    debugLoggingLevelDebug: "Debug",
+    debugLoggingLevelInfo: "Info",
+    debugLogsToggleOpen: "\u67E5\u770B\u65E5\u5FD7",
+    debugLogsToggleClose: "\u6536\u8D77\u65E5\u5FD7",
+    debugLogsFilterAll: "\u5168\u90E8",
+    debugLogsFilterWarn: "\u8B66\u544A\u4E0E\u9519\u8BEF",
+    debugLogsRefresh: "\u5237\u65B0",
+    debugLogsRefreshing: "\u5237\u65B0\u4E2D\u2026",
+    debugLogsCopy: "\u590D\u5236",
+    debugLogsCopied: "\u5DF2\u590D\u5236",
+    debugLogsCopyFailed: "\u590D\u5236\u5931\u8D25",
+    debugLogsExport: "\u5BFC\u51FA",
+    debugLogsClear: "\u6E05\u7A7A",
+    debugLogsLoading: "\u6B63\u5728\u52A0\u8F7D\u65E5\u5FD7\u2026",
+    debugLogsEmpty: "\u6682\u65E0\u5339\u914D\u65E5\u5FD7\u3002",
+    debugLogsFileLabel: "\u65E5\u5FD7\u6587\u4EF6\uFF1A",
+    debugLogsFileFallback: "\u4EC5\u5185\u5B58\u6A21\u5F0F\uFF08{error}\uFF09",
+    debugLogsCount: "{count} \u6761",
     terminalRemote: "\u8FDC\u7A0B\u7EC8\u7AEF",
     terminalRemoteHint: "\u5141\u8BB8\u53D7\u4FE1\u4EFB\u7684 Remote \u8BBE\u5907\u4EE5\u6B64 Host \u7528\u6237\u8EAB\u4EFD\u8FD0\u884C\u4EA4\u4E92\u5F0F Shell\u3002\u9ED8\u8BA4\u5F00\u542F\uFF0C\u72EC\u7ACB\u4E8E Agent \u5BA1\u6279\uFF1B\u5207\u6362\u540E\u7ACB\u5373\u4FDD\u5B58\u5E76\u751F\u6548\u3002",
     terminalRemoteUnavailable: "\u8FDC\u7A0B\u7EC8\u7AEF\u4E0D\u53EF\u7528\u3002\u8BF7\u5728 Host \u7684 Remote \u8BBE\u7F6E\u4E2D\u5F00\u542F\u300C\u8FDC\u7A0B\u7EC8\u7AEF\u300D\uFF0C\u5F00\u5173\u4F1A\u7ACB\u5373\u751F\u6548\u3002",
     terminalSaved: "\u8FDC\u7A0B\u7EC8\u7AEF\u8BBE\u7F6E\u5DF2\u4FDD\u5B58\uFF0C\u7ACB\u5373\u751F\u6548\u3002",
     sidebarEntry: "\u4FA7\u680F\u5165\u53E3\u6837\u5F0F",
-    sidebarEntryHint: "\u300C\u6807\u51C6\u300D\u628A Remote \u6309\u94AE\u7559\u5728\u4FA7\u680F\u5E95\u90E8\uFF1B\u300C\u7B80\u6D01\u300D\u628A\u5B83\u6536\u8FDB\u8D26\u53F7\u884C\u53F3\u4FA7\uFF0C\u53EA\u663E\u793A\u56FE\u6807\u3002\u5207\u6362\u540E\u7ACB\u5373\u751F\u6548\u3002",
+    sidebarEntryHint: "\u300C\u6807\u51C6\u300D\u628A Remote \u6309\u94AE\u7559\u5728\u4FA7\u680F\u5E95\u90E8\uFF1B\u300C\u7B80\u6D01\u300D\u628A\u5B83\u6536\u8FDB\u8D26\u53F7\u884C\u53F3\u4FA7\uFF0C\u672C\u5730\u663E\u793A\u56FE\u6807\uFF0C\u8FDC\u7A0B\u663E\u793A\u4E3B\u673A\u540D\u548C\u9000\u51FA\u3002\u5207\u6362\u540E\u7ACB\u5373\u751F\u6548\u3002",
     sidebarEntryStandard: "\u6807\u51C6",
     sidebarEntryCompact: "\u7B80\u6D01",
     sidebarEntrySaved: "\u4FA7\u680F\u5165\u53E3\u6837\u5F0F\u5DF2\u4FDD\u5B58\u3002",
     previewOpen: "\u9884\u89C8\u670D\u52A1",
     previewPort: "Host \u7AEF\u53E3",
     previewLocalOnly: "\u9884\u89C8\u9700\u8981 Desktop\uFF0C\u6216\u8FDE\u63A5\u5230\u672C\u673A Harness \u7684\u6D4F\u89C8\u5668\u3002",
+    hostReferenceName: "\u540D\u79F0",
+    hostReferenceSystem: "\u7CFB\u7EDF",
+    hostReferenceDeviceId: "\u8BBE\u5907 ID",
+    hostReferenceInvocation: "\u8C03\u7528\u5185\u5BB9",
     settings: "\u8BBE\u7F6E",
     pluginTitle: "DeepSeek \u8FDC\u7A0B\u8FDE\u63A5",
     pluginDescription: "\u57FA\u4E8E P2P \u7F51\u7EDC\uFF0C\u4F7F\u7528\u7AEF\u5230\u7AEF\u52A0\u5BC6\u8FDC\u7A0B\u8BBF\u95EE DeepSeek Harness\u3001CodeX\u3001Claude Code\u3001Pi \u7B49\u5DE5\u4F5C\u533A\uFF0C\u652F\u6301Web\u548C\u79FB\u52A8\u7AEF\u3002",
@@ -2084,6 +2206,9 @@ If a code was sent, recover the original submission without changing it.`,
     credentialsCorrupted: "\u672C\u673A Remote \u767B\u5F55\u51ED\u636E\u5DF2\u635F\u574F\uFF0C\u8BF7\u5728\u8BBE\u7F6E\u4E2D\u9000\u51FA\u8D26\u53F7\u6216\u91CD\u7F6E\u8EAB\u4EFD\u3002",
     identityLocked: "\u672C\u673A Remote \u8EAB\u4EFD\u6B63\u88AB\u5176\u4ED6\u8FDB\u7A0B\u5360\u7528\uFF0C\u8BF7\u5B8C\u5168\u9000\u51FA\u5176\u4ED6 DSH \u5B9E\u4F8B\u540E\u91CD\u8BD5\u3002",
     storageConflict: "\u68C0\u6D4B\u5230\u51B2\u7A81\u6216\u65E0\u6CD5\u786E\u8BA4\u5F52\u5C5E\u7684\u65E7\u7248 Remote \u5B58\u50A8\u76EE\u5F55\uFF0C\u8BF7\u505C\u6B62\u6240\u6709 DSH \u5B9E\u4F8B\u540E\u624B\u52A8\u68C0\u67E5\u5904\u7406\u3002",
+    storageConflictEntry: "\u68C0\u6D4B\u5230\u51B2\u7A81\u6216\u65E0\u6CD5\u786E\u8BA4\u5F52\u5C5E\u7684\u65E7\u7248 Remote \u5B58\u50A8\u76EE\u5F55\uFF0C\u53D1\u73B0\u5F02\u5E38\u6587\u4EF6\u201C{name}\u201D\u3002\u8BF7\u505C\u6B62\u6240\u6709 DSH \u5B9E\u4F8B\u540E\u624B\u52A8\u68C0\u67E5\u5904\u7406\u3002",
+    retryStartup: "\u91CD\u8BD5\u542F\u52A8 Remote",
+    retryStartupSuccess: "Remote \u5DF2\u6210\u529F\u542F\u52A8\u3002",
     resetIdentity: "\u91CD\u7F6E\u672C\u673A Remote \u8EAB\u4EFD",
     resetIdentityHint: "\u5F53\u672C\u673A\u8EAB\u4EFD\u5BC6\u94A5\u5BF9\u635F\u574F\u65F6\u91CD\u5EFA\u8EAB\u4EFD\u3002\u91CD\u7F6E\u540E\u9700\u8981\u91CD\u65B0\u767B\u5F55\u3002",
     resetIdentityConfirm: "\u786E\u5B9A\u8981\u91CD\u7F6E\u672C\u673A Remote \u8EAB\u4EFD\u5417\uFF1F\u91CD\u7F6E\u540E\u9700\u8981\u91CD\u65B0\u767B\u5F55\u3002",
@@ -2117,7 +2242,7 @@ If a code was sent, recover the original submission without changing it.`,
     reconnectStarted: "\u5DF2\u53D1\u8D77\u91CD\u8FDE\u3002",
     connectionAuthorizationExpired: "\u6388\u6743\u5DF2\u5931\u6548\uFF0C\u8BF7\u9000\u51FA\u6388\u6743\u540E\u91CD\u65B0\u8FDE\u63A5\u6B64 Host\u3002",
     connectionReplaced: "\u53E6\u4E00\u5B9E\u4F8B\u6B63\u5728\u4F7F\u7528\u6B64 Host \u8EAB\u4EFD\u3002\u8BF7\u505C\u6B62\u8BE5\u5B9E\u4F8B\uFF0C\u6216\u4F7F\u7528\u72EC\u7ACB\u7684 DSH_HOME \u540E\u91CD\u65B0\u8FDE\u63A5\u3002",
-    connectionCredentialsBusy: "\u51ED\u636E\u5237\u65B0\u88AB\u9501\u5B9A\uFF0C\u8BF7\u505C\u6B62\u5176\u4ED6\u5B9E\u4F8B\u3002\u82E5\u6B64\u524D\u5F02\u5E38\u9000\u51FA\uFF0C\u8BF7\u505C\u6B62\u6240\u6709\u5B9E\u4F8B\u540E\u79FB\u9664 server-credentials.json.refresh-lock \u5E76\u91CD\u65B0\u6388\u6743\u3002",
+    connectionCredentialsBusy: "\u51ED\u636E\u5237\u65B0\u6B63\u5FD9\uFF0C\u4E3B\u673A\u5C06\u91CD\u8BD5\u3002\u53EA\u6709\u505C\u6B62\u6240\u6709\u5B9E\u4F8B\u540E\uFF0C\u624D\u80FD\u79FB\u9664\u65E7\u7248\u6B8B\u7559\u7684\u5237\u65B0\u9501\u3002",
     connectionDeviceRevoked: "\u6B64 Host \u5DF2\u5728 Server \u4E0A\u88AB\u64A4\u9500\uFF0C\u8BF7\u9000\u51FA\u6388\u6743\u540E\u91CD\u65B0\u8FDE\u63A5\u3002",
     connectionOwnershipRequired: "Server \u5DF2\u4E0D\u518D\u5C06\u6B64 Host \u8BC6\u522B\u4E3A\u5F53\u524D\u8D26\u53F7\u7684\u8BBE\u5907\u3002",
     connectionRateLimited: "Server \u8BF7\u6C42\u8FC7\u591A\uFF0C\u63D2\u4EF6\u5C06\u7EE7\u7EED\u81EA\u52A8\u91CD\u8BD5\u3002",
@@ -2132,6 +2257,9 @@ If a code was sent, recover the original submission without changing it.`,
     serverAccountPassword: "Server \u8D26\u53F7\u5BC6\u7801",
     signInRegisterHost: "\u767B\u5F55\u5E76\u6CE8\u518C Host",
     signingIn: "\u6B63\u5728\u767B\u5F55\u2026",
+    loginWaitingAuthorization: "\u6B63\u5728\u7B49\u5F85\u6388\u6743\u7ED3\u679C",
+    loginLoadingDevices: "\u767B\u5F55\u6210\u529F\uFF0C\u6B63\u5728\u52A0\u8F7D\u8BBE\u5907",
+    loginLoadingSettings: "\u767B\u5F55\u6210\u529F\uFF0C\u6B63\u5728\u52A0\u8F7D\u8BBE\u7F6E",
     useRegistrationCode: "\u4F7F\u7528\u8FDE\u63A5\u7801",
     registering: "\u6B63\u5728\u6CE8\u518C\u2026",
     remoteEntry: "Remote",
@@ -2139,6 +2267,7 @@ If a code was sent, recover the original submission without changing it.`,
     remoteDescription: "\u9009\u62E9\u60F3\u8981\u8FDE\u63A5\u4E3B\u673A\u548C\u5DE5\u4F5C\u76EE\u5F55\u3002",
     starProject: "\u5F00\u6E90\u9879\u76EE\uFF0C\u6B22\u8FCEStar~",
     chooseHost: "\u4E3B\u673A",
+    manageHosts: "\u7BA1\u7406\u8BBE\u5907",
     chooseDirectory: "\u5DE5\u4F5C\u76EE\u5F55",
     selectHostHint: "\u9009\u62E9\u4E00\u53F0\u5728\u7EBF\u4E3B\u673A\u4EE5\u6D4F\u89C8\u5176\u76EE\u5F55\u3002",
     emptyDirectory: "\u8FD9\u4E2A\u76EE\u5F55\u4E0B\u6CA1\u6709\u53EF\u89C1\u7684\u5B50\u76EE\u5F55\u3002",
@@ -2175,6 +2304,11 @@ If a code was sent, recover the original submission without changing it.`,
     updateAvailable: "\u2B06 Remote {latest} \u53EF\u7528\uFF08\u5F53\u524D {current}\uFF09",
     updateShort: "\u2B06 {version}",
     updateAvailableShort: "{version} \u53EF\u7528",
+    pluginUpdating: "\u6B63\u5728\u5347\u7EA7\u2026",
+    pluginUpdateReload: "\u6B63\u5728\u5347\u7EA7\uFF0CRemote \u5373\u5C06\u91CD\u65B0\u52A0\u8F7D",
+    pluginUpdateFailed: "\u5347\u7EA7\u5931\u8D25",
+    pluginUpdateUnknown: "\u5347\u7EA7\u72B6\u6001\u672A\u77E5\uFF0C\u70B9\u51FB\u91CD\u8BD5",
+    pluginUpdateManual: "\u53D1\u5E03\u9875",
     updateBadge: "\u6709\u53EF\u7528\u66F4\u65B0",
     updateAvailableTag: "\u2B06 \u53EF\u66F4\u65B0",
     existingWorkspaces: "DSH \u5DE5\u4F5C\u533A",
@@ -2302,14 +2436,14 @@ If a code was sent, recover the original submission without changing it.`,
     noConnectedClients: "\u76EE\u524D\u6CA1\u6709\u8BBE\u5907\u8FDE\u63A5\u5230\u8FD9\u53F0\u4E3B\u673A\u3002",
     unknownDevice: "\u672A\u77E5\u8BBE\u5907",
     exitRemoteAccount: "\u9000\u51FA\u8D26\u53F7",
-    githubLogin: "GitHub \u626B\u7801",
-    providerLogin: "{provider} \u626B\u7801",
+    githubLogin: "Github",
+    providerLogin: "{provider}",
     scanWithProvider: "\u4F7F\u7528 {provider} \u626B\u7801\u767B\u5F55",
     loadingLoginProviders: "\u6B63\u5728\u83B7\u53D6\u767B\u5F55\u65B9\u5F0F\u2026",
     retryLoginProviders: "\u91CD\u65B0\u83B7\u53D6\u767B\u5F55\u65B9\u5F0F",
     serverApplied: "Server \u5730\u5740\u5DF2\u751F\u6548\u3002",
     noLoginProviders: "\u6682\u65E0\u53EF\u7528\u7684\u626B\u7801\u767B\u5F55\u65B9\u5F0F\uFF0C\u8BF7\u4F7F\u7528\u90AE\u7BB1\u548C\u5BC6\u7801\u3002",
-    zhihuLogin: "\u77E5\u4E4E\u626B\u7801",
+    zhihuLogin: "\u77E5\u4E4E",
     scanWithGitHub: "\u4F7F\u7528 GitHub \u626B\u7801\u767B\u5F55",
     scanWithZhihu: "\u4F7F\u7528\u77E5\u4E4E\u626B\u7801\u767B\u5F55",
     openInBrowser: "\u5728\u6D4F\u89C8\u5668\u4E2D\u7EE7\u7EED",
@@ -2329,6 +2463,770 @@ If a code was sent, recover the original submission without changing it.`,
     claudeVirtualWorkspace: "Claude \u5DE5\u4F5C\u533A",
     hermesVirtualWorkspace: "Hermes \u5DE5\u4F5C\u533A",
     codexVirtualSessions: "Sessions"
+  }, ru = {
+    serverSavedLive: "\u0410\u0434\u0440\u0435\u0441 \u0441\u0435\u0440\u0432\u0435\u0440\u0430 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D \u0438 \u043F\u0440\u0438\u043C\u0435\u043D\u0451\u043D.",
+    saveServerBeforeLogin: "\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u0435 \u0430\u0434\u0440\u0435\u0441 \u0441\u0435\u0440\u0432\u0435\u0440\u0430, \u043F\u0440\u0435\u0436\u0434\u0435 \u0447\u0435\u043C \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C \u0432\u0445\u043E\u0434 \u0438\u043B\u0438 \u0441\u043E\u043F\u0440\u044F\u0436\u0435\u043D\u0438\u0435.",
+    pairingLoginTab: "DSH Go",
+    pairingTitle: "\u0421\u043E\u043F\u0440\u044F\u0436\u0435\u043D\u0438\u0435 \u0441 DSH Go",
+    pairingHint: `\u041E\u0442\u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u043A\u043E\u0434 \u0432 DSH Go \u0438 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0435 \u043D\u0430 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0435.
+\u0417\u0430\u0442\u0435\u043C \u0432\u0432\u0435\u0434\u0438\u0442\u0435 \u043A\u043E\u0434 \u0441 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0430 \u043D\u0430 \u044D\u0442\u043E\u043C \u043A\u043E\u043C\u043F\u044C\u044E\u0442\u0435\u0440\u0435 \u0438 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0435 \u043F\u0440\u0438\u0432\u044F\u0437\u043A\u0443.`,
+    pairingHostOnly: "\u041D\u043E\u0432\u044B\u0435 \u0445\u043E\u0441\u0442\u044B \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u0438\u043D\u0438\u043C\u0430\u044E\u0442 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F. \u0421\u043E\u043F\u0440\u044F\u0436\u0435\u043D\u0438\u0435 \u043D\u0435 \u0434\u0430\u0451\u0442 \u0443\u043F\u0440\u0430\u0432\u043B\u044F\u0442\u044C \u0434\u0440\u0443\u0433\u0438\u043C\u0438 \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0430\u043C\u0438.",
+    pairingSaveServer: "\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u0435 \u0430\u0434\u0440\u0435\u0441 \u0441\u0435\u0440\u0432\u0435\u0440\u0430 \u043F\u0435\u0440\u0435\u0434 \u0441\u043E\u043F\u0440\u044F\u0436\u0435\u043D\u0438\u0435\u043C.",
+    pairingScan: "\u041E\u0442\u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u044D\u0442\u043E\u0442 QR-\u043A\u043E\u0434 \u0432 DSH Go \u0438 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0435 \u043D\u0430 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0435.",
+    pairingEnter: "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0442\u0435\u043B\u0435\u0444\u043E\u043D, \u043E\u0442\u043F\u0440\u0430\u0432\u0438\u0432\u0448\u0438\u0439 \u0437\u0430\u043F\u0440\u043E\u0441, \u0438 \u0432\u0432\u0435\u0434\u0438\u0442\u0435 \u0435\u0433\u043E \u043A\u043E\u0434.",
+    pairingComplete: "\u0421\u043E\u043F\u0440\u044F\u0436\u0435\u043D\u0438\u0435 \u0432\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u043E. \u0422\u0435\u043F\u0435\u0440\u044C DSH Go \u043C\u043E\u0436\u0435\u0442 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0430\u0442\u044C\u0441\u044F \u043A \u044D\u0442\u043E\u043C\u0443 \u0445\u043E\u0441\u0442\u0443.",
+    pairingPending: "\u0412\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u0435 \u0438\u0441\u0445\u043E\u0434\u043D\u0443\u044E \u043E\u0442\u043F\u0440\u0430\u0432\u043A\u0443, \u043D\u0435 \u043C\u0435\u043D\u044F\u044F \u043A\u043E\u0434.",
+    pairingClosed: "\u0421\u043E\u043F\u0440\u044F\u0436\u0435\u043D\u0438\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u043E. \u0427\u0442\u043E\u0431\u044B \u043D\u0430\u0447\u0430\u0442\u044C \u0437\u0430\u043D\u043E\u0432\u043E, \u0441\u043E\u0437\u0434\u0430\u0439\u0442\u0435 \u043D\u043E\u0432\u044B\u0439 QR-\u043A\u043E\u0434.",
+    pairingQr: "\u041E\u0434\u043D\u043E\u0440\u0430\u0437\u043E\u0432\u044B\u0439 QR-\u043A\u043E\u0434 \u0441\u043E\u043F\u0440\u044F\u0436\u0435\u043D\u0438\u044F DSH Go",
+    pairingExpires: "\u0418\u0441\u0442\u0435\u043A\u0430\u0435\u0442 \u0447\u0435\u0440\u0435\u0437 {time}",
+    pairingExpired: "\u0421\u0440\u043E\u043A \u0438\u0441\u0442\u0451\u043A",
+    pairingCode: "8-\u0437\u043D\u0430\u0447\u043D\u044B\u0439 \u043A\u043E\u0434 \u0441 \u044D\u043A\u0440\u0430\u043D\u0430 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0430",
+    pairingWarning: "\u041E\u0442\u043F\u0440\u0430\u0432\u0438\u0442\u044C \u043A\u043E\u0434 \u043C\u043E\u0436\u043D\u043E \u0442\u043E\u043B\u044C\u043A\u043E \u043E\u0434\u0438\u043D \u0440\u0430\u0437. \u041D\u0435\u0432\u0435\u0440\u043D\u044B\u0439 \u043A\u043E\u0434 \u0430\u043D\u043D\u0443\u043B\u0438\u0440\u0443\u0435\u0442 \u044D\u0442\u043E\u0442 QR-\u043A\u043E\u0434 \u2014 \u043E\u0442\u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \u043D\u043E\u0432\u044B\u0439.",
+    pairingConfirm: "\u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044C \u043F\u0440\u0438\u0432\u044F\u0437\u043A\u0443",
+    pairingRetry: "\u0412\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C \u0438\u0441\u0445\u043E\u0434\u043D\u0443\u044E \u043E\u0442\u043F\u0440\u0430\u0432\u043A\u0443",
+    pairingCancel: "\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0441\u043E\u043F\u0440\u044F\u0436\u0435\u043D\u0438\u0435",
+    pairingStart: "\u0421\u043E\u0437\u0434\u0430\u0442\u044C QR-\u043A\u043E\u0434 \u0441\u043E\u043F\u0440\u044F\u0436\u0435\u043D\u0438\u044F",
+    pairingBusy: "\u041F\u043E\u0434\u043E\u0436\u0434\u0438\u0442\u0435\u2026",
+    pairingUnsupported: "\u042D\u0442\u043E\u0442 \u0441\u0435\u0440\u0432\u0435\u0440 \u043D\u0435 \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u0442 \u0441\u043E\u043F\u0440\u044F\u0436\u0435\u043D\u0438\u0435 \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432.",
+    pairingError: `\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u044C \u0441\u043E\u043F\u0440\u044F\u0436\u0435\u043D\u0438\u0435. \u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435.
+\u0415\u0441\u043B\u0438 \u043A\u043E\u0434 \u0443\u0436\u0435 \u0431\u044B\u043B \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D, \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u0435 \u0438\u0441\u0445\u043E\u0434\u043D\u0443\u044E \u043E\u0442\u043F\u0440\u0430\u0432\u043A\u0443, \u043D\u0435 \u043C\u0435\u043D\u044F\u044F \u0435\u0433\u043E.`,
+    remoteTools: "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0430\u0442\u044C Remote Tools",
+    remoteToolsHint: "\u0414\u0435\u043B\u0430\u0435\u0442 \u0438\u043D\u0441\u0442\u0440\u0443\u043C\u0435\u043D\u0442\u044B remote_* \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B\u043C\u0438 \u0432 \u0441\u0435\u0441\u0441\u0438\u044F\u0445. \u0412\u043A\u043B\u044E\u0447\u0435\u043D\u043E \u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E; \u043E\u0442\u043A\u043B\u044E\u0447\u0438\u0442\u0435, \u0435\u0441\u043B\u0438 \u043E\u043D\u0438 \u043D\u0435 \u043D\u0443\u0436\u043D\u044B. \u0418\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F \u043F\u0440\u0438\u043C\u0435\u043D\u044F\u044E\u0442\u0441\u044F \u043F\u043E\u0441\u043B\u0435 \u043F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u043A\u0430 \u0445\u043E\u0441\u0442\u0430.",
+    remoteToolsSaved: "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430 Remote Tools \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0430.",
+    debugLogging: "\u041E\u0442\u043B\u0430\u0434\u043E\u0447\u043D\u044B\u0439 \u0436\u0443\u0440\u043D\u0430\u043B",
+    debugLoggingHint: "\u0417\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442 \u043F\u043E\u0434\u0440\u043E\u0431\u043D\u0443\u044E \u0434\u0438\u0430\u0433\u043D\u043E\u0441\u0442\u0438\u043A\u0443 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F \u0432 \u0436\u0443\u0440\u043D\u0430\u043B \u0445\u043E\u0441\u0442\u0430 (\u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E \u0437\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u044E\u0442\u0441\u044F \u0443\u0440\u043E\u0432\u043D\u0438 Info \u0438 \u0432\u044B\u0448\u0435). \u041F\u0440\u0438\u043C\u0435\u043D\u044F\u0435\u0442\u0441\u044F \u0441\u0440\u0430\u0437\u0443; \u043E\u0442\u043A\u043B\u044E\u0447\u0438\u0442\u0435 \u043F\u043E\u0441\u043B\u0435 \u0434\u0438\u0430\u0433\u043D\u043E\u0441\u0442\u0438\u043A\u0438.",
+    debugLoggingLevelDebug: "Debug",
+    debugLoggingLevelInfo: "Info",
+    debugLogsToggleOpen: "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0436\u0443\u0440\u043D\u0430\u043B",
+    debugLogsToggleClose: "\u0421\u043A\u0440\u044B\u0442\u044C \u0436\u0443\u0440\u043D\u0430\u043B",
+    debugLogsFilterAll: "\u0412\u0441\u0435",
+    debugLogsFilterWarn: "\u041F\u0440\u0435\u0434\u0443\u043F\u0440\u0435\u0436\u0434\u0435\u043D\u0438\u044F \u0438 \u043E\u0448\u0438\u0431\u043A\u0438",
+    debugLogsRefresh: "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C",
+    debugLogsRefreshing: "\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435\u2026",
+    debugLogsCopy: "\u041A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u0442\u044C",
+    debugLogsCopied: "\u0421\u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u043E",
+    debugLogsCopyFailed: "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u0442\u044C",
+    debugLogsExport: "\u042D\u043A\u0441\u043F\u043E\u0440\u0442",
+    debugLogsClear: "\u041E\u0447\u0438\u0441\u0442\u0438\u0442\u044C",
+    debugLogsLoading: "\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0436\u0443\u0440\u043D\u0430\u043B\u0430\u2026",
+    debugLogsEmpty: "\u041F\u043E\u0434\u0445\u043E\u0434\u044F\u0449\u0438\u0445 \u0437\u0430\u043F\u0438\u0441\u0435\u0439 \u043F\u043E\u043A\u0430 \u043D\u0435\u0442.",
+    debugLogsFileLabel: "\u0424\u0430\u0439\u043B \u0436\u0443\u0440\u043D\u0430\u043B\u0430:",
+    debugLogsFileFallback: "\u0422\u043E\u043B\u044C\u043A\u043E \u0432 \u043F\u0430\u043C\u044F\u0442\u0438 ({error})",
+    debugLogsCount: "\u0417\u0430\u043F\u0438\u0441\u0435\u0439: {count}",
+    terminalRemote: "\u0423\u0434\u0430\u043B\u0451\u043D\u043D\u044B\u0439 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B",
+    terminalRemoteHint: "\u0420\u0430\u0437\u0440\u0435\u0448\u0430\u0435\u0442 \u0434\u043E\u0432\u0435\u0440\u0435\u043D\u043D\u044B\u043C \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0430\u043C Remote \u0437\u0430\u043F\u0443\u0441\u043A\u0430\u0442\u044C \u0438\u043D\u0442\u0435\u0440\u0430\u043A\u0442\u0438\u0432\u043D\u0443\u044E \u043E\u0431\u043E\u043B\u043E\u0447\u043A\u0443 \u043E\u0442 \u0438\u043C\u0435\u043D\u0438 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F \u044D\u0442\u043E\u0433\u043E \u0445\u043E\u0441\u0442\u0430. \u0412\u043A\u043B\u044E\u0447\u0435\u043D\u043E \u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E; \u043D\u0435 \u0437\u0430\u0432\u0438\u0441\u0438\u0442 \u043E\u0442 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u0438\u0439 \u0430\u0433\u0435\u043D\u0442\u0430. \u041F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u0435\u0442\u0441\u044F \u0438 \u043F\u0440\u0438\u043C\u0435\u043D\u044F\u0435\u0442\u0441\u044F \u0441\u0440\u0430\u0437\u0443.",
+    terminalRemoteUnavailable: "\u0423\u0434\u0430\u043B\u0451\u043D\u043D\u044B\u0439 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D. \u0412\u043A\u043B\u044E\u0447\u0438\u0442\u0435 \xAB\u0423\u0434\u0430\u043B\u0451\u043D\u043D\u044B\u0439 \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\xBB \u0432 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430\u0445 Remote \u043D\u0430 \u0445\u043E\u0441\u0442\u0435; \u043F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0430\u0442\u0435\u043B\u044C \u043F\u0440\u0438\u043C\u0435\u043D\u044F\u0435\u0442\u0441\u044F \u0441\u0440\u0430\u0437\u0443.",
+    terminalSaved: "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430 \u0443\u0434\u0430\u043B\u0451\u043D\u043D\u043E\u0433\u043E \u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B\u0430 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0430 \u0438 \u043F\u0440\u0438\u043C\u0435\u043D\u0435\u043D\u0430.",
+    sidebarEntry: "\u041A\u043D\u043E\u043F\u043A\u0430 \u043D\u0430 \u0431\u043E\u043A\u043E\u0432\u043E\u0439 \u043F\u0430\u043D\u0435\u043B\u0438",
+    sidebarEntryHint: "\xAB\u0421\u0442\u0430\u043D\u0434\u0430\u0440\u0442\u043D\u044B\u0439\xBB \u043E\u0441\u0442\u0430\u0432\u043B\u044F\u0435\u0442 \u043A\u043D\u043E\u043F\u043A\u0443 Remote \u0432\u043D\u0438\u0437\u0443 \u0431\u043E\u043A\u043E\u0432\u043E\u0439 \u043F\u0430\u043D\u0435\u043B\u0438. \xAB\u041A\u043E\u043C\u043F\u0430\u043A\u0442\u043D\u044B\u0439\xBB \u043F\u0435\u0440\u0435\u043D\u043E\u0441\u0438\u0442 \u0435\u0451 \u0432 \u0441\u0442\u0440\u043E\u043A\u0443 \u0430\u043A\u043A\u0430\u0443\u043D\u0442\u0430: \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u043E \u2014 \u0437\u043D\u0430\u0447\u043E\u043A, \u043F\u0440\u0438 \u0443\u0434\u0430\u043B\u0451\u043D\u043D\u043E\u043C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0438 \u2014 \u0438\u043C\u044F \u0445\u043E\u0441\u0442\u0430 \u0438 \xAB\u0412\u044B\u0439\u0442\u0438\xBB. \u041F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043C\u0435\u043D\u044F\u0435\u0442\u0441\u044F \u0441\u0440\u0430\u0437\u0443.",
+    sidebarEntryStandard: "\u0421\u0442\u0430\u043D\u0434\u0430\u0440\u0442\u043D\u044B\u0439",
+    sidebarEntryCompact: "\u041A\u043E\u043C\u043F\u0430\u043A\u0442\u043D\u044B\u0439",
+    sidebarEntrySaved: "\u0412\u0438\u0434 \u043A\u043D\u043E\u043F\u043A\u0438 \u043D\u0430 \u0431\u043E\u043A\u043E\u0432\u043E\u0439 \u043F\u0430\u043D\u0435\u043B\u0438 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D.",
+    previewOpen: "\u0421\u0435\u0440\u0432\u0438\u0441 \u043F\u0440\u0435\u0434\u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440\u0430",
+    previewPort: "\u041F\u043E\u0440\u0442 \u0445\u043E\u0441\u0442\u0430",
+    previewLocalOnly: "\u0414\u043B\u044F \u043F\u0440\u0435\u0434\u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440\u0430 \u043D\u0443\u0436\u0435\u043D Desktop \u0438\u043B\u0438 \u0431\u0440\u0430\u0443\u0437\u0435\u0440, \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u044B\u0439 \u043A Harness \u043D\u0430 \u044D\u0442\u043E\u043C \u043A\u043E\u043C\u043F\u044C\u044E\u0442\u0435\u0440\u0435.",
+    hostReferenceName: "\u0418\u043C\u044F",
+    hostReferenceSystem: "\u0421\u0438\u0441\u0442\u0435\u043C\u0430",
+    hostReferenceDeviceId: "ID \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0430",
+    hostReferenceInvocation: "\u0412\u044B\u0437\u043E\u0432",
+    settings: "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438",
+    pluginTitle: "DeepSeek Remote",
+    pluginDescription: "\u0423\u0434\u0430\u043B\u0451\u043D\u043D\u044B\u0439 \u0434\u043E\u0441\u0442\u0443\u043F \u043A DeepSeek Harness, CodeX, Claude Code, Pi \u0438 \u0434\u0440\u0443\u0433\u0438\u043C \u0440\u0430\u0431\u043E\u0447\u0438\u043C \u043E\u0431\u043B\u0430\u0441\u0442\u044F\u043C \u0438\u0437 \u0432\u0435\u0431- \u0438 \u043C\u043E\u0431\u0438\u043B\u044C\u043D\u044B\u0445 \u043A\u043B\u0438\u0435\u043D\u0442\u043E\u0432 \u0447\u0435\u0440\u0435\u0437 P2P \u0441\u043E \u0441\u043A\u0432\u043E\u0437\u043D\u044B\u043C \u0448\u0438\u0444\u0440\u043E\u0432\u0430\u043D\u0438\u0435\u043C.",
+    openPluginSettings: "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438 Remote",
+    expandSettings: "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438: {name}",
+    collapseSettings: "\u0421\u043A\u0440\u044B\u0442\u044C \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438: {name}",
+    unsaved: "\u041D\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E",
+    associated: "\u0410\u0432\u0442\u043E\u0440\u0438\u0437\u043E\u0432\u0430\u043D\u043E",
+    authorizationComplete: "\u0410\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u044F \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0430",
+    loadingSettings: "\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043A DeepSeek Remote\u2026",
+    mode: "\u0420\u0435\u0436\u0438\u043C",
+    pluginMode: "\u0420\u0435\u0436\u0438\u043C \u043F\u043B\u0430\u0433\u0438\u043D\u0430",
+    host: "\u0425\u043E\u0441\u0442",
+    client: "\u041A\u043B\u0438\u0435\u043D\u0442",
+    authorization: "\u0410\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u044F",
+    account: "\u0410\u043A\u043A\u0430\u0443\u043D\u0442",
+    hostRegistrationCode: "\u041E\u0434\u043D\u043E\u0440\u0430\u0437\u043E\u0432\u044B\u0439 \u043A\u043E\u0434 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u0438 \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0430",
+    ownedDeviceAuthorization: "\u0421\u043E\u0431\u0441\u0442\u0432\u0435\u043D\u043D\u043E\u0435 \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u043E",
+    authorizedOn: "{role}: \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u044F \u043D\u0430 {serverUrl} \u0432\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u0430.",
+    readOnly: "\u042D\u0442\u043E\u0442 \u043F\u0440\u043E\u0444\u0438\u043B\u044C DSH \u043D\u0435 \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u0442 \u0437\u0430\u043F\u0438\u0441\u044C \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044C\u0441\u043A\u0438\u0445 \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043A.",
+    discard: "\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F",
+    save: "\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C",
+    saving: "\u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435\u2026",
+    signOut: "\u0412\u044B\u0439\u0442\u0438",
+    signingOut: "\u0412\u044B\u0445\u043E\u0434\u2026",
+    hostName: "\u0418\u043C\u044F \u0445\u043E\u0441\u0442\u0430",
+    deviceId: "ID \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0430",
+    serverUrl: "URL \u0441\u0435\u0440\u0432\u0435\u0440\u0430",
+    serverUrlHint: "HTTPS-\u0430\u0434\u0440\u0435\u0441 \u0434\u043B\u044F \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u0438 \u0430\u043A\u043A\u0430\u0443\u043D\u0442\u0430 \u0438 \u0437\u0430\u0448\u0438\u0444\u0440\u043E\u0432\u0430\u043D\u043D\u043E\u0439 \u0440\u0435\u0442\u0440\u0430\u043D\u0441\u043B\u044F\u0446\u0438\u0438.",
+    serverSaved: "\u0410\u0434\u0440\u0435\u0441 \u0441\u0435\u0440\u0432\u0435\u0440\u0430 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D. \u041F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0435 DSH, \u0447\u0442\u043E\u0431\u044B \u043F\u0440\u0438\u043C\u0435\u043D\u0438\u0442\u044C \u0435\u0433\u043E.",
+    codexRemote: "Codex Remote",
+    codexRemoteHint: "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u043A \u043F\u0440\u043E\u0435\u043A\u0442\u0430\u043C CodeX \u043D\u0430 \u044D\u0442\u043E\u043C \u0445\u043E\u0441\u0442\u0435.",
+    codexSaved: "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430 Codex Remote \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0430. \u041F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0435 DSH, \u0447\u0442\u043E\u0431\u044B \u043F\u0440\u0438\u043C\u0435\u043D\u0438\u0442\u044C \u0435\u0451.",
+    cursorRemote: "\u0410\u0434\u0430\u043F\u0442\u0435\u0440 Cursor ACP (\u044D\u043A\u0441\u043F\u0435\u0440\u0438\u043C\u0435\u043D\u0442\u0430\u043B\u044C\u043D\u043E)",
+    cursorRemoteHint: "\u0412\u043A\u043B\u044E\u0447\u0430\u0435\u0442 \u0431\u044D\u043A\u0435\u043D\u0434 Cursor `agent acp` \u0434\u043B\u044F \u0448\u043B\u044E\u0437\u0430 Agent ACP. \u0422\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044F \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0439 `agent login`. \u041F\u043E\u0441\u043B\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F \u043F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0435 DSH.",
+    cursorSaved: "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430 \u0430\u0434\u0430\u043F\u0442\u0435\u0440\u0430 Cursor ACP \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0430. \u041F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0435 DSH, \u0447\u0442\u043E\u0431\u044B \u043F\u0440\u0438\u043C\u0435\u043D\u0438\u0442\u044C \u0435\u0451.",
+    authorizeFromRemote: "\u0412\u043E\u0439\u0434\u0438\u0442\u0435, \u0447\u0442\u043E\u0431\u044B \u0443\u043F\u0440\u0430\u0432\u043B\u044F\u0442\u044C \u044D\u0442\u0438\u043C \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u043E\u043C \u0438 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0430\u0442\u044C\u0441\u044F \u043A \u0441\u0432\u043E\u0438\u043C \u0443\u0434\u0430\u043B\u0451\u043D\u043D\u044B\u043C \u0445\u043E\u0441\u0442\u0430\u043C.",
+    signInAccount: "\u0412\u043E\u0439\u0442\u0438",
+    saveServerBeforeSignIn: "\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u0435 \u0430\u0434\u0440\u0435\u0441 \u0441\u0435\u0440\u0432\u0435\u0440\u0430 \u043F\u0435\u0440\u0435\u0434 \u0432\u0445\u043E\u0434\u043E\u043C.",
+    authorizationMethod: "\u0421\u043F\u043E\u0441\u043E\u0431 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u0438",
+    accountPassword: "\u041F\u0430\u0440\u043E\u043B\u044C \u0430\u043A\u043A\u0430\u0443\u043D\u0442\u0430",
+    registrationCode: "\u041A\u043E\u0434 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u0438 \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0430",
+    registrationCodeHint: "\u0421\u043E\u0437\u0434\u0430\u0439\u0442\u0435 \u0435\u0433\u043E \u043F\u043E\u0441\u043B\u0435 \u0432\u0445\u043E\u0434\u0430 \u043D\u0430 \u0441\u0430\u0439\u0442\u0435 \u0441\u0435\u0440\u0432\u0435\u0440\u0430. \u041A\u043E\u0434 \u043E\u0434\u043D\u043E\u0440\u0430\u0437\u043E\u0432\u044B\u0439 \u0438 \u0441\u043B\u0443\u0436\u0438\u0442 \u0434\u043B\u044F \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F \u044D\u0442\u043E\u0433\u043E \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0430.",
+    accountHint: "\u0410\u043A\u043A\u0430\u0443\u043D\u0442 \u0434\u043E\u043B\u0436\u0435\u043D \u043F\u0440\u0438\u043D\u0430\u0434\u043B\u0435\u0436\u0430\u0442\u044C \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u043C\u0443 \u0441\u0435\u0440\u0432\u0435\u0440\u0443.",
+    password: "\u041F\u0430\u0440\u043E\u043B\u044C",
+    passwordHint: "\u0422\u043E\u043B\u044C\u043A\u043E \u0430\u043A\u043A\u0430\u0443\u043D\u0442\u044B DSH Remote Web \u0438\u043B\u0438 \u0441\u043E\u0431\u0441\u0442\u0432\u0435\u043D\u043D\u043E\u0433\u043E \u0441\u0435\u0440\u0432\u0438\u0441\u0430; \u043D\u0435 \u043E\u0444\u0438\u0446\u0438\u0430\u043B\u044C\u043D\u044B\u0435 \u0430\u043A\u043A\u0430\u0443\u043D\u0442\u044B DeepSeek Harness.",
+    modeSavedNeedsAuthorization: "\u0420\u0435\u0436\u0438\u043C \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D. \u041F\u0435\u0440\u0435\u0434 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435\u043C \u0432\u044B\u043F\u043E\u043B\u043D\u0438\u0442\u0435 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u044E ({role}). \u0421\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 \u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u0438 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B.",
+    modeSavedReused: "\u0420\u0435\u0436\u0438\u043C \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D, \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D\u0430 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0430\u044F \u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u044F. \u041F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0435 Harness, \u0447\u0442\u043E\u0431\u044B \u043F\u0440\u0438\u043C\u0435\u043D\u0438\u0442\u044C.",
+    modeSavedOwnedRole: "\u0420\u0435\u0436\u0438\u043C \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D. \u042D\u0442\u043E \u0441\u043E\u0431\u0441\u0442\u0432\u0435\u043D\u043D\u043E\u0435 \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u043E \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u043E\u0432\u0430\u043D\u043E \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438. \u041F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0435 Harness, \u0447\u0442\u043E\u0431\u044B \u043F\u0440\u0438\u043C\u0435\u043D\u0438\u0442\u044C.",
+    enterRegistrationCode: "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u043A\u043E\u0434 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u0438 \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0430.",
+    enterAccountPassword: "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0430\u043A\u043A\u0430\u0443\u043D\u0442 \u0438 \u043F\u0430\u0440\u043E\u043B\u044C \u0441\u0435\u0440\u0432\u0435\u0440\u0430.",
+    associationSaved: "\u041F\u0440\u0438\u0432\u044F\u0437\u043A\u0430 \u0432\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u0430. \u041F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0435 Harness, \u0447\u0442\u043E\u0431\u044B \u043F\u0440\u0438\u043C\u0435\u043D\u0438\u0442\u044C.",
+    signedOut: "\u0412\u044B \u0432\u044B\u0448\u043B\u0438 \u0438\u0437 \u0430\u043A\u043A\u0430\u0443\u043D\u0442\u0430 \u0438 \u043E\u0442\u043A\u043B\u044E\u0447\u0438\u043B\u0438\u0441\u044C \u043E\u0442 Remote.",
+    remoteRequestFailed: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u043F\u0440\u043E\u0441\u0430 \u0443\u0434\u0430\u043B\u0451\u043D\u043D\u043E\u0433\u043E \u0440\u0435\u0436\u0438\u043C\u0430.",
+    remoteControlUnavailable: "\u0423\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u043B\u0430\u0433\u0438\u043D\u043E\u043C Remote \u0435\u0449\u0451 \u0437\u0430\u043F\u0443\u0441\u043A\u0430\u0435\u0442\u0441\u044F. \u0415\u0441\u043B\u0438 \u043E\u043D\u043E \u043E\u0441\u0442\u0430\u043D\u0435\u0442\u0441\u044F \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B\u043C, \u043F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0435 DSH.",
+    identityCorrupted: "\u041B\u043E\u043A\u0430\u043B\u044C\u043D\u0430\u044F \u0438\u0434\u0435\u043D\u0442\u0438\u0447\u043D\u043E\u0441\u0442\u044C Remote \u043F\u043E\u0432\u0440\u0435\u0436\u0434\u0435\u043D\u0430. \u0427\u0442\u043E\u0431\u044B \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C \u0440\u0430\u0431\u043E\u0442\u0443, \u0441\u0431\u0440\u043E\u0441\u044C\u0442\u0435 \u0438\u0434\u0435\u043D\u0442\u0438\u0447\u043D\u043E\u0441\u0442\u044C \u0432 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430\u0445.",
+    credentialsCorrupted: "\u041B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0435 \u0443\u0447\u0451\u0442\u043D\u044B\u0435 \u0434\u0430\u043D\u043D\u044B\u0435 Remote \u043F\u043E\u0432\u0440\u0435\u0436\u0434\u0435\u043D\u044B. \u0427\u0442\u043E\u0431\u044B \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C \u0440\u0430\u0431\u043E\u0442\u0443, \u0432\u044B\u0439\u0434\u0438\u0442\u0435 \u0438\u0437 \u0430\u043A\u043A\u0430\u0443\u043D\u0442\u0430 \u0438\u043B\u0438 \u0441\u0431\u0440\u043E\u0441\u044C\u0442\u0435 \u0438\u0434\u0435\u043D\u0442\u0438\u0447\u043D\u043E\u0441\u0442\u044C \u0432 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430\u0445.",
+    identityLocked: "\u041B\u043E\u043A\u0430\u043B\u044C\u043D\u0430\u044F \u0438\u0434\u0435\u043D\u0442\u0438\u0447\u043D\u043E\u0441\u0442\u044C Remote \u0437\u0430\u0431\u043B\u043E\u043A\u0438\u0440\u043E\u0432\u0430\u043D\u0430 \u0434\u0440\u0443\u0433\u0438\u043C \u043F\u0440\u043E\u0446\u0435\u0441\u0441\u043E\u043C. \u041E\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u0435 \u0434\u0440\u0443\u0433\u0438\u0435 \u044D\u043A\u0437\u0435\u043C\u043F\u043B\u044F\u0440\u044B DSH \u0438 \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435 \u043F\u043E\u043F\u044B\u0442\u043A\u0443.",
+    storageConflict: "\u041E\u0431\u043D\u0430\u0440\u0443\u0436\u0435\u043D\u043E \u043A\u043E\u043D\u0444\u043B\u0438\u043A\u0442\u0443\u044E\u0449\u0435\u0435 \u0438\u043B\u0438 \u043D\u0435\u043F\u0440\u043E\u0432\u0435\u0440\u0435\u043D\u043D\u043E\u0435 \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0435\u0435 \u0445\u0440\u0430\u043D\u0438\u043B\u0438\u0449\u0435 Remote. \u041E\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u0435 \u0432\u0441\u0435 \u044D\u043A\u0437\u0435\u043C\u043F\u043B\u044F\u0440\u044B DSH \u0438 \u043F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0435\u0433\u043E \u0432\u0440\u0443\u0447\u043D\u0443\u044E.",
+    storageConflictEntry: "\u041E\u0431\u043D\u0430\u0440\u0443\u0436\u0435\u043D\u043E \u043A\u043E\u043D\u0444\u043B\u0438\u043A\u0442\u0443\u044E\u0449\u0435\u0435 \u0438\u043B\u0438 \u043D\u0435\u043F\u0440\u043E\u0432\u0435\u0440\u0435\u043D\u043D\u043E\u0435 \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0435\u0435 \u0445\u0440\u0430\u043D\u0438\u043B\u0438\u0449\u0435 Remote: \u043D\u0430\u0439\u0434\u0435\u043D \u043D\u0435\u043E\u0436\u0438\u0434\u0430\u043D\u043D\u044B\u0439 \u044D\u043B\u0435\u043C\u0435\u043D\u0442 \xAB{name}\xBB. \u041E\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u0435 \u0432\u0441\u0435 \u044D\u043A\u0437\u0435\u043C\u043F\u043B\u044F\u0440\u044B DSH \u0438 \u043F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0435\u0433\u043E \u0432\u0440\u0443\u0447\u043D\u0443\u044E.",
+    retryStartup: "\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C \u0437\u0430\u043F\u0443\u0441\u043A Remote",
+    retryStartupSuccess: "Remote \u0437\u0430\u043F\u0443\u0449\u0435\u043D.",
+    resetIdentity: "\u0421\u0431\u0440\u043E\u0441\u0438\u0442\u044C \u0438\u0434\u0435\u043D\u0442\u0438\u0447\u043D\u043E\u0441\u0442\u044C Remote",
+    resetIdentityHint: "\u0421\u043E\u0437\u0434\u0430\u0451\u0442 \u0437\u0430\u043D\u043E\u0432\u043E \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0435 \u043F\u0430\u0440\u044B \u043A\u043B\u044E\u0447\u0435\u0439 \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0430, \u0435\u0441\u043B\u0438 \u043E\u043D\u0438 \u043F\u043E\u0432\u0440\u0435\u0436\u0434\u0435\u043D\u044B. \u041F\u043E\u0442\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044F \u0432\u043E\u0439\u0442\u0438 \u0441\u043D\u043E\u0432\u0430.",
+    resetIdentityConfirm: "\u0421\u0431\u0440\u043E\u0441\u0438\u0442\u044C \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u0443\u044E \u0438\u0434\u0435\u043D\u0442\u0438\u0447\u043D\u043E\u0441\u0442\u044C Remote? \u041F\u043E\u0442\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044F \u0432\u043E\u0439\u0442\u0438 \u0441\u043D\u043E\u0432\u0430.",
+    resetIdentitySuccess: "\u0418\u0434\u0435\u043D\u0442\u0438\u0447\u043D\u043E\u0441\u0442\u044C Remote \u0441\u0431\u0440\u043E\u0448\u0435\u043D\u0430.",
+    resettingAction: "\u0421\u0431\u0440\u043E\u0441\u2026",
+    remoteStartupFailed: "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u044C \u043F\u043B\u0430\u0433\u0438\u043D Remote.",
+    switchTarget: "\u041F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u0446\u0435\u043B\u044C Harness: \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u0430\u044F / \u0443\u0434\u0430\u043B\u0451\u043D\u043D\u0430\u044F",
+    harnessTarget: "\u0426\u0435\u043B\u044C Harness",
+    close: "\u0417\u0430\u043A\u0440\u044B\u0442\u044C",
+    refreshRemote: "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0443\u0434\u0430\u043B\u0451\u043D\u043D\u044B\u0435 \u0445\u043E\u0441\u0442\u044B",
+    refreshRemoteShort: "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C",
+    local: "\u041B\u043E\u043A\u0430\u043B\u044C\u043D\u043E",
+    remoteTarget: "\u0423\u0434\u0430\u043B\u0451\u043D\u043D\u043E \xB7 {name}",
+    remoteHostMention: "Remote \xB7 {platform}",
+    thisMachineLocal: "\u042D\u0442\u043E\u0442 \u043A\u043E\u043C\u043F\u044C\u044E\u0442\u0435\u0440 (\u043B\u043E\u043A\u0430\u043B\u044C\u043D\u043E)",
+    currentDevice: "\u0422\u0435\u043A\u0443\u0449\u0435\u0435 \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u043E",
+    noRemoteHosts: "\u0421\u0435\u0439\u0447\u0430\u0441 \u043D\u0435\u0442 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B\u0445 \u0443\u0434\u0430\u043B\u0451\u043D\u043D\u044B\u0445 \u0445\u043E\u0441\u0442\u043E\u0432.",
+    online: "\u0412 \u0441\u0435\u0442\u0438",
+    offline: "\u041D\u0435 \u0432 \u0441\u0435\u0442\u0438",
+    thisMachineHost: "\u042D\u0442\u043E\u0442 \u043A\u043E\u043C\u043F\u044C\u044E\u0442\u0435\u0440 \u043A\u0430\u043A \u0443\u0434\u0430\u043B\u0451\u043D\u043D\u044B\u0439 \u0445\u043E\u0441\u0442",
+    connected: "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043E",
+    connectedAs: "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043E \u043A\u0430\u043A {account}",
+    connection: "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435",
+    checkingConnection: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F\u2026",
+    connecting: "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435",
+    reconnecting: "\u041F\u0435\u0440\u0435\u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435",
+    lastActive: "\u041F\u043E\u0441\u043B\u0435\u0434\u043D\u044F\u044F \u0430\u043A\u0442\u0438\u0432\u043D\u043E\u0441\u0442\u044C: {time}",
+    neverConnected: "\u0423\u0441\u043F\u0435\u0448\u043D\u044B\u0445 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0439 \u0435\u0449\u0451 \u043D\u0435 \u0431\u044B\u043B\u043E.",
+    reconnect: "\u041F\u0435\u0440\u0435\u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C\u0441\u044F",
+    reconnectingAction: "\u041F\u0435\u0440\u0435\u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435\u2026",
+    reconnectStarted: "\u0417\u0430\u043F\u0440\u043E\u0448\u0435\u043D\u043E \u043F\u0435\u0440\u0435\u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435.",
+    connectionAuthorizationExpired: "\u0421\u0440\u043E\u043A \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u0438 \u0438\u0441\u0442\u0451\u043A. \u0412\u044B\u0439\u0434\u0438\u0442\u0435 \u0438 \u0441\u043D\u043E\u0432\u0430 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0443\u0439\u0442\u0435 \u044D\u0442\u043E\u0442 \u0445\u043E\u0441\u0442.",
+    connectionReplaced: "\u0418\u0434\u0435\u043D\u0442\u0438\u0447\u043D\u043E\u0441\u0442\u044C \u044D\u0442\u043E\u0433\u043E \u0445\u043E\u0441\u0442\u0430 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442 \u0434\u0440\u0443\u0433\u043E\u0439 \u044D\u043A\u0437\u0435\u043C\u043F\u043B\u044F\u0440. \u041E\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u0435 \u0435\u0433\u043E \u0438\u043B\u0438 \u0437\u0430\u0434\u0430\u0439\u0442\u0435 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u044B\u0439 DSH_HOME, \u043F\u0440\u0435\u0436\u0434\u0435 \u0447\u0435\u043C \u043F\u0435\u0440\u0435\u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0430\u0442\u044C\u0441\u044F.",
+    connectionCredentialsBusy: "\u0423\u0447\u0451\u0442\u043D\u044B\u0435 \u0434\u0430\u043D\u043D\u044B\u0435 \u0441\u0435\u0439\u0447\u0430\u0441 \u043E\u0431\u043D\u043E\u0432\u043B\u044F\u044E\u0442\u0441\u044F. \u0425\u043E\u0441\u0442 \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442 \u043F\u043E\u043F\u044B\u0442\u043A\u0443. \u0423\u0434\u0430\u043B\u044F\u0439\u0442\u0435 \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0443\u044E \u0431\u043B\u043E\u043A\u0438\u0440\u043E\u0432\u043A\u0443 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u043E\u0441\u043B\u0435 \u043E\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0438 \u0432\u0441\u0435\u0445 \u044D\u043A\u0437\u0435\u043C\u043F\u043B\u044F\u0440\u043E\u0432.",
+    connectionDeviceRevoked: "\u0414\u043E\u0441\u0442\u0443\u043F \u044D\u0442\u043E\u0433\u043E \u0445\u043E\u0441\u0442\u0430 \u043E\u0442\u043E\u0437\u0432\u0430\u043D \u043D\u0430 \u0441\u0435\u0440\u0432\u0435\u0440\u0435. \u0412\u044B\u0439\u0434\u0438\u0442\u0435 \u0438 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0443\u0439\u0442\u0435 \u0435\u0433\u043E \u0441\u043D\u043E\u0432\u0430.",
+    connectionOwnershipRequired: "\u0421\u0435\u0440\u0432\u0435\u0440 \u0431\u043E\u043B\u044C\u0448\u0435 \u043D\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442 \u044D\u0442\u043E\u0442 \u0445\u043E\u0441\u0442 \u0432\u0430\u0448\u0438\u043C \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u043E\u043C.",
+    connectionRateLimited: "\u0421\u0435\u0440\u0432\u0435\u0440 \u043F\u043E\u043B\u0443\u0447\u0430\u0435\u0442 \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u043D\u043E\u0433\u043E \u0437\u0430\u043F\u0440\u043E\u0441\u043E\u0432. \u0410\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u044B\u0435 \u043F\u043E\u043F\u044B\u0442\u043A\u0438 \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0430\u0442\u0441\u044F.",
+    connectionVersionMismatch: "\u0412\u0435\u0440\u0441\u0438\u0438 \u043F\u0440\u043E\u0442\u043E\u043A\u043E\u043B\u0430 \u043F\u043B\u0430\u0433\u0438\u043D\u0430 \u0438 \u0441\u0435\u0440\u0432\u0435\u0440\u0430 \u043D\u0435\u0441\u043E\u0432\u043C\u0435\u0441\u0442\u0438\u043C\u044B.",
+    connectionInvalidResponse: "\u0421\u0435\u0440\u0432\u0435\u0440 \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u043E\u0435 \u0443\u043F\u0440\u0430\u0432\u043B\u044F\u044E\u0449\u0435\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435.",
+    connectionReachability: "\u0421\u0435\u0440\u0432\u0435\u0440 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D. \u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0441\u0435\u0442\u044C \u0438 \u0430\u0434\u0440\u0435\u0441 \u0441\u0435\u0440\u0432\u0435\u0440\u0430.",
+    connectionUnexpected: "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u043D\u0435\u043E\u0436\u0438\u0434\u0430\u043D\u043D\u043E \u043F\u0440\u0435\u0440\u0432\u0430\u043B\u043E\u0441\u044C. \u0410\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u044B\u0435 \u043F\u043E\u043F\u044B\u0442\u043A\u0438 \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0430\u0442\u0441\u044F.",
+    hostSignInHint: "\u0412\u043E\u0439\u0434\u0438\u0442\u0435, \u0447\u0442\u043E\u0431\u044B \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u043E\u0432\u0430\u0442\u044C \u044D\u0442\u043E\u0442 \u0445\u043E\u0441\u0442 \u043D\u0430 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u043C \u0441\u0435\u0440\u0432\u0435\u0440\u0435.",
+    checkingHost: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u0438 \u0445\u043E\u0441\u0442\u0430\u2026",
+    hostUnavailable: "\u0425\u043E\u0441\u0442 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D: {error}",
+    serverAccountEmail: "Email \u0430\u043A\u043A\u0430\u0443\u043D\u0442\u0430 \u0441\u0435\u0440\u0432\u0435\u0440\u0430",
+    serverAccountPassword: "\u041F\u0430\u0440\u043E\u043B\u044C \u0430\u043A\u043A\u0430\u0443\u043D\u0442\u0430 \u0441\u0435\u0440\u0432\u0435\u0440\u0430",
+    signInRegisterHost: "\u0412\u043E\u0439\u0442\u0438 \u0438 \u0437\u0430\u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0445\u043E\u0441\u0442",
+    signingIn: "\u0412\u0445\u043E\u0434\u2026",
+    loginWaitingAuthorization: "\u041E\u0436\u0438\u0434\u0430\u043D\u0438\u0435 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u0438",
+    loginLoadingDevices: "\u0412\u0445\u043E\u0434 \u0432\u044B\u043F\u043E\u043B\u043D\u0435\u043D. \u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432",
+    loginLoadingSettings: "\u0412\u0445\u043E\u0434 \u0432\u044B\u043F\u043E\u043B\u043D\u0435\u043D. \u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043A",
+    useRegistrationCode: "\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u044C \u043A\u043E\u0434 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F",
+    registering: "\u0420\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u044F\u2026",
+    remoteEntry: "Remote",
+    remoteTitle: "DS Harness Remote \u2014 \u0443\u0434\u0430\u043B\u0451\u043D\u043D\u0430\u044F \u0440\u0430\u0431\u043E\u0447\u0430\u044F \u043E\u0431\u043B\u0430\u0441\u0442\u044C",
+    remoteDescription: "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u043E\u0434\u0438\u043D \u0438\u0437 \u0441\u0432\u043E\u0438\u0445 \u0445\u043E\u0441\u0442\u043E\u0432, \u0437\u0430\u0442\u0435\u043C \u0440\u0430\u0431\u043E\u0447\u0438\u0439 \u043A\u0430\u0442\u0430\u043B\u043E\u0433. \u0418\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441 Harness \u043E\u0441\u0442\u0430\u0451\u0442\u0441\u044F \u043D\u0430 \u044D\u0442\u043E\u043C \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0435.",
+    starProject: "\u041F\u0440\u043E\u0435\u043A\u0442 \u0441 \u043E\u0442\u043A\u0440\u044B\u0442\u044B\u043C \u043A\u043E\u0434\u043E\u043C \u2014 \u0431\u0443\u0434\u0435\u043C \u0440\u0430\u0434\u044B \u0437\u0432\u0451\u0437\u0434\u0430\u043C~",
+    chooseHost: "\u0425\u043E\u0441\u0442",
+    manageHosts: "\u0423\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0435 \u0445\u043E\u0441\u0442\u0430\u043C\u0438",
+    chooseDirectory: "\u0420\u0430\u0431\u043E\u0447\u0438\u0439 \u043A\u0430\u0442\u0430\u043B\u043E\u0433",
+    selectHostHint: "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0445\u043E\u0441\u0442 \u0432 \u0441\u0435\u0442\u0438, \u0447\u0442\u043E\u0431\u044B \u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440\u0435\u0442\u044C \u0435\u0433\u043E \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0438.",
+    emptyDirectory: "\u0412 \u044D\u0442\u043E\u043C \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0435 \u043D\u0435\u0442 \u0432\u0438\u0434\u0438\u043C\u044B\u0445 \u043F\u043E\u0434\u043A\u0430\u0442\u0430\u043B\u043E\u0433\u043E\u0432.",
+    openWorkspace: "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0440\u0430\u0431\u043E\u0447\u0443\u044E \u043E\u0431\u043B\u0430\u0441\u0442\u044C",
+    openingWorkspace: "\u041E\u0442\u043A\u0440\u044B\u0442\u0438\u0435\u2026",
+    loadingDirectory: "\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u043E\u0432\u2026",
+    remoteProgressCheckingHost: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0445\u043E\u0441\u0442\u0430",
+    remoteProgressCheckingHostDetail: "\u041F\u043E\u0438\u0441\u043A \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0433\u043E \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0430 \u0438 \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0430, \u0432 \u0441\u0435\u0442\u0438 \u043B\u0438 \u043E\u043D\u043E.",
+    remoteProgressAuthorizingPeer: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u0438",
+    remoteProgressAuthorizingPeerDetail: "\u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043D\u0430\u0434\u043B\u0435\u0436\u043D\u043E\u0441\u0442\u0438 \u043A \u0430\u043A\u043A\u0430\u0443\u043D\u0442\u0443 \u0438 \u0437\u0430\u043A\u0440\u0435\u043F\u043B\u0451\u043D\u043D\u043E\u0439 \u0438\u0434\u0435\u043D\u0442\u0438\u0447\u043D\u043E\u0441\u0442\u0438 \u0445\u043E\u0441\u0442\u0430.",
+    remoteProgressOpeningChannel: "\u041E\u0442\u043A\u0440\u044B\u0442\u0438\u0435 \u0437\u0430\u0448\u0438\u0444\u0440\u043E\u0432\u0430\u043D\u043D\u043E\u0433\u043E \u043A\u0430\u043D\u0430\u043B\u0430",
+    remoteProgressOpeningChannelDetail: "\u041F\u043E\u043F\u044B\u0442\u043A\u0438 \u043F\u043E \u043E\u0447\u0435\u0440\u0435\u0434\u0438: LAN, P2P, TURN, \u043F\u0440\u0438 \u043D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u043E\u0441\u0442\u0438 Relay.",
+    remoteProgressProbeLan: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 LAN",
+    remoteProgressProbeLanDetail: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E\u0441\u0442\u0438 \u0445\u043E\u0441\u0442\u0430 \u0432 \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u043E\u0439 \u0441\u0435\u0442\u0438.",
+    remoteProgressProbeP2p: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 P2P",
+    remoteProgressProbeP2pDetail: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0432\u0430\u0440\u0438\u0430\u043D\u0442\u043E\u0432 \u043F\u0440\u044F\u043C\u043E\u0433\u043E \u0438\u043D\u0442\u0435\u0440\u043D\u0435\u0442-\u0441\u043E\u0435\u0434\u0438\u043D\u0435\u043D\u0438\u044F \u043C\u0435\u0436\u0434\u0443 \u044D\u0442\u0438\u043C \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u043E\u043C \u0438 \u0445\u043E\u0441\u0442\u043E\u043C.",
+    remoteProgressProbeTurn: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 TURN",
+    remoteProgressProbeTurnDetail: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0440\u0435\u0442\u0440\u0430\u043D\u0441\u043B\u044F\u0446\u0438\u0438 \u0447\u0435\u0440\u0435\u0437 TURN \u0434\u043B\u044F \u0441\u0435\u0442\u0435\u0439 \u0441 \u043E\u0433\u0440\u0430\u043D\u0438\u0447\u0435\u043D\u0438\u044F\u043C\u0438.",
+    remoteProgressProbeRelay: "\u041F\u043E\u0434\u0433\u043E\u0442\u043E\u0432\u043A\u0430 Relay",
+    remoteProgressProbeRelayDetail: "\u041F\u043E\u0434\u0433\u043E\u0442\u043E\u0432\u043A\u0430 \u0437\u0430\u043F\u0430\u0441\u043D\u043E\u0433\u043E \u0437\u0430\u0448\u0438\u0444\u0440\u043E\u0432\u0430\u043D\u043D\u043E\u0433\u043E Relay \u0447\u0435\u0440\u0435\u0437 \u0441\u0435\u0440\u0432\u0435\u0440 \u043D\u0430 \u0441\u043B\u0443\u0447\u0430\u0439, \u0435\u0441\u043B\u0438 \u043F\u0440\u044F\u043C\u044B\u0435 \u043F\u0443\u0442\u0438 \u043D\u0435 \u043E\u0442\u043A\u0440\u043E\u044E\u0442\u0441\u044F.",
+    remoteProgressTryingPrefix: "\u041F\u043E\u043F\u044B\u0442\u043A\u0430: ",
+    remoteProgressUsingPrefix: "\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442\u0441\u044F: ",
+    remoteProgressLoadingWorkspaces: "\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0440\u0430\u0431\u043E\u0447\u0438\u0445 \u043E\u0431\u043B\u0430\u0441\u0442\u0435\u0439",
+    remoteProgressLoadingWorkspacesDetail: "\u0427\u0442\u0435\u043D\u0438\u0435 \u0441\u043F\u0438\u0441\u043A\u0430 \u0440\u0430\u0431\u043E\u0447\u0438\u0445 \u043E\u0431\u043B\u0430\u0441\u0442\u0435\u0439 \u0443\u0434\u0430\u043B\u0451\u043D\u043D\u043E\u0433\u043E Harness \u0447\u0435\u0440\u0435\u0437 \u0442\u0443\u043D\u043D\u0435\u043B\u044C.",
+    remoteProgressSwitchingWorkspace: "\u041F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0438\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441\u0430",
+    remoteProgressSwitchingWorkspaceDetail: "\u041F\u0435\u0440\u0435\u0434\u0430\u0447\u0430 \u0443\u0434\u0430\u043B\u0451\u043D\u043D\u043E\u0439 \u0440\u0430\u0431\u043E\u0447\u0435\u0439 \u043E\u0431\u043B\u0430\u0441\u0442\u0438 \u0432 \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0439 \u0438\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441 Harness.",
+    remoteProgressReady: "\u0413\u043E\u0442\u043E\u0432\u043E",
+    remoteProgressReadyDetail: "\u0423\u0434\u0430\u043B\u0451\u043D\u043D\u044B\u0439 \u0445\u043E\u0441\u0442 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D, \u0441\u043E\u0435\u0434\u0438\u043D\u0435\u043D\u0438\u0435 \u0437\u0430\u0448\u0438\u0444\u0440\u043E\u0432\u0430\u043D\u043E.",
+    backToHosts: "\u0412\u044B\u0431\u0440\u0430\u0442\u044C \u0434\u0440\u0443\u0433\u043E\u0439 \u0445\u043E\u0441\u0442",
+    currentDirectory: "\u0412\u044B\u0431\u0440\u0430\u043D\u043D\u044B\u0439 \u043A\u0430\u0442\u0430\u043B\u043E\u0433",
+    directoryTruncated: "\u0423\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0442\u043E\u043B\u044C\u043A\u043E \u0447\u0430\u0441\u0442\u044C \u044D\u0442\u043E\u0433\u043E \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0430.",
+    pluginVersion: "\u041F\u043B\u0430\u0433\u0438\u043D {version}",
+    harnessVersion: "Harness {version}",
+    updateAvailable: "\u2B06 \u0414\u043E\u0441\u0442\u0443\u043F\u0435\u043D Remote {latest} (\u0442\u0435\u043A\u0443\u0449\u0430\u044F \u0432\u0435\u0440\u0441\u0438\u044F {current})",
+    updateShort: "\u2B06 {version}",
+    updateAvailableShort: "\u0414\u043E\u0441\u0442\u0443\u043F\u043D\u0430 \u0432\u0435\u0440\u0441\u0438\u044F {version}",
+    pluginUpdating: "\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435\u2026",
+    pluginUpdateReload: "\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435, Remote \u043F\u0435\u0440\u0435\u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0441\u044F",
+    pluginUpdateFailed: "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043E\u0431\u043D\u043E\u0432\u0438\u0442\u044C",
+    pluginUpdateUnknown: "\u0421\u0442\u0430\u0442\u0443\u0441 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u0435\u043D, \u043D\u0430\u0436\u043C\u0438\u0442\u0435, \u0447\u0442\u043E\u0431\u044B \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C",
+    pluginUpdateManual: "\u0420\u0435\u043B\u0438\u0437\u044B",
+    updateBadge: "\u0414\u043E\u0441\u0442\u0443\u043F\u043D\u043E \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435",
+    updateAvailableTag: "\u2B06 \u0414\u043E\u0441\u0442\u0443\u043F\u043D\u043E \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435",
+    existingWorkspaces: "\u0420\u0430\u0431\u043E\u0447\u0438\u0435 \u043E\u0431\u043B\u0430\u0441\u0442\u0438 DSH",
+    remotePathPlaceholder: "/home/user/project",
+    remotePathHint: "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0430\u0431\u0441\u043E\u043B\u044E\u0442\u043D\u044B\u0439 \u043F\u0443\u0442\u044C \u043A \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0443 \u043D\u0430 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u043C \u0445\u043E\u0441\u0442\u0435.",
+    noRemoteWorkspaces: "\u0423\u0434\u0430\u043B\u0451\u043D\u043D\u044B\u0445 \u0440\u0430\u0431\u043E\u0447\u0438\u0445 \u043E\u0431\u043B\u0430\u0441\u0442\u0435\u0439 \u043F\u043E\u043A\u0430 \u043D\u0435\u0442. \u041D\u0430\u0436\u043C\u0438\u0442\u0435 +, \u0447\u0442\u043E\u0431\u044B \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C.",
+    activeRemote: "{name}",
+    exitRemote: "\u0412\u044B\u0439\u0442\u0438",
+    addRemoteWorkspace: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0443\u0434\u0430\u043B\u0451\u043D\u043D\u0443\u044E \u0440\u0430\u0431\u043E\u0447\u0443\u044E \u043E\u0431\u043B\u0430\u0441\u0442\u044C",
+    addCodexWorkspace: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0440\u0430\u0431\u043E\u0447\u0443\u044E \u043E\u0431\u043B\u0430\u0441\u0442\u044C CodeX",
+    addCursorWorkspace: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0440\u0430\u0431\u043E\u0447\u0443\u044E \u043E\u0431\u043B\u0430\u0441\u0442\u044C Cursor",
+    addAntigravityWorkspace: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0440\u0430\u0431\u043E\u0447\u0443\u044E \u043E\u0431\u043B\u0430\u0441\u0442\u044C Antigravity",
+    addPiWorkspace: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0440\u0430\u0431\u043E\u0447\u0443\u044E \u043E\u0431\u043B\u0430\u0441\u0442\u044C Pi",
+    addOpencodeWorkspace: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0440\u0430\u0431\u043E\u0447\u0443\u044E \u043E\u0431\u043B\u0430\u0441\u0442\u044C OpenCode",
+    addClaudeWorkspace: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0440\u0430\u0431\u043E\u0447\u0443\u044E \u043E\u0431\u043B\u0430\u0441\u0442\u044C Claude",
+    addHermesWorkspace: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0440\u0430\u0431\u043E\u0447\u0443\u044E \u043E\u0431\u043B\u0430\u0441\u0442\u044C Hermes",
+    noCodexWorkspaces: "\u0420\u0430\u0431\u043E\u0447\u0438\u0445 \u043E\u0431\u043B\u0430\u0441\u0442\u0435\u0439 CodeX \u043F\u043E\u043A\u0430 \u043D\u0435\u0442.",
+    noCursorWorkspaces: "\u0420\u0430\u0431\u043E\u0447\u0438\u0445 \u043E\u0431\u043B\u0430\u0441\u0442\u0435\u0439 Cursor \u043F\u043E\u043A\u0430 \u043D\u0435\u0442. \u0414\u043E\u0431\u0430\u0432\u044C\u0442\u0435 \u043A\u0430\u0442\u0430\u043B\u043E\u0433 \u043F\u0440\u043E\u0435\u043A\u0442\u0430, \u0447\u0442\u043E\u0431\u044B \u043D\u0430\u0447\u0430\u0442\u044C.",
+    noAntigravityWorkspaces: "\u0420\u0430\u0431\u043E\u0447\u0438\u0445 \u043E\u0431\u043B\u0430\u0441\u0442\u0435\u0439 Antigravity \u043F\u043E\u043A\u0430 \u043D\u0435\u0442. \u0414\u043E\u0431\u0430\u0432\u044C\u0442\u0435 \u043A\u0430\u0442\u0430\u043B\u043E\u0433 \u043F\u0440\u043E\u0435\u043A\u0442\u0430, \u0447\u0442\u043E\u0431\u044B \u043D\u0430\u0447\u0430\u0442\u044C.",
+    noPiWorkspaces: "\u0420\u0430\u0431\u043E\u0447\u0438\u0445 \u043E\u0431\u043B\u0430\u0441\u0442\u0435\u0439 Pi \u043F\u043E\u043A\u0430 \u043D\u0435\u0442. \u0414\u043E\u0431\u0430\u0432\u044C\u0442\u0435 \u043A\u0430\u0442\u0430\u043B\u043E\u0433 \u043F\u0440\u043E\u0435\u043A\u0442\u0430, \u0447\u0442\u043E\u0431\u044B \u043D\u0430\u0447\u0430\u0442\u044C.",
+    noOpencodeWorkspaces: "\u0420\u0430\u0431\u043E\u0447\u0438\u0445 \u043E\u0431\u043B\u0430\u0441\u0442\u0435\u0439 OpenCode \u043F\u043E\u043A\u0430 \u043D\u0435\u0442. \u0414\u043E\u0431\u0430\u0432\u044C\u0442\u0435 \u043A\u0430\u0442\u0430\u043B\u043E\u0433 \u043F\u0440\u043E\u0435\u043A\u0442\u0430, \u0447\u0442\u043E\u0431\u044B \u043D\u0430\u0447\u0430\u0442\u044C.",
+    noClaudeWorkspaces: "\u0420\u0430\u0431\u043E\u0447\u0438\u0445 \u043E\u0431\u043B\u0430\u0441\u0442\u0435\u0439 Claude \u043F\u043E\u043A\u0430 \u043D\u0435\u0442. \u0414\u043E\u0431\u0430\u0432\u044C\u0442\u0435 \u043A\u0430\u0442\u0430\u043B\u043E\u0433 \u043F\u0440\u043E\u0435\u043A\u0442\u0430, \u0447\u0442\u043E\u0431\u044B \u043D\u0430\u0447\u0430\u0442\u044C.",
+    noHermesWorkspaces: "\u0420\u0430\u0431\u043E\u0447\u0438\u0445 \u043E\u0431\u043B\u0430\u0441\u0442\u0435\u0439 Hermes \u043F\u043E\u043A\u0430 \u043D\u0435\u0442. \u0414\u043E\u0431\u0430\u0432\u044C\u0442\u0435 \u043A\u0430\u0442\u0430\u043B\u043E\u0433 \u043F\u0440\u043E\u0435\u043A\u0442\u0430, \u0447\u0442\u043E\u0431\u044B \u043D\u0430\u0447\u0430\u0442\u044C.",
+    cancelAddWorkspace: "\u041E\u0442\u043C\u0435\u043D\u0430",
+    confirmAddWorkspace: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0438 \u043E\u0442\u043A\u0440\u044B\u0442\u044C",
+    showAllWorkspaces: "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0432\u0441\u0435 \u0440\u0430\u0431\u043E\u0447\u0438\u0435 \u043E\u0431\u043B\u0430\u0441\u0442\u0438 DSH",
+    showAllCodexWorkspaces: "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0432\u0441\u0435 \u0440\u0430\u0431\u043E\u0447\u0438\u0435 \u043E\u0431\u043B\u0430\u0441\u0442\u0438 CodeX",
+    showAllCursorWorkspaces: "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0432\u0441\u0435 \u0440\u0430\u0431\u043E\u0447\u0438\u0435 \u043E\u0431\u043B\u0430\u0441\u0442\u0438 Cursor",
+    showAllAntigravityWorkspaces: "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0432\u0441\u0435 \u0440\u0430\u0431\u043E\u0447\u0438\u0435 \u043E\u0431\u043B\u0430\u0441\u0442\u0438 Antigravity",
+    showAllPiWorkspaces: "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0432\u0441\u0435 \u0440\u0430\u0431\u043E\u0447\u0438\u0435 \u043E\u0431\u043B\u0430\u0441\u0442\u0438 Pi",
+    showAllOpencodeWorkspaces: "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0432\u0441\u0435 \u0440\u0430\u0431\u043E\u0447\u0438\u0435 \u043E\u0431\u043B\u0430\u0441\u0442\u0438 OpenCode",
+    showAllClaudeWorkspaces: "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0432\u0441\u0435 \u0440\u0430\u0431\u043E\u0447\u0438\u0435 \u043E\u0431\u043B\u0430\u0441\u0442\u0438 Claude",
+    showAllHermesWorkspaces: "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0432\u0441\u0435 \u0440\u0430\u0431\u043E\u0447\u0438\u0435 \u043E\u0431\u043B\u0430\u0441\u0442\u0438 Hermes",
+    remoteModeLabel: "\u0423\u0434\u0430\u043B\u0451\u043D\u043D\u044B\u0439 \u0440\u0435\u0436\u0438\u043C \xB7 {name}",
+    remoteNetworkP2p: "P2P",
+    remoteNetworkTurn: "TURN",
+    remoteNetworkRelay: "Relay",
+    remoteNetworkLan: "LAN",
+    remoteNetworkOffline: "\u041E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E",
+    clientSignInAgain: "\u0421\u0440\u043E\u043A \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u0438 \u0438\u0441\u0442\u0451\u043A \xB7 \u0412\u043E\u0439\u0434\u0438\u0442\u0435 \u0441\u043D\u043E\u0432\u0430",
+    remoteLinkEncrypted: "\u0421\u043A\u0432\u043E\u0437\u043D\u043E\u0435 \u0448\u0438\u0444\u0440\u043E\u0432\u0430\u043D\u0438\u0435",
+    connectionRouteTitle: "\u041C\u0430\u0440\u0448\u0440\u0443\u0442 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F",
+    connectionRouteFrom: "\u041E\u0442\u043A\u0443\u0434\u0430",
+    connectionRouteVia: "\u0427\u0435\u0440\u0435\u0437",
+    connectionRouteTo: "\u041A\u0443\u0434\u0430",
+    connectionRouteCurrentDevice: "\u042D\u0442\u043E \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u043E",
+    connectionRouteLan: "\u041B\u043E\u043A\u0430\u043B\u044C\u043D\u0430\u044F \u0441\u0435\u0442\u044C",
+    connectionRouteP2p: "\u041F\u0440\u044F\u043C\u043E\u0439 \u043F\u0443\u0442\u044C \u0447\u0435\u0440\u0435\u0437 \u0438\u043D\u0442\u0435\u0440\u043D\u0435\u0442",
+    connectionRouteTurn: "\u0421\u0435\u0440\u0432\u0438\u0441 \u0440\u0435\u0442\u0440\u0430\u043D\u0441\u043B\u044F\u0446\u0438\u0438 TURN",
+    connectionRouteRelay: "\u0421\u0435\u0440\u0432\u0435\u0440 Remote",
+    connectionRouteHost: "\u0420\u0430\u0431\u043E\u0447\u0438\u0439 \u043A\u043E\u043C\u043F\u044C\u044E\u0442\u0435\u0440 \u0441 Harness",
+    connectionRouteLanDetail: "\u041F\u0440\u044F\u043C\u0430\u044F \u043F\u0435\u0440\u0435\u0434\u0430\u0447\u0430 \u043F\u043E \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u043E\u0439 \u0441\u0435\u0442\u0438",
+    connectionRouteP2pDetail: "\u041F\u0440\u044F\u043C\u0430\u044F \u043F\u0435\u0440\u0435\u0434\u0430\u0447\u0430 \u0447\u0435\u0440\u0435\u0437 \u0438\u043D\u0442\u0435\u0440\u043D\u0435\u0442",
+    connectionRouteTurnDetail: "\u0417\u0430\u0448\u0438\u0444\u0440\u043E\u0432\u0430\u043D\u043D\u0430\u044F \u043F\u0435\u0440\u0435\u0434\u0430\u0447\u0430 \u0447\u0435\u0440\u0435\u0437 \u0441\u0435\u0440\u0432\u0438\u0441 TURN",
+    connectionRouteRelayDetail: "\u0417\u0430\u0448\u0438\u0444\u0440\u043E\u0432\u0430\u043D\u043D\u0430\u044F \u043F\u0435\u0440\u0435\u0434\u0430\u0447\u0430 \u0447\u0435\u0440\u0435\u0437 \u0441\u0435\u0440\u0432\u0435\u0440 Remote",
+    connectionRouteEncrypted: "\u041D\u0430 \u0432\u0441\u0451\u043C \u043C\u0430\u0440\u0448\u0440\u0443\u0442\u0435 \u0434\u0430\u043D\u043D\u044B\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F \u043E\u0441\u0442\u0430\u044E\u0442\u0441\u044F \u043F\u043E\u0434 \u0441\u043A\u0432\u043E\u0437\u043D\u044B\u043C \u0448\u0438\u0444\u0440\u043E\u0432\u0430\u043D\u0438\u0435\u043C.",
+    connectionDetailsConnection: "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435",
+    connectionDetailsWebRtc: "\u0421\u0432\u0435\u0434\u0435\u043D\u0438\u044F \u043E \u0441\u0435\u0442\u0438 \xB7 WebRTC / ICE",
+    connectionId: "ID \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F",
+    connectedAt: "\u0423\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043E",
+    preferredTransports: "\u041F\u043E\u0440\u044F\u0434\u043E\u043A \u043F\u043E\u043F\u044B\u0442\u043E\u043A",
+    controlChannel: "\u041A\u0430\u043D\u0430\u043B \u0443\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F",
+    controlAddress: "\u0410\u0434\u0440\u0435\u0441 \u0443\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F",
+    serverUnavailableError: "\u0421\u0435\u0440\u0432\u0438\u0441 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435 \u043F\u043E\u043F\u044B\u0442\u043A\u0443 \u043F\u043E\u0437\u0436\u0435.",
+    connectionHoldCountdown: "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0438\u0441\u0442\u0435\u0447\u0451\u0442 \u0447\u0435\u0440\u0435\u0437 {seconds} \u0441",
+    serverUnavailableCountdown: "\u0421\u0435\u0440\u0432\u0438\u0441 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D \xB7 \u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0438\u0441\u0442\u0435\u0447\u0451\u0442 \u0447\u0435\u0440\u0435\u0437 {seconds} \u0441",
+    unavailable: "\u041D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E",
+    serverUnavailableShort: "\u0421\u0435\u0440\u0432\u0438\u0441 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D",
+    serverUnavailable: "\u0421\u0435\u0440\u0432\u0435\u0440 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D. \u041F\u0435\u0440\u0435\u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435.",
+    serverUnavailableConnected: "\u0421\u0435\u0440\u0432\u0435\u0440 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D. \u0421\u0432\u044F\u0437\u044C \u0441 \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u043E\u043C \u0430\u043A\u0442\u0438\u0432\u043D\u0430. \u041F\u0435\u0440\u0435\u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435.",
+    serverLeaseExpiring: "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0438\u0441\u0442\u0435\u0447\u0451\u0442 \u0447\u0435\u0440\u0435\u0437 {seconds} \u0441.",
+    serverRestored: "\u0421\u0435\u0440\u0432\u0435\u0440 \u0441\u043D\u043E\u0432\u0430 \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D.",
+    serverLinkDisconnected: "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u043F\u043E\u0442\u0435\u0440\u044F\u043D\u043E.",
+    controlStateConnecting: "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435",
+    controlStateOpen: "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043E",
+    controlStateClosing: "\u0417\u0430\u043A\u0440\u044B\u0442\u0438\u0435",
+    controlStateClosed: "\u0417\u0430\u043A\u0440\u044B\u0442\u043E",
+    peerState: "Peer-\u0441\u043E\u0435\u0434\u0438\u043D\u0435\u043D\u0438\u0435",
+    dataChannel: "DataChannel",
+    localCandidate: "\u041B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0439 \u043A\u0430\u043D\u0434\u0438\u0434\u0430\u0442",
+    remoteCandidate: "\u0423\u0434\u0430\u043B\u0451\u043D\u043D\u044B\u0439 \u043A\u0430\u043D\u0434\u0438\u0434\u0430\u0442",
+    localAddress: "\u041B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0439 \u0430\u0434\u0440\u0435\u0441",
+    remoteAddress: "\u0423\u0434\u0430\u043B\u0451\u043D\u043D\u044B\u0439 \u0430\u0434\u0440\u0435\u0441",
+    networkProtocol: "\u0421\u0435\u0442\u0435\u0432\u043E\u0439 \u043F\u0440\u043E\u0442\u043E\u043A\u043E\u043B",
+    relayProtocol: "\u041F\u0440\u043E\u0442\u043E\u043A\u043E\u043B TURN",
+    roundTripTime: "\u0412\u0440\u0435\u043C\u044F \u043F\u0440\u0438\u0451\u043C\u0430-\u043F\u0435\u0440\u0435\u0434\u0430\u0447\u0438",
+    availableBitrate: "\u0414\u043E\u0441\u0442\u0443\u043F\u043D\u0430\u044F \u0438\u0441\u0445\u043E\u0434\u044F\u0449\u0430\u044F \u0441\u043A\u043E\u0440\u043E\u0441\u0442\u044C",
+    bytesSent: "\u041E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E \u0447\u0435\u0440\u0435\u0437 WebRTC",
+    bytesReceived: "\u041F\u043E\u043B\u0443\u0447\u0435\u043D\u043E \u0447\u0435\u0440\u0435\u0437 WebRTC",
+    notProvided: "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D\u043E",
+    candidateHost: "\u041B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0439 \u0430\u0434\u0440\u0435\u0441 \xB7 host",
+    candidateSrflx: "\u041F\u0443\u0431\u043B\u0438\u0447\u043D\u044B\u0439 \u0430\u0434\u0440\u0435\u0441 \xB7 srflx",
+    candidatePrflx: "\u0410\u0434\u0440\u0435\u0441 \u043F\u0438\u0440\u0430 \xB7 prflx",
+    candidateRelay: "\u0410\u0434\u0440\u0435\u0441 TURN \xB7 relay",
+    openLocalWorkspaces: "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0435 \u0440\u0430\u0431\u043E\u0447\u0438\u0435 \u043E\u0431\u043B\u0430\u0441\u0442\u0438",
+    clientSignInHint: "\u0412\u043E\u0439\u0434\u0438\u0442\u0435 \u043D\u0430 \u044D\u0442\u043E\u0442 \u0441\u0435\u0440\u0432\u0435\u0440, \u0447\u0442\u043E\u0431\u044B \u0443\u0432\u0438\u0434\u0435\u0442\u044C \u0441\u043F\u0438\u0441\u043E\u043A \u0441\u0432\u043E\u0438\u0445 \u0443\u0434\u0430\u043B\u0451\u043D\u043D\u044B\u0445 \u0445\u043E\u0441\u0442\u043E\u0432.",
+    signInClient: "DS Harness Remote:",
+    signInClientDescription: "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u0435\u0441\u044C \u043E\u0434\u0438\u043D \u0440\u0430\u0437 \u2014 \u0434\u043E\u0441\u0442\u0443\u043F \u0432 \u043B\u044E\u0431\u043E\u0435 \u0432\u0440\u0435\u043C\u044F.",
+    startSignIn: "\u041D\u0430\u0447\u0430\u0442\u044C \u0432\u0445\u043E\u0434",
+    allowControlCurrentDevice: "\u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u044C \u0443\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0435 \u044D\u0442\u0438\u043C \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u043E\u043C",
+    allowControlDevice: "\u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u044C \u0443\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0435 \u044D\u0442\u0438\u043C \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u043E\u043C",
+    connectedClientCount: "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043E: {count}",
+    checkAcp: "\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u0431\u044D\u043A\u0435\u043D\u0434",
+    checkingAcp: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 ACP\u2026",
+    acpAvailable: "ACP \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D",
+    acpUnavailable: "ACP \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D",
+    agentBackends: "\u0414\u0440\u0443\u0433\u0438\u0435 \u0430\u0433\u0435\u043D\u0442\u044B \u0434\u043B\u044F \u043A\u043E\u0434\u0430",
+    acpDocumentation: "\u041F\u043E\u0434\u0440\u043E\u0431\u043D\u0435\u0435 \u0432 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430\u0446\u0438\u0438.",
+    acpHint: "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0447\u0435\u0440\u0435\u0437 ACP. ",
+    acpCheckPassed: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043F\u0440\u043E\u0439\u0434\u0435\u043D\u0430",
+    acpCheckFailed: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043D\u0435 \u043F\u0440\u043E\u0439\u0434\u0435\u043D\u0430",
+    installOrConfigureAcp: "\u0423\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C / \u043D\u0430\u0441\u0442\u0440\u043E\u0438\u0442\u044C",
+    configureAcp: "\u041D\u0430\u0441\u0442\u0440\u043E\u0438\u0442\u044C \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438",
+    installAcp: "\u0423\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C \u0438 \u043D\u0430\u0441\u0442\u0440\u043E\u0438\u0442\u044C",
+    installingAcp: "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430\u2026",
+    acpConfiguredNotice: "\u0411\u044D\u043A\u0435\u043D\u0434 ACP \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438 \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D \u0438 \u0432\u043A\u043B\u044E\u0447\u0451\u043D.",
+    acpInstalledNotice: "\u0411\u044D\u043A\u0435\u043D\u0434 ACP \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D \u0438 \u0432\u043A\u043B\u044E\u0447\u0451\u043D.",
+    acpDownloadRequired: "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0441\u043A\u0430\u0447\u0430\u0439\u0442\u0435 \u0438 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u0435 {backend}: {url}",
+    addAcp: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C ACP",
+    acpName: "\u0418\u043C\u044F \u0441\u0435\u0440\u0432\u0438\u0441\u0430",
+    acpCommand: "\u041A\u043E\u043C\u0430\u043D\u0434\u0430",
+    acpArguments: "\u0410\u0440\u0433\u0443\u043C\u0435\u043D\u0442\u044B",
+    removeAcp: "\u0423\u0434\u0430\u043B\u0438\u0442\u044C",
+    currentConnectedDevices: "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u044B\u0435 \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0430",
+    noConnectedClients: "\u0421\u0435\u0439\u0447\u0430\u0441 \u043A \u044D\u0442\u043E\u043C\u0443 \u0445\u043E\u0441\u0442\u0443 \u043D\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043E \u043D\u0438 \u043E\u0434\u043D\u043E\u0433\u043E \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0430.",
+    unknownDevice: "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u043E\u0435 \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u043E",
+    exitRemoteAccount: "\u0412\u044B\u0439\u0442\u0438",
+    githubLogin: "Github",
+    providerLogin: "{provider}",
+    scanWithProvider: "\u041E\u0442\u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435, \u0447\u0442\u043E\u0431\u044B \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C \u0447\u0435\u0440\u0435\u0437 {provider}",
+    loadingLoginProviders: "\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0441\u043F\u043E\u0441\u043E\u0431\u043E\u0432 \u0432\u0445\u043E\u0434\u0430\u2026",
+    retryLoginProviders: "\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0443 \u0441\u043F\u043E\u0441\u043E\u0431\u043E\u0432 \u0432\u0445\u043E\u0434\u0430",
+    serverApplied: "\u0410\u0434\u0440\u0435\u0441 \u0441\u0435\u0440\u0432\u0435\u0440\u0430 \u043F\u0440\u0438\u043C\u0435\u043D\u0451\u043D.",
+    noLoginProviders: "\u0412\u0445\u043E\u0434 \u043F\u043E QR-\u043A\u043E\u0434\u0443 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D. \u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 email \u0438 \u043F\u0430\u0440\u043E\u043B\u044C.",
+    zhihuLogin: "Zhihu",
+    scanWithGitHub: "\u041E\u0442\u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435, \u0447\u0442\u043E\u0431\u044B \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C \u0447\u0435\u0440\u0435\u0437 GitHub",
+    scanWithZhihu: "\u041E\u0442\u0441\u043A\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435, \u0447\u0442\u043E\u0431\u044B \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C \u0447\u0435\u0440\u0435\u0437 Zhihu",
+    openInBrowser: "\u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435",
+    scanLoginHint: "\u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0435 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u044E \u043D\u0430 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0435. \u042D\u0442\u043E \u043E\u043A\u043D\u043E \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442 \u0440\u0430\u0431\u043E\u0442\u0443 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.",
+    currentServiceAddress: "\u0414\u043E\u043C\u0435\u043D \u0441\u0435\u0440\u0432\u0438\u0441\u0430 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u0438:",
+    editServiceAddress: "\u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C \u0430\u0434\u0440\u0435\u0441 \u0441\u0435\u0440\u0432\u0438\u0441\u0430",
+    restoreDefaultServiceAddress: "\u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E",
+    cancelServiceAddressEdit: "\u041E\u0442\u043C\u0435\u043D\u0430",
+    accountPasswordLogin: "\u041F\u0430\u0440\u043E\u043B\u044C",
+    qrLoginExpired: "\u0421\u0440\u043E\u043A \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044F QR-\u043A\u043E\u0434\u0430 \u0438\u0441\u0442\u0451\u043A. \u041E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u0435\u0433\u043E, \u0447\u0442\u043E\u0431\u044B \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C.",
+    refreshQrCode: "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C QR-\u043A\u043E\u0434",
+    codexVirtualWorkspace: "\u0412\u0438\u0440\u0442\u0443\u0430\u043B\u044C\u043D\u0430\u044F \u0440\u0430\u0431\u043E\u0447\u0430\u044F \u043E\u0431\u043B\u0430\u0441\u0442\u044C CodeX",
+    cursorVirtualWorkspace: "\u0412\u0438\u0440\u0442\u0443\u0430\u043B\u044C\u043D\u0430\u044F \u0440\u0430\u0431\u043E\u0447\u0430\u044F \u043E\u0431\u043B\u0430\u0441\u0442\u044C Cursor",
+    antigravityVirtualWorkspace: "\u0412\u0438\u0440\u0442\u0443\u0430\u043B\u044C\u043D\u0430\u044F \u0440\u0430\u0431\u043E\u0447\u0430\u044F \u043E\u0431\u043B\u0430\u0441\u0442\u044C Antigravity",
+    piVirtualWorkspace: "\u0412\u0438\u0440\u0442\u0443\u0430\u043B\u044C\u043D\u0430\u044F \u0440\u0430\u0431\u043E\u0447\u0430\u044F \u043E\u0431\u043B\u0430\u0441\u0442\u044C Pi",
+    opencodeVirtualWorkspace: "\u0412\u0438\u0440\u0442\u0443\u0430\u043B\u044C\u043D\u0430\u044F \u0440\u0430\u0431\u043E\u0447\u0430\u044F \u043E\u0431\u043B\u0430\u0441\u0442\u044C OpenCode",
+    claudeVirtualWorkspace: "\u0412\u0438\u0440\u0442\u0443\u0430\u043B\u044C\u043D\u0430\u044F \u0440\u0430\u0431\u043E\u0447\u0430\u044F \u043E\u0431\u043B\u0430\u0441\u0442\u044C Claude",
+    hermesVirtualWorkspace: "\u0412\u0438\u0440\u0442\u0443\u0430\u043B\u044C\u043D\u0430\u044F \u0440\u0430\u0431\u043E\u0447\u0430\u044F \u043E\u0431\u043B\u0430\u0441\u0442\u044C Hermes",
+    codexVirtualSessions: "\u0421\u0435\u0441\u0441\u0438\u0438"
+  }, uk = {
+    serverSavedLive: "\u0410\u0434\u0440\u0435\u0441\u0443 \u0441\u0435\u0440\u0432\u0435\u0440\u0430 \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043D\u043E \u0439 \u0437\u0430\u0441\u0442\u043E\u0441\u043E\u0432\u0430\u043D\u043E.",
+    saveServerBeforeLogin: "\u0417\u0431\u0435\u0440\u0435\u0436\u0456\u0442\u044C \u0430\u0434\u0440\u0435\u0441\u0443 \u0441\u0435\u0440\u0432\u0435\u0440\u0430, \u043F\u0435\u0440\u0448 \u043D\u0456\u0436 \u043F\u0440\u043E\u0434\u043E\u0432\u0436\u0438\u0442\u0438 \u0432\u0445\u0456\u0434 \u0430\u0431\u043E \u0441\u043F\u0430\u0440\u044E\u0432\u0430\u043D\u043D\u044F.",
+    pairingLoginTab: "DSH Go",
+    pairingTitle: "\u0421\u043F\u0430\u0440\u044E\u0432\u0430\u043D\u043D\u044F \u0437 DSH Go",
+    pairingHint: `\u0412\u0456\u0434\u0441\u043A\u0430\u043D\u0443\u0439\u0442\u0435 \u043A\u043E\u0434 \u0443 DSH Go \u0456 \u043F\u0456\u0434\u0442\u0432\u0435\u0440\u0434\u044C\u0442\u0435 \u043D\u0430 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0456.
+\u041F\u043E\u0442\u0456\u043C \u0432\u0432\u0435\u0434\u0456\u0442\u044C \u043A\u043E\u0434 \u0456\u0437 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0430 \u043D\u0430 \u0446\u044C\u043E\u043C\u0443 \u043A\u043E\u043C\u043F\u02BC\u044E\u0442\u0435\u0440\u0456 \u0439 \u043F\u0456\u0434\u0442\u0432\u0435\u0440\u0434\u044C\u0442\u0435 \u043F\u0440\u0438\u0432\u02BC\u044F\u0437\u043A\u0443.`,
+    pairingHostOnly: "\u041D\u043E\u0432\u0456 \u0445\u043E\u0441\u0442\u0438 \u043B\u0438\u0448\u0435 \u043F\u0440\u0438\u0439\u043C\u0430\u044E\u0442\u044C \u0437\u02BC\u0454\u0434\u043D\u0430\u043D\u043D\u044F. \u0421\u043F\u0430\u0440\u044E\u0432\u0430\u043D\u043D\u044F \u043D\u0435 \u0434\u0430\u0454 \u0437\u043C\u043E\u0433\u0438 \u043A\u0435\u0440\u0443\u0432\u0430\u0442\u0438 \u0456\u043D\u0448\u0438\u043C\u0438 \u043F\u0440\u0438\u0441\u0442\u0440\u043E\u044F\u043C\u0438.",
+    pairingSaveServer: "\u0417\u0431\u0435\u0440\u0435\u0436\u0456\u0442\u044C \u0430\u0434\u0440\u0435\u0441\u0443 \u0441\u0435\u0440\u0432\u0435\u0440\u0430 \u043F\u0435\u0440\u0435\u0434 \u0441\u043F\u0430\u0440\u044E\u0432\u0430\u043D\u043D\u044F\u043C.",
+    pairingScan: "\u0412\u0456\u0434\u0441\u043A\u0430\u043D\u0443\u0439\u0442\u0435 \u0446\u0435\u0439 QR-\u043A\u043E\u0434 \u0443 DSH Go \u0456 \u043F\u0456\u0434\u0442\u0432\u0435\u0440\u0434\u044C\u0442\u0435 \u043D\u0430 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0456.",
+    pairingEnter: "\u041F\u0435\u0440\u0435\u0432\u0456\u0440\u0442\u0435 \u0442\u0435\u043B\u0435\u0444\u043E\u043D, \u0449\u043E \u043D\u0430\u0434\u0456\u0441\u043B\u0430\u0432 \u0437\u0430\u043F\u0438\u0442, \u0456 \u0432\u0432\u0435\u0434\u0456\u0442\u044C \u0439\u043E\u0433\u043E \u043A\u043E\u0434.",
+    pairingComplete: "\u0421\u043F\u0430\u0440\u0435\u043D\u043E. \u0422\u0435\u043F\u0435\u0440 DSH Go \u043C\u043E\u0436\u0435 \u043F\u0456\u0434\u043A\u043B\u044E\u0447\u0430\u0442\u0438\u0441\u044F \u0434\u043E \u0446\u044C\u043E\u0433\u043E \u0445\u043E\u0441\u0442\u0430.",
+    pairingPending: "\u0412\u0456\u0434\u043D\u043E\u0432\u0456\u0442\u044C \u043F\u043E\u0447\u0430\u0442\u043A\u043E\u0432\u0435 \u043D\u0430\u0434\u0441\u0438\u043B\u0430\u043D\u043D\u044F, \u043D\u0435 \u0437\u043C\u0456\u043D\u044E\u044E\u0447\u0438 \u043A\u043E\u0434.",
+    pairingClosed: "\u0421\u043F\u0430\u0440\u044E\u0432\u0430\u043D\u043D\u044F \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u043E. \u0417\u0433\u0435\u043D\u0435\u0440\u0443\u0439\u0442\u0435 \u043D\u043E\u0432\u0438\u0439 QR-\u043A\u043E\u0434, \u0449\u043E\u0431 \u043F\u043E\u0447\u0430\u0442\u0438 \u0437\u043D\u043E\u0432\u0443.",
+    pairingQr: "\u041E\u0434\u043D\u043E\u0440\u0430\u0437\u043E\u0432\u0438\u0439 QR-\u043A\u043E\u0434 \u0434\u043B\u044F \u0441\u043F\u0430\u0440\u044E\u0432\u0430\u043D\u043D\u044F \u0437 DSH Go",
+    pairingExpires: "\u0421\u043F\u043B\u0438\u0432\u0430\u0454 \u0447\u0435\u0440\u0435\u0437 {time}",
+    pairingExpired: "\u0422\u0435\u0440\u043C\u0456\u043D \u0434\u0456\u0457 \u043C\u0438\u043D\u0443\u0432",
+    pairingCode: "8-\u0437\u043D\u0430\u0447\u043D\u0438\u0439 \u043A\u043E\u0434, \u043F\u043E\u043A\u0430\u0437\u0430\u043D\u0438\u0439 \u043D\u0430 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0456",
+    pairingWarning: "\u0414\u043E\u0437\u0432\u043E\u043B\u0435\u043D\u043E \u043B\u0438\u0448\u0435 \u043E\u0434\u043D\u0435 \u043D\u0430\u0434\u0441\u0438\u043B\u0430\u043D\u043D\u044F. \u041D\u0435\u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u0438\u0439 \u043A\u043E\u0434 \u0440\u043E\u0431\u0438\u0442\u044C \u0446\u0435\u0439 QR-\u043A\u043E\u0434 \u043D\u0435\u0434\u0456\u0439\u0441\u043D\u0438\u043C; \u0432\u0456\u0434\u0441\u043A\u0430\u043D\u0443\u0439\u0442\u0435 \u043D\u043E\u0432\u0438\u0439.",
+    pairingConfirm: "\u041F\u0456\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0438 \u043F\u0440\u0438\u0432\u02BC\u044F\u0437\u043A\u0443",
+    pairingRetry: "\u0412\u0456\u0434\u043D\u043E\u0432\u0438\u0442\u0438 \u043F\u043E\u0447\u0430\u0442\u043A\u043E\u0432\u0435 \u043D\u0430\u0434\u0441\u0438\u043B\u0430\u043D\u043D\u044F",
+    pairingCancel: "\u0421\u043A\u0430\u0441\u0443\u0432\u0430\u0442\u0438 \u0441\u043F\u0430\u0440\u044E\u0432\u0430\u043D\u043D\u044F",
+    pairingStart: "\u0417\u0433\u0435\u043D\u0435\u0440\u0443\u0432\u0430\u0442\u0438 QR-\u043A\u043E\u0434 \u0434\u043B\u044F \u0441\u043F\u0430\u0440\u044E\u0432\u0430\u043D\u043D\u044F",
+    pairingBusy: "\u0417\u0430\u0447\u0435\u043A\u0430\u0439\u0442\u0435\u2026",
+    pairingUnsupported: "\u0426\u0435\u0439 \u0441\u0435\u0440\u0432\u0435\u0440 \u043D\u0435 \u043F\u0456\u0434\u0442\u0440\u0438\u043C\u0443\u0454 \u0441\u043F\u0430\u0440\u044E\u0432\u0430\u043D\u043D\u044F \u043F\u0440\u0438\u0441\u0442\u0440\u043E\u0457\u0432.",
+    pairingError: `\u041D\u0435 \u0432\u0434\u0430\u043B\u043E\u0441\u044F \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0438 \u0441\u043F\u0430\u0440\u044E\u0432\u0430\u043D\u043D\u044F. \u041F\u0435\u0440\u0435\u0432\u0456\u0440\u0442\u0435 \u0437\u02BC\u0454\u0434\u043D\u0430\u043D\u043D\u044F.
+\u042F\u043A\u0449\u043E \u043A\u043E\u0434 \u0443\u0436\u0435 \u043D\u0430\u0434\u0456\u0441\u043B\u0430\u043D\u043E, \u0432\u0456\u0434\u043D\u043E\u0432\u0456\u0442\u044C \u043F\u043E\u0447\u0430\u0442\u043A\u043E\u0432\u0435 \u043D\u0430\u0434\u0441\u0438\u043B\u0430\u043D\u043D\u044F, \u043D\u0435 \u0437\u043C\u0456\u043D\u044E\u044E\u0447\u0438 \u0439\u043E\u0433\u043E.`,
+    remoteTools: "\u0412\u043F\u0440\u043E\u0432\u0430\u0434\u0436\u0443\u0432\u0430\u0442\u0438 Remote Tools",
+    remoteToolsHint: "\u041D\u0430\u0434\u0430\u0432\u0430\u0442\u0438 \u0456\u043D\u0441\u0442\u0440\u0443\u043C\u0435\u043D\u0442\u0438 remote_* \u0443 \u0441\u0435\u0441\u0456\u044F\u0445. \u0422\u0438\u043F\u043E\u0432\u043E \u0443\u0432\u0456\u043C\u043A\u043D\u0435\u043D\u043E; \u0432\u0438\u043C\u043A\u043D\u0456\u0442\u044C, \u044F\u043A\u0449\u043E \u0432\u043E\u043D\u0438 \u043D\u0435 \u043F\u043E\u0442\u0440\u0456\u0431\u043D\u0456. \u0417\u043C\u0456\u043D\u0438 \u043D\u0430\u0431\u0443\u0434\u0443\u0442\u044C \u0447\u0438\u043D\u043D\u043E\u0441\u0442\u0456 \u043F\u0456\u0441\u043B\u044F \u043F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u043A\u0443 \u0445\u043E\u0441\u0442\u0430.",
+    remoteToolsSaved: "\u041D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u043D\u043D\u044F Remote Tools \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043D\u043E.",
+    debugLogging: "\u0416\u0443\u0440\u043D\u0430\u043B \u043D\u0430\u043B\u0430\u0433\u043E\u0434\u0436\u0435\u043D\u043D\u044F",
+    debugLoggingHint: "\u0417\u0430\u043F\u0438\u0441\u0443\u0432\u0430\u0442\u0438 \u0434\u0435\u0442\u0430\u043B\u044C\u043D\u0443 \u0434\u0456\u0430\u0433\u043D\u043E\u0441\u0442\u0438\u043A\u0443 \u0437\u02BC\u0454\u0434\u043D\u0430\u043D\u043D\u044F \u0434\u043E \u0436\u0443\u0440\u043D\u0430\u043B\u0443 \u0445\u043E\u0441\u0442\u0430 (\u0442\u0438\u043F\u043E\u0432\u043E \u0437\u0430\u043F\u0438\u0441\u0443\u044E\u0442\u044C\u0441\u044F \u0440\u0456\u0432\u043D\u0456 Info \u0456 \u0432\u0438\u0449\u0435). \u0414\u0456\u0454 \u043E\u0434\u0440\u0430\u0437\u0443; \u0432\u0438\u043C\u043A\u043D\u0456\u0442\u044C \u043F\u0456\u0441\u043B\u044F \u0443\u0441\u0443\u043D\u0435\u043D\u043D\u044F \u043D\u0435\u0441\u043F\u0440\u0430\u0432\u043D\u043E\u0441\u0442\u0435\u0439.",
+    debugLoggingLevelDebug: "Debug",
+    debugLoggingLevelInfo: "Info",
+    debugLogsToggleOpen: "\u041F\u0435\u0440\u0435\u0433\u043B\u044F\u043D\u0443\u0442\u0438 \u0436\u0443\u0440\u043D\u0430\u043B",
+    debugLogsToggleClose: "\u0421\u0445\u043E\u0432\u0430\u0442\u0438 \u0436\u0443\u0440\u043D\u0430\u043B",
+    debugLogsFilterAll: "\u0423\u0441\u0456",
+    debugLogsFilterWarn: "\u041F\u043E\u043F\u0435\u0440\u0435\u0434\u0436\u0435\u043D\u043D\u044F \u0439 \u043F\u043E\u043C\u0438\u043B\u043A\u0438",
+    debugLogsRefresh: "\u041E\u043D\u043E\u0432\u0438\u0442\u0438",
+    debugLogsRefreshing: "\u041E\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u044F\u2026",
+    debugLogsCopy: "\u041A\u043E\u043F\u0456\u044E\u0432\u0430\u0442\u0438",
+    debugLogsCopied: "\u0421\u043A\u043E\u043F\u0456\u0439\u043E\u0432\u0430\u043D\u043E",
+    debugLogsCopyFailed: "\u041D\u0435 \u0432\u0434\u0430\u043B\u043E\u0441\u044F \u0441\u043A\u043E\u043F\u0456\u044E\u0432\u0430\u0442\u0438",
+    debugLogsExport: "\u0415\u043A\u0441\u043F\u043E\u0440\u0442\u0443\u0432\u0430\u0442\u0438",
+    debugLogsClear: "\u041E\u0447\u0438\u0441\u0442\u0438\u0442\u0438",
+    debugLogsLoading: "\u0417\u0430\u0432\u0430\u043D\u0442\u0430\u0436\u0435\u043D\u043D\u044F \u0436\u0443\u0440\u043D\u0430\u043B\u0443\u2026",
+    debugLogsEmpty: "\u0412\u0456\u0434\u043F\u043E\u0432\u0456\u0434\u043D\u0438\u0445 \u0437\u0430\u043F\u0438\u0441\u0456\u0432 \u0443 \u0436\u0443\u0440\u043D\u0430\u043B\u0456 \u0449\u0435 \u043D\u0435\u043C\u0430\u0454.",
+    debugLogsFileLabel: "\u0424\u0430\u0439\u043B \u0436\u0443\u0440\u043D\u0430\u043B\u0443:",
+    debugLogsFileFallback: "\u041B\u0438\u0448\u0435 \u0432 \u043F\u0430\u043C\u02BC\u044F\u0442\u0456 ({error})",
+    debugLogsCount: "\u0417\u0430\u043F\u0438\u0441\u0456\u0432: {count}",
+    terminalRemote: "\u0412\u0456\u0434\u0434\u0430\u043B\u0435\u043D\u0438\u0439 \u0442\u0435\u0440\u043C\u0456\u043D\u0430\u043B",
+    terminalRemoteHint: "\u0414\u043E\u0437\u0432\u043E\u043B\u0438\u0442\u0438 \u0434\u043E\u0432\u0456\u0440\u0435\u043D\u0438\u043C \u043F\u0440\u0438\u0441\u0442\u0440\u043E\u044F\u043C Remote \u0437\u0430\u043F\u0443\u0441\u043A\u0430\u0442\u0438 \u0456\u043D\u0442\u0435\u0440\u0430\u043A\u0442\u0438\u0432\u043D\u0443 \u043E\u0431\u043E\u043B\u043E\u043D\u043A\u0443 \u0432\u0456\u0434 \u0456\u043C\u0435\u043D\u0456 \u043A\u043E\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0447\u0430 \u0446\u044C\u043E\u0433\u043E \u0445\u043E\u0441\u0442\u0430. \u0422\u0438\u043F\u043E\u0432\u043E \u0443\u0432\u0456\u043C\u043A\u043D\u0435\u043D\u043E; \u043D\u0435 \u0437\u0430\u043B\u0435\u0436\u0438\u0442\u044C \u0432\u0456\u0434 \u043F\u0456\u0434\u0442\u0432\u0435\u0440\u0434\u0436\u0435\u043D\u044C \u0434\u043B\u044F \u0430\u0433\u0435\u043D\u0442\u0430. \u041F\u0435\u0440\u0435\u043C\u0438\u043A\u0430\u043D\u043D\u044F \u0437\u0431\u0435\u0440\u0456\u0433\u0430\u0454\u0442\u044C\u0441\u044F \u0439 \u0434\u0456\u0454 \u043E\u0434\u0440\u0430\u0437\u0443.",
+    terminalRemoteUnavailable: "\u0412\u0456\u0434\u0434\u0430\u043B\u0435\u043D\u0438\u0439 \u0442\u0435\u0440\u043C\u0456\u043D\u0430\u043B \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0438\u0439. \u0423\u0432\u0456\u043C\u043A\u043D\u0456\u0442\u044C \xAB\u0412\u0456\u0434\u0434\u0430\u043B\u0435\u043D\u0438\u0439 \u0442\u0435\u0440\u043C\u0456\u043D\u0430\u043B\xBB \u0443 \u043D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u043D\u043D\u044F\u0445 Remote \u043D\u0430 \u0445\u043E\u0441\u0442\u0456; \u043F\u0435\u0440\u0435\u043C\u0438\u043A\u0430\u0447 \u0434\u0456\u0454 \u043E\u0434\u0440\u0430\u0437\u0443.",
+    terminalSaved: "\u041D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u043D\u043D\u044F \u0432\u0456\u0434\u0434\u0430\u043B\u0435\u043D\u043E\u0433\u043E \u0442\u0435\u0440\u043C\u0456\u043D\u0430\u043B\u0430 \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043D\u043E. \u0414\u0456\u0454 \u043E\u0434\u0440\u0430\u0437\u0443.",
+    sidebarEntry: "\u041A\u043D\u043E\u043F\u043A\u0430 \u043D\u0430 \u0431\u0456\u0447\u043D\u0456\u0439 \u043F\u0430\u043D\u0435\u043B\u0456",
+    sidebarEntryHint: "\xAB\u0421\u0442\u0430\u043D\u0434\u0430\u0440\u0442\u043D\u0438\u0439\xBB \u0437\u0430\u043B\u0438\u0448\u0430\u0454 \u043A\u043D\u043E\u043F\u043A\u0443 Remote \u0432\u043D\u0438\u0437\u0443 \u0431\u0456\u0447\u043D\u043E\u0457 \u043F\u0430\u043D\u0435\u043B\u0456. \xAB\u041A\u043E\u043C\u043F\u0430\u043A\u0442\u043D\u0438\u0439\xBB \u043F\u0435\u0440\u0435\u043D\u043E\u0441\u0438\u0442\u044C \u0457\u0457 \u0432 \u0440\u044F\u0434\u043E\u043A \u043E\u0431\u043B\u0456\u043A\u043E\u0432\u043E\u0433\u043E \u0437\u0430\u043F\u0438\u0441\u0443: \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u043E \u2014 \u0437\u043D\u0430\u0447\u043E\u043A, \u0432\u0456\u0434\u0434\u0430\u043B\u0435\u043D\u043E \u2014 \u0456\u043C\u02BC\u044F \u0445\u043E\u0441\u0442\u0430 \u0439 \xAB\u0412\u0438\u0439\u0442\u0438\xBB. \u041F\u0435\u0440\u0435\u043C\u0438\u043A\u0430\u043D\u043D\u044F \u0434\u0456\u0454 \u043E\u0434\u0440\u0430\u0437\u0443.",
+    sidebarEntryStandard: "\u0421\u0442\u0430\u043D\u0434\u0430\u0440\u0442\u043D\u0438\u0439",
+    sidebarEntryCompact: "\u041A\u043E\u043C\u043F\u0430\u043A\u0442\u043D\u0438\u0439",
+    sidebarEntrySaved: "\u0421\u0442\u0438\u043B\u044C \u043A\u043D\u043E\u043F\u043A\u0438 \u043D\u0430 \u0431\u0456\u0447\u043D\u0456\u0439 \u043F\u0430\u043D\u0435\u043B\u0456 \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043D\u043E.",
+    previewOpen: "\u0421\u0435\u0440\u0432\u0456\u0441 \u043F\u043E\u043F\u0435\u0440\u0435\u0434\u043D\u044C\u043E\u0433\u043E \u043F\u0435\u0440\u0435\u0433\u043B\u044F\u0434\u0443",
+    previewPort: "\u041F\u043E\u0440\u0442 \u0445\u043E\u0441\u0442\u0430",
+    previewLocalOnly: "\u0414\u043B\u044F \u043F\u043E\u043F\u0435\u0440\u0435\u0434\u043D\u044C\u043E\u0433\u043E \u043F\u0435\u0440\u0435\u0433\u043B\u044F\u0434\u0443 \u043F\u043E\u0442\u0440\u0456\u0431\u0435\u043D Desktop \u0430\u0431\u043E \u0431\u0440\u0430\u0443\u0437\u0435\u0440, \u043F\u0456\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0439 \u0434\u043E Harness \u043D\u0430 \u0446\u044C\u043E\u043C\u0443 \u043A\u043E\u043C\u043F\u02BC\u044E\u0442\u0435\u0440\u0456.",
+    hostReferenceName: "\u0406\u043C\u02BC\u044F",
+    hostReferenceSystem: "\u0421\u0438\u0441\u0442\u0435\u043C\u0430",
+    hostReferenceDeviceId: "ID \u043F\u0440\u0438\u0441\u0442\u0440\u043E\u044E",
+    hostReferenceInvocation: "\u0412\u0438\u043A\u043B\u0438\u043A",
+    settings: "\u041D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u043D\u043D\u044F",
+    pluginTitle: "DeepSeek Remote",
+    pluginDescription: "\u0412\u0456\u0434\u0434\u0430\u043B\u0435\u043D\u0438\u0439 \u0434\u043E\u0441\u0442\u0443\u043F \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0456 P2P \u0456\u0437 \u043D\u0430\u0441\u043A\u0440\u0456\u0437\u043D\u0438\u043C \u0448\u0438\u0444\u0440\u0443\u0432\u0430\u043D\u043D\u044F\u043C \u0434\u043E DeepSeek Harness, CodeX, Claude Code, Pi \u0442\u0430 \u0456\u043D\u0448\u0438\u0445 \u0440\u043E\u0431\u043E\u0447\u0438\u0445 \u043F\u0440\u043E\u0441\u0442\u043E\u0440\u0456\u0432 \u0456\u0437 \u0432\u0435\u0431\u0443 \u0439 \u043C\u043E\u0431\u0456\u043B\u044C\u043D\u0438\u0445 \u043F\u0440\u0438\u0441\u0442\u0440\u043E\u0457\u0432.",
+    openPluginSettings: "\u041D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u043D\u043D\u044F Remote",
+    expandSettings: "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u0438 \u043D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u043D\u043D\u044F: {name}",
+    collapseSettings: "\u0421\u0445\u043E\u0432\u0430\u0442\u0438 \u043D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u043D\u043D\u044F: {name}",
+    unsaved: "\u041D\u0435 \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043D\u043E",
+    associated: "\u0410\u0432\u0442\u043E\u0440\u0438\u0437\u043E\u0432\u0430\u043D\u043E",
+    authorizationComplete: "\u0410\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0456\u044E \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u043E",
+    loadingSettings: "\u0417\u0430\u0432\u0430\u043D\u0442\u0430\u0436\u0435\u043D\u043D\u044F \u043D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u043D\u044C DeepSeek Remote\u2026",
+    mode: "\u0420\u0435\u0436\u0438\u043C",
+    pluginMode: "\u0420\u0435\u0436\u0438\u043C \u043F\u043B\u0430\u0433\u0456\u043D\u0430",
+    host: "\u0425\u043E\u0441\u0442",
+    client: "\u041A\u043B\u0456\u0454\u043D\u0442",
+    authorization: "\u0410\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0456\u044F",
+    account: "\u041E\u0431\u043B\u0456\u043A\u043E\u0432\u0438\u0439 \u0437\u0430\u043F\u0438\u0441",
+    hostRegistrationCode: "\u041E\u0434\u043D\u043E\u0440\u0430\u0437\u043E\u0432\u0438\u0439 \u043A\u043E\u0434 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0456\u0457 \u043F\u0440\u0438\u0441\u0442\u0440\u043E\u044E",
+    ownedDeviceAuthorization: "\u0412\u043B\u0430\u0441\u043D\u0438\u0439 \u043F\u0440\u0438\u0441\u0442\u0440\u0456\u0439",
+    authorizedOn: "{role} \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u043E\u0432\u0430\u043D\u043E \u043D\u0430 {serverUrl}.",
+    readOnly: "\u0426\u0435\u0439 \u043F\u0440\u043E\u0444\u0456\u043B\u044C DSH \u043D\u0435 \u043C\u0430\u0454 \u043D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u043D\u044C \u043A\u043E\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0447\u0430, \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0438\u0445 \u0434\u043B\u044F \u0437\u0430\u043F\u0438\u0441\u0443.",
+    discard: "\u0412\u0456\u0434\u043A\u0438\u043D\u0443\u0442\u0438",
+    save: "\u0417\u0431\u0435\u0440\u0435\u0433\u0442\u0438",
+    saving: "\u0417\u0431\u0435\u0440\u0435\u0436\u0435\u043D\u043D\u044F\u2026",
+    signOut: "\u0412\u0438\u0439\u0442\u0438",
+    signingOut: "\u0412\u0438\u0445\u0456\u0434\u2026",
+    hostName: "\u0406\u043C\u02BC\u044F \u0445\u043E\u0441\u0442\u0430",
+    deviceId: "ID \u043F\u0440\u0438\u0441\u0442\u0440\u043E\u044E",
+    serverUrl: "URL \u0441\u0435\u0440\u0432\u0435\u0440\u0430",
+    serverUrlHint: "HTTPS-\u0430\u0434\u0440\u0435\u0441\u0430 \u0434\u043B\u044F \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0456\u0457 \u043E\u0431\u043B\u0456\u043A\u043E\u0432\u043E\u0433\u043E \u0437\u0430\u043F\u0438\u0441\u0443 \u0439 \u0437\u0430\u0448\u0438\u0444\u0440\u043E\u0432\u0430\u043D\u043E\u0457 \u0440\u0435\u0442\u0440\u0430\u043D\u0441\u043B\u044F\u0446\u0456\u0457.",
+    serverSaved: "\u0410\u0434\u0440\u0435\u0441\u0443 \u0441\u0435\u0440\u0432\u0435\u0440\u0430 \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043D\u043E. \u041F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0456\u0442\u044C DSH, \u0449\u043E\u0431 \u0437\u0430\u0441\u0442\u043E\u0441\u0443\u0432\u0430\u0442\u0438 \u0457\u0457.",
+    codexRemote: "Codex Remote",
+    codexRemoteHint: "\u041F\u0456\u0434\u043A\u043B\u044E\u0447\u0430\u0442\u0438\u0441\u044F \u0434\u043E \u043F\u0440\u043E\u0454\u043A\u0442\u0456\u0432 CodeX \u043D\u0430 \u0446\u044C\u043E\u043C\u0443 \u0445\u043E\u0441\u0442\u0456.",
+    codexSaved: "\u041D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u043D\u043D\u044F Codex Remote \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043D\u043E. \u041F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0456\u0442\u044C DSH, \u0449\u043E\u0431 \u0437\u0430\u0441\u0442\u043E\u0441\u0443\u0432\u0430\u0442\u0438 \u0439\u043E\u0433\u043E.",
+    cursorRemote: "\u0410\u0434\u0430\u043F\u0442\u0435\u0440 Cursor ACP (\u0435\u043A\u0441\u043F\u0435\u0440\u0438\u043C\u0435\u043D\u0442\u0430\u043B\u044C\u043D\u0438\u0439)",
+    cursorRemoteHint: "\u0423\u0432\u0456\u043C\u043A\u043D\u0443\u0442\u0438 \u0431\u0435\u043A\u0435\u043D\u0434 Cursor `agent acp` \u0434\u043B\u044F \u0448\u043B\u044E\u0437\u0443 Agent ACP. \u041F\u043E\u0442\u0440\u0456\u0431\u0435\u043D \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u0438\u0439 `agent login`. \u041F\u0456\u0441\u043B\u044F \u0437\u043C\u0456\u043D\u0438 \u0446\u044C\u043E\u0433\u043E \u043D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u043D\u043D\u044F \u043F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0456\u0442\u044C DSH.",
+    cursorSaved: "\u041D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u043D\u043D\u044F \u0430\u0434\u0430\u043F\u0442\u0435\u0440\u0430 Cursor ACP \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043D\u043E. \u041F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0456\u0442\u044C DSH, \u0449\u043E\u0431 \u0437\u0430\u0441\u0442\u043E\u0441\u0443\u0432\u0430\u0442\u0438 \u0439\u043E\u0433\u043E.",
+    authorizeFromRemote: "\u0423\u0432\u0456\u0439\u0434\u0456\u0442\u044C, \u0449\u043E\u0431 \u043A\u0435\u0440\u0443\u0432\u0430\u0442\u0438 \u0446\u0438\u043C \u043F\u0440\u0438\u0441\u0442\u0440\u043E\u0454\u043C \u0456 \u043F\u0456\u0434\u043A\u043B\u044E\u0447\u0430\u0442\u0438\u0441\u044F \u0434\u043E \u0441\u0432\u043E\u0457\u0445 \u0432\u0456\u0434\u0434\u0430\u043B\u0435\u043D\u0438\u0445 \u0445\u043E\u0441\u0442\u0456\u0432.",
+    signInAccount: "\u0423\u0432\u0456\u0439\u0442\u0438",
+    saveServerBeforeSignIn: "\u0417\u0431\u0435\u0440\u0435\u0436\u0456\u0442\u044C \u0430\u0434\u0440\u0435\u0441\u0443 \u0441\u0435\u0440\u0432\u0435\u0440\u0430 \u043F\u0435\u0440\u0435\u0434 \u0432\u0445\u043E\u0434\u043E\u043C.",
+    authorizationMethod: "\u0421\u043F\u043E\u0441\u0456\u0431 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0456\u0457",
+    accountPassword: "\u041F\u0430\u0440\u043E\u043B\u044C \u043E\u0431\u043B\u0456\u043A\u043E\u0432\u043E\u0433\u043E \u0437\u0430\u043F\u0438\u0441\u0443",
+    registrationCode: "\u041A\u043E\u0434 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0456\u0457 \u043F\u0440\u0438\u0441\u0442\u0440\u043E\u044E",
+    registrationCodeHint: "\u0417\u0433\u0435\u043D\u0435\u0440\u0443\u0439\u0442\u0435 \u0439\u043E\u0433\u043E \u043F\u0456\u0441\u043B\u044F \u0432\u0445\u043E\u0434\u0443 \u043D\u0430 \u0441\u0430\u0439\u0442\u0456 \u0441\u0435\u0440\u0432\u0435\u0440\u0430. \u0412\u0438\u043A\u043E\u0440\u0438\u0441\u0442\u0430\u0439\u0442\u0435 \u043E\u0434\u0438\u043D \u0440\u0430\u0437, \u0449\u043E\u0431 \u043F\u0456\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u0438 \u0446\u0435\u0439 \u043F\u0440\u0438\u0441\u0442\u0440\u0456\u0439.",
+    accountHint: "\u041E\u0431\u043B\u0456\u043A\u043E\u0432\u0438\u0439 \u0437\u0430\u043F\u0438\u0441 \u043C\u0430\u0454 \u043D\u0430\u043B\u0435\u0436\u0430\u0442\u0438 \u0434\u043E \u0432\u0438\u0431\u0440\u0430\u043D\u043E\u0433\u043E \u0441\u0435\u0440\u0432\u0435\u0440\u0430.",
+    password: "\u041F\u0430\u0440\u043E\u043B\u044C",
+    passwordHint: "\u041B\u0438\u0448\u0435 \u043E\u0431\u043B\u0456\u043A\u043E\u0432\u0456 \u0437\u0430\u043F\u0438\u0441\u0438 DSH Remote Web \u0430\u0431\u043E \u0432\u043B\u0430\u0441\u043D\u043E\u0433\u043E \u0440\u043E\u0437\u0433\u043E\u0440\u043D\u0443\u0442\u043E\u0433\u043E \u0441\u0435\u0440\u0432\u0456\u0441\u0443; \u043D\u0435 \u043E\u0444\u0456\u0446\u0456\u0439\u043D\u0456 \u043E\u0431\u043B\u0456\u043A\u043E\u0432\u0456 \u0437\u0430\u043F\u0438\u0441\u0438 DeepSeek Harness.",
+    modeSavedNeedsAuthorization: "\u0420\u0435\u0436\u0438\u043C \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043D\u043E. \u0410\u0432\u0442\u043E\u0440\u0438\u0437\u0443\u0439\u0442\u0435 {role} \u043F\u0435\u0440\u0435\u0434 \u043F\u0456\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043D\u044F\u043C. \u041D\u0430\u044F\u0432\u043D\u0456 \u0440\u0435\u0454\u0441\u0442\u0440\u0430\u0446\u0456\u0457 \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043D\u043E.",
+    modeSavedReused: "\u0420\u0435\u0436\u0438\u043C \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043D\u043E. \u0412\u0438\u043A\u043E\u0440\u0438\u0441\u0442\u0430\u043D\u043E \u043D\u0430\u044F\u0432\u043D\u0443 \u0440\u0435\u0454\u0441\u0442\u0440\u0430\u0446\u0456\u044E. \u041F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0456\u0442\u044C Harness, \u0449\u043E\u0431 \u0437\u0430\u0441\u0442\u043E\u0441\u0443\u0432\u0430\u0442\u0438.",
+    modeSavedOwnedRole: "\u0420\u0435\u0436\u0438\u043C \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043D\u043E. \u0426\u0435\u0439 \u0432\u043B\u0430\u0441\u043D\u0438\u0439 \u043F\u0440\u0438\u0441\u0442\u0440\u0456\u0439 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u043E\u0432\u0430\u043D\u043E \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u043D\u043E. \u041F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0456\u0442\u044C Harness, \u0449\u043E\u0431 \u0437\u0430\u0441\u0442\u043E\u0441\u0443\u0432\u0430\u0442\u0438.",
+    enterRegistrationCode: "\u0412\u0432\u0435\u0434\u0456\u0442\u044C \u043A\u043E\u0434 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0456\u0457 \u043F\u0440\u0438\u0441\u0442\u0440\u043E\u044E.",
+    enterAccountPassword: "\u0412\u0432\u0435\u0434\u0456\u0442\u044C \u043E\u0431\u043B\u0456\u043A\u043E\u0432\u0438\u0439 \u0437\u0430\u043F\u0438\u0441 \u0456 \u043F\u0430\u0440\u043E\u043B\u044C \u0441\u0435\u0440\u0432\u0435\u0440\u0430.",
+    associationSaved: "\u041F\u0440\u0438\u0432\u02BC\u044F\u0437\u0430\u043D\u043E. \u041F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0456\u0442\u044C Harness, \u0449\u043E\u0431 \u0437\u0430\u0441\u0442\u043E\u0441\u0443\u0432\u0430\u0442\u0438.",
+    signedOut: "\u0412\u0438 \u0432\u0438\u0439\u0448\u043B\u0438 \u0437 \u043E\u0431\u043B\u0456\u043A\u043E\u0432\u043E\u0433\u043E \u0437\u0430\u043F\u0438\u0441\u0443 \u0439 \u0432\u0456\u0434\u043A\u043B\u044E\u0447\u0438\u043B\u0438\u0441\u044F \u0432\u0456\u0434 Remote.",
+    remoteRequestFailed: "\u041F\u043E\u043C\u0438\u043B\u043A\u0430 \u0437\u0430\u043F\u0438\u0442\u0443 \u0432\u0456\u0434\u0434\u0430\u043B\u0435\u043D\u043E\u0433\u043E \u0440\u0435\u0436\u0438\u043C\u0443.",
+    remoteControlUnavailable: "\u041A\u0435\u0440\u0443\u0432\u0430\u043D\u043D\u044F \u043F\u043B\u0430\u0433\u0456\u043D\u043E\u043C Remote \u0449\u0435 \u0437\u0430\u043F\u0443\u0441\u043A\u0430\u0454\u0442\u044C\u0441\u044F. \u042F\u043A\u0449\u043E \u0432\u043E\u043D\u043E \u0437\u0430\u043B\u0438\u0448\u0430\u0454\u0442\u044C\u0441\u044F \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0438\u043C, \u043F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u0442\u0456\u0442\u044C DSH.",
+    identityCorrupted: "\u041B\u043E\u043A\u0430\u043B\u044C\u043D\u0443 \u0456\u0434\u0435\u043D\u0442\u0438\u0447\u043D\u0456\u0441\u0442\u044C Remote \u043F\u043E\u0448\u043A\u043E\u0434\u0436\u0435\u043D\u043E. \u0429\u043E\u0431 \u0432\u0456\u0434\u043D\u043E\u0432\u0438\u0442\u0438 \u0440\u043E\u0431\u043E\u0442\u0443, \u0441\u043A\u0438\u043D\u044C\u0442\u0435 \u0456\u0434\u0435\u043D\u0442\u0438\u0447\u043D\u0456\u0441\u0442\u044C \u0443 \u043D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u043D\u043D\u044F\u0445.",
+    credentialsCorrupted: "\u041B\u043E\u043A\u0430\u043B\u044C\u043D\u0456 \u043E\u0431\u043B\u0456\u043A\u043E\u0432\u0456 \u0434\u0430\u043D\u0456 Remote \u043F\u043E\u0448\u043A\u043E\u0434\u0436\u0435\u043D\u043E. \u0429\u043E\u0431 \u0432\u0456\u0434\u043D\u043E\u0432\u0438\u0442\u0438 \u0440\u043E\u0431\u043E\u0442\u0443, \u0432\u0438\u0439\u0434\u0456\u0442\u044C \u0430\u0431\u043E \u0441\u043A\u0438\u043D\u044C\u0442\u0435 \u0456\u0434\u0435\u043D\u0442\u0438\u0447\u043D\u0456\u0441\u0442\u044C \u0443 \u043D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u043D\u043D\u044F\u0445.",
+    identityLocked: "\u041B\u043E\u043A\u0430\u043B\u044C\u043D\u0443 \u0456\u0434\u0435\u043D\u0442\u0438\u0447\u043D\u0456\u0441\u0442\u044C Remote \u0437\u0430\u0431\u043B\u043E\u043A\u043E\u0432\u0430\u043D\u043E \u0456\u043D\u0448\u0438\u043C \u043F\u0440\u043E\u0446\u0435\u0441\u043E\u043C. \u0417\u0443\u043F\u0438\u043D\u0456\u0442\u044C \u0456\u043D\u0448\u0456 \u0435\u043A\u0437\u0435\u043C\u043F\u043B\u044F\u0440\u0438 DSH \u0456 \u043F\u043E\u0432\u0442\u043E\u0440\u0456\u0442\u044C \u0441\u043F\u0440\u043E\u0431\u0443.",
+    storageConflict: "\u0412\u0438\u044F\u0432\u043B\u0435\u043D\u043E \u043A\u043E\u043D\u0444\u043B\u0456\u043A\u0442\u043D\u0435 \u0430\u0431\u043E \u043D\u0435\u043F\u0435\u0440\u0435\u0432\u0456\u0440\u0435\u043D\u0435 \u0437\u0430\u0441\u0442\u0430\u0440\u0456\u043B\u0435 \u0441\u0445\u043E\u0432\u0438\u0449\u0435 Remote. \u0417\u0443\u043F\u0438\u043D\u0456\u0442\u044C \u0443\u0441\u0456 \u0435\u043A\u0437\u0435\u043C\u043F\u043B\u044F\u0440\u0438 DSH \u0456 \u043F\u0435\u0440\u0435\u0432\u0456\u0440\u0442\u0435 \u0439\u043E\u0433\u043E \u0432\u0440\u0443\u0447\u043D\u0443.",
+    storageConflictEntry: "\u0412\u0438\u044F\u0432\u043B\u0435\u043D\u043E \u043A\u043E\u043D\u0444\u043B\u0456\u043A\u0442\u043D\u0435 \u0430\u0431\u043E \u043D\u0435\u043F\u0435\u0440\u0435\u0432\u0456\u0440\u0435\u043D\u0435 \u0437\u0430\u0441\u0442\u0430\u0440\u0456\u043B\u0435 \u0441\u0445\u043E\u0432\u0438\u0449\u0435 Remote. \u0417\u043D\u0430\u0439\u0434\u0435\u043D\u043E \u043D\u0435\u043E\u0447\u0456\u043A\u0443\u0432\u0430\u043D\u0438\u0439 \u0437\u0430\u043F\u0438\u0441 \xAB{name}\xBB. \u0417\u0443\u043F\u0438\u043D\u0456\u0442\u044C \u0443\u0441\u0456 \u0435\u043A\u0437\u0435\u043C\u043F\u043B\u044F\u0440\u0438 DSH \u0456 \u043F\u0435\u0440\u0435\u0432\u0456\u0440\u0442\u0435 \u0439\u043E\u0433\u043E \u0432\u0440\u0443\u0447\u043D\u0443.",
+    retryStartup: "\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0438 \u0437\u0430\u043F\u0443\u0441\u043A Remote",
+    retryStartupSuccess: "Remote \u0437\u0430\u043F\u0443\u0449\u0435\u043D\u043E.",
+    resetIdentity: "\u0421\u043A\u0438\u043D\u0443\u0442\u0438 \u0456\u0434\u0435\u043D\u0442\u0438\u0447\u043D\u0456\u0441\u0442\u044C Remote",
+    resetIdentityHint: "\u041F\u043E\u0432\u0442\u043E\u0440\u043D\u043E \u0441\u0442\u0432\u043E\u0440\u0438\u0442\u0438 \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u0456 \u043F\u0430\u0440\u0438 \u043A\u043B\u044E\u0447\u0456\u0432 \u043F\u0440\u0438\u0441\u0442\u0440\u043E\u044E, \u044F\u043A\u0449\u043E \u0457\u0445 \u043F\u043E\u0448\u043A\u043E\u0434\u0436\u0435\u043D\u043E. \u041F\u043E\u0442\u0440\u0456\u0431\u043D\u043E \u0431\u0443\u0434\u0435 \u0443\u0432\u0456\u0439\u0442\u0438 \u0437\u043D\u043E\u0432\u0443.",
+    resetIdentityConfirm: "\u0421\u043F\u0440\u0430\u0432\u0434\u0456 \u0441\u043A\u0438\u043D\u0443\u0442\u0438 \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u0443 \u0456\u0434\u0435\u043D\u0442\u0438\u0447\u043D\u0456\u0441\u0442\u044C Remote? \u041F\u043E\u0442\u0440\u0456\u0431\u043D\u043E \u0431\u0443\u0434\u0435 \u0443\u0432\u0456\u0439\u0442\u0438 \u0437\u043D\u043E\u0432\u0443.",
+    resetIdentitySuccess: "\u0406\u0434\u0435\u043D\u0442\u0438\u0447\u043D\u0456\u0441\u0442\u044C Remote \u0441\u043A\u0438\u043D\u0443\u0442\u043E.",
+    resettingAction: "\u0421\u043A\u0438\u0434\u0430\u043D\u043D\u044F\u2026",
+    remoteStartupFailed: "\u041D\u0435 \u0432\u0434\u0430\u043B\u043E\u0441\u044F \u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0438 \u043F\u043B\u0430\u0433\u0456\u043D Remote.",
+    switchTarget: "\u041F\u0435\u0440\u0435\u043C\u043A\u043D\u0443\u0442\u0438 \u0446\u0456\u043B\u044C Harness: \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u0430 / \u0432\u0456\u0434\u0434\u0430\u043B\u0435\u043D\u0430",
+    harnessTarget: "\u0426\u0456\u043B\u044C Harness",
+    close: "\u0417\u0430\u043A\u0440\u0438\u0442\u0438",
+    refreshRemote: "\u041E\u043D\u043E\u0432\u0438\u0442\u0438 \u0432\u0456\u0434\u0434\u0430\u043B\u0435\u043D\u0456 \u0445\u043E\u0441\u0442\u0438",
+    refreshRemoteShort: "\u041E\u043D\u043E\u0432\u0438\u0442\u0438",
+    local: "\u041B\u043E\u043A\u0430\u043B\u044C\u043D\u043E",
+    remoteTarget: "\u0412\u0456\u0434\u0434\u0430\u043B\u0435\u043D\u043E \xB7 {name}",
+    remoteHostMention: "Remote \xB7 {platform}",
+    thisMachineLocal: "\u0426\u0435\u0439 \u043A\u043E\u043C\u043F\u02BC\u044E\u0442\u0435\u0440 (\u043B\u043E\u043A\u0430\u043B\u044C\u043D\u043E)",
+    currentDevice: "\u041F\u043E\u0442\u043E\u0447\u043D\u0438\u0439 \u043F\u0440\u0438\u0441\u0442\u0440\u0456\u0439",
+    noRemoteHosts: "\u0417\u0430\u0440\u0430\u0437 \u043D\u0435\u043C\u0430\u0454 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0438\u0445 \u0432\u0456\u0434\u0434\u0430\u043B\u0435\u043D\u0438\u0445 \u0445\u043E\u0441\u0442\u0456\u0432.",
+    online: "\u0423 \u043C\u0435\u0440\u0435\u0436\u0456",
+    offline: "\u041D\u0435 \u0432 \u043C\u0435\u0440\u0435\u0436\u0456",
+    thisMachineHost: "\u0426\u0435\u0439 \u043A\u043E\u043C\u043F\u02BC\u044E\u0442\u0435\u0440 \u044F\u043A \u0445\u043E\u0441\u0442 Remote",
+    connected: "\u041F\u0456\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043E",
+    connectedAs: "\u041F\u0456\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043E \u044F\u043A {account}",
+    connection: "\u0417\u02BC\u0454\u0434\u043D\u0430\u043D\u043D\u044F",
+    checkingConnection: "\u041F\u0435\u0440\u0435\u0432\u0456\u0440\u043A\u0430 \u0437\u02BC\u0454\u0434\u043D\u0430\u043D\u043D\u044F\u2026",
+    connecting: "\u041F\u0456\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043D\u044F",
+    reconnecting: "\u041F\u0435\u0440\u0435\u043F\u0456\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043D\u044F",
+    lastActive: "\u041E\u0441\u0442\u0430\u043D\u043D\u044F \u0430\u043A\u0442\u0438\u0432\u043D\u0456\u0441\u0442\u044C: {time}",
+    neverConnected: "\u0429\u0435 \u043D\u0435 \u0431\u0443\u043B\u043E \u0436\u043E\u0434\u043D\u043E\u0433\u043E \u0443\u0441\u043F\u0456\u0448\u043D\u043E\u0433\u043E \u043F\u0456\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043D\u044F.",
+    reconnect: "\u041F\u0435\u0440\u0435\u043F\u0456\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u0438\u0441\u044F",
+    reconnectingAction: "\u041F\u0435\u0440\u0435\u043F\u0456\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043D\u044F\u2026",
+    reconnectStarted: "\u0417\u0430\u043F\u0438\u0442 \u043D\u0430 \u043F\u0435\u0440\u0435\u043F\u0456\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043D\u044F \u043D\u0430\u0434\u0456\u0441\u043B\u0430\u043D\u043E.",
+    connectionAuthorizationExpired: "\u0422\u0435\u0440\u043C\u0456\u043D \u0434\u0456\u0457 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0456\u0457 \u043C\u0438\u043D\u0443\u0432. \u0412\u0438\u0439\u0434\u0456\u0442\u044C \u0456 \u0437\u043D\u043E\u0432\u0443 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0443\u0439\u0442\u0435 \u0446\u0435\u0439 \u0445\u043E\u0441\u0442.",
+    connectionReplaced: "\u0406\u043D\u0448\u0438\u0439 \u0435\u043A\u0437\u0435\u043C\u043F\u043B\u044F\u0440 \u0432\u0438\u043A\u043E\u0440\u0438\u0441\u0442\u043E\u0432\u0443\u0454 \u0456\u0434\u0435\u043D\u0442\u0438\u0447\u043D\u0456\u0441\u0442\u044C \u0446\u044C\u043E\u0433\u043E \u0445\u043E\u0441\u0442\u0430. \u041F\u0435\u0440\u0448 \u043D\u0456\u0436 \u043F\u0435\u0440\u0435\u043F\u0456\u0434\u043A\u043B\u044E\u0447\u0430\u0442\u0438\u0441\u044F, \u0437\u0443\u043F\u0438\u043D\u0456\u0442\u044C \u0439\u043E\u0433\u043E \u0430\u0431\u043E \u0432\u0438\u043A\u043E\u0440\u0438\u0441\u0442\u0430\u0439\u0442\u0435 \u043E\u043A\u0440\u0435\u043C\u0438\u0439 DSH_HOME.",
+    connectionCredentialsBusy: "\u041E\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u044F \u043E\u0431\u043B\u0456\u043A\u043E\u0432\u0438\u0445 \u0434\u0430\u043D\u0438\u0445 \u0437\u0430\u0439\u043D\u044F\u0442\u0435. \u0425\u043E\u0441\u0442 \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C \u0441\u043F\u0440\u043E\u0431\u0443. \u0412\u0438\u0434\u0430\u043B\u044F\u0439\u0442\u0435 \u0437\u0430\u0441\u0442\u0430\u0440\u0456\u043B\u0435 \u0431\u043B\u043E\u043A\u0443\u0432\u0430\u043D\u043D\u044F \u043E\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u044F \u043B\u0438\u0448\u0435 \u043F\u0456\u0441\u043B\u044F \u0437\u0443\u043F\u0438\u043D\u043A\u0438 \u0432\u0441\u0456\u0445 \u0435\u043A\u0437\u0435\u043C\u043F\u043B\u044F\u0440\u0456\u0432.",
+    connectionDeviceRevoked: "\u0426\u0435\u0439 \u0445\u043E\u0441\u0442 \u0432\u0456\u0434\u043A\u043B\u0438\u043A\u0430\u043D\u043E \u043D\u0430 \u0441\u0435\u0440\u0432\u0435\u0440\u0456. \u0412\u0438\u0439\u0434\u0456\u0442\u044C \u0456 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0443\u0439\u0442\u0435 \u0439\u043E\u0433\u043E \u0437\u043D\u043E\u0432\u0443.",
+    connectionOwnershipRequired: "\u0421\u0435\u0440\u0432\u0435\u0440 \u0431\u0456\u043B\u044C\u0448\u0435 \u043D\u0435 \u0440\u043E\u0437\u043F\u0456\u0437\u043D\u0430\u0454 \u0446\u0435\u0439 \u0445\u043E\u0441\u0442 \u044F\u043A \u0432\u043B\u0430\u0441\u043D\u0438\u0439 \u043F\u0440\u0438\u0441\u0442\u0440\u0456\u0439.",
+    connectionRateLimited: "\u0421\u0435\u0440\u0432\u0435\u0440 \u043E\u0442\u0440\u0438\u043C\u0443\u0454 \u0437\u0430\u0431\u0430\u0433\u0430\u0442\u043E \u0437\u0430\u043F\u0438\u0442\u0456\u0432. \u0410\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u043D\u0456 \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u0456 \u0441\u043F\u0440\u043E\u0431\u0438 \u0442\u0440\u0438\u0432\u0430\u044E\u0442\u044C.",
+    connectionVersionMismatch: "\u0412\u0435\u0440\u0441\u0456\u0457 \u043F\u0440\u043E\u0442\u043E\u043A\u043E\u043B\u0443 \u043F\u043B\u0430\u0433\u0456\u043D\u0430 \u0439 \u0441\u0435\u0440\u0432\u0435\u0440\u0430 \u043D\u0435\u0441\u0443\u043C\u0456\u0441\u043D\u0456.",
+    connectionInvalidResponse: "\u0421\u0435\u0440\u0432\u0435\u0440 \u043F\u043E\u0432\u0435\u0440\u043D\u0443\u0432 \u043D\u0435\u0434\u0456\u0439\u0441\u043D\u0435 \u043A\u0435\u0440\u0443\u0432\u0430\u043B\u044C\u043D\u0435 \u043F\u043E\u0432\u0456\u0434\u043E\u043C\u043B\u0435\u043D\u043D\u044F.",
+    connectionReachability: "\u041D\u0435 \u0432\u0434\u0430\u0454\u0442\u044C\u0441\u044F \u0437\u0432\u02BC\u044F\u0437\u0430\u0442\u0438\u0441\u044F \u0456\u0437 \u0441\u0435\u0440\u0432\u0435\u0440\u043E\u043C. \u041F\u0435\u0440\u0435\u0432\u0456\u0440\u0442\u0435 \u043C\u0435\u0440\u0435\u0436\u0443 \u0442\u0430 \u0430\u0434\u0440\u0435\u0441\u0443 \u0441\u0435\u0440\u0432\u0435\u0440\u0430.",
+    connectionUnexpected: "\u0417\u02BC\u0454\u0434\u043D\u0430\u043D\u043D\u044F \u043D\u0435\u043E\u0447\u0456\u043A\u0443\u0432\u0430\u043D\u043E \u043F\u0435\u0440\u0435\u0440\u0432\u0430\u043B\u043E\u0441\u044F. \u0410\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u043D\u0456 \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u0456 \u0441\u043F\u0440\u043E\u0431\u0438 \u0442\u0440\u0438\u0432\u0430\u044E\u0442\u044C.",
+    hostSignInHint: "\u0423\u0432\u0456\u0439\u0434\u0456\u0442\u044C, \u0449\u043E\u0431 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0443\u0432\u0430\u0442\u0438 \u0446\u0435\u0439 \u0445\u043E\u0441\u0442 \u043D\u0430 \u0432\u0438\u0431\u0440\u0430\u043D\u043E\u043C\u0443 \u0441\u0435\u0440\u0432\u0435\u0440\u0456.",
+    checkingHost: "\u041F\u0435\u0440\u0435\u0432\u0456\u0440\u043A\u0430 \u0440\u0435\u0454\u0441\u0442\u0440\u0430\u0446\u0456\u0457 \u0445\u043E\u0441\u0442\u0430\u2026",
+    hostUnavailable: "\u0425\u043E\u0441\u0442 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0438\u0439: {error}",
+    serverAccountEmail: "\u0415\u043B. \u043F\u043E\u0448\u0442\u0430 \u043E\u0431\u043B\u0456\u043A\u043E\u0432\u043E\u0433\u043E \u0437\u0430\u043F\u0438\u0441\u0443 \u0441\u0435\u0440\u0432\u0435\u0440\u0430",
+    serverAccountPassword: "\u041F\u0430\u0440\u043E\u043B\u044C \u043E\u0431\u043B\u0456\u043A\u043E\u0432\u043E\u0433\u043E \u0437\u0430\u043F\u0438\u0441\u0443 \u0441\u0435\u0440\u0432\u0435\u0440\u0430",
+    signInRegisterHost: "\u0423\u0432\u0456\u0439\u0442\u0438 \u0439 \u0437\u0430\u0440\u0435\u0454\u0441\u0442\u0440\u0443\u0432\u0430\u0442\u0438 \u0445\u043E\u0441\u0442",
+    signingIn: "\u0412\u0445\u0456\u0434\u2026",
+    loginWaitingAuthorization: "\u041E\u0447\u0456\u043A\u0443\u0432\u0430\u043D\u043D\u044F \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0456\u0457",
+    loginLoadingDevices: "\u0412\u0445\u0456\u0434 \u0432\u0438\u043A\u043E\u043D\u0430\u043D\u043E. \u0417\u0430\u0432\u0430\u043D\u0442\u0430\u0436\u0435\u043D\u043D\u044F \u043F\u0440\u0438\u0441\u0442\u0440\u043E\u0457\u0432",
+    loginLoadingSettings: "\u0412\u0445\u0456\u0434 \u0432\u0438\u043A\u043E\u043D\u0430\u043D\u043E. \u0417\u0430\u0432\u0430\u043D\u0442\u0430\u0436\u0435\u043D\u043D\u044F \u043D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u043D\u044C",
+    useRegistrationCode: "\u0412\u0438\u043A\u043E\u0440\u0438\u0441\u0442\u0430\u0442\u0438 \u043A\u043E\u0434 \u043F\u0456\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043D\u044F",
+    registering: "\u0420\u0435\u0454\u0441\u0442\u0440\u0430\u0446\u0456\u044F\u2026",
+    remoteEntry: "Remote",
+    remoteTitle: "DS Harness Remote \u2014 \u0432\u0456\u0434\u0434\u0430\u043B\u0435\u043D\u0438\u0439 \u0440\u043E\u0431\u043E\u0447\u0438\u0439 \u043F\u0440\u043E\u0441\u0442\u0456\u0440",
+    remoteDescription: "\u0412\u0438\u0431\u0435\u0440\u0456\u0442\u044C \u043E\u0434\u0438\u043D \u0437\u0456 \u0441\u0432\u043E\u0457\u0445 \u0445\u043E\u0441\u0442\u0456\u0432, \u0430 \u043F\u043E\u0442\u0456\u043C \u0440\u043E\u0431\u043E\u0447\u0438\u0439 \u043A\u0430\u0442\u0430\u043B\u043E\u0433. \u0406\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441 Harness \u0437\u0430\u043B\u0438\u0448\u0430\u0454\u0442\u044C\u0441\u044F \u043D\u0430 \u0446\u044C\u043E\u043C\u0443 \u043F\u0440\u0438\u0441\u0442\u0440\u043E\u0457.",
+    starProject: "\u041F\u0440\u043E\u0454\u043A\u0442 \u0437 \u0432\u0456\u0434\u043A\u0440\u0438\u0442\u0438\u043C \u043A\u043E\u0434\u043E\u043C \u2014 \u0431\u0443\u0434\u0435\u043C\u043E \u0440\u0430\u0434\u0456 \u0432\u0430\u0448\u0438\u043C \u0437\u0456\u0440\u043A\u0430\u043C~",
+    chooseHost: "\u0425\u043E\u0441\u0442",
+    manageHosts: "\u041A\u0435\u0440\u0443\u0432\u0430\u0442\u0438 \u0445\u043E\u0441\u0442\u0430\u043C\u0438",
+    chooseDirectory: "\u0420\u043E\u0431\u043E\u0447\u0438\u0439 \u043A\u0430\u0442\u0430\u043B\u043E\u0433",
+    selectHostHint: "\u0412\u0438\u0431\u0435\u0440\u0456\u0442\u044C \u0445\u043E\u0441\u0442 \u0443 \u043C\u0435\u0440\u0435\u0436\u0456, \u0449\u043E\u0431 \u043F\u0435\u0440\u0435\u0433\u043B\u044F\u043D\u0443\u0442\u0438 \u0439\u043E\u0433\u043E \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0438.",
+    emptyDirectory: "\u0423 \u0446\u044C\u043E\u043C\u0443 \u043A\u0430\u0442\u0430\u043B\u043E\u0437\u0456 \u043D\u0435\u043C\u0430\u0454 \u0432\u0438\u0434\u0438\u043C\u0438\u0445 \u043F\u0456\u0434\u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0456\u0432.",
+    openWorkspace: "\u0412\u0456\u0434\u043A\u0440\u0438\u0442\u0438 \u0440\u043E\u0431\u043E\u0447\u0438\u0439 \u043F\u0440\u043E\u0441\u0442\u0456\u0440",
+    openingWorkspace: "\u0412\u0456\u0434\u043A\u0440\u0438\u0442\u0442\u044F\u2026",
+    loadingDirectory: "\u0417\u0430\u0432\u0430\u043D\u0442\u0430\u0436\u0435\u043D\u043D\u044F \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0456\u0432\u2026",
+    remoteProgressCheckingHost: "\u041F\u0435\u0440\u0435\u0432\u0456\u0440\u043A\u0430 \u0445\u043E\u0441\u0442\u0430",
+    remoteProgressCheckingHostDetail: "\u041F\u043E\u0448\u0443\u043A \u0432\u0438\u0431\u0440\u0430\u043D\u043E\u0433\u043E \u043F\u0440\u0438\u0441\u0442\u0440\u043E\u044E \u0439 \u043F\u0435\u0440\u0435\u0432\u0456\u0440\u043A\u0430, \u0447\u0438 \u0432\u0456\u043D \u0443 \u043C\u0435\u0440\u0435\u0436\u0456.",
+    remoteProgressAuthorizingPeer: "\u041F\u0435\u0440\u0435\u0432\u0456\u0440\u043A\u0430 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0456\u0457",
+    remoteProgressAuthorizingPeerDetail: "\u041F\u0456\u0434\u0442\u0432\u0435\u0440\u0434\u0436\u0435\u043D\u043D\u044F \u043D\u0430\u043B\u0435\u0436\u043D\u043E\u0441\u0442\u0456 \u0434\u043E \u043E\u0431\u043B\u0456\u043A\u043E\u0432\u043E\u0433\u043E \u0437\u0430\u043F\u0438\u0441\u0443 \u0442\u0430 \u0437\u0430\u043A\u0440\u0456\u043F\u043B\u0435\u043D\u043E\u0457 \u0456\u0434\u0435\u043D\u0442\u0438\u0447\u043D\u043E\u0441\u0442\u0456 \u0445\u043E\u0441\u0442\u0430.",
+    remoteProgressOpeningChannel: "\u0412\u0456\u0434\u043A\u0440\u0438\u0442\u0442\u044F \u0437\u0430\u0448\u0438\u0444\u0440\u043E\u0432\u0430\u043D\u043E\u0433\u043E \u043A\u0430\u043D\u0430\u043B\u0443",
+    remoteProgressOpeningChannelDetail: "\u0421\u043F\u0440\u043E\u0431\u0430 LAN, P2P, TURN, \u0430 \u0437\u0430 \u043F\u043E\u0442\u0440\u0435\u0431\u0438 \u2014 Relay.",
+    remoteProgressProbeLan: "\u041F\u0435\u0440\u0435\u0432\u0456\u0440\u043A\u0430 LAN",
+    remoteProgressProbeLanDetail: "\u041F\u0435\u0440\u0435\u0432\u0456\u0440\u043A\u0430, \u0447\u0438 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0438\u0439 \u0445\u043E\u0441\u0442 \u0443 \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u0456\u0439 \u043C\u0435\u0440\u0435\u0436\u0456.",
+    remoteProgressProbeP2p: "\u041F\u0435\u0440\u0435\u0432\u0456\u0440\u043A\u0430 P2P",
+    remoteProgressProbeP2pDetail: "\u041F\u0435\u0440\u0435\u0432\u0456\u0440\u043A\u0430 \u043A\u0430\u043D\u0434\u0438\u0434\u0430\u0442\u0456\u0432 \u043F\u0440\u044F\u043C\u043E\u0433\u043E \u0437\u02BC\u0454\u0434\u043D\u0430\u043D\u043D\u044F \u0447\u0435\u0440\u0435\u0437 \u0456\u043D\u0442\u0435\u0440\u043D\u0435\u0442 \u043C\u0456\u0436 \u0446\u0438\u043C \u043F\u0440\u0438\u0441\u0442\u0440\u043E\u0454\u043C \u0456 \u0445\u043E\u0441\u0442\u043E\u043C.",
+    remoteProgressProbeTurn: "\u041F\u0435\u0440\u0435\u0432\u0456\u0440\u043A\u0430 TURN",
+    remoteProgressProbeTurnDetail: "\u041F\u0435\u0440\u0435\u0432\u0456\u0440\u043A\u0430 \u0448\u043B\u044F\u0445\u0443 \u0440\u0435\u0442\u0440\u0430\u043D\u0441\u043B\u044F\u0446\u0456\u0457 TURN \u0434\u043B\u044F \u043C\u0435\u0440\u0435\u0436 \u0437 \u043E\u0431\u043C\u0435\u0436\u0435\u043D\u043D\u044F\u043C\u0438.",
+    remoteProgressProbeRelay: "\u041F\u0456\u0434\u0433\u043E\u0442\u043E\u0432\u043A\u0430 Relay",
+    remoteProgressProbeRelayDetail: "\u041F\u0456\u0434\u0433\u043E\u0442\u043E\u0432\u043A\u0430 \u0440\u0435\u0437\u0435\u0440\u0432\u043D\u043E\u0433\u043E \u0437\u0430\u0448\u0438\u0444\u0440\u043E\u0432\u0430\u043D\u043E\u0433\u043E Relay \u0447\u0435\u0440\u0435\u0437 \u0441\u0435\u0440\u0432\u0435\u0440, \u044F\u043A\u0449\u043E \u043F\u0440\u044F\u043C\u0456 \u0448\u043B\u044F\u0445\u0438 \u043D\u0435 \u0432\u0456\u0434\u043A\u0440\u0438\u044E\u0442\u044C\u0441\u044F.",
+    remoteProgressTryingPrefix: "\u0421\u043F\u0440\u043E\u0431\u0430 ",
+    remoteProgressUsingPrefix: "\u0412\u0438\u043A\u043E\u0440\u0438\u0441\u0442\u043E\u0432\u0443\u0454\u0442\u044C\u0441\u044F ",
+    remoteProgressLoadingWorkspaces: "\u0417\u0430\u0432\u0430\u043D\u0442\u0430\u0436\u0435\u043D\u043D\u044F \u0440\u043E\u0431\u043E\u0447\u0438\u0445 \u043F\u0440\u043E\u0441\u0442\u043E\u0440\u0456\u0432",
+    remoteProgressLoadingWorkspacesDetail: "\u0427\u0438\u0442\u0430\u043D\u043D\u044F \u0441\u043F\u0438\u0441\u043A\u0443 \u0432\u0456\u0434\u0434\u0430\u043B\u0435\u043D\u0438\u0445 \u0440\u043E\u0431\u043E\u0447\u0438\u0445 \u043F\u0440\u043E\u0441\u0442\u043E\u0440\u0456\u0432 Harness \u0447\u0435\u0440\u0435\u0437 \u0442\u0443\u043D\u0435\u043B\u044C.",
+    remoteProgressSwitchingWorkspace: "\u041F\u0435\u0440\u0435\u043C\u0438\u043A\u0430\u043D\u043D\u044F \u0456\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441\u0443",
+    remoteProgressSwitchingWorkspaceDetail: "\u041F\u0435\u0440\u0435\u0434\u0430\u0432\u0430\u043D\u043D\u044F \u0432\u0456\u0434\u0434\u0430\u043B\u0435\u043D\u043E\u0433\u043E \u0440\u043E\u0431\u043E\u0447\u043E\u0433\u043E \u043F\u0440\u043E\u0441\u0442\u043E\u0440\u0443 \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u043E\u043C\u0443 \u0456\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441\u0443 Harness.",
+    remoteProgressReady: "\u0413\u043E\u0442\u043E\u0432\u043E",
+    remoteProgressReadyDetail: "\u0412\u0456\u0434\u0434\u0430\u043B\u0435\u043D\u0438\u0439 \u0445\u043E\u0441\u0442 \u043F\u0456\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043E, \u0437\u02BC\u0454\u0434\u043D\u0430\u043D\u043D\u044F \u0437\u0430\u0448\u0438\u0444\u0440\u043E\u0432\u0430\u043D\u0435.",
+    backToHosts: "\u0412\u0438\u0431\u0440\u0430\u0442\u0438 \u0456\u043D\u0448\u0438\u0439 \u0445\u043E\u0441\u0442",
+    currentDirectory: "\u0412\u0438\u0431\u0440\u0430\u043D\u0438\u0439 \u043A\u0430\u0442\u0430\u043B\u043E\u0433",
+    directoryTruncated: "\u0412\u0434\u0430\u043B\u043E\u0441\u044F \u043F\u043E\u043A\u0430\u0437\u0430\u0442\u0438 \u043B\u0438\u0448\u0435 \u0447\u0430\u0441\u0442\u0438\u043D\u0443 \u0446\u044C\u043E\u0433\u043E \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0443.",
+    pluginVersion: "\u041F\u043B\u0430\u0433\u0456\u043D {version}",
+    harnessVersion: "Harness {version}",
+    updateAvailable: "\u2B06 \u0414\u043E\u0441\u0442\u0443\u043F\u043D\u0430 \u0432\u0435\u0440\u0441\u0456\u044F Remote {latest} (\u043F\u043E\u0442\u043E\u0447\u043D\u0430 {current})",
+    updateShort: "\u2B06 {version}",
+    updateAvailableShort: "\u0414\u043E\u0441\u0442\u0443\u043F\u043D\u0430 {version}",
+    pluginUpdating: "\u041E\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u044F\u2026",
+    pluginUpdateReload: "\u041E\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u044F. Remote \u0431\u0443\u0434\u0435 \u043F\u0435\u0440\u0435\u0437\u0430\u0432\u0430\u043D\u0442\u0430\u0436\u0435\u043D\u043E",
+    pluginUpdateFailed: "\u041D\u0435 \u0432\u0434\u0430\u043B\u043E\u0441\u044F \u043E\u043D\u043E\u0432\u0438\u0442\u0438",
+    pluginUpdateUnknown: "\u0421\u0442\u0430\u043D \u043E\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u044F \u043D\u0435\u0432\u0456\u0434\u043E\u043C\u0438\u0439, \u043D\u0430\u0442\u0438\u0441\u043D\u0456\u0442\u044C, \u0449\u043E\u0431 \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0438",
+    pluginUpdateManual: "\u0412\u0438\u043F\u0443\u0441\u043A\u0438",
+    updateBadge: "\u0414\u043E\u0441\u0442\u0443\u043F\u043D\u0435 \u043E\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u044F",
+    updateAvailableTag: "\u2B06 \u0414\u043E\u0441\u0442\u0443\u043F\u043D\u0435 \u043E\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u044F",
+    existingWorkspaces: "\u0420\u043E\u0431\u043E\u0447\u0456 \u043F\u0440\u043E\u0441\u0442\u043E\u0440\u0438 DSH",
+    remotePathPlaceholder: "/home/user/project",
+    remotePathHint: "\u0412\u0432\u0435\u0434\u0456\u0442\u044C \u0430\u0431\u0441\u043E\u043B\u044E\u0442\u043D\u0438\u0439 \u0448\u043B\u044F\u0445 \u0434\u043E \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0443 \u043D\u0430 \u0432\u0438\u0431\u0440\u0430\u043D\u043E\u043C\u0443 \u0445\u043E\u0441\u0442\u0456.",
+    noRemoteWorkspaces: "\u0412\u0456\u0434\u0434\u0430\u043B\u0435\u043D\u0438\u0445 \u0440\u043E\u0431\u043E\u0447\u0438\u0445 \u043F\u0440\u043E\u0441\u0442\u043E\u0440\u0456\u0432 \u0449\u0435 \u043D\u0435\u043C\u0430\u0454. \u0414\u043E\u0434\u0430\u0439\u0442\u0435 \u0457\u0445 \u043A\u043D\u043E\u043F\u043A\u043E\u044E +.",
+    activeRemote: "{name}",
+    exitRemote: "\u0412\u0438\u0439\u0442\u0438",
+    addRemoteWorkspace: "\u0414\u043E\u0434\u0430\u0442\u0438 \u0432\u0456\u0434\u0434\u0430\u043B\u0435\u043D\u0438\u0439 \u0440\u043E\u0431\u043E\u0447\u0438\u0439 \u043F\u0440\u043E\u0441\u0442\u0456\u0440",
+    addCodexWorkspace: "\u0414\u043E\u0434\u0430\u0442\u0438 \u0440\u043E\u0431\u043E\u0447\u0438\u0439 \u043F\u0440\u043E\u0441\u0442\u0456\u0440 CodeX",
+    addCursorWorkspace: "\u0414\u043E\u0434\u0430\u0442\u0438 \u0440\u043E\u0431\u043E\u0447\u0438\u0439 \u043F\u0440\u043E\u0441\u0442\u0456\u0440 Cursor",
+    addAntigravityWorkspace: "\u0414\u043E\u0434\u0430\u0442\u0438 \u0440\u043E\u0431\u043E\u0447\u0438\u0439 \u043F\u0440\u043E\u0441\u0442\u0456\u0440 Antigravity",
+    addPiWorkspace: "\u0414\u043E\u0434\u0430\u0442\u0438 \u0440\u043E\u0431\u043E\u0447\u0438\u0439 \u043F\u0440\u043E\u0441\u0442\u0456\u0440 Pi",
+    addOpencodeWorkspace: "\u0414\u043E\u0434\u0430\u0442\u0438 \u0440\u043E\u0431\u043E\u0447\u0438\u0439 \u043F\u0440\u043E\u0441\u0442\u0456\u0440 OpenCode",
+    addClaudeWorkspace: "\u0414\u043E\u0434\u0430\u0442\u0438 \u0440\u043E\u0431\u043E\u0447\u0438\u0439 \u043F\u0440\u043E\u0441\u0442\u0456\u0440 Claude",
+    addHermesWorkspace: "\u0414\u043E\u0434\u0430\u0442\u0438 \u0440\u043E\u0431\u043E\u0447\u0438\u0439 \u043F\u0440\u043E\u0441\u0442\u0456\u0440 Hermes",
+    noCodexWorkspaces: "\u0420\u043E\u0431\u043E\u0447\u0438\u0445 \u043F\u0440\u043E\u0441\u0442\u043E\u0440\u0456\u0432 CodeX \u0449\u0435 \u043D\u0435\u043C\u0430\u0454.",
+    noCursorWorkspaces: "\u0420\u043E\u0431\u043E\u0447\u0438\u0445 \u043F\u0440\u043E\u0441\u0442\u043E\u0440\u0456\u0432 Cursor \u0449\u0435 \u043D\u0435\u043C\u0430\u0454. \u0414\u043E\u0434\u0430\u0439\u0442\u0435 \u043A\u0430\u0442\u0430\u043B\u043E\u0433 \u043F\u0440\u043E\u0454\u043A\u0442\u0443, \u0449\u043E\u0431 \u043F\u043E\u0447\u0430\u0442\u0438.",
+    noAntigravityWorkspaces: "\u0420\u043E\u0431\u043E\u0447\u0438\u0445 \u043F\u0440\u043E\u0441\u0442\u043E\u0440\u0456\u0432 Antigravity \u0449\u0435 \u043D\u0435\u043C\u0430\u0454. \u0414\u043E\u0434\u0430\u0439\u0442\u0435 \u043A\u0430\u0442\u0430\u043B\u043E\u0433 \u043F\u0440\u043E\u0454\u043A\u0442\u0443, \u0449\u043E\u0431 \u043F\u043E\u0447\u0430\u0442\u0438.",
+    noPiWorkspaces: "\u0420\u043E\u0431\u043E\u0447\u0438\u0445 \u043F\u0440\u043E\u0441\u0442\u043E\u0440\u0456\u0432 Pi \u0449\u0435 \u043D\u0435\u043C\u0430\u0454. \u0414\u043E\u0434\u0430\u0439\u0442\u0435 \u043A\u0430\u0442\u0430\u043B\u043E\u0433 \u043F\u0440\u043E\u0454\u043A\u0442\u0443, \u0449\u043E\u0431 \u043F\u043E\u0447\u0430\u0442\u0438.",
+    noOpencodeWorkspaces: "\u0420\u043E\u0431\u043E\u0447\u0438\u0445 \u043F\u0440\u043E\u0441\u0442\u043E\u0440\u0456\u0432 OpenCode \u0449\u0435 \u043D\u0435\u043C\u0430\u0454. \u0414\u043E\u0434\u0430\u0439\u0442\u0435 \u043A\u0430\u0442\u0430\u043B\u043E\u0433 \u043F\u0440\u043E\u0454\u043A\u0442\u0443, \u0449\u043E\u0431 \u043F\u043E\u0447\u0430\u0442\u0438.",
+    noClaudeWorkspaces: "\u0420\u043E\u0431\u043E\u0447\u0438\u0445 \u043F\u0440\u043E\u0441\u0442\u043E\u0440\u0456\u0432 Claude \u0449\u0435 \u043D\u0435\u043C\u0430\u0454. \u0414\u043E\u0434\u0430\u0439\u0442\u0435 \u043A\u0430\u0442\u0430\u043B\u043E\u0433 \u043F\u0440\u043E\u0454\u043A\u0442\u0443, \u0449\u043E\u0431 \u043F\u043E\u0447\u0430\u0442\u0438.",
+    noHermesWorkspaces: "\u0420\u043E\u0431\u043E\u0447\u0438\u0445 \u043F\u0440\u043E\u0441\u0442\u043E\u0440\u0456\u0432 Hermes \u0449\u0435 \u043D\u0435\u043C\u0430\u0454. \u0414\u043E\u0434\u0430\u0439\u0442\u0435 \u043A\u0430\u0442\u0430\u043B\u043E\u0433 \u043F\u0440\u043E\u0454\u043A\u0442\u0443, \u0449\u043E\u0431 \u043F\u043E\u0447\u0430\u0442\u0438.",
+    cancelAddWorkspace: "\u0421\u043A\u0430\u0441\u0443\u0432\u0430\u0442\u0438",
+    confirmAddWorkspace: "\u0414\u043E\u0434\u0430\u0442\u0438 \u0439 \u0432\u0456\u0434\u043A\u0440\u0438\u0442\u0438",
+    showAllWorkspaces: "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u0438 \u0432\u0441\u0456 \u0440\u043E\u0431\u043E\u0447\u0456 \u043F\u0440\u043E\u0441\u0442\u043E\u0440\u0438 DSH",
+    showAllCodexWorkspaces: "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u0438 \u0432\u0441\u0456 \u0440\u043E\u0431\u043E\u0447\u0456 \u043F\u0440\u043E\u0441\u0442\u043E\u0440\u0438 CodeX",
+    showAllCursorWorkspaces: "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u0438 \u0432\u0441\u0456 \u0440\u043E\u0431\u043E\u0447\u0456 \u043F\u0440\u043E\u0441\u0442\u043E\u0440\u0438 Cursor",
+    showAllAntigravityWorkspaces: "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u0438 \u0432\u0441\u0456 \u0440\u043E\u0431\u043E\u0447\u0456 \u043F\u0440\u043E\u0441\u0442\u043E\u0440\u0438 Antigravity",
+    showAllPiWorkspaces: "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u0438 \u0432\u0441\u0456 \u0440\u043E\u0431\u043E\u0447\u0456 \u043F\u0440\u043E\u0441\u0442\u043E\u0440\u0438 Pi",
+    showAllOpencodeWorkspaces: "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u0438 \u0432\u0441\u0456 \u0440\u043E\u0431\u043E\u0447\u0456 \u043F\u0440\u043E\u0441\u0442\u043E\u0440\u0438 OpenCode",
+    showAllClaudeWorkspaces: "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u0438 \u0432\u0441\u0456 \u0440\u043E\u0431\u043E\u0447\u0456 \u043F\u0440\u043E\u0441\u0442\u043E\u0440\u0438 Claude",
+    showAllHermesWorkspaces: "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u0438 \u0432\u0441\u0456 \u0440\u043E\u0431\u043E\u0447\u0456 \u043F\u0440\u043E\u0441\u0442\u043E\u0440\u0438 Hermes",
+    remoteModeLabel: "\u0412\u0456\u0434\u0434\u0430\u043B\u0435\u043D\u0438\u0439 \u0440\u0435\u0436\u0438\u043C \xB7 {name}",
+    remoteNetworkP2p: "P2P",
+    remoteNetworkTurn: "TURN",
+    remoteNetworkRelay: "Relay",
+    remoteNetworkLan: "LAN",
+    remoteNetworkOffline: "\u0412\u0456\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043E",
+    clientSignInAgain: "\u0422\u0435\u0440\u043C\u0456\u043D \u0434\u0456\u0457 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0456\u0457 \u043C\u0438\u043D\u0443\u0432 \xB7 \u0423\u0432\u0456\u0439\u0442\u0438 \u0437\u043D\u043E\u0432\u0443",
+    remoteLinkEncrypted: "\u041D\u0430\u0441\u043A\u0440\u0456\u0437\u043D\u0435 \u0448\u0438\u0444\u0440\u0443\u0432\u0430\u043D\u043D\u044F",
+    connectionRouteTitle: "\u041C\u0430\u0440\u0448\u0440\u0443\u0442 \u0437\u02BC\u0454\u0434\u043D\u0430\u043D\u043D\u044F",
+    connectionRouteFrom: "\u0417\u0432\u0456\u0434\u043A\u0438",
+    connectionRouteVia: "\u0427\u0435\u0440\u0435\u0437",
+    connectionRouteTo: "\u041A\u0443\u0434\u0438",
+    connectionRouteCurrentDevice: "\u0426\u0435\u0439 \u043F\u0440\u0438\u0441\u0442\u0440\u0456\u0439",
+    connectionRouteLan: "\u041B\u043E\u043A\u0430\u043B\u044C\u043D\u0430 \u043C\u0435\u0440\u0435\u0436\u0430",
+    connectionRouteP2p: "\u041F\u0440\u044F\u043C\u0435 \u0437\u02BC\u0454\u0434\u043D\u0430\u043D\u043D\u044F \u0447\u0435\u0440\u0435\u0437 \u0456\u043D\u0442\u0435\u0440\u043D\u0435\u0442",
+    connectionRouteTurn: "\u0421\u0435\u0440\u0432\u0456\u0441 \u0440\u0435\u0442\u0440\u0430\u043D\u0441\u043B\u044F\u0446\u0456\u0457 TURN",
+    connectionRouteRelay: "\u0421\u0435\u0440\u0432\u0435\u0440 Remote",
+    connectionRouteHost: "\u0420\u043E\u0431\u043E\u0447\u0438\u0439 \u043A\u043E\u043C\u043F\u02BC\u044E\u0442\u0435\u0440 \u0456\u0437 Harness",
+    connectionRouteLanDetail: "\u041F\u0440\u044F\u043C\u0430 \u043F\u0435\u0440\u0435\u0434\u0430\u0447\u0430 \u0447\u0435\u0440\u0435\u0437 \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u0443 \u043C\u0435\u0440\u0435\u0436\u0443",
+    connectionRouteP2pDetail: "\u041F\u0440\u044F\u043C\u0430 \u043F\u0435\u0440\u0435\u0434\u0430\u0447\u0430 \u0447\u0435\u0440\u0435\u0437 \u0456\u043D\u0442\u0435\u0440\u043D\u0435\u0442",
+    connectionRouteTurnDetail: "\u0417\u0430\u0448\u0438\u0444\u0440\u043E\u0432\u0430\u043D\u0430 \u043F\u0435\u0440\u0435\u0434\u0430\u0447\u0430 \u0447\u0435\u0440\u0435\u0437 \u0441\u0435\u0440\u0432\u0456\u0441 TURN",
+    connectionRouteRelayDetail: "\u0417\u0430\u0448\u0438\u0444\u0440\u043E\u0432\u0430\u043D\u0430 \u043F\u0435\u0440\u0435\u0434\u0430\u0447\u0430 \u0447\u0435\u0440\u0435\u0437 \u0441\u0435\u0440\u0432\u0435\u0440 Remote",
+    connectionRouteEncrypted: "\u041D\u0430 \u0432\u0441\u044C\u043E\u043C\u0443 \u043C\u0430\u0440\u0448\u0440\u0443\u0442\u0456 \u0434\u0430\u043D\u0456 \u0437\u0430\u0441\u0442\u043E\u0441\u0443\u043D\u043A\u0443 \u0437\u0430\u043B\u0438\u0448\u0430\u044E\u0442\u044C\u0441\u044F \u043D\u0430\u0441\u043A\u0440\u0456\u0437\u043D\u043E \u0437\u0430\u0448\u0438\u0444\u0440\u043E\u0432\u0430\u043D\u0438\u043C\u0438.",
+    connectionDetailsConnection: "\u0417\u02BC\u0454\u0434\u043D\u0430\u043D\u043D\u044F",
+    connectionDetailsWebRtc: "\u0412\u0456\u0434\u043E\u043C\u043E\u0441\u0442\u0456 \u043F\u0440\u043E \u043C\u0435\u0440\u0435\u0436\u0443 \xB7 WebRTC / ICE",
+    connectionId: "ID \u0437\u02BC\u0454\u0434\u043D\u0430\u043D\u043D\u044F",
+    connectedAt: "\u0412\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043E",
+    preferredTransports: "\u041F\u043E\u0440\u044F\u0434\u043E\u043A \u0441\u043F\u0440\u043E\u0431",
+    controlChannel: "\u041A\u0430\u043D\u0430\u043B \u043A\u0435\u0440\u0443\u0432\u0430\u043D\u043D\u044F",
+    controlAddress: "\u0410\u0434\u0440\u0435\u0441\u0430 \u043A\u0435\u0440\u0443\u0432\u0430\u043D\u043D\u044F",
+    serverUnavailableError: "\u0421\u0435\u0440\u0432\u0456\u0441 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0438\u0439. \u0421\u043F\u0440\u043E\u0431\u0443\u0439\u0442\u0435 \u043F\u0456\u0437\u043D\u0456\u0448\u0435.",
+    connectionHoldCountdown: "\u0417\u02BC\u0454\u0434\u043D\u0430\u043D\u043D\u044F \u0441\u043F\u043B\u0438\u0432\u0430\u0454 \u0447\u0435\u0440\u0435\u0437 {seconds} \u0441",
+    serverUnavailableCountdown: "\u0421\u0435\u0440\u0432\u0456\u0441 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0438\u0439 \xB7 \u0417\u02BC\u0454\u0434\u043D\u0430\u043D\u043D\u044F \u0441\u043F\u043B\u0438\u0432\u0430\u0454 \u0447\u0435\u0440\u0435\u0437 {seconds} \u0441",
+    unavailable: "\u041D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E",
+    serverUnavailableShort: "\u0421\u0435\u0440\u0432\u0456\u0441 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0438\u0439",
+    serverUnavailable: "\u0421\u0435\u0440\u0432\u0435\u0440 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0438\u0439. \u041F\u0435\u0440\u0435\u043F\u0456\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043D\u044F.",
+    serverUnavailableConnected: "\u0421\u0435\u0440\u0432\u0435\u0440 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0438\u0439. \u0417\u0432\u02BC\u044F\u0437\u043E\u043A \u043C\u0456\u0436 \u043F\u0440\u0438\u0441\u0442\u0440\u043E\u044F\u043C\u0438 \u0430\u043A\u0442\u0438\u0432\u043D\u0438\u0439. \u041F\u0435\u0440\u0435\u043F\u0456\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043D\u044F.",
+    serverLeaseExpiring: "\u0417\u02BC\u0454\u0434\u043D\u0430\u043D\u043D\u044F \u0441\u043F\u043B\u0438\u0432\u0430\u0454 \u0447\u0435\u0440\u0435\u0437 {seconds} \u0441.",
+    serverRestored: "\u0421\u0435\u0440\u0432\u0435\u0440 \u0432\u0456\u0434\u043D\u043E\u0432\u043B\u0435\u043D\u043E.",
+    serverLinkDisconnected: "\u0417\u02BC\u0454\u0434\u043D\u0430\u043D\u043D\u044F \u0432\u0442\u0440\u0430\u0447\u0435\u043D\u043E.",
+    controlStateConnecting: "\u041F\u0456\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043D\u044F",
+    controlStateOpen: "\u041F\u0456\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043E",
+    controlStateClosing: "\u0417\u0430\u043A\u0440\u0438\u0442\u0442\u044F",
+    controlStateClosed: "\u0417\u0430\u043A\u0440\u0438\u0442\u043E",
+    peerState: "\u041E\u0434\u043D\u043E\u0440\u0430\u043D\u0433\u043E\u0432\u0435 \u0437\u02BC\u0454\u0434\u043D\u0430\u043D\u043D\u044F",
+    dataChannel: "DataChannel",
+    localCandidate: "\u041B\u043E\u043A\u0430\u043B\u044C\u043D\u0438\u0439 \u043A\u0430\u043D\u0434\u0438\u0434\u0430\u0442",
+    remoteCandidate: "\u0412\u0456\u0434\u0434\u0430\u043B\u0435\u043D\u0438\u0439 \u043A\u0430\u043D\u0434\u0438\u0434\u0430\u0442",
+    localAddress: "\u041B\u043E\u043A\u0430\u043B\u044C\u043D\u0430 \u0430\u0434\u0440\u0435\u0441\u0430",
+    remoteAddress: "\u0412\u0456\u0434\u0434\u0430\u043B\u0435\u043D\u0430 \u0430\u0434\u0440\u0435\u0441\u0430",
+    networkProtocol: "\u041C\u0435\u0440\u0435\u0436\u0435\u0432\u0438\u0439 \u043F\u0440\u043E\u0442\u043E\u043A\u043E\u043B",
+    relayProtocol: "\u041F\u0440\u043E\u0442\u043E\u043A\u043E\u043B TURN",
+    roundTripTime: "\u0417\u0430\u0442\u0440\u0438\u043C\u043A\u0430 \u0442\u0443\u0434\u0438 \u0439 \u043D\u0430\u0437\u0430\u0434",
+    availableBitrate: "\u0414\u043E\u0441\u0442\u0443\u043F\u043D\u0430 \u0432\u0438\u0445\u0456\u0434\u043D\u0430 \u0448\u0432\u0438\u0434\u043A\u0456\u0441\u0442\u044C",
+    bytesSent: "\u041D\u0430\u0434\u0456\u0441\u043B\u0430\u043D\u043E \u0431\u0430\u0439\u0442\u0456\u0432 WebRTC",
+    bytesReceived: "\u041E\u0442\u0440\u0438\u043C\u0430\u043D\u043E \u0431\u0430\u0439\u0442\u0456\u0432 WebRTC",
+    notProvided: "\u041D\u0435 \u043D\u0430\u0434\u0430\u043D\u043E",
+    candidateHost: "\u041B\u043E\u043A\u0430\u043B\u044C\u043D\u0430 \u0430\u0434\u0440\u0435\u0441\u0430 \xB7 host",
+    candidateSrflx: "\u041F\u0443\u0431\u043B\u0456\u0447\u043D\u0430 \u0430\u0434\u0440\u0435\u0441\u0430 \xB7 srflx",
+    candidatePrflx: "\u0410\u0434\u0440\u0435\u0441\u0430 \u0432\u0443\u0437\u043B\u0430 \xB7 prflx",
+    candidateRelay: "\u0410\u0434\u0440\u0435\u0441\u0430 TURN \xB7 relay",
+    openLocalWorkspaces: "\u0412\u0456\u0434\u043A\u0440\u0438\u0442\u0438 \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u0456 \u0440\u043E\u0431\u043E\u0447\u0456 \u043F\u0440\u043E\u0441\u0442\u043E\u0440\u0438",
+    clientSignInHint: "\u0423\u0432\u0456\u0439\u0434\u0456\u0442\u044C \u043D\u0430 \u0446\u044C\u043E\u043C\u0443 \u0441\u0435\u0440\u0432\u0435\u0440\u0456, \u0449\u043E\u0431 \u043F\u043E\u0431\u0430\u0447\u0438\u0442\u0438 \u0441\u0432\u043E\u0457 \u0432\u0456\u0434\u0434\u0430\u043B\u0435\u043D\u0456 \u0445\u043E\u0441\u0442\u0438.",
+    signInClient: "DS Harness Remote:",
+    signInClientDescription: "\u041F\u0456\u0434\u043A\u043B\u044E\u0447\u0456\u0442\u044C\u0441\u044F \u043E\u0434\u0438\u043D \u0440\u0430\u0437. \u0414\u043E\u0441\u0442\u0443\u043F \u0431\u0443\u0434\u044C-\u043A\u043E\u043B\u0438.",
+    startSignIn: "\u041F\u043E\u0447\u0430\u0442\u0438 \u0432\u0445\u0456\u0434",
+    allowControlCurrentDevice: "\u0414\u043E\u0437\u0432\u043E\u043B\u0438\u0442\u0438 \u043A\u0435\u0440\u0443\u0432\u0430\u043D\u043D\u044F \u0446\u0438\u043C \u043F\u0440\u0438\u0441\u0442\u0440\u043E\u0454\u043C",
+    allowControlDevice: "\u0414\u043E\u0437\u0432\u043E\u043B\u0438\u0442\u0438 \u043A\u0435\u0440\u0443\u0432\u0430\u043D\u043D\u044F \u0446\u0438\u043C \u043F\u0440\u0438\u0441\u0442\u0440\u043E\u0454\u043C",
+    connectedClientCount: "\u041F\u0456\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043E: {count}",
+    checkAcp: "\u041F\u0435\u0440\u0435\u0432\u0456\u0440\u0438\u0442\u0438 \u0431\u0435\u043A\u0435\u043D\u0434",
+    checkingAcp: "\u041F\u0435\u0440\u0435\u0432\u0456\u0440\u043A\u0430 ACP\u2026",
+    acpAvailable: "ACP \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0438\u0439",
+    acpUnavailable: "ACP \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0438\u0439",
+    agentBackends: "\u0406\u043D\u0448\u0456 \u0430\u0433\u0435\u043D\u0442\u0438 \u0434\u043B\u044F \u043A\u043E\u0434\u0443\u0432\u0430\u043D\u043D\u044F",
+    acpDocumentation: "\u041E\u0437\u043D\u0430\u0439\u043E\u043C\u0442\u0435\u0441\u044F \u0437 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430\u0446\u0456\u0454\u044E.",
+    acpHint: "\u041F\u0456\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043D\u044F \u0447\u0435\u0440\u0435\u0437 ACP. ",
+    acpCheckPassed: "\u041F\u0435\u0440\u0435\u0432\u0456\u0440\u043A\u0443 \u043F\u0440\u043E\u0439\u0434\u0435\u043D\u043E",
+    acpCheckFailed: "\u041F\u0435\u0440\u0435\u0432\u0456\u0440\u043A\u0443 \u043D\u0435 \u043F\u0440\u043E\u0439\u0434\u0435\u043D\u043E",
+    installOrConfigureAcp: "\u0412\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u0438 / \u041D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u0442\u0438",
+    configureAcp: "\u041D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u0442\u0438 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u043D\u043E",
+    installAcp: "\u0412\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u0438 \u0439 \u043D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u0442\u0438",
+    installingAcp: "\u041D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u043D\u043D\u044F\u2026",
+    acpConfiguredNotice: "\u0411\u0435\u043A\u0435\u043D\u0434 ACP \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u043D\u043E \u043D\u0430\u043B\u0430\u0448\u0442\u043E\u0432\u0430\u043D\u043E \u0439 \u0443\u0432\u0456\u043C\u043A\u043D\u0435\u043D\u043E.",
+    acpInstalledNotice: "\u0411\u0435\u043A\u0435\u043D\u0434 ACP \u0432\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043E \u0439 \u0443\u0432\u0456\u043C\u043A\u043D\u0435\u043D\u043E.",
+    acpDownloadRequired: "\u0421\u043F\u043E\u0447\u0430\u0442\u043A\u0443 \u0437\u0430\u0432\u0430\u043D\u0442\u0430\u0436\u0442\u0435 \u0439 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u0456\u0442\u044C {backend}: {url}",
+    addAcp: "\u0414\u043E\u0434\u0430\u0442\u0438 ACP",
+    acpName: "\u041D\u0430\u0437\u0432\u0430 \u0441\u0435\u0440\u0432\u0456\u0441\u0443",
+    acpCommand: "\u041A\u043E\u043C\u0430\u043D\u0434\u0430",
+    acpArguments: "\u0410\u0440\u0433\u0443\u043C\u0435\u043D\u0442\u0438",
+    removeAcp: "\u0412\u0438\u043B\u0443\u0447\u0438\u0442\u0438",
+    currentConnectedDevices: "\u041F\u0456\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0456 \u0437\u0430\u0440\u0430\u0437 \u043F\u0440\u0438\u0441\u0442\u0440\u043E\u0457",
+    noConnectedClients: "\u0417\u0430\u0440\u0430\u0437 \u0434\u043E \u0446\u044C\u043E\u0433\u043E \u0445\u043E\u0441\u0442\u0430 \u043D\u0435 \u043F\u0456\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043E \u0436\u043E\u0434\u043D\u043E\u0433\u043E \u043F\u0440\u0438\u0441\u0442\u0440\u043E\u044E.",
+    unknownDevice: "\u041D\u0435\u0432\u0456\u0434\u043E\u043C\u0438\u0439 \u043F\u0440\u0438\u0441\u0442\u0440\u0456\u0439",
+    exitRemoteAccount: "\u0412\u0438\u0439\u0442\u0438",
+    githubLogin: "Github",
+    providerLogin: "{provider}",
+    scanWithProvider: "\u0412\u0456\u0434\u0441\u043A\u0430\u043D\u0443\u0439\u0442\u0435, \u0449\u043E\u0431 \u043F\u0440\u043E\u0434\u043E\u0432\u0436\u0438\u0442\u0438 \u0447\u0435\u0440\u0435\u0437 {provider}",
+    loadingLoginProviders: "\u0417\u0430\u0432\u0430\u043D\u0442\u0430\u0436\u0435\u043D\u043D\u044F \u0441\u043F\u043E\u0441\u043E\u0431\u0456\u0432 \u0432\u0445\u043E\u0434\u0443\u2026",
+    retryLoginProviders: "\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0438 \u0437\u0430\u0432\u0430\u043D\u0442\u0430\u0436\u0435\u043D\u043D\u044F \u0441\u043F\u043E\u0441\u043E\u0431\u0456\u0432 \u0432\u0445\u043E\u0434\u0443",
+    serverApplied: "\u0410\u0434\u0440\u0435\u0441\u0443 \u0441\u0435\u0440\u0432\u0435\u0440\u0430 \u0437\u0430\u0441\u0442\u043E\u0441\u043E\u0432\u0430\u043D\u043E.",
+    noLoginProviders: "\u0412\u0445\u0456\u0434 \u0447\u0435\u0440\u0435\u0437 QR-\u043A\u043E\u0434 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0438\u0439. \u0412\u0438\u043A\u043E\u0440\u0438\u0441\u0442\u0430\u0439\u0442\u0435 \u0435\u043B. \u043F\u043E\u0448\u0442\u0443 \u0439 \u043F\u0430\u0440\u043E\u043B\u044C.",
+    zhihuLogin: "Zhihu",
+    scanWithGitHub: "\u0412\u0456\u0434\u0441\u043A\u0430\u043D\u0443\u0439\u0442\u0435, \u0449\u043E\u0431 \u043F\u0440\u043E\u0434\u043E\u0432\u0436\u0438\u0442\u0438 \u0447\u0435\u0440\u0435\u0437 GitHub",
+    scanWithZhihu: "\u0412\u0456\u0434\u0441\u043A\u0430\u043D\u0443\u0439\u0442\u0435, \u0449\u043E\u0431 \u043F\u0440\u043E\u0434\u043E\u0432\u0436\u0438\u0442\u0438 \u0447\u0435\u0440\u0435\u0437 Zhihu",
+    openInBrowser: "\u041F\u0440\u043E\u0434\u043E\u0432\u0436\u0438\u0442\u0438 \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0456",
+    scanLoginHint: "\u0410\u0432\u0442\u043E\u0440\u0438\u0437\u0443\u0439\u0442\u0435\u0441\u044F \u043D\u0430 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0456. \u0426\u0435 \u0432\u0456\u043A\u043D\u043E \u043F\u0440\u043E\u0434\u043E\u0432\u0436\u0438\u0442\u044C \u0440\u043E\u0431\u043E\u0442\u0443 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u043D\u043E.",
+    currentServiceAddress: "\u0414\u043E\u043C\u0435\u043D \u0441\u0435\u0440\u0432\u0456\u0441\u0443 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0456\u0457:",
+    editServiceAddress: "\u0417\u043C\u0456\u043D\u0438\u0442\u0438 \u0430\u0434\u0440\u0435\u0441\u0443 \u0441\u0435\u0440\u0432\u0456\u0441\u0443",
+    restoreDefaultServiceAddress: "\u0412\u0456\u0434\u043D\u043E\u0432\u0438\u0442\u0438 \u0442\u0438\u043F\u043E\u0432\u0443",
+    cancelServiceAddressEdit: "\u0421\u043A\u0430\u0441\u0443\u0432\u0430\u0442\u0438",
+    accountPasswordLogin: "\u041F\u0430\u0440\u043E\u043B\u044C",
+    qrLoginExpired: "\u0422\u0435\u0440\u043C\u0456\u043D \u0434\u0456\u0457 \u0446\u044C\u043E\u0433\u043E QR-\u043A\u043E\u0434\u0443 \u043C\u0438\u043D\u0443\u0432. \u041E\u043D\u043E\u0432\u0456\u0442\u044C \u0439\u043E\u0433\u043E, \u0449\u043E\u0431 \u043F\u0440\u043E\u0434\u043E\u0432\u0436\u0438\u0442\u0438.",
+    refreshQrCode: "\u041E\u043D\u043E\u0432\u0438\u0442\u0438 QR-\u043A\u043E\u0434",
+    codexVirtualWorkspace: "\u0412\u0456\u0440\u0442\u0443\u0430\u043B\u044C\u043D\u0438\u0439 \u0440\u043E\u0431\u043E\u0447\u0438\u0439 \u043F\u0440\u043E\u0441\u0442\u0456\u0440 CodeX",
+    cursorVirtualWorkspace: "\u0412\u0456\u0440\u0442\u0443\u0430\u043B\u044C\u043D\u0438\u0439 \u0440\u043E\u0431\u043E\u0447\u0438\u0439 \u043F\u0440\u043E\u0441\u0442\u0456\u0440 Cursor",
+    antigravityVirtualWorkspace: "\u0412\u0456\u0440\u0442\u0443\u0430\u043B\u044C\u043D\u0438\u0439 \u0440\u043E\u0431\u043E\u0447\u0438\u0439 \u043F\u0440\u043E\u0441\u0442\u0456\u0440 Antigravity",
+    piVirtualWorkspace: "\u0412\u0456\u0440\u0442\u0443\u0430\u043B\u044C\u043D\u0438\u0439 \u0440\u043E\u0431\u043E\u0447\u0438\u0439 \u043F\u0440\u043E\u0441\u0442\u0456\u0440 Pi",
+    opencodeVirtualWorkspace: "\u0412\u0456\u0440\u0442\u0443\u0430\u043B\u044C\u043D\u0438\u0439 \u0440\u043E\u0431\u043E\u0447\u0438\u0439 \u043F\u0440\u043E\u0441\u0442\u0456\u0440 OpenCode",
+    claudeVirtualWorkspace: "\u0412\u0456\u0440\u0442\u0443\u0430\u043B\u044C\u043D\u0438\u0439 \u0440\u043E\u0431\u043E\u0447\u0438\u0439 \u043F\u0440\u043E\u0441\u0442\u0456\u0440 Claude",
+    hermesVirtualWorkspace: "\u0412\u0456\u0440\u0442\u0443\u0430\u043B\u044C\u043D\u0438\u0439 \u0440\u043E\u0431\u043E\u0447\u0438\u0439 \u043F\u0440\u043E\u0441\u0442\u0456\u0440 Hermes",
+    codexVirtualSessions: "\u0421\u0435\u0441\u0456\u0457"
   };
 
   // packages/plugin/src/client/server-notice.ts
@@ -2458,7 +3356,11 @@ If a code was sent, recover the original submission without changing it.`,
     return status?.online ? " isOnline" : status?.reconnecting ? " isReconnecting" : status === void 0 ? "" : " isOffline";
   }
   function startupErrorMessage(error, t) {
-    return error.code === "IDENTITY_INVALID" ? t("identityCorrupted") : error.code === "SERVER_CREDENTIALS_INVALID" ? t("credentialsCorrupted") : error.code === "IDENTITY_LOCKED" ? t("identityLocked") : error.code === "STORAGE_CONFLICT" ? t("storageConflict") : error.code === "SERVER_CREDENTIALS_BUSY" ? t("connectionCredentialsBusy") : error.message || t("remoteStartupFailed");
+    return error.code === "IDENTITY_INVALID" ? t("identityCorrupted") : error.code === "SERVER_CREDENTIALS_INVALID" ? t("credentialsCorrupted") : error.code === "IDENTITY_LOCKED" ? t("identityLocked") : error.code === "STORAGE_CONFLICT" ? storageConflictMessage(error.message, t) : error.code === "SERVER_CREDENTIALS_BUSY" ? t("connectionCredentialsBusy") : error.message || t("remoteStartupFailed");
+  }
+  function storageConflictMessage(message, t) {
+    let match = /^Remote storage ownership could not be verified; nothing was moved\. Inspect the legacy directory manually\. Unexpected entry "([A-Za-z0-9._-]{1,160})" was found\.$/.exec(message);
+    return match === null ? t("storageConflict") : t("storageConflictEntry", { name: match[1] });
   }
   function messageOf(reason, t) {
     if (typeof reason == "object" && reason !== null && "code" in reason && typeof reason.code == "string") {
@@ -2466,7 +3368,10 @@ If a code was sent, recover the original submission without changing it.`,
       if (reason.code === "IDENTITY_INVALID") return t("identityCorrupted");
       if (reason.code === "SERVER_CREDENTIALS_INVALID") return t("credentialsCorrupted");
       if (reason.code === "IDENTITY_LOCKED") return t("identityLocked");
-      if (reason.code === "STORAGE_CONFLICT") return t("storageConflict");
+      if (reason.code === "STORAGE_CONFLICT") {
+        let message = "message" in reason && typeof reason.message == "string" ? reason.message : "";
+        return storageConflictMessage(message, t);
+      }
       if (reason.code === "SERVER_CREDENTIALS_BUSY") return t("connectionCredentialsBusy");
     }
     return reason instanceof Error ? reason.message : String(reason);
@@ -2536,10 +3441,10 @@ If a code was sent, recover the original submission without changing it.`,
         React.createElement(
           "dl",
           null,
-          React.createElement("div", null, React.createElement("dt", null, "\u540D\u79F0"), React.createElement("dd", null, hostReference.label)),
-          React.createElement("div", null, React.createElement("dt", null, "\u7CFB\u7EDF"), React.createElement("dd", null, hostReference.platform)),
-          React.createElement("div", null, React.createElement("dt", null, "\u8BBE\u5907 ID"), React.createElement("dd", { className: "isMono" }, hostReference.deviceId)),
-          React.createElement("div", null, React.createElement("dt", null, "\u8C03\u7528\u5185\u5BB9"), React.createElement("dd", { className: "isMono" }, hostReference.invocation))
+          React.createElement("div", null, React.createElement("dt", null, t("hostReferenceName")), React.createElement("dd", null, hostReference.label)),
+          React.createElement("div", null, React.createElement("dt", null, t("hostReferenceSystem")), React.createElement("dd", null, hostReference.platform)),
+          React.createElement("div", null, React.createElement("dt", null, t("hostReferenceDeviceId")), React.createElement("dd", { className: "isMono" }, hostReference.deviceId)),
+          React.createElement("div", null, React.createElement("dt", null, t("hostReferenceInvocation")), React.createElement("dd", { className: "isMono" }, hostReference.invocation))
         )
       ));
       if (status?.mode !== "remote") return renderHostReference();
@@ -2778,7 +3683,12 @@ If a code was sent, recover the original submission without changing it.`,
           "div",
           { className: "dshRemoteProgressHeader" },
           React.createElement("strong", null, props.t(progress.label)),
-          React.createElement("span", null, `${percent}%`)
+          React.createElement(
+            "span",
+            { className: "dshRemoteProgressStatus" },
+            React.createElement("span", { className: "dshRemoteLoginSpinner", "aria-hidden": !0 }),
+            `${percent}%`
+          )
         ),
         React.createElement("p", null, detail),
         React.createElement("div", {
@@ -2961,13 +3871,15 @@ If a code was sent, recover the original submission without changing it.`,
         subscribeStatus,
         getStatusSnapshot,
         getStatusSnapshot
-      ), [open, setOpen] = React.useState(props.view === "page"), [serverUrl, setServerUrl] = React.useState(""), [savingServer, setSavingServer] = React.useState(!1), [editingServer, setEditingServer] = React.useState(!1), serverDraftEdited = React.useRef(!1), [remoteToolsBusy, setRemoteToolsBusy] = React.useState(!1), [remoteToolsEnabled, setRemoteToolsEnabled] = React.useState(!0), [associations, setAssociations] = React.useState({}), [loaded, setLoaded] = React.useState(!1), [writable, setWritable] = React.useState(!1), [busy, setBusy] = React.useState(!1), [terminalEnabled, setTerminalEnabled] = React.useState(!1), [debugBusy, setDebugBusy] = React.useState(!1), [debugLogging, setDebugLogging] = React.useState(!1), [resetBusy, setResetBusy] = React.useState(!1), [terminalBusy, setTerminalBusy] = React.useState(!1), [sidebarEntry, setSidebarEntry] = React.useState(() => props.sidebarEntry?.read?.() ?? "standard"), [sidebarEntryBusy, setSidebarEntryBusy] = React.useState(!1), [acpBackends, setAcpBackends] = React.useState([]), [acpAvailability, setAcpAvailability] = React.useState({}), [acpChecking, setAcpChecking] = React.useState({}), [acpInstalling, setAcpInstalling] = React.useState({}), [acpCheckResults, setAcpCheckResults] = React.useState({}), [reconnectBusy, setReconnectBusy] = React.useState(!1), [hostStatus, setHostStatus] = React.useState(void 0), [hostName, setHostName] = React.useState(""), [hostDeviceId, setHostDeviceId] = React.useState(""), [notice, setNotice] = React.useState(void 0), [error, setError] = React.useState(void 0), [settingsView, setSettingsView] = React.useState(void 0), [signInOpen, setSignInOpen] = React.useState(!1), [loginEmail, setLoginEmail] = React.useState(""), [loginPassword, setLoginPassword] = React.useState(""), [loginMethod, setLoginMethod] = React.useState("password"), [oauthProviders, setOAuthProviders] = React.useState([]), [providersLoading, setProvidersLoading] = React.useState(!1), [providersFailed, setProvidersFailed] = React.useState(!1), [pairingAvailable, setPairingAvailable] = React.useState(!1), [qrSession, setQrSession] = React.useState(void 0), [qrImage, setQrImage] = React.useState(void 0), [qrExpired, setQrExpired] = React.useState(!1), [qrFailed, setQrFailed] = React.useState(!1), [qrBusy, setQrBusy] = React.useState(!1), [qrCompleted, setQrCompleted] = React.useState(!1), [providerReload, setProviderReload] = React.useState(0), [completionReload, setCompletionReload] = React.useState(0), qrFlowRun = React.useRef(0), providerRequestRun = React.useRef(0), loginMethodManuallySelected = React.useRef(!1), selectedLoginMethod = React.useRef(loginMethod);
-      selectedLoginMethod.current = loginMethod;
-      let associationReadRun = React.useRef(0), association = associations.client ?? associations.host;
+      ), [open, setOpen] = React.useState(props.view === "page"), [serverUrl, setServerUrl] = React.useState(""), [savingServer, setSavingServer] = React.useState(!1), [editingServer, setEditingServer] = React.useState(!1), serverDraftEdited = React.useRef(!1), [remoteToolsBusy, setRemoteToolsBusy] = React.useState(!1), [remoteToolsEnabled, setRemoteToolsEnabled] = React.useState(!0), [associations, setAssociations] = React.useState({}), [loaded, setLoaded] = React.useState(!1), [writable, setWritable] = React.useState(!1), [busy, setBusy] = React.useState(!1), [terminalEnabled, setTerminalEnabled] = React.useState(!1), [debugBusy, setDebugBusy] = React.useState(!1), [debugLogging, setDebugLogging] = React.useState(!1), [logsOpen, setLogsOpen] = React.useState(!1), [logsFilter, setLogsFilter] = React.useState("all"), [logsLoading, setLogsLoading] = React.useState(!1), [logsClearing, setLogsClearing] = React.useState(!1), [logsSnapshot, setLogsSnapshot] = React.useState(void 0), [logsError, setLogsError] = React.useState(void 0), [logsCopyState, setLogsCopyState] = React.useState("idle"), logsRequestRun = React.useRef(0), logsCopyTimer = React.useRef(void 0), logsViewportRef = React.useRef(null), [resetBusy, setResetBusy] = React.useState(!1), [retryStartupBusy, setRetryStartupBusy] = React.useState(!1), [terminalBusy, setTerminalBusy] = React.useState(!1), [sidebarEntry, setSidebarEntry] = React.useState(() => props.sidebarEntry?.read?.() ?? "standard"), [sidebarEntryBusy, setSidebarEntryBusy] = React.useState(!1), [acpBackends, setAcpBackends] = React.useState([]), [acpAvailability, setAcpAvailability] = React.useState({}), [acpChecking, setAcpChecking] = React.useState({}), [acpInstalling, setAcpInstalling] = React.useState({}), [acpCheckResults, setAcpCheckResults] = React.useState({}), [reconnectBusy, setReconnectBusy] = React.useState(!1), [hostStatus, setHostStatus] = React.useState(void 0), [hostName, setHostName] = React.useState(""), [hostDeviceId, setHostDeviceId] = React.useState(""), [notice, setNotice] = React.useState(void 0), [error, setError] = React.useState(void 0), [settingsView, setSettingsView] = React.useState(void 0), [signInOpen, setSignInOpen] = React.useState(!1), [loginEmail, setLoginEmail] = React.useState(""), [loginPassword, setLoginPassword] = React.useState(""), [loginMethod, setLoginMethod] = React.useState("password"), [oauthProviders, setOAuthProviders] = React.useState([]), [providersLoading, setProvidersLoading] = React.useState(!1), [providersFailed, setProvidersFailed] = React.useState(!1), [pairingServerUrl, setPairingServerUrl] = React.useState(void 0), [qrSession, setQrSession] = React.useState(void 0), [qrImage, setQrImage] = React.useState(void 0), [qrExpired, setQrExpired] = React.useState(!1), [qrFailed, setQrFailed] = React.useState(!1), [qrBusy, setQrBusy] = React.useState(!1), [qrCompleted, setQrCompleted] = React.useState(!1), [providerReload, setProviderReload] = React.useState(0), [completionReload, setCompletionReload] = React.useState(0), qrFlowRun = React.useRef(0), providerRequestRun = React.useRef(0), loginMethodManuallySelected = React.useRef(!1), associationReadRun = React.useRef(0), association = associations.client ?? associations.host;
       React.useEffect(() => {
         association !== void 0 && setSignInOpen(!1);
       }, [association]);
-      let savedServerUrl = settingsView?.config.serverUrl, serverDirty = savedServerUrl === void 0 || serverUrl.trim() !== savedServerUrl, applyAssociations = (view) => {
+      let savedServerUrl = settingsView?.config.serverUrl, pairingAvailable = pairingServerUrl !== void 0 && pairingServerUrl === savedServerUrl, serverDirty = savedServerUrl === void 0 || serverUrl.trim() !== savedServerUrl;
+      React.useEffect(() => {
+        setPairingServerUrl(void 0), setLoginMethod((current) => current === "device_pairing" ? "password" : current);
+      }, [savedServerUrl]);
+      let applyAssociations = (view) => {
         setAssociations(view.associations ?? (view.association === void 0 ? {} : { host: view.association }));
       }, applyView = (view, updateAssociations = !0) => {
         setSettingsView(view), serverDraftEdited.current || setServerUrl(view.config.serverUrl ?? "https://dsh.r2049.cn"), setTerminalEnabled(view.config.terminal?.enabled ?? !0), setDebugLogging(view.config.logLevel === "debug"), setRemoteToolsEnabled(view.config.remoteTools?.enabled ?? !0), setSidebarEntry(view.config.sidebar?.entry ?? "standard"), props.sidebarEntry?.publish(view.config.sidebar?.entry ?? "standard"), setAcpBackends((view.config.acp?.backends ?? []).map((item) => ({ id: item.id, enabled: item.enabled !== !1 }))), setAcpAvailability(view.acpAvailability ?? {}), updateAssociations && applyAssociations(view), setWritable(view.writable), setLoaded(!0);
@@ -3006,18 +3918,18 @@ If a code was sent, recover the original submission without changing it.`,
       }, [props.statusFeed]), React.useEffect(() => {
         if (!signInOpen || savingServer || serverDirty) return;
         let active = !0, run = ++providerRequestRun.current;
-        return qrFlowRun.current += 1, setQrSession(void 0), setQrImage(void 0), setQrExpired(!1), setQrFailed(!1), setQrBusy(!1), setQrCompleted(!1), setOAuthProviders([]), setPairingAvailable(!1), setProvidersLoading(!0), setProvidersFailed(!1), props.control("client.account.providers").then((items) => {
+        return qrFlowRun.current += 1, setQrSession(void 0), setQrImage(void 0), setQrExpired(!1), setQrFailed(!1), setQrBusy(!1), setQrCompleted(!1), setOAuthProviders([]), setProvidersLoading(!0), setProvidersFailed(!1), props.control("client.account.providers").then((items) => {
           if (!active || run !== providerRequestRun.current) return;
           let pairingSupported = items.some((item) => item.devicePairing === !0);
-          setPairingAvailable(pairingSupported);
+          setPairingServerUrl(pairingSupported ? savedServerUrl : void 0);
           let available = items.filter((item) => item.qrStartUrl != null);
           setOAuthProviders(available), setLoginMethod((current) => {
             if (loginMethodManuallySelected.current && (current === "password" || current === "device_pairing" && pairingSupported || available.some((item) => `oauth:${item.id}` === current))) return current;
             let preferred = available.find((item) => item.id === props.preferredQrProvider) ?? available[0];
             return preferred === void 0 ? "password" : `oauth:${preferred.id}`;
           });
-        }).catch((reason) => {
-          !active || run !== providerRequestRun.current || (setProvidersFailed(!0), setPairingAvailable(!1), setLoginMethod("password"), selectedLoginMethod.current !== "device_pairing" && setError(messageOf(reason, t)));
+        }).catch(() => {
+          !active || run !== providerRequestRun.current || (setProvidersFailed(!0), setLoginMethod((current) => loginMethodManuallySelected.current && current === "device_pairing" ? current : "password"));
         }).finally(() => {
           active && run === providerRequestRun.current && setProvidersLoading(!1);
         }), () => {
@@ -3201,11 +4113,76 @@ If a code was sent, recover the original submission without changing it.`,
             setAcpInstalling((current) => ({ ...current, [backend]: !1 }));
           }
         }
-      }, setDebug = async (enabled) => {
+      }, loadLogs = async (filter = logsFilter) => {
+        let run = ++logsRequestRun.current;
+        setLogsLoading(!0), setLogsError(void 0);
+        try {
+          let next = await props.control("settings.logs.get", { filter, limit: 500 });
+          if (run !== logsRequestRun.current) return;
+          setLogsSnapshot(next);
+        } catch (reason) {
+          if (run !== logsRequestRun.current) return;
+          setLogsError(messageOf(reason, t));
+        } finally {
+          run === logsRequestRun.current && setLogsLoading(!1);
+        }
+      }, toggleLogsDrawer = () => {
+        let nextOpen = !logsOpen;
+        setLogsOpen(nextOpen), nextOpen && loadLogs(logsFilter);
+      }, changeLogsFilter = (filter) => {
+        filter === logsFilter && logsSnapshot !== void 0 || (setLogsFilter(filter), loadLogs(filter));
+      }, copyLogs = async () => {
+        let lines = logsSnapshot?.entries.map((entry) => entry.line).join(`
+`) ?? "";
+        if (lines) {
+          try {
+            typeof navigator < "u" && navigator.clipboard && typeof navigator.clipboard.writeText == "function" ? (await navigator.clipboard.writeText(lines), setLogsCopyState("copied")) : setLogsCopyState("failed");
+          } catch {
+            setLogsCopyState("failed");
+          }
+          logsCopyTimer.current !== void 0 && clearTimeout(logsCopyTimer.current), logsCopyTimer.current = setTimeout(() => {
+            logsCopyTimer.current = void 0, setLogsCopyState("idle");
+          }, 2e3);
+        }
+      }, exportLogs = () => {
+        let lines = logsSnapshot?.entries.map((entry) => entry.line).join(`
+`) ?? "";
+        if (!lines || typeof document > "u" || typeof Blob > "u" || typeof URL > "u") return;
+        let blob = new Blob([lines + `
+`], { type: "text/plain;charset=utf-8" }), href = URL.createObjectURL(blob);
+        try {
+          let link = document.createElement("a");
+          link.href = href, link.download = "ds-harness-remote-" + (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-").slice(0, 19) + ".log", document.body?.appendChild(link), link.click(), link.remove();
+        } finally {
+          URL.revokeObjectURL(href);
+        }
+      }, clearLogs = async () => {
+        if (logsClearing) return;
+        let run = ++logsRequestRun.current;
+        setLogsLoading(!1), setLogsClearing(!0), setLogsError(void 0);
+        try {
+          let cleared = await props.control("settings.logs.clear", {});
+          if (run !== logsRequestRun.current) return;
+          setLogsSnapshot(cleared);
+        } catch (reason) {
+          if (run !== logsRequestRun.current) return;
+          setLogsError(messageOf(reason, t));
+        } finally {
+          setLogsClearing(!1);
+        }
+      };
+      React.useEffect(() => () => {
+        logsCopyTimer.current !== void 0 && clearTimeout(logsCopyTimer.current);
+      }, []), React.useEffect(() => {
+        if (!logsOpen) return;
+        let viewport = logsViewportRef.current;
+        viewport && typeof viewport.scrollHeight == "number" && (viewport.scrollTop = viewport.scrollHeight);
+      }, [logsOpen, logsSnapshot]);
+      let setDebug = async (enabled) => {
         if (!debugBusy) {
           setDebugBusy(!0), setError(void 0);
           try {
-            applyView(await props.control("settings.development.set", { debugLogging: enabled }));
+            applyView(await props.control("settings.development.set", { debugLogging: enabled })), logsOpen && loadLogs(logsFilter);
           } catch (reason) {
             setError(messageOf(reason, t));
           } finally {
@@ -3217,21 +4194,115 @@ If a code was sent, recover the original submission without changing it.`,
         { className: "dshRemoteDevelopmentSettings" },
         React.createElement(
           "div",
-          { className: "dshRemoteAuthorizationSetting" },
+          { className: "dshRemoteDebugLogGroup" },
           React.createElement(
             "div",
-            null,
-            React.createElement("strong", null, t("debugLogging")),
-            React.createElement("p", null, t("debugLoggingHint"))
+            { className: "dshRemoteDebugLogHeader" },
+            React.createElement(
+              "button",
+              {
+                type: "button",
+                className: "dshRemoteDebugLogTrigger",
+                "aria-expanded": logsOpen,
+                onClick: toggleLogsDrawer
+              },
+              React.createElement(
+                "span",
+                { className: "dshRemoteDebugLogTitleRow" },
+                React.createElement("strong", null, t("debugLogging")),
+                React.createElement("span", {
+                  className: debugLogging ? "dshRemoteDebugLogLevelBadge isDebug" : "dshRemoteDebugLogLevelBadge"
+                }, t(debugLogging ? "debugLoggingLevelDebug" : "debugLoggingLevelInfo"))
+              ),
+              React.createElement("p", null, t("debugLoggingHint"))
+            ),
+            React.createElement(
+              "div",
+              { className: "dshRemoteDebugLogControls" },
+              React.createElement("button", {
+                type: "button",
+                className: "dshRemoteLogToggleBtn",
+                "aria-expanded": logsOpen,
+                onClick: toggleLogsDrawer
+              }, logsOpen ? t("debugLogsToggleClose") + " \u25B4" : t("debugLogsToggleOpen") + " \u25BE"),
+              React.createElement("input", {
+                type: "checkbox",
+                role: "switch",
+                checked: debugLogging,
+                disabled: busy || debugBusy || !writable,
+                "aria-label": t("debugLogging"),
+                onChange: (event) => void setDebug(event.target.checked)
+              })
+            )
           ),
-          React.createElement("input", {
-            type: "checkbox",
-            role: "switch",
-            checked: debugLogging,
-            disabled: busy || debugBusy || !writable,
-            "aria-label": t("debugLogging"),
-            onChange: (event) => void setDebug(event.target.checked)
-          })
+          logsOpen && React.createElement(
+            "div",
+            { className: "dshRemoteLogDrawer", role: "region", "aria-label": t("debugLogging") },
+            React.createElement(
+              "div",
+              { className: "dshRemoteLogToolbar" },
+              React.createElement(
+                "div",
+                { className: "dshRemoteLogFilterGroup", role: "group" },
+                React.createElement("button", {
+                  type: "button",
+                  className: logsFilter === "all" ? "dshRemoteLogFilterBtn isActive" : "dshRemoteLogFilterBtn",
+                  "aria-pressed": logsFilter === "all",
+                  onClick: () => changeLogsFilter("all")
+                }, t("debugLogsFilterAll")),
+                React.createElement("button", {
+                  type: "button",
+                  className: logsFilter === "warn" ? "dshRemoteLogFilterBtn isActive" : "dshRemoteLogFilterBtn",
+                  "aria-pressed": logsFilter === "warn",
+                  onClick: () => changeLogsFilter("warn")
+                }, t("debugLogsFilterWarn"))
+              ),
+              React.createElement(
+                "div",
+                { className: "dshRemoteLogActions" },
+                React.createElement("button", {
+                  type: "button",
+                  className: "dshRemoteLogActionBtn",
+                  disabled: logsLoading,
+                  onClick: () => void loadLogs(logsFilter)
+                }, t(logsLoading ? "debugLogsRefreshing" : "debugLogsRefresh")),
+                React.createElement("button", {
+                  type: "button",
+                  className: "dshRemoteLogActionBtn",
+                  disabled: !logsSnapshot?.entries.length,
+                  onClick: () => void copyLogs()
+                }, t(logsCopyState === "copied" ? "debugLogsCopied" : logsCopyState === "failed" ? "debugLogsCopyFailed" : "debugLogsCopy")),
+                React.createElement("button", {
+                  type: "button",
+                  className: "dshRemoteLogActionBtn",
+                  disabled: !logsSnapshot?.entries.length,
+                  onClick: exportLogs
+                }, t("debugLogsExport")),
+                React.createElement("button", {
+                  type: "button",
+                  className: "dshRemoteLogActionBtn",
+                  disabled: logsClearing || !logsSnapshot?.totalBuffered,
+                  onClick: () => void clearLogs()
+                }, t("debugLogsClear"))
+              )
+            ),
+            (logsSnapshot?.filePath || logsSnapshot?.fileError || logsSnapshot) && React.createElement(
+              "div",
+              { className: "dshRemoteLogMeta" },
+              logsSnapshot?.filePath && React.createElement("span", null, t("debugLogsFileLabel"), " ", React.createElement("code", null, logsSnapshot.filePath)),
+              logsSnapshot?.fileError && React.createElement("span", { className: "dshRemoteLogFallback" }, t("debugLogsFileFallback", { error: logsSnapshot.fileError })),
+              logsSnapshot && React.createElement("span", null, t("debugLogsCount", { count: logsSnapshot.entries.length }))
+            ),
+            logsError && React.createElement("p", { className: "dshRemoteError", role: "alert" }, logsError),
+            logsLoading && !logsSnapshot ? React.createElement("p", { className: "dshRemoteLogEmpty" }, t("debugLogsLoading")) : !logsSnapshot || logsSnapshot.entries.length === 0 ? React.createElement("p", { className: "dshRemoteLogEmpty" }, t("debugLogsEmpty")) : React.createElement(
+              "div",
+              { className: "dshRemoteLogViewport", ref: logsViewportRef },
+              logsSnapshot.entries.map((entry) => React.createElement("span", {
+                key: entry.seq,
+                className: entry.level === "error" ? "dshRemoteLogLine isError" : entry.level === "warn" ? "dshRemoteLogLine isWarn" : entry.level === "debug" ? "dshRemoteLogLine isDebug" : "dshRemoteLogLine"
+              }, entry.line))
+            )
+          )
         ),
         React.createElement(
           "div",
@@ -3285,7 +4356,21 @@ If a code was sent, recover the original submission without changing it.`,
         } finally {
           setResetBusy(!1);
         }
-      }, resetDisabledByStartupState = settingsView?.startupError?.code === "STORAGE_CONFLICT" || settingsView?.startupError?.code === "IDENTITY_LOCKED", resetIdentitySetting = React.createElement(
+      }, resetDisabledByStartupState = settingsView?.startupError?.code === "STORAGE_CONFLICT" || settingsView?.startupError?.code === "IDENTITY_LOCKED", retryStartup = async () => {
+        if (retryStartupBusy) return;
+        let run = ++associationReadRun.current;
+        setRetryStartupBusy(!0), setError(void 0), setNotice(void 0);
+        try {
+          let view = await props.control("settings.startup.retry", {}), status = await props.control("status").catch(() => {
+          });
+          applyView(view, run === associationReadRun.current), setHostStatus(status?.host), setHostName(status?.deviceName ?? ""), setHostDeviceId(status?.host?.deviceId ?? ""), setNotice({ key: "retryStartupSuccess" });
+        } catch (reason) {
+          setError(messageOf(reason, t)), load().catch(() => {
+          });
+        } finally {
+          setRetryStartupBusy(!1);
+        }
+      }, resetIdentitySetting = React.createElement(
         "div",
         { className: "dshRemoteAuthorizationSetting" },
         React.createElement(
@@ -3301,9 +4386,15 @@ If a code was sent, recover the original submission without changing it.`,
           onClick: () => void resetIdentity()
         }, t(resetBusy ? "resettingAction" : "resetIdentity"))
       ), startupErrorBanner = settingsView?.startupError !== void 0 ? React.createElement(
-        "p",
+        "div",
         { className: "dshRemoteError", role: "alert" },
-        startupErrorMessage(settingsView.startupError, t)
+        React.createElement("p", null, startupErrorMessage(settingsView.startupError, t)),
+        React.createElement("button", {
+          type: "button",
+          className: "dshRemoteDiscard",
+          disabled: busy || resetBusy || retryStartupBusy,
+          onClick: () => void retryStartup()
+        }, t("retryStartup"))
       ) : null, sidebarEntrySetting = React.createElement(
         "div",
         { className: "dshRemoteAuthorizationSetting" },
@@ -3389,7 +4480,7 @@ If a code was sent, recover the original submission without changing it.`,
         )
       );
       if (props.view === "summary") return React.createElement("span", null, t("pluginDescription"));
-      let orderedQrProviders = [...oauthProviders].sort((a, b) => +(b.id === props.preferredQrProvider) - +(a.id === props.preferredQrProvider)), selectedProvider = oauthProviders.find((item) => `oauth:${item.id}` === loginMethod), scanLabel = t("scanWithProvider", { provider: selectedProvider?.displayName ?? "" }), passwordVisible = !savingServer && !serverDirty && loginMethod === "password" && (loginMethodManuallySelected.current || !providersLoading && !providersFailed && oauthProviders.length === 0), qrLoginTab = (provider) => React.createElement("button", {
+      let orderedQrProviders = [...oauthProviders].sort((a, b) => +(b.id === props.preferredQrProvider) - +(a.id === props.preferredQrProvider)), selectedProvider = oauthProviders.find((item) => `oauth:${item.id}` === loginMethod), scanLabel = t("scanWithProvider", { provider: selectedProvider?.displayName ?? "" }), passwordVisible = !savingServer && !serverDirty && loginMethod === "password" && (loginMethodManuallySelected.current || !providersLoading && oauthProviders.length === 0), qrLoginTab = (provider) => React.createElement("button", {
         key: provider.id,
         type: "button",
         role: "tab",
@@ -3435,6 +4526,17 @@ If a code was sent, recover the original submission without changing it.`,
           "div",
           { className: "dshRemoteLoginContent" },
           providersLoading && loginMethod !== "device_pairing" ? React.createElement("p", { className: "dshRemoteSettingsState", role: "status" }, t("loadingLoginProviders")) : null,
+          providersFailed ? React.createElement(
+            "p",
+            { className: "dshRemoteSettingsState", role: "status" },
+            t("noLoginProviders"),
+            " ",
+            React.createElement("button", {
+              type: "button",
+              disabled: busy || savingServer || serverDirty,
+              onClick: () => setProviderReload((value) => value + 1)
+            }, t("retryLoginProviders"))
+          ) : null,
           loginMethod === "device_pairing" && pairingAvailable ? React.createElement(
             "div",
             { role: "tabpanel", id: "dsh-remote-settings-device-pairing-panel", "aria-labelledby": "dsh-remote-settings-device-pairing-tab" },
@@ -3485,7 +4587,12 @@ If a code was sent, recover the original submission without changing it.`,
             qrCompleted ? React.createElement(
               "div",
               { className: "dshRemoteInlineSignInQrState" },
-              React.createElement("p", null, t("loadingSettings")),
+              React.createElement(
+                "div",
+                { className: "dshRemoteLoginProgress", role: "status", "aria-live": "polite" },
+                React.createElement("span", { className: "dshRemoteLoginSpinner", "aria-hidden": !0 }),
+                t("loginLoadingSettings")
+              ),
               React.createElement("button", {
                 type: "button",
                 className: "dshRemoteReconnect",
@@ -3540,7 +4647,13 @@ If a code was sent, recover the original submission without changing it.`,
               React.createElement("span", null, t("openInBrowser"), " \u2197")
             ) : null,
             React.createElement("strong", null, scanLabel),
-            React.createElement("p", null, t("scanLoginHint"))
+            React.createElement("p", null, t("scanLoginHint")),
+            !qrCompleted && !qrFailed && !qrExpired && (qrBusy || qrSession !== void 0) ? React.createElement(
+              "div",
+              { className: "dshRemoteLoginProgress", role: "status", "aria-live": "polite" },
+              React.createElement("span", { className: "dshRemoteLoginSpinner", "aria-hidden": !0 }),
+              t("loginWaitingAuthorization")
+            ) : null
           ) : null
         ),
         React.createElement(
@@ -3840,6 +4953,7 @@ If a code was sent, recover the original submission without changing it.`,
       // their host-defined geometry, including third-party sidebar variants.
       // Match native workspace rows: 8px inset, 16px icon slot and 6px label gap.
       ".dshRemoteSidebarEntry{box-sizing:border-box;flex:none;width:36px;min-width:36px;display:block}.dshRemoteSidebarEntry .dshRemoteModeButton{box-sizing:border-box;width:36px;height:36px;min-height:36px;justify-content:center;gap:0;padding:0;border-radius:50%}.dshRemoteSidebarEntry.isWide{flex:0 1 auto;width:fit-content;min-width:36px;max-width:100%;height:36px;margin:0}.dshRemoteSidebarEntry.isWide .dshRemoteModeButton{width:auto;max-width:100%;min-width:0;justify-content:flex-start;gap:6px;padding:0 8px;border-radius:8px;font:inherit;font-size:14px;line-height:20px;text-align:start}.dshRemoteSidebarLabel{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dshRemoteSidebarEntry.isRail{height:36px}.dshRemoteSidebarEntry.isActive .dshRemoteComputerIcon{color:var(--dsw-alias-brand-primary)}.dshRemoteSidebarEntry .dshRemoteModeButton:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px}.dshRemoteSidebarEntry .dshRemoteModeButton:disabled{opacity:.45;cursor:default}",
+      ".dshRemoteSidebarEntry.isWide.isActive .dshRemoteSidebarLabel{max-width:170px}",
       ".dshRemoteComputerIcon{box-sizing:border-box;width:18px;height:18px;flex:0 0 18px;color:var(--dsw-alias-label-secondary)}.dshRemoteSidebarEntry.isWide .dshRemoteComputerIcon{width:16px;height:16px;flex-basis:16px}",
       // Compact entry: the same button portalled to the end of the host account row.
       ".dshRemoteAccountEntry{display:inline-flex;align-items:center;flex:none}.dshRemoteAccountEntry .dshRemoteAccountEntryButton{box-sizing:border-box;width:26px;height:26px;min-width:26px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);display:inline-flex;align-items:center;justify-content:center;padding:0;cursor:pointer}.dshRemoteAccountEntry .dshRemoteAccountEntryButton:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.dshRemoteAccountEntry .dshRemoteAccountEntryButton:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:0}.dshRemoteAccountEntry .dshRemoteAccountEntryButton:disabled{opacity:.45;cursor:default}.dshRemoteAccountEntry.isActive .dshRemoteComputerIcon{color:var(--dsw-alias-brand-primary)}",
@@ -3864,13 +4978,13 @@ If a code was sent, recover the original submission without changing it.`,
       // Registry update link inside the modal's account footer row, and the mini
       // upgrade affordances on the sidebar entry buttons. The host-row
       // "update available" marker stays plain text inside the joined detail string.
-      ".dshRemoteAccountUpdate{flex:0 0 auto;color:var(--dsw-alias-brand-primary);font-size:12px;font-weight:500;white-space:nowrap;text-decoration:none}.dshRemoteAccountUpdate:hover{color:var(--dsw-alias-brand-primary);text-decoration:underline;text-underline-offset:3px}.dshRemoteAccountUpdate:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:3px;border-radius:3px}",
+      ".dshRemoteAccountUpdate,button.dshRemoteAccountUpdate{flex:0 0 auto;color:var(--dsw-alias-brand-primary);font-size:12px;font-weight:500;white-space:nowrap;text-decoration:none}button.dshRemoteAccountUpdate{background:none;border:0;padding:0;font:inherit;line-height:1.5;cursor:pointer}button.dshRemoteAccountUpdate:disabled{cursor:default;text-decoration:none;opacity:.7}.dshRemoteAccountUpdate:hover{color:var(--dsw-alias-brand-primary);text-decoration:underline;text-underline-offset:3px}.dshRemoteAccountUpdate:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:3px;border-radius:3px}",
       // Update affordances in the host's own update-indicator look: the labeled
       // sidebar entry button (full width again, as before cab95ec) carries the
       // DesktopUpdateIndicator palette (8% brand fill, 20% brand border, 12px/500
       // suffix); icon-only rail/compact entries get the official 6px brand dot.
       ".dshRemoteSidebarEntry.isWide.hasUpdate .dshRemoteModeButton{border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary-new-colorprimary-new-color,var(--dsw-alias-brand-primary)) 20%,transparent);background:color-mix(in srgb,var(--dsw-alias-brand-primary-new-colorprimary-new-color,var(--dsw-alias-brand-primary)) 8%,transparent);color:var(--dsw-alias-brand-primary-new-colorprimary-new-color,var(--dsw-alias-brand-primary));font-weight:500}.dshRemoteSidebarEntry .dshRemoteModeButton,.dshRemoteAccountEntry .dshRemoteAccountEntryButton{position:relative}.dshRemoteUpdateSuffix{flex:0 0 auto;margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:18px;font-weight:500}.dshRemoteUpdateDot{position:absolute;inset-inline-end:2px;top:2px;width:6px;height:6px;border-radius:50%;background:var(--dsw-alias-brand-primary-new-colorprimary-new-color,var(--dsw-alias-brand-primary))}",
-      ".dshRemoteSectionHeading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:10px}.dshRemoteSectionTitle{min-width:0;display:flex;align-items:center;gap:10px}.dshRemoteSectionTitle>strong{font-size:14px}.dshRemoteSectionActions{display:flex;align-items:center;gap:14px}.dshRemoteSectionActions>button{border:0;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;padding:5px 0;font-size:12px}.dshRemoteSectionActions>button:hover:not(:disabled){color:var(--dsw-alias-label-primary);text-decoration:underline}",
+      ".dshRemoteSectionHeading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:10px}.dshRemoteSectionTitle{min-width:0;display:flex;align-items:center;gap:10px}.dshRemoteSectionTitle>strong{font-size:14px}.dshRemoteManageHosts{color:var(--dsw-alias-label-secondary);font-size:12px;text-decoration:none;white-space:nowrap}.dshRemoteManageHosts:hover{color:var(--dsw-alias-label-primary);text-decoration:underline}.dshRemoteSectionActions{display:flex;align-items:center;gap:14px}.dshRemoteSectionActions>button{border:0;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;padding:5px 0;font-size:12px}.dshRemoteSectionActions>button:hover:not(:disabled){color:var(--dsw-alias-label-primary);text-decoration:underline}",
       ".dshRemoteSectionTitle{flex:1}.dshRemoteSectionTitle>.dshRemoteConnectedMenu{margin-left:auto}",
       '.dshRemoteAcpSetting{display:block!important;width:100%;padding:0}.dshRemoteAcpSetting>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;cursor:pointer;list-style:none}.dshRemoteAcpSetting>summary::-webkit-details-marker{display:none}.dshRemoteAcpSetting>summary::after{content:"\u2304";color:var(--dsw-alias-label-secondary);transition:transform .18s ease-out}.dshRemoteAcpSetting[open]>summary::after{transform:rotate(180deg)}.dshRemoteAcpSummaryText{min-width:0}.dshRemoteAcpSummaryText strong{display:block}.dshRemoteAcpSummaryText p{margin:4px 0 0;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:1.4}.dshRemoteAcpCheckLink{grid-column:2;grid-row:1;color:var(--dsw-alias-brand-primary);font-size:12px;text-decoration:underline;text-underline-offset:3px}.dshRemoteAcpCheckLink:hover{color:var(--dsw-alias-label-primary)}.dshRemoteAcpCheckResult{grid-column:3;grid-row:1;font-size:11px;line-height:1.4;white-space:nowrap}.dshRemoteAcpCheckResult.isPassed{color:var(--dsw-alias-state-success-primary)}.dshRemoteAcpCheckResult.isFailed{color:var(--dsw-alias-state-danger-primary)}.dshRemoteAcpList{display:flex;flex-direction:column;gap:0;margin-top:12px;padding-top:0;border-top:0}.dshRemoteAcpList>.dshRemoteAuthorizationSetting{display:grid;width:100%;grid-template-columns:minmax(0,1fr) auto auto auto auto;align-items:center;column-gap:18px;line-height:1.4}.dshRemoteAcpList>.dshRemoteAuthorizationSetting>span:first-child{min-width:0;line-height:1.4}.dshRemoteAcpList>.dshRemoteAuthorizationSetting>input{grid-column:4;grid-row:1}',
       ".dshRemoteAcpAddLink{align-self:flex-start;margin-top:12px;color:var(--dsw-alias-brand-primary);font-size:12px;text-decoration:underline;text-underline-offset:3px}.dshRemoteAcpAddForm{display:grid;grid-template-columns:minmax(100px,.8fr) minmax(140px,1fr) minmax(100px,1fr) auto;gap:8px;margin-top:12px}.dshRemoteAcpAddForm input{min-width:0;height:34px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-2);color:inherit;padding:0 10px}.dshRemoteAcpAddForm button{border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:transparent;color:var(--dsw-alias-label-primary);padding:0 12px;cursor:pointer;font:inherit;font-size:12px}.dshRemoteAcpAddForm button:hover{background:var(--dsw-alias-interactive-bg-hover)}.dshRemoteAcpRemoveLink{grid-column:3;grid-row:1;color:var(--dsw-alias-label-secondary);font-size:12px;text-decoration:underline;text-underline-offset:3px}.dshRemoteAcpRemoveLink:hover{color:var(--dsw-alias-state-danger-primary)}",
@@ -3878,9 +4992,11 @@ If a code was sent, recover the original submission without changing it.`,
       ".dshRemoteAcpList>.dshRemoteAuthorizationSetting{grid-template-columns:minmax(0,1fr) auto 40px 56px;column-gap:18px}.dshRemoteAcpCheckCell{grid-column:2;display:flex;align-items:center;gap:10px;min-width:0}.dshRemoteAcpCheckLink,.dshRemoteAcpRemoveLink{justify-self:start}.dshRemoteAcpCheckResult{position:static}",
       ".dshRemoteAcpCheckLink.isPassed{color:var(--dsw-alias-state-success-primary)}.dshRemoteAcpCheckLink.isFailed{color:var(--dsw-alias-state-danger-primary)}.dshRemoteAcpCheckLink.isChecking{color:var(--dsw-alias-label-secondary)}.dshRemoteAcpInstallLink{color:var(--dsw-alias-brand-primary);font-size:12px;text-decoration:underline;text-underline-offset:3px;cursor:pointer;white-space:nowrap}.dshRemoteAcpInstallLink.isInstalling{color:var(--dsw-alias-label-secondary);pointer-events:none}",
       ".dshRemoteCancelWorkspace{min-height:36px;border:0;background:transparent;color:var(--dsw-alias-label-secondary);padding:6px 0;cursor:pointer}.dshRemoteCancelWorkspace:hover:not(:disabled){color:var(--dsw-alias-label-primary);text-decoration:underline}.dshRemoteCancelWorkspace:disabled{opacity:.5;cursor:default}",
-      '.dshRemoteHostList{display:flex;flex-direction:column;border-top:1px solid var(--dsw-alias-border-l2);max-height:296px;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}.dshRemoteHostList.isCollapsed{max-height:none;overflow-y:visible}.dshRemoteHostList>button{min-height:58px;flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px;text-align:left;border:0;border-bottom:1px solid var(--dsw-alias-border-l2);background:transparent;padding:10px 4px;cursor:pointer}.dshRemoteHostList>button:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}.dshRemoteHostList>button:disabled{opacity:.5;cursor:default}.dshRemoteHostList>button[aria-current="true"]{background:var(--dsw-alias-interactive-bg-hover)}.dshRemoteHostList>button>span{min-width:0;display:flex;flex-direction:column;gap:3px}.dshRemoteHostList>button strong{font-size:14px;font-weight:500}.dshRemoteHostList small{color:var(--dsw-alias-label-secondary);font-size:12px}',
+      ".dshRemoteHostLoading{display:flex;align-items:center;justify-content:center;gap:8px;position:absolute;left:50%;transform:translateX(-50%);white-space:nowrap;color:var(--dsw-alias-label-secondary)}",
+      '.dshRemoteHostList{display:flex;flex-direction:column;border-top:1px solid var(--dsw-alias-border-l2);max-height:296px;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}.dshRemoteHostList.isCollapsed{max-height:none;overflow-y:visible}.dshRemoteHostList>button{min-height:58px;flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px;text-align:left;border:0;border-bottom:1px solid var(--dsw-alias-border-l2);background:transparent;padding:10px 20px 10px 4px;cursor:pointer}.dshRemoteHostList>button:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}.dshRemoteHostList>button:disabled{opacity:.5;cursor:default}.dshRemoteHostList>button[aria-current="true"]{background:var(--dsw-alias-interactive-bg-hover)}.dshRemoteHostList>button>span{min-width:0;display:flex;flex-direction:column;gap:3px}.dshRemoteHostList>button strong{font-size:14px;font-weight:500}.dshRemoteHostList small{color:var(--dsw-alias-label-secondary);font-size:12px}',
       '.dshRemoteConnectedMenu{position:relative;flex:0 0 auto;margin-right:4px}.dshRemoteConnectedCount{appearance:none;display:inline-flex;align-items:center;justify-content:center;height:22px;border:0;border-radius:999px;background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-secondary);box-shadow:0 1px 2px rgba(0,0,0,.18),0 0 0 1px rgba(255,255,255,.04) inset;padding:0 10px;font:inherit;font-size:11px;font-weight:500;line-height:17px;white-space:nowrap;cursor:default}.dshRemoteConnectedCount.isOnline{color:var(--dsw-alias-state-success-primary)}.dshRemoteConnectedCount.isInteractive{cursor:pointer}.dshRemoteConnectedCount.isInteractive:hover{filter:brightness(1.08)}.dshRemoteConnectedCount:disabled{opacity:1;cursor:default}.dshRemoteConnectedCount:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}.dshRemoteConnectedPanel{position:absolute;top:calc(100% + 8px);right:0;z-index:4;width:min(320px,calc(100vw - 48px));max-height:min(280px,40vh);overflow:auto;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-2);box-shadow:0 10px 28px rgba(0,0,0,.28);padding:10px 12px}.dshRemoteConnectedPanelTitle{display:block;margin:0 0 6px;color:var(--dsw-alias-label-primary);font-size:12px;font-weight:600}.dshRemoteClientList{display:flex;flex-direction:column}.dshRemoteClientRow{min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--dsw-alias-border-l2)}.dshRemoteClientRow:last-child{border-bottom:0}.dshRemoteClientRow>span{min-width:0;display:flex;flex-direction:column;gap:2px}.dshRemoteClientRow strong{font-size:13px;font-weight:500}.dshRemoteClientRow small{color:var(--dsw-alias-label-secondary);font-size:11px}.dshRemoteClientOnline{display:inline-flex;align-items:center;gap:6px;color:var(--dsw-alias-state-success-primary)!important}.dshRemoteClientOnline::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}',
       ".dshRemoteConnectedCount{height:auto;border-radius:0;background:transparent;box-shadow:none;padding:0 4px;text-decoration:underline;text-decoration-color:color-mix(in srgb,currentColor 45%,transparent);text-underline-offset:3px}.dshRemoteConnectedCount.isInteractive:hover{filter:none;text-decoration-color:currentColor}.dshRemoteConnectedCount:focus-visible{outline-offset:3px;border-radius:3px}",
+      ".dshRemoteProgressStatus{display:inline-flex;align-items:center;gap:8px}",
       '.dshRemoteProgress{display:flex;flex-direction:column;gap:8px;margin:12px 0;padding:12px 14px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:var(--dsw-alias-bg-layer-2)}.dshRemoteProgressHeader{display:flex;align-items:center;justify-content:space-between;gap:12px}.dshRemoteProgressHeader strong{font-size:13px;font-weight:600}.dshRemoteProgressHeader span{color:var(--dsw-alias-label-secondary);font-size:12px}.dshRemoteProgressBar{height:6px;overflow:hidden;border-radius:999px;background:var(--dsw-alias-bg-layer-3)}.dshRemoteProgressBar>span{display:block;width:100%;height:100%;border-radius:inherit;background:var(--dsw-alias-brand-primary);transform-origin:left center;transition:transform .22s ease-out}[dir="rtl"] .dshRemoteProgressBar>span{transform-origin:right center}.dshRemoteProgress p{margin:0;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:1.45}.dshRemoteProgressRoute{font-weight:500}.dshRemoteProgressRoute .isActive{color:var(--dsw-alias-state-success-primary);font-weight:700}.dshRemoteProgressRouteArrow{color:var(--dsw-alias-label-tertiary)}@media(prefers-reduced-motion:reduce){.dshRemoteProgressBar>span{transition:none}}',
       '.dshRemoteBrowser{display:flex;flex-direction:column}.dshRemoteCrumbs{display:flex;align-items:center;gap:4px;overflow:auto;padding:2px 0 10px}.dshRemoteCrumbs>button{flex:0 0 auto;border:0;background:transparent;color:var(--dsw-alias-label-secondary);padding:5px 7px;border-radius:6px;cursor:pointer}.dshRemoteCrumbs>button:not(:last-child)::after{content:" /";color:var(--dsw-alias-label-tertiary)}.dshRemoteCrumbs>button:disabled{color:var(--dsw-alias-label-primary);font-weight:600}',
       ".dshRemotePage.hasSelectedHost>.dshRemotePageHeader{flex-shrink:0}.dshRemotePage.hasSelectedHost>.dshRemotePageBody{min-height:0;overflow:hidden}.dshRemotePage.hasSelectedHost .dshRemotePageBody>button,.dshRemotePage.hasSelectedHost .dshRemotePageBody>p{flex-shrink:0}.dshRemotePage.hasSelectedHost .dshRemoteBrowser{min-height:0;flex:1 1 auto}.dshRemoteBrowser>.dshRemoteWorkspaceHeading{flex-shrink:0}.dshRemoteWorkspaceLists,.dshRemoteFolderBrowser{min-height:0;overflow:auto;overscroll-behavior:contain;flex:1 1 auto}",
@@ -3895,10 +5011,11 @@ If a code was sent, recover the original submission without changing it.`,
       ".dshRemoteSettingsServer{width:100%;flex:initial!important;margin:0 0 16px!important}.dshRemoteSettingsServer>label{flex:0 0 auto;font-size:13px}.dshRemotePairingInstructions,.dshRemotePairing .dshRemoteError{white-space:pre-line}",
       ".dshRemoteLoginServer{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;flex:0 1 680px;min-width:0;margin:0}.dshRemoteLoginServer button{font-size:12px}.dshRemoteLoginServer input{box-sizing:border-box;flex:1 1 220px;min-width:0;min-height:40px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-3);color:inherit;padding:0 12px;font:inherit}.dshRemoteLoginServer button{flex:0 0 auto;min-height:40px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-3);color:inherit;padding:8px 12px;font:inherit;cursor:pointer}",
       ".dshRemoteClientLogin{width:min(440px,100%);display:flex;flex-direction:column;gap:8px}.dshRemoteClientLogin input{box-sizing:border-box;width:100%;min-height:40px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-3);color:inherit;padding:0 12px;font:inherit}.dshRemoteClientLogin button{align-self:flex-start;min-height:40px;border:0;border-radius:8px;background:var(--dsw-alias-label-primary);color:var(--dsw-alias-bg-layer-1);padding:8px 16px;cursor:pointer}.dshRemotePasswordHint{margin:0;text-align:center;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:1.5}",
+      '.dshRemoteLoginProgress{display:flex;align-items:center;justify-content:center;gap:8px;min-height:24px;color:var(--dsw-alias-label-secondary);font-size:12px}.dshRemoteLoginSpinner{order:1;display:inline-flex;align-items:center;justify-content:center;gap:12px;width:24px;height:16px;flex:0 0 auto}.dshRemoteLoginSpinner::before,.dshRemoteLoginSpinner::after{content:"";width:4px;height:4px;border-radius:50%;background:currentColor;animation:dshRemoteLoginPulse 1.2s ease-in-out infinite}.dshRemoteLoginSpinner::after{animation-delay:.2s}.dshRemoteLoginSpinner{background:radial-gradient(circle,currentColor 2px,transparent 2.5px) center/4px 4px no-repeat;animation:dshRemoteLoginPulse 1.2s ease-in-out .1s infinite}@keyframes dshRemoteLoginPulse{0%,80%,100%{opacity:.35}40%{opacity:1}}@media(prefers-reduced-motion:reduce){.dshRemoteLoginSpinner,.dshRemoteLoginSpinner::before,.dshRemoteLoginSpinner::after{animation:none;opacity:.65}}',
       ".dshRemoteQrLogin{width:min(440px,100%);display:flex;flex-direction:column;align-items:center;gap:8px;padding:6px 0 2px;text-align:center}.dshRemoteQrLogin img,.dshRemoteQrPlaceholder{box-sizing:border-box;width:200px;height:200px;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:#fff;padding:8px}.dshRemoteQrOpen{display:flex;flex-direction:column;align-items:center;gap:5px;color:var(--dsw-alias-label-secondary);font-size:12px;text-decoration:none}.dshRemoteQrOpen:hover{color:var(--dsw-alias-label-primary);text-decoration:underline}.dshRemoteQrOpen:hover img{border-color:var(--dsw-alias-label-dimmed)}.dshRemoteQrOpen:focus-visible{border-radius:12px;outline:2px solid var(--dsw-alias-brand-primary);outline-offset:3px}.dshRemoteQrPlaceholder{display:flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-secondary)}.dshRemoteQrLogin>strong{font-size:14px}.dshRemoteQrLogin>p{max-width:48ch;margin:0;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:1.5}.dshRemoteServiceAddress{box-sizing:border-box;display:flex;flex-wrap:nowrap;align-items:center;justify-content:center;gap:6px;width:100%;height:44px;min-height:44px;margin:8px 0 0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:1.5}.dshRemoteServiceAddress>span{flex:0 0 auto;white-space:nowrap}.dshRemoteServiceAddress>a{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary);text-decoration:none}.dshRemoteServiceAddress>a:hover{color:var(--dsw-alias-label-primary);text-decoration:underline}.dshRemoteServiceAddressEdit{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:4px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}.dshRemoteServiceAddressEdit:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.dshRemoteServiceAddressEdit:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}.dshRemoteServiceAddressEdit:disabled{opacity:.5;cursor:default}.dshRemoteQrLogin>button,.dshRemoteClientLogin>.dshRemoteLoginSwitch{min-height:32px;border:0;background:transparent;color:var(--dsw-alias-label-secondary);padding:4px 8px;font:inherit;font-size:12px;cursor:pointer}.dshRemoteQrLogin>button:hover,.dshRemoteClientLogin>.dshRemoteLoginSwitch:hover{color:var(--dsw-alias-label-primary);text-decoration:underline}.dshRemoteClientLogin>.dshRemoteLoginSwitch{align-self:flex-start;background:transparent;color:var(--dsw-alias-label-secondary);padding-left:0}",
       ".dshRemoteLoginHeading{box-sizing:border-box;width:100%;display:flex;align-items:baseline;justify-content:center;overflow:hidden;white-space:nowrap;font-size:14px}.dshRemoteLoginHeading>a{display:inline-flex;align-items:baseline;justify-content:center;gap:10px;min-width:0;color:var(--dsw-alias-label-primary);font-size:inherit;font-weight:700;text-decoration:none;border-bottom:1px solid transparent}.dshRemoteLoginHeading>a:hover{text-decoration:none;border-bottom-color:currentColor}.dshRemoteLoginHeading>a:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px;border-radius:3px}.dshRemoteLoginTitle{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dshRemoteLoginHeading>a>span{flex:0 0 auto;color:inherit;font-size:inherit;font-weight:inherit}.dshRemoteLoginTabs{box-sizing:border-box;width:100%;flex-wrap:nowrap;overflow-x:auto}.dshRemoteLoginTabs>button{min-width:max-content;flex:1 0 auto;display:flex;align-items:center;justify-content:center;padding:6px 10px;white-space:nowrap;text-align:center}.dshRemoteLoginTabs>button.isActive::after{right:0;left:0;bottom:0;border-radius:0}.dshRemoteClientLogin,.dshRemoteQrLogin{box-sizing:border-box;width:100%;height:300px;min-height:300px}.dshRemoteClientLogin{align-items:stretch;padding-top:16px}.dshRemoteClientLogin>button{align-self:stretch;width:100%}.dshRemoteQrLogin{padding-top:12px}",
       '.dshRemoteHostControlToggle{display:flex;align-items:center;gap:7px;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px;white-space:nowrap;cursor:default}.dshRemoteHostControlToggle>input{appearance:none;box-sizing:border-box;position:relative;width:32px;height:18px;flex:0 0 auto;margin:0;border:1px solid var(--dsw-alias-label-secondary);border-radius:999px;background:var(--dsw-alias-bg-layer-3);cursor:pointer;box-shadow:inset 0 0 0 1px var(--dsw-alias-border-l2);transition:background .16s ease-out,border-color .16s ease-out,box-shadow .16s ease-out}.dshRemoteHostControlToggle>input::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:var(--dsw-alias-label-secondary);transition:transform .16s ease-out,background .16s ease-out}.dshRemoteHostControlToggle>input:checked{border-color:var(--dsw-alias-state-success-primary);background:var(--dsw-alias-state-success-primary);box-shadow:none}.dshRemoteHostControlToggle>input:checked::after{transform:translateX(14px);background:var(--dsw-alias-bg-layer-1)}.dshRemoteHostControlToggle>input:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}.dshRemoteHostControlToggle>input:disabled{opacity:.5;cursor:default}@media(prefers-reduced-motion:reduce){.dshRemoteHostControlToggle>input,.dshRemoteHostControlToggle>input::after{transition:none}}',
-      ".dshRemoteAccountFooter{display:flex;align-items:center;justify-content:flex-start;gap:12px;border-top:1px solid var(--dsw-alias-border-l2);padding-top:14px;color:var(--dsw-alias-label-secondary);font-size:12px}.dshRemoteAccountSettings{flex:0 0 auto;border:0;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;padding:5px 0;font:inherit;line-height:1.5;white-space:nowrap}.dshRemoteAccountSettings:hover{color:var(--dsw-alias-label-primary);text-decoration:underline}.dshRemoteAccountExit{flex:0 0 auto;margin-left:auto;border:0;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;padding:5px 0;font-size:12px;line-height:1.5;white-space:nowrap}.dshRemoteAccountExit:hover:not(:disabled){color:var(--dsw-alias-label-primary);text-decoration:underline}.dshRemoteAccountExit:disabled{opacity:.5;cursor:default;text-decoration:none}",
+      ".dshRemoteAccountFooter{position:relative;display:flex;align-items:center;justify-content:flex-start;gap:12px;border-top:1px solid var(--dsw-alias-border-l2);padding-top:14px;color:var(--dsw-alias-label-secondary);font-size:12px}.dshRemoteAccountSettings{flex:0 0 auto;border:0;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;padding:5px 0;font:inherit;line-height:1.5;white-space:nowrap}.dshRemoteAccountSettings:hover{color:var(--dsw-alias-label-primary);text-decoration:underline}.dshRemoteAccountExit{flex:0 0 auto;margin-left:auto;border:0;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;padding:5px 0;font-size:12px;line-height:1.5;white-space:nowrap}.dshRemoteAccountExit:hover:not(:disabled){color:var(--dsw-alias-label-primary);text-decoration:underline}.dshRemoteAccountExit:disabled{opacity:.5;cursor:default;text-decoration:none}",
       ".dshRemoteLocalLink{align-self:flex-start;border:0;background:transparent;color:var(--dsw-alias-label-secondary);padding:4px 0;cursor:pointer}.dshRemoteLocalLink:hover{color:var(--dsw-alias-label-primary)}",
       "@keyframes dshRemotePageIn{from{opacity:0;transform:translateY(6px) scale(.99)}to{opacity:1;transform:none}}@media(prefers-reduced-motion:reduce){.dshRemotePage{animation:none}}@media(max-width:620px){.dshRemoteBackdrop{padding:12px}.dshRemotePage{max-height:calc(100vh - 24px)}.dshRemotePageHeader{gap:8px;padding:12px 16px}.dshRemotePage.hasSelectedHost .dshRemotePageBack{max-width:112px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dshRemoteSectionHeading{align-items:flex-start;flex-direction:column;gap:8px}.dshRemoteWorkspaceHeading{align-items:center;flex-direction:row}.dshRemoteSectionActions{width:100%;justify-content:space-between}.dshRemotePageBody{padding:20px 16px}.dshRemoteOpenBar{align-items:flex-end}.dshRemoteOpenBar>button{min-height:48px}}",
       ".dshRemoteBackdrop{position:fixed;inset:0;z-index:1000;background:var(--dsw-alias-bg-mask-3);display:grid;place-items:center;padding:20px;-webkit-app-region:no-drag}",
@@ -3929,15 +5046,17 @@ If a code was sent, recover the original submission without changing it.`,
       ".dshRemotePairing{padding:16px 0;border-bottom:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-primary)}.dshRemotePairing h3{font-size:14px;margin:0 0 8px}.dshRemotePairing p{font-size:13px;line-height:1.5;margin:8px 0}.dshRemotePairingQr{box-sizing:border-box;display:block;width:min(200px,100%);height:auto;margin:12px auto;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;padding:8px;background:#fff}.dshRemotePairingIdentity code{overflow-wrap:anywhere;font-size:12px}.dshRemotePairing label{display:grid;gap:8px}.dshRemotePairing input{width:100%;max-width:240px;box-sizing:border-box;padding:10px 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:20px;letter-spacing:.15em}.dshRemotePairing input:focus-visible,.dshRemotePairing button:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}.dshRemotePairingActions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}",
       ".dshRemoteServiceAddress:has(form){height:auto;flex-wrap:wrap;justify-content:flex-start;row-gap:6px}.dshRemoteServiceAddress:has(form)>span{width:100%;text-align:left}.dshRemoteServiceAddress .dshRemoteLoginServer{box-sizing:border-box;width:100%;flex:1 0 100%;display:flex;flex-wrap:wrap;gap:6px}.dshRemoteServiceAddress .dshRemoteLoginServer>input,.dshRemoteServiceAddress .dshRemoteLoginServer>button{box-sizing:border-box;height:36px;min-height:36px;font-size:13px;line-height:normal;border-radius:8px;padding:0 10px}.dshRemoteServiceAddress .dshRemoteLoginServer>input{flex:1 1 180px;width:0;min-width:180px}.dshRemoteServiceAddress .dshRemoteLoginServer>button{flex:0 1 auto}",
       ".dshRemotePairing .dshRemotePairingCountdown{text-align:center;font-size:12px;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary);margin:4px 0}",
-      ".dshRemoteLoginContent{box-sizing:border-box;height:auto;min-height:320px;overflow:visible;overflow-anchor:none;padding-top:12px}.dshRemoteLoginContent>.dshRemoteClientLogin,.dshRemoteLoginContent>.dshRemoteQrLogin{height:auto;min-height:0;padding-top:4px}.dshRemoteLoginContent .dshRemoteQrPlaceholder,.dshRemoteLoginContent .dshRemoteInlineSignInQrState{box-sizing:border-box;height:228px;min-height:228px;display:flex;flex-direction:column;align-items:center;justify-content:center}.dshRemoteLoginContent .dshRemoteQrOpen{box-sizing:border-box;min-height:228px}.dshRemoteInlineSignIn .dshRemoteLoginContent>.dshRemoteClientLogin,.dshRemoteInlineSignIn .dshRemoteLoginContent>.dshRemoteQrLogin{padding-top:4px}.dshRemoteLoginContent .dshRemotePairing,.dshRemoteInlineSignIn .dshRemoteLoginContent .dshRemotePairing{padding:4px 0}.dshRemoteLoginContent .dshRemotePairing .dshRemotePairingInstructions,.dshRemoteLoginContent .dshRemotePairing .dshRemotePairingPolicy{margin:0 0 8px}.dshRemoteLoginContent .dshRemotePairingQr{margin:8px auto}",
+      ".dshRemoteLoginContent{box-sizing:border-box;height:360px;min-height:360px;overflow:auto;scrollbar-gutter:stable;overflow-anchor:none;padding-top:12px}.dshRemoteLoginContent>.dshRemoteClientLogin,.dshRemoteLoginContent>.dshRemoteQrLogin{height:auto;min-height:0;padding-top:4px}.dshRemoteLoginContent .dshRemoteQrPlaceholder,.dshRemoteLoginContent .dshRemoteInlineSignInQrState{box-sizing:border-box;height:228px;min-height:228px;display:flex;flex-direction:column;align-items:center;justify-content:center}.dshRemoteLoginContent .dshRemoteQrOpen{box-sizing:border-box;min-height:228px}.dshRemoteInlineSignIn .dshRemoteLoginContent>.dshRemoteClientLogin,.dshRemoteInlineSignIn .dshRemoteLoginContent>.dshRemoteQrLogin{padding-top:4px}.dshRemoteLoginContent .dshRemotePairing,.dshRemoteInlineSignIn .dshRemoteLoginContent .dshRemotePairing{padding:4px 0}.dshRemoteLoginContent .dshRemotePairing .dshRemotePairingInstructions,.dshRemoteLoginContent .dshRemotePairing .dshRemotePairingPolicy{margin:0 0 8px}.dshRemoteLoginContent .dshRemotePairingQr{margin:8px auto}",
       ".dshRemoteInlineSignIn>.dshRemoteServiceAddress{justify-content:center;margin:8px 0 0;font-size:12px;height:36px;min-height:36px}.dshRemoteInlineSignIn>.dshRemoteServiceAddress:has(form){height:auto;min-height:0;margin-bottom:24px;position:relative;z-index:1;background:var(--dsw-alias-bg-base,var(--dsw-alias-bg-layer-1))}.dshRemotePanelPairing{width:100%;min-width:0}.dshRemotePanelPairing .dshRemoteSave{background:var(--dsw-alias-label-primary);color:var(--dsw-alias-bg-layer-1);border:0}.dshRemotePanelPairing .dshRemotePairing{border-bottom:0}.dshRemotePanelPairing .dshRemotePairingPolicy{color:var(--dsw-alias-label-secondary);font-size:12px}",
       ".dshRemoteInlineSignIn .dshRemoteClientLogin{max-width:440px}.dshRemoteInlineSignIn .dshRemoteClientLogin>input,.dshRemoteInlineSignIn .dshRemoteClientLogin>button{height:36px;min-height:36px;font-size:13px}.dshRemoteInlineSignIn{width:min(440px,100%);max-width:100%;margin:0 auto 48px;padding-top:0;border-top:0}.dshRemoteInlineSignIn .dshRemoteSettingsServer{display:flex;align-items:center;gap:8px;width:100%;margin:0 0 20px!important}.dshRemoteInlineSignIn .dshRemoteSettingsServer>label{font-size:12px;color:var(--dsw-alias-label-secondary);white-space:nowrap}.dshRemoteInlineSignIn .dshRemoteSettingsServer>input{height:34px;min-height:34px;font-size:13px;padding:0 10px;background:transparent;border-radius:6px}.dshRemoteInlineSignIn .dshRemoteSettingsServer>button{height:34px;min-height:34px;padding:0 12px;font-size:12px;border-radius:6px;background:transparent}.dshRemoteInlineSignIn .dshRemoteLoginTabs{width:100%;justify-content:stretch;gap:0}.dshRemoteInlineSignIn .dshRemoteLoginTabs>button{flex:1 0 0;min-width:max-content;min-height:38px;padding:6px 10px;font-size:13px}.dshRemoteInlineSignIn .dshRemotePairing{padding:20px 0 8px;border-bottom:0}.dshRemoteInlineSignIn .dshRemotePairing h3{margin:0 0 12px;font-size:14px}.dshRemoteInlineSignIn .dshRemotePairingInstructions{font-size:13px;line-height:1.8;margin:0 0 12px}.dshRemoteInlineSignIn .dshRemotePairingPolicy{font-size:12px;color:var(--dsw-alias-label-secondary);margin:0 0 20px}.dshRemoteInlineSignIn .dshRemotePairingActions{margin:16px 0 0}.dshRemoteInlineSignIn .dshRemotePairingActions>button{width:100%;min-height:36px;padding:8px 14px;font-size:13px;border-radius:8px}.dshRemoteInlineSignIn .dshRemotePairing .dshRemoteError{font-size:12px;line-height:1.7}",
       ".dshRemoteLoginContent .dshRemotePairingQr{margin:4px auto}.dshRemotePairingActions:empty{display:none}.dshRemotePairingQrActions{display:flex;align-items:center;justify-content:center;gap:16px;min-height:48px}.dshRemotePairingQrActions>.dshRemotePairingCountdown{font-size:18px;line-height:1.4}.dshRemotePairingQrActions>button{min-height:44px;padding:8px 18px;font-size:15px}.dshRemoteLoginContent .dshRemotePairing .dshRemotePairingInstructions{font-size:15px;line-height:1.6}.dshRemotePairingInstructionPrimary{font-size:18px}.dshRemotePairingInstructionSecondary{font-size:15px}.dshRemoteLoginContent .dshRemotePairing .dshRemotePairingInstructions,.dshRemoteLoginContent .dshRemotePairing .dshRemotePairingPolicy{margin-bottom:4px}",
       ".dshRemotePairingHeading{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 12px;margin-bottom:12px}.dshRemotePairingHeading>.dshRemotePairingInstructions{margin:0!important}.dshRemotePairingHeading>.dshRemotePairingCountdown{white-space:nowrap}.dshRemotePairing .dshRemotePairingIdentity{margin:12px 0 20px}.dshRemotePairingIdentity>strong{display:inline-block;margin-bottom:4px}.dshRemotePairingIdentity code{display:inline-block;font-size:11px;line-height:1.6;color:var(--dsw-alias-label-secondary)}.dshRemotePairingCodeForm{display:grid;gap:12px;margin-top:20px}.dshRemotePairingCodeForm>label{font-size:13px;gap:8px}.dshRemotePairingCodeForm input{height:44px;padding:8px 12px;font-size:20px}.dshRemotePairing .dshRemotePairingCodeWarning{margin:0;font-size:12px;line-height:1.6;color:var(--dsw-alias-label-secondary)}.dshRemotePairingCodeActions{display:flex;gap:8px;flex-wrap:wrap}.dshRemotePairingCodeActions>button{min-height:36px;font-size:13px}",
-      '.dshRemoteAuthorizationSetting{border-top:1px solid var(--dsw-alias-border-l2);display:flex;align-items:center;justify-content:space-between;gap:20px;padding:12px 0}.dshRemoteAuthorizationSetting>div{min-width:0}.dshRemoteAuthorizationSetting strong{font-size:13px;font-weight:500}.dshRemoteAuthorizationSetting p{margin:3px 0 0;color:var(--dsw-alias-label-tertiary);font-size:12px}.dshRemoteAuthorizationSetting>input{appearance:none;position:relative;width:38px;height:22px;flex:0 0 auto;margin:0;border:1px solid var(--dsw-alias-label-secondary);border-radius:999px;background:var(--dsw-alias-bg-layer-3);cursor:pointer;box-shadow:inset 0 0 0 1px var(--dsw-alias-border-l2);transition:background .16s ease-out,border-color .16s ease-out,box-shadow .16s ease-out}.dshRemoteAuthorizationSetting>input::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--dsw-alias-label-secondary);transition:transform .16s ease-out,background .16s ease-out}.dshRemoteAuthorizationSetting>input:checked{border-color:var(--dsw-alias-state-success-primary);background:var(--dsw-alias-state-success-primary);box-shadow:none}.dshRemoteAuthorizationSetting>input:checked::after{transform:translateX(16px);background:var(--dsw-alias-bg-layer-1)}.dshRemoteAuthorizationSetting>input:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}.dshRemoteAuthorizationSetting>input:disabled{opacity:.5;cursor:default}@media(prefers-reduced-motion:reduce){.dshRemoteAuthorizationSetting>input,.dshRemoteAuthorizationSetting>input::after{transition:none}}',
+      '.dshRemoteAuthorizationSetting{border-top:1px solid var(--dsw-alias-border-l2);display:flex;align-items:center;justify-content:space-between;gap:20px;padding:12px 0}.dshRemoteAuthorizationSetting>div{min-width:0}.dshRemoteAuthorizationSetting strong{font-size:13px;font-weight:500}.dshRemoteAuthorizationSetting p{margin:3px 0 0;color:var(--dsw-alias-label-tertiary);font-size:12px}.dshRemoteAuthorizationSetting>input,.dshRemoteDebugLogControls>input{appearance:none;position:relative;width:38px;height:22px;flex:0 0 auto;margin:0;border:1px solid var(--dsw-alias-label-secondary);border-radius:999px;background:var(--dsw-alias-bg-layer-3);cursor:pointer;box-shadow:inset 0 0 0 1px var(--dsw-alias-border-l2);transition:background .16s ease-out,border-color .16s ease-out,box-shadow .16s ease-out}.dshRemoteAuthorizationSetting>input::after,.dshRemoteDebugLogControls>input::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--dsw-alias-label-secondary);transition:transform .16s ease-out,background .16s ease-out}.dshRemoteAuthorizationSetting>input:checked,.dshRemoteDebugLogControls>input:checked{border-color:var(--dsw-alias-state-success-primary);background:var(--dsw-alias-state-success-primary);box-shadow:none}.dshRemoteAuthorizationSetting>input:checked::after,.dshRemoteDebugLogControls>input:checked::after{transform:translateX(16px);background:var(--dsw-alias-bg-layer-1)}.dshRemoteAuthorizationSetting>input:focus-visible,.dshRemoteDebugLogControls>input:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}.dshRemoteAuthorizationSetting>input:disabled,.dshRemoteDebugLogControls>input:disabled{opacity:.5;cursor:default}@media(prefers-reduced-motion:reduce){.dshRemoteAuthorizationSetting>input,.dshRemoteAuthorizationSetting>input::after,.dshRemoteDebugLogControls>input,.dshRemoteDebugLogControls>input::after{transition:none}}',
       ".dshRemoteAssociation{min-width:0;flex:1;display:grid;grid-template-columns:minmax(0,auto) minmax(0,1fr);align-items:baseline;column-gap:12px;row-gap:4px}.dshRemoteAssociation>span{grid-column:1/-1;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:1.5}.dshRemoteAssociation strong{grid-column:1;min-width:0;color:var(--dsw-alias-label-primary);font-size:14px;font-weight:500;line-height:1.5;overflow-wrap:anywhere}.dshRemoteAssociation p{grid-column:2;color:var(--dsw-alias-label-tertiary);margin:0;font-size:12px;line-height:1.5}",
       ".dshRemoteConnection{border-top:1px solid var(--dsw-alias-border-l2);display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0}.dshRemoteConnectionSummary{min-width:0;display:flex;flex-direction:column;gap:4px}.dshRemoteConnectionSummary>span{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:1.5}.dshRemoteConnectionSummary strong{display:flex;align-items:center;gap:7px;color:var(--dsw-alias-label-primary);font-size:14px;font-weight:500;line-height:1.5}.dshRemoteConnectionSummary p,.dshRemoteConnectionIssue{color:var(--dsw-alias-label-tertiary);margin:0;font-size:12px;line-height:1.5}.dshRemoteConnectionDot{width:8px;height:8px;flex:0 0 auto;border-radius:999px;background:var(--dsw-alias-label-tertiary)}.dshRemoteConnectionDot.isOnline{background:var(--dsw-alias-state-success-primary)}.dshRemoteConnectionDot.isReconnecting{background:var(--dsw-alias-state-warn-primary)}.dshRemoteConnectionDot.isOffline{background:var(--dsw-alias-state-error-primary)}.dshRemoteConnectionIssue{color:var(--dsw-alias-state-error-primary);padding:0 0 12px}.dshRemoteReconnect{appearance:none;flex:0 0 auto;font:inherit;cursor:pointer;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);min-height:34px;padding:5px 14px;font-size:13px;line-height:1.5}.dshRemoteReconnect:hover:not(:disabled){color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-label-dimmed);background:var(--dsw-alias-interactive-bg-hover)}.dshRemoteReconnect:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}.dshRemoteReconnect:disabled{opacity:.4;cursor:default}",
       ".dshRemoteSettingsFooter{border-top:1px solid var(--dsw-alias-border-l2);display:flex;justify-content:flex-end;align-items:center;gap:8px;padding:12px 0 4px}.dshRemoteSettingsFooter .dshRemoteError,.dshRemoteNotice{min-width:0;flex:1;margin:0;font-size:12px;line-height:1.5}.dshRemoteNotice{color:var(--dsw-alias-label-tertiary)}.dshRemoteDiscard,.dshRemoteSave{appearance:none;font:inherit;cursor:pointer;border:1px solid transparent;border-radius:8px;padding:5px 14px;font-size:13px;line-height:1.5}.dshRemoteDiscard{border-color:var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);background:transparent}.dshRemoteDiscard:hover:not(:disabled){color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-label-dimmed)}.dshRemoteSave{background:var(--dsw-alias-label-primary);color:var(--dsw-alias-bg-layer-3)}.dshRemoteDiscard:disabled,.dshRemoteSave:disabled{opacity:.4;cursor:default}.dshRemoteDiscard:focus-visible,.dshRemoteSave:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}",
+      ".dshRemoteDebugLogGroup{border-top:1px solid var(--dsw-alias-border-l2);padding:12px 0}.dshRemoteDebugLogHeader{display:flex;align-items:center;justify-content:space-between;gap:16px}.dshRemoteDebugLogTrigger{appearance:none;border:0!important;border-radius:6px!important;background:transparent!important;padding:0!important;margin:0;text-align:left;color:inherit;font:inherit;cursor:pointer;min-width:0;flex:1;min-height:unset!important;white-space:normal}.dshRemoteDebugLogTrigger:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:4px;border-radius:6px}.dshRemoteDebugLogTitleRow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.dshRemoteDebugLogTitleRow strong{font-size:13px;font-weight:500}.dshRemoteDebugLogTrigger p{margin:3px 0 0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:1.4;white-space:normal}.dshRemoteDebugLogLevelBadge{display:inline-flex;align-items:center;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:500;line-height:1.5;background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-secondary);border:1px solid var(--dsw-alias-border-l2)}.dshRemoteDebugLogLevelBadge.isDebug{color:var(--dsw-alias-state-success-primary);border-color:var(--dsw-alias-state-success-primary)}.dshRemoteDebugLogControls{display:flex;align-items:center;gap:10px;flex:0 0 auto}",
+      ".dshRemoteLogToggleBtn,.dshRemoteLogActionBtn,.dshRemoteLogFilterBtn{appearance:none;font:inherit;cursor:pointer;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);min-height:28px!important;padding:3px 10px!important;font-size:12px!important;line-height:1.4!important;white-space:nowrap}.dshRemoteLogToggleBtn:hover:not(:disabled),.dshRemoteLogActionBtn:hover:not(:disabled),.dshRemoteLogFilterBtn:hover:not(:disabled){color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-label-dimmed);background:var(--dsw-alias-interactive-bg-hover)}.dshRemoteLogToggleBtn:disabled,.dshRemoteLogActionBtn:disabled,.dshRemoteLogFilterBtn:disabled{opacity:.45;cursor:default}.dshRemoteLogFilterBtn.isActive{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-3);border-color:var(--dsw-alias-label-secondary);font-weight:500}.dshRemoteLogDrawer{margin-top:12px;padding:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:var(--dsw-alias-bg-layer-2,var(--dsw-alias-bg-layer-1));display:flex;flex-direction:column;gap:8px}.dshRemoteLogToolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.dshRemoteLogFilterGroup,.dshRemoteLogActions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.dshRemoteLogMeta{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--dsw-alias-label-tertiary);line-height:1.4}.dshRemoteLogMeta code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere}.dshRemoteLogFallback{color:var(--dsw-alias-state-warn-primary)}.dshRemoteLogViewport{box-sizing:border-box;width:100%;max-height:260px;min-height:120px;overflow:auto;padding:10px 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-3);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;line-height:1.55;margin:0;white-space:pre-wrap;overflow-wrap:break-word;word-break:normal}.dshRemoteLogLine{display:block;color:var(--dsw-alias-label-primary);margin-bottom:3px}.dshRemoteLogLine:last-child{margin-bottom:0}.dshRemoteLogLine.isDebug{color:var(--dsw-alias-label-tertiary)}.dshRemoteLogLine.isWarn{color:var(--dsw-alias-state-warn-primary)}.dshRemoteLogLine.isError{color:var(--dsw-alias-state-error-primary)}.dshRemoteLogEmpty{color:var(--dsw-alias-label-tertiary);font-size:12px;margin:0;padding:16px 0;text-align:center}",
       "@media(max-width:620px){.dshRemotePluginCardStatus{display:none}.dshRemoteSettingsTop{gap:10px}.dshRemoteConnection{align-items:flex-start}.dshRemoteReconnect{min-height:40px}.dshRemotePortsRow{flex-direction:column}.dshRemoteAcpAddForm{grid-template-columns:1fr}.dshRemoteAcpAddForm button{min-height:40px}}"
     ].join(""), document.head.append(style), () => style.remove();
   }
@@ -3954,6 +5073,37 @@ If a code was sent, recover the original submission without changing it.`,
     }), observer = new MutationObserver(update);
     return observer.observe(document.body, { childList: !0, subtree: !0 }), update(), () => {
       unsubscribe(), observer.disconnect(), notice?.remove();
+    };
+  }
+
+  // packages/plugin/src/client/account-entry.ts
+  var NATIVE_ROW_SELECTOR = '[class*="settingsArea"] [class*="triggerRow"]', DS_BOT_ROW_SELECTOR = '[class*="settingsArea"] .bt-settings-row', accountRowSelectors = [NATIVE_ROW_SELECTOR, DS_BOT_ROW_SELECTOR], accountRowRetry = { intervalMs: 50, attempts: 40 }, MISSING_ANCHOR_WARNING = 'ds-harness-remote: Compact sidebar entry found no account row ([class*="settingsArea"] [class*="triggerRow"] or [class*="settingsArea"] .bt-settings-row). This host/DS-Bot combination exposes no Compact slot; the Standard entry stays in the sidebar footer.', warned = /* @__PURE__ */ new Set();
+  function reportMissingAnchor() {
+    warned.has(MISSING_ANCHOR_WARNING) || (warned.add(MISSING_ANCHOR_WARNING), console.warn(MISSING_ANCHOR_WARNING));
+  }
+  function isLaidOut(row) {
+    return typeof row.getClientRects != "function" || row.getClientRects().length > 0;
+  }
+  function findAccountRow(root) {
+    for (let selector of accountRowSelectors)
+      for (let row of Array.from(root.querySelectorAll(selector)))
+        if (isLaidOut(row)) return row;
+    return null;
+  }
+  function mountAccountEntry(attach) {
+    let attempt = 0, timer, host, attached = !1, observer, sync = () => {
+      timer !== void 0 && (window.clearTimeout(timer), timer = void 0);
+      let row = findAccountRow(document);
+      if (row === null) {
+        attached && (attached = !1, attach(null)), attempt < accountRowRetry.attempts ? (attempt += 1, timer = window.setTimeout(sync, accountRowRetry.intervalMs)) : reportMissingAnchor();
+        return;
+      }
+      attempt = 0, host === void 0 && (host = document.createElement("span")), (host.parentElement !== row || !host.isConnected) && row.append(host), attached || (attached = !0, attach(host)), observer === void 0 && document.body !== null && (observer = new MutationObserver(() => {
+        (!attached || host?.isConnected !== !0) && sync();
+      }), observer.observe(document.body, { childList: !0, subtree: !0 }));
+    };
+    return sync(), () => {
+      timer !== void 0 && window.clearTimeout(timer), observer?.disconnect(), host?.remove();
     };
   }
 
@@ -3996,27 +5146,41 @@ If a code was sent, recover the original submission without changing it.`,
   // packages/plugin/src/client/icons.ts
   var deepSeekWorkspaceIcon = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAACVBMVEUAAADy8vXx8fUsA3vyAAAAAXRSTlMAQObYZgAAAOxJREFUWMPtlsEOwyAMQxP+/6OnTZMGxHGcot3wDYgfhkJbs6urprzveGtu9d1NgEdto8w93GuA7zPS2RFg7ynsCOAokbtAmLr2YaeKgJ6fxpT8jCAC0qSqPyNoO5DXdvyouj4ClFAdYaDxK09uiBDCIYBf6CxLesnR0uF2pG+JmhCqrUb0AOvjjoQaYDTCEAAgMg5grhAeAQIB+/M15IcKlnUIp4CkTCd0AKb4zVsRSJVGYEVzT0agK107IMGMEurvromEpaX4wzk/IKw378kq4LafED6Oowxfk7AP2q8W16EdM3p29Eyvrv6vF0WIBfBziKyCAAAAAElFTkSuQmCC", gptWorkspaceIcon = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAclBMVEX////v7+++wMf////s7O3k5OTExcrX2Ny6vMTv8PPW19yXmqRqboJmaHd3eoaqrLPs7fGMjpfb3eKlpq1eYXOxs7pWWWd+gY5HSVdRVGVub3k+QU74+Pg4OkcvMT1ISlUoKjUiIy4fICueoKkaGyUSFB21Bp+qAAAAAXRSTlMAQObYZgAABChJREFUWMPtl916qjoQhlsdEwIECEgMYCBxx/u/xT1DrFUL1LO1DtY8LSLJvPnmB4gfH//sr7TPDfvdebf/xXZbkE/4zZ0MVhGHd9zJDsv+7F3//Z69tT5wljAu3tXw+TIlzXKJlhflYmJ+5uF5WpWhb54X+C/zZCmT2wJA4dJZwus0UYjIGqWyMhVbEp4yKNRRqlv0opW5PJLJ4rFJXvP4JKDRMqturBZjkMVJFYjR6iHQDQDI4+k2k51wZbWrqwp4mR/1CVYATyko9TFGxBUqL5IvMbXSWt0T8bkGgFLqgqZBI/Uxbx5UAxLaNcCNLBpttM7wbCc1pmJOpWAsDtey68UaQMyrFgb9uxLPjqg3+nGluyKN0XUdWw0BJ0NvTFFqgzpr9J+Dh4w0Ga1qkqBNswagxdRgFPAbgHRQG5jumGWyMxrTIaRRa4AzFs0YrNMXgI4MJWnsKYFhGNMnIh/mBOPsV8CZBFjN9w8ArowxnZzDr5IcvxTaKpxJCVsoI3SWysz1UM4AqQdzlCgho1IKrK+x1mKFzisANtgEU8E7GwHDgOqxe4w9tnM166wbaA2xBMBLrTWcAGYGdCiYVUJUrMCF+7l6gklrW1RwPi8ByjuActANqhKzVWoYrFGcCFzbDgNaBrTWpncFQMcI2DfWoAiDqRCiHcYM/ZdCEKkZqfR8spj4F0CiJjv2gHL6URNoCQDaYacL6O1oFDO2eQDUFP7AKdCRdC4CRDZaNifbjA41l/uYb/SZMAFNTBGzY7sG4J2jTsJgToOzIzXF3HZqBpSOAGduXbkGEKV1OqVGqRJpRxtvwbSw5IqAiUJItwBCOT9R32FCGo3nCkAN3t0UTBRC6zDONcBeOee9pr4T+ASbnDOdc5OmtREwEEB5w8Wqgt4bOV5c7Lt9iiK8zdP/IsBbutUGX4gNwEVCqd3FUt/xYnRWt7BvPBYQjwjAGXa3ASguHVAZ/WXKlA3eZDX1wRegFsr7E2wAlB9xFbx/7MV70kFT8aqNgLL3F8nFBmA3hrn/IJHjKJOK2oj1WI4Z4FzwN/81AOhgYD6v2xbIvaZIurLC9AfvB1WLTYAoXejF1xeBL5cpBIyEbmxkZymIXwDQh1BAfOrhI1lfwtgz8tozF5T4ttf3+32AyxC6klwAgw/YVTHpoK82xYt3wLP/Bw4AAI4D7/01TLKXBj9NEz2wEuGiKpoy68S/FwCLMQAZ3gXhihaCa25vQo6RyToOz9PE6wYjJgGi1YnqZX8qMIK+TDlnargGzSv4NvFjlwXf/nfLLMrAB4O/Xl3BH0d+RIASFgDA8IYMIXgr2+cBsbDdPSwAAHjSZFmb3txETCKIxc0uWwI8rxsLJcTiVndNwyMgKljbbNN2/zcEAja2+4RgIDYN2Bu/WtAOaEodnu2dnzz/7I/Y/w/LaEcX/MdfAAAAAElFTkSuQmCC";
 
+  // packages/plugin/src/client/plugin-upgrade.ts
+  var DEFAULTS = {
+    intervalMs: 1e3,
+    unreachableDeadlineMs: 6e4,
+    stalledReads: 3
+  };
+  async function settleLostUpgrade(readStatus, latest, options = {}) {
+    let intervalMs = options.intervalMs ?? DEFAULTS.intervalMs, deadlineMs = options.unreachableDeadlineMs ?? DEFAULTS.unreachableDeadlineMs, stalledReads = options.stalledReads ?? DEFAULTS.stalledReads, sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))), waited = 0, stalled = 0;
+    for (; waited <= deadlineMs; ) {
+      let status;
+      try {
+        status = await readStatus();
+      } catch {
+        status = void 0;
+      }
+      let current = status !== void 0 && status.controlUnavailable !== !0 ? status.update?.currentVersion : void 0;
+      if (current !== void 0) {
+        if (compareVersions(current, latest) >= 0) return "upgraded";
+        if (stalled += 1, stalled >= stalledReads) return "unknown";
+      } else
+        stalled = 0;
+      await sleep(intervalMs), waited += intervalMs;
+    }
+    return "unknown";
+  }
+
   // packages/plugin/src/client/workspaces.ts
   function createRemoteWorkspaceAction(React, portal) {
     let ServerNotice = createServerNotice(React), HostPairingPanel = createHostPairingPanel(React), RemoteProgressView = createRemoteProgressView(React);
     function RemoteAccountEntry(props) {
       let [container, setContainer] = React.useState(null), { portal: portal2 } = props;
-      if (React.useEffect(() => {
-        if (portal2 === void 0) return;
-        let attempt = 0, timer, host, observer, attach = () => {
-          let row = document.querySelector('[class*="settingsArea"] [class*="triggerRow"]');
-          if (row === null) {
-            attempt < 40 && (attempt += 1, timer = window.setTimeout(attach, 50));
-            return;
-          }
-          host = document.createElement("span"), observer = new MutationObserver(() => {
-            host !== void 0 && !host.isConnected && row.append(host);
-          }), observer.observe(row, { childList: !0 }), row.append(host), setContainer(host);
-        };
-        return attach(), () => {
-          timer !== void 0 && window.clearTimeout(timer), observer?.disconnect(), host?.remove();
-        };
-      }, [portal2]), typeof portal2 != "function" || container === null) return props.fallback;
+      if (React.useEffect(
+        () => portal2 === void 0 ? void 0 : mountAccountEntry(setContainer),
+        [portal2]
+      ), typeof portal2 != "function" || container === null) return props.fallback;
       try {
         return portal2(props.children, container);
       } catch {
@@ -4030,7 +5194,7 @@ If a code was sent, recover the original submission without changing it.`,
           if (typeof code == "string") return connectionErrorMessage(code, translate);
         }
         return messageOf(reason, translate);
-      }, [open, setOpen] = React.useState(!1), [status, setStatus] = React.useState(void 0), [devices, setDevices] = React.useState([]), [discoveryUnavailable, setDiscoveryUnavailable] = React.useState(!1), [selectedHost, setSelectedHost] = React.useState(void 0), [connectingHost, setConnectingHost] = React.useState(void 0), [workspaces, setWorkspaces] = React.useState([]), [codexWorkspaces, setCodexWorkspaces] = React.useState([]), [cursorWorkspaces, setCursorWorkspaces] = React.useState([]), [antigravityWorkspaces, setAntigravityWorkspaces] = React.useState([]), [piWorkspaces, setPiWorkspaces] = React.useState([]), [opencodeWorkspaces, setOpencodeWorkspaces] = React.useState([]), [claudeWorkspaces, setClaudeWorkspaces] = React.useState([]), [hermesWorkspaces, setHermesWorkspaces] = React.useState([]), [workspaceBackend, setWorkspaceBackend] = React.useState("harness"), [codexWorkspaceId, setCodexWorkspaceId] = React.useState(void 0), [cursorWorkspaceId, setCursorWorkspaceId] = React.useState(void 0), [antigravityWorkspaceId, setAntigravityWorkspaceId] = React.useState(void 0), [piWorkspaceId, setPiWorkspaceId] = React.useState(void 0), [opencodeWorkspaceId, setOpencodeWorkspaceId] = React.useState(void 0), [claudeWorkspaceId, setClaudeWorkspaceId] = React.useState(void 0), [hermesWorkspaceId, setHermesWorkspaceId] = React.useState(void 0), [directory, setDirectory] = React.useState(void 0), [path, setPath] = React.useState(""), [addingWorkspace, setAddingWorkspace] = React.useState(!1), [showAllWorkspaces, setShowAllWorkspaces] = React.useState(!1), [showAllCodexWorkspaces, setShowAllCodexWorkspaces] = React.useState(!1), [devicesOpen, setDevicesOpen] = React.useState(!1), [showAllCursorWorkspaces, setShowAllCursorWorkspaces] = React.useState(!1), [showAllAntigravityWorkspaces, setShowAllAntigravityWorkspaces] = React.useState(!1), [showAllPiWorkspaces, setShowAllPiWorkspaces] = React.useState(!1), [showAllOpencodeWorkspaces, setShowAllOpencodeWorkspaces] = React.useState(!1), [showAllClaudeWorkspaces, setShowAllClaudeWorkspaces] = React.useState(!1), [showAllHermesWorkspaces, setShowAllHermesWorkspaces] = React.useState(!1), workspaceListId = "dsh-remote-workspace-list", codexWorkspaceHeadingId = "dsh-remote-codex-workspace-heading", codexWorkspaceListId = "dsh-remote-codex-workspace-list", cursorWorkspaceHeadingId = "dsh-remote-cursor-workspace-heading", cursorWorkspaceListId = "dsh-remote-cursor-workspace-list", antigravityWorkspaceHeadingId = "dsh-remote-antigravity-workspace-heading", piWorkspaceHeadingId = "dsh-remote-pi-workspace-heading", opencodeWorkspaceHeadingId = "dsh-remote-opencode-workspace-heading", claudeWorkspaceHeadingId = "dsh-remote-claude-workspace-heading", hermesWorkspaceHeadingId = "dsh-remote-hermes-workspace-heading", antigravityWorkspaceListId = "dsh-remote-antigravity-workspace-list", piWorkspaceListId = "dsh-remote-pi-workspace-list", opencodeWorkspaceListId = "dsh-remote-opencode-workspace-list", claudeWorkspaceListId = "dsh-remote-claude-workspace-list", hermesWorkspaceListId = "dsh-remote-hermes-workspace-list", [busy, setBusy] = React.useState(!1), [needsAuthorization, setNeedsAuthorization] = React.useState(void 0), [email, setEmail] = React.useState(""), [password, setPassword] = React.useState(""), [loginServerUrl, setLoginServerUrl] = React.useState("https://dsh.r2049.cn"), [editingServer, setEditingServer] = React.useState(!1), [savingServer, setSavingServer] = React.useState(!1), serverDirty = loginServerUrl.trim() !== (status?.serverUrl ?? ""), [loginMethod, setLoginMethod] = React.useState("password"), loginMethodManuallySelected = React.useRef(!1), [oauthProviders, setOAuthProviders] = React.useState([]), [providersLoading, setProvidersLoading] = React.useState(!1), [providersFailed, setProvidersFailed] = React.useState(!1), [pairingAvailable, setPairingAvailable] = React.useState(!1), [providerReload, setProviderReload] = React.useState(0), providerRequestRun = React.useRef(0), [qrSession, setQrSession] = React.useState(void 0), [qrImage, setQrImage] = React.useState(void 0), [qrExpired, setQrExpired] = React.useState(!1), [hostEmail, setHostEmail] = React.useState(""), [hostPassword, setHostPassword] = React.useState(""), [hostRegistrationCode, setHostRegistrationCode] = React.useState(""), [progress, setProgress] = React.useState(void 0), progressRun = React.useRef(0), qrFlowRun = React.useRef(0), pageRef = React.useRef(null), [notice, setNotice] = React.useState(void 0), [error, setError] = React.useState(void 0), [sidebarEntry, setSidebarEntry] = React.useState(() => props.sidebarEntry.read());
+      }, [open, setOpen] = React.useState(!1), [status, setStatus] = React.useState(void 0), [devices, setDevices] = React.useState([]), [discoveryUnavailable, setDiscoveryUnavailable] = React.useState(!1), [selectedHost, setSelectedHost] = React.useState(void 0), [connectingHost, setConnectingHost] = React.useState(void 0), [workspaces, setWorkspaces] = React.useState([]), [codexWorkspaces, setCodexWorkspaces] = React.useState([]), [cursorWorkspaces, setCursorWorkspaces] = React.useState([]), [antigravityWorkspaces, setAntigravityWorkspaces] = React.useState([]), [piWorkspaces, setPiWorkspaces] = React.useState([]), [opencodeWorkspaces, setOpencodeWorkspaces] = React.useState([]), [claudeWorkspaces, setClaudeWorkspaces] = React.useState([]), [hermesWorkspaces, setHermesWorkspaces] = React.useState([]), [workspaceBackend, setWorkspaceBackend] = React.useState("harness"), [codexWorkspaceId, setCodexWorkspaceId] = React.useState(void 0), [cursorWorkspaceId, setCursorWorkspaceId] = React.useState(void 0), [antigravityWorkspaceId, setAntigravityWorkspaceId] = React.useState(void 0), [piWorkspaceId, setPiWorkspaceId] = React.useState(void 0), [opencodeWorkspaceId, setOpencodeWorkspaceId] = React.useState(void 0), [claudeWorkspaceId, setClaudeWorkspaceId] = React.useState(void 0), [hermesWorkspaceId, setHermesWorkspaceId] = React.useState(void 0), [directory, setDirectory] = React.useState(void 0), [path, setPath] = React.useState(""), [addingWorkspace, setAddingWorkspace] = React.useState(!1), [showAllWorkspaces, setShowAllWorkspaces] = React.useState(!1), [showAllCodexWorkspaces, setShowAllCodexWorkspaces] = React.useState(!1), [devicesOpen, setDevicesOpen] = React.useState(!1), [upgradePhase, setUpgradePhase] = React.useState("idle"), [upgradeError, setUpgradeError] = React.useState(void 0), [showAllCursorWorkspaces, setShowAllCursorWorkspaces] = React.useState(!1), [showAllAntigravityWorkspaces, setShowAllAntigravityWorkspaces] = React.useState(!1), [showAllPiWorkspaces, setShowAllPiWorkspaces] = React.useState(!1), [showAllOpencodeWorkspaces, setShowAllOpencodeWorkspaces] = React.useState(!1), [showAllClaudeWorkspaces, setShowAllClaudeWorkspaces] = React.useState(!1), [showAllHermesWorkspaces, setShowAllHermesWorkspaces] = React.useState(!1), workspaceListId = "dsh-remote-workspace-list", codexWorkspaceHeadingId = "dsh-remote-codex-workspace-heading", codexWorkspaceListId = "dsh-remote-codex-workspace-list", cursorWorkspaceHeadingId = "dsh-remote-cursor-workspace-heading", cursorWorkspaceListId = "dsh-remote-cursor-workspace-list", antigravityWorkspaceHeadingId = "dsh-remote-antigravity-workspace-heading", piWorkspaceHeadingId = "dsh-remote-pi-workspace-heading", opencodeWorkspaceHeadingId = "dsh-remote-opencode-workspace-heading", claudeWorkspaceHeadingId = "dsh-remote-claude-workspace-heading", hermesWorkspaceHeadingId = "dsh-remote-hermes-workspace-heading", antigravityWorkspaceListId = "dsh-remote-antigravity-workspace-list", piWorkspaceListId = "dsh-remote-pi-workspace-list", opencodeWorkspaceListId = "dsh-remote-opencode-workspace-list", claudeWorkspaceListId = "dsh-remote-claude-workspace-list", hermesWorkspaceListId = "dsh-remote-hermes-workspace-list", [busy, setBusy] = React.useState(!1), [refreshingHosts, setRefreshingHosts] = React.useState(!1), [needsAuthorization, setNeedsAuthorization] = React.useState(void 0), [email, setEmail] = React.useState(""), [password, setPassword] = React.useState(""), [loginServerUrl, setLoginServerUrl] = React.useState("https://dsh.r2049.cn"), [editingServer, setEditingServer] = React.useState(!1), [savingServer, setSavingServer] = React.useState(!1), serverDirty = loginServerUrl.trim() !== (status?.serverUrl ?? ""), [loginMethod, setLoginMethod] = React.useState("password"), loginMethodManuallySelected = React.useRef(!1), [oauthProviders, setOAuthProviders] = React.useState([]), [providersLoading, setProvidersLoading] = React.useState(!1), [providersFailed, setProvidersFailed] = React.useState(!1), [pairingServerUrl, setPairingServerUrl] = React.useState(void 0), pairingAvailable = pairingServerUrl !== void 0 && pairingServerUrl === status?.serverUrl, [providerReload, setProviderReload] = React.useState(0), providerRequestRun = React.useRef(0), [qrSession, setQrSession] = React.useState(void 0), [qrImage, setQrImage] = React.useState(void 0), [qrExpired, setQrExpired] = React.useState(!1), [hostEmail, setHostEmail] = React.useState(""), [hostPassword, setHostPassword] = React.useState(""), [hostRegistrationCode, setHostRegistrationCode] = React.useState(""), [progress, setProgress] = React.useState(void 0), progressRun = React.useRef(0), qrFlowRun = React.useRef(0), pageRef = React.useRef(null), [notice, setNotice] = React.useState(void 0), [error, setError] = React.useState(void 0), [sidebarEntry, setSidebarEntry] = React.useState(() => props.sidebarEntry.read());
       React.useEffect(
         () => props.sidebarEntry.subscribe(() => setSidebarEntry(props.sidebarEntry.read())),
         [props.sidebarEntry]
@@ -4068,7 +5232,7 @@ If a code was sent, recover the original submission without changing it.`,
         props.control("status").then(setStatus).catch(() => {
         });
       }, []), React.useEffect(() => {
-        status?.serverUrl !== void 0 && setLoginServerUrl(status.serverUrl);
+        status?.serverUrl !== void 0 && setLoginServerUrl(status.serverUrl), setPairingServerUrl(void 0), setLoginMethod((current) => current === "device_pairing" ? "password" : current);
       }, [status?.serverUrl]), React.useEffect(() => {
         let remoteActive2 = status?.mode === "remote";
         return document.documentElement.classList.toggle("dshRemoteTargetActive", remoteActive2), () => {
@@ -4095,18 +5259,18 @@ If a code was sent, recover the original submission without changing it.`,
       React.useEffect(() => {
         if (!open || !needsAuthorization || savingServer || serverDirty) return;
         let active = !0, run = ++providerRequestRun.current;
-        return qrFlowRun.current += 1, setBusy(!1), setQrSession(void 0), setQrImage(void 0), setQrExpired(!1), setOAuthProviders([]), setPairingAvailable(!1), setProvidersLoading(!0), setProvidersFailed(!1), props.control("client.account.providers").then((items) => {
+        return qrFlowRun.current += 1, setBusy(!1), setQrSession(void 0), setQrImage(void 0), setQrExpired(!1), setOAuthProviders([]), setProvidersLoading(!0), setProvidersFailed(!1), props.control("client.account.providers").then((items) => {
           if (!active || run !== providerRequestRun.current) return;
           let pairingSupported = items.some((item) => item.devicePairing === !0);
-          setPairingAvailable(pairingSupported);
+          setPairingServerUrl(pairingSupported ? status?.serverUrl : void 0);
           let available = items.filter((item) => item.qrStartUrl != null);
           setOAuthProviders(available), setLoginMethod((current) => {
             if (loginMethodManuallySelected.current && (current === "password" || current === "device_pairing" && pairingSupported || available.some((item) => `oauth:${item.id}` === current))) return current;
             let preferred = available.find((item) => item.id === props.preferredQrProvider) ?? available[0];
             return preferred === void 0 ? "password" : `oauth:${preferred.id}`;
           });
-        }).catch((reason) => {
-          !active || run !== providerRequestRun.current || (setProvidersFailed(!0), setPairingAvailable(!1), setLoginMethod("password"), setError(messageOf(reason, t)));
+        }).catch(() => {
+          !active || run !== providerRequestRun.current || (setProvidersFailed(!0), setLoginMethod((current) => loginMethodManuallySelected.current && current === "device_pairing" ? current : "password"));
         }).finally(() => {
           active && run === providerRequestRun.current && setProvidersLoading(!1);
         }), () => {
@@ -4145,7 +5309,7 @@ If a code was sent, recover the original submission without changing it.`,
       }, [open, loginMethod, qrSession, savingServer, serverDirty]);
       let selectLoginMethod = (method) => {
         loginMethodManuallySelected.current = !0, method !== loginMethod && (qrFlowRun.current += 1, setLoginMethod(method), setQrSession(void 0), setQrImage(void 0), setQrExpired(!1), setError(void 0));
-      }, orderedQrProviders = [...oauthProviders].sort((a, b) => +(b.id === props.preferredQrProvider) - +(a.id === props.preferredQrProvider)), selectedProvider = oauthProviders.find((item) => `oauth:${item.id}` === loginMethod), scanLabel = t("scanWithProvider", { provider: selectedProvider?.displayName ?? "" }), passwordVisible = !savingServer && !serverDirty && loginMethod === "password" && (loginMethodManuallySelected.current || !providersLoading && !providersFailed && oauthProviders.length === 0), qrLoginTab = (provider) => React.createElement("button", {
+      }, orderedQrProviders = [...oauthProviders].sort((a, b) => +(b.id === props.preferredQrProvider) - +(a.id === props.preferredQrProvider)), selectedProvider = oauthProviders.find((item) => `oauth:${item.id}` === loginMethod), scanLabel = t("scanWithProvider", { provider: selectedProvider?.displayName ?? "" }), passwordVisible = !savingServer && !serverDirty && loginMethod === "password" && (loginMethodManuallySelected.current || !providersLoading && oauthProviders.length === 0), qrLoginTab = (provider) => React.createElement("button", {
         key: provider.id,
         type: "button",
         role: "tab",
@@ -4228,7 +5392,7 @@ If a code was sent, recover the original submission without changing it.`,
       }, cancelAddingWorkspace = () => {
         setAddingWorkspace(!1), setWorkspaceBackend("harness"), setCodexWorkspaceId(void 0), setCursorWorkspaceId(void 0), setAntigravityWorkspaceId(void 0), setPiWorkspaceId(void 0), setOpencodeWorkspaceId(void 0), setClaudeWorkspaceId(void 0), setHermesWorkspaceId(void 0), setDirectory(void 0), setPath("");
       }, refreshRemote = async () => {
-        setBusy(!0), setNotice(void 0), setError(void 0);
+        setBusy(!0), setRefreshingHosts(!0), setNotice(void 0), setError(void 0);
         try {
           let nextStatus = await props.control("status");
           if (setStatus(nextStatus), nextStatus.controlUnavailable) {
@@ -4273,7 +5437,7 @@ If a code was sent, recover the original submission without changing it.`,
         } catch (reason) {
           setError(connectionErrorMessageFor(reason, t));
         } finally {
-          setBusy(!1);
+          setRefreshingHosts(!1), setBusy(!1);
         }
       }, show = async () => {
         setShowAllWorkspaces(!1), setShowAllCodexWorkspaces(!1), setShowAllCursorWorkspaces(!1), setShowAllAntigravityWorkspaces(!1), setShowAllPiWorkspaces(!1), setShowAllOpencodeWorkspaces(!1), setShowAllClaudeWorkspaces(!1), setShowAllHermesWorkspaces(!1), setOpen(!0), await refreshRemote();
@@ -4286,7 +5450,7 @@ If a code was sent, recover the original submission without changing it.`,
       let chooseAnotherHost = () => {
         setSelectedHost(void 0), setWorkspaces([]), setCodexWorkspaces([]), setCursorWorkspaces([]), setAntigravityWorkspaces([]), setPiWorkspaces([]), setOpencodeWorkspaces([]), setClaudeWorkspaces([]), setHermesWorkspaces([]), setShowAllWorkspaces(!1), setShowAllCodexWorkspaces(!1), setShowAllCursorWorkspaces(!1), setShowAllAntigravityWorkspaces(!1), setShowAllPiWorkspaces(!1), setShowAllOpencodeWorkspaces(!1), setShowAllClaudeWorkspaces(!1), setShowAllHermesWorkspaces(!1), setWorkspaceBackend("harness"), setCodexWorkspaceId(void 0), setCursorWorkspaceId(void 0), setAntigravityWorkspaceId(void 0), setPiWorkspaceId(void 0), setOpencodeWorkspaceId(void 0), setClaudeWorkspaceId(void 0), setHermesWorkspaceId(void 0), setDirectory(void 0), setPath(""), setAddingWorkspace(!1), setError(void 0);
       }, resetLoginFlow = () => {
-        providerRequestRun.current += 1, qrFlowRun.current += 1, setQrSession(void 0), setQrImage(void 0), setQrExpired(!1), setOAuthProviders([]), setProvidersFailed(!1), setProvidersLoading(!1), setLoginMethod("password"), loginMethodManuallySelected.current = !1, setPassword(""), setError(void 0), setNotice(void 0);
+        providerRequestRun.current += 1, qrFlowRun.current += 1, setQrSession(void 0), setQrImage(void 0), setQrExpired(!1), setOAuthProviders([]), setPairingServerUrl(void 0), setProvidersFailed(!1), setProvidersLoading(!1), setLoginMethod("password"), loginMethodManuallySelected.current = !1, setPassword(""), setError(void 0), setNotice(void 0);
       }, saveLoginServer = async (serverUrlOverride) => {
         let nextServerUrl = (serverUrlOverride ?? loginServerUrl).trim();
         if (!(nextServerUrl === "" || savingServer)) {
@@ -4386,7 +5550,34 @@ If a code was sent, recover the original submission without changing it.`,
             setError(messageOf(reason, t)), setBusy(!1);
           }
         }
-      }, reauth = status?.clientAuthRequired === !0, remoteLabel = reauth ? t("clientSignInAgain") : status?.mode === "remote" ? t("activeRemote", { name: status.target?.name ?? t("host") }) : t("remoteEntry"), remoteActionLabel = !reauth && status?.mode === "remote" ? `${remoteLabel} \xB7 ${t("exitRemote")}` : remoteLabel, visibleWorkspaces = showAllWorkspaces ? workspaces : workspaces.slice(0, 3), visibleCodexWorkspaces = showAllCodexWorkspaces ? codexWorkspaces : codexWorkspaces.slice(0, 3), visibleCursorWorkspaces = showAllCursorWorkspaces ? cursorWorkspaces : cursorWorkspaces.slice(0, 3), visibleAntigravityWorkspaces = showAllAntigravityWorkspaces ? antigravityWorkspaces : antigravityWorkspaces.slice(0, 3), visiblePiWorkspaces = showAllPiWorkspaces ? piWorkspaces : piWorkspaces.slice(0, 3), visibleOpencodeWorkspaces = showAllOpencodeWorkspaces ? opencodeWorkspaces : opencodeWorkspaces.slice(0, 3), visibleClaudeWorkspaces = showAllClaudeWorkspaces ? claudeWorkspaces : claudeWorkspaces.slice(0, 3), visibleHermesWorkspaces = showAllHermesWorkspaces ? hermesWorkspaces : hermesWorkspaces.slice(0, 3), codexAvailable = status?.remoteFeatures?.codex === !0, cursorAvailable = status?.remoteFeatures?.cursor === !0, antigravityAvailable = status?.remoteFeatures?.antigravity === !0, piAvailable = status?.remoteFeatures?.pi === !0, opencodeAvailable = status?.remoteFeatures?.opencode === !0, claudeAvailable = status?.remoteFeatures?.claude === !0, hermesAvailable = status?.remoteFeatures?.hermes === !0, rawUpdate = status?.update, updateInfo = rawUpdate !== void 0 && typeof rawUpdate.currentVersion == "string" && typeof rawUpdate.latestVersion == "string" ? rawUpdate : void 0, localUpdateAvailable = updateInfo !== void 0 && compareVersions(updateInfo.currentVersion, updateInfo.latestVersion) < 0, updateNotice = updateInfo !== void 0 && localUpdateAvailable ? t("updateAvailable", { latest: updateInfo.latestVersion, current: updateInfo.currentVersion }) : void 0, deviceUpdateAvailable = (device) => updateInfo !== void 0 && device.clientVersion !== void 0 && compareVersions(device.clientVersion, updateInfo.latestVersion) < 0, selectedHostDetails = selectedHost === void 0 ? void 0 : [
+      }, reauth = status?.clientAuthRequired === !0, remoteLabel = reauth ? t("clientSignInAgain") : status?.mode === "remote" ? t("activeRemote", { name: status.target?.name ?? t("host") }) : t("remoteEntry"), remoteActionLabel = !reauth && status?.mode === "remote" ? `${remoteLabel} \xB7 ${t("exitRemote")}` : remoteLabel, visibleWorkspaces = showAllWorkspaces ? workspaces : workspaces.slice(0, 3), visibleCodexWorkspaces = showAllCodexWorkspaces ? codexWorkspaces : codexWorkspaces.slice(0, 3), visibleCursorWorkspaces = showAllCursorWorkspaces ? cursorWorkspaces : cursorWorkspaces.slice(0, 3), visibleAntigravityWorkspaces = showAllAntigravityWorkspaces ? antigravityWorkspaces : antigravityWorkspaces.slice(0, 3), visiblePiWorkspaces = showAllPiWorkspaces ? piWorkspaces : piWorkspaces.slice(0, 3), visibleOpencodeWorkspaces = showAllOpencodeWorkspaces ? opencodeWorkspaces : opencodeWorkspaces.slice(0, 3), visibleClaudeWorkspaces = showAllClaudeWorkspaces ? claudeWorkspaces : claudeWorkspaces.slice(0, 3), visibleHermesWorkspaces = showAllHermesWorkspaces ? hermesWorkspaces : hermesWorkspaces.slice(0, 3), codexAvailable = status?.remoteFeatures?.codex === !0, cursorAvailable = status?.remoteFeatures?.cursor === !0, antigravityAvailable = status?.remoteFeatures?.antigravity === !0, piAvailable = status?.remoteFeatures?.pi === !0, opencodeAvailable = status?.remoteFeatures?.opencode === !0, claudeAvailable = status?.remoteFeatures?.claude === !0, hermesAvailable = status?.remoteFeatures?.hermes === !0, rawUpdate = status?.update, updateInfo = rawUpdate !== void 0 && typeof rawUpdate.currentVersion == "string" && typeof rawUpdate.latestVersion == "string" ? rawUpdate : void 0, localUpdateAvailable = updateInfo !== void 0 && compareVersions(updateInfo.currentVersion, updateInfo.latestVersion) < 0, updateNotice = updateInfo !== void 0 && localUpdateAvailable ? t("updateAvailable", { latest: updateInfo.latestVersion, current: updateInfo.currentVersion }) : void 0, releasesUrl = "https://github.com/liguobao/ds-harness-remote/releases", canUpgradeInPlace = updateInfo?.upgrade === "ready", startLocalUpgrade = async () => {
+        if (!(!canUpgradeInPlace || updateInfo === void 0)) {
+          setUpgradePhase("running"), setUpgradeError(void 0);
+          try {
+            let result = await props.control("plugin.update", {
+              version: updateInfo.latestVersion
+            });
+            if (result.status === "started") {
+              setUpgradePhase("started");
+              return;
+            }
+            if (result.status === "manual") {
+              setUpgradePhase("idle"), window.open(releasesUrl, "_blank", "noopener");
+              return;
+            }
+            setUpgradePhase("failed"), setUpgradeError(typeof result.message == "string" && result.message !== "" ? result.message : t("pluginUpdateFailed"));
+          } catch (reason) {
+            if (setUpgradePhase("verifying"), await settleLostUpgrade(
+              () => props.control("status"),
+              updateInfo.latestVersion
+            ) === "upgraded") {
+              setUpgradePhase("started");
+              return;
+            }
+            setUpgradePhase("unknown"), setUpgradeError(messageOf(reason, t));
+          }
+        }
+      }, deviceUpdateAvailable = (device) => updateInfo !== void 0 && device.clientVersion !== void 0 && compareVersions(device.clientVersion, updateInfo.latestVersion) < 0, selectedHostDetails = selectedHost === void 0 ? void 0 : [
         formatPlatform(selectedHost.platform),
         selectedHost.harnessVersion === void 0 ? void 0 : t("harnessVersion", { version: selectedHost.harnessVersion }),
         selectedHost.clientVersion === void 0 ? void 0 : t("pluginVersion", { version: selectedHost.clientVersion }),
@@ -4491,7 +5682,7 @@ If a code was sent, recover the original submission without changing it.`,
           disabled: busy,
           onClick: () => void openLocalWorkspaces()
         }, t("exitRemote")) : null
-      ), accountEntry = React.createElement(
+      ), accountEntry = remoteActive ? entry : React.createElement(
         "div",
         { className: `dshRemoteAccountEntry${remoteActive ? " isActive" : ""}` },
         React.createElement("button", {
@@ -4622,6 +5813,17 @@ If a code was sent, recover the original submission without changing it.`,
                   "div",
                   { className: "dshRemoteLoginContent" },
                   providersLoading && loginMethod !== "device_pairing" ? React.createElement("p", { role: "status" }, t("loadingLoginProviders")) : null,
+                  providersFailed ? React.createElement(
+                    "p",
+                    { role: "status" },
+                    t("noLoginProviders"),
+                    " ",
+                    React.createElement("button", {
+                      type: "button",
+                      disabled: busy || savingServer || serverDirty,
+                      onClick: () => setProviderReload((value) => value + 1)
+                    }, t("retryLoginProviders"))
+                  ) : null,
                   !savingServer && !serverDirty && !providersLoading && !providersFailed && oauthProviders.length === 0 && loginMethod !== "device_pairing" ? React.createElement("p", { role: "status" }, t("noLoginProviders")) : null,
                   loginMethod === "device_pairing" && pairingAvailable && status?.hostAuthorizationAvailable ? React.createElement(
                     "div",
@@ -4695,6 +5897,16 @@ If a code was sent, recover the original submission without changing it.`,
                     ) : null,
                     React.createElement("strong", null, scanLabel),
                     React.createElement("p", null, t("scanLoginHint")),
+                    !qrExpired && (busy || qrSession !== void 0) ? React.createElement(
+                      "div",
+                      {
+                        className: "dshRemoteLoginProgress",
+                        role: "status",
+                        "aria-live": "polite"
+                      },
+                      React.createElement("span", { className: "dshRemoteLoginSpinner", "aria-hidden": !0 }),
+                      t(busy && qrSession !== void 0 ? "loginLoadingDevices" : "loginWaitingAuthorization")
+                    ) : null,
                     qrExpired ? React.createElement("button", {
                       type: "button",
                       disabled: busy,
@@ -4802,6 +6014,13 @@ If a code was sent, recover the original submission without changing it.`,
                       "div",
                       { className: "dshRemoteSectionTitle" },
                       React.createElement("strong", null, t(status?.host?.pairingHostOnly ? "thisMachineHost" : "chooseHost")),
+                      status?.serverUrl !== void 0 && !status.host?.pairingHostOnly ? React.createElement("a", {
+                        className: "dshRemoteManageHosts",
+                        href: `${status.serverUrl}/app/hosts`,
+                        target: "_blank",
+                        rel: "noreferrer",
+                        title: t("manageHosts")
+                      }, t("manageHosts")) : null,
                       status?.hostAuthorizationAvailable ? React.createElement(
                         "div",
                         { className: "dshRemoteHostControlToggle" },
@@ -4821,7 +6040,7 @@ If a code was sent, recover the original submission without changing it.`,
                   React.createElement("div", {
                     className: `dshRemoteHostList${connectingHost === void 0 ? "" : " isCollapsed"}`,
                     "aria-busy": connectingHost === void 0 ? void 0 : !0
-                  }, listedHosts.length === 0 ? error !== void 0 ? null : React.createElement("p", null, t(busy ? "checkingConnection" : status?.host?.pairingHostOnly ? "pairingHostOnly" : "noRemoteHosts")) : listedHosts.map((device) => React.createElement(
+                  }, listedHosts.length === 0 ? error !== void 0 || refreshingHosts ? null : React.createElement("p", null, t(status?.host?.pairingHostOnly ? "pairingHostOnly" : "noRemoteHosts")) : listedHosts.map((device) => React.createElement(
                     "button",
                     {
                       type: "button",
@@ -4852,6 +6071,11 @@ If a code was sent, recover the original submission without changing it.`,
                   React.createElement(
                     "footer",
                     { className: "dshRemoteAccountFooter" },
+                    refreshingHosts ? React.createElement(
+                      "span",
+                      { className: "dshRemoteHostLoading", role: "status", "aria-label": t("checkingConnection") },
+                      React.createElement("span", { className: "dshRemoteLoginSpinner", "aria-hidden": !0 })
+                    ) : null,
                     React.createElement(
                       "span",
                       { className: "dshRemoteHostNameLine" },
@@ -4863,9 +6087,29 @@ If a code was sent, recover the original submission without changing it.`,
                         t
                       })
                     ),
-                    updateNotice === void 0 ? null : React.createElement("a", {
+                    updateNotice === void 0 ? null : canUpgradeInPlace ? React.createElement(
+                      React.Fragment,
+                      null,
+                      React.createElement("button", {
+                        type: "button",
+                        className: "dshRemoteAccountUpdate",
+                        disabled: upgradePhase === "running" || upgradePhase === "verifying" || upgradePhase === "started",
+                        title: upgradePhase === "failed" || upgradePhase === "unknown" ? upgradeError ?? updateNotice : updateNotice,
+                        onClick: () => void startLocalUpgrade()
+                      }, t(
+                        upgradePhase === "running" || upgradePhase === "verifying" ? "pluginUpdating" : upgradePhase === "started" ? "pluginUpdateReload" : upgradePhase === "failed" ? "pluginUpdateFailed" : upgradePhase === "unknown" ? "pluginUpdateUnknown" : "updateAvailableShort",
+                        { version: updateInfo?.latestVersion ?? "" }
+                      )),
+                      React.createElement("a", {
+                        className: "dshRemoteAccountUpdate",
+                        href: releasesUrl,
+                        target: "_blank",
+                        rel: "noreferrer",
+                        title: updateNotice
+                      }, t("pluginUpdateManual"))
+                    ) : React.createElement("a", {
                       className: "dshRemoteAccountUpdate",
-                      href: "https://github.com/liguobao/ds-harness-remote/releases",
+                      href: releasesUrl,
                       target: "_blank",
                       rel: "noreferrer",
                       title: updateNotice
@@ -5415,26 +6659,68 @@ If a code was sent, recover the original submission without changing it.`,
     return RemoteWorkspaceAction;
   }
 
-  // packages/plugin/src/control-route.ts
-  var CONTROL_RPC_PREFIX = "/ds-harness-remote", STATUS_STREAM_ENDPOINT = "status.events", STATUS_STREAM_PATH = `${CONTROL_RPC_PREFIX}/${STATUS_STREAM_ENDPOINT}`;
-
   // packages/plugin/src/plugin-route-client.ts
   var PluginRouteFailure = class extends Error {
-    constructor(code, message) {
+    constructor(code, message, details = {}) {
       super(message);
       this.code = code;
+      this.details = details;
     }
-  };
+  }, KNOWN_ERROR_NAMES = /* @__PURE__ */ new Set([
+    "TimeoutError",
+    "TypeError",
+    "RangeError",
+    "SyntaxError",
+    "ReferenceError",
+    "URIError",
+    "EvalError",
+    "Error",
+    "AbortError",
+    "DOMException"
+  ]);
+  function sanitizeErrorName(error) {
+    if (typeof error == "object" && error !== null && "name" in error) {
+      let name = error.name;
+      if (typeof name == "string" && KNOWN_ERROR_NAMES.has(name)) return name;
+    }
+    return "Error";
+  }
+  function isTimeoutError(error) {
+    for (let current = error, depth = 0; current != null && depth < 4; depth++) {
+      if (typeof current != "object") return !1;
+      let candidate = current;
+      if (candidate.name === "TimeoutError" || candidate.code === "UND_ERR_CONNECT_TIMEOUT" || candidate.code === "ETIMEDOUT") return !0;
+      current = candidate.cause;
+    }
+    return !1;
+  }
+  function isAbortFailure(error, signal) {
+    return signal?.aborted === !0 ? !0 : typeof error == "object" && error !== null && error.name === "AbortError";
+  }
   function createPluginRouteFetch(original, baseUrl, options = {}) {
     let routeUrl = new URL("api/bot", baseUrl), nextRpcId = 0, control = async (method, payload, signal) => {
-      let rpcId = `plugin-route-${++nextRpcId}`, response = await original(new URL(`${CONTROL_RPC_PREFIX.slice(1)}/${method}`, baseUrl), {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ type: "client-request", rpcId, method, payload }),
-        signal
-      });
-      if (!response.ok) throw new PluginRouteFailure("remote-plugin/control-unavailable", `The local Remote control request failed (HTTP ${response.status}). Reload the Remote plugin.`);
+      let rpcId = `plugin-route-${++nextRpcId}`, response;
+      try {
+        response = await original(new URL(`${CONTROL_RPC_PREFIX.slice(1)}/${method}`, baseUrl), {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ type: "client-request", rpcId, method, payload }),
+          signal
+        });
+      } catch (error) {
+        throw isAbortFailure(error, signal) || isTimeoutError(error) ? error : new PluginRouteFailure("remote-plugin/control-unavailable", "The local Remote control request failed. Reload the Remote plugin.", {
+          stage: "transport",
+          method,
+          errorName: sanitizeErrorName(error)
+        });
+      }
+      if (!response.ok)
+        throw new PluginRouteFailure("remote-plugin/control-unavailable", `The local Remote control request failed (HTTP ${response.status}). Reload the Remote plugin.`, {
+          stage: "transport",
+          method,
+          httpStatus: response.status
+        });
       let envelope = await response.json();
       if (!isRecord(envelope) || envelope.type !== "server-response" || envelope.rpcId !== rpcId || !isRecord(envelope.result))
         throw new PluginRouteFailure("remote-plugin/control-invalid", "The local Remote control response is invalid. Reload the Remote plugin.");
@@ -5450,19 +6736,43 @@ If a code was sent, recover the original submission without changing it.`,
       let lifetime = (init?.signal !== void 0 ? init.signal ?? void 0 : input instanceof Request ? input.signal : void 0) ?? AbortSignal.timeout(45e3);
       try {
         lifetime.throwIfAborted();
-        let status = await control("status", {}, AbortSignal.any([lifetime, AbortSignal.timeout(1e4)]));
+        let status, probeTimeout = AbortSignal.timeout(1e4), probeSignal = AbortSignal.any([lifetime, probeTimeout]);
+        try {
+          status = await control("status", {}, probeSignal);
+        } catch (error) {
+          throw error instanceof PluginRouteFailure ? error : (lifetime.throwIfAborted(), probeTimeout.aborted ? new PluginRouteFailure("remote-plugin/control-timeout", "The local Remote control probe timed out. Reload the Remote plugin.", {
+            stage: "status",
+            timeoutMs: 1e4,
+            errorName: sanitizeErrorName(error)
+          }) : isTimeoutError(error) ? new PluginRouteFailure("remote-plugin/control-timeout", "The local Remote control request timed out. Reload the Remote plugin.", {
+            stage: "transport",
+            method: "status",
+            errorName: sanitizeErrorName(error)
+          }) : error);
+        }
         if (lifetime.throwIfAborted(), !isRecord(status)) throw new PluginRouteFailure("remote-plugin/authority-unavailable", "The Remote plugin route authority is unavailable.");
         if (status.mode === "local") return original(input, init);
         if (status.mode !== "remote") throw new PluginRouteFailure("remote-plugin/authority-unavailable", "The Remote plugin route authority is unavailable.");
         if (status.connected !== !0) throw new PluginRouteFailure("remote-plugin/disconnected", "The Remote Host is disconnected. Reconnect to load DS Bot.");
         if (!isRecord(status.remoteFeatures) || status.remoteFeatures.pluginRoute !== !0) throw new PluginRouteFailure("remote-plugin/host-unsupported", "The selected Host does not support plugin route forwarding. Update and reload Remote on the Host, then reconnect.");
         if (status.backend !== void 0 && status.backend !== "harness") throw new PluginRouteFailure("remote-plugin/backend-unsupported", "DS Bot requires the Remote Harness catalog. Select a Harness workspace on this Host.");
-        let body = await (input instanceof Request ? new Request(input, init) : new Request(requestUrl, init)).clone().json();
-        if (!isRecord(body)) throw new Error("The plugin route body must be a JSON object.");
+        let body = await (input instanceof Request ? new Request(input, init) : new Request(requestUrl, init)).clone().json().catch((error) => {
+          throw new PluginRouteFailure("remote-plugin/route-request-invalid", "The plugin route body must be a JSON object.", {
+            stage: "request-body",
+            errorName: sanitizeErrorName(error)
+          });
+        });
+        if (!isRecord(body))
+          throw new PluginRouteFailure("remote-plugin/route-request-invalid", "The plugin route body must be a JSON object.", { stage: "request-body" });
         let result = await control("plugin.route", { route: "api/bot", body }, lifetime);
         if (!isRecord(result) || !Number.isInteger(result.status) || result.status < 200 || result.status > 599)
-          throw new Error("The plugin route response is invalid.");
+          throw new PluginRouteFailure("remote-plugin/route-response-invalid", "The plugin route response is invalid.", { stage: "response-structure" });
         let statusCode = result.status;
+        if (statusCode === 404 && body.endpoint === "state")
+          return new Response(JSON.stringify({ ok: !0, value: { bots: [], rooms: [], agents: [] } }), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
         if (statusCode === 404) throw new PluginRouteFailure("remote-plugin/bot-not-loaded", "The Host has no DS Bot route. Enable ds-bot in the same DSH instance/profile as the connected Host.");
         if (statusCode === 503) throw new PluginRouteFailure("remote-plugin/host-carrier-unavailable", "The Host plugin route carrier is unavailable. Update and reload Remote on the Host.");
         if (statusCode >= 200 && statusCode < 300 && options.beforeResponse !== void 0)
@@ -5476,12 +6786,19 @@ If a code was sent, recover the original submission without changing it.`,
           headers: { "content-type": "application/json" }
         });
       } catch (error) {
-        return lifetime.throwIfAborted(), new Response(JSON.stringify({
+        lifetime.throwIfAborted();
+        let failure = error instanceof PluginRouteFailure ? error : isTimeoutError(error) ? new PluginRouteFailure("remote-plugin/control-timeout", "The Remote plugin route request timed out. Reload the Remote plugin.", {
+          stage: "route",
+          errorName: sanitizeErrorName(error)
+        }) : new PluginRouteFailure("remote-plugin/unavailable", "The Remote plugin route is unavailable.", {
+          errorName: sanitizeErrorName(error)
+        });
+        return new Response(JSON.stringify({
           ok: !1,
           error: {
-            code: error instanceof PluginRouteFailure ? error.code : "remote-plugin/unavailable",
-            message: error instanceof PluginRouteFailure ? error.message : "The Remote plugin route is unavailable.",
-            details: {}
+            code: failure.code,
+            message: failure.message,
+            details: failure.details
           }
         }), { status: 200, headers: { "content-type": "application/json" } });
       }
@@ -5723,6 +7040,8 @@ If a code was sent, recover the original submission without changing it.`,
     beforeResponse: createPluginRouteCatalogGuard(() => pluginSessions)
   }) : void 0;
   pluginRouteFetch !== void 0 && (window.fetch = pluginRouteFetch);
+  var uploadGlobal = globalThis, previousUploadHook = uploadGlobal.__DSH_FILE_UPLOAD__, remoteUploadHook = typeof originalPluginFetch == "function" && typeof document < "u" ? { fetch: createRemoteUploadFetch(previousUploadHook?.fetch ?? originalPluginFetch.bind(window), document.baseURI) } : void 0;
+  remoteUploadHook !== void 0 && (uploadGlobal.__DSH_FILE_UPLOAD__ = remoteUploadHook);
   function controlRouteUnavailableStatus() {
     return {
       mode: "local",
@@ -5920,10 +7239,25 @@ If a code was sent, recover the original submission without changing it.`,
       }
       function apply(ctx) {
         if (window.__DS_HARNESS_REMOTE_CLIENT_ACTIVE__) return;
-        window.__DS_HARNESS_REMOTE_CLIENT_ACTIVE__ = !0, readyPluginSessions(ctx.sessions), ctx.effect(() => () => {
+        window.__DS_HARNESS_REMOTE_CLIENT_ACTIVE__ = !0, readyPluginSessions(ctx.sessions), ctx.inject(["fileUpload"], (uploadContext) => {
+          let service = uploadContext.get("fileUpload");
+          if (service === void 0 || remoteUploadHook === void 0) return;
+          let originalPost = service.post, post = async (request) => {
+            let response = await remoteUploadHook.fetch(request.path, {
+              method: "POST",
+              body: request.body,
+              headers: request.headers,
+              signal: request.signal
+            });
+            return { status: response.status, body: await response.text() };
+          };
+          uploadContext.effect(() => (service.post = post, () => {
+            service.post === post && (service.post = originalPost);
+          }), "ds-harness-remote: attachment upload carrier");
+        }), ctx.effect(() => () => {
           window.__DS_HARNESS_REMOTE_CLIENT_ACTIVE__ = !1;
         }, "ds-harness-remote: client singleton"), ctx.effect(() => () => {
-          pluginRouteFetch !== void 0 && window.fetch === pluginRouteFetch && (window.fetch = originalPluginFetch);
+          pluginRouteFetch !== void 0 && window.fetch === pluginRouteFetch && (window.fetch = originalPluginFetch), uploadGlobal.__DSH_FILE_UPLOAD__ === remoteUploadHook && (uploadGlobal.__DSH_FILE_UPLOAD__ = previousUploadHook);
         }, "ds-harness-remote: plugin route fetch");
         let t = ctx.locale.bind(localeNamespace), remoteOpenListeners = /* @__PURE__ */ new Set(), openRemote = () => {
           for (let listener of remoteOpenListeners) listener();
@@ -6052,7 +7386,10 @@ If a code was sent, recover the original submission without changing it.`,
                   value: JSON.stringify({ deviceId: device.deviceId, label: device.name, platform: device.platform })
                 }));
               },
-              onPick: (pick) => ({ text: `@${pick.candidate.label ?? pick.candidate.name} ` })
+              onPick: (pick) => {
+                let host = JSON.parse(pick.candidate.value);
+                return { text: `@${host.label} (Remote hostId=${JSON.stringify(host.deviceId)}) ` };
+              }
             }, stopHostFileOpen = (event) => {
               let target = event.target instanceof Element ? event.target.closest('button,[role="button"],a') ?? event.target : void 0;
               if (!(target instanceof Element)) return;
@@ -6074,7 +7411,7 @@ If a code was sent, recover the original submission without changing it.`,
               document.removeEventListener("click", stopHostFileOpen, !0), unregister();
             };
           }, "ds-harness-remote: host mention source");
-        }), ctx.effect(() => ctx.locale.register(localeNamespace, { zh, en }), "ds-harness-remote: dictionaries"), ctx.effect(() => installStyle(clientModuleId), "ds-harness-remote: client styles"), ctx.effect(() => installTerminalAvailabilityNotice(statusFeed, t), "ds-harness-remote: terminal availability notice"), ctx.slots.inject("shell.overlay", () => ctx.slots.register({
+        }), ctx.effect(() => ctx.locale.register(localeNamespace, { zh, en, ru, uk }), "ds-harness-remote: dictionaries"), ctx.effect(() => installStyle(clientModuleId), "ds-harness-remote: client styles"), ctx.effect(() => installTerminalAvailabilityNotice(statusFeed, t), "ds-harness-remote: terminal availability notice"), ctx.slots.inject("shell.overlay", () => ctx.slots.register({
           name: "shell.overlay",
           id: "ds-harness-remote-global-context",
           order: 20,

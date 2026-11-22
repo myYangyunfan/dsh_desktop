@@ -1,6 +1,7 @@
 import { RemoteClientError } from '@dsh-remote/client-core';
 import { HARNESS_API_TRANSFER_CHUNK_BYTES, MAX_HARNESS_API_TRANSFER_BYTES, } from '@dsh-remote/protocol';
 import { uuidV7 } from './ids.js';
+import { canonicalUnaryHistoryKey, extractSessionIdFromGatewayPayload, isSessionMutationEndpoint, RemoteSessionHistoryCache, } from './session-history-cache.js';
 import { normalizeAssistantMessageStreamValue, normalizeLegacySessionGatewayValue, } from './session-format-compat.js';
 const DIRECT_REMOTE_CALL_BYTES = 2 * 1024 * 1024;
 const WELCOME_NOTICE_NAMESPACE = 'ui-settings-general';
@@ -12,15 +13,17 @@ export class RemoteTypertGateway {
     compatibility;
     harnessVersion;
     deferStreamDisconnect;
+    historyCache;
     frameTransfers;
     constructor(client, compatibility, harnessVersion, 
     // Native snapshot consumers treat wire errors as terminal. Their local
     // carrier is reset by subscribeRemoteRecovery only after reauthentication.
-    deferStreamDisconnect = false) {
+    deferStreamDisconnect = false, historyCache = new RemoteSessionHistoryCache()) {
         this.client = client;
         this.compatibility = compatibility;
         this.harnessVersion = harnessVersion;
         this.deferStreamDisconnect = deferStreamDisconnect;
+        this.historyCache = historyCache;
     }
     async invoke(request) {
         const result = await this.dispatch(`${request.namespace}/${request.method}`, { args: request.args }, request.signal ?? new AbortController().signal);
@@ -29,6 +32,51 @@ export class RemoteTypertGateway {
         throw remoteFailure(result.error);
     }
     async dispatch(endpoint, payload, signal) {
+        if (endpoint === 'workspace/delete') {
+            this.historyCache.clear();
+        }
+        else if (isSessionMutationEndpoint(endpoint)) {
+            const mutatedSessionId = extractSessionIdFromGatewayPayload(payload);
+            if (mutatedSessionId !== undefined)
+                this.historyCache.invalidateSession(mutatedSessionId);
+        }
+        if (endpoint === 'session/page' || endpoint === 'session/history' || endpoint === 'session/projections') {
+            const sessionId = extractSessionIdFromGatewayPayload(payload);
+            if (sessionId !== undefined) {
+                const key = canonicalUnaryHistoryKey(endpoint, payload);
+                const cached = this.historyCache.getUnary(this.client, sessionId, key)
+                    ?? (endpoint === 'session/page' ? this.historyCache.slicePageFromSnapshot(this.client, sessionId, payload) : undefined);
+                if (cached !== undefined)
+                    return { ok: true, value: cached };
+                return await this.historyCache.runSingleFlightUnary(this.client, sessionId, key, signal, async (sharedSignal) => {
+                    const readEpoch = this.historyCache.beginReadEpoch();
+                    try {
+                        const result = await this.dispatchRemote(endpoint, payload, sharedSignal);
+                        if (result.ok) {
+                            this.historyCache.setUnary(this.client, sessionId, key, result.value, readEpoch);
+                        }
+                        return result;
+                    }
+                    catch (error) {
+                        if (!sharedSignal.aborted && !(isRecord(error) && error.isDSHRemoteError === true)) {
+                            const fallback = this.historyCache.getFallbackUnary(sessionId, endpoint, key, payload);
+                            if (fallback !== undefined)
+                                return { ok: true, value: fallback };
+                        }
+                        throw error;
+                    }
+                });
+            }
+        }
+        const result = await this.dispatchRemote(endpoint, payload, signal);
+        if (isSessionMutationEndpoint(endpoint)) {
+            const mutatedSessionId = extractSessionIdFromGatewayPayload(payload);
+            if (mutatedSessionId !== undefined)
+                this.historyCache.invalidateSession(mutatedSessionId);
+        }
+        return result;
+    }
+    async dispatchRemote(endpoint, payload, signal) {
         // The Remote Gateway contract requires a single plain-object `args` field.
         // Keep the payload unchanged here: converting it to positional arrays makes
         // current Hosts reject even empty calls such as `llm/listProviders`.
@@ -84,6 +132,28 @@ export class RemoteTypertGateway {
     }
     async open(endpoint, payload, signal) {
         signal.throwIfAborted();
+        if (endpoint === 'session/follow') {
+            const sessionId = extractSessionIdFromGatewayPayload(payload);
+            const cached = sessionId === undefined
+                ? undefined
+                : this.historyCache.getFollowSnapshot(this.client, sessionId);
+            if (cached !== undefined && cached.sameClient && sessionId !== undefined) {
+                return this.iterateWithCachedSnapshot(sessionId, cached.snapshot, cached.cursor, endpoint, payload, signal);
+            }
+            try {
+                return await this.openRaw(endpoint, payload, signal, sessionId, cached?.snapshot);
+            }
+            catch (error) {
+                if (cached !== undefined && !signal.aborted && !(isRecord(error) && error.isDSHRemoteError === true)) {
+                    return this.iterateFallbackSnapshot(cached.snapshot, signal);
+                }
+                throw error;
+            }
+        }
+        return this.openRaw(endpoint, payload, signal);
+    }
+    async openRaw(endpoint, payload, signal, sessionId, fallbackSnapshot) {
+        signal.throwIfAborted();
         const streamId = uuidV7();
         const queue = new AsyncValueQueue();
         const lifetime = new AbortController();
@@ -123,9 +193,188 @@ export class RemoteTypertGateway {
             await this.deferDisconnect(error, disconnected, signal);
             throw error;
         }
-        return this.iterate(streamId, endpoint, queue, unsubscribe, unsubscribeClose, signal, onAbort, lifetime, transferSignal, () => disconnected);
+        return this.iterate(streamId, endpoint, queue, unsubscribe, unsubscribeClose, signal, onAbort, lifetime, transferSignal, () => disconnected, sessionId, fallbackSnapshot);
     }
-    async *iterate(streamId, endpoint, queue, unsubscribe, unsubscribeClose, signal, onAbort, lifetime, transferSignal, disconnected) {
+    async *iterateWithCachedSnapshot(sessionId, cachedSnapshot, initialCursor, endpoint, payload, signal) {
+        const upstreamController = new AbortController();
+        const onAbort = () => upstreamController.abort();
+        signal.addEventListener('abort', onAbort, { once: true });
+        const upstreamPromise = this.openRaw(endpoint, payload, upstreamController.signal, sessionId);
+        void upstreamPromise.catch(() => undefined);
+        let upstreamIterator;
+        let lastCursor = initialCursor;
+        let assistantRevision = 0;
+        let resyncRequired = false;
+        const backfillRange = async (fromExclusive, toInclusive) => {
+            const missingCount = toInclusive - fromExclusive;
+            if (missingCount <= 0)
+                return [];
+            if (missingCount > 200)
+                return undefined;
+            const backfilled = await this.dispatchRemote('session/page', {
+                args: {
+                    request: {
+                        address: { kind: 'session', sessionId },
+                        throughSeq: toInclusive,
+                        maxMessages: missingCount,
+                    },
+                },
+            }, upstreamController.signal).catch(() => undefined);
+            if (!backfilled?.ok || !isRecord(backfilled.value) || !Array.isArray(backfilled.value.records)) {
+                return undefined;
+            }
+            const records = backfilled.value.records.filter((record) => isRecord(record) && isRecord(record.event) && typeof record.event.seq === 'number'
+                && record.event.seq > fromExclusive && record.event.seq <= toInclusive);
+            if (records.length !== missingCount)
+                return undefined;
+            for (let index = 0; index < records.length; index += 1) {
+                if (records[index].event.seq !== fromExclusive + index + 1)
+                    return undefined;
+            }
+            return records;
+        };
+        try {
+            signal.throwIfAborted();
+            yield cachedSnapshot;
+            const upstream = await upstreamPromise;
+            upstreamIterator = upstream[Symbol.asyncIterator]();
+            while (true) {
+                const next = await upstreamIterator.next();
+                if (next.done)
+                    break;
+                const item = next.value;
+                if (isRecord(item) && item.type === 'snapshot') {
+                    const upstreamCursor = typeof item.cursor === 'number' ? item.cursor : lastCursor;
+                    if (upstreamCursor < lastCursor) {
+                        this.historyCache.recordFollowSnapshot(this.client, sessionId, item);
+                        resyncRequired = true;
+                        throw new RemoteClientError('TRANSPORT_CLOSED', 'Remote session history cursor was reset; reopen to resync.');
+                    }
+                    if (Array.isArray(item.records)) {
+                        const newerRecords = item.records.filter((record) => isRecord(record) && isRecord(record.event) && typeof record.event.seq === 'number' && record.event.seq > lastCursor);
+                        for (const record of newerRecords) {
+                            if (record.event.seq <= lastCursor)
+                                continue;
+                            if (record.event.seq > lastCursor + 1) {
+                                const recovered = await backfillRange(lastCursor, record.event.seq - 1);
+                                if (recovered === undefined) {
+                                    this.historyCache.recordFollowSnapshot(this.client, sessionId, item);
+                                    resyncRequired = true;
+                                    throw new RemoteClientError('TRANSPORT_CLOSED', 'Remote session history gap requires resync.');
+                                }
+                                this.historyCache.prependBackfilledRecords(this.client, sessionId, recovered);
+                                for (const missing of recovered) {
+                                    lastCursor = missing.event.seq;
+                                    yield missing;
+                                }
+                            }
+                            lastCursor = record.event.seq;
+                            yield record;
+                        }
+                    }
+                    if (upstreamCursor > lastCursor) {
+                        const recovered = await backfillRange(lastCursor, upstreamCursor);
+                        if (recovered === undefined) {
+                            this.historyCache.recordFollowSnapshot(this.client, sessionId, item);
+                            resyncRequired = true;
+                            throw new RemoteClientError('TRANSPORT_CLOSED', 'Remote session history cursor gap requires resync.');
+                        }
+                        this.historyCache.prependBackfilledRecords(this.client, sessionId, recovered);
+                        for (const missing of recovered) {
+                            lastCursor = missing.event.seq;
+                            yield missing;
+                        }
+                    }
+                    if (isRecord(item.projections) && isRecord(item.projections.values)) {
+                        const cachedProjections = isRecord(cachedSnapshot.projections) && isRecord(cachedSnapshot.projections.values)
+                            ? cachedSnapshot.projections.values
+                            : undefined;
+                        const asOfSeq = typeof item.projections.asOfSeq === 'number' ? item.projections.asOfSeq : lastCursor;
+                        for (const [key, value] of Object.entries(item.projections.values)) {
+                            if (cachedProjections === undefined || JSON.stringify(cachedProjections[key]) !== JSON.stringify(value)) {
+                                yield { type: 'projection', key, seq: asOfSeq, value };
+                            }
+                        }
+                    }
+                    if (isRecord(item.assistantStream)) {
+                        const cachedAssistant = isRecord(cachedSnapshot.assistantStream) ? cachedSnapshot.assistantStream : undefined;
+                        const hasActiveStream = item.assistantStream.active === true
+                            || item.assistantStream.message != null
+                            || (Array.isArray(item.assistantStream.entries) && item.assistantStream.entries.length > 0);
+                        const cachedHadActiveStream = cachedAssistant !== undefined && (cachedAssistant.active === true
+                            || cachedAssistant.message != null
+                            || (Array.isArray(cachedAssistant.entries) && cachedAssistant.entries.length > 0));
+                        if (hasActiveStream || cachedHadActiveStream) {
+                            yield {
+                                type: 'assistant-stream',
+                                frame: {
+                                    ...item.assistantStream,
+                                    revision: ++assistantRevision,
+                                },
+                            };
+                        }
+                    }
+                    continue;
+                }
+                if (isRecord(item) && item.type === 'event' && isRecord(item.event) && typeof item.event.seq === 'number') {
+                    if (item.event.seq <= lastCursor)
+                        continue;
+                    if (item.event.seq > lastCursor + 1) {
+                        const recovered = await backfillRange(lastCursor, item.event.seq - 1);
+                        if (recovered === undefined) {
+                            this.historyCache.invalidateSession(sessionId);
+                            resyncRequired = true;
+                            throw new RemoteClientError('TRANSPORT_CLOSED', 'Remote session live event gap requires resync.');
+                        }
+                        this.historyCache.prependBackfilledRecords(this.client, sessionId, [...recovered, item]);
+                        for (const missing of recovered) {
+                            lastCursor = missing.event.seq;
+                            yield missing;
+                        }
+                    }
+                    lastCursor = item.event.seq;
+                    yield item;
+                    continue;
+                }
+                if (isRecord(item) && item.type === 'assistant-stream' && isRecord(item.frame)) {
+                    yield {
+                        ...item,
+                        frame: {
+                            ...item.frame,
+                            revision: ++assistantRevision,
+                        },
+                    };
+                    continue;
+                }
+                yield item;
+            }
+        }
+        catch (error) {
+            if (signal.aborted)
+                return;
+            if (resyncRequired || (isRecord(error) && error.isDSHRemoteError === true))
+                throw error;
+            if (this.deferStreamDisconnect) {
+                await new Promise(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
+                return;
+            }
+            throw error;
+        }
+        finally {
+            signal.removeEventListener('abort', onAbort);
+            upstreamController.abort();
+            await upstreamIterator?.return?.().catch(() => undefined);
+        }
+    }
+    async *iterateFallbackSnapshot(snapshot, signal) {
+        signal.throwIfAborted();
+        yield snapshot;
+        if (this.deferStreamDisconnect && !signal.aborted) {
+            await new Promise(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
+        }
+    }
+    async *iterate(streamId, endpoint, queue, unsubscribe, unsubscribeClose, signal, onAbort, lifetime, transferSignal, disconnected, sessionId, fallbackSnapshot) {
+        let resolvedSessionId = sessionId ?? '';
         try {
             for await (const item of queue) {
                 let frame = item;
@@ -148,12 +397,25 @@ export class RemoteTypertGateway {
                 }
                 transferSignal.throwIfAborted();
                 const value = frame.value;
-                yield this.compatibility === 'legacy-to-v3'
+                const normalized = this.compatibility === 'legacy-to-v3'
                     ? normalizeLegacySessionGatewayValue(endpoint, value)
                     : normalizeAssistantMessageStreamValue(endpoint, value);
+                if (endpoint === 'session/follow' && isRecord(normalized)) {
+                    if (normalized.type === 'snapshot') {
+                        if (resolvedSessionId.length === 0 && isRecord(normalized.header) && typeof normalized.header.id === 'string') {
+                            resolvedSessionId = normalized.header.id;
+                        }
+                        this.historyCache.recordFollowSnapshot(this.client, resolvedSessionId, normalized);
+                    }
+                    else {
+                        this.historyCache.recordFollowFrame(this.client, resolvedSessionId, normalized);
+                    }
+                }
+                yield normalized;
             }
         }
         catch (error) {
+            void fallbackSnapshot;
             await this.deferDisconnect(error, disconnected(), signal);
             throw error;
         }

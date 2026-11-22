@@ -5,14 +5,20 @@ export function createPluginRouteDispatcher(readConnection, readPort, peer) {
         signal.throwIfAborted();
         const connection = readConnection();
         const handler = connection?.createSharedFetchHandler?.('/api');
+        const upload = route === 'api/session/uploadFileBinary'
+            ? body.payload : undefined;
+        const query = upload === undefined ? '' : `?${new URLSearchParams({ sessionId: upload.sessionId, ...(upload.mediaType === undefined ? {} : { mediaType: upload.mediaType }),
+            ...(upload.name === undefined ? {} : { name: upload.name }) })}`;
+        const contentType = upload === undefined ? 'application/json' : 'application/octet-stream';
+        const requestBody = upload === undefined ? JSON.stringify(body ?? {}) : Buffer.from(upload.data, 'base64');
         let response;
         if (handler !== undefined) {
             // The authenticated Remote channel has already admitted this peer. Invoke
             // the official local Fetch carrier, including on Desktop without HTTP.
-            response = await withSignal(handler.fetch(new Request(`http://127.0.0.1/${route}`, {
+            response = await withSignal(handler.fetch(new Request(`http://127.0.0.1/${route}${query}`, {
                 method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify(body ?? {}),
+                headers: { 'content-type': contentType },
+                body: requestBody,
                 signal,
             }), peer), signal);
         }
@@ -27,10 +33,10 @@ export function createPluginRouteDispatcher(readConnection, readPort, peer) {
                 const setCookie = typeof launch.headers.getSetCookie === 'function' ? launch.headers.getSetCookie() : [];
                 cookie = setCookie.map(item => item.split(';', 1)[0]).join('; ') || undefined;
             }
-            response = await fetch(`${origin}/${route}`, {
+            response = await fetch(`${origin}/${route}${query}`, {
                 method: 'POST',
-                headers: { 'content-type': 'application/json', ...(cookie === undefined ? {} : { cookie }) },
-                body: JSON.stringify(body ?? {}),
+                headers: { 'content-type': contentType, ...(cookie === undefined ? {} : { cookie }) },
+                body: requestBody,
                 signal,
             });
             if (response.status === 401)

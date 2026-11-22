@@ -13,6 +13,7 @@ export class AcpLiveProjection {
         if (session === undefined)
             throw new Error('The Session was not found.');
         await this.context.hydrateSession(session);
+        this.context.rememberOpenedSession?.(session.sessionId);
         const history = this.context.historyPage(session, {
             limit: optionalPositiveInteger(request.maxMessages) ?? 50,
         });
@@ -428,6 +429,9 @@ export class AcpLiveProjection {
         follow.piReasoning = '';
     }
     closeFollowAfterRemoteStreamClosed(follow, outcome = { kind: 'completed' }) {
+        const session = this.context.sessions.get(follow.sessionId);
+        if (session !== undefined)
+            session.running = false;
         if (this.context.backend === 'pi') {
             this.finishPiAssistant(follow, outcome);
             if (follow.stepOpen) {
@@ -440,6 +444,8 @@ export class AcpLiveProjection {
             follow.piToolOutputs.clear();
             follow.piToolCalls.clear();
             follow.activeToolCalls.clear();
+            if (session !== undefined)
+                this.context.syncSessionCache?.(session);
             return;
         }
         if (follow.streamActive) {
@@ -496,6 +502,8 @@ export class AcpLiveProjection {
         follow.accumulatedText = '';
         follow.piToolOutputs.clear();
         follow.piToolCalls.clear();
+        if (session !== undefined)
+            this.context.syncSessionCache?.(session);
     }
     pushEvent(follow, type, data) {
         const session = this.context.sessions.get(follow.sessionId);
@@ -509,6 +517,7 @@ export class AcpLiveProjection {
         };
         if (session !== undefined) {
             session.events.push({ type: 'event', event });
+            this.context.syncSessionCache?.(session);
         }
         for (const f of this.context.follows) {
             if (f.sessionId === follow.sessionId) {

@@ -56,7 +56,7 @@ const { useState, useEffect, useCallback, useMemo, useRef } = React2;
    - 等宽字体是 --ds-font-family-code（ui-theme/src/styles/base.css 的 :root 里定义的就是
      它，官方 51 处用它）。别用 --dsw-font-mono：那个名字全仓没有定义，只是个约定俗成的
      引用目标，用上它等于永远命中 fallback，等宽字形跟宿主代码块对不上。 */
-const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(--dsw-alias-state-success-primary);--mcp-err:var(--dsw-alias-state-error-primary);--mcp-warn:var(--dsw-alias-state-warn-primary);--mcp-info:var(--dsw-alias-state-business-primary);--mcp-mut:var(--dsw-alias-label-secondary);--mcp-bg-1:var(--dsw-alias-bg-layer-1);--mcp-bg-2:var(--dsw-alias-bg-layer-2);--mcp-bg-3:var(--dsw-alias-bg-layer-3);--mcp-line:var(--dsw-alias-border-l2);--mcp-mono:var(--ds-font-family-code,ui-monospace,SFMono-Regular,Menlo,monospace);--mcp-r-xs:var(--dsw-radius-xs);--mcp-r-sm:var(--dsw-radius-sm);--mcp-r-md:var(--dsw-radius-md);--mcp-r-lg:var(--dsw-radius-lg);--mcp-r-xl:var(--dsw-radius-xl);--mcp-r-panel:var(--dsw-radius-panel)}
+const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(--dsw-alias-state-success-primary);--mcp-err:var(--dsw-alias-state-error-primary);--mcp-warn:var(--dsw-alias-state-warn-primary);--mcp-info:var(--dsw-alias-state-business-primary);--mcp-mut:var(--dsw-alias-label-secondary);--mcp-bg-1:var(--dsw-alias-bg-layer-1);--mcp-bg-2:var(--dsw-alias-bg-layer-2);--mcp-bg-3:var(--dsw-alias-bg-layer-3);--mcp-line:var(--dsw-alias-border-l2);--mcp-mono:var(--ds-font-family-code,ui-monospace,SFMono-Regular,Menlo,monospace);--mcp-r-xs:var(--dsw-radius-xs);--mcp-r-sm:var(--dsw-radius-sm);--mcp-r-md:var(--dsw-radius-md);--mcp-r-lg:var(--dsw-radius-lg);--mcp-r-xl:var(--dsw-radius-xl);--mcp-r-panel:var(--dsw-radius-panel);--mcp-kind-system:var(--dsw-alias-label-secondary);--mcp-kind-attachment:color-mix(in srgb,var(--dsw-alias-brand-primary) 46%,var(--dsw-alias-state-error-primary))}
 .dsh-mcp-wrap,.dsh-mcp-panel-overlay,.dsh-mcp-overlay,.dsh-mcp-fab,.dsh-mcp-footer-action,.dsh-mcp-toast{color:var(--dsw-alias-label-primary);font-family:var(--dsw-font-family,inherit)}
 .dsh-mcp-wrap{box-sizing:border-box;display:flex;flex-direction:column;height:100%;min-height:0;gap:16px;padding:0;font-size:12.5px;-webkit-font-smoothing:antialiased}
 .dsh-mcp-wrap ::-webkit-scrollbar{width:8px;height:8px}
@@ -276,31 +276,35 @@ const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(-
    这是一个工作台，不是设置卡片堆：顶部给上下文，正文给决策，底部给提交。
    颜色、几何和层级全部从 DSH 主题令牌来；平面分隔用发丝线，抬升表面才用阴影。 */
 .dsh-mcp-tool-loading-page{display:flex;flex:1;min-height:0;flex-direction:column;overflow:hidden}
-.dsh-mcp-tool-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 2px 2px 0}
-/* 固定区域：参数、概览、工具条不滚；只有工具列表滚。 */
-.dsh-mcp-tool-fixed{flex:none}
+.dsh-mcp-tool-scroll{flex:1 1 auto;min-height:128px;overflow-y:auto;overflow-x:hidden;padding:0 2px 2px 0}
+/* 固定区域：参数、概览、工具条不滚；只有工具列表滚。
+   ⚠️ 它必须**可压缩**（flex-shrink:1）且自带滚动条：真机上它曾经是 flex:none，一有内容
+   长高就把下面那个 flex:1 的滚动区挤成 0 高——工具列表从此滚不到（用户原话："挤压的下面
+   都滚动不了"）。修"把长内容搬走"只解决了这一次，把不可压缩改成可压缩才解决这一类。 */
+.dsh-mcp-tool-fixed{flex:0 0 auto;max-height:64%;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
 .dsh-mcp-tool-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:0 0 10px}
 .dsh-mcp-tool-hero-copy{min-width:0}
 .dsh-mcp-tool-title{margin:0;font-size:16px;font-weight:650;line-height:1.3;letter-spacing:0}
-/* 概览条：一张卡、四个统计格。数字是这张页面上唯一变长的东西，给它 tabular-nums
-   并钉住一格的宽度节奏，保存中数字增减时不推挤邻居。 */
-.dsh-mcp-tool-overview{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:10px 0 2px;border:1px solid var(--mcp-line);border-radius:var(--mcp-r-lg);background:var(--mcp-bg-2)}
-.dsh-mcp-tool-stat{display:flex;align-items:center;gap:9px;min-width:0;padding:10px 14px}
-.dsh-mcp-tool-stat+.dsh-mcp-tool-stat{border-left:.5px solid var(--mcp-line)}
-.dsh-mcp-tool-stat-mark{width:8px;height:8px;flex:none;border-radius:50%;corner-shape:round;background:var(--mcp-mut)}
+/* 概览条：一排小胶囊。第一版是四张大卡，占掉首屏却只回答四个数；页面真正要回答的是
+   “哪台服务器的哪些工具该常驻”，所以数字压成一行，把高度还给列表。 */
+.dsh-mcp-tool-overview{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 2px}
+.dsh-mcp-tool-stat{display:inline-flex;align-items:center;gap:7px;min-width:0;padding:5px 10px;border:.5px solid var(--mcp-line);border-radius:999px;corner-shape:round;background:var(--mcp-bg-2)}
+.dsh-mcp-tool-stat-mark{width:7px;height:7px;flex:none;border-radius:50%;corner-shape:round;background:var(--mcp-mut)}
 .dsh-mcp-tool-stat-mark.resident{background:var(--mcp-ok)}
 .dsh-mcp-tool-stat-mark.deferred{background:var(--mcp-accent)}
 .dsh-mcp-tool-stat-mark.protected{background:var(--mcp-warn)}
-.dsh-mcp-tool-stat-value{font-size:17px;font-weight:680;line-height:1.1;font-variant-numeric:tabular-nums}
-.dsh-mcp-tool-stat-copy{min-width:0;display:flex;flex-direction:column;gap:1px}
-.dsh-mcp-tool-stat-label{color:var(--dsw-alias-label-primary);font-size:11.5px;font-weight:600;line-height:1.3}
-.dsh-mcp-tool-stat-note{overflow:hidden;color:var(--mcp-mut);font-size:10.5px;line-height:1.35;text-overflow:ellipsis;white-space:nowrap}
-/* 搜索参数：与工具列表同级的第二区块，不再是底部折叠的「高级设置」。
-    标题与三列字段先于工具统计，说明留给字段旁的提示。 */
-.dsh-mcp-tool-params{padding:0 0 14px;border-bottom:.5px solid var(--mcp-line)}
-.dsh-mcp-tool-params-head{margin-bottom:12px}
-.dsh-mcp-tool-params-title{margin:0;font-size:13px;font-weight:600;line-height:1.35}
+.dsh-mcp-tool-stat-value{font-size:13px;font-weight:680;line-height:1.1;font-variant-numeric:tabular-nums}
+.dsh-mcp-tool-stat-copy{min-width:0;display:inline-flex;align-items:center;gap:5px}
+.dsh-mcp-tool-stat-label{color:var(--dsw-alias-label-primary);font-size:11px;font-weight:600;line-height:1.3;white-space:nowrap}
+.dsh-mcp-tool-stat-note{display:none}
+/* 搜索参数固定在顶部：它是 ToolSearch 的核心配置（一次返回几条、目录多大、已发现集能留多久），
+   默认可见、不折叠。它管的是 tool_search 本身，不是“这个工具要不要常驻”。 */
+.dsh-mcp-tool-params{padding:0 0 12px;border-bottom:.5px solid var(--mcp-line)}
+.dsh-mcp-tool-params-title{margin:0 0 10px;font-size:13px;font-weight:600;line-height:1.35}
+.dsh-mcp-tool-params-note{color:var(--mcp-mut);font-size:10.5px;line-height:1.4}
 .dsh-mcp-tool-params-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+/* 体检是一段要读的文字，不跟控件挤一格：单独占一行，用一条细分隔线跟控件区开。 */
+.dsh-mcp-tool-facts{margin-top:14px;padding-top:10px;border-top:.5px solid var(--mcp-line);display:grid;gap:3px}
 .dsh-mcp-tool-param{display:flex;flex-direction:column;gap:6px;min-width:0}
 .dsh-mcp-tool-param-label{display:flex;align-items:center;gap:5px;color:var(--dsw-alias-label-primary);font-size:11.5px;font-weight:600;line-height:1.35}
 .dsh-mcp-tool-param-inline{display:flex;align-items:center;gap:8px}
@@ -311,20 +315,71 @@ const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(-
 .dsh-mcp-tool-param-saved{margin:8px 0 0;color:var(--mcp-ok);font-size:11px;line-height:1.4}
 /* 工具条：搜索 + 分段筛选。筛选用与顶栏能力层同一形态的浅槽分段控件——
    「看到哪一面」在面板里已经长这样，工具页不再发明第二种筛选长相。 */
-.dsh-mcp-tool-toolbar{display:flex;align-items:center;gap:10px;padding:8px 0 10px}
+.dsh-mcp-tool-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0 10px}
 .dsh-mcp-tool-toolbar .dsh-mcp-search{flex:1;min-width:180px}
+.dsh-mcp-tool-filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:none}
+.dsh-mcp-tool-filter-label{color:var(--mcp-mut);font-size:10.5px;font-weight:600}
+.dsh-mcp-tool-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 2px 6px;border-bottom:.5px solid var(--mcp-line);margin-bottom:8px}
+.dsh-mcp-tool-section-toggle{display:flex;align-items:center;gap:6px;min-width:0;border:0;background:transparent;color:inherit;font:inherit;padding:0;cursor:pointer}
+.dsh-mcp-tool-section-toggle:hover h4{color:var(--mcp-accent)}
+.dsh-mcp-tool-section-toggle h4{pointer-events:none}
+.dsh-mcp-tool-section-head:first-child{padding-top:2px}
+.dsh-mcp-tool-section-head h4{margin:0;font-size:12px;font-weight:650;line-height:1.35;letter-spacing:.1px}
+.dsh-mcp-tool-banner{margin:8px 0 0;padding:7px 10px;border:.5px solid var(--dsw-alias-state-warn-primary);border-radius:var(--mcp-r-md);background:var(--dsw-alias-state-warn-tertiary);color:var(--dsw-alias-label-primary);font-size:11px;line-height:1.5}
+.dsh-mcp-tool-hint{color:var(--mcp-mut);font-size:10.5px;line-height:1.4;padding:0 0 6px}
 .dsh-mcp-tool-filter{display:inline-flex;gap:2px;flex:none;padding:3px;border-radius:var(--mcp-r-lg);background:var(--mcp-bg-2)}
 .dsh-mcp-tool-filter button{display:inline-flex;align-items:center;gap:5px;border:0;border-radius:var(--mcp-r-md);background:transparent;color:var(--mcp-mut);font:inherit;font-size:11.5px;line-height:1.3;padding:5px 11px;cursor:pointer;white-space:nowrap}
 .dsh-mcp-tool-filter button[aria-pressed='true']{background:var(--dsw-alias-button-primary-fill);color:var(--dsw-alias-label-primary-inverted);font-weight:650}
 /* 卡片网格：每张卡自带边框与底色，行间不再用发丝线分隔——线上排名字曾是
-   「密密麻麻一整片」观感的来源；卡片之间的 10px 空隙就是分组。 */
+   「密密麻麻一整片」观感的来源；卡片之间的 8px 空隙就是分组。 */
 .dsh-mcp-tool-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+/* 组：一台服务器一张卡包住它的工具。组头常驻在滚动区顶部（sticky），滚到 700 行时
+   仍能看见“这是哪台服务器 + 整台默认是什么”。 */
+.dsh-mcp-tool-groups{display:flex;flex-direction:column;gap:10px}
+.dsh-mcp-tool-group{border:.5px solid var(--mcp-line);border-radius:var(--mcp-r-lg);background:var(--mcp-bg-1);overflow:clip}
+.dsh-mcp-tool-group-head{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--mcp-bg-2)}
+.dsh-mcp-tool-group.open .dsh-mcp-tool-group-head{border-bottom:.5px solid var(--mcp-line)}
+.dsh-mcp-tool-group-toggle{display:flex;align-items:center;gap:8px;flex:1;min-width:0;border:0;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;text-align:left;cursor:pointer;padding:0}
+.dsh-mcp-tool-group-name{overflow:hidden;font-size:12px;font-weight:650;line-height:1.4;white-space:nowrap;text-overflow:ellipsis}
+.dsh-mcp-tool-group-count{flex:none;padding:0 7px;border-radius:999px;corner-shape:round;background:var(--mcp-line);color:var(--mcp-mut);font-size:10px;font-weight:650;line-height:16px;font-variant-numeric:tabular-nums}
+.dsh-mcp-tool-group-summary{min-width:0;overflow:hidden;color:var(--mcp-mut);font-size:10.5px;white-space:nowrap;text-overflow:ellipsis}
+.dsh-mcp-tool-group-only{flex:none;border:0;background:transparent;color:var(--mcp-mut);font:inherit;font-size:10.5px;line-height:1.4;padding:2px 4px;cursor:pointer;white-space:nowrap}
+.dsh-mcp-tool-group-default{flex:none;color:var(--mcp-mut);font-size:10.5px;line-height:1.4;white-space:nowrap}
+.dsh-mcp-tool-group-only:hover{color:var(--mcp-accent)}
+.dsh-mcp-tool-group .dsh-mcp-tool-list{padding:8px 10px 10px}
+.dsh-mcp-tool-group .dsh-mcp-tool-row{content-visibility:auto;contain-intrinsic-size:auto 92px}
+/* ── 自定义分组与批量（DESIGN §16/§18）──────────────────────────────── */
+/* 复选框放进已有的一行（行头 / 组头），不新增行高；窄屏由组头的 flex-wrap 接手。 */
+.dsh-mcp-tool-check{flex:none;width:14px;height:14px;margin:0;accent-color:var(--mcp-accent);cursor:pointer}
+.dsh-mcp-tool-row.is-selected{border-color:var(--mcp-accent);background:var(--dsw-alias-interactive-bg-hover-accent)}
+/* 动作条固定在滚动区上方：长列表里选完半屏看不到动作条等于没有。 */
+.dsh-mcp-tool-batch{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border:.5px solid var(--mcp-line);border-radius:var(--mcp-r-md);background:var(--mcp-bg-2)}
+.dsh-mcp-tool-batch-count{flex:none;color:var(--mcp-mut);font-size:11.5px;line-height:1.4;white-space:nowrap;font-variant-numeric:tabular-nums}
+.dsh-mcp-tool-batch-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:auto}
+.dsh-mcp-tool-join{height:28px;padding:0 8px;border:1px solid var(--mcp-line);border-radius:var(--mcp-r-md);background:var(--mcp-bg-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:11.5px;cursor:pointer}
+/* "N 个在自定义分组里"：少了的工具要有去处，不能凭空消失。 */
+.dsh-mcp-tool-group-moved{flex:none;color:var(--mcp-mut);font-size:10.5px;line-height:1.4;white-space:nowrap;border-bottom:1px dotted var(--mcp-line)}
+.dsh-mcp-tool-empty{padding:8px 2px;color:var(--mcp-mut);font-size:12px;line-height:1.5}
+.dsh-mcp-tool-section-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+@media (max-width:480px){
+  .dsh-mcp-tool-batch-count{white-space:normal}
+  .dsh-mcp-tool-batch-actions{margin-left:0;width:100%}
+}
+.dsh-mcp-tool-scope{display:flex;align-items:center;gap:8px;min-width:0;padding:0 0 8px}
+.dsh-mcp-tool-scope-label{flex:none;color:var(--mcp-mut);font-size:10.5px;font-weight:600}
+.dsh-mcp-tool-scope .dsh-mcp-tabs-wrap{flex:1;min-width:0}
+.dsh-mcp-tool-focus{display:flex;align-items:center;gap:8px;margin:0 0 8px;padding:6px 10px;border:.5px solid var(--mcp-accent);border-radius:var(--mcp-r-md);background:var(--dsw-alias-interactive-bg-hover-accent);font-size:11px;line-height:1.4}
+.dsh-mcp-tool-focus span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsh-mcp-tools-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
 /* 行 = 卡片：第 1 行 名称+中文短名+ⓘ | 常驻/按需分段；第 2 行 说明（截断，全文在 title）。
    说明截断是有意的：这页的决定是「加载方式」，说明只是辨认工具用的线索，
    整段铺开会让 34 张卡高低不一、网格错位。 */
 .dsh-mcp-tool-row{position:relative;display:flex;flex-direction:column;gap:5px;margin:0;padding:10px 12px;border:.5px solid var(--mcp-line);border-radius:var(--mcp-r-md);background:var(--mcp-bg-1);transition:border-color .12s,background .12s}
 .dsh-mcp-tool-row.is-changed{border-color:var(--mcp-accent);background:var(--dsw-alias-interactive-bg-hover-accent)}
-.dsh-mcp-tool-info{display:flex;align-items:center;gap:6px;min-width:0}
+.dsh-mcp-tool-row.is-overridden{border-color:var(--dsw-alias-border-l3)}
+.dsh-mcp-tool-head{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.dsh-mcp-tool-override{flex:none;padding:1px 6px;border-radius:999px;corner-shape:round;background:var(--dsw-alias-interactive-bg-hover-accent);color:var(--mcp-accent);font-size:9.5px;font-weight:650;line-height:15px}
+.dsh-mcp-tool-info{display:flex;align-items:center;gap:6px;min-width:0;flex:1}
 .dsh-mcp-tool-row .dsh-mcp-tool-name{flex:0 1 auto;max-width:100%;min-width:0;overflow:hidden;color:var(--dsw-alias-label-primary);font-family:var(--mcp-mono);font-size:12px;font-weight:650;line-height:1.4;text-overflow:ellipsis;white-space:nowrap}
 .dsh-mcp-tool-alias{min-width:0;overflow:hidden;color:var(--mcp-mut);font-size:11px;line-height:1.4;text-overflow:ellipsis;white-space:nowrap}
 .dsh-mcp-tool-desc{display:-webkit-box;overflow:hidden;color:var(--mcp-mut);font-size:10.5px;line-height:1.45;-webkit-box-orient:vertical;-webkit-line-clamp:2}
@@ -336,6 +391,7 @@ const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(-
 .dsh-mcp-tool-pick button[aria-pressed='true']{font-weight:650}
 .dsh-mcp-tool-pick button[aria-pressed='true'].is-resident{background:var(--dsw-alias-state-success-tertiary);color:var(--dsw-alias-state-success-primary)}
 .dsh-mcp-tool-pick button[aria-pressed='true'].is-deferred{background:var(--dsw-alias-interactive-bg-hover-accent);color:var(--mcp-accent)}
+.dsh-mcp-tool-pick button[aria-pressed='true'].is-inherit{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dsh-mcp-tool-pick button:focus-visible{outline:1px solid var(--mcp-accent);outline-offset:1px}
 /* 保存栏常驻底栏：左边一句话说清「改了几个/改完何时生效」，右边放弃+保存。
    改动徽标与脏行卡片同色同圆点——底部 promised 的改动数与列表里高亮的卡互相对得上。 */
@@ -351,15 +407,23 @@ const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(-
   .dsh-mcp-tool-row.is-changed:hover{border-color:var(--mcp-accent)}
   .dsh-mcp-tool-pick button:not([aria-pressed='true']):hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 }
+/* 761–980px：两列会把 MCP 工具名压到只剩几个字（实测 800px 下 mcp__jsh...），
+   而名字是找工具的唯一线索。这一档改成单列；真正的窄屏规则在 760px 下。 */
+@media (max-width:980px){
+  .dsh-mcp-tool-list{grid-template-columns:minmax(0,1fr)}
+}
 @media (max-width:760px){
   .dsh-mcp-tool-hero{display:block;padding-bottom:8px}
-  .dsh-mcp-tool-overview{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .dsh-mcp-tool-stat{padding:9px 10px}
-  .dsh-mcp-tool-stat+.dsh-mcp-tool-stat{border-left:0}
-  .dsh-mcp-tool-stat:nth-child(even){border-left:.5px solid var(--mcp-line)}
-  .dsh-mcp-tool-stat:nth-child(n+3){border-top:.5px solid var(--mcp-line)}
-  .dsh-mcp-tool-stat-value{font-size:16px}
-  .dsh-mcp-tool-stat-note{display:none}
+  /* 窄屏：组头与工具行都改成“名字一行、控件下一行”。
+     共享一行时 430px 下面包屑只剩 4 个字（实测 "chro..." / "mcp__js..."）——
+     名字是找工具的唯一线索，宁可多一行也不能截。 */
+  .dsh-mcp-tool-group-head{flex-wrap:wrap;row-gap:6px}
+  .dsh-mcp-tool-group-toggle{flex:1 1 100%;flex-wrap:wrap;row-gap:4px}
+  .dsh-mcp-tool-group-summary{flex-basis:100%;order:3}
+  .dsh-mcp-tool-group-only{display:none}
+  .dsh-mcp-tool-head{flex-wrap:wrap;row-gap:6px}
+  .dsh-mcp-tool-info{flex-basis:100%}
+  .dsh-mcp-tool-stat-value{font-size:12px}
   .dsh-mcp-tool-params-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .dsh-mcp-tool-param:last-child{grid-column:1 / -1}
   .dsh-mcp-tool-param-label{font-size:10.5px}
@@ -614,6 +678,175 @@ const MCP_CSS = `body{--mcp-accent:var(--dsw-alias-brand-primary);--mcp-ok:var(-
    .dsh-mcp-dot.loading 的呼吸只改透明度、且是「正在连接」的状态线索，故保留。
    ⚠️ 本注释在模板字符串内部：不得出现反引号。 */
 @media (prefers-reduced-motion:reduce){.dsh-mcp-panel,.dsh-mcp-whatsnew,.dsh-mcp-modal,.dsh-mcp-toast,.dsh-mcp-fab{animation:none}.dsh-mcp-wrap *,.dsh-mcp-panel-overlay *,.dsh-mcp-overlay *,.dsh-mcp-fab,.dsh-mcp-toggle::after{transition:none}}
+/* ── 上下文观测面 ───────────────────────────────────────────────────────────
+   这一面是**读图表**，不是读表格。元素多，所以按三个问题分层排：
+     总量（多大 / 还剩多少）→ 构成（被谁占着）→ 工具 → 明细 → 轮次 → 搜索记录。
+   每层一张卡，卡片之间用留白与发丝线分隔，滚动时不会"跳回去找上下文"。
+
+   视觉基调是**通透**：卡片用极浅的层色 + 1px 边 + 大圆角，块图用低饱和分类色叠在层色上
+   （color-mix 而不是实色），所以深浅主题下都不会出现"亮块刺眼 / 暗块看不见"。
+   分类色只用一套（系统=信息蓝、工具=品牌色、工具结果=警告橙、附件=紫、会话=成功绿）。 */
+.dsh-mcp-ctx{display:flex;flex:1;flex-direction:column;gap:14px;min-height:0;overflow-y:auto;overflow-x:hidden;padding-right:2px}
+/* ⚠️ 每个直接子块都必须 flex:none。整面是纵向 flex + overflow-y:auto，子块默认 flex:0 1 auto
+   会因为"装不下"被压扁到 0 高，而内容仍然溢出可见——真机上看到的正是**几段文字叠在一起**。
+   滚动由容器负责，子块不许收缩。 */
+.dsh-mcp-ctx>*{flex:none}
+.dsh-mcp-ctx-empty{display:flex;align-items:center;justify-content:center;min-height:88px;padding:14px;border:.5px dashed var(--mcp-line);border-radius:var(--mcp-r-lg);color:var(--mcp-mut);font-size:11.5px}
+.dsh-mcp-ctx-blank{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;box-sizing:border-box;width:100%;max-width:540px;margin:auto;padding:36px 28px;border:.5px dashed var(--mcp-line);border-radius:var(--mcp-r-lg);background:color-mix(in srgb,var(--mcp-bg-2) 55%,transparent);text-align:center}
+.dsh-mcp-ctx-blank-title{color:var(--dsw-alias-label-primary);font-size:14px;font-weight:600;line-height:1.5}
+.dsh-mcp-ctx-blank-note{max-width:38em;color:var(--mcp-mut);font-size:11.5px;line-height:1.65}
+/* 多会话总览：一行一个会话，用量条放在中间，谁快满了/谁在生成一眼可见。 */
+.dsh-mcp-ctx-all-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;min-width:0}
+.dsh-mcp-ctx-all-title{color:var(--dsw-alias-label-primary);font-size:12.5px;font-weight:650;line-height:1.4}
+.dsh-mcp-ctx-all{display:flex;flex-direction:column;gap:8px;min-width:0}
+.dsh-mcp-ctx-allrow{display:flex;flex-direction:column;gap:7px;min-width:0;padding:12px 14px;border:.5px solid var(--mcp-line);border-radius:var(--mcp-r-lg);background:linear-gradient(180deg,var(--mcp-bg-2),var(--mcp-bg-1));color:inherit;font:inherit;text-align:left;cursor:pointer;transition:border-color .12s,background .12s}
+.dsh-mcp-ctx-allrow:hover{border-color:var(--dsw-alias-border-l3);background:var(--dsw-alias-interactive-bg-hover)}
+.dsh-mcp-ctx-allrow.running{border-color:color-mix(in srgb,var(--mcp-ok) 42%,var(--mcp-line))}
+.dsh-mcp-ctx-allrow-top{display:flex;align-items:center;gap:8px;min-width:0}
+.dsh-mcp-ctx-allrow-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary);font-size:12px;font-weight:600;line-height:1.45}
+.dsh-mcp-ctx-allrow-live{flex:none;padding:0 7px;border-radius:999px;corner-shape:round;background:color-mix(in srgb,var(--mcp-ok) 16%,transparent);color:var(--mcp-ok);font-size:9.5px;font-weight:600;line-height:16px}
+.dsh-mcp-ctx-allrow-meta{color:var(--mcp-mut);font-size:10.5px;line-height:1.5;font-variant-numeric:tabular-nums}
+.dsh-mcp-ctx-back{flex:none;padding:4px 10px;border:.5px solid var(--mcp-line);border-radius:999px;corner-shape:round;background:var(--mcp-bg-1);color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;line-height:1.4;cursor:pointer;white-space:nowrap;transition:border-color .12s,color .12s}
+.dsh-mcp-ctx-back:hover{border-color:var(--dsw-alias-border-l3);color:var(--dsw-alias-label-primary)}
+
+/* ── 会话选择器：工作区 + 标题，两级信息 ── */
+.dsh-mcp-ctx-sessions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
+.dsh-mcp-ctx-sessions-label{flex:none;color:var(--mcp-mut);font-size:10.5px;letter-spacing:.02em}
+.dsh-mcp-ctx-session{display:inline-flex;align-items:center;gap:6px;max-width:230px;overflow:hidden;padding:4px 10px;border:.5px solid var(--mcp-line);border-radius:999px;corner-shape:round;background:var(--mcp-bg-1);color:var(--mcp-mut);font:inherit;font-size:11px;line-height:1.35}
+.dsh-mcp-ctx-session-ws{flex:none;padding:0 5px;border-radius:4px;background:color-mix(in srgb,var(--mcp-accent) 14%,transparent);color:var(--dsw-alias-brand-text);font-size:9.5px;font-weight:600;line-height:15px;max-width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsh-mcp-ctx-session-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── 顶部两张卡：总量与缓存 ── */
+.dsh-mcp-ctx-overview{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:10px}
+.dsh-mcp-ctx-card{display:flex;flex-direction:column;gap:5px;min-width:0;padding:13px 15px;border:.5px solid var(--mcp-line);border-radius:var(--mcp-r-lg);background:linear-gradient(180deg,var(--mcp-bg-2),var(--mcp-bg-1))}
+.dsh-mcp-ctx-card-label{display:flex;align-items:center;gap:8px;color:var(--mcp-mut);font-size:11px;line-height:1.4}
+.dsh-mcp-ctx-card-value{display:flex;align-items:baseline;gap:5px;color:var(--dsw-alias-label-primary);font-size:27px;font-weight:640;line-height:1.12;letter-spacing:-.015em;font-variant-numeric:tabular-nums}
+.dsh-mcp-ctx-card-value.sm{font-size:21px}
+.dsh-mcp-ctx-card-value b{font-weight:680}
+.dsh-mcp-ctx-card-sep{color:var(--mcp-mut);font-weight:400}
+.dsh-mcp-ctx-card-cap{color:var(--dsw-alias-label-secondary);font-weight:560}
+.dsh-mcp-ctx-card-unit{color:var(--mcp-mut);font-size:11px;font-weight:500;white-space:nowrap}
+.dsh-mcp-ctx-card-note{color:var(--mcp-mut);font-size:10.5px;line-height:1.5}
+.dsh-mcp-ctx-badge{padding:1.5px 8px;border-radius:999px;corner-shape:round;background:var(--mcp-line);color:var(--mcp-mut);font-size:9.5px;font-weight:600;line-height:15px;letter-spacing:.02em}
+.dsh-mcp-ctx-badge.ok{background:color-mix(in srgb,var(--mcp-ok) 16%,transparent);color:var(--mcp-ok)}
+.dsh-mcp-ctx-badge.warn{background:color-mix(in srgb,var(--mcp-warn) 18%,transparent);color:var(--mcp-warn)}
+.dsh-mcp-ctx-badge.err{background:color-mix(in srgb,var(--mcp-err) 18%,transparent);color:var(--mcp-err)}
+.dsh-mcp-ctx-meter{position:relative;height:7px;margin-top:2px;border-radius:999px;corner-shape:round;background:var(--mcp-bg-3);overflow:hidden}
+.dsh-mcp-ctx-meter.thin{height:4px;margin-top:1px}
+.dsh-mcp-ctx-meter-fill{display:block;height:100%;border-radius:999px;corner-shape:round;background:var(--mcp-accent);transition:width .3s cubic-bezier(.2,0,0,1)}
+.dsh-mcp-ctx-meter-fill.ok{background:linear-gradient(90deg,color-mix(in srgb,var(--mcp-ok) 78%,transparent),var(--mcp-ok))}
+.dsh-mcp-ctx-meter-fill.warn{background:linear-gradient(90deg,color-mix(in srgb,var(--mcp-warn) 78%,transparent),var(--mcp-warn))}
+.dsh-mcp-ctx-meter-fill.err{background:linear-gradient(90deg,color-mix(in srgb,var(--mcp-err) 78%,transparent),var(--mcp-err))}
+
+/* ── 分区（构成 / 工具 / 内容 / 轮次 / 搜索）── */
+.dsh-mcp-ctx-section{display:flex;flex-direction:column;gap:9px;min-width:0;padding:13px 15px;border:.5px solid var(--mcp-line);border-radius:var(--mcp-r-lg);background:var(--mcp-bg-1)}
+.dsh-mcp-ctx-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.dsh-mcp-ctx-section-title{margin:0;color:var(--dsw-alias-label-primary);font-size:12px;font-weight:650;line-height:1.4;letter-spacing:.01em}
+.dsh-mcp-ctx-section-tools{display:inline-flex;align-items:center;gap:10px;min-width:0}
+.dsh-mcp-ctx-section-hint{color:var(--mcp-mut);font-size:10px;line-height:1.4;font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsh-mcp-ctx-viewswitch{display:inline-flex;align-items:center;gap:2px;padding:2px;border-radius:999px;corner-shape:round;background:var(--mcp-bg-2);border:.5px solid var(--mcp-line)}
+.dsh-mcp-ctx-viewswitch button{padding:3px 10px;border:0;border-radius:999px;corner-shape:round;background:transparent;color:var(--mcp-mut);font:inherit;font-size:10.5px;line-height:1.5;cursor:pointer;white-space:nowrap;transition:background .12s,color .12s}
+.dsh-mcp-ctx-viewswitch button:hover{color:var(--dsw-alias-label-primary)}
+.dsh-mcp-ctx-viewswitch button.sel{background:var(--dsw-alias-interactive-bg-hover-accent);color:var(--dsw-alias-label-primary);font-weight:600}
+
+/* ── 块图（treemap）── */
+.dsh-mcp-ctx-map{position:relative;width:100%;border:.5px solid var(--mcp-line);border-radius:var(--mcp-r-md);background:color-mix(in srgb,var(--mcp-bg-2) 70%,transparent);overflow:hidden}
+.dsh-mcp-ctx-cell{position:absolute;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;gap:2px;padding:6px 8px;border:1px solid color-mix(in srgb,var(--mcp-bg-1) 60%,transparent);border-radius:4px;overflow:hidden;color:var(--dsw-alias-label-primary);background:var(--mcp-bg-2);transition:filter .12s,transform .12s}
+.dsh-mcp-ctx-cell:hover{filter:brightness(1.14);z-index:2}
+.dsh-mcp-ctx-cell.kind-system{background:color-mix(in srgb,var(--mcp-kind-system) 22%,var(--mcp-bg-2))}
+.dsh-mcp-ctx-cell.kind-tools{background:color-mix(in srgb,var(--mcp-info) 30%,var(--mcp-bg-2))}
+.dsh-mcp-ctx-cell.kind-tool-result{background:color-mix(in srgb,var(--mcp-warn) 24%,var(--mcp-bg-2))}
+.dsh-mcp-ctx-cell.kind-attachment{background:color-mix(in srgb,var(--mcp-kind-attachment) 26%,var(--mcp-bg-2))}
+.dsh-mcp-ctx-cell.kind-conversation{background:color-mix(in srgb,var(--mcp-ok) 22%,var(--mcp-bg-2))}
+.dsh-mcp-ctx-cell-label{min-width:0;overflow:hidden;font-size:11px;font-weight:600;line-height:1.3;text-overflow:ellipsis;white-space:nowrap}
+.dsh-mcp-ctx-cell-size{flex:none;color:var(--dsw-alias-label-primary);opacity:.72;font-size:10px;line-height:1.3;font-variant-numeric:tabular-nums;white-space:nowrap}
+.dsh-mcp-ctx-cell-size.only{opacity:.82}
+
+/* ── 网格视图：每格固定量，空格子看得见"还剩多少" ── */
+.dsh-mcp-ctx-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(14px,1fr));gap:3px;width:100%;padding:2px;border:.5px solid var(--mcp-line);border-radius:var(--mcp-r-md);background:color-mix(in srgb,var(--mcp-bg-2) 70%,transparent)}
+.dsh-mcp-ctx-grid-cell{display:block;aspect-ratio:1;border-radius:2px;background:var(--mcp-bg-3);opacity:.85;transition:transform .1s,opacity .1s}
+.dsh-mcp-ctx-grid-cell:hover{opacity:1;transform:scale(1.18);z-index:2}
+.dsh-mcp-ctx-grid-cell.kind-system{background:var(--mcp-kind-system)}
+.dsh-mcp-ctx-grid-cell.kind-tools{background:var(--mcp-info)}
+.dsh-mcp-ctx-grid-cell.kind-tool-result{background:var(--mcp-warn)}
+.dsh-mcp-ctx-grid-cell.kind-attachment{background:var(--mcp-kind-attachment)}
+.dsh-mcp-ctx-grid-cell.kind-conversation{background:var(--mcp-ok)}
+.dsh-mcp-ctx-grid-cell.kind-free{background:var(--mcp-bg-3);opacity:.5}
+
+/* ── 图例 ── */
+.dsh-mcp-ctx-legend{display:flex;align-items:center;gap:14px;flex-wrap:wrap;min-width:0}
+.dsh-mcp-ctx-legend-item{display:inline-flex;align-items:center;gap:5px;min-width:0;color:var(--mcp-mut);font-size:10.5px;line-height:1.5}
+.dsh-mcp-ctx-legend-item.free{opacity:.8}
+.dsh-mcp-ctx-dot{width:8px;height:8px;flex:none;border-radius:2px;background:var(--mcp-mut)}
+.dsh-mcp-ctx-dot.kind-system{background:var(--mcp-kind-system)}
+.dsh-mcp-ctx-dot.kind-tools{background:var(--mcp-info)}
+.dsh-mcp-ctx-dot.kind-tool-result{background:var(--mcp-warn)}
+.dsh-mcp-ctx-dot.kind-attachment{background:var(--mcp-kind-attachment)}
+.dsh-mcp-ctx-dot.kind-conversation{background:var(--mcp-ok)}
+.dsh-mcp-ctx-dot.kind-free{background:var(--mcp-bg-3);border:.5px solid var(--mcp-line)}
+.dsh-mcp-ctx-legend-label{color:var(--dsw-alias-label-primary);font-weight:500}
+.dsh-mcp-ctx-legend-size{font-variant-numeric:tabular-nums}
+
+/* ── 工具卡：四格统计 + 一条占比 ── */
+.dsh-mcp-ctx-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.dsh-mcp-ctx-stat{display:flex;flex-direction:column;gap:2px;min-width:0;padding:8px 10px;border:.5px solid var(--mcp-line);border-radius:var(--mcp-r-md);background:var(--mcp-bg-2)}
+.dsh-mcp-ctx-stat-value{color:var(--dsw-alias-label-primary);font-size:16px;font-weight:660;line-height:1.2;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.dsh-mcp-ctx-stat-label{color:var(--mcp-mut);font-size:10px;line-height:1.4}
+.dsh-mcp-ctx-stat-note{color:var(--mcp-mut);font-size:9.5px;line-height:1.4;opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* 目录状态一行（原「目录体检」）：一行说完"哪些工具按需、目录多大、有没有被截"。 */
+.dsh-mcp-ctx-catalog{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;min-width:0;padding-top:8px;border-top:.5px solid var(--mcp-line)}
+.dsh-mcp-ctx-catalog-label{flex:none;color:var(--mcp-mut);font-size:10px;font-weight:600;line-height:1.5}
+.dsh-mcp-ctx-catalog-text{min-width:0;color:var(--dsw-alias-label-secondary);font-size:10.5px;line-height:1.5;overflow-wrap:anywhere}
+.dsh-mcp-ctx-catalog.warn .dsh-mcp-ctx-catalog-text{color:var(--mcp-warn)}
+.dsh-mcp-ctx-catalog-hint{flex-basis:100%;color:var(--mcp-mut);font-size:10px;line-height:1.5}
+
+/* ── 明细与搜索 ── */
+.dsh-mcp-ctx-filter{display:inline-flex;align-items:center;gap:2px;padding:2px;border-radius:999px;corner-shape:round;background:var(--mcp-bg-2);border:.5px solid var(--mcp-line)}
+.dsh-mcp-ctx-filter button{padding:3px 9px;border:0;border-radius:999px;corner-shape:round;background:transparent;color:var(--mcp-mut);font:inherit;font-size:10.5px;line-height:1.5;cursor:pointer;white-space:nowrap;transition:background .12s,color .12s}
+.dsh-mcp-ctx-filter button:hover{color:var(--dsw-alias-label-primary)}
+.dsh-mcp-ctx-filter button.sel{background:var(--dsw-alias-interactive-bg-hover-accent);color:var(--dsw-alias-label-primary);font-weight:600}
+.dsh-mcp-ctx-rows{display:flex;flex-direction:column;gap:1px}
+.dsh-mcp-ctx-row{display:flex;align-items:center;gap:8px;min-width:0;padding:4px 3px;border-radius:var(--mcp-r-xs);transition:background .1s}
+.dsh-mcp-ctx-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dsh-mcp-ctx-row-label{flex:0 1 auto;min-width:0;max-width:38%;overflow:hidden;color:var(--dsw-alias-label-primary);font-size:11.5px;line-height:1.45;text-overflow:ellipsis;white-space:nowrap}
+.dsh-mcp-ctx-row.search .dsh-mcp-ctx-row-label{flex:1 1 auto;max-width:none;font-family:var(--mcp-mono);font-size:10.5px;color:var(--dsw-alias-brand-text)}
+/* ⚠️ 副标题必须**限宽 + 省略**：系统提示词那一条的副标题是提示词首行（最长 96 字），不给上限
+   它会把 flex:none 撑到几百像素，把同一行里的标签挤成 0 宽、把大小推出卡片外——真机预览里
+   首行只剩一句英文、标签「系统提示词」整条消失。 */
+.dsh-mcp-ctx-row-sub{flex:0 1 auto;min-width:0;max-width:42%;overflow:hidden;text-overflow:ellipsis;color:var(--mcp-mut);font-size:10px;line-height:1.45;white-space:nowrap}
+/* 「其余 N 项」：明细被截断时的那一行。它是**说明这一行不是条目**，所以不画条、不上色。 */
+.dsh-mcp-ctx-more{padding:4px 3px;color:var(--mcp-mut);font-size:10px;line-height:1.45}
+.dsh-mcp-ctx-row-bar{flex:1 1 auto;min-width:40px;height:6px;border-radius:999px;corner-shape:round;background:var(--mcp-bg-3);overflow:hidden}
+.dsh-mcp-ctx-row-fill{display:block;height:100%;border-radius:999px;corner-shape:round;background:var(--mcp-accent);transition:width .2s}
+.dsh-mcp-ctx-row-fill.kind-system{background:var(--mcp-kind-system)}
+.dsh-mcp-ctx-row-fill.kind-tools{background:var(--mcp-info)}
+.dsh-mcp-ctx-row-fill.kind-tool-result{background:var(--mcp-warn)}
+.dsh-mcp-ctx-row-fill.kind-attachment{background:var(--mcp-kind-attachment)}
+.dsh-mcp-ctx-row-fill.kind-conversation{background:var(--mcp-ok)}
+.dsh-mcp-ctx-row-size{flex:none;min-width:52px;text-align:right;color:var(--dsw-alias-label-primary);font-size:10.5px;line-height:1.45;font-variant-numeric:tabular-nums;white-space:nowrap}
+.dsh-mcp-ctx-chip{flex:none;padding:0 7px;border-radius:999px;corner-shape:round;border:.5px solid var(--mcp-line);background:var(--mcp-bg-2);color:var(--mcp-mut);font-size:9.5px;line-height:16px;white-space:nowrap}
+.dsh-mcp-ctx-chip.exact{border-color:color-mix(in srgb,var(--mcp-accent) 50%,var(--mcp-line));color:var(--dsw-alias-brand-text)}
+
+/* ── 轮次柱 ── */
+.dsh-mcp-ctx-turn-bars{display:flex;align-items:flex-end;gap:3px;height:68px;padding:2px 0 0;border-bottom:.5px solid var(--mcp-line)}
+.dsh-mcp-ctx-turn-bar{position:relative;display:flex;align-items:flex-end;flex:1 1 0;min-width:3px;max-width:30px;height:100%}
+.dsh-mcp-ctx-turn-fill{display:block;width:100%;border-radius:2px 2px 0 0;background:linear-gradient(180deg,var(--mcp-info),color-mix(in srgb,var(--mcp-info) 45%,transparent));transition:filter .12s}
+.dsh-mcp-ctx-turn-bar:hover .dsh-mcp-ctx-turn-fill{filter:brightness(1.2)}
+
+/* ── 脚注 ── */
+.dsh-mcp-ctx-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:4px;border-top:.5px solid var(--mcp-line);color:var(--mcp-mut);font-size:10px;line-height:1.5}
+.dsh-mcp-ctx-foot-meta{display:inline-flex;align-items:center;gap:10px;flex:none;font-variant-numeric:tabular-nums}
+.dsh-mcp-ctx-foot-model{min-width:0;color:var(--dsw-alias-brand-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 三项都用**单一类名**：早先这里写成 .n.dsh-mcp-ctx-foot-fresh.busy，那个 .n 是编辑时
+   留下的残渣——选择器永远不匹配，于是「本轮还在生成」的警示色和「更新中」的绿色全都静默失效
+   （样式表不报错，界面上只是少了颜色，没人会发现）。 */
+.dsh-mcp-ctx-foot-fresh{color:var(--mcp-mut)}
+.dsh-mcp-ctx-foot-fresh.busy{color:var(--mcp-warn)}
+.dsh-mcp-ctx-foot-live{color:var(--mcp-ok)}
+.dsh-mcp-ctx-foot-err{color:var(--mcp-warn)}
+@media (max-width:900px){.dsh-mcp-ctx-overview{grid-template-columns:minmax(0,1fr)}.dsh-mcp-ctx-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.dsh-mcp-ctx-card-value{font-size:23px}.dsh-mcp-ctx-row-label{max-width:46%}.dsh-mcp-ctx-turn-bars{height:52px}}
 `;
 
 // ── Skills（能力层第二面）样式 ────────────────────────────────────────────────
@@ -683,7 +916,6 @@ const SKILLS_CSS = `.dsh-skills-root{display:flex;flex-direction:column;min-heig
 `;
 
 const h = React2.createElement;
-
 // ── 文案层（locale） ────────────────────────────────────────────────────
 //
 // 面板的每一句用户可见文案都走这里的 t()。两种语言：源码里的中文字面量是**基准**
@@ -844,6 +1076,32 @@ const EN_DICT = {
   '导入 MCP': 'Import MCP',
   '导入 MCP（{scope}）': 'Import MCP ({scope})',
   '导出项目 MCP': 'Export project MCP',
+  '{chars} 字符': '{chars} chars',
+  '重新读取最近日志': 'Reload recent logs',
+  '查看最近日志': 'Show recent logs',
+  '没有采集到日志': 'No log records captured',
+  '最新的在最前（宿主只保留最近 12 条）': 'Newest first (the host keeps the last 12 records)',
+  '读取日志失败': 'Failed to read logs',
+  '没有可写入的技能位置': 'No writable skill location',
+  '从本机选择技能文件（.md 或压缩包）导入到当前落点': 'Pick a skill file (.md or an archive) from this machine and import it into the current destination',
+  '选择要导入的技能文件': 'Choose a skill file to import',
+  '导入本机技能': 'Import local skill',
+  '引用未归还：refs {refs} > 会话 {sessions}': 'Reference leaked: refs {refs} > sessions {sessions}',
+  '连接是旧配置建的（写盘后重载未完成）': 'Connection was created from an older config (reload after write has not finished)',
+  '读不出当前配置：{reason}': 'Cannot read the current config: {reason}',
+  '作用域故障：{reason}': 'Scope failure: {reason}',
+  '同名条目多条：{names}': 'Multiple entries share the same name: {names}',
+  '{name}  refs {refs} / 会话 {sessions}': '{name}  refs {refs} / sessions {sessions}',
+  '读取连接诊断失败': 'Failed to read connection diagnostics',
+  '每条项目共享连接的引用与配置状态（排障用）': 'Refs and config state of each project shared connection (for troubleshooting)',
+  '收起连接诊断': 'Hide connection diagnostics',
+  '没有活动的项目连接': 'No active project connections',
+  '连接诊断': 'Connection diagnostics',
+  '导出全局 MCP': 'Export global MCP',
+  '导出全局': 'Export global',
+  '导出全局层的 MCP 配置（JSON，可备份或迁移）。注意：面板添加过的条目已是实际值，可能含明文凭据': 'Export the global-layer MCP config (JSON, for backup or migration). Note: entries added through the panel are already resolved values, so they may contain plaintext credentials',
+  '这是全局层的完整配置。⚠️ 通过面板添加的条目在 profile 里已是**求值后的实际值**，因此 URL 里的 token、header / env 的字面值会原样出现在这里，请按密钥对待。手写的 ${VAR} 模板（!!js 表达式）会保留引用写法。': 'This is the full config of the global layer. ⚠️ Entries added through the panel are stored in the profile as **resolved values**, so tokens in URLs and literal header / env values appear here verbatim — treat this as a secret. Hand-written templates (!!js expressions) keep their reference form.',
+  '格式与 .dsh/mcp.json 一致：可以放进目标工作区的 .dsh/mcp.json，或用「导入 MCP」粘贴回来（粘贴到全局层就是同名更新）。全局层没有 exclude（那是项目屏蔽全局 MCP 的字段）。': 'Same format as .dsh/mcp.json: drop it into a target workspace\'s .dsh/mcp.json, or paste it back through "Import MCP" (pasting into the global layer updates by name). The global layer has no exclude (that field means "this project hides these global MCPs").',
   '复制项目 MCP': 'Copy project MCP',
   '复制项目 MCP 到另一个工作区': 'Copy project MCP to another workspace',
   '导出': 'Export',
@@ -956,45 +1214,143 @@ const EN_DICT = {
   '工具调用超时（毫秒）': "Tool invocation timeout (ms)",
   '首次连接失败时阻止插件启动': "Block plugin startup on initial connection failure",
   // —— ToolSearch 延迟加载 ——
-  '延迟加载工具（ToolSearch 按需搜索）': "Defer tool loading (on demand via ToolSearch)",
-  '开启后该服务器的工具不再全量常驻上下文，模型按需通过 tool_search 搜索加载；调用一次多一个往返。适合工具数量多的服务器。': "When enabled, this server's tools no longer stay resident in context; the model loads them on demand via tool_search, at the cost of one extra round trip per discovery. Suited to servers with many tools.",
-  '工具延迟加载': "Tool deferral",
   // 主按钮（过滤器行那一颗）：ToolSearch 上线时只加了中文——英文界面下**主按钮显示中文**，
   // 而当时 parity 只覆盖表驱动标签，调用点上的字面量没人核对。新增词条必须同时过
   // test/client-i18n.test.mjs 的"调用点 parity"（它同时守缺英文与死词条两个方向）。
   '全部延迟': "Defer all",
   '取消全部延迟': "Undefer all",
   '延迟': "Deferred",
-  // 行内单台开关（两种状态都渲染、都可点）
+  // 行内单台开关（组级默认，两种状态都渲染、都可点）
   '全量': "Resident",
-  '该服务器的工具不常驻上下文：模型经 tool_search 按需搜索加载，命中后才进入工具列表。点击切回全量常驻。': "This server's tools do not stay resident in context: the model loads them on demand via tool_search, and they enter the tool list only after a hit. Click to keep them fully resident again.",
-  '该服务器的工具每轮都常驻上下文。点击切到延迟加载：模型经 tool_search 按需搜索，命中后才进入工具列表。': "This server's tools stay resident in context every turn. Click to defer them: the model loads them on demand via tool_search, and they enter the tool list only after a hit.",
   '该服务器不属于本插件的配置，延迟开关要回到它自己的作用域里改': "This server is not configured by this plugin; switch deferral where it is configured",
-  '已把 {name} 切到延迟加载': "Deferred {name}",
-  '已把 {name} 切回全量常驻': "{name} is fully resident again",
-  '已开启（{count} 工具经 tool_search 按需加载）': "Enabled ({count} tools load on demand via tool_search)",
-  '该服务器 {count} 个工具，将经 tool_search 按需加载': "This server has {count} tools, which will load on demand via tool_search",
-  '关闭（工具全量常驻上下文）': "Disabled (all tool schemas stay resident in context)",
-  '该服务器仅 {count} 个工具：延迟后按需加载，但每轮仍要付一段引导语，省下的空间可能不多': "This server has only {count} tools: deferral still loads them on demand, but every turn also pays a guidance paragraph, so the space saved may be small",
-  '已开启全部延迟加载': "Deferral enabled for all MCP servers",
-  '已关闭全部延迟加载': "Deferral disabled for all MCP servers",
-  '把当前 Web profile 的所有 MCP 切到延迟加载（{count} 个）：模型经 tool_search 按需搜索，命中后才进工具列表': "Switch all {count} MCP servers in the current Web profile to deferred loading: the model searches on demand via tool_search, and tools enter the list only after a hit",
-  '把当前 Web profile 的所有 MCP 切回全量常驻（{count} 个）': "Switch all {count} MCP servers in the current Web profile back to fully resident",
-  '把该项目的所有 MCP 切到延迟加载（{count} 个）：模型经 tool_search 按需搜索，命中后才进工具列表': "Switch all {count} MCP servers in this project to deferred loading: the model searches on demand via tool_search, and tools enter the list only after a hit",
-  '把该项目的所有 MCP 切回全量常驻（{count} 个）': "Switch all {count} MCP servers in this project back to fully resident",
+  '整台默认按需：模型经 tool_search 按需加载。点击把整台设为全量常驻。': "This server defaults to on-demand via tool_search. Click to make the whole server fully resident.",
+  '整台默认常驻：工具每轮都在上下文里。点击把整台切到按需加载。': "This server defaults to fully resident. Click to make the whole server load on demand.",
+  '（另有 {count} 个工具在「工具」页单独设置，仍按那里生效）': " ({count} tool(s) are overridden on the Tools page and still follow that setting)",
+  '{count} 个工具在「工具」页被单独设置，仍按那里生效': "{count} tool(s) are overridden on the Tools page and still follow that setting",
+  '{count} 单独设置': "{count} overridden",
+  'ToolSearch 总开关生效中（所有工具常驻），服务器级开关不生效': "The ToolSearch master switch is on (all tools resident); the server-level switch has no effect",
+  'ToolSearch 总开关（DSH_MCP_TOOL_SEARCH=off）生效中：所有工具常驻，本页设置暂不生效；关掉开关后设置会恢复。': "The ToolSearch master switch (DSH_MCP_TOOL_SEARCH=off) is active: all tools are resident and settings here have no effect until it is turned off; your settings are kept.",
+  '当前整体方案为「全部常驻」（配置里写的），服务器级开关不生效': "The overall plan is All resident (set in the config); the server-level switch has no effect",
+  '已把 {name} 的默认加载方式设为延迟': "{name} now defaults to on-demand",
+  '已把 {name} 的默认加载方式设为全量': "{name} now defaults to fully resident",
+  '已把全部 MCP 的默认加载方式设为延迟': "All MCP servers now default to on-demand",
+  '已把全部 MCP 的默认加载方式设为全量': "All MCP servers now default to fully resident",
+  // 详情页摘要：这里显示逐工具的**实际**分布，与芯片的组级默认分开。
+  // ⚠️ 这个键在下面「统一工具加载策略」那一段也出现过（"Loading mode"）——对象字面量里
+  // 重复键会**静默**取后一个，而 i18n 用例看不到（它只比对键集合）。同一个中文原文只能有
+  // 一条译文，所以收在这里写一次：读的时候一律是 "Loading mode"。
+  '加载方式': "Loading mode",
+  '按需加载（{count} 个工具经 tool_search 搜索）': "On demand ({count} tool(s) load via tool_search)",
+  '全量常驻（{count} 个工具每轮都在上下文里）': "Fully resident ({count} tool(s) in context every turn)",
+  '混合（{total} 个中 {resident} 个常驻 / {deferred} 个按需）{extra}': "Mixed ({resident} resident / {deferred} on demand out of {total}){extra}",
+  '；{count} 个工具在「工具」页单独设置': "; {count} tool(s) overridden on the Tools page",
+  '整台设为延迟（尚无工具）': "Server defaults to on-demand (no tools yet)",
+  '整台设为全量（尚无工具）': "Server defaults to fully resident (no tools yet)",
+  '加载方式（延迟 / 全量）在服务器列表的芯片与「工具」页里改；这里只管连接与超时。': "Loading (deferred / resident) is set from the chip in the server list and the Tools page; this form only covers connection and timeouts.",
+  // 批量按钮的 title：它写的是每台服务器的组级默认，不是逐工具策略。
+  '把当前 Web profile 的所有 MCP 的默认加载方式设为延迟（{count} 个）：模型经 tool_search 按需搜索；「工具」页的单独设置仍生效': "Make all {count} MCP servers in the current Web profile default to on-demand: the model searches via tool_search; per-tool overrides on the Tools page still apply",
+  '把当前 Web profile 的所有 MCP 的默认加载方式设为全量（{count} 个）；「工具」页的单独设置仍生效': "Make all {count} MCP servers in the current Web profile default to fully resident; per-tool overrides on the Tools page still apply",
+  '把该项目的所有 MCP 的默认加载方式设为延迟（{count} 个）：模型经 tool_search 按需搜索；「工具」页的单独设置仍生效': "Make all {count} MCP servers in this project default to on-demand: the model searches via tool_search; per-tool overrides on the Tools page still apply",
+  '把该项目的所有 MCP 的默认加载方式设为全量（{count} 个）；「工具」页的单独设置仍生效': "Make all {count} MCP servers in this project default to fully resident; per-tool overrides on the Tools page still apply",
+  // —— 工具页 v2：按服务器分组 + 三态（跟随/常驻/按需） ——
+  '跟随服务器': "Follow the server",
+  '跟随全局': "Follow global",
+  '宿主默认': "Host default",
+  '（未单独设置）': " (not set separately)",
+  '整台：{value}{follow}': "Server default: {value}{follow}",
+  '整台默认在 MCP 列表的芯片上改；这里只显示结果': "The server default is changed by the chip on the MCP list; this only shows the result",
+  '整体方案为「全部常驻」（配置里写的）：本页的逐工具设置会保留，但此刻不生效。': "The overall plan is All resident (set in the config): per-tool settings here are kept but have no effect right now.",
+  '{source}（{value}）': "{source} ({value})",
+  '不单独设置这个工具：使用上一级的决定（当前：{value}）': "Leave this tool unset: use the parent decision (currently: {value})",
+  '不跟随上一级设置': "Does not follow the parent setting",
+  '单独设置': "Overridden",
+  '有覆盖': "Overridden",
+  // —— 工具页 v3：自定义分组 + 批量（DESIGN §16/§18）——
+  '我的分组': "My groups",
+  '未分组': "Ungrouped",
+  '+ 新建分组': "+ New group",
+  '新建分组': "New group",
+  '重命名分组': "Rename group",
+  '重命名': "Rename",
+  '删除分组': "Delete group",
+  '删除': "Delete",
+  '确定': "OK",
+  '分组名称': "Group name",
+  '例如：表格工具': "For example: spreadsheet tools",
+  '组名不能为空': "The group name cannot be empty",
+  '组名已存在': "That group name already exists",
+  '分组是全局的；切到「全局」作用域里改': "Groups are global; switch to the Global scope to change them",
+  '分组操作': "Group actions",
+  '整组加载方式': "Group loading mode",
+  '跟随宿主默认': "Follow the host default",
+  '跟随': "Follow",
+  '跟随分组「{name}」': "Follow group \u201c{name}\u201d",
+  '不单独设置这个分组：成员跟随宿主默认': "Leave this group unset: members follow the host default",
+  '把选中的 {count} 个加进来': "Add the {count} selected",
+  '加入选中的 {count} 个': "Add the {count} selected",
+  '还没有工具：勾选上面的工具后点「加入分组」': "No tools yet: select tools above, then choose Add to group",
+  '{count} 个在自定义分组里': "{count} in custom groups",
+  '这些工具已归入自定义分组，去「我的分组」里管理': "These tools live in custom groups; manage them under My groups",
+  '{count} 个工具将回到「未分组」并跟随宿主默认；它们自己的逐工具设置不受影响。': "{count} tools will return to Ungrouped and follow the host default; their per-tool settings are untouched.",
+  '批量设置': "Bulk settings",
+  '匹配 {count} 个': "{count} matching",
+  '已选 {count} 个 · 共匹配 {total} 个': "{count} selected \u00b7 {total} matching",
+  '设为常驻': "Set resident",
+  '设为按需': "Set on demand",
+  '存为分组': "Save as group",
+  '撤销这一步': "Undo this step",
+  '清空选择': "Clear selection",
+  '加入分组': "Add to group",
+  '加入分组…': "Add to group\u2026",
+  '新建分组…': "New group\u2026",
+  '选择 {name}': "Select {name}",
+  '选择这一组的全部工具': "Select every tool in this group",
+  '没有可设置的工具。': "No tools to configure.",
+  '没有匹配的工具': "No matching tools",
+  '其他工具': "Other tools",
+
+  '只看 {name}': "Showing {name} only",
+  '只看这台': "Only this server",
+  '显示全部': "Show all",
+  '未归属': "Unassigned",
+  '全部常驻': "All resident",
+  '全部按需': "All on demand",
+  '{resident} 常驻 / {deferred} 按需': "{resident} resident / {deferred} on demand",
+  '{policy} · {count} 个单独设置': "{policy} · {count} overridden",
+  '搜索设置': "Search settings",
+  '搜索设置是全局配置；切到「全局」作用域里改。': "Search settings are global; switch to the Global scope to change them.",
+  '作用域': "Scope",
+  // —— 工具页的分区/分类（内置按用途分组）——
+  '类型': "Type",
+  '按类型筛选': "Filter by type",
+  '内置': "Built-in",
+  '其他': "Other",
+  'MCP 服务器': "MCP servers",
+  '内置工具（按用途）': "Built-in tools (by purpose)",
+  '其他插件与未识别': "Other plugins and unrecognised",
+  '文件': "Files",
+  '命令与终端': "Commands and terminals",
+  '网络': "Web",
+  'MCP 资源': "MCP resources",
+  '任务与后台': "Tasks and background jobs",
+  '子代理与团队': "Subagents and teams",
+  '技能与交互': "Skills and interaction",
+  '定时': "Schedules",
+  '代码与工作区': "Code and workspace",
+  '宿主与插件': "Host and plugins",
+  '其他内置': "Other built-ins",
+  '按服务器 / 用途分组': "Grouped by server / purpose",
+
+  '在工具页管理': "Manage on the Tools page",
+  '加载方式（整台默认与逐工具）在「工具」页按服务器分组管理；这里显示已注册的工具与参数。': "Loading (server default and per tool) is managed by server groups on the Tools page; this view shows registered tools and their parameters.",
   // —— C2：延迟加载参数表单 ——
   // —— 统一工具加载策略（表驱动文案走 localized()，这里只收 t() 的调用点）——
   '工具': "Tools",
-  '加载方式': "Loading mode",
+  // '加载方式' 已在上面的详情页摘要里登记（同一原文只能一条译文），这里不再重复。
 
   '放弃修改': "Discard changes",
   '保存已完成，但重新读取失败：{error}': "Saved, but reloading failed: {error}",
   '已保存工具加载策略': "Tool loading policy saved",
-  '搜索参数': "Search settings",
-  '一次最多返回几个': "Results per search",
-  '搜一次最多拿回几条。调小可能漏掉要用的那个，调大每次多占一点上下文。默认 10。': "How many results one search returns. Smaller may miss the tool; larger costs a little context. Default 10.",
-  '同时记住几个已发现的工具': "Remembered tools",
-  '模型搜索出来的工具同时保留几个，超了先淘汰最久没用过的。默认 20。': "How many searched tools stay loaded at once; the least recently used are dropped first. Default 20.",
   '限制目录大小': "Limit catalog size",
   '目录上限需要一个正整数': "The catalog limit needs a positive whole number.",
   // —— 工具加载页（第三个能力面）——
@@ -1003,7 +1359,6 @@ const EN_DICT = {
   '可设置': "Configurable",
   '常驻': "Resident",
   '按需': "On demand",
-  '内置与插件工具': "Built-in & plugin tools",
   '每轮都在上下文里': "In context every turn",
   '搜索命中后加载': "Loaded after a search hit",
   '受保护': "Protected",
@@ -1306,6 +1661,105 @@ const EN_DICT = {
   'skillhub.cn 上的技能由任何人发布，条目里没有许可信息；安装前会把上游给的发布方认证与安全扫描结论摆出来，但那不等于本插件的审查结论。收录 ≠ 背书。': "Skills on skillhub.cn are published by anyone, and listings carry no license information; before installation, the publisher verification and security scan conclusions provided by upstream are shown, but those are not this plugin's own review conclusions. Listed ≠ endorsed.",
   'MCP 市场服务未连接（面板仍可用）': "MCP marketplace service not connected (the panel still works)",
   '技能服务未连接（需要宿主挂载 dsh-skill）': "Skill service not connected (requires the Host to mount dsh-skill)",
+
+  // —— 上下文观测面 ——
+  // 键全部是**中文原文**：t() 的查表口径就是"原文字符串 → 译文"，不引入 key 常量，
+  // 这样漏翻时界面上仍是能读的中文，而不是一个 `context.used` 占位符。
+  '上下文': "Context",
+  '上下文读取失败': "Failed to read the context",
+  '已用上下文': "Context used",
+  '提示词缓存': "Prompt cache",
+  '新增 {fresh}': "{fresh} new",
+  // 这三条经 CONTEXT_KIND_LABELS / CONTEXT_KINDS 两张表到达（渲染点 t(CONTEXT_KIND_LABELS[kind])）。
+  // 源码扫描看不见 `t(表[键])`，所以它们必须同时登记进 client-i18n 的可达集，
+  // 否则会被判成"死词条"——那是扫描器的视角盲区，不是词条真的没人用。
+  '工具结果': "Tool results",
+  '工具定义': "Tool definitions",
+  '会话内容': "Conversation",
+  '附件': "Attachments",
+  '构成视图': "Composition view",
+  '块图': "Blocks",
+  '网格': "Grid",
+  '没有可画的内容': "Nothing to draw",
+  '最近的工具搜索': "Recent tool searches",
+  '关键词': "Keyword",
+  '剩余空间': "Free space",
+  '系统提示词': "System prompt",
+  '接近上限': "Near the limit",
+  '偏高': "Elevated",
+  '健康': "Healthy",
+  // '未知' 已在上面登记过（--mcp-mut 那一段），同一原文只留一条。
+  '正在读取上下文…': "Reading the context…",
+  '还没有可排布的上下文内容': "No context content to lay out yet",
+  '这一类还没有内容': "Nothing in this category yet",
+  '未知会话': "Unknown session",
+  '会话': "Session",
+  '命中': "cached",
+  '整场 {percent}': "Session-wide {percent}",
+  '{label}：{size} {unit}': "{label}: {size} {unit}",
+  '第 {turn} 轮：{size} token（缓存命中 {cache}）': "Turn {turn}: {size} tokens ({cache} cached)",
+  '第 {turn} 轮': "Turn {turn}",
+  // ⚠️ 不要给 'token' 建条目：中英同形，词典里放一条"译文与原文相同"的键会被
+  // client-i18n 的死键检查判成无效条目（它守的正是"这条译了等于没译"）。
+  // 单位里的 token 由渲染处直接用字面量，只有中文的「字符」才需要翻译。
+  '字符': "characters",
+  '已用上下文 {percent}': "Context used {percent}",
+
+  // —— 工具页的目录体检卡（默认收起的那一行）——
+  '目录': "Catalog",
+  '{names} 的工具按需搜索': "Tools from {names} are searched on demand",
+  ' 等 {count} 台': " and {count} total",
+  '{chars} 字符／轮': "{chars} chars / turn",
+  '截掉 {count} 个': "{count} cut",
+  '截掉的只能靠关键词碰运气；到「工具」页把「限制目录大小」调大就能全部列出。': "Cut tools can only be guessed by keyword. Raise \"Limit catalog size\" on the Tools tab to list them all.",
+  // 块图列内的短名：窄列（四十来像素）放得下两个汉字。「图例/筛选器/明细」仍用全名。
+  // 「工具」这条在上面（能力层页签）已经有了，不再重复登记。
+  '系统': "System",
+  '剩余': "Free",
+
+  '现在没有会话在运行': "No session is running",
+  '还没有会话发出过请求': "No session has sent a request yet",
+  '跑起来之后，这里会显示每个会话占用了多少上下文。': "Once sessions are running, this shows how much context each one uses.",
+
+  '{count} 个会话正在运行': "{count} sessions running",
+  '← 全部会话': "← All sessions",
+  '生成中': "generating",
+  '还没有数据': "No data yet",
+  ' · {count} 次请求': " · {count} request(s)",
+
+
+
+
+  // —— 上下文面：全部用"人话"，不用内部名词（目录预算 / 延迟服务器 / token-meter / 遍历）
+  '已用 {percent} · 还剩 {free}': "{percent} used · {free} left",
+  ' · 大约还能发 {count} 条': " · about {count} more message(s) fit",
+  '上下文被谁占着': "What is holding the context",
+  '每格 {size}，共 {count} 格': "{size} per cell, {count} cells",
+  '工具数': "Tools",
+  '占上下文': "Context share",
+  '搜索次数': "Searches",
+  '按名 {byName} · 关键词 {byKeyword}': "{byName} by name · {byKeyword} by keyword",
+  // 明细行的副标题：宿主只给 count，措辞在这里——所以英文界面不会漏出「3 条消息」。
+  '其余 {count} 项': "{count} more",
+  '未知工具': "Unknown tool",
+  '{count} 条消息': "{count} messages",
+  '{count} 轮': "{count} turns",
+  '{count} 个工具的 schema': "{count} tool schemas",
+  '读取失败，正在重试': "Read failed, retrying",
+  '明细': "Details",
+  '按分类筛选': "Filter by category",
+  '每轮用掉多少': "How much each turn used",
+  '按名': "By name",
+  '（空）': "(empty)",
+  '这是上一轮的读数，本轮还在生成': "Numbers from the previous turn; this one is still generating",
+  '这是最近一轮的读数': "Numbers from the latest turn",
+  '{turns} 轮': "{turns} turn(s)",
+  '更新中': "updating",
+  '一次搜回几个': "Results per search",
+  '模型搜一次最多拿回几个工具。调小可能漏掉要用的那个，调大每次多占一点上下文。默认 10。': "How many tools one search returns. Smaller may miss the one you need; larger costs a little context each time. Default 10.",
+  '同时记住几个搜到的工具': "Found tools kept on hand",
+  '搜到过的工具会留在手边直接用。超了就先淘汰最久没用的。默认 20。': "Tools found by search stay on hand for direct use. Past the cap, the least recently used one is dropped. Default 20.",
+
 }
 
 /** EN_DICT 里有没有这条键（中文原文 → 英文译文的查表存在性判断）。 */
@@ -1408,6 +1862,91 @@ function localized(value) {
   return localeIsEnglish() ? (value.en ?? value.zh ?? '') : (value.zh ?? value.en ?? '');
 }
 
+// ── 当前语言版本：让 effect 依赖能感知语言切换 ──────────────────────────────
+// 组件渲染时直接读 localeActive 就够了（宿主每个 outlet 在语言切换时都会重渲染），
+// 但 **effect 依赖不行**：切语言不会改变任何 props/state，依赖里没有它，
+// 「按语言重新拉取」这类 effect 就不会跑（真机表现：切英文后技能市场的描述与
+// 分类名停在中文，要等下次搜索/重挂才变）。所以给语言一个版本号 store，
+// readActive 在语言真变时 bump，组件用 useLocaleVersion() 把它列进依赖。
+function createLocaleVersion() {
+  let version = 0;
+  const listeners = new Set();
+  return {
+    get: () => version,
+    bump: () => {
+      version += 1;
+      for (const listener of [...listeners]) listener();
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => { listeners.delete(listener); };
+    },
+  };
+}
+const localeVersion = createLocaleVersion();
+const useLocaleVersion = () => {
+  const [version, setVersion] = useState(localeVersion.get());
+  useEffect(() => localeVersion.subscribe(() => setVersion(localeVersion.get())), []);
+  return version;
+};
+
+/** apply 时没探到 locale 服务时留下的 ctx，供面板首次挂载时重探（桌面壳的异步 provide）。 */
+let localeProbeCtx = null;
+/** 文案层是否已接上线（探到服务且 register/bind 成功）。 */
+let localeWired = false;
+
+/**
+ * 把面板的词典接到宿主的 locale 服务上。探不到服务就原样返回 false（调用方决定
+ * 是否留下 ctx 稍后重探）。任何异常都按「没接上」处理——翻译层接不上不得挡住
+ * 面板（fail-open），退化成中文原文。
+ *
+ * 注册**中英两份**词典（见 ZH_DICT 的注释：只注册 en 会让中文模式整片变英文，
+ * 因为宿主把英文设为每条回落链的终点）。
+ * @param {object} ctx - 插件 apply 的 cordis 上下文。
+ * @returns {boolean} 是否接上了。
+ */
+function wireLocale(ctx) {
+  try {
+    const locale = typeof ctx?.get === 'function' ? ctx.get('locale') : null;
+    if (!locale || typeof locale.register !== 'function' || typeof locale.bind !== 'function') return false;
+    // ctx.effect 保证插件卸载时词典随之注销（否则 HMR 重载会因 (ns, locale) 重复占用而抛错）。
+    ctx.effect(() => locale.register(LOCALE_NS, { zh: ZH_DICT, en: EN_DICT }), 'dsh-toolbox-ui: dictionaries');
+    // bind 的返回值必须验一次：宿主若返回非函数，下面每次渲染调 localeT(zh) 都会抛，
+    // 而整段接线在 try 里——异常会被 catch 吞掉、面板无声退化。这里挡在接线处，
+    // 坏 bind 按「没有语言包」处理（退回自带表/中文原文），不留定时炸弹。
+    const bound = locale.bind(LOCALE_NS);
+    localeT = typeof bound === 'function' ? bound : null;
+    // 记录 active 语言。用订阅而不是只读一次：用户在设置里切语言时不能要求重开面板。
+    // getLocale() 缺失（老宿主）时不订阅，active 保持 null → t() 恒等回中文，
+    // 面板在该宿主上就是纯中文——这是没有语言服务时唯一诚实的表现。
+    if (typeof locale.getLocale === 'function' && typeof locale.subscribe === 'function') {
+      const readActive = () => {
+        const next = locale.getLocale()?.active ?? null;
+        // 只在语言**真变**时 bump：宿主每次发布（含我们自己注册词典）都会通知订阅者，
+        // 无脑 bump 会让市场的 effect 白拉一遍。
+        if (next === localeActive) return;
+        localeActive = next;
+        localeVersion.bump();
+      };
+      readActive();
+      ctx.effect(() => locale.subscribe(readActive), 'dsh-toolbox-ui: locale subscription');
+    }
+    localeWired = true;
+    return true;
+  } catch {
+    // 刻意吞掉：翻译层接不上不得挡住面板（fail-open），退化成中文原文。
+    localeT = null;
+    localeActive = null;
+    return false;
+  }
+}
+
+/** 面板首次挂载时调用：apply 没接上 locale 服务（桌面壳的异步 provide）就在这里补接。 */
+function ensureLocaleWired() {
+  if (localeWired || !localeProbeCtx) return;
+  if (wireLocale(localeProbeCtx)) localeProbeCtx = null;
+}
+
 // ── 技能面板的纯逻辑 ────────────────────────────────────────────────────
 // 单独放一组、且都是纯函数：面板组件本身在 jsdom 里测不出多少真东西（渲染得出来 ≠ 对），
 // 而下面这些推导才是最容易出错的地方（作用域归属、遮蔽、诊断合并、红绿灯判定）。
@@ -1500,6 +2039,16 @@ function skillScopeLabel(row) {
  */
 const SOURCE_RANK = { 'project-dsh': 100, 'project-agents': 200, custom: 300, 'user-dsh': 400, 'user-agents': 500, bundled: 600 };
 const sourceRank = (source) => SOURCE_RANK[source] ?? 999;
+
+/**
+ * 安装目标的**唯一身份**：`source + root`。
+ *
+ * ⚠️ 不能只用 `source`：两个工作区都会有 `project-agents`。只按 source 做 key/查找，会让
+ * 两个单选项撞同一个 key、同一个选中值，而且 `find` 取首个 → 用户以为选的是项目 B，
+ * 实际写进项目 A（或 `installTargets[0]` 那个默认）。宿主本来就是按 `source\0root`
+ * 去重的（skills-registry.js 的 skillTargetsView），面板必须用同一套身份。
+ */
+const installTargetId = (option) => `${option?.source || ''}\u0000${option?.root || ''}`
 
 function skillScopeOptions(rows) {
   const seen = new Map();
@@ -1885,7 +2434,6 @@ const ICONS = {
   plus: 'M8 3v10M3 8h10',
   refresh: 'M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3',
   trash: 'M3 4h10M6.5 4V2.8a.8.8 0 0 1 .8-.8h1.4a.8.8 0 0 1 .8.8V4M4.5 4l.6 9a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.6-9M6.7 7v4.5M9.3 7v4.5',
-  plug: 'M6 2v4M10 2v4M4.5 6h7V8a3.5 3.5 0 0 1-7 0zM8 11.5V14',
   // 面板图标：四格网格，比插头更贴近「管理面板」语义。
   panel: 'M2.5 2.5h4.3v4.3H2.5zM9.2 2.5h4.3v4.3H9.2zM2.5 9.2h4.3v4.3H2.5zM9.2 9.2h4.3v4.3H9.2z',
   x: 'M4 4l8 8M12 4l-8 8',
@@ -2305,6 +2853,119 @@ const copyTargets = (workspaces, from) => (workspaces || []).filter((ws) => ws &
 // serverName 等于把真因留在每行详情里等用户自己找，而用户拿着横幅去提问时最需要的恰恰是它；
 // 同一条事实（Host 记的 error 文本）只在这里成形，两处横幅都读它。
 const firstFailureReason = (entry) => String(entry?.error ?? '').trim() || t('（宿主没有给出原因）');
+/**
+ * 一条共享连接是不是处于**异常**状态，以及为什么。
+ *
+ * 为什么要有这个视图：宿主侧的 `projectConnections` 一直在（只读排障面），但面板没有入口——
+ * 它回答的是单行视图回答不了的问题：`refs > sessions` 说明某条连接的引用卡住不归还。
+ * 那些引用由 cordis 的 agent scope effect 拥有，泄漏时**没有任何单行 UI 能看出来**：
+ * 面板会一直显示连接正常、工具可用，直到空闲回收永远不发生。
+ *
+ * 判定顺序就是排查顺序（先看引用是否归还，再看连接是不是旧配置建的，最后才是环境问题）。
+ * 返回 `null` 表示健康；**空闲待回收不是异常**（refs=0 且没人用是设计好的常态）。
+ *
+ * @param {object} row - projectConnections 的一行。
+ * @returns {{code: string, text: string} | null}
+ */
+const connectionAnomalyOf = (row) => {
+  if (!row || typeof row !== 'object') return null;
+  const refs = Number(row.refs) || 0;
+  const sessions = Number(row.sessions) || 0;
+  if (refs > sessions) {
+    // 这是唯一能提前发现“引用泄漏”的信号：重构/卸载路径少跑一次 disposer 就会长这样。
+    return { code: 'leaked', text: t('引用未归还：refs {refs} > 会话 {sessions}', { refs, sessions }) };
+  }
+  if (row.configStale === true) return { code: 'stale', text: t('连接是旧配置建的（写盘后重载未完成）') };
+  if (String(row.configError ?? '') !== '') return { code: 'config', text: t('读不出当前配置：{reason}', { reason: row.configError }) };
+  if (String(row.scopeError ?? '') !== '') return { code: 'scope', text: t('作用域故障：{reason}', { reason: row.scopeError }) };
+  if (Array.isArray(row.duplicateOwners) && row.duplicateOwners.length) {
+    return { code: 'duplicate', text: t('同名条目多条：{names}', { names: row.duplicateOwners.join(t('、')) }) };
+  }
+  return null;
+};
+// 一行诊断的紧凑文本：serverName 是定位键，refs/sessions 是核心数字。
+const connectionDiagText = (row) => t('{name}  refs {refs} / 会话 {sessions}', {
+  name: row?.serverName ?? '?',
+  refs: Number(row?.refs) || 0,
+  sessions: Number(row?.sessions) || 0,
+});
+
+// ── 本机技能导入（R11）：浏览器只能给**内容**，给不了宿主路径 ─────────────────
+// 为什么这两个是纯函数：客户端在本仓库跑不了真实文件选择器，但"字节 → base64"与
+// "这份文件该发什么 payload"完全可以真跑。它们也正好是最容易写错的两处。
+const B64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+/**
+ * 字节 → base64。
+ *
+ * 为什么不用 `btoa`：① vm 沙箱里没有 btoa（测试跑不了）；② btoa 要求先拼成一个巨大的
+ * 二进制字符串，大文件会卡栈。这里直接按 3 字节一组查表，既不依赖宿主环境也没有中间字符串。
+ * @param {Uint8Array|number[]} bytes
+ * @returns {string}
+ */
+const base64FromBytes = (bytes) => {
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b0 = bytes[i];
+    const b1 = i + 1 < bytes.length ? bytes[i + 1] : undefined;
+    const b2 = i + 2 < bytes.length ? bytes[i + 2] : undefined;
+    out += B64_ALPHABET[b0 >> 2];
+    out += B64_ALPHABET[((b0 & 3) << 4) | ((b1 ?? 0) >> 4)];
+    out += b1 === undefined ? '=' : B64_ALPHABET[((b1 & 15) << 2) | ((b2 ?? 0) >> 6)];
+    out += b2 === undefined ? '=' : B64_ALPHABET[b2 & 63];
+  }
+  return out;
+};
+/** 纯文本技能（.md）的扩展名集合：只有这些走 `content`，其余一律当归档传字节。 */
+const TEXT_SKILL_EXTENSIONS = ['md', 'markdown', 'txt'];
+/**
+ * 浏览器选中的文件 → `importSkill` 的 payload。
+ *
+ * 两个决定写在注释里，因为它们不显然：
+ *   ① **不猜归档格式**：宿主的 `detectArchiveFormat` 按魔数判 zip/tar.gz/tar，客户端若再抄一份
+ *      就等于第二真相源。这里只看用户意图（扩展名）决定走哪条**传送形式**，真正的格式与
+ *      安全性全部由宿主在解压那一步判定（错判只会得到一句明确的报错，不会绕过校验）。
+ *   ② 落点参数（source/root/projectPath）由调用方给，**不在这里拼路径**：那是落点解析的事
+ *      （skills-file-ops 的 resolveTargetReference 是唯一真相源）。
+ *
+ * @param {{ name: string, text?: string, bytes?: Uint8Array, target?: object }} input
+ * @returns {object} wire payload
+ */
+const skillImportPayloadOf = ({ name, text, bytes, target }) => {
+  const fileName = String(name ?? '');
+  const dot = fileName.lastIndexOf('.');
+  const extension = dot < 0 ? '' : fileName.slice(dot + 1).toLowerCase();
+  const payload = {
+    source: target?.source,
+    root: target?.root,
+    projectPath: target?.projectPath,
+  };
+  if (TEXT_SKILL_EXTENSIONS.includes(extension)) return { ...payload, content: String(text ?? '') };
+  return { ...payload, archiveBase64: base64FromBytes(bytes ?? []) };
+};
+/**
+ * 日志时间戳 → 固定宽度的本地时钟（HH:MM:SS）。
+ *
+ * 刻意不用 `toLocaleTimeString`：它跟着运行环境 locale 变，快照与断言会因环境而异。
+ * 非法/缺失时间给固定占位符，而不是 "Invalid Date"。
+ */
+const logClock = (ts) => {
+  const value = Number(ts);
+  if (!Number.isFinite(value) || value <= 0) return '--:--:--';
+  const date = new Date(value);
+  const pad = (n) => String(n).padStart(2, 0);
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+};
+/**
+ * 最近日志 → 逐行文本（**最新在最前**，与人读日志的习惯一致；宿主给的数组是升序）。
+ *
+ * 为什么返回数组而不是拼成一大串：单条日志可能是多行 stack（`white-space: pre-wrap`
+ * 已经保留换行），拼成一条之后就没法给每一行加时间前缀了。
+ */
+const recentLogLines = (logs) => (Array.isArray(logs) ? logs : [])
+  .slice()
+  .reverse()
+  .map((record) => `${logClock(record?.ts)} ${String(record?.type || 'log').toUpperCase()} ${String(record?.text ?? '')}`.trimEnd());
+
 // 预览文案：把「这次会新增 / 覆盖 / 跳过什么」逐条说清。抽成纯函数是为了能在 node 里直接断言
 // ——组件在测试环境只跑首帧，异步预览那段逻辑靠它才测得到。
 const copyPlanText = (plan) => {
@@ -2327,6 +2988,46 @@ const copyPlanKey = ({ from, to, names, overwrite } = {}) => (to
 const copyPlanReady = (key, preview) => Boolean(key) && preview?.key === key && Boolean(preview?.plan);
 // 兜底文件名与 .dsh/mcp.json 同名，用户拿到就能直接放进目标工作区。
 const exportFileName = (name) => String(name || 'workspace').replace(/[\\/:*?"<>|\s]+/g, '-') + '-mcp.json';
+
+/**
+ * 排序键。两个能力面共用同一套键名与同一份文案，切换能力层时排序按钮不用重新学。
+ *
+ * ⚠️ **没有「按作用域」**：两个面的列表本身已经按作用域切开了——MCP 面是作用域药丸
+ * （每个列表里只可能有一种 scope），技能面是分组（组顺序由 skillGroups 的档位固定，
+ * 与输入顺序无关）。所以按作用域排序**永远不可能改变任何可见的东西**。
+ * 一个点了永远没反应的菜单项比没有这一项更糟：用户会以为排序坏了。
+ */
+const SORT_KEYS = ['default', 'name', 'status'];
+// 同 SCOPE_LABELS：存中文原文，渲染时翻（模块级 t() 会把语言锁死在加载那一刻）。
+const SORT_LABELS = { default: '默认顺序', name: '按名称', status: '按状态' };
+
+/**
+ * 能力层枚举：MCP / 技能 / 工具。计数由外壳填（技能的来自 SkillsPanel 回传）。
+ *
+ * ⚠️ label 存**中文原文**，由 seg 的渲染点过 t()。这里不写成 t('技能')：
+ * 模块级求值发生在 apply() 拿到 locale 之前，会把语言锁死在加载那一刻——
+ * 真机表现正是「能力层那个『技能』页签切到 English 后仍是中文」。
+ */
+const ABILITY_TABS = [
+  { id: 'mcp', label: 'MCP' },
+  { id: 'skills', label: '技能' },
+  { id: 'tool-loading', label: '工具' },
+  // 上下文面是**观测**，不是配置：它只读宿主的会话与计量，写不了任何东西。
+  // 放在最后一格是因为前三个是"改什么"，它是"现在是什么样"——先动手再有读数。
+  { id: 'context', label: '上下文' },
+];
+
+/**
+ * 模式层枚举：已安装 / 发现市场。**两个能力面共用这一套**，由外壳渲染在第二行。
+ *
+ * 曾经它叫「管理 / 市场」且由技能面自己画：MCP 面的市场是一个弹窗按钮、技能面的市场是
+ * 一个模式切换——同一个概念两种形态。现在两边都是第二行上的同一个分段控件。
+ */
+// 同 ABILITY_TABS：label 存中文原文，由 seg 的渲染点过 t()（模块级 t() 会锁死语言）。
+const SKILL_MODES = [
+  { id: 'manage', label: '已安装' },
+  { id: 'market', label: '发现市场' },
+];
 
 // ── 列表底栏：统计与排序（纯函数）──────────────────────────────────────
 //
@@ -2382,23 +3083,11 @@ const skillStatsText = (rows) => {
  */
 const deferAllState = (rows, { includeWorkspace = false } = {}) => {
   const list = (Array.isArray(rows) ? rows : []).filter((s) => s && s.managed === true && (includeWorkspace || s.scope !== 'workspace'));
-  // 与行内芯片读**同一个字段**：芯片显示的是"统一策略下的实际状态"（`deferEffective`），
-  // 概览若还数旧的 `defer`，就会出现"概览说 0 台延迟、每行芯片都写着延迟"。
-  const deferred = countRows(list, (s) => (s.deferEffective ?? s.defer) === true);
+  // 按钮写的是**组级默认**，所以这里也数组级默认（不是逐工具分布）：否则一台“3 个工具被单独
+  // 设为常驻、其余按需”的服务器会让按钮显示“部分延迟”而永远无法一键归一。
+  const deferred = countRows(list, (s) => (s.deferConfigured ?? (s.defer === true ? 'deferred' : 'resident')) === 'deferred');
   return { total: list.length, deferred, all: list.length > 0 && deferred === list.length };
 };
-
-/**
- * 排序键。两个能力面共用同一套键名与同一份文案，切换能力层时排序按钮不用重新学。
- *
- * ⚠️ **没有「按作用域」**：两个面的列表本身已经按作用域切开了——MCP 面是作用域药丸
- * （每个列表里只可能有一种 scope），技能面是分组（组顺序由 skillGroups 的档位固定，
- * 与输入顺序无关）。所以按作用域排序**永远不可能改变任何可见的东西**。
- * 一个点了永远没反应的菜单项比没有这一项更糟：用户会以为排序坏了。
- */
-const SORT_KEYS = ['default', 'name', 'status'];
-// 同 SCOPE_LABELS：存中文原文，渲染时翻（模块级 t() 会把语言锁死在加载那一刻）。
-const SORT_LABELS = { default: '默认顺序', name: '按名称', status: '按状态' };
 
 /**
  * 稳定排序：同键的行保持**宿主返回的原始顺序**。
@@ -2482,10 +3171,17 @@ const ServerList = ({ servers, total, selected, query, onQuery, onSelect, onTogg
                 h('div', { className: 'dsh-mcp-item-sub' },
                   h(Badge, { cls: s.transport === 'http' ? 't-http' : 't-stdio' }, s.transport === 'http' ? 'HTTP' : 'stdio'),
                   h('span', { className: 'dsh-mcp-item-meta' }, s.scope === 'workspace' ? wsSub(s) : t('{count} 工具', { count: s.toolCount })),
-                  // 延迟开关：**两种状态都渲染**，点一下就地切换（不必进「编辑」框）。
-                  // 不带 token 数：我们不知道用户装了什么 MCP，schema 大小差一个量级，任何
-                  // 估算都给不出可用的数，而给了数用户就拿它做决定（主动误导）。
-                  h(DeferChip, { on: (s.deferEffective ?? s.defer) === true, interactive: s.managed === true && !busy, onClick: () => onToggleDefer(s) }),
+                  // 延迟开关：**两种状态都渲染**，点一下只改“整台默认”（组级），不必进「编辑」框。
+                  // 逐工具覆盖比它高，所以另有「N 覆盖」徽标把例外摆出来——否则用户会以为
+                  // 整台切了、却看见部分工具没跟着变。
+                  h(DeferChip, {
+                    on: s.deferLocked ? false : ((s.deferConfigured ?? (s.defer === true ? 'deferred' : 'resident')) === 'deferred'),
+                    overrides: s.deferOverrides ?? 0,
+                    locked: s.deferLocked ?? null,
+                    interactive: s.managed === true && !busy,
+                    onClick: () => onToggleDefer(s),
+                  }),
+                  (s.deferOverrides ?? 0) > 0 ? h(Badge, { title: t('{count} 个工具在「工具」页被单独设置，仍按那里生效', { count: s.deferOverrides }) }, t('{count} 单独设置', { count: s.deferOverrides })) : null,
                   mountFailed(s) ? h(Badge, { cls: 's-err' }, t('挂载失败')) : null,
                   scopeFailed(s) ? h(Badge, { cls: 's-err' }, t('作用域故障')) : null,
                 ),
@@ -2512,29 +3208,31 @@ const EyeToggle = ({ hidden, disabled, onChange, label }) =>
     onClick: (e) => { e.stopPropagation(); onChange(!hidden); },
   }, h(Icon, { d: ICONS[hidden ? 'eyeOff' : 'eye'], size: 15 }));
 
-// 延迟开关芯片：**状态即按钮**（两种状态都渲染、都可点）。
+// 延迟开关芯片：**状态即按钮**。它显示的是**组级默认**（项目组 > 全局组 > 旧 defer > 模式），
+// 不是逐工具分布——逐工具例外由旁边的「N 单独设置」徽标表达。
 //
-// 为什么改成这样：以前这里只是"开着的时候才出现的徽标"，想给某一台开延迟必须进「编辑」
-// 弹框勾一下——而列表上看不出那个动作在哪（用户实测反馈："按钮确实藏得有点深"）。
-//
-// 为什么是**芯片**不是开关：右侧那颗 Toggle 是「启用/禁用」（关掉 = 该服务器不加载、工具
-// 全没）。延迟只是"工具放不放常驻上下文"，两者外观一致会让人以为关掉延迟等于关掉服务器。
+// 为什么不是开关：右侧那颗 Toggle 是「启用/禁用」（关掉 = 该服务器不加载、工具全没）。
+// 延迟只是“工具放不放常驻上下文”，两者外观一致会让人以为关掉延迟等于关掉服务器。
 // 与眼睛（可见性）同一条教训：后果不同的控件必须长得不一样。
 //
-// 非本插件管理的条目（项目视图里出现的全局条目、外部 bundle 的条目）只展示不可点：
-// 它们要改得去它自己的作用域，在这里改会变成"点了另一个文件"。
-const DeferChip = ({ on, interactive, onClick }) => {
+// 锁定（总开关 off / 整体方案为全部常驻）时只展示不可点，并把原因写在 title 里——
+// 能点却没效果是最难排查的反馈。
+const DeferChip = ({ on, overrides = 0, locked = null, interactive, onClick }) => {
   const label = on ? t('延迟') : t('全量');
-  const title = on
-    ? t('该服务器的工具不常驻上下文：模型经 tool_search 按需搜索加载，命中后才进入工具列表。点击切回全量常驻。')
-    : t('该服务器的工具每轮都常驻上下文。点击切到延迟加载：模型经 tool_search 按需搜索，命中后才进入工具列表。');
-  // 闪电图标 = 延迟加载（与「全部延迟」主按钮同一个图标），两种状态都带：它标明"这是延迟开关"，
-  // 而不是"现在延迟着"。状态由 `.sel`（accent 底 + accent 边框）+ 文案 + aria-pressed 表达。
+  const lockTitle = locked === 'master-switch'
+    ? t('ToolSearch 总开关生效中（所有工具常驻），服务器级开关不生效')
+    : locked === 'all-resident'
+      ? t('当前整体方案为「全部常驻」（配置里写的），服务器级开关不生效')
+      : null;
+  const base = on
+    ? t('整台默认按需：模型经 tool_search 按需加载。点击把整台设为全量常驻。')
+    : t('整台默认常驻：工具每轮都在上下文里。点击把整台切到按需加载。');
+  const title = (lockTitle || base) + (overrides > 0 ? t('（另有 {count} 个工具在「工具」页单独设置，仍按那里生效）', { count: overrides }) : '');
   const icon = h(Icon, { d: ICONS.zap, size: 11 });
-  if (!interactive) {
+  if (!interactive || lockTitle) {
     return h('span', {
       className: 'dsh-mcp-chip sm ro' + (on ? ' sel' : ''),
-      title: t('该服务器不属于本插件的配置，延迟开关要回到它自己的作用域里改'),
+      title: lockTitle || t('该服务器不属于本插件的配置，延迟开关要回到它自己的作用域里改'),
     }, icon, label);
   }
   return h('button', {
@@ -2594,7 +3292,7 @@ const GlobalServerList = ({ servers, exclude, onToggleExclude, onSelect, selecte
 };
 
 /**
- * 详情页签的公共构造。MCP 面与技能面必须长得一样、行为一样，所以规则只写在这里。
+ * 详情页签的公共构造。各能力面必须长得一样、行为一样，所以规则只写在这里。
  *
  * 刻意做成**普通函数而不是组件**：组件节点在假 React 树里不会被展开（测试收集到的
  * 只有 `{ type: DetailTab, props }`），于是「页签文案与计数正确」这类断言只能空转。
@@ -2612,7 +3310,26 @@ const detailTab = (tab, onTab, id, label, count) => h('button', {
 /** 非当前页签的卡片不参与布局——只渲染当前页会让别处的文本断言失去意义，所以是隐藏而非卸载。 */
 const detailPaneOff = (tab, id) => (tab === id ? '' : ' dsh-mcp-pane-off');
 
-const ServerDetail = ({ server, tools, onToggle, onReconnect, onEdit, onRemove, busy, onReveal, revealed, onCopy, excluded, onToggleExclude, emptyTitle, emptyActions, tab = 'overview', onTab }) => {
+// 详情页的加载方式一句话：由**逐工具实际结果**（deferEffective）决定，与芯片的组级默认分开：
+// 芯片回答“整台默认怎么走”，这里回答“模型实际看到多少”。两者不同时正好说明存在逐工具覆盖。
+const deferSummaryText = (server) => {
+  const configured = server.deferConfigured ?? (server.defer === true ? 'deferred' : 'resident');
+  const total = server.toolCountForDefer ?? 0;
+  const deferred = server.deferredCount ?? 0;
+  const overrides = server.deferOverrides ?? 0;
+  const extra = overrides > 0 ? t('；{count} 个工具在「工具」页单独设置', { count: overrides }) : '';
+  if (server.deferEffective === 'mixed') {
+    return t('混合（{total} 个中 {resident} 个常驻 / {deferred} 个按需）{extra}', { total, resident: total - deferred, deferred, extra });
+  }
+  if (total === 0) {
+    return (configured === 'deferred' ? t('整台设为延迟（尚无工具）') : t('整台设为全量（尚无工具）')) + extra;
+  }
+  return (server.deferEffective === 'deferred'
+    ? t('按需加载（{count} 个工具经 tool_search 搜索）', { count: total })
+    : t('全量常驻（{count} 个工具每轮都在上下文里）', { count: total })) + extra;
+};
+
+const ServerDetail = ({ server, tools, onToggle, onReconnect, onEdit, onRemove, busy, onReveal, revealed, onCopy, excluded, onToggleExclude, emptyTitle, emptyActions, tab = 'overview', onTab, onOpenToolLoading, recentLogs = null, onLoadRecentLogs }) => {
   if (!server)
     return h('div', { className: 'dsh-mcp-detail' }, h('div', { className: 'dsh-mcp-d-empty' },
       h('b', null, emptyTitle || t('选择左侧的一个 MCP')),
@@ -2774,16 +3491,19 @@ const ServerDetail = ({ server, tools, onToggle, onReconnect, onEdit, onRemove, 
             : isForeign ? t('全局配置（在「全局」标签页可编辑）') : isWorkspace ? t('项目配置 .dsh/mcp.json（可编辑，本项目会话共享一份连接）') : server.managed ? t('当前 Web profile（可编辑）') : t('其他 bundle / Agent（只读）')),
         server.toolCallTimeoutMs ? h('b', null, t('调用超时')) : null, server.toolCallTimeoutMs ? h('span', null, server.toolCallTimeoutMs + ' ms') : null,
         h('b', null, t('启动失败策略')), h('span', null, server.failOnStartupError ? t('阻止插件启动') : t('记录错误并继续')),
-        h('b', null, t('工具延迟加载')), h('span', null, (server.deferEffective ?? server.defer)
-          ? t('已开启（{count} 工具经 tool_search 按需加载）', { count: server.toolCount })
-          : t('关闭（工具全量常驻上下文）')),
+        h('b', null, t('加载方式')), h('span', null, deferSummaryText(server)),
         server.reconnect ? h('b', null, t('自动重连')) : null, server.reconnect ? h('span', null, server.reconnect.enabled === false ? t('关闭') : t('{min}–{max} ms，最多 {attempts} 次', { min: server.reconnect.initialDelayMs || 500, max: server.reconnect.maxDelayMs || 30000, attempts: server.reconnect.maxAttempts || 10 })) : null,
         headerKeys.length ? h('b', null, 'Headers') : null, headerKeys.length ? h('div', { className: 'dsh-mcp-secret-list' }, headerKeys.map((k) => h(RevealRow, { key: k, field: 'headers', keyName: k, label: 'Header ' + k }))) : null,
         envKeys.length ? h('b', null, t('环境变量')) : null, envKeys.length ? h('div', { className: 'dsh-mcp-secret-list' }, envKeys.map((k) => h(RevealRow, { key: k, field: 'env', keyName: k, label: t('环境变量 {name}', { name: k }) }))) : null,
       ),
     ),
     h('div', { className: 'dsh-mcp-card' + paneOff('tools') },
-      h('h4', null, t('工具（{count}）', { count: tools.length })),
+      h('div', { className: 'dsh-mcp-tools-head' },
+        h('h4', null, t('工具（{count}）', { count: tools.length })),
+        onOpenToolLoading ? h(Btn, { cls: 'sm', onClick: () => onOpenToolLoading(server), children: t('在工具页管理') }) : null,
+      ),
+      // 加载方式不在这张卡片里重复：全局面板按服务器分组管它，那里同时能看到逐工具例外。
+      h('div', { className: 'dsh-mcp-d-note' }, t('加载方式（整台默认与逐工具）在「工具」页按服务器分组管理；这里显示已注册的工具与参数。')),
       h('div', { className: 'dsh-mcp-tools' },
         tools.length === 0
           ? h('div', { className: 'dsh-mcp-empty-list' }, server.toolCountAmbiguous ? t('工具归属存在命名歧义') : server.scope === 'workspace' ? t('尚无会话持有该项目连接，或连接尚未就绪') : t('暂无工具'))
@@ -2794,6 +3514,20 @@ const ServerDetail = ({ server, tools, onToggle, onReconnect, onEdit, onRemove, 
       diagBlocks.length
         ? diagBlocks
         : h('div', { className: 'dsh-mcp-d-note' }, t('未检测到配置层冲突或工具归属歧义。')),
+      // 最近日志（R12）：宿主已采集 12 条，这里按需取一次。为什么不做成页签：
+      // 页签数已经参与「诊断 (N)」的计数，为一个可选的排障面板再加一页会让那个数字
+      // 变成两件事（冲突数 + 有没有日志）——那正是"同一个数字两种含义"的老毛病。
+      h('div', { className: 'dsh-mcp-source-detail' },
+        onLoadRecentLogs
+          ? h(Btn, { cls: 'sm ghost', onClick: onLoadRecentLogs, children: recentLogs ? t('重新读取最近日志') : t('查看最近日志') })
+          : null,
+        recentLogs && recentLogs.error ? h('div', { className: 'dsh-mcp-log' }, recentLogs.error) : null,
+        recentLogs && recentLogs.logs
+          ? (recentLogs.logs.length === 0
+            ? h('div', null, t('没有采集到日志'))
+            : h('div', { className: 'dsh-mcp-log', title: t('最新的在最前（宿主只保留最近 12 条）') }, ...recentLogLines(recentLogs.logs).map((line, index) => h('div', { key: String(index) }, line))))
+          : null,
+      ),
     ),
     ),
   );
@@ -2813,7 +3547,25 @@ const ServerDetailPane = (props) => {
   // 换一台 server 就回到概览：上一台的页签选择对新的一台没有意义。
   const key = props.server ? props.server.serverName + ':' + (props.server.scope || '') : '';
   useEffect(() => { setTab('overview'); }, [key]);
-  return h(ServerDetail, { ...props, tab, onTab: setTab });
+  // 最近日志（R12）：宿主一直在采 12 条，但只有 lastError 被用上。**点击才取**——
+  // 单条最多 2000 字符，12 条最坏 24KB/服务器，那是详情该付的钱，不是列表轮询该付的。
+  // null = 还没取；{ logs } 或 { error } 表示取过了。换一台就清空（上一台的日志对新的一台没意义）。
+  const [recentLogs, setRecentLogs] = useState(null);
+  useEffect(() => { setRecentLogs(null); }, [key]);
+  const loadRecentLogs = () => {
+    if (!props.server || typeof props.call !== 'function') return;
+    const name = props.server.serverName;
+    void (async () => {
+      try {
+        const res = await props.call('status', name);
+        if (!res || res.ok !== true) { setRecentLogs({ error: (res && res.error) || t('读取日志失败') }); return; }
+        setRecentLogs({ logs: Array.isArray(res.server && res.server.recentLogs) ? res.server.recentLogs : [] });
+      } catch (error) {
+        setRecentLogs({ error: String((error && error.message) || error) });
+      }
+    })();
+  };
+  return h(ServerDetail, { ...props, tab, onTab: setTab, recentLogs, onLoadRecentLogs: loadRecentLogs });
 };
 
 const AddEditModal = ({ open, onClose, onSubmit, busy, initial, onRevealValue, revealEpoch, scope, scopeName }) => {
@@ -2825,7 +3577,6 @@ const AddEditModal = ({ open, onClose, onSubmit, busy, initial, onRevealValue, r
   const [cwd, setCwd] = useState('');
   const [toolCallTimeoutMs, setToolCallTimeoutMs] = useState('60000');
   const [failOnStartupError, setFailOnStartupError] = useState(false);
-  const [deferTools, setDeferTools] = useState(false);
   const [reconnectEnabled, setReconnectEnabled] = useState(true);
   const [initialDelayMs, setInitialDelayMs] = useState('500');
   const [maxDelayMs, setMaxDelayMs] = useState('30000');
@@ -2865,8 +3616,7 @@ const AddEditModal = ({ open, onClose, onSubmit, busy, initial, onRevealValue, r
       setCwd(initial.cwd || '');
       setToolCallTimeoutMs(String(initial.toolCallTimeoutMs || 60000));
       setFailOnStartupError(initial.failOnStartupError === true);
-      setDeferTools(initial.defer === true);
-      setReconnectEnabled(initial.reconnect?.enabled !== false);
+        setReconnectEnabled(initial.reconnect?.enabled !== false);
       setInitialDelayMs(String(initial.reconnect?.initialDelayMs || 500));
       setMaxDelayMs(String(initial.reconnect?.maxDelayMs || 30000));
       setMaxAttempts(String(initial.reconnect?.maxAttempts || 10));
@@ -2955,9 +3705,8 @@ const AddEditModal = ({ open, onClose, onSubmit, busy, initial, onRevealValue, r
     if (initialDelay > maxDelay) return setError(t('首次延迟不能大于最大延迟'));
     spec.toolCallTimeoutMs = timeout;
     spec.failOnStartupError = failOnStartupError;
-    // 表单显式渲染的字段直接赋值；defer 关掉时写 false（updateEntry 对 false 原样落盘，
-    // 不会留下 true 残影）。
-    spec.defer = deferTools;
+    // 加载方式（延迟/全量）不在这张表单里：它写在 `toolLoading` 的组级/逐工具策略上，
+    // 由 MCP 列表的芯片与「工具」页管理。表单不拥有它，就不会在编辑时抹掉它。
     spec.reconnect = { enabled: reconnectEnabled, initialDelayMs: initialDelay, maxDelayMs: maxDelay, maxAttempts: attempts };
     // 表单只拥有它显式渲染的字段，而提交是**重建** spec 而不是增量修改 —— 所以其余字段必须原样
     // 带回去，否则"编辑一次"就把它们抹掉：`disabled`（会让一个被禁用的 server 被悄悄启用）以及
@@ -3035,18 +3784,9 @@ const AddEditModal = ({ open, onClose, onSubmit, busy, initial, onRevealValue, r
         h('h4', null, t('运行策略')),
         h('div', { className: 'dsh-mcp-field' }, h('label', null, t('工具调用超时（毫秒）')), h('input', { type: 'number', min: 1, value: toolCallTimeoutMs, onChange: (e) => setToolCallTimeoutMs(e.target.value) })),
         h('label', { className: 'dsh-mcp-check' }, h('input', { type: 'checkbox', checked: failOnStartupError, onChange: (e) => setFailOnStartupError(e.target.checked) }), t('首次连接失败时阻止插件启动')),
-        h('label', { className: 'dsh-mcp-check', title: t('开启后该服务器的工具不再全量常驻上下文，模型按需通过 tool_search 搜索加载；调用一次多一个往返。适合工具数量多的服务器。') }, h('input', { type: 'checkbox', checked: deferTools, onChange: (e) => setDeferTools(e.target.checked) }), t('延迟加载工具（ToolSearch 按需搜索）')),
-        // 开启前预告：只给**真实数据**——工具数。不再提任何门槛：两道门槛（per-server ≤10、
-        // 会话级 <15）在第十轮整个删掉了（官方没有这两道，且它们制造"勾了没生效"的断层）。
-        // 刻意不给"能省多少 token"：我们不知道用户装了什么 MCP，schema 大小差一个量级，
-        // 估算数字的精确感是假的，而用户会拿它做决定。
-        // 唯一保留的诚实记账：小服务器延迟之后每轮仍要付一段引导语，"省字"可能是负的
-        // （DECISIONS §9.1 的补记）——这句话必须写在这里，因为开关就在这一行。
-        editing && initial.toolCount !== undefined
-          ? h('div', { className: 'dsh-mcp-d-note' }, initial.toolCount <= 10
-            ? t('该服务器仅 {count} 个工具：延迟后按需加载，但每轮仍要付一段引导语，省下的空间可能不多', { count: initial.toolCount })
-            : t('该服务器 {count} 个工具，将经 tool_search 按需加载', { count: initial.toolCount }))
-          : null,
+        // 加载方式不在这里重复：服务器列表的芯片改“整台默认”，「工具」页改逐工具。
+        // 同一件事只留一个写入口，编辑框里只说明去哪儿改。
+        h('div', { className: 'dsh-mcp-d-note' }, t('加载方式（延迟 / 全量）在服务器列表的芯片与「工具」页里改；这里只管连接与超时。')),
         h('label', { className: 'dsh-mcp-check' }, h('input', { type: 'checkbox', checked: reconnectEnabled, onChange: (e) => setReconnectEnabled(e.target.checked) }), t('断开后自动重连')),
         h('div', { className: 'dsh-mcp-number-grid' },
           h('div', { className: 'dsh-mcp-field' }, h('label', null, t('首次延迟 ms')), h('input', { type: 'number', min: 1, step: 'any', value: initialDelayMs, onChange: (e) => setInitialDelayMs(e.target.value) })),
@@ -3127,16 +3867,6 @@ function catalogForScope(items, { isWorkspace, knownNames } = {}) {
  * @param {object[]} discovered - skillScopeOptions(rows) 的退路。
  * @returns {{ source, label, scope, root, writable, exists, pending }[]}
  */
-/**
- * 安装目标的**唯一身份**：`source + root`。
- *
- * ⚠️ 不能只用 `source`：两个工作区都会有 `project-agents`。只按 source 做 key/查找，会让
- * 两个单选项撞同一个 key、同一个选中值，而且 `find` 取首个 → 用户以为选的是项目 B，
- * 实际写进项目 A（或 `installTargets[0]` 那个默认）。宿主本来就是按 `source\0root`
- * 去重的（skills-registry.js 的 skillTargetsView），面板必须用同一套身份。
- */
-const installTargetId = (option) => `${option?.source || ''}\u0000${option?.root || ''}`
-
 function skillTargetOptions(targets, discovered) {
   const host = (Array.isArray(targets) ? targets : []).filter((target) => typeof target?.source === 'string' && typeof target?.root === 'string')
   if (host.length === 0) return Array.isArray(discovered) ? discovered : []
@@ -3657,8 +4387,7 @@ const JsonImportModal = ({ open, onClose, call, busy, setBusy, onImported, scope
 // 只读快照，写入目标不在这里发生：拿到 JSON 的用户可以自己决定放进哪个工作区、或备份起来。
 // 与「复制到…」的分工：这个功能把配置**给你**（可跨机器、可分享、可存档），凭据因此会经过浏览器；
 // 同机搬运不需要这一点，用复制即可（那条路凭据不出 Host）。
-const WorkspaceExportModal = ({ open, onClose, call, scope, scopeName }) => {
-  const [state, setState] = useState({ phase: 'loading' });
+const WorkspaceExportModal = ({ open, onClose, call, scope, scopeName }) => {  const [state, setState] = useState({ phase: 'loading' });
   const [note, setNote] = useState('');
   useEffect(() => {
     if (!open) return undefined;
@@ -3667,7 +4396,11 @@ const WorkspaceExportModal = ({ open, onClose, call, scope, scopeName }) => {
     setNote('');
     (async () => {
       try {
-        const res = await call('exportWorkspaceJson', { wsPath: scope });
+        // 两个数据源、同一个形状：项目层读 <工作区>/.dsh/mcp.json，全局层读 profile patch 里的
+        // managed 条目。客户端只需要知道"问哪个方法"，其余字段（count/excluded/json）含义一致。
+        const res = scope === 'global'
+          ? await call('exportGlobalJson')
+          : await call('exportWorkspaceJson', { wsPath: scope });
         if (cancelled) return;
         if (!res?.ok) throw new Error(res?.error || t('导出失败'));
         setState({ phase: 'ready', data: res });
@@ -3702,7 +4435,9 @@ const WorkspaceExportModal = ({ open, onClose, call, scope, scopeName }) => {
   };
   return h('div', { className: 'dsh-mcp-overlay', onClick: (e) => e.target === e.currentTarget && onClose() },
     h(Dialog, { label: t('导出项目 MCP'), onClose },
-      h('h3', null, t('导出项目 MCP{scope}', { scope: scope !== 'global' && scopeName ? t('（{name}）', { name: scopeName }) : '' })),
+      h('h3', null, scope === 'global'
+        ? t('导出全局 MCP')
+        : t('导出项目 MCP{scope}', { scope: scopeName ? t('（{name}）', { name: scopeName }) : '' })),
       state.phase === 'loading' ? h('div', { className: 'dsh-mcp-source-detail' }, t('正在读取项目配置…')) : null,
       state.phase === 'error' ? h('div', { className: 'dsh-mcp-d-err' }, state.error) : null,
       data ? h(React2.Fragment, null,
@@ -3710,8 +4445,16 @@ const WorkspaceExportModal = ({ open, onClose, call, scope, scopeName }) => {
           h('label', null, t('共 {count} 个 MCP{suffix}', { count: data.count, suffix: excluded.length ? t('，含 exclude（{names}）', { names: excluded.join(t('、')) }) : '' })),
           h('textarea', { className: 'dsh-mcp-import-json', readOnly: true, value: json, onFocus: (e) => e.target.select() }),
         ),
-        h('div', { className: 'dsh-mcp-log warn' }, t('这是完整配置：字面写死的凭据（URL 里的 token、字面 header / env 值）会原样出现在这里，请按密钥对待。用 ${VAR} 引用的位置保持引用写法，不会被解析成明文。')),
-        h('div', { className: 'dsh-mcp-source-detail' }, t('格式与 .dsh/mcp.json 一致：可以直接放进目标工作区的 .dsh/mcp.json，或用「导入 MCP」粘贴回来（粘贴只读取 mcpServers，exclude 需要手动设）。')),
+        h('div', { className: 'dsh-mcp-log warn' }, scope === 'global'
+          // ⚠️ 全局层的警告**不能**照抄项目层：patch 里存的是**求值后**的实际值
+          // （toMcpClientConfig 用 evaluateEnvExpression），所以面板添加过的 env/header 在这里
+          // 已经是明文，导出只能如实给出；而手写的 `!!js process.env.X` 仍会被转回 `${X}`。
+          // 两条路混在同一份文件里，所以文案必须把这两种情况都说出来。
+          ? t('这是全局层的完整配置。⚠️ 通过面板添加的条目在 profile 里已是**求值后的实际值**，因此 URL 里的 token、header / env 的字面值会原样出现在这里，请按密钥对待。手写的 ${VAR} 模板（!!js 表达式）会保留引用写法。')
+          : t('这是完整配置：字面写死的凭据（URL 里的 token、字面 header / env 值）会原样出现在这里，请按密钥对待。用 ${VAR} 引用的位置保持引用写法，不会被解析成明文。')),
+        h('div', { className: 'dsh-mcp-source-detail' }, scope === 'global'
+          ? t('格式与 .dsh/mcp.json 一致：可以放进目标工作区的 .dsh/mcp.json，或用「导入 MCP」粘贴回来（粘贴到全局层就是同名更新）。全局层没有 exclude（那是项目屏蔽全局 MCP 的字段）。')
+          : t('格式与 .dsh/mcp.json 一致：可以直接放进目标工作区的 .dsh/mcp.json，或用「导入 MCP」粘贴回来（粘贴只读取 mcpServers，exclude 需要手动设）。')),
       ) : null,
       note ? h('div', { className: 'dsh-mcp-source-detail' }, note) : null,
       h('div', { className: 'dsh-mcp-modal-actions' },
@@ -3723,23 +4466,23 @@ const WorkspaceExportModal = ({ open, onClose, call, scope, scopeName }) => {
   );
 };
 
-// ── 延迟加载参数（C2）────────────────────────────────────────────────────
+// ── 工具加载页 ───────────────────────────────────────────────────────────
 //
-// 面板是这三个数字**唯一的解释处**：数值本身没有意义，「这个数管什么、改大改小会怎样」才是
-// 用户决定动不动它时要看的（证据见 .tasks/mcp-tool-search/TUNING-DECISIONS.md 的 F4/Q2/Q4）。
-// 所以每个字段的标签旁有一个 ⓘ 标记，鼠标移上去用**大白话**说明它的作用——不摆"33%"、
-// "schema 体积"这种行话：能看懂的人本来就会自己调，需要说明的正是看不懂的那批。
+// 这一页只有一个问题：**每个工具下一轮要不要占上下文**。它由三层配置决定（见
+// lib/tool-loading-policy.js）：整体方案 mode、服务器组 groups、逐工具 tools。
+// 页面按**使用路径**组织，不按“配置的存储位置”组织：
 //
-// 保存是**一次 RPC**：Host 把值写进 profile patch 的 `config.toolSearch`，然后在运行中的
-// 进程里重装运行时（工具定义里的上限跟着变）。面板不自己拼配置，也不假设"写盘即生效"——
-// patch 文件不会被热加载，这一点在 test/real-host-loader 里用真 loader 钉着。
+//   ① 内置按用途分类（文件 / 命令与终端 / 网络 / …）排在最前：MCP 的整台默认在 MCP 页的
+//      芯片上管，来工具页通常是给内置工具做逐工具配置；
+//   ② 服务器组（MCP）排第二：组头**只读**显示「整台默认」，写入口在 MCP 页；行里处理逐工具例外；
+//   ③ 名单外的插件工具单列。宿主没有 provenance 接口，无法可靠区分新内置与第三方，不猜；
+//   ④ 受保护项（tool_search / run_code）：只读，不进可设置列表。
+//
+// 面板是**全局 + 项目**两种作用域：项目的覆盖写在 .dsh/mcp.json 的 toolLoading，
+// 与全局同形；行里的「跟随全局」在项目里表示删掉项目键，回落到全局。
 //
 // ⚠️ 表里存**中文原文**（= EN_DICT 的键），翻译发生在渲染点 t(field.label)：在这里写 t()
 // 会把语言冻在 bundle 加载那一刻（i18n 用例里那组真机缺陷就是它）。
-// 参数说明标记（ⓘ）：鼠标移上去用大白话说清这个数字管什么。
-// 用**原生 `title`**而不是自绘 tooltip：面板里已经有浮层裁切、层级与主题三样要跟宿主同步的
-// 东西，为一个说明再养一套不划算。同一段文字同时给 `aria-label` + `tabIndex`——读屏与键盘
-// 也能拿到（触屏没有 hover，`title` 不出现，那条路只能靠 aria）。
 const HintMarker = ({ text }) => h('span', {
   className: 'dsh-mcp-hint',
   title: text,
@@ -3747,12 +4490,6 @@ const HintMarker = ({ text }) => h('span', {
   tabIndex: 0,
 }, h(Icon, { d: ICONS.info, size: 12 }));
 
-// 说明一律一句话——那块地方小，`title` 该回答"这个数字管什么"，不是放一篇论文。
-// ── 工具搜索（ToolSearch）：一个入口，两件事 ─────────────────────────────
-//
-// ① 工具：内置与其他插件的工具逐个选「常驻 / 按需」，默认常驻。
-//    MCP 的启停与「延迟 / 全量」在左侧列表里，这里不重复。
-// ② 搜索参数：一次返回几条、目录上限、已发现上限（原先单独的「延迟参数」并到了这里）。
 /**
  * 目录上限开关打开时的**建议起点**，不是默认值：默认完全不限制（服务端
  * `DEFAULTS.maxCatalogChars = undefined`）。12,500 有实测依据——456 个延迟工具只列名字约
@@ -3760,124 +4497,310 @@ const HintMarker = ({ text }) => h('span', {
  */
 const CATALOG_CHARS_SUGGESTION = 12500
 
-const TOOL_SEARCH_CHOICES = [
+/** 逐工具三态。`inherit` 用**删掉覆盖键**表达（与配置模型一致，不发明第三取值）。 */
+const TOOL_POLICY_CHOICES = [
+  { id: 'inherit' },
   { id: 'resident', label: '常驻' },
   { id: 'deferred', label: '按需' },
 ]
 
-/** 已知宿主内置工具的中文短名。未知工具只显示名字，不硬造翻译。 */
+/** 面板侧的成员索引：与宿主 `groupMembershipOf` 同一条规则（先出现者胜）。 */
+const groupMembershipOf = (groups) => {
+  const membership = new Map()
+  for (const [name, entry] of Object.entries(groups || {})) {
+    for (const tool of entry?.tools ?? []) if (!membership.has(tool)) membership.set(tool, name)
+  }
+  return membership
+}
+
+/** 分组草稿的等价比：键顺序也算（顺序即显示顺序）。 */
+const sameGroups = (left, right) => JSON.stringify(left || {}) === JSON.stringify(right || {})
+
+/** 把工具从所有组里摘掉，再放进目标组（移动语义）。返回新对象，不改入参。 */
+const moveToolsIntoGroup = (groups, target, toolNames) => {
+  const moving = new Set(toolNames)
+  const next = {}
+  for (const [name, entry] of Object.entries(groups || {})) {
+    next[name] = { ...entry, tools: (entry.tools || []).filter((tool) => !moving.has(tool)) }
+  }
+  if (target === null) return next
+  next[target] = { ...(next[target] || {}), tools: [...(next[target]?.tools || []), ...toolNames] }
+  return next
+}
+
+/** 组策略缺席时行内要跟的那一层：宿主已经把 `inheritedPolicy` 算成"去掉逐工具覆盖后的值"，
+ *  所以有组策略时它必然是组值；这里只决定文案说的是"跟谁"。 */
+const followSourceOf = (row, groupName, groups) => {
+  if (groupName && groups?.[groupName]?.policy) return { key: 'group', name: groupName }
+  return { key: row.kind === 'mcp' ? 'server' : 'host' }
+}
+
+// 整体方案（mode）**没有 UI**：它只由配置文件/部署决定，页面只在被它压住时给横幅。
+// 两个写入口保持清晰：MCP 页芯片 → 整台默认（groups）；工具页每行 → 逐工具（tools）。
+
+/**
+ * 已知**宿主内置工具**的中文短名。
+ *
+ * 名单只收能在宿主源码里找到定义的第一方工具（`deepseek-harness` 的 `packages` 下各 `tool-*` 包）：
+ * 断言的依据是定义处，不是“看着像内置”。曾经这里混进过 chrome-devtools 的 MCP 工具名
+ * （`navigate_page` / `take_screenshot` …）和宿主里不存在的 `task`、`schedule_update`，
+ * 后果是名字相同的第三方工具会被贴上“内置”标签、分进内置分类——比不分类更糟。
+ *
+ * 名单外的非 MCP 工具一律进「其他插件与未识别工具」：宿主没有 provenance 接口，
+ * 猜错会改掉别人的工具身份，所以不猜。
+ */
 const BUILTIN_LABELS = {
-  tool_search: '工具搜索入口',
+  // 文件
   working_directory: '切换工作目录',
   read: '读取文件',
   write: '写入文件',
   edit: '编辑文件',
+  read_image: '查看图片',
+  apply_patch: '应用补丁',
+  str_replace_editor: '结构化编辑',
   glob: '查找文件',
   grep: '搜索文件内容',
+  // 命令
   bash: '运行命令',
   pwsh: '运行命令',
-  run_code: '运行代码',
-  read_image: '查看图片',
-  ask_user_question: '向用户提问',
-  task: '任务列表',
-  todo_write: '待办清单',
+  terminal_open: '打开终端',
+  terminal_send: '向终端发送',
+  terminal_read: '读取终端',
+  terminal_signal: '发送终端信号',
+  terminal_close: '关闭终端',
+  terminal_list: '列出终端',
+  // 网络
   web_search: '网页搜索',
   web_fetch: '抓取网页',
+  // MCP 资源
   list_mcp_resources: '列出 MCP 资源',
   list_mcp_resource_templates: '列出资源模板',
   read_mcp_resource: '读取 MCP 资源',
-  skill: '加载技能',
-  present: '交付文件',
-  job_list: '列出后台任务',
-  job_output: '读取任务输出',
-  job_kill: '停止后台任务',
-  send_message: '给 Agent 发消息',
-  subagent: '委派子任务',
-  subagent_fork: '带上下文委派',
-  list_agents: '列出子 Agent',
-  interrupt_agent: '中断子 Agent',
-  workflow: '编排多 Agent',
+  // 任务与后台
+  todo_write: '待办清单',
   get_goal: '查看当前目标',
   create_goal: '创建持续目标',
   update_goal: '更新目标',
   exit_plan_mode: '退出计划模式',
-  schedule_create: '创建定时提醒',
-  schedule_list: '列出定时提醒',
-  schedule_delete: '删除定时提醒',
-  schedule_update: '修改定时提醒',
-  list_pages: '列出浏览器页面',
-  navigate_page: '打开网页',
-  take_screenshot: '网页截图',
-  take_snapshot: '读取页面结构',
-  click: '点击页面元素',
-  fill: '填写页面输入',
-  hover: '悬停页面元素',
-  press_key: '按下按键',
-  evaluate_script: '在页面执行脚本',
-  new_page: '新建浏览器页面',
-  close_page: '关闭浏览器页面',
-  resize_page: '调整页面尺寸',
-  select_page: '切换浏览器页面',
-  wait_for: '等待页面条件',
-  list_console_messages: '读取控制台消息',
-  list_network_requests: '读取网络请求',
-  get_network_request: '查看单个网络请求',
-  performance_start_trace: '开始性能录制',
-  performance_stop_trace: '结束性能录制',
+  job_list: '列出后台任务',
+  job_output: '读取任务输出',
+  job_kill: '停止后台任务',
+  // 子代理与团队
+  subagent: '委派子任务',
+  subagent_fork: '带上下文委派',
+  list_subagent_models: '列出子代理模型',
+  send_message: '给子代理发消息',
+  list_agents: '列出子代理',
+  interrupt_agent: '中断子代理',
+  wait_agent: '等待子代理',
+  workflow: '编排多代理',
+  team_task_create: '创建团队任务',
+  team_task_get: '查看团队任务',
+  team_task_list: '列出团队任务',
+  team_task_update: '更新团队任务',
+  // 技能与交互
+  skill: '加载技能',
+  ask_user_question: '向用户提问',
+  present: '交付文件',
+  // 定时
+  schedule_create: '创建定时任务',
+  schedule_list: '列出定时任务',
+  schedule_view: '查看定时任务',
+  schedule_edit: '编辑定时任务',
+  // 代码与工作区
+  lsp: '代码导航',
+  create_worktree: '创建工作树',
+  load_workspace_dependencies: '加载工作区依赖',
+  // 宿主与插件
+  plugin_manager: '管理插件',
+  plugin_market: '插件市场',
+  cordis_inspect_list: '列出 Cordis 条目',
+  cordis_inspect_query: '查询 Cordis 条目',
+  // 其他
+  run_code: '运行代码',
+  session_search: '搜索会话',
+  session_trace: '追踪会话',
+  session_event_read: '读取会话事件',
+  session_event_search: '搜索会话事件',
+  session_event_trace: '追踪会话事件',
+  ralph: '循环任务',
 }
 
 const toolLabel = (row) => (row.kind === 'builtin' && BUILTIN_LABELS[row.name]) || row.name
 
 /**
- * 一个工具 = 一行：**宿主原名**（等宽，正常显示）+ 中文短名标记 + 策略下拉。
+ * 已知宿主内置工具的用途分类。
  *
- * 名字必须用宿主原名：`working_directory`、`job_output` 是可搜索、可与日志/文档对上号的
- * 唯一标识；把它换成中文标题后，用户在别处看到英文名就找不到对应行了。
- * 中文短名是**标记**（说明这行大概是什么工具），不是标题；未知工具没有标记，
- * 退回到宿主的 description 标记（ⓘ），不硬造翻译。
+ * 分类按**工具做什么**，不按包名：文件读写归“文件”，终端与命令归“命令”，
+ * 子代理/团队/消息归“子代理与团队”，插件与 Cordis 检查归“宿主与插件”。
+ * 名单外的名字不进任何内置分类。
  */
+const BUILTIN_CATEGORY_GROUPS = [
+  { id: 'files', label: '文件', names: ['working_directory', 'read', 'write', 'edit', 'read_image', 'apply_patch', 'str_replace_editor', 'glob', 'grep'] },
+  { id: 'shell', label: '命令与终端', names: ['bash', 'pwsh', 'terminal_open', 'terminal_send', 'terminal_read', 'terminal_signal', 'terminal_close', 'terminal_list'] },
+  { id: 'web', label: '网络', names: ['web_search', 'web_fetch'] },
+  { id: 'mcp-resources', label: 'MCP 资源', names: ['list_mcp_resources', 'list_mcp_resource_templates', 'read_mcp_resource'] },
+  { id: 'tasks', label: '任务与后台', names: ['todo_write', 'get_goal', 'create_goal', 'update_goal', 'exit_plan_mode', 'job_list', 'job_output', 'job_kill'] },
+  {
+    id: 'agents',
+    label: '子代理与团队',
+    names: ['subagent', 'subagent_fork', 'list_subagent_models', 'send_message', 'list_agents', 'interrupt_agent',
+      'wait_agent', 'workflow', 'team_task_create', 'team_task_get', 'team_task_list', 'team_task_update'],
+  },
+  { id: 'interaction', label: '技能与交互', names: ['skill', 'ask_user_question', 'present'] },
+  { id: 'schedule', label: '定时', names: ['schedule_create', 'schedule_list', 'schedule_view', 'schedule_edit'] },
+  { id: 'code', label: '代码与工作区', names: ['lsp', 'create_worktree', 'load_workspace_dependencies'] },
+  { id: 'host', label: '宿主与插件', names: ['plugin_manager', 'plugin_market', 'cordis_inspect_list', 'cordis_inspect_query'] },
+  { id: 'misc', label: '其他内置', names: ['run_code', 'session_search', 'session_trace', 'session_event_read', 'session_event_search', 'session_event_trace', 'ralph'] },
+]
+const BUILTIN_CATEGORY = Object.fromEntries(
+  BUILTIN_CATEGORY_GROUPS.flatMap((group) => group.names.map((name) => [name, group.id])),
+)
+const BUILTIN_CATEGORY_LABELS = Object.fromEntries(BUILTIN_CATEGORY_GROUPS.map((group) => [group.id, group.label]))
+const BUILTIN_CATEGORY_ORDER = BUILTIN_CATEGORY_GROUPS.map((group) => group.id)
+
+/** 顶层分区：内置 / MCP / 其他。类型筛选就是按它过滤。
+ *
+ * 顺序是**使用路径**，不是数据量：MCP 的整台默认在 MCP 页的芯片上管，来工具页主要是给内置工具
+ * 做逐工具配置；MCP 服务器组留在后面（只用来处理某台服务器的逐工具例外）。
+ */
+const TOOL_SECTION_ORDER = ['builtin', 'mcp', 'other']
+const sectionLabel = (section) => (section === 'mcp'
+  ? t('MCP 服务器')
+  : section === 'builtin' ? t('内置工具（按用途）') : t('其他插件与未识别'))
+
 /**
- * 一个工具 = 一行：宿主原名（等宽）+ 中文短名标记 + 常驻/按需。
+ * 按“用户会去哪儿找”分组：MCP 按服务器、其余合成一组、归属有歧义的 MCP 单列。
  *
- * 这里没有第三态：工具页只管全局。内置与插件工具在所有项目里是同一批宿主工具，
- * 按项目再分一层只会让「换个项目就变回去」看起来像丢配置。MCP 服务器粒度的
- * 开关在 MCP 页面，不在这里重复。
+ * 不按 kind 只分两类：`kind` 只有 mcp/builtin 两值，而 builtin 里混着宿主内置与其他插件的
+ * 工具（宿主没有 provenance 接口，分不出来）。把它们分开显示就是编一个我们没有的信息。
+ *
+ * 排序用 **code-unit** 而不是 localeCompare：排序结果必须与面板外的日志/配置对得上，
+ * 而 localeCompare 依赖 ICU 与区域，同一份数据在不同机器上会给出不同顺序。
  */
-const toolLoadingRow = (row, draft, onChange, { saving = false } = {}) => {
+const toolGroups = (rows) => {
+  const map = new Map()
+  for (const row of rows) {
+    let key
+    let section
+    let owner = null
+    let category = null
+    let label = null
+    if (row.kind === 'mcp') {
+      key = row.owner ? 'mcp:' + row.owner : 'mcp:'
+      section = 'mcp'
+      owner = row.owner || null
+    } else if (Object.hasOwn(BUILTIN_LABELS, row.name)) {
+      category = BUILTIN_CATEGORY[row.name] || 'misc'
+      key = 'builtin:' + category
+      section = 'builtin'
+      label = BUILTIN_CATEGORY_LABELS[category]
+    } else {
+      key = 'plugin'
+      section = 'other'
+    }
+    let group = map.get(key)
+    if (group === undefined) {
+      group = { key, section, owner, category, label, rows: [] }
+      map.set(key, group)
+    }
+    group.rows.push(row)
+  }
+  for (const group of map.values()) {
+    group.rows.sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0))
+  }
+  return [...map.values()].sort((left, right) => {
+    const bySection = TOOL_SECTION_ORDER.indexOf(left.section) - TOOL_SECTION_ORDER.indexOf(right.section)
+    if (bySection !== 0) return bySection
+    if (left.section === 'builtin') {
+      return BUILTIN_CATEGORY_ORDER.indexOf(left.category) - BUILTIN_CATEGORY_ORDER.indexOf(right.category)
+    }
+    if (left.section === 'mcp') {
+      // 归属不明的 MCP 工具放**最后**：它不是一个服务器，放在第一行会把正常的服务器组挤下去。
+      const byOwned = (left.owner ? 0 : 1) - (right.owner ? 0 : 1)
+      if (byOwned !== 0) return byOwned
+      const a = left.owner || ''
+      const b = right.owner || ''
+      return a < b ? -1 : a > b ? 1 : 0
+    }
+    return 0
+  })
+}
+
+const groupLabel = (group) => (group.section === 'mcp'
+  ? (group.owner || t('未归属'))
+  : group.section === 'other' ? t('未分组') : t(group.label))
+
+/** 组的“跟随值”：没有组级键时模型实际会用的值。服务端下发；老宿主按方案兜底。 */
+const groupInherited = (loaded, owner) => {
+  if (owner === null) return 'resident' // 非 MCP（内置/插件）不受 mode=recommended 影响
+  const state = (loaded?.groups || []).find((group) => group.owner === owner)
+  if (state?.inherited === 'deferred' || state?.inherited === 'resident') return state.inherited
+  return loaded?.policy?.mode === 'recommended' ? 'deferred' : 'resident'
+}
+
+/**
+ * 一个工具 = 一行：宿主原名（等宽）+ 中文短名 + 三态。
+ *
+ * 名字必须是宿主原名：`working_directory`、`job_output` 是可搜索、可与日志/文档对上号的
+ * 唯一标识；换成中文标题后，用户在别处看到英文名就找不到对应行。
+ * “继承项”必须写清**跟谁**、**当前是什么**：只写“跟随”，用户既不知道上一层是谁，也不知道
+ * 选它会发生什么。服务器行写「跟随服务器」，内置工具写「宿主默认」，项目里的覆盖写「跟随全局」。
+ */
+const toolLoadingRow = (row, draft, saved, onChange, { saving, inherited, followLabel, checked = false, onToggle = null }) => {
   const alias = row.kind === 'builtin' ? BUILTIN_LABELS[row.name] : ''
-  const policy = draft[row.name] || row.policy || 'resident'
-  // 改动高亮：草稿值与已保存值不同 = 这张卡要进「保存」的承诺里。用户改完往下滚之前
-  // 能在原地看到「这张卡不一样了」，而不是滚到底栏才发现改了几张。
-  const changed = (row.policy || 'resident') !== policy
-  return h('div', { className: 'dsh-mcp-tool-row' + (changed ? ' is-changed' : ''), key: row.name },
-    h('div', { className: 'dsh-mcp-tool-info' },
-      h('span', { className: 'dsh-mcp-tool-name', title: row.name }, row.name),
-      alias ? h('span', { className: 'dsh-mcp-tool-alias' }, alias) : null,
-      row.description ? h(HintMarker, { text: row.description }) : null,
-    ),
-    h('span', { className: 'dsh-mcp-tool-pick', role: 'group', 'aria-label': (alias || row.name) + ' · ' + t('加载方式') },
-      ...TOOL_SEARCH_CHOICES.map((choice) => h('button', {
-        key: choice.id,
-        type: 'button',
-        className: choice.id === 'resident' ? 'is-resident' : 'is-deferred',
-        'aria-pressed': policy === choice.id,
+  const explicit = Object.hasOwn(draft, row.name)
+  const policy = explicit ? draft[row.name] : (row.policy || 'resident')
+  const savedExplicit = Object.hasOwn(saved || {}, row.name)
+  const changed = explicit !== savedExplicit || (explicit && draft[row.name] !== saved[row.name])
+  const inheritedText = inherited === 'deferred' ? t('按需') : t('常驻')
+  // “跟随”必须说清**跟谁**、**当前是什么**：只写“跟随”，用户既不知道上一层是谁，也不知道
+  // 选它会发生什么。服务器行跟服务器默认，内置工具跟宿主默认，项目里的覆盖跟全局。
+  const inheritLabel = t('{source}（{value}）', { source: followLabel, value: inheritedText })
+  return h('div', { className: 'dsh-mcp-tool-row' + (changed ? ' is-changed' : '') + (explicit ? ' is-overridden' : '') + (checked ? ' is-selected' : ''), key: row.name },
+    // 一行两列：名字/说明在左，三态在右。三态不另起一行——那会让 700 多行时每张卡多占
+    // 一整行，而“这行是什么工具”和“它怎么加载”本就是同一眼的判断。
+    h('div', { className: 'dsh-mcp-tool-head' },
+      onToggle ? h('input', {
+        type: 'checkbox',
+        className: 'dsh-mcp-tool-check',
+        checked,
         disabled: saving,
-        onClick: () => onChange(row.name, choice.id),
-      }, t(choice.label))),
+        'aria-label': t('选择 {name}', { name: alias || row.name }),
+        onClick: (e) => e.stopPropagation(),
+        onChange: () => onToggle(row.name),
+      }) : null,
+      h('div', { className: 'dsh-mcp-tool-info' },
+        h('span', { className: 'dsh-mcp-tool-name', title: row.name }, row.name),
+        alias ? h('span', { className: 'dsh-mcp-tool-alias' }, alias) : null,
+        explicit ? h('span', { className: 'dsh-mcp-tool-override', title: t('不跟随上一级设置') }, t('单独设置')) : null,
+        row.description ? h(HintMarker, { text: row.description }) : null,
+      ),
+      h('span', { className: 'dsh-mcp-tool-pick', role: 'group', 'aria-label': (alias || row.name) + ' · ' + t('加载方式') },
+        ...TOOL_POLICY_CHOICES.map((choice) => h('button', {
+          key: choice.id,
+          type: 'button',
+          className: choice.id === 'resident' ? 'is-resident' : choice.id === 'deferred' ? 'is-deferred' : 'is-inherit',
+          'aria-pressed': choice.id === 'inherit' ? !explicit : (explicit && policy === choice.id),
+          title: choice.id === 'inherit' ? t('不单独设置这个工具：使用上一级的决定（当前：{value}）', { value: inheritedText }) : undefined,
+          disabled: saving,
+          onClick: () => onChange(row.name, choice.id),
+        }, choice.id === 'inherit' ? inheritLabel : t(choice.label))),
+      ),
     ),
-    // 说明只作辨认线索：一行截断、全文留在 title。决定「加载方式」不需要读整段 schema 描述，
-    // 铺开只会让 34 张卡高低不一（density 用例钉着双列网格，不齐整的双列比单列更乱）。
+    // 说明只作辨认线索：一行截断、全文留在 title。决定加载方式不需要读整段 schema 描述，
+    // 铺开只会让卡片高低不一（density 用例钉着双列网格，不齐整的双列比单列更乱）。
     row.description ? h('div', { className: 'dsh-mcp-tool-desc', title: row.description }, row.description) : null,
   )
 }
 
-/** 搜索参数三项：与原来的「延迟参数」同一套字段与校验，只是搬进同一个弹窗。 */
+/** 搜索参数三项：与原来的「延迟参数」同一套字段与校验，只是收进了可折叠的「搜索设置」。 */
 const SEARCH_PARAM_FIELDS = [
-  { key: 'maxResults', label: '一次最多返回几个', about: '搜一次最多拿回几条。调小可能漏掉要用的那个，调大每次多占一点上下文。默认 10。' },
-  { key: 'maxDiscovered', label: '同时记住几个已发现的工具', about: '模型搜索出来的工具同时保留几个，超了先淘汰最久没用过的。默认 20。' },
+  { key: 'maxResults', label: '一次搜回几个', about: '模型搜一次最多拿回几个工具。调小可能漏掉要用的那个，调大每次多占一点上下文。默认 10。' },
+  { key: 'maxDiscovered', label: '同时记住几个搜到的工具', about: '搜到过的工具会留在手边直接用。超了就先淘汰最久没用的。默认 20。' },
 ]
 
-const ToolLoadingModal = ({ open, onClose, call, onSaved, inline = false }) => {
+const ToolLoadingModal = ({ open, onClose, call, onSaved, inline = false, scopes = null, scope = 'global', onScope = null, focus = null, onFocusConsumed = null }) => {
   const [loaded, setLoaded] = useState(null)
   const [toolDraft, setToolDraft] = useState({})
   const [params, setParams] = useState({})
@@ -3888,12 +4811,37 @@ const ToolLoadingModal = ({ open, onClose, call, onSaved, inline = false }) => {
   const [searchLoaded, setSearchLoaded] = useState(false)
   const [searchSaved, setSearchSaved] = useState(false)
   // 保存后显示**宿主原话**（`note`）：它区分"已写入并立即生效"与"已写入，重启后生效"。
-  // 写死一句"参数已保存"就把这个区别盖掉了，而那正是 persisted/live 契约要说的事。
   const [savedNotice, setSavedNotice] = useState('')
   const [saving, setSaving] = useState(false)
   const [toolQuery, setToolQuery] = useState('')
   const [toolFilter, setToolFilter] = useState('all')
-  const readPolicy = () => call('toolLoadingSettings')
+  const [toolType, setToolType] = useState('all')
+  // 折叠状态：只记用户显式拨过的组；所有组（MCP 与内置分类）默认收起。
+  const [openGroups, setOpenGroups] = useState({})
+  // 筛选态下用户显式折叠的组。筛选变化时清空——"筛选默认展开、但别抢走折叠权"，
+  // 之前这里是 `filtering ? true : …`，于是选了类型筛选后所有组都点不动（实测复现）。
+  const [collapsedFiltered, setCollapsedFiltered] = useState({})
+  const [focusOwner, setFocusOwner] = useState(null)
+  // ── 自定义分组与批量（DESIGN §16/§18）──────────────────────────────────
+  // 分组、勾选、撤销全部是**草稿**：与逐工具三态进同一个保存条，唯一的落盘点仍是一次保存。
+  const [groupDraft, setGroupDraft] = useState({})
+  const [selected, setSelected] = useState({})
+  // 只保留最近一次批量前的快照：撤销一步足够，多级撤销会让"放弃修改"变成第三种语义。
+  const [lastBulk, setLastBulk] = useState(null)
+  // { mode: 'create' | 'save' | 'rename', value, error, target? }
+  const [groupPrompt, setGroupPrompt] = useState(null)
+  const [groupDelete, setGroupDelete] = useState(null)
+  // 段落级折叠：我的分组 / 内置 / MCP / 其他 整段收起（700 工具时不想滚过整段）。
+  const [closedSections, setClosedSections] = useState({})
+  const sectionOpen = (id) => closedSections[id] !== true
+  // 筛选一变就重新展开：否则用户上次折叠的组会一直藏着，看着像"筛选没结果"。
+  useEffect(() => { setCollapsedFiltered({}) }, [toolQuery, toolFilter, toolType])
+  const inWorkspace = typeof scope === 'string' && scope !== '' && scope !== 'global'
+  const readPolicy = () => (inWorkspace ? call('workspaceToolLoading', { wsPath: scope }) : call('toolLoadingSettings'))
+  const savePolicy = (policy, customGroups) => (inWorkspace
+    ? call('setWorkspaceToolLoading', { wsPath: scope, policy })
+    : call('updateToolLoadingSettings', customGroups === undefined ? { policy } : { policy, customGroups }))
+
   useEffect(() => {
     if (!open) return undefined
     let cancelled = false
@@ -3905,19 +4853,28 @@ const ToolLoadingModal = ({ open, onClose, call, onSaved, inline = false }) => {
     setParams({})
     setLimitOn(false)
     setSavedParams({})
+    setToolDraft({})
+    setFocusOwner(null)
+    setGroupDraft({})
+    setSelected({})
+    setLastBulk(null)
+    setGroupPrompt(null)
+    setGroupDelete(null)
     ;(async () => {
       try {
-        const [res, search] = await Promise.all([readPolicy(), call('toolSearchSettings')])
+        // 搜索参数是插件全局配置（不是项目配置）：项目作用域下不显示、也不请求。
+        const [res, search] = await Promise.all([readPolicy(), inWorkspace ? Promise.resolve(null) : call('toolSearchSettings')])
         if (cancelled) return
         if (!res?.ok) throw new Error(res?.error || t('读取失败'))
         setToolDraft({ ...(res.policy?.tools || {}) })
+        setGroupDraft({ ...(res.customGroups || {}) })
         setLoaded(res)
         if (search?.ok && search.settings) {
           setSearchLoaded(true)
           setParams({ ...search.settings })
           setSavedParams({ ...search.settings })
           setLimitOn(search.settings.maxCatalogChars !== undefined)
-        } else {
+        } else if (!inWorkspace) {
           setSearchError(search?.error || t('读取失败'))
         }
       } catch (e) {
@@ -3925,24 +4882,43 @@ const ToolLoadingModal = ({ open, onClose, call, onSaved, inline = false }) => {
       }
     })()
     return () => { cancelled = true }
-  }, [open, call])
+  }, [open, call, scope])
+
+  // 深链：从 MCP 详情的「工具」页签切过来时，只显示那台服务器并把它展开。
+  // 只消费一次（consume 后上层清空 focus），否则用户手动切走再回来会被再次定位。
+  useEffect(() => {
+    if (!open || !focus || loaded === null) return
+    if (focus.scope && focus.scope !== scope) return
+    setFocusOwner(focus.name)
+    setToolQuery('')
+    setToolFilter('all')
+    setToolType('all')
+    setOpenGroups((prev) => ({ ...prev, ['mcp:' + focus.name]: true }))
+    onFocusConsumed?.()
+  }, [open, focus, loaded, scope])
+
   if (!open) return null
-  const entriesKey = (tools) => JSON.stringify(Object.entries(tools || {}).sort(([a], [b]) => a.localeCompare(b)))
-  const dirty = loaded !== null && entriesKey(toolDraft) !== entriesKey(loaded.policy?.tools)
+  const savedTools = loaded?.policy?.tools || {}
+  const savedGroups = loaded?.customGroups || {}
+  const entriesKey = (value) => JSON.stringify(Object.entries(value || {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+  const groupsDirty = !sameGroups(groupDraft, savedGroups)
+  const dirty = loaded !== null && (entriesKey(toolDraft) !== entriesKey(savedTools) || groupsDirty)
   const paramKey = (value, limited) => JSON.stringify([
     ...SEARCH_PARAM_FIELDS.map((field) => String(value[field.key] ?? '')),
     limited ? String(value.maxCatalogChars ?? '') : null,
   ])
-  const paramsChanged = searchLoaded && paramKey(params, limitOn) !== paramKey(savedParams, savedParams.maxCatalogChars !== undefined)
+  const paramsChanged = !inWorkspace && searchLoaded && paramKey(params, limitOn) !== paramKey(savedParams, savedParams.maxCatalogChars !== undefined)
   const setTool = (name, value) => setToolDraft((prev) => {
     const next = { ...prev }
-    const original = loaded?.tools?.find((row) => row.name === name)
-    if (value === original?.policy && !Object.hasOwn(loaded.policy?.tools || {}, name)) delete next[name]
+    if (value === 'inherit') delete next[name]
     else next[name] = value
     return next
   })
   const discard = () => {
-    setToolDraft({ ...(loaded.policy?.tools || {}) })
+    setToolDraft({ ...savedTools })
+    setGroupDraft({ ...savedGroups })
+    setSelected({})
+    setLastBulk(null)
     setParams({ ...savedParams })
     setLimitOn(savedParams.maxCatalogChars !== undefined)
     setError('')
@@ -3951,13 +4927,10 @@ const ToolLoadingModal = ({ open, onClose, call, onSaved, inline = false }) => {
   const submit = async () => {
     if (saving || loaded === null || (inline && !dirty && !paramsChanged)) return
     setSaving(true)
-    // 本次保存要显示的那句话（宿主原话优先）。同一个值既给面板内联提示，也给上层 flash，
-    // 两处显示同一句话——否则面板说"重启后生效"、外面弹"已保存"，等于自己拆自己的台。
     let notice = ''
     setError('')
     setSearchError('')
     try {
-      // 全部输入先校验，避免无效参数使工具策略先落盘。
       const settings = {}
       if (paramsChanged) {
         for (const field of SEARCH_PARAM_FIELDS) {
@@ -3973,18 +4946,16 @@ const ToolLoadingModal = ({ open, onClose, call, onSaved, inline = false }) => {
           settings.maxCatalogChars = value
         }
       }
-      // 两个配置使用各自 RPC。每项成功后立即确认该项的基线，后项失败仍保留已保存事实。
       if (dirty) {
-        const policy = { ...loaded.policy, groups: { ...(loaded.policy?.groups || {}) }, tools: { ...toolDraft } }
+        // tools 与 mode/groups（MCP 服务器组）原样保留；自定义分组是**另一个兄弟键**，
+        // 只有全局作用域能写，项目页签只读。
+        // mode: legacy 用删键表达，否则写侧校验会拒。
+        const policy = { ...loaded.policy, tools: { ...toolDraft } }
         if (policy.mode === 'legacy') delete policy.mode
-        const res = await call('updateToolLoadingSettings', { policy })
+        const res = await savePolicy(policy, inWorkspace || !groupsDirty ? undefined : groupDraft)
         if (!res?.ok) throw new Error(res?.error || t('保存失败'))
         notice = res.note || ''
         setSavedNotice(notice)
-        const savedPolicy = res.policy || policy
-        setLoaded({ ...loaded, policy: savedPolicy,
-          tools: (loaded.tools || []).map((row) => ({ ...row, policy: savedPolicy.tools?.[row.name] || row.policy })) })
-        setToolDraft({ ...(savedPolicy.tools || {}) })
       }
       if (paramsChanged) {
         const res = await call('updateToolSearchSettings', { settings })
@@ -3996,10 +4967,11 @@ const ToolLoadingModal = ({ open, onClose, call, onSaved, inline = false }) => {
         setSearchSaved(true)
         if (res.note) { notice = res.note; setSavedNotice(res.note) }
       }
-      // ③ 回读策略（参数保存后服务端可能规范化）
+      // 回读当前作用域（参数保存后服务端可能规范化；策略也可能被合并）
       const fresh = await readPolicy()
       if (!fresh?.ok) throw new Error(t('保存已完成，但重新读取失败：{error}', { error: fresh?.error || t('读取失败') }))
       setToolDraft({ ...(fresh.policy?.tools || {}) })
+      setGroupDraft({ ...(fresh.customGroups || {}) })
       setLoaded(fresh)
       onSaved?.(fresh, notice || undefined)
     } catch (e) {
@@ -4013,26 +4985,257 @@ const ToolLoadingModal = ({ open, onClose, call, onSaved, inline = false }) => {
     setParams((prev) => ({ ...prev, [key]: value }))
     setSearchSaved(false)
   }
-  // 单一数据源：这一页只认 `toolLoadingSettings().tools` 这一份行数据。
-  // 曾经这里把 `kind === 'mcp'` 的行整类排除（"MCP 去 MCP 页管"），可是 MCP 页那个开关读的是
-  // 旧的服务器级 `defer`，统一策略下的组级/单工具设置在那儿看不见——于是被延迟的 MCP 工具
-  // 在工具页被丢掉、在 MCP 页显示"全量"，两边都说没事。现在 MCP 行照样进这张表，
-  // 计数也从同一份 rows 派生，不再"概览数一套、列表数另一套"。
+  // 单一数据源：这一页只认 `toolLoadingSettings()` / `workspaceToolLoading()` 的 tools 行。
+  // 计数、分组、覆盖数全部从同一份 rows 派生，不再“概览数一套、列表数另一套”。
   const manageable = (loaded?.tools || []).filter((row) => row.protected !== true)
-  const policyOf = (row) => toolDraft[row.name] || row.policy || 'resident'
+  const policyOf = (row) => (Object.hasOwn(toolDraft, row.name) ? toolDraft[row.name] : (row.policy || 'resident'))
   const residentCount = manageable.filter((row) => policyOf(row) === 'resident').length
   const deferredCount = manageable.length - residentCount
-  const changedCount = manageable.filter((row) => (row.policy || 'resident') !== policyOf(row)).length
+  const overrideOf = (row) => Object.hasOwn(toolDraft, row.name)
+  const changedCount = manageable.filter((row) => {
+    const explicit = Object.hasOwn(toolDraft, row.name)
+    return explicit !== Object.hasOwn(savedTools, row.name) || (explicit && toolDraft[row.name] !== savedTools[row.name])
+  }).length
   const protectedTools = (loaded?.tools || []).filter((row) => row.protected === true)
   const needle = toolQuery.trim().toLowerCase()
-  const visibleTools = manageable.filter((row) => (toolFilter === 'all' || policyOf(row) === toolFilter)
-    && (!needle || [row.name, toolLabel(row), row.description || ''].join(' ').toLowerCase().includes(needle)))
-  // 搜索参数提到顶部：它们是「工具怎么加载」的另一半，不是高级选项。
-  // 一个保存动作，只调用实际发生改动的配置接口。
-  const parameters = h('section', { className: 'dsh-mcp-tool-params' },
-    h('div', { className: 'dsh-mcp-tool-params-head' },
-      h('h4', { className: 'dsh-mcp-tool-params-title' }, t('搜索参数')),
+  const searching = needle !== ''
+  // 任何筛选命中都要展开命中的组（DESIGN §14.4-3）：否则"匹配 26 个"和眼前三个组头对不上。
+  const filtering = searching || toolFilter !== 'all' || toolType !== 'all'
+  const rowMatches = (row) => (!needle || [row.name, toolLabel(row), row.description || ''].join(' ').toLowerCase().includes(needle))
+    && (toolFilter === 'all' || (toolFilter === 'overridden' ? overrideOf(row) : policyOf(row) === toolFilter))
+  // 分组草稿 → 成员索引。**一个工具只出现一处**：被分走的行从系统分组里退出显示。
+  const membership = groupMembershipOf(groupDraft)
+  const ungrouped = manageable.filter((row) => !membership.has(row.name))
+  const groups = toolGroups(ungrouped)
+  const allSystemGroups = new Map(toolGroups(manageable).map((group) => [group.key, group]))
+  const customGroups = Object.entries(groupDraft).map(([name, entry]) => {
+    const allRows = manageable.filter((row) => membership.get(row.name) === name)
+    return { key: 'custom:' + name, section: 'custom', name, policy: entry?.policy, allRows, rows: allRows.filter(rowMatches) }
+  })
+  const showCustomSection = toolType === 'all' || toolType === 'custom'
+  const visibleCustom = showCustomSection
+    ? customGroups
+      .filter((group) => focusOwner === null)
+      .filter((group) => group.rows.length > 0 || (!searching && toolFilter === 'all'))
+    : []
+  const visibleGroups = groups
+    .filter((group) => toolType === 'all' || group.section === toolType)
+    .filter((group) => (focusOwner === null || group.owner === focusOwner))
+    .map((group) => ({ ...group, allRows: group.rows, rows: group.rows.filter(rowMatches) }))
+    .filter((group) => group.rows.length > 0 || (focusOwner === null && !searching && toolFilter === 'all'))
+  // 系统组头据此说"这 N 个在自定义分组里"：少了的工具要有去处，不能凭空消失。
+  const movedOf = (group) => {
+    const all = allSystemGroups.get(group.key)
+    return all ? all.rows.filter((row) => membership.has(row.name)).length : 0
+  }
+  // 批量作用对象：勾选优先，否则当前匹配集合；两者都没有时不渲染动作条。
+  const selectedRows = manageable.filter((row) => selected[row.name])
+  const matchedRows = manageable.filter(rowMatches)
+  const batchRows = selectedRows.length ? selectedRows : matchedRows
+  const showBatch = loaded !== null && (selectedRows.length > 0 || filtering)
+  const batchLabel = selectedRows.length
+    ? t('已选 {count} 个 · 共匹配 {total} 个', { count: selectedRows.length, total: matchedRows.length })
+    : t('匹配 {count} 个', { count: matchedRows.length })
+  // 默认全部收起：MCP 与内置分类都是。首屏只留分区/组头（各带工具数与策略摘要），
+  // 搜一次或点一下才展开。曾经 MCP 收起、内置展开，结果 34 个内置行把首屏铺满，
+  // “按用途分类”在视觉上等于没做。
+  const groupOpen = (group) => {
+    if (collapsedFiltered[group.key]) return false
+    if (filtering && group.rows.length > 0) return true
+    return openGroups[group.key] ?? false
+  }
+  const toggleGroup = (group) => {
+    const open = groupOpen(group)
+    if (filtering && group.rows.length > 0) {
+      setCollapsedFiltered((prev) => {
+        const next = { ...prev }
+        if (open) next[group.key] = true
+        else delete next[group.key]
+        return next
+      })
+      return
+    }
+    setOpenGroups((prev) => ({ ...prev, [group.key]: !open }))
+  }
+  const summaryOf = (group) => {
+    const rows = group.allRows || group.rows
+    const resident = rows.filter((row) => policyOf(row) === 'resident').length
+    const deferred = rows.length - resident
+    const policyText = resident === rows.length
+      ? t('全部常驻')
+      : deferred === rows.length ? t('全部按需') : t('{resident} 常驻 / {deferred} 按需', { resident, deferred })
+    const overrides = rows.filter(overrideOf).length
+    return overrides > 0 ? t('{policy} · {count} 个单独设置', { policy: policyText, count: overrides }) : policyText
+  }
+
+  // ── 批量与分组动作（全部只改草稿；保存条仍是唯一落盘点）────────────────
+  const toggleSelect = (name) => setSelected((prev) => {
+    const next = { ...prev }
+    if (next[name]) delete next[name]
+    else next[name] = true
+    return next
+  })
+  const selectRows = (rows) => setSelected((prev) => {
+    const next = { ...prev }
+    const every = rows.length > 0 && rows.every((row) => next[row.name])
+    for (const row of rows) {
+      if (every) delete next[row.name]
+      else next[row.name] = true
+    }
+    return next
+  })
+  // 一步一次撤销：快照只在批量动作前取一份，整页仍有「放弃修改」。
+  const setMany = (value) => {
+    if (!batchRows.length) return
+    setLastBulk({ draft: { ...toolDraft }, groups: { ...groupDraft } })
+    setToolDraft((prev) => {
+      const next = { ...prev }
+      for (const row of batchRows) {
+        if (value === 'inherit') delete next[row.name]
+        else next[row.name] = value
+      }
+      return next
+    })
+  }
+  const undoBulk = () => {
+    if (!lastBulk) return
+    setToolDraft(lastBulk.draft)
+    setGroupDraft(lastBulk.groups)
+    setLastBulk(null)
+  }
+  const setGroupPolicy = (name, value) => setGroupDraft((prev) => {
+    const next = { ...prev, [name]: { ...(prev[name] || { tools: [] }) } }
+    if (value === 'inherit') delete next[name].policy
+    else next[name].policy = value
+    return next
+  })
+  // 移动语义：从原组移除，再进目标组。一个工具只在一个组里。
+  const joinGroup = (target) => {
+    const names = batchRows.map((row) => row.name)
+    if (!names.length || !target) return
+    setGroupDraft((prev) => moveToolsIntoGroup(prev, target, names))
+    setSelected({})
+  }
+  const deleteGroup = (name) => {
+    setGroupDraft((prev) => {
+      const next = { ...prev }
+      delete next[name]
+      return next
+    })
+    setGroupDelete(null)
+  }
+  const openCreate = () => setGroupPrompt({ mode: 'create', value: '', error: '', target: '' })
+  const openSaveAs = () => setGroupPrompt({
+    mode: 'save',
+    value: toolQuery.trim() || (toolType === 'other' ? t('其他工具') : ''),
+    error: '',
+    target: '',
+  })
+  const openRename = (name) => setGroupPrompt({ mode: 'rename', value: name, error: '', target: name })
+  const submitPrompt = () => {
+    const prompt = groupPrompt
+    if (!prompt) return
+    const name = String(prompt.value || '').trim()
+    const fail = (error) => setGroupPrompt({ ...prompt, error })
+    if (name === '') return fail(t('组名不能为空'))
+    if (prompt.mode === 'rename') {
+      if (name !== prompt.target && Object.hasOwn(groupDraft, name)) return fail(t('组名已存在'))
+      setGroupDraft((prev) => {
+        const next = {}
+        for (const [key, entry] of Object.entries(prev)) next[key === prompt.target ? name : key] = entry
+        return next
+      })
+      setOpenGroups((prev) => ({ ...prev, ['custom:' + name]: true }))
+      setGroupPrompt(null)
+      return
+    }
+    if (Object.hasOwn(groupDraft, name)) return fail(t('组名已存在'))
+    const names = prompt.mode === 'save' ? batchRows.map((row) => row.name) : []
+    // 刚批量设成同一个显式值时，把它**上提**为组策略并删掉逐工具覆盖：
+    // 否则组策略会被这些覆盖压住，组头点了没反应（DESIGN §13.2-2）。
+    let promoted
+    if (prompt.mode === 'save' && names.length) {
+      const values = new Set(names.map((tool) => toolDraft[tool]))
+      const [only] = values
+      if (values.size === 1 && (only === 'resident' || only === 'deferred')) promoted = only
+    }
+    setGroupDraft((prev) => {
+      const next = moveToolsIntoGroup(prev, name, names)
+      next[name] = { ...(next[name] || { tools: [] }) }
+      if (promoted) next[name].policy = promoted
+      return next
+    })
+    if (promoted) {
+      setToolDraft((prev) => {
+        const next = { ...prev }
+        for (const tool of names) delete next[tool]
+        return next
+      })
+    }
+    setOpenGroups((prev) => ({ ...prev, ['custom:' + name]: true }))
+    setSelected({})
+    setGroupPrompt(null)
+  }
+  // 概览条：一格回答一个“现在是什么局面”。数值全部与列表同源。
+  const stat = (mark, value, label, note) => h('div', { className: 'dsh-mcp-tool-stat', title: note || label },
+    h('span', { className: 'dsh-mcp-tool-stat-mark' + (mark ? ' ' + mark : '') }),
+    h('span', { className: 'dsh-mcp-tool-stat-value' }, String(value)),
+    h('span', { className: 'dsh-mcp-tool-stat-copy' },
+      h('span', { className: 'dsh-mcp-tool-stat-label' }, label),
+      note ? h('span', { className: 'dsh-mcp-tool-stat-note' }, note) : null,
     ),
+  )
+  const hero = h('div', { className: 'dsh-mcp-tool-hero' }, h('div', { className: 'dsh-mcp-tool-hero-copy' },
+    h('h3', { className: 'dsh-mcp-tool-title' }, t('工具加载')),
+  ))
+  const scopeBar = inline && scopes && scopes.length > 1
+    ? h('div', { className: 'dsh-mcp-tool-scope' },
+      h('span', { className: 'dsh-mcp-tool-scope-label' }, t('作用域')),
+      h(ScopeTabs, { tabs: scopes, active: scope, onSelect: (next) => onScope?.(next) }),
+    )
+    : null
+  const overview = loaded === null ? null : h('div', { className: 'dsh-mcp-tool-overview' },
+    stat('', manageable.length, t('可设置'), t('按服务器 / 用途分组')),
+    stat('resident', residentCount, t('常驻'), t('每轮都在上下文里')),
+    stat('deferred', deferredCount, t('按需'), t('搜索命中后加载')),
+    stat('protected', protectedTools.length, t('受保护'), protectedTools.map((row) => row.name).join(' / ')),
+  )
+  const toolbar = h('div', { className: 'dsh-mcp-tool-toolbar' },
+    h('div', { className: 'dsh-mcp-search' }, h(Icon, { d: ICONS.search }), h('input', { value: toolQuery,
+      placeholder: t('按名称或用途搜索'), 'aria-label': t('按名称或用途搜索'), onChange: (e) => setToolQuery(e.target.value) })),
+    h('div', { className: 'dsh-mcp-tool-filters' },
+      // 类型是**视图筛选**，不是策略：MCP 与内置工具在策略上本来就分开（组级 vs 逐工具），
+      // 这个筛选只回答“我现在只想看哪一类”。切类型时清掉「只看这台」，否则内置页会被
+      // 一个服务器名过滤成空列表。
+      h('span', { className: 'dsh-mcp-tool-filter-label' }, t('类型')),
+      h('div', { className: 'dsh-mcp-tool-filter', role: 'group', 'aria-label': t('按类型筛选') },
+        ...[['all', t('全部')], ['custom', t('我的分组')], ['builtin', t('内置')], ['mcp', t('MCP')], ['other', t('其他')]].map(([id, label]) => h('button', {
+          key: id, type: 'button', 'aria-pressed': toolType === id, onClick: () => { setToolType(id); if (id !== 'all') setFocusOwner(null) },
+        }, label)),
+      ),
+      h('span', { className: 'dsh-mcp-tool-filter-label' }, t('加载方式')),
+      h('div', { className: 'dsh-mcp-tool-filter', role: 'group', 'aria-label': t('按加载策略筛选') },
+        ...[['all', t('全部')], ['resident', t('常驻')], ['deferred', t('按需')], ['overridden', t('有覆盖')]].map(([id, label]) => h('button', {
+          key: id, type: 'button', 'aria-pressed': toolFilter === id, onClick: () => setToolFilter(id),
+        }, label)),
+      ),
+    ),
+  )
+  // 这一页**不写**整台默认（groups）：整台默认只有一个入口——MCP 列表的芯片。
+  // 页面只显示它，并在被整体方案压住时给横幅，避免同一件事在三个地方各有一个开关。
+  const banner = loaded?.masterSwitch === 'off'
+    ? h('div', { className: 'dsh-mcp-tool-banner', role: 'status' }, t('ToolSearch 总开关（DSH_MCP_TOOL_SEARCH=off）生效中：所有工具常驻，本页设置暂不生效；关掉开关后设置会恢复。'))
+    : manageable.some((row) => row.reason === 'mode-resident')
+      ? h('div', { className: 'dsh-mcp-tool-banner', role: 'status' }, t('整体方案为「全部常驻」（配置里写的）：本页的逐工具设置会保留，但此刻不生效。'))
+      : null
+  const focusBar = focusOwner === null ? null : h('div', { className: 'dsh-mcp-tool-focus' },
+    h('span', null, t('只看 {name}', { name: focusOwner })),
+    h('button', { type: 'button', className: 'dsh-mcp-btn sm ghost', onClick: () => setFocusOwner(null) }, t('显示全部')),
+  )
+  // 搜索参数是 ToolSearch 的**核心配置**（一次返回几条、目录多大、已发现集能留多久），
+  // 因此固定在页面顶部、默认可见，不折叠、不塞到列表末尾。
+  const parameters = h('section', { className: 'dsh-mcp-tool-params' },
+    h('h4', { className: 'dsh-mcp-tool-params-title' }, t('搜索设置')),
     h('div', { className: 'dsh-mcp-tool-params-grid' },
       ...SEARCH_PARAM_FIELDS.map((field) => h('label', { className: 'dsh-mcp-tool-param', key: field.key },
         h('span', { className: 'dsh-mcp-tool-param-label' }, t(field.label), h(HintMarker, { text: t(field.about) })),
@@ -4045,12 +5248,9 @@ const ToolLoadingModal = ({ open, onClose, call, onSaved, inline = false }) => {
           h(Toggle, { on: limitOn, disabled: !searchLoaded || saving, label: t('限制目录大小'), onChange: (next) => {
             if (!searchLoaded) return
             setLimitOn(next)
-            // 打开时只在**空**的情况下预填建议起点：别覆盖用户已经填过的数。
             if (next && String(params.maxCatalogChars ?? '').trim() === '') setParam('maxCatalogChars', String(CATALOG_CHARS_SUGGESTION))
             setSearchSaved(false)
           } }),
-          // 关掉时**置灰保留**，不卸载：主流语义是"可见、不可改、不生效"。卸载会让表单跳一下，
-          // 用户也看不出这一项原本是什么。`disabled` 表达"不生效"，保存时仍**不发**这个键。
           h('input', { type: 'number', min: 1, step: 1, disabled: !limitOn || !searchLoaded || saving,
             value: params.maxCatalogChars ?? '', placeholder: String(CATALOG_CHARS_SUGGESTION),
             'aria-label': t('最多字符数'), onChange: (e) => setParam('maxCatalogChars', e.target.value) }),
@@ -4060,47 +5260,225 @@ const ToolLoadingModal = ({ open, onClose, call, onSaved, inline = false }) => {
     searchError ? h('div', { className: 'dsh-mcp-d-err' }, searchError) : null,
     searchSaved ? h('p', { role: 'status', className: 'dsh-mcp-tool-param-saved' }, savedNotice || t('参数已保存')) : null,
   )
-  // 概览条的一格：圆点与数字给「现在是什么局面」一个 3 秒答案。数值全来自与列表
-  // 同源的那份数据（other / protectedTools / changedCount），不另问宿主——两个来源
-  // 各数各的，迟早出现「概览说 34、列表数出 33」这种自己对不上自己的笑话。
-  const stat = (mark, value, label, note) => h('div', { className: 'dsh-mcp-tool-stat' },
-    h('span', { className: 'dsh-mcp-tool-stat-mark' + (mark ? ' ' + mark : '') }),
-    h('span', { className: 'dsh-mcp-tool-stat-value' }, String(value)),
-    h('span', { className: 'dsh-mcp-tool-stat-copy' },
-      h('span', { className: 'dsh-mcp-tool-stat-label' }, label),
-      note ? h('span', { className: 'dsh-mcp-tool-stat-note' }, note) : null,
+  const sectionHead = (id, label, extra = null) => {
+    const open = sectionOpen(id)
+    return h('div', { className: 'dsh-mcp-tool-section-head', key: 'section:' + id },
+      h('button', {
+        type: 'button',
+        className: 'dsh-mcp-tool-section-toggle',
+        'aria-expanded': open,
+        onClick: () => setClosedSections((prev) => ({ ...prev, [id]: open })),
+      }, h(Caret, { open }), h('h4', null, label)),
+      extra,
+    )
+  }
+  const checkAll = (rows) => {
+    const allChecked = rows.length > 0 && rows.every((row) => selected[row.name])
+    const someChecked = rows.some((row) => selected[row.name])
+    return h('input', {
+      type: 'checkbox',
+      className: 'dsh-mcp-tool-check',
+      checked: allChecked,
+      disabled: saving,
+      'aria-label': t('选择这一组的全部工具'),
+      ref: (el) => { if (el) el.indeterminate = !allChecked && someChecked },
+      onChange: () => selectRows(rows),
+    })
+  }
+  const customGroupNode = (group) => {
+    const open = groupOpen(group)
+    const follow = group.policy === undefined
+    const followLabel = t('跟随宿主默认')
+    return h('section', { className: 'dsh-mcp-tool-group' + (open ? ' open' : ''), key: group.key },
+      h('div', { className: 'dsh-mcp-tool-group-head' },
+        checkAll(group.allRows),
+        h('button', { type: 'button', className: 'dsh-mcp-tool-group-toggle', 'aria-expanded': open, onClick: () => toggleGroup(group) },
+          h(Caret, { open }),
+          h('span', { className: 'dsh-mcp-tool-group-name' }, group.name),
+          h('span', { className: 'dsh-mcp-tool-group-count' }, String(group.allRows.length)),
+          h('span', { className: 'dsh-mcp-tool-group-summary' }, summaryOf(group)),
+        ),
+        h('span', { className: 'dsh-mcp-tool-pick', role: 'group', 'aria-label': t('整组加载方式') },
+          ...TOOL_POLICY_CHOICES.map((choice) => h('button', {
+            key: choice.id,
+            type: 'button',
+            className: choice.id === 'resident' ? 'is-resident' : choice.id === 'deferred' ? 'is-deferred' : 'is-inherit',
+            'aria-pressed': choice.id === 'inherit' ? follow : (!follow && group.policy === choice.id),
+            title: choice.id === 'inherit' ? t('不单独设置这个分组：成员跟随宿主默认') : undefined,
+            disabled: saving || inWorkspace,
+            onClick: () => setGroupPolicy(group.name, choice.id),
+          }, choice.id === 'inherit' ? followLabel : t(choice.label))),
+        ),
+        h(DropMenu, {
+          label: '⋯',
+          title: t('分组操作'),
+          cls: 'sm',
+          disabled: inWorkspace || saving,
+          items: [
+            { key: 'rename', label: t('重命名'), onSelect: () => openRename(group.name) },
+            {
+              key: 'add',
+              label: t('把选中的 {count} 个加进来', { count: batchRows.length }),
+              disabled: !batchRows.length,
+              onSelect: () => joinGroup(group.name),
+            },
+            { key: 'delete', label: t('删除分组'), danger: true, onSelect: () => setGroupDelete(group.name) },
+          ],
+        }),
+      ),
+      open ? h('div', { className: 'dsh-mcp-tool-list' },
+        group.rows.length
+          ? group.rows.map((row) => toolLoadingRow(row, toolDraft, savedTools, setTool, {
+            saving,
+            inherited: row.inheritedPolicy || 'resident',
+            followLabel: group.policy ? t('跟随分组「{name}」', { name: group.name }) : (row.kind === 'mcp' ? t('跟随服务器') : t('宿主默认')),
+            checked: !!selected[row.name],
+            onToggle: toggleSelect,
+          }))
+          : h('div', { className: 'dsh-mcp-tool-empty' }, t('还没有工具：勾选上面的工具后点「加入分组」')),
+        !group.allRows.length && batchRows.length
+          ? h('button', { type: 'button', className: 'dsh-mcp-btn sm', onClick: () => joinGroup(group.name) },
+            t('加入选中的 {count} 个', { count: batchRows.length }))
+          : null,
+      ) : null,
+    )
+  }
+  const groupNode = (group) => {
+    const open = groupOpen(group)
+    const groupState = group.owner ? (loaded?.groups || []).find((item) => item.owner === group.owner) : null
+    // 整台默认的**唯一写入口**在 MCP 列表芯片；这里只读展示，并说清它从哪来。
+    const serverDefault = groupState
+      ? { value: groupState.configured === 'inherit' ? groupState.inherited : groupState.configured, follow: groupState.configured === 'inherit' }
+      : (group.owner ? { value: group.allRows?.[0]?.inheritedPolicy || 'resident', follow: true } : null)
+    const defaultText = serverDefault
+      ? t('整台：{value}{follow}', { value: serverDefault.value === 'deferred' ? t('按需') : t('常驻'), follow: serverDefault.follow ? t('（未单独设置）') : '' })
+      : null
+    const moved = movedOf(group)
+    return h('section', { className: 'dsh-mcp-tool-group' + (open ? ' open' : ''), key: group.key },
+      h('div', { className: 'dsh-mcp-tool-group-head' },
+        checkAll(group.allRows),
+        h('button', { type: 'button', className: 'dsh-mcp-tool-group-toggle', 'aria-expanded': open, onClick: () => toggleGroup(group) },
+          h(Caret, { open }),
+          h('span', { className: 'dsh-mcp-tool-group-name' }, groupLabel(group)),
+          h('span', { className: 'dsh-mcp-tool-group-count' }, String(group.allRows.length)),
+          h('span', { className: 'dsh-mcp-tool-group-summary' }, summaryOf(group)),
+        ),
+        moved > 0 ? h('span', { className: 'dsh-mcp-tool-group-moved', title: t('这些工具已归入自定义分组，去「我的分组」里管理') },
+          t('{count} 个在自定义分组里', { count: moved })) : null,
+        defaultText ? h('span', { className: 'dsh-mcp-tool-group-default', title: t('整台默认在 MCP 列表的芯片上改；这里只显示结果') }, defaultText) : null,
+        group.owner && focusOwner === null ? h('button', { type: 'button', className: 'dsh-mcp-tool-group-only', onClick: (e) => { e.stopPropagation(); setFocusOwner(group.owner) } }, t('只看这台')) : null,
+      ),
+      open ? h('div', { className: 'dsh-mcp-tool-list' },
+        ...group.rows.map((row) => toolLoadingRow(row, toolDraft, savedTools, setTool, {
+          saving,
+          inherited: row.inheritedPolicy || groupInherited(loaded, group.owner),
+          followLabel: inWorkspace ? t('跟随全局') : row.kind === 'mcp' ? t('跟随服务器') : t('宿主默认'),
+          checked: !!selected[row.name],
+          onToggle: toggleSelect,
+        })),
+      ) : null,
+    )
+  }
+  const showList = manageable.length > 0
+  const systemNodes = (() => {
+    const nodes = []
+    let lastSection = null
+    for (const group of visibleGroups) {
+      if (group.section !== lastSection) {
+        lastSection = group.section
+        nodes.push(sectionHead(group.section, sectionLabel(group.section)))
+      }
+      if (sectionOpen(group.section)) nodes.push(groupNode(group))
+    }
+    return nodes
+  })()
+  const list = loaded === null
+    ? (error ? null : h('div', { className: 'dsh-mcp-source-detail' }, t('正在读取…')))
+    : !showList
+      ? h('div', { className: 'dsh-mcp-source-detail' }, t('没有可设置的工具。'))
+      : (visibleCustom.length || visibleGroups.length || showCustomSection)
+        ? h('div', { className: 'dsh-mcp-tool-groups' },
+          showCustomSection
+            ? sectionHead('custom', t('我的分组'),
+              h('span', { className: 'dsh-mcp-tool-section-actions' },
+                inWorkspace ? h('span', { className: 'dsh-mcp-tool-group-default' }, t('分组是全局的；切到「全局」作用域里改')) : null,
+                h('button', { type: 'button', className: 'dsh-mcp-btn sm ghost', disabled: saving || inWorkspace, onClick: openCreate }, t('+ 新建分组'))))
+            : null,
+          ...(showCustomSection && sectionOpen('custom') ? visibleCustom.map(customGroupNode) : []),
+          ...systemNodes,
+        )
+        : h('div', { className: 'dsh-mcp-source-detail' }, t('没有匹配的工具。'))
+  // 动作条：只在"已经缩小了范围"时出现（有勾选或有筛选）。不做"全部工具一键"——
+  // 那和策略层拒绝"非 MCP 全局开关"是同一条理由：没有明确意图的批量等于误伤。
+  const batchBar = showBatch ? h('div', { className: 'dsh-mcp-tool-batch', role: 'toolbar', 'aria-label': t('批量设置') },
+    h('span', { className: 'dsh-mcp-tool-batch-count' }, batchRows.length ? batchLabel : t('没有匹配的工具')),
+    h('span', { className: 'dsh-mcp-tool-batch-actions' },
+      h(Btn, { cls: 'sm', disabled: saving || !batchRows.length, onClick: () => setMany('resident'), children: t('设为常驻') }),
+      h(Btn, { cls: 'sm', disabled: saving || !batchRows.length, onClick: () => setMany('deferred'), children: t('设为按需') }),
+      h(Btn, { cls: 'sm ghost', disabled: saving || !batchRows.length, onClick: () => setMany('inherit'), children: t('跟随') }),
+      h('select', {
+        className: 'dsh-mcp-tool-join',
+        value: '',
+        disabled: saving || !batchRows.length,
+        'aria-label': t('加入分组'),
+        onChange: (e) => {
+          const value = e.target.value
+          if (value === '__new__') openSaveAs()
+          else if (value !== '') joinGroup(value)
+        },
+      },
+      h('option', { value: '' }, t('加入分组…')),
+      ...Object.keys(groupDraft).map((name) => h('option', { key: name, value: name }, name)),
+      h('option', { value: '__new__' }, t('新建分组…'))),
+      h(Btn, { cls: 'sm', disabled: saving || !batchRows.length, onClick: openSaveAs, children: t('存为分组') }),
+      lastBulk ? h(Btn, { cls: 'sm ghost', onClick: undoBulk, children: t('撤销这一步') }) : null,
+      selectedRows.length ? h(Btn, { cls: 'sm ghost', onClick: () => setSelected({}), children: t('清空选择') }) : null,
     ),
-  )
-  const hero = h('div', { className: 'dsh-mcp-tool-hero' }, h('div', { className: 'dsh-mcp-tool-hero-copy' },
-    h('h3', { className: 'dsh-mcp-tool-title' }, t('工具加载')),
-  ))
-  const overview = loaded === null ? null : h('div', { className: 'dsh-mcp-tool-overview' },
-    stat('', manageable.length, t('可设置'), t('内置与插件工具')),
-    stat('resident', residentCount, t('常驻'), t('每轮都在上下文里')),
-    stat('deferred', deferredCount, t('按需'), t('搜索命中后加载')),
-    stat('protected', protectedTools.length, t('受保护'), protectedTools.map((row) => row.name).join(' / ')),
-  )
-  const toolbar = h('div', { className: 'dsh-mcp-tool-toolbar' },
-    h('div', { className: 'dsh-mcp-search' }, h(Icon, { d: ICONS.search }), h('input', { value: toolQuery,
-      placeholder: t('按名称或用途搜索'), 'aria-label': t('按名称或用途搜索'), onChange: (e) => setToolQuery(e.target.value) })),
-    h('div', { className: 'dsh-mcp-tool-filter', role: 'group', 'aria-label': t('按加载策略筛选') },
-      ...[{ id: 'all', label: '全部' }, ...TOOL_SEARCH_CHOICES].map((choice) => h('button', {
-        key: choice.id, type: 'button', 'aria-pressed': toolFilter === choice.id, onClick: () => setToolFilter(choice.id),
-      }, t(choice.label))),
+  ) : null
+  const promptDialog = groupPrompt ? h('div', { className: 'dsh-mcp-overlay', onClick: (e) => e.target === e.currentTarget && setGroupPrompt(null) },
+    h(Dialog, { label: groupPrompt.mode === 'rename' ? t('重命名分组') : t('新建分组'), onClose: () => setGroupPrompt(null) },
+    h('div', { className: 'dsh-mcp-field' },
+      h('label', null, t('分组名称')),
+      h('input', {
+        value: groupPrompt.value,
+        maxLength: 40,
+        autoFocus: true,
+        placeholder: t('例如：表格工具'),
+        onChange: (e) => setGroupPrompt({ ...groupPrompt, value: e.target.value, error: '' }),
+        onKeyDown: (e) => { if (e.key === 'Enter') submitPrompt() },
+      }),
     ),
-  )
-  const list = loaded === null ? null : visibleTools.length ? h('div', { className: 'dsh-mcp-tool-list' }, ...visibleTools.map((row) => toolLoadingRow(row, toolDraft, setTool, { saving })))
-    : h('div', { className: 'dsh-mcp-source-detail' }, t('没有匹配的工具。'))
+    groupPrompt.error ? h('div', { className: 'dsh-mcp-d-err', role: 'alert' }, groupPrompt.error) : null,
+    h('div', { className: 'dsh-mcp-modal-actions' },
+      h(Btn, { onClick: () => setGroupPrompt(null), children: t('取消') }),
+      h(Btn, { cls: 'primary', onClick: submitPrompt, children: t('确定') }),
+    )),
+  ) : null
+  const deleteDialog = groupDelete ? h('div', { className: 'dsh-mcp-overlay', onClick: (e) => e.target === e.currentTarget && setGroupDelete(null) },
+    h(Dialog, { label: t('删除分组'), onClose: () => setGroupDelete(null) },
+      h('p', null, t('{count} 个工具将回到「未分组」并跟随宿主默认；它们自己的逐工具设置不受影响。', {
+        count: (groupDraft[groupDelete]?.tools || []).length,
+      })),
+      h('div', { className: 'dsh-mcp-modal-actions' },
+        h(Btn, { onClick: () => setGroupDelete(null), children: t('取消') }),
+        h(Btn, { cls: 'primary', onClick: () => deleteGroup(groupDelete), children: t('删除') }),
+      )),
+  ) : null
   const fixed = [
     inline ? null : hero,
     error ? h('div', { className: 'dsh-mcp-d-err', role: 'alert' }, error) : null,
-    loaded === null ? (error ? null : h('div', { className: 'dsh-mcp-source-detail' }, t('正在读取…')))
-      : h(React2.Fragment, null, parameters, overview, toolbar),
+    scopeBar,
+    loaded === null ? null : h(React2.Fragment, null, banner,
+      inWorkspace
+        ? h('div', { className: 'dsh-mcp-tool-hint' }, t('搜索设置是全局配置；切到「全局」作用域里改。'))
+        : parameters,
+      overview, toolbar, batchBar, focusBar),
   ]
-  const content = [...fixed, list]
+  // 只有列表进滚动区。
+  const scroll = [list]
   if (inline) return h('div', { className: 'dsh-mcp-tool-loading-page' },
     h('div', { className: 'dsh-mcp-tool-fixed' }, ...fixed),
-    h('div', { className: 'dsh-mcp-tool-scroll' }, list),
+    h('div', { className: 'dsh-mcp-tool-scroll' }, ...scroll),
     h('div', { className: 'dsh-mcp-tool-save' },
       h('span', { className: 'dsh-mcp-tool-save-hint' },
         (dirty || paramsChanged) ? h('span', { className: 'dsh-mcp-tool-save-dirty' },
@@ -4114,12 +5492,902 @@ const ToolLoadingModal = ({ open, onClose, call, onSaved, inline = false }) => {
         loaded ? h(Btn, { cls: 'primary', onClick: submit, disabled: saving || (!dirty && !paramsChanged), children: saving ? t('保存中…') : t('保存') }) : null,
       ),
     ),
+    promptDialog,
+    deleteDialog,
   )
   return h('div', { className: 'dsh-mcp-overlay', onClick: (e) => e.target === e.currentTarget && onClose?.() },
-    h(Dialog, { label: t('工具加载'), onClose }, ...content),
+    h(Dialog, { label: t('工具加载'), onClose }, ...fixed, ...scroll, promptDialog, deleteDialog),
   )
 }
+// ── 上下文观测面（「上下文」能力层）────────────────────────────────────────────
+//
+// 这一面只回答一个问题：**下一轮请求里，上下文被谁占着**。
+//
+// 数据全部来自宿主 `contextReport`（lib/context-report.js 组装），这里不做任何估算：
+// 数字、分类、排序都是宿主给的；客户端只负责**排布**。
+// 这条分工是刻意的——一旦客户端也开始算 token，面板里就会出现两个互相矛盾的数。
+//
+// ## 三条显示纪律
+//
+//   1. **总量与构成分开**：上面那个 `已用 / 上限` 是提供方报告的真值；treemap 是按这个真值
+//      等比换算过的构成（同一构成内的比例不变，总量对得上）。换算系数会写在图注里。
+//   2. **缺数就说缺**：宿主没挂 token-meter 时整面切成"按字符排布"，单位写"字符"，
+//      不把字符数伪装成 token。
+//   3. **不猜"当前会话"**：先读前端记的当前会话，读不到让宿主挑最近活跃的。
+//
+// ## 布局为什么是这个顺序
+//
+// 元素一多就容易乱，所以按"先总量、再构成、再细节"三层排，每层一个问题：
+//   总量（多大 / 还剩多少）→ 构成（被谁占着）→ 工具（工具这块的细节）→ 明细（逐项）
+//   → 轮次（时间维度）→ 搜索记录（过程）→ 脚注。
+// 阅读顺序与问题的自然顺序一致，滚动时不会"跳回去找上下文"。
 
+/**
+ * 分类的固定顺序与中文标签。
+ *
+ * 顺序必须与宿主的 `CONTEXT_KINDS` 同序（`context-face.test.mjs` 有一条跨端断言钉住它）。
+ * **文字只在客户端这一处**：宿主报告里没有 label/sublabel，只有 kind、工具名、计数、轮次。
+ * 这是刻意的分工——宿主产出事实，客户端产出措辞（`t()` 在这里，也就只有这里能翻）。
+ */
+const CONTEXT_KIND_ORDER = ['system', 'tools', 'tool-result', 'attachment', 'conversation']
+
+const CONTEXT_KIND_LABELS = {
+  system: '系统提示词',
+  tools: '工具定义',
+  'tool-result': '工具结果',
+  attachment: '附件',
+  conversation: '会话内容',
+}
+
+/** 筛选器：全部 + 五类。标签从上面那张表推出来，不再手抄第三份。 */
+const CONTEXT_FILTERS = [
+  { id: 'all', label: '全部' },
+  ...CONTEXT_KIND_ORDER.map((kind) => ({ id: kind, label: CONTEXT_KIND_LABELS[kind] })),
+]
+
+/**
+ * 明细一次最多铺多少行、块图每列最多画几块。
+ *
+ * 长会话的条目是**按轮**增长的（真机一次会话 400+ 步），全铺出来就是上千个 DOM 行、
+ * 上千条 1px 高的色带——既滚不动也读不出。折中：按大小取前 N 项（"最费上下文的是谁"
+ * 本来就是这张表要回答的问题），剩下的合成一行/一块并**如实给出剩下的条数**。
+ */
+const DETAIL_ROW_LIMIT = 20
+const CHART_ITEM_LIMIT = 6
+
+/**
+ * token 数的人类可读形式：`980` / `12.3K` / `1.2M`。
+ *
+ * 为什么不用 toLocaleString：中文语境下「324,112」读起来比「324K」慢，而这个面板要回答的
+ * 是"还剩多少空间"，量级比精确位数重要。精确值放在 title 里（见 `exactTitle`）。
+ */
+const formatTokens = (value) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—'
+  const abs = Math.abs(value)
+  if (abs >= 1000000) return (value / 1000000).toFixed(abs >= 10000000 ? 0 : 1) + 'M'
+  if (abs >= 1000) {
+    // 四舍五入后可能刚好到 1000（999,600 → "1000K"）：那不是 K 能表达的量级，进位成 M。
+    const k = Math.round(value / 1000)
+    if (Math.abs(k) >= 1000) return (value / 1000000).toFixed(1) + 'M'
+    return String(k) + 'K'
+  }
+  return String(Math.round(value))
+}
+
+const exactTitle = (value, unit) => (typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString() + ' ' + unit : '')
+
+const formatPercent = (ratio) => {
+  if (typeof ratio !== 'number' || !Number.isFinite(ratio)) return '—'
+  const percent = ratio * 100
+  if (percent > 0 && percent < 1) return '<1%'
+  if (percent > 99.5 && percent < 100) return '99%+'
+  return Math.round(percent) + '%'
+}
+
+/**
+ * 块图**列内**的短标签。
+ *
+ * 列宽是按占比分列的，窄面板下小分类只剩四十来像素：那里放「系统提示词 / 工具定义」会被
+ * 省略成「系统…」「工具…」——比短名字更难认。所以图里用短名，**图例、筛选器、明细仍用全名**
+ * （它们有整行的宽度）。hover 的 title 也是全名。
+ */
+const CONTEXT_SHORT_LABELS = { system: '系统', tools: '工具', attachment: '附件', free: '剩余' }
+
+/**
+ * 条目的显示名与副标题。
+ *
+ * 宿主只给事实（kind / 工具名 / count / turn），措辞全部在这里：所以英文界面里不会有中文漏出。
+ * 工具名是**标识符**，原样显示才对——它与模型看到的名字一致，翻译它反而让人对不上号。
+ */
+const contextItemLabel = (item) => {
+  if (!item) return ''
+  if (item.kind === 'free') return t('剩余空间')
+  if (item.kind === 'rest') return t('其余 {count} 项', { count: item.count ?? 0 })
+  if (item.kind === 'system') return t('系统提示词')
+  if (item.kind === 'tools') return t('工具定义')
+  // 「全部」视图里的会话内容是**一行合计**；逐轮只在「会话内容」筛选里出现。
+  if (item.kind === 'conversation') return item.aggregate ? t('会话内容') : t('第 {turn} 轮', { turn: item.turn ?? 0 })
+  if (item.kind === 'attachment') return t('附件')
+  // 剩下的只有"按工具名合并的工具结果"：名字解析不到时说"未知工具"，不留一行空白。
+  return String(item.label || '') || t('未知工具')
+}
+
+/** 块图里用的短名：只有分类级条目有短名，工具名与轮次照旧（它们本身就是短标识）。 */
+const contextChartLabel = (item) => {
+  const short = CONTEXT_SHORT_LABELS[item?.kind]
+  return short ? t(short) : contextItemLabel(item)
+}
+
+/** 副标题：件数 / 条数这种**数量事实**，不是句子（"×37"读起来比"共 37 次调用"快）。 */
+const contextItemSub = (item) => {
+  if (!item) return null
+  if (item.kind === 'tool-result' || item.kind === 'attachment') return '×' + (item.count ?? 0)
+  if (item.kind === 'conversation') {
+    return item.aggregate
+      ? t('{count} 轮', { count: item.count ?? 0 })
+      : t('{count} 条消息', { count: item.count ?? 0 })
+  }
+  if (item.kind === 'tools') return Number.isFinite(item.count) ? t('{count} 个工具的 schema', { count: item.count }) : null
+  // 系统提示词的首行是内容本身（给读者一个"这条是什么"的抓手），宿主管它叫 preview。
+  if (item.kind === 'system') return item.preview || null
+  return null
+}
+
+/**
+ * 把一类条目压到 `limit` 个：前 `limit - 1` 大项 + 一块"其余"。
+ *
+ * 只在**真的超了**的时候出现；没超时返回原数组，界面上不会多出一块"其余 0 项"。
+ * `items` 已按大小降序（宿主排好的），这里不改顺序。
+ *
+ * @param {{id: string, value: number}[]} items
+ * @param {number} limit
+ * @returns {{items: object[], rest: {id: string, kind: string, value: number, count: number}|null}}
+ */
+const capItems = (items, limit) => {
+  const list = Array.isArray(items) ? items : []
+  if (limit <= 0 || list.length <= limit) return { items: list, rest: null }
+  const head = list.slice(0, limit - 1)
+  const tail = list.slice(limit - 1)
+  return {
+    items: head,
+    rest: {
+      id: 'rest',
+      kind: 'rest',
+      value: tail.reduce((sum, item) => sum + (Number.isFinite(item.value) ? item.value : 0), 0),
+      count: tail.length,
+    },
+  }
+}
+
+/**
+ * 按**分类分列**的块图。
+ *
+ * 为什么不是一次性 squarify 全局条目：分类顺序固定之后，小分类（附件常常只有几百字符）
+ * 会被大分类挤成一条看不见的细线——真机第一版就是这样，图里只剩"工具结果"和"会话内容"
+ * 两块大的，另外三类全在左侧 20px 里。
+ *
+ * ## 列宽按真实占比，只留一条"看得见"的下限
+ *
+ * 曾经把小分类抬到 68px 再归一化。真机宽度（悬浮面板 420px、六列）下这一步数学上给不到
+ * 68px（6×68 > 388），归一化又把它收回去——于是小分类既没拿到可见宽度，面积也不再等比例：
+ * 附件 2K 与系统提示词 29K 看起来一样宽，工具定义 36K 看起来是工具结果 442K 的三分之一。
+ * 一张面积不按值的图，比没有图更糟（这正是这个面板一直想避免的"假精确"）。
+ *
+ * 所以：**列宽 = 真实占比**，只给细到看不见的类一个与容器成比例的极小下限
+ * （宽度的 1.2%，夹在 2~8px），让"有这一类"能看出来；具体多大请读图例与明细。
+ * 窄列放不下标签，也不硬塞——图例就是那张对照表。
+ *
+ * @param {{kind: string, label: string, value: number, items: {id: string, label: string, value: number, title?: string}[]}[]} groups
+ *   已经按固定分类顺序排好
+ * @param {number} width
+ * @param {number} height
+ * @returns {{tiles: {key: string, kind: string, label: string, value: number, x: number, y: number, w: number, h: number}[], columns: {kind: string, x: number, w: number}[]}}
+ */
+function layoutColumns(groups, width, height) {
+  const list = (Array.isArray(groups) ? groups : []).filter((group) => Number.isFinite(group.value) && group.value > 0)
+  if (list.length === 0 || !(width > 0) || !(height > 0)) return { tiles: [], columns: [] }
+  const total = list.reduce((sum, group) => sum + group.value, 0)
+  if (!(total > 0)) return { tiles: [], columns: [] }
+  // 可见下限：只为"别让一个真实存在的类变成 0 像素"，不是"给它一个体面的宽度"。
+  const floor = Math.min(8, Math.max(2, width * 0.012))
+  const wanted = list.map((group) => Math.max(floor, (group.value / total) * width))
+  const wantedSum = wanted.reduce((sum, value) => sum + value, 0)
+  const scale = wantedSum > 0 ? width / wantedSum : 0
+  const tiles = []
+  const columns = []
+  let x = 0
+  list.forEach((group, index) => {
+    const w = Math.max(1, wanted[index] * scale)
+    // 列内条目按大小降序铺满该列（一列里通常只有 1~3 个条目，竖排比再次 squarify 更好读）。
+    const items = (Array.isArray(group.items) ? group.items : []).filter((item) => Number.isFinite(item.value) && item.value > 0)
+    const itemSum = items.reduce((sum, item) => sum + item.value, 0)
+    if (items.length === 0) {
+      tiles.push({ key: 'col:' + group.kind, kind: group.kind, label: group.label, value: group.value, x, y: 0, w, h: height })
+    } else if (itemSum <= 0) {
+      tiles.push({ key: 'col:' + group.kind, kind: group.kind, label: group.label, value: group.value, x, y: 0, w, h: height })
+    } else {
+      let y = 0
+      items.forEach((item, itemIndex) => {
+        // 最后一块吃掉舍入误差，避免底部留一条缝。
+        const tileHeight = itemIndex === items.length - 1 ? height - y : (item.value / itemSum) * height
+        tiles.push({ key: 'item:' + item.id, kind: group.kind, label: item.label, title: item.title, value: item.value, x, y, w, h: Math.max(1, tileHeight) })
+        y += tileHeight
+      })
+    }
+    columns.push({ kind: group.kind, x, w })
+    x += w
+  })
+  return { tiles, columns }
+}
+
+/**
+ * 网格视图：把一个值切成若干个等量方块（参考"格子墙"那种读法）。
+ *
+ * 与块图的分工：块图回答"谁大谁小"，网格回答"一共多少个格子、填了多少"——
+ * 后者对"还剩多少"的直觉更强（空格子看得见）。每格代表固定量（自动取整），
+ * 所以格子数随用量增长，超过上限就按比例放大每格的量（并在图注里说明）。
+ *
+ * @param {{kind: string, value: number}[]} segments 按分类顺序的用量
+ * @param {number} capacity 总容量（与 segments 同单位）
+ * @param {number} maxCells 最多画多少格（防止 100 万 token 画出 500 格×N 卡住浏览器）
+ * @returns {{cells: {kind: string, value: number}[], unit: number, capped: boolean}}
+ */
+function buildGridCells(segments, capacity, maxCells) {
+  const used = segments.reduce((sum, segment) => sum + Math.max(0, segment.value), 0)
+  const span = Math.max(used, Number.isFinite(capacity) ? capacity : 0)
+  if (!(span > 0) || !(maxCells > 0)) return { cells: [], unit: 0, capped: false }
+  let unit = Math.ceil(span / maxCells)
+  // 取一个"整"的单位，读起来舒服（2K、5K、10K…），也让格子边界稳定。
+  const nice = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000]
+  const scaled = nice.find((step) => step >= unit) ?? unit
+  unit = scaled
+  const cells = []
+  let capped = false
+  let budget = maxCells
+  for (const segment of segments) {
+    if (segment.value <= 0) continue
+    const count = Math.max(1, Math.round(segment.value / unit))
+    for (let index = 0; index < count && budget > 0; index += 1) {
+      cells.push({ kind: segment.kind, value: unit })
+      budget -= 1
+    }
+    if (budget === 0) { capped = true; break }
+  }
+  // 剩余空间也画成格子（暗格），这样"填满度"一眼可见。
+  const capacityCells = Number.isFinite(capacity) ? Math.round(capacity / unit) : cells.length
+  while (cells.length < capacityCells && budget > 0) {
+    cells.push({ kind: 'free', value: unit })
+    budget -= 1
+  }
+  if (cells.length < capacityCells) capped = true
+  return { cells, unit, capped }
+}
+
+/**
+ * 「上下文」能力面。
+ *
+ * 轮询而不是订阅：读的是一份**派生快照**（日志 → 价格 → 汇总），宿主没有为它开事件；
+ * 3s 一次、只在面板开着时跑。
+ */
+const ContextFace = ({ call }) => {
+  const [report, setReport] = useState(null)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [filter, setFilter] = useState('all')
+  const [view, setView] = useState('treemap')
+  // null = 跟随（界面上正在看的会话 / 或"全部会话"列表）；有值 = 用户明确要看某个会话。
+  const [targetId, setTargetId] = useState(null)
+  const [box, setBox] = useState({ w: 0, h: 288 })
+  const boxRef = useRef(null)
+
+  const load = useCallback(async (target) => {
+    setLoading(true)
+    // 唯一的来源是"用户在总览里点选了哪个会话"。不再猜测"界面上正在看哪个"：
+    // 这个面板是全局的，猜错只会让人以为数字错了。
+    const wanted = target ?? targetId
+    try {
+      const result = await call('contextReport', wanted ? { sessionId: wanted } : {})
+      if (!result || result.ok === false) {
+        setError((result && result.error) || t('上下文读取失败'))
+        return
+      }
+      setError('')
+      setReport(result)
+      // 宿主给回来的**不是用户点的那个**：说明它已经不在了（会话结束 / 工作区关闭）。
+      // 静默换成别的会话是最坏的一种：标题说 A、数字是 B，而用户没有理由怀疑。
+      // 退回总览，让"现在有哪些会话"自己说话，不需要额外一句解释。
+      if (wanted && result.session && result.session.id !== wanted) setTargetId(null)
+    } catch (error) {
+      // RPC 层拒绝（宿主重启、连接断开）不是 `{ok:false}`，会抛。不接住就是两件事：
+      // 转圈永远停不下 + 一个没人处理的 rejection。
+      setError((error && error.message) || t('上下文读取失败'))
+    } finally {
+      setLoading(false)
+    }
+  }, [call, targetId])
+
+  useEffect(() => {
+    let alive = true
+    load(targetId)
+    const interval = setInterval(() => { if (alive) load(targetId) }, 3000)
+    return () => { alive = false; clearInterval(interval) }
+  }, [load, targetId])
+
+  // 宽度量容器（treemap / 网格都按真实像素排布），量不到就按面板宽度估。
+  useEffect(() => {
+    const el = boxRef.current
+    if (!el) return undefined
+    const measure = () => setBox({ w: el.clientWidth || 0, h: 288 })
+    measure()
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measure)
+      return () => window.removeEventListener('resize', measure)
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [report, view])
+
+  if (error && report === null) {
+    return h('div', { className: 'dsh-mcp-ctx' },
+      h('div', { className: 'dsh-mcp-d-err', role: 'alert' }, error),
+      h('button', { type: 'button', className: 'dsh-mcp-btn sm', onClick: () => load(targetId) }, t('重试')),
+    )
+  }
+  if (report === null) {
+    return h('div', { className: 'dsh-mcp-ctx' }, h('div', { className: 'dsh-mcp-ctx-empty' }, t('正在读取上下文…')))
+  }
+  // 没有会话在跑：这是正常状态（不是错误）。面板每 3 秒轮询，用户跑起来之后这里会自己变成
+  // 有内容的视图，所以**不需要**任何"点这里重试"的动作。
+  const items = Array.isArray(report.items) ? report.items : []
+  const budget = report.budget || {}
+  const cache = report.cache || {}
+  const billed = report.billed || { prompt: 0, requests: 0 }
+  const toolInfo = report.tools || {}
+  const search = toolInfo.search || { calls: 0, byName: 0, byKeyword: 0, recent: [] }
+  const session = report.session || {}
+  const route = report.route || {}
+  const sessions = Array.isArray(report.sessions) ? report.sessions : []
+  const used = budget.used
+  const windowTokens = budget.window
+
+  // ── 多会话：先给"全部会话"总览 ────────────────────────────────────────────
+  //
+  // 同时跑多个工作区是常态（用户原话："我使用的时候都是好几个工作区，好几个会话同时的"），
+  // 所以多会话时不该把人锁在一个会话的详情里、再让他去顶部找芯片切换。先给一屏总览：
+  // 每个会话一行，带用量条，谁快满了、谁正在生成一眼看出。点进去才看详情。
+  // 单会话用户的路径不变——直接进详情，不经过这一屏。
+  const showAllSessions = sessions.length > 1 && targetId === null
+  if (showAllSessions) {
+    return h('div', { className: 'dsh-mcp-ctx' },
+      h('div', { className: 'dsh-mcp-ctx-all-head' },
+        h('div', { className: 'dsh-mcp-ctx-all-title' }, t('{count} 个会话正在运行', { count: sessions.length })),
+        loading ? h('span', { className: 'dsh-mcp-ctx-foot-live' }, t('更新中')) : null,
+      ),
+      h('div', { className: 'dsh-mcp-ctx-all' },
+        ...sessions.map((entry) => {
+          const percent = typeof entry.ratio === 'number' ? Math.min(100, Math.max(0.5, entry.ratio * 100)) : 0
+          const tone = typeof entry.ratio !== 'number' ? '' : entry.ratio >= 0.8 ? ' err' : entry.ratio >= 0.5 ? ' warn' : ' ok'
+          return h('button', {
+            key: 'all:' + entry.id,
+            type: 'button',
+            className: 'dsh-mcp-ctx-allrow' + (entry.running ? ' running' : ''),
+            title: entry.cwd || entry.id,
+            onClick: () => setTargetId(entry.id),
+          },
+            h('div', { className: 'dsh-mcp-ctx-allrow-top' },
+              entry.workspace ? h('span', { className: 'dsh-mcp-ctx-session-ws' }, entry.workspace) : null,
+              h('span', { className: 'dsh-mcp-ctx-allrow-title' }, entry.title || String(entry.id).slice(0, 16)),
+              entry.running ? h('span', { className: 'dsh-mcp-ctx-allrow-live' }, t('生成中')) : null,
+            ),
+            h('div', { className: 'dsh-mcp-ctx-meter thin' },
+              h('span', { className: 'dsh-mcp-ctx-meter-fill' + tone, style: { width: percent + '%' } })),
+            h('div', { className: 'dsh-mcp-ctx-allrow-meta' },
+              // 纯数字拼装，没有中文可翻——不走 t()（给同形译文建词条会被死键检查判掉）。
+              typeof entry.used === 'number'
+                ? `${formatTokens(entry.used)} / ${formatTokens(entry.window)} · ${formatPercent(entry.ratio)}`
+                : t('还没有数据'),
+              typeof entry.requests === 'number' && entry.requests > 0 ? t(' · {count} 次请求', { count: entry.requests }) : null,
+            ),
+          )
+        }),
+      ),
+    )
+  }
+
+  if (report.empty === true || !session) {
+    // 空状态就是空的：**通用**提示，不指向任何会话。
+    //
+    // 这个面板是全局的——一个入口覆盖所有工作区与所有会话，所以"现在没有会话在运行"
+    // 本身就是完整的事实。早先这里写"这个会话没在运行"并跟一串会话 id，是在暗示
+    // "面板属于某个会话"，与它的定位相反；用户的原话是"我那么多会话你为啥显示这个"。
+    return h('div', { className: 'dsh-mcp-ctx' },
+      h('div', { className: 'dsh-mcp-ctx-blank' },
+        h('div', { className: 'dsh-mcp-ctx-blank-title' }, t('现在没有会话在运行')),
+        h('div', { className: 'dsh-mcp-ctx-blank-note' }, t('跑起来之后，这里会显示每个会话占用了多少上下文。')),
+      ),
+    )
+  }
+  // 会话活着、但**一次请求都还没发过**：也没有任何东西可画。此时不要画一堆"—"卡片再在底部
+  // 解释一遍为什么是空的——那就是用户说的"废话"。一个空状态说清"发消息就会有了"即可。
+  //
+  // ⚠️ 判据用 `session.requests`，不能用"items 为空"：报告里总有一个「工具定义」条目（哪怕
+  // 值是 0），所以 items 永远非空——真机上这条判断就是这么失效的，面板照旧画出一整页破折号。
+  if (Number(session.requests ?? 0) === 0 && typeof used !== 'number') {
+    // 保持**通用说法**（"还没有会话发出过请求"），不点名具体会话：这个面板是全局的，一个入口
+    // 覆盖所有工作区；早先这里跟一串会话 id，用户的原话是"我那么多会话你为啥显示这个？"。
+    return h('div', { className: 'dsh-mcp-ctx' },
+      h('div', { className: 'dsh-mcp-ctx-blank' },
+        h('div', { className: 'dsh-mcp-ctx-blank-title' }, t('还没有会话发出过请求')),
+        h('div', { className: 'dsh-mcp-ctx-blank-note' }, t('跑起来之后，这里会显示每个会话占用了多少上下文。')),
+      ),
+    )
+  }
+  // ⚠️ 不要叫 window：那是浏览器全局，同名会让 ResizeObserver 兜底路径读错东西。
+  const ratio = budget.ratio
+  // 单位：宿主给了至少一个价格就按 token 排布，否则整面退化成"字符"。
+  // 'token' 中英同形，所以**不过 t()**——给同形译文建词典条目会被死键检查判掉。
+  const priced = items.some((item) => typeof item.tokens === 'number')
+  const unit = priced ? 'token' : t('字符')
+  const valueOf = (item) => (priced ? item.tokens : item.chars)
+  // 分母取宿主给的 `totals.itemTokens`（**封顶前**的全量和），不拿手里这些条目现加：
+  // 宿主每类最多带 24 条，自己加出来的和会偏小，于是换算系数把缺口摊到剩下的条目上——
+  // 数字变大、还"加得起来"。这正是这个面板反复要避免的那种假精确。
+  const carried = items.reduce((sum, item) => sum + (Number.isFinite(valueOf(item)) ? valueOf(item) : 0), 0)
+  const sumOfItems = priced && Number.isFinite(report.totals?.itemTokens) && report.totals.itemTokens > 0
+    ? report.totals.itemTokens
+    : carried
+  // 等比换算：把估算构成放大/缩小到**真实总量**（构成内比例不变，各处数字加起来对得上）。
+  //
+  // ⚠️ 只在**每一类都有价格**（宿主 `totals.measured`）时才换算。缺了某一类的价格时，剩下
+  // 几类会被按 `used/已量总和` 放大——看起来仍然铺满、仍然"对得上总量"，实际每个数都偏大，
+  // 而偏大的幅度正是缺失的那一类所占的份额（工具定义常见 10~20%）。这是把"未知"算成"零"
+  // 的一种变体，且它伪装成完整。此时宁可不换算：数字是估算原值，缺口留在图上。
+  const measured = report.totals?.measured === true
+  const factor = priced && measured && typeof used === 'number' && sumOfItems > 0 ? used / sumOfItems : 1
+  /**
+   * 一个条目在**当前尺度**下的大小。
+   *
+   * ⚠️ 字段必须按 `priced` 选，**不能靠调用方记得传**：曾经写成 `sizeOf(item, field)` 且
+   * 默认 `field` 落到 `chars`，于是有 token 价格时块图与明细显示的全是字符数
+   * （真机：图例 44K、格子 175K，同一屏两个数）。这类"可选参数默认值错"只有对比两处
+   * 数字才看得出来，所以这里不给参数。
+   */
+  const sizeOf = (item) => {
+    const raw = priced ? item.tokens : item.chars
+    if (typeof raw !== 'number' || !Number.isFinite(raw)) return 0
+    return Math.max(1, Math.round(raw * factor))
+  }
+  const remaining = typeof budget.remaining === 'number' ? budget.remaining : null
+  // ⚠️ **剩余空间与容量的单位必须跟着构成走**。构成在"有价格"时是 token、在只有字符账时是字符，
+  // 而 `remaining` / `budget.window` 永远是 token。直接摆进同一个块图就是量纲混用
+  // （真机：549K token 的剩余被 861K 字符的会话内容压成一小块）。
+  // 换算口径：used 个 token 对应 sumOfItems 个字符，所以 1 个 token ≈ sumOfItems/used 个字符。
+  const charPerToken = !priced && typeof used === 'number' && used > 0 && sumOfItems > 0 ? sumOfItems / used : 1
+  const toDisplay = (tokenValue) => (typeof tokenValue !== 'number' || !Number.isFinite(tokenValue)
+    ? null
+    : priced ? tokenValue : Math.round(tokenValue * charPerToken))
+  const remainingDisplay = toDisplay(remaining)
+  const capacityDisplay = toDisplay(typeof windowTokens === 'number' ? windowTokens : null)
+  const health = typeof ratio !== 'number' ? '' : ratio >= 0.8 ? ' err' : ratio >= 0.5 ? ' warn' : ' ok'
+  const healthLabel = typeof ratio !== 'number' ? t('未知') : ratio >= 0.8 ? t('接近上限') : ratio >= 0.5 ? t('偏高') : t('健康')
+  const avgRequest = billed.requests > 0 && typeof used === 'number' ? billed.prompt / billed.requests : null
+  const room = remaining !== null && avgRequest !== null && avgRequest > 0 ? Math.floor(remaining / avgRequest) : null
+
+  // ── 构成：按**分类固定顺序**聚合（不按面积），分类内按大小降序 ──────────────
+  //
+  // 每列最多 `CHART_ITEM_LIMIT` 块：长会话的「会话内容」是按轮的（真机 400+ 轮），全画出来
+  // 就是几百条 1px 高的色带，既看不见也点不到。取最大的几项 + 一块"其余"，饼图/块图都是
+  // 这个读法；剩下的条数写在那一块上，不悄悄丢。
+  //
+  // 这里的排序与宿主"分类内按大小降序"同向且同序（缩放系数是常数，不改变大小关系），
+  // 只是为了决定**折叠哪几项**——不是第二个排序真相源（明细列表那边就不排，见 ⑥）。
+  const chartItemsOf = (own, kind, folded, kindValue) => {
+    const mapped = own
+      .map((item) => ({ id: item.id, label: contextChartLabel(item), value: sizeOf(item) }))
+      .sort((left, right) => right.value - left.value)
+    const { items: head, rest } = capItems(mapped, CHART_ITEM_LIMIT)
+    const hidden = (rest ? rest.count : 0) + (Number.isFinite(folded) ? folded : 0)
+    if (hidden === 0) return head
+    // 折叠块在窄列里放不下"其余 N 项"（实测被省略成「其…」），所以块里只写 `+N`，
+    // 展开的说法放进 title。
+    //
+    // 它的大小 = **这一类总量 − 已画出的那些**：宿主折叠掉的那 N 条没有单条大小，但它们的
+    // 合计是已知的（分类合计）。用"手里这些的和"当块值会让那一截在列里显得比实际小得多。
+    const headSum = head.reduce((sum, item) => sum + item.value, 0)
+    const restValue = Number.isFinite(kindValue) ? Math.max(1, Math.round(kindValue) - headSum) : (rest ? rest.value : 1)
+    return [...head, {
+      id: 'rest:' + kind,
+      label: '+' + hidden,
+      title: t('其余 {count} 项', { count: hidden }),
+      value: restValue,
+    }]
+  }
+  const kindDeclared = (kind) => (Array.isArray(report.kinds) ? report.kinds : []).find((entry) => entry.kind === kind) || null
+  // 宿主每类最多带 `MAX_ITEMS_PER_KIND` 条，没带过来的条数在 `folded` 里——"其余 N 项"要把
+  // 这两笔加起来，否则长会话会被报少一大截（"其余 3 项"其实是 1403 项）。
+  const foldedOf = (kind) => {
+    const declared = kindDeclared(kind)
+    return declared && Number.isFinite(declared.folded) ? declared.folded : 0
+  }
+  const kindTotals = new Map()
+  for (const kind of CONTEXT_KIND_ORDER) {
+    const own = items.filter((item) => item.kind === kind)
+    if (own.length === 0) continue
+    // 分类合计优先取宿主给的 kinds（唯一真源），没有再按条目求和。
+    const declared = kindDeclared(kind)
+    const tokens = declared && Number.isFinite(declared.tokens) ? declared.tokens : own.reduce((sum, item) => sum + (Number.isFinite(item.tokens) ? item.tokens : 0), 0)
+    const chars = declared && Number.isFinite(declared.chars) ? declared.chars : own.reduce((sum, item) => sum + (Number.isFinite(item.chars) ? item.chars : 0), 0)
+    const value = priced ? tokens : chars
+    kindTotals.set(kind, {
+      kind,
+      label: CONTEXT_KIND_LABELS[kind] || kind,
+      value: Number.isFinite(value) ? value * factor : 0,
+      count: own.length,
+      items: chartItemsOf(own, kind, foldedOf(kind), Number.isFinite(value) ? value * factor : 0),
+    })
+  }
+  // 只画**有量**的分类。值为 0 的类不是"谁占着"，画出来只会多一条没有意义的边
+  // （早先按面积全局排布时更糟：0 会被抬成占满屏幕的一整块，比不画还误导）。
+  const segments = CONTEXT_KIND_ORDER
+    .map((kind) => kindTotals.get(kind))
+    .filter(Boolean)
+    .filter((segment) => segment.value > 0)
+
+  const layout = layoutColumns(
+    [
+      ...segments.map((segment) => ({ ...segment, value: Math.max(1, Math.round(segment.value)) })),
+      // 剩余空间作为**最后一列**（不是第一列）。真机反馈说"剩余的显示在左边有点反直觉"——
+      // 那是按面积降序的必然结果。分类固定顺序 + 剩余放尾部，读者从左往右看的是
+      // "谁占着"，最右边那列才是"还剩多少"，与进度条的直觉一致。
+      ...(remainingDisplay !== null && remainingDisplay > 0
+        ? [{
+          kind: 'free',
+          label: t('剩余空间'),
+          value: remainingDisplay,
+          items: [{ id: 'free', label: t('剩余'), value: remainingDisplay }],
+        }]
+        : []),
+    ],
+    box.w || 760,
+    box.h || 288,
+  )
+  const grid = buildGridCells(
+    segments.map((segment) => ({ kind: segment.kind, value: Math.max(1, Math.round(segment.value)) })),
+    capacityDisplay,
+    420,
+  )
+
+  const legend = segments.length === 0 && remainingDisplay === null ? null : h('div', { className: 'dsh-mcp-ctx-legend' },
+    ...segments.map((segment) => h('span', { key: 'legend:' + segment.kind, className: 'dsh-mcp-ctx-legend-item', title: exactTitle(Math.round(segment.value), unit) },
+      h('span', { className: 'dsh-mcp-ctx-dot kind-' + segment.kind }),
+      h('span', { className: 'dsh-mcp-ctx-legend-label' }, t(segment.label)),
+      h('span', { className: 'dsh-mcp-ctx-legend-size' }, formatTokens(segment.value) + ' ' + unit),
+    )),
+    remainingDisplay !== null ? h('span', { className: 'dsh-mcp-ctx-legend-item free', title: exactTitle(remaining, 'token') },
+      h('span', { className: 'dsh-mcp-ctx-dot kind-free' }),
+      h('span', { className: 'dsh-mcp-ctx-legend-label' }, t('剩余空间')),
+      h('span', { className: 'dsh-mcp-ctx-legend-size' }, formatTokens(remainingDisplay) + ' ' + unit),
+    ) : null,
+  )
+
+  // ── 顶部：总览 + 缓存 ────────────────────────────────────────────────────
+  const overview = h('div', { className: 'dsh-mcp-ctx-overview' },
+    h('div', { className: 'dsh-mcp-ctx-card wide' },
+      h('div', { className: 'dsh-mcp-ctx-card-label' }, t('已用上下文'), h('span', { className: 'dsh-mcp-ctx-badge' + health }, healthLabel)),
+      h('div', { className: 'dsh-mcp-ctx-card-value' },
+        // 还没发出过请求时没有"已用"这个数：只放一个破折号，不画成「— / 1.0M token」——
+        // 那样读起来像"用量正好是 0"，而真实情况是"还不知道"。
+        used === null
+          ? h('b', null, '—')
+          : h(React2.Fragment, null,
+            h('b', null, formatTokens(used)),
+            h('span', { className: 'dsh-mcp-ctx-card-sep' }, '/'),
+            h('span', { className: 'dsh-mcp-ctx-card-cap' }, formatTokens(windowTokens)),
+            h('span', { className: 'dsh-mcp-ctx-card-unit' }, 'token'),
+          ),
+      ),
+      h('div', { className: 'dsh-mcp-ctx-card-note' },
+        // 没有 ratio 就**什么都不写**：卡片上那个破折号已经把"没有这个数"说完了，
+        // 再补一句"还没发出过请求"在"发过请求但提供方没回用量"时还是**假的**。
+        typeof ratio === 'number'
+          ? t('已用 {percent} · 还剩 {free}', { percent: formatPercent(ratio), free: formatTokens(remaining) })
+          : null,
+        room === null ? null : t(' · 大约还能发 {count} 条', { count: room }),
+      ),
+      typeof ratio === 'number'
+        ? h('div', { className: 'dsh-mcp-ctx-meter', role: 'img', 'aria-label': t('已用上下文 {percent}', { percent: formatPercent(ratio) }) },
+          h('span', { className: 'dsh-mcp-ctx-meter-fill' + health, style: { width: Math.min(100, Math.max(0.5, ratio * 100)) + '%' } }))
+        : null,
+    ),
+    h('div', { className: 'dsh-mcp-ctx-card' },
+      h('div', { className: 'dsh-mcp-ctx-card-label' }, t('提示词缓存')),
+      h('div', { className: 'dsh-mcp-ctx-card-value sm' }, formatPercent(cache.hitRate), h('span', { className: 'dsh-mcp-ctx-card-unit' }, t('命中'))),
+      h('div', { className: 'dsh-mcp-ctx-card-note' },
+        // 命中率已经是主角（上面那个大数字），这里只补**要全额付费的那部分**。
+        // 曾经写"616K 来自缓存 · 39K 新增"：一半是上面那个百分比已经说完的事，而且在窄面板
+        // 里正好挤出换行（"新增"被拆到第二行）。一个事实只说一次。
+        typeof cache.fresh === 'number'
+          ? t('新增 {fresh}', { fresh: formatTokens(cache.fresh) })
+          : t('整场 {percent}', { percent: formatPercent(cache.sessionHitRate) }),
+      ),
+      // 没有命中率就不画这条进度条：0.5% 宽的空条读起来是"命中 0%"，而真实情况是"不知道"。
+      // 上面那个大数字已经写着破折号，这里留白就够（与左边"已用上下文"同一条纪律）。
+      typeof cache.hitRate === 'number'
+        ? h('div', { className: 'dsh-mcp-ctx-meter thin' },
+          h('span', { className: 'dsh-mcp-ctx-meter-fill ok', style: { width: Math.min(100, Math.max(0.5, cache.hitRate * 100)) + '%' } }))
+        : null,
+    ),
+  )
+
+  // ── 构成：视图切换 + 两种画法 ─────────────────────────────────────────────
+  const viewSwitch = h('div', { className: 'dsh-mcp-ctx-viewswitch', role: 'group', 'aria-label': t('构成视图') },
+    ...[['treemap', t('块图')], ['grid', t('网格')]].map(([id, label]) => h('button', {
+      key: 'view:' + id,
+      type: 'button',
+      'aria-pressed': view === id,
+      className: view === id ? 'sel' : '',
+      onClick: () => setView(id),
+    }, label)),
+  )
+
+  // 图表对读屏是噪声：每个色块只是一个数字，而它要说的事在图例里**已经是文字**了
+  // （分类名 + 数值），明细里还有逐项数字。所以整块 aria-hidden，别让读屏逐块念。
+  const treemap = h('div', { className: 'dsh-mcp-ctx-map', ref: boxRef, 'aria-hidden': 'true', style: { height: (box.h || 288) + 'px' } },
+    layout.tiles.length === 0
+      ? h('div', { className: 'dsh-mcp-ctx-empty' }, t('还没有可排布的上下文内容'))
+      : layout.tiles.map((tile) => {
+        // 标签要**宽**也要**高**：列宽现在按真实占比分，小分类只有几像素，放标签只会得到
+        // 一条被裁掉的色带。放不下就不放——图例就是那张对照表，悬停的 title 也带全名。
+        const hasLabel = tile.h >= 38 && tile.w >= 44
+        const hasSize = tile.h >= 38 && tile.w >= 58
+        return h('div', {
+          key: tile.key,
+          className: 'dsh-mcp-ctx-cell kind-' + tile.kind + (tile.kind === 'free' ? ' free' : ''),
+          style: { left: tile.x + 'px', top: tile.y + 'px', width: tile.w + 'px', height: tile.h + 'px' },
+          title: t('{label}：{size} {unit}', { label: tile.title ?? tile.label, size: formatTokens(tile.value), unit }),
+        },
+          hasLabel ? h('span', { className: 'dsh-mcp-ctx-cell-label' }, tile.label) : null,
+          hasSize ? h('span', { className: 'dsh-mcp-ctx-cell-size' }, formatTokens(tile.value)) : null,
+          !hasLabel && tile.w >= 40 && tile.h >= 18 ? h('span', { className: 'dsh-mcp-ctx-cell-size only' }, formatTokens(tile.value)) : null,
+        )
+      }),
+  )
+
+  const gridView = h('div', { className: 'dsh-mcp-ctx-grid' + (grid.capped ? ' capped' : ''), ref: boxRef, 'aria-hidden': 'true' },
+    ...grid.cells.map((cell, index) => h('span', {
+      key: 'cell:' + index,
+      className: 'dsh-mcp-ctx-grid-cell kind-' + cell.kind,
+      title: cell.kind === 'free' ? t('剩余空间') : t(CONTEXT_KIND_LABELS[cell.kind] || cell.kind),
+    })),
+  )
+
+  const composition = h('section', { className: 'dsh-mcp-ctx-section' },
+    h('div', { className: 'dsh-mcp-ctx-section-head' },
+      h('h4', { className: 'dsh-mcp-ctx-section-title' }, t('上下文被谁占着')),
+      h('div', { className: 'dsh-mcp-ctx-section-tools' },
+        h('span', { className: 'dsh-mcp-ctx-section-hint' },
+          view === 'grid'
+            ? (grid.unit > 0 ? t('每格 {size}，共 {count} 格', { size: formatTokens(grid.unit), count: grid.cells.length }) : t('没有可画的内容'))
+            : null),
+        viewSwitch,
+      ),
+    ),
+    view === 'treemap' ? treemap : gridView,
+    legend,
+  )
+
+  // ── 工具：数量 / 占比 / 搜索 ──────────────────────────────────────────────
+  //
+  // 三格：工具数（多少）、占上下文（多大一块）、搜索次数（找过几次）。原来还有一格
+  // 「搜索结果」单独报字符数——那个数对决策没有用；「占上下文」原来一格数字加一条占比条，
+  // 两处说同一件事，现在合成一格：值就是占比，副标题给绝对量。
+  const statTile = (label, value, note) => h('div', { className: 'dsh-mcp-ctx-stat', key: 'stat:' + label },
+    h('span', { className: 'dsh-mcp-ctx-stat-value' }, value),
+    h('span', { className: 'dsh-mcp-ctx-stat-label' }, label),
+    note ? h('span', { className: 'dsh-mcp-ctx-stat-note' }, note) : null,
+  )
+  // ⚠️ 有 token 价格时**不能**拿字符数乘换算系数：那个系数是 token→token 的刻度，
+  // 乘到字符上得到的是一个既不是字符也不是 token 的数（降级态里最容易出现的量纲混用）。
+  const toolTokens = Number.isFinite(toolInfo.tokens)
+    ? toolInfo.tokens * factor
+    : (priced ? null : (Number.isFinite(toolInfo.chars) ? toolInfo.chars : null))
+  const toolShare = Number.isFinite(toolTokens) && Number.isFinite(used) && used > 0 ? toolTokens / used : null
+  // 目录状态一行（原「目录体检」）：多少台 MCP 的工具不随每轮发送、那份目录本身多大、
+  // 有没有被上限截掉。只用**人话**，不出现"预算 / 延迟 / revision"这类实现词。
+  const catalog = report.catalog || null
+  const assembly = catalog?.lastAssembly ?? null
+  const deferred = Array.isArray(catalog?.deferredServers) ? catalog.deferredServers : []
+  const catalogParts = []
+  if (deferred.length > 0) {
+    // 「的工具」不是啰嗦：`names` 在超过三台时以"等 N 台"结尾，用「的」才能直接接上，
+    // 写成"台 按需搜索"会多出一个看起来像错字空格。
+    catalogParts.push(t('{names} 的工具按需搜索', { names: deferred.slice(0, 3).join(t('、')) + (deferred.length > 3 ? t(' 等 {count} 台', { count: deferred.length }) : '') }))
+  }
+  if (assembly && Number.isFinite(assembly.chars)) {
+    // 行首那个「目录」标签已经说明了这是什么，这里不再重复一次"目录"。
+    catalogParts.push(t('{chars} 字符／轮', { chars: Math.round(assembly.chars) }))
+  }
+  // 只在**被截断**时说；没截断就什么都不说——"没有截断"是一句没人需要的信息。
+  if (assembly && Number.isFinite(assembly.truncated) && assembly.truncated > 0) {
+    catalogParts.push(t('截掉 {count} 个', { count: assembly.truncated }))
+  }
+  const catalogLine = catalogParts.length === 0 ? null : h('div', { className: 'dsh-mcp-ctx-catalog' + (assembly && assembly.truncated > 0 ? ' warn' : '') },
+    h('span', { className: 'dsh-mcp-ctx-catalog-label' }, t('目录')),
+    h('span', { className: 'dsh-mcp-ctx-catalog-text' }, catalogParts.join(' · ')),
+    assembly && assembly.truncated > 0
+      // 给**下一步**，不解释机制：去哪里、改哪个名字，都用「工具」页上那个设置的原名
+      // （那里叫「限制目录大小」，这里叫「目录上限」的话就是同一个东西的两个名字）。
+      ? h('span', { className: 'dsh-mcp-ctx-catalog-hint' }, t('截掉的只能靠关键词碰运气；到「工具」页把「限制目录大小」调大就能全部列出。'))
+      : null,
+  )
+  const toolsSection = h('section', { className: 'dsh-mcp-ctx-section' },
+    h('div', { className: 'dsh-mcp-ctx-section-head' },
+      h('h4', { className: 'dsh-mcp-ctx-section-title' }, t('工具')),
+    ),
+    h('div', { className: 'dsh-mcp-ctx-stats' },
+      statTile(t('工具数'), toolInfo.total === null || toolInfo.total === undefined ? '—' : String(toolInfo.total), null),
+      statTile(
+        t('占上下文'),
+        formatPercent(toolShare),
+        Number.isFinite(toolTokens) ? formatTokens(toolTokens) + ' ' + unit : '—',
+      ),
+      statTile(t('搜索次数'), String(search.calls ?? 0), t('按名 {byName} · 关键词 {byKeyword}', { byName: search.byName ?? 0, byKeyword: search.byKeyword ?? 0 })),
+    ),
+    // 工具目录的状态（原来在工具页叫「目录体检」）：读者在这里已经知道"工具占多少"，
+    // 紧接着回答"那份目录本身有多大、有没有被上限截掉"。放在这一卡里，不另开一块。
+    catalogLine,
+  )
+
+  // ── 明细 ────────────────────────────────────────────────────────────────
+  //
+  // 会话内容在「全部」视图里**合成一行**（"会话内容 · 14 轮"）：逐轮明细是时间序列，下面的
+  // 「每轮用掉多少」已经画得更好；把 14 行几乎一样的"第 N 轮 / 6 条消息"铺在这里，只会把
+  // 真正有差别的那几行（工具名）挤下去。点「会话内容」筛选时再看逐轮。
+  const conversationDeclared = kindDeclared('conversation')
+  const conversationItems = items.filter((item) => item.kind === 'conversation')
+  const conversationRow = conversationDeclared && conversationItems.length > 0
+    ? {
+      id: 'kind:conversation',
+      kind: 'conversation',
+      aggregate: true,
+      // 值取宿主的分类合计（真的那才是全量，手里的条目可能被宿主的 24 条上限截过）。
+      tokens: conversationDeclared.tokens,
+      chars: conversationDeclared.chars,
+      count: conversationDeclared.count,
+      turn: null,
+    }
+    : null
+  const withoutConversation = items.filter((item) => item.kind !== 'conversation')
+  const filteredItems = filter === 'all'
+    ? [...withoutConversation, ...(conversationRow ? [conversationRow] : [])]
+    : items.filter((item) => item.kind === filter)
+  const shownItems = filteredItems.slice(0, DETAIL_ROW_LIMIT)
+  // 被折叠的 = 自己截掉的 + 宿主没随报告带过来的。只算自己那部分会把长会话报少一大截。
+  const foldedInView = filter === 'all'
+    ? CONTEXT_KIND_ORDER.filter((kind) => kind !== 'conversation').reduce((sum, kind) => sum + foldedOf(kind), 0)
+    : foldedOf(filter)
+  const restRows = filteredItems.length - shownItems.length + foldedInView
+  const maxSize = shownItems.reduce((max, item) => Math.max(max, sizeOf(item)), 0) || 1
+  const list = h('section', { className: 'dsh-mcp-ctx-section' },
+    h('div', { className: 'dsh-mcp-ctx-section-head' },
+      h('h4', { className: 'dsh-mcp-ctx-section-title' }, t('明细')),
+      h('div', { className: 'dsh-mcp-ctx-filter', role: 'group', 'aria-label': t('按分类筛选') },
+        ...CONTEXT_FILTERS.map((entry) => h('button', {
+          key: 'filter:' + entry.id,
+          type: 'button',
+          'aria-pressed': filter === entry.id,
+          className: filter === entry.id ? 'sel' : '',
+          onClick: () => setFilter(entry.id),
+        }, t(entry.label))),
+      ),
+    ),
+    filteredItems.length === 0
+      ? h('div', { className: 'dsh-mcp-ctx-empty' }, t('这一类还没有内容'))
+      : h('div', { className: 'dsh-mcp-ctx-rows' },
+        ...shownItems.map((item) => h('div', { className: 'dsh-mcp-ctx-row', key: 'row:' + item.id },
+          h('span', { className: 'dsh-mcp-ctx-dot kind-' + item.kind }),
+          // title 给系统提示词的首行之类放不进一行的内容；副标题是数量，不是句子。
+          h('span', { className: 'dsh-mcp-ctx-row-label', title: contextItemSub(item) || '' }, contextItemLabel(item)),
+          contextItemSub(item) ? h('span', { className: 'dsh-mcp-ctx-row-sub' }, contextItemSub(item)) : null,
+          h('span', { className: 'dsh-mcp-ctx-row-bar' },
+            h('span', { className: 'dsh-mcp-ctx-row-fill kind-' + item.kind, style: { width: Math.max(1, Math.round((sizeOf(item) / maxSize) * 100)) + '%' } })),
+          h('span', { className: 'dsh-mcp-ctx-row-size', title: exactTitle(valueOf(item), unit) }, formatTokens(sizeOf(item))),
+        )),
+        restRows > 0 ? h('div', { className: 'dsh-mcp-ctx-more' }, t('其余 {count} 项', { count: restRows })) : null,
+      ),
+  )
+
+  // ── 各轮规模 ─────────────────────────────────────────────────────────────
+  const turns = Array.isArray(report.turns) ? report.turns : []
+  const maxTurn = turns.reduce((max, turn) => Math.max(max, turn.prompt || 0), 0) || 1
+  const turnsBlock = turns.length === 0 ? null : h('section', { className: 'dsh-mcp-ctx-section' },
+    h('div', { className: 'dsh-mcp-ctx-section-head' },
+      h('h4', { className: 'dsh-mcp-ctx-section-title' }, t('每轮用掉多少')),
+    ),
+    h('div', { className: 'dsh-mcp-ctx-turn-bars' },
+      ...turns.slice(-60).map((turn) => h('span', {
+        key: 'turn:' + turn.turn,
+        className: 'dsh-mcp-ctx-turn-bar',
+        title: t('第 {turn} 轮：{size} token（缓存命中 {cache}）', { turn: turn.turn, size: turn.prompt, cache: formatPercent(turn.prompt > 0 ? turn.cacheRead / turn.prompt : null) }),
+      }, h('span', { className: 'dsh-mcp-ctx-turn-fill', style: { height: Math.max(4, Math.round((turn.prompt / maxTurn) * 100)) + '%' } }))),
+    ),
+  )
+
+  // ── 最近的搜索（从工具页搬来：它本来就在讲"上下文里发生了什么"）────────────
+  //
+  // 一次都没搜过就**整块不画**：工具卡里"搜索次数 0"已经把这件事说完了，
+  // 再留一个空区块加一句"这个会话还没搜过工具"只是往页面上贴废话。
+  const recent = Array.isArray(search.recent) ? search.recent : []
+  const searchBlock = recent.length === 0 ? null : h('section', { className: 'dsh-mcp-ctx-section' },
+    h('div', { className: 'dsh-mcp-ctx-section-head' },
+      h('h4', { className: 'dsh-mcp-ctx-section-title' }, t('最近的工具搜索')),
+    ),
+    h('div', { className: 'dsh-mcp-ctx-rows' },
+      ...recent.slice().reverse().map((entry, index) => h('div', { className: 'dsh-mcp-ctx-row search', key: 'search:' + index },
+        h('span', { className: 'dsh-mcp-ctx-chip' + (entry.exact ? ' exact' : '') }, entry.exact ? t('按名') : t('关键词')),
+        h('span', { className: 'dsh-mcp-ctx-row-label', title: entry.query }, entry.query || t('（空）')),
+        typeof entry.chars === 'number' ? h('span', { className: 'dsh-mcp-ctx-row-size' }, t('{chars} 字符', { chars: entry.chars })) : null,
+      )),
+    ),
+  )
+
+  // 数据是哪一刻的：面板读的是**最近一次请求**的快照，正在跑的这一轮还没进去。
+  // 不标注的话，用户看到数字不变会以为面板坏了（参考产品也都在这里标一句）。
+  const freshness = session.running
+    ? t('这是上一轮的读数，本轮还在生成')
+    : t('这是最近一轮的读数')
+  // 脚注只说"这一份数字是什么"，不再重复顶部的会话名——同一个名字一行里出现两次，
+  // 读者会以为下面那行是另一个东西。左边留给**模型**：上限是跟模型走的，换了模型就换了尺子。
+  const footer = h('div', { className: 'dsh-mcp-ctx-foot' },
+    route.model
+      ? h('span', { className: 'dsh-mcp-ctx-foot-model', title: [route.provider, route.model].filter(Boolean).join(' · ') }, route.model)
+      : null,
+    h('span', { className: 'dsh-mcp-ctx-foot-meta' },
+      // 轮询失败时这份数字是**旧的**，而这恰恰是最容易被当成"现在的"的时候：说一句，不做成弹窗。
+      error ? h('span', { className: 'dsh-mcp-ctx-foot-err', role: 'status' }, t('读取失败，正在重试')) : null,
+      error ? null : h('span', { className: 'dsh-mcp-ctx-foot-fresh' + (session.running ? ' busy' : '') }, freshness),
+      t('{turns} 轮', { turns: Number.isFinite(report.turnTotal) ? report.turnTotal : turns.length }),
+      loading && !error ? h('span', { className: 'dsh-mcp-ctx-foot-live' }, t('更新中')) : null,
+    ),
+  )
+
+  // 详情页顶部：多会话时给一条"← 全部会话"的返回；单会话时只显示"你在看哪个"（不可点）。
+  //
+  // 早先是把会话画成一排芯片（点一下切换）。那是"列表 → 详情"的拙劣替代：芯片里只有名字，
+  // 看不出谁快满了、谁在生成，而且会话一多就挤成两行。现在多会话先给总览列表（见上面），
+  // 进来之后再从这里回去。
+  //
+  // 工作区名取宿主给的 `sessions[].workspace`，**不在这里切 cwd**：Windows 路径有 `\` 与 `/`
+  // 两种分隔符，宿主切一次、这里再切一次就是两个真相源（同一个路径可能显示成两个名字）。
+  // `active` 也是宿主算的（"这份报告讲的是哪个会话"）：客户端比 id 就是又算一遍。
+  const currentEntry = sessions.find((entry) => entry.active === true) || null
+  const workspace = currentEntry && typeof currentEntry.workspace === 'string' ? currentEntry.workspace : null
+  const sessionChip = h('span', { className: 'dsh-mcp-ctx-session current' },
+    workspace ? h('span', { className: 'dsh-mcp-ctx-session-ws', title: session.cwd || '' }, workspace) : null,
+    h('span', { className: 'dsh-mcp-ctx-session-title' }, session.title || (session.id ? String(session.id).slice(0, 20) : t('未知会话'))),
+  )
+  const sessionBar = sessions.length > 1
+    ? h('div', { className: 'dsh-mcp-ctx-sessions' },
+      h('button', { type: 'button', className: 'dsh-mcp-ctx-back', onClick: () => setTargetId(null) }, t('← 全部会话')),
+      sessionChip,
+    )
+    : h('div', { className: 'dsh-mcp-ctx-sessions' },
+      h('span', { className: 'dsh-mcp-ctx-sessions-label' }, t('会话')),
+      sessionChip,
+    )
+
+  return h('div', { className: 'dsh-mcp-ctx' },
+    sessionBar,
+    overview,
+    composition,
+    toolsSection,
+    list,
+    turnsBlock,
+    searchBlock,
+    footer,
+  )
+}
 // ── 复制到另一个工作区 ───────────────────────────────────────────────────
 // 默认全选源项目的 MCP、默认跳过目标同名条目：这两个默认值的方向一致——先让最常见的
 // 「把 A 的配置搬给 B」一次点完，同时让"改动目标已有配置"必须由用户显式选一次。
@@ -4234,42 +6502,159 @@ const WorkspaceCopyModal = ({ open, onClose, call, busy, setBusy, onCopied, from
 };
 
 const POLL_INTERVAL_MS = 5000;
-
-// 面板靠轮询反映 MCP 连接状态。标签页不可见时没人看这份数据，却照样每 5s 打两个 RPC，
-// 因此隐藏期间跳过拉取，并在重新可见时立刻补一次，避免用户回来先看到一屏陈旧状态。
-function startVisibilityAwarePolling(doc, timer, intervalMs, run) {
-  const visible = () => !doc || doc.visibilityState !== 'hidden';
-  const disposeInterval = timer.interval(() => { if (visible()) run(); }, intervalMs);
-  if (!doc || typeof doc.addEventListener !== 'function') return disposeInterval;
-  const onVisibilityChange = () => { if (visible()) run(); };
-  doc.addEventListener('visibilitychange', onVisibilityChange);
-  return () => {
-    disposeInterval();
-    doc.removeEventListener('visibilitychange', onVisibilityChange);
-  };
+/**
+ * 面板顶部通知条的计算：**顺序与条件**是这一块的全部价值，所以它是一个可以单测的纯函数。
+ *
+ * 顺序固定（有真机依据）：降级 → 读取失败 → 项目级故障 → 更新。前三条是「现在有问题」，
+ * 更新是纯增值信息，排最后（它本来就不该抢注意力）。
+ *
+ * 抽出来的理由不是"少 73 行"，而是这四条的**互斥与共存规则**原先只能靠读 500 行 JSX 才知道：
+ *   · 技能服务缺失要在 **MCP 面也**说（否则用户以为是自己没技能，其实是宿主没挂 dsh-skill）；
+ *   · 项目级故障（挂载/作用域/restrict）只在项目作用域下说——全局页没有这些概念；
+ *   · 更新提示在 done 阶段**不得**再读 updateHint（那时宿主已把它刷成"已是最新"）。
+ * 这些规则现在是函数的输入输出，能直接被用例钉住（见 test/panel-chrome.test.mjs 的新用例）。
+ */
+function buildNotices({ skillsService, flash, error, mountErrors, scopeErrors, restrictError, scope, updateHint, upgradeState, runUpgrade, dismissUpdateHint, liveAgents, refreshing, load }) {
+  return [
+    // 技能服务缺失：**在 MCP 面也要说**。MCP 面照常可用，但用户切到技能面时不能
+    // 只看到一个空列表——他需要知道是宿主没挂 dsh-skill，而不是自己没有技能。
+    skillsService.state === 'down'
+      ? h(Notice, {
+        key: 'skills-down', tone: 'err', icon: 'shield',
+        title: t('宿主 skills 服务未就绪，技能面已降级'),
+        children: t('未取到 remote.skillsManager（{reason}）。技能面不可用，MCP 面不受影响。', { reason: skillsService.error || t('原因未知') }),
+        actions: [h(Btn, { key: 'how', cls: 'sm', onClick: () => flash(t('检查宿主是否挂载并启用了 @deepseek-ai/dsh-skill')), children: t('排查') })],
+      })
+      : null,
+    error
+      ? h(Notice, {
+        key: 'load-failed', tone: 'err', icon: 'warn',
+        title: t('MCP 配置读取失败'),
+        children: error,
+        actions: [h(Btn, { key: 'retry', cls: 'sm', onClick: () => load(true), disabled: refreshing, children: t('重试') })],
+      })
+      : null,
+    scope !== 'global' && mountErrors.length
+      ? h(Notice, {
+        key: 'mount-failed', tone: 'warn', icon: 'warn',
+        title: t('{count} 个项目 MCP 未能挂载到会话', { count: mountErrors.length }),
+        // 项目 MCP 是「该项目所有会话共享一份连接」，同一项目内不会因并发会话而撞名；这里只
+        // 如实给出并发会话数作为上下文（挂载失败的常见外部原因），不再把它说成 serverName 占用。
+        // 只列 serverName 等于把真因留给用户自己逐条点开，所以正文直接摆出首条原因（Host 记的
+        // 官方原文；同名占用时还带「和谁同名」与根因），其余各条在详情里给全文。
+        children: mountErrors.map((m) => m.serverName).join(t('、'))
+          + t('。首个原因：{reason}　点开对应条目查看每一条的具体错误。', { reason: firstFailureReason(mountErrors[0]) })
+          + (liveAgents > 1 ? t('　本项目当前有 {count} 个会话在运行。', { count: liveAgents }) : ''),
+      })
+      : null,
+    scope !== 'global' && scopeErrors.length
+      ? h(Notice, {
+        key: 'scope-failed', tone: 'warn', icon: 'warn',
+        // 「作用域隔离失败」说清后果：这批工具会出现在**所有**项目的会话里（不是只在这一个项目里
+        // 少工具），所以它不是"某个 server 没配好"，而是这台机器的安装让作用域失效——横幅因此
+        // 也必须带出原因，否则用户只会去查 MCP 配置。
+        title: t('{count} 个项目 MCP 的工具无法隔离（会出现在所有项目的会话里）', { count: scopeErrors.length }),
+        children: scopeErrors.map((m) => m.serverName).join(t('、'))
+          + t('。首个原因：{reason}　点开对应条目查看每一条的具体错误。', { reason: firstFailureReason(scopeErrors[0]) }),
+      })
+      : null,
+    scope !== 'global' && restrictError
+      ? h(Notice, { key: 'restrict', tone: 'warn', icon: 'warn', title: t('屏蔽未能写入会话作用域'), children: restrictError.error })
+      : null,
+    // 更新条的存活条件：有新版本，**或者**刚升完（要告诉用户重启，否则「点完就消失」
+    // 等于没说——实测就是这样：升级成功后 updateHint 立刻变成「已是最新」，这条随之消失）。
+    (updateHint || upgradeState.phase === 'done') ? h(Notice, {
+      key: 'update', tone: 'info', icon: 'up',
+      title: upgradeState.phase === 'running'
+        ? t('正在升级到 v{version}…', { version: upgradeState.version })
+        // ⚠️ done 分支**不得**再读 updateHint 的字段：那时它已经是 null（宿主已认不出旧版）。
+        : upgradeState.phase === 'done' ? t('已升级到 v{version}，重启宿主后生效', { version: upgradeState.version })
+          : upgradeState.phase === 'failed' ? t('升级失败：{text}', { text: upgradeState.text })
+            : upgradeState.phase === 'blocked' && upgradeState.reason === 'not-npm'
+              ? t('本地链接安装，无法一键升级{suffix}', { suffix: updateHint?.current ? t('（当前 v{version}）', { version: updateHint.current }) : '' })
+              : t('新版本 v{version} 可用', { version: updateHint.latest }),
+      children: upgradeState.phase === 'done' ? t('宿主代码在进程内执行，不重启等于没升级。') : t('升级由官方 pluginManager 执行，装完需要重启宿主。'),
+      actions: [
+        // 可升级时给按钮，否则退回链接。按钮只在探测确认过 service + npm 来源后出现——
+        // 探测失败时这一整条与改动前完全一致，不会出现点了没反应的按钮。
+        upgradeState.phase === 'idle' && upgradeState.spec
+          ? h(Btn, { key: 'go', cls: 'sm primary', title: t('升级由官方 pluginManager 执行，装完需要重启宿主'), onClick: runUpgrade, children: t('升级') })
+          : h('a', {
+            key: 'link',
+            className: 'dsh-mcp-btn sm',
+            href: (updateHint && updateHint.url) || 'https://github.com/Imzl-zl/dsh-toolbox-ui/releases',
+            target: '_blank',
+            rel: 'noreferrer',
+          }, upgradeState.phase === 'done' ? t('看这次改了什么') : t('查看更新方式')),
+        h(Btn, { key: 'close', cls: 'icon ghost', title: t('本版本内不再提示'), onClick: dismissUpdateHint }, h(Icon, { d: ICONS.x })),
+      ],
+    }) : null,
+  ].filter(Boolean);
 }
 
-const McpTab = (props) => {
-  const { call, callSkills, onClose, floating, timer, pluginManager } = props;
-  const panelRef = useRef(null);
+
+
+/**
+ * 明文按钮的状态机：哪一条已展开、哪一条正在读、代次什么时候失效。
+ *
+ * 为什么抽成 hook：这是**一套协议**，不是十个独立状态——
+ *   · `revealRevisionRef` 与 `revealGeneration` 必须一起变，否则"配置变了但明文还挂着"与
+ *     "切换服务器后旧响应回写到新行上"会各自单独发生；
+ *   · 折叠、去重、代次校验三处必须读同一份 `revealed`，散在组件里只能靠人眼对。
+ * 抽出来之后它在组件里只剩一次调用，而加载与轮询那一大块不再需要关心明文。
+ */
+function useReveal({ call, scope, resetOn, flash }) {
+  const revealRevisionRef = useRef('');
+  const [revealed, setRevealed] = useState({});
+  const revealGeneration = useRef(0);
+  const clearRevealed = useCallback(() => {
+    clearRevealState(revealGeneration, setRevealed);
+  }, []);
+  const revealValue = useCallback(async (server, field, key) => {
+    if (!server.managed) throw new Error(t('该 MCP 来自其他配置层，配置只读，无法查看具体值'));
+    const res = server.scope === 'workspace'
+      ? await call('revealWorkspaceServer', { wsPath: scope, name: server.serverName, field, key })
+      : await call('reveal', { name: server.serverName, field, key });
+    if (!res?.ok) throw new Error(res?.error || t('读取配置失败'));
+    return res.value;
+  }, [call, scope]);
+  const onReveal = useCallback(async (server, field, key) => {
+    const id = server.serverName + ':' + field + (key !== undefined ? ':' + key : '');
+    if (revealed[id]?.value !== undefined) { setRevealed((prev) => ({ ...prev, [id]: false })); return; }
+    if (revealed[id]?.pending) return;
+    const generation = revealGeneration.current;
+    setRevealed((prev) => ({ ...prev, [id]: { pending: true } }));
+    try {
+      const value = await revealValue(server, field, key);
+      if (generation !== revealGeneration.current) return;
+      setRevealed((prev) => ({ ...prev, [id]: { value, field, key } }));
+    } catch (e) {
+      if (generation !== revealGeneration.current) return;
+      setRevealed((prev) => ({ ...prev, [id]: false }));
+      flash(String(e?.message || e), 'err');
+    }
+  }, [flash, revealValue, revealed]);
+  // 选中项随时会变：上一台服务器的明文不能跟着留在界面上。
+  useEffect(() => { clearRevealed(); }, [resetOn, clearRevealed]);
+  return { revealed, revealRevisionRef, revealGeneration, clearRevealed, revealValue, onReveal };
+}
+
+/**
+ * 面板的数据面：一次可见工具收集之外的全部加载状态（列表、诊断、作用域工作区）。
+ *
+ * 为什么抽成 hook：这十份状态由一个**隐式协议**串着——
+ *   · `loadSeq` 决定"这个响应还算不算数"；
+ *   · `revisionRef` 决定"内容没变就别重渲染"，于是**乐观更新后必须主动作废它**
+ *     （组件里那 5 处 `revisionRef.current = ''` 就是这条协议，包装成 `invalidate()` 之后
+ *     它有了名字，也不再要求调用方知道 revision 是什么）；
+ *   · `manualRefreshSeq` 决定"转圈什么时候停"。
+ * 三者只要有一处单独改动，症状都是"界面停在旧数据"或"转圈不停"，而它们在 973 行里
+ * 相隔几百行、各改各的。收进一个 hook 之后，这套协议只有一个地方能改。
+ */
+function useMcpServers({ call, scope, timer, flash, revealRevisionRef, clearRevealed, diagEnabled }) {
   const [servers, setServers] = useState([]);
   const [error, setError] = useState('');
-  const [selected, setSelected] = useState('');
-  const [query, setQuery] = useState('');
-  const [tools, setTools] = useState([]);
-  const [busy, setBusy] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
-  // C2：延迟加载参数的表单。与 add/import 同一层：它也是"改宿主配置"的一次性动作。
-  // 统一工具加载策略（内置 + MCP 同一套规则、可整体切换）。与「延迟参数」分开：
-  // 一个是**有哪些工具该常驻**，一个是**搜索机制自己的预算**，混在一起会让人以为是同一件事。
-  const [editTarget, setEditTarget] = useState(null);
-  const [toast, setToast] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [transportFilter, setTransportFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
-  // ---- workspace 项目层 ----
-  const [scope, setScope] = useState('global');
   const [workspaces, setWorkspaces] = useState([]);
   const [globalServers, setGlobalServers] = useState([]);
   const [exclude, setExclude] = useState([]);
@@ -4277,31 +6662,13 @@ const McpTab = (props) => {
   const [scopeErrors, setScopeErrors] = useState([]);
   const [restrictError, setRestrictError] = useState(null);
   const [liveAgents, setLiveAgents] = useState(0);
-  const [globalOpen, setGlobalOpen] = useState(false);
-  const [exportOpen, setExportOpen] = useState(false);
-  const [copyOpen, setCopyOpen] = useState(false);
-  const [updateHint, setUpdateHint] = useState(null);
   const loadSeq = useRef(0);
   const manualRefreshSeq = useRef(0);
   const revisionRef = useRef('');
-  const revealRevisionRef = useRef('');
-  const [revealed, setRevealed] = useState({});
-  const revealGeneration = useRef(0);
-  const clearRevealed = useCallback(() => {
-    clearRevealState(revealGeneration, setRevealed);
-  }, []);
-
-  useEffect(() => {
-    if (floating) panelRef.current?.focus();
-  }, [floating]);
-
-  const flash = useCallback(
-    (msg, kind) => {
-      setToast({ msg, kind: kind || 'ok' });
-      timer.timeout(() => setToast(''), 3200);
-    },
-    [timer],
-  );
+  // 连接诊断的数据面（排障视图）：**只在展开时**取一次，不跟主轮询——refs/sessions 只在
+  // “有人忘了归还引用”时才有意义，常驻轮询只会给每次 5s 都多一个 RPC。
+  const [diagRows, setDiagRows] = useState([]);
+  const [diagError, setDiagError] = useState('');
 
   const load = useCallback(async (notify = false) => {
     const seq = ++loadSeq.current;
@@ -4359,6 +6726,115 @@ const McpTab = (props) => {
     load(false);
     return startVisibilityAwarePolling(typeof document === 'undefined' ? null : document, timer, POLL_INTERVAL_MS, () => load(false));
   }, [load, timer]);
+
+  useEffect(() => {
+    if (!diagEnabled || scope === 'global') return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await call('projectConnections');
+        if (cancelled) return;
+        if (res?.ok) { setDiagRows(Array.isArray(res.connections) ? res.connections : []); setDiagError(''); } else setDiagError(res?.error || t('读取连接诊断失败'));
+      } catch (e) {
+        if (!cancelled) setDiagError(String(e?.message || e));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [diagEnabled, scope, call]);
+  /** 乐观更新之后必须调用：下一次 load 一定写回（否则 revision 没变，界面会停在本地猜测上）。 */
+  const invalidate = useCallback(() => { revisionRef.current = ''; }, []);
+  /**
+   * 切换作用域：先让在途请求失效，再清掉旧作用域的视图数据。
+   * 不这么做的话，新 scope 已渲染、旧 servers 仍在树里，用户会先看到「项目里有全局 MCP」，
+   * 下一次刷新又消失（完整理由见调用点 switchScope）。
+   */
+  const resetScope = useCallback(() => {
+    loadSeq.current += 1;
+    revisionRef.current = '';
+    setServers([]);
+    setGlobalServers([]);
+    setExclude([]);
+    setMountErrors([]);
+    setScopeErrors([]);
+    setRestrictError(null);
+    setLiveAgents(0);
+    setError('');
+  }, []);
+  return {
+    servers, error, refreshing, workspaces, globalServers, exclude,
+    mountErrors, scopeErrors, restrictError, liveAgents,
+    load, invalidate, resetScope, diagRows, diagError,
+    setServers, setGlobalServers, setExclude,
+  };
+}
+
+// 面板靠轮询反映 MCP 连接状态。标签页不可见时没人看这份数据，却照样每 5s 打两个 RPC，
+// 因此隐藏期间跳过拉取，并在重新可见时立刻补一次，避免用户回来先看到一屏陈旧状态。
+function startVisibilityAwarePolling(doc, timer, intervalMs, run) {
+  const visible = () => !doc || doc.visibilityState !== 'hidden';
+  const disposeInterval = timer.interval(() => { if (visible()) run(); }, intervalMs);
+  if (!doc || typeof doc.addEventListener !== 'function') return disposeInterval;
+  const onVisibilityChange = () => { if (visible()) run(); };
+  doc.addEventListener('visibilitychange', onVisibilityChange);
+  return () => {
+    disposeInterval();
+    doc.removeEventListener('visibilitychange', onVisibilityChange);
+  };
+}
+
+const McpTab = (props) => {
+  const { call, callSkills, onClose, floating, timer, pluginManager } = props;
+  const panelRef = useRef(null);
+  const [selected, setSelected] = useState('');
+  const [query, setQuery] = useState('');
+  const [tools, setTools] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  // C2：延迟加载参数的表单。与 add/import 同一层：它也是"改宿主配置"的一次性动作。
+  // 统一工具加载策略（内置 + MCP 同一套规则、可整体切换）。与「延迟参数」分开：
+  // 一个是**有哪些工具该常驻**，一个是**搜索机制自己的预算**，混在一起会让人以为是同一件事。
+  const [editTarget, setEditTarget] = useState(null);
+  const [toast, setToast] = useState('');
+  const [transportFilter, setTransportFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  // ---- workspace 项目层 ----
+  const [scope, setScope] = useState('global');
+  // 从 MCP 详情的「工具」页签跳到工具页时，定位到那台服务器（只消费一次）。
+  const [toolFocus, setToolFocus] = useState(null);
+  const [globalOpen, setGlobalOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false);
+  // 连接诊断（R10）：宿主侧的 projectConnections 一直在，但面板没有入口。
+  // **默认不取数**：它是排障视图，不该让每次打开项目页都多打一个 RPC；展开才问一次。
+  const [diagOpen, setDiagOpen] = useState(false);
+  const [updateHint, setUpdateHint] = useState(null);
+
+  useEffect(() => {
+    if (floating) panelRef.current?.focus();
+  }, [floating]);
+
+  const flash = useCallback(
+    (msg, kind) => {
+      setToast({ msg, kind: kind || 'ok' });
+      timer.timeout(() => setToast(''), 3200);
+    },
+    [timer],
+  );
+
+  // 明文的整套状态机（展开/待读/代次失效）归 useReveal，组件只负责把它的三个出口接给详情与表单。
+  // ⚠️ 必须在 `flash` 之后调用：hook 内部会用它报「读取配置失败」，而在声明之前引用它是 TDZ 错误
+  // （渲染时直接抛 Cannot access 'flash' before initialization，整页空白）。
+  const { revealed, revealRevisionRef, revealGeneration, clearRevealed, revealValue, onReveal } = useReveal({ call, scope, resetOn: selected, flash });
+
+  // 数据面：列表、诊断、作用域工作区 + 加载/轮询/防串（见 useMcpServers 的说明）。
+  const {
+    servers, error, refreshing, workspaces, globalServers, exclude,
+    mountErrors, scopeErrors, restrictError, liveAgents,
+    load, invalidate, resetScope, diagRows, diagError,
+    setServers, setGlobalServers, setExclude,
+  } = useMcpServers({ call, scope, timer, flash, revealRevisionRef, clearRevealed, diagEnabled: diagOpen });
+
 
   // 更新提示：Host 每天最多查一次 npm registry（本包的 latest 端点，见 lib/index.js 的
   // updateLatestUrl）；纯增值信息，任何失败都静默，不打扰面板。
@@ -4458,24 +6934,24 @@ const McpTab = (props) => {
 
   const toggleDeferOne = (s) => {
     if (busy || s.managed !== true) return;
-    // 方向必须从**芯片显示的那个值**推出：芯片读 `deferEffective`（统一策略下的实际状态），
-    // 若这里改读旧的 `defer`，用户点一颗写着"延迟"的芯片、方向却是"再打开一次延迟"，
-    // 结果就是点了没反应却提示成功。
-    const next = (s.deferEffective ?? s.defer) !== true;
+    // 方向必须从**芯片显示的那个值**推出（组级默认）：若这里改读旧的 `defer`，用户点一颗写着
+    // “延迟”的芯片、方向却是“再打开一次延迟”，结果就是点了没反应却提示成功。
+    if (s.deferLocked) return;
+    const next = (s.deferConfigured ?? (s.defer === true ? 'deferred' : 'resident')) !== 'deferred';
     // 乐观更新只动被点的那一行（不是整个作用域），再由 act 完成后的 load 校准。
-    revisionRef.current = '';
-    setServers((prev) => prev.map((row) => (row.serverName === s.serverName && row.scope === s.scope ? { ...row, defer: next, deferEffective: next } : row)));
+    invalidate();
+    setServers((prev) => prev.map((row) => (row.serverName === s.serverName && row.scope === s.scope ? { ...row, defer: next, deferConfigured: next ? 'deferred' : 'resident' } : row)));
     return act(
       'setDefer',
       s.scope === 'workspace' ? { name: s.serverName, wsPath: scope, defer: next } : { name: s.serverName, defer: next },
-      next ? t('已把 {name} 切到延迟加载', { name: s.serverName }) : t('已把 {name} 切回全量常驻', { name: s.serverName }),
+      next ? t('已把 {name} 的默认加载方式设为延迟', { name: s.serverName }) : t('已把 {name} 的默认加载方式设为全量', { name: s.serverName }),
     );
   };
   const onToggle = (s) => {
     if (busy || !s.managed) return;
     const next = !s.enabled;
     // 乐观更新：本地先翻转，操作完成后由 load 校准。
-    revisionRef.current = '';
+    invalidate();
     setServers((prev) => prev.map((x) => (x.serverName === s.serverName ? { ...x, enabled: next } : x)));
     if (scope === 'global') {
       return act(next ? 'enable' : 'disable', s.serverName, (next ? t('已启用 ') : t('已禁用 ')) + s.serverName);
@@ -4495,9 +6971,9 @@ const McpTab = (props) => {
   const setDeferAll = (next) => {
     if (busy) return;
     const inWorkspace = scope !== 'global';
-    revisionRef.current = '';
-    setServers((prev) => prev.map((s) => (s.managed === true && (inWorkspace || s.scope !== 'workspace') ? { ...s, defer: next } : s)));
-    return act('setDeferAll', inWorkspace ? { wsPath: scope, defer: next } : { defer: next }, next ? t('已开启全部延迟加载') : t('已关闭全部延迟加载'));
+    invalidate();
+    setServers((prev) => prev.map((s) => (s.managed === true && (inWorkspace || s.scope !== 'workspace') ? { ...s, defer: next, deferConfigured: next ? 'deferred' : 'resident' } : s)));
+    return act('setDeferAll', inWorkspace ? { wsPath: scope, defer: next } : { defer: next }, next ? t('已把全部 MCP 的默认加载方式设为延迟') : t('已把全部 MCP 的默认加载方式设为全量'));
   };
   const onReconnect = (s) => {
     // 项目连接也要有出口：mcp-client 的重连预算耗尽后会注销工具并停止，只能靠重载配置/重启宿主
@@ -4520,41 +6996,16 @@ const McpTab = (props) => {
   };
   const onToggleExclude = (serverName, hidden) => {
     if (busy || scope === 'global') return;
-    revisionRef.current = '';
+    invalidate();
     setGlobalServers((prev) => prev.map((s) => (s.serverName === serverName ? { ...s, excluded: hidden } : s)));
     setExclude((prev) => (hidden ? (prev.includes(serverName) ? prev : [...prev, serverName]) : prev.filter((name) => name !== serverName)));
     // 屏蔽同样是"写盘即对齐"：Host 会立刻把新的 restrict 写进会话作用域，运行中的会话在**下一次
     // 模型请求**就不再见得到这些工具（工具清单是每步重新组装的，不是首轮定型）。
     act('setWorkspaceExclude', { wsPath: scope, serverName, hidden }, hidden ? t('已屏蔽 {name}，对运行中的会话立即生效', { name: serverName }) : t('已取消屏蔽 {name}，对运行中的会话立即生效', { name: serverName }));
   };
-  useEffect(() => { clearRevealed(); }, [selected, clearRevealed]);
-  const revealValue = useCallback(async (server, field, key) => {
-    if (!server.managed) throw new Error(t('该 MCP 来自其他配置层，配置只读，无法查看具体值'));
-    const res = server.scope === 'workspace'
-      ? await call('revealWorkspaceServer', { wsPath: scope, name: server.serverName, field, key })
-      : await call('reveal', { name: server.serverName, field, key });
-    if (!res?.ok) throw new Error(res?.error || t('读取配置失败'));
-    return res.value;
-  }, [call, scope]);
   const onCopy = useCallback((text) => {
     copyText(text).then((ok) => flash(ok ? t('已复制到剪贴板') : t('复制失败'), ok ? 'ok' : 'err'));
   }, [flash]);
-  const onReveal = useCallback(async (server, field, key) => {
-    const id = server.serverName + ':' + field + (key !== undefined ? ':' + key : '');
-    if (revealed[id]?.value !== undefined) { setRevealed((prev) => ({ ...prev, [id]: false })); return; }
-    if (revealed[id]?.pending) return;
-    const generation = revealGeneration.current;
-    setRevealed((prev) => ({ ...prev, [id]: { pending: true } }));
-    try {
-      const value = await revealValue(server, field, key);
-      if (generation !== revealGeneration.current) return;
-      setRevealed((prev) => ({ ...prev, [id]: { value, field, key } }));
-    } catch (e) {
-      if (generation !== revealGeneration.current) return;
-      setRevealed((prev) => ({ ...prev, [id]: false }));
-      flash(String(e?.message || e), 'err');
-    }
-  }, [flash, revealValue, revealed]);
   const onSubmit = async (spec, setFormError) => {
     setBusy(true);
     const isWorkspace = scope !== 'global';
@@ -4677,16 +7128,12 @@ const McpTab = (props) => {
     if (next === scope) return;
     // 先让旧请求失效，再清掉旧作用域的视图数据。否则新 scope 已渲染、
     // 旧 servers 仍在树里，用户就会先看到「项目里有全局 MCP」，下一次刷新又消失。
-    loadSeq.current += 1;
+    // 作用域数据那一半归 useMcpServers.resetScope()；这里只清组件自己的 UI 状态。
+    resetScope();
     setScope(next);
-    setServers([]);
-    setGlobalServers([]);
+    // 作用域变了，之前那个「只看这台」的定位就过期了。
+    setToolFocus(null);
     setTools([]);
-    setExclude([]);
-    setMountErrors([]);
-    setScopeErrors([]);
-    setRestrictError(null);
-    setLiveAgents(0);
     setSelected('');
     setQuery('');
     // 状态过滤在两种作用域下语义不同（项目 MCP 无连接态），切换时归零避免「空列表且控件已隐藏」。
@@ -4698,11 +7145,9 @@ const McpTab = (props) => {
     setAddOpen(false);
     setImportOpen(false);
     setEditTarget(null);
-    setError('');
-    revisionRef.current = '';
     clearRevealed();
     // 新作用域只由 [load, timer] effect 拉取；这里的 load 仍捕获旧 scope。
-  }, [scope, clearRevealed]);
+  }, [scope, clearRevealed, resetScope]);
 
   // 工作区路径列表：宿主 skillsManager.list 要的是字符串数组，而 workspaces 状态里是
   // { path, name, serverCount, … } 对象。单独抽出来是因为 SkillsPanel 也要用同一份
@@ -4723,6 +7168,14 @@ const McpTab = (props) => {
   // 技能面一条自己的 bar），于是「同一个概念、两种形态、两个渲染者」。现在只有这一个。
   const [ability, setAbility] = useState('mcp');
   const [mode, setMode] = useState('manage');
+  // 深层链接：切到工具页并只看某一台服务器。scope 用**当前面板作用域**（不是服务器自己的）——
+  // 项目作用域下看的正是“这台在本项目的覆盖”，全局页反而是另一个问题。
+  const openToolPageFor = (server) => {
+    if (!server?.serverName) return;
+    setMode('manage');
+    setToolFocus({ name: server.serverName, scope, nonce: Date.now() });
+    setAbility('tool-loading');
+  };
   // 技能面的作用域药丸（全部 + 每个实际存在的作用域组）。选择值就是组的 key，
   // 与列表分组同源（skillGroupKey），所以药丸上的数字和它筛出来的行数一定相等。
   const [scopeFilter, setScopeFilter] = useState('all');
@@ -4789,7 +7242,7 @@ const McpTab = (props) => {
     t('能力层'),
   );
 
-  // 悬浮窗外壳：**两个能力面共用这一处**。
+  // 悬浮窗外壳：**各能力面共用这一处**。
   // `.dsh-mcp-wrap` 只提供列布局与内边距；面板真正的外观（背景、圆角、阴影、遮罩、层级）
   // 全部来自 .dsh-mcp-panel-overlay / .dsh-mcp-panel。所以任何返回内容的出口都必须过这里，
   // 否则得到的是一个没有背景、没有定位的裸 div——页面其它内容会直接透过来。
@@ -4803,13 +7256,16 @@ const McpTab = (props) => {
 
   // ── 第二行：模式分段 | 作用域药丸 | 连接状态 ────────────────────────────
   //
-  // 这一条由**外壳**渲染，两个能力面共用（曾经技能面自己画一条 bar、MCP 面直接把作用域
+  // 这一条由**外壳**渲染，各能力面共用（工具面不渲染这一条，它自带作用域行；曾经技能面自己画一条 bar、MCP 面直接把作用域
   // 药丸当第二行，于是切面时这一行的形状与控件都换了）。
   //
   // 作用域只在**已安装**模式出现：市场是随宿主一起发下来的目录，没有作用域语义，
   // 留着它只会让人以为「筛选了市场」（原型同款处理：市场模式下这段 display:none、不留空档）。
   const skillsScopeTabs = skillsService.scopeTabs || [];
-  const runtime = ability === 'tool-loading'
+  // 「工具」与「上下文」两面都不吃第二行：它们管的是宿主全局注册的工具与会话，
+  // 与当前选中哪个项目无关（工具页自带作用域行，上下文面只读一个最近活跃的会话）。
+  const bareAbility = ability === 'tool-loading' || ability === 'context';
+  const runtime = bareAbility
     ? null
     : ability === 'skills'
       ? (skillsService.state === 'down'
@@ -4822,9 +7278,9 @@ const McpTab = (props) => {
   // 工具页没有作用域：它管的是宿主全局注册的工具，与当前选中哪个项目无关。
   // 所以这一行在工具页只留右侧那句状态，模式与作用域两列都不渲染。
   const subRow = h('div', { className: 'dsh-mcp-sub' },
-    ability === 'tool-loading' ? null : seg(SKILL_MODES, mode, setMode, t('模式')),
+    bareAbility ? null : seg(SKILL_MODES, mode, setMode, t('模式')),
     h('div', { className: 'dsh-mcp-sub-scope' },
-      ability === 'tool-loading'
+      bareAbility
         ? null
         : mode === 'manage'
           ? (ability === 'skills'
@@ -4836,89 +7292,16 @@ const McpTab = (props) => {
   );
 
   // ── 通知条 ──────────────────────────────────────────────────────────────
+
+  const notices = buildNotices({ skillsService, flash, error, mountErrors, scopeErrors, restrictError, scope, updateHint, upgradeState, runUpgrade, dismissUpdateHint, liveAgents, refreshing, load });
   // 顺序固定：降级 → 读取失败 → 项目级故障 → 更新。前三条是「现在有问题」，
   // 更新是纯增值信息，所以它排最后（也最容易被忽略，但它本来就不该抢注意力）。
-  const notices = [
-    // 技能服务缺失：**在 MCP 面也要说**。MCP 面照常可用，但用户切到技能面时不能
-    // 只看到一个空列表——他需要知道是宿主没挂 dsh-skill，而不是自己没有技能。
-    skillsService.state === 'down'
-      ? h(Notice, {
-        key: 'skills-down', tone: 'err', icon: 'shield',
-        title: t('宿主 skills 服务未就绪，技能面已降级'),
-        children: t('未取到 remote.skillsManager（{reason}）。技能面不可用，MCP 面不受影响。', { reason: skillsService.error || t('原因未知') }),
-        actions: [h(Btn, { key: 'how', cls: 'sm', onClick: () => flash(t('检查宿主是否挂载并启用了 @deepseek-ai/dsh-skill')), children: t('排查') })],
-      })
-      : null,
-    error
-      ? h(Notice, {
-        key: 'load-failed', tone: 'err', icon: 'warn',
-        title: t('MCP 配置读取失败'),
-        children: error,
-        actions: [h(Btn, { key: 'retry', cls: 'sm', onClick: () => load(true), disabled: refreshing, children: t('重试') })],
-      })
-      : null,
-    scope !== 'global' && mountErrors.length
-      ? h(Notice, {
-        key: 'mount-failed', tone: 'warn', icon: 'warn',
-        title: t('{count} 个项目 MCP 未能挂载到会话', { count: mountErrors.length }),
-        // 项目 MCP 是「该项目所有会话共享一份连接」，同一项目内不会因并发会话而撞名；这里只
-        // 如实给出并发会话数作为上下文（挂载失败的常见外部原因），不再把它说成 serverName 占用。
-        // 只列 serverName 等于把真因留给用户自己逐条点开，所以正文直接摆出首条原因（Host 记的
-        // 官方原文；同名占用时还带「和谁同名」与根因），其余各条在详情里给全文。
-        children: mountErrors.map((m) => m.serverName).join(t('、'))
-          + t('。首个原因：{reason}　点开对应条目查看每一条的具体错误。', { reason: firstFailureReason(mountErrors[0]) })
-          + (liveAgents > 1 ? t('　本项目当前有 {count} 个会话在运行。', { count: liveAgents }) : ''),
-      })
-      : null,
-    scope !== 'global' && scopeErrors.length
-      ? h(Notice, {
-        key: 'scope-failed', tone: 'warn', icon: 'warn',
-        // 「作用域隔离失败」说清后果：这批工具会出现在**所有**项目的会话里（不是只在这一个项目里
-        // 少工具），所以它不是"某个 server 没配好"，而是这台机器的安装让作用域失效——横幅因此
-        // 也必须带出原因，否则用户只会去查 MCP 配置。
-        title: t('{count} 个项目 MCP 的工具无法隔离（会出现在所有项目的会话里）', { count: scopeErrors.length }),
-        children: scopeErrors.map((m) => m.serverName).join(t('、'))
-          + t('。首个原因：{reason}　点开对应条目查看每一条的具体错误。', { reason: firstFailureReason(scopeErrors[0]) }),
-      })
-      : null,
-    scope !== 'global' && restrictError
-      ? h(Notice, { key: 'restrict', tone: 'warn', icon: 'warn', title: t('屏蔽未能写入会话作用域'), children: restrictError.error })
-      : null,
-    // 更新条的存活条件：有新版本，**或者**刚升完（要告诉用户重启，否则「点完就消失」
-    // 等于没说——实测就是这样：升级成功后 updateHint 立刻变成「已是最新」，这条随之消失）。
-    (updateHint || upgradeState.phase === 'done') ? h(Notice, {
-      key: 'update', tone: 'info', icon: 'up',
-      title: upgradeState.phase === 'running'
-        ? t('正在升级到 v{version}…', { version: upgradeState.version })
-        // ⚠️ done 分支**不得**再读 updateHint 的字段：那时它已经是 null（宿主已认不出旧版）。
-        : upgradeState.phase === 'done' ? t('已升级到 v{version}，重启宿主后生效', { version: upgradeState.version })
-          : upgradeState.phase === 'failed' ? t('升级失败：{text}', { text: upgradeState.text })
-            : upgradeState.phase === 'blocked' && upgradeState.reason === 'not-npm'
-              ? t('本地链接安装，无法一键升级{suffix}', { suffix: updateHint?.current ? t('（当前 v{version}）', { version: updateHint.current }) : '' })
-              : t('新版本 v{version} 可用', { version: updateHint.latest }),
-      children: upgradeState.phase === 'done' ? t('宿主代码在进程内执行，不重启等于没升级。') : t('升级由官方 pluginManager 执行，装完需要重启宿主。'),
-      actions: [
-        // 可升级时给按钮，否则退回链接。按钮只在探测确认过 service + npm 来源后出现——
-        // 探测失败时这一整条与改动前完全一致，不会出现点了没反应的按钮。
-        upgradeState.phase === 'idle' && upgradeState.spec
-          ? h(Btn, { key: 'go', cls: 'sm primary', title: t('升级由官方 pluginManager 执行，装完需要重启宿主'), onClick: runUpgrade, children: t('升级') })
-          : h('a', {
-            key: 'link',
-            className: 'dsh-mcp-btn sm',
-            href: (updateHint && updateHint.url) || 'https://github.com/Imzl-zl/dsh-toolbox-ui/releases',
-            target: '_blank',
-            rel: 'noreferrer',
-          }, upgradeState.phase === 'done' ? t('看这次改了什么') : t('查看更新方式')),
-        h(Btn, { key: 'close', cls: 'icon ghost', title: t('本版本内不再提示'), onClick: dismissUpdateHint }, h(Icon, { d: ICONS.x })),
-      ],
-    }) : null,
-  ].filter(Boolean);
 
-  // ── 两个能力面共用的外壳 ────────────────────────────────────────────────
+  // ── 各能力面共用的外壳 ────────────────────────────────────────────────
   //
   // ⚠️ 三个不变量，都有真机故障作依据：
   //
-  // 1) **两个能力面必须走同一个出口**（.dsh-mcp-panel-overlay → .dsh-mcp-panel → .dsh-mcp-wrap）。
+  // 1) **各能力面必须走同一个出口**（.dsh-mcp-panel-overlay → .dsh-mcp-panel → .dsh-mcp-wrap）。
   //    `.dsh-mcp-wrap` 只负责列布局与内边距，没有背景/定位/层级；裸返回会让面板被当成
   //    页面里的普通 div，设置页内容直接透过来（实测糊成一片、完全不可读）。
   //
@@ -4944,6 +7327,21 @@ const McpTab = (props) => {
         ? h(Btn, { icon: 'refresh', onClick: () => load(true), disabled: refreshing, children: refreshing ? t('刷新中…') : t('刷新') })
         : null,
       ability === 'mcp' ? h(Btn, { onClick: () => setImportOpen(true), title: t('导入 MCP（{scope}）', { scope: scopeName }), children: t('导入 MCP') }) : null,
+      // 导出是导入的**逆向**动作（同一份整层 JSON 快照），所以它们住同一个位置、紧挨着。
+      // 为什么必须解释：全局层曾经把这颗按钮单独画成 .dsh-mcp-body 里的一个动作行，
+      // 而 .dsh-mcp-body 是 flex 行——多一个直接子元素就多一列，整个面板被挤窄一截
+      // （用户原话：「直接整体向右挤压，而且特别丑」）。动作行属于容器内部，不属于容器本身。
+      // 文案按作用域分开：全局导的是 profile patch（求值后的实际值），项目导的是 .dsh/mcp.json。
+      ability === 'mcp' && servers.length > 0
+        ? h(Btn, {
+          disabled: busy,
+          title: scope === 'global'
+            ? t('导出全局层的 MCP 配置（JSON，可备份或迁移）。注意：面板添加过的条目已是实际值，可能含明文凭据')
+            : t('导出本项目的 MCP 配置（JSON，可备份、跨机器迁移或分享）'),
+          onClick: () => setExportOpen(true),
+          children: scope === 'global' ? t('导出全局') : t('导出'),
+        })
+        : null,
       ability === 'mcp'
         ? h(Btn, { cls: 'primary', icon: 'plus', onClick: openAdd, title: (scope === 'global' ? t('添加 MCP') : t('添加项目 MCP')) + t('（{name}）', { name: scopeName }), children: scope === 'global' ? t('添加 MCP') : t('添加项目 MCP') })
         // 技能面这里**不放「发现技能」**：市场已经是第二行那个模式分段（同一屏、同一位置）。
@@ -4981,16 +7379,25 @@ const McpTab = (props) => {
 
   // 「全部延迟」的**唯一**渲染处：列表的过滤器行（ServerList 的 toolbarAction）。
   // 曾经它同时出现在底栏，一屏放不下时用户根本看不到——现在是唯一入口，位置固定在第一屏。
+  //
+  // 它写的是每台服务器的**组级默认**，不是逐工具策略：所以 title 要说明「工具页的单独设置仍生效」——
+  // 否则用户会以为按一下就全部归零。锁定（总开关 / 全部常驻方案）时只读并写清原因。
+  const deferAllLocked = (servers || []).find((s) => s.managed === true && (scope !== 'global' || s.scope !== 'workspace'))?.deferLocked ?? null;
+  const deferAllLockTitle = deferAllLocked === 'master-switch'
+    ? t('ToolSearch 总开关生效中（所有工具常驻），服务器级开关不生效')
+    : deferAllLocked === 'all-resident'
+      ? t('当前整体方案为「全部常驻」（配置里写的），服务器级开关不生效')
+      : null;
   const deferAllAction = {
     label: deferAll.all ? t('取消全部延迟') : t('全部延迟'),
-    title: (deferAll.all
+    title: deferAllLockTitle || (deferAll.all
       ? (scope === 'global'
-        ? t('把当前 Web profile 的所有 MCP 切回全量常驻（{count} 个）', { count: deferAll.total })
-        : t('把该项目的所有 MCP 切回全量常驻（{count} 个）', { count: deferAll.total }))
+        ? t('把当前 Web profile 的所有 MCP 的默认加载方式设为全量（{count} 个）；「工具」页的单独设置仍生效', { count: deferAll.total })
+        : t('把该项目的所有 MCP 的默认加载方式设为全量（{count} 个）；「工具」页的单独设置仍生效', { count: deferAll.total }))
       : (scope === 'global'
-        ? t('把当前 Web profile 的所有 MCP 切到延迟加载（{count} 个）：模型经 tool_search 按需搜索，命中后才进工具列表', { count: deferAll.total })
-        : t('把该项目的所有 MCP 切到延迟加载（{count} 个）：模型经 tool_search 按需搜索，命中后才进工具列表', { count: deferAll.total }))),
-    disabled: deferAll.total === 0 || busy,
+        ? t('把当前 Web profile 的所有 MCP 的默认加载方式设为延迟（{count} 个）：模型经 tool_search 按需搜索；「工具」页的单独设置仍生效', { count: deferAll.total })
+        : t('把该项目的所有 MCP 的默认加载方式设为延迟（{count} 个）：模型经 tool_search 按需搜索；「工具」页的单独设置仍生效', { count: deferAll.total }))),
+    disabled: deferAll.total === 0 || busy || deferAllLockTitle !== null,
     onClick: () => setDeferAll(!deferAll.all),
   };
 
@@ -5023,6 +7430,9 @@ const McpTab = (props) => {
       ? h(
         'div',
         { className: 'dsh-mcp-body' },
+        // ⚠️ 这一层只允许「列表 + 详情」两个直接子元素。.dsh-mcp-body 是 display:flex，
+        // 往里多塞一行动作就等于多出一列，列表与详情一起被挤窄——导出曾经就长在这里，
+        // 现在它在标题栏（与「导入 MCP」成对）。动作行属于卡片**内部**，不属于面板主体。
         h(ServerList, {
           servers: sortServers(filtered, mcpSort),
           total: servers.length,
@@ -5041,6 +7451,7 @@ const McpTab = (props) => {
           toolbarAction: deferAllAction,
         }),
         h(ServerDetailPane, {
+          call,
           server: selectedServer,
           tools,
           onToggle,
@@ -5051,6 +7462,7 @@ const McpTab = (props) => {
           onReveal,
           revealed,
           onCopy,
+          onOpenToolLoading: openToolPageFor,
         }),
       )
       : h(
@@ -5067,10 +7479,9 @@ const McpTab = (props) => {
                 title: t('共享的全局 MCP'), onClick: () => { setGlobalOpen(true); setSelected(''); } },
                 t('全局共享'), h('span', null, globalServers.length)),
             ),
+            // 卡片内的动作行只放**项目专属**的「复制到…」：导出已经搬到标题栏与导入成对，
+            // 同一个动作不该在两种作用域下住在两个地方。
             !globalOpen && servers.length > 0 ? h('div', { className: 'dsh-mcp-section-actions' },
-              h(Btn, { cls: 'sm ghost', disabled: busy,
-                title: t('导出本项目的 MCP 配置（JSON，可备份、跨机器迁移或分享）'),
-                onClick: () => setExportOpen(true), children: t('导出') }),
               h(Btn, { cls: 'sm ghost', disabled: busy,
                 title: t('把本项目的 MCP 复制到另一个已注册的工作区'),
                 onClick: () => setCopyOpen(true), children: t('复制到…') }),
@@ -5100,8 +7511,30 @@ const McpTab = (props) => {
               toolbarAction: deferAllAction,
             }),
           ),
+          // 连接诊断：放在左栏底部（.dsh-mcp-ws-body 本来就是 column，零布局改动）。
+          // 它回答的是单行视图回答不了的问题——`refs > sessions` 说明某条共享连接的引用
+          // 卡住不归还，而那个泄漏**没有任何单行症状**：面板一直显示连接正常、工具可用，
+          // 直到空闲回收永远不发生。
+          h('div', { className: 'dsh-mcp-source-detail' },
+            h(Btn, { cls: 'sm ghost', onClick: () => setDiagOpen((prev) => !prev),
+              title: t('每条项目共享连接的引用与配置状态（排障用）'),
+              children: diagOpen ? t('收起连接诊断') : t('连接诊断') }),
+            diagOpen
+              ? h('div', null,
+                diagError ? h('div', { className: 'dsh-mcp-log' }, diagError) : null,
+                !diagError && diagRows.length === 0 ? h('div', null, t('没有活动的项目连接')) : null,
+                !diagError ? diagRows.map((row) => {
+                  const anomaly = connectionAnomalyOf(row);
+                  return h('div', { key: row.wsPath + '\u0000' + row.serverName },
+                    h('span', null, connectionDiagText(row)),
+                    anomaly ? h(Badge, { cls: 's-err' }, anomaly.text) : null);
+                }) : null,
+              )
+              : null,
+          ),
         ),
         h(ServerDetailPane, {
+          call,
           server: selectedServer,
           tools,
           onToggle,
@@ -5112,6 +7545,7 @@ const McpTab = (props) => {
           onReveal,
           revealed,
           onCopy,
+          onOpenToolLoading: openToolPageFor,
           excluded: exclude.includes(selected),
           onToggleExclude,
           emptyTitle: !globalOpen && servers.length === 0 ? t('此项目还没有 MCP') : undefined,
@@ -5145,15 +7579,22 @@ const McpTab = (props) => {
     { className: 'dsh-mcp-wrap' },
     head,
     ...notices,
-    ability === 'tool-loading' ? null : subRow,
+    bareAbility ? null : subRow,
     ability === 'skills'
       ? skillsBody
-      : ability === 'tool-loading'
+      : ability === 'context'
+        ? h(ContextFace, { call })
+        : ability === 'tool-loading'
         ? h(ToolLoadingModal, {
           open: true,
           inline: true,
           onClose: () => {},
           call,
+          scopes: scopeTabs,
+          scope,
+          onScope: switchScope,
+          focus: toolFocus,
+          onFocusConsumed: () => setToolFocus(null),
           onSaved: (_fresh, note) => flash(note || t('已保存工具加载策略')),
         })
         : mcpBody,
@@ -5161,7 +7602,7 @@ const McpTab = (props) => {
     h(JsonImportModal, { open: importOpen, onClose: () => setImportOpen(false), call, busy, setBusy, onImported, scope, scopeName }),
     // 更新提示也挂在面板的弹层列表里：面板一开它就挂载，向宿主问一次「这次变了什么」。
     h(WhatsNewModal, { call }),
-    h(WorkspaceExportModal, { open: exportOpen && scope !== 'global', onClose: () => setExportOpen(false), call, scope, scopeName }),
+    h(WorkspaceExportModal, { open: exportOpen, onClose: () => setExportOpen(false), call, scope, scopeName }),
     h(WorkspaceCopyModal, {
       open: copyOpen && scope !== 'global',
       onClose: () => setCopyOpen(false),
@@ -5266,36 +7707,8 @@ const usePanelOpen = () => {
   return open;
 };
 
-// ── 当前语言版本：让 effect 依赖能感知语言切换 ──────────────────────────────
-// 组件渲染时直接读 localeActive 就够了（宿主每个 outlet 在语言切换时都会重渲染），
-// 但 **effect 依赖不行**：切语言不会改变任何 props/state，依赖里没有它，
-// 「按语言重新拉取」这类 effect 就不会跑（真机表现：切英文后技能市场的描述与
-// 分类名停在中文，要等下次搜索/重挂才变）。所以给语言一个版本号 store，
-// readActive 在语言真变时 bump，组件用 useLocaleVersion() 把它列进依赖。
-function createLocaleVersion() {
-  let version = 0;
-  const listeners = new Set();
-  return {
-    get: () => version,
-    bump: () => {
-      version += 1;
-      for (const listener of [...listeners]) listener();
-    },
-    subscribe(listener) {
-      listeners.add(listener);
-      return () => { listeners.delete(listener); };
-    },
-  };
-}
-const localeVersion = createLocaleVersion();
-const useLocaleVersion = () => {
-  const [version, setVersion] = useState(localeVersion.get());
-  useEffect(() => localeVersion.subscribe(() => setVersion(localeVersion.get())), []);
-  return version;
-};
-
 // ── 入口显示偏好：两个入口都可关，但不能都关 ─────────────────────────────────
-// 面板只能从这两个入口打开（右下角悬浮按钮 / 左侧栏底部「MCP」）。所以「两个都关」是一
+// 面板只能从这两个入口打开（右下角悬浮按钮 / 左侧栏底部「工具箱」）。所以「两个都关」是一
 // 个必须**无法表达**的状态：真出现了，用户就再也打不开面板，只能手改 localStorage 回来。
 // 这里因此不存两个 boolean，而是存一张「模式 → 入口可见性」表：非法组合在表里根本不存在，
 // 不需要额外的守卫、禁用逻辑或「至少留一个」的提示文案。新增入口时，这张表的不变式
@@ -5433,7 +7846,9 @@ const McpFooterAction = ({ wide }) => {
       'aria-expanded': open,
       onClick: () => panelVisibility.set(true),
     },
-    h(Icon, { d: ICONS.plug, size: wide ? 16 : 18 }),
+    // 与悬浮按钮同一个图标（四宫格），不再用 plug：宿主侧栏的「插件」已经用了 plug，
+    // 两个入口都插头会让用户以为它们是同一个东西。
+    h(Icon, { d: ICONS.panel, size: wide ? 16 : 18 }),
     wide ? h('span', { className: 'dsh-mcp-footer-name' }, t('工具箱')) : null,
   );
 };
@@ -5676,31 +8091,6 @@ const WhatsNewModal = ({ call }) => {
 // ── 技能能力面：管理（左列表 + 右详情）与市场（卡片网格）──────────────────
 // 复用既有原子（Toggle / Badge / Btn / Icon / 空状态 / toast），不另造一套。
 
-/**
- * 能力层枚举：MCP / 技能。计数由外壳填（技能的来自 SkillsPanel 回传）。
- *
- * ⚠️ label 存**中文原文**，由 seg 的渲染点过 t()。这里不写成 t('技能')：
- * 模块级求值发生在 apply() 拿到 locale 之前，会把语言锁死在加载那一刻——
- * 真机表现正是「能力层那个『技能』页签切到 English 后仍是中文」。
- */
-const ABILITY_TABS = [
-  { id: 'mcp', label: 'MCP' },
-  { id: 'skills', label: '技能' },
-  { id: 'tool-loading', label: '工具' },
-];
-
-/**
- * 模式层枚举：已安装 / 发现市场。**两个能力面共用这一套**，由外壳渲染在第二行。
- *
- * 曾经它叫「管理 / 市场」且由技能面自己画：MCP 面的市场是一个弹窗按钮、技能面的市场是
- * 一个模式切换——同一个概念两种形态。现在两边都是第二行上的同一个分段控件。
- */
-// 同 ABILITY_TABS：label 存中文原文，由 seg 的渲染点过 t()（模块级 t() 会锁死语言）。
-const SKILL_MODES = [
-  { id: 'manage', label: '已安装' },
-  { id: 'market', label: '发现市场' },
-];
-
 const SkillsEmpty = ({ text }) => h('div', { className: 'dsh-skills-empty' }, text);
 
 /**
@@ -5820,6 +8210,18 @@ function invocationUnknownReason(row) {
 }
 
 /** 管理模式的右侧详情：元信息 + 正文 + 启停/删除（与 MCP 面同一张详情卡片）。 */
+/**
+ * 来源记录 → 一行人话（R14）。
+ *
+ * 版本可能为空串（上游不一定给）：那时只显示 slug 与页面链接，**不编造一个版本号**。
+ * 纯函数是因为它要能真跑：客户端在本仓库跑不了 hook，但字符串拼装可以。
+ */
+const hubSourceLabel = (hub) => {
+  const slug = String(hub?.slug ?? '');
+  const version = String(hub?.version ?? '');
+  return version ? slug + ' · v' + version : slug;
+};
+
 const SkillDetail = ({ row, shadowedBy, body, busy, onRetry, onToggle, onRemove, onModelInvocable, onUserInvocable, tab = 'overview', onTab }) => {
   if (!row) return h('div', { className: 'dsh-mcp-detail' }, h('div', { className: 'dsh-mcp-d-empty' },
     h('b', null, t('选择左侧的一个技能')),
@@ -5899,6 +8301,12 @@ const SkillDetail = ({ row, shadowedBy, body, busy, onRetry, onToggle, onRemove,
         h('div', { className: 'dsh-mcp-kv' },
           // 作用域与根目录合成一行：分组之后「哪一级」已由组头说过，这里只补完整路径。
           h('b', null, t('位置')), h('span', null, (row.root || t('（未报告）')) + t('（{name}）', { name: skillScopeLabel(row) })),
+          // R14：外部源装进来的技能显示来源与版本；本机导入的没有来源（不显示这一行，
+          // 而不是显示"未知"——"没有来源"与"来源读不出来"是两件事）。
+          body.hub ? h('b', null, t('来源')) : null,
+          body.hub ? h('span', null, hubSourceLabel(body.hub)) : null,
+          body.hubError ? h('b', null, t('来源')) : null,
+          body.hubError ? h('span', { className: 'dsh-mcp-d-err' }, body.hubError) : null,
           // 「停用」的落点是**文件内容**（frontmatter 的两个调用面字段），不是文件名——
           // 旧机制（改名 .disabled）只在迁移读取时才会出现在状态里，如实标出来。
           h('b', null, t('状态')), h('span', null,
@@ -6184,23 +8592,19 @@ function dedupeHubSkills(items) {
  */
 // ⚠️ 它**不接** onClose / floating / onMode：悬浮外壳（wrapFloating）与模式分段都归 McpTab，
 // 面板只负责「技能面那具身体」。留着没人用的 prop 会让下一个人以为这里还能控制面板开关。
-const SkillsPanel = ({ call, workspaces, mode = 'manage', scopeFilter = 'all', onScopeFilter, sortKey = 'default', onSort, onSummary, flash }) => {
-  const [rows, setRows] = useState([]);
-  // ⚠️ 选中存的是**身份**（行 key），行对象从当前 rows **派生**——不存对象本身。
-  // 存对象会留住"上一次取数时的那个对象"：面板里刚启停一个技能后列表刷新，详情却还在渲染
-  // 旧对象（真机实测：磁盘上已经是 .disabled，详情仍写「已启用」，点「刷新」也不变，只有重新
-  // 选中那一行才对）。派生之后这个状态无法存在——没有旧对象可留。
-  const [selectedKey, setSelectedKey] = useState('');
-  // 正文是**三态**，不是字符串：字符串没法表达「失败了」，于是失败只能长得像加载中。
-  const [body, setBody] = useState({ status: 'idle' });
-  const [busy, setBusy] = useState(false);
-  const [entry, setEntry] = useState(null);
-  const [scope, setScope] = useState('');
-  // 宿主支持的**全部**落盘位置（含还没建的）。老宿主没有这个方法 → 空数组 → 退回发现集。
-  const [targets, setTargets] = useState([]);
-  // 市场只有**一个**来源：skillhub.cn（直连上游、本插件只做披露）。
-  // page/done 是翻页的真值来源：上游 total=192936（实测，深页有货），只取首页就会
-  // 「计数写着 19 万、屏幕只有一页」——数字与实物对不上，用户以为下拉会刷新。
+/**
+ * 技能市场（外部源）的那一半：搜索、翻页、分类标签、披露详情。
+ *
+ * 为什么与 SkillsPanel 分开：这七个状态由一个**翻页状态机**串着，而它的三条规则都只能靠
+ * 注释和"别动这里"维持——
+ *   ① 关键字分草稿与已提交两份：依赖链把击键变成请求的话，就变成"每敲一个字打一次上游"；
+ *   ② 在途闸必须是**同步** ref：state 要等下一次渲染+effect 才同步，双击/滚动连发会在
+ *      那个窗口里并发打同一页，去重后第二次全是重复项 → 被误判成 done → 翻页提前终止；
+ *   ③ 分类只随**语言**重取，不随关键字（否则每搜一次多打一次分类接口）。
+ * 三条规则各自失效时症状都很轻（慢一点、少几页、多一次请求），所以散在 493 行里没人会
+ * 同时看见它们。收进一个 hook 之后，翻页状态机只有一处可改。
+ */
+function useSkillsHub({ call, localeV }) {
   const [hub, setHub] = useState({ items: [], total: 0, page: 1, done: false, loading: false, loadingMore: false, error: '', kind: '' });
   // 滚动回调与「加载更多」按钮都在渲染之外触发，那里读不到本次渲染的 hub——ref 拿最新的一份。
   const hubRef = useRef(hub);
@@ -6213,8 +8617,6 @@ const SkillsPanel = ({ call, workspaces, mode = 'manage', scopeFilter = 'all', o
   const [hubCategoryLabels, setHubCategoryLabels] = useState({});
   // 外部源条目被选中时的披露信息（点安装时按 slug 拉一次 detail）。
   const [hubDetail, setHubDetail] = useState(null);
-  // 管理面列表的筛选词：只管**本地**那张表，不发任何网络请求。
-  const [query, setQuery] = useState('');
   // 市场的关键字分**草稿**与**已提交**两份。为什么要分开：
   // `searchHub` 是 useCallback，而挂载/切分类/提交都靠 `useEffect([call, searchHub])` 触发——
   // 把输入框直接绑到 searchHub 的依赖上，就等于「每敲一个字打一次上游」，
@@ -6224,76 +8626,7 @@ const SkillsPanel = ({ call, workspaces, mode = 'manage', scopeFilter = 'all', o
   // 共用一份状态会让「管理面筛选词」出现在市场搜索框里，也会让两边互相触发。
   const [marketDraft, setMarketDraft] = useState('');
   const [hubKeyword, setHubKeyword] = useState('');
-  // 语言版本：搜索与分类的 effect 依赖它——切语言要按新语言重拉
-  // （上游描述中英两份、分类名中英两份，不重拉就停在切换前的语言）。
-  const localeV = useLocaleVersion();
-  // 筛选只留状态。作用域**不在这里**：它是第二行那排药丸（外壳持有），由 scopeFilter 传进来。
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [collapsedGroups, setCollapsedGroups] = useState(() => new Set());
 
-  // onSummary 是外壳的回调，用来把「技能服务在不在 + 一共几个技能」报上去
-  // （第二行的连接状态、能力层那个计数都读它）。用 ref 拿最新的一份，避免把它写进 load 的依赖。
-  const summaryRef = useRef(onSummary);
-  useEffect(() => { summaryRef.current = onSummary; }, [onSummary]);
-
-  const load = useCallback(async () => {
-    // ⚠️ 工作区列表**由 McpTab 通过 props 传进来**，不能在这里自己问服务：
-    // 本组件的 `call` 是 callSkills（打到 skillsManager），而 `listWorkspaces` 只在
-    // **mcpManager** 上——问了也只会拿到 {ok:false}，且**不报错**，表现为「项目级技能
-    // 永远不出现」。这个缺陷由「面板只调 skillsManager 真实存在的方法」用例抓出。
-    // SPEC 约束 13：每个工作区各查一次 list({cwd}) 再合并（宿主传 cwd 时返回合并视图，
-    // 所以按 source 过滤在宿主侧完成，客户端只负责把列表传下去）。
-    const result = await call('list', { workspaces: workspaces || [] });
-    if (!result.ok) {
-      // 服务不可用：把原因与「一个技能都没有」分开——前者要一条降级提示，后者是空状态。
-      summaryRef.current?.({ state: 'down', count: null, error: result.error || '', scopeTabs: [] });
-      return result;
-    }
-    // 宿主返回的是**一个**数组：停用不再是「在另一个数组里」，而是行上的派生态
-    // （enabled = 两个调用面是否都关掉，见 lib/skills-registry.js 的 toView）。
-    // 旧版是两个数组、停用件由宿主扫盘补一份——那套做法的代价见 SkillsManagerGateway.list。
-    const next = skillRows(result.skills || []);
-    setRows(next);
-    // 计数就是行数：已停用的技能也是技能（面板里看得见、也点得动），
-    // 只数可调用的会让「能力层写着 8、列表里有 11 行」这种自相矛盾出现。
-    summaryRef.current?.({ state: 'ready', count: next.length, error: '', scopeTabs: skillScopeTabs(next) });
-    return result;
-  }, [call, workspaces]);
-
-  useEffect(() => { void load(); }, [load]);
-  // 切回这个标签页时重取一次列表：**宿主侧本来就已经自动发现**（它用 chokidar 监听技能根，
-  // 新增/改名/删除技能无需重启即到达模型），所以面板缺的只是「知道自己该重取一次」。
-  //
-  // ⚠️ 为什么不是订阅 `skills/change` 做到推送式刷新：那个事件**不在**宿主的 Remote 转发
-  // 白名单里，而白名单由 `dsh-api-remotes` 独占（`registerRemoteEvents` 只接受一个源，
-  // 第二个注册直接抛 already registered）——第三方插件没有合法途径把它送到浏览器。
-  // 这是契约没开这个口，不是我们偷懒；如实写在这里，免得下一轮有人又去试一遍。
-  //
-  // 也不轮询：技能变化远没有 MCP 连接状态那么频繁，而每次 list 都要扫全部技能根并逐个读文件
-  // 解析 frontmatter。焦点重取的收益/成本比明显更好。
-  useEffect(() => {
-    if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return undefined;
-    const onVisibilityChange = () => { if (document.visibilityState !== 'hidden') void load(); };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
-  }, [load]);
-  useEffect(() => {
-    // 安装目标：问宿主「可以写到哪里」。拿不到（老宿主）就留空，由 skillTargetOptions 退回归发现集。
-    // ⚠️ try/catch 不能省：RPC **抛错**（宿主没这个 endpoint、传输失败）时没有它，
-    // 这个 async IIFE 会 reject 成 `Uncaught (in promise)`——注释承诺的"拿不到就留空"
-    // 对抛错那条路根本不成立。真机 console 实测过（stack 经 prepareInvocation）。
-    void (async () => {
-      try {
-        const result = await call('skillTargets', { workspaces: workspaces || [] });
-        if (result.ok) setTargets(result.targets || []);
-      } catch { /* 安装目标只是增强：留空即退回归发现集，不该把面板带下去 */ }
-    })();
-  }, [call, workspaces]);
-
-  // 外部源的搜索：**显式触发**（挂载首屏 / 切分类 / 回车提交），不是每次击键都打网络。
-  // 这条纪律靠**依赖**成立，不靠注释：searchHub 只依赖 hubKeyword（已提交的），
-  // 而输入框改的是 marketDraft —— 所以击键不会让它换身份、也就不会有请求。
-  // 远端目录不可用时只把错误留在结果区，面板照旧（约束 11 的降级纪律）。
   const searchHub = useCallback(async () => {
     setHub((current) => ({ ...current, loading: true, error: '', kind: '' }));
     try {
@@ -6352,34 +8685,109 @@ const SkillsPanel = ({ call, workspaces, mode = 'manage', scopeFilter = 'all', o
 
   useEffect(() => { void searchHub(); }, [searchHub]);
 
-  const scopeOptions = skillTargetOptions(targets, skillScopeOptions(rows));
-  // 安装目标 = 候选里**可写**的那些。内置目录（bundled）只读，既不该进候选、
-  // 更不该像第一版那样因为排在前面而成为默认目标（真机实测：默认就指向内置目录，
-  // 而 importSkill 不传 writable 时宿主按可写处理 → 会直接写进内置目录）。
-  const installTargets = scopeOptions.filter((option) => option.writable !== false);
-  // 摘要、弹窗默认选项与最终写入共用这一个目标；scope 是身份，作用域语义来自 option.scope。
-  const installTarget = installTargets.find((option) => option.id === scope) || installTargets[0];
-  const shadowed = shadowedSkills(rows);
+  return {
+    hub, hubCategory, setHubCategory, hubCategoryLabels,
+    hubDetail, setHubDetail,
+    marketDraft, setMarketDraft, hubKeyword, setHubKeyword,
+    searchHub, loadMoreHub, hubHasMore,
+  };
+}
 
-  // 列表与详情共用筛选结果，不能继续操作已被作用域、状态或查询排除的行。
-  const visibleRows = useMemo(() => sortSkills(rows.filter((row) => {
-    if (scopeFilter !== 'all' && skillGroupKey(row) !== scopeFilter) return false;
-    if (statusFilter === 'disabled' && row.enabled !== false) return false;
-    if (statusFilter === 'enabled' && row.enabled === false) return false;
-    const needle = query.trim().toLowerCase();
-    if (needle === '') return true;
-    return [row.name, row.description, skillScopeLabel(row), row.cwd]
-      .some((value) => String(value || '').toLowerCase().includes(needle));
-  }), sortKey), [rows, scopeFilter, statusFilter, query, sortKey, localeV]);
-  const selected = selectedSkillRow(visibleRows, selectedKey);
 
-  // 加载某一行的正文。三态必须都落到 UI 上：失败没有终态，就会长得像「一直在加载」。
+/**
+ * 技能管理面的那一半：本地列表、详情正文、以及所有会改磁盘的动作。
+ *
+ * 为什么与市场面分开：这两半**没有共享状态**，只有一个交汇点——市场装了技能之后要收起
+ * 披露弹窗。分开之前，16 个 useState 挤在一个 493 行的函数里，"改本地技能"与"翻市场页"
+ * 的代码互相夹着，读一处必须跳过另一处。
+ *
+ * 收敛在这里的三条纪律（每一条单独失效时症状都很轻，所以必须写下来）：
+ *   ① 工作区列表**由 props 传进来**：本组件的 call 是 callSkills（skillsManager），
+ *      而列表在 mcpManager 上——自己问只会拿到 ok:false 且不报错，表现为"项目级技能永远不出现"；
+ *   ② 安装目标只列**可写**的：内置 bundled 目录只读，让它成为默认目标会直接把技能写进内置目录；
+ *   ③ 选中存**身份**（行 key）而不是行对象：存对象会留住上一次取数时的快照，启停之后详情
+ *      仍渲染旧值（真机实测过）。
+ */
+function useSkillsManage({ call, workspaces, onSummary, flash }) {
+  const [rows, setRows] = useState([]);
+  // ⚠️ 选中存的是**身份**（行 key），行对象从当前 rows **派生**——不存对象本身。
+  // 存对象会留住"上一次取数时的那个对象"：面板里刚启停一个技能后列表刷新，详情却还在渲染
+  // 旧对象（真机实测：磁盘上已经是 .disabled，详情仍写「已启用」，点「刷新」也不变，只有重新
+  // 选中那一行才对）。派生之后这个状态无法存在——没有旧对象可留。
+  const [selectedKey, setSelectedKey] = useState('');
+  // 正文是**三态**，不是字符串：字符串没法表达「失败了」，于是失败只能长得像加载中。
+  const [body, setBody] = useState({ status: 'idle' });
+  const [busy, setBusy] = useState(false);
+  const [entry, setEntry] = useState(null);
+  const [scope, setScope] = useState('');
+  // 宿主支持的**全部**落盘位置（含还没建的）。老宿主没有这个方法 → 空数组 → 退回发现集。
+  const [targets, setTargets] = useState([]);
+
+  const summaryRef = useRef(onSummary);
+  useEffect(() => { summaryRef.current = onSummary; }, [onSummary]);
+
+  const load = useCallback(async () => {
+    // ⚠️ 工作区列表**由 McpTab 通过 props 传进来**，不能在这里自己问服务：
+    // 本组件的 `call` 是 callSkills（打到 skillsManager），而 `listWorkspaces` 只在
+    // **mcpManager** 上——问了也只会拿到 {ok:false}，且**不报错**，表现为「项目级技能
+    // 永远不出现」。这个缺陷由「面板只调 skillsManager 真实存在的方法」用例抓出。
+    // SPEC 约束 13：每个工作区各查一次 list({cwd}) 再合并（宿主传 cwd 时返回合并视图，
+    // 所以按 source 过滤在宿主侧完成，客户端只负责把列表传下去）。
+    const result = await call('list', { workspaces: workspaces || [] });
+    if (!result.ok) {
+      // 服务不可用：把原因与「一个技能都没有」分开——前者要一条降级提示，后者是空状态。
+      summaryRef.current?.({ state: 'down', count: null, error: result.error || '', scopeTabs: [] });
+      return result;
+    }
+    // 宿主返回的是**一个**数组：停用不再是「在另一个数组里」，而是行上的派生态
+    // （enabled = 两个调用面是否都关掉，见 lib/skills-registry.js 的 toView）。
+    // 旧版是两个数组、停用件由宿主扫盘补一份——那套做法的代价见 SkillsManagerGateway.list。
+    const next = skillRows(result.skills || []);
+    setRows(next);
+    // 计数就是行数：已停用的技能也是技能（面板里看得见、也点得动），
+    // 只数可调用的会让「能力层写着 8、列表里有 11 行」这种自相矛盾出现。
+    summaryRef.current?.({ state: 'ready', count: next.length, error: '', scopeTabs: skillScopeTabs(next) });
+    return result;
+  }, [call, workspaces]);
+
+  useEffect(() => { void load(); }, [load]);
+  // 切回这个标签页时重取一次列表：**宿主侧本来就已经自动发现**（它用 chokidar 监听技能根，
+  // 新增/改名/删除技能无需重启即到达模型），所以面板缺的只是「知道自己该重取一次」。
+  //
+  // ⚠️ 为什么不是订阅 `skills/change` 做到推送式刷新：那个事件**不在**宿主的 Remote 转发
+  // 白名单里，而白名单由 `dsh-api-remotes` 独占（`registerRemoteEvents` 只接受一个源，
+  // 第二个注册直接抛 already registered）——第三方插件没有合法途径把它送到浏览器。
+  // 这是契约没开这个口，不是我们偷懒；如实写在这里，免得下一轮有人又去试一遍。
+  //
+  // 也不轮询：技能变化远没有 MCP 连接状态那么频繁，而每次 list 都要扫全部技能根并逐个读文件
+  // 解析 frontmatter。焦点重取的收益/成本比明显更好。
+  useEffect(() => {
+    if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return undefined;
+    const onVisibilityChange = () => { if (document.visibilityState !== 'hidden') void load(); };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [load]);
+  useEffect(() => {
+    // 安装目标：问宿主「可以写到哪里」。拿不到（老宿主）就留空，由 skillTargetOptions 退回归发现集。
+    // ⚠️ try/catch 不能省：RPC **抛错**（宿主没这个 endpoint、传输失败）时没有它，
+    // 这个 async IIFE 会 reject 成 `Uncaught (in promise)`——注释承诺的"拿不到就留空"
+    // 对抛错那条路根本不成立。真机 console 实测过（stack 经 prepareInvocation）。
+    void (async () => {
+      try {
+        const result = await call('skillTargets', { workspaces: workspaces || [] });
+        if (result.ok) setTargets(result.targets || []);
+      } catch { /* 安装目标只是增强：留空即退回归发现集，不该把面板带下去 */ }
+    })();
+  }, [call, workspaces]);
+
   const loadBody = useCallback(async (row) => {
     if (!row) return;
     setBody({ status: 'loading' });
     const result = await call('detail', skillDetailRequest(row));
     setBody(result.ok
-      ? { status: 'ok', text: result.skill?.content || '' }
+      // R14：hub 是宿主从 <技能>/.hub.json 读出来的来源（slug/version/pageUrl）。
+      // 原来这里只取 content，把来源直接丢了——于是界面永远看不到'从哪装的、哪个版本'。
+      ? { status: 'ok', text: result.skill?.content || '', hub: result.skill?.hub ?? null, hubError: result.skill?.hubError || '' }
       // 错误原文给出去：用户要靠它判断下一步，只留一句「加载失败」等于没给信息。
       : { status: 'error', text: result.error || t('宿主未返回原因') });
   }, [call]);
@@ -6388,13 +8796,6 @@ const SkillsPanel = ({ call, workspaces, mode = 'manage', scopeFilter = 'all', o
     setSelectedKey(row?.key ?? '');
     void loadBody(row);
   }, [loadBody]);
-
-  // 保留仍可见的选择；筛选排除它时补选第一行，无匹配时清空详情。
-  useEffect(() => {
-    if (selected) return;
-    if (visibleRows.length) selectRow(visibleRows[0]);
-    else if (selectedKey) { setSelectedKey(''); setBody({ status: 'idle' }); }
-  }, [selected, visibleRows, selectedKey, selectRow]);
 
   // 行动作的统一出口——与 MCP 面的 act 同一条纪律：**失败必须说出来**。宿主拒绝时给的是具体
   // 原因（「这个字段的值跨了多行，请手工修改这一行」这类），吞掉它就只剩「点了没反应」；而技能面
@@ -6412,6 +8813,7 @@ const SkillsPanel = ({ call, workspaces, mode = 'manage', scopeFilter = 'all', o
       return true;
     } finally { setBusy(false); }
   }, [call, flash, load]);
+
 
   const toggleRow = useCallback(async (row, enable) => {
     // 双向：MCP 面每行都有启用/停用开关，技能面必须同样能**恢复**已停用的技能。
@@ -6445,6 +8847,105 @@ const SkillsPanel = ({ call, workspaces, mode = 'manage', scopeFilter = 'all', o
     if (await act('removeSkill', skillDetailRequest(row))) setSelectedKey('');
   }, [act]);
 
+
+  return {
+    rows, selectedKey, setSelectedKey, body, setBody, busy, entry, setEntry,
+    scope, setScope, targets,
+    load, loadBody, selectRow, act,
+    toggleRow, toggleModelInvocable, toggleUserInvocable, removeRow,
+  };
+}
+
+
+/**
+ * 本机技能导入：浏览器选中文件 → `importSkill` 的 payload。
+ *
+ * 为什么是模块级函数而不是组件里的 useCallback：它的全部输入（file、落点、act、flash）
+ * 都能从外部给，所以拆出来就能**真跑**（客户端在本仓库跑不了真实文件选择器，但可以传一个
+ * 带 `text()` / `arrayBuffer()` 的假 file）。留在组件里只能靠源码正则间接证明。
+ *
+ * 两条边界写在参数里，不在这里重新判断：
+ *   · 落点（source/root/projectPath）由调用方给，**不在这里拼路径**；
+ *   · 归档格式由**宿主**按魔数判（客户端只按扩展名决定走 content 还是 archiveBase64）。
+ */
+async function importSkillFile({ file, target, act, flash }) {
+  if (!file) return false;
+  if (!target) { flash?.(t('没有可写入的技能位置'), 'err'); return false; }
+  const name = String(file.name ?? '');
+  const extension = name.slice(name.lastIndexOf('.') + 1).toLowerCase();
+  const isText = TEXT_SKILL_EXTENSIONS.includes(extension);
+  try {
+    const payload = skillImportPayloadOf({
+      name,
+      // 文本读成字符串更直接；归档必须字节。
+      text: isText ? await file.text() : undefined,
+      bytes: isText ? undefined : new Uint8Array(await file.arrayBuffer()),
+      target,
+    });
+    return await act('importSkill', payload);
+  } catch (error) {
+    // 读文件本身失败（权限/被移走）也要说出来：否则用户只看到“什么都没发生”。
+    flash?.(String(error?.message || error), 'err');
+    return false;
+  }
+}
+
+const SkillsPanel = ({ call, workspaces, mode = 'manage', scopeFilter = 'all', onScopeFilter, sortKey = 'default', onSort, onSummary, flash }) => {
+  // 市场只有**一个**来源：skillhub.cn（直连上游、本插件只做披露）。
+  // page/done 是翻页的真值来源：上游 total=192936（实测，深页有货），只取首页就会
+  // 「计数写着 19 万、屏幕只有一页」——数字与实物对不上，用户以为下拉会刷新。
+  // 语言版本：搜索与分类的 effect 依赖它——切语言要按新语言重拉
+  // （上游描述中英两份、分类名中英两份，不重拉就停在切换前的语言）。
+  const localeV = useLocaleVersion();
+
+  // 市场面（外部源搜索 / 翻页 / 分类 / 披露）：七个状态 + 两个在途闸自成一体，
+  // 与管理面（本地列表 + 技能文件读写）没有共享状态，只有 confirmInstall 一处交汇（留在组件）。
+  const {
+    hub, hubCategory, setHubCategory, hubCategoryLabels,
+    hubDetail, setHubDetail,
+    marketDraft, setMarketDraft, hubKeyword, setHubKeyword,
+    searchHub, loadMoreHub, hubHasMore,
+  } = useSkillsHub({ call, localeV });
+
+  // 管理面（本地技能列表 + 技能文件读写）：数据、加载、写动作。confirmInstall 也在这里，
+  // 但它的收尾要同时影响市场面的披露弹窗——那一处由 onInstalled 通知，不把两个面的 state 缠在一起。
+  const {
+    rows, selectedKey, setSelectedKey, body, setBody, busy, entry, setEntry,
+    scope, setScope, targets,
+    load, loadBody, selectRow, act,
+    toggleRow, toggleModelInvocable, toggleUserInvocable, removeRow,
+  } = useSkillsManage({ call, workspaces, onSummary, flash });
+  // 管理面列表的筛选词：只管**本地**那张表，不发任何网络请求。
+  // 它刻意与市场的 marketDraft / hubKeyword 分开：两个面本来就是两个互不相干的搜索框，
+  // 共用一份状态会让管理面的筛选词出现在市场搜索框里（反之亦然）。
+  const [query, setQuery] = useState('');
+  // 筛选只留状态。作用域**不在这里**：它是第二行那排药丸（外壳持有），由 scopeFilter 传进来。
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [collapsedGroups, setCollapsedGroups] = useState(() => new Set());
+
+  // onSummary 是外壳的回调，用来把「技能服务在不在 + 一共几个技能」报上去
+  // （第二行的连接状态、能力层那个计数都读它）。用 ref 拿最新的一份，避免把它写进 load 的依赖。
+
+  // 外部源的搜索：**显式触发**（挂载首屏 / 切分类 / 回车提交），不是每次击键都打网络。
+  // 这条纪律靠**依赖**成立，不靠注释：searchHub 只依赖 hubKeyword（已提交的），
+  // 而输入框改的是 marketDraft —— 所以击键不会让它换身份、也就不会有请求。
+  // 远端目录不可用时只把错误留在结果区，面板照旧（约束 11 的降级纪律）。
+
+  const scopeOptions = skillTargetOptions(targets, skillScopeOptions(rows));
+  // 安装目标 = 候选里**可写**的那些。内置目录（bundled）只读，既不该进候选、
+  // 更不该像第一版那样因为排在前面而成为默认目标（真机实测：默认就指向内置目录，
+  // 而 importSkill 不传 writable 时宿主按可写处理 → 会直接写进内置目录）。
+  const installTargets = scopeOptions.filter((option) => option.writable !== false);
+  // 摘要、弹窗默认选项与最终写入共用这一个目标；scope 是身份，作用域语义来自 option.scope。
+  const installTarget = installTargets.find((option) => option.id === scope) || installTargets[0];
+
+  // 浏览器只能给内容：读字节/文本 → payload 的事在模块级做（可单测），这里只接线。
+  // 落点用 installTarget——它是**渲染派生值**，所以这一步必须留组件（同 confirmInstall 的理由）。
+  const onImportFile = (file) => { void importSkillFile({ file, target: installTarget, act, flash }); };
+
+  // 安装是**两个面的交汇点**：落点由管理面派生（installTarget），装完要收起市场面的披露弹窗。
+  // 所以它留在这里，不进任何一边的 hook —— 放进去就要么把两面的 state 缠在一起，
+  // 要么把 installTarget 这个渲染派生值塞进 hook 的依赖里。
   const confirmInstall = useCallback(async (target) => {
     // 落点按**安装目标的唯一身份**（source + root）解析：两个工作区会有同一个 source，
     // 按 source `find` 会静默装进第一个（用户以为选了项目 B，实际写进项目 A）。
@@ -6464,8 +8965,33 @@ const SkillsPanel = ({ call, workspaces, mode = 'manage', scopeFilter = 'all', o
       acknowledged: true,
     });
     // 装失败时弹窗留在原地（用户要能看到失败原因、能重试），只有成功才收起来。
+    // 装成功才收起弹窗：失败时留在原地，用户要能看到原因并重试。
     if (ok) { setEntry(null); setHubDetail(null); }
-  }, [act, installTarget]);
+  }, [act, installTarget, setEntry, setHubDetail]);
+
+  const shadowed = shadowedSkills(rows);
+
+  // 列表与详情共用筛选结果，不能继续操作已被作用域、状态或查询排除的行。
+  const visibleRows = useMemo(() => sortSkills(rows.filter((row) => {
+    if (scopeFilter !== 'all' && skillGroupKey(row) !== scopeFilter) return false;
+    if (statusFilter === 'disabled' && row.enabled !== false) return false;
+    if (statusFilter === 'enabled' && row.enabled === false) return false;
+    const needle = query.trim().toLowerCase();
+    if (needle === '') return true;
+    return [row.name, row.description, skillScopeLabel(row), row.cwd]
+      .some((value) => String(value || '').toLowerCase().includes(needle));
+  }), sortKey), [rows, scopeFilter, statusFilter, query, sortKey, localeV]);
+  const selected = selectedSkillRow(visibleRows, selectedKey);
+  // 保留仍可见的选择；筛选排除它时补选第一行，无匹配时清空详情。
+  // ⚠️ 这个 effect 必须留在组件：它读的是**视图派生值**（selected / visibleRows），
+  // 而那两样依赖 query / statusFilter / sortKey / localeV —— 都是视图状态，不属于管理面的数据。
+  useEffect(() => {
+    if (selected) return;
+    if (visibleRows.length) selectRow(visibleRows[0]);
+    else if (selectedKey) { setSelectedKey(''); setBody({ status: 'idle' }); }
+  }, [selected, visibleRows, selectedKey, selectRow]);
+
+  // 加载某一行的正文。三态必须都落到 UI 上：失败没有终态，就会长得像「一直在加载」。
 
   // 选中的作用域在数据刷新后可能整个消失（工作区被移除），留着它会让列表永远空着、
   // 而药丸上已经找不到那个高亮项——用户没有任何办法退回去。
@@ -6503,6 +9029,23 @@ const SkillsPanel = ({ call, workspaces, mode = 'manage', scopeFilter = 'all', o
               h('option', { value: 'all' }, t('全部状态')),
               h('option', { value: 'enabled' }, t('已启用')),
               h('option', { value: 'disabled' }, t('已停用')),
+            ),
+            // 本机导入：一个包裹式 <input type=file>（原生控件样式不可控，所以把图片藏着）。
+            // 它传的是**内容**而不是路径：浏览器拿不到宿主路径，宿主收到后先落 system tmp
+            // 再走与 skilhub 同一套导入路径（zip-slip / 符号链接 / 锁 / 原子提交）。
+            h('label', { className: 'dsh-mcp-btn sm', title: t('从本机选择技能文件（.md 或压缩包）导入到当前落点') },
+              t('导入本机技能'),
+              h('input', {
+                type: 'file',
+                'aria-label': t('选择要导入的技能文件'),
+                style: { display: 'none' },
+                onChange: (event) => {
+                  const file = event?.target?.files && event.target.files[0];
+                  // 先清空再读：同一个文件连选两次时必须都能触发 change（不清会静默无反应）。
+                  if (event?.target) event.target.value = '';
+                  if (file) void importLocalSkill(file);
+                },
+              }),
             ),
           ),
           h('div', { className: 'dsh-mcp-list' },
@@ -6841,48 +9384,50 @@ const MCP_CONTRIBUTION = {
   package: 'dsh-toolbox-ui',
   descriptors: [
     // <rpc-contract:begin> 由 scripts/rpc-contract.mjs 生成，勿手改
-    { id: 'dsh-toolbox-ui#mcpManager/list', service: 'mcpManager', namespace: 'mcpManager', method: 'list', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('ListResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/status', service: 'mcpManager', namespace: 'mcpManager', method: 'status', invocation: { kind: 'direct' }, parameters: [mcpParam('name', 'String')], result: mcpCodec('StatusResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/enable', service: 'mcpManager', namespace: 'mcpManager', method: 'enable', invocation: { kind: 'direct' }, parameters: [mcpParam('name', 'String')], result: mcpCodec('NoteResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/disable', service: 'mcpManager', namespace: 'mcpManager', method: 'disable', invocation: { kind: 'direct' }, parameters: [mcpParam('name', 'String')], result: mcpCodec('NoteResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/reconnect', service: 'mcpManager', namespace: 'mcpManager', method: 'reconnect', invocation: { kind: 'direct' }, parameters: [mcpParam('name', 'String')], result: mcpCodec('NoteResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/tools', service: 'mcpManager', namespace: 'mcpManager', method: 'tools', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('ToolsResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/builtins', service: 'mcpManager', namespace: 'mcpManager', method: 'builtins', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('BuiltinCatalogResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/installBuiltins', service: 'mcpManager', namespace: 'mcpManager', method: 'installBuiltins', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'BuiltinInstallPayload')], result: mcpCodec('BuiltinInstallResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/add', service: 'mcpManager', namespace: 'mcpManager', method: 'add', invocation: { kind: 'direct' }, parameters: [mcpParam('spec', 'Spec')], result: mcpCodec('NoteResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/update', service: 'mcpManager', namespace: 'mcpManager', method: 'update', invocation: { kind: 'direct' }, parameters: [mcpParam('spec', 'Spec')], result: mcpCodec('NoteResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/removeServer', service: 'mcpManager', namespace: 'mcpManager', method: 'removeServer', invocation: { kind: 'direct' }, parameters: [mcpParam('name', 'String')], result: mcpCodec('NoteResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/setDeferAll', service: 'mcpManager', namespace: 'mcpManager', method: 'setDeferAll', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'DeferAllPayload')], result: mcpCodec('DeferAllResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/setDefer', service: 'mcpManager', namespace: 'mcpManager', method: 'setDefer', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'DeferPayload')], result: mcpCodec('NoteResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/toolSearchSettings', service: 'mcpManager', namespace: 'mcpManager', method: 'toolSearchSettings', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('ToolSearchSettings') },
-    { id: 'dsh-toolbox-ui#mcpManager/updateToolSearchSettings', service: 'mcpManager', namespace: 'mcpManager', method: 'updateToolSearchSettings', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ToolSearchSettingsPayload')], result: mcpCodec('ToolSearchSettings') },
-    { id: 'dsh-toolbox-ui#mcpManager/toolLoadingSettings', service: 'mcpManager', namespace: 'mcpManager', method: 'toolLoadingSettings', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('ToolLoadingSettings') },
-    { id: 'dsh-toolbox-ui#mcpManager/updateToolLoadingSettings', service: 'mcpManager', namespace: 'mcpManager', method: 'updateToolLoadingSettings', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ToolLoadingPayload')], result: mcpCodec('ToolLoadingSettings') },
-    { id: 'dsh-toolbox-ui#mcpManager/workspaceToolLoading', service: 'mcpManager', namespace: 'mcpManager', method: 'workspaceToolLoading', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ToolLoadingPayload')], result: mcpCodec('ToolLoadingSettings') },
-    { id: 'dsh-toolbox-ui#mcpManager/setWorkspaceToolLoading', service: 'mcpManager', namespace: 'mcpManager', method: 'setWorkspaceToolLoading', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ToolLoadingPayload')], result: mcpCodec('ToolLoadingSettings') },
-    { id: 'dsh-toolbox-ui#mcpManager/reveal', service: 'mcpManager', namespace: 'mcpManager', method: 'reveal', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('RevealResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/previewImport', service: 'mcpManager', namespace: 'mcpManager', method: 'previewImport', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('ImportPreview') },
-    { id: 'dsh-toolbox-ui#mcpManager/importJson', service: 'mcpManager', namespace: 'mcpManager', method: 'importJson', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('ImportResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/scanImportSources', service: 'mcpManager', namespace: 'mcpManager', method: 'scanImportSources', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('ImportSourcesResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/previewImportSource', service: 'mcpManager', namespace: 'mcpManager', method: 'previewImportSource', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('ImportPreview') },
-    { id: 'dsh-toolbox-ui#mcpManager/importSource', service: 'mcpManager', namespace: 'mcpManager', method: 'importSource', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('ImportResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/listWorkspaces', service: 'mcpManager', namespace: 'mcpManager', method: 'listWorkspaces', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('WorkspaceListResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/getWorkspaceView', service: 'mcpManager', namespace: 'mcpManager', method: 'getWorkspaceView', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('WorkspaceViewResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/addWorkspaceServer', service: 'mcpManager', namespace: 'mcpManager', method: 'addWorkspaceServer', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('NoteResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/updateWorkspaceServer', service: 'mcpManager', namespace: 'mcpManager', method: 'updateWorkspaceServer', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('NoteResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/removeWorkspaceServer', service: 'mcpManager', namespace: 'mcpManager', method: 'removeWorkspaceServer', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('NoteResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/setWorkspaceExclude', service: 'mcpManager', namespace: 'mcpManager', method: 'setWorkspaceExclude', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('NoteResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/installWorkspaceBuiltins', service: 'mcpManager', namespace: 'mcpManager', method: 'installWorkspaceBuiltins', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'BuiltinInstallPayload')], result: mcpCodec('BuiltinInstallResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/previewWorkspaceImport', service: 'mcpManager', namespace: 'mcpManager', method: 'previewWorkspaceImport', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('ImportPreview') },
-    { id: 'dsh-toolbox-ui#mcpManager/importWorkspaceJson', service: 'mcpManager', namespace: 'mcpManager', method: 'importWorkspaceJson', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('ImportResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/copyWorkspaceServers', service: 'mcpManager', namespace: 'mcpManager', method: 'copyWorkspaceServers', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('WorkspaceCopyResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/previewWorkspaceCopy', service: 'mcpManager', namespace: 'mcpManager', method: 'previewWorkspaceCopy', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('WorkspaceCopyPreview') },
-    { id: 'dsh-toolbox-ui#mcpManager/exportWorkspaceJson', service: 'mcpManager', namespace: 'mcpManager', method: 'exportWorkspaceJson', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('WorkspaceExportResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/revealWorkspaceServer', service: 'mcpManager', namespace: 'mcpManager', method: 'revealWorkspaceServer', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('RevealResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/projectConnections', service: 'mcpManager', namespace: 'mcpManager', method: 'projectConnections', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('ProjectConnectionsResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/reconnectWorkspaceServer', service: 'mcpManager', namespace: 'mcpManager', method: 'reconnectWorkspaceServer', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('NoteResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/updateHint', service: 'mcpManager', namespace: 'mcpManager', method: 'updateHint', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('UpdateHintResult') },
-    { id: 'dsh-toolbox-ui#mcpManager/whatsNew', service: 'mcpManager', namespace: 'mcpManager', method: 'whatsNew', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('WhatsNewResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/list', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'list', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('ListResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/status', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'status', invocation: { kind: 'direct' }, parameters: [mcpParam('name', 'String')], result: mcpCodec('StatusResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/enable', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'enable', invocation: { kind: 'direct' }, parameters: [mcpParam('name', 'String')], result: mcpCodec('NoteResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/disable', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'disable', invocation: { kind: 'direct' }, parameters: [mcpParam('name', 'String')], result: mcpCodec('NoteResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/reconnect', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'reconnect', invocation: { kind: 'direct' }, parameters: [mcpParam('name', 'String')], result: mcpCodec('NoteResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/tools', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'tools', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('ToolsResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/builtins', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'builtins', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('BuiltinCatalogResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/installBuiltins', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'installBuiltins', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'BuiltinInstallPayload')], result: mcpCodec('BuiltinInstallResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/add', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'add', invocation: { kind: 'direct' }, parameters: [mcpParam('spec', 'Spec')], result: mcpCodec('NoteResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/update', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'update', invocation: { kind: 'direct' }, parameters: [mcpParam('spec', 'Spec')], result: mcpCodec('NoteResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/removeServer', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'removeServer', invocation: { kind: 'direct' }, parameters: [mcpParam('name', 'String')], result: mcpCodec('NoteResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/setDeferAll', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'setDeferAll', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'DeferAllPayload')], result: mcpCodec('DeferAllResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/setDefer', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'setDefer', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'DeferPayload')], result: mcpCodec('NoteResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/toolSearchSettings', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'toolSearchSettings', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('ToolSearchSettings') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/updateToolSearchSettings', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'updateToolSearchSettings', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ToolSearchSettingsPayload')], result: mcpCodec('ToolSearchSettings') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/toolLoadingSettings', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'toolLoadingSettings', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('ToolLoadingSettings') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/updateToolLoadingSettings', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'updateToolLoadingSettings', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ToolLoadingPayload')], result: mcpCodec('ToolLoadingSettings') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/workspaceToolLoading', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'workspaceToolLoading', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ToolLoadingPayload')], result: mcpCodec('ToolLoadingSettings') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/setWorkspaceToolLoading', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'setWorkspaceToolLoading', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ToolLoadingPayload')], result: mcpCodec('ToolLoadingSettings') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/reveal', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'reveal', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('RevealResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/previewImport', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'previewImport', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('ImportPreview') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/importJson', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'importJson', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('ImportResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/scanImportSources', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'scanImportSources', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('ImportSourcesResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/previewImportSource', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'previewImportSource', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('ImportPreview') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/importSource', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'importSource', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('ImportResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/listWorkspaces', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'listWorkspaces', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('WorkspaceListResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/getWorkspaceView', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'getWorkspaceView', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('WorkspaceViewResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/addWorkspaceServer', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'addWorkspaceServer', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('NoteResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/updateWorkspaceServer', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'updateWorkspaceServer', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('NoteResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/removeWorkspaceServer', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'removeWorkspaceServer', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('NoteResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/setWorkspaceExclude', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'setWorkspaceExclude', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('NoteResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/installWorkspaceBuiltins', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'installWorkspaceBuiltins', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'BuiltinInstallPayload')], result: mcpCodec('BuiltinInstallResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/previewWorkspaceImport', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'previewWorkspaceImport', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('ImportPreview') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/importWorkspaceJson', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'importWorkspaceJson', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('ImportResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/copyWorkspaceServers', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'copyWorkspaceServers', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('WorkspaceCopyResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/previewWorkspaceCopy', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'previewWorkspaceCopy', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('WorkspaceCopyPreview') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/exportWorkspaceJson', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'exportWorkspaceJson', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('WorkspaceExportResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/exportGlobalJson', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'exportGlobalJson', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('WorkspaceExportResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/revealWorkspaceServer', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'revealWorkspaceServer', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('RevealResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/projectConnections', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'projectConnections', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('ProjectConnectionsResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/reconnectWorkspaceServer', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'reconnectWorkspaceServer', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ImportPayload')], result: mcpCodec('NoteResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/updateHint', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'updateHint', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('UpdateHintResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/whatsNew', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'whatsNew', invocation: { kind: 'direct' }, parameters: [], result: mcpCodec('WhatsNewResult') },
+    { id: 'dsh-toolbox-ui#toolboxMcp/contextReport', service: 'toolboxMcp', namespace: 'toolboxMcp', method: 'contextReport', invocation: { kind: 'direct' }, parameters: [mcpParam('payload', 'ContextPayload')], result: mcpCodec('ContextReport') },
     sk('list', [skParam('payload', 'SkillPayload')], 'SkillListResult'),
     sk('detail', [skParam('payload', 'SkillPayload')], 'SkillDetailResult'),
     sk('setEnabled', [skParam('payload', 'SkillPayload')], 'SkillMutationResult'),
@@ -6899,63 +9444,6 @@ const MCP_CONTRIBUTION = {
     // <rpc-contract:end>
   ].map((descriptor) => ({ ...descriptor, sourceLocation: { file: 'dsh-toolbox-ui/lib/typert.js', line: 7, column: 1 } }))
 };
-/** apply 时没探到 locale 服务时留下的 ctx，供面板首次挂载时重探（桌面壳的异步 provide）。 */
-let localeProbeCtx = null;
-/** 文案层是否已接上线（探到服务且 register/bind 成功）。 */
-let localeWired = false;
-
-/**
- * 把面板的词典接到宿主的 locale 服务上。探不到服务就原样返回 false（调用方决定
- * 是否留下 ctx 稍后重探）。任何异常都按「没接上」处理——翻译层接不上不得挡住
- * 面板（fail-open），退化成中文原文。
- *
- * 注册**中英两份**词典（见 ZH_DICT 的注释：只注册 en 会让中文模式整片变英文，
- * 因为宿主把英文设为每条回落链的终点）。
- * @param {object} ctx - 插件 apply 的 cordis 上下文。
- * @returns {boolean} 是否接上了。
- */
-function wireLocale(ctx) {
-  try {
-    const locale = typeof ctx?.get === 'function' ? ctx.get('locale') : null;
-    if (!locale || typeof locale.register !== 'function' || typeof locale.bind !== 'function') return false;
-    // ctx.effect 保证插件卸载时词典随之注销（否则 HMR 重载会因 (ns, locale) 重复占用而抛错）。
-    ctx.effect(() => locale.register(LOCALE_NS, { zh: ZH_DICT, en: EN_DICT }), 'dsh-toolbox-ui: dictionaries');
-    // bind 的返回值必须验一次：宿主若返回非函数，下面每次渲染调 localeT(zh) 都会抛，
-    // 而整段接线在 try 里——异常会被 catch 吞掉、面板无声退化。这里挡在接线处，
-    // 坏 bind 按「没有语言包」处理（退回自带表/中文原文），不留定时炸弹。
-    const bound = locale.bind(LOCALE_NS);
-    localeT = typeof bound === 'function' ? bound : null;
-    // 记录 active 语言。用订阅而不是只读一次：用户在设置里切语言时不能要求重开面板。
-    // getLocale() 缺失（老宿主）时不订阅，active 保持 null → t() 恒等回中文，
-    // 面板在该宿主上就是纯中文——这是没有语言服务时唯一诚实的表现。
-    if (typeof locale.getLocale === 'function' && typeof locale.subscribe === 'function') {
-      const readActive = () => {
-        const next = locale.getLocale()?.active ?? null;
-        // 只在语言**真变**时 bump：宿主每次发布（含我们自己注册词典）都会通知订阅者，
-        // 无脑 bump 会让市场的 effect 白拉一遍。
-        if (next === localeActive) return;
-        localeActive = next;
-        localeVersion.bump();
-      };
-      readActive();
-      ctx.effect(() => locale.subscribe(readActive), 'dsh-toolbox-ui: locale subscription');
-    }
-    localeWired = true;
-    return true;
-  } catch {
-    // 刻意吞掉：翻译层接不上不得挡住面板（fail-open），退化成中文原文。
-    localeT = null;
-    localeActive = null;
-    return false;
-  }
-}
-
-/** 面板首次挂载时调用：apply 没接上 locale 服务（桌面壳的异步 provide）就在这里补接。 */
-function ensureLocaleWired() {
-  if (localeWired || !localeProbeCtx) return;
-  if (wireLocale(localeProbeCtx)) localeProbeCtx = null;
-}
-
 async function apply(ctx) {
   const disposeMount = await ctx.remote.$mount(MCP_CONTRIBUTION);
   let disposeCss;
@@ -7011,7 +9499,10 @@ async function apply(ctx) {
     disposeCss = __injectCss(MCP_CSS + '\n' + SKILLS_CSS);
     timer = createTimer();
     const call = async (method, args) => {
-      const svc = (typeof ctx.get === 'function' ? ctx.get('remote.mcpManager') : null) || null;
+      // 服务名从**生成段**读（`lib/rpc-contract.js` 的 MCP_SERVICE），不在这里再写一遍：
+      // 曾经写死 `remote.mcpManager`，而那个名字是宿主自己的（0.2.2-rc.2 起被
+      // @deepseek-ai/dsh-mcp-manager 占用），两边撞名会让对方的插件起不来。
+      const svc = (typeof ctx.get === 'function' ? ctx.get('remote.' + MCP_CONTRIBUTION.descriptors[0].namespace) : null) || null;
       if (!svc || typeof svc[method] !== 'function') return { ok: false, error: t('MCP 市场服务未连接（面板仍可用）') };
       const r = args === undefined || args === null ? await svc[method]() : await svc[method](args);
       if (r && r.ok) return { ok: true, ...((r.value && typeof r.value === 'object') ? r.value : {}) };

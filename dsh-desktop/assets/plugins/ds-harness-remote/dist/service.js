@@ -1,17 +1,19 @@
+import { LanUploadHost } from './lan-upload.js';
 import { HostPairing } from './host-pairing.js';
 import { WorkspaceUploadHost } from './workspace-upload.js';
 import { workspaceUploadRootResolver } from './workspace-upload-authority.js';
 import { LoopbackHost } from './loopback-host.js';
 import { TerminalPolicy } from './terminal-policy.js';
-import { createEvent } from '@dsh-remote/protocol';
+import { createEvent, REMOTE_SESSION_EVENTS_CAPABILITY } from '@dsh-remote/protocol';
 import { ConnectionController } from './connection-controller.js';
-import { harnessSessionGeneration, readHarnessDistributionVersion, } from './harness-version.js';
+import { harnessSessionGeneration, isLiveSessionEventsHarnessVersion, readHarnessDistributionVersion, } from './harness-version.js';
 import { RpcRouter } from './rpc-router.js';
 import { RemoteFileViewerBridge } from './file-viewer-bridge.js';
 import { HostServerApi, ServerApiError, } from './server-api.js';
 import { HostServerConnection } from './server-connection.js';
 import { ServerCredentialStore } from './server-credentials.js';
-import { HarnessRemoteBridge } from './harness-remote-bridge.js';
+import { dispatchCommandForHost, HarnessRemoteBridge } from './harness-remote-bridge.js';
+import { readCompactionConfirmation, RemoteCompactionOperations } from './remote-compaction-operations.js';
 import { PluginRouteBridge } from './plugin-route-bridge.js';
 import { loadNodeRtcFactory } from './werift-rtc.js';
 import { CodexRemoteDomain } from './codex/domain.js';
@@ -43,10 +45,16 @@ export class HostPluginRuntime {
     codex;
     acp;
     codexWorkspaceState = new CodexWorkspaceState(key => TerminalPolicy.releaseOwner(this.terminalOwners, key));
+    /**
+     * Host-wide async compaction registry. It deliberately lives on the runtime,
+     * not on a connection: disconnecting a client must not abort a compaction.
+     */
+    compactionOperations;
     localCodexPeer;
     localCodexPublish = async () => undefined;
     localAcpPeer;
     localAcpPublish = async () => undefined;
+    warnedMissingHostApi = false;
     constructor(config, identities, logger, localGateway, fileViewerHost, 
     /** PTY-backed terminal provider from the Host `subprocess` service, when present. */
     terminalSpawner, pluginRoutes, 
@@ -64,10 +72,46 @@ export class HostPluginRuntime {
         this.loopbackPorts = [...config.loopback.ports];
         this.codex = new CodexRemoteDomain(config.codex, logger);
         this.acp = new AcpRemoteGateway(config.acp ?? { enabled: false, backends: [] }, logger, undefined, undefined, () => this.terminalEnabled, this.terminalSpawner);
+        // Each operation runs on its own owner Peer minted from the Host gateway,
+        // so its lifetime is independent of the client connection that submitted it.
+        this.compactionOperations = new RemoteCompactionOperations(async (sessionId, signal) => {
+            const gateway = this.localGateway?.createPeer?.() ?? this.localGateway;
+            if (gateway === undefined)
+                throw new RpcError('HARNESS_UNAVAILABLE', 'The Host Harness gateway is unavailable.');
+            try {
+                return await dispatchCommandForHost(gateway, { args: { agentId: sessionId, line: '/compact' } }, signal, this.harnessVersion);
+            }
+            finally {
+                await gateway.dispose?.();
+            }
+        }, {
+            logger,
+            // `commands/execute` stops waiting on abort while the compaction handler
+            // keeps running, so lifecycle confirmation comes from the Session log.
+            confirm: async (sessionId, acceptedAt, commandId) => {
+                const gateway = this.localGateway?.createPeer?.() ?? this.localGateway;
+                if (gateway === undefined)
+                    return { kind: 'unknown' };
+                try {
+                    const result = await gateway.dispatch('session/events', {
+                        args: { request: { address: { kind: 'session', sessionId }, maxMessages: 128 } },
+                    }, AbortSignal.timeout(5_000));
+                    return readCompactionConfirmation(result, acceptedAt, commandId);
+                }
+                catch {
+                    return { kind: 'unknown' };
+                }
+                finally {
+                    await gateway.dispose?.();
+                }
+            },
+        });
         this.connections = new ConnectionController(this.identities, (context, send) => {
             const peerGateway = this.localGateway?.createPeer?.() ?? this.localGateway;
+            const uploadDispatcher = this.pluginRoutes?.(peerGateway?.peer);
+            const uploadBridge = uploadDispatcher === undefined ? undefined : new PluginRouteBridge(uploadDispatcher, this.logger);
             const harnessRemote = peerGateway?.supportsCarrier === true
-                ? new HarnessRemoteBridge(peerGateway, (event, data) => send(createEvent(event, data)), this.logger, this.harnessVersion, new TerminalPolicy(() => this.terminalEnabled, context.peerDeviceId, this.terminalOwners), new CodexWorkspaceBridge((threadId, signal) => this.codex.resolveThreadWorkspace(context.connectionId, threadId), () => this.terminalEnabled, this.codexWorkspaceState, this.terminalSpawner), workspaceUploadRootResolver(peerGateway, () => harnessSessionGeneration(this.harnessVersion) === 'v3', threadId => this.codex.resolveThreadWorkspace(context.connectionId, threadId), sessionId => this.acp.resolveUploadWorkspace(context.connectionId, sessionId)), this.schedule)
+                ? new HarnessRemoteBridge(peerGateway, (event, data) => send(createEvent(event, data)), this.logger, this.harnessVersion, new TerminalPolicy(() => this.terminalEnabled, context.peerDeviceId, this.terminalOwners), new CodexWorkspaceBridge((threadId, signal) => this.codex.resolveThreadWorkspace(context.connectionId, threadId), () => this.terminalEnabled, this.codexWorkspaceState, this.terminalSpawner), workspaceUploadRootResolver(peerGateway, () => harnessSessionGeneration(this.harnessVersion) === 'v3', threadId => this.codex.resolveThreadWorkspace(context.connectionId, threadId), sessionId => this.acp.resolveUploadWorkspace(context.connectionId, sessionId)), this.schedule, uploadBridge === undefined ? undefined : body => uploadBridge.call({ route: 'api/session/uploadFileBinary', body }, true))
                 : undefined;
             const fileViewer = new RemoteFileViewerBridge(() => this.fileViewerHost?.(), this.logger);
             const codex = this.codex.createPeer(context, (event, data) => send(createEvent(event, data)));
@@ -77,12 +121,20 @@ export class HostPluginRuntime {
             // plugin is activated.
             const dispatcher = this.pluginRoutes?.(peerGateway?.peer);
             const pluginRoute = dispatcher === undefined ? undefined : new PluginRouteBridge(dispatcher, this.logger);
-            return new RpcRouter(undefined, this.logger, fileViewer, harnessRemote, () => this.hostCapabilities(), codex, cursor, 
+            const workspaceUpload = new WorkspaceUploadHost(workspaceUploadRootResolver(peerGateway, () => harnessSessionGeneration(this.harnessVersion) === 'v3', threadId => this.codex.resolveThreadWorkspace(context.connectionId, threadId), sessionId => this.acp.resolveUploadWorkspace(context.connectionId, sessionId)), undefined, context.transportMode);
+            const lanUpload = context.peerIdentityKey && context.transportMode ? new LanUploadHost(workspaceUpload, {
+                connectionId: context.connectionId, peerIdentityKey: context.peerIdentityKey,
+                identity: () => this.currentIdentity(), mode: context.transportMode,
+            }) : undefined;
+            return new RpcRouter(undefined, this.logger, fileViewer, harnessRemote, () => this.transportCapabilities(peerGateway), codex, cursor, 
             // Handles and their lifetime belong to this connection; only policy is shared.
-            this.createLoopbackHost(), () => this.hostWorkspaceTypes(), pluginRoute, new WorkspaceUploadHost(workspaceUploadRootResolver(peerGateway, () => harnessSessionGeneration(this.harnessVersion) === 'v3', threadId => this.codex.resolveThreadWorkspace(context.connectionId, threadId), sessionId => this.acp.resolveUploadWorkspace(context.connectionId, sessionId)), undefined, context.transportMode));
+            this.createLoopbackHost(), () => this.hostWorkspaceTypes(), pluginRoute, workspaceUpload, {
+                operations: this.compactionOperations,
+                owner: { deviceId: context.peerDeviceId, connectionId: context.connectionId },
+            }, lanUpload);
         }, this.logger);
         if (config.serverUrl !== undefined) {
-            this.serverApi = new HostServerApi(config.serverUrl, new ServerCredentialStore(identities.directory));
+            this.serverApi = new HostServerApi(config.serverUrl, new ServerCredentialStore(identities.directory), fetch, 'host', config.httpServerAllowlist);
         }
     }
     setTerminalEnabled(enabled) {
@@ -177,7 +229,7 @@ export class HostPluginRuntime {
             identityKey: this.identity.publicKey,
             ...(this.harnessVersion === undefined ? {} : { harnessVersion: this.harnessVersion }),
         }, async (result) => { await this.serverApi.adoptPairing(result); if (!this.closed)
-            this.serverConnection?.reconnect(); });
+            this.serverConnection?.reconnect(); }, fetch, this.config.httpServerAllowlist);
     }
     async pairingControl(action, input) {
         if (this.pairing === undefined || this.closed)
@@ -377,6 +429,7 @@ export class HostPluginRuntime {
         this.pairing?.close();
         this.serverApi?.close();
         await this.serverConnection?.stop();
+        this.compactionOperations.closeAll();
         await this.connections.close();
         await this.localCodexPeer?.closeAll();
         this.localCodexPeer = undefined;
@@ -446,6 +499,58 @@ export class HostPluginRuntime {
             }
         }
         return capabilities;
+    }
+    async transportCapabilities(gateway) {
+        const capabilities = this.hostCapabilities();
+        if (gateway?.supportsCarrier !== true)
+            return capabilities;
+        let result;
+        try {
+            result = await gateway.dispatch('session/list', { args: { _request: {} } }, AbortSignal.timeout(5_000));
+        }
+        catch {
+            throw new RpcError('CONNECTION_FAILED', 'Cannot verify the Host Session API.', undefined, true);
+        }
+        if (result.ok) {
+            if (isLiveSessionEventsHarnessVersion(this.harnessVersion) && await this.probeLiveSessionEvents(gateway)) {
+                capabilities.push(REMOTE_SESSION_EVENTS_CAPABILITY);
+            }
+            return capabilities;
+        }
+        if (result.error.code === 'gateway/service-unavailable') {
+            throw new RpcError('CONNECTION_FAILED', 'The Host Session API is not ready.', undefined, true);
+        }
+        if (result.error.code !== 'gateway/invocation-unavailable') {
+            throw new RpcError('CONNECTION_FAILED', 'Cannot verify the Host Session API.', undefined, true);
+        }
+        if (!this.warnedMissingHostApi) {
+            this.warnedMissingHostApi = true;
+            this.logger.warn('Host Remote API is incomplete. Install @deepseek-ai/dsh-api-remotes and its Host API packages.');
+        }
+        return capabilities.filter(value => !value.startsWith('harness.remote.') && value !== 'harness.terminal.v1');
+    }
+    async probeLiveSessionEvents(gateway) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 2_000);
+        let iterator;
+        try {
+            const stream = await gateway.open('$events', { args: {} }, controller.signal);
+            iterator = stream[Symbol.asyncIterator]();
+            const first = await iterator.next();
+            return !first.done
+                && typeof first.value === 'object'
+                && first.value !== null
+                && !Array.isArray(first.value)
+                && first.value.type === 'ready';
+        }
+        catch {
+            return false;
+        }
+        finally {
+            clearTimeout(timeout);
+            controller.abort();
+            await iterator?.return?.().catch(() => undefined);
+        }
     }
     hostWorkspaceTypes() {
         const types = [];

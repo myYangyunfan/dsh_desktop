@@ -1,4 +1,5 @@
 import { type RemoteClientCore } from '@dsh-remote/client-core';
+import { RemoteSessionHistoryCache } from './session-history-cache.js';
 import { type SessionFormatCompatibility } from './session-format-compat.js';
 import type { RemoteTypertGatewayTarget, TypertGatewayRequest, TypertRpcResult } from './typert-gateway-contract.js';
 /** Client-side alpha Gateway carrier over the authenticated Remote channel. */
@@ -7,15 +8,20 @@ export declare class RemoteTypertGateway implements RemoteTypertGatewayTarget {
     private readonly compatibility?;
     private readonly harnessVersion?;
     private readonly deferStreamDisconnect;
+    private readonly historyCache;
     private frameTransfers?;
-    constructor(client: RemoteClientCore, compatibility?: SessionFormatCompatibility | undefined, harnessVersion?: string | undefined, deferStreamDisconnect?: boolean);
+    constructor(client: RemoteClientCore, compatibility?: SessionFormatCompatibility | undefined, harnessVersion?: string | undefined, deferStreamDisconnect?: boolean, historyCache?: RemoteSessionHistoryCache);
     invoke(request: TypertGatewayRequest): Promise<unknown>;
     dispatch(endpoint: string, payload: unknown, signal: AbortSignal): Promise<TypertRpcResult>;
+    private dispatchRemote;
     private legacyWelcomeAcknowledged;
     private settingsDescribeValue?;
     /** DSH <=0.1.6 cannot persist the 0.1.7 welcome acknowledgement remotely. */
     private normalizeLegacyWelcomeSettings;
     open(endpoint: string, payload: unknown, signal: AbortSignal): Promise<AsyncIterable<unknown>>;
+    private openRaw;
+    private iterateWithCachedSnapshot;
+    private iterateFallbackSnapshot;
     private iterate;
     private deferDisconnect;
     private callTransferred;

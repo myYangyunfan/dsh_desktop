@@ -220,6 +220,54 @@ export function stripTags(html) {
   return decodeEntities(String(html).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
 }
 
+export function queryOverlapTokens(query) {
+  const tokens = new Set();
+  for (const run of String(query).match(/[\u4e00-\u9fff]+/g) ?? []) {
+    // 单字（年/月/日）几乎出现在任何默认页里，只保留二元组。
+    if (run.length === 2) tokens.add(run);
+    for (let i = 0; i + 1 < run.length; i++) tokens.add(run.slice(i, i + 2));
+  }
+  for (const word of String(query).toLowerCase().split(/[^a-z0-9]+/)) {
+    if (word.length >= 2) tokens.add(word);
+  }
+  return [...tokens];
+}
+
+/**
+ * A result batch that shares too little vocabulary with the query is treated as
+ * an empty result so the caller can advance to the next engine. This is the
+ * same contract Bing has used since #112; noisy HTML/aggregator engines opt in.
+ */
+export function looksRelevant(query, sources) {
+  const tokens = queryOverlapTokens(query);
+  // Pure-symbol/single-character queries cannot be judged reliably; let them through.
+  if (tokens.length === 0) return true;
+  const strong = tokens.filter((t) => !/^\d+$/.test(t));
+  const usable = strong.length > 0 ? strong : tokens;
+  // A short ASCII token such as gt/max is usually a model suffix, not the
+  // subject. A real title hit needs a CJK bigram or an ASCII word of length 4+.
+  const titleStrong = strong.filter((t) => /[\u4e00-\u9fff]/.test(t) || t.length >= 4);
+  const titleTokens = titleStrong.length > 0 ? titleStrong : usable;
+  const matched = new Set();
+  const titleMatched = new Set();
+  let relevant = 0;
+  for (const source of sources) {
+    const title = String(source.title ?? "").toLowerCase();
+    const hay = `${title} ${source.snippet ?? ""} ${source.url ?? ""}`.toLowerCase();
+    const hits = usable.filter((t) => hay.includes(t.toLowerCase()));
+    if (hits.length > 0) {
+      relevant += 1;
+      for (const hit of hits) matched.add(hit);
+      for (const hit of titleTokens) {
+        if (title.includes(hit.toLowerCase())) titleMatched.add(hit);
+      }
+    }
+  }
+  const enoughSources = relevant >= Math.max(1, Math.ceil(sources.length / 3));
+  const enoughTokens = matched.size >= Math.min(2, usable.length) || matched.size / usable.length >= 0.5;
+  return enoughSources && enoughTokens && titleMatched.size > 0;
+}
+
 export function extractDdgUrl(rel) {
   if (!rel) return null;
   const m = rel.match(/uddg=([^&]+)/);

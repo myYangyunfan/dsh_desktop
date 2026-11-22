@@ -1,3 +1,4 @@
+import { BINARY_UPLOAD_CHUNK_BYTES } from '@dsh-remote/protocol';
 import { workspaceUploadMaxBytes } from './workspace-transfer-limits.js';
 import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
@@ -7,24 +8,30 @@ import { z } from 'zod';
 import { RpcError } from './safe-error.js';
 export const WORKSPACE_UPLOAD_BYTES = 20 * 1024 * 1024;
 export const WORKSPACE_UPLOAD_CHUNK = 64 * 1024;
+/** Bounded authority revalidation while chunks stream; publication always revalidates. */
+export const WORKSPACE_UPLOAD_AUTHORITY_TTL_MS = 5_000;
+export const WORKSPACE_UPLOAD_AUTHORITY_BYTES = 4 * 1024 * 1024;
 const scope = z.object({ sessionId: z.string().min(1).max(512), uploadId: z.string().uuid() }).strict();
-const openParams = scope.extend({ name: z.string().min(1), totalBytes: z.number().int().min(0).max(workspaceUploadMaxBytes("LAN")) }).strict();
+const openParams = scope.extend({ name: z.string().min(1), totalBytes: z.number().int().min(0).max(workspaceUploadMaxBytes("LAN")), encoding: z.literal('binary-v1').optional() }).strict();
 const chunkParams = scope.extend({ offset: z.number().int().min(0), data: z.string().min(1).max(Math.ceil(WORKSPACE_UPLOAD_CHUNK / 3) * 4) }).strict();
+const binaryChunkParams = scope.extend({ offset: z.number().int().min(0), data: z.instanceof(Uint8Array).refine(data => data.byteLength > 0 && data.byteLength <= BINARY_UPLOAD_CHUNK_BYTES) }).strict();
 /** One authenticated peer owns this bounded, ephemeral upload service. */
 export class WorkspaceUploadHost {
     resolveRoot;
     ttlMs;
     transportMode;
+    now;
     uploads = new Map();
     completed = new Map();
     queue = Promise.resolve();
     lifetime = new AbortController();
     timer;
     closed = false;
-    constructor(resolveRoot, ttlMs = 120_000, transportMode = () => undefined) {
+    constructor(resolveRoot, ttlMs = 120_000, transportMode = () => undefined, now = Date.now) {
         this.resolveRoot = resolveRoot;
         this.ttlMs = ttlMs;
         this.transportMode = transportMode;
+        this.now = now;
         this.timer = setInterval(() => { void this.serialize(() => this.expire()).catch(() => undefined); }, Math.min(ttlMs, 30_000));
         this.timer.unref();
     }
@@ -37,6 +44,7 @@ export class WorkspaceUploadHost {
                 switch (method) {
                     case 'workspace.upload.open': return await this.begin(input);
                     case 'workspace.upload.chunk': return await this.append(input);
+                    case 'workspace.upload.chunk.binary': return await this.append(input, true);
                     case 'workspace.upload.commit': return await this.commit(input);
                     case 'workspace.upload.abort': {
                         const p = scope.parse(input);
@@ -97,19 +105,22 @@ export class WorkspaceUploadHost {
             throw failure('UPLOAD_WORKSPACE_UNAVAILABLE');
         const temp = join(root, `.dsh-upload-${randomUUID()}.part`);
         const handle = await open(temp, constants.O_CREAT | constants.O_EXCL | constants.O_RDWR | (constants.O_NOFOLLOW ?? 0), 0o600);
-        const upload = { ...p, received: 0, touched: Date.now(), root, sourceRoot, dev: directory.dev, ino: directory.ino, temp, handle };
+        const upload = { ...p, received: 0, touched: this.now(), root, sourceRoot, dev: directory.dev, ino: directory.ino, temp, handle,
+            authorityCheckedAt: 0, authorityBytes: 0 };
         this.uploads.set(p.uploadId, upload);
         await this.validateRoot(upload);
-        return { uploadId: p.uploadId, chunkBytes: WORKSPACE_UPLOAD_CHUNK };
+        return { uploadId: p.uploadId, chunkBytes: p.encoding ? BINARY_UPLOAD_CHUNK_BYTES : WORKSPACE_UPLOAD_CHUNK, ...(p.encoding ? { encoding: p.encoding } : {}) };
     }
-    async append(input) {
-        const p = chunkParams.parse(input);
+    async append(input, binary = false) {
+        const p = binary ? binaryChunkParams.parse(input) : chunkParams.parse(input);
         const upload = this.requireUpload(p);
-        const data = Buffer.from(p.data, 'base64');
-        if (!data.length || data.length > WORKSPACE_UPLOAD_CHUNK || data.toString('base64') !== p.data
+        if (binary !== (upload.encoding === 'binary-v1'))
+            throw failure('UPLOAD_INVALID_CHUNK');
+        const data = typeof p.data === 'string' ? Buffer.from(p.data, 'base64') : Buffer.from(p.data.buffer, p.data.byteOffset, p.data.byteLength);
+        if (!data.length || data.length > (binary ? BINARY_UPLOAD_CHUNK_BYTES : WORKSPACE_UPLOAD_CHUNK) || (!binary && data.toString('base64') !== p.data)
             || p.offset !== upload.received || upload.received + data.length > upload.totalBytes)
             throw failure('UPLOAD_INVALID_CHUNK');
-        await this.validateRoot(upload);
+        await this.validateRoot(upload, this.authorityExpired(upload));
         let written = 0;
         while (written < data.length) {
             const result = await upload.handle.write(data, written, data.length - written, upload.received + written);
@@ -119,7 +130,7 @@ export class WorkspaceUploadHost {
         }
         this.assertLive();
         upload.received += data.length;
-        upload.touched = Date.now();
+        upload.touched = this.now();
         return { uploadId: p.uploadId, receivedBytes: upload.received };
     }
     async commit(input) {
@@ -155,7 +166,7 @@ export class WorkspaceUploadHost {
             }
             const result = { name, path: `./${name}`, bytes: upload.totalBytes };
             // Publication is the commit point. Abort/disconnect may only remove the temp.
-            this.completed.set(p.uploadId, { sessionId: p.sessionId, result, touched: Date.now() });
+            this.completed.set(p.uploadId, { sessionId: p.sessionId, result, touched: this.now() });
             if (this.completed.size > 64)
                 this.completed.delete(this.completed.keys().next().value);
             await this.discard(p.uploadId, upload);
@@ -191,12 +202,27 @@ export class WorkspaceUploadHost {
                 signal.removeEventListener('abort', onAbort);
         }
     }
-    async validateRoot(upload) {
+    /**
+     * Chunks re-check the workspace root identity locally on every call. The
+     * expensive session-authority lookup is bounded (TTL/bytes) and always runs
+     * before publication; a revoked session can therefore never publish a file.
+     */
+    authorityExpired(upload) {
+        return this.now() - upload.authorityCheckedAt >= WORKSPACE_UPLOAD_AUTHORITY_TTL_MS
+            || upload.received - upload.authorityBytes >= WORKSPACE_UPLOAD_AUTHORITY_BYTES;
+    }
+    async validateRoot(upload, recheckAuthority = true) {
         if (upload.totalBytes > workspaceUploadMaxBytes(this.transportMode()))
             throw failure('UPLOAD_LIMIT');
-        const current = await this.sessionRoot(upload.sessionId);
-        this.assertLive();
-        if (current !== upload.sourceRoot || await realpath(current) !== upload.root || await realpath(upload.root) !== upload.root)
+        if (recheckAuthority) {
+            const current = await this.sessionRoot(upload.sessionId);
+            this.assertLive();
+            if (current !== upload.sourceRoot || await realpath(current) !== upload.root)
+                throw failure('UPLOAD_WORKSPACE_CHANGED');
+            upload.authorityCheckedAt = this.now();
+            upload.authorityBytes = upload.received;
+        }
+        if (await realpath(upload.root) !== upload.root)
             throw failure('UPLOAD_WORKSPACE_CHANGED');
         const directory = await stat(upload.root);
         if (!directory.isDirectory() || directory.dev !== upload.dev || directory.ino !== upload.ino)
@@ -217,7 +243,7 @@ export class WorkspaceUploadHost {
         catch { /* Missing/replaced directories are never followed during cleanup. */ }
     }
     async expire() {
-        const cutoff = Date.now() - this.ttlMs;
+        const cutoff = this.now() - this.ttlMs;
         await Promise.all([...this.uploads].filter(([, u]) => u.touched <= cutoff).map(([id, u]) => this.discard(id, u)));
         for (const [id, entry] of this.completed)
             if (entry.touched <= cutoff)

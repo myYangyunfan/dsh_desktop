@@ -759,4 +759,164 @@ export const WHATS_NEW = [
       },
     ],
   },
+  {
+    version: '1.11.0',
+    items: [
+      {
+        text: {
+          zh: '**工具页重做：内置工具在前，按用途分组，搜索设置固定在顶部**：内置工具按用途分成文件、命令与终端、网络等组，MCP 工具按服务器排在后面；所有组默认收起，顶部可按类型与加载方式筛选。搜索参数始终在页面顶部，不再折叠',
+          en: '**Rebuilt Tools page: built-ins first, grouped by purpose, search settings fixed at the top**: built-ins are grouped by purpose (files, commands and terminals, web, and more), MCP tools follow under their servers, and every group starts collapsed. The top filters by type and loading mode, and the search parameters stay at the top instead of being folded away',
+        },
+        where: { zh: '面板「工具」页', en: 'The panel "Tools" tab' },
+      },
+      {
+        text: {
+          zh: '**新增 MCP 不再往配置末尾补第二个 `insert` 块**：写盘时并入已有的 MCP 块，不再追加新的 insert；YAML 输出保留引号与流式集合写法，diff 里只多出新条目',
+          en: '**Adding an MCP no longer appends a second `insert` block**: the write merges into the existing MCP block instead of appending another insert; YAML output keeps its quoting and flow collections, so the diff contains only the new entry',
+        },
+        where: { zh: '新增 MCP 后的 profile patch', en: 'The profile patch after adding an MCP' },
+      },
+      {
+        text: {
+          zh: '**MCP 页芯片与工具页不再各写一套真值**：整台默认只写 `toolLoading.groups`，工具页只写 `toolLoading.tools`；旧 `defer` 只读兼容，`mode` 只由配置文件决定。项目作用域下的组头也改为读同一份实际状态',
+          en: '**The MCP chips and the Tools page no longer keep two writable truths**: the server default writes only `toolLoading.groups`, the Tools page writes only `toolLoading.tools`, legacy `defer` is read-only compatibility, and `mode` is config-file only. Project-scope group headers now read the same effective state too',
+        },
+        where: { zh: '面板 MCP 芯片与工具页', en: 'MCP chips and the Tools page' },
+      },
+      {
+        text: {
+          zh: '**内置工具名单按宿主源码核对**：删掉误入的 MCP 工具名与不存在的工具，补上文件、终端、子代理、定时等遗漏项；名单外的名字不再猜身份，统一进「其他插件与未识别」',
+          en: '**Built-in tool names checked against the host source**: MCP tool names and nonexistent tools that had slipped in are gone, while missing files, terminal, subagent and schedule tools are added. Names outside the list are no longer guessed — they go into "Other plugins and unrecognised"',
+        },
+        where: { zh: '面板「工具」→ 类型筛选「内置」', en: 'Panel "Tools" → type filter "Built-in"' },
+      },
+      {
+        text: {
+          zh: '**ToolSearch 实测：工具定义从 89.9K 降到 9.4K**：同一套 MCP 的对照，工具定义少 80.5K（-89.5%），约 9.6×；整段上下文从 115K 降到 21.3K（-81.5%）。README 里有两张原始截图',
+          en: '**ToolSearch measured: tool definitions drop from 89.9K to 9.4K**: with the same MCP servers, definitions shrink by 80.5K (-89.5%), about 9.6×, and total context use drops from 115K to 21.3K (-81.5%). The README includes both original screenshots',
+        },
+        where: { zh: 'README 的 ToolSearch 对照', en: 'The ToolSearch comparison in the README' },
+      },
+    ],
+  },
+  {
+    version: '1.11.1',
+    items: [
+      {
+        text: {
+          zh: '**升级后工具页不再只剩 5 个内置工具**：插件可能在已有会话之后才加载（升级、HMR、桌面端先开会话），此前只靠 `agent/created` 事件收集会话，漏掉已存在的会话后就只剩根作用域的 5 个工具；现在从宿主 `ctx.agents.list()` 注册表补齐，项目作用域同样生效',
+          en: '**The Tools page no longer shows only 5 built-ins after an upgrade**: the plugin can load after sessions already exist (upgrade, HMR, or the desktop app opening a session first). It used to rely only on `agent/created`, so those sessions were missed and only the five root-scope tools remained. It now fills them in from the host `ctx.agents.list()` registry, including project scope',
+        },
+        where: { zh: '面板「工具」页（已有会话时）', en: 'The panel "Tools" tab with existing sessions' },
+      },
+    ],
+  },
+  {
+    version: '1.11.2',
+    items: [
+      {
+        text: {
+          zh: '**修好 DSH 0.2.2-rc.2 上「插件入口没有挂载」**：rc.2 的官方 web-app 自带 `@deepseek-ai/dsh-mcp-manager`，它和本插件抢同一个服务名，谁后注册谁启动失败——之前失败的总是它，而本插件又据此把入口整体让掉，结果两边都没有入口。现在本插件改用自己命名空间（`toolboxMcp`），官方那个不再报错，本面板的入口照常挂载；宿主自带的那个没有面板、也卸不掉，不再向它让位',
+          en: '**Fixed "plugin entry not mounted" on DSH 0.2.2-rc.2**: the rc.2 official web-app bundles `@deepseek-ai/dsh-mcp-manager`, which claims the same service name as this plugin. Whichever registers second fails to start — previously that was always the official one, and this plugin then yielded its entry away, leaving no entry at all. The plugin now uses its own namespace (`toolboxMcp`): the official plugin starts cleanly and this panel mounts as usual. The host manager has no panel and cannot be removed, so the plugin no longer yields to it',
+        },
+        where: { zh: 'DSH 0.2.2-rc.2 的侧栏 / 悬浮入口', en: 'Sidebar / floating entry on DSH 0.2.2-rc.2' },
+      },
+      {
+        text: {
+          zh: '**工具页去掉三处重复说明**：搜索设置标题下的整段介绍、列表上方的「整台默认在 MCP 页改」、分组标题右侧的「N 组 · M 个工具」都删了（每个参数本来就有 ⓘ，组头自己带数量）；目录体检不再挤进参数网格的第三格，改为独立成块，三个参数回到一行',
+          en: '**Three redundant explanations removed from the Tools page**: the intro paragraph under the settings title, the "server default is changed on the MCP page" line above the list, and the "N groups · M tools" counter beside section headers are gone (each field already has an ⓘ, each group header shows its own count). The catalog checkup no longer sits in the third grid cell — it is its own block, so the three settings fit one row',
+        },
+        where: { zh: '面板「工具」页顶部', en: 'Top of the panel "Tools" tab' },
+      },
+      {
+        text: {
+          zh: '**目录体检的数字与说法修准了**：`待发现 N 个工具名` 之前在某些路径上会显示成 `undefined`（分组形态取错了长度），现在恒为真实数字；「最近的搜索」按时间倒序（不再把"无命中"当缺陷排最前）；截断的说明改成真实代价——名字不在目录里就不能用 `select:` 精确取，只能靠关键词碰',
+          en: '**The catalog checkup now reports correct numbers and wording**: "N tools pending" could render as `undefined` on some paths (wrong length on the grouped path) and is now always a real number; "recent searches" is newest-first (no longer treating a miss as a defect to surface first); the truncation note states the real cost — a name not in the catalog cannot be fetched with `select:`, only guessed by keyword',
+        },
+        where: { zh: '面板「工具」页 → 目录体检', en: 'Panel "Tools" tab → catalog checkup' },
+      },
+    ],
+  },
+  {
+    version: '1.12.0',
+    items: [
+      {
+        text: {
+          zh: '**工具页可以批量改了**：内置 / MCP / 其他工具都能勾选，顶部动作条对勾选（或当前筛选结果）一键设常驻 / 按需 / 跟随，并支持「撤销这一步」',
+          en: '**Bulk changes on the Tools page**: any tool — built-in, MCP or other — can be selected, and the action bar sets the selection (or the current filter result) to resident / on-demand / follow in one click, with a one-step undo',
+        },
+        where: { zh: '面板「工具」页 → 勾选后的动作条', en: 'Panel "Tools" tab → the action bar after selecting' },
+      },
+      {
+        text: {
+          zh: '**新增「我的分组」**：段头可以新建空组，动作条可以「存为分组」把当前这批工具存下来；组有自己的默认加载方式，成员继承、逐工具例外仍然优先（逐工具 > 分组 > 服务器 > 模式）',
+          en: '**New "My groups"**: create an empty group from the section header, or save the current batch with "Save as group". A group carries its own default loading mode; members inherit it and per-tool exceptions still win (per-tool > group > server > mode)',
+        },
+        where: { zh: '面板「工具」页 →「我的分组」', en: 'Panel "Tools" tab → "My groups"' },
+      },
+      {
+        text: {
+          zh: '**分组是全局配置**：写在 profile patch 的 `config.customGroups`，项目作用域只读；一个工具只属于一个组，被分走的工具在原段标注「N 个在自定义分组里」',
+          en: '**Groups are global**: stored as `config.customGroups` in the profile patch, read-only in project scopes. One tool belongs to one group, and the original section reports "N in custom groups" for the ones moved out',
+        },
+        where: { zh: '面板「工具」页 → 项目作用域 / 段头', en: 'Panel "Tools" tab → project scope / section headers' },
+      },
+      {
+        text: {
+          zh: '**兼容 DSH 0.2.2-rc.3**：宿主服务面在 rc.2 → rc.3 之间没有改动，开发基线升到 rc.3（cordis 4.1 / loader 1.1），0.2.1-rc.5 仍是支持下限',
+          en: '**DSH 0.2.2-rc.3 compatibility**: the host service surface did not change between rc.2 and rc.3; the development baseline moved to rc.3 (cordis 4.1 / loader 1.1), with 0.2.1-rc.5 still the supported floor',
+        },
+        where: { zh: '安装要求（README / 安装文档）', en: 'Requirements (README / installation guide)' },
+      },
+    ],
+  },
+  {
+    version: '1.12.1',
+    items: [
+      {
+        text: {
+          zh: '**导出按钮搬回标题栏**：全局与项目的「导出」现在是同一颗按钮，紧挨「导入 MCP」，切作用域不再换位置。它之前被画成列表容器的一个直接子元素、在 flex 行里自成一列，把全局页的列表与详情整体挤窄了',
+          en: '**Export moved into the title bar**: global and project export are now one button right next to "Import MCP", so it no longer moves when you switch scope. It used to be a direct child of the list container, taking a column of its own in that flex row and squeezing the list and detail panes on the global tab',
+        },
+        where: { zh: '面板「MCP」页 → 标题栏（「导入 MCP」右侧）', en: 'Panel "MCP" tab → title bar (right of "Import MCP")' },
+      },
+    ],
+  },
+  {
+    version: '1.13.0',
+    items: [
+      {
+        text: {
+          zh: '**新增「上下文」页，只看正在运行的会话**：一块面板回答"下一轮请求里上下文被谁占着"——总量（模型报的真值）+ 构成（系统提示词 / 工具定义 / 工具结果 / 附件 / 会话内容）+ 明细 + 各轮规模。它**只读当下在跑的会话**，不再列一堆历史会话让你挑；没有会话在跑时说清"为什么空着、怎么让它有数字"，不装成故障',
+          en: '**New "Context" tab that only looks at running sessions**: one pane answers "who is holding the context in the next request" — the total (reported by the model), the composition (system prompt / tool definitions / tool results / attachments / conversation), a detail list, and per-turn sizes. It reads **only sessions running right now** instead of listing a pile of historical ones to choose from; when nothing is running it explains why it is empty and how to get numbers, rather than posing as a fault',
+        },
+        where: { zh: '面板顶部能力层「上下文」', en: 'The "Context" layer in the panel\'s ability tabs' },
+      },
+      {
+        text: {
+          zh: '**构成按固定顺序分列，剩余空间在最右**：五类从左到右固定排（系统提示词 → 工具定义 → 工具结果 → 附件 → 会话内容），**列宽就是值的占比**（小到快看不见的类只留一条可见的边，精确数字读图例与明细）；同一个构成还能切成**网格**看"一共多少格、填了多少"',
+          en: '**Composition lays out as fixed-order columns with free space at the far right**: the five kinds keep a stable left-to-right order (system prompt → tool definitions → tool results → attachments → conversation), and **column width is the share** (categories too small to see keep only a visible edge; read exact sizes from the legend and the detail rows). The same composition can switch to a **grid** showing "how many cells, how full"',
+        },
+      },
+      {
+        text: {
+          zh: '**工具页不再被日志挤压，职责也收窄了**：工具页**只负责配置**（搜索参数、逐工具加载方式、分组）。原来占着一大块的「目录体检」是观测，不是配置，现在并进上下文页的工具卡，用一行说清"哪些工具按需搜索、目录多大、有没有被上限截掉"——连这个名字一起去掉了，用户不需要知道宿主编织目录时管它叫什么。面板里那些只有懂实现的人才看得懂的说明，改成了直白的「代价是什么」',
+          en: '**The Tools page is no longer squeezed by the log, and its job narrowed**: the Tools page now **only configures** (search parameters, per-tool loading, groups). The "catalog checkup" block was observability, not configuration, so it now lives in the tool card on the Context tab as one line: which tools are searched on demand, how big the catalog is, and whether the cap cut it — the name itself is gone too. Explanations that only made sense to someone who knows the implementation are now plain "what it costs you"',
+        },
+        where: { zh: '面板「工具」页 → 筛选条下方；「上下文」页 → 工具卡与搜索记录', en: 'Panel "Tools" tab → below the filter bar; "Context" tab → tool card and search log' },
+      },
+      {
+        text: {
+          zh: '**多个会话同时跑时，先看总览**：一屏列出所有正在运行的会话（工作区 · 标题 · 已用/上限 · 用量条 · 谁在生成），点进去才看详情，顶部一键回总览；只跑一个会话时直接进详情，不多一层点击。空状态是**通用**的（"现在没有会话在运行"）——这个面板是全局的，不该把某个会话拎出来说',
+          en: '**Several sessions running? See them all first**: one screen lists every running session (workspace, title, used/limit, usage bar, who is generating); click through for detail and come back with one tap. With a single session it goes straight to detail — no extra click. The empty state is **generic** ("no session is running") — this panel is global and must not single out one session',
+        },
+      },
+      {
+        text: {
+          zh: '**界面上不再有解释性说明**：缺数用数字本身表达（破折号、单位写"字符"），不再在面板底部补一段"为什么是这样"；一个请求都没发过的会话直接给一句空状态，而不是画一整页"—"再解释一遍。降级原因改为写进宿主日志——需要排查时找得到，平时不占地方',
+          en: '**No more explanatory notes in the UI**: a missing number is expressed by the number itself (an em dash, or the unit "characters") instead of a paragraph at the bottom explaining why; a session that has not sent a request yet gets one short empty state rather than a full page of dashes plus an explanation. Degradation reasons now go to the Host log — findable when needed, out of the way otherwise',
+        },
+      },
+    ],
+  },
 ]

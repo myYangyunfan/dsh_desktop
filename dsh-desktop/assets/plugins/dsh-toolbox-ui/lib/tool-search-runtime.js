@@ -129,11 +129,15 @@ export function resolveRuntimeConfig(config = {}) {
   // 统一策略：网关合成的决策函数（`(agent, schemas) => {mode, entries}`）。
   // 没有它就是静态夹具/旧部署，走服务器级口径。
   const policyFor = typeof config.policyFor === 'function' ? config.policyFor : undefined
+  // 工具代次（活值）：只在**有人听 tools/change** 时可信，拿不到就退回全量比较。
+  // 见 viewRevision 的 contentFingerprintFor。
+  const toolsGeneration = typeof config.toolsGeneration === 'function' ? config.toolsGeneration : undefined
   return {
     toolName,
     deferServersOf,
     serverNamesOf,
     ...(policyFor === undefined ? {} : { policyFor }),
+    ...(toolsGeneration === undefined ? {} : { toolsGeneration }),
     maxResults,
     // 累积发现集的上限：它决定"有多少份 schema 长期常驻请求"，不设会随长会话长回全量基线。
     // 注意它**不是**一次搜索能返回多少名字的上限——关键词形态受 maxResults 管，而 `select:`
@@ -246,12 +250,43 @@ export function guardDecision(name, { managed, discovered }, config) {
   return `tool ${JSON.stringify(name)} is deferred; call ${config.toolName} with the exact name ${JSON.stringify(name)} as the query to load its schema, then call it directly`
 }
 
-/** 视图 revision：工具可见面内容 + 全部影响划分的配置。变了才重建，否则复用缓存。 */
+/** 工具内容指纹：名字 + 描述 + parameters + output。735 工具实测 ~10ms（stringify + sha256）。 */
+function contentFingerprint(schemas) {
+  return revisionOf((schemas ?? []).map((schema) => [schema?.name, schema?.description, schema?.parameters ?? null, schema?.output ?? null]))
+}
+
+// 内容指纹的**复用**：宿主每次 register/dispose 都同步派发 tools/change（本插件已订阅，
+// 代次因此可信），同一代次内工具内容不可能变。名字集合另行指纹一次——准入 `toolSet` 逐回合
+// 变、且它不派发事件，代次盖不住这一半。
+// 代次不可信（没有订阅，返回 undefined）或没有 agent（静态夹具直接调）时退回全量算：
+// 宁可慢，不可拿一个不动的数字当"没变化"。
+const contentFingerprintCache = new WeakMap() // agent -> { generation, names, content }
+function contentFingerprintFor(schemas, config, agent) {
+  const generation = typeof config.toolsGeneration === 'function' ? config.toolsGeneration() : undefined
+  if (agent === undefined || generation === undefined) return contentFingerprint(schemas)
+  const names = revisionOf((schemas ?? []).map((schema) => schema?.name))
+  const hit = contentFingerprintCache.get(agent)
+  if (hit !== undefined && hit.generation === generation && hit.names === names) return hit.content
+  const content = contentFingerprint(schemas)
+  contentFingerprintCache.set(agent, { generation, names, content })
+  return content
+}
+
+/**
+ * 视图 revision：工具可见面内容 + 全部影响划分的配置。变了才重建，否则复用缓存。
+ *
+ * 内容那一半决定它是否昂贵：735 工具的全量内容指纹 ~10ms，而它保护的目录文本才 ~11ms
+ * （本文件组装期每请求都跑一次）。所以内容指纹按代次复用（见 contentFingerprintFor），
+ * revision 本身仍然是**内容派生**的——不是 `代次号`：同一内容在不同代次必须得到同一个
+ * revision，否则一次无关的 tools/change（比如项目工具注册）会把所有会话的视图与目录文本
+ * 一起打成失效，那是另一种浪费。
+ */
 export function viewRevision(schemas, config, agent) {
   const policy = policySetsOf(config, agent, schemas)
   return revisionOf({
     toolName: config.toolName,
-    tools: (schemas ?? []).map((schema) => [schema?.name, schema?.description, schema?.parameters ?? null, schema?.output ?? null]),
+    // 内容指纹已含名字，不再单列名字项。
+    content: contentFingerprintFor(schemas, config, agent),
     // 有统一策略时，延迟/常驻按**工具名**算（逐工具覆盖与保护都在里面）；
     // 没有策略的静态夹具仍走服务器级旧口径。
     defer: policy === null ? [...config.deferServersOf(agent)].sort() : [...policy.deferred].sort(),
@@ -512,7 +547,9 @@ function flatCatalogText(tools, config, budget) {
   if (shown > 0) body.push('', ...tools.slice(0, shown).map((tool) => `- ${tool.name}`))
   const truncated = total - shown
   if (truncated > 0) body.push('', notice(truncated))
-  return { text: body.join('\n'), truncated }
+  // listed/total 是 R13a 的体检口径：面板要能说出"池子里几个、目录列了几个"。
+  // 与 truncated 一起返回，因为它们本来就是同一次分配算出来的三个数。
+  return { text: body.join('\n'), truncated, listed: shown, total }
 }
 
 /**
@@ -559,14 +596,18 @@ export function catalogSectionText(catalog, config, grouping) {
   const taken = allocateCatalogNames(all, budget)
   const body = [title, '', intro]
   let truncated = 0
+  let listed = 0
   for (const group of all) {
     const shown = Math.min(group.names.length, taken.get(group.key) ?? 0)
     const hidden = group.names.length - shown
     truncated += hidden
+    listed += shown
     body.push('', catalogGroupHeader(group, hidden, grouping?.instructionsOf))
     for (const line of group.lines.slice(0, shown)) body.push(line)
   }
-  return { text: body.join('\n'), truncated }
+  // 三个数同源：`total` 是**待发现**的工具数（传进来的目录已按 deferred 过滤），
+  // 而它是 Map —— `Map.length` 恒为 undefined，会让面板显示「待发现 undefined 个」。
+  return { text: body.join('\n'), truncated, listed, total: catalog.size }
 }
 
 /**
@@ -882,10 +923,21 @@ export function installToolSearchRuntime(ctx, config = {}) {
   // 所以必须给文本单独一个缓存，否则每次组装都要重算（735 工具 ~11ms）。
   // 键 = `${revision}:${versionOf(state)}`；只留两个 slot——发现集的版本号在淘汰/回灌之间
   // 可能来回，两格足以避免抖动，又不会长成一张表。
+  // R13a：最近一次目录组装的体检数据（**全局一份**，见 catalogTextFor 里的理由）。
+  let lastCatalogAssembly = null
+  // 「模型搜过什么」**不在这里**：它属于**会话**，从会话日志数（lib/context-report.js 的
+  // foldToolSearchStats），按会话、带结果字符数、顺手就能回答"这个会话搜了几次"。
+  // 这里曾有一份全局环形记录（R13b，20 条、只写不给模型看），展示搬去上下文页之后它就没有
+  // 读者了；留着就是第二个"搜索记录"真相源，迟早与日志那份对不上。热路径上那次
+  // `JSON.stringify(全部 schema)` 也跟着一起没了。
   const catalogCache = new WeakMap()
   const catalogTextFor = (agent, view, state, deferred, sections) => {
     // 缓存键必须含 instructions 指纹：组头摘要读的是 `mcp:<server>` 段正文，而它不在
     // view.revision 里。漏掉这一项 = 服务器重连后摘要永久陈旧（B 档，但仍属静默错误）。
+    // ⚠️ 这个键**不含 maxCatalogChars**：改预算后若命中缓存，目录段仍是旧预算的。
+    // 现在成立是因为 `updateToolSearchSettings` 会**重装运行时**（新闭包 ⇒ 新 catalogCache ⇒ 无缓存）。
+    // R13a 的体检读的正是"上一次组装"，所以这条依赖第一次变得**可观测**——将来若把预算改成
+    // 热更新（不重装），必须同时把这个键补上预算，否则体检会显示旧预算下的数字。
     const key = `${view.revision}:${versionOf(state)}:${instructionFingerprint(sections)}`
     let cache = catalogCache.get(agent)
     if (cache === undefined) {
@@ -894,17 +946,25 @@ export function installToolSearchRuntime(ctx, config = {}) {
     }
     const hit = cache.get(key)
     if (hit !== undefined) return hit
-    const { text, truncated } = catalogSectionText(filterCatalog(view.catalog, deferred), resolved, {
+    const { text, truncated, listed, total } = catalogSectionText(filterCatalog(view.catalog, deferred), resolved, {
       ownerOf: view.ownerOf,
       instructionsOf: instructionReader(sections),
     })
     // C 档：截断必须**对人也可观测**。模型能从组头看到数量，但运维/用户看不到——
     // 而"目录被预算砍了"正是将来要不要做 `server:<名>` 枚举的判断依据（见 NEXT-SESSION-1.9 §Q2-3）。
     // 键带 revision：同一份库存只记一次，调预算/换模型/工具增减时才再记。
+    // R13a：把这次组装的三个数**留在内存里**，面板通过 toolSearchSettings 读它。
+    // 只保留最近一次（不按 agent 分表）：面板要回答的是"这台机器上目录有没有被预算砍"，
+    // 而预算与池子大小对同一代次的所有会话是同一件事。按 agent 存表还会在 R7 那条线上
+    // 增加一份需要清理的 per-agent 状态（那里刚收干净）。
+    // `chars` 是**目录段的实际字符数**——它是每轮请求都要付的固定成本，也是"目录预算调不调"
+    // 这个取舍的唯一读数（实测 735 工具：不限制 37,403 字符，12,500 预算 12,886 字符）。
+    // 只报"列了几个名字"是不够的：名字长度不等，字符数才是上下文。
+    lastCatalogAssembly = { revision: view.revision, listed, truncated, total, chars: text.length, budget: resolved.maxCatalogChars ?? null, at: Date.now() }
     if (truncated > 0) {
       warnOnce(ctx, `catalogTruncated:${view.revision}`,
         `目录因 maxCatalogChars=${resolved.maxCatalogChars} 未列出 ${truncated} 个工具名`
-        + `（模型仍可用关键词或 select: 搜到）；想全列就调大它`)
+        + `（被砍掉的名字模型不知道，不能用 select: 精确取，只能靠关键词碰）；想全列就调大它`)
     }
     cache.set(key, text)
     if (cache.size > 2) cache.delete(cache.keys().next().value)
@@ -1279,7 +1339,7 @@ export function installToolSearchRuntime(ctx, config = {}) {
     return { state: 'pending', reason: 'the projection handle is not ready yet' }
   }
 
-  return Object.assign(cleanup, { status: capabilities, generation: presentationGeneration })
+  return Object.assign(cleanup, { status: capabilities, generation: presentationGeneration, catalog: () => lastCatalogAssembly })
 }
 
 

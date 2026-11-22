@@ -111,7 +111,7 @@ mcpManager/projectConnections → { connections: [{ wsPath, serverName, state, r
 
 ## Entry display preference (why you cannot turn off both)
 
-The panel has only two entries: the floating button in the bottom-right corner (`shell.overlay`) and "MCP" at the bottom of the left sidebar (`sidebar.footer.action`, declared since 0.1.5). Both can be turned off individually, but **they cannot be turned off at the same time** — if both really were off, the panel could never be opened again (you would have to hand-edit localStorage to get it back).
+The panel has only two entries: the floating button in the bottom-right corner (`shell.overlay`) and "Toolbox" at the bottom of the left sidebar (`sidebar.footer.action`, declared since 0.1.5). Both can be turned off individually, but **they cannot be turned off at the same time** — if both really were off, the panel could never be opened again (you would have to hand-edit localStorage to get it back).
 
 This is guaranteed not by UI disabling logic but by the **data model**: the preference stores a three-valued enum (`both` / `fab` / `sidebar`), not one boolean per entry. The combination "both off" does not exist in the type, so there is no need for a guard, a greyed-out button, or a "keep at least one" hint; `test/client-entry.test.mjs` asserts directly against that visibility table that "at least one entry is visible for each item", so a future new entry goes red there first instead of waiting for a user to lock themselves out.
 
@@ -186,7 +186,7 @@ Three tradeoff rules; read them before changing the range:
 | **both** | PASS | PASS | PASS |
 | `mode: 'src-json'` | reject | reject | reject |
 
-Historical evidence: the loader of `0.2.0-rc.2` measures the same as the `0.1.6-alpha.2` column: only `create()` passes, and only `schema` is rejected. Both codec keys remain because historical hosts checked different keys; this is not a current release-support promise. Current admission is tested as the matched `0.2.1-rc.5` (Loader 1.0.6) and `0.2.2-rc.1` (Loader 1.1.0) combinations, with the shape pinned by `test/typert-manifest.test.mjs` and host contract tests.
+Historical evidence: the loader of `0.2.0-rc.2` measures the same as the `0.1.6-alpha.2` column: only `create()` passes, and only `schema` is rejected. Both codec keys remain because historical hosts checked different keys; this is not a current release-support promise. Current admission is tested as the matched `0.2.1-rc.5` (Loader 1.0.6) and `0.2.2-rc.3` (Loader 1.1.0) combinations, with the shape pinned by `test/typert-manifest.test.mjs` and host contract tests.
 
 The browser half (`@deepseek-ai/dsh-typert-registry`'s `lib/client.js`) performs the same validation, so the codec in `lib/client.js` must be changed in step — changing only the host copy produces "the panel loads, and blows up on the first call".
 
@@ -256,7 +256,7 @@ The `!!js` syntax is implemented only in `lib/env-expression.js` (generation / v
 "Copy to another workspace" and "Export JSON" look like the same thing (both get the config somewhere else), but their **disclosure surfaces differ**, so their boundaries are defined separately:
 
 - **Copy**: the source config is read inside the Host and written directly to the target; the browser sends only `{from, to, names, overwrite}` and gets back a list of names and counts (`added` / `updated` / `skipped` / `targetCount` / `changed`; the write that actually happens also adds a `note`). Config values never leave the Host. The value projection discipline matches the list projection, so same-machine transfer needs no new trust assumptions.
-- **Export**: this is the **only** path that lets the full config (including literal credentials) pass through the browser, and that is intentional — backup, cross-machine migration, and sharing with colleagues all require getting the complete file, and handing over a redacted copy would make none of those uses possible. The cost is written in the UI ("literally hard-coded credentials will appear here as-is") and documented, rather than avoided by not mentioning it. It is read-only and writes no files; **"project scope only" is a property of the entry point, not something the Host enforces** (`exportWorkspaceJson` accepts canonical paths just like the existing read-only RPCs; the UI simply only offers this entry on the project tab). To see the **effective runtime values** you still go through `reveal` (that path is per-field, on demand, and closed only for servers outside the current Web profile's management).
+- **Export**: this is the **only** path that lets the full config (including literal credentials) pass through the browser, and that is intentional — backup, cross-machine migration, and sharing with colleagues all require getting the complete file, and handing over a redacted copy would make none of those uses possible. The cost is written in the UI ("literally hard-coded credentials will appear here as-is") and documented, rather than avoided by not mentioning it. It is read-only and writes no files; **"exports the current scope" is a property of the entry point, not something the Host enforces** (`exportWorkspaceJson` accepts canonical paths just like the existing read-only RPCs, and `exportGlobalJson` reads the profile patch but still returns the same `{ mcpServers }` shape; the UI puts this single button in the title bar right next to "Import MCP", and both its label and its data source follow the current scope — global export and project export are one button, not two entry points). To see the **effective runtime values** you still go through `reveal` (that path is per-field, on demand, and closed only for servers outside the current Web profile's management).
 
 **The write path is stricter than the read path**: reading a directory's config only requires a canonical path (`getWorkspaceView` has always been that way), but writing `<directory>/.dsh/mcp.json` requires that directory to be a **registered** workspace on this machine. Writing by canonical path alone would expose an interface for "writing files into arbitrary directories" to the browser — a capability of an entirely different order from "reading arbitrary files". This invariant is expressed exactly once, in `withRegisteredWorkspaceWrite(ctx, wsPath, operation)`, and **all** Remotes that write project config go through it (there is no longer any write path in `lib/index.js` that calls `withWorkspaceWrite` directly), so a newly added write path cannot "forget the gate" — `test/package-contract.test.mjs` pins this as a structural assertion. Registry access likewise has a single place (`workspaceRegistryOf` is the low-level accessor, `registeredWorkspacePaths` is its throwing projection).
 
@@ -348,7 +348,7 @@ Existence must be checked against a list, so the repository carries a generated 
 
 ## The skill ability pane: why it sits alongside the MCP pane instead of merging with it
 
-The panel has **two ability panes** (MCP / Skills), switched by an ability-layer enum at the top, sharing the same floating window and sidebar entry. They must be two independent host services:
+The panel has **three ability panes** (MCP / Skills / Tools), switched by an ability-layer enum at the top, sharing the same floating window and sidebar entry. The skills pane must be an independent host service (reasons below); the tools pane is served by `mcpManager`, which already owns the tool loading policy, so it does not add a service.
 
 - **`skills` cannot go into the MCP gateway's `static inject`**. Cordis's `inject` is a **dependency declaration** — when the service is missing, the fiber simply stays inactive and waits, **without raising an error**. But the host's built-in plugin `dsh-skill` can be disabled by the user, and once `skills` is added to the existing gateway's inject, those profiles would have the **MCP panel fail silently along with it**. So `SkillsManagerGateway` is a separate sub-plugin with its own `inject = ["skills"]`; when unmet, only the skill surface is affected.
 - **The two services must be mounted within the same patch entry**: `cordis.patch.yml` has only one, and `package-contract` asserts that its id and name each appear exactly once, so the sub-plugin is mounted by the existing plugin's constructor via `ctx.plugin()`.
@@ -461,32 +461,210 @@ runs `npm run contract:check`, so hand-editing a generated file or adding a meth
 fails immediately. The client is split into parts by capability, and `lib/client.js` stays a single-file
 artifact produced and verified by `scripts/build-client.mjs` (`--check`).
 
-## Tool search policy
+## Tool loading policy
 
-**One job only: decide, per tool, whether it can be searched.**
+**One source of truth: `toolLoading` with its `mode / groups / tools` layers.** Every tool's outcome
+follows a single precedence chain (implemented only in `lib/tool-loading-policy.js`):
 
-- "Tool search" lists DSH built-in and third-party tools; each is **Resident** or **Searchable**,
-  resident by default. There is no global switch and no "recommended / everything resident" mode —
-  the list itself is the switch.
-- MCP servers are not controlled twice: enable/disable and Deferred/Resident stay on the MCP list,
-  one switch per server.
-- A searchable tool stays out of the model's context; the model must find it via `tool_search`
-  and only then can call it. The search entry and PTC's `run_code` can never be hidden.
+```
+protected (tool_search / run_code)
+  → master switch DSH_MCP_TOOL_SEARCH=off
+  → mode = all-resident
+  → project per-tool → global per-tool
+  → custom groups (optional policy; an empty policy is pure organisation)
+  → project per-group → global per-group
+  → legacy defer (true / false)
+  → mode default (recommended defers MCP tools, otherwise resident)
+```
 
-Configuration lives in `toolLoading.tools` (tool name → `resident` / `deferred`); a project
-writes it into its own `.dsh/mcp.json`. Anything not listed is resident.
+**One writer per concept.** The chip and bulk button on the MCP list write `groups` (the server
+default, and the **only** entry point); the Tools page writes `tools` (per tool) and `customGroups`
+(a sibling key next to `toolLoading`, so the chip's whole-policy rewrite can never touch it). `mode`
+has no UI and is decided by the config file alone; when it overrides per-tool settings the page
+shows a banner saying those settings are kept but have no effect. Legacy `defer` is **read-only**:
+it stays an input layer so old configs behave the same after an upgrade, but no UI writes it any
+more. "Inherit" therefore always deletes the override key, which makes overrides reversible.
 
-Why resident by default: the host exposes no tool provenance API, so the plugin cannot tell
-built-in from third-party; hiding anything by default could hide a user's everyday tool.
-**No search entry point when there is nothing to search**: with an empty deferred set (no deferred MCP at all, or everything already discovered), `tool_search` disappears from the model-visible tools together with the catalog section. It stays registered in the host, but "searching would find nothing right now" only invites a wasted round (issue #9). This does not conflict with "the search entry point cannot be hidden by user policy": the former is "there is nothing to search", the latter is "the user cannot turn it off".
-Server-level stays tri-state: `defer: true` = deferred, `defer: false` = explicitly resident,
-absent = follow the rest — so the Deferred/Resident chip always decides.
+**Bulk changes and custom groups (whole page).** Every row — built-in, MCP or other — can be
+selected; the action bar targets the **selection**, or the **current filter result** when nothing
+is selected, and stays hidden when neither exists (there is no "all tools at once" button). It can
+set resident / on-demand / follow, or save the batch as a named group; when the batch was just set
+to one uniform value, that value is **promoted** to the group policy and the per-tool overrides are
+deleted — otherwise the overrides would shadow the group and its header would look dead. A group
+can hold any tool, its members are displayed **instead of** their system grouping (the original
+section reports "N in custom groups"), and one tool belongs to at most one group. The group policy
+sits below per-tool overrides and above server groups. Groups are **global** configuration: project
+scopes are read-only, and writing one through the project path is an explicit error.
+
+**The Tools page groups by purpose and server, with built-ins first.** Known host built-ins are
+grouped by purpose (files / commands and terminals / web / MCP resources / tasks and jobs /
+subagents and teams / skills and interaction / schedules / code and workspace / host and plugins)
+and come **first** — MCP server defaults are managed by the chip on the MCP page, so the Tools page
+is mainly for per-tool built-in configuration. MCP servers are grouped by `serverName` after them
+(read-only, collapsible headers) for per-tool exceptions. Unknown non-MCP names get one honest
+"Other plugins and unrecognised" group — the host exposes no provenance API, so the plugin does not
+guess. MCP tools with ambiguous ownership get their own "Unassigned" group; `tool_search` /
+`run_code` are read-only. Each group header shows the server default, the actual distribution, and
+the number of per-tool overrides; each row offers Follow the server / Host default / Follow global
+(current value) / Resident / On demand.
+
+**Scopes.** Global policy lives in the plugin's `config.toolLoading`; a project's policy lives in
+`.dsh/mcp.json` under the same shape. "Inherit" in a project deletes the project key and falls back
+to the global group, legacy `defer`, then the mode. Search parameters (`maxResults` /
+`maxDiscovered` / `maxCatalogChars`) are the other half — `toolSearch` — and sit in a
+"Search settings" section at the **top** of the Tools page, visible by default; it is core
+configuration, not a collapsed section at the end of the list.
+
+Why non-MCP tools default to resident: the host exposes no tool provenance API, so hiding anything
+by default could hide a user's everyday tool. Users opt tools in explicitly.
+
+**No search entry point when there is nothing to search**: with an empty deferred set (no deferred
+MCP at all, or everything already discovered), `tool_search` disappears from the model-visible
+tools together with the catalog section. It stays registered in the host, but "searching would find
+nothing right now" only invites a wasted round (issue #9). This does not conflict with "the search
+entry point cannot be hidden by user policy": the former is "there is nothing to search", the
+latter is "the user cannot turn it off".
+
+**Reading legacy `defer`**: `true` = deferred, `false` = explicitly resident, absent = follow other
+settings. It still decides a server's default while no `groups` entry exists; once the chip or a
+group header writes `groups`, that layer wins.
+
+## The context observability pane
+
+**Why this pane exists**: the Tools page used to carry a "catalog checkup" block answering "how big is the
+catalog", while the question people actually ask is "who is holding the context in the next request". The
+first is a paragraph of text; the second needs a picture. So this is its own ability layer, and it **takes
+the catalog checkup over** — observability lives in one place, and the Tools page only configures.
+
+**The dividing line is configuration versus observation**: the Tools page writes parameters, loading choices
+and groups (what changes when you edit); the Context page reads the current state (what it looks like now).
+One reading appears in exactly one page, because the same number shown twice will disagree some day. The
+user's words were "you already have a page for this context, so it should show there".
+
+**Only running sessions are observed**. The pane answers "who is holding the context in the next request" —
+no request, no context. So it reads only **live sessions** (the sessions of `ctx.agents`, plus any loaded
+`Session` in `ctx.sessions`) and never walks the history on disk.
+
+That boundary is a product decision: an earlier version scanned `~/.dsh/sessions` and rendered dozens of
+historical sessions as a row of buttons; the user's words were "too many sessions, I cannot tell what your
+strategy is, some workspaces have several and some have none". An observability pane should not become a
+session picker that forces a choice — that is the sidebar's job.
+
+Dropping the disk path also dropped a whole degradation chain: multi-frame zstd decoding, two-phase parsing
+(read a 64KB digest first, fully parse on demand), the character-vs-token unit conversion, and `DSH_HOME`
+path resolution. A live session always has a `Session` object, so tokenMeter prices are the standard path
+and the composition is in tokens by construction.
+
+**No running session is not an error**: the Host returns an empty report (`{ empty: true }`) instead of
+throwing, because the pane polls every 3 seconds and a throw would make the error strip flash. There is
+exactly one empty state ("no session is running") and it never names a session: one entry covers every
+workspace, so singling one out implies the pane belongs to it. The Host does **not** remember which
+session it was asked about, so the old `requested` field is gone — nothing ever read it, yet the docs
+used it to describe two different empty states.
+
+**A session that disappeared falls back to the overview**: when the Host cannot find the requested
+`sessionId` it falls back to the most recently active session, so the returned `session.id` differs from
+what the pane asked for. The pane then does **not** hang that data under the clicked title (that would be
+"title says A, numbers are B"); it returns to the all-sessions overview. The check is a single string
+comparison and needs no cooperation from the Host.
+
+**The report carries no human-readable copy**: category ids, item ids, tool names, counts, turns, token or
+character counts — facts only. `label` / `sublabel` used to be assembled into Chinese on the Host side
+("×37", "8 messages", "unknown tool"): invisible in a Chinese UI, leaked verbatim into English, while
+both test suites stayed green. The rule is: any Chinese emitted here can never be translated by the
+client. So all wording lives in the client (`t()` exists only there) and the Host only answers "what, and
+how much".
+
+**The composition is scaled to the total only when every category is priced** (Host `totals.measured`).
+Scaling with one price missing inflates the remaining categories by `used / priced-sum`: the chart still
+fills, the numbers still add up, but every number is too large by exactly the missing category's share
+(tool definitions are commonly 10–20%). That is the "unknown treated as zero" variant wearing the mask of
+completeness — better to show raw estimates with the gap left in the chart.
+
+**Long sessions must be capped**: items grow per turn (400+ turns on a real machine). The detail list
+shows at most 20 rows and each treemap column at most 6 blocks, with the folded count written as
+"{count} more" — capping is fine, silently drawing less is not. Order still comes from the Host (fixed
+category order, size-descending inside a category); the client never re-sorts, because a second sort order
+is a second source of truth.
+
+**Composition and total are separate accounts**. `measure()` node prices are the **estimated composition**
+(the Host's fixed "four characters per token plus structural overhead"); `contextPressure()`'s
+`pressureTokens` is the **real total** (provider-reported). The two do not match by construction (CJK and
+JSON schema get undercounted), so scaling the composition up into the total, or spreading the total over the
+composition, would hand the user a fake number that looks precise. Instead the treemap scales the composition
+to the real total with a **proportional conversion** (ratios inside the composition are preserved, and the
+numbers add up to the total shown above) — **and only when every category carries a price**
+(`totals.measured`); with one price missing there is no conversion, and the numbers stay estimates with the
+gap left visible in the chart. The UI carries **no note about this basis**: the unit (tokens / characters)
+and the fact that the legend adds up to the total above already say it, and one more paragraph explaining it
+would be for the implementer, not the reader.
+
+**Why a hand-written layout**: an equal-cell grid makes small cells look about as big as large ones,
+which destroys the whole point of "which one is big at a glance"; a global squarified treemap lets a
+small category be squeezed into an invisible sliver by a large one. So the layout is **one column per
+category**: column width **is the share**, and items inside a column stack by size. The order is fixed:
+system → tools → tool-result → attachment → conversation → free space. The real-machine complaint was
+"why is the free space on the left, that is counter-intuitive", which is exactly what a pure
+size-descending order produces (the largest item lands leftmost). With a fixed order, "the Nth column in
+the picture" and "the Nth legend item" always agree, and the free space reliably sits at the far right.
+
+**Column width must not lie**: an earlier version lifted small categories to 68px and renormalised. But a
+420px floating panel cannot afford 68px per column for six columns (6×68 > 388), and renormalisation took
+the lift back — so the small category got neither the visible width nor proportionality (attachments at
+2K looked as wide as the 29K system prompt). A chart whose area ignores its value is worse than no chart,
+so the rule now is: width = share, and categories under 1.2% get a **2–8px** visible edge so "this
+category exists" is visible. Exact sizes are read from the legend and the detail rows. Columns too narrow
+for a label get no label — the legend is the lookup table and the hover title carries the full name.
+
+**Per-turn rows are not dumped into the detail list**: "turn N / 6 messages / 13K" looks identical 400
+times over, and the "how much each turn used" bar chart is the right shape for a time series. So the "all"
+view folds the conversation into **one row** ("Conversation · 400 turns"); per-turn rows appear only when
+the "Conversation" filter is selected.
+
+**The report must converge as sessions grow**: detail rows grow per turn while the pane polls every 3
+seconds. Uncapped, a 1500-turn session produced a **287KB** report (1504 items + 1500 turn rows) — around
+95KB/s with the panel open plus a 1500-entry JSON parse. So the Host caps: at most `MAX_ITEMS_PER_KIND`
+(24) rows per category and `TURN_HISTORY_LIMIT` (120) turns, with the overflow reported honestly through
+`kinds[].folded` and `turnTotal`; `totals` still counts everything, because the client uses it as the
+conversion denominator. Measured: 287KB → **16KB**.
+
+**"No session service" is not an empty state**: both cases look identical in the UI, but one means "you
+have not started a session" and the other means "this Host cannot provide sessions". The second must be an
+error (otherwise the panel is empty forever and users think the plugin is broken), so when both sources
+(`agents` and `sessions`) are missing the Host throws and the pane shows an error strip.
+
+**Five categories, all of them things the Host actually has**: system prompt (`system/message`), tool
+definitions (request-header `tools` plus `developer/message`), tool results (`tool/result`), attachments
+(the `image` blocks inside messages), and conversation (user/assistant text and reasoning). The Host has
+**no** "memory" dimension — no event or block type marks one — so the pane does not invent a fake
+category: splitting by memory/file would first need a Host-side marker, otherwise it could only guess
+from filenames, which is fake precision. Attachments are peeled out of the conversation by **character
+share**, and the node price is split by the same ratio (the total is preserved).
+
+**Two views for two questions**: the block view answers "who is big", the grid answers "how many cells,
+how full" (empty cells are visible). Each grid cell is an automatically chosen round amount (2K/5K/10K…);
+cell count grows with usage and the per-cell amount is enlarged past the cap — the per-cell amount is shown next to the section title ("5K per cell, 326 cells").
+
+**Units must line up**: the composition is in tokens when prices exist and in characters when only a
+character ledger is available, while `remaining` and `budget.window` are always tokens. Mixing them
+squeezes 549K tokens of free space into a small block next to 861K characters of conversation (a real
+machine showed exactly that, and the grid made it worse: capacity in tokens but cells laid out from
+characters meant 326 cells × 5K = 1.63M against a 1M capacity). So there is one `toDisplay()` exit: when
+only a character ledger exists, token values are multiplied by `character total / used tokens`; the block
+view, the legend, the grid capacity, and the per-cell caption all go through it.
+
+**Turn attribution** follows the Host's `assistant/message.data.turn`, not the `turn/start` cursor: a
+forked or resumed session may carry a single `turn/start` (a real machine had 424 steps and turn numbers
+up to 15 with exactly one `turn/start`), while `user/message` carries no turn field at all. **That
+resolution exists in exactly one place** (`foldSurfaceEvents`): the priced path once did its own
+`Number(event.data.turn ?? 0)`, so the same log produced different turns on the two paths.
 
 ## Package structure
 
 - `package.json`: declares `dsh.bundle` and the Web `dsh.client`
 - `cordis.patch.yml`: inserts the single Host plugin instance
 - `lib/index.js`: the `mcpManager` Host Remote
+- `lib/context-report.js`: pure assembly of context composition and usage (touches no ctx, testable without a Host)
 - `lib/mcp-registry.js`: enumeration of MCP entries in the loader and inference of tool ownership
 - `lib/workspace-runtime.js`: project config read/write state, the shared mcp-client connections reference-counted by `(project, serverName)`, and the projection of their tools into each session scope
 - `lib/workspace-config.js`: reading, writing, and conversion of project-level `.dsh/mcp.json`

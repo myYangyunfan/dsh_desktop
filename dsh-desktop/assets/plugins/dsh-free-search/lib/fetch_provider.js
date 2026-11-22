@@ -1,10 +1,11 @@
 // 质量链 fetch provider：接管宿主 web_fetch（替代基础 http provider）。
-// T1 直连（跟随重定向，仅文本类内容）→ T2 exa contents（$1/1000 页，清洗正文 markdown，文本质量好且便宜）
+// T1 直连（http/https 均支持，按目标协议选 transport；跟随重定向，仅文本类内容）→ T2 exa contents（$1/1000 页，清洗正文 markdown，文本质量好且便宜）
 // → T3 firecrawl（Markdown，反爬/JS/PDF）→ T4 crawl4ai（Markdown 备份）。
 // firecrawl 额度保护：仅在前层（直连/exa）失败时才走；exa 失败静默降级不抛。
 // 契约：WebFetchResult { url, statusCode, body: {kind:'html'|'text', content}, truncated }（CLOSED 联合类型）。
 // ponytail: 无服务级令牌桶——web_fetch 为单发用户/agent 驱动调用，非扇出；若未来批量调用再引入共享调度。
 
+import http from "node:http";
 import https from "node:https";
 import zlib from "node:zlib";
 import { spawn } from "node:child_process";
@@ -13,7 +14,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { callExa, callFirecrawl, callCrawl4ai } from "./fetch_upstream.js";
 import { stripLoneSurrogates } from "./safe_text.js";
-import { assertPublicUrl, safeLookup } from "./ssrf.js";
+import { assertPublicUrl, makeSafeLookup } from "./ssrf.js";
+import { agentForUrl, proxyForTarget, readProxyEnv } from "./proxy.js";
 
 const T1_MIN_CHARS = 300;
 const TEXTUAL = /text\/|json|xml|javascript|application\/json/i;
@@ -26,6 +28,14 @@ const BROWSER_CANDIDATES = [
   "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
   "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+  "/usr/bin/google-chrome",
+  "/usr/bin/google-chrome-stable",
+  "/opt/google/chrome/chrome",
+  "/usr/bin/chromium",
+  "/usr/bin/chromium-browser",
+  "/snap/bin/chromium",
+  "/usr/bin/microsoft-edge",
+  "/usr/bin/microsoft-edge-stable",
 ];
 let cachedBrowserPath; // undefined = 未检测；null = 无浏览器
 function findSystemBrowser() {
@@ -44,7 +54,7 @@ function findSystemBrowser() {
   return cachedBrowserPath;
 }
 
-function browserDumpDom(browserPath, url, { timeoutMs = 25000, signal } = {}) {
+function browserDumpDom(browserPath, url, { timeoutMs = 25000, signal, proxy = "" } = {}) {
   return new Promise((resolve) => {
     // 独立 user-data-dir：避免与用户正在运行的浏览器实例抢同一 profile（共享 profile 时无输出/立即退出）
     let tmpDir;
@@ -63,6 +73,8 @@ function browserDumpDom(browserPath, url, { timeoutMs = 25000, signal } = {}) {
         "--disable-component-update",
         "--disable-sync",
         `--user-data-dir=${tmpDir}`,
+        // 直连拿不到的站往往也正需要代理：把同一个代理交给浏览器，否则这一层照样白跑。
+        ...(proxy ? [`--proxy-server=${proxy}`] : []),
         "--dump-dom",
         "--virtual-time-budget=10000",
         url,
@@ -152,7 +164,7 @@ function decodeBody(buffer, contentType) {
 }
 
 /** GET 跟随重定向（≤5 跳），返回最终 URL / 状态 / 正文 / 内容类型；支持 gzip/br/deflate 解压。 */
-export function httpsGetFollow(url, { headers = {}, timeoutMs = 20000, signal, lookup } = {}, transport = https) {
+export function httpsGetFollow(url, { headers = {}, timeoutMs = 20000, signal, lookup, agent = null } = {}, transport = null) {
   return new Promise((resolve, reject) => {
     let settled = false;
     let activeReq = null;
@@ -191,7 +203,7 @@ export function httpsGetFollow(url, { headers = {}, timeoutMs = 20000, signal, l
       signal.addEventListener("abort", onAbort, { once: true });
     }
 
-    const hop = (current, left) => {
+    const hop = async (current, left) => {
       if (settled) return;
       let target;
       try {
@@ -200,7 +212,22 @@ export function httpsGetFollow(url, { headers = {}, timeoutMs = 20000, signal, l
         settle(false, error);
         return;
       }
-      const req = transport.request(
+      const hopAgent = typeof agent === "function" ? agent(target.toString()) : agent;
+      // 按每一跳的协议选 transport：http 目标走明文，https 目标走 TLS；
+      // 跨协议的跳转（http → https、https → http）因此不会拿错模块。
+      const hopTransport = transport ?? (target.protocol === "http:" ? http : https);
+      // 走代理时主机名由代理解析，transport 的 lookup 钩子不再生效；重定向的每一跳
+      // 因此在这里显式过一遍 SSRF 校验，避免代理成为绕过守卫的通道。
+      if (hopAgent && lookup) {
+        try {
+          await new Promise((resolve, reject) => lookup(target.hostname, { all: true }, (error) => (error ? reject(error) : resolve(undefined))));
+        } catch (error) {
+          settle(false, error);
+          return;
+        }
+        if (settled) return;
+      }
+      const req = hopTransport.request(
         {
           hostname: target.hostname,
           port: target.port || (target.protocol === "http:" ? 80 : 443),
@@ -208,13 +235,14 @@ export function httpsGetFollow(url, { headers = {}, timeoutMs = 20000, signal, l
           method: "GET",
           headers,
           timeout: timeoutMs,
-          ...(lookup ? { lookup } : {}),
+          ...(lookup && !hopAgent ? { lookup } : {}),
+          ...(hopAgent ? { agent: hopAgent } : {}),
         },
         (res) => {
           activeRes = res;
           if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && left > 0) {
             res.resume();
-            return hop(new URL(res.headers.location, current).toString(), left - 1);
+            return void hop(new URL(res.headers.location, current).toString(), left - 1).catch((error) => settle(false, error));
           }
 
           const enc = String(res.headers["content-encoding"] || "").toLowerCase();
@@ -269,7 +297,7 @@ export function httpsGetFollow(url, { headers = {}, timeoutMs = 20000, signal, l
     };
 
     try {
-      hop(url, 5);
+      void hop(url, 5).catch((error) => settle(false, error));
     } catch (error) {
       settle(false, error);
     }
@@ -297,29 +325,68 @@ const BROWSERISH = {
 export function browserishHeaders(acceptLanguage = "en-US,en;q=0.9") {
   return { ...BROWSERISH, "Accept-Language": String(acceptLanguage ?? "").trim() || "en-US,en;q=0.9" };
 }
+export async function withKeyRotation({
+  engine,
+  env,
+  resolveKey,
+  call,
+  onKeyFailure = async () => false,
+  errors = [],
+  label = engine,
+  maxAttempts = 10,
+}) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const key = await resolveKey();
+    if (!key) return null;
+    try {
+      return await call(key);
+    } catch (error) {
+      errors.push(`${label}: ${error?.message ?? String(error)}`);
+      const retry = await onKeyFailure({ engine, env, key, error });
+      if (!retry) return null;
+    }
+  }
+  return null;
+}
+
 export function createFetchProvider({
   resolveApiKey,
+  onKeyFailure = async () => false,
   logger,
   acceptLanguage = () => "en-US,en;q=0.9",
   browserEnabled = () => true,
   prefer = () => "exa",
+  allowedCidrs = () => [],
   validateUrl = assertPublicUrl,
 }) {
+  // 每个 provider 实例按 proxy URL 复用同一条隧道 agent。
+  const proxyAgents = new Map();
   return {
     id: "fs-quality-fetch",
     /** 廉价本地可用性检查（seam 契约要求，禁止网络调用）。 */
     available() { return true; },
     async fetch(request, signal) {
       const url = String(request?.url || "");
-      if (!/^https:\/\//i.test(url)) throw new Error(`fs-quality-fetch: only https URLs are supported (got "${url.slice(0, 60)}")`);
+      // 协议校验交给下面的 SSRF guard（只放行 http/https）。早期版本在这里直接
+      // 拒绝非 https 目标，等于把 T1 直连的限制提升成了 provider 级断言，连带把
+      // T1.5 浏览器和 T2/T3 第三方 tier 一起封杀（#143）。
       // SSRF guard: never fetch loopback / private / metadata addresses, and use a
-      // lookup that re-checks every redirect hop.
-      await validateUrl(url);
+      // lookup that re-checks every redirect hop. Explicitly allowed CIDRs cover
+      // transparent-proxy fake-ip ranges (Clash/mihomo 198.18.0.0/15).
+      const allowed = allowedCidrs();
+      await validateUrl(url, { allowedCidrs: allowed });
       const errors = [];
 
       // T1：直连（文本类内容；二进制交给后层——exa 取正文，PDF 等仍由 firecrawl 处理）
       try {
-        const r = await httpsGetFollow(url, { headers: browserishHeaders(acceptLanguage()), signal, lookup: safeLookup });
+        // 沿用宿主/环境里的代理配置：T1 用 node:http(s)，看不到 undici 的全局 dispatcher。
+        // 每一跳按目标协议选 agent（http 走明文 CONNECT 隧道），重定向跨协议也成立。
+        const r = await httpsGetFollow(url, {
+          headers: browserishHeaders(acceptLanguage()),
+          signal,
+          lookup: makeSafeLookup(allowed),
+          agent: (target) => agentForUrl(target, { settings: readProxyEnv(), cache: proxyAgents }),
+        });
         if (r.status < 400 && TEXTUAL.test(r.contentType) && r.text.length >= T1_MIN_CHARS) {
           return { url: r.url, statusCode: r.status, body: { kind: "html", content: stripLoneSurrogates(r.text) }, truncated: false };
         }
@@ -331,7 +398,10 @@ export function createFetchProvider({
       const browserPath = findSystemBrowser();
       if (browserEnabled() && browserPath) {
         try {
-          const html = await browserDumpDom(browserPath, url, { signal });
+          const html = await browserDumpDom(browserPath, url, {
+            signal,
+            proxy: proxyForTarget(url, readProxyEnv()).replace(/\/$/, ""),
+          });
           if (html && html.length >= T1_MIN_CHARS && !/403 Forbidden|\bcaptcha\b/i.test(html.slice(0, 3000))) {
             return { url, statusCode: 200, body: { kind: "html", content: stripLoneSurrogates(html) }, truncated: false };
           }
@@ -342,40 +412,65 @@ export function createFetchProvider({
       }
 
       // T2/T3：exa 与 firecrawl 的先后顺序可在设置页切换；crawl4ai 固定最后。
-      const exaTier = async () => {
-        const exaKey = await resolveApiKey("EXA_API_KEY", "exaApiKey").catch(() => undefined);
-        if (!exaKey) return null;
-        try {
-          const text = await callExa(url, exaKey, signal);
-          if (text.trim().length >= T1_MIN_CHARS) return { url, statusCode: 200, body: { kind: "text", content: stripLoneSurrogates(text) }, truncated: false };
-          errors.push("exa: short content");
-        } catch (e) { errors.push(`exa: ${e.message}`); }
-        return null;
-      };
-      const firecrawlTier = async () => {
-        const firecrawlKey = await resolveApiKey("FIRECRAWL_API_KEY", "firecrawlApiKey").catch(() => undefined);
-        if (!firecrawlKey) return null;
-        try {
-          const md = await callFirecrawl(url, firecrawlKey, signal);
-          if (md.trim().length >= T1_MIN_CHARS) return { url, statusCode: 200, body: { kind: "text", content: stripLoneSurrogates(md) }, truncated: false };
-          errors.push("firecrawl: short content");
-        } catch (e) { errors.push(`firecrawl: ${e.message}`); }
-        return null;
-      };
+      const exaTier = () =>
+        withKeyRotation({
+          engine: "exa",
+          env: "EXA_API_KEY",
+          label: "exa",
+          resolveKey: () => resolveApiKey("EXA_API_KEY", "exaApiKey").catch(() => undefined),
+          call: async (exaKey) => {
+            const text = await callExa(url, exaKey, signal);
+            if (text.trim().length >= T1_MIN_CHARS) {
+              return { url, statusCode: 200, body: { kind: "text", content: stripLoneSurrogates(text) }, truncated: false };
+            }
+            errors.push("exa: short content");
+            return null;
+          },
+          onKeyFailure,
+          errors,
+        });
+      const firecrawlTier = () =>
+        withKeyRotation({
+          engine: "firecrawl",
+          env: "FIRECRAWL_API_KEY",
+          label: "firecrawl",
+          resolveKey: () => resolveApiKey("FIRECRAWL_API_KEY", "firecrawlApiKey").catch(() => undefined),
+          call: async (firecrawlKey) => {
+            const md = await callFirecrawl(url, firecrawlKey, signal);
+            if (md.trim().length >= T1_MIN_CHARS) {
+              return { url, statusCode: 200, body: { kind: "text", content: stripLoneSurrogates(md) }, truncated: false };
+            }
+            errors.push("firecrawl: short content");
+            return null;
+          },
+          onKeyFailure,
+          errors,
+        });
       const order = prefer() === "firecrawl" ? [firecrawlTier, exaTier] : [exaTier, firecrawlTier];
       for (const tier of order) {
         const hit = await tier();
         if (hit) return hit;
       }
 
-      const crawl4aiKey = await resolveApiKey("CRAWL4AI_API_KEY", undefined).catch(() => undefined);
-      if (crawl4aiKey) {
-        try {
-          const text = await callCrawl4ai(url, crawl4aiKey, signal);
-          if (text.trim().length >= T1_MIN_CHARS) return { url, statusCode: 200, body: { kind: "text", content: stripLoneSurrogates(text) }, truncated: false };
-          errors.push("crawl4ai: short content");
-        } catch (e) { errors.push(`crawl4ai: ${e.message}`); }
-      }
+      const crawl4aiTier = () =>
+        withKeyRotation({
+          engine: "crawl4ai",
+          env: "CRAWL4AI_API_KEY",
+          label: "crawl4ai",
+          resolveKey: () => resolveApiKey("CRAWL4AI_API_KEY", undefined).catch(() => undefined),
+          call: async (crawl4aiKey) => {
+            const text = await callCrawl4ai(url, crawl4aiKey, signal);
+            if (text.trim().length >= T1_MIN_CHARS) {
+              return { url, statusCode: 200, body: { kind: "text", content: stripLoneSurrogates(text) }, truncated: false };
+            }
+            errors.push("crawl4ai: short content");
+            return null;
+          },
+          onKeyFailure,
+          errors,
+        });
+      const crawl4aiHit = await crawl4aiTier();
+      if (crawl4aiHit) return crawl4aiHit;
 
       logger?.warn?.(`fs-quality-fetch: all tiers failed for ${url}: ${errors.join("; ")}`);
       throw new Error(`fs-quality-fetch: could not fetch ${url} (${errors.join("; ")})`);

@@ -60,10 +60,16 @@ export declare class HostPluginRuntime {
     private readonly codex;
     private readonly acp;
     private readonly codexWorkspaceState;
+    /**
+     * Host-wide async compaction registry. It deliberately lives on the runtime,
+     * not on a connection: disconnecting a client must not abort a compaction.
+     */
+    private readonly compactionOperations;
     private localCodexPeer?;
     private localCodexPublish;
     private localAcpPeer?;
     private localAcpPublish;
+    private warnedMissingHostApi;
     constructor(config: ResolvedConfig, identities: IdentityStore, logger: SafeLogger, localGateway?: LocalTypertGateway | undefined, fileViewerHost?: (() => FileViewerHostServiceLike | undefined) | undefined, 
     /** PTY-backed terminal provider from the Host `subprocess` service, when present. */
     terminalSpawner?: RemoteTerminalSpawner | undefined, pluginRoutes?: ((peer?: unknown) => PluginRouteDispatcher | undefined) | undefined, 
@@ -143,6 +149,8 @@ export declare class HostPluginRuntime {
     private createServerConnection;
     private readHarnessVersion;
     private hostCapabilities;
+    private transportCapabilities;
+    private probeLiveSessionEvents;
     private hostWorkspaceTypes;
     private acpAvailable;
     private requireLocalCodexPeer;

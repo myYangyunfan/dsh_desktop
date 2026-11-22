@@ -1,6 +1,7 @@
 import { projectCodexModel, projectCodexThread } from '@dsh-remote/client-core';
 import { contentBlocks, toolOutputImageBlocks } from './codex-image-codec.js';
 import { modelSelection } from './virtual-catalog.js';
+import { turnEndReason } from './turn-end-reason.js';
 import { array, CODEX_SESSION_PREFIX, hashString, integer, normalizeTime, record, string } from './virtual-values.js';
 const MAX_LIVE_TOOL_OUTPUT = 128 * 1024;
 const DEFAULT_HISTORY_MESSAGES = 50;
@@ -88,15 +89,6 @@ export function projectCodexNativeHistory(thread, sessionId, sessionGeneration =
         nextTurn: turnNumber,
         ...(active === undefined ? {} : { activeTurnId: active }),
     };
-}
-function turnEndReason(turn) {
-    if (turn.status === 'failed' || turn.error !== undefined && turn.error !== null) {
-        return { kind: 'error', error: { message: 'CodeX turn failed.', code: 'codex-turn-failed' } };
-    }
-    if (turn.status === 'interrupted' || turn.status === 'cancelled' || turn.status === 'canceled' || turn.status === 'aborted') {
-        return { kind: 'interrupted' };
-    }
-    return { kind: 'completed' };
 }
 export function paginateCodexNativeHistory(history, request) {
     const throughSeq = Math.min(request.throughSeq ?? history.lastSeq, history.lastSeq);

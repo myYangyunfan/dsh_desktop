@@ -53,6 +53,8 @@ export interface AcpLiveProjectionContext {
     readonly modelSelection: (sessionId: string) => AcpModelSelection;
     readonly permissionsProjection: (sessionId: string) => unknown;
     readonly permissionSelection: (sessionId: string) => AcpPermissionPreset | undefined;
+    readonly rememberOpenedSession?: (sessionId: string) => void;
+    readonly syncSessionCache?: (session: AcpSessionState) => void;
 }
 export declare class AcpLiveProjection {
     private readonly context;

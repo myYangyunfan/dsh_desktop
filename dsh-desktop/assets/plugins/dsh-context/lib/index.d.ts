@@ -1,22 +1,24 @@
 /**
- * dsh-context v0.83.0
+ * dsh-context v0.86.0
  * A DeepSeek Harness plugin for context insight and management, with context dashboard and context command, for understanding how the context is made of, and how it evolves.
  * @author bowenliang123
  * @license Apache-2.0
  * @homepage https://github.com/bowenliang123/dsh-context
- * @built 2026-11-08T17:44:57+00:00
- * @commit 4a71bd53ad3b
- * @commit-date 2026-11-09T01:40:06+08:00
+ * @built 2026-11-18T17:18:01+00:00
+ * @commit f37ff3d02712
+ * @commit-date 2026-11-19T01:15:18+08:00
  */
 
 import "zod";
 import "@deepseek-ai/dsh-session";
 import z$1 from "@deepseek-ai/schemastery";
+import { MessagePort } from "node:worker_threads";
 import { Context } from "@deepseek-ai/cordis";
 interface ToolStart {
   start: number;
   day: string;
   name?: string;
+  transport?: true;
 }
 interface ActivityState {
   days: Record<string, ActivityDay>;
@@ -46,6 +48,11 @@ interface HeadersState {
 }
 interface CommandStateRecord extends CommandRecord {
   call?: string;
+}
+interface AgentAlias {
+  catalogName?: string;
+  memberName?: string;
+  catalogLabel?: string;
 }
 interface TimelineState {
   surface: SurfaceNode[];
@@ -95,6 +102,7 @@ interface TimelineState {
     name: string;
     start: number;
     argsRaw?: string;
+    transport?: true;
   }>;
   pendingShadowedSeqs?: number[];
   pendingShadowEventSeq?: number;
@@ -107,8 +115,10 @@ interface TimelineState {
   programTally?: Record<string, number>;
   commandCalls?: string[];
   commandCallsOverflow?: boolean;
+  agents?: Record<string, AgentAlias>;
   pendingCodeCmds?: Record<string, CommandStateRecord[]>;
   pendingCodeOps?: Record<string, FileOpRecord[]>;
+  pendingCodeStarts?: Record<string, number>;
 }
 interface CumulativeTotals {
   turns: number;
@@ -184,7 +194,7 @@ type DefaultPlacement = 'all' | 'tab' | 'sidebar' | 'hide';
 type InsightsEntry = 'show' | 'hide';
 type DefaultDurationCurve = 'show' | 'hide';
 type OverviewAutoSteps = 'off' | '100' | '200' | '300';
-type DefaultOverviewRange = 'today' | '7d' | '30d' | 'all';
+type DefaultOverviewRange = 'today' | '7d' | '30d';
 type FleetTab = 'show' | 'hide';
 interface PluginSettings {
   defaultPlacement: DefaultPlacement;
@@ -201,7 +211,14 @@ interface PluginSettings {
   promptPrefix: string;
   promptSuffix: string;
 }
-interface Snapshot {
+interface SurfaceNodeWindow {
+  nodes: SurfaceNode[];
+  droppedNodes: number;
+  archive: SurfaceNode[];
+  surfaceFloor?: number;
+  archiveFloor?: number;
+}
+interface Snapshot extends SurfaceNodeWindow {
   ok: boolean;
   unsupported?: {
     current: string;
@@ -243,11 +260,6 @@ interface Snapshot {
   cost?: SessionCostUsage;
   timing?: TimingTotals;
   systems?: SystemPromptNode[];
-  nodes: SurfaceNode[];
-  droppedNodes: number;
-  archive: SurfaceNode[];
-  surfaceFloor?: number;
-  archiveFloor?: number;
   fileOps?: FileOpRecord[];
   fileOpsFloor?: number;
   commands?: CommandRecord[];
@@ -283,16 +295,11 @@ interface SessionCostRead {
   faces?: CostPriceFace[];
   misses?: CostPriceMiss[];
 }
-interface ContextTimelineDetail {
+interface ContextTimelineDetail extends SurfaceNodeWindow {
   rev: number;
   head?: ContextTimeline;
   requests: RequestRecord[];
   events: ContextEventRecord[];
-  nodes: SurfaceNode[];
-  droppedNodes: number;
-  archive: SurfaceNode[];
-  surfaceFloor?: number;
-  archiveFloor?: number;
   fileOps?: FileOpRecord[];
   fileOpsFloor?: number;
   commands?: CommandRecord[];
@@ -423,6 +430,7 @@ interface SurfaceNode {
   err?: boolean;
   skill?: string;
   calls?: string[];
+  agent?: string;
 }
 interface SlimRequestRecord {
   turn?: number;
@@ -452,9 +460,11 @@ interface ContextEventRecord {
   kind: 'compaction' | 'prune' | 'inject' | 'model' | 'mode';
   form?: string;
   tokens?: number;
+  grossTokens?: number;
   count?: number;
   sub?: string;
   name?: string;
+  agent?: string;
   detail?: string;
   from?: string;
   to?: string;
@@ -519,7 +529,7 @@ export declare const Config: z$1<Schemastery.ObjectS<NoInfer<{
   insightsEntry: z$1<"hide" | "show", "hide" | "show", "defined">;
   defaultDurationCurve: z$1<"hide" | "show", "hide" | "show", "defined">;
   overviewAutoSteps: z$1<"100" | "200" | "300" | "off", "100" | "200" | "300" | "off", "defined">;
-  defaultOverviewRange: z$1<"30d" | "7d" | "all" | "today", "30d" | "7d" | "all" | "today", "defined">;
+  defaultOverviewRange: z$1<"30d" | "7d" | "today", "30d" | "7d" | "today", "defined">;
   fleetTab: z$1<"hide" | "show", "hide" | "show", "defined">;
   promptPrefix: z$1<string, string, "defined">;
   promptSuffix: z$1<string, string, "defined">;
@@ -541,11 +551,13 @@ export declare const Config: z$1<Schemastery.ObjectS<NoInfer<{
   insightsEntry: z$1<"hide" | "show", "hide" | "show", "defined">;
   defaultDurationCurve: z$1<"hide" | "show", "hide" | "show", "defined">;
   overviewAutoSteps: z$1<"100" | "200" | "300" | "off", "100" | "200" | "300" | "off", "defined">;
-  defaultOverviewRange: z$1<"30d" | "7d" | "all" | "today", "30d" | "7d" | "all" | "today", "defined">;
+  defaultOverviewRange: z$1<"30d" | "7d" | "today", "30d" | "7d" | "today", "defined">;
   fleetTab: z$1<"hide" | "show", "hide" | "show", "defined">;
   promptPrefix: z$1<string, string, "defined">;
   promptSuffix: z$1<string, string, "defined">;
 }>>, "plain">;
+type FoldPort = Pick<MessagePort, 'on' | 'postMessage'>;
+export declare function startFoldWorkerChannel(port?: FoldPort | null): void;
 export declare const name = "dsh-context";
 export declare const inject: string[];
 export declare function apply(ctx: Context, config: Config): void;

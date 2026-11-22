@@ -9,6 +9,7 @@ import { rerank, embed, cosineMatrix, decide, judgeQueryIntent } from "./rerank.
 import { promptLanguageOf, toolDescription, toolParam, localizedEffect } from "./prompt_i18n.js";
 import { httpsJson, htmlToText, callExa, callFirecrawl, callCrawl4ai } from "./fetch_upstream.js";
 import { isDomainBlocked } from "./domain_filter.js";
+import { assessEvidenceQuality } from "./quality.js";
 
 // 模型组件的受控替身（测试/评审用；抓取层的替身在 fetch_upstream.js 的 CONTROLLED_STUBS）
 export const CONTROLLED_STUBS = { rerank: null, embed: null, decide: null, judgeQueryIntent: null };
@@ -838,6 +839,19 @@ export function registerResearchTool(ctx, { provider, resolveApiKey, wrapUntrust
                 sources: { type: "array", items: { type: "object", additionalProperties: false, properties: RESEARCH_SOURCE_FIELDS } },
                 documents: { type: "array", items: { type: "object", additionalProperties: false, properties: DOC_FIELDS } },
                 notes: { type: "array", items: { type: "string" } },
+                quality: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    level: { type: "string" },
+                    cap: { type: "string" },
+                    sources: { type: "number" },
+                    domains: { type: "number" },
+                    dated: { type: "number" },
+                    fetched: { type: "number" },
+                    note: { type: "string" },
+                  },
+                },
               },
             },
             render(_args, value) {
@@ -862,9 +876,15 @@ export function registerResearchTool(ctx, { provider, resolveApiKey, wrapUntrust
                 return `### ${d.title || d.url}${mark}\n[${d.url}]\n_${meta}_\n\n${d.content}`;
               });
               const notes = value.notes.length ? `\n## Notes\n${value.notes.map((n) => `- ${n}`).join("\n")}` : "";
+              const q = value.quality;
+              const quality = q
+                ? `_evidence: ${q.level} · ${q.sources} sources · ${q.domains} domains · ${q.dated} dated · ${q.fetched} fetched — ${q.note}_\n`
+                : "";
               const brief =
                 `# Research: ${value.question}\n` +
-                `_engines: ${value.engines} · sources: ${value.sources.length} · documents: ${value.documents.length} · ~${value.estimatedTokens} tokens_\n\n` +
+                `_engines: ${value.engines} · sources: ${value.sources.length} · documents: ${value.documents.length} · ~${value.estimatedTokens} tokens_\n` +
+                quality +
+                `\n` +
                 `## Sources\n${src.join("\n") || "No results found."}\n\n` +
                 `## Documents\n${docs.join("\n\n") || "(no documents fetched — snippets above are all we have)"}` +
                 notes;
@@ -1344,6 +1364,7 @@ export function registerResearchTool(ctx, { provider, resolveApiKey, wrapUntrust
               out.estimatedTokens = estimateTokens(
                 out.sources.map((s) => s.title + s.snippet).join("") + out.documents.map((d) => d.content).join("")
               );
+              out.quality = assessEvidenceQuality(out);
               return out;
             } finally {
               clearTimeout(deadlineTimer);

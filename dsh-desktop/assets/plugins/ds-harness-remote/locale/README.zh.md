@@ -15,7 +15,9 @@
 ## 开始使用
 
 1. 在工作电脑安装并启用插件，打开侧栏 **Remote** 登录账号。
-2. 在另一台电脑的 Remote、[浏览器](https://dsh.r2049.cn/app)或 [Android 客户端](https://github.com/liguobao/ds-harness-remote/releases/latest)登录同一账号。
+2. 在另一台电脑的 Remote、[浏览器](https://dsh.r2049.cn/app)、[iOS 客户端（内测）](https://github.com/liguobao/ds-harness-remote/issues/20)、[Android 客户端](https://github.com/liguobao/ds-harness-remote/releases/latest)或 [DSH Go](https://github.com/ccch1mneyyy/dsh-go) 登录同一账号。
 3. 选择在线主机和工作区，继续对话。工作电脑需保持运行并联网。
+
+[DSH Go](https://github.com/ccch1mneyyy/dsh-go) 是第三方 DeepSeek Harness Android 客户端，既可在手机本机运行 DSH，也可通过本插件远程连接电脑上的 DSH。
 
 [完整说明](https://github.com/liguobao/ds-harness-remote/blob/main/README.zh.md) · [自部署指南](https://github.com/liguobao/ds-harness-remote/blob/main/apps/server/README.zh.md) · [反馈问题](https://github.com/liguobao/ds-harness-remote/issues)

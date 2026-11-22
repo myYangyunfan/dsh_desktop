@@ -2,7 +2,7 @@
   "$schema": "https://dsh.community/schemas/dsh-plugin-0.15.json",
   "id": "com.r2049.ds-harness-remote",
   "name": "ds-harness-remote",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "manifestVersion": "0.15",
   "facets": {
     "host": {

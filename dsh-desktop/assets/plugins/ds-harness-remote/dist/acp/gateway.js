@@ -82,6 +82,11 @@ export class AcpRemoteGateway {
     pendingReconfiguration = new Set();
     archivingSessions = new Set();
     opencodeOperations = new Map();
+    historyEpoch = 0;
+    minValidHistoryEpoch = 0;
+    historyInvalidatedAt = new Map();
+    pendingHistoryReads = new Map();
+    backendHistoryChains = new Map();
     constructor(config, logger, createAcp = (binary, targetLogger, backend) => {
         if (backend.id === 'antigravity') {
             return new AntigravityAcpClient(binary, targetLogger, undefined, { args: backend.args, cwd: backend.cwd });
@@ -262,6 +267,7 @@ export class AcpRemoteGateway {
                 if (!client.archiveSession)
                     throw new RpcError('OPENCODE_ARCHIVE_UNAVAILABLE', 'The Host OpenCode adapter does not support native archiving.');
                 await client.archiveSession(sessionId, cwd);
+                this.invalidateSessionHistory(sessionId);
                 if (this.closed || this.requireAcp(backend) !== client || this.backendInstances.get(backend) !== instance)
                     throw new RpcError('OPENCODE_ARCHIVE_UNAVAILABLE', 'The OpenCode backend changed. Refresh the session list to confirm the archive state.');
                 const result = { backend, sessionId, archived: true };
@@ -421,13 +427,15 @@ export class AcpRemoteGateway {
             this.requireAcp(backend);
             if (isCatalogBackend(backend)) {
                 const cwd = await this.catalogSessionCwd(backend, conversationId);
+                assertCurrent();
                 // History uses an isolated reader and must neither require nor claim
                 // the live session's control ownership.
                 const client = this.requireAcp(backend);
                 if (!client.history)
                     throw new RpcError('METHOD_NOT_ALLOWED', 'The ACP backend does not support history.');
+                const events = await this.readCatalogHistory(backend, client, conversationId, cwd, assertCurrent);
                 const preset = this.sessionPermissions.get(conversationId);
-                return { events: await client.history(conversationId, cwd), ...(preset ? { permissionPreset: preset } : {}) };
+                return { events, ...(preset ? { permissionPreset: preset } : {}) };
             }
             if (backend !== 'antigravity')
                 return { events: [] };
@@ -553,6 +561,7 @@ export class AcpRemoteGateway {
         if (call.method === 'session/prompt' && sessionId !== undefined) {
             if (this.promptsInProgress.has(sessionId))
                 throw new RpcError('PROMPT_IN_PROGRESS', 'An ACP reply is already in progress.');
+            this.invalidateSessionHistory(sessionId);
             const backend = this.sessionBackends.get(sessionId) ?? this.defaultBackend();
             const task = { backend, client: this.requireAcp(backend) };
             this.promptsInProgress.set(sessionId, task);
@@ -597,6 +606,7 @@ export class AcpRemoteGateway {
             return { accepted: true, stopReason: 'in_progress' };
         }
         if (call.method === 'session/cancel' && sessionId !== undefined) {
+            this.invalidateSessionHistory(sessionId);
             this.cancelledSessions.add(sessionId);
             const preparation = this.preparingPrompts.get(sessionId);
             if (preparation) {
@@ -680,10 +690,76 @@ export class AcpRemoteGateway {
         finally {
             if (this.promptsInProgress.get(sessionId) === task) {
                 this.promptsInProgress.delete(sessionId);
+                this.invalidateSessionHistory(sessionId);
                 // The Client has now been told how the turn ended, so a session whose
                 // adapter died can be closed instead of waiting for a producer.
                 if (!this.isSessionBackendReady(sessionId))
                     await this.failSessionStreams(sessionId);
+            }
+        }
+    }
+    invalidateSessionHistory(sessionId) {
+        const invalidationEpoch = ++this.historyEpoch;
+        this.historyInvalidatedAt.delete(sessionId);
+        this.historyInvalidatedAt.set(sessionId, invalidationEpoch);
+        while (this.historyInvalidatedAt.size > 256) {
+            const oldestKey = this.historyInvalidatedAt.keys().next().value;
+            if (oldestKey === undefined)
+                break;
+            const oldestEpoch = this.historyInvalidatedAt.get(oldestKey) ?? 0;
+            this.minValidHistoryEpoch = Math.max(this.minValidHistoryEpoch, oldestEpoch);
+            this.historyInvalidatedAt.delete(oldestKey);
+        }
+        for (const key of this.pendingHistoryReads.keys()) {
+            if (key.endsWith(`:${sessionId}`)) {
+                this.pendingHistoryReads.delete(key);
+            }
+        }
+    }
+    isHistoryEpochValid(sessionId, readEpoch) {
+        return readEpoch > this.minValidHistoryEpoch && readEpoch > (this.historyInvalidatedAt.get(sessionId) ?? 0);
+    }
+    async readCatalogHistory(backend, client, conversationId, cwd, assertCurrent) {
+        const key = `${backend}:${conversationId}`;
+        const existing = this.pendingHistoryReads.get(key);
+        if (existing !== undefined
+            && existing.client === client
+            && this.isHistoryEpochValid(conversationId, existing.readEpoch)) {
+            const events = await existing.promise;
+            assertCurrent();
+            return events;
+        }
+        const readEpoch = ++this.historyEpoch;
+        const previous = this.backendHistoryChains.get(backend) ?? Promise.resolve();
+        let releaseQueue;
+        const currentTurn = new Promise(resolve => { releaseQueue = resolve; });
+        const nextChain = previous.then(() => currentTurn, () => currentTurn);
+        this.backendHistoryChains.set(backend, nextChain);
+        const readPromise = (async () => {
+            await previous.catch(() => undefined);
+            try {
+                assertCurrent();
+                if (this.requireAcp(backend) !== client) {
+                    throw new RpcError('CURSOR_UNAVAILABLE', `The ${backend} ACP backend is not ready.`);
+                }
+                return await client.history(conversationId, cwd);
+            }
+            finally {
+                releaseQueue();
+                if (this.backendHistoryChains.get(backend) === nextChain) {
+                    this.backendHistoryChains.delete(backend);
+                }
+            }
+        })();
+        this.pendingHistoryReads.set(key, { client, readEpoch, promise: readPromise });
+        try {
+            const events = await readPromise;
+            assertCurrent();
+            return events;
+        }
+        finally {
+            if (this.pendingHistoryReads.get(key)?.promise === readPromise) {
+                this.pendingHistoryReads.delete(key);
             }
         }
     }

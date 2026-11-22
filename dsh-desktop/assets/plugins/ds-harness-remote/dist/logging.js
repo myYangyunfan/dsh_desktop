@@ -1,5 +1,5 @@
 const levels = ['debug', 'info', 'warn', 'error'];
-const secretKey = /authorization|cookie|token|secret|private|shared|ciphertext|payload|prompt|source|workspace|output|registrationCode|deviceCode/i;
+const secretKey = /authorization|cookie|token|secret|password|passphrase|credential|apiKey|private|shared|ciphertext|payload|prompt|source|workspace|output|registrationCode|deviceCode/i;
 export class SafeLogger {
     sink;
     threshold;

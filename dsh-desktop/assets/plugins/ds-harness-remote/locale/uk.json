@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "DS Harness Remote",
+    "description": "Віддалений доступ до робочих просторів DeepSeek Harness, CodeX, Claude Code, Pi та інших агентів із браузера й мобільних клієнтів — через P2P з наскрізним шифруванням.",
+    "detail": "locale/README.uk.md"
+  }
+}

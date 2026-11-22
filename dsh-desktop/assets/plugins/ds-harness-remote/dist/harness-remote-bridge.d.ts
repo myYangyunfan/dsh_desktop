@@ -6,7 +6,7 @@ import type { LocalTypertGateway, TypertRpcResult } from './typert-gateway-contr
 import { CodexWorkspaceBridge } from './codex-workspace-bridge.js';
 type PublishRemoteFrame = (event: 'harness.remote.frame' | 'harness.remote.stream.closed', data: HarnessRemoteFrameData | HarnessRemoteStreamClosedData) => Promise<void>;
 /** Fixed v0.1.2 Typert Remote subset exposed to authenticated peers. */
-export declare const HARNESS_REMOTE_ALLOWLIST: readonly ["$events", "$events/result", "agentPresets/list", "agentPresets/read", "agentPresets/select", "commands/execute", "commands/list", "credentials/describe", "credentials/set", "credentials/unset", "directoryPicker/list", "fileReferences/list", "goals/clear", "goals/complete", "goals/create", "goals/edit", "goals/pause", "goals/resume", "job/list", "job/follow", "job/kill", "llm/discoverModels", "llm/listConfigurableProviders", "llm/listProviders", "messageFeedback/delete", "messageFeedback/list", "messageFeedback/put", "pluginInventory/list", "pluginManager/listBundles", "pluginManager/listPlugins", "pluginManager/listVersions", "pluginManager/readBundleDetail", "pluginManager/setBundleEnabled", "pluginManager/setPluginEnabled", "pluginManager/updateBundle", "permissionPresets/catalog", "schedule/list", "schedule/catalog", "schedule/history", "schedule/create", "schedule/update", "schedule/delete", "schedule/deleteInactive", "schedule/deliveryLimits", "schedule/edit", "schedule/run", "session/attachment", "session/cancel", "session/canOpenWorkspacePath", "session/control", "session/create", "session/follow", "session/fork", "session/list", "session/events", "session/modelCatalog", "session/page", "session/prompt", "remoteAccess/follow", "session/projections", "session/initializeDefaultModel", "session/workspacePathApplications", "session/rename", "session/search", "session/selectModel", "session/updateQueue", "sessionReferenceResolver/candidates", "settings/describe", "settings/mutate", "settings/replace", "settings/update", "skills/list", "subagents/interruptByParent", "subagents/list", "subagents/prompt", "userQuestions/answer", "userQuestions/attachWait", "claudeCodeMods/watchBand", "claudeCodeMods/pressBand", "workspaceFiles/list", "workspaceFiles/stat", "workspaceFiles/read", "workspaceFiles/readBytes", "workspaceFiles/readAll", "workspaceFiles/readRelated", "workspaceFiles/changes", "officeToPdf/render", "officeToPdf/generation", "toolResults/watch", "workspace/archiveSession", "workspace/create", "workspace/delete", "workspace/follow", "workspace/insertBefore", "workspace/insertSessionBefore", "workspace/rename", "workspace/unarchiveSession", "workspace/initializeDefault", "workspace/pinSession", "workspace/unpinSession"];
+export declare const HARNESS_REMOTE_ALLOWLIST: readonly ["$events", "$events/result", "agentPresets/list", "agentPresets/read", "agentPresets/select", "commands/execute", "commands/list", "credentials/describe", "credentials/set", "credentials/unset", "directoryPicker/list", "fileReferences/list", "goals/clear", "goals/complete", "goals/create", "goals/edit", "goals/pause", "goals/resume", "job/list", "job/follow", "job/kill", "llm/discoverModels", "llm/listConfigurableProviders", "llm/listProviders", "messageFeedback/delete", "messageFeedback/list", "messageFeedback/put", "pluginInventory/list", "pluginManager/listBundles", "pluginManager/listPlugins", "pluginManager/listVersions", "pluginManager/readBundleDetail", "pluginManager/setBundleEnabled", "pluginManager/setPluginEnabled", "pluginManager/updateBundle", "permissionPresets/catalog", "schedule/list", "schedule/catalog", "schedule/history", "schedule/create", "schedule/update", "schedule/delete", "schedule/deleteInactive", "schedule/deliveryLimits", "schedule/edit", "schedule/run", "fileUploads/upload", "session/attachment", "session/cancel", "session/canOpenWorkspacePath", "session/control", "session/create", "session/follow", "session/fork", "session/list", "session/events", "session/modelCatalog", "session/page", "session/prompt", "remoteAccess/follow", "session/projections", "session/initializeDefaultModel", "session/workspacePathApplications", "session/rename", "session/search", "session/selectModel", "session/updateQueue", "sessionReferenceResolver/candidates", "settings/describe", "settings/mutate", "settings/replace", "settings/update", "skills/list", "subagents/interruptByParent", "subagents/list", "subagents/prompt", "userQuestions/answer", "userQuestions/attachWait", "claudeCodeMods/watchBand", "claudeCodeMods/pressBand", "workspaceFiles/list", "workspaceFiles/stat", "workspaceFiles/read", "workspaceFiles/readBytes", "workspaceFiles/readAll", "workspaceFiles/readRelated", "workspaceFiles/changes", "officeToPdf/render", "officeToPdf/generation", "toolResults/watch", "workspace/archiveSession", "workspace/create", "workspace/delete", "workspace/follow", "workspace/insertBefore", "workspace/insertSessionBefore", "workspace/rename", "workspace/unarchiveSession", "workspace/initializeDefault", "workspace/pinSession", "workspace/unpinSession"];
 export type NativeWorkspaceResolver = (sessionId: string, signal: AbortSignal) => Promise<string | undefined>;
 export declare const WORKSPACE_FILE_READ_ENDPOINTS: Set<string>;
 /**
@@ -54,12 +54,14 @@ export declare class HarnessRemoteBridge {
     private readonly codexWorkspace?;
     private readonly resolveWorkspaceRoot?;
     private readonly schedule?;
+    private readonly uploadAttachment?;
     compactHistoryEnabled: boolean;
     private readonly streams;
     private readonly incomingTransfers;
     private readonly outgoingTransfers;
+    private warnedMissingRemoteEvents;
     private readonly terminalCarrier;
-    constructor(gateway: LocalTypertGateway, publish: PublishRemoteFrame, logger?: SafeLogger | undefined, harnessVersion?: string | undefined, terminal?: TerminalPolicy, codexWorkspace?: CodexWorkspaceBridge | undefined, resolveWorkspaceRoot?: NativeWorkspaceResolver | undefined, schedule?: ScheduleCreateService | undefined);
+    constructor(gateway: LocalTypertGateway, publish: PublishRemoteFrame, logger?: SafeLogger | undefined, harnessVersion?: string | undefined, terminal?: TerminalPolicy, codexWorkspace?: CodexWorkspaceBridge | undefined, resolveWorkspaceRoot?: NativeWorkspaceResolver | undefined, schedule?: ScheduleCreateService | undefined, uploadAttachment?: ((body: unknown) => Promise<unknown>) | undefined);
     call(input: unknown): Promise<TypertRpcResult>;
     /** Validate one untrusted create request, then delegate to the Host schedule service. */
     private createSchedule;
@@ -83,6 +85,9 @@ export declare class HarnessRemoteBridge {
         opened: true;
         streamId: string;
     }>;
+    private remoteEventsWithFallback;
+    private canUseIdleRemoteEvents;
+    private warnMissingRemoteEvents;
     closeStream(input: unknown): {
         closed: boolean;
         streamId: string;
@@ -102,8 +107,15 @@ export declare class HarnessRemoteBridge {
     private pruneTransfers;
     private assertNativeWorkspaceFileCall;
     private resolveWorkspaceRootForSession;
+    /**
+     * Containment is always evaluated against the canonical workspace root, not
+     * the raw `cwd`: a symlinked parent, a `..` segment or a Windows case variant
+     * must not turn an in-root file into a denial. The boundary itself is
+     * unchanged: the canonical target must stay inside the canonical root.
+     */
     private verifyWorkspacePathContainment;
 }
+export declare function dispatchCommandForHost(gateway: LocalTypertGateway, payload: unknown, signal: AbortSignal, harnessVersion?: string): Promise<TypertRpcResult>;
 export declare function filterSessionListProjections(result: TypertRpcResult): TypertRpcResult;
 export declare function filterSessionListProjections(endpoint: string, result: TypertRpcResult): TypertRpcResult;
 export {};

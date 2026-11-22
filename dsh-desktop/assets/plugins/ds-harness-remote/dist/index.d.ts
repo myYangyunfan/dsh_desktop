@@ -13,6 +13,8 @@ declare module '@deepseek-ai/cordis' {
 export declare const name = "ds-harness-remote";
 export { Config };
 export declare function apply(ctx: Context, entry?: EntryConfig | ConfigShape | undefined): void;
+/** Start the shared Host runtime from the separate dsh-TUI package. */
+export declare function applyTuiHost(ctx: Context, entry: EntryConfig | ConfigShape | undefined): void;
 export type { ResolvedConfig } from './config.js';
 export { resolveConfig } from './config.js';
 export { ConnectionController, ConnectionRejectedError } from './connection-controller.js';

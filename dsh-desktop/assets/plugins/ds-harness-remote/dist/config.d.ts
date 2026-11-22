@@ -5,6 +5,8 @@ export interface Config {
     enabled?: boolean;
     role?: 'host' | 'client' | 'both';
     serverUrl?: string;
+    /** Additional hosts or CIDR ranges that may use HTTP for a self-hosted Server. */
+    httpServerAllowlist?: string[];
     deviceName?: string;
     terminal?: {
         enabled?: boolean;
@@ -84,6 +86,7 @@ export interface ResolvedConfig {
     enabled: boolean;
     role: 'host' | 'client' | 'both';
     serverUrl?: string;
+    httpServerAllowlist: string[];
     deviceName: string;
     forceRelay: boolean;
     rotatePinnedPeerKey: boolean;
@@ -129,6 +132,7 @@ export declare const entryConfigSchema: s<Schemastery.ObjectS<NoInfer<{
     enabled: s<boolean, boolean, "plain">;
     role: s<"host" | "client" | "both", "host" | "client" | "both", "plain">;
     serverUrl: s<string, string, "plain">;
+    httpServerAllowlist: s<string[], string[], "plain">;
     deviceName: s<string, string, "plain">;
     terminal: s<Schemastery.ObjectS<NoInfer<{
         enabled: s<boolean, boolean, "plain">;
@@ -216,6 +220,7 @@ export declare const entryConfigSchema: s<Schemastery.ObjectS<NoInfer<{
     enabled: s<boolean, boolean, "plain">;
     role: s<"host" | "client" | "both", "host" | "client" | "both", "plain">;
     serverUrl: s<string, string, "plain">;
+    httpServerAllowlist: s<string[], string[], "plain">;
     deviceName: s<string, string, "plain">;
     terminal: s<Schemastery.ObjectS<NoInfer<{
         enabled: s<boolean, boolean, "plain">;
@@ -309,5 +314,5 @@ export declare const entryConfigSchema: s<Schemastery.ObjectS<NoInfer<{
 export declare function withVolatileSchema<T>(schema: T): T;
 export declare const Config: s<Config>;
 export declare function resolveConfig(input?: ConfigInput, env?: NodeJS.ProcessEnv): ResolvedConfig;
-export declare function normalizeServerUrl(value: string): string;
+export declare function normalizeServerUrl(value: string, httpServerAllowlist?: readonly string[]): string;
 //# sourceMappingURL=config.d.ts.map

@@ -37,7 +37,7 @@ __export(index_exports, {
   default: () => index_default
 });
 module.exports = __toCommonJS(index_exports);
-var React18 = __toESM(require("react"), 1);
+var React19 = __toESM(require("react"), 1);
 
 // src/core/log.js
 function debugEnabled() {
@@ -595,6 +595,10 @@ var SETTINGS_I18N = {
     pagerTitle: "\u7248\u672C\u5207\u6362\uFF08\u64A4\u56DE/\u7F16\u8F91\u91CD\u53D1\uFF09",
     pagerPrev: "\u4E0A\u4E00\u4E2A\u7248\u672C",
     pagerNext: "\u4E0B\u4E00\u4E2A\u7248\u672C",
+    pagerConfirm: "\u7248\u672C\u5207\u6362\u786E\u8BA4\u80F6\u56CA",
+    pagerSwitchAsk: "\u5207\u81F3 v{ver}\uFF1F\uFF08\u5F53\u524D\u8FDB\u5EA6\u5DF2\u81EA\u52A8\u4FDD\u62A4\uFF09",
+    pagerHistoricalBadge: "\u5386\u53F2\u7248\u672C v{cur}\uFF08\u6700\u65B0 v{max}\uFF09",
+    pagerBackToLatest: "\u56DE\u5230\u6700\u65B0",
     modifying: "\u6B63\u5728\u4FEE\u6539",
     preparingSession: "\u6B63\u5728\u51C6\u5907\u65B0\u4F1A\u8BDD\u2026",
     confirm: "\u786E\u5B9A",
@@ -703,6 +707,10 @@ var SETTINGS_I18N = {
     pagerTitle: "Version pager (recall/edit resends)",
     pagerPrev: "Previous version",
     pagerNext: "Next version",
+    pagerConfirm: "Version switch confirmation capsule",
+    pagerSwitchAsk: "Switch to v{ver}? (current state auto-saved)",
+    pagerHistoricalBadge: "History v{cur} (latest v{max})",
+    pagerBackToLatest: "Back to latest",
     modifying: "Modifying",
     preparingSession: "Preparing new session\u2026",
     confirm: "Confirm",
@@ -762,11 +770,11 @@ var SETTINGS_I18N = {
     vaultWorkspace: "Per-Workspace",
     vaultGlobalHint: "Stored in ~/.dsh/dsh-easyrewrite/EasyRewrited_Sessions/, centralized vault",
     vaultWorkspaceHint: "Stored in workspace's .easyrewrite_vault/EasyRewrited_Sessions/, isolated",
-    cleanLegacyArchived: "Clean Legacy Archived Sessions",
-    cleanLegacyArchivedHint: "Prune old archived session records in DSH 0.2 sidebar to avoid clutter",
-    cleaning: "Cleaning\u2026",
-    cleanDone: "Cleanup done: pruned {n} zombie sessions from archive!",
-    cleanNone: "No legacy archived sessions found to clean"
+    cleanLegacyArchived: "Smart Migrate & Clean Legacy Archives",
+    cleanLegacyArchivedHint: "Safely convert legacy recall archives to shadow Vault, clean residual list while keeping user manual archives",
+    cleaning: "Migrating\u2026",
+    cleanDone: "Smart migration complete: converted {n} historical versions into Vault, kept {r} user archives untouched!",
+    cleanNone: "All legacy archives are already in the new Vault format, no conversion needed"
   },
   ja: {
     title: "EasyRewrite",
@@ -811,6 +819,10 @@ var SETTINGS_I18N = {
     pagerTitle: "\u30D0\u30FC\u30B8\u30E7\u30F3\u5207\u66FF\uFF08\u64A4\u56DE/\u7DE8\u96C6\u518D\u9001\uFF09",
     pagerPrev: "\u524D\u306E\u30D0\u30FC\u30B8\u30E7\u30F3",
     pagerNext: "\u6B21\u306E\u30D0\u30FC\u30B8\u30E7\u30F3",
+    pagerConfirm: "\u30D0\u30FC\u30B8\u30E7\u30F3\u5207\u66FF\u78BA\u8A8D\u30AB\u30D7\u30BB\u30EB",
+    pagerSwitchAsk: "v{ver} \u306B\u5207\u308A\u66FF\u3048\u307E\u3059\u304B\uFF1F\uFF08\u73FE\u5728\u306E\u9032\u6357\u306F\u81EA\u52D5\u4FDD\u8B77\u3055\u308C\u307E\u3059\uFF09",
+    pagerHistoricalBadge: "\u904E\u53BB\u7248 v{cur}\uFF08\u6700\u65B0 v{max}\uFF09",
+    pagerBackToLatest: "\u6700\u65B0\u3078\u623B\u308B",
     modifying: "\u5909\u66F4\u4E2D",
     preparingSession: "\u65B0\u3057\u3044\u30BB\u30C3\u30B7\u30E7\u30F3\u3092\u6E96\u5099\u4E2D\u2026",
     confirm: "\u78BA\u5B9A",
@@ -870,11 +882,11 @@ var SETTINGS_I18N = {
     vaultWorkspace: "\u30EF\u30FC\u30AF\u30B9\u30DA\u30FC\u30B9\u500B\u5225",
     vaultGlobalHint: "~/.dsh/dsh-easyrewrite/EasyRewrited_Sessions/ \u306B\u4FDD\u5B58",
     vaultWorkspaceHint: "\u5404\u30EF\u30FC\u30AF\u30B9\u30DA\u30FC\u30B9\u306E .easyrewrite_vault/EasyRewrited_Sessions/ \u306B\u4FDD\u5B58",
-    cleanLegacyArchived: "\u904E\u53BB\u306E\u30A2\u30FC\u30AB\u30A4\u30D6\u5C65\u6B74\u3092\u4E00\u62EC\u30AF\u30EA\u30FC\u30F3\u30A2\u30C3\u30D7",
-    cleanLegacyArchivedHint: "DSH 0.2 \u306E\u30B5\u30A4\u30C9\u30D0\u30FC\u306B\u6B8B\u308B\u904E\u53BB\u306E\u30A2\u30FC\u30AB\u30A4\u30D6\u30BB\u30C3\u30B7\u30E7\u30F3\u8A18\u9332\u3092\u6574\u7406",
-    cleaning: "\u30AF\u30EA\u30FC\u30F3\u30A2\u30C3\u30D7\u4E2D\u2026",
-    cleanDone: "\u30AF\u30EA\u30FC\u30F3\u30A2\u30C3\u30D7\u5B8C\u4E86\uFF1A{n} \u500B\u306E\u30BE\u30F3\u30D3\u30BB\u30C3\u30B7\u30E7\u30F3\u3092\u6574\u7406\u3057\u307E\u3057\u305F\uFF01",
-    cleanNone: "\u6574\u7406\u5BFE\u8C61\u306E\u904E\u53BB\u30A2\u30FC\u30AB\u30A4\u30D6\u30BB\u30C3\u30B7\u30E7\u30F3\u306F\u898B\u3064\u304B\u308A\u307E\u305B\u3093\u3067\u3057\u305F"
+    cleanLegacyArchived: "\u904E\u53BB\u30A2\u30FC\u30AB\u30A4\u30D6\u306E\u30B9\u30DE\u30FC\u30C8\u79FB\u884C\u3068\u6574\u7406",
+    cleanLegacyArchivedHint: "\u904E\u53BB\u306E\u64A4\u56DE\u30A2\u30FC\u30AB\u30A4\u30D6\u3092Vault\u5F62\u5F0F\u3078\u5B89\u5168\u306B\u5909\u63DB\u3057\u3001\u30E6\u30FC\u30B6\u30FC\u624B\u52D5\u30A2\u30FC\u30AB\u30A4\u30D6\u3092\u4FDD\u6301\u3057\u305F\u307E\u307E\u4E00\u89A7\u3092\u6574\u7406",
+    cleaning: "\u79FB\u884C\u4E2D\u2026",
+    cleanDone: "\u30B9\u30DE\u30FC\u30C8\u79FB\u884C\u5B8C\u4E86\uFF1A{n} \u4EF6\u306E\u5C65\u6B74\u30D0\u30FC\u30B8\u30E7\u30F3\u3092Vault\u306B\u5909\u63DB\u3057\u3001{r} \u4EF6\u306E\u30E6\u30FC\u30B6\u30FC\u624B\u52D5\u30A2\u30FC\u30AB\u30A4\u30D6\u3092\u4FDD\u6301\u3057\u307E\u3057\u305F\uFF01",
+    cleanNone: "\u3059\u3079\u3066\u306E\u904E\u53BB\u30A2\u30FC\u30AB\u30A4\u30D6\u306F\u65E2\u306B\u65B0Vault\u5F62\u5F0F\u306B\u79FB\u884C\u6E08\u307F\u3067\u3059\u3002\u518D\u5909\u63DB\u306E\u5FC5\u8981\u306F\u3042\u308A\u307E\u305B\u3093"
   }
 };
 var localeServiceRef = null;
@@ -908,7 +920,7 @@ function setLocaleService(service) {
 
 // src/core/constants.js
 var NS = "dsh-easyrewrite";
-var CURRENT_VERSION = "3.0.1";
+var CURRENT_VERSION = "3.1.0";
 var MIN_DSH_VERSION = "0.1.2-rc.1";
 var MAX_TESTED_DSH_VERSION = "0.2.5";
 var SETTING_KEYS = {
@@ -923,6 +935,7 @@ var SETTING_KEYS = {
   debug: "dsh-easyrewrite:debug",
   shortcut: "dsh-easyrewrite:shortcut",
   pagerEnabled: "dsh-easyrewrite:pagerEnabled",
+  pagerConfirm: "dsh-easyrewrite:pagerConfirm",
   checkUpdateDaily: "dsh-easyrewrite:checkUpdateDaily",
   lastUpdateCheckTime: "dsh-easyrewrite:lastUpdateCheckTime",
   dismissedUpdateVersion: "dsh-easyrewrite:dismissedUpdateVersion",
@@ -987,6 +1000,12 @@ function editOffShowRecall() {
 function recallConfirmEnabled() {
   return getBool(SETTING_KEYS.recallConfirm, true);
 }
+function pagerEnabled() {
+  return getBool(SETTING_KEYS.pagerEnabled, true);
+}
+function pagerConfirmEnabled() {
+  return getBool(SETTING_KEYS.pagerConfirm, true);
+}
 function versionGt(a, b) {
   const pa = String(a || "0").split(".").map((x) => parseInt(x, 10) || 0);
   const pb = String(b || "0").split(".").map((x) => parseInt(x, 10) || 0);
@@ -1017,23 +1036,60 @@ function cmpDsh(a, b) {
   if (va.pre !== vb.pre) return va.pre - vb.pre;
   return va.preNum - vb.preNum;
 }
-function hasChatSnapshot(props) {
-  return !!(props && (typeof props.useChat === "function" || typeof props.useSession === "function"));
+function hookSignatureKey(props, propNames) {
+  if (!props) return "empty";
+  return propNames.map((k) => typeof props[k] === "function" ? k + ":1" : k + ":0").join("|");
+}
+function readChatSnapshotSync(sessionId, opts) {
+  const o = opts || {};
+  try {
+    const uiConv = o.uiConversation || serviceRefs.uiConversation;
+    const sessions = o.sessions || o.ctxSessions || serviceRefs.sessions;
+    if (uiConv && typeof uiConv.binding === "function" && sessions && typeof sessions.binding === "function" && sessionId) {
+      const sb = sessions.binding(sessionId);
+      if (sb) {
+        const convB = uiConv.binding(sb);
+        const chatTarget = convB && typeof convB.target === "function" ? convB.target("chat") : null;
+        if (chatTarget && typeof chatTarget.getSnapshot === "function") {
+          const snap = chatTarget.getSnapshot();
+          if (snap) return snap;
+        }
+      }
+    }
+  } catch (e) {
+  }
+  return o.fallbackSnapshot || null;
 }
 function getChatSnapshot(props) {
-  try {
-    if (props && typeof props.useChat === "function") return props.useChat((s) => s);
-    if (props && typeof props.useSession === "function") {
-      const s = props.useSession((x) => x);
-      return s && s.chat ? s.chat : s;
-    }
-  } catch (eSnap) {
-  }
-  return null;
+  if (!props) return null;
+  if (props._resolvedChatSnapshot !== void 0) return props._resolvedChatSnapshot;
+  if (props.chatSnapshot) return props.chatSnapshot;
+  return readChatSnapshotSync(props.sessionId, {
+    uiConversation: props.uiConversation,
+    sessions: props.ctxSessions
+  });
 }
 
 // src/core/session.js
 var React2 = __toESM(require("react"), 1);
+function getExternalSideSessionIds() {
+  const out = /* @__PURE__ */ new Set();
+  try {
+    if (typeof localStorage !== "undefined" && localStorage && typeof localStorage.getItem === "function") {
+      const raw = localStorage.getItem("dsh-sidenote:side-sessions:v1");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.ids)) {
+          for (let i = 0; i < parsed.ids.length; i++) {
+            if (typeof parsed.ids[i] === "string" && parsed.ids[i]) out.add(parsed.ids[i]);
+          }
+        }
+      }
+    }
+  } catch (e) {
+  }
+  return out;
+}
 function sessionLineageRoot(byId, id) {
   let cur = id;
   let guard = 0;
@@ -1047,6 +1103,8 @@ function sessionLineageRoot(byId, id) {
 }
 function familyOfSession(sessionId, ctxSessions) {
   try {
+    const externalHidden = getExternalSideSessionIds();
+    if (externalHidden.has(sessionId)) return null;
     if (!ctxSessions || !ctxSessions.list || typeof ctxSessions.list.getSnapshot !== "function") return null;
     const snap = ctxSessions.list.getSnapshot();
     if (!snap || !snap.byId || !snap.byId[sessionId]) return null;
@@ -1076,6 +1134,8 @@ function familyOfSession(sessionId, ctxSessions) {
       const id = ids[j];
       const sj = snap.byId[id];
       if (sj && sj.origin === "subagent") continue;
+      if (sj && sj.archived) continue;
+      if (externalHidden.has(id)) continue;
       if (sj && sj.blank) continue;
       if (depth[id] === void 0) continue;
       let cur = id;
@@ -1117,10 +1177,13 @@ function listVersionFamilies(ctxSessions) {
     if (!ctxSessions || !ctxSessions.list) return [];
     const snap = ctxSessions.list.getSnapshot();
     if (!snap || !snap.byId) return [];
+    const externalHidden = getExternalSideSessionIds();
     const seen = {};
     const out = [];
     const ids = Array.isArray(snap.ids) ? snap.ids : [];
     for (let i = 0; i < ids.length; i++) {
+      const curMeta = snap.byId[ids[i]];
+      if (externalHidden.has(ids[i]) || curMeta && (curMeta.archived || curMeta.origin === "subagent")) continue;
       const root = sessionLineageRoot(snap.byId, ids[i]);
       if (seen[root]) continue;
       seen[root] = true;
@@ -2609,7 +2672,7 @@ function initAutoUpdateCheck() {
 }
 
 // src/features/bubble/index.js
-var React12 = __toESM(require("react"), 1);
+var React13 = __toESM(require("react"), 1);
 
 // src/features/bubble/width.js
 function calcBtnRowMinWidth(cancelText, confirmText) {
@@ -2852,10 +2915,70 @@ function createSettingsStyles() {
 }
 
 // src/features/bubble/view.js
-var React11 = __toESM(require("react"), 1);
+var React12 = __toESM(require("react"), 1);
+
+// src/core/hook-gates.js
+var React6 = __toESM(require("react"), 1);
+var identity = (s) => s;
+function ChatViaUseChat(wrapperProps) {
+  const snap = wrapperProps.__props.useChat(identity);
+  return React6.createElement(
+    wrapperProps.__target,
+    Object.assign({}, wrapperProps.__props, { _resolvedChatSnapshot: snap })
+  );
+}
+function ChatViaUseSession(wrapperProps) {
+  const sess = wrapperProps.__props.useSession(identity);
+  const snap = sess && sess.chat ? sess.chat : sess;
+  return React6.createElement(
+    wrapperProps.__target,
+    Object.assign({}, wrapperProps.__props, { _resolvedChatSnapshot: snap })
+  );
+}
+function ChatViaNone(wrapperProps) {
+  const p = wrapperProps.__props;
+  return React6.createElement(
+    wrapperProps.__target,
+    Object.assign({}, p, { _resolvedChatSnapshot: p && p.chatSnapshot || null })
+  );
+}
+function InputViaUseInput(wrapperProps) {
+  const inputState = wrapperProps.__props.useInput(identity);
+  return React6.createElement(
+    wrapperProps.__target,
+    Object.assign({}, wrapperProps.__props, { _resolvedInputState: inputState })
+  );
+}
+function InputViaProp(wrapperProps) {
+  const p = wrapperProps.__props;
+  return React6.createElement(
+    wrapperProps.__target,
+    Object.assign({}, p, { _resolvedInputState: p && p.inputState || null })
+  );
+}
+function InputGateThenTarget(props) {
+  const hasInput = !!(props && typeof props.useInput === "function");
+  const Adapter = hasInput ? InputViaUseInput : InputViaProp;
+  const target = props.__finalTarget;
+  const cleanProps = Object.assign({}, props);
+  delete cleanProps.__finalTarget;
+  const sig = hookSignatureKey(cleanProps, ["useInput"]);
+  return React6.createElement(Adapter, { key: sig, __target: target, __props: cleanProps });
+}
+function renderWithChatGate(Target, props) {
+  const hasChat = !!(props && typeof props.useChat === "function");
+  const hasSession = !!(props && typeof props.useSession === "function");
+  const Adapter = hasChat ? ChatViaUseChat : hasSession ? ChatViaUseSession : ChatViaNone;
+  const sig = hookSignatureKey(props, ["useChat", "useSession"]);
+  return React6.createElement(Adapter, { key: sig, __target: Target, __props: props });
+}
+function renderWithChatAndInputGate(Target, props) {
+  const forwarded = Object.assign({}, props, { __finalTarget: Target });
+  return renderWithChatGate(InputGateThenTarget, forwarded);
+}
 
 // src/features/recall/store.js
-var React6 = __toESM(require("react"), 1);
+var React7 = __toESM(require("react"), 1);
 var PENDING_PREFIX = "dsh-easyrewrite:pending:";
 var pendingCache = {};
 var pendingListeners = [];
@@ -2922,7 +3045,7 @@ function subscribePending(fn) {
   };
 }
 function usePending(sessionId) {
-  return React6.useSyncExternalStore(subscribePending, function() {
+  return React7.useSyncExternalStore(subscribePending, function() {
     return readPending(sessionId);
   });
 }
@@ -2962,15 +3085,15 @@ function safeOpenSession(targetId, props) {
 }
 
 // src/features/recall/image.js
-var React7 = __toESM(require("react"), 1);
+var React8 = __toESM(require("react"), 1);
 function PendingOriginalImage(props2) {
-  var st = React7.useState(null);
+  var st = React8.useState(null);
   var url = st[0];
   var setUrl = st[1];
-  var errState = React7.useState(false);
+  var errState = React8.useState(false);
   var failed = errState[0];
   var setFailed = errState[1];
-  React7.useEffect(function() {
+  React8.useEffect(function() {
     var alive = true;
     props2.loadImage(props2.ref).then(function(u) {
       if (alive && u) setUrl(u);
@@ -2982,11 +3105,11 @@ function PendingOriginalImage(props2) {
     };
   }, []);
   if (failed || !url) return null;
-  return React7.createElement("img", { src: url, style: { maxWidth: "100%", width: "auto", maxHeight: "280px", borderRadius: "12px", display: "block" } });
+  return React8.createElement("img", { src: url, style: { maxWidth: "100%", width: "auto", maxHeight: "280px", borderRadius: "12px", display: "block" } });
 }
 
 // src/features/bubble/model-picker.js
-var React8 = __toESM(require("react"), 1);
+var React9 = __toESM(require("react"), 1);
 function EditModelPicker(props) {
   var L = useUILocaleDict();
   var dir = null;
@@ -2997,7 +3120,7 @@ function EditModelPicker(props) {
     dir = null;
   }
   var hasStore = !!(dir && dir.store && typeof dir.store.subscribe === "function" && typeof dir.store.getSnapshot === "function");
-  var snap = React8.useSyncExternalStore(
+  var snap = React9.useSyncExternalStore(
     hasStore ? function(cb) {
       return dir.store.subscribe(cb);
     } : function() {
@@ -3010,14 +3133,14 @@ function EditModelPicker(props) {
       return null;
     }
   );
-  var menuState = React8.useState(false);
+  var menuState = React9.useState(false);
   var menuOpen = menuState[0];
   var setMenuOpen = menuState[1];
-  var viewState = React8.useState("root");
+  var viewState = React9.useState("root");
   var view = viewState[0];
   var setView = viewState[1];
-  var rootRef = React8.useRef(null);
-  React8.useEffect(function() {
+  var rootRef = React9.useRef(null);
+  React9.useEffect(function() {
     if (!menuOpen || !dir || typeof dir.load !== "function") return;
     try {
       dir.load().catch(function() {
@@ -3025,7 +3148,7 @@ function EditModelPicker(props) {
     } catch (eLoad) {
     }
   }, [menuOpen]);
-  React8.useEffect(function() {
+  React9.useEffect(function() {
     if (!menuOpen) return;
     function onDocClick(e) {
       try {
@@ -3099,7 +3222,7 @@ function EditModelPicker(props) {
     }
   }
   function menuRow(label, value, onClick, key) {
-    return React8.createElement(
+    return React9.createElement(
       "button",
       { key, type: "button", style: rowBase, onMouseEnter: function(e) {
         rowHover(e, true);
@@ -3109,17 +3232,17 @@ function EditModelPicker(props) {
         e.stopPropagation();
         onClick();
       } },
-      React8.createElement("span", null, label),
-      React8.createElement(
+      React9.createElement("span", null, label),
+      React9.createElement(
         "span",
         { style: { display: "inline-flex", alignItems: "center", gap: "6px", color: "var(--dsw-alias-label-tertiary)" } },
-        React8.createElement("span", null, value),
-        React8.createElement("span", null, "\u203A")
+        React9.createElement("span", null, value),
+        React9.createElement("span", null, "\u203A")
       )
     );
   }
   function backRow(label) {
-    return React8.createElement(
+    return React9.createElement(
       "button",
       { key: "back", type: "button", style: Object.assign({}, rowBase, { minHeight: "32px", padding: "4px 8px" }), onMouseEnter: function(e) {
         rowHover(e, true);
@@ -3129,22 +3252,22 @@ function EditModelPicker(props) {
         e.stopPropagation();
         setView("root");
       } },
-      React8.createElement(
+      React9.createElement(
         "span",
         { style: { display: "inline-flex", alignItems: "center", gap: "4px", color: "var(--dsw-alias-label-secondary)" } },
-        React8.createElement("span", { style: { fontSize: "18px", lineHeight: "18px", fontWeight: 500, flex: "none" } }, "\u2039"),
-        React8.createElement("span", { style: { fontSize: "12px" } }, label)
+        React9.createElement("span", { style: { fontSize: "18px", lineHeight: "18px", fontWeight: 500, flex: "none" } }, "\u2039"),
+        React9.createElement("span", { style: { fontSize: "12px" } }, label)
       )
     );
   }
-  var check = React8.createElement("span", { style: { color: "var(--dsw-alias-label-primary)", flex: "none" } }, "\u2713");
-  var chevron = React8.createElement("svg", {
+  var check = React9.createElement("span", { style: { color: "var(--dsw-alias-label-primary)", flex: "none" } }, "\u2713");
+  var chevron = React9.createElement("svg", {
     width: "14",
     height: "14",
     viewBox: "0 0 24 24",
     "aria-hidden": true,
     style: { color: "var(--dsw-alias-label-caption, var(--dsw-alias-label-tertiary))", flex: "none", transition: "transform .12s", transform: menuOpen ? "rotate(270deg)" : "rotate(90deg)" }
-  }, React8.createElement("path", { d: "M9 6l6 6-6 6", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }));
+  }, React9.createElement("path", { d: "M9 6l6 6-6 6", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }));
   var body;
   if (view === "root") {
     body = [
@@ -3159,12 +3282,12 @@ function EditModelPicker(props) {
     var kids = [backRow(L.modelMenu)];
     for (var gi2 = 0; gi2 < groups.length; gi2++) {
       var g2 = groups[gi2];
-      if (groups.length > 1 && g2.name) kids.push(React8.createElement("div", { key: "g" + gi2, style: { position: "sticky", top: "0", zIndex: 1, background: "var(--dsw-specific-menu, rgba(42,42,46,0.98))", padding: "5px 8px 3px", fontSize: "12px", fontWeight: 500, lineHeight: "18px", color: "var(--dsw-alias-label-tertiary)" } }, g2.name));
+      if (groups.length > 1 && g2.name) kids.push(React9.createElement("div", { key: "g" + gi2, style: { position: "sticky", top: "0", zIndex: 1, background: "var(--dsw-specific-menu, rgba(42,42,46,0.98))", padding: "5px 8px 3px", fontSize: "12px", fontWeight: 500, lineHeight: "18px", color: "var(--dsw-alias-label-tertiary)" } }, g2.name));
       var g2m = Array.isArray(g2.models) ? g2.models : [];
       for (var mj = 0; mj < g2m.length; mj++) {
         (function(gid, model) {
           var selected = !!(sel && gid === sel.provider && model.id === sel.model);
-          kids.push(React8.createElement(
+          kids.push(React9.createElement(
             "button",
             { key: gid + ":" + model.id, type: "button", role: "menuitemradio", "aria-checked": selected, title: model.name, style: Object.assign({}, rowBase, { alignItems: "flex-start" }), onMouseEnter: function(e) {
               rowHover(e, true);
@@ -3174,18 +3297,18 @@ function EditModelPicker(props) {
               e.stopPropagation();
               pickModel(gid, model.id);
             } },
-            React8.createElement(
+            React9.createElement(
               "span",
               { style: { display: "flex", flexDirection: "column", gap: "2px", minWidth: "0" } },
-              React8.createElement("span", null, model.name),
-              model.description ? React8.createElement("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-tertiary)", lineHeight: "16px" } }, model.description) : null
+              React9.createElement("span", null, model.name),
+              model.description ? React9.createElement("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-tertiary)", lineHeight: "16px" } }, model.description) : null
             ),
             selected ? check : null
           ));
         })(g2.id, g2m[mj]);
       }
     }
-    body = groups.length === 0 ? [backRow(L.modelMenu), React8.createElement("div", { key: "empty", style: { padding: "10px", fontSize: "13px", lineHeight: "20px", color: "var(--dsw-alias-label-tertiary)" } }, snap.status === "loading" ? L.modelsLoading : L.modelsEmpty)] : kids;
+    body = groups.length === 0 ? [backRow(L.modelMenu), React9.createElement("div", { key: "empty", style: { padding: "10px", fontSize: "13px", lineHeight: "20px", color: "var(--dsw-alias-label-tertiary)" } }, snap.status === "loading" ? L.modelsLoading : L.modelsEmpty)] : kids;
   } else {
     var effortChoices = [];
     if (reasoning !== void 0) {
@@ -3197,7 +3320,7 @@ function EditModelPicker(props) {
     for (var ej = 0; ej < effortChoices.length; ej++) {
       (function(level) {
         var selected = level.effort === effectiveEffort;
-        eKids.push(React8.createElement(
+        eKids.push(React9.createElement(
           "button",
           { key: String(level.effort), type: "button", role: "menuitemradio", "aria-checked": selected, style: Object.assign({}, rowBase), onMouseEnter: function(e) {
             rowHover(e, true);
@@ -3207,17 +3330,17 @@ function EditModelPicker(props) {
             e.stopPropagation();
             pickEffort(level.effort);
           } },
-          React8.createElement("span", null, level.label),
+          React9.createElement("span", null, level.label),
           selected ? check : null
         ));
       })(effortChoices[ej]);
     }
     body = eKids;
   }
-  return React8.createElement(
+  return React9.createElement(
     "div",
     { ref: rootRef, style: { display: "inline-block", maxWidth: "60%", minWidth: "0" } },
-    React8.createElement(
+    React9.createElement(
       "button",
       {
         type: "button",
@@ -3237,8 +3360,8 @@ function EditModelPicker(props) {
           setView("root");
         }
       },
-      React8.createElement("span", { style: { fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: "0" } }, modelLabel),
-      effortLabel ? React8.createElement("span", {
+      React9.createElement("span", { style: { fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: "0" } }, modelLabel),
+      effortLabel ? React9.createElement("span", {
         style: {
           color: "var(--dsw-alias-brand-primary, #4d6bfe)",
           background: "rgba(77, 107, 254, 0.12)",
@@ -3254,7 +3377,7 @@ function EditModelPicker(props) {
       }, effortLabel) : null,
       chevron
     ),
-    menuOpen ? React8.createElement("div", { role: "menu", style: menuStyle, onClick: function(e) {
+    menuOpen ? React9.createElement("div", { role: "menu", style: menuStyle, onClick: function(e) {
       e.stopPropagation();
     } }, body) : null
   );
@@ -3436,7 +3559,7 @@ async function requestCleanGhostQueue(targetSessionId) {
 }
 
 // src/features/recall/capsule.js
-var React9 = __toESM(require("react"), 1);
+var React10 = __toESM(require("react"), 1);
 function ConfirmCapsule({ text, onConfirm, onCancel }) {
   var L = useUILocaleDict();
   var capsuleStyle = {
@@ -3461,15 +3584,15 @@ function ConfirmCapsule({ text, onConfirm, onCancel }) {
     cursor: "pointer",
     whiteSpace: "nowrap"
   };
-  return React9.createElement(
+  return React10.createElement(
     "div",
     { style: capsuleStyle, "data-dsh-easyrewrite": "confirm-capsule" },
-    React9.createElement("span", null, text),
-    React9.createElement("button", { type: "button", style: pillBtnStyle, onClick: function(e) {
+    React10.createElement("span", null, text),
+    React10.createElement("button", { type: "button", style: pillBtnStyle, onClick: function(e) {
       e.stopPropagation();
       onConfirm();
     } }, L.confirm),
-    React9.createElement("button", { type: "button", style: pillBtnStyle, onClick: function(e) {
+    React10.createElement("button", { type: "button", style: pillBtnStyle, onClick: function(e) {
       e.stopPropagation();
       onCancel();
     } }, L.cancel)
@@ -3477,8 +3600,20 @@ function ConfirmCapsule({ text, onConfirm, onCancel }) {
 }
 
 // src/features/history/pager.js
-var React10 = __toESM(require("react"), 1);
-function goToVersion(fam, sessionId, nextIndex, props, cleanupRef) {
+var React11 = __toESM(require("react"), 1);
+function fmtShortVerTime(ts) {
+  if (!ts || typeof ts !== "number" || isNaN(ts)) return "";
+  try {
+    var d = new Date(ts);
+    var p = function(n) {
+      return n < 10 ? "0" + n : String(n);
+    };
+    return p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+  } catch (e) {
+    return "";
+  }
+}
+function goToVersion(fam, sessionId, nextIndex, props) {
   var next = fam.versions[nextIndex];
   if (!next) return;
   log("info", "pager", "\u5207\u6362\u7248\u672C", { from: sessionId, to: next, index: nextIndex + 1, count: fam.versions.length });
@@ -3494,38 +3629,6 @@ function goToVersion(fam, sessionId, nextIndex, props, cleanupRef) {
   }
   var doOpen = function() {
     safeOpenSession(next, props);
-    if (cleanupRef.current !== null) {
-      clearInterval(cleanupRef.current);
-      cleanupRef.current = null;
-    }
-    var attempts = 0;
-    cleanupRef.current = setInterval(function() {
-      attempts++;
-      try {
-        var cur = typeof props.currentSessionId === "function" ? props.currentSessionId() : null;
-        if (cur === next) {
-          clearInterval(cleanupRef.current);
-          cleanupRef.current = null;
-          fam.versions.forEach(function(vid) {
-            if (vid !== next) {
-              fetch("/bubble/vault/retire-session", {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ sessionId: vid }),
-                keepalive: true
-              }).catch(function() {
-              });
-            }
-          });
-          return;
-        }
-      } catch (e) {
-      }
-      if (attempts >= 40) {
-        clearInterval(cleanupRef.current);
-        cleanupRef.current = null;
-      }
-    }, 200);
   };
   if (typeof props.restoreSession === "function") {
     try {
@@ -3641,14 +3744,36 @@ function goToVaultVersion(vaultManifest, sessionId, nextIndex, props, setVaultMa
   }
 }
 function VersionPager(props) {
+  return renderWithChatGate(VersionPagerBody, props);
+}
+function VersionPagerBody(props) {
   var sessionId = props && props.sessionId || "";
   var L = useUILocaleDict();
-  var cleanupRef = React10.useRef(null);
-  var vaultState = React10.useState(null);
+  var vaultState = React11.useState(null);
   var vaultManifest = vaultState[0];
   var setVaultManifest = vaultState[1];
-  var vaultManifestRef = React10.useRef(null);
+  var vaultManifestRef = React11.useRef(null);
+  var pagerOnState = React11.useState(pagerEnabled());
+  var pagerOn = pagerOnState[0];
+  var setPagerOn = pagerOnState[1];
+  var pendingState = React11.useState(null);
+  var pendingTargetIndex = pendingState[0];
+  var setPendingTargetIndex = pendingState[1];
   var snapshot = getChatSnapshot(props);
+  React11.useEffect(function() {
+    function syncPagerSetting() {
+      setPagerOn(pagerEnabled());
+    }
+    window.addEventListener("dsh-easyrewrite:settings-change", syncPagerSetting);
+    window.addEventListener("storage", syncPagerSetting);
+    return function() {
+      window.removeEventListener("dsh-easyrewrite:settings-change", syncPagerSetting);
+      window.removeEventListener("storage", syncPagerSetting);
+    };
+  }, []);
+  React11.useEffect(function() {
+    setPendingTargetIndex(null);
+  }, [sessionId]);
   var isLastTail = false;
   try {
     if (snapshot && Array.isArray(snapshot.order) && snapshot.nodes && typeof snapshot.nodes.get === "function") {
@@ -3675,8 +3800,8 @@ function VersionPager(props) {
     }
   } catch (e) {
   }
-  React10.useEffect(function() {
-    if (!sessionId || !isLastTail || typeof fetch !== "function") return;
+  React11.useEffect(function() {
+    if (!pagerOn || !sessionId || !isLastTail || typeof fetch !== "function") return;
     var cancelled = false;
     var retryTimer = null;
     function fetchVaultList(attempt) {
@@ -3709,41 +3834,8 @@ function VersionPager(props) {
       cancelled = true;
       if (retryTimer !== null) clearTimeout(retryTimer);
     };
-  }, [sessionId, isLastTail, props && props.messageId]);
-  React10.useEffect(function() {
-    function onKey(e) {
-      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-      var tgt = e.target;
-      if (tgt && (tgt.tagName === "INPUT" || tgt.tagName === "TEXTAREA" || tgt.isContentEditable)) return;
-      var vMan = vaultManifestRef.current;
-      if (vMan && Array.isArray(vMan.versions) && vMan.versions.length >= 2) {
-        var vIdx = typeof vMan.currentVersionIndex === "number" ? vMan.currentVersionIndex : vMan.versions.length - 1;
-        if (e.key === "ArrowLeft" && vIdx > 0) {
-          e.preventDefault();
-          goToVaultVersion(vMan, sessionId, vIdx - 1, props, setVaultManifest, vaultManifestRef);
-        } else if (e.key === "ArrowRight" && vIdx < vMan.versions.length - 1) {
-          e.preventDefault();
-          goToVaultVersion(vMan, sessionId, vIdx + 1, props, setVaultManifest, vaultManifestRef);
-        }
-        return;
-      }
-      var fam = familyOfSession(sessionId, props.ctxSessions);
-      if (!fam || fam.versions.length < 2) return;
-      var idx = fam.index;
-      if (e.key === "ArrowLeft" && idx > 0) {
-        e.preventDefault();
-        goToVersion(fam, sessionId, idx - 1, props, cleanupRef);
-      } else if (e.key === "ArrowRight" && idx < fam.versions.length - 1) {
-        e.preventDefault();
-        goToVersion(fam, sessionId, idx + 1, props, cleanupRef);
-      }
-    }
-    window.addEventListener("keydown", onKey, true);
-    return function() {
-      window.removeEventListener("keydown", onKey, true);
-    };
-  }, [sessionId]);
-  if (!isLastTail) return null;
+  }, [pagerOn, sessionId, isLastTail, props && props.messageId]);
+  if (!pagerOn || !isLastTail) return null;
   var useVault = !!(vaultManifest && Array.isArray(vaultManifest.versions) && vaultManifest.versions.length >= 2);
   var family = useVault ? null : familyOfSession(sessionId, props.ctxSessions);
   if (!useVault && (!family || family.versions.length < 2)) return null;
@@ -3751,11 +3843,22 @@ function VersionPager(props) {
   var index = useVault ? typeof vaultManifest.currentVersionIndex === "number" ? vaultManifest.currentVersionIndex : count - 1 : family.index;
   var atFirst = index <= 0;
   var atLast = index >= count - 1;
-  function go(delta) {
+  var isHistorical = index < count - 1;
+  function executeGo(targetIdx) {
+    if (targetIdx < 0 || targetIdx >= count || targetIdx === index) return;
+    setPendingTargetIndex(null);
     if (useVault) {
-      goToVaultVersion(vaultManifest, sessionId, index + delta, props, setVaultManifest, vaultManifestRef);
+      goToVaultVersion(vaultManifest, sessionId, targetIdx, props, setVaultManifest, vaultManifestRef);
     } else {
-      goToVersion(family, sessionId, index + delta, props, cleanupRef);
+      goToVersion(family, sessionId, targetIdx, props);
+    }
+  }
+  function requestGo(targetIdx) {
+    if (targetIdx < 0 || targetIdx >= count || targetIdx === index) return;
+    if (pagerConfirmEnabled()) {
+      setPendingTargetIndex(targetIdx);
+    } else {
+      executeGo(targetIdx);
     }
   }
   var pagerStyle = {
@@ -3781,30 +3884,128 @@ function VersionPager(props) {
   function btnDisabled(flag) {
     return Object.assign({}, btnStyle, flag ? { opacity: 0.35, cursor: "default" } : {});
   }
-  return React10.createElement(
+  function formatVersionTag(idxPos) {
+    var verItem = useVault && vaultManifest && Array.isArray(vaultManifest.versions) ? vaultManifest.versions[idxPos] : null;
+    var num = verItem && typeof verItem.versionNumber === "number" ? verItem.versionNumber : idxPos + 1;
+    var ts = verItem ? verItem.updatedAt || verItem.createdAt : null;
+    var shortTime = ts ? fmtShortVerTime(ts) : "";
+    return shortTime ? String(num) + " (" + shortTime + ")" : String(num);
+  }
+  return React11.createElement(
     "span",
     { style: pagerStyle, "data-dsh-easyrewrite": "version-pager", title: L.pagerTitle },
-    React10.createElement("button", {
+    React11.createElement("button", {
       type: "button",
       className: "dbe-pager-btn",
       style: btnDisabled(atFirst),
       disabled: atFirst,
       "aria-label": L.pagerPrev,
       onClick: function() {
-        go(-1);
+        requestGo(index - 1);
       }
-    }, React10.createElement(IconChevronLeftOutline, null)),
-    React10.createElement("span", { style: { padding: "0 4px", fontSize: "14px", whiteSpace: "nowrap" } }, index + 1 + "/" + count),
-    React10.createElement("button", {
+    }, React11.createElement(IconChevronLeftOutline, null)),
+    React11.createElement("span", { style: { padding: "0 4px", fontSize: "14px", whiteSpace: "nowrap" } }, index + 1 + "/" + count),
+    React11.createElement("button", {
       type: "button",
       className: "dbe-pager-btn",
       style: btnDisabled(atLast),
       disabled: atLast,
       "aria-label": L.pagerNext,
       onClick: function() {
-        go(1);
+        requestGo(index + 1);
       }
-    }, React10.createElement(IconChevronRightOutline, null))
+    }, React11.createElement(IconChevronRightOutline, null)),
+    pendingTargetIndex !== null ? React11.createElement(
+      "span",
+      {
+        "data-dsh-easyrewrite": "pager-confirm-capsule",
+        style: {
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "6px",
+          marginLeft: "6px",
+          padding: "2px 8px",
+          borderRadius: "999px",
+          background: "var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.14))",
+          border: "1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.28))",
+          fontSize: "12px",
+          color: "var(--dsw-alias-label-primary)",
+          whiteSpace: "nowrap"
+        }
+      },
+      React11.createElement("span", null, (L.pagerSwitchAsk || "\u5207\u81F3 v{ver}\uFF1F").replace("{ver}", formatVersionTag(pendingTargetIndex))),
+      React11.createElement("button", {
+        type: "button",
+        style: {
+          appearance: "none",
+          border: "none",
+          background: "var(--dsw-static-deepseek-500, #4d6bfe)",
+          color: "#ffffff",
+          borderRadius: "999px",
+          padding: "1px 8px",
+          fontSize: "11px",
+          cursor: "pointer",
+          fontFamily: "inherit"
+        },
+        onClick: function() {
+          executeGo(pendingTargetIndex);
+        }
+      }, L.confirm || "\u786E\u5B9A"),
+      React11.createElement("button", {
+        type: "button",
+        style: {
+          appearance: "none",
+          border: "1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.3))",
+          background: "transparent",
+          color: "var(--dsw-alias-label-secondary)",
+          borderRadius: "999px",
+          padding: "1px 8px",
+          fontSize: "11px",
+          cursor: "pointer",
+          fontFamily: "inherit"
+        },
+        onClick: function() {
+          setPendingTargetIndex(null);
+        }
+      }, L.cancel || "\u53D6\u6D88")
+    ) : isHistorical ? React11.createElement(
+      "span",
+      {
+        "data-dsh-easyrewrite": "pager-historical-badge",
+        style: {
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "6px",
+          marginLeft: "6px",
+          padding: "2px 8px",
+          borderRadius: "999px",
+          background: "rgba(217, 130, 43, 0.14)",
+          border: "1px solid rgba(217, 130, 43, 0.35)",
+          fontSize: "11px",
+          color: "#d9822b",
+          whiteSpace: "nowrap"
+        }
+      },
+      React11.createElement("span", null, (L.pagerHistoricalBadge || "\u5386\u53F2\u7248\u672C v{cur}\uFF08\u6700\u65B0 v{max}\uFF09").replace("{cur}", formatVersionTag(index)).replace("{max}", formatVersionTag(count - 1))),
+      React11.createElement("button", {
+        type: "button",
+        style: {
+          appearance: "none",
+          border: "none",
+          background: "rgba(217, 130, 43, 0.22)",
+          color: "inherit",
+          borderRadius: "999px",
+          padding: "1px 7px",
+          fontSize: "11px",
+          fontWeight: "600",
+          cursor: "pointer",
+          fontFamily: "inherit"
+        },
+        onClick: function() {
+          requestGo(count - 1);
+        }
+      }, L.pagerBackToLatest || "\u56DE\u5230\u6700\u65B0")
+    ) : null
   );
 }
 
@@ -3843,7 +4044,7 @@ function isImageFile(f) {
   }
   return isImageMediaType(type) || type && type.indexOf("image/") === 0 || isImageFileName(name);
 }
-function UserBubbleView(props) {
+function UserBubbleViewInner(props) {
   var node = props.node;
   var data = node && node.data ? node.data : {};
   var text = extractText(data.content);
@@ -3864,13 +4065,12 @@ function UserBubbleView(props) {
   var sessionId = props.sessionId;
   var myKey = node && typeof node.key === "string" ? node.key : "";
   var pending = usePending(sessionId);
-  var confirmState = React11.useState(false);
+  var confirmState = React12.useState(false);
   var confirming = confirmState[0];
   var setConfirming = confirmState[1];
-  var draftRef = React11.useRef("");
-  var inputState = typeof props.useInput === "function" ? props.useInput(function(s) {
-    return s;
-  }) : props.inputState || null;
+  var draftRef = React12.useRef("");
+  var editInFlightRef = React12.useRef(false);
+  var inputState = props && props._resolvedInputState !== void 0 ? props._resolvedInputState : props.inputState || null;
   if (inputState) draftRef.current = typeof inputState.draft === "string" ? inputState.draft : "";
   try {
     var inImgs = getInputImageIdsCompat(inputState);
@@ -3884,36 +4084,36 @@ function UserBubbleView(props) {
     }
   } catch (eMir2) {
   }
-  var previewState = React11.useState(false);
+  var previewState = React12.useState(false);
   var showPreview = previewState[0];
   var setShowPreview = previewState[1];
-  var editState = React11.useState(false);
+  var editState = React12.useState(false);
   var editing = editState[0];
   var setEditing = editState[1];
-  var editTextState = React11.useState("");
+  var editTextState = React12.useState("");
   var editText = editTextState[0];
   var setEditText = editTextState[1];
-  var errState = React11.useState(null);
+  var errState = React12.useState(null);
   var opError = errState[0];
   var setOpError = errState[1];
-  var bubbleInitSizeState = React11.useState({ w: 0, h: 0 });
+  var bubbleInitSizeState = React12.useState({ w: 0, h: 0 });
   var bubbleInitSize = bubbleInitSizeState[0];
   var isEditPending = pending && pending.type === "edit" && pending.targetKey === myKey;
-  var sEditImgs = React11.useState([]);
+  var sEditImgs = React12.useState([]);
   var editImages = sEditImgs[0];
   var setEditImages = sEditImgs[1];
-  var editImagesRef = React11.useRef([]);
+  var editImagesRef = React12.useRef([]);
   editImagesRef.current = editImages;
-  var editRestoredRef = React11.useRef(false);
-  var hadEditPendingAtMount = React11.useRef(false);
+  var editRestoredRef = React12.useRef(false);
+  var hadEditPendingAtMount = React12.useRef(false);
   if (hadEditPendingAtMount.current === false && pending && pending.type === "edit" && pending.targetKey === myKey) hadEditPendingAtMount.current = true;
-  var sEditSel = React11.useState(null);
+  var sEditSel = React12.useState(null);
   var editSel = sEditSel[0];
   var setEditSel = sEditSel[1];
-  var sPSize = React11.useState(messagePreviewSize());
+  var sPSize = React12.useState(messagePreviewSize());
   var pSize = sPSize[0];
   var setPSize = sPSize[1];
-  React11.useEffect(function() {
+  React12.useEffect(function() {
     function onSettingsChange(e) {
       if (!e || !e.key || e.key === "dsh-easyrewrite:messagePreviewSize" || e.detail && e.detail.key === "dsh-easyrewrite:messagePreviewSize") {
         setPSize(messagePreviewSize());
@@ -3926,22 +4126,22 @@ function UserBubbleView(props) {
       window.removeEventListener("dsh-easyrewrite:settings-change", onSettingsChange);
     };
   }, []);
-  var sDzActive = React11.useState(false);
+  var sDzActive = React12.useState(false);
   var dzActive = sDzActive[0];
   var setDzActive = sDzActive[1];
-  var sDzOver = React11.useState(false);
+  var sDzOver = React12.useState(false);
   var dzOver = sDzOver[0];
   var setDzOver = sDzOver[1];
-  var sDzBottomOver = React11.useState(false);
+  var sDzBottomOver = React12.useState(false);
   var dzBottomOver = sDzBottomOver[0];
   var setDzBottomOver = sDzBottomOver[1];
-  var dzActiveRef = React11.useRef(false);
-  var dzOverRef = React11.useRef(false);
-  var dzBottomOverRef = React11.useRef(false);
-  var dzWatchdogRef = React11.useRef(0);
-  var stagedBottomImageIdsRef = React11.useRef([]);
-  var stagedBottomFilesRef = React11.useRef([]);
-  var createdBlobUrlsRef = React11.useRef([]);
+  var dzActiveRef = React12.useRef(false);
+  var dzOverRef = React12.useRef(false);
+  var dzBottomOverRef = React12.useRef(false);
+  var dzWatchdogRef = React12.useRef(0);
+  var stagedBottomImageIdsRef = React12.useRef([]);
+  var stagedBottomFilesRef = React12.useRef([]);
+  var createdBlobUrlsRef = React12.useRef([]);
   function createTrackedObjectUrl(file) {
     if (!file || typeof URL === "undefined" || typeof URL.createObjectURL !== "function") return "";
     try {
@@ -3965,7 +4165,7 @@ function UserBubbleView(props) {
       }
     }
   }
-  React11.useEffect(function() {
+  React12.useEffect(function() {
     if (!editing) {
       revokeTrackedObjectUrls();
     }
@@ -4005,7 +4205,7 @@ function UserBubbleView(props) {
     } catch (eSp) {
     }
   }
-  React11.useEffect(function() {
+  React12.useEffect(function() {
     if (!isEditPending || editing) return;
     setEditing(true);
     setEditText(pending.draftText);
@@ -4164,7 +4364,7 @@ function UserBubbleView(props) {
       return false;
     }
   }
-  React11.useEffect(function() {
+  React12.useEffect(function() {
     var card = document.querySelector("[data-composer-card='true']") || document.querySelector("[data-composer-card]");
     var scrollEl = card ? card.querySelector("[data-input-scroll]") : document.querySelector("[data-input-scroll]");
     function restoreInputBox() {
@@ -4267,7 +4467,7 @@ function UserBubbleView(props) {
       restoreInputBox();
     };
   }, [editing, dzActive, dzBottomOver]);
-  React11.useEffect(function() {
+  React12.useEffect(function() {
     if (!editing) return;
     function looksLikeFileDrag(e) {
       try {
@@ -4572,8 +4772,8 @@ function UserBubbleView(props) {
   var anchorSeq = node && typeof node.anchorSeq === "number" ? node.anchorSeq : node && typeof node.seq === "number" ? node.seq : 0;
   var afterCount = 0;
   var onlyUser = statOnlyUser();
+  var snapshot = getChatSnapshot(props);
   try {
-    var snapshot = getChatSnapshot(props);
     if (snapshot) {
       if (Array.isArray(snapshot.order) && snapshot.nodes && typeof snapshot.nodes.get === "function") {
         var order = snapshot.order;
@@ -4649,17 +4849,17 @@ function UserBubbleView(props) {
             var imgs = refs.map(function(r2) {
               return { attachment: r2 };
             });
-            origImages = React11.createElement(
+            origImages = React12.createElement(
               "div",
               { key: "orig-images", onClick: togglePreview, style: { cursor: "pointer" } },
               renderMessageImagesCompat(imgs, props)
             );
           } else if (typeof props.loadImage === "function") {
-            origImages = React11.createElement(
+            origImages = React12.createElement(
               "div",
               { key: "orig-images-self", onClick: togglePreview, style: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px", cursor: "pointer" } },
               refs.map(function(r3, ri3) {
-                return React11.createElement(PendingOriginalImage, { key: ri3, ref: r3, loadImage: props.loadImage });
+                return React12.createElement(PendingOriginalImage, { key: ri3, ref: r3, loadImage: props.loadImage });
               })
             );
           }
@@ -4668,11 +4868,11 @@ function UserBubbleView(props) {
         origImages = null;
       }
     }
-    return React11.createElement(
+    return React12.createElement(
       "div",
       { style: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px", padding: "2px 0" }, "data-dsh-easyrewrite": "user-pending" },
       showPreview ? origImages : null,
-      showPreview ? React11.createElement(
+      showPreview ? React12.createElement(
         "div",
         {
           className: "dsh-easyrewrite-bubble",
@@ -4681,7 +4881,7 @@ function UserBubbleView(props) {
           onClick: togglePreview
         },
         text || L.emptyMsg
-      ) : React11.createElement(
+      ) : React12.createElement(
         "div",
         {
           className: "dsh-easyrewrite-bubble",
@@ -4779,7 +4979,6 @@ function UserBubbleView(props) {
     setEditing(false);
     log("info", "edit", "\u7F16\u8F91\u53D6\u6D88\uFF08\u539F\u6837\u4E0D\u53D8\uFF09");
   }
-  var editInFlightRef = React11.useRef(false);
   async function confirmEdit() {
     if (editInFlightRef.current) return;
     editInFlightRef.current = true;
@@ -5055,7 +5254,7 @@ function UserBubbleView(props) {
     };
     var pcEd = contentParts(data.content);
     var editImgs = pcEd && pcEd.images ? pcEd.images : [];
-    return React11.createElement(
+    return React12.createElement(
       "div",
       {
         style: rowStyle,
@@ -5143,7 +5342,7 @@ function UserBubbleView(props) {
         var dzThumbDrag = editMode === "extended" || editMode === "custom" ? dzFixedDrag : Math.max(44, Math.floor((editBoxW - 2 * dzBorder - 2 * dzPadX - 3 * dzGap) / 4));
         var thumbSize = dzShow ? dzThumbDrag : dzThumbUsual;
         var dzMinH = !hasImgs ? dzThumbDrag + 16 : void 0;
-        return React11.createElement(
+        return React12.createElement(
           "div",
           {
             "data-easyrewrite-dropzone": "1",
@@ -5166,7 +5365,7 @@ function UserBubbleView(props) {
           },
           editImages.map(function(ei, eiIdx) {
             if (ei.isFile) {
-              return React11.createElement(
+              return React12.createElement(
                 "div",
                 {
                   key: ei.id,
@@ -5202,12 +5401,12 @@ function UserBubbleView(props) {
                     handleAttachmentDragEnd(e);
                   }
                 },
-                React11.createElement(
+                React12.createElement(
                   "div",
                   { style: { flex: "none", width: "28px", height: "28px", display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" } },
                   renderFileTypeIcon(ei.name, 28)
                 ),
-                React11.createElement("span", {
+                React12.createElement("span", {
                   style: {
                     width: "100%",
                     maxWidth: "100%",
@@ -5224,7 +5423,7 @@ function UserBubbleView(props) {
                     pointerEvents: "none"
                   }
                 }, ei.name || "file"),
-                React11.createElement("button", {
+                React12.createElement("button", {
                   type: "button",
                   onClick: function(ev) {
                     ev.stopPropagation();
@@ -5255,7 +5454,7 @@ function UserBubbleView(props) {
                 }, "\xD7")
               );
             }
-            return React11.createElement(
+            return React12.createElement(
               "div",
               {
                 key: ei.id,
@@ -5282,8 +5481,8 @@ function UserBubbleView(props) {
                   handleAttachmentDragEnd(e);
                 }
               },
-              ei.url ? React11.createElement("img", { src: ei.url, draggable: false, style: { width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" } }) : React11.createElement("div", { style: { width: "100%", height: "100%", background: "var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.08))" } }),
-              React11.createElement("button", { type: "button", onClick: function(ev) {
+              ei.url ? React12.createElement("img", { src: ei.url, draggable: false, style: { width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" } }) : React12.createElement("div", { style: { width: "100%", height: "100%", background: "var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.08))" } }),
+              React12.createElement("button", { type: "button", onClick: function(ev) {
                 ev.stopPropagation();
                 var nxtRm = editImagesRef.current.filter(function(x) {
                   return x.id !== ei.id;
@@ -5294,7 +5493,7 @@ function UserBubbleView(props) {
               }, style: { position: "absolute", top: "2px", right: "2px", width: "18px", height: "18px", borderRadius: "50%", border: "none", background: "rgba(0,0,0,0.55)", color: "#fff", fontSize: "12px", lineHeight: "18px", textAlign: "center", cursor: "pointer", padding: "0" }, title: "\u79FB\u9664\u56FE\u7247" }, "\xD7")
             );
           }),
-          dzShow ? React11.createElement(
+          dzShow ? React12.createElement(
             "div",
             {
               "data-easyrewrite-dropzone-overlay": "1",
@@ -5315,7 +5514,7 @@ function UserBubbleView(props) {
                 transition: "background-color .12s ease"
               }
             },
-            React11.createElement(
+            React12.createElement(
               "div",
               { style: { color: dzOver ? dzBlue : "rgba(128,128,128,0.85)", fontSize: "13px", lineHeight: "20px", fontWeight: 500, padding: "0 12px", textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" } },
               editMode === "compact" ? L.dzCompact : L.dzFull
@@ -5323,12 +5522,12 @@ function UserBubbleView(props) {
           ) : null
         );
       })(),
-      React11.createElement(
+      React12.createElement(
         "div",
         { style: editBoxStyle },
-        hasUnpreservable ? React11.createElement("div", { style: { fontSize: "12px", color: "var(--dsw-alias-label-warning, #b7791f)", marginBottom: "6px", lineHeight: "1.5" } }, L.attachWarning) : null,
-        opError ? React11.createElement("div", { style: { fontSize: "12px", color: "var(--dsw-alias-label-error, #d9534f)", marginBottom: "6px", lineHeight: "1.5" } }, opError) : null,
-        React11.createElement("textarea", {
+        hasUnpreservable ? React12.createElement("div", { style: { fontSize: "12px", color: "var(--dsw-alias-label-warning, #b7791f)", marginBottom: "6px", lineHeight: "1.5" } }, L.attachWarning) : null,
+        opError ? React12.createElement("div", { style: { fontSize: "12px", color: "var(--dsw-alias-label-error, #d9534f)", marginBottom: "6px", lineHeight: "1.5" } }, opError) : null,
+        React12.createElement("textarea", {
           ref: function(taEl) {
             if (taEl && !taEl.__autoHeightDone) {
               taEl.__autoHeightDone = true;
@@ -5401,25 +5600,25 @@ function UserBubbleView(props) {
             }
           }
         }),
-        React11.createElement(
+        React12.createElement(
           "div",
           { style: btnRowStyle },
-          props.modelDirectories || getModelDirectories() ? React11.createElement(EditModelPicker, { sessionId, modelDirectories: props.modelDirectories || getModelDirectories(), selection: editSel, onChange: setEditSel }) : null,
-          React11.createElement(
+          props.modelDirectories || getModelDirectories() ? React12.createElement(EditModelPicker, { sessionId, modelDirectories: props.modelDirectories || getModelDirectories(), selection: editSel, onChange: setEditSel }) : null,
+          React12.createElement(
             "div",
             { style: { display: "flex", gap: "8px", marginLeft: "auto" } },
-            React11.createElement("button", { type: "button", style: ghostBtnStyle, onClick: function(e) {
+            React12.createElement("button", { type: "button", style: ghostBtnStyle, onClick: function(e) {
               e.stopPropagation();
               cancelEdit();
             } }, L.cancel),
-            React11.createElement("button", { type: "button", style: primaryBtnStyle, onClick: function(e) {
+            React12.createElement("button", { type: "button", style: primaryBtnStyle, onClick: function(e) {
               e.stopPropagation();
               confirmEdit();
             } }, L.confirm)
           )
         )
       ),
-      React11.createElement(
+      React12.createElement(
         "div",
         { style: actionsStyle },
         actionButton("\u64A4\u56DE", "\u64A4\u56DE", function(e) {
@@ -5447,16 +5646,16 @@ function UserBubbleView(props) {
   var hasTextContent = typeof text === "string" && text.trim().length > 0;
   var hasAttachments = msgImages.length > 0 || msgFiles.length > 0;
   var shouldRenderBubble = hasTextContent || !hasAttachments;
-  return React11.createElement(
+  return React12.createElement(
     "div",
     { style: rowStyle, "data-dsh-easyrewrite": "user", "data-preview-size": pSize, "data-time-hover-root": true },
     renderMessageAttachmentsCompat(pc, props, pSize),
-    shouldRenderBubble ? React11.createElement(
+    shouldRenderBubble ? React12.createElement(
       "div",
       { className: "dsh-easyrewrite-bubble", style: bubbleStyle, onClick: onBubbleClick, title: L.clickEdit },
       text || L.emptyMsg
     ) : null,
-    confirming ? React11.createElement(ConfirmCapsule, {
+    confirming ? React12.createElement(ConfirmCapsule, {
       text: afterCount === 0 ? L.recallText0 : onlyUser ? L.recallTextQ.replace("{n}", String(afterCount)) : L.recallTextC.replace("{n}", String(afterCount)),
       onConfirm: async function() {
         setConfirming(false);
@@ -5538,10 +5737,10 @@ function UserBubbleView(props) {
       onCancel: function() {
         setConfirming(false);
       }
-    }) : React11.createElement(
+    }) : React12.createElement(
       "div",
       { style: actionsStyle },
-      React11.createElement("span", { className: "dbe-time", style: timeStyle }, formatClock(msgTime)),
+      React12.createElement("span", { className: "dbe-time", style: timeStyle }, formatClock(msgTime)),
       // 撤回键：rewrite 关闭且二级「关闭时显示撤回键」也关闭 → 隐藏
       !rewriteOnClick() && !editOffShowRecall() ? null : actionButton("\u64A4\u56DE", "\u64A4\u56DE", async function(e) {
         e.stopPropagation();
@@ -5636,9 +5835,12 @@ function UserBubbleView(props) {
         e.stopPropagation();
         enterEdit(e.currentTarget ? e.currentTarget.offsetWidth : 0);
       }, iconImg(ICONS.edit, "\u7F16\u8F91")),
-      React11.createElement(CopyButton, { text })
+      React12.createElement(CopyButton, { text })
     )
   );
+}
+function UserBubbleView(props) {
+  return renderWithChatAndInputGate(UserBubbleViewInner, props);
 }
 
 // src/features/bubble/theme.js
@@ -5778,23 +5980,23 @@ function BubbleSettingsPage(props) {
     switchRow,
     segmentedGroup
   } = styles;
-  const [rewrite, setRewrite] = React12.useState(rewriteOnClick());
-  const [showRecall, setShowRecall] = React12.useState(editOffShowRecall());
-  const [widthMode, setWidthMode] = React12.useState(editWidthMode());
-  const [customW, setCustomW] = React12.useState(String(editWidthCustom()));
+  const [rewrite, setRewrite] = React13.useState(rewriteOnClick());
+  const [showRecall, setShowRecall] = React13.useState(editOffShowRecall());
+  const [widthMode, setWidthMode] = React13.useState(editWidthMode());
+  const [customW, setCustomW] = React13.useState(String(editWidthCustom()));
   if (props && props.view === "summary") {
     return L.rowBubbleDesc || "\u652F\u6301\u539F\u5730\u70B9\u51FB\u6C14\u6CE1\u7F16\u8F91\u3001\u8C03\u6574\u7F16\u8F91\u6846\u5BBD\u5EA6\u3001\u56FE\u7247\u62D6\u5165\u4E0E\u9644\u4EF6\u4FDD\u7559\u3002";
   }
-  return React12.createElement(
+  return React13.createElement(
     "div",
     {
       style: Object.assign({}, bodyStyle, { margin: 0, borderTop: "none", padding: "12px 16px" }),
       "data-dsh-easyrewrite": "bubble-settings"
     },
-    React12.createElement(
+    React13.createElement(
       "div",
       { style: sectionStyle },
-      React12.createElement("span", { style: groupTitleStyle }, L.rowBubbleTitle || L.sectionEdit),
+      React13.createElement("span", { style: groupTitleStyle }, L.rowBubbleTitle || L.sectionEdit),
       switchRow(L.rewrite, rewrite, (v) => {
         setRewrite(v);
         setBool("dsh-easyrewrite:rewriteOnClick", v);
@@ -5803,10 +6005,10 @@ function BubbleSettingsPage(props) {
         setShowRecall(v);
         setBool("dsh-easyrewrite:editOffShowRecall", v);
       }, rewrite ? L.lockedHint : null, rewrite),
-      React12.createElement(
+      React13.createElement(
         "div",
         { style: groupStyle },
-        React12.createElement("span", { style: labelStyle }, L.editWidth),
+        React13.createElement("span", { style: labelStyle }, L.editWidth),
         segmentedGroup([
           ["compact", L.wCompact],
           ["standard", L.wStandard],
@@ -5816,11 +6018,11 @@ function BubbleSettingsPage(props) {
           setWidthMode(v);
           setSetting("dsh-easyrewrite:editWidth", v);
         }),
-        React12.createElement(
+        React13.createElement(
           "div",
           { style: rowStyle },
-          React12.createElement("span", { style: labelStyle }, L.customWidth),
-          React12.createElement("input", {
+          React13.createElement("span", { style: labelStyle }, L.customWidth),
+          React13.createElement("input", {
             type: "number",
             min: 100,
             max: 1200,
@@ -5839,7 +6041,7 @@ function BubbleSettingsPage(props) {
         )
       )
     ),
-    React12.createElement("span", { style: Object.assign({}, hintStyle, { marginTop: "8px" }) }, L.instant)
+    React13.createElement("span", { style: Object.assign({}, hintStyle, { marginTop: "8px" }) }, L.instant)
   );
 }
 function registerBubble(ctx) {
@@ -5914,7 +6116,7 @@ function registerBubble(ctx) {
 }
 
 // src/features/recall/index.js
-var React14 = __toESM(require("react"), 1);
+var React15 = __toESM(require("react"), 1);
 
 // src/features/recall/hotkey.js
 var HOTKEY_KEY = "dsh-easyrewrite:hotkey";
@@ -6000,7 +6202,7 @@ function formatHotkey(combo) {
 }
 
 // src/features/recall/banner.js
-var React13 = __toESM(require("react"), 1);
+var React14 = __toESM(require("react"), 1);
 
 // src/features/recall/tune.js
 var barTune = { inset: null, size: null, radius: null, bg: null };
@@ -6054,14 +6256,16 @@ function barDiagnose() {
 }
 
 // src/features/recall/banner.js
-function RecallBanner(props) {
+function RecallBannerInner(props) {
+  var latestChatSnapRef = React14.useRef(null);
+  latestChatSnapRef.current = getChatSnapshot(props);
   var sessionId = props.sessionId;
   var L = useUILocaleDict();
   var pending = usePending(sessionId);
   var active = pending && pending.type === "recall";
-  var sendingRef = React13.useRef(false);
-  var barRef = React13.useRef(null);
-  React13.useEffect(function() {
+  var sendingRef = React14.useRef(false);
+  var barRef = React14.useRef(null);
+  React14.useEffect(function() {
     if (!active) return;
     var scrollEl = document.querySelector("[data-input-scroll]");
     if (!scrollEl || !scrollEl.parentNode) return;
@@ -6225,8 +6429,8 @@ function RecallBanner(props) {
       barRef.current = null;
     };
   }, [active, sessionId, pending]);
-  var backupRecovered = React13.useRef({});
-  React13.useEffect(function() {
+  var backupRecovered = React14.useRef({});
+  React14.useEffect(function() {
     if (backupRecovered.current[sessionId]) return;
     var local = readPending(sessionId);
     if (local) return;
@@ -6257,8 +6461,8 @@ function RecallBanner(props) {
     } catch (e) {
     }
   }, [sessionId]);
-  var lastBackupMetaRef = React13.useRef({});
-  React13.useEffect(function() {
+  var lastBackupMetaRef = React14.useRef({});
+  React14.useEffect(function() {
     if (!active || !pending) return;
     var meta = lastBackupMetaRef.current[sessionId] || (lastBackupMetaRef.current[sessionId] = { time: 0, updatedAt: 0 });
     function backupNow() {
@@ -6287,7 +6491,7 @@ function RecallBanner(props) {
       clearInterval(timer);
     };
   }, [active, pending, sessionId]);
-  var hiddenRows = React13.useRef(/* @__PURE__ */ new Set());
+  var hiddenRows = React14.useRef(/* @__PURE__ */ new Set());
   function applyHideAfter(list, targetKey) {
     var rows = list.querySelectorAll("[data-chat-anchor-key]");
     var started = false;
@@ -6311,7 +6515,7 @@ function RecallBanner(props) {
     });
     hiddenRows.current.clear();
   }
-  React13.useEffect(function() {
+  React14.useEffect(function() {
     if (!active || !pending) return;
     var mode = pending.visualMode || "minimal";
     if (mode !== "minimal" && mode !== "simple") return;
@@ -6327,7 +6531,7 @@ function RecallBanner(props) {
       restoreHiddenRows();
     };
   }, [active, pending, sessionId]);
-  React13.useEffect(function() {
+  React14.useEffect(function() {
     try {
       var binding = props.ctxSessions && typeof props.ctxSessions.binding === "function" ? props.ctxSessions.binding(sessionId) : null;
       var sess = binding ? binding.session : null;
@@ -6379,8 +6583,8 @@ function RecallBanner(props) {
   }
   function computeRecallBoundary(props2, targetSeq) {
     try {
-      if (!hasChatSnapshot(props2)) return null;
-      var snapshot = getChatSnapshot(props2);
+      var snapshot = readChatSnapshotSync(props2 && props2.sessionId, { uiConversation: props2 && props2.uiConversation, sessions: props2 && props2.ctxSessions, fallbackSnapshot: latestChatSnapRef.current || props2 && (props2._resolvedChatSnapshot || props2.chatSnapshot) || null });
+      if (!snapshot) return null;
       if (!snapshot || !Array.isArray(snapshot.order) || !snapshot.nodes || typeof snapshot.nodes.get !== "function") return null;
       var order = snapshot.order;
       var tIdx = -1;
@@ -6573,7 +6777,7 @@ function RecallBanner(props) {
       sendingRef.current = false;
     }
   }
-  React13.useEffect(function() {
+  React14.useEffect(function() {
     if (!active && !sendingRef.current) return;
     var p = pending;
     function onKeyDownCapture(e) {
@@ -6609,7 +6813,7 @@ function RecallBanner(props) {
     };
   }, [active, sessionId, pending]);
   var resumeKey = "dsh-easyrewrite:resume-send:" + sessionId;
-  React13.useEffect(function() {
+  React14.useEffect(function() {
     var raw = null;
     try {
       raw = localStorage.getItem(resumeKey);
@@ -6866,6 +7070,9 @@ function RecallBanner(props) {
   }, [sessionId, resumeKey]);
   return null;
 }
+function RecallBanner(props) {
+  return renderWithChatGate(RecallBannerInner, props);
+}
 
 // src/features/recall/index.js
 function RecallSettingsPage(props) {
@@ -6882,15 +7089,15 @@ function RecallSettingsPage(props) {
     switchRow,
     segmentedGroup
   } = styles;
-  const [confirmCapsule, setConfirmCapsule] = React14.useState(recallConfirmEnabled());
-  const [origImg, setOrigImg] = React14.useState(showOriginalImages());
-  const [visual, setVisual] = React14.useState(recallVisualMode());
-  const [statOnly, setStatOnly] = React14.useState(statOnlyUser());
-  const [hotkey, setHotkeyState] = React14.useState(hotkeySetting());
-  const [hotkeyOn, setHotkeyOn] = React14.useState(hotkeyEnabledSetting());
-  const [recording, setRecording] = React14.useState(false);
-  const [hotkeyInvalid, setHotkeyInvalid] = React14.useState(false);
-  React14.useEffect(() => {
+  const [confirmCapsule, setConfirmCapsule] = React15.useState(recallConfirmEnabled());
+  const [origImg, setOrigImg] = React15.useState(showOriginalImages());
+  const [visual, setVisual] = React15.useState(recallVisualMode());
+  const [statOnly, setStatOnly] = React15.useState(statOnlyUser());
+  const [hotkey, setHotkeyState] = React15.useState(hotkeySetting());
+  const [hotkeyOn, setHotkeyOn] = React15.useState(hotkeyEnabledSetting());
+  const [recording, setRecording] = React15.useState(false);
+  const [hotkeyInvalid, setHotkeyInvalid] = React15.useState(false);
+  React15.useEffect(() => {
     if (!recording) return;
     function onKey(e) {
       e.preventDefault();
@@ -6918,16 +7125,16 @@ function RecallSettingsPage(props) {
   if (props && props.view === "summary") {
     return L.rowRecallDesc || "\u63D0\u4F9B\u6D88\u606F\u64A4\u56DE\u64CD\u4F5C\u680F\u6309\u94AE\u3001\u64A4\u56DE\u5F85\u5B9A\u80F6\u56CA\u5012\u8BA1\u65F6\u786E\u8BA4\u3001\u4E09\u79CD\u89C6\u89C9\u6A21\u5F0F\u53CA\u5168\u5C40\u5FEB\u6377\u952E\u3002";
   }
-  return React14.createElement(
+  return React15.createElement(
     "div",
     {
       style: Object.assign({}, bodyStyle, { margin: 0, borderTop: "none", padding: "12px 16px" }),
       "data-dsh-easyrewrite": "recall-settings"
     },
-    React14.createElement(
+    React15.createElement(
       "div",
       { style: sectionStyle },
-      React14.createElement("span", { style: groupTitleStyle }, L.rowRecallTitle || L.sectionRecall),
+      React15.createElement("span", { style: groupTitleStyle }, L.rowRecallTitle || L.sectionRecall),
       switchRow(L.recallConfirm, confirmCapsule, (v) => {
         setConfirmCapsule(v);
         setBool("dsh-easyrewrite:recallConfirm", v);
@@ -6936,10 +7143,10 @@ function RecallSettingsPage(props) {
         setOrigImg(v);
         setBool("dsh-easyrewrite:showOriginalImages", v);
       }),
-      React14.createElement(
+      React15.createElement(
         "div",
         { style: groupStyle },
-        React14.createElement("span", { style: labelStyle }, L.visualMode),
+        React15.createElement("span", { style: labelStyle }, L.visualMode),
         segmentedGroup([
           ["simple", L.visualSimple],
           ["minimal", L.visualMinimal],
@@ -6958,17 +7165,17 @@ function RecallSettingsPage(props) {
         setHotkeyEnabledSetting(v);
         if (!v) setRecording(false);
       }, L.hotkeyHint),
-      React14.createElement(
+      React15.createElement(
         "div",
         { style: rowStyle },
-        React14.createElement(
+        React15.createElement(
           "div",
           { style: { display: "flex", flexDirection: "column", gap: "2px" } },
-          React14.createElement("span", { style: labelStyle }, L.hotkey + "\uFF1A" + (hotkey ? formatHotkey(hotkey) : L.hotkeyNone)),
-          React14.createElement("span", { style: hintStyle }, recording ? L.hotkeyRecording : hotkey ? null : L.hotkeyHint),
-          hotkeyInvalid ? React14.createElement("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-error, #d9534f)" } }, L.hotkeyInvalid) : null
+          React15.createElement("span", { style: labelStyle }, L.hotkey + "\uFF1A" + (hotkey ? formatHotkey(hotkey) : L.hotkeyNone)),
+          React15.createElement("span", { style: hintStyle }, recording ? L.hotkeyRecording : hotkey ? null : L.hotkeyHint),
+          hotkeyInvalid ? React15.createElement("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-error, #d9534f)" } }, L.hotkeyInvalid) : null
         ),
-        React14.createElement("button", {
+        React15.createElement("button", {
           type: "button",
           disabled: !hotkeyOn,
           style: {
@@ -6991,7 +7198,7 @@ function RecallSettingsPage(props) {
         }, recording ? L.hotkeyRecording : L.hotkeyRecord)
       )
     ),
-    React14.createElement("span", { style: Object.assign({}, hintStyle, { marginTop: "8px" }) }, L.instant)
+    React15.createElement("span", { style: Object.assign({}, hintStyle, { marginTop: "8px" }) }, L.instant)
   );
 }
 function registerRecall(ctx) {
@@ -7123,8 +7330,15 @@ function registerRecall(ctx) {
 }
 
 // src/features/history/index.js
-var React15 = __toESM(require("react"), 1);
+var React16 = __toESM(require("react"), 1);
 function HistorySettingsPage(props) {
+  const L = useUILocaleDict();
+  if (props && props.view === "summary") {
+    return L.rowHistoryDesc || "\u63D0\u4F9B\u4F1A\u8BDD\u9876\u90E8 < X / Y > \u5386\u53F2\u7248\u672C\u7FFB\u9875\u5668\u4E0E\u5386\u53F2\u7248\u672C\u6811\u5BFC\u822A\u3002";
+  }
+  return React16.createElement(HistorySettingsPageBody, props);
+}
+function HistorySettingsPageBody(props) {
   const L = useUILocaleDict();
   const styles = createSettingsStyles();
   const {
@@ -7136,15 +7350,13 @@ function HistorySettingsPage(props) {
     hintStyle,
     switchRow
   } = styles;
-  const [pagerOn, setPagerOn] = React15.useState(getBool("dsh-easyrewrite:pagerEnabled", true));
-  const [histOpen, setHistOpen] = React15.useState(true);
-  const [famOpenMap, setFamOpenMap] = React15.useState({});
-  const [statusMsg, setStatusMsg] = React15.useState(null);
-  const [cleaning, setCleaning] = React15.useState(false);
+  const [pagerOn, setPagerOn] = React16.useState(getBool("dsh-easyrewrite:pagerEnabled", true));
+  const [pagerConfirmOn, setPagerConfirmOn] = React16.useState(getBool("dsh-easyrewrite:pagerConfirm", true));
+  const [histOpen, setHistOpen] = React16.useState(true);
+  const [famOpenMap, setFamOpenMap] = React16.useState({});
+  const [statusMsg, setStatusMsg] = React16.useState(null);
+  const [cleaning, setCleaning] = React16.useState(false);
   const ctxSessions = props && props.ctxSessions || serviceRefs.sessions;
-  if (props && props.view === "summary") {
-    return L.rowHistoryDesc || "\u63D0\u4F9B\u4F1A\u8BDD\u9876\u90E8 < X / Y > \u5386\u53F2\u7248\u672C\u7FFB\u9875\u5668\u4E0E\u5386\u53F2\u7248\u672C\u6811\u5BFC\u822A\u3002";
-  }
   const { families, loading, refresh } = useVersionFamilies(ctxSessions, props);
   let snap = null;
   try {
@@ -7175,55 +7387,59 @@ function HistorySettingsPage(props) {
     const p2 = (x) => (x < 10 ? "0" : "") + x;
     return dd.getFullYear() + "-" + p2(dd.getMonth() + 1) + "-" + p2(dd.getDate()) + " " + p2(dd.getHours()) + ":" + p2(dd.getMinutes());
   };
-  const chev = (openState) => React15.createElement("svg", {
+  const chev = (openState) => React16.createElement("svg", {
     width: "18",
     height: "18",
     viewBox: "0 0 24 24",
     style: { flex: "none", display: "block", color: "var(--dsw-alias-label-tertiary)", transform: openState ? "rotate(90deg)" : "rotate(0deg)", transition: "transform .12s" }
-  }, React15.createElement("path", { d: "M9 6l6 6-6 6", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }));
+  }, React16.createElement("path", { d: "M9 6l6 6-6 6", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }));
   const rowHead = { display: "flex", alignItems: "center", gap: "8px", padding: "6px 8px", cursor: "pointer", borderRadius: "6px" };
   const hdrRow = { display: "flex", alignItems: "center", cursor: "pointer", padding: "4px 0" };
-  return React15.createElement(
+  return React16.createElement(
     "div",
     {
       style: Object.assign({}, bodyStyle, { margin: 0, borderTop: "none", padding: "12px 16px" }),
       "data-dsh-easyrewrite": "history-settings"
     },
-    React15.createElement(
+    React16.createElement(
       "div",
       { style: sectionStyle },
-      React15.createElement("span", { style: groupTitleStyle }, L.rowHistoryTitle || L.sectionVersions),
+      React16.createElement("span", { style: groupTitleStyle }, L.rowHistoryTitle || L.sectionVersions),
       switchRow(L.pagerTitle || "\u542F\u7528\u7FFB\u9875\u5668", pagerOn, (v) => {
         setPagerOn(v);
         setBool("dsh-easyrewrite:pagerEnabled", v);
       }),
-      statusMsg ? React15.createElement("div", {
+      switchRow(L.pagerConfirm || "\u7248\u672C\u5207\u6362\u786E\u8BA4\u80F6\u56CA", pagerConfirmOn, (v) => {
+        setPagerConfirmOn(v);
+        setBool("dsh-easyrewrite:pagerConfirm", v);
+      }),
+      statusMsg ? React16.createElement("div", {
         style: { padding: "6px 10px", borderRadius: "6px", background: "rgba(77,107,254,0.12)", color: "var(--dsw-alias-brand-primary, #4d6bfe)", fontSize: "12px", marginBottom: "6px" }
       }, statusMsg) : null,
-      React15.createElement(
+      React16.createElement(
         "div",
         { style: groupStyle },
-        loading ? React15.createElement("span", { style: hintStyle }, "\u6B63\u5728\u626B\u63CF\u5386\u53F2\u7248\u672C\u5BB6\u65CF...") : families.length === 0 ? React15.createElement("span", { style: hintStyle }, L.versionFamilyNone) : React15.createElement(
+        loading ? React16.createElement("span", { style: hintStyle }, "\u6B63\u5728\u626B\u63CF\u5386\u53F2\u7248\u672C\u5BB6\u65CF...") : families.length === 0 ? React16.createElement("span", { style: hintStyle }, L.versionFamilyNone) : React16.createElement(
           "div",
           { style: { display: "flex", flexDirection: "column", gap: "4px" } },
-          React15.createElement(
+          React16.createElement(
             "div",
             { style: hdrRow, onClick: () => setHistOpen(!histOpen) },
             chev(histOpen),
-            React15.createElement("span", { style: { fontSize: "12px", fontWeight: "600", color: "var(--dsw-alias-label-secondary)" } }, L.versionHistory),
-            React15.createElement("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-tertiary)", marginLeft: "auto" } }, families.length + " \u4E2A\u5BB6\u65CF")
+            React16.createElement("span", { style: { fontSize: "12px", fontWeight: "600", color: "var(--dsw-alias-label-secondary)" } }, L.versionHistory),
+            React16.createElement("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-tertiary)", marginLeft: "auto" } }, families.length + " \u4E2A\u5BB6\u65CF")
           ),
           histOpen ? families.map((fam) => {
             const fid = fam.sessionId || fam.rootId;
             const open = !!famOpenMap[fid];
             const vList = fam.versions || [];
-            return React15.createElement(
+            return React16.createElement(
               "div",
               {
                 key: fid,
                 style: { display: "flex", flexDirection: "column", gap: "2px", padding: "4px 0 4px 12px", borderTop: "1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.14))" }
               },
-              React15.createElement(
+              React16.createElement(
                 "div",
                 { style: hdrRow, onClick: () => {
                   const nm = Object.assign({}, famOpenMap);
@@ -7231,9 +7447,9 @@ function HistorySettingsPage(props) {
                   setFamOpenMap(nm);
                 } },
                 chev(open),
-                React15.createElement("span", { style: { fontSize: "12px", fontWeight: "500", color: "var(--dsw-alias-label-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "1" } }, famName(fam)),
-                fam.isVault ? React15.createElement("span", { style: { fontSize: "10px", padding: "1px 6px", borderRadius: "4px", background: "var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.1))", color: "var(--dsw-alias-label-tertiary)", marginRight: "6px" } }, "Vault") : null,
-                React15.createElement("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-tertiary)", flex: "none", marginLeft: "auto" } }, vList.length + " " + L.versionCount)
+                React16.createElement("span", { style: { fontSize: "12px", fontWeight: "500", color: "var(--dsw-alias-label-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "1" } }, famName(fam)),
+                fam.isVault ? React16.createElement("span", { style: { fontSize: "10px", padding: "1px 6px", borderRadius: "4px", background: "var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.1))", color: "var(--dsw-alias-label-tertiary)", marginRight: "6px" } }, "Vault") : null,
+                React16.createElement("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-tertiary)", flex: "none", marginLeft: "auto" } }, vList.length + " " + L.versionCount)
               ),
               open ? vList.map((ver, vi) => {
                 const isVault = fam.isVault;
@@ -7241,15 +7457,15 @@ function HistorySettingsPage(props) {
                 const vStamp = isVault ? ver.createdAt || ver.updatedAt : metaOf(ver).updatedAt;
                 const isCur = isVault ? ver.isCurrent || vi === fam.currentVersionIndex : false;
                 const summary = isVault && ver.summary ? ver.summary : null;
-                return React15.createElement(
+                return React16.createElement(
                   "div",
                   { key: isVault ? ver.versionNumber : ver, style: rowHead },
-                  React15.createElement("span", { style: { fontSize: "11px", fontWeight: "bold", color: isCur ? "var(--dsw-alias-brand-primary, #4d6bfe)" : "var(--dsw-alias-label-tertiary)", fontVariantNumeric: "tabular-nums", flex: "none", width: "28px" } }, "v" + vNum),
-                  React15.createElement("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-tertiary)", fontVariantNumeric: "tabular-nums", flex: "none", width: "115px" } }, fmtStamp(vStamp)),
-                  summary ? React15.createElement("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "1", minWidth: "0" }, title: summary }, summary) : React15.createElement("span", { style: { flex: "1" } }),
-                  isCur ? React15.createElement("span", {
+                  React16.createElement("span", { style: { fontSize: "11px", fontWeight: "bold", color: isCur ? "var(--dsw-alias-brand-primary, #4d6bfe)" : "var(--dsw-alias-label-tertiary)", fontVariantNumeric: "tabular-nums", flex: "none", width: "28px" } }, "v" + vNum),
+                  React16.createElement("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-tertiary)", fontVariantNumeric: "tabular-nums", flex: "none", width: "115px" } }, fmtStamp(vStamp)),
+                  summary ? React16.createElement("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "1", minWidth: "0" }, title: summary }, summary) : React16.createElement("span", { style: { flex: "1" } }),
+                  isCur ? React16.createElement("span", {
                     style: { fontSize: "11px", padding: "2px 8px", borderRadius: "4px", background: "rgba(46,160,67,0.15)", color: "#2ea043", flex: "none", fontWeight: "500" }
-                  }, "\u5F53\u524D\u7248\u672C") : React15.createElement("button", {
+                  }, "\u5F53\u524D\u7248\u672C") : React16.createElement("button", {
                     type: "button",
                     style: { appearance: "none", border: "1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.3))", background: "transparent", color: "var(--dsw-alias-label-secondary)", borderRadius: "6px", padding: "2px 8px", fontSize: "12px", cursor: "pointer", fontFamily: "inherit", flex: "none" },
                     onClick: (ev) => {
@@ -7277,21 +7493,21 @@ function HistorySettingsPage(props) {
         )
       ),
       // 智能迁移与清理遗留插件归档（严格保留用户主动归档会话）
-      React15.createElement(
+      React16.createElement(
         "div",
         {
           style: Object.assign({}, groupStyle, { marginTop: "16px", paddingTop: "12px", borderTop: "1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.15))" })
         },
-        React15.createElement(
+        React16.createElement(
           "div",
           { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" } },
-          React15.createElement(
+          React16.createElement(
             "div",
             { style: { display: "flex", flexDirection: "column", gap: "2px", flex: "1", minWidth: 0 } },
-            React15.createElement("span", { style: labelStyle }, L.cleanLegacyArchived || "\u667A\u80FD\u6E05\u7406\u9057\u7559\u63D2\u4EF6\u5F52\u6863"),
-            React15.createElement("span", { style: hintStyle }, L.cleanLegacyArchivedHint || "\u5C06\u5386\u53F2\u64A4\u56DE\u5F52\u6863\u5B89\u5168\u8F6C\u5316\u4E3A\u5F71\u5B50\u4ED3\u50A8\u65B0\u6A21\u5F0F\uFF0C\u62D4\u9664\u6B8B\u7559\u5217\u8868\uFF1B\u7528\u6237\u4E3B\u52A8\u5F52\u6863 100% \u5B89\u5168\u4FDD\u7559\uFF01")
+            React16.createElement("span", { style: labelStyle }, L.cleanLegacyArchived || "\u667A\u80FD\u6E05\u7406\u9057\u7559\u63D2\u4EF6\u5F52\u6863"),
+            React16.createElement("span", { style: hintStyle }, L.cleanLegacyArchivedHint || "\u5C06\u5386\u53F2\u64A4\u56DE\u5F52\u6863\u5B89\u5168\u8F6C\u5316\u4E3A\u5F71\u5B50\u4ED3\u50A8\u65B0\u6A21\u5F0F\uFF0C\u62D4\u9664\u6B8B\u7559\u5217\u8868\uFF1B\u7528\u6237\u4E3B\u52A8\u5F52\u6863 100% \u5B89\u5168\u4FDD\u7559\uFF01")
           ),
-          React15.createElement("button", {
+          React16.createElement("button", {
             type: "button",
             disabled: cleaning,
             style: {
@@ -7338,7 +7554,7 @@ function HistorySettingsPage(props) {
         )
       )
     ),
-    React15.createElement("span", { style: Object.assign({}, hintStyle, { marginTop: "8px" }) }, L.instant)
+    React16.createElement("span", { style: Object.assign({}, hintStyle, { marginTop: "8px" }) }, L.instant)
   );
 }
 function registerHistory(ctx) {
@@ -7443,7 +7659,7 @@ function registerHistory(ctx) {
 }
 
 // src/features/other/index.js
-var React16 = __toESM(require("react"), 1);
+var React17 = __toESM(require("react"), 1);
 function OtherSettingsPage(props) {
   const L = useUILocaleDict();
   const styles = createSettingsStyles();
@@ -7457,27 +7673,27 @@ function OtherSettingsPage(props) {
     switchRow,
     segmentedGroup
   } = styles;
-  const [previewSize, setPreviewSize] = React16.useState(messagePreviewSize());
-  const [conflict, setConflict] = React16.useState(draftConflictMode());
-  const [debugOn, setDebugOn] = React16.useState(getBool("dsh-easyrewrite:debug", false));
+  const [previewSize, setPreviewSize] = React17.useState(messagePreviewSize());
+  const [conflict, setConflict] = React17.useState(draftConflictMode());
+  const [debugOn, setDebugOn] = React17.useState(getBool("dsh-easyrewrite:debug", false));
   if (props && props.view === "summary") {
     return L.rowOtherDesc || "\u6D88\u606F\u9884\u89C8\u5927\u5C0F\u5916\u89C2\uFF08\u5C0F/\u653E\u5927\uFF09\u3001\u8349\u7A3F\u56DE\u586B\u51B2\u7A81\u6A21\u5F0F\u914D\u7F6E\u53CA\u5E95\u5C42\u8F85\u52A9\u9009\u9879\u3002";
   }
-  return React16.createElement(
+  return React17.createElement(
     "div",
     {
       style: Object.assign({}, bodyStyle, { margin: 0, borderTop: "none", padding: "12px 16px" }),
       "data-dsh-easyrewrite": "other-settings"
     },
-    React16.createElement(
+    React17.createElement(
       "div",
       { style: sectionStyle },
-      React16.createElement("span", { style: groupTitleStyle }, L.rowOtherTitle || "\u5916\u89C2\u4E0E\u8F85\u52A9\u8BBE\u7F6E"),
+      React17.createElement("span", { style: groupTitleStyle }, L.rowOtherTitle || "\u5916\u89C2\u4E0E\u8F85\u52A9\u8BBE\u7F6E"),
       // 消息预览大小：小（收为紧凑小方框，默认） vs 放大（图片放大呈现官方高度 + 大文件卡片）
-      React16.createElement(
+      React17.createElement(
         "div",
         { style: groupStyle },
-        React16.createElement("span", { style: labelStyle }, L.messagePreviewSize),
+        React17.createElement("span", { style: labelStyle }, L.messagePreviewSize),
         segmentedGroup([
           ["small", L.previewSizeSmall],
           ["large", L.previewSizeLarge]
@@ -7485,12 +7701,12 @@ function OtherSettingsPage(props) {
           setPreviewSize(v);
           setSetting("dsh-easyrewrite:messagePreviewSize", v);
         }),
-        React16.createElement("span", { style: hintStyle }, previewSize === "large" || previewSize === "standard" ? L.previewSizeHintLarge : L.previewSizeHintSmall)
+        React17.createElement("span", { style: hintStyle }, previewSize === "large" || previewSize === "standard" ? L.previewSizeHintLarge : L.previewSizeHintSmall)
       ),
-      React16.createElement(
+      React17.createElement(
         "div",
         { style: groupStyle },
-        React16.createElement("span", { style: labelStyle }, L.conflictMode),
+        React17.createElement("span", { style: labelStyle }, L.conflictMode),
         segmentedGroup([
           ["overwrite", L.conflictOverwriteShort],
           ["merge", L.conflictMergeShort]
@@ -7498,14 +7714,14 @@ function OtherSettingsPage(props) {
           setConflict(v);
           setSetting("dsh-easyrewrite:conflictMode", v);
         }),
-        React16.createElement("span", { style: hintStyle }, conflict === "merge" ? L.conflictMerge : L.conflictOverwrite)
+        React17.createElement("span", { style: hintStyle }, conflict === "merge" ? L.conflictMerge : L.conflictOverwrite)
       ),
       switchRow("\u5F00\u53D1\u8005\u8C03\u8BD5\u65E5\u5FD7 (Console Debug)", debugOn, (v) => {
         setDebugOn(v);
         setBool("dsh-easyrewrite:debug", v);
       }, "\u5F00\u542F\u540E\u5728\u6D4F\u89C8\u5668\u63A7\u5236\u53F0\u6253\u5370\u8BE6\u7EC6\u8C03\u8BD5\u65E5\u5FD7\u53CA\u6302\u8F7D\u8C03\u53C2\u63A5\u53E3")
     ),
-    React16.createElement("span", { style: Object.assign({}, hintStyle, { marginTop: "8px" }) }, L.instant)
+    React17.createElement("span", { style: Object.assign({}, hintStyle, { marginTop: "8px" }) }, L.instant)
   );
 }
 function registerOther(ctx) {
@@ -7526,50 +7742,50 @@ function registerOther(ctx) {
 }
 
 // src/features/settings-card/index.js
-var React17 = __toESM(require("react"), 1);
+var React18 = __toESM(require("react"), 1);
 function EasyRewriteSettingsCard(props) {
   var embedded = !!(props && props.embedded);
   var L = useUILocaleDict();
-  var openState = React17.useState(embedded);
+  var openState = React18.useState(embedded);
   var open = openState[0];
   var setOpen = openState[1];
-  var sRewrite = React17.useState(rewriteOnClick());
+  var sRewrite = React18.useState(rewriteOnClick());
   var rewrite = sRewrite[0];
   var setRewrite = sRewrite[1];
-  var sRecall = React17.useState(editOffShowRecall());
+  var sRecall = React18.useState(editOffShowRecall());
   var showRecall = sRecall[0];
   var setShowRecall = sRecall[1];
-  var sConfirm = React17.useState(recallConfirmEnabled());
+  var sConfirm = React18.useState(recallConfirmEnabled());
   var confirmCapsule = sConfirm[0];
   var setConfirmCapsule = sConfirm[1];
-  var sHistOpen = React17.useState(false);
+  var sHistOpen = React18.useState(false);
   var histOpen = sHistOpen[0];
   var setHistOpen = sHistOpen[1];
-  var sFamOpen = React17.useState({});
+  var sFamOpen = React18.useState({});
   var famOpenMap = sFamOpen[0];
   var setFamOpenMap = sFamOpen[1];
-  var sUpdateVer = React17.useState("");
+  var sUpdateVer = React18.useState("");
   var updateVer = sUpdateVer[0];
   var setUpdateVer = sUpdateVer[1];
-  var sDshVer = React17.useState(null);
+  var sDshVer = React18.useState(null);
   var dshVer = sDshVer[0];
   var setDshVer = sDshVer[1];
-  var sRemindClosed = React17.useState(getBool("dsh-easyrewrite:autoCheckReminded", false));
+  var sRemindClosed = React18.useState(getBool("dsh-easyrewrite:autoCheckReminded", false));
   var remindClosed = sRemindClosed[0];
   var setRemindClosed = sRemindClosed[1];
-  var sUpdateMsg = React17.useState("");
+  var sUpdateMsg = React18.useState("");
   var updateMsg = sUpdateMsg[0];
   var setUpdateMsg = sUpdateMsg[1];
-  var sUpdateAvail = React17.useState("");
+  var sUpdateAvail = React18.useState("");
   var updateAvailableVer = sUpdateAvail[0];
   var setUpdateAvailableVer = sUpdateAvail[1];
-  var sChecking = React17.useState(false);
+  var sChecking = React18.useState(false);
   var updateChecking = sChecking[0];
   var setUpdateChecking = sChecking[1];
-  var sUpdating = React17.useState(false);
+  var sUpdating = React18.useState(false);
   var updateUpdating = sUpdating[0];
   var setUpdateUpdating = sUpdating[1];
-  var sAutoCheck = React17.useState(getBool("dsh-easyrewrite:autoCheckUpdate", false));
+  var sAutoCheck = React18.useState(getBool("dsh-easyrewrite:autoCheckUpdate", false));
   var autoCheckOn = sAutoCheck[0];
   var setAutoCheckOn = sAutoCheck[1];
   function doCheckUpdate() {
@@ -7636,7 +7852,7 @@ function EasyRewriteSettingsCard(props) {
       setUpdateMsg(L.updateFailed);
     });
   }
-  React17.useEffect(function() {
+  React18.useEffect(function() {
     if (!open) return;
     var now = Date.now();
     var lastCheck = 0;
@@ -7654,7 +7870,7 @@ function EasyRewriteSettingsCard(props) {
     if (!updateVer) setUpdateVer("\u2026");
     doCheckUpdate();
   }, [open]);
-  React17.useEffect(function() {
+  React18.useEffect(function() {
     var autoOn = getBool("dsh-easyrewrite:autoCheckUpdate", false);
     if (!autoOn) return;
     var today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
@@ -7670,19 +7886,19 @@ function EasyRewriteSettingsCard(props) {
     }
     doCheckUpdate();
   }, []);
-  var sHotkey = React17.useState(hotkeySetting());
+  var sHotkey = React18.useState(hotkeySetting());
   var hotkey = sHotkey[0];
   var setHotkeyState = sHotkey[1];
-  var sHotkeyOn = React17.useState(hotkeyEnabledSetting());
+  var sHotkeyOn = React18.useState(hotkeyEnabledSetting());
   var hotkeyOn = sHotkeyOn[0];
   var setHotkeyOn = sHotkeyOn[1];
-  var sRecording = React17.useState(false);
+  var sRecording = React18.useState(false);
   var recording = sRecording[0];
   var setRecording = sRecording[1];
-  var sHotkeyInvalid = React17.useState(false);
+  var sHotkeyInvalid = React18.useState(false);
   var hotkeyInvalid = sHotkeyInvalid[0];
   var setHotkeyInvalid = sHotkeyInvalid[1];
-  React17.useEffect(function() {
+  React18.useEffect(function() {
     if (!recording) return;
     setHotkeyCaptureActive(true);
     function onKey(e) {
@@ -7709,31 +7925,37 @@ function EasyRewriteSettingsCard(props) {
       window.removeEventListener("keydown", onKey, true);
     };
   }, [recording]);
-  var sVisual = React17.useState(recallVisualMode());
+  var sVisual = React18.useState(recallVisualMode());
   var visual = sVisual[0];
   var setVisual = sVisual[1];
-  var sStat = React17.useState(statOnlyUser());
+  var sStat = React18.useState(statOnlyUser());
   var statOnly = sStat[0];
   var setStatOnly = sStat[1];
-  var sConflict = React17.useState(draftConflictMode());
+  var sConflict = React18.useState(draftConflictMode());
   var conflict = sConflict[0];
   var setConflict = sConflict[1];
-  var sWidth = React17.useState(editWidthMode());
+  var sWidth = React18.useState(editWidthMode());
   var widthMode = sWidth[0];
   var setWidthMode = sWidth[1];
-  var sCustom = React17.useState(String(editWidthCustom()));
+  var sCustom = React18.useState(String(editWidthCustom()));
   var customW = sCustom[0];
   var setCustomW = sCustom[1];
-  var sPreviewSize = React17.useState(messagePreviewSize());
+  var sPreviewSize = React18.useState(messagePreviewSize());
   var previewSize = sPreviewSize[0];
   var setPreviewSize = sPreviewSize[1];
-  var sOrigImg = React17.useState(showOriginalImages());
+  var sOrigImg = React18.useState(showOriginalImages());
   var origImg = sOrigImg[0];
   var setOrigImg = sOrigImg[1];
-  var sVaultLoc = React17.useState(vaultStorageLocation());
+  var sVaultLoc = React18.useState(vaultStorageLocation());
   var vaultLoc = sVaultLoc[0];
   var setVaultLoc = sVaultLoc[1];
-  var sCleanState = React17.useState({ cleaning: false, msg: "" });
+  var sPagerOn = React18.useState(pagerEnabled());
+  var pagerOn = sPagerOn[0];
+  var setPagerOn = sPagerOn[1];
+  var sPagerConfirmOn = React18.useState(pagerConfirmEnabled());
+  var pagerConfirmOn = sPagerConfirmOn[0];
+  var setPagerConfirmOn = sPagerConfirmOn[1];
+  var sCleanState = React18.useState({ cleaning: false, msg: "" });
   var cleanState = sCleanState[0];
   var setCleanState = sCleanState[1];
   var famHook = useVersionFamilies(props.ctxSessions);
@@ -7819,20 +8041,20 @@ function EasyRewriteSettingsCard(props) {
       userSelect: "none",
       boxSizing: "border-box"
     };
-    return React17.createElement(
+    return React18.createElement(
       "div",
       {
         style: Object.assign({}, rowStyle, disabled ? { opacity: 0.45, cursor: "not-allowed" } : null),
         "data-dsh-easyrewrite": "switch-row",
         title: disabled ? extraHint || "" : void 0
       },
-      React17.createElement(
+      React18.createElement(
         "div",
         { style: { display: "flex", flexDirection: "column", gap: "2px", flex: "1", minWidth: "0" } },
-        React17.createElement("span", { style: labelStyle }, label),
-        extraHint ? React17.createElement("span", { style: hintStyle }, extraHint) : null
+        React18.createElement("span", { style: labelStyle }, label),
+        extraHint ? React18.createElement("span", { style: hintStyle }, extraHint) : null
       ),
-      React17.createElement("div", {
+      React18.createElement("div", {
         role: "checkbox",
         "aria-checked": !!value,
         "aria-disabled": disabled || void 0,
@@ -7842,7 +8064,7 @@ function EasyRewriteSettingsCard(props) {
           if (disabled) return;
           onChange(!value);
         }
-      }, value ? React17.createElement(IconCheckOutline, null) : null)
+      }, value ? React18.createElement(IconCheckOutline, null) : null)
     );
   }
   function segmentedGroup(options, value, onChange) {
@@ -7873,13 +8095,13 @@ function EasyRewriteSettingsCard(props) {
       transition: "left .18s ease",
       zIndex: 1
     };
-    return React17.createElement(
+    return React18.createElement(
       "div",
       { style: segStyle, role: "radiogroup" },
-      React17.createElement("div", { style: thumbStyle, "data-dsh-easyrewrite": "seg-thumb" }),
+      React18.createElement("div", { style: thumbStyle, "data-dsh-easyrewrite": "seg-thumb" }),
       options.map(function(opt) {
         var sel = value === opt[0];
-        return React17.createElement("div", {
+        return React18.createElement("div", {
           key: opt[0],
           role: "radio",
           "aria-checked": sel,
@@ -7905,14 +8127,14 @@ function EasyRewriteSettingsCard(props) {
       })
     );
   }
-  var cardBody = React17.createElement(
+  var cardBody = React18.createElement(
     "div",
     { style: bodyStyle },
     // —— 编辑 ——
-    React17.createElement(
+    React18.createElement(
       "div",
       { style: sectionStyle },
-      React17.createElement("span", { style: groupTitleStyle }, L.sectionEdit),
+      React18.createElement("span", { style: groupTitleStyle }, L.sectionEdit),
       switchRow(L.rewrite, rewrite, function(v) {
         setRewrite(v);
         setBool("dsh-easyrewrite:rewriteOnClick", v);
@@ -7922,19 +8144,19 @@ function EasyRewriteSettingsCard(props) {
         setBool("dsh-easyrewrite:editOffShowRecall", v);
       }, rewrite ? L.lockedHint : null, rewrite),
       // 编辑宽度：三固定 + 自定义（固定时输入框禁用置灰）
-      React17.createElement(
+      React18.createElement(
         "div",
         { style: groupStyle },
-        React17.createElement("span", { style: labelStyle }, L.editWidth),
+        React18.createElement("span", { style: labelStyle }, L.editWidth),
         segmentedGroup([["compact", L.wCompact], ["standard", L.wStandard], ["extended", L.wExtended], ["custom", L.wCustom]], widthMode, function(v) {
           setWidthMode(v);
           setSetting("dsh-easyrewrite:editWidth", v);
         }),
-        React17.createElement(
+        React18.createElement(
           "div",
           { style: rowStyle },
-          React17.createElement("span", { style: labelStyle }, L.customWidth),
-          React17.createElement("input", {
+          React18.createElement("span", { style: labelStyle }, L.customWidth),
+          React18.createElement("input", {
             type: "number",
             min: 100,
             max: 1200,
@@ -7951,10 +8173,10 @@ function EasyRewriteSettingsCard(props) {
       )
     ),
     // —— 撤回 ——
-    React17.createElement(
+    React18.createElement(
       "div",
       { style: sectionStyle },
-      React17.createElement("span", { style: groupTitleStyle }, L.sectionRecall),
+      React18.createElement("span", { style: groupTitleStyle }, L.sectionRecall),
       switchRow(L.recallConfirm, confirmCapsule, function(v) {
         setConfirmCapsule(v);
         setBool("dsh-easyrewrite:recallConfirm", v);
@@ -7964,10 +8186,10 @@ function EasyRewriteSettingsCard(props) {
         setBool("dsh-easyrewrite:showOriginalImages", v);
       }),
       // 视觉模式
-      React17.createElement(
+      React18.createElement(
         "div",
         { style: groupStyle },
-        React17.createElement("span", { style: labelStyle }, L.visualMode),
+        React18.createElement("span", { style: labelStyle }, L.visualMode),
         segmentedGroup([["simple", L.visualSimple], ["minimal", L.visualMinimal], ["info", L.visualInfo]], visual, function(v) {
           setVisual(v);
           setSetting("dsh-easyrewrite:visualMode", v);
@@ -7984,17 +8206,17 @@ function EasyRewriteSettingsCard(props) {
         if (!v) setRecording(false);
       }, L.hotkeyHint),
       // 键位行：始终显示；总开关关闭时录制按钮禁用置灰
-      React17.createElement(
+      React18.createElement(
         "div",
         { style: rowStyle },
-        React17.createElement(
+        React18.createElement(
           "div",
           { style: { display: "flex", flexDirection: "column", gap: "2px" } },
-          React17.createElement("span", { style: labelStyle }, L.hotkey + "\uFF1A" + (hotkey ? formatHotkey(hotkey) : L.hotkeyNone)),
-          React17.createElement("span", { style: hintStyle }, recording ? L.hotkeyRecording : hotkey ? null : L.hotkeyHint),
-          hotkeyInvalid ? React17.createElement("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-error, #d9534f)" } }, L.hotkeyInvalid) : null
+          React18.createElement("span", { style: labelStyle }, L.hotkey + "\uFF1A" + (hotkey ? formatHotkey(hotkey) : L.hotkeyNone)),
+          React18.createElement("span", { style: hintStyle }, recording ? L.hotkeyRecording : hotkey ? null : L.hotkeyHint),
+          hotkeyInvalid ? React18.createElement("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-error, #d9534f)" } }, L.hotkeyInvalid) : null
         ),
-        React17.createElement("button", {
+        React18.createElement("button", {
           type: "button",
           disabled: !hotkeyOn,
           style: {
@@ -8018,49 +8240,57 @@ function EasyRewriteSettingsCard(props) {
       )
     ),
     // —— 回填 ——
-    React17.createElement(
+    React18.createElement(
       "div",
       { style: sectionStyle },
-      React17.createElement("span", { style: groupTitleStyle }, L.sectionComposer),
+      React18.createElement("span", { style: groupTitleStyle }, L.sectionComposer),
       // 回填冲突模式
-      React17.createElement(
+      React18.createElement(
         "div",
         { style: groupStyle },
-        React17.createElement("span", { style: labelStyle }, L.conflictMode),
+        React18.createElement("span", { style: labelStyle }, L.conflictMode),
         segmentedGroup([["overwrite", L.conflictOverwriteShort], ["merge", L.conflictMergeShort]], conflict, function(v) {
           setConflict(v);
           setSetting("dsh-easyrewrite:conflictMode", v);
         }),
-        React17.createElement("span", { style: hintStyle }, conflict === "merge" ? L.conflictMerge : L.conflictOverwrite)
+        React18.createElement("span", { style: hintStyle }, conflict === "merge" ? L.conflictMerge : L.conflictOverwrite)
       )
     ),
     // —— 其他配置 / 外观与辅助 ——
-    React17.createElement(
+    React18.createElement(
       "div",
       { style: sectionStyle },
-      React17.createElement("span", { style: groupTitleStyle }, L.rowOtherTitle || "\u5916\u89C2\u4E0E\u8F85\u52A9\u8BBE\u7F6E"),
+      React18.createElement("span", { style: groupTitleStyle }, L.rowOtherTitle || "\u5916\u89C2\u4E0E\u8F85\u52A9\u8BBE\u7F6E"),
       // 消息预览大小：小（收为紧凑小方框，默认） vs 放大（图片放大呈现官方高度 + 大文件卡片）
-      React17.createElement(
+      React18.createElement(
         "div",
         { style: groupStyle },
-        React17.createElement("span", { style: labelStyle }, L.messagePreviewSize),
+        React18.createElement("span", { style: labelStyle }, L.messagePreviewSize),
         segmentedGroup([["small", L.previewSizeSmall], ["large", L.previewSizeLarge]], previewSize === "large" || previewSize === "standard" ? "large" : "small", function(v) {
           setPreviewSize(v);
           setSetting("dsh-easyrewrite:messagePreviewSize", v);
         }),
-        React17.createElement("span", { style: hintStyle }, previewSize === "large" || previewSize === "standard" ? L.previewSizeHintLarge : L.previewSizeHintSmall)
+        React18.createElement("span", { style: hintStyle }, previewSize === "large" || previewSize === "standard" ? L.previewSizeHintLarge : L.previewSizeHintSmall)
       )
     ),
     // —— 版本 ——
-    React17.createElement(
+    React18.createElement(
       "div",
       { style: sectionStyle },
-      React17.createElement("span", { style: groupTitleStyle }, L.sectionVersions),
+      React18.createElement("span", { style: groupTitleStyle }, L.sectionVersions),
+      switchRow(L.pagerTitle, pagerOn, function(v) {
+        setPagerOn(v);
+        setBool("dsh-easyrewrite:pagerEnabled", v);
+      }),
+      switchRow(L.pagerConfirm, pagerConfirmOn, function(v) {
+        setPagerConfirmOn(v);
+        setBool("dsh-easyrewrite:pagerConfirm", v);
+      }),
       // 影子仓储路径选择（嵌套 fork）
-      React17.createElement(
+      React18.createElement(
         "div",
         { style: groupStyle },
-        React17.createElement("span", { style: labelStyle }, L.vaultLocation),
+        React18.createElement("span", { style: labelStyle }, L.vaultLocation),
         segmentedGroup([["global", L.vaultGlobal], ["workspace", L.vaultWorkspace]], vaultLoc, function(v) {
           setVaultLoc(v);
           setSetting("dsh-easyrewrite:vaultStorageLocation", v);
@@ -8072,19 +8302,19 @@ function EasyRewriteSettingsCard(props) {
           }).catch(function() {
           });
         }),
-        React17.createElement("span", { style: hintStyle }, vaultLoc === "workspace" ? L.vaultWorkspaceHint : L.vaultGlobalHint)
+        React18.createElement("span", { style: hintStyle }, vaultLoc === "workspace" ? L.vaultWorkspaceHint : L.vaultGlobalHint)
       ),
       // 一键清理历史遗留僵尸归档（解决 DSH 0.2 侧边栏展开 100+ 废会话污染）
-      React17.createElement(
+      React18.createElement(
         "div",
         { style: rowStyle },
-        React17.createElement(
+        React18.createElement(
           "div",
           { style: { display: "flex", flexDirection: "column", gap: "2px", flex: "1", minWidth: "0" } },
-          React17.createElement("span", { style: labelStyle }, L.cleanLegacyArchived),
-          React17.createElement("span", { style: hintStyle }, cleanState.msg || L.cleanLegacyArchivedHint)
+          React18.createElement("span", { style: labelStyle }, L.cleanLegacyArchived),
+          React18.createElement("span", { style: hintStyle }, cleanState.msg || L.cleanLegacyArchivedHint)
         ),
-        React17.createElement("button", {
+        React18.createElement("button", {
           type: "button",
           disabled: cleanState.cleaning,
           style: {
@@ -8126,12 +8356,12 @@ function EasyRewriteSettingsCard(props) {
       ),
       // 版本历史（三层折叠）：总开关默认收起 → 按对话名的家族折叠项 → 条目显最后对话时间
       // （融合影子仓储 Vault 与官方 lineage 全量版本树）
-      React17.createElement(
+      React18.createElement(
         "div",
         { style: groupStyle },
         (function() {
           var families = allFamilies;
-          if (!families || families.length === 0) return React17.createElement("span", { style: hintStyle }, L.versionFamilyNone);
+          if (!families || families.length === 0) return React18.createElement("span", { style: hintStyle }, L.versionFamilyNone);
           var snap = null;
           try {
             snap = props.ctxSessions && props.ctxSessions.list && props.ctxSessions.list.getSnapshot ? props.ctxSessions.list.getSnapshot() : null;
@@ -8165,35 +8395,35 @@ function EasyRewriteSettingsCard(props) {
             return dd.getFullYear() + "-" + p2(dd.getMonth() + 1) + "-" + p2(dd.getDate()) + " " + p2(dd.getHours()) + ":" + p2(dd.getMinutes());
           };
           var chev = function(openState2) {
-            return React17.createElement("svg", {
+            return React18.createElement("svg", {
               width: "18",
               height: "18",
               viewBox: "0 0 24 24",
               style: { flex: "none", display: "block", color: "var(--dsw-alias-label-tertiary)", transform: openState2 ? "rotate(90deg)" : "rotate(0deg)", transition: "transform .12s" }
-            }, React17.createElement("path", { d: "M9 6l6 6-6 6", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }));
+            }, React18.createElement("path", { d: "M9 6l6 6-6 6", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }));
           };
           var rowHead = { display: "flex", alignItems: "center", gap: "6px", padding: "5px 4px", cursor: "pointer", borderRadius: "6px" };
           var hdrRow = { display: "flex", alignItems: "center", cursor: "pointer" };
-          return React17.createElement(
+          return React18.createElement(
             "div",
             { style: { display: "flex", flexDirection: "column", gap: "2px" } },
-            React17.createElement(
+            React18.createElement(
               "div",
               { style: hdrRow, onClick: function() {
                 setHistOpen(!histOpen);
               } },
               chev(histOpen),
-              React17.createElement("span", { style: { fontSize: "12px", color: "var(--dsw-alias-label-secondary)" } }, L.versionHistory),
-              React17.createElement("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-tertiary)", marginLeft: "auto" } }, families.length + " \u4E2A\u5BB6\u65CF")
+              React18.createElement("span", { style: { fontSize: "12px", color: "var(--dsw-alias-label-secondary)" } }, L.versionHistory),
+              React18.createElement("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-tertiary)", marginLeft: "auto" } }, families.length + " \u4E2A\u5BB6\u65CF")
             ),
             histOpen ? families.map(function(fam) {
               var fid = fam.sessionId || fam.rootId;
               var open2 = !!famOpenMap[fid];
               var vList = fam.versions || [];
-              return React17.createElement(
+              return React18.createElement(
                 "div",
                 { key: fid, style: { display: "flex", flexDirection: "column", gap: "2px", padding: "2px 0 2px 12px", borderTop: "1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.14))" } },
-                React17.createElement(
+                React18.createElement(
                   "div",
                   { style: hdrRow, onClick: function() {
                     var nm = {};
@@ -8202,9 +8432,9 @@ function EasyRewriteSettingsCard(props) {
                     setFamOpenMap(nm);
                   } },
                   chev(open2),
-                  React17.createElement("span", { style: { fontSize: "12px", color: "var(--dsw-alias-label-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "1" } }, famName(fam)),
-                  fam.isVault ? React17.createElement("span", { style: { fontSize: "10px", padding: "1px 6px", borderRadius: "4px", background: "var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.1))", color: "var(--dsw-alias-label-tertiary)", marginRight: "6px" } }, "Vault") : null,
-                  React17.createElement("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-tertiary)", flex: "none", marginLeft: "auto" } }, vList.length + " " + L.versionCount)
+                  React18.createElement("span", { style: { fontSize: "12px", color: "var(--dsw-alias-label-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "1" } }, famName(fam)),
+                  fam.isVault ? React18.createElement("span", { style: { fontSize: "10px", padding: "1px 6px", borderRadius: "4px", background: "var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.1))", color: "var(--dsw-alias-label-tertiary)", marginRight: "6px" } }, "Vault") : null,
+                  React18.createElement("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-tertiary)", flex: "none", marginLeft: "auto" } }, vList.length + " " + L.versionCount)
                 ),
                 open2 ? vList.map(function(ver, vi) {
                   var isVault = fam.isVault;
@@ -8212,13 +8442,13 @@ function EasyRewriteSettingsCard(props) {
                   var vStamp = isVault ? ver.createdAt || ver.updatedAt : metaOf(ver).updatedAt;
                   var isCur = isVault ? ver.isCurrent || vi === fam.currentVersionIndex : false;
                   var summary = isVault && ver.summary ? ver.summary : null;
-                  return React17.createElement(
+                  return React18.createElement(
                     "div",
                     { key: isVault ? ver.versionNumber : ver, style: rowHead },
-                    React17.createElement("span", { style: { fontSize: "11px", fontWeight: isCur ? "bold" : "normal", color: isCur ? "var(--dsw-alias-brand-primary, #4d6bfe)" : "var(--dsw-alias-label-tertiary)", fontVariantNumeric: "tabular-nums", flex: "none", width: "26px" } }, "v" + vNum),
-                    React17.createElement("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-tertiary)", fontVariantNumeric: "tabular-nums", flex: "none", width: "110px" } }, fmtStamp(vStamp)),
-                    summary ? React17.createElement("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "1", minWidth: "0" }, title: summary }, summary) : React17.createElement("span", { style: { flex: "1" } }),
-                    isCur ? React17.createElement("span", { style: { fontSize: "11px", padding: "2px 8px", borderRadius: "4px", background: "rgba(46,160,67,0.15)", color: "#2ea043", flex: "none" } }, "\u5F53\u524D") : React17.createElement("button", {
+                    React18.createElement("span", { style: { fontSize: "11px", fontWeight: isCur ? "bold" : "normal", color: isCur ? "var(--dsw-alias-brand-primary, #4d6bfe)" : "var(--dsw-alias-label-tertiary)", fontVariantNumeric: "tabular-nums", flex: "none", width: "26px" } }, "v" + vNum),
+                    React18.createElement("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-tertiary)", fontVariantNumeric: "tabular-nums", flex: "none", width: "110px" } }, fmtStamp(vStamp)),
+                    summary ? React18.createElement("span", { style: { fontSize: "11px", color: "var(--dsw-alias-label-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "1", minWidth: "0" }, title: summary }, summary) : React18.createElement("span", { style: { flex: "1" } }),
+                    isCur ? React18.createElement("span", { style: { fontSize: "11px", padding: "2px 8px", borderRadius: "4px", background: "rgba(46,160,67,0.15)", color: "#2ea043", flex: "none" } }, "\u5F53\u524D") : React18.createElement("button", {
                       type: "button",
                       style: { appearance: "none", border: "1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.3))", background: "transparent", color: "var(--dsw-alias-label-secondary)", borderRadius: "6px", padding: "2px 8px", fontSize: "12px", cursor: "pointer", fontFamily: "inherit", flex: "none" },
                       onClick: function(ev) {
@@ -8237,26 +8467,26 @@ function EasyRewriteSettingsCard(props) {
       )
     ),
     // —— 更新 ——
-    React17.createElement(
+    React18.createElement(
       "div",
       { style: sectionStyle },
-      React17.createElement("span", { style: groupTitleStyle }, L.sectionUpdate),
+      React18.createElement("span", { style: groupTitleStyle }, L.sectionUpdate),
       // 更新检查与执行（精简版：手动检查 + 每日检测可选 + 有新版提示）
-      React17.createElement(
+      React18.createElement(
         "div",
         { style: groupStyle },
-        React17.createElement("span", { style: labelStyle }, L.currentVersion + "\uFF1A" + (updateVer || "\u2026")),
+        React18.createElement("span", { style: labelStyle }, L.currentVersion + "\uFF1A" + (updateVer || "\u2026")),
         (function() {
           if (!dshVer) return null;
-          if (cmpDsh(dshVer, MIN_DSH_VERSION) < 0) return React17.createElement(
+          if (cmpDsh(dshVer, MIN_DSH_VERSION) < 0) return React18.createElement(
             "div",
             { key: "dsh-low", style: { display: "flex", flexDirection: "column", gap: "4px", padding: "6px 8px", background: "var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.1))", borderRadius: "8px" } },
-            React17.createElement("span", { style: { fontSize: "12px", lineHeight: "18px", color: "var(--dsw-alias-label-primary)" } }, L.dshLowWarning.replace("{cur}", dshVer).replace("{min}", MIN_DSH_VERSION)),
-            React17.createElement(
+            React18.createElement("span", { style: { fontSize: "12px", lineHeight: "18px", color: "var(--dsw-alias-label-primary)" } }, L.dshLowWarning.replace("{cur}", dshVer).replace("{min}", MIN_DSH_VERSION)),
+            React18.createElement(
               "div",
               { style: { display: "flex", alignItems: "center", gap: "6px" } },
-              React17.createElement("code", { style: { fontSize: "11px", color: "var(--dsw-alias-label-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "1" } }, "npm install -g @deepseek-ai/dsh@" + MIN_DSH_VERSION),
-              React17.createElement("button", { type: "button", style: { appearance: "none", border: "1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.3))", background: "transparent", color: "var(--dsw-alias-label-secondary)", borderRadius: "6px", padding: "2px 8px", fontSize: "11px", cursor: "pointer", fontFamily: "inherit", flex: "none" }, onClick: function() {
+              React18.createElement("code", { style: { fontSize: "11px", color: "var(--dsw-alias-label-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "1" } }, "npm install -g @deepseek-ai/dsh@" + MIN_DSH_VERSION),
+              React18.createElement("button", { type: "button", style: { appearance: "none", border: "1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.3))", background: "transparent", color: "var(--dsw-alias-label-secondary)", borderRadius: "6px", padding: "2px 8px", fontSize: "11px", cursor: "pointer", fontFamily: "inherit", flex: "none" }, onClick: function() {
                 try {
                   legacyCopy("npm install -g @deepseek-ai/dsh@" + MIN_DSH_VERSION);
                 } catch (eC1) {
@@ -8264,29 +8494,29 @@ function EasyRewriteSettingsCard(props) {
               } }, L.copyUpgradeCmd)
             )
           );
-          if (cmpDsh(MAX_TESTED_DSH_VERSION, dshVer) < 0) return React17.createElement("div", { key: "dsh-new", style: { padding: "6px 8px", fontSize: "12px", lineHeight: "18px", color: "var(--dsw-alias-label-secondary)", background: "var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.08))", borderRadius: "8px" } }, L.dshNewNotice.replace("{cur}", dshVer));
+          if (cmpDsh(MAX_TESTED_DSH_VERSION, dshVer) < 0) return React18.createElement("div", { key: "dsh-new", style: { padding: "6px 8px", fontSize: "12px", lineHeight: "18px", color: "var(--dsw-alias-label-secondary)", background: "var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.08))", borderRadius: "8px" } }, L.dshNewNotice.replace("{cur}", dshVer));
           return null;
         })(),
-        !remindClosed && !getBool("dsh-easyrewrite:autoCheckUpdate", false) ? React17.createElement(
+        !remindClosed && !getBool("dsh-easyrewrite:autoCheckUpdate", false) ? React18.createElement(
           "div",
           { key: "remind", style: { display: "flex", alignItems: "center", gap: "8px", padding: "6px 8px", background: "rgba(77,107,254,0.08)", borderRadius: "8px" } },
-          React17.createElement("span", { style: { fontSize: "12px", lineHeight: "18px", color: "var(--dsw-alias-label-primary)", flex: "1", minWidth: "0" } }, L.suggestAutoCheck),
-          React17.createElement("button", { type: "button", style: { appearance: "none", border: "none", background: "var(--dsw-static-deepseek-500, #4d6bfe)", color: "#ffffff", borderRadius: "6px", padding: "3px 10px", fontSize: "12px", cursor: "pointer", fontFamily: "inherit", flex: "none" }, onClick: function() {
+          React18.createElement("span", { style: { fontSize: "12px", lineHeight: "18px", color: "var(--dsw-alias-label-primary)", flex: "1", minWidth: "0" } }, L.suggestAutoCheck),
+          React18.createElement("button", { type: "button", style: { appearance: "none", border: "none", background: "var(--dsw-static-deepseek-500, #4d6bfe)", color: "#ffffff", borderRadius: "6px", padding: "3px 10px", fontSize: "12px", cursor: "pointer", fontFamily: "inherit", flex: "none" }, onClick: function() {
             setBool("dsh-easyrewrite:autoCheckUpdate", true);
             setBool("dsh-easyrewrite:autoCheckReminded", true);
             setAutoCheckOn(true);
             setRemindClosed(true);
           } }, L.enableNow),
-          React17.createElement("button", { type: "button", title: L.remindIgnore, style: { appearance: "none", border: "none", background: "var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.16))", color: "var(--dsw-alias-label-secondary)", borderRadius: "6px", padding: "3px 10px", fontSize: "12px", cursor: "pointer", fontFamily: "inherit", flex: "none" }, onClick: function() {
+          React18.createElement("button", { type: "button", title: L.remindIgnore, style: { appearance: "none", border: "none", background: "var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.16))", color: "var(--dsw-alias-label-secondary)", borderRadius: "6px", padding: "3px 10px", fontSize: "12px", cursor: "pointer", fontFamily: "inherit", flex: "none" }, onClick: function() {
             setBool("dsh-easyrewrite:autoCheckReminded", true);
             setRemindClosed(true);
           } }, L.remindIgnore)
         ) : null,
-        React17.createElement(
+        React18.createElement(
           "div",
           { style: rowStyle },
-          React17.createElement("span", { style: hintStyle, flex: "1" }, updateMsg || ""),
-          React17.createElement("button", {
+          React18.createElement("span", { style: hintStyle, flex: "1" }, updateMsg || ""),
+          React18.createElement("button", {
             type: "button",
             style: {
               appearance: "none",
@@ -8305,11 +8535,11 @@ function EasyRewriteSettingsCard(props) {
             }
           }, updateChecking ? L.checking : L.checkUpdate)
         ),
-        updateAvailableVer ? React17.createElement(
+        updateAvailableVer ? React18.createElement(
           "div",
           { style: rowStyle },
-          React17.createElement("span", { style: { fontSize: "12px", color: "var(--dsw-alias-brand-primary, #4d6bfe)", flex: "1" } }, L.newVersion.replace("{ver}", updateAvailableVer)),
-          React17.createElement("button", {
+          React18.createElement("span", { style: { fontSize: "12px", color: "var(--dsw-alias-brand-primary, #4d6bfe)", flex: "1" } }, L.newVersion.replace("{ver}", updateAvailableVer)),
+          React18.createElement("button", {
             type: "button",
             style: {
               appearance: "none",
@@ -8334,13 +8564,13 @@ function EasyRewriteSettingsCard(props) {
         })
       )
     ),
-    React17.createElement("span", { style: hintStyle }, L.instant)
+    React18.createElement("span", { style: hintStyle }, L.instant)
   );
   if (embedded) return props.view === "summary" ? L.subtitle : cardBody;
-  return React17.createElement(
+  return React18.createElement(
     "li",
     { style: Object.assign({}, cardStyle, open ? cardOpenStyle : null), "data-dsh-easyrewrite": "settings-card" },
-    React17.createElement(
+    React18.createElement(
       "button",
       {
         type: "button",
@@ -8351,16 +8581,16 @@ function EasyRewriteSettingsCard(props) {
           setOpen(!open);
         }
       },
-      React17.createElement(
+      React18.createElement(
         "span",
         { style: headTextStyle },
-        React17.createElement("span", { style: titleStyle }, L.title),
-        React17.createElement("span", { style: subStyle }, L.subtitle)
+        React18.createElement("span", { style: titleStyle }, L.title),
+        React18.createElement("span", { style: subStyle }, L.subtitle)
       ),
-      React17.createElement(
+      React18.createElement(
         "svg",
         { width: "18", height: "18", viewBox: "0 0 24 24", style: Object.assign({}, chevronStyle, open ? chevronOpenStyle : null) },
-        React17.createElement("path", { d: "M9 6l6 6-6 6", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" })
+        React18.createElement("path", { d: "M9 6l6 6-6 6", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" })
       )
     ),
     open ? cardBody : null
@@ -8368,7 +8598,7 @@ function EasyRewriteSettingsCard(props) {
 }
 
 // src/index.js
-function apply(ctx) {
+var apply = (ctx) => {
   ctx.effect(() => {
     const disposers = [];
     function safeRun(tag, fn) {
@@ -8392,12 +8622,12 @@ function apply(ctx) {
       if (ctx && ctx.locale) setLocaleService(ctx.locale);
       try {
         if (typeof ctx.locale === "object" && ctx.locale !== null && typeof ctx.locale.register === "function") {
-          ctx.locale.register(NS, {});
+          ctx.locale.register(NS, { zh: SETTINGS_I18N.zh, en: SETTINGS_I18N.en, ja: SETTINGS_I18N.ja });
         }
       } catch (e) {
       }
     });
-    log("info", "lifecycle", "client half active (v3.0.0 modular architecture)");
+    log("info", "lifecycle", "client half active (v" + CURRENT_VERSION + " modular architecture)");
     safeRun("auto-update", () => {
       initAutoUpdateCheck();
     });
@@ -8554,7 +8784,7 @@ function apply(ctx) {
       log("info", "lifecycle", "client half unloaded");
     };
   }, "dsh-easyrewrite: modular client bundle");
-}
+};
 var index_default = {
   name: "dsh-easyrewrite",
   inject: ["slots", "sessions", "workspaces", "conversation", "uiConversation", "locale", "modelDirectories"],

@@ -51,6 +51,11 @@ export declare class AcpRemoteGateway {
     private readonly pendingReconfiguration;
     private readonly archivingSessions;
     private readonly opencodeOperations;
+    private historyEpoch;
+    private minValidHistoryEpoch;
+    private readonly historyInvalidatedAt;
+    private readonly pendingHistoryReads;
+    private readonly backendHistoryChains;
     constructor(config: ResolvedAcpConfig, logger: SafeLogger, createAcp?: AcpFactory, restartDelaysMs?: readonly number[], terminalEnabled?: () => boolean, terminalSpawner?: RemoteTerminalSpawner | undefined);
     /** Only implemented adapters are advertised; registry entries never select an adapter by executable name. */
     enabledBackends(): string[];
@@ -72,6 +77,9 @@ export declare class AcpRemoteGateway {
     private captureCallScope;
     private callInternal;
     private runPromptInBackground;
+    private invalidateSessionHistory;
+    private isHistoryEpochValid;
+    private readCatalogHistory;
     private failSessionStreams;
     respond(connectionId: string, input: unknown): Promise<{
         resolved: true;

@@ -5,6 +5,28 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### chore(companion)：内置件更新一轮，7 件升到 npm latest（2026-11-22）
+
+按用户「开始更新」。判据仍是「身份 same 且远端更高」（`scan-plugin-channels.mjs --npm --json` 的
+`identityVerdict` + `actionable`），33 条在册件里命中 9 条，落盘 7 件：
+
+- `dsh-toolbox-ui` 1.10.1 → **1.13.0**（**本地 fork 撤销**）：上游自带同款修复，`lib/update-hint.js` 新增
+  `isHostBundledMcpManager(name)` = `startsWith("@deepseek-ai/")`，让位顺序为「self 比 name →
+  `isMcpManagerPluginName` → `isHostBundledMcpManager` → `entryIsActive(entry)`」；最后一道是上游多的：
+  **只对真正在跑的竞争条目让位**。回归锁 `unit-toolbox-yield-detector` 改为咬上游形态（8 例，含两条
+  摘闸反证 + fork 名不许混回来的哨兵）。附带拿到 24h 被动更新提示条。
+- `dsh-free-search` 0.9.39 → **0.9.70**（重放 `lib/cache.js` 的 `DSH_HOME` 落点：上游该文件 `DSH_HOME` 命中 0）
+- `dsh-context` 0.83.0 → **0.86.0**（`zod` 4.4.3 → `^4.6.6`，宿主顶层 4.6.7 满足；新增 7 份多语言 README）
+- `dsh-pocket` 2.12.0 → **2.13.1**（重放 hero 输入卡两条 `:has(textarea)` 并代锚，上游仍未吸收）
+- `dsh-easyrewrite` 3.0.1 → **3.1.0**、`dsh-plugin-shop` 0.9.3 → **0.9.4**、
+  `ds-harness-remote` 0.6.4 → **0.6.5**（内层树沿用，deps 未变）
+
+**`billion-context` 0.1.213 → 0.1.216 不换**：按 §4.7 的硬判据复算，`already-folded-echo`（#5961 的正向指纹）
+在两份产物中仍是 **0**（`already-folded` / `not at its minimum` 的命中数与 0.1.213 逐处相同），
+`build-info.commit` 从 `133f3525c` 换到 `6a641f378` 但新增的 issue 引用一直到 #6880 都不含 #5961——
+**版本号变了，修复没进来**。台账：inventory 新增 §4.8；§一 / §5.2 / README 两张表 / 同一节版本列同步，
+§5.2 的七个兼容实测数按 `plugin-module-table` 重放重算（`ds-harness-remote` 声明 9→10、peer 11→13 等）。
+
 ### chore(kernel)：随包内核换代 0.2.2-rc.3 → 0.2.2-rc.5（2026-11-19）
 
 上游 `next` 已到 **0.2.2-rc.5**（`latest` 仍停在 rc.1；rc.4 与 rc.5 两天内连发）。本次换代对我们是

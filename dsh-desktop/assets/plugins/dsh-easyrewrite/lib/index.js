@@ -9,7 +9,7 @@
  *
  * 依赖服务：webServer（路由）、sessions（fork/flush）。
  */
-import { appendFile, mkdir, writeFile, rm, readFile, readdir, copyFile, rename, open } from 'node:fs/promises';
+import { appendFile, mkdir, writeFile, rm, readFile, readdir, copyFile, rename, open, stat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { zstdDecompressSync, zstdCompressSync } from 'node:zlib';
 import { homedir } from 'node:os';
@@ -330,6 +330,39 @@ function withWorkspaceLock(fn) {
 // 归档迁移单飞锁：防止启动期自动迁移与手动触发并发重入导致双倍内存与磁盘 IO
 let _migrationInFlight = null;
 
+// 按 sessionId 隔离的影子仓储串行互斥锁：彻底杜绝多个组件并发请求 /vault/list、/vault/save、/vault/restore 时发生 manifest.json 读写竞态
+const _vaultLocks = new Map();
+function withVaultLock(sessionId, fn) {
+  const key = String(sessionId || '__global__');
+  const prev = _vaultLocks.get(key) || Promise.resolve();
+  const next = prev.then(() => fn(), () => fn());
+  const tracked = next.catch(() => {}).finally(() => {
+    if (_vaultLocks.get(key) === tracked) {
+      _vaultLocks.delete(key);
+    }
+  });
+  _vaultLocks.set(key, tracked);
+  return next;
+}
+
+// 原子写入 manifest.json（先写唯一临时文件再 rename，防止并发读取到半截 JSON 或空文件导致版本列表被清空）
+async function writeVaultManifestAtomic(vaultDir, manifest) {
+  await mkdir(vaultDir, { recursive: true });
+  const manifestPath = join(vaultDir, 'manifest.json');
+  const tmpPath = join(
+    vaultDir,
+    `manifest.json.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`
+  );
+  const payload = JSON.stringify(manifest, null, 2);
+  try {
+    await writeFile(tmpPath, payload, 'utf8');
+    await rename(tmpPath, manifestPath);
+  } catch (eRen) {
+    try { await rm(tmpPath, { force: true }); } catch (eRm) {}
+    await writeFile(manifestPath, payload, 'utf8');
+  }
+}
+
 // 切断 V8 SlicedString 对大体积母字符串的底层引用，防止从大 JSONL 中提取短字段（如 title/id）后整块母串无法 GC
 function flattenStr(str) {
   if (typeof str !== 'string' || str.length === 0) return str;
@@ -461,20 +494,19 @@ async function sha256File(filePath) {
 
 async function loadVaultManifest(vaultDir, sessionId, workspaceId) {
   const manifestPath = join(vaultDir, 'manifest.json');
+  let m = null;
+  let needsWrite = false;
   try {
     const raw = await readFile(manifestPath, 'utf8');
-    const m = JSON.parse(raw);
-    if (!m.title || m.title.startsWith('session-')) {
-      const derived = await resolveSessionTitle(sessionId, vaultDir);
-      if (derived && !derived.startsWith('session-')) {
-        m.title = derived;
-        try { await writeFile(manifestPath, JSON.stringify(m, null, 2), 'utf8'); } catch (eW) {}
-      }
-    }
-    return m;
+    m = JSON.parse(raw);
+    if (!m || typeof m !== 'object') m = null;
   } catch (e) {
+    m = null;
+  }
+
+  if (!m) {
     const defaultTitle = await resolveSessionTitle(sessionId, vaultDir).catch(() => '未命名对话');
-    return {
+    m = {
       version: 1,
       sessionId,
       workspaceId: workspaceId || null,
@@ -483,6 +515,62 @@ async function loadVaultManifest(vaultDir, sessionId, workspaceId) {
       versions: []
     };
   }
+  if (!Array.isArray(m.versions)) m.versions = [];
+
+  // 自愈恢复：扫描 vaultDir 下的所有 v*.zstd 物理快照文件，若存在未在 manifest.versions 登记的孤儿快照则自动找回，
+  // 杜绝因 manifest.json 损坏/截断导致历史版本丢失或被后续新建的 vN.zstd 覆盖！
+  try {
+    const entries = await readdir(vaultDir);
+    const knownFiles = new Set(m.versions.map(v => v && v.filename).filter(Boolean));
+    const orphanFiles = [];
+    for (const fname of entries) {
+      const match = /^v(\d+)\.zstd$/i.exec(fname);
+      if (match && !knownFiles.has(fname)) {
+        orphanFiles.push({ filename: fname, versionNumber: parseInt(match[1], 10) });
+      }
+    }
+    if (orphanFiles.length > 0) {
+      orphanFiles.sort((a, b) => a.versionNumber - b.versionNumber);
+      for (const orph of orphanFiles) {
+        const fPath = join(vaultDir, orph.filename);
+        const fHash = await sha256File(fPath);
+        if (!fHash) continue;
+        let mtime = Date.now();
+        try {
+          const st = await stat(fPath);
+          if (st && st.mtimeMs) mtime = Math.floor(st.mtimeMs);
+        } catch (eSt) {}
+        m.versions.push({
+          versionNumber: orph.versionNumber,
+          filename: orph.filename,
+          originalFilename: 'session.v4.jsonl.zstd',
+          sha256: fHash,
+          sourceSessionId: sessionId,
+          createdAt: mtime,
+          immutable: true,
+          summary: `恢复版本 ${orph.versionNumber}`
+        });
+      }
+      m.versions.sort((a, b) => (a.versionNumber || 0) - (b.versionNumber || 0));
+      if (typeof m.currentVersionIndex !== 'number' || m.currentVersionIndex < 0 || m.currentVersionIndex >= m.versions.length) {
+        m.currentVersionIndex = Math.max(0, m.versions.length - 1);
+      }
+      needsWrite = true;
+    }
+  } catch (eScan) {}
+
+  if (!m.title || m.title.startsWith('session-')) {
+    const derived = await resolveSessionTitle(sessionId, vaultDir).catch(() => null);
+    if (derived && !derived.startsWith('session-')) {
+      m.title = derived;
+      needsWrite = true;
+    }
+  }
+
+  if (needsWrite && m.versions.length > 0) {
+    try { await writeVaultManifestAtomic(vaultDir, m); } catch (eW) {}
+  }
+  return m;
 }
 
 /** 智能推导会话人类可读标题（优先官方 projection 缓存，次选 Zstd 会话物理/快照头部帧，兜底未命名） */
@@ -671,7 +759,7 @@ async function listAllVaultFamilies(ctx) {
   return families;
 }
 
-async function saveVaultSnapshotInternal(sessionId, workspaceId, summary, storageModeOverride = null, sourceFilePath = null, options = null) {
+async function _saveVaultSnapshotUnlocked(sessionId, workspaceId, summary, storageModeOverride = null, sourceFilePath = null, options = null) {
   let sourceFile = sourceFilePath;
   let effectiveWsId = workspaceId;
 
@@ -693,43 +781,120 @@ async function saveVaultSnapshotInternal(sessionId, workspaceId, summary, storag
   const currentHash = (options && typeof options.knownSha256 === 'string' && options.knownSha256)
     ? options.knownSha256
     : await sha256File(sourceFile);
+  if (!currentHash) {
+    return { ok: false, error: 'source-file-unreadable' };
+  }
   const origName = sourceFile.split(/[/\\]/).pop() || 'session.v4.jsonl.zstd';
   const sourceSid = (options && options.sourceSessionId) ? options.sourceSessionId : sessionId;
   const replaceIfSameSource = !!(options && options.replaceIfSameSource);
+  const forceNewVersion = !!(options && options.forceNewVersion);
+  const isImmutableSummary = typeof summary === 'string' && (
+    summary.includes('撤回前') ||
+    summary.includes('切换版本前') ||
+    summary.includes('覆盖前') ||
+    summary.includes('历史')
+  );
+  const markImmutable = !!(options && options.immutable) || isImmutableSummary;
 
-  const lastVer = manifest.versions[manifest.versions.length - 1];
-  if (lastVer && (lastVer.sha256 === currentHash || lastVer.restoredSha256 === currentHash)) {
-    lastVer.updatedAt = Date.now();
-    if (!lastVer.sourceSessionId) lastVer.sourceSessionId = sourceSid;
-    if (summary) lastVer.summary = summary;
-    manifest.currentVersionIndex = manifest.versions.length - 1;
-    await writeFile(join(vaultDir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
-    return { ok: true, manifest, unchanged: true, versionNumber: lastVer.versionNumber };
+  // 1. 全版本列表判重：检查当前文件内容是否已存在于任意版本快照中（含 restoredSha256），
+  // 杜绝处于历史版本 v1 时调用 save 把 v1 当作新版本重复写入或错误移动游标！
+  const existingIdx = manifest.versions.findIndex(
+    v => v && (v.sha256 === currentHash || v.restoredSha256 === currentHash)
+  );
+  if (existingIdx >= 0 && !forceNewVersion) {
+    const matchedVer = manifest.versions[existingIdx];
+    matchedVer.updatedAt = Date.now();
+    if (!matchedVer.sourceSessionId) matchedVer.sourceSessionId = sourceSid;
+    if (markImmutable) matchedVer.immutable = true;
+    if (summary && existingIdx === manifest.versions.length - 1 && !matchedVer.immutable) {
+      matchedVer.summary = summary;
+    }
+    if (!options || !options.preserveIndex) {
+      manifest.currentVersionIndex = existingIdx;
+    }
+    await writeVaultManifestAtomic(vaultDir, manifest);
+    return { ok: true, manifest, unchanged: true, versionNumber: matchedVer.versionNumber };
   }
 
-  // 若当前处于最新版本且该版本即由本会话自身产生（例如刚完成回答落盘或同会话继续追问），原位更新当前版本快照而不膨胀版本号
+  const lastVer = manifest.versions[manifest.versions.length - 1];
+
+  // 2. 原位同步（In-Place Sync）五重安全门禁：
+  // 仅当：(a) 显式允许 replaceIfSameSource 且非 forceNewVersion；
+  //       (b) 当前游标确实处于最新版本（currentVersionIndex === versions.length - 1，绝不在回退旧版本后覆盖末尾版本！）；
+  //       (c) 末尾版本未被封存（!lastVer.immutable，凡经历过版本切换/回退的快照一律不可变）；
+  //       (d) 来源会话一致（lastVer.sourceSessionId === sourceSid）；
+  //       (e) 字节数单调不减（sourceFile 大小 >= 原快照文件大小，防止任何截断/回滚的短内容覆盖长对话快照）；
+  // 才允许原位更新最后一个版本快照而不膨胀版本号。
   if (
     replaceIfSameSource &&
+    !forceNewVersion &&
     lastVer &&
+    !lastVer.immutable &&
     lastVer.sourceSessionId === sourceSid &&
     manifest.currentVersionIndex === manifest.versions.length - 1
   ) {
     const snapshotPath = join(vaultDir, lastVer.filename);
-    await copyFile(sourceFile, snapshotPath);
-    lastVer.sha256 = currentHash;
-    delete lastVer.restoredSha256;
-    lastVer.updatedAt = Date.now();
-    if (summary) lastVer.summary = summary;
-    await writeFile(join(vaultDir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
-    writeLog('info', 'vault', '已原位同步当前会话最新版本快照', { sessionId, versionNumber: lastVer.versionNumber, filename: lastVer.filename });
-    return { ok: true, manifest, versionNumber: lastVer.versionNumber, updatedInPlace: true };
+    let canReplaceInPlace = true;
+    try {
+      const [srcStat, oldStat] = await Promise.all([stat(sourceFile), stat(snapshotPath)]);
+      if (srcStat && oldStat && srcStat.size < oldStat.size) {
+        canReplaceInPlace = false;
+      }
+    } catch (eSt) {}
+
+    if (canReplaceInPlace) {
+      await copyFile(sourceFile, snapshotPath);
+      lastVer.sha256 = currentHash;
+      delete lastVer.restoredSha256;
+      lastVer.updatedAt = Date.now();
+      if (markImmutable) lastVer.immutable = true;
+      if (summary) lastVer.summary = summary;
+      await writeVaultManifestAtomic(vaultDir, manifest);
+      writeLog('info', 'vault', '已原位同步当前会话最新版本快照', { sessionId, versionNumber: lastVer.versionNumber, filename: lastVer.filename });
+      return { ok: true, manifest, versionNumber: lastVer.versionNumber, updatedInPlace: true };
+    }
   }
 
-  const newVerNum = manifest.versions.length + 1;
+  // 3. 新建独立版本快照：
+  // 若此前处于历史旧版本（currentVersionIndex < versions.length - 1），先将现有全部版本锁定为 immutable，防止任何后续操作覆盖历史分支
+  const wasOnHistoricalVersion = manifest.versions.length > 0 &&
+    typeof manifest.currentVersionIndex === 'number' &&
+    manifest.currentVersionIndex < manifest.versions.length - 1;
+  const baseVer = wasOnHistoricalVersion ? manifest.versions[manifest.currentVersionIndex] : null;
+  if (wasOnHistoricalVersion) {
+    for (const v of manifest.versions) {
+      if (v) v.immutable = true;
+    }
+  }
+
+  // 严格计算单调递增且磁盘尚不存在的全新版本号，100% 杜绝覆盖磁盘上任何已有的 v*.zstd
+  let maxVerNum = manifest.versions.length;
+  for (const v of manifest.versions) {
+    if (v && typeof v.versionNumber === 'number' && v.versionNumber > maxVerNum) {
+      maxVerNum = v.versionNumber;
+    }
+  }
+  try {
+    const entries = await readdir(vaultDir);
+    for (const fname of entries) {
+      const m = /^v(\d+)\.zstd$/i.exec(fname);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (n > maxVerNum) maxVerNum = n;
+      }
+    }
+  } catch (eDir) {}
+
+  const newVerNum = maxVerNum + 1;
   const snapshotFileName = `v${newVerNum}.zstd`;
   const snapshotPath = join(vaultDir, snapshotFileName);
 
   await copyFile(sourceFile, snapshotPath);
+
+  let effectiveSummary = summary || `版本 ${newVerNum}`;
+  if (wasOnHistoricalVersion && baseVer && (!summary || /^版本\s+\d+$/.test(summary))) {
+    effectiveSummary = `版本 ${newVerNum} (自 v${baseVer.versionNumber} 演进)`;
+  }
 
   const verItem = {
     versionNumber: newVerNum,
@@ -738,15 +903,22 @@ async function saveVaultSnapshotInternal(sessionId, workspaceId, summary, storag
     sha256: currentHash,
     sourceSessionId: sourceSid,
     createdAt: Date.now(),
-    summary: summary || `版本 ${newVerNum}`
+    ...(markImmutable ? { immutable: true } : {}),
+    summary: effectiveSummary
   };
 
   manifest.versions.push(verItem);
   manifest.currentVersionIndex = manifest.versions.length - 1;
-  await writeFile(join(vaultDir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
+  await writeVaultManifestAtomic(vaultDir, manifest);
 
   writeLog('info', 'vault', '已保存版本快照', { sessionId, versionNumber: newVerNum, snapshotFileName });
   return { ok: true, manifest, versionNumber: newVerNum, newSnapshot: true };
+}
+
+async function saveVaultSnapshotInternal(sessionId, workspaceId, summary, storageModeOverride = null, sourceFilePath = null, options = null) {
+  return withVaultLock(sessionId, () =>
+    _saveVaultSnapshotUnlocked(sessionId, workspaceId, summary, storageModeOverride, sourceFilePath, options)
+  );
 }
 
 // 运行时自检：Node 26+ 的 zstdDecompressSync 原生支持一次性解压全部拼接帧，而 Node 22/24 仅解压第 1 帧。
@@ -1047,60 +1219,72 @@ function releaseSessionHostMemory(ctx, sessionId) {
 }
 
 async function restoreVaultSnapshotInternal(ctx, sessionId, workspaceId, targetVersionNumber, storageModeOverride = null) {
-  const phys = await findSessionPhysical(sessionId, workspaceId);
-  if (!phys || !phys.sessionFile) {
-    return { ok: false, error: 'physical-session-not-found' };
-  }
+  return withVaultLock(sessionId, async () => {
+    const phys = await findSessionPhysical(sessionId, workspaceId);
+    if (!phys || !phys.sessionFile) {
+      return { ok: false, error: 'physical-session-not-found' };
+    }
 
-  const effectiveWsId = phys.workspaceId || workspaceId;
-  const cfg = await readVaultConfig();
-  const mode = storageModeOverride || cfg.storageMode;
-  const vaultDir = resolveVaultDir(sessionId, effectiveWsId, mode);
+    const effectiveWsId = phys.workspaceId || workspaceId;
+    const cfg = await readVaultConfig();
+    const mode = storageModeOverride || cfg.storageMode;
+    const vaultDir = resolveVaultDir(sessionId, effectiveWsId, mode);
 
-  const manifest = await loadVaultManifest(vaultDir, sessionId, effectiveWsId);
-  const targetVer = manifest.versions.find(v => v.versionNumber === targetVersionNumber);
-  if (!targetVer) {
-    return { ok: false, error: 'version-not-found' };
-  }
+    const manifest = await loadVaultManifest(vaultDir, sessionId, effectiveWsId);
+    const targetVer = manifest.versions.find(v => v.versionNumber === targetVersionNumber);
+    if (!targetVer) {
+      return { ok: false, error: 'version-not-found' };
+    }
 
-  const targetSnapshotPath = join(vaultDir, targetVer.filename);
-  let snapshotBuf = null;
-  try {
-    snapshotBuf = await readFile(targetSnapshotPath);
-  } catch (e) {
-    return { ok: false, error: 'snapshot-file-missing' };
-  }
+    const targetSnapshotPath = join(vaultDir, targetVer.filename);
+    let snapshotBuf = null;
+    try {
+      snapshotBuf = await readFile(targetSnapshotPath);
+    } catch (e) {
+      return { ok: false, error: 'snapshot-file-missing' };
+    }
 
-  // 安全保障：仅当当前活跃文件与现有所有版本快照（含 restoredSha256）均不同时，才自动追加保存最新快照
-  const currentDiskHash = await sha256File(phys.sessionFile);
-  const alreadyInVault = manifest.versions.some(
-    v => v.sha256 === currentDiskHash || v.restoredSha256 === currentDiskHash
-  );
-  if (!alreadyInVault) {
-    await saveVaultSnapshotInternal(sessionId, effectiveWsId, '覆盖前自动保存', mode);
-  }
+    // 安全保障 1：仅当当前活跃文件与现有所有版本快照（含 restoredSha256）均不同时，自动强制追加保存最新不可变快照
+    const currentDiskHash = await sha256File(phys.sessionFile);
+    const alreadyInVault = currentDiskHash && manifest.versions.some(
+      v => v && (v.sha256 === currentDiskHash || v.restoredSha256 === currentDiskHash)
+    );
+    if (currentDiskHash && !alreadyInVault) {
+      await _saveVaultSnapshotUnlocked(sessionId, effectiveWsId, '覆盖前自动保存', mode, phys.sessionFile, {
+        forceNewVersion: true,
+        immutable: true,
+        knownSha256: currentDiskHash
+      });
+    }
 
-  // 先清理幽灵队列并释放内存 Session 与内核文件写锁，再执行磁盘原子覆盖
-  cleanGhostInbox(ctx, sessionId);
-  releaseSessionHostMemory(ctx, sessionId);
+    // 先清理幽灵队列并释放内存 Session 与内核文件写锁，再执行磁盘原子覆盖
+    cleanGhostInbox(ctx, sessionId);
+    releaseSessionHostMemory(ctx, sessionId);
 
-  const updatedManifest = await loadVaultManifest(vaultDir, sessionId, effectiveWsId);
-  const targetIndex = updatedManifest.versions.findIndex(v => v.versionNumber === targetVersionNumber);
+    const updatedManifest = await loadVaultManifest(vaultDir, sessionId, effectiveWsId);
+    const targetIndex = updatedManifest.versions.findIndex(v => v.versionNumber === targetVersionNumber);
 
-  const finalBuf = rewriteZstdHeaderId(snapshotBuf, sessionId);
-  const restoredHash = createHash('sha256').update(finalBuf).digest('hex');
-  const tmpFile = phys.sessionFile + '.restore.tmp';
-  await writeFile(tmpFile, finalBuf);
-  await rename(tmpFile, phys.sessionFile);
+    const finalBuf = rewriteZstdHeaderId(snapshotBuf, sessionId);
+    const restoredHash = createHash('sha256').update(finalBuf).digest('hex');
+    const tmpFile = phys.sessionFile + '.restore.tmp';
+    await writeFile(tmpFile, finalBuf);
+    await rename(tmpFile, phys.sessionFile);
 
-  if (targetIndex >= 0 && updatedManifest.versions[targetIndex]) {
-    updatedManifest.versions[targetIndex].restoredSha256 = restoredHash;
-  }
-  updatedManifest.currentVersionIndex = targetIndex >= 0 ? targetIndex : 0;
-  await writeFile(join(vaultDir, 'manifest.json'), JSON.stringify(updatedManifest, null, 2), 'utf8');
+    // 安全保障 2：一旦发生版本切换/回滚，将当前版本列表中所有现有快照全部标记为 immutable（不可变封存），
+    // 彻底杜绝回滚到旧版本后，后续的原位同步把 v2 等更新的历史版本覆盖掉！
+    for (const v of updatedManifest.versions) {
+      if (v) v.immutable = true;
+    }
 
-  writeLog('info', 'vault', '已原样还原版本快照并重置 Host', { sessionId, targetVersionNumber });
-  return { ok: true, manifest: updatedManifest, targetVersionNumber };
+    if (targetIndex >= 0 && updatedManifest.versions[targetIndex]) {
+      updatedManifest.versions[targetIndex].restoredSha256 = restoredHash;
+    }
+    updatedManifest.currentVersionIndex = targetIndex >= 0 ? targetIndex : 0;
+    await writeVaultManifestAtomic(vaultDir, updatedManifest);
+
+    writeLog('info', 'vault', '已原样还原版本快照并重置 Host', { sessionId, targetVersionNumber });
+    return { ok: true, manifest: updatedManifest, targetVersionNumber };
+  });
 }
 
 /**
@@ -1282,15 +1466,19 @@ async function cloneVaultInternal(sourceSessionId, targetSessionId, workspaceId 
       }
     }
 
-    // 独立生成 targetManifest
+    // 独立生成 targetManifest（从父会话继承的所有历史快照均标记为不可变 immutable）
+    const clonedVersions = Array.isArray(sourceManifest.versions)
+      ? sourceManifest.versions.map(v => (v ? { ...v, immutable: true } : v))
+      : [];
     const targetManifest = {
       ...sourceManifest,
+      versions: clonedVersions,
       sessionId: targetSessionId,
       workspaceId: effectiveWsId || sourceManifest.workspaceId,
       clonedFrom: sourceSessionId,
       clonedAt: Date.now()
     };
-    await writeFile(join(targetVaultDir, 'manifest.json'), JSON.stringify(targetManifest, null, 2), 'utf8');
+    await writeVaultManifestAtomic(targetVaultDir, targetManifest);
 
     writeLog('info', 'vault', '成功将源会话影子仓储克隆给新 Fork 会话', {
       sourceSessionId,
@@ -1479,7 +1667,15 @@ async function migrateArchivedSessionsInternal(ctx, force = false) {
         continue;
       }
 
-      // 多版本撤回家族：确定在 workspace.sessionIds 中排在最前面的唯一当前活跃会话 activeMember
+      // 多版本撤回家族：若所有成员均处于侧边栏活跃展示中且均非 dsh-er- 遗留前缀（例如用户原生 Fork 或第三方侧边对话），严禁合并删除
+      const hasLegacyOrRetiredMember = members.some(
+        m => !activeSessionSet.has(m.id) || m.id.startsWith('dsh-er-')
+      );
+      if (!hasLegacyOrRetiredMember) {
+        continue;
+      }
+
+      // 确定在 workspace.sessionIds 中排在最前面的唯一当前活跃会话 activeMember
       const sortedByActive = [...members].sort((a, b) => {
         const rankA = sessionOrderRank.has(a.id) ? sessionOrderRank.get(a.id) : 999999;
         const rankB = sessionOrderRank.has(b.id) ? sessionOrderRank.get(b.id) : 999999;
@@ -1512,9 +1708,10 @@ async function migrateArchivedSessionsInternal(ctx, force = false) {
         );
       }
 
-      // 将除 activeMember 以外的所有历史旧版本移出主目录与侧边栏
+      // 仅将非活跃（已归档/残留）或明确带有 dsh-er- 前缀的历史旧版本移出主目录与侧边栏，严禁删除活跃原生 Fork
       for (const verMember of members) {
         if (verMember.id === activeMember.id) continue;
+        if (activeSessionSet.has(verMember.id) && !verMember.id.startsWith('dsh-er-')) continue;
         removedSessionIds.add(verMember.id);
         migratedCount++;
         releaseSessionHostMemory(ctx, verMember.id);
@@ -1636,6 +1833,9 @@ export const __test = {
   readVaultConfig,
   writeVaultConfig,
   resolveVaultDir,
+  withVaultLock,
+  writeVaultManifestAtomic,
+  loadVaultManifest,
   findSessionPhysical,
   readFileSlice,
   decompressZstdFrames,
@@ -1651,19 +1851,34 @@ export const __test = {
   resolveSessionTitle
 };
 
-export function apply(ctx) {
+// 注意：必须使用箭头函数（无 .prototype），避免 Cordis `isConstructor(apply)` 误判为类构造函数而丢弃卸载返回值
+export const apply = (ctx) => {
   writeLog('info', 'host', 'apply: 路由注册开始');
-  try {
-    if (ctx.settings && typeof ctx.settings.register === 'function') {
-      const dummySchema = (x) => x ?? {};
-      dummySchema.toJSON = () => ({ type: 'object' });
-      ctx.settings.register(settingsNamespace('dsh-easyrewrite'), dummySchema);
-      writeLog('info', 'host', 'settings namespace 已注册（插件配置卡片可用）');
-    }
-  } catch (err) {
-    writeLog('warn', 'host', 'settings namespace 注册失败（不影响核心功能）', { err: String(err?.message ?? err) });
-  }
   const disposers = [];
+  let disposed = false;
+  const cleanup = () => {
+    if (disposed) return;
+    disposed = true;
+    for (let i = disposers.length - 1; i >= 0; i -= 1) {
+      try { disposers[i](); } catch (e) { /* ignore */ }
+    }
+    disposers.length = 0;
+    writeLog('info', 'host', 'apply: 已卸载');
+  };
+
+  const registerAll = () => {
+    try {
+      try {
+        if (ctx.settings && typeof ctx.settings.register === 'function') {
+          const dummySchema = (x) => x ?? {};
+          dummySchema.toJSON = () => ({ type: 'object' });
+          const settingsDisposer = ctx.settings.register(settingsNamespace('dsh-easyrewrite'), dummySchema);
+          if (typeof settingsDisposer === 'function') disposers.push(settingsDisposer);
+          writeLog('info', 'host', 'settings namespace 已注册（插件配置卡片可用）');
+        }
+      } catch (err) {
+        writeLog('warn', 'host', 'settings namespace 注册失败（不影响核心功能）', { err: String(err?.message ?? err) });
+      }
 
   // 自动安全迁移：新版本首次启动自动将历史撤回归档安全转化为影子仓储新模式（确保数据不丢失）
   migrateArchivedSessionsInternal(ctx, false).catch((err) => {
@@ -1998,35 +2213,50 @@ export function apply(ctx) {
         const phys = await findSessionPhysical(sessionId, workspaceId);
         const effectiveWsId = phys?.workspaceId || workspaceId;
         const vaultDir = resolveVaultDir(sessionId, effectiveWsId, mode);
-        let manifest = await loadVaultManifest(vaultDir, sessionId, effectiveWsId);
 
-        // 若该会话已存在影子仓储历史版本（>= 1），且当前磁盘会话文件产生了尚未登记的新内容，自动将其同步为最新版本快照
-        if (manifest.versions.length >= 1 && phys && phys.sessionFile) {
-          let diskHash = await sha256File(phys.sessionFile);
-          if (diskHash) {
-            const matchedIdx = manifest.versions.findIndex(
-              v => v.sha256 === diskHash || v.restoredSha256 === diskHash
-            );
-            if (matchedIdx === -1) {
-              // 等待可能正在异步落盘的 turn/end 帧完成（最多重试 2 次，每次 100ms），仅读取尾部切片检查闭合，避免全量解压大文件
-              for (let waitAttempt = 0; waitAttempt < 2; waitAttempt++) {
-                const closed = await isLastTurnClosedInZstdFile(phys.sessionFile);
-                if (closed) break;
-                await new Promise(r => setTimeout(r, 100));
-                diskHash = await sha256File(phys.sessionFile);
-              }
-              const saved = await saveVaultSnapshotInternal(
-                sessionId,
-                effectiveWsId,
-                `版本 ${manifest.versions.length + 1}`,
-                mode,
-                phys.sessionFile,
-                { sourceSessionId: sessionId, replaceIfSameSource: true, knownSha256: diskHash }
-              );
-              if (saved && saved.manifest) manifest = saved.manifest;
+        // 先在锁外等待可能正在异步落盘的 turn/end 帧闭合（最多 200ms），避免持有互斥锁期间阻塞并发操作
+        const preManifest = await loadVaultManifest(vaultDir, sessionId, effectiveWsId);
+        if (preManifest.versions.length >= 1 && phys && phys.sessionFile) {
+          const preHash = await sha256File(phys.sessionFile);
+          const preMatched = preHash && preManifest.versions.some(
+            v => v && (v.sha256 === preHash || v.restoredSha256 === preHash)
+          );
+          if (preHash && !preMatched) {
+            for (let waitAttempt = 0; waitAttempt < 2; waitAttempt++) {
+              const closed = await isLastTurnClosedInZstdFile(phys.sessionFile);
+              if (closed) break;
+              await new Promise(r => setTimeout(r, 100));
             }
           }
         }
+
+        // 在 sessionId 互斥锁内原子检查磁盘 hash、自动原位/新增快照同步及游标修正，避免与 /save 或 /restore 交错写坏 manifest
+        const manifest = await withVaultLock(sessionId, async () => {
+          let curManifest = await loadVaultManifest(vaultDir, sessionId, effectiveWsId);
+          if (curManifest.versions.length >= 1 && phys && phys.sessionFile) {
+            const diskHash = await sha256File(phys.sessionFile);
+            if (diskHash) {
+              const matchedIdx = curManifest.versions.findIndex(
+                v => v && (v.sha256 === diskHash || v.restoredSha256 === diskHash)
+              );
+              if (matchedIdx === -1) {
+                const saved = await _saveVaultSnapshotUnlocked(
+                  sessionId,
+                  effectiveWsId,
+                  null,
+                  mode,
+                  phys.sessionFile,
+                  { sourceSessionId: sessionId, replaceIfSameSource: true, knownSha256: diskHash }
+                );
+                if (saved && saved.manifest) curManifest = saved.manifest;
+              } else if (curManifest.currentVersionIndex !== matchedIdx) {
+                curManifest.currentVersionIndex = matchedIdx;
+                await writeVaultManifestAtomic(vaultDir, curManifest);
+              }
+            }
+          }
+          return curManifest;
+        });
 
         sendJson(res, 200, { ok: true, manifest });
       } catch (err) {
@@ -2197,9 +2427,18 @@ export function apply(ctx) {
     }
   }));
 
-  writeLog('info', 'host', 'apply: 路由注册完成');
-  return () => {
-    for (const d of disposers) { try { d(); } catch (e) { /* ignore */ } }
-    writeLog('info', 'host', 'apply: 已卸载');
+      writeLog('info', 'host', 'apply: 路由注册完成');
+      return cleanup;
+    } catch (err) {
+      cleanup();
+      throw err;
+    }
   };
-}
+
+  if (typeof ctx?.effect === 'function') {
+    ctx.effect(registerAll, 'dsh-easyrewrite: host routes & lifecycle');
+  } else {
+    registerAll();
+  }
+  return cleanup;
+};

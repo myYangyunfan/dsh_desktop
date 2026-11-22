@@ -1,5 +1,5 @@
 // Degoog self-hosted engine.
-import { uniqueSources, fetchHtmlWithRetry, stripTags, decodeEntities, approximateTimeRange, SEARXNG_INSTANCES, SEARXNG_TIME, ANYSEARCH_URL, EXA_MCP_URL, extractDdgUrl, MARKET_TO_LANG, LANG_PROFILES, BING_URL, DDG_HTML_URL, DDG_LITE_URL, activeAcceptLanguage, USER_AGENT, searchLanguage, configLanguage, activeOutputLanguage } from "./shared.js";
+import { uniqueSources, fetchHtmlWithRetry, stripTags, decodeEntities, approximateTimeRange, SEARXNG_INSTANCES, SEARXNG_TIME, ANYSEARCH_URL, EXA_MCP_URL, extractDdgUrl, MARKET_TO_LANG, LANG_PROFILES, BING_URL, DDG_HTML_URL, DDG_LITE_URL, activeAcceptLanguage, USER_AGENT, searchLanguage, configLanguage, activeOutputLanguage, looksRelevant } from "./shared.js";
 
 const DEGOOG_TIME = { day: "day", week: "week", month: "month", year: "year" };
 
@@ -56,7 +56,14 @@ export async function searchDegoog(query, maxResults, options, signal) {
           ...(row.title ? { title: String(row.title) } : {}),
           ...(row.snippet ?? row.content ? { snippet: String(row.snippet ?? row.content) } : {}),
         }));
-      if (sources.length > 0) return { sources: uniqueSources(sources, maxResults ?? 10), truncated: false };
+      if (sources.length > 0) {
+        const unique = uniqueSources(sources, maxResults ?? 10);
+        if (!looksRelevant(query, unique)) {
+          errors.push(`${base}: irrelevant results`);
+          continue;
+        }
+        return { sources: unique, truncated: false };
+      }
       errors.push(`${base}: 0 results`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

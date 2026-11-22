@@ -16,7 +16,7 @@ Node 逻辑仍是活代码（Tauri sidecar 直接复用，零重写）。主平�
 | 目录 | 说明 |
 | --- | --- |
 | `dsh-tauri/` | 桌面壳主线：`contracts/`（六份契约）、`src-tauri/`（Rust 工作区）、`sidecar/`（Node 薄封装）、`ui/`（frontendDist 占位页）、`dlls/`（D3DCOMPILER_47.dll）、`pp/`（打包暂存，gitignored）、`ta13-soak/`（Rust soak 压测）、`scripts/`（stage-payload / stage-plugin-gate / smoke-installed）、`docs/` |
-| `dsh-desktop/` | 内核侧 Node 逻辑：构建期补丁、自愈（根级 boot 链脚本 `watchdog.js` / `*-heal.js` 等）、插件同步、余额链、`docs/`、`assets/plugins/`（**随安装包分发**——v1.0.0 内置线，2026-10-08 裁定；内置伴随插件在册 **33** 个（v1.0.0 由 39 精简、2026-10-07 移除 11 个，2026-10-11 增自研 `dsh-builtin-manager` 内置插件管理页，2026-10-16 增自研 `dsh-goal-completion` 目标收尾标签页，2026-10-17 随内核 0.2.1 换代退役 `dsh-reasoning-effort`，2026-11-08 按用户要求退役 `dsh-quest-ui` / `dsh-auto-compact` / `dsh-zcode-migrate` 三件，2026-11-09 按用户要求新增 `dsh-context` 与 `ds-harness-remote` 两件，同日按用户要求把 8 件内置件升到 npm latest：shop 0.9.3 / toolbox-ui 1.10.1 / context 0.83.0 / billion-context-dsh 0.2.27 / free-search 0.9.39 / pocket 2.12.0 / easyrewrite 3.0.1 / harness-remote 0.6.4；同日再按用户要求把上下文压缩件整体换成上游统一版 `billion-context` 0.1.213——旧 `billion-context-dsh` 0.2.27 退役，理由见「已知坑」里 preset 隔离那条）；随包 agent 预设子系统已整体拆除）、`vendor/`（node/npm 运行时 + `dsh-kernel/` pin 的离线内核 tgz，后者**必须入库**） |
+| `dsh-desktop/` | 内核侧 Node 逻辑：构建期补丁、自愈（根级 boot 链脚本 `watchdog.js` / `*-heal.js` 等）、插件同步、余额链、`docs/`、`assets/plugins/`（**随安装包分发**——v1.0.0 内置线，2026-10-08 裁定；内置伴随插件在册 **33** 个（v1.0.0 由 39 精简、2026-10-07 移除 11 个，2026-10-11 增自研 `dsh-builtin-manager` 内置插件管理页，2026-10-16 增自研 `dsh-goal-completion` 目标收尾标签页，2026-10-17 随内核 0.2.1 换代退役 `dsh-reasoning-effort`，2026-11-08 按用户要求退役 `dsh-quest-ui` / `dsh-auto-compact` / `dsh-zcode-migrate` 三件，2026-11-09 按用户要求新增 `dsh-context` 与 `ds-harness-remote` 两件，同日按用户要求把 8 件内置件升到 npm latest：shop 0.9.3 / toolbox-ui 1.10.1 / context 0.83.0 / billion-context-dsh 0.2.27 / free-search 0.9.39 / pocket 2.12.0 / easyrewrite 3.0.1 / harness-remote 0.6.4；同日再按用户要求把上下文压缩件整体换成上游统一版 `billion-context` 0.1.213——旧 `billion-context-dsh` 0.2.27 退役，理由见「已知坑」里 preset 隔离那条；2026-11-22 再按用户要求更新一轮 7 件：toolbox-ui 1.13.0（上游自带让位修复，本地 fork 撤销）/ free-search 0.9.70 / context 0.86.0 / pocket 2.13.1 / easyrewrite 3.1.0 / shop 0.9.4 / harness-remote 0.6.5，同轮复核 `billion-context` 0.1.216 仍不含 #5961 修复、维持 0.1.213）；随包 agent 预设子系统已整体拆除）、`vendor/`（node/npm 运行时 + `dsh-kernel/` pin 的离线内核 tgz，后者**必须入库**） |
 | `dsh-desktop/scripts/test/` | 全部 Node 测试（202 个 `*.test.js/.mjs`，另有 `fixtures/`、`ta16-snapshots/`、mock server），单测唯一去处 |
 | `.github/workflows/` | `ci.yml`（PR 门禁）、`tauri-release.yml`（tag 发版，唯一发布入口）、`release.yml`（退役 Electron 线，全部 `if: false`） |
 
@@ -343,7 +343,7 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   ② 兼容性不报错，意外以日志收场（`panics.log`）不以崩溃收场；③ 用户数据不动。
 - 文档里的测试基线数字常滞后。**现值（2026-11-19 实测，随包内核 0.2.2-rc.5；补丁层净数 **60****：
   `scripts/test/` **206 个测试文件**（`*.test.js` 205 + `*.test.mjs` 1），
-  `npm test` = **2263 例 / pass 2254 / skip 9 / fail 0**（11-19「内核 0.2.2-rc.5 换代」批实跑）；
+  `npm test` = **2264 例 / pass 2255 / skip 9 / fail 0**（11-22「内置件更新一轮」批实跑；11-19 的 rc.5 换代批为 2263 / 2254）；
   pass/skip 分界随本机材料与网络浮动（11-12「rc.2 换代」批为 2238 / pass 2229 / skip 9 / fail 0；
   Rust 同批：`dsh-tauri-app --lib` **236 passed / 0 failed / 1 ignored**、`bridge` **30 passed / 0 failed**），
   skip 都是环境缺料（pristine 缺 codex/pi-ai、openclaw 兄弟目录不在盘、本机无 dsh-pack 克隆、真实网络、
@@ -514,8 +514,10 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   设计与踩坑见 `dsh-desktop/docs/better-sidebar-kernel-integration.md`。
 - **`dsh-toolbox-ui` 的「让位检测」曾把内核运行时包 `@deepseek-ai/dsh-mcp-manager` 误判成竞争面板（2026-11-18）**：
   判据只有「名含 mcp+manager」，而它纯运行时、无 `./client`（内核 78 个 `dsh-client-ui-*` 无 mcp 项），面板停用后
-  **无替代界面**。修法：`findConflictingManager(entries, self)` 加 `@deepseek-ai/*` scope 排除，锁 `unit-toolbox-yield-detector`；
-  vendored 包（`Imzl-zl/dsh-toolbox-ui` 1.10.1）的本地改动，换版要重放。
+  **无替代界面**。fork 期的修法是 `findConflictingManager(entries, self)` 加 `@deepseek-ai/*` scope 排除；
+  **2026-11-22 换版到 `Imzl-zl/dsh-toolbox-ui` 1.13.0 后本地 fork 已撤**——上游自带同一修复
+  （`lib/update-hint.js` 的 `isHostBundledMcpManager` + 只对在跑条目让位的 `entryIsActive`），
+  `unit-toolbox-yield-detector` 改咬上游形态（8 例，含两条摘闸反证 +「fork 名不许混回来」哨兵）。
 - **插件自带测试的夹具必须按宿主「真形状」造，否则用例在为已下线的契约作证**：2026-10-08 实测案例是
   `assets/plugins/dsh-synapse` 的 `test/replay-watermark.test.js` 用 `makeSession()` 造 `{ id, header, events }`，
   而 pin 的 rc.2 上 `Session.prototype` 已经没有 `events`（只有 `snapshotEvents`/`ownEvents`；0.2.1-rc.1 复核仍如此）——10 个测试文件

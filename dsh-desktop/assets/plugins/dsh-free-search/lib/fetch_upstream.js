@@ -3,6 +3,7 @@
 // 注意：不用全局 fetch(undici) 访问 api.crawl4ai.com——其 Pingora 网关会空 401 拦截 undici 特征。
 
 import https from "node:https";
+import { agentForUrl } from "./proxy.js";
 
 // ---------- 受控替身注入点（测试基建；默认全 null = 生产直连真实服务，行为不变） ----------
 export const CONTROLLED_STUBS = { exa: null, firecrawl: null, crawl4ai: null };
@@ -30,8 +31,10 @@ export function htmlToText(html) {
 export function httpsJson(method, url, { headers = {}, body, timeoutMs = 30000, signal } = {}) {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
+    // 云端服务同样可能只能经代理到达（企业出网/受限网络）：沿用环境里的代理配置。
+    const agent = agentForUrl(url);
     const req = https.request(
-      { hostname: u.hostname, port: u.port || 443, path: u.pathname + u.search, method, headers, timeout: timeoutMs },
+      { hostname: u.hostname, port: u.port || 443, path: u.pathname + u.search, method, headers, timeout: timeoutMs, ...(agent ? { agent } : {}) },
       (res) => {
         const chunks = [];
         res.on("data", (c) => chunks.push(c));

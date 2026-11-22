@@ -15,7 +15,7 @@ export function createRemoteProgressView(React) {
             className: 'dshRemoteProgress',
             role: 'status',
             'aria-live': 'polite',
-        }, React.createElement('div', { className: 'dshRemoteProgressHeader' }, React.createElement('strong', null, props.t(progress.label)), React.createElement('span', null, `${percent}%`)), React.createElement('p', null, detail), React.createElement('div', {
+        }, React.createElement('div', { className: 'dshRemoteProgressHeader' }, React.createElement('strong', null, props.t(progress.label)), React.createElement('span', { className: 'dshRemoteProgressStatus' }, React.createElement('span', { className: 'dshRemoteLoginSpinner', 'aria-hidden': true }), `${percent}%`)), React.createElement('p', null, detail), React.createElement('div', {
             className: 'dshRemoteProgressBar',
             role: 'progressbar',
             'aria-valuemin': 0,

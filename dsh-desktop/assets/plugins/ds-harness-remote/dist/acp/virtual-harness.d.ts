@@ -1,4 +1,5 @@
 import { AgentAcpClient } from '@dsh-remote/client-core';
+import { AcpSessionHistoryCache } from '../session-history-cache.js';
 import type { RemoteTypertGatewayTarget, TypertGatewayRequest, TypertRpcResult } from '../typert-gateway-contract.js';
 import type { AcpCatalogBackend, AcpVirtualWorkspaceView } from './virtual-catalog.js';
 import type { AcpClientLike } from './virtual-contract.js';
@@ -18,6 +19,7 @@ export declare class AcpVirtualHarness implements RemoteTypertGatewayTarget {
      * see `method-not-found` for every global surface and can fail its render.
      */
     private readonly hostCarrier?;
+    private readonly historyCache;
     private readonly live;
     private readonly events;
     private readonly titles;
@@ -30,6 +32,8 @@ export declare class AcpVirtualHarness implements RemoteTypertGatewayTarget {
     private readonly pendingApprovals;
     private readonly pendingHistory;
     private selectedWorkspaceId?;
+    private lastOpenedSessionId?;
+    private readonly openedWorkspaceSessions;
     private readonly selectedModels;
     private readonly selectedPermissions;
     private commandSeq;
@@ -48,16 +52,19 @@ export declare class AcpVirtualHarness implements RemoteTypertGatewayTarget {
      * serves them from the Host; without this fallback the native Client would
      * see `method-not-found` for every global surface and can fail its render.
      */
-    hostCarrier?: RemoteTypertGatewayTarget | undefined);
+    hostCarrier?: RemoteTypertGatewayTarget | undefined, historyCache?: AcpSessionHistoryCache);
     static remote(core: ConstructorParameters<typeof AgentAcpClient>[0], host: {
         deviceId: string;
         name: string;
-    }, backend?: AcpCatalogBackend, capabilities?: readonly string[], hostCarrier?: RemoteTypertGatewayTarget): AcpVirtualHarness;
+    }, backend?: AcpCatalogBackend, capabilities?: readonly string[], hostCarrier?: RemoteTypertGatewayTarget, historyCache?: AcpSessionHistoryCache): AcpVirtualHarness;
+    get openedSessionId(): string | undefined;
+    get openedSessions(): ReadonlyMap<string, string>;
+    private rememberOpenedSession;
     workspaces(): Promise<AcpVirtualWorkspaceView[]>;
     private backendLabel;
     selectWorkspace(workspaceId: string): Promise<AcpVirtualWorkspaceView>;
     selectOrCreateWorkspace(path: string): Promise<AcpVirtualWorkspaceView>;
-    preferredSessionId(): Promise<string | undefined>;
+    preferredSessionId(preferredSessionId?: string | undefined): Promise<string | undefined>;
     invoke(request: TypertGatewayRequest): Promise<unknown>;
     dispatch(endpoint: string, payload: unknown, signal: AbortSignal): Promise<TypertRpcResult>;
     open(endpoint: string, payload: unknown, signal: AbortSignal): Promise<AsyncIterable<unknown>>;
@@ -77,6 +84,8 @@ export declare class AcpVirtualHarness implements RemoteTypertGatewayTarget {
     private attachment;
     private hydrateSession;
     private hydrateSessionOnce;
+    private restoreCachedSession;
+    private syncSessionCache;
     private sessionHistory;
     private sessionProjections;
     private sessionPage;

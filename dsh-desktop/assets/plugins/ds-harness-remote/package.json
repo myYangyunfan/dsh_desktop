@@ -1,6 +1,6 @@
 {
   "name": "ds-harness-remote",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "description": "P2P-based, end-to-end encrypted remote access to DeepSeek Harness, CodeX, Claude Code, Pi, and other workspaces from web and mobile clients.",
   "keywords": [
     "deepseek",
@@ -64,6 +64,7 @@
     "client": {
       "inject": [
         "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-file-upload",
         "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-ui-sidebar",
         "@deepseek-ai/dsh-client-ui-slots",

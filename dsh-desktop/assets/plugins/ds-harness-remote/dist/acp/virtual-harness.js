@@ -1,5 +1,6 @@
 import { AgentAcpClient } from '@dsh-remote/client-core';
 import { ACP_TOOL_CALL_ENDPOINTS, ACP_TOOL_STREAM_ENDPOINTS } from '@dsh-remote/protocol';
+import { AcpSessionHistoryCache } from '../session-history-cache.js';
 import { acpImageContent, acpImageLimits, parseAcpImage } from './image-content.js';
 import { acpBackendLabel, createAcpWorkspaceView, modelCatalog, nativeWorkspace, recreateWorkspaceFromId } from './virtual-catalog.js';
 import { acpPermissionsProjection, array, AsyncValueQueue, business, carrierArgs, extractPromptText, extractSessionId, fail, failFrom, failure, isAcpPermissionPreset, isRecord, nativeAcpId, optionalInteger, optionalPositiveInteger, record, requestArg, requiredString, sessionPrefix, string, success, } from './virtual-contract.js';
@@ -16,6 +17,7 @@ export class AcpVirtualHarness {
     host;
     backend;
     hostCarrier;
+    historyCache;
     live;
     events;
     titles;
@@ -28,6 +30,8 @@ export class AcpVirtualHarness {
     pendingApprovals = new Map();
     pendingHistory = new Map();
     selectedWorkspaceId;
+    lastOpenedSessionId;
+    openedWorkspaceSessions = new Map();
     selectedModels = new Map();
     selectedPermissions = new Map();
     commandSeq = 0;
@@ -43,11 +47,12 @@ export class AcpVirtualHarness {
      * serves them from the Host; without this fallback the native Client would
      * see `method-not-found` for every global surface and can fail its render.
      */
-    hostCarrier) {
+    hostCarrier, historyCache = new AcpSessionHistoryCache()) {
         this.client = client;
         this.host = host;
         this.backend = backend;
         this.hostCarrier = hostCarrier;
+        this.historyCache = historyCache;
         const owner = this;
         this.live = new AcpLiveProjection({
             ensureSessionRegistered: (...args) => owner.ensureSessionRegistered(...args),
@@ -70,6 +75,8 @@ export class AcpVirtualHarness {
             modelSelection: (...args) => owner.modelSelection(...args),
             permissionsProjection: (...args) => owner.permissionsProjection(...args),
             permissionSelection: (...args) => owner.permissionSelection(...args),
+            rememberOpenedSession: sessionId => owner.rememberOpenedSession(sessionId),
+            syncSessionCache: session => owner.syncSessionCache(session),
         });
         this.events = new AcpEventCarrier({
             get archivedSessionIds() { return owner.archivedSessionIds; },
@@ -92,8 +99,28 @@ export class AcpVirtualHarness {
             this.applyArchived(`${sessionPrefix(this.backend)}${data.sessionId}`);
         });
     }
-    static remote(core, host, backend = "cursor", capabilities = [], hostCarrier) {
-        return new AcpVirtualHarness(new AgentAcpClient(core, capabilities), host, backend, hostCarrier);
+    static remote(core, host, backend = "cursor", capabilities = [], hostCarrier, historyCache) {
+        return new AcpVirtualHarness(new AgentAcpClient(core, capabilities), host, backend, hostCarrier, historyCache);
+    }
+    get openedSessionId() {
+        return this.lastOpenedSessionId;
+    }
+    get openedSessions() {
+        return new Map(this.openedWorkspaceSessions);
+    }
+    rememberOpenedSession(sessionId) {
+        if (this.closed)
+            return;
+        this.lastOpenedSessionId = sessionId;
+        for (const workspace of this.workspaceById.values()) {
+            if (!workspace.sessionIds.includes(sessionId))
+                continue;
+            this.openedWorkspaceSessions.delete(workspace.workspaceId);
+            this.openedWorkspaceSessions.set(workspace.workspaceId, sessionId);
+            if (this.openedWorkspaceSessions.size > 64) {
+                this.openedWorkspaceSessions.delete(this.openedWorkspaceSessions.keys().next().value);
+            }
+        }
     }
     async workspaces() {
         for (const workspace of this.workspaceById.values())
@@ -131,11 +158,14 @@ export class AcpVirtualHarness {
         this.publishWorkspaceBaseline();
         return this.workspaceById.get(workspace.workspaceId) ?? workspace;
     }
-    async preferredSessionId() {
+    async preferredSessionId(preferredSessionId = this.openedWorkspaceSessions.get(this.selectedWorkspaceId ?? '')) {
         const selected = this.selectedWorkspaceId === undefined
             ? undefined
             : this.workspaceById.get(this.selectedWorkspaceId);
         const sessionIds = selected?.sessionIds ?? [];
+        if (preferredSessionId !== undefined && sessionIds.includes(preferredSessionId) && !this.archivedSessionIds.has(preferredSessionId)) {
+            return preferredSessionId;
+        }
         let bestSessionId;
         let bestUpdatedAt = -1;
         for (const sessionId of sessionIds) {
@@ -281,6 +311,11 @@ export class AcpVirtualHarness {
         if (this.closed)
             return;
         this.closed = true;
+        for (const session of this.sessions.values()) {
+            if (session.hydrated || session.events.length > 0) {
+                this.syncSessionCache(session);
+            }
+        }
         this.titles.close();
         this.unsubscribeArchived?.();
         for (const stream of this.workspaceStreams)
@@ -355,6 +390,7 @@ export class AcpVirtualHarness {
     }
     applyArchived(sessionId) {
         this.archivedSessionIds.add(sessionId);
+        this.historyCache.delete(sessionId);
         for (const [workspaceId, workspace] of this.workspaceById) {
             if (!workspace.sessionIds.includes(sessionId))
                 continue;
@@ -457,8 +493,10 @@ export class AcpVirtualHarness {
         }
         this.titles.applyPrompt(session, text);
         session.blank = false;
+        session.hydrated = true;
         session.running = true;
         session.updatedAt = Date.now();
+        this.syncSessionCache(session);
         this.events.emitRemoteEvent('api-session/status', [sessionId, true]);
         this.publishWorkspaceBaseline();
         await this.client.prompt(session.acpSessionId, text ?? '', signal, images, this.backend);
@@ -476,6 +514,7 @@ export class AcpVirtualHarness {
                 this.live.closeFollowAfterRemoteStreamClosed(follow, { kind: 'aborted', reason: { kind: 'user' } });
             }
         }
+        this.syncSessionCache(session);
         this.events.emitRemoteEvent('api-session/status', [sessionId, false]);
         return success({ accepted: true });
     }
@@ -490,6 +529,7 @@ export class AcpVirtualHarness {
         session.title = title;
         session.titleOverridden = true;
         session.updatedAt = Date.now();
+        this.syncSessionCache(session);
         this.events.publishProjection(sessionId, 'title', title);
         return success({ sessionId });
     }
@@ -515,10 +555,13 @@ export class AcpVirtualHarness {
         return cached?.sessionId === sessionId ? success({ attachment: cached.attachment, data: cached.data }) : failure('attachment-error', 'The image attachment is unavailable or expired.');
     }
     async hydrateSession(session) {
-        if (this.backend === 'cursor' || session.blank || session.events.length > 0)
+        if (this.backend === 'cursor' || session.blank || (session.events.length > 0 && !session.staleHistory))
             return;
-        if (this.backend !== 'pi')
-            return this.hydrateSessionOnce(session);
+        const cached = this.historyCache.getFresh(session.sessionId);
+        if (cached !== undefined && (!Number.isFinite(session.updatedAt) || session.updatedAt === cached.hostUpdatedAt)) {
+            this.restoreCachedSession(session, cached, false);
+            return;
+        }
         const pending = this.pendingHistory.get(session.sessionId);
         if (pending)
             return pending;
@@ -539,6 +582,11 @@ export class AcpVirtualHarness {
                 events = await this.client.loadSessionHistory(session.sessionId, this.backend);
             }
             catch (error) {
+                const stale = this.historyCache.getStale(session.sessionId);
+                if (stale !== undefined && stale.events.length > 0) {
+                    this.restoreCachedSession(session, stale, true);
+                    return;
+                }
                 // A failed history read is not a successful empty baseline; do not continue
                 // a restored conversation until its authoritative history is available.
                 if (this.backend === 'pi' || this.backend === 'claude' || this.backend === 'opencode' || this.backend === 'hermes')
@@ -547,13 +595,59 @@ export class AcpVirtualHarness {
             }
         }
         if (events.length > 0) {
+            session.hydrated = true;
+            session.staleHistory = false;
             session.events = events;
             const firstUser = session.events.find(entry => entry.event.type === 'user/message');
             this.titles.applyPrompt(session, extractPromptText(array(record(firstUser?.event.data).content)));
             session.blank = false;
             for (const event of session.events)
                 this.cacheImageAttachments(session.sessionId, array(record(event.event.data).content ?? record(record(event.event.data).message).content));
+            this.syncSessionCache(session);
         }
+    }
+    restoreCachedSession(session, cached, staleFallback) {
+        session.events = cached.events;
+        session.hydrated = !staleFallback && !cached.stale && !cached.truncated;
+        session.staleHistory = staleFallback || Boolean(cached.stale) || Boolean(cached.truncated);
+        session.blank = cached.blank;
+        if (cached.title !== undefined && (!session.titleOverridden || cached.titleOverridden)) {
+            session.title = cached.title;
+            session.titleOverridden = cached.titleOverridden;
+            session.titleFromPrompt = cached.titleFromPrompt;
+        }
+        if (cached.selectedModel !== undefined && !this.selectedModels.has(session.sessionId)) {
+            this.selectedModels.set(session.sessionId, cached.selectedModel);
+        }
+        if (cached.permissionPreset !== undefined && !this.selectedPermissions.has(session.sessionId)) {
+            this.selectedPermissions.set(session.sessionId, cached.permissionPreset);
+        }
+        for (const event of session.events) {
+            this.cacheImageAttachments(session.sessionId, array(record(event.event.data).content ?? record(record(event.event.data).message).content));
+        }
+    }
+    syncSessionCache(session) {
+        if (this.backend === 'cursor')
+            return;
+        const existing = this.historyCache.getStale(session.sessionId);
+        const isStale = Boolean(session.running || session.staleHistory);
+        const hostUpdatedAt = session.staleHistory && existing !== undefined
+            ? existing.hostUpdatedAt
+            : session.updatedAt;
+        const selectedModel = this.selectedModels.get(session.sessionId);
+        const permissionPreset = this.selectedPermissions.get(session.sessionId);
+        this.historyCache.set(session.sessionId, {
+            events: session.events,
+            blank: session.blank && session.events.length === 0,
+            hydrated: Boolean((session.hydrated || session.events.length > 0) && !session.staleHistory),
+            stale: isStale,
+            ...(session.title === undefined ? {} : { title: session.title }),
+            ...(session.titleOverridden === undefined ? {} : { titleOverridden: session.titleOverridden }),
+            ...(session.titleFromPrompt === undefined ? {} : { titleFromPrompt: session.titleFromPrompt }),
+            hostUpdatedAt,
+            ...(selectedModel === undefined ? {} : { selectedModel }),
+            ...(permissionPreset === undefined ? {} : { permissionPreset }),
+        });
     }
     async sessionHistory(request) {
         const sessionId = extractSessionId(request);
@@ -561,8 +655,12 @@ export class AcpVirtualHarness {
         if (session === undefined)
             return failure('session-not-found', 'The Session was not found.');
         await this.hydrateSession(session);
+        const beforeSeq = optionalInteger(request.beforeSeq);
+        if (beforeSeq === undefined) {
+            this.rememberOpenedSession(session.sessionId);
+        }
         const page = this.historyPage(session, {
-            beforeSeq: optionalInteger(request.beforeSeq),
+            beforeSeq,
             limit: optionalPositiveInteger(request.maxMessages) ?? 50,
         });
         return success({
@@ -820,6 +918,9 @@ export class AcpVirtualHarness {
         if (resolved !== sessionId) {
             this.events.publishProjection(sessionId, 'permissions', this.permissionsProjection(resolved), seq);
         }
+        const session = this.sessions.get(resolved);
+        if (session !== undefined)
+            this.syncSessionCache(session);
         if (this.client.selectPermission) {
             void this.client.selectPermission(nativeAcpId(resolved, this.backend), this.backend, preset ?? 'workspace-write').catch(() => undefined);
         }
@@ -905,6 +1006,9 @@ export class AcpVirtualHarness {
         this.selectedModels.set(sessionId, confirmed);
         if (rawSessionId && rawSessionId !== sessionId)
             this.selectedModels.set(rawSessionId, confirmed);
+        const session = this.sessions.get(sessionId);
+        if (session !== undefined)
+            this.syncSessionCache(session);
         const seq = this.nextProjectionSeq();
         this.events.publishProjection(sessionId, 'modelSelection', this.modelSelectionProjection(sessionId), seq);
         if (rawSessionId && rawSessionId !== sessionId) {

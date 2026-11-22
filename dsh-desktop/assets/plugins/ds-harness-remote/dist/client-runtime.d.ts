@@ -34,7 +34,12 @@ export declare class ClientModeRuntime {
     private readonly codexOpenedSessions;
     private codexOpenGeneration;
     private cursorVirtual?;
+    private cursorVirtualSelection?;
+    private readonly acpOpenedSessions;
     private acpVirtualBackend;
+    private readonly remoteHistoryCaches;
+    private readonly codexHistoryCaches;
+    private readonly acpHistoryCaches;
     private readonly gatewaySwitch;
     private readonly codexStreams;
     private connectionProgress?;
@@ -101,6 +106,10 @@ export declare class ClientModeRuntime {
     private activeRemote;
     private selectRemoteTarget;
     private remoteTypertGateway;
+    private remoteHistoryCache;
+    private codexHistoryCache;
+    private acpHistoryCache;
+    private clearHistoryCaches;
     private selectCodexTarget;
     private closeCodexVirtual;
     private closeCursorVirtual;

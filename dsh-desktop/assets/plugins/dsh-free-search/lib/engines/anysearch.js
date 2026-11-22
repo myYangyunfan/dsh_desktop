@@ -1,7 +1,12 @@
 // AnySearch AI engine (anonymous tier, optional key).
-import { uniqueSources, fetchHtmlWithRetry, stripTags, decodeEntities, approximateTimeRange, SEARXNG_INSTANCES, SEARXNG_TIME, ANYSEARCH_URL, EXA_MCP_URL, extractDdgUrl, MARKET_TO_LANG, LANG_PROFILES, BING_URL, DDG_HTML_URL, DDG_LITE_URL, activeAcceptLanguage, USER_AGENT, searchLanguage, configLanguage, activeOutputLanguage } from "./shared.js";
+import { uniqueSources, fetchHtmlWithRetry, stripTags, decodeEntities, approximateTimeRange, SEARXNG_INSTANCES, SEARXNG_TIME, ANYSEARCH_URL, EXA_MCP_URL, extractDdgUrl, MARKET_TO_LANG, LANG_PROFILES, BING_URL, DDG_HTML_URL, DDG_LITE_URL, activeAcceptLanguage, USER_AGENT, searchLanguage, configLanguage, activeOutputLanguage, looksRelevant } from "./shared.js";
 
 let ignoredAnysearchKey = "";
+
+/** Called from index.js when the user writes a new AnySearch key. */
+export function resetIgnoredAnysearchKey() {
+  ignoredAnysearchKey = "";
+}
 
 const ANYSEARCH_KEY_INVALID_NOTE_ZH = "AnySearch key 无效，本次已忽略该 key，改回免费匿名档";
 
@@ -53,14 +58,15 @@ export async function searchAnysearch(query, maxResults, signal, apiKey) {
   const data = await response.json();
   if (data.code !== 0) throw new Error(`AnySearch API error: ${data.message ?? data.code}`);
   const results = data.data?.results ?? [];
+  const sources = results
+    .filter((r) => r.url)
+    .map((r) => ({
+      url: r.url,
+      ...(r.title ? { title: String(r.title) } : {}),
+      ...(r.snippet ? { snippet: String(r.snippet).slice(0, 300) } : {}),
+    }));
   return {
-    sources: results
-      .filter((r) => r.url)
-      .map((r) => ({
-        url: r.url,
-        ...(r.title ? { title: String(r.title) } : {}),
-        ...(r.snippet ? { snippet: String(r.snippet).slice(0, 300) } : {}),
-      })),
+    sources: sources.length > 0 && !looksRelevant(query, sources) ? [] : sources,
     truncated: false,
     ...(keyRejected || keyIgnoredSticky ? { content: anysearchKeyNote() } : {}),
   };

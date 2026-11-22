@@ -26,10 +26,7 @@ export interface ServerCredentials extends z.infer<typeof credentialSchema> {
 export declare class ServerCredentialStore {
     private readonly path;
     constructor(directory: string);
-    /** Serialize the complete read/refresh/write transaction across processes.
-     * Never steal an old lock: a suspended owner may still consume a one-use token.
-     * After a crash, stop all instances before removing the orphaned lock.
-     */
+    /** Each process owns one queue record. A dead process cannot hold the queue. */
     withRefreshLock<T>(operation: () => Promise<T>): Promise<T>;
     pairingHostOnly(): Promise<boolean>;
     restrictPairingHostOnly(): Promise<void>;
@@ -37,6 +34,8 @@ export declare class ServerCredentialStore {
     save(credentials: Omit<ServerCredentials, 'schemaVersion'>): Promise<ServerCredentials>;
     clear(): Promise<void>;
 }
+export declare function withDefaultCredentialMigrationGate<T>(home: string, operation: () => Promise<T>): Promise<T>;
+export declare function assertRefreshQueueIdle(directory: string): Promise<void>;
 export declare class ServerCredentialsInvalidError extends Error {
     readonly code = "SERVER_CREDENTIALS_INVALID";
 }
@@ -44,6 +43,11 @@ export declare class ServerCredentialsBusyError extends Error {
     readonly code = "SERVER_CREDENTIALS_BUSY";
     constructor();
 }
+export declare class ServerCredentialsLockUnsupportedError extends Error {
+    readonly code = "SERVER_CREDENTIALS_LOCK_UNSUPPORTED";
+    constructor();
+}
+export declare const SERVER_CREDENTIALS_QUEUE_MARKER = "DSH_REFRESH_LOCK_V2\n";
 export declare function atomicWritePrivate(path: string, contents: string): Promise<void>;
 export declare function readPrivateJson(path: string): Promise<unknown | undefined>;
 export {};

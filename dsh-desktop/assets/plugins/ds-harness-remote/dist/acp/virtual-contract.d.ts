@@ -29,6 +29,8 @@ export interface AcpSessionState {
     title?: string;
     titleOverridden?: boolean;
     titleFromPrompt?: boolean;
+    hydrated?: boolean;
+    staleHistory?: boolean;
     blank: boolean;
     running: boolean;
     createdAt: number;

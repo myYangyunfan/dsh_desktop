@@ -24,20 +24,43 @@ export function buildDoctorReport({
   dshHome = "",
   provider = "",
   effectiveProvider = "",
+  searchProvider = "",
+  fetchProvider = "",
   promptLanguage = "en",
   promptChars = 0,
   promptInjected = true,
+  poolsConfigured = false,
   tools = { enabled: [], disabled: [] },
   toolsKnown = [],
   engines = [],
+  suppressWarnings = false,
   now = Date.now(),
 } = {}) {
   const lines = [];
   lines.push(`dsh-free-search ${version}`);
   lines.push(`node ${nodeVersion}${dshHome ? ` · ${dshHome}` : ""}`);
+  const effectiveLabel = `geo default (${effectiveProvider || "?"})`;
   lines.push(
-    `preferred: ${provider || "auto"}${provider ? "" : ` (resolves to ${effectiveProvider || "?"})`} · prompt ${promptLanguage}, ${promptChars} chars${promptInjected ? "" : ", not injected"}`
+    `preferred: ${provider || effectiveLabel} · prompt ${promptLanguage}, ${promptChars} chars${promptInjected ? "" : ", not injected"}`
   );
+  lines.push(`providers: search=${searchProvider || "auto"} · fetch=${fetchProvider || "auto"}`);
+  const warnings = [];
+  if (!suppressWarnings) {
+    if (poolsConfigured && provider !== "auto" && provider !== "multi") {
+      warnings.push(`language pools are configured, but provider is ${provider || effectiveLabel}; zhPool/enPool only apply to auto or multi`);
+    }
+    if (searchProvider && searchProvider !== "ddg" && searchProvider !== "deepseek-official") {
+      warnings.push(`search is served by "${searchProvider}", not this plugin; search providers are mutually exclusive (the last takeover wins)`);
+    }
+    if (fetchProvider && fetchProvider !== "fs-quality-fetch" && fetchProvider !== "http") {
+      warnings.push(`fetch is served by "${fetchProvider}", not this plugin; fetch providers are mutually exclusive`);
+    }
+  }
+  if (warnings.length > 0) {
+    lines.push("");
+    lines.push("warnings:");
+    for (const warning of warnings) lines.push(`  - ${warning}`);
+  }
   const enabledTools = toolsKnown.filter((id) => !tools.disabled.includes(id));
   lines.push(`tools: ${enabledTools.length}/${toolsKnown.length} on${enabledTools.length ? ` (${enabledTools.join(", ")})` : ""}`);
   lines.push("");

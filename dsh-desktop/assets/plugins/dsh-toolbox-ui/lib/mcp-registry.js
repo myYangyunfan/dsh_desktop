@@ -25,11 +25,13 @@ function revisionOf(value) {
 	if (serialized === undefined) throw new TypeError("revision input must be JSON-serializable");
 	return createHash("sha256").update(serialized).digest("hex");
 }
-function toolInventory(ctx) {
+// `visible` 交给调用方传：同一次枚举（`ctx.tools.schemas()`）既喂清单也喂面板的可见集，
+// 而它是当前最贵的一步（宿主对每个工具的 parameters 深拷贝）。不传就保持原来的自读语义。
+function toolInventory(ctx, visible) {
 	const serverNames = [...new Set(allMcpEntries(ctx).map((entry) => entry.options.config.serverName))];
 	const schemas = new Map(serverNames.map((name) => [name, []]));
 	const ambiguous = new Set();
-	for (const schema of ctx.tools.schemas()) {
+	for (const schema of visible ?? ctx.tools.schemas()) {
 		const owners = serverNames.filter((name) => schema.name.startsWith(`mcp__${name}__`));
 		if (owners.length === 1) schemas.get(owners[0]).push(schema);
 		else if (owners.length > 1) owners.forEach((name) => ambiguous.add(name));

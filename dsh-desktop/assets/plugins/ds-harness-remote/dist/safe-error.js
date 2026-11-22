@@ -17,6 +17,37 @@ export function safeErrorCode(error) {
         return 'INVALID_MESSAGE';
     return 'INTERNAL_ERROR';
 }
+/**
+ * Stable, non-sensitive reasons for workspace file denials. They are safe to
+ * expose on the wire and to log: they describe the rule, never a path, file
+ * name, file body or raw filesystem error.
+ */
+export const WORKSPACE_FILE_FAILURE_REASONS = [
+    'scope-missing',
+    'authority-unavailable',
+    'root-invalid',
+    'outside-root',
+    'symlink',
+    'not-regular-file',
+    'not-found',
+    'too-large',
+    'io',
+];
+const workspaceFileFailureReasons = new Set(WORKSPACE_FILE_FAILURE_REASONS);
+export function workspaceFileFailureReason(error) {
+    if (typeof error !== 'object' || error === null || !('details' in error))
+        return undefined;
+    const details = error.details;
+    if (typeof details !== 'object' || details === null)
+        return undefined;
+    const reason = details.reason;
+    return typeof reason === 'string' && workspaceFileFailureReasons.has(reason)
+        ? reason
+        : undefined;
+}
+export function workspaceFileFailure(code, message, reason) {
+    return new RpcError(code, message, { reason });
+}
 const SAFE_STARTUP_CODES = new Set([
     'IDENTITY_INVALID',
     'IDENTITY_LOCKED',
@@ -36,6 +67,7 @@ const SAFE_STATIC_STARTUP_MESSAGES = new Set([
     'Remote storage must be a real directory; symbolic links are not migrated.',
     'Remote storage contains a lock or symbolic link; stop all Harness instances and inspect it before migration.',
 ]);
+const SAFE_STORAGE_CONFLICT_ENTRY_MESSAGE = /^Remote storage ownership could not be verified; nothing was moved\. Inspect the legacy directory manually\. Unexpected entry "[A-Za-z0-9._-]{1,160}" was found\.$/;
 export function safeStartupError(error) {
     const code = error instanceof Error && 'code' in error && typeof error.code === 'string' && SAFE_STARTUP_CODES.has(error.code)
         ? error.code
@@ -46,12 +78,14 @@ export function safeStartupError(error) {
     if (code === 'SERVER_CREDENTIALS_BUSY') {
         return {
             code,
-            message: 'Credential refresh is locked. Stop other instances; after a crash, stop all instances before removing server-credentials.json.refresh-lock and authorizing again.',
+            message: 'Credential refresh is busy. The Host will retry. Remove a legacy refresh lock only after every instance stops.',
         };
     }
     if (code === 'IDENTITY_INVALID' || code === 'IDENTITY_LOCKED' || code === 'STORAGE_CONFLICT') {
         const rawMessage = error instanceof Error ? error.message : '';
-        if (SAFE_STATIC_STARTUP_MESSAGES.has(rawMessage) || /^private key permissions must be 0600, got [0-7]{3,4}$/.test(rawMessage)) {
+        if (SAFE_STATIC_STARTUP_MESSAGES.has(rawMessage)
+            || SAFE_STORAGE_CONFLICT_ENTRY_MESSAGE.test(rawMessage)
+            || /^private key permissions must be 0600, got [0-7]{3,4}$/.test(rawMessage)) {
             return { code, message: rawMessage };
         }
         if (rawMessage.startsWith('device identity is invalid')) {

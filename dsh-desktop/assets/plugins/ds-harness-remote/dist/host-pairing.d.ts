@@ -13,7 +13,7 @@ export declare class HostPairing {
     private readonly serverUrl;
     private readonly lifetime;
     private queue;
-    constructor(serverUrl: string, directory: string, identity: HostIdentity, descriptor: Record<string, unknown>, adopt: (value: PairingCredentials) => Promise<void>, fetcher?: FetchImplementation);
+    constructor(serverUrl: string, directory: string, identity: HostIdentity, descriptor: Record<string, unknown>, adopt: (value: PairingCredentials) => Promise<void>, fetcher?: FetchImplementation, httpServerAllowlist?: readonly string[]);
     close(): void;
     discard(): Promise<void>;
     private serial;

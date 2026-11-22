@@ -15,7 +15,9 @@
 ## 使い始めるには
 
 1. 作業用パソコンにプラグインをインストールして有効化し、サイドバーの **Remote** からログインします。
-2. 別のパソコンの Remote、[ブラウザー](https://dsh.r2049.cn/app)、または [Android アプリ](https://github.com/liguobao/ds-harness-remote/releases/latest)で同じアカウントにログインします。
+2. 別のパソコンの Remote、[ブラウザー](https://dsh.r2049.cn/app)、[iOS アプリ（ベータ）](https://github.com/liguobao/ds-harness-remote/issues/20)、[Android アプリ](https://github.com/liguobao/ds-harness-remote/releases/latest)、または [DSH Go](https://github.com/ccch1mneyyy/dsh-go) で同じアカウントにログインします。
 3. オンラインのホストとワークスペースを選択します。作業用パソコンは起動し、インターネットに接続したままにしてください。
+
+[DSH Go](https://github.com/ccch1mneyyy/dsh-go) はサードパーティー製の DeepSeek Harness Android クライアントです。スマートフォン上で DSH を実行するほか、本プラグイン経由でパソコン上の DSH にリモート接続できます。
 
 [詳しい使い方](https://github.com/liguobao/ds-harness-remote/blob/main/README.ja.md) · [セルフホスティング](https://github.com/liguobao/ds-harness-remote/blob/main/apps/server/README.md) · [問題を報告](https://github.com/liguobao/ds-harness-remote/issues)

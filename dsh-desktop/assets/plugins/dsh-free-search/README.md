@@ -34,7 +34,7 @@
 #### 引擎与切换
 
 - **零成本** —— 多个免费引擎，无需 key、无需注册
-- **36 个引擎可选**：DuckDuckGo（html/lite）、Bing、SearXNG（元搜索，支持自定义实例）、AnySearch、Exa、Tavily、Keenable、Firecrawl、Parallel、Perplexity、SerpBase、Serply、Outcrawl、Google 自定义搜索（`google`，需 API key + CSE ID）、DeepSeek 官方、DeepSeek 原生搜索 API、You.com、百度千帆、Kimi、阿里云百炼、火山联网搜索（豆包搜索）、知乎全网/站内（`zhihu_global`/`zhihu_site`，经知乎开放平台 MCP）、Antigravity CLI 搜索（`agy`，需本机安装）、OpenAI / Gemini / Claude 模型内置搜索。默认自动回退链覆盖其中 28 个；5 个 HTML SERP 引擎默认不参与，OpenAI / Gemini / Claude 三个按次计费引擎只在显式点名时运行。
+- **42 个引擎可选**：DuckDuckGo（html/lite）、Bing、SearXNG（元搜索，支持自定义实例）、AnySearch、Exa、Tavily、Keenable、Firecrawl、Parallel、Brave（`brave`，官方 Search API，需 `BRAVE_API_KEY`）、智谱（`zhipu`，官方 Web Search API，需 `ZHIPU_API_KEY`）、Perplexity、SerpBase、Serply、Outcrawl、SpecStream（`specstream`，官方 Search API，需 `SPECSTREAM_API_KEY`）、Google 自定义搜索（`google`，需 API key + CSE ID）、秘塔搜索（`metaso`，官方 API，按点数计费）、Yandex 搜索（`yandex`，官方 API，按请求计费，需 folder ID）、腾讯元宝搜索（`yuanbao`，API key 网关，有活动免费额度）、DeepSeek 官方、DeepSeek 原生搜索 API、You.com、百度千帆、Kimi、阿里云百炼、火山联网搜索（豆包搜索）、知乎全网/站内（`zhihu_global`/`zhihu_site`，经知乎开放平台 MCP）、Antigravity CLI 搜索（`agy`，需本机安装）、OpenAI / Gemini / Claude 模型内置搜索。默认自动回退链覆盖其中 30 个；5 个 HTML SERP 引擎默认不参与，OpenAI / Gemini / Claude 三个模型引擎、Metaso、Yandex、Yuanbao 和 SpecStream 都只在显式点名时运行。
 - **5 个 HTML 搜索页引擎（默认关闭）** —— 把传统搜索页并入同一套引擎 / 回退 / 冷却 / 设置体系：`baidu-html`（百度网页）、`so360`、`sogou`、`wechat`（微信文章）、`toutiao`。免 key、免额度，代价是抓页面：验证码/反爬按 `bot-wall` 归类并让整个家族冷却 10 分钟（整段出口 IP 都会被打标），结果也没有 API 摘要。它们默认不进 auto / 回退链 / 语言池，只在显式 `engine=` 或加入语言池时运行。
 - **引擎白名单** —— 设置页「只使用勾选的引擎」开启后，只有勾选的引擎可用，升级新增的引擎默认不启用；配置里对应 `allowedEngines`（非空时等价于把其余引擎全部禁用）。
 - **全局引擎开关与回退优先级** —— 设置页可勾选/取消引擎（取消后全局生效：普通搜索 / Auto / `advanced_search` / `multi_search` / 引擎测试都不再用它），并可用 ↑↓ 调整全局回退顺序（一键恢复默认）。
@@ -48,7 +48,7 @@
 
 - **统一引擎回退** —— 任何引擎失败（付费/免费，缺 key/401/限流/网络）自动轮流尝试下一个引擎：首选引擎 → 其他引擎（exa/tavily/keenable/firecrawl/parallel/you 无 key 也会尝试，因为它们自带 keyless 免费额度）→ 剩余免费引擎，搜索永不直接失败；结果顶部注明实际生效的引擎（如 `Note: perplexity unavailable or failed, using exa.`）；失败按类别处理：额度/鉴权失败 → 本会话冷却该引擎，反爬 → 短退避，超时/5xx/限流 → 同引擎重试一次，解析失败/0 结果 → 不冷却（详见下文「失败分类与引擎冷却」）。
 - **多 key 轮换** —— 任何 key 字段（或对应环境变量）都可以用逗号 / 分号 / 换行分隔多把 key；平时按请求轮流使用（round-robin，避免单 key 撞 QPS/RPM 风控），遇到 401/402/429（鉴权失败、额度耗尽、限流）先轮换同一引擎的下一把，再走引擎回退；`multi` 模式同样生效（#96）。
-- **按 key 冷却与诊断** —— 429 与额度错误按 key 分别冷却，同一引擎的其他 key 不受牵连；冷却状态写入磁盘，重启后仍在；失败信息和日志里的 key 一律打码；设置页底部的「诊断」按钮列出每个引擎当前为什么不可用、冷却还剩多久，以及本次进程内的调用次数、成功/空/失败和平均耗时；同一引擎并发超过 2 会排队（HTML SERP 为 1），避免免费引擎被同时打爆。
+- **按 key 冷却与诊断** —— 429 与额度错误按 key 分别冷却，同一引擎的其他 key 不受牵连；冷却状态写入磁盘，重启后仍在；失败信息和日志里的 key 一律打码；设置页底部的「诊断」按钮列出每个引擎当前为什么不可用、冷却还剩多久，以及本次进程内的调用次数、成功/空/失败和平均耗时；同一引擎并发超过 2 会排队（HTML SERP 为 1），避免免费引擎被同时打爆；诊断还会标注当前 web search/fetch provider，被其他插件接管时给出互斥警告。
 - **自带更新** —— 卡片底部显示当前版本和「检查更新」；npm 安装的版本可一键升级到 latest，本地 link 开发模式改为跳转 npm 页面并提示 `git pull`。
 - **引擎测试** —— `free_search_test` 工具让 agent 一键测试所有引擎；设置页也有「测试引擎」按钮（直测当前引擎，不走回退链，付费引擎无 key 会明确报错）。
 - **截断安全** —— 标题和摘要按码点截断，搜索结果、工具输出和 `web_fetch` 正文在离开插件前统一清除孤立代理；含 emoji 的结果不会再让会话历史出现无法序列化的字符（#108）。
@@ -58,7 +58,8 @@
 
 #### Multi 与语言池
 
-- **Multi 模式** —— 可把搜索引擎设为 `Multi Search`：`web_search` 按查询语言并发**对应语言池的全部**已启用引擎（不再是前 3 个；中文/英文池可在设置页编辑，每池最低 2 个引擎）、按 URL 合并去重（同站判定用 **eTLD+1**）、跨源命中的结果优先；设置页有 **Fast / Balanced / Deep** 三档强度，也可手填并发上限与目标成功源数；整轮检索共享 **30 秒总预算**，到点返回已有结果；合并结果的条数上限可在设置页调整（对应 `multiMaxResults`，默认 20，最大 100，单次 `maxResults` 只能要得更少）。代价是成倍消耗额度；multi 失败会自动退回单引擎回退链。
+- **Multi 模式** —— 可把搜索引擎设为 `Multi Search`：`web_search` 按查询语言并发**对应语言池的全部**已启用引擎（不再是前 3 个；中文/英文池可在设置页编辑，每池最低 2 个引擎）、按 URL 合并去重（同站判定用 **eTLD+1**）、跨源命中的结果优先；设置页有 **Fast / Balanced / Deep** 三档强度，也可手填并发上限与目标成功源数；整轮检索共享 **30 秒总预算**，到点返回已有结果；合并结果的条数上限可在设置页调整（对应 `multiMaxResults`，默认 20，最大 100，单次 `maxResults` 只能要得更少）。合并结果会用 MinHash 去掉近重复来源。代价是成倍消耗额度；multi 失败会自动退回单引擎回退链。
+- **按意图路由** —— Auto 在未自定义回退顺序时，按查询领域（金融 / 学术 / 代码 / 新闻 / 购物）重排当前语言池；只调整已有引擎的先后，不新增引擎、不改回退集合。
 
 <img src="https://raw.githubusercontent.com/DDDMUC/dsh-free-search/master/assets/ui-performance.png" alt="性能：缓存与 Multi 档位" width="100%" />
 <sub>▲ 性能：结果缓存时长与 Multi 的 Fast / Balanced / Deep 档位</sub>
@@ -76,7 +77,7 @@
 
 #### 抓取与工具
 
-- **网页抓取（web_fetch）** —— 让 agent 抓取网页内容（官方 `dsh-web-fetch-http` provider，纯 JS，零额外依赖），可自动接管 `web.fetchProvider` 为插件的直连 → 浏览器渲染 → exa / firecrawl → crawl4ai 质量链。T1.5 浏览器渲染可在设置页关闭，exa 与 firecrawl 的先后顺序也可切换；私网、回环和云元数据地址一律拒绝（SSRF 防护）。
+- **网页抓取（web_fetch）** —— 让 agent 抓取网页内容（官方 `dsh-web-fetch-http` provider，纯 JS，零额外依赖），可自动接管 `web.fetchProvider` 为插件的直连 → 浏览器渲染 → exa / firecrawl → crawl4ai 质量链。直连层同时支持 `http://` 与 `https://` 目标，并按每一跳的协议选择传输；只有 `http(s)` 以外的协议会被拒绝。T1.5 浏览器渲染可在设置页关闭，exa 与 firecrawl 的先后顺序也可切换；私网、回环和云元数据地址一律拒绝（SSRF 防护）。Clash / mihomo TUN 的 fake-ip 网段（常见 198.18.0.0/15）可在「额外允许的网段」里显式放行，否则系统 DNS 返回的占位地址会被当成私网拒绝。
 
 <img src="https://raw.githubusercontent.com/DDDMUC/dsh-free-search/master/assets/ui-fetch.png" alt="抓取与平台：web_fetch 接管、Key 存储位置与平台搜索开关" width="100%" />
 <sub>▲ 抓取：自动接管 web_fetch、Key 存储位置与平台搜索开关</sub>
@@ -84,7 +85,7 @@
 - **平台搜索（platform_search）** —— 搜 GitHub / V2EX / B站 / Reddit / Hacker News / Stack Overflow / 维基百科 / npm / YouTube / Vimeo / 掘金 / 豆瓣 / Qiita（公开 API 或免 key 抓取，零依赖）；X (Twitter) 经本地 Grok Build CLI（需 SuperGrok / X Premium 登录）。
 - **垂直领域直查（domain_search）** —— 41 个免 key 垂直源直查：包/版本（PyPI、crates、GitHub releases、endoflife…）、学术（arXiv、Crossref、OpenAlex、Semantic Scholar、PubMed、dblp、Zenodo…）、安全（NVD、OSV、CISA KEV）、金融（SEC EDGAR、IMF、World Bank、CFETS、Yahoo Finance、CoinGecko…）、法律（US Federal Register、US CourtListener、openlegaldata、UK legislation）、新闻（Google News、GDELT）等。
 - **视频搜索（video_search）** —— 跨站找视频：Bing Videos + DuckDuckGo Videos（免 key，失败互相回退），返回视频链接、标题与来源/时长等元信息。
-- **一次调用完成研究（research）** —— 多引擎并发搜索 → 候选重排 → 分层抓取正文 → 段落选窗 → 带出处的 Markdown 证据包；模型组件（重排/嵌入/决策模型）全部可选，缺失或失败时静默回退规则路径。
+- **一次调用完成研究（research）** —— 多引擎并发搜索 → 候选重排 → 分层抓取正文 → 段落选窗 → 带出处的 Markdown 证据包；模型组件（重排/嵌入/决策模型）全部可选，缺失或失败时静默回退规则路径；输出附带证据质量闸门（high / medium / low 与结论上限），证据不足时明确提示先核验再下结论。
 - **检索正文缓存（cache_search）** —— 全文检索 `research` 抓过的正文（`node:sqlite` 持久缓存，存储 7 天；`node:sqlite` 不可用时自动降级为 no-op，免 flag 需 ≥ 22.13，22.5–22.12 需 `--experimental-sqlite`）。
 - **干净集成** —— 实现官方 `WebSearchProvider` seam 接口，与官方插件共存。
 - **时间过滤** —— `advanced_search` 工具支持 `timeRange`：固定档、自定义相对值、绝对日期三种形式（详见下方逻辑说明）。
@@ -94,6 +95,9 @@
 #### 设置页与目录
 
 - **网页设置页** —— 引擎切换 + API key 配置（UI 中 key 脱敏显示「已配置」）+ 中英文切换；入口在左侧「插件」页的组件行配置（`plugins.row.config`，DSH 0.2.1-rc.2+）。远程访问（VPS / 反向代理 / 自定义域名）下也能用：桥接接口沿用宿主的 Host 围栏，`--trusted-host` 与 `--public-url` 声明的地址会放行（#84）。
+- **侧栏入口可关闭** —— 默认在左侧栏显示「免费搜索」；设置页关闭后写入配置并持久化，重启仍隐藏；隐藏时可用 `/free-search` 命令或插件页打开。
+- **斜杠命令可关闭** —— 默认注册 `/free-search-engine` 和 `/free-search`；设置页关闭 `slashCommands` 后两个命令都不再注册，设置仍在插件页，提示词也改为让模型参考插件设置。适合只想给 agent 用搜索工具的场景。
+- **优先使用免 key 档（可选）** —— 默认配了 key 的引擎一律用 key。设置页打开 `keylessFirst` 后，Exa / Tavily / Keenable / Firecrawl / Parallel / AnySearch / You.com 先走免 key 档，只有它限流、额度用尽、要求鉴权或网络失败时才改用 key（同一次请求内重试一次）；免 key 档失败后会休息一段时间（上限 45 分钟），期间直接用 key。适合 key 按量计费、想把它留作后备的场景。
 
 <img src="https://raw.githubusercontent.com/DDDMUC/dsh-free-search/master/assets/ui-apikeys.png" alt="全局回退优先级与每引擎 API key" width="100%" />
 <sub>▲ 全局回退优先级：每行一个引擎，右侧填该引擎的 API key（已配置会脱敏显示）</sub>
@@ -127,46 +131,52 @@
 
 ### 引擎列表
 
-| id | 引擎 | 费用 | 说明 |
-|---|---|---|---|
-| `auto` | Auto 智能路由 | 动态 | **根据查询语言/时间条件自动选路**（含中文优先 Bing/Baidu/Aliyun/AnySearch，英文优先 Bing/Exa/Tavily；时间过滤优先支持引擎），末尾全量回退 |
-| `ddg` | DuckDuckGo HTML | 免费 | 偶发限流（反爬），解封自动恢复 |
-| `ddg-lite` | DuckDuckGo Lite | 免费 | 轻量版，同上 |
-| `bing` | Bing | 免费 | 免 key，中文优化（zh-CN）；中国出口的自动默认 |
-| `anysearch` | AnySearch AI | 免费 | AI 搜索，无 key（匿名额度） |
-| `searxng` | SearXNG 元搜索 | 免费 | 多实例自动切换，支持自定义实例 |
-| `degoog` | Degoog（自建聚合器） | 免费 | 需要自己的实例（`degoogInstances`），免 key；实例开启 API Key 时用 `degoogApiKey`（Bearer） |
-| `exa` | Exa | 免费 | **无 key 也可用**（MCP 匿名），配 key 提升额度 |
-| `tavily` | Tavily | 免费 | **无 key 也可用**（keyless 匿名），配 key 提升额度 |
-| `keenable` | Keenable | 免费 | **无 key 也可用**（MCP 匿名），配 key 提升额度 |
-| `firecrawl` | Firecrawl | 免费 | **无 key 也可用**（官方免 key 匿名额度），配 key 提升限额。注意：keyless 档按**出口 IP** 判定，VPN/代理出口会被 403 拒绝；插件会冷却 6 小时并说明原因（有 key 不受影响） |
-| `parallel` | Parallel | 免费 | **无 key 也可用**（官方 MCP 匿名额度），配 key 提升额度并支持精确时间过滤 |
-| `you` | You.com | 免费 | **无 key 也可用**（官方免 key 档，每天 100 次），配 `YDC_API_KEY` 提升额度（旧名 `YOUCOM_API_KEY` 继续兼容） |
-| `agy` | Antigravity CLI | 免费 | 需本机安装 [Antigravity](https://antigravity.google) 并登录，插件通过 `agy -p` 调用；免 key、免额度，默认在引擎列表里，没装 CLI 时自动跳过 |
-| `perplexity` | Perplexity | 付费 | 需 `PERPLEXITY_API_KEY` |
-| `serpbase` | SerpBase | 付费 | 需 `SERPBASE_API_KEY`（serpbase.dev，注册送 100 次免费额度） |
-| `serply` | Serply | 付费 | 需 `SERPLY_API_KEY`（serply.io，新账户 30 天内 2,500 次免费额度）；Google 网页结果，按设置页语言本地化 |
-| `outcrawl` | Outcrawl | 付费 | 需 `OUTCRAWL_API_KEY`（outcrawl.ai，每月 1,000 credits 免费额度）；网页搜索结果（标题/链接/摘要），单次最多 20 条 |
-| `google` | Google 自定义搜索 | 免费额度 | 需 `GOOGLE_CSE_API_KEY` 和 Programmable Search Engine ID（`googleCseId` / cx）；Google 官方 Custom Search JSON API，每天 100 次免费，按次计费超额；支持 `hl`、安全搜索和 `dateRestrict` 时间过滤 |
-| `deepseek-official` | DeepSeek 官方 | 付费 | 需 `DEEPSEEK_API_KEY`；走 Anthropic 兼容的 `web_search` 服务端工具，每次搜索是一整个模型轮次（慢、耗 token） |
-| `deepseek-tools` | DeepSeek 原生搜索 API | 付费 | 需 `DEEPSEEK_API_KEY`（与上一档共用）；直接 `POST /v1/tools/search`，无模型参与，返回结构化 `results[]`（`title`/`url`/`summary`/`date`），同 query 实测 ~0.3s vs 上一档 ~5-6s |
-| `baidu` | 百度千帆 AI 搜索 | 额度 | 需 `BAIDU_API_KEY`（千帆 AI 搜索，每日赠 50 次，超额按量后付费）；中文全网，支持时间过滤 |
-| `kimi` | Kimi（Moonshot）联网搜索 | 付费 | 需 `MOONSHOT_API_KEY`（basic 约 ￥0.01/次），返回带正文 chunks 的中文结果；**无免费额度**，适合显式选用或作质量升级池，不建议放进默认并发池 |
-| `kimi` | Kimi（Moonshot）联网搜索 | 付费 | 需 `MOONSHOT_API_KEY`（basic 约 ￥0.01/次），返回带正文 chunks 的中文结果 |
-| `aliyun` | 阿里云百炼 EnhancedSearch | 付费 | 需 `DASHSCOPE_API_KEY`（MCP search_pro，约 ￥0.03/次，新用户 200 次免费包）；中文全网带来源 hostname |
-| `doubao` | 火山引擎联网搜索（豆包搜索） | 免费额度 | 需 `DOUBAO_SEARCH_API_KEY`（联网搜索控制台开通，**每月 500 次免费**，超出按量付费）；中文时效内容强，支持时间/站点过滤，返回千字级摘要 |
-| `zhihu_global` | 知乎全网搜索（开放平台 MCP） | 免费额度 | 需 `ZHIHU_API_KEY`；**每日 5,000 次试用额度**（试用结束需另行开通）；支持时间过滤（`publish_time`）；无 key 时自动跳过 |
-| `zhihu_site` | 知乎站内搜索（开放平台 MCP） | 免费额度 | 需 `ZHIHU_API_KEY`；**每日 5,000 次试用额度**（与 `zhihu_global` 共享）；不支持时间过滤 |
-| `zhihu_global` | 知乎全网搜索（开放平台 MCP） | 付费 | 需 `ZHIHU_API_KEY`；支持时间过滤（`publish_time`）；无 key 时自动跳过 |
-| `zhihu_site` | 知乎站内搜索（开放平台 MCP） | 付费 | 需 `ZHIHU_API_KEY`；不支持时间过滤 |
-| `openai` | OpenAI 模型内置搜索 | 付费 | 需 `OPENAI_API_KEY`；走 Responses API 的 `web_search` 工具，返回带引用的回答。**按次计费，仅在显式选中时使用**（不参与自动回退/auto）；默认 `gpt-6-luna`，模型与端点可配（`openaiModel` / `openaiBaseUrl`） |
-| `gemini` | Gemini Grounding with Google Search | 付费 | 需 `GEMINI_API_KEY`（兼容 `GOOGLE_API_KEY`）；走官方推荐的 **Interactions API**（`POST /v1beta/interactions`，`tools:[{type:"google_search"}]`），从 `steps[].content[].annotations` 取引用。**按次计费，仅在显式选中时使用**；默认 `gemini-3.8-flash`，模型与端点可配（`geminiModel` / `geminiBaseUrl`） |
-| `claude` | Claude 服务端 web_search | 付费 | 需 `ANTHROPIC_API_KEY`；结果来自 `web_search_tool_result`。**按次计费，仅在显式选中时使用**；默认 `claude-sonnet-5-5`，模型与端点可配（`claudeModel` / `claudeBaseUrl`） |
-| `baidu-html` | 百度网页（HTML） | 免费 | 中文网页结果最全的一档；连续请求 2–3 次容易触发验证码，触发后家族冷却 10 分钟。API 版百度见 `baidu`（千帆） |
-| `so360` | 360 搜索 | 免费 | 中文网页；反爬最严，多数网络下直接返回验证码页，命中 `bot-wall` |
-| `sogou` | 搜狗 | 免费 | 中文网页；`/link?url=…` 签名跳转链会解包成真实地址（一次 `redirect: manual`，不抓正文） |
-| `wechat` | 微信文章（搜狗） | 免费 | 公众号文章；签名链**单次有效**，预取会跳反爬页，因此保留原链不解包 |
-| `toutiao` | 今日头条 | 免费 | 走页面内嵌 JSON 的 `article_url`；聚合内容多，建议对结论做二次核对 |
+| id | 引擎 | 费用 | 免 key | 说明 |
+|---|---|---|---|---|
+| `auto` | Auto 智能路由 | 动态 | 视池 | **根据查询语言/时间条件自动选路**（含中文优先 Bing/Baidu/Aliyun/AnySearch，英文优先 Bing/Exa/Tavily；时间过滤优先支持引擎），末尾全量回退 |
+| `ddg` | DuckDuckGo HTML | 免费 | 是 | 偶发限流（反爬），解封自动恢复 |
+| `ddg-lite` | DuckDuckGo Lite | 免费 | 是 | 轻量版，同上 |
+| `bing` | Bing | 免费 | 是 | 免 key，中文优化（zh-CN）；中国出口的自动默认 |
+| `anysearch` | AnySearch AI | 免费 | 是 | AI 搜索，无 key（匿名额度） |
+| `searxng` | SearXNG 元搜索 | 免费 | 是 | 多实例自动切换，支持自定义实例 |
+| `degoog` | Degoog（自建聚合器） | 免费 | 是（需实例） | 需要自己的实例（`degoogInstances`），免 key；实例开启 API Key 时用 `degoogApiKey`（Bearer） |
+| `exa` | Exa | 免费 | 可选 | **无 key 也可用**（MCP 匿名），配 key 提升额度 |
+| `tavily` | Tavily | 免费 | 可选 | **无 key 也可用**（keyless 匿名），配 key 提升额度 |
+| `keenable` | Keenable | 免费 | 可选 | **无 key 也可用**（MCP 匿名），配 key 提升额度 |
+| `firecrawl` | Firecrawl | 免费 | 可选 | **无 key 也可用**（官方免 key 匿名额度），配 key 提升限额。注意：keyless 档按**出口 IP** 判定，VPN/代理出口会被 403 拒绝；插件会冷却 6 小时并说明原因（有 key 不受影响） |
+| `parallel` | Parallel | 免费 | 可选 | **无 key 也可用**（官方 MCP 匿名额度），配 key 提升额度并支持精确时间过滤 |
+| `brave` | Brave Search | 付费（有免费额度） | 否 | 需 `BRAVE_API_KEY`（[API Dashboard](https://api-dashboard.search.brave.com)，$5/月免费额度 ≈ 1,000 次，超出按 $5/1,000 次计费）；独立索引，`freshness` 支持 pd/pw/pm/py 与日期区间 |
+| `zhipu` | 智谱搜索 | 付费（按次） | 否 | 需 `ZHIPU_API_KEY`；`search_std` ¥0.01/次、`search_pro` ¥0.03/次、搜狗/夸克 ¥0.05/次；支持 oneDay/oneWeek/oneMonth/oneYear 时间过滤 |
+| `you` | You.com | 免费 | 可选 | **无 key 也可用**（官方免 key 档，每天 100 次），配 `YDC_API_KEY` 提升额度（旧名 `YOUCOM_API_KEY` 继续兼容） |
+| `agy` | Antigravity CLI | 免费 | 是（需 CLI） | 需本机安装 [Antigravity](https://antigravity.google) 并登录，插件通过 `agy -p` 调用；免 key、免额度，默认在引擎列表里，没装 CLI 时自动跳过 |
+| `perplexity` | Perplexity | 付费 | 否 | 需 `PERPLEXITY_API_KEY` |
+| `serpbase` | SerpBase | 付费 | 否 | 需 `SERPBASE_API_KEY`（serpbase.dev，注册送 100 次免费额度） |
+| `serply` | Serply | 付费 | 否 | 需 `SERPLY_API_KEY`（serply.io，新账户 30 天内 2,500 次免费额度）；Google 网页结果，按设置页语言本地化 |
+| `outcrawl` | Outcrawl | 付费 | 否 | 需 `OUTCRAWL_API_KEY`（outcrawl.ai，每月 1,000 credits 免费额度）；网页搜索结果（标题/链接/摘要），单次最多 20 条 |
+| `google` | Google 自定义搜索 | 免费额度 | 否 | 需 `GOOGLE_CSE_API_KEY` 和 Programmable Search Engine ID（`googleCseId` / cx）；Google 官方 Custom Search JSON API，每天 100 次免费，按次计费超额；支持 `hl`、安全搜索和 `dateRestrict` 时间过滤 |
+| `metaso` | 秘塔搜索 | 付费（点数） | 否 | 需 `METASO_API_KEY`（metaso.cn/api）；官方 AI 搜索 API，按点数计费（约 0.03 元/次，新用户有体验额度）；支持网页 / 文库 / 学术三种 `scope`，返回摘要和来源；不在默认回退顺序里，配 key 后显式选用 |
+| `yandex` | Yandex 搜索 | 付费 | 否 | 需 `YANDEX_API_KEY` 和 `yandexFolderId`（AI Studio，按请求计费，需 billing account）；官方 Search API，`searchType` 支持 RU/TR/COM/KK/BE/UZ，响应为 Base64 XML；支持 day / 2 weeks / month 时间过滤；显式专用 |
+| `yuanbao` | 腾讯元宝搜索 | 付费（有活动免费额度） | 否 | 需 `TENCENTCLOUD_WSA_APIKEY`（console.cloud.tencent.com/wsapi）；API key 网关，支持自然 / 权威 / 混合模式、站点限定、时间范围；活动页可领每日免费额度（限时）；显式专用 |
+| `specstream` | SpecStream | 付费 | 否 | 需 `SPECSTREAM_API_KEY`（specstream.ai）；网页搜索结果（标题/链接/摘要/发布日期），单次最多 10 条；显式专用（不在默认回退链、Auto 路由或语言池里） |
+| `deepseek-official` | DeepSeek 官方 | 付费 | 否 | 需 `DEEPSEEK_API_KEY`；走 Anthropic 兼容的 `web_search` 服务端工具，每次搜索是一整个模型轮次（慢、耗 token） |
+| `deepseek-tools` | DeepSeek 原生搜索 API | 付费 | 否 | 需 `DEEPSEEK_API_KEY`（与上一档共用）；直接 `POST /v1/tools/search`，无模型参与，返回结构化 `results[]`（`title`/`url`/`summary`/`date`），同 query 实测 ~0.3s vs 上一档 ~5-6s；端点可通过 `deepseekToolsBaseUrl` 改成自定义网关（完整 URL 或 base；走 `/v1/search` 的网关请填完整 URL），key 可用 `deepseekToolsApiKey` 单独覆盖 |
+| `baidu` | 百度千帆 AI 搜索 | 额度 | 否 | 需 `BAIDU_API_KEY`（千帆 AI 搜索：web_search 每日赠 50 次，额度用尽/403 时自动回退到 chat/completions，另有 100 次/天免费额度；超额按量后付费）；中文全网，支持时间过滤 |
+| `kimi` | Kimi（Moonshot）联网搜索 | 付费 | 否 | 需 `MOONSHOT_API_KEY`（basic 约 ￥0.01/次），返回带正文 chunks 的中文结果；**无免费额度**，适合显式选用或作质量升级池，不建议放进默认并发池 |
+| `kimi` | Kimi（Moonshot）联网搜索 | 付费 | 否 | 需 `MOONSHOT_API_KEY`（basic 约 ￥0.01/次），返回带正文 chunks 的中文结果 |
+| `aliyun` | 阿里云百炼 EnhancedSearch | 付费 | 否 | 需 `DASHSCOPE_API_KEY`（MCP search_pro，约 ￥0.03/次，新用户 200 次免费包）；中文全网带来源 hostname |
+| `doubao` | 火山引擎联网搜索（豆包搜索） | 免费额度 | 否 | 需 `DOUBAO_SEARCH_API_KEY`（联网搜索控制台开通，**每月 500 次免费**，超出按量付费）；中文时效内容强，支持时间/站点过滤，返回千字级摘要 |
+| `zhihu_global` | 知乎全网搜索（开放平台 MCP） | 免费额度 | 否 | 需 `ZHIHU_API_KEY`；**每日 5,000 次试用额度**（试用结束需另行开通）；支持时间过滤（`publish_time`）；无 key 时自动跳过 |
+| `zhihu_site` | 知乎站内搜索（开放平台 MCP） | 免费额度 | 否 | 需 `ZHIHU_API_KEY`；**每日 5,000 次试用额度**（与 `zhihu_global` 共享）；不支持时间过滤 |
+| `zhihu_global` | 知乎全网搜索（开放平台 MCP） | 付费 | 否 | 需 `ZHIHU_API_KEY`；支持时间过滤（`publish_time`）；无 key 时自动跳过 |
+| `zhihu_site` | 知乎站内搜索（开放平台 MCP） | 付费 | 否 | 需 `ZHIHU_API_KEY`；不支持时间过滤 |
+| `openai` | OpenAI 模型内置搜索 | 付费 | 否 | 需 `OPENAI_API_KEY`；走 Responses API 的 `web_search` 工具，返回带引用的回答。**按次计费，仅在显式选中时使用**（不参与自动回退/auto）；默认 `gpt-6-luna`，模型与端点可配（`openaiModel` / `openaiBaseUrl`） |
+| `gemini` | Gemini Grounding with Google Search | 付费 | 否 | 需 `GEMINI_API_KEY`（兼容 `GOOGLE_API_KEY`）；走官方推荐的 **Interactions API**（`POST /v1beta/interactions`，`tools:[{type:"google_search"}]`），从 `steps[].content[].annotations` 取引用。**按次计费，仅在显式选中时使用**；默认 `gemini-3.8-flash`，模型与端点可配（`geminiModel` / `geminiBaseUrl`） |
+| `claude` | Claude 服务端 web_search | 付费 | 否 | 需 `ANTHROPIC_API_KEY`；结果来自 `web_search_tool_result`。**按次计费，仅在显式选中时使用**；默认 `claude-sonnet-5-5`，模型与端点可配（`claudeModel` / `claudeBaseUrl`） |
+| `baidu-html` | 百度网页（HTML） | 免费 | 是 | 中文网页结果最全的一档；连续请求 2–3 次容易触发验证码，触发后家族冷却 10 分钟。API 版百度见 `baidu`（千帆） |
+| `so360` | 360 搜索 | 免费 | 是 | 中文网页；反爬最严，多数网络下直接返回验证码页，命中 `bot-wall` |
+| `sogou` | 搜狗 | 免费 | 是 | 中文网页；`/link?url=…` 签名跳转链会解包成真实地址（一次 `redirect: manual`，不抓正文） |
+| `wechat` | 微信文章（搜狗） | 免费 | 是 | 公众号文章；签名链**单次有效**，预取会跳反爬页，因此保留原链不解包 |
+| `toutiao` | 今日头条 | 免费 | 是 | 走页面内嵌 JSON 的 `article_url`；聚合内容多，建议对结论做二次核对 |
 
 - **默认引擎自动选**：`provider` 留空时按出口地区选一次——中国大陆出口用 `bing`（不依赖代理），其它地区用 `parallel`（免 key 的官方 MCP，官方文档命中率更高）；探测失败一律退回 `bing`。也可用 `DSH_FREE_SEARCH_DEFAULT=bing` 或 `=parallel` 指定，设置页选过引擎则以你的选择为准。
 - **自动回退**：任何引擎失败（免费限流/反爬，付费缺 key/无效/网络错误）都会自动轮流尝试下一个引擎——先试其他已配 key 的付费引擎，再试免费引擎（Bing/AnySearch 等），并在结果中附带回退提示——搜索不会因引擎问题直接失败。
@@ -175,10 +185,13 @@
   - Tavily：<https://app.tavily.com/home>
   - Keenable：<https://keenable.ai/login>
   - Parallel：<https://platform.parallel.ai>
+  - Brave：<https://api-dashboard.search.brave.com>（API 文档：<https://api-dashboard.search.brave.com/app/documentation>）
+  - 智谱：<https://bigmodel.cn/apikey/platform>（API 文档：<https://docs.bigmodel.cn/cn/guide/tools/web-search>）
   - Perplexity：<https://www.perplexity.ai/settings/api>
   - SerpBase：<https://serpbase.dev>
   - Serply：<https://serply.io>（API 文档：<https://serply.io/docs>）
   - Outcrawl：<https://outcrawl.ai>（API 文档：<https://outcrawl.ai/docs>）
+  - SpecStream：<https://specstream.ai/signup?src=dsh-free-search>（API 文档：<https://specstream.ai/agents.md>；`?src=dsh-free-search` 仅用于来源归因统计，不含任何返佣或推广分成）
   - DeepSeek：<https://platform.deepseek.com/api_keys>
   - 豆包搜索（火山联网搜索）：<https://console.volcengine.com/search-infinity/web-search>
   - You.com：<https://you.com/platform/api-keys>
@@ -191,8 +204,8 @@
 |---|---|---|
 | ① 无限免 key | `ddg` / `ddg-lite` / `bing` / `searxng` / `anysearch` | — |
 | ② 匿名额度（不配 key 也能跑） | `exa` / `tavily` / `keenable` / `firecrawl` / `parallel` / `you`（每天 100 次） | 配 key 提额 |
-| ③ 免费额度（需 key） | `zhihu_global` / `zhihu_site`（每日 5,000 次试用）、`doubao`（每月 500 次）、`baidu`（每日 50 次）、`aliyun`（新用户 200 次包） | 按量后付费 |
-| ④ 付费升级（需 key 才有产出） | `serpbase`（注册送 100 次）/ `serply`（30 天 2,500 次）/ `outcrawl`（每月 1,000 credits）/ `perplexity` / `deepseek-official` / `deepseek-tools` / `kimi` | 按量 / 按次 |
+| ③ 免费额度（需 key） | `zhihu_global` / `zhihu_site`（每日 5,000 次试用）、`doubao`（每月 500 次）、`baidu`（每日 50 次）、`aliyun`（新用户 200 次包）、`brave`（每月 $5 额度 ≈ 1,000 次） | 按量后付费 |
+| ④ 付费升级（需 key 才有产出） | `serpbase`（注册送 100 次）/ `serply`（30 天 2,500 次）/ `outcrawl`（每月 1,000 credits）/ `specstream`（显式专用）/ `perplexity` / `deepseek-official` / `deepseek-tools` / `kimi` | 按量 / 按次 |
 | ⑤ 按次计费（模型内置，显式-only） | `openai` / `gemini` / `claude` | 按 token + 每次搜索 |
 
 选默认池的经验：**① 打底 + ③ 打主力**；② 可以进但要知道它在烧匿名额度；④ 只在你确实需要该源时显式选用；⑤ 永不入池。完整的逐引擎额度事实与默认池提案见 [docs/engine-quota-tiers.md](./docs/engine-quota-tiers.md)。
@@ -208,7 +221,7 @@
 
 ### 安装
 
-需要 **DSH 0.2.1-rc.2 或更新的 0.2.x**；更早的 0.1.x 宿主不满足 `engines.dsh`，插件管理器会拒绝安装。
+需要 **DSH 0.2.1-rc.2 到 0.3.x**（`engines.dsh` = `>=0.2.1-rc.2 <0.4.0-0`，顶层 `engines.dsh` 与 `dsh.engines.dsh` 同步声明，安装门禁与社区市场读同一范围）；更早的 0.1.x 和 0.4 及以上宿主不满足该范围，插件管理器会拒绝安装。已实测：0.2.2-rc.1（DSH Desktop 2.0.22-next 内置版本）与 0.2.2-rc.3。
 
 ```sh
 git clone https://github.com/DDDMUC/dsh-free-search.git
@@ -225,7 +238,7 @@ dsh web
 
 插件加载后**自动接管搜索**：
 
-- `web.searchProvider` 未设置，或仍是 DSH 出厂默认的官方搜索 `deepseek-official` 时，自动切换为本插件的 provider（id 固定为 `ddg`）；
+- `web.searchProvider` 未设置，或仍是当前版本的官方搜索默认（0.2.2-rc.2 起是 `deepseek-search-api`，旧版是 `deepseek-official`）时，自动切换为本插件的 provider（id 固定为 `ddg`）；
 - 如果（你或别的插件）已显式选择其他 provider，本插件不抢占，只在启动日志输出 WARN 与切换用的 YAML。
 
 **接管会写进 profile（DSH 0.2.x）**：从 `0.2.0-rc.2` 起 provider 选择存放在 config 的 volatile ref 里，只能经 `settings.mutate("web", …)` 写入，落盘结果就是 `profiles/<profile>/cordis.patch.yml` 多出：
@@ -252,8 +265,10 @@ DSH 0.2.1 设置 → 网页搜索 → **DeepSeek 搜索 API** 开关会和本插
 | 操作 | 结果 |
 |---|---|
 | 打开开关 | `web.searchProvider` 写成 `deepseek-search-api`（属于「显式选择其他 provider」），**本插件主动让路**，搜索走官方直连 API；抓取同时变成 `deepseek-fetch-api` |
-| 关闭开关 | DSH 会把整行 `- id: web` 删掉，provider 回到出厂默认 `deepseek-official` —— 这是**模型搜索**（一次完整 aux 请求，实测 ~12s、按 token 计费），不是免费引擎 |
-| 关闭后 | **0.9.8 起**：插件检测到 `deepseek-official` 会在运行时补一次接管（日志 `DSH's search switch put the web providers back to the official defaults — re-took …`），通常几秒内恢复免费链路；若没恢复，完整重启 DSH |
+| 关闭开关 | DSH 会把整行 `- id: web` 删掉，provider 回到当前版本的官方默认：0.2.2-rc.2 起是 `deepseek-search-api`（按 Search API 计费），旧版是 `deepseek-official`（模型搜索，一次完整 aux 请求，按 token 计费）；都不是免费引擎 |
+| 关闭后 | **0.9.8 起**：插件检测到任一官方默认会在运行时补一次接管（日志 `DSH's search switch put the web providers back to the official defaults — re-took …`），通常几秒内恢复免费链路；若没恢复，完整重启 DSH |
+
+开关打开期间，`fetchProvider` 会一直停在 `deepseek-fetch-api`，`web_fetch` 也就一直走官方计费接口，`fs-quality-fetch` 的直连/浏览器/exa/firecrawl 一层都不会被调用（报错信息来自 DeepSeek，与插件无关）。这是插件默认让路的结果，不是上游故障。想「官方搜索 + 插件抓取」同时在，打开本插件设置页「抓取」段的**强制接管 web_fetch**（写入 `fetchProviderForce: true`），保存即生效，不用重启；也可以手写 `fetchProvider: fs-quality-fetch`。
 
 想换引擎请用 `/free-search-engine` 或本插件设置页，**不要动那个开关**。打开开关再关掉，官方直连会退回模型搜索，直到插件重新接管或重启。
 
@@ -278,7 +293,7 @@ DSH 0.2.1 设置 → 网页搜索 → **DeepSeek 搜索 API** 开关会和本插
 配置页提供：
 
 - **Search engine**：下拉框切换引擎，保存即生效
-- **API keys**：为 Exa / Tavily / Keenable / Firecrawl / Parallel / Perplexity / DeepSeek / SerpBase / Serply / Outcrawl / Google CSE / You.com 填写 key（密码框，保存后只显示"已配置"；Exa / Tavily / Keenable / Firecrawl / Parallel / You.com 不填也可免 key 使用）
+- **API keys**：为 Exa / Tavily / Keenable / Firecrawl / Parallel / Perplexity / DeepSeek / SerpBase / Serply / Outcrawl / SpecStream / Google CSE / Metaso / Yandex / Yuanbao / You.com 填写 key（密码框，保存后只显示"已配置"；Exa / Tavily / Keenable / Firecrawl / Parallel / You.com 不填也可免 key 使用）
   - **推荐**：付费引擎 key 建议写入 harness 凭据中心 `~/.dsh/.credentials.yaml`（如 `DEEPSEEK_API_KEY: sk-...`，与官方 LLM provider 一致，一处管理所有 key）。插件读取优先级：凭据中心 > 设置页 > 环境变量，设置页填的 key 仅作为遗留兼容。
 - **Test engine**：直测当前引擎可用性（不走回退链，付费引擎无 key 会明确报错）
 - **Use Bing default**：把当前搜索引擎切回稳定的免费 Bing；`Discard` 只撤销尚未保存的编辑
@@ -366,7 +381,9 @@ DSH 0.2.1 设置 → 网页搜索 → **DeepSeek 搜索 API** 开关会和本插
 
 如果你**特意** pin 了 `fetchProvider: http`（只想要内置抓取），把 `fetchProviderTakeover` 设为 `false` 即可：本插件不再把 `http` 当成「出厂默认」去接管，但仍会在完全未设置时补上。
 
-`searchProvider` 的规则相同：未设置或仍是 `deepseek-official` 时接管，显式指定其它 provider 时不抢占。
+DSH 的搜索开关会把 `fetchProvider` 写成 `deepseek-fetch-api`，默认同样让路。要把抓取抢回来又不想改 YAML，打开 `fetchProviderForce`（设置页「抓取」段的「强制接管」）：它忽略上面那条判据，保存后立即把 `web.fetchProvider` 写回 `fs-quality-fetch`。
+
+`searchProvider` 的规则相同：未设置或仍是当前版本的官方默认（`deepseek-search-api` / `deepseek-official`）时接管，显式指定其它 provider 时不抢占。
 
 #### 配置文件
 
@@ -376,7 +393,7 @@ DSH 0.2.1 设置 → 网页搜索 → **DeepSeek 搜索 API** 开关会和本插
 
 ```yaml
 # profiles/<profile>/cordis.patch.yml 中该条目的 config：
-provider:                   # 留空 = 自动（中国出口 bing，其它 parallel）；也可写 ddg / bing / auto / multi 等
+provider:                   # 留空 = 地区默认（不是 Auto 路由；中国出口 bing，其它 parallel）；也可写 ddg / bing / auto / multi 等
 fallbackOn: [quota, auth, bot-wall, transient, invalid-response, unknown]   # 允许触发回退的失败类别；[] = 任何失败都立即中止（默认全部）
 lang: zh                    # 搜索语言池/本地化（zh / en / ru …，不再被设置页强行改写）
 #   lang 决定：Bing 的 mkt/Accept-Language、Wikipedia 子域（ja → ja.wikipedia.org）、地理编码语言；
@@ -397,7 +414,9 @@ promptToolsLang: ""          # 工具段那句话的语言，zh 或 en；留空�
 disabledTools: []           # 关掉的工具不再注册（例如 [domain_search]），schema 一并从上下文消失
 bingMarket: zh-CN           # Bing 市场；留空 = 自动（不发送 mkt）
 fetchProviderTakeover: true # false = 保留你显式 pin 的 fetchProvider: http
+fetchProviderForce: false # true = 连 DSH 搜索开关写进来的 deepseek-fetch-api 也接管（#142）
 browserFetch: true           # 直连失败时用系统浏览器无头渲染
+allowFakeIpCidrs: []          # 显式放行的保留网段，例如 Clash/mihomo fake-ip 的 198.18.0.0/15
 fetchPrefer: exa             # exa | firecrawl —— 两者都失败后先试哪个 keyed 抓取层
 region: cn-zh               # DuckDuckGo 区域（可选）
 searxngInstances:           # 自定义 SearXNG 实例（可选）
@@ -422,9 +441,17 @@ perplexityApiKey: ...
 serpbaseApiKey: ...         # 或通过设置页填写
 serplyApiKey: ...           # 或通过设置页填写
 outcrawlApiKey: ...         # 或通过设置页填写
+specstreamApiKey: ...       # 或通过设置页填写
 googleCseApiKey: ...        # Google Custom Search API key
 googleCseId: "..."         # Programmable Search Engine 的 cx
+metasoApiKey: ...          # Metaso API key (metaso.cn/api)
+metasoScope: webpage       # webpage | document | scholar
+yandexApiKey: ...          # Yandex Search API key (AI Studio)
+yandexFolderId: "..."      # folder the key was created in
+yandexSearchType: auto     # auto | ru | tr | com | kk | be | uz
 deepseekApiKey: ...
+deepseekToolsApiKey: ...   # optional key for the custom endpoint
+deepseekToolsBaseUrl: ""    # custom /v1/tools/search endpoint or base; empty = api.deepseek.com
 ```
 
 #### 让 agent 测试所有引擎
@@ -511,7 +538,31 @@ Search engine test:
 
 - 自动跟随重定向、解码正文（HTML 转文本）
 - 支持超时和大小限制
-- ⚠️ 注意：`web_fetch` 无 SSRF 防护，agent 理论上可访问内网地址——按需使用
+- ⚠️ 注意：`web_fetch` 默认拒绝回环、私网、链路本地和云元数据地址。若使用 Clash / mihomo TUN 的 fake-ip DNS，请把对应网段（常见 `198.18.0.0/15`）加入设置页的「额外允许的网段」，否则所有被代理域名都会被判成私网而抓取失败；只放行 fake-ip 网段，不要放行 RFC1918；IPv6 fake-ip 常用 ULA（如 `fdfe:dcba:9876::/64`），需要显式加入才会放行。
+
+#### MCP server（stdio）
+
+同仓库带一个独立的 stdio MCP server，供 Claude Desktop、Cursor、Codex 等 MCP 客户端使用，不依赖 DSH 运行时：
+
+```bash
+npx -y -p dsh-free-search dsh-free-search-mcp
+```
+
+`web_search` 默认只自动调用免 key 的 Bing / DuckDuckGo；在参数或 `MCP_SEARCH_ENGINE` 里显式点名 `google` / `baidu` / `brave` / `metaso` / `yandex` / `yuanbao` / `deepseek-tools` / `zhipu` / `perplexity` / `serpbase` / `serply` / `outcrawl` / `tinyfish` / `jina` / `kimi` / `aliyun` / `doubao` / `zhihu_global` / `zhihu_site` / `specstream` / `deepseek-official` / `openai` / `gemini` / `claude` / `agy` 时才会使用付费或有额度限制的引擎；`anysearch` / `searxng` / `exa` / `tavily` / `keenable` / `firecrawl` / `parallel` / `you` 可显式选择，且有免 key 档；`degoog` 需要 `MCP_DEGOOG_INSTANCES`；`baidu-html` / `so360` / `sogou` / `wechat` / `toutiao` 是默认关闭的 HTML SERP 抓取引擎。支持 `time_range`（day/week/month/year）。`advanced_search` 是同一后端的兼容别名，便于按宿主工具名调用。`web_fetch` 仍走直连 / 浏览器 / Exa / Firecrawl。`multi_search` 并行合并多个引擎（默认只跑免费引擎），`domain_search` 直查包/论文/CVE/财报/金融/法律等垂直源，`platform_search` 直查 GitHub/HN/Reddit/npm/Wikipedia/Bilibili/V2EX/掘金/豆瓣/Qiita/YouTube/Vimeo/X，`video_search` 查 Bing/DDG 视频，`research` 做轻量多引擎检索 + 抓取 + 证据摘要，`cache_search` 检索本地研究缓存，`free_search_test` 逐引擎探测，`doctor` 输出本地配置/凭据诊断，`weather` 查询 1–7 天天气；不监听端口。Claude Desktop 配置示例：
+
+```json
+{
+  "mcpServers": {
+    "dsh-free-search": {
+      "command": "npx",
+      "args": ["-y", "-p", "dsh-free-search", "dsh-free-search-mcp"],
+      "env": { "MCP_LANG": "zh", "MCP_SEARCH_ENGINE": "auto" }
+    }
+  }
+}
+```
+
+环境变量：`MCP_SEARCH_ENGINE`（默认 auto，也可指定任意引擎 id）、`MCP_MAX_RESULTS`、`MCP_SAFE_SEARCH`、`MCP_LANG`、`MCP_BING_MARKET`、`MCP_BROWSER_FETCH`、`MCP_ALLOW_FAKE_IP_CIDRS`。付费/可选 key 引擎按需读取：`GOOGLE_CSE_API_KEY` + `GOOGLE_CSE_ID`、`BAIDU_API_KEY`、`BRAVE_API_KEY`、`METASO_API_KEY` / `MCP_METASO_SCOPE`、`YANDEX_API_KEY` + `YANDEX_FOLDER_ID`、`TENCENTCLOUD_WSA_APIKEY` / `MCP_YUANBAO_MODE` / `MCP_YUANBAO_SITE`、`DEEPSEEK_TOOLS_API_KEY` 或 `DEEPSEEK_API_KEY`、`ZHIPU_API_KEY` / `MCP_ZHIPU_SEARCH_ENGINE`；免 key 档可选 `ANYSEARCH_API_KEY`、`MCP_SEARXNG_INSTANCES` / `MCP_SEARXNG_BEARER_TOKEN`、`EXA_API_KEY`、`TAVILY_API_KEY`、`KEENABLE_API_KEY`、`FIRECRAWL_API_KEY`、`PARALLEL_API_KEY`、`YDC_API_KEY`（旧名 `YOUCOM_API_KEY` 亦可）。
 
 #### 平台搜索（platform_search）
 
@@ -585,25 +636,44 @@ Search engine test:
 
 #### 离线自检断言（tools/）
 
-仓库自带 **50 个**零依赖断言脚本（合计 **796 项**），**不需要 API key、不联网、不需要测试框架**，Node ≥ 20 即可跑：
+仓库自带 **71 个**零依赖断言脚本（合计 **1060 项**），**不需要 API key、不联网、不需要测试框架**，Node ≥ 20 即可跑。一次跑全部：`npm test`。
 
 | 脚本 | 覆盖 | 运行（项数） |
 |---|---|---|
 | `assert-auto-default.mjs` | 自动默认引擎：`provider` 留空时的地区判定（CN → bing、其它 → parallel）、探测失败回落 bing、`DSH_FREE_SEARCH_DEFAULT` 覆盖、提示词跟随、`effectiveProvider` 下发 | `node tools/assert-auto-default.mjs`（7） |
 | `assert-serp-engines.mjs` | HTML 搜索页家族：注册表不变式、时间过滤声明、默认不进 auto 与回退链、显式入池才生效、四个解析器的内联 fixture、反爬识别与文本清洗 | `node tools/assert-serp-engines.mjs`（32） |
-| `assert-engines.mjs` | 引擎清单 / 免费引擎口径 / 语言分池路由 / 池配置字段 / 知乎 URL 剥 utm / `deepseek-tools` 接线与 snippetCap 放宽 | `node tools/assert-engines.mjs`（41） |
+| `assert-engines.mjs` | 引擎清单 / 免费引擎口径 / 语言分池路由 / 池配置字段 / 知乎 URL 剥 utm / `deepseek-tools` 接线与 snippetCap 放宽 / `outcrawl` 与 `specstream` 显式专用注册点 | `node tools/assert-engines.mjs`（89） |
 | `assert-blocked-domains.mjs` | 域名黑名单：解析、匹配、收口，且前后端清洗同口径 | `node tools/assert-blocked-domains.mjs`（69） |
 | `assert-multi-policy.mjs` | multi 执行策略：并发上限是天花板 / 目标成功源非硬下限 / 凭据资格在上限之前分流 / **Fast·Balanced·Deep 档位** | `node tools/assert-multi-policy.mjs`（146） |
 | `assert-multi-limit.mjs` | multi 结果上限（#109）：默认 20 / 硬上限 100 / 配置归一化、单次 maxResults 受上限约束、工具参数与本段提示词写明生效上限、设置页字段与保存 | `node tools/assert-multi-limit.mjs`（6） |
 | `assert-maintenance.mjs` | 维护面：CI 在 Node 20/22/24 跑全部断言并过打包闸门、发布脚本会 bump / 校验 / 打 tag / 可发布、恢复官方 provider 的桥接与设置页按钮 | `node tools/assert-maintenance.mjs`（4） |
-| `assert-engine-modules.mjs` | 引擎分层：实现文件存在且被 index 引用、引擎函数已迁出 index、设置页引擎 id 与服务端清单一致、清单覆盖 36 个引擎且免费/按次标记正确 | `node tools/assert-engine-modules.mjs`（4） |
+| `assert-engine-modules.mjs` | 引擎分层：实现文件存在且被 index 引用、引擎函数已迁出 index、设置页引擎 id 与服务端清单一致、清单覆盖 42 个引擎且免费/按次标记正确、index 不引用引擎私有名 | `node tools/assert-engine-modules.mjs`（6） |
+| `assert-brave.mjs` | Brave Search：catalog/凭据/设置接线、请求头与 count/freshness、错误分类、HTML 清洗、ISO 日期归一化、15s 超时 | `node tools/assert-brave.mjs`（54） |
+| `assert-sidebar-entry.mjs` | 侧栏入口（#129）：`sidebarEntry` 默认开、设置页读写、条件注册/注销、`/free-search` 命令打开面板 | `node tools/assert-sidebar-entry.mjs`（4） |
+| `assert-slash-commands.mjs` | 斜杠命令开关：`slashCommands` 默认开、设置页读写、两个命令按配置注册/注销、关闭后提示词不再提 `/free-search-engine` | `node tools/assert-slash-commands.mjs`（4） |
+| `assert-keyless-first.mjs` | 免 key 优先：`keylessFirst` 默认关、开启后先走免 key 档，限流/鉴权/网络失败改用 key 并休息、其他失败不动用 key、无 key 行为不变，覆盖 Tavily、Exa 与 multi 模式 | `node tools/assert-keyless-first.mjs`（13） |
+| `assert-zhipu.mjs` | 智谱搜索：catalog/回退链、请求头与 engine/count/recency、Sogou 步进、响应映射、错误分类、无 key | `node tools/assert-zhipu.mjs`（6） |
+| `assert-deepseek-snippets.mjs` | deepseek-tools 摘要：默认 600、0 不截断、总预算上限、短条目保留 | `node tools/assert-deepseek-snippets.mjs`（5） |
+| `assert-bing-relevance.mjs` | Bing 相关性（#112）：单字中文 token 被剔除、无关替代 SERP 被拒、真正相关的结果通过、只命中通用引擎名的整批被拒、单一 token 覆盖一半时放行、单字/纯数字查询的显式行为 | `node tools/assert-bing-relevance.mjs`（6） |
+| `assert-relevance-pools.mjs` | 相关性守卫与语言池（#132/#133）：AnySearch 无关批次判空、相关批次保留、shared.js 守卫被 anysearch/searxng/ddg/ddg-lite/degoog/keenable 使用、doctor 地区默认文案与语言池告警、缓存 key 随 zhPool/enPool 变化 | `node tools/assert-relevance-pools.mjs`（5） |
+| `assert-quality.mjs` | 研究证据闸门：8 源 / 3 域 / 3 正文 / 2 日期为 high，3 源 / 2 域 / 1 正文为 medium，单源与失败注记为 low，空包为 low，research 的 schema/输出/brief 接线 | `node tools/assert-quality.mjs`（6） |
+| `assert-dedupe.mjs` | 近重复去重：MinHash 同文本同签名、同 URL 去重、跨站转载去重、不同文章保留且顺序不变、阈值可调、provider 与 multi 两条路径接线 | `node tools/assert-dedupe.mjs`（6） |
+| `assert-intent-routing.mjs` | 意图路由：五类领域与 general 分类、偏好重排稳定、Auto 头部按领域、自定义回退顺序不被重排、时间过滤仍生效、接线 | `node tools/assert-intent-routing.mjs`（6） |
 | `assert-result-ranking.mjs` | 合并排序：**eTLD+1 同域判定** / 域名轮转 / `seenIn` 降为末位 / 时效仅带时间过滤时生效 | `node tools/assert-result-ranking.mjs`（31） |
 | `assert-url-norm.mjs` | URL 规范化：只剔已审计的 tracking 参数，保留可能区分资源的参数 | `node tools/assert-url-norm.mjs`（72） |
 | `assert-prompt-contract.mjs` | 系统提示词契约：**检索≠抓取**、不可信边界、模型内置搜索只在显式选中时运行 | `node tools/assert-prompt-contract.mjs`（9） |
 | `assert-research-degradation.mjs` | research 无 key 全降级、`node:sqlite` no-op、90s 预算隔离、缓存目录可配置、`budget.exhausted` 契约名 | `node tools/assert-research-degradation.mjs`（19） |
 | `assert-research-call-wrappers.mjs` | research 四个 `call*` 包装层的替身/底层透传（#75 回归） | `node tools/assert-research-call-wrappers.mjs`（23） |
-| `assert-fetch-chain.mjs` | `fs-quality-fetch` 四层链序、任一层命中即停、exa 失败静默降级 firecrawl、全层失败聚合报错 | `node tools/assert-fetch-chain.mjs`（8） |
-| `assert-fetch-ssrf.mjs` | 抓取 SSRF 防护：公网/私网/保留地址判定、DNS 解析到私网拒绝、localhost 与 IP 字面量拒绝、非 HTTPS 与带凭据 URL 拒绝、provider 接线与设置项 | `node tools/assert-fetch-ssrf.mjs`（6） |
+| `assert-fetch-chain.mjs` | `fs-quality-fetch` 四层链序、任一层命中即停、exa 失败静默降级 firecrawl、全层失败聚合报错、http 目标进到 tier 链而不是被入口断言拒绝 | `node tools/assert-fetch-chain.mjs`（9） |
+| `assert-fetch-ssrf.mjs` | 抓取 SSRF 防护：公网/私网/保留地址判定、DNS 解析到私网拒绝、localhost 与 IP 字面量拒绝、`http://` 与 `https://` 放行而其他协议与带凭据 URL 拒绝、http 目标解析到私网同样拒绝、fake-ip 网段默认拒绝且仅按配置放行、IPv6 ULA 显式放行、放行后仍拒绝回环/IPv4 私网/链路本地、provider 接线与设置项 | `node tools/assert-fetch-ssrf.mjs`（10） |
+| `assert-fetch-http.mjs` | 明文 http 目标（#143）：直连层按协议选 transport、http 重定向可跟随、provider 不再在入口拒绝 http 而交给 tier 链、全层失败报直连原因而不再报 only https、非 http(s) 协议仍拒、`agentForUrl` 为 http 目标选明文隧道 agent、经 `CONNECT` 隧道抓取 http 页面 | `node tools/assert-fetch-http.mjs`（7） |
+| `assert-mcp.mjs` | MCP stdio 面：initialize 协议协商、tools/list 的 JSON Schema、tools/call 文本结果、工具错误与 JSON-RPC 错误区分、必填参数校验、显式付费引擎与新 provider、advanced/multi/domain/platform/video/research/weather 新工具、bin/files 打包 | `node tools/assert-mcp.mjs`（10） |
+| `assert-mcp.mjs` | MCP stdio surface: initialize negotiation, tools/list JSON Schema, tools/call text results, tool errors vs JSON-RPC errors, required arguments, explicit keyed engines and new providers, advanced/multi/domain/platform/video/research/weather tools, bin/files packaging | `node tools/assert-mcp.mjs` (10) |
+| `assert-baidu.mjs` | 百度千帆：key 必填、web_search 首请求、403 或 results.code 额度错误回退 chat/completions（stream:false）、401 不回退、双端失败合并报错 | `node tools/assert-baidu.mjs`（6） |
+| `assert-deepseek-endpoint.mjs` | DeepSeek 搜索端点：默认地址、base/完整 URL 归一、自定义 endpoint 收 Bearer/key/query、配置与设置页接线 | `node tools/assert-deepseek-endpoint.mjs`（4） |
+| `assert-yuanbao.mjs` |key 必填、Bearer 网关/Query/Mode/Site/FromTime、自然与 VR 页面解析、日期归一、错误分类、注册与显式专用 | `node tools/assert-yuanbao.mjs`（6） |
+| `assert-yandex.mjs` | Yandex Search：key+folder 必填、Api-Key/请求体/分组、searchType 与 period/family 映射、Base64 XML 解析与日期、错误分类、注册与显式专用 | `node tools/assert-yandex.mjs`（6） |
+| `assert-metaso.mjs` | 秘塔搜索：key 必填、请求体（q/scope/size/summary/raw/concise）、摘要与日期映射、文库数组、size 上限、无效 scope 回退、401/402/429/400 错误分类、注册与默认回退排除 | `node tools/assert-metaso.mjs`（6） |
 | `assert-google-cse.mjs` | Google Custom Search：key+ID 必填、请求参数（q/num/start/hl/safe/dateRestrict）、结果映射与发布日期、超过 10 条分页、403/429/400 错误分类、时间档映射、全链路注册 | `node tools/assert-google-cse.mjs`（6） |
 | `assert-engine-runtime.mjs` | 引擎运行时：按引擎并发上限（普通 2 / HTML SERP 1）、排队与 abort 清理、成功/空/失败/平均耗时统计、provider 与 runEngineTest 两条路径接线、诊断报告带 stats | `node tools/assert-engine-runtime.mjs`（4） |
 | `assert-single-fetch-layer.mjs` | 抓取层全库只有一份实现、依赖单向、替身键不串层 | `node tools/assert-single-fetch-layer.mjs`（22） |
@@ -623,12 +693,14 @@ Search engine test:
 | `assert-rail-section.mjs` | 页内目录的机器可读当前段：卡片根 `data-dsh-fs-section` 与 `railActive` 绑定、六段 id 固定、滚动监听仍在更新 | `node tools/assert-rail-section.mjs`（4） |
 | `assert-package-files.mjs` | 发布清单闸门（#97）：`files` 展开后必须覆盖被引用的本地模块、入口点与 `cordis.patch.yml`，并确认 `prepack` 守卫生效 | `node tools/assert-package-files.mjs`（4） |
 | `assert-key-rotation.mjs` | 多 key 轮换（#96）：round-robin 与 peek、单 key 不推进、配额优先于 429 的分类、轮换候选集合、`multi` 模式内重试与预检不消耗 key | `node tools/assert-key-rotation.mjs`（7） |
+| `assert-fetch-key-rotation.mjs` | `web_fetch` 云端抓取（#128）：配额失败冻结当前 key 并用下一把重试、非轮换错误不换 key、无 key 不发请求、真实 provider 的 exa 402 重试、Linux 浏览器路径可发现 | `node tools/assert-fetch-key-rotation.mjs`（6） |
 | `assert-x-platform.mjs` | X (Twitter) 平台（Grok Build CLI）：可用性、提示词约束、structuredOutput/text/原始 JSON 解析、status 链接过滤与截断、双语文案与面板默认值 | `node tools/assert-x-platform.mjs`（8） |
 | `assert-cooldown.mjs` | 冷却：Retry-After / reset 时间提示优先、失败类档次（session / 短冷却 / 额度 / 月度 / 地区）、key 指纹稳定且互不相同、store 冷却 / 剩余 / 清除、有限冷却落盘重启后仍在而 session 不落盘、按 key 与按引擎互不干扰 | `node tools/assert-cooldown.mjs`（6） |
 | `assert-redact.mjs` | 错误脱敏：已登记 key 全量替换、`sk-` / Bearer / api_key / x-api-key 形态无需登记也能打码、普通文本与短值不动、环境变量按名称收集 | `node tools/assert-redact.mjs`（4） |
-| `assert-doctor.mjs` | 诊断报告：时长格式化、头部版本 / Node / DSH 主目录 / 生效默认 / 提示词字数、每个引擎的标记与原因、冷却原因去重列出、提示词未注入的提示 | `node tools/assert-doctor.mjs`（5） |
+| `assert-doctor.mjs` | 诊断报告：时长格式化、头部版本 / Node / DSH 主目录 / 生效默认 / 提示词字数、每个引擎的标记与原因、冷却原因去重列出、提示词未注入的提示、非 Auto 语言池告警 | `node tools/assert-doctor.mjs`（7） |
 | `assert-agy.mjs` | Antigravity CLI：提示词查询 / 条数 / JSON 契约、structuredOutput 与 response 两种信封、非 SUCCESS 透出上游原因、URL 过滤与截断、CLI 参数、注入 runner 跳过 PATH 检查 | `node tools/assert-agy.mjs`（6） |
 | `assert-allowed-engines.mjs` | 引擎白名单（#106）：条目归一化、空名单保持原状、非空时禁用其余全部（含未来新增）、显式禁用优先、错拼不锁死搜索、白名单内引擎可入链（HTML 家族 / 按次计费）、auto 只路由白名单、内置提示词只列白名单且回退为 none、schema 默认空 | `node tools/assert-allowed-engines.mjs`（9） |
+| `assert-host-compat.mjs` | 宿主兼容声明（0.9.51）：顶层 `engines.dsh` 与 `dsh.engines.dsh` 一致、覆盖 0.2.1-rc.2～0.3.x 并拒绝 0.1.x/0.4+、每个 `@deepseek-ai/dsh*` peer 与主范围无冲突、市场的交集判定与安装门禁一致、`dshReleases` 列出实测版本、客户端版本跟随 package.json | `node tools/assert-host-compat.mjs`（8） |
 | `assert-updater.mjs` | 自带更新：版本比较、registry 探测（成功 / 非 200 / 网络失败返回 null）、安装模式识别（真实安装优先于 link）、客户端按钮与桥接、服务端两条路由与 pnpm 升级命令、卡片版本跟 package.json 一致 | `node tools/assert-updater.mjs`（9） |
 | `assert-inject.mjs` | 旧版 Cordis 兼容（#107）：静态 inject 声明 web / settings / tools / systemPrompt、可选服务只走 `ctx.get`、回调上下文的属性读取都在 inject 里、动态依赖列表没有未知服务 | `node tools/assert-inject.mjs`（4） |
 | `assert-safe-text.mjs` | UTF-16 截断安全（#108）：孤立高低代理清理、有效代理对保留、码点截断不切开 emoji、`cleanSnippet` 300 边界落在整字符、结果/来源/错误脱敏、web_fetch 各层正文兜底、源码守卫 | `node tools/assert-safe-text.mjs`（9） |
@@ -637,8 +709,9 @@ Search engine test:
 | `assert-firecrawl-keyless.mjs` | Firecrawl keyless 出口判定：403 + VPN/proxy 文案才算拒绝、普通 403 与 401/429/500 不算、冷却初始未触发 | `node tools/assert-firecrawl-keyless.mjs`（5） |
 | `assert-fetch-charset.mjs` | 抓取编码（#88）：`charset=gbk` / `gb2312` 按声明解码、无声明时嗅探 `<meta charset>` 与 http-equiv 形式、默认 UTF-8、未知 label 兜底 UTF-8 不抛错 | `node tools/assert-fetch-charset.mjs`（6） |
 | `assert-fetch-abort.mjs` | 抓取中断（#87）：压缩响应中途断连必须 reject（不再永久 pending）、明文断连同样 reject、abort 能打断停滞的 gzip 流、complete 响应与重定向仍正常 | `node tools/assert-fetch-abort.mjs`（6） |
-| `assert-bridge-access.mjs` | 桥接 Host 围栏（#84）：loopback 放行、remote peer 打 loopback Host 拒绝、`--trusted-host`（无端口匹配任意端口 / 带端口精确匹配）、`--public-url`、绑定地址、跨站与异源拒绝 | `node tools/assert-bridge-access.mjs`（11） |
-| `assert-provider-takeover.mjs` | provider 接管：旧属性 API 与 rc.2 的 `config.*` ref 两套兼容、`settings.mutate(web)` 单批写入、显式指定的 provider 不被抢占、`fetchProviderTakeover: false` 时保留显式 `http`、describe 噪声不误报、嵌套 config 变化与 web 重建分别成行、关闭 DSH 搜索开关后重新接管且不抢 `deepseek-search-api`、apply 重入/重复注册不再中断、重复日志去重 | `node tools/assert-provider-takeover.mjs`（16） |
+| `assert-fetch-proxy.mjs` | 抓取层代理：`http_proxy` / `https_proxy` / `all_proxy` / `no_proxy` 解析（大小写与小写优先、空值视为未设置）、`NO_PROXY` 的域名 / `host:port` / `*` 匹配、loopback 恒直连、`socks5://` 忽略、`CONNECT` 隧道握手与 `Proxy-Authorization`、代理拒绝与提前断连不挂起、有 agent 时重定向每一跳仍过 SSRF 校验、浏览器 tier 的 `--proxy-server` | `node tools/assert-fetch-proxy.mjs`（12） |
+| `assert-bridge-access.mjs` | 桥接 Host 围栏（#84）：loopback 放行、remote peer 打 loopback Host 拒绝、`--trusted-host`（无端口匹配任意端口 / 带端口精确匹配）、`--public-url`、绑定地址、跨站与异源拒绝、connection 鉴权委托与 fail-closed、设置客户端按 `document.baseURI` 解析子路径 | `node tools/assert-bridge-access.mjs`（14） |
+| `assert-provider-takeover.mjs` | provider 接管：旧属性 API 与 rc.2 的 `config.*` ref 两套兼容、`settings.mutate(web)` 单批写入、显式指定的 provider 不被抢占、`fetchProviderTakeover: false` 时保留显式 `http`、`fetchProviderForce` 抢回 `deepseek-fetch-api` 且不动搜索、开关打开时保存设置即补接管（关闭时不动 web）、describe 噪声不误报、嵌套 config 变化与 web 重建分别成行、关闭 DSH 搜索开关后重新接管（`deepseek-search-api` / `deepseek-official` 均视为官方默认）、apply 重入/重复注册不再中断、重复日志去重 | `node tools/assert-provider-takeover.mjs`（25） |
 
 任何一个失败会以非 0 退出码结束并列出失败项；把某个旧版本文件路径作为参数传进去，可以看到修复前必红（用来证明断言不是空转）。改动发布相关逻辑后建议先跑一遍再发版。
 
@@ -646,15 +719,28 @@ Search engine test:
 
 ### 代理说明（国内用户）
 
-DuckDuckGo 等引擎可能需要代理才能访问，而 Node.js 的 `fetch` 默认不走系统代理。需要给 dsh 进程设置（Node 24+）：
+本插件有两条独立的出网路径，代理对两条都要配：
+
+1. **搜索**（`web_search` / `multi_search` / `advanced_search` / `platform_search` / `video_search` 等）走 `globalThis.fetch`（undici），是否代理由 undici 的全局 dispatcher 决定。
+2. **抓取正文**（`web_fetch` 与 `research` 的 T1 直连、T1.5 无头浏览器，以及 exa / firecrawl / crawl4ai 的云端调用）历史上直接用 `node:https` 与子进程，**既不读代理环境变量，也不受 undici dispatcher 影响**。所以会出现「搜索能通、抓取一直超时」——设置里的代理插件对第二层无效。现在这一层自己读代理环境变量，并为每一跳建立 HTTP `CONNECT` 隧道（浏览器 tier 则传 `--proxy-server`）。
+
+配置方式（`http_proxy` / `https_proxy` / `all_proxy` / `no_proxy`，大小写均可，小写优先，空值视为未设置）：
 
 ```sh
-export NODE_USE_ENV_PROXY=1
 export HTTPS_PROXY=http://127.0.0.1:7897   # 你的代理地址
 export HTTP_PROXY=http://127.0.0.1:7897
+export NO_PROXY=localhost,127.0.0.1,::1    # 可选
 ```
 
-Windows 用户：桌面快捷方式已内置此配置（`set NODE_USE_ENV_PROXY=1&& set HTTPS_PROXY=...`）。
+- 只支持 `http://` / `https://` 代理（可带 Basic 认证）；`socks5://` 会被忽略并直连。
+- `http://` 目标同样走代理：隧道建立后直接用明文 socket，不会对不支持 TLS 的站点叠一层 TLS 握手。
+- loopback 地址（`localhost`、`127.0.0.1`、`::1`、`127.0.0.0/8`）恒直连。
+- `NO_PROXY` 支持逗号分隔的域名、`host:port` 与 `*`。
+- 走代理时域名由代理端解析，`lookup` 钩子失效；因此重定向的每一跳都会先显式过一遍 SSRF 校验，`allowFakeIpCidrs` 等设置继续生效。
+- 代理不可达时按原有逻辑降级到云端 tier，错误信息里会带 `proxy <host> refused CONNECT ...` 之类的具体原因。
+- 不依赖 Node 24 的 `NODE_USE_ENV_PROXY`，Node ≥ 20 即可；该变量只影响 undici 那条路径。
+
+Windows 用户：桌面快捷方式已内置 `NODE_USE_ENV_PROXY=1` + `HTTPS_PROXY`（`set NODE_USE_ENV_PROXY=1&& set HTTPS_PROXY=...`）。
 
 ### 工作原理
 
@@ -690,7 +776,7 @@ This plugin solves exactly that: multiple free engines plus automatic fallback, 
 #### Engines and switching
 
 - **Zero Cost** — Multiple free engines with no API key or registration required
-- **36 engines available** — DuckDuckGo (HTML / Lite), Bing, AnySearch AI, SearXNG (meta-search with custom instances), Exa, Tavily, Keenable, Firecrawl, Parallel, Perplexity, SerpBase, Serply, Outcrawl, Google Programmable Search (`google`, needs an API key plus a CSE ID), DeepSeek Official, DeepSeek Native Search API, You.com, Baidu Qianfan, Kimi, Aliyun Bailian, Volcano Doubao, Zhihu web-wide/site search (`zhihu_global`/`zhihu_site`, via the Zhihu open-platform MCP), Antigravity CLI search (`agy`, requires the local CLI), and the model-based OpenAI / Gemini / Claude searches. The default auto-fallback chain covers 28 of them; the 5 HTML SERP engines stay out by default and the per-call billed OpenAI / Gemini / Claude engines run only when explicitly named.
+- **42 engines available** — DuckDuckGo (HTML / Lite), Bing, AnySearch AI, SearXNG (meta-search with custom instances), Exa, Tavily, Keenable, Firecrawl, Parallel, Brave (`brave`, official Search API, needs `BRAVE_API_KEY`), Zhipu (`zhipu`, official Web Search API, needs `ZHIPU_API_KEY`), Perplexity, SerpBase, Serply, Outcrawl, SpecStream (`specstream`, official Search API, needs `SPECSTREAM_API_KEY`), Google Programmable Search (`google`, needs an API key plus a CSE ID), Metaso (秘塔搜索, official API, billed per call), Yandex Search (official API, billed per request, folder ID required), Tencent Yuanbao Search (API-key gateway with a limited free-quota activity), DeepSeek Official, DeepSeek Native Search API, You.com, Baidu Qianfan, Kimi, Aliyun Bailian, Volcano Doubao, Zhihu web-wide/site search (`zhihu_global`/`zhihu_site`, via the Zhihu open-platform MCP), Antigravity CLI search (`agy`, requires the local CLI), and the model-based OpenAI / Gemini / Claude searches. The default auto-fallback chain covers 30 of them; the 5 HTML SERP engines stay out by default and the per-call billed OpenAI / Gemini / Claude engines, Metaso, Yandex, Yuanbao and SpecStream run only when explicitly named.
 - **5 HTML SERP engines (off by default)** — Traditional result pages join the same engine / fallback / cooldown / settings machinery: `baidu-html` (Baidu web), `so360`, `sogou`, `wechat` (WeChat articles) and `toutiao`. No key, no quota — the trade-off is scraping: captcha/anti-bot pages are classified as `bot-wall` and cool the whole family down for 10 minutes (the egress IP gets flagged as a whole), and results carry no API snippets. They never join auto routing, the fallback chain or the language pools; they only run when named via `engine=` or added to a pool.
 - **Engine whitelist** — turn on Use only the checked engines and only those engines stay usable; engines added by later versions stay off. It maps to `allowedEngines` in the config (a non-empty list is equivalent to disabling every other engine).
 - **Global engine enable/disable & fallback priority** — uncheck engines you never want (applies everywhere: web_search fallback, Auto routing, advanced_search, multi_search, engine tests) and reorder the global fallback chain with ↑↓ (one-click reset).
@@ -704,7 +790,7 @@ This plugin solves exactly that: multiple free engines plus automatic fallback, 
 
 - **Unified Engine Fallback** — Any engine failure (paid or free, missing key, 401, rate limit, network error) automatically tries the next engine: the configured engine first, then other engines (exa/tavily/keenable/firecrawl/parallel/you are tried even without a key because they have built-in keyless quota), then the remaining free engines (Bing/AnySearch etc.) — with a note attached to the results naming the engine that actually served them (e.g. `Note: perplexity unavailable or failed, using exa.`). Failures are classified: quota/auth failures cool the engine down for the session, anti-bot walls back off briefly, timeout/5xx/rate-limit failures retry the same engine once, and parse errors / 0 results are reported without cooling it down. Search never fails outright.
 - **Multi-key rotation** — Any key field (or its env var) accepts several keys separated by commas, semicolons or newlines. Keys are used round-robin per request, and on 401/402/429 the same engine retries with the next key before the engine-level fallback runs. This also applies inside `multi` mode (#96).
-- **Per-key cooldowns and diagnostics** — a 429 or quota error cools the key that hit it, not every other key of the same engine; the state is written to disk and survives a restart; keys are masked in failure text and logs; the Diagnose button at the bottom of the settings page lists why each engine is currently unavailable, how long its cooldown has left, and the in-process call count, success/empty/failure split and average latency; concurrent calls to one engine queue beyond 2 (1 for HTML SERP), so a free engine is not hammered in the same second.
+- **Per-key cooldowns and diagnostics** — a 429 or quota error cools the key that hit it, not every other key of the same engine; the state is written to disk and survives a restart; keys are masked in failure text and logs; the Diagnose button at the bottom of the settings page lists why each engine is currently unavailable, how long its cooldown has left, and the in-process call count, success/empty/failure split and average latency; concurrent calls to one engine queue beyond 2 (1 for HTML SERP), so a free engine is not hammered in the same second; the doctor also reports the active web search/fetch provider and warns when another plugin owns it (providers are mutually exclusive).
 - **Built-in updater** — the card footer shows the version and a Check update button; npm installs upgrade to latest in one click, while a local link install links to the npm page and points at git pull instead.
 - **Engine Testing** — `free_search_test` for the agent to check all engines in one call; the settings UI also has a "Test engine" button that tests the selected engine directly (no fallback chain; paid engines without a key report an explicit error).
 - **Truncation safety** — titles and snippets are cut by code point, and search results, tool output and web_fetch bodies are stripped of lone surrogates before leaving the plugin; an emoji can no longer make history unserializable (#108).
@@ -714,7 +800,8 @@ This plugin solves exactly that: multiple free engines plus automatic fallback, 
 
 #### Multi and language pools
 
-- **Multi mode** — pick `Multi Search` as the engine: web_search queries **every enabled engine of the query's language pool** concurrently (no longer top 3; zh/en pools editable in the settings UI, minimum 2 engines each), merges/deduplicates URLs (same-site detection via **eTLD+1**) and prioritizes cross-source hits; the settings UI offers **Fast / Balanced / Deep** presets or your own cap and target numbers; the whole run shares one **30-second budget** and returns whatever it already has when time is up; the final unique-result ceiling is configurable in Settings (`multiMaxResults`, default 20, max 100, while a per-call `maxResults` can only ask for fewer). This costs more quota; a failed multi run automatically falls back to the single-engine chain.
+- **Multi mode** — pick `Multi Search` as the engine: web_search queries **every enabled engine of the query's language pool** concurrently (no longer top 3; zh/en pools editable in the settings UI, minimum 2 engines each), merges/deduplicates URLs (same-site detection via **eTLD+1**) and prioritizes cross-source hits; the settings UI offers **Fast / Balanced / Deep** presets or your own cap and target numbers; the whole run shares one **30-second budget** and returns whatever it already has when time is up; the final unique-result ceiling is configurable in Settings (`multiMaxResults`, default 20, max 100, while a per-call `maxResults` can only ask for fewer). Merged results are de-duplicated with MinHash. This costs more quota; a failed multi run automatically falls back to the single-engine chain.
+- **Intent routing** — when no custom fallback order is set, Auto reorders the current language pool by query domain (finance / academic / code / news / shopping); it only changes the order of engines already selected, never adds engines or changes the fallback set.
 
 <img src="https://raw.githubusercontent.com/DDDMUC/dsh-free-search/master/assets/ui-performance.png" alt="Performance: cache and Multi presets" width="100%" />
 <sub>▲ Performance: result cache TTL and the Fast / Balanced / Deep Multi presets</sub>
@@ -732,7 +819,7 @@ This plugin solves exactly that: multiple free engines plus automatic fallback, 
 
 #### Fetch and tools
 
-- **Webpage Fetching (`web_fetch`)** — Allows the agent to read full webpage contents (official `dsh-web-fetch-http` provider, pure JS, zero extra dependencies); it can take over `web.fetchProvider` with the plugin's direct → browser render → exa / firecrawl → crawl4ai quality chain. The headless browser tier can be switched off in Settings and the exa/firecrawl order is configurable; loopback, private-network and cloud-metadata addresses are rejected (SSRF guard).
+- **Webpage Fetching (`web_fetch`)** — Allows the agent to read full webpage contents (official `dsh-web-fetch-http` provider, pure JS, zero extra dependencies); it can take over `web.fetchProvider` with the plugin's direct → browser render → exa / firecrawl → crawl4ai quality chain. The direct tier handles `http://` as well as `https://` targets and picks the transport per hop; only schemes other than `http(s)` are refused. The headless browser tier can be switched off in Settings and the exa/firecrawl order is configurable; loopback, private-network and cloud-metadata addresses are rejected (SSRF guard). Clash / mihomo TUN fake-ip ranges (usually 198.18.0.0/15) can be allowed explicitly under extra allowed networks, otherwise the placeholder addresses returned by system DNS are rejected as private.
 
 <img src="https://raw.githubusercontent.com/DDDMUC/dsh-free-search/master/assets/ui-fetch.png" alt="Fetch and platforms: web_fetch takeover, key storage and platform switches" width="100%" />
 <sub>▲ Fetch: web_fetch takeover, key storage location and platform search switches</sub>
@@ -740,7 +827,7 @@ This plugin solves exactly that: multiple free engines plus automatic fallback, 
 - **Platform Search (`platform_search`)** — Search GitHub / V2EX / Bilibili / Reddit / Hacker News / Stack Overflow / Wikipedia / npm / YouTube / Vimeo / Juejin / Douban / Qiita (public APIs or keyless scraping, zero extra dependencies); X (Twitter) goes through the local Grok Build CLI (SuperGrok / X Premium sign-in).
 - **Vertical Lookups (`domain_search`)** — Direct lookup in 41 keyless vertical sources: packages/versions (PyPI, crates, GitHub releases, endoflife…), academia (arXiv, Crossref, OpenAlex, Semantic Scholar, PubMed, dblp, Zenodo…), security (NVD, OSV, CISA KEV), finance (SEC EDGAR, IMF, World Bank, CFETS, Yahoo Finance, CoinGecko…), law (US Federal Register, US CourtListener, openlegaldata, UK legislation), news (Google News, GDELT) and more.
 - **Video Search (`video_search`)** — Find videos across the web via Bing Videos + DuckDuckGo Videos (keyless, mutual fallback), returning video links with titles and publisher/duration metadata.
-- **One-Call Research (`research`)** — Concurrent multi-engine search → candidate rerank → tiered body fetch → window selection → an evidence pack with provenance as Markdown; every model component (rerank / embedding / decision model) is optional and silently falls back to the rule path when missing or failing.
+- **One-Call Research (`research`)** — Concurrent multi-engine search → candidate rerank → tiered body fetch → window selection → an evidence pack with provenance as Markdown; every model component (rerank / embedding / decision model) is optional and silently falls back to the rule path when missing or failing; the output carries an evidence quality gate (high / medium / low with a conclusion cap) and says so when the evidence is too thin.
 - **Search Fetched Bodies (`cache_search`)** — Full-text search over the bodies `research` already fetched (`node:sqlite` persistent cache, 7-day retention; degrades to a no-op whenever `node:sqlite` is unavailable — unflagged from 22.13, while 22.5–22.12 needs `--experimental-sqlite`).
 - **Clean Integration** — Implements the official `WebSearchProvider` seam interface, coexisting seamlessly with official plugins.
 - **Time Filtering** — The `advanced_search` tool supports `timeRange`: fixed tiers, custom relative values, or an absolute date (details below).
@@ -750,6 +837,9 @@ This plugin solves exactly that: multiple free engines plus automatic fallback, 
 #### Settings and rail
 
 - **Web Settings UI** — Engine switching, API key configuration (keys masked as "configured" in the UI), and a Chinese/English toggle; the entry is the component-row config (`plugins.row.config`) on the sidebar Plugins page (DSH 0.2.1-rc.2+). Remote access (VPS, reverse proxy, custom domain) works too: the bridge reuses the host's own Host fence, so addresses declared with `--trusted-host` or `--public-url` are accepted (#84).
+- **Optional sidebar entry** — the left-sidebar row is shown by default; turning it off persists in the plugin config and survives restarts. The panel remains reachable through `/free-search` or the plugin page.
+- **Optional slash commands** — `/free-search-engine` and `/free-search` are registered by default; turning `slashCommands` off in settings unregisters both, settings stay on the plugin page, and the prompt points the model at the plugin settings instead. Useful when you only want the search tools for the agent.
+- **Keyless tier first (optional)** — by default an engine with a key always uses it. With `keylessFirst` on in settings, Exa / Tavily / Keenable / Firecrawl / Parallel / AnySearch / You.com try their keyless tier first and switch to the key only when that tier is rate limited, out of quota, asks for auth or fails to connect (retried once within the same request). A failed keyless tier rests for a while (at most 45 minutes), and searches go straight to the key meanwhile. Useful when the key is pay-as-you-go and should be the backup.
 
 <img src="https://raw.githubusercontent.com/DDDMUC/dsh-free-search/master/assets/ui-apikeys.png" alt="Global fallback priority and per-engine API keys" width="100%" />
 <sub>▲ Global fallback priority: one engine per row, its API key on the right (configured keys are masked)</sub>
@@ -784,46 +874,52 @@ If this plugin has been helpful, a ⭐ on [GitHub](https://github.com/DDDMUC/dsh
 
 ### Supported Engines
 
-| id | Engine | Cost | Description |
-|---|---|---|---|
-| `auto` | Auto Smart Routing | Dynamic | **Smartly routes engines based on query language/time filter** (Chinese queries prioritize Bing/Baidu/Aliyun/AnySearch, English queries prioritize Bing/Exa/Tavily; time filters prioritize time-capable engines), with full fallback |
-| `ddg` | DuckDuckGo HTML | Free | Occasional rate limits (anti-bot challenges); recovers automatically |
-| `ddg-lite` | DuckDuckGo Lite | Free | Lightweight version; same rate-limit behavior as above |
-| `bing` | Bing | Free | No key, optimized for Chinese (`zh-CN`); the automatic default on a mainland egress |
-| `anysearch` | AnySearch AI | Free | AI search, no key needed (anonymous quota) |
-| `searxng` | SearXNG Meta Search | Free | Multi-instance automatic failover; supports custom instances |
-| `degoog` | Degoog (self-hosted aggregator) | Free | Needs your own instance (`degoogInstances`), no key; `degoogApiKey` (Bearer) only if the instance enables API keys |
-| `exa` | Exa | Free | **Usable without a key** (anonymous MCP); configure a key for higher quota |
-| `tavily` | Tavily | Free | **Usable without a key** (keyless anonymous); configure a key for higher quota |
-| `keenable` | Keenable | Free | **Usable without a key** (anonymous MCP); configure a key for higher quota |
-| `firecrawl` | Firecrawl | Free | **Usable without a key** (official keyless anonymous quota); a key adds higher limits. Note: the keyless tier is judged by **egress IP** — VPN/proxy egress gets a 403, in which case the plugin cools it down for 6 hours and says why (a key is unaffected) |
-| `parallel` | Parallel | Free | **Works without a key** (official MCP anonymous quota); a key raises limits and enables precise time filtering |
-| `you` | You.com | Free | **Works without a key** (official keyless tier, 100 searches a day); set `YDC_API_KEY` for higher limits (the old `YOUCOM_API_KEY` name still works) |
-| `agy` | Antigravity CLI | Free | Requires the [Antigravity](https://antigravity.google) CLI installed and signed in; invoked as `agy -p`, no key and no quota, enabled by default and skipped automatically when the CLI is absent |
-| `perplexity` | Perplexity | Paid | Requires `PERPLEXITY_API_KEY` |
-| `serpbase` | SerpBase | Paid | Requires `SERPBASE_API_KEY` (serpbase.dev, 100 free queries on signup) |
-| `serply` | Serply | Paid | Requires `SERPLY_API_KEY` (serply.io, 2,500 free credits for the first 30 days); Google web results localized to the settings language |
-| `outcrawl` | Outcrawl | Paid | Requires `OUTCRAWL_API_KEY` (outcrawl.ai, free tier of 1,000 credits a month); web results with title, URL and snippet, up to 20 per search |
-| `google` | Google Programmable Search | Free quota | Requires `GOOGLE_CSE_API_KEY` and a Programmable Search Engine ID (`googleCseId` / cx); official Custom Search JSON API, 100 free queries/day then billed; supports `hl`, safe search and `dateRestrict` time filtering |
-| `deepseek-official` | DeepSeek Official | Paid | Requires `DEEPSEEK_API_KEY`; uses the Anthropic-compatible `web_search` server tool, so every search is a full model turn (slow, token-billed) |
-| `deepseek-tools` | DeepSeek Native Search API | Paid | Requires `DEEPSEEK_API_KEY` (shared with the row above); calls `POST /v1/tools/search` directly, no model involved, returns structured `results[]` (`title`/`url`/`summary`/`date`) — measured ~0.3s vs ~5-6s for the row above on the same query |
-| `baidu` | Baidu Qianfan AI Search | Quota | Requires `BAIDU_API_KEY` (Qianfan AI Search, 50 free calls/day then pay-as-you-go); Chinese web-wide, supports time filtering |
-| `kimi` | Kimi (Moonshot) Web Search | Paid | Requires `MOONSHOT_API_KEY` (basic ~¥0.01/call); returns Chinese results with body chunks; **no free quota**, so prefer explicit selection or the escalation pool over the default concurrent pool |
-| `kimi` | Kimi (Moonshot) Web Search | Paid | Requires `MOONSHOT_API_KEY` (basic ~¥0.01/call); returns Chinese results with body chunks |
-| `aliyun` | Aliyun Bailian EnhancedSearch | Paid | Requires `DASHSCOPE_API_KEY` (MCP search_pro, ~¥0.03/call, 200 free calls for new users); Chinese web-wide with source hostnames |
-| `doubao` | Volcano Web Search (Doubao) | Free quota | Requires `DOUBAO_SEARCH_API_KEY` (open it in the Web Search console; **500 free queries/month**, pay-as-you-go beyond); strong for fresh Chinese content, supports time/site filters, returns long summaries |
-| `zhihu_global` | Zhihu web-wide search (open-platform MCP) | Free quota | Requires `ZHIHU_API_KEY`; **5,000 calls/day trial quota** (paid access after the trial); supports the time filter (`publish_time`); skipped automatically when no key is set |
-| `zhihu_site` | Zhihu site search (open-platform MCP) | Free quota | Requires `ZHIHU_API_KEY`; **5,000 calls/day trial quota** (shared with `zhihu_global`); time filtering not offered |
-| `zhihu_global` | Zhihu web-wide search (open-platform MCP) | Paid | Requires `ZHIHU_API_KEY`; supports the time filter (`publish_time`); skipped automatically when no key is set |
-| `zhihu_site` | Zhihu site search (open-platform MCP) | Paid | Requires `ZHIHU_API_KEY`; time filtering not verified, so it is not offered |
-| `openai` | OpenAI built-in web search | Paid | Requires `OPENAI_API_KEY`; uses the Responses API `web_search` tool and returns a cited answer. **Billed per search, explicit selection only** (never picked by the fallback chain or Auto); default `gpt-6-luna`, model/endpoint configurable (`openaiModel` / `openaiBaseUrl`) |
-| `gemini` | Gemini grounding with Google Search | Paid | Requires `GEMINI_API_KEY` (falls back to `GOOGLE_API_KEY`); uses the recommended **Interactions API** (`POST /v1beta/interactions`, `tools:[{type:"google_search"}]`) and reads citations from `steps[].content[].annotations`. **Billed per search, explicit selection only**; default `gemini-3.8-flash`, model/endpoint configurable (`geminiModel` / `geminiBaseUrl`) |
-| `claude` | Claude server-side web_search | Paid | Requires `ANTHROPIC_API_KEY`; results come from `web_search_tool_result`. **Billed per search, explicit selection only**; default `claude-sonnet-5-5`, model/endpoint configurable (`claudeModel` / `claudeBaseUrl`) |
-| `baidu-html` | Baidu web (HTML) | Free | Broadest Chinese web coverage of the family; 2–3 back-to-back requests can trigger a captcha, which cools the family down for 10 minutes. The API-based Baidu engine is `baidu` (Qianfan) |
-| `so360` | 360 Search | Free | Chinese web; the strictest anti-bot of the family, usually answers with a captcha page (`bot-wall`) |
-| `sogou` | Sogou | Free | Chinese web; `/link?url=…` signed redirects are resolved to the real URL (one `redirect: manual` hop, body discarded) |
-| `wechat` | WeChat articles (Sogou) | Free | Public-account articles; the signed link is **single-use**, so prefetching burns it and lands on the anti-bot page — the original link is kept as-is |
-| `toutiao` | Toutiao | Free | Reads `article_url` out of the embedded JSON; heavily aggregated, so verify conclusions a second time |
+| id | Engine | Cost | Keyless | Description |
+|---|---|---|---|---|
+| `auto` | Auto Smart Routing | Dynamic | Pool-dependent | **Smartly routes engines based on query language/time filter** (Chinese queries prioritize Bing/Baidu/Aliyun/AnySearch, English queries prioritize Bing/Exa/Tavily; time filters prioritize time-capable engines), with full fallback |
+| `ddg` | DuckDuckGo HTML | Free | Yes | Occasional rate limits (anti-bot challenges); recovers automatically |
+| `ddg-lite` | DuckDuckGo Lite | Free | Yes | Lightweight version; same rate-limit behavior as above |
+| `bing` | Bing | Free | Yes | No key, optimized for Chinese (`zh-CN`); the automatic default on a mainland egress |
+| `anysearch` | AnySearch AI | Free | Yes | AI search, no key needed (anonymous quota) |
+| `searxng` | SearXNG Meta Search | Free | Yes | Multi-instance automatic failover; supports custom instances |
+| `degoog` | Degoog (self-hosted aggregator) | Free | Yes (instance) | Needs your own instance (`degoogInstances`), no key; `degoogApiKey` (Bearer) only if the instance enables API keys |
+| `exa` | Exa | Free | Optional | **Usable without a key** (anonymous MCP); configure a key for higher quota |
+| `tavily` | Tavily | Free | Optional | **Usable without a key** (keyless anonymous); configure a key for higher quota |
+| `keenable` | Keenable | Free | Optional | **Usable without a key** (anonymous MCP); configure a key for higher quota |
+| `firecrawl` | Firecrawl | Free | Optional | **Usable without a key** (official keyless anonymous quota); a key adds higher limits. Note: the keyless tier is judged by **egress IP** — VPN/proxy egress gets a 403, in which case the plugin cools it down for 6 hours and says why (a key is unaffected) |
+| `parallel` | Parallel | Free | Optional | **Works without a key** (official MCP anonymous quota); a key raises limits and enables precise time filtering |
+| `brave` | Brave Search | Paid (free allowance) | No | Requires `BRAVE_API_KEY` ([API Dashboard](https://api-dashboard.search.brave.com); $5/month free credit ≈ 1,000 queries, then $5 per 1,000); independent index, `freshness` supports pd/pw/pm/py and date ranges |
+| `zhipu` | Zhipu Web Search | Paid (per call) | No | Requires `ZHIPU_API_KEY`; `search_std` ¥0.01/call, `search_pro` ¥0.03/call, Sogou/Quark ¥0.05/call; supports oneDay/oneWeek/oneMonth/oneYear recency |
+| `you` | You.com | Free | Optional | **Works without a key** (official keyless tier, 100 searches a day); set `YDC_API_KEY` for higher limits (the old `YOUCOM_API_KEY` name still works) |
+| `agy` | Antigravity CLI | Free | Yes (CLI) | Requires the [Antigravity](https://antigravity.google) CLI installed and signed in; invoked as `agy -p`, no key and no quota, enabled by default and skipped automatically when the CLI is absent |
+| `perplexity` | Perplexity | Paid | No | Requires `PERPLEXITY_API_KEY` |
+| `serpbase` | SerpBase | Paid | No | Requires `SERPBASE_API_KEY` (serpbase.dev, 100 free queries on signup) |
+| `serply` | Serply | Paid | No | Requires `SERPLY_API_KEY` (serply.io, 2,500 free credits for the first 30 days); Google web results localized to the settings language |
+| `outcrawl` | Outcrawl | Paid | No | Requires `OUTCRAWL_API_KEY` (outcrawl.ai, free tier of 1,000 credits a month); web results with title, URL and snippet, up to 20 per search |
+| `google` | Google Programmable Search | Free quota | No | Requires `GOOGLE_CSE_API_KEY` and a Programmable Search Engine ID (`googleCseId` / cx); official Custom Search JSON API, 100 free queries/day then billed; supports `hl`, safe search and `dateRestrict` time filtering |
+| `metaso` | Metaso (秘塔搜索) | Paid (credits) | No | Requires `METASO_API_KEY` (metaso.cn/api); official AI search API billed per call (about ¥0.03/query, trial credits for new accounts); supports webpage / document / scholar scopes and returns summaries with sources; not in the default fallback order, use it explicitly after configuring a key |
+| `yandex` | Yandex Search | Paid | No | Requires `YANDEX_API_KEY` and `yandexFolderId` (AI Studio; billed per request to a billing account); official Search API with RU/TR/COM/KK/BE/UZ search types and Base64 XML responses; supports day / 2 weeks / month time filters; explicit-only |
+| `yuanbao` | Tencent Yuanbao Search | Paid (limited free-quota activity) | No | Requires `TENCENTCLOUD_WSA_APIKEY` (console.cloud.tencent.com/wsapi); API-key gateway with natural / authoritative / hybrid modes, site restriction and time ranges; the activity page offers a limited daily free quota; explicit-only |
+| `specstream` | SpecStream | Paid | No | Requires `SPECSTREAM_API_KEY` (specstream.ai); web results with title, URL, snippet and publish date, up to 10 per search; explicit-only (never enters the default fallback chain, Auto routing, or language pools) |
+| `deepseek-official` | DeepSeek Official | Paid | No | Requires `DEEPSEEK_API_KEY`; uses the Anthropic-compatible `web_search` server tool, so every search is a full model turn (slow, token-billed) |
+| `deepseek-tools` | DeepSeek Native Search API | Paid | No | Requires `DEEPSEEK_API_KEY` (shared with the row above); calls `POST /v1/tools/search` directly, no model involved, returns structured `results[]` (`title`/`url`/`summary`/`date`) — measured ~0.3s vs ~5-6s for the row above; the endpoint is configurable via `deepseekToolsBaseUrl` (full URL or base; use the full URL for a gateway exposing `/v1/search`) and the key can be overridden with `deepseekToolsApiKey` for custom gateways |
+| `baidu` | Baidu Qianfan AI Search | Quota | No | Requires `BAIDU_API_KEY` (Qianfan AI Search: 50 free web_search calls/day; when that quota is exhausted or returns 403 it falls back to chat/completions, which has a separate 100/day free quota; pay-as-you-go beyond); Chinese web-wide, supports time filtering |
+| `kimi` | Kimi (Moonshot) Web Search | Paid | No | Requires `MOONSHOT_API_KEY` (basic ~¥0.01/call); returns Chinese results with body chunks; **no free quota**, so prefer explicit selection or the escalation pool over the default concurrent pool |
+| `kimi` | Kimi (Moonshot) Web Search | Paid | No | Requires `MOONSHOT_API_KEY` (basic ~¥0.01/call); returns Chinese results with body chunks |
+| `aliyun` | Aliyun Bailian EnhancedSearch | Paid | No | Requires `DASHSCOPE_API_KEY` (MCP search_pro, ~¥0.03/call, 200 free calls for new users); Chinese web-wide with source hostnames |
+| `doubao` | Volcano Web Search (Doubao) | Free quota | No | Requires `DOUBAO_SEARCH_API_KEY` (open it in the Web Search console; **500 free queries/month**, pay-as-you-go beyond); strong for fresh Chinese content, supports time/site filters, returns long summaries |
+| `zhihu_global` | Zhihu web-wide search (open-platform MCP) | Free quota | No | Requires `ZHIHU_API_KEY`; **5,000 calls/day trial quota** (paid access after the trial); supports the time filter (`publish_time`); skipped automatically when no key is set |
+| `zhihu_site` | Zhihu site search (open-platform MCP) | Free quota | No | Requires `ZHIHU_API_KEY`; **5,000 calls/day trial quota** (shared with `zhihu_global`); time filtering not offered |
+| `zhihu_global` | Zhihu web-wide search (open-platform MCP) | Paid | No | Requires `ZHIHU_API_KEY`; supports the time filter (`publish_time`); skipped automatically when no key is set |
+| `zhihu_site` | Zhihu site search (open-platform MCP) | Paid | No | Requires `ZHIHU_API_KEY`; time filtering not verified, so it is not offered |
+| `openai` | OpenAI built-in web search | Paid | No | Requires `OPENAI_API_KEY`; uses the Responses API `web_search` tool and returns a cited answer. **Billed per search, explicit selection only** (never picked by the fallback chain or Auto); default `gpt-6-luna`, model/endpoint configurable (`openaiModel` / `openaiBaseUrl`) |
+| `gemini` | Gemini grounding with Google Search | Paid | No | Requires `GEMINI_API_KEY` (falls back to `GOOGLE_API_KEY`); uses the recommended **Interactions API** (`POST /v1beta/interactions`, `tools:[{type:"google_search"}]`) and reads citations from `steps[].content[].annotations`. **Billed per search, explicit selection only**; default `gemini-3.8-flash`, model/endpoint configurable (`geminiModel` / `geminiBaseUrl`) |
+| `claude` | Claude server-side web_search | Paid | No | Requires `ANTHROPIC_API_KEY`; results come from `web_search_tool_result`. **Billed per search, explicit selection only**; default `claude-sonnet-5-5`, model/endpoint configurable (`claudeModel` / `claudeBaseUrl`) |
+| `baidu-html` | Baidu web (HTML) | Free | Yes | Broadest Chinese web coverage of the family; 2–3 back-to-back requests can trigger a captcha, which cools the family down for 10 minutes. The API-based Baidu engine is `baidu` (Qianfan) |
+| `so360` | 360 Search | Free | Yes | Chinese web; the strictest anti-bot of the family, usually answers with a captcha page (`bot-wall`) |
+| `sogou` | Sogou | Free | Yes | Chinese web; `/link?url=…` signed redirects are resolved to the real URL (one `redirect: manual` hop, body discarded) |
+| `wechat` | WeChat articles (Sogou) | Free | Yes | Public-account articles; the signed link is **single-use**, so prefetching burns it and lands on the anti-bot page — the original link is kept as-is |
+| `toutiao` | Toutiao | Free | Yes | Reads `article_url` out of the embedded JSON; heavily aggregated, so verify conclusions a second time |
 
 - **The default engine is picked automatically**: when `provider` is left empty the plugin probes the egress region once - mainland China gets `bing` (no proxy needed), everywhere else gets `parallel` (the keyless official MCP, which hits official documentation more often). A failed probe falls back to `bing`. Set `DSH_FREE_SEARCH_DEFAULT=bing` or `=parallel` to override, and any engine picked in the settings page wins.
 - **Auto-failover**: any engine failure (rate-limited free engine, or missing/invalid paid key, network error) automatically tries the next engine — the configured engine first, then other engines (exa/tavily/keenable/firecrawl/parallel/you are tried even without a key because they have built-in keyless quota), then the remaining free engines (Bing/AnySearch etc.) — with a note attached to the results naming the engine that actually served them (e.g. `Note: perplexity unavailable or failed, using exa.`). Search never fails outright because of engine issues.
@@ -832,10 +928,13 @@ If this plugin has been helpful, a ⭐ on [GitHub](https://github.com/DDDMUC/dsh
   - Tavily: <https://app.tavily.com/home>
   - Keenable: <https://keenable.ai/login>
   - Parallel: <https://platform.parallel.ai>
+  - Brave: <https://api-dashboard.search.brave.com> (API docs: <https://api-dashboard.search.brave.com/app/documentation>)
+  - Zhipu: <https://bigmodel.cn/apikey/platform> (API docs: <https://docs.bigmodel.cn/cn/guide/tools/web-search>)
   - Perplexity: <https://www.perplexity.ai/settings/api>
   - SerpBase: <https://serpbase.dev>
   - Serply: <https://serply.io> (API docs: <https://serply.io/docs>)
   - Outcrawl: <https://outcrawl.ai> (API docs: <https://outcrawl.ai/docs>)
+  - SpecStream: <https://specstream.ai/signup?src=dsh-free-search> (API docs: <https://specstream.ai/agents.md>; `?src=dsh-free-search` is a source-attribution parameter only, with no referral or affiliate payment)
   - DeepSeek: <https://platform.deepseek.com/api_keys>
   - Doubao / Volcano Web Search: <https://console.volcengine.com/search-infinity/web-search>
   - You.com: <https://you.com/platform/api-keys>
@@ -849,8 +948,8 @@ The free/paid binary is not what decides **who belongs in a default pool** — t
 |---|---|---|
 | ① Unlimited, no key | `ddg` / `ddg-lite` / `bing` / `searxng` / `anysearch` | — |
 | ② Anonymous quota (runs without a key) | `exa` / `tavily` / `keenable` / `firecrawl` / `parallel` / `you` (100/day) | key raises the quota |
-| ③ Free quota (key required) | `zhihu_global` / `zhihu_site` (5,000/day trial), `doubao` (500/month), `baidu` (50/day), `aliyun` (200-call starter pack) | pay-as-you-go |
-| ④ Paid upgrade (needs a key to return anything) | `serpbase` (100 free on signup) / `serply` (2,500 for 30 days) / `outcrawl` (1,000 credits a month) / `perplexity` / `deepseek-official` / `deepseek-tools` / `kimi` | per call / per query |
+| ③ Free quota (key required) | `zhihu_global` / `zhihu_site` (5,000/day trial), `doubao` (500/month), `baidu` (50/day), `aliyun` (200-call starter pack), `brave` ($5/month credit ≈ 1,000 queries) | pay-as-you-go |
+| ④ Paid upgrade (needs a key to return anything) | `serpbase` (100 free on signup) / `serply` (2,500 for 30 days) / `outcrawl` (1,000 credits a month) / `specstream` (explicit-only) / `perplexity` / `deepseek-official` / `deepseek-tools` / `kimi` | per call / per query |
 | ⑤ Per-call billing (model built-in, explicit-only) | `openai` / `gemini` / `claude` | per token + per search |
 
 Rule of thumb for a default pool: **① as the floor + ③ as the workhorse**; ② is allowed but remember it burns anonymous quota; ④ only when you actually want that source; ⑤ never enters a pool. Per-engine facts and a default-pool proposal live in [docs/engine-quota-tiers.md](./docs/engine-quota-tiers.md).
@@ -866,7 +965,7 @@ Rule of thumb for a default pool: **① as the floor + ③ as the workhorse**; �
 
 ### Installation
 
-Requires **DSH 0.2.1-rc.2 or a newer 0.2.x**; older 0.1.x hosts do not satisfy `engines.dsh` and the plugin manager will refuse the install.
+Requires **DSH 0.2.1-rc.2 through 0.3.x** (`engines.dsh` = `>=0.2.1-rc.2 <0.4.0-0`, declared at both the top-level `engines.dsh` and `dsh.engines.dsh` so the install gate and the community market read one range); older 0.1.x hosts and 0.4+ hosts do not satisfy it and the plugin manager refuses the install. Verified on 0.2.2-rc.1 (the runtime inside DSH Desktop 2.0.22-next) and 0.2.2-rc.3.
 
 ```sh
 git clone https://github.com/DDDMUC/dsh-free-search.git
@@ -883,7 +982,7 @@ dsh web
 
 The plugin **takes over search** once loaded:
 
-- When `web.searchProvider` is unset, or still the shipped default `deepseek-official`, it switches to this plugin's provider (id: `ddg`);
+- When `web.searchProvider` is unset, or still the shipped default for the running DSH (`deepseek-search-api` since 0.2.2-rc.2, `deepseek-official` on older hosts), it switches to this plugin's provider (id: `ddg`);
 - If you (or another plugin) explicitly selected a different provider, it does not steal it — it only logs a WARN with a copy-pasteable YAML snippet.
 
 **The takeover is persisted into the profile (DSH 0.2.x).** Since `0.2.0-rc.2` the provider selection lives in volatile config refs and can only be written through `settings.mutate("web", …)`, which lands in `profiles/<profile>/cordis.patch.yml` as:
@@ -910,8 +1009,10 @@ DSH 0.2.1 has Settings → Web search → **DeepSeek search API**, which interac
 | Action | Result |
 |---|---|
 | Turn the switch on | `web.searchProvider` becomes `deepseek-search-api` (an explicit choice), so **this plugin steps aside** and search goes through the official direct API; fetch becomes `deepseek-fetch-api` as well |
-| Turn the switch off | DSH deletes the whole `- id: web` row, so the provider falls back to the shipped default `deepseek-official` — that is **model search** (a full auxiliary request, ~12 s in practice, billed per token), not the free engines |
-| After turning it off | **Since 0.9.8**: the plugin notices `deepseek-official` and re-takes at runtime (log line `DSH's search switch put the web providers back to the official defaults — re-took …`), normally within seconds; if it does not, restart DSH |
+| Turn the switch off | DSH deletes the whole `- id: web` row, so the provider falls back to the shipped default for the running DSH: `deepseek-search-api` since 0.2.2-rc.2 (billed per Search API call), or `deepseek-official` on older hosts (model search: a full auxiliary request, billed per token). Neither is a free engine |
+| After turning it off | **Since 0.9.8**: the plugin notices either official default and re-takes at runtime (log line `DSH's search switch put the web providers back to the official defaults — re-took …`), normally within seconds; if it does not, restart DSH |
+
+While the switch is on, `fetchProvider` stays at `deepseek-fetch-api`, so `web_fetch` keeps going through the paid official API and none of the `fs-quality-fetch` tiers (direct / browser / exa / firecrawl) run — the error text comes from DeepSeek and never mentions the plugin. That is the plugin stepping aside on purpose, not an upstream outage. To keep official search and the plugin's fetch chain at the same time, turn on **Force the web_fetch takeover** in this plugin's settings (writes `fetchProviderForce: true`); saving applies immediately, no restart. Setting `fetchProvider: fs-quality-fetch` by hand does the same.
 
 Use `/free-search-engine` or this plugin's settings page to change engines, **not that switch**. Turning it on and then off drops you from the official direct API back to model search until the plugin re-takes over or DSH restarts.
 
@@ -936,7 +1037,7 @@ After installation, open the config page (DSH 0.2.1-rc.2+):
 The config page provides:
 
 - **Search engine**: Select an engine from the dropdown; changes take effect immediately upon saving.
-- **API keys**: Enter keys for Exa / Tavily / Keenable / Firecrawl / Parallel / Perplexity / DeepSeek / Google CSE / You.com (password fields; displayed as "configured" once saved; Exa / Tavily / Keenable / Firecrawl / Parallel / You.com work without a key too).
+- **API keys**: Enter keys for Exa / Tavily / Keenable / Firecrawl / Parallel / Perplexity / DeepSeek / Google CSE / Metaso / Yandex / Yuanbao / SpecStream / You.com (password fields; displayed as "configured" once saved; Exa / Tavily / Keenable / Firecrawl / Parallel / You.com work without a key too).
   - **Recommended**: store paid-engine keys in the harness credential center `~/.dsh/.credentials.yaml` (e.g. `DEEPSEEK_API_KEY: sk-...`, same as the official LLM providers — one place for all keys). Resolution order: credentials center > settings page > environment variable; the settings-page fields remain for backward compatibility.
 - **Test engine**: Tests the selected engine directly (no fallback chain; paid engines without a key report an explicit error).
 - **Use Bing default**: stage a switch back to the stable free Bing engine; `Discard` only cancels unsaved edits
@@ -1024,7 +1125,9 @@ Otherwise startup can loop on "write the `web` config → the web service rebuil
 
 If you deliberately pinned `fetchProvider: http` (you only want the built-in fetcher), set `fetchProviderTakeover: false`: `http` is no longer treated as the factory default, while a completely unset provider is still filled in.
 
-`searchProvider` follows the same rule: taken over when unset or still `deepseek-official`, never when explicitly pointed elsewhere.
+DSH's search switch writes `fetchProvider: deepseek-fetch-api`, and the plugin steps aside for that too. To take fetch back without editing YAML, turn on `fetchProviderForce` ("Force the web_fetch takeover" in the settings page's fetch section): it ignores the rule above and writes `web.fetchProvider` back to `fs-quality-fetch` as soon as the setting is saved.
+
+`searchProvider` follows the same rule: taken over when unset or still the running host's official default (`deepseek-search-api` / `deepseek-official`), never when explicitly pointed elsewhere.
 
 #### Configuration File
 
@@ -1034,7 +1137,7 @@ The old `free-search:` section of `~/.dsh/settings.yaml` is **not** imported by 
 
 ```yaml
 # config of that entry in profiles/<profile>/cordis.patch.yml:
-provider:                   # empty = auto (bing on a mainland egress, parallel elsewhere); or ddg / bing / auto / multi
+provider:                   # empty = geo default (NOT Auto routing; bing on a mainland egress, parallel elsewhere); or ddg / bing / auto / multi
 fallbackOn: [quota, auth, bot-wall, transient, invalid-response, unknown]   # failure classes allowed to trigger fallback; [] = abort on any failure (default: all)
 lang: zh                    # search language pools / localization (zh / en / ru …; no longer rewritten by the settings page)
 #   lang drives Bing's mkt/Accept-Language, the Wikipedia subdomain (ja → ja.wikipedia.org) and the geocoding language;
@@ -1055,7 +1158,9 @@ promptConstraintsIndex: 0
 disabledTools: []           # tools that are not registered at all (e.g. [domain_search]); their schemas leave the context too
 bingMarket: zh-CN           # Bing market; empty = automatic (no mkt sent)
 fetchProviderTakeover: true # false = keep the fetchProvider: http you pinned yourself
+fetchProviderForce: false # true = also take over the deepseek-fetch-api written by DSH's search switch (#142)
 browserFetch: true           # use the system browser headless renderer when direct fetch fails
+allowFakeIpCidrs: []          # reserved ranges to allow explicitly, e.g. 198.18.0.0/15 for Clash/mihomo fake-ip
 fetchPrefer: exa             # exa | firecrawl — which keyed fetch tier to try first
 region: cn-zh               # DuckDuckGo region (optional)
 searxngInstances:           # Custom SearXNG instances (optional)
@@ -1080,9 +1185,17 @@ perplexityApiKey: ...
 serpbaseApiKey: ...         # Or configure via the web settings UI
 serplyApiKey: ...           # Or configure via the web settings UI
 outcrawlApiKey: ...         # Or configure via the web settings UI
+specstreamApiKey: ...       # Or configure via the web settings UI
 googleCseApiKey: ...        # Google Custom Search API key
 googleCseId: "..."         # Programmable Search Engine cx
+metasoApiKey: ...          # Metaso API key (metaso.cn/api)
+metasoScope: webpage       # webpage | document | scholar
+yandexApiKey: ...          # Yandex Search API key (AI Studio)
+yandexFolderId: "..."      # folder the key was created in
+yandexSearchType: auto     # auto | ru | tr | com | kk | be | uz
 deepseekApiKey: ...
+deepseekToolsApiKey: ...   # optional key for the custom endpoint
+deepseekToolsBaseUrl: ""    # custom /v1/tools/search endpoint or base; empty = api.deepseek.com
 ```
 
 #### Asking the Agent to Test All Engines
@@ -1169,7 +1282,31 @@ After searching, the agent can **read full webpage content** (e.g., *"Open the f
 
 - Automatically follows redirects and decodes HTML to plain text.
 - Supports timeout and response size limits.
-- ⚠️ Note: `web_fetch` does not have SSRF protection; the agent could theoretically access internal network addresses. Use as needed.
+- ⚠️ Note: `web_fetch` rejects loopback, private, link-local and cloud-metadata addresses by default. Under Clash / mihomo TUN fake-ip DNS, add the fake-ip range (usually `198.18.0.0/15`) to extra allowed networks in Settings, otherwise every proxied host resolves to a placeholder address and is rejected; only allow the fake-ip ranges, never RFC1918; IPv6 fake-ip often uses a ULA such as `fdfe:dcba:9876::/64`, which must be listed explicitly.
+
+#### MCP server (stdio)
+
+The repo also ships a standalone stdio MCP server for Claude Desktop, Cursor, Codex and other MCP clients; it does not need the DSH runtime:
+
+```bash
+npx -y -p dsh-free-search dsh-free-search-mcp
+```
+
+`web_search` auto-runs only the keyless Bing / DuckDuckGo engines; a keyed engine (`google` / `baidu` / `brave` / `metaso` / `yandex` / `yuanbao` / `deepseek-tools` / `zhipu` / `perplexity` / `serpbase` / `serply` / `outcrawl` / `tinyfish` / `jina` / `kimi` / `aliyun` / `doubao` / `zhihu_global` / `zhihu_site` / `specstream` / `deepseek-official` / `openai` / `gemini` / `claude` / `agy`) runs only when named in the argument or `MCP_SEARCH_ENGINE`; `anysearch` / `searxng` / `exa` / `tavily` / `keenable` / `firecrawl` / `parallel` / `you` can also be named explicitly and have keyless tiers; `degoog` needs `MCP_DEGOOG_INSTANCES`; `baidu-html` / `so360` / `sogou` / `wechat` / `toutiao` are opt-in HTML SERP scrapers. It supports `time_range` (day/week/month/year). `advanced_search` is a compatibility alias over the same backend for hosts that call that tool name. `web_fetch` still uses direct / browser / Exa / Firecrawl. `multi_search` merges several engines in parallel (free engines by default), `domain_search` queries structured package/paper/CVE/filing/finance/law sources, `platform_search` queries GitHub/HN/Reddit/npm/Wikipedia/Bilibili/V2EX/Juejin/Douban/Qiita/YouTube/Vimeo/X, `video_search` queries Bing/DDG videos, `research` runs a lightweight multi-engine search + fetch + evidence brief, `cache_search` searches the local research cache, `free_search_test` probes engines, `doctor` reports local config/credentials, and `weather` returns a 1-7 day forecast; the server does not listen on a port. Claude Desktop example:
+
+```json
+{
+  "mcpServers": {
+    "dsh-free-search": {
+      "command": "npx",
+      "args": ["-y", "-p", "dsh-free-search", "dsh-free-search-mcp"],
+      "env": { "MCP_LANG": "zh", "MCP_SEARCH_ENGINE": "auto" }
+    }
+  }
+}
+```
+
+Environment: `MCP_SEARCH_ENGINE` (auto by default, or any explicit engine id), `MCP_MAX_RESULTS`, `MCP_SAFE_SEARCH`, `MCP_LANG`, `MCP_BING_MARKET`, `MCP_BROWSER_FETCH`, `MCP_ALLOW_FAKE_IP_CIDRS`. Keyed/optional engines read their own env: `GOOGLE_CSE_API_KEY` + `GOOGLE_CSE_ID`, `BAIDU_API_KEY`, `BRAVE_API_KEY`, `METASO_API_KEY` / `MCP_METASO_SCOPE`, `YANDEX_API_KEY` + `YANDEX_FOLDER_ID`, `TENCENTCLOUD_WSA_APIKEY` / `MCP_YUANBAO_MODE` / `MCP_YUANBAO_SITE`, `DEEPSEEK_TOOLS_API_KEY` or `DEEPSEEK_API_KEY`, `ZHIPU_API_KEY` / `MCP_ZHIPU_SEARCH_ENGINE`; keyless-capable engines can use `ANYSEARCH_API_KEY`, `MCP_SEARXNG_INSTANCES` / `MCP_SEARXNG_BEARER_TOKEN`, `EXA_API_KEY`, `TAVILY_API_KEY`, `KEENABLE_API_KEY`, `FIRECRAWL_API_KEY`, `PARALLEL_API_KEY`, `YDC_API_KEY` (the old `YOUCOM_API_KEY` alias also works).
 
 #### Platform Search (`platform_search`)
 
@@ -1243,25 +1380,42 @@ Restart `dsh web` after switching to apply changes.
 
 #### Offline self-check assertions (`tools/`)
 
-**Fifty** zero-dependency assertion scripts ship with the repo (**796 assertions** total): **no API keys, no network, no test framework**, Node ≥ 20:
+**Seventy-one** zero-dependency assertion scripts ship with the repo (**1060 assertions** total): **no API keys, no network, no test framework**, Node ≥ 20. Run everything with `npm test`.
 
 | Script | Covers | Run (count) |
 |---|---|---|
 | `assert-auto-default.mjs` | Automatic default engine: the region decision when `provider` is empty (CN to bing, anything else to parallel), falling back to bing on a failed probe, the `DSH_FREE_SEARCH_DEFAULT` override, the prompt following it, and `effectiveProvider` reaching the panel | `node tools/assert-auto-default.mjs` (7) |
 | `assert-serp-engines.mjs` | HTML SERP family: registry invariants, time-filter declarations, staying out of auto routing and the fallback chain, only joining when named in a pool, inline fixtures for the four parsers, anti-bot detection and text cleanup | `node tools/assert-serp-engines.mjs` (32) |
-| `assert-engines.mjs` | engine registry / free-engine rule / language-pool routing / pool config fields / Zhihu URL utm stripping / `deepseek-tools` wiring and snippetCap widening | `node tools/assert-engines.mjs` (41) |
+| `assert-engines.mjs` | engine registry / free-engine rule / language-pool routing / pool config fields / Zhihu URL utm stripping / `deepseek-tools` wiring and snippetCap widening / `outcrawl` and explicit-only `specstream` registration | `node tools/assert-engines.mjs` (89) |
 | `assert-blocked-domains.mjs` | domain blocklist: parsing, matching, choke points, and byte-identical front/back-end sanitizing | `node tools/assert-blocked-domains.mjs` (69) |
 | `assert-multi-policy.mjs` | multi execution policy: ceiling semantics / target-is-not-a-hard-minimum / credential eligibility before the ceiling / **Fast·Balanced·Deep presets** | `node tools/assert-multi-policy.mjs` (146) |
 | `assert-multi-limit.mjs` | Multi result ceiling (#109): default 20 / hard max 100 / config normalisation, per-call maxResults clamped to the ceiling, tool copy and prompt state name the effective limit, settings field and save path | `node tools/assert-multi-limit.mjs` (6) |
 | `assert-maintenance.mjs` | Maintenance surface: CI runs every assertion on Node 20/22/24 plus the packaging gate, the release script bumps / verifies / tags / can publish, and the restore-official-provider bridge and settings button are wired | `node tools/assert-maintenance.mjs` (4) |
-| `assert-engine-modules.mjs` | Engine layout: module files exist and are imported, implementations have left index.js, the client engine ids match the server catalog, and the catalog covers 36 engines with the right free/explicit flags | `node tools/assert-engine-modules.mjs` (4) |
+| `assert-engine-modules.mjs` | Engine layout: module files exist and are imported, implementations have left index.js, the client engine ids match the server catalog, the catalog covers 42 engines with the right free/explicit flags, and index never reads an engine-private name | `node tools/assert-engine-modules.mjs` (6) |
+| `assert-brave.mjs` | Brave Search: catalog / credential / settings wiring, request headers and count/freshness, error classification, HTML stripping, ISO date normalization, and the 15s budget | `node tools/assert-brave.mjs` (54) |
+| `assert-sidebar-entry.mjs` | Sidebar entry (#129): `sidebarEntry` defaults on, settings load/save it, registration can be disposed/recreated, and `/free-search` opens the panel | `node tools/assert-sidebar-entry.mjs` (4) |
+| `assert-slash-commands.mjs` | Slash-command switch: `slashCommands` defaults on, settings load/save it, both commands register/unregister from config, and the prompt stops naming `/free-search-engine` when off | `node tools/assert-slash-commands.mjs` (4) |
+| `assert-keyless-first.mjs` | Keyless tier first: `keylessFirst` defaults off; when on, the keyless tier runs first and a rate limit, auth demand or network failure falls back to the key (which then rests the keyless tier), other failures leave the key alone, and no-key behaviour is unchanged; covers Tavily, Exa and multi mode | `node tools/assert-keyless-first.mjs` (13) |
+| `assert-zhipu.mjs` | Zhipu Web Search: catalog/fallback wiring, auth and request engine/count/recency, Sogou count steps, response mapping, error classes, missing key | `node tools/assert-zhipu.mjs` (6) |
+| `assert-deepseek-snippets.mjs` | deepseek-tools snippets: default 600, 0 disables the cap, total budget ceiling, short results survive, summary+snippet joining, and site labels | `node tools/assert-deepseek-snippets.mjs` (5) |
+| `assert-bing-relevance.mjs` | Bing relevance (#112): single-character CJK tokens removed, an unrelated substituted SERP rejected, genuinely relevant results accepted, a batch matching only a generic engine name rejected, one distinctive token covering half the query accepted, and explicit single-character/numeric behaviour | `node tools/assert-bing-relevance.mjs` (6) |
+| `assert-relevance-pools.mjs` | Relevance guard and language pools (#132/#133): AnySearch drops an unrelated batch but keeps a matching one, the shared guard is used by anysearch/searxng/ddg/ddg-lite/degoog/keenable, doctor reports the geo default and warns about unused pools, and the cache key changes with zhPool/enPool | `node tools/assert-relevance-pools.mjs` (5) |
+| `assert-quality.mjs` | Research evidence gate: 8 sources / 3 domains / 3 bodies / 2 dates is high, 3 / 2 / 1 is medium, a single source or a degraded note is low, an empty package is low, and research wires the gate into schema, output and brief | `node tools/assert-quality.mjs` (6) |
+| `assert-dedupe.mjs` | Near-duplicate removal: identical text shares a MinHash signature, exact URLs and cross-site copies are dropped, different articles survive in order, the threshold is configurable, and both the provider and multi paths run it | `node tools/assert-dedupe.mjs` (6) |
+| `assert-intent-routing.mjs` | Intent routing: the five domains plus general, stable preference reordering, Auto head follows the domain, a custom fallback order is never reordered, time filtering still applies, and the wiring | `node tools/assert-intent-routing.mjs` (6) |
 | `assert-result-ranking.mjs` | merged ranking: **eTLD+1 same-site detection** / domain round-robin / `seenIn` demoted / freshness only under a time filter | `node tools/assert-result-ranking.mjs` (31) |
 | `assert-url-norm.mjs` | URL normalization: strips only audited tracking params, keeps params that may identify different resources | `node tools/assert-url-norm.mjs` (72) |
 | `assert-prompt-contract.mjs` | system-prompt contract: **search ≠ fetch**, untrusted-data boundary, model engines only when explicitly selected | `node tools/assert-prompt-contract.mjs` (9) |
 | `assert-research-degradation.mjs` | research degrades fully without keys, `node:sqlite` no-op, 90s budget isolation, configurable cache dir, `budget.exhausted` contract names | `node tools/assert-research-degradation.mjs` (19) |
 | `assert-research-call-wrappers.mjs` | the four research `call*` wrappers proxy to stubs / the real layer (#75 regression) | `node tools/assert-research-call-wrappers.mjs` (23) |
 | `assert-fetch-chain.mjs` | `fs-quality-fetch` tier ordering, stop-on-first-success, silent firecrawl degradation, aggregated all-tiers failure | `node tools/assert-fetch-chain.mjs` (8) |
-| `assert-fetch-ssrf.mjs` | Fetch SSRF guard: public/private/reserved address classification, DNS resolving to a private address rejected, localhost and IP literals rejected, non-HTTPS and credential URLs rejected, provider wiring and settings | `node tools/assert-fetch-ssrf.mjs` (6) |
+| `assert-fetch-ssrf.mjs` | Fetch SSRF guard: public/private/reserved address classification, DNS resolving to a private address rejected, localhost and IP literals rejected, `http://` accepted while other schemes and credential URLs are refused, an http host resolving to a private address rejected, fake-ip ranges blocked by default and allowed only when configured, IPv6 ULA allowed only when listed, loopback/IPv4-private/link-local still blocked after opt-in, provider wiring and settings | `node tools/assert-fetch-ssrf.mjs` (10) |
+| `assert-fetch-http.mjs` | Plain-http targets (#143): the direct tier picks its transport per protocol, http redirects are followed, the provider no longer refuses http up front and lets the tier chain run, an all-tiers failure reports the direct error instead of an https-only assertion, other schemes still refused, `agentForUrl` hands http targets a plain tunnel agent, and an http page is fetched through a `CONNECT` tunnel | `node tools/assert-fetch-http.mjs` (7) |
+| `assert-baidu.mjs` | Baidu Qianfan: key required, web_search first, 403 or results.code quota fallback to chat/completions (stream:false), no fallback on 401, combined error when both fail | `node tools/assert-baidu.mjs` (6) |
+| `assert-deepseek-endpoint.mjs` | DeepSeek search endpoint: default URL, base/full-URL normalization, custom endpoint receives bearer/key/query, config and settings wiring | `node tools/assert-deepseek-endpoint.mjs` (4) |
+| `assert-yuanbao.mjs` | key required, Bearer gateway and Query/Mode/Site/FromTime, natural and VR page parsing, date normalization, error classes, registration and explicit-only | `node tools/assert-yuanbao.mjs` (6) |
+| `assert-yandex.mjs` | Yandex Search: key + folder required, Api-Key/body/grouping, searchType and period/family mapping, Base64 XML parsing and dates, error classes, registration and explicit-only | `node tools/assert-yandex.mjs` (6) |
+| `assert-metaso.mjs` | Metaso search: key required, request body (q/scope/size/summary/raw/concise), summary and date mapping, document array, size clamp, invalid scope fallback, 401/402/429/400 error classes, registration and default-chain exclusion | `node tools/assert-metaso.mjs` (6) |
 | `assert-google-cse.mjs` | Google Custom Search: key + ID required, request params (q/num/start/hl/safe/dateRestrict), result mapping with dates, pagination past ten results, 403/429/400 classification, time-range mapping, full registration | `node tools/assert-google-cse.mjs` (6) |
 | `assert-engine-runtime.mjs` | Engine runtime: per-engine concurrency caps (2 normally, 1 for HTML SERP), queueing with abort cleanup, ok/empty/fail/average-latency stats, wiring on both the provider and runEngineTest paths, and stats in the doctor report | `node tools/assert-engine-runtime.mjs` (4) |
 | `assert-single-fetch-layer.mjs` | exactly one fetch implementation repo-wide, one-way deps, seams owned by the right layer | `node tools/assert-single-fetch-layer.mjs` (22) |
@@ -1281,12 +1435,14 @@ Restart `dsh web` after switching to apply changes.
 | `assert-rail-section.mjs` | Machine-readable active section for the in-page rail: the card root's `data-dsh-fs-section` tracks `railActive`, the six section ids are fixed, and the scroll spy still updates it | `node tools/assert-rail-section.mjs` (4) |
 | `assert-package-files.mjs` | Packaging gate (#97): after expanding `files`, every imported local module, the entry points and `cordis.patch.yml` must be published, and the `prepack` guard must be wired | `node tools/assert-package-files.mjs` (4) |
 | `assert-key-rotation.mjs` | Multi-key rotation (#96): round-robin and peek, single keys never advancing, quota classification ahead of 429, the rotation-candidate set, and in-engine retries that keep multi-mode preflight from consuming keys | `node tools/assert-key-rotation.mjs` (7) |
+| `assert-fetch-key-rotation.mjs` | `web_fetch` cloud tiers (#128): a quota-failed key is cooled and the next key is tried, non-rotation errors do not consume another key, no key means no request, the real provider retries exa after a 402, and Linux browser paths | `node tools/assert-fetch-key-rotation.mjs` (6) |
 | `assert-x-platform.mjs` | X (Twitter) platform via the Grok Build CLI: availability, prompt guardrails, structuredOutput/text/raw JSON parsing, status-link filtering and caps, bilingual copy and panel defaults | `node tools/assert-x-platform.mjs` (8) |
 | `assert-cooldown.mjs` | Cooldowns: Retry-After / reset hints win, failure classes (session / short / quota / monthly / region), stable distinct key fingerprints, store cool/remaining/clear, finite cooldowns survive a restart while session ones do not, per-key and per-engine state stay separate | `node tools/assert-cooldown.mjs` (6) |
 | `assert-redact.mjs` | Error redaction: registered keys are scrubbed everywhere, `sk-` / Bearer / api_key / x-api-key shapes need no registration, ordinary text and short values are untouched, environment secrets are collected by name | `node tools/assert-redact.mjs` (4) |
-| `assert-doctor.mjs` | Doctor report: duration formatting, version / Node / DSH home / effective default / prompt size header, a mark and reason per engine, cooldown reasons listed once, a warning when the prompt is not injected | `node tools/assert-doctor.mjs` (5) |
+| `assert-doctor.mjs` | Doctor report: duration formatting, version / Node / DSH home / effective default / prompt size header, a mark and reason per engine, cooldown reasons listed once, a warning when the prompt is not injected, and a warning when language pools are configured but cannot apply | `node tools/assert-doctor.mjs` (7) |
 | `assert-agy.mjs` | Antigravity CLI: query / cap / JSON contract in the prompt, structuredOutput and response envelopes, upstream reason on non-SUCCESS, URL filtering and truncation, CLI flags, injected runner skips the PATH check | `node tools/assert-agy.mjs` (6) |
 | `assert-allowed-engines.mjs` | Engine whitelist (#106): entries normalised, an empty list changes nothing, a non-empty list disables everything else (including future engines), explicit disables win, a typo does not brick search, whitelisted engines join the chain (HTML family / billed), Auto only routes allowed engines, the built-in prompt lists only them with a none fallback, and the schema defaults to empty | `node tools/assert-allowed-engines.mjs` (9) |
+| `assert-host-compat.mjs` | Host compatibility declarations (0.9.51): top-level `engines.dsh` matches `dsh.engines.dsh`, covers 0.2.1-rc.2 through 0.3.x and rejects 0.1.x/0.4+, every `@deepseek-ai/dsh*` peer agrees with that line, the market's intersection matches the install gate, `dshReleases` lists the verified hosts, and the client version follows package.json | `node tools/assert-host-compat.mjs` (8) |
 | `assert-updater.mjs` | Built-in updater: version comparison, registry probe (success / non-200 / network failure yields null), install-mode detection (a real install beats a link), the client button and bridge helper, both server routes with the pnpm upgrade command, and the card version matching package.json | `node tools/assert-updater.mjs` (9) |
 | `assert-inject.mjs` | Older Cordis compatibility (#107): the static inject list declares web / settings / tools / systemPrompt, optional services are read through `ctx.get`, every property read on a callback context is declared, and dynamic dependency lists contain no unknown services | `node tools/assert-inject.mjs` (4) |
 | `assert-safe-text.mjs` | UTF-16 truncation safety (#108): lone high/low surrogates replaced, valid pairs kept, code-point slicing never splits an emoji, `cleanSnippet`'s 300 boundary lands on a whole character, results/sources/errors sanitized, every web_fetch tier covered, plus source guards | `node tools/assert-safe-text.mjs` (9) |
@@ -1295,8 +1451,9 @@ Restart `dsh web` after switching to apply changes.
 | `assert-firecrawl-keyless.mjs` | Firecrawl keyless egress refusal: only a 403 with the VPN/proxy wording counts, plain 403 and 401/429/500 do not, and the cooldown starts inactive | `node tools/assert-firecrawl-keyless.mjs` (5) |
 | `assert-fetch-charset.mjs` | fetch encoding (#88): `charset=gbk` / `gb2312` decoded as declared, `<meta charset>` and the http-equiv form sniffed when the header omits it, UTF-8 by default, and an unknown label falls back to UTF-8 instead of throwing | `node tools/assert-fetch-charset.mjs` (6) |
 | `assert-fetch-abort.mjs` | fetch interruption (#87): a compressed response cut mid-body rejects instead of hanging forever, identity truncation rejects too, abort breaks a stalled gzip stream, and complete responses plus redirects still work | `node tools/assert-fetch-abort.mjs` (6) |
-| `assert-bridge-access.mjs` | bridge Host fence (#84): loopback allowed, a remote peer behind a loopback Host refused, `--trusted-host` (port-less matches any port, explicit port matches exactly), `--public-url`, the bind address, cross-site and foreign-Origin refused | `node tools/assert-bridge-access.mjs` (11) |
-| `assert-provider-takeover.mjs` | provider takeover: both the legacy property API and the rc.2 `config.*` refs, a single batched `settings.mutate(web)`, explicit foreign providers left untouched, an explicit `http` kept when `fetchProviderTakeover` is off, describe()-triggered events ignored when nothing changed, nested config changes and web rebuilds reported separately, re-takeover after DSH's search switch is turned off without fighting an explicit `deepseek-search-api`, apply re-entry / duplicate registrations tolerated, and repeated logs deduplicated | `node tools/assert-provider-takeover.mjs` (16) |
+| `assert-fetch-proxy.mjs` | proxy support for the fetch tiers: `http_proxy` / `https_proxy` / `all_proxy` / `no_proxy` parsing (either case, lowercase wins, empty means unset), `NO_PROXY` domain / `host:port` / `*` matching, loopback always direct, `socks5://` ignored, the `CONNECT` tunnel handshake and `Proxy-Authorization`, a refusing proxy and an early disconnect never hanging, the SSRF guard still applied to every redirect hop when an agent is in use, and `--proxy-server` for the browser tier | `node tools/assert-fetch-proxy.mjs` (12) |
+| `assert-bridge-access.mjs` | bridge Host fence (#84): loopback allowed, a remote peer behind a loopback Host refused, `--trusted-host` (port-less matches any port, explicit port matches exactly), `--public-url`, the bind address, cross-site and foreign-Origin refused, connection-auth delegation, fail-closed behavior, and settings-client subpath resolution via `document.baseURI` | `node tools/assert-bridge-access.mjs` (14) |
+| `assert-provider-takeover.mjs` | provider takeover: both the legacy property API and the rc.2 `config.*` refs, a single batched `settings.mutate(web)`, explicit foreign providers left untouched, an explicit `http` kept when `fetchProviderTakeover` is off, `fetchProviderForce` taking `deepseek-fetch-api` back without touching search, saving the plugin settings re-taking fetch right away (and leaving web alone when off), describe()-triggered events ignored when nothing changed, nested config changes and web rebuilds reported separately, re-takeover after DSH's search switch is turned off (both `deepseek-search-api` and `deepseek-official` count as the factory default), apply re-entry / duplicate registrations tolerated, and repeated logs deduplicated | `node tools/assert-provider-takeover.mjs` (25) |
 
 Any failure exits non-zero with the failing items listed. Passing the path of an older file shows the pre-fix failures (proving the assertions are not vacuous). Worth running before a release.
 
@@ -1304,15 +1461,27 @@ Any failure exits non-zero with the failing items listed. Passing the path of an
 
 ### Proxy Note (for Users in Mainland China)
 
-Engines like DuckDuckGo may require a proxy. Since Node.js `fetch` does not use the system proxy by default, set the following environment variables for the dsh process (Node 24+):
+This plugin has two independent outbound paths, and both need the proxy configured:
+
+1. **Search** (`web_search` / `multi_search` / `advanced_search` / `platform_search` / `video_search`, …) goes through `globalThis.fetch` (undici), so whether it is proxied depends on undici's global dispatcher.
+2. **Body fetching** (`web_fetch`, plus the T1 direct fetch and T1.5 headless-browser tiers of `research`, and the exa / firecrawl / crawl4ai cloud calls) used plain `node:https` and child processes. That layer **never read the proxy environment variables and never saw the undici dispatcher**, which is why search works while fetching keeps timing out — a proxy plugin installed for undici cannot reach it. It now reads the proxy environment itself and opens an HTTP `CONNECT` tunnel per hop (the browser tier gets `--proxy-server` instead).
+
+Configure (`http_proxy` / `https_proxy` / `all_proxy` / `no_proxy`, either case, lowercase wins, empty means unset):
 
 ```sh
-export NODE_USE_ENV_PROXY=1
 export HTTPS_PROXY=http://127.0.0.1:7897   # Your proxy address
 export HTTP_PROXY=http://127.0.0.1:7897
+export NO_PROXY=localhost,127.0.0.1,::1    # Optional
 ```
 
-Windows users: The desktop shortcut already includes this configuration (`set NODE_USE_ENV_PROXY=1&& set HTTPS_PROXY=...`).
+- Only `http://` / `https://` proxies are supported (Basic auth allowed); `socks5://` is ignored and the request goes direct.
+- Loopback addresses (`localhost`, `127.0.0.1`, `::1`, `127.0.0.0/8`) always go direct.
+- `NO_PROXY` accepts comma-separated domains, `host:port`, and `*`.
+- When proxied, the proxy resolves the hostname so the `lookup` hook no longer applies; every redirect hop is therefore re-checked by the SSRF guard explicitly, and settings such as `allowFakeIpCidrs` keep working.
+- If the proxy is unreachable the usual degradation to the cloud tiers still happens, and the error message names the reason (`proxy <host> refused CONNECT ...`).
+- This does not depend on Node 24's `NODE_USE_ENV_PROXY`; Node ≥ 20 is enough. That variable only affects the undici path.
+
+Windows users: The desktop shortcut already includes `NODE_USE_ENV_PROXY=1` + `HTTPS_PROXY` (`set NODE_USE_ENV_PROXY=1&& set HTTPS_PROXY=...`).
 
 ### How It Works
 

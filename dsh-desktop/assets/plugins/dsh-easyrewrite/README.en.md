@@ -18,7 +18,7 @@
 
 Click your own message bubble to edit it in place; hit the recall button beside copy to withdraw it and everything after it. Nothing is ever really changed until you commit — the conversation, the model context, and the session log stay untouched until you press **Confirm** (rewrite) or **Send** (recall).
 
-> Compatible with DeepSeek Harness Web (**v3.0.0 fully compatible with dsh 0.2.x and 0.1.7 series**, featuring independent shadow Vault and universal attachment lossless relay; users on 0.1.1-rc.2 or earlier please stay on **2.3.1**). Pure official extension points, zero DSH source modification.
+> Compatible with DeepSeek Harness Web (**v3.1.0 fully compatible with dsh 0.2.x and 0.1.7 series**, focused on performance & underlying architecture optimizations and stability bug fixes — including locked atomic shadow Vault writes, clean Cordis hot-reload lifecycle disposal, React Hooks gate isolation, and history-safe pager guards; users on 0.1.1-rc.2 or earlier please stay on **2.3.1**). Pure official extension points, zero DSH source modification.
 
 ---
 
@@ -122,7 +122,7 @@ In the DSH rollback and state restoration ecosystem, different technical routes 
 3. **Immersive In-Bubble Editing & Seamless UX (🌟 `DSH-EasyRewrite` 129⭐)**:
    - Dedicated to making message editing and recall feel truly native. v3.0.0 introduces the **independent shadow Vault engine**, completely preventing sidebar archive pollution without hacking fragile memory logs, while delivering the only in-bubble expansion and universal attachment relay experience.
 
-| Core Capabilities | 🌟 dsh-easyrewrite (v3.0.0) | Traditional Recall Plugins (e.g. recall-plugin) | Code/File Rollback (e.g. dsh-rewind/turn-rewind) | Global Savepoint (e.g. savepoint) |
+| Core Capabilities | 🌟 dsh-easyrewrite (v3.1.0) | Traditional Recall Plugins (e.g. recall-plugin) | Code/File Rollback (e.g. dsh-rewind/turn-rewind) | Global Savepoint (e.g. savepoint) |
 | :--- | :---: | :---: | :---: | :---: |
 | **Bubble Inline Edit (Rewrite)** | **✅ Exclusive** (click bubble to expand inline) | ❌ None (jumps to composer only) | ❌ None (modal/CLI only) | ❌ None |
 | **Message Recall** | ✅ (next to native copy button) | ✅ (basic recall) | ✅ (command/button) | ⚠️ (full rollback) |
@@ -152,7 +152,7 @@ In the DSH rollback and state restoration ecosystem, different technical routes 
 - **Invisible**: day-to-day use barely notices the plugin — features live where you expect them, results match intuition; no popups, no interrupted rhythm.
 - **Lazy commit** is the foundation: entering edit mode or confirming a recall is purely local draft state; **context changes only at "确定" (rewrite) or "发送" (recall)**. Close dsh mid-way and nothing moves.
 - **Seamless replacement**: after a recall it feels like the original conversation was edited — autonomous versioning via the shadow Vault without "a new conversation appeared" split or sidebar clutter.
-- **Bubble edit (v3.0.0 fully shipped)**: click the bubble to edit in place, what you edit is what you send — the natural extension of the same seamless philosophy.
+- **Bubble edit (v3.0.x fully shipped)**: click the bubble to edit in place, what you edit is what you send — the natural extension of the same seamless philosophy.
 
 **3. Persistent & accident-proof**
 

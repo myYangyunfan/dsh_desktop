@@ -3,10 +3,10 @@ import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import { MobileNavToggle } from './MobileNavToggle.tsx'
 import { MobileNavOverlay } from './MobileNavOverlay.tsx'
 import { MobileDrawerFooter } from './MobileDrawerFooter.tsx'
-import { startFileGuard } from './fileGuard.ts'
+import { startAddWorkspaceHider } from './add-workspace.ts'
 import { MOBILE_CSS } from './mobile.css.ts'
 import { POCKET_RPC_CHANNEL, POCKET_ENDPOINTS, MOBILE_RIGHTBAR_ATTRIBUTE, MOBILE_RIGHTBAR_EVENT } from '../api.js'
-import { NS, en, zh } from './locales.ts'
+import { NS, en, ja, zh } from './locales.ts'
 import type { MobileNavKey } from './locales.ts'
 import { resolveLayout, persistLayoutFromUrl } from './layout-mode.mjs'
 
@@ -42,7 +42,7 @@ export function mobileApply(ctx): void {
     narrow = { matches: true, addEventListener: () => {}, removeEventListener: () => {} } as MediaQueryList;
   }
 
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-mobile-nav: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'dsh-mobile-nav: dictionaries')
 
   ctx.effect(() => {
     let active = true
@@ -288,44 +288,37 @@ export function mobileApply(ctx): void {
     }
   }, 'dsh-mobile-nav: sheet rise animation replay')
 
-  // 移动端文件守卫（issue #17 修正）：手机上点 dsh-web 渲染的文件链接会触发桌面
-  // 端 workspaces.openPath(open ...) —— 既打不开（路径在电脑上），又会抛
-  // "path open failed"。这里在捕获阶段拦截这类点击 / 键盘激活，改为弹一个提示，
-  // 并隐藏「添加工作区」入口（手机上配工作区无意义）；同时在文件链接旁注入
-  // 「复制」按钮，点它经主机 RPC 读取文件正文再写入剪贴板。只挂窄屏。
+  // 隐藏「添加工作区」入口：只在**明确是桌面宿主**的窄屏上隐藏（issue #17 + #205）。
+  // 桌面宿主用的是系统文件选择器，手机上点开必然失败；但 `dsh web` CLI / Linux
+  // 走的是网页文件选择器，手机上同样能选路径、能新建工作区。原来一律按屏幕宽度
+  // 隐藏，等于把可用功能藏掉了。status 里的 desktop 字段就是宿主类型，按设备判定。
+  // 只有拿到 desktop === true 才隐藏；读不到状态/请求失败/字段缺失一律保留入口 ——
+  // fail 方向必须朝「不隐藏」，否则 CLI/Linux 那条路在 RPC 抖动时会重新被藏掉。
+  // 代价仅是桌面宿主在极少数 RPC 失败时露出一个点了会失败的按钮，可接受。
   ctx.effect(() => {
     if (!narrow.matches) return () => {}
-    // 尽量拿到当前工作区 cwd（文件链接文案是相对它的），传给主机 RPC 做精确解析；
-    // 拿不到就回退到主机 process.cwd()。dsh-web 的 workspaces 服务暴露当前工作区。
-    const getWorkspaceCwd = (): string => {
+    let active = true
+    let dispose: (() => void) | null = null
+    const load = async (): Promise<void> => {
       try {
-        const ws = (ctx as unknown as { get?: (k: string) => unknown }).get?.('workspaces')
-          ?? (ctx as unknown as { workspaces?: unknown }).workspaces
-        const list = (ws as { list?: unknown })?.list
-        const arr: unknown[] | null = Array.isArray(list)
-          ? list
-          : (list && typeof list === 'object' && 'value' in (list as object)
-            ? (list as { value: unknown[] }).value
-            : null)
-        if (Array.isArray(arr)) {
-          for (const w of arr) {
-            const c = (w as { cwd?: string; root?: string })?.cwd
-              ?? (w as { cwd?: string; root?: string })?.root
-            if (typeof c === 'string' && c) return c
-          }
+        const result = await ctx.connection.rpc.call(POCKET_RPC_CHANNEL, POCKET_ENDPOINTS.status, {}) as {
+          ok?: boolean
+          value?: { desktop?: boolean }
         }
-      } catch { /* 忽略，回退 process.cwd() */ }
-      return ''
+        if (!active) return
+        if (result?.ok === true && result.value?.desktop === true) {
+          dispose = startAddWorkspaceHider()
+        }
+      } catch {
+        // 状态不可用：保留入口，不隐藏（见上）
+      }
     }
-    // 手机侧读文件回调：走 dsh-pocket 的 RPC 通道，由主机侧 fileRead 端点处理。
-    const readFile = (filePath: string) =>
-      ctx.connection.rpc.call(
-        POCKET_RPC_CHANNEL,
-        POCKET_ENDPOINTS.fileRead,
-        { path: filePath, cwd: getWorkspaceCwd() },
-      ) as Promise<{ ok: boolean; value?: { content: string; path: string; size: number }; error?: { message: string } }>
-    return startFileGuard(readFile)
-  }, 'dsh-mobile-nav: file open guard + copy button + hide add-workspace (issue #17)')
+    void load()
+    return () => {
+      active = false
+      dispose?.()
+    }
+  }, 'dsh-mobile-nav: hide add-workspace on desktop hosts only (issue #17 #205)')
 
   // 手机上模型 / 提供方设置加载失败：上游 dsh-web 会渲染「加载提供方目录失败 /
   // Settings are unavailable in this browser」。这条文案不是 dsh-pocket 的，但手机侧

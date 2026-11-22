@@ -31,17 +31,17 @@ const param = (name, symbol) => ({
 })
 
 /**
- * mcpManager 的 invocation 工厂。
+ * MCP 服务的 invocation 工厂（服务名见 lib/rpc-contract.js 的 MCP_SERVICE）。
  *
- * 为什么不复用 mvs()：mv() 把 id/service/namespace 三处都写死成 mcpManager（三处必须一致，
+ * 为什么不复用 mvs()：mv() 把 id/service/namespace 三处都写死成同一个服务名（三处必须一致，
  * 所以留一个工厂一种形态是刻意的）。两个服务的 serviceKey 与 wire namespace 都不同
- * （mcpManager / skillsManager），硬套 mv() 只会得到 id 与实际 endpoint 不符的条目——
+ * （MCP_SERVICE / skillsManager），硬套 mv() 只会得到 id 与实际 endpoint 不符的条目——
  * 那种错误在结构上完全合法，只在调用时静默打到错的服务上。故参数化 service/namespace。
  */
 const mv = (method, params, resultSym) => ({
-  id: `dsh-toolbox-ui#mcpManager/${method}`,
-  service: 'mcpManager',
-  namespace: 'mcpManager',
+  id: `dsh-toolbox-ui#toolboxMcp/${method}`,
+  service: 'toolboxMcp',
+  namespace: 'toolboxMcp',
   method,
   invocation: { kind: 'direct' },
   parameters: params,
@@ -103,11 +103,13 @@ export const TYPERT = {
     mv('copyWorkspaceServers', [param('payload', 'ImportPayload')], 'WorkspaceCopyResult'),
     mv('previewWorkspaceCopy', [param('payload', 'ImportPayload')], 'WorkspaceCopyPreview'),
     mv('exportWorkspaceJson', [param('payload', 'ImportPayload')], 'WorkspaceExportResult'),
+    mv('exportGlobalJson', [], 'WorkspaceExportResult'),
     mv('revealWorkspaceServer', [param('payload', 'ImportPayload')], 'RevealResult'),
     mv('projectConnections', [], 'ProjectConnectionsResult'),
     mv('reconnectWorkspaceServer', [param('payload', 'ImportPayload')], 'NoteResult'),
     mv('updateHint', [], 'UpdateHintResult'),
     mv('whatsNew', [], 'WhatsNewResult'),
+    mv('contextReport', [param('payload', 'ContextPayload')], 'ContextReport'),
     mvs('list', [param('payload', 'SkillPayload')], 'SkillListResult'),
     mvs('detail', [param('payload', 'SkillPayload')], 'SkillDetailResult'),
     mvs('setEnabled', [param('payload', 'SkillPayload')], 'SkillMutationResult'),

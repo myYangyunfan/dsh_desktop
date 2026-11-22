@@ -9,6 +9,8 @@ export interface HarnessVersionLookupContext {
     /** Extra directory roots that may hold `node_modules/@deepseek-ai/dsh`. */
     globalRoots?: string[];
     env?: NodeJS.ProcessEnv;
+    /** Sibling module resolution scope. Pass null to disable. */
+    moduleScope?: string | null;
 }
 export type HarnessSessionGeneration = 'legacy' | 'v3';
 export declare function normalizeHarnessVersion(value: unknown): string | undefined;
@@ -18,6 +20,8 @@ export declare function normalizeHarnessVersion(value: unknown): string | undefi
  * prevent them from being presented as supported installations.
  */
 export declare function harnessSessionGeneration(version: string | undefined): HarnessSessionGeneration;
+/** True on DSH 0.2.x+ hosts whose Session Controller emits `api-session/*` events. */
+export declare function isLiveSessionEventsHarnessVersion(version: string | undefined): boolean;
 /**
  * Read the installed Harness CLI version from its package manifest.
  *
@@ -31,6 +35,11 @@ export declare function harnessSessionGeneration(version: string | undefined): H
  * `process.argv[1]`. In that case recover the version from the working
  * directory, the running executable's ancestors, `createRequire(...)` module
  * scope, and the usual global npm roots instead of returning `undefined`.
+ *
+ * HarmonyOS / DSHM on-device installs are even further removed: the Harness
+ * runs in-process inside the host application, so every filesystem anchor
+ * above belongs to the host. `DSHM_CORE_DIR` (exported by the launcher) and
+ * this module's own resolution scope are consulted as additional candidates.
  */
 export declare function readHarnessDistributionVersion(entrypoint?: string | undefined, context?: HarnessVersionLookupContext): Promise<string | undefined>;
 //# sourceMappingURL=harness-version.d.ts.map

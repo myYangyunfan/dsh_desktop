@@ -35,6 +35,7 @@ export interface CodexLiveProjectionContext {
         request: JsonRecord;
     }) => void;
     readonly imageAttachments: Map<string, CodexImageAttachmentEntry>;
+    readonly invalidateThreadHistory?: (threadId: string) => void;
 }
 export declare class CodexLiveProjection {
     private readonly context;

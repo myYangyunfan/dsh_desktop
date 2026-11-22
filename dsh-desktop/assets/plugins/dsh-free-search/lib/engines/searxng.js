@@ -1,5 +1,5 @@
 // SearXNG meta-search engine.
-import { uniqueSources, fetchHtmlWithRetry, stripTags, decodeEntities, approximateTimeRange, SEARXNG_INSTANCES, SEARXNG_TIME, ANYSEARCH_URL, EXA_MCP_URL, extractDdgUrl, MARKET_TO_LANG, LANG_PROFILES, BING_URL, DDG_HTML_URL, DDG_LITE_URL, activeAcceptLanguage, USER_AGENT, searchLanguage, configLanguage, activeOutputLanguage } from "./shared.js";
+import { uniqueSources, fetchHtmlWithRetry, stripTags, decodeEntities, approximateTimeRange, SEARXNG_INSTANCES, SEARXNG_TIME, ANYSEARCH_URL, EXA_MCP_URL, extractDdgUrl, MARKET_TO_LANG, LANG_PROFILES, BING_URL, DDG_HTML_URL, DDG_LITE_URL, activeAcceptLanguage, USER_AGENT, searchLanguage, configLanguage, activeOutputLanguage, looksRelevant } from "./shared.js";
 
 export async function searchSearxng(query, maxResults, options, signal) {
   const instances = options?.searxngInstances?.length
@@ -46,7 +46,12 @@ export async function searchSearxng(query, maxResults, options, signal) {
           ...(r.content ? { snippet: String(r.content) } : {}),
         }));
       if (sources.length > 0) {
-        return { sources: uniqueSources(sources, maxResults ?? 10), truncated: false };
+        const unique = uniqueSources(sources, maxResults ?? 10);
+        if (!looksRelevant(query, unique)) {
+          errors.push(`${base}: irrelevant results`);
+          continue;
+        }
+        return { sources: unique, truncated: false };
       }
       errors.push(`${base}: 0 results`);
     } catch (error) {

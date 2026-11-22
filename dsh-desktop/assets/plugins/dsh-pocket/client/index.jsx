@@ -11,7 +11,7 @@ import { createElement as h, useEffect, useRef, useState } from 'react';
 
 import { POCKET_RPC_CHANNEL, POCKET_ENDPOINTS, MOBILE_RIGHTBAR_ATTRIBUTE, MOBILE_RIGHTBAR_EVENT, redactStatus, compareVersions } from './api.js';
 import { mobileApply } from './mobile/mobile-apply.tsx';
-import { NS as POCKET_NS, zh as POCKET_ZH, en as POCKET_EN } from './pocket-locales.js';
+import { NS as POCKET_NS, zh as POCKET_ZH, en as POCKET_EN, ja as POCKET_JA } from './pocket-locales.js';
 
 const name = 'dsh-pocket';
 const inject = ['slots', 'connection', 'layout', 'locale', 'sessionLogDownload'];
@@ -26,6 +26,26 @@ function fmt(t, key, vars) {
     }
   }
   return s;
+}
+
+// 访问密码默认遮罩：默认显示 10 个圆点，点「显示/隐藏」切换明文——防肩窥与截屏泄露。
+// 样式自包含（不依赖组件内部的 styles 对象），可在任意密码行复用。
+// 注意按钮 style 的属性顺序：`font` 是简写属性，若排在 `fontSize` 之后会把
+// font-size 一并重置成 inherit，按钮文字就继承父级字号、比同排其他按钮大。
+// 必须让 `font: 'inherit'` 在前、`fontSize: 12` 在后（和 styles.btn 一致）。
+function PinMask(props) {
+  const [shown, setShown] = useState(false);
+  const value = props && props.value != null ? String(props.value) : '';
+  const t = props && typeof props.t === 'function' ? props.t : () => '';
+  const dots = '\u2022'.repeat(10);
+  return h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 8 } },
+    h('span', { style: { fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 13, letterSpacing: 1 } }, shown ? value : dots),
+    h('button', {
+      type: 'button',
+      style: { font: 'inherit', fontSize: 12, padding: '2px 10px', height: 26, borderRadius: 999, border: '1px solid var(--dsw-alias-border-l2,#d1d5db)', background: 'transparent', color: 'var(--dsw-alias-label-secondary,#6b7280)', cursor: 'pointer' },
+      onClick: () => setShown((v) => !v),
+      title: shown ? t('pinHide') : t('pinShow'),
+    }, shown ? t('pinHide') : t('pinShow')));
 }
 
 // 官方 DeepSeek Harness 设计系统（dsh-client-ui-theme design-platform.css）：
@@ -180,7 +200,8 @@ function PocketSettingsTab({ rpcCall, t }) {
     // 命名隧道模式：Token/域名没配齐就不发起（服务端同样会拒绝）
     const cfg = status?.tunnelConfig;
     if (cfg?.mode === 'named' && (!cfg.hostname || !cfg.tokenSet)) {
-      setError(t('namedNeedCfg'));
+      // 同一通道：配置不全也只写 tunnelState，不写全局 error（否则页面底部又来一条）
+      setTunnelState({ phase: 'error', detail: t('namedNeedCfg'), startedAt: null });
       return;
     }
     setBusy(true);
@@ -189,7 +210,12 @@ function PocketSettingsTab({ rpcCall, t }) {
     try {
       setStatus(await call(POCKET_ENDPOINTS.tunnelStart, { disclaimer: true }));
     } catch (err) {
-      setError(err.message);
+      // 失败只走一条展示通道：tunnelState（与 service.mjs 的进度状态同源，
+      // 轮询 load() 也会拿到）。此前这里还会把失败写进全局 error 状态，页面底部
+      // 于是再渲染一遍同样的错误，而且那条没有区块归属、紧贴「手机端右边栏」，
+      // 读起来像那个开关失败了。开机自动恢复失败时用户没点过按钮，全局 error
+      // 恒为 null，只有 tunnelState 有值 —— 卡片那条才覆盖全部场景。
+      setTunnelState({ phase: 'error', detail: err?.message ?? String(err), startedAt: null });
     } finally {
       setBusy(false);
     }
@@ -344,6 +370,8 @@ function PocketSettingsTab({ rpcCall, t }) {
   const tunnelUrl = status?.tunnelUrl;
   const tunnelPhase = tunnelState?.phase ?? 'idle';
   const tunnelStarting = ['downloading', 'starting', 'registering'].includes(tunnelPhase);
+  // 自愈自动重建中（就绪探活连续失败 / 进程崩溃后）：快速隧道会换新地址，需重新扫码
+  const tunnelRestarting = tunnelPhase === 'restarting';
   const tunnelStateDetail = tunnelState?.detail ?? '';
   const tunnelStateStarted = tunnelState?.startedAt ?? null;
   // 公网模式视图（issue #66）：{ mode, hostname, tokenSet }
@@ -380,8 +408,20 @@ function PocketSettingsTab({ rpcCall, t }) {
     onClick,
   }, h('span', { style: { display: 'block', width: 16, height: 16, borderRadius: '50%', cornerShape: 'round', background: on ? 'var(--dsw-alias-label-primary-foreground, #0f1115)' : 'var(--dsw-alias-switch-thumb, #8b9198)', transition: 'transform 120ms ease', transform: on ? 'translateX(16px)' : 'translateX(0)' } }));
   // 卡片内主内容：二维码 + 地址 + 提示
-  const qrArea = (src, url, hint) => h('div', { style: { background: 'var(--dsw-alias-bg-layer-2,#f3f4f6)', borderRadius: 10, padding: '10px 12px', textAlign: 'center', margin: '10px 0' } },
-    h('img', { src, alt: 'QR', style: styles.qr }),
+  // issue #203：后端生成二维码失败（最常见是源码直装缺 qrcode 依赖）时 status 里是
+  // null。空 src 的 <img> 只是一块空白，地址文字却照常显示，用户只会以为「二维码坏了」。
+  // 只在「地址已有、但二维码为空」时提示缺依赖 —— 地址还没就绪时不应甩一个
+  // 依赖错误给用户，那只是启动中的正常状态，留一个占位框即可。
+  const qrArea = (src, url, hint, missingText) => h('div', { style: { background: 'var(--dsw-alias-bg-layer-2,#f3f4f6)', borderRadius: 10, padding: '10px 12px', textAlign: 'center', margin: '10px 0' } },
+    src
+      ? h('img', { src, alt: 'QR', style: styles.qr })
+      : url
+        ? h('div', {
+            role: 'alert',
+            'data-pocket-qr-error': '1',
+            style: { ...styles.qr, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14, fontSize: 12, lineHeight: 1.6, textAlign: 'left', color: 'var(--dsw-alias-label-primary,inherit)' },
+          }, missingText)
+        : h('div', { style: styles.qr, 'data-pocket-qr-pending': '1' }),
     h('div', { style: styles.code }, url),
     h('div', { style: styles.muted }, hint));
   // 设置行：上分隔线，内部第一行 = 左标签 + 右操作；extra 作为第二段渲染
@@ -454,7 +494,7 @@ function PocketSettingsTab({ rpcCall, t }) {
         ? h('div', { style: { marginTop: 8, fontSize: 12, color: 'var(--dsw-alias-state-warn-primary,#b45309)', lineHeight: 1.5 } }, t('lanDisabledHint'))
         : (lanUrl
           ? h('div', null,
-            qrArea(status.lanQr, lanUrl, t('lanHint')),
+            qrArea(status.lanQr, lanUrl, t('lanHint'), t('qrFailed')),
             // 访问密码行：开关 + 值（关闭时提示直连）
             row(t('lanPin'), Switch(status?.lanAuthEnabled !== false, () => setLanAuth(status?.lanAuthEnabled === false)),
               status?.lanAuthEnabled === false
@@ -462,7 +502,7 @@ function PocketSettingsTab({ rpcCall, t }) {
                 : (customPin?.which === 'lan'
                   ? customPinRow('lan')
                   : h('div', { style: { marginTop: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } },
-                    h('span', { style: { fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 13, letterSpacing: 1 } }, status.lanToken),
+                    h(PinMask, { value: status.lanToken, t }),
                     h('button', { style: { ...styles.btn, height: 26, padding: '0 10px', fontSize: 12 }, onClick: refreshLanPin }, t('refresh')),
                     customBtn('lan'),
                     status?.lanPinCustom ? h('span', { style: { fontSize: 11, color: 'var(--dsw-alias-state-warn-primary,#b45309)' } }, t('pinCustomHint')) : null,
@@ -494,9 +534,17 @@ function PocketSettingsTab({ rpcCall, t }) {
         h('span', { style: { fontWeight: 600, fontSize: 13 } }, t('wanAccess')),
         tunnelUrl
           ? h('button', { style: { ...styles.btn, height: 28, padding: '0 12px', fontSize: 12, color: 'var(--dsw-alias-state-error-primary,#dc2626)' }, onClick: stopTunnel }, t('stopTunnel'))
-          : h('button', { style: { ...styles.primary, height: 28, padding: '0 14px', fontSize: 12 }, onClick: startTunnel, disabled: busy || tunnelStarting }, busy || tunnelStarting ? t('opening') : t('enable')),
+          // 自动重连中：旧地址已失效（tunnelUrl 为空），给一个「停止重连」出口——
+          // 否则用户只能干等最多 healthMaxRestarts 轮退避重建，无法取消。
+          : tunnelRestarting
+            ? h('button', { style: { ...styles.btn, height: 28, padding: '0 12px', fontSize: 12, color: 'var(--dsw-alias-state-error-primary,#dc2626)' }, onClick: stopTunnel }, t('stopReconnect'))
+            : h('button', { style: { ...styles.primary, height: 28, padding: '0 14px', fontSize: 12 }, onClick: startTunnel, disabled: busy || tunnelStarting },
+              busy || tunnelStarting ? t('opening') : t('enable')),
       ),
-      tunnelStarting
+      tunnelRestarting
+        ? h('div', { style: { marginTop: 8, fontSize: 12, color: 'var(--dsw-alias-state-warn-primary,#b45309)' } },
+          errText(tunnelStateDetail) || t('reconnecting'))
+        : tunnelStarting
         ? h('div', { style: { marginTop: 8, fontSize: 12, color: 'var(--dsw-alias-label-secondary,#6b7280)' } },
           tunnelPhase === 'downloading'
             ? fmt(t, 'downloading', { s: elapsed(tunnelStateStarted) })
@@ -507,7 +555,7 @@ function PocketSettingsTab({ rpcCall, t }) {
           : (!tunnelUrl && !isDesktop ? h('div', { style: { ...styles.muted, marginTop: 8 } }, t('wanOffHint')) : null),
       tunnelUrl
         ? h('div', null,
-          qrArea(status.tunnelQr, tunnelUrl, namedMode ? t('namedRunningHint') : t('wanHint')),
+          qrArea(status.tunnelQr, tunnelUrl, namedMode ? t('namedRunningHint') : t('wanHint'), t('qrFailed')),
           // 防钓鱼 / 别收藏（issue #82）：公网链接仅本次有效、勿收藏提示
           h('div', { style: { marginTop: 8, fontSize: 12, lineHeight: 1.5, borderLeft: '4px solid var(--dsw-alias-state-warn-primary,#b45309)', background: 'var(--dsw-alias-bg-layer-2,#f3f4f6)', borderRadius: 8, padding: '8px 10px' } }, t('wanEphemeralWarn')),
           // 地址模式行（随机/固定；固定域名选中或编辑时高亮）
@@ -565,7 +613,7 @@ function PocketSettingsTab({ rpcCall, t }) {
               customPin?.which === 'public'
                 ? null
                 : h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 8 } },
-                  h('span', { style: { fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 13, letterSpacing: 1 } }, status.accessToken),
+                  h(PinMask, { value: status.accessToken, t }),
                   customBtn('public')),
               h('div', { style: { marginTop: 6 } },
                 customPin?.which === 'public' ? customPinRow('public') : null,
@@ -672,9 +720,9 @@ export function apply(ctx) {
   const rpcCall = (endpoint, payload, signal) =>
     ctx.connection.rpc.call(POCKET_RPC_CHANNEL, endpoint, payload, signal);
 
-  // 设置页签接入 DSH 本地化：注册 pocket 词典（zh/en），并绑定一个随当前 locale 切换的 t()。
+  // 设置页签接入 DSH 本地化：注册 pocket 词典（zh/en/ja），并绑定一个随当前 locale 切换的 t()。
   const translate = ctx.locale.bind(POCKET_NS);
-  ctx.effect(() => ctx.locale.register(POCKET_NS, { zh: POCKET_ZH, en: POCKET_EN }), 'dsh-pocket: pocket locale dictionaries');
+  ctx.effect(() => ctx.locale.register(POCKET_NS, { zh: POCKET_ZH, en: POCKET_EN, ja: POCKET_JA }), 'dsh-pocket: pocket locale dictionaries');
 
   // 设置一级入口（与 通用设置/模型/插件 同级，order 1 = 通用之后、最外层）
   ctx.slots.inject('settings.section', () =>

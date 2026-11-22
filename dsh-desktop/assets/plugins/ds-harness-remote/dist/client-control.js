@@ -265,6 +265,10 @@ export class ClientControl {
                 if (typeof value.route !== 'string' || !isAllowedPluginRoute(value.route)) {
                     throw new ClientModeError('INVALID_MESSAGE', 'A valid plugin route is required.');
                 }
+                if (value.route === 'api/session/uploadFileBinary'
+                    && (typeof value.targetDeviceId !== 'string' || this.context.activeRemote()?.target.deviceId !== value.targetDeviceId)) {
+                    throw new ClientModeError('REMOTE_NOT_CONNECTED', 'The selected upload Host changed. Select the file again.');
+                }
                 if (!isRecord(value.body))
                     throw new ClientModeError('INVALID_MESSAGE', 'A plugin route body object is required.');
                 return ok(await this.context.pluginRoute(value.route, value.body, signal));

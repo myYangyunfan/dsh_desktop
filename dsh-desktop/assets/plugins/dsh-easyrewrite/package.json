@@ -1,6 +1,6 @@
 {
   "name": "dsh-easyrewrite",
-  "version": "3.0.1",
+  "version": "3.1.0",
   "description": "The most seamless message recall & re-edit plugin for DSH Web — native experience, strong compatibility, simple toggles, rich settings, modern lightweight UI.",
   "icon": "./assets/icon.png",
   "type": "module",
@@ -74,7 +74,7 @@
   ],
   "license": "MIT",
   "scripts": {
-    "test": "node tests/check-scope-vars.mjs && node tests/smoke-host.mjs && node tests/test-log-memory.mjs && node tests/test-issue9-anti-double-submit.mjs && node tests/test-issue11-bubble-compatibility.mjs && node tests/test-dsh-0.1.7-pager.mjs && node tests/test-dsh-0.1.7-image-drafts.mjs && node tests/test-recall-cross-session-images.mjs && node tests/test-v3-components-render.mjs && node tests/test-vault-storage.mjs && node tests/test-community-improvements.mjs",
+    "test": "node tests/check-scope-vars.mjs && node tests/smoke-host.mjs && node tests/test-log-memory.mjs && node tests/test-issue9-anti-double-submit.mjs && node tests/test-issue11-bubble-compatibility.mjs && node tests/test-dsh-0.1.7-pager.mjs && node tests/test-dsh-0.1.7-image-drafts.mjs && node tests/test-recall-cross-session-images.mjs && node tests/test-v3-components-render.mjs && node tests/test-vault-storage.mjs && node tests/test-community-improvements.mjs && node tests/test-issue27-hooks-and-issue29-routes.mjs",
     "build": "node build.mjs",
     "prepare": "node build.mjs",
     "prepack": "node build.mjs"

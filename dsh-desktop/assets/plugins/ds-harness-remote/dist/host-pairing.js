@@ -38,12 +38,12 @@ export class HostPairing {
     serverUrl;
     lifetime = new AbortController();
     queue = Promise.resolve();
-    constructor(serverUrl, directory, identity, descriptor, adopt, fetcher = fetch) {
+    constructor(serverUrl, directory, identity, descriptor, adopt, fetcher = fetch, httpServerAllowlist = []) {
         this.identity = identity;
         this.descriptor = descriptor;
         this.adopt = adopt;
         this.fetcher = fetcher;
-        this.serverUrl = normalizeServerUrl(serverUrl);
+        this.serverUrl = normalizeServerUrl(serverUrl, httpServerAllowlist);
         this.path = join(directory, 'host-pairing.json');
     }
     close() { this.lifetime.abort(); }

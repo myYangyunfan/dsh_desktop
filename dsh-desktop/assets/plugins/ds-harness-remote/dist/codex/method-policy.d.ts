@@ -161,7 +161,7 @@ declare const schemas: {
     }, z.core.$strict>;
 };
 export type AllowedCodexAppMethod = keyof typeof schemas;
-export declare const CODEX_APP_ALLOWLIST: readonly ("turn/start" | "thread/list" | "project/list" | "model/list" | "thread/resume" | "dsh/directoryList" | "thread/archive" | "thread/start" | "thread/fork" | "turn/steer" | "thread/read" | "turn/interrupt" | "thread/name/set" | "dsh/sessionHistory" | "project/create" | "account/read" | "dsh/sessionAttachment" | "thread/unarchive" | "thread/unsubscribe")[];
+export declare const CODEX_APP_ALLOWLIST: readonly ("thread/list" | "project/list" | "model/list" | "turn/start" | "thread/resume" | "dsh/directoryList" | "thread/archive" | "thread/start" | "thread/fork" | "turn/steer" | "thread/read" | "turn/interrupt" | "thread/name/set" | "dsh/sessionHistory" | "project/create" | "account/read" | "dsh/sessionAttachment" | "thread/unarchive" | "thread/unsubscribe")[];
 export declare function parseCodexCall(method: string, params: unknown): {
     method: AllowedCodexAppMethod;
     params: Record<string, unknown>;

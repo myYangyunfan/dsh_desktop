@@ -4,6 +4,7 @@ import { codexPermissionPresetFromResponse } from './permissions.js';
 import { CODEX_PROVIDER, modelSelectionProjection } from './virtual-catalog.js';
 import { AsyncValueQueue, CODEX_IMAGE_ATTACHMENT_PREFIX, codexImageLimitsProjection, codexPermissionsProjection, sessionIdFromAddress, } from './virtual-contract.js';
 import { adaptEventData, appendBoundedText, commandText, fileChangeSummary, isSurfaceEvent, isToolItemType, itemEvents, itemText, sanitizedFileChanges, toolResultContentReplacement, toolResultEvent, } from './virtual-history.js';
+import { turnEndReason } from './turn-end-reason.js';
 import { array, integer, nativeThreadId, optionalPositiveInteger, record, string } from './virtual-values.js';
 export class CodexLiveProjection {
     context;
@@ -99,6 +100,7 @@ export class CodexLiveProjection {
             this.context.setPermissionSelection(follow.sessionId, preset);
             return;
         }
+        this.context.invalidateThreadHistory?.(follow.threadId);
         if (frame.method === 'turn/started') {
             const turn = record(params.turn);
             const turnModel = projectCodexModel(turn);
@@ -503,14 +505,5 @@ export class CodexLiveProjection {
         follow.queue.close();
         this.context.emitRemoteEvent('api-session/status', [follow.sessionId, false]);
     }
-}
-function turnEndReason(turn) {
-    if (turn.status === 'failed' || turn.error !== undefined && turn.error !== null) {
-        return { kind: 'error', error: { message: 'CodeX turn failed.', code: 'codex-turn-failed' } };
-    }
-    if (turn.status === 'interrupted' || turn.status === 'cancelled' || turn.status === 'canceled' || turn.status === 'aborted') {
-        return { kind: 'interrupted' };
-    }
-    return { kind: 'completed' };
 }
 //# sourceMappingURL=virtual-live.js.map

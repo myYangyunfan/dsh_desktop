@@ -8794,161 +8794,164 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			if (typeof held?.dispose === "function") held.dispose();
 		}
 		//#endregion
-		//#region \0dsh-plugin-shop-css:61217181
-		const css = "/* Shop styles — the shop's own page with its market shelf, and the shop's two\n * buttons on dsh's Plugins page. Every variable read here is a dsh theme\n * alias token (`--dsw-alias-*`), one of the shop's own properties declared in\n * this file (`--shop-*`, `--category-hue`, `--switch-hue`, `--track-hue`), or\n * one of two dsh variables outside the alias set, each read where the shop\n * copies dsh: `--dsh-frame-top-clearance`, so the page head clears the\n * desktop frame as dsh's own pages do, and `--dsw-radius-sm`, because the\n * Plugins page buttons copy dsh's Button (0.1.5-rc.3 lacks that token, and\n * has no Plugins page to draw them on). `state-error` and\n * `state-success` do not exist, so the state-*-primary set stands in for\n * them (measured 2026-10-17 on dsh 0.1.5-rc.3, 0.1.7-rc.2 and 0.2.0-rc.2,\n * which do define `bg-layer-3` and `interactive-bg-hover`, once listed here\n * as missing). The signature is the category spine: one HUE per\n * category (seven fixed hues, not the brand token — the brand resolves to\n * near-black in the light theme, so seven brand opacities read as seven\n * shades of gray), with the category name as the cover label in the same hue. Class names are mapped to content-derived names at bundle time\n * (tsdown.s931c3b_client.s821251_config.s739867_ts) and stubbed in tests; only the keys are relied\n * on.\n *\n * One token rule the theme forces: the background LAYERS do not carry\n * contrast. In the light theme bg-base, bg-layer-1, bg-layer-2 and\n * bg-layer-3 all resolve to the same white; only the dark theme spreads them\n * (950/875/850/800). So a layer-2 fill on a layer-1 ground is invisible for\n * half of all users, and anything whose fill is its ONLY affordance — the\n * loading skeleton, the borderless capability chips — derives its fill from\n * label-primary instead, which inverts with the theme by construction.\n * Elements that also carry a border or text may keep a layer fill.\n * `css-tokens.s931c3b_client.s6bd619_spec.s739867_ts` pins this. */\n\n.s620b40_panel {\n  display: flex;\n  flex-direction: column;\n  gap: 14px;\n  /* The shop's own width decides the shelf's arrangement (design\n   * 2026-11-02-shop-widescreen-layout §3). The container is this tab root,\n   * not `.s960683_shelfBody`: a container query cannot style its own container, and\n   * the rule that turns the shelf body into the rail's grid is exactly that.\n   * Inline size only — the panel's height still follows its content. */\n  container-type: inline-size;\n  /* The two reds every red text in this tab is painted with. dsh's error red\n   * is #ec1313 in the light theme, which measures 4.498:1 as text on white —\n   * a miss of two thousandths — and 3.57:1 on the badge's own 14% red fill\n   * (4.00:1 in dark). Mixing it toward label-primary fixes both, because\n   * label-primary is the theme's foreground pole: it darkens the red on light\n   * surfaces and lightens it on dark ones. Measured in the live app: 90% of\n   * the red is 5.30:1 on white and 5.29:1 on the dark card, and 80% is\n   * 4.98:1 on the badge's tint, 4.92:1 in dark. Computed: 90% is 6.14:1 on\n   * the dark page itself (#151517, `bg-base`), where the self-update's\n   * failure heading sits (4.69:1 on Settings' #2c2c2e, its ground through\n   * 0.8.7), and 80% is 5.23:1 on the uninstall button's 10% hover fill.\n   * Declared here, on the tab root, because a custom property inherits: one\n   * declaration reaches every red element, and a new one cannot be\n   * forgotten. */\n  --shop-error: color-mix(in srgb, var(--dsw-alias-state-error-primary) 90%, var(--dsw-alias-label-primary));\n  --shop-error-on-tint: color-mix(in srgb, var(--dsw-alias-state-error-primary) 80%, var(--dsw-alias-label-primary));\n  /* The amber and the green, mixed the same way for the same reason. dsh's\n   * warn #f59e0b and success #22c55e are one value in both themes and pass\n   * in the dark one, but as text on white they measure 2.15:1 and 2.28:1.\n   * Each derived colour keeps the largest multiple of ten of its hue that\n   * clears every surface it paints, as the reds do. Computed from the live\n   * tokens over every bg layer in both themes: amber at 60% is 4.95:1 on a\n   * plain surface but 4.44:1 on its own 14% tint, so text on an amber tint\n   * takes 50% (5.66:1); green at 60% is 5.18:1 plain and 4.60:1 on its 14%\n   * tint, so one green serves both. */\n  --shop-warn: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 60%, var(--dsw-alias-label-primary));\n  --shop-warn-on-tint: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 50%, var(--dsw-alias-label-primary));\n  --shop-success: color-mix(in srgb, var(--dsw-alias-state-success-primary) 60%, var(--dsw-alias-label-primary));\n  /* The favorite star's set colour. Deliberately NOT `--shop-warn`: that mix\n   * is tuned for text on a tint and reads as dark amber, while a 15 px glyph\n   * is a mark rather than a sentence — it wants the hue, kept bright. 70% is\n   * the brightest mix that still darkens with the light theme instead of\n   * glowing on white (a raw warn token is one value in both palettes). */\n  --shop-star: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 70%, var(--dsw-alias-label-primary));\n  /* The shelf never scrolls sideways: a card too wide for its track wraps\n   * its badges rather than widening the panel.\n   *\n   * Clipped on BOTH axes, with a margin, because `.sf47d01_searchInput` sits at\n   * exactly (0, 0) of this box — it is the first child of `.sfb0d90_toolbar`, itself\n   * the first child here, and this rule carries no padding — so its focus\n   * ring paints ENTIRELY outside the panel.\n   *\n   * Both axes is the load-bearing part: `overflow-clip-margin` is inert\n   * unless the element clips on both. Clipping x alone left the margin doing\n   * nothing — measured against the live app on 0.7.1, the ring reached 0 of\n   * its 3px on the left at every device pixel ratio (1, 1.25, 1.5, 2), while\n   * keeping the full 3px on the right, where the 280px input stops short of\n   * the panel and never meets the clip edge. Raising the margin to 6px\n   * changed nothing; clipping both axes with the SAME 3px restored the whole\n   * ring. A test that reads declarations cannot see that difference, which is\n   * why the first attempt at this shipped broken.\n   *\n   * `clip` is not a scroll container, so this does not bring back the\n   * accidental scrolling `hidden` caused by coercing the other axis to\n   * `auto`. Nothing is lost vertically: the panel's scrollHeight equals its\n   * height and no descendant paints outside the clip rect (measured).\n   * `overflow-x: hidden` stays as the fallback for engines without `clip`,\n   * where the ring is clipped as it was before, never worse. */\n  overflow-x: hidden;\n  overflow: clip;\n  overflow-clip-margin: 3px;\n}\n\n/* The shop's own page in dsh's main column (design\n * 2026-10-16-shop-sidebar-page §4.2), framed as dsh 0.2.0-rc.2 frames its\n * Plugins page — read from that page's stylesheet: the page is the scroll\n * container, its children one centred column (960px then; 1280 since the\n * 2026-11-02 wide layout), and the head clears the desktop title bar. One declaration is the shop's own, `color`:\n * dsh's `.s125266_page` inherits its colour from the shell around it, and the shop's\n * root is not inside dsh's panel stylesheet, so the shop's page states it. */\n.s125266_page {\n  box-sizing: border-box;\n  height: 100%;\n  overflow: auto;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 32px;\n  padding: 0 clamp(24px, 4vw, 48px) 48px;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* The head and the shelf share one column, and on 2026-11-02 that column\n * widened from 960 to 1280 so the wide arrangement has room for a rail\n * beside two cards (design 2026-11-02-shop-widescreen-layout §3). A head at\n * 960 over a body at 1280 would read as misaligned. */\n.s125266_page > * {\n  width: 100%;\n  max-width: min(1280px, 100%);\n}\n\n.s9c1070_pageHead {\n  box-sizing: border-box;\n  padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px));\n}\n\n.s475fb9_pageTitle {\n  margin: 0;\n  font-size: 20px;\n  font-weight: 500;\n  line-height: 28px;\n}\n\n/* Secondary, as dsh's own intro: 5.80:1 on the light theme's white. */\n.sa7f73e_pageIntro {\n  margin: 4px 0 0;\n  font-size: 13px;\n  line-height: 20px;\n  color: var(--dsw-alias-label-secondary);\n}\n\n/* The shelf's two arrangements (design 2026-11-02-shop-widescreen-layout\n * §4). Base: today's column — the controls, then the results — with the\n * same 14px the panel used to put between them. The container is `.s620b40_panel`,\n * so these rules are queried from above, not from here. */\n.s960683_shelfBody {\n  display: flex;\n  flex-direction: column;\n  gap: 14px;\n}\n\n/* Narrow: the category chips and the switch are one row, as they are today.\n * `nowrap` is load-bearing — flex line-breaking uses the chips' MAX-content\n * width, so a wrapping row sends the switch to a line of its own the moment\n * the chips do not fit, which is every narrow panel. The bar shrinks and\n * wraps its own chips instead. The bar is a sibling of the switch now, not\n * its parent, so `align-items: flex-end` is what keeps the switch level with\n * the bar's last line rather than floating beside the middle of a two-line\n * block. */\n.sc34345_controls {\n  display: flex;\n  flex-wrap: nowrap;\n  align-items: flex-end;\n  gap: 6px;\n}\n\n/* The rail's headings. Hidden below the threshold, where the controls are one\n * wrapping bar and these words would label nothing; the wide rule reveals\n * them (design 2026-11-02-shop-widescreen-layout §4). */\n.s2c9677_railHeading {\n  display: none;\n  margin: 0;\n  font-size: 11px;\n  font-weight: 600;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.sfa80b4_results {\n  display: flex;\n  flex-direction: column;\n  gap: 14px;\n}\n\n\n/* The two buttons on dsh's Plugins page (design 2026-10-16-shop-sidebar-page\n * §7), drawn as that page draws its own small outline buttons beside them —\n * dsh 0.2.0-rc.2's Button, sm + outline: 28px tall, 12px text on an 18px\n * line, 10px of side padding, the small radius, the neutral stroke. That\n * stroke is 0.5px in dsh and 1px here: every border in this stylesheet is,\n * and Chromium paints 0.5px as 1px at every ratio measured. */\n.s8e13a0_detailAction {\n  box-sizing: border-box;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  height: 28px;\n  padding: 0 10px;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: var(--dsw-radius-sm);\n  background: transparent;\n  color: var(--dsw-alias-label-primary);\n  font-size: 12px;\n  line-height: 18px;\n  cursor: pointer;\n}\n\n.s8e13a0_detailAction:hover {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n\n.s8e13a0_detailAction:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n.sa3deac_stateLine {\n  margin: 0;\n  color: var(--dsw-alias-label-primary);\n  font-size: 13px;\n}\n\n/* Visually hidden but screen-reader readable (the loading copy while the\n * skeleton stands in visually). */\n.s9361fb_srOnly {\n  position: absolute;\n  width: 1px;\n  height: 1px;\n  margin: -1px;\n  padding: 0;\n  border: 0;\n  clip: rect(0 0 0 0);\n  clip-path: inset(50%);\n  overflow: hidden;\n  white-space: nowrap;\n}\n\n/* The loading shelf: ghost cards with the same geometry as the real grid, so\n * the swap to content is a same-shape handoff instead of a jump. */\n.sb1fe4e_skeletonGrid {\n  display: grid;\n  grid-template-columns: 1fr;\n  gap: 8px;\n}\n\n.s8c9105_skeletonCard {\n  position: relative;\n  display: flex;\n  flex-direction: column;\n  border: 1px solid var(--dsw-alias-border-l1);\n  border-radius: 10px;\n  background: var(--dsw-alias-bg-layer-1);\n  overflow: hidden;\n}\n\n/* The shimmer sweep: one gradient band travels across each ghost card while\n * the bars breathe, so the loading state reads as \"the shelf is scanning\". */\n.s8c9105_skeletonCard::after {\n  content: '';\n  position: absolute;\n  inset: 0;\n  background: linear-gradient(\n    100deg,\n    transparent 25%,\n    color-mix(in srgb, var(--dsw-alias-label-primary) 14%, transparent) 50%,\n    transparent 75%\n  );\n  transform: translateX(-100%);\n  animation: dshShopSkeletonSweep 1.4s ease-in-out infinite;\n  pointer-events: none;\n}\n\n@keyframes dshShopSkeletonSweep {\n  to { transform: translateX(100%); }\n}\n\n.s865ab3_skeletonName {\n  width: 55%;\n  height: 14px;\n  margin: 10px 12px 0;\n  border-radius: 4px;\n  background: color-mix(in srgb, var(--dsw-alias-label-primary) 8%, transparent);\n}\n\n.s6b4bce_skeletonSummary {\n  width: 92%;\n  height: 12px;\n  margin: 10px 12px 0;\n  border-radius: 4px;\n  background: color-mix(in srgb, var(--dsw-alias-label-primary) 8%, transparent);\n}\n\n.sf40a9a_skeletonSummaryShort {\n  width: 68%;\n  height: 12px;\n  margin: 6px 12px 10px;\n  border-radius: 4px;\n  background: color-mix(in srgb, var(--dsw-alias-label-primary) 8%, transparent);\n}\n\n/* The ghost of the action line, right where the real buttons land. */\n.s8e5a8a_skeletonActions {\n  display: block;\n  width: 84px;\n  height: 24px;\n  margin: 0 12px 10px;\n  border-radius: 999px;\n  background: color-mix(in srgb, var(--dsw-alias-label-primary) 8%, transparent);\n}\n\n.s8c9105_skeletonCard span {\n  animation: dshShopSkeletonPulse 1.6s ease-in-out infinite;\n}\n\n@keyframes dshShopSkeletonPulse {\n  0%, 100% { opacity: 0.5; }\n  50% { opacity: 1; }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .s8c9105_skeletonCard span { animation: none; opacity: 0.75; }\n  .s8c9105_skeletonCard::after { content: none; }\n}\n\n.s51f04e_actionButton {\n  align-self: flex-start;\n  padding: 5px 14px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 6px;\n  background: var(--dsw-alias-bg-layer-2);\n  color: var(--dsw-alias-label-primary);\n  font-size: 13px;\n  cursor: pointer;\n}\n\n.s51f04e_actionButton:hover {\n  border-color: color-mix(in srgb, var(--dsw-alias-brand-primary) 45%, var(--dsw-alias-border-l2));\n  color: var(--dsw-alias-brand-primary);\n}\n\n.s51f04e_actionButton:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n.sfb0d90_toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 12px;\n  flex-wrap: wrap;\n}\n\n.s925fc4_toolbarRight {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  flex-wrap: wrap;\n}\n\n/* The shop's own version, right of the search box: `v0.4.4`, plus the\n * update button when the version check found a newer release. */\n.s5ea3a7_versionBlock {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.sc66a32_versionText {\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 12px;\n  letter-spacing: 0.02em;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.sccdf7c_updateSelfButton {\n  padding: 2px 10px;\n  border: 1px solid var(--dsw-alias-brand-primary);\n  border-radius: 999px;\n  background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent);\n  color: var(--dsw-alias-brand-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.sccdf7c_updateSelfButton:hover {\n  background: color-mix(in srgb, var(--dsw-alias-brand-primary) 20%, transparent);\n}\n\n.sccdf7c_updateSelfButton:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n/* The on-demand re-check next to the version number: a quiet pill; the\n * border and text carry it in the light theme where bg layers are white. */\n.scf8dbb_checkUpdateButton {\n  padding: 2px 10px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 999px;\n  background: var(--dsw-alias-bg-layer-2);\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n  cursor: pointer;\n}\n\n.scf8dbb_checkUpdateButton:hover {\n  border-color: var(--dsw-alias-label-secondary);\n  color: var(--dsw-alias-label-primary);\n}\n\n.scf8dbb_checkUpdateButton:disabled {\n  opacity: 0.6;\n  cursor: default;\n}\n\n.scf8dbb_checkUpdateButton:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n/* The project's GitHub mark, right of the version row: a quiet icon link.\n * The octocat carries itself — color shift on hover, no text, no border. */\n.s85b663_githubLink {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  padding: 3px;\n  border-radius: 6px;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.s85b663_githubLink:hover {\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-bg-layer-2);\n}\n\n.s85b663_githubLink:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n/* The self-update's expanded states (running log / done + restart /\n * failure detail) sit under the toolbar, above the category bar. */\n.s5c8eb8_selfUpdatePanel {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  margin-top: 8px;\n}\n\n.sf47d01_searchInput {\n  width: min(280px, 100%);\n  padding: 6px 10px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 6px;\n  background: var(--dsw-alias-bg-layer-1);\n  color: var(--dsw-alias-label-primary);\n  font-size: 13px;\n}\n\n.sf47d01_searchInput:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n/* Subdued line under the search box when a dictionary intent fired (design\n * 2026-10-08-search-query-expansion §4). One fact, no badge. */\n.sdce253_expansionNote {\n  margin: 4px 0 0;\n  font-size: 12px;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.s797744_staleBadge {\n  padding: 2px 8px;\n  border-radius: 999px;\n  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 14%, transparent);\n  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-warn-primary) 40%, transparent);\n  color: var(--shop-warn-on-tint);\n  font-size: 12px;\n}\n\n.s2b7ed0_categoryBar {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 6px;\n  margin-top: 6px;\n  /* A flex item of `.sc34345_controls` at narrow widths: it may shrink below its\n   * content, so the chips wrap instead of pushing the switch off the line.\n   * It must NOT grow — a growing bar takes the whole line and pushes the\n   * switch to a line of its own, where today the two share one. The wide\n   * rail restores its natural height. */\n  flex: 0 1 auto;\n  min-width: 0;\n}\n\n.s5bccd1_categoryButton {\n  /* The hue this button carries when selected. `All` and `Installed` select by\n   * something other than a category and keep the brand token; the six category\n   * buttons override it from the shared hue table below, so a pressed Tool tab\n   * turns the same blue as a tool card's spine. */\n  --category-hue: var(--dsw-alias-brand-primary);\n  padding: 3px 10px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 999px;\n  background: var(--dsw-alias-bg-layer-1);\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n  cursor: pointer;\n}\n\n/* Blend text with the theme foreground: darker on light backgrounds, lighter\n * on dark ones. The unblended category hue belongs on the border and fill. */\n.s5bccd1_categoryButton:hover {\n  border-color: color-mix(in srgb, var(--category-hue) 45%, var(--dsw-alias-border-l2));\n  color: color-mix(in srgb, var(--category-hue) 45%, var(--dsw-alias-label-primary) 55%);\n}\n\n/* Selected. Written `.s5bccd1_categoryButton.s7436f6_categoryButtonOn` — TWO classes — so it\n * matches `.s5bccd1_categoryButton:hover`'s specificity and, coming after it, wins.\n * As a bare `.s7436f6_categoryButtonOn` it lost both `border-color` and `color` to the\n * hover rule for as long as the pointer stayed on the tab that had just been\n * clicked, which is precisely when a reader looks for confirmation.\n *\n * EVERY declaration here is a colour: a pressed tab must occupy exactly the\n * same box as an unpressed one, so the bar does not reflow — and with ~9 pills\n * on a wrapping row, one that grows can push the rest onto another line and\n * move the tab out from under the pointer that just clicked it. That is what\n * `font-weight: 600` did (bold metrics are wider than regular), and it is why\n * nothing may be added here that resolves to a length: no padding, no\n * border-width, no font-size, no letter-spacing. `css-tokens.s931c3b_client.s6bd619_spec.s739867_ts`\n * fails the build on one.\n *\n * Nor a second line. An inset ring once doubled this border, and every control\n * in the stylesheet now draws exactly one 1px line, which is also the thinnest\n * the host paints (Chromium draws 0.5px as 1px). What separates pressed from\n * unpressed is lightness instead of thickness: the border is the hue mixed 30%\n * toward label-primary, the theme's foreground pole, so it clears 3:1 against\n * the bar in both themes for every hue — the raw hue measured 1.86:1 on white\n * for `ui` — and the fill under it is 22% of the hue. The `other` tab is the\n * case this is for: its hue IS the neutral gray this file uses for \"no\n * category\", so on the light theme the hue alone barely separates the two. */\n.s5bccd1_categoryButton.s7436f6_categoryButtonOn {\n  border-color: color-mix(in srgb, var(--category-hue) 70%, var(--dsw-alias-label-primary));\n  background: color-mix(in srgb, var(--category-hue) 22%, transparent);\n  color: color-mix(in srgb, var(--category-hue) 45%, var(--dsw-alias-label-primary) 55%);\n}\n\n/* Forced colours replace every colour above with the system palette, which\n * would leave the three colour declarations saying nothing and the pressed tab\n * indistinguishable from its neighbours, so this mode alone gets an outline. */\n@media (forced-colors: active) {\n  .s5bccd1_categoryButton.s7436f6_categoryButtonOn {\n    outline: 2px solid ButtonText;\n    outline-offset: -4px;\n  }\n}\n\n.s5bccd1_categoryButton:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n/* The incompatible filter, at the right edge of the controls row at narrow\n * widths: `margin-left: auto` pushes it past the bar, which shrinks and wraps\n * its own chips (`flex: 0 1 auto`) rather than squeezing the switch. Under\n * the wide layout it is a full-width row under the rail's \"Filter\" heading.\n * It is a MODIFIER, not a ninth category — the categories select what to show\n * and this one subtracts from whatever they selected — so it takes the error\n * hue it filters on rather than joining the hue table.\n *\n * And it is a SWITCH, which is the difference the shape now carries. It used\n * to wear `.s5bccd1_categoryButton`: same pill, same row, same size as the eight tabs,\n * differing only in being red. That reads as a ninth tab, and it is not one —\n * the tabs are choose-one and this is on-or-off. So it drops the pill chrome\n * entirely (no border, no fill, nothing to compete with the row it sits\n * beside) and puts the state in a track, the same one every installed card\n * carries. Nothing here restates the switch geometry; `--switch-hue` is the\n * whole of what this control says about it, and it reaches the label too, so\n * one declaration keeps the word and the track the same colour. */\n.s49785e_incompatibleFilter {\n  --switch-hue: var(--dsw-alias-state-error-primary);\n  margin-left: auto;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  /* One line at any panel size. A flex row that cannot fit its items shrinks\n   * every one of them, and a switch squeezed below its own content broke its\n   * words mid-label — 只看收 / 藏, 隐藏不兼容 / 3708 — once the favorites\n   * switch shared the row (reported 2026-11-06). Under `nowrap` the label's\n   * min-content is the whole line, which a flex item's automatic minimum will\n   * not shrink below, so the squeeze goes to the bar: its chips wrap. */\n  white-space: nowrap;\n  /* Matches the pills' vertical padding so the bar keeps one line box whether\n   * this control wraps onto a row of its own or shares theirs. */\n  padding: 3px 0;\n  border: 0;\n  background: none;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n  cursor: pointer;\n}\n\n/* Hover lifts the word to full contrast and warms the track's border. Scoped\n * to the OFF track: `.s49785e_incompatibleFilter:hover .s3e91a7_switch` outranks `.scf58a9_switchOn`\n * by two classes, so unscoped it would strip the hue from the border at\n * exactly the moment a reader has the pointer on it to check the state. */\n.s49785e_incompatibleFilter:hover {\n  color: var(--dsw-alias-label-primary);\n}\n\n.s49785e_incompatibleFilter:hover .s3e91a7_switch:not(.scf58a9_switchOn) {\n  border-color: color-mix(in srgb, var(--switch-hue) 45%, var(--dsw-alias-border-l2));\n}\n\n/* On. Written with both classes for the reason `.s5bccd1_categoryButton.s7436f6_categoryButtonOn`\n * is: it has to match `:hover`'s specificity and come after it, or the colour\n * reverts under a pointer that has not moved since the click. */\n.s49785e_incompatibleFilter.sace172_incompatibleFilterOn {\n  color: color-mix(in srgb, var(--switch-hue) 45%, var(--dsw-alias-label-primary) 55%);\n}\n\n/* Off here means \"nothing is being taken away\" — the resting state — so the\n * knob steps back to the secondary label. The enable switch keeps the full\n * strength dot, where off means \"this plugin is disabled\" and is worth\n * noticing. In this bar it would be the heaviest mark in a row of hairline\n * pills, and on the light theme it is the WHOLE control: bg-layer-2 is the\n * same white as the panel there, so an off track is a hairline outline with a\n * near-black dot sitting in it. */\n.s49785e_incompatibleFilter .s3e91a7_switch:not(.scf58a9_switchOn) .se04dcb_switchKnob {\n  background: var(--dsw-alias-label-secondary);\n}\n\n/* The ring has no border to trace, so it takes an offset and the pill radius\n * of the tabs it sits beside rather than hugging the text. */\n.s49785e_incompatibleFilter:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 2px;\n  border-radius: 999px;\n}\n\n.s8bbbce_updatableHeading {\n  margin: 2px 0 0;\n  font-size: 16px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  color: var(--dsw-alias-label-primary);\n}\n/* The Updatable heading and its one batch action on a line (design\n * 2026-11-04-borrowings-round-4 §3). The action sits at the row's end, where\n * the card list's other secondary actions put theirs, and wraps under the\n * heading rather than squeezing it when the column is narrow. */\n.s42f7ef_updatableHead {\n  display: flex;\n  align-items: baseline;\n  justify-content: space-between;\n  gap: 8px 12px;\n  flex-wrap: wrap;\n}\n\n.sdbe244_updateAllButton {\n  flex: 0 0 auto;\n  font-size: 12px;\n  padding: 4px 10px;\n  border-radius: 6px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  background: transparent;\n  color: var(--dsw-alias-label-primary);\n  cursor: pointer;\n}\n\n.sdbe244_updateAllButton:hover {\n  border-color: var(--dsw-alias-brand-primary);\n  color: var(--dsw-alias-brand-primary);\n}\n\n/* The ring every other control in this stylesheet carries. The batch action is\n * the only one in the Updatable header, so it is also the only Tab stop there\n * — without this it would be the one keyboard-reachable control with no\n * visible focus. */\n.sdbe244_updateAllButton:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n.sa7ab40_catalogStatsRow {\n  display: flex;\n  align-items: center;\n  /* The row holds the catalog line, the refresh button and the shelf order's\n   * three pills (design 2026-10-12-shelf-orders §4). Without wrapping, the\n   * last of them overflows the tab at a narrow width. */\n  flex-wrap: wrap;\n  gap: 10px;\n  margin: 6px 0 0;\n}\n\n/* The shelf's order control, at the right end of the stats row. `margin-left:\n * auto` is what puts it there while the line and the refresh button stay\n * left — and it is safe on a wrapping row, unlike a width. */\n.sa52bfa_sortGroup {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  margin-left: auto;\n}\n\n.s411b49_sortLabel {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n}\n\n.s4e9afc_catalogStats {\n  margin: 0;\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 12px;\n  letter-spacing: 0.02em;\n  color: var(--dsw-alias-label-secondary);\n}\n\n/* Sits beside the 12px stats caption, so it is quieter than `.s51f04e_actionButton`:\n * this is an affordance, not a call to action — the catalog reloads on its\n * own at mount and the shelf is already usable without it. Named\n * `catalogRefresh*` (not `reload*`) so it cannot collide with the §4 page\n * reload offer below, which reloads the whole tab rather than refetching\n * the catalog data. */\n.s37ae89_catalogRefreshButton {\n  padding: 1px 9px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 999px;\n  background: transparent;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 11px;\n  line-height: 17px;\n  cursor: pointer;\n}\n\n.s37ae89_catalogRefreshButton:hover:not(:disabled) {\n  border-color: color-mix(in srgb, var(--dsw-alias-brand-primary) 45%, var(--dsw-alias-border-l2));\n  color: var(--dsw-alias-brand-primary);\n}\n\n.s37ae89_catalogRefreshButton:disabled {\n  cursor: default;\n  opacity: 0.6;\n}\n\n.s37ae89_catalogRefreshButton:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n.sad310e_catalogRefreshFailed {\n  font-size: 11px;\n  color: var(--shop-warn);\n}\n\n.s3671cd_emptyLine {\n  margin: 0;\n  color: var(--dsw-alias-label-primary);\n  font-size: 13px;\n}\n\n/* The shelf: a responsive grid of cards. `auto-fill` with a 430px minimum\n * gives the two columns the wide layout buys — two tracks and their 12px gap\n * need 872px of results column — and one column below that (design\n * 2026-11-02-shop-widescreen-layout §5). The vertical gap is today's 8px. */\n.s984038_cards {\n  display: grid;\n  grid-template-columns: repeat(auto-fill, minmax(min(430px, 100%), 1fr));\n  max-width: 100%;\n  gap: 8px 12px;\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  animation: dshShopCardsIn 220ms ease;\n}\n\n@keyframes dshShopCardsIn {\n  from { opacity: 0; transform: translateY(3px); }\n  to { opacity: 1; transform: none; }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .s984038_cards { animation: none; }\n}\n\n/* The shelf's grid item is the <li> carrying a card's identity (ShopPage\n * reads it), not the card, and a grid item's min-width is auto: the 1fr track\n * could then never be narrower than the widest item's min-content, and every\n * card widens to it. Two things reach that width. Content that cannot wrap,\n * on a narrow window. And a card the browser skips (`content-visibility:\n * auto` below), which keeps the width it last rendered at: browsing a wide\n * window and narrowing it left every card 960px wide in a 662px column, its\n * right side clipped by the panel (measured on dsh 0.2.1-rc.2, 0.2.0-rc.2 and\n * 0.1.7-rc.2, 2026-10-22). Until the page took the main column the panel was\n * as wide as Settings made it, and a window resize did not move it. */\n/* The card is this item's child. Without a grid here the item stretches to\n * the row but the card keeps its content height, so the action row's\n * `margin-top: auto` has no free space to absorb and two cards in a row end\n * their buttons on different lines — measured 65px short at a 1280px tab\n * (2026-11-02). A one-row grid stretches the card to the cell. */\n.s984038_cards > li {\n  min-width: 0;\n  display: grid;\n}\n\n.s393112_card {\n  position: relative;\n  display: flex;\n  flex-direction: column;\n  /* The page and the card are both bg-layer-1 — the light theme resolves\n   * every layer token to white — so this border is the card's only edge.\n   * border-l1 is 4% black on white (#f5f5f5), which reads as no edge; l2 is\n   * 10% (#e5e5e5, 1.19:1 against white where l1 was 1.08:1), and in dark it\n   * goes from 6% to 12% white on #232324. */\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 10px;\n  background: var(--dsw-alias-bg-layer-1);\n  overflow: hidden;\n  transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;\n  /* Off-screen cards skip layout and paint; the placeholder keeps scrollbar\n   * estimation sane before the browser has measured the real height. */\n  content-visibility: auto;\n  contain-intrinsic-size: auto 140px;\n}\n\n/* The sentinel that triggers the next shelf batch: zero visual footprint. */\n.sbcba8e_cardsSentry {\n  height: 1px;\n  margin: 0;\n  padding: 0;\n}\n\n.s527167_showingLine {\n  margin: 0;\n  font-size: 12px;\n  letter-spacing: 0.02em;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.s393112_card:hover {\n  border-color: color-mix(in srgb, var(--dsw-alias-brand-primary) 45%, var(--dsw-alias-border-l2));\n  transform: translateY(-1px);\n  box-shadow: 0 2px 8px color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent);\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .s393112_card { transition: none; }\n  .s393112_card:hover { transform: none; }\n}\n\n/* The signature: a spine and cover in the category's own hue. The hues are\n * fixed mid-bright colors that read on both themes; `other` deliberately\n * stays a neutral gray so the fallback category does not compete. */\n.s542978_cardSpine {\n  position: absolute;\n  top: 0;\n  bottom: 0;\n  left: 0;\n  width: 3px;\n  background: var(--category-hue, #8B8E96);\n}\n\n/* The hue table, keyed by `data-category` and read by BOTH surfaces that\n * speak in category colour: a card's spine and badge, and the category bar's\n * own tab. One table, so a tab can never disagree with the cards it filters to\n * — which is the whole point of colouring the tab. `.s5bccd1_categoryButton` sets the\n * brand fallback for `All`/`Installed`; these attribute selectors are one\n * specificity step above it and win wherever the attribute is present. */\n.s393112_card[data-category='tool'], .s5bccd1_categoryButton[data-category='tool'] { --category-hue: #4C8DFF; }\n.s393112_card[data-category='provider'], .s5bccd1_categoryButton[data-category='provider'] { --category-hue: #A78BFA; }\n.s393112_card[data-category='ui'], .s5bccd1_categoryButton[data-category='ui'] { --category-hue: #2DD4BF; }\n.s393112_card[data-category='workflow'], .s5bccd1_categoryButton[data-category='workflow'] { --category-hue: #F59E0B; }\n.s393112_card[data-category='integration'], .s5bccd1_categoryButton[data-category='integration'] { --category-hue: #34D399; }\n.s393112_card[data-category='theme'], .s5bccd1_categoryButton[data-category='theme'] { --category-hue: #F472B6; }\n.s393112_card[data-category='other'], .s5bccd1_categoryButton[data-category='other'] { --category-hue: #8B8E96; }\n\n/* The category sits in the badge row as a quiet chip in the category's own\n * hue — the border carries it where the light theme's white layers cannot\n * (the same lesson as the check button). */\n.sf00430_categoryBadge {\n  padding: 1px 7px;\n  border: 1px solid color-mix(in srgb, var(--category-hue, #8B8E96) 45%, transparent);\n  border-radius: 999px;\n  font-size: 11px;\n  font-weight: 600;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n  color: var(--category-hue, #8B8E96);\n  white-space: nowrap;\n}\n\n/* One entry's icon: a 32px tile holding a 24px image (design\n * 2026-10-23-shop-plugin-icons §8.3). The border and radius are dsh's own\n * (`PackageArtwork`'s .s90612f_cardIcon), so a card's icon reads the same here as on\n * dsh's Plugins page. No backplate in either theme (§8.4). */\n.s46420b_entryIcon {\n  box-sizing: border-box;\n  flex: none;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: 32px;\n  height: 32px;\n  border: 0.5px solid var(--dsw-alias-border-l3);\n  border-radius: var(--dsw-radius-md);\n  overflow: hidden;\n}\n\n.s30c17d_entryIconImage {\n  width: 24px;\n  height: 24px;\n  object-fit: contain;\n}\n\n.s6d9715_entryHeader {\n  display: flex;\n  flex-direction: row;\n  align-items: flex-start;\n  gap: 12px;\n  min-width: 0;\n  padding: 10px 12px 2px;\n  border: none;\n  background: transparent;\n  color: inherit;\n  font: inherit;\n  text-align: left;\n  cursor: pointer;\n}\n\n.s6d9715_entryHeader:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: -2px;\n}\n\n/* The name and the badge row, one column inside the header button. The\n * badges used to share the name's row, which at a 430px grid track left the\n * name about 120px; under it they get the full width and the name keeps its\n * line (design 2026-11-02-shop-widescreen-layout §5). */\n.sb177d0_entryHeading {\n  display: flex;\n  flex-direction: column;\n  gap: 3px;\n  min-width: 0;\n  flex: 1 1 auto;\n}\n\n/* The name fills the row and truncates rather than wraps; the badges stay\n * intact on the row under it. */\n.s20ce20_name {\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 13px;\n  font-weight: 600;\n  flex: 1 1 auto;\n  min-width: 0;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  color: var(--dsw-alias-label-primary);\n}\n\n.sd40dfb_badges {\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n/* The action line: buttons side by side; an active install/uninstall flow\n * (gate, log, notices) takes the full width below them. */\n.s6c1137_cardActions {\n  display: flex;\n  flex-direction: row;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 8px;\n  padding: 8px 12px 10px;\n  /* Grid rows stretch every card to the tallest one, and the card is a flex\n   * column: this takes the leftover height above the buttons, so two cards\n   * in one row end their action rows on the same line (design\n   * 2026-11-02-shop-widescreen-layout §5). */\n  margin-top: auto;\n}\n\n/* The star (design 2026-11-02-market-borrowings §7): a glyph button at the\n * head of the action row, sized to the row's own rhythm. `aria-pressed` plus\n * a fixed pair of labels is the pattern the incompatible switch records — the\n * glyph carries the state, the label names the action. */\n.s7cd7a4_favoriteButton {\n  flex: 0 0 auto;\n  min-width: 28px;\n  height: 28px;\n  padding: 0 6px;\n  border-radius: 8px;\n  border: 1px solid transparent;\n  background: transparent;\n  /* Unstarred: a light grey, dimmer than body text. Mixed toward transparent\n   * rather than named, so it stays \"light\" on the dark theme too — the palette\n   * has no tertiary label token, and `label-secondary` alone reads as body\n   * text rather than as an inactive control. */\n  color: color-mix(in srgb, var(--dsw-alias-label-secondary) 60%, transparent);\n  font-size: 15px;\n  line-height: 1;\n  cursor: pointer;\n}\n\n/* Hover is a faint wash, never a frame: a border here drew a box around a\n * star the reader had just set, which read as a selected tile rather than as\n * a favorite (reported 2026-11-04 from a screenshot where the pointer still\n * rested on the button). The wash only darkens an UNSTARRED star — this rule\n * outranks `.scf50f9_favoriteButtonOn` by specificity, so a `color` here would turn a\n * yellow star grey under the pointer. */\n.s7cd7a4_favoriteButton:hover {\n  background: var(--dsw-alias-interactive-bg-hover);\n  color: var(--dsw-alias-label-secondary);\n}\n\n/* The starred state: yellow (design: the reader's two states are grey and\n * yellow). Declared after the hover rule — this rule and `.s7cd7a4_favoriteButton`\n * have the same specificity, so source order decides — and repeated on\n * `:hover` because the hover selector outranks it. */\n.scf50f9_favoriteButtonOn {\n  color: var(--shop-star);\n}\n\n.scf50f9_favoriteButtonOn:hover {\n  color: var(--shop-star);\n}\n\n/* The rollback offer (same design, §6): one button and, on failure, the\n * host's sentence beside it. It sits inside the installed branch, after the\n * label and the badge, so it never displaces the card's primary action. */\n.s273dc3_rollbackGroup {\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.sc2f4de_rollbackButton {\n  font-size: 12px;\n  padding: 4px 10px;\n  border-radius: 6px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  background: transparent;\n  color: var(--dsw-alias-label-primary);\n  cursor: pointer;\n}\n\n.sc2f4de_rollbackButton:hover {\n  border-color: var(--dsw-alias-brand-primary);\n  color: var(--dsw-alias-brand-primary);\n}\n\n.s3d3d7b_rollbackNote {\n  font-size: 12px;\n  line-height: 1.5;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.s6c1137_cardActions > .s90ee5d_gate,\n.s6c1137_cardActions > .s7360e7_installPanel,\n.s6c1137_cardActions > .s23bc70_installedActions,\n.s6c1137_cardActions > .sd3442a_receipt {\n  flex-basis: 100%;\n}\n\n/* The entry's version, always visible on the card (the expanded detail\n * repeats it in the version row) — the same quiet mono as the toolbar. */\n.s92c63e_cardVersion {\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 12px;\n  letter-spacing: 0.02em;\n  color: var(--dsw-alias-label-secondary);\n  /* A release tag prints as tagged, never cut to seven characters (market\n   * borrowings §11), and a tag can run to any length. The cap keeps every\n   * tag of up to fourteen characters whole, prerelease suffix included\n   * (`v0.1.0-alpha.0`): fourteen glyphs plus the letter-spacing above come to\n   * about 14.5ch, so the cap is 15ch, not 14. A longer tag ends in an ellipsis,\n   * and the tooltip carries the whole of it. */\n  max-width: 15ch;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n/* The octocat marking a source the reader can read on GitHub, beside the\n * card's version. */\n.s9bbd60_sourceBadge {\n  display: inline-flex;\n  align-items: center;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.s860f8d_tierBadge {\n  padding: 1px 7px;\n  border-radius: 999px;\n  font-size: 11px;\n  line-height: 1.6;\n}\n\n.s860f8d_tierBadge[data-tier='verified'] {\n  color: var(--shop-success);\n  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 14%, transparent);\n  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-success-primary) 40%, transparent);\n}\n\n.s860f8d_tierBadge[data-tier='verified-stale'] {\n  color: var(--shop-warn-on-tint);\n  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 14%, transparent);\n  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-warn-primary) 40%, transparent);\n}\n\n.s860f8d_tierBadge[data-tier='community'] {\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-bg-layer-2);\n  border: 1px solid var(--dsw-alias-border-l2);\n}\n\n/* The §C10 shadowed badge: an installed github entry the catalog refuses\n * shadowed-by-npm. Subdued/secondary rather than a warn tint — nothing is\n * wrong with the install itself; the shelf just cannot show it. */\n.s860f8d_tierBadge[data-tier='shadowed'] {\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-bg-layer-2);\n  border: 1px solid var(--dsw-alias-border-l2);\n}\n\n/* The §C5 archived badge: a github repository the owner has frozen.\n * Subdued register, same as shadowed — nothing is wrong with the install;\n * the pinned commit still serves, so the mark is informational only. */\n.s860f8d_tierBadge[data-tier='archived'] {\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-bg-layer-2);\n  border: 1px solid var(--dsw-alias-border-l2);\n}\n\n.sdbb7d3_incompatibleBadge {\n  flex-shrink: 0;\n  padding: 3px 9px;\n  border-radius: 999px;\n  font-size: 12px;\n  white-space: nowrap;\n  /* On the tint, not on the plain surface: this text reads on its own 14% red\n   * fill, where the 90% red would measure 4.21:1 (light) and 4.43:1 (dark). */\n  color: var(--shop-error-on-tint);\n  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 14%, transparent);\n  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 40%, transparent);\n}\n\n.se738ec_starsBadge {\n  font-size: 11px;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.s3b39c2_chevron, .s95724c_chevronOpen {\n  color: var(--dsw-alias-label-secondary);\n  transition: transform 120ms ease;\n}\n\n.s95724c_chevronOpen { transform: rotate(180deg); }\n\n@media (prefers-reduced-motion: reduce) {\n  .s3b39c2_chevron, .s95724c_chevronOpen { transition: none; }\n}\n\n.s360005_body {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  padding: 0 12px;\n}\n\n.s4e1686_summary {\n  margin: 0;\n  font-size: 13px;\n  line-height: 1.5;\n  color: var(--dsw-alias-label-primary);\n  display: -webkit-box;\n  -webkit-line-clamp: 2;\n  -webkit-box-orient: vertical;\n  overflow: hidden;\n}\n\n.s6701b3_summaryZh {\n  margin: -4px 0 0;\n  font-size: 12px;\n  line-height: 1.5;\n  color: var(--dsw-alias-label-secondary);\n  display: -webkit-box;\n  -webkit-line-clamp: 1;\n  -webkit-box-orient: vertical;\n  overflow: hidden;\n}\n\n/* Expanded cards show the full summary: the clamp is lifted, never raised —\n * a higher number would still truncate the author's text, just later. */\n.s24b80c_summaryExpanded {\n  -webkit-line-clamp: unset;\n  display: block;\n}\n\n.s692202_summaryZhExpanded {\n  -webkit-line-clamp: unset;\n  display: block;\n}\n\n/* `white-space: pre-line` so the newline in the copy is the copy's own: the\n   dictionary decides where the line breaks, and a translator changes it\n   without touching the component. Collapses runs of spaces like `normal`, so\n   only the explicit \\n survives. */\n.s8ce637_incompatibleDetail {\n  margin: 0;\n  font-size: 12px;\n  line-height: 1.5;\n  white-space: pre-line;\n  color: var(--shop-error);\n}\n\n/* The way out of dsh's own refusal: the lead-in, then the exemption command\n * on its own line. */\n/* Block layout rather than flex: Firefox 153 will not line-clamp a container\n * that holds a display:flex child (Chromium 151 does), and the fold's\n * measured goal — \"the whole red block, remedy included, as one unit\" —\n * needs the container to clamp in BOTH engines the shop targets. The 4px\n * rhythm between the lead-in and the command is kept by the margins of the\n * children. */\n.sd54426_remedy {\n  display: block;\n}\n\n.sd54426_remedy > * + * { margin-top: 4px; }\n\n/* The fold under a card's whole red block: two lines by default, a small\n * Refresh-pill-shaped toggle under it. Two containers, one rhythm: the shelf\n * uses `.s432999_foldBlock` collapsed and `.s89b821_foldBlockExpanded` open, and they share\n * one `display: block` (Firefox clamps no flex child inside a -webkit-box).\n * The clamp is on the BLOCK rather than any one line, so a 43-line remedy\n * counts as a unit instead of squashing the harness-peers line to a sliver\n * and hiding the command the reader actually came for. Both containers\n * still render the full block to a screen reader — `white-space: normal`\n * instead of pre-line keeps the copy's own `\\n` visible without forcing the\n * browser to lay the block's pieces like a text node. */\n.s432999_foldBlock {\n  display: block;\n  -webkit-line-clamp: 2;\n  -webkit-box-orient: vertical;\n  display: -webkit-box;\n  overflow: hidden;\n}\n\n.s89b821_foldBlockExpanded { display: block; }\n\n/* The toggle. Geometry and quiet voice are the Refresh pill's\n * (`catalogStatsRow` right beside it on the same screen): one 1px border,\n * 11px text, secondary label, no fill. It is the only one of its kind here,\n * so a class of its own means one function of its own. */\n.s683b1a_foldToggle {\n  /* The pill's own width. Under a card's red block it is an item of the card\n   * body, a column, which stretches every child it is not told otherwise:\n   * 934px against the Refresh pill's 59px at a 1440 window (2026-10-22). */\n  align-self: flex-start;\n  padding: 1px 9px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 999px;\n  background: transparent;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 11px;\n  line-height: 17px;\n  cursor: pointer;\n}\n\n.s683b1a_foldToggle:hover { border-color: color-mix(in srgb, var(--dsw-alias-brand-primary) 45%, var(--dsw-alias-border-l2)); }\n.s683b1a_foldToggle:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }\n\n.sf1e1f7_remedyLead {\n  margin: 0;\n  font-size: 12px;\n  line-height: 1.5;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* The exemption command, bound for a terminal unchanged: one click selects\n * all of it, and it wraps anywhere rather than widening the card. A border,\n * not a fill, marks the box: the bg layers are one white in the light theme. */\n.s3617dd_allowCommand {\n  display: block;\n  padding: 6px 8px;\n  border-radius: 6px;\n  background: var(--dsw-alias-bg-base);\n  border: 1px solid var(--dsw-alias-border-l1);\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 11px;\n  line-height: 1.5;\n  white-space: pre-wrap;\n  word-break: break-all;\n  user-select: all;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* A refused install on a surface that does not state its blockers — the\n * outdated row — writes them out on their own full-width line under the\n * refused label, the command that clears dsh's refusal included. Block,\n * rather than flex: Firefox will not line-clamp a -webkit-box that holds a\n * display:flex child, and the fold this element can sit inside of carries\n * that clamp. The 6px rhythm between the block's lines is carried by the\n * children's margins. */\n.s285915_refusal {\n  display: block;\n  flex-basis: 100%;\n}\n\n.s285915_refusal > * + * { margin-top: 6px; }\n\n.s7b4c84_capabilitiesBlock {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.s9a6ba6_capabilitiesNote {\n  margin: 0;\n  font-size: 11px;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.s923a46_capabilities {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 4px;\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.s923a46_capabilities li {\n  padding: 1px 6px;\n  border-radius: 4px;\n  background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent);\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 11px;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.s3644b7_detail {\n  border-top: 1px solid var(--dsw-alias-border-l1);\n  padding-top: 8px;\n}\n\n.s627f22_detailRows {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  margin: 0;\n}\n\n.s932013_detailRow {\n  display: flex;\n  justify-content: space-between;\n  gap: 12px;\n  font-size: 12px;\n}\n\n.s932013_detailRow dt {\n  color: var(--dsw-alias-label-secondary);\n}\n\n.s932013_detailRow dd {\n  margin: 0;\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  overflow-wrap: anywhere;\n  text-align: right;\n  color: var(--dsw-alias-label-primary);\n}\n\n.s932013_detailRow a {\n  color: var(--dsw-alias-brand-primary);\n  text-decoration: none;\n}\n\n.s932013_detailRow a:hover {\n  text-decoration: underline;\n}\n\n.s932013_detailRow a:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n/* What the entry IS rather than what you can do with it — how big it is and\n * who published it — at the right edge of the action row. `margin-left: auto`\n * is what pushes it there, and it lives on this wrapper rather than on either\n * label so the group stays flush right when only one of the two has a value —\n * a packument that named no account has no author, and an entry the registry\n * could not measure honestly has no size. Rarer than it was (every live entry\n * now carries a size, github included), but the wrapper is not what makes it\n * rare: without one, an EMPTY meta group still costs 8px, because\n * `.s6c1137_cardActions` is a flex row with `gap: 8px` and a zero-width item is still\n * an item. The row is a wrapping flex, so an active install flow (which claims\n * the full width) drops the whole group to the next line rather than squeezing\n * it. */\n.s417d77_cardMeta {\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n  margin-left: auto;\n  min-width: 0;\n}\n\n/* The on-disk size, left of the author. Mono and tabular so the digits of one\n * figure line up with the digits of another WHEREVER the two land: `.s417d77_cardMeta`\n * is flush right and the author sits outside the size, so a size's x position\n * moves with the author's width and is different again on the many entries\n * that carry no author at all. There is no column to align to, which is why\n * the reason given here is per-figure legibility rather than the column the\n * first version of this comment claimed. Secondary colour, because it\n * qualifies the entry rather than announcing it.\n *\n * `font-variant-numeric` is safe HERE and would not be on a pill: this element\n * has no state rules, so nothing it does can reflow a wrapping row.\n *\n * `.s8ff0b6_shelfDate` shares this rule because it is the same kind of fact — a\n * fixed-width figure a reader compares down the shelf (design\n * 2026-10-12-shelf-orders §4) — and two copies of these declarations would\n * drift. */\n.s90762b_size,\n.s8ff0b6_shelfDate {\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-variant-numeric: tabular-nums;\n  font-size: 12px;\n  letter-spacing: 0.02em;\n  white-space: nowrap;\n  color: var(--dsw-alias-label-secondary);\n}\n\n/* An install past 50 MB on disk (design 2026-11-02-market-borrowings §2),\n * beside the figure it already prints. The mix, not the raw warn token, is\n * what the contrast suite measures: a colour is only allowed here after it\n * clears the same threshold as every other label on this surface\n * (`css-tokens.s931c3b_client.s6bd619_spec.s739867_ts` fails on a raw token). The tooltip carries the\n * same fact for a reader who cannot see the tint. */\n.sacd098_sizeLarge {\n  color: var(--shop-warn);\n}\n\n/* The publishing account, at the outer end of `.s417d77_cardMeta` on the action row —\n * NOT beside the npm link in the expanded detail, which is where it used to\n * live and what this comment described until the accurate half was deleted\n * with the `margin-left: auto` that moved to `.s417d77_cardMeta`. There is no middot:\n * `.s417d77_cardMeta`'s 8px gap separates it from the size.\n *\n * Secondary label colour carries the distinction — never a background fill,\n * which is invisible in the light theme where every bg-layer token is the\n * same white. */\n.s7877a8_author {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n}\n\n.s573a28_reviewedLine {\n  margin: 8px 0 0;\n  padding: 6px 8px;\n  border-radius: 6px;\n  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 12%, transparent);\n  font-size: 12px;\n  color: var(--shop-warn-on-tint);\n}\n\n/* Install flow. */\n.s7360e7_installPanel {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  margin-top: 2px;\n}\n\n/* ONE geometry for everything that occupies the install button's place: the\n * button itself, the confirm/cancel pair beside the restart gate, the installed\n * label, and the refused label. Stated once because a refused label HAS to look\n * like the button it replaces apart from its colour and its text, and four\n * copies of the same five declarations is how they stop looking alike.\n * `cursor: pointer` is NOT here: only the controls that can be pressed take it,\n * while a label renders with the default cursor. */\n.sb518cc_installButton,\n.sfdae08_confirmButton,\n.s5f9442_cancelButton,\n.s912349_installedLabel,\n.s3886c9_refusedLabel {\n  align-self: flex-start;\n  margin: 0;\n  padding: 5px 14px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 6px;\n  font-size: 13px;\n}\n\n.sb518cc_installButton, .sfdae08_confirmButton, .s5f9442_cancelButton {\n  cursor: pointer;\n}\n\n.sb518cc_installButton {\n  border-color: var(--dsw-alias-brand-primary);\n  background: var(--dsw-alias-brand-primary);\n  color: var(--dsw-alias-bg-base);\n}\n\n/* Between the click and the host's answer. The flow ignores a repeat start for\n * the same identity, so this is the visible half of the same fact: a control\n * that says \"not now\" rather than one that looks ready to send a second\n * install. Only the button can be in this state — a label is never pressed. */\n.sb518cc_installButton:disabled {\n  cursor: wait;\n}\n\n.sb518cc_installButton:hover {\n  background: color-mix(in srgb, var(--dsw-alias-brand-primary) 88%, var(--dsw-alias-label-primary));\n}\n\n.sfdae08_confirmButton {\n  border: 1px solid var(--dsw-alias-brand-primary);\n  background: var(--dsw-alias-brand-primary);\n  color: var(--dsw-alias-bg-base);\n}\n\n.sfdae08_confirmButton:hover {\n  background: color-mix(in srgb, var(--dsw-alias-brand-primary) 88%, var(--dsw-alias-label-primary));\n}\n\n.s5f9442_cancelButton {\n  border: 1px solid var(--dsw-alias-border-l2);\n  background: var(--dsw-alias-bg-layer-2);\n  color: var(--dsw-alias-label-primary);\n}\n\n.s5f9442_cancelButton:hover {\n  border-color: var(--dsw-alias-label-secondary);\n}\n\n.sb518cc_installButton:focus-visible, .sfdae08_confirmButton:focus-visible, .s5f9442_cancelButton:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n/* The shelf card of a plugin that is installed and current carries this\n * non-interactive label instead of an install button. Border + text do the\n * work in the light theme, where every bg-layer token resolves to white. */\n.s912349_installedLabel {\n  align-self: flex-start;\n  margin: 0;\n  padding: 5px 14px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 6px;\n  font-size: 13px;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-bg-layer-2);\n}\n\n/* The refused Install/Update button's replacement: the same box as the button\n * (the geometry rule above), filled solid red, not pressable. The fill is the\n * derived red rather than the raw token because text sits on it — bg-base on\n * `--shop-error` measures 5.31:1 light and 6.14:1 dark — and the raw error red\n * under bg-base text measures 4.498:1, the miss this whole family of fixes\n * exists for. Nothing here changes on hover: it is a statement, not a control,\n * so it keeps the default cursor and its colours. */\n.s3886c9_refusedLabel {\n  border-color: var(--shop-error);\n  background: var(--shop-error);\n  color: var(--dsw-alias-bg-base);\n  white-space: nowrap;\n}\n\n/* An installed card's controls: the installed label or the update button,\n * plus the uninstall button. The install panel's running/failed states are\n * column layouts and sit as one item of this row. */\n.s23bc70_installedActions {\n  display: flex;\n  align-items: flex-start;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n/* Uninstall revokes privilege; the quiet outline keeps it from competing\n * with the primary action, and the error tint says \"removes\". */\n.s224fc5_uninstallButton {\n  align-self: flex-start;\n  padding: 5px 14px;\n  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 55%, transparent);\n  border-radius: 6px;\n  background: transparent;\n  /* The on-tint red: hovering this button paints a 10% red fill under the\n   * word, where the plain red measures 4.50:1 (light) — the same two\n   * thousandths short of the floor the raw token shipped at. */\n  color: var(--shop-error-on-tint);\n  font-size: 13px;\n  cursor: pointer;\n}\n\n.s224fc5_uninstallButton:hover {\n  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent);\n}\n\n.s224fc5_uninstallButton:focus-visible {\n  outline: 2px solid var(--dsw-alias-state-error-primary);\n  outline-offset: 1px;\n}\n\n/* The restart dsh button on a done install: quiet outline, same rank as\n * the other secondary actions. */\n.s95ac3a_restartSelfButton {\n  /* The version row's third state. Geometry matches .scf8dbb_checkUpdateButton and\n   * .sccdf7c_updateSelfButton exactly — the row is one evolving control and a\n   * different pill would read as a different kind of thing. It takes the\n   * emphasised fill rather than the neutral one because at that moment the\n   * restart is the only thing left to do, the same reason Update has it. */\n  padding: 2px 10px;\n  border: 1px solid var(--dsw-alias-brand-primary);\n  border-radius: 999px;\n  background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent);\n  color: var(--dsw-alias-brand-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.s95ac3a_restartSelfButton:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n/* The two activation offers share one recipe: a border in an alias token,\n * never a `bg-layer` fill alone — all four bg-layer tokens collapse to the\n * same white under `body` in the light theme, and a fill-only button would\n * vanish there. Grouped rather than copied, because a copy is a rule that\n * can be corrected on one button and left wrong on the other, silently. */\n.s7b3b53_restartButton,\n.s6c804e_reloadButton {\n  align-self: flex-start;\n  padding: 5px 14px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 6px;\n  background: var(--dsw-alias-bg-layer-2);\n  color: var(--dsw-alias-label-primary);\n  font-size: 13px;\n  cursor: pointer;\n}\n\n.s7b3b53_restartButton:hover,\n.s6c804e_reloadButton:hover {\n  border-color: var(--dsw-alias-label-secondary);\n}\n\n.s7b3b53_restartButton:focus-visible,\n.s6c804e_reloadButton:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n/* A settled install's or uninstall's receipt: its log, what happened, and\n * what to do next, stacked. A column, so the log box spans the card as the\n * running and failed views' logs do, rather than being as wide as its longest\n * line (852, 409 and 260px on three cards of one page, 2026-10-22), and the\n * sentence never shares a line with a button it would sit misaligned beside. */\n.sd3442a_receipt {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n/* The buttons under a receipt, a failure, or a reload or restart note, in one\n * row: the offer first (Reload, Restart dsh, Retry) and the way out (Dismiss)\n * beside it. They stood a line apart: Dismiss beside the reload note and\n * Reload under it, or Retry above Dismiss. */\n.s73ce9d_offerActions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 8px;\n}\n\n/* The §4 reload offer: a notice plus its button, one item of\n * `.s23bc70_installedActions` the way the restart gate is — a column of its own\n * rather than inline with the row. */\n.s1d4318_reloadPanel {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-start;\n  gap: 6px;\n}\n\n\n.s90ee5d_gate {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  padding: 10px;\n  border: 1px solid var(--dsw-alias-state-warn-primary);\n  border-radius: 8px;\n  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 8%, transparent);\n}\n\n.sef1dd3_gateTitle {\n  margin: 0;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--shop-warn-on-tint);\n}\n\n.sd5e608_gateBody {\n  margin: 0;\n  font-size: 12px;\n  line-height: 1.6;\n  color: var(--dsw-alias-label-primary);\n}\n\n.sd02440_gateWarning {\n  margin: 0;\n  font-size: 12px;\n  line-height: 1.6;\n  white-space: pre-line;\n  color: var(--shop-error);\n}\n\n.s2dc996_gateActions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.s930b5b_installing {\n  margin: 0;\n  font-size: 12px;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.sd2bb29_log {\n  max-height: 160px;\n  overflow: auto;\n  margin: 0;\n  padding: 8px;\n  border-radius: 6px;\n  background: var(--dsw-alias-bg-base);\n  border: 1px solid var(--dsw-alias-border-l1);\n  list-style: none;\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 11px;\n  line-height: 1.5;\n}\n\n.sd711bc_logLine {\n  white-space: pre-wrap;\n  word-break: break-all;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.s2b5c0b_notice {\n  margin: 0;\n  font-size: 12px;\n  color: var(--shop-success);\n}\n\n.s971ca7_failedHeading {\n  margin: 0;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--shop-error);\n}\n\n.s6b727d_reportLine {\n  margin: 0;\n  font-size: 12px;\n}\n\n.s5d7267_reportLink {\n  color: var(--dsw-alias-brand-primary);\n  text-decoration: underline;\n}\n\n.s3cc4cd_failedDetail {\n  margin: 0;\n  font-size: 12px;\n  line-height: 1.6;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* A failed install's retry line (design 2026-11-02-market-borrowings §5): the\n * command the executor ran, monospaced and selectable, with a copy button.\n * `min-width: 0` on the code is what lets a long spec wrap inside the card\n * instead of widening it — the card is a grid item and would otherwise take\n * the line's width. */\n.sb7d936_commandLine {\n  display: flex;\n  align-items: flex-start;\n  gap: 8px;\n  margin: 0;\n}\n\n.s998ca3_commandText {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 11px;\n  line-height: 1.6;\n  padding: 6px 8px;\n  border-radius: 6px;\n  background: var(--dsw-alias-bg-secondary);\n  color: var(--dsw-alias-label-primary);\n  overflow-wrap: anywhere;\n}\n\n.s3a3192_copyButton {\n  flex: 0 0 auto;\n  font-size: 12px;\n  padding: 4px 10px;\n  border-radius: 6px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  background: transparent;\n  color: var(--dsw-alias-label-primary);\n  cursor: pointer;\n}\n\n.s3a3192_copyButton:hover {\n  border-color: var(--dsw-alias-brand-primary);\n  color: var(--dsw-alias-brand-primary);\n}\n\n.sb623dd_rejectedCode {\n  margin: 0;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--shop-error);\n}\n\n.s2f1e30_rejectedDetail {\n  margin: 0;\n  font-size: 12px;\n  line-height: 1.6;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* The Updatable section. The class keeps the Host's field name; only the\n   heading the reader sees was renamed. */\n.sbe69dd_outdatedSection {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  margin-top: 6px;\n}\n\n.s551425_outdatedList {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.s13bb63_outdatedRow {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 12px;\n  flex-wrap: wrap;\n  padding: 10px 12px;\n  border: 1px solid var(--dsw-alias-border-l1);\n  border-radius: 8px;\n  background: var(--dsw-alias-bg-layer-1);\n}\n\n.sa94d32_outdatedInfo {\n  display: flex;\n  flex-direction: row;\n  align-items: center;\n  gap: 10px;\n  min-width: 0;\n}\n\n/* The name and everything under it, beside the icon. */\n.s7a5eac_outdatedText {\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  min-width: 0;\n}\n\n.sa94d32_outdatedInfo strong {\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 13px;\n  word-break: break-all;\n  color: var(--dsw-alias-label-primary);\n}\n\n.s90a6e2_outdatedVersions {\n  /* Two inline labels with nothing between them in the markup ran together as\n   * `installed v1.0.0latest v2.0.0`: JSX drops the whitespace-only line, and\n   * the per-label class the markup asked for was never defined (singular\n   * against this rule's plural). The container owns the gap, the same idiom\n   * as .sd40dfb_badges — the labels need no class of their own. */\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n  font-size: 12px;\n  color: var(--dsw-alias-label-secondary);\n}\n\n/* The update row's \"what changed\" link (design 2026-11-02-market-borrowings\n * §4). It inherits the versions line's size and rides the same gap, so it\n * reads as the third fact on that line; the underline is its only affordance\n * because the surrounding text is not a link. */\n.s546703_whatChanged {\n  color: var(--dsw-alias-brand-primary);\n  text-decoration: underline;\n  text-underline-offset: 2px;\n  white-space: nowrap;\n}\n\n.s546703_whatChanged:hover {\n  text-decoration-thickness: 2px;\n}\n\n/* The §C10 shadowed section. Reuses the outdated list's visual language; only\n * the section spacing and the per-row explanation paragraph are its own. */\n.s11f6e4_shadowedSection {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  margin-top: 6px;\n}\n\n.s76e33a_shadowedDetail {\n  margin: 4px 0 0;\n  font-size: 12px;\n  line-height: 1.5;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.s13d9ff_outdatedActions {\n  display: flex;\n  align-items: center;\n  /* The reload offer (§4) mounts inside the switch beside the Update button\n   * and is a two-line block, not a control: without wrapping, a row reading\n   * [switch][notice + Reload][Update] overflowed the Settings dialog the shop\n   * sat in through 0.8.7, and the page's column narrows with the window. */\n  flex-wrap: wrap;\n  gap: 10px;\n}\n\n/* The shop's one switch. It is worn by two controls that mean different\n * things — the enable/disable toggle on an installed card, and the shelf's\n * incompatible filter — so the geometry lives here once and each caller states\n * only its hue.\n *\n * `--switch-hue` is that knob, and it is read from the ANCESTOR rather than\n * declared per state: `.s49785e_incompatibleFilter` sets it once and it reaches the\n * track and the label together, which is what keeps a red switch from sitting\n * under a neutral word. A declaration on `.s3e91a7_switch` itself would shadow the\n * inherited value (an element's own rule beats what it inherits), so the\n * default rides in the `var()` fallback and is resolved once into\n * `--track-hue` instead of being spelled out at each use.\n *\n * `box-sizing` and `padding` are stated because the two callers are different\n * elements — a `<button>`, which the UA gives padding, and a `<span>`, which\n * it does not. Without them the same class renders two sizes, and the knob\n * sits 2px above centre in the taller one. */\n.s3e91a7_switch {\n  --track-hue: var(--switch-hue, var(--dsw-alias-state-success-primary));\n  box-sizing: border-box;\n  display: inline-block;\n  position: relative;\n  width: 32px;\n  height: 18px;\n  padding: 0;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 999px;\n  background: var(--dsw-alias-bg-layer-2);\n  cursor: pointer;\n  transition: background 120ms ease, border-color 120ms ease;\n}\n\n/* The knob's POSITION is the state, which is the reason this control needs no\n * `forced-colors` fallback the way the category pills do: a system palette\n * replaces every colour below and moves nothing. */\n.scf58a9_switchOn {\n  border-color: var(--track-hue);\n  background: color-mix(in srgb, var(--track-hue) 55%, transparent);\n}\n\n.se04dcb_switchKnob {\n  position: absolute;\n  top: 2px;\n  left: 2px;\n  width: 12px;\n  height: 12px;\n  border-radius: 999px;\n  background: var(--dsw-alias-label-primary);\n  transition: transform 120ms ease, background 120ms ease;\n}\n\n.scf58a9_switchOn .se04dcb_switchKnob {\n  transform: translateX(14px);\n  background: var(--dsw-alias-bg-base);\n}\n\n.s3e91a7_switch:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .s3e91a7_switch, .se04dcb_switchKnob { transition: none; }\n}\n\n/* The hot enable/disable switch on installed rows: the knob button plus the\n * §8 hot-apply / failure notices rendered beside it. */\n.s494ebe_switchWrap {\n  display: inline-flex;\n  align-items: center;\n  /* Same reason as `.s13d9ff_outdatedActions`: `.s1d4318_reloadPanel`'s own comment calls\n   * itself \"a column of its own rather than inline with the row\", which held\n   * for `.s23bc70_installedActions` and not here until this line. */\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n/* THE WIDE RULES MUST STAY LAST. Nesting in @container adds no\n * specificity, so between a container rule and a top-level rule of the same\n * selector the source order decides. Placed above `.s2b7ed0_categoryBar`,\n * `.s5bccd1_categoryButton` and the two focus rules, every one of these lost: the\n * rail kept the pills' row, the switch's auto margin and the outside ring,\n * and the geometry-only e2e passed (measured 2026-11-02).\n * `css-tokens.s931c3b_client.s6bd619_spec.s739867_ts` fails if this block moves back up. */\n/* The rail. Two 430px tracks and their 12px gap need 872; the rail and its\n * 24px gap add 256; 12px of margin makes the threshold 1140. Below 872 the\n * grid's own `auto-fill` leaves one column. */\n@container (min-width: 1140px) {\n  .s960683_shelfBody {\n    display: grid;\n    grid-template-columns: 232px minmax(0, 1fr);\n    column-gap: 24px;\n    row-gap: 14px;\n  }\n\n  /* The rail sticks under dsh's frame top rather than scrolling away with\n   * the results. `.s620b40_panel`'s `overflow: clip` is not a scroll container, so\n   * the page stays the scrollport; the e2e proves it (design\n   * 2026-11-02-shop-widescreen-layout §4). */\n  .sc34345_controls {\n    flex-direction: column;\n    align-items: stretch;\n    gap: 8px;\n    position: sticky;\n    top: calc(16px + var(--dsh-frame-top-clearance, 0px));\n    align-self: start;\n    /* The cap subtracts the same clearance the offset adds. Without it a\n     * rail whose content fits the cap hangs clearance - 16px below the\n     * viewport while stuck (measured: 32px at the desktop frame's 48px), and\n     * its last control only comes into view at the very bottom of the page.\n     * The 32px is the 16px above the rail plus 16px below it. */\n    max-height: calc(100vh - 32px - var(--dsh-frame-top-clearance, 0px));\n    overflow: auto;\n  }\n\n  .s2c9677_railHeading {\n    display: block;\n  }\n\n  .s2b7ed0_categoryBar {\n    flex: none;\n    flex-direction: column;\n    align-items: stretch;\n    gap: 4px;\n    /* The 6px belongs to the wrapping row; in the rail the controls' 8px gap\n     * is the whole rhythm above the first button. */\n    margin-top: 0;\n  }\n\n  /* Label left, count right: the two spans the buttons carry. */\n  .s5bccd1_categoryButton {\n    display: flex;\n    justify-content: space-between;\n  }\n\n  /* The rail is a column with `align-items: stretch`, where an auto left\n   * margin would shrink the switch to its content and push it right. */\n  .s49785e_incompatibleFilter {\n    margin-left: 0;\n  }\n\n  /* The rail is a scroll container (`overflow: auto`) and its controls are\n   * flush with its padding box, so a ring drawn OUTSIDE them loses both\n   * vertical segments to the clip — measured: red on the top edge and\n   * corners, nothing on the sides. The inset ring, the idiom\n   * `.s6d9715_entryHeader:focus-visible` already uses, keeps all four sides. */\n  .s5bccd1_categoryButton:focus-visible {\n    outline-offset: -2px;\n  }\n\n  .s49785e_incompatibleFilter:focus-visible {\n    outline-offset: -2px;\n  }\n}\n";
-		if (typeof document !== "undefined" && !document.querySelector("style[data-plugin-css=\"61217181\"]")) {
+		//#region \0dsh-plugin-shop-css:e3675a89
+		const css = "/* Shop styles — the shop's own page with its market shelf, and the shop's two\n * buttons on dsh's Plugins page. Every variable read here is a dsh theme\n * alias token (`--dsw-alias-*`), one of the shop's own properties declared in\n * this file (`--shop-*`, `--category-hue`, `--switch-hue`, `--track-hue`), or\n * one of two dsh variables outside the alias set, each read where the shop\n * copies dsh: `--dsh-frame-top-clearance`, so the page head clears the\n * desktop frame as dsh's own pages do, and `--dsw-radius-sm`, because the\n * Plugins page buttons copy dsh's Button (0.1.5-rc.3 lacks that token, and\n * has no Plugins page to draw them on). `state-error` and\n * `state-success` do not exist, so the state-*-primary set stands in for\n * them (measured 2026-10-17 on dsh 0.1.5-rc.3, 0.1.7-rc.2 and 0.2.0-rc.2,\n * which do define `bg-layer-3` and `interactive-bg-hover`, once listed here\n * as missing). The signature is the category spine: one HUE per\n * category (seven fixed hues, not the brand token — the brand resolves to\n * near-black in the light theme, so seven brand opacities read as seven\n * shades of gray), with the category name as the cover label in the same hue. Class names are mapped to content-derived names at bundle time\n * (tsdown.s8583e3_client.s942a79_config.s5f67aa_ts) and stubbed in tests; only the keys are relied\n * on.\n *\n * One token rule the theme forces: the background LAYERS do not carry\n * contrast. In the light theme bg-base, bg-layer-1, bg-layer-2 and\n * bg-layer-3 all resolve to the same white; only the dark theme spreads them\n * (950/875/850/800). So a layer-2 fill on a layer-1 ground is invisible for\n * half of all users, and anything whose fill is its ONLY affordance — the\n * loading skeleton, the borderless capability chips — derives its fill from\n * label-primary instead, which inverts with the theme by construction.\n * Elements that also carry a border or text may keep a layer fill.\n * `css-tokens.s8583e3_client.sfd9d8a_spec.s5f67aa_ts` pins this. */\n\n.s255e5a_panel {\n  display: flex;\n  flex-direction: column;\n  gap: 14px;\n  /* The shop's own width decides the shelf's arrangement (design\n   * 2026-11-02-shop-widescreen-layout §3). The container is this tab root,\n   * not `.sdabbbb_shelfBody`: a container query cannot style its own container, and\n   * the rule that turns the shelf body into the rail's grid is exactly that.\n   * Inline size only — the panel's height still follows its content. */\n  container-type: inline-size;\n  /* The two reds every red text in this tab is painted with. dsh's error red\n   * is #ec1313 in the light theme, which measures 4.498:1 as text on white —\n   * a miss of two thousandths — and 3.57:1 on the badge's own 14% red fill\n   * (4.00:1 in dark). Mixing it toward label-primary fixes both, because\n   * label-primary is the theme's foreground pole: it darkens the red on light\n   * surfaces and lightens it on dark ones. Measured in the live app: 90% of\n   * the red is 5.30:1 on white and 5.29:1 on the dark card, and 80% is\n   * 4.98:1 on the badge's tint, 4.92:1 in dark. Computed: 90% is 6.14:1 on\n   * the dark page itself (#151517, `bg-base`), where the self-update's\n   * failure heading sits (4.69:1 on Settings' #2c2c2e, its ground through\n   * 0.8.7), and 80% is 5.23:1 on the uninstall button's 10% hover fill.\n   * Declared here, on the tab root, because a custom property inherits: one\n   * declaration reaches every red element, and a new one cannot be\n   * forgotten. */\n  --shop-error: color-mix(in srgb, var(--dsw-alias-state-error-primary) 90%, var(--dsw-alias-label-primary));\n  --shop-error-on-tint: color-mix(in srgb, var(--dsw-alias-state-error-primary) 80%, var(--dsw-alias-label-primary));\n  /* The amber and the green, mixed the same way for the same reason. dsh's\n   * warn #f59e0b and success #22c55e are one value in both themes and pass\n   * in the dark one, but as text on white they measure 2.15:1 and 2.28:1.\n   * Each derived colour keeps the largest multiple of ten of its hue that\n   * clears every surface it paints, as the reds do. Computed from the live\n   * tokens over every bg layer in both themes: amber at 60% is 4.95:1 on a\n   * plain surface but 4.44:1 on its own 14% tint, so text on an amber tint\n   * takes 50% (5.66:1); green at 60% is 5.18:1 plain and 4.60:1 on its 14%\n   * tint, so one green serves both. */\n  --shop-warn: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 60%, var(--dsw-alias-label-primary));\n  --shop-warn-on-tint: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 50%, var(--dsw-alias-label-primary));\n  --shop-success: color-mix(in srgb, var(--dsw-alias-state-success-primary) 60%, var(--dsw-alias-label-primary));\n  /* The favorite star's set colour. Deliberately NOT `--shop-warn`: that mix\n   * is tuned for text on a tint and reads as dark amber, while a 15 px glyph\n   * is a mark rather than a sentence — it wants the hue, kept bright. 70% is\n   * the brightest mix that still darkens with the light theme instead of\n   * glowing on white (a raw warn token is one value in both palettes). */\n  --shop-star: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 70%, var(--dsw-alias-label-primary));\n  /* The shelf never scrolls sideways: a card too wide for its track wraps\n   * its badges rather than widening the panel.\n   *\n   * Clipped on BOTH axes, with a margin, because `.s232ec4_searchInput` sits at\n   * exactly (0, 0) of this box — it is the first child of `.s646509_toolbar`, itself\n   * the first child here, and this rule carries no padding — so its focus\n   * ring paints ENTIRELY outside the panel.\n   *\n   * Both axes is the load-bearing part: `overflow-clip-margin` is inert\n   * unless the element clips on both. Clipping x alone left the margin doing\n   * nothing — measured against the live app on 0.7.1, the ring reached 0 of\n   * its 3px on the left at every device pixel ratio (1, 1.25, 1.5, 2), while\n   * keeping the full 3px on the right, where the search track is capped at\n   * 320px and stops short of the panel, never meeting the clip edge. Raising\n   * the margin to 6px changed nothing; clipping both axes with the SAME 3px\n   * restored the whole ring. A test that reads declarations cannot see that\n   * difference, which is why the first attempt at this shipped broken.\n   *\n   * `clip` is not a scroll container, so this does not bring back the\n   * accidental scrolling `hidden` caused by coercing the other axis to\n   * `auto`. Nothing is lost vertically: the panel's scrollHeight equals its\n   * height and no descendant paints outside the clip rect (measured).\n   * `overflow-x: hidden` stays as the fallback for engines without `clip`,\n   * where the ring is clipped as it was before, never worse. */\n  overflow-x: hidden;\n  overflow: clip;\n  overflow-clip-margin: 3px;\n}\n\n/* The shop's own page in dsh's main column (design\n * 2026-10-16-shop-sidebar-page §4.2), framed as dsh 0.2.0-rc.2 frames its\n * Plugins page — read from that page's stylesheet: the page is the scroll\n * container, its children one centred column (960px then; 1280 since the\n * 2026-11-02 wide layout), and the head clears the desktop title bar. One declaration is the shop's own, `color`:\n * dsh's `.s3f14d7_page` inherits its colour from the shell around it, and the shop's\n * root is not inside dsh's panel stylesheet, so the shop's page states it. */\n.s3f14d7_page {\n  box-sizing: border-box;\n  height: 100%;\n  overflow: auto;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 32px;\n  padding: 0 clamp(24px, 4vw, 48px) 48px;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* The head and the shelf share one column, and on 2026-11-02 that column\n * widened from 960 to 1280 so the wide arrangement has room for a rail\n * beside two cards (design 2026-11-02-shop-widescreen-layout §3). A head at\n * 960 over a body at 1280 would read as misaligned. */\n.s3f14d7_page > * {\n  width: 100%;\n  max-width: min(1280px, 100%);\n}\n\n.s9bc9a3_pageHead {\n  box-sizing: border-box;\n  padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px));\n}\n\n.sd3fc57_pageTitle {\n  margin: 0;\n  font-size: 20px;\n  font-weight: 500;\n  line-height: 28px;\n}\n\n/* Secondary, as dsh's own intro: 5.80:1 on the light theme's white. */\n.s11ac5e_pageIntro {\n  margin: 4px 0 0;\n  font-size: 13px;\n  line-height: 20px;\n  color: var(--dsw-alias-label-secondary);\n}\n\n/* The shelf's two arrangements (design 2026-11-02-shop-widescreen-layout\n * §4). Base: today's column — the controls, then the results — with the\n * same 14px the panel used to put between them. The container is `.s255e5a_panel`,\n * so these rules are queried from above, not from here. */\n.sdabbbb_shelfBody {\n  display: flex;\n  flex-direction: column;\n  gap: 14px;\n}\n\n/* Narrow: the category chips and the switch are one row, as they are today.\n * `nowrap` is load-bearing — flex line-breaking uses the chips' MAX-content\n * width, so a wrapping row sends the switch to a line of its own the moment\n * the chips do not fit, which is every narrow panel. The bar shrinks and\n * wraps its own chips instead. The bar is a sibling of the switch now, not\n * its parent, so `align-items: flex-end` is what keeps the switch level with\n * the bar's last line rather than floating beside the middle of a two-line\n * block. */\n.s56ac64_controls {\n  display: flex;\n  flex-wrap: nowrap;\n  align-items: flex-end;\n  gap: 6px;\n}\n\n/* The rail's headings. Hidden below the threshold, where the controls are one\n * wrapping bar and these words would label nothing; the wide rule reveals\n * them (design 2026-11-02-shop-widescreen-layout §4). */\n.sbd6019_railHeading {\n  display: none;\n  margin: 0;\n  font-size: 11px;\n  font-weight: 600;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.s7df015_results {\n  display: flex;\n  flex-direction: column;\n  gap: 14px;\n}\n\n\n/* The two buttons on dsh's Plugins page (design 2026-10-16-shop-sidebar-page\n * §7), drawn as that page draws its own small outline buttons beside them —\n * dsh 0.2.0-rc.2's Button, sm + outline: 28px tall, 12px text on an 18px\n * line, 10px of side padding, the small radius, the neutral stroke. That\n * stroke is 0.5px in dsh and 1px here: every border in this stylesheet is,\n * and Chromium paints 0.5px as 1px at every ratio measured. */\n.sbaabcb_detailAction {\n  box-sizing: border-box;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  height: 28px;\n  padding: 0 10px;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: var(--dsw-radius-sm);\n  background: transparent;\n  color: var(--dsw-alias-label-primary);\n  font-size: 12px;\n  line-height: 18px;\n  cursor: pointer;\n}\n\n.sbaabcb_detailAction:hover {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n\n.sbaabcb_detailAction:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n.s44a3ec_stateLine {\n  margin: 0;\n  color: var(--dsw-alias-label-primary);\n  font-size: 13px;\n}\n\n/* Visually hidden but screen-reader readable (the loading copy while the\n * skeleton stands in visually). */\n.s3a0ece_srOnly {\n  position: absolute;\n  width: 1px;\n  height: 1px;\n  margin: -1px;\n  padding: 0;\n  border: 0;\n  clip: rect(0 0 0 0);\n  clip-path: inset(50%);\n  overflow: hidden;\n  white-space: nowrap;\n}\n\n/* The loading shelf: ghost cards with the same geometry as the real grid, so\n * the swap to content is a same-shape handoff instead of a jump. */\n.se0c3b4_skeletonGrid {\n  display: grid;\n  grid-template-columns: 1fr;\n  gap: 8px;\n}\n\n.s520416_skeletonCard {\n  position: relative;\n  display: flex;\n  flex-direction: column;\n  border: 1px solid var(--dsw-alias-border-l1);\n  border-radius: 10px;\n  background: var(--dsw-alias-bg-layer-1);\n  overflow: hidden;\n}\n\n/* The shimmer sweep: one gradient band travels across each ghost card while\n * the bars breathe, so the loading state reads as \"the shelf is scanning\". */\n.s520416_skeletonCard::after {\n  content: '';\n  position: absolute;\n  inset: 0;\n  background: linear-gradient(\n    100deg,\n    transparent 25%,\n    color-mix(in srgb, var(--dsw-alias-label-primary) 14%, transparent) 50%,\n    transparent 75%\n  );\n  transform: translateX(-100%);\n  animation: dshShopSkeletonSweep 1.4s ease-in-out infinite;\n  pointer-events: none;\n}\n\n@keyframes dshShopSkeletonSweep {\n  to { transform: translateX(100%); }\n}\n\n.s8c7d6f_skeletonName {\n  width: 55%;\n  height: 14px;\n  margin: 10px 12px 0;\n  border-radius: 4px;\n  background: color-mix(in srgb, var(--dsw-alias-label-primary) 8%, transparent);\n}\n\n.sf5179e_skeletonSummary {\n  width: 92%;\n  height: 12px;\n  margin: 10px 12px 0;\n  border-radius: 4px;\n  background: color-mix(in srgb, var(--dsw-alias-label-primary) 8%, transparent);\n}\n\n.sbb0d25_skeletonSummaryShort {\n  width: 68%;\n  height: 12px;\n  margin: 6px 12px 10px;\n  border-radius: 4px;\n  background: color-mix(in srgb, var(--dsw-alias-label-primary) 8%, transparent);\n}\n\n/* The ghost of the action line, right where the real buttons land. */\n.s96e910_skeletonActions {\n  display: block;\n  width: 84px;\n  height: 24px;\n  margin: 0 12px 10px;\n  border-radius: 999px;\n  background: color-mix(in srgb, var(--dsw-alias-label-primary) 8%, transparent);\n}\n\n.s520416_skeletonCard span {\n  animation: dshShopSkeletonPulse 1.6s ease-in-out infinite;\n}\n\n@keyframes dshShopSkeletonPulse {\n  0%, 100% { opacity: 0.5; }\n  50% { opacity: 1; }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .s520416_skeletonCard span { animation: none; opacity: 0.75; }\n  .s520416_skeletonCard::after { content: none; }\n}\n\n.s73242a_actionButton {\n  align-self: flex-start;\n  padding: 5px 14px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 6px;\n  background: var(--dsw-alias-bg-layer-2);\n  color: var(--dsw-alias-label-primary);\n  font-size: 13px;\n  cursor: pointer;\n}\n\n.s73242a_actionButton:hover {\n  border-color: color-mix(in srgb, var(--dsw-alias-brand-primary) 45%, var(--dsw-alias-border-l2));\n  color: var(--dsw-alias-brand-primary);\n}\n\n.s73242a_actionButton:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n/* The toolbar is two paired columns: what you can FIND on the left (the\n * search box, and under it the count that query found), and how the list is\n * ARRANGED on the right (the shop's version row, and under it the sort).\n * The hole that sat between the search box and the version row is now the\n * gutter between two columns that mean something (design\n * 2026-11-11-shop-shelf-restyle §2.6).\n *\n * The middle column is `minmax(0, 1fr)` so it can shrink to nothing; the\n * left one cannot go below 160px because the search box has a width of its\n * own, and the right one is `auto` because the version row and the sort\n * pills are as wide as they are. */\n.s646509_toolbar {\n  display: grid;\n  grid-template-columns: minmax(160px, 320px) minmax(0, 1fr) auto;\n  grid-template-areas:\n    'search . meta'\n    'count  . sort';\n  align-items: center;\n  column-gap: 16px;\n  row-gap: 6px;\n}\n\n/* The count and the refresh beside it: what the query found, and the way to\n * ask again. Under the search box, because that is what it belongs to.\n *\n * `flex-wrap: wrap` is not optional. The track is 160–320px and the count and\n * Refresh already fill most of it; the refresh-failure sentence is a third\n * item that then had 24px of width in Chinese and 42px in English, so it\n * stood 10 lines tall inside the toolbar and pushed the shelf down. The\n * stats row this replaced carried the same declaration for the same reason\n * (review, 2026-11-11). */\n.sfbbea1_queryMeta {\n  grid-area: count;\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 10px;\n  min-width: 0;\n}\n\n.s745e3c_toolbarRight {\n  grid-area: meta;\n  justify-self: end;\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  flex-wrap: wrap;\n}\n\n/* The shop's own version, right of the search box: `v0.4.4`, plus the\n * update button when the version check found a newer release. */\n.s4fe61f_versionBlock {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.sb9b924_versionText {\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 12px;\n  letter-spacing: 0.02em;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.sa04455_updateSelfButton {\n  padding: 2px 10px;\n  border: 1px solid var(--dsw-alias-brand-primary);\n  border-radius: 999px;\n  background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent);\n  color: var(--dsw-alias-brand-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.sa04455_updateSelfButton:hover {\n  background: color-mix(in srgb, var(--dsw-alias-brand-primary) 20%, transparent);\n}\n\n.sa04455_updateSelfButton:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n/* The on-demand re-check next to the version number: a quiet pill; the\n * border and text carry it in the light theme where bg layers are white. */\n.s614a38_checkUpdateButton {\n  padding: 2px 10px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 999px;\n  background: var(--dsw-alias-bg-layer-2);\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n  cursor: pointer;\n}\n\n.s614a38_checkUpdateButton:hover {\n  border-color: var(--dsw-alias-label-secondary);\n  color: var(--dsw-alias-label-primary);\n}\n\n.s614a38_checkUpdateButton:disabled {\n  opacity: 0.6;\n  cursor: default;\n}\n\n.s614a38_checkUpdateButton:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n/* The project's GitHub mark, right of the version row: a quiet icon link.\n * The octocat carries itself — color shift on hover, no text, no border. */\n.sa987f7_githubLink {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  padding: 3px;\n  border-radius: 6px;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.sa987f7_githubLink:hover {\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-bg-layer-2);\n}\n\n.sa987f7_githubLink:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n/* The self-update's expanded states (running log / done + restart /\n * failure detail) sit under the toolbar, above the category bar. */\n.sb81ba5_selfUpdatePanel {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  margin-top: 8px;\n}\n\n/* The search field and its glyph. The glyph is markup rather than a `url()`\n * background: the client build's CSS-modules rewrite replaces every `.s593322_word`\n * in the stylesheet, comments included, and a data URI carrying the SVG\n * namespace URL had the two dotted tokens in that URL turned into class\n * selectors, so the shipped bundle drew nothing at all (review, 2026-11-11).\n * An `aria-hidden` SVG is not announced, keeps the glyph out of the CSS, and\n * takes `currentColor` — the fixed gray the URI carried did not follow the\n * dark theme. */\n.s7dcbab_searchBox {\n  grid-area: search;\n  position: relative;\n  min-width: 0;\n}\n\n.scdb647_searchGlyph {\n  position: absolute;\n  left: 9px;\n  top: 50%;\n  width: 14px;\n  height: 14px;\n  transform: translateY(-50%);\n  color: var(--dsw-alias-label-secondary);\n  pointer-events: none;\n}\n\n.s232ec4_searchInput {\n  box-sizing: border-box;\n  width: 100%;\n  height: 32px;\n  padding: 0 10px 0 30px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 8px;\n  background-color: var(--dsw-alias-bg-base);\n  color: var(--dsw-alias-label-primary);\n  font-size: 13px;\n}\n\n.s232ec4_searchInput:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n/* Subdued line under the search box when a dictionary intent fired (design\n * 2026-10-08-search-query-expansion §4). One fact, no badge. It spans the\n * toolbar's width because the grid's two columns are taken; it is a rare\n * state, and the fact is about the query as a whole. */\n.s76fb13_expansionNote {\n  grid-column: 1 / -1;\n  margin: 0;\n  font-size: 12px;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.s3946f1_staleBadge {\n  padding: 2px 8px;\n  border-radius: 999px;\n  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 14%, transparent);\n  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-warn-primary) 40%, transparent);\n  color: var(--shop-warn-on-tint);\n  font-size: 12px;\n}\n\n.sb2c859_categoryBar {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 6px;\n  margin-top: 6px;\n  /* A flex item of `.s56ac64_controls` at narrow widths: it may shrink below its\n   * content, so the chips wrap instead of pushing the switch off the line.\n   * It must NOT grow — a growing bar takes the whole line and pushes the\n   * switch to a line of its own, where today the two share one. The wide\n   * rail restores its natural height. */\n  flex: 0 1 auto;\n  min-width: 0;\n}\n\n.s26d58e_categoryButton {\n  /* The hue this button carries when selected. `All` and `Installed` select by\n   * something other than a category and keep the brand token; the six category\n   * buttons override it from the shared hue table below, so a pressed Tool tab\n   * turns the same blue as a tool card's spine. */\n  --category-hue: var(--dsw-alias-brand-primary);\n  /* The label and the count are two spans, and they are one word in two\n   * sizes: a baseline flex row puts the count on the label's line instead of\n   * leaving the two to the browser's inline layout, where the count sits a\n   * fraction lower and the gap between them is whatever the space in the\n   * markup left. Six pixels is the gap the sort row's own label wants too. */\n  display: inline-flex;\n  align-items: baseline;\n  gap: 6px;\n  padding: 3px 10px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 999px;\n  background: var(--dsw-alias-bg-layer-1);\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n  cursor: pointer;\n}\n\n/* The count beside a category's name. Mono and tabular, so the digits of one\n * count line up with the digits of another — the reader compares these\n * numbers down the bar. Secondary, because the count qualifies the name and\n * does not announce itself; the pressed state blends it with the word\n * instead, which is why the rule below reads the inherited colour.\n *\n * The quiet step is 90%, not 75%. At 75% the count measured 3.37:1 on the\n * light theme's white — under the 4.5:1 floor this file holds for 11px text.\n * The dark theme was never the constraint (6.49:1 at 75%). `opacity`\n * composites over whatever ground the pill has, so one declaration covers\n * the resting, hover and pressed states; at 90% the count is 4.63:1 resting\n * and 4.53:1 pressed at the worst hue (`ui`), and the label itself stays at\n * 5.80:1, which leaves the count a visible step quieter (computed from the\n * live theme tokens, 2026-11-12). */\n.s26d58e_categoryButton > span:last-child {\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 11px;\n  font-variant-numeric: tabular-nums;\n  color: var(--dsw-alias-label-secondary);\n  opacity: 0.9;\n}\n\n/* Blend text with the theme foreground: darker on light backgrounds, lighter\n * on dark ones. The unblended category hue belongs on the border and fill. */\n.s26d58e_categoryButton:hover {\n  border-color: color-mix(in srgb, var(--category-hue) 45%, var(--dsw-alias-border-l2));\n  color: color-mix(in srgb, var(--category-hue) 45%, var(--dsw-alias-label-primary) 55%);\n}\n\n/* Selected. Written `.s26d58e_categoryButton.s5f68c4_categoryButtonOn` — TWO classes — so it\n * matches `.s26d58e_categoryButton:hover`'s specificity and, coming after it, wins.\n * As a bare `.s5f68c4_categoryButtonOn` it lost both `border-color` and `color` to the\n * hover rule for as long as the pointer stayed on the tab that had just been\n * clicked, which is precisely when a reader looks for confirmation.\n *\n * EVERY declaration here is a colour: a pressed tab must occupy exactly the\n * same box as an unpressed one, so the bar does not reflow — and with ~9 pills\n * on a wrapping row, one that grows can push the rest onto another line and\n * move the tab out from under the pointer that just clicked it. That is what\n * `font-weight: 600` did (bold metrics are wider than regular), and it is why\n * nothing may be added here that resolves to a length: no padding, no\n * border-width, no font-size, no letter-spacing. `css-tokens.s8583e3_client.sfd9d8a_spec.s5f67aa_ts`\n * fails the build on one.\n *\n * Nor a second line. An inset ring once doubled this border, and every control\n * in the stylesheet now draws exactly one 1px line, which is also the thinnest\n * the host paints (Chromium draws 0.5px as 1px). What separates pressed from\n * unpressed is lightness instead of thickness: the border is the hue mixed 30%\n * toward label-primary, the theme's foreground pole, so it clears 3:1 against\n * the bar in both themes for every hue — the raw hue measured 1.86:1 on white\n * for `ui` — and the fill under it is 22% of the hue. The `other` tab is the\n * case this is for: its hue IS the neutral gray this file uses for \"no\n * category\", so on the light theme the hue alone barely separates the two. */\n.s26d58e_categoryButton.s5f68c4_categoryButtonOn {\n  border-color: color-mix(in srgb, var(--category-hue) 70%, var(--dsw-alias-label-primary));\n  background: color-mix(in srgb, var(--category-hue) 22%, transparent);\n  color: color-mix(in srgb, var(--category-hue) 45%, var(--dsw-alias-label-primary) 55%);\n}\n\n/* The count on a PRESSED tab takes the word's colour — the word says which\n * category, the count says how many, and the two must not read as two\n * different kinds of thing. The quiet step is the base rule's `opacity: 0.9`\n * and it composites over the pressed fill too, so this rule only changes the\n * colour. A second opacity here measured 3.36:1 over the 22% fill at 0.75\n * (computed for `ui`, the worst hue; review, 2026-11-11). Colour and opacity\n * only, like every other state rule on a pill: a length here would reflow\n * the bar. */\n.s26d58e_categoryButton.s5f68c4_categoryButtonOn > span:last-child {\n  color: inherit;\n}\n\n/* Forced colours replace every colour above with the system palette, which\n * would leave the three colour declarations saying nothing and the pressed tab\n * indistinguishable from its neighbours, so this mode alone gets an outline. */\n@media (forced-colors: active) {\n  .s26d58e_categoryButton.s5f68c4_categoryButtonOn {\n    outline: 2px solid ButtonText;\n    outline-offset: -4px;\n  }\n}\n\n.s26d58e_categoryButton:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n/* The incompatible filter, at the right edge of the controls row at narrow\n * widths: `margin-left: auto` pushes it past the bar, which shrinks and wraps\n * its own chips (`flex: 0 1 auto`) rather than squeezing the switch. Under\n * the wide layout it is a full-width row under the rail's \"Filter\" heading.\n * It is a MODIFIER, not a ninth category — the categories select what to show\n * and this one subtracts from whatever they selected — so it takes the error\n * hue it filters on rather than joining the hue table.\n *\n * And it is a SWITCH, which is the difference the shape now carries. It used\n * to wear `.s26d58e_categoryButton`: same pill, same row, same size as the eight tabs,\n * differing only in being red. That reads as a ninth tab, and it is not one —\n * the tabs are choose-one and this is on-or-off. So it drops the pill chrome\n * entirely (no border, no fill, nothing to compete with the row it sits\n * beside) and puts the state in a track, the same one every installed card\n * carries. Nothing here restates the switch geometry; `--switch-hue` is the\n * whole of what this control says about it, and it reaches the label too, so\n * one declaration keeps the word and the track the same colour. */\n.sfd887b_incompatibleFilter {\n  --switch-hue: var(--dsw-alias-state-error-primary);\n  margin-left: auto;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  /* One line at any panel size. A flex row that cannot fit its items shrinks\n   * every one of them, and a switch squeezed below its own content broke its\n   * words mid-label — 只看收 / 藏, 隐藏不兼容 / 3708 — once the favorites\n   * switch shared the row (reported 2026-11-06). Under `nowrap` the label's\n   * min-content is the whole line, which a flex item's automatic minimum will\n   * not shrink below, so the squeeze goes to the bar: its chips wrap. */\n  white-space: nowrap;\n  /* Matches the pills' vertical padding so the bar keeps one line box whether\n   * this control wraps onto a row of its own or shares theirs. */\n  padding: 3px 0;\n  border: 0;\n  background: none;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n  cursor: pointer;\n}\n\n/* Hover lifts the word to full contrast and warms the track's border. Scoped\n * to the OFF track: `.sfd887b_incompatibleFilter:hover .s11c019_switch` outranks `.s7580e8_switchOn`\n * by two classes, so unscoped it would strip the hue from the border at\n * exactly the moment a reader has the pointer on it to check the state. */\n.sfd887b_incompatibleFilter:hover {\n  color: var(--dsw-alias-label-primary);\n}\n\n.sfd887b_incompatibleFilter:hover .s11c019_switch:not(.s7580e8_switchOn) {\n  border-color: color-mix(in srgb, var(--switch-hue) 45%, var(--dsw-alias-border-l2));\n}\n\n/* On. Written with both classes for the reason `.s26d58e_categoryButton.s5f68c4_categoryButtonOn`\n * is: it has to match `:hover`'s specificity and come after it, or the colour\n * reverts under a pointer that has not moved since the click. */\n.sfd887b_incompatibleFilter.s6e4cba_incompatibleFilterOn {\n  color: color-mix(in srgb, var(--switch-hue) 45%, var(--dsw-alias-label-primary) 55%);\n}\n\n/* Off here means \"nothing is being taken away\" — the resting state — so the\n * knob steps back to the secondary label. The enable switch keeps the full\n * strength dot, where off means \"this plugin is disabled\" and is worth\n * noticing. In this bar it would be the heaviest mark in a row of hairline\n * pills, and on the light theme it is the WHOLE control: bg-layer-2 is the\n * same white as the panel there, so an off track is a hairline outline with a\n * near-black dot sitting in it. */\n.sfd887b_incompatibleFilter .s11c019_switch:not(.s7580e8_switchOn) .saab2b3_switchKnob {\n  background: var(--dsw-alias-label-secondary);\n}\n\n/* The ring has no border to trace, so it takes an offset and the pill radius\n * of the tabs it sits beside rather than hugging the text. */\n.sfd887b_incompatibleFilter:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 2px;\n  border-radius: 999px;\n}\n\n.sebf017_updatableHeading {\n  margin: 2px 0 0;\n  font-size: 16px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  color: var(--dsw-alias-label-primary);\n}\n/* The Updatable heading and its one batch action on a line (design\n * 2026-11-04-borrowings-round-4 §3). The action sits at the row's end, where\n * the card list's other secondary actions put theirs, and wraps under the\n * heading rather than squeezing it when the column is narrow. */\n.sd96efb_updatableHead {\n  display: flex;\n  align-items: baseline;\n  justify-content: space-between;\n  gap: 8px 12px;\n  flex-wrap: wrap;\n}\n\n.s74eefe_updateAllButton {\n  flex: 0 0 auto;\n  font-size: 12px;\n  padding: 4px 10px;\n  border-radius: 6px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  background: transparent;\n  color: var(--dsw-alias-label-primary);\n  cursor: pointer;\n}\n\n.s74eefe_updateAllButton:hover {\n  border-color: var(--dsw-alias-brand-primary);\n  color: var(--dsw-alias-brand-primary);\n}\n\n/* The ring every other control in this stylesheet carries. The batch action is\n * the only one in the Updatable header, so it is also the only Tab stop there\n * — without this it would be the one keyboard-reachable control with no\n * visible focus. */\n.s74eefe_updateAllButton:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n/* The shelf's order control, at the right end of the toolbar's second row\n * (design 2026-11-11-shop-shelf-restyle §2.6). It used to sit at the right\n * end of the catalog stats row, a third row of its own, and it wore the\n * category tabs' own class — so three sort pills sat a row below eight\n * category tabs and looked like three more categories.\n *\n * The pills keep that class: the pressed rule it carries is pinned to colour\n * only, so the row cannot reflow on a click, and the class is what gives the\n * pressed sort pill its state. What changes is the CHROME, below. */\n.sa6825e_sortGroup {\n  grid-area: sort;\n  justify-self: end;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n/* The sort pills stop wearing the category tabs' clothes. A filter and an\n * ordering are different acts, and a row of pills that all look the same says\n * they are the same. These take the pill chrome off — no border, no fill —\n * and the pressed one takes a foreground wash instead of the category hue,\n * because a hue on a sort pill would claim it filters by a category.\n *\n * COLOUR ONLY, like every other state rule on a pill: the row cannot\n * reflow. */\n.sa6825e_sortGroup .s26d58e_categoryButton {\n  border-color: transparent;\n  background: transparent;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.sa6825e_sortGroup .s26d58e_categoryButton:hover {\n  color: var(--dsw-alias-label-primary);\n}\n\n/* The edge is `border-l2`, not `border-l1`: l1 measures 1.09:1 against the\n * page and the card's own rule calls it \"no edge at all\" (design\n * 2026-11-11-shop-shelf-restyle §3). §2.2 asks the pressed pill for \"a\n * one-pixel edge\", and l1 drew nothing the wash did not already say (review,\n * 2026-11-11). */\n.sa6825e_sortGroup .s26d58e_categoryButton.s5f68c4_categoryButtonOn {\n  border-color: var(--dsw-alias-border-l2);\n  background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent);\n  color: var(--dsw-alias-label-primary);\n}\n\n.s268f9e_sortLabel {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n}\n\n.sccc4d1_catalogStats {\n  margin: 0;\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 12px;\n  letter-spacing: 0.02em;\n  color: var(--dsw-alias-label-secondary);\n}\n\n/* Sits beside the 12px stats caption, so it is quieter than `.s73242a_actionButton`:\n * this is an affordance, not a call to action — the catalog reloads on its\n * own at mount and the shelf is already usable without it. Named\n * `catalogRefresh*` (not `reload*`) so it cannot collide with the §4 page\n * reload offer below, which reloads the whole tab rather than refetching\n * the catalog data. */\n.sff243d_catalogRefreshButton {\n  padding: 1px 9px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 999px;\n  background: transparent;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 11px;\n  line-height: 17px;\n  cursor: pointer;\n}\n\n.sff243d_catalogRefreshButton:hover:not(:disabled) {\n  border-color: color-mix(in srgb, var(--dsw-alias-brand-primary) 45%, var(--dsw-alias-border-l2));\n  color: var(--dsw-alias-brand-primary);\n}\n\n.sff243d_catalogRefreshButton:disabled {\n  cursor: default;\n  opacity: 0.6;\n}\n\n.sff243d_catalogRefreshButton:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n.s194168_catalogRefreshFailed {\n  font-size: 11px;\n  color: var(--shop-warn);\n}\n\n.s6de1ab_emptyLine {\n  margin: 0;\n  color: var(--dsw-alias-label-primary);\n  font-size: 13px;\n}\n\n/* The shelf: a responsive grid of cards. `auto-fill` with a 430px minimum\n * gives the two columns the wide layout buys — two tracks and their 12px gap\n * need 872px of results column — and one column below that (design\n * 2026-11-02-shop-widescreen-layout §5). The vertical gap is today's 8px. */\n.sf657f5_cards {\n  display: grid;\n  grid-template-columns: repeat(auto-fill, minmax(min(430px, 100%), 1fr));\n  max-width: 100%;\n  gap: 8px 12px;\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  animation: dshShopCardsIn 220ms ease;\n}\n\n@keyframes dshShopCardsIn {\n  from { opacity: 0; transform: translateY(3px); }\n  to { opacity: 1; transform: none; }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .sf657f5_cards { animation: none; }\n}\n\n/* The shelf's grid item is the <li> carrying a card's identity (ShopPage\n * reads it), not the card, and a grid item's min-width is auto: the 1fr track\n * could then never be narrower than the widest item's min-content, and every\n * card widens to it. Two things reach that width. Content that cannot wrap,\n * on a narrow window. And a card the browser skips (`content-visibility:\n * auto` below), which keeps the width it last rendered at: browsing a wide\n * window and narrowing it left every card 960px wide in a 662px column, its\n * right side clipped by the panel (measured on dsh 0.2.1-rc.2, 0.2.0-rc.2 and\n * 0.1.7-rc.2, 2026-10-22). Until the page took the main column the panel was\n * as wide as Settings made it, and a window resize did not move it. */\n/* The card is this item's child. Without a grid here the item stretches to\n * the row but the card keeps its content height, so the action row's\n * `margin-top: auto` has no free space to absorb and two cards in a row end\n * their buttons on different lines — measured 65px short at a 1280px tab\n * (2026-11-02). A one-row grid stretches the card to the cell. */\n.sf657f5_cards > li {\n  min-width: 0;\n  display: grid;\n}\n\n.s65f383_card {\n  position: relative;\n  display: flex;\n  flex-direction: column;\n  /* The page and the card are both bg-layer-1 — the light theme resolves\n   * every layer token to white — so this border is the card's only edge.\n   * border-l1 is 4% black on white (#f5f5f5), which reads as no edge; l2 is\n   * 10% (#e5e5e5, 1.26:1 against white where l1 is 1.09:1 — both computed\n   * from the live theme's `#0000001a` and `#0000000a`, 2026-11-12), and in\n   * dark it goes from 6% to 12% white on #232324. */\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 10px;\n  background: var(--dsw-alias-bg-layer-1);\n  overflow: hidden;\n  transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;\n  /* Off-screen cards skip layout and paint; the placeholder keeps scrollbar\n   * estimation sane before the browser has measured the real height. */\n  content-visibility: auto;\n  contain-intrinsic-size: auto 140px;\n}\n\n/* The sentinel that triggers the next shelf batch: zero visual footprint. */\n.sd7ee01_cardsSentry {\n  height: 1px;\n  margin: 0;\n  padding: 0;\n}\n\n.s705cc6_showingLine {\n  margin: 0;\n  font-size: 12px;\n  letter-spacing: 0.02em;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.s65f383_card:hover {\n  border-color: color-mix(in srgb, var(--dsw-alias-brand-primary) 45%, var(--dsw-alias-border-l2));\n  transform: translateY(-1px);\n  box-shadow: 0 2px 8px color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent);\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .s65f383_card { transition: none; }\n  .s65f383_card:hover { transform: none; }\n}\n\n/* The signature: a spine and cover in the category's own hue. The hues are\n * fixed mid-bright colors that read on both themes; `other` deliberately\n * stays a neutral gray so the fallback category does not compete. */\n.s4ce25d_cardSpine {\n  position: absolute;\n  top: 0;\n  bottom: 0;\n  left: 0;\n  /* Four pixels, not three. At three the spine does not read as a colour at\n   * all — it is a hairline in the category's hue on the card's left edge, and\n   * the eye takes it for a border. It is the shop's signature (design\n   * 2026-11-02-shop-widescreen-layout §5), so it grows rather than goes\n   * (design 2026-11-11-shop-shelf-restyle §2.4). */\n  width: 4px;\n  background: color-mix(in srgb, var(--category-hue, #8B8E96) 85%, transparent);\n}\n\n/* The hue table, keyed by `data-category` and read by BOTH surfaces that\n * speak in category colour: a card's spine and badge, and the category bar's\n * own tab. One table, so a tab can never disagree with the cards it filters to\n * — which is the whole point of colouring the tab. `.s26d58e_categoryButton` sets the\n * brand fallback for `All`/`Installed`; these attribute selectors are one\n * specificity step above it and win wherever the attribute is present. */\n.s65f383_card[data-category='tool'], .s26d58e_categoryButton[data-category='tool'] { --category-hue: #4C8DFF; }\n.s65f383_card[data-category='provider'], .s26d58e_categoryButton[data-category='provider'] { --category-hue: #A78BFA; }\n.s65f383_card[data-category='ui'], .s26d58e_categoryButton[data-category='ui'] { --category-hue: #2DD4BF; }\n.s65f383_card[data-category='workflow'], .s26d58e_categoryButton[data-category='workflow'] { --category-hue: #F59E0B; }\n.s65f383_card[data-category='integration'], .s26d58e_categoryButton[data-category='integration'] { --category-hue: #34D399; }\n.s65f383_card[data-category='theme'], .s26d58e_categoryButton[data-category='theme'] { --category-hue: #F472B6; }\n.s65f383_card[data-category='other'], .s26d58e_categoryButton[data-category='other'] { --category-hue: #8B8E96; }\n\n/* The category sits in the badge row as a chip in the category's own hue.\n *\n * The WORD is the hue blended 50% toward `label-primary`, the theme's\n * foreground pole. It used to be the raw hue, and the raw hue is unreadable:\n * measured in the live app on 2026-11-11, at 11px/600 on white, `ui` measured\n * 1.86:1, `integration` 1.92:1 and `workflow` 2.15:1 — every one of the seven\n * under the 4.5:1 floor. This is the same defect the reds, the ambers and the\n * greens were already fixed for (\"never paints text with the raw error\n * token\"), and the seven category hues were never brought under that rule. The\n * mix inverts with the theme, so the dark theme gets a light word on a dark\n * tint. Every hue clears 4.5:1 over the 15% ground below: the worst is `ui` at\n * 5.14:1 and `workflow` reaches 5.61:1 (computed from the live theme tokens,\n * 2026-11-12).\n *\n * The GROUND is 15% of the hue. It is a fill and not the only affordance —\n * the word is there in a colour that clears the floor against it — so the\n * light theme's white layers cannot swallow it.\n *\n * The Latin typography is gone: `uppercase` does nothing to a Chinese word,\n * and `letter-spacing: 0.08em` pulled its glyphs apart. */\n.s9c8eaa_categoryBadge {\n  padding: 2px 7px;\n  border: 0;\n  border-radius: 6px;\n  font-size: 11px;\n  font-weight: 500;\n  letter-spacing: 0;\n  text-transform: none;\n  background: color-mix(in srgb, var(--category-hue, #8B8E96) 15%, transparent);\n  color: color-mix(in srgb, var(--category-hue, #8B8E96) 50%, var(--dsw-alias-label-primary));\n  white-space: nowrap;\n}\n\n/* Forced colours replace the 15% tint with the system palette, so the chip\n * loses its shape and its word becomes a plain run of text. The word still\n * says which category, so this restores the chip, not the information. An\n * outline draws inside the box, so it does not reflow the badge row. */\n@media (forced-colors: active) {\n  .s9c8eaa_categoryBadge {\n    outline: 1px solid CanvasText;\n    outline-offset: -1px;\n  }\n}\n\n/* One entry's icon: a 32px tile holding a 24px image (design\n * 2026-10-23-shop-plugin-icons §8.3). The border and radius are dsh's own\n * (`PackageArtwork`'s .s7ff339_cardIcon), so a card's icon reads the same here as on\n * dsh's Plugins page.\n *\n * The GROUND is new, and it is option E of that design's §4/§8.4: a 15% tint\n * of the category's hue behind the artwork. It is DECORATION, not a fix: in\n * the dark theme it is nearly invisible, and the icon's own visibility there\n * — the problem §8.4 is about — is exactly where it was. The half-pixel\n * border stays, because it is what keeps the tile's edge visible in the dark\n * theme, where the tint does nothing. */\n.sc2425d_entryIcon {\n  box-sizing: border-box;\n  flex: none;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: 32px;\n  height: 32px;\n  border: 0.5px solid var(--dsw-alias-border-l3);\n  border-radius: var(--dsw-radius-md);\n  background: color-mix(in srgb, var(--category-hue, #8B8E96) 15%, transparent);\n  overflow: hidden;\n}\n\n.scc3f74_entryIconImage {\n  width: 24px;\n  height: 24px;\n  object-fit: contain;\n}\n\n.sa97234_entryHeader {\n  display: flex;\n  flex-direction: row;\n  align-items: flex-start;\n  gap: 12px;\n  min-width: 0;\n  padding: 10px 12px 2px;\n  border: none;\n  background: transparent;\n  color: inherit;\n  font: inherit;\n  text-align: left;\n  cursor: pointer;\n}\n\n.sa97234_entryHeader:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: -2px;\n}\n\n/* The name and the badge row, one column inside the header button. The\n * badges used to share the name's row, which at a 430px grid track left the\n * name about 120px; under it they get the full width and the name keeps its\n * line (design 2026-11-02-shop-widescreen-layout §5). */\n.s25c388_entryHeading {\n  display: flex;\n  flex-direction: column;\n  gap: 3px;\n  min-width: 0;\n  flex: 1 1 auto;\n}\n\n/* The name fills the row and truncates rather than wraps; the badges stay\n * intact on the row under it. */\n.sc3f149_name {\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 13.5px;\n  font-weight: 600;\n  letter-spacing: -0.005em;\n  flex: 1 1 auto;\n  min-width: 0;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  color: var(--dsw-alias-label-primary);\n}\n\n.s513026_badges {\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n/* The action line: buttons side by side; an active install/uninstall flow\n * (gate, log, notices) takes the full width below them. */\n.s9b5048_cardActions {\n  display: flex;\n  flex-direction: row;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 8px;\n  /* 12px, the header's and the body's inset: at 14px every card's buttons sat\n   * 2px further in than the name and the summary above them (review,\n   * 2026-11-11). */\n  padding: 9px 12px 11px;\n  /* One hairline above the actions, so the card has a FOOTER: the buttons\n   * were floating in the description, with nothing to say where the prose\n   * stopped (design 2026-11-11-shop-shelf-restyle §2.3). The rule is\n   * `border-l1`, the same one the expanded detail's own divider uses\n   * (`.sde3f0c_detail`), and it is one line like every other line in this file. */\n  border-top: 1px solid var(--dsw-alias-border-l1);\n  /* Grid rows stretch every card to the tallest one, and the card is a flex\n   * column: this takes the leftover height above the buttons, so two cards\n   * in one row end their action rows on the same line (design\n   * 2026-11-02-shop-widescreen-layout §5). */\n  margin-top: auto;\n}\n\n/* The star (design 2026-11-02-market-borrowings §7): a glyph button at the\n * head of the action row, sized to the row's own rhythm. `aria-pressed` plus\n * a fixed pair of labels is the pattern the incompatible switch records — the\n * glyph carries the state, the label names the action. */\n.se10272_favoriteButton {\n  flex: 0 0 auto;\n  min-width: 28px;\n  height: 28px;\n  padding: 0 6px;\n  border-radius: 8px;\n  border: 1px solid transparent;\n  background: transparent;\n  /* Unstarred: a light grey, dimmer than body text. Mixed toward transparent\n   * rather than named, so it stays \"light\" on the dark theme too — the palette\n   * has no tertiary label token, and `label-secondary` alone reads as body\n   * text rather than as an inactive control. */\n  color: color-mix(in srgb, var(--dsw-alias-label-secondary) 60%, transparent);\n  font-size: 15px;\n  line-height: 1;\n  cursor: pointer;\n}\n\n/* Hover is a faint wash, never a frame: a border here drew a box around a\n * star the reader had just set, which read as a selected tile rather than as\n * a favorite (reported 2026-11-04 from a screenshot where the pointer still\n * rested on the button). The wash only darkens an UNSTARRED star — this rule\n * outranks `.sc6a99e_favoriteButtonOn` by specificity, so a `color` here would turn a\n * yellow star grey under the pointer. */\n.se10272_favoriteButton:hover {\n  background: var(--dsw-alias-interactive-bg-hover);\n  color: var(--dsw-alias-label-secondary);\n}\n\n/* The starred state: yellow (design: the reader's two states are grey and\n * yellow). Declared after the hover rule — this rule and `.se10272_favoriteButton`\n * have the same specificity, so source order decides — and repeated on\n * `:hover` because the hover selector outranks it. */\n.sc6a99e_favoriteButtonOn {\n  color: var(--shop-star);\n}\n\n.sc6a99e_favoriteButtonOn:hover {\n  color: var(--shop-star);\n}\n\n/* The rollback offer (same design, §6): one button and, on failure, the\n * host's sentence beside it. It sits inside the installed branch, after the\n * label and the badge, so it never displaces the card's primary action. */\n.se126be_rollbackGroup {\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.s3948b3_rollbackButton {\n  font-size: 12px;\n  padding: 4px 10px;\n  border-radius: 6px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  background: transparent;\n  color: var(--dsw-alias-label-primary);\n  cursor: pointer;\n}\n\n.s3948b3_rollbackButton:hover {\n  border-color: var(--dsw-alias-brand-primary);\n  color: var(--dsw-alias-brand-primary);\n}\n\n.s519304_rollbackNote {\n  font-size: 12px;\n  line-height: 1.5;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.s9b5048_cardActions > .sc4f2ac_gate,\n.s9b5048_cardActions > .s4d374c_installPanel,\n.s9b5048_cardActions > .sf53ca0_installedActions,\n.s9b5048_cardActions > .sc34531_receipt {\n  flex-basis: 100%;\n}\n\n/* The entry's version, always visible on the card (the expanded detail\n * repeats it in the version row) — the same quiet mono as the toolbar. */\n.sc6ec6e_cardVersion {\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 12px;\n  letter-spacing: 0.02em;\n  color: var(--dsw-alias-label-secondary);\n  /* A release tag prints as tagged, never cut to seven characters (market\n   * borrowings §11), and a tag can run to any length. The cap keeps every\n   * tag of up to fourteen characters whole, prerelease suffix included\n   * (`v0.1.0-alpha.0`): fourteen glyphs plus the letter-spacing above come to\n   * about 14.5ch, so the cap is 15ch, not 14. A longer tag ends in an ellipsis,\n   * and the tooltip carries the whole of it. */\n  max-width: 15ch;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n/* The octocat marking a source the reader can read on GitHub, beside the\n * card's version. */\n.s71f10f_sourceBadge {\n  display: inline-flex;\n  align-items: center;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.s5e82cb_tierBadge {\n  padding: 1px 7px;\n  border-radius: 999px;\n  font-size: 11px;\n  line-height: 1.6;\n}\n\n.s5e82cb_tierBadge[data-tier='verified'] {\n  color: var(--shop-success);\n  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 14%, transparent);\n  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-success-primary) 40%, transparent);\n}\n\n.s5e82cb_tierBadge[data-tier='verified-stale'] {\n  color: var(--shop-warn-on-tint);\n  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 14%, transparent);\n  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-warn-primary) 40%, transparent);\n}\n\n.s5e82cb_tierBadge[data-tier='community'] {\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-bg-layer-2);\n  border: 1px solid var(--dsw-alias-border-l2);\n}\n\n/* The §C10 shadowed badge: an installed github entry the catalog refuses\n * shadowed-by-npm. Subdued/secondary rather than a warn tint — nothing is\n * wrong with the install itself; the shelf just cannot show it. */\n.s5e82cb_tierBadge[data-tier='shadowed'] {\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-bg-layer-2);\n  border: 1px solid var(--dsw-alias-border-l2);\n}\n\n/* The §C5 archived badge: a github repository the owner has frozen.\n * Subdued register, same as shadowed — nothing is wrong with the install;\n * the pinned commit still serves, so the mark is informational only. */\n.s5e82cb_tierBadge[data-tier='archived'] {\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-bg-layer-2);\n  border: 1px solid var(--dsw-alias-border-l2);\n}\n\n.s4bbe02_incompatibleBadge {\n  flex-shrink: 0;\n  padding: 3px 9px;\n  border-radius: 999px;\n  font-size: 12px;\n  white-space: nowrap;\n  /* On the tint, not on the plain surface: this text reads on its own 14% red\n   * fill, where the 90% red would measure 4.21:1 (light) and 4.43:1 (dark). */\n  color: var(--shop-error-on-tint);\n  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 14%, transparent);\n  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 40%, transparent);\n}\n\n.sff43b4_starsBadge {\n  font-size: 11px;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.s73f7fb_chevron, .s61393c_chevronOpen {\n  color: var(--dsw-alias-label-secondary);\n  transition: transform 120ms ease;\n}\n\n.s61393c_chevronOpen { transform: rotate(180deg); }\n\n@media (prefers-reduced-motion: reduce) {\n  .s73f7fb_chevron, .s61393c_chevronOpen { transition: none; }\n}\n\n.s820ebf_body {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  padding: 0 12px;\n}\n\n.sb8fbc8_summary {\n  margin: 0;\n  font-size: 13px;\n  line-height: 1.55;\n  /* The SECONDARY label, not the primary one. The name is the identity and\n   * the description is the author's prose; both were `label-primary`, so the\n   * eye could not tell which of the two was the plugin (design\n   * 2026-11-11-shop-shelf-restyle §2.3). `label-secondary` measures 5.80:1\n   * on white, so this is a demotion, not a dimming. */\n  color: var(--dsw-alias-label-secondary);\n  display: -webkit-box;\n  -webkit-line-clamp: 2;\n  -webkit-box-orient: vertical;\n  overflow: hidden;\n}\n\n.se507db_summaryZh {\n  margin: -4px 0 0;\n  font-size: 12px;\n  line-height: 1.5;\n  color: var(--dsw-alias-label-secondary);\n  display: -webkit-box;\n  -webkit-line-clamp: 1;\n  -webkit-box-orient: vertical;\n  overflow: hidden;\n}\n\n/* Expanded cards show the full summary: the clamp is lifted, never raised —\n * a higher number would still truncate the author's text, just later. */\n.s10baf0_summaryExpanded {\n  -webkit-line-clamp: unset;\n  display: block;\n}\n\n.sb9dba9_summaryZhExpanded {\n  -webkit-line-clamp: unset;\n  display: block;\n}\n\n/* `white-space: pre-line` so the newline in the copy is the copy's own: the\n   dictionary decides where the line breaks, and a translator changes it\n   without touching the component. Collapses runs of spaces like `normal`, so\n   only the explicit \\n survives. */\n.s6eca19_incompatibleDetail {\n  margin: 0;\n  /* Four pixels, and not more: the e2e reads this block's height against its\n   * own line height and holds the fold to \"about two lines\" — an upper bound\n   * of 2.6 lines, which at 12px/1.55 is 48.36px. Two lines plus the padding\n   * is 45.2px, and seven pixels of padding was 51.2px, over the bound. */\n  padding: 4px 9px;\n  border-radius: 6px;\n  /* A ground for the notice, so it reads as a block of text about ONE\n   * plugin rather than as a hole cut in the card: 3,572 of the 26,265 entries\n   * carry one, and nothing else on the page is red (design\n   * 2026-11-11-shop-shelf-restyle §2.7). The word stays `--shop-error`, which\n   * measures 5.31:1 on the card and 4.73:1 on this ground — the same red,\n   * with a floor under it that the plain surface did not need. */\n  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 7%, transparent);\n  /* One line, like every other line in this file: a two-pixel edge would be\n   * the first control here to draw more than one, and the e2e's one-line scan\n   * reads the computed width. */\n  border-left: 1px solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 55%, transparent);\n  font-size: 12px;\n  line-height: 1.55;\n  white-space: pre-line;\n  color: var(--shop-error);\n}\n\n/* The way out of dsh's own refusal: the lead-in, then the exemption command\n * on its own line. */\n/* Block layout rather than flex: Firefox 153 will not line-clamp a container\n * that holds a display:flex child (Chromium 151 does), and the fold's\n * measured goal — \"the whole red block, remedy included, as one unit\" —\n * needs the container to clamp in BOTH engines the shop targets. The 4px\n * rhythm between the lead-in and the command is kept by the margins of the\n * children. */\n.s3d0044_remedy {\n  display: block;\n}\n\n.s3d0044_remedy > * + * { margin-top: 4px; }\n\n/* The fold under a card's whole red block: two lines by default, a small\n * Refresh-pill-shaped toggle under it. Two containers, one rhythm: the shelf\n * uses `.s67d135_foldBlock` collapsed and `.s626303_foldBlockExpanded` open, and they share\n * one `display: block` (Firefox clamps no flex child inside a -webkit-box).\n * The clamp is on the BLOCK rather than any one line, so a 43-line remedy\n * counts as a unit instead of squashing the harness-peers line to a sliver\n * and hiding the command the reader actually came for. Both containers\n * still render the full block to a screen reader — `white-space: normal`\n * instead of pre-line keeps the copy's own `\\n` visible without forcing the\n * browser to lay the block's pieces like a text node. */\n.s67d135_foldBlock {\n  display: block;\n  -webkit-line-clamp: 2;\n  -webkit-box-orient: vertical;\n  display: -webkit-box;\n  overflow: hidden;\n}\n\n.s626303_foldBlockExpanded { display: block; }\n\n/* The toggle. Geometry and quiet voice are the Refresh pill's\n * (`catalogRefreshButton` right beside it on the same screen): one 1px border,\n * 11px text, secondary label, no fill. It is the only one of its kind here,\n * so a class of its own means one function of its own. */\n.sfbcf2c_foldToggle {\n  /* The pill's own width. Under a card's red block it is an item of the card\n   * body, a column, which stretches every child it is not told otherwise:\n   * 934px against the Refresh pill's 59px at a 1440 window (2026-10-22). */\n  align-self: flex-start;\n  padding: 1px 9px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 999px;\n  background: transparent;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 11px;\n  line-height: 17px;\n  cursor: pointer;\n}\n\n.sfbcf2c_foldToggle:hover { border-color: color-mix(in srgb, var(--dsw-alias-brand-primary) 45%, var(--dsw-alias-border-l2)); }\n.sfbcf2c_foldToggle:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }\n\n.sdf203f_remedyLead {\n  margin: 0;\n  font-size: 12px;\n  line-height: 1.5;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* The exemption command, bound for a terminal unchanged: one click selects\n * all of it, and it wraps anywhere rather than widening the card. A border,\n * not a fill, marks the box: the bg layers are one white in the light theme. */\n.sc32335_allowCommand {\n  display: block;\n  padding: 6px 8px;\n  border-radius: 6px;\n  background: var(--dsw-alias-bg-base);\n  border: 1px solid var(--dsw-alias-border-l1);\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 11px;\n  line-height: 1.5;\n  white-space: pre-wrap;\n  word-break: break-all;\n  user-select: all;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* A refused install on a surface that does not state its blockers — the\n * outdated row — writes them out on their own full-width line under the\n * refused label, the command that clears dsh's refusal included. Block,\n * rather than flex: Firefox will not line-clamp a -webkit-box that holds a\n * display:flex child, and the fold this element can sit inside of carries\n * that clamp. The 6px rhythm between the block's lines is carried by the\n * children's margins. */\n.sc74941_refusal {\n  display: block;\n  flex-basis: 100%;\n}\n\n.sc74941_refusal > * + * { margin-top: 6px; }\n\n.s9d2029_capabilitiesBlock {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.s3bdbd5_capabilitiesNote {\n  margin: 0;\n  font-size: 11px;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.s441702_capabilities {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 4px;\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.s441702_capabilities li {\n  padding: 1px 6px;\n  border-radius: 4px;\n  background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent);\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 11px;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.sde3f0c_detail {\n  border-top: 1px solid var(--dsw-alias-border-l1);\n  padding-top: 8px;\n}\n\n.se98179_detailRows {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  margin: 0;\n}\n\n.sfb4d2f_detailRow {\n  display: flex;\n  justify-content: space-between;\n  gap: 12px;\n  font-size: 12px;\n}\n\n.sfb4d2f_detailRow dt {\n  color: var(--dsw-alias-label-secondary);\n}\n\n.sfb4d2f_detailRow dd {\n  margin: 0;\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  overflow-wrap: anywhere;\n  text-align: right;\n  color: var(--dsw-alias-label-primary);\n}\n\n.sfb4d2f_detailRow a {\n  color: var(--dsw-alias-brand-primary);\n  text-decoration: none;\n}\n\n.sfb4d2f_detailRow a:hover {\n  text-decoration: underline;\n}\n\n.sfb4d2f_detailRow a:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n/* What the entry IS rather than what you can do with it — how big it is and\n * who published it — at the right edge of the action row. `margin-left: auto`\n * is what pushes it there, and it lives on this wrapper rather than on either\n * label so the group stays flush right when only one of the two has a value —\n * a packument that named no account has no author, and an entry the registry\n * could not measure honestly has no size. Rarer than it was (every live entry\n * now carries a size, github included), but the wrapper is not what makes it\n * rare: without one, an EMPTY meta group still costs 8px, because\n * `.s9b5048_cardActions` is a flex row with `gap: 8px` and a zero-width item is still\n * an item. The row is a wrapping flex, so an active install flow (which claims\n * the full width) drops the whole group to the next line rather than squeezing\n * it. */\n.s5fbaf9_cardMeta {\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n  margin-left: auto;\n  min-width: 0;\n}\n\n/* The on-disk size, left of the author. Mono and tabular so the digits of one\n * figure line up with the digits of another WHEREVER the two land: `.s5fbaf9_cardMeta`\n * is flush right and the author sits outside the size, so a size's x position\n * moves with the author's width and is different again on the many entries\n * that carry no author at all. There is no column to align to, which is why\n * the reason given here is per-figure legibility rather than the column the\n * first version of this comment claimed. Secondary colour, because it\n * qualifies the entry rather than announcing it.\n *\n * `font-variant-numeric` is safe HERE and would not be on a pill: this element\n * has no state rules, so nothing it does can reflow a wrapping row.\n *\n * `.s98d53f_shelfDate` shares this rule because it is the same kind of fact — a\n * fixed-width figure a reader compares down the shelf (design\n * 2026-10-12-shelf-orders §4) — and two copies of these declarations would\n * drift. */\n.s2d3c05_size,\n.s98d53f_shelfDate {\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-variant-numeric: tabular-nums;\n  font-size: 12px;\n  letter-spacing: 0.02em;\n  white-space: nowrap;\n  color: var(--dsw-alias-label-secondary);\n}\n\n/* An install past 50 MB on disk (design 2026-11-02-market-borrowings §2),\n * beside the figure it already prints. The mix, not the raw warn token, is\n * what the contrast suite measures: a colour is only allowed here after it\n * clears the same threshold as every other label on this surface\n * (`css-tokens.s8583e3_client.sfd9d8a_spec.s5f67aa_ts` fails on a raw token). The tooltip carries the\n * same fact for a reader who cannot see the tint. */\n.sf7bc75_sizeLarge {\n  color: var(--shop-warn);\n}\n\n/* The publishing account, at the outer end of `.s5fbaf9_cardMeta` on the action row —\n * NOT beside the npm link in the expanded detail, which is where it used to\n * live and what this comment described until the accurate half was deleted\n * with the `margin-left: auto` that moved to `.s5fbaf9_cardMeta`. There is no middot:\n * `.s5fbaf9_cardMeta`'s 8px gap separates it from the size.\n *\n * Secondary label colour carries the distinction — never a background fill,\n * which is invisible in the light theme where every bg-layer token is the\n * same white. */\n.s1ff66f_author {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n}\n\n.sd58c6d_reviewedLine {\n  margin: 8px 0 0;\n  padding: 6px 8px;\n  border-radius: 6px;\n  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 12%, transparent);\n  font-size: 12px;\n  color: var(--shop-warn-on-tint);\n}\n\n/* Install flow. */\n.s4d374c_installPanel {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  margin-top: 2px;\n}\n\n/* ONE geometry for everything that occupies the install button's place: the\n * button itself, the confirm/cancel pair beside the restart gate, the installed\n * label, and the refused label. Stated once because a refused label HAS to look\n * like the button it replaces apart from its colour and its text, and four\n * copies of the same five declarations is how they stop looking alike.\n * `cursor: pointer` is NOT here: only the controls that can be pressed take it,\n * while a label renders with the default cursor. */\n.se7aaed_installButton,\n.sb43a49_confirmButton,\n.s6e45d1_cancelButton,\n.sb6fc74_installedLabel,\n.s906629_refusedLabel {\n  align-self: flex-start;\n  margin: 0;\n  padding: 5px 14px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 6px;\n  font-size: 13px;\n}\n\n.se7aaed_installButton, .sb43a49_confirmButton, .s6e45d1_cancelButton {\n  cursor: pointer;\n}\n\n.se7aaed_installButton {\n  border-color: var(--dsw-alias-brand-primary);\n  background: var(--dsw-alias-brand-primary);\n  color: var(--dsw-alias-bg-base);\n}\n\n/* Between the click and the host's answer. The flow ignores a repeat start for\n * the same identity, so this is the visible half of the same fact: a control\n * that says \"not now\" rather than one that looks ready to send a second\n * install. Only the button can be in this state — a label is never pressed. */\n.se7aaed_installButton:disabled {\n  cursor: wait;\n}\n\n.se7aaed_installButton:hover {\n  background: color-mix(in srgb, var(--dsw-alias-brand-primary) 88%, var(--dsw-alias-label-primary));\n}\n\n.sb43a49_confirmButton {\n  border: 1px solid var(--dsw-alias-brand-primary);\n  background: var(--dsw-alias-brand-primary);\n  color: var(--dsw-alias-bg-base);\n}\n\n.sb43a49_confirmButton:hover {\n  background: color-mix(in srgb, var(--dsw-alias-brand-primary) 88%, var(--dsw-alias-label-primary));\n}\n\n.s6e45d1_cancelButton {\n  border: 1px solid var(--dsw-alias-border-l2);\n  background: var(--dsw-alias-bg-layer-2);\n  color: var(--dsw-alias-label-primary);\n}\n\n.s6e45d1_cancelButton:hover {\n  border-color: var(--dsw-alias-label-secondary);\n}\n\n.se7aaed_installButton:focus-visible, .sb43a49_confirmButton:focus-visible, .s6e45d1_cancelButton:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n/* The shelf card of a plugin that is installed and current carries this\n * non-interactive label instead of an install button. Border + text do the\n * work in the light theme, where every bg-layer token resolves to white. */\n.sb6fc74_installedLabel {\n  align-self: flex-start;\n  margin: 0;\n  padding: 5px 14px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 6px;\n  font-size: 13px;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-bg-layer-2);\n}\n\n/* The refused Install/Update button's replacement: the same box as the button\n * (the geometry rule above), filled solid red, not pressable. The fill is the\n * derived red rather than the raw token because text sits on it — bg-base on\n * `--shop-error` measures 5.31:1 light and 6.14:1 dark — and the raw error red\n * under bg-base text measures 4.498:1, the miss this whole family of fixes\n * exists for. Nothing here changes on hover: it is a statement, not a control,\n * so it keeps the default cursor and its colours. */\n.s906629_refusedLabel {\n  border-color: var(--shop-error);\n  background: var(--shop-error);\n  color: var(--dsw-alias-bg-base);\n  white-space: nowrap;\n}\n\n/* An installed card's controls: the installed label or the update button,\n * plus the uninstall button. The install panel's running/failed states are\n * column layouts and sit as one item of this row. */\n.sf53ca0_installedActions {\n  display: flex;\n  align-items: flex-start;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n/* Uninstall revokes privilege; the quiet outline keeps it from competing\n * with the primary action, and the error tint says \"removes\". */\n.s96967f_uninstallButton {\n  align-self: flex-start;\n  padding: 5px 14px;\n  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 55%, transparent);\n  border-radius: 6px;\n  background: transparent;\n  /* The on-tint red: hovering this button paints a 10% red fill under the\n   * word, where the plain red measures 4.50:1 (light) — the same two\n   * thousandths short of the floor the raw token shipped at. */\n  color: var(--shop-error-on-tint);\n  font-size: 13px;\n  cursor: pointer;\n}\n\n.s96967f_uninstallButton:hover {\n  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent);\n}\n\n.s96967f_uninstallButton:focus-visible {\n  outline: 2px solid var(--dsw-alias-state-error-primary);\n  outline-offset: 1px;\n}\n\n/* The restart dsh button on a done install: quiet outline, same rank as\n * the other secondary actions. */\n.sb00c36_restartSelfButton {\n  /* The version row's third state. Geometry matches .s614a38_checkUpdateButton and\n   * .sa04455_updateSelfButton exactly — the row is one evolving control and a\n   * different pill would read as a different kind of thing. It takes the\n   * emphasised fill rather than the neutral one because at that moment the\n   * restart is the only thing left to do, the same reason Update has it. */\n  padding: 2px 10px;\n  border: 1px solid var(--dsw-alias-brand-primary);\n  border-radius: 999px;\n  background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent);\n  color: var(--dsw-alias-brand-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.sb00c36_restartSelfButton:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n/* The two activation offers share one recipe: a border in an alias token,\n * never a `bg-layer` fill alone — all four bg-layer tokens collapse to the\n * same white under `body` in the light theme, and a fill-only button would\n * vanish there. Grouped rather than copied, because a copy is a rule that\n * can be corrected on one button and left wrong on the other, silently. */\n.s6ac237_restartButton,\n.s64a5ff_reloadButton {\n  align-self: flex-start;\n  padding: 5px 14px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 6px;\n  background: var(--dsw-alias-bg-layer-2);\n  color: var(--dsw-alias-label-primary);\n  font-size: 13px;\n  cursor: pointer;\n}\n\n.s6ac237_restartButton:hover,\n.s64a5ff_reloadButton:hover {\n  border-color: var(--dsw-alias-label-secondary);\n}\n\n.s6ac237_restartButton:focus-visible,\n.s64a5ff_reloadButton:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n/* A settled install's or uninstall's receipt: its log, what happened, and\n * what to do next, stacked. A column, so the log box spans the card as the\n * running and failed views' logs do, rather than being as wide as its longest\n * line (852, 409 and 260px on three cards of one page, 2026-10-22), and the\n * sentence never shares a line with a button it would sit misaligned beside. */\n.sc34531_receipt {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n/* The buttons under a receipt, a failure, or a reload or restart note, in one\n * row: the offer first (Reload, Restart dsh, Retry) and the way out (Dismiss)\n * beside it. They stood a line apart: Dismiss beside the reload note and\n * Reload under it, or Retry above Dismiss. */\n.sbe9357_offerActions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 8px;\n}\n\n/* The §4 reload offer: a notice plus its button, one item of\n * `.sf53ca0_installedActions` the way the restart gate is — a column of its own\n * rather than inline with the row. */\n.sf79aef_reloadPanel {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-start;\n  gap: 6px;\n}\n\n\n.sc4f2ac_gate {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  padding: 10px;\n  border: 1px solid var(--dsw-alias-state-warn-primary);\n  border-radius: 8px;\n  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 8%, transparent);\n}\n\n.s559c38_gateTitle {\n  margin: 0;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--shop-warn-on-tint);\n}\n\n.s3c0ace_gateBody {\n  margin: 0;\n  font-size: 12px;\n  line-height: 1.6;\n  color: var(--dsw-alias-label-primary);\n}\n\n.sc323e5_gateWarning {\n  margin: 0;\n  font-size: 12px;\n  line-height: 1.6;\n  white-space: pre-line;\n  color: var(--shop-error);\n}\n\n.s4b2373_gateActions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.s52b5a5_installing {\n  margin: 0;\n  font-size: 12px;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.s64ab71_log {\n  max-height: 160px;\n  overflow: auto;\n  margin: 0;\n  padding: 8px;\n  border-radius: 6px;\n  background: var(--dsw-alias-bg-base);\n  border: 1px solid var(--dsw-alias-border-l1);\n  list-style: none;\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 11px;\n  line-height: 1.5;\n}\n\n.s1531a8_logLine {\n  white-space: pre-wrap;\n  word-break: break-all;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.sf20dda_notice {\n  margin: 0;\n  font-size: 12px;\n  color: var(--shop-success);\n}\n\n.seb9b08_failedHeading {\n  margin: 0;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--shop-error);\n}\n\n.s755788_reportLine {\n  margin: 0;\n  font-size: 12px;\n}\n\n.s77578c_reportLink {\n  color: var(--dsw-alias-brand-primary);\n  text-decoration: underline;\n}\n\n.sfd3021_failedDetail {\n  margin: 0;\n  font-size: 12px;\n  line-height: 1.6;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* A failed install's retry line (design 2026-11-02-market-borrowings §5): the\n * command the executor ran, monospaced and selectable, with a copy button.\n * `min-width: 0` on the code is what lets a long spec wrap inside the card\n * instead of widening it — the card is a grid item and would otherwise take\n * the line's width. */\n.s3525c1_commandLine {\n  display: flex;\n  align-items: flex-start;\n  gap: 8px;\n  margin: 0;\n}\n\n.s7ccc44_commandText {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 11px;\n  line-height: 1.6;\n  padding: 6px 8px;\n  border-radius: 6px;\n  background: var(--dsw-alias-bg-secondary);\n  color: var(--dsw-alias-label-primary);\n  overflow-wrap: anywhere;\n}\n\n.sfdc792_copyButton {\n  flex: 0 0 auto;\n  font-size: 12px;\n  padding: 4px 10px;\n  border-radius: 6px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  background: transparent;\n  color: var(--dsw-alias-label-primary);\n  cursor: pointer;\n}\n\n.sfdc792_copyButton:hover {\n  border-color: var(--dsw-alias-brand-primary);\n  color: var(--dsw-alias-brand-primary);\n}\n\n.s50ba35_rejectedCode {\n  margin: 0;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--shop-error);\n}\n\n.se75489_rejectedDetail {\n  margin: 0;\n  font-size: 12px;\n  line-height: 1.6;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* The Updatable section. The class keeps the Host's field name; only the\n   heading the reader sees was renamed. */\n.sa276cf_outdatedSection {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  margin-top: 6px;\n}\n\n.sceae6e_outdatedList {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.s8d2072_outdatedRow {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 12px;\n  flex-wrap: wrap;\n  padding: 10px 12px;\n  border: 1px solid var(--dsw-alias-border-l1);\n  border-radius: 8px;\n  background: var(--dsw-alias-bg-layer-1);\n}\n\n.s5c2545_outdatedInfo {\n  display: flex;\n  flex-direction: row;\n  align-items: center;\n  gap: 10px;\n  min-width: 0;\n}\n\n/* The name and everything under it, beside the icon. */\n.s3ecfe4_outdatedText {\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  min-width: 0;\n}\n\n.s5c2545_outdatedInfo strong {\n  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n  font-size: 13px;\n  word-break: break-all;\n  color: var(--dsw-alias-label-primary);\n}\n\n.s877c68_outdatedVersions {\n  /* Two inline labels with nothing between them in the markup ran together as\n   * `installed v1.0.0latest v2.0.0`: JSX drops the whitespace-only line, and\n   * the per-label class the markup asked for was never defined (singular\n   * against this rule's plural). The container owns the gap, the same idiom\n   * as .s513026_badges — the labels need no class of their own. */\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n  font-size: 12px;\n  color: var(--dsw-alias-label-secondary);\n}\n\n/* The update row's \"what changed\" link (design 2026-11-02-market-borrowings\n * §4). It inherits the versions line's size and rides the same gap, so it\n * reads as the third fact on that line; the underline is its only affordance\n * because the surrounding text is not a link. */\n.s866540_whatChanged {\n  color: var(--dsw-alias-brand-primary);\n  text-decoration: underline;\n  text-underline-offset: 2px;\n  white-space: nowrap;\n}\n\n.s866540_whatChanged:hover {\n  text-decoration-thickness: 2px;\n}\n\n/* The §C10 shadowed section. Reuses the outdated list's visual language; only\n * the section spacing and the per-row explanation paragraph are its own. */\n.s6c4649_shadowedSection {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  margin-top: 6px;\n}\n\n.scc2a21_shadowedDetail {\n  margin: 4px 0 0;\n  font-size: 12px;\n  line-height: 1.5;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.sa1f556_outdatedActions {\n  display: flex;\n  align-items: center;\n  /* The reload offer (§4) mounts inside the switch beside the Update button\n   * and is a two-line block, not a control: without wrapping, a row reading\n   * [switch][notice + Reload][Update] overflowed the Settings dialog the shop\n   * sat in through 0.8.7, and the page's column narrows with the window. */\n  flex-wrap: wrap;\n  gap: 10px;\n}\n\n/* The shop's one switch. It is worn by two controls that mean different\n * things — the enable/disable toggle on an installed card, and the shelf's\n * incompatible filter — so the geometry lives here once and each caller states\n * only its hue.\n *\n * `--switch-hue` is that knob, and it is read from the ANCESTOR rather than\n * declared per state: `.sfd887b_incompatibleFilter` sets it once and it reaches the\n * track and the label together, which is what keeps a red switch from sitting\n * under a neutral word. A declaration on `.s11c019_switch` itself would shadow the\n * inherited value (an element's own rule beats what it inherits), so the\n * default rides in the `var()` fallback and is resolved once into\n * `--track-hue` instead of being spelled out at each use.\n *\n * `box-sizing` and `padding` are stated because the two callers are different\n * elements — a `<button>`, which the UA gives padding, and a `<span>`, which\n * it does not. Without them the same class renders two sizes, and the knob\n * sits 2px above centre in the taller one. */\n.s11c019_switch {\n  --track-hue: var(--switch-hue, var(--dsw-alias-state-success-primary));\n  box-sizing: border-box;\n  display: inline-block;\n  position: relative;\n  width: 32px;\n  height: 18px;\n  padding: 0;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 999px;\n  background: var(--dsw-alias-bg-layer-2);\n  cursor: pointer;\n  transition: background 120ms ease, border-color 120ms ease;\n}\n\n/* The knob's POSITION is the state, which is the reason this control needs no\n * `forced-colors` fallback the way the category pills do: a system palette\n * replaces every colour below and moves nothing. */\n.s7580e8_switchOn {\n  border-color: var(--track-hue);\n  background: color-mix(in srgb, var(--track-hue) 55%, transparent);\n}\n\n.saab2b3_switchKnob {\n  position: absolute;\n  top: 2px;\n  left: 2px;\n  width: 12px;\n  height: 12px;\n  border-radius: 999px;\n  background: var(--dsw-alias-label-primary);\n  transition: transform 120ms ease, background 120ms ease;\n}\n\n.s7580e8_switchOn .saab2b3_switchKnob {\n  transform: translateX(14px);\n  background: var(--dsw-alias-bg-base);\n}\n\n.s11c019_switch:focus-visible {\n  outline: 2px solid var(--dsw-alias-brand-primary);\n  outline-offset: 1px;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .s11c019_switch, .saab2b3_switchKnob { transition: none; }\n}\n\n/* The hot enable/disable switch on installed rows: the knob button plus the\n * §8 hot-apply / failure notices rendered beside it. */\n.sd9f9e4_switchWrap {\n  display: inline-flex;\n  align-items: center;\n  /* Same reason as `.sa1f556_outdatedActions`: `.sf79aef_reloadPanel`'s own comment calls\n   * itself \"a column of its own rather than inline with the row\", which held\n   * for `.sf53ca0_installedActions` and not here until this line. */\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n/* THE WIDE RULES MUST STAY LAST. Nesting in @container adds no\n * specificity, so between a container rule and a top-level rule of the same\n * selector the source order decides. Placed above `.sb2c859_categoryBar`,\n * `.s26d58e_categoryButton` and the two focus rules, every one of these lost: the\n * rail kept the pills' row, the switch's auto margin and the outside ring,\n * and the geometry-only e2e passed (measured 2026-11-02).\n * `css-tokens.s8583e3_client.sfd9d8a_spec.s5f67aa_ts` fails if this block moves back up. */\n/* The rail. Two 430px tracks and their 12px gap need 872; the rail and its\n * 24px gap add 256; 12px of margin makes the threshold 1140. Below 872 the\n * grid's own `auto-fill` leaves one column. */\n@container (min-width: 1140px) {\n  .sdabbbb_shelfBody {\n    display: grid;\n    grid-template-columns: 232px minmax(0, 1fr);\n    column-gap: 24px;\n    row-gap: 14px;\n  }\n\n  /* The rail sticks under dsh's frame top rather than scrolling away with\n   * the results. `.s255e5a_panel`'s `overflow: clip` is not a scroll container, so\n   * the page stays the scrollport; the e2e proves it (design\n   * 2026-11-02-shop-widescreen-layout §4). */\n  .s56ac64_controls {\n    flex-direction: column;\n    align-items: stretch;\n    gap: 8px;\n    position: sticky;\n    top: calc(16px + var(--dsh-frame-top-clearance, 0px));\n    align-self: start;\n    /* The cap subtracts the same clearance the offset adds. Without it a\n     * rail whose content fits the cap hangs clearance - 16px below the\n     * viewport while stuck (measured: 32px at the desktop frame's 48px), and\n     * its last control only comes into view at the very bottom of the page.\n     * The 32px is the 16px above the rail plus 16px below it. */\n    max-height: calc(100vh - 32px - var(--dsh-frame-top-clearance, 0px));\n    overflow: auto;\n  }\n\n  .sbd6019_railHeading {\n    display: block;\n  }\n\n  .sb2c859_categoryBar {\n    flex: none;\n    flex-direction: column;\n    align-items: stretch;\n    gap: 4px;\n    /* The 6px belongs to the wrapping row; in the rail the controls' 8px gap\n     * is the whole rhythm above the first button. */\n    margin-top: 0;\n  }\n\n  /* Label left, count right: the two spans the buttons carry. */\n  .s26d58e_categoryButton {\n    display: flex;\n    justify-content: space-between;\n  }\n\n  /* The rail is a column with `align-items: stretch`, where an auto left\n   * margin would shrink the switch to its content and push it right. */\n  .sfd887b_incompatibleFilter {\n    margin-left: 0;\n  }\n\n  /* The rail is a scroll container (`overflow: auto`) and its controls are\n   * flush with its padding box, so a ring drawn OUTSIDE them loses both\n   * vertical segments to the clip — measured: red on the top edge and\n   * corners, nothing on the sides. The inset ring, the idiom\n   * `.sa97234_entryHeader:focus-visible` already uses, keeps all four sides. */\n  .s26d58e_categoryButton:focus-visible {\n    outline-offset: -2px;\n  }\n\n  .sfd887b_incompatibleFilter:focus-visible {\n    outline-offset: -2px;\n  }\n}\n";
+		if (typeof document !== "undefined" && !document.querySelector("style[data-plugin-css=\"e3675a89\"]")) {
 			const tag = document.createElement("style");
-			tag.dataset.pluginCss = "61217181";
+			tag.dataset.pluginCss = "e3675a89";
 			tag.textContent = css;
 			document.head.appendChild(tag);
 		}
-		var _dsh_plugin_shop_css_61217181_default = {
-			"client": "s931c3b_client",
-			"config": "s821251_config",
-			"ts": "s739867_ts",
-			"spec": "s6bd619_spec",
-			"panel": "s620b40_panel",
-			"shelfBody": "s960683_shelfBody",
-			"searchInput": "sf47d01_searchInput",
-			"toolbar": "sfb0d90_toolbar",
-			"page": "s125266_page",
-			"pageHead": "s9c1070_pageHead",
-			"pageTitle": "s475fb9_pageTitle",
-			"pageIntro": "sa7f73e_pageIntro",
-			"controls": "sc34345_controls",
-			"railHeading": "s2c9677_railHeading",
-			"results": "sfa80b4_results",
-			"detailAction": "s8e13a0_detailAction",
-			"stateLine": "sa3deac_stateLine",
-			"srOnly": "s9361fb_srOnly",
-			"skeletonGrid": "sb1fe4e_skeletonGrid",
-			"skeletonCard": "s8c9105_skeletonCard",
-			"skeletonName": "s865ab3_skeletonName",
-			"skeletonSummary": "s6b4bce_skeletonSummary",
-			"skeletonSummaryShort": "sf40a9a_skeletonSummaryShort",
-			"skeletonActions": "s8e5a8a_skeletonActions",
-			"actionButton": "s51f04e_actionButton",
-			"toolbarRight": "s925fc4_toolbarRight",
-			"versionBlock": "s5ea3a7_versionBlock",
-			"versionText": "sc66a32_versionText",
-			"updateSelfButton": "sccdf7c_updateSelfButton",
-			"checkUpdateButton": "scf8dbb_checkUpdateButton",
-			"githubLink": "s85b663_githubLink",
-			"selfUpdatePanel": "s5c8eb8_selfUpdatePanel",
-			"expansionNote": "sdce253_expansionNote",
-			"staleBadge": "s797744_staleBadge",
-			"categoryBar": "s2b7ed0_categoryBar",
-			"categoryButton": "s5bccd1_categoryButton",
-			"categoryButtonOn": "s7436f6_categoryButtonOn",
-			"incompatibleFilter": "s49785e_incompatibleFilter",
-			"switch": "s3e91a7_switch",
-			"switchOn": "scf58a9_switchOn",
-			"incompatibleFilterOn": "sace172_incompatibleFilterOn",
-			"switchKnob": "se04dcb_switchKnob",
-			"updatableHeading": "s8bbbce_updatableHeading",
-			"updatableHead": "s42f7ef_updatableHead",
-			"updateAllButton": "sdbe244_updateAllButton",
-			"catalogStatsRow": "sa7ab40_catalogStatsRow",
-			"sortGroup": "sa52bfa_sortGroup",
-			"sortLabel": "s411b49_sortLabel",
-			"catalogStats": "s4e9afc_catalogStats",
-			"catalogRefreshButton": "s37ae89_catalogRefreshButton",
-			"catalogRefreshFailed": "sad310e_catalogRefreshFailed",
-			"emptyLine": "s3671cd_emptyLine",
-			"cards": "s984038_cards",
-			"card": "s393112_card",
-			"cardsSentry": "sbcba8e_cardsSentry",
-			"showingLine": "s527167_showingLine",
-			"cardSpine": "s542978_cardSpine",
-			"categoryBadge": "sf00430_categoryBadge",
-			"cardIcon": "s90612f_cardIcon",
-			"entryIcon": "s46420b_entryIcon",
-			"entryIconImage": "s30c17d_entryIconImage",
-			"entryHeader": "s6d9715_entryHeader",
-			"entryHeading": "sb177d0_entryHeading",
-			"name": "s20ce20_name",
-			"badges": "sd40dfb_badges",
-			"cardActions": "s6c1137_cardActions",
-			"favoriteButton": "s7cd7a4_favoriteButton",
-			"favoriteButtonOn": "scf50f9_favoriteButtonOn",
-			"rollbackGroup": "s273dc3_rollbackGroup",
-			"rollbackButton": "sc2f4de_rollbackButton",
-			"rollbackNote": "s3d3d7b_rollbackNote",
-			"gate": "s90ee5d_gate",
-			"installPanel": "s7360e7_installPanel",
-			"installedActions": "s23bc70_installedActions",
-			"receipt": "sd3442a_receipt",
-			"cardVersion": "s92c63e_cardVersion",
-			"sourceBadge": "s9bbd60_sourceBadge",
-			"tierBadge": "s860f8d_tierBadge",
-			"incompatibleBadge": "sdbb7d3_incompatibleBadge",
-			"starsBadge": "se738ec_starsBadge",
-			"chevron": "s3b39c2_chevron",
-			"chevronOpen": "s95724c_chevronOpen",
-			"body": "s360005_body",
-			"summary": "s4e1686_summary",
-			"summaryZh": "s6701b3_summaryZh",
-			"summaryExpanded": "s24b80c_summaryExpanded",
-			"summaryZhExpanded": "s692202_summaryZhExpanded",
-			"incompatibleDetail": "s8ce637_incompatibleDetail",
-			"remedy": "sd54426_remedy",
-			"foldBlock": "s432999_foldBlock",
-			"foldBlockExpanded": "s89b821_foldBlockExpanded",
-			"foldToggle": "s683b1a_foldToggle",
-			"remedyLead": "sf1e1f7_remedyLead",
-			"allowCommand": "s3617dd_allowCommand",
-			"refusal": "s285915_refusal",
-			"capabilitiesBlock": "s7b4c84_capabilitiesBlock",
-			"capabilitiesNote": "s9a6ba6_capabilitiesNote",
-			"capabilities": "s923a46_capabilities",
-			"detail": "s3644b7_detail",
-			"detailRows": "s627f22_detailRows",
-			"detailRow": "s932013_detailRow",
-			"cardMeta": "s417d77_cardMeta",
-			"shelfDate": "s8ff0b6_shelfDate",
-			"size": "s90762b_size",
-			"sizeLarge": "sacd098_sizeLarge",
-			"author": "s7877a8_author",
-			"reviewedLine": "s573a28_reviewedLine",
-			"installButton": "sb518cc_installButton",
-			"confirmButton": "sfdae08_confirmButton",
-			"cancelButton": "s5f9442_cancelButton",
-			"installedLabel": "s912349_installedLabel",
-			"refusedLabel": "s3886c9_refusedLabel",
-			"uninstallButton": "s224fc5_uninstallButton",
-			"restartSelfButton": "s95ac3a_restartSelfButton",
-			"restartButton": "s7b3b53_restartButton",
-			"reloadButton": "s6c804e_reloadButton",
-			"offerActions": "s73ce9d_offerActions",
-			"reloadPanel": "s1d4318_reloadPanel",
-			"gateTitle": "sef1dd3_gateTitle",
-			"gateBody": "sd5e608_gateBody",
-			"gateWarning": "sd02440_gateWarning",
-			"gateActions": "s2dc996_gateActions",
-			"installing": "s930b5b_installing",
-			"log": "sd2bb29_log",
-			"logLine": "sd711bc_logLine",
-			"notice": "s2b5c0b_notice",
-			"failedHeading": "s971ca7_failedHeading",
-			"reportLine": "s6b727d_reportLine",
-			"reportLink": "s5d7267_reportLink",
-			"failedDetail": "s3cc4cd_failedDetail",
-			"commandLine": "sb7d936_commandLine",
-			"commandText": "s998ca3_commandText",
-			"copyButton": "s3a3192_copyButton",
-			"rejectedCode": "sb623dd_rejectedCode",
-			"rejectedDetail": "s2f1e30_rejectedDetail",
-			"outdatedSection": "sbe69dd_outdatedSection",
-			"outdatedList": "s551425_outdatedList",
-			"outdatedRow": "s13bb63_outdatedRow",
-			"outdatedInfo": "sa94d32_outdatedInfo",
-			"outdatedText": "s7a5eac_outdatedText",
-			"outdatedVersions": "s90a6e2_outdatedVersions",
-			"whatChanged": "s546703_whatChanged",
-			"shadowedSection": "s11f6e4_shadowedSection",
-			"shadowedDetail": "s76e33a_shadowedDetail",
-			"outdatedActions": "s13d9ff_outdatedActions",
-			"switchWrap": "s494ebe_switchWrap"
+		var _dsh_plugin_shop_css_e3675a89_default = {
+			"client": "s8583e3_client",
+			"config": "s942a79_config",
+			"ts": "s5f67aa_ts",
+			"spec": "sfd9d8a_spec",
+			"panel": "s255e5a_panel",
+			"shelfBody": "sdabbbb_shelfBody",
+			"searchInput": "s232ec4_searchInput",
+			"toolbar": "s646509_toolbar",
+			"page": "s3f14d7_page",
+			"pageHead": "s9bc9a3_pageHead",
+			"pageTitle": "sd3fc57_pageTitle",
+			"pageIntro": "s11ac5e_pageIntro",
+			"controls": "s56ac64_controls",
+			"railHeading": "sbd6019_railHeading",
+			"results": "s7df015_results",
+			"detailAction": "sbaabcb_detailAction",
+			"stateLine": "s44a3ec_stateLine",
+			"srOnly": "s3a0ece_srOnly",
+			"skeletonGrid": "se0c3b4_skeletonGrid",
+			"skeletonCard": "s520416_skeletonCard",
+			"skeletonName": "s8c7d6f_skeletonName",
+			"skeletonSummary": "sf5179e_skeletonSummary",
+			"skeletonSummaryShort": "sbb0d25_skeletonSummaryShort",
+			"skeletonActions": "s96e910_skeletonActions",
+			"actionButton": "s73242a_actionButton",
+			"queryMeta": "sfbbea1_queryMeta",
+			"toolbarRight": "s745e3c_toolbarRight",
+			"versionBlock": "s4fe61f_versionBlock",
+			"versionText": "sb9b924_versionText",
+			"updateSelfButton": "sa04455_updateSelfButton",
+			"checkUpdateButton": "s614a38_checkUpdateButton",
+			"githubLink": "sa987f7_githubLink",
+			"selfUpdatePanel": "sb81ba5_selfUpdatePanel",
+			"word": "s593322_word",
+			"searchBox": "s7dcbab_searchBox",
+			"searchGlyph": "scdb647_searchGlyph",
+			"expansionNote": "s76fb13_expansionNote",
+			"staleBadge": "s3946f1_staleBadge",
+			"categoryBar": "sb2c859_categoryBar",
+			"categoryButton": "s26d58e_categoryButton",
+			"categoryButtonOn": "s5f68c4_categoryButtonOn",
+			"incompatibleFilter": "sfd887b_incompatibleFilter",
+			"switch": "s11c019_switch",
+			"switchOn": "s7580e8_switchOn",
+			"incompatibleFilterOn": "s6e4cba_incompatibleFilterOn",
+			"switchKnob": "saab2b3_switchKnob",
+			"updatableHeading": "sebf017_updatableHeading",
+			"updatableHead": "sd96efb_updatableHead",
+			"updateAllButton": "s74eefe_updateAllButton",
+			"sortGroup": "sa6825e_sortGroup",
+			"sortLabel": "s268f9e_sortLabel",
+			"catalogStats": "sccc4d1_catalogStats",
+			"catalogRefreshButton": "sff243d_catalogRefreshButton",
+			"catalogRefreshFailed": "s194168_catalogRefreshFailed",
+			"emptyLine": "s6de1ab_emptyLine",
+			"cards": "sf657f5_cards",
+			"card": "s65f383_card",
+			"cardsSentry": "sd7ee01_cardsSentry",
+			"showingLine": "s705cc6_showingLine",
+			"cardSpine": "s4ce25d_cardSpine",
+			"categoryBadge": "s9c8eaa_categoryBadge",
+			"cardIcon": "s7ff339_cardIcon",
+			"entryIcon": "sc2425d_entryIcon",
+			"entryIconImage": "scc3f74_entryIconImage",
+			"entryHeader": "sa97234_entryHeader",
+			"entryHeading": "s25c388_entryHeading",
+			"name": "sc3f149_name",
+			"badges": "s513026_badges",
+			"cardActions": "s9b5048_cardActions",
+			"detail": "sde3f0c_detail",
+			"favoriteButton": "se10272_favoriteButton",
+			"favoriteButtonOn": "sc6a99e_favoriteButtonOn",
+			"rollbackGroup": "se126be_rollbackGroup",
+			"rollbackButton": "s3948b3_rollbackButton",
+			"rollbackNote": "s519304_rollbackNote",
+			"gate": "sc4f2ac_gate",
+			"installPanel": "s4d374c_installPanel",
+			"installedActions": "sf53ca0_installedActions",
+			"receipt": "sc34531_receipt",
+			"cardVersion": "sc6ec6e_cardVersion",
+			"sourceBadge": "s71f10f_sourceBadge",
+			"tierBadge": "s5e82cb_tierBadge",
+			"incompatibleBadge": "s4bbe02_incompatibleBadge",
+			"starsBadge": "sff43b4_starsBadge",
+			"chevron": "s73f7fb_chevron",
+			"chevronOpen": "s61393c_chevronOpen",
+			"body": "s820ebf_body",
+			"summary": "sb8fbc8_summary",
+			"summaryZh": "se507db_summaryZh",
+			"summaryExpanded": "s10baf0_summaryExpanded",
+			"summaryZhExpanded": "sb9dba9_summaryZhExpanded",
+			"incompatibleDetail": "s6eca19_incompatibleDetail",
+			"remedy": "s3d0044_remedy",
+			"foldBlock": "s67d135_foldBlock",
+			"foldBlockExpanded": "s626303_foldBlockExpanded",
+			"foldToggle": "sfbcf2c_foldToggle",
+			"remedyLead": "sdf203f_remedyLead",
+			"allowCommand": "sc32335_allowCommand",
+			"refusal": "sc74941_refusal",
+			"capabilitiesBlock": "s9d2029_capabilitiesBlock",
+			"capabilitiesNote": "s3bdbd5_capabilitiesNote",
+			"capabilities": "s441702_capabilities",
+			"detailRows": "se98179_detailRows",
+			"detailRow": "sfb4d2f_detailRow",
+			"cardMeta": "s5fbaf9_cardMeta",
+			"shelfDate": "s98d53f_shelfDate",
+			"size": "s2d3c05_size",
+			"sizeLarge": "sf7bc75_sizeLarge",
+			"author": "s1ff66f_author",
+			"reviewedLine": "sd58c6d_reviewedLine",
+			"installButton": "se7aaed_installButton",
+			"confirmButton": "sb43a49_confirmButton",
+			"cancelButton": "s6e45d1_cancelButton",
+			"installedLabel": "sb6fc74_installedLabel",
+			"refusedLabel": "s906629_refusedLabel",
+			"uninstallButton": "s96967f_uninstallButton",
+			"restartSelfButton": "sb00c36_restartSelfButton",
+			"restartButton": "s6ac237_restartButton",
+			"reloadButton": "s64a5ff_reloadButton",
+			"offerActions": "sbe9357_offerActions",
+			"reloadPanel": "sf79aef_reloadPanel",
+			"gateTitle": "s559c38_gateTitle",
+			"gateBody": "s3c0ace_gateBody",
+			"gateWarning": "sc323e5_gateWarning",
+			"gateActions": "s4b2373_gateActions",
+			"installing": "s52b5a5_installing",
+			"log": "s64ab71_log",
+			"logLine": "s1531a8_logLine",
+			"notice": "sf20dda_notice",
+			"failedHeading": "seb9b08_failedHeading",
+			"reportLine": "s755788_reportLine",
+			"reportLink": "s77578c_reportLink",
+			"failedDetail": "sfd3021_failedDetail",
+			"commandLine": "s3525c1_commandLine",
+			"commandText": "s7ccc44_commandText",
+			"copyButton": "sfdc792_copyButton",
+			"rejectedCode": "s50ba35_rejectedCode",
+			"rejectedDetail": "se75489_rejectedDetail",
+			"outdatedSection": "sa276cf_outdatedSection",
+			"outdatedList": "sceae6e_outdatedList",
+			"outdatedRow": "s8d2072_outdatedRow",
+			"outdatedInfo": "s5c2545_outdatedInfo",
+			"outdatedText": "s3ecfe4_outdatedText",
+			"outdatedVersions": "s877c68_outdatedVersions",
+			"whatChanged": "s866540_whatChanged",
+			"shadowedSection": "s6c4649_shadowedSection",
+			"shadowedDetail": "scc2a21_shadowedDetail",
+			"outdatedActions": "sa1f556_outdatedActions",
+			"switchWrap": "sd9f9e4_switchWrap"
 		};
 		//#endregion
 		//#region src/client/ShopDetailAction.tsx
@@ -9008,7 +9011,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			if (name === null || !canOpen()) return null;
 			if (own) return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 				type: "button",
-				className: _dsh_plugin_shop_css_61217181_default.detailAction,
+				className: _dsh_plugin_shop_css_e3675a89_default.detailAction,
 				"data-shop-open-shop": true,
 				onClick: openShop,
 				children: t("openShop")
@@ -9017,7 +9020,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			const only = listed.keys.length === 1 ? listed.keys[0] ?? null : null;
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 				type: "button",
-				className: _dsh_plugin_shop_css_61217181_default.detailAction,
+				className: _dsh_plugin_shop_css_e3675a89_default.detailAction,
 				"data-shop-view-in-shop": true,
 				onClick: () => {
 					page.focus(name, only);
@@ -10336,13 +10339,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			const { rootRef, expandable, expanded, toggle } = useFoldableRedBlock();
 			const kindName = attrName.replace(/^data-shop-/, "");
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-				className: expanded ? _dsh_plugin_shop_css_61217181_default.foldBlockExpanded : _dsh_plugin_shop_css_61217181_default.foldBlock,
+				className: expanded ? _dsh_plugin_shop_css_e3675a89_default.foldBlockExpanded : _dsh_plugin_shop_css_e3675a89_default.foldBlock,
 				[attrName]: true,
 				ref: rootRef,
 				children
 			}), expandable && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 				type: "button",
-				className: _dsh_plugin_shop_css_61217181_default.foldToggle,
+				className: _dsh_plugin_shop_css_e3675a89_default.foldToggle,
 				"data-shop-fold": kindName,
 				"aria-expanded": expanded,
 				onClick: toggle,
@@ -10378,10 +10381,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			const [failed, setFailed] = (0, react.useState)(void 0);
 			const src = icon === void 0 || icon === failed ? DEFAULT_ICON_DATA_URL : icon;
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-				className: _dsh_plugin_shop_css_61217181_default.entryIcon,
+				className: _dsh_plugin_shop_css_e3675a89_default.entryIcon,
 				"aria-hidden": "true",
 				children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("img", {
-					className: _dsh_plugin_shop_css_61217181_default.entryIconImage,
+					className: _dsh_plugin_shop_css_e3675a89_default.entryIconImage,
 					src,
 					width: 24,
 					height: 24,
@@ -10418,7 +10421,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		* those nodes, and React's next commit throws on the ones it no longer finds
 		* (design 2026-09-26-market-borrowings §4). The tab renders no portals, so its
 		* root is its whole surface. */
-		const PANEL_ROOT = `${_dsh_plugin_shop_css_61217181_default.panel} notranslate`;
+		const PANEL_ROOT = `${_dsh_plugin_shop_css_e3675a89_default.panel} notranslate`;
 		/** What the tab is trying to load, and with which catalog cache behavior:
 		* a refresh forces the network re-fetch while the stale snapshot stays
 		* visible (§10); a retry leaves the error state and starts from loading; a
@@ -10447,7 +10450,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				width: "14",
 				height: "14",
 				"aria-hidden": "true",
-				className: open ? _dsh_plugin_shop_css_61217181_default.chevronOpen : _dsh_plugin_shop_css_61217181_default.chevron,
+				className: open ? _dsh_plugin_shop_css_e3675a89_default.chevronOpen : _dsh_plugin_shop_css_e3675a89_default.chevron,
 				children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
 					fill: "currentColor",
 					d: "M3.5 6 8 10.5 12.5 6l1 1L8 12.5 2.5 7l1-1Z"
@@ -10485,17 +10488,17 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			const uninstalling = uninstallFlow.view.kind === "running";
 			const removed = uninstallFlow.view.kind === "done";
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-				className: _dsh_plugin_shop_css_61217181_default.card,
+				className: _dsh_plugin_shop_css_e3675a89_default.card,
 				"data-shop-entry": entry.name,
 				"data-category": category,
 				children: [
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-						className: _dsh_plugin_shop_css_61217181_default.cardSpine,
+						className: _dsh_plugin_shop_css_e3675a89_default.cardSpine,
 						"aria-hidden": "true"
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("button", {
 						type: "button",
-						className: _dsh_plugin_shop_css_61217181_default.entryHeader,
+						className: _dsh_plugin_shop_css_e3675a89_default.entryHeader,
 						"aria-expanded": open,
 						"aria-controls": detailId,
 						onClick: () => {
@@ -10505,19 +10508,19 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						children: [
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)(EntryIcon, { icon }),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
-								className: _dsh_plugin_shop_css_61217181_default.entryHeading,
+								className: _dsh_plugin_shop_css_e3675a89_default.entryHeading,
 								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-									className: _dsh_plugin_shop_css_61217181_default.name,
+									className: _dsh_plugin_shop_css_e3675a89_default.name,
 									children: entry.name
 								}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
-									className: _dsh_plugin_shop_css_61217181_default.badges,
+									className: _dsh_plugin_shop_css_e3675a89_default.badges,
 									children: [
 										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-											className: _dsh_plugin_shop_css_61217181_default.categoryBadge,
+											className: _dsh_plugin_shop_css_e3675a89_default.categoryBadge,
 											children: t(categoryKey(entry))
 										}),
 										entry.source === "npm" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-											className: _dsh_plugin_shop_css_61217181_default.sourceBadge,
+											className: _dsh_plugin_shop_css_e3675a89_default.sourceBadge,
 											"data-shop-source-npm": true,
 											role: "img",
 											"aria-label": t("npmSource"),
@@ -10534,7 +10537,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 											})
 										}),
 										hasGithubHome(entry) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-											className: _dsh_plugin_shop_css_61217181_default.sourceBadge,
+											className: _dsh_plugin_shop_css_e3675a89_default.sourceBadge,
 											"data-shop-source-github": true,
 											role: "img",
 											"aria-label": t("githubSource"),
@@ -10548,7 +10551,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 											})
 										}),
 										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-											className: _dsh_plugin_shop_css_61217181_default.cardVersion,
+											className: _dsh_plugin_shop_css_e3675a89_default.cardVersion,
 											"data-card-version": true,
 											role: "img",
 											"aria-label": versionName,
@@ -10556,17 +10559,17 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 											children: version.text
 										}),
 										entry.tier !== "community" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-											className: _dsh_plugin_shop_css_61217181_default.tierBadge,
+											className: _dsh_plugin_shop_css_e3675a89_default.tierBadge,
 											"data-tier": entry.tier,
 											children: t(tierKey(entry.tier))
 										}),
 										entry.archived === true && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-											className: _dsh_plugin_shop_css_61217181_default.tierBadge,
+											className: _dsh_plugin_shop_css_e3675a89_default.tierBadge,
 											"data-tier": "archived",
 											children: t("archivedBadge")
 										}),
 										stars !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
-											className: _dsh_plugin_shop_css_61217181_default.starsBadge,
+											className: _dsh_plugin_shop_css_e3675a89_default.starsBadge,
 											role: "img",
 											"aria-label": t("stars", { count: stars }),
 											children: ["★ ", formatStars(stars)]
@@ -10578,14 +10581,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						]
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						className: _dsh_plugin_shop_css_61217181_default.body,
+						className: _dsh_plugin_shop_css_e3675a89_default.body,
 						children: [
 							summary !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-								className: open ? `${_dsh_plugin_shop_css_61217181_default.summary} ${_dsh_plugin_shop_css_61217181_default.summaryExpanded}` : _dsh_plugin_shop_css_61217181_default.summary,
+								className: open ? `${_dsh_plugin_shop_css_e3675a89_default.summary} ${_dsh_plugin_shop_css_e3675a89_default.summaryExpanded}` : _dsh_plugin_shop_css_e3675a89_default.summary,
 								children: summary.en
 							}),
 							summary?.zh !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-								className: open ? `${_dsh_plugin_shop_css_61217181_default.summaryZh} ${_dsh_plugin_shop_css_61217181_default.summaryZhExpanded}` : _dsh_plugin_shop_css_61217181_default.summaryZh,
+								className: open ? `${_dsh_plugin_shop_css_e3675a89_default.summaryZh} ${_dsh_plugin_shop_css_e3675a89_default.summaryZhExpanded}` : _dsh_plugin_shop_css_e3675a89_default.summaryZh,
 								children: summary.zh
 							}),
 							blockers.length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(FoldableRedBlock, {
@@ -10593,28 +10596,28 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 								attrName: "data-shop-remedy",
 								children: blockers.map((blocker) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(BlockerLine, {
 									blocker,
-									className: _dsh_plugin_shop_css_61217181_default.incompatibleDetail,
+									className: _dsh_plugin_shop_css_e3675a89_default.incompatibleDetail,
 									surface: "detail"
 								}, blocker.kind))
 							}),
 							open && entry.catalog !== void 0 && entry.catalog.capabilities.length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-								className: _dsh_plugin_shop_css_61217181_default.capabilitiesBlock,
+								className: _dsh_plugin_shop_css_e3675a89_default.capabilitiesBlock,
 								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-									className: _dsh_plugin_shop_css_61217181_default.capabilitiesNote,
+									className: _dsh_plugin_shop_css_e3675a89_default.capabilitiesNote,
 									children: t("capabilitiesNote")
 								}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("ul", {
-									className: _dsh_plugin_shop_css_61217181_default.capabilities,
+									className: _dsh_plugin_shop_css_e3675a89_default.capabilities,
 									children: entry.catalog.capabilities.map((capability) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("li", { children: capability }, capability))
 								})]
 							}),
 							open && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("section", {
 								id: detailId,
-								className: _dsh_plugin_shop_css_61217181_default.detail,
+								className: _dsh_plugin_shop_css_e3675a89_default.detail,
 								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("dl", {
-									className: _dsh_plugin_shop_css_61217181_default.detailRows,
+									className: _dsh_plugin_shop_css_e3675a89_default.detailRows,
 									children: [
 										npmUrl !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-											className: _dsh_plugin_shop_css_61217181_default.detailRow,
+											className: _dsh_plugin_shop_css_e3675a89_default.detailRow,
 											"data-shop-npm": true,
 											children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("dt", { children: t("npmPage") }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("dd", { children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("a", {
 												href: npmUrl,
@@ -10624,7 +10627,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 											}) })]
 										}),
 										entry.repository !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-											className: _dsh_plugin_shop_css_61217181_default.detailRow,
+											className: _dsh_plugin_shop_css_e3675a89_default.detailRow,
 											children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("dt", { children: t("repository") }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("dd", { children: /^https?:\/\//.test(entry.repository) ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("a", {
 												href: entry.repository,
 												target: "_blank",
@@ -10633,32 +10636,32 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 											}) : entry.repository })]
 										}),
 										entry.license !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-											className: _dsh_plugin_shop_css_61217181_default.detailRow,
+											className: _dsh_plugin_shop_css_e3675a89_default.detailRow,
 											children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("dt", { children: t("license") }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("dd", { children: isCustomLicense(entry.license) ? t("customLicense") : entry.license })]
 										}),
 										entry.engines !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-											className: _dsh_plugin_shop_css_61217181_default.detailRow,
+											className: _dsh_plugin_shop_css_e3675a89_default.detailRow,
 											"data-shop-engines": true,
 											children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("dt", { children: t("requiresDsh") }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("dd", { children: entry.engines.trim() === "" ? JSON.stringify(entry.engines) : entry.engines })]
 										}),
 										entry.dependencies !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-											className: _dsh_plugin_shop_css_61217181_default.detailRow,
+											className: _dsh_plugin_shop_css_e3675a89_default.detailRow,
 											"data-shop-dependencies": true,
 											children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("dt", { children: t("dependencies") }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("dd", { children: entry.dependencies })]
 										}),
 										entry.bin !== void 0 && entry.bin.length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-											className: _dsh_plugin_shop_css_61217181_default.detailRow,
+											className: _dsh_plugin_shop_css_e3675a89_default.detailRow,
 											"data-shop-bin": true,
 											children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("dt", { children: t("commands") }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("dd", { children: entry.bin.join(", ") })]
 										}),
 										entry.installScripts === true && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-											className: _dsh_plugin_shop_css_61217181_default.detailRow,
+											className: _dsh_plugin_shop_css_e3675a89_default.detailRow,
 											"data-shop-install-scripts": true,
 											children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("dt", { children: t("installScripts") }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("dd", { children: t("installScriptsDeclared") })]
 										})
 									]
 								}), entry.tier === "verified-stale" && entry.review !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-									className: _dsh_plugin_shop_css_61217181_default.reviewedLine,
+									className: _dsh_plugin_shop_css_e3675a89_default.reviewedLine,
 									children: entry.review.reviewedVersion !== void 0 ? t("reviewedVersionLine", {
 										reviewed: versionLabel("npm", entry.review.reviewedVersion).text,
 										current: version.text
@@ -10671,12 +10674,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						]
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						className: _dsh_plugin_shop_css_61217181_default.cardActions,
+						className: _dsh_plugin_shop_css_e3675a89_default.cardActions,
 						"data-shop-actions": true,
 						children: [
 							onFavorite !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 								type: "button",
-								className: favorite === true ? `${_dsh_plugin_shop_css_61217181_default.favoriteButton} ${_dsh_plugin_shop_css_61217181_default.favoriteButtonOn}` : _dsh_plugin_shop_css_61217181_default.favoriteButton,
+								className: favorite === true ? `${_dsh_plugin_shop_css_e3675a89_default.favoriteButton} ${_dsh_plugin_shop_css_e3675a89_default.favoriteButtonOn}` : _dsh_plugin_shop_css_e3675a89_default.favoriteButton,
 								"data-shop-favorite": favorite === true ? "on" : "off",
 								"aria-pressed": favorite === true,
 								"aria-label": t(favorite === true ? "unfavorite" : "favorite"),
@@ -10719,7 +10722,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 									restartBlocked,
 									reload
 								}, "install") : /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-									className: _dsh_plugin_shop_css_61217181_default.installedLabel,
+									className: _dsh_plugin_shop_css_e3675a89_default.installedLabel,
 									"data-shop-installed": true,
 									children: t("installed")
 								}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(BlockerBadge, {
@@ -10738,7 +10741,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 									restartBlocked,
 									reload
 								}) : rollbackReceipt !== null && !removed && !uninstalling ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-									className: _dsh_plugin_shop_css_61217181_default.rollbackGroup,
+									className: _dsh_plugin_shop_css_e3675a89_default.rollbackGroup,
 									"data-shop-rollback-done": true,
 									children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(ActivationOffer, {
 										activation: rollbackReceipt,
@@ -10749,7 +10752,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 										where: "install",
 										trailing: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 											type: "button",
-											className: _dsh_plugin_shop_css_61217181_default.cancelButton,
+											className: _dsh_plugin_shop_css_e3675a89_default.cancelButton,
 											"data-shop-rollback-dismiss": true,
 											onClick: () => {
 												setRollbackReceipt(null);
@@ -10779,15 +10782,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 								}, "uninstall")
 							] }),
 							(size !== void 0 || author !== null || shelfDay !== void 0) && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
-								className: _dsh_plugin_shop_css_61217181_default.cardMeta,
+								className: _dsh_plugin_shop_css_e3675a89_default.cardMeta,
 								children: [
 									shelfDay !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-										className: _dsh_plugin_shop_css_61217181_default.shelfDate,
+										className: _dsh_plugin_shop_css_e3675a89_default.shelfDate,
 										"data-shop-shelf-date": true,
 										children: t(order === "added" ? "listedOn" : "updatedOn", { date: shelfDay })
 									}),
 									size !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-										className: largeSize ? `${_dsh_plugin_shop_css_61217181_default.size} ${_dsh_plugin_shop_css_61217181_default.sizeLarge}` : _dsh_plugin_shop_css_61217181_default.size,
+										className: largeSize ? `${_dsh_plugin_shop_css_e3675a89_default.size} ${_dsh_plugin_shop_css_e3675a89_default.sizeLarge}` : _dsh_plugin_shop_css_e3675a89_default.size,
 										"data-shop-size": true,
 										...largeSize ? { "data-shop-size-large": "" } : {},
 										role: "img",
@@ -10796,7 +10799,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 										children: size
 									}),
 									author !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-										className: _dsh_plugin_shop_css_61217181_default.author,
+										className: _dsh_plugin_shop_css_e3675a89_default.author,
 										"data-shop-author": true,
 										children: t("authorLine", { author })
 									})
@@ -10847,13 +10850,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				...attribute,
 				children: blocker.text
 			}), blocker.remedy !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-				className: _dsh_plugin_shop_css_61217181_default.remedy,
+				className: _dsh_plugin_shop_css_e3675a89_default.remedy,
 				"data-shop-remedy": blocker.kind,
 				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-					className: _dsh_plugin_shop_css_61217181_default.remedyLead,
+					className: _dsh_plugin_shop_css_e3675a89_default.remedyLead,
 					children: blocker.remedy.lead
 				}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("code", {
-					className: _dsh_plugin_shop_css_61217181_default.allowCommand,
+					className: _dsh_plugin_shop_css_e3675a89_default.allowCommand,
 					"data-shop-allow-command": true,
 					children: blocker.remedy.command
 				})]
@@ -10891,7 +10894,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			if (lead === void 0 || word === null) return null;
 			const detail = blockers.map((blocker) => blocker.text).join("\n");
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-				className: _dsh_plugin_shop_css_61217181_default.incompatibleBadge,
+				className: _dsh_plugin_shop_css_e3675a89_default.incompatibleBadge,
 				"data-shop-blocker": lead.kind,
 				role: "img",
 				"aria-label": detail,
@@ -10927,14 +10930,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		function CommandLine({ command, t }) {
 			const [copied, setCopied] = (0, react.useState)(false);
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-				className: _dsh_plugin_shop_css_61217181_default.commandLine,
+				className: _dsh_plugin_shop_css_e3675a89_default.commandLine,
 				"data-shop-command": true,
 				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("code", {
-					className: _dsh_plugin_shop_css_61217181_default.commandText,
+					className: _dsh_plugin_shop_css_e3675a89_default.commandText,
 					children: command
 				}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 					type: "button",
-					className: _dsh_plugin_shop_css_61217181_default.copyButton,
+					className: _dsh_plugin_shop_css_e3675a89_default.copyButton,
 					"data-shop-copy-command": true,
 					onClick: () => {
 						(async () => {
@@ -11016,23 +11019,23 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				}
 			};
 			if (state === "running") return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-				className: _dsh_plugin_shop_css_61217181_default.rollbackNote,
+				className: _dsh_plugin_shop_css_e3675a89_default.rollbackNote,
 				"data-shop-rollback-running": true,
 				children: t("rollingBack")
 			});
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
-				className: _dsh_plugin_shop_css_61217181_default.rollbackGroup,
+				className: _dsh_plugin_shop_css_e3675a89_default.rollbackGroup,
 				"data-shop-rollback-group": true,
 				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 					type: "button",
-					className: _dsh_plugin_shop_css_61217181_default.rollbackButton,
+					className: _dsh_plugin_shop_css_e3675a89_default.rollbackButton,
 					"data-shop-rollback": true,
 					onClick: () => {
 						run();
 					},
 					children: t("rollbackTo", { version })
 				}), state === "failed" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-					className: _dsh_plugin_shop_css_61217181_default.rollbackNote,
+					className: _dsh_plugin_shop_css_e3675a89_default.rollbackNote,
 					"data-shop-rollback-failed": true,
 					children: detail === "" ? t("rollbackFailed") : detail
 				})]
@@ -11048,39 +11051,39 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			const refused = refusesInstall(blockers);
 			const word = blockerBadgeKey(blockers);
 			if (view.kind === "running") return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-				className: _dsh_plugin_shop_css_61217181_default.installPanel,
+				className: _dsh_plugin_shop_css_e3675a89_default.installPanel,
 				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-					className: _dsh_plugin_shop_css_61217181_default.installing,
+					className: _dsh_plugin_shop_css_e3675a89_default.installing,
 					children: t(installPhaseKey(view.phase))
 				}), view.log.length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-					className: _dsh_plugin_shop_css_61217181_default.log,
+					className: _dsh_plugin_shop_css_e3675a89_default.log,
 					"data-shop-log": true,
 					children: view.log.map((line, index) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-						className: _dsh_plugin_shop_css_61217181_default.logLine,
+						className: _dsh_plugin_shop_css_e3675a89_default.logLine,
 						"data-shop-log-line": true,
 						children: line
 					}, index))
 				})]
 			});
 			if (view.kind === "done") return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-				className: _dsh_plugin_shop_css_61217181_default.receipt,
+				className: _dsh_plugin_shop_css_e3675a89_default.receipt,
 				children: [
 					view.log.length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-						className: _dsh_plugin_shop_css_61217181_default.log,
+						className: _dsh_plugin_shop_css_e3675a89_default.log,
 						"data-shop-log": true,
 						children: view.log.map((line, index) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-							className: _dsh_plugin_shop_css_61217181_default.logLine,
+							className: _dsh_plugin_shop_css_e3675a89_default.logLine,
 							"data-shop-log-line": true,
 							children: line
 						}, index))
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-						className: _dsh_plugin_shop_css_61217181_default.notice,
+						className: _dsh_plugin_shop_css_e3675a89_default.notice,
 						"data-shop-restart-notice": true,
 						children: t(activationNoticeKey(view.activation, view.restartReason))
 					}),
 					view.detail !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-						className: _dsh_plugin_shop_css_61217181_default.notice,
+						className: _dsh_plugin_shop_css_e3675a89_default.notice,
 						"data-shop-done-note": true,
 						children: view.detail
 					}),
@@ -11093,7 +11096,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						where: "install",
 						trailing: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 							type: "button",
-							className: _dsh_plugin_shop_css_61217181_default.cancelButton,
+							className: _dsh_plugin_shop_css_e3675a89_default.cancelButton,
 							"data-shop-install-dismiss": true,
 							onClick: reset,
 							children: t("dismiss")
@@ -11113,23 +11116,23 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 					shopVersion
 				});
 				return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-					className: _dsh_plugin_shop_css_61217181_default.installPanel,
+					className: _dsh_plugin_shop_css_e3675a89_default.installPanel,
 					children: [
 						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-							className: _dsh_plugin_shop_css_61217181_default.failedHeading,
+							className: _dsh_plugin_shop_css_e3675a89_default.failedHeading,
 							children: t("installFailed")
 						}),
 						view.log.length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-							className: _dsh_plugin_shop_css_61217181_default.log,
+							className: _dsh_plugin_shop_css_e3675a89_default.log,
 							"data-shop-log": true,
 							children: view.log.map((line, index) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-								className: _dsh_plugin_shop_css_61217181_default.logLine,
+								className: _dsh_plugin_shop_css_e3675a89_default.logLine,
 								"data-shop-log-line": true,
 								children: line
 							}, index))
 						}),
 						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-							className: _dsh_plugin_shop_css_61217181_default.failedDetail,
+							className: _dsh_plugin_shop_css_e3675a89_default.failedDetail,
 							children: view.detail === "" ? t("installTransportFailed") : view.detail
 						}),
 						view.command !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(CommandLine, {
@@ -11137,9 +11140,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 							t
 						}),
 						report !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-							className: _dsh_plugin_shop_css_61217181_default.reportLine,
+							className: _dsh_plugin_shop_css_e3675a89_default.reportLine,
 							children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("a", {
-								className: _dsh_plugin_shop_css_61217181_default.reportLink,
+								className: _dsh_plugin_shop_css_e3675a89_default.reportLink,
 								"data-shop-report": true,
 								href: report,
 								target: "_blank",
@@ -11148,17 +11151,17 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 							})
 						}),
 						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-							className: _dsh_plugin_shop_css_61217181_default.offerActions,
+							className: _dsh_plugin_shop_css_e3675a89_default.offerActions,
 							"data-shop-offer": true,
 							children: refused && word !== null ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 								type: "button",
-								className: _dsh_plugin_shop_css_61217181_default.cancelButton,
+								className: _dsh_plugin_shop_css_e3675a89_default.cancelButton,
 								"data-shop-install-dismiss": true,
 								onClick: reset,
 								children: t("dismiss")
 							}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 								type: "button",
-								className: _dsh_plugin_shop_css_61217181_default.installButton,
+								className: _dsh_plugin_shop_css_e3675a89_default.installButton,
 								"data-shop-install-retry": true,
 								disabled: starting,
 								onClick: () => {
@@ -11171,19 +11174,19 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				});
 			}
 			if (view.kind === "rejected") return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-				className: _dsh_plugin_shop_css_61217181_default.installPanel,
+				className: _dsh_plugin_shop_css_e3675a89_default.installPanel,
 				children: [
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-						className: _dsh_plugin_shop_css_61217181_default.rejectedCode,
+						className: _dsh_plugin_shop_css_e3675a89_default.rejectedCode,
 						children: t(rejectionCodeKey(view.code))
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-						className: _dsh_plugin_shop_css_61217181_default.rejectedDetail,
+						className: _dsh_plugin_shop_css_e3675a89_default.rejectedDetail,
 						children: view.detail
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 						type: "button",
-						className: _dsh_plugin_shop_css_61217181_default.cancelButton,
+						className: _dsh_plugin_shop_css_e3675a89_default.cancelButton,
 						"data-shop-install-dismiss": true,
 						onClick: reset,
 						children: t("dismiss")
@@ -11193,7 +11196,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			const update = variant === "update";
 			const detail = blockers.map((blocker) => blocker.text).join("\n");
 			if (refused && word !== null) return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-				className: _dsh_plugin_shop_css_61217181_default.refusedLabel,
+				className: _dsh_plugin_shop_css_e3675a89_default.refusedLabel,
 				"data-shop-refused": true,
 				"data-shop-blocker-kind": blockers[0]?.kind,
 				role: "img",
@@ -11205,14 +11208,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				attrName: "data-shop-refusal",
 				children: blockers.map((blocker) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(BlockerLine, {
 					blocker,
-					className: _dsh_plugin_shop_css_61217181_default.gateWarning,
+					className: _dsh_plugin_shop_css_e3675a89_default.gateWarning,
 					surface: "warning"
 				}, blocker.kind))
 			})] });
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
 				/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 					type: "button",
-					className: _dsh_plugin_shop_css_61217181_default.installButton,
+					className: _dsh_plugin_shop_css_e3675a89_default.installButton,
 					disabled: starting || locked,
 					...update ? { "data-shop-update": true } : { "data-shop-install": true },
 					onClick: () => {
@@ -11229,7 +11232,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 					attrName: "data-shop-blocker-lines",
 					children: blockers.map((blocker) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(BlockerLine, {
 						blocker,
-						className: _dsh_plugin_shop_css_61217181_default.gateWarning,
+						className: _dsh_plugin_shop_css_e3675a89_default.gateWarning,
 						surface: "warning"
 					}, blocker.kind))
 				})
@@ -11244,34 +11247,34 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		function UninstallPanel({ name, t, restart, restartBlocked, reload, flow }) {
 			const { view, start, reset } = flow;
 			if (view.kind === "running") return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-				className: _dsh_plugin_shop_css_61217181_default.installPanel,
+				className: _dsh_plugin_shop_css_e3675a89_default.installPanel,
 				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-					className: _dsh_plugin_shop_css_61217181_default.installing,
+					className: _dsh_plugin_shop_css_e3675a89_default.installing,
 					children: t("uninstalling")
 				}), view.log.length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-					className: _dsh_plugin_shop_css_61217181_default.log,
+					className: _dsh_plugin_shop_css_e3675a89_default.log,
 					"data-shop-log": true,
 					children: view.log.map((line, index) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-						className: _dsh_plugin_shop_css_61217181_default.logLine,
+						className: _dsh_plugin_shop_css_e3675a89_default.logLine,
 						"data-shop-log-line": true,
 						children: line
 					}, index))
 				})]
 			});
 			if (view.kind === "done") return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-				className: _dsh_plugin_shop_css_61217181_default.receipt,
+				className: _dsh_plugin_shop_css_e3675a89_default.receipt,
 				children: [
 					view.log.length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-						className: _dsh_plugin_shop_css_61217181_default.log,
+						className: _dsh_plugin_shop_css_e3675a89_default.log,
 						"data-shop-log": true,
 						children: view.log.map((line, index) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-							className: _dsh_plugin_shop_css_61217181_default.logLine,
+							className: _dsh_plugin_shop_css_e3675a89_default.logLine,
 							"data-shop-log-line": true,
 							children: line
 						}, index))
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-						className: _dsh_plugin_shop_css_61217181_default.notice,
+						className: _dsh_plugin_shop_css_e3675a89_default.notice,
 						"data-shop-uninstall-done": true,
 						children: t(uninstallActivationNoticeKey(view.activation))
 					}),
@@ -11284,7 +11287,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						where: "uninstall",
 						trailing: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 							type: "button",
-							className: _dsh_plugin_shop_css_61217181_default.cancelButton,
+							className: _dsh_plugin_shop_css_e3675a89_default.cancelButton,
 							"data-shop-uninstall-dismiss": true,
 							onClick: reset,
 							children: t("dismiss")
@@ -11293,37 +11296,37 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				]
 			});
 			if (view.kind === "failed") return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-				className: _dsh_plugin_shop_css_61217181_default.installPanel,
+				className: _dsh_plugin_shop_css_e3675a89_default.installPanel,
 				children: [
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-						className: _dsh_plugin_shop_css_61217181_default.failedHeading,
+						className: _dsh_plugin_shop_css_e3675a89_default.failedHeading,
 						children: t("uninstallFailed")
 					}),
 					view.log.length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-						className: _dsh_plugin_shop_css_61217181_default.log,
+						className: _dsh_plugin_shop_css_e3675a89_default.log,
 						"data-shop-log": true,
 						children: view.log.map((line, index) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-							className: _dsh_plugin_shop_css_61217181_default.logLine,
+							className: _dsh_plugin_shop_css_e3675a89_default.logLine,
 							"data-shop-log-line": true,
 							children: line
 						}, index))
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-						className: _dsh_plugin_shop_css_61217181_default.failedDetail,
+						className: _dsh_plugin_shop_css_e3675a89_default.failedDetail,
 						children: view.detail === "" ? t("uninstallTransportFailed") : view.detail
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						className: _dsh_plugin_shop_css_61217181_default.offerActions,
+						className: _dsh_plugin_shop_css_e3675a89_default.offerActions,
 						"data-shop-offer": true,
 						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 							type: "button",
-							className: _dsh_plugin_shop_css_61217181_default.uninstallButton,
+							className: _dsh_plugin_shop_css_e3675a89_default.uninstallButton,
 							"data-shop-uninstall-retry": true,
 							onClick: () => void start({ name }),
 							children: t("retry")
 						}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 							type: "button",
-							className: _dsh_plugin_shop_css_61217181_default.cancelButton,
+							className: _dsh_plugin_shop_css_e3675a89_default.cancelButton,
 							"data-shop-uninstall-dismiss": true,
 							onClick: reset,
 							children: t("dismiss")
@@ -11334,7 +11337,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			if (view.kind !== "idle") return null;
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 				type: "button",
-				className: _dsh_plugin_shop_css_61217181_default.uninstallButton,
+				className: _dsh_plugin_shop_css_e3675a89_default.uninstallButton,
 				"data-shop-uninstall": true,
 				onClick: () => void start({ name }),
 				children: t("uninstall")
@@ -11375,44 +11378,44 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				else if (outcome.kind === "unreachable") setRefusal(t("restartTransportFailed"));
 			};
 			const tail = trailing === void 0 ? null : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-				className: _dsh_plugin_shop_css_61217181_default.offerActions,
+				className: _dsh_plugin_shop_css_e3675a89_default.offerActions,
 				"data-shop-offer": true,
 				children: trailing
 			});
 			if (monitor?.kind === "requesting" || monitor?.kind === "restarting") return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-				className: _dsh_plugin_shop_css_61217181_default.notice,
+				className: _dsh_plugin_shop_css_e3675a89_default.notice,
 				"data-shop-restarting": true,
 				children: t("restarting")
 			}), tail] });
 			if (monitor?.kind === "failed") return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-				className: _dsh_plugin_shop_css_61217181_default.failedDetail,
+				className: _dsh_plugin_shop_css_e3675a89_default.failedDetail,
 				"data-shop-restart-error": true,
 				children: monitor.logFile === void 0 ? t("restartFailedNotice") : t("restartFailedLogNotice", { log: monitor.logFile })
 			}), tail] });
 			if (monitor?.kind === "not-restarted") return tail;
 			if (gateOpen) return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-				className: _dsh_plugin_shop_css_61217181_default.gate,
+				className: _dsh_plugin_shop_css_e3675a89_default.gate,
 				"data-shop-restart-gate": true,
 				children: [
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-						className: _dsh_plugin_shop_css_61217181_default.gateTitle,
+						className: _dsh_plugin_shop_css_e3675a89_default.gateTitle,
 						children: t("restartTitle")
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-						className: _dsh_plugin_shop_css_61217181_default.gateBody,
+						className: _dsh_plugin_shop_css_e3675a89_default.gateBody,
 						children: t("restartBody")
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						className: _dsh_plugin_shop_css_61217181_default.gateActions,
+						className: _dsh_plugin_shop_css_e3675a89_default.gateActions,
 						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 							type: "button",
-							className: _dsh_plugin_shop_css_61217181_default.confirmButton,
+							className: _dsh_plugin_shop_css_e3675a89_default.confirmButton,
 							"data-shop-restart-confirm": true,
 							onClick: () => void onConfirm(),
 							children: t("restartConfirm")
 						}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 							type: "button",
-							className: _dsh_plugin_shop_css_61217181_default.cancelButton,
+							className: _dsh_plugin_shop_css_e3675a89_default.cancelButton,
 							onClick: () => setGateOpen(false),
 							children: t("cancel")
 						})]
@@ -11420,17 +11423,17 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				]
 			}), tail] });
 			const refused = refusal === null ? null : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-				className: _dsh_plugin_shop_css_61217181_default.failedDetail,
+				className: _dsh_plugin_shop_css_e3675a89_default.failedDetail,
 				"data-shop-restart-error": true,
 				children: refusal
 			});
 			if (gate !== void 0) return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [refused, tail] });
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [refused, /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-				className: _dsh_plugin_shop_css_61217181_default.offerActions,
+				className: _dsh_plugin_shop_css_e3675a89_default.offerActions,
 				"data-shop-offer": true,
 				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 					type: "button",
-					className: _dsh_plugin_shop_css_61217181_default.restartButton,
+					className: _dsh_plugin_shop_css_e3675a89_default.restartButton,
 					"data-shop-restart": true,
 					onClick: () => setGateOpen(true),
 					children: t("restart")
@@ -11449,13 +11452,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		*/
 		function NotRestartedNotice({ t, pid, logFile }) {
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-				className: _dsh_plugin_shop_css_61217181_default.selfUpdatePanel,
+				className: _dsh_plugin_shop_css_e3675a89_default.selfUpdatePanel,
 				"data-shop-not-restarted": true,
 				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-					className: _dsh_plugin_shop_css_61217181_default.failedDetail,
+					className: _dsh_plugin_shop_css_e3675a89_default.failedDetail,
 					children: pid === void 0 ? t("notRestartedNotice") : t("notRestartedPidNotice", { pid: String(pid) })
 				}), logFile !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-					className: _dsh_plugin_shop_css_61217181_default.failedDetail,
+					className: _dsh_plugin_shop_css_e3675a89_default.failedDetail,
 					children: t("notRestartedLogNotice", { log: logFile })
 				})]
 			});
@@ -11481,7 +11484,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				trailing
 			});
 			const tail = trailing === void 0 ? null : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-				className: _dsh_plugin_shop_css_61217181_default.offerActions,
+				className: _dsh_plugin_shop_css_e3675a89_default.offerActions,
 				"data-shop-offer": true,
 				children: trailing
 			});
@@ -11493,7 +11496,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				trailing
 			});
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-				className: _dsh_plugin_shop_css_61217181_default.notice,
+				className: _dsh_plugin_shop_css_e3675a89_default.notice,
 				"data-shop-restart-disabled": true,
 				children: t(restartBlockedNoticeKey(restartBlocked))
 			}), tail] });
@@ -11504,17 +11507,17 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		* would help without knowing that now is a good time. */
 		function ReloadPanel({ t, reload, where, trailing }) {
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-				className: _dsh_plugin_shop_css_61217181_default.reloadPanel,
+				className: _dsh_plugin_shop_css_e3675a89_default.reloadPanel,
 				"data-shop-reload": where,
 				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-					className: _dsh_plugin_shop_css_61217181_default.notice,
+					className: _dsh_plugin_shop_css_e3675a89_default.notice,
 					children: t("reloadNote")
 				}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-					className: _dsh_plugin_shop_css_61217181_default.offerActions,
+					className: _dsh_plugin_shop_css_e3675a89_default.offerActions,
 					"data-shop-offer": true,
 					children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 						type: "button",
-						className: _dsh_plugin_shop_css_61217181_default.reloadButton,
+						className: _dsh_plugin_shop_css_e3675a89_default.reloadButton,
 						onClick: reload,
 						children: t("reload")
 					}), trailing]
@@ -11563,7 +11566,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				}
 			};
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-				className: _dsh_plugin_shop_css_61217181_default.switchWrap,
+				className: _dsh_plugin_shop_css_e3675a89_default.switchWrap,
 				"data-shop-enabled-switch": row.name,
 				children: [
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
@@ -11572,18 +11575,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						"aria-checked": enabled,
 						"aria-label": t("enabledSwitch"),
 						"data-shop-toggle": true,
-						className: `${_dsh_plugin_shop_css_61217181_default.switch} ${enabled ? _dsh_plugin_shop_css_61217181_default.switchOn : ""}`,
+						className: `${_dsh_plugin_shop_css_e3675a89_default.switch} ${enabled ? _dsh_plugin_shop_css_e3675a89_default.switchOn : ""}`,
 						onClick: () => void onToggle(),
 						disabled: toggle.kind === "saving" || locked,
-						children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: _dsh_plugin_shop_css_61217181_default.switchKnob })
+						children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: _dsh_plugin_shop_css_e3675a89_default.switchKnob })
 					}),
 					toggle.kind === "saved" && toggle.live && owed === "nothing" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-						className: _dsh_plugin_shop_css_61217181_default.notice,
+						className: _dsh_plugin_shop_css_e3675a89_default.notice,
 						"data-shop-hot-apply": true,
 						children: t("hotApplyNote")
 					}),
 					owed === "restart" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-						className: _dsh_plugin_shop_css_61217181_default.notice,
+						className: _dsh_plugin_shop_css_e3675a89_default.notice,
 						"data-shop-toggle-restart": true,
 						children: t("toggleRestartNote")
 					}),
@@ -11596,7 +11599,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						where: "toggle"
 					}),
 					toggle.kind === "error" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-						className: _dsh_plugin_shop_css_61217181_default.failedDetail,
+						className: _dsh_plugin_shop_css_e3675a89_default.failedDetail,
 						"data-shop-toggle-error": true,
 						children: toggle.detail
 					})
@@ -11612,22 +11615,22 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		function OutdatedRow({ row, icon, tier, missing, harness, github, shopVersion, t, setEnabled, flowFor, locked, restart, restartBlocked, reload, page }) {
 			const changed = whatChangedUrl(row);
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-				className: _dsh_plugin_shop_css_61217181_default.outdatedRow,
+				className: _dsh_plugin_shop_css_e3675a89_default.outdatedRow,
 				"data-shop-outdated-entry": row.name,
 				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-					className: _dsh_plugin_shop_css_61217181_default.outdatedInfo,
+					className: _dsh_plugin_shop_css_e3675a89_default.outdatedInfo,
 					children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(EntryIcon, { icon }), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
-						className: _dsh_plugin_shop_css_61217181_default.outdatedText,
+						className: _dsh_plugin_shop_css_e3675a89_default.outdatedText,
 						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-							className: _dsh_plugin_shop_css_61217181_default.name,
+							className: _dsh_plugin_shop_css_e3675a89_default.name,
 							children: row.name
 						}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
-							className: _dsh_plugin_shop_css_61217181_default.outdatedVersions,
+							className: _dsh_plugin_shop_css_e3675a89_default.outdatedVersions,
 							children: [
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: t("installedVersion", { version: versionLabel(row.source, row.installed).text }) }),
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: t("latestVersion", { version: versionLabel(row.source, row.latest).text }) }),
 								changed !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("a", {
-									className: _dsh_plugin_shop_css_61217181_default.whatChanged,
+									className: _dsh_plugin_shop_css_e3675a89_default.whatChanged,
 									"data-shop-what-changed": true,
 									href: changed,
 									target: "_blank",
@@ -11638,7 +11641,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						})]
 					})]
 				}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-					className: _dsh_plugin_shop_css_61217181_default.outdatedActions,
+					className: _dsh_plugin_shop_css_e3675a89_default.outdatedActions,
 					children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(EnabledSwitch, {
 						row,
 						surface: "row",
@@ -11694,7 +11697,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		function OutdatedSection({ state, entriesByKey, icons, missingByKey, harnessVerdicts, nameTakenByKey, shopVersion, t, setEnabled, flowFor, uninstallFor, restart, restartBlocked, reload, page }) {
 			if (state.kind === "loading") return null;
 			if (state.kind === "error") return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-				className: _dsh_plugin_shop_css_61217181_default.stateLine,
+				className: _dsh_plugin_shop_css_e3675a89_default.stateLine,
 				"data-shop-outdated-error": true,
 				children: t("installedError")
 			});
@@ -11719,24 +11722,24 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				}
 			};
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("section", {
-				className: _dsh_plugin_shop_css_61217181_default.outdatedSection,
+				className: _dsh_plugin_shop_css_e3675a89_default.outdatedSection,
 				"data-shop-outdated": true,
 				"aria-labelledby": UPDATABLE_HEADING_ID,
 				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-					className: _dsh_plugin_shop_css_61217181_default.updatableHead,
+					className: _dsh_plugin_shop_css_e3675a89_default.updatableHead,
 					children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("h2", {
-						className: _dsh_plugin_shop_css_61217181_default.updatableHeading,
+						className: _dsh_plugin_shop_css_e3675a89_default.updatableHeading,
 						id: UPDATABLE_HEADING_ID,
 						children: t("updatableSection")
 					}), outdated.length > 1 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 						type: "button",
-						className: _dsh_plugin_shop_css_61217181_default.updateAllButton,
+						className: _dsh_plugin_shop_css_e3675a89_default.updateAllButton,
 						"data-shop-update-all": true,
 						onClick: updateAll,
 						children: t("updateAll", { count: outdated.length })
 					})]
 				}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("ul", {
-					className: _dsh_plugin_shop_css_61217181_default.outdatedList,
+					className: _dsh_plugin_shop_css_e3675a89_default.outdatedList,
 					children: outdated.map((row) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("li", { children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(OutdatedRow, {
 						row,
 						icon: iconOf(entriesByKey.get(identityKey(row)), icons),
@@ -11768,40 +11771,40 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			const shadowed = entries.filter((entry) => entry.shadowed === true);
 			if (shadowed.length === 0) return null;
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("section", {
-				className: _dsh_plugin_shop_css_61217181_default.shadowedSection,
+				className: _dsh_plugin_shop_css_e3675a89_default.shadowedSection,
 				"data-shop-shadowed": true,
 				children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("ul", {
-					className: _dsh_plugin_shop_css_61217181_default.outdatedList,
+					className: _dsh_plugin_shop_css_e3675a89_default.outdatedList,
 					children: shadowed.map((row) => {
 						const key = identityKey(row);
 						return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("li", { children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-							className: _dsh_plugin_shop_css_61217181_default.outdatedRow,
+							className: _dsh_plugin_shop_css_e3675a89_default.outdatedRow,
 							"data-shop-shadowed-entry": row.name,
 							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-								className: _dsh_plugin_shop_css_61217181_default.outdatedInfo,
+								className: _dsh_plugin_shop_css_e3675a89_default.outdatedInfo,
 								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(EntryIcon, { icon: iconOf(entriesByKey.get(identityKey(row)), icons) }), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
-									className: _dsh_plugin_shop_css_61217181_default.outdatedText,
+									className: _dsh_plugin_shop_css_e3675a89_default.outdatedText,
 									children: [
 										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-											className: _dsh_plugin_shop_css_61217181_default.name,
+											className: _dsh_plugin_shop_css_e3675a89_default.name,
 											children: row.name
 										}),
 										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-											className: _dsh_plugin_shop_css_61217181_default.badges,
+											className: _dsh_plugin_shop_css_e3675a89_default.badges,
 											children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-												className: _dsh_plugin_shop_css_61217181_default.tierBadge,
+												className: _dsh_plugin_shop_css_e3675a89_default.tierBadge,
 												"data-tier": "shadowed",
 												children: t("shadowedBadge")
 											})
 										}),
 										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-											className: _dsh_plugin_shop_css_61217181_default.shadowedDetail,
+											className: _dsh_plugin_shop_css_e3675a89_default.shadowedDetail,
 											children: t("shadowedDetail")
 										})
 									]
 								})]
 							}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-								className: _dsh_plugin_shop_css_61217181_default.outdatedActions,
+								className: _dsh_plugin_shop_css_e3675a89_default.outdatedActions,
 								children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(UninstallPanel, {
 									name: row.name,
 									t,
@@ -11851,16 +11854,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 					role: "alert",
 					children: [
 						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-							className: _dsh_plugin_shop_css_61217181_default.stateLine,
+							className: _dsh_plugin_shop_css_e3675a89_default.stateLine,
 							children: say("tabCrashed", en.tabCrashed)
 						}),
 						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-							className: _dsh_plugin_shop_css_61217181_default.failedDetail,
+							className: _dsh_plugin_shop_css_e3675a89_default.failedDetail,
 							children: error.message
 						}),
 						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 							type: "button",
-							className: _dsh_plugin_shop_css_61217181_default.actionButton,
+							className: _dsh_plugin_shop_css_e3675a89_default.actionButton,
 							onClick: () => this.setState({ error: null }),
 							children: say("retry", en.retry)
 						})
@@ -12266,19 +12269,19 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				"data-shop-tab": true,
 				"aria-busy": "true",
 				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-					className: _dsh_plugin_shop_css_61217181_default.srOnly,
+					className: _dsh_plugin_shop_css_e3675a89_default.srOnly,
 					children: t("loading")
 				}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-					className: _dsh_plugin_shop_css_61217181_default.skeletonGrid,
+					className: _dsh_plugin_shop_css_e3675a89_default.skeletonGrid,
 					"data-shop-skeleton": true,
 					"aria-hidden": "true",
 					children: Array.from({ length: 8 }, (_, i) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						className: _dsh_plugin_shop_css_61217181_default.skeletonCard,
+						className: _dsh_plugin_shop_css_e3675a89_default.skeletonCard,
 						children: [
-							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: _dsh_plugin_shop_css_61217181_default.skeletonName }),
-							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: _dsh_plugin_shop_css_61217181_default.skeletonSummary }),
-							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: _dsh_plugin_shop_css_61217181_default.skeletonSummaryShort }),
-							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: _dsh_plugin_shop_css_61217181_default.skeletonActions })
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: _dsh_plugin_shop_css_e3675a89_default.skeletonName }),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: _dsh_plugin_shop_css_e3675a89_default.skeletonSummary }),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: _dsh_plugin_shop_css_e3675a89_default.skeletonSummaryShort }),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: _dsh_plugin_shop_css_e3675a89_default.skeletonActions })
 						]
 					}, i))
 				})]
@@ -12288,11 +12291,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				translate: "no",
 				"data-shop-tab": true,
 				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-					className: _dsh_plugin_shop_css_61217181_default.stateLine,
+					className: _dsh_plugin_shop_css_e3675a89_default.stateLine,
 					children: t("error")
 				}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 					type: "button",
-					className: _dsh_plugin_shop_css_61217181_default.actionButton,
+					className: _dsh_plugin_shop_css_e3675a89_default.actionButton,
 					onClick: () => {
 						setRequest({
 							kind: "retry",
@@ -12310,48 +12313,61 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				"data-shop-tab": true,
 				children: [
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						className: _dsh_plugin_shop_css_61217181_default.toolbar,
+						className: _dsh_plugin_shop_css_e3675a89_default.toolbar,
 						children: [
-							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
-								type: "search",
-								className: _dsh_plugin_shop_css_61217181_default.searchInput,
-								"aria-label": t("search"),
-								placeholder: t("search"),
-								value: query,
-								onChange: (event) => {
-									page.setView({
-										query: event.target.value,
-										visibleCount: 48
-									});
-								}
+							/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+								className: _dsh_plugin_shop_css_e3675a89_default.searchBox,
+								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("svg", {
+									className: _dsh_plugin_shop_css_e3675a89_default.searchGlyph,
+									viewBox: "0 0 16 16",
+									"aria-hidden": "true",
+									fill: "currentColor",
+									"data-shop-search-glyph": true,
+									children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+										fillRule: "evenodd",
+										d: "M10 2a4 4 0 100 8 4 4 0 000-8zM2 6a5 5 0 110 10A5 5 0 012 6zm11.7 9.7a1 1 0 001.4 0l1.6-1.6a1 1 0 00-1.4-1.4l-1.6 1.6a1 1 0 000 1.4z"
+									})
+								}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
+									type: "search",
+									className: _dsh_plugin_shop_css_e3675a89_default.searchInput,
+									"aria-label": t("search"),
+									placeholder: t("search"),
+									value: query,
+									onChange: (event) => {
+										page.setView({
+											query: event.target.value,
+											visibleCount: 48
+										});
+									}
+								})]
 							}),
 							expansionMemo.intents.length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
 								"data-shop-expansion-note": true,
-								className: _dsh_plugin_shop_css_61217181_default.expansionNote,
+								className: _dsh_plugin_shop_css_e3675a89_default.expansionNote,
 								children: t("zhExpansionNote", { terms: expansionMemo.terms.slice(1).map((term) => term.startsWith("#") ? term.slice(1) : term).join(", ") })
 							}),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-								className: _dsh_plugin_shop_css_61217181_default.toolbarRight,
+								className: _dsh_plugin_shop_css_e3675a89_default.toolbarRight,
 								children: [
 									result.stale && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-										className: _dsh_plugin_shop_css_61217181_default.staleBadge,
+										className: _dsh_plugin_shop_css_e3675a89_default.staleBadge,
 										children: t("staleLabel", { date: result.builtAt.slice(0, 10) })
 									}),
 									selfVersion !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-										className: _dsh_plugin_shop_css_61217181_default.versionBlock,
+										className: _dsh_plugin_shop_css_e3675a89_default.versionBlock,
 										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
-											className: _dsh_plugin_shop_css_61217181_default.versionText,
+											className: _dsh_plugin_shop_css_e3675a89_default.versionText,
 											"data-shop-version": true,
 											children: ["v", selfVersion.installed]
 										}), restartMonitor !== null ? null : selfPending && restartBlocked === null ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 											type: "button",
-											className: _dsh_plugin_shop_css_61217181_default.restartSelfButton,
+											className: _dsh_plugin_shop_css_e3675a89_default.restartSelfButton,
 											"data-shop-restart": true,
 											onClick: () => setSelfRestartGate(true),
 											children: t("restart")
 										}) : !selfPending && selfVersion.outdated && selfVersion.latest !== null && selfUpdate.view.kind === "idle" ? selfVersion.selfUpdate === "dsh-page" ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 											type: "button",
-											className: _dsh_plugin_shop_css_61217181_default.updateSelfButton,
+											className: _dsh_plugin_shop_css_e3675a89_default.updateSelfButton,
 											"data-shop-update-desktop": true,
 											title: t("updateInDshPageTitle"),
 											disabled: openUpdatePage === void 0,
@@ -12359,7 +12375,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 											children: t("updateInDshPage")
 										}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 											type: "button",
-											className: _dsh_plugin_shop_css_61217181_default.updateSelfButton,
+											className: _dsh_plugin_shop_css_e3675a89_default.updateSelfButton,
 											"data-shop-update-self": true,
 											onClick: () => {
 												if (selfVersion.latest !== null) selfUpdate.start({ version: selfVersion.latest });
@@ -12367,7 +12383,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 											children: t("update")
 										}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 											type: "button",
-											className: _dsh_plugin_shop_css_61217181_default.checkUpdateButton,
+											className: _dsh_plugin_shop_css_e3675a89_default.checkUpdateButton,
 											"data-shop-check-update": true,
 											title: t("checkUpdateTitle"),
 											disabled: checkState !== "idle",
@@ -12376,7 +12392,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 										})]
 									}),
 									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("a", {
-										className: _dsh_plugin_shop_css_61217181_default.githubLink,
+										className: _dsh_plugin_shop_css_e3675a89_default.githubLink,
 										href: SHOP_REPO_URL,
 										target: "_blank",
 										rel: "noopener noreferrer",
@@ -12392,6 +12408,63 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 										})
 									})
 								]
+							}),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+								className: _dsh_plugin_shop_css_e3675a89_default.queryMeta,
+								children: [
+									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+										className: _dsh_plugin_shop_css_e3675a89_default.catalogStats,
+										"data-shop-catalog-stats": true,
+										children: t("catalogStats", {
+											count: String(browsable.length),
+											date: result.builtAt.slice(0, 10)
+										})
+									}),
+									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+										type: "button",
+										className: _dsh_plugin_shop_css_e3675a89_default.catalogRefreshButton,
+										"data-shop-catalog-refresh": true,
+										disabled: reloading,
+										onClick: () => {
+											setReloading(true);
+											setReloadFailed(false);
+											setRequest({
+												kind: "refresh",
+												reverdicts: pendingReverdict()
+											});
+											setVersionReload((current) => current + 1);
+										},
+										children: reloading ? t("refreshing") : t("refresh")
+									}),
+									reloadFailed && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+										className: _dsh_plugin_shop_css_e3675a89_default.catalogRefreshFailed,
+										"data-shop-catalog-refresh-failed": true,
+										children: t("refreshFailed")
+									})
+								]
+							}),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+								className: _dsh_plugin_shop_css_e3675a89_default.sortGroup,
+								role: "group",
+								"aria-labelledby": sortLabelId,
+								"data-shop-sort": true,
+								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+									className: _dsh_plugin_shop_css_e3675a89_default.sortLabel,
+									id: sortLabelId,
+									children: t("sortLabel")
+								}), SHELF_ORDERS.map((name) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+									type: "button",
+									className: order === name ? `${_dsh_plugin_shop_css_e3675a89_default.categoryButton} ${_dsh_plugin_shop_css_e3675a89_default.categoryButtonOn}` : _dsh_plugin_shop_css_e3675a89_default.categoryButton,
+									"aria-pressed": order === name,
+									"data-shop-order": name,
+									onClick: () => {
+										page.setView({
+											order: name,
+											visibleCount: 48
+										});
+									},
+									children: t(shelfOrderLocaleKey(name))
+								}, name))]
 							})
 						]
 					}),
@@ -12401,29 +12474,29 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						logFile: restartMonitor.logFile
 					}),
 					selfUpdate.view.kind === "running" && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						className: _dsh_plugin_shop_css_61217181_default.selfUpdatePanel,
+						className: _dsh_plugin_shop_css_e3675a89_default.selfUpdatePanel,
 						"data-shop-self-updating": true,
 						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-							className: _dsh_plugin_shop_css_61217181_default.installing,
+							className: _dsh_plugin_shop_css_e3675a89_default.installing,
 							children: t(installPhaseKey(selfUpdate.view.phase))
 						}), selfUpdate.view.log.length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-							className: _dsh_plugin_shop_css_61217181_default.log,
+							className: _dsh_plugin_shop_css_e3675a89_default.log,
 							"data-shop-log": true,
 							children: selfUpdate.view.log.map((line, index) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-								className: _dsh_plugin_shop_css_61217181_default.logLine,
+								className: _dsh_plugin_shop_css_e3675a89_default.logLine,
 								"data-shop-log-line": true,
 								children: line
 							}, index))
 						})]
 					}),
 					selfPending && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-						className: _dsh_plugin_shop_css_61217181_default.selfUpdatePanel,
+						className: _dsh_plugin_shop_css_e3675a89_default.selfUpdatePanel,
 						"data-shop-self-update-done": true,
 						children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-							className: _dsh_plugin_shop_css_61217181_default.installedActions,
+							className: _dsh_plugin_shop_css_e3675a89_default.installedActions,
 							children: [
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-									className: _dsh_plugin_shop_css_61217181_default.notice,
+									className: _dsh_plugin_shop_css_e3675a89_default.notice,
 									children: t("installedRestartNotice")
 								}),
 								restartBlocked === null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(RestartPanel, {
@@ -12436,7 +12509,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 									}
 								}),
 								restartBlocked !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-									className: _dsh_plugin_shop_css_61217181_default.notice,
+									className: _dsh_plugin_shop_css_e3675a89_default.notice,
 									"data-shop-restart-disabled": true,
 									children: t(restartBlockedNoticeKey(restartBlocked))
 								})
@@ -12444,24 +12517,24 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						})
 					}),
 					selfUpdate.view.kind === "failed" && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						className: _dsh_plugin_shop_css_61217181_default.selfUpdatePanel,
+						className: _dsh_plugin_shop_css_e3675a89_default.selfUpdatePanel,
 						"data-shop-self-update-failed": true,
 						children: [
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-								className: _dsh_plugin_shop_css_61217181_default.failedHeading,
+								className: _dsh_plugin_shop_css_e3675a89_default.failedHeading,
 								children: t("updateFailed")
 							}),
 							selfUpdate.view.log.length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-								className: _dsh_plugin_shop_css_61217181_default.log,
+								className: _dsh_plugin_shop_css_e3675a89_default.log,
 								"data-shop-log": true,
 								children: selfUpdate.view.log.map((line, index) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-									className: _dsh_plugin_shop_css_61217181_default.logLine,
+									className: _dsh_plugin_shop_css_e3675a89_default.logLine,
 									"data-shop-log-line": true,
 									children: line
 								}, index))
 							}),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-								className: _dsh_plugin_shop_css_61217181_default.failedDetail,
+								className: _dsh_plugin_shop_css_e3675a89_default.failedDetail,
 								children: selfUpdate.view.detail === "" ? t("updateTransportFailed") : selfUpdate.view.detail
 							}),
 							selfUpdate.view.command !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(CommandLine, {
@@ -12470,7 +12543,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 							}),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 								type: "button",
-								className: _dsh_plugin_shop_css_61217181_default.cancelButton,
+								className: _dsh_plugin_shop_css_e3675a89_default.cancelButton,
 								"data-shop-update-self-dismiss": true,
 								onClick: () => {
 									selfUpdate.resetWhere((current) => current.kind === "failed");
@@ -12480,24 +12553,24 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						]
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						className: _dsh_plugin_shop_css_61217181_default.shelfBody,
+						className: _dsh_plugin_shop_css_e3675a89_default.shelfBody,
 						"data-shop-shelf": true,
 						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-							className: _dsh_plugin_shop_css_61217181_default.controls,
+							className: _dsh_plugin_shop_css_e3675a89_default.controls,
 							"data-shop-controls": true,
 							children: [
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("h2", {
-									className: _dsh_plugin_shop_css_61217181_default.railHeading,
+									className: _dsh_plugin_shop_css_e3675a89_default.railHeading,
 									children: t("categoriesHeading")
 								}),
 								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-									className: _dsh_plugin_shop_css_61217181_default.categoryBar,
+									className: _dsh_plugin_shop_css_e3675a89_default.categoryBar,
 									role: "group",
 									"aria-label": t("catalog"),
 									children: [
 										/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("button", {
 											type: "button",
-											className: category === null ? `${_dsh_plugin_shop_css_61217181_default.categoryButton} ${_dsh_plugin_shop_css_61217181_default.categoryButtonOn}` : _dsh_plugin_shop_css_61217181_default.categoryButton,
+											className: category === null ? `${_dsh_plugin_shop_css_e3675a89_default.categoryButton} ${_dsh_plugin_shop_css_e3675a89_default.categoryButtonOn}` : _dsh_plugin_shop_css_e3675a89_default.categoryButton,
 											"aria-pressed": category === null,
 											onClick: () => {
 												page.setView({
@@ -12514,7 +12587,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 										}),
 										CATEGORY_ORDER.map((key) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("button", {
 											type: "button",
-											className: category === key ? `${_dsh_plugin_shop_css_61217181_default.categoryButton} ${_dsh_plugin_shop_css_61217181_default.categoryButtonOn}` : _dsh_plugin_shop_css_61217181_default.categoryButton,
+											className: category === key ? `${_dsh_plugin_shop_css_e3675a89_default.categoryButton} ${_dsh_plugin_shop_css_e3675a89_default.categoryButtonOn}` : _dsh_plugin_shop_css_e3675a89_default.categoryButton,
 											"aria-pressed": category === key,
 											"data-category": key,
 											"data-shop-category-tab": key,
@@ -12532,7 +12605,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 										}, key)),
 										/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("button", {
 											type: "button",
-											className: category === "installed" ? `${_dsh_plugin_shop_css_61217181_default.categoryButton} ${_dsh_plugin_shop_css_61217181_default.categoryButtonOn}` : _dsh_plugin_shop_css_61217181_default.categoryButton,
+											className: category === "installed" ? `${_dsh_plugin_shop_css_e3675a89_default.categoryButton} ${_dsh_plugin_shop_css_e3675a89_default.categoryButtonOn}` : _dsh_plugin_shop_css_e3675a89_default.categoryButton,
 											"aria-pressed": category === "installed",
 											"data-shop-category-installed": true,
 											onClick: () => {
@@ -12551,14 +12624,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 								}),
 								category !== "installed" && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
 									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("h2", {
-										className: _dsh_plugin_shop_css_61217181_default.railHeading,
+										className: _dsh_plugin_shop_css_e3675a89_default.railHeading,
 										children: t("filterHeading")
 									}),
 									readState !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("button", {
 										type: "button",
 										role: "switch",
 										"aria-checked": favoritesOnly,
-										className: favoritesOnly ? `${_dsh_plugin_shop_css_61217181_default.incompatibleFilter} ${_dsh_plugin_shop_css_61217181_default.incompatibleFilterOn}` : _dsh_plugin_shop_css_61217181_default.incompatibleFilter,
+										className: favoritesOnly ? `${_dsh_plugin_shop_css_e3675a89_default.incompatibleFilter} ${_dsh_plugin_shop_css_e3675a89_default.incompatibleFilterOn}` : _dsh_plugin_shop_css_e3675a89_default.incompatibleFilter,
 										title: t("favoritesFilterTitle"),
 										"data-shop-favorites-filter": true,
 										onClick: () => {
@@ -12568,16 +12641,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 											}));
 										},
 										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-											className: favoritesOnly ? `${_dsh_plugin_shop_css_61217181_default.switch} ${_dsh_plugin_shop_css_61217181_default.switchOn}` : _dsh_plugin_shop_css_61217181_default.switch,
+											className: favoritesOnly ? `${_dsh_plugin_shop_css_e3675a89_default.switch} ${_dsh_plugin_shop_css_e3675a89_default.switchOn}` : _dsh_plugin_shop_css_e3675a89_default.switch,
 											"aria-hidden": "true",
-											children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: _dsh_plugin_shop_css_61217181_default.switchKnob })
+											children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: _dsh_plugin_shop_css_e3675a89_default.switchKnob })
 										}), t("favoritesFilter")]
 									}),
 									/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("button", {
 										type: "button",
 										role: "switch",
 										"aria-checked": hideIncompatible,
-										className: hideIncompatible ? `${_dsh_plugin_shop_css_61217181_default.incompatibleFilter} ${_dsh_plugin_shop_css_61217181_default.incompatibleFilterOn}` : _dsh_plugin_shop_css_61217181_default.incompatibleFilter,
+										className: hideIncompatible ? `${_dsh_plugin_shop_css_e3675a89_default.incompatibleFilter} ${_dsh_plugin_shop_css_e3675a89_default.incompatibleFilterOn}` : _dsh_plugin_shop_css_e3675a89_default.incompatibleFilter,
 										title: t(hideIncompatible ? "showIncompatibleTitle" : "incompatibleFilterTitle"),
 										"data-shop-hide-incompatible": true,
 										onClick: () => {
@@ -12587,87 +12660,30 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 											}));
 										},
 										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-											className: hideIncompatible ? `${_dsh_plugin_shop_css_61217181_default.switch} ${_dsh_plugin_shop_css_61217181_default.switchOn}` : _dsh_plugin_shop_css_61217181_default.switch,
+											className: hideIncompatible ? `${_dsh_plugin_shop_css_e3675a89_default.switch} ${_dsh_plugin_shop_css_e3675a89_default.switchOn}` : _dsh_plugin_shop_css_e3675a89_default.switch,
 											"aria-hidden": "true",
-											children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: _dsh_plugin_shop_css_61217181_default.switchKnob })
+											children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: _dsh_plugin_shop_css_e3675a89_default.switchKnob })
 										}), t("hideIncompatible", { count: incompatibleCount })]
 									})
 								] })
 							]
 						}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-							className: _dsh_plugin_shop_css_61217181_default.results,
+							className: _dsh_plugin_shop_css_e3675a89_default.results,
 							"data-shop-results": true,
 							children: [
-								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-									className: _dsh_plugin_shop_css_61217181_default.catalogStatsRow,
-									children: [
-										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-											className: _dsh_plugin_shop_css_61217181_default.catalogStats,
-											"data-shop-catalog-stats": true,
-											children: t("catalogStats", {
-												count: String(browsable.length),
-												date: result.builtAt.slice(0, 10)
-											})
-										}),
-										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-											type: "button",
-											className: _dsh_plugin_shop_css_61217181_default.catalogRefreshButton,
-											"data-shop-catalog-refresh": true,
-											disabled: reloading,
-											onClick: () => {
-												setReloading(true);
-												setReloadFailed(false);
-												setRequest({
-													kind: "refresh",
-													reverdicts: pendingReverdict()
-												});
-												setVersionReload((current) => current + 1);
-											},
-											children: reloading ? t("refreshing") : t("refresh")
-										}),
-										reloadFailed && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-											className: _dsh_plugin_shop_css_61217181_default.catalogRefreshFailed,
-											"data-shop-catalog-refresh-failed": true,
-											children: t("refreshFailed")
-										}),
-										/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
-											className: _dsh_plugin_shop_css_61217181_default.sortGroup,
-											role: "group",
-											"aria-labelledby": sortLabelId,
-											"data-shop-sort": true,
-											children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-												className: _dsh_plugin_shop_css_61217181_default.sortLabel,
-												id: sortLabelId,
-												children: t("sortLabel")
-											}), SHELF_ORDERS.map((name) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-												type: "button",
-												className: order === name ? `${_dsh_plugin_shop_css_61217181_default.categoryButton} ${_dsh_plugin_shop_css_61217181_default.categoryButtonOn}` : _dsh_plugin_shop_css_61217181_default.categoryButton,
-												"aria-pressed": order === name,
-												"data-shop-order": name,
-												onClick: () => {
-													page.setView({
-														order: name,
-														visibleCount: 48
-													});
-												},
-												children: t(shelfOrderLocaleKey(name))
-											}, name))]
-										})
-									]
-								}),
 								result.plugins.length === 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-									className: _dsh_plugin_shop_css_61217181_default.emptyLine,
+									className: _dsh_plugin_shop_css_e3675a89_default.emptyLine,
 									children: t("empty")
 								}) : filtered.length === 0 ? category === "installed" && installedState.kind !== "ready" ? installedState.kind === "loading" ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-									className: _dsh_plugin_shop_css_61217181_default.emptyLine,
+									className: _dsh_plugin_shop_css_e3675a89_default.emptyLine,
 									"data-shop-installed-loading": true,
 									children: t("installedLoading")
 								}) : null : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-									className: _dsh_plugin_shop_css_61217181_default.emptyLine,
+									className: _dsh_plugin_shop_css_e3675a89_default.emptyLine,
 									"data-shop-empty": true,
 									children: matched.length === 0 ? t("emptySearch") : favoritesOnly && !matched.some((entry) => favorites.has(entryKey(entry))) ? t("emptyFavoritesFiltered") : t("emptyIncompatibleFiltered")
 								}) : /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("ul", {
-									className: _dsh_plugin_shop_css_61217181_default.cards,
+									className: _dsh_plugin_shop_css_e3675a89_default.cards,
 									children: [visible.map((entry) => {
 										const key = entryKey(entry);
 										return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("li", {
@@ -12708,12 +12724,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 										}, key);
 									}), incremental && visibleCount < filtered.length && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("li", {
 										ref: sentinelRef,
-										className: _dsh_plugin_shop_css_61217181_default.cardsSentry,
+										className: _dsh_plugin_shop_css_e3675a89_default.cardsSentry,
 										"data-shop-sentry": true,
 										"aria-hidden": "true"
 									})]
 								}), incremental && visibleCount < filtered.length && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-									className: _dsh_plugin_shop_css_61217181_default.showingLine,
+									className: _dsh_plugin_shop_css_e3675a89_default.showingLine,
 									"aria-live": "polite",
 									children: t("showing", {
 										shown: String(visibleCount),
@@ -12880,7 +12896,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			}, [page]);
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("section", {
 				ref: scroller,
-				className: `${_dsh_plugin_shop_css_61217181_default.page} notranslate`,
+				className: `${_dsh_plugin_shop_css_e3675a89_default.page} notranslate`,
 				translate: "no",
 				"data-shop-page": true,
 				onScroll: (event) => {
@@ -12890,15 +12906,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				onTouchStart: cancelRestore,
 				onKeyDown: cancelRestore,
 				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("header", {
-					className: _dsh_plugin_shop_css_61217181_default.pageHead,
+					className: _dsh_plugin_shop_css_e3675a89_default.pageHead,
 					"data-shop-page-head": true,
 					"data-window-drag": true,
 					children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("h1", {
-						className: _dsh_plugin_shop_css_61217181_default.pageTitle,
+						className: _dsh_plugin_shop_css_e3675a89_default.pageTitle,
 						"data-shop-page-title": true,
 						children: t("title")
 					}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-						className: _dsh_plugin_shop_css_61217181_default.pageIntro,
+						className: _dsh_plugin_shop_css_e3675a89_default.pageIntro,
 						"data-shop-page-intro": true,
 						children: t("intro")
 					})]

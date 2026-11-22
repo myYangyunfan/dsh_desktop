@@ -197,10 +197,14 @@ export function startupErrorMessage(error, t) {
     if (error.code === 'IDENTITY_LOCKED')
         return t('identityLocked');
     if (error.code === 'STORAGE_CONFLICT')
-        return t('storageConflict');
+        return storageConflictMessage(error.message, t);
     if (error.code === 'SERVER_CREDENTIALS_BUSY')
         return t('connectionCredentialsBusy');
     return error.message || t('remoteStartupFailed');
+}
+function storageConflictMessage(message, t) {
+    const match = /^Remote storage ownership could not be verified; nothing was moved\. Inspect the legacy directory manually\. Unexpected entry "([A-Za-z0-9._-]{1,160})" was found\.$/.exec(message);
+    return match === null ? t('storageConflict') : t('storageConflictEntry', { name: match[1] });
 }
 export function messageOf(reason, t) {
     if (typeof reason === 'object' && reason !== null && 'code' in reason && typeof reason.code === 'string') {
@@ -212,8 +216,10 @@ export function messageOf(reason, t) {
             return t('credentialsCorrupted');
         if (reason.code === 'IDENTITY_LOCKED')
             return t('identityLocked');
-        if (reason.code === 'STORAGE_CONFLICT')
-            return t('storageConflict');
+        if (reason.code === 'STORAGE_CONFLICT') {
+            const message = 'message' in reason && typeof reason.message === 'string' ? reason.message : '';
+            return storageConflictMessage(message, t);
+        }
         if (reason.code === 'SERVER_CREDENTIALS_BUSY')
             return t('connectionCredentialsBusy');
     }

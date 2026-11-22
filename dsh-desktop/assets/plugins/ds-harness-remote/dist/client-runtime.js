@@ -1,3 +1,4 @@
+import { uploadLocalMentions } from './local-mention-upload.js';
 import { AgentAcpClient, CodexRemoteClient } from '@dsh-remote/client-core';
 import { acpCwdWorkspaceId, AcpVirtualHarness, discoverAcpVirtualWorkspaces } from './acp/virtual-harness.js';
 import { probeRemoteHostFeatures, remoteHostFeatures } from './client-capabilities.js';
@@ -12,6 +13,7 @@ import { registerControlRoute } from './control-route.js';
 import { harnessSessionGeneration } from './harness-version.js';
 import { uuidV7 } from './ids.js';
 import { RemoteTypertGateway } from './remote-typert-gateway.js';
+import { AcpSessionHistoryCache, CodexSessionHistoryCache, RemoteSessionHistoryCache, } from './session-history-cache.js';
 import { safeErrorCode } from './safe-error.js';
 import { RemoteSessionTools } from './remote-session-tools.js';
 import { ServerApiError } from './server-api.js';
@@ -60,7 +62,12 @@ export class ClientModeRuntime {
     codexOpenedSessions = new Map();
     codexOpenGeneration = 0;
     cursorVirtual;
+    cursorVirtualSelection;
+    acpOpenedSessions = new Map();
     acpVirtualBackend = 'cursor';
+    remoteHistoryCaches = new Map();
+    codexHistoryCaches = new Map();
+    acpHistoryCaches = new Map();
     gatewaySwitch;
     codexStreams = new Map();
     connectionProgress;
@@ -199,7 +206,16 @@ export class ClientModeRuntime {
                     return;
             }
             const credentials = await this.server.authenticate(this.requireIdentity());
-            await this.host.authorizeHostAsOwned(credentials.accessToken, credentials.account);
+            try {
+                await this.host.authorizeHostAsOwned(credentials.accessToken, credentials.account);
+            }
+            catch (error) {
+                if (!(error instanceof ServerApiError) || error.status !== 401
+                    || (error.code !== 'AUTH_INVALID' && error.code !== 'TOKEN_EXPIRED'))
+                    throw error;
+                const refreshed = await this.server.refreshCredentials(credentials.accessToken);
+                await this.host.authorizeHostAsOwned(refreshed.accessToken, refreshed.account);
+            }
         }
         catch (error) {
             this.logger.warn('automatic Host authorization failed', { code: safeErrorCode(error) });
@@ -374,6 +390,8 @@ export class ClientModeRuntime {
     async clearClientAuthorization() {
         const cleanup = this.leaveRemote();
         this.codexOpenedSessions.clear();
+        this.acpOpenedSessions.clear();
+        this.clearHistoryCaches();
         if (this.identity === undefined) {
             await Promise.all([cleanup, this.server.clearAuthorization()]);
             return;
@@ -398,7 +416,16 @@ export class ClientModeRuntime {
             return this.status();
         }
         const credentials = await this.server.authenticate(this.requireIdentity());
-        await this.host.authorizeHostAsOwned(credentials.accessToken, credentials.account);
+        try {
+            await this.host.authorizeHostAsOwned(credentials.accessToken, credentials.account);
+        }
+        catch (error) {
+            if (!(error instanceof ServerApiError) || error.status !== 401
+                || (error.code !== 'AUTH_INVALID' && error.code !== 'TOKEN_EXPIRED'))
+                throw error;
+            const refreshed = await this.server.refreshCredentials(credentials.accessToken);
+            await this.host.authorizeHostAsOwned(refreshed.accessToken, refreshed.account);
+        }
         return this.status();
     }
     async setMode(mode, targetDeviceId, signal) {
@@ -577,7 +604,7 @@ export class ClientModeRuntime {
         const virtual = CodexVirtualHarness.remote(remote.client, {
             deviceId: remote.target.deviceId,
             name: remote.target.name,
-        }, harnessSessionGeneration(this.host?.localHarnessVersion?.()), new RemoteTypertGateway(remote.client));
+        }, harnessSessionGeneration(this.host?.localHarnessVersion?.()), this.remoteTypertGateway(remote), this.codexHistoryCache(remote.target.deviceId));
         try {
             let workspace;
             try {
@@ -657,7 +684,7 @@ export class ClientModeRuntime {
         const virtual = AcpVirtualHarness.remote(remote.client, {
             deviceId: remote.target.deviceId,
             name: remote.target.name,
-        }, backend, remote.features.acpModelLoadsSession ? ['agent.acp.antigravity.model-load.v1'] : [], new RemoteTypertGateway(remote.client));
+        }, backend, remote.features.acpModelLoadsSession ? ['agent.acp.antigravity.model-load.v1'] : [], this.remoteTypertGateway(remote), this.acpHistoryCache(remote.target.deviceId, backend));
         let workspace;
         try {
             try {
@@ -672,9 +699,14 @@ export class ClientModeRuntime {
             this.assertRemoteCurrent(remote, signal);
             await this.closeCursorVirtual();
             this.assertRemoteCurrent(remote, signal);
-            const preferredSessionId = await virtual.preferredSessionId();
+            const selectionKey = JSON.stringify([remote.target.deviceId, backend, workspace.workspaceId]);
+            const rememberedSessionId = this.acpOpenedSessions.get(selectionKey);
+            const preferredSessionId = rememberedSessionId === undefined
+                ? await virtual.preferredSessionId()
+                : await virtual.preferredSessionId(rememberedSessionId);
             this.assertRemoteCurrent(remote, signal);
             this.cursorVirtual = virtual;
+            this.cursorVirtualSelection = { targetDeviceId: remote.target.deviceId, workspaceId: workspace.workspaceId, backend };
             this.acpVirtualBackend = backend;
             this.selectCursorTarget(virtual, remote);
             this.pendingWorkspaceSelection = {
@@ -704,7 +736,7 @@ export class ClientModeRuntime {
         const virtual = AcpVirtualHarness.remote(remote.client, {
             deviceId: remote.target.deviceId,
             name: remote.target.name,
-        }, backend, remote.features.acpModelLoadsSession ? ['agent.acp.antigravity.model-load.v1'] : [], new RemoteTypertGateway(remote.client));
+        }, backend, remote.features.acpModelLoadsSession ? ['agent.acp.antigravity.model-load.v1'] : [], this.remoteTypertGateway(remote), this.acpHistoryCache(remote.target.deviceId, backend));
         try {
             const workspace = await virtual.selectOrCreateWorkspace(trimmedPath);
             this.assertRemoteCurrent(remote, signal);
@@ -713,6 +745,7 @@ export class ClientModeRuntime {
             await this.closeCursorVirtual();
             this.assertRemoteCurrent(remote, signal);
             this.cursorVirtual = virtual;
+            this.cursorVirtualSelection = { targetDeviceId: remote.target.deviceId, workspaceId: workspace.workspaceId, backend };
             this.acpVirtualBackend = backend;
             this.selectCursorTarget(virtual, remote);
             this.pendingWorkspaceSelection = {
@@ -746,6 +779,7 @@ export class ClientModeRuntime {
             await this.leaveRemote();
         }
         finally {
+            this.clearHistoryCaches();
             this.gatewaySwitch.restore();
         }
     }
@@ -791,6 +825,12 @@ export class ClientModeRuntime {
         if (!remote.features.pluginRoute) {
             throw new ClientModeError('FEATURE_NOT_SUPPORTED', 'The connected Host cannot forward plugin routes.');
         }
+        if (route === 'api/session/uploadFileBinary') {
+            const result = await this.remoteTypertGateway(remote).dispatch('remoteUploads/upload', { args: body }, signal);
+            if (!result.ok)
+                throw new ClientModeError(result.error.code, result.error.message);
+            return result.value;
+        }
         return remote.client.rpc('plugin.route.call', { route, body }, signal);
     }
     activeRemote() {
@@ -800,12 +840,89 @@ export class ClientModeRuntime {
         this.assertRemoteCompatible(remote);
         this.clientAuthRequired = false;
         const target = { deviceId: remote.target.deviceId, name: remote.target.name };
-        this.gatewaySwitch.selectRemote(this.remoteTypertGateway(remote), undefined, target);
+        const gateway = this.remoteTypertGateway(remote);
+        const selected = {
+            invoke: async (request) => {
+                if (`${request.namespace}/${request.method}` !== 'session/prompt')
+                    return gateway.invoke(request);
+                const payload = await uploadLocalMentions({ args: request.args }, gateway, request.signal ?? new AbortController().signal);
+                return gateway.invoke({ ...request, args: payload.args });
+            },
+            dispatch: async (endpoint, payload, signal) => gateway.dispatch(endpoint, endpoint === 'session/prompt' ? await uploadLocalMentions(payload, gateway, signal) : payload, signal),
+            open: (endpoint, payload, signal) => gateway.open(endpoint, payload, signal),
+        };
+        this.gatewaySwitch.selectRemote(selected, undefined, target);
         this.recoverable = remote;
     }
     remoteTypertGateway(remote) {
         const localSessionGeneration = harnessSessionGeneration(this.host?.localHarnessVersion?.());
-        return new RemoteTypertGateway(remote.client, localSessionGeneration === 'v3' && remote.features.sessionFormat !== 3 ? 'legacy-to-v3' : undefined, remote.harnessVersion, true);
+        return new RemoteTypertGateway(remote.client, localSessionGeneration === 'v3' && remote.features.sessionFormat !== 3 ? 'legacy-to-v3' : undefined, remote.harnessVersion, true, this.remoteHistoryCache(remote.target.deviceId));
+    }
+    remoteHistoryCache(deviceId) {
+        let cache = this.remoteHistoryCaches.get(deviceId);
+        if (cache === undefined) {
+            cache = new RemoteSessionHistoryCache();
+        }
+        else {
+            this.remoteHistoryCaches.delete(deviceId);
+        }
+        this.remoteHistoryCaches.set(deviceId, cache);
+        while (this.remoteHistoryCaches.size > 16) {
+            const oldest = this.remoteHistoryCaches.keys().next().value;
+            if (oldest === undefined)
+                break;
+            this.remoteHistoryCaches.get(oldest)?.clear();
+            this.remoteHistoryCaches.delete(oldest);
+        }
+        return cache;
+    }
+    codexHistoryCache(deviceId) {
+        let cache = this.codexHistoryCaches.get(deviceId);
+        if (cache === undefined) {
+            cache = new CodexSessionHistoryCache();
+        }
+        else {
+            this.codexHistoryCaches.delete(deviceId);
+        }
+        this.codexHistoryCaches.set(deviceId, cache);
+        while (this.codexHistoryCaches.size > 16) {
+            const oldest = this.codexHistoryCaches.keys().next().value;
+            if (oldest === undefined)
+                break;
+            this.codexHistoryCaches.get(oldest)?.clear();
+            this.codexHistoryCaches.delete(oldest);
+        }
+        return cache;
+    }
+    acpHistoryCache(deviceId, backend) {
+        const key = `${deviceId}:${backend}`;
+        let cache = this.acpHistoryCaches.get(key);
+        if (cache === undefined) {
+            cache = new AcpSessionHistoryCache();
+        }
+        else {
+            this.acpHistoryCaches.delete(key);
+        }
+        this.acpHistoryCaches.set(key, cache);
+        while (this.acpHistoryCaches.size > 32) {
+            const oldest = this.acpHistoryCaches.keys().next().value;
+            if (oldest === undefined)
+                break;
+            this.acpHistoryCaches.get(oldest)?.clear();
+            this.acpHistoryCaches.delete(oldest);
+        }
+        return cache;
+    }
+    clearHistoryCaches() {
+        for (const cache of this.remoteHistoryCaches.values())
+            cache.clear();
+        for (const cache of this.codexHistoryCaches.values())
+            cache.clear();
+        for (const cache of this.acpHistoryCaches.values())
+            cache.clear();
+        this.remoteHistoryCaches.clear();
+        this.codexHistoryCaches.clear();
+        this.acpHistoryCaches.clear();
     }
     selectCodexTarget(virtual, remote) {
         this.recoverable = undefined;
@@ -835,7 +952,19 @@ export class ClientModeRuntime {
     }
     async closeCursorVirtual() {
         const virtual = this.cursorVirtual;
+        const selection = this.cursorVirtualSelection;
         this.cursorVirtual = undefined;
+        this.cursorVirtualSelection = undefined;
+        if (selection !== undefined && virtual !== undefined && virtual.openedSessions !== undefined) {
+            for (const [workspaceId, sessionId] of virtual.openedSessions) {
+                const key = JSON.stringify([selection.targetDeviceId, selection.backend, workspaceId]);
+                this.acpOpenedSessions.delete(key);
+                this.acpOpenedSessions.set(key, sessionId);
+                if (this.acpOpenedSessions.size > 64) {
+                    this.acpOpenedSessions.delete(this.acpOpenedSessions.keys().next().value);
+                }
+            }
+        }
         await virtual?.close();
     }
     selectCursorTarget(virtual, remote) {

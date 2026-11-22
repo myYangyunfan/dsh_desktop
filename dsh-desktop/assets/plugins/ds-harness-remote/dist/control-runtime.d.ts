@@ -2,6 +2,8 @@ import { type Config, type ConfigInput, type ResolvedConfig } from './config.js'
 import { type ClientModeRuntime, type HostConnectionHandle, type HostAuthorizationControl } from './client-runtime.js';
 import { type HostWebServerLike } from './control-route.js';
 import type { PluginUpdateSnapshot } from './update-check.js';
+import type { PluginSelfUpdateResult } from './plugin-self-update.js';
+import type { HostLogSnapshot, HostLogStore } from './host-log-store.js';
 export interface PluginSettingsView {
     config: Config;
     deviceName: string;
@@ -19,6 +21,9 @@ export interface PluginSettingsView {
         code: string;
         message: string;
     };
+}
+export interface PluginLogView extends HostLogSnapshot {
+    logLevel: 'debug' | 'info' | 'warn' | 'error';
 }
 export interface PluginAssociation {
     method: 'account' | 'host_registration_code' | 'owned_device' | 'device_pairing';
@@ -47,9 +52,13 @@ export declare class PluginControlRuntime {
     private client;
     private host;
     private readonly switchServer?;
-    /** Update-check snapshots merged into every `status` result; absent when the plugin is disabled. */
+    /**
+     * Update-check snapshots merged into every `status` result, and the local
+     * online upgrade. Absent when the plugin is disabled.
+     */
     private readonly updates?;
     private readonly useDefaultStorage;
+    private readonly logStore?;
     private logoutFlight?;
     private serverSwitchFlight?;
     private startupFailure?;
@@ -63,10 +72,14 @@ export declare class PluginControlRuntime {
         client: ClientModeRuntime | undefined;
         host: HostAuthorizationControl;
     }>) | undefined, 
-    /** Update-check snapshots merged into every `status` result; absent when the plugin is disabled. */
+    /**
+     * Update-check snapshots merged into every `status` result, and the local
+     * online upgrade. Absent when the plugin is disabled.
+     */
     updates?: {
         snapshot(): PluginUpdateSnapshot | undefined;
-    } | undefined, useDefaultStorage?: boolean);
+        start?(version: string): Promise<PluginSelfUpdateResult>;
+    } | undefined, useDefaultStorage?: boolean, logStore?: HostLogStore | undefined);
     register(connection: HostConnectionHandle, webServer?: HostWebServerLike): () => Promise<void>;
     /**
      * Read the value the status event stream pushes. It resolves through the same
@@ -77,10 +90,14 @@ export declare class PluginControlRuntime {
     private handle;
     private configure;
     private setServer;
+    private retryStartup;
     private applyServer;
     private resetIdentity;
     private applyResetIdentity;
     private setRole;
+    private currentLogLevel;
+    private getLogs;
+    private clearLogs;
     private setDevelopment;
     private setAppearance;
     private setCodex;
@@ -95,6 +112,12 @@ export declare class PluginControlRuntime {
     private settingsView;
     private associations;
     private association;
+    /**
+     * Replace this Desktop install through the official plugin manager.
+     * A version the registry check did not publish is refused. Installs the
+     * manager cannot update stay on the manual releases path.
+     */
+    private updatePlugin;
     private hostOnlyStatus;
 }
 //# sourceMappingURL=control-runtime.d.ts.map
