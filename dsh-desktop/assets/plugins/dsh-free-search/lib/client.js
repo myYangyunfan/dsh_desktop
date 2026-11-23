@@ -570,6 +570,9 @@ window.__ModuleLoader__.load({
         fetchForceHint: "DSH 的「DeepSeek 搜索 API」开关会把 web.fetchProvider 写成 deepseek-fetch-api，即使关掉搜索开关，抓取也会一直走官方计费接口。勾选此项后，保存即把抓取改回 fs-quality-fetch，忽略上一项的判据。",
         browserFetchLabel: "用本机浏览器渲染",
         browserFetchHint: "直连失败时用系统 Chrome/Edge 无头加载页面，能过 JS 挑战；没有浏览器时自动跳过。",
+        browserPathLabel: "浏览器路径",
+        browserPathPlaceholder: "留空＝自动探测（Edge / Chrome 的常见安装位置）",
+        browserPathHint: "填写后只用这一个可执行文件，不再自动探测；文件不存在时跳过这一层，不会改用其它浏览器。适用于便携版、Brave / Vivaldi 等非常规安装位置。Firefox 不支持 `--headless=new --dump-dom`，填了也不会生效。",
         fakeIpCidrsLabel: "额外允许的网段（fake-ip 透明代理）",
         fakeIpCidrsHint: "一行一个 CIDR。Clash/mihomo TUN 的 fake-ip 通常是 198.18.0.0/15；只豁免这里列出的保留段；回环、IPv4 私网、链路本地和云元数据仍会被拦截，IPv6 ULA（fc00::/7）只有显式列出时才放行。",
         fetchPreferLabel: "抓取质量链顺序",
@@ -817,6 +820,9 @@ window.__ModuleLoader__.load({
         fetchForceHint: "DSH's DeepSeek search switch writes web.fetchProvider as deepseek-fetch-api, so fetches keep going through the paid official API even after the switch is turned off. With this on, saving sets fetch back to fs-quality-fetch and ignores the check above.",
         browserFetchLabel: "Render with the local browser",
         browserFetchHint: "When direct fetch fails, load the page in headless Chrome/Edge to pass JS challenges; skipped when no browser is installed.",
+        browserPathLabel: "Browser path",
+        browserPathPlaceholder: "Empty = auto-detect (the usual Edge / Chrome install locations)",
+        browserPathHint: "When set, only this executable is used and auto-detection stops; if the file is missing, T1.5 is skipped rather than run with another browser. Use it for portable builds or unusual locations such as Brave / Vivaldi. Firefox does not support `--headless=new --dump-dom`, so pointing at it has no effect.",
         fakeIpCidrsLabel: "Extra allowed networks (fake-ip proxy)",
         fakeIpCidrsHint: "One CIDR per line. Clash/mihomo TUN fake-ip commonly uses 198.18.0.0/15; only the ranges listed here are exempted. Loopback, RFC1918, link-local and cloud metadata stay blocked.",
         fetchPreferLabel: "Fetch quality-chain order",
@@ -922,7 +928,7 @@ window.__ModuleLoader__.load({
       "cache_search",
       "domain_search",
     ];
-    const PLUGIN_VERSION = "0.9.80";
+    const PLUGIN_VERSION = "0.9.82";
     const PLUGIN_REPO_URL = "https://github.com/DDDMUC/dsh-free-search";
     // 右侧浮动目录（#85）：条目顺序即页面顺序，anchor 是页面里对应 field 的 id。
     const NAV_ITEMS = [
@@ -1542,6 +1548,7 @@ window.__ModuleLoader__.load({
       const [fetchProviderTakeover, setFetchProviderTakeover] = react.useState(true);
       const [fetchProviderForce, setFetchProviderForce] = react.useState(false);
       const [browserFetch, setBrowserFetch] = react.useState(true);
+      const [browserPath, setBrowserPath] = react.useState("");
       const [allowFakeIpCidrs, setAllowFakeIpCidrs] = react.useState("");
       const [fetchPrefer, setFetchPrefer] = react.useState("exa");
       const [deepseekFetchUrl, setDeepseekFetchUrl] = react.useState("");
@@ -1925,6 +1932,7 @@ window.__ModuleLoader__.load({
               setFetchProviderTakeover(v.fetchProviderTakeover !== false);
               setFetchProviderForce(v.fetchProviderForce === true);
               setBrowserFetch(v.browserFetch !== false);
+              setBrowserPath(String(v.browserPath ?? ""));
               setAllowFakeIpCidrs((Array.isArray(v.allowFakeIpCidrs) ? v.allowFakeIpCidrs : []).join("\n"));
               setFetchPrefer(v.fetchPrefer === "firecrawl" ? "firecrawl" : "exa");
               setDeepseekFetchUrl(v.deepseekFetchBaseUrl ?? "");
@@ -2175,6 +2183,7 @@ window.__ModuleLoader__.load({
             value: Number.isFinite(Number(snippetBudgetChars)) ? Math.max(0, Math.floor(Number(snippetBudgetChars))) : 0,
           });
           ops.push({ op: "set", path: ["browserFetch"], value: browserFetch });
+          ops.push({ op: "set", path: ["browserPath"], value: String(browserPath ?? "").trim() });
           ops.push({ op: "set", path: ["deepseekFetchBaseUrl"], value: deepseekFetchUrl.trim() });
           ops.push({
             op: "set",
@@ -3387,6 +3396,36 @@ react_jsx_runtime.jsxs("div", {
                         className: "dshfs-hint",
                         children: t.browserFetchHint,
                       }),
+                      // #160：浏览器路径只在启用 T1.5 时才有意义。
+                      browserFetch
+                        ? react_jsx_runtime.jsxs("div", {
+                            className: "dshfs-field",
+                            children: [
+                              react_jsx_runtime.jsx("div", {
+                                className: "dshfs-label",
+                                children: t.browserPathLabel,
+                              }),
+                              react_jsx_runtime.jsx("input", {
+                                className: "dshfs-input",
+                                type: "text",
+                                placeholder: t.browserPathPlaceholder,
+                                value: browserPath,
+                                spellCheck: false,
+                                disabled: !ready || saving,
+                                onChange: (e) => {
+                                  setBrowserPath(e.target.value);
+                                  setDirty(true);
+                                  setFailed(false);
+                                  setSaveError("");
+                                },
+                              }),
+                              react_jsx_runtime.jsx("p", {
+                                className: "dshfs-hint",
+                                children: t.browserPathHint,
+                              }),
+                            ],
+                          })
+                        : null,
                     ],
                   }),
                   react_jsx_runtime.jsxs("div", {

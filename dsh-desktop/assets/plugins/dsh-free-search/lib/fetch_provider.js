@@ -37,10 +37,25 @@ const BROWSER_CANDIDATES = [
   "/usr/bin/microsoft-edge",
   "/usr/bin/microsoft-edge-stable",
 ];
+// #160：自定义浏览器路径。空 = 自动探测候选表；填了就只认这一个，
+// 找不到时**不回落**候选表 —— 用户以为自己指定了 A 却悄悄跑成 B，
+// 比直接跳过这一层更难排查。
+let cachedBrowserKey;
 let cachedBrowserPath; // undefined = 未检测；null = 无浏览器
-function findSystemBrowser() {
-  if (cachedBrowserPath !== undefined) return cachedBrowserPath;
+function findSystemBrowser(customPath = "") {
+  const custom = String(customPath ?? "").trim();
+  const cacheKey = custom;
+  if (cachedBrowserKey === cacheKey && cachedBrowserPath !== undefined) return cachedBrowserPath;
+  cachedBrowserKey = cacheKey;
   cachedBrowserPath = null;
+  if (custom) {
+    try {
+      if (existsSync(custom)) cachedBrowserPath = custom;
+    } catch {
+      // 路径不可读：当作没有
+    }
+    return cachedBrowserPath;
+  }
   for (const p of BROWSER_CANDIDATES) {
     try {
       if (existsSync(p)) {
@@ -52,6 +67,17 @@ function findSystemBrowser() {
     }
   }
   return cachedBrowserPath;
+}
+
+/** 测试用：清掉探测缓存。 */
+export function resetBrowserCache() {
+  cachedBrowserKey = undefined;
+  cachedBrowserPath = undefined;
+}
+
+/** 测试用/诊断用：当前会选中的浏览器路径（未命中为 null）。 */
+export function detectBrowser(customPath = "") {
+  return findSystemBrowser(customPath);
 }
 
 function browserDumpDom(browserPath, url, { timeoutMs = 25000, signal, proxy = "" } = {}) {
@@ -355,6 +381,7 @@ export function createFetchProvider({
   logger,
   acceptLanguage = () => "en-US,en;q=0.9",
   browserEnabled = () => true,
+  browserPath: browserPathSetting = () => "",
   prefer = () => "exa",
   allowedCidrs = () => [],
   validateUrl = assertPublicUrl,
@@ -417,7 +444,7 @@ export function createFetchProvider({
       } catch (e) { errors.push(`direct: ${e.message}`); }
 
       // T1.5：系统浏览器无头渲染（执行 JS 过挑战，抓直连拿不到的页面；无浏览器或设置里关掉时跳过）
-      const browserPath = findSystemBrowser();
+      const browserPath = findSystemBrowser(browserPathSetting());
       if (browserEnabled() && browserPath) {
         try {
           const html = await browserDumpDom(browserPath, url, {

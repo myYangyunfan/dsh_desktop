@@ -1282,6 +1282,10 @@ const Config = z.object({
   fetchProviderForce: z.boolean().default(false).volatile(),
   // T1.5 headless browser rendering (default on, matching 0.9.x behaviour).
   browserFetch: z.boolean().default(true).volatile(),
+  // #160: custom browser executable. Empty = probe the built-in candidate list;
+  // set = use exactly this path, and skip T1.5 entirely when it is missing
+  // (falling back to another browser would hide a bad path).
+  browserPath: z.string().default("").volatile(),
   // Opt-in reserved ranges for transparent-proxy fake-ip DNS (Clash/mihomo
   // commonly use 198.18.0.0/15). Loopback / RFC1918 / link-local stay blocked.
   allowFakeIpCidrs: z.array(z.string()).default([]).volatile(),
@@ -2529,6 +2533,8 @@ function apply(ctx, config) {
     // #92：web_fetch 栈与 searchOnce 分开结算，这里按当前请求结算，而不是复用上一次请求留下的值。
     acceptLanguage: () => acceptLanguageFor(current()),
     browserEnabled: () => current().browserFetch !== false,
+    // #160：自定义浏览器路径（空 = 自动探测候选表）。
+    browserPath: () => current().browserPath ?? "",
     prefer: () => (current().fetchPrefer === "firecrawl" ? "firecrawl" : "exa"),
     allowedCidrs: () => current().allowFakeIpCidrs ?? [],
     // #124：自定义 DeepSeek 兼容抓取端点；key 留空时依次复用工具 key、搜索 key。

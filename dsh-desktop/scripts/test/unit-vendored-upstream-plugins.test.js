@@ -26,7 +26,7 @@ const PLUGINS = path.join(DSH, 'assets', 'plugins');
 const PLUGIN_MODULE_TABLE = require('../lib/plugin-module-table');
 
 const FIVE = [
-  ['web-search-free', 'dsh-free-search', '0.9.80', 'MIT'],
+  ['web-search-free', 'dsh-free-search', '0.9.82', 'MIT'],
   ['shop', 'dsh-plugin-shop', '0.9.4', 'Apache-2.0'],
   ['network-proxy', '@local/dsh-network-proxy', '1.0.4', 'MIT'],
   ['mcp-manager-ui', 'dsh-toolbox-ui', '1.14.0', 'MIT'],

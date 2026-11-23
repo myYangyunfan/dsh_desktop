@@ -5,6 +5,24 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### chore(companion)：dsh-free-search 0.9.80 → 0.9.82（2026-11-23）
+
+上游在两个小时内连发 0.9.81 / 0.9.82（11-22T11:00Z / 11:40Z），晚于 v1.1.1 的通道扫描，故本版补升。
+修的是上游 #159：插件被**禁用或卸载**后，`profiles/<name>/cordis.patch.yml` 里仍残留它写过的
+`searchProvider: ddg` / `fetchProvider: fs-quality-fetch`，provider 却已不在——于是每次
+`web_search` / `web_fetch` 都报 `WEB_PROVIDER_CONFIGURED_MISSING`。0.9.82 新增 `lib/restore.js`
+与 `bin/restore.js`，提供独立 CLI `dsh-free-search`，在插件未加载的状态下按文本清洗该行
+（不走 YAML round-trip，注释与顺序都保留）。
+
+逐文件比对：新增 `bin/restore.js`(3221B) + `lib/restore.js`(7987B)，改
+`lib/{client,fetch_provider,index}.js`、`package.json`（多一条 `bin` 别名）、README。
+本仓 `lib/cache.js` 的缓存落点 fork（`DSH_HOME` 优先，上游写死 `~/.cache`）已在新字节上重放，
+与上游 0.9.82 的唯一差异仍是这 4 行（我方 2932B vs 上游 2834B）。
+
+台账六处同改：`THIRD_PARTY_NOTICES.md` §4.1、`README.md`、`README.en.md`、
+`docs/builtin-plugins-inventory.md` §一·§5.2、`scripts/lib/companion-plugins.js` 注释、
+`unit-vendored-upstream-plugins.test.js` 的 FIVE 表。
+
 ### fix(companion)：billion-context（bili-native）改为随包默认关闭（2026-11-23）
 
 用户报障「bili 这个记忆插件有问题」。随包 0.1.213 仍带上游 `ranxianglei/billion-context`

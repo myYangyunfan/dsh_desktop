@@ -150,7 +150,7 @@ const COMPANION_PLUGINS = [
   // 追加在清单末尾：前 18 条的顺序被 unit-patch-engine 的漂移防线钉住。
   { id: 'goal-completion', name: '@deepseek-ai/dsh-goal-completion' },
   // —— 2026-10-22 用户点名的五个上游插件（随安装包内置） ——
-  // 免费多引擎搜索（DDDMUC/dsh-free-search，MIT，0.9.80）：注册 ctx.web 搜索
+  // 免费多引擎搜索（DDDMUC/dsh-free-search，MIT，0.9.82）：注册 ctx.web 搜索
   // provider，内置 web_search 自动选用；loader id 是 `web-search-free`（不是包名）。
   { id: 'web-search-free', name: 'dsh-free-search' },
   // 插件商店（LivXue/dsh-plugin-shop，Apache-2.0，0.9.4）：浏览/安装/启停/更新
