@@ -44,6 +44,8 @@ const {
   ACP_SELF_DISABLE_BLOCK,
   SYNAPSE_SELF_DISABLE_BLOCK,
   SYNAPSE_DEFAULT_DISABLED_MARKER,
+  BILI_SELF_DISABLE_BLOCK,
+  BILI_DEFAULT_DISABLED_MARKER,
   removeAcpBasicDisableBlock,
   ensureDisabledPatchEntry, ensureDefaultDisabledOnce, removeLegacyMarketplacePatchLines,
   removeRetiredDshMarketPatchRows, removeRetiredThirdPartyThinkingPatchRows,
@@ -305,12 +307,15 @@ function syncPlugins(home, dryRun, dshPkgDir) {
   }
 
   // billion-context（bili-native）取代已停止维护的 billion-context-dsh（compaction-acp）：
-  // 2026-11-09 按用户要求换成上游统一版 0.1.213，**默认启用**——旧件因「上下文占用未到 1/4
-  // 仍频繁压缩」被我们默认关闭过，新版是模型驱动（compactIfNeeded/compactNow 返回 null，压缩
-  // 由模型调 compress 工具）加 preset 级 compaction gate，宿主自动压缩回到预设自己的
-  // compaction-basic 管线，不再需要默认关闭。迁移面两步：① 旧 compaction-acp 的默认禁用行与
-  // insert 行由 RETIRED_COMPANIONS 的 removeRetiredCompanionPatchRows 撤账（上面那一段已覆盖）；
-  // ② 旧件时代为互斥写过的 compaction-basic 禁用块必须撤掉，否则预设拿不到 stock 压缩。
+  // 2026-11-09 按用户要求换成上游统一版 0.1.213。旧件因「上下文占用未到 1/4 仍频繁压缩」
+  // 被我们默认关闭过，新版是模型驱动（compactIfNeeded/compactNow 返回 null，压缩由模型调
+  // compress 工具）加 preset 级 compaction gate，宿主自动压缩回到预设自己的 compaction-basic
+  // 管线，当时因此改为**默认启用**。
+  // 2026-11-23 用户报障（「bili 这个记忆插件有问题」）→ 改为**默认关闭**：随包 0.1.213 仍带上游
+  // #5911 / #5984 / #6010 的幻影引用与 ref 账本分叉。需要时在 设置 → 插件 → 内置插件 一键开启。
+  // 迁移面两步：① 旧 compaction-acp 的默认禁用行与 insert 行由 RETIRED_COMPANIONS 的
+  // removeRetiredCompanionPatchRows 撤账（上面那一段已覆盖）；② 旧件时代为互斥写过的
+  // compaction-basic 禁用块必须撤掉，否则预设拿不到 stock 压缩。
   if (bundleNames.has('billion-context')) {
     const heal = removeAcpBasicDisableBlock(patch);
     if (heal.changed) {
@@ -318,6 +323,16 @@ function syncPlugins(home, dryRun, dshPkgDir) {
       changed = true;
       if (dryRun) log(`dry-run: 将撤销 ${patchFile} 中的 compaction-basic 禁用块`);
       else log('已撤销 compaction-basic 禁用块（billion-context 不再接管宿主面压缩入口）');
+    }
+    // 只禁 bili-native 一条：bundle 层的 bili-compaction-gate 必须保持启用——它是四个出厂
+    // 预设 `inject: [biliBasicCompactionPolicy]` 等待的服务提供者（上游 #3662）。gate 在位而
+    // 引擎关闭时预设回落到内核自带压缩；连 gate 一起禁 = 会话创建永久 pending。
+    const bili = ensureDefaultDisabledOnce(patch, new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*bili-native(?![A-Za-z0-9_.-])'), BILI_SELF_DISABLE_BLOCK, BILI_DEFAULT_DISABLED_MARKER);
+    if (bili.changed) {
+      patch = bili.patch;
+      changed = true;
+      if (dryRun) log(`dry-run: 将向 ${patchFile} 写入 bili-native 默认禁用条目`);
+      else log('已写入 bili-native 禁用条目（billion-context 默认关闭，bili-compaction-gate 保持启用）');
     }
   }
 

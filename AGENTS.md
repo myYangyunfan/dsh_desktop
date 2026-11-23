@@ -197,6 +197,12 @@ bash dsh-tauri/scripts/smoke-installed.sh            # ③ 安装布局冒烟
   正确姿势是上游新线 `billion-context` 0.1.213 的 `bili-compaction-gate`：一个 always-on 的 gate 条目 + 四条
   `preset-*` 的 `inject: [biliBasicCompactionPolicy]`（0.2.2-rc.1 预设行本身不带 inject，替换是纯追加），
   严禁把 gate 条目一起禁掉——它承载预设等待的服务，关掉就是会话创建永久 pending。
+  **2026-11-23 起该件随包默认关闭**（用户报障；随包 0.1.213 仍带上游 #5911/#5984/#6010 的幻影引用与 ref 账本分叉）：
+  默认禁用行只写 `- id: bili-native`（`BILI_SELF_DISABLE_BLOCK` + 一次性 marker，`sync-companion-plugins.js` 与
+  `integration/plugin-sync.js` **两条入口都要接**，回归锁 `unit-companion-profile.test.js`）；**不要把 gate 加进禁用块**。
+  安全性由 gate 自身判据兜住：只有引擎 `dist/agent/dsh-native.js` 会 `declareDshCompactionActive()` 置
+  `__BILI_DSH_COMPACTION_VERDICT__ = 'active'`，gate 只读不写，所以引擎关掉时 gate 的 `internal/config` 钩子原样返回，
+  预设回到内核自带压缩、`/compact` 命令也在。用户在 设置 → 插件 → 内置插件 开回来即可（marker 保证不再被默认回写）。
   换 vendored 压缩件还有一条运行时判据：它会把 proxy 作为**子进程**拉起来（`nativeProxyScriptPath()` =
   `dist/index.js`），只抄 `exports["."]` 会让子进程 `Cannot find module .../dist/index.js`，而父进程只说
   `bili: proxy child exited before becoming healthy (code 1)`；真因在 `%TEMP%\bili-proxy-<port>.log`。

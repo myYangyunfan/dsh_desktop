@@ -42,6 +42,19 @@ const SYNAPSE_SELF_DISABLE_BLOCK = '\n# dsh-synapse（synapse，会话地图）�
 // sync 看到它就不再回写 disabled，用户的选择得以持久。重置默认删掉本行即可。
 const SYNAPSE_DEFAULT_DISABLED_MARKER = '# DSH Desktop：dsh-synapse 默认禁用已应用（用户开启后不再回写）';
 
+// billion-context（bili-native，上下文压缩 /「记忆」后端）自身默认关闭的禁用块。
+// 随包 0.1.213 仍带上游 #5911 / #5984 / #6010 的幻影引用与 ref 账本分叉，用户报障后
+// 改为默认禁用；需要时在 设置 → 插件 → 内置插件 一键开启（与 synapse 同一机制）。
+// **只禁 bili-native 这一条**：bundle 层里的 bili-compaction-gate 是独立的 always-on
+// 条目，承载四个出厂预设 `inject: [biliBasicCompactionPolicy]` 等待的服务（上游 #3662）。
+// gate 在位而 bili-native 关闭时，gate 的 internal/config 钩子因
+// `__BILI_DSH_COMPACTION_VERDICT__ !== 'active'` 原样返回，预设随即回落到内核自带压缩；
+// 若把 gate 一起禁掉，四个预设永久 pending，会话创建直接死。
+const BILI_SELF_DISABLE_BLOCK = '\n# billion-context（bili-native）：上下文压缩默认关闭（上游 #5911/#5984/#6010 幻影引用与 ref 账本分叉；设置 → 插件 → 内置插件 可一键开启）\n# 只禁本条目：bili-compaction-gate 必须保持启用，否则四个出厂预设的 inject 永久 pending\n- id: bili-native\n  disabled: true\n';
+// 与 synapse 同款「默认禁用只应用一次」标记：用户开启后 toggle 删 disabled 块，
+// 但不删本标记（不含 `关闭 <id>` 形状），下次 boot 不再回写。
+const BILI_DEFAULT_DISABLED_MARKER = '# DSH Desktop：billion-context 默认禁用已应用（用户开启后不再回写）';
+
 // v1.0.0 起 harness-pet / cardian / graph-memory 三条「随包默认禁用」块随插件一并
 // 退役（旧常量全文见 git 历史）。旧装机机器上已经写进 cordis.patch.yml 的禁用块由
 // 下面的 removeDisabledRowsByIds 回收——它按形状判定而非按常量字符串判定，所以
@@ -1039,6 +1052,8 @@ module.exports = {
   ACP_SELF_DISABLE_BLOCK,
   SYNAPSE_SELF_DISABLE_BLOCK,
   SYNAPSE_DEFAULT_DISABLED_MARKER,
+  BILI_SELF_DISABLE_BLOCK,
+  BILI_DEFAULT_DISABLED_MARKER,
   LOADER_ID_RE,
   parsePatchRows,
   patchRowIds,

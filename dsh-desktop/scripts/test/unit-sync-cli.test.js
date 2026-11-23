@@ -100,11 +100,14 @@ test('sync CLI: 空 DSH_HOME 首次同步落盘正确（包/条目/禁用块）'
   }
   // harness-pet 的默认禁用块（PET_DISABLE_BLOCK）随该伴随件 v1.0.0 退役一并从
   // sync CLI 与 patch-surgery 拆除，故此处不再断言其写入。
-  // billion-context（2026-11-09 取代 billion-context-dsh）默认启用，同步器不再写任何禁用行：
-  // 它的接管走插件自带 cordis.patch.yml 的 preset 级 gate，宿主面的旧 compaction-acp 禁用行
-  // 由 RETIRED_COMPANIONS 撤账，compaction-basic 一律留给内核预设。
+  // billion-context（2026-11-09 取代 billion-context-dsh）在 2026-11-23 之前是「默认启用、
+  // 同步器不写禁用行」；用户报障后改为**默认关闭**——只写 bili-native 一条禁用行，且
+  // bili-compaction-gate 必须留在启用态（否则四个出厂预设的 inject 永久 pending）。
+  // 旧 compaction-acp 禁用行仍须已被 RETIRED_COMPANIONS 撤账。
   assert.ok(!patch.includes('- id: compaction-acp'), '旧 compaction-acp 禁用行必须已被撤账');
-  assert.ok(!patch.includes('- id: bili-native\n  disabled: true'), 'billion-context 默认启用，同步器不得写禁用行');
+  assert.ok(patch.includes('- id: bili-native\n  disabled: true'), 'billion-context 默认关闭：必须写 bili-native 禁用行');
+  assert.ok(!/(?:^|\n)\s*-?\s*id:\s*bili-compaction-gate\b/.test(patch), 'bili-compaction-gate 不得被禁用（会话创建会永久 pending）');
+  assert.ok(patch.includes('只禁本条目：bili-compaction-gate 必须保持启用'), '禁用块内必须保留 gate 约束注释');
 });
 
 test('sync CLI: 二次同步零写入；dry-run 零落盘', (t) => {

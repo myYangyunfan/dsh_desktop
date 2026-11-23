@@ -5,6 +5,24 @@ DeepSeek Harness（dsh）的 Windows 桌面客户端：内置独立 Node 运行�
 
 ## [Unreleased]
 
+### fix(companion)：billion-context（bili-native）改为随包默认关闭（2026-11-23）
+
+用户报障「bili 这个记忆插件有问题」。随包 0.1.213 仍带上游 `ranxianglei/billion-context`
+#5911 / #5984 / #6010 的幻影引用与 ref 账本分叉，且 0.1.216 也没修——不再等上游，改为**默认关闭**。
+
+禁用行只写 `- id: bili-native`（`BILI_SELF_DISABLE_BLOCK` + 一次性 marker），
+`sync-companion-plugins.js` 与 `integration/plugin-sync.js` 两条入口都接上，写一次即止：
+用户在内置插件页开回来后不再被默认回写。
+
+**关键约束：`bili-compaction-gate` 保持启用**。它是四个出厂预设 `inject: [biliBasicCompactionPolicy]`
+等待的服务提供者（上游 #3662），一起禁就是会话创建永久 pending。安全性由 gate 自身判据兜住：
+只有引擎 `dist/agent/dsh-native.js` 会 `declareDshCompactionActive()` 置 `__BILI_DSH_COMPACTION_VERDICT__ = 'active'`，
+gate 只读不写，所以引擎关闭时 gate 的 `internal/config` 钩子原样返回，预设回落到内核自带压缩，
+`/compact` 命令也在。
+
+回归锁：`unit-companion-profile.test.js` 新增 1 例（块形状 / 幂等 / marker 持久 / 显式关闭仍生效 /
+gate 不得进禁用块 / 两条入口接线）。
+
 ### fix(companion)：应用内「检查更新」补齐四件内置件（2026-11-22）
 
 内置件管理页的「检查更新」一直查不到 `dsh-pocket` / `dsh-easyrewrite` / `dsh-context` / `ds-harness-remote`

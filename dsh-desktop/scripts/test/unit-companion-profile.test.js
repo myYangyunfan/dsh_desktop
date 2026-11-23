@@ -15,6 +15,8 @@ const {
   ACP_SELF_DISABLE_BLOCK,
   SYNAPSE_SELF_DISABLE_BLOCK,
   SYNAPSE_DEFAULT_DISABLED_MARKER,
+  BILI_SELF_DISABLE_BLOCK,
+  BILI_DEFAULT_DISABLED_MARKER,
   ensureDefaultDisabledOnce,
 } = require('../lib/companion-profile');
 const { togglePluginInPatch } = require('../plugin-core/lib/patch-surgery');
@@ -116,6 +118,60 @@ test('SYNAPSE_SELF_DISABLE_BLOCK：会话地图默认禁用块形状、幂等与
     const src = fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
     assert.match(src, /bundleNames\.has\('dsh-synapse'\)/, rel + ' 必须按 bundle 名判定');
     assert.match(src, /SYNAPSE_SELF_DISABLE_BLOCK/, rel + ' 必须写入 synapse 默认禁用块');
+  }
+});
+
+test('BILI_SELF_DISABLE_BLOCK：上下文压缩默认禁用块只禁引擎、不碰 gate，且可持久开启', () => {
+  assert.match(BILI_SELF_DISABLE_BLOCK, /id:\s*bili-native\b/);
+  assert.match(BILI_SELF_DISABLE_BLOCK, /disabled:\s*true/);
+  // 反证（上游 #3662）：块里绝不能出现 bili-compaction-gate 的顶层条目。gate 是四个出厂
+  // 预设 `inject: [biliBasicCompactionPolicy]` 等待的服务提供者，一起禁就是会话创建永久
+  // pending——而静态扫、boot 五步、单测全绿都看不出来，只有真机会话建不起来。
+  assert.ok(
+    !/(?:^|\n)\s*-?\s*id:\s*bili-compaction-gate\b/.test(BILI_SELF_DISABLE_BLOCK),
+    'gate 条目不得写进默认禁用块',
+  );
+  assert.match(BILI_SELF_DISABLE_BLOCK, /bili-compaction-gate/, '块内注释必须写明 gate 不能一起禁（留给读 patch 文件的人）');
+
+  const pattern = /(?:^|\n)\s*-?\s*id\s*:\s*bili-native(?![A-Za-z0-9_.-])/;
+  const out = ensureDefaultDisabledOnce('- insert:\n    - id: balance\n', pattern, BILI_SELF_DISABLE_BLOCK, BILI_DEFAULT_DISABLED_MARKER);
+  assert.strictEqual(out.changed, true);
+  assert.ok(out.patch.includes('id: bili-native'));
+  assert.ok(out.patch.includes('disabled: true'));
+  assert.ok(out.patch.includes(BILI_DEFAULT_DISABLED_MARKER), '写入禁用块的同时写入一次性标记');
+  assert.strictEqual(
+    ensureDefaultDisabledOnce(out.patch, pattern, BILI_SELF_DISABLE_BLOCK, BILI_DEFAULT_DISABLED_MARKER).changed,
+    false,
+    '重复同步必须幂等',
+  );
+
+  // bundle 层 insert 里已有 bili-native 登记点时不再叠一条 disabled。
+  const registered = '- insert:\n    - id: bili-native\n      name: billion-context\n';
+  assert.strictEqual(ensureDisabledPatchEntry(registered, pattern, BILI_SELF_DISABLE_BLOCK).changed, false);
+
+  // 用户在内置插件页开启后必须持久：toggle 删 disabled 块，但一次性标记要留下。
+  const enabled = togglePluginInPatch(out.patch, 'bili-native', true, 'billion-context');
+  assert.ok(!/(?:^|\n)\s*-?\s*id:\s*bili-native\b/.test(enabled), '开启后顶层注册点应被移除');
+  assert.ok(enabled.includes(BILI_DEFAULT_DISABLED_MARKER), '一次性标记不得被 toggle 带走');
+  assert.strictEqual(
+    ensureDefaultDisabledOnce(enabled, pattern, BILI_SELF_DISABLE_BLOCK, BILI_DEFAULT_DISABLED_MARKER).changed,
+    false,
+    '已标记的开启状态不得被下次同步回写',
+  );
+  // 显式再次关闭仍要写入（标记只阻止「默认回写」）。
+  assert.ok(
+    togglePluginInPatch(enabled, 'bili-native', false, 'billion-context').includes('disabled: true'),
+    '显式关闭必须重新写入 disabled',
+  );
+
+  // 接线：CLI 同步与 Tauri sidecar boot 的 integration/plugin-sync 两条入口都得接上——
+  // 只测常量形状会漏掉「没接上」（2026-10-22 实测过这个假绿）。
+  const fs = require('node:fs');
+  const path = require('node:path');
+  for (const rel of ['sync-companion-plugins.js', 'integration/plugin-sync.js']) {
+    const src = fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
+    assert.match(src, /bundleNames\.has\('billion-context'\)/, rel + ' 必须按 bundle 名判定');
+    assert.match(src, /BILI_SELF_DISABLE_BLOCK/, rel + ' 必须写入 bili-native 默认禁用块');
   }
 });
 

@@ -33,6 +33,8 @@ const {
   ACP_SELF_DISABLE_BLOCK,
   SYNAPSE_SELF_DISABLE_BLOCK,
   SYNAPSE_DEFAULT_DISABLED_MARKER,
+  BILI_SELF_DISABLE_BLOCK,
+  BILI_DEFAULT_DISABLED_MARKER,
   removeAcpBasicDisableBlock,
   removeLegacyMarketplacePatchLines,
   removeRetiredDshMarketPatchRows,
@@ -452,6 +454,27 @@ function createPluginSync(ctx) {
           }
         } catch (err) {
           log('写入 synapse 默认禁用条目失败: ' + err.message);
+        }
+      }
+
+      // billion-context（bili-native，上下文压缩 /「记忆」后端）默认关闭：随包 0.1.213
+      // 仍带上游 #5911 / #5984 / #6010 的幻影引用与 ref 账本分叉，用户报障后改为默认
+      // 禁用；需要时在 设置 → 插件 → 内置插件 一键开启。
+      // **只禁 bili-native 一条**：bundle 层的 bili-compaction-gate 必须保持启用——它是
+      // 四个出厂预设 `inject: [biliBasicCompactionPolicy]` 等待的服务提供者（上游
+      // #3662），gate 在位而引擎关闭时预设回落到内核自带压缩；连 gate 一起禁就是会话
+      // 创建永久 pending。块内注释写明了这条约束，别让后人「顺手」把 gate 加进去。
+      if (bundleNames.has('billion-context')) {
+        try {
+          let patch = '';
+          try { patch = fs.readFileSync(patchFile, 'utf8'); } catch { /* 全新 profile：patch 文件尚未创建，视为空 */ }
+          const self = ensureDefaultDisabledOnce(patch, new RegExp('(?:^|\\n)\\s*-?\\s*id\\s*:\\s*bili-native\\b'), BILI_SELF_DISABLE_BLOCK, BILI_DEFAULT_DISABLED_MARKER);
+          if (self.changed) {
+            writeFileAtomic(patchFile, self.patch);
+            log('billion-context 默认关闭：已写入 bili-native 禁用条目（bili-compaction-gate 保持启用）');
+          }
+        } catch (err) {
+          log('写入 billion-context 默认禁用条目失败: ' + err.message);
         }
       }
 
