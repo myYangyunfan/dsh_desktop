@@ -1,0 +1,48 @@
+# 依赖更新。每周一跑；不代替内核换代流程。
+# 安全更新仍会另开 PR（ignore 只挡常规版本更新）。
+version: 2
+updates:
+  # npm 清单只有 dsh-desktop/package.json + package-lock.json。
+  # dsh-tauri 没有 package.json（sidecar 复用 dsh-desktop 的依赖），不要给它加一条 npm。
+  # assets/plugins/** 是随包 vendored 插件，版本由伴随插件台账钉死，不在这里扫。
+  - package-ecosystem: npm
+    directory: /dsh-desktop
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    # @deepseek-ai/* 与 scripts/compat/kernel-pin.json、vendor/dsh-kernel/*.tgz 精确对齐。
+    # Dependabot 改 package.json 不会重打离线 tarball，常规升级会直接拆掉这条 pin。
+    # 换内核走仓库既有流程，不走这条自动更新。
+    ignore:
+      - dependency-name: "@deepseek-ai/*"
+    groups:
+      npm-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  # Cargo 工作区与 Cargo.lock 在 dsh-tauri/src-tauri（成员 crate 是 path，不单列）。
+  - package-ecosystem: cargo
+    directory: /dsh-tauri/src-tauri
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      cargo-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      actions-minor-and-patch:
+        update-types:
+          - minor
+          - patch

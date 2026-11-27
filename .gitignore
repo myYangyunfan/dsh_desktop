@@ -59,3 +59,39 @@ dsh-desktop/vendor-next/
 
 # 本地便携 LITE 组装目录（构建脚本产物，不入库）
 portable-lite/
+
+# 密钥与本地凭据。不要把证书、私钥、.env 推进公开仓库。
+# 模式按文件名，避免误伤 vendor tarball（例如 dsh-credentials-*.tgz）和插件源码。
+.env
+.env.*
+!.env.example
+*.key
+*.p12
+*.pfx
+*.p8
+*.pem
+*.cer
+*.crt
+*.jks
+*.keystore
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+id_ecdsa
+id_ecdsa.pub
+credentials.json
+credentials.yaml
+credentials.yml
+.credentials.yaml
+.credentials.yml
+secrets.json
+service-account.json
+service-account*.json
+*.mobileprovision
+AuthKey_*.p8
+
+# 下面两份是 localhost 测试夹具，不是生产密钥，必须继续入库。
+# 仅用于 dsh-desktop/scripts/test/fixtures/（test-key.pem / test-cert.pem）。
+!dsh-desktop/scripts/test/fixtures/test-key.pem
+!dsh-desktop/scripts/test/fixtures/test-cert.pem

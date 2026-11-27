@@ -13,6 +13,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# 显式最小权限。本工作流只 checkout 并跑测试，不写仓库内容。
+# 未列出的 scope 为 none，不要在这里加 contents: write。
+permissions:
+  contents: read
+
 jobs:
   test:
     name: check-syntax + unit tests
