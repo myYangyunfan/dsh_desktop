@@ -36,7 +36,7 @@ tauri-plugin-single-instance = "2.4.3"
 # - 流式下载用 Response::chunk()（无需 stream 特性），JSON 用 serde_json
 #   手解（无需 json 特性）。
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
-sha2 = "0.10"
+sha2 = "0.11"
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
 # URL 解析（updater 下载门禁：scheme+host 白名单）。树内已有（tauri 传递）。
 url = "2"
