@@ -358,7 +358,7 @@
     "ws": "^8.18.0",
     "yaml": "^2.4.0",
     "zod": "^4.0.0",
-    "zstddec": "0.2.0"
+    "zstddec": "0.3.4"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-session-turn-outline": "0.2.2-rc.5"
