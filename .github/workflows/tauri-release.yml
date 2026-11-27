@@ -661,7 +661,7 @@ jobs:
           node-version: '24'
 
       - name: Download exe artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: win-x64-bin
           path: exe-artifact
@@ -1419,7 +1419,7 @@ jobs:
     if: always() && !cancelled() && (needs.build-windows.result == 'success' || needs.build-portable.result == 'success' || needs.build-linux.result == 'success' || needs.build-macos.result == 'success' || needs.build-windows-arm64.result == 'success')
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
