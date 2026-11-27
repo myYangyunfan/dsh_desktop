@@ -78,7 +78,7 @@ jobs:
       ARCH: x64
       UNPACKED: win-unpacked
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
@@ -308,7 +308,7 @@ jobs:
       ARCH: arm64
       UNPACKED: win-arm64-unpacked
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
@@ -552,7 +552,7 @@ jobs:
       ARCH: x64
       UNPACKED: linux-unpacked
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
@@ -781,7 +781,7 @@ jobs:
       UNPACKED: mac
       DIST_SUFFIX: '--x64'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
@@ -966,7 +966,7 @@ jobs:
       UNPACKED: mac-arm64
       DIST_SUFFIX: '--arm64'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
